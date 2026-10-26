@@ -90,6 +90,15 @@ def test_named_public_programs_for_worksound_inst():
     assert out["pub_sha.RTXPRO6000", "R-hi, IMAD.HI at 32 (unmeasured)"]["rate"] == pytest.approx(10.22e9, rel=0.01)
 
 
+def test_packed_dfma_fits_three_products_at_80_and_loses_the_issue_slots_to_dp4a():
+    assert PB.dfma_k(3, 81 * 81) == (19, 18) and PB.dfma_k(4, 81 * 81) is None
+    eX, eW = (PB.entry_pmf(PB.data_pmf("zero"), u) for u in (PB.V2_V, PB.V2_U))
+    leaves = PB.leaves_of(None, 0, eX, eW)
+    for kw in ({}, {"wgmma_smem": False}, {"facets": False}):
+        p = PB.price(PB.H200, leaves, 2048, 16512, PB.TOKENS, lookups=True, model_dfma=True, **kw)
+        assert not any(r.startswith("dfma") for r in p.routes) and "f64" not in p.binding
+
+
 def test_v2_tile_route_on_h200_wins_through_the_joint_facet_when_peels_pass_three_eighths():
     _, bit, depth = PB.BIT_COST["sm_90"][0]
     big = PB.tile_job_at(PB.H200, 2, 1024, 4096, 6144, bit, depth, 80, 1.15)

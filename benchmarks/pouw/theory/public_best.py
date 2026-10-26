@@ -13,11 +13,12 @@ c_mm is the cheapest public method's priced time for every word over the honest 
 the H200, mma.sync k32 on sm_120). A method's time is the max over θ's resources of its load over the resource's rate
 (CALIB's product form: `theta.toml`'s `joint` census shows MMA and the other pipes overlapping). The resources are the
 tensor pipe (dense s8, 2:4 sparse s8, f16), issue, the ALU pipe, the FMA pipe (FFMA one slot, IMAD and DP4A two),
-shared memory and, on sm_120, register-file reads. A linear program picks, for every class of Strassen leaf, how its
-product and its int8 overflow corrections are computed:
+the FP64 pipe (the data sheet's lanes), shared memory and, on sm_120, register-file reads. A linear program picks, for
+every class of Strassen leaf, how its product and its int8 overflow corrections are computed:
 
 - main product: s8 on wrapped forms, f16 (forms of up to 11 bits are exact, FP32 accumulation of a segment is exact
-  with overwhelming probability at these magnitudes), two s8 bit planes, DP4A or FFMA beside the tensor pipe;
+  with overwhelming probability at these magnitudes), two s8 bit planes, DP4A, FFMA or packed DFMA (two or three
+  products a DFMA, exact below 2^53) beside the tensor pipe;
 - each overflow correction 256 e·D (e the sparse excess of a form): 2:4 sparse s8 (leftover groups of 3 or 4 nonzeros
   scattered), two 2:4 layers, or a scatter through shared memory with int16- or int8-packed rows, adds on the ALU or
   the FMA pipe.
@@ -33,6 +34,7 @@ over all data (BET-HYBRID-2's `width.py`), so it is the adversary's case; real w
 from __future__ import annotations
 
 import argparse
+import functools
 import itertools
 import math
 import re
@@ -70,6 +72,7 @@ class Card:
     honest_tile: tuple     # the honest kernel's (m, n) tile
     facets: tuple          # θ's joint census: (a, b) with a·(tensor time) + b·(other warp instructions) ≤ 4 SMSP-cycles
     facet_other: str       # what θ's facet counts as other: every instruction (issue) or vector-pipe ones (vec)
+    f64: float = 2.0       # FP64 lanes (DFMA) an SM-clock beside the tensor pipe: the data sheet's, unmeasured
     family: str = "sm_120"
     assumed: tuple = field(default_factory=tuple)
 
@@ -85,8 +88,9 @@ H200 = Card(
     rf=math.inf, mma_rf=0.0, mma_issue=1 / 2048, mac_rate=1978.9e12 / 2, sha=4.79e9, c_op=64,
     acc_words=48 * 1024, min_m=64, honest_tile=(64, 256),
     # JI90_0: IGMMA.64x256x32 62.741 + every other warp instruction 0.981 SMSP-cycles; an IGMMA is 131072 MACs a SMSP
-    facets=((62.741 * 4095.6 / 131072, 0.981),), facet_other="issue", family="sm_90",
+    facets=((62.741 * 4095.6 / 131072, 0.981),), facet_other="issue", f64=64.0, family="sm_90",
     assumed=("2:4 sparse s8 at the data sheet's 8192 (3958 TOPS), unmeasured",
+             "DFMA on 64 FP64 lanes (34 TFLOPS at 1980 MHz), unmeasured, beside the tensor pipe",
              "wgmma at n128 at the measured n256 rate, n64 halfway to n32's measured 2729.9",
              "DP4A at IMAD's 64 lanes, unmeasured on sm_90",
              "48K of the 64K register words a SM hold accumulators",
@@ -108,6 +112,7 @@ SM120 = Card(
     facets=tuple((a * 1023.8 / 4096, b) for a, b in ((8.115, 1.0), (15.03, 0.317), (15.539, 0.172))),
     facet_other="vec",
     assumed=("160 accumulator registers a lane (a warp's super-tile)",
+             "DFMA on 2 FP64 lanes (1/64 of FP32), unmeasured",
              "every MMA instruction weighs in JI3e in proportion to its tensor time"),
 )
 CARDS = (H200, H200_M1, SM120)
@@ -393,11 +398,12 @@ def catalogue():
 # --------------------------------------------------------------------------------------------------------------------
 # Pricing: per naive MAC, loads on each resource; the time is the max of load / rate.
 
-RES = ("tensor", "issue", "alu", "fma", "smem", "rf", "vec")
+RES = ("tensor", "issue", "alu", "fma", "smem", "rf", "vec", "f64")
 
 
 def cap(card: Card) -> dict:
-    return dict(tensor=1.0, issue=card.issue, alu=card.alu, fma=card.fma, smem=card.smem, rf=card.rf, vec=math.inf)
+    return dict(tensor=1.0, issue=card.issue, alu=card.alu, fma=card.fma, smem=card.smem, rf=card.rf, vec=math.inf,
+                f64=card.f64)
 
 
 def scatter_loads(variant: str) -> dict:
@@ -464,6 +470,47 @@ def binary_loads(sp: dict, sc0: dict, p: float, amort_bin: int, amort_dense: int
     for r, x in lanes_alu(2 / amort_dense + 5 / 4 / amort_bin).items():
         out[r] += x
     return out
+
+
+@functools.cache
+def dfma_k(p: int, P: int, bits: int = 53) -> tuple[int, int] | None:
+    """Kronecker packing on DFMA (RT-LEAN-2 L30): p entries of one side s bits apart in one double, times one entry
+    of the other, accumulated k times, exact while every value is an integer below 2^bits (the card rounds to 53).
+    A field's sum is at most P k (P the largest |product|) and decodes signed when P k < 2^(s-1). The largest k with
+    its s, or None when no k fits (p = 4 at ±80)."""
+    best, k = None, 1
+    while True:
+        s = (P * k).bit_length() + 1
+        if P * k * sum(2 ** (s * i) for i in range(p)) >= 2 ** bits:
+            return best
+        best, k = (k, s), k + 1
+
+
+def dfma_loads(p: int, P: int, n: int, m: int, model: bool = False) -> dict | None:
+    """Loads a leaf MAC of packed DFMA beside the MMA, a BESIDE_TILE register tile of doubles (t² accumulators, t
+    packed and t plain operands, two LDS.128 words a double). Every k DFMAs an accumulator is decoded on the ALU:
+    a DADD of 1.5·2^52 puts the integer in the low mantissa, then per field but the last a signed extract and a
+    64-bit borrow-and-shift (6), the last 1, p IADDs into the int32 outputs and 2 for the offset (7p - 3). Packing p
+    entries and converting them is paid once for the n columns, converting the other side once for the m rows.
+    model: MODEL-SPEC's Lane.dfma, a 53x53 -> 128-bit exact product: p = 4 (a0 + a1 2^2s against b0 + b1 2^s,
+    s = 22), each result added into a 128-bit integer accumulator (4 IADD3), decoded every (2^21 - 1) // P."""
+    t = BESIDE_TILE
+    if model:
+        p, k, acc = 4, (2 ** 21 - 1) // P, 1.0
+        if k < 1:
+            return None
+    else:
+        ks = dfma_k(p, P)
+        if ks is None:
+            return None
+        k, acc = ks[0], 0.0
+    alu = acc + (7 * p - 3) / (p * k) + (p + 2) / (p * n) + 1 / m
+    f64 = 1 / p + 1 / (p * k)
+    return {"f64": f64, "alu": alu, "issue": f64 + 1 / (t * p) + alu, "smem": 16 / (t * p), "rf": 6 / p + 2 * alu,
+            "vec": f64 + alu}
+
+
+DFMA_P = (2, 3)
 
 
 def lookup_routes(L: int, n: int, m: int, kappa: float = 1.0) -> dict:
@@ -552,7 +599,8 @@ class Method:
 
 def price(card: Card, leaves: list, L: int, n: int, m: int, g: tuple = NAIVE, beside: bool = True,
           wgmma_smem: bool = True, facets: bool = True, items: tuple = (), extra_fixed: dict | None = None,
-          lookups: bool = False, rest: Leaf | None = None, asm: float | None = None) -> Priced:
+          lookups: bool = False, rest: Leaf | None = None, asm: float | None = None,
+          model_dfma: bool = False) -> Priced:
     """LP: minimize T (SM-clocks a naive MAC) with every resource's load at most T times its rate, and θ's joint
     facets a·tensor + b·other ≤ 4T. c = T over the honest kernel's 1/s8.
 
@@ -566,16 +614,17 @@ def price(card: Card, leaves: list, L: int, n: int, m: int, g: tuple = NAIVE, be
     rest: the operands' naive leaf, for the part the scheme's blocks don't cover (default: generic int8 entries).
     asm: the scheme's output assembly, IADD3s a segment a output entry (`assembly`)."""
     return price_methods(card, [Method("main", leaves, g, rest, asm)], L, n, m, beside=beside, wgmma_smem=wgmma_smem,
-                         facets=facets, items=items, extra_fixed=extra_fixed, lookups=lookups)
+                         facets=facets, items=items, extra_fixed=extra_fixed, lookups=lookups, model_dfma=model_dfma)
 
 
 def price_methods(card: Card, methods: list, L: int, n: int, m: int, beside: bool = True, wgmma_smem: bool = True,
                   facets: bool = True, items: tuple = (), extra_fixed: dict | None = None,
-                  lookups: bool = False) -> Priced:
+                  lookups: bool = False, model_dfma: bool = False) -> Priced:
     """`price` over several methods at once. The prover picks a method a tile, so the LP picks every method's share
     of the product (the shares sum to 1) together with every route: the convex hull of the methods, which can beat
     each of them when they bind different resources (ALGO-COST A19). A method's leaves, fixed loads and items scale
-    with its share; `items` and `extra_fixed` are the job's, whichever method runs. Priced.mix: the shares."""
+    with its share; `items` and `extra_fixed` are the job's, whichever method runs. Priced.mix: the shares.
+    model_dfma: add MODEL-SPEC's 128-bit exact DFMA (`dfma_loads`) to the card's packed DFMA routes."""
     names, cols, eqs = [], [], []
 
     def var(name, loads):
@@ -644,6 +693,11 @@ def price_methods(card: Card, methods: list, L: int, n: int, m: int, beside: boo
                         ld[res_] = ld.get(res_, 0.0) + lf.A.q * lf.B.q * x
                 var(f"{k}:{r}", ld)
                 mrow[f"{k}:{r}"] = 1.0
+            for p in (DFMA_P + (("model",) if model_dfma else ())) if beside else ():
+                ld = dfma_loads(4 if p == "model" else p, lf.A.max_abs * lf.B.max_abs, n, m, model=p == "model")
+                if ld is not None:
+                    var(f"{k}:dfma{p}", ld)
+                    mrow[f"{k}:dfma{p}"] = 1.0
             bins = [(s, o) for s, fs, o in (("A", lf.A, "B"), ("B", lf.B, "A")) if fs.binary > 0]
             for s, o in bins:
                 var(f"{k}:2:4 bin {s}", binary_loads(sp, sc0, (lf.A if s == "A" else lf.B).binary, rows_of[s],
