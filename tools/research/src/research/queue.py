@@ -1903,9 +1903,18 @@ PREFLIGHT_MIN_FREE = 0.25
 #: the temporary worktrees' prefix (`merged_worktree`), `<tmp>/research-merged-<pid>-*`: one whose process is gone is swept (a kill
 #: skips `finally`)
 MERGED_PREFIX = "research-merged-"
-#: prints the paths of the suites `suites.py`'s `touched` selects for the change from commit argv[1] to tree argv[2], as JSON
-_TOUCHED = ("import json, sys; sys.path.insert(0, 'tools/verity/check'); import suites as S; "
-            "print(json.dumps([s.path for s in S.touched(S.discover(), S.members(), sys.argv[1], sys.argv[2], S.locked())]))")
+#: prints, as JSON, the paths of the suites `suites.py`'s `touched` selects for the change from commit argv[1] to tree argv[2]
+#: (`suites`) and, for each, the fetched registry entries under its inputs (`fixtures`), as `suites.py` picks what to fetch before
+#: it runs them: the repository's own suite reads tracked files only, so it needs none
+_TOUCHED = ("import json, sys; sys.path.insert(0, 'tools/verity/check'); import suites as S; pkgs = S.members(); "
+            "chosen = S.touched(S.discover(), pkgs, sys.argv[1], sys.argv[2], S.locked()); "
+            "ins = {s: S.inputs_of(s, pkgs) for s in chosen}; own = {s: [p for p in ps if p != '.'] for s, ps in ins.items()}; "
+            "fx = S.fetched_fixtures(sys.argv[2], {p for ps in own.values() for p in ps}); "
+            "print(json.dumps({'suites': [s.path for s in chosen], 'fixtures': {s.path: sorted(p for p in fx "
+            "if S.covered(p, own[s], S.dropped(s, ins[s]))) for s in chosen}}))")
+#: what the preflight's fetch of its suites' fixtures (`research data fetch-fixtures`) may take of `PREFLIGHT_BUDGET_S`: the
+#: machine's store keeps every blob it fetches, so a later preflight here copies them from it in seconds
+PREFLIGHT_FETCH_S = 45.0
 #: a line of pytest's short summary: `FAILED tests/x.py::test_y - why`, `ERROR tests/x.py - why` (a collection error)
 def free_memory() -> float | None:
     """The share of this machine's memory available (`/proc/meminfo`'s MemAvailable over MemTotal), or None where unreadable."""
@@ -1938,12 +1947,13 @@ class Touched:
     """What `touched_suites` gave.  ``failed``: each failed suite in `suites.py --json`'s shape (`quick_tier.ROW_KEYS`, status
     failed, with each failing test's summary line under `summary`), as drive reads a remote run's from its `TOUCHED_REPORT` once it
     ends; ``suites``: those that ran here; ``ids``: the runs launched; ``notes``: what kept a suite or a launch from running;
-    ``tail``: the launch's output."""
+    ``tail``: the launch's output; ``fixtures``: each selected suite's fetched fixtures (`LocalSuites`)."""
     suites: list[str] = field(default_factory=list)
     failed: list[dict] = field(default_factory=list)
     ids: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     tail: str = ""
+    fixtures: dict[str, list[str]] = field(default_factory=dict)
 
 
 def failed_row(suite: str, failures: dict[str, str]) -> dict:
@@ -2003,22 +2013,28 @@ def merged_worktree(repo: Path, commit: str, root: Path | None = None):
 class LocalSuites:
     """`touched_suites` here, as the preflight runs them: `pytest ARGS` (`--collect-only`) in each suite `suites.py`'s own `touched`
     selects (run with the tree's ``python``; `PREFLIGHT_UNCOLLECTED` left out), or in ``suites`` alone when given, ``jobs`` at once,
-    each through ``run`` (the caller's budget); none while under `PREFLIGHT_MIN_FREE` of memory is available."""
+    each through ``run`` (the caller's budget); none while under `PREFLIGHT_MIN_FREE` of memory is available.  First ``fetch``
+    (the tree, the paths; gives the paths still missing and why) brings the fetched fixtures under those suites' inputs into the
+    tree (`_TOUCHED`'s, or ``fixtures`` with ``suites``), since a test may read one at import; a suite whose fixtures it couldn't
+    fetch isn't collected, and one note says so."""
     python: str
     run: Callable[[list[str], Path], tuple[subprocess.CompletedProcess | None, str]]
     jobs: int = PREFLIGHT_JOBS
     free: Callable[[], float | None] = free_memory
     suites: list[str] | None = None
     args: tuple[str, ...] = ("--collect-only",)
+    fetch: Callable[[Path, list[str]], tuple[set[str], str]] | None = None
+    fixtures: dict[str, list[str]] = field(default_factory=dict)
 
     def __call__(self, wt: Path, commit: str, base: str) -> Touched:
-        out = Touched()
+        out = Touched(fixtures=dict(self.fixtures))
         suites = self.suites
         if suites is None:
             r, why = self.run([self.python, "-P", "-c", _TOUCHED, base, _out(wt, "rev-parse", f"{commit}^{{tree}}")], wt)
             try:
-                suites = json.loads(r.stdout.strip().splitlines()[-1]) if r is not None and r.returncode == 0 else None
-            except (ValueError, IndexError):
+                said = json.loads(r.stdout.strip().splitlines()[-1]) if r is not None and r.returncode == 0 else None
+                suites, out.fixtures = (said["suites"], said["fixtures"]) if said is not None else (None, {})
+            except (ValueError, IndexError, KeyError, TypeError):
                 suites = None
             if suites is None:
                 out.notes.append(f"no suite collected: `suites.py` couldn't say which the change touches "
@@ -2031,6 +2047,14 @@ class LocalSuites:
             out.notes.append(f"no suite collected: {f:.0%} of memory available, under {PREFLIGHT_MIN_FREE:.0%}; the train's check "
                              "still collects them")
             todo = []
+        need = sorted({p for s in todo for p in out.fixtures.get(s, ())})
+        if need and self.fetch is not None:
+            missing, why = self.fetch(wt, need)
+            if blocked := [s for s in todo if missing & set(out.fixtures.get(s, ()))]:
+                shown = ", ".join(sorted(missing)[:3]) + (f" and {len(missing) - 3} more" if len(missing) > 3 else "")
+                out.notes.append(f"{', '.join(blocked)} not judged: {len(missing)} of the {len(need)} fixture(s) the suites read "
+                                 f"weren't fetched ({why or 'no source held them'}: {shown}); the train's check fetches them")
+                todo = [s for s in todo if s not in blocked]
         with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(self.jobs, len(todo) or 1))) as pool:
             for s, res in zip(todo, pool.map(lambda s: pytest_failures(self.run, self.python, wt / s, list(self.args)), todo)):
                 if isinstance(res, str):
@@ -2120,7 +2144,9 @@ class Preflight:
     `next` is fetched fresh; a PR already on it is merged onto the commit below its old head, as drive's next sync would rebuild
     it.  The checks of (b) run in a temporary worktree of the caller's repository at the merge (`merged_worktree`), with its own environment
     (`sync`; ``python`` stands in for its interpreter), under `budget_s` together, and the worktree is removed whatever
-    happens.  A failure that `next` has too (a pin already stale there, a fixture this machine never fetched) isn't the PR's:
+    happens.  The fetched fixtures under the collected suites' inputs come into it first (``fetch``, by default `_fetch_fixtures`:
+    through ``store``, within `PREFLIGHT_FETCH_S` of the budget); a suite whose fixtures can't be fetched (no credentials, no
+    source) is named once and not judged.  A failure that `next` has too (a pin already stale there) isn't the PR's:
     each failed check runs again at `next` in the same worktree, within the same budget, and only what fails on the merge alone
     refuses.  What keeps a check from running (no `next` to fetch, the budget spent, labels that can't be pulled) is said and
     refuses nothing: the preflight saves a train, and the train's check is still the gate."""
@@ -2128,9 +2154,11 @@ class Preflight:
     def __init__(self, repo: Path, remote: str, store, *, sync: tuple[str, ...] | None = PREFLIGHT_SYNC, python: str | None = None,
                  budget_s: float = PREFLIGHT_BUDGET_S, jobs: int = PREFLIGHT_JOBS, clock: Callable[[], float] = time.monotonic,
                  root: Path | None = None, log: Callable[[str], None] = print,
-                 free: Callable[[], float | None] = free_memory):
+                 free: Callable[[], float | None] = free_memory,
+                 fetch: Callable[[Path, list[str], float], tuple[set[str], str]] | None = None):
         self.repo, self.remote, self.store, self.sync, self.python = Path(repo), remote, store, sync, python
         self.budget_s, self.jobs, self.clock, self.log, self.free = budget_s, jobs, clock, log, free
+        self.fetch = fetch or self._fetch_fixtures
         self.root = Path(root or tempfile.gettempdir())
 
     def __call__(self, pr: PR, prs: list[PR]) -> str | None:
@@ -2233,13 +2261,14 @@ class Preflight:
         tree = r.stdout.split()[0]
         commit = _out(self.repo, "commit-tree", tree, "-p", base, "-p", pr.head, "-m", f"preflight: #{pr.number} onto {base[:12]}")
         deadline = self.clock() + self.budget_s
+        fixtures: dict[str, list[str]] = {}
         with merged_worktree(self.repo, commit, self.root) as wt:
-            failed = self._checks(wt, base, tree, None, notes, deadline)
+            failed = self._checks(wt, base, tree, None, notes, deadline, fixtures)
             if not any(failed.values()):
                 return []
             _git(wt, "checkout", "-q", "--detach", "--force", base)
             _git(wt, "clean", "-qffdx", "-e", "/.venv")
-            again = self._checks(wt, base, tree, {k for k, v in failed.items() if v}, [], deadline)
+            again = self._checks(wt, base, tree, {k for k, v in failed.items() if v}, [], deadline, fixtures)
         out = []
         for name, fails in failed.items():
             if fails and name not in again:
@@ -2280,10 +2309,38 @@ class Preflight:
         except OSError as e:
             return None, f"{argv[0]} didn't start ({e})"
 
+    def _fetch_fixtures(self, wt: Path, paths: list[str], deadline: float) -> tuple[set[str], str]:
+        """The fetched registry entries ``paths`` brought into ``wt`` by `research data fetch-fixtures` (`suites.py`'s fetch, every
+        byte checked against its id) through ``store``, whose blobs stay there for the next preflight on this machine, within
+        `PREFLIGHT_FETCH_S` of what's left by ``deadline``: the paths still missing, and why."""
+        left = min(deadline - self.clock(), PREFLIGHT_FETCH_S)
+        if left <= 0:
+            return set(paths), "the budget was spent before the fetch started"
+        root = getattr(self.store, "root", None)
+        argv = [sys.executable, "-P", "-m", "research", "data", "fetch-fixtures", *(["--store", str(root)] if root else []),
+                "--repo", str(wt), "--json", *(str(wt / p) for p in paths)]
+        try:
+            r = subprocess.run(argv, capture_output=True, text=True, errors="replace", stdin=subprocess.DEVNULL, timeout=left,
+                               check=False)
+        except subprocess.TimeoutExpired:
+            return set(paths), f"`research data fetch-fixtures` still running after {left:.0f} s"
+        except OSError as e:
+            return set(paths), f"`research data fetch-fixtures` didn't start ({e})"
+        try:
+            rep = json.loads(r.stdout)
+            missing = {e["path"] for e in rep["entries"] if e["status"] in ("missing", "stale")}
+        except (ValueError, KeyError, TypeError):
+            return set(paths), f"`research data fetch-fixtures` exited {r.returncode}: {(r.stderr or r.stdout).strip()[-200:]}"
+        if not missing:
+            return missing, ""
+        return missing, ("no source here: no reachable private remote, no public URL" if not rep.get("sources")
+                         else f"not on {', '.join(rep['sources'])}")
+
     def _checks(self, wt: Path, base: str, tree: str, only: set[str] | None, notes: list[str],
-                deadline: float) -> dict[str, dict[str, str]]:
+                deadline: float, fixtures: dict[str, list[str]]) -> dict[str, dict[str, str]]:
         """{check: {what failed: its line}} for the checks of (b) on the tree checked out in ``wt`` (``only`` those named), each
-        that ran by ``deadline``; why each other didn't run goes to ``notes``."""
+        that ran by ``deadline``; why each other didn't run goes to ``notes``.  ``fixtures`` gets each collected suite's fetched
+        fixtures on the first pass (``only`` None), and a later pass fetches them again."""
         want = (lambda name: True) if only is None else (lambda name: name in only)
         out: dict[str, dict[str, str]] = {}
 
@@ -2320,7 +2377,10 @@ class Preflight:
                 d, _, rest = path.rpartition("tests/")
                 got(f"tests:{path}", pytest_failures(run, py, wt / (d.rstrip("/") or "."), ["tests/" + rest]))
         names = None if only is None else [n.partition(":")[2] for n in only if n.startswith("collect:")]
-        res = touched_suites(self.repo, tree, base, LocalSuites(py, run, self.jobs, self.free, names), wt=wt)
+        fetch = lambda wt_, paths: self.fetch(wt_, paths, deadline)                    # noqa: E731
+        res = touched_suites(self.repo, tree, base, LocalSuites(py, run, self.jobs, self.free, names, fetch=fetch,
+                                                                fixtures=fixtures), wt=wt)
+        fixtures.update(res.fixtures)
         notes += res.notes
         failed = {row["suite"]: dict(zip(row["failed_tests"], row["summary"])) for row in res.failed}
         for s in res.suites:
