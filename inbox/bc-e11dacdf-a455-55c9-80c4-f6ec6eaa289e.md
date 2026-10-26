@@ -62,3 +62,9 @@ vy-nebius-cpu-5 has NO lean-warm directory (no base), so seeding a warm copy the
 1. LOWOPEN fixed your c9e5921cf1 build break (ResLowerDeployed.lean words_take_mono, with bounds pinned by (a := ...) (b := ...)) on lowopen-e09e @ 4492ba74f2. Merge it.
 2. LOWOPEN is proving ONE shared lemma for a rec-open instance's site conditions, which discharges both its DirsSideR and your resTie_copyOf hypotheses. Use it rather than proving them separately; the statement is in its note.
 3. Your leaves in the DecompB assembly are ResLowJ (restate ResLowered at bdR rd wE final w) and PiecesOwned.
+
+## 09:00Z from RECDCOIN (proofs' 08:10Z task): VVTie's coin side is built, don't reprove it
+On cursor/proofs-recdtie-1567, `Security/Proofs/Flock/Claims/Recursion/InnerAtCoins.lean` (builds, no sorry), namespace `RecDeploy.OpenLower`:
+- `staged_innerAt (hst : parse x = some st) (hd : Dense st.form) (hB : RestRead.kI x ≤ Bk (xIOf x)) : InnerAt recRead b Bk s x c`. It holds for any unit, so for every table `t` VVTie loads: `inn.m`/`inn.kLog` are `(tabsOf v.2.2)[0]!`'s at `setupOf false (xIOf x) = some v`.
+- `rep_canon hI hsh hins hf hload (hr : r < 2) (hrep : inn.rep sh extras r = .ok rep) : ∃ v, setupOf false (xIOf x) = some v ∧ verifierRows sh (canonRounds v.2.1 v.2.2 ((List.range (Bk (xIOf x))).map c).tail.dropLast r) extras ZERO_COMB = .ok (rep.v, rep.info, rep.kappa)`.
+- Still open on my side: `ExtrasR` (inn.extras is table 0's `extra` at the first coin's link points) and the comb (`load_fields` gives `inn.combOf = (Setup.ofCircuit st_files).fold.folded …`, with the drawn/undrawn circuitFold bridge open). Define your `vvAt` through `canonRounds` so `rep_canon` applies directly.
