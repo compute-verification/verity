@@ -157,9 +157,14 @@ theorem rowDigest_eq (row : Array ℕ) : Firewall.rowDigest row = Sha512.hash �
 /-- A row's words as `Firewall.rowDigest` lays them after its prefix: each two bytes, little-endian. -/
 def wordBytes (ws : Array ℕ) : Msg := ws.toList.flatMap fun w => [(w % 256).toUInt8, (w / 256 % 256).toUInt8]
 
-/-- The instance copy `(o, g, 0)` of a part's table is: block `o`'s VU `g`, its first unit (`rowHidden`'s index). Check 5
-holds instances `0` and `1` (reps `0` and `1`), so only copies `(o, g, 0)` with `instOf c o g < 2` are tied. -/
-def instOf (c : Circuit) (o g : ℕ) : ℕ := o * c.g + g
+/-- **The copy a piece keyed `(jj, o, g, u)` reads**: instance `n = o + g` of the outer part's one table, at block
+`n / c.g`'s VU `n % c.g` of that part's own circuit `c` (`Circuit.instOf`), unit `u`. The key does not know `c.g`, which
+the prover chooses and check 5 does not pin, so a piece at `(jj, r, 0, 0)` is instance `r` at every `c.g ≥ 1`. Check 5
+holds instances `0` and `1` (reps `0` and `1`), so only keys with `o + g < 2` are tied. -/
+abbrev keyCopy (p : Flock.Readable.Parsed) (ht : 0 < p.sts.size) (w : Claims.Flock.Wit) (key : ℕ × ℕ × ℕ × ℕ) :
+    ℕ → Bool :=
+  Flock.Readable.copyOf p 0 ht w ((key.2.1 + key.2.2.1) / p.sts[0].c.g) ((key.2.1 + key.2.2.1) % p.sts[0].c.g)
+    key.2.2.2
 
 /-- The `nv` elements a row of words carries, 8 words an element (`RecCoins.words`), zero past `nv`. -/
 def wordsElems (nv : ℕ) (ws : Array ℕ) (e : ℕ) : _root_.Flock.F128 :=
@@ -1466,8 +1471,9 @@ theorem resTie_staged {b : Brings} {IV : Claims.Verifier Coin}
 `s` accepts at an algebra part, each piece `ownQ` gives it holds where, at every staged statement and witness that pass
 `Flock.check`, agree with the messages and record true, collision-free calls, the piece sits at one of the statement's
 copies, of its group, at which check 5's tie holds (`ResTie`) and whose rows are what `elemAt` reads. The piece's key is
-`(jj, o, g, u)`: the part's group `jj` (so pieces of different groups have different keys) and the copy `(o, g, u)` of
-the part's one table. Check 5 holds only
+`(jj, o, g, u)`: the part's group `jj` (so pieces of different groups have different keys) and instance `o + g`'s unit
+`u` of the part's one table (`keyCopy`: block `(o + g) / c.g`, VU `(o + g) % c.g` at the part's own `c.g`, which the
+prover chooses), so the pieces needn't know `c.g`. Check 5 holds only
 two instances, so `resPieces_computes`' tie at every copy does not follow from it; this one asks it where the pieces
 are. -/
 theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {L : LayoutB}
@@ -1486,8 +1492,9 @@ theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
       showsPart untr b s x xO c → L.Agrees cmt x s w xO ms → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
       (Claims.findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false →
       ∀ q ∈ pieces (Claims.Recursion.xI D x), ownQ x q = some s →
-        ∃ ht : 0 < p.sts.size, q.key.2.1 < 2 ^ (p.sts[0].m - p.sts[0].c.kLog) ∧
-          q.key.2.2.1 < p.sts[0].c.g ∧ q.key.2.2.2 < p.sts[0].c.upv ∧
+        ∃ ht : 0 < p.sts.size, 0 < p.sts[0].c.g ∧
+          (q.key.2.1 + q.key.2.2.1) / p.sts[0].c.g < 2 ^ (p.sts[0].m - p.sts[0].c.kLog) ∧
+          q.key.2.2.2 < p.sts[0].c.upv ∧
           ∀ (m k cl jj : ℕ) (sh : _root_.Flock.Shape) (holo : Bool) (S : _root_.Flock.RecOpen.GfS) (ns : List ℕ)
             (nv : ℕ), _root_.Flock.RecResiduals.params p.sts[0].c.unit.name = some (m, k, cl, jj) →
             _root_.Flock.RecResiduals.shape? m k cl = some sh →
@@ -1496,11 +1503,10 @@ theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
             S = q.S ∧ q.key.1 = jj ∧
             ResTie S ns nv
               (vvAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key)
-              (_root_.Flock.Readable.copyOf p 0 ht w q.key.2.1 q.key.2.2.1 q.key.2.2.2) ∧
+              (keyCopy p ht w q.key) ∧
             ∀ os last, Bd.final (ms.getD (Bd.DE.V.k (Claims.Recursion.xI D x) - 1) []) = some (os, last) →
               os.length + 1 = Bd.DE.V.k (Claims.Recursion.xI D x) →
-              _root_.Flock.Readable.rowsRead ns nv
-                  (_root_.Flock.Readable.copyOf p 0 ht w q.key.2.1 q.key.2.2.1 q.key.2.2.2) =
+              _root_.Flock.Readable.rowsRead ns nv (keyCopy p ht w q.key) =
                 elemAt (Claims.Recursion.xI D x) (Bd.opened os last)
                   ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key) :
     PiecesComputes Bd D pieces (resHolds elemAt vvAt) ownQ s x c ms := by
@@ -1517,12 +1523,11 @@ theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
   rw [hsv] at hsv'
   cases hsv'
   intro q hq ho os last hf hl
-  obtain ⟨ht', ho', hg, hu, hch⟩ := hpc xO w p hx hck' hs ⟨hh, hp, hm, hrw⟩ hT hc q hq ho
+  obtain ⟨ht', hG, ho', hu, hch⟩ := hpc xO w p hx hck' hs ⟨hh, hp, hm, hrw⟩ hT hc q hq ho
   obtain ⟨m, k, cl, jj, sh, holo, S, ns, nv, h1, h2, h3, h4, hro⟩ :=
-    _root_.Flock.Readable.innerCopies ht' ho' hg hu hcp
+    _root_.Flock.Readable.innerCopies ht' ho' (Nat.mod_lt _ hG) hu hcp
   obtain ⟨rfl, -, htie, hE⟩ := hch m k cl jj sh holo S ns nv h1 h2 h3 h4
-  have hz : ResZero q.S (_root_.Flock.Readable.rowsRead ns nv
-      (_root_.Flock.Readable.copyOf p 0 ht' w q.key.2.1 q.key.2.2.1 q.key.2.2.2))
+  have hz : ResZero q.S (_root_.Flock.Readable.rowsRead ns nv (keyCopy p ht' w q.key))
       (vvAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key) :=
     resVal_zero_of_tie hro htie
   rw [hE os last hf hl] at hz
@@ -1532,8 +1537,8 @@ theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
 
 /-- **The coin tie**: at a V\* statement `xO` part `s` stages at `x` and shows the coins `c` at, wherever check 5 loads
 a `rec-residuals` statement's inner session and computes its `v` rows (`residualRows`), the verifier's values the coins give
-at a copy (`vvAt` at the inner statement and the coins, keyed `(jj, o, g, 0)` by the part's group) are the elements
-of that copy's instance's row, at the verifier's part `(S, ns, nv)`. `staged_rep_drawn` is its coin side. -/
+at a key (`vvAt` at the inner statement and the coins, keyed `(jj, o, g, 0)` by the part's group) are the elements
+of instance `o + g`'s row, at the verifier's part `(S, ns, nv)`. `staged_rep_drawn` is its coin side. -/
 def VVTie (untr : TrReader) (b : Brings) (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (Bk : Msg → ℕ) (s : ℕ) (x : Msg) (c : ℕ → Coin) : Prop :=
   ∀ (xO : Msg), showsPart untr b s x xO c → ∀ (i : RecIns) (spec : SessionSpec) (sts : Array Stmt),
@@ -1545,14 +1550,13 @@ def VVTie (untr : TrReader) (b : Brings) (vvAt : Msg → List Coin → ℕ × �
         ∀ (sh : _root_.Flock.Shape) (holo : Bool) (S : _root_.Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ),
           RecResiduals.shape? m k cl = some sh → RecResiduals.holoOf sts[t].c = .ok holo →
           RecResiduals.part { sh with holo } jj = .ok (S, ns, nv) →
-          ∀ o g, g < sts[t].c.g → instOf sts[t].c o g < 2 →
-            vvAt (xIOf x) ((List.range (Bk (xIOf x))).map c) (jj, o, g, 0) =
-              wordsElems nv rows[instOf sts[t].c o g]!
+          ∀ o g, o + g < 2 →
+            vvAt (xIOf x) ((List.range (Bk (xIOf x))).map c) (jj, o, g, 0) = wordsElems nv rows[o + g]!
 
-/-- **Check 5's tie at a piece's copy** (the `ResTie` conjunct `resPieces_computesAt` asks of each piece): at copy
-`(0, o, g, 0)` of an instance `n` check 5 holds (`n < 2`), between the verifier's values the coins give at the piece's
-key `(jj, o, g, 0)` and the
-copy's columns. `resTie_staged` at `n`, with the copy's `v` columns where its slot reads (`vCols_of_base`, VBridge's
+/-- **Check 5's tie at a piece's copy** (the `ResTie` conjunct `resPieces_computesAt` asks of each piece): at key
+`(jj, o, g, 0)` of an instance `n = o + g` check 5 holds (`n < 2`), between the verifier's values the coins give at the
+key and its copy's columns (`keyCopy`: block `n / c.g`, VU `n % c.g`, at any `c.g ≥ 1`). `resTie_staged` at `n`, with
+the copy's `v` columns where its slot reads (`vCols_of_base`, VBridge's
 `vBase` being the port's column by `vBase_staged`), the `out` slot committing its output bits (`slotOut_staged`), its
 residual columns where the `out` slot reads (`oCols_staged`, from the output leaves `checkParsed` holds to V\*'s), and
 the coins' values check 5's row (`VVTie`). -/
@@ -1580,7 +1584,7 @@ theorem resTie_copyOf {b : Brings} {IV : Claims.Verifier Coin}
     {sh : _root_.Flock.Shape} {holo : Bool} {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
     (hshp : RecResiduals.shape? m k cl = some sh) (hholo : RecResiduals.holoOf sts[0].c = .ok holo)
     (hpart : RecResiduals.part { sh with holo } jj = .ok (S, ns, nv))
-    {o g n : ℕ} (hg : g < sts[0].c.g) (hn : instOf sts[0].c o g = n) (hn2 : n < 2) (hnp : n < sts[0].pub.n)
+    {o g n : ℕ} (hG : 0 < sts[0].c.g) (hn : o + g = n) (hn2 : n < 2) (hnp : n < sts[0].pub.n)
     {qv qo : ℕ} (hqv : c.ports.findIdx? (·.name == "v") = some qv)
     (hqo : c.ports.findIdx? (·.name == "out") = some qo) (hvin : qv < HmOut.nIn c) (hoout : ¬ qo < HmOut.nIn c)
     {ptv pto : Port} (hptv : c.ports[qv]? = some ptv) (hpto : c.ports[qo]? = some pto)
@@ -1590,16 +1594,20 @@ theorem resTie_copyOf {b : Brings} {IV : Claims.Verifier Coin}
         8 * nv ≤ rows[n]!.size)
     (hwo : pto.words = (RecCoins.padTo (RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!
       (Registered.rowWords (RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!.size 16)).size) :
-    ResTie S ns nv (vvAt (xIOf x) ((List.range (Bk (xIOf x))).map cs) (jj, o, g, 0))
-      (Flock.Readable.copyOf p 0 ht w o g 0) := by
+    ResTie S ns nv (vvAt (xIOf x) ((List.range (Bk (xIOf x))).map cs) (jj, o, g, 0)) (keyCopy p ht w (jj, o, g, 0)) := by
   obtain ⟨p', -, -, hx', ht', hpi, -, -, -, -⟩ := stagedTables hsh.2
   rw [hx] at hx'
   cases hx'
+  have hpc0 : p.sts[0].c = c := partCircuit_staged hsh.2 hx ht' hpi hr hpc ht
   have hc0 : sts[0].c = c := by
-    have e := partCircuit_staged hsh.2 hx ht' hpi hr hpc ht
     have hp : p = { i.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
     subst hp
-    exact e
+    exact hpc0
+  have hg : n % c.g < c.g := Nat.mod_lt _ (hc0 ▸ hG)
+  have hk : keyCopy p ht w (jj, o, g, 0) = Flock.Readable.copyOf p 0 ht w (n / c.g) (n % c.g) 0 := by
+    simp only [keyCopy]
+    rw [hpc0, hn]
+  rw [hk]
   have hslo := slotOut_staged (w := w) hsh.2 hck hr hss hsv hpc (by rw [← hc0]; exact hres) hshp
     (by rw [← hc0]; exact hholo) hqo hoout hn2
   obtain ⟨inn, rows, hinn, hrw, hall⟩ := resTie_staged hT hnc hsh.2 hck hr hss hsv hpc hsu h0 hidx hown hres hso hop
@@ -1608,16 +1616,15 @@ theorem resTie_copyOf {b : Brings} {IV : Claims.Verifier Coin}
   have hvb := vBase_staged hsh.2 hr hss hsv hpc hqv (by rw [← hc0]; exact hres) hshp (by rw [← hc0]; exact hholo)
     hpart
   have hVc := vCols_of_base (w := w) hsh.2 hr hss hsv hpc hx ht hqv hvin hptv
-    (by rw [hwv]; exact le_trans hsz (size_padTo_ge _ _)) (hc0 ▸ hg)
-    (show o * c.g + g = n by rw [← hc0]; exact hn) hvb
+    (by rw [hwv]; exact le_trans hsz (size_padTo_ge _ _)) hg (Nat.div_add_mod' n c.g) hvb
   have hzs : 128 ≤ ((RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!).size := by
     rw [getElem!_pos (RecCoins.zeroRows 2 RecCoins.OUT_WORDS) n (by simpa [RecCoins.zeroRows] using hn2)]
     simp [RecCoins.zeroRows, RecCoins.OUT_WORDS]
   have hOc := oCols_staged (w := w) hsh.2 hck hr hss hsv hpc hx ht hqv hqo hvin hoout hpto
     (by rw [hwo]; exact le_trans hzs (size_padTo_ge _ _)) (by rw [← hc0]; exact hres) hshp
-    (by rw [← hc0]; exact hholo) hpart (hc0 ▸ hg) (show o * c.g + g = n by rw [← hc0]; exact hn)
-  rw [hvv xO hsh i spec sts hsu 0 h0 m k cl jj hres f inn rows hf hinn hrw sh holo S ns nv hshp hholo hpart o g hg
-    (by rw [hn]; exact hn2), hn]
+    (by rw [← hc0]; exact hholo) hpart hg (Nat.div_add_mod' n c.g)
+  rw [hvv xO hsh i spec sts hsu 0 h0 m k cl jj hres f inn rows hf hinn hrw sh holo S ns nv hshp hholo hpart o g
+    (hn ▸ hn2), hn]
   exact hall hptv hpto hwv hwo hnr hsz hVc hOc
 
 /-- **`resTie_copyOf` at check 5's site** (`CopySite.copySite_staged`): the setup's registered ports, its source at C3
@@ -1642,7 +1649,7 @@ theorem resTie_site {b : Brings} {IV : Claims.Verifier Coin}
     {sh : _root_.Flock.Shape} {holo : Bool} {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
     (hshp : RecResiduals.shape? m k cl = some sh) (hholo : RecResiduals.holoOf sts[0].c = .ok holo)
     (hpart : RecResiduals.part { sh with holo } jj = .ok (S, ns, nv))
-    {o g n : ℕ} (hg : g < sts[0].c.g) (hn : instOf sts[0].c o g = n) (hn2 : n < 2) (hnp : n < sts[0].pub.n)
+    {o g n : ℕ} (hG : 0 < sts[0].c.g) (hn : o + g = n) (hn2 : n < 2) (hnp : n < sts[0].pub.n)
     {qv qo : ℕ} (hqv : c.ports.findIdx? (·.name == "v") = some qv)
     (hqo : c.ports.findIdx? (·.name == "out") = some qo) (hvin : qv < HmOut.nIn c) (hoout : ¬ qo < HmOut.nIn c)
     {ptv pto : Port} (hptv : c.ports[qv]? = some ptv) (hpto : c.ports[qo]? = some pto)
@@ -1653,12 +1660,11 @@ theorem resTie_site {b : Brings} {IV : Claims.Verifier Coin}
         8 * nv ≤ rows[n]!.size)
     (hwo : pto.words = (RecCoins.padTo (RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!
       (Registered.rowWords (RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!.size 16)).size) :
-    ResTie S ns nv (vvAt (xIOf x) ((List.range (Bk (xIOf x))).map cs) (jj, o, g, 0))
-      (Flock.Readable.copyOf p 0 ht w o g 0) := by
+    ResTie S ns nv (vvAt (xIOf x) ((List.range (Bk (xIOf x))).map cs) (jj, o, g, 0)) (keyCopy p ht w (jj, o, g, 0)) := by
   have hrs : (RecResiduals.params sts[0].c.unit.name).isSome := by simp [hres]
   obtain ⟨own, f, hown, hf, hso, hop, hsp, hro⟩ := RecDeploy.CopySite.copySite_staged hsu h0 (.inr hrs)
   exact resTie_copyOf hT hnc hsh hck hr hss hsv hpc hx ht hsu h0 hidx hown hres hso hop hsp (hro hrs) hf hset hvv
-    hshp hholo hpart hg hn hn2 hnp hqv hqo hvin hoout hptv hpto (hrows f hf) hwo
+    hshp hholo hpart hG hn hn2 hnp hqv hqo hvin hoout hptv hpto (hrows f hf) hwo
 
 /-- **The `rec-residuals` pieces' share of `hlowP` at the layout of record** (U12's statement): at the compiled record
 `recBound` over `DeployedR.layR elem` and `IVStar` of `bdR rd wE final w`, the staging `showsPart`, wherever part `s`

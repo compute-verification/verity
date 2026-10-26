@@ -172,9 +172,10 @@ end Shares
 
 /-! ## The `rec-residuals` pieces -/
 
-/-- **A `rec-residuals` piece**: its key `(jj, o, g, u)`, the verifier's group `jj` its part computes and the copy
-`(o, g, u)` of that part's one table (`ResLower.resPieces_computesAt`; `resPieces_computes` reads the first component
-as the table instead), and the group of residuals it computes. -/
+/-- **A `rec-residuals` piece**: its key `(jj, o, g, u)`, the verifier's group `jj` its part computes and instance
+`o + g`'s unit `u` of that part's one table (`ResLower.keyCopy`, block `(o + g) / c.g` and VU `(o + g) % c.g` at the
+part's own `c.g`; `ResLower.resPieces_computesAt`; `resPieces_computes` reads the first component as the table
+instead), and the group of residuals it computes. -/
 structure ResPiece where
   key : ℕ × ℕ × ℕ × ℕ
   S : _root_.Flock.RecOpen.GfS
