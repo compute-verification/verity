@@ -217,6 +217,107 @@ def resSetup (xO : Msg) : List Msg :=
   | some (i, _, sts) => sts.toList.flatMap (resSetupSt (RecCoins.Source.atC3 i.src i.inner i.commits))
   | none => []
 
+theorem rowDigest_eq (row : Array ℕ) : Firewall.rowDigest row = Sha512.hash ⟨(rowInput row).toArray⟩ := by
+  rw [rowInput, FlockSoundness.Refine.bytes_of_list]
+  rfl
+
+/-! ## Check 5's tie at one port and instance -/
+
+/-- **Check 5's tie at one port's row** (`commit_tie` at `PartAccepts`' refusal): where part `s` records port `q`'s
+calls at instance `n` (`portCalls`, true and collision-free with the verifier's evaluations), its slot outputs the commit
+string of the row its forms read (`hslot`), check 5 holds that commit string to `commitRow row salt` (`hpub`), and the
+verifier evaluates that row's and salt's inputs (`hv`, `hs`), the part's row bytes are the verifier's row's. -/
+theorem port_tie {Coin' : Type} {H : Msg → Msg} (hH : H = FlockDeploy.sha512) {D : Claims.Recursion.Deploy Coin'}
+    {L : LayoutB} {x xO : Msg} {s : ℕ} {w : Claims.Flock.Wit} {c : Circuit} {nm : String} {q n : ℕ}
+    (hT : ∀ e ∈ L.calls x s w, H e.1 = e.2) (hnc : (Claims.findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false)
+    (hmem : ∀ e ∈ portCalls c nm q n, e ∈ L.shaAt x s)
+    (hslot : readForms w (hmCommit c q n) = FlockSoundness.Binding.commitString
+      (rowPfx c q ++ readForms w (rowForms c nm q n)) (readForms w (hmSalt c q n)))
+    {row : Array ℕ} {salt : ByteArray}
+    (hpub : (RecCoins.commitRow row salt).data.toList = readForms w (hmCommit c q n))
+    (hv : rowInput (RecCoins.padTo row (Registered.rowWords row.size 16)) ∈ D.setup xO)
+    (hs : (Hm96.Default512.saltPrefix ++ salt).data.toList ∈ D.setup xO) :
+    rowPfx c q ++ readForms w (rowForms c nm q n) = rowInput (RecCoins.padTo row (Registered.rowWords row.size 16)) := by
+  subst hH
+  have hT' := vcallsAt_append_true hT (D := D) (xO := xO)
+  have hcall : ∀ e ∈ portCalls c nm q n, e.1 ++ readForms w e.2.1 ∈
+      (L.calls x s w ++ vcallsAt FlockDeploy.sha512 D xO).map Prod.fst := fun e he =>
+    List.mem_map.2 ⟨_, List.mem_append_left _ (List.mem_map.2 ⟨e, hmem e he, rfl⟩), rfl⟩
+  have hver : ∀ u ∈ D.setup xO, u ∈ (L.calls x s w ++ vcallsAt FlockDeploy.sha512 D xO).map Prod.fst := fun u hu =>
+    List.mem_map.2 ⟨(u, _), List.mem_append_right _ (List.mem_map.2 ⟨u, hu, rfl⟩), rfl⟩
+  refine commit_tie hT' hnc (hcall _ (List.mem_cons_of_mem _ List.mem_cons_self)) (hver _ hv)
+    (hcall _ List.mem_cons_self) ?_ ?_
+  · rw [show FlockSoundness.Refine.K512.saltPrefix ++ salt.data.toList =
+      (Hm96.Default512.saltPrefix ++ salt).data.toList by
+        rw [ByteArray.data_append, Array.toList_append]; rfl]
+    exact hver _ hs
+  · rw [← hslot, ← hpub, RecCoins.commitRow, rowDigest_eq, commitString_exec]
+
+/-! ## The share at the pieces' copies -/
+
+/-- **`resPieces_computes` with the tie at the pieces' copies only**, and the whole acceptance at hand: wherever part
+`s` accepts at an algebra part, each piece `ownQ` gives it holds where, at every staged statement and witness that pass
+`Flock.check`, agree with the messages and record true, collision-free calls, the piece sits at one of the statement's
+copies, of its group, at which check 5's tie holds (`ResTie`) and whose rows are what `elemAt` reads. Check 5 holds only
+two instances, so `resPieces_computes`' tie at every copy does not follow from it; this one asks it where the pieces
+are. -/
+theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {L : LayoutB}
+    {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {b : Brings} {cmt : Msg → ℕ → Msg → Msg} {s : ℕ}
+    {x : Msg} {c : ℕ → Coin} {ms : List Msg}
+    (h : PartAccepts H D (deployZkRec _root_.Flock.Readable.relation) L shape (showsPart untr b) cmt s x c ms)
+    {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt} (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss)
+    {j : ℕ} {nm : String} {pt : VStar.Part} (hsv : ss[s]? = some (.inner j nm pt))
+    (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)
+    (pieces : Msg → List ResPiece) (ownQ : Msg → ResPiece → Option ℕ)
+    (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+    (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+    (hpc : ∀ (xO : Msg) (w : Claims.Flock.Wit) (p : _root_.Flock.Readable.Parsed),
+      _root_.Flock.Readable.parseBytes readOfO xO = some p →
+      Claims.Flock.check (_root_.Flock.Readable.parseOf _root_.Flock.Readable.relation readOfO) xO w = true →
+      showsPart untr b s x xO c → L.Agrees cmt x s w xO ms → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
+      (Claims.findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false →
+      ∀ q ∈ pieces (Claims.Recursion.xI D x), ownQ x q = some s →
+        ∃ ht : q.key.1 < p.sts.size, q.key.2.1 < 2 ^ (p.sts[q.key.1].m - p.sts[q.key.1].c.kLog) ∧
+          q.key.2.2.1 < p.sts[q.key.1].c.g ∧ q.key.2.2.2 < p.sts[q.key.1].c.upv ∧
+          ∀ (m k cl jj : ℕ) (sh : _root_.Flock.Shape) (holo : Bool) (S : _root_.Flock.RecOpen.GfS) (ns : List ℕ)
+            (nv : ℕ), _root_.Flock.RecResiduals.params p.sts[q.key.1].c.unit.name = some (m, k, cl, jj) →
+            _root_.Flock.RecResiduals.shape? m k cl = some sh →
+            _root_.Flock.RecResiduals.holoOf p.sts[q.key.1].c = .ok holo →
+            _root_.Flock.RecResiduals.part { sh with holo } jj = .ok (S, ns, nv) →
+            S = q.S ∧
+            ResTie S ns nv
+              (vvAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key)
+              (_root_.Flock.Readable.copyOf p q.key.1 ht w q.key.2.1 q.key.2.2.1 q.key.2.2.2) ∧
+            ∀ os last, Bd.final (ms.getD (Bd.DE.V.k (Claims.Recursion.xI D x) - 1) []) = some (os, last) →
+              os.length + 1 = Bd.DE.V.k (Claims.Recursion.xI D x) →
+              _root_.Flock.Readable.rowsRead ns nv
+                  (_root_.Flock.Readable.copyOf p q.key.1 ht w q.key.2.1 q.key.2.2.1 q.key.2.2.2) =
+                elemAt (Claims.Recursion.xI D x) (Bd.opened os last) q.key) :
+    PiecesComputes Bd D pieces (resHolds elemAt vvAt) ownQ s x c ms := by
+  obtain ⟨-, xO, w, hck, hT, hc, hs, hh, hp, hm, hrw⟩ := h
+  obtain ⟨p, r', sv, hx, ht, hpi, hr', ⟨ss', hss', hsv'⟩, -, htab⟩ := stagedReads hs
+  have hck' : Claims.Flock.check (_root_.Flock.Readable.parseOf _root_.Flock.Readable.relation readOfO) xO w =
+      true := hck
+  have hcp := _root_.Flock.Readable.stmtCopies_of_allOuts htab
+    (_root_.Flock.Readable.allOuts_of_check hck' hx ht hpi)
+  rw [hr] at hr'
+  cases hr'
+  rw [hss] at hss'
+  cases hss'
+  rw [hsv] at hsv'
+  cases hsv'
+  intro q hq ho os last hf hl
+  obtain ⟨ht', ho', hg, hu, hch⟩ := hpc xO w p hx hck' hs ⟨hh, hp, hm, hrw⟩ hT hc q hq ho
+  obtain ⟨m, k, cl, jj, sh, holo, S, ns, nv, h1, h2, h3, h4, hro⟩ :=
+    _root_.Flock.Readable.innerCopies ht' ho' hg hu hcp
+  obtain ⟨rfl, htie, hE⟩ := hch m k cl jj sh holo S ns nv h1 h2 h3 h4
+  have hz : ResZero q.S (_root_.Flock.Readable.rowsRead ns nv
+      (_root_.Flock.Readable.copyOf p q.key.1 ht' w q.key.2.1 q.key.2.2.1 q.key.2.2.2))
+      (vvAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key) :=
+    resVal_zero_of_tie hro htie
+  rw [hE os last hf hl] at hz
+  exact hz
+
 /-! ## The statements -/
 
 /-- The instance copy `(o, g, 0)` of a part's table is: block `o`'s VU `g`, its first unit (`rowHidden`'s index). Check 5
