@@ -3,23 +3,23 @@ CMP-92 23:00Z) on circuits' partition (CMP-92, DEMOWL's section 1b), every op a 
 
 A block is one lockstep window: `batch` requests of `context` bytes (`prompt` given, the rest generated greedily, the
 last never fed back), each from its first byte to its last, so a block runs `positions` = context - 1 decode steps and
-nothing carries across it. Its templates are circuits' Definitions (`templates`): the W8A8 coordinates
+nothing carries across it. Its subcircuits are circuits' Definitions (`templates`): the W8A8 coordinates
 (`ScaledMmS8Coordinate_v1` on `GEMM_SM90_S8`), attention's BF16 coordinates (`GemmCoordinate_v2` on `GEMM_HOPPER`),
 and the row units circuits is writing (RMSNorm, the quantizer, softmax, the residual add, the gathers, the embedding and
 argmax), each id `stub:` until it lands, its ANDs composed from pinned pieces.
 
-**The law is what Lean proves.** Each template is one window of the block (`IntegrityPeriod`, #4358): one C-Flock `--zk`
+**The law is what Lean proves.** Each subcircuit is one sampling block of the block (`IntegrityPeriod`, #4358): one C-Flock `--zk`
 session drawing a uniform `subset:k` of its n units, split over `tables` tables of at most `_cap` drawn units each
-(m = k_log + nbl <= 35). Every template draws `k = ceil(ln(S/delta)/share)`, so by `IntegrityPeriodLog` each window has
-fewer than `K0 = ln(S/delta) n/k` <= share n units wrong outside delta (the S windows of the block split delta), and by
-`IntegrityHorizon` a template's windows over any period have fewer than ln(S/delta) n/k in all. The faulty ANDs beside
+(m = k_log + nbl <= 35). Every subcircuit draws `k = ceil(ln(S/delta)/share)`, so by `IntegrityPeriodLog` each sampling block has
+fewer than `K0 = ln(S/delta) n/k` <= share n units wrong outside delta (the S sampling blocks of the block split delta), and by
+`IntegrityHorizon` a subcircuit's sampling blocks over any period have fewer than ln(S/delta) n/k in all. The faulty ANDs beside
 them (`Stratified.harm_bound`, each unit weighted by its ANDs) are informative: the law-level bound is proved
 (`FlockSoundness.Audit.stratified_isHarmBound_exact`), but no guarantee in the lock composes it with acceptance.
 
 **Cost** is C-Flock's fit (`transformer.costs`: zero-knowledge sessions on sm_120, in RTX PRO 6000 GPU-seconds, taken as
 H200 GPU-seconds), per table `statement_fixed + statement_per_and A` and per drawn unit `(per_and + staged_per_and) A`,
 A a unit's ANDs with its rows' openings (`row_ands`); staging is taken to scale with the drawn units, not n. The fit
-measured units of 5.1e6 to 3.0e7 ANDs, so the row templates' (up to 2e8) are extrapolated. Replaying
+measured units of 5.1e6 to 3.0e7 ANDs, so the row subcircuits' (up to 2e8) are extrapolated. Replaying
 the drawn requests (`REPLAY_BLOCKS` of the block's own run) and committing every unit's outputs (a design rule, not a
 choice) are priced beside the proving, not traded against it.
 
@@ -47,7 +47,7 @@ from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as F, gemm as G  # noqa: E402
 
 DELTAS = (1e-2, 1e-6)
-#: each template's window certifies at most this share of its units wrong at delta = 1% (`transformer.TARGET_SHARE`)
+#: each subcircuit's sampling block certifies at most this share of its units wrong at delta = 1% (`transformer.TARGET_SHARE`)
 SHARE = X.TARGET_SHARE
 #: replaying the drawn requests, in blocks of the block's own run: stand-in, the drawn units touch nearly every request
 #: and a step's cost is its weights' decode, not its batch (CMP-95 item 5's bundle will price it)
@@ -92,7 +92,7 @@ class Shape:
 
 @dataclass(frozen=True)
 class Template:
-    """A template of the block: `units` a block, each `ands` ANDs opening `rows` (bytes each) and writing `out_bits`."""
+    """A subcircuit of the block: `units` a block, each `ands` ANDs opening `rows` (bytes each) and writing `out_bits`."""
 
     id: str
     units: int
@@ -109,8 +109,8 @@ class Template:
 
 def templates(m: Shape, pins: dict[str, int] | None = None, *, tiles: bool = False,
               pad: bool = False) -> list[Template]:
-    """Circuits' partition of one block (CMP-92 section 1b), one template a Definition, its units a block. `pad`:
-    softmax and PV padded to the context (one template each) instead of one per key count p + 1; `tiles`: the static matmuls as
+    """Circuits' partition of one block (CMP-92 section 1b), one subcircuit a Definition, its units a block. `pad`:
+    softmax and PV padded to the context (one subcircuit each) instead of one per key count p + 1; `tiles`: the static matmuls as
     tiles of `TILE` output channels writing one row, which removes the gathers of their outputs."""
     p = pins if pins is not None else X.pieces()
     R, L, T, Gn, d, f, V = m.batch, m.layers, m.positions, m.generate, m.width, m.mlp, m.vocab
@@ -183,7 +183,7 @@ class Rates:
 
 @dataclass(frozen=True)
 class Window:
-    """One template's window of the block: `k` of its units drawn in one session of `tables` tables."""
+    """One subcircuit's sampling block of the block: `k` of its units drawn in one session of `tables` tables."""
 
     template: Template
     k: int
@@ -199,9 +199,9 @@ class Window:
 
 
 def window(t: Template, k: int, windows: int, r: Rates) -> Window:
-    """`t`'s window drawing k: its tables (at most `_cap` drawn units each, k rounded up to a multiple of them, as
+    """`t`'s sampling block drawing k: its tables (at most `_cap` drawn units each, k rounded up to a multiple of them, as
     `HiddenWindow.hdiv` needs), its expected proving cost, and at each delta `IntegrityPeriodLog`'s K0 (delta split over
-    the block's `windows`) and `IntegrityHorizon`'s bound over any number of the template's windows."""
+    the block's `windows`) and `IntegrityHorizon`'s bound over any number of the subcircuit's sampling blocks."""
     a, cap = t.proved, X._cap(t.proved)
     k = min(t.units, k)
     tables = ceil(k / cap)
@@ -212,7 +212,7 @@ def window(t: Template, k: int, windows: int, r: Rates) -> Window:
 
 
 def plan(ts: list[Template], share: float, r: Rates) -> list[Window]:
-    """Every template's window at `k = ceil(ln(S/delta)/share)`, delta = 1%: each certifies at most `share` of its
+    """Every subcircuit's sampling block at `k = ceil(ln(S/delta)/share)`, delta = 1%: each certifies at most `share` of its
     units wrong."""
     k = ceil(log(len(ts) / DELTAS[0]) / share)
     return [window(t, k, len(ts), r) for t in ts]
@@ -247,8 +247,8 @@ def budget_share(ts: list[Template], m: Shape, r: Rates, gpu_s: float) -> float 
 
 
 def window_blocks(ws: list[Window], m: Shape) -> int:
-    """The least B for which windows of B blocks prove within their own GPU time. K0 = ln(S/delta) n/k is the same share
-    of a window's units whatever its n, and `_cap` reads only a unit's ANDs, so a window over B blocks keeps k, its
+    """The least B for which sampling blocks of B blocks prove within their own GPU time. K0 = ln(S/delta) n/k is the same share
+    of a sampling block's units whatever its n, and `_cap` reads only a unit's ANDs, so a sampling block over B blocks keeps k, its
     tables and its cost, and costs a block 1/B of it."""
     return ceil(proving(ws, m) / m.block_s)
 
@@ -303,9 +303,9 @@ def render(o: dict) -> str:
     lines = [f"# The H200 plan: {m['layers']} layers, width {m['width']}, {m['heads']} query heads of {m['head_dim']} "
              f"(MQA, {m['kv_heads']} KV head), MLP {m['mlp']}, V {m['vocab']}, C {m['context']}; a block of "
              f"{m['batch']:,} requests, {o['block_s']:g} s", "",
-             f"Every template's window draws k = ceil(ln(S/1%)/{o['share']:g}) of its units (S = {len(o['windows'])} "
-             f"windows), so each has fewer than K0 = ln(S/delta) n/k units wrong outside delta (IntegrityPeriodLog), "
-             f"and its windows over any period fewer than that in all (IntegrityHorizon). {o['units']:,} units, "
+             f"Every subcircuit's sampling block draws k = ceil(ln(S/1%)/{o['share']:g}) of its units (S = {len(o['windows'])} "
+             f"sampling blocks), so each has fewer than K0 = ln(S/delta) n/k units wrong outside delta (IntegrityPeriodLog), "
+             f"and its sampling blocks over any period fewer than that in all (IntegrityHorizon). {o['units']:,} units, "
              f"{o['ands']:.4g} ANDs a block.", "",
              "| template | units a block | k | statements | ANDs a unit | proved, rows opened | statements GPU-s "
              "| drawn GPU-s | K0 at 1% | K0 at 1e-6 |", "|---|---|---|---|---|---|---|---|---|---|"]
@@ -321,11 +321,11 @@ def render(o: dict) -> str:
     B = o["window_blocks"]
     lines += ["", "the block's own GPU time buys " + ("no plan" if b is None else
               f"a share of {b:.3g} of each template's units wrong at 1%") +
-              f"; windows of {B:,} blocks ({B * o['block_s'] / 86400:.3g} days of one H200) prove the same share "
+              f"; sampling blocks of {B:,} blocks ({B * o['block_s'] / 86400:.3g} days of one H200) prove the same share "
               "within their own GPU time", "",
               "| share at 1% | proving GPU-s a block |", "|---|---|"]
     lines += [f"| {f['share']:g} | {f['proving']:.4g} |" for f in o["frontier"]]
-    lines += ["", "| cut | windows | proving GPU-s a block |", "|---|---|---|",
+    lines += ["", "| cut | sampling blocks | proving GPU-s a block |", "|---|---|---|",
               f"| as planned (tiles {o['tiles']}, padded {o['pad']}) | {len(o['windows'])} | {c['proving']:.4g} |"]
     lines += [f"| {k} | {v['windows']} | {v['proving']:.4g} |" for k, v in o["alternatives"].items()]
     lines += ["", "faulty units over a period, summed over the templates (Lean: pooled is IntegrityHorizon a template, "

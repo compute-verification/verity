@@ -4,7 +4,7 @@ CPU reference) or scaled onto one RTX PRO 6000 (compute-accounting's Phase 2 mod
 The Definition DAG is one server-time block of serving: `requests` requests of `context` positions each (`prompt` given,
 the rest generated greedily, the last one never fed back, so `positions` = context - 1 run), through `layers` pre-norm
 blocks of width `width` (`heads` heads of 64, an MLP of `mlp` with ReLU), learned absolute positions, a byte vocabulary
-and a W8A8 output head. Every op is a unit of one request's (`cuts` puts every template in the `request` replay domain),
+and a W8A8 output head. Every op is a unit of one request's (`cuts` puts every subcircuit in the `request` replay domain),
 and its units, from the finest up:
 
 - the static matmuls (QKV, the output projection, MLP up and down, the head): `ScaledMmS8Coordinate_v1{K}` on sm_120's
@@ -29,10 +29,10 @@ faulty units (`IntegrityPeriod`'s W) are reported beside it. The cost is C-Flock
 sessions on sm_120 (`inputs.observations`, `costfit`), in GPU-seconds of an RTX PRO 6000, with every serve-time
 commitment of the block: every unit's outputs, the requests' bytes, the carried KV cache at the block's close, PoUW's
 CP-W receipts (h1, assumed) and the bandwidth audit's receipts (`serve`), and the replay of each drawn request
-(`Serving.replay`). A plan is a stratified law, k units of each template; the chosen one is the cheapest certifying at
+(`Serving.replay`). A plan is a stratified law, k units of each subcircuit; the chosen one is the cheapest certifying at
 most `TARGET_SHARE` of the block's ANDs wrong. `recertify` recomputes its certificate from the sizes alone through
 core's `Stratified.harm_bound` and `count_bound`, and `pooled` bounds the faulty units over a monitoring period of many
-blocks. `handoff` is the plan as the GPU loop registers it: one `IntegrityPeriod` window a template, or the block as one
+blocks. `handoff` is the plan as the GPU loop registers it: one `IntegrityPeriod` window a subcircuit, or the block as one
 window under the `work:1` law.
 
     uv run python benchmarks/sampling_plan/transformer.py --out DIR [--model small|large] [--share S] [--delta D]
@@ -187,7 +187,7 @@ def _group(name: str, child: Shape, count: int, rows: tuple[int, ...]) -> Shape:
 
 class Dag:
     """The block's Definition DAG: `ops` maps each op to its root shape and its instances a block, and `ids` each real
-    Definition's shape id to its descriptor id (the circuit record's template id); a stub has none."""
+    Definition's shape id to its descriptor id (the circuit record's subcircuit id); a stub has none."""
 
     def __init__(self, m: Model, pins: dict[str, int] | None = None) -> None:
         self.m, self.pins = m, pins if pins is not None else pieces()
@@ -196,8 +196,8 @@ class Dag:
         self.ops = self._ops()
 
     def template_id(self, c: Candidate) -> str:
-        """A candidate's template in the circuit record: its unit's descriptor id, or the stub's id (the planner's
-        template is `{op}#{cut}:{shape id}`, and a stub's op and shape ids both hold a colon)."""
+        """A candidate's subcircuit in the circuit record: its unit's descriptor id, or the stub's id (the planner's
+        subcircuit is `{op}#{cut}:{shape id}`, and a stub's op and shape ids both hold a colon)."""
         sid = c.template[len(c.op) + 1:].split(":", 1)[1]
         return self.ids.get(sid, sid)
 
@@ -378,7 +378,7 @@ def costs(m: Model, s: Serving) -> CostModel:
 
 
 def candidates(dag: Dag, cm: CostModel, objective: Objective, grid: int = 21) -> tuple[list[Candidate], dict]:
-    """`candidates.cuts` on each op, every template in the `request` replay domain: its alternatives, each its units
+    """`candidates.cuts` on each op, every subcircuit in the `request` replay domain: its alternatives, each its units
     by Definition."""
     out, alts = [], {}
     for op, (root, n) in dag.ops.items():
@@ -405,7 +405,7 @@ def chosen(cands: list[Candidate], cm: CostModel, objective: Objective, front: l
 
 
 def law(plan: Plan, cands: list[Candidate]) -> Stratified:
-    """The plan's stratified law: one stratum a template, k_s of n_s drawn."""
+    """The plan's stratified law: one stratum a subcircuit, k_s of n_s drawn."""
     return Stratified(tuple(Stratum(c.template, c.units, plan.sizes[c.template]) for c in cands
                             if c.template in plan.sizes))
 
@@ -437,7 +437,7 @@ def pooled(plan: Plan, cands: list[Candidate], delta: float, blocks: float, *, a
 
 
 def horizon(plan: Plan, cands: list[Candidate], delta: float) -> float:
-    """`IntegrityHorizon`'s bound on the faulty units over any number of windows, each a template's window of a block
+    """`IntegrityHorizon`'s bound on the faulty units over any number of windows, each a subcircuit's window of a block
     (`windows`): ln(1/delta) / q at q the least share k_s / n_s any window draws."""
     return log(1 / delta) / min(plan.sizes[c.template] / c.units for c in cands if c.template in plan.sizes)
 
@@ -457,20 +457,20 @@ def monitoring(plan: Plan, cands: list[Candidate], s: Serving, *, servers: int =
 
 
 def handoff(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
-    """The plan as the GPU loop registers it (`integrations/torch_loop`'s `circuit_record(..., law, cap)`), each template
+    """The plan as the GPU loop registers it (`integrations/torch_loop`'s `circuit_record(..., law, cap)`), each subcircuit
     a Definition's descriptor id (a stub's id until CIR-100 lands) with its units:
 
-    * `windows`, the form `IntegrityPeriod` (#4358) reads: one window a template, its units under `subset:k_s` in
+    * `windows`, the form `IntegrityPeriod` (#4358) reads: one window a subcircuit, its units under `subset:k_s` in
       members of its statement size (the loop's `--law` and `--cap`), and at each delta its `K0`, `IntegrityPeriodLog`'s
       ln(1/delta_w)/q at delta_w = delta over the block's windows and q = k/n (or n - k + 1, which no draw misses), so
       outside delta every window has fewer than its K0 units wrong;
-    * `record`, the block as one window: every template under the `work:1` law whose work table's floors are the plan's
-      k, which `draw.derive` expands to exactly those k (`work_k`). It needs one `cap` for every template, so it carries
+    * `record`, the block as one window: every subcircuit under the `work:1` law whose work table's floors are the plan's
+      k, which `draw.derive` expands to exactly those k (`work_k`). It needs one `cap` for every subcircuit, so it carries
       the least statement size; `IntegrityPeriod` covers only a uniform subset, not this law.
 
-    The planner's strata are its ops' templates, so two ops cut to one Definition (attention's QK and PV matmuls both to
+    The planner's strata are its ops' subcircuits, so two ops cut to one Definition (attention's QK and PV matmuls both to
     `F2fpBf16_v1`, say) are two of its strata and one of the record's: merged, at the higher of their rates, which only
-    raises each one's draw. A merged template's units are credited one work, as the work law needs."""
+    raises each one's draw. A merged subcircuit's units are credited one work, as the work law needs."""
     groups: dict[str, list[Candidate]] = {}
     for c in cands:
         if c.template in plan.sizes:
