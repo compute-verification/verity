@@ -322,8 +322,12 @@ theorem ParseFacts.toU {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (pre 
 /-- `ParseFactsU` doesn't read the circuit's template. -/
 theorem ParseFactsU.retmpl {tags : Tags} {pre : Array (String × Net)} {c : Circuit} (P : ParseFactsU tags pre c)
     (t : Option TmplUnit) : ParseFactsU tags pre { c with tmpl := t } :=
-  ⟨P.nets, P.portWords, P.v1Segs, P.rowWires, P.unitNet, P.shaNet, P.hmNet, P.kinds, P.check, P.rowNets, P.recNet,
-    P.recResiduals, P.recSparse, P.recOpening, P.typed⟩
+  ⟨P.nets, P.portWords, P.v1Segs, P.rowWires, P.unitNet, P.shaNet, P.hmNet, P.kinds, P.check,
+    (by rw [← P.rowNets]; exact HmNets.check_congr rfl rfl rfl),
+    (by rw [← P.recNet]; exact RecOpen.check_congr rfl rfl rfl rfl rfl rfl rfl),
+    (by rw [← P.recResiduals]; exact RecResiduals.check_congr rfl rfl),
+    (by rw [← P.recSparse]; exact RecSparse.check_congr rfl rfl),
+    (by rw [← P.recOpening]; exact RecOpening.check_congr rfl rfl), P.typed⟩
 
 /-- `ParseFactsU` of a flat circuit with `pre`'s nets `Built` is `ParseFacts`. -/
 theorem ParseFactsU.facts {tags : Tags} {pre : Array (String × Net)} {c : Circuit} (P : ParseFactsU tags pre c)
@@ -332,6 +336,18 @@ theorem ParseFactsU.facts {tags : Tags} {pre : Array (String × Net)} {c : Circu
     v1Segs := P.v1Segs, rowWires := P.rowWires, unitNet := P.unitNet, shaNet := P.shaNet, hmNet := P.hmNet,
     kinds := P.kinds, check := P.check, rowNets := P.rowNets, recNet := P.recNet, recResiduals := P.recResiduals,
     recSparse := P.recSparse, recOpening := P.recOpening, typed := P.typed, tmpl := ht }
+
+/-- **The nets a session's parse put ahead of its file** (`HmOut.parseCommit`): a templated circuit's committed unit
+net, none for a flat circuit. -/
+def unitPre (c : Circuit) : Array (String × Net) :=
+  match c.tmpl with
+  | some tu => #[("unit", tu.net)]
+  | none => #[]
+
+theorem unitPre_flat {c : Circuit} (h : c.tmpl = none) : unitPre c = #[] := by simp [unitPre, h]
+
+theorem unitPre_tmpl {c : Circuit} {tu : TmplUnit} (h : c.tmpl = some tu) : unitPre c = #[("unit", tu.net)] := by
+  simp [unitPre, h]
 
 set_option maxHeartbeats 4000000 in
 /-- **What `HmRow.parse` accepted, with nets `pre` first, of any kind** (a typed flat class's unit net, #307, or a

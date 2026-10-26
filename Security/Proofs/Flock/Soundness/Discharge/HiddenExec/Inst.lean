@@ -60,7 +60,7 @@ theorem wiredDeltaH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
   have sp := Hidden.setupHidden_spec' h
   have Lf := flat_layout ht h
   have F := flat_unitFacts ht h
-  have P : ParseFacts tags st.c := F.parse
+  have P := F.parse
   have C : CheckFacts st.c := F.check
   have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
     rw [sp.da, Hidden.hidden_delta']
@@ -70,7 +70,7 @@ theorem wiredDeltaH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
   have hs₀ : g * st.c.perVu.getD n 0 + i < (st.c.rangeOf n).count := net_slot_lt Lf C hn hg hi
   have hsl : (st.c.rangeOf n).slotLog = (netOf st.c n).unitLog := (net_range Lf C hn).2.2.2
   have hq : (portCols (netOf st.c n).inGroups)[p]!.1 + (portCols (netOf st.c n).inGroups)[p]!.2 ≤ netIn st.c n :=
-    (nets_ok P n).1.2.2 _ (getElem_mem_toList' hp)
+    (F.nets n).1.2.2 _ (getElem_mem_toList' hp)
   have hfit : netIn st.c n ≤ netW st.c n := (Lf.fit n).2
   have hb : o < 2 ^ (st.c.rangeOf n).slotLog := by
     rw [hsl]
@@ -92,7 +92,8 @@ variable {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout st) (Lf : FlockSou
 include hR in
 /-- **A composite input carries what its stacked unit input's copy position carries in the flat twin**
 (`Aliased.copyPos`), in every block of a satisfying witness of the hidden statement (`copyAt_blockH`). -/
-theorem inst_blockH (P : ParseFacts tags st.c) (C : CheckFacts st.c) {g : ℕ} (hg : g < st.c.g)
+theorem inst_blockH {pre : Array (String × Net)} (P : ParseFactsU tags pre st.c) (C : CheckFacts st.c) {g : ℕ}
+    (hg : g < st.c.g)
     (x : Fin (instRows st.c).w) (hx : x.val < (instRows st.c).nIn) {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
     (L.model regs).block z o
@@ -147,7 +148,7 @@ fit (`placement_instOf`, `wiredDeltaH`). -/
 theorem placement_inst (hrows : Hidden.Any.OutRowsS a.st.c) {g : ℕ} (hg : g < a.st.c.g) :
     Placement T (instRows a.st.c) (a.instCol hg) :=
   Placed.Accepted.placement_cast a.hT
-    (placement_instOf a.L a.regs a.unitFacts.parse a.unitFacts.check (wiredDeltaH a.ht a.h hrows) hg)
+    (placement_instOf a.L a.regs a.unitFacts.parse a.unitFacts.nets a.unitFacts.check (wiredDeltaH a.ht a.h hrows) hg)
 
 /-- **Composite inputs with one key carry one value**, at template instance `g`, in every block of a satisfying
 witness. -/

@@ -46,7 +46,7 @@ theorem flatAll_count (hrw : RowWires st.c) {n s off x : ℕ} (hn : n = st.c.sha
     rcases hn with rfl | rfl
     · exact F.sha
     · exact F.hm
-  obtain ⟨hum, huk, huc⟩ := unit_range_facts P C
+  obtain ⟨hum, huk, huc⟩ := unit_range_facts_of P.unitNet C
   have hunit : ∀ s₀ b, s₀ < st.c.unitRange.count → b < 2 ^ st.c.unitRange.slotLog →
       st.c.unitRange.slot s₀ + b ≠ x := fun s₀ b hs₀ hb he =>
     atSlot_ne L F hnn P.unitNet hun hat (show AtSlot st.c st.c.unitNet s₀ b x from ⟨hs₀, hb, he.symm⟩)
@@ -108,7 +108,7 @@ theorem flatAll_count (hrw : RowWires st.c) {n s off x : ℕ} (hn : n = st.c.sha
       · exact hwhm
     obtain ⟨hm', hk', -⟩ := rangeOf_spec (C.one_range _ hd1)
     have hq := getD_mem_toList hd3 (d := default)
-    have hle := (nets_ok P w.dst.1).1.2.2 _ hq
+    have hle := (F.nets w.dst.1).1.2.2 _ hq
     have hfit := (L.fit w.dst.1).2
     intro he
     refine atSlot_ne L F hnn hd1 hne hat (s' := g * st.c.perVu.getD w.dst.1 0 + w.dst.2.1)
