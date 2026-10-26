@@ -22,7 +22,7 @@ while :; do
     set -a; . /root/.config/verity/r2.env; set +a
     APPLY=; [ -f $D/apply ] && APPLY="--apply --state $D/marks.json"
     cd /data/infra/store-gc-src && PYTHONPATH=src LC_ALL=C.UTF-8 timeout 18000 \
-      python3.12 -m research data gc --store /root/store-gc-store --cite $NOTES --cite $CODE --cache $D/cache \
+      python3.12 -m research data gc --store /root/store-gc-store --cite $NOTES --cite $CODE --cache $D/cache --work /root \
       --report $D/reports/$(date -u +%Y%m%dT%H%MZ).json $APPLY
   ) >> "$LOG" 2>&1
   echo "$(date -u +%FT%TZ) pass rc=$? $(cat /data/infra/store-gc-src/COMMIT 2>/dev/null)" >> "$LOG"

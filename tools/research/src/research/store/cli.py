@@ -50,7 +50,7 @@
                                                    copy every registry entry (and its `previous` ids) to the public export bucket; --verify-url
                                                    fetches them all back through a public front end into a scratch store, checking every byte
   research data doctor [--clean] [--runs-dir D]    stale store_publish_error.json files (run is an attempt here) vs real failures; --clean deletes the stale
-  research data gc --cite DIR... --cache DIR [--apply --state FILE] [--report FILE] [--jobs N]
+  research data gc --cite DIR... --cache DIR [--apply --state FILE] [--report FILE] [--work DIR] [--jobs N]
                                                    the remote's blobs only uncited artifacts past their kind's TTL hold (gc.py, README §7.4);
                                                    --apply marks them and deletes those still candidates a grace after their mark
   research data reindex [--remote]                 rebuild the catalog (built aside, swapped in complete); --remote first pulls what the remote has
@@ -1331,6 +1331,7 @@ def cmd_gc(argv: list[str]) -> int:
     ap.add_argument("--state", metavar="FILE", help="the marks (required with --apply)")
     ap.add_argument("--apply", action="store_true", help="mark this pass's candidates and delete the ones marked a grace ago")
     ap.add_argument("--report", metavar="FILE", help="write the plan's summary and the expired ids here (JSON)")
+    ap.add_argument("--work", metavar="DIR", help="where the pass's blob table goes (a local disk; default the temp dir)")
     ap.add_argument("--jobs", type=int, default=gc.JOBS)
     ns = ap.parse_args(argv)
     if ns.apply and not ns.state:
@@ -1341,7 +1342,8 @@ def cmd_gc(argv: list[str]) -> int:
         return 2
     say = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
     try:
-        p = gc.plan(st.remote, Path(ns.cache), [Path(c) for c in ns.cite], now=gc.clock(), jobs=ns.jobs, log=say)
+        p = gc.plan(st.remote, Path(ns.cache), [Path(c) for c in ns.cite], now=gc.clock(), jobs=ns.jobs,
+                    work=Path(ns.work) if ns.work else None, log=say)
         out: dict[str, Any] = {"remote": st.remote.describe(), "ttl_days": gc.TTL_DAYS, **p.summary()}
         if ns.apply:
             out["applied"] = gc.apply(st.remote, p, Path(ns.cache), Path(ns.state), now=gc.clock(), jobs=ns.jobs, log=say)

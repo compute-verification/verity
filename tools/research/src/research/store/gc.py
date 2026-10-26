@@ -3,16 +3,15 @@
 What stays (the keep set):
 
 * **cited**: an `art:` id (full, or the abbreviated `art:<8+ hex>` reports print) or a run id named by any label on the remote
-  (its target, ref or value), by a file of a citing tree (`--cite DIR`: the notes repository, a checkout of the code with its
-  fixture registry), or by a kept artifact's manifest; a cited run keeps every `art:` id its attempt names (outputs, inputs,
-  telemetry).
+  (its target, ref or value) or by a file of a citing tree (`--cite DIR`: the notes repository, a checkout of the code with its
+  fixture registry); a cited run keeps every `art:` id its attempt names (outputs, inputs, telemetry).
 * **young**: an artifact whose manifest is younger than its kind's TTL (`TTL_DAYS`, by the manifest's LastModified).
 * **untimed**: every artifact of a kind `TTL_DAYS` doesn't name.
 
 What a kept manifest's `refs` name joins the keep set, to a fixed point; what a cited one's `meta` names (art ids and runs) does
 too, but not what a young or untimed one's `meta` mentions: a result naming its own run is no citation of that run.  A blob is a
-candidate when an expired artifact (one outside the keep set) holds it and no kept artifact does.  Manifests, attempts and labels are never deleted: an expired id still resolves,
-and `fetch` reports its blob absent.
+candidate when an expired artifact (one outside the keep set) holds it and no kept artifact does.  Manifests, attempts and labels
+are never deleted: an expired id still resolves, and `fetch` reports its blob absent.
 
 Deletion is two-phase, for uploads in flight.  An upload skips a blob the remote already holds (`S3Remote.put` HEADs first), so a
 new artifact can come to hold an old blob before its manifest is listed.  `apply` therefore deletes only a blob that has been a
@@ -20,7 +19,9 @@ candidate since a pass at least `GRACE_S` ago (`state`, the marks) and still is 
 more just before deleting.  `GRACE_S` covers a custody upload (its key lives at most 24 h, README §10.1).
 
 Fails closed: a manifest, label or attempt it can't read, or a citing tree it can't scan, stops the pass before anything is
-deleted.  Remote objects are immutable, so `cache` keeps every manifest, label and attempt it read, by key.
+deleted.  Remote objects are immutable, so `cache` keeps every manifest, label and attempt it read, by key.  Memory stays small on
+a bucket of millions of blobs: each manifest is parsed as it is read, and its blobs go to a SQLite file in `work` that one query
+groups by digest.
 """
 from __future__ import annotations
 
@@ -28,13 +29,15 @@ import bisect
 import json
 import os
 import re
+import sqlite3
 import subprocess
+import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 TTL_DAYS: dict[str, float] = {
     "run-record/v1": 7,
@@ -50,6 +53,7 @@ JOBS = 32
 ART_TEXT = re.compile(r"art:([0-9a-f]{8,64})(?![0-9a-f])")
 RUN_TEXT = re.compile(r"(?<![0-9A-Za-z])(r\d{8}-\d{6}-[0-9a-f]{4})(?![0-9a-f])")
 SCAN_MAX_BYTES = 8 << 20
+PARSE_ERRORS = (ValueError, KeyError, TypeError, AttributeError)
 
 
 class GcError(Exception):
@@ -115,32 +119,36 @@ class Reader:
         os.replace(tmp, p)
         return p.read_bytes()
 
-    def many(self, keys: list[str]) -> dict[str, bytes]:
-        def one(k: str) -> tuple[str, bytes | BaseException]:
+    def each(self, keys: list[str], fn: Callable[[bytes], Any]) -> Iterator[tuple[str, Any]]:
+        """(key, fn(its bytes)) for every key, in order, reading `jobs` ahead; the bytes are dropped once `fn` has them.  Any key
+        unreadable, or that `fn` can't parse, is a GcError once every key has been tried."""
+        def one(k: str) -> tuple[str, Any, str | None]:
             try:
-                return k, self.get(k)
+                return k, fn(self.get(k)), None
+            except GcError as e:
+                return k, None, str(e)
+            except PARSE_ERRORS as e:
+                return k, None, f"{k} is unparseable ({type(e).__name__}: {e})"
             except Exception as e:  # noqa: BLE001  reported below, all at once
-                return k, e
-        out: dict[str, bytes] = {}
+                return k, None, f"{k}: {type(e).__name__}: {e}"
         bad: list[str] = []
         with ThreadPoolExecutor(max_workers=max(1, min(self.jobs, len(keys) or 1))) as ex:
-            for k, v in ex.map(one, keys):
-                if isinstance(v, BaseException):
-                    bad.append(f"{k}: {type(v).__name__}: {v}")
-                else:
-                    out[k] = v
+            for i in range(0, len(keys), 4096):
+                for k, v, err in ex.map(one, keys[i:i + 4096]):
+                    if err:
+                        bad.append(err)
+                    else:
+                        yield k, v
         if bad:
             raise GcError(f"{len(bad)} key(s) unreadable, e.g. {bad[0]}")
-        return out
 
 
 @dataclass
 class Art:
+    idx: int
     kind: str
     age_s: float
     bytes: int
-    blobs: tuple[bytes, ...]
-    sizes: tuple[int, ...]
     refs: frozenset[str]
     mentions: frozenset[str]
     runs: frozenset[str]
@@ -164,7 +172,8 @@ class Plan:
                 "by_kind": self.by_kind}
 
 
-def _parse_manifest(raw: bytes, age_s: float) -> Art:
+def _parse_manifest(raw: bytes) -> tuple[str, int, frozenset[str], frozenset[str], frozenset[str], list[tuple[bytes, int]]]:
+    """(kind, payload bytes, refs' art hex, meta's art hex, meta's runs, [(blob digest, bytes)])."""
     doc = json.loads(raw)
     payload = doc.get("payload") or {}
     if payload.get("type") == "file":
@@ -173,9 +182,8 @@ def _parse_manifest(raw: bytes, age_s: float) -> Art:
         blobs = [(f["sha256"], f["bytes"]) for f in payload.get("files") or []]
     refs, _ = named(json.dumps(doc.get("refs")))
     mentions, runs = named(json.dumps(doc.get("meta")))
-    return Art(kind=str(doc.get("kind")), age_s=age_s, bytes=int(payload.get("bytes") or 0),
-               blobs=tuple(bytes.fromhex(b) for b, _ in blobs), sizes=tuple(int(n) for _, n in blobs), refs=frozenset(refs),
-               mentions=frozenset(mentions), runs=frozenset(runs))
+    return (str(doc["kind"]), int(payload.get("bytes") or 0), frozenset(refs), frozenset(mentions), frozenset(runs),
+            [(bytes.fromhex(b), int(n)) for b, n in blobs])
 
 
 def _resolve(hexes: set[str], ordered: list[str]) -> set[str]:
@@ -198,23 +206,12 @@ def _label_target(key: str) -> str:
 
 
 def plan(remote: Any, cache: Path, cite: list[Path], *, now: float, ttl: dict[str, float] | None = None, jobs: int = JOBS,
-         log: Callable[[str], None] | None = None) -> Plan:
+         work: Path | None = None, log: Callable[[str], None] | None = None) -> Plan:
     say = log or (lambda s: None)
     ttl = TTL_DAYS if ttl is None else ttl
     rd = Reader(remote, cache, jobs)
     if not cite:
         raise GcError("no citing tree given (--cite: the notes repository and a checkout of the code)")
-    listing = {k[len("manifests/"):-len(".json")]: _epoch(t) for k, t in remote.list_times("manifests/") if k.endswith(".json")}
-    say(f"{len(listing)} manifests listed")
-    raw = rd.many([f"manifests/{h}.json" for h in listing])
-    arts: dict[str, Art] = {}
-    for h, t in listing.items():
-        try:
-            arts[h] = _parse_manifest(raw.pop(f"manifests/{h}.json"), now - t)
-        except (ValueError, KeyError, TypeError, AttributeError) as e:
-            raise GcError(f"manifests/{h}.json is unparseable ({type(e).__name__}: {e})") from None
-    del raw
-    ordered = sorted(arts)
     cited_hex: set[str] = set()
     cited_runs: set[str] = set()
     for root in cite:
@@ -222,15 +219,51 @@ def plan(remote: Any, cache: Path, cite: list[Path], *, now: float, ttl: dict[st
         say(f"{root}: names {len(a)} art ids, {len(r)} runs")
         cited_hex |= a
         cited_runs |= r
-    label_keys = [k for k in remote.list("labels/") if k.endswith(".json")]
-    for k, body in rd.many(label_keys).items():
-        a, r = named(_label_target(k) + "\n" + body.decode(errors="replace"))
-        cited_hex |= a
-        cited_runs |= r
-    say(f"{len(label_keys)} labels read; cited: {len(cited_hex)} art ids, {len(cited_runs)} runs")
-    attempts = {k[len("attempts/"):-len(".json")] for k in remote.list("attempts/") if k.endswith(".json")}
+    listing = {k[len("manifests/"):-len(".json")]: _epoch(t) for k, t in remote.list_times("manifests/") if k.endswith(".json")}
+    say(f"{len(listing)} manifests listed")
+    with tempfile.TemporaryDirectory(prefix="store-gc-", dir=work) as tmp:
+        db = sqlite3.connect(Path(tmp) / "blobs.sqlite")
+        db.executescript("PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; CREATE TABLE b(art INTEGER, digest BLOB, size INTEGER);")
+        arts: dict[str, Art] = {}
+        keys = [f"manifests/{h}.json" for h in sorted(listing)]
+        for i, (k, (kind, n, refs, mentions, runs, blobs)) in enumerate(rd.each(keys, _parse_manifest)):
+            h = k[len("manifests/"):-len(".json")]
+            arts[h] = Art(idx=i, kind=kind, age_s=now - listing[h], bytes=n, refs=refs, mentions=mentions, runs=runs)
+            db.executemany("INSERT INTO b VALUES (?,?,?)", ((i, d, s) for d, s in blobs))
+            if i % 20000 == 0 and i:
+                say(f"{i} manifests read")
+        ordered = sorted(arts)
+        label_keys = [k for k in remote.list("labels/") if k.endswith(".json")]
+        for k, (a, r) in rd.each(label_keys, lambda body: named(body.decode(errors="replace"))):
+            ta, tr = named(_label_target(k))
+            cited_hex |= a | ta
+            cited_runs |= r | tr
+        say(f"{len(label_keys)} labels read; cited: {len(cited_hex)} art ids, {len(cited_runs)} runs")
+        attempts = {k[len("attempts/"):-len(".json")] for k in remote.list("attempts/") if k.endswith(".json")}
+        p = Plan(listed=set(arts))
+        keep = _keep(arts, ordered, cited_hex, cited_runs, attempts, ttl, rd, p)
+        for why in keep.values():
+            p.kept_by[why] = p.kept_by.get(why, 0) + 1
+        db.execute("CREATE TABLE k(art INTEGER PRIMARY KEY)")
+        db.executemany("INSERT INTO k VALUES (?)", ((arts[h].idx,) for h in keep))
+        for h, a in arts.items():
+            row = p.by_kind.setdefault(a.kind, {"artifacts": 0, "bytes": 0, "expired": 0, "expired_bytes": 0})
+            row["artifacts"] += 1
+            row["bytes"] += a.bytes
+            if h not in keep:
+                p.expired[f"art:{h}"] = a.kind
+                row["expired"] += 1
+                row["expired_bytes"] += a.bytes
+        q = "SELECT b.digest, MAX(b.size) FROM b LEFT JOIN k ON k.art = b.art GROUP BY b.digest HAVING COUNT(k.art) = 0"
+        p.candidates = {d.hex(): int(s) for d, s in db.execute(q)}
+        db.close()
+    say(f"{len(p.expired)} artifacts expired; {len(p.candidates)} candidate blobs, {sum(p.candidates.values()) / 2**30:.1f} GiB")
+    return p
 
-    p = Plan(listed=set(arts))
+
+def _keep(arts: dict[str, Art], ordered: list[str], cited_hex: set[str], cited_runs: set[str], attempts: set[str],
+          ttl: dict[str, float], rd: Reader, p: Plan) -> dict[str, str]:
+    """{art hex: why it stays} (module docstring)."""
     keep: dict[str, str] = {}
     stack: list[str] = []
 
@@ -263,30 +296,11 @@ def plan(remote: Any, cache: Path, cite: list[Path], *, now: float, ttl: dict[st
         runs = sorted((todo_runs - seen_runs) & attempts)
         seen_runs |= todo_runs
         todo_runs = set()
-        for body in rd.many([f"attempts/{r}.json" for r in runs]).values():
-            a_hex, _ = named(body.decode(errors="replace"))
+        for _, a_hex in rd.each([f"attempts/{r}.json" for r in runs], lambda body: named(body.decode(errors="replace"))[0]):
             for h in _resolve(a_hex, ordered):
                 hold(h, "cited run")
     p.cited_runs = len(seen_runs & attempts)
-    for why in keep.values():
-        p.kept_by[why] = p.kept_by.get(why, 0) + 1
-    kept_blobs: set[bytes] = set()
-    for h in keep:
-        kept_blobs.update(arts[h].blobs)
-    for h, a in arts.items():
-        k = p.by_kind.setdefault(a.kind, {"artifacts": 0, "bytes": 0, "expired": 0, "expired_bytes": 0})
-        k["artifacts"] += 1
-        k["bytes"] += a.bytes
-        if h in keep:
-            continue
-        p.expired[f"art:{h}"] = a.kind
-        k["expired"] += 1
-        k["expired_bytes"] += a.bytes
-        for b, n in zip(a.blobs, a.sizes):
-            if b not in kept_blobs:
-                p.candidates[b.hex()] = n
-    say(f"{len(p.expired)} artifacts expired; {len(p.candidates)} candidate blobs, {sum(p.candidates.values()) / 2**30:.1f} GiB")
-    return p
+    return keep
 
 
 def load_marks(path: Path) -> dict[str, float]:
@@ -310,19 +324,14 @@ def save_marks(path: Path, marks: dict[str, float], now: float) -> None:
 def apply(remote: Any, p: Plan, cache: Path, state: Path, *, now: float, grace_s: float = GRACE_S, jobs: int = JOBS,
           log: Callable[[str], None] | None = None) -> dict[str, Any]:
     """Delete the blobs `p` names that were marked at least `grace_s` before `now` and that no manifest listed since `p` holds; mark
-    the rest.  Returns {deleted, deleted_bytes, marked, rescued}."""
+    the rest.  Returns {deleted, deleted_bytes, marked, rescued, errors, error_count}."""
     say = log or (lambda s: None)
     marks = load_marks(state)
     due = {b for b, t in marks.items() if b in p.candidates and now - t >= grace_s}
-    new = [k[len("manifests/"):-len(".json")] for k in remote.list("manifests/") if k.endswith(".json")]
-    new = [h for h in new if h not in p.listed]
+    new = [k for k in remote.list("manifests/") if k.endswith(".json") and k[len("manifests/"):-len(".json")] not in p.listed]
     rescued: set[str] = set()
-    if new:
-        for k, body in Reader(remote, cache, jobs).many([f"manifests/{h}.json" for h in new]).items():
-            try:
-                rescued |= {b.hex() for b in _parse_manifest(body, 0.0).blobs} & set(p.candidates)
-            except (ValueError, KeyError, TypeError, AttributeError) as e:
-                raise GcError(f"{k} is unparseable ({type(e).__name__}: {e})") from None
+    for _, parsed in Reader(remote, cache, jobs).each(new, _parse_manifest):
+        rescued |= {d.hex() for d, _ in parsed[5]} & p.candidates.keys()
     due -= rescued
     say(f"{len(new)} manifests listed since the plan; {len(rescued)} candidates they hold are kept; deleting {len(due)} blobs")
 
@@ -340,7 +349,8 @@ def apply(remote: Any, p: Plan, cache: Path, state: Path, *, now: float, grace_s
             (errors.append(f"{b}: {type(e).__name__}: {e}") if e else deleted.append(b))
     done = set(deleted)
     save_marks(state, {b: marks.get(b, now) for b in p.candidates if b not in done and b not in rescued}, now)
-    return {"deleted": len(deleted), "deleted_bytes": sum(p.candidates[b] for b in deleted), "marked": len(p.candidates) - len(done),
+    return {"deleted": len(deleted), "deleted_bytes": sum(p.candidates[b] for b in deleted),
+            "marked": len(p.candidates) - len(done) - len(rescued),
             "rescued": len(rescued), "errors": errors[:20], "error_count": len(errors)}
 
 
