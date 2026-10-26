@@ -566,7 +566,6 @@
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
-        "ruff.toml",
         ".gitignore"
       ]
     },
@@ -578,7 +577,8 @@
       "usergroup": "S0C954BELSW",
       "owns": [
         "integrations/vllm/",
-        "examples/vllm/"
+        "examples/vllm/",
+        "ruff.toml"
       ],
       "linear": "VLLM",
       "branch_suffixes": [
