@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.Recursion.VStarDeployed
+import Proofs.Flock.Claims.Recursion.HmsgRun
 
 /-!
 # hp before the last round at the deployed builder (`hpEarly`)
@@ -148,7 +148,6 @@ theorem hpEarly {mask : ℕ → ℕ → Bool} {I : InnerRec} {x : Msg} {w : Clai
     have hw : (wOs (VStarTrace.A mask) I x w ρ (hist.take (RestRead.kI x - 1)))[P[k].1]? =
         some (vstarWit (VStarTrace.A mask) I x w ρ (hist.take (RestRead.kI x - 1)) P[k].1) := by
       simp [wOs, List.getElem?_range hlt]
-    dsimp only
     rw [hw]
     first
     | rw [Option.map_some', Option.getD_some]
@@ -162,5 +161,27 @@ theorem hpEarly {mask : ℕ → ℕ → Bool} {I : InnerRec} {x : Msg} {w : Clai
   have h := hp_of_assembled (L := DeployedR.layR OpenRows.elemR) (x := x) (i := i) hs' hm
   simp only [wOs, List.getElem_map, List.getElem_range] at h
   exact h
+
+/-- **hp before the last round on the honest run**: `hpEarly` at the honest compiled run's messages and inner rounds
+(`refP` at `finB`), its `hmsg` the run's (`hmsg_run`). -/
+theorem hpEarly_run (mask : ℕ → ℕ → Bool) (I : InnerRec) (IV : Claims.Verifier FlockDeploy.Coin) (b : Brings)
+    (w : Claims.Flock.Wit) {x : Msg} {xr : XR} (hx : readX x = some xr) (hk : IV.k (xIOf x) = RestRead.kI x)
+    (ω : RecDeploy.Tape (finB b (VStarTrace.A mask) I x))
+    (r : Fin ((RecDeploy.V IV (finB b (VStarTrace.A mask) I x).st).k x) → FlockDeploy.Coin) {s i : ℕ}
+    (hs : s < nS x) (hi : i < RestRead.kI x - 1)
+    (hfit : RowsFit I x w ω.1 ((((Claims.run FlockDeploy.sha512 (refP IV (finB b (VStarTrace.A mask) I x) w)
+      (RecDeploy.V IV (finB b (VStarTrace.A mask) I x).st) x ω r).msgs.take (IV.k (xIOf x))).map histOf).take
+        (RestRead.kI x - 1)) i)
+    (hT : TraceAt mask I x w ω.1 ((((Claims.run FlockDeploy.sha512 (refP IV (finB b (VStarTrace.A mask) I x) w)
+      (RecDeploy.V IV (finB b (VStarTrace.A mask) I x).st) x ω r).msgs.take (IV.k (xIOf x))).map histOf).take
+        (RestRead.kI x - 1))) :
+    ∀ o m, (o, m) ∈ (DeployedR.layR OpenRows.elemR).piecesOf x s
+      (witFin (VStarTrace.A mask) I x w ω.1 (((Claims.run FlockDeploy.sha512
+        (refP IV (finB b (VStarTrace.A mask) I x) w) (RecDeploy.V IV (finB b (VStarTrace.A mask) I x).st) x ω
+          r).msgs.take (IV.k (xIOf x))).map histOf) s) i →
+      (((((Claims.run FlockDeploy.sha512 (refP IV (finB b (VStarTrace.A mask) I x) w)
+        (RecDeploy.V IV (finB b (VStarTrace.A mask) I x).st) x ω r).msgs.map Prod.fst).getD i []).drop o).take
+          m.length = m :=
+  hpEarly hs hi hfit hT (hmsg_run (VStarTrace.A mask) I IV b w hx hk ω r hi)
 
 end RecDeploy.HpEarly
