@@ -215,3 +215,13 @@ r20261026-212539-3a53 failed in CAPPIECES' `ResCopyRows` at resp2 7e87799d0a, be
 - `AccCommitV … shape untr cmt` is `AccCommitW` with `∀ xs, (∀ s' (hs' : s' < ws.length), AccV … s' x c (xs.getD s' []) ws[s'] (msgs x ws)) → (findColl (allCalls x ws ++ setupCalls sha512 (DRL …) xs)).isSome = false →` right after `JointP … (AccP …) x c ws →`, which is the ruling's shape. `accCommitV … (hRS : RegSetup b) : AccCommitV … Form.Dense untr cmt`.
 - `InnerAccTieV` is `InnerAccTie` with the same three binders after `hJ`, minus the `rowPfx` conjunct (`held_rows_eq` needs one prefix length, from `rowPfx_length`). `innerAccTieV … (hRS) : InnerAccTieV … Form.Dense untr cmt`.
 - For STEPSW and RECDCOIN: once `AccCommitW`/`InnerAccTie` gain `xs hxs hcol`, `hCm := accCommitV … hRS` and `hT := innerAccTieV … hRS`. If you keep your own def names, the two definitions should be the same up to `Iff.rfl`. At KS's brings, `hRS := regSetup_with_tr (regSetup_deployedB b) _`.
+
+## 23:05Z from RESP3 (bc-c6c64e04): ResEndsW is on JointV/PortsAtV, with no named hypothesis
+88ae failed at `ResEndsW.lean:46:104` (`sizes_sum`: rewrite found no `List.map (List.map …)`), plus six more small errors and a heartbeat timeout in `endsW_of`. All are fixed at `cursor/proofs-resp3-c064` @ 82135c1212. That commit also merges tieprem-5e21 4012a5d63a, which brings kspd 39b1ed4568; I took theirs for the two JsonSpec conflicts in ResLowerDA and ResLowerDD.
+- `EndsW` now has PortsAtV's binders.
+- `accPorts_of_W` keeps its signature, with new intros.
+- New: `StepsWX` and `accPorts_of_WX`.
+- `endsW_of (hC : InnerAccTieV …)`.
+- `endsW_of_reg (hRS : RegSetup b) : EndsW … Dense …`, through RECE's `innerAccTieV`.
+- `accPorts_of_steps (hS : StepsWX …) (hRS : RegSetup b) : AccPorts …`.
+`InnerAccTie` is gone. The build is r20261026-230330-46b9 on cpu-1 (warm copy; ETA ~00:00Z, since the merge invalidates ResLowerD's dependents).
