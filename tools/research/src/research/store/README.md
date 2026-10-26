@@ -376,7 +376,8 @@ run-files/v1 and vllm-row-meta/v1 14, telemetry/v1 30; every other kind keeps no
 (`--cite-linear`, required with `--apply`: issues and comments, projects, project updates, documents) or a cited artifact's `meta` names, every `art:` id a cited run's attempt names, whatever a kept manifest's `refs` name, young and
 untimed artifacts. Manifests, attempts and labels stay, so an expired id still resolves and `fetch` reports its blob absent.
 A blob is deleted only after it has been a candidate for `gc.GRACE_S` (24 h, the longest custody upload) and is one still,
-after a last listing of `manifests/`, so an upload that reused it meanwhile keeps it. Cite what you need before its TTL: a
+after a fresh listing of `manifests/` before each batch of `gc.BATCH` (1,000) deletes, so an upload that reused it meanwhile
+keeps it; a blob deleted under an upload that landed during its batch is reported `lost` (the pass exits 1). Cite what you need before its TTL: a
 label (`research data label ART note ...`) or a note naming its id. The control pod runs it (`infra/control/store_gc.sh`).
 
 ## 8. Labels
