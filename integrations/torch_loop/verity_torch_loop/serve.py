@@ -10,7 +10,7 @@ their entries in the registration's window and their salts in `ACTIVATIONS_PRIVA
 SHA-512, the run root, the population and the units whose outputs are not their Definition's (`Window.mismatches`: none
 unless ``--tamper``). With ``--opening FILE`` the circuit is its compiler's (`compile`): the loop's schedule is committed as
 advice under that compiler, the registration binds both, and the advice's opening (the prover's private file) goes to
-``FILE``. The second prints the circuit record's SHA-512 alone, from the loop's shape and no value: the circuit the verifier
+``FILE``. The second prints the circuit record's SHA-512, from the loop's shape and no value: the circuit the verifier
 registers before the loop runs, when it has no compiler.
 
     python -m verity_torch_loop.serve --commit-weights OPENING --pin PIN [--h 128] [--wired]
@@ -18,9 +18,13 @@ registers before the loop runs, when it has no compiler.
 commits the model's weights once, before any run (`loop.commit_weights`): the prover's opening (their salts) to
 ``OPENING``, the verifier's pin of their roots to ``PIN``. ``--registered`` (with ``--out`` or ``--circuit-only``): the
 circuit reads the weights as registered values (`loop.TorchLoop`'s ``registered``), served from ``--weights OPENING``;
-``--tamper-weights``: served from other weights under that opening's salts. ``--wired``: the wired circuit (`loop.TorchLoop`'s
-``wired``, with ``--commit-weights`` the weights one row a linear); ``--tamper-activations``: its quantize units' codes
-tampered."""
+``--tamper-weights``: served from other weights under that opening's salts. ``--tie`` (with ``--out`` or
+``--circuit-only``): each output unit's ``o0`` reads the output value the network certifier relayed (`loop.TorchLoop`'s
+``tie``), served from ``--out-opening OPENING`` (`loop.out_opening`: the rows and the certifier's salts). ``--circuit-only``
+also prints the circuit's program digest, which the output value's domain binds, and the loop's output units
+(`TorchLoop.output_units`), which a work law proves whole beside its draw (`TorchLoop.work_table`). ``--wired``: the wired circuit
+(`loop.TorchLoop`'s ``wired``, with ``--commit-weights`` the weights one row a linear); ``--tamper-activations``: its quantize
+units' codes tampered."""
 from __future__ import annotations
 
 import argparse
@@ -57,6 +61,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tamper-activations", action="store_true")
     ap.add_argument("--commit-weights", help="commit the weights: their opening (the prover's) to this file")
     ap.add_argument("--pin", help="with --commit-weights: the verifier's pin of their roots to this file")
+    ap.add_argument("--tie", action="store_true", help="each output unit's o0 reads the certified output value")
+    ap.add_argument("--out-opening", help="with --tie --out: the output value's opening (loop.out_opening)")
     a = ap.parse_args(argv)
     if a.commit_weights:
         if not a.pin:
@@ -71,12 +77,15 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--out DIR, or --circuit-only")
     if a.registered and a.out and not a.weights:
         ap.error("--registered --out needs --weights OPENING")
+    if a.tie and a.out and not a.out_opening:
+        ap.error("--tie --out needs --out-opening OPENING")
     loop = L.TorchLoop(L.Model(h=a.h), [int(x) for x in a.requests.split(",")], a.steps, a.tamper, a.run_id,
-                       a.registered, a.tamper_weights, a.wired, a.tamper_activations)
+                       a.registered, a.tamper_weights, a.tie, wired=a.wired, tamper_activations=a.tamper_activations)
     law = D.parse_law(a.law)
     if a.circuit_only:
-        empty = IF.Window(loop.circuit(), loop.run_root, law, a.cap)
-        print(json.dumps({"circuit": hashlib.sha512(IF.circuit_bytes(empty.circuit_record())).hexdigest()}))
+        empty = IF.Window(loop.circuit(), loop.run_root, law, a.cap, work_table=loop.work_table(law))
+        print(json.dumps({"circuit": hashlib.sha512(IF.circuit_bytes(empty.circuit_record())).hexdigest(),
+                          "program": empty.window.partition["program"], "outputs": loop.output_units()}))
         return 0
     advice = None
     if a.opening:
@@ -85,7 +94,8 @@ def main(argv: list[str] | None = None) -> int:
         advice = IF.advice_binding(c, reg.root.hex(), 8 * len(data))
         Path(a.opening).write_text(json.dumps(IF.advice_opening(data, reg)))
     weights = L.opened(loop.model, json.loads(Path(a.weights).read_text())) if a.registered else None
-    win = loop.window(law, a.cap, advice, weights)
+    out = L.opened_out(json.loads(Path(a.out_opening).read_text())) if a.tie else None
+    win = loop.window(law, a.cap, advice, weights, out)
     bad = win.mismatches()
     acts = loop.commit_activations()
     win.write(win.close(), a.out, {"loop": "torch-loop", "activations": L.activations(loop.model, acts)}, registrar=R)

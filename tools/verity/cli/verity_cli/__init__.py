@@ -4,7 +4,7 @@
     verity check PART... [ARGS]     only those parts of it, tests, circuits or lean (their jobs in check/ci.toml)
     verity check --remote [ARGS]    the check recorded as an Attempt, on a free pod unless --on POD names one
     verity check move BASE HEAD     certify a pure move (check/move_check.py)
-    verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh)
+    verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh; a - in NAME is a _)
     verity lean try FILE [--on NODE] [--pool P] [--as LANE]
                                     elaborate one Lean file on a node's warm slot tree (lean/lean_changed.py --try) and
                                     print Lean's output: the edit loop (default vy-nebius-cpu-1, pool research)
@@ -40,6 +40,8 @@ def _check(args: list[str]) -> int:
 
 def _bench(args: list[str]) -> int:
     names = sorted(p.name for p in (ROOT / "benchmarks").iterdir() if p.is_dir() and not p.name.startswith((".", "_")))
+    if args:
+        args = [args[0].replace("-", "_"), *args[1:]]
     if not args or args[0] not in names:
         raise SystemExit("verity bench NAME [ARGS]: NAME is one of " + ", ".join(names))
     d = ROOT / "benchmarks" / args[0]
