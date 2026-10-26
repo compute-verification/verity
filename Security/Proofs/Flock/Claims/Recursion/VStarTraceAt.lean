@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.VStarNets
 import Proofs.Flock.Claims.Recursion.SlotsDeployed
+import Proofs.Flock.Claims.Recursion.VStarAccept
 import Proofs.Flock.C3.PubRows.Shape
 
 /-!
@@ -64,6 +65,17 @@ theorem traceOk_fitPin {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s
     (hi : VStar.In.partIn src (progOf c) sv = .ok pin) : TraceOk c (fitPin c pin) :=
   VStarTraceOk.traceOk_refs hS hp (VStarNets.nets_three hS hp) (refs_fitPin (VStarTraceOk.partIn_refs hi))
     (rows_fitPin c pin (portWords_named (names_staged hS hp)))
+
+/-- **The stager accepts a staged part, and `TraceOk` holds at its fitted port inputs**, wherever the stager's checks
+hold at the part's statement (`hok_of_fits`). -/
+theorem traceOk_fits {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape} {hist : List (Msg × Msg)}
+    {stg : Stage} {s : ℕ} {xO : Msg} (hS : StagedPart stg s x xO)
+    (hf : ∀ st c src, partAt x s = some (st, c) → srcOf I x w ρ hist = some src → StmtFits src st) :
+    ∀ st c src, partAt x s = some (st, c) → srcOf I x w ρ hist = some src →
+      ∃ pin, VStar.In.partIn src (progOf c) st = .ok pin ∧ TraceOk c (fitPin c pin) := by
+  intro st c src hp hs
+  obtain ⟨pin, hi⟩ := hok_of_fits hf st c src hp hs
+  exact ⟨pin, hi, traceOk_fitPin hS hp hi⟩
 
 /-- **`TraceOkAt` at the deployed V\***: every part of `x` staged. -/
 theorem traceOkAt_staged {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape} {h : List (Msg × Msg)}
