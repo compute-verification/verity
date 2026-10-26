@@ -7,6 +7,7 @@ import Proofs.Flock.Claims.Recursion.MoreSlotsAll
 import Proofs.Flock.Claims.Recursion.HonestPartsLayR
 import Proofs.Flock.Claims.Recursion.SchedDense
 import Proofs.Flock.Claims.Recursion.DeployedBrings
+import Proofs.Flock.Claims.Recursion.VStarAccept
 
 /-!
 # The honest half of `RecursiveKSAt`'s non-vacuity at the deployed V\* (`honest_half`)
@@ -31,8 +32,11 @@ The run accepting is one named premise, `HonestRunAccepted`: the statement is in
 compiled verifier accepts the reference prover's run and the inner verifier its inner proof. It is witnessed outside
 Lean, by running the deployed verifier on the honest deployed fixture. No collision among a part's recorded calls is
 `NoCollAt`, SHA-512's collision event. The rest are hypotheses: the builder's facts (`NumsFixed`, `StagedSetsUp`,
-`WitSatisfies`), the fitted rows (`RowsFit`), the tape exception (`hTops`), the stager accepting (`hok`) and the shared
-rows' widths (`hWd`).
+`WitSatisfies`), the fitted rows (`RowsFit`), the tape exception (`hTops`), the stager's checks at each part's statement
+(`StmtFits`, so the stager accepts by `hok_of_fits`) and the shared rows' widths (`hWd`).
+
+`Ir` is any inner prover: no Lean `InnerRec` is the deployed reference inner prover yet (its `rest` is the stager's
+inputs, which `rec_vstage`, `rec_vstar` and `verifier_rows` build). `StmtFits` reads `Ir.rest`'s openings and tops.
 `bringsAt_deployedB`: the brings here are `RecursiveKS`'s `deployedB` at `bringsAt mask Ir b0 x`.
 -/
 
@@ -124,8 +128,8 @@ by running the deployed verifier on the honest deployed fixture), each part `s <
 
 Besides that premise it takes: the builder's facts (`NumsFixed`, `StagedSetsUp`, `WitSatisfies`); no collision among
 each part's recorded calls (`NoCollAt`, SHA-512's collision event); the fitted rows (`RowsFit`); the tape exception
-(`hTops`: the reps' tops differ at every level above 0); the stager accepting at the honest source (`hok`); and the
-holders of one round's row agreeing on its port's words (`hWd`, to be a verifier check). -/
+(`hTops`: the reps' tops differ at every level above 0); the stager's checks at each part's statement at the honest
+source (`StmtFits`); and the holders of one round's row agreeing on its port's words (`hWd`, to be a verifier check). -/
 theorem honest_half (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) (x : Msg)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record)
     (recRest : Msg → List (Msg × Out) → List UInt8)
@@ -144,18 +148,15 @@ theorem honest_half (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) 
     (∀ i < RestRead.kI x - 1, HpEarly.RowsFit (Ir.fit x) x w ω.1 (hist.take (RestRead.kI x - 1)) i) →
     (∀ src, srcOf (Ir.fit x) x w ω.1 (hist.take (RestRead.kI x - 1)) = some src → ∀ l, 0 < l → ∀ a b,
       (src.tops[0]!)[l]? = some a → (src.tops[1]!)[l]? = some b → _root_.VStar.In.sameTop a b = false) →
-    ((∀ src, srcOf (Ir.fit x) x w ω.1 (hist.take (RestRead.kI x - 1)) = some src → ∀ l, 0 < l → ∀ a b,
-        (src.tops[0]!)[l]? = some a → (src.tops[1]!)[l]? = some b → _root_.VStar.In.sameTop a b = false) →
-      ∀ s st c src, partAt x s = some (st, c) →
-        srcOf (Ir.fit x) x w ω.1 (hist.take (RestRead.kI x - 1)) = some src →
-        ∃ pin, _root_.VStar.In.partIn src (progOf c) st = .ok pin) →
+    (∀ s st c src, partAt x s = some (st, c) →
+      srcOf (Ir.fit x) x w ω.1 (hist.take (RestRead.kI x - 1)) = some src → StmtFits src st) →
     (∀ xr, readX x = some xr → ∀ s₁ c₁ h₁ s₂ c₂ h₂, xr.w.parts[s₁]?.bind partCircuit = some c₁ →
       h₁ ∈ heldRows xr s₁ → xr.w.parts[s₂]?.bind partCircuit = some c₂ → h₂ ∈ heldRows xr s₂ → h₁.1 = h₂.1 →
       (c₁.ports[h₁.2.2.1]?).map (·.words) = (c₂.ports[h₂.2.2.1]?).map (·.words)) →
     ∀ s < nS x,
       Claims.Recursion.VStarB.PartAccepts FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
         Claims.Recursion.Form.Dense (showsPart recRead bR) (cmtTr recRead) s x (Claims.coinSeq r) ms := by
-  intro bR L bL I D hN hS hW w st ω r hRun hnc hist ms hfit hTops hok hWd s hs
+  intro bR L bL I D hN hS hW w st ω r hRun hnc hist ms hfit hTops hFits hWd s hs
   obtain ⟨hR, hx, hf, hacc, hI⟩ := hRun
   obtain ⟨xr, hxr⟩ := readX_of_lt_nS hs
   have hk : I.V.k (xIOf x) = RestRead.kI x := rfl
@@ -183,7 +184,7 @@ theorem honest_half (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) 
   exact honest_partAccepts_final mask Ir (deployedB b0) x aux nOf hd recRest decI hN hS hW hR hx hf ω r hacc hI s hs
     hTm (hnc s hs) hA hpE ⟨xr₁, rs, hxr₁, hrs⟩
     ⟨bL.st, _, stagedPart_run FlockDeploy.sha512 I.V bL.st x (refP I.V bL w) ω r hacc hs⟩ hTops
-    (fun h => hok h s) hWd
+    (fun _ => hok_of_fits (hFits s)) hWd
     (fun hfitH => HhHeld.hh_A0 (mask := mask) (I := Ir.fit x) (x := x) (w := w) (ρ := ω.1) (hist := hist) (s := s)
       (ms := ms) (schedMatches_dense x st hx hf)
       (fun sv c src pin hp hsrc hpi => VStarTraceAt.traceAt_staged hSall mask s sv c src pin hp hsrc hpi) hfitH hmsg)
