@@ -45,6 +45,11 @@ the units, their feeds, gathers and weight reads, and wires them):
   `Gemm_v2{K, 1}` unit over the LM head's input and its first weight row.
 - `RMSNormTriton_v5`, `RMSNormFusedCuda_v2` and `SiluMul_v2` are one unit each.
 
+The weights record is never one registered parameter: each weight a port reads is its own at the port's row width
+(`window_builder.weight_param`: ``weights/<label>@<words>``, a tied embedding twice, once as its table's rows and once as the
+LM head's), its reads' bases and steps whole rows of it, so each is pinned as a root over its own rows and the window's
+members take its rows as registered rows (`interface.members`). A pin of `WEIGHTS` pins them all.
+
 A reader port that reads several writers' rows is cut (`interface.Layout.cut`), one cut per template and port: the cut ``d``
 divides every use's row count, leaves its reader at most ``grain.rows`` rows in and out, and makes the fewest gather units,
 a use's rows gathered ``m / d`` at a time by `AllGather_v1` units (whose ``parts`` are cut a row a part, so a gather of
@@ -205,8 +210,9 @@ class _Program:
             raise Unexpressible(f"{name}: its inputs are {params}; the window's lowering takes a prompt and the weights record "
                                 "(no seed, prefix-cache hit, carried state or peers)")
         self.params = params
+        labels = [label for label, _ in dict(self.fn.signature()[0])[WEIGHTS].fields]
         self.fields = _spans(f"{name}: weight", dict(self.fn.signature()[0])[WEIGHTS].fields)
-        self.weights = self.fields[-1][1]
+        b.weights = b.weights or tuple((label, s[1], e[1] - s[1]) for label, s, e in zip(labels, self.fields, self.fields[1:]))
         self.outs: dict[int, list[tuple[int, int, Row]]] = {}
         self.words: dict[int, list[tuple[int, int, int]]] = {}
         self.gemms: dict[int, tuple[Any, tuple[Row, ...], int]] = {}
@@ -299,8 +305,7 @@ class _Program:
         tok, table = node.args
         tid, u = self.b.unit(E.read(V, H))
         self.b.feed(tid, "tok", u, 1, self._token(tok))
-        lo = self.weight(table.refs, V * H)
-        t = self.b.tables.setdefault((lo, H, V), IF.Table(f"embedding@{lo}", WEIGHTS, lo, H, V))
+        t = self.b.table(self.weight(table.refs, V * H), H, V)
         self.b.roots += [IF.TableRead(tid, "root", t.name, "root", u, 1), IF.TableRead(tid, "domain", t.name, "domain", u, 1)]
         self.b.openings.append(IF.Opening(tid, t.name, "tok", ("row", "salt", "path"), "o1", u, 1))
         self.outs[j] = [(0, H, Row(tid, u, "o0", H))]
@@ -611,7 +616,6 @@ def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None
     for r in progs:
         if r.position != cls.positions:
             raise Unexpressible(f"{r.name}: {r.position} positions, not its class's {cls.positions}")
-    weights = progs[0].weights
     b.settle()
     roots = _runs(b.roots, lambda x: (x.reader, x.port, x.table, x.of), lambda x: x.at, lambda x: x.units,
                   lambda x, n: IF.TableRead(x.reader, x.port, x.table, x.of, x.at, n))
@@ -619,7 +623,7 @@ def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None
                      lambda x, n: IF.Opening(x.reader, x.table, x.key, x.ports, x.verdict, x.at, n))
     ingress = _runs(b.ingress, lambda x: (x.reader, x.port, x.step), lambda x: x.at, lambda x: x.units,
                     lambda x, n: IF.Ingress(x.reader, x.port, x.at, n, x.step))
-    reg = IF.Registered({WEIGHTS: weights}, tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
+    reg = IF.Registered(dict(sorted(b.params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
                         tuple(openings))
     rows = {g.reader for g in b.ingress}
     masks = {f.tid for f in b.feeds if f.port == "occ"}
