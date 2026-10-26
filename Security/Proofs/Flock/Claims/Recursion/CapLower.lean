@@ -1,6 +1,5 @@
 import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
 import Proofs.Flock.Claims.Recursion.CapOpens
-import Proofs.Flock.Claims.Recursion.CapPieces
 import Proofs.Flock.Claims.Recursion.SlotsCommit
 import Proofs.Flock.Soundness.Binding.Leaf
 
@@ -21,8 +20,8 @@ opened position (`CopyTopR`). This file reduces the second half to two facts.
 * **The reader** (`SideCapR`): the side's cap entry is the node RecCap's opened row carries. A RecCap's opened row is
   its whole hidden `top` row, 1024 bits (`rowHidden`, eight bits a byte), the node then 64 bytes of padding, while
   a climb's top and `FitsRep.sizes`' cap entries are 64 bytes (`DecodeZL.ProofSizes.capEach`, `rcapsEach`). So the
-  reader has to take each cap row's first 64 bytes (CAPPIECES' `nodeOf`). `capR` and `ligR` read the whole row today,
-  at which `SideCapR` fails.
+  reader takes each cap row's node (`FlockDeploy.nodeOf`): `topGroups` does, so `ligR`'s recursive caps do, but
+  `capR` reads round 0's rows whole, at which `SideCapR` fails at level 0.
 
 `capTop_of` gives the climb's top (`CapTopNC`, `CopyTopR` away from a joint collision) from the two, and
 `openPieces_deployedNC` is LOWOPEN's `openPieces_deployed` at `JointNC`.
@@ -32,7 +31,7 @@ namespace RecDeploy.CapLower
 
 open Flock
 open Claims (Msg)
-open FlockDeploy (Coin FinalP setupOf tabsOf)
+open FlockDeploy (Coin FinalP nodeOf)
 open Claims.Recursion.VStarB
 open FlockVBridge.Family (bytesAt outCol)
 open RecDeploy.OpenLower (Joint StagedAt AtPieces AtOpened ownQR ownQR_some copyR copyAtR schAt sideAtR OpenCopyR
@@ -63,7 +62,7 @@ theorem decompB_of_jointNC {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} 
 /-! ## What a cap row carries -/
 
 /-- RecCap's `top` row at instance `n`, off part witness `w'` in its circuit `c'` (`rowHidden`, eight bits a byte):
-the node then 64 bytes of padding (CAPPIECES' `nodeRow`), whose node is its `nodeOf`. -/
+the node then 64 bytes of padding (`FlockDeploy.nodeRow`), whose node is its `nodeOf`. -/
 def capRow (c' : Circuit) (w' : Claims.Flock.Wit) (n : ℕ) : ByteArray :=
   ⟨(readForms w' (((rowHidden c' "top" n).getD []).map HmNets.Lin.var)).toArray⟩
 
