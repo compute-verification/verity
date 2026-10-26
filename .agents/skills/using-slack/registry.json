@@ -648,7 +648,8 @@
       "charter": "Daniel, 2026-10-18 (via top, COMM-44)",
       "usergroup": "S0CA9EAFKED",
       "owns": [
-        "benchmarks/rho/"
+        "benchmarks/rho/",
+        "benchmarks/circuit_properties/"
       ],
       "branch_suffixes": [
         "4207"
