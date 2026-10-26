@@ -1,0 +1,39 @@
+# The vLLM example's move out of `benchmarks/one_stage/`: what `tools/move/layout.py --map tools/move/examples_vllm_map.toml`
+# moves and rewrites (Daniel, 25 Oct 11:43 PM PDT, VLLM-119: examples get a top-level `examples/`, one directory per example,
+# each holding its workload, its placement and the command that runs it; `integrations/vllm/` keeps only what attaches Verity
+# to vLLM: the engine, the capture, the Commit, the Program's lowering and the checks).
+#
+# - The example is Llama-3.2-1B bf16, batch-invariant eager, on one RTX PRO 6000. Its two commands, each with its placement
+#   (the `research run` line it is run with), join `examples/vllm/`: `llama1b_tp1_commit.sh` as `commit.sh`, the row's
+#   Build, Match and Commit of record, and `llama1b_serve_seal.sh` as `serve.sh`, the committing endpoint under its load
+#   with each closed window's advice and row dir.
+# - `examples/vllm/` is not a package. Its scripts run by path from the tree root and reach `verity_vllm` through
+#   `PYTHONPATH=$TREE/integrations/vllm`, as before. The rows of record (`integrations/vllm/workloads/`, `manifests/`),
+#   which the integration reads by row id, and the tools `serve.sh` runs from the integration's directory stay.
+# Nothing is split, edited or deleted, and no file is added. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+
+[paths]
+"benchmarks/one_stage/llama1b_tp1_commit.sh" = "examples/vllm/commit.sh"
+"benchmarks/one_stage/llama1b_serve_seal.sh" = "examples/vllm/serve.sh"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and this map, changelogs, research's recorded moves), and files
+# whose bytes a digest pins.
+exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "tools/verity/check/tests/test_suites.py", "tools/verity/check/tests/test_move_check.py",
+           "tools/research/src/research/store/moves.json"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`): none, since neither script is a module
