@@ -72,6 +72,39 @@ class Kernel:
     def xor3(self, a, b, c) -> np.ndarray:
         return self.lop3(a, b, c, lambda x, y, z: x ^ y ^ z)
 
+    def xor2(self, a, b) -> np.ndarray:
+        return self.lop3(a, b, 0, lambda x, y, z: x ^ y)
+
+    def and2(self, a, b) -> np.ndarray:
+        return self.lop3(a, b, 0, lambda x, y, z: x & y)
+
+    def shf_l_w(self, u, r: int) -> np.ndarray:
+        """rotl(u, r): SHF.L.W, the funnel shift of (u, u)."""
+        out = rotl(u32(u), r).astype(U32)
+        self.add("SHF", out.size)
+        return out
+
+    def redux_xor(self, x: np.ndarray) -> np.ndarray:
+        """redux.sync.xor across each warp (axis 0 grouped by 32 lanes): one warp instruction a warp, class ``REDUX``,
+        counted in lanes (32 a warp) like every other class."""
+        x = u32(x)
+        out = np.bitwise_xor.reduce(x.reshape(-1, 32, *x.shape[1:]), axis=1).astype(U32)
+        self.add("REDUX", x.size)
+        return out
+
+    def shfl_bfly(self, x: np.ndarray, m: int) -> np.ndarray:
+        """SHFL.BFLY by lane mask ``m`` within each warp (axis 0 grouped by 32 lanes)."""
+        x = u32(x)
+        idx = np.arange(x.shape[0])
+        out = x[(idx & ~31) | ((idx & 31) ^ m)]
+        self.add("SHFL", x.size)
+        return out
+
+    def stg(self, lanes: int, nbytes: int) -> None:
+        """A global store of ``lanes`` lanes (class ``STG``, values unchanged)."""
+        self.add("STG", lanes)
+        self.add("GMEM.B", nbytes)
+
     def iadd3(self, a, b, c=0, sb: int = 1, sc: int = 1) -> np.ndarray:
         """a + sb b + sc c mod 2^32, sb and sc in {1, -1} (IADD3's input negation)."""
         a, b, c = u32(a), u32(b), u32(c)
