@@ -197,3 +197,6 @@ For D5, after RT-LEAN's L27/L28 decisions: price each method at the **cheapest r
 - **A11:** reusing weight-side coins across decode calls opens nothing algorithmically. Decode at m = 32 is memory-bound; past the ridge, A10's condition applies.
 
 D5 must include A10 (depth-1 Strassen with overflow fixes on idle lanes, RTX PRO 6000, conditional on lane load) and A12 (the noise-tile cross-term route at c_t ≈ 2.54).
+
+## 04:25Z (real UTC), coordinator
+New question from me (MODEL-SPEC-3 answers from NVIDIA docs): does the H200's FP64 DMMA share the INT8 tensor datapath? If the model lets DMMA run concurrently on its own `f64` resource, price packed-DMMA throughput added to INT8 tensor work in D5 and A-items, and say whether it beats the honest kernel.

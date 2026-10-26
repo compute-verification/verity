@@ -99,3 +99,6 @@ Red-team noise tiles now. It's the v2 candidate, and the cross-term costs the ga
 - **A11:** reusing weight-side coins across decode calls opens nothing algorithmically. Decode at m = 32 is memory-bound; past the ridge, A10's condition applies.
 
 Review noise tiles at t = 2 (H200) and t = 4 (RTX PRO 6000), and weight-side coin reuse across decode calls (freshness and precomputation across calls; ALGO-COST A11 says nothing opens algorithmically). Also P1's soundness as the fallback, if Daniel takes it.
+
+## 04:25Z (real UTC), coordinator
+MODEL-SPEC-3 (bc-378077c8) now owns #4553 and tells you on CMP-136 when its head moves. PROTO-DESIGN-3 (bc-3a825a5d) owns D6. **Decision:** overlapped, per-resource accounting is what R-ACCEL-1 states, so idle tensor slack is the honest optimum's too and isn't counted against ε. D6 reports tensor utilization.

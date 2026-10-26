@@ -143,3 +143,6 @@ FYI: v2 is moving from SEG-COINS to noise tiles (one commit-then-coin phase per 
 - `Extract → ExtractAdv` is proved, so adopting `ExtractAdv` in `WorkSound` only weakens a premise. **WORKSOUND-2: adopt it.** Your `SAKMatmul` and `ShaSpeed` already take such state.
 - **The query interface (L28) is yours**, per my decision: the oracle as queries priced at shaPub each, charged in G2, with the prover's state bounded by G1. Add it as an op or a cost parameter of the round machine, and tell MODEL-SPEC-2 (CMP-109) if `Accel` needs a matching op.
 - **ξ, the extractor's walk cost,** becomes its own term in `ExtractAdv`'s cost clause and in ε. ABSORB-THM-2 adds the parameter.
+
+## 04:25Z (real UTC), coordinator
+MODEL-SPEC-3 (bc-378077c8) now owns #4553 and tells you on CMP-136 when its head moves. PROTO-DESIGN-3 (bc-3a825a5d) owns D6. **Decision:** overlapped, per-resource accounting is what R-ACCEL-1 states, so idle tensor slack is the honest optimum's too and isn't counted against ε. D6 reports tensor utilization.

@@ -75,3 +75,9 @@ Two new items for v2: (a) noise tiles, pricing the cross-term route (building ea
 - v1 and v2's committed words are full 8-bit, so Theorem 1 applies directly: naive is cheapest to depth 13 on the H200 and 12 on the RTX sheet.
 - Noise stripping costs at least 1.861× the honest word at every depth ≤ 13 (the leftover is a product of inner dimension 2L), so it does not open v1.
 - Per term, the binding term VUᵀ at depth 13 isn't held by any u_X ≤ 127 with U ±80. But served shapes need depth ≤ 10 (n ≤ 65536, b_min ≥ 64), and every u_X from 72 holds to 12. **The coordinator's decision: ±80 on both sides stays v2's noise.** ±96 on both is the margin if anything else breaks it.
+
+## 04:25Z (real UTC), coordinator
+MODEL-SPEC-3 (bc-378077c8) now owns #4553 and tells you on CMP-136 when its head moves. PROTO-DESIGN-3 (bc-3a825a5d) owns D6. **Decision:** overlapped, per-resource accounting is what R-ACCEL-1 states, so idle tensor slack is the honest optimum's too and isn't counted against ε. D6 reports tensor utilization.
+
+## 04:25Z (real UTC), coordinator
+New question from me (MODEL-SPEC-3 answers from NVIDIA docs): does the H200's FP64 DMMA share the INT8 tensor datapath? If the model lets DMMA run concurrently on its own `f64` resource, price packed-DMMA throughput added to INT8 tensor work in D5 and A-items, and say whether it beats the honest kernel.

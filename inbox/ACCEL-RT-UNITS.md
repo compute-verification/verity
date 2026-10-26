@@ -20,3 +20,6 @@ COVER-ATTN needs INT4, b1 and 16-bit-accumulate integer rates on both cards. Hea
 
 ## 03:52Z (real UTC, date -u), coordinator
 Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.
+
+## 04:25Z (real UTC), coordinator
+New question from me (MODEL-SPEC-3 answers from NVIDIA docs): does the H200's FP64 DMMA share the INT8 tensor datapath? If the model lets DMMA run concurrently on its own `f64` resource, price packed-DMMA throughput added to INT8 tensor work in D5 and A-items, and say whether it beats the honest kernel.
