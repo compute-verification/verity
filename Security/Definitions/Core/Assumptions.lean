@@ -69,9 +69,12 @@ the `BLACKWELL_SM120_*_M16N8K32` integer captures and BF16; `Accel.CapturedProdu
 covers, each still to capture: on the H200 FP8 at a nonzero accumulator, mixed E4M3 × E5M2 `wgmma`, f16, tf32 and b1;
 on the RTX PRO 6000 the E4M3, E5M2 and E2M1 K32 atom (its `BLACKWELL_SM120_*` value captures agree with
 `Sm120.f8Pipeline` in 99.96–99.997% of atoms only, PEARLC-MODEL; their pair swaps are this Prop's check), the
-block-scaled NVF4 and MXF4 (pinned in Python only), mixed f8f6f4 pairings, f16, tf32 and b1. -/
+block-scaled NVF4 and MXF4 (pinned in Python only), mixed f8f6f4 pairings, f16, tf32 and b1. The 2:4 sparse MMAs'
+dots (`x.dotSp`, no capture on either card) have the form over their `k/2` kept pairs: the metadata only routes each
+kept element of `A` to the element of `B` it names (`Accel.mmaSpEval`), and each such pair meets one multiplier. -/
 def AccelProductForm (x : Accel.Open) : Prop :=
-  ∀ fa fb sat k, Accel.ProductForm fa fb k (x.dot fa fb sat k)
+  (∀ fa fb sat k, Accel.ProductForm fa fb k (x.dot fa fb sat k)) ∧
+    ∀ fa fb sat k, Accel.ProductForm fa fb (k / 2) (x.dotSp fa fb sat k)
 
 /-- **`card-within-accel(card)`**: the card can do no more than its accelerator model, the refinement direction (a
 theorem about `c.machine` reaches the card only through it). `can f t` says the card, running any code on its units
@@ -90,7 +93,7 @@ host link's bandwidth, which the model prices); and compute data compression (U7
 and incompressible; a method bound by device memory or L2 on compressible data of its own is outside the claim).
 
 **Gaps**, units the card has that the instances don't have yet, so the claim is open for code that uses them until
-each is added with its rate: 2:4-sparse MMA and its metadata selector, DMMA, `HFMA2` and `f16` accumulators, vector
+each is added with its rate: DMMA, `HFMA2` and `f16` accumulators, vector
 atomics and reductions (`red.v4`, `redux.sync`), TMA bulk reductions (`cp.reduce.async.bulk`), NVSwitch `multimem`
 reductions. The node's host CPUs and its host and peer links are other devices of the period
 (RT-PROTO P9, RT-UNITS U9), not units of the card. -/

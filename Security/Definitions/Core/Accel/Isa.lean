@@ -192,6 +192,39 @@ def accC (fa fb : Fmt) (s : Shape) (v : ℕ → Word) (o : ℕ) : Word := v (s.w
 def mmaEval (dot : Dot) (fa fb : Fmt) (s : Shape) (v : ℕ → Word) (o : ℕ) : Word :=
   dot (accC fa fb s v o) (rowA fa s v (o / s.n)) (colB fa fb s v (o % s.n))
 
+/-! A **2:4 sparse MMA** (`mma.sp`, `wgmma.mma_async.sp`) at logical shape `s`: of each group of 4 of a row of `A`, 2
+elements are kept, and the metadata names each kept element's position in its group (2 bits). Its inputs are `A`'s
+kept elements (`m` rows of `k/2`), the metadata (`m` rows of `k/2` selectors), `B` (`n` columns of `k`) and `C`. -/
+
+/-- The words of a sparse MMA's kept `A`: `m` rows of `k/2` elements. -/
+def Shape.waSp (s : Shape) (fa : Fmt) : ℕ := packedWords s.m (s.k / 2) fa.bits
+
+/-- The words of a sparse MMA's metadata: `m` rows of `k/2` selectors of 2 bits. -/
+def Shape.wsel (s : Shape) : ℕ := packedWords s.m (s.k / 2) 2
+
+/-- Row `i` of a sparse MMA's kept `A`. -/
+def rowASp (fa : Fmt) (s : Shape) (v : ℕ → Word) (i : ℕ) : List ℕ :=
+  List.ofFn fun l : Fin (s.k / 2) => elem fa.bits v (i * (s.k / 2) + l)
+
+/-- The selector of row `i`'s kept element `l`: its position in its group of 4. -/
+def selSp (fa : Fmt) (s : Shape) (v : ℕ → Word) (i l : ℕ) : ℕ :=
+  elem 2 (fun w => v (s.waSp fa + w)) (i * (s.k / 2) + l)
+
+/-- The elements of column `j` of `B` that row `i`'s selectors name, one for each kept element: the kept element `l`
+is in group `l / 2`, so it meets `B`'s element `4 · (l / 2) + selector`. -/
+def colBSp (fa fb : Fmt) (s : Shape) (v : ℕ → Word) (i j : ℕ) : List ℕ :=
+  List.ofFn fun l : Fin (s.k / 2) =>
+    elem fb.bits (fun w => v (s.waSp fa + s.wsel + w)) (j * s.k + 4 * (l.val / 2) + selSp fa s v i l)
+
+/-- Accumulator `o` of a sparse MMA's `C`. -/
+def accCSp (fa fb : Fmt) (s : Shape) (v : ℕ → Word) (o : ℕ) : Word := v (s.waSp fa + s.wsel + s.wb fb + o)
+
+/-- **A sparse MMA's output** `o = i·n + j`: the sparse dot of accumulator `o` with row `i`'s kept elements and the
+elements of column `j` its selectors name. Only the kept pairs meet a multiplier, as on the card, so an unselected
+element of `B` reaches no output. -/
+def mmaSpEval (dot : Dot) (fa fb : Fmt) (s : Shape) (v : ℕ → Word) (o : ℕ) : Word :=
+  dot (accCSp fa fb s v o) (rowASp fa s v (o / s.n)) (colBSp fa fb s v (o / s.n) (o % s.n))
+
 /-! ## Lane functions -/
 
 /-- An integer comparison. -/
@@ -344,6 +377,9 @@ inductive Op (S : Type) where
   /-- an MMA of `fa` rows by `fb` columns at shape `sh`, `A` read from store `sa` and `B` from `sb` (`C` and `D` are
   registers); `sat` clamps an integer MMA's result -/
   | mma (fa fb : Fmt) (sat : Bool) (sh : Shape) (sa sb : S)
+  /-- a 2:4 sparse MMA at logical shape `sh`, its kept `A` read from store `sa`, its metadata from registers and `B`
+  from `sb` (`C` and `D` are registers) -/
+  | mmaSp (fa fb : Fmt) (sat : Bool) (sh : Shape) (sa sb : S)
   /-- a lane function on registers -/
   | lane (g : Lane)
   /-- a uniform-datapath instruction: one lane function a warp computes once (`UIADD3`, `ULOP3`, …), on registers -/
@@ -364,12 +400,13 @@ variable {S : Type}
 
 def nIn : Op S → ℕ
   | .mma fa fb _ sh _ _ => sh.wa fa + sh.wb fb + sh.m * sh.n
+  | .mmaSp fa fb _ sh _ _ => sh.waSp fa + sh.wsel + sh.wb fb + sh.m * sh.n
   | .lane g | .uni g => g.nIn
   | .copy _ _ n => n
   | .atom _ _ => 2
 
 def nOut : Op S → ℕ
-  | .mma _ _ _ sh _ _ => sh.m * sh.n
+  | .mma _ _ _ sh _ _ | .mmaSp _ _ _ sh _ _ => sh.m * sh.n
   | .lane g | .uni g => g.nOut
   | .copy _ _ n => n
   | .atom _ _ => 2
@@ -377,28 +414,34 @@ def nOut : Op S → ℕ
 /-- The store input `i` is read from (`reg` is the register store). -/
 def inStore (reg : S) : (o : Op S) → Fin o.nIn → S
   | .mma fa fb _ sh sa sb, i => if i.val < sh.wa fa then sa else if i.val < sh.wa fa + sh.wb fb then sb else reg
+  | .mmaSp fa fb _ sh sa sb, i =>
+    if i.val < sh.waSp fa then sa
+    else if sh.waSp fa + sh.wsel ≤ i.val ∧ i.val < sh.waSp fa + sh.wsel + sh.wb fb then sb else reg
   | .lane _, _ | .uni _, _ => reg
   | .copy s _ _, _ => s
   | .atom s _, i => if i.val = 0 then s else reg
 
 /-- The store output `i` is written to. -/
 def outStore (reg : S) : (o : Op S) → Fin o.nOut → S
-  | .mma .., _ => reg
+  | .mma .., _ | .mmaSp .., _ => reg
   | .lane _, _ | .uni _, _ => reg
   | .copy _ t _, _ => t
   | .atom s _, i => if i.val = 0 then s else reg
 
-/-- An opcode's semantics, the MMA's dot for formats `fa`, `fb`, saturation and `k` given by `dot`. -/
-def eval (dot : Fmt → Fmt → Bool → ℕ → Dot) : (o : Op S) → (Fin o.nIn → Word) → Fin o.nOut → Word
+/-- An opcode's semantics, the MMA's dot for formats `fa`, `fb`, saturation and `k` given by `dot`, and a sparse MMA's
+at its logical `k` by `dotSp`. -/
+def eval (dot dotSp : Fmt → Fmt → Bool → ℕ → Dot) : (o : Op S) → (Fin o.nIn → Word) → Fin o.nOut → Word
   | .mma fa fb sat sh _ _, v, o => mmaEval (dot fa fb sat sh.k) fa fb sh (getD v) o.val
+  | .mmaSp fa fb sat sh _ _, v, o => mmaSpEval (dotSp fa fb sat sh.k) fa fb sh (getD v) o.val
   | .lane g, v, o | .uni g, v, o => g.eval (getD v) o.val
   | .copy _ _ _, v, o => getD v o.val
   | .atom _ .add, v, o => if o.val = 0 then getD v 0 + getD v 1 else getD v 0
   | .atom _ .exch, v, o => if o.val = 0 then getD v 1 else getD v 0
 
-/-- The products an MMA forms: `m·n·k`. -/
+/-- The products an MMA forms: `m·n·k`, and a sparse MMA's `m·n·k/2`. -/
 def macs : Op S → ℕ
   | .mma _ _ _ sh _ _ => sh.m * sh.n * sh.k
+  | .mmaSp _ _ _ sh _ _ => sh.m * sh.n * (sh.k / 2)
   | _ => 0
 
 end Op

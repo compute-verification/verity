@@ -32,7 +32,8 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 | QMMA.16832 (sm_120: e4m3, e5m2, e2m1) | `mma.sync` `kind::f8f6f4` | covered | `mma`. Same-format dots are pinned; mixed pairings are `Open.dot`. FP6 (e3m2, e2m3) is missing |
 | OMMA.SF.16864 (sm_120: nvf4, mxf4) | `mma.sync` `kind::mxf4nvf4` `.block_scale` | covered | `mma` nvf4/mxf4. The dot is `Open.dot` (pinned in Python only) |
 | QMMA.SF (sm_120 `kind::mxf8f6f4`) | `mma.sync` `.block_scale` | missing | block-scaled FP8 and FP6 |
-| HMMA.SP, IMMA.SP, QMMA.SP, OMMA.SP, the sparse GMMA | `mma.sp`, `wgmma.mma_async.sp` | missing | 2:4 sparsity: the same products at the same rate with a free gather of A |
+| HMMA.SP, IMMA.SP, QMMA.SP, the sparse GMMA | `mma.sp`, `wgmma.mma_async.sp` | covered | `Op.mmaSp`: the kept pairs (each kept element of A with the element of B its 2-bit selector names) at the dense forms' tensor units a real product, so twice the logical rate; dots `Open.dotSp` under `AccelProductForm` |
+| OMMA.SP (sm_120) | `mma.sp` `kind::mxf4nvf4` | missing | block-scaled sparse FP4 |
 | DMMA (sm_90) | `mma.sync` `.f64` | missing | 128 f64 MACs an SM clock (Sheet); an int8 × int8 product is exact in f64 |
 | DMMA (sm_120) | `mma.sync` `.f64` | missing | to check: whether sm_120 has a tensor DMMA at any rate |
 

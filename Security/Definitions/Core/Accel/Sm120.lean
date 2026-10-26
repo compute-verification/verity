@@ -44,6 +44,9 @@ truncation in 99.96–99.997% of atoms only, so no capture pins it. The block-sc
 (`models.BLACKWELL_SM120_NVF4`, `_MXF4`, captured in Python, a block-scaled adder this module doesn't transcribe) and
 every other dot are `Open.dot`.
 
+**2:4 sparse MMAs** (`mma.sp`): at `m16n8` and twice the dense `k`, at the same tensor units a real product, their
+dots `Open.dotSp`; the block-scaled sparse forms (`kind::mxf4nvf4` at `k = 128`) are a gap.
+
 **Coarser than the card**, and **not yet in the instance**: as for the H200 (`Accel.H200`), with FP6 (`e3m2`, `e2m3`)
 and the block-scaled FP8 and FP6 forms (`kind::mxf8f6f4`) among the gaps, and no DMMA at all (sm_120 has none at rate).
 -/
@@ -95,6 +98,8 @@ def pair (fa fb : Fmt) : Bool := intPair fa fb || (f8f6f4 fa && f8f6f4 fb) || fa
 /-- The opcodes the RTX PRO 6000 has. -/
 def Avail : Op Store → Prop
   | .mma fa fb _ sh sa sb => pair fa fb ∧ sh.k ∈ ks fa ∧ sh.m = 16 ∧ sh.n = 8 ∧ sa = .reg ∧ sb = .reg
+  | .mmaSp fa fb _ sh sa sb =>
+    pair fa fb ∧ fa ≠ .nvf4 ∧ fa ≠ .mxf4 ∧ sh.k ∈ (ks fa).map (2 * ·) ∧ sh.m = 16 ∧ sh.n = 8 ∧ sa = .reg ∧ sb = .reg
   | .lane _ => True
   | .uni g => g.pipe ≠ .fma
   | .copy s t n => n ≤ 4 ∨ (s = .smem ∧ t ≠ .reg) ∨ (t = .smem ∧ s ≠ .reg)

@@ -73,6 +73,9 @@ def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) 
   | .mma fa fb _ sh sa sb, r =>
     (if r = .tensor then (sh.m * sh.n * sh.k : ℕ) * weight fa * scale sh else 0) + (if r = .issue then 1 else 0) +
       ((if sa = .smem then (sh.wa fa : ℚ≥0) else 0) + (if sb = .smem then (sh.wb fb : ℚ≥0) else 0)) * port .smem r
+  | .mmaSp fa fb _ sh sa sb, r =>
+    (if r = .tensor then (sh.m * sh.n * (sh.k / 2) : ℕ) * weight fa * scale sh else 0) + (if r = .issue then 1 else 0) +
+      ((if sa = .smem then (sh.waSp fa : ℚ≥0) else 0) + (if sb = .smem then (sh.wb fb : ℚ≥0) else 0)) * port .smem r
   | .lane g, r =>
     match r, g.pipe with
     | .issue, _ => 1 / 32
@@ -101,6 +104,9 @@ structure Open where
   madHi : ℚ≥0
   /-- the dot of every format pair and `k` that no capture pins, by formats, saturation and `k` -/
   dot : Fmt → Fmt → Bool → ℕ → Dot
+  /-- a 2:4 sparse MMA's dot at logical `k`, over its `k/2` kept pairs (`mmaSpEval`), by formats and saturation: no
+  capture pins one on either card -/
+  dotSp : Fmt → Fmt → Bool → ℕ → Dot
 
 /-- **A card's table**: its data sheet's numbers, and the dots its captures pin. -/
 structure Card where
@@ -170,7 +176,7 @@ def machine {ι : Type} (cap : ι → ℕ) (oracle : ℕ) : Machine ι where
   nOut o := o.1.nOut
   inStore o := o.1.inStore .reg
   outStore o := o.1.outStore .reg
-  eval o := o.1.eval (c.dot x)
+  eval o := o.1.eval (c.dot x) x.dotSp
   use o := opUse (c.weightOf x) (c.scale x) x.madHi o.1
   braUse r := if r = .issue then 1 / 32 else 0
   text := c.text

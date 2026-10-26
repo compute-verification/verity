@@ -54,8 +54,12 @@ one issue slot (it is a warpgroup's four warp instructions); `IMAD.WIDE` one `im
 functions charged an issue slot's share only; uniform registers pooled with the register file. A cross-lane move is
 `SHFL` on the shuffle pipe (32 lanes a SM-clock, its own pipe beside the `alu`) or a register copy on the `alu`.
 
+**2:4 sparse MMAs** (`mma.sp`, `wgmma.mma_async.sp`, PTX ISA 9.0 §9.7.14.6 and §9.7.15.6): at the dense forms'
+shapes and twice their `k`, at the same tensor units a real product (so twice the logical rate: CALIB's
+`IMMA.SP.16864` census row), their dots `Open.dotSp`.
+
 **Not yet in the instance** (each a gap in faithfulness, not a relaxation): DMMA (`f64` MMA, 128 MACs an SM clock,
-32 units each), 2:4-sparse MMA (`.sp`, the same products at the same rate with a free gather of `A`), `f16`
+32 units each), `f16`
 accumulators, `HFMA2`/`HMUL2`, `DFMA`, conversions (`I2F`, `F2I`, `F2FP`), `MUFU`, `FMNMX`, `mul.hi.s32`, `BMSK`,
 constant-bank operands, `redux`, `vote`, TMA multicast, and floating-point atomics.
 -/
@@ -107,6 +111,10 @@ def pair (fa fb : Fmt) : Bool := intPair fa fb || (fp8 fa && fp8 fb) || fa = fb
 def Avail : Op Store → Prop
   | .mma fa fb _ sh sa sb =>
     pair fa fb ∧ sh.k ∈ ks fa ∧
+      ((sh.m = 16 ∧ sh.n = 8 ∧ !fp8 fa ∧ sa = .reg ∧ sb = .reg) ∨
+        (sh.m = 64 ∧ 8 ∣ sh.n ∧ 8 ≤ sh.n ∧ sh.n ≤ 256 ∧ (sa = .reg ∨ sa = .smem) ∧ sb = .smem))
+  | .mmaSp fa fb _ sh sa sb =>
+    pair fa fb ∧ fa ≠ .b1 ∧ sh.k ∈ (ks fa).map (2 * ·) ∧
       ((sh.m = 16 ∧ sh.n = 8 ∧ !fp8 fa ∧ sa = .reg ∧ sb = .reg) ∨
         (sh.m = 64 ∧ 8 ∣ sh.n ∧ 8 ≤ sh.n ∧ sh.n ≤ 256 ∧ (sa = .reg ∨ sa = .smem) ∧ sb = .smem))
   | .lane _ => True
