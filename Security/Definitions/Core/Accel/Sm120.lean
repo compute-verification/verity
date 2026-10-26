@@ -19,9 +19,15 @@ shared memory with L1, 128 KB an SM (whitepaper: 128 KB of L1 and shared memory 
   2617 MHz boost is the same 1024), so 192,512; a MAC of `e4m3`, `e5m2` or `e2m1` (`kind::f8f6f4`, `QMMA.16832`) uses
   1 unit, of `nvf4` or `mxf4` (`OMMA.SF.16864`, 8192 MACs in 16 cycles; whitepaper FP4 2,015.2 dense) 1/2, of `f16` or
   `bf16` 2 (503.8), of `tf32` 4 (251.9); sm_120 has no native `b1` MMA (below);
+* the `k16` integer `mma.sync` (`IMMA.16816`) runs at half the `k32` rate on the card (CALIB: 512 against 1024 MACs an
+  SM clock); the instance prices it at the `k32` rate, which lets a program do more, and a per-shape θ row would
+  tighten it (RT-MODEL M11);
 * issue: 4 warp instructions an SM clock (four sub-partitions, one warp scheduler each), so 752;
 * `alu` and `imad`: 64 lanes an SM clock each (the DS-120 census: `LOP3` and `IMAD` two cycles a warp instruction on a
   sub-partition; CUDA C++ Programming Guide §6.4.1 Table 7), so 12,032 each;
+* `f64`: 2 lanes an SM clock (Programming Guide Table 7, CC 12.0: 64-bit floating-point multiply-add 2), so 376; DMMA
+  (`Op.dmma`; PTX gives `mma` `.f64` to sm_80 and later) has no documented rate on this card: 32 tensor units a MAC,
+  32 MACs an SM clock, 16 × the FP64 lanes' rate, is a generous placeholder, and CALIB's θ needs a row for it;
 * shared memory: 32 banks of a 32-bit word a clock an SM (Programming Guide, 'Shared Memory'), so 6016;
 * GDDR7: 1597 GB/s (product page, 'Memory Bandwidth 1597 GB/s'), 1597 · 10⁹ / (4 · 2.43 · 10⁹) = 39925/243 words.
 
@@ -33,7 +39,7 @@ datapath too (`uni`, a whole issue slot each: CUDA Binary Utilities §4.4 lists 
 share, and no document gives their issue cost; one slot as measured on sm_100, RT-B200-EMP, run r20261019-055605-6cc2,
 and on sm_90, a placeholder until CALIB measures sm_120; whether sm_120's uniform datapath has functions beyond the
 integer ones is a gap); copies of at most 4 words, and bulk copies with shared memory at one end (TMA); atomics on
-shared memory, L2 and GDDR7.
+shared memory, L2 and GDDR7; integer reductions as on the H200.
 
 **Captured dots** (`captured`): the integer path exactly (`models.BLACKWELL_SM120_S8_M16N8K32`, `_WRAP`,
 `_U8S8_M16N8K32`); `bf16` at `k = 16`, `TC.HOPPER_BF16_M16N8K16` (its docstring: `mma.sync.m16n8k16.bf16` on Hopper and
@@ -44,8 +50,13 @@ truncation in 99.96–99.997% of atoms only, so no capture pins it. The block-sc
 (`models.BLACKWELL_SM120_NVF4`, `_MXF4`, captured in Python, a block-scaled adder this module doesn't transcribe) and
 every other dot are `Open.dot`.
 
+**2:4 sparse MMAs** (`mma.sp`): at `m16n8` and twice the dense `k`, at the same tensor units a real product, their
+dots `Open.dotSp`; the block-scaled sparse forms (`kind::mxf4nvf4` at `k = 128`) are a gap.
+
 **Coarser than the card**, and **not yet in the instance**: as for the H200 (`Accel.H200`), with FP6 (`e3m2`, `e2m3`)
-and the block-scaled FP8 and FP6 forms (`kind::mxf8f6f4`) among the gaps, and no DMMA at all (sm_120 has none at rate).
+and the block-scaled FP8 and FP6 forms (`kind::mxf8f6f4`) among the gaps. DMMA, the FP64 lanes, `HFMA2`, the float
+reductions and `redux.sync` are over-approximated as on the H200 (`HFMA2`'s sm_120 rate is undocumented: an issue
+slot's share is at least the card's, since issue caps every lane instruction; a θ row should confirm it).
 -/
 
 open scoped NNRat
@@ -66,6 +77,7 @@ def ρ : Res → ℚ≥0
   | .alu => 188 * 64
   | .imad => 188 * 64
   | .shfl => 188 * 32
+  | .f64 => 188 * 2
   | .smem => 188 * 32
   | .dram => 39925 / 243
 
@@ -76,6 +88,7 @@ def weight : Fmt → ℚ≥0
   | .f16 | .bf16 => 2
   | .tf32 => 4
   | .b1 => 0
+  | .f64 => 32
 
 /-- PTX's `k` for each format at `m16n8`, none for `b1`: the card has no native `b1` MMA. -/
 def ks : Fmt → List ℕ
@@ -84,7 +97,7 @@ def ks : Fmt → List ℕ
   | .f16 | .bf16 => [8, 16]
   | .tf32 => [4, 8]
   | .nvf4 | .mxf4 => [64]
-  | .b1 => []
+  | .b1 | .f64 => []
 
 /-- Whether a format is one of `kind::f8f6f4`'s. -/
 def f8f6f4 (f : Fmt) : Bool := f = .e4m3 || f = .e5m2 || f = .e2m1
@@ -95,16 +108,22 @@ def pair (fa fb : Fmt) : Bool := intPair fa fb || (f8f6f4 fa && f8f6f4 fb) || fa
 /-- The opcodes the RTX PRO 6000 has. -/
 def Avail : Op Store → Prop
   | .mma fa fb _ sh sa sb => pair fa fb ∧ sh.k ∈ ks fa ∧ sh.m = 16 ∧ sh.n = 8 ∧ sa = .reg ∧ sb = .reg
-  | .lane _ => True
-  | .uni g => g.pipe ≠ .fma
+  | .mmaSp fa fb _ sh sa sb =>
+    pair fa fb ∧ fa ≠ .nvf4 ∧ fa ≠ .mxf4 ∧ sh.k ∈ (ks fa).map (2 * ·) ∧ sh.m = 16 ∧ sh.n = 8 ∧ sa = .reg ∧ sb = .reg
+  | .lane g => g.warp = false
+  | .uni g => g.uniform = true
   | .copy s t n => n ≤ 4 ∨ (s = .smem ∧ t ≠ .reg) ∨ (t = .smem ∧ s ≠ .reg)
   | .atom s _ => s ≠ .reg
+  | .red s t n g => g.reduces ∧ ((s = .reg ∧ t ≠ .reg ∧ n ≤ 8) ∨ (s = .smem ∧ (t = .l2 ∨ t = .dram)))
+  | .dmma sh => (sh.m = 8 ∧ sh.n = 8 ∧ sh.k = 4) ∨ (sh.m = 16 ∧ sh.n = 8 ∧ (sh.k = 4 ∨ sh.k = 8 ∨ sh.k = 16))
 
 /-- The candidate for sm_120's FP8 and `kind::f8f6f4` E2M1 atom (`models.BLACKWELL_SM120_E4M3_M16N8K32`, `_E5M2_`,
 `_E2M1_`), not pinned (`captured`). -/
 def f8Pipeline : TC.Pipeline := { groups := [32], width := 26, zeroExponent := -133 }
 
-/-- The dots the RTX PRO 6000's captures pin. -/
+/-- The dots the RTX PRO 6000's captures pin. The integer ones (`intCaptured`) ignore `k` and the shape, so the `k16`
+forms inherit the `k32` captures: a sum of 16 products is exact (at most 2^18 in magnitude), and the only place a
+clamp lands is `C + dot`, which the `k32` captures' clamp tiles pin (RT-MODEL M11). -/
 def captured (fa fb : Fmt) (sat : Bool) (k : ℕ) : Option Dot :=
   match intCaptured fa fb sat with
   | some d => some d
@@ -114,7 +133,8 @@ def captured (fa fb : Fmt) (sat : Bool) (k : ℕ) : Option Dot :=
 /-- **The RTX PRO 6000's table.** A program's code is at most GDDR7's bytes over 16-byte instructions; the coarse
 device's rates are the tensor core's s8 MACs, the 188 · 128 FP32 lanes, and GDDR7's bits a tick rounded up
 (1597 · 10⁹ · 8 / 2.43 · 10⁹ = 5,257.6). θ's floor: `madHi ≥ 2` (`IMAD.HI` at 32 lanes a
-SM-clock against `IMAD`'s 64, CUDA C++ Programming Guide §6.4.1 Table 7; not yet measured on this card). `b1` needs
+SM-clock against `IMAD`'s 64, CUDA C++ Programming Guide §6.4.1 Table 7; not yet measured on this card: RT-UNITS U8
+reads about 16 lanes from `SHA_ROT`, which would make it 4, and the floor rises to CALIB's measurement). `b1` needs
 no floor: no `b1` MMA is available. -/
 def card : Card where
   size := size

@@ -25,6 +25,9 @@ reports.
   dispatching one warp instruction a clock), so 528;
 * `alu` and `imad`: 64 lanes an SM clock each (CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 9.0: 32-bit integer
   add, compare, min, max, logic and shift 64; multiply and multiply-add 64), so 8448 each;
+* `f64`: 64 lanes an SM clock (Programming Guide Table 7, CC 9.0: 64-bit floating-point add, multiply, multiply-add
+  64), so 8448; DMMA (`Op.dmma`) 128 MACs an SM clock, 32 tensor units a MAC (whitepaper: FP64 Tensor Core 67 TFLOPS
+  over 132 SMs at 1980 MHz is 128.2);
 * shared memory: 32 banks of one 32-bit word a clock an SM (Programming Guide, 'Shared Memory', CC 9.0), so 4224;
 * HBM: 4.8 TB/s (H200 data sheet, 'GPU Memory Bandwidth 4.8TB/s'), 4.8 · 10¹² / (4 · 1.98 · 10⁹) = 20000/33 words.
 
@@ -36,7 +39,9 @@ integer ones on the uniform datapath too (`uni`, a whole issue slot each: CUDA B
 uniform opcodes, integer only, and no document gives their issue cost; measured at one slot beside an async `wgmma`,
 1.08–1.19 SMSP cycles, RT-H200-EMP, run r20261019-064443-0ae6, and 0.984 beside a saturated lane stream, the census's
 UNI line, DC-90; `[uniform_issue]` of the sm_90 sheet); copies of at most 4 words (a lane's 128-bit load or store),
-and bulk copies of any length with shared memory at one end (TMA); atomics on shared memory, L2 and HBM.
+and bulk copies of any length with shared memory at one end (TMA); atomics on shared memory, L2 and HBM; integer
+reductions (`Lane.reduces`) of up to 4 registers into memory (`red`), and of any length from shared memory into L2 or
+HBM (`cp.reduce.async.bulk`), priced as the copy.
 
 **Captured dots** (`captured`): the integer path exactly, `silicon.integer.HOPPER_SM90_S8_K32` (the clamp or wrap at
 D; `wgmma` m64n64k32, m64n128k32 and m64n256k32 `.s8`, all eight forms, about 10.3–10.6 M elements each with the
@@ -54,10 +59,19 @@ one issue slot (it is a warpgroup's four warp instructions); `IMAD.WIDE` one `im
 functions charged an issue slot's share only; uniform registers pooled with the register file. A cross-lane move is
 `SHFL` on the shuffle pipe (32 lanes a SM-clock, its own pipe beside the `alu`) or a register copy on the `alu`.
 
-**Not yet in the instance** (each a gap in faithfulness, not a relaxation): DMMA (`f64` MMA, 128 MACs an SM clock,
-32 units each), 2:4-sparse MMA (`.sp`, the same products at the same rate with a free gather of `A`), `f16`
-accumulators, `HFMA2`/`HMUL2`, `DFMA`, conversions (`I2F`, `F2I`, `F2FP`), `MUFU`, `FMNMX`, `mul.hi.s32`, `BMSK`,
-constant-bank operands, `redux`, `vote`, TMA multicast, and floating-point atomics.
+**2:4 sparse MMAs** (`mma.sp`, `wgmma.mma_async.sp`, PTX ISA 9.0 §9.7.14.6 and §9.7.15.6): at the dense forms'
+shapes and twice their `k`, at the same tensor units a real product (so twice the logical rate: CALIB's
+`IMMA.SP.16864` census row), their dots `Open.dotSp`.
+
+**Over-approximated** (`Accel.Isa`'s docstring: an exact integer version at the unit's rate): DMMA (`Op.dmma`, at
+`m8n8k4` and `m16n8k4`, `k8`, `k16`, PTX ISA 9.0 §9.7.14.5.14), the FP64 lanes (`Lane.dfma` on the `f64` pipe),
+`HFMA2`, `HADD2`, `HMUL2` (`Lane.hfma2`, one lane on the FP32 pipe, an issue slot's share: Table 7, CC 9.0, gives
+16-bit FP multiply-add 256 results, two a lane), the float reductions (`Op.red` by `iadd3` and `add2`, `red.v8`
+included), and `redux.sync` (`Lane.redux`, a uniform instruction's slot).
+
+**Not yet in the instance** (each a gap in faithfulness, not a relaxation): `f16` accumulators, conversions (`I2F`,
+`F2I`, `F2FP`), `MUFU`, `FMNMX`, `mul.hi.s32`, `BMSK`, constant-bank operands, `vote`, TMA multicast, the 64-bit
+and `inc`/`dec` reductions, and `mma.sync` FP8 (`m16n8k32` `.e4m3`/`.e5m2`, PTX sm_89 and later; no capture of its dot).
 -/
 
 open scoped NNRat
@@ -78,6 +92,7 @@ def ρ : Res → ℚ≥0
   | .alu => 132 * 64
   | .imad => 132 * 64
   | .shfl => 132 * 32
+  | .f64 => 132 * 64
   | .smem => 132 * 32
   | .dram => 20000 / 33
 
@@ -86,9 +101,10 @@ def weight : Fmt → ℚ≥0
   | .s8 | .u8 | .e4m3 | .e5m2 => 1
   | .f16 | .bf16 => 2
   | .tf32 => 4
+  | .f64 => 32
   | _ => 0
 
-/-- PTX's `k` for each format (`mma.sync` and `wgmma`). -/
+/-- PTX's `k` for each format, `mma.sync`'s (PTX ISA 9.0 §9.7.14); `wgmma` takes one of them, `wgK`. -/
 def ks : Fmt → List ℕ
   | .s8 | .u8 => [16, 32]
   | .e4m3 | .e5m2 => [32]
@@ -96,6 +112,16 @@ def ks : Fmt → List ℕ
   | .tf32 => [4, 8]
   | .b1 => [128, 256]
   | _ => []
+
+/-- `wgmma`'s one `k` for each format (PTX ISA 9.0 §9.7.15: 32 for `s8`, `u8` and FP8, 16 for `f16` and `bf16`, 8
+for `tf32`, 256 for `b1`), so its `k16` integer and `k8` half forms don't exist (RT-MODEL M11): on the card the only
+`s8` `k16` form is `mma.sync` `IMMA.16816`. -/
+def wgK : Fmt → ℕ
+  | .s8 | .u8 | .e4m3 | .e5m2 => 32
+  | .f16 | .bf16 => 16
+  | .tf32 => 8
+  | .b1 => 256
+  | _ => 0
 
 /-- Whether a format is FP8. -/
 def fp8 (f : Fmt) : Bool := f = .e4m3 || f = .e5m2
@@ -108,16 +134,24 @@ def Avail : Op Store → Prop
   | .mma fa fb _ sh sa sb =>
     pair fa fb ∧ sh.k ∈ ks fa ∧
       ((sh.m = 16 ∧ sh.n = 8 ∧ !fp8 fa ∧ sa = .reg ∧ sb = .reg) ∨
-        (sh.m = 64 ∧ 8 ∣ sh.n ∧ 8 ≤ sh.n ∧ sh.n ≤ 256 ∧ (sa = .reg ∨ sa = .smem) ∧ sb = .smem))
-  | .lane _ => True
-  | .uni g => g.pipe ≠ .fma
+        (sh.m = 64 ∧ 8 ∣ sh.n ∧ 8 ≤ sh.n ∧ sh.n ≤ 256 ∧ (sa = .reg ∨ sa = .smem) ∧ sb = .smem ∧ sh.k = wgK fa))
+  | .mmaSp fa fb _ sh sa sb =>
+    pair fa fb ∧ fa ≠ .b1 ∧ sh.k ∈ (ks fa).map (2 * ·) ∧
+      ((sh.m = 16 ∧ sh.n = 8 ∧ !fp8 fa ∧ sa = .reg ∧ sb = .reg) ∨
+        (sh.m = 64 ∧ 8 ∣ sh.n ∧ 8 ≤ sh.n ∧ sh.n ≤ 256 ∧ (sa = .reg ∨ sa = .smem) ∧ sb = .smem ∧ sh.k = 2 * wgK fa))
+  | .lane g => g.warp = false
+  | .uni g => g.uniform = true
   | .copy s t n => n ≤ 4 ∨ (s = .smem ∧ t ≠ .reg) ∨ (t = .smem ∧ s ≠ .reg)
   | .atom s _ => s ≠ .reg
+  | .red s t n g => g.reduces ∧ ((s = .reg ∧ t ≠ .reg ∧ n ≤ 8) ∨ (s = .smem ∧ (t = .l2 ∨ t = .dram)))
+  | .dmma sh => (sh.m = 8 ∧ sh.n = 8 ∧ sh.k = 4) ∨ (sh.m = 16 ∧ sh.n = 8 ∧ (sh.k = 4 ∨ sh.k = 8 ∨ sh.k = 16))
 
 /-- Hopper's FP8 pipeline (`models.HOPPER_E4M3_K32`, `HOPPER_E5M2_K32`). -/
 def fp8Pipeline : TC.Pipeline := { groups := [32], width := 14, zeroExponent := -139 }
 
-/-- The dots the H200's captures pin. -/
+/-- The dots the H200's captures pin. The integer ones (`intCaptured`) ignore `k` and the shape, so the `k16`
+forms inherit the `k32` captures: a sum of 16 products is exact (at most 2^18 in magnitude), and the only place a
+clamp lands is `C + dot`, which the `k32` captures' clamp tiles pin (RT-MODEL M11). -/
 def captured (fa fb : Fmt) (sat : Bool) (k : ℕ) : Option Dot :=
   match intCaptured fa fb sat with
   | some d => some d

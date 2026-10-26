@@ -23,6 +23,18 @@ writes, and the units of each resource it uses; this module says what each compu
 
 An opcode reads and writes only its operands, so a product leaves its accumulator only through further instructions,
 each of which pays its units (`Machine`'s G2).
+
+**Over-approximated units.** A card's unit whose rounding no capture pins, and which is far slower than the INT8
+tensor core, is in the set as an **exact integer version at least as capable as the unit**, at the unit's rate: on
+the integers the unit computes exactly (its format's exact range), the version computes the same values, and it keeps
+every bit beyond that range where the unit rounds. Letting a unit do more than the card does, at the card's rate, keeps
+every lower bound over the model sound for the card, the direction `Assumptions.CardWithinAccel` needs. These are:
+DMMA (`Op.dmma`, exact on operands within FP64's ±2^53, its result in 128 bits); the FP64 lanes (`Lane.dfma`, likewise;
+`DADD` and `DMUL` are it with `b = 1` or `c = 0`); `HFMA2` (`Lane.hfma2`, each half exact on integers within f16's
+±2048, its result in a word of its own; `HADD2`, `HMUL2` and the `bf16` forms, exact within ±256, likewise); the
+float reductions (`red`, `cp.reduce.async.bulk` on `f32`: exact integer adds, `iadd3`; on `f16x2` and `bf16x2`:
+`Lane.add2`); and `redux.sync` (`Lane.redux`, exact). The version reads its operands as two's-complement integers, not
+as the card's float codes: a conversion is the card's own cost.
 -/
 
 namespace Verity.Accel
@@ -35,6 +47,8 @@ open Verity.TC
 FP32; and the block-scaled FP4 formats `nvf4` (a UE4M3 scale per 16 E2M1 operands) and `mxf4` (a UE8M0 scale per 32). -/
 inductive Fmt
   | s8 | u8 | b1 | e4m3 | e5m2 | e2m1 | f16 | bf16 | tf32 | nvf4 | mxf4
+  /-- FP64, DMMA's format: no `Op.mma` takes it; its MMA is `Op.dmma`, and this names its tensor units a MAC -/
+  | f64
   deriving DecidableEq
 
 /-- An operand's bits. -/
@@ -44,6 +58,7 @@ def Fmt.bits : Fmt → ℕ
   | .s8 | .u8 | .e4m3 | .e5m2 => 8
   | .f16 | .bf16 => 16
   | .tf32 => 32
+  | .f64 => 64
 
 /-- The elements a row of `k` products carries: its `k` operands, then for a block-scaled format each block's 8-bit
 scale as two 4-bit elements. -/
@@ -192,6 +207,39 @@ def accC (fa fb : Fmt) (s : Shape) (v : ℕ → Word) (o : ℕ) : Word := v (s.w
 def mmaEval (dot : Dot) (fa fb : Fmt) (s : Shape) (v : ℕ → Word) (o : ℕ) : Word :=
   dot (accC fa fb s v o) (rowA fa s v (o / s.n)) (colB fa fb s v (o % s.n))
 
+/-! A **2:4 sparse MMA** (`mma.sp`, `wgmma.mma_async.sp`) at logical shape `s`: of each group of 4 of a row of `A`, 2
+elements are kept, and the metadata names each kept element's position in its group (2 bits). Its inputs are `A`'s
+kept elements (`m` rows of `k/2`), the metadata (`m` rows of `k/2` selectors), `B` (`n` columns of `k`) and `C`. -/
+
+/-- The words of a sparse MMA's kept `A`: `m` rows of `k/2` elements. -/
+def Shape.waSp (s : Shape) (fa : Fmt) : ℕ := packedWords s.m (s.k / 2) fa.bits
+
+/-- The words of a sparse MMA's metadata: `m` rows of `k/2` selectors of 2 bits. -/
+def Shape.wsel (s : Shape) : ℕ := packedWords s.m (s.k / 2) 2
+
+/-- Row `i` of a sparse MMA's kept `A`. -/
+def rowASp (fa : Fmt) (s : Shape) (v : ℕ → Word) (i : ℕ) : List ℕ :=
+  List.ofFn fun l : Fin (s.k / 2) => elem fa.bits v (i * (s.k / 2) + l)
+
+/-- The selector of row `i`'s kept element `l`: its position in its group of 4. -/
+def selSp (fa : Fmt) (s : Shape) (v : ℕ → Word) (i l : ℕ) : ℕ :=
+  elem 2 (fun w => v (s.waSp fa + w)) (i * (s.k / 2) + l)
+
+/-- The elements of column `j` of `B` that row `i`'s selectors name, one for each kept element: the kept element `l`
+is in group `l / 2`, so it meets `B`'s element `4 · (l / 2) + selector`. -/
+def colBSp (fa fb : Fmt) (s : Shape) (v : ℕ → Word) (i j : ℕ) : List ℕ :=
+  List.ofFn fun l : Fin (s.k / 2) =>
+    elem fb.bits (fun w => v (s.waSp fa + s.wsel + w)) (j * s.k + 4 * (l.val / 2) + selSp fa s v i l)
+
+/-- Accumulator `o` of a sparse MMA's `C`. -/
+def accCSp (fa fb : Fmt) (s : Shape) (v : ℕ → Word) (o : ℕ) : Word := v (s.waSp fa + s.wsel + s.wb fb + o)
+
+/-- **A sparse MMA's output** `o = i·n + j`: the sparse dot of accumulator `o` with row `i`'s kept elements and the
+elements of column `j` its selectors name. Only the kept pairs meet a multiplier, as on the card, so an unselected
+element of `B` reaches no output. -/
+def mmaSpEval (dot : Dot) (fa fb : Fmt) (s : Shape) (v : ℕ → Word) (o : ℕ) : Word :=
+  dot (accCSp fa fb s v o) (rowASp fa s v (o / s.n)) (colBSp fa fb s v (o / s.n) (o % s.n))
+
 /-! ## Lane functions -/
 
 /-- An integer comparison. -/
@@ -207,7 +255,7 @@ inductive AtomFn
 /-- The CUDA-core pipe a lane function issues to: the integer `alu`, the integer multiplier `imad`, or the FP32 `fma`
 pipe. -/
 inductive Pipe
-  | alu | imad | fma | shfl
+  | alu | imad | fma | shfl | f64
   deriving DecidableEq
 
 /-- A lane function: one lane's instruction on 32-bit registers. -/
@@ -254,30 +302,74 @@ inductive Lane
   | fmul
   /-- `SHFL`: a cross-lane move, the word `a` (the pooled register file names the source lane's register) -/
   | shfl
+  /-- `DFMA` over-approximated: `a·b + c` exactly, each operand the two words' 64-bit two's-complement integer within
+  ±2^53 (FP64's exact integers; zero outside), the result as four words of 128-bit two's complement, low first -/
+  | dfma
+  /-- `HFMA2` over-approximated: for each half `o` of the words, `a·b + c` exactly on the halves' 16-bit
+  two's-complement integers within ±2048 (f16's exact integers; zero outside), the result for half `o` as word `o` -/
+  | hfma2
+  /-- a halfwise add modulo `2^16` (no carry between halves): the `f16x2` and `bf16x2` reductions over-approximated,
+  exact on their exact integers -/
+  | add2
+  /-- `REDUX`: the reduction by `g` (a `reduces` function) of 32 words, one a lane, to one word; only on the uniform
+  datapath (`Op.uni`), a warp instruction -/
+  | redux (g : Lane)
   deriving DecidableEq
 
 namespace Lane
 
 def nIn : Lane → ℕ
   | .popc | .flo | .brev | .shfl => 1
-  | .setp _ | .min _ | .max _ | .lea _ | .fadd | .fmul => 2
+  | .setp _ | .min _ | .max _ | .lea _ | .fadd | .fmul | .add2 => 2
   | .madWide => 4
+  | .dfma => 6
+  | .redux _ => 32
   | _ => 3
 
+/-- The lane functions a reduction to memory applies (`red`, `cp.reduce.async.bulk`): 32-bit integer add, min and max,
+and the bitwise ones (`LOP3` with its third input zero, any two-input function, a superset of `and`, `or`, `xor`). The
+card's float reductions are over-approximated (the module's docstring): `f32` by `iadd3`, `f16x2` and `bf16x2` by
+`add2`. Its 64-bit and `inc`/`dec` reductions are other functions, not here. -/
+def reduces : Lane → Bool
+  | .iadd3 | .min _ | .max _ | .lop3 _ | .add2 => true
+  | _ => false
+
+/-- A warp-wide function, available on the uniform datapath only. -/
+def warp : Lane → Bool
+  | .redux _ => true
+  | _ => false
+
 def nOut : Lane → ℕ
-  | .madWide => 2
+  | .madWide | .hfma2 => 2
+  | .dfma => 4
   | _ => 1
 
 def pipe : Lane → Pipe
   | .mad | .madWide | .madHi _ | .dp4a _ _ => .imad
-  | .ffma | .fadd | .fmul => .fma
+  | .ffma | .fadd | .fmul | .hfma2 | .add2 => .fma
   | .shfl => .shfl
+  | .dfma => .f64
   | _ => .alu
+
+/-- Whether the uniform datapath runs `g`: an integer function, or `redux` of a reduction function. -/
+def uniform : Lane → Bool
+  | .redux g => g.reduces
+  | g => g.pipe == .alu || g.pipe == .imad
 
 /-- Byte `i` of `w`, signed or not. -/
 def byte (signed : Bool) (w : Word) (i : ℕ) : ℤ :=
   let v := w.toNat / 2 ^ (8 * i) % 256
   if signed ∧ 128 ≤ v then (v : ℤ) - 256 else v
+
+/-- The 64-bit two's-complement integer of words `lo`, `hi`, if within FP64's exact integers (±2^53), else 0. -/
+def int53 (lo hi : Word) : ℤ :=
+  let v := (BitVec.ofNat 64 (hi.toNat * 2 ^ 32 + lo.toNat)).toInt
+  if v.natAbs ≤ 2 ^ 53 then v else 0
+
+/-- Half `o` of `w` as a 16-bit two's-complement integer, if within f16's exact integers (±2048), else 0. -/
+def half11 (w : Word) (o : ℕ) : ℤ :=
+  let v := (BitVec.ofNat 16 (w.toNat / 2 ^ (16 * o))).toInt
+  if v.natAbs ≤ 2048 then v else 0
 
 def lop3Eval (lut : BitVec 8) (a b c : Word) : Word :=
   (List.range 8).foldl (fun acc t =>
@@ -334,6 +426,12 @@ def eval : Lane → (ℕ → Word) → ℕ → Word
   | .fadd, x, _ => BitVec.ofNat 32 (Fp32.f32AddV2 (x 0).toNat (x 1).toNat)
   | .fmul, x, _ => BitVec.ofNat 32 (Fp32.f32MulV2 (x 0).toNat (x 1).toNat)
   | .shfl, x, _ => x 0
+  | .dfma, x, o => BitVec.ofInt 32 ((int53 (x 0) (x 1) * int53 (x 2) (x 3) + int53 (x 4) (x 5)) / 2 ^ (32 * o))
+  | .hfma2, x, o => BitVec.ofInt 32 (half11 (x 0) o * half11 (x 1) o + half11 (x 2) o)
+  | .add2, x, _ => BitVec.ofNat 32 (((x 0).toNat + (x 1).toNat) % 2 ^ 16 +
+      ((x 0).toNat / 2 ^ 16 + (x 1).toNat / 2 ^ 16) % 2 ^ 16 * 2 ^ 16)
+  | .redux g, x, _ =>
+    (List.range 31).foldl (fun acc i => g.eval (fun j => if j = 0 then acc else if j = 1 then x (i + 1) else 0) 0) (x 0)
 
 end Lane
 
@@ -344,6 +442,9 @@ inductive Op (S : Type) where
   /-- an MMA of `fa` rows by `fb` columns at shape `sh`, `A` read from store `sa` and `B` from `sb` (`C` and `D` are
   registers); `sat` clamps an integer MMA's result -/
   | mma (fa fb : Fmt) (sat : Bool) (sh : Shape) (sa sb : S)
+  /-- a 2:4 sparse MMA at logical shape `sh`, its kept `A` read from store `sa`, its metadata from registers and `B`
+  from `sb` (`C` and `D` are registers) -/
+  | mmaSp (fa fb : Fmt) (sat : Bool) (sh : Shape) (sa sb : S)
   /-- a lane function on registers -/
   | lane (g : Lane)
   /-- a uniform-datapath instruction: one lane function a warp computes once (`UIADD3`, `ULOP3`, …), on registers -/
@@ -353,7 +454,25 @@ inductive Op (S : Type) where
   /-- an atomic on a word of store `s`: input 0 and output 0 are that word, input 1 the register operand, and output
   1 the word's old value -/
   | atom (s : S) (g : AtomFn)
+  /-- a reduction of `n` words of store `s` into `n` words of store `t` (`red.v4`, `red.v8`, TMA's
+  `cp.reduce.async.bulk`): output `i` is lane function `g` of input `n + i`, the word of `t` it replaces, and input
+  `i`, the word of `s` -/
+  | red (s t : S) (n : ℕ) (g : Lane)
+  /-- DMMA over-approximated: an exact integer MMA at shape `sh` on registers (`dmmaEval`) -/
+  | dmma (sh : Shape)
   deriving DecidableEq
+
+/-- **DMMA's output** `o`, over-approximated: word `o % 4` (low first) of the 128-bit two's complement of
+`C q + Σ_l A i l · B l j` exactly, `q = o / 4 = i·n + j`, each element two words read by `Lane.int53` (FP64's exact
+integers). The inputs `v` are `A` (`m` rows of `k`), `B` (`n` columns of `k`) and `C` (`m·n`), two words an element. -/
+def dmmaEval (s : Shape) (v : ℕ → Word) (o : ℕ) : Word :=
+  let e (w : ℕ) : ℤ := Lane.int53 (v w) (v (w + 1))
+  let q := o / 4
+  let i := q / s.n
+  let j := q % s.n
+  let d := e (2 * s.m * s.k + 2 * s.k * s.n + 2 * q) +
+    ((List.range s.k).map fun l => e (2 * (i * s.k + l)) * e (2 * s.m * s.k + 2 * (j * s.k + l))).sum
+  BitVec.ofInt 32 (d / 2 ^ (32 * (o % 4)))
 
 /-- The `i`th of `n` words, zero past the end. -/
 def getD {n : ℕ} (v : Fin n → Word) (i : ℕ) : Word := if h : i < n then v ⟨i, h⟩ else 0
@@ -364,41 +483,58 @@ variable {S : Type}
 
 def nIn : Op S → ℕ
   | .mma fa fb _ sh _ _ => sh.wa fa + sh.wb fb + sh.m * sh.n
+  | .mmaSp fa fb _ sh _ _ => sh.waSp fa + sh.wsel + sh.wb fb + sh.m * sh.n
   | .lane g | .uni g => g.nIn
   | .copy _ _ n => n
   | .atom _ _ => 2
+  | .red _ _ n _ => 2 * n
+  | .dmma sh => 2 * sh.m * sh.k + 2 * sh.k * sh.n + 2 * sh.m * sh.n
 
 def nOut : Op S → ℕ
-  | .mma _ _ _ sh _ _ => sh.m * sh.n
+  | .mma _ _ _ sh _ _ | .mmaSp _ _ _ sh _ _ => sh.m * sh.n
   | .lane g | .uni g => g.nOut
-  | .copy _ _ n => n
+  | .copy _ _ n | .red _ _ n _ => n
   | .atom _ _ => 2
+  | .dmma sh => 4 * sh.m * sh.n
 
 /-- The store input `i` is read from (`reg` is the register store). -/
 def inStore (reg : S) : (o : Op S) → Fin o.nIn → S
   | .mma fa fb _ sh sa sb, i => if i.val < sh.wa fa then sa else if i.val < sh.wa fa + sh.wb fb then sb else reg
+  | .mmaSp fa fb _ sh sa sb, i =>
+    if i.val < sh.waSp fa then sa
+    else if sh.waSp fa + sh.wsel ≤ i.val ∧ i.val < sh.waSp fa + sh.wsel + sh.wb fb then sb else reg
   | .lane _, _ | .uni _, _ => reg
   | .copy s _ _, _ => s
   | .atom s _, i => if i.val = 0 then s else reg
+  | .red s t n _, i => if i.val < n then s else t
+  | .dmma _, _ => reg
 
 /-- The store output `i` is written to. -/
 def outStore (reg : S) : (o : Op S) → Fin o.nOut → S
-  | .mma .., _ => reg
+  | .mma .., _ | .mmaSp .., _ => reg
   | .lane _, _ | .uni _, _ => reg
   | .copy _ t _, _ => t
   | .atom s _, i => if i.val = 0 then s else reg
+  | .red _ t _ _, _ => t
+  | .dmma _, _ => reg
 
-/-- An opcode's semantics, the MMA's dot for formats `fa`, `fb`, saturation and `k` given by `dot`. -/
-def eval (dot : Fmt → Fmt → Bool → ℕ → Dot) : (o : Op S) → (Fin o.nIn → Word) → Fin o.nOut → Word
+/-- An opcode's semantics, the MMA's dot for formats `fa`, `fb`, saturation and `k` given by `dot`, and a sparse MMA's
+at its logical `k` by `dotSp`. -/
+def eval (dot dotSp : Fmt → Fmt → Bool → ℕ → Dot) : (o : Op S) → (Fin o.nIn → Word) → Fin o.nOut → Word
   | .mma fa fb sat sh _ _, v, o => mmaEval (dot fa fb sat sh.k) fa fb sh (getD v) o.val
+  | .mmaSp fa fb sat sh _ _, v, o => mmaSpEval (dotSp fa fb sat sh.k) fa fb sh (getD v) o.val
   | .lane g, v, o | .uni g, v, o => g.eval (getD v) o.val
   | .copy _ _ _, v, o => getD v o.val
   | .atom _ .add, v, o => if o.val = 0 then getD v 0 + getD v 1 else getD v 0
   | .atom _ .exch, v, o => if o.val = 0 then getD v 1 else getD v 0
+  | .red _ _ n g, v, o => g.eval (fun j => if j = 0 then getD v (n + o.val) else if j = 1 then getD v o.val else 0) 0
+  | .dmma sh, v, o => dmmaEval sh (getD v) o.val
 
-/-- The products an MMA forms: `m·n·k`. -/
+/-- The products an MMA forms: `m·n·k`, and a sparse MMA's `m·n·k/2`. -/
 def macs : Op S → ℕ
   | .mma _ _ _ sh _ _ => sh.m * sh.n * sh.k
+  | .mmaSp _ _ _ sh _ _ => sh.m * sh.n * (sh.k / 2)
+  | .dmma sh => sh.m * sh.n * sh.k
   | _ => 0
 
 end Op

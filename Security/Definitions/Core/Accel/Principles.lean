@@ -16,7 +16,8 @@ are statements to prove (in `Proofs/Core/Accel`), not assumptions: they follow f
   E2M1), P1 is a property of the open parameter (`H200.P1Open`, `Sm120.P1Open`), measurable on the card. A wider
   operand therefore takes several MMAs: that much is semantics, not an assumption.
 * **(P2) An MMA's products sum into exactly one destination; C is a register read.** An MMA's output `o` reads row
-  `o / n` of `A`, column `o % n` of `B` and accumulator `o` only (`P2Local`), and distinct outputs read distinct row
+  `o / n` of `A`, column `o % n` of `B` and accumulator `o` only (`P2Local`; a 2:4 sparse MMA's, row `o / n`'s kept
+  elements and the elements of column `o % n` its selectors name, `P2LocalSp`), and distinct outputs read distinct row
   and column pairs (`P2Distinct`), so each of its `m·n·k` products is formed in one output's dot. The accumulator `C`
   is an input like `A` and `B`, read from registers its operands name, and `D` is written where its own operands name
   (`mma.sync` on both cards takes `D ≠ C`): one accumulator value may seed several MMAs, each at its own units and no
@@ -97,6 +98,14 @@ def P2Local : Prop :=
   ∀ (dot : Dot) (fa fb : Fmt) (s : Shape) (v v' : ℕ → Word) (o : ℕ),
     rowA fa s v (o / s.n) = rowA fa s v' (o / s.n) → colB fa fb s v (o % s.n) = colB fa fb s v' (o % s.n) →
     accC fa fb s v o = accC fa fb s v' o → mmaEval dot fa fb s v o = mmaEval dot fa fb s v' o
+
+/-- **P2, locality of a sparse MMA**: its output `o` changes only with row `o / n`'s kept elements of `A`, the
+elements of column `o % n` of `B` that row's selectors name, and accumulator `o`. -/
+def P2LocalSp : Prop :=
+  ∀ (dot : Dot) (fa fb : Fmt) (s : Shape) (v v' : ℕ → Word) (o : ℕ),
+    rowASp fa s v (o / s.n) = rowASp fa s v' (o / s.n) →
+    colBSp fa fb s v (o / s.n) (o % s.n) = colBSp fa fb s v' (o / s.n) (o % s.n) →
+    accCSp fa fb s v o = accCSp fa fb s v' o → mmaSpEval dot fa fb s v o = mmaSpEval dot fa fb s v' o
 
 /-- **P2, one accumulator a pair**: distinct outputs of an MMA read distinct row and column pairs. -/
 def P2Distinct : Prop :=

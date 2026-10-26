@@ -5,9 +5,9 @@ import Mathlib.Tactic.NormNum
 # The accelerator model's principles, proved
 
 The integer path is exact on the s32 range, saturating or not (`p1Int`). P2's halves that need no capture: an MMA's
-output reads only its own row, column and accumulator (`p2Local`), its outputs are distinct products' destinations
-(`p2Distinct`), an opcode writes no word but its outputs (`p2Frame`), and every opcode takes at least a lane's share
-of an issue slot (`p2Priced`). Each card refines its coarse `Device` (`H200.refines`, `Sm120.refines`). The integer
+output reads only its own row, column and accumulator (`p2Local`; a sparse MMA's, its kept pairs, `p2LocalSp`), its
+outputs are distinct products' destinations (`p2Distinct`), an opcode writes no word but its outputs (`p2Frame`), and
+every opcode takes at least a lane's share of an issue slot (`p2Priced`). Each card refines its coarse `Device` (`H200.refines`, `Sm120.refines`). The integer
 path's dots have the product form (`intProductForm`, the integer half of `CapturedProductForm`).
 -/
 
@@ -26,6 +26,10 @@ theorem p2Local : P2Local := by
   intro dot fa fb s v v' o hA hB hC
   simp only [mmaEval, hA, hB, hC]
 
+theorem p2LocalSp : P2LocalSp := by
+  intro dot fa fb s v v' o hA hB hC
+  simp only [mmaSpEval, hA, hB, hC]
+
 theorem p2Distinct : P2Distinct := by
   intro s o o' _ _ hq hr
   rw [← Nat.div_add_mod o s.n, ← Nat.div_add_mod o' s.n, hq, hr]
@@ -35,10 +39,13 @@ theorem p2Priced : P2Priced := by
   intro weight scale hi o
   cases o with
   | mma fa fb _ sh sa sb => simpa [opUse, port] using h
+  | mmaSp fa fb _ sh sa sb => simpa [opUse, port] using h
   | lane g => simp [opUse]
   | uni g => simpa [opUse] using h
   | copy s t n => cases s <;> cases t <;> simp [opUse, port]
   | atom s _ => cases s <;> simp [opUse, port]
+  | red s t n _ => cases s <;> cases t <;> simp [opUse, port]
+  | dmma sh => simpa [opUse] using h
 
 theorem p2Frame : P2Frame := by
   intro ι m o src dst pred M l hl
