@@ -265,17 +265,17 @@ theorem agrees_bdR (H : Claims.Msg → Claims.Msg) (rel : _root_.Flock.Readable.
     have e : (((bdC rel rd cols wE join rowIn final w).DE.V.next x (ms.take (j + 1)) (cs.take (j + 1))).eval H).1 =
         .msg (cs[j]'hjc).bytes := nextR_coin rd H _ _ _ _ hc
     rw [e]
-    have hg : cs.getD j default = cs[j]'hjc := List.getD_eq_getElem _ _ hjc
-    simp only [Claims.OC.eval, hl, ↓reduceIte, hg]
-    exact decide_eq_true (by first | rfl | trivial)
+    have ha : (bdC rel rd cols wE join rowIn final w).ans (cs.getD j default) = (cs[j]'hjc).bytes := by
+      rw [List.getD_eq_getElem _ _ hjc]
+      rfl
+    simp only [Claims.OC.eval, hl, ↓reduceIte, ha, decide_true]
   · have hj1 : j + 1 = ms.length := by omega
     have e : (((bdC rel rd cols wE join rowIn final w).DE.V.next x (ms.take (j + 1)) (cs.take (j + 1))).eval H).1 =
         .acc := by
       rw [hj1, List.take_length, show cs.take ms.length = cs by rw [← hlen, List.take_length]]
       exact hacc
     rw [e]
-    simp only [Claims.OC.eval, hl, ↓reduceIte]
-    exact decide_eq_true (by first | rfl | trivial)
+    simp only [Claims.OC.eval, hl, ↓reduceIte, decide_true]
 
 /-- **The honest run passes `IVStar` at `bdR (nextR rd)`, `join := joinR`**: on the honest commit strings of the rows
 and salts `os`, then a last message `final` reads as `os` and `last`, at coins numbering the deployed plain verifier's
@@ -292,10 +292,11 @@ theorem ivstarR_honest_run (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
       (bdC rel rd cols wE joinR rowIn final w).IVStar x () fun i => cs.getD i.val default).out = .acc := by
   refine (bdC rel rd cols wE joinR rowIn final w).run_honest_acc out64_sha512 hfin hk hn hcs ?_
   refine agrees_bdR sha512 rel rd cols wE joinR rowIn final w hx
-    (by rw [Bound.opened_length, hcs, hk]) (fun j hj => ?_) hacc
-  have hj' : j < os.length := by rw [Bound.opened_length] at hj; omega
-  rw [Bound.opened_getElem _ _ _ hj']
-  exact joinR_head _
+    (by have := (bdC rel rd cols wE joinR rowIn final w).opened_length os last; omega) (fun j hj => ?_) hacc
+  have hj' : j < os.length := by
+    have := (bdC rel rd cols wE joinR rowIn final w).opened_length os last
+    omega
+  exact ⟨_, ((bdC rel rd cols wE joinR rowIn final w).opened_getElem os last hj').trans rfl⟩
 
 /-! ## The honest session -/
 
@@ -330,6 +331,12 @@ theorem salted_fst (ys : ℕ → ℕ → RecDeploy.Salt) (rounds : List (List Cl
   refine List.ext_getElem (by simp [salted_length]) fun j h₁ h₂ => ?_
   refine List.ext_getElem (by simp [salted]) fun i h₃ h₄ => ?_
   simp [salted]
+
+theorem salted_join (ys : ℕ → ℕ → RecDeploy.Salt) (rounds : List (List Claims.Msg)) :
+    (salted ys rounds).map (fun o => joinR (o.map Prod.fst)) = rounds.map joinR := by
+  have h := congrArg (List.map joinR) (salted_fst ys rounds)
+  rw [List.map_map] at h
+  exact h
 
 /-- **What the honest prover sends `IVStar` at `bdR`**: each round's commit strings of its honest rows under the salts
 `ys` (`honestRounds`, `salted`), then the last message `lastO`. -/
@@ -442,14 +449,18 @@ theorem honestRounds_nAt {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : 
   rcases j with _ | j
   · simp only [honestRounds, List.getD_cons_zero, ↓reduceIte]
     exact hround0
-  · have hj' : j < L.flatten.length := by simpa [honestRounds] using hj
+  · have hj' : j < L.flatten.length := by
+      have h := hj
+      simp only [honestRounds, List.length_cons, List.length_map] at h
+      omega
     have hjM : j < M.flatten.length := hfl ▸ hj'
     simp only [honestRounds, List.getD_cons_succ, Nat.add_one_ne_zero, ↓reduceIte, Nat.add_sub_cancel]
     rw [← hMflat, List.getElem?_eq_getElem hjM]
     have e : (List.map (fun rs => rs.map rowMsg) L.flatten).getD j [] = (L.flatten.getD j []).map rowMsg := by
-      simp [List.getD_eq_getElem?_getD, hj']
+      rw [List.getD_eq_getElem _ _ (by rw [List.length_map]; exact hj'), List.getD_eq_getElem _ _ hj',
+        List.getElem_map]
     rw [e, List.length_map, hfP j hj']
-    simp [List.getD_eq_getElem?_getD, hjM]
+    simp [List.getD_eq_getElem _ _ hjM]
 
 /-- **The honest session passes `IVStar` at `bdR (nextR rd)`**: at a statement that sets up with `TableOk` tables, from
 each table's level-0 cap and each rep's honest proof at its table's cap, the honest prover's commit strings of the
@@ -483,7 +494,7 @@ theorem ivstarR_honest_session (rel : _root_.Flock.Readable.Parsed → _root_.Fl
     omega
   · rw [salted_getD_length]
     exact hn j (by rwa [salted_length] at hj)
-  · rw [salted_fst, ← honestMsgs_rounds]
+  · rw [salted_join, ← honestMsgs_rounds]
     exact hacc
 
 /-- **The tables' facts the files-level results take** (`htab`), at a statement `verify --plain-tables` admits. -/
