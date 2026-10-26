@@ -120,6 +120,7 @@ import Proofs.Flock.Claims.Recursion.RecRecord
 import Proofs.Flock.Claims.Recursion.RecOpen
 import Proofs.Flock.Claims.Recursion.OpenedPlain
 import Proofs.Flock.Claims.Recursion.OpenedDecode
+import Proofs.Flock.Claims.Recursion.VerdictRowD
 import Proofs.Flock.Claims.Recursion.SlotsCommit
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Recursion.OpensReads
