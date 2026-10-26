@@ -908,7 +908,7 @@ lemma EncodeBound.mono {F : Field} {k B E E' εnum εden : ℕ} (h : EncodeBound
 theorem encodeBound_of {F : Field} {k B E e εnum εden : ℕ} (hS : SquaringFloor F e εnum εden)
     (hC : ChainSum F k B e εnum εden) (hE : E ≤ k * F.squarings * e) (hε : εden ≤ 2 ^ 64 * εnum) (hk : 0 < k)
     (hp : 2 ^ 66 ≤ F.p) (hp4 : F.p % 4 = 3) : EncodeBound F k B E εnum εden :=
-  (hC hε hk hp hp4 hS).mono hE
+  EncodeBound.mono (hC hε hk hp hp4 hS) hE
 
 theorem EncodeBudget : Accounting.Guarantees.Gates.EncodeBudget := by
   intro F k B E e εnum εden ι W caps A m x words out hS hC hE hε hk hp hp4 hP hR hci hnd hlt hcw
@@ -947,8 +947,8 @@ theorem EncodeCost : Accounting.Guarantees.Gates.EncodeCost := by
   intro F k B E e εnum εden q hS hC hE hε hk hp hp4 hn
   exact encodeCost_ge (encodeBound_of hS hC hE hε hk hp hp4) hn q
 
-/-- A root's squarings at p1024: `⌊log₂((p + 1)/4)⌋ = 1021`. -/
 set_option exponentiation.threshold 1100 in
+/-- A root's squarings at p1024: `⌊log₂((p + 1)/4)⌋ = 1021`. -/
 theorem p1024_squarings : p1024.squarings = 1021 := by
   have h8 : (2 : ℕ) ^ 1024 = 2 ^ 1021 * 8 := by rw [show (8 : ℕ) = 2 ^ 3 by norm_num, ← pow_add]
   have hN : 1021 < (2 : ℕ) ^ 1021 := Nat.lt_two_pow_self
