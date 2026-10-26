@@ -33,6 +33,9 @@ plan = G.Plan(context, G.regroup(layout, 4))
   concatenation of byte ranges (`S.Part(source, offset, nbytes)`) of a slot's row of the group's tensors. Every slot has
   the same layout; a unit holds at most 262,144 bits (its size class). The engine takes at most two parts a row.
   Groups are the prover's plumbing (one launch each): the layout's digest binds only its units' rows.
+  A plan is linear in the layout's units: the layout digest is computed once (`Layout.digest`), every unit's domain id in
+  one pass (`S.unit_domain_ids`, two SHA-512s a unit), and a group the layout repeats (its layers) is laid out once, so
+  `add` rebinds that group's row table to the step's tensors without a Python step a row.
 - `step`: the step's index; `slots`: how many sequence slots it has.
 - `salt_key`: 32 bytes, `S.fresh_salt_key()` (the OS generator), fresh each step and the prover's alone, kept with the
   step's record to open from.
