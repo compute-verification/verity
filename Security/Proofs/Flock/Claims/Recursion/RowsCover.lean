@@ -167,7 +167,7 @@ theorem rowsCover (shape : Claims.Recursion.Form → Prop) : RowsCover shape := 
 /-- **`KSLin2` at the deployment's dense statements, at `layoutBTops`, with the rows' ports discharged**:
 `ksLin2_deployed_tops` with `RowsCover` from `rowsCover`. What stays at the dense form is the schedule (`SchedMatches`),
 RecCap's port (`CapPorts`), the last round's pieces (`FinPieces`, which holds at `finOpen`: `finPieces_finOpen`), and
-`VstarShowsB`, `PartChecksB`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. This bounds no
+`VstarShowsB`, `PartChecksBV`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. This bounds no
 number by itself: those premises are open.
 -/
 theorem ksLin2_deployed_rows (b : Brings) (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -186,7 +186,7 @@ theorem ksLin2_deployed_rows (b : Brings) (fin : Msg → List (ℕ × List (Msg 
           (cmt : Msg → ℕ → Msg → Msg),
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+          (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
             L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
             L shape shows cmt s) ∧

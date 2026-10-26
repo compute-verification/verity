@@ -298,7 +298,7 @@ theorem not_heldB_layoutBCap_none {W : Type} (IV : Claims.Verifier Coin) (ivScop
 `heldB_layoutBCap`. What stays at the dense form is the schedule (`SchedMatches`), RecCap's port (`CapPorts`), the rows'
 ports (`RowsCover`), the tops (`TopsHeld`, false at every `topsAt` that holds no such round:
 `not_heldB_layoutBCap_none`), the last round's pieces (`FinPieces`, which holds at `finOpen`: `finPieces_finOpen`), and
-`VstarShowsB`, `PartChecksB`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. -/
+`VstarShowsB`, `PartChecksBV`, `PartOpensB` and `DecompB`; then `RunPairs` and the readers' three facts. -/
 theorem ksLin2_deployed_cap (b : Brings) (topsAt : Msg → ℕ → ℕ → Option (List (Msg × List HmNets.Lin)))
     (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ) (join : List Msg → Msg)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
@@ -316,7 +316,7 @@ theorem ksLin2_deployed_cap (b : Brings) (topsAt : Msg → ℕ → ℕ → Optio
           (cmt : Msg → ℕ → Msg → Msg),
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+          (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
             L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
             L shape shows cmt s) ∧
