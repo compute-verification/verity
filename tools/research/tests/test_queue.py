@@ -269,6 +269,43 @@ def test_nonlean_first_off_at_main_keeps_first_then_admission_order_and_turning_
     assert [m.pr for m in world.queue(nonlean_first=True).sync()[0]] == [2, 3, 1]
 
 
+def test_first_naming_a_lean_change_before_a_nonlean_one_builds_a_next_the_same_sync_keeps(world):
+    """A sync compares `next` with the order it would build, non-Lean first, so `--first`'s order, which non-Lean first
+    overrides, rebuilds nothing on the next tick."""
+    world.gh.put(1, world.change({"pkg/A.lean": "-- 1\n"}))
+    world.gh.put(2, world.change({"a.txt": "2\n"}))
+    world.gh.put(3, world.change({"pkg/B.lean": "-- 3\n"}))
+    world.gh.put(4, world.change({"b.txt": "4\n"}))
+    members, _ = world.queue(first=(3, 4), nonlean_first=True).sync()
+    assert [m.pr for m in members] == [4, 2, 3, 1]
+    again, _ = world.queue(first=(3, 4), nonlean_first=True).sync()
+    assert [m.commit for m in again] == [m.commit for m in members] and world.logs[-1].endswith("kept 4, merged 0")
+
+
+def test_a_pr_the_last_sync_left_out_is_tried_above_the_rest_so_a_sync_with_nothing_new_keeps_next(world):
+    """26 Oct 10:48Z to 11:02Z: each drive tick logged `81 PR(s) above main, kept 0, merged 81` with `main` still: a PR that
+    didn't merge stayed where `--first`, or non-Lean first, put it in the order the sync compares `next` with, so every member
+    above it was merged again (new commits), and every Lean check of `next` but drive's own was thrown away.  Left out at a
+    head, it (and a PR that contains it) is tried above the rest until that head moves."""
+    world.gh.put(1, world.change({"pkg/A.lean": "-- 1\n"}))
+    world.gh.put(2, world.change({"a.txt": "2\n"}))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    world.gh.put(4, world.change({"d.txt": "4\n"}, base=world.gh.prs[3].head))
+    _git(world.dev, "push", "-q", "origin", f"{world.change({'c.txt': 'main\n'})}:refs/heads/main")
+    first = (3, 1, 4)
+    members, entries = world.queue(first=first).sync()
+    assert [m.pr for m in members] == [2, 1] and entries[3].state == "refused" and entries[4].state == "waiting"
+    for _ in range(2):
+        again, entries = world.queue(first=first).sync()
+        assert [m.commit for m in again] == [m.commit for m in members] and world.logs[-1].endswith("kept 2, merged 0")
+        assert entries[3].state == "refused" and entries[4].state == "waiting"
+    world.gh.put(3, world.change({"c.txt": "3 on main\n"}))                                       # fixed: first again
+    members, entries = world.queue(first=first).sync()
+    assert [m.pr for m in members] == [3, 2, 1] and entries[4].state == "refused"     # #4 holds the old #3, which conflicts
+    again, _ = world.queue(first=first).sync()
+    assert [m.commit for m in again] == [m.commit for m in members] and world.logs[-1].endswith("kept 3, merged 0")
+
+
 def test_the_queues_clone_merges_lean_audit_records_with_the_record_driver(world):
     """`.gitattributes` names `lean-audit` for every lean-audit.json; the queue's own clone must define it, or two PRs that each
     add a record conflict as text (12 Oct: #1806)."""

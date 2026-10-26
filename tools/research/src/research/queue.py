@@ -119,7 +119,8 @@ change: the same owner, or that one's owner withdrew its mark (`Queue._carried`)
 on its diff against `main`, or against the PR it's stacked on) and contains none of those merged with it goes below every Lean
 change, `--first`'s order and then admission's within each part, so it doesn't wait above a Lean change for its Lean check.
 Members the sync keeps never move for it.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
-which files conflict and which queued PRs touched them.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
+which files conflict and which queued PRs touched them; while its head stays, later syncs try it, and the PRs that contain it,
+above everything else, whatever `--first` or non-Lean first would say, so a sync with nothing new keeps `next`.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
 `main`, `gate_refusal`) on its merge onto `next` (`tools/verity/check/gates/markdown_caps.py`: one it puts over a cap),
 with the gate's fix: each PR the sync merges is judged, a new one or one merged again above a
 dropped or moved member, never one in the prefix it keeps, so a refusal never takes a running check's commit off `next`.
@@ -1117,8 +1118,19 @@ class Queue:
         chain = self.chain()
         entries = self.entries(prs, state)
         entries.update(waiting)
-        order = self.order(chain, entries)
         frozen = {m.pr: m.head for m in chain if self._frozen(m, entries) or self._pending(m, entries)}
+        # what the last sync left out at its head is tried again above the rest: in `--first`'s place or among members `next`
+        # keeps, it would be left out again and every member above it merged again (26 Oct 10:48Z to 11:02Z: each tick logged
+        # `81 PR(s) above main, kept 0, merged 81`)
+        on = {m.pr for m in chain}
+        out = {int(n) for n, c in state.get("conflicts", {}).items()
+               if int(n) in entries and int(n) not in on and c["head"] == entries[int(n)].pr.head}
+        out |= {n for n, e in entries.items() if n not in on and out.intersection(e.after)}
+
+        def last(order: list[int]) -> list[int]:
+            return [n for n in order if n not in out] + [n for n in order if n in out]
+
+        order = last(self.order(chain, entries))
         heads = {n: frozen.get(n, entries[n].pr.head) for n in order}
 
         def kept(order: list[int]) -> int:
@@ -1129,7 +1141,7 @@ class Queue:
         main = _out(self.workdir, "rev-parse", "refs/remotes/origin/main")
         nonlean = self.nonlean_first
         if len(order) - k > 1 and (nonlean if nonlean is not None else flags_at(self.workdir, main).nonlean_first):
-            order = order[:k] + self._nonlean_order(order[k:], heads, entries)
+            order = last(order[:k] + self._nonlean_order(order[k:], heads, entries))
             k = kept(order)
         members = chain[:k]
         tip = members[-1].commit if members else _out(self.workdir, "rev-parse", "origin/main")
