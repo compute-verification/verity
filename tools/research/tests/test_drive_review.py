@@ -240,11 +240,10 @@ def test_a_moved_lean_check_that_regenerated_locks_runs_again_on_the_rebuilt_com
     assert h.d.q.load_state()["drive"]["lean"][new]["state"] is None
 
 
-def _lock_landing(world, monkeypatch, tmp_path, above: dict[str, str], lock: str | None = None) -> tuple[Review, str, str, dict]:
+def _lock_landing(world, monkeypatch, tmp_path, above: dict[str, str], lock: str | None = None) -> tuple[Review, str, str]:
     """#1 (a Lean change with its lock) checked and landed with the records its check regenerated, `{"records": 2}`, while a
     check stacked at `next`'s top for #2 (a Lean change in the same package: without its lock, or stacked on #1 with ``lock``
-    as its lock) runs; its run dir holds ``above``'s records.  (the harness, that check's run id, the commit it ran on, {run: its
-    fetch})"""
+    as its lock) runs; its run dir holds ``above``'s records.  (the harness, that check's run id, the commit it ran on)"""
     h = Review(world, monkeypatch, nonlean_first=False)
     h.d.regenerate_locks = True
     world.gh.put(1, world.change({"pkg/A.lean": "theorem a : True := trivial\n", "pkg/lean-audit.json": '{"records": 1}\n'}))
@@ -265,7 +264,7 @@ def _lock_landing(world, monkeypatch, tmp_path, above: dict[str, str], lock: str
     assert h.tick().startswith("landed #1"), world.logs
     assert _subject(world, "main").startswith("Lock records regenerated for #1") and _git(world.origin, "rev-parse", "main^") == one
     world.gh.prs.pop(1)                                                 # GitHub closes it as merged
-    return h, second, top, runs
+    return h, second, top
 
 
 @pytest.mark.parametrize("records", ['{"records": 3}\n', '{"records": 2}\n'])
@@ -277,7 +276,7 @@ def test_a_landing_with_regenerated_locks_rebuilds_next_on_its_lock_commit_and_t
     next sync keeps them, and the check above, running on, moves to its commit's image and lands it with its own records: the
     tree it checked with them, which the lock gate checks against the commit it ran on.  When its records are the ones below,
     the image holds them already, and it lands as it is."""
-    h, rid, top, runs = _lock_landing(world, monkeypatch, tmp_path, {"pkg": records})
+    h, rid, top = _lock_landing(world, monkeypatch, tmp_path, {"pkg": records})
     lock, new = _main(world), _tip(world)
     assert _git(world.origin, "rev-parse", f"{new}~2") == lock                  # #2's image, then #3's, on the lock commit
     assert _git(world.origin, "diff", "--name-only", top, new) == "pkg/lean-audit.json"
@@ -310,7 +309,7 @@ def test_a_landing_with_regenerated_locks_rebuilds_next_on_its_lock_commit_and_t
 def test_a_member_above_whose_merge_changes_the_regenerated_lock_keeps_its_own_record_and_its_place(world, monkeypatch, tmp_path):
     """In the S1 tail most Lean changes above a landing change its lock too: each keeps its merge's record, so the rebuild
     doesn't stop there, and a check above it, of the same tree, covers its image as it is."""
-    h, rid, top, _ = _lock_landing(world, monkeypatch, tmp_path, {}, lock='{"records": 5}\n')
+    h, rid, top = _lock_landing(world, monkeypatch, tmp_path, {}, lock='{"records": 5}\n')
     lock, new = _main(world), _tip(world)
     assert _git(world.origin, "rev-parse", f"{new}~2") == lock and _tree(world, new) == _tree(world, top)
     assert h.d.q.load_state()["drive"]["lean"][new]["carried"] == {"from": top, "files": []}
@@ -326,7 +325,7 @@ def test_a_member_above_whose_merge_changes_the_regenerated_lock_keeps_its_own_r
 def test_a_moved_check_that_didnt_regenerate_the_records_below_it_covers_nothing(world, monkeypatch, tmp_path):
     """The image holds the lock commit's records, and a check that passed without regenerating them checked a tree with other
     ones: it covers nothing, and the commit is checked again."""
-    h, rid, top, _ = _lock_landing(world, monkeypatch, tmp_path, {})
+    h, rid, top = _lock_landing(world, monkeypatch, tmp_path, {})
     lock, new = _main(world), _tip(world)
     h.review(2)
     h.review(3)
