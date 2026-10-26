@@ -195,6 +195,7 @@ def analyse(nf, card: str, K: int, N: int, t: int, Lp: int, pv: bool = False, se
     tc = j["route"].c
     out = dict(K=K, N=N, t=t, Lp=Lp, L=t * Lp, pv=pv, digits=r["digits"], gamma=r["gamma_max"],
                any=r["saved"] / r["T"], lane=j["lane"], minT=dict(c=j["c"], c_opt=j["c_opt"], eps_alg=j["eps_alg"]),
+               hull=[(m.label, sorted(k for it in m.items for k in it[2])) for m in j["methods"]],
                job=at_prices(c, j, N, j["route"].mu, lk), job_binding=j["route"].binding)
     x0 = first_tensor_bound(c, j, N, lookups=lk)
     p = period(c, j, N, x0 + 1e-4 * tc, lookups=lk)
@@ -204,7 +205,7 @@ def analyse(nf, card: str, K: int, N: int, t: int, Lp: int, pv: bool = False, se
         p = period(c, j, N, x0 + f * tc, lookups=lk)
         a = at_prices(c, j, N, p.mu, lk)
         rows.append(dict(X=x0 / tc + f, c=a["c"], c_mm=a["c_mm"], leak=a["leak"], eps_alg=a["eps_alg"],
-                         binding=p.binding, mix=a["mix"]))
+                         binding=p.binding, mix=a["mix"], routes=a["routes"]))
     out["sens"] = rows
     out["worst"] = min(rows + [dict(out["served"], X=out["served"]["X0"])], key=lambda x: x["c"])
     return out
