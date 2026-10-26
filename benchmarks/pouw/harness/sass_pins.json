@@ -1,6 +1,6 @@
 {
  "version": "sass-pins/v2",
- "note": "Each toolkit's ptxas (its .note.nv.tkinfo version, build and arguments, -v aside), every signature (sass_gate.signature) of each subroutine with a flagged instruction that it builds for ieee_pin.cu (ptxas specializes a body to its call sites, so one name may have several), and the numeric run (ieee_pin.py) that gated and ran those builds and found every sequence exact; a toolkit without one exempts nothing. Regenerate with: python sass_gate.py --pin BINARY... --toolkit NAME, ieee_pin.cu built with that toolkit with and without -fmad=false (POUW_CUDA_BIN naming its bin/); ieee_pin.py refuses to run when the entry isn't what its builds pin.",
+ "note": "Each toolkit's ptxas (its .note.nv.tkinfo version, build and arguments, -v aside), every signature (sass_gate.signature) of each subroutine with a flagged instruction that it builds for ieee_pin.cu (ptxas specializes a body to its call sites, so one name may have several), and the numeric run (ieee_pin.py) that gated and ran those builds and found every sequence exact; a toolkit without one exempts nothing. Regenerate with: python sass_gate.py --pin BINARY... --toolkit NAME, ieee_pin.cu built with that toolkit with and without -fmad=false (POUW_CUDA_BIN naming its bin/); ieee_pin.py refuses to run when the entry isn't what its builds pin. A toolkit's exceptions are flagged instructions of sass_gate.EXCEPTABLE it passes alone: each names the Definition the verifier replays that models it bit for bit, and the numeric run that held its target card to that Definition on every operand word; written by hand, and kept by a repin while the ptxas is unchanged.",
  "toolkits": {
   "12.9.1": {
    "version": "Cuda compilation tools, release 12.9, V12.9.86",
@@ -120,6 +120,26 @@
      "nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a --no-compress -fmad=false"
     ],
     "result": "both builds exact everywhere: rcp and sqrt on all 2^32 inputs (16777214 subnormal inputs; rcp 33554430 subnormal outputs), div on 2^32 pairs weighted to subnormals (1005716801 subnormal inputs, 213610692 subnormal outputs), 3/b and a/b by a constant numerator on 2^32 each, u16, u16 as a call, u32, s32 and u32 by 64 divisors on 2^32 each, u64 and s64 on 2^30 each, and every subnormal input against the host; the --use_fast_math, -ftz=true and -prec-div=false -prec-sqrt=false controls differ"
+   },
+   "exceptions": {
+    "MUFU.EX2": {
+     "definition": "verity.ml.circuits.ops.mufu.MufuEx2Ftz (MufuEx2Ftz_v1, ex2.approx.ftz.f32: library table ex2, sha512 5cb768c1725369ad905e725437463729d5b6054ca9adc498e755247e2ba848b510e3325e1c3fecad1242832aca5fa0afd463b16002a7f34050a7b377ed107877, read inside its reduction rule)",
+     "numeric": {
+      "runs": [
+       "r20261026-015355-aec6",
+       "r20261026-032225-3cee"
+      ],
+      "source_sha": [
+       "d632cbfa5ed7e99194d67354c6abb38c9a11cdbd",
+       "3cc8d5b6a60a776c272634e92d2def75d586fb1b"
+      ],
+      "card": "NVIDIA H200, sm_90 (vy-dc-h200 GPU-bfca767e; vy-dc-h200-3 GPU-82ba9694), driver 580.173.02",
+      "builds": [
+       "nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -fmad=false (benchmarks/torch_gpu/units/units.cu, #4518)"
+      ],
+      "result": "units_sweep's op 0, a bare MUFU.EX2 of each operand word, on all 2^32 words against evaluate_batch(MufuEx2Ftz) (its registered kernel, which test_evaluation's self_check holds to the evaluator), each block of 2^24 reduced to a sum of splitmix64((i << 32) | out): 0 of 256 blocks differ in either run; MufuEx2Ftz and its table are unchanged from both source commits to this pin"
+     }
+    }
    }
   }
  },
