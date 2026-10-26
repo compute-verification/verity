@@ -23,9 +23,12 @@ from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_seal as ss
 from verity_vllm.pipeline.serve_admit import Admission, Delta
 
-torch = pytest.importorskip("torch")
+try:
+    import torch
+except ModuleNotFoundError:
+    pytest.skip("could not import 'torch'", allow_module_level=True)
 
-from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Committer, Engine, Runner, Serving, events, records  # noqa: E402
+from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Committer, Engine, Runner, Serving, events, records
 
 A = {0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]}
 B = {0: [("model.embed_tokens", bytes(255 - i for i in range(256)) * 2)], 1: [("runner.sampler", b"\x09\x08\x07\x06")]}

@@ -278,7 +278,10 @@ class CommitWindows:
     def close(self) -> dict[str, Any]:
         t0 = self.clock()
         laps = [("", t0)]
-        lap = lambda name: laps.append((name, self.clock()))  # noqa: E731
+
+        def lap(name: str) -> None:
+            laps.append((name, self.clock()))
+
         rc = self.com.finalize() if int(self.com._step_index) else None    # a window whose one step() only drained outputs
         lap("finalize")
         readback = self.record.absorb(self.com, self.window) if rc is not None else None
