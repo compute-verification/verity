@@ -299,7 +299,10 @@ theorem Committed.unrolled_unit (hty : tags.typed = false) (h : Committed tags c
   · have hf := parse_tmpl_none hty h
     rw [unrolled_flat hf, lunit_flat hf]
     exact ⟨rfl, hf, rfl⟩
-  · obtain ⟨-, -, -, -, -, -, -, -, he⟩ := unrolled_of_parseTmpl h
-    exact ⟨FlockSoundness.unrolled_unit h, unrolled_tmpl h, by rw [he]⟩
+  · refine ⟨FlockSoundness.unrolled_unit h, unrolled_tmpl h, ?_⟩
+    unfold HmOut.unrolled
+    split
+    · split <;> rfl
+    · rfl
 
 end FlockSoundness.Discharge.Hidden
