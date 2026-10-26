@@ -1,10 +1,10 @@
-import Models.Accounting.Guarantees.FillerLuck
+import Definitions.Accounting.Guarantees.FillerLuck
 import Proofs.Accounting.TS.Rounds
 
 /-!
 # The filler's per-check luck
 
-Proofs of `Models.Accounting.Guarantees.FillerLuck`. Lemma P2 is PoUW's parity lemma on `F₂^K` (`parity_prob_sq`,
+Proofs of `Definitions.Accounting.Guarantees.FillerLuck`. Lemma P2 is PoUW's parity lemma on `F₂^K` (`parity_prob_sq`,
 Cauchy–Schwarz and Parseval: `(2p − 1)² ≤ 2^R/2^K`), read at every deficit (`luck_of_sq`) and over a column of uniform
 parity by splitting the column's noise into its parity and a uniform rest (`exists_parity_equiv`); a word ring's
 equality is read mod 2 through `φ`. A tile's cell is the cell lemma at each setting of the other rows and columns

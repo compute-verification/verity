@@ -387,6 +387,80 @@ def test_a_merge_with_push_runs_the_steps_from_the_marker_over_what_it_and_the_l
     assert _marker(repo) == tip
 
 
+def _lean_repo(tmp_path: Path) -> tuple[Path, str, str, str]:
+    """A repository with a Lake package (`pkg/`, its lock and a source): (repo, base, a commit changing the source on it, a
+    commit on that changing only a README)."""
+    repo = tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "-b", "main", str(repo))
+    (repo / "pkg").mkdir()
+    (repo / "pkg/lean-audit.json").write_text("{}\n")
+    (repo / "pkg/A.lean").write_text("def a := 1\n")
+    (repo / "README.md").write_text("r\n")
+    shas = []
+    for path, text in ((None, None), ("pkg/A.lean", "def a := 2\n"), ("README.md", "r2\n")):
+        if path:
+            (repo / path).write_text(text)
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", path or "base")
+        shas.append(_git(repo, "rev-parse", "HEAD"))
+    return repo, *shas
+
+
+def test_a_landing_that_touches_a_lean_package_starts_the_lean_cache_publish_and_one_that_does_not_does_not(tmp_path,
+                                                                                                         monkeypatch):
+    """CI-174: the Lean cache was published only daily, so a landing's Lean waited on a stale cache.  A landing whose range
+    touches a Lake package's source starts infra's publisher with the landed SHA; one that touches none, or an absent script,
+    starts nothing; every case is one line, with the seconds the script took to start."""
+    repo, base, lean, docs = _lean_repo(tmp_path)
+    script = tmp_path / "lean_publish.sh"
+    monkeypatch.setenv(M.LEAN_PUBLISH_ENV, str(script))
+    calls, lines = [], []
+    run = lambda argv, **_k: calls.append(argv) or subprocess.CompletedProcess(argv, 0, "", "")  # noqa: E731
+
+    assert not M.lean_publish(repo, base, docs, log=lines.append, run=run)
+    assert calls == [] and lines[-1].endswith("is absent") and str(script) in lines[-1]
+    script.write_text("#!/bin/sh\n")
+    assert M.lean_publish(repo, base, docs, log=lines.append, run=run, clock=iter([10.0, 11.5]).__next__)
+    assert calls == [[str(script), docs]], "a range with a Lean change in it counts, whatever its tip changed"
+    assert "started" in lines[-1] and "1.5 s" in lines[-1] and M.LEAN_PUBLISH_LOG in lines[-1]
+    assert not M.lean_publish(repo, lean, docs, log=lines.append, run=run)
+    assert len(calls) == 1 and lines[-1].endswith("touches no Lean package")
+    monkeypatch.setenv(M.LEAN_PUBLISH_ENV, "")
+    assert not M.lean_publish(repo, base, lean, log=lines.append, run=run) and len(calls) == 1 and "off" in lines[-1]
+
+
+def test_a_lean_cache_publish_that_fails_is_logged_and_the_landing_stands(tmp_path, monkeypatch):
+    """The publisher's nonzero exit, its timeout or its failure to run is one line naming why and the rerun; `caught_up` still
+    runs the steps after it and moves its marker, so a landing never fails on the publish."""
+    repo, base, lean, _docs = _lean_repo(tmp_path)
+    script = tmp_path / "lean_publish.sh"
+    script.write_text("#!/bin/sh\n")
+    monkeypatch.setenv(M.LEAN_PUBLISH_ENV, str(script))
+    lines: list[str] = []
+
+    def timeout(argv, **k):
+        raise subprocess.TimeoutExpired(argv, k["timeout"])
+
+    for run, why in ((lambda argv, **_k: subprocess.CompletedProcess(argv, 3, "", "cpu-4 unreachable\n"),
+                      "exited 3: cpu-4 unreachable"),
+                     (timeout, f"no exit within {M.LEAN_PUBLISH_TIMEOUT_S} s"),
+                     (lambda argv, **_k: (_ for _ in ()).throw(PermissionError("not executable")), "PermissionError")):
+        assert not M.lean_publish(repo, base, lean, log=lines.append, run=run, clock=iter([0.0, 2.0]).__next__)
+        assert "not started" in lines[-1] and why in lines[-1] and "2.0 s" in lines[-1] and f"rerun: {script} {lean}" in lines[-1]
+
+    origin = tmp_path / "origin.git"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(repo, "remote", "add", "origin", str(origin))
+    _git(repo, "push", "-q", "origin", f"{base}:refs/heads/main", f"{base}:{M.AFTER_LAND_REF}", f"{base}:{M.SPEC_ALERTED_REF}")
+    ran = _steps(monkeypatch)
+    script.write_text('#!/bin/sh\necho "$1" > "$(dirname "$0")/published"\nexit 3\n')
+    script.chmod(0o755)
+    _git(repo, "push", "-q", "origin", f"{lean}:refs/heads/main")
+    assert M.caught_up(repo, "origin", "check", log=lines.append) == lean
+    assert (tmp_path / "published").read_text().strip() == lean and any(f"{script} exited 3" in x for x in lines[-4:])
+    assert ran[-2:] == [("report", base, lean), ("landed", base, lean)] and _marker(repo) == lean
+
+
 def test_a_spec_dm_that_failed_is_sent_again_by_the_next_sweep_which_fails_until_it_goes(tmp_path, monkeypatch, capsys):
     """Tip 141 (8 Oct): the DM failed on the Slack broker's socket, the after-landing marker moved anyway, and only a hand retry
     sent it.  The DM's own marker stays put until `alert` returns True, so the next run resends it, and `--sweep` exits 1 while it

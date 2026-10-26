@@ -352,19 +352,46 @@ its head constant and that constant's module, and what it reaches (`reaches`). T
 binders (`∀ j, P j` is headed by `P`); `guarded` says those binders include a hypothesis (`A → B`), and `applies` is what
 its body applies (`applies`). A conjunction counts as each of its conjuncts. -/
 partial def hypothesisJson (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning : Array Name) (moduleOf : Name → Option Name) (source name : String)
-    (pos : Nat) (t : Expr) : MetaM (Array Json) := do
+    (pos : Nat) (t : Expr) (extra : Expr → List (String × Json) := fun _ => []) : MetaM (Array Json) := do
   let t ← instantiateMVars t
   if t.isAppOfArity ``And 2 then
-    return (← hypothesisJson env table meaning moduleOf source s!"{name}.1" pos t.appFn!.appArg!) ++
-      (← hypothesisJson env table meaning moduleOf source s!"{name}.2" pos t.appArg!)
+    return (← hypothesisJson env table meaning moduleOf source s!"{name}.1" pos t.appFn!.appArg! extra) ++
+      (← hypothesisJson env table meaning moduleOf source s!"{name}.2" pos t.appArg! extra)
   let (head, guarded, body) ← forallTelescope t fun ys b => do
     let guarded ← ys.anyM fun y => do isProp (← y.fvarId!.getType)
     let head : Option Name := match b.getAppFn with | .const c _ => some c | _ => none
     return (head, guarded, applies env table meaning b)
-  return #[Json.mkObj [("source", toJson source), ("name", toJson name), ("at", toJson pos),
+  return #[Json.mkObj ([("source", toJson source), ("name", toJson name), ("at", toJson pos),
     ("type", toJson (toString (← ppExpr t))),
     ("head", toJson (head.map toString)), ("module", toJson ((head.bind moduleOf).map toString)),
-    ("reaches", toJson (reaches env table meaning t)), ("guarded", toJson guarded), ("applies", toJson body)]]
+    ("reaches", toJson (reaches env table meaning t)), ("guarded", toJson guarded), ("applies", toJson body)] ++ extra t)]
+
+/-- The positions of the binders `xs` that `e` mentions. -/
+def usesOf (xs : Array Expr) (e : Expr) : Array Nat :=
+  (Array.range xs.size).filter fun j => e.containsFVar xs[j]!.fvarId!
+
+/-- `e` as a field path of one of the binders `xs`: `x.a.b` (`T.b (S.a x)`, structure projections applied to `x`) is
+`x`'s position and the projections, innermost first; a bare binder has none. Anything else is none. -/
+partial def fieldPath (env : Environment) (xs : Array Expr) (e : Expr) : Option (Nat × List String) :=
+  match e.consumeMData with
+  | .fvar f => (xs.findIdx? (·.fvarId! == f)).map (·, [])
+  | .proj s i b => (fieldPath env xs b).map fun (j, p) => (j, p ++ [s!"{s}.{i}"])
+  | e => match e.getAppFn with
+    | .const c _ => match env.getProjectionFnInfo? c with
+      | some info => if e.getAppNumArgs == info.numParams + 1 then
+          (fieldPath env xs e.appArg!).map fun (j, p) => (j, p ++ [c.toString]) else none
+      | none => none
+    | _ => none
+
+/-- `shares` for a hypothesis `x.f = y.f`: one field path (`fieldPath`, not empty) of two different binders, by their
+positions (`inputs`) and the path; nothing for any other hypothesis. -/
+def sharesOf (env : Environment) (xs : Array Expr) (t : Expr) : List (String × Json) :=
+  if !t.isAppOfArity ``Eq 3 then [] else
+  match fieldPath env xs t.appFn!.appArg!, fieldPath env xs t.appArg! with
+  | some (j, p), some (k, q) =>
+    if j != k && p == q && !p.isEmpty then
+      [("shares", Json.mkObj [("inputs", toJson #[j, k]), ("path", toJson p)])] else []
+  | _, _ => []
 
 partial def conjuncts (e : Expr) : List Expr :=
   if e.isAppOfArity ``And 2 then conjuncts e.appFn!.appArg! ++ conjuncts e.appArg! else [e]
@@ -398,7 +425,9 @@ partial def eventsOf (env : Environment) (table : Std.HashMap Name (Array Name))
 
 /-- One part of a statement's shape, for the audit's shape rule: its binders (`inputs`: those that aren't propositions,
 each with its position and its type's head), its hypotheses (`hypothesisJson`: each `Prop` binder, and each `Prop` field
-of a structure an input ranges over), what its conclusion reaches, and its events (`eventsOf`). -/
+of a structure an input ranges over), what its conclusion reaches, and its events (`eventsOf`). Each binder, and the
+conclusion, gives the positions of the binders it mentions (`uses`, `usesOf`), so that `check.py` can reorder them, and
+a hypothesis equating one field of two binders says so (`shares`, `sharesOf`). -/
 def shapeOf (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning : Array Name) (moduleOf : Name → Option Name) (stmt : Expr) : MetaM Json :=
   forallTelescope stmt fun xs concl => do
     let mut inputs := #[]
@@ -406,12 +435,14 @@ def shapeOf (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning
     for h : i in [0:xs.size] do
       let d ← xs[i].fvarId!.getDecl
       let t ← instantiateMVars d.type
+      let uses := toJson (usesOf xs t)
       if ← isProp t then
-        hyps := hyps ++ (← hypothesisJson env table meaning moduleOf "binder" d.userName.toString i t)
+        hyps := hyps ++ ((← hypothesisJson env table meaning moduleOf "binder" d.userName.toString i t (sharesOf env xs)).map
+          (·.setObjVal! "uses" uses))
         continue
       let head : Option Name := match t.getAppFn with | .const c _ => some c | _ => none
       inputs := inputs.push <| Json.mkObj [("name", toJson d.userName.toString), ("at", toJson i),
-        ("head", toJson (head.map toString))]
+        ("head", toJson (head.map toString)), ("uses", uses)]
       -- a family of structures (`Vs : Fin S → VStmt`) holds their fields at every index
       hyps := hyps ++ (← forallTelescope t fun _ cod => do
         let cod ← whnfR cod
@@ -431,7 +462,8 @@ def shapeOf (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning
               out := out ++ (← hypothesisJson env table meaning moduleOf "field" s!"{d.userName}.{fd.userName}" i fd.type)
           return out)
     return Json.mkObj [("inputs", toJson inputs), ("hypotheses", toJson hyps),
-      ("conclusion", toJson (reaches env table meaning concl)), ("events", toJson (← eventsOf env table meaning concl))]
+      ("conclusion", toJson (reaches env table meaning concl)), ("events", toJson (← eventsOf env table meaning concl)),
+      ("uses", toJson (usesOf xs concl))]
 
 /-- The statement's shape, one part per conjunct of a statement that is a conjunction (`shapeOf` each), after a lifted
 definition is unfolded once (`liftOf`) and its `let`s are inlined. -/
