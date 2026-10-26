@@ -31,14 +31,23 @@ ADDR=${TO[-1]#*@}
 SSHO=(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20)
 SSH=("${SSHO[@]}" "${TO[@]}")
 D=$("${SSH[@]}" mktemp -d /tmp/wipe-peer-XXXXXX)
-CTL=$(mktemp -u /tmp/wipe-tunnel-XXXXXX)
-trap '[ -S "$CTL" ] && "${SSHO[@]}" -S "$CTL" -O exit "${TO[@]}" 2>/dev/null; "${SSH[@]}" rm -rf "$D" || true' EXIT
+TPID=
+trap '[ -n "$TPID" ] && kill "$TPID" 2>/dev/null; "${SSH[@]}" rm -rf "$D" || true' EXIT
 tar -c --exclude=./.git --exclude=./.venv --exclude=./out --exclude=.lake . | "${SSH[@]}" tar -x -C "$D"
 "${SSH[@]}" "bash -lc 'cd $D && uv sync -q --all-packages --extra torch-cpu'"
 LISTEN=0.0.0.0:$PORT TARGET=$ADDR:$PORT LINK=()
 if [ "$TUNNEL" = 1 ]; then
   LPORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
-  "${SSHO[@]}" -f -N -M -S "$CTL" -o ExitOnForwardFailure=yes -L "127.0.0.1:$LPORT:127.0.0.1:$PORT" "${TO[@]}"
+  # Not a control master (-M): ssh -N sets TCP_NODELAY on its connection only when it isn't one, and without it a read
+  # waits out the peer's delayed ACK (r20261026-092852-4c4d: one round trip of 41.5 ms, past the 20 ms deadline).
+  "${SSHO[@]}" -N -o ExitOnForwardFailure=yes -L "127.0.0.1:$LPORT:127.0.0.1:$PORT" "${TO[@]}" &
+  TPID=$!
+  for _ in $(seq 100); do
+    python3 -c 'import socket, sys; socket.create_connection(("127.0.0.1", int(sys.argv[1])), 1).close()' "$LPORT" \
+      2>/dev/null && break
+    kill -0 "$TPID" || { echo "peer.sh: the ssh forward to $PEER exited"; exit 2; }
+    sleep 0.2
+  done
   LISTEN=127.0.0.1:$PORT TARGET=127.0.0.1:$LPORT
   LINK=(--link "challenger=$PEER@ssh to $ADDR:22, forwarding this node's 127.0.0.1:$LPORT to its 127.0.0.1:$PORT")
 fi
