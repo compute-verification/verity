@@ -125,7 +125,7 @@ theorem splitOn_subset (n : ℕ) : ("subset:" ++ toString n).splitOn ":" = ["sub
     rcases hx with rfl | rfl | rfl | rfl | rfl | rfl <;> rfl
   rw [splitOn_colon, String.toList_append, hpre, List.append_assoc, List.singleton_append, List.splitOn_eq_splitOnP,
     List.splitOnP_append_cons_of_forall_mem hs6 ':' rfl, List.splitOnP_eq_singleton]
-  · have h6 : String.ofList ['s', 'u', 'b', 's', 'e', 't'] = "subset" := by first | decide | rfl | simp
+  · have h6 : String.ofList ['s', 'u', 'b', 's', 'e', 't'] = "subset" := by decide
     simp only [List.map_cons, List.map_nil, String.ofList_toList, h6]
   · intro x hx
     simp only [beq_eq_false_iff_ne, ne_eq]
