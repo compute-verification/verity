@@ -45,7 +45,9 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   it is committed as (`Registered.checkPort` holds a hidden-output statement's output rows, the verifier's PROTOCOL.md
   §16.13), so S_t is the one leaf unit t computes and unit t + 1 reads, the view the one leaf ingress t computes and
   egress t reads, and the egress row the one the warden signed: the chains are wires through the registered roots, not
-  the prover's word. Accepted: every o0 opens to 1.
+  the prover's word. Accepted: every o0 opens to 1. The registration's roots also name, as
+  ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden
+  port reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
 * **Negatives**, each refused by Lean's registered reads ("does not open"). ``chain``: the same Program on a state tree
   with S_A and S_{A+1} swapped (leaves A and A + 1): ingress unit A's o1, the S_A it computes, doesn't open leaf A.
   ``tampered``: an egress-only Program of G·T units, one egress row's `DATA` id changed and its link-window re-signed (a
@@ -469,7 +471,8 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
     the salts its rows, inputs and outputs but o0, are committed under, its header's `registered` entries and the
     verifier's own ports, the host's read of them (`warden_rows.refusal`, `tree_refusal`: the ports in its signature's
     order, inputs then outputs), each unit's o0 word and its output rows as the references compute them (``made``,
-    None where the ingress reference gives none)."""
+    None where the ingress reference gives none), and the warden's row registration each warden port reads
+    (``warden``)."""
     ch, T, cls = at.chain, at.T, at.setup.cls
     tp, w, bs = mb.template, mb.window, list(mb.buckets)
     rows = [b - w * T for b in bs]
@@ -509,7 +512,7 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
     changed = at.tampered.bucket if name == "tampered" and tp == "egress" and at.tampered.window == w else None
     return SimpleNamespace(round=name, template=tp, window=w, name=mb.name, base=mb.base, n=len(bs), buckets=bs,
                            units=units, made=made, salts=salts, entries=entries, ports=ports, bcs=bcs, refused=refused,
-                           outputs=outputs, changed=changed)
+                           outputs=outputs, changed=changed, warden={p: s.registration for p, s in warden.items()})
 
 
 def target(at: SimpleNamespace, name: str) -> str | None:
@@ -637,7 +640,7 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
          "n": n, "base": mr.base, "defn": sg.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"],
          "salts": got["salts"], "ports": st.ports, "outputs": o0, "units": mr.units, "ins": sg.ins, "made": made,
          "partition_file": pg.partition_file, "program_file": pg.program_file,
-         "registered_file": out / "registered.json", "k_log": st.meta["k_log"], "nbl": nbl,
+         "registered_file": out / "registered.json", "k_log": st.meta["k_log"], "nbl": nbl, "warden": mr.warden,
          "stage_s": round(time.time() - t0, 1)}
     m["header"] = M.a0.public_header(out, n)
     m["bcs"] = shared_bcs(out / f"pub-{n}.bin", st.ports)
@@ -789,15 +792,33 @@ def coins_outcome(a, coins: SimpleNamespace, spec: S.Spec, units: list, counts: 
 
 # --- the audit ----------------------------------------------------------------------------------------------------------
 
+def warden_roots(members) -> list[dict]:
+    """The registration's ``rows/<direction>/<w>`` roots: each warden row registration its members' warden ports read
+    (an ingress unit's ``row``, an egress unit's ``o1``), its root and domain as the warden registered them
+    (`warden_rows.registration`, read back by the verifier), its T rows the leaves. A period check
+    (`NetworkCheck.Period`'s rows form) holds a link-window's answer to its rows by these, by root and domain.
+
+    A port is never the row registration's value (``warden/<direction>/<w>``, the name Lean reports the reads under):
+    the audit takes a root port named as a value for a registered value of the record (`audit.session_registered`),
+    which this registration lists none of, and refuses the round."""
+    out = {}
+    for m in members:
+        for doc in m["warden"].values():
+            p = f"rows/{doc['direction']}/{doc['window']}"
+            out[p] = {"port": p, "root": doc["root"], "leaves": doc["rows"], "domain": doc["domain"]}
+    return [out[p] for p in sorted(out)]
+
+
 def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: list[dict], trees: dict, out: Path,
           port: int, k: int | None = None, coins: SimpleNamespace | None = None) -> dict:
-    """One round registered (its members' ports and the scan's registrations' roots, before any coin), its units drawn
-    by the verifier's Lean (`draw --stratified k` on its own coins; every unit when `k` is None) or, given the
-    challenger's ``coins``, by the round's `service.Stream` on them (`spec_of`; `a5_coins.RankCoins`, rank 0), each
-    member's drawn units proved --zk behind the firewall and held by Lean with the verifier's own registered reads; then
-    each held unit's ``o0`` opened under the salt the prover sends. A member with no unit drawn runs no session. Writes
-    what the verifier received under ``out / "verifier"``. An accepted audit carries its charge terms (`charge_terms`)
-    and each member's cost per drawn unit; on the challenger's coins, the outcome of record is the stream's
+    """One round registered (its members' ports, the scan's registrations' roots, and the warden's row registrations
+    its warden ports read, `warden_roots`, before any coin), its units drawn by the verifier's Lean (`draw --stratified
+    k` on its own coins; every unit when `k` is None) or, given the challenger's ``coins``, by the round's
+    `service.Stream` on them (`spec_of`; `a5_coins.RankCoins`, rank 0), each member's drawn units proved --zk behind the
+    firewall and held by Lean with the verifier's own registered reads; then each held unit's ``o0`` opened under the
+    salt the prover sends. A member with no unit drawn runs no session. Writes what the verifier received under
+    ``out / "verifier"``. An accepted audit carries its charge terms (`charge_terms`) and each member's cost per drawn
+    unit; on the challenger's coins, the outcome of record is the stream's
     (`coins_outcome`)."""
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
     out.mkdir(parents=True, exist_ok=True)
@@ -815,6 +836,10 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
         want[f"scan/{kind}"] = {"leaves": len(reg.rows), "domain": d}
         schemas[f"scan/{kind}"] = BitRowLeaf.hiding_schema
         roots.append({"port": f"scan/{kind}", "root": reg.root.hex(), "leaves": len(reg.rows), "domain": d})
+    for r in warden_roots(members):
+        want[r["port"]] = {"leaves": r["leaves"], "domain": r["domain"]}
+        schemas[r["port"]] = WR.SCHEMA
+        roots.append(r)
     leaf_layer = hashlib.sha512(M.canonical_json(publics)).hexdigest()
     k = sum(m["n"] for m in members) if k is None else k
     law = M.D.parse_law(f"stratified:{k}")

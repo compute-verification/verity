@@ -291,6 +291,12 @@ the certificates' signatures are checked on the host from their public fields, n
 spatial unit across links is not checked (each registration is one link-window, alone), and the frames' consistency
 with the served computation is left to N3.
 
+## A period, as onsite's communication component (`verity/certifier/v0`)
+
+Onsite composes the network certifier as one `Core.Protocol`, `NetworkCheck.Period` (`network/lean`, the
+`network-period` executable), which publishes the bound `K` on what left the site with its terms:
+[protocol/period.md](protocol/period.md).
+
 ## A served link (`served`)
 
 A served link's egress counts follow its requests' arrivals and the run-time syncs, so nothing fixes them before the
