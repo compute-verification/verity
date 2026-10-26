@@ -41,22 +41,22 @@ open Claims.Recursion.VStarB
 noncomputable section
 
 /-- Where the accumulators start in the inner statement's `w`: past table 0's rounds' elements (`portSizes`). -/
-def accBase (X : Msg) : ℕ :=
-  match setupOf false X with
+def accBase (xi : Msg) : ℕ :=
+  match setupOf false xi with
   | some v => (_root_.Flock.RecAlgebra.rounds (Rows.shapeNoCoin v.2.1 v.2.2)).flatten.size
   | none => 0
 
 /-- Row element `e` of group `p`, as an index of the inner statement's `w` (`Rows.portAt`). -/
-def elemPort (X : Msg) (p e : ℕ) : Option ℕ :=
-  match setupOf false X with
+def elemPort (xi : Msg) (p e : ℕ) : Option ℕ :=
+  match setupOf false xi with
   | some v => Rows.portAt (Rows.shapeNoCoin v.2.1 v.2.2) p e
   | none => none
 
 /-- **The accumulators' offset** at group `p`'s row element `e`: `δ c` at `acc0 c` and `acc1 c` (`w`'s elements
 `accBase X + c` and `accBase X + 2 + c`), `0` elsewhere. -/
-def accOff (X : Msg) (p : ℕ) (δ : ℕ → _root_.Flock.F128) (e : ℕ) : _root_.Flock.F128 :=
-  match elemPort X p e with
-  | some j => if accBase X ≤ j then δ ((j - accBase X) % 2) else 0
+def accOff (xi : Msg) (p : ℕ) (δ : ℕ → _root_.Flock.F128) (e : ℕ) : _root_.Flock.F128 :=
+  match elemPort xi p e with
+  | some j => if accBase xi ≤ j then δ ((j - accBase xi) % 2) else 0
   | none => 0
 
 /-- The compiled record at the deployed layout. -/
@@ -120,10 +120,10 @@ value (below `accBase`), the copy's row is what `elemReadC acc` reads, at every 
 def FramePorts (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
-  PortsAt rd wE final w b elem shape untr cmt fun X cs ms' p ht wt q ns nv =>
-    ∀ (acc : Msg → List Msg → List Coin → ℕ → Array _root_.Flock.F128) (e j : ℕ), elemPort X q.key.1 e = some j →
-      j < accBase X →
-      _root_.Flock.Readable.rowsRead ns nv (keyCopy p ht wt q.key) e = Rows.elemReadC acc X ms' cs q.key e
+  PortsAt rd wE final w b elem shape untr cmt fun xi cs ms' p ht wt q ns nv =>
+    ∀ (acc : Msg → List Msg → List Coin → ℕ → Array _root_.Flock.F128) (e j : ℕ), elemPort xi q.key.1 e = some j →
+      j < accBase xi →
+      _root_.Flock.Readable.rowsRead ns nv (keyCopy p ht wt q.key) e = Rows.elemReadC acc xi ms' cs q.key e
 
 /-- **P3, the accumulator ports**: in a piece's port context, one offset `δ` such that on every row element of its group
 whose `w` index is an accumulator (`accBase X + i`, `i < 4`: `acc0 0, acc0 1, acc1 0, acc1 1`), the copy's row is what
@@ -132,10 +132,10 @@ def AccPorts (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ →
     (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
-  PortsAt rd wE final w b elem shape untr cmt fun X cs ms' p ht wt q ns nv =>
-    ∃ δ : ℕ → _root_.Flock.F128, ∀ e j, elemPort X q.key.1 e = some j → accBase X ≤ j →
+  PortsAt rd wE final w b elem shape untr cmt fun xi cs ms' p ht wt q ns nv =>
+    ∃ δ : ℕ → _root_.Flock.F128, ∀ e j, elemPort xi q.key.1 e = some j → accBase xi ≤ j →
       _root_.Flock.Readable.rowsRead ns nv (keyCopy p ht wt q.key) e =
-        Rows.elemReadC (Top.accRC rd key) X ms' cs q.key e + δ ((j - accBase X) % 2)
+        Rows.elemReadC (Top.accRC rd key) xi ms' cs q.key e + δ ((j - accBase xi) % 2)
 
 /-- **`resPieces_computesAt` at a pinned witness** (`PartAcceptsP`): the same share, asked only at the part's own
 witness `w`. -/
@@ -217,8 +217,10 @@ end RecDeploy.ResLower
 
 namespace RecDeploy.DecompBR
 
+open Flock
 open Claims (Msg Out)
 open FlockDeploy (Coin FinalP)
+open Claims.Recursion.VStarB
 
 /-- **`ResLowJP` at the deployed layout from `ResLoweredP`**: the two are one statement at the brings `bB`, `Dense`,
 `recRead` and `cmtTr recRead`. -/
@@ -239,5 +241,7 @@ end RecDeploy.DecompBR
 namespace RecDeploy.ResLower
 
 noncomputable section
+
+end
 
 end RecDeploy.ResLower
