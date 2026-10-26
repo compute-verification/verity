@@ -1,6 +1,7 @@
 """The seeded weights and their registration root (`verity_torch_loop.weights`, CMP-95 interface 1)."""
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 from pathlib import Path
@@ -13,6 +14,7 @@ from verity.core.protocols.sampled_proofs.one_stage import registered as REG
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value
+from verity.ml.commitments import hm96
 from verity.ml.commitments.gates import embedding
 from verity_torch_loop import weights as W
 
@@ -124,17 +126,35 @@ def test_root_opens_under_the_verifiers_entries():
     assert W.registration_digest(W.TINY, prog, roots) != W.registration_digest(W.TINY, PROG, plain)
 
 
-def test_tok_is_what_the_embed_unit_reads():
-    """``tok``'s row r is token r's embedding, and it opens under ``EmbeddingRead_v1``'s reference at the hidden
-    token."""
+def test_tok_is_one_token_a_row():
+    """``tok``'s row r is token r's embedding, registered in ``hm96-sha512/row/v2``: the row, its salt and path open at
+    its token's position and at no other."""
     s, prog = W.TINY, reading_program(W.TINY, ["tok", "l0.wq"])
     t = W.tensor(s, "tok")
-    assert (t.rows, t.cols, t.words, t.leaves, t.schema) == (s.vocab, s.width, s.width, s.vocab, embedding.SCHEMA)
+    assert (t.rows, t.cols, t.words, t.leaves, t.schema) == (s.vocab, s.width, s.width, s.vocab, REG.SCHEMA_V2)
     c = W.commit(s, SEED, KEY, prog, "tok")
     assert W.root(s, SEED, KEY, prog, ["tok"])["tok"] == c.root
+    inst = hm96.SHA512
     for tok in (0, 97, s.vocab - 1):
         row = W.generate(s, SEED, "tok", [tok])[0].tolist()
         assert list(c.rows[tok]) == row
+        bc = inst.commit_string(inst.default_key, REG.row_digest(row, 16, REG.SCHEMA_V2), c.salts[tok])
+        assert bc == c.bcs[tok]
+        assert REG.verify_read(c.domain, c.root, tok, bc, c.path(tok), REG.SCHEMA_V2)
+        assert not REG.verify_read(c.domain, c.root, tok ^ 1, bc, c.path(tok), REG.SCHEMA_V2)
+
+
+def test_tok_in_the_embed_units_format():
+    """With `Shape.tok_schema` ``hm96-sha512/row-seg/v1``, a token's row opens under ``EmbeddingRead_v1``'s reference at
+    the hidden token, and at no other."""
+    s = dataclasses.replace(W.TINY, name="tiny-row-seg", tok_schema=REG.SCHEMA_SEG)
+    prog = reading_program(s, ["tok", "l0.wq"])
+    assert W.tensor(s, "tok").schema == embedding.SCHEMA
+    c = W.commit(s, SEED, KEY, prog, "tok")
+    assert W.root(s, SEED, KEY, prog, ["tok"])["tok"] == c.root
+    assert c.root != W.commit(W.TINY, SEED, KEY, prog, "tok").root
+    for tok in (0, 97, s.vocab - 1):
+        row = W.generate(s, SEED, "tok", [tok])[0].tolist()
         path = c.path(tok)
         h, ok = embedding.reference(s.vocab, tok, c.root, c.domain.domain_id, row, c.salts[tok],
                                     [path[i:i + 64] for i in range(0, len(path), 64)])

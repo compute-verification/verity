@@ -12,7 +12,7 @@ No torch: memory-accounting's encoder, the loop and the all-protocols runner run
   ``wq`` (heads·d, H), ``wk``, ``wv`` (kv_heads·d, H), ``wo`` (H, heads·d), ``mlp_norm`` (H), ``wup`` (F, H), ``wdown``
   (H, F), each linear followed by its ``.scale`` (N), then ``final_norm`` (H), ``head`` (V, H) and ``head.scale``. A 2-D
   tensor is row-major: a linear's row r is output channel r's elements in ascending input index, ``tok``'s row r token
-  r's embedding (the row `EmbeddingRead_v1` opens at the hidden token), and ``pos`` is stored transposed (row j is
+  r's embedding (the row an embed unit opens at the hidden token), and ``pos`` is stored transposed (row j is
   coordinate j over the positions). A tensor's bytes are its elements little-endian (s8 codes, f32 scales, bf16 words).
   **The weights stream** is every tensor's bytes in this order, no padding (`Tensor.offset`): 130.10 GiB at `H200`, of
   which the 52 layers' s8 matrices are 139,695,489,024 bytes.
@@ -28,7 +28,8 @@ No torch: memory-accounting's encoder, the loop and the all-protocols runner run
   root parameter of its name (core's ``Registered.commit``), its bytes cut into rows of `Tensor.words` u16 words
   (little-endian, the reading port's row, as CIR-100's units read them: an s8 linear ``row_codes`` codes, the K-part
   ``S8AccumulatorPart{K=row_codes}`` reads; a scale 2 words; ``tok`` one token's H words; a gain and ``pos`` 1 word), in
-  ``hm96-sha512/row/v2`` (``tok`` in `Shape.tok_schema`, ``EmbeddingRead_v1``'s ``hm96-sha512/row-seg/v1``), under the
+  ``hm96-sha512/row/v2`` (``tok`` in `Shape.tok_schema`, row/v2 by default, or ``EmbeddingRead_v1``'s
+  ``hm96-sha512/row-seg/v1``), under the
   domain the verifier derives (``registered.registered_entries``, the value held across windows):
   ``registered.domain(program_digest(program), name, words, leaves, word_bits)``, the word width the parameter's leaf
   width rounded up to 16 or 32 bits (an f32 scale read as one 32-bit leaf is 1 word of 32 bits, the same row bytes; a
@@ -92,8 +93,9 @@ class Shape:
     context: int
     #: s8 codes in one registered row of a linear: the K of the part a unit reads
     row_codes: int
-    #: ``tok``'s row format: the embed unit's (``EmbeddingRead_v1``)
-    tok_schema: str = REG.SCHEMA_SEG
+    #: ``tok``'s row format: ``hm96-sha512/row/v2``, the rows the demo's proofs cover (proofs, 26 Oct 00:39Z);
+    #: ``hm96-sha512/row-seg/v1`` is ``EmbeddingRead_v1``'s
+    tok_schema: str = REG.SCHEMA_V2
 
 
 #: the H200 demo's frozen shape (compute-accounting, 25 Oct 23:00Z)

@@ -29,7 +29,7 @@ committed row longer than one SHA-512 block.
   decoder shape (the H200 demo's frozen shape, Phase 1's CPU model): a SHA-512 counter generator from (seed, tensor, row)
   to every tensor, the weights stream's layout (`manifest`), and each tensor as a registered value of core's for the
   program that reads it (its digest and parameter widths, as `registered.registered_entries` derives the domains; `tok`
-  one token a row, `EmbeddingRead_v1`'s), its root computed in parallel chunks (`root`). No torch.
+  one token a row, in `hm96-sha512/row/v2`), its root computed in parallel chunks (`root`). No torch.
   `python -m verity_torch_loop.weights manifest|write|root|fixture`; the fixture is `tests/fixtures/weights-v1.json`.
   The H200 demo's manifest under its seed (`DEMO_SEED`), with each tensor's SHA-256, and its registration digest under
   the test salt key for the placeholder program `TEST_PROGRAM` are
