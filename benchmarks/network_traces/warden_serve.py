@@ -31,7 +31,11 @@ its own generation config to a request that omits them. `rehearse --ids` sends t
 at the same sampling when given): warden-form id requests (`active.id_request`, offset 0), each answered by the fake
 endpoint as an id-form response (`id_response`: one `io_tie.id_event` cell an output id, then `io_tie.TRAILER`, at most
 `egress_cells` − 1 ids), what `scan_zk.py prove --warden-run` proves; the gate's `warden-rehearse --scan` sends it to
-the peer's endpoint, at scan_zk's schedule.
+the peer's endpoint, at scan_zk's schedule. `--prompts FILE` (with `--ids`) gives the id requests' prompts instead
+(`read_prompts`, `prompt_traffic`: request j's the (j mod n)-th, each with exactly `--max-tokens`), and
+`--window-per-group` sends them in groups of the n, group g's half a bucket into link-window g·G (`group_windows`), so
+that group g's cells are exactly windows g·G … (g+1)·G − 1 (`groups.json`), and the run is exactly those windows: a
+loop's period of requests a group, as the gate's `warden-rehearse --scan --prompts --window-per-group` runs it.
 
 **Subcommands**, from the repository root or with `benchmarks/network_traces` on the path:
 
@@ -44,7 +48,7 @@ the peer's endpoint, at scan_zk's schedule.
     python warden_serve.py client --deployment DIR/deployment.json --traffic TRAFFIC.json --out DIR
     python warden_serve.py check --run DIR
     python warden_serve.py rehearse (--upstream HOST:PORT | --fake) --out DIR [--requests 100] [--temperature T]
-        [--top-p P] [--ids] [schedule]
+        [--top-p P] [--ids [--prompts FILE [--window-per-group]]] [schedule]
 
 - `serve` writes `deployment.json` (the warden's public key, the session, the schedule's parameters and their digest,
   the origin, the listener), runs the warden for `--windows` windows, and writes `warden.json` (each connection's
@@ -141,6 +145,10 @@ QUESTIONS = ("Explain how a bloom filter works.", "Write a haiku about the sea."
 FILLER = ("Notes: the meeting moved to Thursday, the printer on the third floor is out of toner, the parking lot is "
           "closed for repaving next week, and the quarterly report is due on Friday.").split()
 TEMPERATURES = (0.0, 0.7, 1.0)
+#: a prompt id's bits, the scan's IDB (`scan_zk.CLASS`): the scan reads each prompt id and output id in IDB bits
+PROMPT_ID_BITS = 17
+#: the public file of a `--window-per-group` rehearsal: each group's requests and link-windows (`groups`)
+GROUPS = "groups.json"
 
 
 # Traffic and the bytes on it.
@@ -190,6 +198,65 @@ def id_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prompt_t
         out.append({"at": round(at, 3), "ids": fields})
         at += rng.expovariate(rate)
     return out
+
+
+def group_windows(params: WardenParams, tokens: int) -> int:
+    """The link-windows a group of at most `lanes` id requests takes when it arrives half a bucket into a window's
+    first bucket (`prompt_traffic`'s ``window_per_group``), each answered by at most `tokens` id events and the trailer:
+    admitted by the bucket after its arrival's (and one more for the client's lag), its last egress cell in bucket
+    s + D + ⌊tokens/r⌋ (the warden's schedule), so a group's cells are all in its own windows."""
+    return -(-(params.delay + tokens // params.slots + 3) // params.window)
+
+
+def read_prompts(data: bytes, params: WardenParams) -> list[list[int]]:
+    """``--prompts``: a JSON array of prompts, each a non-empty array of token ids below 2^`PROMPT_ID_BITS` (the
+    scan's IDB), each prompt's id request (`active.id_request`, offset 0) within the schedule's ingress bound."""
+    try:
+        prompts = json.loads(data)
+    except ValueError as e:
+        raise SystemExit(f"--prompts: not JSON: {e}") from None
+    if not (isinstance(prompts, list) and prompts and all(isinstance(p, list) and p for p in prompts)
+            and all(type(t) is int and 0 <= t < 1 << PROMPT_ID_BITS for p in prompts for t in p)):
+        raise SystemExit(f"--prompts: a JSON array of prompts, each a non-empty array of token ids below "
+                         f"2^{PROMPT_ID_BITS}")
+    for p in prompts:
+        cells_in = -(-len(id_request(model="m" * 62, user="u" * 62, prompt=p, max_tokens=1,
+                                     frame_bytes=params.cell_bytes, offset=0)) // params.payload)
+        if cells_in > params.ingress_cells:
+            raise SystemExit(f"--prompts: a prompt of {len(p)} ids takes {cells_in} ingress cells, past the "
+                             f"schedule's {params.ingress_cells}")
+    return prompts
+
+
+def prompt_traffic(prompts: list[list[int]], n: int, *, model: str, params: WardenParams, max_tokens: int,
+                   rate: float = 0.5, seed: int = 0, start_s: float = 0.0, temperature: float | None = None,
+                   top_p: float | None = None, window_per_group: bool = False) -> list[dict]:
+    """n warden-form id requests (`id_traffic`'s items) of the given prompts, request j's ``prompts[j mod len]`` with
+    exactly `max_tokens`: at `id_traffic`'s Poisson arrivals, or under `window_per_group` in groups of ``len(prompts)``
+    (at most `lanes`), group g's requests together half a bucket into window g·G (G = `group_windows`), so group g's
+    cells are exactly its windows' (``groups``). The seeds are the seed's either way."""
+    if window_per_group and len(prompts) > params.lanes:
+        raise SystemExit(f"--window-per-group: a group of {len(prompts)} prompts, past the schedule's "
+                         f"{params.lanes} lanes")
+    rng = random.Random(seed)
+    at, out = start_s, []
+    G, window_s = group_windows(params, max_tokens), params.window * params.bucket_ms / 1000
+    for j in range(n):
+        drawn = rng.choice(TEMPERATURES)
+        fields = {"model": model, "user": f"user-{j}", "prompt": list(prompts[j % len(prompts)]),
+                  "max_tokens": max_tokens, "temperature": drawn if temperature is None else temperature,
+                  "top_p": 1.0 if top_p is None else top_p, "seed": rng.randrange(1 << 31)}
+        when = (j // len(prompts)) * G * window_s + params.bucket_ms / 2000 if window_per_group else at
+        out.append({"at": round(when, 3), "ids": fields})
+        at += rng.expovariate(rate)
+    return out
+
+
+def groups(n: int, per: int, params: WardenParams, max_tokens: int) -> list[dict]:
+    """`prompt_traffic`'s groups under ``window_per_group``: each group's requests (indices) and its link-windows."""
+    G = group_windows(params, max_tokens)
+    return [{"group": g, "requests": list(range(g * per, min(n, (g + 1) * per))), "windows": [g * G, (g + 1) * G]}
+            for g in range(-(-n // per))]
 
 
 def fake_ids(body: dict) -> list[int]:
@@ -880,6 +947,11 @@ def table(result: dict) -> str:
 # The rehearsal.
 
 def traffic_of(args, model: str) -> list[dict]:
+    if getattr(args, "prompts", None) is not None:
+        params = _params(args)
+        return prompt_traffic(read_prompts(args.prompts.read_bytes(), params), args.requests, model=model, params=params,
+                              max_tokens=min(args.max_tokens, args.egress_cells - 1), rate=args.rate, seed=args.seed,
+                              temperature=args.temperature, top_p=args.top_p, window_per_group=args.window_per_group)
     if getattr(args, "ids", False):
         return id_traffic(args.requests, model=model, rate=args.rate, seed=args.seed, prompt_tokens=(16, args.prompt_max),
                           max_tokens=(1, min(args.max_tokens, args.egress_cells - 1)), temperature=args.temperature,
@@ -899,6 +971,10 @@ def _flags(args) -> list[str]:
 
 
 def rehearse(args) -> int:
+    if args.prompts is not None and not args.ids:
+        raise SystemExit("--prompts: id requests' prompts, with --ids")
+    if args.window_per_group and args.prompts is None:
+        raise SystemExit("--window-per-group: groups of the --prompts")
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
     params = _params(args)
@@ -921,6 +997,11 @@ def rehearse(args) -> int:
         (out / "traffic.json").write_text(json.dumps(traffic))
         window_s = params.window * params.bucket_ms / 1000
         windows = math.ceil((traffic[-1]["at"] + args.tail) / window_s)
+        if args.window_per_group:
+            grouped = groups(len(traffic), len(read_prompts(args.prompts.read_bytes(), params)), params,
+                             traffic[0]["ids"]["max_tokens"])
+            (out / GROUPS).write_text(json.dumps({"groups": grouped}, indent=1))
+            windows = grouped[-1]["windows"][1]
         with open(out / "serve.log", "w") as log:
             serving = subprocess.Popen(me + ["serve", "--upstream", "%s:%d" % upstream, "--listen", "127.0.0.1:0",
                                              "--out", str(out), "--key", str(scratch / "warden"), "--session",
@@ -998,6 +1079,12 @@ def parser() -> argparse.ArgumentParser:
     r.add_argument("--ids", action="store_true",
                    help="warden-form id requests (id_traffic), answered id-form (the fake's --id-payload): the scan's "
                         "traffic (scan_zk.py --warden-run)")
+    r.add_argument("--prompts", type=Path,
+                   help="with --ids: the requests' prompts, a JSON array of token-id arrays, request j's the (j mod n)-th "
+                        "of the n, each with exactly --max-tokens (at most --egress-cells - 1)")
+    r.add_argument("--window-per-group", action="store_true",
+                   help="with --prompts: the requests in groups of the n prompts (at most --lanes), group g's half a "
+                        "bucket into window g·G, G = group_windows, the run exactly its groups' windows (groups.json)")
     f.add_argument("--id-payload", type=int, help="answer every request id-form (id_response) at P bytes an event")
     c.add_argument("--deployment", required=True, type=Path)
     c.add_argument("--traffic", required=True, type=Path)

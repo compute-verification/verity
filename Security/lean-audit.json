@@ -2495,9 +2495,14 @@
    "why": "C-Flock's definitions, extracted from Proofs/Flock, are trusted text: they import no assumption, guarantee or proof"
   },
   "Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted": {
-   "imports": ["Definitions.Accounting.JointPeriod", "Definitions.NetworkCertifier.Period"],
+   "imports": [
+    "Definitions.Accounting.JointPeriod",
+    "Definitions.NetworkCertifier.Period",
+    "Definitions.NetworkCertifier.Tap",
+    "Definitions.Core.Assumptions"
+   ],
    "except": [],
-   "why": "the network certifier's bridge to the joint period reads the period run (Definitions.Accounting.JointPeriod) and the network certifier's window good event (Definitions.NetworkCertifier.Period), and imports no assumption, guarantee or proof"
+   "why": "the network certifier's bridge to the joint period reads the period run (Definitions.Accounting.JointPeriod), the network certifier's window good event (Definitions.NetworkCertifier.Period), and the deployed network certifier's code and record format (Definitions.NetworkCertifier.Tap) with its trust, trusted-host (Definitions.Core.Assumptions), which the run carries as a field; it imports no guarantee or proof"
   }
  },
  "reads_exempt": {
@@ -3373,6 +3378,14 @@
    "signature": ["Accounting.SecurityProofs.JointHorizonBlocksA : Accounting.Guarantees.JointHorizonBlocksA"],
    "assumptions": [],
    "type_hash": "44fa6ebcc2dd58e4949f72a01d94cf019d868d99eaada13ae4c6a98b07b80d3c"
+  },
+  "Accounting.SecurityProofs.JointHorizonBlocksAbstract": {
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.JointHorizonBlocksAbstract : Accounting.Guarantees.JointHorizonBlocksAbstract"
+   ],
+   "assumptions": [],
+   "type_hash": "fd1876c7178f149d9b2f37764af8c626bfe916d1d6dd6bb731c59bead5db5e17"
   },
   "Accounting.SecurityProofs.JointHorizonBlocksDeployed": {
    "owner": "@lean"
@@ -11689,7 +11702,8 @@
    "Accounting.SecurityProofs.JointHorizonBlocksDeployed": "frozen (no-function): It is JointHorizonBlocks with each block's five legs from the five bridges (IntegrityOfIntegrityBlock, WorkOfH1CheckedCreditPeriod, SpaceOfPeriodHeld, BandwidthOfAuditPerRunPeriod, CommOfPeriodLeakAccepted) at each block's realizations and their sources' premises, over an abstract horizon of blocks of the device model whose verdicts, and each wipe's surviving foreign content, are fields of the run, not Lean functions (Security/Definitions/Accounting/JointBlocks.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointHorizonBlocksDeployedA": "frozen (no-function): It is Demo A's JointHorizonBlocksA (sampled proofs, PoUW and the network certifier) with each block's three legs from IntegrityOfIntegrityBlock, WorkOfH1CheckedCreditPeriod and CommOfPeriodLeakAccepted at each block's realizations and their sources' premises, over abstract periods of the device model whose verdicts are fields of the run, not Lean functions (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "NetTiming.SecurityProofs.HorizonLeakAccepted": "frozen (obligation,no-function,world-unlisted): It is conditional on two per-window inputs taken as plain hypotheses over an abstract monitoring period of windows on a product of live coins (Fin m → Ω), each window's acceptance event and the faulty set W_i of its witness read only from earlier windows' coins: the conditional escape (hesc, Pr_x[acc_i] ≤ (1 − q)^|W_i| + e_i given the earlier coins, q the design's per-window detection probability, which Flock.Guarantees.SampledKSLive would give at each window's history) and the leak relation at that same faulty set (hleak, Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i, which the live SampledLeakAccepted, P2, would give), neither discharged. With the network certifier's code (tapCode: wardenCode and the record of its cells, in any record format TapRecord whose cells read back on the schedules it holds, TapRecord.fits, which every schedule in Ss meets, hfit, tap_cells_read) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), it bounds Pr[every window accepts ∧ ¬HorizonGood] by δ + Σ e_i + Σ e'_i at Fmax ≥ ln(1/δ)/q and counts the secrets meeting HorizonGood at each draw of the coins by #Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \\ reg_i) · Dj^k_i; it is not a run of the sampled verifier, the challenger's draw or the network check's code, and it is not the deployed system's bound over a monitoring period until both inputs are discharged.",
-   "NetTiming.SecurityProofs.HorizonWrongUnitsLe": "frozen (no-function): It is a fact of probability over an abstract horizon of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its units) is a hypothesis, an abstract set of wrong units read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ wrong units] by (1 − q)^F + Σ ε_i, and the leak those wrong units carry (the count over the horizon, with A3 and KS at the deployment) is not stated here."
+   "NetTiming.SecurityProofs.HorizonWrongUnitsLe": "frozen (no-function): It is a fact of probability over an abstract horizon of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its units) is a hypothesis, an abstract set of wrong units read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ wrong units] by (1 − q)^F + Σ ε_i, and the leak those wrong units carry (the count over the horizon, with A3 and KS at the deployment) is not stated here.",
+   "Accounting.SecurityProofs.JointHorizonBlocksAbstract": "frozen (no-function): Like JointHorizon, over a horizon of blocks on one coin space with extra events: each block's five per-period guarantees and each extra event's bound are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -12858,6 +12872,7 @@
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
     "Accounting.SecurityProofs.JointHorizonBlocksA",
+    "Accounting.SecurityProofs.JointHorizonBlocksAbstract",
     "Accounting.SecurityProofs.JointHorizonBlocksLegs",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
@@ -13667,6 +13682,13 @@
     "Accounting.SecurityProofs.JointHorizonBlocksLegs"
    ]
   },
+  "Definitions.Accounting.Guarantees.JointBlocksAbstract": {
+   "digest": "981f89e464f8b866fd9f8d83f67e70260c622ddb1af824ef56c6daeb94c65599",
+   "definitions": {
+    "Accounting.Guarantees.JointHorizonBlocksAbstract": "144ba7e5493fa277ccd9ef43927deca71dd15c0683b5b6094d1f253c59e56eea"
+   },
+   "guarantees": ["Accounting.SecurityProofs.JointHorizonBlocksAbstract"]
+  },
   "Definitions.Accounting.Guarantees.JointBridge.BandwidthOfAuditPerRunPeriod": {
    "digest": "92bbb6a198220d610653da2cc982f5ce463b117d9823a5548efd4fd04aaf38ff",
    "definitions": {
@@ -13675,9 +13697,9 @@
    "guarantees": ["Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod"]
   },
   "Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted": {
-   "digest": "47d227a9d320be28dd83333726e48ffb833f1e1d1c392f6ff8b4fa61fbe9e1b2",
+   "digest": "6945bb9ecaa153c65e168d1533abaf4494ce6063665bbf185151c648ef43d871",
    "definitions": {
-    "Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted": "1f8c360ac969ae680c8a0111128604b91b49c7c42b543e69a36c5bae3fa12d9e"
+    "Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted": "a814d6d909d86a3dc22a1c847b7837cdfd9c225975a50d9f069cc4def0ff36e1"
    },
    "guarantees": ["Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted"]
   },
@@ -14617,6 +14639,7 @@
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
     "Accounting.SecurityProofs.JointHorizonBlocksA",
+    "Accounting.SecurityProofs.JointHorizonBlocksAbstract",
     "Accounting.SecurityProofs.JointHorizonBlocksLegs",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
@@ -14660,13 +14683,14 @@
    "guarantees": ["Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod"]
   },
   "Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted": {
-   "digest": "1fbe9a4a6977dfa10f769ce27467d1f9fdf7608423a03456fc7fb06298512494",
+   "digest": "603ad473301f0a8069f8685f0e8ff710252a536e50ba863e537324755f281e27",
    "definitions": {
-    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted": "00540422c6bbf79206b27d41350b58fcbbfc2f247c863826f7732a9cd6d2d57d",
+    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted": "99f116cc9c9128a098f46a74c85bf546ae7df85cf8b8a01399c0174e2d90eedc",
     "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.Tape": "03029516e24d80d57711c1303c7efe0b1bb73c7589c6d4dd19a15eb283b4d2ef",
     "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.prover": "b85eaa01c3acedd19f54e649c6b2b22ba8026b67d14c3748b955bc6efc7b2819",
     "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.stmt": "b60c9e38b436f38e92bf5938feb92288011d20db87604d9c7338df82800b214c",
-    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.tapeFintype": "ae10ea12426a0c7bafab0e98d566330bacf850d0f7df1678e0d56936dd958f64"
+    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.tapeFintype": "ae10ea12426a0c7bafab0e98d566330bacf850d0f7df1678e0d56936dd958f64",
+    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.tops": "b28da912cbe77629ccdd87300bcd791159523d4d76fafefe24c6e6453cb65f25"
    },
    "guarantees": ["Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted"]
   },
@@ -14716,6 +14740,7 @@
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
     "Accounting.SecurityProofs.JointHorizonBlocksA",
+    "Accounting.SecurityProofs.JointHorizonBlocksAbstract",
     "Accounting.SecurityProofs.JointHorizonBlocksLegs",
     "Accounting.SecurityProofs.JointPeriod"
    ]
@@ -17547,6 +17572,7 @@
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
     "Accounting.SecurityProofs.JointHorizonBlocksA",
+    "Accounting.SecurityProofs.JointHorizonBlocksAbstract",
     "Accounting.SecurityProofs.JointHorizonBlocksLegs",
     "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.Localization",
@@ -17910,6 +17936,7 @@
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
     "Accounting.SecurityProofs.JointHorizonBlocksA",
+    "Accounting.SecurityProofs.JointHorizonBlocksAbstract",
     "Accounting.SecurityProofs.JointHorizonBlocksLegs",
     "Accounting.SecurityProofs.JointPeriod",
     "Nci.Cover.SecurityProofs.CoverTraining",
@@ -21696,7 +21723,10 @@
     "NetTiming.tapLog": "30f489572c14b138976b71ae3ea3edb0fbcce6abf73a6f251593790fcd02d233",
     "NetTiming.tapVal": "820beef45fb779042d495c23e9f9c0fc0d2cd98f2ef0a17beaed6f9e7c550aa8"
    },
-   "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodLeakAccepted"
+   ]
   },
   "Definitions.NetworkCertifier.Warden": {
    "digest": "44483d6d7b90ee894c8893c859b277c18696789fc671a62a68405cfb2d0a9a17",
@@ -23565,6 +23595,7 @@
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
     "Accounting.SecurityProofs.JointHorizonBlocksA",
+    "Accounting.SecurityProofs.JointHorizonBlocksAbstract",
     "Accounting.SecurityProofs.JointHorizonBlocksLegs",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
@@ -27925,7 +27956,7 @@
    "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
   },
   "Definitions.Pouw.PearlC.W1": {
-   "digest": "dda803ba68bd8da56c2316e0c26bca3d4779a9cbb579e0329745250f5b3d7e3c",
+   "digest": "98f6a77e4252f891668b0f969227d55401e03f83606078da36b3907981e21f75",
    "definitions": {
     "Pouw.PearlC.W1.Addr": "f874d9f13c441c566c9eb13426b94122d70bc31ea9e1d646825e675de38e9c30",
     "Pouw.PearlC.W1.Addr.off": "55814166b9f20bad081bb03f147091dee7afcfb346d37f30c4beea6d432a3704",
@@ -27942,13 +27973,14 @@
     "Pouw.PearlC.W1.Code.size": "a798590d8934093fc5c0156745e5177692dd821b94baf6fcc007074c4522ad09",
     "Pouw.PearlC.W1.Fmt": "90751949d9ced8d44d438acc9c56111cf5d8277b9b3f630c62928eb0eb3ba01f",
     "Pouw.PearlC.W1.Fmt.bf16": "ff3b4b7a2f4de3f5f91bc581622e1d32c9358b3de560db3817206489f2d74c90",
-    "Pouw.PearlC.W1.Fmt.bits": "aefb038c5b7b1db823819dc0a263509de81acb0bd6e2b5cb9b2120f17f1fe879",
-    "Pouw.PearlC.W1.Fmt.casesOn": "9bd12b5b58b56280c72a8f967e44d8dfda6c44614d532e6d30476d02299da55d",
-    "Pouw.PearlC.W1.Fmt.ctorIdx": "3be9963fc7f61e8212ec26d708b1ef37943a9fa767843a91eb878bb6bdf2a2b9",
+    "Pouw.PearlC.W1.Fmt.bits": "18eed12b8681b4fb3546fc1d4b2fb44afbcd992e12d615b7013a4d3a632bd13a",
+    "Pouw.PearlC.W1.Fmt.casesOn": "114b684184866973208307a1f9b96d7f51b5c31db00ff739dfc23b87850d9c93",
+    "Pouw.PearlC.W1.Fmt.ctorIdx": "a214914d505141dde1472c0e5795c5d5506e928341d2d742f37c830636e1db60",
     "Pouw.PearlC.W1.Fmt.e2m1": "fda96f2369634a5ded3f85966224fe3e2eaab2be7ca73f2a0ffbc816707a8806",
     "Pouw.PearlC.W1.Fmt.e4m3": "6b86e62df41421e85714b83a62d67ef5c03d6d396cb02a831b475a2099bf52a5",
     "Pouw.PearlC.W1.Fmt.perWord": "61c5889decd0def8bf919b3e3642aab9d5d3ceb74ed43028f18c074cfc7075d8",
-    "Pouw.PearlC.W1.Fmt.rec": "e7e8db8a9adfd2803bdfc4eb4cea637c3c04c17d1be9f9c3601faff36268feff",
+    "Pouw.PearlC.W1.Fmt.rec": "01ab82d78c166eac668b2e037a5aa0f05b29769dba424fe7ce62a8f4a1755196",
+    "Pouw.PearlC.W1.Fmt.s8": "e410b96a36fdea94750d0b54527432e5d9c18bd4163ecde10f51a71c345a63d2",
     "Pouw.PearlC.W1.Fop": "4010afb1bf105e5c1d373d50315a2b57351d999f81bab700f64a4954f5546fc5",
     "Pouw.PearlC.W1.Fop.add": "67e4e839bce7b8cc67f7230bde4cd9695081647f88ff852326c589beba673b6d",
     "Pouw.PearlC.W1.Fop.casesOn": "1744276b5f7a13b23e8d8a9dc31f4463af629a100f5c0ace97be9352490d4d6f",
@@ -27972,7 +28004,7 @@
     "Pouw.PearlC.W1.Instr.cvt": "8b1ab9a421a0f95bc41273dbdd336bb818e0922599374d030c20067873da6a03",
     "Pouw.PearlC.W1.Instr.dynamic": "ab3904363ad3b9fa563ea1c0a6b9bd65655647f9244f84138ca7fc17b30f2673",
     "Pouw.PearlC.W1.Instr.dynamic._sparseCasesOn_1": "90e4bc77e6c031c7aff10cd2b62b23bdb496c934ff6b915acf29c8703956239e",
-    "Pouw.PearlC.W1.Instr.exec": "c7f7e29953fff86d548f927aa654ac9425b74cd4f466c7be015e3e56f4cd851c",
+    "Pouw.PearlC.W1.Instr.exec": "7485426d96fdf55a86ff66ceb659d799fa0754c1df648c9f9e635fd11863d3be",
     "Pouw.PearlC.W1.Instr.fop": "0b20782cd583d179d9a9203b4087c909a4f643a5fb9d9c7147cf33d8cad96a25",
     "Pouw.PearlC.W1.Instr.iadd3": "0742a8239f9872956d3c937bc9214795e81972cd92d654bb8d9f12edba4c6dd9",
     "Pouw.PearlC.W1.Instr.iop": "abb2f697b629f5e00fd34229e570b8953ca44e874df0527c0501aac792a457d9",
@@ -28017,7 +28049,7 @@
     "Pouw.PearlC.W1.St.mem": "17ba4a1b5f18a997fbc0d18967afcb89b4116cfff8d2a94be0c24670f4683542",
     "Pouw.PearlC.W1.W1Device": "0cb483f5d20d395fe958b90acff472f0210f750522bf2cedf2920249c9974ea3",
     "Pouw.PearlC.W1.W1Device.bf16": "a1354381ff18da5474de5c0e9d813f4ed45fe3751a6b42fda039f95881db3e08",
-    "Pouw.PearlC.W1.W1Device.depth": "a4107219cc832a335ab27e4a6791c70d10b15b326a461b516d4933ca9c387f63",
+    "Pouw.PearlC.W1.W1Device.depth": "5af5411c144ff93578f530596b55e92b6f1eb259f01f1e48082336004651a2cd",
     "Pouw.PearlC.W1.W1Device.e4m3": "6eb6d506616e4e521e4b774aaacce06bb558d996f23e93abb6616d92a808b2f8",
     "Pouw.PearlC.W1.W1Device.fp4": "318321e3afd42d8d39e22cdbeab9ce4c2e4410e017c0c92cce955554e3b0d4d3",
     "Pouw.PearlC.W1.W1Device.fp4Sm120": "53746d9366060c23684b347daff641d537ec9991b6f75a8836c647b2bf6f275e",
@@ -28034,16 +28066,16 @@
     "Pouw.PearlC.W1.W1Prices.fetch": "d0f283472c4161bb638f4b15969bdd5a5e0704f51d26080e96fe9729bc7b5eb0",
     "Pouw.PearlC.W1.W1Prices.fp32": "cf0cced6538038df65423a289b211163e6c19ae268b12085bb5345d25d456094",
     "Pouw.PearlC.W1.W1Prices.fp4Sm120": "6c30ae5b45668564cf16efdbff216789a631fd1d514b7c93ddbc9f2f87aac165",
-    "Pouw.PearlC.W1.W1Prices.h100": "113e20e3746fe1bbf0666bd5c215a1e5c64897a3ffb07e2f57f9d5f65f1e0622",
+    "Pouw.PearlC.W1.W1Prices.h100": "02f38db5b6ef7f973e7c41f1979b3323cc384e303e730ee5a97761b686e463e2",
     "Pouw.PearlC.W1.W1Prices.int32": "9c7f3a6f9decc4fb3791972b1a8499d221a2707abc4057862756c020aece2a96",
     "Pouw.PearlC.W1.W1Prices.mac": "a2f761e8bfd914c9738487f9e5816cd94be9d08047104b636a3f69bcb8ef60af",
     "Pouw.PearlC.W1.W1Prices.scale": "8063474a6885488cb0512513d2a29ffeb356b9c1e9c36585b53e5da5f37d51d2",
     "Pouw.PearlC.W1.W1Prices.sha512": "2633f80140bc6878792de4d5dd656ed7362e3beb85a8f06730d0b73e97d63e04",
-    "Pouw.PearlC.W1.W1Prices.sm120": "e9370ae9c87b3f9b0d923b63b655b7d20e4b30608a52967b95efb298c6d507a0",
+    "Pouw.PearlC.W1.W1Prices.sm120": "2be658035b8b6c811d36e7f60f6d5dbde521f67c63e15f21c47911feb77da193",
     "Pouw.PearlC.W1.W1Prices.sm120Loop": "2032bd65d42062324933d980bc61f12b416e0584f64fda157b60949102c8fb52",
     "Pouw.PearlC.W1.actAt": "bcb3dfbeac06500a56b6aea25932f8ddc4d81afd8668788500da5c525229d863",
     "Pouw.PearlC.W1.bf16Step": "7de69eb282d832ca5adafecd93a58ffacb43fa0122af58c8f6b7cee5959b5522",
-    "Pouw.PearlC.W1.cvtCode": "202c8247976b084e60cf81684976adec8d446f8e9c4fc8509476f1cc429a2e5f",
+    "Pouw.PearlC.W1.cvtCode": "115c21ae5bbbdbc3385bf433e13c4f7f0598984075bbc334c9d64d159a1be379",
     "Pouw.PearlC.W1.exec": "fad52da07aad74a229e2df9a480592a89c590427c56dc590be0085cb6b7422aa",
     "Pouw.PearlC.W1.field": "5a34513a6efe273245594bc96b2173f00a581c1fcc4aba122914c0f8b509b9ad",
     "Pouw.PearlC.W1.final": "b7d138c25657c1e76d031c9743a6551b61178322b7d7e3af553046fa5d662f77",
@@ -28052,9 +28084,9 @@
     "Pouw.PearlC.W1.instDecidableEqFmt": "008991a55184902ab29a05cf141fa1eb9ca5ddc00a8a6a3a1ea6dd138cab63f9",
     "Pouw.PearlC.W1.instDecidableEqFrag": "265e3aaba85cb63c012baa40b1e3c0169c0e49c04a4664d8b55a4b1023d49091",
     "Pouw.PearlC.W1.instDecidableEqFrag.decEq": "f8e2ae21de20046fde230b32a25af4ce2886bb9eb579b1b6c87f2a411055ede1",
-    "Pouw.PearlC.W1.instReprFmt.repr.match_1": "cf73057c6c18b822c336c18806779b2b145d1312921c24dd9ed7fcc27e5a5361",
+    "Pouw.PearlC.W1.instReprFmt.repr.match_1": "3b1015753b8d38a020a4ebf489fc88e11baee9e091fe4750190b2115ea9c8dd4",
     "Pouw.PearlC.W1.lop3Word": "f6297b5a00122648b7e1844d9a00901d9f5fd7450f6dc015c8fe7db3c88b0028",
-    "Pouw.PearlC.W1.mmaWord": "40b2220e55f08e6ba73c262b36148c8f2d1c39e5cbf0b2f5b6a8f2656a1b472b",
+    "Pouw.PearlC.W1.mmaWord": "d3a30cbb66ec98c9059a2183382d1abc00f64948d9a115f58c8bc57382eb6331",
     "Pouw.PearlC.W1.nan32": "73697cde64221b87a5edf29a40fbb104c052f27b3c1c990003c390cd6193f932",
     "Pouw.PearlC.W1.opCode": "5e95a88c9079b77885b67e14fbbe31302aafef06e6ef1df6c4409513bf7d9e17",
     "Pouw.PearlC.W1.opScale": "01bf851dcda5912633dfd1bd8a559d132881e6edfaddbf695684e85402fc0b39",
@@ -28062,6 +28094,8 @@
     "Pouw.PearlC.W1.prmtWord": "922cc2ca970f19122f860ded456001d2ce3e7b68d4bd12502538dffd61a1d07b",
     "Pouw.PearlC.W1.readout": "f71661c68df0449912e50583b312b809d9934afe22f6fda9d3a107283b230706",
     "Pouw.PearlC.W1.rowWords": "6c1a810c7f70629efc649fae3ed4fbc307536de7614763475afed76eae6eea8a",
+    "Pouw.PearlC.W1.s8Step": "2e025eda058ef4dea7dc2bb96a5883efef29ec2b4efcb6874e56c34dc28e9f55",
+    "Pouw.PearlC.W1.s8Value": "2ac799a52b2252ce5d4abb695ca27acd1fddb5fc6130ce8ece7b66c74bd18400",
     "Pouw.PearlC.W1.scaleWords": "3a77fb932cc98f0d9ac8933228f0249f2e2a777e34c547dfd53856865b51db10",
     "Pouw.PearlC.W1.setField": "c8dc2b9bd3f72248da56fe2382a74385eb6a314ab40af9cd38eccbedc3782e46",
     "Pouw.PearlC.W1.sm120Frags": "bcf9e0321fc2eb9263dfc32c57aa35ea09a5e0c956144891bf45249a35760667",
@@ -35466,7 +35500,7 @@
    ]
   },
   "Flock.Zk": {
-   "digest": "7fc0e7c7aa64df6e40cacdb245d8048cdacb2d5f234f8bed51b09124a69887eb",
+   "digest": "02d9257ecdcee3b034471e7f07c82442729e93143a3ca81f20bc634298724920",
    "definitions": {
     "Flock.Zk.INNER_LOG_INV_RATE": "d6ad9e7298bfa7fda1765c25e4b21bcf2d7ea35b7fb92014546242e462c35658",
     "Flock.Zk.K_PAD": "fb9b4b1b8bba3910fa6eb2a70efdb8cd80445d165fd5bcb81b641f1a8e459b54",
@@ -35517,7 +35551,7 @@
     "Flock.Zk.TAU_TAG": "5abd313a9f4b013b2076057d03fbd5d1ce54e348a761f00079553a03eb858002",
     "Flock.Zk.claimCheck": "0229769c0f97aa8015f36299532fde1139c1bc49abfdeafe4680cfbc6724beec",
     "Flock.Zk.codeAt": "296adca86e164940ffccc2088464c8ac42d47005d49431bbfce42ad75fc8f921",
-    "Flock.Zk.coinSpec": "e7a5a238ef64cf48cdbdd64b4695fa468119a289ffb9237c59600e23adc2d7a1",
+    "Flock.Zk.coinSpec": "c537fdb8a04d5f0ae7e13d5bee1313a483bd27657185e36fab6b90e57a6daa42",
     "Flock.Zk.hooks": "2f743475278b721357f7811b94574723a33c5a47e46a742971a8879a1d005943",
     "Flock.Zk.instInhabitedLin": "0b883e786d300762ca2880a4349508ddea871df9923e17b6d95338c4babeb276",
     "Flock.Zk.instInhabitedLin.default": "1bb69bf2d2c39a6995627c42b5975600974c7be276b697f9694a2985251ac76e",
