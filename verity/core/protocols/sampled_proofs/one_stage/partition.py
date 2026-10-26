@@ -21,7 +21,7 @@ and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the temp
   out; a `Q_word` unit's are its cut's), as is one with a template of no gate. `ranges`, `units` and `strata` read their
   units in canonical order (node order, then member, for a template query; Call order, then the Call's own, for
   `Q_word` and `Q_call`), and `unit_gates` gives
-  each unit's root gates.
+  each unit's root gates. `in_order` holds when the units read stratum by stratum are the population in order.
 * **Programs**: `population_program` (instances of one template, `TemplateInstances_v1{template, N}`) and
   `mixed_population_program` (of several, `TemplatePopulations_v1{templates, counts}`), whose binding records name the
   templates by descriptor id, are `verity.ml.circuits.population`'s, named here too: a serving stack builds its window's
@@ -234,7 +234,19 @@ def unit_gates(program: Program, query: Mapping[str, Any]) -> list[tuple[int, in
     return out
 
 
-__all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "mixed_population_program", "partition",
+def in_order(program: Program, query: Mapping[str, Any], n: int) -> bool:
+    """`Slots.popOk`: `query` applies to `program`, every unit has its gates (`unit_gates`), and the units read stratum by
+    stratum (`strata`) are `0, ..., n - 1` in order, so slot `u` is unit `u`. The run refuses a registration whose program
+    and query fail it (`population-order`): the sampled audit's knowledge soundness reads slot `u` as the game's unit `u`."""
+    try:
+        ss, gates = strata(program, query), unit_gates(program, query)
+    except (QueryRefused, ValueError):
+        return False
+    us = [u for _t, rs in ss for lo, hi in rs for u in range(lo, hi)]
+    return us == list(range(n)) and all(u < len(gates) for u in us)
+
+
+__all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "in_order", "mixed_population_program", "partition",
            "POPULATION_VERSIONS", "population_program", "program_digest", "program_sha512", "ranges", "strata", "template_instance_query",
            "template_instances_query", "unit_class", "UNIT_CLASS_MAX", "UNIT_CLASSES", "unit_gates", "units",
            "QUERY_X"]
