@@ -251,7 +251,7 @@ theorem honest_len (o : Run sha512 Readable.relation) {cs : List Coin} (hcs : o.
 
 /-! ## The record's draw -/
 
-/-- **The session's draw is the statement's** at a plain completeness run, under the record's JSON specification. -/
+/-- **The session's draw is the statement's** at a plain completeness run. -/
 theorem honest_drawTied (o : Run sha512 Readable.relation) :
     drawEq (RecDeploy.drawOfU o.spec.unitDraw) o.s.read.draw = true := by
   obtain ⟨-, -, hDO, hU⟩ := JsonRT.stmtOk (H := sha512) (rel := Readable.relation) o.toCase
