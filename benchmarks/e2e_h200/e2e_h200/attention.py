@@ -92,7 +92,7 @@ def pv(p: np.ndarray, values: np.ndarray) -> np.ndarray:
 
 
 def attend(q: np.ndarray, keys: np.ndarray, values: np.ndarray, positions: np.ndarray) -> tuple[np.ndarray, Softmax, np.ndarray]:
-    """Each slot at its own position: q (B, H, 64), keys and values (B, ctx, 64) u16 (the slot's cache rows), positions (B,).
+    """Each slot at its own position: q (B, H, d), keys and values (B, ctx, d) u16 (the slot's cache rows), positions (B,).
     Row b attends over its positions 0 .. positions[b], run per group of equal positions; its scores and probabilities come
     back laid out (H, ctx) with +0 past its position, so a row's layout depends only on the shape."""
     b, h, _ = q.shape

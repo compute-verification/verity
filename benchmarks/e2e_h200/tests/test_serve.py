@@ -1,6 +1,6 @@
 """The driver serving requests through `slots.SlotKV` by continuous batching, at the tiny shape on the CPU: slots are reused and
-steps mix positions, every row a request commits equals its row when it runs alone, the KV rows attention reads are QKV's
-committed words at the steps that wrote them (and a stale read is caught by replay), and every family replays."""
+steps mix positions, every row a request commits equals its row when it runs alone, the KV rows attention reads are K's and V's
+committed rows at the steps that wrote them (and a stale read is caught by replay), and every family replays."""
 from __future__ import annotations
 
 import json
@@ -12,10 +12,10 @@ import torch
 import run as RUN
 from e2e_h200.commit import Committer, fixture_secrets
 from e2e_h200.driver import Driver, words
-from e2e_h200.replay import Replayer
 from e2e_h200.shape import TINY
 from e2e_h200.slots import Request, SlotKV, SlotShape
 from e2e_h200.store import GeneratorStore
+from e2e_h200.units import Replayer
 from e2e_h200.weights import Weights
 
 SLOTS, N, P, G, ADMIT = 3, 7, 2, 3, 2
@@ -48,7 +48,7 @@ def prompts() -> np.ndarray:
 
 def serve(weights: Weights, stale_at: int | None = None) -> tuple[Driver, RecordingKV]:
     d = Driver(TINY, GeneratorStore(weights), SLOTS, committer(), clock=lambda: 0.0)
-    kv = RecordingKV(SlotShape(SLOTS, TINY.layers, TINY.ctx, TINY.head_dim, prompt=P, generate=G), "cpu", admit=ADMIT,
+    kv = RecordingKV(SlotShape(SLOTS, TINY.layers, TINY.context, TINY.head_dim, prompt=P, generate=G), "cpu", admit=ADMIT,
                      stale_at=stale_at)
     ps = prompts()
     d.serve(kv, [Request(i, bytes(ps[i].astype(np.uint8))) for i in range(N)])
@@ -61,7 +61,7 @@ def replayer(weights: Weights, d: Driver) -> Replayer:
 
 @pytest.fixture(scope="module")
 def weights():
-    return Weights(TINY, 0)
+    return Weights(TINY)
 
 
 @pytest.fixture(scope="module")
@@ -101,10 +101,12 @@ def test_each_request_commits_what_it_commits_alone(weights, served):
 
 
 def test_attention_reads_the_committed_kv(weights, served):
-    """At every step and layer, the keys and values each slot's attention read are QKV's committed words at the steps that
-    wrote them (replay's `Replayer.kv`), and +0 past the slot's position, a reused slot included."""
+    """At every step and layer, the keys and values each slot's attention read are K's and V's committed rows at the steps
+    that wrote them (`Replayer.kv`), and +0 past the slot's position, a reused slot included; the scores and probabilities
+    rows are +0 past it too."""
     d, kv = served
     rp = replayer(weights, d)
+    c = TINY.context
     for st in d.steps:
         for layer in range(TINY.layers):
             keys, values = kv.reads[st.step, layer]
@@ -112,37 +114,36 @@ def test_attention_reads_the_committed_kv(weights, served):
                 k, v = rp.kv(st.step, layer, b)
                 assert np.array_equal(keys[b, :p + 1], k) and np.array_equal(values[b, :p + 1], v)
                 assert not keys[b, p + 1:].any() and not values[b, p + 1:].any()
+                for op in ("scores", "softmax"):
+                    row = st.tables[f"l{layer}.{op}"][0][b].view(np.uint16).reshape(TINY.heads, c)
+                    assert not row[:, p + 1:].any(), (st.step, b, op)
 
 
 def test_every_family_replays_at_every_step(weights, served):
-    """Two units of every family at every step, and every unit of the families with at most a few a row (the attention
-    scores and probabilities among them at this shape, each row at its own position)."""
+    """Two units of every family at every step, and every unit of the embedding and the attention families (one per group of
+    rows at a position, each row reading its own slot's history)."""
     d, _ = served
     rp = replayer(weights, d)
     bad = []
     for st in d.steps:
         bad += [u.doc() for u in rp.draw(st.step, 2, b"serve") if not u.ok]
-        for f in rp.families(st.step):
-            if f.per_slot <= 8:
-                bad += [(st.step, f.name, b, i) for b in range(st.batch) for i in range(f.count(b))
-                        if (lambda r: r[1] != r[2])(f.replay(b, i))]
+        every = rp.every(st.step, only=lambda f: f.position is not None or f.name == "embed")
+        bad += [u.doc() for u in every if not u.ok]
+        assert {u.position for u in every} == set(st.positions.tolist())
     assert bad == []
 
 
 def test_a_stale_kv_read_fails_replay(weights, served):
     step = mixed_steps(served[0])[0]
     d, _ = serve(weights, stale_at=step)
-    rp = replayer(weights, d)
-    scores = [f for f in rp.families(step) if f.name.endswith("self_attn.scores")]
-    bad = [(f.name, b, i) for f in scores for b in range(d.steps[step].batch) for i in range(f.count(b))
-           if (lambda r: r[1] != r[2])(f.replay(b, i))]
-    assert bad
+    units = replayer(weights, d).every(step, only=lambda f: f.name.endswith(".scores"))
+    assert units and not all(u.ok for u in units)
     assert [r.root for r in d.results[:step]] == [r.root for r in served[0].results[:step]]
 
 
 def test_run_serves_requests(tmp_path):
-    rc = RUN.main(["--out", str(tmp_path), "--batch", "3", "--requests", "5", "--prompt-bytes", "2", "--generate", "2",
-                   "--admit", "2", "--commit", "reference", "--draw", "1"])
+    rc = RUN.main(["--out", str(tmp_path), "--shape", "tiny", "--batch", "3", "--requests", "5", "--prompt-bytes", "2",
+                   "--generate", "2", "--admit", "2", "--commit", "reference", "--draw", "1"])
     assert rc == 0
     rec = json.loads((tmp_path / "record.json").read_text())
     assert rec["serving"]["finished"] == 5 and rec["serving"]["slot_reuses"] == 2

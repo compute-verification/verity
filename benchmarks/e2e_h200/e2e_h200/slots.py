@@ -15,7 +15,8 @@ A step, as `driver.Driver.step` runs it::
     ...                                       # the step's tables committed, a row a slot keyed (slot, position)
     finished = kv.end(tokens, base=base)      # each slot's output byte; frees the slots whose last position this was
 
-The driver's table-major commit holds the KV rows as words of QKV's rows, which replay reads (`replay.Replayer.kv`). For the
+The driver's table-major commit holds the KV rows as the ``wk`` and ``wv`` tables' rows, which replay reads
+(`units.Replayer.kv`). For the
 per-slot subtree (CMP-95 item 3), ``rows()`` gives the rows written this step per slot, the commit call lays each slot's
 subtree out with the KV rows at ``[base, base + R)``, and ``end`` takes that base.
 

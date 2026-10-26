@@ -14,11 +14,17 @@ unit), and `Family.replay` gives a unit's opened inputs, its committed output wo
 
 A unit's inputs are read from the committed tables (an earlier op's row, an earlier step's K or V row) and the registered
 weights (`weights.Weights`, from the generator, not the store, so a wrong decode shows as a mismatch).
+
+Row b of a step is slot ``slots[b]`` at its own position p. Its attention reads the slot's K and V rows committed at positions
+0 .. p, each at the step and row the slot ran it (`Replayer.history`), never the live cache. The attention families come one
+per group of rows at one position t, so each is one template (``SoftmaxRow_v1{N = t + 1}``, ``GemmCoordinatePad_v1{T = t +
+1}``). QK^T's unit (head, j), j <= t, is index head * (t + 1) + j of its family and word head * context + j of the
+``scores`` row.
 """
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -92,7 +98,12 @@ class Family:
     template: str
     status: str
     per_slot: int
-    replay: Callable[[int, int], tuple[list[np.ndarray], np.ndarray, np.ndarray]]   # (slot, index) -> (inputs, got, want)
+    replay: Callable[[int, int], tuple[list[np.ndarray], np.ndarray, np.ndarray]]   # (row, index) -> (inputs, got, want)
+    rows: tuple[int, ...] | None = None     # the rows of one position group (the attention families), else every row
+    position: int | None = None
+
+    def rows_of(self, batch: int) -> Sequence[int]:
+        return range(batch) if self.rows is None else self.rows
 
 
 @lru_cache(maxsize=None)
@@ -112,20 +123,41 @@ def _pv(t: int) -> RP.Template:
 
 class Replayer:
     def __init__(self, shape: Shape, weights: Weights, steps: list[StepTables], tokens: list[np.ndarray]) -> None:
-        """``steps[s]`` the committed tables of step s (position s), ``tokens[s]`` the bytes it embedded."""
+        """``steps[s]`` the committed tables of step s (row b: slot ``slots[b]`` at ``positions[b]``), ``tokens[s]`` the bytes
+        its rows embedded."""
         self.shape, self.weights, self.steps, self.tokens = shape, weights, steps, tokens
         self._array = lru_cache(maxsize=8)(weights.array)
 
     # -- committed words
 
-    def raw(self, step: int, op: str, slot: int) -> np.ndarray:
-        return np.ascontiguousarray(self.steps[step].tables[op][0][slot])
+    def raw(self, step: int, op: str, row: int) -> np.ndarray:
+        return np.ascontiguousarray(self.steps[step].tables[op][0][row])
 
-    def u16(self, step: int, op: str, slot: int) -> np.ndarray:
-        return self.raw(step, op, slot).view(np.uint16)
+    def u16(self, step: int, op: str, row: int) -> np.ndarray:
+        return self.raw(step, op, row).view(np.uint16)
 
-    def word(self, step: int, op: str, slot: int) -> np.uint32:
-        return np.asarray(self.steps[step].tables[op][1][slot], np.float32).view(np.uint32)
+    def word(self, step: int, op: str, row: int) -> np.uint32:
+        return np.asarray(self.steps[step].tables[op][1][row], np.float32).view(np.uint32)
+
+    def history(self, step: int, b: int) -> list[tuple[int, int]]:
+        """The (step, row) at which row ``b`` of ``step``'s slot ran each of its positions 0 .. p."""
+        st = self.steps[step]
+        slot, p = int(st.slots[b]), int(st.positions[b])
+        out = []
+        for j in range(p + 1):
+            s = step - p + j
+            r = self.steps[s].row_of(slot)
+            if int(self.steps[s].positions[r]) != j:
+                raise ValueError(f"slot {slot} is at position {p} at step {step} but at {self.steps[s].positions[r]}, "
+                                 f"not {j}, at step {s}")
+            out.append((s, r))
+        return out
+
+    def kv(self, step: int, layer: int, b: int) -> tuple[np.ndarray, np.ndarray]:
+        """Row ``b``'s keys and values at ``layer``, (p + 1, head_dim) u16 each: K's and V's committed rows at its positions."""
+        hist = self.history(step, b)
+        return (np.stack([self.u16(s, f"l{layer}.wk", r) for s, r in hist]),
+                np.stack([self.u16(s, f"l{layer}.wv", r) for s, r in hist]))
 
     def _gain(self, name: str) -> np.ndarray:
         return np.asarray(self._array(name), np.uint16)
@@ -140,7 +172,7 @@ class Replayer:
             p = f"l{layer}."
             out += [self._rms(step, p + "attn_norm", prev), self._quant(step, p + "attn_quant", p + "attn_norm", False)]
             out += [self._linear(step, p + k, p + "attn_quant") for k in ("wq", "wk", "wv")]
-            out += self._attention(step, p)
+            out += self._attention(step, layer)
             out += [self._quant(step, p + "o_quant", p + "pv", False), self._linear(step, p + "wo", p + "o_quant"),
                     self._add(step, p + "attn_residual", prev, p + "wo"),
                     self._rms(step, p + "mlp_norm", p + "attn_residual"),
@@ -154,10 +186,9 @@ class Replayer:
 
     def _embed(self, step: int) -> Family:
         sh = self.shape
-        t = self.steps[step].position
 
         def replay(b: int, _: int):
-            tok = int(self.tokens[step][b])
+            tok, t = int(self.tokens[step][b]), int(self.steps[step].positions[b])
             col, pos = self._gain("tok")[tok], self._gain("pos")[:, t]
             return [np.array([tok], np.uint16), col, pos], self.u16(step, "embed", b), RP.bf16_add(col, pos)
         return Family("embed", RP.key_of("EmbeddingRow_v1", {"V": sh.vocab}), ROW, 1, replay)
@@ -194,36 +225,44 @@ class Replayer:
             return [x, np.array([sx]), wrow, np.array([sw])], self.u16(step, op, b)[i:i + 1], want.astype(np.uint16)
         return Family(op, tpl.key, COORD, n, replay)
 
-    def _attention(self, step: int, p: str) -> list[Family]:
-        sh = self.shape
-        t = self.steps[step].position
-        d, h, t1 = sh.head_dim, sh.heads, t + 1
+    def _attention(self, step: int, layer: int) -> list[Family]:
+        positions = self.steps[step].positions
+        out = []
+        for t in np.unique(positions).tolist():
+            out += self._attention_at(step, layer, int(t), tuple(np.flatnonzero(positions == t).tolist()))
+        return out
+
+    def _attention_at(self, step: int, layer: int, t: int, rows: tuple[int, ...]) -> list[Family]:
+        """QK^T, softmax and PV of the rows at position ``t``: a row's scores and probabilities are words head * context + j,
+        j <= t, of its (heads, context) row."""
+        sh, p = self.shape, f"l{layer}."
+        d, h, c, t1 = sh.head_dim, sh.heads, sh.context, t + 1
         qk, pv = _qk(d), _pv(t1)
 
-        def keys(b: int, op: str) -> np.ndarray:
-            return np.stack([self.u16(s, p + op, b) for s in range(t1)])     # (t + 1, d): positions 0 .. t
+        def heads(b: int, op: str, head: int) -> np.ndarray:
+            return self.u16(step, p + op, b)[head * c:head * c + t1]
 
         def scores(b: int, i: int):
             head, j = divmod(i, t1)
             q = self.u16(step, p + "wq", b)[head * d:(head + 1) * d]
-            k = keys(b, "wk")[j]
+            k = self.kv(step, layer, b)[0][j]
             want = qk.evaluate(q[None], k[None])[0]
-            return [q, k], self.u16(step, p + "scores", b)[i:i + 1], want.astype(np.uint16)
+            return [q, k], heads(b, "scores", head)[j:j + 1], want.astype(np.uint16)
 
         def soft(b: int, head: int):
-            x = self.u16(step, p + "scores", b)[head * t1:(head + 1) * t1]
-            return [x], self.u16(step, p + "softmax", b)[head * t1:(head + 1) * t1], softmax_row(x[None])[0]
+            x = heads(b, "scores", head)
+            return [x], heads(b, "softmax", head), softmax_row(x[None])[0]
 
         def pvu(b: int, i: int):
-            head, c = divmod(i, d)
-            pr = self.u16(step, p + "softmax", b)[head * t1:(head + 1) * t1]
-            v = keys(b, "wv")[:, c]
+            head, col = divmod(i, d)
+            pr = heads(b, "softmax", head)
+            v = self.kv(step, layer, b)[1][:, col]
             want = pv.evaluate(pr[None], v[None])[0]
             return [pr, v], self.u16(step, p + "pv", b)[i:i + 1], want.astype(np.uint16)
 
-        return [Family(p + "scores", qk.key, COORD, h * t1, scores),
-                Family(p + "softmax", RP.key_of("SoftmaxRow_v1", {"N": t1}), ROW, h, soft),
-                Family(p + "pv", pv.key, pv.status, h * d, pvu)]
+        return [Family(p + "scores", qk.key, COORD, h * t1, scores, rows, t),
+                Family(p + "softmax", RP.key_of("SoftmaxRow_v1", {"N": t1}), ROW, h, soft, rows, t),
+                Family(p + "pv", pv.key, pv.status, h * d, pvu, rows, t)]
 
     def _add(self, step: int, op: str, a: str, b_op: str) -> Family:
         def replay(b: int, _: int):
@@ -239,11 +278,11 @@ class Replayer:
 
     # -- the draw
 
-    def unit(self, fam: Family, step: int, slot: int, index: int) -> Unit:
-        inputs, got, want = fam.replay(slot, index)
+    def unit(self, fam: Family, step: int, row: int, index: int) -> Unit:
+        inputs, got, want = fam.replay(row, index)
         st = self.steps[step]
-        return Unit(fam.name, fam.template, step, st.position, slot, index, inputs, np.asarray(got).reshape(-1),
-                    np.asarray(want).reshape(-1).astype(np.asarray(got).dtype))
+        return Unit(fam.name, fam.template, step, int(st.positions[row]), int(st.slots[row]), index, inputs,
+                    np.asarray(got).reshape(-1), np.asarray(want).reshape(-1).astype(np.asarray(got).dtype))
 
     def draw(self, step: int, k: int, seed: bytes, only: Callable[[Family], bool] = lambda f: True) -> list[Unit]:
         """``k`` units of every family of ``step`` (or of those ``only`` keeps), replayed: a FIXTURE coin per family, until
@@ -253,15 +292,17 @@ class Replayer:
         for fam in self.families(step):
             if not only(fam):
                 continue
-            h = hashlib.sha512(b"e2e-h200/draw-fixture\0" + seed + fam.name.encode() + step.to_bytes(4, "big")).digest()
+            at = b"" if fam.position is None else fam.position.to_bytes(4, "big")
+            h = hashlib.sha512(b"e2e-h200/draw-fixture\0" + seed + fam.name.encode() + step.to_bytes(4, "big") + at).digest()
             rng = np.random.Generator(np.random.PCG64(int.from_bytes(h[:16], "big")))
-            for u in rng.integers(0, fam.per_slot * st.batch, size=k):
-                slot, idx = divmod(int(u), fam.per_slot)
-                units.append(self.unit(fam, step, slot, idx))
+            rows = fam.rows_of(st.batch)
+            for u in rng.integers(0, fam.per_slot * len(rows), size=k):
+                r, idx = divmod(int(u), fam.per_slot)
+                units.append(self.unit(fam, step, rows[r], idx))
         return units
 
     def every(self, step: int, only: Callable[[Family], bool] = lambda f: True) -> list[Unit]:
         """Every unit of ``step``'s families that ``only`` keeps."""
         st = self.steps[step]
         return [self.unit(f, step, b, i) for f in self.families(step) if only(f)
-                for b in range(st.batch) for i in range(f.per_slot)]
+                for b in f.rows_of(st.batch) for i in range(f.per_slot)]

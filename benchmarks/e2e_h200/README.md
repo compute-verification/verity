@@ -23,9 +23,10 @@ linear, QK^T and PV coordinate is one unit (`ScaledMmS8Coordinate_v1{K}`, no K-s
 | Store and decode call | `store.py`: P2 v4 (`p2-16448/v4`) rows over the weights stream, the P2 reference decode on the CPU, or kernels' `Stage.decode` with `--stage-lib`; `--store generator` regenerates instead | memory-accounting's layout and decode call (CMP-95 item 2), MEM-69's store on the card |
 | W8A8 linears | `ops.s8_linear`: `torch._int_mm` on CUDA (int64 matmul on the CPU), then `bf16((f32(acc) · sx) · sw)` | kernels' KP2-S8 |
 | Row ops | `ops.py`: the plan's row functions; sums sequential (on the host), division and sqrt correctly rounded through f64 | circuits' row-op kernels |
-| Attention | `attention.py`: `GemmCoordinate_v2{GEMM_HOPPER}` and the MUFU ex2 table, numpy on the CPU | KP2-ATTN |
-| Commit | `commit.py`: `verity_vllm.commit.row_tables` (`--commit reference`), its C++ twin (`host`) or its CUDA kernel (`device`); one table an op, a row a slot | kernels' commit tree with a subtree a slot (CMP-95 item 3) |
-| Replay | `e2e_h200/units.py`: coordinate units through `replay.py`'s templates (main's Definitions); row units through compositions of `replay.py`'s word functions until circuits' row Definitions land; a fixture coin draws K a family | circuits' row Definitions; PRF-170's plan through `replay.draw` |
+| Slots and KV cache | `slots.py`: `SlotKV` admits requests FIFO into the lowest free sequence slots, runs each at its own position, frees and reuses a slot when its request finishes, and holds each slot's K and V rows (the one KV head, the context's positions) as the step's bf16 bits; `check_slots.py` checks it at the frozen KV shape on a device | stays |
+| Attention | `attention.py`: `GemmCoordinate_v2{GEMM_HOPPER}` and the MUFU ex2 table, numpy on the CPU, per group of equal positions | KP2-ATTN |
+| Commit | `commit.py`: `verity_vllm.commit.row_tables` (`--commit reference`), its C++ twin (`host`) or its CUDA kernel (`device`); one table an op, a row a slot keyed (slot, position); `slots.commit_step` is the per-slot-subtree stand-in | kernels' commit tree with a subtree a slot (CMP-95 item 3) |
+| Replay | `e2e_h200/units.py`: coordinate units through `replay.py`'s templates (main's Definitions); row units through compositions of `replay.py`'s word functions until circuits' row Definitions land; a row's attention reads its slot's K and V rows at the steps that wrote them; a fixture coin draws K a family | circuits' row Definitions; PRF-170's plan through `replay.draw` |
 | Bundle and record | `record.py`: provisional v0 schemas | IFACE-B's (CMP-95 items 5 and 6, `benchmarks/e2e_demo`) |
 | Legs | `legs.py`: PoUS spot reads, wipe and reload, certifier digests as fixtures; bandwidth and PoUW not run; integrity is the replay | MEM-67/69, CMP-97, NET-72, ALLP-H1LOOP/SALT, C-Flock `--zk` and Lean |
 
@@ -36,6 +37,7 @@ independent CPU decode step; the suite holds the driver's rows equal to `cpu_ste
 
 ~~~text
 uv run python benchmarks/e2e_h200/run.py --out /tmp/e2e --commit host           # the small shape, CPU, generator store
+uv run python benchmarks/e2e_h200/run.py --out /tmp/e2e --batch 8 --requests 24 --prompt-bytes 8 --generate 24   # continuous batching
 uv run python benchmarks/e2e_h200/run.py --out /tmp/e2e --shape tiny --store p2-encode --workers 8   # the tiny shape's P2 store (~1 s a block)
 uv run python benchmarks/e2e_h200/run.py --out /tmp/e2e --tamper l1.wup   # exits 3: replay finds it
 uv run python benchmarks/e2e_h200/run.py --out OUT --shape h200 --seed demo --device cuda --commit device --store p2:C.bin --stage-lib DIR
