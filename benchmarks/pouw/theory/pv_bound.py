@@ -8,10 +8,12 @@ Four-Russians lookups on the bit terms, A15) all save tensor time; ε_alg is the
 slack over the ALU without wraps (`eps_ovl`). PV is ALU-bound at every shape (hashing a cell's words and O over only K
 MACs, and P's dither at 1/d_v bits a MAC), so the slack is 0.
 
-Needs `nofold.py` from cursor/compute-research-accel-proto-design-ea24 (070e970980):
+Needs `nofold.py` from cursor/compute-research-accel-proto-design-ea24 (070e970980) and, for the θ pricing, D5's
+`public_best.py` from cursor/compute-research-accel-bet-algo-lab-ea24 (126ba960ca):
 
     git show origin/cursor/compute-research-accel-proto-design-ea24:benchmarks/pouw/accel_score/nofold.py > /tmp/nofold.py
-    uv run python benchmarks/pouw/theory/pv_bound.py /tmp/nofold.py
+    git show origin/cursor/compute-research-accel-bet-algo-lab-ea24:benchmarks/pouw/theory/public_best.py > /tmp/public_best.py
+    uv run python benchmarks/pouw/theory/pv_bound.py /tmp/nofold.py /tmp/public_best.py
 """
 
 from __future__ import annotations
@@ -23,9 +25,10 @@ import sys
 CONTEXTS = (1024, 4096, 8192, 16384, 32768, 65536, 131072)
 
 
-def load(path: str):
-    spec = importlib.util.spec_from_file_location("nofold", path)
+def load(path: str, name: str):
+    spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
     spec.loader.exec_module(mod)
     return mod
 
@@ -67,10 +70,44 @@ def contexts(n) -> None:
             print(f"  {card:13} {name:20} " + "  ".join(cells))
 
 
+def theta(n, pb, card: str = "RTX PRO 6000", designs=((4, 1 << 20), (3, 256), (2, 256))) -> None:
+    """The tiles' route at PV's picks under D5's θ (`public_best.tile_job_at`: θ's maximum with its joint facets, the
+    honest load set to nofold's A_nw/T, as D5's `v2_report` does), MAC-weighted over the world mix. A design is
+    (tiles, largest L′); c_opt < 1 is the route's leak against the honest words' best program."""
+    sm = pb.SM120 if card == "RTX PRO 6000" else pb.H200
+    _, bit, depth = pb.BIT_COST[sm.family][0]
+    print(f"\nPV's tile route under D5's θ (joint facets), {card}: MAC-weighted leak 1 − c_opt, γ, worst bin")
+    for mdl in n.WORLD:
+        hist = n.world_macs(mdl)[0]
+        for t, lp_max in designs:
+            W = leak = G = 0.0
+            worst = (0.0, None)
+            bins: dict[int, float] = {}
+            for keys, rows in hist.items():
+                k = max(64 * t, 64 * math.ceil(keys / 64))
+                bins[k] = bins.get(k, 0.0) + rows * keys
+            for k, w in bins.items():
+                rounds = [n.v2_round(card, k, mdl["dv"], t * lp, 16, m=n.M_PREFILL * mdl["hq"] // mdl["hkv"],
+                                     tiles=t) for lp in range(64, min(lp_max, k // t) + 1, 64)]
+                r = min(rounds, key=lambda x: x["gamma_max"])
+                j = pb.tile_job_at(sm, t, int(r["L"] / t), k, mdl["dv"], bit, depth, pb.V2_V, r["A_nw"] / r["T"],
+                                   s_max=12.0)
+                c = 1.0 if j is None else j["c_opt"]
+                W, leak, G = W + w, leak + w * (1 - c), G + w * r["gamma_max"]
+                worst = max(worst, (1 - c, (k, int(r["L"] / t))), key=lambda x: x[0])
+            print(f"  {mdl['name']:16} t {t} L′ ≤ {lp_max if lp_max < 1 << 20 else 'free':>4}: leak {leak / W:.2%}, "
+                  f"γ {G / W:.2f}, worst {worst[0]:.1%} at K {worst[1][0] if worst[1] else '-'} L′ "
+                  f"{worst[1][1] if worst[1] else '-'}")
+
+
 def main(argv: list[str]) -> None:
-    n = load(argv[1] if len(argv) > 1 else "/tmp/nofold.py")
+    n = load(argv[1] if len(argv) > 1 else "/tmp/nofold.py", "nofold")
     world(n)
     contexts(n)
+    if len(argv) > 2:
+        pb = load(argv[2], "public_best")
+        theta(n, pb, "RTX PRO 6000")
+        theta(n, pb, "H200", designs=((2, 1 << 20),))
 
 
 if __name__ == "__main__":
