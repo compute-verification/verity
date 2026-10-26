@@ -20,6 +20,8 @@ namespace FlockSoundness.Discharge.ZkHidden
 
 open Flock Refine Exec Game Model DecodeZL ZkSession ZkExec HiddenExec
 
+local notation "𝕂" => FlockLevel3.GF256
+
 section Table
 
 variable {n mPts : ℕ} {I : Inputs} {S : Finset (Fin n)} {d : Lean.Json}
