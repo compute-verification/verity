@@ -41,7 +41,7 @@ theorem inputArg_some {P : Prog} {a : Arg} {q : ℕ} (h : inputArg P a = some q)
       · rename_i hin
         cases h
         obtain ⟨hk, hnk⟩ := Array.getElem?_eq_some_iff.1 hn
-        exact ⟨⟨c, hparts⟩, hk, by rw [getElem!_pos _ _ hk, hnk]; exact hin⟩
+        exact ⟨⟨c, Array.ext' hparts⟩, hk, by rw [getElem!_pos (P.defs[P.root]!).body.nodes q hk, hnk]; exact hin⟩
       · cases h
     · cases h
   · cases h
@@ -192,7 +192,7 @@ theorem batch_lands (hc : NciCheck.Desc.calleesFirst P = true) (hrp : (P.defs[P.
     exact Or.inl ⟨by omega, by omega⟩
   · have hi := arg_lt ht
     have hmem : ((P.defs[P.root]!).body.nodes[ke]!).args[i]! ∈ ((P.defs[P.root]!).body.nodes[ke]!).args := by
-      rw [getElem!_pos _ _ hi]; exact Array.getElem_mem hi
+      rw [getElem!_pos ((P.defs[P.root]!).body.nodes[ke]!).args i hi]; exact Array.getElem_mem hi
     obtain ⟨q, hq⟩ := Option.isSome_iff_exists.1 (hargs _ hmem)
     exact Or.inr ⟨_, hmem, q, hq, arg_lands P hroot hB hL hk hq ht n' a h⟩
 
@@ -340,7 +340,7 @@ theorem closure {bytes : ByteArray} (hdec : decode bytes = .ok P) (hov : P.order
       exact Or.inl ⟨by omega, by omega⟩
     · have hi := arg_lt ht
       have hmem : ((P.defs[P.root]!).body.nodes[ke]!).args[i]! ∈ ((P.defs[P.root]!).body.nodes[ke]!).args := by
-        rw [getElem!_pos _ _ hi]; exact Array.getElem_mem hi
+        rw [getElem!_pos ((P.defs[P.root]!).body.nodes[ke]!).args i hi]; exact Array.getElem_mem hi
       obtain ⟨q, hq⟩ := Option.isSome_iff_exists.1 (hargs _ hmem)
       exact Or.inr ⟨_, hmem, q, hq, arg_lands P hroot hB hL hk hq ht _ y h⟩
   · obtain ⟨-, hqK, hin⟩ := inputArg_some hq
@@ -473,5 +473,145 @@ theorem causal_of_facts {bytes : ByteArray} {P : Prog} {s : Schedule} {kl ke q' 
     have hqq := DescAgree.node_unique _ _ hmono' hqK hq'K ⟨h3, h4⟩ ⟨h1, h2⟩
     subst hqq
     exact (F.e_args b hb).2 hq
+
+theorem scan_bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} :
+    (x >>= f) = .ok b ↔ ∃ a, x = .ok a ∧ f a = .ok b := by
+  cases x <;> simp [bind, Except.bind]
+
+theorem scan_ite_ok {ε α : Type} {c : Prop} [Decidable c] {A B : Except ε α} {b : α} :
+    (if c then A else B) = .ok b ↔ (c ∧ A = .ok b) ∨ (¬ c ∧ B = .ok b) := by
+  by_cases hc : c <;> simp [hc]
+
+theorem scan_throw_ok {ε α : Type} {e : ε} {b : α} : (throw e : Except ε α) = .ok b ↔ False := by
+  simp [throw, throwThe, MonadExceptOf.throw]
+
+theorem scan_pure_ok {ε α : Type} {a b : α} : (pure a : Except ε α) = .ok b ↔ a = b := by
+  simp [pure, Except.pure]
+
+theorem form_eq_batch {f : Flock.Program.Form} (h : (f == .batch) = true) : f = .batch := by
+  cases f <;> first | rfl | exact absurd h (by decide)
+
+/-- A template node is a root node calling a composite. -/
+theorem templateNodes_mem {P : Prog} {k : ℕ} (h : k ∈ templateNodes P) :
+    k < (P.defs[P.root]!).body.nodes.size ∧ (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false := by
+  unfold templateNodes at h
+  simp only [List.mem_filter, List.mem_range] at h
+  obtain ⟨hk, hd⟩ := h
+  refine ⟨hk, ?_⟩
+  split at hd
+  · rename_i d hdef
+    obtain ⟨hlt, heq⟩ := Array.getElem?_eq_some_iff.1 hdef
+    rw [getElem!_pos P.defs _ hlt, heq]; simpa using hd
+  · cases hd
+
+/-- **What `scanOf`'s acceptance gives**, at a window of at least two steps: `Facts`, at the second template's node,
+the last's, and the input node the second's row reads. -/
+theorem scanOf_facts {j : Lean.Json} {program : String} {s : Schedule} {sc : Scan} {c : String} {P : Prog}
+    (h : scanOf j program s = .ok sc) (hc : Flock.canon j = .ok c) (hP : decode c.toUTF8 = .ok P)
+    (hT : 2 ≤ s.window) : ∃ kl ke q', Facts P s kl ke q' := by
+  unfold scanOf at h
+  simp only [hc, hP, scan_bind_ok, scan_ite_ok, scan_throw_ok, scan_pure_ok, false_and, and_false, or_false,
+    exists_false, exists_eq_left', Except.ok.injEq] at h
+  obtain ⟨-, h⟩ := h
+  split at h
+  case h_2 => simp only [scan_throw_ok] at h
+  rename_i root hroot
+  have hR : P.defs[P.root]! = root := by
+    obtain ⟨hlt, heq⟩ := Array.getElem?_eq_some_iff.1 hroot
+    rw [getElem!_pos P.defs _ hlt, heq]
+  subst hR
+  split at h
+  case h_2 => simp only [scan_throw_ok] at h
+  rename_i xe de hback
+  simp only [scan_bind_ok, scan_ite_ok, scan_throw_ok, false_and, and_false, false_or, exists_false] at h
+  obtain ⟨-, h⟩ := h
+  split at h
+  case h_3 => simp only [scan_bind_ok, scan_throw_ok, false_and, exists_false] at h
+  all_goals simp only [scan_bind_ok, scan_ite_ok, scan_throw_ok, scan_pure_ok, false_and, and_false, or_false,
+    exists_false, exists_eq_left', Option.all_some, Option.all_none, Option.map_some, Option.map_none,
+    Option.getD_some, Option.getD_none, Bool.and_true] at h
+  case h_1 =>
+    obtain ⟨-, hcount, -⟩ := h
+    simp only [Bool.and_eq_true, beq_iff_eq, Option.some.injEq] at hcount
+    omega
+  rename_i f b hpop
+  obtain ⟨hnames, hcount, hrow, -, hret, -, hwalk, -, -, hrows, hargs, hegr, -⟩ := h
+  -- the templates: `templateNodes P = [k0, kl, ke]`
+  simp only [Array.back?_map, List.back?_toArray, Option.map_eq_some_iff] at hback
+  obtain ⟨ke, hke, hge⟩ := hback
+  simp only [Array.toList_pop, Array.toList_map] at hpop
+  obtain ⟨ys, hys⟩ := List.getLast?_eq_some_iff.1 hke
+  rw [hys, List.map_append, List.map_cons, List.map_nil, List.dropLast_concat] at hpop
+  obtain ⟨k0, kl, rfl⟩ : ∃ k0 kl, ys = [k0, kl] := by
+    rcases ys with _ | ⟨k0, _ | ⟨kl, _ | ⟨k2, ys⟩⟩⟩ <;> simp at hpop
+    exact ⟨_, _, rfl⟩
+  simp only [List.map_cons, List.map_nil, List.cons.injEq, and_true] at hpop
+  obtain ⟨rfl, rfl⟩ := hpop
+  simp only [Prod.mk.injEq] at hge
+  obtain ⟨rfl, rfl⟩ := hge
+  simp only [List.cons_append, List.nil_append] at hys
+  have hmem_l : kl ∈ templateNodes P := by rw [hys]; simp
+  have hmem_e : ke ∈ templateNodes P := by rw [hys]; simp
+  obtain ⟨hkl, hlc⟩ := templateNodes_mem hmem_l
+  obtain ⟨hke', hec⟩ := templateNodes_mem hmem_e
+  -- the counts
+  simp only [Bool.and_eq_true] at hcount
+  obtain ⟨⟨⟨⟨-, -⟩, hlater⟩, heb⟩, hen⟩ := hcount
+  split at hlater
+  case isFalse => simp at hlater
+  rename_i hlb
+  simp only [decide_eq_true_eq] at hlb
+  simp only [beq_iff_eq, Option.some.injEq] at hlater hen
+  -- the rows, the arguments and the names
+  simp only [Array.append_singleton, List.push_toArray, List.cons_append, List.nil_append, List.map_toArray,
+    List.map_cons, List.map_nil, List.size_toArray, List.length_cons, List.length_nil, Nat.zero_add, Nat.reduceAdd,
+    List.all_toArray', List.all_cons, List.all_nil, Bool.and_true, Bool.and_eq_true] at hrows
+  obtain ⟨-, hr1⟩ := hrows
+  obtain ⟨q', hq'⟩ := Option.isSome_iff_exists.1 hr1
+  obtain ⟨a0, ha0, hia⟩ := Option.bind_eq_some_iff.1 hq'
+  have hrow_in : inputArg P (((P.defs[P.root]!).body.nodes[kl]!).args[0]!) = some q' := by
+    obtain ⟨hlt, heq⟩ := Array.getElem?_eq_some_iff.1 ha0
+    rw [getElem!_pos ((P.defs[P.root]!).body.nodes[kl]!).args 0 hlt, heq]; exact hia
+  simp only [Array.append_singleton, List.push_toArray, List.cons_append, List.nil_append, List.size_toArray,
+    List.length_cons, List.length_nil, Nat.zero_add, Nat.reduceAdd, List.all_toArray', List.all_cons, List.all_nil,
+    Bool.and_true, Bool.and_eq_true, Array.all_eq_true] at hargs
+  obtain ⟨-, -, hae⟩ := hargs
+  simp only [Array.append_singleton, List.push_toArray, List.cons_append, List.nil_append, List.map_toArray,
+    List.map_cons, List.map_nil, Array.contains_eq_mem, List.mem_toArray, List.mem_cons, List.not_mem_nil, or_false,
+    Bool.decide_or, Bool.not_or, Array.all_eq_true, Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true,
+    decide_eq_false_iff_not] at hegr
+  simp only [Bool.and_eq_true, beq_iff_eq] at hnames
+  obtain ⟨⟨-, hnl⟩, -⟩ := hnames
+  simp only [Bool.and_eq_true] at hrow hwalk
+  refine ⟨kl, ke, q', ?_⟩
+  exact {
+    last := by rw [hys]; rfl
+    second := by rw [hys]; rfl
+    kl_lt := hkl
+    ke_lt := hke'
+    l_comp := hlc
+    e_comp := hec
+    l_batch := form_eq_batch hlb.1
+    e_batch := form_eq_batch heb
+    l_n := hlater
+    e_n := hen
+    e_ret := BodiesOk.ty_beq hret
+    l_p0 := by
+      have := congrArg Array.size hnl
+      rw [Array.size_map] at this
+      rw [this]; decide
+    l_row := BodiesOk.ty_beq hrow.2
+    walk := hwalk.2
+    row_in := hrow_in
+    e_args := fun b hb => by
+      obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hb
+      refine ⟨hae i hi, fun he => (hegr i hi).2 ?_⟩
+      rw [he, hq'] }
+
+/-- **The scan is causal.** -/
+theorem scanCausal : ScanCausal := by
+  intro j program s sc c P C h hc hP hov hF t ht t' ht' htt'
+  obtain ⟨kl, ke, q', F⟩ := scanOf_facts h hc hP (by omega)
+  exact causal_of_facts hP hov F C hF t ht t' ht' htt'
 
 end Properties.NetworkScan.CausalProof
