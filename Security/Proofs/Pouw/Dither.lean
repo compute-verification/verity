@@ -1,5 +1,6 @@
 import Definitions.Pouw.Guarantees.Dither
 import Proofs.Pouw.RelativeSecurity
+import Proofs.Pouw.ShaRealize
 
 /-!
 # The no-fold Dither protocol's work-soundness: the headline's proof
@@ -15,9 +16,14 @@ import Proofs.Pouw.RelativeSecurity
   - A round's factor reads only the coins up to that round, and is frozen at 1 on a round whose oracle and advice
     are bad for `ShaSpeed` (`roundF`), so the rounds' product is a supermartingale over the fresh coins
     (`expect_prod_rounds`), and Markov bounds the luck by `δ` (`prob_rounds_le`).
-  - The union bound adds the service's `κ_S`, the extraction's `κ_x(A)`, the bad oracles' `κ_sha(A)` and the
-    degenerate dithers' `k (κ_dmm + κ_dsha)` (`prob_round_le`). Off those events the rounds meet the work floor
-    (`floor_of_rounds`), and `FreedOfFloor` turns it into freed compute.
+  - The union bound adds the service's `κ_S`, the extraction's `κ_x(A)` on runs within the cap (a run whose timed
+    work and answers fit makes at most `Q` oracle calls, `calls_le_of_fits`), the bad oracles' `κ_sha(A)` and the
+    degenerate dithers'
+    `k (κ_dmm + κ_dsha)` (`prob_round_le`). Off those events the rounds meet the work floor (`floor_of_rounds`), and
+    `FreedOfFloor` turns it into freed compute.
+* `WorkSoundNoFold`: `WorkSound` on the no-fold round with `ExtractAdv` from
+  `Proofs.Pouw.ShaRealize.ExtractOfRealize` at the budget `⌈Q⌉ + V`.
+* `FleetSound`: the union bound over the units, each unit's event sliced at the other units' coins.
 -/
 
 namespace Pouw.SecurityProofs.Dither
@@ -361,15 +367,35 @@ theorem floor_of_rounds {k : ℕ} (H pm ps cw ch cw' ch' ew eh D : Fin k → ℝ
   · rw [sub_mul, add_mul, one_mul, div_mul_cancel₀ _ hC, div_mul_cancel₀ _ hC]
     linarith
 
+/-! ## The cap on oracle calls -/
+
+/-- **A run whose timed use fits makes at most `Q` oracle calls** (RT-LEAN-2 L39): by (G3) the rounds' calls, in
+their work and answers, use at least `calls · callUse_r` of a resource `r` a call uses, which fits within its capacity
+`cap_r ≤ Q callUse_r`. -/
+theorem calls_le_of_fits {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (Pd : Period G) {Q : ℝ}
+    (hG3 : G.G3) (hneeds : ∀ j r, 0 ≤ Pd.needs j r) (hcap : ∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r)
+    (o : P.Orc) (x : Fin k → P.Draw × P.Chk) {z : Pd.J → ℝ} (hfit : Pd.Fits (A.timedUse o x) z) :
+    A.calls o x ≤ Q := by
+  obtain ⟨r, hr, hc⟩ := hcap
+  have h1 : A.calls o x * G.callUse r ≤ A.timedUse o x r := by
+    unfold Prover.calls Prover.timedUse
+    rw [Finset.sum_mul]
+    exact Finset.sum_le_sum fun w _ => by
+      rw [add_mul]
+      exact add_le_add ((hG3 (A.work w) (A.workIn o x w)).2 r) ((hG3 (A.answer w) (A.answerIn o x w)).2 r)
+  have h2 : A.timedUse o x r ≤ Pd.cap r :=
+    le_trans (le_add_of_nonneg_right (Finset.sum_nonneg fun j _ => mul_nonneg (hfit.1 j) (hneeds j r))) (hfit.2 r)
+  exact le_of_mul_le_mul_right ((h1.trans h2).trans hc) hr
+
 /-! ## The headline -/
 
 /-- `Definitions.Pouw.Guarantees.Dither.WorkSound`. -/
 theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
-  intro G P k Reg reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η δ β K κS κdmm κdsha Badv ξ κx κsha
-    hreg hdual hpos hH hη hδ hδ1 hβ hK hξ hκd hG1 hG2 hP1 hP2 hsak hsha hout hserv himp hextr A
+  intro G P k Reg reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η δ β K κS Q κdmm κdsha Badv ξ κx κsha
+    hreg hdual hpos hH hη hδ hδ1 hβ hK hξ hκd hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv himp hextr A
   beta_reduce
   classical
-  obtain ⟨Adv, adv, Mw, Mh, henc, hadv, hroot, huse, hext, hx⟩ := hextr hG1 hG2 hP1 hP2 A
+  obtain ⟨Adv, adv, Mw, Mh, henc, hadv, hroot, huse, hext, hx⟩ := hextr hG1 hG2 hG3 hP1 hP2 A
   obtain ⟨hμ, hneeds, hval, z', hfit', hslack⟩ := hdual
   have hreg' : ∀ w, 0 < Hmm (reg w) ∧ 0 < Hsha (reg w) ∧ 0 ≤ Ho (reg w) ∧ pubmm (reg w) ≤ Hmm (reg w) ∧
       pubsha (reg w) ≤ Hsha (reg w) := fun w => hpos _ (hreg w)
@@ -447,17 +473,18 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
   have hfloor : ∀ o x, A.Passes verdict dev o x → ∑ w, Dval o x w < Real.log (1 / δ) / η →
       (1 - (epsWorkSound (fun w => Hmm (reg w) + Hsha (reg w) + Ho (reg w)) (fun w => pubmm (reg w))
         (fun w => pubsha (reg w)) η δ β K + (∑ r, μ r * ξ A r) / ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)))) *
-        ∑ r, μ r * (1 * Pd.hon r) ≤ ∑ r, μ r * A.workUse o x r := by
+        ∑ r, μ r * (1 * Pd.hon r) ≤ ∑ r, μ r * A.timedUse o x r := by
     intro o x hv hD
     have hC : ∑ r, μ r * (1 * Pd.hon r) = ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)) := by
       rw [hH]
       simp only [one_mul]
     rw [hC]
-    have hS0 : 0 ≤ ∑ r, μ r * A.workUse o x r := Finset.sum_nonneg fun r _ => mul_nonneg (hμ r)
-      (Finset.sum_nonneg fun w _ => ((hG2.2 (A.work w) (A.workIn o x w)).2 r).1)
+    have hS0 : 0 ≤ ∑ r, μ r * A.timedUse o x r := Finset.sum_nonneg fun r _ => mul_nonneg (hμ r)
+      (Finset.sum_nonneg fun w _ =>
+        add_nonneg ((hG2.2 (A.work w) (A.workIn o x w)).2 r).1 ((hG2.2 (A.answer w) (A.answerIn o x w)).2 r).1)
     have hcost : ∑ w, (G.cost μ (Mw w) (adv o x w, (x w).1) +
           G.cost μ (Mh w) (o, (adv o x w, (x w).1), G.Mc.eval (Mw w) (adv o x w, (x w).1))) ≤
-        ∑ r, μ r * A.workUse o x r + ∑ r, μ r * ξ A r := by
+        ∑ r, μ r * A.timedUse o x r + ∑ r, μ r * ξ A r := by
       have h1 : ∑ w, (G.cost μ (Mw w) (adv o x w, (x w).1) +
             G.cost μ (Mh w) (o, (adv o x w, (x w).1), G.Mc.eval (Mw w) (adv o x w, (x w).1))) =
           ∑ r, μ r * ∑ w, (G.use (Mw w) (adv o x w, (x w).1) r +
@@ -532,20 +559,20 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
       exact hκ2
   -- The bad oracles and advice.
   have E3 : prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) => ∃ w, ¬ Good ox.1 w (adv ox.1 ox.2 w)) ≤ κsha A := by
-    refine le_trans (prob_mono fun ox h => ?_) (hsha hG1 hG2 hP1 hP2 A (Badv A) Adv henc adv hadv Mw' Mh'
+    refine le_trans (prob_mono fun ox h => ?_) (hsha hG1 hG2 hG3 hP1 hP2 A (Badv A) Adv henc adv hadv Mw' Mh'
       (fun w i => (hMw' w i).2.1) (fun w i => (hMh' w i).2.1) hroot')
     obtain ⟨w, hw⟩ := h
     exact ⟨w, fun hD => hw ((hGood _ _ _).mpr hD)⟩
   -- The extraction.
   have E2 : prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>
-      A.Accepted reg ox.1 ox.2 ∧ ∃ w, ¬ okw ox.1 ox.2 w) ≤ κx A := by
+      A.Accepted reg ox.1 ox.2 ∧ A.calls ox.1 ox.2 ≤ Q ∧ ∃ w, ¬ okw ox.1 ox.2 w) ≤ κx A := by
     refine le_trans (prob_mono fun ox h => ?_) hx
-    obtain ⟨hacc, w, hw⟩ := h
-    exact ⟨hacc, w, fun hk => hw ((hokw _ _ _).mpr hk)⟩
+    obtain ⟨hacc, hq, w, hw⟩ := h
+    exact ⟨hacc, hq, w, fun hk => hw ((hokw _ _ _).mpr hk)⟩
   -- The union bound.
   refine le_trans (prob_mono (q := fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>
       ((((A.Passes verdict dev ox.1 ox.2 ∧ ¬ A.Accepted reg ox.1 ox.2) ∨
-          (A.Accepted reg ox.1 ox.2 ∧ ∃ w, ¬ okw ox.1 ox.2 w)) ∨
+          (A.Accepted reg ox.1 ox.2 ∧ A.calls ox.1 ox.2 ≤ Q ∧ ∃ w, ¬ okw ox.1 ox.2 w)) ∨
         (∃ w, ¬ Good ox.1 w (adv ox.1 ox.2 w))) ∨
         (∃ w, Good ox.1 w (adv ox.1 ox.2 w) ∧ deg ox.1 ox.2 w)) ∨
         ((∀ w, Good ox.1 w (adv ox.1 ox.2 w) ∧ ¬ deg ox.1 ox.2 w ∧ okw ox.1 ox.2 w) ∧
@@ -560,13 +587,51 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
             exact Or.inl (Or.inr ⟨w, hg w, hw⟩)
           · by_cases hD : Real.log (1 / δ) / η ≤ ∑ w, Dval o x w
             · exact Or.inr ⟨fun w => ⟨hg w, fun h => hdg ⟨w, h⟩, hok w⟩, hD⟩
-            · exact absurd (FreedOfFloor G Pd 1 _ (A.workUse o x) μ z z' hμ hneeds hval zero_le_one hε hfit'
+            · exact absurd (FreedOfFloor G Pd 1 _ (A.timedUse o x) μ z z' hμ hneeds hval zero_le_one hε hfit'
                 hslack hfit (hfloor o x hv (not_le.mp hD))) hnot
         · exact Or.inl (Or.inl (Or.inr (not_forall.mp hg)))
-      · exact Or.inl (Or.inl (Or.inl (Or.inr ⟨hacc, not_forall.mp hok⟩)))
+      · exact Or.inl (Or.inl (Or.inl (Or.inr
+          ⟨hacc, calls_le_of_fits A Pd hG3 hneeds hcap o x hfit, not_forall.mp hok⟩)))
     · exact Or.inl (Or.inl (Or.inl (Or.inl ⟨hv, hacc⟩)))
   · refine (prob_or5_le _ _ _ _ _).trans ?_
     have := add_le_add (add_le_add (add_le_add (add_le_add (hserv A) E2) E3) E4) E5
     linarith
+
+/-- `Definitions.Pouw.Guarantees.Dither.WorkSoundNoFold`: `WorkSound` with `ExtractAdv` from `ExtractOfRealize` at
+the budget `⌈Q⌉ + V`. -/
+theorem WorkSoundNoFold : Pouw.Guarantees.Dither.WorkSoundNoFold := by
+  intro G nf k Reg reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η δ β K κS Q κsha κdmm κdsha Badv V X D _ _ _ _ _
+    E eo rD pl dirs ξw ξl hreg hdual hpos hH hη hδ hδ1 hβ hK hξw hξl hκd hcap hopens hG1 hG2 hG3 horc hP1 hP2
+    hsak hsha hout hserv himp hR A
+  have hx := Pouw.SecurityProofs.ShaRealize.ExtractOfRealize G nf k reg Q X D E eo rD pl dirs ξw ξl
+    (fun _ => ⌈Q⌉₊ + V) (fun _ _ => ⌈Q⌉₊ + V) (fun _ => Badv) hopens horc hR
+  refine (WorkSound G (noFoldRound nf) k Reg reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η δ β K κS Q κdmm κdsha
+    (fun _ => Badv) (fun _ r => k * ξw r + (⌈Q⌉₊ + V : ℕ) * ξl r)
+    (fun _ => (((⌈Q⌉₊ + V) * (⌈Q⌉₊ + V) + ∑ _w : Fin k, (⌈Q⌉₊ + V) * (2 * (⌈Q⌉₊ + V) + 1) : ℕ) : ℝ) /
+      Fintype.card D) (fun _ => κsha) hreg hdual hpos hH hη hδ hδ1 hβ hK
+    (fun _ r => add_nonneg (mul_nonneg (Nat.cast_nonneg _) (hξw r)) (mul_nonneg (Nat.cast_nonneg _) (hξl r))) hκd
+    hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv himp hx A).trans (le_of_eq ?_)
+  simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]
+
+/-- `Definitions.Pouw.Guarantees.Dither.FleetSound`: the union bound over the units, each unit's event sliced at the
+other units' coins. -/
+theorem FleetSound : Pouw.Guarantees.Dither.FleetSound := by
+  intro G P k N Obs verdict dev Pd ε κ C κmax hκ hunit A hA
+  classical
+  refine le_trans (prob_mono (q := fun ox : P.Orc × (Fin N → Fin k → P.Draw × P.Chk) =>
+      ∃ u ∈ (Finset.univ : Finset (Fin N)), (A u fun v => ox.2 v.1).Passes (verdict u) (dev u) ox.1 (ox.2 u) ∧
+        ∃ z, (Pd u).Fits ((A u fun v => ox.2 v.1).timedUse ox.1 (ox.2 u)) z ∧
+          ¬ (Pd u).FreedWithin 1 z (ε u (A u fun v => ox.2 v.1)) (C u))
+      fun ox ⟨u, hu⟩ => ⟨u, Finset.mem_univ u, hu⟩) ((prob_exists_le _ _).trans (Finset.sum_le_sum fun u _ => ?_))
+  let e : P.Orc × (Fin N → Fin k → P.Draw × P.Chk) ≃
+      (P.Orc × (Fin k → P.Draw × P.Chk)) × ({v : Fin N // v ≠ u} → Fin k → P.Draw × P.Chk) :=
+    ((Equiv.refl P.Orc).prodCongr (Equiv.piSplitAt u fun _ => Fin k → P.Draw × P.Chk)).trans
+      (Equiv.prodAssoc _ _ _).symm
+  let F : (P.Orc × (Fin k → P.Draw × P.Chk)) × ({v : Fin N // v ≠ u} → Fin k → P.Draw × P.Chk) → Prop :=
+    fun b => (A u b.2).Passes (verdict u) (dev u) b.1.1 b.1.2 ∧
+      ∃ z, (Pd u).Fits ((A u b.2).timedUse b.1.1 b.1.2) z ∧ ¬ (Pd u).FreedWithin 1 z (ε u (A u b.2)) (C u)
+  calc prob _ = prob (fun ox => F (e ox)) := rfl
+    _ = prob F := by rw [prob_equiv e]; simp only [Equiv.apply_symm_apply]
+    _ ≤ κmax u := prob_le_of_slices F (hκ u) fun y => (hunit u (A u y)).trans (hA u y)
 
 end Pouw.SecurityProofs.Dither

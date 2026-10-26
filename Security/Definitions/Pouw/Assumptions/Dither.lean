@@ -73,7 +73,8 @@ def SAKMatmul (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (Reg : Set P.Ins
 
 /-- `pouw-sha512-speed` (proposed; R-ACCEL-7, Daniel 25 Oct: "sure"). **Nobody computes SHA-512 meaningfully faster
 than the best public implementation**, on a round's commitment, in sampling form and per prover (RT-LEAN-2 L37): in
-the model at its device premises, for every prover `A` on the registered instances `reg`, every advice of at most `B`
+the model at its device premises (with (G3): an oracle call is a step priced at the public implementation's use), for
+every prover `A` on the registered instances `reg`, every advice of at most `B`
 bits on which each round's programs read nothing of that round's coins or later, and every words and commitment
 program of each round that exchange no bits with outside machines, where the commitment program's output is `A`'s
 root as an equation (condition 1), the probability over the oracle and the verifier's coins that some round's
@@ -90,10 +91,12 @@ hashes part of the tree is caught where the check selects a cell outside that pa
 `pub a` is the pinned public implementation's priced cost of the instance's commitment at the period's dual prices.
 Under the random oracle it is ABSORB-THM's realization: each oracle query costs at least the public implementation's,
 so the honest prover meets it with shortfall 0. MODEL-SPEC's θ floors (RT-MODEL M12, on `Open.sync`, `b1` and `madHi`)
-are what keep the model from hashing faster than the card. -/
+are what keep the model from hashing faster than the card. The premise is meant for models whose programs reach the
+oracle only through their calls (`Accel.OracleCalls` at the round's table, RT-LEAN-2 L28): where a program reads the
+table as data it is false, and the headline says nothing. -/
 def ShaSpeed (G : Accel) (P : RoundProto) (k : ℕ) (reg : Fin k → P.Inst) (μ : G.Res → ℝ) (pub η : P.Inst → ℝ)
     (κdeg : ℕ → ℝ) (κsha : Prover G P k → ℝ) : Prop :=
-  G.G1 → G.G2 → G.P1 → G.P2 → ∀ (A : Prover G P k) (B : ℕ) (Adv : Type),
+  G.G1 → G.G2 → G.G3 → G.P1 → G.P2 → ∀ (A : Prover G P k) (B : ℕ) (Adv : Type),
     (∃ e : Adv → Fin (2 ^ B), Function.Injective e) →
     ∀ (adv : P.Orc → (Fin k → P.Draw × P.Chk) → Fin k → Adv),
     (∀ o x x' w, (∀ v : Fin k, v < w → x v = x' v) → adv o x w = adv o x' w) →
