@@ -1479,6 +1479,12 @@
     },
     {
       "paths": {
+        "benchmarks/one_stage/llama1b_tp1_commit.sh": "examples/vllm/commit.sh",
+        "benchmarks/one_stage/llama1b_serve_seal.sh": "examples/vllm/serve.sh"
+      }
+    },
+    {
+      "paths": {
         "integrations/vllm/verity_vllm/engine/profiles/__init__.py": "integrations/vllm/verity_vllm/observe/fold/profiles/__init__.py",
         "integrations/vllm/verity_vllm/engine/profiles/generic.py": "integrations/vllm/verity_vllm/observe/fold/profiles/generic.py",
         "integrations/vllm/verity_vllm/engine/profiles/gen_dense2_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_dense2_patterns.py",

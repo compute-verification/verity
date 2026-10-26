@@ -3,7 +3,7 @@
 # Llama-3.2-1B bf16 batch-invariant eager on one RTX PRO 6000 (ROW, default the B4 I256/O32 rtxpro6000 row: prompt lengths 151, 8,
 # 256 and 87), its Build and Match of record and a deferred config-run Commit in one row dir, then the Commit's C2 replay on CPU.
 #   research run --on vy-nebius-1 --project verity --source TREE --cwd source --mem-gb 192 --timeout 6h \
-#     --env GPU_LEASE_WHO=vllm-llama1b-commit -- bash benchmarks/one_stage/llama1b_tp1_commit.sh
+#     --env GPU_LEASE_WHO=vllm-llama1b-commit -- bash examples/vllm/commit.sh
 # Needs on the node: vLLM's venv (/workspace/jobs/venv312), the checkpoint in /workspace/hf, the taps of record under /workspace/cp
 # (cli.MACHINE) and gpu-lease; the row leases a GPU only for its Match capture and its Commit's engine (GPU_LEASE, pipeline.gpu_lease).
 # A single-GPU row defers its replay only as a config run (row_stages.SingleRow.commit_cmd), and leaves one bundle,
