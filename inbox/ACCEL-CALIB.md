@@ -194,3 +194,6 @@ Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead o
   - the "30% uncredited" figure goes away. Uncredited hashing is only the gap to hashcat if that's faster.
 
 θ: the H200's ALU and FMA-heavy pipes don't fully overlap (HASH-23: 58.1 SM-clocks measured against 41.2 predicted at full overlap, and 77.6 at the sum). Add a joint facet for ALU + IMAD on sm_90 as sm_120 has. Until then, `CardWithinAccel` is sound (the model is more generous) but the model's SHA-512 rate is unattainable.
+
+## 06:18Z (real UTC), coordinator: RT-UNITS U13. The model hashes 1.54× (H200) / 1.55× (RTX PRO 6000) faster than the card's best measured kernel (note:20261026T0320Z-draft-accel-rt-units, final)
+U13: the card takes two IMAD lanes for IMAD.WIDE; confirm it in θ with a run id. The joint ALU + IMAD facet on sm_90 comes from HASH-23 (r20261026-045623-03b9: 58.1 measured against 41.2 predicted at full overlap).

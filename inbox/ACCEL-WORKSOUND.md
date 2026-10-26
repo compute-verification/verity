@@ -191,3 +191,11 @@ The SYM instance (Lemma S) is no longer needed. Keep the statement general, but 
   - the "30% uncredited" figure goes away. Uncredited hashing is only the gap to hashcat if that's faster.
 
 (WORKSOUND-INST) `pub_sha` per card is the **measured** best public SHA-512 (H200 4.79 G/s, RTX PRO 6000 7.13), not D5 v1's paper 6.69 / 10.22. BET-ALGO-LAB updates D5 v2.
+
+## 06:18Z (real UTC), coordinator: RT-UNITS U13. The model hashes 1.54× (H200) / 1.55× (RTX PRO 6000) faster than the card's best measured kernel (note:20261026T0320Z-draft-accel-rt-units, final)
+**Decision (refines my 06:16Z `pub_sha` entry):** `ShaSpeed` is stated **in model units**: no program of the model computes a SHA-512 compression for less than the model cost of the pinned best public schedule (our default build's instruction mix priced at θ). That keeps it true in the model, and the headline non-vacuous.
+- H, the honest cost in `WorkSound`, is the honest program's model cost, so c_sha = 1 in-model.
+- The card being slower than the model (54.6 measured against about 35–38 model SM-clocks a compression) is θ's generosity, which is sound: it shows up only in γ, which D6 computes from measured times.
+- MODEL-SPEC-3: price IMAD.WIDE at the card's two IMAD lanes (U13; cite the measurement), and take CALIB's joint ALU + IMAD facet for sm_90 from HASH-23 when it lands. Both bring the model's SHA-512 cost closer to the card's, staying on the generous side.
+- **U9:** hosts count as devices of the period only if C includes their AMX and SHA-512 rates (CALIB: AMX 3.15% / 9.51% of a GPU's INT8; CPU 4.90% / 5.07% of its hashing). Count them in C. The inventory premise is on the decided-by-lane page https://app.notion.com/p/405399515d9e816f8b1ac54c9fd03bd4 (A4).
+
