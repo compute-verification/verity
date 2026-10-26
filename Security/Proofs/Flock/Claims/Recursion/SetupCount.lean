@@ -1616,4 +1616,369 @@ theorem checkPublic_cost (c : Circuit) (pub : Public) (K : Nat)
         all_goals first | omega | exact Nat.le_refl _ | exact getElem!_le hT' _
       · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); first | omega | exact Nat.le_refl _
 
+
+
+/-! ## The inner setup: `Stmt.setupHiddenWith`, at the values its parse, load and draw return -/
+
+/-- Every shared-row table of `pub` holds at most `2 ^ K` rows. -/
+def PT (K : Nat) (pub : Public) : Prop := ∀ t, pub.tables = some t → ∀ r ∈ t.counts, r ≤ 2 ^ K
+
+/-- The population `checkPublic` hashes has at most `2 ^ K` instances. -/
+def PN (K : Nat) (pub : Public) : Prop := (pub.population.getD (pub.n, pub.digests, pub.outputs)).1 ≤ 2 ^ K
+
+theorem okC_of_V {α : Type} {x : CountV α} {y : V α} (hs : ∀ k, (x.go k).1 = y) {Q : α → Prop}
+    (hy : ∀ a, y = .ok a → Q a) : okC x Q :=
+  fun k a k' hx => hy a (by have := hs k; rw [hx] at this; exact this.symm)
+
+theorem map_cost {α β : Type} {x : CountV α} {g : α → β} {n : Nat} (hx : countC.P x n) : countC.P (g <$> x) n := by
+  rw [map_eq_pure_bind]
+  exact countC.mono (countC.bind hx fun _ => countC.pure _) (Nat.le_of_eq (Nat.add_zero n))
+
+theorem map_bind_cost {α β γ : Type} {x : CountV α} {g : α → β} {f : β → CountV γ} {N : Nat}
+    (h : countC.P (x >>= fun a => f (g a)) N) : countC.P ((g <$> x) >>= f) N := by
+  rw [bind_map_left]; exact h
+
+theorem outParse_cost (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) (ht : tags.typed = false) :
+    countC.P (HmOut.parseWith (Hashes.counted h) tags bytes tables) 2 := by
+  unfold HmOut.parseWith
+  simp only [ht, Bool.not_false, ↓reduceIte]
+  apply countC.mono
+  · repeat (first
+      | extract_lets
+      | (with_reducible apply throwBind)
+      | (with_reducible apply Cost.bind)
+      | (with_reducible apply bindAny)
+      | (with_reducible apply rowParse_cost h)
+      | (with_reducible intro _)
+      | (with_reducible apply Cost.pure)
+      | (with_reducible apply pureAny)
+      | (with_reducible apply throw0)
+      | (with_reducible apply Cost.throw)
+      | (with_reducible apply Cost.lift)
+      | (with_reducible apply liftAny)
+      | (with_reducible apply Cost.forIn_array)
+      | (with_reducible apply Cost.forIn_array0)
+      | (with_reducible apply forIn_array0Any)
+      | (with_reducible apply Cost.forIn_list)
+      | (with_reducible apply Cost.forIn_list0)
+      | (with_reducible apply forIn_list0Any)
+      | (with_reducible apply forIn_range0)
+      | (with_reducible apply forIn_range0Any)
+      | (with_reducible apply Cost.mapM_array)
+      | (with_reducible apply mapM_array0Any)
+      | (with_reducible apply Cost.ite)
+      | (with_reducible apply iteAny)
+      | (with_reducible apply diteMax)
+      | (with_reducible apply diteAny)
+      | split)
+    iterate 40
+      all_goals try (dsimp +zetaDelta -zeta only)
+      all_goals repeat (first
+        | extract_lets
+        | (with_reducible apply throwBind)
+        | (with_reducible apply Cost.bind)
+        | (with_reducible apply bindAny)
+        | (with_reducible apply rowParse_cost h)
+        | (with_reducible intro _)
+        | (with_reducible apply Cost.pure)
+        | (with_reducible apply pureAny)
+        | (with_reducible apply throw0)
+        | (with_reducible apply Cost.throw)
+        | (with_reducible apply Cost.lift)
+        | (with_reducible apply liftAny)
+        | (with_reducible apply Cost.forIn_array)
+        | (with_reducible apply Cost.forIn_array0)
+        | (with_reducible apply forIn_array0Any)
+        | (with_reducible apply Cost.forIn_list)
+        | (with_reducible apply Cost.forIn_list0)
+        | (with_reducible apply forIn_list0Any)
+        | (with_reducible apply forIn_range0)
+        | (with_reducible apply forIn_range0Any)
+        | (with_reducible apply Cost.mapM_array)
+        | (with_reducible apply mapM_array0Any)
+        | (with_reducible apply Cost.ite)
+        | (with_reducible apply iteAny)
+        | (with_reducible apply diteMax)
+        | (with_reducible apply diteAny)
+        | split)
+    all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
+  · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); omega
+
+set_option maxHeartbeats 8000000 in
+/-- **`Stmt.setupHiddenWith`'s calls**, at a drawn statement of an untyped circuit: ten for its parse, partition, load,
+draw, law, links or query and digests, and `checkPublic`'s, at the ports and rows its parse, load and draw return. -/
+theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
+    (d : Json) (partition : Option Json) (program publicInputs : Option ByteArray) (PC : Circuit → Prop) (NP K : Nat)
+    (ht : tags.typed = false) (hPC : ∀ c, PC c → c.ports.size ≤ NP)
+    (H1 : okC (HmOut.parseWith (Hashes.counted h) tags cf tables) PC)
+    (H2 : ∀ c pi, PC c → okC (HmIn.loadPublicWith (Hashes.counted h) tags c pi pf) (PT K))
+    (H3 : ∀ c pi pop, PT K pop → okC (HmIn.drawnWith (Hashes.counted h) c pi pop d) (fun pub => PT K pub ∧ PN K pub)) :
+    countC.P (Stmt.setupHiddenWith (Hashes.counted h) tags cf pf coins tables (some d) partition program publicInputs)
+      (10 + NP * perRow K) := by
+  have hParse : ∀ {β : Type} {f : Circuit → CountV β} {m N : Nat}, (∀ c, PC c → countC.P (f c) m) → 2 + m ≤ N →
+      countC.P (HmOut.parseWith (Hashes.counted h) tags cf tables >>= f) N :=
+    fun hf hN => bindQ (outParse_cost h tags cf tables ht) H1 hf hN
+  have hLoad : ∀ c pi {β : Type} {f : Public → CountV β} {m N : Nat}, PC c → (∀ pop, PT K pop → countC.P (f pop) m) →
+      1 + m ≤ N → countC.P (HmIn.loadPublicWith (Hashes.counted h) tags c pi pf >>= f) N :=
+    fun c pi _ _ _ _ hc hf hN => bindQ (inLoadPublic_cost h tags c pi pf) (H2 c pi hc) hf hN
+  have hDrawn : ∀ c pi pop {β : Type} {f : Public → CountV β} {m N : Nat}, PT K pop →
+      (∀ pub, PT K pub ∧ PN K pub → countC.P (f pub) m) → 1 + m ≤ N →
+      countC.P (HmIn.drawnWith (Hashes.counted h) c pi pop d >>= f) N :=
+    fun c pi pop _ _ _ _ hp hf hN => bindQ (drawn_cost h _ pop d) (H3 c pi pop hp) hf hN
+  have hCP : ∀ c pub, PC c → PT K pub ∧ PN K pub →
+      countC.P (HmOut.checkPublicWith (Hashes.counted h) c pub) (NP * perRow K) :=
+    fun c pub hc hp => countC.mono (checkPublic_cost h c pub K hp.1 hp.2) (Nat.mul_le_mul_right _ (hPC c hc))
+  unfold Stmt.setupHiddenWith
+  generalize Except.map (fun x => x.law) (Draw.UnitDraw.ofJson d) = s
+  cases hb : tags.bindings <;> cases partition <;> cases program <;>
+    rcases s with e | (k | ⟨num, den⟩ | ⟨k, strata⟩ | ⟨k, strata⟩)
+  all_goals
+    (try simp -zeta only)
+    apply countC.mono
+    · repeat (first
+        | extract_lets
+        | (with_reducible apply hParse)
+        | (with_reducible apply hLoad)
+        | (with_reducible apply hDrawn)
+        | (with_reducible apply map_bind_cost)
+        | (with_reducible apply throwBind)
+        | (with_reducible apply Cost.bind)
+        | (with_reducible apply bindAny)
+        | (with_reducible apply hCP)
+        | (with_reducible apply map_cost)
+        | (with_reducible apply checkPartition_cost h)
+        | (with_reducible apply stratifiedLaw_cost h)
+        | (with_reducible apply deriveTemplate_cost h)
+        | (with_reducible apply linksCheck_cost h)
+        | (with_reducible apply qwordFinding_cost h)
+        | (with_reducible apply sha_cost h)
+        | (with_reducible intro _)
+        | (with_reducible apply Cost.pure)
+        | (with_reducible apply pureAny)
+        | (with_reducible apply throw0)
+        | (with_reducible apply Cost.throw)
+        | (with_reducible apply Cost.lift)
+        | (with_reducible apply liftAny)
+        | (with_reducible apply Cost.forIn_array)
+        | (with_reducible apply Cost.forIn_array0)
+        | (with_reducible apply forIn_array0Any)
+        | (with_reducible apply Cost.forIn_list)
+        | (with_reducible apply Cost.forIn_list0)
+        | (with_reducible apply forIn_list0Any)
+        | (with_reducible apply forIn_range0)
+        | (with_reducible apply forIn_range0Any)
+        | (with_reducible apply Cost.mapM_array)
+        | (with_reducible apply mapM_array0Any)
+        | (with_reducible apply Cost.ite)
+        | (with_reducible apply iteAny)
+        | (with_reducible apply diteMax)
+        | (with_reducible apply diteAny)
+        | split)
+      iterate 40
+        all_goals try (dsimp +zetaDelta -zeta only)
+        all_goals repeat (first
+          | extract_lets
+          | (with_reducible apply hParse)
+          | (with_reducible apply hLoad)
+          | (with_reducible apply hDrawn)
+          | (with_reducible apply map_bind_cost)
+          | (with_reducible apply throwBind)
+          | (with_reducible apply Cost.bind)
+          | (with_reducible apply bindAny)
+          | (with_reducible apply hCP)
+          | (with_reducible apply map_cost)
+          | (with_reducible apply checkPartition_cost h)
+          | (with_reducible apply stratifiedLaw_cost h)
+          | (with_reducible apply deriveTemplate_cost h)
+          | (with_reducible apply linksCheck_cost h)
+          | (with_reducible apply qwordFinding_cost h)
+          | (with_reducible apply sha_cost h)
+          | (with_reducible intro _)
+          | (with_reducible apply Cost.pure)
+          | (with_reducible apply pureAny)
+          | (with_reducible apply throw0)
+          | (with_reducible apply Cost.throw)
+          | (with_reducible apply Cost.lift)
+          | (with_reducible apply liftAny)
+          | (with_reducible apply Cost.forIn_array)
+          | (with_reducible apply Cost.forIn_array0)
+          | (with_reducible apply forIn_array0Any)
+          | (with_reducible apply Cost.forIn_list)
+          | (with_reducible apply Cost.forIn_list0)
+          | (with_reducible apply forIn_list0Any)
+          | (with_reducible apply forIn_range0)
+          | (with_reducible apply forIn_range0Any)
+          | (with_reducible apply Cost.mapM_array)
+          | (with_reducible apply mapM_array0Any)
+          | (with_reducible apply Cost.ite)
+          | (with_reducible apply iteAny)
+          | (with_reducible apply diteMax)
+          | (with_reducible apply diteAny)
+          | split)
+      all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *)
+      all_goals first | omega | assumption
+    · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); first | omega
+
+
+theorem workLaw_cost' (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) :
+    countC.P (HmRow.workLawWith (Hashes.counted h) obj program k table) 1 := workLaw_cost h obj program k table
+
+set_option maxHeartbeats 8000000 in
+/-- **`Stmt.setupTablesWith`'s calls** at one table of a statement with hidden outputs and a draw: the verifier's own
+stratified or work law, and the one statement's setup. -/
+theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (count : Nat)
+    (tables : List (String × ByteArray)) (d : Json) (partition : Option Json) (program : Option ByteArray)
+    (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
+    (closure : Option (Std.HashMap Nat (Array Nat))) (publicInputs : Option ByteArray) (B : Nat)
+    (hc : count ≤ 1) (hh : tags.hiddenOutputs = true)
+    (hS : countC.P (Stmt.setupHiddenWith (Hashes.counted h) tags cf pf coins tables (some d) partition program
+      publicInputs) B) :
+    countC.P (Stmt.setupTablesWith (Hashes.counted h) tags cf pf coins count tables (some d) partition program work
+      stratified closure publicInputs) (2 + B) := by
+  unfold Stmt.setupTablesWith
+  simp -zeta only [hc, hh, ↓reduceIte, decide_true, Bool.not_true, Bool.and_false, Bool.false_eq_true]
+  generalize Draw.UnitDraw.ofJson d = r
+  rcases r with e | ⟨law, population, units, cl⟩
+  rotate_left
+  · cases law
+    all_goals
+      dsimp -zeta only
+      apply countC.mono
+      · repeat (first
+          | extract_lets
+          | (with_reducible apply throwBind)
+          | (with_reducible apply Cost.bind)
+          | (with_reducible apply bindAny)
+          | (with_reducible apply hS)
+          | (with_reducible apply stratifiedLaw_cost h)
+          | (with_reducible apply workLaw_cost' h)
+          | (with_reducible apply sha_cost h)
+          | (with_reducible intro _)
+          | (with_reducible apply Cost.pure)
+          | (with_reducible apply pureAny)
+          | (with_reducible apply throw0)
+          | (with_reducible apply Cost.throw)
+          | (with_reducible apply Cost.lift)
+          | (with_reducible apply liftAny)
+          | (with_reducible apply Cost.forIn_array)
+          | (with_reducible apply Cost.forIn_array0)
+          | (with_reducible apply forIn_array0Any)
+          | (with_reducible apply Cost.forIn_list)
+          | (with_reducible apply Cost.forIn_list0)
+          | (with_reducible apply forIn_list0Any)
+          | (with_reducible apply forIn_range0)
+          | (with_reducible apply forIn_range0Any)
+          | (with_reducible apply Cost.mapM_array)
+          | (with_reducible apply mapM_array0Any)
+          | (with_reducible apply Cost.ite)
+          | (with_reducible apply iteAny)
+          | (with_reducible apply diteMax)
+          | (with_reducible apply diteAny)
+          | split)
+        iterate 40
+          all_goals try (dsimp +zetaDelta -zeta only)
+          all_goals repeat (first
+            | extract_lets
+            | (with_reducible apply throwBind)
+            | (with_reducible apply Cost.bind)
+            | (with_reducible apply bindAny)
+            | (with_reducible apply hS)
+            | (with_reducible apply stratifiedLaw_cost h)
+            | (with_reducible apply workLaw_cost' h)
+            | (with_reducible apply sha_cost h)
+            | (with_reducible intro _)
+            | (with_reducible apply Cost.pure)
+            | (with_reducible apply pureAny)
+            | (with_reducible apply throw0)
+            | (with_reducible apply Cost.throw)
+            | (with_reducible apply Cost.lift)
+            | (with_reducible apply liftAny)
+            | (with_reducible apply Cost.forIn_array)
+            | (with_reducible apply Cost.forIn_array0)
+            | (with_reducible apply forIn_array0Any)
+            | (with_reducible apply Cost.forIn_list)
+            | (with_reducible apply Cost.forIn_list0)
+            | (with_reducible apply forIn_list0Any)
+            | (with_reducible apply forIn_range0)
+            | (with_reducible apply forIn_range0Any)
+            | (with_reducible apply Cost.mapM_array)
+            | (with_reducible apply mapM_array0Any)
+            | (with_reducible apply Cost.ite)
+            | (with_reducible apply iteAny)
+            | (with_reducible apply diteMax)
+            | (with_reducible apply diteAny)
+            | split)
+        all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *)
+        all_goals first | omega
+      · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); first | omega
+  · dsimp -zeta only
+    apply countC.mono
+    · repeat (first
+        | extract_lets
+        | (with_reducible apply throwBind)
+        | (with_reducible apply Cost.bind)
+        | (with_reducible apply bindAny)
+        | (with_reducible apply hS)
+        | (with_reducible apply stratifiedLaw_cost h)
+        | (with_reducible apply workLaw_cost' h)
+        | (with_reducible apply sha_cost h)
+        | (with_reducible intro _)
+        | (with_reducible apply Cost.pure)
+        | (with_reducible apply pureAny)
+        | (with_reducible apply throw0)
+        | (with_reducible apply Cost.throw)
+        | (with_reducible apply Cost.lift)
+        | (with_reducible apply liftAny)
+        | (with_reducible apply Cost.forIn_array)
+        | (with_reducible apply Cost.forIn_array0)
+        | (with_reducible apply forIn_array0Any)
+        | (with_reducible apply Cost.forIn_list)
+        | (with_reducible apply Cost.forIn_list0)
+        | (with_reducible apply forIn_list0Any)
+        | (with_reducible apply forIn_range0)
+        | (with_reducible apply forIn_range0Any)
+        | (with_reducible apply Cost.mapM_array)
+        | (with_reducible apply mapM_array0Any)
+        | (with_reducible apply Cost.ite)
+        | (with_reducible apply iteAny)
+        | (with_reducible apply diteMax)
+        | (with_reducible apply diteAny)
+        | split)
+      iterate 40
+        all_goals try (dsimp +zetaDelta -zeta only)
+        all_goals repeat (first
+          | extract_lets
+          | (with_reducible apply throwBind)
+          | (with_reducible apply Cost.bind)
+          | (with_reducible apply bindAny)
+          | (with_reducible apply hS)
+          | (with_reducible apply stratifiedLaw_cost h)
+          | (with_reducible apply workLaw_cost' h)
+          | (with_reducible apply sha_cost h)
+          | (with_reducible intro _)
+          | (with_reducible apply Cost.pure)
+          | (with_reducible apply pureAny)
+          | (with_reducible apply throw0)
+          | (with_reducible apply Cost.throw)
+          | (with_reducible apply Cost.lift)
+          | (with_reducible apply liftAny)
+          | (with_reducible apply Cost.forIn_array)
+          | (with_reducible apply Cost.forIn_array0)
+          | (with_reducible apply forIn_array0Any)
+          | (with_reducible apply Cost.forIn_list)
+          | (with_reducible apply Cost.forIn_list0)
+          | (with_reducible apply forIn_list0Any)
+          | (with_reducible apply forIn_range0)
+          | (with_reducible apply forIn_range0Any)
+          | (with_reducible apply Cost.mapM_array)
+          | (with_reducible apply mapM_array0Any)
+          | (with_reducible apply Cost.ite)
+          | (with_reducible apply iteAny)
+          | (with_reducible apply diteMax)
+          | (with_reducible apply diteAny)
+          | split)
+      all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *)
+      all_goals first | omega
+    · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); first | omega
+
 end RecDeploy.SetupCount
