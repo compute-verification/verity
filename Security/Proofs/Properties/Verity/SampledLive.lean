@@ -192,3 +192,44 @@ theorem ks_ofLive (file : ByteArray → ByteArray) (D : ByteArray → Flock.Desc
   fun θ c τ => (A θ c).ks (q θ) τ (hCR θ c τ)
 
 end Verity.SampledSession
+
+namespace Verity.Vocab
+
+open Accounting Flock.Guarantees Flock.Bridge
+open scoped ENNReal
+
+variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+
+/-- **Sampled proofs' target from C-Flock's live audit**: `sampledProofsSound` at `ofLive`'s session, with `KS`
+discharged by `SampledKSLivePub` (`ks_ofLive`): where the collision-resistance premises hold at every strategy and
+`deltaPub` is at most the published error. -/
+theorem sampledProofsSound_ofLive (file : ByteArray → ByteArray) (D : ByteArray → Flock.Desc)
+    (hU : ∀ F, FlockSoundness.Built (D F).unroll.unit) (n : ByteArray → ℕ) (kd K₀ : ByteArray → ℕ)
+    (desc : ByteArray → Claims.Msg) (q : ByteArray → Claims.Sampling.Query)
+    (A : ∀ θ c : ByteArray, LiveAt (n (file θ)) (D (file θ)) (hU (file θ)) (kd θ) (K₀ θ) (desc θ))
+    (place : (θ F c : ByteArray) → Fin (keyCircuit (D F) (hU F) (n F)).N → Option Place)
+    (programDigest : ByteArray → Option Hash.Digest) (rounds : ByteArray → List ℕ)
+    (coinsRead : Audit → Sent → List Release)
+    (world : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Outcome → Accounting.World d α)
+    (certOf : ByteArray → Accounting.Certificates) (priceOf : ByteArray → Accounting.Price)
+    (delta : ByteArray → Audit → ℝ≥0∞)
+    (hreg : ∀ θ h, programDigest θ = some h → sha512 (file θ).data.toList = h)
+    (hOpens : ∀ (θ c : ByteArray) (g : Fin (keyCircuit (D (file θ)) (hU (file θ)) (n (file θ))).N) (v : BitVec 1),
+      ((SampledSession.ofLive file D hU n kd K₀ desc q A).vocab place programDigest rounds coinsRead world certOf
+          priceOf delta).Opens θ (file θ) c g v ↔
+        OpensAt (keyCircuit (D (file θ)) (hU (file θ)) (n (file θ)))
+          (fun g => constsOf (D (file θ)).unroll (hU (file θ)) (n (file θ)) g) Claims.Sampling.sha512Msg
+          (A θ c).Cd (A θ c).roots g (v.getLsbD 0))
+    (hCouple : (SampledSession.ofLive file D hU n kd K₀ desc q A).Couples
+      ((SampledSession.ofLive file D hU n kd K₀ desc q A).vocab place programDigest rounds coinsRead world certOf
+        priceOf delta))
+    (hCR : ∀ θ c τ, (A θ c).CR τ)
+    (hε : ∀ θ, (K₀ θ : ℝ) - 1 ≤ (certOf θ).ε * n (file θ))
+    (hδ : ∀ θ c, ENNReal.ofReal (deltaPub (n (file θ)) (kd θ) (K₀ θ) (A θ c).k (A θ c).qF (A θ c).qS (A θ c).t'
+      (A θ c).M (A θ c).Rw (ioSum (A θ c).P) (A θ c).ρ) ≤ delta θ .sampled) :
+    ((SampledSession.ofLive file D hU n kd K₀ desc q A).vocab place programDigest rounds coinsRead world certOf
+      priceOf delta).SampledProofsSound :=
+  sampledProofsSound _ place programDigest rounds coinsRead world certOf priceOf delta hreg hOpens hCouple
+    (SampledSession.ks_ofLive file D hU n kd K₀ desc q A hCR) hε hδ
+
+end Verity.Vocab
