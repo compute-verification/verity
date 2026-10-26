@@ -9,14 +9,11 @@
     cast         the bf16 <-> f32 casts as Boolean Definitions
     s8           the exact s8 matmul family on bits: the u8 x s8 step, S8Dot_v2, S8Matmul_v2, LimbSplit_v2 and its four limb steps
     int8         the exact-int8 profile's f32 / f64 steps (rint, the s8 casts, the exact and RN64 products, the u32 cast, the LUT
-                 index) as circuits over `forms`, for `verity_vllm.program.registry.boolean_int8`'s Definitions and `scalar`'s
-                 s8 cast
+                 index) as circuits over `forms`, for `verity_vllm.program.registry.boolean_int8`'s Definitions
     moe          a padded static MoE layer's pair GEMMs on bits: MoeSelectBf16x{E}_v2 (the multiplexer tree over the expert id's
                  low bits and its range bit), MoePairCoordinate(W)_v2 and MoePairGemm(W)_v2
-    quant        the torch loop's ReLU and per-row s8 quantize on bits: QuantRowS8_v2, RowAbsMax_v2 and QuantChunkS8_v2
-    scalar       the bf16 comparator, the selects, the bit AND, PTX max / min, the E4M3 and E2M1 casts, the rounding f32 -> s8
-                 cast and the high 16 bits as Boolean Definitions (and names the IEEE f32 arithmetic of `elementwise` and the
-                 bf16 widening of `cast`)
+    scalar       the bf16 comparator, the selects, the bit AND, PTX max / min and the E4M3 and E2M1 casts as Boolean Definitions
+                 (and names the IEEE f32 arithmetic of `elementwise` and the bf16 widening of `cast`)
     rowwise      CMP-92's row ops split so that each Definition outputs at most 16 bits: a bf16 row's softmax (its max, a
                  16-bit half of its reciprocal sum, one output) and the embedding's coordinate
 
