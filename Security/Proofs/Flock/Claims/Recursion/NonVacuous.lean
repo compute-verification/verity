@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Recursion.VerdictAssembly
+import Proofs.Flock.Claims.Recursion.VerdictLoop
 import Proofs.Flock.Claims.Recursion.VerdictPieces
 import Proofs.Flock.Claims.Recursion.VerdictRun
 import Proofs.Flock.Claims.Recursion.RecRecord
@@ -24,18 +25,19 @@ has (`DenseInner`), where the last step reads (`ReadOkR`), the four base checks 
 **The targets** (`acc` is rep `k`'s four accumulators, which the integration chooses once for every row):
 
 * `TargetB` (row B): each rep's stream rounds hold its frames at `w`'s `T` (`FramedAt`).
-* `TargetPoints` (row C): the session's points are the link points at the first coin.
 * `TargetL` (row L): `RowL` at each rep.
 * `TargetD` (row D): `rec-open` pieces, their sides and positions, holding, tied to the decision's side (`hside`) and
   the verifier rows' positions (`hpos`), and covering every query.
 * `TargetR` (row R): S, its groups, the rounds' sizes, `w`'s size and every part's residuals vanishing.
 * `TargetE` (row E): each rep's accumulator chain and position, with `UnitSums` and `ReadsEnds`.
-* `TargetTables` (decision): the session spec has one table per statement.
-* `TargetVerdict` (row A's step 3): every table's reps running, with row L's `params` and `cap`, make the verdict on
-  the decoded proofs (`verifyJPWith`) accept.
+* `TargetDecode` (the record): at a decision, the record value the verdict reads decodes (S1–S14).
+* `TargetPublics` (the record): the session's public words are empty.
 
-Rows G and B's `finds`, `roundsWF`, `noEmpty` are proved (`runs_assembled`), and so are C's sizes and shapes: each rep's
-proof index is in range (`decR_fits`) and shaped for its file (the `shaped` base check).
+Rows G and B's `finds`, `roundsWF`, `noEmpty` are proved (`runs_assembled`), and so are C's sizes, shapes and points:
+each rep's proof index is in range (`decR_fits`), shaped for its file (the `shaped` base check), and the session's link
+points are the first coin's (`DecAt.points_eq`). Row A's step 3 is proved (`DecAt.verdict_of_runs`): the decision sets
+up one table, which the spec names (`DecAt.tables_of_dense`), and every table's runs with row L make the verdict on the
+decoded proofs accept.
 
 **The pieces** (`Piece Q`): the parts' pieces `Q`, and one more, `dense`, which says the inner statement is a dense one.
 Its owner's lowering fact (`hlowP`) holds at every dense compiled statement, and with it the verdict is only ever asked
@@ -90,11 +92,6 @@ def TargetB : Prop :=
         (valOf (D.sh cls i) (D.rep cls (acc x ms cs) i r).w (D.rep cls (acc x ms cs) i r).comb
           (D.rep cls (acc x ms cs) i r).cons .T))
 
-/-- **Row C's target, the points**: the session's points are the link points at the first coin. -/
-def TargetPoints : Prop :=
-  ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ D : DecAt rd x ms cs,
-    D.sess.points = pointsOf D.spec D.d.c₁
-
 /-- **Row L's target**: the fields the reader fixes, at each rep. -/
 def TargetL : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ),
@@ -137,18 +134,19 @@ def TargetE : Prop :=
         ∀ r : Fin 2, ReadsEnds (D.sh cls i) (D.rep cls (acc x ms cs) i r) (accC r)
           (D.opens cls (acc x ms cs) i r (p0 r))
 
-/-- **The decision's target, the tables**: the session spec has one table per statement. -/
-def TargetTables : Prop :=
-  ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ D : DecAt rd x ms cs,
-    D.sts.size = D.spec.tables.size
+/-- **The record's target, the decode**: at a decision, the record value the verdict reads decodes at the setup
+SHA-512 gives. -/
+def TargetDecode : Prop :=
+  ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ d : FlockDeploy.DecR,
+    FlockDeploy.decR rd x ms cs = some d → ∀ (spec : SessionSpec) (sts : Array Stmt),
+    FlockDeploy.setupWith (Claims.hOf FlockDeploy.sha512) d.s.read = .ok (spec, sts) →
+    ∃ sess, Record.decodeJWith (Flock.Hashes.ofSha512 (Claims.hOf FlockDeploy.sha512) : Flock.Hashes Flock.V) spec
+      (FlockDeploy.jAt FlockDeploy.sha512 spec sts d.c₁ d.mids d.f) = .ok sess
 
-/-- **Row A's step 3, the verdict from the tables' runs**: where every table's reps run and carry the pinned
-parameters and the committed cap (row L), the verdict on the decoded proofs accepts. -/
-def TargetVerdict : Prop :=
-  ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs →
-    (∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ), i < D.sts.size →
-      (D.files cls i).Runs ∧ ∀ r : Fin 2, D.RowL cls (acc x ms cs) i r) →
-    holdsR FlockDeploy.sha512 rd .verdict x ms cs
+/-- **The record's target, the public words**: the session's public words are empty. -/
+def TargetPublics : Prop :=
+  ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ D : DecAt rd x ms cs,
+    (D.sess.publics.all fun p => p.size == 0) = true
 
 end Targets
 
@@ -197,27 +195,58 @@ variable (rd : Msg → Option FinalP) (P : Msg → List Msg → List Coin → Pr
   (acc : Msg → List Msg → List Coin → ℕ → Array F128)
 
 /-- **Every table's reps run where the rows are asked**: `runs_assembled`, each row's hypothesis its target. -/
-theorem runs_of_targets (hB : TargetB rd P acc) (hpts : TargetPoints rd P) (hL : TargetL rd P acc)
-    (hD : TargetD rd P acc) (hR : TargetR rd P acc) (hE : TargetE rd P acc) (hT : TargetTables rd P) :
+theorem runs_of_targets (hB : TargetB rd P acc) (hL : TargetL rd P acc) (hD : TargetD rd P acc)
+    (hR : TargetR rd P acc) (hE : TargetE rd P acc) :
     ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs →
       ∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ), i < D.sts.size → (D.files cls i).Runs := by
   intro x ms cs hA D cls i hi
   obtain ⟨⟨xo, sto, hst, hf, hx⟩, hr, hb, -⟩ := id hA
-  have hti : i < D.spec.tables.size := hT x ms cs hA D ▸ hi
+  have hti : i < D.spec.tables.size := by
+    obtain ⟨h1, h2⟩ := D.tables_of_dense hst hf hx
+    omega
   obtain ⟨pieces, sideAt, posAt, hholds, hside, hpos, hcover⟩ := hD x ms cs hA D cls i hi
   obtain ⟨S, gs, hS, hg, hsz, hw, hparts⟩ := hR x ms cs hA D cls i hi
   obtain ⟨accC, p0, hu, hrd⟩ := hE x ms cs hA D cls i hi
-  exact D.runs_assembled cls (acc x ms cs) hst hf hx hi hti (hB x ms cs hA D cls i hi) (hpts x ms cs hA D)
+  exact D.runs_assembled cls (acc x ms cs) hst hf hx hi hti (hB x ms cs hA D cls i hi) D.points_eq
     (fun r => idx_lt D hi r) (fun r => shaped_of_base hr hb D _ (idx_lt D hi r)) (hL x ms cs hA D cls i hi)
     pieces sideAt posAt hholds hside hpos hcover hS hg hsz hw hparts accC p0 hu hrd
 
-/-- **The verdict where the rows are asked**: `TargetVerdict` at `runs_of_targets` and row L. -/
-theorem verdict_of_targets (hB : TargetB rd P acc) (hpts : TargetPoints rd P) (hL : TargetL rd P acc)
-    (hD : TargetD rd P acc) (hR : TargetR rd P acc) (hE : TargetE rd P acc) (hT : TargetTables rd P)
-    (hV : TargetVerdict rd P acc) :
-    ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → holdsR FlockDeploy.sha512 rd .verdict x ms cs :=
-  fun x ms cs hA => hV x ms cs hA fun D cls i hi =>
-    ⟨runs_of_targets rd P acc hB hpts hL hD hR hE hT x ms cs hA D cls i hi, hL x ms cs hA D cls i hi⟩
+/-- A class to read the tables' files at: their runs and row L do not depend on it. -/
+def cls₀ : HClass where
+  m := 13
+  kLog := 6
+  hk := by omega
+  hk6 := le_refl _
+  hm := le_refl _
+  pin := ⟨0, by positivity⟩
+  A₀pub := 0
+  B₀pub := 0
+  slotLog := 0
+  units := ∅
+  ptLocal := 0
+  mPts := 0
+  nnz := 0
+
+/-- **The verdict where the rows are asked**: at a decision, the record decodes (`TargetDecode`), and row A's step 3
+(`DecAt.verdict_of_runs`) at row G (`DecAt.rowG`), `runs_of_targets` and row L. -/
+theorem verdict_of_targets (hB : TargetB rd P acc) (hL : TargetL rd P acc) (hD : TargetD rd P acc)
+    (hR : TargetR rd P acc) (hE : TargetE rd P acc) (hDec : TargetDecode rd P) (hPub : TargetPublics rd P) :
+    ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → holdsR FlockDeploy.sha512 rd .verdict x ms cs := by
+  intro x ms cs hA
+  obtain ⟨⟨xo, sto, hst, hf, hx⟩, -, -, -⟩ := id hA
+  unfold holdsR
+  cases h : FlockDeploy.actR rd x ms cs with
+  | rej => trivial
+  | coin c => trivial
+  | decide s spec sts link c₁ mids f =>
+    intro spec' sts' hs
+    have hd := FlockDeploy.actR_decide h
+    obtain ⟨sess, hsess⟩ := hDec x ms cs hA _ hd spec' sts' hs
+    let D : DecAt rd x ms cs := ⟨_, hd, spec', sts', hs, sess, hsess⟩
+    obtain ⟨h1, ht1⟩ := D.tables_of_dense hst hf hx
+    exact D.verdict_of_runs cls₀ (acc x ms cs) (h1.trans ht1.symm) (by omega) (hPub x ms cs hA D)
+      (fun i hi => D.rowG cls₀ (acc x ms cs) hst hf hx hi)
+      (fun i hi => ⟨runs_of_targets rd P acc hB hL hD hR hE x ms cs hA D cls₀ i hi, hL x ms cs hA D cls₀ i hi⟩)
 
 end Runs
 
@@ -245,13 +274,12 @@ def RowsHold {Q : Type} (rows : Msg → List Q) (holds : Q → Msg → List Msg 
 structure Targets (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → List Q)
     (holds : Q → Msg → List Msg → List Coin → Prop) (acc : Msg → List Msg → List Coin → ℕ → Array F128) : Prop where
   b : TargetB rd (RowsHold rows holds) acc
-  points : TargetPoints rd (RowsHold rows holds)
   l : TargetL rd (RowsHold rows holds) acc
   d : TargetD rd (RowsHold rows holds) acc
   r : TargetR rd (RowsHold rows holds) acc
   e : TargetE rd (RowsHold rows holds) acc
-  tables : TargetTables rd (RowsHold rows holds)
-  verdict : TargetVerdict rd (RowsHold rows holds) acc
+  decode : TargetDecode rd (RowsHold rows holds)
+  publics : TargetPublics rd (RowsHold rows holds)
 
 /-- **`hpieces` at the pieces, from the targets.** -/
 theorem hpieces_of_targets (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → List Q)
@@ -261,7 +289,7 @@ theorem hpieces_of_targets (rd : Msg → Option FinalP) {Q : Type} (rows : Msg �
       (∀ b ∈ VerdictP.bases, holdsR FlockDeploy.sha512 rd b x ms cs) →
       (∀ q ∈ pieces rows x, pholds holds q x ms cs) → holdsR FlockDeploy.sha512 rd .verdict x ms cs := by
   intro x ms cs hr hb hp
-  refine verdict_of_targets rd (RowsHold rows holds) acc h.b h.points h.l h.d h.r h.e h.tables h.verdict x ms cs
+  refine verdict_of_targets rd (RowsHold rows holds) acc h.b h.l h.d h.r h.e h.decode h.publics x ms cs
     ⟨hp .dense List.mem_cons_self, hr, hb, fun q hq => hp (.row q) ?_⟩
   exact List.mem_cons_of_mem _ (List.mem_map.2 ⟨q, hq, rfl⟩)
 
