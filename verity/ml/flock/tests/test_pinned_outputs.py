@@ -12,6 +12,9 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+#: the live server's refusal of the form (`proved_scope::PINNED_WHY`)
+PINNED_WHY = "pinned outputs (META pinned_outputs): a form no soundness theorem covers yet"
+
 
 def pinned_toy(pinned_words: int, rowed: bool = False, flip: bool = False):
     """A unit reading one 1024-bit `sha512/row/v2` input row ``p0`` (64 words) that pins ``d`` of ``pinned_words`` words,
@@ -86,10 +89,12 @@ def test_a_pinned_output_has_no_row_and_meta_names_it(pinned_words, rowed, tmp_p
 @pytest.mark.skipif(not os.environ.get("FLOCK_CIRCUIT"), reason="FLOCK_CIRCUIT names no flock-circuit selftest build")
 @pytest.mark.parametrize("pinned_words,rowed", [(1, False), (16, True)])
 def test_the_prover_proves_a_zero_pinned_output_and_no_nonzero_one(pinned_words, rowed, tmp_path):
-    """`flock-circuit selftest --only honest` (a selftest build, ``FLOCK_CIRCUIT``) accepts a session of instances whose pinned
-    words are zero, with no output row or with one before them, and accepts none whose pinned words are not: Δ ties each
-    pinned bit to the forced-zero row, so the block's R1CS has no witness there. What it catches that the parse test
-    can't: the prover's witness and Δ agree on the pinned columns, and a nonzero pinned word reaches no accepted proof."""
+    """`flock-circuit selftest --only honest` (a selftest build, ``FLOCK_CIRCUIT``) refuses the form (`ProvedScope`'s
+    `pinnedWhy`, until a soundness theorem covers it), and under the refusal both replays verify a session of instances
+    whose pinned words are zero, with no output row or with one before them, and neither verifies one whose pinned words
+    are not: Δ ties each pinned bit to the forced-zero row, so the block's R1CS has no witness there. What it catches that
+    the parse test can't: the prover's witness and Δ agree on the pinned columns, and a nonzero pinned word reaches no
+    verified proof."""
     from verity_flock import circuit as FC
 
     low, sub, iset = pinned_toy(pinned_words, rowed)
@@ -111,9 +116,10 @@ def test_the_prover_proves_a_zero_pinned_output_and_no_nonzero_one(pinned_words,
                             "--circuit", str(d / "circuit.txt"), "--tables", str(d / "tables"), "--forged", str(d / "none.txt")],
                            capture_output=True, text=True, check=False)
         neg = [json.loads(ln.split("\t", 1)[1]) for ln in r.stdout.splitlines() if ln.startswith("NEG\t")]
-        verdicts[zero] = (neg[0].get("accepted") is True) if neg else False
         (tmp_path / f"{d.name}.log").write_text(r.stdout + r.stderr)
-    assert verdicts == {True: True, False: False}, (tmp_path / "zero.log").read_text()[-2000:]
+        assert len(neg) == 1 and PINNED_WHY in (neg[0]["refusal"] or "") and not neg[0]["accepted"], r.stdout + r.stderr
+        verdicts[zero] = [ok for _stream, ok, _why in neg[0]["reps_ok"]]
+    assert verdicts == {True: [True, True], False: [False, False]}, verdicts
 
 
 def test_pinned_outputs_are_refused_outside_their_form():

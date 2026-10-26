@@ -3842,10 +3842,9 @@ mod tests {
         assert_eq!((c.pinned, c.out_row_ports.len(), c.ports.len()), (1, 0, 1));
         let (da, db) = delta(&c, pin_of(&c));
         let zero = (c.unit_range().slot(0) + c.unit().useful) as u32;
-        let want: Vec<(u32, u32)> = (0..c.g).flat_map(|g| (0..16).flat_map(move |t| {
-            let i = (c.out_col()(g, 0) + t) as u32;
-            [(i, i), (i, zero)]
-        })).collect();
+        let out_col = &c.out_col();
+        let want: Vec<(u32, u32)> = (0..c.g).flat_map(|g| (0..16).map(move |t| (out_col(g, 0) + t) as u32))
+            .flat_map(|i| [(i, i), (i, zero)]).collect();
         assert_eq!((&da[da.len() - want.len()..], &db[db.len() - want.len()..]), (&want[..], &want[..]));
         assert_eq!(crate::proved_scope::circuit_why(&c, true).as_deref(), Some(crate::proved_scope::PINNED_WHY));
         let refused: [(&str, &dyn Fn(&mut Value)); 5] = [
