@@ -27,6 +27,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from e2e_h200 import legs as L  # noqa: E402
@@ -164,7 +165,8 @@ def main(argv: list[str] | None = None) -> int:
         extra={"tamper": a.tamper or None, "registration": registration, "micro_batch": a.micro_batch or a.batch,
                "attention": driver.attn.kind + (" (kernels' attn_ref, #4466, and softmax_t)" if driver.attn.kind == "attn_ref"
                                                 else " (the Definitions' numpy kernels on the CPU)"),
-               "gemm": "torch._int_mm + torch epilogue" if a.device.startswith("cuda") else "exact f64 matmul + torch epilogue"})
+               "gemm": "torch._int_mm + torch epilogue" if a.device.startswith("cuda") else "exact f64 matmul + torch epilogue",
+               "cuda_peak_allocated_bytes": torch.cuda.max_memory_allocated() if a.device.startswith("cuda") else None})
     print(json.dumps({"replay": {k: replay[k] for k in ("drawn", "mismatches", "families")},
                       "opening": opening and {k: opening[k] for k in ("mismatches", "units_opened", "units_unverified",
                                                                       "reference_unequal")},
