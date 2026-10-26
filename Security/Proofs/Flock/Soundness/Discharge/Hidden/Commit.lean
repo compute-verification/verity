@@ -53,7 +53,8 @@ theorem parseCommit_leafScheme (h : HmOut.parseCommit tags cf tables = .ok c) : 
     exact parse_leafScheme h
   · rw [parseCommit_tmpl hi] at h
     obtain ⟨tu, c₀, hp, -, -, rfl⟩ := TmplValue.parseTmpl_cases h
-    exact Exec.parse_leafScheme_pre hp
+    have := Exec.parse_leafScheme_pre hp
+    exact this
 
 /-- A committed circuit's slots are `HmRow.check`'s: `slot_log` in 7..k_log. -/
 theorem parseCommit_slots (h : HmOut.parseCommit tags cf tables = .ok c) :
@@ -64,7 +65,8 @@ theorem parseCommit_slots (h : HmOut.parseCommit tags cf tables = .ok c) :
   · rw [parseCommit_tmpl hi] at h
     obtain ⟨tu, c₀, hp, -, -, rfl⟩ := TmplValue.parseTmpl_cases h
     obtain ⟨_, hls⟩ := hm_parse_checkPre hp
-    exact hm_check_slots hls
+    have := hm_check_slots hls
+    exact this
 
 /-! ## The session -/
 
