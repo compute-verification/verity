@@ -3,17 +3,28 @@
   "IoTieRequestEnd_v1": {
    "and": 65
   },
+  "IoTieRequestFrame_v1{B=4096}": {
+   "and": 166615,
+   "type": "dadd0d916ddc6be4385ab72e20fe8615f7730ecbc40c1507b4199421965875f6f1d43948dee581cf20856de084e9fb968e1defd73e069c7299604faaf725854e"
+  },
   "IoTieRequestFrame_v1{B=512}": {
    "and": 20876
   },
   "IoTieRequestStep_v1": {
    "and": 135
   },
+  "IoTieRequest_v1{B=4096,L=1,R=1}": {
+   "and": 166811,
+   "type": "b709bec777e0e888ad1de914ca890416e3d578acf4cdc5d41c12e7e888e20bf5348f6937565ab0d796439e769cff50258e87e0c1b5a0fd9546285c31c5041824"
+  },
   "IoTieRequest_v1{B=512,L=1,R=2}": {
    "and": 42082
   }
  },
  "digests": {
+  "IoTieRequest_v1{B=4096,L=1,R=1}": {
+   "sha512": "7ce3d6d3f1c8b757e165d03e20dc4d5918254c5676820014cf5f439af8688f9fb16145cf09e0cd308a964ecfffe31d60f6574f2793e32e90f40d980c8be81595"
+  },
   "IoTieRequest_v1{B=512,L=1,R=2}": {
    "sha512": "d5549b88b09fb0b469dc3185634928d1f8ece88dfeca9f8c1ca94b77931d2f7ecba980d318119553c489d138b328abb276fa733d6b7f8f8074438af2e8467432"
   },

@@ -7,13 +7,15 @@ and the stream's registrations built from the stream's outcomes of record alone 
 `tie_service.Ties`, the advised link's tie source).
 
     python benchmarks/network_traces/n2_tie_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
-      [--jobs 2] [--debug-clear] [--dry]
+      [--class test|served] [--gpu] [--jobs 2] [--debug-clear] [--dry]
 
 * **The link** (`PARAMS`, the pinned size class): REDTEAM phase 9's span, three id requests of 5, 40 and 5 prompt tokens
   served through the warden's own ingress (`io_request.serve`) in two windows of T = 4 buckets of two lanes of r = 2
   512-byte cells, request 1's `DATA` in bucket 3 and its `END` in bucket 4, so it spans the windows. The advice is v0
   of one prefill step, each request one kept output, with the link's `received`; it and the warden's release are
-  public, and the cells and their salts are witness.
+  public, and the cells and their salts are witness. ``--class served`` (`CLASSES`) is the served link's ingress
+  instead, `n2_advised_zk`'s: one window of T = 60 buckets of one lane of r = 1 4,096-byte cell, the unit
+  `IoTieRequest_v1{B=4096,L=1,R=1}`, with the ``honest`` and ``forged`` members alone.
 * **Members.** One stream each, over the link's two windows: ``honest``, tied in both; ``carried``, bucket 4 proved on
   its lane's carry-in fields + 5 with its carry-out's + 5 (REDTEAM phase 9 (b)), which IoTieRequest accepts but which
   opens to no public row of the verifier's, so window 1 is refused; ``forged``, an advice whose request 1 is 45 prompt
@@ -76,11 +78,35 @@ MEMBERS = ("honest", "carried", "forged", "split")
 #: each member's windows' outcomes of record, which are its tie's
 EXPECT = {"honest": (True, True), "carried": (True, False), "forged": (False, False), "split": (False, False)}
 #: what the verifier receives per link-window, by file (`member`)
-RECEIVED = {"registration.json": "the registration record (the warden's salted root)", "draw.json": "the stream's draw",
+def _received(T: int) -> dict[str, str]:
+    return {"registration.json": "the registration record (the warden's salted root)", "draw.json": "the stream's draw",
             f"pub-{T}.bin": "the statement's public file", "registered.json": "the verifier's own registered reads",
             "session-*": "the session's files",
             "delivered.json": "each unit's pub and o0 rows' salts and its output word",
             "outcome.json": "the outcome record", "advice.json": "the link's advice and the warden's release"}
+
+
+RECEIVED = _received(T)
+WINDOWS = 2
+#: the size classes `use` sets: ``test``, the pinned test class above with every member; ``served``, the served link's
+#: ingress (`n2_advised_zk`: B = 4,096, T = 60 buckets a window, an allocation of one cell, IoTieRequest_v1{B=4096,L=1,
+#: R=1}), one window, honest and forged
+CLASSES = {
+    "test": {"B": B, "params": PARAMS, "windows": WINDOWS, "expect": EXPECT},
+    "served": {"B": 4096, "params": W.WardenParams(cell_bytes=4096, slots=1, lanes=1, window=60, delay=1),
+               "windows": 1, "expect": {"honest": (True,), "forged": (False,)}},
+}
+
+
+def use(name: str) -> None:
+    """Set the driver's size class to `CLASSES` [name]: its B, warden parameters, windows, and members with their
+    verdicts."""
+    global B, PARAMS, T, PROFILE, MEMBERS, EXPECT, RECEIVED, WINDOWS
+    c = CLASSES[name]
+    B, PARAMS, WINDOWS, EXPECT = c["B"], c["params"], c["windows"], dict(c["expect"])
+    T, MEMBERS = PARAMS.window, tuple(EXPECT)
+    PROFILE = AD.AdvisedProfile(WINDOWS, TS.framing(B, 64), 0)
+    RECEIVED = _received(T)
 
 
 def log(msg: str) -> None:
@@ -103,8 +129,8 @@ def advice(prompt_lens, got) -> AD.LinkAdvice:
 
 
 def served(prompt_lens, arrivals, rates) -> Q.Link:
-    """The requests through the warden's own ingress over two windows."""
-    return Q.serve(PARAMS, requests(prompt_lens), arrivals, rates, buckets=2 * T)
+    """The requests through the warden's own ingress over the class's windows."""
+    return Q.serve(PARAMS, requests(prompt_lens), arrivals, rates, buckets=WINDOWS * T)
 
 
 def received(link: Q.Link) -> tuple[int, ...]:
@@ -124,11 +150,12 @@ def members() -> dict[str, tuple]:
     proves on, what was changed)."""
     link, split = served(SPAN, ARRIVALS, RATES), served(SPLIT, SPLIT_ARRIVALS, SPLIT_RATES)
     honest = advice(SPAN, received(link))
-    return {"honest": (link, honest, None, {}),
+    plan = {"honest": (link, honest, None, {}),
             "carried": (link, honest, _carried, {"bucket": T, "added_fields": CARRIED}),
             "forged": (link, advice(FORGED, received(link)), None, {"prompt_lens": list(FORGED)}),
             "split": (split, advice(SPLIT[::-1], received(split)), SPLIT, {"prompt_lens": list(SPLIT[::-1]),
                                                                           "certified": list(SPLIT)})}
+    return {name: plan[name] for name in MEMBERS}
 
 
 def link_windows(tie: TS.IngressTie, link: Q.Link, adv: AD.LinkAdvice, edit=None) -> SimpleNamespace:
@@ -246,7 +273,10 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
     verifier receives under ``out / "verifier"`` (`RECEIVED`), each window's files prefixed by its window."""
     stream = tie.stream(budget=len(rd.windows), delta=cs.DELTA, challenger="n2-tie-zk", coins=cs._no_coins,
                         clock=time.monotonic)
-    env, av = Z.firewall(M, sg), SimpleNamespace(bin=a.bin, lease=[], gpu=False)
+    # the firewall rechecks a witness the host computed, so a device prover takes the host's (flock-circuit's
+    # FIREWALL-REFUSED otherwise), as a8's fw arm does
+    env = {**Z.firewall(M, sg), **({"FC_HOST_WITNESS": "1"} if a.gpu else {})}
+    av = SimpleNamespace(bin=a.bin, lease=[], gpu=a.gpu)
     vdir = out / "verifier"
     vdir.mkdir(parents=True, exist_ok=True)
     digest = AD.digest(rd.advice)
@@ -356,7 +386,8 @@ def prove(a) -> int:
     tie = TS.IngressTie(LINK, PARAMS, SESSION, proof_deadline=cs.PROOF_DEADLINE_S)
     plan = members()
     rounds = {name: link_windows(tie, link, adv, edit) for name, (link, adv, edit, _) in plan.items()}
-    summary: dict = {"link": {"name": LINK, "shape": list(tie.key), "T": T, "unit": tie.unit.id,
+    summary: dict = {"class": a.cls, "gpu": a.gpu,
+                     "link": {"name": LINK, "shape": list(tie.key), "T": T, "unit": tie.unit.id,
                               "program": tie.partition["program"], "partition": P.digest(tie.partition),
                               "gates": [g.id for g in tie.gates()], "pinned": all(HC.pinned(g) for g in tie.gates()),
                               "bits": {p: tie.bits(p) for p in TS.PORTS}},
@@ -435,6 +466,8 @@ def main(argv=None) -> int:
     p.add_argument("--bin")
     p.add_argument("--lean")
     p.add_argument("--out", required=True)
+    p.add_argument("--class", dest="cls", choices=sorted(CLASSES), default="test", help="the size class (`CLASSES`)")
+    p.add_argument("--gpu", action="store_true", help="each session's prover on the GPU (`flock-circuit prove --gpu`)")
     p.add_argument("--port", type=int, default=7981)
     p.add_argument("--jobs", type=int, default=2, help="members proved at once")
     p.add_argument("--debug-clear", action="store_true",
@@ -444,6 +477,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
+    use(a.cls)
     return prove(a)
 
 
