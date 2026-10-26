@@ -84,9 +84,14 @@ theorem cutRounds_head {l : List ℕ} {ls : List (List ℕ)} {m : Msg} {ps : Lis
 
 /-! ## The level-0 cap -/
 
+/-- A layout's messages don't read its calls. -/
+theorem msgs_shaAt (L : LayoutB) (f : Msg → ℕ → List (Msg × List HmNets.Lin × List HmNets.Lin)) :
+    ({ L with shaAt := f } : LayoutB).msgs = L.msgs := rfl
+
 /-- The layout of record's messages are `layoutBTops`' at the last round's pieces: `layR` adds only calls. -/
 theorem msgs_layR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) :
-    (DeployedR.layR elem).msgs = (RestRead.layAt (DeployedR.restR elem)).msgs := rfl
+    (DeployedR.layR elem).msgs = (RestRead.layAt (DeployedR.restR elem)).msgs :=
+  msgs_shaAt (RestRead.layAt (DeployedR.restR elem)) _
 
 /-- **The side's level-0 cap entry is RecCap's `top` row's node**, at every reading of the deployed last message: at
 a dense compiled statement and witnesses one a part, `finalR`'s first round is RecCap's part's `top` rows over its
