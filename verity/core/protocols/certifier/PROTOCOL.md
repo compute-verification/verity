@@ -292,6 +292,10 @@ the certificates' signatures are checked on the host from their public fields, n
 spatial unit across links is not checked (each registration is one link-window, alone), and the frames' consistency
 with the served computation is left to N3.
 
+## A warden link (`service.WardenProfile`)
+
+[protocol/warden-link.md](protocol/warden-link.md).
+
 ## A period, as onsite's communication component (`verity/certifier/v0`)
 
 Onsite composes the network certifier as one `Core.Protocol`, `NetworkCheck.Period` (`network/lean`, the
