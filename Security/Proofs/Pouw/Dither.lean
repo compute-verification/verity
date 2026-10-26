@@ -2,20 +2,10 @@ import Definitions.Pouw.Guarantees.Dither
 import Proofs.Pouw.RelativeSecurity
 
 /-!
-# Dither's work-soundness: the freed-compute bound, the map to the floors of record, and the honest witness
+# The no-fold Dither protocol's work-soundness: the freed-compute bound and the honest witness
 
 * `FreedOfFloor`: the guarantee `Definitions.Pouw.Guarantees.Dither.FreedOfFloor`, weak duality of the period's linear
   program.
-* `workFloor_of_roundsFloor`: the rounds' floor gives the whole run's floor under the direct-sum cut (the rounds use no
-  more of any resource than the run), so `DitherWorkSound`'s proof owes only its `RoundsFloor` conjunct.
-* `workFloor_iff_serviceFloorPerProver`: where the machine's cost of a run is its priced cost at `λ`, the priced floor
-  `WorkFloor` is the service floor per prover of the floors of record (`ServiceFloorPerProver`), so the conclusions
-  of `StagedFloorKOneSidedPerProver` and `DitherWorkSound` are one form.
-* `honest_witness` (rule I): an honest prover of today's Dither round (`L = 32`, U in `±1, …, ±64`, placement
-  `t mod 32`, on a `1 × 32 × 1` instance) over a one-round period meets every hypothesis of `DitherWorkSound` at `c = 1`
-  and is accepted on every coin, its rounds and its whole run each at priced cost `k H`. The model (`flat`) prices
-  every program at least one honest round, so SAK(matmul) holds in it at `c = 1`; it witnesses that the premises hold
-  together with an honest run, not that SAK(matmul) holds in a real model.
 -/
 
 namespace Pouw.SecurityProofs.Dither
@@ -50,48 +40,22 @@ theorem FreedOfFloor : Pouw.Guarantees.Dither.FreedOfFloor := by
   unfold Period.value
   nlinarith [h1, h3, h4, hfloor, hslack]
 
-/-! ## The map to the floors of record -/
-
-/-- Where the machine's cost of every run is its priced cost at `λ`, the priced floor is the service floor per
-prover, the conclusion form of `StagedFloorKOneSidedPerProver`. -/
-theorem workFloor_iff_serviceFloorPerProver (G : Accel) (S : Service) (p : G.Res → ℝ) (F : ℝ)
-    (κ : ∀ (Ω : Type) [Fintype Ω], G.Mc.Alg (S.Seed × Ω) (S.Com × S.Ans) → ENNReal)
-    (hc : ∀ {I O : Type} (f : G.Mc.Alg I O) (x : I), G.Mc.cost f x = G.priced p f x) :
-    WorkFloor G S p F κ ↔ ServiceFloorPerProver G.Mc S F κ := by
-  unfold WorkFloor ServiceFloorPerProver Machine.charge
-  simp only [hc]
-
-/-- **The rounds' floor gives the whole run's floor**: where the cut is a direct sum (SAK(matmul)'s second half: an
-accepted period's rounds use no more of any resource than the adversary's run), every run whose rounds are priced at
-`F` or more is itself priced at `F` or more, at every price vector. -/
-theorem workFloor_of_roundsFloor (G : Accel) (S : Service) (P : RoundProto) {R : ℕ} (run : PeriodMap G S P R)
-    (e : S.Seed ≃ Paths (P.Draw × P.Chk) R) (p : G.Res → ℝ) (F : ℝ)
-    (κ : ∀ (Ω : Type) [Fintype Ω], G.Mc.Alg (S.Seed × Ω) (S.Com × S.Ans) → ENNReal)
-    (hp : Simplex p) (hG1 : G.G1) (hG2 : G.G2) (hP1 : G.P1) (hP2 : G.P2) (hA : DirectSum G S P run e)
-    (h : RoundsFloor G S P run e p F κ) : WorkFloor G S p F κ := by
-  intro Ω _ M hM
-  refine le_trans (ENNReal.ofReal_le_ofReal (prob_mono ?_)) (h Ω M hM)
-  rintro ⟨σ, r⟩ ⟨hv, hlt⟩
-  refine ⟨hv, lt_of_le_of_lt ?_ (lt_of_le_of_lt (le_max_right _ _) hlt)⟩
-  have hx := hA hG1 hG2 hP1 hP2 Ω M hM r (e σ) (by rw [Equiv.symm_apply_apply]; exact hv)
-  rw [Equiv.symm_apply_apply] at hx
-  unfold PeriodPlay.priced Accel.priced
-  exact Finset.sum_le_sum fun q _ =>
-    mul_le_mul_of_nonneg_left (div_le_div_of_nonneg_right (hx.1 q) (hG2.1 q).le) (hp.1 q)
-
 /-! ## The honest witness (rule I) -/
 
-/-- Programs as functions carrying a work tag of at least one round; the machine's own costs are `0`. -/
-def tagged : Machine where
-  Alg I O := {g : (I → O) × ℕ // 1 ≤ g.2}
+/-- Programs as functions carrying a tag at least their output type's size; the machine's own costs are `0`. The
+witness model (`wmodel`) charges a program its tag's bits on every resource, so every program uses at least its
+output's bits. -/
+noncomputable def sized : Machine where
+  Alg I O := {g : (I → O) × ℕ // Nat.card O ≤ g.2}
   eval f := f.1.1
   time _ := 0
   cost _ _ := 0
   size _ := 0
-  seq f g := ⟨(g.1.1 ∘ f.1.1, f.1.2 + g.1.2), by have := f.2; omega⟩
-  pair f g := ⟨(fun x => (f.1.1 x, g.1.1 x), f.1.2 + g.1.2), by have := f.2; omega⟩
-  fst := ⟨(Prod.fst, 1), le_rfl⟩
-  snd := ⟨(Prod.snd, 1), le_rfl⟩
+  seq f g := ⟨(g.1.1 ∘ f.1.1, f.1.2 + g.1.2), by have := g.2; omega⟩
+  pair f g := ⟨(fun x => (f.1.1 x, g.1.1 x), f.1.2 * g.1.2), by
+    rw [Nat.card_prod]; exact Nat.mul_le_mul f.2 g.2⟩
+  fst := fun {I _} => ⟨(Prod.fst, Nat.card I), le_rfl⟩
+  snd := fun {_ J} => ⟨(Prod.snd, Nat.card J), le_rfl⟩
   eval_seq _ _ _ := rfl
   eval_pair _ _ _ := rfl
   eval_fst _ := rfl
@@ -108,111 +72,188 @@ def tagged : Machine where
   time_fst := rfl
   time_snd := rfl
 
-/-- One resource at rate 1; a program tagged `t` uses `t H` of it over `t H` seconds, holds nothing, imports nothing. -/
-noncomputable def flat (H : ℝ) : Accel where
-  Mc := tagged
-  Res := Unit
-  rate _ := 1
+/-- The witness's three resources: resource `r` takes `wt r` units a bit, and supplies `wt r` units a second. -/
+def wt : Fin 3 → ℝ := ![1, 2, 3]
+
+/-- **The witness model**: three resources; a program tagged `t` takes `log₂ t` seconds and `wt r · log₂ t` units of
+each resource `r`, holds nothing and imports nothing. -/
+noncomputable def wmodel : Accel where
+  Mc := sized
+  Res := Fin 3
+  rate := wt
   mem := 0
-  use f _ _ := H * (f.1.2 : ℝ)
+  use f _ r := wt r * (Nat.log 2 f.1.2 : ℝ)
   held _ _ := 0
-  wall f _ := H * (f.1.2 : ℝ)
+  wall f _ := (Nat.log 2 f.1.2 : ℝ)
   ext _ _ := 0
   P1 := True
   P2 := True
 
-/-- Today's Dither knobs (`L = 32`, U in `±1, …, ±64`, placement `t mod 32`) on a `1 × 32 × 1` instance. -/
-abbrev K1 : Knobs where
+/-- The witness's prices: resource 1 is free, so the price is not uniform. -/
+def μw : Fin 3 → ℝ := ![1, 0, 2]
+
+/-- The no-fold knobs on a `1 × 1 × 1` instance with one segment of length 1, bit noise on both operands, one word
+checked a round, and the commitment `h` into 512 bits. -/
+abbrev Kw (h : (Fin 1 → Fin 1 → Fin 1 → Word) → (Fin 512 → Bool)) : NoFold where
   n := 1
   n' := 1
   nb := 1
-  L := 32
-  u := 64
-  place t := ⟨t.val % 32, Nat.mod_lt _ (by norm_num)⟩
+  L := 1
+  Draw := (Fin 1 → Fin (1 * 1) → Fin 2) × (Fin (1 * 1) → Fin 1 → Fin 2)
+  noise ab d := (fun i t => ab.1 i t + ((d.1 i t).val : Word), fun t j => ab.2 t j + ((d.2 t j).val : Word))
+  s := 1
+  Root := Fin 512 → Bool
+  merkle := h
 
-/-- Today's Dither round at `K1`. -/
-abbrev P1 : RoundProto := ditherRound K1
+/-- The no-fold round at `Kw h`. -/
+abbrev Pw (h : (Fin 1 → Fin 1 → Fin 1 → Word) → (Fin 512 → Bool)) : RoundProto := noFoldRound (Kw h)
+
+variable (h : (Fin 1 → Fin 1 → Fin 1 → Word) → (Fin 512 → Bool))
 
 /-- The committed operands: zero. -/
-def a0 : P1.Inst := (fun _ _ => 0, fun _ _ => 0)
+def a0 : (Pw h).Inst := (fun _ _ => 0, fun _ _ => 0)
 
-/-- The honest round program: the honest transcript, tagged one round. -/
-def honRound (H : ℝ) (a : P1.Inst) : (flat H).Mc.Alg P1.Draw P1.Tr :=
-  (⟨(ditherHonest K1 a, 1), le_rfl⟩ : {g : (P1.Draw → P1.Tr) × ℕ // 1 ≤ g.2})
+/-- The honest words program, tagged its output's size. -/
+noncomputable def hw : wmodel.Mc.Alg (Pw h).Draw (Pw h).Tr :=
+  (⟨(noFoldHonest (Kw h) (a0 h), Nat.card (Pw h).Tr), le_rfl⟩ :
+    {g : ((Pw h).Draw → (Pw h).Tr) × ℕ // Nat.card (Pw h).Tr ≤ g.2})
 
-/-- The witness service: a one-round period's live coins, the transcript as the answer, and the check on it. -/
-noncomputable def S1 : Service where
-  Seed := Paths (P1.Draw × P1.Chk) 1
-  lam := 256
+/-- The honest commitment program, tagged its output's size. -/
+noncomputable def hh : wmodel.Mc.Alg (Pw h).Draw (Pw h).Root :=
+  (⟨(fun d => h (noFoldHonest (Kw h) (a0 h) d), Nat.card (Pw h).Root), le_rfl⟩ :
+    {g : ((Pw h).Draw → (Pw h).Root) × ℕ // Nat.card (Pw h).Root ≤ g.2})
+
+/-- The witness service: a two-round period's live coins; nothing committed before the coins; the answer each round's
+commitment and words; the verifier checks each round's drawn word. -/
+noncomputable def Sw : Service where
+  Seed := Paths ((Pw h).Draw × (Pw h).Chk) 2
+  lam := 4
   card_seed := by
-    refine (Fintype.card_congr (Equiv.prodPUnit (P1.Draw × P1.Chk))).trans ?_
-    simp [ditherRound, Fintype.card_prod, Fintype.card_fin]
+    refine (Fintype.card_congr (Equiv.prodCongr (Equiv.refl _) (Equiv.prodPUnit _))).trans ?_
+    simp [noFoldRound, Fintype.card_prod, Fintype.card_fin]
   Com := Unit
-  Ans := P1.Tr
+  Ans := ((Pw h).Root × (Pw h).Tr) × ((Pw h).Root × (Pw h).Tr)
   Coins := Unit
-  verify _ σ T := @decide (P1.ok a0 σ.1.1 σ.1.2 T) (Classical.propDecidable _)
+  verify _ σ T := @decide ((Pw h).ok (a0 h) σ.1.1 σ.1.2 T.1.2 ∧ (Pw h).ok (a0 h) σ.2.1.1 σ.2.1.2 T.2.2)
+    (Classical.propDecidable _)
 
-/-- The witness analysis map: every adversary's period is cut into the honest round. -/
-noncomputable def run1 (H : ℝ) : PeriodMap (flat H) S1 P1 1 :=
-  fun _ _ _ _ => { play := .round a0 (honRound H a0) fun _ => .done, Bind := fun _ _ => False, ZK := fun _ _ => False }
+/-- The witness analysis map: every adversary's period is cut into two honest rounds. -/
+noncomputable def run2 : PeriodMap wmodel (Sw h) (Pw h) 2 :=
+  fun _ _ _ _ => { play := .round (a0 h) (hw h) (hh h) fun _ => .round (a0 h) (hw h) (hh h) fun _ => .done,
+                   Bind := fun _ _ => False, ZK := fun _ _ => False }
 
-/-- The honest prover: it commits nothing before the coins and answers with the honest transcript, tagged one round. -/
-def honest (H : ℝ) : (flat H).Mc.Alg (S1.Seed × Unit) (S1.Com × S1.Ans) :=
-  (⟨(fun ω => ((), ditherHonest K1 a0 ω.1.1.1), 1), le_rfl⟩ :
-    {g : (S1.Seed × Unit → S1.Com × S1.Ans) × ℕ // 1 ≤ g.2})
+/-- The honest prover: it commits nothing before the coins and answers each round's commitment and words, tagged its
+output's size. -/
+noncomputable def honest : wmodel.Mc.Alg ((Sw h).Seed × Unit) ((Sw h).Com × (Sw h).Ans) :=
+  (⟨(fun ω => ((), ((h (noFoldHonest (Kw h) (a0 h) ω.1.1.1), noFoldHonest (Kw h) (a0 h) ω.1.1.1),
+      (h (noFoldHonest (Kw h) (a0 h) ω.1.2.1.1), noFoldHonest (Kw h) (a0 h) ω.1.2.1.1))),
+      Nat.card ((Sw h).Com × (Sw h).Ans)), le_rfl⟩ :
+    {g : ((Sw h).Seed × Unit → (Sw h).Com × (Sw h).Ans) × ℕ // Nat.card ((Sw h).Com × (Sw h).Ans) ≤ g.2})
 
-/-- The witness price: the one resource. -/
-def p1 : Unit → ℝ := fun _ => 1
+/-- The witness period: one other job, worth `7` a unit and using `wt r` of each resource a unit; the honest round
+uses `544 wt r` (its 32 bits of words and 512 bits of commitment); the period is `T = 2000` seconds. -/
+noncomputable def Pdw : Period wmodel where
+  T := 2000
+  J := Unit
+  val _ := 7
+  needs _ r := wt r
+  hon r := wt r * 544
+
+theorem card_tr : Nat.card (Pw h).Tr = 2 ^ 32 := by
+  simp [noFoldRound, Nat.card_eq_fintype_card, ZMod.card]
+
+theorem card_root : Nat.card (Pw h).Root = 2 ^ 512 := by
+  simp [noFoldRound, Nat.card_eq_fintype_card]
+
+theorem card_out : Nat.card ((Sw h).Com × (Sw h).Ans) = 2 ^ 1088 := by
+  change Nat.card (Unit × (((Pw h).Root × (Pw h).Tr) × ((Pw h).Root × (Pw h).Tr))) = _
+  rw [Nat.card_prod, Nat.card_prod, Nat.card_prod, Nat.card_unique, card_tr, card_root]
+  simp only [one_mul, ← pow_add]
+
+/-- A program of the witness model uses at least `n` bits' worth where its output has `2^n` values. -/
+theorem log_tag_ge {I O : Type} (f : wmodel.Mc.Alg I O) {n : ℕ} (hn : Nat.card O = 2 ^ n) :
+    n ≤ Nat.log 2 f.1.2 := by
+  have h0 : Nat.card O ≤ f.1.2 := f.2
+  have h1 : 2 ^ n ≤ f.1.2 := hn.symm.trans_le h0
+  calc n = Nat.log 2 (2 ^ n) := (Nat.log_pow (by norm_num) n).symm
+    _ ≤ Nat.log 2 f.1.2 := Nat.log_mono_right h1
+
+theorem log_card_tr : Nat.log 2 (Nat.card (Pw h).Tr) = 32 := by
+  rw [card_tr]; exact Nat.log_pow (by norm_num) 32
+
+theorem log_card_root : Nat.log 2 (Nat.card (Pw h).Root) = 512 := by
+  rw [card_root]; exact Nat.log_pow (by norm_num) 512
+
+theorem sum_μw_wt : ∑ r, μw r * wt r = 7 := by
+  simp [Fin.sum_univ_three, μw, wt]; norm_num
+
+theorem cost_wmodel {I O : Type} (f : wmodel.Mc.Alg I O) (x : I) :
+    wmodel.cost μw f x = 7 * (Nat.log 2 f.1.2 : ℝ) := by
+  change ∑ r, μw r * (wt r * (Nat.log 2 f.1.2 : ℝ)) = _
+  simp_rw [← mul_assoc]
+  rw [← Finset.sum_mul, sum_μw_wt]
+
+theorem avg_le_one {Ω : Type} [Fintype Ω] (f : Ω → ℝ) (hf : ∀ x, f x ≤ 1) : avg f ≤ 1 := by
+  unfold avg
+  rcases Nat.eq_zero_or_pos (Fintype.card Ω) with h0 | hpos
+  · simp [h0]
+  · rw [div_le_one (by exact_mod_cast hpos)]
+    calc ∑ ω, f ω ≤ ∑ _ω : Ω, (1 : ℝ) := Finset.sum_le_sum fun ω _ => hf ω
+      _ = Fintype.card Ω := by simp
+
+/-- A shortfall is `0` where the cost reaches `c H` with nothing imported. -/
+theorem shortfall_zero {c H cost : ℝ} (hH : 0 < H) (h : c * H ≤ cost) : roundShortfall c 0 H cost 0 = 0 := by
+  unfold roundShortfall
+  rw [zero_mul, add_zero]
+  refine max_eq_left ?_
+  rw [sub_nonpos, le_div_iff₀ hH]
+  exact h
+
+theorem g1_wmodel : wmodel.G1 := by
+  intro I O f x
+  show (0 : ℝ) + 0 ≤ 0
+  norm_num
+
+theorem g2_wmodel : wmodel.G2 := by
+  refine ⟨fun r => ?_, fun f x r => ⟨?_, le_rfl⟩⟩
+  · fin_cases r <;> simp [wmodel, wt]
+  · exact mul_nonneg (by fin_cases r <;> simp [wt]) (Nat.cast_nonneg _)
+
+/-- **SAK(matmul) holds in the witness model at `c_mm = 1`**: every words program uses at least the words' 32 bits. -/
+theorem sak_wmodel (η : ℝ) : SAKMatmul wmodel (Pw h) μw 1 η 0 (7 * 32) := by
+  intro _ _ _ _ a Mw
+  refine avg_le_one _ fun x => ?_
+  have hs : roundShortfall 1 0 (7 * 32) (wmodel.cost μw Mw x.1) (wmodel.ext Mw x.1) = 0 := by
+    refine shortfall_zero (by norm_num) ?_
+    rw [cost_wmodel]
+    have := log_tag_ge Mw (card_tr h)
+    have : (32 : ℝ) ≤ (Nat.log 2 Mw.1.2 : ℝ) := by exact_mod_cast this
+    linarith
+  split_ifs <;> simp [hs]
+
+/-- **SHA-512's speed holds in the witness model at `c_sha = 1`**: every commitment program uses at least the
+commitment's 512 bits. -/
+theorem sha_wmodel (η : ℝ) : ShaSpeed wmodel (Pw h) μw 1 η 0 (7 * 512) := by
+  intro _ _ _ _ a Mw Mh _
+  refine avg_le_one _ fun x => ?_
+  have hs : roundShortfall 1 0 (7 * 512) (wmodel.cost μw Mh x.1) (wmodel.ext Mh x.1) = 0 := by
+    refine shortfall_zero (by norm_num) ?_
+    rw [cost_wmodel]
+    have := log_tag_ge Mh (card_root h)
+    have : (512 : ℝ) ≤ (Nat.log 2 Mh.1.2 : ℝ) := by exact_mod_cast this
+    linarith
+  split_ifs <;> simp [hs]
 
 theorem prob_false {Ω : Type} [Fintype Ω] : prob (fun _ : Ω => False) = 0 := by
   unfold prob
   simp
 
-theorem avg_le_one {Ω : Type} [Fintype Ω] (f : Ω → ℝ) (h : ∀ x, f x ≤ 1) : avg f ≤ 1 := by
-  unfold avg
-  rcases Nat.eq_zero_or_pos (Fintype.card Ω) with h0 | hpos
-  · simp [h0]
-  · rw [div_le_one (by exact_mod_cast hpos)]
-    calc ∑ ω, f ω ≤ ∑ _ω : Ω, (1 : ℝ) := Finset.sum_le_sum fun ω _ => h ω
-      _ = Fintype.card Ω := by simp
-
-theorem priced_flat (H : ℝ) {I O : Type} (f : (flat H).Mc.Alg I O) (x : I) :
-    (flat H).priced p1 f x = H * (f.1.2 : ℝ) := by
-  change ∑ _r : Unit, (1 : ℝ) * (H * (f.1.2 : ℝ) / 1) = H * (f.1.2 : ℝ)
-  simp
-
-theorem simplex_p1 (H : ℝ) : Simplex (G := flat H) p1 := by
-  refine ⟨fun _ => zero_le_one, ?_⟩
-  change ∑ _r : Unit, (1 : ℝ) = 1
-  simp
-
-theorem g1_flat (H : ℝ) : (flat H).G1 := by
-  intro I O f x
-  simp [flat, tagged]
-
-theorem g2_flat (H : ℝ) (hH : 0 ≤ H) : (flat H).G2 := by
-  refine ⟨fun _ => by simp [flat], fun f x r => ⟨?_, ?_⟩⟩
-  · exact mul_nonneg hH (Nat.cast_nonneg _)
-  · simp [flat]
-
-/-- **Theorem O holds in the witness model at `c = 1`**: every round program costs at least one honest round. -/
-theorem theoremO_flat (H η : ℝ) (hH : 0 < H) : TheoremO (flat H) P1 p1 1 η 0 H := by
-  intro _ _ _ _ a M
-  unfold roundMoment
-  refine avg_le_one _ fun x => ?_
-  have ht : (1 : ℝ) ≤ (M.1.2 : ℝ) := by exact_mod_cast M.2
-  have hs : roundShortfall 1 0 H ((flat H).priced p1 M x.1) ((flat H).ext M x.1) = 0 := by
-    rw [priced_flat]
-    unfold roundShortfall
-    rw [zero_mul, add_zero, mul_div_cancel_left₀ _ hH.ne']
-    exact max_eq_left (by linarith)
-  split_ifs <;> simp [hs]
-
-/-- **The service is sound in the witness**, at no break and for any finders. -/
-theorem serviceSound_flat (H : ℝ) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders (flat H).Mc S1 1) :
-    ServiceSoundDither (flat H) S1 P1 (run1 H) (Equiv.refl _) sha fb fz 0 0 0 0 := by
+/-- **The service is sound in the witness**, at no break and for any finders: the cut's rounds are honest, so its play
+accepts on every coin. -/
+theorem service_wmodel (sha : Claims.Msg → Claims.Msg) (fb fz : Finders wmodel.Mc (Sw h) 2) :
+    ServiceSound wmodel (Sw h) (Pw h) (run2 h) (Equiv.refl _) sha fb fz 0 0 0 0 := by
   intro Ω' _ M _ r
-  refine ⟨fun w => ?_, fun w => ?_, fun x _ => Or.inl ⟨rfl, trivial⟩⟩
+  refine ⟨fun w => ?_, fun w => ?_, fun x _ => Or.inl ⟨fun _ => rfl, fun _ => rfl, trivial⟩⟩
   · show prob (fun _ => False) ≤ 0 + 0 * _
     rw [prob_false]
     simp
@@ -220,51 +261,80 @@ theorem serviceSound_flat (H : ℝ) (sha : Claims.Msg → Claims.Msg) (fb fz : F
     rw [prob_false]
     simp
 
-/-- **The witness's cut is a direct sum**: every program is tagged at least one round, so the honest round is a piece
-of it. -/
-theorem directSum_flat (H : ℝ) (hH : 0 ≤ H) : DirectSum (flat H) S1 P1 (run1 H) (Equiv.refl _) := by
-  intro _ _ _ _ Ω' _ M _ r x _
-  refine ⟨fun q => ?_, ?_⟩
-  · have ht : (1 : ℝ) ≤ (M.1.2 : ℝ) := by exact_mod_cast M.2
-    show H * ((1 : ℕ) : ℝ) + 0 ≤ H * (M.1.2 : ℝ)
-    simp only [Nat.cast_one, mul_one, add_zero]
+theorem import_wmodel : ImportWithinCertifier wmodel (Sw h) 0 := fun _ _ _ _ _ => le_rfl
+
+theorem use_hw (d : (Pw h).Draw) (r : Fin 3) : wmodel.use (hw h) d r = wt r * 32 := by
+  change wt r * (Nat.log 2 (Nat.card (Pw h).Tr) : ℝ) = _
+  rw [log_card_tr]
+  norm_num
+
+theorem use_hh (d : (Pw h).Draw) (r : Fin 3) : wmodel.use (hh h) d r = wt r * 512 := by
+  change wt r * (Nat.log 2 (Nat.card (Pw h).Root) : ℝ) = _
+  rw [log_card_root]
+  norm_num
+
+/-- The cut's two rounds use `2 · 544 wt r` of each resource, on every path. -/
+theorem play_use (Ω' : Type) [Fintype Ω'] (M : wmodel.Mc.Alg ((Sw h).Seed × Ω') ((Sw h).Com × (Sw h).Ans)) (r : Ω')
+    (x : Paths ((Pw h).Draw × (Pw h).Chk) 2) (q : Fin 3) :
+    (run2 h Ω' M r).play.use x q = 2 * (wt q * 544) := by
+  change wmodel.use (hw h) x.1.1 q + wmodel.use (hh h) x.1.1 q +
+    (wmodel.use (hw h) x.2.1.1 q + wmodel.use (hh h) x.2.1.1 q + 0) = _
+  rw [use_hw, use_hh, use_hw, use_hh]
+  ring
+
+/-- **Commit-and-open's extraction holds in the witness**: every adversary's output has at least `1088` bits (two
+rounds' words and commitments), so the two honest rounds are within its run. -/
+theorem extract_wmodel : Extract wmodel (Sw h) (Pw h) (run2 h) (Equiv.refl _) := by
+  intro _ _ _ _ Ω' _ M _ r
+  refine ⟨⟨fun _ => rfl, fun _ => ⟨fun _ => rfl, fun _ => trivial⟩⟩, fun x _ => ⟨fun q => ?_, ?_⟩⟩
+  · refine le_trans (le_of_eq (play_use h Ω' M r x q)) ?_
+    change 2 * (wt q * 544) ≤ wt q * (Nat.log 2 M.1.2 : ℝ)
+    have h1 := log_tag_ge M (card_out h)
+    have h2 : (1088 : ℝ) ≤ (Nat.log 2 M.1.2 : ℝ) := by exact_mod_cast h1
+    have h3 : 0 ≤ wt q := by fin_cases q <;> simp [wt]
     nlinarith
-  · show (0 : ℝ) + 0 ≤ 0
+  · show (0 : ℝ) + 0 + (0 + 0 + 0) ≤ 0
     norm_num
 
-theorem import_flat (H : ℝ) : ImportWithinCertifier (flat H) S1 0 := fun _ _ _ _ _ => le_rfl
+/-- **The witness period's dual price**: `μw` prices the job at its value, and the honest strategy credited two rounds
+does `2000 − 1088` units of the job beside them, worth the capacity they leave. -/
+theorem dualOpt_wmodel : Pdw.DualOpt μw 2 := by
+  refine ⟨fun r => by fin_cases r <;> simp [μw], fun _ r => by fin_cases r <;> simp [Pdw, wt], fun _ => ?_,
+    fun _ => 2000 - 1088, ⟨fun _ => by norm_num, fun r => ?_⟩, ?_⟩
+  · show (7 : ℝ) ≤ ∑ r, μw r * wt r
+    rw [sum_μw_wt]
+  · show (2 : ℕ) * (wt r * 544) + ∑ _j : Unit, (2000 - 1088 : ℝ) * wt r ≤ wt r * 2000
+    simp only [Finset.univ_unique, Finset.sum_singleton]
+    norm_num
+    linarith
+  · show ∑ _j : Unit, (7 : ℝ) * (2000 - 1088) = ∑ r, μw r * (wt r * 2000 - (2 : ℕ) * (wt r * 544))
+    simp [Fin.sum_univ_three, μw, wt]
+    norm_num
 
-/-- **The honest prover is accepted on every coin**, and commits first. -/
-theorem honest_accepted (H : ℝ) (σ : S1.Seed) :
-    S1.verify ((flat H).Mc.eval (honest H) (σ, ())).1 σ ((flat H).Mc.eval (honest H) (σ, ())).2 = true := by
-  show @decide (P1.ok a0 σ.1.1 σ.1.2 (ditherHonest K1 a0 σ.1.1)) (Classical.propDecidable _) = true
-  exact @decide_eq_true _ (Classical.propDecidable _) rfl
-
-/-- The honest prover's rounds, as the witness analysis cuts them, are priced one honest round. -/
-theorem honest_rounds_priced (H : ℝ) (x : Paths (P1.Draw × P1.Chk) 1) :
-    (run1 H Unit (honest H) ()).play.priced p1 x = (1 : ℕ) * H := by
-  change ∑ _r : Unit, (1 : ℝ) * ((H * ((1 : ℕ) : ℝ) + 0) / 1) = ((1 : ℕ) : ℝ) * H
-  simp
-
-/-- **The honest witness** (rule I): at `k = 1`, `c = 1`, `β = K = 0` and no break, the honest prover of today's
-Dither round meets every hypothesis of `DitherWorkSound`, commits first, is accepted on every coin, and is priced
-`k H`, its rounds and its whole run alike. -/
-theorem honest_witness (H η : ℝ) (hH : 0 < H) (hη : 0 ≤ η) (sha : Claims.Msg → Claims.Msg)
-    (fb fz : Finders (flat H).Mc S1 1) :
-    Simplex (G := flat H) p1 ∧ 0 < H ∧ 0 ≤ η ∧ (0 : ℝ) ≤ 0 ∧
-      (flat H).G1 ∧ (flat H).G2 ∧ (flat H).P1 ∧ (flat H).P2 ∧
-      SAKMatmul (flat H) S1 P1 (run1 H) (Equiv.refl _) p1 1 η 0 H ∧
-      ServiceSoundDither (flat H) S1 P1 (run1 H) (Equiv.refl _) sha fb fz 0 0 0 0 ∧
-      ImportWithinCertifier (flat H) S1 0 ∧
-      (∀ σ σ' r, ((flat H).Mc.eval (honest H) (σ, r)).1 = ((flat H).Mc.eval (honest H) (σ', r)).1) ∧
-      (∀ σ, S1.verify ((flat H).Mc.eval (honest H) (σ, ())).1 σ ((flat H).Mc.eval (honest H) (σ, ())).2 = true) ∧
-      (∀ x, (run1 H Unit (honest H) ()).play.priced p1 x = (1 : ℕ) * H) ∧
-      ∀ ω, (flat H).priced p1 (honest H) ω = (1 : ℕ) * H := by
-  refine ⟨simplex_p1 H, hH, hη, le_rfl, g1_flat H, g2_flat H hH.le, trivial, trivial, ⟨theoremO_flat H η hH,
-    directSum_flat H hH.le⟩, serviceSound_flat H sha fb fz, import_flat H, fun _ _ _ => rfl, honest_accepted H,
-    honest_rounds_priced H, fun ω => ?_⟩
-  rw [priced_flat]
-  show H * ((1 : ℕ) : ℝ) = ((1 : ℕ) : ℝ) * H
-  ring
+/-- **The honest witness** (rule I): in a model of three resources at a non-uniform price, over a two-round period of
+the no-fold round, with one other job at the period's dual price, the honest prover meets every hypothesis of
+`WorkSound` at `c_mm = c_sha = 1`, `β = K = 0`, no break, and every `η > 0` and `0 < δ ≤ 1`; it commits first, is
+accepted on every coin, and its credited rounds use exactly two honest rounds' resources. -/
+theorem honest_witness (η δ : ℝ) (hη : 0 < η) (hδ : 0 < δ) (hδ1 : δ ≤ 1) (sha : Claims.Msg → Claims.Msg)
+    (fb fz : Finders wmodel.Mc (Sw h) 2) :
+    Pdw.DualOpt μw 2 ∧ (0 : ℝ) < 7 * 32 ∧ (0 : ℝ) < 7 * 512 ∧ (7 * 32 + 7 * 512 : ℝ) = ∑ r, μw r * Pdw.hon r ∧
+      (1 : ℝ) ≤ 1 ∧ (1 : ℝ) ≤ 1 ∧ 0 < η ∧ 0 < δ ∧ δ ≤ 1 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) ≤ 0 ∧
+      (0 : ℝ) ≤ 0 ∧ wmodel.G1 ∧ wmodel.G2 ∧ wmodel.P1 ∧ wmodel.P2 ∧
+      SAKMatmul wmodel (Pw h) μw 1 η 0 (7 * 32) ∧ ShaSpeed wmodel (Pw h) μw 1 η 0 (7 * 512) ∧
+      ServiceSound wmodel (Sw h) (Pw h) (run2 h) (Equiv.refl _) sha fb fz 0 0 0 0 ∧
+      ImportWithinCertifier wmodel (Sw h) 0 ∧ Extract wmodel (Sw h) (Pw h) (run2 h) (Equiv.refl _) ∧
+      (∀ σ σ' r, (wmodel.Mc.eval (honest h) (σ, r)).1 = (wmodel.Mc.eval (honest h) (σ', r)).1) ∧
+      (∀ σ, (Sw h).verify (wmodel.Mc.eval (honest h) (σ, ())).1 σ (wmodel.Mc.eval (honest h) (σ, ())).2 = true) ∧
+      ∀ x q, (run2 h Unit (honest h) ()).play.use x q = (2 : ℕ) * Pdw.hon q := by
+  refine ⟨dualOpt_wmodel, by norm_num, by norm_num, ?_, le_rfl, le_rfl, hη, hδ, hδ1, le_rfl, le_rfl, le_rfl,
+    le_rfl, g1_wmodel, g2_wmodel, trivial, trivial, sak_wmodel h η, sha_wmodel h η, service_wmodel h sha fb fz,
+    import_wmodel h, extract_wmodel h, fun _ _ _ => rfl, fun σ => ?_, fun x q => ?_⟩
+  · show (7 * 32 + 7 * 512 : ℝ) = ∑ r, μw r * (wt r * 544)
+    simp [Fin.sum_univ_three, μw, wt]
+    norm_num
+  · exact @decide_eq_true _ (Classical.propDecidable _) ⟨fun _ => rfl, fun _ => rfl⟩
+  · refine (play_use h Unit (honest h) () x q).trans ?_
+    show 2 * (wt q * 544) = ((2 : ℕ) : ℝ) * (wt q * 544)
+    norm_num
 
 end Pouw.SecurityProofs.Dither
