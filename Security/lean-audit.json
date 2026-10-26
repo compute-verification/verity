@@ -2714,6 +2714,12 @@
    "assumptions": [],
    "type_hash": "bb41fea01012eea126f03a9f2f6fab6cfc2e588f1a1ef70e5f2f6941d224b0e8"
   },
+  "Accounting.SecurityProofs.BandwidthOfAuditPerRun": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.BandwidthOfAuditPerRun : Accounting.Guarantees.BandwidthOfAuditPerRun"],
+   "assumptions": [],
+   "type_hash": "7bfcaf861d98451805b9a88b5568f8a05b715c8cc82215a6f38723f5419b0c19"
+  },
   "Accounting.SecurityProofs.BoundReceiptLink": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.BoundReceiptLink : Accounting.Guarantees.BoundReceiptLink"],
@@ -2739,6 +2745,15 @@
    "signature": ["Accounting.SecurityProofs.BoundSketchRelay : Accounting.Guarantees.BoundSketchRelay"],
    "assumptions": [],
    "type_hash": "21c560aa53d87b8de413f4642976ab01db69dcac363f25a19d88b4b732d30987"
+  },
+  "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod": {
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod :",
+    "  Accounting.Guarantees.Bridge.BandwidthOfAuditPerRunPeriod"
+   ],
+   "assumptions": [],
+   "type_hash": "8c3dda6ff4ca31c818104a37896b5af0666c53ff846e2ccaf90aa792e29a6820"
   },
   "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted": {
    "owner": "@lean",
@@ -11613,7 +11628,9 @@
    "Accounting.SecurityProofs.JointHorizonBlocksA": "frozen (no-function): Demo A's composed theorem, JointHorizonBlocksLegs at sampled proofs, PoUW and the network certifier: each block's three per-period guarantees are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock": "frozen (no-function): It is Demo A's JointHorizonBlocksA (sampled proofs, PoUW and the network certifier) with each server-time block's integrity leg from IntegrityOfIntegrityBlock, over abstract periods of the device model whose verdicts are fields of the run, not Lean functions (Security/Definitions/Accounting/JointPeriod.lean), through each block's realization of C-Flock's integrity audit of that block (Accounting.RealizesIntegrityOfIntegrityBlock), and it bounds a Pouw.pr event, which shape.events does not list.",
    "NetTiming.SecurityProofs.PeriodLeakAccepted": "frozen (no-function,world-unlisted): It composes SampledLeakAccepted's statement (NetTiming.sampledLeak_reg at SampledAuditAccepted, with Claims.Sampling.KS at each deployment) with the tap's read-back (tap_cells_read), over the tap's code (tapCode: the warden's code wardenCode and the record of its cells, in any record format TapRecord whose cells read back) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), across a period of windows: it bounds AccSeqsSampled at each window's registration and the cells of the tap's code, not runs of the network check's code or of a compiled warden program, and it counts the secrets whose every window meets its good event (WindowGood, which holds that the audit's trace carries the tap's record, Carries, as RAcc's conclusion does), with each window's failure bounded on its own and no union over the period's live coins yet.",
-   "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted": "frozen (no-function): The network audit's PeriodRun.Sound on a run that realizes the network certifier's period of sampled audits (RealizesCommOfPeriodLeakAccepted), from PeriodLeakAccepted's per-window conjunct and the union bound over the windows: the verdicts and the claim are fields of the run (Security/Definitions/Accounting/JointPeriod.lean), not a Lean function, and it bounds a Pouw.pr event, which shape.events does not list."
+   "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted": "frozen (no-function): The network audit's PeriodRun.Sound on a run that realizes the network certifier's period of sampled audits (RealizesCommOfPeriodLeakAccepted), from PeriodLeakAccepted's per-window conjunct and the union bound over the windows: the verdicts and the claim are fields of the run (Security/Definitions/Accounting/JointPeriod.lean), not a Lean function, and it bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.BandwidthOfAuditPerRun": "frozen (no-function,hash): It is BandwidthOfAudit at the coins drawn: it carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to the per-run bandwidth guarantee (BandwidthSoundPerRun) of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/BandwidthAudit.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod": "frozen (no-function,hash): It is BandwidthOfAuditPerRun on a period's coins: it carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to PoUB's per-period guarantee (PeriodRun.Sound at .poub) of an abstract period of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/JointPeriod.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -12157,6 +12174,8 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.BandwidthOfAudit",
+    "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Bandwidth.SecurityProofs.AuditInteractive",
     "Bandwidth.SecurityProofs.AuditInteractiveRO",
     "Bandwidth.SecurityProofs.AuditJoint",
@@ -12245,7 +12264,11 @@
     "Accounting.BandwidthCoins": "c3bb41c05837c55489d3f73243f4280cbdb8336332389cf2c224c1e49c149b17",
     "Accounting.RealizesBandwidth": "77354a4cb9b40ce1fbb04b20b43f916dc96c419d4cc94233aa8adefcfafe9c89"
    },
-   "guarantees": ["Accounting.SecurityProofs.BandwidthOfAudit"]
+   "guarantees": [
+    "Accounting.SecurityProofs.BandwidthOfAudit",
+    "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod"
+   ]
   },
   "Definitions.Accounting.BoundReceipt": {
    "digest": "53ed45e11502dd358ad97759eaa6c04a2cb7c1faca874618a8597f6dc4d70c27",
@@ -12754,6 +12777,8 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.BandwidthOfAudit",
+    "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
@@ -13282,11 +13307,12 @@
    ]
   },
   "Definitions.Accounting.Guarantees.BandwidthAudit": {
-   "digest": "ed99b53f590775120c7f7840dbbe03218ef88b57612325e6a81a65e851c6bfdb",
+   "digest": "581974581c58062b230436461caa5099004b1723037af929f761b08a95f3633b",
    "definitions": {
-    "Accounting.Guarantees.BandwidthOfAudit": "b59cf5ee9a05024bb31a7fe0cd7a9163b8f12d95f94833eada2d8fbe30717d7c"
+    "Accounting.Guarantees.BandwidthOfAudit": "b59cf5ee9a05024bb31a7fe0cd7a9163b8f12d95f94833eada2d8fbe30717d7c",
+    "Accounting.Guarantees.BandwidthOfAuditPerRun": "04fbe4f5c5b9122bc2768eb1246e47ada0d321f43ff863a057feaff1199b1f87"
    },
-   "guarantees": ["Accounting.SecurityProofs.BandwidthOfAudit"]
+   "guarantees": ["Accounting.SecurityProofs.BandwidthOfAudit", "Accounting.SecurityProofs.BandwidthOfAuditPerRun"]
   },
   "Definitions.Accounting.Guarantees.BoundReceipt": {
    "digest": "cfc04f46a5e00cdac1c5cd53390a9847d84e3b73589aa9c1ca72fec6ff4b5330",
@@ -13580,6 +13606,13 @@
     "Accounting.SecurityProofs.JointHorizonBlocksA",
     "Accounting.SecurityProofs.JointHorizonBlocksLegs"
    ]
+  },
+  "Definitions.Accounting.Guarantees.JointBridge.BandwidthOfAuditPerRunPeriod": {
+   "digest": "92bbb6a198220d610653da2cc982f5ce463b117d9823a5548efd4fd04aaf38ff",
+   "definitions": {
+    "Accounting.Guarantees.Bridge.BandwidthOfAuditPerRunPeriod": "2e2b525eded3e46566b8b1b26ee5a168da7e81167dc6cd285dcab61e0cf32914"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod"]
   },
   "Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted": {
    "digest": "47d227a9d320be28dd83333726e48ffb833f1e1d1c392f6ff8b4fa61fbe9e1b2",
@@ -14504,6 +14537,8 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.BandwidthOfAudit",
+    "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
@@ -14557,6 +14592,13 @@
     "Accounting.SecurityProofs.JointHorizonBlocks"
    ]
   },
+  "Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod": {
+   "digest": "14292553c86b96d68d79da7719972e449bf4300354039c2c2af7f3d9eac2f93c",
+   "definitions": {
+    "Accounting.RealizesBandwidthOfAuditPerRunPeriod": "791ddd03a495c1a38f95db79fd73bc9fc518abee0e5320ceff094ed79a3a0629"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod"]
+  },
   "Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted": {
    "digest": "1fbe9a4a6977dfa10f769ce27467d1f9fdf7608423a03456fc7fb06298512494",
    "definitions": {
@@ -14605,6 +14647,7 @@
     "Accounting.instFintypeAudit": "dc9e117e0e88e8b554ce66dc5272159cd8ee10f8ae1184a3bfe1034a0b87a87d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
@@ -14659,6 +14702,7 @@
     "Accounting.onlineCostPearlC": "5416d23a3147119804ae9e28f5a4b5ac7a8c926467c0207ca15445b96c9d5e7d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
     "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced",
     "Accounting.SecurityProofs.ComputeOfPouwPerRun",
@@ -17427,6 +17471,7 @@
     "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.B4",
     "Accounting.SecurityProofs.B4Covered",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
@@ -17790,6 +17835,7 @@
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
@@ -21834,8 +21880,10 @@
     "Accounting.SecurityProofs.B2WindowAudit",
     "Accounting.SecurityProofs.B2WindowP2Ring",
     "Accounting.SecurityProofs.BandwidthOfAudit",
+    "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
     "Accounting.SecurityProofs.BoundReceiptLink",
     "Accounting.SecurityProofs.BoundReceiptLinkInteractive",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.CarrierBits",
     "Accounting.SecurityProofs.Colocation",
     "Accounting.SecurityProofs.DeclaredCircuitRequirement",
@@ -23370,6 +23418,8 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.BandwidthOfAudit",
+    "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
