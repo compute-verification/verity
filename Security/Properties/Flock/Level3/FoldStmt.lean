@@ -1,4 +1,5 @@
 import Flock.Circuit
+import Mathlib.Data.Nat.Notation
 
 /-!
 Which columns a range of the lincheck fold covers (`covers`). The fold's facts (`fold_get`, `baseOf_get`) are
