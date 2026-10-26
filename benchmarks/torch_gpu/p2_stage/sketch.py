@@ -14,8 +14,7 @@ reads it, the units' receipts and the pass's root, bit for bit `remote_bandwidth
   σ[g] is assigned, never added to, so a block read twice (one two tensors share, a unit two chunks share) changes
   nothing; the store's rows hold whole units, so a chunk's units at its ends are read whole. `Pass.partials` gives each
   block's π alone (a GEMM against S_i's four block columns, the one of j mod 4 kept), which the fixture is held to
-  first. With `stream`, the GEMM runs on the pass's own high-priority stream, beside the chunk's decode (the rows held
-  for it by `record_stream`); `join` and `finish` wait for it.
+  first.
 - **y** (`receipts.cu`): a thread a unit, one SHA-512 compression from `sketch_prefix(seed)`'s midstate over
   u64be g ‖ σ_g, with sha512_rows' compression; `receipts_host.cpp` is its host twin.
 - **root** (`Tree`): sha512_rows' engine over the y buffer: each leaf's 16 receipts (1,024 bytes) a sha512/row/v2 row,
@@ -218,10 +217,9 @@ class Pass:
     """One pass of the audit over a store of `units` units (blocks 0 .. 4 units − 1; blocks past them are in no unit),
     on `device`: `read` as the decode reads, `finish` at the step's end."""
 
-    def __init__(self, seed: bytes, units: int, device: Any, rows: int = R.SKETCH_ROWS, stream: bool = False) -> None:
+    def __init__(self, seed: bytes, units: int, device: Any, rows: int = R.SKETCH_ROWS) -> None:
         self.start_ns = time.time_ns()
         self.seed, self.units, self.device = seed, units, torch.device(device)
-        self.stream = torch.cuda.Stream(self.device, priority=-1) if stream and self.device.type == "cuda" else None
         self.S = torch.from_numpy(signs(seed, rows)).to(self.device)
         self.B = self.S.view(rows, PER, BLOCK).permute(1, 0, 2).reshape(PER * rows, BLOCK).contiguous()
         self.sigma = torch.zeros(units, rows, dtype=torch.int32, device=self.device)
@@ -244,20 +242,8 @@ class Pass:
         if a < 0 or b > rows.shape[0]:
             raise ValueError(f"blocks [{first}, {first + rows.shape[0]}) don't hold units {u.start} .. {u.stop - 1} whole")
         x = rows[a:b].view(torch.int8).reshape(len(u), UNIT)
-        if self.stream is None:
-            self.sigma[u.start:u.stop] = int_mm(x, self.S)
-            self.seen[u.start:u.stop] = True
-            return
-        self.stream.wait_stream(torch.cuda.current_stream(self.device))
-        with torch.cuda.stream(self.stream):
-            self.sigma[u.start:u.stop] = int_mm(x, self.S)
-            self.seen[u.start:u.stop] = True
-        rows.record_stream(self.stream)
-
-    def join(self) -> None:
-        """With `stream`, the current stream waits for the sketches `read` put on the pass's own stream."""
-        if self.stream is not None:
-            torch.cuda.current_stream(self.device).wait_stream(self.stream)
+        self.sigma[u.start:u.stop] = int_mm(x, self.S)
+        self.seen[u.start:u.stop] = True
 
     def partials(self, j0: int, rows: Any) -> Any:
         """π of blocks j0 .. j0 + n − 1 ([n, 16] int32) from their rows ([n, 2056] uint8)."""
@@ -270,7 +256,6 @@ class Pass:
         """The receipts (`y`, the tree's buffer) and the root; refused if a unit wasn't read."""
         if tree.units != self.units or tree.y.device != self.sigma.device:
             raise ValueError("the tree is of another store or device")
-        self.join()
         missing = int((~self.seen).sum())
         if missing:
             raise ValueError(f"{missing} of {self.units} units weren't read this pass")

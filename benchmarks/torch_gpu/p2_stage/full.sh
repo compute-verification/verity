@@ -18,7 +18,7 @@
 # receipts' and sha512_rows' kernels built for ARCH (default 90a). Under one untimed lease of at most LEASE_MIN minutes
 # (default 20), refused if it could reach one of QUIET's windows (M3's run, Demo B, INF-242): full.py, every tensor of LAYERS (default all 52
 # layers and the head) staged and held to the manifest's SHA-256, with RECEIPTS=1 the bandwidth audit's pass beside it
-# (`--receipts`, its σ, y and salts kept in scratch; SKETCH_STREAM=1: the sketch on its own stream), then GEMM_LAYER's matrices (default 51; empty for none) through
+# (`--receipts`, its σ, y and salts kept in scratch), then GEMM_LAYER's matrices (default 51; empty for none) through
 # KS8-SIMPLE at each batch of M (default 16384). After the lease, niced on half the host's cores: check.py on the GEMM's
 # samples and SAMPLE blocks of every tensor (default 128; 0 skips it) against P2's reference, and with RECEIPTS=1
 # bw_ref.py, the CPU reference's check of the kept pass (every y and the root, BW_SAMPLE units' σ, default 100000).
@@ -91,7 +91,7 @@ df -h "$S" "$ENC" > "$O/df.txt" 2>&1
 COMMON=(--layout "$LAYOUT" --weights "$MANIFEST" --generator verity_torch_loop.weights --shape h200 --weights-seed "$SEED"
         --encoded "$ENC" --source "$SOURCE" --commitment "$COMMITMENT" --out "$O")
 FULL=("${COMMON[@]}" --lib "$S/lib/lib" ${GEMM_LAYER:+--gemm-layer "$GEMM_LAYER" --m "$M"} ${LAYERS:+--layers "$LAYERS"}
-      ${RECEIPTS:+--receipts --keep "$S/keep"} ${SKETCH_STREAM:+--sketch-stream})
+      ${RECEIPTS:+--receipts --keep "$S/keep"})
 export FULL_ARGS="${FULL[*]}"
 
 nvidia-smi --query-gpu=timestamp,index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu,memory.used \
