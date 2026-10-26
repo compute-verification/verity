@@ -20,7 +20,8 @@ the salt in no case), and answered by one-stage with its one unit proved. In the
 each link-window's ingress and egress rows committed and registered under a small drawn schedule
 (`warden_rows.Cells.commit` and `registration`, signed by the same key), its three records certified, and the scan's
 registration holding both rows' roots and domains, answered by one-stage with a stratified or subset draw at the
-period's δ; the scan's Program is stand-ins of its two templates at small widths (`scan_descriptor`). Beside them,
+period's δ; the scan's Program is its generator form, stand-ins of its three templates at small widths
+(`scan_descriptor`), and a Program in the checker form is a bad scan (`bad_scans`). Beside them,
 the compute audits, each answered with a subset draw and its bound on wrong units. `case(kind, seed, form)` is a small
 period of the form aimed at a verdict, or at a decoding failure (`KINDS`), and `cases(seed, form)` one of each with its
 answer, as a composition's difftest takes a real component's cases.
@@ -49,7 +50,8 @@ from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.pouw import core_check as CC
 from verity.ml.circuits import boolean as BL, codec, population
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.types import Array, Value
+from verity.ml.circuits.refs import tuple_of
+from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import lms
 
@@ -77,10 +79,13 @@ U32 = 1 << 32
 FORMS = ("clock", "rows")
 SCHEMA = "verity-ir/descriptor/v1"
 INPUT_ID = re.compile(r"^(?:Registered)?Input([1-9][0-9]*)_v1$")
-#: the scan's templates' parameters: the ingress bucket's (`ingress_scan.IngressScanBucket`) and the egress bucket's
-#: (`egress.EgressBucket`)
-INGRESS_PARAMS = ("row", "sin", "prog", "sout", "view")
-EGRESS_PARAMS = ("state", "row")
+#: the scan's templates' parameters in the generator form: bucket 0's (`ingress_scan.IngressScanFirst`), each later
+#: ingress bucket's (`ingress_scan.IngressScanBucket`) and the egress bucket's (`egress.EgressBucket`)
+FIRST_PARAMS = ("row", "prog")
+INGRESS_PARAMS = ("row", "sin", "prog")
+EGRESS_PARAMS = ("state",)
+#: the checker form's, which took the rows its units compared as inputs
+CHECKER_PARAMS = (("row", "sin", "prog", "sout", "view"), ("state", "row"))
 
 # --- the mirror --------------------------------------------------------------------------------------------------------
 
@@ -214,34 +219,44 @@ def program_sha512(desc: dict) -> str:
 
 
 def _scan(j, program: str, s: WardenParams) -> Scan:
-    """`scanOf`: the scan's terms from its Program's descriptor, which must be the registered Program and the scan of
-    the schedule's link-window. It reads the descriptor's template nodes and signatures; C-Flock's decoder, which Lean
-    runs on it, refuses no descriptor this module writes."""
+    """`scanOf`: the scan's terms from its Program's descriptor, which must be the registered Program and the generator
+    form of the schedule's link-window, an egress template with a row among its parameters (the checker form) refused
+    first. It reads the descriptor's template nodes and signatures; C-Flock's decoder, which Lean runs on it, refuses no
+    descriptor this module writes."""
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
         raise D.Reject("scan: not a Program's descriptor")
     if program_sha512(j) != program:
         raise D.Reject("scan: its SHA-512 is not the registered Program's")
     defs, callees = j["definitions"], j["callees"]
     nodes = defs[j["root"]]["body"]["nodes"]
-    templates = [(x, defs[callees[x["fn"]]]) for x in nodes if defs[callees[x["fn"]]]["form"] != "primitive"]
-    if len(templates) != 2:
-        raise D.Reject("scan: not two templates")
-    (xi, di), (xe, de) = templates
-    pi, pe = di["body"]["params"], de["body"]["params"]
-    if tuple(k for k, _ in pi) != INGRESS_PARAMS or tuple(k for k, _ in pe) != EGRESS_PARAMS:
-        raise D.Reject("scan: the templates' parameters are not the ingress and egress buckets'")
-    T = s.window
-    if not all(x["form"] == "batch" and x["n"] == T for x in (xi, xe)):
-        raise D.Reject(f"scan: not {T} instances of each template")
-    row = ["Array", s.lanes * s.slots * s.cell_bytes, ["Value", 8]]
-    if pi[0][1] != row or pe[1][1] != row:
-        raise D.Reject("scan: a template's row is not the schedule's")
+    templates = [(x, defs[callees[x["fn"]]]["body"]) for x in nodes if defs[callees[x["fn"]]]["form"] != "primitive"]
+    T, row = s.window, ["Array", s.lanes * s.slots * s.cell_bytes, ["Value", 8]]
+    if not templates:
+        raise D.Reject("scan: no template")
+    (xf, bf), later, (xe, be) = templates[0], templates[1:-1], templates[-1]
+    if any(k == "row" or t == row for k, t in be["params"]):
+        raise D.Reject("scan: the egress template takes its row as an input (the checker form)")
+    if len(templates) not in (2, 3):
+        raise D.Reject("scan: not the generator form's templates")
+    names = lambda b: tuple(k for k, _ in b["params"])  # noqa: E731
+    if (names(bf) != FIRST_PARAMS or any(names(b) != INGRESS_PARAMS for _, b in later)
+            or names(be) != EGRESS_PARAMS):
+        raise D.Reject("scan: the templates' parameters are not the generator form's")
+    counts = [(xf, 1), *((x, T - 1) for x, _ in later), (xe, T)]
+    if len(later) != (T > 1) or not all(x["form"] == "batch" and x["n"] == n for x, n in counts):
+        raise D.Reject(f"scan: not bucket 0, {T - 1} later ingress buckets and {T} egress buckets")
+    if bf["params"][0][1] != row or any(b["params"][0][1] != row for _, b in later):
+        raise D.Reject("scan: an ingress template's row is not the schedule's")
+    if any(b["params"][2][1] != bf["params"][1][1] or b["ret_type"] != bf["ret_type"] for _, b in later):
+        raise D.Reject("scan: the ingress templates' prog or return differ")
+    if be["ret_type"] != ["Tuple", [["Value", OUT_BITS], row]]:
+        raise D.Reject("scan: the egress template doesn't return a u16 and the schedule's row")
     inputs = sum(int(w[1]) * (x["n"] if x["form"] in ("batch", "scan") else 1)
                  for x in nodes if (w := INPUT_ID.match(callees[x["fn"]])))
-    if inputs != T * sum(bits_of(t) for _, t in pi + pe):
+    bits = lambda b: sum(bits_of(t) for _, t in b["params"])  # noqa: E731
+    if inputs != bits(bf) + (T - 1) * sum(bits(b) for _, b in later) + T * bits(be):
         raise D.Reject("scan: an input gate that is no template's parameter")
-    return Scan(T, T * bits_of(pi[2][1]), bits_of(pi[3][1]) + bits_of(pi[4][1]) + bits_of(di["body"]["ret_type"]),
-                bits_of(pe[1][1]) + bits_of(de["body"]["ret_type"]))
+    return Scan(T, T * bits_of(bf["params"][1][1]), bits_of(bf["ret_type"]), bits_of(be["ret_type"]))
 
 
 def params(j) -> Params:
@@ -687,34 +702,88 @@ FOLD = PrimitiveDefinition("NetworkPeriodScanFold", 1, (("s", U16), ("b", BYTE))
                            register=False)
 
 
+#: the generator form's stand-ins' gates: a bit from a bit and a byte, a u16 from a byte, a byte from a u16
+MIX = PrimitiveDefinition("NetworkPeriodScanMix", 1, (("a", BIT), ("b", BYTE)), BIT, lambda a, b: a ^ b & 1,
+                          register=False)
+WIDEN = PrimitiveDefinition("NetworkPeriodScanWiden", 1, (("b", BYTE),), U16, lambda b: b, register=False)
+LOW = PrimitiveDefinition("NetworkPeriodScanLow", 1, (("s", U16),), BYTE, lambda s: s & 0xFF, register=False)
+
+
+def _ingress_ret(S):
+    return Tuple(U16, Array(S.STATE, BIT), Array(S.VIEW, BIT))
+
+
+def _first_sig(S):
+    return tuple(zip(S.NAMES, (Array(S.ROW, BYTE), Array(S.PROG, BIT)))), _ingress_ret(S)
+
+
 def _ingress_sig(S):
+    return tuple(zip(S.NAMES, (Array(S.ROW, BYTE), Array(S.STATE, BIT), Array(S.PROG, BIT)))), _ingress_ret(S)
+
+
+def _egress_sig(S):
+    return tuple(zip(S.NAMES, (Array(S.WORDS, U16),))), Tuple(U16, Array(S.ROW, BYTE))
+
+
+def _first(B, S, row, prog):
+    return tuple_of(B.call(WIDEN, row[0]), B.batch(MIX, prog[0], row[0], axes=(None, None), n=S.STATE),
+                    B.batch(MIX, prog[0], row[0], axes=(None, None), n=S.VIEW))
+
+
+def _ingress(B, S, row, sin, prog):
+    return tuple_of(B.call(WIDEN, row[0]), B.batch(MIX, sin, row[0], axes=(0, None)),
+                    B.batch(MIX, prog[0], row[0], axes=(None, None), n=S.VIEW))
+
+
+def _egress(B, S, state):
+    return tuple_of(B.call(WIDEN, B.call(LOW, state[0])), B.batch(LOW, state[0], axes=(None,), n=S.ROW))
+
+
+#: Stand-ins of the scan's templates in the generator form, with their parameters and returns as `IngressScanFirst`,
+#: `IngressScanBucket` and `EgressBucket` have them at small widths: each unit computes and returns its rows.
+_STATICS = ("NAMES", "ROW", "STATE", "PROG", "VIEW")
+FIRST_BUCKET = CompositeDefinition("NetworkPeriodScanFirst", 0, _STATICS, _first_sig, _first, register=False)
+INGRESS_BUCKET = CompositeDefinition("NetworkPeriodScanIngress", 1, _STATICS, _ingress_sig, _ingress, register=False)
+EGRESS_BUCKET = CompositeDefinition("NetworkPeriodScanEgress", 1, ("NAMES", "WORDS", "ROW"), _egress_sig, _egress,
+                                    register=False)
+
+
+def _checker_ingress_sig(S):
     return tuple(zip(S.NAMES, (Array(S.ROW, BYTE), Array(S.STATE, BIT), Array(S.PROG, BIT), Array(S.STATE, BIT),
                                Array(S.VIEW, BIT)))), BIT
 
 
-def _egress_sig(S):
+def _checker_egress_sig(S):
     return tuple(zip(S.NAMES, (Array(S.WORDS, U16), Array(S.ROW, BYTE)))), U16
 
 
-#: Stand-ins of the scan's templates, with their parameters and returns as `IngressScanBucket` and `EgressBucket` have
-#: them at small widths, each one gate.
-INGRESS_BUCKET = CompositeDefinition(
-    "NetworkPeriodScanIngress", 0, ("NAMES", "ROW", "STATE", "PROG", "VIEW"), _ingress_sig,
+#: Stand-ins of the checker form's templates, which take the rows they compare as inputs (its egress row an input gate,
+#: which `NetTiming.Layout.Fits` refuses), each one gate.
+CHECKER_INGRESS = CompositeDefinition(
+    "NetworkPeriodScanIngress", 0, _STATICS, _checker_ingress_sig,
     lambda B, S, row, sin, prog, sout, view: B.call(BL.XOR, BL.operands(sin[0], sout[0])), register=False)
-EGRESS_BUCKET = CompositeDefinition("NetworkPeriodScanEgress", 0, ("NAMES", "WORDS", "ROW"), _egress_sig,
-                                    lambda B, S, state, row: B.call(FOLD, state[0], row[0]), register=False)
+CHECKER_EGRESS = CompositeDefinition("NetworkPeriodScanEgress", 0, ("NAMES", "WORDS", "ROW"), _checker_egress_sig,
+                                     lambda B, S, state, row: B.call(FOLD, state[0], row[0]), register=False)
 
 
 @lru_cache(maxsize=None)
-def scan_descriptor(T: int, row: int, widths: tuple[int, int, int, int], counts: tuple[int, int] | None = None,
-                    names: tuple[tuple[str, ...], tuple[str, ...]] = (INGRESS_PARAMS, EGRESS_PARAMS)) -> str:
-    """The canonical descriptor of a scan's Program: `T` stand-in ingress instances, then `T` egress (or `counts`), each
-    template's row `row` bytes, the ingress bucket's state, prog and view bits and the egress bucket's state words
-    `widths`."""
+def scan_descriptor(T: int, row: int, widths: tuple[int, int, int, int], counts: tuple[int, ...] | None = None,
+                    names: tuple[tuple[str, ...], ...] = (FIRST_PARAMS, INGRESS_PARAMS, EGRESS_PARAMS),
+                    checker: bool = False) -> str:
+    """The canonical descriptor of a scan's Program in the generator form: bucket 0's stand-in instance, `T − 1` later
+    ingress instances (no template when there are none) and `T` egress instances (or `counts`), each ingress template's
+    row `row` bytes, the ingress buckets' state, prog and view bits and the egress bucket's state words `widths`;
+    `checker`: in the checker form instead, `T` ingress and `T` egress instances (or `counts`) that take their rows."""
     state, prog, view, words = widths
-    templates = (bind(INGRESS_BUCKET, NAMES=names[0], ROW=row, STATE=state, PROG=prog, VIEW=view),
-                 bind(EGRESS_BUCKET, NAMES=names[1], WORDS=words, ROW=row))
-    program = population.mixed_population_program(list(zip(templates, counts or (T, T))))
+    ingress = {"ROW": row, "STATE": state, "PROG": prog, "VIEW": view}
+    if checker:
+        templates = (bind(CHECKER_INGRESS, NAMES=CHECKER_PARAMS[0], **ingress),
+                     bind(CHECKER_EGRESS, NAMES=CHECKER_PARAMS[1], WORDS=words, ROW=row))
+    else:
+        templates = (bind(FIRST_BUCKET, NAMES=names[0], **ingress), bind(INGRESS_BUCKET, NAMES=names[1], **ingress),
+                     bind(EGRESS_BUCKET, NAMES=names[2], WORDS=words, ROW=row))
+    counts = counts or ((T, T) if checker else (1, T - 1, T))
+    program = population.mixed_population_program([(t, n) for t, n in zip(templates, counts) if n])
     return D.canonical(codec.encode_program(program))
 
 
@@ -1028,17 +1097,19 @@ def _bad_params(p: dict, n: int) -> list:
 
 
 def _scan_widths(desc: dict) -> tuple[int, int, int, int]:
-    """`scan_descriptor`'s widths of a descriptor it wrote: the ingress template's state, prog and view bits, and the
-    egress template's state words."""
-    sig = {len(d["body"]["params"]): d["body"]["params"] for d in desc["definitions"].values()
+    """`scan_descriptor`'s widths of a generator-form descriptor it wrote: the ingress templates' state, prog and view
+    bits, and the egress template's state words."""
+    sig = {len(d["body"]["params"]): d["body"] for d in desc["definitions"].values()
            if d["form"] == "composite" and d["body"]["params"]}
-    return sig[5][1][1][1], sig[5][2][1][1], sig[5][4][1][1], sig[2][0][1][1]
+    first, egress = sig[len(FIRST_PARAMS)], sig[len(EGRESS_PARAMS)]
+    _, state, view = first["ret_type"][1]
+    return state[1], first["params"][1][1][1], view[1], egress["params"][0][1][1]
 
 
 def bad_scans(p: dict) -> list[dict]:
     """Rows-form parameters whose scan `scanOf` refuses, each one change to `p`: not a descriptor, another Program's
-    (its SHA-512 not `program`), and, each under its own SHA-512, templates with other parameters, another number of
-    instances, rows not the schedule's, and an input gate no template's."""
+    (its SHA-512 not `program`), and, each under its own SHA-512, the checker form (its egress row an input), templates
+    with other parameters, another number of instances, rows not the schedule's, and an input gate no template's."""
     s, desc = p["schedule"], p["scan"]
     T, row, widths = s["window"], s["lanes"] * s["slots"] * s["cell_bytes"], _scan_widths(desc)
 
@@ -1053,10 +1124,14 @@ def bad_scans(p: dict) -> list[dict]:
          "out": len(extra["types"]) - 1})
     return [p | {"scan": "x"}, p | {"scan": {"free": 0, "steps": 0}}, p | {"scan": desc | {"schema": "verity-ir/v0"}},
             p | {"scan": json.loads(scan_descriptor(T, row, (widths[0] + 1, *widths[1:])))},
-            own(scan_descriptor(T, row, widths, names=(("row", "sin", "seed", "sout", "view"), EGRESS_PARAMS))),
-            own(scan_descriptor(T, row, widths, names=(INGRESS_PARAMS, ("row", "state")))),
-            own(scan_descriptor(T, row, widths, counts=(T, T + 1))),
-            own(scan_descriptor(T, row, widths, counts=(T + 1, T + 1))),
+            own(scan_descriptor(T, row, widths, checker=True)),
+            own(scan_descriptor(T, row, widths, names=(("row", "seed"), INGRESS_PARAMS, EGRESS_PARAMS))),
+            *([own(scan_descriptor(T, row, widths, names=(FIRST_PARAMS, ("row", "sin", "seed"), EGRESS_PARAMS)))]
+              if T > 1 else []),
+            own(scan_descriptor(T, row, widths, names=(FIRST_PARAMS, INGRESS_PARAMS, ("words",)))),
+            own(scan_descriptor(T, row, widths, counts=(1, T - 1, T + 1))),
+            own(scan_descriptor(T, row, widths, counts=(2, T - 1, T))),
+            own(scan_descriptor(T, row, widths, counts=(1, T, T))),
             own(scan_descriptor(T, row + 1, widths)),
             p | {"scan": extra, "program": program_sha512(extra)}]
 

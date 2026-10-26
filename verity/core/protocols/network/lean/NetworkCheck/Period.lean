@@ -44,10 +44,14 @@ certifier's one fixed schedule (`warden.WardenParams`: each a positive integer, 
 header, and B, S = `lanes` · `slots` and T = `window` u32s), whose digest `WardenParams.digest` every registration
 binds; its `program` is the scan's registered Program, the descriptor's SHA-512 (`partition_object.program_sha512`),
 and its `link` the run's (`warden_serve.LINK`), whose fails record is certified under the link `<link>-fails`. The
-descriptor must decode (`Flock.Program.decode`) and be the scan of the schedule's link-window: its root batches T
-instances of a template whose parameters are `row`, `sin`, `prog`, `sout` and `view` (`IngressScanBucket`), then T of
-one whose are `state` and `row` (`EgressBucket`), each `row` the schedule's (S · B bytes), and its every input gate is a
-template's parameter. The compute audits' layout terms are not read in the rows form.
+descriptor must decode (`Flock.Program.decode`) and be the scan of the schedule's link-window in the generator form:
+its root batches one instance of a template whose parameters are `row` and `prog` (`IngressScanFirst`, bucket 0), T − 1
+of one whose are `row`, `sin` and `prog` (`IngressScanBucket`; none when T = 1), each `row` the schedule's (S · B
+bytes) and both returning the same, then T of one whose parameter is `state` and which returns a u16 and the
+schedule's row (`EgressBucket`), and its every input gate is a template's parameter. An egress template that takes its
+row as an input, the checker form, is refused by name: no egress gate is an input (`NetTiming.Layout.Fits`), so `K`
+counts only what a Program that computes its egress rows leaves free. The compute audits' layout terms are not read in
+the rows form.
 
 **Commitment**, canonical JSON `{"audits": [registration, …], "windows": [registration, …]}`: one-stage's registration
 record of each compute audit and of each link-window, in order, each of format `verity/registration/v1` or `v2`. Its
@@ -134,11 +138,11 @@ the network certifier's rows; the compute audits read none, so they are in no te
   admits a queued connection at the first lane that frees, in the clients' arrival order, so the admissions are a
   function of the lengths, and `#Ss ≤ ∏_c (cap_c + 1)`. The second factor is the fail cell's position (`failCell`). A
   failed lane ends at its fail cell, so in a run the two coincide; `K` charges the product as the statement states it.
-* each scan's terms, from the scan's Program: `free` T times the ingress template's `prog` bits (the scan registers
-  the rows and its first bucket's `sin`, the empty state), `steps` T, `faulty_bits` `b · max(b_ing, b_eg)` with
-  `b_ing` an ingress instance's `sout`, `view` and return bits and `b_eg` an egress instance's `row` and return bits:
-  each instance's committed values (`faultyBits`), with the scan read as the program generating its rows, each
-  instance's outputs those parameters. `b` is its answer's `bound` (over its draw's strata, `countBound`), 0 when every
+* each scan's terms, from the scan's Program: `free` T times the ingress templates' `prog` bits (the scan registers
+  the rows, and bucket 0 starts from the empty state, constants of `IngressScanFirst`), `steps` T, `faulty_bits`
+  `b · max(b_ing, b_eg)` with `b_ing` an ingress instance's return bits (its verdict u16, state and view) and `b_eg` an
+  egress instance's (its u16 and row): each instance's committed values (`faultyBits`), the outputs it computes and
+  other units or the client read. `b` is its answer's `bound` (over its draw's strata, `countBound`), 0 when every
   unit is drawn, `drawn` its draw's `Σ k`, and `faulty_sets` every set of at most `b` of its 2T units, which holds the
   sets a stratified draw leaves possible too.
 * `eps` is the scans' δ summed, `m · δ`: the δ part of the union over the monitoring period's windows that
@@ -203,8 +207,8 @@ structure Schedule where
 def Schedule.allocation (s : Schedule) : Nat := s.lanes * s.slots
 
 /-- The scan's terms, read off its Program: its monitoring period (`T`, the window's buckets), its free inputs (`T`
-ingress instances' `prog`), and the bits one ingress and one egress instance commit (its outputs other units read or
-the client receives, and its return). -/
+ingress instances' `prog`), and the bits one ingress and one egress instance commit (its return: the outputs other
+units read or the client receives, and its verdict). -/
 structure Scan where
   steps : Nat
   free : Nat
@@ -352,18 +356,26 @@ def Schedule.digest (s : Schedule) : V ByteArray :=
     ("slots", toJson s.slots), ("window", toJson s.window), ("kinds", toJson cellKinds),
     ("reasons", toJson failReasons)])
 
-/-- The scan's templates' parameters: the ingress bucket's (`ingress_scan.IngressScanBucket`) and the egress bucket's
-(`egress.EgressBucket`). -/
-def ingressParams : Array String := #["row", "sin", "prog", "sout", "view"]
-def egressParams : Array String := #["state", "row"]
+/-- The scan's templates' parameters in the generator form: bucket 0's (`ingress_scan.IngressScanFirst`, from the empty
+state), each later ingress bucket's (`ingress_scan.IngressScanBucket`) and the egress bucket's (`egress.EgressBucket`),
+which computes its row and returns it. -/
+def firstParams : Array String := #["row", "prog"]
+def ingressParams : Array String := #["row", "sin", "prog"]
+def egressParams : Array String := #["state"]
 
 /-- A type's bits: its leaves' widths summed. -/
 def bitsOf (t : Flock.Program.Ty) : Nat := t.widths.foldl (· + ·) 0
 
+/-- Parameters' bits: their types' summed. -/
+def paramBits (ps : Array (String × Flock.Program.Ty)) : Nat := ps.foldl (fun n p => n + bitsOf p.2) 0
+
 /-- The scan's terms from its Program's descriptor (`Flock.Program.decode` of its canonical bytes), which must be the
-registered Program (`program`, its SHA-512) and the scan of the schedule's link-window: its root batches `T` instances
-of the ingress template, then `T` of the egress template, each template's `row` the schedule's row (`S · B` bytes), and
-every input gate a template's parameter. -/
+registered Program (`program`, its SHA-512) and the generator form of the schedule's link-window: its root batches one
+instance of bucket 0's template, `T - 1` of the later ingress buckets' (no such template when `T = 1`), both returning
+the same and each one's `row` the schedule's row (`S · B` bytes), then `T` of the egress template, which returns a u16
+and the schedule's row, and every input gate is a template's parameter. An egress template with a row among its
+parameters, the checker form, is refused first, by name: there the egress row is an input gate, which
+`NetTiming.Layout.Fits` refuses, and `K` would count the free inputs of a Program that only compares its egress rows. -/
 def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   let prog ← match Flock.Program.decode (← Flock.canon j).toUTF8 with
     | .ok prog => pure prog
@@ -374,21 +386,37 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
     | some d => if d.prim then none else some (x, d)
     | none => none
   let T := s.window
-  let #[(xi, di), (xe, de)] := templates | throw "scan: not two templates, the ingress bucket's and the egress bucket's"
-  unless di.params.map (·.1) == ingressParams && de.params.map (·.1) == egressParams do
-    throw s!"scan: the templates' parameters are not {ingressParams} and {egressParams}"
-  unless xi.form == .batch && xi.n == T && xe.form == .batch && xe.n == T do
-    throw s!"scan: not {T} instances of each template, the link-window's buckets"
   let row : Flock.Program.Ty := .array (s.allocation * s.cellBytes) (.value 8)
-  unless di.params[0]!.2 == row && de.params[1]!.2 == row do throw "scan: a template's row is not the schedule's"
+  let some (xe, de) := templates.back? | throw "scan: no template"
+  if de.params.any (fun p => p.1 == "row" || p.2 == row) then
+    throw "scan: the egress template takes its row as an input (the checker form): no egress gate is an input \
+      (NetTiming.Layout.Fits)"
+  let ((xf, df), later) ← match templates.pop with
+    | #[f] => pure (f, none)
+    | #[f, b] => pure (f, some b)
+    | _ => throw "scan: not the generator form's templates: bucket 0's, the later ingress buckets' and the egress \
+      bucket's"
+  unless df.params.map (·.1) == firstParams && later.all (·.2.params.map (·.1) == ingressParams) &&
+      de.params.map (·.1) == egressParams do
+    throw s!"scan: the templates' parameters are not {firstParams}, {ingressParams} and {egressParams}"
+  let laterN := match later with
+    | some (x, _) => if x.form == .batch && 1 ≤ x.n then some x.n else none
+    | none => some 0
+  unless xf.form == .batch && xf.n == 1 && laterN == some (T - 1) && xe.form == .batch && xe.n == T do
+    throw s!"scan: not bucket 0, {T - 1} later ingress buckets and {T} egress buckets, the link-window's"
+  unless df.params[0]!.2 == row && later.all (·.2.params[0]!.2 == row) do
+    throw "scan: an ingress template's row is not the schedule's"
+  unless later.all fun (_, d) => d.params[2]!.2 == df.params[1]!.2 && d.ret == df.ret do
+    throw "scan: the ingress templates' prog or return differ"
+  unless de.ret == .tuple #[.value outBits, row] do
+    throw "scan: the egress template doesn't return a u16 and the schedule's row"
   let inputs := root.body.nodes.foldl (fun n x => n + match prog.defs[x.fn]? with
     | some d => ((Flock.Program.inputWidth? d.key).map (· * x.members)).getD 0
     | none => 0) 0
-  unless inputs == T * ((di.params ++ de.params).foldl (fun n p => n + bitsOf p.2) 0) do
+  let laterBits := (later.map (paramBits ·.2.params)).getD 0
+  unless inputs == paramBits df.params + (T - 1) * laterBits + T * paramBits de.params do
     throw "scan: an input gate that is no template's parameter"
-  pure { steps := T, free := T * bitsOf di.params[2]!.2,
-         ingress := bitsOf di.params[3]!.2 + bitsOf di.params[4]!.2 + bitsOf di.ret,
-         egress := bitsOf de.params[1]!.2 + bitsOf de.ret }
+  pure { steps := T, free := T * bitsOf df.params[1]!.2, ingress := bitsOf df.ret, egress := bitsOf de.ret }
 
 def paramsOf (j : Json) : V Params := do
   match j with

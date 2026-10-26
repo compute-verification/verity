@@ -121,22 +121,37 @@ def test_the_rows_form_refuses_what_it_must(server):
 
 
 def test_the_scan_is_read_off_its_program(server):
-    """The rows form's scan terms are its registered Program's: T, T instances' `prog` bits free, and an ingress and an
-    egress instance's committed bits (their state and view, and their row, each with its return); and Lean and the
-    mirror refuse, as parameters, a scan that isn't a descriptor, another Program's, one whose templates have other
-    parameters or other than T instances each, or rows other than the schedule's, and one with an input gate no
-    template's."""
+    """The rows form's scan terms are its registered Program's, in the generator form: T, T ingress instances' `prog`
+    bits free, and an ingress and an egress instance's committed bits (their returns: a u16 with the state and view, or
+    with the row); and Lean and the mirror refuse, as parameters, a scan that isn't a descriptor, another Program's, one
+    in the checker form (its egress row an input), one whose templates have other parameters or other than 1, T − 1
+    and T instances, or rows other than the schedule's, and one with an input gate no template's."""
     for n in range(3):
         case = build("rows-honest", n, small=n % 2 == 0)
         p, desc = PC.params(case["params"]), case["params"]["scan"]
         state, prog, view, _words = PC._scan_widths(desc)
         T, row = p.schedule.window, WR.row_bytes(p.schedule)
-        assert p.scan == PC.Scan(T, T * prog, state + view + 1, 8 * row + 16), (n, p.scan)
+        assert p.scan == PC.Scan(T, T * prog, 16 + state + view, 16 + 8 * row), (n, p.scan)
         for bad in PC.bad_scans(case["params"]):
             broken = case | {"params": bad}
             assert reference(broken)["reason"].startswith("params: scan:"), (n, reference(broken))
             verdict, out = D.replay(PORT, broken, server)
             assert verdict == REJECT and "scan" in json.loads(out)["reason"], (n, out)
+
+
+def test_a_scan_in_the_checker_form_is_refused_by_name(server):
+    """A scan in the checker form, whose egress template takes the row its units compare as an input, is refused at the
+    parameters by Lean and the mirror, by name, though its terms would read: no egress gate is an input
+    (`NetTiming.Layout.Fits`), so `K` counts only what a Program that computes its egress rows leaves free."""
+    for n in range(2):
+        case = build("rows-honest", n, small=True)
+        s = PC.params(case["params"]).schedule
+        d = json.loads(PC.scan_descriptor(s.window, WR.row_bytes(s), PC._scan_widths(case["params"]["scan"]),
+                                          checker=True))
+        broken = case | {"params": case["params"] | {"scan": d, "program": PC.program_sha512(d)}}
+        assert "(the checker form)" in reference(broken)["reason"], (n, reference(broken))
+        verdict, out = D.replay(PORT, broken, server)
+        assert verdict == REJECT and "(the checker form)" in json.loads(out)["reason"], (n, out)
 
 
 def test_the_mirror_reads_a_registration_as_the_network_certifier_writes_it():
