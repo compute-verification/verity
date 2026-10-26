@@ -153,12 +153,12 @@ printable with the prover's nonce put in. -/
 theorem stmtOkZk (S : Claims.JsonSpec printJ Flock.canon) : StmtOkZk H rel := by
   intro c
   obtain ⟨st, -, hspec, h1⟩ := c.one
-  obtain ⟨⟨c', pop, hl, hd⟩, hinst, hsig, hhello⟩ := setupOne_stmt h1
+  obtain ⟨⟨c', pop, hl, hd⟩, hinst, hsig, hhello, -⟩ := setupOne_stmt h1
   obtain ⟨w, hwz, hw⟩ := insOf_true (setupOf_some c.setup).1
   obtain ⟨hzk, -, hdraw⟩ := Raw.ins_read hw
   have hz : c.s.read.zk = true := hzk.trans hwz
   obtain ⟨d, hdd⟩ := Option.isSome_iff_exists.1 c.ready_parts.2.1
-  have hu := unitDraw_of S hl (hd d hdd)
+  have hu := unitDraw_of hl (hd d hdd)
   have hU : c.spec.unitDraw = some d := by
     rw [hspec]
     simp [Stmt.spec, hu, Except.toOption]
@@ -174,15 +174,14 @@ theorem stmtOkZk (S : Claims.JsonSpec printJ Flock.canon) : StmtOkZk H rel := by
   have hdl := Ins.setup_drawLaw (setupOf_some c.setup).2 c.ready_parts.2.1
   rw [hdd, hz] at hdl
   simp only [ProvedScope.drawLaw, hD] at hdl
-  have hlw : ProvedScope.lawWhy true c.s.read.tags D = none := by
-    cases e : ProvedScope.lawWhy true c.s.read.tags D with
+  have hlw : ProvedScope.lawWhy true c.s.read.tags false D = none := by
+    cases e : ProvedScope.lawWhy true c.s.read.tags false D with
     | none => rfl
     | some _ => rw [e] at hdl; cases hdl
-  obtain ⟨t, ht⟩ := draw_parse hdraw hdd
   have hg : Good d := by
     rcases law_of_lawWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
-    · exact good_stratified (S.parse_wf _ _ ht) hD hK
-    · exact good_subset (S.parse_wf _ _ ht) hD hk
+    · exact good_stratified (draw_wf hdraw hdd) hD hK
+    · exact good_subset (draw_wf hdraw hdd) hD hk
   refine ⟨fun hn' => ?_, hg, D, hD, by rw [hspec]; exact hn⟩
   rw [hn'] at hD
   cases hD

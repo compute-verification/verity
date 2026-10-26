@@ -21,6 +21,9 @@
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-scale [SCALE_STAGES=gpu,audit] [SCALE_LOG2=19,25] [FIT_PYTHON=<vLLM's python>
 #          FIT_CPUS=... FIT_MODEL=<id, or a snapshot directory when the HF cache has no refs>]   # p2_v1/scale.py into $OUT:
 #          the device encode rate, the store of 2^e blocks audited, vLLM beside it
+#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-store P2FAST='-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA' -- encode --store DIR --seed ...
+#          p2_v1/store.py's command after the literal --, run on the library with every GPU the run sees (`encode`, `verify
+#          --decode`, `spot`); --out is $OUT, and DIR, the store, is scratch outside the run directory
 #
 # On a shared node (band-gpu, p2-v1-gpu, side-by-side): WORK=<dir> holds the venvs and builds, VCPU and RCPU the verifier's and
 # the responder's cores (default: the 3rd and 4th physical cores), WORKERS the reference gate's processes (default nproc).
@@ -219,7 +222,7 @@ elif [ "$IMPL" = band-gpu ]; then
   clocks after
   exit $RC
 elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-gpu ] || [ "$IMPL" = side-by-side ] \
-     || [ "$IMPL" = p2-scale ]; then
+     || [ "$IMPL" = p2-scale ] || [ "$IMPL" = p2-store ]; then
   gpu_env || exit 3
   record_host
   # P2 v1's library (benchmarks/pous/p2_v1): CGBN at p2_gpu's pinned commit, gmp.h for CGBN's host pass (the system's, else
@@ -246,6 +249,14 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-
     ${P2FAST+"FAST=$P2FAST"} > "$O/p2v1-make.log" 2>&1 || { tail -20 "$O/p2v1-make.log"; exit 3; }
   fi
   cp "$P2LIB"/*.ptxas "$O/" 2>/dev/null
+  if [ "$IMPL" = p2-store ]; then
+    while [ $# -gt 0 ] && [ "$1" != -- ]; do shift; done
+    [ $# -ge 2 ] || { echo "p2-store runs p2_v1/store.py's command after a literal --"; exit 2; }
+    shift
+    "$PY" benchmarks/pous/p2_v1/store.py "$1" --out "${OUT:-$O/bench}" --p2-lib "$P2LIB" "${@:2}"; RC=$?
+    clocks after
+    exit $RC
+  fi
   if [ "$IMPL" = p2-scale ]; then
     SO=${OUT:-$O/bench}; SC=$(mktemp -d); trap 'rm -rf "$SC"' EXIT; RC=0
     case ",${SCALE_STAGES:-gpu,audit}," in *,gpu,*)
