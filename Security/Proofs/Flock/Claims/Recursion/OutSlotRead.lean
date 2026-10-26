@@ -131,7 +131,7 @@ open Claims (Msg)
 open FlockDeploy (Coin FinalP nodeOf)
 open Claims.Recursion.VStarB
 open FlockVBridge.Family (bytesAt outCol)
-open RecDeploy.OpenLower (AtPiecesP copyR qAt)
+open RecDeploy.OpenLower (AtPiecesP copyR qAt schAt PiecesInRangeR ownQR_some levelMatch)
 
 section Deployed
 
@@ -177,6 +177,33 @@ theorem outSlotTie_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Co
       hqo s' N' c' w' qc hs' hc' hw' hqc hlt, ?_⟩
   exact outBytes_staged hst.2.2.2.2.2.2.2.2 hst.1 ht hr' hss' hsv' hcc hqo w _
 
+/-- **`OutIdxLt` from the pieces' range**: a piece is of rep 0 or 1 and one of its level's `q_l` queries
+(`PiecesInRangeR`), and its level statement has `n = 2 q_l` (`levelMatch`), as in `copyFitsR_of`. -/
+theorem outIdxLt_of (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse x = parse x)
+    (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f) (hR : PiecesInRangeR pieces) :
+    OutIdxLt H D shape untr b cmt L pieces := by
+  intro x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hw hst q hq ho ht r' ss' hr' hss' lv' n' hsv'
+  obtain ⟨hrep, hqry⟩ := hR _ q hq
+  have hx' : parse x = some st := (hP x).symm.trans hx
+  have hxI : Claims.Recursion.xI D x = xIOf x := by
+    unfold Claims.Recursion.xI xIOf
+    rw [hP x]
+  obtain ⟨h0, r'', ss'', hr'', hss'', L', H', n'', hsv''⟩ := ownQR_some ho
+  rw [hr'] at hr''
+  cases hr''
+  rw [hss'] at hss''
+  cases hss''
+  rw [hsv'] at hsv''
+  cases hsv''
+  obtain ⟨hls, -, -, hn⟩ := levelMatch hx' (hS _ hf) hr' hss' hsv'
+  subst hls
+  rw [h0, hxI] at hqry
+  simp only [qAt]
+  rw [hxI]
+  generalize ((schAt (xIOf x) 0).levels[q.level]!).q = Q at hqry hn ⊢
+  have h1 : q.rep * Q ≤ 1 * Q := Nat.mul_le_mul_right _ (by omega)
+  omega
+
 /-- **The binding at the layout of record, from the tie**: `outBindRP_of_slot` off `outSlotTie_of`. -/
 theorem outBindRP_of_leaves (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
@@ -185,6 +212,17 @@ theorem outBindRP_of_leaves (elem : (r : XR) → List (Fin r.w.parts.length × L
     OutBindRP FlockDeploy.sha512 D shape untr b cmt (DeployedR.layR elem) Bd pieces posAt :=
   outBindRP_of_slot D shape untr b cmt Bd elem pieces posAt
     (outSlotTie_of FlockDeploy.sha512 D shape untr b cmt (DeployedR.layR elem) Bd pieces posAt hI hC)
+
+/-- **The binding at the layout of record, from the commit tie alone**, at pieces in range (row D's are,
+`piecesInRangeR_rowDPieces`). -/
+theorem outBindRP_of_tie (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
+    (hP : ∀ x, D.parse x = parse x) (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f)
+    (hR : PiecesInRangeR pieces)
+    (hC : OutCommitTie FlockDeploy.sha512 D shape untr b cmt (DeployedR.layR elem) Bd pieces posAt) :
+    OutBindRP FlockDeploy.sha512 D shape untr b cmt (DeployedR.layR elem) Bd pieces posAt :=
+  outBindRP_of_leaves D shape untr b cmt Bd elem pieces posAt
+    (outIdxLt_of FlockDeploy.sha512 D shape untr b cmt (DeployedR.layR elem) pieces hP hS hR) hC
 
 end Deployed
 
