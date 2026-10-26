@@ -28,6 +28,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -130,6 +132,38 @@ def answer(audit_out: Path, rec: Mapping[str, Any], delta: Fraction) -> dict[str
             "verdict": "accept"}
 
 
+def keep(src: Path, dst: Path) -> None:
+    """The audit's records from ``src`` into ``dst``, as `benchmarks/prove_path/run.sh`'s ``keep``: never a member's
+    circuit (its SHA-512 is in the records), a session's archive, an instance file, a private file or the prover's copy of
+    a member's files."""
+    for f in sorted(src.rglob("*")):
+        rel = f.relative_to(src)
+        if not f.is_file() or {"archive", "prover"} & set(rel.parts[:-1]) or f.name == "circuit.txt" \
+                or f.name.endswith("-private.bin") or f.name.startswith("inst-") or re.match(r"m[0-9]+-inst-", f.name):
+            continue
+        (dst / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(f, dst / rel)
+
+
+_records_audit = RA.main
+
+
+def in_scratch(argv: list[str]) -> int:
+    """`records_audit.main` with the audit's tree (each member's circuit, the sessions' archives, the prover's files,
+    tens of GiB for an H1 window) in a temporary directory, removed after, and only its records (`keep`) in the
+    ``--out`` it was given. The directory is under ``$TMPDIR``, else ``/tmp``."""
+    argv = list(argv)
+    i = argv.index("--out") + 1
+    out = Path(argv[i])
+    out.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="pouw-audit-", ignore_cleanup_errors=True) as work:
+        argv[i] = work
+        try:
+            return _records_audit(argv)
+        finally:
+            keep(Path(work), out)
+
+
 def lean_line(exe: str, params: Any, commitment: bytes, evidence: bytes) -> str:
     """`pouw-check check PARAMS COMMITMENT EVIDENCE`'s outcome line."""
     with tempfile.TemporaryDirectory() as d:
@@ -174,6 +208,7 @@ def main(argv: list[str] | None = None) -> int:
     rec, prov = _provenance(wdir)
     law = rec["law"]
     held_prov = {"provenance": prov}
+    RA.main = in_scratch
     RA.verifier_window = verifier_window
     FI.flock_input_files = flock_input_files
     RA.source = lambda w, held: source(w, {**held, **held_prov})

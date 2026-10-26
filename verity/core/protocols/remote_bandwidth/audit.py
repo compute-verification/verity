@@ -95,7 +95,7 @@ import os
 import secrets
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from typing import Any, Protocol
 
@@ -107,7 +107,7 @@ from verity.ml.randomness import derive, frame
 from . import codec, coins, receipts
 from . import pooled as _pooled
 from . import schedule as _schedule
-from .codec import BLOCK_BYTES, SEED_BYTES, Codec
+from .codec import BLOCK_BYTES, P2_LAYOUT, SEED_BYTES, Codec, P2Codec
 from .receipts import DIGEST_BYTES, LIMITS, SALT_BYTES, Plan
 
 PROTOCOL_ID = "verity/remote-bandwidth/v0"
@@ -254,11 +254,14 @@ class Params:
                              "re-key falls at age L − 1, which at L = 1 is before it may be resident")
         if not 0 < self.delta < 1:
             raise ValueError("0 < delta < 1")
-        if type(self.codec) is not Codec:
-            raise ValueError("a session's codec is a Codec")
+        if type(self.codec) not in (Codec, P2Codec):
+            raise ValueError("a session's codec is a Codec, or a P2 store's P2Codec")
         receipts.receipt_kind(self.receipt)
         _bind(self.bind)
-        receipts.block_layout(self.layout)
+        if type(self.codec) is Codec:
+            receipts.block_layout(self.layout)
+        elif self.layout != P2_LAYOUT or self.bind or self.receipt != receipts.SKETCH_SHA512:
+            raise ValueError(f"a P2 store's session reads {P2_LAYOUT} units under sketch-sha512, of the block alone")
         receipts.sketch_rows(self.receipt, self.rows)
         if type(self.groups_per_coin) is not int or self.groups_per_coin < 1:
             raise ValueError("groups_per_coin is a positive integer")
@@ -736,7 +739,9 @@ class Record:
     one), which, with each pass's head (`WindowRecord.heads`), the memory-map unit's verdict is on
     (`RequirementLink.mapped`), and the receipts every draw requested (`Params.samples`, None in a record no session
     made): a draw of U receipts drew min(`samples`, U), so `samples` is the k_t of the draw's rejection Σ_t k_t/2^64
-    (`ledger.rejection`), which a draw opening all its receipts doesn't show.  `public` is what acceptance makes
+    (`ledger.rejection`), which a draw opening all its receipts doesn't show.  `samples` is also the session's draw cap
+    s and `append_coins` the append coins its coin commitment reserved, which bound every window of the session,
+    whatever its outcome (`ledger.binding`; None in a record no session made).  `public` is what acceptance makes
     public; `profile` is the protocol's profile, each window's schedule and openings law (the γ terms need the node's
     capacities: `ledger`).  At `groups_per_coin` g > 1 a window's `profile` counts its share of its draw's openings,
     and the law is the draw's: `samples` receipts uniform over its g windows' receipts together (`pooled_windows`).
@@ -756,6 +761,7 @@ class Record:
     rows: int = receipts.SKETCH_ROWS
     appended: int = 0
     released: int = 0
+    append_coins: int | None = field(default=None, kw_only=True)
     lifetime: int | None = None
     appends: bytes | None = None
     pace: Pace | None = None
@@ -877,10 +883,17 @@ class Session:
     `Record.end_ns` over the same store, less the trusted round-trip floor if there is one, or the clock at
     registration for the store's first session, so that no read serves receipts of two sessions.  `tiles` is PoUW's
     check if the registration binds z, and None if it does not.  Blocks appended after the codec seed (`append`) are
-    the session's: they take indices from N up, and a later session over the store starts again from N."""
+    the session's: they take indices from N up, and a later session over the store starts again from N.  A session
+    over PoUS's P2 store is `p2.Session`, whose blocks are units of `block_bytes` (`codecs`, the codec it takes)."""
+
+    codecs: tuple[type, ...] = (Codec,)
+    block_bytes: int = BLOCK_BYTES
 
     def __init__(self, params: Params, registration: Registration, tiles: Tiles | None, coins_: coins.Coins, *,
                  not_before_ns: int, clock: Callable[[], int] = time.monotonic_ns) -> None:
+        if type(params.codec) not in self.codecs:
+            raise ValueError(f"a {type(self).__name__} is over a store under {[c.__name__ for c in self.codecs]}, not "
+                             f"{type(params.codec).__name__}: a P2 store's session is p2.Session")
         if (registration.blocks != params.blocks or registration.codec != params.codec
                 or registration.receipt != params.receipt or registration.bind != params.bind
                 or registration.layout != params.layout
@@ -1290,7 +1303,16 @@ class Session:
         return Scheduled(self.registration.digest, self.commitment.root, cap)
 
     def record(self) -> Record:
-        """The session's record, once every window is accepted."""
+        """The session's record, once every window is accepted, with its bounds (`bounded`)."""
+        return self.bounded(self._record())
+
+    def bounded(self, record: Record) -> Record:
+        """`record` with the bounds every window of this session obeys, whatever its outcome: its draw cap and the
+        append coins its coin commitment reserved (`Record.samples`, `Record.append_coins`, `ledger.binding`)."""
+        return replace(record, samples=self.params.samples, append_coins=self.commitment.family(coins.APPEND) or 0)
+
+    def _record(self) -> Record:
+        """The session's record without its bounds."""
         self._live()
         if len(self.windows) != self.params.windows or any(w.verdict is None or not w.verdict.accepted for w in self.windows):
             raise SessionError("a record needs every window of the session accepted")
@@ -1300,7 +1322,7 @@ class Session:
             profile = window_profile(lengths, len(w.draws), self.params.delta)
             out.append(WindowRecord(t, lengths, w.released_ns, self.deadline(t), w.opened_ns, profile, tuple(w.post),
                                     tuple(w.steps), tuple(w.heads), tuple(w.stale), tuple(w.arrived)))
-        return Record(self.registration.digest, self.commitment.root, self.params.blocks, BLOCK_BYTES, tuple(out),
+        return Record(self.registration.digest, self.commitment.root, self.params.blocks, self.block_bytes, tuple(out),
                       self.registration.receipt, self.registration.bind, self.registration.codec,
                       self.registration.layout, self.registration.rows, self.extent - self.params.blocks, self.released,
                       self.params.lifetime, self._head, self.params.pace, self.params.groups_per_coin,
@@ -1681,7 +1703,8 @@ def pooled(record: Record) -> tuple[float, float]:
     found s_t correct receipts).  `wrong` is the most Σ_t f_t·U_t those allow, and `floor` the most any f_t is:
     min(1 − s_t/U_t, d̄·S/s_t), about ln(1/δ)/s_t.  The Lean states `wrong` at each window's own U_t, on the deployed
     draw, at δ + Σ_t s_t/2^64 + the PRF advantage of each window's distinguisher, one a window that the session fixes,
-    + the coin commitment's hiding terms (`Accounting.Guarantees.Remote.PooledDraw`, `ledger.hiding`).
+    + the coin commitment's hiding terms + the receipts' binding term (`Accounting.Guarantees.Remote.PooledDraw`,
+    `ledger.draw`).
 
     Both are `pooled_bound`'s exact values rounded up: d̄·S from above by a certified rational (`pooled.budget`), and
     `wrong` the greedy over the windows by U_t/s_t falling, which `Properties.RemoteAudit.PooledCovers` proves at least
@@ -1703,7 +1726,8 @@ class Rebuild:
 
     def __post_init__(self) -> None:
         if type(self.codec) is not Codec:
-            raise ValueError("a rebuild model is of a Codec")
+            raise ValueError("a rebuild model is of a Codec: μ_rebuild over a P2 store waits on the squaring ceiling at "
+                             "P2's encode (SquaringCeilingP2, drafted, not stated)")
         if type(self.squarings_per_s) not in (int, float) or not 0 <= self.squarings_per_s < math.inf:
             raise ValueError("a squaring ceiling is a finite nonnegative rate")
 

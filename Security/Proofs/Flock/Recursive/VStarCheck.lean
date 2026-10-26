@@ -30,7 +30,7 @@ to `VStmt.Loads` (`loads_of_verifiesV`), and `RecursiveAudit`'s (i) reads it in 
   `verifyCmd` forms them; `find?_circuit`: `Tags.circuit`'s name names `Tags.circuit`. With refusal (5)'s name
   equation they give V*'s tags.
 * `firstDiff?_eq_none`: byte strings without a first difference are equal (`forIn_none_all`, the loop running through).
-* `checkFile_ok`, `checkParsed_ok`, `check_ok`, `checkCircuit_ok`, `checkStmt_ok`: what each check gives when it
+* `checkFile_ok`, `checkParsed_ok`, `checkParsed_leavesOut`, `check_ok`, `checkCircuit_ok`, `checkStmt_ok`: what each check gives when it
   passes.
 * `population_of_setupHidden`: the set-up statement's population (`RecVStar.population`) is the size of the public
   file `loadPublic` reads, drawn or not (`drawn` records it, `loadPublic` records none and leaves `n` at it).
@@ -233,6 +233,28 @@ theorem checkParsed_ok {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkP
           simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, Bool.not_eq_true', Array.isEmpty_iff, not_or,
             Classical.not_not, Bool.not_eq_false] at h1 h2 h3
           exact ⟨h1.1, h1.2, h2, h3⟩
+  · cases h
+
+/-- **The parse check's output leaves**: the circuit's output leaves are its unit's output words in order, as V*'s
+`leaves_out` (`VStar.Compose`'s META) writes them. -/
+theorem checkParsed_leavesOut {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkParsed s c = .ok ()) :
+    ∃ u, s.unit = .ok u ∧ c.leavesOut.getD 0 #[] = Array.range u.outWords := by
+  unfold RecVStar.checkParsed at h
+  dsimp only at h
+  split at h
+  · rename_i u hs
+    refine ⟨u, hs, ?_⟩
+    rw [pure_bind] at h
+    split at h
+    · cases h
+    · split at h
+      · cases h
+      · split at h
+        · cases h
+        · split at h
+          · cases h
+          · rename_i h4
+            exact Classical.byContradiction fun hne => h4 (bne_iff_ne.2 hne)
   · cases h
 
 /-- **The unit check, as V*'s statement `j`**: a unit named `name` over `n` instances is statement `j` of V*'s

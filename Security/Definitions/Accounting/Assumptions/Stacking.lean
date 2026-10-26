@@ -4,8 +4,8 @@ import Definitions.Accounting.Carrier
 # Stacking's named assumptions: bound keys, the declared circuit's carriers, the steered layout (trusted)
 
 What the stacking guarantees (`Definitions/Accounting/Guarantees/Stacking.lean`, `DeclaredCircuit.lean`) assume beyond the
-remote audit's own and `Accounting.Assumptions.EncodeChainHardness`, each a named `Prop` taken as a hypothesis, never an
-`axiom`:
+remote audit's own and the gate model's `Accounting.Assumptions.SquaringFloor` and `Accounting.Assumptions.ChainSum`,
+each a named `Prop` taken as a hypothesis, never an `axiom`:
 
 * `KeyBinding T M δ enc`: under the append-coin rule (`Accounting.appendCoinBlocks`), whatever the writers choose for
   each append from the codec and the coins of the appends before it, the blocks a pass reads at any layout fixed apart
@@ -78,8 +78,8 @@ the layout `layout c y` puts at positions of appends after the registration) bes
 and the codec and the append coins `y`, the session `A c y`'s device at candidate `g`. The carrier's provenance is
 `W`'s over a set `I` of at most `L` of the audit `Aud`'s windows, `L` the lifetime cap itself: its inputs are at most
 `W`'s run-input bits there, and its encodes, at the gate model's `encodeBitsCost` for the deployed codec (p1024,
-3 rounds) in the restricted class (`B` operand bits, more than `εnum/εden` of the draws), cost at most `W`'s budgeted
-units there (`RateSketch.Provenance.OfCircuit`). Rebuilds of registered tiles (append `0`: the weights, the pool's
+3 rounds) in the restricted class (`B` operand bits, more than `εnum/εden` of the draws), cost at most `W`'s nonlinear
+units there, its budgeted units and its data products (`RateSketch.Provenance.OfCircuit`). Rebuilds of registered tiles (append `0`: the weights, the pool's
 filler) are not bounded, so a guarantee that reads this credits no registered block.
 
 **Why it should hold.** In the verbatim class a device obtains a sector it doesn't hold, read or take over the link by
