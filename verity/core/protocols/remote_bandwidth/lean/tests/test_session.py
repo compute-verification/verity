@@ -16,7 +16,7 @@ from hypothesis import strategies as st
 
 import ra_cases as M
 import verity_difftest as D
-from verity.core.protocols.remote_bandwidth import audit
+from verity.core.protocols.remote_bandwidth import audit, coins, receipts
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -72,4 +72,24 @@ def test_a_pace_names_one_or_two_windows_in_flight_two_when_it_names_none(server
 def test_a_registration_that_binds_tiles_is_refused_by_both(server) -> None:
     case = copy.deepcopy(M.recorded("honest")[0])
     case["registration"]["bind"] = True
+    assert D.replay(PORT, case, server)[0] == "reject"
+
+
+@pytest.mark.parametrize("seed", [receipts.SEED_V0, None])
+def test_a_session_of_fiat_shamir_seeds_is_refused_by_both_by_name(server, seed) -> None:
+    """Parameters that name receipt format seed/v0, whose pass seeds were SHA-512 of the prover's previous root, or
+    that name none, are refused by both, with seed/v0 named."""
+    case = copy.deepcopy(M.recorded("honest")[0])
+    if seed is None:
+        del case["params"]["seed"]
+    else:
+        case["params"]["seed"] = seed
+    kind, lean = D.replay(PORT, case, server)
+    assert kind == "reject" and f"{receipts.SEED_V0} is refused" in lean
+
+
+@pytest.mark.parametrize("pass_coins", [[], ["00" * (coins.SEED_BYTES // 2)]])
+def test_a_session_with_no_pass_coin_of_64_bytes_is_refused_by_both(server, pass_coins) -> None:
+    case = copy.deepcopy(M.recorded("honest")[0])
+    case["pass_coins"] = pass_coins
     assert D.replay(PORT, case, server)[0] == "reject"

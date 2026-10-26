@@ -51,7 +51,7 @@ def _registration(b: bytes) -> audit.Registration:
 
 def _evidence(b: bytes) -> dict:
     j = P.canonical_json(b)
-    _keys(j, ["append_coins", "coins", "events"], "evidence")
+    _keys(j, ["append_coins", "coins", "events", "pass_coins"], "evidence")
     M._list(j, "events")
     return j
 
@@ -59,11 +59,13 @@ def _evidence(b: bytes) -> dict:
 def _check(p: dict, reg: audit.Registration, e: dict) -> tuple:
     try:
         with M.decoding():
-            kw, committed, appends, not_before = M.session_of(p | {"append_coins": e["append_coins"], "coins": e["coins"]})
+            kw, committed, appends, passes, not_before = M.session_of(
+                p | {k: e[k] for k in ("append_coins", "coins", "pass_coins")})
             events = [M.event_of(x) for x in e["events"]]
             params = M.params_of(reg, kw)
         clock = M.Clock()
-        s = audit.Session(params, reg, None, M.replayed(reg, 0, params.windows, committed, appends, params.groups_per_coin),
+        s = audit.Session(params, reg, None,
+                          M.replayed(reg, 0, params.windows, committed, appends, passes, params.groups_per_coin),
                           not_before_ns=not_before, clock=clock)
         for x in events:
             M.apply(s, clock, x)
@@ -83,7 +85,8 @@ def case_of(session: dict) -> dict:
     """The protocol's case of a `session` difftest's case: the registration, the log, and the parameters."""
     s = session if isinstance(session, dict) else {}
     return {"commitment": canonical(s.get("registration")).encode().hex(),
-            "evidence": canonical({k: s[k] for k in ("append_coins", "coins", "events") if k in s}).encode().hex(),
+            "evidence": canonical({k: s[k] for k in ("append_coins", "coins", "events", "pass_coins")
+                                   if k in s}).encode().hex(),
             "params": {k: s[k] for k in ("not_before_ns", "params") if k in s}}
 
 
@@ -99,6 +102,8 @@ FRAMING = [
     lambda c: c | {"evidence": json.dumps(_json(c["evidence"])).encode().hex()},
     lambda c: c | {"evidence": canonical(_json(c["evidence"]) | {"x": []}).encode().hex()},
     lambda c: c | {"evidence": canonical(_json(c["evidence"]) | {"events": {}}).encode().hex()},
+    lambda c: c | {"evidence": canonical({k: v for k, v in _json(c["evidence"]).items()
+                                          if k != "pass_coins"}).encode().hex()},
     lambda c: c | {"commitment": json.dumps(_json(c["commitment"])).encode().hex()},
     lambda c: c | {"commitment": c["commitment"].upper()},
     lambda c: c | {"commitment": c["commitment"][:-2]},

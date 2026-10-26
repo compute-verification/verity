@@ -47,7 +47,7 @@ def changed(draw, v):
             return v[:i] + "0123456789abcdef"[(int(v[i], 16) + draw(st.integers(1, 15))) % 16] + v[i + 1:]
         return {6: v[:-2], 7: v + "00", 8: "", 9: draw(st.sampled_from([v + "0", v.upper()]))}[op]
     if isinstance(v, str):
-        return draw(st.sampled_from(["", "x", "sketch-sha512", "block-sha512", "p512", "p1024", "verify", "receive"]))
+        return draw(st.sampled_from(["", "x", "sketch-sha512", "block-sha512", "p512", "p1024", "verify", "receive", "seed"]))
     if v is None:
         return draw(st.sampled_from([0, [], "00", [[0, 1]], [[], []]]))
     if isinstance(v, list):

@@ -59,12 +59,12 @@ def register_op(draw) -> dict:
 
 
 def event_op(draw, n: str) -> dict:
-    """An event for session 0 or 1 of node `n`'s live registration: one that releases a coin, takes a root (now and
-    then a malformed one), closes a window or verifies it with no openings."""
+    """An event for session 0 or 1 of node `n`'s live registration: one that releases a coin (a pass's among them),
+    takes a root (now and then a malformed one), closes a window or verifies it with no openings."""
     t, now = draw(st.integers(0, 1)), draw(st.integers(0, 12))
     root = draw(st.sampled_from([expand(b"root %d" % now, 64), "00" * 63]))
     e = draw(st.sampled_from([
-        {"kind": "start", "now": now}, {"kind": "boundary", "now": now},
+        {"kind": "start", "now": now}, {"kind": "boundary", "now": now}, {"kind": "seed"},
         {"kind": "receive", "t": t, "i": 0, "root": root, "runs": None, "change": None, "step": 0, "now": now},
         {"kind": "close", "t": t, "now": now}, {"kind": "verify", "t": t, "openings": []}]))
     return {"op": "event", "node": n, "session": draw(st.sampled_from([0, 0, 1])), "event": e}
@@ -78,16 +78,21 @@ def session_op(draw, index: int | None) -> dict:
     g = 2 if windows == 2 and rare(draw, 3) else 1
     v = {"op": "session", "registration": index,
          "params": {"deadline_ns": 100, "deferred": False, "lifetime": 4, "min_passes": 1, "pace": pace,
-                    "samples": 4, "window_ns": 1, "windows": windows} | ({"groups_per_coin": g} if g != 1 else {}),
+                    "samples": 4, "seed": receipts.SEED, "window_ns": 1, "windows": windows}
+         | ({"groups_per_coin": g} if g != 1 else {}),
          "coins": [expand(b"coin %d" % u, 32) for u in range(windows + -(-windows // g))], "append_coins": [],
+         "pass_coins": [expand(b"pass coin %d" % u, 64) for u in range(draw(st.integers(1, 2)))],
          "not_before_ns": draw(st.integers(0, 2)), "index": draw(st.sampled_from([None, None, 0, 1, -1]))}
     if index is None or rare(draw, 10):
         v["registration"] = M.registration_json(audit.Registration(
             bytes.fromhex(node(draw)) or M.NODE, 6, bytes(64), bytes(32), M.P512, receipts.DEFAULT, False, receipts.LAYOUT,
             receipts.sketch_rows(receipts.DEFAULT)))
     if rare(draw):
-        k, bad = draw(st.sampled_from([("coins", []), ("registration", -1), ("index", True)]))
+        k, bad = draw(st.sampled_from([("coins", []), ("registration", -1), ("index", True), ("pass_coins", []),
+                                       ("pass_coins", ["00" * 32])]))
         v[k] = bad
+    if rare(draw):
+        v["params"]["seed"] = receipts.SEED_V0
     return v
 
 
@@ -121,16 +126,17 @@ def read_back(draw) -> dict:
 
 def script(draw, n: str, k: int) -> list[dict]:
     """The first few events of session `k` over node `n`'s registration in a window's order, now and then off it: a
-    malformed root, a step below the first, a boundary sooner than the window, a close long past it."""
+    malformed root, a step below the first, a root with no pass coin out, a boundary sooner than the window, a close
+    long past it."""
     now = draw(st.integers(0, 3))
     root = draw(st.sampled_from([expand(b"root %d" % now, 64)] * 3 + ["00" * 63]))
-    events = [{"kind": "start", "now": now},
+    events = [{"kind": "start", "now": now}, *([{"kind": "seed"}] if draw(st.integers(0, 5)) else []),
               {"kind": "receive", "t": 0, "i": 0, "root": root, "runs": None, "change": None,
                "step": draw(st.sampled_from([0, 0, 0, -1])), "now": now + 1},
               {"kind": "boundary", "now": now + draw(st.sampled_from([2, 2, 0]))},
               {"kind": "close", "t": 0, "now": now + draw(st.sampled_from([3, 3, 200]))},
               {"kind": "verify", "t": 0, "openings": []}]
-    return [{"op": "event", "node": n, "session": k, "event": e} for e in events[:draw(st.integers(0, 5))]]
+    return [{"op": "event", "node": n, "session": k, "event": e} for e in events[:draw(st.integers(0, len(events)))]]
 
 
 @st.composite
@@ -182,7 +188,7 @@ def recorded(name: str, cut: int | None = None) -> dict:
     register = {"op": "register", "nonce": ZERO} | {k: reg[k] for k in (
         "node", "blocks", "payload_root", "codec", "receipt", "bind", "layout", "rows")}
     session = {"op": "session", "registration": 0, "index": 0} | {k: case[k] for k in (
-        "params", "coins", "append_coins", "not_before_ns")}
+        "params", "coins", "append_coins", "pass_coins", "not_before_ns")}
     events = [{"op": "event", "node": reg["node"], "session": 0, "event": e} for e in case["events"][:cut]]
     return {"source": M.SOURCE.hex(), "registry": None, "ops": [
         register, session, *events, register, {"op": "close", "node": reg["node"]},

@@ -14,7 +14,7 @@ import pytest
 
 import ra_cases as M
 import replay as R
-from verity.core.protocols.remote_bandwidth import audit, wire
+from verity.core.protocols.remote_bandwidth import audit, receipts, wire
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -75,7 +75,7 @@ def zero_passes(r: M.Run) -> None:
     r.finish()
 
 
-@pytest.mark.parametrize("name", ["honest", "drop-registered", "unchained-head", "late", "honest-paced",
+@pytest.mark.parametrize("name", ["honest", "drop-registered", "guessed-seed", "late", "honest-paced",
                                   "order-past-pace"])
 def test_a_transcript_replays_to_the_definitions_verdict(server, tmp_path, name) -> None:
     case, outcome = M.recorded(name)
@@ -111,6 +111,22 @@ def test_a_transcript_reads_a_windows_frames_as_the_live_verifiers_do(server, tm
     path.write_text(json.dumps(framed([b"\0"])))
     row, = R.replay_transcript(path, server)
     assert row["agree"] and row["lean"]["rejected"] == {"failure": "malformed", "window": first, "at": None}, row
+
+
+@pytest.mark.parametrize("seed", [None, receipts.SEED_V0])
+def test_a_transcript_of_fiat_shamir_seeds_is_refused_by_name(server, tmp_path, seed) -> None:
+    """A transcript of receipt format seed/v0, whose pass seeds were SHA-512 of the prover's previous root, or of one
+    written before the format was named, is refused by both verifiers, the Lean naming seed/v0."""
+    case = copy.deepcopy(M.recorded("honest")[0])
+    if seed is None:
+        del case["params"]["seed"]
+    else:
+        case["params"]["seed"] = seed
+    path = tmp_path / "case.json"
+    path.write_text(json.dumps(case))
+    row, = R.replay_transcript(path, server)
+    assert row["agree"] and row["held"] is False and "reject" in row["python"], row
+    assert f"{receipts.SEED_V0} is refused" in row["lean"]["reject"], row
 
 
 @pytest.mark.parametrize("key", ["samples", "min_passes"])
@@ -149,7 +165,7 @@ def test_a_transcript_that_names_no_pace_replays_only_with_the_pace_its_verifier
     assert row["held"] is False and "sha256" in row["why"], row
 
 
-@pytest.mark.parametrize("name", ["honest", "honest-subset", "honest-by-root", "drop-registered", "stale-challenge",
+@pytest.mark.parametrize("name", ["honest", "honest-subset", "honest-by-root", "drop-registered", "stale-seed",
                                   "honest-paced"])
 def test_a_verifier_json_replays_to_its_recorded_verdict(server, tmp_path, name) -> None:
     path = tmp_path / "verifier.json"
@@ -316,9 +332,13 @@ def test_case_of_keeps_the_recorded_parameters_and_clock() -> None:
     case, made = R.case_of(v["registration"], s)
     assert case["params"] == {
         "deadline_ns": s["allowance_ns"], "deferred": False, "lifetime": s["record"]["public"]["lifetime"],
-        "min_passes": 1, "pace": None, "samples": s["samples"], "window_ns": s["window_ns"], "windows": s["windows"]}
+        "min_passes": 1, "pace": None, "samples": s["samples"], "seed": receipts.SEED, "window_ns": s["window_ns"],
+        "windows": s["windows"]}
     assert s["record"]["public"]["lifetime"] == s["lifetime"] == audit.lifetime_windows(s["window_ns"])
     receives = [e for e in case["events"] if e["kind"] == "receive"]
+    kinds = [e["kind"] for e in case["events"]]
+    assert all(kinds[k - 1] == "seed" for k, kind in enumerate(kinds) if kind == "receive")
+    assert len(case["pass_coins"]) == len(receives)
     assert [e["now"] for e in receives] == [x for w in s["windows_seen"] for x in w["arrivals_ns"]]
     assert [e["step"] for e in receives] == [x for w in s["record"]["profile"]["windows"] for x in w["steps"]]
     assert made == {"plans": "recorded lengths", "steps": "recorded"}

@@ -220,13 +220,17 @@ def case_of(reg: dict, session: dict) -> tuple[dict, dict]:
             raise ValueError(f"window {t} was drawn at no recorded time")
         timed.append((at, 2, t, 0, {"kind": "close", "t": t, "now": at}))
     start = seen[0]["released_ns"]
-    events = [{"kind": "start", "now": start}] + [e for *_, e in sorted(timed, key=lambda x: x[:4])]
+    events = [{"kind": "start", "now": start}] + [x for *_, e in sorted(timed, key=lambda x: x[:4])
+                                                  for x in ([{"kind": "seed"}, e] if e["kind"] == "receive" else [e])]
+    passes = max(1, sum(1 for e in events if e["kind"] == "seed"))
     case = {"registration": registration_of(reg), "not_before_ns": start, "append_coins": [],
             "coins": [_synthetic(b"replay coin %d" % j, 32) for j in range(W + coins.openings_coins(W, g))],
+            "pass_coins": [_synthetic(b"replay pass coin %d" % n, coins.SEED_BYTES) for n in range(passes)],
             "events": events,
             "params": {"deadline_ns": session["allowance_ns"], "deferred": False, "lifetime": lifetime,
                        "min_passes": 1, "pace": pace_json(session), "samples": session["samples"],
-                       "window_ns": window_ns, "windows": W} | ({"groups_per_coin": g} if g != 1 else {})}
+                       "seed": receipts.SEED, "window_ns": window_ns, "windows": W}
+            | ({"groups_per_coin": g} if g != 1 else {})}
     return case, made
 
 
