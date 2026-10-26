@@ -224,7 +224,7 @@ def loaded_code_objects() -> dict[str, Any]:
     Triton's compiled-kernel `hash`, and the cubin bytes' sha256 while Inductor still holds them).  Digests: kernel_set_sha256 over the sorted
     {(kernel name, source sha256)}, binary_set_sha256 over the sorted binary identities (cubin sha256 or triton hash), module_keys_sha256.
 
-    [R16 unit B] per compiled binary: triton hash + cubin sha256 + per-ELF-section sha256 + code_sha256 (every section except CUBIN_DENY_LIST, rev F-r16-09) + compile metadata +
+    [R16 unit B] per compiled binary: triton hash + cubin sha256 + per-ELF-section sha256 + code_sha256 (every section except CUBIN_DENY_LIST) + compile metadata +
     the autotune config it was compiled for (`compile_results[*]` = every candidate the process compiled; `launchers[*]` = the one(s) it
     EXECUTES after autotuning); `executed_set_sha256` over the sorted {(kernel, src sha, executed code id, executed config)} is the identity
     of the specialization the graphs replay.  Two processes running the same code objects differ in cubin BYTES when the debug/line-info
