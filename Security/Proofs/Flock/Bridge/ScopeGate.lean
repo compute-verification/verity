@@ -40,9 +40,11 @@ structure KsScoped (I : Inputs) (D : Flock.Desc) (pub : Flock.Public) (kd : ℕ)
 
 /-- **`verify --zk` accepts, files, draw and transcript**: `LiveAcceptsKS`, and the files and the record's draw pass
 `Flock.KsScope.check` (the last refusal of `verify --zk`'s verdict). -/
-def LiveAcceptsScoped {n : ℕ} {Reg : Type} (I : Inputs) (o : Reg × Finset (Fin n) × Transcript) : Prop :=
+def LiveAcceptsScoped {n : ℕ} {Reg : Type} (I : Inputs)
+    (o : Reg × Finset (Fin n) × FlockSoundness.Discharge.Exec.Transcript) : Prop :=
   LiveAcceptsKS I o ∧
-    Flock.KsScope.check (zkTags I) I.circuitFile I.publicFile I.tables I.count (recordDraw o.2.2.record) = .ok ()
+    Flock.KsScope.check (zkTags I) I.circuitFile I.publicFile I.tables I.count
+      (FlockSoundness.Discharge.Exec.recordDraw o.2.2.record) = .ok ()
 
 /-- **The files that pass `Flock.KsScope.check` are in five of `KsScoped`'s six**, and the draw passes `drawWhy`. -/
 theorem ksScoped_files {I : Inputs} {D : Flock.Desc} {pub : Flock.Public} {draw : Option Lean.Json}
@@ -64,10 +66,12 @@ theorem ksScoped_files {I : Inputs} {D : Flock.Desc} {pub : Flock.Public} {draw 
 /-- **The record's draw passing `drawWhy` gives the draw's `k` a multiple of the tables**: custody makes an accepted
 record's draw `dj S`, and a `dj S` that parses the verifier's own subset draw of `kd` units. -/
 theorem div_of_drawWhy {n mPts : ℕ} {Reg : Type} {I : Inputs} {dj : Finset (Fin n) → Lean.Json}
-    {Jf : Finset (Fin n) → Reg → ℕ} {wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (Jf S R) mPts → Transcript}
+    {Jf : Finset (Fin n) → Reg → ℕ}
+    {wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (Jf S R) mPts → FlockSoundness.Discharge.Exec.Transcript}
     {kd : ℕ} (hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJ I dj Jf wr kd) {S : Finset (Fin n)} {R : Reg}
     {lo : LiveOutJ (Jf S R) mPts} (hacc : AcceptsZK I (wr S R lo))
-    (hd : Flock.KsScope.drawWhy I.count (recordDraw (wr S R lo).record) = none) : kd % nTab I = 0 := by
+    (hd : Flock.KsScope.drawWhy I.count (FlockSoundness.Discharge.Exec.recordDraw (wr S R lo).record) = none) :
+    kd % nTab I = 0 := by
   unfold nTab
   split
   · exact Nat.mod_one kd
