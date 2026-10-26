@@ -257,17 +257,23 @@ def v2_round(card: str, K: int, N: int, L: int, word_bits: int, m: int = M_PREFI
     g = tensor + alu
     c_t = (1 if tiles == 1 else 2) + 1
     saved = max(0.0, (dy - 1) * Lp, g_rm * K - K / s_b, L - K / s_b, K + g_rm * K - K / s_b - c_t * K / tiles)
+    a_nw = alu - g_wrap
     return {"L": L, "tiles": tiles, "S": S, "gamma": g, "gamma_max": max(tensor, alu), "hash": g_hash, "A": g_a,
-            "coin": g_coin, "rm": g_rm, "wrap": g_wrap, "h": (g_hash + g_a + g_coin) / g, "eps_alg": saved / (g * K)}
+            "coin": g_coin, "rm": g_rm, "wrap": g_wrap, "h": (g_hash + g_a + g_coin) / g, "eps_alg": saved / (g * K),
+            "T": tensor, "A_nw": a_nw, "saved": saved / K,
+            "eps_ovl": min(saved / K, max(0.0, tensor - a_nw)) / max(tensor, a_nw)}
 
 
-def v2_pick(card: str, K: int, N: int, word_bits: int, budget: float = EPS_ALG_V2, tile_set=(1,), **kw) -> dict:
+def v2_pick(card: str, K: int, N: int, word_bits: int, budget: float = EPS_ALG_V2, tile_set=(1,), overlap=False,
+            **kw) -> dict:
     """The segment (L' a multiple of 64, L = tiles·L' at most K) of least γ with ε_alg within budget; else the least
-    ε_alg."""
+    ε_alg. With `overlap`, γ is the round's pipe maximum and ε_alg the tensor saving that fits the tensor pipe's slack
+    over the ALU without wraps (overlapped credit is priced without wraps, which vanish at small operands)."""
     rounds = [v2_round(card, K, N, t * Lp, word_bits, tiles=t, **kw)
               for t in tile_set for Lp in range(64, K // t + 1, 64)]
-    ok = [r for r in rounds if r["eps_alg"] <= budget]
-    return min(ok, key=lambda r: r["gamma"]) if ok else min(rounds, key=lambda r: r["eps_alg"])
+    eps, gam = ("eps_ovl", "gamma_max") if overlap else ("eps_alg", "gamma")
+    ok = [r for r in rounds if r[eps] <= budget]
+    return min(ok, key=lambda r: r[gam]) if ok else min(rounds, key=lambda r: r[eps])
 
 
 def v2_static(card: str, model: str, word_bits: int, budget: float = EPS_ALG_V2, **kw) -> dict:
@@ -344,6 +350,150 @@ def v2_tiles(budget: float = 0.01) -> None:
                 r = v2_pick(card, n, dv, 16, budget, tile_set=range(1, 7), weight_coins=False)
                 cells.append(f"n {n}: {r['gamma']:.2f} (L {r['L']}, {r['tiles']} tiles)")
             print(f"  {card:13} {model:16} PV " + "; ".join(cells))
+
+
+def _dense(name, layers, hidden, hq, hkv, d, ffn, vocab):
+    static = layers * hidden * (hq * d + 2 * hkv * d + hq * d + 2 * ffn) + layers * ffn * hidden + hidden * vocab
+    return {"name": name, "static": static, "hq": hq, "hkv": hkv, "dqk": d, "dv": d,
+            "att": lambda t: [(layers, t)], "indexer": lambda t: 0}
+
+
+def _dsv4():
+    def att(t):
+        w = min(t, 128)
+        return [(30, w + min(1024, t // 4)), (31, w + t // 128)]
+
+    return {"name": "DeepSeek-V4-Pro", "static": 49e9, "hq": 128, "hkv": 1, "dqk": 512, "dv": 512, "att": att,
+            "indexer": lambda t: 30 * 64 * 128 * (t // 4)}
+
+
+# COVER-ATTN's world model and final ATT block (cover_attn.py at 27fc89418f on cursor/compute-research-accel-cover-attn-ea24):
+# a 4,500-token request processed causally; ATT's P̃ carries 8 fresh bits, its K̃ and Ṽ noise is streamed once a key.
+WORLD = [_dense("Llama-3.1-8B", 32, 4096, 32, 8, 128, 14336, 128256),
+         _dense("Llama-3.1-70B", 80, 8192, 64, 8, 128, 28672, 128256), _dsv4()]
+WORLD_TOKENS, ATT_H_P, ATT_WRAP_P, SOFTMAX_PASS = 4500, 8, 0.0126, 1.0
+HBM = {"H200": 4.8e12, "RTX PRO 6000": 1.792e12}
+L_UNIT_ANDS, ANDS_PER_MAC, LOOKUP_G_MAX = 1.34e8, 370, 8
+
+
+def world_macs(m: dict) -> tuple[dict, float, float, float, float]:
+    """{attended n: (token, layer) rows}; static, QKᵀ, PV and indexer MACs of one request."""
+    hist, ix = {}, 0.0
+    for t in range(1, WORLD_TOKENS + 1):
+        for nl, n in m["att"](t):
+            hist[n] = hist.get(n, 0) + nl
+        ix += m["indexer"](t)
+    qk = sum(c * m["hq"] * m["dqk"] * n for n, c in hist.items())
+    pv = sum(c * m["hq"] * m["dv"] * n for n, c in hist.items())
+    return hist, m["static"] * WORLD_TOKENS, qk, pv, ix
+
+
+def static_pipes(card: str, model: str, budget: float, **kw) -> dict:
+    """v2's static rounds with tiles, picked under overlapped accounting: MAC-weighted tensor, ALU without wraps, wraps,
+    the tensor saving at A = B = 0, and the worst shape's pipe maximum."""
+    tot = T = A = W = S = 0.0
+    worst = (0.0, None)
+    for K, N, reps in SHAPES[model]:
+        r = v2_pick(card, K, N, 16, budget, tile_set=range(1, 7), overlap=True, **kw)
+        w = K * N * reps
+        tot, T, A, W, S = tot + w, T + w * r["T"], A + w * r["A_nw"], W + w * r["wrap"], S + w * r["saved"]
+        if r["gamma_max"] > worst[0]:
+            worst = (r["gamma_max"], (K, N, r["L"], r["tiles"]))
+    return {"T": T / tot, "A_nw": A / tot, "wrap": W / tot, "saved": S / tot, "worst": worst}
+
+
+def att_pipes(card: str, m: dict, hist: dict, word_bits: int = 16) -> tuple[float, float, float, float]:
+    """ATT a credited PV and QKᵀ MAC (tensor, ALU without wraps), MAC-weighted over the attended keys, with v2's words
+    and NF3's leaves. Tensor 2: the noised round and the plain stream that serves S and O; QKᵀ adds the two-pass
+    softmax's S pass. PV words every min(n, L_unit) keys; QKᵀ one word a GQA cell (inner H_kv·d) or a head (d_qk)."""
+    mac, sha, c_op, _ = V2_CARDS[card]
+    per_comp = ETA * mac / sha
+    C = per_comp * LEAF_BLOCKS * TREE / LEAF_DATA_BITS * word_bits
+    bit = per_comp / 512
+    g_heads = m["hq"] // m["hkv"]
+    L_unit = L_UNIT_ANDS / (ANDS_PER_MAC * (m["dqk"] + 1))
+    w = sum(c * n for n, c in hist.items())
+    pv_a = sum(c * n * (ATT_H_P * bit / m["dv"] + 8 * bit / (g_heads * n) + C / min(n, L_unit))
+               for n, c in hist.items()) / w
+    if m["hkv"] > 1:
+        qk_a = sum(c * n * (8 * bit / n + 8 * bit / (g_heads * n) + C / (m["hkv"] * m["dqk"]) + c_op / 2 / m["dqk"])
+                   for n, c in hist.items()) / w
+    else:
+        qk_a = sum(c * n * (8 * bit / n + 8 * bit / (g_heads * n) + C / m["dqk"]) for n, c in hist.items()) / w
+    return 2.0, pv_a, 2.0 + SOFTMAX_PASS, qk_a
+
+
+def lookup_alu(card: str, hist: dict) -> float:
+    """COVER-ATTN's ℓ: ALU MAC-times of one PV round MAC moved to Four-Russians lookups on 8-bit P̃ (8/g adds a MAC
+    over the bit-planes, 2^g-entry tables of Ṽ chunks built once for the n/2 later queries), g ≤ 8."""
+    n = sum(c * n * n for n, c in hist.items()) / sum(c * n for n, c in hist.items())
+    c_op = V2_CARDS[card][2]
+    return min(c_op * 8 / g * (1 + 2 ** g / (n / 2)) for g in range(2, LOOKUP_G_MAX + 1))
+
+
+def v2_world(budget: float = 0.01) -> list[dict]:
+    """v2 static (tiles) plus ATT at the world model, the period's tensor and ALU pipes overlapped.
+
+    Credit is priced at max(T, A without wraps); the honest period takes max(T, A). Where the period is tensor-bound the
+    honest kernel moves PV round MACs to Four-Russians lookups on the ALU until the pipes meet (COVER-ATTN's RTX PRO
+    6000 kernel). ε_alg is what a prover at A = B = 0 (or low rank) saves within the tensor pipe's slack over the ALU
+    without wraps: PD2-1's routes first, at no ALU cost, then lookups at ℓ."""
+    rows = []
+    for card in V2_CARDS:
+        a_wrap = V2_CARDS[card][2] * ATT_WRAP_P / 2
+        for m in WORLD:
+            hist, st, qk, pv, ix = world_macs(m)
+            tot = st + qk + pv + ix
+            s = static_pipes(card, m["name"], budget)
+            pv_t, pv_a, qk_t, qk_a = att_pipes(card, m, hist)
+            T = st * s["T"] + pv * pv_t + qk * qk_t + ix
+            A_nw = st * s["A_nw"] + pv * pv_a + qk * qk_a
+            Wr = st * s["wrap"] + (pv + qk) * a_wrap
+            g_add = (T + A_nw + Wr) / tot
+            ell = lookup_alu(card, hist)
+            x = min(pv, max(0.0, T - A_nw - Wr) / (1 + ell))
+            T, A_nw = T - x, A_nw + ell * x
+            credit, honest = max(T, A_nw), max(T, A_nw + Wr)
+            slack = max(0.0, T - A_nw)
+            s1 = min(st * s["saved"], slack)
+            s2 = min(pv - x, (slack - s1) / (1 + ell))
+            rows.append({"card": card, "model": m["name"], "gamma_add": g_add, "gamma": honest / tot,
+                         "T": T / tot, "A": (A_nw + Wr) / tot, "eps_alg": (s1 + s2) / credit,
+                         "wrap_uncredited": (honest - credit) / honest, "lookup": x / pv,
+                         "copy_share": (qk + pv) / tot, "uncredited": ix / tot, "worst": s["worst"],
+                         "static_gamma": max(s["T"], s["A_nw"] + s["wrap"])})
+    return rows
+
+
+def v2_world_print(budget: float = 0.01) -> None:
+    print(f"\nv2 at the world model (static with tiles + ATT, 16-bit words, overlapped pipes, eps_alg budget {budget:.0%}"
+          f" a shape)")
+    print(f"  {'card':13} {'model':16} {'g_ovl':>6} {'g_add':>6} {'T':>5} {'A':>5} {'eps_alg':>7} {'wraps':>6} "
+          f"{'lookup':>6} {'copy':>5} {'uncr':>5}  static, worst shape")
+    for r in v2_world(budget):
+        g, (K, N, L, t) = r["worst"]
+        print(f"  {r['card']:13} {r['model']:16} {r['gamma']:6.2f} {r['gamma_add']:6.2f} {r['T']:5.2f} {r['A']:5.2f} "
+              f"{r['eps_alg']:7.2%} {r['wrap_uncredited']:6.1%} {r['lookup']:6.1%} {r['copy_share']:5.1%} "
+              f"{r['uncredited']:5.2%}  {r['static_gamma']:.2f}, K {K} N {N} L {L} t {t}: {g:.2f}")
+
+
+def v2_decode(budget: float = 0.01) -> None:
+    """Static rounds at decode batches, overlapped, with weight-side coins (c, U, π) fresh a call or reused across
+    calls (the reuse is unpriced: ALGO-COST and RT-PROTO)."""
+    print(f"\nv2 decode, static rounds with tiles (16-bit words, overlapped, eps_alg budget {budget:.0%}): compute gamma "
+          f"fresh / reused weight-side coins, then the roofline (int8 weights from HBM, +1/8 B a weight for reused c)")
+    for card in V2_CARDS:
+        mem_mac = ETA * V2_CARDS[card][0] / HBM[card]
+        for model in ("Llama-3.1-8B", "Llama-3.1-70B", "DeepSeek-V4-Pro"):
+            cells = []
+            for m in (1, 32, 256):
+                f = static_pipes(card, model, budget, m=m)
+                r = static_pipes(card, model, budget, m=m, weight_coins=False)
+                gf, gr = max(f["T"], f["A_nw"] + f["wrap"]), max(r["T"], r["A_nw"] + r["wrap"])
+                plain = max(1.0, mem_mac / m)
+                cells.append(f"m {m}: {gf:.2f} / {gr:.2f}, roofline {max(gf, mem_mac / m) / plain:.2f} / "
+                             f"{max(gr, 1.125 * mem_mac / m) / plain:.2f}")
+            print(f"  {card:13} {model:16} " + "; ".join(cells))
 
 
 def seg_coins() -> None:
@@ -428,4 +578,6 @@ if __name__ == "__main__":
     v2()
     v2_att()
     v2_tiles()
+    v2_world_print()
+    v2_decode()
     seg_coins()
