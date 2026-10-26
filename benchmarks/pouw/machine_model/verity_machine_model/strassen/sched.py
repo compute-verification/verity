@@ -82,13 +82,14 @@ def _costs(name: str) -> Costs:
 
 
 class Tables:
-    def __init__(self, name: str, lmax: int, schemes, clamp: int | None = None):
-        """clamp: the product mod clamp (a CRT residue), every combination reduced, so ranges never exceed clamp."""
+    def __init__(self, name: str, lmax: int, schemes, clamp: int | None = None, extra=()):
+        """clamp: the product mod clamp (a CRT residue), every combination reduced, so ranges never exceed clamp.
+        extra: further grid points (operand ranges to read exactly)."""
         self.C = _costs(name)
         self.schemes = schemes
         self.clamp = clamp
         Vmax = clamp if clamp else 255 * 4 ** lmax + 1
-        self.g = g = grid(Vmax, extra=tuple(self.C.closure) + ((clamp,) if clamp else ()))
+        self.g = g = grid(Vmax, extra=tuple(self.C.closure) + ((clamp,) if clamp else ()) + tuple(extra))
         G = len(g)
         self.down = lambda v: np.searchsorted(g, v, side="right") - 1
         self.upi = lambda v: np.minimum(np.searchsorted(g, v, side="left"), G - 1)
@@ -222,6 +223,28 @@ def run(name: str, lmax: int):
               f"  depth {l} on every path: [{at(T, flo, 256, 256) / n:.6f}, {at(T, fup, 256, 256) / n:.6f}]",
               flush=True)
 
+
+def narrow(name: str, lmax: int, pairs=((2, 128), (2, 129), (128, 255), (256, 256))):
+    """Operands narrower than int8 (Dither's chosen data): at each depth budget, the least cost of any schedule and of
+    one with a scheme, at each pair of operand ranges, against naive int8 (8^(l+1))."""
+    T = Tables(name, lmax, [STRASSEN, WINOGRAD, TRIVIAL],
+               extra=[v for p in pairs for v in p] + [2 ** a + 1 for a in range(1, 13)] + [2 ** a for a in range(13)])
+    tabs = T.level(None, None, None, None, 0)
+    for l in range(lmax + 1):
+        if l:
+            tabs = T.level(*tabs, l)
+        lo, up, hlo, hup = tabs
+        n = 8 ** (l + 1)
+        cells = []
+        for VA, VB in pairs:
+            a = (at(T, lo, VA, VB), at(T, up, VA, VB), at(T, hlo, VA, VB), at(T, hup, VA, VB))
+            cells.append(f"({VA},{VB}) any [{a[0] / n:.6f}, {a[1] / n:.6f}] scheme [{a[2] / n:.6f}, {a[3] / n:.6f}]")
+        print(f"{name} l={l:2d}: " + "; ".join(cells), flush=True)
+
+
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "narrow":
+    narrow(sys.argv[2], int(sys.argv[3]))
+    sys.exit(0)
 
 if __name__ == "__main__":
     run(sys.argv[1], int(sys.argv[2]))
