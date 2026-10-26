@@ -20,6 +20,7 @@ conversions are exact over a whole cover, and per block they assume each block d
 from __future__ import annotations
 
 import math
+from functools import lru_cache
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Literal, Protocol
@@ -177,6 +178,7 @@ def ps_rate(b: float, f: float, a: float, aout: float, pool: float, mu: float) -
     return max(min(c1, c2), mu * f / max(aout, pool / (4 * b * a)))
 
 
+@lru_cache(maxsize=1 << 16)
 def partial_sum(k: float, b: float, f: float, a: float, aout: float, grid: int = 1000) -> float:
     """`PartialSumCoverBound`: `r(μ) (#P − k #𝓘) ≤ 2k #𝓘` for every `μ ∈ [0, 1]`, so a block finishes at most
     `k + 2k / r` products at the best `r = max_μ psRate b f a aOut (2k) μ` (over a grid of `μ`)."""

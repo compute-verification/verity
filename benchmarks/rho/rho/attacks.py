@@ -14,6 +14,7 @@ class's is (`classes.counted`), which assumes the rest of the counted products t
 from __future__ import annotations
 
 import math
+from functools import cache, lru_cache
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Literal
@@ -50,11 +51,13 @@ class StateFits:
         return a
 
 
-def phis() -> list[float]:
+@cache
+def phis() -> tuple[float, ...]:
     """`benchmarks/nci/slowdown.py`'s grid of slices."""
-    return [10 ** (-12 + 12 * i / 2400) for i in range(2400)] + [1.0]
+    return (*(10 ** (-12 + 12 * i / 2400) for i in range(2400)), 1.0)
 
 
+@lru_cache(maxsize=1 << 16)
 def search(state: float, splits: bool, flops: float, cut: float, data: float, decode: float, k: float, compute: float,
            shared: float = math.inf) -> float:
     """The most reference work one block does by `benchmarks/nci/slowdown.py`'s `search`: it covers a slice, a fraction
@@ -64,7 +67,7 @@ def search(state: float, splits: bool, flops: float, cut: float, data: float, de
     so that `T` tokens hold no more of it and cross only at its two ends. 0 when no slice fits. One sequential chain of
     blocks, as there: the state carries what a block hands on inside a step (`Profile.token_state_bits`)."""
     best = 0.0
-    for phi in phis() + ([k / (2 * state)] if splits and state > k / 2 else []):
+    for phi in phis() + ((k / (2 * state),) if splits and state > k / 2 else ()):
         held = phi * state if splits else state
         if held >= k or phi * decode >= compute or (splits and held > shared):
             continue
@@ -97,6 +100,7 @@ class Shard:
         return a
 
 
+@lru_cache(maxsize=1 << 16)
 def tile(k: float, weight_bits: float, beta_x: float, psum_bits: float, rows: float, cols: float,
          grid: int = 400) -> float:
     """The column tile (E1, Proposition 3's tightness) completed with its partial sums: `r` input coordinates by `w`
