@@ -13,10 +13,14 @@ outside them (`Flock.KsScope.check`, after `Flock.PortRoots.check` in its verdic
 acceptance.
 
 * `Bridge.KsScoped I D pub kd`: the six.
-* `Bridge.LiveAcceptsScoped I o`: `verify --zk` accepts: `Bridge.LiveAcceptsKS`, and the files and the record's draw
-  pass `Flock.KsScope.check`.
+* `Bridge.AcceptsScoped I t`: `verify --zk`'s verdict on one session's transcript: `AcceptsZK`, and the files pass
+  `Flock.PortRoots.check`, and the files and the record's draw pass `Flock.KsScope.check`. `Bridge.LiveAcceptsScoped I o`
+  is it at the live audit's transcript.
+* `Bridge.typed_of_check`: the check refuses a typed statement. `Bridge.built_of_parse`: the circuit file of an untyped
+  statement that parses has a built unit.
 * `Bridge.ksScoped_files`, `Bridge.div_of_drawWhy`: the check gives five of the six from the files, and the sixth, the
   draw's `k` a multiple of the tables, from the record's draw, which custody (`RecordCustodyZKJ`) makes the verifier's.
+  `Bridge.ksScoped_of_accepts` puts them together: an accepted transcript the prover's session wrote is in `KsScoped`.
 * `SampledKSLiveV4`: at files and a draw in `KsScoped`, `SampledKSLiveV3`'s bound on `LiveAcceptsScoped`'s event;
   outside them, `verify --zk` accepts with probability 0. It takes none of the six as a hypothesis.
   `sampledKSLiveV4_of` derives it from `SampledKSLiveV3`.
@@ -38,11 +42,43 @@ structure KsScoped (I : Inputs) (D : Flock.Desc) (pub : Flock.Public) (kd : ℕ)
   div : kd % nTab I = 0
   tags : TagsOkZHJ I
 
-/-- **`verify --zk` accepts, files, draw and transcript**: `LiveAcceptsKS`, and the files and the record's draw pass
-`Flock.KsScope.check` (the last refusal of `verify --zk`'s verdict). -/
+/-- **`verify --zk` accepts one session's transcript**: `AcceptsZK`, the files' rows, names and roots
+(`Flock.PortRoots.check`), and the tags, files and the record's draw (`Flock.KsScope.check`, the last refusal of
+`verify --zk`'s verdict outside `--rec-inner`). -/
+def AcceptsScoped (I : Inputs) (t : Transcript) : Prop :=
+  AcceptsZK I t ∧ Flock.PortRoots.check (zkTags I) I.circuitFile I.publicFile I.tables = .ok () ∧
+    Flock.KsScope.check (zkTags I) I.circuitFile I.publicFile I.tables I.count (recordDraw t.record) = .ok ()
+
+/-- **`verify --zk` accepts the live audit's transcript** (`AcceptsScoped` at it). -/
 def LiveAcceptsScoped {n : ℕ} {Reg : Type} (I : Inputs) (o : Reg × Finset (Fin n) × Transcript) : Prop :=
-  LiveAcceptsKS I o ∧
-    Flock.KsScope.check (zkTags I) I.circuitFile I.publicFile I.tables I.count (recordDraw o.2.2.record) = .ok ()
+  AcceptsScoped I o.2.2
+
+theorem LiveAcceptsScoped.ks {n : ℕ} {Reg : Type} {I : Inputs} {o : Reg × Finset (Fin n) × Transcript}
+    (h : LiveAcceptsScoped I o) : LiveAcceptsKS I o :=
+  ⟨h.1, h.2.1⟩
+
+/-- **`Flock.KsScope.check` passing passes its tags check**, whatever the files. -/
+theorem tagsWhy_of_check {tags : Flock.Tags} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : ℕ}
+    {draw : Option Lean.Json} (h : Flock.KsScope.check tags cf pf tables count draw = .ok ()) :
+    Flock.KsScope.tagsWhy tags = none := by
+  unfold Flock.KsScope.check Flock.KsScope.checkOf at h
+  cases ht : Flock.KsScope.tagsWhy tags with
+  | none => rfl
+  | some w => simp [ht] at h
+
+/-- **`verify --zk` refuses a typed statement**: files that pass `Flock.KsScope.check` are of an untyped one. -/
+theorem typed_of_check {I : Inputs} {draw : Option Lean.Json}
+    (h : Flock.KsScope.check (zkTags I) I.circuitFile I.publicFile I.tables I.count draw = .ok ()) :
+    I.tags.typed = false :=
+  (zkTags_typed I).symm.trans (Flock.KsScope.tagsWhy_none (tagsWhy_of_check h)).1
+
+/-- **An untyped statement's circuit file that parses has a built unit**: the parse builds every net it reads from
+lines (`parse_facts`), and the unit is one (`unit_built`). -/
+theorem built_of_parse {tags : Flock.Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {D : Flock.Desc}
+    (ht : tags.typed = false) (hD : Flock.Desc.parse tags cf tables = .ok D) : Built D.unroll.unit := by
+  have P := parse_facts (FlockSoundness.Discharge.Hidden.parse_untyped ht (Flock.Desc.parse_flat hD)).1
+  obtain ⟨ls, hls⟩ := P.check
+  exact unit_built P (check_facts P.typed hls)
 
 /-- **The files that pass `Flock.KsScope.check` are in five of `KsScoped`'s six**, and the draw passes `drawWhy`. -/
 theorem ksScoped_files {I : Inputs} {D : Flock.Desc} {pub : Flock.Public} {draw : Option Lean.Json}
@@ -54,9 +90,7 @@ theorem ksScoped_files {I : Inputs} {D : Flock.Desc} {pub : Flock.Public} {draw 
       Flock.KsScope.drawWhy I.count draw = none := by
   obtain ⟨ht, hs, hp, hd⟩ := Flock.KsScope.check_ok h (Flock.Desc.parse_flat hD) hpub
   obtain ⟨ht1, ht2, ht3, ht4⟩ := Flock.KsScope.tagsWhy_none ht
-  have P := parse_facts (FlockSoundness.Discharge.Hidden.parse_untyped ht1 (Flock.Desc.parse_flat hD)).1
-  obtain ⟨ls, hls⟩ := P.check
-  exact ⟨(zkTags_typed I).symm.trans ht1, unit_built P (check_facts P.typed hls), hp,
+  exact ⟨typed_of_check h, built_of_parse ht1 hD, hp,
     (FlockSoundness.Discharge.FailClosed.scopeOkH_eq _).symm.trans hs,
     ⟨(zkTags_hiddenOutputs I).symm.trans ht2, (zkTags_retainRounds I).symm.trans ht3,
       (zkTags_merkleLeaf I).symm.trans ht4⟩, hd⟩
@@ -78,6 +112,18 @@ theorem div_of_drawWhy {n mPts : ℕ} {Reg : Type} {I : Inputs} {dj : Finset (Fi
     have hdS := hCust.2 S d hjd
     exact hk kd (by rw [hdS]; rfl)
 
+/-- **An accepted transcript the prover's session wrote is in `KsScoped`**: its files pass `Flock.KsScope.check`
+(`ksScoped_files`), and custody makes its record's draw the verifier's (`div_of_drawWhy`). -/
+theorem ksScoped_of_accepts {n mPts : ℕ} {Reg : Type} {I : Inputs} {D : Flock.Desc} {pub : Flock.Public}
+    {dj : Finset (Fin n) → Lean.Json} {Jf : Finset (Fin n) → Reg → ℕ}
+    {wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (Jf S R) mPts → Transcript} {kd : ℕ}
+    (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D)
+    (hpub : Flock.HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub)
+    (hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJ I dj Jf wr kd) {S : Finset (Fin n)} {R : Reg}
+    {lo : LiveOutJ (Jf S R) mPts} (h : AcceptsScoped I (wr S R lo)) : KsScoped I D pub kd := by
+  obtain ⟨hty, hU, hpt, hsc, hTags, hd⟩ := ksScoped_files hD hpub h.2.2
+  exact ⟨hty, hU, hpt, hsc, div_of_drawWhy hCust h.1 hd, hTags⟩
+
 end Flock.Bridge
 
 namespace Flock.Guarantees
@@ -90,8 +136,8 @@ open scoped ENNReal
 
 open Classical in
 /-- **`SampledKSLiveV3` with its file preconditions read off acceptance**: on the event that `verify --zk` accepts the
-transcript, the files and the record's draw (`Bridge.LiveAcceptsScoped`: `Bridge.LiveAcceptsKS`, and
-`Flock.KsScope.check`), the sampled-proofs run passes the registration's population (`Bridge.RunPopOk`), and the claims
+transcript, the files and the record's draw (`Bridge.LiveAcceptsScoped`: `AcceptsZK`, `Flock.PortRoots.check` and
+`Flock.KsScope.check`; v2's one-stage check is to run the same three), the sampled-proofs run passes the registration's population (`Bridge.RunPopOk`), and the claims
 relation fails, at files and a draw in `Bridge.KsScoped` the bound is `SampledKSLiveV3`'s, and outside them the event
 has probability 0. It has none of V3's hypotheses `I.tags.typed = false`, `Built D.unroll.unit`, `pub.tables = none`,
 `scopeOkH D.unroll = true`, `kd % nTab I = 0` and `TagsOkZHJ I`. `SampledKSLiveV3` implies it
@@ -164,15 +210,14 @@ def SampledKSLiveV4 : Prop :=
         (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ = 0
 
 /-- **`SampledKSLiveV3` gives `SampledKSLiveV4`**: at files and a draw in `KsScoped`, V4's event is inside V3's at
-`KsScoped`'s six; outside them no outcome the prover reaches is accepted, since an accepted outcome's files pass
-`Flock.KsScope.check` (`Bridge.ksScoped_files`) and its record's draw is the verifier's (`Bridge.div_of_drawWhy`). -/
+`KsScoped`'s six; outside them no outcome the prover reaches is accepted (`Bridge.ksScoped_of_accepts`). -/
 theorem sampledKSLiveV4_of (h : SampledKSLiveV3) : SampledKSLiveV4 := by
   intro n Reg I D hD pub hpub hn desc qr kd hkd dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hCust k Rw M hk hRw hM ρ hρ hr
     t' ht' K₀ hK₀ τ qF qS q
   split
   · next hs =>
     intro L P vb σ Xr δ Cc rows roots Cd κ hT hL
-    exact (prob_mono (fun o ho => ⟨⟨ho.1.1.1, ho.1.2⟩, ho.2⟩) _ τ).trans
+    exact (prob_mono (fun o ho => ⟨⟨ho.1.1.ks, ho.1.2⟩, ho.2⟩) _ τ).trans
       (h n Reg I hs.typed D hD hs.built pub hpub hs.tables hs.scope hn desc qr kd hkd hs.div dj S₀ d₀ y₀ wr dg N Ω Lb
         src hA3 hs.tags hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS q hT hL)
   · next hs =>
@@ -183,7 +228,6 @@ theorem sampledKSLiveV4_of (h : SampledKSLiveV3) : SampledKSLiveV4 := by
     obtain ⟨t, ht, rfl⟩ := Game.Outcome.of_map _ _ _ hω
     unfold liveOfZJ at ht
     obtain ⟨lo, -, rfl⟩ := Game.Outcome.of_map _ _ _ ht
-    obtain ⟨hty, hU, hpt, hsc, hTags, hd⟩ := Bridge.ksScoped_files hD hpub he.1.2
-    exact ⟨hty, hU, hpt, hsc, Bridge.div_of_drawWhy hCust he.1.1.1 hd, hTags⟩
+    exact Bridge.ksScoped_of_accepts hD hpub hCust he.1
 
 end Flock.Guarantees
