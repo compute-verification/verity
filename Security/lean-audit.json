@@ -2547,7 +2547,8 @@
    "Proofs.Flock.SessionLoop": "the session loop's guarantee states Flock's zero knowledge at the loop's release (`LeanRelease.ofLoop`) and the deployed masked record (`deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Flock.Bridge": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Properties.NetworkCertifier.Bytes": "the byte conversion `bs`, which the deployed sampling commitment's SHA-512 (`Claims.Sampling.Path.sha512Msg`) and registration roots read in SampledKSLive; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod": "the integrity bridge's realization reads C-Flock's integrity audit over a period (Flock.Guarantees.IntegrityHorizon, its SamplingBlock and Period.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+   "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod": "the integrity bridge's realization reads C-Flock's integrity audit over a period (Flock.Guarantees.IntegrityHorizon, its SamplingBlock and Period.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock": "the block integrity bridge's realization reads C-Flock's integrity audit of a server-time block (Flock.Guarantees.IntegrityBlock, its ServerBlocks, SamplingBlock and ServerBlocks.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
   }
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
@@ -2789,6 +2790,14 @@
    "assumptions": [],
    "type_hash": "8c3dda6ff4ca31c818104a37896b5af0666c53ff846e2ccaf90aa792e29a6820"
   },
+  "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock": {
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock : Accounting.Guarantees.Bridge.IntegrityOfIntegrityBlock"
+   ],
+   "assumptions": [],
+   "type_hash": "ab8736f1165491994d7128308b03b0ac3218dd5bae7856b0d28f0cf1b9c30a4f"
+  },
   "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod": {
    "owner": "@lean",
    "signature": [
@@ -2796,6 +2805,24 @@
    ],
    "assumptions": [],
    "type_hash": "9c51b9643d2338efb76b1fb71c237e7e91a2aa0a1cff5a71cc0797723a71b639"
+  },
+  "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock": {
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock :",
+    "  Accounting.Guarantees.Bridge.JointHorizonBlocksAOfIntegrityBlock"
+   ],
+   "assumptions": [],
+   "type_hash": "0e86137edd9f0ec0919f5f1c5fea69b1ede75195a36c664f4a616590569b82f5"
+  },
+  "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock": {
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock :",
+    "  Accounting.Guarantees.Bridge.JointHorizonBlocksOfIntegrityBlock"
+   ],
+   "assumptions": [],
+   "type_hash": "62de4c544039859d07600b8cd02bd9c2e2ee4f2e3baca52734b133fd22e20496"
   },
   "Accounting.SecurityProofs.CapacityOfStateBound": {
    "owner": "@memory-accounting",
@@ -11692,7 +11719,10 @@
    "Accounting.SecurityProofs.JointHorizonBlocksA": "frozen (no-function): Demo A's composed theorem, JointHorizonBlocksLegs at sampled proofs, PoUW and the network certifier: each block's three per-period guarantees are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": "lemma: the forking step behind the remote audit's receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which PooledDraw and the drawn memory-line guarantees charge, over a session and its receipts, not a Lean function: with the held row by definition the plurality of the rows the receipt shows over window t's continuations (Accounting.Remote.Draw.Receipts.held, at Accounting.Remote.Draw.cont) and no premise beyond L_t holding every receipt window t opens, the binding term is at most sum_t sqrt(|L_t| s_t (fork_t + split_t)), fork_t the chance that two runs from window t's cut on independent openings coins hash a SHA-512 collision between one receipt's two openings' checks (Receipts.Broken, Hash.SecurityProofs.RowBinding) and split_t the chance that their roots, ranks or verifiers differ (Receipts.Split); split_t is not bounded for the deployed committed play, whose prover may compute window t's roots from the coin commitment (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": "lemma: ReceiptsBindingOfFork under claim cr/sha-512 (Claims.StrictBirthday) at each window's fork finder (Accounting.Remote.Draw.Receipts.finder, at q_t SHA-512 calls): the receipts' binding term is at most sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), not a Lean function; where the window's cut fixes its roots split_t = 0 and it is sum_t sqrt(|L_t| s_t) q_t/2^256.5 (Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed), ledger.binding's form, which the code charges at the session's bounds (L_t the most receipts a window of the session can have, s_t its draw cap), not at one record's U_t and s'_t; the deployed committed play doesn't fix the roots (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
-   "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod": "frozen (no-function,hash): It is BandwidthOfAuditPerRun on a period's coins: it carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to PoUB's per-period guarantee (PeriodRun.Sound at .poub) of an abstract period of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/JointPeriod.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list."
+   "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod": "frozen (no-function,hash): It is BandwidthOfAuditPerRun on a period's coins: it carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to PoUB's per-period guarantee (PeriodRun.Sound at .poub) of an abstract period of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/JointPeriod.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock": "frozen (no-function): It carries C-Flock's integrity audit of one server-time block (Flock.Guarantees.IntegrityBlock) to block b's sampled audit's per-period guarantee (PeriodRun.Sound) in a horizon of blocks of the device model whose verdicts are fields of the run, not Lean functions, through a realization whose fields are properties of the deployed run (Accounting.RealizesIntegrityOfIntegrityBlock, Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean): wrong_eq is the program-from-circuit correspondence (M1) until Lowers/progOf/partOf land, and units_eq with gates_nonempty is the partition's public unit-size property. It bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock": "frozen (no-function): It is JointHorizonBlocks with each block's integrity leg from IntegrityOfIntegrityBlock, over an abstract horizon of blocks of the device model whose verdicts, and each wipe's surviving foreign content, are fields of the run, not Lean functions (Security/Definitions/Accounting/JointBlocks.lean), through each block's realization of C-Flock's integrity audit of that block (Accounting.RealizesIntegrityOfIntegrityBlock), and it bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock": "frozen (no-function): It is Demo A's JointHorizonBlocksA (sampled proofs, PoUW and the network certifier) with each server-time block's integrity leg from IntegrityOfIntegrityBlock, over abstract periods of the device model whose verdicts are fields of the run, not Lean functions (Security/Definitions/Accounting/JointPeriod.lean), through each block's realization of C-Flock's integrity audit of that block (Accounting.RealizesIntegrityOfIntegrityBlock), and it bounds a Pouw.pr event, which shape.events does not list."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -12843,7 +12873,10 @@
     "Accounting.SecurityProofs.BandwidthOfAudit",
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
     "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.CapacityOfStateBound",
     "Accounting.SecurityProofs.Compose.CircuitCredit",
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
@@ -14612,7 +14645,10 @@
     "Accounting.SecurityProofs.BandwidthOfAudit",
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
     "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.CapacityOfStateBound",
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
     "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced",
@@ -14657,7 +14693,10 @@
     "Accounting.BlocksRun.weights": "6c6b9fb9eddd2e62c9c91fdf062da259a4d1d9b34408b3b9701b1bf0ad6f4938",
     "Accounting.BlocksRun.wipe": "085e4093e9e5cc263b651909d4b218d8325e397865b1ee6fa2b276f7836ff0c7"
    },
-   "guarantees": ["Accounting.SecurityProofs.JointHorizonBlocks"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
+    "Accounting.SecurityProofs.JointHorizonBlocks"
+   ]
   },
   "Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod": {
    "digest": "14292553c86b96d68d79da7719972e449bf4300354039c2c2af7f3d9eac2f93c",
@@ -14704,7 +14743,10 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
     "Accounting.SecurityProofs.JointHorizonBlocksA",
@@ -17572,7 +17614,10 @@
     "Accounting.SecurityProofs.B4",
     "Accounting.SecurityProofs.B4Covered",
     "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
     "Accounting.SecurityProofs.JointHorizon",
@@ -17934,7 +17979,10 @@
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
     "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
     "Accounting.SecurityProofs.JointHorizonBlocksA",
@@ -18372,7 +18420,10 @@
     "FlockSoundness.Accounting.tableError": "379cb0e59f39af11a43528dc3c88b34e0e8c55b7c3d4563e22d4371bdb6e1c48"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -18438,7 +18489,10 @@
     "FlockSoundness.Accounting.instDecidableOk": "6ff45e7f70c0f9683114f2e765e0f9c5c8ce64c01d70afc473dd93b28887b614"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -18511,7 +18565,10 @@
     "FlockSoundness.Accounting.padRepError": "4f4a4fdca77d6a089e1d51810b1206ea8ea24c612a05babeb3cfbd44aa4ef50a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -18591,7 +18648,10 @@
     "FlockSoundness.Accounting.queriesAt": "02ff8aa174c6daa85acab4c3c46c3a7c884bdb01a81e37e168dc3815b407d42b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -18670,7 +18730,10 @@
     "FlockSoundness.Model.eqAt": "af3e9c770b31ce68d2d7eb0c428ebe813a53cf2cd59a827b02bfe3fb9f84c8fd"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -18742,7 +18805,10 @@
     "FlockSoundness.Audit.xorSum": "c627186d879d69d17638b56c9e47172a64d74159228eebeebe6104754ad393a8"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -18830,7 +18896,10 @@
     "FlockSoundness.Model.twoOodC": "06f33671802f2c322c72bb58ee84e35c34c09cc869c79b7843a2df7dcd8cb116"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -18883,7 +18952,10 @@
     "FlockSoundness.Game.value": "bc2660b60becad0b8b4c4f8f12e9810dd670a419e44ddecab4f976b1af502fda"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -18994,7 +19066,10 @@
     "FlockSoundness.Game.batch": "866b22834bce610eb069a1c2285d79a65d6f80912da3c475c04ff81491f5e5fa"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -19031,7 +19106,10 @@
     "FlockSoundness.Rewinding.IsPluralityE": "bf9a6c3f6d76b65e210591d34febc279167fc07e3da3aa5442ba9166c193ad4e"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -19067,7 +19145,10 @@
     "FlockSoundness.Game.interleaveWith": "2c2fa2fa78877e7bc10b20a3063946797a5f8e5c43b68b604f9a7daee32bf588"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -19127,7 +19208,10 @@
     "FlockSoundness.Game.Lock.table": "6049cad8749939632d9ca49981ee41aa2bccb2e38ca1301be6285b068d6fc07f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -19163,7 +19247,10 @@
     "FlockSoundness.Game.Strategy.ofMap": "d45c1c43a350061bcf18d74128ee9d5b0e766c26ccbe1bc90098f0a774247d72"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -19210,7 +19297,10 @@
     "FlockSoundness.Game.runsStrat": "1e0f6d5c51b72b47a858300d8ee46099ad04dd70d57be6e710392a3c7f474502"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -19345,7 +19435,10 @@
     "FlockSoundness.Model.twoOod": "4b3281286358a6c31e57db502e0ee569422fb6ca59cad6f97cdc760ad364f1c0"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -19388,7 +19481,10 @@
     "FlockSoundness.Model.queryAndBatchV": "bb312b6c1af27603d2e51d9eb77b051e14ab4ba4afc4bab0b3999851448cc03a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -19439,7 +19535,10 @@
     "FlockSoundness.Merkle.xorBytes": "1a6543034cfd27812c0fa204112fe907680579ff63b51dbefc752739b3b890cf"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -19503,7 +19602,10 @@
     "FlockSoundness.Model.zerocheck": "1adbe38c3623641cb52b1275da780c46c08f06ef0b895f489fc51348982d8812"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -19542,7 +19644,10 @@
     "FlockSoundness.Rewinding.ConflictAt": "9b41482c93da5e18a0aac29986b1deb6006dda2c919d711f69978976348e3061"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -19582,7 +19687,10 @@
     "FlockSoundness.Model.table": "bcc400a4d021e0c4a46ce632bcaf4f4e66a37f4c0776462c9d2eddf2edce8234"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -19683,7 +19791,10 @@
     "FlockSoundness.Model.witnessOf": "150efb4e315b769ca6097f14841f9ec4055aa45672c84abce160297fec07f1c5"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -23592,7 +23703,10 @@
     "Accounting.SecurityProofs.BandwidthOfAudit",
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
     "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.CapacityOfStateBound",
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
     "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced",
@@ -28746,7 +28860,10 @@
     "_private.Flock.Bytes.0.Flock.hexDigit": "242ae26c46d2dc228fe0433d3eaba3116be00c18226f89bb07d3bb80ff51768a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -28839,7 +28956,10 @@
     "_private.Flock.Canon.0.Flock.hex4": "7c4da174272bc28875627bc5c5f157d6d70a8c1163e8e6e961d111bf7cf9a56c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -28998,7 +29118,10 @@
     "Flock.instInhabitedWire.default": "e9f25bc5c2c2da965cfb4d19d740bd50159c32e1c96797e9df4c8ec6e7b0f5a7"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -29126,7 +29249,10 @@
     "_private.Flock.CircuitType.0.Flock.CircuitType.portsOfJson": "85a1e80d9ab12ab9944d8f9e4ae23e0c8e42bf3a119a63e3d3a46be5c46ee99f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -29213,7 +29339,10 @@
     "Flock.CoinTree.ofHello": "a145ee007c12826ee60aca145efa20c71dc9439960cbb439e48cf12ffb7fa6da"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -29311,7 +29440,10 @@
     "Flock.rd32": "1023ca573b2f5767610f1a96d09b95c162b412865dc098ab0b52fcfc817c3098"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -29383,7 +29515,10 @@
     "Flock.Derive.ceilPow2": "cff16037ede34ed07b6b641f362f23fe908fb00ef0a5c361b12c3d6a4c1df4e0"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -29529,7 +29664,10 @@
     "Flock.DeriveAll.xorCols": "8513b9a13c7edc534fcea36661c4bb85f82d4a03bbf60a1be1a24956d344412e"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -29642,7 +29780,10 @@
     "Flock.DeriveAll.walk._sparseCasesOn_3": "2287c60cb4cbc4629081a9aa0db5774e702e1de63c7f7352719eae3f5d899bba"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -29718,7 +29859,10 @@
     "Flock.Desc.unroll": "638fe7510e5750ee10fc270b2d6296cb19fc2bfff467aa0b9eb89e5558fa1730"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -29819,7 +29963,10 @@
     "_private.Flock.Draw.0.Flock.Draw.workStratumOfJson": "5cad839e36fe00cc241399868793440ece4cd9d90015ce20cba8172b76884588"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -29904,7 +30051,10 @@
     "Flock.Extract.separable": "815381ea7afc2180279d0de0966d787c7114a8ecacb94e698d78e2d8db52e700"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -30024,7 +30174,10 @@
     "Flock.phi8Table": "c843996d571e5071f33e1788901951831ea8ffbcfc2f615881a46ee626da9154"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -30239,7 +30392,10 @@
     "Flock.Sha512.word": "b1086da4c00e9cf65abe8a24bde5bf83aa2e6897854b30766e6be070dc7de279"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -30348,7 +30504,10 @@
     "_private.Flock.Hm96.0.Flock.Hm96.tag": "824dbcae40eb3817e77d8bdc91e1a12f0b1fe7ccbebc0be5d3097e7c4fc436eb"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -30522,7 +30681,10 @@
     "Flock.HmNets.xorW": "8dc4538d76c03337e641b8cb730139b3debc541f18f34aa95d0d5de93f4aee17"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -30741,7 +30903,10 @@
     "_private.Flock.HmRow.0.Flock.HmRow.templateStrata": "d1afdd12f32817b3c645c55e29c61170a35ba172f9918cee9d3e1221f392b5c6"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -30918,7 +31083,10 @@
     "_private.Flock.Layout.0.Flock.Layout.natArr": "1908b58b2178b82233146f7d2ab2142db10b35eee48f9b7ff6721ce79d97aaba"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -30997,7 +31165,10 @@
     "Flock.libraryTable?": "2e4f5eb96b2eaa7ac47dad86353794bc75e4ba83998eb37a6b6780b50bc321cf"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -31115,7 +31286,10 @@
     "Flock.whatsGo": "f9caac05639e5876006e083cbb72fb76c62689db2c98ee875127b5c7f5ed1274"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -31203,7 +31377,10 @@
     "Flock.MufuTable.words": "89cf712873d3107f3917070011dc4a22b66cc68311751742ea6645539180175d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -31286,7 +31463,10 @@
     "Flock.sibsOf": "35ad17c257b59414cec25e4a24c9bcbcf4d5fc94e6451016d84fff8ba8cd403b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -31411,7 +31591,10 @@
     "_private.Flock.Net.0.Flock.Net.num": "3eabe4a40fe243c1336f63a815a8766ef8f2f271de028d86056f366d4e139592"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -31505,7 +31688,10 @@
     "Flock.instDecidableEqSparse.decEq": "89677e4ac34ed70c798cb332722d6c38084bb3459da314aecf6885db46b14988"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -31582,7 +31768,10 @@
     "Flock.normObj": "7dea20ca2cda7fcb2c4336175d40ce97a4003789c7f4421b2961e294516b16c6"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -31647,7 +31836,10 @@
     "Flock.ringSwitch": "22d2cb107109365c4d8496a90b3d782f016cac1568bc5a0e0c73b4274da6ac8a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -31754,7 +31946,10 @@
     "Flock.Partition.validate": "258ccfcfd51cf7ddff8d88638763a2e4220507340884be487fc57049d3eba285"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -31855,7 +32050,10 @@
     "Flock.skipWeights": "aff948bf8c5a5b9d23dd040dd3d7887973a997a1c0f68e53c50c56517d9c023a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -32102,7 +32300,10 @@
     "_private.Flock.Program.0.Flock.Program.widthAfter?": "d2d3353bca7af82568c6f879cb7eab47614b60e8d80d22d30d8a6092bf00c061"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -32248,7 +32449,10 @@
     "Flock.instInhabitedZerocheckProof.default": "1958fa8c58e95acc1d63b3659ae5368b791c029b919acbfa1b25aea8f86c68f3"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -32380,7 +32584,10 @@
     "Flock.instInhabitedPublic.default": "32d7220c79f8cee269c9c870fbbb12ec7d42e4e3e3c4c03d7555d33400da438b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -32519,7 +32726,10 @@
     "_private.Flock.Qcall.0.Flock.Qcall.withCall._sparseCasesOn_1": "87d69ec69db9432d52144924fea3a6d9501cd3634b4475d6520cb16d58a8ed55"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -32603,7 +32813,10 @@
     "Flock.Qword.targets": "85c67728bf5e951528d74c58f3267561acde452e7a95447a6eb0f8e5431f9715"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -32907,7 +33120,10 @@
     "Flock.RecAlgebra.zerocheck": "2e27f0ae9e96a32dedb6d33040e62432dde822b1366d914e8f33cef9dee7e25e"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -33151,7 +33367,10 @@
     "Flock.RecOpen.xorL": "8935e8f3e98775737ddd63b5d3573af33305eb6ccc1f76b2546e9f2d2cd38b2c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -33252,7 +33471,10 @@
     "Flock.RecOpening.wi": "cee7e58a9e30dab307a4f61b68892b33a01a68a70571b9ec3ef79fc7b7bcd84f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -33363,7 +33585,10 @@
     "Flock.RecResiduals.unitNet'": "fe90c04ee1382889605928a0735447de609eac613a78b31c168c3fcd92bbdd68"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -33479,7 +33704,10 @@
     "Flock.RecSparse.xorAllL": "c7b62b065a2617c1fac3bf821a126af9c65fab97312c60d98870c1f7710eeaac"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -33740,7 +33968,10 @@
     "Flock.StreamRec.rounds": "5b146dec61efbb297a72cb7578d80cbb1da9e81ebd64fae52b0edb5b4919f4f3"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -33913,7 +34144,10 @@
     "Flock.mkRegion": "5f114dc12db36808d8d8d876a67e06d165ba81c44eb0ca2cd345fdadd66b5188"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -34004,7 +34238,10 @@
     "Flock.queriesAt": "e5c2e5d88c9efd1ef08a6bb2dd8fab6ccae9de9d90a49d5f64119195e0d3f903"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -34129,7 +34366,10 @@
     "Flock.instInhabitedStmt.default": "2cc8a24a64bf8126a8f5ba4bbc778b1917a99776b220735bfaa7cd4f041eba7d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -34199,7 +34439,10 @@
     "Flock.Steps.run": "e19aed10a03fea7d226e8ff1a56eb9d8101bf35cf0e34cb94cc270fb54064cab"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -34343,7 +34586,10 @@
     "_private.Flock.Tags.0.Flock.Tags.s": "a4a190d4a37066637be18f3ca5b4adc590b08525521438547f56b4222a5775ff"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -34447,7 +34693,10 @@
     "_private.Flock.TemplateQuery.0.Flock.TemplateQuery.showList": "d5a3296879e70e5e0cb3eb37f12c4953792cd600933b0f6bef8905084afc58cd"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -34563,7 +34812,10 @@
     "Flock.Tmpl.write": "6ad4a2e8427d885d98219bc3b97309c3de7a16479eb856f09aab5f1aec37f1fd"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -34638,7 +34890,10 @@
     "Flock.Tmpl.ascend._sparseCasesOn_1": "9b141f10244ce06d0ccc813b43d610fd61e4554ba47c2bbd6a443375b1bc098d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -34718,7 +34973,10 @@
     "Flock.TmplUnit.t": "07c1e0ee77f879f688a79e3fb1b7dd515c5d071666e08b97512ba90c11da2d5b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -34803,7 +35061,10 @@
     "Flock.Tmpl.laneSum": "fb4b09830df216f9def87f10129e281595ad63fdc961ac1382120e9f7e4394fa"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -34897,7 +35158,10 @@
     "Flock.Tmpl.up": "f64998158661355c175a5cd80f13b80fc297aead5b35a2d0cba31c4b7c0fb921"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -34976,7 +35240,10 @@
     "Flock.Tmpl.selfRow": "f1d06f07b9e7895740fb85cead3ce97f46bf92536b55d614855eb21256aedceb"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -35079,7 +35346,10 @@
     "Flock.Tmpl.walkChild": "f0fb60dba0cf34c0b8dd45b1199136db4419b2357deb9dbff06f512611ab4e8c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -35136,7 +35406,10 @@
     "Flock.Tmpl.Tmpl.groupsOk": "8b1813655c7d51736052ce2592b4e2cac90a522f80ea04d312d5fe23ae86bc03"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -35235,7 +35508,10 @@
     "_private.Flock.Transcript.0.Flock.Round.answers.match_1.splitter": "4b402e2ea389f69e2be9145428adfb21ec78ecf6124db4edb1970ee2a421d2af"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -35336,7 +35612,10 @@
     "_private.Flock.Typed.0.Flock.Typed.ctx": "35fd1c8fb7bc6ab93cf2e1f04c60788cdda858e75b8e305bb3d35a34ee42c844"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -35423,7 +35702,10 @@
     "Flock.verifyRep._sparseCasesOn_5": "9f6ace488738f8b16e5145d32a158bb73b2d0e199b69a5e957f5ba9da82d89f2"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -35551,7 +35833,10 @@
     "_private.Flock.Zk.0.Flock.Zk.s": "328fbfec598bc6d2a7439596efe2435ec8d78dbb84f23880e4b0b104a2453b1f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -35629,7 +35914,10 @@
     "Flock.Zk.rhoIndependent": "f0006095b61ed91fc31bc4b8c47e4a75adcb8d2889f72daecc4e1e9c2e883868"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -35717,7 +36005,10 @@
     "Flock.Zk.reader": "713d28e06de43d2872849cf3bbfb4e664e09fbf18c208281dbc94c228b902d01"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -35850,6 +36141,21 @@
     "PouwWindow.Lanes.regReads": "0445d880288a47d9f9f1b34f12a35656acf63a7abbe1fc7d81d91210e30d8324"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
+  },
+  "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock": {
+   "digest": "2192cb57b4fd45bc75a3f19796d8df85db090f8f3226f5286bd38d3ef51fc7c6",
+   "definitions": {
+    "Accounting.Guarantees.Bridge.IntegrityOfIntegrityBlock": "501accf17823eb948e174affa0931c55deadb1cb1560c1453be4e15ab8eabebb",
+    "Accounting.Guarantees.Bridge.JointHorizonBlocksAOfIntegrityBlock": "e45c3e3663083f84e7eee9f03eefafcba8845cc4f3c6f492948cdb06880abdb3",
+    "Accounting.Guarantees.Bridge.JointHorizonBlocksOfIntegrityBlock": "bc658dab2da6e26fb02d80934d11d7a42e34335b219b4b8ba251a122d71236b5",
+    "Accounting.RealizesIntegrityOfIntegrityBlock": "6051c0820cf8b0d2c2e18fbad171ee327e368239a79dfb1de8e067b1ca4d1999",
+    "Accounting.RealizesIntegrityOfIntegrityBlock.strat": "5e434fec2984fb4bb1c5dff1e7ed6d890b61cc9387c770669916c101b3e93dd0"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock"
+   ]
   },
   "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod": {
    "digest": "9365bad207e9eb5c1224b67eb02f4d2ee78749499fa89b5ccbda509d7782835b",
@@ -36209,6 +36515,9 @@
     "Flock.Guarantees.ServerBlocks.start": "854d1bc820d2de6eeadde9bab2b6d5274bee65ec9cf07ab717662467b73ae5f3"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.IntegrityBlock",
     "Flock.SecurityProofs.IntegrityBlocks",
     "Flock.SecurityProofs.IntegrityHorizonBlocks"
@@ -36224,7 +36533,10 @@
     "FlockSoundness.Game.runBind": "724c0b185e4b1d3b4a9a3b995f531d69ff33bea1cc2911ce5255719a89486c6c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.IntegrityBlock",
     "Flock.SecurityProofs.IntegrityBlocks",
     "Flock.SecurityProofs.IntegrityHorizon",
@@ -36284,7 +36596,10 @@
     "Flock.Guarantees.WindowRec.wrong": "9f522d666470a77884f53c76e7674584d12a9a731cd1a645df8b5cd4553ce1ed"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.IntegrityBlock",
     "Flock.SecurityProofs.IntegrityBlocks",
     "Flock.SecurityProofs.IntegrityHorizon",
@@ -36353,7 +36668,10 @@
     "FlockLevel3.unpack": "34d46d73da3087e523794f03fdf8cc353e89599bab7796dabf68f8d46e7a5d66"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -36433,7 +36751,10 @@
     "FlockLevel3.natPoly": "111cbf4afcf70249625f67c95ea00b823b4afff592fc0274ac1047bfbf46c941"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -36476,7 +36797,10 @@
     "FlockLevel3.instDecidableCovers": "5a9f69494dfe77ded8a7b1614c8e4a6b26d647278efdaea0cf800996bc1fbeb8"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -36519,7 +36843,10 @@
     "FlockLevel3.w128": "d6a5772060eba5ae44a5e24a598bbaae27240b7e726634cbd499318fb5ddbfac"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -36566,7 +36893,10 @@
     "FlockLevel3.instFieldGF128": "8d89e3a068c342c818866b82d507901b8cea23772c0345b39cc1467af187f955"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -36665,7 +36995,10 @@
     "FlockLevel3.toAdj": "3d43ec40ffd40bb80c838bd961cfc60dfffd36a7c5c459a792fa49f89b21fb54"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -36714,7 +37047,10 @@
     "FlockLevel3.xK": "917b2bcfdc9e2ff9eee754606678c46b5eb298a2aa0629f24942687a5cc045c2"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -36756,7 +37092,10 @@
     "FlockLevel3.lagΛ": "09a906a6c22c0330f471dd9127b548111bd8adae56940c5354543f1a71b1ffce"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -36798,7 +37137,10 @@
     "FlockLevel3.sPoly": "ec337ddf87e0323de610b88e2d958535657a6bf98deae09f0257051aa466ffda"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -36846,7 +37188,10 @@
     "FlockLevel3.sparseEntry": "3f477da2cae04b669b8905fb8b393a1d00b70c9d7f915a42b45cee03768f96c6"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -36887,7 +37232,10 @@
     "FlockLevel3.u": "9f0c9aed308bb84c708a957725a63f5d9be6219ba17e66216cc1f311c9249e2a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -37810,7 +38158,10 @@
     "FlockSoundness.Assumptions.UniformRandomBytesTest": "e5c2a5e2cfb598e2208b5ea0627f7a747fec4562254dae7bb3aaabec8ecb9d73"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -37933,7 +38284,10 @@
     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ": "167287a3a7f1c1def8a44226e55431613ce209de3d6f812bd506108d9fd257e4"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -37977,7 +38331,10 @@
     "FlockSoundness.Audit.Partition.tabOf": "e659a7fc8b58a78b75bbafc0cc9317a0bfc128969b3ac49a6a1946833f835091"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -38042,7 +38399,10 @@
     "FlockSoundness.Audit.Partition.placeDecoder": "e64e289378b2cca6895119e368a0802c090129af173f8b4dca4aec5ae6313934"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -38176,7 +38536,10 @@
     "FlockSoundness.Audit.Law.Ω": "c3422bf20fbb717e53861bbecdf9a42a99ae18322e433a415d5ddc7b72263ef2"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -38258,7 +38621,10 @@
     "FlockSoundness.Audit.reg": "dcf7c15357f24fdae0b8e370f590ca7d5d46f429a3c615a7061874388535e623"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -38481,7 +38847,10 @@
     "FlockSoundness.Binding.wit": "aa5b7493972b214f1e00d7f2b25ec445007257a11ec430b4696fc325d2d4f719"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -38529,7 +38898,10 @@
     "FlockSoundness.Binding.hm96Pair": "c1ac7aba11bea03bf4156061f96ef5c100b0e3731b63980fccfb9a29476c4083"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -38580,7 +38952,10 @@
     "FlockSoundness.Binding.hm96XPair": "4d0186feb77eec5d3e24a771cf5f2dfcbae2b0a3d1d8ebce3c8d7f06dd17eb9c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -38652,7 +39027,10 @@
     "FlockSoundness.Binding.HmRowsX.scheme": "5f29ade6b9c84ac6d9d74cf2111a678e418be73627388582d5c0933f1d0e2740"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -38728,7 +39106,10 @@
     "FlockSoundness.tabAt": "dabd91dc48cad79654ffbcc86c42eda7d2c1cef79bc211646b97190105a62985"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -38765,7 +39146,10 @@
     "FlockSoundness.tabOf": "e324da8145b1394df62157229abf8075c3f547bc27fd3203b8472bbe93d488cf"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -38827,7 +39211,10 @@
     "FlockSoundness.wit": "63c5ebda55f859c118e57170708ff50a8560217a34e1e68f2e4a80bafc169cb2"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -38904,7 +39291,10 @@
     "FlockSoundness.Discharge.Aliased.srcKey": "da7d260b5d53d2a57fe1aa3b87ad81803bd932a2147d955a1ccc655b3d2f6107"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -39085,7 +39475,10 @@
     "FlockSoundness.Discharge.Composed.tableZJ": "d1ba296f6cdeec31109a8130fdb33895658c82be4fd90d8d73feeca58a1af87c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -39284,7 +39677,10 @@
     "FlockSoundness.Discharge.Const.Prog.rowsWireC": "9dbb5b0dddc8b50ee642561ebe6cce113b441334e422181a03da11367d707d7a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -39326,7 +39722,10 @@
     "FlockSoundness.Discharge.DecodeZL.wMid": "a10467e4576de872572766132148aaaef8a943e493bf94fae4e52ab8b0283f6f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -39361,7 +39760,10 @@
     "FlockSoundness.Discharge.DecodeZL.wOP": "fc88e5df91481d2c4eeec5021441e42abf6c64be5f7c5ea26a70643eab92ab5d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -39429,7 +39831,10 @@
     "FlockSoundness.Discharge.DecodeZL.wZL": "a25c95558c75820fcb901e96bcaab12c64fedc942aecd63dd0d8678c8ff659f2"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -39467,7 +39872,10 @@
     "FlockSoundness.Discharge.DecodeZLJ.partJson": "3de4ddc4f67e6140c995b3c430def38006a5698eb4906e0538923603e09a5bc6"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -39530,7 +39938,10 @@
     "FlockSoundness.Discharge.Exec.slotOpensL": "c56660d01d566006a77b3b5d927d90fd232b5abb5c55bbdde3dd430006277b07"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -39565,7 +39976,10 @@
     "FlockSoundness.Discharge.Exec.capOfRoot": "be537f3d1534d509593f3fd32844ff197345589a9d7e25dc018516187ac3f491"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -39619,7 +40033,10 @@
     "FlockSoundness.Discharge.Exec.setupOf": "a1b00a74a7d210e3564d54a90f1691ea9da1252cd87fbeac47ee3b0225b9e412"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -39742,7 +40159,10 @@
     "FlockSoundness.Discharge.Exec.mPtsOf": "7080ef81fec16a718bf61f0c69adb35559ecb27ee2fa01e9e75939c45dd429cc"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -39839,7 +40259,10 @@
     "FlockSoundness.Discharge.Exec.tagsAt": "c145f63dfb15a31a5f04f7d37a87418f4216e038b4af09c8df5a471caf51e807"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -40089,7 +40512,10 @@
     "FlockSoundness.Discharge.Hidden.outAt": "d25ef6df5a3c8ca52a01818bc7ffb4a6368dc9bbe62194648196cf8c54a9cd9f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -40126,7 +40552,10 @@
     "FlockSoundness.Discharge.Hidden.flatTwin": "31ef41157ae45739fd91c76f31068871f83d0e30df9a64ac2531bca8c239eb9e"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -40163,7 +40592,10 @@
     "FlockSoundness.Discharge.Hidden.rowPre": "feea601fb923e5504bd97a6a65ae7fd79855e100cdd7044d1a8bdc4321782589"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -40201,7 +40633,10 @@
     "FlockSoundness.Discharge.Hidden.Any.SegRow": "ce9affa02c31881c4ec9b53f6254c07d2c1c263482eba8c4448870453c8b6f01"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -40240,7 +40675,10 @@
     "FlockSoundness.Discharge.Hidden.segComps": "9bf17d0a665d43acd65a9518667c130e71e808ae6c964bfab0e1c1557f1c7b7c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -40278,7 +40716,10 @@
     "FlockSoundness.Discharge.Hidden.Any.PadRow": "dea946f03f3b50de7789b110903a82202a71a2a56f525ef1471007c02bd7b27a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -40315,7 +40756,10 @@
     "FlockSoundness.Discharge.Hidden.SegShape.firstOf": "796b0e3510e87ed0db6c6ca7d5c2cd4e2fadd4a8df162856ce3a3046e79d600d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -40363,7 +40807,10 @@
     "FlockSoundness.Discharge.HiddenExec.UnitRowsFlat": "51abb10dbd7d73c7d5be2ce8f96edba4c488d91cf08889648317a3ce95a4ed77"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -40460,7 +40907,10 @@
     "FlockSoundness.Discharge.HiddenExec.rowOfH": "924949e7089a165d43e9684cfa7824582f704b88097ef0699a4ec64eeb9ea72b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -40517,7 +40967,10 @@
     "FlockSoundness.Discharge.HiddenExec.SitesH.vu": "61ad4451a66cf2f3f40cf5d194aa86537afc063c3d66fbeb03b2e96f7000baac"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -40554,7 +41007,10 @@
     "FlockSoundness.Discharge.HiddenExec.outPortOf": "c0793982baf2839d21e4de6606383f3da94b6e324d7a8b5ab1bc43e8b719d0e7"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -40592,7 +41048,10 @@
     "FlockSoundness.Discharge.HiddenExec.siteAddrH": "05938198d7777354c590207a7f09d0326787dfd6d5a5497cca1f7e506b48ef6d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -40630,7 +41089,10 @@
     "FlockSoundness.Discharge.HiddenExec.sitesAtH": "e05d710ab53a92d3870b13d34295f59ec32bd90d56a0c2442dfacda643ea6334"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -40690,7 +41152,10 @@
     "FlockSoundness.Discharge.HiddenExec.tablesAtH": "67aa68ee29ea6a78507dc0f93fe0af00c9fd9fc7559553c124f366c7b90addd7"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -40806,7 +41271,10 @@
     "FlockSoundness.Discharge.Hm.saltCol": "a87924d3ca469d07f650bd83e2b31bffd269dff54ecfc11aa6eba8e529a0f637"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -40972,7 +41440,10 @@
     "FlockSoundness.Discharge.Integrate.tableAt": "140e6a4921ac8bcbce985f756708f24cd28680293b857a37bcde8ae87070c293"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -41023,7 +41494,10 @@
     "FlockSoundness.Discharge.Layout.inBlockOr": "796471326c0a4141ed0f649e5afb4ca16a24dc7bcb66847bc483bde39b7eddfe"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -41077,7 +41551,10 @@
     "FlockSoundness.Discharge.Layout.zeroG": "45cb2aadfda5f30a87d0b37e244c49f2c310b13a1bc529bc667b0d18188fd3ca"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -41132,7 +41609,10 @@
     "FlockSoundness.Discharge.Layout.portRowW": "4f8a74c9adb179b0de17326bbadd0b3b7524eba8e73d3bfd9109f2761306405b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -41172,7 +41652,10 @@
     "FlockSoundness.Discharge.Layout.gateAt": "cb3d642d67063a0ae2733f072b5fbb176d830c7cdabe4ef6f25e487db3d55402"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -41216,7 +41699,10 @@
     "FlockSoundness.Discharge.Layout.outDecode": "c4dbee414c1a0ca04e2c535b37da890ca4cc21dba1ef3eeddb8ed2c731249d38"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -41255,7 +41741,10 @@
     "FlockSoundness.Discharge.Layout.outsOf": "a02cb0e26ff57e1a4ef33847605dee6eadf1e5c8aba2f01cf2ea063314801bd4"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -41316,7 +41805,10 @@
     "FlockSoundness.Discharge.Layout.Readers.valAt": "1ccb6ab4492f06c3c630c085a3f68ad864c0699801eb2a913097740318c7cc9e"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -41357,7 +41849,10 @@
     "FlockSoundness.Discharge.Layout.extSeg": "c70b0229f924a07fe780fa21ee484fa21f14ae1c6b2f662fb19e26216d5653bd"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -41397,7 +41892,10 @@
     "FlockSoundness.Discharge.Layout.widthOf": "2712eb32e748df7b6f2b34b611f330edb0312cce2be7f932b390639f6237c0c1"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -41443,7 +41941,10 @@
     "FlockSoundness.Discharge.Layout.rowEncP": "457f718a8721153cfac9426653b8a6b9dafc816af7c1161d1002dcc164cd0acf"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -41489,7 +41990,10 @@
     "FlockSoundness.Discharge.Layout.v2Row": "59148d3acda6a097991e727e7caeec20cebd6061073197ad6e09d9124bce8516"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -41551,7 +42055,10 @@
     "FlockSoundness.Discharge.Placed.keyProg": "1e6d14ae0da7d8d09e033f920a397f218ddd7f54737886b5a69417791312a18f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -41614,7 +42121,10 @@
     "FlockSoundness.Discharge.Placed.uniform": "65281c0d07e03bc97cfeb4962d95824fd69807a0d84420348f1c8283f4bb3eaa"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -41659,7 +42169,10 @@
     "FlockSoundness.Discharge.Placed.zeroGate": "2470ebd857a4c6e4738c56913eb4e8b62dba2dfa558a218702dd87ab05a1c05e"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -41834,7 +42347,10 @@
     "FlockSoundness.Discharge.Tables.upd": "5c25e2dd898f5463068f6dc5415ec452410fd05691674dec907a30fab7ce0d7d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -41868,7 +42384,10 @@
     "FlockSoundness.Discharge.Tables.partDraw": "bf70222edaa33c796d3a2885c49eb9ca1bb01926a8832f80ea4fa7fba4ef1e3e"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -41948,7 +42467,10 @@
     "FlockSoundness.Discharge.Tables.steps_batch_ofFn": "0dc2da52d61d752a1a080525334a625e11c1b20d0166e083b2e111877cbcd08f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -42039,7 +42561,10 @@
     "FlockSoundness.Discharge.ZkBind.witZ": "7a2a732d4a526f3e87d610e14743558c41ab3b0602a011d3ea4e034ff0989323"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -42083,7 +42608,10 @@
     "FlockSoundness.Discharge.ZkBind.HmRowsZX.scheme": "8fa19f6878410904ace188b0e0eba595e28794e0b0ee316ec6066cc6bd145d5e"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
     "Flock.SecurityProofs.EndToEndHiddenDrawnFlat",
@@ -42135,7 +42663,10 @@
     "FlockSoundness.Discharge.ZkBind.witOf": "08940d38ba5f567dd74d691ac4950931755a1fbd1e139e5880408e5d8bb46e61"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -42181,7 +42712,10 @@
     "FlockSoundness.Discharge.ZkExec.zkTags": "52b991cd340260bb9563ca78fbec6a9a4318ff1fee04560d8dcbfedbfdb053cf"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -42268,7 +42802,10 @@
     "FlockSoundness.Discharge.ZkExec.wY": "e877ffbbffbb2cb2778c22e5e8b34056403f54bddf8ac3bd5ae1158db54529a4"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -42302,7 +42839,10 @@
     "FlockSoundness.Discharge.ZkExec.innerN": "75a67d6552b55d90b1cb09dc9fd0bb0721158da533083d6c2bd654dee0d80bd8"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -42368,7 +42908,10 @@
     "FlockSoundness.Discharge.ZkExec.shapeZKn": "910e3d5381918aa0ae184cb7cb07b655cb4b17b17d41bfdfd29bc9d6765dc42f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -42468,7 +43011,10 @@
     "FlockSoundness.Discharge.ZkHidden.tableZHJ": "7c47b1fb21c8e1a66e59738002c6d17603985c5e650faaae3da6834ae6667625"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -42524,7 +43070,10 @@
     "FlockSoundness.Discharge.ZkHidden.tableShH": "3a807f341ffb6f8741e333ba93cd13df51bb0abb640be3460bc12fb1afe2f8b4"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -42581,7 +43130,10 @@
     "FlockSoundness.Discharge.ZkLink.tauTab": "f557f4ed66bff223734efcab0d449c6213fb5998a7da9e000198289b16db6a9d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -42670,7 +43222,10 @@
     "FlockSoundness.Discharge.ZkLink.zcStrat": "dfc16e367a250ae8613b391aa1aa13bceffe6f1be0dfef3f7c5885e44de0e9a9"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -42721,7 +43276,10 @@
     "FlockSoundness.Discharge.ZkLink.trialStratZC": "6a16a970e7e6e4d25ae30170e22e3506951379f5cab13ab4dd1da391ccbb6314"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -42756,7 +43314,10 @@
     "FlockSoundness.Discharge.ZkLink.drawOf": "ef60d41dd614d169fc272ee62e10e6c07a47af85af2fe43a6322d3092d3ff1ea"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -42823,7 +43384,10 @@
     "FlockSoundness.Discharge.ZkLink.ΩcZ": "1d5408b8e977ab64102222d179cff9d50ab5697fb794a49412a5171e115fc07e"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -42872,7 +43436,10 @@
     "FlockSoundness.Discharge.ZkLink.lockRecZ": "9cebc30618414c07df55906b42786bde1bbf0c74395f62d3c8a7a1c7d4291feb"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -42927,7 +43494,10 @@
     "FlockSoundness.Discharge.ZkLink.lockSessZ": "0c2f03217c8d57919b84f05b10013b7a425b7e47716467eec8299cb1d5eb9c12"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -42967,7 +43537,10 @@
     "FlockSoundness.Discharge.ZkLink.tabOrcP": "d1fc6227fad2f2bc3b0c14204c1fbd73a5310ed07ee6e2d6e747b6565bc934d8"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -43002,7 +43575,10 @@
     "FlockSoundness.Discharge.ZkLink.wrongRegZ": "ccbde5e870e121f958eac0c18f18f754f863cefc3c3b641e052132f726e9a9d2"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -43039,7 +43615,10 @@
     "FlockSoundness.Discharge.ZkLink.tabAfterZCP": "2bc585a5bf519204862e8a260d2237f49464c3511aba6bb624f710943f8b8e22"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -43074,7 +43653,10 @@
     "FlockSoundness.Discharge.ZkLink.stratZ": "ec3e279d4af7ef80cb3c460073d97bff297b1fbbeb0369562651bb809694d4c4"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -43116,7 +43698,10 @@
     "FlockSoundness.Discharge.ZkLink.selfSFinderZ": "3c0c30563915e225be0419fc9644c75484928d10e5d28b2dfe70e8987962103c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -43168,7 +43753,10 @@
     "FlockSoundness.Discharge.ZkLink.tripleOfLay": "01f448f1b124afcfc3c9572e92e604b0ef79afd0cfd0fb1f2e906046cc7d9970"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -43343,7 +43931,10 @@
     "FlockSoundness.Discharge.ZkSession.zerocheckZK": "9ac4ef32f695cb7b12b36171e1dcf1ef0d575a2db63ca12e8d3ffd841660559a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -43399,7 +43990,10 @@
     "FlockSoundness.Discharge.ZkSession.εInner": "40e880dca06dbfc14b036690e78a6a002f521b1ed12eac7089f141e0a17d7e37"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -43454,7 +44048,10 @@
     "FlockSoundness.Discharge.ZkSession.unmask": "c357b03dc113e26534236d04ec77e175578e392cd33cee37f6ffbda77e6438ab"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -43514,7 +44111,10 @@
     "FlockSoundness.Discharge.ZkSession.tabOfZ": "b2cc9bdecb30731b31adddcff020a63a34ada3667a459161c08491e6d2d5548b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -43649,7 +44249,10 @@
     "FlockSoundness.Audit.ProgPlaces.o": "6e7a0cb08de242e74872e864e11ee34f8112d44a008eabebcef653bbbeb2a5d6"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -43688,7 +44291,10 @@
     "FlockSoundness.Audit.Law.streamOf": "67d24db1b71b682e622b4970c754764982ec8493b87fe9f5c8ab9e70c20de0f7"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -43727,7 +44333,10 @@
     "FlockSoundness.Audit.Law.tapesOf": "83f1170cbc6f00bde92bd44a30fc157820b2850c012bec049d30d7fe6248e1db"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -43763,7 +44372,10 @@
     "FlockSoundness.portOf": "b8c65ec2ea12ae713c17294933f906e1fa465ba7337185ce7445b0169ff3b85b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -43822,7 +44434,10 @@
     "FlockSoundness.unitRows": "8fe7519ba88614a977ae11626ef0073862723ee564ecb3017e7216b60f3af0cf"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -43870,7 +44485,10 @@
     "FlockSoundness.stackPlace": "9c604532cbcbc4c972da554a1e5aae73bae1033eb4a6d24d2d207c8c121b555b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -43932,7 +44550,10 @@
     "FlockSoundness.Typed.starts": "1e4b3378bcc0ab7e6bb2d562ba84d6923853bd201b4d09cedb724ceb084b781b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -43972,7 +44593,10 @@
     "FlockSoundness.Extract.firstTable": "c6f5254fa31e64151f581f1f4831d5f7c2a5daa920e2dc8cfe36c0013cb840aa"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -44008,7 +44632,10 @@
     "FlockSoundness.Extract.waitCost": "b3de93a3322597557e3361342d1a3bd3e2d3a2cdb12e87060e7a85bfb643f4ee"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -44043,7 +44670,10 @@
     "FlockSoundness.execArith": "97f7795115ed1d64af251f622e0fc69732cf2653d0b5786aec16a5baab14f1ea"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -44087,7 +44717,10 @@
     "FlockSoundness.padWit": "b476385f1b312a595f8430993f0374ab90570b1c1de69156cb67b465a138fe9f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -44122,7 +44755,10 @@
     "FlockSoundness.levelsChained": "d17168c6830ac2f8f5ff353882993e380bb0a18555b1ce9dceb0ee77fd8400d5"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -44199,7 +44835,10 @@
     "FlockSoundness.LinkFinder.pRd": "c3aed35ba5aa7cf2f797dee74b8c6eb9f42b699e4ce63455819924e519184c7c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -44234,7 +44873,10 @@
     "FlockSoundness.Model.Statement.LinkLayout": "b37e44f0312955e52492256533b24acdc935490aeddd9708281231159bd4adce"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -44315,7 +44957,10 @@
     "FlockSoundness.bit": "fa1e76f1a50434b9e7c3510ea8309e5203789a2ec0817c1f61412a0abfe22125"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -44358,7 +45003,10 @@
     "FlockSoundness.opStep": "5ec7851d1115b45a62daaa784397e6e14a3613f28981ae5445883616248b2ce9"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -44393,7 +45041,10 @@
     "FlockSoundness.encAt": "6063ca2589aaf81f35112962526995d10646e325b88bf83074ef8536359667f9"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -44427,7 +45078,10 @@
     "FlockSoundness.Refine.gOf": "3a71f981d04b22a5b07519e7485f36a30469a3a1a63ae3216c0f3f472bda4d17"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -44477,7 +45131,10 @@
     "FlockSoundness.Refine.encs": "953513c483d25f1f7c6693170d5d4d159edf372296a83969ba63b22356e9f53c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -44512,7 +45169,10 @@
     "FlockSoundness.Refine.openAt": "374320eb4ab289ae1eafe6cb5340899c06a17871777c11b5d57f1e69b31e8f48"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -44578,7 +45238,10 @@
     "FlockSoundness.Refine.roundOf": "8b93e4abf393c54ebedbd05ac7111f15ef698a2d6263d193c37b66026d82f74a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -44648,7 +45311,10 @@
     "FlockSoundness.Refine.tapeFrom": "29dfaad7239d41edb30d4726b61d156f71a2ee4eadf254f5bc916001fc300995"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -44690,7 +45356,10 @@
     "FlockSoundness.Refine.toDig": "fc09670eec36ed92bef301805e7fd420fc6ae40c8d7e2e886967b6cc3de958a6"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -44736,7 +45405,10 @@
     "FlockSoundness.Refine.regionsOf": "64a77bb4527c2fa7b43f0591444fc7f6078ac344e7fe2e7f6b50972318acd3ae"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -44798,7 +45470,10 @@
     "FlockSoundness.Game.Msg": "2acda76a98ee7f334fe9942e6a6ac59dcf8e9f97038dc030edf17763a3845850"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -44837,7 +45512,10 @@
     "FlockSoundness.Refine.saltsOf": "a0d5812e80a2fd860d924b9a3b626466509453659b2f05d5e5748a45e51cc96b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -44879,7 +45557,10 @@
     "FlockSoundness.Refine.schedOf": "42ccc94c62f4e76f64ce302754198a1bf0069d2181af3fefed823c4d9aae5cce"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -44950,7 +45631,10 @@
     "FlockSoundness.Refine.stmtOf": "e9b850a1a4865c1694dbcf82b840df952e4810c9570f20f74d63a3d8bd2a2f2c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -45002,7 +45686,10 @@
     "FlockSoundness.Refine.opensOf": "a4daf031f719278dc72fd901ff6e9111823cb4f2b31f95b8cdee277c57b7f610"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -45039,7 +45726,10 @@
     "FlockSoundness.Refine.vecOf": "17d5309a86fc86fe5bfd64134c970f402910f930e9b292b87123e95fc04178c4"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -45148,7 +45838,10 @@
     "FlockSoundness.TabSpec.sch": "f4c4db7df0197cca1a2487075aa4276562cc9df6b9d3b95e59e9de83ae25811a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
     "Accounting.SecurityProofs.TS.LeafLanesSound",
@@ -45198,7 +45891,10 @@
     "FlockSoundness.padWits": "2dcfff3d191b61a77e14cad6defb19a7258ebf3e2f50124eca404e640152564b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
@@ -45245,7 +45941,10 @@
     "FlockSoundness.StrictCR.twoRuns": "ac1f6d0c3231bdd7b8f27b5914ec697b054a7b805d780058840462d0d81d9d91"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
     "Flock.SecurityProofs.EndToEndHidden",
