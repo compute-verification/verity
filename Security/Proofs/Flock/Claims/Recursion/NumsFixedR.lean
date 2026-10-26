@@ -28,12 +28,13 @@ namespace RecDeploy.NumsFix
 
 open Flock
 open Claims (Msg Out)
-open FlockSoundness.Refine (ebind_ok throw_bind')
+open FlockSoundness.Refine
 open FlockSoundness.Discharge.Exec (range_mapM_ok mPts_of_any)
 open Lean (Json)
 
 /-! ## Flock's parsers with the public file swapped -/
 
+set_option maxHeartbeats 4000000 in
 /-- **A raw statement with its public file swapped reads the same**, but for the public file. -/
 theorem rawIns_pf {w : FlockDeploy.Raw} {pf : ByteArray} {b b' : FlockDeploy.Ins} (h : w.ins = .ok b)
     (h' : ({ w with publicFile := pf } : FlockDeploy.Raw).ins = .ok b') :
@@ -94,7 +95,7 @@ theorem setupTables_okH' {tags : Tags} {cf pf : ByteArray} {coins : Coins} {coun
 theorem outRegions_size {c : Circuit} {pub : Public} {r : Array Region} (h : HmOut.regions c pub = .ok r) :
     r.size = c.ports.size := by
   unfold HmOut.regions at h
-  dsimp only at h
+  try dsimp only at h
   exact (range_mapM_ok h).1
 
 theorem inRegions_size {c : Circuit} {pi : HmIn.Ports} {pub : Public} {r : Array Region}
@@ -103,7 +104,7 @@ theorem inRegions_size {c : Circuit} {pi : HmIn.Ports} {pub : Public} {r : Array
   unfold HmIn.regions at h
   cases he : pi.ports.isEmpty
   · simp only [he, Bool.false_eq_true, ↓reduceIte] at h ⊢
-    dsimp only at h
+    try dsimp only at h
     exact (range_mapM_ok h).1
   · simp only [he, ↓reduceIte, pure, Except.pure, Except.ok.injEq] at h ⊢
     subst h
@@ -114,8 +115,8 @@ set_option maxHeartbeats 2000000 in
 theorem inLoad_row {tags : Tags} {c : Circuit} {pi : HmIn.Ports} {f : ByteArray} {pop : Public}
     (h : HmIn.loadPublic tags c pi f = .ok pop) : ∃ c', HmRow.loadPublic tags c' f = .ok pop := by
   unfold HmIn.loadPublic at h
-  dsimp only at h
-  simp only [throw_bind', pure_bind] at h
+  try dsimp only at h
+  try simp only [throw_bind', pure_bind] at h
   repeat' walk_step
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq] at h
