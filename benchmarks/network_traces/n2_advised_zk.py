@@ -363,8 +363,8 @@ def from_io(io: list[dict]) -> ADV.Advice:
                                           for i, q in enumerate(requests) if q.output_len > k)))
     frames = {r["user"]: [b for _, b in r["frames"]] for r in io}
     probe = ADV.Advice(requests, tuple(steps), (0,) * sum(q.output_len for q in requests))
-    return ADV.Advice(requests, tuple(steps),
-                      tuple(frames[requests[o.request].id][o.index] for o in ADV.outputs(probe)))
+    release = tuple(frames[requests[o.request].id][o.index] for o in ADV.outputs(probe))
+    return ADV.Advice(requests, tuple(steps), release)
 
 
 def every_count(lw: LinkWindows, w: int, pair):

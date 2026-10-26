@@ -196,6 +196,22 @@ def test_joined_advice_numbers_each_windows_requests_after_the_windows_before_an
     assert all(b_ == frames[got.requests[o.request].id][o.index] for o, b_ in zip(ADV.outputs(got), got.release))
 
 
+def test_advice_from_io_is_the_certified_requests_each_kept_output_released_at_its_frame():
+    """`from_io` (--advice-from-io, a gate rehearsal's advice): the certified requests in arrival order, and each kept
+    output of each released in the bucket its certified frame went out."""
+    a = _link(n2.T)[0].session.link.advice
+    frames = {q.id: [] for q in a.requests}
+    for o, b in zip(ADV.outputs(a), a.release):
+        frames[a.requests[o.request].id].append(b)
+    io = [{"user": q.id, "prompt": [0] * q.prompt_len, "output": [0] * q.output_len, "finish": q.finish,
+           "frames": [[i, b] for i, b in enumerate(frames[q.id])]} for q in a.requests]
+    got = n2.from_io(io)
+    assert got.requests == a.requests
+    assert sorted((o.request, o.index) for o in ADV.outputs(got)) == \
+        sorted((r, i) for r, q in enumerate(a.requests) for i in range(q.output_len))
+    assert all(b == frames[got.requests[o.request].id][o.index] for o, b in zip(ADV.outputs(got), got.release))
+
+
 def test_the_verifier_derives_the_provers_public_row():
     """The verifier's own ``pub`` row is the prover's in every window of every member, and holds the window's view of
     the member's advice: moved and short state another view than honest's in some window, extra the same."""
@@ -275,28 +291,6 @@ def test_the_scan_names_both_ends_pieces_and_leaves_out_what_the_public_rows_hol
     assert not secret & set(out)
 
 
-def test_the_provers_instance_holds_every_piece_the_control_expects_of_a_head_but_its_zero_padded_tail():
-    """The control (`a8.received` on the prover's own instance files) expects every held piece of each head, but not its
-    zero-padded last chunk: the advised unit's head is 157 + L + 4T bytes, 2214 at T = 512, so its last 6 bytes end
-    off a 16-byte boundary, and the wit row holds the head followed by its salt's field, never by zeros. Run
-    r20261025-183805-7c27's control failed on exactly those 8 pieces (``head egress 0 @2208`` …), holding the other 57
-    of the scan's 337. Here the windows' wit rows, the rows the instance files hold as they are, stand in for them."""
-    _, rounds = _link(n2.T)
-    rd = rounds["honest"]
-    blobs, held = n2.Z.blobs_of(rd)
-    scan = SimpleNamespace(PIECE=16, needles=lambda pieces: {v: n for n, v in pieces.items()},
-                           find=lambda data, table: {n: 1 for v, n in table.items() if v in data})
-    kept, held_kept, _ = n2.Z.public_pieces(scan, blobs, held, b"")
-    wit = b"".join(rd.lw.row(x.args, "wit") for x in rd.windows)
-    head = blobs["head egress 0"]
-    tail = f"head egress 0 @{len(head) - len(head) % 16}"
-    assert len(head) == 2214 and tail == "head egress 0 @2208" and tail in kept and tail not in held_kept
-    assert kept[tail] not in wit and wit.startswith(head) and wit[len(head):len(head) + 10] != bytes(10)
-    assert held_kept and all(kept[k] in wit for k in held_kept)
-    assert {k for k in kept if k.rsplit(" @", 1)[0] in held} - held_kept == {
-        f"head {end} {w} @2208" for end in n2.ENDS for w in range(n2.WINDOWS)}
-
-
 def test_the_prover_s_other_subset_is_another_k_subset_of_the_period():
     """`n2_zk.other_subset`, the ``other_subset`` member's windows: K of the period's, ascending, not the draw's units
     (the undrawn windows first), and the draw's own at K = n, where no other subset exists."""
@@ -318,3 +312,25 @@ def test_a_sampled_period_adds_the_other_subset_member_and_an_unsampled_one_refu
     assert s["draw"]["law"] == "subset:2" and s["draw"]["population"] == n2.WINDOWS
     with pytest.raises(SystemExit, match="needs --draw"):
         n2.main(["prove", "--dry", "--members", "honest,other_subset", "--out", str(tmp_path / "all")])
+
+
+def test_the_provers_instance_holds_every_piece_the_control_expects_of_a_head_but_its_zero_padded_tail():
+    """The control (`a8.received` on the prover's own instance files) expects every held piece of each head, but not its
+    zero-padded last chunk: the advised unit's head is 157 + L + 4T bytes, 2214 at T = 512, so its last 6 bytes end
+    off a 16-byte boundary, and the wit row holds the head followed by its salt's field, never by zeros. Run
+    r20261025-183805-7c27's control failed on exactly those 8 pieces (``head egress 0 @2208`` …), holding the other 57
+    of the scan's 337. Here the windows' wit rows, the rows the instance files hold as they are, stand in for them."""
+    _, rounds = _link(n2.T)
+    rd = rounds["honest"]
+    blobs, held = n2.Z.blobs_of(rd)
+    scan = SimpleNamespace(PIECE=16, needles=lambda pieces: {v: n for n, v in pieces.items()},
+                           find=lambda data, table: {n: 1 for v, n in table.items() if v in data})
+    kept, held_kept, _ = n2.Z.public_pieces(scan, blobs, held, b"")
+    wit = b"".join(rd.lw.row(x.args, "wit") for x in rd.windows)
+    head = blobs["head egress 0"]
+    tail = f"head egress 0 @{len(head) - len(head) % 16}"
+    assert len(head) == 2214 and tail == "head egress 0 @2208" and tail in kept and tail not in held_kept
+    assert kept[tail] not in wit and wit.startswith(head) and wit[len(head):len(head) + 10] != bytes(10)
+    assert held_kept and all(kept[k] in wit for k in held_kept)
+    assert {k for k in kept if k.rsplit(" @", 1)[0] in held} - held_kept == {
+        f"head {end} {w} @2208" for end in n2.ENDS for w in range(n2.WINDOWS)}
