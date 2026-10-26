@@ -145,9 +145,8 @@ theorem part_partS {sh : _root_.Flock.Shape} {j : ℕ} {S : _root_.Flock.RecOpen
 /-- **A decision of the opened messages**: at a dense compiled statement whose last message reads (`ReadOkR`, which
 `ReadsAt` gives at a joint acceptance), where the base checks hold, the record decodes (`decode_at`), so a `DecAt`
 exists. -/
-theorem decAt_of {rd : Msg → Option FinalP}
-    (hBs : BasesHold rd) {xo : Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
-    (hf : Claims.Recursion.Form.Dense sto.form) {ms : List Msg} {cs : List Coin}
+theorem decAt_of {rd : Msg → Option FinalP} (hBs : BasesHold rd) {xo : Msg} {sto : Claims.Recursion.Stmt}
+    (hst : parse xo = some sto) (hf : Claims.Recursion.Form.Dense sto.form) {ms : List Msg} {cs : List Coin}
     (hr : FlockDeploy.ReadOkR rd (xIOf xo) ms cs) (hlen : ms.length = cs.length) :
     Nonempty (Rows.DecAt rd (xIOf xo) ms cs) := by
   have hr' := hr

@@ -336,6 +336,8 @@ import Proofs.Flock.Claims.Recursion.ResLowerDD
 import Proofs.Flock.Claims.Recursion.KSDec
 import Proofs.Flock.Claims.Recursion.ResAccPorts
 import Proofs.Flock.Claims.Recursion.ResChainW
+import Proofs.Flock.Claims.Recursion.OpenLevW
+import Proofs.Flock.Claims.Recursion.HresAsm
 import Proofs.Flock.Claims.Recursion.OpenCoefTie
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
