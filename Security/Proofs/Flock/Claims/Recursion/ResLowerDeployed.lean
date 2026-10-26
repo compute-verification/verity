@@ -653,7 +653,8 @@ theorem resTie_staged {b : Brings} {IV : Claims.Verifier Coin}
   have hzn : n < (RecCoins.zeroRows 2 RecCoins.OUT_WORDS).size := by simpa [RecCoins.zeroRows] using hn2
   obtain ⟨prog, hprog, hpv⟩ := check5_bytes hS hck hr hpc hsu h0 hidx hown hcv hqv hn2 hnr hnp
   obtain ⟨prog', hprog', hpo⟩ := check5_bytes hS hck hr hpc hsu h0 hidx hown hcz hqo hn2 hzn hnp
-  obtain rfl : prog' = prog := Except.ok.inj (hprog'.symm.trans hprog)
+  have hpp : prog' = prog := Except.ok.inj (hprog'.symm.trans hprog)
+  rw [hpp] at hpo
   beta_reduce at hpv hpo
   have hst : resSetupSt (RecCoins.Source.atC3 i.src i.inner i.commits) sts[0] =
       commitIns rows (RecCoins.verifierSalt prog RecCoins.V_VALUE) ++
@@ -672,8 +673,9 @@ theorem resTie_staged {b : Brings} {IV : Claims.Verifier Coin}
   have hzr : ∀ i, ((RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!).getD i 0 = 0 := fun i => by
     rw [Array.getD_eq_getD_getElem?]
     by_cases hi : i < ((RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!).size
-    · rw [Array.getElem?_eq_getElem hi, Option.getD_some, ← getElem!_pos _ _ hi]
-      exact FlockSoundness.Discharge.Recursion.zeroRows_get 2 _ n i
+    · rw [Array.getElem?_eq_getElem hi, Option.getD_some]
+      have hz0 := FlockSoundness.Discharge.Recursion.zeroRows_get 2 RecCoins.OUT_WORDS n i
+      rwa [getElem!_pos ((RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!) i hi] at hz0
     · rw [Array.getElem?_eq_none (Nat.le_of_not_lt hi)]
       rfl
   exact resTie_layVR hT hnc hr hss hsv hpc hn2 hqv hqo hvin hoout hslv hslo hptv hpto hwv hwo hzr hpv.symm hpo.symm
