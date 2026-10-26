@@ -56,6 +56,8 @@
   "Proofs.Properties.Composition",
   "Proofs.Properties.Verity.Soundness",
   "Proofs.Properties.NetworkCertifier.Period",
+  "Proofs.Properties.Verity.Network.Coupling",
+  "Proofs.Properties.Verity.Network.Window",
   "Proofs.Properties.Verity.Network.Legs"
  ],
  "exempt": {
