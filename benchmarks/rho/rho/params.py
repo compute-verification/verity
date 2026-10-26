@@ -106,10 +106,10 @@ class Registry:
             raise KeyError(f"no table {prefix!r} in the registry (data/*.toml)")
         return {k[len(prefix) + 1:]: self.param(k).value for k in keys}
 
-    def fields(self, cls: type, prefix: str, **given: Any) -> Any:
+    def fields(self, cls: type, prefix: str, skip: Iterable[str] = (), **given: Any) -> Any:
         """An instance of dataclass `cls` from table `prefix`: each field from the table (or `given`), and no other keys
-        in the table than fields, `kind` and `name`."""
-        table = self.table(prefix)
+        in the table than fields, `kind`, `name` and `skip` (the keys a caller reads and converts itself)."""
+        table = {k: v for k, v in self.table(prefix).items() if k not in set(skip)}
         names = {f.name for f in fields(cls)}
         stray = set(table) - names - {"kind", "name"}
         if stray:

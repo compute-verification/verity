@@ -1,26 +1,37 @@
-"""The slowdown theorem's shape: what every bound, attack and datacenter instantiates.
+"""Layer 3, exclusion: the serving-block bound with its local minima (the working draft's §8, which states it).
 
-Training is charged by its *counted products*: the multiplications of its reference computation, `κ/2` per FLOP. A
-**block** is a part of the actual circuit with a **budget**: the FLOPs it runs and the novel bits that enter it (what it
-didn't register). A bound caps the counted products one block can finish given its budget, an attack is a construction
-that finishes that many: either is an **allowance**. A **region** is a part of the monitored fleet over the horizon (one
-location over one window), and a **cut** of it is one way of covering it with blocks plus *free* FLOPs, which no budget
-constrains and which count at face value. Every cut is an upper bound, so under a bound a region contributes the least
-of its cuts, and never more than its own compute. An attack is a construction, so it is evaluated on the region's
-*layout* instead: the blocks and free FLOPs a strategy that obeys every protocol actually gets there (no layout: the
-region is unconstrained). The dark pool's share `ε_dark` of the adversary's training rate runs unencumbered:
+Everything here is in gates and counted weight. A **block** has a budget `(c, k)` (`Budget`): its gates and its
+unregistered input bits. A training class gives a per-block cap `q_T(c, k)` (`Cap`), the most counted weight a block
+with that budget holds; an attack gives a construction's count instead. A **serving block** (`ServingBlock`) is one
+server between two consecutive wipes, padded to `c_S` gates; each `Cut` of it is one valid partition, its blocks plus
+its uncertified gates `U` by route, and an argument of the bound's minimum:
 
-    g = Σ_R n_R · min(κ C_R / 2, min_cuts Σ_B n_B · min(a(B), κ C_B / 2) + κ · free / 2) / Σ_R n_R · κ C_R / 2
+* `serving`, one block `(c_S, k_S)`, its cap `q_T(c_S, k_S)`;
+* `inference`, its `n_S` inference blocks `(c, k)` and `U_S`, so `n_S q_T(c, k) + q_U(U_S)`.
 
-(an attack's `g` takes the layout in place of the least cut)
-    ρ̄ = μ / (ε_dark + (1 − ε_dark) · g)
+`q_U(U) = ω_max U / s_×` is the elementary uncertified cap, `w U` with `w` the weight a gate can hold (`ω_max / s_×`),
+and no block holds more than `w c`. Under a bound each serving block contributes the least of its cuts (the local
+minimum), and the dark leaves `q_U(|A[L_dark]|)`:
 
-where `μ` is the compute the algorithm needs to reach the target, in multiples of the reference algorithm's (the
-working draft's `|C_{0,m}(G)|/T_0`), and the other unaccounted compute (`ε_undecl`, `ε_gap`, `ε_skip`, `ε_break`) is
-the free FLOPs inside `g`.
+    Σ_v ω_v ≤ Σ_S min{q_T(c_S, k_S), n_S q_T(c, k) + q_U(S)} + q_U(dark)
 
-This module knows no GPU, protocol or training class: `regimes` builds the partition from the actual datacenter,
-`classes` and `attacks` give allowances, and `families` the algorithm's profile.
+With `aggregate=True` the minimum is of the global sums instead (each cut name summed over every serving block), the
+bound to use where only aggregate bounds exist. Remote has no wipe or certifier, so its serving blocks are a server over
+the horizon with only the inference cut. An attack is a construction, so it is evaluated on a serving block's *layout*
+(what a protocol-abiding strategy gets), at the share `mfu` of the gates a construction uses, and the dark leaves at
+theirs.
+
+ρ is the circuit-size slowdown, `|A| / T_0` for the actual circuit `A` that reaches the target: the bound's weight per
+gate of the inventory, against the reference's `w` per gate, gives
+
+    ρ ≥ μ / (ε_dark + (1 − ε_dark) g),   g = Σ_S n_S · share_S / Σ_S n_S
+
+with `share_S` each serving block's local minimum over its own weight at capacity, `w c_S`, and `μ` the gates the
+algorithm needs in multiples of the reference's. The time to the target is then `T ≥ ρ T_0 / Φ_total`, the idealized
+normalization (the reference at full capacity; `scenario.Scenario.seconds`).
+
+This module knows no GPU, protocol or training class: `envelopes` builds the serving blocks from the prior,
+`classes` and `attacks` give the caps, and `families` the algorithm's profile.
 """
 
 from __future__ import annotations
@@ -33,23 +44,23 @@ from typing import Literal
 
 @dataclass(frozen=True)
 class Budget:
-    """What one block may use: the FLOPs it runs, the novel bits that enter it, and the bits that may cross its
-    narrowest declared forward cut (`math.inf` where the policy declares none: an NCI block; an episode of the proof of
-    forward computation, whose operators form a one-way chain, has `n_max` positions times the write allowance)."""
+    """`(c, k)`: a block's gates and its unregistered input bits, and the bits that may cross its narrowest declared
+    forward cut (`math.inf` where the policy declares none: an inference block; an episode of the proof of forward
+    computation, whose operators form a one-way chain, has `n_max` positions times the write allowance)."""
 
-    compute: float
+    gates: float
     inputs: float
     cut: float = math.inf
 
 
-#: The most counted products one block with this budget finishes: a cap for a bound, a construction for an attack.
-#: `math.inf` is no cap (a bound whose premises fail at this budget).
-Allowance = Callable[[Budget], float]
+#: `q_T(c, k)`: the most counted weight one block with this budget holds, a cap for a bound and a construction for an
+#: attack. `math.inf` is no cap (a class whose premises fail at this budget).
+Cap = Callable[[Budget], float]
 
 
 @dataclass(frozen=True)
 class Blocks:
-    """`count` blocks of one kind in a region, each with `budget`."""
+    """`count` blocks of one kind in a serving block, each with `budget`."""
 
     kind: str
     budget: Budget
@@ -58,40 +69,43 @@ class Blocks:
 
 @dataclass(frozen=True)
 class Cut:
-    """One way of covering a region: its budgeted blocks, and its free FLOPs by source, valid under `cites` (the Lean
-    guarantees and premises that make every FLOP of the region either in a block or free)."""
+    """One valid partition of a serving block: its blocks, and its uncertified gates by route (`U`, which no block
+    constrains), valid under `cites` (the Lean guarantees and premises that put every gate in a block or in `U`)."""
 
     name: str
     blocks: tuple[Blocks, ...] = ()
-    free: Mapping[str, float] = field(default_factory=dict)
+    uncertified: Mapping[str, float] = field(default_factory=dict)
     cites: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
-class Region:
-    """`count` regions of one kind over the horizon, each running `compute` FLOPs when unencumbered: its cuts (upper
-    bounds, for bounds) and its layout (what a protocol-abiding strategy gets, for attacks; None: unconstrained)."""
+class ServingBlock:
+    """`count` serving blocks of one kind over the horizon, each of `gates` (`c_S`, at capacity): its cuts (the
+    arguments of the bound's minimum) and its layout (what a protocol-abiding strategy gets, for attacks; None:
+    unconstrained), and `mfu`, the share of its gates a construction uses."""
 
     name: str
-    compute: float
+    gates: float
     count: float
     cuts: tuple[Cut, ...]
     layout: Cut | None = None
+    mfu: float = 1.0
 
 
 @dataclass(frozen=True)
 class Partition:
-    """The monitored fleet over the horizon as regions, and `ε_dark`, the dark pool's share of the adversary's training
-    rate outside them."""
+    """The actual circuit as serving blocks, and the dark leaves: `eps_dark` of the inventory's capacity, of which a
+    construction uses `dark_mfu`."""
 
-    regions: tuple[Region, ...]
+    serving: tuple[ServingBlock, ...]
     eps_dark: float
+    dark_mfu: float = 1.0
 
 
 @dataclass(frozen=True)
 class Share:
-    """What one region contributes, as a share of its unencumbered products: the total, the cut that set it, and the
-    cut's terms (by block kind and free source)."""
+    """What one serving block holds, as a share of its weight at capacity (`w c_S`): the total, the cut that set it,
+    and the cut's terms (by block kind and uncertified route)."""
 
     value: float
     cut: str
@@ -101,63 +115,102 @@ class Share:
 Side = Literal["bound", "attack"]
 
 
-def share(region: Region, allowance: Allowance, kappa: float, side: Side = "bound") -> Share:
-    """Under a bound, the least of `region`'s cuts; under an attack, its layout; never more than its own compute."""
-    full = kappa * region.compute / 2
-    best = Share(1.0, "compute", {"compute": 1.0})
-    if full <= 0:
+def terms(block: ServingBlock, cut: Cut, cap: Cap, w: float) -> dict[str, float]:
+    """`cut`'s argument of the minimum, term by term, over `w c_S`: each block kind's `n · min(q(c, k), w c)` and each
+    route's `q_U(U) = w U`."""
+    full = w * block.gates
+    out = {b.kind: b.count * min(cap(b.budget), w * b.budget.gates) / full for b in cut.blocks}
+    for route, gates in cut.uncertified.items():
+        out[route] = out.get(route, 0.0) + w * gates / full
+    return out
+
+
+def local(block: ServingBlock, cap: Cap, w: float, side: Side = "bound") -> Share:
+    """The serving-block bound's local minimum: under a bound, the least of `block`'s cuts; under an attack, its layout
+    at `mfu`. Never more than the block's own gates hold (`w c_S`, or `mfu` of it for a construction)."""
+    ceiling = 1.0 if side == "bound" else block.mfu
+    best = Share(ceiling, "capacity", {"capacity": ceiling})
+    if block.gates <= 0:
         return best
-    for cut in region.cuts if side == "bound" else (region.layout,) if region.layout else ():
-        terms = {b.kind: b.count * min(allowance(b.budget), kappa * b.budget.compute / 2) / full for b in cut.blocks}
-        for source, flops in cut.free.items():
-            terms[source] = terms.get(source, 0.0) + kappa * flops / 2 / full
-        total = math.fsum(terms.values())
+    for cut in block.cuts if side == "bound" else (block.layout,) if block.layout else ():
+        t = terms(block, cut, cap, w)
+        total = math.fsum(t.values())
         if total < best.value:
-            best = Share(total, cut.name, terms)
+            best = Share(total, cut.name, t)
+    return best
+
+
+def aggregate(partition: Partition, cap: Cap, w: float) -> dict[str, Share]:
+    """The minimum of the global bounds: each cut name's terms summed over every serving block (a block without that
+    cut, or whose cut holds more than its capacity, at its capacity), the least of those sums, as each block's share."""
+    capacity = Share(1.0, "capacity", {"capacity": 1.0})
+    weights = {b.name: b.count * b.gates for b in partition.serving}
+    best: dict[str, Share] = {b.name: capacity for b in partition.serving}
+    best_total = math.fsum(weights.values())
+    for name in sorted({c.name for b in partition.serving for c in b.cuts}):
+        shares = {}
+        for b in partition.serving:
+            cut = next((c for c in b.cuts if c.name == name), None)
+            t = terms(b, cut, cap, w) if cut and b.gates > 0 else {}
+            v = math.fsum(t.values())
+            shares[b.name] = Share(v, name, t) if cut and v < 1.0 else capacity
+        s = math.fsum(weights[n] * v.value for n, v in shares.items())
+        if s < best_total:
+            best, best_total = shares, s
     return best
 
 
 @dataclass(frozen=True)
 class Slowdown:
-    """ρ for one algorithm under one allowance: `rho = efficiency / (ε_dark + (1 − ε_dark) g)`, with each region's share
-    and `g`'s terms summed over regions (each a share of the monitored fleet's unencumbered products)."""
+    """ρ for one algorithm under one cap: `rho = efficiency / (dark + (1 − ε_dark) g)`, with each serving block's
+    share and `g`'s terms summed over serving blocks (each a share of the monitored fleet's weight at capacity).
+    `dark` is the dark leaves' part of the inventory's weight at capacity: `ε_dark` under a bound (`q_U(dark)`), and
+    `ε_dark` times what a construction uses of them under an attack."""
 
     rho: float
     g: float
     eps_dark: float
+    dark: float
     efficiency: float
-    regions: Mapping[str, Share]
+    serving: Mapping[str, Share]
     terms: Mapping[str, float]
 
     @property
     def monitored(self) -> float:
-        """The share of the adversary's training done on monitored compute: the protocols do their job for this
-        algorithm when it is small (`g ≪ d`), and not when it is near 1."""
-        rate = self.eps_dark + (1 - self.eps_dark) * self.g
+        """The share of the adversary's counted weight held on monitored gates: the protocols do their job for this
+        algorithm when it is small (`g ≪ ε_dark`), and not when it is near 1."""
+        rate = self.dark + (1 - self.eps_dark) * self.g
         return (1 - self.eps_dark) * self.g / rate if rate > 0 else 0.0
 
 
-def slowdown(partition: Partition, allowance: Allowance, kappa: float, efficiency: float = 1.0,
-             side: Side = "bound") -> Slowdown:
-    weights = {r.name: r.count * r.compute for r in partition.regions}
+def slowdown(partition: Partition, cap: Cap, w: float, efficiency: float = 1.0, side: Side = "bound",
+             aggregate_only: bool = False) -> Slowdown:
+    """ρ from the serving-block bound: each serving block's local minimum (or, with `aggregate_only`, the minimum of
+    the global sums), and the dark leaves."""
+    weights = {b.name: b.count * b.gates for b in partition.serving}
     total = math.fsum(weights.values())
-    shares = {r.name: share(r, allowance, kappa, side) for r in partition.regions}
-    terms: dict[str, float] = {}
+    if aggregate_only and side == "bound":
+        shares = aggregate(partition, cap, w)
+    else:
+        shares = {b.name: local(b, cap, w, side) for b in partition.serving}
+    out: dict[str, float] = {}
     for name, s in shares.items():
         for term, v in s.terms.items():
-            terms[term] = terms.get(term, 0.0) + weights[name] * v / total
+            out[term] = out.get(term, 0.0) + weights[name] * v / total
     g = math.fsum(weights[n] * s.value for n, s in shares.items()) / total if total else 0.0
-    return Slowdown(rho(partition.eps_dark, g, efficiency), g, partition.eps_dark, efficiency, shares, terms)
+    dark = partition.eps_dark * (1.0 if side == "bound" else partition.dark_mfu)
+    return Slowdown(rho(dark, g, efficiency, partition.eps_dark), g, partition.eps_dark, dark, efficiency, shares,
+                    out)
 
 
-def rho(eps_dark: float, g: float, efficiency: float = 1.0) -> float:
-    """The slowdown when an `ε_dark` share of the training rate runs unencumbered and the rest at `g` of its
-    unencumbered rate."""
-    rate = eps_dark + (1 - eps_dark) * g
+def rho(dark: float, g: float, efficiency: float = 1.0, eps_dark: float | None = None) -> float:
+    """The size slowdown when the dark leaves hold `dark` of the inventory's weight at capacity and the monitored
+    `1 − ε_dark` hold `g` of theirs (`eps_dark` defaults to `dark`)."""
+    rate = dark + (1 - (dark if eps_dark is None else eps_dark)) * g
     return efficiency / rate if rate > 0 else math.inf
 
 
-def least(*allowances: Allowance) -> Allowance:
-    """Several bounds on the same block at once: each caps the same counted products, so the least of them does, under
+def least(*caps: Cap) -> Cap:
+    """Several bounds on the same block at once: each caps the same counted weight, so the least of them does, under
     the union of their premises."""
-    return lambda budget: min((a(budget) for a in allowances), default=math.inf)
+    return lambda budget: min((a(budget) for a in caps), default=math.inf)
