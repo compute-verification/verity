@@ -181,6 +181,17 @@ class SmPartition:
             self._rest_ctx = self._green(self._rest)
         return self._stream(self._rest_ctx, priority)
 
+    @contextlib.contextmanager
+    def current(self) -> Any:
+        """The partition's green context as this thread's current context, the one the runtime resolves a kernel in: a
+        graph captured on ``stream`` takes kernel node parameters only from it (the primary context's are refused)."""
+        ctx = self.ok(self.drv.cuCtxFromGreenCtx(self._ctx))
+        self.ok(self.drv.cuCtxPushCurrent(ctx))
+        try:
+            yield
+        finally:
+            self.ok(self.drv.cuCtxPopCurrent())
+
 
 class Plan:
     """What a run's ``context`` and ``layout`` fix, on ``device`` (a CUDA device, or ``"host"`` for the engine's host twin).
@@ -568,7 +579,8 @@ class StepCommitter:
         with plan.side():
             gr = plan.graph(self, grp, tensors)
             gr.addr.copy_(torch.tensor([base, stride], dtype=torch.int64).pin_memory(), non_blocking=True)
-            plan.engine.rekey(gr.graph.raw_cuda_graph_exec(), gr.nodes, gr.n, self.salts.key)
+            with plan.partition.current() if plan.partition else contextlib.nullcontext():
+                plan.engine.rekey(gr.graph.raw_cuda_graph_exec(), gr.nodes, gr.n, self.salts.key)
             gr.graph.replay()
             done = torch.cuda.Event()
             done.record(plan.stream)

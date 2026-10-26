@@ -310,18 +310,24 @@ int sxr_graph_leaf_nodes(void* graph, void** out, uint32_t max) {
 }
 
 // Each of n leaf nodes (sxr_graph_leaf_nodes) in the graph's instantiation (a cudaGraphExec_t) to salt under key (eight
-// words) from its next launch on; every other argument stays as captured.
+// words) from its next launch on; every other argument stays as captured. The current context is the one the graph was
+// captured in. A refusal is returned, and not left for the next launch's cudaGetLastError.
 int sxr_graph_rekey(void* exec, void* const* nodes, uint32_t n, const uint32_t* key) {
   for (uint32_t i = 0; i < n; ++i) {
     cudaKernelNodeParams p;
     int rc = cudaGraphKernelNodeGetParams((cudaGraphNode_t)nodes[i], &p);
-    if (rc) return rc;
-    LeafArgs a = *static_cast<const LeafArgs*>(p.kernelParams[0]);
-    std::memcpy(a.key, key, sizeof a.key);
-    void* args[] = {&a};
-    p.kernelParams = args;
-    p.extra = nullptr;
-    if ((rc = cudaGraphExecKernelNodeSetParams((cudaGraphExec_t)exec, (cudaGraphNode_t)nodes[i], &p))) return rc;
+    if (!rc) {
+      LeafArgs a = *static_cast<const LeafArgs*>(p.kernelParams[0]);
+      std::memcpy(a.key, key, sizeof a.key);
+      void* args[] = {&a};
+      p.kernelParams = args;
+      p.extra = nullptr;
+      rc = cudaGraphExecKernelNodeSetParams((cudaGraphExec_t)exec, (cudaGraphNode_t)nodes[i], &p);
+    }
+    if (rc) {
+      cudaGetLastError();
+      return rc;
+    }
   }
   return 0;
 }
