@@ -80,7 +80,7 @@ recursion track, whose outer proof must be a proof of knowledge (DESIGN.md §3).
 
 **It is required for the partial-integrity composition of sampled audits** (§4). Halevi–Micali leaves are statistically
 hiding, so every commit string opens to essentially every value, and plain soundness says nothing about which values a
-unit used. The audit bound defines a faulty unit through extracted values, so it pays the table's knowledge error and a
+unit used. The audit bound defines a faulty proof block through extracted values, so it pays the table's knowledge error and a
 link term per audit.
 
 - **The extractor** (`Knowledge.lean`) works in three steps:

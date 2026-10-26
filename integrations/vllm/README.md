@@ -63,19 +63,19 @@ primitive families through `verity.ml.circuits.codec.register_lazy_family`), low
 lifted / padded Programs (`lifting/`), `workload.py` / `compact.py`, `model.py` (specified computations such as bf16(sqrt(H))),
 and `verity/ml/kernels/`, the independent kernel models the Definitions wrap (numpy / C++ / CUDA models, twins, relation checkers and
 their tables).  Entrypoints: `program.frontend.derive`, `program.registry`.  Never: module paths as identity, hook sets,
-proof-unit policy, model-name tables (`registry/quarantine/` is the by-name residue and only shrinks; the lanes core
+proof-block policy, model-name tables (`registry/quarantine/` is the by-name residue and only shrinks; the lanes core
 binds were promoted into `registry/`).
 `registry/fa3_check_inf.py` is FA3's
 per-iteration `Check_inf` chain (`Attention_v4`), bound under `TargetProfile.fa3_construction = "check-inf-per-iteration"` (the default).
 
 **`query/`** implements the *verification query*: `word.py` (`Q_word_v1{X=16,W=32}`, the query of record: every Call's circuit cut
-into proof units of bounded committed width, on core's `verity.ml.circuits.cut`; `verity/partition/v1` names the partition; its unit rules are
+into proof blocks of bounded committed width, on core's `verity.ml.circuits.cut`; `verity/partition/v1` names the partition; its unit rules are
 shared across processes and runs through `manifest build --unit-rule-cache DIR`, env `VERITY_UNIT_RULE_CACHE`), `module_body.py`
 (Q_module_body_v1, for A/B), `cross_call.py` (the opt-in cross-Call recompute check, `manifest build --cross-call-check`),
 `program_view.py`, `manifest/` (the
 required-value manifest: `format.py` the shared vocabulary, `verify.py` the rebuild-and-compare check of record),
 `query_artifact.py` (query artifact identities), `compare.py` (a v2 manifest against a v1 one), `required.py` (v1
-`IDENTITY_KEY` rows).  Boundary values, proof-unit partitions and dead gates are core's `verity.ml.circuits.boundary`, `verity.ml.circuits.partition`
+`IDENTITY_KEY` rows).  Boundary values, proof-block partitions and dead gates are core's `verity.ml.circuits.boundary`, `verity.ml.circuits.partition`
 and `verity.ml.circuits.liveness`.  Never: execution data, hooks, model names, anything read from a run.
 
 **`correspondence/`** implements *runtime correspondence* as data: `runtime.py` (runtime-correspondence/v1),
@@ -161,7 +161,7 @@ Core (Verity semantics, `verity`):
 - **Call** — one application of a Definition inside a Program (retires "Program row", "instance" in prose; `instances.json.gz` stores Calls).
 - **Value** — an input or output of a Call (retires "Member" in prose; the serialized `member` / `output_member` field keeps its name).
 - **Program** — the sequence of Calls with its dataflow; `program_digest` covers the dataflow only.
-- **verification query** — Q: which sets of Calls are **proof units** (`VU` / `vu_*` in serialized and code names); `Q_module_v1` is called **Q_module_body_v1** in prose
+- **verification query** — Q: which sets of Calls are **proof blocks** (`VU` / `vu_*` in serialized and code names); `Q_module_v1` is called **Q_module_body_v1** in prose
   (units = module bodies, submodule calls excluded; the serialized id stays until a labelled decision).
 - **boundary values** — `⋃_{V∈Q(P)} (in(V) ∪ out(V))`; **required values** = boundary values ∪ prescribed inputs (weights, prompt ids)
   ∪ protocol-required values (sampled ids); **commitment** — the position-identified Merkle roots over the required values;
@@ -199,7 +199,7 @@ Layers and where they live (Draft 3 §12.1):
 | layer | responsibility | today |
 | --- | --- | --- |
 | Program | Definitions, Calls, dataflow, `program_digest` | `verity/ml/definitions/registry`, `verity_vllm/program/frontend` (lowering rules) |
-| query | Q(P), proof units, boundary and required values | `verity_vllm/query` (`module_body`, `word`), `verity_vllm/pipeline/manifest.py` (`verity-vllm manifest`: the manifest of record), `verity_vllm/check/poc_required_interface.py` |
+| query | Q(P), proof blocks, boundary and required values | `verity_vllm/query` (`module_body`, `word`), `verity_vllm/pipeline/manifest.py` (`verity-vllm manifest`: the manifest of record), `verity_vllm/check/poc_required_interface.py` |
 | runtime correspondence | Call ↔ module path / fx node / slot | `verity_vllm/correspondence`, `verity_vllm/program/lifting`, `verity_vllm/correspondence/reader_for_query.py`, `verity_vllm/correspondence/runtime.py` |
 | acquisition | acquisition plan, taps, hooks, collector | `verity_vllm/acquire` (`plan.py` ROUTE_OF_FAMILY, `install.py`, `stage.py`); hazard / analytic owners in `commit/committer/native_collect.py`, `commit/committer/native_host.py`, `commit/committer/hidden_gpu_src/` |
 | observation + resolution | capture log, fold, occurrence resolution | `pipeline/m1_capture.py`, `observe/fold/fold.py`, `check/match/batch_decomp.py` |

@@ -2,7 +2,7 @@
 
 The records, every one in the window's directory but the advice's opening:
 
-* **the circuit** in proof units with its public layout (``circuit.json``), which the registration binds by SHA-512;
+* **the circuit** in proof blocks with its public layout (``circuit.json``), which the registration binds by SHA-512;
 * **the compiler and the advice**, when the circuit depends on run-time choices: the registration's window names the compiler
   (``compiler``: its name and digest, which carries the public cap on the advice's length, and the commit its code is at)
   and the advice's hiding commitment (``advice``: its root and its length in bits, which is charged); the advice is a bit
