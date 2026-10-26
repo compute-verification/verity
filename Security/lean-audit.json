@@ -2918,6 +2918,15 @@
    "assumptions": [],
    "type_hash": "0620c0fb742047ca1143d4ed9d45e9c1a5197c2b1372bd430dcb20b53bb89167"
   },
+  "Accounting.SecurityProofs.Cut.MinCut": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Cut.Units": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Cut.Whole": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.DeclaredCircuitRequirement": {
    "owner": "@compute-accounting",
    "signature": [
@@ -11460,7 +11469,10 @@
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, each window's decisions, hits and order entries (WindowCharge.bits: ChargeCount_v2's whole-window charge, the mirror of window_charge.py's reference_window, every count coded inside the coder) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Whole": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, each window's decisions, hits and order entries (WindowCharge.bits: ChargeCount_v2's whole-window charge, the mirror of window_charge.py's reference_window, every count coded inside the coder) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.SampledLeakAccepted": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with Claims.Sampling.KS at each deployment), and bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts, not runs of the network check's code; it is NetTiming.sampledLeak_reg's statement, which charges the free inputs outside each statement's registered inputs (freeInputs \\ reg, at AsReg), since RAcc pins the inputs to the trace's committed values.",
-   "NetTiming.SecurityProofs.SampledAuditAccepted": "frozen (no-function): It is stated over a sampling deployment's knowledge soundness (Claims.Sampling.KS, its one hypothesis) and the circuit's Program (circuitProgram), not runs of the network check's code: it carries an accepted sampled audit to RAcc delta (the faulty set in M_delta, none of it drawn all, and Accepted with the faulty units' committed gates as advice), the runs EncardAccSeqsSampledLe counts."
+   "NetTiming.SecurityProofs.SampledAuditAccepted": "frozen (no-function): It is stated over a sampling deployment's knowledge soundness (Claims.Sampling.KS, its one hypothesis) and the circuit's Program (circuitProgram), not runs of the network check's code: it carries an accepted sampled audit to RAcc delta (the faulty set in M_delta, none of it drawn all, and Accepted with the faulty units' committed gates as advice), the runs EncardAccSeqsSampledLe counts.",
+   "Accounting.SecurityProofs.Cut.MinCut": "frozen (conjecture,no-function): It is a consequence of the named open conjecture EncodeChainHardness, over every circuit of the gate model and every cut of it that holds its writes (Accounting.Gates.cut), not a property of a Lean function: the property's check has no Lean code yet.",
+   "Accounting.SecurityProofs.Cut.Units": "frozen (no-function): A bound on the units of every circuit of the gate model's cut (Accounting.Gates.cut) by its side's units in the circuit, not a property of a Lean function: the property's census check has no Lean code yet.",
+   "Accounting.SecurityProofs.Cut.Whole": "frozen (no-function): The trivial cut of every circuit of the gate model (Accounting.Gates.cut at every gate) has its units and run-input bits and no boundary, not a property of a Lean function: the property's census check has no Lean code yet."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
