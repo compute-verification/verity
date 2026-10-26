@@ -17,7 +17,6 @@
     {"file": "verity_vllm/check/gates.py", "kind": "def-name", "symbol": "<module>", "detail": "gate_G8"},
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "def-name", "symbol": "<module>", "detail": "_runs_fast"},
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "module-name", "symbol": "<module>", "detail": "global_match_fast"},
-    {"file": "verity_vllm/check/replay/replay.py", "kind": "doc-date", "symbol": "<module>", "detail": "date"},
     {"file": "verity_vllm/pipeline/admission_planner.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "M-nnnn", "count": 2},
     {"file": "verity_vllm/pipeline/admission_planner.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 4},
     {"file": "verity_vllm/pipeline/admission_planner.py", "kind": "doc-round", "symbol": "gap_accounting", "detail": "R1N"},

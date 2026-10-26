@@ -223,12 +223,9 @@ def test_run_config_dry_run_resolves_b7_and_forwards_the_engine_arg():
         c = cmds[st]
         assert c[c.index("--case") + 1] == "B7" and "--engine-arg=gpu_memory_utilization=0.95" in c, (st, c)
     assert "--verify-weights" in cmds["capture"]
-    for st in ("resolve", "compare", "fold", "root_policy", "wiring", "replay_a", "replay_chain"):
+    for st in ("resolve", "fold", "fold_2"):
         c = cmds[st]
         assert c[c.index("--profile") + 1] == "derived_B7", (st, c)
-    assert not any(st.startswith("replay_b_step") for st in cmds)
-    rp = cmds["root_policy"]
-    assert rp[rp.index("--safetensors") + 1] == "/ck/snap/model*.safetensors"                 # 4 shards: model-0000{1..4}-of-00004.safetensors
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -253,8 +250,8 @@ def _weights_intervals(C):
 
 
 def test_serve_family_is_serve_v4_for_a_tied_and_an_untied_config():
-    """Every dense profile's serving-family reference is the registered `Serve_v4` (compare_structure's default: BN by the FA2 rule,
-    C without BN).  An untied checkpoint (B7) has its own `lm_head` field after `cos_sin` in `b1.weights_type`; a tied one has none."""
+    """Every dense profile's serving-family reference is the registered `Serve_v4` (BN by the FA2 rule, C without
+    BN).  An untied checkpoint (B7) has its own `lm_head` field after `cos_sin` in `b1.weights_type`; a tied one has none."""
     from verity_vllm.engine.profiles import gen_ov_easy_family as F
     assert B7.SERVE_FAMILY is F.serve_family
     untied, tied = F.serve_family(B7.C), F.serve_family(L.C)

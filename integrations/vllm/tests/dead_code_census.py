@@ -71,8 +71,7 @@ PROTECTED = (
 
 #: row_pod.sh's Match runs run_config with `--skip census,...,golden,...`: the modules those stages would `-m` are statically reachable
 #: (run_config's stage table names them) but never run by the live launcher.  Reported, not deleted.
-RUN_CONFIG_SKIPPED_STAGE_MODULES = ("verity_vllm.properties.census", "verity_vllm.properties.noninterference", "verity_vllm.check.fold_compare",
-                                    "verity_vllm.check.root_policy", "verity_vllm.properties.golden", "verity_vllm.check.operand_provenance")
+RUN_CONFIG_SKIPPED_STAGE_MODULES = ("verity_vllm.properties.census", "verity_vllm.properties.noninterference", "verity_vllm.properties.golden")
 
 #: a circuit-check sidecar (`circuit_check.sidecars.SUFFIX`, which this suite cannot import): its name is no module name, so nothing
 #: imports it; circuit-check's discovery (`sidecars.discover`) loads it by path
