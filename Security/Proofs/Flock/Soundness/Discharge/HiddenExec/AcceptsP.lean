@@ -109,7 +109,7 @@ theorem setupTables_specP (hh : tags.hiddenOutputs = true)
 
 /-- **flock-verify's acceptance at the verifier's public inputs, table by table**: under hidden outputs, when
 `AcceptsP I own t`, every table's statement is its `SpecP` at `own`. -/
-theorem acceptsP_specP {I : Inputs} {own : Option ByteArray} {t : Transcript} (hh : I.tags.hiddenOutputs = true)
+theorem acceptsP_specP {I : Inputs} {own : Option ByteArray} {t : Exec.Transcript} (hh : I.tags.hiddenOutputs = true)
     (h : AcceptsP I own t) :
     ∃ spec sts, setupOfP I own t.record = .ok (spec, sts) ∧
       Flock.verify spec (sts.map Flock.Setup.ofCircuit) t.record t.proofs = .ok () ∧ 0 < sts.size ∧

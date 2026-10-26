@@ -277,6 +277,6 @@ theorem inVal_public {c : Circuit} {pi : HmIn.Ports} {pub : Public} {b k jj i : 
     (hq : (pi.leaves.getD (k % c.upv) #[]).getD jj (-1) = q) (hq0 : 0 ≤ q) :
     inVal c pi pub b k jj = pub.outputs.getD (i * pi.words + q.toNat) 0 := by
   simp only [inVal, hk, ↓reduceIte, hi]
-  rw [hq, if_pos hq0]
+  simp only [hq, ge_iff_le, hq0, ↓reduceIte]
 
 end FlockSoundness.Discharge.Layout
