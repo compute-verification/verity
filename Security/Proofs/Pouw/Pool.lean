@@ -22,11 +22,16 @@ union bound, at `ln(G/δ)` a replica.
   `SAKMatmul` gives, yet all pass together with probability 1/2, and two of them have a product averaging 2. The
   pointwise premise refuses them (`parity_pointwise`).
 * **Pooling replicas by convexity** (`prob_convex_pool`, `fleet_convex_luck`; RT-POOL's RP1): without a new premise,
-  each replica's own moment (`WorkSound`'s rounds, average at most 1 under `SAKMatmul`, against advice that reads
-  every other replica's coins) bounds the fleet's total shortfall at `ln(1/δ)` rather than `ln(G/δ)`: the weights
-  `1/η` put the total's exponential below the replicas' mixture, which needs no independence between them. The bound
-  is on the total, and its rate is a replica's: the total's share stays `ln(1/δ)/(η q)`, not `ln(1/δ)/(η G q)`.
-  That is the best per-replica moments give (`convex_pool_tight`): replicas that cheat on one shared coin attain it.
+  each replica's own moment (`expect_replica_rounds`: `WorkSound`'s rounds, average at most 1 under `SAKMatmul`,
+  against advice that reads every other replica's coins) bounds the fleet's total shortfall at `ln(1/δ)` rather than
+  `ln(G/δ)`: the weights `1/η` put the total's exponential below the replicas' mixture, which needs no independence
+  between them. The bound is on the total, and its rate is a replica's: the total's share stays `ln(1/δ)/(η q)`, not
+  `ln(1/δ)/(η G q)`. That is the best per-replica moments give (`convex_pool_tight`): replicas that cheat on one
+  shared coin attain it.
+* **On the accepted set** (`prob_convex_pool_accepted`, `fleet_convex_luck_accepted`; RT-POOL's RP24): a failed
+  replica voids only its own period, and one Markov bound covers every set `S` of accepted replicas at once, at
+  `Λ_S (ln (Λ / Λ_S) + t)` for `Λ_S = ∑_{u ∈ S} 1 / η u`: at equal rates, `ln(G/(s δ))/(η q)` of the accepted credit
+  at `s` accepted replicas.
 -/
 
 namespace Pouw.SecurityProofs.Pool
@@ -474,21 +479,16 @@ theorem prob_convex_pool {Ω ι : Type*} [Fintype Ω] [Fintype ι] [Nonempty ι]
       _ ≤ ∑ u, w u * M u ω := Finset.sum_le_sum fun u hu => by
           rw [smul_eq_mul]; exact mul_le_mul_of_nonneg_left (hZ u ω hA) (hw0 u hu)
 
-/-- **The fleet's luck by convexity**, at `FleetSound`'s quantifier: replica `u`'s round `w` has a nonnegative factor
-of its advice and its own coin, averaging at most 1 over that coin at every advice (`WorkSound`'s round), and its
-advice reads its own coins before `w` and every other replica's coins. Where `A` holds and each replica's rated
-shortfall has its exponential below its rounds' product, the replicas' total shortfall exceeds `t · ∑ u, 1 / η u` with
-probability at most `e^{-t}`. -/
-theorem fleet_convex_luck {Ω Adv : Type} [Fintype Ω] {N k : ℕ} [NeZero N]
+/-- **A replica's moment at `FleetSound`'s quantifier**: replica `u`'s round `w` has a nonnegative factor of its
+advice and its own coin, averaging at most 1 over that coin at every advice (`WorkSound`'s round), and its advice
+reads its own coins before `w` and every other replica's coins. Then the replica's rounds' product averages at most
+1 over every replica's coins. -/
+theorem expect_replica_rounds {Ω Adv : Type} [Fintype Ω] {N k : ℕ}
     (adv : Fin N → (Fin N → Fin k → Ω) → Fin k → Adv)
     (hadv : ∀ u x x' w, (∀ v : Fin k, v < w → x u v = x' u v) → (∀ u', u' ≠ u → x u' = x' u') →
       adv u x w = adv u x' w)
     (F : Fin N → Fin k → Adv → Ω → ℝ) (h0 : ∀ u w s ω, 0 ≤ F u w s ω) (h1 : ∀ u w s, expect (F u w s) ≤ 1)
-    (η : Fin N → ℝ) (hη : ∀ u, 0 < η u) (D : Fin N → (Fin N → Fin k → Ω) → ℝ) (A : (Fin N → Fin k → Ω) → Prop)
-    (hZ : ∀ u x, A x → Real.exp (η u * D u x) ≤ ∏ w, F u w (adv u x w) (x u w)) (t : ℝ) :
-    prob (fun x => A x ∧ t * ∑ u, 1 / η u ≤ ∑ u, D u x) ≤ Real.exp (-t) := by
-  refine prob_convex_pool (fun u x => ∏ w, F u w (adv u x w) (x u w)) D η hη
-    (fun u x => Finset.prod_nonneg fun w _ => h0 _ _ _ _) (fun u => ?_) A hZ t
+    (u : Fin N) : expect (fun x : Fin N → Fin k → Ω => ∏ w, F u w (adv u x w) (x u w)) ≤ 1 := by
   let e := Equiv.funSplitAt u (Fin k → Ω)
   have hu : ∀ a y, e.symm (a, y) u = a := fun a y => by simp [e, Equiv.funSplitAt, Equiv.piSplitAt]
   have hne : ∀ a a' y u', u' ≠ u → e.symm (a, y) u' = e.symm (a', y) u' := fun a a' y u' h => by
@@ -500,6 +500,101 @@ theorem fleet_convex_luck {Ω Adv : Type} [Fintype Ω] {N k : ℕ} [NeZero N]
     (F u) (h0 u) (h1 u)
   simp only [hu] at hr ⊢
   exact hr
+
+/-- **The fleet's luck by convexity**, at `FleetSound`'s quantifier (`expect_replica_rounds`): where `A` holds and
+each replica's rated shortfall has its exponential below its rounds' product, the replicas' total shortfall exceeds
+`t · ∑ u, 1 / η u` with probability at most `e^{-t}`. -/
+theorem fleet_convex_luck {Ω Adv : Type} [Fintype Ω] {N k : ℕ} [NeZero N]
+    (adv : Fin N → (Fin N → Fin k → Ω) → Fin k → Adv)
+    (hadv : ∀ u x x' w, (∀ v : Fin k, v < w → x u v = x' u v) → (∀ u', u' ≠ u → x u' = x' u') →
+      adv u x w = adv u x' w)
+    (F : Fin N → Fin k → Adv → Ω → ℝ) (h0 : ∀ u w s ω, 0 ≤ F u w s ω) (h1 : ∀ u w s, expect (F u w s) ≤ 1)
+    (η : Fin N → ℝ) (hη : ∀ u, 0 < η u) (D : Fin N → (Fin N → Fin k → Ω) → ℝ) (A : (Fin N → Fin k → Ω) → Prop)
+    (hZ : ∀ u x, A x → Real.exp (η u * D u x) ≤ ∏ w, F u w (adv u x w) (x u w)) (t : ℝ) :
+    prob (fun x => A x ∧ t * ∑ u, 1 / η u ≤ ∑ u, D u x) ≤ Real.exp (-t) :=
+  prob_convex_pool (fun u x => ∏ w, F u w (adv u x w) (x u w)) D η hη
+    (fun _ _ => Finset.prod_nonneg fun _ _ => h0 _ _ _ _) (expect_replica_rounds adv hadv F h0 h1) A hZ t
+
+/-- **Pooling the accepted replicas by convexity** (RT-POOL's RP24): ACCEL's verdict is per replica, so a failed
+replica voids only its own period and the others are credited. One Markov bound on `prob_convex_pool`'s mixture covers
+every set `S` of accepted replicas at once, with no union over sets: on `S`, Jensen within `S` gives
+`∑_{u ∈ S} D u ≤ Λ_S (ln (Λ / Λ_S) + t)`, where `Λ_S = ∑_{u ∈ S} 1 / η u` and `Λ = ∑ u, 1 / η u`. At `S` every replica
+it is `prob_convex_pool`. -/
+theorem prob_convex_pool_accepted {Ω ι : Type*} [Fintype Ω] [Fintype ι] [Nonempty ι] (M D : ι → Ω → ℝ)
+    (η : ι → ℝ) (hη : ∀ u, 0 < η u) (hM0 : ∀ u ω, 0 ≤ M u ω) (hM : ∀ u, expect (M u) ≤ 1)
+    (acc : ι → Ω → Prop) (hZ : ∀ u ω, acc u ω → Real.exp (η u * D u ω) ≤ M u ω) (t : ℝ) :
+    prob (fun ω => ∃ S : Finset ι, (∀ u ∈ S, acc u ω) ∧ S.Nonempty ∧
+      (∑ u ∈ S, 1 / η u) * (Real.log ((∑ u, 1 / η u) / ∑ u ∈ S, 1 / η u) + t) ≤ ∑ u ∈ S, D u ω) ≤
+      Real.exp (-t) := by
+  classical
+  set L := ∑ u, 1 / η u
+  have hLpos : 0 < L := Finset.sum_pos (fun u _ => one_div_pos.mpr (hη u)) Finset.univ_nonempty
+  set w : ι → ℝ := fun u => 1 / η u / L with hw
+  have hw0 : ∀ u, 0 ≤ w u := fun u => div_nonneg (one_div_pos.mpr (hη u)).le hLpos.le
+  have hw1 : ∑ u, w u = 1 := by rw [hw, ← Finset.sum_div, div_self hLpos.ne']
+  refine prob_le_of_expect_le_one (f := fun ω => ∑ u, w u * M u ω)
+    (fun ω => Finset.sum_nonneg fun u _ => mul_nonneg (hw0 u) (hM0 u ω)) ?_ t ?_
+  · rw [Pouw.RelativeSecurity.expect_sum]
+    calc ∑ u, Pouw.RelativeSecurity.expect (fun ω => w u * M u ω)
+          = ∑ u, w u * Pouw.RelativeSecurity.expect (M u) := by
+          simp only [Pouw.RelativeSecurity.expect_mul_left]
+      _ ≤ ∑ u, w u * 1 := Finset.sum_le_sum fun u _ => mul_le_mul_of_nonneg_left (hM u) (hw0 u)
+      _ = 1 := by simp only [mul_one, hw1]
+  · rintro ω ⟨S, hacc, hne, hD⟩
+    set LS := ∑ u ∈ S, 1 / η u
+    have hLSpos : 0 < LS := Finset.sum_pos (fun u _ => one_div_pos.mpr (hη u)) hne
+    set v : ι → ℝ := fun u => 1 / η u / LS with hv
+    have hv0 : ∀ u ∈ S, 0 ≤ v u := fun u _ => div_nonneg (one_div_pos.mpr (hη u)).le hLSpos.le
+    have hv1 : ∑ u ∈ S, v u = 1 := by rw [hv, ← Finset.sum_div, div_self hLSpos.ne']
+    have hmix : ∑ u ∈ S, v u • (η u * D u ω) = (∑ u ∈ S, D u ω) / LS := by
+      rw [Finset.sum_div]
+      refine Finset.sum_congr rfl fun u _ => ?_
+      rw [hv, smul_eq_mul]
+      field_simp [(hη u).ne']
+    have hjensen : Real.exp ((∑ u ∈ S, D u ω) / LS) ≤ ∑ u ∈ S, v u * Real.exp (η u * D u ω) := by
+      calc Real.exp ((∑ u ∈ S, D u ω) / LS) = Real.exp (∑ u ∈ S, v u • (η u * D u ω)) := by rw [hmix]
+        _ ≤ ∑ u ∈ S, v u • Real.exp (η u * D u ω) :=
+            convexOn_exp.map_sum_le hv0 hv1 fun _ _ => Set.mem_univ _
+        _ = ∑ u ∈ S, v u * Real.exp (η u * D u ω) := by simp only [smul_eq_mul]
+    have hratio : 0 < L / LS := div_pos hLpos hLSpos
+    have ht : Real.log (L / LS) + t ≤ (∑ u ∈ S, D u ω) / LS := by
+      rw [le_div_iff₀ hLSpos, mul_comm]
+      exact hD
+    have hc : 0 ≤ LS / L := div_nonneg hLSpos.le hLpos.le
+    have key : Real.exp t = LS / L * Real.exp (Real.log (L / LS) + t) := by
+      rw [Real.exp_add, Real.exp_log hratio, ← mul_assoc, div_mul_div_comm, mul_comm LS L,
+        div_self (mul_pos hLpos hLSpos).ne', one_mul]
+    have hwv : ∀ u, LS / L * (v u * Real.exp (η u * D u ω)) = w u * Real.exp (η u * D u ω) := fun u => by
+      show LS / L * (1 / η u / LS * Real.exp (η u * D u ω)) = 1 / η u / L * Real.exp (η u * D u ω)
+      rw [← mul_assoc, div_mul_div_comm, mul_comm LS (1 / η u), mul_div_mul_right _ _ hLSpos.ne']
+    calc Real.exp t = LS / L * Real.exp (Real.log (L / LS) + t) := key
+      _ ≤ LS / L * Real.exp ((∑ u ∈ S, D u ω) / LS) :=
+          mul_le_mul_of_nonneg_left (Real.exp_le_exp.mpr ht) hc
+      _ ≤ LS / L * ∑ u ∈ S, v u * Real.exp (η u * D u ω) := mul_le_mul_of_nonneg_left hjensen hc
+      _ = ∑ u ∈ S, w u * Real.exp (η u * D u ω) := by
+          rw [Finset.mul_sum]
+          exact Finset.sum_congr rfl fun u _ => hwv u
+      _ ≤ ∑ u ∈ S, w u * M u ω :=
+          Finset.sum_le_sum fun u hu => mul_le_mul_of_nonneg_left (hZ u ω (hacc u hu)) (hw0 u)
+      _ ≤ ∑ u, w u * M u ω :=
+          Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ S)
+            fun u _ _ => mul_nonneg (hw0 u) (hM0 u ω)
+
+/-- `fleet_convex_luck` on the accepted set (RT-POOL's RP24): the same rounds and advice, with each replica's moment
+bound read only where it is accepted. -/
+theorem fleet_convex_luck_accepted {Ω Adv : Type} [Fintype Ω] {N k : ℕ} [NeZero N]
+    (adv : Fin N → (Fin N → Fin k → Ω) → Fin k → Adv)
+    (hadv : ∀ u x x' w, (∀ v : Fin k, v < w → x u v = x' u v) → (∀ u', u' ≠ u → x u' = x' u') →
+      adv u x w = adv u x' w)
+    (F : Fin N → Fin k → Adv → Ω → ℝ) (h0 : ∀ u w s ω, 0 ≤ F u w s ω) (h1 : ∀ u w s, expect (F u w s) ≤ 1)
+    (η : Fin N → ℝ) (hη : ∀ u, 0 < η u) (D : Fin N → (Fin N → Fin k → Ω) → ℝ)
+    (acc : Fin N → (Fin N → Fin k → Ω) → Prop)
+    (hZ : ∀ u x, acc u x → Real.exp (η u * D u x) ≤ ∏ w, F u w (adv u x w) (x u w)) (t : ℝ) :
+    prob (fun x => ∃ S : Finset (Fin N), (∀ u ∈ S, acc u x) ∧ S.Nonempty ∧
+      (∑ u ∈ S, 1 / η u) * (Real.log ((∑ u, 1 / η u) / ∑ u ∈ S, 1 / η u) + t) ≤ ∑ u ∈ S, D u x) ≤
+      Real.exp (-t) :=
+  prob_convex_pool_accepted (fun u x => ∏ w, F u w (adv u x w) (x u w)) D η hη
+    (fun _ _ => Finset.prod_nonneg fun _ _ => h0 _ _ _ _) (expect_replica_rounds adv hadv F h0 h1) acc hZ t
 
 /-- **Convexity pooling is tight against per-replica premises**: `N` replicas that all cheat on one shared coin of
 `n` values each meet `prob_convex_pool`'s premises at `η = 1`, and their total shortfall reaches `N · ln n` with
