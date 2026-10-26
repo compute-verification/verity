@@ -141,7 +141,9 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
         panels.append(("a server window's compute Φ·Δτ·MFU", win.compute))
     ks = _logspace(1e4, 1e13, points)
     data: dict = {"scenario": name, "family": fam.name, "k": ks, "declared_k": k_policy,
-                  "window_k": win.inputs if win else None, "panels": []}
+                  "window_k": win.inputs if win else None,
+                  "slowdown": "κC / (2 a(C, k)); 0 where the statement's premise fails (no cap), ∞ where a = 0",
+                  "panels": []}
     fig, axes = plt.subplots(1, len(panels), figsize=(6.4 * len(panels), 5.2), sharey=True, squeeze=False)
     lines: dict[str, Any] = {}
     top = 10.0
@@ -178,7 +180,9 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
             k_vac = None
             if vacuous is not None:
                 k_vac = ks[0] if vacuous == 0 else analysis.crossing(per_block, 1.0, ks[vacuous - 1], ks[vacuous])
-            fails = next((k for k, y in zip(ks, ys, strict=True) if y == 0), None)
+            j = next((j for j, y in enumerate(ys) if y == 0), None)
+            fails = None if j is None else ks[0] if j == 0 else analysis.crossing(
+                lambda k, f=per_block: float(f(k) == 0), 0.5, ks[j - 1], ks[j])
             panel["classes"][arg.name] = {"status": status, "slowdown": ys, "vacuous_from_k": k_vac,
                                           "premise_fails_from_k": fails,
                                           "at_declared_k": per_block(k_policy),
