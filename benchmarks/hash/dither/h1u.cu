@@ -65,7 +65,9 @@
 //              kh_units_multi's receipts under J10-R's call-scale noise (#3574's form; at the end of this file), with
 //              kh_units_multi_j10r_sm and a served step's seeds from h1r's call table, kh_seeds_j10r_h1r; a call's
 //              workspace is kh_j10r_jw_bytes(M, N, K): kh_j10r_rows_bytes(M, K) but with H1U_JW (its column blocks and
-//              W' once a call, after JX's rows)
+//              W' once a call, after JX's rows); kh_j10r_workspace_bytes(M, N, K, rc) is the size a caller allocates
+//              for either form (rc: kh_units_multi_j10rc's), from the build's own flags, kh_j10r_flags() (1 H1U_JW,
+//              2 H1U_JRC)
 //   kh_units_multi_j10rc(calls, ncalls, units, M, live, mode, stream)   (H1U_JRC) kh_units_multi_j10r's receipts with
 //              each call's column blocks hashed once a call too, its workspace kh_j10r_ws_bytes(M, N, K), its units
 //              H1U_JSWZ row blocks at a time (H1U_JSWZQ: a block's warps a patch of them); built with H1U_JRY = 1 too,
@@ -737,7 +739,7 @@ __host__ __device__ __forceinline__ u64 jx_ad_off(u32 M, u32 K) { return jx_x_of
 // h1jr_x; the unit loads W' in B's place, hashes no block, builds no W' and reads its columns' coins blocks for U (its
 // tail's), and h1umj's and h1umj_sm's units go H1U_JWSWZ row blocks at a time, column block by column block, so a CTA's
 // warps share a column block's W' and a band's X and W' stay in L2; the same receipts. The workspace is
-// kh_j10r_jw_bytes(M, N, K), not kh_j10r_rows_bytes
+// kh_j10r_jw_bytes(M, N, K), not kh_j10r_rows_bytes (kh_j10r_workspace_bytes gives it from kh_j10r_flags)
 #ifndef H1U_JW
 #define H1U_JW 0
 #endif
@@ -2840,9 +2842,10 @@ extern "C" int kh_lanes(const void* A, const void* B, unsigned L, unsigned K, co
 //              seeds.call_seed at the call's first position `call`, receipt_seed at base + u; data is kh_seeds' with
 //              CALL_SEED_TAG in SEED_TAG's place
 //   kh_units_multi_j10r(calls, ncalls, units, M, live, mode, stream)   kh_units_multi's receipts under J10-R: calls
-//              ncalls + 1 UCallR (kh_ucallr_bytes() each), each with its row workspace rws of kh_j10r_rows_bytes(M, K)
-//              bytes; mode 0 both launches, 1 the rows alone, 2 the units alone (on rows a mode 0 or 1 call wrote; with
-//              H1U_JX, h1jr_x's row blocks' X and A_d first, from those rows)
+//              ncalls + 1 UCallR (kh_ucallr_bytes() each), each with its workspace rws of
+//              kh_j10r_workspace_bytes(M, N, K, 0) bytes (kh_j10r_rows_bytes(M, K) but under H1U_JW); mode 0 both
+//              launches, 1 the rows alone, 2 the units alone (on rows a mode 0 or 1 call wrote; with H1U_JX, h1jr_x's
+//              row blocks' X and A_d first, from those rows)
 //   kh_units_multi_j10r_sm(calls, ncalls, units, M, live, q, den, next, stream)   both launches, the units' on the SMs
 //              whose id % den < q alone (h1umj_sm, as kh_units_multi_sm's h1um_sm); kh_units_multi_j10r_smc(.., q, den,
 //              cap, next, stream) with at most cap CTAs an SM besides (as kh_units_multi_smc)
@@ -3477,6 +3480,8 @@ static void jx_launch(const void* calls, unsigned ncalls, unsigned M, const void
 extern "C" unsigned long long kh_j10r_jw_bytes(unsigned M, unsigned N, unsigned K) {
   return H1U_JW ? jw_w_off(M, N, K) + (unsigned long long)N * K : kh_j10r_rows_bytes(M, K);
 }
+// the build's flags kh_j10r_workspace_bytes dispatches on: 1 H1U_JW, 2 H1U_JRC (a caller refuses a bit it doesn't know)
+extern "C" unsigned kh_j10r_flags() { return (H1U_JW ? 1u : 0u) | (H1U_JRC ? 2u : 0u); }
 
 extern "C" int kh_units_multi_j10r(const void* calls, unsigned ncalls, unsigned units, unsigned M, const void* live,
                                    int mode, void* stream) {
@@ -4058,3 +4063,14 @@ extern "C" int kh_units_multi_j10rc_sm(const void* calls, unsigned ncalls, unsig
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
 #endif
+
+// a call's workspace in this build at M rows, the size its caller allocates: with rc, kh_units_multi_j10rc's
+// (kh_j10r_ws_bytes, which kh_units_multi_j10r may run on too; 0 without H1U_JRC), else kh_units_multi_j10r's and its
+// _sm and _smc forms' (kh_j10r_jw_bytes: H1U_JW's column blocks and W' after the rows). Monotone in M, so a workspace
+// of T rows serves any M <= T
+extern "C" unsigned long long kh_j10r_workspace_bytes(unsigned M, unsigned N, unsigned K, int rc) {
+#if H1U_JRC
+  if (rc) return kh_j10r_ws_bytes(M, N, K);
+#endif
+  return rc ? 0 : kh_j10r_jw_bytes(M, N, K);
+}

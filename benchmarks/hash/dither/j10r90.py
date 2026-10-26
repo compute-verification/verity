@@ -18,8 +18,9 @@ receipt_seed; the same call
 by kh_units_multi_j10r_sm on every SM equal on every word; the no-write control (zero units) refused; one bit of the row
 workspace moving exactly row block 0's units, and one bit of unit 0's seed_c moving unit 0 alone (unitsbench.j10r_gate's
 faults, through the rows and units launches alone; under H1U_JW, whose column pass alone reads the call's seed_c, one
-bit of unit 0's sigma_R moving unit 0 alone and one bit of the call's seed_c moving every unit). The sampled units'
-receipts (every build) and z tiles go to
+bit of unit 0's sigma_R moving unit 0 alone and one bit of the call's seed_c moving every unit); the workspace the
+build's own size (j10r_ws.py), no launch writing the sentinel tail past it, and under H1U_JW its last bytes written
+(its W' fills it). The sampled units' receipts (every build) and z tiles go to
 j10r90-check.npz, the rest to j10r90-check.json. Exit 4 if any gate fails.
 
 verify (a CPU node, check's out/ as DIR): every sampled unit's receipt and z against `h1tile.j10r_reference` itself, from
@@ -227,6 +228,7 @@ def gate(lib, jc: JCall, out: torch.Tensor, first: torch.Tensor | None, picks: l
     pk = torch.tensor(picks, device="cuda")
     jc.jseeds.fill_(0x5A5A5A5A5A5A5A5)
     left, as_poison = unwritten(out, launch(mu, seeded=True))
+    ws_end = mu.end_written()[0]
     r: dict = {"units": jc.units, "words": out.shape[1], "poison_left": left, "written_as_poison": as_poison,
                "bad_words": int((out[pk] != ref_t).sum()),
                "vs_base_bad_words": None if first is None else int((out != first).sum())}
@@ -240,6 +242,7 @@ def gate(lib, jc: JCall, out: torch.Tensor, first: torch.Tensor | None, picks: l
     ms = U.MultiJ10R(lib, [(jc, jc.b, out2)], sm=True)
     r["sm_poison_left"], r["sm_written_as_poison"] = unwritten(out2, launch(ms))
     r["sm_vs_units_bad_words"] = int((out2 != keep).sum())
+    r["sm_ws_tail_written"] = ms.tail_written()
     del out2, ms
     poison(out, mu)
     mu.run(units=0)
@@ -280,10 +283,12 @@ def gate(lib, jc: JCall, out: torch.Tensor, first: torch.Tensor | None, picks: l
         r["fault_call_seed_conforming"] = cm.numel() == jc.units
     out.copy_(keep)
     del keep
+    r.update({"ws_bytes": int(mu.rws[0].numel()), "ws_end_written": ws_end, "ws_tail_written": mu.tail_written()})
     r["ok"] = (r["poison_left"] == 0 and r["bad_words"] == 0 and r["vs_base_bad_words"] in (None, 0)
                and r["seed_bad"] == 0 and r["sm_poison_left"] == 0 and r["sm_vs_units_bad_words"] == 0
                and r["control_refused"] and r["fault_rows_conforming"] and r["fault_seed_conforming"]
-               and r.get("fault_call_seed_conforming", True))
+               and r.get("fault_call_seed_conforming", True)
+               and r["ws_tail_written"] == 0 and r["sm_ws_tail_written"] == 0 and (not lib.jw or ws_end > 0))
     return r, got
 
 
