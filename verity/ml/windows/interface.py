@@ -49,8 +49,8 @@ position and path to the value's root; the verifier's ``--registered`` file of t
 root it pinned alone (`registered_reads`), and Lean's registered reads open each row against it. Cuts, tables, roots,
 openings and ingress are refused by the committer until it commits them. A `Read` may also name an output row ``o<j>``:
 that row's words are the parameter's leaves at the pattern's positions (a value a server sends out, its response or a
-wire to another server). It fills no input row, and wires may read the row too; the committer refuses it until it commits
-output-row reads.
+wire to another server). It fills no input row, and wires may read the row too; `members` refuses a circuit that declares
+one until the committer commits output-row reads.
 
 The circuit's blocks (`Blocks`, ``verity/blocks/v1``, the record's ``blocks``) are stated per template and step, never per
 unit: ``proof``, the partition into proof units (its units and partition digest, which the verifier holds to the record's,

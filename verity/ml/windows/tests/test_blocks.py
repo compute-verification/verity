@@ -250,8 +250,13 @@ def test_cmp92s_class_circuit_on_one_server_and_on_two_has_one_inference_and_not
 def test_cmp92s_two_server_split_cuts_every_template_at_the_server_boundary(circuits):
     """With one server the layer row units are one statement (their one wire covers both layers); with two, each template is
     cut where s0's units end, so no statement's units span both servers, and the verifier derives the same members from the
-    descriptor record. The window's blocks are byte-identical under any run."""
+    descriptor record. The window's blocks are byte-identical under any run. The members are the circuits' without their
+    registered reads: `members` fills tables for uncut reads of input rows only, and CMP-92's output-row and cut reads are
+    refused until the committer commits them."""
     cap = 1 << 20
+    with pytest.raises(ValueError, match="whole registered rows"):
+        I.members(circuits[1], cap)
+    circuits = {n: replace(c, registered=None) for n, c in circuits.items()}
     by_template = {n: {} for n in circuits}
     for n, c in circuits.items():
         for m in I.members(c, cap):
