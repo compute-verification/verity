@@ -59,7 +59,6 @@ KNOWN = frozenset({
     "verity_vllm.check.replay.index",
     "verity_vllm.check.replay.opening",
     "verity_vllm.check.weights_of_record",
-    "verity_vllm.commit",
     "verity_vllm.commit.committer.host_retention",
     "verity_vllm.commit.committer.native_collect",
     "verity_vllm.commit.committer.native_host",
