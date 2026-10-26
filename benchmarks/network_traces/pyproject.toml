@@ -22,7 +22,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # proof format with its verifier's reader. A served run's Commit windows are the vLLM integration's window advice, which
 # window_chain joins for n2_advised_zk. n2_advised_zk's period draws take the challenger's coins through one_stage's
 # a5_coins, whose local session is live_challenger's auditor host and serve.py (under its tests' stub).
-# torch_loop_stub.py serves the torch loop's model. chain_record writes the block record's certifier entry by the
+# torch_loop_stub.py serves the toy's model. chain_record writes the block record's certifier entry by the
 # all-protocols runner's block_leg, which test_chain_record holds to the block record's schema on certifier/v0 cases
 # from period_case (the period check's Python mirror, with verity_difftest's decoders), which also re-decides them.
 inputs = ["integrations/vllm/workloads", "integrations/vllm/verity_vllm/__init__.py",
