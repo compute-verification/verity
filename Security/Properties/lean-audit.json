@@ -119,6 +119,10 @@
    "owner": "@memory-accounting",
    "digest": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3"
   },
+  "Pous.P2.Assumptions.P2RingRoundSecure": {
+   "owner": "@memory-accounting",
+   "digest": "98fbba3bae29f20560d86a31473797edc89dc0b1e28c7cde20737d9bf6e4254a"
+  },
   "Pous.Period.RingDevice": {
    "owner": "@memory-accounting",
    "digest": "635c2edca25704b425275a4f2d3944bccd1dfc3878fc051e8b3700d198e7454d"
@@ -496,7 +500,10 @@
    "type_hash": "d9f255e477992784b174c2ec19e62a74285cab29e74c5516ab850ccd97937f29"
   },
   "Pous.EndToEnd.SecurityProofs.drawAtMost": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Pous.EndToEnd.SecurityProofs.drawAtMost : Pous.EndToEnd.DrawAtMost"],
+   "assumptions": [],
+   "type_hash": "832f570a4c56af9684f8d2a66faf7bf1450850c1cf7c94f2f4d52646155c9bfd"
   },
   "Pous.EndToEnd.SecurityProofs.drawExact": {
    "owner": "@memory-accounting",
@@ -511,7 +518,10 @@
    "type_hash": "5dc7c76ddb97e183be16c13ca978691fc8dafb21666007a67234aaa14048fee3"
   },
   "Pous.EndToEnd.SecurityProofs.endToEndRingAt": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Pous.EndToEnd.SecurityProofs.endToEndRingAt : Pous.EndToEnd.EndToEndRingAt"],
+   "assumptions": [],
+   "type_hash": "8a2fa5565cc1fbff11be2e5f537c45bb40d039c5afcc127fdb4bc170ec7cad79"
   },
   "Pous.EndToEnd.SecurityProofs.endToEndRingDemo": {
    "owner": "@memory-accounting"
@@ -523,7 +533,10 @@
    "type_hash": "0cef57124c5093d2f8e3861680cb48d6367ac85be9af5d45d083d6d66c616544"
   },
   "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure : Pous.EndToEnd.EndToEndRingOfRoundSecure"],
+   "assumptions": [],
+   "type_hash": "9004a9310d4f4f332fdcf802e52f38d4ac34a87eba173a2707f1956bef3eba23"
   },
   "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide": {
    "owner": "@memory-accounting"
@@ -547,7 +560,10 @@
    "type_hash": "71902a65dd8a9adc2df40323be3e5de079a94eea74277938847d0dceba81ecad"
   },
   "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt : Pous.EndToEnd.RunCheckAcceptsAt"],
+   "assumptions": [],
+   "type_hash": "d739e355c470adec077c55bcab72e4f9643a5c3b0a930e25382fb477cd500d78"
   },
   "Pous.Period.SecurityProofs.obligationHeld": {
    "owner": "@memory-accounting",
@@ -4622,6 +4638,7 @@
    "guarantees": [
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
     "Pous.EndToEnd.SecurityProofs.honestPassesRing",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
@@ -4629,14 +4646,17 @@
    ]
   },
   "Definitions.Pous.Assumptions.P2": {
-   "digest": "8a18aecc7bb9cd368f2be5b9bc6adc7d410a46202405278812d9a33d566b8e95",
+   "digest": "7ce5b35aeb20506a3871b75ef859a16eeb0bebfbf21df90b9c945e8772a8f770",
    "definitions": {
     "Pous.P2.Assumptions.CoinCommitHides": "cd2e704557c1d6266ff3cb8dde135be3e5538a7c8748cc0f03d743dc30e958cb",
-    "Pous.P2.Assumptions.P2RingAuditSecure": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3"
+    "Pous.P2.Assumptions.P2RingAuditSecure": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3",
+    "Pous.P2.Assumptions.P2RingRoundSecure": "98fbba3bae29f20560d86a31473797edc89dc0b1e28c7cde20737d9bf6e4254a"
    },
    "guarantees": [
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld"
@@ -4663,7 +4683,9 @@
    },
    "guarantees": [
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.honestPassesRing",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -4678,9 +4700,12 @@
     "Pous.pr": "e2d360abdc3bb446124cc63b9261aab7c0e25149c089edabce91272c925d6edb"
    },
    "guarantees": [
+    "Pous.EndToEnd.SecurityProofs.drawAtMost",
     "Pous.EndToEnd.SecurityProofs.drawExact",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.honestPassesRing",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -4707,7 +4732,9 @@
    },
    "guarantees": [
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.honestPassesRing",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -4722,7 +4749,9 @@
    },
    "guarantees": [
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.honestPassesRing",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -4739,7 +4768,9 @@
    },
    "guarantees": [
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.honestPassesRing",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -4764,7 +4795,9 @@
    },
    "guarantees": [
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.honestPassesRing",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -4831,7 +4864,9 @@
    },
    "guarantees": [
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.honestPassesRing",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -4849,6 +4884,16 @@
     "Pous.Mutable.snap": "2b04a49908528f2689ff3a2781d3552a94e34e804f86dcd749831e62b125df70"
    },
    "guarantees": ["Pous.Period.SecurityProofs.obligationHeld"]
+  },
+  "Definitions.Pous.P2.Rounds": {
+   "digest": "565cf5818ebcc7936ff23cea1ba96ea0a57ab03ae5538aeef1c8a1d5c3e81412",
+   "definitions": {
+    "Pous.VarResponderOn": "6f284758c66f2231d7802e1d996c49a0a3beb1071e8754c193cdd823ba0f981d",
+    "Pous.VarResponderOn.step": "813cf4769e42688bdce563b03dbd9d5d80fcca5dd763b11fff69c1751fba1b83",
+    "Pous.varAnswers": "f46e52cc7f22f537498e84dc6d1ae75aef6958d23e60c3df6cb2d0e9fbc0ee5d",
+    "Pous.varPassesOn": "0dc8f405a0c20d1994fa6ddc97d5660fc93c51660f1b89e40982ffb969d4d81e"
+   },
+   "guarantees": ["Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure"]
   },
   "Definitions.Pouw.Basic.Prob": {
    "digest": "942703a432c5fb2594b72b9f7bd38aa8f1cc0a08aff2cdaf5742a1935d9ca690",
@@ -5194,9 +5239,12 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -5473,9 +5521,12 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -5587,9 +5638,12 @@
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -5655,6 +5709,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -5935,9 +5990,12 @@
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -6269,6 +6327,7 @@
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -6319,9 +6378,12 @@
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld"
@@ -6429,11 +6491,15 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "Pous.EndToEnd.SecurityProofs.drawAtMost",
     "Pous.EndToEnd.SecurityProofs.drawExact",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld"
@@ -6452,6 +6518,7 @@
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld"
@@ -6487,6 +6554,7 @@
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld"
@@ -7241,6 +7309,7 @@
    },
    "guarantees": [
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -7282,9 +7351,12 @@
    },
    "guarantees": [
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -7303,7 +7375,9 @@
    },
    "guarantees": [
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.obligationHeld",
@@ -7373,6 +7447,7 @@
    },
    "guarantees": [
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld"
@@ -7430,6 +7505,7 @@
    },
    "guarantees": [
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld"
@@ -8657,6 +8733,7 @@
    },
    "guarantees": [
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -8703,15 +8780,47 @@
     "Pous.EndToEnd.tableStrings": "3f780560c4a6f6ed22c7f24f80f99482d7ad6c870d48f5a69b4cfa663001c65d"
    },
    "guarantees": [
+    "Pous.EndToEnd.SecurityProofs.drawAtMost",
     "Pous.EndToEnd.SecurityProofs.drawExact",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.honestPassesRing",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld"
+   ]
+  },
+  "Properties.Pous.EndToEndAt": {
+   "digest": "b21f67c804ec5b011a7b6914ee924762f8a543de95951448c9725e32ab1a3840",
+   "definitions": {
+    "Pous.EndToEnd.AuditsSetupAt": "4eb6aff7826d6923fb27ddaee4b5d5dc2330e7cc2245fea890a5d9ba60dff270",
+    "Pous.EndToEnd.DrawAtMost": "ed02e446fe21834d9438bb488d9f9210ac033bbf90563241e976e746ecde2a95",
+    "Pous.EndToEnd.EndToEndRingAt": "a0e43954214cebdd4e6b9d2ec6fa098cfe4bcb2a8398d1d7090d2860e5574f0d",
+    "Pous.EndToEnd.EndToEndRingOfRoundSecure": "5bfc910a5712fb8e32074167520d22955b7905e6d9ba3cb4dc16e036cee6d939",
+    "Pous.EndToEnd.PassesAt": "cb7efa4735dfe8ba3ad29374ce336dc52c9efe54a4057c2470a8715459faf7b9",
+    "Pous.EndToEnd.RingServer": "9b59dbc9d6c066c5559b64a88e3064091451e59af51b15260a5a440957b90ade",
+    "Pous.EndToEnd.RingServer.pre": "adc05612bc738e3100e8a68fbecac680767fb625e4d0c937bd5ce4003ec9f897",
+    "Pous.EndToEnd.RingServer.step": "160540a8b5a19c5e214ec0370d6d47d62fcfac9766e5456b53b4d3e9d49f1ebe",
+    "Pous.EndToEnd.RunCheckAcceptsAt": "d3e92b6735624dd79fec006f53ae0e1d3a91821b51179691b5face8c980e92df",
+    "Pous.EndToEnd.SAt": "92254c209ec5e7fec9bbc11616287419e76d44460dcf23cd6003560efdb4749c",
+    "Pous.EndToEnd.ServerAt": "191b3e8b41cf662ef9763dc5a3a00a8b55354afa8342c14858380bec95dae20b",
+    "Pous.EndToEnd.ShapedAt": "857369acc67831231cebd3b4b5d8857402495356de19fd851f766be60ee86fb9",
+    "Pous.EndToEnd.TableBreakAt": "eb392d286b2f089c538b22ad81d52718d02fced90a03279ddcf19729e329abab",
+    "Pous.EndToEnd.coinViewAt": "4f706109cd608e2380fba196965f705b73283a34c7212f0cafb532bb2da2e260",
+    "Pous.EndToEnd.commitmentOfAt": "359f751b804d78142d38e88bdb62cc3d22a6196a9ce010584e38398b63604e42",
+    "Pous.EndToEnd.schAt": "548c786e4696997154355dcfc507617cda29090f4bad2bd03b1b078ec893584a",
+    "Pous.EndToEnd.tableStringsAt": "77f5ade10701bc2cab4eee863daad40e593d36573a2adf10e23f62399c176579"
+   },
+   "guarantees": [
+    "Pous.EndToEnd.SecurityProofs.drawAtMost",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt",
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt"
    ]
   },
   "Properties.Pous.MemoryChallenger": {
@@ -8755,6 +8864,7 @@
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld"
@@ -8809,6 +8919,7 @@
    },
    "guarantees": [
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt",
     "Pous.Period.SecurityProofs.obligationHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
