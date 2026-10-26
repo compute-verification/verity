@@ -169,7 +169,8 @@ A spec-level reference for network accounting's timing channel:
   private (`NetTiming.Layout`). `checked_refusal` checks that the layout fits the circuit (`NetTiming.Layout.Fits`, its
   first conjunct taking a frame gate that is an input) at the record's grain, which contains the gate grain's, held to
   `prog_fits`, `Layout.Fits` itself on a flattened program. `refusal`, the verifier's check before it draws, refuses
-  what passes it by name until Lean's `Layout.Fits` takes the checked row. `Fits` stays structural: a served window fits
+  what passes it by name: Lean's `Layout.Fits` takes no egress gate that is an input, so the checked row isn't its form,
+  and a window fits it when its units compute and return its egress rows. `Fits` stays structural: a served window fits
   in the step-indexed scan's form, and a window in any other form is refused;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
   warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), computes the

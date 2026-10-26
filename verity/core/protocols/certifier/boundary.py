@@ -44,13 +44,11 @@ no unit of the record writes. That dependence contains `Depends`, so a record th
 `Layout.Fits` itself on a flattened program, with ``checked`` its first conjunct taking a frame gate that is an input,
 and the tests hold `checked_refusal` to it); a record that fits only at the gate grain is refused.
 
-**Not yet Lean's** (`refusal`, the verifier's): `Layout.Fits`' first conjunct returns every slot gate (`C.outs`), frame
-gates included, so a record that passes the check, whose frame is its checked row, is refused after it, by name, until
-`NetTiming.Layout.Fits` takes a frame gate that is an input. That change and the lemma the composition rests on are
-proofs': on a trace whose egress units are exact (a class drawn `all`) and whose verdicts open to `ACCEPT`, unit ℓ·T + t's
-frame inputs are the cells `egress.bucket_map` renders from its state input. The state is a registered read too, not a
-wire, so the chain from ingress to egress is the scan's ok bits on the registered state rows (`ingress_scan`), which
-no record-grain dependence sees.
+**Not Lean's** (`refusal`, the verifier's): `Layout.Fits`' first conjunct takes every slot gate, frame gates included,
+to be one `C` returns (`C.outs`) and not an input, since the circuit's Program reads an input from the advice, so an
+input egress gate would accept any rows the trace carries and bound nothing. A record that passes the check, whose frame
+is its checked row, is refused after it, by name: its frame is an input. A window fits Lean's form when its units
+compute and return its egress rows from the ingress and the Programs' rows (the scan lowered in generator form).
 
 `Fits` stays structural (top's ruling, 25 Oct: semantic Fits is dropped): a served window fits in the step-indexed scan's
 form (`ingress_scan`, note:network-accounting/20261025T0830Z-report-net68-scan-router),
@@ -223,17 +221,17 @@ def _own_row(name: str, s: Side, m: Mapping[str, Any]) -> str | None:
 
 def refusal(doc: Mapping[str, Any]) -> str | None:
     """The verifier's check: why the circuit record's boundary doesn't fit `NetTiming.Layout.Fits` as Lean states it, by
-    the conjunct it fails. A record that passes `checked_refusal` is refused by Fits' first conjunct, which returns every
-    slot gate, until Lean's takes a frame gate that is an input (module docstring, "Not yet Lean's"); so is every record
-    of this format, whose frame is its checked row."""
+    the conjunct it fails. A record that passes `checked_refusal` is refused by Fits' first conjunct, which takes every
+    slot gate to be returned and not an input (module docstring, "Not Lean's"); so is every record of this format, whose
+    frame is its checked row."""
     why = checked_refusal(doc)
     if why is not None:
         return why
     e = parse(doc).egress
     return (f"Layout.Fits, egress gates are returned: {e.template}'s frame {e.frame!r} is its checked row, an input its "
-            f"verdict {e.verdict!r} holds to the cells it renders, and NetTiming.Layout.Fits returns every slot gate "
-            f"(C.outs), which a frame of R·B = {e.slots}·{e.frame_bytes} bytes can't be (a unit's outputs are at most 16 "
-            "bits): refused until Layout.Fits takes a frame gate that is an input (prog_fits, checked)")
+            f"verdict {e.verdict!r} holds to the cells it renders, and NetTiming.Layout.Fits takes every slot gate to be "
+            f"returned (C.outs), which a frame of R·B = {e.slots}·{e.frame_bytes} bytes can't be (a unit's outputs are at "
+            "most 16 bits), and not an input, which the Program reads from the advice (prog_fits)")
 
 
 def checked_refusal(doc: Mapping[str, Any]) -> str | None:
@@ -300,14 +298,15 @@ def prog_fits(gates: Sequence[tuple[str, Sequence[int]]], outs: Sequence[int],
     """`NetTiming.Layout.Fits lay C k` itself on a flattened program `C` (`Claims.Sampling.Prog`: ``gates`` each ``(kind,
     reads)``, kind one of ``input``, ``const``, ``not``, ``and``, ``xor``; ``outs`` its returned gates) and a layout
     (``egress(t, ℓ, σ)``, a slot's presence gate and frame gates, and ``ingress(t)``): before ``k``, every slot gate is in
-    ``outs``, every ingress gate is an input, and no slot gate of a step reaches (`Depends`, reflexive) an ingress gate of
-    a later step. With ``checked``, the first conjunct as the checked row needs it: every presence gate is in ``outs`` and
-    every frame gate is in ``outs`` or an input."""
+    ``outs`` and not an input, every ingress gate is an input, and no slot gate of a step reaches (`Depends`, reflexive)
+    an ingress gate of a later step. With ``checked``, the first conjunct as the checked row needs it: every presence gate
+    is in ``outs`` and not an input, and every frame gate is too or is an input."""
     returned = set(outs)
     pairs = [(t, egress(t, ell, s)) for t in range(k) for ell in range(L) for s in range(S)]
     slot = {t: [g for u, (p, frame) in pairs if u == t for g in (p, *frame)] for t in range(k)}
     is_input = lambda g: 0 <= g < len(gates) and gates[g][0] == "input"  # noqa: E731
-    if any(p not in returned or any(g not in returned and not (checked and is_input(g)) for g in frame)
+    computed = lambda g: g in returned and not is_input(g)  # noqa: E731
+    if any(not computed(p) or any(not computed(g) and not (checked and is_input(g)) for g in frame)
            for _t, (p, frame) in pairs):
         return False
     if any(not 0 <= g < len(gates) or gates[g][0] != "input" for t in range(k) for g in ingress(t)):

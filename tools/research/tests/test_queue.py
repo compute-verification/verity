@@ -247,6 +247,53 @@ def test_the_queues_clone_merges_lean_audit_records_with_the_record_driver(world
     assert set(merged["guarantees"]) == {"T", "A", "B"}
 
 
+def test_a_sync_by_merge_tree_builds_the_next_and_refusals_the_worktree_merges_built(world, monkeypatch):
+    """25-26 Oct: a sync that merged each candidate in the clone's worktree, ~70 of them conflicting, took 40 min.  `_merge` now
+    merges with `git merge-tree` and `git commit-tree` and touches no worktree; over 30 PRs (conflicts in one and two files,
+    lock records only the merge driver an earlier member adds to `.gitattributes` merges, a stacked PR, a second sync that
+    appends) it builds the same `next` (tree, first-parent messages) and the same refusals as the worktree merges."""
+    lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
+    base = world.change({f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")})
+    _git(world.dev, "push", "-q", "origin", f"{base}:refs/heads/main")
+    rec = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
+    heads = {}
+    for n in range(1, 31):
+        if n == 2:
+            files = {".gitattributes": "lean-audit.json merge=lean-audit\n"}
+        elif n % 7 == 0:
+            files = {"pkg/lean-audit.json": json.dumps({**rec, "guarantees": {**rec["guarantees"], f"G{n}": "1"}})}
+        elif n % 5 == 0:
+            files = {"shared.txt": f"{n}\n", **({"a.txt": f"{n}\n"} if n % 10 == 0 else {})}
+        else:
+            files = {"a.txt" if n == 1 else f"f{n}.txt": f"{n}\n"}
+        heads[n] = world.change(files, base=heads[3] if n == 29 else "origin/main")
+        world.gh.put(n, heads[n])
+    new = world.queue()
+    monkeypatch.setattr(new, "_merge_in_worktree", lambda *a: pytest.fail("merged in the worktree"))
+    old = Queue(world.tmp / "q-old" / "verity", remote=str(world.origin), github=world.gh, store=world.store,
+                log=world.logs.append, ready=lambda n, h: (n, h) in world.gh.ready, shadow=True)
+    old._attr_source = False
+
+    def same() -> list:
+        (got, ge), (want, we) = new.sync(), old.sync()
+        assert [m.pr for m in got] == [m.pr for m in want]
+        assert {n: (e.state, e.why) for n, e in ge.items()} == {n: (e.state, e.why.replace(SHADOW_BRANCH, "next"))
+                                                                  for n, e in we.items()}
+        tips = [_git(world.origin, "rev-parse", f"refs/heads/{b}") for b in ("next", SHADOW_BRANCH)]
+        assert len({_git(world.origin, "rev-parse", f"{t}^{{tree}}") for t in tips}) == 1
+        assert len({_git(world.origin, "log", "--first-parent", "--format=%B", f"main..{t}") for t in tips}) == 1
+        assert _git(new.workdir, "rev-parse", "HEAD") == tips[0]
+        return got, ge
+
+    first, entries = same()
+    two, one = "conflicts with `next` in a.txt, shared.txt (touched by #1, #5)", "conflicts with `next` in shared.txt (touched by #5)"
+    assert {n: e.why for n, e in entries.items() if e.state == "refused"} == {10: two, 15: one, 20: two, 25: one, 30: two}
+    assert {7, 14, 21, 28, 29} <= {m.pr for m in first}
+    world.gh.put(31, world.change({"f31.txt": "31\n"}))
+    again, _ = same()
+    assert [m.commit for m in again[:-1]] == [m.commit for m in first] and again[-1].pr == 31
+
+
 def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_and_no_note_is_written(world, monkeypatch):
     """13 Oct: a sync on @lean's VM wrote conflict handoffs for ci's and circuits' PRs into @lean's notes clone, where they
     waited for @lean's next notes push; drive tells each conflict in the merge thread (`Driver.refuse`)."""

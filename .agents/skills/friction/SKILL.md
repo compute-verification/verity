@@ -2,7 +2,7 @@
 name: friction
 description: >
   What to do when a tool, rule, check or step gets in your way in Verity: fix it yourself, ask the owner or your
-  coordinator when you can't tell, take only money past a budget line, keys and claims to Daniel, record a ruling as a
+  coordinator when you can't tell, take only keys, access and claims to Daniel (spend is its lead's call), record a ruling as a
   rule where the next agent will read it, or leave a short friction note when you can't fix it now. Holds the standing
   rulings that AGENTS.md and the other skills don't state (what an agent may change without asking, and protocol and
   claim rulings), and the `kind: friction` note format with its `severity: incident` flag. Use when you worked around
@@ -47,8 +47,8 @@ in-flight files, or deletes others' work. Check `AGENTS.md`, the owning skill an
 follow one if it covers the case. Otherwise ask the owner of what the change touches, or your coordinator when owners
 disagree or you can't tell who owns it (a handle holder: `research msg send --to @HANDLE`; a worker: its report to the
 coordinator that launched it). Give the case, the change and your recommendation in a few lines, and prepare the change
-meanwhile. Only spend past a budget line, keys and access, and claims (what a guarantee says or rests on) go on to Daniel,
-through `.agents/skills/asking-daniel/SKILL.md`.
+meanwhile. Only keys and access, and claims (what a guarantee says or rests on) go on to Daniel, through
+`.agents/skills/asking-daniel/SKILL.md`. Spend, a short budget line included, is the call of the lead whose line pays (13 Oct).
 
 For a new rule, gate or required review, price it first with `.agents/skills/process-design/SKILL.md`.
 
