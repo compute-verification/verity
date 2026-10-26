@@ -33,6 +33,12 @@ def checkKeys : List String := ["entries", "scheme", "template", "tile_work"]
 /-- `window.COINS` and `window.MODES`: the check item's optional key and the coin modes it may name. -/
 def coinsKey : String := "coins"
 def coinModes : List String := ["live", "seeded"]
+/-- `core_check.LIVE_PARAM`, `LIVE` and `LIVE_PARAMS`: a live window's parameters' salt session inputs. -/
+def liveKey : String := "live"
+def liveKeys : List String := ["key", "ledger", "main", "pins", "session"]
+def LIVE_PARAMS : String :=
+  "live is exactly when check.coins is live, and is then {key, ledger, main, pins, session}: the pinned challenger " ++
+    "key, the auditor's ledger, the host's pins log, main's first-parent history and the salt session's files"
 
 /-- The `check` item: the tile template, its work per tile, the commitment scheme, the public bound on entries, and the
 window's coin mode when the item names one (`window.mode`: seeded when it names none). -/
@@ -63,7 +69,8 @@ structure Params where
   hi : Nat
   /-- Each slot's max_tokens, which a row of record serves whatever it samples (stop mode `fixed`, `ignore_eos`). -/
   maxTokens : List Nat
-  deriving DecidableEq, Repr
+  /-- A live window's salt session's inputs as its verifier holds them (`liveKeys`); `none` for any other window. -/
+  live : Option Json := none
 
 def isHexDigest (s : String) : Bool := s.length = 128 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
 
@@ -75,7 +82,8 @@ def ratioField (j : Json) (k : String) (ok : Core.Ratio → Bool) (what : String
   pure r
 
 def paramsOf (j : Json) : V Params := do
-  unless keys j == some paramsKeys do throw s!"keys are not {", ".intercalate paramsKeys}"
+  unless (keys j).map (·.filter (· != liveKey)) == some paramsKeys do
+    throw s!"keys are not {", ".intercalate paramsKeys}, and optionally {liveKey}"
   let c := get j "check"
   unless (keys c).map (·.filter (· != coinsKey)) == some checkKeys do
     throw s!"check's keys are not {", ".intercalate checkKeys}, and optionally {coinsKey}"
@@ -112,7 +120,10 @@ def paramsOf (j : Json) : V Params := do
     pure m
   let some maxTokens := maxTokens
     | throw "length is not {max_tokens, stop} with stop fixed and max_tokens a non-empty list of positive natural numbers"
-  pure { check := { entries, scheme, template, tileWork, coins }, context, delta, eps, gridBits, query, lo, hi, maxTokens }
+  let live := PouwWindow.field? j liveKey
+  unless (coins == some "live") == live.isSome && live.all (fun l => keys l == some liveKeys) do throw LIVE_PARAMS
+  pure { check := { entries, scheme, template, tileWork, coins }, context, delta, eps, gridBits, query, lo, hi, maxTokens,
+         live }
 
 /-- One of the record's roots. -/
 structure Root where
@@ -234,9 +245,11 @@ def strataOf (work : Bool) (j : Json) (ctx : String) : V (Array DrawStratum) := 
     strata := strata.push (← stratumOf work s s!"{ctx}.strata[{strata.size}]")
   pure strata
 
-/-- The public outputs `{"draw": d}`, `d` one of `draw.py`'s laws with exactly its keys (`check_draw`'s). -/
+/-- The public outputs `{"draw": d}`, `d` one of `draw.py`'s laws with exactly its keys (`check_draw`'s), and optionally a
+live window's `salt` (`saltOf`). -/
 def drawOf (j : Json) : V UnitDraw := do
-  keysAre j ["draw"] "public"
+  unless keys j == some ["draw"] || keys j == some ["draw", "salt"] do
+    throw "public: keys are not draw, and optionally salt"
   let d := get j "draw"
   let ctx := "public.draw"
   let law ← Flock.J.str d "law" ctx
@@ -259,6 +272,13 @@ def drawOf (j : Json) : V UnitDraw := do
       pure (.work k strata closure)
   pure ⟨l, population, ← natsOf d "units" ctx⟩
 
+/-- A live window's `salt` among the public outputs, an object (`windowSaltReason` reads it), or `none`. -/
+def saltOf (j : Json) : V (Option Json) :=
+  match PouwWindow.field? j "salt" with
+  | none => pure none
+  | some s@(.obj _) => pure (some s)
+  | some _ => throw "public.salt: not an object"
+
 /-- What the service said. -/
 inductive Said where
   | accept (profile : Core.Integrity) (draw : UnitDraw)
@@ -270,15 +290,20 @@ structure Evidence where
   /-- The registration digest the answer is for, hex, or `none` for `null`. -/
   commitment : Option String
   said : Said
+  /-- On acceptance, the salt among its public outputs (`saltOf`). -/
+  salt : Option Json := none
 
 /-- `Core.Answer.ofJson`, then on acceptance `Core.Integrity.ofJson` of its profile and `drawOf` of its public outputs
 (which `Answer.ofJson` has already found present, as it has the reason of any other answer). -/
 def evidenceOf (b : ByteArray) : V Evidence := do
   let a ← Core.Answer.ofJson (← Core.canonicalJson b)
-  let said ← match a.verdict with
-    | .accept => do pure (.accept (← Core.Integrity.ofJson (a.profile.getD .null)) (← drawOf (a.published.getD .null)))
-    | .reject => pure (.reject (a.reason.getD ""))
-    | .undecided => pure (.undecided (a.reason.getD ""))
-  pure ⟨a.protocol, a.digest.map Flock.hexOf, said⟩
+  let (said, salt) ← match a.verdict with
+    | .accept => do
+      let prof ← Core.Integrity.ofJson (a.profile.getD .null)
+      let draw ← drawOf (a.published.getD .null)
+      pure (Said.accept prof draw, ← saltOf (a.published.getD .null))
+    | .reject => pure (Said.reject (a.reason.getD ""), none)
+    | .undecided => pure (Said.undecided (a.reason.getD ""), none)
+  pure ⟨a.protocol, a.digest.map Flock.hexOf, said, salt⟩
 
 end PouwCheck
