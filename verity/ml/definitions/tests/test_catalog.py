@@ -19,6 +19,8 @@ REPO = Path(__file__).resolve().parents[4]
 
 COUNT = 1256
 
+COUNT += 2  # ops' `PvRowPad_v1` and `_v2` (#4623), a line of its own so it merges with any other change to the count
+
 
 def test_the_catalog_loads_every_definition_and_no_other():
     registry, errors = catalog.load()
