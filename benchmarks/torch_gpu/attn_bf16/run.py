@@ -6,12 +6,12 @@ CUDA driver API (ctypes on libcuda.so.1; numpy for the buffers, torch only for t
    and its UUID equal to GPU_LEASE_UUID when gpu-lease set it.  A mismatch exits 3 before any launch.
 1. The check, on every case in CHECK (fixture.py's): S and O are filled with 0xA5 and QK^T and PV run on the case's
    inputs; each buffer must equal the fixture's byte for byte (every word the Definition defines, and 0xA5A5 everywhere
-   else).  The tilings are q8 (a block per 8 query rows, head and sequence), at 4, 1 and 8 warps a block, and, where 8
-   or 16 divides the query heads a KV head serves, h8 and h16 (8 or 16 heads a tile, a block per query row and sequence
-   and Y blocks of head groups), each with one group a block of 1 warp, every 8th group a block of 8 warps, and all of
-   them in one block of 4 warps: each gives the tiles to other warps, for the same bytes.  A control arm fills the buffers
-   and launches nothing, and must be
-   rejected.  The inputs must come back unchanged.  A FULL case (<case>.full.npz) makes its inputs with gen.py, checks
+   else).  The tilings are q8 (a block per 8 query rows, head and sequence), at 4, 1 and 8 warps a block, and each head
+   tiling that serves the case (attn.serves: h8 and h16 where 8 or 16 divides the query heads a KV head serves, s16 too
+   where no query sees more than 32 keys and PV's K is at most 32; a block per query row and sequence and Y blocks of head
+   groups), each with one group a block of 1 warp, every 8th group a block of 8 warps, all of them in one block of 4
+   warps, and all of them in one warp: each gives the tiles to other warps, for the same bytes.  A control arm fills the buffers and launches nothing,
+   and must be rejected.  The inputs must come back unchanged.  A FULL case (<case>.full.npz) makes its inputs with gen.py, checks
    them against the fixture's digests (exit 5 if the generator disagrees), and compares each sequence's S and O digests.
 2. The torch functions (attn.py's qk and pv, the skeleton's interface), on every decode case (one query a sequence): once
    over the whole batch with its lens, and once per KV length T over the sequences of that length with k and v sliced to
@@ -20,8 +20,8 @@ CUDA driver API (ctypes on libcuda.so.1; numpy for the buffers, torch only for t
    is not compared); for FULL, each sequence's digests.
    Exit 4 if any check fails, before anything is timed.
 3. Diagnostic timing (information only, not a panel row), at the H200 model's decode step (TIME_B sequences, TIME_H query
-   heads of head dim 64 on TIME_HKV KV heads, every KV length TIME_L, PV's K = 32): QK^T and PV here at every h8 and h16
-   launch shape (Y and warps; q8 where neither applies) and through attn.py, each the median of REPS after a warm-up,
+   heads of head dim 64 on TIME_HKV KV heads, every KV length TIME_L, PV's K = 32): QK^T and PV here at every launch shape
+   of each head tiling that serves (Y and warps; q8 where none does) and through attn.py, each the median of REPS after a warm-up,
    interleaved rep by rep with torch's SDPA (its default choice of backend, and FlashAttention's alone; both include the
    softmax these two leave out) and with torch's two bf16 batched matmuls (cuBLAS), on the card.
 
@@ -144,7 +144,7 @@ class Attn:
         G = self.H // self.Hkv
         assert self.H % self.Hkv == 0 and G & (G - 1) == 0, (self.H, self.Hkv)
         self.gshift = G.bit_length() - 1
-        self.tilings = ("q8", *(t for t, n in attn.GROUP.items() if G % n == 0))
+        self.tilings = ("q8", *(t for t in attn.GROUP if attn.serves(t, G, self.Lcap, self.kpv)))
         self.s_shape, self.o_shape = (self.B, self.H, self.Mq, self.Lcap), (self.B, self.H, self.Mq, self.D)
         self.dev = {k: cu.put(z[k]) for k in ("Q", "K", "V", "P", "lens", "nq")}
         self.S = cu.alloc(int(np.prod(self.s_shape)) * 2)
@@ -161,7 +161,7 @@ class Attn:
         return self.funcs[attn.kernel(op, self.D, tiling)]
 
     def launch(self, op: str, tiling: str, warps: int, Y: int = 0) -> None:
-        """attn.grid's blocks for ``tiling`` (h8, h16: Y blocks of head groups), of ``warps`` warps."""
+        """attn.grid's blocks for ``tiling`` (h8, h16, s16: Y blocks of head groups), of ``warps`` warps."""
         args = self.qk_args if op == "qk" else self.pv_args
         params = (vp * 1)(C.cast(C.pointer(args), vp))
         self.cu("cuLaunchKernel", self.kernel(op, tiling), *grid(tiling, self.B, self.H, self.Mq, Y), 32 * warps, 1, 1, 0,
@@ -169,12 +169,13 @@ class Attn:
 
     def shapes(self) -> list[tuple[str, int, int]]:
         """The check's launches, (tiling, warps, Y): q8 at 4, 1 and 8 warps; each head-group tiling one group a block of
-        1 warp, every 8th group a block of 8 warps, and every group in one block of 4 warps."""
+        1 warp, every 8th group a block of 8 warps, every group in one block of 4 warps, and every group in one warp (s16's
+        reuse of K and V across a warp's groups, and its reload where they change KV head)."""
         out = [("q8", w, 0) for w in WARPS]
         for t in self.tilings[1:]:
             g = self.H // attn.GROUP[t]
-            out += [(t, 1, g), (t, 8, max(1, g // 8)), (t, 4, 1)]
-        return out
+            out += [(t, 1, g), (t, 8, max(1, g // 8)), (t, 4, 1), (t, 1, 1)]
+        return list(dict.fromkeys(out))
 
     def poison(self) -> None:
         self.cu("cuMemsetD8_v2", self.S, POISON, int(np.prod(self.s_shape)) * 2)

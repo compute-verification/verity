@@ -24,6 +24,9 @@ CASES, each CHECK/<case>.npz (Q, K, V, P, lens, nq: the inputs; S, O: the buffer
   specials_d64/d128  NaN, infinities, -0, subnormals, exact cancellation, overflow, and specials in V a shorter query of
                      the tile must not see; decode, prefill and chunks in turn (MQA at 64, GQA at 128)
   long_d64/d128      PV over 4,096 keys
+  s16_mqa_d64        the s16 kernels' bounds (every query sees at most 32 keys): MQA, 2 head groups, PV's K = 32, specials
+                     and decode, prefill and chunks in turn
+  s16_gqa_d128       the same at head dim 128, GQA with 16 query heads a KV head (4 KV heads), PV padded to 16 alone
 FULL, CHECK/<case>.full.npz: the H200 model's whole decode step (20,480 sequences), its inputs made by gen.py from a seed
 on both sides, so the file holds each sequence's digest of S and O (and of the inputs, by chunk) instead of the arrays.
 CHECK/fixture.json lists the cases, their word counts and the reference sample's.
@@ -77,9 +80,11 @@ CASES = {
     "specials_d128": (24, 8, 1, 128, 40, lambda B: 17 + np.arange(B), _mixed, 0.05, 1),
     "long_d64": (4, 8, 1, 64, 4096, lambda B: np.array([4096, 4095, 2049, 1]), _decode, 0.0, 0),
     "long_d128": (2, 2, 2, 128, 4100, lambda B: np.array([4100, 3000]), lambda lens: np.array([1, 40]), 0.001, 1),
+    "s16_mqa_d64": (36, 32, 1, 64, 32, lambda B: 1 + np.arange(B) % 32, _mixed, 0.05, 2),
+    "s16_gqa_d128": (24, 64, 4, 128, 32, lambda B: np.array([32, 31, 30, 17, 16, 15, 9, 8, 1, 2, 3, 24] * 2), _mixed, 0.05, 1),
 }
 # PV's least K by case (default 0: pad16(len) alone)
-KPV = {"h200_decode": 32, "mha_decode_d64": 32, "specials_d64": 48, "h200_decode_full": 32}
+KPV = {"h200_decode": 32, "mha_decode_d64": 32, "specials_d64": 48, "h200_decode_full": 32, "s16_mqa_d64": 32}
 # name: B, H, Hkv, D, Lcap, seed (gen.py's inputs: lens 1 + b mod Lcap, one query each)
 FULL = {"h200_decode_full": (20480, 256, 1, 64, 32, 20261026)}
 SEQ_CHUNK = 256

@@ -1,7 +1,7 @@
 """build.sh's gate on one attn_bf16 cubin (sm_90a or sm_120a): ptxas's report and cuobjdump's SASS.  Refuses (exit 1, the
 reasons on stderr) on a ptxas warning, a stack frame, a spill or local memory, and on any kernel whose floating-point
 instructions aren't the Definition's: every tensor-core instruction an HMMA.16816.F32.BF16 (D/16 of them in QK^T's unrolled
-k loop, at least one in PV's), the cvt an F2FP.BF16(.F32).PACK_AB, and no other floating-point arithmetic (an HFMA2.MMA of
+k loop, 4 D/16 in _s16's, at least one in PV's), the cvt an F2FP.BF16(.F32).PACK_AB, and no other floating-point arithmetic (an HFMA2.MMA of
 -RZ and RZ, the compiler's way of loading a constant, adds nothing).
 
   python3 sass_gate.py ARCH PTXAS_TXT SASS_TXT OUT_JSON
@@ -18,9 +18,9 @@ CVT = re.compile(r"^F2FP\.BF16(\.F32)?\.PACK_AB$")
 MMA = re.compile(r"\b([QHOIU]MMA|[QH]GMMA|UTC\w*MMA)(\.[\w.]+)?")
 FLOAT = re.compile(r"\b(FADD|FMUL|FFMA|FMNMX|FSETP|FSET|FCHK|MUFU|FRND|F2F|F2I|I2F|DADD|DMUL|DFMA|DSETP|HADD2|HMUL2|HFMA2|HMNMX2|HSETP2|F2FP)(\.[\w.]+)?\b")
 CONSTANT = re.compile(r"\bHFMA2\.MMA R\d+, -RZ, RZ\b")
-#: kernel: (exact HMMA count, or None for at least one)
-WANT = {f"attn_{op}_d{d}{tile}": (d // 16 if op == "qk" else None) for tile in ("", "_h8", "_h16") for op in ("qk", "pv")
-        for d in (64, 128)}
+#: kernel: (exact HMMA count, or None for at least one); _s16's QK^T unrolls its 4 key tiles
+WANT = {f"attn_{op}_d{d}{tile}": ((4 if tile == "_s16" else 1) * d // 16 if op == "qk" else None)
+        for tile in ("", "_h8", "_h16", "_s16") for op in ("qk", "pv") for d in (64, 128)}
 
 
 def gate(arch: str, ptxas: str, sass: str) -> tuple[dict, list[str]]:

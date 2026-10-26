@@ -4,8 +4,9 @@
 // the PRO 6000's capture of sm120.mma.m16n8k16.bf16 agrees with it).  Softmax is its own unit: QK^T's words come out, PV's
 // P goes in.
 //
-//   attn_qk_d{64,128}[_h8]   S[b,h,q,j] = GemmCoordinate{K=D}(Q[b,h,q,:], K[b,kv(h),j,:])                   for j < len(b,q)
-//   attn_pv_d{64,128}[_h8]   O[b,h,q,d] = GemmCoordinate{K=kp}(P[b,h,q,:len] ++ 0, V[b,kv(h),:len,d] ++ 0)    len = len(b,q)
+//   attn_qk_d{64,128}[_h8|_h16|_s16]   S[b,h,q,j] = GemmCoordinate{K=D}(Q[b,h,q,:], K[b,kv(h),j,:])          for j < len(b,q)
+//   attn_pv_d{64,128}[_h8|_h16|_s16]   O[b,h,q,d] = GemmCoordinate{K=kp}(P[b,h,q,:len] ++ 0, V[b,kv(h),:len,d] ++ 0)
+//                                                                                                        len = len(b,q)
 //
 // with kp = max(kpv, pad16(len)): kpv = 0 pads each query's keys to a multiple of 16, and kpv = 32 is the H200 model's PV
 // (every KV length 1..32 padded with +0 to K = 32).
@@ -21,7 +22,10 @@
 // warps take every warps-th of them, and a warp runs every tile of its group (QK^T: each key tile, with the group's Q loaded
 // once; PV: each d tile, with P loaded once a key block), so a decode step reads each key and value once for 8 heads.  The
 // _h16 kernels run head groups of 16 (16 divides 2^gshift) the same way, with the heads as the tile's 16 rows instead.  The
-// launch decides which warp runs a tile, never a word's steps.
+// _s16 kernels are _h16's tiles where every query sees at most S16_KEYS = 32 keys and PV's kp is at most 32 (the H200
+// model's decode step): a warp loads the shared operand once for all of its groups of one KV head (K's 4 key tiles, V's 2
+// key steps), and a query past those bounds is left unwritten.  The launch decides which warp runs a tile, never a word's
+// steps.
 // QK^T's tile is 16 keys (A, K's rows) x 8 columns (B, Q's rows) over k = D, and in _h16 16 heads (A, Q's rows) x 8 keys
 // (B, K^T).  PV's is 16 d (A, V^T) x 8 columns (B, P^T) over k = keys, and in _h16 16 heads (A, P's rows) x 8 d (B, V).  The
 // step's products are exact and its total semantics symmetric in its operands (a NaN product is the one canonical NaN), so
@@ -52,6 +56,8 @@ struct AttnArgs {
 };
 
 namespace {
+
+constexpr int S16_KEYS = 32;  // the _s16 kernels' most keys a query sees, and PV's largest kp
 
 __device__ __forceinline__ void mma_bf16(float (&d)[4], const uint32_t (&a)[4], const uint32_t (&b)[2], const float (&c)[4]) {
     asm("mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%10,%11,%12,%13};\n"
@@ -188,7 +194,7 @@ __device__ __forceinline__ void pv(const AttnArgs& a) {
     }
 }
 
-// The _h8 and _h16 kernels' head groups of N heads: query q = blockIdx.x of sequence b = blockIdx.z, and this warp's first
+// The _h8, _h16 and _s16 kernels' head groups of N heads: query q = blockIdx.x of sequence b = blockIdx.z, and this warp's first
 // group's head h0 and the stride between its groups' heads.
 struct Groups {
     int b, q, L, seen, h0, hstep;
@@ -393,6 +399,113 @@ __device__ __forceinline__ void pv16(const AttnArgs& a) {
     }
 }
 
+template <int D>
+__device__ __forceinline__ void qk16s(const AttnArgs& a) {
+    const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
+    const Groups w = groups_of<16>(a);
+    if (!w.seen || w.seen > S16_KEYS) return;
+    const bool pairs = pairs_ok(a.out, a.os);
+    uint32_t Bk[S16_KEYS / 8][D / 16][2];  // key tile n's B at step s, loaded once for every group of KV head kvh
+    int kvh = -1;
+#pragma unroll 1
+    for (int h0 = w.h0; h0 < a.H; h0 += w.hstep) {
+        if ((h0 >> a.gshift) != kvh) {
+            kvh = h0 >> a.gshift;
+            const uint16_t* K = a.kv + w.b * a.kvs[0] + kvh * a.kvs[1];
+#pragma unroll
+            for (int n = 0; n < S16_KEYS / 8; ++n) {
+                const int j = 8 * n + g;  // B's column: key j
+                const bool jok = j < w.seen;
+                const uint16_t* krow = K + (jok ? j : 0) * a.kvs[2];
+#pragma unroll
+                for (int s = 0; s < D / 16; ++s) {
+                    const int c = 16 * s + 2 * t;
+                    Bk[n][s][0] = jok ? ld_pair(krow + c) : 0u;
+                    Bk[n][s][1] = jok ? ld_pair(krow + c + 8) : 0u;
+                }
+            }
+        }
+        const uint16_t* qa = a.x + w.b * a.xs[0] + (h0 + g) * a.xs[1] + w.q * a.xs[2];
+        const uint16_t* qb = qa + 8 * a.xs[1];
+        float acc[S16_KEYS / 8][4];
+#pragma unroll
+        for (int n = 0; n < S16_KEYS / 8; ++n) acc[n][0] = acc[n][1] = acc[n][2] = acc[n][3] = 0.0f;
+#pragma unroll
+        for (int s = 0; s < D / 16; ++s) {  // each word's chain: steps s = 0 .. D/16 - 1 in order, from +0
+            const int c = 16 * s + 2 * t;
+            const uint32_t Aq[4] = {ld_pair(qa + c), ld_pair(qb + c), ld_pair(qa + c + 8), ld_pair(qb + c + 8)};
+#pragma unroll
+            for (int n = 0; n < S16_KEYS / 8; ++n)
+                if (8 * n < w.seen) mma_bf16(acc[n], Aq, Bk[n][s], acc[n]);
+        }
+        uint16_t* Sa = a.out + w.b * a.os[0] + (h0 + g) * a.os[1] + w.q * a.os[2];
+        uint16_t* Sb = Sa + 8 * a.os[1];
+#pragma unroll
+        for (int n = 0; n < S16_KEYS / 8; ++n) {
+            const int jc = 8 * n + 2 * t;
+            st2(Sa + jc, acc[n][0], acc[n][1], jc, w.seen, pairs);
+            st2(Sb + jc, acc[n][2], acc[n][3], jc, w.seen, pairs);
+        }
+    }
+}
+
+template <int D>
+__device__ __forceinline__ void pv16s(const AttnArgs& a) {
+    const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
+    const Groups w = groups_of<16>(a);
+    if (!w.seen) return;
+    const int steps = max(a.kpv >> 4, (w.seen + 15) >> 4);
+    if (steps > S16_KEYS / 16) return;
+    const bool pin = pairs_ok(a.x, a.xs), pout = pairs_ok(a.out, a.os);
+    const int64_t vr = a.kvs[2];
+    constexpr int DC = 64;  // d a pass: V's B for every step and 8 d tiles in 32 registers
+#pragma unroll 1
+    for (int d0 = 0; d0 < D; d0 += DC) {
+        uint32_t Bv[S16_KEYS / 16][DC / 8][2];  // step s's B for d tile dt, loaded once for every group of KV head kvh
+        int kvh = -1;
+#pragma unroll 1
+        for (int h0 = w.h0; h0 < a.H; h0 += w.hstep) {
+            if ((h0 >> a.gshift) != kvh) {
+                kvh = h0 >> a.gshift;
+                const uint16_t* V = a.kv + w.b * a.kvs[0] + kvh * a.kvs[1] + d0 + g;  // B's column: d = d0 + 8 dt + g
+#pragma unroll
+                for (int s = 0; s < S16_KEYS / 16; ++s) {
+                    const int ka = 16 * s + 2 * t, kb = ka + 8;
+                    const bool l0 = ka < w.seen, l1 = ka + 1 < w.seen, l2 = kb < w.seen, l3 = kb + 1 < w.seen;
+#pragma unroll
+                    for (int dt = 0; dt < DC / 8; ++dt) {
+                        const uint16_t* v = V + 8 * dt;
+                        Bv[s][dt][0] = pack(l0 ? v[ka * vr] : 0u, l1 ? v[(ka + 1) * vr] : 0u);
+                        Bv[s][dt][1] = pack(l2 ? v[kb * vr] : 0u, l3 ? v[(kb + 1) * vr] : 0u);
+                    }
+                }
+            }
+            const uint16_t* pa = a.x + w.b * a.xs[0] + (h0 + g) * a.xs[1] + w.q * a.xs[2];
+            const uint16_t* pb = pa + 8 * a.xs[1];
+            float acc[DC / 8][4];
+#pragma unroll
+            for (int dt = 0; dt < DC / 8; ++dt) acc[dt][0] = acc[dt][1] = acc[dt][2] = acc[dt][3] = 0.0f;
+#pragma unroll
+            for (int s = 0; s < S16_KEYS / 16; ++s) {  // each word's chain: its kp/16 steps in order, from +0
+                if (s < steps) {
+                    const int ka = 16 * s + 2 * t, kb = ka + 8;
+                    const uint32_t A[4] = {ld2(pa + ka, ka, w.seen, pin), ld2(pb + ka, ka, w.seen, pin),
+                                           ld2(pa + kb, kb, w.seen, pin), ld2(pb + kb, kb, w.seen, pin)};
+#pragma unroll
+                    for (int dt = 0; dt < DC / 8; ++dt) mma_bf16(acc[dt], A, Bv[s][dt], acc[dt]);
+                }
+            }
+            uint16_t* Oa = a.out + w.b * a.os[0] + (h0 + g) * a.os[1] + w.q * a.os[2] + d0 + 2 * t;
+            uint16_t* Ob = Oa + 8 * a.os[1];
+#pragma unroll
+            for (int dt = 0; dt < DC / 8; ++dt) {
+                st2(Oa + 8 * dt, acc[dt][0], acc[dt][1], 0, 2, pout);
+                st2(Ob + 8 * dt, acc[dt][2], acc[dt][3], 0, 2, pout);
+            }
+        }
+    }
+}
+
 }  // namespace
 
 extern "C" __global__ void __launch_bounds__(256) attn_qk_d64(const AttnArgs a) { qk<64>(a); }
@@ -407,3 +520,7 @@ extern "C" __global__ void __launch_bounds__(256) attn_qk_d64_h16(const AttnArgs
 extern "C" __global__ void __launch_bounds__(256) attn_qk_d128_h16(const AttnArgs a) { qk16<128>(a); }
 extern "C" __global__ void __launch_bounds__(256) attn_pv_d64_h16(const AttnArgs a) { pv16<64>(a); }
 extern "C" __global__ void __launch_bounds__(256) attn_pv_d128_h16(const AttnArgs a) { pv16<128>(a); }
+extern "C" __global__ void __launch_bounds__(256) attn_qk_d64_s16(const AttnArgs a) { qk16s<64>(a); }
+extern "C" __global__ void __launch_bounds__(256) attn_qk_d128_s16(const AttnArgs a) { qk16s<128>(a); }
+extern "C" __global__ void __launch_bounds__(256) attn_pv_d64_s16(const AttnArgs a) { pv16s<64>(a); }
+extern "C" __global__ void __launch_bounds__(256) attn_pv_d128_s16(const AttnArgs a) { pv16s<128>(a); }

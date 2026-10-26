@@ -23,11 +23,21 @@ import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAD_K = 32
 ARCH = {(9, 0): "sm_90a", (12, 0): "sm_120a"}
-#: the head-group tilings' group sizes; a tiling serves where its size divides the query heads a KV head serves
-GROUP = {"h16": 16, "h8": 8}
-#: each op's launch: (tiling, warps a block, head groups a warp), falling back to h8 and then q8 where the tiling can't
+#: the head-group tilings' group sizes
+GROUP = {"s16": 16, "h16": 16, "h8": 8}
+#: the s16 kernels' most keys a query sees, and PV's largest K
+S16_KEYS = 32
+#: each op's launch: (tiling, warps a block, head groups a warp), falling back to h16, h8 and then q8 where the tiling can't
 #: serve; run.py's timing sweeps the alternatives
-LAUNCH = {"qk": ("h16", 8, 1), "pv": ("h16", 8, 1)}
+LAUNCH = {"qk": ("s16", 4, 4), "pv": ("s16", 4, 4)}
+
+
+def serves(tiling: str, G: int, T: int, kpv: int) -> bool:
+    """Whether ``tiling`` computes every word for G query heads a KV head, T keys at most and PV's least K kpv: a head
+    tiling where its group size divides G, s16 only for T and kpv at most S16_KEYS."""
+    if tiling == "q8":
+        return True
+    return G % GROUP[tiling] == 0 and (tiling != "s16" or (T <= S16_KEYS and kpv <= S16_KEYS))
 
 u64 = C.c_uint64
 
@@ -40,7 +50,7 @@ class Args(C.Structure):
 
 
 def grid(tiling: str, B: int, H: int, Mq: int, Y: int = 0) -> tuple[int, int, int]:
-    """q8: a block per (8 query rows, head, sequence); h8, h16: per (query row, sequence) and Y blocks of head groups
+    """q8: a block per (8 query rows, head, sequence); h8, h16, s16: per (query row, sequence) and Y blocks of head groups
     (default one group a block), each block's warps running every Y-th group."""
     return (-(-Mq // 8), H, B) if tiling == "q8" else (Mq, Y or H // GROUP[tiling], B)
 
@@ -140,8 +150,8 @@ def _launch(op: str, x, kv, out, lens, kpv: int) -> None:
             raise ValueError(f"attn_bf16: lens {tuple(lens.shape)}, want ({B},)")
     nq = torch.ones((B,), dtype=torch.int32, device=dev)
     tiling, warps, per = LAUNCH[op]
-    if G % GROUP[tiling]:
-        tiling = "h8" if G % 8 == 0 else "q8"
+    if not serves(tiling, G, T, kpv):
+        tiling = next(t for t in ("h16", "h8", "q8") if serves(t, G, T, kpv))
     lib, ctx, funcs = _module(dev.index if dev.index is not None else torch.cuda.current_device())
     args = Args(x.data_ptr(), kv.data_ptr(), out.data_ptr(), lens.data_ptr(), nq.data_ptr(),
                 (C.c_int64 * 3)(x.stride(0), x.stride(1), 0), (C.c_int64 * 3)(kv.stride(0), kv.stride(1), kv.stride(2)),

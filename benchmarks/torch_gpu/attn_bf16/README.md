@@ -10,8 +10,10 @@ causal prefill and prefill chunks, head dims 64 and 128, MHA, GQA and MQA over a
   per-query zeroing of V in the block where the tile's queries stop at different keys). The `_h8` kernels put 8 query
   heads that share a KV head in a tile's columns, so a decode step reads each key and value once for 8 heads, and a warp
   runs every tile of its head groups (Q or P loaded once a group). The `_h16` kernels put 16 heads in a tile's rows
-  instead, and load and store word pairs 32 bits at a time where a buffer's strides allow; `attn.LAUNCH` picks the
-  tiling and launch shape for each op.
+  instead, and load and store word pairs 32 bits at a time where a buffer's strides allow. The `_s16` kernels are
+  `_h16`'s where no query sees more than 32 keys (the H200 model's decode step): a warp loads K's or V's fragments once
+  for all of its head groups. `attn.LAUNCH` picks the tiling and launch shape for each op, and `attn.serves` says where
+  each applies.
 - `attn.py`: the kernels as torch functions with the skeleton's attention interface, `qk(q, k)` and `pv(p, v)` (PV's K
   is 32 for every KV length 1..32), one launch each on torch's current stream from the shipped cubin.
 - `build.sh`: on a CPU node, both cubins (`-fmad=false`, no FTZ or fast-math), `sass_gate.py` on each, and
