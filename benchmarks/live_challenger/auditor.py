@@ -234,7 +234,7 @@ CERTIFIER_REQUESTS = (4, 400)
 CERTIFIER_IN_FLIGHT = (1, 4)
 CERTIFIER_TOKENS = (16, 64)
 #: a certifier rehearsal's tampering shims, each `certifier_serve.py`'s `--tamper` of that name
-TAMPERS = ("late", "extra", "drop", "token")
+TAMPERS = ("late", "extra", "drop", "token", "byte")
 CERTIFIER_PROFILES = ("planned", "served")
 #: a certifier rehearsal's traffic, `certifier_serve.py`'s `--traffic`
 CERTIFIER_TRAFFIC = ("fixed", "varied")

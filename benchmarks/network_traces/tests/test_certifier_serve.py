@@ -306,7 +306,7 @@ def test_the_gate_takes_every_tamper_the_rehearsal_has_and_each_is_a_serve_this_
     each reaches `serve` (which alone checks it, after the tunnel is up) as one strategy of `rehearse`."""
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
     import auditor as A
-    assert A.TAMPERS == cs.TAMPERS == ("late", "extra", "drop", "token")
+    assert A.TAMPERS == cs.TAMPERS == ("late", "extra", "drop", "token", "byte")
     for t in A.TAMPERS:
         args = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": t}, tmp_path, "u")[2:])
         assert args.strategies.split(",") == [t]
@@ -314,6 +314,17 @@ def test_the_gate_takes_every_tamper_the_rehearsal_has_and_each_is_a_serve_this_
                                          "--link", "127.0.0.1:1", "--reveal", "127.0.0.1:2", "--key", "k",
                                          "--challenger-key", "k.json", "--session", "00", "--tamper", t])
         assert served.tamper == t
+
+
+def test_the_byte_shim_changes_one_output_byte_of_a_hex_response_and_keeps_it_hex():
+    data = bytes([0xa5, 0x00, 0xff]) * 8
+    got = cs.ar.other_hex(data.hex().encode())
+    changed = bytes.fromhex(got.decode())
+    assert changed[0] == 0xb5 and changed[1:] == data[1:]
+    assert cs.ar.other_hex(b"\0\0f0") == b"\0\0e0"
+    with pytest.raises(ValueError, match="no output byte"):
+        cs.ar.other_hex(b"\0\0")
+    assert cs.ar.adversary_plan({"sessions": [["s.0", "s.1"]]}, None, "byte")["byte"] == "s.0"
 
 
 def test_the_gates_varied_rehearsal_is_a_varied_rehearse_named_for_its_run_with_every_flag_it_was_given(tmp_path):

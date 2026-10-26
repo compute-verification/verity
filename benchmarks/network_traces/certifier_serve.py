@@ -122,7 +122,7 @@ certified, the I/O, the audit and the salt accept.
         [--eos-ids ID,...] [--name varied]
     python certifier_serve.py serve --plan PLAN --calibration REPORT --upstream URL --out DIR --link HOST:PORT
         --reveal HOST:PORT --key KEYDIR --challenger-key PUBLIC.json --session HEX [--start-in 10]
-        [--tamper late|extra|drop|token]
+        [--tamper late|extra|drop|token|byte]
     python certifier_serve.py client --plan PLAN --calibration REPORT --deployment DEPLOYMENT.json --out DIR
     python certifier_serve.py check --run DIR --challenger KEYDIR [--expect accepted|refused]
     python certifier_serve.py rehearse (--upstream URL | --vllm MODEL) --out DIR [plan's options] [--strategies S,...]
@@ -156,12 +156,15 @@ certified, the I/O, the audit and the salt accept.
   `serve` serves reveals.
 - `rehearse` makes both keys in a scratch directory outside `--out`, plans, and for each of `--strategies` (honest, late,
   extra by default, or any of `--tamper`'s) runs `serve` and `client` as processes and `check`; `summary.json` holds
-  each run's verdicts, and it exits 0 when `check` accepts honest and token and refuses the rest. With `--vllm MODEL`
-  it starts vLLM on this host's GPU first (`active_replay.start_vllm`). Besides late and extra, `--tamper drop` leaves
-  out the first event of the first session's response (F − 1), on time and logged, so only N2's counts refuse it, and
+  each run's verdicts, and it exits 0 when `check` accepts honest, token and byte and refuses the rest. With
+  `--vllm MODEL` it starts vLLM on this host's GPU first (`active_replay.start_vllm`). Besides late and extra,
+  `--tamper drop` leaves out the first event of the first session's response (F − 1), on time and logged, so only N2's
+  counts refuse it, and
   `--tamper token` writes every token of window 0's responses carrying other bytes (`active_replay.other_token`), so
   its frame counts are honest's and `check` accepts it: only the I/O tie, which `check` doesn't run, refuses certified
-  tokens that aren't the committed sampled ones.
+  tokens that aren't the committed sampled ones. `--tamper byte` changes one hex digit of the first session's response
+  (`active_replay.other_hex`): one output byte of a response whose text is its outputs' hex, which `check` accepts and
+  only the output tie refuses.
 
 **Outputs** in a run's directory: `plan.json`, `calibration.json`, `deployment.json`, the proxy's records
 (`requests.records`, `responses.records`, `committed.jsonl`) and `certified.jsonl` (each record's head, the
@@ -237,8 +240,8 @@ PROOF_DEADLINE_S = 600.0
 DELTA = 2.0 ** -40
 STRATEGIES = ("honest", "late", "extra")
 TAMPERS = ("late", *ar.LIVE_TAMPERS)
-# `check`'s verdict on each run it expects to accept: honest, and token, whose frames only the I/O tie reads
-ACCEPTED = ("honest", "token")
+# `check`'s verdict on each run it expects to accept: honest, and token and byte, whose frames only the I/O tie reads
+ACCEPTED = ("honest", "token", "byte")
 PROFILES = ("planned", "served")
 TRAFFIC = ("fixed", "varied")
 #: a varied plan's N2 profile: the egress counts derive from the ingress head and the advice (N2-ADVICE)
