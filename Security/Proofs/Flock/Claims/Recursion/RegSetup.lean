@@ -124,8 +124,12 @@ def SameRoot (reg reg' : Port) : Prop :=
 
 theorem opens_same {reg reg' : Port} (h : SameRoot reg reg') (bc : ByteArray) (pos : Nat) (path : ByteArray) :
     opens reg' bc pos path = opens reg bc pos path := by
+  cases reg
+  cases reg'
   obtain ⟨hl, hd, hs, hr⟩ := h
-  simp only [opens, opensLeaf, climb, hl, hd, hs, hr]
+  dsimp only at hl hd hs hr
+  subst hl hd hs hr
+  rfl
 
 theorem opensInputs_same {reg reg' : Port} (h : SameRoot reg reg') (bc : ByteArray) (pos : Nat) (path : ByteArray) :
     opensInputs reg' bc pos path = opensInputs reg bc pos path := by
@@ -230,12 +234,11 @@ theorem bc_eq_of_regOpenings {Coin : Type} {D : Claims.Recursion.Deploy Coin} (h
   have hmem : ∀ {y : Claims.Msg} {w : ByteArray}, y ∈ xs → Claims.toMsg w ∈ D.setup y →
       Claims.toMsg w ∈ (l ++ Claims.Recursion.setupCalls FlockDeploy.sha512 D xs).map Prod.fst :=
     fun hy hw => List.mem_map.2 ⟨_, List.mem_append_right _ (mem_setupCalls_of_listed hy hw), rfl⟩
-  have hfind := Claims.findColl_isSome_mem FlockDeploy.sha512 _ htrue (Claims.toMsg u) (Claims.toMsg v)
-    (hmem hx (hD xO _ (toMsg_mem_regIns ho hu))) (hmem hx' (hD xO' _ (toMsg_mem_regIns ho' hv)))
+  have hcol : Claims.Collision FlockDeploy.sha512 (Claims.toMsg u) (Claims.toMsg v) :=
     ⟨fun e => huv (by rw [← Claims.ofMsg_toMsg u, ← Claims.ofMsg_toMsg v, e]), by
-      show Claims.toMsg (Sha512.hash (Claims.ofMsg (Claims.toMsg u))) =
-        Claims.toMsg (Sha512.hash (Claims.ofMsg (Claims.toMsg v)))
-      rw [Claims.ofMsg_toMsg, Claims.ofMsg_toMsg, he]⟩
-  simp [hc] at hfind
+      simp only [FlockDeploy.sha512, Claims.ofMsg_toMsg, he]⟩
+  have hfind := Claims.findColl_isSome_mem FlockDeploy.sha512 _ htrue (Claims.toMsg u) (Claims.toMsg v)
+    (hmem hx (hD xO _ (toMsg_mem_regIns ho hu))) (hmem hx' (hD xO' _ (toMsg_mem_regIns ho' hv))) hcol
+  exact Bool.false_ne_true (hc.symm.trans hfind)
 
 end RecDeploy
