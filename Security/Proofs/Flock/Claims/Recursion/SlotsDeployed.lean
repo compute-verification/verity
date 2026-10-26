@@ -28,7 +28,7 @@ theorem slotFacts_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st
     _root_.Flock.HmNets.check c = .ok () ∧ c.kLog ≤ 32 ∧ ∀ q (hq : q < c.ports.size), c.ports[q].v2 = false ∧
       c.ports[q].segs = none ∧ 2 * c.ports[q].words = 128 * c.ports[q].chunks := by
   obtain ⟨r, hr, -, hc⟩ := VStarTraceOk.partAt_some hp
-  obtain ⟨p, r', -, hx, ht, hpi, hr', -, h0, htab⟩ := stagedTables hS
+  obtain ⟨p, r', sv', hx, ht, hpi, hr', -, h0, htab⟩ := stagedTables hS
   rw [hr] at hr'
   cases hr'
   have hpc := partCircuit_staged hS hx ht hpi hr hc h0
