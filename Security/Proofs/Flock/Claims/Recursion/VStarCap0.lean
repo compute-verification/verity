@@ -56,6 +56,10 @@ theorem flatMap_single {α β : Type} (l : List α) (f : α → β) : l.flatMap 
   | nil => rfl
   | cons a l ih => simp [List.flatMap_cons, ih]
 
+theorem getElem_map_range_toArray {α : Type} (f : ℕ → α) {N n : ℕ}
+    (h : n < ((List.range N).map f).toArray.size) : ((List.range N).map f).toArray[n] = f n := by
+  simp
+
 theorem pair_append {α : Type} (u v : α) : (#[u, v] : Array α) = #[u] ++ #[v] := by
   simp
 
@@ -184,9 +188,14 @@ theorem portRow_cap0 {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fi
       simp
   have hpin := capIn_ok (N := N) hT (by simp)
   refine ⟨_, _, hsrc, hpin, by simp [hrr], fun n hn => ?_⟩
-  have hpw : portWords c "top" = 64 := by simp [portWords, hp, h0, hw]
+  have hpw : portWords c "top" = 64 := by
+    have hq : c.ports.findIdx? (·.name == "top") = some 0 := capPort_cap hp h0
+    unfold portWords
+    rw [hq]
+    simp [hp, hw]
   rw [portRow_fitPin, pair_append, portRow_ownRows, Option.map_some, hpw]
-  · simp only [List.getElem_toArray, List.getElem_map, List.getElem_range]
+  · rw [getElem_map_range_toArray, getElem_map_range_toArray]
+    beta_reduce
     rw [fitPortRow_top, hrr, List.getElem?_map, List.getElem?_range hn, Option.map_some]
   · simpa using hn
   · simpa using hn
