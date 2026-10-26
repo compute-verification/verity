@@ -80,7 +80,7 @@ def Bound.honestAs (Bd : Bound Coin Col T) (H : Msg → Msg) (os : List (List (M
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
 theorem Bound.commitRow_length (Bd : Bound Coin Col T) {H : Msg → Msg} (h64 : Out64 H) (row : Msg)
     (y : Fin Bd.saltLen → UInt8) : (Bd.commitRow H row y).length = 128 := by
-  simp only [Bound.commitRow, List.length_append, xorMask_length, h64]
+  rw [Bound.commitRow, List.length_append, xorMask_length, h64, h64]
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
 theorem Bound.commitRound_length (Bd : Bound Coin Col T) {H : Msg → Msg} (h64 : Out64 H) :
@@ -115,7 +115,8 @@ theorem Bound.commitRound_block (Bd : Bound Coin Col T) {H : Msg → Msg} (h64 :
   | o :: os, i + 1, hi => by
     show ((Bd.commitRow H o.1 o.2 ++ Bd.commitRound H os).drop (128 * (i + 1))).take 128 = _
     rw [show 128 * (i + 1) = (Bd.commitRow H o.1 o.2).length + 128 * i by
-      rw [Bd.commitRow_length h64]; ring, List.drop_append]
+      rw [Bd.commitRow_length h64]; ring, List.drop_append, List.drop_eq_nil_of_le (Nat.le_add_right _ _), List.nil_append,
+      Nat.add_sub_cancel_left]
     exact Bd.commitRound_block h64 os i (by simpa using hi)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
@@ -137,6 +138,19 @@ theorem Bound.zip_commitRound (Bd : Bound Coin Col T) (H : Msg → Msg) :
         os.map fun o => Bd.opensRound (Bd.commitRound H o) o
   | [] => rfl
   | o :: os => by simp only [List.map_cons, List.zip_cons_cons, Bd.zip_commitRound H os]
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
+theorem Bound.opened_length (Bd : Bound Coin Col T) (os : List (List (Msg × (Fin Bd.saltLen → UInt8)))) (last : Msg) :
+    (Bd.opened os last).length = os.length + 1 := by
+  simp [Bound.opened]
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
+/-- Every opened round before the last is `join` of its rows. -/
+theorem Bound.opened_getElem (Bd : Bound Coin Col T) (os : List (List (Msg × (Fin Bd.saltLen → UInt8)))) (last : Msg)
+    {j : ℕ} (hj : j < os.length) :
+    (Bd.opened os last)[j]'(by rw [Bd.opened_length]; omega) = Bd.join (os[j].map Prod.fst) := by
+  simp only [Bound.opened]
+  rw [List.getElem_append_left (by simpa using hj), List.getElem_map]
 
 /-- **`IVStar` accepts the honest prover's messages**: where `final` reads the last message as the rows and salts `os`,
 then `last`, the rounds number `DE`'s, each carries the schedule's count of rows (`nAt`), and `DE`'s verifier accepts
@@ -180,7 +194,8 @@ theorem Bound.run_honest_acc (Bd : Bound Coin Col T) {H : Msg → Msg} (h64 : Ou
     exact map_range_getD _ _
   have e2 : (List.range (Bd.DE.V.k x)).map
       (coinSeq fun i : Fin (Bd.IVStar.k x) => cs.getD i.val default) = cs := by
-    rw [← map_range_getD cs default, hcs]
+    conv_rhs => rw [← map_range_getD cs default]
+    rw [hcs]
     refine List.map_congr_left fun i hi => ?_
     have hi' : i < Bd.IVStar.k x := List.mem_range.1 hi
     simp only [coinSeq, hi', ↓reduceDIte]
@@ -201,8 +216,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-- **SHA-512's outputs are 64 bytes.** -/
 theorem out64_sha512 : Claims.Out64 sha512 := fun m => by
-  show (Sha512.hash (Claims.ofMsg m)).data.toList.length = 64
-  rw [Array.length_toList]
+  rw [sha512, Claims.toMsg, Array.length_toList, ByteArray.size_data]
   exact Sha512.hash_size _
 
 theorem getLast?_take_succ {α : Type} {l : List α} {j : ℕ} (hj : j < l.length) :
@@ -246,13 +260,14 @@ theorem agrees_bdR (H : Claims.Msg → Claims.Msg) (rel : _root_.Flock.Readable.
   rw [eval_bindOC]
   by_cases hl : j + 1 < ms.length
   · obtain ⟨t, ht⟩ := h0 j hl
-    have hc := act_coin_of_tag hx (by omega) (by omega) ht
+    have hjc : j < cs.length := by omega
+    have hc := act_coin_of_tag (ms := ms) (cs := cs) hx (by omega) hjc ht
     have e : (((bdC rel rd cols wE join rowIn final w).DE.V.next x (ms.take (j + 1)) (cs.take (j + 1))).eval H).1 =
-        .msg cs[j].bytes := nextR_coin rd H _ _ _ _ hc
+        .msg (cs[j]'hjc).bytes := nextR_coin rd H _ _ _ _ hc
     rw [e]
-    have hg : cs.getD j default = cs[j] := by simp [List.getD_eq_getElem?_getD, show j < cs.length by omega]
+    have hg : cs.getD j default = cs[j]'hjc := List.getD_eq_getElem _ _ hjc
     simp only [Claims.OC.eval, hl, ↓reduceIte, hg]
-    exact decide_eq_true rfl
+    exact decide_eq_true (by first | rfl | trivial)
   · have hj1 : j + 1 = ms.length := by omega
     have e : (((bdC rel rd cols wE join rowIn final w).DE.V.next x (ms.take (j + 1)) (cs.take (j + 1))).eval H).1 =
         .acc := by
@@ -260,7 +275,7 @@ theorem agrees_bdR (H : Claims.Msg → Claims.Msg) (rel : _root_.Flock.Readable.
       exact hacc
     rw [e]
     simp only [Claims.OC.eval, hl, ↓reduceIte]
-    exact decide_eq_true rfl
+    exact decide_eq_true (by first | rfl | trivial)
 
 /-- **The honest run passes `IVStar` at `bdR (nextR rd)`, `join := joinR`**: on the honest commit strings of the rows
 and salts `os`, then a last message `final` reads as `os` and `last`, at coins numbering the deployed plain verifier's
@@ -276,10 +291,10 @@ theorem ivstarR_honest_run (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     (Claims.run sha512 (Claims.replay ((bdC rel rd cols wE joinR rowIn final w).honestAs sha512 os lastO))
       (bdC rel rd cols wE joinR rowIn final w).IVStar x () fun i => cs.getD i.val default).out = .acc := by
   refine (bdC rel rd cols wE joinR rowIn final w).run_honest_acc out64_sha512 hfin hk hn hcs ?_
-  refine agrees_bdR sha512 rel rd cols wE joinR rowIn final w hx (by simp [Bound.opened, hcs, hk]) (fun j hj => ?_) hacc
-  have hj' : j < os.length := by simp [Bound.opened] at hj; omega
-  show ∃ t, (os.map (fun o => joinR (o.map Prod.fst)) ++ [last])[j] = 0 :: t
-  rw [List.getElem_append_left (by simpa using hj'), List.getElem_map]
+  refine agrees_bdR sha512 rel rd cols wE joinR rowIn final w hx
+    (by rw [Bound.opened_length, hcs, hk]) (fun j hj => ?_) hacc
+  have hj' : j < os.length := by rw [Bound.opened_length] at hj; omega
+  rw [Bound.opened_getElem _ _ _ hj']
   exact joinR_head _
 
 /-! ## The honest session -/
@@ -308,6 +323,7 @@ theorem salted_getD_length (ys : ℕ → ℕ → RecDeploy.Salt) (rounds : List 
   · rw [List.getD_eq_getElem _ _ (by rw [salted_length]; exact hj), List.getD_eq_getElem _ _ hj]
     simp [salted]
   · rw [List.getD_eq_default _ _ (by rw [salted_length]; omega), List.getD_eq_default _ _ (by omega)]
+    rfl
 
 theorem salted_fst (ys : ℕ → ℕ → RecDeploy.Salt) (rounds : List (List Claims.Msg)) :
     (salted ys rounds).map (fun o => o.map Prod.fst) = rounds := by
@@ -350,7 +366,7 @@ theorem flatten_getD_rel {α β : Type} (P : α → β → Prop) (da : α) (db :
       exact ih2 (i - a.length) (by simp only [List.flatten_cons, List.length_append] at hi; omega)
 
 /-- Rep `k`'s schedule, table `k / 2`'s, rep by rep, is `nAtSched`'s: each table's schedule twice. -/
-theorem flatten_repSched (spec : SessionSpec) (sts : Array Stmt) :
+theorem flatten_repSched (spec : SessionSpec) (sts : Array _root_.Flock.Stmt) :
     ((List.range (2 * sts.size)).map fun k => RecDeploy.repSchedAt spec sts[k / 2]!).flatten =
       sts.toList.flatMap fun st => RecDeploy.repSchedAt spec st ++ RecDeploy.repSchedAt spec st := by
   have key : ∀ (g : ℕ → List RecVStar.SchedRound) (n : ℕ),
@@ -374,7 +390,7 @@ theorem flatten_repSched (spec : SessionSpec) (sts : Array Stmt) :
 up, from each table's level-0 cap (of `level0Nodes` nodes) and each rep's honest proof at its table's cap, round 0
 carries the caps' nodes, round `1 + i` the `i`-th recorded round's tops and value row (`nAtSched`), and there are as
 many rounds after round 0 as the reps' schedules have (`FitsRep` at each rep, `repFits`). -/
-theorem honestRounds_nAt {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem honestRounds_nAt {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hx : setupOf false x = some (s, spec, sts)) {c₁ : Coin} {cs : List Coin} {caps : Array (Array ByteArray)}
     {ps : Array Flock.Proof} {Ts : ℕ → F128} (hs : caps.size = sts.size)
     (hcs : ∀ i < caps.size, caps[i]!.size = RecDeploy.level0Nodes sts[i]!) (hps : ps.size = 2 * sts.size)
@@ -444,7 +460,7 @@ theorem ivstarR_honest_session (rel : _root_.Flock.Readable.Parsed → _root_.Fl
     (rd : Claims.Msg → Option FinalP) (cols : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128))
     (wE : Claims.Msg → ℝ) (rowIn : Claims.Msg → Claims.Msg)
     (final : Claims.Msg → Option (List (List (Claims.Msg × RecDeploy.Salt)) × Claims.Msg)) (w : Claims.Msg → ℝ)
-    {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {cs : List Coin}
+    {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} {c₁ : Coin} {cs : List Coin}
     {caps : Array (Array ByteArray)} {ps : Array Flock.Proof} {Ts : ℕ → F128} {ys : ℕ → ℕ → RecDeploy.Salt}
     {last lastO : Claims.Msg} (hx : setupOf false x = some (s, spec, sts))
     (htab : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i]) (hs : caps.size = sts.size)
@@ -471,7 +487,7 @@ theorem ivstarR_honest_session (rel : _root_.Flock.Readable.Parsed → _root_.Fl
     exact hacc
 
 /-- **The tables' facts the files-level results take** (`htab`), at a statement `verify --plain-tables` admits. -/
-theorem tabsOk_of_plain {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem tabsOk_of_plain {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hx : setupOf false x = some (s, spec, sts)) (hP : PlainTablesOk s.read sts) (c₁ : Coin) :
     ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
       ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048 :=
@@ -485,7 +501,7 @@ theorem ivstarR_honest_files (rel : _root_.Flock.Readable.Parsed → _root_.Floc
     (rd : Claims.Msg → Option FinalP) (cols : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128))
     (wE : Claims.Msg → ℝ) (rowIn : Claims.Msg → Claims.Msg)
     (final : Claims.Msg → Option (List (List (Claims.Msg × RecDeploy.Salt)) × Claims.Msg)) (w : Claims.Msg → ℝ)
-    {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {cs : List Coin}
+    {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} {c₁ : Coin} {cs : List Coin}
     {resp : ℕ → Claims.Msg} {wI : Claims.Flock.Wit} {ω : FlockComplete.Tape} {Ts : ℕ → F128}
     {ys : ℕ → ℕ → RecDeploy.Salt} {last lastO : Claims.Msg} (hx : setupOf false x = some (s, spec, sts))
     (htab : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
