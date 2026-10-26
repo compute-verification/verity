@@ -93,23 +93,22 @@ abbrev Loc : Type := Σ s : m.Store, Fin (m.size s)
 /-- The stores' contents: a word at every location. -/
 abbrev Mem : Type := m.Loc → Word
 
-/-- The word of store `s` at index `w + off`, modulo the store's size. -/
-def index (s : m.Store) (w : Word) (off : ℕ) : Fin (m.size s) :=
-  ⟨(w.toNat + off) % m.size s, Nat.mod_lt _ (m.size_pos s)⟩
+/-- Word `i` of store `s`, its index taken modulo the store's size. -/
+def loc (s : m.Store) (i : ℕ) : m.Loc := ⟨s, ⟨i % m.size s, Nat.mod_lt _ (m.size_pos s)⟩⟩
 
-/-- An operand in store `s`: a fixed word of `s`; the word of `s` at a register's value plus an offset (an address the
-program computed); or an immediate the text carries (as an output, it discards the word). -/
-inductive Operand (s : m.Store)
-  | direct (i : Fin (m.size s))
-  | indirect (r : Fin (m.size m.reg)) (off : ℕ)
+/-- An operand: a fixed word of the store its opcode names; the word at a register's value plus an offset (an address
+the program computed); or an immediate the text carries (as an output, it discards the word). Indices are taken modulo
+the store's size. -/
+inductive Operand
+  | direct (i : ℕ)
+  | indirect (r : ℕ) (off : ℕ)
   | imm (w : Word)
 
 /-- An instruction of a text: an opcode on operands, predicated on a register (it writes only when the register is
 nonzero), or a branch to `target` when register `p` is nonzero. -/
 inductive Instr
-  | op (o : m.Op) (src : (i : Fin (m.nIn o)) → m.Operand (m.inStore o i))
-      (dst : (i : Fin (m.nOut o)) → m.Operand (m.outStore o i)) (pred : Option (Fin (m.size m.reg)))
-  | bra (p : Fin (m.size m.reg)) (target : ℕ)
+  | op (o : m.Op) (src : Fin (m.nIn o) → Operand) (dst : Fin (m.nOut o) → Operand) (pred : Option ℕ)
+  | bra (p : ℕ) (target : ℕ)
 
 /-- A program: each thread's text. -/
 abbrev Prog (Θ : Type) : Type := Θ → List m.Instr
@@ -121,32 +120,33 @@ structure State (Θ : Type) where
 
 variable {m}
 
-/-- The location an operand names in `M`, or none for an immediate. -/
-def Operand.loc {s : m.Store} : m.Operand s → m.Mem → Option m.Loc
-  | .direct i, _ => some ⟨s, i⟩
-  | .indirect r off, M => some ⟨s, m.index s (M ⟨m.reg, r⟩) off⟩
+/-- The location an operand names in store `s` of `M`, or none for an immediate. -/
+def Operand.locIn (s : m.Store) : Operand → m.Mem → Option m.Loc
+  | .direct i, _ => some (m.loc s i)
+  | .indirect r off, M => some (m.loc s ((M (m.loc m.reg r)).toNat + off))
   | .imm _, _ => none
 
-/-- The word an operand reads in `M`. -/
-def Operand.read {s : m.Store} : m.Operand s → m.Mem → Word
-  | .direct i, M => M ⟨s, i⟩
-  | .indirect r off, M => M ⟨s, m.index s (M ⟨m.reg, r⟩) off⟩
-  | .imm w, _ => w
+/-- The word an operand reads in store `s` of `M`. -/
+def Operand.readIn (s : m.Store) (x : Operand) (M : m.Mem) : Word :=
+  match x with
+  | .imm w => w
+  | _ => match x.locIn s M with
+    | some l => M l
+    | none => 0
 
-/-- `M` with `w` written where the output operand `x` names in `M₀` (the memory before the instruction, so an address
-is read before any write). -/
-def Operand.write {s : m.Store} (x : m.Operand s) (M₀ M : m.Mem) (w : Word) : m.Mem :=
-  match x.loc M₀ with
+/-- `M` with `w` written where the output operand `x` names in store `s` of `M₀` (the memory before the instruction,
+so an address is read before any write). -/
+def Operand.writeIn (s : m.Store) (x : Operand) (M₀ M : m.Mem) (w : Word) : m.Mem :=
+  match x.locIn s M₀ with
   | some l => Function.update M l w
   | none => M
 
 /-- An opcode's effect on `M`: every input read, then the outputs written in order, unless the predicate is zero. -/
-def execOp (o : m.Op) (src : (i : Fin (m.nIn o)) → m.Operand (m.inStore o i))
-    (dst : (i : Fin (m.nOut o)) → m.Operand (m.outStore o i)) (pred : Option (Fin (m.size m.reg))) (M : m.Mem) :
-    m.Mem :=
-  let v := m.eval o fun i => (src i).read M
-  if pred.any fun p => M ⟨m.reg, p⟩ = 0 then M
-  else (List.finRange (m.nOut o)).foldl (fun M' i => (dst i).write M M' (v i)) M
+def execOp (o : m.Op) (src : Fin (m.nIn o) → Operand) (dst : Fin (m.nOut o) → Operand) (pred : Option ℕ)
+    (M : m.Mem) : m.Mem :=
+  let v := m.eval o fun i => (src i).readIn (m.inStore o i) M
+  if pred.any fun p => M (m.loc m.reg p) = 0 then M
+  else (List.finRange (m.nOut o)).foldl (fun M' i => (dst i).writeIn (m.outStore o i) M M' (v i)) M
 
 /-- The units of resource `r` an instruction uses. -/
 def Instr.use : m.Instr → m.Res → ℚ≥0
@@ -162,7 +162,7 @@ def step (P : m.Prog Θ) (σ : m.State Θ) (θ : Θ) : m.State Θ × Option m.In
   | some (.op o src dst pred) =>
       (⟨execOp o src dst pred σ.mem, Function.update σ.pc θ (σ.pc θ + 1)⟩, some (.op o src dst pred))
   | some (.bra p t) =>
-      (⟨σ.mem, Function.update σ.pc θ (if σ.mem ⟨m.reg, p⟩ ≠ 0 then t else σ.pc θ + 1)⟩, some (.bra p t))
+      (⟨σ.mem, Function.update σ.pc θ (if σ.mem (m.loc m.reg p) ≠ 0 then t else σ.pc θ + 1)⟩, some (.bra p t))
 
 /-- One tick: the threads `θs` step in order; the state after, and the instructions they ran. -/
 def tick (P : m.Prog Θ) (σ : m.State Θ) (θs : List Θ) : m.State Θ × List m.Instr :=
