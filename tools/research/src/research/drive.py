@@ -6,7 +6,8 @@ agent acts unless the automation refuses).  A loop runs it every few minutes.  H
    a merge commit onto `main` naming its PRs, with a `Checked:` trailer for the run.  On a `main` that moved outside the queue,
    the commit still lands when the commits `main` gained share no file with it (`Skipped-check:` names them) and change
    no check tooling (`CHECK_TOOLING`), which would have checked it differently.  Then
-   `merge.caught_up` (the spec DM, node 1's mirror, the post-train regression, the landing post) and the sweep.
+   `merge.caught_up` (the spec DM, node 1's mirror, the post-train regression, the Lean cache publish, the landing post) and
+   the sweep.
 2. Sync `next` (`Queue.sync`): admit and drop PRs, rebuild on a moved `main`; but while a check of `next` runs and `main` moved
    by files its train doesn't change (and no check tooling), `next` stays on its base so the check isn't wasted (`held`, the
    rule `queue.hold` keeps for every sync: `eject`'s and a hand one read drive's launches from the state file).

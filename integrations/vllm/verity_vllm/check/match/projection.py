@@ -96,7 +96,7 @@ class Projection(PX.CachedKv, C.Prog):
         return super()._src(run, unfold)
 
     def _srcP(self, p: tuple, unfold: bool) -> list[tuple]:
-        """[R17 mfast] `_src` for one run progression `(space, (idx0, lo0, hi0), (dI, dL, dH), count)` (compare.Prog._srcP): the request's
+        """`_src` for one run progression `(space, (idx0, lo0, hi0), (dI, dL, dH), count)` (compare.Prog._srcP): the request's
         own inputs by kind, another request's reads as XREQ counted per RUN, everything else the oracle Prog's mapping.  Uniform only
         when every run of the progression is provably of one kind (one node, or a node range wholly outside this request's instances
         and the inputs); otherwise the record's mapping run by run."""

@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import sys
 import uuid
 from importlib import resources
@@ -44,6 +43,7 @@ from pathlib import Path
 import numpy as np
 from dataclasses import dataclass
 
+from verity_vllm import settings
 from verity_vllm.config import (CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, option, row_execution, row_world,
                                 rows_of_record)
 from verity_vllm.engine import served
@@ -269,7 +269,7 @@ class Tok:
 
 
 def hf_home() -> Path:
-    env = os.environ.get("HF_HOME")
+    env = settings.HF_HOME
     if env:
         return Path(env)
     try:
