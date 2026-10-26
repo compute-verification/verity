@@ -1,0 +1,12 @@
+{
+ "definitions": {
+  "RowAbsMax_v2{N=128,RELU=True}": {
+   "and": 8290,
+   "type": "a1c1ac1d90f6911a14da27715e518d271dda6a93523690033370aa1345952e91149c4606ec358f0dcf8daf6d509f78ac99302b729939e558b5c3603a1f89314b"
+  },
+  "RowAbsMax_v2{N=4,RELU=False}": {
+   "and": 90,
+   "type": "c9062bf187f73945fcc07f1ac58e2180d8cbf73fcd7263c63b5d14169fbd4380319c7622ac7301433965ce0a088f49006b470f0b1ed20398d8d849b36c62384b"
+  }
+ }
+}

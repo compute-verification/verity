@@ -7,6 +7,8 @@
   `ScaledMmS8Coordinate_v1{K=H, DOT=BlackwellS8ImmaDot32_v1}`'s function (`verity.ml.circuits.ops.gemm`, the s8 binding of
   sm_120), the circuit's one template: each output coordinate of each linear at each token row is one unit. The ReLU
   between the linears and each row's quantization are not units: their outputs are committed as the next linear's inputs.
+  `verity.ml.circuits.ops.quant`'s ``QuantRowS8`` computes them from a linear's bf16 row, one unit a row, for the circuit
+  that wires each linear to the next.
 * **Serving** (:class:`TorchLoop`, an `interface.Integration`): each request is one token, embedded and run through the MLP
   for ``steps`` decode steps, step s + 1 reading step s's output. Every linear's units are recorded into the window as they
   are computed (`Window.record`), labelled with the request, step, layer and op path they serve, which Verity never reads.
