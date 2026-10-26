@@ -5,18 +5,26 @@
 # kernels' staging decode with P2's reference decode on the CPU; the peer builds the toy's registration itself and holds
 # that, never the prover's. PEER is the lane's machine, not the auditor's, so the run certifies nothing. cwd = a clone:
 #
-#   research run --on NODE --project verity --campaign e2e-demo --source . --cwd clone --timeout 30m -- \
-#     bash benchmarks/pous/p2_v1/bw_peer.sh PEER
+#   research run --on auto --project verity --campaign e2e-demo --source . --cwd clone --timeout 30m -- \
+#     bash benchmarks/pous/p2_v1/bw_peer.sh PEER [PEER ...]
 #
-# $OUT/<session>/ has the prover's session.json and the verifier's own answer (verifier-answer.json); $OUT/verdicts.txt
-# each session's verdict line, and the verifier's agreeing with it. The peer's scratch is removed on exit.
+# PEER is the first of those named that ssh reaches and that isn't this host. $OUT/<session>/ has the prover's
+# session.json and the verifier's own answer (verifier-answer.json); $OUT/verdicts.txt each session's verdict line, and
+# the verifier's agreeing with it. The peer's scratch is removed on exit.
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
-PEER=${1:?usage: bw_peer.sh PEER}
+[ $# -gt 0 ] || { echo "usage: bw_peer.sh PEER [PEER ...]"; exit 2; }
 O=${OUT:?}
-LINE=$(grep -E "^$PEER " /etc/vy/peers) || { echo "bw_peer.sh: $PEER has no line in /etc/vy/peers"; exit 2; }
-read -r -a TO <<< "${LINE#"$PEER "}"
 SSHO=(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20)
+PEER= TO=()
+for p in "$@"; do
+  line=$(grep -E "^$p " /etc/vy/peers) || { echo "bw_peer.sh: $p has no line in /etc/vy/peers" >> "$O/peers.txt"; continue; }
+  read -r -a to <<< "${line#"$p "}"
+  there=$("${SSHO[@]}" "${to[@]}" hostname 2>> "$O/peers.txt") || { echo "$p: unreachable" >> "$O/peers.txt"; continue; }
+  [ "$there" = "$(hostname)" ] && { echo "$p: this host" >> "$O/peers.txt"; continue; }
+  PEER=$p TO=("${to[@]}"); break
+done
+[ -n "$PEER" ] || { cat "$O/peers.txt"; echo "bw_peer.sh: no peer reachable"; exit 2; }
 SSH=("${SSHO[@]}" "${TO[@]}")
 S=$(mktemp -d)
 R=$("${SSH[@]}" mktemp -d /tmp/bw-peer-XXXXXX)
