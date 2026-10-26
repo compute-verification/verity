@@ -23,3 +23,20 @@ O-IO's results:
 - **The coordinator decided OPT_honest:** it's the best public algorithm (OPT*), as the agreed end state has it. The deployed kernel's gap from it is reported as its own term, ε_alg (0.53–1.76% for the reference kernel per O-IO).
 
 Two consequences for the statement. (1) `ImportWithinCertifier` in the per-bit form (help ≤ βK) is false: state import per unit (units outsourced ≤ K/b_unit, b_unit ≈ 1 Kbit when inputs are seed-derived) and keep the bound's dependence on b_unit explicit. (2) Lemma S gives a second, very clean headline for a SYM design: if Daniel takes the twin, `WorkSound` for SYM is a coupling plus SAK at uniform int8. Keep the statement parametric enough to instantiate either.
+
+## 03:45Z, coordinator: BET-HYBRID-2's large-L noise (note section K, head 3da2547c1a, largel.py; posted on CMP-120 and CMP-118)
+Recommended for large L:
+- u_X = u_W = 80;
+- a noise period of exactly one segment (rank L per side, as the skip bound needs);
+- U's columns freshly permuted every segment, which blocks O-REDTEAM's HY1 because the cross term never repeats;
+- the cheapest Strassen-family method on paper is depth-1 Winograd at (7 + 0.5·8)/8 = 1.375× naive. X at ±64 fails (1.125); u_X = 72 is borderline (1.22);
+- the served product is recovered exactly in largel.py's six cases (uniform, zero, HY1's A = 0 with periodic B; ±80 and ±127).
+
+Honest cost beyond the hash: wraps (W on 2:4, +0.5 tensor; or both on the ALU, +0.22 issue / +0.43 pipe) and peels, γ_rm ≈ 6L/K (0.53 at L = 1450, K = 16384). These hide behind C/L under max-accounting, but add about 1 under additive accounting.
+
+Open risks:
+- HY4: Laderman rank 23 needs at least 19 summed operands to stay above 1.2, and the ⟨4,4,4⟩ rank 48–49 schemes are uncounted. The criterion: a scheme beats 1.2 if R + 0.5(s_A + s_B) < 1.2·mkn.
+- 1.375 assumes the adversary's overflow fix costs at least 2:4's 0.5 per summed operand.
+- The 70B densities at ±80 are missing.
+
+HY2: wrap corrections and peels are serving work outside the words. Under R-ACCEL-1 they're other work, not credit, so skipping them isn't a soundness issue. Say so explicitly in the statement's docstring, or answer BET-HYBRID-2's smell that they may enter ε through the skip bound when tensor time binds.

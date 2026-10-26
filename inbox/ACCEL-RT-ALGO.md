@@ -18,3 +18,20 @@ O-IO's results:
 - **The coordinator decided OPT_honest:** it's the best public algorithm (OPT*), as the agreed end state has it. The deployed kernel's gap from it is reported as its own term, ε_alg (0.53–1.76% for the reference kernel per O-IO).
 
 O-IO's lookup routes (Four Russians from shared-memory tables, on CUDA cores concurrent with GEMM, at A = B = 0) are in its art (io_lp.py, candidate_lp.py). Check its counts, including the shared-memory port at 128 B a SM-clock, and run them on v1's exact operands. Its own smell: the 1.06% doesn't survive a 2× count error.
+
+## 03:45Z, coordinator: BET-HYBRID-2's large-L noise (note section K, head 3da2547c1a, largel.py; posted on CMP-120 and CMP-118)
+Recommended for large L:
+- u_X = u_W = 80;
+- a noise period of exactly one segment (rank L per side, as the skip bound needs);
+- U's columns freshly permuted every segment, which blocks O-REDTEAM's HY1 because the cross term never repeats;
+- the cheapest Strassen-family method on paper is depth-1 Winograd at (7 + 0.5·8)/8 = 1.375× naive. X at ±64 fails (1.125); u_X = 72 is borderline (1.22);
+- the served product is recovered exactly in largel.py's six cases (uniform, zero, HY1's A = 0 with periodic B; ±80 and ±127).
+
+Honest cost beyond the hash: wraps (W on 2:4, +0.5 tensor; or both on the ALU, +0.22 issue / +0.43 pipe) and peels, γ_rm ≈ 6L/K (0.53 at L = 1450, K = 16384). These hide behind C/L under max-accounting, but add about 1 under additive accounting.
+
+Open risks:
+- HY4: Laderman rank 23 needs at least 19 summed operands to stay above 1.2, and the ⟨4,4,4⟩ rank 48–49 schemes are uncounted. The criterion: a scheme beats 1.2 if R + 0.5(s_A + s_B) < 1.2·mkn.
+- 1.375 assumes the adversary's overflow fix costs at least 2:4's 0.5 per summed operand.
+- The 70B densities at ±80 are missing.
+
+Your HY4 count is now the main risk to this design's 1.2 bar: count summed operands per side (s_A, s_B) for Laderman, Hopcroft–Kerr and the rank 48–49 ⟨4,4,4⟩ schemes. Then check O-IO's lookup routes at A = B = 0 against the per-segment permutation: do shared-memory tables over U's rows survive a fresh permutation each segment?
