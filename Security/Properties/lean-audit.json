@@ -45,6 +45,7 @@
   "Properties.RemoteAudit.Line",
   "Properties.RemoteAudit.Schedule",
   "Properties.RemoteAudit.Live",
+  "Properties.Composition",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.Accounting.JointBridge.WorkOfCreditedWords"
  ],
@@ -325,6 +326,8 @@
   "Definitions.Claims",
   "Definitions.Hash",
   "Definitions.Pouw.Basic",
+  "Properties.Composition",
+  "CoreComposition",
   "Properties.NciDesc",
   "Definitions.Pouw.Window",
   "Definitions.Pouw.PearlC",
@@ -540,6 +543,11 @@
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck", "Properties.Pouw.Period"],
    "except": [],
    "why": "the period's credit at served H1's accepted prefix is stated against its own verdict (`PouwCheck.Credit.window`) and draw (`Credit.drawnOf`), the accounting model's period and J10-R's noise (`Definitions.Accounting.ComposePeriod`, `Definitions.Accounting.TS.J10R`), its named claims and `Properties.Pouw.Period`'s salt premise, never a proof"
+  },
+  "Properties.Composition": {
+   "imports": ["CoreComposition.Product"],
+   "except": [],
+   "why": "the properties are stated against the composition's own functions and the core interface's, on Lean core: nothing of Mathlib or of `security`"
   }
  },
  "reads_exempt": {
@@ -904,6 +912,18 @@
    "signature": ["Properties.CertifierDevice.records : Properties.CertifierDevice.Records"],
    "assumptions": [],
    "type_hash": "3d10d8c7be7195759652912607c6aa1859289fc9b053d0891c0df0d5576643f3"
+  },
+  "Properties.Composition.acceptMeans": {
+   "owner": "@proofs",
+   "signature": ["Properties.Composition.acceptMeans : Properties.Composition.AcceptMeans"],
+   "assumptions": [],
+   "type_hash": "62c9c4ab346e4e8737a8dd33e32a7442528b5943912fec653650c09f23382320"
+  },
+  "Properties.Composition.answerAccepts": {
+   "owner": "@proofs",
+   "signature": ["Properties.Composition.answerAccepts : Properties.Composition.AnswerAccepts"],
+   "assumptions": [],
+   "type_hash": "9ef48444197e3ddf011a98db92e86110363c2cf80dde2491249648d8fe97dbc2"
   },
   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
    "owner": "@compute-accounting",
@@ -3434,6 +3454,14 @@
    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt": {
     "function": "PousCheck.Run.checkAt",
     "outcome": "accept"
+   },
+   "Properties.Composition.acceptMeans": {
+    "function": "Core.Composition.check",
+    "outcome": "accept"
+   },
+   "Properties.Composition.answerAccepts": {
+    "function": "Core.Protocol.answer",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -3997,6 +4025,30 @@
     "Properties.Requirement.topological"
    ]
   },
+  "CoreComposition.Product": {
+   "digest": "8357e3f76705294148caf008aa8d53b1c981403cc57a2289883c678112ddcc18",
+   "definitions": {
+    "Core.Composition.Answers": "ce5e7efd960e3c1d869d6f029b14a2783af08a79f6dd8fcc1c6ac82947c0f4b8",
+    "Core.Composition.Case": "e1d6dca48094d8180e9a91af36d79453005187d32ae340134c6091b9652bbe5c",
+    "Core.Composition.Case.commitment": "c1ec24f2a1691724ad29ed3646ba1fa727798db2e86f70e46393b8f67ce6d672",
+    "Core.Composition.Case.evidence": "863f25abd49f71d64606bf49f495c9188878bd1757bb1cb5210fc1f168e286ea",
+    "Core.Composition.Case.id": "f1e6f8047ee36486a14e79bc6b04b43cfd6cc407a75b92693f405da459093901",
+    "Core.Composition.Case.params": "8ae581ddf4b510e3fbb2c7b630e62a2edb55351e040ddff61e64c8b53ddd7154",
+    "Core.Composition.Keyed": "580d2eb54845b895bae5675b6dc9c0e0ec46dc37d750a0564e7fef6846501fc6",
+    "Core.Composition.Named": "bdb899d2926eb56f1a3b37d9d4798f4ec2b336bcf047d1179fcce0df4f41d039",
+    "Core.Composition.Named.id": "7d3fd870a453280c1f1656517fe087f6d3216b68605c917b5adb8b181c8a6e8f",
+    "Core.Composition.Named.params": "fc9e220a72a04e0193b7304e7c8d184e0eebebcb0d8a51b6067f31b80ece24c6",
+    "Core.Composition.answersOf": "c6df0589223a1b4e09e95f8165b7429096243ce2781ab948890ca216b8dd7b79",
+    "Core.Composition.bind": "de2b1e7646572a32bb2663d8a6851b69578e72434ff84641ec3118c0bb41eb09",
+    "Core.Composition.binding": "cdcf259697abdbf9bcb047ecaca5a07a9f9a966a9fe205c914fe4246b814c13c",
+    "Core.Composition.check": "100081501fadd97248442f7ddbbfd8386801b99490923e570679e8aee6e7a508",
+    "Core.Composition.judge": "c50acc616c7648ce89baf987748e5946d90450ddff9f9cb499549babd49060ee",
+    "Core.Composition.misfit": "2e55a22712fc8215456ed4e186a2dd1757d5cc9b6a3006e680d290683a8e07d0",
+    "Core.Composition.run": "3d1e2602bd7db40ea261ffaf4152fa516be4606fd4d584b83a7502e1a77bf14f",
+    "_private.CoreComposition.Product.0.Core.Composition.reasons": "f19dd4d38993b4aec3bfb2e367bea0f8433abfc65851e0abbb8d3828495332ad"
+   },
+   "guarantees": ["Properties.Composition.acceptMeans"]
+  },
   "CoreProtocol.Profile": {
    "digest": "6b48d70a03be47bbc16fb54d2b4ca09269285cd9442ce7211c9abdf9cec0535b",
    "definitions": {
@@ -4066,7 +4118,7 @@
    ]
   },
   "CoreProtocol.Protocol": {
-   "digest": "af75233a1ddc56df133e1e652d0bd324af3de16d6854a0fcd298b209209667fd",
+   "digest": "f688a6c1fff616359ab583c5e071dc3f3d77815e5aed58f6aa6027e2cb11824b",
    "definitions": {
     "Core.Answer": "5da1a1dc7c3a38866fb726c7c8f20f4a5f59ee249feb3cda145b8e3cb4143014",
     "Core.Answer.digest": "d836aa67c9938f2a8b2b90aa9072dee781ea1e90129eca96845002ccbcb3e2b0",
@@ -4113,6 +4165,7 @@
     "Core.Verdict.undecided": "c286e20877f53e983e2847548bf0864728a1ee7a2988a2c852bc9684a58c2b7d",
     "Core.canonicalJson": "248f540589e66dcee3fed2d3a1b6dfc238132c311c5694875a67c6ab98bff35c",
     "Core.canonicalJson._sparseCasesOn_3": "636006752adbd5a614a0be69f18609f0783764283355527f05cc5159d5172c06",
+    "Core.instDecidableEqVerdict": "f46bce4ed5ce4155001bb005897480dc26f2267c50d3b4c2cf4c622a33d232db",
     "Core.instReprVerdict.repr.match_1": "512a9ee16b4e82345f3343510c022654d75d82c2a8b0218985a2e4bf3cb23d3d",
     "_private.CoreProtocol.Protocol.0.Core.opt": "7720a69b388da12990009ab9c126a25370b5ea8b036100358463e2813c7a0710"
    },
@@ -4129,6 +4182,8 @@
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
+    "Properties.Composition.acceptMeans",
+    "Properties.Composition.answerAccepts",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsLinkWindows",
     "Properties.NetworkCertifier.acceptsOneRecordEach",
@@ -6909,6 +6964,8 @@
     "Properties.CertifierDevice.issuerVerifies",
     "Properties.CertifierDevice.linkSchedule",
     "Properties.CertifierDevice.records",
+    "Properties.Composition.acceptMeans",
+    "Properties.Composition.answerAccepts",
     "Properties.Identity.taggedIsFlock",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsLinkWindows",
@@ -7033,6 +7090,8 @@
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
+    "Properties.Composition.acceptMeans",
+    "Properties.Composition.answerAccepts",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsLinkWindows",
     "Properties.NetworkCertifier.acceptsOneRecordEach",
@@ -7234,6 +7293,7 @@
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.CertifierDevice.issuerVerifies",
+    "Properties.Composition.acceptMeans",
     "Properties.Identity.streamIsFlock",
     "Properties.Identity.taggedIsFlock",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
@@ -10798,6 +10858,20 @@
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows"
    ]
+  },
+  "Properties.Composition": {
+   "digest": "b9f50ea80ef3e1d5ca7aeebdf8b27f10d9b45a16e8ab6a0f355c4b27dd2320f9",
+   "definitions": {
+    "Properties.Composition.AcceptMeans": "b74b5f32f9ca94ba09cafef0ce9f3276e6056d3dd76c9bc77f59cabc5f114048",
+    "Properties.Composition.Accepted": "bf80cb850b5bafc41b003264ee2f01b909875cff3da4d37e7ef16c566c756e13",
+    "Properties.Composition.AnswerAccepts": "3730657920dee4f71784d3f9a8da810a24e704fd3ab0eb044eec35a18b4675ff",
+    "Properties.Composition.DecodedAccepted": "09ee34a6e081457094734878a34bdc6b085e3b581683ea26acb64d5497d4435a",
+    "Properties.Composition.Fits": "17f56db7d8753eb5cb1b56cf5372c484416cfc401ba473cec8c93df4d2447b35",
+    "Properties.Composition.digestOf": "2a96b9ee3bea5327b2ce55f309f13b9c82641b0c69f2b6c233df18f7f351ff42",
+    "Properties.Composition.digests": "3f6c516221163d568ddc3ec0ad2128b6f40f10c8023f86cdbd9bc67367e89f38",
+    "Properties.Composition.triples": "c13bf0420c351aa780cb5d3b9df5299a788f116b55f766540d9366b2993990d6"
+   },
+   "guarantees": ["Properties.Composition.acceptMeans", "Properties.Composition.answerAccepts"]
   },
   "Properties.Evaluate": {
    "digest": "cd5c4e08ef821abd0b2f6be9c8d87edbb721cbc76cde9c021adc8949e7a7e177",
