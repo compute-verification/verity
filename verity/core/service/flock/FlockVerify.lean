@@ -1553,8 +1553,8 @@ def recComposeCmd (args : List String) : IO UInt32 := do
     else if a == "--rec-inner" || a == "--rec-rows" || a == "--archive" then flag := true
     else logs := logs.push a
   -- a log that can't be read is a part that never ran: no VERDICT, so refused
-  let parts ← logs.toList.mapM fun f => do
-    try pure (f, ← IO.FS.readFile f) catch _ => pure (f, "")
+  let parts : List (String × String) ← logs.toList.mapM fun f => do
+    try pure (f, ← IO.FS.readFile ⟨f⟩) catch _ => pure (f, "")
   let res := RecCompose.check n digest parts
   let line := Lean.Json.mkObj [("accepted", Lean.Json.bool res.toBool), ("why", Lean.Json.str (match res with
       | .ok () => "" | .error e => e)), ("statements", Lean.toJson n), ("parts", Lean.toJson parts.length),
