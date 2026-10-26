@@ -396,13 +396,13 @@ theorem sessionRun_decides_fit {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out
     {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
     (hS : FlockComplete.sessionS H resp spec sts w ω = (.ok (rec, pfs), bs))
     (hfc : FilesFinalC spec sts c₁ cs.tail.dropLast pfs) (hrd : rd last = some fl)
-    (hps : fl.ps = filePs spec sts c₁ pfs) :
+    (hps : fl.ps = filePs spec sts c₁ pfs) (hst : fl.stmt = x) :
     ∃ d, decR rd x (honestMsgs (fileCaps spec sts c₁ pfs) ((List.range (filePs spec sts c₁ pfs).size).map fun k =>
       repRows (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast k) (filePs spec sts c₁ pfs)[k]!
         (Ts k)) last) cs = some d := by
   obtain ⟨h64t, hts⟩ := setup_tables hx
   obtain ⟨hsz, hall⟩ := sessionS_reps h64 hc hts.symm htab hS (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast
-  refine sessionRun_decides h64 hx hcs hc hts.symm htab hS hfc ?_ ?_ hrd hps
+  refine sessionRun_decides h64 hx hcs hc hts.symm htab hS hfc ?_ ?_ hrd hps hst
   · refine capRows_fit (by rw [fileCaps_size]; exact h64t) fun a ha => ?_
     obtain ⟨i, hi, rfl⟩ := Array.mem_map.1 ha
     have hi' := Array.mem_range.1 hi

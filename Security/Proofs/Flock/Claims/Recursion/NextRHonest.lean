@@ -108,9 +108,10 @@ def RepReadsBack : Prop :=
 /-- **An honest prover's rounds read back.** Take a statement that sets up as `(s, spec, sts)` and coins whose first is
 `c₁`. The honest prover sends round 0 from each table's level-0 cap `caps[i]` (of its `2^cap₀` nodes), and each rep's
 rounds from its proof `ps[k]` (honest, at its table's cap) at its batched value `Ts k`, with a last message the reader
-reads as `fl`, whose proofs are `ps`. On those messages `decR` decides. It reads round 0 as the link of the caps, each
-table's `root_B` its cap's nodes joined, with no public words; every rep's proof as `ps[k]`; the round messages as
-the honest proofs' framed bytes; and the record as the reader's (`recJ`) at them. -/
+reads as `fl`, whose statement is the statement and whose proofs are `ps`, each shaped for its file (`ShapedAt`). On
+those messages `decR` decides. It reads round 0 as the link of the caps, each table's `root_B` its cap's nodes joined,
+with no public words; every rep's proof as `ps[k]`; the round messages as the honest proofs' framed bytes; and the
+record as the reader's (`recJ`) at the statement. -/
 def ReadsBack : Prop :=
   ∀ (rd : Claims.Msg → Option FinalP) (x last : Claims.Msg) (cs : List Coin) (s : Ins) (spec : SessionSpec)
     (sts : Array Stmt) (c₁ : Coin) (caps : Array (Array ByteArray)) (ps : Array Flock.Proof) (Ts : ℕ → F128)
@@ -122,7 +123,7 @@ def ReadsBack : Prop :=
       HonestRep (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! ∧ ps[k]!.cap = caps[k / 2]!) →
     RowsFit ((capRows caps).map nodeRow) →
     (∀ k < ps.size, ∀ rs ∈ repRows (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k), RowsFit rs) →
-    rd last = some fl → fl.ps = ps →
+    rd last = some fl → fl.ps = ps → fl.stmt = x → ShapedAt spec sts c₁ ps →
     decR rd x (honestMsgs caps ((List.range ps.size).map fun k =>
         repRows (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k)) last) cs =
       some ⟨s, spec, sts,
@@ -131,7 +132,7 @@ def ReadsBack : Prop :=
         c₁, ((List.range ps.size).map fun k =>
           framesOf (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k)).flatten.zip
           cs.tail.dropLast,
-        ⟨fl.stmt, recJ spec sts
+        ⟨x, recJ spec sts
           ((caps.toList.map Array.toList).map (·.foldl (· ++ ·) ByteArray.empty),
             sts.toList.map fun _ => ByteArray.empty) c₁
           ((List.range ps.size).map fun k =>
@@ -406,7 +407,7 @@ theorem range_map_getElem! {α : Type} [Inhabited α] (a : Array α) :
 
 /-- **The session reads back where each rep does.** -/
 theorem readsBack_of_rep (hR : RepReadsBack) : ReadsBack := by
-  intro rd x last cs s spec sts c₁ caps ps Ts fl hx hc1 hs hcs hps hrep h0 hrows hrd hfl
+  intro rd x last cs s spec sts c₁ caps ps Ts fl hx hc1 hs hcs hps hrep h0 hrows hrd hfl hst hsh
   set reps := (List.range ps.size).map fun k =>
     repRows (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k)
     with hreps
@@ -451,7 +452,13 @@ theorem readsBack_of_rep (hR : RepReadsBack) : ReadsBack := by
     rw [hreps] at hl
     obtain ⟨k, hk, rfl⟩ := List.mem_map.1 hl
     exact hrows k (List.mem_range.1 hk) rs hrl
-  simp only [decR, hx, hlast, hhead, hc1, hrd, rowsOf_rows h0, Option.map_some, map_nodeOf_nodeRow, hmid,
-    linkR_capRows hs hcs, hpf, Option.bind_eq_bind, Option.bind_some, Option.pure_def]
+  have hrd' : (rd last).filter (·.stmt == x) = some fl := Option.filter_eq_some_iff.2 ⟨hrd, beq_iff_eq.2 hst⟩
+  have hpf' : (readPs spec sts c₁ (capRows caps) reps.flatten cs.tail.dropLast fl).filter (fun pf =>
+      @decide (ShapedAt spec sts c₁ pf.1) (Classical.propDecidable _)) =
+      some (ps, ((List.range ps.size).map fun k =>
+        framesOf (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k)).flatten) :=
+    Option.filter_eq_some_iff.2 ⟨hpf, @decide_eq_true _ (Classical.propDecidable _) hsh⟩
+  simp only [decR, hx, hlast, hhead, hc1, hrd', rowsOf_rows h0, Option.map_some, map_nodeOf_nodeRow, hmid,
+    linkR_capRows hs hcs, hpf', Option.bind_eq_bind, Option.bind_some, Option.pure_def]
 
 end FlockDeploy
