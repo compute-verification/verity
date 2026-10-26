@@ -17,7 +17,8 @@ window is PoUW's ``{context, kind, public}``, not one-stage's provenance:
   (`flock_input_files`), and the window's operands (``activations``) are held to domains binding that context
   (`committed_activations`);
 * the tiles' ``a`` and ``b`` rows are registered reads of those operands: each drawn member's ``--registered`` file comes
-  from the record and the registration's entries alone (`operands.held`, records_audit's ``--registered``), and Lean's
+  from the record and the registration's entries alone (`operands.held`, records_audit's ``--registered``, in place of
+  its `window_pins`, which reads a one-stage window's ``run``), and Lean's
   registered reads open every row against them.
 
 Then `answer` makes the proof service's answer for the registration in PoUW's evidence form (`core_check.evidence`:
@@ -200,6 +201,8 @@ def main(argv: list[str] | None = None) -> int:
     RA.source = lambda w, held: source(w, {**held, **held_prov})
     RA.committed_activations = committed_activations
     RA.pinned = lambda doc: OP.held({"context": rec["window"]["context"], OP.KEY: doc})
+    # the window's own values are its operands, which --registered pins (`operands.held`, under the window's context)
+    RA.window_pins = lambda w, circuit: {}
     out.mkdir(parents=True, exist_ok=True)
     (out / "operands.json").write_text(json.dumps(rec["window"].get(OP.KEY), sort_keys=True))
     rc = RA.main(["audit", "--window", str(wdir), "--law", f"{law['law']}:{law['k']}", "--circuit", a.circuit,
