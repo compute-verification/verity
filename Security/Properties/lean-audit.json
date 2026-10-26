@@ -1755,6 +1755,9 @@
    "assumptions": [],
    "type_hash": "5e3069f2c0bb12102f9cf9ec32b6cb573d48b81d26b2f1ce0143b0c683f65959"
   },
+  "Properties.RemoteAudit.Component.publishedEps": {
+   "owner": "@memory-accounting"
+  },
   "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.Line.SecurityProofs.lineHeld : Properties.RemoteAudit.Line.LineHeld"],
@@ -3133,6 +3136,10 @@
     "outcome": "accept"
    },
    "Properties.RemoteAudit.Component.acceptIsVerified": {
+    "function": "RemoteAudit.Protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.Component.publishedEps": {
     "function": "RemoteAudit.Protocol.check",
     "outcome": "accept"
    },
