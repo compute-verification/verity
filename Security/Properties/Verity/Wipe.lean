@@ -1,5 +1,6 @@
 import Properties.Verity.Soundness
 import MemoryChallenger.WipeProtocol
+import Definitions.Pous.Guarantees.StreamedWipeServer
 
 /-!
 # The wipe, the sixth subprotocol, in the causal game
@@ -12,22 +13,26 @@ compiled component is `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`
   proofs committed to (`RegistrationAccepts`), and its component's acceptance of its own case in what the prover sent
   (`WipeAccepts`);
 * its claim is per server, in the physical model (Daniel, 26 Oct 12:16 PM PDT: "We only wipe all but 5 GB of the assumed
-  memory capacity of the server"): each server `s` has a public assumed memory capacity `capacity θ s` (M_s, over every
-  tier), and at the wipe tick that opens the period a server whose tiers hold at most M_s keeps at most `keepBits θ`
-  bits of prior content (5 GB, 4 × 10^10 bits, at the operating point) plus its egress (`WipeVocab.Holds`);
+  memory capacity of the server"): each server `s` publishes its wipe (`n` labels, ratio `r`, `k` reads, `R` bits outside
+  the fill), so its assumed memory capacity is `M_s = 512 · n + R` over every tier (`capacity`), and at the wipe tick
+  that opens the period a server whose tiers hold at most M_s keeps at most 5 GB (`4 · 10^10` bits) of prior content
+  plus its egress (`WipeVocab.Holds`);
 * its target (`WipeVocab.WipeSound`, MEM-93) is that claim's bound per server, at every parameters, commitment and
-  strategy, with error `delta θ s` plus its collision term at the probability that its fixed finder applied to the
-  strategy outputs a SHA-512 collision (`WipeVocab.error`): a release missing from the device's log is an LMS forgery,
-  which the finder turns into one.
+  strategy, with error `StreamedWipeMeetsServer5GB`'s bound at the wipe model's prover built from the strategy
+  (`2^-128` plus the PRF's advantage against the distinguisher built from it) plus the forged-release finder's loss
+  (`WipeVocab.error`). It follows from `Pous.Guarantees.StreamedWipeMeetsServer5GB` (memory-accounting, MEM-95), the
+  coupling of the wipe model's game into this one (`WipeVocab.Couples`) and the published wipes being at the 5 GB point
+  (`WipeVocab.AtOperatingPoint`): `Verity.WipeVocab.wipeSound_of_streamed`. Whether a deployment's `R` reaches that
+  point is an operating fact of its parameters, not a premise: the theorem holds at whatever `R` is registered.
 
 `Vocab.SoundnessWithWipe` is `Vocab.Soundness` with the wipe's claim among the period's claims and its errors, summed
 over the servers, in the bound. The wipe's claim is counted where the wipe's case is accepted: onsite's components
 don't include `verity/wipe/v0` yet, so until `Core.Onsite.components` composes it, `WipeAccepts` holds of nothing and
 the wipe's term bounds nothing.
 
-The names the wipe defines are `WipeVocab`'s fields: `coinsRead` (ONE-4), the finder per server, what each server holds,
-keeps and sends in each play (the memory challenger's world), and the capacities, kept bits, errors and collision terms
-the product publishes, from the parameters.
+The names the wipe defines are `WipeVocab`'s fields: `coinsRead` (ONE-4), what each server holds, keeps and sends in
+each play (the memory challenger's world), each server's published wipe and egress bound, the PRF, the wipe model's
+prover built from the strategy, and the forged-release finder and its loss.
 -/
 
 namespace Verity
@@ -46,17 +51,26 @@ structure ServerWipe where
   egress : ℕ
 
 /-- **The names the wipe defines**, over the servers `Srv` and the rounds of the subprotocols' names `V`: the releases the
-wipe's check read, decoded from the device's signed log entries in what the prover sent (ONE-4); its collision finder
-per server applied to a strategy; what each server holds, keeps and sends in each play; and each server's assumed
-capacity M_s, the bits a wipe leaves (5 GB at the operating point), the error and the collision term per server, from the
-parameters alone. -/
+wipe's check read, decoded from the device's signed log entries in what the prover sent (ONE-4); what each server holds,
+keeps and sends in each play; each server's wipe as published (the fill's `n` labels, the ratio `r`, the read count
+`k`, the bits `R` outside the fill, so its assumed capacity is `M_s = 512 · n + R`) and the egress bound `E` its network
+certifier enforces; the PRF the labels come from; the wipe model's prover built from the strategy at each server
+(`prover`, a fixed construction, whose distinguisher `StreamedWipe.wipeDistinguisherBy` is the wipe's finder term); the
+forged-release finder per server and its loss. -/
 structure WipeVocab {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α) (Srv : Type) where
   coinsRead : Sent → List Release
-  finder : (θ F c : ByteArray) → Game.Strategy (V.game θ F c) → Srv → Finder
   world : (θ F c : ByteArray) → Game.Strategy (V.game θ F c) → Outcome → Srv → ServerWipe
-  capacity : ByteArray → Srv → ℕ
-  keepBits : ByteArray → ℕ
-  delta : ByteArray → Srv → ℝ≥0∞
+  n : ByteArray → Srv → ℕ
+  r : ByteArray → Srv → ℕ
+  k : ByteArray → Srv → ℕ
+  R : ByteArray → Srv → ℕ
+  egressBound : ByteArray → Srv → ℕ
+  κ : ByteArray → Srv → ℕ
+  prf : (θ : ByteArray) → (s : Srv) → Pous.Bits (κ θ s) → Fin (n θ s) → Pous.Bits 512
+  prover : (θ F c : ByteArray) → Game.Strategy (V.game θ F c) → (s : Srv) →
+    Pous.StreamedWipe.Prover (n θ s) (k θ s) 512 (40000000000 + egressBound θ s) (512 * n θ s + R θ s)
+      (egressBound θ s)
+  finder : (θ F c : ByteArray) → Game.Strategy (V.game θ F c) → Srv → Claims.Finder
   loss : ByteArray → Srv → ℝ≥0∞ → ℝ≥0∞
 
 namespace WipeVocab
@@ -65,29 +79,59 @@ variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] {V : Vocab d α} {
 
 /-- **The wipe's verdict**: the circuit file passed the commit phase's check, NCI accepted the registration sampled
 proofs committed to, and the wipe's component accepts what the prover sent. -/
-def Verdict (o : Outcome) : Prop :=
+def Verdict (V : Vocab d α) (o : Outcome) : Prop :=
   V.Registered o.params o.file ∧ RegistrationAccepts o.sent ∧ WipeAccepts o.sent
 
 /-- Every release the wipe's check read is in the device's log; outside it, the release is a forgery of the device's
 LMS signature, which the wipe's finder turns into a collision. -/
 def Logged (o : Outcome) : Prop := ∀ r ∈ W.coinsRead o.sent, r ∈ o.log
 
+/-- Server `s`'s assumed memory capacity, every tier counted: `M_s = 512 · n + R`. -/
+def capacity (θ : ByteArray) (s : Srv) : ℕ := 512 * W.n θ s + W.R θ s
+
 /-- **The wipe's claim at server `s`**: if the server's tiers hold at most its assumed capacity M_s, it keeps at most
-`keepBits` bits of prior content across the wipe tick, plus its egress. -/
+5 GB (`4 · 10^10` bits) of prior content across the wipe tick, plus its egress. -/
 def Holds (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (s : Srv) (o : Outcome) : Prop :=
   (W.world θ F c σ o s).mem ≤ W.capacity θ s →
-    (W.world θ F c σ o s).kept ≤ W.keepBits θ + (W.world θ F c σ o s).egress
+    (W.world θ F c σ o s).kept ≤ 40000000000 + (W.world θ F c σ o s).egress
 
-/-- **The wipe's error at server `s` and a strategy**: its published `δ`, plus its collision term at the probability
-that its finder applied to the strategy outputs a SHA-512 collision. -/
+/-- **The wipe's error at server `s` and a strategy**: `StreamedWipeMeetsServer5GB`'s bound at the prover built from the
+strategy (`2^-128` plus the PRF's advantage against the distinguisher built from it), plus the forged-release finder's
+loss at its probability of a SHA-512 collision. -/
 noncomputable def error (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (s : Srv) : ℝ≥0∞ :=
-  W.delta θ s + W.loss θ s (W.finder θ F c σ s).collides
+  (2⁻¹ : ℝ≥0∞) ^ 128 +
+      Pous.StreamedWipe.prfAdvantage (W.prf θ s)
+        (Pous.StreamedWipe.wipeDistinguisherBy Pous.StreamedWipe.Accepts (W.prover θ F c σ s)) +
+    W.loss θ s (ENNReal.ofReal ((W.finder θ F c σ s).Pr sha512Msg))
 
 /-- **The wipe's target (MEM-93)**: at all parameters and commitments, for every strategy and every server, the
 probability that the wipe accepts while that server's claim fails is at most its error at that strategy. -/
 def WipeSound : Prop :=
   ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (s : Srv),
-    Game.prob (fun o => W.Verdict o ∧ ¬ W.Holds θ F c σ s o) (V.game θ F c) σ ≤ W.error θ F c σ s
+    Game.prob (fun o => Verdict V o ∧ ¬ W.Holds θ F c σ s o) (V.game θ F c) σ ≤ W.error θ F c σ s
+
+/-- **The wipe model's game realizes the causal game's wipe** at each server: the probability that the wipe accepts
+while server `s` keeps more than 5 GB plus its egress is at most the probability that the wipe model accepts the prover
+built from the strategy while it keeps its `4 · 10^10 + E` bits (`StreamedWipe.winRealBy` at `Accepts`), plus the
+forged-release finder's loss. It is the coupling the memory challenger's piece proves (MEM-93). -/
+def Couples : Prop :=
+  ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (s : Srv),
+    Game.prob (fun o => Verdict V o ∧ ¬ W.Holds θ F c σ s o) (V.game θ F c) σ ≤
+      Pous.StreamedWipe.winRealBy Pous.StreamedWipe.Accepts (W.prf θ s) (W.prover θ F c σ s) +
+        W.loss θ s (ENNReal.ofReal ((W.finder θ F c σ s).Pr sha512Msg))
+
+/-- **Every server's published wipe is at the 5 GB point** (`StreamedWipe.OperatingPoint`), with `n ≥ 1`, `r ≥ 1` and
+`(r − 1)^k · 2^129 ≤ r^k`: the parameters `StreamedWipeMeetsServer5GB` reads. -/
+def AtOperatingPoint : Prop :=
+  ∀ θ s, 0 < W.n θ s ∧ 0 < W.r θ s ∧ (W.r θ s - 1) ^ W.k θ s * 2 ^ 129 ≤ W.r θ s ^ W.k θ s ∧
+    Pous.StreamedWipe.OperatingPoint (W.n θ s) (W.r θ s) (W.k θ s) (W.R θ s)
+
+/-- **The wipe's honest lemma at the deployment**: at registered files, the deployment's honest prover meets every
+server's wipe claim on almost every play (memory-accounting's `Pous.Claims.StreamedWipeMeetsServer5GB_meets` at the
+deployed parameters, through `Couples`). -/
+def HonestHolds : Prop :=
+  ∀ θ F c : ByteArray, V.Registered θ F → ∀ s,
+    Game.prob (fun o => ¬ W.Holds θ F c (V.honest θ F c) s o) (V.game θ F c) (V.honest θ F c) = 0
 
 end WipeVocab
 

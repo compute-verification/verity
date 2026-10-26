@@ -513,6 +513,24 @@ At the deployed fill, `N = 40,625,000,000` labels (2.6 TB) at `δ = 2^-40`, half
   count `C(N, r) ≤ N^r ≤ 2^(36·r)` spends the difference: `k · (D/N) = 28.434 > 41 · ln 2` for sampling, and
   `17 + 548 · (D − 1) + 41 = 8,554,279,510` bits for compression, each `2^-41`.
 
+At `k = 2152` reads and `δ = 2^-128`, the figure `verity/wipe/v0` publishes, `StreamedWipeMeetsFamily`
+(`Security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean`, with its instances `StreamedWipeMeets96GiB` and
+`StreamedWipeMeets141GB`, proved in `Security/Proofs/Pous/StreamedWipe/Family.lean`) proves `⌈M/19⌉ + E` bits for every
+fill of `N ≥ 2^19` labels (one 32 MiB segment or more, no upper limit) at `g = N − ⌈N/24⌉`: `2152/24 > 129 · ln 2` for
+sampling, and with the count `C(N, r) ≤ 2^N` the compression term needs `q ≥ E + 512 · (⌈N/24⌉ − 1) + N + 141`, below
+`⌈M/19⌉ + E` since `512/24 + 1 < 512/19` bits a label, each `2^-129`.
+`(18/19)^2152 ≈ 2^-167.9`, but sampling can't take all of `f = 1/19`: the missing labels' bits and the count come out of
+the same `M/19`. At `k = 2152` this split reaches about `f = 1/23`, and `f = 1/19` from about `k = 1,765`.
+
+For any read count, `StreamedWipeMeetsReads` (`Security/Definitions/Pous/Guarantees/StreamedWipeReads.lean`, proved in
+the same `Family.lean`, the family being its instance at `r = 24`) proves `512 · (⌈N/r⌉ − 1) + N + ⌊log₂ k⌋ + 130 + R + E`
+bits at `2^-128` for every `k` and `r` with `(r − 1)^k · 2^129 ≤ r^k` (that is `(1 − 1/r)^k ≤ 2^-129`), every fill of
+`N ≥ 1` labels and `R` bits of the server outside the fill, which count in full. So `f ≈ 1/r + 1/512` at
+`k ≈ 129 · ln 2 · r ≈ 89.4 · r`. Its H200 instance, `StreamedWipeMeets141GB5`, meets the onsite target of at most
+5 GB a device: at `N = 2,203,125,000` (141·10⁹ bytes) with the 2.3 GB driver reserve, the least ratio is `r = 59` and its
+least read count `k = 5231`, for `39,721,768,854 + E` bits (the fill's 21,321,768,854, about 2.665 GB, plus the reserve:
+about 4.965 GB). At `r = 58` the fill's share alone is 2.706 GB.
+
 **What it rests on.** No named assumption. The PRF enters as the advantage term in the conclusion, which C3 bounds for
 an efficient prover. The physical premises are the game's shape, and the deployment must make them true:
 
@@ -522,6 +540,39 @@ an efficient prover. The physical premises are the game's shape, and the deploym
   the last answer, as the network certifier counts them;
 - C5, *no side channel*: no label leaves except through that egress, and nothing reaches the server during the
   challenges but the indices and what the outside sends.
+
+The `+ N` in `StreamedWipeMeetsReads`'s threshold is the count `C(N, m) ≤ 2^N` of the sets of `m = ⌈N/r⌉ − 1`
+missing labels, `N/512` bytes, 29.5 GB on a whole 8×H200 server. `StreamedWipeMeetsReadsTight`
+(`Security/Definitions/Pous/Guarantees/StreamedWipeServer.lean`, proved in
+`Security/Proofs/Pous/StreamedWipe/Server.lean`) replaces it with `m · (⌊log₂⌊3N/m⌋⌋ + 1)` (`C(N, m) ≤ (e·N/m)^m`), so the fill's share is about `(N/r) · (512 + log₂(e·r))`. Per server (Daniel, 26 Oct: the
+wipe leaves at most 5 GB of the server's assumed memory capacity), `StreamedWipeMeetsServer` states it against the
+assumed capacity `M_s = 512 · N + R` over every tier, `R` being every bit outside the fill (the boot disk and the GPU
+contexts included): a server keeps at most `B(N, r, k, R) + E` bits, `B` the fill's share plus `R`.
+`StreamedWipeMeetsServer5GB` is it at the 5 GB point `B ≤ 4·10^10`, and the servers that reach it, at the least `r`
+and its least `k` (the H200 also at its deployed `k`), are:
+
+| server | fill | `R` | `r` | `k` | fill's share | `B` | statement |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| one H200, measured | 148.48 GB | 2.276 GB | 56 | 4,963 | 2.693 GB | 4.969 GB | |
+| one H200, deployed | 148.48 GB | 2.276 GB | 62 | 5,500 | 2.432 GB | 4.709 GB | `StreamedWipeMeetsServerH200` |
+| 8×H200, HBM | 1,128 GB | 8 × 0.3 + 1.5 GB | 1,050 | 93,843 | 1.0995 GB | 4.9995 GB | `StreamedWipeMeetsServer8H200HBM` |
+| 8×H200, HBM and 2 TB RAM | 3,128 GB | 8 × 0.3 + 1.5 GB | 2,922 | 261,229 | 1.0998 GB | 4.9998 GB | `StreamedWipeMeetsServer8H200HBMRAM` |
+| 8×H200, and 12 TB disk | 15,128 GB | 8 × 0.3 + 1.5 GB | 14,183 | 1,268,143 | 1.1000 GB | 4.99996 GB | `StreamedWipeMeetsServer8H200` |
+
+The H200 is vy-dc-h200-2's card as r20261026-003454-bfd2 measured it (`Pous.StreamedWipe.h200`): 143,771 MiB in all
+and a fill of 4,425 segments of 32 MiB, so `R` is 18,211,667,968 bits; the deployed row is `wipe_party --reads 5500` at
+its published `r = 62`. With today's fill-process contexts at zero reserve, `R = 8 × 1.2 GB = 9.6 GB` on its own, and no
+`r` reaches 5 GB. `8 × 0.3 GB + 1.5 GB` is a minimal context per GPU and a host OS, unmeasured: the minimal-context
+probe in Tuesday's window on vy-dc-h200-2 is to measure it, and the 8×H200 rows' honest lemmas wait on it.
+
+Each of `StreamedWipeMeetsReadsTight`, `StreamedWipeMeetsServer`, `StreamedWipeMeetsServer5GB` and
+`StreamedWipeMeetsServerH200` is its claim (`Security/Definitions/Pous/Claims/StreamedWipeServer.lean`) at the wipe's
+verdict, with two lemmas beside it (`Security/Proofs/Pous/StreamedWipe/Witnesses.lean`). The honest one
+(`Pous.Claims.<name>_meets`): its numeric premises, `M_s = 512·N + R`, `0 < N`, `(r − 1)^k · 2^129 ≤ r^k` and the
+5 GB point, hold at the measured H200 at `k = 5500`. The nontrivial one (`Pous.Claims.<name>_fails`): against a verdict
+that accepts everything, a prover that writes its prior content into its memory and reads it back is accepted and
+keeps it with probability 1, while the PRF's advantage against the distinguisher built from it
+(`wipeDistinguisher P`) is 0. A prover that keeps nothing stays within `2^-q` (`Pous.Claims.keepNothing_within`).
 
 **Measured** (`r20261019-061002-ee6b`, one RTX PRO 6000 Blackwell Server Edition with 188 SMs;
 `benchmarks/pous/streamed_wipe/run.sh`; every gate passed, 76 vectors against `streamed_wipe.label`):
@@ -863,7 +914,10 @@ The properties of the Lean verdicts `PousCheck.TimedAudit` and `MemoryChallenger
 | `DenseMeets64`, `SegMeets14`, `SegTagMeets14` | the dense scheme at 64 KB, `D = 5`, `k = 106`, in the ideal-hash model: one segment, 448 segments (14 GB), and the 448 segments keyed as the implementation keys them, for every salt | proved |
 | `SegTagAuditSecure`, `DomainSepEquiv`, `TagInjective14` | the tagged keying's transfer: the tagged scheme is as secure as the global one, and the tags relabel the global indices injectively (448 distinct tags) | proved |
 | `BandTwoWay220_12`, `BandTwoWay220_12D11`, `BandTwoWay220_16` | the band certificate for the two-directional column game (`Pous.ColumnGame`): `B(220, 12)` at game depths 10 and 11, and `B(220, 16)` at depth 12, save at most `X = 3` labels | proved |
+| `StreamedWipeMeetsReadsTight`, `StreamedWipeMeetsServer`, `StreamedWipeMeetsServer5GB`, `StreamedWipeMeetsServerH200`, `StreamedWipeMeetsServer8H200HBM`, `StreamedWipeMeetsServer8H200HBMRAM`, `StreamedWipeMeetsServer8H200` | the streamed-label wipe as `StreamedWipeMeetsReads` states it, with the count of the missing labels, `m·(⌊log₂⌊3N/m⌋⌋ + 1)` for `m = ⌈N/r⌉ − 1`, in place of `N`; per server against its assumed memory capacity `M_s = 512·N + R`, at most `2^-128 + Adv_PRF` for `q ≥ B(N, r, k, R) + E`, and at the 5 GB point `B ≤ 4·10^10` for `q ≥ 4·10^10 + E`; one H200 as measured at its deployed `k = 5500`, and an 8×H200 server with 3.9 GB outside the fill, its HBM at `k = 93,843`, with RAM at `k = 261,229` and every tier at `k = 1,268,143` | proved |
 | `StreamedWipe`, `StreamedWipeMeets2600GB` | the streamed-label wipe ("The streamed-label wipe"): for every prover of the sequential wipe, `Pr[accepted ∧ the prior content survives] ≤ (g/N)^k + k·C(N, g+1)·2^(M+E)/2^(q+(g+1)·b) + Adv_PRF`, with no named assumption; at 2.6 TB and `k = 74,000`, at most `2^-40 + Adv_PRF` for `q ≥ E + 8.6·10⁹` bits | proved |
+| `StreamedWipeMeetsFamily`, `StreamedWipeMeets96GiB`, `StreamedWipeMeets141GB` | the streamed-label wipe at `k = 2152` reads, `verity/wipe/v0`'s figure: for every fill of at least one 32 MiB segment, at most `2^-128 + Adv_PRF` for `q ≥ ⌈M/19⌉ + E`; at 96 GiB and 141 GB the explicit thresholds | proved |
+| `StreamedWipeMeetsReads`, `StreamedWipeMeets141GB5` | the streamed-label wipe at any `k` reads with `(1 − 1/r)^k ≤ 2^-129`: for every fill and `R` bits outside it, at most `2^-128 + Adv_PRF` for `q ≥ 512·(⌈N/r⌉ − 1) + N + ⌊log₂ k⌋ + 130 + R + E`; an H200 (141 GB and its 2.3 GB reserve) at `k = 5231`, `q ≥ 39,721,768,854 + E` bits, at most 5 GB | proved |
 
 **Why N10 fails.** Top label `v` reads only column `v` of the lower layer, so an adversary can pay for a lower label a
 column at a time, where whole-label pebbling charges it a whole label. N10′, the column-aware restatement over
@@ -882,9 +936,10 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
   whose leaves have the published root, every one of the device's 105 recorded answers was the challenged block of
   `C*` on time on the device's own clock; or the run holds a SHA-512 collision or an LMS forgery. `RunCheckAccepts` is
   proved (`Pous.EndToEnd.SecurityProofs.runCheckAccepts`). `RunCertifies` adds setup's
-  acceptance (`Accepted`): `C*` decodes to the committed `W` and its root is published. It follows from
-  `RunCheckAccepts` and setup's `AcceptsDecodes` and `PublishesRoot` (`runCertifies_of`), which are open, so it is a
-  statement no guarantee states yet (`unstated`).
+  acceptance (`Accepted`): `C*` decodes to the committed `W` and its root is published. It is proved
+  (`Pous.EndToEnd.SecurityProofs.runCertifies`) from `RunCheckAccepts` and setup's `AcceptsDecodes` and `PublishesRoot`
+  (`PousCheck.Properties.SecurityProofs.acceptsDecodes` and `publishesRoot`, guarantees), and `periodHeld` reads it; no
+  guarantee states it alone (`unstated`).
 - `Pous.EndToEnd.EndToEndRing`, **in the ring model, with ω uniform**: a server holding at most `⌊ρ·|C|⌋` bits
   between setup, the session and its rounds, each answer `(D, Q, L)`-bounded (`Server S D Q L`), shown the session
   commitment the code builds, with the memory challenger's coins drawn online by the code's own sampler and coin tree,
