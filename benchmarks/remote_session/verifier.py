@@ -576,7 +576,7 @@ def lean_record(session: dict) -> dict:
                          "a window's arrivals not one a pass")
     return {"appended": pub["appended"], "appends": pub["appends"], "blocks": pub["blocks"],
             "lifetime": pub["lifetime"], "pace": pub["pace"], "registration": pub["registration"],
-            "released": pub["released"],
+            "released": pub["released"], **{k: pub[k] for k in ("groups_per_coin",) if k in pub},
             "windows": [{"arrived_ns": list(x["arrivals_ns"]), "deadline_ns": w["deadline_ns"],
                          "drawn": w["profile"]["drawn"]["receipt"], "heads": w["heads"], "lengths": w["lengths"],
                          "opened_ns": w["opened_ns"], "post_seed": w["post_seed"], "released_ns": w["released_ns"],
@@ -1716,9 +1716,9 @@ def main() -> int:
                          f"{coins.APPENDS}, or none when the prover's hello says its sessions append nothing")
     ap.add_argument("--groups-per-coin", type=int, default=1, metavar="G",
                     help="each session's windows drawn on one openings coin (`audit.Params.groups_per_coin`): its "
-                         "draw's last window's close draws them together, ⌈W/G⌉ openings coins in all; a session "
-                         "drawn G > 1 a coin has no line of record (`line.SHARED`), and none is at one window in "
-                         "flight (a `--paced` F = 1), which no property covers")
+                         "draw's last window's close draws them together, ⌈W/G⌉ openings coins in all, and the line "
+                         "of record's pooled bound reads its draws (`line.draws_of`); none is at one window in "
+                         "flight (a `--paced` F = 1), which no property covers (`line.SHARED`)")
     ap.add_argument("--memory-of", type=Path, metavar="VERIFIER_JSON",
                     help="print each accepted session's memory line in both forms from a verifier.json written "
                          "before the average form (`recorded_memory`, with --host-bytes the node line), and a paced "

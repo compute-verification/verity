@@ -1394,9 +1394,9 @@ def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_ma
     record that run makes (`Line.lineOfRun`, `LineHeld`'s `lineOf`): the line of the session's kept record, given
     beside it or not, with the times seen on the verifier's clock the record's own. A kept record that isn't the run's,
     a record or transcript of another registration than the one given, a transcript cut short of its verdict,
-    `samples` other than its parameters' and times seen off the record's are refused, and a transcript drawn two
-    windows a coin has no line, as its record has none (`line.SHARED`); on the challenger's clock the times aren't held
-    to the record."""
+    `samples` other than its parameters' and times seen off the record's are refused, and a transcript that names two
+    windows a coin beside one openings coin a window is malformed; on the challenger's clock the times aren't held to
+    the record."""
     import copy
     import json
 
@@ -1431,11 +1431,53 @@ def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_ma
             "refused": "the Lean verifier gave the session no record"}
         with pytest.raises(lv.LeanError, match="samples: the session's"):
             call({**bare, "session": case, "samples": inputs["samples"] + 1})
-        assert call({**bare, "session": {**case, "params": {**case["params"], "groups_per_coin": 2}}}) == {
-            "refused": verifier.line.SHARED}
+        with pytest.raises(lv.LeanError, match="coins of 32 bytes"):
+            call({**bare, "session": {**case, "params": {**case["params"], "groups_per_coin": 2}}})
         why = verifier.line.record_run_json(late)["refused"]
         assert why.startswith("window 1 was seen released at") and call({**late, "session": case}) == {"refused": why}
         assert "refused" not in call({**late, "session": case, "clock": "challenger"})
+    finally:
+        lean.close()
+
+
+def test_the_leans_line_of_a_transcript_drawn_four_windows_a_coin_reads_the_draws_of_the_record_it_makes(tmp_path):
+    """At `--groups-per-coin 4` and two windows in flight, a paced session's twelve windows are three draws. Its line
+    of record reads the same twelve groups and, for its pooled bound, the three draws, each four windows' receipts and
+    draws summed (`line.draws_of`); `line_record` with the transcript runs `Shared.run 4` on it and reads the line off
+    the record that run makes, which names g: the line of the kept record, given beside it or not, line.py's. With
+    the record's pace at one window in flight it has no line (`line.SHARED`)."""
+    import copy
+    import json
+
+    import lean_verifier as lv
+
+    got = {}
+    (r,), (pr,) = run("honest", paces=[verifier.pace_of("2:8:40:2", 1.0)], groups_per_coin=4, transcript=tmp_path,
+                      then=lambda v: got.update(reg=wire.registration_json(v.registration)))
+    assert r["accepted"] and pr["accepted"] and r["windows"] == 12 and r["record"]["public"]["groups_per_coin"] == 4
+    case = json.loads(Path(r["transcript"]["path"]).read_bytes())
+    assert case["params"]["groups_per_coin"] == 4 and len(case["coins"]) == 12 + 3
+    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
+    inputs = verifier.recorded_inputs(r, got["reg"], host_bytes=0, rates=rates)
+    record = inputs["record"]
+    assert record["groups_per_coin"] == 4 and len(record["windows"]) == 12
+    draws = verifier.line.draws_of(4, record["windows"])
+    assert [d for _, d in draws] == [min(inputs["samples"], u) for u, _ in draws] and len(draws) == 3
+    assert draws == verifier.recorded_windows(r)[0]
+    want = verifier.line.record_run_json(inputs)
+    per_window = copy.deepcopy(inputs)
+    del per_window["record"]["groups_per_coin"]
+    assert "refused" not in want and verifier.line.record_run_json(per_window)["refused"].startswith("window ")
+    one = copy.deepcopy(inputs)
+    one["record"]["pace"] = {**one["record"]["pace"], "in_flight": 1}
+    lean = lv.Lean(lv.build(), lambda _: None)
+    try:
+        def call(x: dict) -> dict:
+            return lean.call({"op": "line_record", **x})
+
+        bare = {k: x for k, x in inputs.items() if k != "record"}
+        assert call(inputs) == call({**inputs, "session": case}) == call({**bare, "session": case}) == want
+        assert call(one) == verifier.line.record_run_json(one) == {"refused": verifier.line.SHARED}
     finally:
         lean.close()
 

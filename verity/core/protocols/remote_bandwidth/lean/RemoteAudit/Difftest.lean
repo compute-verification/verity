@@ -584,19 +584,21 @@ private def seenOf (j : Json) : V Line.Seen := do
 
 /-- `line.record_run_json`: the line of an accepted session's record, `{"record", "registration", "samples", "seen",
 "per", "block_bytes", "chip_bytes", "node_bytes", "delta", "rates"}` (`record` as the verifier's `outcome` request gives
-it, `recordJ`'s; `registration` as `registrationOf` reads one), read off the record (`Line.lineOfRecordOn`), or why it
-has none: none for a record drawn more than one window a coin (`groups_per_coin`), whose windows' draws the line
-doesn't read (`Line.SHARED`), and none for a record not of `registration`, its digest or its registered blocks another
+it, `recordJ`'s; `registration` as `registrationOf` reads one), read off the record (`Line.lineOfRecordOn` at the
+record's `groups_per_coin` g, 1 when it doesn't name it: above 1 its pooled bound reads its draws, `Line.ofSummaryAt`),
+or why it has none: none for a record drawn more than one window a coin at one window in flight, which no property
+covers (`Line.SHARED`), and none for a record not of `registration`, its digest or its registered blocks another
 registration's (`Line.lineOfRegistered`). `clock`, if given, says
 whose clock the times seen are on: `record` (the default), the record's own, and held to it (`Line.timesOff`), or
 `challenger` (the challenger's release log's) or `replay` (a replay's at another round trip), which the record doesn't
 hold.
 
 With `session`, the session's transcript (`sessionFn`'s input: its registration, parameters, `not_before_ns`, events
-and coins), the line is of the record `Session.run` makes of it (`Line.lineOfRun`, `LineHeld`'s `lineOf`, its run
-shared with the record's check), at its parameters' `samples`: none for a transcript drawn more than one window a coin,
-as for its record, or run on another registration than `registration`. Refused unless the transcript has two windows
-in flight, `samples` is its parameters', and `record`, if given, is the run's (`summaryJ`'s form). -/
+and coins), the line is of the record `Shared.run g` makes of it at its parameters' g (`Line.lineOfRun`, `LineHeld`'s
+`lineOf` at a node of g windows a draw, `Session.run` at g = 1, its run shared with the record's check), at its
+parameters' `samples`: none for a transcript run on another registration than `registration`. Refused unless the
+transcript has two windows in flight, `samples` is its parameters', and `record`, if given, is the run's (`recordJ`'s
+form). -/
 def lineRecordFn (j : Json) : V Json := do
   let onRecord ← if !J.has j "clock" then pure true else match ← J.str j "clock" "input" with
     | "record" => pure true
@@ -613,12 +615,16 @@ def lineRecordFn (j : Json) : V Json := do
   let registration ← registrationOf (← J.get j "registration" "input")
   if !J.has j "session" then
     let rj ← J.get j "record" "input"
-    let line := Line.lineOfRegistered onRecord registration (← hex rj "registration") (← summaryOf rj) samples seen
-      per b chip node δ rates
+    let digest ← hex rj "registration"
+    let sm ← summaryOf rj
     let g ← if J.has rj "groups_per_coin" then J.nat rj "groups_per_coin" "record" else pure 1
-    return lineJ (if g ≠ 1 then .error Line.SHARED else line)
+    let f ← match ← J.get rj "pace" "record" with
+      | .null => pure 2
+      | q => if J.has q "in_flight" then J.nat q "in_flight" "pace" else pure 2
+    if g != 1 && f == 1 then return lineJ (.error Line.SHARED)
+    return lineJ (Line.lineOfRegistered onRecord g registration digest sm samples seen per b chip node δ rates)
   let x ← J.get j "session" "input"
-  if (← perCoinOf x) != 1 then return lineJ (.error Line.SHARED)
+  let g ← perCoinOf x
   let reg ← registrationOf (← J.get x "registration" "session")
   let (params, coins, appendCoins, notBeforeNs) ← sessionOf x
   match ← J.get (← J.get x "params" "session") "pace" "params" with
@@ -628,19 +634,19 @@ def lineRecordFn (j : Json) : V Json := do
       if (← J.nat q "in_flight" "pace") != 2 then throw "a line's session has two windows in flight (in_flight 2)"
   if samples ≠ params.samples then throw s!"samples: the session's {params.samples}, not {samples}"
   let events ← (← J.arr x "events" "session").mapM eventOf
-  let ran := Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events
+  let ran := Shared.run g (Session.State.init params reg coins appendCoins notBeforeNs) events
   if J.has j "record" then
     let given ← J.get j "record" "input"
     let made := match ran with
-      | .ok (_, s') => s'.summary.map (summaryJ s'.digest)
+      | .ok (_, s') => s'.summary.map fun x => recordJ s'.digest x 2 g
       | .error _ => none
     if made.any (· != given) then
       return refusedOr (.error "the record is not the one Session.run makes of the session's transcript")
   return lineJ (match ran with
     | .ok (_, s') => match s'.summary with
-      | some sm => Line.lineOfRegistered onRecord registration s'.digest sm samples seen per b chip node δ rates
-      | none => Line.lineOfSummary? onRecord none samples seen per b chip node δ rates
-    | .error _ => Line.lineOfSummary? onRecord none samples seen per b chip node δ rates)
+      | some sm => Line.lineOfRegistered onRecord g registration s'.digest sm samples seen per b chip node δ rates
+      | none => Line.lineOfSummary? onRecord g none samples seen per b chip node δ rates
+    | .error _ => Line.lineOfSummary? onRecord g none samples seen per b chip node δ rates)
 
 private def natsOfN (j : Json) (n : Nat) (ctx : String) : V (Array Nat) := do
   let xs ← J.asArr j ctx

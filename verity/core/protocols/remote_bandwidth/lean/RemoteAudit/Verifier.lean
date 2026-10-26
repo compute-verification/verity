@@ -51,10 +51,11 @@ difftest's `session` reads one, `Difftest.eventOf`):
   "node_bytes", "delta", "rates"}`, with `"clock"` and `"session"` if given: an accepted paced session's memory line
   read off its record (`record`, as `outcome` gives it: `Line.lineOfRecordOn`, its groups, windows and registered
   blocks the record's, the times and reads beside each group `seen`, held to the record's times on its `clock`, its W
-  the pooled bound of its windows, `Pooled.pooled`), refused unless the record is of `registration`
-  (`Line.lineOfRegistered`), or off the record `Session.run` makes of the session's transcript `session`
-  (`Line.lineOfRun`), as the difftest's `line_record` writes it (`Difftest.lineRecordFn`), or `{"refused": why}`: the
-  line of record (`benchmarks/remote_session/auditor_line.py`) is this answer, held equal to `line.py`'s;
+  the pooled bound of its windows, or at `groups_per_coin` g > 1 of its draws, `Pooled.pooled`), refused unless the
+  record is of `registration` (`Line.lineOfRegistered`), or off the record `Shared.run g` makes of the session's
+  transcript `session` (`Line.lineOfRun`), as the difftest's `line_record` writes it (`Difftest.lineRecordFn`), or
+  `{"refused": why}`, a record drawn g > 1 a coin at one window in flight among them (`Line.SHARED`): the line of
+  record (`benchmarks/remote_session/auditor_line.py`) is this answer, held equal to `line.py`'s;
 * `{"op": "line", "groups", "per", "blocks", "block_bytes", "chip_bytes", "node_bytes", "windows", "delta", "rates"}`:
   the same line of groups and windows given (`Line.line`, `Difftest.lineFn`).
 
@@ -62,9 +63,10 @@ A window's verdict is `checkWindowChunked`'s, which is `checkWindow`'s, on the w
 reads its frames: any frame that doesn't decode leaves it none, and the transcript records the frames so. A window
 with no draws is rejected `malformed` at its settle (`Session.verifyBy`), whatever its frames, so an undecodable frame
 is refused on every window, as the driver's Python refuses it. `Properties.RemoteAudit.LiveIsRun` states that what
-this loop accepts at two windows in flight and one window a draw's openings coin, its coins arriving one an event and
-each verdict applied at its settle, is what `Session.run` accepts on the events it records; none yet covers one in
-flight (`Flight`), and the `session` request refuses one in flight at g above 1. Openings are checked in the clear.
+this loop accepts at two windows in flight and g windows a draw's openings coin, its coins arriving one an event and
+each verdict applied at its settle, is what `Shared.run g` accepts on the events it records (`Session.run` at g = 1);
+none yet covers one in flight (`Flight`), and the `session` request refuses one in flight at g above 1. Openings are
+checked in the clear.
 -/
 
 namespace RemoteAudit.Verifier

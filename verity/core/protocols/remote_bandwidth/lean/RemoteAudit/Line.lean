@@ -1,5 +1,5 @@
 import RemoteAudit.Pooled
-import RemoteAudit.Session
+import RemoteAudit.Shared
 
 /-!
 # The memory line held over time
@@ -12,8 +12,11 @@ rationals, every refusal the Python's word for word. `lineOfRecord` reads the se
 registered blocks off the Lean verifier's record of it (`Session.Summary`), each group's times and reads beside it
 (`Seen`), refused unless the record is of the registration given with it (`lineOfRegistered`); `line` takes them
 given. The wrong receipts W are the pooled bound of the record's windows
-(`RemoteAudit.Pooled.pooled`: their receipts and draws at δ). `line.py`'s docstring has the form; `tests/test_line.py`
-holds the two together through `RemoteAudit.Difftest`'s `line` and `line_record`. Code: Lean core only.
+(`RemoteAudit.Pooled.pooled`: their receipts and draws at δ). A record drawn g > 1 windows a coin (`Shared`) has the
+same groups, and its pooled bound reads its draws, each its g windows' receipts and draws summed (`ofSummaryAt`,
+`lineOfRecordAt`); at one window in flight it has no line (`SHARED`). `line.py`'s docstring has the form;
+`tests/test_line.py` holds the two together through `RemoteAudit.Difftest`'s `line` and `line_record`. Code: Lean core
+only.
 -/
 
 namespace RemoteAudit.Line
@@ -208,10 +211,11 @@ deriving instance Inhabited for Session.WindowSummary
 /-- `U`, a window's receipts in the record: its passes' lengths summed. -/
 def receipts (w : Session.WindowSummary) : Nat := w.lengths.toList.sum
 
-/-- Why a record drawn more than one window a coin (`groups_per_coin`, `Shared`) has no line: the line reads each
-window's own draw, `min(s, U_t)` of its receipts, and such a window holds its share of its draw's. -/
+/-- Why a record drawn more than one window a coin (`groups_per_coin`, `Shared`) at one window in flight has no line:
+no property of the code covers its draws there (`Properties.RemoteAudit.Live`'s `LiveIsRun` is at two). -/
 def SHARED : String :=
-  "a record drawn more than one window a coin (groups_per_coin) has no line: the line reads each window's own draw"
+  "a record drawn more than one window a coin (groups_per_coin) at one window in flight has no line: no property " ++
+    "of the code covers its draws there"
 
 /-- The groups and windows the line reads of an accepted session's record `sm` (`Session.State.summary`) and what the
 auditor saw of each of its windows (`seen`): group `t` is window `t`, its passes the record's and its times and reads
@@ -243,6 +247,45 @@ def lineOfRecord (sm : Session.Summary) (samples : Nat) (seen : Array Seen) (per
   | .ok (gs, ws) => line gs per sm.blocks blockBytes chipBytes nodeBytes ws δ rates
   | .error why => .error why
 
+/-- The draws of a record drawn `g` windows a coin (`Shared`), as the pooled bound reads them
+(`audit.pooled_windows`): draw `c` is windows `cg … min((c + 1)g, W) − 1`, its receipts `U` and its draws theirs
+summed. -/
+def drawsOf (g : Nat) (ws : Array Session.WindowSummary) : Array (Nat × Nat) :=
+  (Array.range ((ws.size + g - 1) / g)).map fun c =>
+    let xs := ws.extract (c * g) (c * g + g)
+    (xs.foldl (fun a w => a + receipts w) 0, xs.foldl (fun a w => a + w.drawn) 0)
+
+/-- `ofSummary` of a record drawn `g` windows a coin (`Shared`): `ofSummary` at g = 1; above it the same groups, one a
+window, and the record's draws in place of its windows (`drawsOf`), refused unless each draw drew `min(s, U)` of its
+`U` receipts at the session's `samples` `s`, as `Shared.close`'s draw does, and has fewer than `RECEIPT_LIMIT` (2^64)
+receipts, as `receive` holds each window to: the memory model's draw reads at most `2^64 − 1` receipts a draw
+(`Properties.RemoteAudit.Line.receiptMax`), and a draw's windows' receipts, each below the limit, need not be. -/
+def ofSummaryAt (g : Nat) (sm : Session.Summary) (samples : Nat) (seen : Array Seen) :
+    Except String (Array Group × Array (Nat × Nat)) :=
+  if g ≤ 1 then ofSummary sm samples seen
+  else if seen.size ≠ sm.windows.size then
+    .error s!"the auditor saw {seen.size} windows, not the record's {sm.windows.size}"
+  else
+    let ds := drawsOf g sm.windows
+    match ds.findIdx? fun (u, d) => d != min samples u with
+    | some c => .error s!"draw {c} drew {ds[c]!.2} of its {ds[c]!.1} receipts, not min({samples}, {ds[c]!.1})"
+    | none =>
+      match ds.findIdx? fun (u, _) => Session.RECEIPT_LIMIT ≤ u with
+      | some c => .error s!"draw {c} has {ds[c]!.1} receipts, not fewer than 2^64"
+      | none =>
+        .ok ((Array.range sm.windows.size).map fun t =>
+            ({ releasedNs := seen[t]!.releasedNs, lastNs := seen[t]!.lastNs, passes := sm.windows[t]!.lengths.size,
+               least := seen[t]!.least, weights := seen[t]!.weights, hbm := seen[t]!.hbm,
+               host := seen[t]!.host } : Group), ds)
+
+/-- `lineOfRecord` of a record drawn `g` windows a coin: `line` at the groups and draws `ofSummaryAt` reads, its W the
+pooled bound of the record's draws; at g = 1 `lineOfRecord`'s. -/
+def lineOfRecordAt (g : Nat) (sm : Session.Summary) (samples : Nat) (seen : Array Seen)
+    (per blockBytes chipBytes nodeBytes : Nat) (δ : Rat) (rates : Rates) : Except String Line :=
+  match ofSummaryAt g sm samples seen with
+  | .ok (gs, ws) => line gs per sm.blocks blockBytes chipBytes nodeBytes ws δ rates
+  | .error why => .error why
+
 /-- A window's last root's arrival in the record: its last pass's, or its coin's release when it has none (as
 `verifier.paced_groups` reads a window seen). -/
 def lastNs (w : Session.WindowSummary) : Nat := w.arrivedNs.back?.getD w.releasedNs
@@ -257,14 +300,14 @@ def timesOff (sm : Session.Summary) (seen : Array Seen) : Option String :=
     else some (s!"window {t} was seen released at {s.releasedNs} and last at {s.lastNs}, not at the record's "
       ++ s!"{w.releasedNs} and {lastNs w}")
 
-/-- `lineOfRecord` with the times seen held to the record's where they are on its clock (`onRecord`): refused, after
-`ofSummary`'s refusals, where they differ (`timesOff`). Off it they are another clock's, the challenger's release log,
-which the record doesn't hold, and this is `lineOfRecord`. -/
-def lineOfRecordOn (onRecord : Bool) (sm : Session.Summary) (samples : Nat) (seen : Array Seen)
+/-- `lineOfRecordAt` with the times seen held to the record's where they are on its clock (`onRecord`): refused, after
+`ofSummaryAt`'s refusals, where they differ (`timesOff`). Off it they are another clock's, the challenger's release
+log, which the record doesn't hold, and this is `lineOfRecordAt`. -/
+def lineOfRecordOn (onRecord : Bool) (g : Nat) (sm : Session.Summary) (samples : Nat) (seen : Array Seen)
     (per blockBytes chipBytes nodeBytes : Nat) (δ : Rat) (rates : Rates) : Except String Line :=
-  match ofSummary sm samples seen, (if onRecord then timesOff sm seen else none) with
+  match ofSummaryAt g sm samples seen, (if onRecord then timesOff sm seen else none) with
   | .ok _, some why => .error why
-  | _, _ => lineOfRecord sm samples seen per blockBytes chipBytes nodeBytes δ rates
+  | _, _ => lineOfRecordAt g sm samples seen per blockBytes chipBytes nodeBytes δ rates
 
 /-- Why a record `sm` naming registration `digest` is not a record of registration `reg`: it names another, or its
 registered blocks are not `reg`'s; none if it is. -/
@@ -276,32 +319,33 @@ def unregistered (reg : Registration) (digest : ByteArray) (sm : Session.Summary
 
 /-- `lineOfRecordOn` of a record that names registration `digest`, refused first unless it is a record of the
 registration `reg` given with it (`unregistered`), so that the line credits that registration's registered blocks. -/
-def lineOfRegistered (onRecord : Bool) (reg : Registration) (digest : ByteArray) (sm : Session.Summary)
+def lineOfRegistered (onRecord : Bool) (g : Nat) (reg : Registration) (digest : ByteArray) (sm : Session.Summary)
     (samples : Nat) (seen : Array Seen) (per blockBytes chipBytes nodeBytes : Nat) (δ : Rat) (rates : Rates) :
     Except String Line :=
   match unregistered reg digest sm with
   | some why => .error why
-  | none => lineOfRecordOn onRecord sm samples seen per blockBytes chipBytes nodeBytes δ rates
+  | none => lineOfRecordOn onRecord g sm samples seen per blockBytes chipBytes nodeBytes δ rates
 
-/-- The record `Session.run` makes of a session from `s` over `events`, none where the run fails or doesn't accept
-(`Session.State.summary`): `LineHeld`'s `Record.summary`. -/
-def summaryOfRun (s : Session.State) (events : Array Session.Event) : Option Session.Summary :=
-  match Session.run s events with
+/-- The record `Shared.run g` makes of a session drawn `g` windows a coin from `s` over `events`, none where the run
+fails or doesn't accept (`Session.State.summary`): `LineHeld`'s `Record.summary` at a node of `g` windows a draw
+(`Node.groupsPerCoin`), at g = 1 `Session.run`'s (`Shared.run_one`). -/
+def summaryOfRun (g : Nat) (s : Session.State) (events : Array Session.Event) : Option Session.Summary :=
+  match Shared.run g s events with
   | .ok (_, s') => s'.summary
   | .error _ => none
 
 /-- `lineOfRecordOn` of a record, or `lineOf`'s refusal where there is none. -/
-def lineOfSummary? (onRecord : Bool) (sm? : Option Session.Summary) (samples : Nat) (seen : Array Seen)
+def lineOfSummary? (onRecord : Bool) (g : Nat) (sm? : Option Session.Summary) (samples : Nat) (seen : Array Seen)
     (per blockBytes chipBytes nodeBytes : Nat) (δ : Rat) (rates : Rates) : Except String Line :=
   match sm? with
-  | some sm => lineOfRecordOn onRecord sm samples seen per blockBytes chipBytes nodeBytes δ rates
+  | some sm => lineOfRecordOn onRecord g sm samples seen per blockBytes chipBytes nodeBytes δ rates
   | none => .error "the Lean verifier gave the session no record"
 
-/-- The line of a session run from `s` over `events`, as `LineHeld`'s `lineOf` reads a record: `lineOfRecordOn` of the
-run's own record (`summaryOfRun`), or why it has none. -/
-def lineOfRun (onRecord : Bool) (s : Session.State) (events : Array Session.Event) (samples : Nat) (seen : Array Seen)
-    (per blockBytes chipBytes nodeBytes : Nat) (δ : Rat) (rates : Rates) : Except String Line :=
-  lineOfSummary? onRecord (summaryOfRun s events) samples seen per blockBytes chipBytes nodeBytes δ rates
+/-- The line of a session drawn `g` windows a coin run from `s` over `events`, as `LineHeld`'s `lineOf` reads a record
+at a node of `g` windows a draw: `lineOfRecordOn` of the run's own record (`summaryOfRun`), or why it has none. -/
+def lineOfRun (onRecord : Bool) (g : Nat) (s : Session.State) (events : Array Session.Event) (samples : Nat)
+    (seen : Array Seen) (per blockBytes chipBytes nodeBytes : Nat) (δ : Rat) (rates : Rates) : Except String Line :=
+  lineOfSummary? onRecord g (summaryOfRun g s events) samples seen per blockBytes chipBytes nodeBytes δ rates
 
 private def digits? (s : String) : Option Nat :=
   if !s.isEmpty && s.all Char.isDigit then s.toNat? else none

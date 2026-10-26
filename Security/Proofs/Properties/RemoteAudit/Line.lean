@@ -629,7 +629,7 @@ local instance lawfulBEqByteArrayLine : LawfulBEq ByteArray where
 /-- **LineRegistered**, proved: `lineOfRegistered` refuses unless `unregistered` finds nothing, and then it is
 `lineOfRecordOn`. -/
 theorem lineRegistered : LineRegistered := by
-  intro onRecord reg digest sm samples seen per blockBytes chipBytes nodeBytes δ rates l h
+  intro onRecord g reg digest sm samples seen per blockBytes chipBytes nodeBytes δ rates l h
   by_cases hd : digest = reg.digest
   · by_cases hb : sm.blocks = reg.blocks
     · refine ⟨hd, hb, ?_⟩
