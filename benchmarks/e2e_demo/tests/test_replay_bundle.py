@@ -17,7 +17,7 @@ SCHEMA = Path(B.__file__).parent / "schemas" / "drawn-unit-bundle.v2.schema.json
 PATHS = "its paths do not reach its unit, slot and step roots"
 #: `B.digests` of `B.fixture_bundle`: a change to the bundle's bytes changes these (`python -m verity_e2e_demo.replay_bundle
 #: fixture` writes it to look at)
-GOLDEN = {"json": "bff29e1f61c7d41d28d4f5566a1e9cedf7f7cdf8a9ecb03dc5ee793c5ea3a2c80ad27a4eef89ddda1f5a4709553cfdea9b90467627ffeb4ac1935eef0fb13aa4",
+GOLDEN = {"json": "a9e10ec969ab5ebcf41b00fa68cfb5a292dc634e4b01e7d0c23f399ede8a77b31ffc9e91a808fadf2c986e2b84dd7df137745e52a29c8047269841d20b933a18",
           "bin": "183e9e504664b5d831135407b51246829dc10eedf9587917cd88cef516599d2c9685bb19e9b013f403bba1aba68e270495c2e830139fea7efa961f0c823b3db3"}
 #: SHA-512 of kernels' fixtures/commit-slots-v1.json at the commit `B.REFERENCE` pins, which `S.fixture()` writes as
 #: ``json.dumps(fixture, indent=1) + "\n"``
@@ -229,6 +229,35 @@ def test_another_registration_is_refused(fresh, bundle) -> None:
         r["root"] = "00" * 64
     bad = B.check(doc, payload, registration=reg)
     assert bad and all(v == "not the registration's root" for v in bad.values())
+
+
+def _subset(k: int, units: list[int]) -> dict:
+    return {"law": "subset", "population": 512, "k": k, "units": units}
+
+
+def test_a_draw_under_another_law_than_the_registered_one_is_refused(fresh, tmp_path) -> None:
+    """The law is the window's, registered before any coin: a subset:8 draw of a window registered subset:4 is refused,
+    and a subset:2 draw of one registered subset:8, as is a draw of more units than its k or a record under another law."""
+    reg4 = json.loads((fresh[0] / "registration.json").read_text())
+    assert reg4["law"] == {"law": "subset", "k": len(B.FIXTURE_DRAW)}
+    eight = [5, 60, 130, 200, 300, 390, 450, 511]
+    doc, payload = _build(fresh, eight, draw={"source": "fixture", "law": {"law": "subset", "k": 8}})
+    assert set(B.check(doc, payload, registration=reg4)) == {"draw:law"}
+
+    d8 = tmp_path / "window-8"
+    _, weights8, com8 = B.torch_loop_window(d8, law="subset:8")
+    reg8 = json.loads((d8 / "registration.json").read_text())
+    assert reg8["law"] == {"law": "subset", "k": 8}
+    two = [5, 200]
+    receipt = {"format": "verity/registration-receipt/v1", "challenger": "test"}
+    doc, payload = _build((d8, weights8, com8), two, draw={"source": "live", "law": {"law": "subset", "k": 2},
+                                                          "receipt": receipt, "record": _subset(2, two)})
+    assert set(B.check(doc, payload, registration=reg8)) == {"draw:law", "draw:record"}
+    doc, payload = _build((d8, weights8, com8), eight, draw={"source": "live", "law": {"law": "subset", "k": 8},
+                                                            "receipt": receipt, "record": _subset(8, eight)})
+    assert B.check(doc, payload, registration=reg8) == {}
+    doc, payload = _build((d8, weights8, com8), eight[:7], draw={"source": "fixture", "law": {"law": "subset", "k": 8}})
+    assert set(B.check(doc, payload, registration=reg8)) == {"draw:law"}
 
 
 def test_weights_under_other_salts_are_refused(fresh) -> None:
