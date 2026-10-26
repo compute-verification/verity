@@ -53,18 +53,26 @@ theorem rows_eq_of_calls' {l : List (Msg × Msg)} (hT : ∀ e ∈ l, FlockDeploy
   have hsp : FlockSoundness.Refine.K512.saltPrefix = Hm96.Default512.saltPrefix.data.toList := by
     unfold FlockSoundness.Refine.K512; rfl
   have hs1 : FlockDeploy.sha512 (Hm96.Default512.saltPrefix.data.toList ++ readForms w (hmSalt c q n)) =
-      readForms w ((hmCommit c q n).drop 512) := hT _ hs
-  have hr1 : FlockDeploy.sha512 (rowPfx c q ++ readForms w row) = readForms w (hmDigest c q n) := hT _ hr
+      readForms w ((hmCommit c q n).drop 512) := by
+    have h := hT _ hs; exact h
+  have hr1 : FlockDeploy.sha512 (rowPfx c q ++ readForms w row) = readForms w (hmDigest c q n) := by
+    have h := hT _ hr; exact h
   have hs1' : FlockDeploy.sha512 (Hm96.Default512.saltPrefix.data.toList ++ readForms w' (hmSalt c' q' n')) =
-      readForms w' ((hmCommit c' q' n').drop 512) := hT _ hs'
-  have hr1' : FlockDeploy.sha512 (rowPfx c' q' ++ readForms w' row') = readForms w' (hmDigest c' q' n') := hT _ hr'
+      readForms w' ((hmCommit c' q' n').drop 512) := by
+    have h := hT _ hs'; exact h
+  have hr1' : FlockDeploy.sha512 (rowPfx c' q' ++ readForms w' row') = readForms w' (hmDigest c' q' n') := by
+    have h := hT _ hr'; exact h
   have e := CapLower.commit_of_true (c := c) (q := q) (n := n) (w := w) (R := rowPfx c q ++ readForms w row) hs1 hr1
   have e' := CapLower.commit_of_true (c := c') (q := q') (n := n') (w := w') (R := rowPfx c' q' ++ readForms w' row')
     hs1' hr1'
+  have hy0 : Hm96.Default512.saltPrefix.data.toList ++ readForms w (hmSalt c q n) ∈ l.map Prod.fst :=
+    List.mem_map.2 ⟨_, hs, rfl⟩
+  have hy0' : Hm96.Default512.saltPrefix.data.toList ++ readForms w' (hmSalt c' q' n') ∈ l.map Prod.fst :=
+    List.mem_map.2 ⟨_, hs', rfl⟩
   have hy : FlockSoundness.Refine.K512.saltPrefix ++ readForms w (hmSalt c q n) ∈ l.map Prod.fst := by
-    rw [hsp]; exact List.mem_map.2 ⟨_, hs, rfl⟩
+    rw [hsp]; exact hy0
   have hy' : FlockSoundness.Refine.K512.saltPrefix ++ readForms w' (hmSalt c' q' n') ∈ l.map Prod.fst := by
-    rw [hsp]; exact List.mem_map.2 ⟨_, hs', rfl⟩
+    rw [hsp]; exact hy0'
   have hr0 : rowPfx c q ++ readForms w row ∈ l.map Prod.fst := List.mem_map.2 ⟨_, hr, rfl⟩
   have hr0' : rowPfx c' q' ++ readForms w' row' ∈ l.map Prod.fst := List.mem_map.2 ⟨_, hr', rfl⟩
   have hb := CapLower.commit_bind (r := rowPfx c q ++ readForms w row) (r' := rowPfx c' q' ++ readForms w' row')
