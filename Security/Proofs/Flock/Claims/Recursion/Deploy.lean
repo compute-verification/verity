@@ -206,12 +206,12 @@ def ownBindings (b : ByteArray) : Option VStar.Bindings :=
 
 /-- **A part's circuit is V\*'s statement `sv`'s**, as its session's `RecVStar.checkCircuit` holds it: the circuit file
 is V\*'s for `sv` under the verifier's own bindings `f` at the shape's holo flag (`checkFile`, byte for byte), and the
-circuit the setup parses off it (`partCircuit`) carries V\*'s META and row ports (`checkParsed`) and V\*'s part
-(`checkPart`). -/
+circuit the setup parses off it (`partCircuit`) carries V\*'s META and row ports (`checkParsed`), V\*'s part
+(`checkPart`), `sv`'s name as its unit's (`RecVStar.check`) and V\*'s file's META `holo` (`checkHolo`). -/
 def partVStar (shape : RecVStar.Inner) (f : VStar.Bindings) (sv : VStar.Stmt) (p : PartX) : Bool :=
   match partCircuit p with
   | some c => (RecVStar.checkFile sv f p.base.circuit shape.holo).isOk && (RecVStar.checkParsed sv c).isOk &&
-      (RecVStar.checkPart sv c).isOk
+      (RecVStar.checkPart sv c).isOk && c.unit.name == sv.name && (RecVStar.checkHolo sv c shape.holo).isOk
   | none => false
 
 /-- **Each part's circuit is V\*'s statement's of its index** (`partVStar`), under the verifier's own bindings. -/
