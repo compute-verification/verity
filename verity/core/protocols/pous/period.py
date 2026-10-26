@@ -28,7 +28,7 @@ over processes. An audit is cheap: about 1.7 s at `2^19` blocks, mostly the tabl
 `certified_point` and audits it every period, the coins fresh from the OS. The memory challenger is a party of its own
 (`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key at S1's deployed parameters
 (`memory_challenger.LMS`) that `challenger` makes once on that host; the prover and the verifier run on the node.
-`trusted-nebius-host`'s premise, that the memory challenger runs on a machine the prover doesn't control, holds only
+`trusted-host`'s premise, that the memory challenger runs on a machine the prover doesn't control, holds only
 when the challenger host isn't the node, and the leg says which (`challenger_party.placement`). The setup's salt is
 still drawn on the node.
 """
@@ -412,7 +412,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     and the prover is here. With `pous-run-protocol` and `pous-setup` among the period's tools, the Lean answers (the
     verifier of record) and must agree with the Python; it writes `out/pous.case.json` (onsite's PoUS case),
     `out/pous.json` and, in a period that set a store up, `out/pous-setup.case.json`. Which host ran each party, and
-    whether `trusted-nebius-host`'s premise holds (`challenger_party.placement`), go in `pous.json` and in an accepted
+    whether `trusted-host`'s premise holds (`challenger_party.placement`), go in `pous.json` and in an accepted
     answer's profile (`placement`)."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools, small = doc.get("tools") or {}, (doc.get("pous") or {}).get("point") == "small"
