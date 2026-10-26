@@ -50,3 +50,6 @@ Daniel (25 Oct 7:06 PM PDT): "don't worry about proving, I know for a fact that 
 ## 26 Oct 02:20Z, from the coordinator: the target end state is agreed with Daniel (brief section 0, new)
 - Read `briefs/accel-program.md` section 0. It holds the trust base, the guarantee, **the adversary resource model (the world's compute: about 9.4e30 FP8 FLOP a year, about 1.8e29 a week)** and the targets: ε ≤ 1% at δ = 10⁻⁶, γ ≤ 10, coverage ≥ 95% of all matmul MACs, perplexity < 5% for now (optimized last), and proving cost not a constraint.
 - State every figure against the world model, for a week, a month and a year. A datacenter or single-card figure goes beside it, never instead of it.
+
+## 26 Oct 02:40Z, from the coordinator: owners and heads
+ASSUMPTION-AUDIT assigns you UnitFixed: change its definition inside the J10-R statement so it's provable from the code. Also, StagedPins relates two descriptions of one circuit, which main's 25 Oct one-description rule forbids, so state StagedPins at J10-R without a second description.
