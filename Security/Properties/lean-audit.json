@@ -485,7 +485,10 @@
    "type_hash": "d9f255e477992784b174c2ec19e62a74285cab29e74c5516ab850ccd97937f29"
   },
   "Pous.Cited.SecurityProofs.citedAnswerAccepted": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Pous.Cited.SecurityProofs.citedAnswerAccepted : Pous.Cited.CitedAnswerAccepted"],
+   "assumptions": [],
+   "type_hash": "fc9819f48a87377d0f57f390693e5215cca5007c404330a040c7a176c9bbc16d"
   },
   "Pous.Cited.SecurityProofs.citedRunAccepted": {
    "owner": "@memory-accounting",
@@ -2699,8 +2702,11 @@
     "outcome": "accept"
    },
    "Pous.Cited.SecurityProofs.citedAnswerAccepted": {
-    "function": ["PousCheck.SetupProtocol.protocol.answer", "PousCheck.SetupProtocol.protocol.params",
-     "PousCheck.RunProtocol.acceptsCited"],
+    "function": [
+     "PousCheck.SetupProtocol.protocol.answer",
+     "PousCheck.SetupProtocol.protocol.params",
+     "PousCheck.RunProtocol.acceptsCited"
+    ],
     "outcome": "accept"
    },
    "Pous.Cited.SecurityProofs.citedRunAccepted": {
@@ -3716,6 +3722,7 @@
     "_private.CoreProtocol.Protocol.0.Core.opt": "7720a69b388da12990009ab9c126a25370b5ea8b036100358463e2813c7a0710"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.Period.SecurityProofs.periodCapacity",
@@ -5162,6 +5169,7 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
@@ -5277,6 +5285,7 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.Period.SecurityProofs.periodCapacity",
@@ -5447,6 +5456,7 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
@@ -5564,6 +5574,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
@@ -5635,6 +5646,7 @@
    "guarantees": [
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
@@ -5918,6 +5930,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
@@ -6117,6 +6130,7 @@
     "Identity.Sha512.init": "89edeb8d92675d3fd8c6aa32da7bb2b09cfb3c963165ed7e2202d607b57a03b1"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.Period.SecurityProofs.periodCapacity",
@@ -6159,6 +6173,7 @@
     "Identity.taggedState": "47ed529cb2cbb2d42fa243cf0c5d734417fb83045300c8c253efe871407407d1"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.Period.SecurityProofs.periodCapacity",
@@ -6258,6 +6273,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
@@ -6308,6 +6324,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
@@ -6345,6 +6362,7 @@
    "guarantees": [
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted"
    ]
   },
@@ -6421,6 +6439,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.EndToEnd.SecurityProofs.drawExact",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
@@ -6443,6 +6462,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
@@ -6478,6 +6498,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
@@ -7187,6 +7208,7 @@
     "PousCheck.Commit.manifestJson": "09e6a40193c8ebf72415e83a7f610c7fe54fa3b9ad92e9836dd11fd4c2c512df"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.Period.SecurityProofs.periodCapacity",
@@ -7217,6 +7239,7 @@
     "PousCheck.Keys.pad128": "b9c5905f71f7ee855b6342015267268bd819febb3b0e2707c70f7a0f2a2f9b3c"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.Period.SecurityProofs.periodCapacity",
@@ -7238,6 +7261,7 @@
     "PousCheck.Merkle.split": "4bb1e1efa3bbbd5a85e23be9b73e4d0212fab4ec2a2e23aa5b576fed1231324a"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
@@ -7284,6 +7308,7 @@
     "PousCheck.P2.square": "9cf00be25789c94955f710c2ba301938ba65e53bc0821f3c6262a37cf29efa0f"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
@@ -7308,6 +7333,7 @@
     "PousCheck.W_BYTES": "b2aa7e1660031dc72c628103605c42c9e9958d1ae57378c78923458b5e1c7765"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
@@ -7327,6 +7353,7 @@
     "PousCheck.Prim.zeros": "d69ecaabe57a2ee3bb80328697532a0f36c5a73da5594922ea098ae8eb7d67a2"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.Period.SecurityProofs.periodCapacity",
@@ -7381,6 +7408,7 @@
     "PousCheck.Run.rowLeaves": "dfa5cfe42a5f55cca539b81b1033b796dfd910cb7d6e2716c9f1fa2d7b257915"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
@@ -7402,7 +7430,7 @@
     "PousCheck.RunProtocol.instDecidableEqPublic.decEq": "c9688916b2bf6451a9fa53024c0d1ce6bc6c30b6a2d073471b9ec554b5a1192f",
     "PousCheck.RunProtocol.publishedOf": "ba7332ddbf0fcf5faa247b177f7ecbaf60b0192da466d19021b0a1e32f706189"
    },
-   "guarantees": ["Pous.Cited.SecurityProofs.citedRunAccepted"]
+   "guarantees": ["Pous.Cited.SecurityProofs.citedAnswerAccepted", "Pous.Cited.SecurityProofs.citedRunAccepted"]
   },
   "PousCheck.Setup": {
    "digest": "369d32cb35688d77475a78abff9fdf2451e64821e4db2faf61748d95cefaba4b",
@@ -7426,6 +7454,7 @@
     "PousCheck.Setup.verifierKeyFromEncoding": "a151341775d2b482de1c14855ca7009c0b8743a11b2e9c4cecf08e748bfbe254"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.Period.SecurityProofs.periodCapacity",
@@ -7461,6 +7490,7 @@
     "_private.PousCheck.SetupProtocol.0.PousCheck.SetupProtocol.u32be": "f547e86afd95356c53630479070df0b45d34eeb962cdff80c3fea6d4c1a8fd16"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
@@ -8703,14 +8733,19 @@
    ]
   },
   "Properties.Pous.Cited": {
-   "digest": "9a3a59f6222304e75655a7eabaf2c50a518014601a742d0f631729012675996f",
+   "digest": "2abc6c85dca45b8aad31539675004ac0ce4a61793f97fcd99208363048740f49",
    "definitions": {
+    "Pous.Cited.CitedAnswerAccepted": "3a786832874ecc73cacfef9b695815e68f0a4a4cdd211d70c12a595b6f9e01b8",
     "Pous.Cited.CitedRunAccepted": "12ff36519e6d808c350c5cce0e1ece3021a2f6edb3f225c7ef3730693eb602fb",
     "Pous.Cited.RootDecodes": "4266e8083851cc0a2128f558455a86b2c2460232391deb3f69dbc0ed26713400",
     "Pous.Cited.StoreBreak": "f45178607f4c4c2de06a81f774e7560d14d098e5d55e3d2a06cb110b0fc3b928",
     "Pous.Cited.storeStrings": "c80618ca8bb843cdc5a83466f2e0b945e162adfab2fe2c53ba0683eb07fc3e3b"
    },
-   "guarantees": ["Pous.Cited.SecurityProofs.citedRunAccepted", "Pous.Cited.SecurityProofs.rootDecodes"]
+   "guarantees": [
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
+    "Pous.Cited.SecurityProofs.rootDecodes"
+   ]
   },
   "Properties.Pous.EndToEnd": {
    "digest": "5854d781e279af15c6a4d0bc54978539a35cba5aee37ef48342da4f19e37b331",
@@ -8751,6 +8786,7 @@
     "Pous.EndToEnd.tableStrings": "3f780560c4a6f6ed22c7f24f80f99482d7ad6c870d48f5a69b4cfa663001c65d"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedAnswerAccepted",
     "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.EndToEnd.SecurityProofs.drawExact",
