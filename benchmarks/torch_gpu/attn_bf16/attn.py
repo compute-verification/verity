@@ -36,9 +36,9 @@ GROUP = {"s16": 16, "h16": 16, "h8": 8}
 #: the s16 kernels' most keys a query sees, and PV's largest K
 S16_KEYS = 32
 #: each op's launch: (tiling, warps a block, head groups a warp), falling back to h16, h8 and then q8 where the tiling can't
-#: serve; run.py's timing sweeps the alternatives (r20261026-010803-0f9f on the H200 at the frozen shape: QK^T fastest with
-#: every group of a sequence in one warp, PV with 4 warps of 4 groups, at M = 4,096, 12,288 and 20,480 within 3%)
-LAUNCH = {"qk": ("s16", 1, 16), "pv": ("s16", 4, 4)}
+#: serve; run.py's timing sweeps the alternatives (r20261026-015211-8087 on the H200 at the frozen shape: QK^T and PV each
+#: fastest with every group of a sequence in one warp, at M = 4,096, 16,384 and 20,480 within 3%)
+LAUNCH = {"qk": ("s16", 1, 16), "pv": ("s16", 1, 16)}
 
 
 def serves(tiling: str, G: int, T: int, kpv: int) -> bool:
