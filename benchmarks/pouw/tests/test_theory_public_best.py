@@ -118,7 +118,13 @@ def test_pd3_4_routes_win_where_the_tile_route_alone_does_not():
     assert r["c_opt"] < off["c_opt"] < 1
 
 
-def test_v2_tile_route_in_the_job_beats_four_tiles_on_sm120_and_mixed_with_dense_tiles_reaches_further():
+def _emulated(mix):
+    return sum(v for k, v in mix.items() if k.startswith("tiles, b c^T by emulated b1"))
+
+
+def test_v2_tile_route_in_the_job_beats_four_tiles_on_sm120_and_mixed_with_dense_tiles_reaches_further(monkeypatch):
+    """At three tiles the FP4 tile route loses, and the tile route with b c^T on the lanes (route iii) takes a tenth of
+    the round; without route iii (v2's menu) three tiles are leak-free."""
     _, bit, depth = PB.BIT_COST["sm_120"][0]
     kw = dict(o_route=False, zhd=False)
     four = PB.tile_job_at(PB.SM120, 4, 256, 16384, 16512, bit, depth, 80, 1.0, **kw)
@@ -128,7 +134,37 @@ def test_v2_tile_route_in_the_job_beats_four_tiles_on_sm120_and_mixed_with_dense
     assert four["c_opt"] < 0.98
     assert past["c_route"] >= 1 and past["c_opt"] < 1 and 0 < past["route"].mix["tiles"] < 1
     assert three["c_route"] >= 1 and three["route"].mix.get("tiles", 0.0) < 1e-6
-    assert three["c_opt"] == pytest.approx(1.0) and three["eps_alg"] > 0.005
+    assert 0.05 < _emulated(three["route"].mix) < 0.15 and three["c_opt"] < 0.995 and three["eps_alg"] > 0.005
+    monkeypatch.setattr(PB, "B1_EMULATED", ())
+    v2 = PB.tile_job_at(PB.SM120, 3, 256, 16384, 16512, bit, depth, 80, 1.0, **kw)
+    assert v2["c_opt"] == pytest.approx(1.0)
+
+
+def test_emulated_b1_costs_one_int8_product_a_bit_mac_on_the_alu_and_xu():
+    """Route iii's rate (ALGO-COST-3's A35a): on the RTX PRO 6000's ALU and XU alone (no operands or registers), the
+    carry-save trees' cheapest mix is one INT8 product-time a bit MAC, plain popcounts on the XU and Harley-Seal on
+    the ALU; the H200's b1 is native, so its job has no emulated route."""
+    trees = [PB.Method(k, [], fixed={r: ld.get(r, 0.0) for r in ("alu", "xu", "fma", "issue")})
+             for k, ld in PB.b1_emulated().items() if k != "dp4a2"]
+    p = PB.price_methods(PB.SM120, trees, 2 ** 20, 16512, PB.TOKENS, beside=False)
+    assert p.c == pytest.approx(1.0, abs=0.005) and {"alu", "xu"} <= set(p.binding)
+    assert {k.split("/")[0] for k in p.mix} == {"plain", "hs16"}
+    _, bit, depth = PB.BIT_COST["sm_90"][0]
+    ms = PB.tile_job(PB.H200, 2, 512, 16384, 16512, bit, depth, 80)["methods"]
+    assert not any("emulated" in m.label for m in ms)
+
+
+def test_a21s_fp4_route_prices_three_bit_b_ct_at_one_half_and_takes_only_e2m1_operands():
+    def uniform(lo, hi):
+        p = ((PB.INT8 >= lo) & (PB.INT8 <= hi)).astype(float)
+        return p / p.sum()
+    b3, u80 = uniform(0, 7), uniform(-80, 80)
+    assert PB.e2m1_shift(b3) == 3 and PB.e2m1_shift(uniform(0, 1)) == 0 and PB.e2m1_shift(u80) is None
+    fp4 = PB.fp4_method(PB.SM120, b3, b3, 1024, 16512, PB.TOKENS)
+    assert PB.price_methods(PB.SM120, [fp4], 1024, 16512, PB.TOKENS).c == pytest.approx(0.5, abs=1e-3)
+    assert PB.fp4_method(PB.SM120, b3, u80, 1024, 16512, PB.TOKENS) is None
+    assert PB.fp4_method(PB.H200, b3, b3, 1024, 16512, PB.TOKENS) is None
+    assert PB.fp4_method(PB.SM120, b3, b3, 2 ** 20, 16512, PB.TOKENS) is None
 
 
 def test_the_hull_of_methods_beats_each_method_where_they_bind_different_resources():

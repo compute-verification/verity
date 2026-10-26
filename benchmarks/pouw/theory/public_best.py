@@ -13,7 +13,8 @@ c_mm is the cheapest public method's priced time for every word over the honest 
 the H200, mma.sync k32 on sm_120). A method's time is the max over θ's resources of its load over the resource's rate
 (CALIB's product form: `theta.toml`'s `joint` census shows MMA and the other pipes overlapping). The resources are the
 tensor pipe (dense s8, 2:4 sparse s8, f16), issue, the ALU pipe, the FMA pipe (FFMA one slot, IMAD and DP4A two),
-the FP64 pipe (the data sheet's lanes), shared memory and, on sm_120, register-file reads. A linear program picks, for
+the FP64 pipe (the data sheet's lanes), shared memory and, on sm_120, register-file reads and the XU (POPC, the
+census's rate). A linear program picks, for
 every class of Strassen leaf, how its product and its int8 overflow corrections are computed:
 
 - main product: s8 on wrapped forms, f16 (forms of up to 11 bits are exact, FP32 accumulation of a segment is exact
@@ -73,6 +74,8 @@ class Card:
     facets: tuple          # θ's joint census: (a, b) with a·(tensor time) + b·(other warp instructions) ≤ 4 SMSP-cycles
     facet_other: str       # what θ's facet counts as other: every instruction (issue) or vector-pipe ones (vec)
     f64: float = 2.0       # FP64 lanes (DFMA) an SM-clock beside the tensor pipe: the data sheet's, unmeasured
+    xu: float = math.inf   # XU lane-ops (POPC) an SM-clock, where a route uses it (`b1_emulated`)
+    f4: float = 0.0        # dense FP4 (E2M1, scale 1) MACs an SM-clock (`fp4_method`); 0: none
     family: str = "sm_120"
     assumed: tuple = field(default_factory=tuple)
 
@@ -108,6 +111,9 @@ SM120 = Card(
     name="RTX PRO 6000", sms=188, s8=1023.8, sp=2048.0, f16=511.9, issue=4.0 * 32, alu=64.0, fma=124.3, smem=127.6,
     rf=253.8, mma_rf=(4 + 2 + 4) * 32 / 4096, mma_issue=1 / 512, mac_rate=1.0e15 / 2, sha=7.13e9, c_op=8,
     acc_words=160 * 32, min_m=16, honest_tile=(64, 64),
+    # the sm_120 census (machine_model/data/rows.csv): XU 0.5 warp instructions a SM-clock; row M, every MMA form 16
+    # SMSP-cycles, so OMMASF16864 (block-scaled e2m1 m16n8k64) does twice IMMA16832's MACs
+    xu=16.0, f4=2 * 1023.8,
     # JI3e_0..2: MMA a + every other vector-pipe warp instruction b SMSP-cycles; an mma.sync k32 is 4096 MACs a SMSP
     facets=tuple((a * 1023.8 / 4096, b) for a, b in ((8.115, 1.0), (15.03, 0.317), (15.539, 0.172))),
     facet_other="vec",
@@ -398,12 +404,12 @@ def catalogue():
 # --------------------------------------------------------------------------------------------------------------------
 # Pricing: per naive MAC, loads on each resource; the time is the max of load / rate.
 
-RES = ("tensor", "issue", "alu", "fma", "smem", "rf", "vec", "f64")
+RES = ("tensor", "issue", "alu", "fma", "smem", "rf", "vec", "f64", "xu")
 
 
 def cap(card: Card) -> dict:
     return dict(tensor=1.0, issue=card.issue, alu=card.alu, fma=card.fma, smem=card.smem, rf=card.rf, vec=math.inf,
-                f64=card.f64)
+                f64=card.f64, xu=card.xu)
 
 
 def scatter_loads(variant: str) -> dict:
@@ -864,9 +870,40 @@ def scheme_method(label: str, scheme, d: int, eX, eW) -> Method:
                   assembly(scheme, d))
 
 
-def price_hull(card: Card, chosen: dict, eX, eW, L: int, n: int, m: int, **kw) -> Priced:
-    """The convex hull of the methods (label -> (scheme, depth)), priced as one LP (`price_methods`)."""
-    return price_methods(card, [scheme_method(lb, s, d, eX, eW) for lb, (s, d) in chosen.items()], L, n, m, **kw)
+def price_hull(card: Card, chosen: dict, eX, eW, L: int, n: int, m: int, extra: tuple = (), **kw) -> Priced:
+    """The convex hull of the methods (label -> (scheme, depth)) and `extra`'s, priced as one LP (`price_methods`)."""
+    return price_methods(card, [scheme_method(lb, s, d, eX, eW) for lb, (s, d) in chosen.items()] + list(extra),
+                         L, n, m, **kw)
+
+
+E2M1 = (0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0)   # FP4's magnitudes
+
+
+def e2m1_shift(entry: np.ndarray) -> int | None:
+    """An integer s with every value the pmf takes, less s, in ±E2M1 (the smallest |s|), else None."""
+    vals = INT8[entry > 0]
+    fits = [s for s in sorted(range(-8, 9), key=abs) if all(abs(v - s) in E2M1 for v in vals)]
+    return fits[0] if fits else None
+
+
+def fp4_method(card: Card, eX, eW, L: int, n: int, m: int) -> Method | None:
+    """A21's FP4 route (ALGO-COST-3's A32): where X − s and W − s' are E2M1 (`e2m1_shift`), X Wᵀ = (X − s)(W − s')ᵀ
+    + s·1 Wᵀ + s'·X 1ᵀ − s s' L, the product one dense FP4 MMA at card.f4, exact in FP32 while L times its largest
+    product is under 2^24, and the rank-1 corrections on the lanes (one add an output, X's row sums over W's n columns,
+    W's column sums over X's m rows). None where the card has no FP4 or the operands don't fit."""
+    s, s2 = e2m1_shift(eX), e2m1_shift(eW)
+    if not card.f4 or s is None or s2 is None:
+        return None
+    big = max(abs(INT8[eX > 0] - s)) * max(abs(INT8[eW > 0] - s2))
+    if big * L >= 2 ** 24:
+        return None
+    x = card.s8 / card.f4
+    fixed = dict(tensor=1 / card.f4, smem=x * (1 / card.honest_tile[0] + 1 / card.honest_tile[1]), rf=x * card.mma_rf,
+                 issue=x * card.mma_issue)
+    ops = 1 / L + 1 / m + 1 / n
+    for r, y in (("alu", ops), ("issue", ops), ("rf", 3 * ops), ("vec", ops)):
+        fixed[r] = fixed.get(r, 0.0) + y
+    return Method(f"FP4, (X - {s})(W - {s2})^T in E2M1", [], fixed=fixed)
 
 
 def distinct_schemes(schemes, d: int, eX, eW) -> list:
@@ -1392,10 +1429,40 @@ V2_V_MARGIN = 96                    # the RTX PRO 6000's stated margin
 V2_T = {"sm_90": 2, "sm_120": 4}    # v2 as frozen: tiles a segment per card
 V2_PEEL_DIGITS = 4                  # Z_X U^T and V Y_W^T, two base-128 digits each, inner L' once a call
 # b c^T's cost in tensor time a naive MAC, and the Strassen depth it runs at (its output assembly then costs lanes);
-# depth None: part of it runs on lanes the price leaves out, so it enters only the standalone table.
+# depth None: part of it runs on lanes the price leaves out, so it enters only the standalone table. The job LPs price
+# that lane part instruction by instruction (`b1_emulated`).
 BIT_COST = {"sm_90": (("b1 wgmma, θ 32764.6 b1 MACs a SM-clock", 4095.6 / 32764.6, 0),),
             "sm_120": (("FP4 Strassen depth 2 (ALGO-COST A7, exact)", 0.383, 2),
                        ("A7 with b1 emulated on the ALU beside it", 0.26, None))}
+# Emulated b1 (route iii; ALGO-COST-3's A34 and A35, CMP-125 1986c798), where b1 has no MMA (sm_90's is native): a bit
+# MAC is one bit of AND(b word, c word). A strategy ANDs g words, reduces them by `fas` carry-save full adders (two
+# LOP3s each) to `pops` words, popcounts those (POPC, on the XU) and adds the counts by IADD3 (two an op, one
+# accumulator a weight) or IMAD (the weight folded in); hs16 is Harley-Seal. dp4a2 packs two bits a byte instead, so
+# one IDP.4A.U8 is 8 bit MACs, exact over chains of B1_DP4A_CHAIN.
+B1_EMULATED = ("sm_120",)
+B1_TREES = {"plain": (1, 0, 1), "fa3": (3, 1, 2), "fa7": (7, 4, 3), "fa15": (15, 11, 4), "hs16": (16, 15, 1)}
+B1_DP4A_CHAIN, B1_DP4A_BITS = 15, 8
+
+
+def b1_emulated() -> dict:
+    """Each strategy's loads a bit MAC (a warp instruction on one word a lane is 32 bit MACs a lane-op): LOP3 and IADD3
+    on alu, POPC on xu, IMAD and IDP.4A two fma slots, every instruction on issue and vec, register reads (AND 2, a full
+    adder's LOP3 3, POPC 1, IADD3 3, IMAD 2, IDP.4A 3, a chain's mask 1), and the operands from shared memory on the
+    DP4A tile (8 bytes and half an LDS.128 a word pair, over BESIDE_TILE)."""
+    t = BESIDE_TILE
+    out = {}
+    for name, (g, fas, pops) in B1_TREES.items():
+        for acc in ("iadd3", "imad"):
+            alu = g + 2 * fas + (pops / 2 if acc == "iadd3" else 0)
+            imad = pops if acc == "imad" else 0
+            vec = alu + pops + imad
+            rf = 2 * g + 6 * fas + pops + (1.5 * pops if acc == "iadd3" else 2 * pops)
+            ld = dict(alu=alu, xu=pops, fma=2 * imad, vec=vec, issue=vec + g / (2 * t), rf=rf, smem=8 * g / t)
+            out[f"{name}/{acc}"] = {r: x / (32 * g) for r, x in ld.items() if x}
+    ext = 1.5 / B1_DP4A_CHAIN
+    ld = dict(fma=2.0, alu=ext, vec=1 + ext, issue=1 + ext + 1 / (2 * t), rf=3 + 2.5 / B1_DP4A_CHAIN, smem=8 / t)
+    out["dp4a2"] = {r: x / B1_DP4A_BITS for r, x in ld.items()}
+    return out
 
 
 def _tile_operands(t: int, v: int):
@@ -1430,7 +1497,9 @@ def tile_methods(card: Card, t: int, Lp: int, K: int, bit: float, depth: int, L:
       and V (sum c)^T as fixed loads, Z U^T a leaf of weight 1/t on any route), which yields O with the words.
     - O, for every way but tiles: the peels (digits: nofold's base-128 digits of Z_X and Y_W, a product of inner L'
       each a call); zhd (PD3-4: Y_W's high digit is 0, so digits[0] + 1 digits); o_route (PD2-1, PD3-4: O = b c^T
-      from the 1-bit dither, no peels).
+      from the 1-bit dither, no peels), at `bit` and, on B1_EMULATED's cards, by each of `b1_emulated`'s strategies.
+    - On B1_EMULATED's cards, the tile route again with b c^T by each emulated strategy (V (sum c)^T stays on s8), so
+      the prover may split b c^T between the MMA and the lanes in any proportion.
     The first method is the honest words with the peels (OPT_honest's)."""
     mma = dict(smem=1 / card.honest_tile[0] + 1 / card.honest_tile[1], rf=card.mma_rf, issue=card.mma_issue)
 
@@ -1449,8 +1518,10 @@ def tile_methods(card: Card, t: int, Lp: int, K: int, bit: float, depth: int, L:
     o = {f"peels {r}": ld for r, ld in scaled(peels[1]).items()}
     if zhd and digits[1] > 1:
         o.update({f"zhd {r}": ld for r, ld in scaled((digits[0] + 1) * Lp / K).items()})
+    emulated = b1_emulated() if card.family in B1_EMULATED else {}
     if o_route:
         o["o_route"] = bc(bit)
+        o.update({f"o_route b1 {k}": ld for k, ld in emulated.items()})
     get_o = (("O", 1.0, o),)
     ms = [Method("dense", dense, items=(peels,))]
     if len(o) > 1:
@@ -1460,6 +1531,12 @@ def tile_methods(card: Card, t: int, Lp: int, K: int, bit: float, depth: int, L:
         eX, eW, _ = _tile_operands(t, v)
         for label, (s, d) in schemes.items():
             ms.append(replace(scheme_method(label, s, d, eX, eW), items=get_o))
+    for k, ld in emulated.items():
+        f = {r: y / t for r, y in mma.items()}
+        f["tensor"] = 1 / (t * card.s8)
+        for r, y in ld.items():
+            f[r] = f.get(r, 0.0) + y
+        ms.append(Method(f"tiles, b c^T by emulated b1 {k}", [replace(zleaf, weight=1 / t)], fixed=f))
     return ms
 
 

@@ -98,11 +98,24 @@ def test_h200_job_only_prices_sit_on_the_lanes():
     assert D.weighted([row], "job")["c_mm"] is None
 
 
-def test_rtx_public_best_saves_one_digit_of_the_peels_alone_and_tiles_when_served():
+def test_rtx_public_best_saves_one_digit_of_the_peels_alone_and_tiles_when_served(monkeypatch):
     """Job-only, the zero-high-digit peel: the matmul's dense product and 2 + 2 digits against 2 + 1. Served, the joint
-    facet's price makes the tile route (Z U^T on the ALU) the public best."""
+    facet's price makes the tile route (Z U^T on the ALU) the public best, with b c^T on the lanes (route iii); with
+    b c^T on FP4 Strassen (v2's menu) it saves less."""
     card, Lp, j = _job("RTX PRO 6000")
     assert _job_only(card, j)["c_mm"] == pytest.approx((1 + 3 * Lp / K) / (1 + 4 * Lp / K))
     served = _served(card, j)
-    assert served["mix"].get("tiles", 0.0) == pytest.approx(1.0)
-    assert served["c_mm"] < (1 + 3 * Lp / K) / (1 + 4 * Lp / K)
+    assert sum(v for k, v in served["mix"].items() if k.startswith("tiles, b c^T by emulated b1")) == pytest.approx(1.0)
+    monkeypatch.setattr(PB, "B1_EMULATED", ())
+    card, Lp, j = _job("RTX PRO 6000")
+    v2 = _served(card, j)
+    assert v2["mix"].get("tiles", 0.0) == pytest.approx(1.0)
+    assert served["c_mm"] < v2["c_mm"] < (1 + 3 * Lp / K) / (1 + 4 * Lp / K)
+
+
+def test_a21s_fp4_route_is_in_p_hyb3s_rtx_b_ct_row():
+    """A32: b c^T at 3 × 3 bits on the RTX PRO 6000 runs as one shifted FP4 product at half an INT8 product."""
+    rows = D.phyb3_rows(quick=True)
+    rtx = rows["RTX PRO 6000", "b c^T, 3 x 3 bits"]
+    assert rtx["c"] <= 0.5 + 1e-6 and any(k.startswith("FP4") for k in rtx["mix"])
+    assert not any(k.startswith("FP4") for k in rows["H200", "b c^T, 3 x 3 bits"]["mix"])

@@ -1,4 +1,8 @@
-"""D5 v2 (CMP-125): the public best on protocol v3's operands at the honest period's dual prices (P12), in model units.
+"""D5 v2.1 (CMP-125): the public best on protocol v3's operands at the honest period's dual prices (P12), in model units.
+
+v2.1 is v2 (34866fd9f8) with ALGO-COST-3's two missing routes in the menu (A34, coordinator 12:02Z): route (iii), b c^T
+with b1 emulated on the lanes from the measured sm_120 census (A35; `public_best.b1_emulated`, on the RTX PRO 6000), as
+an O-route and inside the tile route; and A21's shifted FP4 product (A32; `public_best.fp4_method`) in P-HYB3's rows.
 
 Protocol v3 (PROTO-DESIGN-3, CMP-118 e0cd4061; `accel_score/nofold.py` and `v3_caps.py` at bbe690dfe5): v2's words, 16-bit
 prefix sums every L = t L' inner indices as SHA-512 hiding leaves (8 blocks, 16-ary tree, O the last 32-bit word); HYB
@@ -10,8 +14,9 @@ bound (R-ACCEL-8).
 A round's job is `public_best.tile_job` at A = B = 0, the cheapest registrable instance: the honest kernel (dense s8,
 the peels, the hashing at nofold's compressions a MAC) against the hull of the prover's methods, every way to the words
 (the plain product with DP4A, FFMA, packed DFMA and O-IO's lookups beside the MMA, Strassen's orbit at depth 1 and 2,
-Hopcroft-Kerr and the integral catalogue, the tile route) with every way to O (the peels, the zero-high-digit peel,
-PD2-1's O-route). SHA-512 is priced in model units (U13): every schedule the model admits, so c_sha = 1 in-model.
+Hopcroft-Kerr and the integral catalogue, the tile route, and on the RTX PRO 6000 the tile route with b c^T on the
+lanes) with every way to O (the peels, the zero-high-digit peel, PD2-1's O-route on `BIT_COST`'s MMA and, on the RTX
+PRO 6000, by emulated b1). SHA-512 is priced in model units (U13): every schedule the model admits, so c_sha = 1 in-model.
 
 Prices mu° are the honest period's LP duals (`price_methods` over the honest words' best program, OPT_honest; P12 and
 PROTO-DESIGN-4's mu°): SM-clocks a unit of each resource and facet, summing to 1 over the capacities. They are never
@@ -467,7 +472,7 @@ def _plus(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
 A21 = {   # ALGO-COST-2 A21 (CMP-118 d0ac4cc8): its figure for each row, outside D5's int8 menu where it says so
     ("H200", "b c^T"): "0.835-0.938 (A16, b1 planes)",
-    ("RTX PRO 6000", "b c^T"): "0.5 (one FP4 product: b - 3 is exact E2M1; not in D5's menu)",
+    ("RTX PRO 6000", "b c^T"): "0.5 (one FP4 product: b - 3 is exact E2M1; in the menu from v2.1, `fp4_method`)",
     ("H200", "b U^T"): "1.0 (INT8; b1 planes would take 3.0)", ("RTX PRO 6000", "b U^T"): "1.0 (INT8; U isn't E2M1)",
     ("H200", "c_t, t 2"): "2.503 (nofold C_T 2.502)", ("H200", "c_t, t 3"): "2.553 (nofold C_T 2.548)",
     ("RTX PRO 6000", "c_t, t 3"): "not priced", ("RTX PRO 6000", "c_t, t 4"): "2.543 (nofold C_T 2.539)",
@@ -477,7 +482,8 @@ A21 = {   # ALGO-COST-2 A21 (CMP-118 d0ac4cc8): its figure for each row, outside
 def phyb3_rows(quick: bool = False) -> dict:
     """A21's three rows for P-HYB3 (3 fresh bits an entry): b c^T at 3 x 3 bits, b U^T (and V c^T) at 3 bits x ±80,
     and the tile route's c_t at |b + V| <= 87 (Z U^T's price plus one int8 product), each standalone at θ (lanes
-    idle) with the fast methods; the tile route's c_t at v2's 1-bit b beside it, against nofold's C_T."""
+    idle) with the fast methods, and A21's shifted FP4 product where the operands fit E2M1 (`fp4_method`: b c^T on
+    the RTX PRO 6000); the tile route's c_t at v2's 1-bit b beside it, against nofold's C_T."""
     b3, u80 = _uniform(0, 7), _uniform(-80, 80)
     zero = pb.data_pmf("zero")
     menu = {} if quick else pb.methods(pb.orbit(), pb.catalogue())
@@ -489,8 +495,10 @@ def phyb3_rows(quick: bool = False) -> dict:
             for mn, (schemes, d) in menu.items():
                 if mn != "naive":
                     chosen[mn] = (pb.best_scheme(c, d, eX, eW, L, n, pb.TOKENS, schemes, beside=True)[1], d)
-            h = pb.price_hull(c, chosen, eX, eW, L, n, pb.TOKENS, beside=True)
-            tens = pb.price_hull(c, chosen, eX, eW, L, n, pb.TOKENS, beside=False)
+            fp4 = pb.fp4_method(c, eX, eW, L, n, pb.TOKENS)
+            extra = (fp4,) if fp4 else ()
+            h = pb.price_hull(c, chosen, eX, eW, L, n, pb.TOKENS, extra, beside=True)
+            tens = pb.price_hull(c, chosen, eX, eW, L, n, pb.TOKENS, extra, beside=False)
             out[name, row] = dict(c=h.c, c_tensor=tens.c, mix=h.mix, binding=h.binding, routes=h.routes,
                                   a21=A21[name, row[:5]])
         for t in ((2, 3) if name == "H200" else (3, 4)):
