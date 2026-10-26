@@ -53,7 +53,8 @@ lives here is misfiled.
 manifest, versions), `code_identity.py` (executed code objects; `kernel_identity.py` the generated kernels' sources and binaries),
 `chunks.py` (chunk attribution, the run loop's `on_step`),
 `vllm_adapter.py` (workloads and request driving; the stages import the engine's names from it), `engine_driver.py`,
-`engine_profile.py`, `handle.py` (a built engine's scheduler and model runner: the module that knows vLLM's object graph), `arrivals.py`, `static_schedule.py` (a `sampling.ignore_eos` run held to the schedule its declaration alone
+`handle.py` (a built engine's scheduler and model runner: the module that knows vLLM's object graph),
+`engine_profile.py`, `arrivals.py`, `static_schedule.py` (a `sampling.ignore_eos` run held to the schedule its declaration alone
 decides), `served_seed.py` (the public default seed a served request without one is sampled under), `rank_worker.py` (the TP rank worker extension), and `profiles/` (kappa: capture profiles and workload JSON; one generic
 constructor + a facts table; the adapter's fixed cases, `cases.py`).  Never: commit, decide what is required.
 
