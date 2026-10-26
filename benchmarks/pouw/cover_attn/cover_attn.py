@@ -117,6 +117,34 @@ def attn_gamma(m, C, e, design, n_tokens=4500, offset=0, rho=1.0):
     return pv_w / pv_m, qk_w / qk_m
 
 
+DESIGNS = [  # (name, skip budget e or None when designed away, PV form or None, QKᵀ form or None)
+    ("static only", 0.01, None, None),
+    ("A1 PV per head", 0.01, "head", None),
+    ("A2 PV head-batched", 0.01, "mqa", None),
+    ("A3 PV per head + QKᵀ batched", 0.01, "head", "batched"),
+    ("B1 skip fixed: PV + QKᵀ per head", None, "head", "head"),
+    ("B2 skip fixed: PV per head + QKᵀ batched", None, "head", "batched"),
+]
+
+
+def totals(m, nb, offset=0):
+    """γ_total = Σ f_i γ_i over plain-time shares (MAC shares, compute-bound), uncredited classes at 1."""
+    st, qk, pv, ix = macs(m, offset=offset)
+    tot = st + qk + pv + ix
+    C = c_word(nb)
+    out = []
+    for name, e, pvf, qkf in DESIGNS:
+        g_pv_head, g_qk_head = attn_gamma(m, C, e, "head", offset=offset)
+        g_pv_b, g_qk_mqa = attn_gamma(m, C, e, "mqa", offset=offset)
+        g_qk_gqa = attn_gamma(m, C, e, "gqa", offset=offset)[1]
+        g_pv = {"head": g_pv_head, "mqa": g_pv_b, None: 1.0}[pvf]
+        g_qk = {"head": g_qk_head, "batched": g_qk_gqa if m["hkv"] > 1 else g_qk_mqa, None: 1.0}[qkf]
+        g = (st * static_gamma(m["name"], C, e) + pv * g_pv + qk * g_qk + ix) / tot
+        cov = (st + (pv if pvf else 0) + (qk if qkf and math.isfinite(g_qk) else 0)) / tot
+        out.append((name, g, cov, (pv * (g_pv - 1) + qk * (g_qk - 1)) / tot))
+    return out
+
+
 def rows():
     out = []
     for m in MODELS:
@@ -151,3 +179,10 @@ if __name__ == "__main__":
                     pvb, qm = attn_gamma(m, C, e, "mqa", offset=off)
                     print(f"| {m['name']} | {off + 2250} | {nb} B | {'e 1%' if e else 'fixed'} | {gs:.1f} | {pv:.1f} | "
                           f"{pvb:.1f} | {qh:.1f} | {qg:.1f} | {qm:.1f} |")
+    print()
+    print("| model | word | design | γ total | coverage of all matmul MACs | attention's share of γ total |")
+    print("|---|---|---|---|---|---|")
+    for m in MODELS:
+        for nb in (4, 2):
+            for name, g, cov, d in totals(m, nb):
+                print(f"| {m['name']} | {nb} B | {name} | {g:.2f} | {cov:.1%} | +{d:.2f} |")
