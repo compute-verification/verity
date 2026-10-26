@@ -226,6 +226,7 @@ import Proofs.Flock.Claims.Recursion.VStarWit
 import Proofs.Flock.Claims.Recursion.VStarBuild
 import Proofs.Flock.Claims.Recursion.VStarTrace
 import Proofs.Flock.Claims.Recursion.HpLast
+import Proofs.Flock.Claims.Recursion.VStarTraceOk
 import Proofs.Flock.Claims.Recursion.VStarDeployed
 import Proofs.Flock.Claims.Recursion.LastSharedR
 import Proofs.Flock.Claims.Recursion.LastFilesR
