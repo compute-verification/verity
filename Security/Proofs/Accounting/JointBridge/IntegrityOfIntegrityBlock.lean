@@ -46,8 +46,7 @@ theorem IntegrityOfIntegrityBlock : Accounting.Guarantees.Bridge.IntegrityOfInte
       FlockSoundness.Game.value (S.BlockEscapes q δ b) (S.run (R.strat ξ)) :=
     FlockSoundness.Game.value_congr (fun l => by
       simp only [Flock.Guarantees.ServerBlocks.BlockEscapes, Flock.Guarantees.ServerBlocks.blockWrong,
-        List.mem_filter, decide_eq_true_eq, and_imp]
-      exact and_congr (forall_congr' fun w => forall_comm) Iff.rfl) _
+        List.mem_filter, decide_eq_true_eq, and_imp]) _
   have hsrc := Flock.SecurityProofs.IntegrityBlock S b q δ hq hδ hqt hA3 (R.strat ξ) (hCR ξ)
   refine (Pouw.pr_mono hsub).trans ?_
   rw [← ENNReal.toReal_ofReal (Pouw.pr_nonneg _), hlaw, hev]
@@ -63,17 +62,19 @@ theorem JointHorizonBlocksOfIntegrityBlock : Accounting.Guarantees.Bridge.JointH
     intro b a
     by_cases ha : a = .sampled
     · subst ha
-      simp only [δ', if_pos rfl]
+      simp only [δ', ite_true]
       exact IntegrityOfIntegrityBlock ι d α C I Ω B s S b q δI hq hδ (hqt b) (hA3 b) (R b) (hCR b) c p
         (hcert b) (hfin b)
-    · simp only [δ', if_neg ha]
+    · simp only [δ', ha, ite_false]
       exact hS b a ha
+  have hsum : ∀ b, ∑ a, δ' b a =
+      (ENNReal.ofReal δI + S.err b).toReal + ∑ a ∈ Finset.univ.erase .sampled, δ b a := by
+    intro b
+    rw [← Finset.add_sum_erase _ _ (Finset.mem_univ Audit.sampled)]
+    refine congrArg₂ (· + ·) (by simp only [δ', ite_true])
+      (Finset.sum_congr rfl fun a ha => ?_)
+    simp only [δ', Finset.ne_of_mem_erase ha, ite_false]
   refine (Accounting.SecurityProofs.JointHorizonBlocks ι α I Ω d C B s c p f δ' εWipe δPous hS' hW hM).trans_eq ?_
-  congr 2
-  refine Finset.sum_congr rfl fun b _ => ?_
-  rw [← Finset.add_sum_erase _ _ (Finset.mem_univ Audit.sampled)]
-  simp only [δ', if_pos rfl]
-  congr 1
-  exact Finset.sum_congr rfl fun a ha => if_neg (Finset.ne_of_mem_erase ha)
+  rw [Finset.sum_congr rfl fun b _ => hsum b]
 
 end Accounting.SecurityProofs.Bridge

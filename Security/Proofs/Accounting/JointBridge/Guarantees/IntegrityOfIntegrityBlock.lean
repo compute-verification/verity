@@ -114,7 +114,7 @@ def JointHorizonBlocksOfIntegrityBlock : Prop :=
     Pouw.pr (fun ξ => (∃ b a, (s.block b).accepts a ξ ∧ ¬ (s.block b).Holds (c b) p a ξ) ∨
         (∃ b, (s.wipe b).accepts ξ ∧ ¬ (s.wipe b).Survives f ξ) ∨
         (∃ b, (s.block b).accepts .pous ξ ∧ ¬ s.MemoryTerm b ξ)) ≤
-      ∑ b, ((ENNReal.ofReal δI + S.err b).toReal + ∑ a ∈ Finset.univ.erase .sampled, δ b a) +
+      ∑ b : Fin B, ((ENNReal.ofReal δI + S.err b).toReal + ∑ a ∈ Finset.univ.erase .sampled, δ b a) +
         ∑ b, εWipe b + ∑ b, δPous b
 
 end Guarantees.Bridge
