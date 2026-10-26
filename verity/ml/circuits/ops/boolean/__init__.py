@@ -1,7 +1,5 @@
 """verity.ml.circuits.ops.boolean: word arithmetic as Boolean circuits.
 
-    argmax       the greedy argmax's 16-bit units on bits: ArgmaxChunkBest_v2, ArgmaxChunkIdx_v2 and ArgmaxCombine_v2, and the
-                 16-bit index's SelectU16_v2 and U16Add_v2
     gemm         the BF16 steps, F2FP cast, DotBf16_v3, GemmCoordinate_v3 and Gemm_v3 on bits, and the E4M3, E5M2, NVFP4 and
                  MXFP4 steps and their coordinates
     attention    FA2 attention's FTZ f32 operations, max, -inf guard and inverse sum as Boolean Definitions
@@ -16,6 +14,8 @@
                  low bits and its range bit), MoePairCoordinate(W)_v2 and MoePairGemm(W)_v2
     scalar       the bf16 comparator, the selects, the bit AND, PTX max / min and the E4M3 and E2M1 casts as Boolean Definitions
                  (and names the IEEE f32 arithmetic of `elementwise` and the bf16 widening of `cast`)
+    rowwise      CMP-92's row ops split so that each Definition outputs at most 16 bits: a bf16 row's softmax (its max, a
+                 16-bit half of its reciprocal sum, one output) and the embedding's coordinate
 
 The builders live elsewhere: `forms`, `gather` and `trace` in `verity.ml.circuits.boolean`; `fp`, `fp4` and `tc_step` in
 `verity.ml.circuits.silicon`; the universal unit in `verity.ml.private_circuits.universal`; `sha512` and `merkle` in
