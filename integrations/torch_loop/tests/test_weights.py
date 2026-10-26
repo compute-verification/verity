@@ -8,10 +8,35 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import verity.ml.circuits.ops.scalar  # noqa: F401
+from verity.core.protocols.sampled_proofs.one_stage import registered as REG
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ml.circuits.program import Program
+from verity.ml.circuits.types import Array, Value
+from verity.ml.commitments.gates import embedding
 from verity_torch_loop import weights as W
 
 FIXTURE = Path(__file__).parent / "fixtures" / "weights-v1.json"
-SEED, KEY = W.TEST_SEED, W.TEST_SALT_KEY
+SEED, KEY, PROG = W.TEST_SEED, W.TEST_SALT_KEY, W.TEST_PROGRAM
+XOR8 = PrimitiveDefinition("SeededWeightsTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
+                           register=False)
+
+
+def reading_program(shape: W.Shape, names=None, bits=None) -> Program:
+    """A program whose root parameters are the tensors (`names`, default all), each at its elements' width (`bits`
+    overrides), named as the tensor."""
+    ts = [t for t in W.tensors(shape) if names is None or t.name in names]
+    width = {t.name: (bits or {}).get(t.name, {"s8": 8, "f32": 32, "bf16": 16}[t.dtype]) for t in ts}
+
+    def sig(S):
+        return tuple((t.name, Array(t.rows, Array(t.cols, Value(width[t.name]))) if t.rows > 1
+                      else Array(t.cols, Value(width[t.name]))) for t in ts), Value(8)
+
+    def body(B, S, *params):
+        a = next(p for t, p in zip(ts, params) if t.kind == "s8")
+        return B.call(XOR8, a[0][0], a[0][1])
+
+    return Program(bind(CompositeDefinition("SeededWeightsTestReader", 0, (), sig, body, register=False)))
 
 
 def test_fixture_is_the_generators():
@@ -67,28 +92,80 @@ def test_stream_and_write(tmp_path):
 def test_root_is_core_commit():
     """Each tensor's root and entry are core's ``Registered.commit`` of its rows under the same salts, in one chunk or many,
     in one process or two."""
-    roots = W.root(W.TINY, SEED, KEY)
+    roots = W.root(W.TINY, SEED, KEY, PROG)
     for t in W.tensors(W.TINY):
-        c = W.commit(W.TINY, SEED, KEY, t.name)
-        assert c.root == roots[t.name] and c.entry() == W.entry(W.TINY, SEED, t.name, roots[t.name])
-    assert W.root(W.TINY, SEED, KEY, chunk_bytes=64, workers=2) == roots
-    assert W.root(W.TINY, SEED, KEY, ["l0.wq", "head.scale"]) == {k: roots[k] for k in ("l0.wq", "head.scale")}
+        c = W.commit(W.TINY, SEED, KEY, PROG, t.name)
+        assert c.root == roots[t.name] and c.entry() == W.entry(W.TINY, PROG, t.name, roots[t.name])
+    assert W.root(W.TINY, SEED, KEY, PROG, chunk_bytes=64, workers=2) == roots
+    assert W.root(W.TINY, SEED, KEY, PROG, ["l0.wq", "head.scale"]) == {k: roots[k] for k in ("l0.wq", "head.scale")}
 
 
-def test_registration_binds_seed_and_key():
-    roots = W.root(W.TINY, SEED, KEY)
-    d = W.registration_digest(W.TINY, SEED, roots)
-    assert W.registration_digest(W.TINY, SEED, W.root(W.TINY, SEED, bytes(32))) != d
-    other = b"another seed"
-    assert W.registration_digest(W.TINY, other, W.root(W.TINY, other, KEY)) != d
+def test_root_opens_under_the_verifiers_entries():
+    """For a program reading the tensors, each entry is what the verifier derives from that program
+    (``registered_entries``, the values held across windows: leaves, words, word_bits, domain), and a row of each kind
+    opens against the parallel root under that domain."""
+    prog = reading_program(W.TINY)
+    r = W.reader(W.TINY, prog)
+    ts = W.tensors(W.TINY)
+    words = {t.name: W.registered_words(t, r.word_bits(t.name)) for t in ts}
+    want = REG.registered_entries(prog, words, {t.name: t.schema for t in ts}, window="ab" * 64, fixed=list(words))
+    roots = W.root(W.TINY, SEED, KEY, prog, chunk_bytes=256, workers=2)
+    for e in W.entries(W.TINY, prog, roots):
+        v = want[e["value"]]
+        assert (e["leaves"], e["words"], e.get("word_bits", 16), e["domain"]) == (
+            v["leaves"], v["words"], v["word_bits"], v["domain"])
+    assert (r.word_bits("l0.wq.scale"), words["l0.wq.scale"], words["l0.wq"]) == (32, 1, W.TINY.row_codes // 2)
+    for name in ("tok", "pos", "l0.attn_norm", "l0.wq", "l0.wq.scale", "head"):
+        t, c = W.tensor(W.TINY, name), W.commit(W.TINY, SEED, KEY, prog, name)
+        assert c.root == roots[name] and c.domain.domain_id.hex() == want[name]["domain"]
+        k = t.leaves - 1
+        assert REG.verify_read(c.domain, roots[name], k, c.bcs[k], c.path(k), t.schema)
+    plain = W.root(W.TINY, SEED, KEY, PROG)
+    assert W.registration_digest(W.TINY, prog, roots) != W.registration_digest(W.TINY, PROG, plain)
+
+
+def test_tok_is_what_the_embed_unit_reads():
+    """``tok``'s row r is token r's embedding, and it opens under ``EmbeddingRead_v1``'s reference at the hidden
+    token."""
+    s, prog = W.TINY, reading_program(W.TINY, ["tok", "l0.wq"])
+    t = W.tensor(s, "tok")
+    assert (t.rows, t.cols, t.words, t.leaves, t.schema) == (s.vocab, s.width, s.width, s.vocab, embedding.SCHEMA)
+    c = W.commit(s, SEED, KEY, prog, "tok")
+    assert W.root(s, SEED, KEY, prog, ["tok"])["tok"] == c.root
+    for tok in (0, 97, s.vocab - 1):
+        row = W.generate(s, SEED, "tok", [tok])[0].tolist()
+        assert list(c.rows[tok]) == row
+        path = c.path(tok)
+        h, ok = embedding.reference(s.vocab, tok, c.root, c.domain.domain_id, row, c.salts[tok],
+                                    [path[i:i + 64] for i in range(0, len(path), 64)])
+        assert ok == 1 and h == row
+        _, bad = embedding.reference(s.vocab, tok ^ 1, c.root, c.domain.domain_id, row, c.salts[tok],
+                                     [path[i:i + 64] for i in range(0, len(path), 64)])
+        assert bad == 0
+
+
+def test_registration_binds_seed_key_and_program():
+    roots = W.root(W.TINY, SEED, KEY, PROG)
+    d = W.registration_digest(W.TINY, PROG, roots)
+    assert W.registration_digest(W.TINY, PROG, W.root(W.TINY, SEED, bytes(32), PROG)) != d
+    assert W.registration_digest(W.TINY, PROG, W.root(W.TINY, b"another seed", KEY, PROG)) != d
+    other = "0" * 128
+    assert W.registration_digest(W.TINY, other, W.root(W.TINY, SEED, KEY, other)) != d
+    assert W.root(W.TINY, SEED, KEY, other)["l0.wq"] != roots["l0.wq"]
 
 
 def test_refusals():
     with pytest.raises(ValueError, match="salt key is 32 bytes"):
-        W.root(W.TINY, SEED, b"short")
+        W.root(W.TINY, SEED, b"short", PROG)
     with pytest.raises(ValueError, match="has no tensor"):
         W.generate(W.TINY, SEED, "l9.wq")
     with pytest.raises(ValueError, match="has rows"):
         W.generate(W.TINY, SEED, "l0.wq", [W.tensor(W.TINY, "l0.wq").rows])
     with pytest.raises(ValueError, match="multiple of row_codes"):
         W.tensors(W.Shape("bad", 48, 1, 1, 16, 1, 64, 256, 8, 32))
+    with pytest.raises(ValueError, match="program digest"):
+        W.root(W.TINY, SEED, KEY, "the-old-string-program")
+    with pytest.raises(ValueError, match="has no parameter 'l0.wk'"):
+        W.root(W.TINY, SEED, KEY, reading_program(W.TINY, ["tok", "l0.wq"]), ["l0.wk"])
+    with pytest.raises(ValueError, match="reads 8 rows of it"):
+        W.reader(W.TINY, reading_program(W.TINY, ["l0.wq.scale", "l0.wq"], bits={"l0.wq.scale": 8}))

@@ -8,12 +8,12 @@ No torch: memory-accounting's encoder, the loop and the all-protocols runner run
 * **The model** (`Shape`): a pre-norm decoder with learned absolute positions, ``heads`` query heads of ``head_dim`` and
   ``kv_heads`` KV heads (1: MQA), a ReLU MLP of width ``mlp``, a byte vocabulary, W8A8 linears (s8 codes, an f32 scale per
   output channel) and bf16 embeddings and norm gains.
-* **The tensors** (`tensors`), in this order: ``tok`` (H, V), ``pos`` (H, C), then per layer ``l<i>.`` ``attn_norm`` (H),
+* **The tensors** (`tensors`), in this order: ``tok`` (V, H), ``pos`` (H, C), then per layer ``l<i>.`` ``attn_norm`` (H),
   ``wq`` (heads·d, H), ``wk``, ``wv`` (kv_heads·d, H), ``wo`` (H, heads·d), ``mlp_norm`` (H), ``wup`` (F, H), ``wdown``
   (H, F), each linear followed by its ``.scale`` (N), then ``final_norm`` (H), ``head`` (V, H) and ``head.scale``. A 2-D
-  tensor is (output channel, input) row-major: row r is output channel r's elements in ascending input index, so the
-  embeddings are stored transposed (row j is coordinate j over the vocabulary, or over the positions), the row an
-  embedding coordinate's unit reads. A tensor's bytes are its elements little-endian (s8 codes, f32 scales, bf16 words).
+  tensor is row-major: a linear's row r is output channel r's elements in ascending input index, ``tok``'s row r token
+  r's embedding (the row `EmbeddingRead_v1` opens at the hidden token), and ``pos`` is stored transposed (row j is
+  coordinate j over the positions). A tensor's bytes are its elements little-endian (s8 codes, f32 scales, bf16 words).
   **The weights stream** is every tensor's bytes in this order, no padding (`Tensor.offset`): 130.10 GiB at `H200`, of
   which the 52 layers' s8 matrices are 139,695,489,024 bytes.
 * **The generator** (`generate`, `row_bytes`): tensor ``t``'s generation row ``g`` (a 2-D tensor's row; a 1-D tensor is one
@@ -24,19 +24,24 @@ No torch: memory-accounting's encoder, the loop and the all-protocols runner run
   ``E = -(7 + floor(log2 K / 2))``, so a linear keeps its input's scale, and ``wq`` takes the score's 1/sqrt(d) as
   ``-floor(log2 d / 2)`` more); a norm gain ``0x3F80 | u16 >> 9`` (bf16 in [1, 2)); an embedding ``u16 & 0x8000 | 0x3F00 |
   u16 & 0x7F`` (bf16 of magnitude in [0.5, 1)).
-* **The registration** (`root`, `entries`): every tensor is one registered value of its name (core's
-  ``Registered.commit``): its bytes cut into rows of `Tensor.words` u16 words (little-endian, the reading port's row, as
-  CIR-100's units read them: an s8 linear ``row_codes`` codes, the K-part ``S8AccumulatorPart{K=row_codes}`` reads; a scale
-  2 words; ``tok`` a column of V words; a gain and ``pos`` 1 word), in ``hm96-sha512/row/v2``, under
-  ``registered.domain(program, name, words, leaves)`` (held across windows; ``program`` = `program`, the model's name as
-  ALLP-WIRE's loop names its weights), row i's salt ChaCha20 blocks 3i .. 3i+2 under the prover's 32-byte salt key at the
-  tensor's index as nonce (C-Flock's ``hm96_salt``; the key salts these rows only). At `H200` every tensor's row count is
-  a power of two, so no tree has a pad. **The registration digest** (`registration_digest`) is SHA-512 of
-  ``verity/seeded-weights/registration/v1`` and ``{program, values}`` (every entry in tensor order): the one root the
+* **The registration** (`root`, `entries`), one per reading program: every tensor is the registered value of the program's
+  root parameter of its name (core's ``Registered.commit``), its bytes cut into rows of `Tensor.words` u16 words
+  (little-endian, the reading port's row, as CIR-100's units read them: an s8 linear ``row_codes`` codes, the K-part
+  ``S8AccumulatorPart{K=row_codes}`` reads; a scale 2 words; ``tok`` one token's H words; a gain and ``pos`` 1 word), in
+  ``hm96-sha512/row/v2`` (``tok`` in `Shape.tok_schema`, ``EmbeddingRead_v1``'s ``hm96-sha512/row-seg/v1``), under the
+  domain the verifier derives (``registered.registered_entries``, the value held across windows):
+  ``registered.domain(program_digest(program), name, words, leaves, word_bits)``, the word width the parameter's leaf
+  width rounded up to 16 or 32 bits (an f32 scale read as one 32-bit leaf is 1 word of 32 bits, the same row bytes; a
+  program named by its digest alone reads each tensor at its elements' width, `Tensor.word_bits`). Row
+  i's salt is ChaCha20 blocks 3i .. 3i+2 under the prover's 32-byte salt key at the tensor's index as nonce (C-Flock's
+  ``hm96_salt``; the key salts these rows only). At `H200` every tensor's row count is a power of two, so no tree has a
+  pad. **The registration digest** (`registration_digest`) is SHA-512 of ``verity/seeded-weights/registration/v1`` and
+  ``{program, values}`` (the program's digest, the entries of the tensors it reads in tensor order): the one root the
   weights' store ties to.
+  The generator never reads the program, so a new program re-roots the weights and leaves their bytes as they were.
 * **In parallel** (`root`): a value's rows are cut into aligned chunks of a power of two rows; each worker generates its
   chunk's bytes itself and returns the chunk's subtree root, and the caller folds them as ``tree_levels`` does. Only the
-  seed, the salt key and chunk indices cross processes.
+  seed, the salt key, the `Reader` (the program's digest and widths) and chunk indices cross processes.
 """
 from __future__ import annotations
 
@@ -58,7 +63,9 @@ from verity.ml.commitments import hm96
 from verity.ml.commitments.hm96 import batch as hm96_batch
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.merkle import merkle_depth
-from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
+from verity.ml.circuits.codec import program_digest
+from verity.ml.circuits.program import Program
+from verity.ml.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix
 from verity.ml.crypto import chacha20
 
 FORMAT = "verity/seeded-weights/v1"
@@ -85,6 +92,8 @@ class Shape:
     context: int
     #: s8 codes in one registered row of a linear: the K of the part a unit reads
     row_codes: int
+    #: ``tok``'s row format: the embed unit's (``EmbeddingRead_v1``)
+    tok_schema: str = REG.SCHEMA_SEG
 
 
 #: the H200 demo's frozen shape (compute-accounting, 25 Oct 23:00Z)
@@ -111,10 +120,17 @@ class Tensor:
     offset: int
     #: a scale's exponent E
     exponent: int = 0
+    #: its registered rows' format
+    schema: str = SCHEMA
 
     @property
     def dtype(self) -> str:
         return {"s8": "s8", "scale": "f32"}.get(self.kind, "bf16")
+
+    @property
+    def word_bits(self) -> int:
+        """Its leaves' width when its reader is named by digest alone: its elements' width rounded up to 16 or 32 bits."""
+        return 32 if self.dtype == "f32" else 16
 
     @property
     def row_bytes(self) -> int:
@@ -149,9 +165,9 @@ def tensors(shape: Shape) -> tuple[Tensor, ...]:
     if s.row_codes % 2 or s.width % s.row_codes or s.mlp % s.row_codes or (s.heads * s.head_dim) % s.row_codes:
         raise ValueError(f"{s.name}: every linear's K must be a multiple of row_codes = {s.row_codes}, an even number")
 
-    def add(name: str, kind: str, rows: int, cols: int, words: int, exponent: int = 0) -> None:
+    def add(name: str, kind: str, rows: int, cols: int, words: int, exponent: int = 0, schema: str = SCHEMA) -> None:
         nonlocal off
-        t = Tensor(name, kind, rows, cols, words, off, exponent)
+        t = Tensor(name, kind, rows, cols, words, off, exponent, schema)
         if t.nbytes % (2 * words):
             raise ValueError(f"{name}: {t.nbytes} bytes are no whole rows of {words} words")
         out.append(t)
@@ -161,7 +177,9 @@ def tensors(shape: Shape) -> tuple[Tensor, ...]:
         add(name, "s8", n, k, s.row_codes // 2)
         add(f"{name}.scale", "scale", 1, n, 2, scale_exponent(k, shift))
 
-    add("tok", "embed", s.width, s.vocab, s.vocab)
+    if s.tok_schema not in (REG.SCHEMA_V2, REG.SCHEMA_SEG):
+        raise ValueError(f"{s.name}: tok's rows are {REG.SCHEMA_V2} or {REG.SCHEMA_SEG}, not {s.tok_schema!r}")
+    add("tok", "embed", s.vocab, s.width, s.width, schema=s.tok_schema)
     add("pos", "embed", s.width, s.context, 1)
     q, kv = s.heads * s.head_dim, s.kv_heads * s.head_dim
     for i in range(s.layers):
@@ -262,10 +280,58 @@ def stream(shape: Shape, seed: bytes, start: int, stop: int) -> bytes:
     return b"".join(out)
 
 
-def program(shape: Shape, seed: bytes) -> str:
-    """What every value's domain binds as its program: the format, the shape and the seed's id (not the seed)."""
+def model_id(shape: Shape, seed: bytes) -> str:
+    """The manifest's name of the weights: the format, the shape and the seed's id (not the seed). No domain binds it."""
     sid = hashlib.sha512(FORMAT.encode() + b"/seed-id\0" + _seed(seed)).hexdigest()[:32]
     return f"{FORMAT}/{shape.name}/{sid}"
+
+
+@dataclass(frozen=True)
+class Reader:
+    """The program a registration is for, as the verifier derives its domains (``registered.registered_entries``): its
+    digest and the leaf width of each tensor it reads."""
+    digest: str
+    widths: tuple[tuple[str, int], ...]
+
+    def word_bits(self, name: str) -> int:
+        for n, b in self.widths:
+            if n == name:
+                return b
+        raise ValueError(f"the program {self.digest[:16]}... has no parameter {name!r}")
+
+
+def registered_words(t: Tensor, word_bits: int) -> int:
+    """`t`'s leaves of `word_bits` bits in one registered row (the same row bytes)."""
+    if 16 * t.words % word_bits:
+        raise ValueError(f"{t.name}: a row of {t.words} u16 words is no whole number of {word_bits}-bit leaves")
+    return 16 * t.words // word_bits
+
+
+def reader(shape: Shape, program: Program | str | Reader) -> Reader:
+    """`program`'s `Reader`: a `Program` reads the tensors its root parameters name, each at the parameter's width
+    (``registered.width``), and must cut each into the tensor's rows; a digest alone (128 hex digits) reads every tensor
+    at `Tensor.word_bits`."""
+    if isinstance(program, Reader):
+        return program
+    if isinstance(program, str):
+        if len(program) != 128 or any(c not in "0123456789abcdef" for c in program):
+            raise ValueError(f"a program digest is lowercase hex of 64 bytes, not {program!r}")
+        return Reader(program, tuple((t.name, t.word_bits) for t in tensors(shape)))
+    if not isinstance(program, Program):
+        raise TypeError(f"a reader is a Program or its digest, not {type(program).__name__}")
+    params = {name for name, _ in program.fn.signature()[0]}
+    widths = []
+    for t in tensors(shape):
+        if t.name not in params:
+            continue
+        b = REG.width(program, t.name)
+        n = REG.shape(program, t.name, registered_words(t, b), t.schema)
+        if n != t.leaves:
+            raise ValueError(f"{t.name}: the program reads {n} rows of it, not its {t.leaves}")
+        widths.append((t.name, b))
+    if not widths:
+        raise ValueError(f"the program reads no tensor of {shape.name}")
+    return Reader(program_digest(program), tuple(widths))
 
 
 def _salt_key(key: bytes) -> bytes:
@@ -279,18 +345,22 @@ def salts(salt_key: bytes, index: int, first: int, n: int) -> bytes:
     return chacha20.keystream(_salt_key(salt_key), index, _SALT_BLOCKS * first, _SALT_BLOCKS * n)
 
 
-def domain(shape: Shape, seed: bytes, t: Tensor):
-    return REG.domain(program(shape, seed), t.name, t.words, t.leaves)
+def domain(t: Tensor, r: Reader):
+    """`t`'s domain under reader `r`, held across windows (no window root)."""
+    b = r.word_bits(t.name)
+    return REG.domain(r.digest, t.name, registered_words(t, b), t.leaves, b)
 
 
-def commit(shape: Shape, seed: bytes, salt_key: bytes, name: str) -> REG.Registered:
+def commit(shape: Shape, seed: bytes, salt_key: bytes, program: Program | str | Reader, name: str) -> REG.Registered:
     """Tensor `name` committed whole by core's ``Registered.commit`` (small shapes; `root` is the same root in parallel)."""
     i, t = next((i, t) for i, t in enumerate(tensors(shape)) if t.name == name)
-    words = np.frombuffer(tensor_bytes(shape, seed, name), "<u2").reshape(t.leaves, t.words)
+    r = reader(shape, program)
+    b = r.word_bits(name)
+    rows = np.frombuffer(tensor_bytes(shape, seed, name), "<u2" if b == 16 else "<u4")
     s = salts(salt_key, i, 0, t.leaves)
-    return REG.Registered.commit(program(shape, seed), name, words.tolist(),
+    return REG.Registered.commit(r.digest, name, rows.reshape(t.leaves, registered_words(t, b)).tolist(),
                                  [s[k * _INST.salt_bytes:(k + 1) * _INST.salt_bytes] for k in range(t.leaves)],
-                                 schema=SCHEMA)
+                                 word_bits=b, schema=t.schema)
 
 
 def chunk_bits(t: Tensor, chunk_bytes: int = CHUNK_BYTES) -> int:
@@ -298,23 +368,32 @@ def chunk_bits(t: Tensor, chunk_bytes: int = CHUNK_BYTES) -> int:
     return max(0, min(merkle_depth(t.leaves), _log2(max(1, chunk_bytes // rb))))
 
 
-def subtree(shape: Shape, seed: bytes, salt_key: bytes, index: int, chunk: int, bits: int) -> bytes:
+def _row_digests(t: Tensor, data: bytes) -> bytes:
+    """Each row's ``x`` (core's ``registered.row_digest``: a bit row's digest is its bytes', whatever its leaves' width)."""
+    rb, out = 2 * t.words, bytearray()
+    if t.schema == REG.SCHEMA_SEG:
+        for k in range(len(data) // rb):
+            out += sha512_row_seg_digest(data[rb * k:rb * (k + 1)], 8 * rb)
+        return bytes(out)
+    row_h = hashlib.sha512(sha512_row_v2_prefix(8 * rb))
+    for k in range(len(data) // rb):
+        h = row_h.copy()
+        h.update(data[rb * k:rb * (k + 1)])
+        out += h.digest()
+    return bytes(out)
+
+
+def subtree(shape: Shape, seed: bytes, salt_key: bytes, r: Reader, index: int, chunk: int, bits: int) -> bytes:
     """The subtree root over rows ``[chunk << bits, (chunk + 1) << bits)`` of the tensor at `index`, pads included."""
     t = tensors(shape)[index]
-    dom, rb = domain(shape, seed, t), 2 * t.words
+    dom, rb = domain(t, r), 2 * t.words
     j0 = chunk << bits
     n = max(0, min(1 << bits, t.leaves - j0))
     level = []
     if n:
         data = tensor_bytes(shape, seed, t.name, j0 * rb, (j0 + n) * rb)
-        row_h = hashlib.sha512(sha512_row_v2_prefix(8 * rb))
-        digests = bytearray()
-        for k in range(n):
-            h = row_h.copy()
-            h.update(data[rb * k:rb * (k + 1)])
-            digests += h.digest()
-        tl = hm96_batch.tree_leaves(_INST, _INST.default_key, bytes(digests), salts(salt_key, index, j0, n))
-        level = [dom.leaf(j0 + k, j0 + k, SCHEMA, tl[k]) for k in range(n)]
+        tl = hm96_batch.tree_leaves(_INST, _INST.default_key, _row_digests(t, data), salts(salt_key, index, j0, n))
+        level = [dom.leaf(j0 + k, j0 + k, t.schema, tl[k]) for k in range(n)]
     level += [dom.pad(j) for j in range(j0 + n, j0 + (1 << bits))]
     g = j0
     for d in range(bits):
@@ -324,22 +403,26 @@ def subtree(shape: Shape, seed: bytes, salt_key: bytes, index: int, chunk: int, 
 
 
 def _task(args: tuple) -> tuple[int, int, bytes]:
-    shape, seed, key, index, chunk, bits = args
-    return index, chunk, subtree(shape, seed, key, index, chunk, bits)
+    shape, seed, key, r, index, chunk, bits = args
+    return index, chunk, subtree(shape, seed, key, r, index, chunk, bits)
 
 
-def root(shape: Shape, seed: bytes, salt_key: bytes, names: Sequence[str] | None = None, *, workers: int = 1,
-         chunk_bytes: int = CHUNK_BYTES, progress: Any = None) -> dict[str, bytes]:
-    """Each tensor's registered root (`names`, default every tensor), equal to `commit`'s, computed over `workers`
-    processes in chunks of at most `chunk_bytes`."""
-    ts = tensors(shape)
-    want = [i for i, t in enumerate(ts) if names is None or t.name in names]
+def root(shape: Shape, seed: bytes, salt_key: bytes, program: Program | str | Reader,
+         names: Sequence[str] | None = None, *, workers: int = 1, chunk_bytes: int = CHUNK_BYTES,
+         progress: Any = None) -> dict[str, bytes]:
+    """Each tensor's registered root for `program` (`names`, default every tensor it reads), equal to `commit`'s, computed
+    over `workers` processes in chunks of at most `chunk_bytes`."""
+    ts, r = tensors(shape), reader(shape, program)
+    read = {n for n, _ in r.widths}
+    for n in names or ():
+        r.word_bits(tensor(shape, n).name)
+    want = [i for i, t in enumerate(ts) if (t.name in names if names is not None else t.name in read)]
     plan, bits_of = [], {}
     for i in want:
         t = ts[i]
         bits = chunk_bits(t, chunk_bytes)
         bits_of[i] = bits
-        plan += [(shape, seed, _salt_key(salt_key), i, c, bits) for c in range((1 << merkle_depth(t.leaves)) >> bits)]
+        plan += [(shape, seed, _salt_key(salt_key), r, i, c, bits) for c in range((1 << merkle_depth(t.leaves)) >> bits)]
     got: dict[int, dict[int, bytes]] = {i: {} for i in want}
     if workers == 1:
         results: Iterable = map(_task, plan)
@@ -348,8 +431,8 @@ def root(shape: Shape, seed: bytes, salt_key: bytes, names: Sequence[str] | None
         pool = multiprocessing.get_context("fork").Pool(workers)
         results = pool.imap_unordered(_task, plan, chunksize=1)
     try:
-        for done, (i, c, r) in enumerate(results, 1):
-            got[i][c] = r
+        for done, (i, c, sub) in enumerate(results, 1):
+            got[i][c] = sub
             if progress is not None:
                 progress(done, len(plan))
     finally:
@@ -359,7 +442,7 @@ def root(shape: Shape, seed: bytes, salt_key: bytes, names: Sequence[str] | None
     out = {}
     for i in want:
         t, level, d = ts[i], [got[i][c] for c in range(len(got[i]))], bits_of[i]
-        dom = domain(shape, seed, t)
+        dom = domain(t, r)
         while len(level) > 1:
             level = [dom.node(d, k // 2, level[k], level[k + 1]) for k in range(0, len(level), 2)]
             d += 1
@@ -367,20 +450,24 @@ def root(shape: Shape, seed: bytes, salt_key: bytes, names: Sequence[str] | None
     return out
 
 
-def entry(shape: Shape, seed: bytes, name: str, value_root: bytes) -> dict[str, Any]:
-    """The registration's entry of tensor `name` (core's ``Registered.entry``)."""
-    t = tensor(shape, name)
-    return {"value": name, "root": value_root.hex(), "leaves": t.leaves, "words": t.words,
-            "domain": domain(shape, seed, t).domain_id.hex()}
+def entry(shape: Shape, program: Program | str | Reader, name: str, value_root: bytes) -> dict[str, Any]:
+    """The registration's entry of tensor `name` for `program` (core's ``Registered.entry``)."""
+    t, r = tensor(shape, name), reader(shape, program)
+    b = r.word_bits(name)
+    return {"value": name, "root": value_root.hex(), "leaves": t.leaves, "words": registered_words(t, b),
+            **REG.width_entry(b), "domain": domain(t, r).domain_id.hex()}
 
 
-def entries(shape: Shape, seed: bytes, roots: dict[str, bytes]) -> list[dict[str, Any]]:
-    return [entry(shape, seed, t.name, roots[t.name]) for t in tensors(shape)]
+def entries(shape: Shape, program: Program | str | Reader, roots: dict[str, bytes]) -> list[dict[str, Any]]:
+    """The entries of the tensors `roots` names, in tensor order."""
+    r = reader(shape, program)
+    return [entry(shape, r, t.name, roots[t.name]) for t in tensors(shape) if t.name in roots]
 
 
-def registration_digest(shape: Shape, seed: bytes, roots: dict[str, bytes]) -> str:
-    return identity_digest_sha512(REGISTRATION, {"program": program(shape, seed),
-                                                 "values": entries(shape, seed, roots)}).hex()
+def registration_digest(shape: Shape, program: Program | str | Reader, roots: dict[str, bytes]) -> str:
+    """SHA-512 of the registration of `roots` for `program`: ``{program: its digest, values: entries}``."""
+    r = reader(shape, program)
+    return identity_digest_sha512(REGISTRATION, {"program": r.digest, "values": entries(shape, r, roots)}).hex()
 
 
 def _sha_task(args: tuple) -> tuple[str, str]:
@@ -412,11 +499,11 @@ def manifest(shape: Shape, seed: bytes | None = None, *, digests: bool = False, 
     rows = []
     for t in tensors(shape):
         r = {"name": t.name, "kind": t.kind, "dtype": t.dtype, "shape": t.shape, "offset": t.offset, "nbytes": t.nbytes,
-             "words": t.words, "leaves": t.leaves, **({"exponent": t.exponent} if t.kind == "scale" else {}),
-             **({"sha256": sha[t.name]} if digests else {})}
+             "words": t.words, "leaves": t.leaves, "schema": t.schema,
+             **({"exponent": t.exponent} if t.kind == "scale" else {}), **({"sha256": sha[t.name]} if digests else {})}
         rows.append(r)
     return {"format": MANIFEST, "generator": FORMAT, "shape": asdict(shape), "stream_bytes": stream_bytes(shape),
-            **({"program": program(shape, seed)} if seed is not None else {}), "tensors": rows}
+            **({"model": model_id(shape, seed)} if seed is not None else {}), "tensors": rows}
 
 
 def tensor_sha256(shape: Shape, seed: bytes, name: str) -> str:
@@ -472,6 +559,8 @@ DEMO_SEED = b"verity/cmp92/h200/weights/v1"
 #: the fixture's public seed and dummy salt key: test values, never the demo's
 TEST_SEED = b"verity/seeded-weights/test-seed"
 TEST_SALT_KEY = hashlib.sha512(b"not-a-secret: the seeded weights' test salt key").digest()[:32]
+#: the fixture's reader, a digest of no program: every tensor at `Tensor.word_bits`
+TEST_PROGRAM = hashlib.sha512(b"not-a-program: the seeded weights' test reader").hexdigest()
 
 
 def first_rows(shape: Shape, seed: bytes) -> list[list[str]]:
@@ -486,18 +575,23 @@ def first_rows(shape: Shape, seed: bytes) -> list[list[str]]:
 
 def fixture() -> dict[str, Any]:
     """The interface's fixture (``tests/fixtures/weights-v1.json``): under `TEST_SEED` and `TEST_SALT_KEY`, `TINY`'s and
-    `PHASE1`'s manifests with digests, entries and registration digests, `H200`'s manifest and each tensor's first and
-    last rows, and the first 64 bytes of `H200`'s stream."""
+    `PHASE1`'s manifests with digests, and their entries and registration digests for `TEST_PROGRAM`; at `H200` the
+    stream's length and first 64 bytes, the first and last rows of layer 0's tensors and of those outside the layers, and
+    SHA-256 of every tensor's
+    (`first_rows`, as compact JSON). `H200`'s whole manifest, with each tensor's SHA-256 under `DEMO_SEED`, is an artifact
+    of the evidence store (``integrations/torch_loop/README.md``)."""
     out: dict[str, Any] = {"format": "verity/seeded-weights/fixture/v1", "seed": TEST_SEED.hex(),
-                           "salt_key": TEST_SALT_KEY.hex(), "shapes": {}}
+                           "salt_key": TEST_SALT_KEY.hex(), "program": TEST_PROGRAM, "shapes": {}}
     for s in (TINY, PHASE1):
-        roots = root(s, TEST_SEED, TEST_SALT_KEY)
+        roots = root(s, TEST_SEED, TEST_SALT_KEY, TEST_PROGRAM)
         out["shapes"][s.name] = {"manifest": manifest(s, TEST_SEED, digests=True),
-                                 "values": entries(s, TEST_SEED, roots),
-                                 "registration": registration_digest(s, TEST_SEED, roots)}
-    m = manifest(H200, TEST_SEED)
-    out["shapes"][H200.name] = {"manifest": m, "rows": first_rows(H200, TEST_SEED),
-                                "stream_head": stream(H200, TEST_SEED, 0, 64).hex()}
+                                 "values": entries(s, TEST_PROGRAM, roots),
+                                 "registration": registration_digest(s, TEST_PROGRAM, roots)}
+    rows = first_rows(H200, TEST_SEED)
+    out["shapes"][H200.name] = {
+        "stream_bytes": stream_bytes(H200), "stream_head": stream(H200, TEST_SEED, 0, 64).hex(),
+        "rows": [r for r in rows if not r[0].startswith("l") or r[0].startswith("l0.")],
+        "rows_sha256": hashlib.sha256(json.dumps(rows, separators=(",", ":")).encode()).hexdigest()}
     return out
 
 
@@ -548,6 +642,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     sub.choices["write"].add_argument("--stop", type=int)
     sub.choices["root"].add_argument("--salt-key", type=_bytes_arg, required=True,
                                      help="the prover's 32-byte salt key: file:PATH, never on a command line in the demo")
+    sub.choices["root"].add_argument("--program", required=True,
+                                     help="the reading program's digest (128 hex digits); each tensor read at its "
+                                          "elements' width (Tensor.word_bits)")
     sub.choices["root"].add_argument("--tensors", help="comma-separated tensor names (default all)")
     a = ap.parse_args(argv)
 
@@ -566,11 +663,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         write(a.shape, a.seed, a.out, workers=a.workers, start=a.start, stop=a.stop, progress=say)
     else:
         names = a.tensors.split(",") if a.tensors else None
-        roots = root(a.shape, a.seed, a.salt_key, names, workers=a.workers, progress=say)
-        doc: dict[str, Any] = {"format": REGISTRATION, "program": program(a.shape, a.seed), "shape": a.shape.name,
-                               "values": [entry(a.shape, a.seed, n, r) for n, r in roots.items()]}
+        roots = root(a.shape, a.seed, a.salt_key, a.program, names, workers=a.workers, progress=say)
+        doc: dict[str, Any] = {"format": REGISTRATION, "program": a.program, "model": model_id(a.shape, a.seed),
+                               "shape": a.shape.name, "values": entries(a.shape, a.program, roots)}
         if names is None:
-            doc["registration"] = registration_digest(a.shape, a.seed, roots)
+            doc["registration"] = registration_digest(a.shape, a.program, roots)
         Path(a.out).write_text(dumps(doc))
     return 0
 
