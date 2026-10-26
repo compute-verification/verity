@@ -21,9 +21,13 @@ x = E.row_digests(rows, variant=None)                      # (G, S, 8)
 lt = E.leaf_table(dids, did_of_row, rank, position, salt_row)
 leaves = E.leaves(lt, x, engine.SaltKey(key, nonce0))      # (G, S, 8); or salts=(G, S, 192) uint8 from the caller
 leaves = E.commit_rows(rows, lt, salts)                    # both: rows in, leaf digests out
+ft = E.frame_table(dids, rank0, n, schema)                 # n units' frame leaves (rank0 + j), each prefix's first block hashed
+rest = E.leaves(lt, x, salts, out, frames=ft, dest=dest, run=run)   # one-row units' frame leaves too, into run (S, units, 8)
+E.frame_units(ft, units, values, run)                      # run[s][units[i]]: the frame leaf of values[i][s]
 E.frame_leaves(values, dids, rank0, schema)                # (T, n, 8): leaf (rank0 + j, rank0 + j, schema, value)
-E.level(children, dids, level)                             # (T, w, 8) nodes over (T, 2w, 8)
+E.level(children, dids, level, first, pre=None)            # (T, w, 8) nodes first .. first + w - 1 over (T, 2w, 8), or pre + (T, 2w - 1, 8)
 E.pads(dids, trees, first, n); E.root(leaves, dids)        # pads; each tree's root (tree_levels' padding)
+E.counts()                                                 # the host twin's compressions and ChaCha20 blocks
 ```
 
 `tensors` are (slots, …) with contiguous slot rows; a thread hashes one (row, slot), and a warp's 32 threads are one row in
@@ -32,8 +36,26 @@ consecutive slots, so they run the same length. The row kernel starts the rows w
 tensors, which at 4,096 slots fills the GPU better than one layer a call (25 rows × 4,096 slots is 1.5 waves on an H200).
 `SaltKey` draws row r's salt in slot s as ChaCha20 blocks 3r … 3r + 2 under the key with nonce `nonce0 + s` (C-Flock's
 `hm96_salt`, commit_slots' `row_salts`). hm96's mask M·y reads the key's 64 KB Hankel table (`hankel_table`: bytes
-[p, p + 64) of T_v are `byte_tables(key)[p][v]`) from shared memory, commit_gpu's `hm96_mask`. The leaf kernel comes at 1 or
-2 blocks an SM (`leaves(..., minb=)`). Calls run on the current torch stream.
+[p, p + 64) of T_v are `byte_tables(key)[p][v]`) from shared memory, commit_gpu's `hm96_mask` with each lane taking T's
+16-byte columns in its own order (`mask_column`), so that a warp's loads of T fall in distinct bank groups whatever the salt
+bytes; the mask is a XOR over the columns, so the order changes no byte. Each thread's 192 salt bytes sit in shared memory
+beside T (112 KB a block) rather than in registers. The leaf kernel comes at 1 or 2 blocks an SM (`leaves(..., minb=)`):
+1, the default, holds its 193 registers without spilling, and on an H200 beats 2's 128 registers with spills by 5%.
+Calls run on the current torch stream.
+
+What each hash costs, and what is shared (a row's leaf is five compressions and three ChaCha20 blocks):
+
+- x: P(8 nbytes) is one block, midstated a row (`row_setup`); a row of at most 111 bytes is one compression more.
+- c = SHA-512(salt prefix ‖ y): the prefix is one block, midstated once; y is 192 bytes, all of them salt (8 |y| =
+  2 |x| + 512), so two compressions, and no ChaCha20 block has bytes to spare for another row.
+- h = SHA-512(leaf prefix(key) ‖ b ‖ c): the prefix is midstated once; b ‖ c is one block, and the padding block is a
+  constant, so its schedule is too (`compress_kw` over `kw_pad256`).
+- the frame leaf: its prefix's first block (frame, tag, domain id) is midstated a row (`leaf_setup`); the rest of the prefix
+  and the value are one block when rank and position take at most 12 bytes (q ≤ 47), built in registers.
+- a unit's slot-tree leaf the same way, from its frame table (`frame_table`, a compression a unit; one block below rank
+  2^24), in the leaf kernel's thread when the unit is one row.
+- a node: its first block (frame, tag, domain id, level) is midstated a level (`node_mids`); the other 146 + len(index)
+  bytes are two blocks, built in registers.
 
 ## Compression variants
 

@@ -217,7 +217,7 @@ def p_attention_tgrouped(node, ctx):
     from tests.observe.test_fold_synthetic import _kv_flat, _slot
     from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
     BN = e2e.BN
     if node.op != "vllm.unified_attention_with_output.default" or len(node.children) != 1:
         return None
@@ -1821,7 +1821,7 @@ def test_sampler_geometry_check_holds_every_launch_to_the_registered_s_whatever_
     """[CIR-87 (1)] The served engine runs every top-p split launch at S = registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs)
     (`engine.topp_pin`); the fold carries the launch's S on every GumbelTopPTokenSelect of the step. GM-01 holds each to the registered
     S of the Program's declared num_SMs, at 8 live rows as at 4 -- and refuses vLLM's own batch-derived S (16 at 8 live on 142 SMs)."""
-    from verity_vllm.program.registry.topp_geometry import registered_splits, splits_for
+    from verity.ml.definitions.registry.topp_geometry import registered_splits, splits_for
     assert (registered_splits(142), splits_for(8, 142)) == (32, 16)
     gp = {"applicability": {"components": {"num_sms": 142}}}
     # engine step 0: 8 live requests; step 1: 4 live -- a verified EOS halved the batch; S is 32 at both
@@ -2051,7 +2051,7 @@ def test_scheduled_state_on_the_r15_b8_record_reproduces_the_kernel_s_flips():
     """The R15 B8 staggered stoch record (157 engine steps, 8 requests arriving 0..44 with caps 2..128, every request served to its cap):
     the scheduled state from (arrival, cap, length stop) alone equals the recorded live count at every step and its S transitions are the
     kernel's flips (0,1,32) -> (32,5,16) -> (101,4,32)."""
-    from verity_vllm.program.registry.topp_geometry import splits_for
+    from verity.ml.definitions.registry.topp_geometry import splits_for
     p = os.path.join(os.path.dirname(gm.__file__), "..", "..", "..", "tests", "program", "data", "topp_split_fixture", "b8_s_schedule_r15_attempt2.json")
     d = json.load(open(p))
     reqs = [_req(rid, v["arrive"], v["served"], cap=v["cap"]) for rid, v in d["served_vs_cap"].items()]

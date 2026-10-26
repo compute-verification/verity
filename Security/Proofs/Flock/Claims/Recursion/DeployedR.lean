@@ -2,12 +2,17 @@ import Proofs.Flock.Claims.Recursion.FinOpen
 import Proofs.Flock.Claims.Recursion.NextR
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
 import Proofs.Flock.Claims.Recursion.BindsDeployed
+import Proofs.Flock.Claims.KS.PlainR
 
 /-!
 # The deployed parameters of the bound record at `nextR` (U8)
 
 The bound record at the recursive verifier, `bdDeployed rel (nextR rdR) cols wER joinR rowInDeployed finalR wR`, at
-V\*'s bound layout `layoutBTops (finOpen (restR elem))`, fixes every choice the code side makes:
+V\*'s bound layout `layR elem` (`layoutBTops (finOpen (restR elem))` with the output rows' and check 5's calls,
+`moreCalls`), fixes every choice the code side makes:
+
+* **The columns** are the reader's, the trimmed plain record's at `rdR` (`deployPlainTrimR rel rdR`), as
+  `RecursiveKSAt` reads them: `bdR` is `RecDeploy.bdR rdR wER finalR wR`.
 
 * **The weights** (ASK-72): `DE`'s is the deployed plain record's (`wER`), `γ`'s at `IVStar` its cover (`wR`,
   `wCover`). **The join** is `FlockDeploy.joinR`, the rows' digest input `rowInDeployed`.
@@ -25,6 +30,14 @@ V\*'s bound layout `layoutBTops (finOpen (restR elem))`, fixes every choice the 
   then the trailer, constant bytes at the last part (`trailerPiece`). `elem` is the one choice still open: the
   pieces at the `rec-open` level parts' hidden rows and siblings. `ElemFramed elem` is the fact it is to meet: its
   pieces read as `encLast` of the statement and some openings at every witness.
+* **The output rows' calls** (`outsCalls`): a level part's `out` and a RecCap's `out` register the same rows as
+  RecCap's `top` (`RecVStar.checkShared`), but no message carries a level's `out` row, so a level's climb binds to
+  its cap only through the two slots' hm96 calls. `layR` records them for every instance (`outCalls`, the row at its
+  output bits, `outRowForms`) beside `layoutBTops`' calls (`layR_calls`). The locked statements read the calls only
+  through their count's cap (`lamLin2_deployed_ge`: any `L`, `n ≤ 2^55`).
+* **Check 5's rows' calls** (`valCalls`): the rows `RecCoins.checkResiduals` and `checkOpen` hold to the verifier's own
+  (`v` and `out` at an algebra part, `dirs` at a `rec-open` part), at `rowForms`. `layR` is the one layout of record:
+  every other layout's calls are among its calls (`layoutBTops_sub_layR`, `valCalls_sub_layR`, `outsCalls_sub_layR`).
 -/
 
 namespace RecDeploy.DeployedR
@@ -183,12 +196,126 @@ def ElemFramed (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × L
 /-- The deployed bound record at `nextR rdR`. -/
 noncomputable abbrev bdR : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace :=
   bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR rdR)
-    (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wER FlockDeploy.joinR rowInDeployed finalR wR
+    (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rdR).cols wER FlockDeploy.joinR rowInDeployed finalR
+    wR
 
-/-- V\*'s deployed bound layout, at `elem`. -/
+/-! ## The output rows' calls -/
+
+/-- **Output port `q`'s row at instance `n`**, at forms: word `k` bit `t` (row bit `16 k + t`) the output bit
+`HmOut.outCol` places it at in the instance's block and VU, where `k` is within the port's run of output words
+(`HmOut.outGroup`), and zero past it (`HmOut.delta`'s forced zero). -/
+def outRowForms (c : Circuit) (q n : ℕ) : List HmNets.Lin :=
+  (List.range (16 * (c.ports.getD q default).words)).map fun i =>
+    if i / 16 < (HmOut.outGroup c (q - HmOut.nIn c)).2.2.2 then
+      HmNets.Lin.var (n / c.g * 2 ^ c.kLog +
+        (HmOut.outCol c (n % c.g) ((HmOut.outGroup c (q - HmOut.nIn c)).2.2.1 + i / 16) + i % 16))
+    else ⟨[], false⟩
+
+/-- **Output port `q`'s hm96 calls at instance `n`**: `hmCalls` with the row at its output bits (`outRowForms`), the
+salt's `SHA-512(p_salt ‖ y) = c`, then the row's `SHA-512(rowIn row) = d`. -/
+def outCalls (c : Circuit) (q n : ℕ) : List (Msg × List HmNets.Lin × List HmNets.Lin) :=
+  [(Hm96.Default512.saltPrefix.data.toList, hmSalt c q n, (hmCommit c q n).drop 512),
+    ((c.ports[q]?.map fun p => (HmRow.rowPrefix p.words).data.toList).getD [], outRowForms c q n, hmDigest c q n)]
+
+/-- Port `out`'s calls at each of `k` instances; none at a circuit with no port `out`. -/
+def outPortCalls (c : Circuit) (k : ℕ) : List (Msg × List HmNets.Lin × List HmNets.Lin) :=
+  match c.ports.findIdx? (·.name == "out") with
+  | some q => (List.range k).flatMap (outCalls c q)
+  | none => []
+
+/-- **The output rows' calls at part `s`**: port `out`'s at each instance of a level part (`.recOpen _ _ _ n` and R's
+`.recOpenStacked _ _ _ n`, its `n` openings, whose climbs' tops `RecCoins.checkOpenTops` registers) and of a RecCap
+(`.cap _ N`, its `N` nodes). -/
+def outsCalls (r : XR) (s : ℕ) : List (Msg × List HmNets.Lin × List HmNets.Lin) :=
+  match (RecVStar.statements r.shape).toOption.bind (·[s]?), r.w.parts[s]?.bind partCircuit with
+  | some (.recOpen _ _ _ n), some c => outPortCalls c n
+  | some (.recOpenStacked _ _ _ n), some c => outPortCalls c n
+  | some (.cap _ N), some c => outPortCalls c N
+  | _, _ => []
+
+/-! ## Check 5's rows' calls -/
+
+/-- **Port `q`'s row at instance `n`**, at forms: an input row's unit input columns (`rowHidden`), an output row's
+output bits (`outRowForms`). -/
+def rowForms (c : Circuit) (nm : String) (q n : ℕ) : List HmNets.Lin :=
+  if q < HmOut.nIn c then ((rowHidden c nm n).getD []).map HmNets.Lin.var else outRowForms c q n
+
+/-- **Port `q`'s hm96 calls at instance `n`**, `hmCalls` at `rowForms`. -/
+def portCalls (c : Circuit) (nm : String) (q n : ℕ) : List (Msg × List HmNets.Lin × List HmNets.Lin) :=
+  [(Hm96.Default512.saltPrefix.data.toList, hmSalt c q n, (hmCommit c q n).drop 512),
+    ((c.ports[q]?.map fun p => (HmRow.rowPrefix p.words).data.toList).getD [], rowForms c nm q n, hmDigest c q n)]
+
+/-- The ports check 5 holds to the verifier's own rows at a `rec-residuals` part (`RecCoins.checkResiduals`): `v`, the
+verifier's values, and `out`, its zero rows. -/
+def resPorts : List String := ["v", "out"]
+
+/-- The port check 5 holds to the verifier's own rows at a `rec-open` part (`RecCoins.checkOpen`): `dirs`, the
+directions of the positions the verifier drew. -/
+def openPorts : List String := ["dirs"]
+
+/-- **The rows check 5 holds at part `s`**, with the port's index: at an algebra part (`.inner`), ports `v` and `out`
+(`resPorts`) at each of its two instances; at a `rec-open` part of `n` instances, port `dirs` (`openPorts`) at each. -/
+def valPorts (r : XR) (s : ℕ) : List (String × ℕ × ℕ) :=
+  match (RecVStar.statements r.shape).toOption.bind (·[s]?), r.w.parts[s]?.bind partCircuit with
+  | some (.inner _ _ _), some c => resPorts.flatMap fun nm => match c.ports.findIdx? (·.name == nm) with
+    | some q => (List.range 2).map fun n => (nm, q, n)
+    | none => []
+  | some (.recOpen _ _ _ n), some c => openPorts.flatMap fun nm => match c.ports.findIdx? (·.name == nm) with
+    | some q => (List.range n).map fun i => (nm, q, i)
+    | none => []
+  | _, _ => []
+
+/-- **Check 5's calls at part `s`**: each of `valPorts`' hm96 calls (`portCalls`). -/
+def valCalls (r : XR) (s : ℕ) : List (Msg × List HmNets.Lin × List HmNets.Lin) :=
+  ((r.w.parts[s]?.bind partCircuit).map fun c => (valPorts r s).flatMap fun h => portCalls c h.1 h.2.1 h.2.2).getD []
+
+/-! ## The layout -/
+
+/-- **The calls `layR` records beside `layoutBTops`' at part `s`**: the output rows' (`outsCalls`) and check 5's
+(`valCalls`). -/
+def moreCalls (r : XR) (s : ℕ) : List (Msg × List HmNets.Lin × List HmNets.Lin) := outsCalls r s ++ valCalls r s
+
+/-- **V\*'s deployed bound layout, at `elem`**, the one layout of record: `layoutBTops (finOpen (restR elem))`, with
+every part's output rows' and check 5's calls recorded too (`moreCalls`), so that the level parts' `out` rows bind to
+RecCap's `top` rows across parts, and check 5's rows to the verifier's. -/
 abbrev layR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) :
     Claims.Recursion.VStarB.LayoutB :=
-  layoutBTops (finOpen (restR elem))
+  { layoutBTops (finOpen (restR elem)) with
+    shaAt := fun x s =>
+      (layoutBTops (finOpen (restR elem))).shaAt x s ++ ((readX x).map fun r => moreCalls r s).getD [] }
+
+theorem layR_calls (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (x : Msg)
+    (s : ℕ) (w : Claims.Flock.Wit) : (layR elem).calls x s w = (layoutBTops (finOpen (restR elem))).calls x s w ++
+      (((readX x).map fun r => moreCalls r s).getD []).map fun p =>
+        (p.1 ++ Claims.Recursion.VStarB.readForms w p.2.1, Claims.Recursion.VStarB.readForms w p.2.2) := by
+  unfold Claims.Recursion.VStarB.LayoutB.calls
+  exact List.map_append ..
+
+/-- **`layoutBTops`' calls are `layR`'s**, at every layout of the last round (`layoutBTops`' calls don't read it). -/
+theorem layoutBTops_sub_layR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (x : Msg) (s : ℕ) (w : Claims.Flock.Wit) :
+    ∀ e ∈ (layoutBTops fin).calls x s w, e ∈ (layR elem).calls x s w := fun e he => by
+  rw [layR_calls]
+  refine List.mem_append_left _ ?_
+  simpa only [Claims.Recursion.VStarB.LayoutB.calls, layoutBTops] using he
+
+/-- **Check 5's calls are `layR`'s**: each of `valCalls`' at part `s`, at the witness `w`. -/
+theorem valCalls_sub_layR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg}
+    {r : XR} (hr : readX x = some r) (s : ℕ) (w : Claims.Flock.Wit) :
+    ∀ p ∈ valCalls r s,
+      (p.1 ++ Claims.Recursion.VStarB.readForms w p.2.1, Claims.Recursion.VStarB.readForms w p.2.2) ∈
+        (layR elem).calls x s w := fun p hp => by
+  rw [layR_calls, hr, Option.map_some, Option.getD_some]
+  exact List.mem_append_right _ (List.mem_map.2 ⟨p, List.mem_append_right _ hp, rfl⟩)
+
+/-- **The output rows' calls are `layR`'s**: each of `outsCalls`' at part `s`, at the witness `w`. -/
+theorem outsCalls_sub_layR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg}
+    {r : XR} (hr : readX x = some r) (s : ℕ) (w : Claims.Flock.Wit) :
+    ∀ p ∈ outsCalls r s,
+      (p.1 ++ Claims.Recursion.VStarB.readForms w p.2.1, Claims.Recursion.VStarB.readForms w p.2.2) ∈
+        (layR elem).calls x s w := fun p hp => by
+  rw [layR_calls, hr, Option.map_some, Option.getD_some]
+  exact List.mem_append_right _ (List.mem_map.2 ⟨p, List.mem_append_left _ hp, rfl⟩)
 
 /-! ## The readers read what they're laid at -/
 

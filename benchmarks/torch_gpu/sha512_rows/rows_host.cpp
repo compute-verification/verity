@@ -1,12 +1,28 @@
 // The kernels' host twin (rows.cu's extern "C" calls, one loop a kernel, on host memory), built by engine.host_lib with the
-// system C++ compiler: what the CPU tests hold to the reference. The stream and variant arguments are ignored.
+// system C++ compiler: what the CPU tests hold to the reference. The stream and variant arguments are ignored. It counts what
+// it hashes (sxr_counts): compressions, those of them over a constant schedule (C::kw), and ChaCha20 blocks.
+#include <cstdint>
+
+namespace {
+uint64_t counts[3];
+}  // namespace
+#define SXR_COUNT_CHACHA() (++counts[2])
+
 #include "rows.cuh"
 
 using namespace sxr;
 
 namespace {
 struct D {
-  static void run(u64* st, u64* w) { sx::compress<0, 1>(st, w); }
+  static void run(u64* st, u64* w) {
+    ++counts[0];
+    sx::compress<0, 1>(st, w);
+  }
+  static void kw(u64* st, const u64* kw) {
+    ++counts[0];
+    ++counts[1];
+    sx::compress_kw<0, 1>(st, kw);
+  }
 };
 }  // namespace
 
@@ -15,6 +31,13 @@ extern "C" {
 int sxr_variants() { return 1; }
 const char* sxr_variant_name(int i) { return i == 0 ? "host" : nullptr; }
 const char* sxr_default() { return "host"; }
+
+void sxr_counts(uint64_t* out, int reset) {
+  for (int i = 0; i < 3; ++i) {
+    out[i] = counts[i];
+    if (reset) counts[i] = 0;
+  }
+}
 
 void sxr_midstate(const uint8_t* block, uint64_t* out) {
   u64 w[16];
@@ -46,7 +69,8 @@ int sxr_leaf_setup(void*, LeafRow* rows, uint32_t G, const uint64_t* dids, const
 }
 
 int sxr_leaves(void*, const LeafArgs* a) {
-  for (u64 t = 0; t < (u64)a->G * a->S; ++t) leaf<D>(*a, a->T, 256, (u32)(t / a->S), (u32)(t % a->S));
+  u32 y[SALT_U32];
+  for (u64 t = 0; t < (u64)a->G * a->S; ++t) leaf<D>(*a, a->T, y, 1, (u32)t & 7, (u32)(t / a->S), (u32)(t % a->S));
   return 0;
 }
 
@@ -57,16 +81,37 @@ int sxr_frame_leaves(void*, const uint64_t* dids, uint32_t D_, const uint64_t* v
   return 0;
 }
 
+int sxr_frame_setup(void*, LeafRow* rows, uint32_t n, uint64_t rank0, const uint64_t* did, const uint8_t* schema,
+                    uint32_t schema_len) {
+  for (u32 j = 0; j < n; ++j) frame_setup<D>(rows[j], rank0 + j, did, schema, schema_len);
+  return 0;
+}
+
+int sxr_frame_units(void*, const LeafRow* frames, const uint64_t* units, const uint64_t* values, uint32_t n, uint32_t S,
+                    uint32_t U, uint64_t* out) {
+  for (u64 t = 0; t < (u64)n * S; ++t) {
+    const u64 d = units[t / S], s = t % S;
+    u64 v[8];
+    for (int i = 0; i < 8; ++i) v[i] = values[8 * t + i];
+    frame_tail<D>(frames[d], v, v);
+    for (int i = 0; i < 8; ++i) out[8 * (s * U + d) + i] = v[i];
+  }
+  return 0;
+}
+
 int sxr_node_mids(void*, const uint64_t* dids, uint32_t D_, uint32_t level, uint64_t* mids) {
   for (u32 d = 0; d < D_; ++d) node_mid<D>(dids + 8 * (u64)d, level, mids + 8 * (u64)d);
   return 0;
 }
 
-int sxr_level(void*, const uint64_t* mids, uint32_t D_, const uint64_t* in, uint32_t T, uint32_t w, uint64_t* out) {
+int sxr_level(void*, const uint64_t* mids, uint32_t D_, const uint64_t* pre, uint64_t pre_stride, const uint64_t* in,
+              uint64_t in_stride, uint32_t T, uint32_t w, uint64_t first, uint64_t* out) {
   for (u64 t = 0; t < (u64)T * w; ++t) {
-    const u64 tree = t / w, i = t % w;
-    const u64* l = in + 8 * (2 * tree * w + 2 * i);
-    node<D>(mids + 8 * (D_ == 1 ? 0 : tree), i, l, l + 8, out + 8 * t);
+    const u64 tree = t / w, i = t % w, j = 2 * i;
+    const u64* kids = in + tree * in_stride;
+    const u64* l = !pre ? kids + 8 * j : j ? kids + 8 * (j - 1) : pre + tree * pre_stride;
+    const u64* r = kids + 8 * (pre ? j : j + 1);
+    node<D>(mids + 8 * (D_ == 1 ? 0 : tree), first + i, l, r, out + 8 * t);
   }
   return 0;
 }

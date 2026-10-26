@@ -36,8 +36,8 @@ from typing import Any, Callable
 
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import DSV4_TOPK_PINS
 from verity_vllm.program.frontend.rules.vllm_marlin_moe import served_config
-from verity_vllm.program.kernels import marlin_moe_rows as MR
-from verity_vllm.program.registry import marlin_moe as MM
+from verity.ml.definitions.numerics import marlin_moe_rows as MR
+from verity.ml.definitions.registry import marlin_moe as MM
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns import (SCRATCH_INT_FILLS, SiluAndMulWithClamp, as_float, bound_args, find_descendants, is_row_major,
