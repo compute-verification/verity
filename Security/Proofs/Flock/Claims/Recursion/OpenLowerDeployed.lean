@@ -610,7 +610,7 @@ theorem stagedFitsR : StagedFitsR H D shape untr b cmt L := by
   rw [hsv] at hsv'
   cases hsv'
   have hn' : _root_.Flock.RecVStar.population p.sts[0] = n := hn
-  obtain ⟨p', -, -, hx', htyp, hpi, -, -, -, htab⟩ := stagedTables hS
+  obtain ⟨p', _, _, hx', htyp, hpi, -, -, -, htab⟩ := stagedTables hS
   rw [hxO] at hx'
   cases hx'
   obtain ⟨_, -, hupv, -, -, -⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok (htab 0 ht).2.2
@@ -703,6 +703,41 @@ def CopyDirsR (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → O
   AtPieces H D shape untr b cmt L pieces fun x c _ LANES HH _ _ w p ht q =>
     HH ≤ 32 ∧ DirsTie (copyR (Claims.Recursion.xI D x) w p ht q) LANES HH
       (posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q)
+
+/-- **A level part's `HH` is at most 32**: its staged table's unit is `rec-open/l<LANES>-h<HH>` (`stagedTables`),
+which the parser's unit check (`ParseFacts.recNet`) accepts only at a valid `LANES` and `HH` (`RecOpen.check_ok`). -/
+theorem hh_le_staged {st : Stage} {x : Msg} {r : XR} {ss : Array VStar.Stmt} {s lv LANES HH n : ℕ}
+    (hr : readX x = some r) (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss)
+    (hsv : ss[s]? = some (.recOpen lv LANES HH n)) {xO : Msg} {p : _root_.Flock.Readable.Parsed}
+    (hxO : _root_.Flock.Readable.parseBytes readOfO xO = some p) (hS : StagedPart st s x xO) (ht : 0 < p.sts.size) :
+    HH ≤ 32 := by
+  obtain ⟨p', r', sv', hx', htyp, hpi, hr', ⟨ss', hss', hsv'⟩, -, htab⟩ := stagedTables hS
+  rw [hxO] at hx'
+  cases hx'
+  rw [hr] at hr'
+  cases hr'
+  rw [hss] at hss'
+  cases hss'
+  rw [hsv] at hsv'
+  cases hsv'
+  obtain ⟨_, P⟩ := _root_.Flock.Readable.parseFacts_of_parse hxO htyp hpi ht
+  have hn : p.sts[0].c.unit.name = _root_.Flock.RecOpen.unitName LANES HH := (htab 0 ht).1
+  obtain ⟨hv, -⟩ := _root_.Flock.RecOpen.check_ok P.recNet (FlockVBridge.params_of_check P.recNet hn)
+  simp only [_root_.Flock.RecOpen.valid, Bool.and_eq_true, decide_eq_true_eq] at hv
+  exact hv.2
+
+/-- **Check 5's `dirs` tie at the copies** (`CopyDirsTieR`): `CopyDirsR` without `HH ≤ 32`, which the staged
+table's unit check gives (`hh_le_staged`). -/
+def CopyDirsTieR (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
+  AtPieces H D shape untr b cmt L pieces fun x c _ LANES HH _ _ w p ht q =>
+    DirsTie (copyR (Claims.Recursion.xI D x) w p ht q) LANES HH
+      (posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q)
+
+theorem copyDirsR_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
+    (hD : CopyDirsTieR H D shape untr b cmt L Bd pieces posAt) : CopyDirsR H D shape untr b cmt L Bd pieces posAt := by
+  intro x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht
+  exact ⟨hh_le_staged hr hss hsv hst.1 hst.2.2.2.2.2.2.2.2 ht,
+    hD x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht⟩
 
 /-- **`CopyBitsR` from check 5's `dirs` tie**, at the deployed reader's statements at the dense form: the side's
 `d − cap` is the statement's `HH` (`sideLevel`), and the tie spells the position's low `HH` bits (`bits_of_dirsTie`). -/
