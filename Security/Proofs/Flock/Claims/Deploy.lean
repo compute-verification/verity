@@ -25,7 +25,7 @@ SHA-512 call an oracle query.
   an `OC.query`, the session's digests and the live coins' among them (S12's `msg_sha512`, `dgWith`); then, with no
   hash, the live session's custody (`checks`): the last message's statement is `x`, the record's draw is the statement's,
   the record's link and rounds are the live messages and coins (`custody`); then the scope (`ProvedScope.check`) and a
-  draw-less session's refusal (`drawLaw zk tags none`), and last S0, the record in its canonical text (`RecordText.check`),
+  draw-less session's refusal (`drawLaw zk tags false none`), and last S0, the record in its canonical text (`RecordText.check`),
   as `verifyCmd` orders them.
 * **Rounds.** `k(x) = 2 + Σ_tables 2 · repRounds`, the link, every recorded round and the last message (`rounds`), of
   the session the statement sets up at SHA-512 (`setupOf`).
@@ -196,7 +196,7 @@ def checks (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : L
     "live: the record's draw is not the statement's"
   custody spec (← liveOf spec f.record) link c₁ mids
   s.read.check
-  (if s.read.draw.isNone then ProvedScope.drawLaw zk s.read.tags none else pure ())
+  (if s.read.draw.isNone then ProvedScope.drawLaw zk s.read.tags false none else pure ())
   RecordText.check f.record
 
 /-- **The decision at a session**: the shipped verdict over `OC` on its tables, then the checks. -/
