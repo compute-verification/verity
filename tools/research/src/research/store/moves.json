@@ -1371,6 +1371,12 @@
     },
     {
       "paths": {
+        "Security/Models/": "Security/Definitions/",
+        "Security/Properties/Proofs/": "Security/Proofs/Properties/"
+      }
+    },
+    {
+      "paths": {
         "integrations/vllm/verity_vllm/protocol_options/__init__.py": "integrations/vllm/verity_vllm/protocols/__init__.py",
         "integrations/vllm/verity_vllm/protocol_options/interface.py": "integrations/vllm/verity_vllm/protocols/interface.py",
         "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py": "integrations/vllm/verity_vllm/protocols/sampled_proofs.py",

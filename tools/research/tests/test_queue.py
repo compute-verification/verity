@@ -346,6 +346,60 @@ def test_a_pr_containing_another_goes_in_after_it_and_waits_while_it_waits(world
     assert [m.pr for m in members] == [5, 4]
 
 
+def _based_on(world: World, n: int, base: str, branch: str = "") -> None:
+    import dataclasses
+
+    world.gh.prs[n] = dataclasses.replace(world.gh.prs[n], base=base, branch=branch or f"lane-{n}/work")
+
+
+def test_status_lists_a_marked_pr_based_on_another_branch_as_waiting_and_drive_still_admits_only_main_based_ones(world):
+    """CI-176: a PR marked ready while based on another PR's branch was invisible to drive and to `status` until its parent
+    landed and someone retargeted it."""
+    parent = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, parent)
+    _based_on(world, 5, "main", "lane-5/parent")
+    world.gh.put(6, world.change({"c.txt": "stacked\n"}, base=parent))
+    _based_on(world, 6, "lane-5/parent")
+    world.gh.put(7, world.change({"b.txt": "elsewhere\n"}))
+    _based_on(world, 7, "some/branch")
+    world.gh.put(8, world.change({"b.txt": "unmarked\n"}), ready=False)
+    _based_on(world, 8, "some/branch")
+    q = world.queue()
+    got = q.status()
+    assert got[6].state == "waiting" and got[6].why == "based on lane-5/parent (#5's head), not main: retarget it to main"
+    assert got[7].state == "waiting" and got[7].why == "based on some/branch, not main: retarget it to main"
+    assert 8 not in got and got[5].state == "ready"
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [5] and set(entries) == {5}
+
+
+def test_ready_marks_a_pr_based_on_another_prs_branch_and_says_drive_wont_see_it(world, capsys):
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    world.with_store_remote()
+    parent = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, parent, ready=False)
+    _based_on(world, 5, "main", "lane-5/parent")
+    world.gh.put(6, child := world.change({"c.txt": "stacked\n"}, base=parent), ready=False)
+    _based_on(world, 6, "lane-5/parent")
+    assert ready(world.gh, world.store, 6, "lane-6", MarkOnly()) == 0
+    note = ("#6 is based on lane-5/parent (#5's head), not main: drive won't see it until #5 lands, one stack level per landing. "
+            "Retarget it to main (drive orders stacked PRs itself: a PR containing another waits for it)")
+    assert note in capsys.readouterr().err
+    assert StoreLabels(world.store, log=world.logs.append).ready(6, child) is True
+
+    _based_on(world, 6, "some/branch")
+    assert ready(world.gh, world.store, 6, "lane-6", MarkOnly(), as_json=True) == 0
+    out = capsys.readouterr()
+    got = json.loads(out.out)
+    assert got["pr"] == 6 and got["head"] == child and got["base"] == "some/branch" and got["exit"] == 0
+    assert got["warning"].startswith("#6 is based on some/branch, not main: drive won't see it until it is. Retarget it to main")
+    assert "marked on lane-6's word" in out.err
+
+    assert ready(world.gh, world.store, 5, "lane-5", MarkOnly()) == 0
+    assert "not main" not in capsys.readouterr().err
+
+
 def test_a_pr_carries_a_contained_unmarked_pr_of_its_own_owner_or_one_whose_owner_withdrew_it(world):
     """24 Oct: drive held a PR containing another open PR's head until that one closed, and no one's tooling may close a PR,
     so lanes rebuilt #3401, #3570 and #3554 by hand.  A rebuild by the same owner, or one whose owner withdrew the PR it
