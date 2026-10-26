@@ -77,13 +77,36 @@ def stage(seed: int, kind: str, levels: list, d: Path) -> Path:
     return d
 
 
+#: the name `stage_part` gives its unit, which claims the verifier's part at that shape (`RecResiduals.check`)
+CLAIMED = "rec-residuals/m22-k6-c2-p0"
+
+
+def unclaim(d: Path) -> Path:
+    """``d``'s circuit with its unit renamed to one no verifier check claims: ``ALG_S`` is not the part at the shape its
+    name gives, so the parse refuses it as the verifier does (`test_a_part_the_verifier_refuses_has_no_trace`); renamed, it
+    is the same gates and ports, which neither assigner reads the name of."""
+    f = d / "circuit.txt"
+    text = f.read_text()
+    assert CLAIMED in text
+    f.write_text(text.replace(CLAIMED, "vstar-trace/alg-p0"))
+    return d
+
+
 @pytest.mark.parametrize("kind", ["level", "inner", "cap"])
 def test_the_trace_is_the_deployed_provers(lean, tmp_path, kind):
     """Each kind of part on drawn sessions: Lean's trace is the deployed prover's witness, block for block and range for range."""
     g = random.Random(IN.SEED)
     for i in range(3):
         levels = [(g.randint(0, 2), g.randint(1, 2), g.randint(1, 2)) for _ in range(g.randint(1, 2))]
-        agree(lean, stage(g.getrandbits(32), kind, levels, tmp_path / f"{kind}{i}"))
+        d = stage(g.getrandbits(32), kind, levels, tmp_path / f"{kind}{i}")
+        agree(lean, unclaim(d) if kind == "inner" else d)
+
+
+def test_a_part_the_verifier_refuses_has_no_trace(lean, tmp_path):
+    """A unit that claims a ``rec-residuals`` part it is not: Lean's parse, the verifier's, refuses it, so no trace."""
+    d = stage(3, "inner", [(1, 1, 1)], tmp_path / "inner")
+    p = subprocess.run([str(lean), str(d / "circuit.txt"), str(d / "inst.bin")], capture_output=True, text=True)
+    assert p.returncode == 2 and "rec-residuals" in p.stderr and not p.stdout, (p.returncode, p.stderr[-2000:])
 
 
 def test_a_salt_bit_moves_only_its_hm96_slots(lean, tmp_path):
@@ -124,4 +147,4 @@ def test_the_recorded_plain_leaf_sessions_traces(lean, tmp_path):
         agree(lean, d)
         checked.append(str(d.relative_to(out)))
     print(json.dumps({"checked": checked}))
-    assert any(c.startswith("L") for c in checked) and "cap" in checked and any(c.startswith("alg/") for c in checked)
+    assert all(any(c.startswith(k) for c in checked) for k in ("L", "cap", "alg/")), checked
