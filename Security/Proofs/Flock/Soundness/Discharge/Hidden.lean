@@ -8,6 +8,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 import Proofs.Flock.Soundness.Discharge.Hidden.Rows
 import Proofs.Flock.Soundness.Discharge.Hidden.Layout
 import Proofs.Flock.Soundness.Discharge.Hidden.Flat
+import Proofs.Flock.Soundness.Discharge.Hidden.SpecOf
+import Proofs.Flock.Soundness.Discharge.Hidden.Commit
 import Proofs.Flock.Soundness.Discharge.Hidden.Committed
 import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Theorems
@@ -36,6 +38,9 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 * `Rows`: an output row is a padded lone port or an exact run of ports (`checkRows_out`: `HmOut.checkRows`), and
   `sha512/row/v1` output rows are one per output port (`out_rows_v1`);
 * `Layout`: an untyped statement's layout (`hidden_layout'`), `layout_of`'s with `outPairs` past its Δ;
+* `SpecOf`: `Spec` on the circuit the caller parsed (`setupHiddenOf_spec`, the walk of `Stmt.setupHiddenOf`);
+* `Commit`: the session on the committed circuit, `HmOut.parseCommit`'s (`parseCommit_untyped`, `specC_wf`,
+  `hidden_layoutC`, `setupHidden_specC`, `setupHiddenOf_specC`);
 * `Flat`: the flat twin (`HmRow.delta`'s Δ alone), which a satisfying witness also satisfies (`sat_flat`), and an output
   row's message bits as copies of `outSrc` (`msg_copy`);
 * `Committed`: an output row's registered `b ‖ c` at a drawn unit is the commit string of its prefix and the output words
