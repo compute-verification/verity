@@ -101,7 +101,8 @@ gate).  `--no-preflight` skips it, for the lander.
 
 `next`.  Its first-parent chain above `main` is the queue, and each merge commit's trailers name its PR, head and owner: git holds
 the queue's state.  A sync keeps the longest prefix of that chain which still matches the admitted PRs (same PR, same head, same
-order) and merges the rest on top.  So a new push moves its PR to the tip, a dropped PR takes the commits after it along (they're
+order) and merges the rest on top, each by `git merge-tree` and `git commit-tree` (`Queue._merge`: no worktree, so a candidate
+that conflicts costs one call).  So a new push moves its PR to the tip, a dropped PR takes the commits after it along (they're
 merged again), and a `main` that moved outside the queue rebuilds `next` on it, unless it moved only by files a train whose check
 runs doesn't change (`hold`): then every sync, drive's, `eject`'s or a hand one, leaves `next` as it is until that check ends.  A
 PR whose head contains another open PR's head goes in after it and waits while that one waits, unless it carries that one's
@@ -338,6 +339,8 @@ class DriveFlags:
     #: scripts a PR's head passes to be admitted (`gate_refusal`: the ready mark's preflight, and the sync that merges it onto
     #: `next`), each by its path from the repository's root, run as it is at `main`; drive's landing runs none
     landing_gates: tuple[str, ...] = ()
+    #: the most Lean checks of `land = "review"` running at once: a lower one and those stacked above it (`drive.lean_stack`)
+    max_lean_checks: int = 2
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml") -> "DriveFlags":
@@ -366,7 +369,7 @@ class DriveFlags:
             if not (on := names("on")):
                 raise bad("on", "at least one machine (train.sh's: a machine, or `auto`)")
             got["on"] = ",".join(on)
-        for k in ("max_running", "train_size"):
+        for k in ("max_running", "train_size", "max_lean_checks"):
             if k in doc:
                 if type(doc[k]) is not int or doc[k] < 1:
                     raise bad(k, "a whole number, 1 or more")
@@ -503,9 +506,9 @@ def label_target(pr: int, head: str) -> str:
 def lean_running(state: dict, pr: int) -> str | None:
     """The run ids of a running review-landing Lean check (`drive["lean"]`) whose checked prefix holds ``pr``, or None: an
     ejection of ``pr`` waits to rebuild `next` until it ends, as a sync would take its commit off `next` and cancel it (24 Oct:
-    r20261024-165000-3c72 was cancelled mid-audit)."""
+    r20261024-165000-3c72 was cancelled mid-audit).  A stacked one (`Driver._stack_lean`) doesn't hold it."""
     for rec in ((state.get("drive") or {}).get("lean") or {}).values():
-        if rec.get("state") is None and any(n == pr for n, _ in rec.get("members") or ()):
+        if rec.get("state") is None and not rec.get("stacked") and any(n == pr for n, _ in rec.get("members") or ()):
             return " ".join(rec.get("ids") or ())
     return None
 
@@ -703,6 +706,10 @@ class Queue:
         self.now: Callable[[], float] = time.time
         self.branch = SHADOW_BRANCH if shadow else BRANCH
         self.state_path = self.workdir.parent / f"{self.workdir.name}.state.json"
+        #: whether git takes `--attr-source` (`_merge`), until it refuses it once
+        self._attr_source = True
+        #: the files each merge commit of `next` changed (`touched_by`)
+        self._touched: dict[str, set[str]] = {}
 
     # -- the clone and its state
 
@@ -914,6 +921,29 @@ class Queue:
     # -- building `next`
 
     def _merge(self, tip: str, pr: PR, members: list[Member]) -> tuple[str | None, str]:
+        """(``pr``'s head merged onto ``tip``, "") or (None, why not), as `git merge --no-ff` in a checkout of ``tip`` gives them,
+        without the checkout: `git merge-tree` merges, with ``tip``'s merge drivers (`--attr-source`), and `git commit-tree`
+        makes the merge commit, so a candidate that conflicts costs one call (25-26 Oct: a sync that merged each candidate in
+        the worktree, ~70 of them conflicting, took 40 min).  A git without `--attr-source` (before 2.40) merges in the
+        worktree (`_merge_in_worktree`)."""
+        if not self._attr_source:
+            return self._merge_in_worktree(tip, pr, members)
+        r = _git(self.workdir, f"--attr-source={tip}", "merge-tree", "--write-tree", "--name-only", "--no-messages", tip, pr.head,
+                 check=False)
+        if r.returncode == 129 and "attr-source" in r.stderr:
+            self._attr_source = False
+            return self._merge_in_worktree(tip, pr, members)
+        if r.returncode == 0:
+            if not _git(self.workdir, "merge-base", "--is-ancestor", pr.head, tip, check=False).returncode:
+                return tip, ""                                  # already merged: `merge --no-ff` makes no commit either
+            commit = _git(self.workdir, "commit-tree", r.stdout.split()[0], "-p", tip, "-p", pr.head, "-m", _message(pr),
+                          env=IDENTITY).stdout.strip()
+            return commit, ""
+        files = list(dict.fromkeys(r.stdout.splitlines()[1:])) if r.returncode == 1 else []
+        return None, self._unmerged(r, files, members)
+
+    def _merge_in_worktree(self, tip: str, pr: PR, members: list[Member]) -> tuple[str | None, str]:
+        """`_merge` by `git merge --no-ff` in the clone's worktree, checked out at ``tip``."""
         _git(self.workdir, "checkout", "-q", "--detach", tip)
         r = _git(self.workdir, "merge", "--no-ff", "--no-edit", "-m", _message(pr), pr.head, check=False, env=IDENTITY)
         if r.returncode == 0:
@@ -921,10 +951,13 @@ class Queue:
         files = _out(self.workdir, "diff", "--name-only", "--diff-filter=U").split()
         _git(self.workdir, "merge", "--abort", check=False)
         _git(self.workdir, "reset", "-q", "--hard", tip)
+        return None, self._unmerged(r, files, members)
+
+    def _unmerged(self, r: subprocess.CompletedProcess, files: list[str], members: list[Member]) -> str:
         if not files:
-            return None, f"doesn't merge onto `{self.branch}`: {(r.stderr or r.stdout).strip()[-200:]}"
-        by = touched_by(self.workdir, members, files)
-        return None, f"conflicts with `{self.branch}` in {', '.join(files)}" + (f" (touched by {', '.join(by)})" if by else "")
+            return f"doesn't merge onto `{self.branch}`: {(r.stderr or r.stdout).strip()[-200:]}"
+        by = touched_by(self.workdir, members, files, self._touched)
+        return f"conflicts with `{self.branch}` in {', '.join(files)}" + (f" (touched by {', '.join(by)})" if by else "")
 
     def handle(self, pr: PR) -> str | None:
         """The Slack handle of the lane that owns ``pr``, from main's registry (`.agents/skills/using-slack/registry.json`): the
@@ -994,6 +1027,7 @@ class Queue:
         conflicts: dict[str, dict] = {}
         main = _out(self.workdir, "rev-parse", "refs/remotes/origin/main")
         gates = gates_at(self.workdir, main) if order[k:] else ()
+        merged = False
         for n in order[k:]:
             e = entries[n]
             if blocked := [a for a in e.after if a in dropped]:
@@ -1001,7 +1035,10 @@ class Queue:
                 dropped.add(n)
                 continue
             refused, unjudged = gate_refusal(self.workdir, main, e.pr.head, gates)
-            commit, why = (None, " | ".join(refused + unjudged)) if refused or unjudged else self._merge(tip, e.pr, members)
+            if refused or unjudged:
+                commit, why = None, " | ".join(refused + unjudged)
+            else:
+                (commit, why), merged = self._merge(tip, e.pr, members), True
             if commit is None:
                 e.state, e.why = "refused", why
                 dropped.add(n)
@@ -1009,6 +1046,8 @@ class Queue:
                 continue
             tip = commit
             members.append(Member(n, e.pr.head, e.pr.owner or "", commit))
+        if merged:                  # drive runs train.sh and check.py from the worktree: `next`'s tip after a sync
+            _git(self.workdir, "checkout", "-q", "--detach", tip)
         for i, m in enumerate(members, 1):
             entries[m.pr].state, entries[m.pr].position, entries[m.pr].commit = "queued", i, m.commit
         old = _git(self.workdir, "rev-parse", "--verify", "-q", f"refs/remotes/origin/{self.branch}", check=False).stdout.strip()
@@ -1263,9 +1302,14 @@ def hold(repo: Path, branch: str, running: Callable[[str, str], bool]) -> str | 
     return None
 
 
-def touched_by(repo: Path, members: list[Member], files: list[str]) -> list[str]:
-    """`#N` for each member whose merge changed one of ``files``."""
-    return [f"#{m.pr}" for m in members if set(files) & set(_out(repo, "diff", "--name-only", f"{m.commit}^1", m.commit).split())]
+def touched_by(repo: Path, members: list[Member], files: list[str], cache: dict[str, set[str]] | None = None) -> list[str]:
+    """`#N` for each member whose merge changed one of ``files``; ``cache`` keeps each merge's files across calls (a sync names
+    the members behind each of its conflicts)."""
+    cache = {} if cache is None else cache
+    for m in members:
+        if m.commit not in cache:
+            cache[m.commit] = set(_out(repo, "diff", "--name-only", f"{m.commit}^1", m.commit).split())
+    return [f"#{m.pr}" for m in members if set(files) & cache[m.commit]]
 
 
 class _Refreshed:
@@ -2615,7 +2659,7 @@ def main(argv: list[str]) -> int:
             Driver(q, on=flags.on, max_running=flags.max_running, train_size=flags.train_size, defer=frozenset(flags.defer),
                    regenerate_locks=flags.regenerate_locks, per_pr_shadow=flags.per_pr_shadow, land=flags.land,
                    after_landing_no_cache=flags.after_landing_no_cache, reviews=labels.reviews,
-                   ready_by=labels.ready_by).tick(dry_run=a.dry_run)
+                   ready_by=labels.ready_by, max_lean_checks=flags.max_lean_checks).tick(dry_run=a.dry_run)
             return 0
         if a.command == "report":
             from .mergequeue import Reporter, Statuses

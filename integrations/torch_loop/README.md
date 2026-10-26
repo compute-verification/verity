@@ -34,6 +34,16 @@ committed row longer than one SHA-512 block.
   records alone, against the registered circuit (`records_audit.py audit --circuit SHA512`) and against the compiler's
   output (`--opening`, `--compilers`): live coins, C-Flock `--zk` behind the Lean firewall, the Lean verifier of record,
   each tampered window refused.
+- `verity_torch_loop/weights.py`: the demo's seeded weights and their registration root (CMP-95 interface 1), for any
+  decoder shape (the H200 demo's frozen shape, Phase 1's CPU model): a SHA-512 counter generator from (seed, tensor, row)
+  to every tensor, the weights stream's layout (`manifest`), and each tensor as a registered value of core's for the
+  program that reads it (its digest and parameter widths, as `registered.registered_entries` derives the domains; `tok`
+  one token a row, `EmbeddingRead_v1`'s), its root computed in parallel chunks (`root`). No torch.
+  `python -m verity_torch_loop.weights manifest|write|root|fixture`; the fixture is `tests/fixtures/weights-v1.json`.
+  The H200 demo's manifest under its seed (`DEMO_SEED`), with each tensor's SHA-256, and its registration digest under
+  the test salt key for the placeholder program `TEST_PROGRAM` are
+  art:3683a02687286d9f36801bac54842dceb66595a497c00e621d03294a12ab4664 (run r20261026-002244-d3a7, 48 workers on
+  vy-nebius-cpu-4: 32 s for the digests, 2 min 32 s for the root).
 
 ## The demo of record
 
