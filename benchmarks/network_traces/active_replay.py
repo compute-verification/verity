@@ -1159,7 +1159,7 @@ class Peer:
             return id_request(**fields, user=name, frame_bytes=self.B_in)
         if self.live_model is None:
             return request_bytes(name, q["frames"], self.B_in)
-        body = self.body if self.body is not None else live_body(q["session"], self.live_model)
+        body = q.get("body") or (self.body if self.body is not None else live_body(q["session"], self.live_model))
         return live_request_bytes(name, body, q["frames"], self.B_in)
 
     async def read(self, reader: asyncio.StreamReader, origin: float) -> None:

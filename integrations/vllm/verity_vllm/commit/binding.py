@@ -402,7 +402,7 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
     # [COORD R17-26/27; rel M-0410 (a)] the classification is ON THE RECORD by family / request / kind so the population's third bucket
     # (sampled_replay.population.not_executed_by_rule) reconciles against it identity-count by identity-count (executed_prefix.reconcile_not_executed);
     # the manifest of record is not edited: rows_n / manifest_digest above are the file's
-    from verity_vllm.check import executed_prefix as _EPX
+    from verity_vllm.commit import executed_prefix as _EPX
 
     hdr["not_executed_by_rule"] = None if executed is None else _EPX.new_classification()
     for r in rows:
@@ -620,7 +620,7 @@ def composition_check(man_hdr: dict[str, Any], bmap: dict[str, Any], *, max_repo
     executed_of = None if request_steps is None else {str(k): {int(x) for x in v} for k, v in request_steps.items()}
     restricted = None
     if request_steps is not None and not padded:
-        from verity_vllm.check.executed_prefix import restrict_engine_steps
+        from verity_vllm.commit.executed_prefix import restrict_engine_steps
         steps, restricted = restrict_engine_steps(steps, request_steps)
     ref = man_hdr.get("composition_reference") or {}
     tok, samp = ref.get("input_token_ids"), ref.get("sampled_token_ids")

@@ -3,10 +3,13 @@ and path node), the parameter table, pinned SHA-512 vectors at the deployed shap
 digests, refusal of tampered signatures, and a leaf state that fails closed."""
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
+import queue
 import shutil
+import threading
 from pathlib import Path
 
 import pytest
@@ -213,6 +216,43 @@ def test_a_second_signer_on_one_state_is_refused(state, small) -> None:
         R.sign(small, st, b"a")
     with _open(state, small) as st:
         assert R.sign(small, st, b"b").q == 1
+
+
+def test_a_waiting_signer_takes_its_turn_at_the_next_leaf(state, small, monkeypatch) -> None:
+    """With ``wait`` a second signer on a held state waits on its lock rather than refusing, and once the holder closes
+    the state it signs at the leaf after the holder's. `flock` is patched to say "waiting" when a blocking lock has to
+    wait, so the holder signs and lets go only once the second signer waits, with no clock."""
+    real, said, got = fcntl.flock, queue.SimpleQueue(), []
+
+    def flock(f, op):
+        if op == fcntl.LOCK_EX:
+            try:
+                return real(f, op | fcntl.LOCK_NB)
+            except BlockingIOError:
+                said.put("waiting")
+        return real(f, op)
+
+    def second() -> None:
+        try:
+            with _open(state, small, wait=True) as st:
+                got.append(R.sign(small, st, b"b").q)
+        except Exception as e:  # noqa: BLE001: the test reads it below
+            got.append(e)
+        said.put("done")
+
+    monkeypatch.setattr(fcntl, "flock", flock)
+    holder = _open(state, small)
+    t = threading.Thread(target=second)
+    t.start()
+    try:
+        first = said.get()
+        signed = R.sign(small, holder, b"a").q
+    finally:
+        holder.close()
+        t.join()
+    rest = [said.get() for _ in range(said.qsize())]
+    assert (first, signed, got, rest) == ("waiting", 0, [1], ["done"])
+    assert state.with_name(state.name + ".journal").read_text().split() == ["0", "1"]
 
 
 def test_a_state_changed_under_its_signer_is_refused(state, small, tmp_path) -> None:
