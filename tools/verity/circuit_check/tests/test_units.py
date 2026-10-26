@@ -1,7 +1,9 @@
 """The catalog bindings' records (`circuit_check.units`), on the synthetic tree of `test_cache`: `cli.run`'s ``--all`` path with
 the real `targets.catalog`, `targets.suite` and `targets.select` over the tree's bindings (its ``syn/catalog.py``), first as a
 full build, which stores each binding's record, then from the records, building only the bindings whose record misses.  And
-`units.call_families` against `targets.call_families`' rules for word Call families made on demand and unbound kinds."""
+`units.call_families` against `targets.call_families`' rules for word Call families made on demand and unbound kinds.  And the
+circuit_check suite's catalog, each binding built in a process of its own and made from what they reach in another
+(`units.built_apart`, `units.from_manifest`), against `targets.suite` built whole."""
 from __future__ import annotations
 
 import json
@@ -339,3 +341,168 @@ def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_
     monkeypatch.setattr(TG, "_vocabulary_bindings", lambda: [("b1-eager-v3/dsv4_indexer_compress", "KeyError: 'ROPE'")])
     with pytest.raises(RuntimeError, match=r"b1-eager-v3/dsv4_indexer_compress: KeyError: 'ROPE'"):
         UN.call_families([], nothing, {})
+
+
+#: the catalog over the synthetic bindings, in a process of its own: built whole (``whole``, `targets.suite`), each binding built
+#: in a process forked for it into a manifest (``build``, `units.built_apart`), or made from that manifest (``load``,
+#: `units.from_manifest`, `units.make`); prints each suite target's descriptor and units, the catalog's errors and the ids made
+#: along a binding's record (`units._materialize`), not from their own
+APART = """
+import json, sys
+from pathlib import Path
+
+root, mode, manifest = Path(sys.argv[1]), sys.argv[3], Path(sys.argv[4])
+sys.path.insert(0, str(root))
+from circuit_check import cache as CC, sidecars as SC, targets as TG, units as UN
+
+SC.REPO, SC.PACKAGES = root, ("syn",)
+import runpy
+runpy.run_path(str(root / "targets.py"))["load_registries"]()
+from syn import catalog
+
+
+def bindings():
+    for units, make in catalog.BINDINGS:
+        yield units, make, "model" if units[0].startswith("_model_roots:") else units[0], units[0]
+
+
+TG.load_registries = lambda: None
+TG._registered = getattr(catalog, "registered", lambda: [])
+TG.catalog_units = bindings
+TG.pouw_bindings = lambda: []
+along, materialize = [], UN._materialize
+UN._materialize = lambda entries, objects, fid, *a, **k: along.append(fid) or materialize(entries, objects, fid, *a, **k)
+
+
+def shown(suite, units):
+    return {"targets": {fid: CC.descriptor(fn) for fid, fn in suite.items()},
+            "units": {fid: sorted(units.get(fid, ())) for fid in suite}, "errors": sorted(map(list, TG.ROOT_ERRORS))}
+
+
+if mode == "whole":
+    out = shown(TG.suite(), TG.BINDINGS)
+elif mode == "build":
+    kept, dropped, _ = UN.built_apart(UN.made_entries(), 2)
+    manifest.write_text(json.dumps(UN.manifest(kept, dropped)))
+    out = {"errors": sorted(map(list, TG.ROOT_ERRORS)), "dropped": [list(u) for u in dropped]}
+else:
+    plan = UN.planned(UN.from_manifest(UN.made_entries(), json.loads(manifest.read_text())))
+    out = {**shown({fid: UN.make(plan, fid) for fid in plan.derived.ids}, plan.derived.units), "along": along}
+print(json.dumps(out))
+"""
+
+#: a model whose body raises, as a model the catalog can't build names its error
+BAD = """
+from verity.ml.circuits import composite
+
+from syn.prims import V
+
+
+@composite("SynBad", 1, [], lambda S: ((("a", V), ("b", V)), V))
+def SynBad(B, S, a, b):
+    raise ValueError("no body at these statics")
+"""
+#: a Definition whose body build kills the process building it, as the kernel's OOM killer does
+DIE = """
+import os
+import signal
+
+from verity.ml.circuits import composite
+
+from syn.prims import V
+
+
+@composite("SynDie", 1, [], lambda S: ((("a", V), ("b", V)), V))
+def SynDie(B, S, a, b):
+    os.kill(os.getpid(), signal.SIGKILL)
+"""
+APART_BINDINGS = """def bad():
+    from syn import bad
+    return [bind(bad.SynBad)]
+
+
+def die():
+    from syn import die
+    return [bind(die.SynDie)]
+
+
+"""
+
+
+def _apart(root: Path, mode: str, ok: bool = True) -> dict | str:
+    """``mode``'s output over ``root`` (`APART`, its manifest beside the tree), or its stderr when it fails (``ok`` false)."""
+    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+    r = subprocess.run([sys.executable, "-c", APART, str(root), str(REPO), mode, str(root.parent / f"{root.name}-manifest.json")],
+                       capture_output=True, text=True, cwd=REPO, env=env)
+    if not ok:
+        assert r.returncode != 0, r.stdout[-3000:]
+        return r.stderr
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout.strip().splitlines()[-1])
+
+
+def _apart_tree(root: Path, *extra: str) -> Path:
+    _tree(root)
+    for rel, text in (("syn/step.py", STEP), ("syn/bad.py", BAD), ("syn/die.py", DIE)):
+        (root / rel).write_text(text.lstrip("\n"))
+    _edit(root, "syn/catalog.py", "BINDINGS = [", STEP_BINDINGS + APART_BINDINGS + "BINDINGS = [")
+    _bindings(root, *BINDINGS, '(("_unbound_roots",), unbound)', '(("_bound_roots",), bound)', *extra)
+    return root
+
+
+def test_the_catalog_built_apart_and_made_from_its_manifest_is_the_one_built_whole(tmp_path):
+    """Each binding built in a process of its own, and the catalog made in another from what they reach, is `targets.suite`
+    built whole: the same targets at the same descriptors, with the same units, SynStep's the Definition of its id the catalog
+    keeps, and a model whose body raises named in `targets.ROOT_ERRORS` as the catalog names it.  The process that makes it
+    builds no binding's body: SynSub and SynAdd, which only a body reaches, are made from their ids."""
+    root = _apart_tree(tmp_path / "t", '(("_model_roots:SynBad_v1",), bad)')
+    whole = _apart(root, "whole")
+    assert {"SynStep_v1{OP=SynInner_v1}", "SynSub_v1", "SynAdd_v1", "SynK_v1{K=2}"} <= set(whole["targets"])
+    assert whole["errors"] == [["_model_roots:SynBad_v1", "ValueError: no body at these statics"]]
+    assert _apart(root, "build") == {"errors": whole["errors"], "dropped": [["_model_roots:SynBad_v1"]]}
+    load = _apart(root, "load")
+    assert {k: load[k] for k in whole} == whole
+    assert not {"SynSub_v1", "SynAdd_v1"} & set(load["along"]), load["along"]
+
+
+def test_a_binding_whose_process_dies_is_named_and_a_model_is_dropped(tmp_path):
+    """A binding's process killed while it builds (as by the kernel's OOM killer) leaves no result: a model's is dropped from the
+    catalog and named in `targets.ROOT_ERRORS`, as the catalog names a model it can't build, and the rest is made as before;
+    any other binding's fails the build by name."""
+    root = _apart_tree(tmp_path / "t")
+    whole = _apart(root, "whole")
+    died = "its process died (signal 9), its result unwritten"
+    _edit(root, "syn/catalog.py", "]\nFAMILIES", ', (("_model_roots:SynDie_v1",), die)]\nFAMILIES')
+    assert _apart(root, "build") == {"errors": [["_model_roots:SynDie_v1", died]], "dropped": [["_model_roots:SynDie_v1"]]}
+    load = _apart(root, "load")
+    assert load["targets"] == whole["targets"] and load["errors"] == [["_model_roots:SynDie_v1", died]]
+    _edit(root, "syn/catalog.py", '(("_model_roots:SynDie_v1",), die)', '(("_die_roots",), die)')
+    assert f"RuntimeError: _die_roots: {died}" in _apart(root, "build", ok=False)
+
+
+def test_one_xdist_worker_builds_the_catalog_and_the_others_take_it(tmp_path, monkeypatch):
+    """Under xdist the first worker to ask builds the catalog apart and writes its manifest beside the workers' basetemps; a later
+    one takes the manifest and builds nothing.  A builder that failed leaves its error there, and each later worker fails on it
+    by name rather than build again."""
+    import conftest
+    from circuit_check import units as UN
+
+    jobs: list[int] = []
+    monkeypatch.setattr(UN, "built_apart",
+                        lambda entries, n, budget, weights: jobs.append(n) or (entries[:1], [("gone",)], {}))
+    monkeypatch.setattr(UN, "manifest", lambda kept, dropped: {"kept": len(kept), "dropped": dropped})
+    monkeypatch.setattr(UN, "from_manifest", lambda entries, got: entries[:got["kept"]])
+    assert conftest._built(["a", "b"], tmp_path, 3) == (["a"], "built apart")
+    assert conftest._built(["a", "b"], tmp_path, 3) == (["a"], "taken from the worker that built it")
+    assert jobs == [3]
+    (tmp_path / conftest.MANIFEST).unlink()
+
+    def dies(*_a):
+        raise RuntimeError("_core_roots: its process died (signal 9), its result unwritten")
+
+    monkeypatch.setattr(UN, "built_apart", dies)
+    with pytest.raises(RuntimeError, match="signal 9"):
+        conftest._built(["a"], tmp_path, 3)
+    monkeypatch.setattr(UN, "built_apart", lambda *a: pytest.fail("built again"))
+    with pytest.raises(RuntimeError, match="the xdist worker that built circuit-check's catalog failed: RuntimeError: _core"):
+        conftest._built(["a"], tmp_path, 3)

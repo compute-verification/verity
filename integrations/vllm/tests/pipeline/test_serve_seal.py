@@ -12,6 +12,7 @@ import pytest
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_seal as ss
+from verity_vllm.records.commit_run import CommitRun
 
 ROWS = {0: [("runner-a", 0, 3, 0, 3), ("runner-b", 3, 5, 0, 2), ("warmup", 5, 6, 0, 1)], 1: [("runner-a", 0, 1, 3, 3)]}
 NAMES = {"runner-a": "alice", "runner-b": "cmpl-2"}
@@ -59,6 +60,8 @@ def test_a_sealed_rows_sha512_window_opens_as_a_deferred_commits_row_dir(tmp_pat
     assert r.run.run_root == rc.run_root and r.ctx["served_window"]["window"] == 5 and r.ctx["code"] == "c0de"
     assert r.programs == {} and r.arrivals == {"alice": 0, "cmpl-2": 0} and r.ctx["tokens"] == {"alice": [7, 9], "cmpl-2": [8]}
     assert sorted(p.name for p in (d / "commit").iterdir()) == ["binding_map_p0.json", "replay_bundle_p0", "runs.jsonl", "verdict.json"]
+    (run,) = CommitRun.load_lines(d / "commit" / "runs.jsonl")
+    assert run.schema is None and run.arm == "instrumented" and run.tokens_equal is None and run.commit.run_root == rc.run_root.hex()
 
 
 #: the Commit of record of the bench row llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager (its ``source``):

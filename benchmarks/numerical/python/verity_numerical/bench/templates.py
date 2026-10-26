@@ -699,6 +699,11 @@ def _composite(path: str) -> Any:
     return getattr(importlib.import_module(mod), attr)
 
 
+#: A row's relation names its rule by the row kernels' module as it was when #101 captured them, in two literals so that a layout
+#: move leaves the text: the captured manifests record it, and their content digests cover it.
+ROW_RULE = "the registered row kernel of {} (verity_vllm.program" ".kernels.rows)"
+
+
 def _row_subcircuit(row: _Row, **params: Any) -> Subcircuit:
     missing = [k for k in row.statics if k not in params]
     extra = sorted(set(params) - set(row.statics))
@@ -714,7 +719,7 @@ def _row_subcircuit(row: _Row, **params: Any) -> Subcircuit:
 
     enc = {k: encode_static(v) for k, v in st.items()}
     rel = {"subcircuit": row.family, "definition": row.family, "statics": enc,
-           "rule": f"the registered row kernel of {row.family} (verity_vllm.program.kernels.rows)"}
+           "rule": ROW_RULE.format(row.family)}
 
     def sampler(sub: Subcircuit, key: Key, j: int) -> Draw:
         ins, info = row.sample(st, key, j)

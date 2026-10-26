@@ -27,8 +27,6 @@ the row bn's bits are the constant ones of -1, so a lane there costs k ANDs.  Th
 """
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 from types import SimpleNamespace
 
 from verity.ml.circuits import boolean as BL
