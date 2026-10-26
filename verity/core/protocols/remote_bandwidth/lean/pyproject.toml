@@ -7,7 +7,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # The references: the audit, its codec, receipts and coins, the store binding, the memory line and its pooled bound, on
 # the commitments, the randomness and the profile; core's pin (models.json),
 # which the binding's test reads as a pin; the difftest's Python half; and what `lake` builds: this package and,
-# through its path requires, C-Flock's verifier's Lean, core's randomness and the difftest server. The schedule check
+# through its path requires, C-Flock's verifier's Lean, core's randomness, the difftest server and the core protocol
+# interface (`RemoteAudit.Protocol`, which `test_protocol.py` holds to the period hook, `period.py`). The schedule check
 # (`schedule.py`) is a reference too.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/remote_bandwidth/__init__.py",
@@ -16,6 +17,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/remote_bandwidth/coins.py", "verity/core/protocols/remote_bandwidth/receipts.py",
           "verity/core/protocols/remote_bandwidth/store.py", "verity/core/protocols/remote_bandwidth/line.py",
           "verity/core/protocols/remote_bandwidth/pooled.py", "verity/core/protocols/remote_bandwidth/schedule.py",
+          "verity/core/protocols/remote_bandwidth/period.py", "verity/core/protocols/interface",
           "verity/core/protocols/pouw/lean/check/models.json",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/sampled_proofs/challenger.py",

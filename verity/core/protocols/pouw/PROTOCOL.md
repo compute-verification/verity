@@ -245,7 +245,7 @@ opens, the challenger signs it with its LMS key on its host (`LiveChallenger.sig
 Timing is a trust assumption, not a check. `after` binds an opening to the root the verifier recorded, but can't show the
 coin was released after it: that rests on the challenger releasing coin i only once it has received root i. The
 challenger is auditor-trusted, the auditor's device on a machine the prover doesn't control, under the named assumption
-`trusted-nebius-host`. The record keeps the order on its own clock: `LiveRecord.log` logs root i's receipt
+`trusted-host`. The record keeps the order on its own clock: `LiveRecord.log` logs root i's receipt
 (`received_at`) and then coin i's release after it (`released_at`).
 
 **Live epochs** (`window.live_challenger`, `rounds_reason`, `round_key`; Lean `PouwWindow.Rounds`). A live PoUW epoch's
@@ -253,7 +253,11 @@ coins are the layout `live_families(R)` under `LIVE_SCHEME` (`"verity/pouw/epoch
 (`"pouw/salt"`), its draw coin (`"pouw/draw"`) and R round coins (`"pouw/round"`, rounds numbered from 0 as Compose's
 `Declared.round` numbers them), R the most rounds a window of the epoch takes, fixed when the challenger commits. The
 salt coin opens once, after the window's open root (`salt.window_open_root`, step 2), and `core_check.salt` (Lean
-`PouwCheck.saltCheck`) is the rule on it, read through the same session as the round coins. Round r's coin opens after
+`PouwCheck.saltCheck`) is the rule on it, read through the same session as the round coins. A Pearl-C pass's session
+takes its salt coin alone (`SALT_FAMILIES`, `salt_epoch_reason`; `Properties.Pouw.LiveSalt`), opened after its salt
+epoch's root (`salt.epoch_open_root` of the weights' root and the epoch's number k, the pass's `pass_index`, which
+the verifier recomputes and never reads from the pass), so it ends complete once that coin is released. Round r's coin
+opens after
 the verifier recorded round r's root, the root of the values round r commits, and round r's noise key is
 `derive(coin_r, "verity/pouw/round-noise/v1", {coins: root, epoch: e, root: root_r, round: r})`: the deferred noised
 products, keyed by a coin the prover could not see when it committed. `core_check.rounds` (Lean

@@ -167,7 +167,7 @@ the standing rulings stated nowhere else.
 - **Auditor-trusted devices.** The network certifiers and the memory challenger sign what they see. What they sign is
   witness and never reaches the auditor in the clear. They are the auditor's hardware: each runs on a machine the prover
   doesn't control, never as a process on the prover's node, and trust in the device and its host provider is a named
-  assumption (`trusted-nebius-host`). Nothing the prover runs or hosts is trusted. A network certifier functions as an
+  assumption (`trusted-host`). Nothing the prover runs or hosts is trusted. A network certifier functions as an
   active warden, in network steganography's sense, but "network certifier" is its one name: never "warden" or "tap"
   (Daniel, 25 Oct; old names in `ARCHITECTURE.md`'s Glossary).
 - **The audited hardware is untrusted, and so is its vendor** (Daniel, 17 Oct: an international scheme may treat the chip
@@ -273,8 +273,8 @@ check must agree; a disagreement means some part reads something it doesn't decl
 reverting anyone's change.
 
 Check time is to come down by a lot, and anyone may do whatever it takes (Daniel, 11 Oct): a change to how `check` runs
-lands without its file owner's review, and the owner is told. infra owns check time as an outcome, and spend past a budget
-line goes to Daniel. Landing is automated, and ci owns that: from a ready mark and a review to `main` moving, no agent acts
+lands without its file owner's review, and the owner is told. infra owns check time as an outcome, and its spend is
+infra's call (13 Oct). Landing is automated, and ci owns that: from a ready mark and a review to `main` moving, no agent acts
 unless the automation refuses, and the lander handles what it refuses.
 
 PRs land through ci's `research queue drive`, with `land = "review"` in `tools/verity/check/drive.toml`:
@@ -296,10 +296,11 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   the lock) waits for its Lean check: a `lean-audit` that passed on a commit of `next` at or above it, which drive launches on
   the reviewed prefix's top (`train.sh TOP MACHINES --deferred lean-audit`), and after a failure there on the PR's own commit;
   only a failure at its own commit goes to its owner. Any recorded run whose `lean-audit` passed there counts too. The top
-  stops below a PR that came onto `next` in the same tick, and while a lower check runs, one at the top starts too when a
-  machine has a free Lean check slot (at most two running). A rebuilt `next` with the same PRs at the same heads keeps the
-  check, and an eject from its prefix rebuilds `next` only once it ends. A PR containing an unmarked PR of the same owner, or
-  one its owner withdrew, carries that change and doesn't wait for it.
+  stops below a PR that came onto `next` in the same tick. While a check runs, a Lean change above it, reviewed or not, gets
+  one stacked at `next`'s top (at most `max_lean_checks` running, drive.toml); the lower one runs on. A rebuilt `next` with
+  the same PRs at the same heads keeps a check, and an eject from its prefix rebuilds `next` only once it ends (a stacked
+  check's: at once). A PR containing an unmarked PR of the same owner, or one its owner withdrew, carries that change and
+  doesn't wait for it.
 - After each landing one run checks `main`'s tip with every check step (`train.sh MAIN MACHINES --deferred JOBS
   --no-regenerate`, with `--no-cache` while `after_landing_no_cache = true`), and nothing lands before one such run of `main`
   itself has ended, its baseline (or ci records `main` green on the control pod: `/data/infra/drive.sh queue baseline SHA
