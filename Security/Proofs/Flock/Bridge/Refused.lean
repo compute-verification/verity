@@ -7,12 +7,12 @@ import Flock.PortRoots
 `SampledKSLiveV2` takes three things of the files as hypotheses: every port an unsegmented row/v2 row (`Bridge.RowsV2`)
 of its own name (`Registered.dupName`), no two ports' registered roots one root under different domains
 (`PortRoots.rootsColl = none`), and the registration's population the game's `n` units in order (`Bridge.PopMatches`).
-The verifiers of record now refuse every file that fails them: `verify --zk` runs `Flock.PortRoots.check` last in its
-verdict (`Main.verifyCmd`), and the sampled-proofs run refuses the registration (`SampledProofs.Run.run`,
+The verifiers of record now refuse every file that fails them: `verify --zk --ks-form` runs `Flock.PortRoots.check`
+last in its verdict (`Main.verifyCmd`), and the sampled-proofs run refuses the registration (`SampledProofs.Run.run`,
 `population-order`, `SampledProofs.Slots.popOk`). So the guarantee reads them off acceptance.
 
-* `Bridge.LiveAcceptsKS I o`: `verify --zk` accepts the live audit's transcript (`LiveAcceptsZK`), and the files pass
-  `Flock.PortRoots.check`, which it also runs.
+* `Bridge.LiveAcceptsKS I o`: `verify --zk --ks-form` accepts: the live audit's transcript (`LiveAcceptsZK`), and the
+  files pass `Flock.PortRoots.check`.
 * `Bridge.RunPopOk desc qr n`: the descriptor parses and its population under the query is `n` units in order
   (`Slots.popOk`), which the run checks at registration.
 * `rowsV2_of_check`, `rootsColl_none_of_collides_false`, `popMatches_of_popOk`: the checks give V2's hypotheses. The
@@ -52,8 +52,8 @@ theorem popMatches_of_popOk {desc : Claims.Msg} {qr : Lean.Json} {n : ℕ} {p : 
   exact h
 
 open FlockSoundness.Discharge.ZkExec in
-/-- **`verify --zk` accepts, files and transcript**: the live audit's transcript (`LiveAcceptsZK`), and the files'
-rows, names and roots (`Flock.PortRoots.check`, the last refusal of `verify --zk`'s verdict). -/
+/-- **`verify --zk --ks-form` accepts, files and transcript**: the live audit's transcript (`LiveAcceptsZK`), and the
+files' rows, names and roots (`Flock.PortRoots.check`, the last refusal of `verify --zk --ks-form`'s verdict). -/
 def LiveAcceptsKS {n : ℕ} {Reg : Type} (I : FlockSoundness.Discharge.Exec.Inputs)
     (o : Reg × Finset (Fin n) × FlockSoundness.Discharge.Exec.Transcript) : Prop :=
   LiveAcceptsZK I o ∧ Flock.PortRoots.check (zkTags I) I.circuitFile I.publicFile I.tables = .ok ()
@@ -75,7 +75,7 @@ open scoped ENNReal
 
 open Classical in
 /-- **`SampledKSLiveV2` with its file preconditions read off acceptance**: `SampledKSLiveV2`'s bound on the event that
-`verify --zk` accepts the transcript and the files (`Bridge.LiveAcceptsKS`: their ports unsegmented row/v2 rows of
+`verify --zk --ks-form` accepts the transcript and the files (`Bridge.LiveAcceptsKS`: their ports unsegmented row/v2 rows of
 distinct names, and no two registered roots one root under different domains, at the public file's population), the
 sampled-proofs run passes the registration's population (`Bridge.RunPopOk`: the descriptor `desc` and the query `qr`
 give the game's `n` units in order), and the claims relation fails. It has none of V2's hypotheses `RowsV2`,

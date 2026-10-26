@@ -1,7 +1,8 @@
 /-
-The circuit and public files `verify --zk` holds to the form the sampled audit's knowledge soundness covers
-(`Flock.Guarantees.SampledKSLiveV3`): every port an unsegmented `sha512/row/v2` row (`rowsV2`) of its own name, and no two ports whose
-registered frame-v3 roots over the public file's population are one root under different domains (`collides`).
+The circuit and public files `verify --zk --ks-form` holds to the form the sampled audit's knowledge soundness covers
+(`Flock.Guarantees.SampledKSLiveV3`): every port an unsegmented `sha512/row/v2` row (`rowsV2`) of its own name, and no
+two ports whose registered frame-v3 roots over the public file's population are one root under different domains
+(`collides`). It is opt-in: `row/v1` and `row-seg/v1` rows, which served and PoUW statements use, are outside the form.
 
 * `rootOf c pub nl q`: port `q`'s registered root, `FV3.root` over its domain (its name, `domOf`) and its `nl` rows'
   `hm96-sha512/row/v2` frame leaves of the public file's `b ‖ c` (`leafOf`).
@@ -9,8 +10,8 @@ registered frame-v3 roots over the public file's population are one root under d
   first part is its domain, so such a pair is a SHA-512 collision, which a file exhibits only by holding one.
 * `checkOf parsed tags publicFile`: on the circuit as `HmOut.parse` reads it, `rowsV2` and no port name twice
   (`Registered.dupName`), then on the public file as `HmOut.loadPublic` reads it, no `collides` at its population
-  (`pub.n`). `verify --zk` refuses every session whose files
-  fail it, after every other check (`Main.verifyCmd`).
+  (`pub.n`). `verify --zk --ks-form` refuses every session whose files fail it, after every other check
+  (`Main.verifyCmd`).
 -/
 import Flock.ProvedScope
 import Flock.Registered
