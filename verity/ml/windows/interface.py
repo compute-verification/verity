@@ -42,7 +42,8 @@ public positions (`Read`), a registered table's root or domain id (`TableRead`),
 (`Opening`), and the system's ingress at its step (`Ingress`). Every input row is wired, one of these, or free, and no row
 is two of them (`check_inputs`); `input_count` counts the free rows' bits from the record alone, at the size of its
 description, a registered row free unless the window's root for its parameter is the one the verifier pinned before the
-run. The window's registration records each registered parameter's root (`Window.write`), and commits the first kind
+run. The window's registration records each registered parameter's root (``registered_roots``, `Window.write`), and
+commits the first kind
 (`Window`'s ``registered``): a member whose units read a registered parameter is a shared-row member, each
 read port a table of the registered rows its units read (`member_reads`), committed under the registered value's salts
 (core's ``one_stage.registered``), so each row's public string is the registered one, and its header names each row's
@@ -1005,10 +1006,10 @@ def held_params(pins: Mapping[str, str] | str | None, roots: Mapping[str, str] |
 
 
 def registered_roots(window: Mapping[str, Any]) -> dict[str, str]:
-    """The roots a window's registration records for its registered parameters (its ``registered``, `Window.write`: core's
-    registration's window, or an integration's own window registration), by parameter; none where it records none.
-    Refused (ValueError) unless each is a root of hex digits."""
-    roots = window.get("registered") or {}
+    """The roots a window's registration records for its registered parameters (its ``registered_roots``, `Window.write`:
+    core's registration's window, or an integration's own window registration), by parameter; none where it records
+    none. Refused (ValueError) unless each is a root of hex digits."""
+    roots = window.get("registered_roots") or {}
     held_params({}, roots)
     return dict(roots)
 
@@ -1306,16 +1307,16 @@ class Window:
               kind: str = "served") -> dict[str, Any]:
         """The window's files (`rows.write`, its ``index.json`` the labels) and ``circuit.json``, the registration core's record
         made by ``registrar`` (core's ``one_stage.registration``), its window naming ``provenance``, the circuit record's
-        SHA-512, the advice binding and each registered value's root by parameter (``registered``, which `input_count`
-        holds to the verifier's pins); each member reading a registered value, its header naming each table row's position
-        and path (`close`)."""
+        SHA-512, the advice binding and each registered value's root by parameter (``registered_roots``, which
+        `input_count` holds to the verifier's pins); each member reading a registered value, its header naming each table
+        row's position and path (`close`)."""
         d = Path(out_dir)
         d.mkdir(parents=True, exist_ok=True)
         body = circuit_bytes(self.circuit_record())
         (d / "circuit.json").write_bytes(body)
         roots = {p: v.root.hex() for p, v in sorted((self.registered or {}).items())}
         bound = {**provenance, "circuit": hashlib.sha512(body).hexdigest(), **(self.advice or {}),
-                 **({"registered": roots} if roots else {})}
+                 **({"registered_roots": roots} if roots else {})}
         return CS.write(c, d, bound, self.labels(), kind=kind, registered=self._entries, registrar=registrar)
 
 
