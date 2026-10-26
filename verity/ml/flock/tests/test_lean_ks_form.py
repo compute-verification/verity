@@ -28,7 +28,7 @@ SERVED = "art:eeb1ed6ad88c683f6dfd3b0ffd2e9941c47f2fcb6f39c097e8f2f20720c6ce4a"
 SCOPE = f"refused: {PF.SCOPE_WHY}: a statement form the soundness proof does not cover"
 TABLES = f"refused: {PF.TABLES_WHY}: a statement form the soundness proof does not cover"
 
-pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]
 
 
 @pytest.fixture(scope="module")
