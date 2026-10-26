@@ -38,9 +38,9 @@ theorem throw_bind {ε α β : Type} (e : ε) (f : α → Except ε β) : (throw
 theorem pure_bind' {ε α β : Type} (a : α) (f : α → Except ε β) : (pure a >>= f : Except ε β) = f a := rfl
 theorem map_ok' {ε α β : Type} (a : α) (f : α → β) : (f <$> (Except.ok a : Except ε α)) = Except.ok (f a) := rfl
 theorem throw_eq_ok {ε α : Type} (e : ε) (a : α) : ((throw e : Except ε α) = Except.ok a) ↔ False :=
-  ⟨fun h => nomatch h, False.elim⟩
+  ⟨(fun h => nomatch h), False.elim⟩
 theorem error_eq_ok {ε α : Type} (e : ε) (a : α) : ((Except.error e : Except ε α) = Except.ok a) ↔ False :=
-  ⟨fun h => nomatch h, False.elim⟩
+  ⟨(fun h => nomatch h), False.elim⟩
 theorem pure_eq_ok {ε α : Type} (a b : α) : ((pure a : Except ε α) = Except.ok b) ↔ a = b :=
   ⟨fun h => Except.ok.inj h, fun h => h ▸ rfl⟩
 
@@ -80,25 +80,25 @@ theorem buildSessionOf_ok {tags : Flock.Tags} {circuitB pubB : ByteArray} {coins
     (h : buildSessionOf (Flock.ProvedScope.circuitOf tags circuitB tables) tags circuitB pubB coins tables count draw
       partition program registered = .ok r) :
     Flock.Stmt.setupTables tags circuitB pubB coins count tables draw partition program = .ok r := by
+  have hof : tags.hiddenOutputs = true →
+      Flock.Stmt.setupTablesOf (Flock.ProvedScope.circuitOf tags circuitB tables) tags circuitB pubB coins count tables
+        draw partition program =
+      Flock.Stmt.setupTables tags circuitB pubB coins count tables draw partition program := by
+    intro hh
+    rw [Flock.Stmt.setupTables_eq]
+    simp only [Flock.ProvedScope.circuitOf, hh, ↓reduceIte]
   unfold buildSessionOf at h
-  by_cases hrow : (!tags.hm96Rows) = true
-  · rw [if_pos hrow] at h
-    cases h
-  · rw [if_neg hrow] at h
-    obtain ⟨⟨spec, sts⟩, hs, h⟩ := bind_ok h
-    have hs' : Flock.Stmt.setupTables tags circuitB pubB coins count tables draw partition program = .ok (spec, sts) := by
-      by_cases hh : tags.hiddenOutputs = true
-      · rw [if_pos hh] at hs
-        rw [Flock.Stmt.setupTables_eq]
-        unfold Flock.ProvedScope.circuitOf at hs
-        rw [if_pos hh] at hs
-        exact hs
-      · rw [if_neg hh] at hs
-        exact hs
+  rcases hrow : tags.hm96Rows with _ | _
+  · simp only [hrow, Bool.not_false, eq_self_iff_true, ↓reduceIte, throw_bind, throw_eq_ok] at h
+  rcases hst : Flock.Stmt.setupTables tags circuitB pubB coins count tables draw partition program with e | ⟨spec, sts⟩ <;>
+  rcases hho : tags.hiddenOutputs with _ | _ <;>
+  simp only [hrow, hho, hof, hst, Bool.not_true, Bool.false_eq_true, eq_self_iff_true, ↓reduceIte, ok_bind, error_bind,
+    error_eq_ok] at h
+  all_goals
     obtain ⟨_, -, h⟩ := bind_ok h
     obtain ⟨_, -, h⟩ := bind_ok h
-    rw [← Except.ok.inj h]
-    exact hs'
+    obtain rfl := Except.ok.inj h
+    first | rfl | exact hst
 
 /-- What `setupAt` sets up at `draw` is `Stmt.setupTables`'s session under `--zk`'s tags and coins, every table's
 statement passing `Zk.shapeOk`, with its verifier-side setups. -/
@@ -108,21 +108,23 @@ theorem setupAt_ok {I : Flock.Witness.Inputs} {rd : Reads} {draw : Option Json} 
         I.tables draw I.partition I.program = .ok (spec, sts) ∧ sts.forM Flock.Zk.shapeOk = .ok () ∧
       tabs = sts.map Flock.Setup.ofCircuit := by
   unfold setupAt at h
-  split at h
-  · next spec' sts' hb =>
-    obtain ⟨_, -, hb⟩ := bind_ok hb
-    obtain ⟨_, -, hb⟩ := bind_ok hb
-    obtain ⟨r, hr, hb⟩ := bind_ok hb
-    obtain ⟨_, -, hb⟩ := bind_ok hb
-    obtain ⟨_, hshape, hb⟩ := bind_ok hb
-    obtain ⟨_, -, hb⟩ := bind_ok hb
-    have hr' : r = (spec', sts') := Except.ok.inj hb
-    subst hr'
-    obtain ⟨_, -, hf⟩ := map_ok h
-    simp only [Prod.mk.injEq] at hf
-    obtain ⟨rfl, rfl, -⟩ := hf
-    exact ⟨sts', buildSessionOf_ok hr, hshape, rfl⟩
-  · cases h
+  rcases hd : draw.isSome with _ | _ <;> simp only [hd, Bool.false_eq_true, eq_self_iff_true, ↓reduceIte] at h
+  all_goals
+    split at h
+    · next spec' sts' hb =>
+      obtain ⟨_, -, hb⟩ := bind_ok hb
+      obtain ⟨_, -, hb⟩ := bind_ok hb
+      obtain ⟨r, hr, hb⟩ := bind_ok hb
+      obtain ⟨_, -, hb⟩ := bind_ok hb
+      obtain ⟨⟨⟩, hshape, hb⟩ := bind_ok hb
+      obtain ⟨_, -, hb⟩ := bind_ok hb
+      have hr' : r = (spec', sts') := Except.ok.inj hb
+      subst hr'
+      obtain ⟨⟨⟩, -, hf⟩ := map_ok h
+      simp only [Prod.mk.injEq] at hf
+      obtain ⟨rfl, rfl, -⟩ := hf
+      exact ⟨sts', buildSessionOf_ok hr, hshape, rfl⟩
+    · simp only [error_eq_ok] at h
 
 /-! ## One step, its pieces named
 
@@ -196,11 +198,14 @@ theorem verdictOf_ok {I : Flock.Witness.Inputs} {rd : Reads} {bs : Core.Blobs} {
     ∃ proofs, AcceptsZK I record proofs := by
   unfold verdictOf at h
   obtain ⟨proofs, -, h⟩ := bind_ok h
-  obtain ⟨_, -, h⟩ := bind_ok h
-  obtain ⟨⟨spec, tabs, rest⟩, hst, h⟩ := bind_ok h
-  obtain ⟨_, hv, -⟩ := bind_ok h
-  obtain ⟨sts, hset, hshape, rfl⟩ := setupAt_ok hst
-  exact ⟨proofs, spec, sts, hset, hshape, hv⟩
+  rcases hk : coinKeyOf I rd record with _ | k <;> simp only [hk] at h
+  on_goal 2 => obtain ⟨_, -, h⟩ := bind_ok h
+  all_goals
+    obtain ⟨⟨spec, tabs, rest⟩, hst, h⟩ := bind_ok h
+    try simp only at h
+    obtain ⟨_, hv, -⟩ := bind_ok h
+    obtain ⟨sts, hset, hshape, rfl⟩ := setupAt_ok hst
+    exact ⟨proofs, spec, sts, hset, hshape, hv⟩
 
 /-- A step that leaves every session accepted, on an accepted verdict: it pushes one verdict and adds the units the
 session proved, and the program is the partition object's. -/
@@ -330,15 +335,19 @@ theorem acceptMeans : AcceptMeans := by
       · rw [if_pos hall] at h
         cases h
         obtain ⟨tags, circuitB, pubB, htags, hcirc, hpub, hsize, hprog, ss, hlen, hss, hunits⟩ := run_ok hrun hall
-        obtain ⟨-, -, -, -, -, hva, -⟩ := Properties.SampledProofs.acceptMeans _ _ _ _ _ hchk
+        obtain ⟨_, _, _, -, -, -, hva, -⟩ := Properties.SampledProofs.acceptMeans _ _ _ _ _ hchk
         obtain ⟨x, hx, -⟩ := hva.2.1
-        have hpos : 0 < e.sessions.size := hsize ▸ Array.size_pos_of_mem hx
+        have hx' : x ∈ r.out := hx
+        have hpos : 0 < e.sessions.size := by rw [← hsize]; exact Array.size_pos_of_mem hx'
         exact ⟨tags, circuitB, pubB, ss, r.out, htags, hcirc, hpub, hpos, hlen, hss, hunits, hprog hpos, hchk⟩
       · rw [if_neg hall] at h
         cases h
     · next o hne hchk =>
-      rw [hchk] at h
-      exact absurd h (hne _ _)
+      first
+      | exact (hchk _ _ h).elim
+      | exact (hchk _ _ (hne ▸ h)).elim
+      | exact (hchk _ _ (hne.symm ▸ h)).elim
+      | (subst hne; exact (hchk _ _ h).elim)
 
 /-- **`AcceptsZK` is the model's `ZkExec.AcceptsZK`** at the witness's inputs as the model reads them (`toExec`), on the
 transcript of the session's record and proof files. -/
