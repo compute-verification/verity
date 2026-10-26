@@ -7,6 +7,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 import Proofs.Flock.Soundness.Discharge.Hidden.Rows
 import Proofs.Flock.Soundness.Discharge.Hidden.Layout
 import Proofs.Flock.Soundness.Discharge.Hidden.Flat
+import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
 import Proofs.Flock.Soundness.Discharge.Hidden.Committed
 import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Theorems
@@ -37,6 +38,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 * `Layout`: an untyped statement's layout (`hidden_layout'`), `layout_of`'s with `outPairs` past its Δ;
 * `Flat`: the flat twin (`HmRow.delta`'s Δ alone), which a satisfying witness also satisfies (`sat_flat`), and an output
   row's message bits as copies of `outSrc` (`msg_copy`);
+* `Unpin`: the statement without Δ's pinned copies (`unpin`), its layout (`unpin_layout`), and a satisfying witness of
+  the accepted statement satisfies it and carries 0 on the pinned bits (`sat_unpin`, `Pinned.sat_unpin`);
 * `Committed`: an output row's registered `b ‖ c` at a drawn unit is the commit string of its prefix and the output words
   its template instance computes (`outputs_committed'`);
 * `Theorems`: one theorem per frozen statement;
