@@ -27,6 +27,7 @@ import Proofs.Core.Accel.Principles
 import Proofs.Core.Accel.Float
 import Proofs.Core.Accel.Decode
 import Proofs.Core.Accel.Witness
+import Proofs.Core.Accel.Sheet
 
 /-!
 # Proofs of core's guarantees

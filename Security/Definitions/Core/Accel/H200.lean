@@ -26,8 +26,11 @@ reports.
   FP64 tensor, FP32 and FP64), and the card measured 1,942.7 TOPS at about 1797 MHz under saturated `wgmma`
   (r20261019-053910-d2c9). Neither shows that no operand class sustains a higher clock, so the long-window cap at
   132 · 4096 · 1830/1980 = 499,712 (RT-MODEL M1) waits on CALIB's check, locked at 1980 MHz with zero, constant and
-  uniform operands (CMP-115), and returns with that run's id if none sustains above 1830 MHz; a MAC of `e4m3` or `e5m2` uses 1 unit (the same
-  1,979 TFLOPS), of `f16` or `bf16` 2 (989.5), of `tf32` 4 (494.5); `b1` has no peak in any document (`Open.b1`);
+  uniform operands (CMP-115), and returns with that run's id if none sustains above 1830 MHz, except for DMMA, whose
+  67 TFLOPS the sheet quotes at 1980 MHz: at 499,712 and weight 32 it would get 15,616 MACs a tick against the
+  sheet's 16,896, which `tensorLong_sheet` (`Proofs/Core/Accel/Sheet.lean`) refuses; a MAC of `e4m3` or `e5m2`
+  uses 1 unit (the same 1,979 TFLOPS), of `f16` or `bf16` 2 (989.5), of `tf32` 4 (494.5); `b1` has no peak in any
+  document (`Open.b1`);
 * `mma.sync`: its tensor rate apart from `wgmma`'s, which is the data sheet's (no document gives `mma.sync`'s on
   Hopper, where it runs below `wgmma`), is `Open.sync` (`scale`) until CALIB measures it;
 * issue: 4 warp instructions an SM clock (whitepaper, 'H100 SM Architecture': four partitions, each a warp scheduler
