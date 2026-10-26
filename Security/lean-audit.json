@@ -2095,6 +2095,7 @@
   "Definitions.Population",
   "Proofs.Accounting.TS.Session",
   "PouwCheck.Inputs",
+  "PouwCheck.WindowSalt",
   "Properties.Pous",
   "Properties.Pouw.Period",
   "PouwWindow.Grid",
