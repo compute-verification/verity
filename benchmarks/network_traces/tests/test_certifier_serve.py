@@ -280,12 +280,33 @@ def test_the_gates_certifier_rehearsal_parses_here_with_its_sampling(tmp_path):
     assert {k: cs.request_body("m", 16)[k] for k in ("temperature", "top_p")} == {"temperature": 0.0, "top_p": 1.0}
 
 
+def test_the_gates_keys_height_reaches_rehearse_and_a_key_above_this_files_is_made_in_its_workers(tmp_path,
+                                                                                                    monkeypatch):
+    """`certifier-rehearse`'s command passes its keys' height, the deployed key's (20) unless the request gives one,
+    as `rehearse`'s `--height`, which makes both keys at it; `load_key` makes a key above `HEIGHT` in
+    `KEYGEN_WORKERS` processes (at 20, minutes, not the quarter hour one process takes) and one at or below it in one,
+    and either loads back from its files."""
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    plain = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": None}, tmp_path, "u")[2:])
+    given = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": None, "height": 10}, tmp_path,
+                                                       "u")[2:])
+    assert (plain.height, given.height) == (cs.lms.DEPLOYED.H, 10) and cs.KEYGEN_WORKERS == 8
+    keygen, workers = cs.lms.keygen, []
+    monkeypatch.setattr(cs.lms, "keygen", lambda params, seed, workers=1, seen=workers: (
+        seen.append((params.H, workers)), keygen(params, seed, workers))[1])
+    for h in (cs.HEIGHT, cs.HEIGHT + 1):
+        made = cs.load_key(tmp_path / f"h{h}", h)
+        assert cs.load_key(tmp_path / f"h{h}").tree == made.tree and len(made.tree) == 2 ** (h + 1)
+    assert workers == [(cs.HEIGHT, 1), (cs.HEIGHT + 1, cs.KEYGEN_WORKERS)]
+
+
 def test_the_gate_takes_every_tamper_the_rehearsal_has_and_each_is_a_serve_this_parser_takes(tmp_path):
     """The gate's tampers are `serve`'s `--tamper` choices, so the auditor host runs every shim this file has, and
     each reaches `serve` (which alone checks it, after the tunnel is up) as one strategy of `rehearse`."""
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
     import auditor as A
-    assert A.TAMPERS == cs.TAMPERS == ("late", "extra", "drop", "token")
+    assert A.TAMPERS == cs.TAMPERS == ("late", "extra", "drop", "token", "byte")
     for t in A.TAMPERS:
         args = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": t}, tmp_path, "u")[2:])
         assert args.strategies.split(",") == [t]
@@ -293,6 +314,17 @@ def test_the_gate_takes_every_tamper_the_rehearsal_has_and_each_is_a_serve_this_
                                          "--link", "127.0.0.1:1", "--reveal", "127.0.0.1:2", "--key", "k",
                                          "--challenger-key", "k.json", "--session", "00", "--tamper", t])
         assert served.tamper == t
+
+
+def test_the_byte_shim_changes_one_output_byte_of_a_hex_response_and_keeps_it_hex():
+    data = bytes([0xa5, 0x00, 0xff]) * 8
+    got = cs.ar.other_hex(data.hex().encode())
+    changed = bytes.fromhex(got.decode())
+    assert changed[0] == 0xb5 and changed[1:] == data[1:]
+    assert cs.ar.other_hex(b"\0\0f0") == b"\0\0e0"
+    with pytest.raises(ValueError, match="no output byte"):
+        cs.ar.other_hex(b"\0\0")
+    assert cs.ar.adversary_plan({"sessions": [["s.0", "s.1"]]}, None, "byte")["byte"] == "s.0"
 
 
 def test_the_gates_varied_rehearsal_is_a_varied_rehearse_named_for_its_run_with_every_flag_it_was_given(tmp_path):
@@ -317,10 +349,10 @@ def test_the_gates_varied_rehearsal_is_a_varied_rehearse_named_for_its_run_with_
 
 
 def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_major(tmp_path):
-    """The plan sends the endpoint's shape (its one model, a prompt of exactly 128 of its tokens, `min_tokens` =
-    `max_tokens`, `ignore_eos`, streamed, the given temperature and top_p on every request, the probes' and the run's
-    alike, so that an endpoint's own generation config never applies) four at a time, the ingress releasing them two a
-    bucket, and the
+    """The plan sends the endpoint's shape (its one model, a prompt of exactly 128 of its tokens, `max_tokens` and
+    `ignore_eos` with no `min_tokens`, streamed, the given temperature and top_p on every request, the probes' and the
+    run's alike, so that an endpoint's own generation config never applies) four at a time, the ingress releasing them
+    two a bucket, and the
     endpoint interleaves the responses of each two released together chunk by chunk; the shim still writes each
     response whole, in the order their requests reached it, so the egress counts are the planned profile's and honest
     traffic is accepted on every link-window."""
@@ -349,8 +381,7 @@ def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_
 
     probed, plan, out = asyncio.run(go())
     assert probed["body"] == {"model": "stub-model", "prompt": list(range(128)), "max_tokens": TOKENS,
-                              "min_tokens": TOKENS, "stream": True, "ignore_eos": True, "temperature": 0.6,
-                              "top_p": 0.9}
+                              "stream": True, "ignore_eos": True, "temperature": 0.6, "top_p": 0.9}
     assert all(b == probed["body"] for b in endpoint.bodies) and len(endpoint.bodies) == 4 + 4 + REQUESTS
     assert plan["served"]["in_flight"] == 4 and plan["request_major"]
     sends = [q["send_ms"] for q in plan["requests"]]
@@ -394,8 +425,9 @@ def test_the_endpoint_gets_each_request_with_the_release_order_the_certifier_sig
 def test_the_certifier_process_keeps_and_signs_as_the_inline_publisher_does(served, tmp_path):
     """`serve`'s `CertifierProcess`, on a copy of one key, writes the honest run's records and commitments byte for
     byte as `CertifyingPublisher` inline does, and the same heads, each certificate at the same leaf and valid under its
-    own fresh salt, and the same clock certificates of the syncs handed with the egress records; a reveal signed between
-    two records takes the same leaf: its calls run in the order they are made."""
+    own fresh salt, and salted clock certificates of the syncs handed with the egress records, the same leaves too,
+    each opening under its own fresh salt; a reveal signed between two records takes the same leaf: its calls run in
+    the order they are made."""
     import certifier_serve  # by name, so that the spawned process finds its functions
 
     _, report, _, runs = served
@@ -440,14 +472,17 @@ def test_the_certifier_process_keeps_and_signs_as_the_inline_publisher_does(serv
     assert all(cs.certified_from_json(d).verify(process.public_key(), SESSION) for d in process_docs)
     clocks = [cs.read_clocks(tmp_path / run / "clocks.jsonl") for run in ("inline-run", "process-run")]
     egress = [r for r, _ in published if r.link == setup.egress_link]
-    assert clocks[0] == clocks[1] and [(c.window, c.sync) for c in clocks[1]] == [(r.window, sync(r)) for r in egress]
+    assert [[(c.window, c.sync) for c in k] for k in clocks] == [[(r.window, sync(r)) for r in egress]] * 2
+    assert [c.certificate.signature[:4] for c in clocks[0]] == [c.certificate.signature[:4] for c in clocks[1]]
     assert all(c.verify(process.public_key(), SESSION) for c in clocks[1])
+    assert len({c.salt for k in clocks for c in k}) == 2 * len(egress)
 
 
 def test_the_served_proxy_hands_its_certifier_each_egress_windows_sync_which_it_signs(tmp_path):
     """`ServedProxy` hands its `publish` the sync its own shaper ran each egress window under, and none with an ingress
-    record or past the shaper's syncs; `CertifyingPublisher` signs it beside the window's record (`clocks.jsonl`), and
-    an advised link's clock source of record reads exactly those syncs back (`LinkWindows(clock_certificates=…)`)."""
+    record or past the shaper's syncs; `CertifyingPublisher` signs it salted beside the window's record (`clocks.jsonl`,
+    with its opening), and an advised link's clock source of record opens exactly those syncs back
+    (`LinkWindows(certified_clocks=…)`)."""
     from verity.core.protocols.certifier.grid import Certifier
     from verity.core.protocols.certifier.service import LinkWindows
 
@@ -488,9 +523,72 @@ def test_the_served_proxy_hands_its_certifier_each_egress_windows_sync_which_it_
         signer.close()
     clocks = cs.read_clocks(tmp_path / "clocks.jsonl")
     assert [(c.link, c.window, c.sync) for c in clocks] == [(cs.N2_LINK, w, syncs[w]) for w in (0, 1)]
-    lw = LinkWindows(cs.N2_LINK, e, setup.sync_set, key, "r-clocks", SESSION, ingress=i, clock_certificates=clocks)
-    assert lw.clock_source.syncs(cs.N2_LINK) == tuple(syncs)
+    lw = LinkWindows(cs.N2_LINK, e, setup.sync_set, key, "r-clocks", SESSION, ingress=i, certified_clocks=clocks)
+    assert lw.clock_source.syncs(cs.N2_LINK) == tuple(syncs) and lw.clock_source.refused == ()
     assert cs.read_clocks(tmp_path / "absent.jsonl") == []
+
+
+def _egress_record(window: int, text: bytes, frame_bytes: int = 4096):
+    """An egress record whose canonical events carry `text`, 64 bytes an event, then a padding slot and an id event."""
+    def frame(kind, body):
+        return (active.HEADER.pack(kind, active.CANONICAL_STREAM, len(body)) + body).ljust(frame_bytes, b"\0")
+
+    slots = [frame(active.DATA, active.event(text[i:i + active.TOKEN_BYTES]))
+             for i in range(0, len(text), active.TOKEN_BYTES)]
+    return SimpleNamespace(window=window, grid=[slots, [None, frame(active.PAD, b""),
+                                                        frame(active.DATA, active.id_event(0, 7))]])
+
+
+def test_the_network_certifier_commits_and_signs_each_egress_windows_output_in_its_own_session(tmp_path):
+    """`--out-program`'s commitment (`certify_out`): the output an egress record's canonical events carry, as the hex
+    of u16 little-endian words, committed under the running issuer, which signs its head in the certifier's session
+    for the link-window: the public record `check_out` pins under the certifier's key, and the witness (each row and
+    its salt) apart, for the prover. A record whose text isn't that commits nothing, and a refused signature is the
+    link-window under ``refused``, with no witness."""
+    from verity.core.protocols.certifier import out_commit as OC
+    from verity.core.protocols.sampled_proofs.one_stage import registered as REG
+
+    program, words = "cd" * 64, [0x0102, 0xfffe, 7, 0]
+    text = b"".join(w.to_bytes(2, "little") for w in words).hex().encode() * 40
+    signer = cs.signer(tmp_path / "key", 4)
+    try:
+        issuer, key = Issuer(signer, SESSION), signer.public_key()
+        assert cs.out_rows(_egress_record(2, text)) == [[w] for w in words] * 40
+        got = cs.certify_out(tmp_path, _egress_record(2, text), issuer, program)
+        assert cs.certify_out(tmp_path, _egress_record(3, b"not hex " * 8), issuer, program) is None
+        assert cs.certify_out(tmp_path, _egress_record(3, b"abc"), issuer, program) is None
+        assert cs.certify_out(tmp_path, _egress_record(4, text), Issuer(signer, bytes(32)), program) is None
+    finally:
+        signer.close()
+    records = [json.loads(x) for x in (tmp_path / cs.OUT_RECORDS).read_text().splitlines()]
+    assert records[1:] == [{"refused": [OC.LINK, "egress", 4]}] and records[0] == got.public
+    want = REG.domain(program, "out", 1, 160, REG.WORD_BITS)
+    assert OC.check_out(records[0], key, SESSION, want, window=2) == got.root
+    witness = [json.loads(x) for x in (tmp_path / cs.OUT_WITNESS).read_text().splitlines()]
+    assert witness == [{"window": 2, "program": program, "rows": [[w] for w in words] * 40,
+                        "salts": [s.hex() for s in got.salts]}]
+    assert not any(s.hex() in json.dumps(records) for s in got.salts)
+
+
+def test_the_out_program_reaches_each_rehearsed_serve_and_is_a_program_digest(tmp_path, monkeypatch):
+    digest = "cd" * 64
+    serve = ["serve", "--plan", "p", "--calibration", "c", "--upstream", "u", "--out", "o", "--link", "h:1",
+             "--reveal", "h:2", "--key", "k", "--challenger-key", "c", "--session", "00"]
+    assert cs.parser().parse_args(serve).out_program is None
+    assert cs.parser().parse_args(["rehearse", "--out", "o", "--out-program", digest]).out_program == digest
+    with pytest.raises(SystemExit):
+        cs.parser().parse_args([*serve, "--out-program", digest.upper()])
+    seen = []
+
+    def popen(argv, **_):
+        seen.append(argv)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cs.subprocess, "Popen", popen)
+    with pytest.raises(KeyboardInterrupt):
+        cs.rehearse_one(tmp_path, "honest", url="u", certifier_dir=tmp_path / "k", challenger_dir=tmp_path / "c",
+                        api_key_env=None, start_in=1.0, out_program=digest)
+    assert cs.parser().parse_args(seen[0][2:]).out_program == digest
 
 
 def test_each_salt_is_revealed_once_to_the_challengers_signed_request(served):
@@ -534,7 +632,8 @@ def test_a_shim_that_writes_one_event_more_is_refused_on_n2s_counts_alone(served
 
 def test_the_served_plan_takes_f_from_the_bodys_tokens_and_refuses_a_response_longer():
     """F is the body's token count, so probed responses of F − 1 and F events plan F frames each; a response of more
-    than F events, or of none, or a body that doesn't ask for exactly its tokens, has no plan."""
+    than F events, or of none, or a body that doesn't ask for exactly its tokens (`ignore_eos`, a `max_tokens` of at
+    least 1) or asks for `min_tokens`, which vllm's advice refuses, has no plan."""
     body = cs.request_body("stub", TOKENS)
 
     def probed(*lengths):
@@ -548,8 +647,13 @@ def test_the_served_plan_takes_f_from_the_bodys_tokens_and_refuses_a_response_lo
     for lengths in ((TOKENS + 1,), (0, TOKENS)):
         with pytest.raises(ValueError, match="events long"):
             cs.served_plan(probed(*lengths), 4, delta_buckets=20)
+    assert "min_tokens" not in body and body["ignore_eos"] is True
+    for bad in ({"min_tokens": TOKENS}, {"min_tokens": 1}, {"ignore_eos": False}, {"max_tokens": 0}):
+        with pytest.raises(ValueError, match="exactly its tokens"):
+            cs.served_plan(probed(TOKENS) | {"body": body | bad}, 4, delta_buckets=20)
+    no_eos = {k: v for k, v in body.items() if k != "ignore_eos"}
     with pytest.raises(ValueError, match="exactly its tokens"):
-        cs.served_plan(probed(TOKENS) | {"body": body | {"min_tokens": 1}}, 4, delta_buckets=20)
+        cs.served_plan(probed(TOKENS) | {"body": no_eos}, 4, delta_buckets=20)
     _, plan = cs.served_plan(probed(TOKENS, TOKENS + 1), 4, delta_buckets=20, frames=TOKENS + 1)
     assert plan["pad_to"] == plan["served"]["response_frames"] == TOKENS + 1 and plan["served"]["tokens"] == TOKENS
     assert sum(map(sum, plan["occupancy"]["egress"])) == 4 * (TOKENS + 1)

@@ -8,6 +8,6 @@ re-exports `SiluMul_v2` for the difftest adapter. `SiluMul_v1` (b1) stays the ki
 """
 from __future__ import annotations
 
-from verity_vllm.program.quarantine.act import silu_mul  # noqa: F401
+from verity_vllm.program.quarantine.act import silu_mul
 
 ALL_DEFINITIONS = [silu_mul.SiluMul]

@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+# The network chain's run of record (chain_record.py) on a CPU machine, from the gate's fetched tarballs, on hidden_zk's
+# builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify, the verifier of record) with the
+# firewall's Lean frame, N2's network-records and the sampled-proofs verifier built in the tree. From a clone, in a slot
+# of network-accounting's pool:
+#   research run --on vy-nebius-cpu-2 --source . --project verity --as LANE --cwd clone --timeout 240m \
+#     --send GATE.tgz -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
+#     --by LANE -- env CR_MEM_GB=128 CR_GATES=GATE.tgz bash benchmarks/network_traces/chain_record.sh
+# Steps, each kept under $OUT and read by the report:
+#   custody  each gate run's files against its end.json (chain_record.py custody)
+#   certs    the client's kept certificates.jsonl (or certified.jsonl) and clocks.jsonl, verified (chain_record.py certs)
+#   endpoint with CR_ENDPOINT, the endpoint's own advice bound to the run and the I/O tie on it, both in the clear
+#            (network-e2e's e2e.py --no-prove: chain.served_advice and chain.tie)
+#   n2       N2's units proved by C-Flock --zk and decided by its verifier of record, Lean included: CR_N2_CMD
+#            (N2-ZK's sampled draw on signed clocks); else on the advice profile n2_advised_zk.py --e2e on the bound
+#            advice and the certifier's clock certificates, and on the others n2_zk.py prove
+#   scan     the scan's chained units, --zk, held by Lean verify --zk --registered (scan_zk.py prove, with
+#            --warden-run when CR_WARDEN_RUN names the gate's warden run and scan_zk takes it: IO-TIE)
+#   report   $OUT/report/report.json and report.md (chain_record.py report)
+# env: CR_MEM_GB (what job.sh's stages may take, within the slot's)
+#      CR_GATES (space-separated: a tarball's name under the run's inputs/, an art: id, or a directory)
+#      CR_CLIENT (the client's kept files, a path under the unpacked gates; by default the certifier rehearsal's
+#      own client/, else its honest directory, never a file of another gate run)  CR_DEPLOYED=1 (certs refuses a key that
+#      isn't LMS at lms.DEPLOYED, H = 20)
+#      CR_ENDPOINT (the endpoint's records, network_e2e chain.ENDPOINT's four files: a tarball's name under inputs/,
+#      an art: id, or a directory)
+#      CR_N2_ROUNDS (n2_zk.py's --rounds)  CR_N2_JOBS (members proved at once, 2)  CR_N2_WINDOWS (n2_advised_zk.py's
+#      --windows)  CR_N2_MEMBERS (its --members)  CR_N2_STANDIN=simulated (a dry run's: on the advice profile when the
+#      advice doesn't bind, the advised unit on n2_advised_zk's simulated link, labelled a stand-in)
+#      CR_N2_ARGS (more n2_advised_zk.py arguments, e.g. "--draw 4", a sampled period on the verifier's own coins)
+#      CR_N2_CMD (replaces the above; run with HONEST, CLIENT, BIN, LEAN, E2E and N2OUT set, writing N2OUT/summary.json)
+#      CR_WARDEN_RUN (the warden rehearsal's run, a path under the unpacked gates)  CR_SCAN_ARGS (more scan_zk.py
+#      arguments, e.g. "--draw 8")  CR_SCAN_CMD (replaces scan_zk.py prove; SCANOUT/summary.json)
+#      CR_PATH=certifier-only (the records are the certifier rehearsal's alone, with no warden rows: the scan isn't run
+#      or required, and the report names what that path stubs, chain_record.STUBBED)
+#      CR_AUDIT (the served units' compute audit windows, space-separated directories: the report's --audit, d1's K)
+#      CR_SCAN_ONLY=1 (the scan alone, its report given no N2 summary: "scan only, N2 not given"; the record's N2 runs
+#      in jobs of its own)  CR_SERIAL=1 (n2 then scan; at once by default)  CR_CACHE (the build cache; hidden_zk's by
+#      default)
+# Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
+# file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive, a signer's
+# state or a gate run's witness/ (custody uploads all of $OUT; a warden run's witness is its lane key's only).
+set -uo pipefail
+export HZ_CONFIGS=chain HZ_MEM_GB=${CR_MEM_GB:?}
+CR_CACHE=${CR_CACHE:-/workspace/research/cache/pouw-hidden-zk}
+if mkdir -p "$CR_CACHE" 2>/dev/null && [ -w "$CR_CACHE" ]; then export HZ_CACHE=$CR_CACHE; fi
+source benchmarks/pouw/hidden_zk/job.sh
+export PATH=$HOME/.elan/bin:$PATH
+export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python:$SRC/tools/research/src
+CR=benchmarks/network_traces/chain_record.py
+
+# ---- the gates -------------------------------------------------------------------------------------------------------
+G=$W/gates
+mkdir -p "$G"
+unpack() {   # unpack SRC DIR: a tarball under the run's inputs/ (or a path), an art: id, or a directory, into DIR
+  mkdir -p "$2"
+  case $1 in
+    art:*) research data fetch "$1" --to "$2" > "$OUT/fetch-${2##*/}.log" 2>&1 || { log "chain: fetch $1 FAILED"; exit 3; } ;;
+    *) local f=$1; [ -e "$f" ] || f=${RESEARCH_RUN_DIR:?}/inputs/$1
+       if [ -d "$f" ]; then cp -a "$f/." "$2/"; else tar -xf "$f" -C "$2" || { log "chain: no tarball $1"; exit 3; }; fi ;;
+  esac
+}
+k=0
+for g in ${CR_GATES:?CR_GATES: the gate tarballs, art: ids or directories}; do
+  k=$((k + 1)); unpack "$g" "$G/g$k"
+  log "chain: gate $k $g: $(find "$G/g$k" -name end.json | sed "s|$G/g$k/||" | tr '\n' ' ')"
+done
+HONEST=$(find "$G" -path '*/out/honest/plan.json' -print -quit); HONEST=${HONEST%/plan.json}
+[ -n "$HONEST" ] || { log "chain: no certifier rehearsal (out/honest/plan.json) in $CR_GATES"; exit 3; }
+if [ -n "${CR_CLIENT:-}" ]; then CLIENT=$(find "$G" -path "*$CR_CLIENT" -print -quit)
+else CLIENT=$HONEST/client; [ -d "$CLIENT" ] || CLIENT=$HONEST; fi
+WARDEN=; [ -z "${CR_WARDEN_RUN:-}" ] || WARDEN=$(find "$G" -path "*$CR_WARDEN_RUN" -print -quit)
+log "chain: certifier run ${HONEST#$G/}, client ${CLIENT#$G/}, warden run ${WARDEN:-none}"
+mkdir -p "$OUT/gates"
+(cd "$G" && find . -type f \( -name '*.json' -o -name '*.jsonl' -o -name '*.log' \) -size -64M ! -path '*/witness/*' \
+  -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/gates/")
+
+setup
+"$PY" "$CR" custody --gates "$G" --out "$OUT/custody.json" 2>&1 | tee -a "$OUT/job.log" | cut -c1-2000
+"$PY" "$CR" certs --run "$HONEST" --client "$CLIENT" ${CR_DEPLOYED:+--deployed} --out "$OUT/certs.json" 2>&1 \
+  | tee -a "$OUT/job.log" | cut -c1-2000
+PROFILE=$("$PY" -c 'import json, sys; print((json.load(open(sys.argv[1])).get("occupancy") or {}).get("kind"))' \
+  "$HONEST/plan.json")
+E2E=$W/e2e
+if [ -n "${CR_ENDPOINT:-}" ]; then
+  unpack "$CR_ENDPOINT" "$W/endpoint"
+  EP=$(find "$W/endpoint" -name advice_trace.jsonl -printf '%h\n' -quit)
+  log "chain: endpoint ${EP:-none} ($CR_ENDPOINT): its advice bound to ${HONEST#$G/} and the I/O tie, in the clear"
+  "$PY" benchmarks/network_e2e/e2e.py --from "${HONEST%/out/honest}" --no-prove --no-negatives --endpoint-run "${EP:-$W/endpoint}" \
+    --out "$E2E" --work "$W/e2e-work" > "$OUT/endpoint.log" 2>&1
+  log "chain: endpoint done, rc $?"
+  mkdir -p "$OUT/endpoint"; cp "$E2E"/report.json "$E2E"/report.md "$E2E"/endpoint/advice.log "$OUT/endpoint/" 2>/dev/null
+  [ -d "$E2E/rehearsal" ] || ln -s "${HONEST%/honest}" "$E2E/rehearsal"
+fi
+BOUND=$("$PY" -c 'import json, sys; b = json.load(open(sys.argv[1]))["chain"]["bits"]; print(int(bool(b["bound"] and b["rebuilt"])))' \
+  "$E2E/report.json" 2>/dev/null || echo 0)
+(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+  || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
+(cd verity/core/protocols/network/lean && lake build network-records) > "$OUT/build-network-records.log" 2>&1 \
+  || { tail -40 "$OUT/build-network-records.log"; exit 7; }
+export VERITY_NETWORK_RECORDS_EXE=$SRC/verity/core/protocols/network/lean/.lake/build/bin/network-records
+export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
+(exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
+  > "$OUT/build-firewall.log" 2>&1
+[ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "chain: no firewall frame"; exit 7; }
+
+# ---- n2 and scan -------------------------------------------------------------------------------------------------------
+keep() {   # keep FROM TO: the public files and what the verifier received, never a prover's file, circuit or archive
+  mkdir -p "$2"
+  (cd "$1" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name prover-instances.bin ! -name instances.bin \
+    ! -name signer-state.json ! -path '*/archive/*' -print0 | xargs -0 -r -I{} cp --parents {} "$2/")
+}
+n2() {
+  export HONEST CLIENT BIN LEAN E2E N2OUT=$W/n2
+  local advised="$PY benchmarks/network_traces/n2_advised_zk.py prove --bin $BIN --lean $LEAN --out $N2OUT \
+    --jobs ${CR_N2_JOBS:-2} ${CR_N2_MEMBERS:+--members $CR_N2_MEMBERS} ${CR_N2_ARGS:-}"
+  if [ -n "${CR_N2_CMD:-}" ]; then cmd=$CR_N2_CMD
+  elif [ "$PROFILE" != advice ]; then cmd="$PY benchmarks/network_traces/n2_zk.py prove --run $HONEST --bin $BIN \
+    --lean $LEAN --out $N2OUT --jobs ${CR_N2_JOBS:-2} ${CR_N2_ROUNDS:+--rounds $CR_N2_ROUNDS}"
+  elif [ "$BOUND" = 1 ]; then cmd="$advised --e2e $E2E ${CR_N2_WINDOWS:+--windows $CR_N2_WINDOWS}"
+  else
+    why="the run is on the advice profile, whose counts N2's advised unit decides on the endpoint's advice, and "
+    if [ -z "${CR_ENDPOINT:-}" ]; then why+="no endpoint records were given (CR_ENDPOINT)"
+    else why+="the endpoint's advice doesn't bind to the run: $("$PY" -c 'import json, sys
+b = json.load(open(sys.argv[1]))["chain"]["bits"]; print((b.get("bound_why") or b.get("why") or "")[:400])' "$E2E/report.json" 2>/dev/null)"; fi
+    if [ "${CR_N2_STANDIN:-}" = simulated ]; then
+      echo "the advised unit on n2_advised_zk's simulated link (its certifier signs each window's sync), not the gate's: $why" \
+        > "$W/n2.standin"; cmd=$advised
+    else echo "$why" > "$W/n2.why"; log "chain: n2 not run: $why"; echo 2 > "$W/n2.rc"; return; fi
+  fi
+  log "chain: n2: $cmd"
+  bash -c "$cmd" > "$OUT/n2.log" 2>&1
+  echo $? > "$W/n2.rc"; keep "$N2OUT" "$OUT/n2"; log "chain: n2 done, rc $(cat "$W/n2.rc")"
+  [ "$(cat "$W/n2.rc")" = 0 ] || tail -n 1 "$OUT/n2.log" | cut -c1-600 > "$W/n2.why"
+}
+scan() {
+  export WARDEN BIN LEAN SCANOUT=$W/scan
+  if [ "${CR_PATH:-}" = certifier-only ]; then
+    echo "the certifier-only path: no warden rows to scan, so no scan" > "$W/scan.why"; echo 2 > "$W/scan.rc"
+    log "chain: scan not run (CR_PATH=certifier-only)"; return
+  fi
+  local wr=
+  if [ -n "$WARDEN" ]; then
+    if "$PY" benchmarks/network_traces/scan_zk.py prove --help 2>/dev/null | grep -q -- --warden-run; then wr="--warden-run $WARDEN"
+    else log "chain: scan_zk takes no --warden-run in this tree, so the scan proves its own run"; fi
+  fi
+  log "chain: scan ${CR_SCAN_CMD:+(CR_SCAN_CMD) }${wr:-on the synthetic warden run of scan_zk}"
+  if [ -n "${CR_SCAN_CMD:-}" ]; then bash -c "$CR_SCAN_CMD"
+  else "$PY" benchmarks/network_traces/scan_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$SCANOUT" $wr \
+    ${CR_SCAN_ARGS:-}; fi > "$OUT/scan.log" 2>&1
+  echo $? > "$W/scan.rc"; keep "$SCANOUT" "$OUT/scan"; log "chain: scan done, rc $(cat "$W/scan.rc")"
+  [ "$(cat "$W/scan.rc")" = 0 ] || tail -n 1 "$OUT/scan.log" | cut -c1-600 > "$W/scan.why"
+  [ -n "$wr" ] && echo "$WARDEN" > "$W/scan.warden"
+}
+if [ -n "${CR_SCAN_ONLY:-}" ]; then scan; elif [ -n "${CR_SERIAL:-}" ]; then n2; scan; else n2 & scan & wait; fi
+
+# ---- the report --------------------------------------------------------------------------------------------------------
+"$PY" - "$OUT/job.json" "$W" <<EOF
+import json, os, sys
+from pathlib import Path
+w = Path(sys.argv[2])
+text = lambda f: (w / f).read_text().strip() if (w / f).is_file() else None
+json.dump({"run": os.environ.get("RESEARCH_RUN_ID"), "tree": "${RESEARCH_SOURCE_SHA:-$(git -C "$SRC" rev-parse HEAD 2>/dev/null)}",
+           "gates": "${CR_GATES}".split(), "endpoint": os.environ.get("CR_ENDPOINT"), "profile": "$PROFILE",
+           "path": os.environ.get("CR_PATH"),
+           "lean": "$(sha256sum "$LEAN" | cut -c1-64) $LEAN", "bin": "$(sha256sum "$BIN" | cut -c1-64)",
+           "n2_cmd": os.environ.get("CR_N2_CMD"), "scan_cmd": os.environ.get("CR_SCAN_CMD"),
+           "scan_only": bool(os.environ.get("CR_SCAN_ONLY")),
+           "rc": {"n2": text("n2.rc"), "scan": text("scan.rc")}, "why": {"n2": text("n2.why"), "scan": text("scan.why")},
+           "stand_in": {"n2": text("n2.standin")}}, open(sys.argv[1], "w"), indent=1)
+EOF
+"$PY" "$CR" report --custody "$OUT/custody.json" --certs "$OUT/certs.json" --endpoint "$OUT/endpoint/report.json" \
+  $( [ -n "${CR_SCAN_ONLY:-}" ] || echo --n2 "$OUT/n2/summary.json") --scan "$OUT/scan/summary.json" --job "$OUT/job.json" \
+  $( [ -f "$W/scan.warden" ] && echo --warden-run "$(cat "$W/scan.warden")") ${CR_AUDIT:+--audit $CR_AUDIT} \
+  --out "$OUT/report" | tee -a "$OUT/job.log"
+rc=${PIPESTATUS[0]}
+cat "$OUT/report/report.md" | tee -a "$OUT/job.log" | cut -c1-600
+log "chain: done, rc $rc"
+exit "$rc"

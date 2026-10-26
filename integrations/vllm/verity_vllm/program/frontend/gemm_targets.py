@@ -166,8 +166,10 @@ class GemmTarget:
         """Identity of the pinned tuned table this target consults (an applicability condition); None for a table-less target."""
         if not self.tuned_table:
             return None
-        from verity_vllm.program.frontend.target_profile import canonical_bytes, sha256_hex
-        return sha256_hex(canonical_bytes({f"{k[0]},{k[1]}": v for k, v in self.tuned_table.items()}))
+        import hashlib
+
+        from verity.ml.circuits.codec import canonical_json
+        return hashlib.sha256(canonical_json({f"{k[0]},{k[1]}": v for k, v in self.tuned_table.items()})).hexdigest()
 
     def describe(self) -> dict:
         return {"key": self.key, "compute_capabilities": [list(c) for c in self.compute_capabilities], "vllm_arch_family": self.vllm_arch_family,

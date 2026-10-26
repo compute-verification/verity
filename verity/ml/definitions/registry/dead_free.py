@@ -19,6 +19,10 @@ compiler emits, where no gate may be one no output depends on.  Rows of record k
 * `AttentionHead_v18` and `Attention_v18`: FA2's per-iteration `Check_inf` head and attention (`fa2_check_inf`'s v5) with the first
   visited block's zero padding only where it is read.  v5 pads that block's K and V rows to BN with a zero row and fills P's
   k-steps with a zero word; when its key count is a multiple of 16 below BN neither is read, 2 dead gates a head.
+* `AttentionHead_v19` and `Attention_v19`: v18 with every step a Call, so a head's key blocks can be units of their own (each
+  `AttnBlock_v5` is about 9.2M ANDs at Llama's geometry, a head of 32 blocks past C-Flock's 2^27 block).  v18 writes its first
+  visited block and its epilogue in its body; v19 Calls `AttnBlockFirst_v1` (that block's steps and padding, with no running
+  state in, which an `AttnBlock_v5{FIRST=True}` Call would be passed and ignore) and `AttnHeadEnd_v1`.
 
 Each computes its v1's function word for word, except at V = 1, where v1's zero-length scan returns a wrong carry and these return
 index 0 (`tests/program/test_dead_free.py`); the attention versions compute v5's at every binding.
@@ -26,6 +30,7 @@ index 0 (`tests/program/test_dead_free.py`); the attention versions compute v5's
 from __future__ import annotations
 
 from collections.abc import Sequence
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -38,7 +43,7 @@ from verity.ml.circuits.ops.scalar import BIT, BitAnd, BitNot, F32, F32Eq, I32Eq
 from verity.ml.circuits.refs import Affine, Coll as _Coll, Concat, Explicit, Refs, Strided, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.definitions.registry import fa2_check_inf as F2, prims as P, ref_prims as RP, sampling as SA, topp_words as TW
-from verity.ml.definitions.registry.b1 import NEG_INF_BF16, ArgmaxStep, TokenSelectChunkStep, chunks, f32c
+from verity.ml.definitions.registry.b1 import NEG_INF_BF16, ZERO16, ArgmaxStep, TokenSelectChunkStep, chunks, f32c
 from verity.ml.definitions.registry.prims import BF16, I32
 
 I64 = SA.I64
@@ -340,6 +345,68 @@ def AttentionV18(B, S, q, kc, vc):
     return F2._check_inf_attention(B, S, q, kc, vc, AttentionHeadV18, ())
 
 
-__all__ = ["AttentionHeadV18", "AttentionV18", "CHUNK", "GumbelSelectF32GivenGreedyV2", "GumbelSelectF32V3",
-           "GumbelTopPTokenSelectSharedGreedyV2", "GumbelTopPTokenSelectV3", "RMSNormTritonV5", "TokenSelectChunkV2", "TokenSelectCombineV2", "TokenSelectV3", "TokenSelectV4", "TopPKeepWordV2",
+@composite("AttnBlockFirst", 1, ["D", "NVIS", "BN", "DOT"],
+           lambda S: ((("q", Array(S.D, BF16)), ("k", Array(S.NVIS, Array(S.D, BF16))), ("v", Array(S.NVIS, Array(S.D, BF16)))),
+                      Tuple(F32, Array(4, F32), Array(S.D, F32))),
+           conformance="not-yet-established: AttentionHead_v18's first visited block")
+def AttnBlockFirstV1(B, S, q, k, v):
+    """`AttentionHead_v18`'s first visited key block, NVIS = 1 ... BN keys: `AttnBlock_v5{D, NVIS, FIRST=True, BN, DOT, CHECK=True}`'s
+    steps with no running state in (the first block reads none) and v18's padding (V rows zero past NVIS to the last k-step it
+    runs, no K rows).  Returns the running state (max, lane sums, O) the next block reads."""
+    D, NVIS, BN = S.D, S.NVIS, S.BN
+    if not 1 <= NVIS <= BN:
+        raise ValueError(f"AttnBlockFirst_v1: NVIS {NVIS} outside 1 ... BN = {BN}")
+    if NVIS < BN and NVIS % 16:  # the last k-step's V rows past NVIS meet P's zero words
+        zero_row = _Coll(Array(D, BF16), concat([B.call(ZERO16).refs] * D))
+        v = _Coll(Array(NVIS + -NVIS % 16, Array(D, BF16)), concat([v.refs] + [zero_row.refs] * (-NVIS % 16)))
+    first = SimpleNamespace(D=D, NVIS=NVIS, FIRST=True, BN=BN, DOT=S.DOT, CHECK=True)
+    return F2._check_inf_block(B, first, q, k, v, None, None, None, None, read_pads_only=True)
+
+
+@composite("AttnHeadEnd", 1, ["D", "INV"],
+           lambda S: ((("l", Array(4, F32)), ("o", Array(S.D, F32))), Array(S.D, BF16)),
+           conformance="not-yet-established: AttentionHead_v18's epilogue")
+def AttnHeadEndV1(B, S, l, o):
+    """`AttentionHead_v18`'s epilogue on the last block's lane sums and O: `sum = (l0 + l2) + (l1 + l3)`, `inv = INV(sum)`,
+    `out = bf16(o * inv)`."""
+    total = B.call(P.F32AddFtz, B.call(P.F32AddFtz, l[0], l[2]), B.call(P.F32AddFtz, l[1], l[3]))
+    inv = B.call(S.INV, total)
+    return B.batch(P.F2fpBf16, B.batch(P.F32MulFtz, o, inv, axes=(0, None)), axes=(0,))
+
+
+@composite("AttentionHead", 19, ["T", "D", "BN", "DOT", "INV", "MASKED_FROM"],
+           lambda S: ((("q", Array(S.D, BF16)), ("k", Array(S.T, Array(S.D, BF16))), ("v", Array(S.T, Array(S.D, BF16)))),
+                      Array(S.D, BF16)),
+           conformance="not-yet-established: AttentionHead_v18's function")
+def AttentionHeadV19(B, S, q, k, v):
+    """`AttentionHead_v18{T, D, BN, DOT, INV, MASKED_FROM}` with every step a Call, so each key block can be a unit of its own: the
+    first visited block `AttnBlockFirst_v1{D, NVIS, BN, DOT}` (keys (nb - 1) BN ... T - 1), block b below it
+    `AttnBlock_v5{D, BN, FIRST=False, BN, DOT, CHECK = b >= MASKED_FROM}`, and the epilogue `AttnHeadEnd_v1{D, INV}`."""
+    T, D, BN, DOT, MF = S.T, S.D, S.BN, S.DOT, S.MASKED_FROM
+    nb = (T + BN - 1) // BN
+    if not 0 <= MF <= nb - 1:
+        raise ValueError(f"AttentionHead_v19: MASKED_FROM {MF} outside blocks 0..{nb - 1} "
+                         "(the first block is always a Check_inf iteration)")
+    lo = (nb - 1) * BN
+    st = B.call(bind(AttnBlockFirstV1, D=D, NVIS=T - lo, BN=BN, DOT=DOT), q, k[lo:T], v[lo:T])
+    for b in range(nb - 2, -1, -1):
+        block = bind(F2.AttnBlockV5, D=D, NVIS=BN, FIRST=False, BN=BN, DOT=DOT, CHECK=b >= MF)
+        st = B.call(block, q, k[b * BN:(b + 1) * BN], v[b * BN:(b + 1) * BN], st[0], st[1], st[2])
+    return B.call(bind(AttnHeadEndV1, D=D, INV=S.INV), st[1], st[2])
+
+
+@composite("Attention", 19, ["T", "NH", "KVH", "D", "BN", "DOT", "INV", "MASKED_FROM"],
+           lambda S: ((("q", Array(S.NH, Array(S.D, BF16))),
+                       ("kc", Array(S.T, Array(S.KVH, Array(S.D, BF16)))),
+                       ("vc", Array(S.T, Array(S.KVH, Array(S.D, BF16))))),
+                      Array(S.NH, Array(S.D, BF16))),
+           conformance="not-yet-established: Attention_v18's function")
+def AttentionV19(B, S, q, kc, vc):
+    """`Attention_v18{T, NH, KVH, D, BN, DOT, INV, MASKED_FROM}` over `AttentionHead_v19`."""
+    return F2._check_inf_attention(B, S, q, kc, vc, AttentionHeadV19, ())
+
+
+__all__ = ["AttentionHeadV18", "AttentionHeadV19", "AttentionV18", "AttentionV19", "AttnBlockFirstV1", "AttnHeadEndV1", "CHUNK",
+           "GumbelSelectF32GivenGreedyV2", "GumbelSelectF32V3", "GumbelTopPTokenSelectSharedGreedyV2", "GumbelTopPTokenSelectV3",
+           "RMSNormTritonV5", "TokenSelectChunkV2", "TokenSelectCombineV2", "TokenSelectV3", "TokenSelectV4", "TopPKeepWordV2",
            "TopPMaskV3", "TopPMaskV4", "lane0_butterfly", "live_replay"]

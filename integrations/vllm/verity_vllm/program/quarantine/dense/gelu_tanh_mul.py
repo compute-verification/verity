@@ -7,7 +7,7 @@ the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEM
 """
 from __future__ import annotations
 
-from verity.ml.definitions.registry.dense import GeluTanhMul  # noqa: F401
+from verity.ml.definitions.registry.dense import GeluTanhMul
 
 SEMANTIC_ID = "dense/GeluTanhMul@v1"
 

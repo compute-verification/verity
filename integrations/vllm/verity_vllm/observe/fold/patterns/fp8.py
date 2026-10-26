@@ -1,4 +1,4 @@
-"""[R15 fp8] Eager Match patterns of vLLM's BLOCK-SCALED FP8 linear (Hopper): the two custom ops `Fp8LinearMethod.apply` executes for a
+"""Eager Match patterns of vLLM's BLOCK-SCALED FP8 linear (Hopper): the two custom ops `Fp8LinearMethod.apply` executes for a
 pre-quantised checkpoint (`quantization_config`: fp8 / e4m3 / `weight_block_size [G, G]` / dynamic activations) when the kernel
 selected is `CutlassFp8BlockScaledMMKernel` (`VLLM_USE_DEEP_GEMM=0`; the DeepGEMM JIT is not the panel's path):
 

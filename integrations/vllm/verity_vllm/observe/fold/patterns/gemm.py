@@ -27,7 +27,7 @@ class GemmLaunch:
     `aten.mm/matmul/linear/addmm` dispatcher node that wraps exactly one such launch (the launch fired inside the
     op's CUDA implementation), consuming the wrapper as scope.
 
-    Constexpr pins (`constexprs`, `num_warps`, `num_stages`) must match exactly.  [R13 ampere] The TILING pinned is the
+    Constexpr pins (`constexprs`, `num_warps`, `num_stages`) must match exactly.  The TILING pinned is the
     record target's launch geometry for (M, N, K) — `gemm_target_of(ctx)`: the registered GEMM specialization of the
     header's capability (`verity_vllm.program.frontend.gemm_targets`; `ada` = vLLM's sm_89 tuned table rows else the default, `ampere`
     = the default for every shape); `constexprs` / `num_warps` / `num_stages` given at construction are the profile's default

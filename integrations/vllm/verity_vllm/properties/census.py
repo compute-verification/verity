@@ -47,7 +47,6 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
-import os
 import re
 import time
 from collections import Counter, OrderedDict
@@ -55,6 +54,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.config import UsageError, option
 from verity_vllm.properties.record import seal
 
@@ -209,10 +209,10 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
     (out / "traces").mkdir(parents=True, exist_ok=True)
     wl = va.load_workload(workload_path, max_tokens)
     case = va.case_of(wl, case)
-    if os.environ.get("VERITY_CENSUS_GPU_UTIL"):
+    if (gpu_util := settings.VERITY_CENSUS_GPU_UTIL) is not None:
         # [coverage] a census re-run that shares the GPU with another engine: the KV-cache size does not enter the kernel counts
         # (no preemption at these workload sizes); the resolved value is on record in this document's engine_kwargs
-        engine_args = {**(engine_args or {}), "gpu_memory_utilization": float(os.environ["VERITY_CENSUS_GPU_UTIL"])}
+        engine_args = {**(engine_args or {}), "gpu_memory_utilization": gpu_util}
     eng = va.build_engine(checkpoints, max_num_seqs=max_num_seqs, case=case, engine_args=engine_args, target=va.target_of_workload(wl))
     print(f"[census] engine built in {eng.build_s:.1f}s (case {case}, {eng.cp['repo']})", flush=True)
     versions = va.versions_doc(eng)
@@ -287,7 +287,7 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
         return steps, tokens
 
     if warmup:
-        warm = va.throwaway_requests(eng, wl["requests"])
+        warm = va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED)
         profiled_run(warm, "warmup")      # profiler + CUPTI warm-up too; discarded
         torch.cuda.synchronize()
     steps, tokens = profiled_run(wl["requests"], "census")

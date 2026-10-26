@@ -187,12 +187,12 @@ def test_an_auditor_host_stops_every_live_run_but_the_commands_its_marker_lists(
 
 def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_no_research_run():
     """The deployed marker lists no command (the challenger runs only through vy-challenger-gate, the verifier through
-    vy-verifier-gate) and goes, with the timer that enforces it, to the two auditor hosts only, each host's gate and units to it
-    alone; the nodes' shared peers file and the cluster's description name neither host."""
+    vy-verifier-gate) and goes, with the timer that enforces it, to the auditor hosts only, each host's gate and units to it
+    alone; the nodes' shared peers file and the cluster's description name no auditor host."""
     import tomllib
     from pathlib import Path
 
-    hosts = ["vy-challenger-1", "vy-auditor-1"]
+    hosts = ["vy-challenger-1", "vy-auditor-1", "vy-auditor-2"]
     nebius = Path(S.__file__).resolve().parent
     assert (nebius / "auditor").read_text().startswith("#") and S.auditor_commands(nebius / "auditor") == []
     rows = tomllib.loads((nebius / "deploy.toml").read_text())["file"]
@@ -209,7 +209,7 @@ def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_
                                                      "/usr/local/sbin/vy-challenger-pin", "/etc/systemd/system/vy-challenger@.service",
                                                      "/etc/systemd/system/vy-certifier@.service")}
     verifier = {e["path"]: e["nodes"] for e in rows if "/pods/nebius/verifier/" in e.get("src", "")}
-    assert verifier == {p: ["vy-auditor-1"] for p in (
+    assert verifier == {p: ["vy-auditor-1", "vy-auditor-2"] for p in (
         "/usr/local/sbin/vy-verifier-gate", "/usr/local/sbin/vy-verifier-setup", "/usr/local/sbin/vy-verifier-pin",
         "/usr/local/sbin/vy-verifier-tunnel", "/etc/systemd/system/vy-verifier@.service",
         "/etc/systemd/system/vy-verifier-replay@.service", "/etc/systemd/system/vy-verifier-publish@.service",
