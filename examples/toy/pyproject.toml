@@ -1,6 +1,6 @@
-# A minimal PyTorch serving loop, an integration of Verity's (`verity.ml.windows.interface`). Not a package: its tests run in
-# the workspace environment (torch from the workspace's torch-cpu extra), and `benchmarks/prove_path/run.sh` (PP_TORCH_LOOP)
-# puts this directory on its path.
+# The toy example: a minimal PyTorch serving loop behind Verity's interface (`verity.ml.windows.interface`). Not a
+# package: its tests run in the workspace environment (torch from the workspace's torch-cpu extra), and
+# `benchmarks/prove_path/run.sh` (PP_TORCH_LOOP) puts this directory on its path.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

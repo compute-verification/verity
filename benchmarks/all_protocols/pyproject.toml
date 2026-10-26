@@ -1,4 +1,4 @@
-# `verity bench all-protocols` (run.sh, verity_all_protocols). Not a package: its tests run in the workspace environment, with
+# `verity example toy`'s runner (verity_all_protocols). Not a package: its tests run in the workspace environment, with
 # this directory on their path.
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,4 +1,4 @@
-"""`verity bench all-protocols`'s runner: every window, one run of the torch loop audited by every protocol's leg, and the
+"""`verity example toy`'s runner: every window, one run of the torch loop audited by every protocol's leg, and the
 result over each monitoring period of a datacenter.
 
     python -m verity_all_protocols.runner --out DIR --tools FILE [--windows N] [--start I] [--window-s S] [--jobs J]

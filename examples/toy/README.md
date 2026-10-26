@@ -1,7 +1,8 @@
-# torch_loop
+# toy
 
-A minimal serving loop that is not vLLM: a two-layer W8A8 MLP in plain PyTorch on CPU (`verity_torch_loop/loop.py`),
-serving a few requests for a few decode steps and recording every linear's output coordinates into a window of Verity's
+The toy example. Its command, `run.sh` (`verity example toy`), serves it every window and audits it by every protocol
+(`benchmarks/all_protocols`). The workload is a minimal serving loop that is not vLLM: a two-layer W8A8 MLP in plain
+PyTorch on CPU (`verity_torch_loop/loop.py`), serving a few requests for a few decode steps and recording every linear's output coordinates into a window of Verity's
 interface (`verity.ml.windows.interface`). Its one template is `ScaledMmS8Coordinate_v1{K=128, DOT=BlackwellS8ImmaDot32_v1}`
 from `verity.ml.circuits.ops.gemm`: the loop builds nothing of its own into the circuit, and imports nothing from
 `integrations/vllm`. Its circuit is fixed by its shape, so it can register no compiler or advice; or it registers its

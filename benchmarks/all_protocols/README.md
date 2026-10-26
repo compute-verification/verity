@@ -1,6 +1,6 @@
 # all_protocols
 
-`verity bench all-protocols` (`run.sh`): every window, one run of the torch loop (`examples/toy`, a two-layer
+`verity example toy` (`examples/toy/run.sh`) runs this: every window, one run of the torch loop (`examples/toy`, a two-layer
 W8A8 MLP on CPU) audited by every protocol's own code, each decided on its own and composed through onsite Verity
 (`verity/core/protocols/onsite`). The result is per monitoring period, over all compute: a week, a month and a year of
 every machine of a census deployment, the pooled total first and the per-window figure beside it.

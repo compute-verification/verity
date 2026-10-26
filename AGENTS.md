@@ -49,6 +49,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
 - `integrations/`: one directory per serving stack Verity's compute runs in. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
   builds each served workload's circuit and commits its values while serving; `benchmarks/one_stage/` takes those values
   through C-Flock's prover and the Lean verifier.
+- `examples/`: one directory per example, each its workload, its placement and the command that runs it (`verity example
+  NAME`). `examples/toy/` (`verity_torch_loop`) is the toy, a W8A8 MLP in PyTorch on CPU that every protocol audits.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, and the benchmark tools.
   - `benchmarks/census/`: data only. `verity` never reads it; it takes such numbers as parameters.
@@ -82,8 +84,8 @@ Code reaches the Nebius nodes only through `research deploy install` from a push
 Dependencies point inward, and `tests/test_boundaries.py` enforces them:
 
 - A verifier imports no `verity.ml` code (Design rules). Until its protocol's verifier of record is Lean, a Python
-  verifier in `verity.core` keeps the edges into `verity.ml` it had on 18 Oct (`CORE_ML_EDGES`) and gains none, and
-  what they reach (`SOUNDNESS_PATH`) only shrinks. `verity.ml` never imports `verity.core`, apart from the files
+  verifier in `verity.core` keeps the edges into `verity.ml` it had on 18 Oct (`CORE_ML_EDGES`) and gains none.
+  `verity.ml` never imports `verity.core`, apart from the files
   `ML_IMPORTS_CORE` names (C-Flock's tests and V*'s builders, and hm96's test of its claims).
 - Everything outside `verity/` may import `verity`. `verity` imports no other distribution of the workspace.
 - Inside `verity`, each unit imports only what `ALLOWED` lists. `ml.circuits`, `ml.randomness`, `ml.crypto` and
@@ -96,8 +98,8 @@ Dependencies point inward, and `tests/test_boundaries.py` enforces them:
   `tests/test_integration_boundaries.py`, which only shrinks (Design rules, "Integrations are frontends").
 
 `verity` is the repository's one command (`tools/verity/cli/`): `verity check` runs every part of the
-check, `verity check tests|lean|circuits` runs only those parts, and `verity bench NAME` runs `benchmarks/<NAME>/`'s runner.
-`verity --help` lists the rest.
+check, `verity check tests|lean|circuits` runs only those parts, `verity bench NAME` runs `benchmarks/<NAME>/`'s runner
+and `verity example NAME` `examples/<NAME>/`'s. `verity --help` lists the rest.
 
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
