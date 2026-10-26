@@ -115,6 +115,7 @@ import dither_manifest as MF
 import dither_one as DO
 import forms as F
 import h1c as H1CM
+import j10r_ws as JWS
 from dither_fused import CM, CO, H1R, Call, Dom, Tab, unwords, words
 from hb_side import auto_j
 
@@ -1405,13 +1406,10 @@ class SoSide(DA.Side):
         order = sorted(range(win.L), key=lambda w: -md[w])
         rws = []
         if self.j10r:
-            # each call's row blocks at T rows (the most a layout takes), one workspace for every ring slot: a step's
-            # units run on the units stream after the step before's
-            h.kh_j10r_rows_bytes.argtypes, h.kh_j10r_rows_bytes.restype = [u32, u32], C.c_ulonglong
-            nbytes = [int(h.kh_j10r_rows_bytes(win.t, k)) for _, k in win.nk]
-            if self.j10rc_min_t:
-                h.kh_j10r_ws_bytes.argtypes, h.kh_j10r_ws_bytes.restype = [u32, u32, u32], C.c_ulonglong
-                nbytes = [int(h.kh_j10r_ws_bytes(win.t, n, k)) for n, k in win.nk]
+            # each call's workspace at T rows (the most a layout takes) as the build sizes it (j10r_ws: an H1U_JW
+            # build's column blocks and W' too, RC's under $DITHER_SO_J10RC_MIN_T), one workspace for every ring slot:
+            # a step's units run on the units stream after the step before's
+            nbytes = [JWS.workspace_bytes(h, win.t, n, k, rc=bool(self.j10rc_min_t)) for n, k in win.nk]
             self.j10r_ws = torch.empty(sum(nbytes), dtype=torch.uint8, device=win.dev)
             rws = [self.j10r_ws.data_ptr() + sum(nbytes[:w]) for w in range(win.L)]
         tabs = []
