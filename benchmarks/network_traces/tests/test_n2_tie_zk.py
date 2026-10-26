@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parents[1]
 
@@ -54,6 +55,26 @@ def test_the_served_class_is_one_window_of_60_buckets_of_one_4096_byte_cell_hone
         assert len(rd.windows) == 1 and len(rd.windows[0].words) == 60 and all(rd.windows[0].opens), name
         assert tuple(bool(x.expect) for x in rd.windows) == sv.EXPECT[name], name
     assert tz.T == 4 and tz.B == 512
+
+
+def test_a_warden_runs_release_is_its_cells_and_its_forged_row_is_the_registered_reads_to_refuse():
+    """`warden_link`'s reading of a warden's cells (`_released`) gives the release and prompt lengths the warden's own
+    ingress served, and `forge`'s row, an id request of the same prompt length, keeps every output word 1 while the
+    registered read refuses it, in its window alone."""
+    tie = _tie()
+    link = tz.served(tz.SPAN, tz.ARRIVALS, tz.RATES)
+    cells = [tz.WR.Cells.of(tz.LINK, tz.Direction.INGRESS, rec, tz.PARAMS, tz.SESSION) for rec in link.records]
+    releases, lens = tz._released(tz.PARAMS, cells)
+    assert releases == list(link.releases) and lens == tz.SPAN
+    real = SimpleNamespace(cells=cells, records=link.records, releases=releases)
+    f = tz.forge(real)
+    rd = tz.link_windows(tie, real, tz.advice(lens, tz.received(real)), f)
+    assert f.window == 0 and rd.windows[0].rows[f.bucket] != cells[0].rows[f.bucket]
+    assert [x.words for x in rd.windows] == [[1] * tz.T] * 2 and all(all(x.opens) for x in rd.windows)
+    assert "does not open" in rd.windows[0].held and rd.windows[1].held is None
+    assert [x.expect for x in rd.windows] == [0, 1]
+    honest = tz.link_windows(tie, real, tz.advice(lens, tz.received(real)))
+    assert [x.expect for x in honest.windows] == [1, 1] and all(x.held is None for x in honest.windows)
 
 
 def test_the_scan_looks_for_held_cells_and_salts_alone():

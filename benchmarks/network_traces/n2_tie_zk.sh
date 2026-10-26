@@ -11,8 +11,9 @@
 #     --env N2_MEM_GB=96 --env N2_GPU=1 --env N2_CLASS=served --env N2_JOBS=1 -- bash benchmarks/network_traces/n2_tie_zk.sh
 # env: N2_MEM_GB (what job.sh's stages may take, within the slot's)  N2_JOBS (--jobs, members proved at once, 2 by
 #      default)  N2_PORT (--port)  N2_CACHE (the build cache, kept across runs where writable)  N2_DEBUG_CLEAR=1
-#      (--debug-clear)  N2_DRY=1 (the instances and references only)  N2_CLASS (--class: test, or served)  N2_GPU=1
-#      (--gpu)  FLOCK_WORK (N2_GPU's build, /workspace/jobs/proof-throughput by default)
+#      (--debug-clear)  N2_DRY=1 (the instances and references only)  N2_CLASS (--class: test, served or warden)
+#      N2_WARDEN_RUN (--warden-run, N2_CLASS=warden's warden run, an absolute path on the node)  N2_WINDOWS (--windows)
+#      N2_GPU=1 (--gpu)  FLOCK_WORK (N2_GPU's build, /workspace/jobs/proof-throughput by default)
 # Kept in $OUT/n2tie: the driver's records and logs, the public files and everything the verifier received; never a
 # prover's file (inst-*, prover-instances.bin) nor a circuit (its pin is kept), nor a session's archive.
 set -uo pipefail
@@ -56,6 +57,7 @@ if [ "${N2_GPU:-0}" = 1 ]; then
 fi
 "$PY" benchmarks/network_traces/n2_tie_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/n2tie" --jobs "${N2_JOBS:-2}" \
   --class "${N2_CLASS:-test}" $GPU_ARG \
+  ${N2_WARDEN_RUN:+--warden-run "$N2_WARDEN_RUN"} ${N2_WINDOWS:+--windows "$N2_WINDOWS"} \
   ${N2_PORT:+--port "$N2_PORT"} ${N2_DEBUG_CLEAR:+--debug-clear} ${N2_DRY:+--dry} 2>&1 \
   | tee -a "$OUT/n2tie.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
