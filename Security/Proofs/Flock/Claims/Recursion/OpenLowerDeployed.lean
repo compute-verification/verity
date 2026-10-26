@@ -269,7 +269,7 @@ theorem statements_dense {i : _root_.Flock.RecVStar.Inner} {ss : Array VStar.Stm
   obtain ⟨u'', -, h⟩ := FlockC3.VStarList.eok_bind h
   cases h
   obtain rfl := (FlockC3.VStarList.candidate3_ok hC).1 hsp
-  exact ⟨A, K, n, hA, hK, by simp [Array.append_assoc]⟩
+  exact ⟨A, K, n, hA, hK, by simp⟩
 
 /-- **A level statement of a public dense inner shape is its level's**: where the verifier's list at a public inner
 shape with no RecSparse phase has `.recOpen lv LANES HH n` at index `s`, it is V\*'s level `s` (`statements_eq`, the
@@ -341,8 +341,13 @@ theorem levelMatch {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some 
   have e : schAt (xIOf x) 0 = sch := by
     unfold schAt
     rw [hset]
-    show (fast100 (Setup.ofCircuit t).m).getD default = sch
-    simp only [show (Setup.ofCircuit t).m = t.m from rfl, htm, hsch, Option.getD_some]
+    have htabs : tabsOf #[t] = #[_root_.Flock.Setup.ofCircuit t] := by simp [tabsOf]
+    have h0 : (tabsOf #[t])[0]!.m = t.m := by
+      rw [htabs]
+      first | rfl | simp [_root_.Flock.Setup.ofCircuit]
+    dsimp only
+    rw [h0, htm, hsch]
+    rfl
   rw [e]
   exact ⟨rfl, hL, hH⟩
 
@@ -424,7 +429,7 @@ def CopyFitsR (pieces : Msg → List OpenPiece) : Prop :=
 /-- **The copy reads the piece's opened row and siblings** (`CopyOpensR`, `OpenCopy`'s last two conjuncts), at
 `sideAtR rd` of every reading of the last message. -/
 def CopyOpensR (pieces : Msg → List OpenPiece) : Prop :=
-  AtPieces H D shape untr b cmt L pieces fun x c ws LANES HH _ _ w p ht q =>
+  AtPieces H D shape untr b cmt L pieces fun x _ ws LANES HH _ _ w p ht q =>
     AtOpened D Bd x (L.msgs x ws) fun ms' =>
       _root_.Flock.Readable.openRow (copyR (Claims.Recursion.xI D x) w p ht q) LANES =
           (openAt (sideAtR rd (Claims.Recursion.xI D x) ms' q).lig
@@ -546,7 +551,7 @@ theorem bits_of_dirsTie {v : ℕ → Bool} {LANES HH pos : ℕ} (hH : HH ≤ 32)
 /-- **Check 5's `dirs` tie at the deployed layout** (`CopyDirsR`): the level's `HH` is at most 32 and the piece's copy
 holds the `dirs` row of the position `posAt` reads off the coins. -/
 def CopyDirsR (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
-  AtPieces H D shape untr b cmt L pieces fun x c ws LANES HH _ _ w p ht q =>
+  AtPieces H D shape untr b cmt L pieces fun x c _ LANES HH _ _ w p ht q =>
     HH ≤ 32 ∧ DirsTie (copyR (Claims.Recursion.xI D x) w p ht q) LANES HH
       (posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q)
 
