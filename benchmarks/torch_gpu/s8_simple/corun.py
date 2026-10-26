@@ -1,6 +1,8 @@
-"""On one CUDA device: a decoder layer's W8A8 linears (`s8_simple.linear`, the fused epilogue) beside that layer's
-serve-time commit (HASH-20's `sha512_rows`: every row's digest and hm96 leaf) on two CUDA streams, at the frozen H200
-shape, as JSON to ``--out``/corun.json and a summary to ``--out``/summary.txt.
+"""On one CUDA device: a decoder layer's W8A8 linears beside that layer's serve-time commit (HASH-20's `sha512_rows`:
+every row's digest and hm96 leaf) on two CUDA streams, at the frozen H200 shape, as JSON to ``--out``/corun-GEMM.json and
+a summary to ``--out``/summary-GEMM.txt. The linears are ``--gemm``'s: `s8_simple.linear` with the fused epilogue
+(``simple``), or KP2-S8's wgmma kernel (`benchmarks/torch_gpu/s8_linear/`, $S8_WGMMA_CUBIN) at `wgmma.default_cfg`
+(``wgmma``) or at its tuned table's picks (``wgmma-tuned``).
 
 compute-accounting's step model adds the commit to the GEMM serially. The GEMM runs on the tensor cores and the row
 kernel on the integer ALU, so the two might overlap. At each of ``--ms`` (token rows, and the commit's slots) this times,
@@ -15,9 +17,10 @@ with CUDA events, each phase's reps queued back to back (a rep starts when every
 
 The overlap won is linears + commit - corun, each the median of its reps. Where the GPU runs at its power cap, the
 co-run's time sits near its energy bound: the alone runs' joules (each median ms times its median power) over the
-co-run's median power. Every co-run's words (each linear's bf16 output and each leaf) must be the alone run's, and each
-linear's fused kernel must pass `check.ptx_audit` (its digest names the PTX text, whose `.file` line holds the tree's
-path), or the exit is 1. An NVML thread samples the leased GPU (by its UUID) through every phase: the SM clock, power
+co-run's median power. Every co-run's words (each linear's bf16 output and each leaf) must be the alone run's, and the
+GEMM's kernels must pass their check, or the exit is 1: for ``simple`` each linear's fused kernel through
+`check.ptx_audit` (its digest names the PTX text, whose `.file` line holds the tree's path), for wgmma the cubin's
+`Lib.identity` (its SASS gate and MANIFEST). An NVML thread samples the leased GPU (by its UUID) through every phase: the SM clock, power
 (the driver's average over the last second, and its instant reading where it has one), the temperature and the clock's
 throttle reasons; a phase's statistics skip its first second. The codes are uniform s8 and the commit's bytes uniform,
 so power reads high for served values.
@@ -61,6 +64,8 @@ def _module(name: str, path: Path) -> Any:
 #: s8_simple's check (sha512_rows has a check.py too)
 C = _module("s8_simple_check", HERE / "check.py")
 MS = (16384, 4096)
+#: ``--gemm``: this directory's linear, or KP2-S8's wgmma kernel at `crosscheck`'s arm of that name
+GEMMS = {"simple": None, "wgmma": "default", "wgmma-tuned": "tuned"}
 PHASES = ("linears", "commit", "corun", "corun_commit_high", "corun_linears_high", "linears_again", "commit_again")
 #: NVML's clock throttle reasons, by bit
 THROTTLE = {0x1: "gpu_idle", 0x2: "applications_clocks", 0x4: "sw_power_cap", 0x8: "hw_slowdown", 0x10: "sync_boost",
@@ -204,14 +209,28 @@ def _mark() -> torch.cuda.Event:
     return e
 
 
-def layer_call(ops: list[tuple[str, tuple]]):
+def layer_call(ops: list[tuple[str, tuple]], linear):
     def call(marks: list) -> list[torch.Tensor]:
         out = []
         for name, args in ops:
-            out.append(S.linear(*args))
+            out.append(linear(*args))
             marks.append((name, _mark()))
         return out
     return call
+
+
+def gemm(name: str, ops: list[tuple[str, tuple]]) -> tuple[Any, dict[str, Any], bool]:
+    """``--gemm``'s linear, what its kernels are and whether they pass their check: `s8_simple.linear` and each linear's
+    PTX audit, or a wgmma arm of `crosscheck` (its config a linear) and the cubin's `Lib.identity`."""
+    if name == "simple":
+        fused = ptx(ops)
+        return S.linear, {"ptx": fused}, all(v["ok"] for v in fused.values())
+    import crosscheck as X
+    import wgmma as W
+    linear, cfg = X.arm(GEMMS[name])
+    ident = W.lib().identity()
+    cfgs = {n: str(cfg(x.shape[0], w.shape[0], x.shape[1])) for n, (x, _, w, _) in ops}
+    return linear, {"cubin": ident, "cfg": cfgs}, ident.get("ok") is True
 
 
 def phase(work: list[tuple[str, torch.cuda.Stream, Any]], reps: int, telemetry: Telemetry, sleep_cycles: int) -> dict[str, Any]:
@@ -270,8 +289,8 @@ def ptx(ops: list[tuple[str, tuple]]) -> dict[str, Any]:
 
 def at(m: int, engine: E.Engine, a: argparse.Namespace, telemetry: Telemetry) -> dict[str, Any]:
     ops = linears(m, a.seed)
-    lin = layer_call(ops)
-    fused = ptx(ops)
+    linear, kernel, kernel_ok = gemm(a.gemm, ops)
+    lin = layer_call(ops, linear)
     com, info = commit(engine, m, a.variant, a.leaf_minb)
     hi = -(1 << 20)  # out of range: CUDA maps it to the highest priority
     plain = {"linears": torch.cuda.Stream(), "commit": torch.cuda.Stream()}
@@ -287,8 +306,8 @@ def at(m: int, engine: E.Engine, a: argparse.Namespace, telemetry: Telemetry) ->
             w = phase(configs[name], 1, telemetry, a.sleep_cycles)
         est[name] = w["ms"]
     res: dict[str, Any] = {"m": m, "commit": info, "linears": {n: list(C.SHAPES[n]) for n in C.LAYER},
-                           "variant": a.variant or engine.default, "leaf_minb": a.leaf_minb, "ptx": fused,
-                           "ptx_ok": all(v["ok"] for v in fused.values()), "phases": {}}
+                           "variant": a.variant or engine.default, "leaf_minb": a.leaf_minb, "gemm": a.gemm,
+                           "kernel": kernel, "kernel_ok": kernel_ok, "phases": {}}
     ref: dict[str, list[torch.Tensor]] = {}
     for name in PHASES:
         reps = max(a.min_reps, min(a.max_reps, math.ceil(a.phase_s * 1e3 / est[name.removesuffix("_again")])))
@@ -339,7 +358,13 @@ def summary(doc: dict[str, Any]) -> str:
         lines.append(f"M = {r['m']}: linears alone {r['alone_ms']['linears']:.3f} ms, commit alone {r['alone_ms']['commit']:.3f} "
                      f"ms ({r['commit']['bytes'] / 1e9:.2f} GB), sum {r['sum_ms']:.3f} ms; drift linears "
                      f"{100 * r['drift']['linears']:+.2f}%, commit {100 * r['drift']['commit']:+.2f}%")
-        lines.append(f"  fused PTX audit ok {r['ptx_ok']}: " + ", ".join(f"{n} {v['digest']}" for n, v in r["ptx"].items()))
+        k = r["kernel"]
+        if "ptx" in k:
+            lines.append(f"  gemm {r['gemm']}: fused PTX audit ok {r['kernel_ok']}: "
+                         + ", ".join(f"{n} {v['digest']}" for n, v in k["ptx"].items()))
+        else:
+            lines.append(f"  gemm {r['gemm']}: cubin {k['cubin'].get('sha256', '?')[:16]} identity ok {r['kernel_ok']}; "
+                         + ", ".join(f"{n} {c}" for n, c in k["cfg"].items()))
         for name in ("linears", "commit"):
             lines.append(f"  {name:20s} {p[name]['ms']:9.3f} ms x{p[name]['reps']:<4d} {_t(p[name]['telemetry'])}")
         for name, c in r["corun"].items():
@@ -364,6 +389,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--variant", default=None, help="the row kernel's variant (default: the build's, 0000)")
     ap.add_argument("--leaf-minb", type=int, choices=(0, 1, 2), default=0)
     ap.add_argument("--seed", type=int, default=20261026)
+    ap.add_argument("--gemm", choices=tuple(GEMMS), default="simple")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     import triton
@@ -389,11 +415,11 @@ def main(argv: list[str] | None = None) -> int:
         doc["seconds"] = round(time.monotonic() - t0, 3)
         doc["telemetry_error"] = telemetry.error
         doc["words_equal"] = bool(doc["runs"]) and all(c["words_equal"] for r in doc["runs"] for c in r["corun"].values())
-        doc["ptx_ok"] = bool(doc["runs"]) and all(r["ptx_ok"] for r in doc["runs"])
-        (a.out / "corun.json").write_text(json.dumps(doc, indent=1) + "\n")
+        doc["kernel_ok"] = bool(doc["runs"]) and all(r["kernel_ok"] for r in doc["runs"])
+        (a.out / f"corun-{a.gemm}.json").write_text(json.dumps(doc, indent=1) + "\n")
         if doc["runs"]:
-            (a.out / "summary.txt").write_text(summary(doc))
-    return 0 if doc["words_equal"] and doc["ptx_ok"] else 1
+            (a.out / f"summary-{a.gemm}.txt").write_text(summary(doc))
+    return 0 if doc["words_equal"] and doc["kernel_ok"] else 1
 
 
 if __name__ == "__main__":
