@@ -53,8 +53,8 @@ theorem CompliesCK : Guarantees.CompliesCK := by
         linarith
       calc ((d.unregistered (P.gates u)).card : ℝ) ≤ α * (P.gates u).card := hr'
         _ ≤ α * Γ := mul_le_mul_of_nonneg_left hs' hα.le
-  obtain ⟨d', P', hpad, hck⟩ := Verity.SecurityProofs.Padding d B Γ _ P hB (fun u => (hP u).1) hk
-  exact ⟨B, P, d', P', hpad, hck⟩
+  obtain ⟨d', P', hpad, hB', hcard, hun⟩ := Verity.SecurityProofs.Padding d B Γ P univ hB fun u _ => (hP u).1
+  exact ⟨B, P, d', P', hpad, ⟨hB', fun u => (hcard u).1 (mem_univ u), fun u => (hun u).symm ▸ hk u⟩⟩
 
 theorem ExpandComplies : Guarantees.ExpandComplies := by
   intro Γ W α d hα hw hW ⟨B, P, hP⟩

@@ -7,9 +7,9 @@ import Mathlib.Tactic.Linarith
 # Proofs of padding and of Theorem 3 at the serving blocks
 
 * `Pad.unregistered`: a padded block reads the unregistered gates its block read;
-* `PadBuild`: the padding of a Boolean declaration's blocks to `c` gates each. `d`'s gates come first, then one
-  registered input gate `z` (the constant the padding reads), then block `u`'s `c - |I_u|` padding gates, each reading
-  `z` and computing `0`.
+* `PadBuild`: the padding of a Boolean declaration's blocks, `n u` gates into block `u`. `d`'s gates come first, then
+  one registered input gate `z` (the constant the padding reads), then the padding gates, each reading `z` and computing
+  `0`. `Padding` pads the chosen blocks to `c` gates and the others by none.
 -/
 
 namespace Verity
@@ -41,34 +41,34 @@ theorem Pad.unregistered {d d' : Declaration} {B : ℕ} {P : Partition d.D B} {P
 
 namespace PadBuild
 
-variable {d : Declaration} {B : ℕ} (P : Partition d.D B) (c : ℕ)
+variable {d : Declaration} {B : ℕ} (P : Partition d.D B) (n : Fin B → ℕ)
 
-/-- The number of padding gates: `c - |I_u|` in block `u`. -/
-abbrev T : ℕ := ∑ u : Fin B, (c - (P.gates u).card)
+/-- The number of padding gates: `n u` in block `u`. -/
+abbrev T {d : Declaration} {B : ℕ} (_P : Partition d.D B) (n : Fin B → ℕ) : ℕ := ∑ u : Fin B, n u
 
 /-- `d`'s gate `g`. -/
-@[reducible] def emb (g : Fin d.D.N) : Fin (d.D.N + 1 + T P c) := ⟨g, by have := g.2; omega⟩
+@[reducible] def emb (g : Fin d.D.N) : Fin (d.D.N + 1 + T P n) := ⟨g, by have := g.2; omega⟩
 
 /-- The registered input gate the padding reads. -/
-@[reducible] def z : Fin (d.D.N + 1 + T P c) := ⟨d.D.N, by omega⟩
+@[reducible] def z : Fin (d.D.N + 1 + T P n) := ⟨d.D.N, by omega⟩
 
 /-- Padding gate `p`. -/
-@[reducible] def pad (p : Fin (T P c)) : Fin (d.D.N + 1 + T P c) := ⟨d.D.N + 1 + p, by have := p.2; omega⟩
+@[reducible] def pad (p : Fin (T P n)) : Fin (d.D.N + 1 + T P n) := ⟨d.D.N + 1 + p, by have := p.2; omega⟩
 
-theorem emb_inj : Function.Injective (emb P c) := fun _ _ h => Fin.ext (congrArg Fin.val h :)
+theorem emb_inj : Function.Injective (emb P n) := fun _ _ h => Fin.ext (congrArg Fin.val h :)
 
 /-- `emb` as an embedding. -/
-@[reducible] def embE : Fin d.D.N ↪ Fin (d.D.N + 1 + T P c) := ⟨emb P c, emb_inj P c⟩
+@[reducible] def embE : Fin d.D.N ↪ Fin (d.D.N + 1 + T P n) := ⟨emb P n, emb_inj P n⟩
 
-theorem pad_inj : Function.Injective (pad P c) := fun a b h => by
+theorem pad_inj : Function.Injective (pad P n) := fun a b h => by
   have := congrArg Fin.val h
   simp only at this
   exact Fin.ext (by omega)
 
 /-- `pad` as an embedding. -/
-def padE : Fin (T P c) ↪ Fin (d.D.N + 1 + T P c) := ⟨pad P c, pad_inj P c⟩
+def padE : Fin (T P n) ↪ Fin (d.D.N + 1 + T P n) := ⟨pad P n, pad_inj P n⟩
 
-theorem slot (b : Fin (d.D.N + 1 + T P c)) : (∃ g, b = emb P c g) ∨ b = z P c ∨ ∃ p, b = pad P c p := by
+theorem slot (b : Fin (d.D.N + 1 + T P n)) : (∃ g, b = emb P n g) ∨ b = z P n ∨ ∃ p, b = pad P n p := by
   have := b.2
   by_cases h : b.val < d.D.N
   · exact Or.inl ⟨⟨b, h⟩, Fin.ext rfl⟩
@@ -76,66 +76,66 @@ theorem slot (b : Fin (d.D.N + 1 + T P c)) : (∃ g, b = emb P c g) ∨ b = z P 
     · exact Or.inr (Or.inl (Fin.ext h'))
     · exact Or.inr (Or.inr ⟨⟨b - (d.D.N + 1), by omega⟩, Fin.ext (by simp only; omega)⟩)
 
-theorem emb_ne_z (g : Fin d.D.N) : emb P c g ≠ z P c := fun h => by
+theorem emb_ne_z (g : Fin d.D.N) : emb P n g ≠ z P n := fun h => by
   have := congrArg Fin.val h
   simp only at this
   omega
 
-theorem emb_ne_pad (g : Fin d.D.N) (p : Fin (T P c)) : emb P c g ≠ pad P c p := fun h => by
+theorem emb_ne_pad (g : Fin d.D.N) (p : Fin (T P n)) : emb P n g ≠ pad P n p := fun h => by
   have := congrArg Fin.val h
   simp only at this
   omega
 
-theorem z_ne_pad (p : Fin (T P c)) : z P c ≠ pad P c p := fun h => by
+theorem z_ne_pad (p : Fin (T P n)) : z P n ≠ pad P n p := fun h => by
   have := congrArg Fin.val h
   simp only at this
   omega
 
 /-- Which gates are inputs: `d`'s inputs and `z`. -/
-def isIn (b : Fin (d.D.N + 1 + T P c)) : Bool :=
+def isIn (b : Fin (d.D.N + 1 + T P n)) : Bool :=
   if h : b.val < d.D.N then d.D.isInput ⟨b, h⟩ else decide (b.val = d.D.N)
 
 /-- What each gate reads: `d`'s gates their wires, the padding `z`. -/
-def rd (b : Fin (d.D.N + 1 + T P c)) : Finset (Fin (d.D.N + 1 + T P c)) :=
-  if h : b.val < d.D.N then (d.D.reads ⟨b, h⟩).map (embE P c) else if b.val = d.D.N then ∅ else {z P c}
+def rd (b : Fin (d.D.N + 1 + T P n)) : Finset (Fin (d.D.N + 1 + T P n)) :=
+  if h : b.val < d.D.N then (d.D.reads ⟨b, h⟩).map (embE P n) else if b.val = d.D.N then ∅ else {z P n}
 
 /-- The blocks: `d`'s gates in theirs, `z` in none, padding gate `p` in the block of its index. -/
-def unitF (b : Fin (d.D.N + 1 + T P c)) : Option (Fin B) :=
+def unitF (b : Fin (d.D.N + 1 + T P n)) : Option (Fin B) :=
   if h : b.val < d.D.N then P.unit ⟨b, h⟩
   else if _ : b.val = d.D.N then none
-  else some (finSigmaFinEquiv.symm (⟨b.val - (d.D.N + 1), by have := b.2; omega⟩ : Fin (T P c))).1
+  else some (finSigmaFinEquiv.symm (⟨b.val - (d.D.N + 1), by have := b.2; omega⟩ : Fin (T P n))).1
 
-theorem isIn_emb (g : Fin d.D.N) : isIn P c (emb P c g) = d.D.isInput g := by
-  rw [isIn, dif_pos (show (emb P c g).val < d.D.N from g.2)]
+theorem isIn_emb (g : Fin d.D.N) : isIn P n (emb P n g) = d.D.isInput g := by
+  rw [isIn, dif_pos (show (emb P n g).val < d.D.N from g.2)]
 
-theorem isIn_z : isIn P c (z P c) = true := by
-  rw [isIn, dif_neg (show ¬ (z P c).val < d.D.N from lt_irrefl _)]
+theorem isIn_z : isIn P n (z P n) = true := by
+  rw [isIn, dif_neg (show ¬ (z P n).val < d.D.N from lt_irrefl _)]
   simp
 
-theorem isIn_pad (p : Fin (T P c)) : isIn P c (pad P c p) = false := by
-  rw [isIn, dif_neg (show ¬ (pad P c p).val < d.D.N by simp only; omega), decide_eq_false_iff_not]
+theorem isIn_pad (p : Fin (T P n)) : isIn P n (pad P n p) = false := by
+  rw [isIn, dif_neg (show ¬ (pad P n p).val < d.D.N by simp only; omega), decide_eq_false_iff_not]
   simp only
   omega
 
-theorem rd_emb (g : Fin d.D.N) : rd P c (emb P c g) = (d.D.reads g).map (embE P c) := by
-  rw [rd, dif_pos (show (emb P c g).val < d.D.N from g.2)]
+theorem rd_emb (g : Fin d.D.N) : rd P n (emb P n g) = (d.D.reads g).map (embE P n) := by
+  rw [rd, dif_pos (show (emb P n g).val < d.D.N from g.2)]
 
-theorem rd_z : rd P c (z P c) = ∅ := by
-  rw [rd, dif_neg (show ¬ (z P c).val < d.D.N from lt_irrefl _), if_pos (show (z P c).val = d.D.N from rfl)]
+theorem rd_z : rd P n (z P n) = ∅ := by
+  rw [rd, dif_neg (show ¬ (z P n).val < d.D.N from lt_irrefl _), if_pos (show (z P n).val = d.D.N from rfl)]
 
-theorem rd_pad (p : Fin (T P c)) : rd P c (pad P c p) = {z P c} := by
-  rw [rd, dif_neg (show ¬ (pad P c p).val < d.D.N by simp only; omega),
-    if_neg (show ¬ (pad P c p).val = d.D.N by simp only; omega)]
+theorem rd_pad (p : Fin (T P n)) : rd P n (pad P n p) = {z P n} := by
+  rw [rd, dif_neg (show ¬ (pad P n p).val < d.D.N by simp only; omega),
+    if_neg (show ¬ (pad P n p).val = d.D.N by simp only; omega)]
 
-theorem unitF_emb (g : Fin d.D.N) : unitF P c (emb P c g) = P.unit g := by
-  rw [unitF, dif_pos (show (emb P c g).val < d.D.N from g.2)]
+theorem unitF_emb (g : Fin d.D.N) : unitF P n (emb P n g) = P.unit g := by
+  rw [unitF, dif_pos (show (emb P n g).val < d.D.N from g.2)]
 
-theorem unitF_z : unitF P c (z P c) = none := by
-  rw [unitF, dif_neg (show ¬ (z P c).val < d.D.N from lt_irrefl _), dif_pos (show (z P c).val = d.D.N from rfl)]
+theorem unitF_z : unitF P n (z P n) = none := by
+  rw [unitF, dif_neg (show ¬ (z P n).val < d.D.N from lt_irrefl _), dif_pos (show (z P n).val = d.D.N from rfl)]
 
-theorem unitF_pad (p : Fin (T P c)) : unitF P c (pad P c p) = some (finSigmaFinEquiv.symm p).1 := by
-  rw [unitF, dif_neg (show ¬ (pad P c p).val < d.D.N by simp only; omega),
-    dif_neg (show ¬ (pad P c p).val = d.D.N by simp only; omega)]
+theorem unitF_pad (p : Fin (T P n)) : unitF P n (pad P n p) = some (finSigmaFinEquiv.symm p).1 := by
+  rw [unitF, dif_neg (show ¬ (pad P n p).val < d.D.N by simp only; omega),
+    dif_neg (show ¬ (pad P n p).val = d.D.N by simp only; omega)]
   congr 3
   exact Fin.ext (by simp)
 
@@ -143,12 +143,12 @@ variable (hB : d.D.Boolean)
 
 /-- The padded circuit. -/
 @[reducible] def circuit : Circuit where
-  N := d.D.N + 1 + T P c
+  N := d.D.N + 1 + T P n
   w _ := 1
-  isInput := isIn P c
-  reads := rd P c
+  isInput := isIn P n
+  reads := rd P n
   reads_lt b a ha := by
-    rcases slot P c b with ⟨g, rfl⟩ | rfl | ⟨p, rfl⟩
+    rcases slot P n b with ⟨g, rfl⟩ | rfl | ⟨p, rfl⟩
     · rw [rd_emb, mem_map] at ha
       obtain ⟨a, ha, rfl⟩ := ha
       exact (d.D.reads_lt g a ha :)
@@ -158,116 +158,114 @@ variable (hB : d.D.Boolean)
       show d.D.N < d.D.N + 1 + p
       omega
   input_reads b hb := by
-    rcases slot P c b with ⟨g, rfl⟩ | rfl | ⟨p, rfl⟩
+    rcases slot P n b with ⟨g, rfl⟩ | rfl | ⟨p, rfl⟩
     · rw [isIn_emb] at hb
       rw [rd_emb, d.D.input_reads g hb, map_empty]
-    · exact rd_z P c
+    · exact rd_z P n
     · simp [isIn_pad] at hb
   op b v := if h : b.val < d.D.N then
-      (d.D.op ⟨b, h⟩ fun a => (v (emb P c a)).cast (hB.one_bit a).symm).cast (hB.one_bit _)
+      (d.D.op ⟨b, h⟩ fun a => (v (emb P n a)).cast (hB.one_bit a).symm).cast (hB.one_bit _)
     else 0
   op_congr b v v' h := by
     by_cases hb : b.val < d.D.N
     · rw [dif_pos hb, dif_pos hb]
       congr 1
       refine d.D.op_congr _ _ _ fun a ha => ?_
-      rw [h (emb P c a) (by rw [rd, dif_pos hb]; exact mem_map_of_mem _ ha)]
+      rw [h (emb P n a) (by rw [rd, dif_pos hb]; exact mem_map_of_mem _ ha)]
     · rw [dif_neg hb, dif_neg hb]
-  outputs := d.D.outputs.map (embE P c)
+  outputs := d.D.outputs.map (embE P n)
 
 /-- The padded declaration: `d`'s registered gates and `z`. -/
 @[reducible] def decl : Declaration where
-  D := circuit P c hB
-  θ := d.θ.map (embE P c) ∪ {z P c}
+  D := circuit P n hB
+  θ := d.θ.map (embE P n) ∪ {z P n}
   θ_input b hb := by
     rcases mem_union.1 hb with hb | hb
     · obtain ⟨g, hg, rfl⟩ := mem_map.1 hb
-      show isIn P c (emb P c g) = true
+      show isIn P n (emb P n g) = true
       rw [isIn_emb]
       exact d.θ_input g hg
     · rw [mem_singleton.1 hb]
-      exact isIn_z P c
+      exact isIn_z P n
 
 /-- The padded partition. -/
-def part : Partition (decl P c hB).D B where
-  unit := unitF P c
+def part : Partition (decl P n hB).D B where
+  unit := unitF P n
   input_iff b := by
-    show unitF P c b = none ↔ isIn P c b = true
-    rcases slot P c b with ⟨g, rfl⟩ | rfl | ⟨p, rfl⟩
+    show unitF P n b = none ↔ isIn P n b = true
+    rcases slot P n b with ⟨g, rfl⟩ | rfl | ⟨p, rfl⟩
     · rw [unitF_emb, isIn_emb]
       exact P.input_iff g
     · simp [unitF_z, isIn_z]
     · simp [unitF_pad, isIn_pad]
 
 /-- The padding is a `Pad`. -/
-def pad_ : Pad d P (decl P c hB) (part P c hB) where
+def pad_ : Pad d P (decl P n hB) (part P n hB) where
   M :=
-    { emb := emb P c
-      emb_inj := emb_inj P c
+    { emb := emb P n
+      emb_inj := emb_inj P n
       emb_w g := (hB.one_bit g).symm
-      isInput_emb g := isIn_emb P c g
-      reads_emb g _ := rd_emb P c g
+      isInput_emb g := isIn_emb P n g
+      reads_emb g _ := rd_emb P n g
       op_emb g _ v := by
-        show (((if h : (emb P c g).val < d.D.N then _ else 0) : BitVec 1)).cast _ = _
-        rw [dif_pos (show (emb P c g).val < d.D.N from g.2)]
+        show (((if h : (emb P n g).val < d.D.N then _ else 0) : BitVec 1)).cast _ = _
+        rw [dif_pos (show (emb P n g).val < d.D.N from g.2)]
         simp only [BitVec.cast_cast, BitVec.cast_eq]
-      outputs_emb o ho := mem_map_of_mem (embE P c) ho }
+      outputs_emb o ho := mem_map_of_mem (embE P n) ho }
   θ_emb g := by
-    show emb P c g ∈ d.θ.map (embE P c) ∪ {z P c} ↔ _
-    rw [mem_union, mem_singleton, or_iff_left (emb_ne_z P c g)]
-    exact mem_map' (embE P c)
-  unit_emb g := unitF_emb P c g
+    show emb P n g ∈ d.θ.map (embE P n) ∪ {z P n} ↔ _
+    rw [mem_union, mem_singleton, or_iff_left (emb_ne_z P n g)]
+    exact mem_map' (embE P n)
+  unit_emb g := unitF_emb P n g
   pad_input g' hg' hi := by
-    show g' ∈ d.θ.map (embE P c) ∪ {z P c}
-    rcases slot P c g' with ⟨g, rfl⟩ | rfl | ⟨p, rfl⟩
+    show g' ∈ d.θ.map (embE P n) ∪ {z P n}
+    rcases slot P n g' with ⟨g, rfl⟩ | rfl | ⟨p, rfl⟩
     · exact absurd ⟨g, rfl⟩ hg'
     · exact mem_union_right _ (mem_singleton_self _)
     · exact absurd hi (by simp [isIn_pad])
   pad_reads g' hg' a ha := by
-    show a ∈ d.θ.map (embE P c) ∪ {z P c}
-    change a ∈ rd P c g' at ha
-    rcases slot P c g' with ⟨g, rfl⟩ | rfl | ⟨p, rfl⟩
+    show a ∈ d.θ.map (embE P n) ∪ {z P n}
+    change a ∈ rd P n g' at ha
+    rcases slot P n g' with ⟨g, rfl⟩ | rfl | ⟨p, rfl⟩
     · exact absurd ⟨g, rfl⟩ hg'
     · simp [rd_z] at ha
     · rw [rd_pad, mem_singleton] at ha
       exact mem_union_right _ (mem_singleton.2 ha)
 
 theorem gates_part (u : Fin B) :
-    (part P c hB).gates u =
-      (P.gates u).map (embE P c) ∪ (univ.filter fun p : Fin (T P c) => (finSigmaFinEquiv.symm p).1 = u).map
-        (padE P c) := by
+    (part P n hB).gates u =
+      (P.gates u).map (embE P n) ∪ (univ.filter fun p : Fin (T P n) => (finSigmaFinEquiv.symm p).1 = u).map
+        (padE P n) := by
   ext b
   rw [Partition.mem_gates, mem_union, mem_map, mem_map]
-  change unitF P c b = some u ↔ _
-  rcases slot P c b with ⟨g, rfl⟩ | rfl | ⟨p, rfl⟩
+  change unitF P n b = some u ↔ _
+  rcases slot P n b with ⟨g, rfl⟩ | rfl | ⟨p, rfl⟩
   · rw [unitF_emb, ← P.mem_gates]
     constructor
     · exact fun h => Or.inl ⟨g, h, rfl⟩
     · rintro (⟨g', hg', he⟩ | ⟨p, _, he⟩)
-      · rwa [(emb_inj P c he :)] at hg'
-      · exact absurd he.symm (emb_ne_pad P c g p)
+      · rwa [(emb_inj P n he :)] at hg'
+      · exact absurd he.symm (emb_ne_pad P n g p)
   · rw [unitF_z]
     simp only [reduceCtorEq, false_iff, not_or, not_exists, not_and]
-    exact ⟨fun g _ he => emb_ne_z P c g he, fun p _ he => z_ne_pad P c p he.symm⟩
+    exact ⟨fun g _ he => emb_ne_z P n g he, fun p _ he => z_ne_pad P n p he.symm⟩
   · rw [unitF_pad, Option.some_inj]
     constructor
     · exact fun h => Or.inr ⟨p, mem_filter.2 ⟨mem_univ _, h⟩, rfl⟩
     · rintro (⟨g, _, he⟩ | ⟨p', hp', he⟩)
-      · exact absurd he (emb_ne_pad P c g p)
-      · rw [← (pad_inj P c he :)]
+      · exact absurd he (emb_ne_pad P n g p)
+      · rw [← (pad_inj P n he :)]
         exact (mem_filter.1 hp').2
 
-theorem card_gates_part (hc : ∀ u, (P.gates u).card ≤ c) (u : Fin B) : ((part P c hB).gates u).card = c := by
+theorem card_gates_part (u : Fin B) : ((part P n hB).gates u).card = (P.gates u).card + n u := by
   rw [gates_part, card_union_of_disjoint, card_map, card_map]
-  · rw [card_filter_fst (n := fun u => c - (P.gates u).card) (· = u)]
+  · rw [card_filter_fst (n := n) (· = u)]
     simp only [sum_filter, sum_ite_eq', mem_univ, if_true]
-    have := hc u
-    omega
   · rw [disjoint_left]
     rintro b hb hb'
     obtain ⟨g, _, rfl⟩ := mem_map.1 hb
     obtain ⟨p, _, he⟩ := mem_map.1 hb'
-    exact emb_ne_pad P c g p he.symm
+    exact emb_ne_pad P n g p he.symm
 
 end PadBuild
 
@@ -278,24 +276,31 @@ namespace Verity.SecurityProofs
 open Finset
 
 theorem Padding : Guarantees.Padding := by
-  intro d B c k P hB hc hk
-  refine ⟨PadBuild.decl P c hB, PadBuild.part P c hB, ⟨PadBuild.pad_ P c hB⟩, ?_, ?_, ?_⟩
+  classical
+  intro d B c P S hB hc
+  let n : Fin B → ℕ := fun u => if u ∈ S then c - (P.gates u).card else 0
+  refine ⟨PadBuild.decl P n hB, PadBuild.part P n hB, ⟨PadBuild.pad_ P n hB⟩, ?_, fun u => ⟨?_, ?_⟩, fun u => ?_⟩
   · exact
       { one_bit := fun _ => rfl
         fanin_pos := fun b hb => by
-          change PadBuild.isIn P c b = false at hb
-          change (PadBuild.rd P c b).Nonempty
-          rcases PadBuild.slot P c b with ⟨g, rfl⟩ | rfl | ⟨p, rfl⟩
+          change PadBuild.isIn P n b = false at hb
+          change (PadBuild.rd P n b).Nonempty
+          rcases PadBuild.slot P n b with ⟨g, rfl⟩ | rfl | ⟨p, rfl⟩
           · rw [PadBuild.isIn_emb] at hb
             rw [PadBuild.rd_emb]
             exact (hB.fanin_pos g hb).map
           · simp [PadBuild.isIn_z] at hb
           · rw [PadBuild.rd_pad]
             exact singleton_nonempty _ }
-  · exact PadBuild.card_gates_part P c hB hc
-  · intro u
-    rw [(PadBuild.pad_ P c hB).unregistered u, card_map]
-    exact hk u
+  · intro hu
+    rw [PadBuild.card_gates_part]
+    have := hc u hu
+    simp only [n, if_pos hu]
+    omega
+  · intro hu
+    rw [PadBuild.card_gates_part]
+    simp [n, hu]
+  · rw [(PadBuild.pad_ P n hB).unregistered u, card_map]
 
 theorem ServingBlockSum : Guarantees.ServingBlockSum := by
   intro C B P S V ω qS qI qDark hV hS hI hD

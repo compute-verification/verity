@@ -5,8 +5,8 @@ import Definitions.Core.Formalism
 
 Stated on core's circuit and partition (`Definitions.Core.Formalism`). Appendix A's translation of a `(c, k)`-partition
 into NCI's coverings is `Nci.Guarantees.PartitionCovers`, and NCI's policy as a padded `(c, k)`-partition is
-`Nci.Guarantees.CompliesCK`. The serving blocks are a `Padding` at `(c_S, k_S)`, summed by `ServingBlockSum`, with each
-serving block's inference cap from `InferenceCap`.
+`Nci.Guarantees.CompliesCK`. The serving blocks are a `Padding` at `c_S` of the blocks reading at most `k_S`, summed by
+`ServingBlockSum`, with each serving block's inference cap from `InferenceCap`.
 -/
 
 namespace Verity.Guarantees
@@ -44,13 +44,17 @@ def Counting : Prop :=
       (c : ℝ) / q * ∑ v ∈ V, ω v ≤ d.D.size d.D.computed ∧
         ∀ T₀ : ℝ, 0 < T₀ → (c : ℝ) / (T₀ * q) * ∑ v ∈ V, ω v ≤ slowdown d.D T₀
 
-/-- **Padding to a `(c, k)`-partition.** On a Boolean declaration, blocks of at most `c` gates that each read at most `k`
-unregistered input bits pad to a `(c, k)`-partition of a declaration that contains it (`Pad`). The serving blocks are
-this at `(c_S, k_S)`: each server's region between two consecutive wipes, padded to exactly `c_S` gates. -/
+/-- **Padding blocks to `c` gates.** On a Boolean declaration, the blocks `S` of at most `c` gates pad to exactly `c`
+gates each in a Boolean declaration that contains it (`Pad`); the other blocks keep their gates, and every block reads as
+many unregistered input bits as before. With `S` every block, each reading at most `k`, the padded partition is a
+`(c, k)`-partition. The serving blocks are `S` at `c_S`, each reading at most `k_S`: each server's region between two
+consecutive wipes, padded to exactly `c_S` gates, beside the dark remainder. -/
 def Padding : Prop :=
-  ∀ (d : Declaration) (B c k : ℕ) (P : Partition d.D B), d.D.Boolean →
-    (∀ u, (P.gates u).card ≤ c) → (∀ u, (d.unregistered (P.gates u)).card ≤ k) →
-    ∃ (d' : Declaration) (P' : Partition d'.D B), Nonempty (Pad d P d' P') ∧ P'.IsCK d' c k
+  ∀ (d : Declaration) (B c : ℕ) (P : Partition d.D B) (S : Finset (Fin B)), d.D.Boolean →
+    (∀ u ∈ S, (P.gates u).card ≤ c) →
+    ∃ (d' : Declaration) (P' : Partition d'.D B), Nonempty (Pad d P d' P') ∧ d'.D.Boolean ∧
+      (∀ u, (u ∈ S → (P'.gates u).card = c) ∧ (u ∉ S → (P'.gates u).card = (P.gates u).card)) ∧
+      ∀ u, (d'.unregistered (P'.gates u)).card = (d.unregistered (P.gates u)).card
 
 /-- **Theorem 3 at the serving blocks** (the serving-block bound's shape). Let the blocks `S` of a partition be the
 serving blocks and the others the dark remainder. If each serving block's counted weight is at most both its serving cap
