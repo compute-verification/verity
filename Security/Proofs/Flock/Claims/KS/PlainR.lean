@@ -197,14 +197,15 @@ theorem accR_cols {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Pr
   rw [hx] at hu
   cases hd : decR rd x ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst)
       ((Claims.run sha512 P (VR rd) x ω r).msgs.map (RecDeploy.outCoin ∘ Prod.snd)) with
-  | none => simp [Claims.Flock.lookCol] at hu
+  | none => rw [hd] at hu; simp [Claims.Flock.lookCol] at hu
   | some d =>
+    rw [hd] at hu
     cases hrr : runOfDecR d 0 with
     | none => simp [colsOf, hrr, Claims.Flock.lookCol] at hu
     | some rr =>
-      try simp only [hrr, colsOf] at hu
-      obtain ⟨st, hst, hm⟩ := runOfDecR_m hrr
+      simp only [colsOf, hrr] at hu
       obtain ⟨⟨s, spec, sts⟩, -, -, -, -, -, -, hv, -, -, -, -, -, rfl⟩ := decR_some hd
+      obtain ⟨st, hst, hm⟩ := runOfDecR_m hrr
       refine ⟨spec, st, tables_head hv hst, ?_⟩
       obtain ⟨p, hp, rfl⟩ := exists_of_lookCol hu
       simp only [Bool.false_eq_true, ↓reduceIte]
@@ -379,7 +380,12 @@ theorem decideFree_VR (rd : Claims.Msg → Option FinalP) : DecideFree sha512 (V
   | decide s spec sts link c₁ mids f =>
     have hso := actR_setupOf hact
     obtain ⟨-, -, -, -, hk, hkp⟩ := accR_length rd (x := x) (as := as) (cs := cs ++ [c]) (by simp [hl]) hacc'
-    have hcl : 0 < cs.length := by omega
+    have hcl : 0 < cs.length := by
+      have e := hl.symm.trans hk
+      have h1 : 1 < cs.length + 1 := by
+        rw [e]
+        exact Nat.lt_of_lt_of_le (by decide) (Nat.le_add_right 2 _)
+      exact Nat.lt_of_succ_lt_succ h1
     obtain ⟨c₀, cs', rfl⟩ : ∃ c₀ cs', cs = c₀ :: cs' := by
       rcases cs with _ | ⟨c₀, cs'⟩
       · exact absurd hcl (Nat.lt_irrefl 0)
