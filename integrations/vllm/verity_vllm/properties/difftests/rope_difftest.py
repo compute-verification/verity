@@ -12,8 +12,8 @@ from __future__ import annotations
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry.prims import BF16
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry.prims import BF16
 
 SEMANTIC_ID = "b1/RoPE@v1"
 

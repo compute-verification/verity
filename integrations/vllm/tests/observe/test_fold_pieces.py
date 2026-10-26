@@ -11,7 +11,7 @@ from verity.ml.circuits.defs import bind
 from verity_vllm.observe.fold.fold import FoldError, fold
 from verity_vllm.observe.fold.resolver import Compute, Const, Gather, Group, Pieces, Profile
 from verity_vllm.observe.fold.views import row_view
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 from tests.observe import test_fold_synthetic as T
 from tests.observe.test_fold_synthetic import memory  # noqa: F401  (the real memory model, or the stub while it is a skeleton)
 

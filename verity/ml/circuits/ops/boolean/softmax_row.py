@@ -14,14 +14,14 @@ rows; `gemm.GEMM_HOPPER` binds the H200's step). Its q row is 16·D bits and eac
 reads is over C-Flock's 111-byte floor, which a unit of short rows alone (a softmax row at T <= 55) doesn't reach. A score
 scale is folded into q's producer, as a power of two.
 
-`SoftmaxRow` is `SoftmaxRef_v1{N, bf16}`'s dataflow (`verity_vllm.program.registry.ref_prims`) on the GPU's operations, so a kernel
+`SoftmaxRow` is `SoftmaxRef_v1{N, bf16}`'s dataflow (`verity.ml.definitions.registry.ref_prims`) on the GPU's operations, so a kernel
 matches it bit for bit with ``add.rn.f32``, ``mul.rn.f32``, ``div.rn.f32``, ``ex2.approx.ftz.f32`` and ``cvt.rn.bf16.f32``:
 
 - ``m`` is the first greatest x_i (+0 and -0 one value, so the earlier is kept, as `F32MaxRef_v1`'s fold keeps it), or 0x7FFF
   when any x_i is a NaN.
 - ``e_j = MUFU.EX2.FTZ(RN(RN(f32(x_j) - f32(m)) * L))``, L = RN32(log2 e) = 0x3FB8AA3B (`MufuEx2Ftz_v2`'s builder), made once
   for each j. The reference's `F32ExpRn_v1` has no Boolean form, and MUFU.EX2 is what an sm_90 kernel computes, read from the
-  sm_89 table as the H200 Definitions read it (`verity_vllm.program.kernels.fa3_model`: assumed identical on sm_90).
+  sm_89 table as the H200 Definitions read it (`verity.ml.definitions.numerics.fa3_model`: assumed identical on sm_90).
 - ``s = (((+0 + e_0) + e_1) + ...) + e_{N-1}``, in ascending order, and ``r = RN(1 / s)``.
 - ``p_j = bf16_rn(RN(e_j * r))``.
 

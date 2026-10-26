@@ -83,7 +83,7 @@ def ir_scale(kernel: str, N: int, eps: float, x: list[int], res: list[int] | Non
     from verity.ml.circuits.evaluation.reference import standalone_call
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluate import evaluate_call
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
 
     spec = bind(b1.RMSNormFusedCuda if kernel == "cuda" else b1.RMSNormTriton, N=N, EPS=eps)
     prog, call = standalone_call(spec)
@@ -96,7 +96,7 @@ def twin_scales(kernel: str, x: Any, res: Any, w: Any, eps: float) -> Any:
     """Every row's IR scale word by the vectorised twin (uint32): `derived_rows.rmsnorm_fused_v2_rows(...)["s"]` / `rmsnorm_triton_rows(...)["inv"]`."""
     import numpy as np
 
-    from verity_vllm.program.kernels import derived_rows as D
+    from verity.ml.definitions.numerics import derived_rows as D
 
     if kernel == "cuda":
         return np.asarray(D.rmsnorm_fused_v2_rows(x, res, w, eps)["s"], dtype=np.uint32)
