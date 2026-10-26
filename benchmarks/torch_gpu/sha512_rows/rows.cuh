@@ -338,6 +338,16 @@ SX_HD u32 mask_column(int k, u32 l) {
 // word w at y[w ys]), the column order lane l's. Bytes [p, p + 64) of T_v are byte_tables(key)[p][v], so for salt bytes
 // p = 16 q + r the 80 bytes [16 q, 16 q + 80) of T_{y_p} are xored into A_r, and A_r shifted down r bytes into m (commit_gpu's
 // hm96_mask, benchmarks/pouw/commit_gpu/commit_gpu.cuh, with its columns in lane l's order).
+SX_HD u32 funnel_r(u32 lo, u32 hi, u32 sh) {   // the low word of (hi:lo) >> sh, sh < 32
+#ifdef __CUDA_ARCH__
+  return __funnelshift_r(lo, hi, sh);
+#else
+  return sh ? (lo >> sh | hi << (32 - sh)) : lo;
+#endif
+}
+
+// The rr loop stays rolled on the device: unrolled, ptxas holds several rounds' loads of T at once, past the leaf kernel's
+// 128 registers at 2 blocks an SM.
 SX_HD void mask(const uint8_t* T, const u32* y, u32 ys, u32 l, u32* m) {
 #pragma unroll
   for (int w = 0; w < 16; ++w) m[w] = 0;
@@ -346,9 +356,10 @@ SX_HD void mask(const uint8_t* T, const u32* y, u32 ys, u32 l, u32* m) {
     u32 yw[12];
 #pragma unroll
     for (int k = 0; k < 12; ++k) yw[k] = y[(4 * mask_column(k, l) + a) * ys];
-#pragma unroll
-    for (int rr = 0; rr < 4; ++rr) {
-      const int r = 4 * a + rr;
+#ifdef __CUDA_ARCH__
+#pragma unroll 1
+#endif
+    for (u32 rr = 0; rr < 4; ++rr) {
       u32 A[20];
 #pragma unroll
       for (int i = 0; i < 20; ++i) A[i] = 0;
@@ -362,9 +373,8 @@ SX_HD void mask(const uint8_t* T, const u32* y, u32 ys, u32 l, u32* m) {
           A[4 * i] ^= u.x; A[4 * i + 1] ^= u.y; A[4 * i + 2] ^= u.z; A[4 * i + 3] ^= u.w;
         }
       }
-      const int sw = r >> 2, sh = 8 * (r & 3);
 #pragma unroll
-      for (int w = 0; w < 16; ++w) m[w] ^= sh ? (A[w + sw] >> sh | A[w + sw + 1] << (32 - sh)) : A[w + sw];
+      for (int w = 0; w < 16; ++w) m[w] ^= funnel_r(A[w + a], A[w + a + 1], 8 * rr);
     }
   }
 }
@@ -389,8 +399,14 @@ SX_HD void leaf(const LeafArgs& A, const uint8_t* T, u32* y, u32 ys, u32 l, u32 
   } else {
     salt_key_words(A.key, A.nonce0 + s, r.salt_row, y, ys);
   }
-  // c before b, so that b's 16 registers aren't live through c's compressions
-  u64 w[16], c[8];
+  u64 bc[16];
+  {
+    u32 m[16];
+    mask(T, y, ys, l, m);
+    for (int i = 0; i < 8; ++i) bc[i] = ld8(A.x + 8 * gs + i) ^ ((u64)sx::bswap32(m[2 * i]) << 32 | sx::bswap32(m[2 * i + 1]));
+  }
+  u64 w[16];
+  u64* c = bc + 8;
   for (int i = 0; i < 8; ++i) c[i] = A.ms_salt[i];
   for (int i = 0; i < 16; ++i) w[i] = sx::be64(y[2 * i * ys], y[(2 * i + 1) * ys]);
   C::run(c, w);
@@ -399,14 +415,9 @@ SX_HD void leaf(const LeafArgs& A, const uint8_t* T, u32* y, u32 ys, u32 l, u32 
   for (int i = 9; i < 15; ++i) w[i] = 0;
   w[15] = (128 + 192) * 8;
   C::run(c, w);
-  {
-    u32 m[16];
-    mask(T, y, ys, l, m);
-    for (int i = 0; i < 8; ++i) w[i] = ld8(A.x + 8 * gs + i) ^ ((u64)sx::bswap32(m[2 * i]) << 32 | sx::bswap32(m[2 * i + 1]));
-  }
-  for (int i = 0; i < 8; ++i) w[8 + i] = c[i];
   u64 h[8];
   for (int i = 0; i < 8; ++i) h[i] = A.ms_leaf[i];
+  for (int i = 0; i < 16; ++i) w[i] = bc[i];
   C::run(h, w);
   C::kw(h, sx::kw_pad256());
   const LeafRow* unit = nullptr;
