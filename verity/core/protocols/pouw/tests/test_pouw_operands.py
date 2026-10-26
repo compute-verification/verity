@@ -43,3 +43,13 @@ def test_x_moves_with_every_root_and_the_program():
     assert OP.root(b) != OP.root(block()), "fresh salts make fresh roots"
     swapped = {"program": "p", "values": {**b["values"], "b": {**b["values"]["b"], "root": b["values"]["a"]["root"]}}}
     assert len({OP.root(b), OP.root(swapped), OP.root({**b, "program": "q"})}) == 3
+
+
+def test_a_record_states_the_operands_with_their_gaps_or_why_they_are_refused():
+    b = block()
+    got = OP.stated({"context": CONTEXT, OP.KEY: b})
+    assert got == {"held": True, "X": OP.root(b).hex(), "roots": {v: e["root"] for v, e in b["values"].items()},
+                   "gaps": list(OP.GAPS)} and any("CIR-100" in g for g in got["gaps"])
+    assert OP.stated({"context": CONTEXT}) is None
+    bad = OP.stated({"context": OTHER, OP.KEY: b})
+    assert bad["held"] is False and "domain other than" in bad["why"]

@@ -25,6 +25,10 @@ from verity.core.protocols.sampled_proofs.one_stage import registered as G
 #: the root X of a window's operands: SHA-512 over this tag, the program and each value's name and root in name order
 TAG = b"verity/pouw/operands/v1\0"
 KEY = "activations"
+#: what a window's operands don't establish yet, named wherever a record reports them (`stated`)
+GAPS = ("the A rows are not proved to be the served activations x (an x row is one token's codes, an A row R tokens' "
+        "K/2 codes): a gather, CIR-100",
+        "the B rows are not proved to be the registered weights' rows")
 
 
 def commit(program: str, context: str, rows: Mapping[str, Sequence[Sequence[int]]],
@@ -68,4 +72,17 @@ def held(window: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     return {str(v): dict(e) for v, e in values.items()}
 
 
-__all__ = ["KEY", "TAG", "block", "commit", "held", "root"]
+def stated(window: Mapping[str, Any]) -> dict[str, Any] | None:
+    """What a record reports of a registration window's operands (`held`): X, each value's root, and `GAPS`; ``held``
+    false and why, for operands `held` refuses; None for a window that names none."""
+    if KEY not in window:
+        return None
+    try:
+        values = held(window)
+    except ValueError as e:
+        return {"held": False, "why": str(e), "gaps": list(GAPS)}
+    return {"held": True, "X": root(window[KEY]).hex(), "roots": {v: e["root"] for v, e in sorted(values.items())},
+            "gaps": list(GAPS)}
+
+
+__all__ = ["GAPS", "KEY", "TAG", "block", "commit", "held", "root", "stated"]
