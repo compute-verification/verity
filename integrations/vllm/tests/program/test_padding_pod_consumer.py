@@ -7,6 +7,7 @@ Torch-free: the host (unpacked) committer path -- `commit_offline` is the exact 
 from __future__ import annotations
 
 import hashlib
+import json
 
 import pytest
 
@@ -399,7 +400,7 @@ def test_the_padding_entrys_step_is_the_engine_step_when_a_member_arrives_late()
                 ids.append({"family": fam, "program_digest": PD, "request_id": rid, "step": s, "invocation": 0, "op_path": op, "output_member": mem,
                             "element_range": [0, n], "rank": 0, "engine_step": s + arr, "dtype": dt, **({"rows": 1} if fam == "input_token_ids" else {})})
     epr = {"ok": True, "lag": 0, "requests": {"r0": {"executed_prefix_len": cap, "cap": cap}, "r1": {"executed_prefix_len": 1, "cap": cap}}}
-    from verity_vllm.check.executed_prefix import request_steps_of_record
+    from verity_vllm.commit.executed_prefix import request_steps_of_record
     steps = request_steps_of_record(epr, {"r0": 0, "r1": 1})
     assert steps == {"r0": [0, 1, 2], "r1": [1]}
     by_step = PS.padding_steps_of_record(ids, epr, {"r0": 0, "r1": 1})
@@ -492,7 +493,7 @@ def test_the_inactive_stratum_is_the_padded_records_population_every_bot_entry_r
     against that bucket family by family."""
     from collections import Counter
     from verity_vllm.check import oracle_compare as OC
-    from verity_vllm.check.executed_prefix import executed_prefix_of_record
+    from verity_vllm.commit.executed_prefix import executed_prefix_of_record
     if not hasattr(OC, "ORDINAL_SEP"):
         pytest.skip("the ordinal-named committed reader (moe F-moe-r17-06, int-8) is not on this tree: a mixed step's padding tensor beside an executed one of the same name is unreadable here")
     com, run, pm, _hdr, _rsteps, _ids = _b2_mixed_padded()
@@ -513,6 +514,8 @@ def test_the_inactive_stratum_is_the_padded_records_population_every_bot_entry_r
     epr = executed_prefix_of_record(["r0", "r1"], {"r0": [17, 0], "r1": [5, 6, 0]}, caps={"r0": CAP, "r1": CAP}, eos_of_record=[0], lag=0)
     rd = OC.OpenedReader(com, run)
     out = PS.padded_population(sr, pm, rd, epr)
+    assert hashlib.sha256(json.dumps([out, sr], sort_keys=True).encode()).hexdigest() == \
+        "f8e698e7bd359beba999dd0580036bfc527f9e2181b5ff64ca37d2ea95ccd9bd", "the record block and the population it rewrites, byte for byte"
     assert out["ok"], out["problems"]
     assert out["padding_entries"] == out["checked_entries"] == 35 and out["unread_n"] == 0 and out["mismatches_n"] == 0
     assert out["checked_words"] == sum(int(e["width_bytes"]) // PS.LIFTED_CONTAINER[e["encoding"]["committed_dtype"]][1] for e in pads)
@@ -667,7 +670,7 @@ def test_brief_7e_past_a_requests_stop_the_moe_route_planes_are_bot_words_and_a_
         def forging(step, name, lo, hi):
             g = rd(step, name, lo, hi)
             return ((3).to_bytes(8, "little") + g[8:]) if (g is not None and name.startswith("moe/L0/router_ids/r0/bot")) else g
-        from verity_vllm.check.executed_prefix import executed_prefix_of_record
+        from verity_vllm.commit.executed_prefix import executed_prefix_of_record
         epr = executed_prefix_of_record(["r0", "r1"], {"r0": [17, 0], "r1": [5, 6, 7, 8, 9]}, caps={"r0": CAP, "r1": CAP}, eos_of_record=[0], lag=0)
         pads = [e for e in pm["entries"] if e.get("activity") == "bot-by-enablement"]
         from collections import Counter

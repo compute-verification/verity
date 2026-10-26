@@ -352,19 +352,46 @@ its head constant and that constant's module, and what it reaches (`reaches`). T
 binders (`∀ j, P j` is headed by `P`); `guarded` says those binders include a hypothesis (`A → B`), and `applies` is what
 its body applies (`applies`). A conjunction counts as each of its conjuncts. -/
 partial def hypothesisJson (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning : Array Name) (moduleOf : Name → Option Name) (source name : String)
-    (pos : Nat) (t : Expr) : MetaM (Array Json) := do
+    (pos : Nat) (t : Expr) (extra : Expr → List (String × Json) := fun _ => []) : MetaM (Array Json) := do
   let t ← instantiateMVars t
   if t.isAppOfArity ``And 2 then
-    return (← hypothesisJson env table meaning moduleOf source s!"{name}.1" pos t.appFn!.appArg!) ++
-      (← hypothesisJson env table meaning moduleOf source s!"{name}.2" pos t.appArg!)
+    return (← hypothesisJson env table meaning moduleOf source s!"{name}.1" pos t.appFn!.appArg! extra) ++
+      (← hypothesisJson env table meaning moduleOf source s!"{name}.2" pos t.appArg! extra)
   let (head, guarded, body) ← forallTelescope t fun ys b => do
     let guarded ← ys.anyM fun y => do isProp (← y.fvarId!.getType)
     let head : Option Name := match b.getAppFn with | .const c _ => some c | _ => none
     return (head, guarded, applies env table meaning b)
-  return #[Json.mkObj [("source", toJson source), ("name", toJson name), ("at", toJson pos),
+  return #[Json.mkObj ([("source", toJson source), ("name", toJson name), ("at", toJson pos),
     ("type", toJson (toString (← ppExpr t))),
     ("head", toJson (head.map toString)), ("module", toJson ((head.bind moduleOf).map toString)),
-    ("reaches", toJson (reaches env table meaning t)), ("guarded", toJson guarded), ("applies", toJson body)]]
+    ("reaches", toJson (reaches env table meaning t)), ("guarded", toJson guarded), ("applies", toJson body)] ++ extra t)]
+
+/-- The positions of the binders `xs` that `e` mentions. -/
+def usesOf (xs : Array Expr) (e : Expr) : Array Nat :=
+  (Array.range xs.size).filter fun j => e.containsFVar xs[j]!.fvarId!
+
+/-- `e` as a field path of one of the binders `xs`: `x.a.b` (`T.b (S.a x)`, structure projections applied to `x`) is
+`x`'s position and the projections, innermost first; a bare binder has none. Anything else is none. -/
+partial def fieldPath (env : Environment) (xs : Array Expr) (e : Expr) : Option (Nat × List String) :=
+  match e.consumeMData with
+  | .fvar f => (xs.findIdx? (·.fvarId! == f)).map (·, [])
+  | .proj s i b => (fieldPath env xs b).map fun (j, p) => (j, p ++ [s!"{s}.{i}"])
+  | e => match e.getAppFn with
+    | .const c _ => match env.getProjectionFnInfo? c with
+      | some info => if e.getAppNumArgs == info.numParams + 1 then
+          (fieldPath env xs e.appArg!).map fun (j, p) => (j, p ++ [c.toString]) else none
+      | none => none
+    | _ => none
+
+/-- `shares` for a hypothesis `x.f = y.f`: one field path (`fieldPath`, not empty) of two different binders, by their
+positions (`inputs`) and the path; nothing for any other hypothesis. -/
+def sharesOf (env : Environment) (xs : Array Expr) (t : Expr) : List (String × Json) :=
+  if !t.isAppOfArity ``Eq 3 then [] else
+  match fieldPath env xs t.appFn!.appArg!, fieldPath env xs t.appArg! with
+  | some (j, p), some (k, q) =>
+    if j != k && p == q && !p.isEmpty then
+      [("shares", Json.mkObj [("inputs", toJson #[j, k]), ("path", toJson p)])] else []
+  | _, _ => []
 
 partial def conjuncts (e : Expr) : List Expr :=
   if e.isAppOfArity ``And 2 then conjuncts e.appFn!.appArg! ++ conjuncts e.appArg! else [e]
@@ -398,7 +425,9 @@ partial def eventsOf (env : Environment) (table : Std.HashMap Name (Array Name))
 
 /-- One part of a statement's shape, for the audit's shape rule: its binders (`inputs`: those that aren't propositions,
 each with its position and its type's head), its hypotheses (`hypothesisJson`: each `Prop` binder, and each `Prop` field
-of a structure an input ranges over), what its conclusion reaches, and its events (`eventsOf`). -/
+of a structure an input ranges over), what its conclusion reaches, and its events (`eventsOf`). Each binder, and the
+conclusion, gives the positions of the binders it mentions (`uses`, `usesOf`), so that `check.py` can reorder them, and
+a hypothesis equating one field of two binders says so (`shares`, `sharesOf`). -/
 def shapeOf (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning : Array Name) (moduleOf : Name → Option Name) (stmt : Expr) : MetaM Json :=
   forallTelescope stmt fun xs concl => do
     let mut inputs := #[]
@@ -406,12 +435,14 @@ def shapeOf (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning
     for h : i in [0:xs.size] do
       let d ← xs[i].fvarId!.getDecl
       let t ← instantiateMVars d.type
+      let uses := toJson (usesOf xs t)
       if ← isProp t then
-        hyps := hyps ++ (← hypothesisJson env table meaning moduleOf "binder" d.userName.toString i t)
+        hyps := hyps ++ ((← hypothesisJson env table meaning moduleOf "binder" d.userName.toString i t (sharesOf env xs)).map
+          (·.setObjVal! "uses" uses))
         continue
       let head : Option Name := match t.getAppFn with | .const c _ => some c | _ => none
       inputs := inputs.push <| Json.mkObj [("name", toJson d.userName.toString), ("at", toJson i),
-        ("head", toJson (head.map toString))]
+        ("head", toJson (head.map toString)), ("uses", uses)]
       -- a family of structures (`Vs : Fin S → VStmt`) holds their fields at every index
       hyps := hyps ++ (← forallTelescope t fun _ cod => do
         let cod ← whnfR cod
@@ -431,7 +462,8 @@ def shapeOf (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning
               out := out ++ (← hypothesisJson env table meaning moduleOf "field" s!"{d.userName}.{fd.userName}" i fd.type)
           return out)
     return Json.mkObj [("inputs", toJson inputs), ("hypotheses", toJson hyps),
-      ("conclusion", toJson (reaches env table meaning concl)), ("events", toJson (← eventsOf env table meaning concl))]
+      ("conclusion", toJson (reaches env table meaning concl)), ("events", toJson (← eventsOf env table meaning concl)),
+      ("uses", toJson (usesOf xs concl))]
 
 /-- The statement's shape, one part per conjunct of a statement that is a conjunction (`shapeOf` each), after a lifted
 definition is unfolded once (`liftOf`) and its `let`s are inlined. -/
@@ -458,20 +490,29 @@ def branching (c : Name) : MetaM Bool := do
   let some ci := (← getEnv).find? c | return false
   forallTelescope ci.type fun xs r => return xs.contains r.getAppFn
 
+/-- Whether `c` is a constant of an assumptions module. -/
+def assumption (moduleOf : Name → Option Name) (c : Name) : Bool :=
+  ((moduleOf c).map (·.components.contains `Assumptions)).getD false
+
 /-- The heads (`premiseHead`) of the parts a hypothesis packs in `∧` and `∃`, past its binders: `(∃ x, A x) ∧ B` has
-`A` and `B`; one that applies a `branching` constant (a `match`) has those of its branches. -/
-partial def packedHeads (moduleOf : Name → Option Name) (t : Expr) : MetaM (Array Name) :=
+`A` and `B`, and so does an abbrev outside an assumptions module that unfolds to it (`abbrev P x := A x ∧ B x`), at most
+`n` times; one that applies a `branching` constant (a `match`) has those of its branches. -/
+partial def packedHeads (moduleOf : Name → Option Name) (t : Expr) (n : Nat := 4) : MetaM (Array Name) :=
   forallTelescope t fun _ b => do
     if b.isAppOfArity ``And 2 then
-      return (← packedHeads moduleOf b.appFn!.appArg!) ++ (← packedHeads moduleOf b.appArg!)
+      return (← packedHeads moduleOf b.appFn!.appArg! n) ++ (← packedHeads moduleOf b.appArg! n)
     if b.isAppOfArity ``Exists 2 then
-      return ← withLocalDeclD `x b.appFn!.appArg! fun x => packedHeads moduleOf (b.appArg!.beta #[x])
+      return ← withLocalDeclD `x b.appFn!.appArg! fun x => packedHeads moduleOf (b.appArg!.beta #[x]) n
     if let .const c _ := b.getAppFn then
       if ← branching c then
         return ← b.getAppArgs.foldlM (init := #[]) fun out a => do
           unless a.isLambda do return out
           lambdaTelescope a fun _ body => do
-            return out ++ (← if ← isProp body then packedHeads moduleOf body else pure #[])
+            return out ++ (← if ← isProp body then packedHeads moduleOf body n else pure #[])
+      if !assumption moduleOf c && n > 0 then
+        let u ← whnfR b
+        if u != b && (u.isAppOfArity ``And 2 || u.isAppOfArity ``Exists 2 || u.isForall) then
+          return ← packedHeads moduleOf u (n - 1)
     return (← premiseHead moduleOf 4 b).toArray
 
 /-- `e` with its `let`s inlined, its metadata dropped and its β-redexes reduced: `forallTelescope` stops at each of them,
@@ -518,6 +559,69 @@ partial def fieldPremises (env : Environment) (meaning premises : Array Name) (m
       let ft ← inferType f
       let inner ← if ← isProp ft then pure #[] else fieldPremises env meaning premises moduleOf false ft
       return out ++ (← mentioned env premises moduleOf ft) ++ inner
+
+/-- What the proposition `e` asserts: its parts through `∧`, the bodies of `∀` and `→`, `let`, and reducible unfolding
+outside an assumptions module (as `premiseHead` sees through an abbrev, at most `n` times); `True` asserts nothing.
+Each part is its head constant, with whether it applies that constant to a proposition or a predicate, or no head for
+a part that applies a bound variable. What `e` takes rather than asserts (an antecedent, the type a `∀` ranges over)
+and a part's arguments add, as parts, the assumptions they mention (`mentioned`, `fieldPremises`). -/
+partial def parts (env : Environment) (meaning premises : Array Name) (moduleOf : Name → Option Name) (n : Nat)
+    (e : Expr) : MetaM (Array (Option Name × Bool)) := do
+  let e := e.consumeMData.headBeta
+  let named (cs : Array Name) := cs.map fun c => (some c, false)
+  match e with
+  | .forallE x t b bi =>
+    let taken ← if ← isProp t then mentioned env premises moduleOf t
+      else fieldPremises env meaning premises moduleOf true t
+    withLocalDecl x bi t fun y => return named taken ++ (← parts env meaning premises moduleOf n (b.instantiate1 y))
+  | .letE _ _ v b _ => parts env meaning premises moduleOf n (b.instantiate1 v)
+  | _ =>
+    if e.isAppOfArity ``And 2 then
+      return (← parts env meaning premises moduleOf n e.appFn!.appArg!) ++ (← parts env meaning premises moduleOf n e.appArg!)
+    if e.isConstOf ``True then return #[]
+    let .const c _ := e.getAppFn | return #[(none, false)]
+    if !assumption moduleOf c && n > 0 then
+      let u ← whnfR e
+      if u != e then return ← parts env meaning premises moduleOf (n - 1) u
+    let args := e.getAppArgs
+    let props ← args.anyM fun a => do forallTelescopeReducing (← inferType a) fun _ r => return r.isProp
+    let taken ← args.foldlM (init := #[]) fun out a => return out ++ (← mentioned env premises moduleOf a)
+    return #[(some c, props)] ++ named taken
+
+/-- The parts (`parts`) that the predicate `c`'s value asserts past its parameters, or none when `c` is a constant of
+an assumptions module, no definition, a `branching` one, or not a predicate. -/
+def assertedParts (env : Environment) (meaning premises : Array Name) (moduleOf : Name → Option Name) (c : Name) :
+    MetaM (Option (Array (Option Name × Bool))) := do
+  if assumption moduleOf c then return none
+  let some (.defnInfo v) := env.find? c | return none
+  if ← branching c then return none
+  unless ← forallTelescopeReducing v.type fun _ r => return r.isProp do return none
+  lambdaTelescope (← plain v.value) fun _ b => return some (← parts env meaning premises moduleOf 4 b)
+
+/-- For a premise headed by `h`, a definition of a module this repository builds (`built`), outside an assumptions module,
+that the lock doesn't list (`listed`): the parts it asserts (`assertedParts`), and those of each such definition among
+them, breadth first, at most 64 definitions; `{definition: [{head, module, props}]}`. Null for any other head. -/
+def unfoldsOf (env : Environment) (meaning premises : Array Name) (listed built : NameSet)
+    (moduleOf : Name → Option Name) (h : Name) : MetaM Json := do
+  let mine (c : Name) : Bool := !listed.contains c && ((moduleOf c).map built.contains).getD false
+  if !mine h then return Json.null
+  let some ps ← assertedParts env meaning premises moduleOf h | return Json.null
+  let part (p : Option Name × Bool) : Json := Json.mkObj [("head", toJson (p.1.map toString)),
+    ("module", toJson ((p.1.bind moduleOf).map toString)), ("props", toJson p.2)]
+  let mut out := #[(h.toString, toJson (ps.map part))]
+  let mut seen : NameSet := ({} : NameSet).insert h
+  let mut queue := ps.filterMap (·.1)
+  let mut i := 0
+  while h : i < queue.size do
+    let c := queue[i]
+    i := i + 1
+    if seen.contains c || !mine c then continue
+    seen := seen.insert c
+    if out.size ≥ 64 then break
+    if let some qs ← assertedParts env meaning premises moduleOf c then
+      out := out.push (c.toString, toJson (qs.map part))
+      queue := queue ++ qs.filterMap (·.1)
+  return Json.mkObj out.toList
 
 /-- For `e` applying a `Guarantees` definition or another definition under `meaning` outside an assumptions module,
 whether it is a `Guarantees` one and its value applied to `e`'s arguments. -/
@@ -677,7 +781,8 @@ partial def conclusionOf (env : Environment) (meaning : Array Name) (t : Expr) (
       ("defs", toJson ((defs.qsort Name.lt).map toString)), ("refl", toJson refl), ("assumed", toJson (hs.contains b))]],
       hs.any (·.isConstOf ``False))
 
-def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning premises : Array Name) (axioms : Std.HashMap Name NameSet)
+def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning premises : Array Name)
+    (listed built : NameSet) (axioms : Std.HashMap Name NameSet)
     (ranges : Std.HashMap Name DeclarationRanges) (rs : Array (Name × Name × ConstantInfo) × Array (Name × Name)) (n : Name) :
     MetaM Json := do
   let some ci := env.find? n | return Json.mkObj [("kind", "missing")]
@@ -705,7 +810,11 @@ def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning
     ("at", toJson (ranges[n]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.pos.column])),
     ("signature", toJson signature), ("axioms", toJson ((axioms.getD n {}).toArray.qsort Name.lt |>.map toString)),
     ("hypotheses", toJson hypotheses), ("shape", ← shapeInfo env table meaning moduleOf ci.type),
-    ("premises", ← (do return toJson (← premisesOf env meaning premises moduleOf false (← plain ci.type))) <|> pure Json.null),
+    ("premises", ← (do
+      let ps ← premisesOf env meaning premises moduleOf false (← plain ci.type)
+      return toJson (← ps.mapM fun p => do
+        let some h := (p.getObjValAs? String "head").toOption | return p
+        return p.setObjVal! "unfolds" (← unfoldsOf env meaning premises listed built moduleOf h.toName))) <|> pure Json.null),
     ("body", ← (do
       let (h, neg) ← bodyHead ci.type
       let (cs, absurd) ← conclusionOf env meaning ci.type
@@ -803,6 +912,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   let roots := names cfg "roots"
   let meaning := names cfg "meaning"
   let premises := names cfg "premises"
+  let listed := (names cfg "assumptions").foldl NameSet.insert {}
   let allowed := names cfg "allowed"
   let pins := names cfg "pins"
   let spec := names cfg "spec"
@@ -890,10 +1000,20 @@ unsafe def main (args : List String) : IO UInt32 := do
         acc := acc.insert pins[i] rs
     return acc
   lap "reads" readsOf.size
+  let found ← (List.range ((mnames.size + 255) / 256)).toArray.mapM fun k => IO.asTask do
+    (mnames.extract (256 * k) (256 * k + 256)).mapM fun m => return toString (← findOLean m)
+  let mut oleans := #[]
+  for t in found do
+    oleans := oleans ++ (← IO.ofExcept t.get)
+  -- the modules a package of this repository builds (an `.olean` in its own `.lake/build`), as `check.py`'s `own_modules`
+  let built : NameSet := (List.range mnames.size).foldl (init := {}) fun s i =>
+    let o := oleans[i]!
+    if (o.splitOn "/.lake/build/").length > 1 && (o.splitOn "/.lake/packages/").length == 1 then s.insert mnames[i]! else s
   -- each pin's facts are a function of the environment and the maps above, so each pin is a task, joined in order
   let tasks ← pins.mapM fun p => IO.asTask do
     let (out, _) ← (MetaM.run' do
-      return (p.toString, ← pinInfo env table meaning premises axioms ranges (readsOf.getD p (#[], #[])) p)).toIO ctx { env }
+      return (p.toString, ← pinInfo env table meaning premises listed built axioms ranges (readsOf.getD p (#[], #[])) p)).toIO
+        ctx { env }
     return out
   let pinned ← tasks.mapM fun t => IO.ofExcept t.get
   lap "pins" pinned.size
@@ -944,11 +1064,6 @@ unsafe def main (args : List String) : IO UInt32 := do
       else
         took := took.insert (rn c) c
   lap "canon" conflicts.size
-  let found ← (List.range ((mnames.size + 255) / 256)).toArray.mapM fun k => IO.asTask do
-    (mnames.extract (256 * k) (256 * k + 256)).mapM fun m => return toString (← findOLean m)
-  let mut oleans := #[]
-  for t in found do
-    oleans := oleans ++ (← IO.ofExcept t.get)
   let mut graph := #[]
   for h : i in [0:mnames.size] do
     let olean := oleans[i]!

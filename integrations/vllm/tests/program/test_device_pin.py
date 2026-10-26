@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.program.registry import bf16_gemm_check as BC
+from verity.ml.definitions.registry import bf16_gemm_check as BC
 
 
 def test_the_probed_routes_are_the_default_routes_at_their_m_only():
