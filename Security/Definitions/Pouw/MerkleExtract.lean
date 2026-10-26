@@ -62,11 +62,21 @@ noncomputable def ext (h : X → D) (E : Enc X D W) (L : Set X) : D → List Boo
 
 /-! ### The random-oracle model (lazy sampling) -/
 
-/-- **An adaptive oracle prover** in the lazy-sampling form of the random oracle: its `q` fresh queries, answered by
-the stream `u` (the oracle's values at fresh points, uniform), the first `τ` of them before its commitment.
-* Query `i` reads only the answers before it (`qry_dep`) and is fresh (`fresh`). A prover that repeats a point has its
-  answer already, so it needs no query.
-* Its root reads only the answers before the commitment (`root_dep`). -/
+/-- **An adaptive oracle prover** in the lazy-sampling form of the random oracle: its `q` queries, answered by the
+stream `u`, the first `τ` of them before its commitment. Over a uniform oracle the answers at `q` distinct points are
+`q` independent uniform values, so counting streams `u : Fin q → D` is the probability over the oracle.
+* **Adaptive.** Query `i` is a function of the answers before it (`qry_dep`), and the root of the answers before the
+  commitment (`root_dep`). Queries after the commitment may read every answer before them.
+* **Distinct queries** (`fresh`; a normalization). A prover that queries a point twice gets the same answer twice, so
+  dropping the repeat changes nothing it computes, and `q` counts distinct points. A real adversary's count is its
+  number of distinct SHA-512 inputs on the commitment path.
+* **`q` includes the verifier's evaluations** (a normalization, read by `ExtractFails`). Checking an opening hashes
+  the points `pts E p w`: the leaf and one node per level. The prover is taken to query all of them itself, after its
+  other queries. That is what the verifier does: an evaluation at a point nobody queried is a fresh uniform answer
+  either way. So `q` is the prover's distinct queries plus, for each opening, its depth plus one, and it is `q`,
+  not the prover's own count, that the bounds read.
+* Off the queried points the oracle answers `default` (`oracle`), a value no bound reads: by the second normalization
+  every point an opening's check hashes is a query. -/
 structure Prover (X D : Type) (q τ : ℕ) where
   qry : Fin q → (Fin q → D) → X
   qry_dep : ∀ i u u', (∀ j : Fin q, j < i → u j = u' j) → qry i u = qry i u'
@@ -90,7 +100,9 @@ end Prover
 
 open Classical in
 /-- **The extraction fails on the stream `u`**: some opening of some word verifies against the prover's root under the
-oracle, hashes only queried points, and isn't the word the extractor reads off the pre-commitment queries. -/
+oracle, hashes only queried points, and isn't the word the extractor reads off the pre-commitment queries. "Hashes
+only queried points" is the normalization that `q` includes the verifier's evaluations (`Prover`): it quantifies over
+every opening whose check the run performs, once those evaluations are counted as queries. -/
 def ExtractFails [Inhabited D] {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) (u : Fin q → D) : Prop :=
   ∃ (p : List (Bool × D × D)) (w : W), Opens (A.oracle u) E (A.root u) p w ∧
     (∀ y ∈ pts E p w, ∃ i, A.qry i u = y) ∧ ext (A.oracle u) E (A.pre u) (A.root u) (p.map Prod.fst) ≠ some w

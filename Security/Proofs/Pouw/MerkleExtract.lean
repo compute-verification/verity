@@ -12,6 +12,8 @@ import Definitions.Pouw.MerkleExtract
   pre-commitment log fails on at most a `(q² + q (2τ + 1)) / |D|` share of the oracle's answer streams: a collision
   among the answers (`q²`), or a post-commitment answer hitting the root or a child digest the log names
   (`q (2τ + 1)`).
+* `extract_of_ro_roots`: the same for `R` roots over one stream, `(q² + ∑_w q (2τ_w + 1)) / |D|`, with one
+  repeated-answer event for all the roots.
 -/
 
 namespace Pouw.MerkleExtract
@@ -133,85 +135,75 @@ theorem oracle_qry [Inhabited D] (u : Fin q → D) (i : Fin q) : A.oracle u (A.q
 
 end Prover
 
-open Classical in
-/-- **`extract_of_ro`**: over the uniform answer streams, extraction fails on at most a `(q² + q (2τ + 1)) / |D|`
-share. -/
-theorem extract_of_ro [Fintype D] [DecidableEq D] [Inhabited D] {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) :
-    (Finset.univ.filter fun u => ExtractFails E A u).card * Fintype.card D ≤
-      (q * q + q * (2 * τ + 1)) * Fintype.card (Fin q → D) := by
-  classical
-  -- the collision sets and the target sets
-  let S : Fin q → (Fin q → D) → Finset D := fun t u => (Finset.univ.filter fun j : Fin q => j < t).image u
-  let T : (Fin q → D) → Finset D := fun u =>
-    insert (A.root u) ((Finset.univ.filter fun i : Fin q => (i : ℕ) < τ).biUnion fun i => children E (A.qry i u))
-  let S' : Fin q → (Fin q → D) → Finset D := fun b u => if τ ≤ (b : ℕ) then T u else ∅
-  have hsub : (Finset.univ.filter fun u => ExtractFails E A u) ⊆
-      (Finset.univ.biUnion fun t => Finset.univ.filter fun u => u t ∈ S t u) ∪
-        (Finset.univ.biUnion fun b => Finset.univ.filter fun u => u b ∈ S' b u) := by
-    intro u hu
-    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hu
-    obtain ⟨p, w, hO, hcov, hne⟩ := hu
-    rcases extract_sound (A.oracle u) E (A.pre u) p (A.root u) w hO with
-      h1 | ⟨x, hx, y, hy, hxy, hh⟩ | ⟨y, hy, hyL, hyT⟩
-    · exact absurd h1 hne
-    · obtain ⟨a, -, rfl⟩ := hx
-      obtain ⟨b, rfl⟩ := hcov y hy
-      rw [A.oracle_qry, A.oracle_qry] at hh
-      have hab : a ≠ b := fun e => hxy (by rw [e])
-      apply Finset.mem_union_left
-      rw [Finset.mem_biUnion]
-      rcases lt_or_gt_of_ne hab with hlt | hlt
-      · refine ⟨b, Finset.mem_univ _, ?_⟩
-        simp only [Finset.mem_filter, Finset.mem_univ, true_and, S, Finset.mem_image]
-        exact ⟨a, hlt, hh⟩
-      · refine ⟨a, Finset.mem_univ _, ?_⟩
-        simp only [Finset.mem_filter, Finset.mem_univ, true_and, S, Finset.mem_image]
-        exact ⟨b, hlt, hh.symm⟩
-    · obtain ⟨b, rfl⟩ := hcov y hy
-      have hb : τ ≤ (b : ℕ) := by
-        by_contra hlt; exact hyL ⟨b, by omega, rfl⟩
-      rw [A.oracle_qry] at hyT
-      apply Finset.mem_union_right
-      rw [Finset.mem_biUnion]
-      refine ⟨b, Finset.mem_univ _, ?_⟩
-      simp only [Finset.mem_filter, Finset.mem_univ, true_and, S', if_pos hb, T, Finset.mem_insert,
-        Finset.mem_biUnion]
-      rcases hyT with h | ⟨l, r, ⟨i, hi, hq⟩, hc⟩
-      · exact Or.inl h
-      · right
-        refine ⟨i, by simpa using hi, ?_⟩
-        have hx : ∃ lr : D × D, E.node lr.1 lr.2 = A.qry i u := ⟨(l, r), hq.symm⟩
-        have hlr := E.node_inj ((Classical.choose_spec hx).trans hq)
-        unfold children
-        rw [dif_pos hx]
-        rcases hc with hc | hc
-        · simp [hc, hlr.1]
-        · simp [hc, hlr.2]
-  have hS : ∀ t u a, S t (Function.update u t a) = S t u := by
+/-! ### The two bad events, `extract_of_ro` and its `R`-root form -/
+
+section RandomOracle
+
+variable [Fintype D] [DecidableEq D]
+
+/-- The answer streams on which answer `t` repeats an earlier answer. -/
+def repeats (q : ℕ) (t : Fin q) : Finset (Fin q → D) :=
+  Finset.univ.filter fun u => u t ∈ (Finset.univ.filter fun j : Fin q => j < t).image u
+
+/-- The targets the commitment fixes: the root and the child digests of the queries before it. -/
+noncomputable def targets {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) (u : Fin q → D) : Finset D :=
+  insert (A.root u) ((Finset.univ.filter fun i : Fin q => (i : ℕ) < τ).biUnion fun i => children E (A.qry i u))
+
+/-- The targets answer `b` can hit: the commitment's, if `b` is answered after it. -/
+noncomputable def targetsAt {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) (b : Fin q) (u : Fin q → D) :
+    Finset D :=
+  if τ ≤ (b : ℕ) then targets E A u else ∅
+
+/-- The answer streams on which an answer after the commitment hits one of its targets. -/
+noncomputable def hits {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) : Finset (Fin q → D) :=
+  Finset.univ.biUnion fun b => Finset.univ.filter fun u => u b ∈ targetsAt E A b u
+
+/-- A repeated answer: on at most a `q² / |D|` share of the streams. -/
+theorem card_repeats_le (q : ℕ) :
+    (Finset.univ.biUnion fun t : Fin q => (repeats q t : Finset (Fin q → D))).card * Fintype.card D ≤
+      q * q * Fintype.card (Fin q → D) := by
+  have hS : ∀ (t : Fin q) (u : Fin q → D) (a : D),
+      (Finset.univ.filter fun j : Fin q => j < t).image (Function.update u t a) =
+        (Finset.univ.filter fun j : Fin q => j < t).image u := by
     intro t u a
     refine Finset.image_congr fun j hj => ?_
     have : j ≠ t := ne_of_lt (by simpa using hj)
     simp [Function.update_of_ne this]
-  have hSc : ∀ t u, (S t u).card ≤ q := fun t u =>
-    (Finset.card_image_le).trans ((Finset.card_filter_le _ _).trans (by simp))
-  have hT : ∀ (b : Fin q) u a, τ ≤ (b : ℕ) → T (Function.update u b a) = T u := by
-    intro b u a hb
+  have hSc : ∀ (t : Fin q) (u : Fin q → D), ((Finset.univ.filter fun j : Fin q => j < t).image u).card ≤ q :=
+    fun t u => (Finset.card_image_le).trans ((Finset.card_filter_le _ _).trans (by simp))
+  calc (Finset.univ.biUnion fun t : Fin q => (repeats q t : Finset (Fin q → D))).card * Fintype.card D
+      ≤ (∑ t : Fin q, (repeats q t : Finset (Fin q → D)).card) * Fintype.card D :=
+        Nat.mul_le_mul_right _ Finset.card_biUnion_le
+    _ = ∑ t : Fin q, (repeats q t : Finset (Fin q → D)).card * Fintype.card D := by rw [Finset.sum_mul]
+    _ ≤ ∑ _t : Fin q, q * Fintype.card (Fin q → D) :=
+        Finset.sum_le_sum fun t _ =>
+          card_hit_le t (fun u => (Finset.univ.filter fun j : Fin q => j < t).image u) q (hS t) (hSc t)
+    _ = q * q * Fintype.card (Fin q → D) := by
+        simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]; ring
+
+omit [Fintype D] in
+/-- The targets answer `b` can hit don't read answer `b`. -/
+theorem targetsAt_update {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) (b : Fin q) (u : Fin q → D) (a : D) :
+    targetsAt E A b (Function.update u b a) = targetsAt E A b u := by
+  unfold targetsAt
+  by_cases hb : τ ≤ (b : ℕ)
+  · rw [if_pos hb, if_pos hb]
     have hagree : ∀ j : Fin q, (j : ℕ) < τ → Function.update u b a j = u j := fun j hj =>
       Function.update_of_ne (fun e => by subst e; omega) _ _
-    simp only [T]
+    unfold targets
     rw [A.root_dep _ _ hagree]
     congr 1
     refine Finset.biUnion_congr rfl fun i hi => ?_
     have hi' : (i : ℕ) < τ := by simpa using hi
     rw [A.qry_dep i _ u fun j hj => hagree j (lt_trans (Fin.lt_def.mp hj) hi')]
-  have hS' : ∀ b u a, S' b (Function.update u b a) = S' b u := by
-    intro b u a
-    by_cases hb : τ ≤ (b : ℕ)
-    · simp only [S', if_pos hb]; exact hT b u a hb
-    · simp only [S', if_neg hb]
-  have hTc : ∀ u, (T u).card ≤ 2 * τ + 1 := by
-    intro u
-    have hF : (Finset.univ.filter fun i : Fin q => (i : ℕ) < τ).card ≤ τ := by
+  · rw [if_neg hb, if_neg hb]
+
+/-- At most `2τ + 1` targets: the root and two children of each query before the commitment. -/
+theorem card_targetsAt_le {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) (b : Fin q) (u : Fin q → D) :
+    (targetsAt E A b u).card ≤ 2 * τ + 1 := by
+  unfold targetsAt
+  split_ifs
+  · have hF : (Finset.univ.filter fun i : Fin q => (i : ℕ) < τ).card ≤ τ := by
       calc (Finset.univ.filter fun i : Fin q => (i : ℕ) < τ).card ≤ (Finset.range τ).card :=
             Finset.card_le_card_of_injOn (fun i => (i : ℕ))
               (fun i hi => by simp only [Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_setOf_eq] at hi
@@ -221,7 +213,9 @@ theorem extract_of_ro [Fintype D] [DecidableEq D] [Inhabited D] {q τ : ℕ} (E 
       intro x; unfold children; split_ifs
       · exact Finset.card_le_two
       · simp
-    calc (T u).card
+    unfold targets
+    calc (insert (A.root u) ((Finset.univ.filter fun i : Fin q => (i : ℕ) < τ).biUnion
+            fun i => children E (A.qry i u))).card
         ≤ ((Finset.univ.filter fun i : Fin q => (i : ℕ) < τ).biUnion fun i => children E (A.qry i u)).card + 1 :=
           Finset.card_insert_le _ _
       _ ≤ (∑ i ∈ Finset.univ.filter fun i : Fin q => (i : ℕ) < τ, (children E (A.qry i u)).card) + 1 := by
@@ -229,28 +223,114 @@ theorem extract_of_ro [Fintype D] [DecidableEq D] [Inhabited D] {q τ : ℕ} (E 
       _ ≤ (∑ _i ∈ Finset.univ.filter fun i : Fin q => (i : ℕ) < τ, 2) + 1 := by
           gcongr with i _; exact hch _
       _ ≤ 2 * τ + 1 := by rw [Finset.sum_const, smul_eq_mul]; omega
-  have hS'c : ∀ b u, (S' b u).card ≤ 2 * τ + 1 := by
-    intro b u
-    by_cases hb : τ ≤ (b : ℕ)
-    · simp only [S', if_pos hb]; exact hTc u
-    · simp only [S', if_neg hb]; simp
-  calc (Finset.univ.filter fun u => ExtractFails E A u).card * Fintype.card D
-      ≤ ((Finset.univ.biUnion fun t => Finset.univ.filter fun u => u t ∈ S t u) ∪
-          (Finset.univ.biUnion fun b => Finset.univ.filter fun u => u b ∈ S' b u)).card * Fintype.card D :=
-        Nat.mul_le_mul_right _ (Finset.card_le_card hsub)
-    _ ≤ (∑ t : Fin q, (Finset.univ.filter fun u => u t ∈ S t u).card +
-          ∑ b : Fin q, (Finset.univ.filter fun u => u b ∈ S' b u).card) * Fintype.card D := by
-        refine Nat.mul_le_mul_right _ ((Finset.card_union_le _ _).trans (Nat.add_le_add ?_ ?_))
-        · exact Finset.card_biUnion_le
-        · exact Finset.card_biUnion_le
-    _ = ∑ t : Fin q, (Finset.univ.filter fun u => u t ∈ S t u).card * Fintype.card D +
-          ∑ b : Fin q, (Finset.univ.filter fun u => u b ∈ S' b u).card * Fintype.card D := by
-        rw [add_mul, Finset.sum_mul, Finset.sum_mul]
-    _ ≤ ∑ _t : Fin q, q * Fintype.card (Fin q → D) +
-          ∑ _b : Fin q, (2 * τ + 1) * Fintype.card (Fin q → D) := by
-        exact add_le_add (Finset.sum_le_sum fun t _ => card_hit_le t (S t) q (hS t) (hSc t))
-          (Finset.sum_le_sum fun b _ => card_hit_le b (S' b) (2 * τ + 1) (hS' b) (hS'c b))
-    _ = (q * q + q * (2 * τ + 1)) * Fintype.card (Fin q → D) := by
+  · simp
+
+/-- An answer after the commitment hitting a target: on at most a `q (2τ + 1) / |D|` share of the streams. -/
+theorem card_hits_le {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) :
+    (hits E A).card * Fintype.card D ≤ q * (2 * τ + 1) * Fintype.card (Fin q → D) := by
+  calc (hits E A).card * Fintype.card D
+      ≤ (∑ b : Fin q, (Finset.univ.filter fun u => u b ∈ targetsAt E A b u).card) * Fintype.card D :=
+        Nat.mul_le_mul_right _ Finset.card_biUnion_le
+    _ = ∑ b : Fin q, (Finset.univ.filter fun u => u b ∈ targetsAt E A b u).card * Fintype.card D := by
+        rw [Finset.sum_mul]
+    _ ≤ ∑ _b : Fin q, (2 * τ + 1) * Fintype.card (Fin q → D) :=
+        Finset.sum_le_sum fun b _ =>
+          card_hit_le b (targetsAt E A b) (2 * τ + 1) (targetsAt_update E A b) (card_targetsAt_le E A b)
+    _ = q * (2 * τ + 1) * Fintype.card (Fin q → D) := by
         simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]; ring
+
+open Classical in
+/-- Every stream on which extraction fails repeats an answer or hits a target (Lemma 1 at the prover's log). -/
+theorem fails_sub [Inhabited D] {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) :
+    (Finset.univ.filter fun u => ExtractFails E A u) ⊆
+      (Finset.univ.biUnion fun t => repeats q t) ∪ hits E A := by
+  intro u hu
+  simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hu
+  obtain ⟨p, w, hO, hcov, hne⟩ := hu
+  rcases extract_sound (A.oracle u) E (A.pre u) p (A.root u) w hO with
+    h1 | ⟨x, hx, y, hy, hxy, hh⟩ | ⟨y, hy, hyL, hyT⟩
+  · exact absurd h1 hne
+  · obtain ⟨a, -, rfl⟩ := hx
+    obtain ⟨b, rfl⟩ := hcov y hy
+    rw [A.oracle_qry, A.oracle_qry] at hh
+    have hab : a ≠ b := fun e => hxy (by rw [e])
+    apply Finset.mem_union_left
+    rw [Finset.mem_biUnion]
+    rcases lt_or_gt_of_ne hab with hlt | hlt
+    · refine ⟨b, Finset.mem_univ _, ?_⟩
+      simp only [repeats, Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_image]
+      exact ⟨a, hlt, hh⟩
+    · refine ⟨a, Finset.mem_univ _, ?_⟩
+      simp only [repeats, Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_image]
+      exact ⟨b, hlt, hh.symm⟩
+  · obtain ⟨b, rfl⟩ := hcov y hy
+    have hb : τ ≤ (b : ℕ) := by
+      by_contra hlt; exact hyL ⟨b, by omega, rfl⟩
+    rw [A.oracle_qry] at hyT
+    apply Finset.mem_union_right
+    unfold hits
+    rw [Finset.mem_biUnion]
+    refine ⟨b, Finset.mem_univ _, ?_⟩
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and, targetsAt, if_pos hb, targets, Finset.mem_insert,
+      Finset.mem_biUnion]
+    rcases hyT with h | ⟨l, r, ⟨i, hi, hq⟩, hc⟩
+    · exact Or.inl h
+    · right
+      refine ⟨i, by simpa using hi, ?_⟩
+      have hx : ∃ lr : D × D, E.node lr.1 lr.2 = A.qry i u := ⟨(l, r), hq.symm⟩
+      have hlr := E.node_inj ((Classical.choose_spec hx).trans hq)
+      unfold children
+      rw [dif_pos hx]
+      rcases hc with hc | hc
+      · simp [hc, hlr.1]
+      · simp [hc, hlr.2]
+
+open Classical in
+/-- **`extract_of_ro`**: over the uniform answer streams, extraction fails on at most a `(q² + q (2τ + 1)) / |D|`
+share. -/
+theorem extract_of_ro [Inhabited D] {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) :
+    (Finset.univ.filter fun u => ExtractFails E A u).card * Fintype.card D ≤
+      (q * q + q * (2 * τ + 1)) * Fintype.card (Fin q → D) := by
+  calc (Finset.univ.filter fun u => ExtractFails E A u).card * Fintype.card D
+      ≤ ((Finset.univ.biUnion fun t => repeats q t) ∪ hits E A).card * Fintype.card D :=
+        Nat.mul_le_mul_right _ (Finset.card_le_card (fails_sub E A))
+    _ ≤ ((Finset.univ.biUnion fun t => (repeats q t : Finset (Fin q → D))).card + (hits E A).card) *
+          Fintype.card D := Nat.mul_le_mul_right _ (Finset.card_union_le _ _)
+    _ = (Finset.univ.biUnion fun t => (repeats q t : Finset (Fin q → D))).card * Fintype.card D +
+          (hits E A).card * Fintype.card D := add_mul _ _ _
+    _ ≤ q * q * Fintype.card (Fin q → D) + q * (2 * τ + 1) * Fintype.card (Fin q → D) :=
+        Nat.add_le_add (card_repeats_le q) (card_hits_le E A)
+    _ = (q * q + q * (2 * τ + 1)) * Fintype.card (Fin q → D) := (add_mul _ _ _).symm
+
+open Classical in
+/-- **`extract_of_ro_roots`, the `R`-root form**: `R` roots over one answer stream, root `w` sent after the first
+`τ w` answers (`A w` is the prover with that root; in a period the `A w` share their queries). Extraction fails at some
+root on at most a `(q² + ∑_w q (2 τ_w + 1)) / |D|` share of the streams: the repeated-answer event is one for all the
+roots, and each root adds its own targets. -/
+theorem extract_of_ro_roots [Inhabited D] {q R : ℕ} {τ : Fin R → ℕ} (E : Enc X D W)
+    (A : ∀ w, Prover X D q (τ w)) :
+    (Finset.univ.filter fun u => ∃ w, ExtractFails E (A w) u).card * Fintype.card D ≤
+      (q * q + ∑ w, q * (2 * τ w + 1)) * Fintype.card (Fin q → D) := by
+  have hsub : (Finset.univ.filter fun u => ∃ w, ExtractFails E (A w) u) ⊆
+      (Finset.univ.biUnion fun t => repeats q t) ∪ Finset.univ.biUnion fun w => hits E (A w) := by
+    intro u hu
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hu
+    obtain ⟨w, hw⟩ := hu
+    rcases Finset.mem_union.mp (fails_sub E (A w) (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hw⟩)) with h | h
+    · exact Finset.mem_union_left _ h
+    · exact Finset.mem_union_right _ (Finset.mem_biUnion.mpr ⟨w, Finset.mem_univ _, h⟩)
+  calc (Finset.univ.filter fun u => ∃ w, ExtractFails E (A w) u).card * Fintype.card D
+      ≤ ((Finset.univ.biUnion fun t => repeats q t) ∪ Finset.univ.biUnion fun w => hits E (A w)).card *
+          Fintype.card D := Nat.mul_le_mul_right _ (Finset.card_le_card hsub)
+    _ ≤ ((Finset.univ.biUnion fun t => (repeats q t : Finset (Fin q → D))).card + ∑ w, (hits E (A w)).card) *
+          Fintype.card D :=
+        Nat.mul_le_mul_right _ ((Finset.card_union_le _ _).trans (Nat.add_le_add_left Finset.card_biUnion_le _))
+    _ = (Finset.univ.biUnion fun t => (repeats q t : Finset (Fin q → D))).card * Fintype.card D +
+          ∑ w, (hits E (A w)).card * Fintype.card D := by rw [add_mul, Finset.sum_mul]
+    _ ≤ q * q * Fintype.card (Fin q → D) + ∑ w, q * (2 * τ w + 1) * Fintype.card (Fin q → D) :=
+        Nat.add_le_add (card_repeats_le q) (Finset.sum_le_sum fun w _ => card_hits_le E (A w))
+    _ = (q * q + ∑ w, q * (2 * τ w + 1)) * Fintype.card (Fin q → D) := by rw [add_mul, Finset.sum_mul]
+
+end RandomOracle
 
 end Pouw.MerkleExtract
