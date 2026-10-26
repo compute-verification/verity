@@ -1564,19 +1564,8 @@ and the ingress terms, which stay the K charge's.
 
 ### Attacks
 
-Moved to [protocol/arbitrary-serving-attacks.md](protocol/arbitrary-serving-attacks.md).
-
-### Adversarial cases
-
-Moved to [protocol/arbitrary-serving-attacks.md](protocol/arbitrary-serving-attacks.md).
-
-### The parts as drafted (24 Oct)
-
-Moved to [protocol/arbitrary-serving-attacks.md](protocol/arbitrary-serving-attacks.md).
-
-### For Daniel: what the guarantees would have to say
-
-Moved to [protocol/arbitrary-serving-attacks.md](protocol/arbitrary-serving-attacks.md).
+Moved to [protocol/arbitrary-serving-attacks.md](protocol/arbitrary-serving-attacks.md), with the adversarial cases, the
+parts as drafted (24 Oct) and what the guarantees would have to say.
 
 ## Calibration (`calibration`)
 
