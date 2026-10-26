@@ -1,13 +1,21 @@
-"""The H200 walking skeleton (CMP-96): steps of the frozen MQA shape (or a small one) from the weights' store through
-decode-to-staging, every op's output committed per step, drawn units replayed bit for bit, each leg run or named, and the
-replay bundle and block record written to ``--out``.
+"""The H200 walking skeleton (CMP-96): steps of the frozen MQA shape (or a small one) on the plain INT8 weights loaded once
+into the device's memory (Demo A; ``--weights staged`` is M4's decode-to-staging path), every op's output committed per step,
+drawn units replayed bit for bit, each leg run or named, and the replay bundle and block record written to ``--out``.
 
-    python benchmarks/e2e_h200/run.py --out OUT [--shape tiny|small|slice|h200] [--seed test|demo|TEXT] [--batch B] [--steps T]
-        [--prompt-bytes P] [--device cpu|cuda] [--store generator|p2-encode|p2:PATH] [--salt HEX] [--stage-lib DIR]
-        [--commit reference|host|device] [--draw K] [--tamper OP] [--run-id ID] [--seed S]
+    python benchmarks/e2e_h200/run.py --out OUT [--shape tiny|small|slice|h200] [--seed test|demo|TEXT] [--batch B]
+        [--steps T] [--prompt-bytes P] [--device cpu|cuda] [--weights resident|staged] [--micro-batch M]
+        [--store generator|p2-encode|p2:PATH] [--workers N] [--commit slots|reference|host|device] [--salt-keys fresh|fixture]
+        [--open K] [--draw K] [--replay-step S] [--attention attn_ref|numpy] [--subcircuit MODULE:FACTORY ...]
+        [--tamper OP] [--run-id ID]
 
-Exit 0 when every drawn unit replays to its committed word, 3 when one doesn't (``--tamper OP`` flips bit 0 of OP's committed
-words at every step: replay must find it), 4 when a leg's fixture check fails.
+Under ``--commit slots`` (kernels' per-slot tree) the run keeps no step's tables: ``--open K`` slots drawn by a fixture coin
+are replayed alone and their slot roots compared with the committed ones (`e2e_h200.opening`), then ``--draw K`` units a
+family of the replayed step are replayed against the Definitions and opened against the step's root. The by-table backends
+keep every step's tables and replay from them.
+
+Exit 0 when every drawn unit replays to its committed word and every opened slot to its committed root, 3 when one doesn't
+(``--tamper OP`` flips bit 0 of OP's committed words at every step: replay or opening must find it), 4 when a leg's fixture
+check fails.
 """
 from __future__ import annotations
 
@@ -23,11 +31,12 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from e2e_h200 import legs as L  # noqa: E402
 from e2e_h200 import record as REC  # noqa: E402
-from e2e_h200.commit import Committer, fixture_secrets  # noqa: E402
-from e2e_h200.driver import Driver  # noqa: E402
+from e2e_h200.commit import Committer, fixture_salt, fixture_secrets  # noqa: E402
+from e2e_h200.driver import Driver, Params  # noqa: E402
+from e2e_h200.opening import Openings, draw_slots, replay_slot  # noqa: E402
 from e2e_h200.shape import SHAPES  # noqa: E402
 from e2e_h200.store import GeneratorStore, P2Store  # noqa: E402
-from e2e_h200.units import Replayer  # noqa: E402
+from e2e_h200.units import Replayer, load_subcircuit  # noqa: E402
 from e2e_h200.weights import Weights  # noqa: E402
 from verity_torch_loop import weights as SW  # noqa: E402
 
@@ -60,13 +69,19 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--steps", type=int, default=4)
     ap.add_argument("--prompt-bytes", type=int, default=2)
     ap.add_argument("--device", default="cpu")
+    ap.add_argument("--weights", default="resident", choices=("resident", "staged"))
+    ap.add_argument("--micro-batch", type=int, default=0, help="rows a layer's ops run on at once (0: the whole batch)")
     ap.add_argument("--store", default="generator")
     ap.add_argument("--salt", default="")
     ap.add_argument("--stage-lib", default="")
     ap.add_argument("--workers", type=int, default=1)
-    ap.add_argument("--commit", default="host", choices=("reference", "host", "device"))
-    ap.add_argument("--draw", type=int, default=4, help="units drawn per family of the replayed step")
+    ap.add_argument("--commit", default="slots", choices=("slots", "reference", "host", "device"))
+    ap.add_argument("--salt-keys", default="fresh", choices=("fresh", "fixture"))
+    ap.add_argument("--open", type=int, default=2, help="slots drawn and opened by replaying their requests (slots backend)")
+    ap.add_argument("--draw", type=int, default=4, help="units drawn per family of the replayed step (per opened slot)")
     ap.add_argument("--replay-step", type=int, default=-1)
+    ap.add_argument("--attention", default=None, choices=("attn_ref", "numpy"))
+    ap.add_argument("--subcircuit", action="append", default=[], help="MODULE:FACTORY joining the integrity registration")
     ap.add_argument("--pous-reads", type=int, default=16)
     ap.add_argument("--tamper", default="")
     ap.add_argument("--run-id", default="e2e-h200-fixture")
@@ -81,12 +96,17 @@ def main(argv: list[str] | None = None) -> int:
     store = make_store(a, weights, a.device)
     t_store = time.perf_counter() - t0
     ctx, key = fixture_secrets(a.run_id)
-    committer = Committer(a.commit, ctx, key)
+    slots = a.commit == "slots"
+    committer = Committer(a.commit, ctx, key, shape, a.device, fixture_salt(a.run_id) if a.salt_keys == "fixture" else None)
     prompts = prompts_for(a.run_id, a.batch, a.prompt_bytes)
+    subs = [load_subcircuit(s, shape=shape, weights=weights, run_id=a.run_id) for s in a.subcircuit]
+    params = Params(shape, store, a.device, a.weights == "resident")
+    print(json.dumps({"params": params.describe()}), flush=True)
 
-    def drive():
-        d = Driver(shape, store, a.batch, committer, a.device, tamper=a.tamper or None)
-        return d, d.run(prompts, a.steps)
+    def drive(salt_keys=None, p=params):
+        d = Driver(shape, p, a.batch, committer, a.device, tamper=a.tamper or None, keep=not slots,
+                   micro_batch=a.micro_batch or None, attention=a.attention, subcircuits=subs)
+        return d, d.run(prompts, a.steps, salt_keys)
 
     driver, results = drive()
     for r in results:
@@ -94,36 +114,63 @@ def main(argv: list[str] | None = None) -> int:
                           "seconds": {k: round(v, 3) for k, v in r.seconds.items()}}), flush=True)
     step = a.replay_step % len(results)
     t0 = time.perf_counter()
-    units = Replayer(shape, weights, driver.steps, [r.tokens_in for r in results]).draw(step, a.draw, a.run_id.encode())
+    opening = None
+    if slots:
+        opn, units, opened_docs = Openings(committer, results), [], []
+        for s in draw_slots(a.batch, a.open, a.run_id.encode(), step):
+            op = replay_slot(shape, params, committer, results, prompts, s, step, a.device, a.attention)
+            got = Replayer(shape, weights, op.driver.steps, op.tokens, subs).draw(step, a.draw, a.run_id.encode() + b"%d" % s)
+            for u in got:
+                u.slot = s
+                u.opened = opn.open(op, step, u)
+            opened_docs.append(op.doc() | {"reference_slot_root_equal": opn.reference_equal(op, step)})
+            units += got
+        opening = {"slots": opened_docs, "draw": f"fixture coin, {a.open} slots of the batch (PRF-170's plan replaces it)",
+                   "mismatches": sum(not d["slot_roots_equal"] for d in opened_docs),
+                   "units_opened": sum(u.opened is not None for u in units),
+                   "units_unverified": sum(u.opened is not None and not u.opened["verified"] for u in units),
+                   "reference_unequal": sum(not d["reference_slot_root_equal"] for d in opened_docs)}
+        registration = Replayer(shape, weights, op.driver.steps, op.tokens, subs).registration(step)
+    else:
+        rp = Replayer(shape, weights, driver.steps, [r.tokens_in for r in results], subs)
+        units = rp.draw(step, a.draw, a.run_id.encode())
+        registration = rp.registration(step)
     t_replay = time.perf_counter() - t0
     REC.write_bundle(out, units, results[step].root, step)
-    replay = REC.replay_summary(units) | {"step": step, "seconds": t_replay,
+    replay = REC.replay_summary(units) | {"step": step, "seconds": t_replay, "opening": opening,
                                           "draw": f"fixture coin, {a.draw} a family (PRF-170's plan replaces it)"}
     outputs = np.stack([r.tokens_out for r in results], 1)
     legs = {
         "integrity": L._entry("integrity", "fixture", replayed=replay["drawn"], mismatches=replay["mismatches"],
                               stands_in_for="C-Flock --zk proving the drawn units and Lean's ACCEPT"),
         "pous": L.pous_spot_reads(store, a.pous_reads, a.run_id.encode()),
-        "bandwidth": L.not_run("bandwidth", "memory-accounting's audit reads run against the demo card's store"),
+        "bandwidth": L.not_run("bandwidth", "M4: memory-accounting's audit reads against the demo card's store"),
         "certifier": L.certifier(prompts, outputs),
-        "wipe": L.wipe_reload(store, lambda: drive()[1][-1].root, results[-1].root),
-        "pouw": L.not_run("pouw", "ALLP-H1LOOP's H1 tiles over the step's INT8 linears, with ALLP-SALT's live salt"),
+        "wipe": L.wipe_reload(store, lambda: drive([r.salt_key for r in results],
+                                                   Params(shape, store, a.device, a.weights == "resident"))[1][-1].root,
+                              results[-1].root),
+        "pouw": L.not_run("pouw", "H200-PERCALL's per-call-noise tiles (CMP-126), a --subcircuit of the registration")
+        if not subs else L._entry("pouw", "fixture", subcircuits=[s.name for s in subs]),
     }
     store.close()
     doc = REC.write_record(
         out, run_id=a.run_id, shape=shape, batch=a.batch, device=a.device,
-        weights={**weights.manifest(), "registration_digest_test_key":
+        weights={**weights.manifest(), **params.describe(), "registration_digest_test_key":
                  weights.registration_digest() if weights.nbytes <= DIGEST_BYTES else None},
         store={**store.describe(), "seconds": t_store,
                "stands_in_for": None if store.kind == "p2-v4" else "MEM-69's P2-encoded store and its decode call"},
-        commit={"backend": a.commit, "context": "fixture", "layout": "table-major: a table an op, a row a slot",
-                "stands_in_for": "kernels' commit tree with one subtree per slot (CMP-95 item 3)"},
+        commit={**committer.describe(), "context": "fixture"},
         results=results, prompts=prompts, replay=replay, legs=legs,
-        extra={"tamper": a.tamper or None, "attention": "Definition numpy kernels on the CPU (KP2-ATTN pending)",
+        extra={"tamper": a.tamper or None, "registration": registration, "micro_batch": a.micro_batch or a.batch,
+               "attention": driver.attn.kind + (" (kernels' attn_ref, #4466, and softmax_t)" if driver.attn.kind == "attn_ref"
+                                                else " (the Definitions' numpy kernels on the CPU)"),
                "gemm": "torch._int_mm + torch epilogue" if a.device.startswith("cuda") else "exact f64 matmul + torch epilogue"})
     print(json.dumps({"replay": {k: replay[k] for k in ("drawn", "mismatches", "families")},
+                      "opening": opening and {k: opening[k] for k in ("mismatches", "units_opened", "units_unverified",
+                                                                      "reference_unequal")},
                       "legs": {k: v["status"] for k, v in legs.items()}}), flush=True)
-    if replay["mismatches"]:
+    if replay["mismatches"] or (opening and (opening["mismatches"] or opening["units_unverified"]
+                                             or opening["reference_unequal"])):
         return 3
     if legs["pous"].get("mismatched_blocks") or legs["wipe"].get("store_digest_equal") is False \
             or legs["wipe"].get("step_root_equal") is False:

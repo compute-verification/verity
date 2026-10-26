@@ -13,7 +13,7 @@ import torch
 import cpu_step as CS
 import run as RUN
 from e2e_h200 import store as STO
-from e2e_h200.commit import Committer, fixture_secrets
+from e2e_h200.commit import Committer, fixture_salt, fixture_secrets
 from e2e_h200.driver import Driver
 from e2e_h200.legs import pous_spot_reads, wipe_reload
 from e2e_h200.shape import SMALL, TINY
@@ -170,18 +170,27 @@ def test_p2_block_round_trips():
 
 
 def test_run_writes_record_and_bundle(tmp_path):
-    rc = RUN.main(["--out", str(tmp_path), "--shape", "tiny", "--batch", "2", "--steps", "2", "--commit", "reference",
-                   "--draw", "1"])
+    rc = RUN.main(["--out", str(tmp_path), "--shape", "tiny", "--batch", "2", "--steps", "2", "--draw", "1"])
     assert rc == 0
     rec = json.loads((tmp_path / "record.json").read_text())
     assert rec["replay"]["mismatches"] == 0 and len(rec["step_roots"]) == 2
-    assert rec["weights"]["registration_digest_test_key"]
+    assert rec["commit"]["backend"] == "slots" and rec["replay"]["opening"]["mismatches"] == 0
+    assert rec["replay"]["opening"]["units_opened"] == rec["replay"]["drawn"] > 0
+    assert rec["weights"]["registration_digest_test_key"] and rec["registration"]["blocks"][0]["name"] == "model"
     assert set(rec["legs"]) == {"integrity", "pous", "bandwidth", "certifier", "wipe", "pouw"}
-    assert json.loads((tmp_path / "bundle.json").read_text())["units"]
+    assert all(u["opened"]["verified"] for u in json.loads((tmp_path / "bundle.json").read_text())["units"])
 
 
-def test_run_exits_3_on_a_tampered_table(tmp_path):
-    rc = RUN.main(["--out", str(tmp_path), "--shape", "tiny", "--batch", "2", "--steps", "1", "--commit", "reference",
+def test_run_replays_kept_tables_under_a_by_table_commit(tmp_path):
+    rc = RUN.main(["--out", str(tmp_path), "--shape", "tiny", "--batch", "2", "--steps", "2", "--commit", "reference",
+                   "--draw", "1"])
+    rec = json.loads((tmp_path / "record.json").read_text())
+    assert rc == 0 and rec["replay"]["opening"] is None and rec["replay"]["drawn"] > 0
+
+
+@pytest.mark.parametrize("commit", ["slots", "reference"])
+def test_run_exits_3_on_a_tampered_table(tmp_path, commit):
+    rc = RUN.main(["--out", str(tmp_path), "--shape", "tiny", "--batch", "2", "--steps", "1", "--commit", commit,
                    "--draw", "1", "--tamper", TAMPER])
     assert rc == 3
 
@@ -190,3 +199,8 @@ def test_run_exits_3_on_a_tampered_table(tmp_path):
 def test_cuda_step_commits_the_cpu_roots(weights, honest):
     _, results = drive(GeneratorStore(weights), device="cuda")
     assert [r.root for r in results] == [r.root for r in honest[1]]
+    roots = []
+    for dev in ("cpu", "cuda"):
+        c = Committer("slots", *fixture_secrets("test"), TINY, dev, fixture_salt("test"))
+        roots.append([r.root for r in Driver(TINY, GeneratorStore(weights), BATCH, c, dev, keep=False).run(PROMPTS, STEPS)])
+    assert roots[0] == roots[1]

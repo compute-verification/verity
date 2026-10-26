@@ -1,24 +1,32 @@
-"""The step driver: one decode step of every sequence slot through every layer, weights staged from the store by its decode
-call, every unit's output committed by the per-step commit call, the step's tables kept on the host for replay.
+"""The step driver: one decode step of a batch of sequence slots through every layer, every unit's output committed by the
+per-step commit call as each group of the step (the embedding, a layer, the head) is written.
 
-Per layer: stage the six linears into their staging buffers (`store.Store.stage`); RMSNorm, quantize, Q, K and V; the slot's
-key and value into its KV cache; scores, softmax and PV (`attention`, on the CPU); quantize, O, the residual add; RMSNorm,
-quantize, up; ReLU and quantize, down, the residual add. Then the final RMSNorm, quantize, the head and argmax. Every slot
-runs in lockstep at one position per step: position t reads byte t of its prompt while t < P, else the previous step's
-argmax. The small tensors (scales, gains, embeddings) are read through the same decode call once (`store.Store.load`).
+The weights (`Params`) are the plain INT8 codes, loaded once into the device's memory through the store's decode call and
+resident across steps (Demo A, M1-M3); ``resident=False`` keeps M4's path, which stages each layer's six linears into staging
+buffers every step (`store.Store.stage`). The small tensors (scales, gains, embeddings) are loaded once either way.
+
+A step (`Driver.step_slots`) runs rows b = 0 .. B - 1, row b the KV pool's slot ``slots[b]`` at its own position
+``positions[b]`` on byte ``tokens[b]``; `Driver.step` is the lockstep step (every slot at one position) that `Driver.run`
+drives: position t reads byte t of each prompt while t < P, else the previous step's argmax. Per layer, in micro-batches of
+rows written into the layer's full-batch tables: RMSNorm, quantize, Q, K and V; the slot's key and value into its KV cache;
+scores, softmax and PV over the slot's first position + 1 keys (`attention.Attention`); quantize, O, the residual add;
+RMSNorm, quantize, up; ReLU and quantize, down, the residual add. Then the final RMSNorm, quantize, the head and argmax.
 
 The units are circuits' plan's, one unit a row (CMP-92 af6de1f1, revised 23:30Z, section 1b), and each table of the step
-(`commit.StepTables`) is one op's outputs, one row a slot, named as `cpu_step` labels them: ``embed``; per layer ``l<i>.``
+(`commit.StepTables`, laid out by `commit.tables`) is one op's outputs, one row a slot: ``embed``; per layer ``l<i>.``
 ``attn_norm``, ``attn_quant`` (codes, and the scale as the row's word), ``wq``, ``wk``, ``wv``, ``scores`` and ``softmax``
-(heads x (t + 1)), ``pv``, ``o_quant``, ``wo``, ``attn_residual``, ``mlp_norm``, ``up_quant``, ``wup``, ``down_quant``
-(RELU), ``wdown``, ``mlp_residual``; then ``final_norm``, ``head_quant``, ``head`` and ``argmax``. A row unit's output is its
-table's row; a coordinate unit's (a linear's, QK^T's, PV's) is one 16-bit word of it. The plan's gathers are wiring: the
-gathered row is the coordinates' table row.
+(heads x context, the slot's first position + 1 of each head's its values and the rest +0), ``pv``, ``o_quant``, ``wo``,
+``attn_residual``, ``mlp_norm``, ``up_quant``, ``wup``, ``down_quant`` (RELU), ``wdown``, ``mlp_residual``; then
+``final_norm``, ``head_quant``, ``head`` and ``argmax``. A row unit's output is its table's row; a coordinate unit's (a
+linear's, QK^T's, PV's) is one 16-bit word of it. The plan's gathers are wiring: the gathered row is the coordinates' table
+row. With ``keep=False`` a group's tables are dropped once committed (a run of record keeps no step's tables: a drawn slot
+is opened by replaying its request, `opening`).
 """
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from collections.abc import Sequence
 from typing import Any, Callable
 
 import numpy as np
@@ -26,7 +34,7 @@ import torch
 
 from . import attention as A
 from . import ops as O
-from .commit import Committer, StepTables
+from .commit import Committer, StepTables, tables
 from .shape import EPS, Shape, check
 from .store import Store
 from .weights import LINEARS
@@ -41,6 +49,52 @@ def from_words(w: np.ndarray, device: Any) -> torch.Tensor:
     return torch.from_numpy(np.ascontiguousarray(w, dtype=np.uint16).view(np.int16)).to(device).view(torch.bfloat16)
 
 
+class Params:
+    """The weights on ``device``: every linear's codes resident (``resident``, loaded once), or staged a layer at a time."""
+
+    def __init__(self, shape: Shape, store: Store, device: Any = "cpu", resident: bool = True,
+                 clock: Callable[[], float] = time.perf_counter) -> None:
+        self.shape, self.store, self.device, self.resident = check(shape), store, torch.device(device), resident
+        dev, w = self.device, store.weights
+        self.names = [f"l{i}.{k}" for i in range(shape.layers) for k in LINEARS] + ["head"]
+        self.sw = {n: torch.from_numpy(np.ascontiguousarray(store.load(f"{n}.scale"))).to(dev) for n in self.names}
+        self.gain = {n: from_words(store.load(n), dev)
+                     for n in [f"l{i}.{k}" for i in range(shape.layers) for k in ("attn_norm", "mlp_norm")] + ["final_norm"]}
+        self.tok = from_words(np.ascontiguousarray(store.load("tok").T), dev)    # (V, H): row v is token v's embedding
+        self.pos = from_words(np.ascontiguousarray(store.load("pos").T), dev)    # (C, H)
+        self.eps = torch.tensor([EPS], dtype=torch.int32).view(torch.float32)[0].to(dev)
+        t0 = clock()
+        if resident:
+            self.lin = {n: store.stage(n, torch.empty(w.dims[n], dtype=torch.int8, device=dev)) for n in self.names}
+            self.staging: dict[str, torch.Tensor] = {}
+        else:
+            self.lin = {}
+            self.staging = {k: torch.empty(w.dims[f"l0.{k}"], dtype=torch.int8, device=dev) for k in LINEARS}
+            self.staging["head"] = torch.empty(w.dims["head"], dtype=torch.int8, device=dev)
+        if dev.type == "cuda":
+            torch.cuda.synchronize(dev)
+        self.load_seconds = clock() - t0
+
+    @property
+    def resident_bytes(self) -> int:
+        return sum(t.numel() for t in self.lin.values())
+
+    def layer(self, layer: int) -> dict[str, torch.Tensor]:
+        """Layer ``layer``'s linears by kind (staged into the staging buffers unless resident)."""
+        if self.resident:
+            return {k: self.lin[f"l{layer}.{k}"] for k in LINEARS}
+        for k in LINEARS:
+            self.store.stage(f"l{layer}.{k}", self.staging[k])
+        return {k: self.staging[k] for k in LINEARS}
+
+    def head(self) -> torch.Tensor:
+        return self.lin["head"] if self.resident else self.store.stage("head", self.staging["head"])
+
+    def describe(self) -> dict:
+        return {"weights": "resident (loaded once, plain INT8)" if self.resident else "staged a layer a step (M4's path)",
+                "resident_bytes": self.resident_bytes, "load_seconds": self.load_seconds}
+
+
 @dataclass
 class StepResult:
     step: int
@@ -51,113 +105,185 @@ class StepResult:
     table_roots: tuple[tuple[str, bytes], ...]
     value_bytes: int
     seconds: dict[str, float] = field(default_factory=dict)
+    slots: np.ndarray | None = None
+    positions: np.ndarray | None = None
+    slot_roots: tuple[bytes, ...] = ()
+    salt_key: bytes | None = field(default=None, repr=False)
 
 
 class Driver:
-    def __init__(self, shape: Shape, store: Store, batch: int, committer: Committer, device: str = "cpu",
-                 clock: Callable[[], float] = time.perf_counter, tamper: str | None = None) -> None:
-        """``tamper``: a table whose committed bytes have bit 0 flipped at every step (a loop whose committed outputs are not
-        its model's), which replay must find."""
-        self.shape, self.store, self.batch, self.committer, self.tamper = check(shape), store, batch, committer, tamper
-        self.device, self.clock = torch.device(device), clock
-        dev, w = self.device, store.weights
-        names = [f"l{i}.{k}" for i in range(shape.layers) for k in LINEARS] + ["head"]
-        self.sw = {n: torch.from_numpy(np.ascontiguousarray(store.load(f"{n}.scale"))).to(dev) for n in names}
-        self.gain = {n: from_words(store.load(n), dev)
-                     for n in [f"l{i}.{k}" for i in range(shape.layers) for k in ("attn_norm", "mlp_norm")] + ["final_norm"]}
-        self.tok = from_words(np.ascontiguousarray(store.load("tok").T), dev)    # (V, H): row v is token v's embedding
-        self.pos = from_words(np.ascontiguousarray(store.load("pos").T), dev)    # (C, H)
-        self.eps = torch.tensor([EPS], dtype=torch.int32).view(torch.float32)[0].to(dev)
-        self.staging = {k: torch.empty(w.dims[f"l0.{k}"], dtype=torch.int8, device=dev) for k in LINEARS}
-        self.head = torch.empty(w.dims["head"], dtype=torch.int8, device=dev)
-        self.k = np.zeros((shape.layers, batch, shape.context, shape.head_dim), np.uint16)
-        self.v = np.zeros_like(self.k)
+    def __init__(self, shape: Shape, store: Store | Params, batch: int, committer: Committer, device: str = "cpu",
+                 clock: Callable[[], float] = time.perf_counter, tamper: str | None = None, keep: bool = True,
+                 micro_batch: int | None = None, resident: bool = True, attention: str | None = None,
+                 subcircuits: Sequence[Any] = ()) -> None:
+        """``batch``: the KV pool's slots. ``tamper``: a table whose committed bytes have bit 0 flipped at every step (a loop
+        whose committed outputs are not its model's), which replay or opening must find. ``micro_batch``: the rows a
+        layer's ops run on at once (all by default). ``attention``: `attention.Attention`'s kind (by default its pick).
+        ``subcircuits``: `units.Subcircuit`s, each served after every step."""
+        self.shape, self.batch, self.committer, self.tamper = check(shape), batch, committer, tamper
+        self.device, self.clock, self.keep = torch.device(device), clock, keep
+        self.params = store if isinstance(store, Params) else Params(shape, store, device, resident, clock)
+        self.store = self.params.store
+        self.mb = micro_batch or batch
+        self.subcircuits = list(subcircuits)
+        self.attn = A.Attention(self.device, attention)
+        self.groups = tables(shape)
+        kv = (shape.layers, batch, shape.context, shape.head_dim)
+        self.k = torch.zeros(kv, dtype=torch.int16, device=self.device)
+        self.v = torch.zeros(kv, dtype=torch.int16, device=self.device)
         self.steps: list[StepTables] = []
         self.results: list[StepResult] = []
+
+    @property
+    def tok(self) -> torch.Tensor:
+        return self.params.tok
 
     def _sync(self) -> None:
         if self.device.type == "cuda":
             torch.cuda.synchronize(self.device)
 
-    def _timed(self, sec: dict[str, float], key: str, fn: Callable[[], Any]) -> Any:
+    def _tick(self, sec: dict[str, float], key: str, t0: float) -> float:
         self._sync()
-        t0 = self.clock()
-        out = fn()
-        self._sync()
-        sec[key] = sec.get(key, 0.0) + self.clock() - t0
-        return out
+        t1 = self.clock()
+        sec[key] = sec.get(key, 0.0) + t1 - t0
+        return t1
+
+    def _alloc(self, st: StepTables, group: int) -> dict[str, tuple[torch.Tensor, torch.Tensor]]:
+        return {t.op: st.alloc(t, self.device) for t in self.groups[group]}
+
+    def _close(self, st: StepTables, group: int) -> None:
+        ops = [t.op for t in self.groups[group]]
+        if self.tamper in ops:
+            st.tables[self.tamper][0].bitwise_xor_(1)
+        self.committer.group(st, group)
+        if not self.keep and self.committer.streams:
+            st.drop(ops)
 
     @staticmethod
-    def _put(st: StepTables, op: str, y: Any) -> Any:
-        st.put(op, y)
-        return y
+    def _bf(t: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        return t[0].view(torch.bfloat16)
 
-    def _quant(self, st: StepTables, op: str, x: torch.Tensor, relu: bool = False) -> O.Quant:
-        q = O.quantize(x, relu)
-        st.put(op, q.codes, q.scale)
+    @staticmethod
+    def _quant(t: tuple[torch.Tensor, torch.Tensor], lo: int, hi: int, q: O.Quant) -> O.Quant:
+        t[0][lo:hi] = q.codes
+        t[1][lo:hi] = q.scale
         return q
 
-    def _linear(self, st: StepTables, op: str, q: O.Quant, w: torch.Tensor, name: str) -> torch.Tensor:
-        return self._put(st, op, O.s8_linear(q, w, self.sw[name]))
-
-    def step(self, t: int, tokens: np.ndarray) -> StepResult:
+    def step(self, t: int, tokens: np.ndarray, **kw: Any) -> StepResult:
         """Position ``t`` for every slot on ``tokens`` (B,): commits the step and returns its argmax bytes."""
-        sh, dev, b = self.shape, self.device, self.batch
-        st = StepTables(len(self.steps), t, b)
+        b = len(tokens)
+        return self.step_slots(np.arange(b), np.full(b, t), tokens, **kw)
+
+    def step_slots(self, slots: np.ndarray, positions: np.ndarray, tokens: np.ndarray, salt_key: bytes | None = None,
+                   nonce0: int = 0) -> StepResult:
+        """Rows b of slots ``slots[b]`` (of the KV pool, distinct) at positions ``positions[b]`` on bytes ``tokens[b]``: commits
+        the step (row b its slot ``nonce0 + b`` of the commit, under ``salt_key`` if given) and returns its argmax bytes."""
+        sh, dev = self.shape, self.device
+        slots, positions = np.asarray(slots, np.int64), np.asarray(positions, np.int64)
+        n = len(slots)
+        if len(set(slots.tolist())) != n or n != len(positions) or n != len(tokens) or not n:
+            raise ValueError("a step's rows are distinct slots, each with a position and a byte")
+        if slots.min() < 0 or slots.max() >= self.batch or positions.min() < 0 or positions.max() >= sh.context:
+            raise ValueError(f"slots are below {self.batch} and positions below {sh.context}")
+        st = StepTables(len(self.results), positions, n, slots=slots)
+        self.committer.begin(st, salt_key, nonce0)
         sec: dict[str, float] = {}
-        tok = torch.from_numpy(tokens.astype(np.int64)).to(dev)
-        x = self._put(st, "embed", O.add(self.tok[tok], self.pos[t][None, :].expand(b, -1)))
+        c0 = self.clock()
+        sl, pos = torch.from_numpy(slots).to(dev), torch.from_numpy(positions).to(dev)
+        whole = n == self.batch and bool((slots == np.arange(n)).all())
+        tok = torch.from_numpy(np.asarray(tokens, np.int64)).to(dev)
+        T = self._alloc(st, 0)
+        x = O.add(self.params.tok[tok], self.params.pos[pos])
+        self._bf(T["embed"])[:] = x
+        self._close(st, 0)
+        ch = [(lo, min(lo + self.mb, n)) for lo in range(0, n, self.mb)]
         for layer in range(sh.layers):
-            p, sg = f"l{layer}.", self.staging
-            for k in LINEARS:
-                self._timed(sec, "stage", lambda k=k: self.store.stage(p + k, sg[k]))
-            c0 = self.clock()
-            h = self._put(st, p + "attn_norm", O.rmsnorm(x, self.gain[p + "attn_norm"], self.eps))
-            q = self._quant(st, p + "attn_quant", h)
-            qw = words(self._linear(st, p + "wq", q, sg["wq"], p + "wq"))
-            self.k[layer, :, t] = words(self._linear(st, p + "wk", q, sg["wk"], p + "wk"))
-            self.v[layer, :, t] = words(self._linear(st, p + "wv", q, sg["wv"], p + "wv"))
-            self._sync()
-            sec["linear+row"] = sec.get("linear+row", 0.0) + self.clock() - c0
-            c0 = self.clock()
-            sc = A.scores(qw.reshape(b, sh.heads, sh.head_dim), self.k[layer, :, :t + 1])
-            sm = A.softmax(sc)
-            att = A.pv(sm.probs, self.v[layer, :, :t + 1])
-            sec["attention"] = sec.get("attention", 0.0) + self.clock() - c0
-            st.put(p + "scores", sc)
-            st.put(p + "softmax", sm.probs)
-            st.put(p + "pv", att)
-            c0 = self.clock()
-            q = self._quant(st, p + "o_quant", from_words(att.reshape(b, sh.width), dev))
-            x = self._put(st, p + "attn_residual", O.add(x, self._linear(st, p + "wo", q, sg["wo"], p + "wo")))
-            h = self._put(st, p + "mlp_norm", O.rmsnorm(x, self.gain[p + "mlp_norm"], self.eps))
-            q = self._quant(st, p + "up_quant", h)
-            u = self._linear(st, p + "wup", q, sg["wup"], p + "wup")
-            q = self._quant(st, p + "down_quant", u, relu=True)
-            x = self._put(st, p + "mlp_residual", O.add(x, self._linear(st, p + "wdown", q, sg["wdown"], p + "wdown")))
-            self._sync()
-            sec["linear+row"] += self.clock() - c0
-        self._timed(sec, "stage", lambda: self.store.stage("head", self.head))
-        h = self._put(st, "final_norm", O.rmsnorm(x, self.gain["final_norm"], self.eps))
-        q = self._quant(st, "head_quant", h)
-        nxt = O.argmax(self._linear(st, "head", q, self.head, "head"))
-        st.put("argmax", nxt.to(torch.int16)[:, None])
-        if self.tamper:
-            codes, word = st.tables[self.tamper]
-            st.tables[self.tamper] = (codes ^ 1, word)
-        roots = self._timed(sec, "commit", lambda: self.committer.commit(st))
+            p = f"l{layer}."
+            if not self.params.resident:
+                c0 = self._tick(sec, "forward", c0)
+            w = self.params.layer(layer)
+            if not self.params.resident:
+                c0 = self._tick(sec, "stage", c0)
+            T = {op[len(p):]: v for op, v in self._alloc(st, layer + 1).items()}
+            for lo, hi in ch:
+                m = hi - lo
+                xs = x[lo:hi]
+                h = O.rmsnorm(xs, self.params.gain[p + "attn_norm"], self.params.eps)
+                self._bf(T["attn_norm"])[lo:hi] = h
+                q = self._quant(T["attn_quant"], lo, hi, O.quantize(h))
+                qv = O.s8_linear(q, w["wq"], self.params.sw[p + "wq"])
+                self._bf(T["wq"])[lo:hi] = qv
+                kk = O.s8_linear(q, w["wk"], self.params.sw[p + "wk"])
+                vv = O.s8_linear(q, w["wv"], self.params.sw[p + "wv"])
+                self._bf(T["wk"])[lo:hi], self._bf(T["wv"])[lo:hi] = kk, vv
+                s_c, p_c = sl[lo:hi], pos[lo:hi]
+                self.k[layer, s_c, p_c] = kk.view(torch.int16)
+                self.v[layer, s_c, p_c] = vv.view(torch.int16)
+                keys = (self.k[layer, lo:hi] if whole else self.k[layer, s_c]).view(torch.bfloat16)
+                vals = (self.v[layer, lo:hi] if whole else self.v[layer, s_c]).view(torch.bfloat16)
+                a0 = self._tick(sec, "forward", c0)
+                sc, pr, att = self.attn(qv.view(m, sh.heads, sh.head_dim), keys, vals, p_c + 1)
+                c0 = self._tick(sec, "attention", a0)
+                self._bf(T["scores"])[lo:hi] = sc.reshape(m, -1)
+                self._bf(T["softmax"])[lo:hi] = pr.reshape(m, -1)
+                att = att.reshape(m, sh.width)
+                self._bf(T["pv"])[lo:hi] = att
+                q = self._quant(T["o_quant"], lo, hi, O.quantize(att))
+                o = O.s8_linear(q, w["wo"], self.params.sw[p + "wo"])
+                self._bf(T["wo"])[lo:hi] = o
+                xs = O.add(xs, o)
+                self._bf(T["attn_residual"])[lo:hi] = xs
+                h = O.rmsnorm(xs, self.params.gain[p + "mlp_norm"], self.params.eps)
+                self._bf(T["mlp_norm"])[lo:hi] = h
+                q = self._quant(T["up_quant"], lo, hi, O.quantize(h))
+                u = O.s8_linear(q, w["wup"], self.params.sw[p + "wup"])
+                self._bf(T["wup"])[lo:hi] = u
+                q = self._quant(T["down_quant"], lo, hi, O.quantize(u, relu=True))
+                del u
+                dn = O.s8_linear(q, w["wdown"], self.params.sw[p + "wdown"])
+                self._bf(T["wdown"])[lo:hi] = dn
+                xs = O.add(xs, dn)
+                self._bf(T["mlp_residual"])[lo:hi] = xs
+                x[lo:hi] = xs
+            self._close(st, layer + 1)
+        c0 = self._tick(sec, "forward", c0)
+        head = self.params.head()
+        if not self.params.resident:
+            c0 = self._tick(sec, "stage", c0)
+        g = len(self.groups) - 1
+        T = self._alloc(st, g)
+        nxt = torch.empty(n, dtype=torch.int64, device=dev)
+        for lo, hi in ch:
+            h = O.rmsnorm(x[lo:hi], self.params.gain["final_norm"], self.params.eps)
+            self._bf(T["final_norm"])[lo:hi] = h
+            q = self._quant(T["head_quant"], lo, hi, O.quantize(h))
+            logits = O.s8_linear(q, head, self.params.sw["head"])
+            self._bf(T["head"])[lo:hi] = logits
+            nxt[lo:hi] = O.argmax(logits)
+        T["argmax"][0].view(torch.int16)[:, 0] = nxt.to(torch.int16)
+        self._close(st, g)
+        c0 = self._tick(sec, "forward", c0)
+        roots = self.committer.finish(st)
+        self._tick(sec, "commit_wait" if self.committer.streams else "commit", c0)
         out = nxt.cpu().numpy().astype(np.int64)
-        res = StepResult(st.step, t, tokens.copy(), out, roots.root, roots.tables, st.value_bytes(), sec)
-        self.steps.append(StepTables(st.step, t, b, st.host()))
+        res = StepResult(st.step, int(positions[0]), np.asarray(tokens).copy(), out, roots.root, roots.tables,
+                         self.value_bytes(n), sec, slots, positions, roots.slot_roots, st.salt_key)
+        if self.keep:
+            self.steps.append(StepTables(st.step, positions, n, st.host(), slots=slots, salt_key=st.salt_key))
         self.results.append(res)
+        for sub in self.subcircuits:
+            sub.serve(self, res)
         return res
 
-    def run(self, prompts: np.ndarray, steps: int) -> list[StepResult]:
+    def value_bytes(self, n: int) -> int:
+        return n * sum(t.nbytes + 4 * t.quant for g in self.groups for t in g)
+
+    def run(self, prompts: np.ndarray, steps: int, salt_keys: list[bytes] | None = None) -> list[StepResult]:
         """``prompts`` (B, P) bytes; positions 0 .. steps - 1 (prefill one byte a step, then decode)."""
         if prompts.shape[0] != self.batch or steps > self.shape.context:
             raise ValueError(f"{self.batch} prompts and at most {self.shape.context} steps")
         toks = prompts[:, 0].astype(np.int64)
         for t in range(steps):
-            res = self.step(t, toks)
+            res = self.step(t, toks, salt_key=salt_keys[t] if salt_keys else None)
             toks = prompts[:, t + 1].astype(np.int64) if t + 1 < prompts.shape[1] else res.tokens_out
         return self.results

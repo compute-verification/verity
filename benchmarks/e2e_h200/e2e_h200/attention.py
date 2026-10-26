@@ -11,12 +11,24 @@ until it is handed over (a BF16 tensor-core product computed by torch is another
 
 Words are numpy u16 (bf16) and u32 (f32); everything is evaluated by `evaluation.evaluate_batch` or numpy float32 ufuncs, each
 one IEEE round to nearest.
+
+`Attention` runs a micro-batch of slots, each at its own position (``lens`` = position + 1 keys), on the tensors' device:
+on CUDA through kernels' `attn_ref` (#4466: QK^T and PV, each word ``GemmCoordinate_v2{K, GEMM_HOPPER}``, PV's K the keys
+padded to a multiple of 16, which equals the K = 32 padding: both pad with +0 codes) and `softmax_t` (SoftmaxRow_v1 in
+torch integer and f32 ops); elsewhere through the numpy kernels above, one call per distinct length. Scores and
+probabilities come out (B, H, C), zero past each slot's length.
 """
 from __future__ import annotations
 
+import importlib.util
+import sys
 from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
+from typing import Any
 
 import numpy as np
+import torch
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
@@ -89,3 +101,108 @@ def pv(p: np.ndarray, values: np.ndarray) -> np.ndarray:
     x = np.broadcast_to(pad(p)[:, :, None, :], (b, h, d, PAD_K)).reshape(-1, PAD_K)
     w = np.broadcast_to(pad(np.swapaxes(values, 1, 2))[:, None, :, :], (b, h, d, PAD_K)).reshape(-1, PAD_K)
     return np.asarray(evaluate_batch(pv_template(), x, w), dtype=np.uint16).reshape(b, h, d)
+
+
+# --- per-slot lengths, on the tensors' device ----------------------------------------------------------------------------
+
+ATTN_REF = Path(__file__).resolve().parents[2] / "torch_gpu" / "attn_ref" / "attn_ref.py"
+_ONE, _INF, _NAN = 0x3F800000, 0x7F800000, 0x7FFFFFFF
+
+
+@lru_cache(maxsize=None)
+def ex2_table(device: Any) -> torch.Tensor:
+    return torch.from_numpy(MU.table("ex2").astype(np.int64)).to(device)
+
+
+def ex2_t(x: torch.Tensor, table: torch.Tensor) -> torch.Tensor:
+    """`MU.mufu_ex2_words` in torch: x int64 f32 words (0 .. 2^32 - 1) -> int64 words."""
+    ax = x & 0x7FFFFFFF
+    e = ax >> 23
+    neg = (x >> 31) != 0
+    mant = (ax & 0x7FFFFF) | 0x800000
+    unb = e - 127
+    k = torch.where(unb >= 0, mant << unb.clamp(0, 29), mant >> (-unb).clamp(0, 24))
+    fixed = torch.where(~neg, k, torch.where((k & 0x7FFFFF) == 0, -k, -k - 1))
+    t = table[fixed & 0x7FFFFF]
+    re = ((t >> 23) & 0xFF) + (fixed >> 23)
+    out = torch.where(re >= 0xFF, _INF, torch.where(re <= 0, 0, (re.clamp(0, 0xFF) << 23) | (t & 0x7FFFFF)))
+    out = torch.where(e == 0, _ONE, out)
+    out = torch.where(unb >= 30, torch.where(neg, 0, _INF), out)
+    return torch.where((e == 0xFF) & ((ax & 0x7FFFFF) != 0), _NAN, out)
+
+
+def _f32(words: torch.Tensor) -> torch.Tensor:
+    """int64 words 0 .. 2^32 - 1 as f32."""
+    return torch.where(words >= 1 << 31, words - (1 << 32), words).to(torch.int32).view(torch.float32)
+
+
+def _words(x: torch.Tensor) -> torch.Tensor:
+    return x.view(torch.int32).to(torch.int64) & 0xFFFFFFFF
+
+
+def softmax_t(scores: torch.Tensor, lens: torch.Tensor) -> torch.Tensor:
+    """`softmax` with each row's first ``lens`` scores: scores (B, H, C) bf16, lens (B,) -> probabilities (B, H, C) bf16,
+    +0 past the length."""
+    c = scores.shape[-1]
+    xf = scores.float()
+    valid = torch.arange(c, device=scores.device)[None, None, :] < lens.to(scores.device)[:, None, None]
+    first = torch.argmax(torch.where(valid, xf, float("-inf")), dim=-1, keepdim=True)
+    m = torch.gather(xf, -1, first)
+    y = (xf - m) * torch.tensor(LOG2E, dtype=torch.float32, device=xf.device)
+    e = torch.where(valid, _f32(ex2_t(_words(y), ex2_table(scores.device))), 0.0)
+    s = torch.zeros(e.shape[:-1], dtype=torch.float32, device=e.device)
+    for j in range(c):
+        s = s + e[..., j]
+    r = (1.0 / s.double()).float()
+    return torch.where(valid, (e * r[..., None]).to(torch.bfloat16), torch.zeros((), dtype=torch.bfloat16, device=e.device))
+
+
+@lru_cache(maxsize=1)
+def attn_ref() -> Any:
+    """kernels' `attn_ref` module, or None when its file or cubin isn't here."""
+    if not ATTN_REF.exists():
+        return None
+    spec = importlib.util.spec_from_file_location("attn_ref", ATTN_REF)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["attn_ref"] = mod
+    spec.loader.exec_module(mod)
+    return mod if mod.cubin_path().exists() else None
+
+
+def _host_words(t: torch.Tensor) -> np.ndarray:
+    return t.contiguous().view(torch.int16).cpu().numpy().view(np.uint16)
+
+
+def _dev(w: np.ndarray, device: Any) -> torch.Tensor:
+    return torch.from_numpy(np.ascontiguousarray(w).view(np.int16)).to(device).view(torch.bfloat16)
+
+
+class Attention:
+    """One micro-batch's attention on ``device``: ``kind`` is ``attn_ref`` (CUDA with kernels' cubin) or ``numpy``."""
+
+    def __init__(self, device: Any, kind: str | None = None) -> None:
+        self.device = torch.device(device)
+        if kind is None:
+            kind = "attn_ref" if self.device.type == "cuda" and attn_ref() is not None else "numpy"
+        if kind == "attn_ref" and (self.device.type != "cuda" or attn_ref() is None):
+            raise ValueError(f"attn_ref runs on CUDA with its cubin ({ATTN_REF.parent})")
+        self.kind = kind
+
+    def __call__(self, q: torch.Tensor, keys: torch.Tensor, values: torch.Tensor, lens: torch.Tensor):
+        """q (B, H, d), keys and values (B, C, d) bf16, lens (B,) -> scores, probabilities (B, H, C) and PV (B, H, d)."""
+        if self.kind == "attn_ref":
+            ar, ln = attn_ref(), lens.to(device=q.device, dtype=torch.int32)
+            s = ar.qk(q.contiguous(), keys.contiguous(), ln, fill=0, check_lens=False)
+            p = softmax_t(s, ln)
+            return s, p, ar.pv(p, values.contiguous(), ln, check_lens=False)
+        b, h, d = q.shape
+        c = keys.shape[1]
+        qw, kw, vw, ln = _host_words(q), _host_words(keys), _host_words(values), lens.cpu().numpy()
+        sc, pr, o = (np.zeros((b, h, c), np.uint16), np.zeros((b, h, c), np.uint16), np.zeros((b, h, d), np.uint16))
+        for n in np.unique(ln):
+            i = np.flatnonzero(ln == n)
+            s = scores(qw[i], kw[i, :n])
+            p = softmax(s).probs
+            sc[i, :, :n], pr[i, :, :n], o[i] = s, p, pv(p, vw[i, :n])
+        return _dev(sc, q.device), _dev(pr, q.device), _dev(o, q.device)

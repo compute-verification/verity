@@ -14,13 +14,18 @@ unit), and `Family.replay` gives a unit's opened inputs, its committed output wo
 
 A unit's inputs are read from the committed tables (an earlier op's row, an earlier step's K or V row) and the registered
 weights (`weights.Weights`, from the generator, not the store, so a wrong decode shows as a mismatch).
+
+A `Subcircuit` joins the step's integrity registration as one more sampling block, drawn with the step's families: PoUW's
+per-call-noise tiles (H200-PERCALL, CMP-126) plug in as ``MODULE:FACTORY`` (`load_subcircuit`, ``run.py --subcircuit``).
 """
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable
+import importlib
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -71,6 +76,8 @@ class Unit:
     inputs: list[np.ndarray]
     got: np.ndarray
     want: np.ndarray
+    span: tuple[int, int, bool] | None = None
+    opened: dict | None = None
 
     @property
     def ok(self) -> bool:
@@ -83,7 +90,8 @@ class Unit:
                 "first_difference": None if self.ok else {"word": int(diff[0]), "got": int(self.got.reshape(-1)[diff[0]]),
                                                           "replayed": int(self.want.reshape(-1)[diff[0]])},
                 "inputs": [{"dtype": str(a.dtype), "shape": list(a.shape),
-                            "sha512": hashlib.sha512(np.ascontiguousarray(a).tobytes()).hexdigest()} for a in self.inputs]}
+                            "sha512": hashlib.sha512(np.ascontiguousarray(a).tobytes()).hexdigest()} for a in self.inputs],
+                **({"opened": self.opened} if self.opened is not None else {})}
 
 
 @dataclass
@@ -93,6 +101,8 @@ class Family:
     status: str
     per_slot: int
     replay: Callable[[int, int], tuple[list[np.ndarray], np.ndarray, np.ndarray]]   # (slot, index) -> (inputs, got, want)
+    #: unit index -> (first byte, end byte, whether the row's scale too) of its outputs in the table's row (None: the row)
+    span: Callable[[int], tuple[int, int, bool]] | None = None
 
 
 @lru_cache(maxsize=None)
@@ -110,10 +120,33 @@ def _pv(t: int) -> RP.Template:
     return RP.gemm_coordinate_pad(t, PV_K)
 
 
+class Subcircuit(Protocol):
+    """A subcircuit of the step's integrity registration besides the model's units: ``serve`` runs after each served step
+    (with the driver's resident weights, ``driver.params``), ``families`` gives its units at a step for the draw, and
+    ``manifest`` what the registration records of it."""
+    name: str
+
+    def serve(self, driver: Any, result: Any) -> None: ...
+
+    def families(self, replayer: Replayer, step: int) -> list[Family]: ...
+
+    def manifest(self) -> dict: ...
+
+
+def load_subcircuit(spec: str, **kw: Any) -> Subcircuit:
+    """``MODULE:FACTORY`` called with ``kw`` (``shape``, ``weights``, ``run_id``)."""
+    module, sep, factory = spec.partition(":")
+    if not sep:
+        raise ValueError(f"a subcircuit is MODULE:FACTORY, not {spec!r}")
+    return getattr(importlib.import_module(module), factory)(**kw)
+
+
 class Replayer:
-    def __init__(self, shape: Shape, weights: Weights, steps: list[StepTables], tokens: list[np.ndarray]) -> None:
+    def __init__(self, shape: Shape, weights: Weights, steps: list[StepTables], tokens: list[np.ndarray],
+                 subcircuits: Sequence[Subcircuit] = ()) -> None:
         """``steps[s]`` the committed tables of step s (position s), ``tokens[s]`` the bytes it embedded."""
         self.shape, self.weights, self.steps, self.tokens = shape, weights, steps, tokens
+        self.subcircuits = list(subcircuits)
         self._array = lru_cache(maxsize=8)(weights.array)
 
     # -- committed words
@@ -133,6 +166,10 @@ class Replayer:
     # -- families
 
     def families(self, step: int) -> list[Family]:
+        """The step's model families, then each subcircuit's."""
+        return self.model_families(step) + [f for sub in self.subcircuits for f in sub.families(self, step)]
+
+    def model_families(self, step: int) -> list[Family]:
         sh = self.shape
         out = [self._embed(step)]
         prev = "embed"
@@ -151,6 +188,12 @@ class Replayer:
         out += [self._rms(step, "final_norm", prev), self._quant(step, "head_quant", "final_norm", False),
                 self._linear(step, "head", "head_quant"), self._argmax(step)]
         return out
+
+    def registration(self, step: int) -> dict:
+        """The step's sampling blocks: the model's families by template, then each subcircuit's."""
+        fams = self.model_families(step)
+        return {"blocks": [{"name": "model", "families": len(fams), "templates": sorted({f.template for f in fams})}]
+                + [{"name": sub.name, **sub.manifest()} for sub in self.subcircuits]}
 
     def _embed(self, step: int) -> Family:
         sh = self.shape
@@ -178,7 +221,7 @@ class Replayer:
             codes, scale = quant_row(x[None], relu)
             got = np.concatenate([self.raw(step, op, b).view(np.uint8).astype(np.uint32), [self.word(step, op, b)]])
             return [x], got, np.concatenate([codes[0].astype(np.uint32), scale])
-        return Family(op, RP.key_of("QuantRowS8_v1", {"N": n, "RELU": relu}), ROW, 1, replay)
+        return Family(op, RP.key_of("QuantRowS8_v1", {"N": n, "RELU": relu}), ROW, 1, replay, lambda _: (0, n, True))
 
     def _linear(self, step: int, op: str, qop: str) -> Family:
         tensor = op
@@ -192,12 +235,12 @@ class Replayer:
             sw = np.asarray(self._array(f"{tensor}.scale")[i], np.float32).view(np.uint32)
             want = tpl.evaluate(x[None], np.array([sx]), wrow[None], np.array([sw]))[0]
             return [x, np.array([sx]), wrow, np.array([sw])], self.u16(step, op, b)[i:i + 1], want.astype(np.uint16)
-        return Family(op, tpl.key, COORD, n, replay)
+        return Family(op, tpl.key, COORD, n, replay, lambda i: (2 * i, 2 * i + 2, False))
 
     def _attention(self, step: int, p: str) -> list[Family]:
         sh = self.shape
         t = self.steps[step].position
-        d, h, t1 = sh.head_dim, sh.heads, t + 1
+        d, h, t1, c = sh.head_dim, sh.heads, t + 1, sh.context
         qk, pv = _qk(d), _pv(t1)
 
         def keys(b: int, op: str) -> np.ndarray:
@@ -208,22 +251,27 @@ class Replayer:
             q = self.u16(step, p + "wq", b)[head * d:(head + 1) * d]
             k = keys(b, "wk")[j]
             want = qk.evaluate(q[None], k[None])[0]
-            return [q, k], self.u16(step, p + "scores", b)[i:i + 1], want.astype(np.uint16)
+            return [q, k], self.u16(step, p + "scores", b)[head * c + j:head * c + j + 1], want.astype(np.uint16)
 
         def soft(b: int, head: int):
-            x = self.u16(step, p + "scores", b)[head * t1:(head + 1) * t1]
-            return [x], self.u16(step, p + "softmax", b)[head * t1:(head + 1) * t1], softmax_row(x[None])[0]
+            x = self.u16(step, p + "scores", b)[head * c:head * c + t1]
+            return [x], self.u16(step, p + "softmax", b)[head * c:head * c + t1], softmax_row(x[None])[0]
 
         def pvu(b: int, i: int):
-            head, c = divmod(i, d)
-            pr = self.u16(step, p + "softmax", b)[head * t1:(head + 1) * t1]
-            v = keys(b, "wv")[:, c]
+            head, c_ = divmod(i, d)
+            pr = self.u16(step, p + "softmax", b)[head * c:head * c + t1]
+            v = keys(b, "wv")[:, c_]
             want = pv.evaluate(pr[None], v[None])[0]
             return [pr, v], self.u16(step, p + "pv", b)[i:i + 1], want.astype(np.uint16)
 
-        return [Family(p + "scores", qk.key, COORD, h * t1, scores),
-                Family(p + "softmax", RP.key_of("SoftmaxRow_v1", {"N": t1}), ROW, h, soft),
-                Family(p + "pv", pv.key, pv.status, h * d, pvu)]
+        def at(i: int) -> tuple[int, int, bool]:
+            head, j = divmod(i, t1)
+            return 2 * (head * c + j), 2 * (head * c + j) + 2, False
+
+        return [Family(p + "scores", qk.key, COORD, h * t1, scores, at),
+                Family(p + "softmax", RP.key_of("SoftmaxRow_v1", {"N": t1}), ROW, h, soft,
+                       lambda head: (2 * head * c, 2 * (head * c + t1), False)),
+                Family(p + "pv", pv.key, pv.status, h * d, pvu, lambda i: (2 * i, 2 * i + 2, False))]
 
     def _add(self, step: int, op: str, a: str, b_op: str) -> Family:
         def replay(b: int, _: int):
@@ -243,7 +291,7 @@ class Replayer:
         inputs, got, want = fam.replay(slot, index)
         st = self.steps[step]
         return Unit(fam.name, fam.template, step, st.position, slot, index, inputs, np.asarray(got).reshape(-1),
-                    np.asarray(want).reshape(-1).astype(np.asarray(got).dtype))
+                    np.asarray(want).reshape(-1).astype(np.asarray(got).dtype), fam.span(index) if fam.span else None)
 
     def draw(self, step: int, k: int, seed: bytes, only: Callable[[Family], bool] = lambda f: True) -> list[Unit]:
         """``k`` units of every family of ``step`` (or of those ``only`` keeps), replayed: a FIXTURE coin per family, until
