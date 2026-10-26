@@ -67,14 +67,12 @@ def test_words_and_digests_round_trip() -> None:
     assert E.digests(np.stack([E.words(d)])) == d
 
 
-def test_a_variant_name_is_four_modes_and_optional_wide_add_and_straight_line_marks() -> None:
+def test_a_variant_name_is_four_modes_and_an_optional_straight_line_mark() -> None:
     assert E.variant_flags("2211") == ("-DSX_V=90", "-DSX_ROLL=1")
     assert E.variant_flags("0000s") == ("-DSX_V=0", "-DSX_ROLL=0")
-    assert E.variant_flags("0033w") == (f"-DSX_V={3 << 4 | 3 << 6 | 1 << 8}", "-DSX_ROLL=1")
-    assert E.variant_flags("0444ws") == (f"-DSX_V={3 << 2 | 3 << 4 | 3 << 6 | 1 << 8 | 1 << 9}", "-DSX_ROLL=0")
-    for bad in ("5000", "0034", "000w", "0000sw"):
-        with pytest.raises(ValueError):
-            E.variant_flags(bad)
+    assert E.variant_flags("0033") == ("-DSX_V=240", "-DSX_ROLL=1")
+    with pytest.raises(ValueError):
+        E.variant_flags("4000")
 
 
 def test_a_row_outside_its_tensor_is_refused() -> None:

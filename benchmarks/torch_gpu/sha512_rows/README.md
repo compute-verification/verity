@@ -42,11 +42,10 @@ tensors, which at 4,096 slots fills the GPU better than one layer a call (25 row
 - 0: funnel shifts on the integer ALU;
 - 1: the high half of each rotation as mul.hi/mad.lo on the FMA pipe;
 - 2: both halves on the FMA pipe;
-- 3: three FMA-pipe instructions a rotation (`rotr3`: mul.hi and mul.lo of the high word, one mad.wide.u32 of the low word);
-- 4: mode 3 with its mul.hi a funnel shift (3 and 4 don't mix in one variant).
+- 3: none on the ALU (`rotr3`): a rotation is one mul.wide of the high word, a mad.lo and a mad.hi of the low word
+  (IMAD.WIDE, IMAD, IMAD.HI), a shift the mul.wide and the mad.hi.
 
-A `w` after the digits issues the 152 two-input 64-bit adds (the round's d + t1, the schedule's last term, the
-feed-forward) as mad.wide.u32 and mad.lo by 1, and a trailing `s` runs the rounds straight-line (`engine.variant_flags`).
+A trailing `s` runs the rounds straight-line (`engine.variant_flags`).
 
 On sm_90 IMAD issues to the FMA pipe, beside the ALU's SHF, LOP3 and IADD3, so a split could issue more than the ALU alone,
 but on the H200 every variant that moves rotations there measured slower, as `SHA_ROT` did for commit_gpu on sm_120. The

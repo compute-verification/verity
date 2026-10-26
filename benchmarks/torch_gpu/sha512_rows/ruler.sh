@@ -14,7 +14,7 @@
 #
 #   research run --on vy-dc-h200-3 --project verity --campaign hash --source . --cwd source --timeout 240m \
 #     --env GPU_LEASE_WHO=kernels-kcommit -- bash benchmarks/torch_gpu/sha512_rows/ruler.sh
-# VARIANTS (default "0000 0000w 0033 0033w 0333w 0044w 0444w 4444w"), ROUNDS (9), LEASE_MIN (14), LEASES (0: builds and
+# VARIANTS (default "0000 0011 0003 0030 0033 1033 0333"), ROUNDS (9), LEASE_MIN (14), LEASES (0: builds and
 # counts only), JOBS (parallel nvcc, 6).
 set -uo pipefail
 export O=${OUT:?}
@@ -44,7 +44,7 @@ build() {
 }
 export -f build
 BUILDS="a0r0l"
-for v in ${VARIANTS:-0000 0000w 0033 0033w 0333w 0044w 0444w 4444w}; do BUILDS="$BUILDS sx$v"; done
+for v in ${VARIANTS:-0000 0011 0003 0030 0033 1033 0333}; do BUILDS="$BUILDS sx$v"; done
 export BUILDS
 # shellcheck disable=SC2086
 printf '%s\n' $BUILDS | xargs -P "${JOBS:-6}" -I{} bash -c 'build {}' &
