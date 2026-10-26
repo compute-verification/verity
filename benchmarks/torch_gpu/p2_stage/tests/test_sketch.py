@@ -8,6 +8,7 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -52,6 +53,15 @@ def test_bw_check_holds_the_host_twins_to_the_fixture(tmp_path):
     assert res["random"]["ok"] and res["random"]["sigma_sampled"] == 42
 
 
+def test_a_pass_covers_the_units_the_tensors_lie_in():
+    def t(a: int, b: int) -> SimpleNamespace:
+        return SimpleNamespace(first_block=a, block_range=range(a, b))
+
+    assert K.plan_units([t(6, 11), t(0, 6)]) == 3 and K.plan_units([t(0, 8)]) == 2
+    with pytest.raises(ValueError, match=r"units 2 \.\. 2 hold no tensor's block"):
+        K.plan_units([t(0, 8), t(12, 13)])
+
+
 def test_a_pass_refuses_what_it_did_not_read_and_moves_with_one_byte(fx):
     rows, units, p = toy_rows(), fx["store"]["units"], fx["passes"][0]
     seed = bytes.fromhex(p["seed"])
@@ -94,22 +104,26 @@ def test_the_decode_sketches_each_chunk_before_decoding_it(fx, monkeypatch):
 
 
 def test_full_receipts_on_the_toy_store_give_the_fixture_root_and_bw_ref_checks_them(tmp_path, monkeypatch, fx):
-    """full.py --receipts over layer 1 alone: layer 0's units are read from their segments and sketched alone, so the
-    pass still covers every unit and its root is the fixture's; bw_ref.py on the kept pass passes, and refuses a y
-    changed or a σ changed."""
+    """full.py --receipts over layer 1 alone, of the toy's store with a segment of padding past the head: layer 0's
+    units are read from their segments and sketched alone, the padding is in no receipt, so the pass covers the
+    tensors' 8 units of the store's 11 and its root is the fixture's; bw_ref.py on the kept pass passes, and refuses a
+    pass over the store's units, a y changed or a σ changed."""
     import bw_ref
     import full
 
     doc = json.loads((T.TOY / "toy.json").read_text())
     manifest, stream = T.toy_stream(doc)
-    (tmp_path / "layout.json").write_text(json.dumps(doc["layout"]))
+    bps = doc["layout"]["params"]["blocks_per_segment"]
+    padded = {**doc["layout"], "params": {**doc["layout"]["params"], "segments": 4}, "blocks": 4 * bps}
+    (tmp_path / "layout.json").write_text(json.dumps(padded))
     (tmp_path / "m.json").write_text(json.dumps(manifest))
     (tmp_path / "w.bin").write_bytes(stream)
-    setup = {"commitment": doc["commitment"], "manifest": doc["layout"]["params"],
+    setup = {"commitment": doc["commitment"], "manifest": padded["params"],
              "layout_sha512": hashlib.sha512((tmp_path / "layout.json").read_bytes()).hexdigest()}
-    bps = doc["layout"]["params"]["blocks_per_segment"]
     root = tmp_path / "store"
-    T.encoded_store(root, np.frombuffer((T.TOY / "c-star.bin").read_bytes(), dtype=np.uint8).reshape(-1, L.ROW), bps, setup)
+    c_star = np.frombuffer((T.TOY / "c-star.bin").read_bytes(), dtype=np.uint8).reshape(-1, L.ROW)
+    pad = np.random.default_rng(7).integers(0, 256, (4 * bps - len(c_star), L.ROW), dtype=np.uint8)
+    T.encoded_store(root, np.concatenate([c_star, pad]), bps, setup)
     monkeypatch.setattr(S.gpu, "Kernels", T.RefKernels)
     p = fx["passes"][0]
     (tmp_path / "salts.bin").write_bytes(salts_of(p))
@@ -125,7 +139,8 @@ def test_full_receipts_on_the_toy_store_give_the_fixture_root_and_bw_ref_checks_
     assert {r["layer"] for r in staged} == {1} and all("decode_sketch_s" in r and "sketch_s" in r for r in staged)
     rc = next(r for r in recs if r["step"] == "summary")["receipts"]
     assert (rc["seed"], rc["root"], rc["units"], rc["leaves"]) == (p["seed"], p["root"], 8, 1)
-    lay = L.store_layout(doc["layout"], T.PREFIX)
+    assert (rc["store_units"], rc["padding_units_left_out"], rc["blocks_past_head_in_plan"]) == (11, 3, 0)
+    lay = L.store_layout(padded, T.PREFIX)
     held = range(lay.layer(1)[0].first_block // K.PER, -(-lay.layer(1)[-1].block_range.stop // K.PER))
     assert rc["gap_units"] == 8 - len(held) == 5
     assert rc["receipts_step_s"] == pytest.approx(rc["decode_sketch_step_s"] + rc["gap_sketch_s"] + rc["finish_s"], abs=1e-5)
@@ -136,10 +151,13 @@ def test_full_receipts_on_the_toy_store_give_the_fixture_root_and_bw_ref_checks_
     res = json.loads((tmp_path / "r1" / "bw_ref.json").read_text())
     assert res["root_cpu"]["match"] and res["y"]["mismatches"] == 0 and res["sigma"] == {**res["sigma"], "units": 8,
                                                                                           "mismatches": 0}
+    rec = json.loads((keep / "pass.json").read_text())
+    (keep / "pass.json").write_text(json.dumps({**rec, "units": 11}))
+    with pytest.raises(SystemExit, match="covers 11 units, not the 8 the store's tensors lie in"):
+        bw_ref.main(ref + ["--out", str(tmp_path / "r0")])
     y = bytearray((keep / "y.bin").read_bytes())
     y[64 * 5] ^= 1
     (keep / "y.bin").write_bytes(bytes(y))
-    rec = json.loads((keep / "pass.json").read_text())
     (keep / "pass.json").write_text(json.dumps({**rec, "y_sha512": hashlib.sha512(bytes(y)).hexdigest()}))
     assert bw_ref.main(ref + ["--out", str(tmp_path / "r2")]) == 1
     assert json.loads((tmp_path / "r2" / "bw_ref.json").read_text())["y"]["first"] == [5]

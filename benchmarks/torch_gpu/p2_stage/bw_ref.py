@@ -4,9 +4,11 @@
   the GPU's;
 - **root**: `receipts.tree(seed, Plan.whole(units), those receipts, the pass's salts)`'s root, against the GPU's;
 - **σ**: sampled units' σ from C*'s bytes (`p2.Sketcher.block` on each of the unit's four blocks, from the encoded
-  store's segment files, read only), against the GPU's: every unit a tensor's first or last block lies in, every unit
-  no tensor's rows hold (the store's padding), each segment's first and last unit, and `--sample` more drawn by
-  `--seed`, in a process pool.
+  store's segment files, read only), against the GPU's: every unit a tensor's first or last block lies in, each
+  segment's first and last unit, and `--sample` more drawn by `--seed`, in a process pool.
+
+A pass whose units aren't the ones the store's tensors lie in (0 .. ⌈e / 4⌉ − 1, e the end of the last tensor's
+blocks; the padding past the head is in no receipt) is refused before anything is checked.
 
     python bw_ref.py --keep KEEP --layout LAYOUT --weights M --encoded ENC --source HEX --commitment HEX --out OUT
                      [--sample 100000] [--seed 12] [--workers N]
@@ -48,12 +50,10 @@ def _sigmas(units: list[int]) -> list[tuple[int, bytes]]:
 
 
 def sample_units(lay: L.StoreLayout, units: int, sample: int, seed: int) -> list[int]:
-    """The units bw_ref recomputes σ for, sorted: each tensor's first and last block's, those no tensor's rows hold,
-    each segment's first and last, and `sample` drawn."""
+    """The units bw_ref recomputes σ for, sorted: each tensor's first and last block's, each segment's first and last,
+    and `sample` drawn."""
     bps = lay.params.blocks_per_segment
     picks = {t.first_block // PER for t in lay.tensors} | {(t.block_range.stop - 1) // PER for t in lay.tensors}
-    held = -(-lay.tensors[-1].block_range.stop // PER)
-    picks |= set(range(min(held, units), units))
     for s in range(lay.params.segments):
         picks |= {s * bps // PER, ((s + 1) * bps - 1) // PER}
     picks = {g for g in picks if g < units}
@@ -78,6 +78,10 @@ def main(argv=None) -> int:
                           None)
     rec = json.loads((args.keep / "pass.json").read_text())
     seed, units, root = bytes.fromhex(rec["seed"]), rec["units"], bytes.fromhex(rec["root"])
+    store_units = lay.params.blocks_per_segment * lay.params.segments // PER
+    tensor_units = -(-max(t.block_range.stop for t in lay.tensors) // PER)
+    if units != tensor_units:
+        raise SystemExit(f"the pass covers {units} units, not the {tensor_units} the store's tensors lie in")
     if R.seed(bytes.fromhex(rec["challenge"]), rec["pass"], bytes.fromhex(rec["previous"])) != seed:
         raise SystemExit("the pass's seed is not receipts.seed(challenge, pass, previous)")
     sigma = (args.keep / "sigma.bin").read_bytes()
@@ -86,7 +90,7 @@ def main(argv=None) -> int:
     S, Y = 4 * R.SKETCH_ROWS, R.DIGEST_BYTES
     if len(sigma) != S * units or len(y) != Y * units or len(salts_raw) != R.SALT_BYTES * R.leaves(units):
         raise SystemExit("the kept pass's files are not its units' σ, y and salts")
-    out: dict = {"units": units, "seed": rec["seed"], "root": rec["root"],
+    out: dict = {"units": units, "store_units": store_units, "seed": rec["seed"], "root": rec["root"],
                  "files_sha512": {"sigma": hashlib.sha512(sigma).hexdigest() == rec["sigma_sha512"],
                                   "y": hashlib.sha512(y).hexdigest() == rec["y_sha512"],
                                   "salts": hashlib.sha512(salts_raw).hexdigest() == rec["salts_sha512"]}}
@@ -113,7 +117,8 @@ def main(argv=None) -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "bw_ref.json").write_text(json.dumps(out, indent=1) + "\n")
     print(json.dumps(out))
-    print(f"bw_ref {'PASS' if out['ok'] else 'FAIL'}: y {units - len(bad_y)}/{units} from the GPU's sigma, root "
+    print(f"bw_ref {'PASS' if out['ok'] else 'FAIL'}: the tensors' {units} units of the store's {store_units} "
+          f"({store_units - units} padding units in no receipt); y {units - len(bad_y)}/{units} from the GPU's sigma, root "
           f"{'match' if out['root_cpu']['match'] else 'DIFFERS'} ({rec['root'][:16]}...), sigma "
           f"{len(picks) - len(bad_s)}/{len(picks)} sampled units from C*")
     return 0 if out["ok"] else 1

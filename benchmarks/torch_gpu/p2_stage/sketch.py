@@ -2,6 +2,7 @@
 reads it, the units' receipts and the pass's root, bit for bit `remote_bandwidth.p2`'s (the interface is `PROTOCOL.md`
 §11 of `verity/core/protocols/remote_bandwidth`; the fixture is `benchmarks/pous/p2_v1/serve.py fixture`). ::
 
+    units = plan_units(layout.tensors)         # the units the store's tensors lie in: the pass's Plan.whole
     tree = Tree(units, device)                 # the receipt tree's row and leaf tables over one y buffer, built once
     P = Pass(seed, units, device)              # pass i's signs S_i on the device (16 rows over a unit's 8,224 bytes)
     store.sketch = P                           # stage.Store.decode_rows sketches each chunk's units before its decode
@@ -21,8 +22,10 @@ reads it, the units' receipts and the pass's root, bit for bit `remote_bandwidth
   its hm96-sha512 leaf under the leaf's 192-byte salt, its frame-v3-sha512 leaf in the pass's domain
   (`receipts.domain(seed, Plan.whole(units))`), and the root.
 
-`finish` refuses a pass that didn't read every unit. On the CPU every step runs on host memory (the engine's and
-`receipts_host.cpp`'s host twins), which is what the tests hold to the fixture.
+A pass covers the units the store's tensors lie in (`plan_units`), not the store's: the encoded padding past the head
+is held, not streamed, so it is in no receipt. `finish` refuses a pass that didn't read every unit. On the CPU every
+step runs on host memory (the engine's and `receipts_host.cpp`'s host twins), which is what the tests hold to the
+fixture.
 """
 from __future__ import annotations
 
@@ -96,6 +99,20 @@ def _arch(device: torch.device) -> str | None:
         return None
     major, minor = torch.cuda.get_device_capability(device)
     return f"{major}{minor}" + ("a" if major in (9, 10, 12) else "")
+
+
+def plan_units(tensors: Any) -> int:
+    """The units a pass covers, 0 .. ⌈e / 4⌉ − 1 with e the end of the last tensor's blocks (`Plan.whole` of them):
+    every unit a tensor's block lies in, the head's last unit whole (with any padding block it shares), and none of the
+    padding past it. Refused if a unit below them holds no tensor's block, which `Plan.whole` would read as padding."""
+    at = 0
+    for t in sorted(tensors, key=lambda t: t.first_block):
+        if t.first_block // PER > at:
+            raise ValueError(f"units {at} .. {t.first_block // PER - 1} hold no tensor's block")
+        at = max(at, -(-t.block_range.stop // PER))
+    if not at:
+        raise ValueError("a pass covers at least one tensor's units")
+    return at
 
 
 def signs(seed: bytes, rows: int = R.SKETCH_ROWS) -> np.ndarray:
@@ -214,8 +231,8 @@ class Tree:
 
 
 class Pass:
-    """One pass of the audit over a store of `units` units (blocks 0 .. 4 units − 1; blocks past them are in no unit),
-    on `device`: `read` as the decode reads, `finish` at the step's end."""
+    """One pass of the audit over `units` units (blocks 0 .. 4 units − 1, `plan_units`; blocks past them are in no
+    receipt), on `device`: `read` as the decode reads, `finish` at the step's end."""
 
     def __init__(self, seed: bytes, units: int, device: Any, rows: int = R.SKETCH_ROWS) -> None:
         self.start_ns = time.time_ns()

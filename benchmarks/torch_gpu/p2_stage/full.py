@@ -19,13 +19,14 @@ encoded store, read only, under the salt `setup.draw_salt` of the coin and commi
   - its rows and its buffer freed, so one tensor's rows and staging buffer are on the device at a time.
 - **summary**: each tensor's fastest decode summed, which is the decode of a step measured tensor by tensor, and the peak
   HBM torch allocated and reserved over the pass.
-- **receipts** (`--receipts`): the remote bandwidth audit's pass over the whole store beside the stage pass
-  (`sketch.py`), under the seed `receipts.seed(CHALLENGE, PASS, PREVIOUS)`: each tensor's rows taken in whole units
-  (up to three blocks more at each end), the sketch attached to the warm-up decode (the pass's σ), and its timed
-  decodes with the sketch and without, and the sketch alone; the units no tensor's rows hold (the store's encoded
-  padding past the head) read from their segments and sketched alone; then y and the root under fresh salts. The
-  summary's `receipts` gives the root, the pass's timestamps, each stage's time summed like the decode's, and the
-  overhead on the decode; with `--keep`, σ, y, the salts and the pass go to that directory for `bw_ref.py`.
+- **receipts** (`--receipts`): the remote bandwidth audit's pass over the units the store's tensors lie in
+  (`sketch.plan_units`; the encoded padding past the head is in no receipt) beside the stage pass (`sketch.py`), under
+  the seed `receipts.seed(CHALLENGE, PASS, PREVIOUS)`: each tensor's rows taken in whole units (up to three blocks more
+  at each end), the sketch attached to the warm-up decode (the pass's σ), and its timed decodes with the sketch and
+  without, and the sketch alone; the units of the tensors `--layers` leaves out read from their segments and sketched
+  alone; then y and the root under fresh salts. The summary's `receipts` gives the root, the pass's timestamps, each
+  stage's time summed like the decode's, and the overhead on the decode; with `--keep`, σ, y, the salts and the pass go
+  to that directory for `bw_ref.py`.
 - **gemm**, after the pass, `--gemm-layer`'s matrices staged again one at a time: x [M, K] s8 and sx [M] f32 seeded on the
   device (rows 0, 1 and 2 all -128, all 127 and all 0), the stream's f32 scales (held to the manifest's SHA-256),
   `s8_simple.linear` (fused epilogue on CUDA) on `n_chunk` output channels at a time, every word against `gemm.twin`, and
@@ -166,8 +167,12 @@ class Audit:
         from verity.core.protocols.remote_bandwidth import receipts as R
 
         self.K, self.R = K, R
-        self.blocks = lay.params.blocks_per_segment * lay.params.segments
-        self.units = self.blocks // K.PER
+        self.store_units = lay.params.blocks_per_segment * lay.params.segments // K.PER
+        try:
+            self.units = K.plan_units(lay.tensors)
+        except ValueError as e:
+            raise SystemExit(str(e)) from None
+        self.tensor_end = max(t.block_range.stop for t in lay.tensors)
         self.challenge, self.index, self.previous = bytes.fromhex(args.challenge), args.pass_index, bytes.fromhex(args.previous)
         self.seed = R.seed(self.challenge, self.index, self.previous)
         self.tree = K.Tree(self.units, DEVICE)
@@ -185,8 +190,8 @@ class Audit:
         return range(min(t.first_block, self.K.PER * u.start), max(t.block_range.stop, self.K.PER * u.stop))
 
     def items(self, tensors: list[L.Tensor]) -> list[tuple[range, L.Tensor | None]]:
-        """In block order: each tensor with its rows' range, and the runs of units no tensor's rows hold, at most a
-        decode chunk at a time, with None."""
+        """In block order: each tensor with its rows' range, and the runs of the pass's units none of `tensors`' rows
+        hold (those of the tensors `--layers` leaves out), at most a decode chunk at a time, with None."""
         out: list[tuple[range, L.Tensor | None]] = []
         at = 0
 
@@ -216,7 +221,9 @@ class Audit:
         root_s = min(events(partial(tree.root, self.seed, self.salts), reps))
         finish_s = min(events(partial(P.finish, tree, self.salts), reps))
         return {"seed": self.seed.hex(), "challenge": self.challenge.hex(), "pass": self.index,
-                "previous": self.previous.hex(), "units": self.units, "leaves": tree.G, "root": P.root.hex(),
+                "previous": self.previous.hex(), "units": self.units, "store_units": self.store_units,
+                "padding_units_left_out": self.store_units - self.units,
+                "blocks_past_head_in_plan": self.K.PER * self.units - self.tensor_end, "leaves": tree.G, "root": P.root.hex(),
                 "start_ns": P.start_ns, "end_ns": P.end_ns, "pass_wall_s": round((P.end_ns - P.start_ns) / 1e9, 3),
                 "gap_units": self.gap_units, "gap_sketch_s": round(self.gap_s, 6), "y_s": round(y_s, 6),
                 "root_s": round(root_s, 6), "finish_s": round(finish_s, 6),
@@ -495,10 +502,12 @@ def main(argv=None) -> int:
     rc = summary.get("receipts")
     print(f"full {'PASS' if ok else 'FAIL'}: {summary['tensors']} tensors staged and held to the manifest's SHA-256, "
           f"decode step {summary['decode_step_s']} s"
-          + (f"; receipts pass {rc['pass']} over {rc['units']} units, root {rc['root'][:16]}..., step with receipts "
-             f"{rc['receipts_step_s']} s (decode with the sketch {rc['decode_sketch_step_s']} s + padding "
-             f"{rc['gap_sketch_s']} s + y and root {rc['finish_s']} s), overhead {rc['overhead_s']} s, ratio "
-             f"{rc['step_ratio']}" if rc else ""), flush=True)
+          + (f"; receipts pass {rc['pass']} over the tensors' {rc['units']} units of the store's {rc['store_units']} "
+             f"({rc['padding_units_left_out']} padding units left out), root {rc['root'][:16]}..., step with receipts "
+             f"{rc['receipts_step_s']} s (decode with the sketch {rc['decode_sketch_step_s']} s"
+             + (f" + unstaged tensors' {rc['gap_units']} units {rc['gap_sketch_s']} s" if rc["gap_units"] else "")
+             + f" + y and root {rc['finish_s']} s), overhead {rc['overhead_s']} s, ratio {rc['step_ratio']}"
+             if rc else ""), flush=True)
     return 0 if ok else 1
 
 

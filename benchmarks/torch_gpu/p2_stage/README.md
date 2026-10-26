@@ -30,12 +30,13 @@ on that buffer.
   against the reference afterwards.
 - `sketch.py`: the remote bandwidth audit's receipts beside the decode (Demo B's bandwidth leg; the interface is
   `verity/core/protocols/remote_bandwidth/PROTOCOL.md` §11, the fixture `benchmarks/pous/p2_v1/serve.py fixture`). With
-  a pass attached (`store.sketch = sketch.Pass(seed, units, device)`), `Store.decode_rows` sketches the units of each
-  chunk before decoding it, from the same rows on the device: σ of each unit's 8,224 stored bytes against the pass's
-  16 sign rows in one int8 GEMM (its four blocks' partials π summed in the accumulators; `Pass.partials` gives each
+  a pass attached (`store.sketch = sketch.Pass(seed, units, device)`, `units = sketch.plan_units(layout.tensors)`: the
+  units the store's tensors lie in, so the encoded padding past the head is in no receipt), `Store.decode_rows`
+  sketches the units of each chunk before decoding it, from the same rows on the device: σ of each unit's 8,224 stored
+  bytes against the pass's 16 sign rows in one int8 GEMM (its four blocks' partials π summed in the accumulators; `Pass.partials` gives each
   block's π). At the step's end `Pass.finish` takes y (`receipts.cu`, one SHA-512 compression a unit from the seed
   block's midstate) and the root (sha512_rows' engine: each leaf's 16 receipts as a sha512/row/v2 row, its hm96-sha512
-  leaf under its salt, the frame-v3-sha512 tree). `full.py --receipts` runs a pass over the whole store beside the
+  leaf under its salt, the frame-v3-sha512 tree). `full.py --receipts` runs a pass over those units beside the
   stage pass, timed with the sketch and without; `bw_ref.py` checks it on the CPU afterwards (every y and the root
   from the pass's σ, and sampled units' σ from C*); `bw_check.py` holds the GPU to the fixture and times the receipts
   at the store's size (`bw.sh`).

@@ -10,7 +10,8 @@ cost at the store's size.
 - **random**: `--random` units of random C* on the device against the CPU reference (`p2.Sketcher`): σ of a seeded
   sample of units from their blocks' π, every y from the device's σ, and the root (`receipts.tree`) under random salts.
 - **bench** (`--bench`): CUDA-event times of σ over one decode chunk (65,536 blocks), as one unit GEMM and as block
-  partials, and of y and the root at the full store's 17,006,592 units, scaled to a step.
+  partials, and of y and the root at the H200 store's pass of 17,003,406 units (those its 209 tensors lie in, blocks
+  0 .. 68,013,622), scaled to a step.
 
 Writes `OUT/bw_check.json` and prints one verdict line; exits 1 if anything differs.
 """
@@ -37,7 +38,7 @@ from p2_v1 import serve  # noqa: E402
 from verity.core.protocols.remote_bandwidth import p2  # noqa: E402
 from verity.core.protocols.remote_bandwidth import receipts as R  # noqa: E402
 
-STORE_UNITS = 1038 * 65536 // p2.UNIT_BLOCKS
+STORE_UNITS = -(-68_013_623 // p2.UNIT_BLOCKS)
 CHUNK = 1 << 16
 
 
