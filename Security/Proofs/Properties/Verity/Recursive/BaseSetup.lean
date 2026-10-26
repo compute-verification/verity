@@ -165,7 +165,7 @@ theorem baseSetup_of_build {tags0 : Flock.Tags} {circuitB pubB : ByteArray} {dra
       (Flock.Zk.maskLogOf circuitB) 1).hm96Rows = true := by
     refine Classical.byContradiction fun hne => ?_
     simp [hne, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at hb
-  simp only [hh, Bool.not_true, Bool.false_eq_true, ↓reduceIte] at hb
+  simp only [hh, Bool.not_true, Bool.false_eq_true, ↓reduceIte, pure_bind] at hb
   have hstep : ∃ x : Flock.SessionSpec × Array Flock.Stmt,
       Flock.Stmt.setupTables
         (Flock.Zk.tags (tags0.withCoins (.tree (Flock.Zk.coinSpec (tags0.tableNames 1)))) (Flock.Zk.maskLogOf circuitB) 1)
