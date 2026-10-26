@@ -1527,6 +1527,18 @@ def live_salt(key: Any, ledger: Any, pins: Any, main: Any, session: Any, manifes
     return salt, None
 
 
+def live_epoch(raw: bytes) -> tuple[dict, bytes, int]:
+    """A live Pearl-C pass's manifest, read from its bytes `raw`, and its salt epoch as `live_salt` reads it: W,
+    `audit.weights_root` of its workload's weights, and k, its ``pass_index``, an integer in [0, 2^64). Raises `Refused`
+    when the manifest names none (`PASS_FORM` among them), `DomainError` when its workload is malformed."""
+    m = _manifest(raw)
+    _, roots = _workload(m)
+    k = m.get("pass_index")
+    if not (_int(k) and 0 <= k < U64):
+        raise Refused(PASS_FORM)
+    return m, weights_root(Co.SCHEME, roots), k
+
+
 def salt(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, weights_root: Any, requests_root: Any,
          opening: Any, verify: Ch.Verify) -> tuple[str, str] | None:
     """None when `opening` is a live window's salt coin, opened after the window's own open root, every coin and root of
@@ -1649,6 +1661,6 @@ def line(a: dict) -> str:
 
 __all__ = ["ANSWER_KEYS", "COIN_KEY", "FORMATS", "ID", "LEVEL", "LIVE", "ONE_STAGE", "Refused", "SCHEME", "SIGNED_LIVE",
            "answer", "answer_of", "canonical", "case", "check", "commitment", "digest", "draw", "evidence", "integrity",
-           "integrity_json", "law_name", "line", "live_salt", "lms_verify", "opening", "params", "pass_epoch", "ratio",
+           "integrity_json", "law_name", "line", "live_epoch", "live_salt", "lms_verify", "opening", "params", "pass_epoch", "ratio",
            "recorded_reason", "registered", "rounds", "salt", "unit_draw", "verify_path", "window_domain", "work_k",
            "work_units"]

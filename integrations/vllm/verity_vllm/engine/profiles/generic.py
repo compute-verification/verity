@@ -1,4 +1,4 @@
-"""[P6, 2026-09-23] The configuration-derived κ profile of ANY checkpoint role: `build_profile(role, world=1)`.
+"""The configuration-derived κ profile of ANY checkpoint role: `build_profile(role, world=1)`.
 
 One constructor per ARCHITECTURE class, selected by the family facts table (`family_facts.FAMILY_FACTS[model_type]["arch"]`):
   * `dense`     -- the Llama-architecture vocabulary (`LlamaForCausalLM`, Qwen2, Mistral, Qwen3, Phi-3, Gemma-2): the base κ module's
