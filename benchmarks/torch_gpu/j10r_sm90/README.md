@@ -60,11 +60,18 @@ INT8, and a slow but exact CUDA unit to fall back on. The fast units are kernels
   Every arm's last run is held to the fixtures. Reports overhead (units / plain) and gamma ((plain + units) / plain)
   per call, per layer (q, kv, o, up and down) and per step (52 layers and the head), against s8_simple and against
   wgmma.
+- `prof.py`: `run` makes one call of each linear with an h1u build's served launch, each in its own NVTX range, for
+  ncu to profile; `summary` keeps the pipe, issue, occupancy, memory, stall and SASS-mix columns of ncu's raw page.
+- `h1u_jw.patch`: JW (`H1U_JW`), applied by `job.sh` to a copy of `h1u.cu` for an arm that sets it, never to the tree.
+  The column blocks are hashed and W' = B + c + U is built once a call (`h1jr_wcols`, `h1jr_w`), into a larger
+  workspace (`kh_j10r_jw_bytes`), so a unit loads W' as its B operand. The units go `H1U_JWSWZ` row blocks at a time,
+  column block by column block.
 - `job.sh`: `gpu` runs on vy-dc-h200-3. Before the lease it computes the fixtures and builds the fallback where they
-  weren't sent, builds HASH-21's three h1u arms (kr, kra and kraq: the defines and flags of KCOMMIT-FB's j10r90.sh)
-  from this tree where none was sent, builds s8_linear's cubin with its own `build.sh` where its files were
-  sent, and generates the operands. Then, under one lease, it runs the check and the bench. `build` and `cpu` do the
-  fallback's build and the fixtures on a node with nvcc. The file's header gives the commands.
+  weren't sent, builds the h1u arms (`H1U_ARMS`; by default HASH-21's kr, kra and kraq: the defines and flags of
+  KCOMMIT-FB's j10r90.sh) from this tree where none was sent, builds s8_linear's cubin with its own `build.sh` where
+  its files were sent, and generates the operands. Then, under one lease, it runs the check, the bench and the
+  profile (`STEPS`). `build` and `cpu` do the fallback's build and the fixtures on a node with nvcc. The file's header
+  gives the commands.
 
 ## Results
 
