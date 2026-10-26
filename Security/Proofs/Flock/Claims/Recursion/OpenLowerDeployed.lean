@@ -28,11 +28,14 @@ So this file states the lowering in the form the deployed layout meets:
   (the side `RecDeploy.Rows.sideAt` reads, without `readRep`'s choice: the table's schedule `schAt`, the cap of round
   0's rows and the last message's proof with the recursive caps the rep's rounds commit, which is what `readRep` keeps
   wherever it fits).
-* `OpenCopyR`, `OpenTieR`: the two facts at a layout `L`, bound record `Bd` and reader `rd`, at the parts' own messages
-  with every part accepting. `openPieces_deployed` is `PiecesComputes` at them.
-* `OpenCopy`'s level shape is proved (`levelMatch`: the level statement's `LANES` and `H` are `schAt`'s level's, at a
-  dense statement), so `OpenCopyR` follows from the copy's range (`CopyFitsR`) and its opened row and siblings
-  (`CopyOpensR`) alone (`openCopyR_of`); `OpenTieR` is the position bits (`CopyBitsR`) and the top (`CopyTopR`).
+* `OpenCopyR`, `OpenTieR`: the two facts at a layout `L`, bound record `Bd` and side `side` (`sideAtR rd`, or
+  `RecDeploy.Rows.sideAt`), at the parts' own messages with every part accepting. `openPieces_deployed` is
+  `PiecesComputes` at them.
+* `OpenCopy`'s level shape is proved (`levelMatch`: the level statement's `LANES`, `H` and `n` are `schAt`'s level's,
+  at a dense statement), so `OpenCopyR` follows from the side's schedule (`SideSchR`, `sideAtR`'s outright), the copy's
+  range (`CopyFitsR`) and its opened row and siblings (`CopyOpensR`) alone (`openCopyR_of`). `CopyFitsR` is the pieces'
+  range (`PiecesInRangeR`) and the staged circuit's capacity (`StagedFitsR`) (`copyFitsR_of`). `OpenTieR` is the
+  position bits (`CopyBitsR`, from check 5's `dirs` tie `CopyDirsR`: `copyBitsR_of`) and the top (`CopyTopR`).
 -/
 
 namespace RecDeploy.OpenLower
@@ -273,12 +276,12 @@ theorem statements_dense {i : _root_.Flock.RecVStar.Inner} {ss : Array VStar.Stm
 
 /-- **A level statement of a public dense inner shape is its level's**: where the verifier's list at a public inner
 shape with no RecSparse phase has `.recOpen lv LANES HH n` at index `s`, it is V\*'s level `s` (`statements_eq`, the
-rest being inner parts and caps), at `fast100`'s schedule at the shape's `m`. -/
+rest being inner parts and caps), at `fast100`'s schedule at the shape's `m`, over its two reps' queries. -/
 theorem recOpen_dense {i : _root_.Flock.RecVStar.Inner} {ss : Array VStar.Stmt}
     (h : _root_.Flock.RecVStar.statements i = .ok ss) (hsp : i.sparse = none) (hh : i.holo = false)
     {s lv LANES HH n : ℕ} (hsv : ss[s]? = some (.recOpen lv LANES HH n)) :
     ∃ sch, fast100 i.m = some sch ∧ lv = s ∧ LANES = 2 ^ (sch.levels[s]!).lanes ∧
-      HH = (sch.levels[s]!).d - (sch.levels[s]!).cap := by
+      HH = (sch.levels[s]!).d - (sch.levels[s]!).cap ∧ n = 2 * (sch.levels[s]!).q := by
   obtain ⟨A, K, n0, hA, hK, rfl⟩ := statements_dense h hsp
   rw [hh] at hA
   obtain ⟨sch, sp, ps, hsch, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
@@ -289,8 +292,8 @@ theorem recOpen_dense {i : _root_.Flock.RecVStar.Inner} {ss : Array VStar.Stmt}
     have h1' : s < sch.levels.size := by simpa using h1
     simp only [List.getElem?_toArray, List.getElem?_map, List.getElem?_range h1', Option.map_some,
       Option.some.injEq, VStar.Stmt.recOpen.injEq] at hsv
-    obtain ⟨rfl, rfl, rfl, -⟩ := hsv
-    exact ⟨rfl, rfl, rfl⟩
+    obtain ⟨rfl, rfl, rfl, rfl⟩ := hsv
+    exact ⟨rfl, rfl, rfl, rfl⟩
   · exfalso
     rw [Array.append_assoc, Array.getElem?_append_right (Nat.le_of_not_lt h1)] at hsv
     rcases Array.mem_append.1 (Array.mem_of_getElem? hsv) with hm | hm
@@ -319,14 +322,15 @@ theorem inner_m {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
   exact ⟨s, spec, t, by rw [hx]; exact hset, by rw [hm, ← e1]⟩
 
 /-- **`OpenCopy`'s level shape at a dense statement**: where the reader reads `x` at the dense form and its V\* list
-has `.recOpen lv LANES HH n` at `s`, the statement is level `s`'s, and `LANES`, `HH` are table 0's schedule's
-(`schAt`) level `s`'s lanes and depth (`recOpen_dense`, `inner_m`). -/
+has `.recOpen lv LANES HH n` at `s`, the statement is level `s`'s, `LANES`, `HH` are table 0's schedule's (`schAt`)
+level `s`'s lanes and depth, and `n` is its two reps' queries (`recOpen_dense`, `inner_m`). -/
 theorem levelMatch {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt}
     (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss) {s lv LANES HH n : ℕ}
     (hsv : ss[s]? = some (.recOpen lv LANES HH n)) :
     lv = s ∧ LANES = 2 ^ ((schAt (xIOf x) 0).levels[s]!).lanes ∧
-      HH = ((schAt (xIOf x) 0).levels[s]!).d - ((schAt (xIOf x) 0).levels[s]!).cap := by
+      HH = ((schAt (xIOf x) 0).levels[s]!).d - ((schAt (xIOf x) 0).levels[s]!).cap ∧
+      n = 2 * ((schAt (xIOf x) 0).levels[s]!).q := by
   obtain ⟨r', hr', -, rfl⟩ := parse_read hst
   rw [hr] at hr'
   cases hr'
@@ -336,7 +340,7 @@ theorem levelMatch {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some 
     cases hs : r.shape.sparse with
     | none => rfl
     | some _ => simp [hs] at h2
-  obtain ⟨sch, hsch, rfl, hL, hH⟩ := recOpen_dense hss hsp hh hsv
+  obtain ⟨sch, hsch, rfl, hL, hH, hn⟩ := recOpen_dense hss hsp hh hsv
   obtain ⟨s', spec, t, hset, htm⟩ := inner_m hst hr
   have e : schAt (xIOf x) 0 = sch := by
     unfold schAt
@@ -349,7 +353,7 @@ theorem levelMatch {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some 
     rw [h0, htm, hsch]
     rfl
   rw [e]
-  exact ⟨rfl, hL, hH⟩
+  exact ⟨rfl, hL, hH, hn⟩
 
 /-- **`ownQR`'s owner of a piece is its level's statement**: where `ownQR` gives piece `q` part `s`, the piece is of
 table 0 and part `s`'s statement is a `.recOpen` at the piece's level. -/
@@ -526,7 +530,7 @@ theorem sideLevel (hP : ∀ x, D.parse x = parse x) (hS : ∀ f, shape f → Cla
   cases hss'
   rw [hsv] at hsv'
   cases hsv'
-  obtain ⟨hls, hL, hH⟩ := levelMatch hx' (hS _ hf) hr hss hsv
+  obtain ⟨hls, hL, hH, -⟩ := levelMatch hx' (hS _ hf) hr hss hsv
   rw [hsch, hxI, h0, hls]
   exact ⟨hL, hH⟩
 
@@ -545,6 +549,52 @@ theorem openCopyR_of (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse x = 
     (hSch x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht os last hfin hl)
   unfold OpenCopy
   exact ⟨hL, hH, hrow, hsib⟩
+
+/-- **The pieces are in range** (`PiecesInRangeR`): each is of rep 0 or 1 and of one of its level's queries, at its
+table's schedule. `RecDeploy.Rows.rowDPieces`'s are (`mem_rowDPiecesOf`, where `Rows.schAt v.2.2` is `schAt`). -/
+def PiecesInRangeR (pieces : Msg → List OpenPiece) : Prop :=
+  ∀ xI, ∀ q ∈ pieces xI, q.rep < 2 ∧ q.query < ((schAt xI q.table).levels[q.level]!).q
+
+/-- **The staged level circuit holds its statement's instances** (`StagedFitsR`): at a level part `.recOpen lv LANES
+HH n` and its staged statement, the parsed table has a VU and a copy, and its blocks' VUs hold all `n` instances. -/
+def StagedFitsR : Prop :=
+  ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+    ∀ (c : ℕ → Coin) (ms : List Msg) (r : XR) (ss : Array VStar.Stmt) (s lv LANES HH n : ℕ), readX x = some r →
+      _root_.Flock.RecVStar.statements r.shape = .ok ss → ss[s]? = some (.recOpen lv LANES HH n) →
+    ∀ (xO : Msg) (w : Claims.Flock.Wit) (p : _root_.Flock.Readable.Parsed),
+      StagedAt H D untr cmt L s x c ms (.recOpen lv LANES HH n) xO w p → ∀ ht : 0 < p.sts.size,
+      0 < p.sts[0].c.g ∧ 0 < p.sts[0].c.upv ∧ n ≤ p.sts[0].c.g * 2 ^ (p.sts[0].m - p.sts[0].c.kLog)
+
+/-- **`CopyFitsR` from the pieces' range and the staged circuit's capacity**: instance `rep · q + query` of a level
+part is below its statement's `n = 2 q` (`levelMatch`), which the staged table holds. -/
+theorem copyFitsR_of (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse x = parse x)
+    (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f) (hR : PiecesInRangeR pieces)
+    (hC : StagedFitsR H D shape untr cmt L) : CopyFitsR H D shape untr b cmt L pieces := by
+  intro x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht
+  obtain ⟨hg, hu, hcap⟩ := hC x st hx hf c (L.msgs x ws) r ss s lv LANES HH n hr hss hsv xO w p hst ht
+  obtain ⟨hrep, hqry⟩ := hR _ q hq
+  have hx' : parse x = some st := (hP x).symm.trans hx
+  have hxI : Claims.Recursion.xI D x = xIOf x := by
+    unfold Claims.Recursion.xI xIOf
+    rw [hP x]
+  obtain ⟨h0, r', ss', hr', hss', L', H', n', hsv'⟩ := ownQR_some ho
+  rw [hr] at hr'
+  cases hr'
+  rw [hss] at hss'
+  cases hss'
+  rw [hsv] at hsv'
+  cases hsv'
+  obtain ⟨hls, -, -, hn⟩ := levelMatch hx' (hS _ hf) hr hss hsv
+  subst hls
+  rw [h0, hxI] at hqry
+  simp only [copyAtR, qAt]
+  rw [getElem!_pos p.sts 0 ht, hxI]
+  generalize ((schAt (xIOf x) 0).levels[q.level]!).q = Q at hqry hn ⊢
+  have h1 : q.rep * Q ≤ 1 * Q := Nat.mul_le_mul_right _ (by omega)
+  have hidx : q.rep * Q + q.query < p.sts[0].c.g * 2 ^ (p.sts[0].m - p.sts[0].c.kLog) := by omega
+  refine ⟨?_, Nat.mod_lt _ hg, hu⟩
+  rw [Nat.div_lt_iff_lt_mul hg]
+  exact lt_of_lt_of_eq hidx (Nat.mul_comm _ _)
 
 /-- The column of a rec-open copy's position bit `h`, where `openIdx` reads it. -/
 def idxCol (LANES HH h : ℕ) : ℕ := 128 * LANES + 1024 * max 1 ((HH + 1) / 2) + 1024 + 256 * LANES + h
