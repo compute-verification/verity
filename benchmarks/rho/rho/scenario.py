@@ -67,10 +67,12 @@ def build(registry: Registry, name: str) -> Scenario:
 class Estimate:
     argument: str
     side: str
-    #: the weakest Lean status among its citations (`lean.weakest`), or `outside`
+    #: the weakest status (`lean.weakest`) among `cites`, or `outside`
     status: str
     slowdown: Slowdown | None
     outside: str = ""
+    #: what it rests on: the argument's citations and those of the cuts that bound it
+    cites: tuple[str, ...] = ()
     #: ρ inside one declared block `(Γ, k)` alone: `κ Γ / (2 a(Γ, k))`, the declared circuit's slowdown
     declared: float = math.nan
 
@@ -114,13 +116,26 @@ class Result:
         return min((f.hi for f in self.families), default=math.inf)
 
 
+def _cut_cites(partition: Partition, s: Slowdown) -> tuple[str, ...]:
+    """The citations of the cut that set each region's share (none where the region's compute did)."""
+    cuts = {(r.name, c.name): c for r in partition.regions for c in (*r.cuts, *((r.layout,) if r.layout else ()))}
+    return tuple(dict.fromkeys(c for name, share in s.regions.items() if (name, share.cut) in cuts
+                               for c in cuts[name, share.cut].cites))
+
+
+def _rated(name: str, side: str, cites: tuple[str, ...], s: Slowdown, partition: Partition,
+           declared: float) -> Estimate:
+    cites = tuple(dict.fromkeys(cites + _cut_cites(partition, s)))
+    return Estimate(name, side, lean.weakest(cites), s, cites=cites, declared=declared)
+
+
 def _estimate(arg: Argument, p: Profile, partition: Partition, block: Budget) -> tuple[Estimate, Allowance | None]:
     try:
         a = arg.allowance(p)
     except Outside as e:
         return Estimate(arg.name, arg.side, "outside", None, str(e)), None
-    return Estimate(arg.name, arg.side, lean.weakest(arg.cites), slowdown(partition, a, p.kappa, p.efficiency, arg.side),
-                    declared=_declared(a, p, block)), a
+    s = slowdown(partition, a, p.kappa, p.efficiency, arg.side)
+    return _rated(arg.name, arg.side, arg.cites, s, partition, _declared(a, p, block)), a
 
 
 def _declared(a: Allowance, p: Profile, block: Budget) -> float:
@@ -136,10 +151,10 @@ def evaluate(s: Scenario) -> Result:
         p = fam.profile(s.model, s.run)
         bounds = [_estimate(b, p, partition, block) for b in s.bounds]
         met = [a for _, a in bounds if a is not None]
-        cites = [c for b, (_, a) in zip(s.bounds, bounds, strict=True) if a is not None for c in b.cites]
-        combined = Estimate("+".join(e.argument for e, a in bounds if a is not None) or "none", "bound",
-                            lean.weakest(cites), slowdown(partition, least(*met), p.kappa, p.efficiency),
-                            declared=_declared(least(*met), p, block))
+        cites = tuple(c for b, (_, a) in zip(s.bounds, bounds, strict=True) if a is not None for c in b.cites)
+        combined = _rated("+".join(e.argument for e, a in bounds if a is not None) or "none", "bound", cites,
+                          slowdown(partition, least(*met), p.kappa, p.efficiency), partition,
+                          _declared(least(*met), p, block))
         out.append(FamilyResult(fam.name, p, tuple(e for e, _ in bounds), combined,
                                 tuple(_estimate(a, p, partition, block)[0] for a in s.attacks)))
     return Result(s, tuple(out))
