@@ -10604,10 +10604,10 @@
    ]
   },
   "Properties.RemoteAudit.Component": {
-   "digest": "29f266e51b0fa821579cbaeac4d4978a1cc310aca5ba871d8ea5c91d76374df5",
+   "digest": "8a452e30b203890ffa0cf0782b0758b1d90c4e3be4e28e66e6f94b9c3d9a1035",
    "definitions": {
     "Properties.RemoteAudit.Component.AcceptIsVerified": "3d8cf07c5d4048e1fa199d06cf8967e8ffa7cee6ba894cb8399930f9253272c9",
-    "Properties.RemoteAudit.Component.LineHeldAtComponent": "1e76aa00e9cdea0190a6426bbc2aa13860f0bd5eb6ef9eb41193ba8220c39c80",
+    "Properties.RemoteAudit.Component.LineHeldAtComponent": "1ce3554e678e9ffa3b16a77c7315ca39f68c82c36c61d2c363c57bfa25b5e937",
     "Properties.RemoteAudit.Component.Plays": "ee66d2cde65b5574f859694c368778d0d4024f07f62797dc30790d8884c50206"
    },
    "guarantees": [
