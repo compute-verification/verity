@@ -16,7 +16,8 @@ writes, and the units of each resource it uses; this module says what each compu
   format's `bits` wide, packed into words, so an MMA can't multiply wider operands (P1), and each of its `m·n·k`
   products is formed inside one output's dot (P2).
 * **Lane functions** (`Op.lane`): one lane's CUDA-core instruction on registers: integer add, multiply-add (low, wide,
-  high), logic, shifts, byte permute, bit counts, compares, selects, `dp4a`, and FP32 `fma`, `add` and `mul` (`Verity.Fp32`).
+  high), logic, shifts, byte permute, bit counts, compares, selects, `dp4a`, and FP32 `fma`, `add` and `mul`
+  (`Verity.Fp32`).
 * **Copies** (`Op.copy`): `n` words from one store to another, unchanged: loads, stores, register moves, TMA.
 * **Atomics** (`Op.atom`): a read-modify-write of one word of a store: integer add, exchange.
 
