@@ -187,6 +187,7 @@ import Proofs.Flock.Claims.Recursion.DecRRecJ
 import Proofs.Flock.Claims.Recursion.LayoutBAcc
 import Proofs.Flock.Claims.Recursion.LastCallsR
 import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+import Proofs.Flock.Claims.Recursion.CapLower
 import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 import Proofs.Flock.Claims.Recursion.RestReadsAt
 import Proofs.Flock.Claims.KS.PlainRConflict
