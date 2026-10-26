@@ -302,10 +302,10 @@ def test_coarse_graining_never_lowers_the_bound():
 def test_report_writes_each_bound_and_coarse_ones_are_looser():
     """The CLI's document on the attention toy: written after each bound, every coarse bound at least the fine one, by step
     strictly looser, and JSON throughout."""
-    program, ends = attention(5, 8)
+    g, info = graph_of(*attention(5, 8))
     seen: list[list[str]] = []
-    doc = B.report(program, ends, chunks=(3, 1), write=lambda d: seen.append(sorted(d["coarse"]) + ["fine"] * ("bounds" in d)),
-                   Es=(64, B.E_CONJECTURED), Ls=(0, 600), m_node=1 << 30)
+    doc = B.report(g, info, chunks=(3, 1), first=info["inputs"], Es=(64, B.E_CONJECTURED), Ls=(0, 600), m_node=1 << 30,
+                   write=lambda d: seen.append(sorted(d["coarse"]) + ["fine"] * ("bounds" in d)))
     assert seen[-1] == ["by_1_calls", "by_3_calls", "by_step", "fine"] and len(seen) == 4
     fine = [Fraction(r["cut_bits"]) for r in doc["bounds"]]
     assert fine[0] == 288 * 4
@@ -314,6 +314,53 @@ def test_report_writes_each_bound_and_coarse_ones_are_looser():
     assert Fraction(doc["coarse"]["by_step"]["bounds"][0]["cut_bits"]) > fine[0]
     assert [r["cut_bits"] for r in doc["coarse"]["by_1_calls"]["bounds"]] == [r["cut_bits"] for r in doc["bounds"]]
     assert json.loads(json.dumps(doc, default=str))["bounds"][1]["m_node_bits"] == 1 << 30
+
+
+# -- modeled decoders -----------------------------------------------------------------------------------------------------
+
+
+def spec(name: str) -> dict:
+    return json.loads((Path(B.__file__).parent / name).read_text())
+
+
+def test_the_8b_decoder_adds_up_to_the_census_request():
+    """The 8B spec's blocks are the census's request Program's units, 9,404,379,802 (its ``check``): 32 steps, the KV of
+    steps 0..30 (256 + 30 rows a layer) and 31 tokens written. A term one unit off is refused."""
+    s = spec("decoder-llama31-8b-int8.json")
+    g, info = B.decoder(s)
+    assert (info["work_units"], info["steps"], info["writes"]) == (9_404_379_802, 32, 32 * 31 + 31)
+    assert g.m_dyn == 32 * (256 + 30) * 32768 + 31 * 32
+    with pytest.raises(ValueError, match="not the measured"):
+        B.decoder({**s, "sample": s["sample"] + 1})
+
+
+def test_decoder_prefill_rows_and_the_specs_build():
+    """A prompt run a row a step reads its prompt token at each of its steps; every spec here builds."""
+    s = {"prompt": 3, "decode": 2, "layers": 2, "prefill": "rows", "row": {"embed": 1, "pre": 2, "post": 3, "final": 4},
+         "sample": 5, "attention": {"r0": 1, "b_q": 1, "b_kv": 1, "w0": 1, "w_start": 0},
+         "bits": {"hidden": 8, "q": 8, "kv": 4, "o": 8, "token": 2}}
+    g, info = B.decoder(s)
+    assert info["steps"] == 5 and info["writes"] == 2 * 4 + 2 and g.m_dyn == 2 * 4 * 4 + 2 * 2
+    assert sum(1 for x in g.values if x.input) == 3
+    for name in ("decoder-llama31-8b-int8.json", "decoder-llama31-70b-tp8.json", "decoder-e2e-h200-mqa.json"):
+        assert B.decoder(spec(name))[1]["work_units"] > 0
+    with pytest.raises(ValueError, match="prefill"):
+        B.decoder({**s, "prefill": "chunked"})
+
+
+def test_decoder_attention_is_charged_its_output_not_its_work():
+    """At E = |c| (a unit a bit), with free blocks and costly tokens and residuals, the writes come from D at the cost of
+    attention's outputs crossing (2 + 1 rows of 5 bits; the last step writes nothing), however much attention's keys
+    cost; free attention costs nothing."""
+    s = {"prompt": 2, "decode": 2, "layers": 1, "row": {"embed": 0, "pre": 0, "post": 0, "final": 0}, "sample": 0,
+         "attention": {"r0": 0, "b_q": 0, "b_kv": 100, "w0": 0, "w_start": 0},
+         "bits": {"hidden": 1000, "q": 1000, "kv": 10, "o": 5, "token": 1000}}
+    for b_kv in (100, 10_000):
+        g, _ = B.decoder({**s, "attention": {**s["attention"], "b_kv": b_kv}})
+        b = B.bound(g, E=1024)
+        assert (b.cut, b.crossing, b.work) == (15, 15, 0) and g.m_dyn == 30 + 2000
+    g, _ = B.decoder({**s, "attention": {**s["attention"], "b_kv": 0}})
+    assert B.bound(g, E=1024).cut == 0
 
 
 def test_table_moves_only_the_input_term():

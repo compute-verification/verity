@@ -44,6 +44,7 @@ of them, so a Program with either has no property/v1 verdict, and its β reads E
 
     python beta.py DESCRIPTOR.json[.gz] --out beta.json [--E 24504 --E 364497] [--L 600 --L 3600] [--m-dyn-node BYTES] \\
         [--chunk N]...                      # a Build's request Program: coarse bounds (by step, N Calls at a time), then the fine one
+    python beta.py --decoder decoder-llama31-70b-tp8.json --out beta.json     # a modeled decoder's request (`decoder`)
 """
 from __future__ import annotations
 
@@ -408,25 +409,101 @@ def table(g: Graph, *, Es: Iterable[Any] = (E_PROVED, E_CONJECTURED), Ls: Iterab
     return out
 
 
-def report(program: Any, ends: Sequence[int], *, chunks: Iterable[int] = (), write: Callable[[dict], None] = lambda _d: None,
-           log: Callable[[str], None] = lambda _m: None, **kw: Any) -> dict:
-    """`program`'s bound over its steps `ends`: by step, by each of `chunks` Calls of a step at a time, then fine (`table`'s
-    keywords in ``kw``). ``write(doc)`` is called after each bound, so a run cut short keeps the coarse ones."""
-    from verity.ml.circuits.census import census
+def decoder(spec: Mapping[str, Any]) -> tuple[Graph, dict]:
+    """A modeled request of a decoder as a coarse graph, and its totals. Step 0 runs the prompt's rows (``prompt``), each of
+    ``decode`` steps after it one row; with ``"prefill": "rows"`` each prompt row is a step of its own, reading its prompt
+    token. A step's nodes, each named ``node[layer]@step``:
 
-    g, info = from_program(program, doc=census(program, list(ends)))
+    - ``embed``: the rows' embedding (``row.embed`` a row), reading the prompt (a run input) or the token sampled a step before;
+    - per layer, ``pre`` (``row.pre`` a row: norm, quantizer, QKV, RoPE), which writes the layer's KV rows and hands its queries
+      to ``attn`` (the window's units(N, S) = r0 N + b_q R + b_kv S + w0 + w_start [N = S], R = N S - N (N - 1) / 2, times
+      ``attention.calls``; `units.py`'s fit), whose output goes to ``post`` (``row.post``: O, residual, norm, MLP), which
+      reads the layer's residual too;
+    - ``head``: the final norm on every row (``row.final``) and the sample (``sample``), writing the next step's token.
+
+    ``bits`` are a row's widths: ``hidden``, ``q``, ``kv`` (a layer's K and V), ``o`` and ``token``. A KV row or token a later
+    step reads is a write. Each node's work is the sum of property/v1 units of the Calls it stands for, and each value's bits
+    are those of the Calls' outputs between them, so the bound is a coarse graph's (`coarsen`): valid and at least the fine
+    Program's, as far as the units and widths are the Program's. ``check`` (optional) holds the model's total work to a
+    measured one."""
+    P, T, Lc = int(spec["prompt"]), int(spec["decode"]), int(spec["layers"])
+    row, bits, at = spec["row"], spec["bits"], spec["attention"]
+    if spec.get("prefill", "batched") not in ("batched", "rows"):
+        raise ValueError(f"prefill is 'batched' or 'rows', not {spec['prefill']!r}")
+    plan = [(P, True)] if spec.get("prefill", "batched") == "batched" else [(1, True)] * P
+    plan += [(1, False)] * T
+    steps = len(plan)
+    work: list[Any] = []
+    names: list[str] = []
+    values: list[Value] = []
+
+    def node(name: str, w: Any) -> int:
+        names.append(name)
+        work.append(w)
+        return len(work) - 1
+
+    def units(N: int, S: int) -> int:
+        R = N * S - N * (N - 1) // 2
+        u = at["r0"] * N + at["b_q"] * R + at["b_kv"] * S + at["w0"] + at["w_start"] * (N == S)
+        return int(at.get("calls", 1)) * u
+
+    prompt = node("prompt", 0)
+    kv_readers: list[list[list[int]]] = [[[] for _ in range(steps)] for _ in range(Lc)]
+    kv_makers: list[list[int]] = [[0] * steps for _ in range(Lc)]
+    tok_from: int | None = None
+    S = 0
+    for s, (N, from_prompt) in enumerate(plan):
+        S += N
+        e = node(f"embed@{s}", N * row["embed"])
+        if from_prompt:
+            values.append(Value(prompt, N * bits["token"], (e,), input=True))
+        else:
+            values.append(Value(tok_from, bits["token"], (e,), write=True))  # type: ignore[arg-type]
+        h = e
+        for layer in range(Lc):
+            pre = node(f"pre[{layer}]@{s}", N * row["pre"])
+            attn = node(f"attn[{layer}]@{s}", units(N, S))
+            post = node(f"post[{layer}]@{s}", N * row["post"])
+            values.append(Value(h, N * bits["hidden"], (pre, post)))
+            values.append(Value(pre, N * bits["q"], (attn,)))
+            values.append(Value(attn, N * bits["o"], (post,)))
+            kv_makers[layer][s] = pre
+            for s0 in range(s + 1):
+                kv_readers[layer][s0].append(attn)
+            h = post
+        head = node(f"head@{s}", N * row["final"] + spec["sample"])
+        values.append(Value(h, N * bits["hidden"], (head,)))
+        tok_from = head
+    for layer in range(Lc):
+        for s, (N, _) in enumerate(plan):
+            values.append(Value(kv_makers[layer][s], N * bits["kv"], tuple(kv_readers[layer][s]), write=s < steps - 1))
+    g = Graph(work, values, names, frozenset({prompt}))
+    total = sum(work)
+    if "check" in spec and total != spec["check"]:
+        raise ValueError(f"the model's work {total} is not the measured {spec['check']}: a row, sample or attention term is off")
+    info = {"label": spec.get("label"), "nodes": len(work), "values": len(values), "steps": steps, "rows": P + T,
+            "m_dyn_bits": g.m_dyn,
+            "writes": sum(x.write for x in values), "work_units": total, "checked": "check" in spec}
+    return g, info
+
+
+def report(g: Graph, info: dict, *, chunks: Iterable[int] = (), first: int = 0, write: Callable[[dict], None] = lambda _d: None,
+           log: Callable[[str], None] = lambda _m: None, **kw: Any) -> dict:
+    """`g`'s bound by step (nodes named ``...@step``; the others, its inputs, alone), by each of `chunks` nodes of a step at a
+    time (counted from node `first`), then fine (`table`'s keywords in ``kw``). ``write(doc)`` is called after each bound, so a
+    run cut short keeps the coarse ones."""
     edges = sum(1 + len(x.readers) for x in g.values)
     log(f"graph: {len(g.work)} nodes, {len(g.values)} values, about {edges} edges, M_dyn {g.m_dyn} bits")
     doc: dict = {"schema": "verity-stacked-share/beta/v1", "graph": info, "graph_edges": edges,
                  "m_node_bits": kw.get("m_node"), "coarse": {}}
-    I = info["inputs"]
 
-    def step(v: int) -> str:
-        return g.names[v].rsplit("@", 1)[-1]
+    def step(v: int) -> str | None:
+        name = g.names[v]
+        return name.rsplit("@", 1)[-1] if "@" in name else None
 
-    coarse: dict[str, Callable[[int], Hashable]] = {"by_step": lambda v: step(v) if v >= I else g.names[v]}
+    coarse: dict[str, Callable[[int], Hashable]] = {"by_step": lambda v: step(v) or g.names[v]}
     for n in sorted(set(chunks), reverse=True):
-        coarse[f"by_{n}_calls"] = lambda v, n=n: (step(v), (v - I) // n) if v >= I else g.names[v]
+        coarse[f"by_{n}_calls"] = lambda v, n=n: (step(v), (v - first) // n) if step(v) else g.names[v]
 
     def line(rows: list[dict]) -> str:
         return ", ".join(f"E={r['E']} L={r['L']} β={r['beta_float']:.4g}" for r in rows)
@@ -444,7 +521,10 @@ def report(program: Any, ends: Sequence[int], *, chunks: Iterable[int] = (), wri
 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("descriptor", type=Path, help="a Build's descriptor (.json or .json.gz), decoded through vLLM's registry")
+    ap.add_argument("descriptor", type=Path, nargs="?",
+                    help="a Build's descriptor (.json or .json.gz), decoded through vLLM's registry")
+    ap.add_argument("--decoder", type=Path, help="instead, a modeled decoder's spec (`decoder`; decoder-*.json); its "
+                    "m_dyn_node_bytes is --m-dyn-node's default")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--sample", default="TokenSelect_v1", help="the family that ends a request Program's steps")
     ap.add_argument("--E", action="append", help=f"units an encode of a word costs (default {E_PROVED} and {E_CONJECTURED})")
@@ -457,25 +537,38 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--chunk", type=int, action="append", default=[],
                     help="also the coarse bound of each step's Calls taken N at a time, before the fine one")
     a = ap.parse_args(argv)
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from units import load  # noqa: E402
-
-    from verity.ml.circuits.census import step_ends
-
+    if (a.descriptor is None) == (a.decoder is None):
+        ap.error("give a descriptor or --decoder SPEC, one of them")
     t0 = time.monotonic()
 
     def log(msg: str) -> None:
         print(f"[beta {time.monotonic() - t0:8.1f}s] {msg}", file=sys.stderr, flush=True)
 
-    program = load(a.descriptor)
-    ends = step_ends(program, [a.sample])
-    log(f"loaded: {len(program.root.body.nodes)} root nodes, {len(ends)} steps")
-    m_node = None if a.m_dyn_node is None else int(8 * exact(a.m_dyn_node, "--m-dyn-node"))
+    m_node_bytes = a.m_dyn_node
+    first = 0
+    if a.decoder is not None:
+        spec = json.loads(a.decoder.read_text())
+        g, info = decoder(spec)
+        m_node_bytes = m_node_bytes or spec.get("m_dyn_node_bytes")
+        source = {"decoder": str(a.decoder), "spec": spec}
+    else:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from units import load  # noqa: E402
+
+        from verity.ml.circuits.census import census, step_ends
+
+        program = load(a.descriptor)
+        ends = step_ends(program, [a.sample])
+        log(f"loaded: {len(program.root.body.nodes)} root nodes, {len(ends)} steps")
+        g, info = from_program(program, doc=census(program, ends))
+        first = info["inputs"]
+        source = {"descriptor": str(a.descriptor)}
+    m_node = None if m_node_bytes is None else int(8 * exact(m_node_bytes, "--m-dyn-node"))
 
     def write(doc: dict) -> None:
-        a.out.write_text(json.dumps({**doc, "descriptor": str(a.descriptor)}, indent=1, default=str))
+        a.out.write_text(json.dumps({**doc, **source}, indent=1, default=str))
 
-    doc = report(program, ends, chunks=a.chunk, write=write, log=log, Es=a.E or (E_PROVED, E_CONJECTURED),
+    doc = report(g, info, chunks=a.chunk, first=first, write=write, log=log, Es=a.E or (E_PROVED, E_CONJECTURED),
                  Ls=a.L or (600, 3600), R_in=a.R_in, c=a.c, inputs=a.inputs, m_node=m_node)
     print(json.dumps({"graph": doc["graph"], "bounds": [{k: r[k] for k in ("E", "L", "beta_float", "cut_bits", "m_dyn_bits")}
                                                         for r in doc["bounds"]]}, indent=1, default=str))
