@@ -19,9 +19,8 @@ documents the same), so `step()` iterations are not forwards: the first iteratio
 last forward returns the finish.  `engine_steps` is the number of forwards; `first_step` / `finish_step` / `arrive_step_realized` are
 forward indices; the raw iteration numbers are kept as `*_iter` and `step_iterations` for the record.
 
-Which iterations ran a forward (2026-09-17, lead's request after the chunked owner's finding).  Until this window the loop MEASURED
-the lag as (first non-empty output iteration - first admission iteration) and inferred "forward at iteration j <=> iteration j + lag
-returned outputs".  Both break under chunked prefill: a partial-prefill step is a forward that returns NOTHING (the engine discards the
+Which iterations ran a forward.  The loop once MEASURED the lag as (first non-empty output iteration - first admission
+iteration) and inferred "forward at iteration j <=> iteration j + lag returned outputs".  Both break under chunked prefill: a partial-prefill step is a forward that returns NOTHING (the engine discards the
 sample of a chunk that leaves the prompt incomplete), so with a 3-chunk first prompt the measured lag was 3 instead of 1 and two
 forwards went uncounted (15 for 17).  The loop now derives forwards in this order and records the source in `timing`:
 
@@ -56,7 +55,7 @@ def scheduler_of(llm: Any) -> Any | None:
         inner = getattr(core, "engine_core", None) or core
         sched = getattr(inner, "scheduler", None)
         return sched if isinstance(getattr(sched, "requests", None), dict) else None
-    except Exception:  # noqa: BLE001
+    except AttributeError:
         return None
 
 
@@ -78,7 +77,7 @@ def _snapshot_computed(sched: Any) -> dict[str, int] | None:
             if nc is not None:
                 out[str(rid)] = int(nc)
         return out
-    except Exception:  # noqa: BLE001
+    except (AttributeError, TypeError, ValueError):
         return None
 
 

@@ -9,4 +9,13 @@ package imports nothing else from `verity_vllm`, so every stage may import it.
 * `served_tokens` -- the driver's served tokens of one run (`capture/tokens.json`), as GM-01's chronology check and the padded
   conversion (`commit.padding_steps`) read them.
 * `declared_stop` -- the workload Program's declared stop rule and LAG (`stop_rule`, `lag`), as the same two read them.
+* `workload` -- the workload (`verity-vllm/workload/v2`, and the v1 layout older runs hold), as the stochastic replay and
+  GM-01's declared side (`check.match.declaration`) read it;
+  its `load` also refuses a field no writer writes (`fields.UnknownField`), and `dump` writes it back.
+* `global_match` -- GM-01's Match result (`cb-a/global-match/v1`), as the executed prefix's link to the Match account reads it;
+  `load` refuses an unknown field and `dump` writes it back, as `workload`'s do.
+* `build_summary` -- the Build's summary (`build_summary.json`, in its `tp1`, `tp` and `tp2-r19` layouts), as the verdict reads the
+  Build's correspondence digest; `load` refuses an unknown field and `dump` writes it back, as `workload`'s do.
+* `commit_run` -- the Commit record, one run of a pair (a line of `commit/runs.jsonl`: `verity/commit-integ/delta/v1`, the TP
+  writer's `delta-tp/v1` and a sealed serving window's), as the verdict reads it; `load` refuses an unknown top-level field.
 """

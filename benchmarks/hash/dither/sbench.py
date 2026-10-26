@@ -130,8 +130,10 @@ Arms:
                  (DITHER_SO_CAPTURE_PRIO=1, `dither_so.capture_at`).  Under SMQ units it keeps every step in the fast
                  regime while the units' span plus lm_head's 0.7 ms covers the step's cycle: without it, a step whose
                  units drain before the next dispatch lets them refill their SMs ahead of lm_head, which then runs on
-                 the forward's SMs alone (2.9 ms, not 0.7) and the next steps stay slow; units that end sooner (h1u's
-                 H1U_JXS at 45/64) do that under it too
+                 the forward's SMs alone (2.9 ms, not 0.7) and the next steps stay slow.  Under it, h1u's H1U_JXS units
+                 stall on some steps (b32 and b64: their span about 2.3 times the median, the serving stream waiting
+                 about 20 ms on them), which their length doesn't explain: H1U_JPI's units, as long, never do, nor do
+                 H1U_JCS=2's, shorter; DITHER_SO_PREQ=0 makes the stalls rarer without removing them
     ARM-mc32     a dither arm whose worker has 32 hardware queues (CUDA_DEVICE_MAX_CONNECTIONS=32, set before its engine
                  makes the CUDA context)
     ARM-skip, ARM-rd0  a dither-a-so J10-R arm whose dead row blocks are the zero receipt (DITHER_UNITS_SKIP_DEAD=1), or

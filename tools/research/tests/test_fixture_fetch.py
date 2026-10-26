@@ -199,6 +199,64 @@ def test_a_fixture_no_source_holds_is_reported_missing(tmp_path):
     assert not rep["ok"] and {e["status"] for e in rep["entries"] if e["path"] != "pkg/tests/fixtures/small.json"} == {"missing"}
 
 
+class _Held:
+    """A source that counts its downloads and holds the first one until `n` fetches have reached the manifests: every fetch is
+    in flight at once while the first is mid-download."""
+
+    def __init__(self, inner: FsRemote, n: int):
+        self.inner, self.n, self.arrived, self.gets = inner, n, 0, {}
+        self.cv = threading.Condition()
+
+    def arrive(self) -> None:
+        with self.cv:
+            self.arrived += 1
+            self.cv.notify_all()
+
+    def get(self, key: str, dst: Path) -> None:
+        with self.cv:
+            self.gets[key] = self.gets.get(key, 0) + 1
+            self.cv.wait_for(lambda: self.arrived >= self.n)
+        self.inner.get(key, dst)
+
+    def describe(self) -> str:
+        return "held"
+
+
+def test_concurrent_first_fetches_of_one_fixture_all_succeed_with_one_download_each(tmp_path, monkeypatch):
+    """A check's pytest and lean-suites steps fetch into one fresh tree and one cold store at once (r20261025-194220-d9fa): each
+    fetch must succeed with the exact bytes, and a fetch that finds another mid-download waits for it and uses its copy."""
+    origin, remote = _store(tmp_path, "origin"), FsRemote(tmp_path / "remote")
+    repo, a = _repo(tmp_path, origin, remote)
+    n = 4
+    src = _Held(remote, n)
+    real = fetchset.fetch_manifests
+
+    def arriving(*args, **kw):
+        src.arrive()
+        return real(*args, **kw)
+    monkeypatch.setattr(fetchset, "fetch_manifests", arriving)
+    start = threading.Barrier(n)
+    reps: list = [None] * n
+
+    def one(i: int) -> None:
+        start.wait()
+        reps[i] = F.fetch_registry(LocalStore(tmp_path / "cold"), repo, srcs=[src], jobs=4)
+
+    ts = [threading.Thread(target=one, args=(i,)) for i in range(n)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert all(r is not None and r["ok"] for r in reps), reps
+    for path in ("pkg/tests/fixtures/big.proof", "pkg/tests/fixtures/set"):
+        assert {e["status"] for r in reps for e in r["entries"] if e["path"] == path} <= {"fetched", "present"}
+    assert F.fixture_id(repo / "pkg/tests/fixtures/big.proof") == a["big"]
+    assert F.fixture_id(repo / "pkg/tests/fixtures/set") == a["set"]
+    assert sorted(p.name for p in (repo / "pkg/tests/fixtures/set").iterdir()) == ["sub_00.proof", "sub_00.stmt"]
+    assert not list((repo / "pkg/tests/fixtures").glob(".tmp-*"))
+    assert src.gets and set(src.gets.values()) == {1}, src.gets
+
+
 def test_history_stubs_are_restored(tmp_path):
     origin, remote = _store(tmp_path, "origin"), FsRemote(tmp_path / "remote")
     repo, a = _repo(tmp_path, origin, remote)
