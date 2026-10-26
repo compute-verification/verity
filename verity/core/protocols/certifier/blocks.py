@@ -42,8 +42,10 @@ in the link-window ``window`` names; a request's, response's or wire's window is
 
 **The pins** (`certified`, `pins`): each transfer's registration (`transfer_rows.registration`) read for the transfer
 the check made of the record (`transfer_rows.check_registration`: its uplink, direction, window, kind, value, the
-circuit's program digest and the value's shape) under its uplink's certifier's key and session. A transfer without one,
-or a registration naming no transfer, is refused, so a root is pinned only from its certificate.
+circuit's program digest and the value's shape, its row format the verifier's own: 16-bit leaves in
+``hm96-sha512/row/v2`` rows unless ``formats`` names another, as a load's f32 scale is one 32-bit leaf a row and its
+token embeddings ``hm96-sha512/row-seg/v1`` rows) under its uplink's certifier's key and session. A transfer without
+one, or a registration naming no transfer, is refused, so a root is pinned only from its certificate.
 """
 
 from __future__ import annotations
@@ -409,12 +411,18 @@ def check(doc: Mapping[str, Any], blocks: Any, layouts: Mapping[str, Any]) -> Bl
 
 
 def certified(doc: Mapping[str, Any], blocks: Any, layouts: Mapping[str, Any], registrations: Iterable[Any],
-              certifiers: Mapping[str, tuple[PublicKey, bytes]]) -> dict[str, TR.TransferHead]:
+              certifiers: Mapping[str, tuple[PublicKey, bytes]],
+              formats: Mapping[str, tuple[int, str]] | None = None) -> dict[str, TR.TransferHead]:
     """Each transfer's head, by value, from its registration (`transfer_rows.check_registration`, for the transfer `check`
     makes of the record, at the record's program digest) under ``certifiers[uplink]``, its uplink's network certifier's
-    key and session. Refused (ValueError) when the blocks break `check`, a transfer has no registration or its
-    registration fails, or a registration names no transfer."""
+    key and session. ``formats``: the verifier's own ``(word_bits, schema)`` of a value whose leaves aren't 16 bits or
+    whose rows aren't ``hm96-sha512/row/v2`` (its program's parameter width, `registered.width`, and its port's row
+    format), a row of ``words`` u16 words then ``words · 16 / word_bits`` leaves. Refused (ValueError) when the blocks
+    break `check`, a transfer has no registration or its registration fails, or a registration names no transfer."""
     b = check(doc, blocks, layouts)
+    formats = dict(formats or {})
+    if extra := sorted(set(formats) - {t.value for t in b.transfers}):
+        raise ValueError(f"formats of {extra}, which no transfer names")
     regs: dict[str, Any] = {}
     for r in registrations:
         v = r.get("value") if isinstance(r, Mapping) else None
@@ -433,19 +441,23 @@ def certified(doc: Mapping[str, Any], blocks: Any, layouts: Mapping[str, Any], r
         if t.uplink not in certifiers:
             raise ValueError(f"{what}: no network certifier on {t.uplink}")
         key, session = certifiers[t.uplink]
+        bits, schema = formats.get(t.value, (TR.WORD_BITS, TR.SCHEMA))
         try:
+            if bits not in TR.WIDTHS or 16 * t.words % bits:
+                raise ValueError(f"its rows of {t.words} u16 words are no whole number of {bits!r}-bit leaves")
             heads[t.value], _ = TR.check_registration(regs[t.value], key, session, link=t.uplink, direction=t.direction,
                                                       window=t.window, kind=t.kind, value=t.value, program=doc.get("program"),
-                                                      words=t.words, rows=t.rows)
+                                                      words=16 * t.words // bits, rows=t.rows, word_bits=bits, schema=schema)
         except ValueError as e:
             raise ValueError(f"{what}: {e}") from None
     return heads
 
 
 def pins(doc: Mapping[str, Any], blocks: Any, layouts: Mapping[str, Any], registrations: Iterable[Any],
-         certifiers: Mapping[str, tuple[PublicKey, bytes]]) -> dict[str, str]:
+         certifiers: Mapping[str, tuple[PublicKey, bytes]],
+         formats: Mapping[str, tuple[int, str]] | None = None) -> dict[str, str]:
     """The verifier's pins, ``{parameter: root}``: every ``in`` transfer's value at its certified root (`certified`), the
     roots ``registration.check`` holds a pinned value to and the parameters the interface's ``input_count`` counts as
     registered."""
-    return {v: h.root.hex() for v, h in certified(doc, blocks, layouts, registrations, certifiers).items()
+    return {v: h.root.hex() for v, h in certified(doc, blocks, layouts, registrations, certifiers, formats).items()
             if h.direction is Direction.INGRESS}

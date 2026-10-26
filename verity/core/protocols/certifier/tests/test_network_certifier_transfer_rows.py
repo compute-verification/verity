@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import random
+from dataclasses import replace
 
 import pytest
 
@@ -71,6 +72,38 @@ def test_a_units_row_opens_the_signed_root_and_a_forged_byte_does_not(tmp_path):
     forged[0][0] ^= 1
     why = WR.refusal(port, dom, entry, [TR.bc(r, s) for r, s in zip(forged, salts)])
     assert why is not None and "does not open" in why
+
+
+@pytest.mark.parametrize("word_bits,schema,words", [(32, G.SCHEMA_V2, 1), (16, G.SCHEMA_SEG, 48)])
+def test_a_value_at_another_width_or_row_format_is_registered_so_and_its_head_binds_it(tmp_path, word_bits, schema, words):
+    """A load's f32 scale (one 32-bit leaf a row) and a token's embedding (a row-seg row longer than one SHA-512 block):
+    `Registered.commit`'s commitment at that width and format, its head binding both, read by the verifier at its own
+    width and format alone, and each row opening the signed root under that format."""
+    rng = random.Random(3)
+    data = [[rng.randrange(1 << word_bits) for _ in range(words)] for _ in range(4)]
+    issuer = Issuer(signers.signer(tmp_path), signers.SESSION)
+    t, cert = TR.attest(issuer, LINK, Direction.INGRESS, 0, "load", PROGRAM, "w", data, word_bits=word_bits, schema=schema)
+    assert t.root == G.Registered.commit(PROGRAM, "w", data, t.salts, word_bits, schema).root
+    assert t.head.domain == TR.domain(PROGRAM, "w", words, 4, word_bits).domain_id == \
+        G.domain(PROGRAM, "w", words, 4, word_bits).domain_id
+    flip = {"word_bits": {32: 16, 16: 32}[word_bits], "schema": G.SCHEMA_SEG if schema == G.SCHEMA_V2 else G.SCHEMA_V2}
+    assert all(replace(t.head, **{k: v}).digest() != t.head.digest() for k, v in flip.items())
+    doc = TR.registration(t.head, cert)
+    assert (doc["words"], doc["word_bits"], doc["row_schema"]) == (words, word_bits, schema)
+    head, dom = TR.check_registration(doc, public(), signers.SESSION, **expect(t, word_bits=word_bits, schema=schema))
+    assert head == t.head
+    with pytest.raises(ValueError, match="registration's word_bits is 32" if word_bits == 32 else "registration's row_schema"):
+        TR.check_registration(doc, public(), signers.SESSION, **expect(t))
+    port = TR.port(t.head, [3, 0])
+    assert (port["word_bits"], port.get("row_schema", G.SCHEMA)) == (word_bits, schema)
+    got, salts, entry = t.statement([3, 0])
+    bcs = [TR.bc(r, s, word_bits, schema) for r, s in zip(got, salts)]
+    assert all(G.verify_read(dom, t.root, p, b, bytes.fromhex(path), schema)
+               for p, b, path in zip(entry["positions"], bcs, entry["paths"]))
+    with pytest.raises(ValueError, match="are 16 or 32 bits, not 8"):
+        TR.Transfer.commit(LINK, Direction.INGRESS, 0, "load", PROGRAM, "w", data, word_bits=8)
+    with pytest.raises(ValueError, match="rows, not 'hm96-sha512/row/v1'"):
+        TR.Transfer.commit(LINK, Direction.INGRESS, 0, "load", PROGRAM, "w", data, schema=G.SCHEMA)
 
 
 @pytest.mark.parametrize("field,value", [("link", "s1/uplink"), ("direction", "ingress"), ("window", 4), ("kind", "wire"),

@@ -122,6 +122,26 @@ def tiny():
     return c, record(c), layouts(c)
 
 
+def test_a_load_of_32_bit_leaves_is_pinned_at_the_verifiers_width_alone(tiny, tmp_path):
+    """The loaded bias, the dot's f32 ``acc`` (2 u16 words a row), registered as a program reading it at 32 bits does,
+    one 32-bit leaf a row: pinned when the verifier's ``formats`` name that width, refused at the default 16, and a
+    format for no transfer, or a width that doesn't cut a transfer's rows, refused."""
+    c, doc, lays = tiny
+    certs, b = Certifiers(tmp_path), blocks()
+    regs = [r for r in certs.register(doc, b) if r["value"] != "bias"]
+    wide = TR.Transfer.commit(UPLINK, Direction.INGRESS, 0, "load", doc["program"], "bias",
+                              [[lo | hi << 16] for lo, hi in values()["bias"]], word_bits=32)
+    regs.append(TR.registration(wide.head, certs.issuers[UPLINK].sign(UPLINK, Direction.INGRESS, 0, wide.head.digest())))
+    pins = BK.pins(doc, b, lays, regs, certs.keys(), {"bias": (32, TR.SCHEMA)})
+    assert pins["bias"] == wide.root.hex() and IF.input_count(doc, pins=pins)["free"] == 0
+    with pytest.raises(ValueError, match="transfer 'bias' .*registration's words is 1, and the verifier's 2"):
+        BK.pins(doc, b, lays, regs, certs.keys())
+    with pytest.raises(ValueError, match=r"formats of \['x'\], which no transfer names"):
+        BK.pins(doc, b, lays, regs, certs.keys(), {"x": (32, TR.SCHEMA)})
+    with pytest.raises(ValueError, match="transfer 'response' .*rows of 1 u16 words are no whole number of 32-bit leaves"):
+        BK.pins(doc, b, lays, regs, certs.keys(), {"bias": (32, TR.SCHEMA), "response": (32, TR.SCHEMA)})
+
+
 def test_free_is_zero_only_with_certified_pins(tiny, tmp_path):
     c, doc, lays = tiny
     certs = Certifiers(tmp_path)
