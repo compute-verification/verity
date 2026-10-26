@@ -1,11 +1,12 @@
 """The batch path at ALLP-IFACE's tiny shape on the CPU: kernels' per-slot commit (the host twin) gives the reference's roots,
-micro-batches and dropped tables change no root, rows at their own positions are the lockstep rows, a drawn slot opens by
-replaying its request alone, the network engine serves what lockstep serves, the torch softmax is the Definitions', the map
-is circuits' FAMILIES table at the frozen shape and each unit's commit unit is its output rows, and a subcircuit joins the
-registration and the draw."""
+micro-batches and dropped tables change no root, the forward stays at most `LAG` groups ahead of a slow commit, rows at
+their own positions are the lockstep rows, a drawn slot opens by replaying its request alone, the network engine serves what
+lockstep serves, the torch softmax is the Definitions', the map is circuits' FAMILIES table at the frozen shape and each
+unit's commit unit is its output rows, and a subcircuit joins the registration and the draw."""
 from __future__ import annotations
 
 import shutil
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -57,6 +58,66 @@ def test_slots_roots_are_the_references(kept):
 def test_micro_batches_and_dropped_tables_change_no_root(params, kept):
     d = Driver(TINY, params, 3, committer(), keep=False, micro_batch=2)
     assert [r.root for r in d.run(PROMPTS, STEPS)] == [r.root for r in kept[2]] and not d.steps
+
+
+def _slow_commit(monkeypatch, c, lag):
+    """``c`` with the slowest side stream: it reads a group's tables only when the forward waits on that group's event.
+    Returns what it saw: the most groups added and unread when the forward hands in the next, the most bytes of tables
+    held, and each group's bytes."""
+    held: dict[int, int] = {}
+    seen = {"lead": 0, "bytes": 0, "sizes": []}
+
+    class Slow(c.G.StepCommitter):
+        def add(self, tensors):
+            seen["lead"] = max(seen["lead"], len(held))
+            super().add(tensors)
+            k = len(seen["sizes"])
+            seen["sizes"].append(sum(np.asarray(t).nbytes for t in tensors))
+            held[k] = seen["sizes"][k]
+            seen["bytes"] = max(seen["bytes"], sum(held.values()))
+            return k
+
+        def finish(self):
+            held.clear()
+            return super().finish()
+
+    def wait(k):
+        for j in [j for j in held if j <= k]:
+            del held[j]
+
+    monkeypatch.setattr(c.G, "StepCommitter", Slow)
+    monkeypatch.setattr(c, "_wait", wait)
+    monkeypatch.setattr("e2e_h200.commit.LAG", lag)
+    return seen
+
+
+#: TINY with 3 layers: 5 groups, so a bound of 2 binds
+DEEP = replace(TINY, name="tiny-h32-l3", layers=3)
+
+
+@pytest.fixture(scope="module")
+def deep():
+    p = Params(DEEP, GeneratorStore(Weights(DEEP)))
+    return p, [r.root for r in Driver(DEEP, p, 3, committer(DEEP), keep=False).run(PROMPTS, 2)]
+
+
+@pytest.mark.parametrize("lag", [1, 2])
+def test_the_forward_stays_at_most_lag_groups_ahead_of_a_slow_commit(deep, monkeypatch, lag):
+    params, roots = deep
+    c = committer(DEEP)
+    seen = _slow_commit(monkeypatch, c, lag)
+    assert [r.root for r in Driver(DEEP, params, 3, c, keep=False).run(PROMPTS, 2)] == roots
+    groups = len(c.groups)
+    sizes = seen["sizes"][:groups]
+    assert seen["lead"] == lag < groups - 1
+    assert seen["bytes"] <= max(sum(sizes[i:i + lag + 1]) for i in range(groups)) < sum(sizes)
+
+
+def test_without_the_bound_a_slow_commit_holds_the_whole_step(deep, monkeypatch):
+    c = committer(DEEP)
+    seen = _slow_commit(monkeypatch, c, 10 ** 9)
+    Driver(DEEP, deep[0], 3, c, keep=False).run(PROMPTS, 1)
+    assert seen["lead"] == len(c.groups) - 1 and seen["bytes"] == sum(seen["sizes"])
 
 
 def test_rows_at_their_own_positions_are_the_lockstep_rows(params, kept):
