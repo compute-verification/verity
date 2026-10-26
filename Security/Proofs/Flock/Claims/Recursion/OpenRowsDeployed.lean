@@ -173,7 +173,7 @@ theorem encF_toBytes (a : F128) : encF a = a.toBytes.data.toList := by
   have hi : i < 16 := by simpa [encF, encNat] using h1
   have hg := FlockSoundness.Refine.toBytes_get a i hi
   rw [getElem!_pos a.toBytes.data i (by omega)] at hg
-  rw [Array.getElem_toList, hg]
+  rw [Array.getElem_toList (xs := a.toBytes.data) (i := i), hg]
   simp only [encF, encNat, List.getElem_append, List.length_map, List.length_range, List.getElem_map,
     List.getElem_range]
   by_cases h8 : i < 8
