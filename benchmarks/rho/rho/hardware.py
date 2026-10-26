@@ -102,9 +102,8 @@ def location(registry: Registry, name: str) -> Location:
     """Location `name`, its datasheet rates (`flops`, `host_ops`) in gates through `Units`."""
     u = units(registry)
     t = f"location.{name}"
-    host = f"{t}.host_ops"
     return registry.fields(Location, t, skip=("flops", "host_ops"), phi=u.gates(registry[f"{t}.flops"]),
-                           host_phi=u.gates(registry[host] if host in registry else 0.0))
+                           host_phi=u.gates(registry.get(f"{t}.host_ops", 0.0)))
 
 
 def fleet(registry: Registry, name: str) -> Fleet:

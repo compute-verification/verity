@@ -3,12 +3,18 @@
 A scenario names a fleet (with its location and dark share), a regime, the NCI policy, a horizon, a run (the target and
 its model), the algorithm families the adversary may use, and the bounds and attacks to apply (all of them unless it
 lists some). With `pofc = "<rules>"` its declared work also runs under the proof of forward computation's rules
-(`rho.pofc`), and `pofc_physical = true` adds the forward-only links to the serving block. Every choice is a registry key (`scenario.<name>.<choice>`), so a sweep can vary a choice like any number.
+(`rho.pofc`), and `pofc_physical = true` adds the forward-only links to the serving block. Every choice is a registry
+key (`scenario.<name>.<choice>`), so a sweep can vary a choice like any number.
 
 `evaluate` gives, for each family, ρ under each bound alone, under every bound it meets at once (`lo`: each block gets
 the least of their caps, under the union of their premises) and under each attack (`hi`: the best construction). The
 adversary picks its family, so the scenario's ρ lies in `[min_A lo_A, min_A hi_A]`. A bound above an attack
 (`lo > hi`) is a contradiction: one of the bound's premises is false for that algorithm, and `contradictions` names it.
+
+ρ is the circuit's size over the reference's, `|A| / T_0`, each serving block padded to its capacity; the time to the
+target is reported beside it, `T ≥ ρ T_0 / Φ_total` (`Scenario.seconds`): the idealized normalization, the reference at
+the inventory's full capacity. A construction's circuit is padded too, so its ρ carries the share of capacity it leaves
+idle (its MFU) and its time is exactly `ρ T_0 / Φ_total`; the reference itself runs in `T_0 / (MFU₀ Φ_total)`.
 """
 
 from __future__ import annotations
@@ -17,15 +23,23 @@ import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from rho import hardware, instances, lean, regimes
+from rho import envelopes, hardware, instances, lean
 from rho.attacks import ATTACKS
-from rho.classes import CLASSES, Argument, Outside, premise_status, premises
+from rho.classes import (
+    CLASSES,
+    Argument,
+    Outside,
+    per_block,
+    premise_status,
+    premises,
+    weight_per_gate,
+)
+from rho.envelopes import Context, Regime
 from rho.families import Family, family
 from rho.instances import Model, Run
 from rho.params import Registry
 from rho.profile import Profile
-from rho.regimes import Context, Regime
-from rho.theorem import Allowance, Budget, Partition, Slowdown, least, slowdown
+from rho.theorem import Budget, Cap, Partition, Slowdown, least, slowdown
 
 YEAR = 365 * 86400.0
 
@@ -44,25 +58,32 @@ class Scenario:
     premises: Mapping[str, Mapping] = field(default_factory=dict)
 
     @property
-    def rate(self) -> float:
-        """The adversary's whole unencumbered training rate, in reference FLOP/s: the monitored fleet's, and the dark
-        pool's share of progress (`Fleet.eps_dark_rate`) beside it."""
+    def total_phi(self) -> float:
+        """`Φ_total`: the inventory's gates per second, the monitored fleet's and the dark leaves' (`ε_dark` of it)."""
         f = self.context.fleet
-        return f.count * self.context.location.phi * f.mfu_train / (1 - f.eps_dark_rate)
+        return f.count * self.context.location.phi / (1 - f.eps_dark)
+
+    @property
+    def reference(self) -> float:
+        """`T_0`: the reference circuit's gates to the run's target (its FLOPs through `hardware.Units`)."""
+        return self.context.units.gates(self.run.target(self.model))
+
+    def seconds(self, rho: float) -> float:
+        """`ρ T_0 / Φ_total`: the time to the run's target at size slowdown `rho`."""
+        return rho * self.reference / self.total_phi
 
     def years(self, rho: float) -> float:
-        """Years to reach the run's target at slowdown `rho`."""
-        return rho * self.run.target(self.model) / self.rate / YEAR
+        return self.seconds(rho) / YEAR
 
 
 def build(registry: Registry, name: str) -> Scenario:
     t = f"scenario.{name}"
     fl = hardware.fleet(registry, registry[f"{t}.fleet"])
-    ctx = Context(fl, hardware.location(registry, fl.location), regimes.policy(registry, registry[f"{t}.policy"]),
-                  hardware.horizon(registry, registry[f"{t}.horizon"]))
+    ctx = Context(fl, hardware.location(registry, fl.location), envelopes.policy(registry, registry[f"{t}.policy"]),
+                  hardware.horizon(registry, registry[f"{t}.horizon"]), hardware.units(registry))
     run = instances.run(registry, registry[f"{t}.run"])
     s = Scenario(
-        name, regimes.regime(registry, registry[f"{t}.regime"]), ctx, instances.model(registry, run.model), run,
+        name, envelopes.regime(registry, registry[f"{t}.regime"]), ctx, instances.model(registry, run.model), run,
         tuple(family(registry, n) for n in registry[f"{t}.families"]),
         tuple(CLASSES[n] for n in registry.get(f"{t}.bounds", list(CLASSES))),
         tuple(ATTACKS[n] for n in registry.get(f"{t}.attacks", list(ATTACKS))), premises(registry))
@@ -87,7 +108,7 @@ class Estimate:
     #: where its premises stand at the largest block that bounds it (`classes.premise_status`: supported, assumed,
     #: contested, refuted); empty for an attack
     premise: str = ""
-    #: ρ inside one inference block `(Γ, k)` alone: `κ Γ / (2 a(Γ, k))`, the declared circuit's slowdown
+    #: ρ inside one inference block `(c, k)` alone: `w c / q_T(c, k)`, the declared circuit's slowdown
     declared: float = math.nan
 
     @property
@@ -130,17 +151,21 @@ class Result:
         return min((f.hi for f in self.families), default=math.inf)
 
 
+def _cuts(partition: Partition) -> dict:
+    return {(b.name, c.name): c for b in partition.serving for c in (*b.cuts, *((b.layout,) if b.layout else ()))}
+
+
 def _cut_cites(partition: Partition, s: Slowdown) -> tuple[str, ...]:
-    """The citations of the cut that set each region's share (none where the region's compute did)."""
-    cuts = {(r.name, c.name): c for r in partition.regions for c in (*r.cuts, *((r.layout,) if r.layout else ()))}
-    return tuple(dict.fromkeys(c for name, share in s.regions.items() if (name, share.cut) in cuts
+    """The citations of the cut that set each serving block's share (none where its capacity did)."""
+    cuts = _cuts(partition)
+    return tuple(dict.fromkeys(c for name, share in s.serving.items() if (name, share.cut) in cuts
                                for c in cuts[name, share.cut].cites))
 
 
 def _binding_k(partition: Partition, s: Slowdown) -> float:
-    """The most novel bits of any block in the cuts that set the regions' shares: where premises must hold."""
-    cuts = {(r.name, c.name): c for r in partition.regions for c in (*r.cuts, *((r.layout,) if r.layout else ()))}
-    return max((b.budget.inputs for name, share in s.regions.items() if (name, share.cut) in cuts
+    """The most novel bits of any block in the cuts that set the serving blocks' shares: where premises must hold."""
+    cuts = _cuts(partition)
+    return max((b.budget.inputs for name, share in s.serving.items() if (name, share.cut) in cuts
                 for b in cuts[name, share.cut].blocks), default=0.0)
 
 
@@ -151,41 +176,44 @@ def _rated(name: str, side: str, cites: tuple[str, ...], s: Slowdown, partition:
     return Estimate(name, side, lean.weakest(cites), s, cites=cites, declared=declared, premise=premise)
 
 
-def _estimate(arg: Argument, p: Profile, partition: Partition, block: Budget,
-              table: Mapping[str, Mapping]) -> tuple[Estimate, Allowance | None]:
+def _estimate(arg: Argument, p: Profile, ctx: Context, partition: Partition, block: Budget,
+              table: Mapping[str, Mapping]) -> tuple[Estimate, Cap | None]:
     try:
-        a = arg.allowance(p)
+        cap = per_block(arg.allowance(p), ctx.units)
     except Outside as e:
         return Estimate(arg.name, arg.side, "outside", None, str(e)), None
-    s = slowdown(partition, a, p.kappa, p.efficiency, arg.side)
-    return _rated(arg.name, arg.side, arg.cites, s, partition, _declared(a, p, block), table), a
+    w = weight_per_gate(p, ctx.units)
+    s = slowdown(partition, cap, w, p.efficiency, arg.side)
+    return _rated(arg.name, arg.side, arg.cites, s, partition, _declared(cap, w, block), table), cap
 
 
-def _declared(a: Allowance, p: Profile, block: Budget) -> float:
-    n = a(block)
-    return max(1.0, p.kappa * block.compute / (2 * n)) if n > 0 else math.inf
+def _declared(cap: Cap, w: float, block: Budget) -> float:
+    n = cap(block)
+    return max(1.0, w * block.gates / n) if n > 0 else math.inf
 
 
-def _combine(args: tuple[Argument, ...], bounds: list[tuple[Estimate, Allowance | None]], p: Profile,
+def _combine(args: tuple[Argument, ...], bounds: list[tuple[Estimate, Cap | None]], p: Profile, ctx: Context,
              partition: Partition, block: Budget, table: Mapping[str, Mapping]) -> Estimate:
     """Every bound met at once: each block gets the least of their caps, under the union of their citations."""
     met = [a for _, a in bounds if a is not None]
     cites = tuple(c for b, (_, a) in zip(args, bounds, strict=True) if a is not None for c in b.cites)
+    w = weight_per_gate(p, ctx.units)
     return _rated("+".join(e.argument for e, a in bounds if a is not None) or "none", "bound", cites,
-                  slowdown(partition, least(*met), p.kappa, p.efficiency), partition, _declared(least(*met), p, block),
+                  slowdown(partition, least(*met), w, p.efficiency), partition, _declared(least(*met), w, block),
                   table)
 
 
 def evaluate(s: Scenario) -> Result:
-    partition = s.regime.partition(s.context)
-    block = Budget(s.context.policy.gamma, s.context.policy.k)
+    ctx = s.context
+    partition = s.regime.partition(ctx)
+    block = Budget(ctx.c, ctx.policy.k)
     out = []
     for fam in s.families:
         p = fam.profile(s.model, s.run)
-        bounds = [_estimate(b, p, partition, block, s.premises) for b in s.bounds]
-        combined = _combine(s.bounds, bounds, p, partition, block, s.premises)
+        bounds = [_estimate(b, p, ctx, partition, block, s.premises) for b in s.bounds]
+        combined = _combine(s.bounds, bounds, p, ctx, partition, block, s.premises)
         out.append(FamilyResult(fam.name, p, tuple(e for e, _ in bounds), combined,
-                                tuple(_estimate(a, p, partition, block, s.premises)[0] for a in s.attacks)))
+                                tuple(_estimate(a, p, ctx, partition, block, s.premises)[0] for a in s.attacks)))
     return Result(s, tuple(out))
 
 

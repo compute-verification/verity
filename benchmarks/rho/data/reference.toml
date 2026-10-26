@@ -2,7 +2,9 @@
 # committed inference, about 2e16 requests a year of DeepSeek-V4-Pro in FP8 at about 4,500 input tokens each, on two
 # fleets (8-GPU H200 servers; NVL72 racks, a rack one location), dark share 0.1% and 1%, side channels 1 kb/s per
 # server, horizons a week, a month and a year; and the work and exfiltration references that make rho interpretable.
-# Its regimes are data/regimes.toml's onsite (a wipe every 24 h, 10 GB a device today) and remote.
+# Its regimes are data/envelopes.toml's onsite (a wipe every 24 h leaving 5 GB of each server's whole memory, Daniel
+# 26 Oct 12:16 PM PDT), onsite-per-device (today's wipe, 10 GB a device and the host unwiped: the sensitivity) and
+# remote.
 
 [model.deepseek-v4-pro]
 n_total = { value = 1.6e12, unit = "param", source = "ruling: Daniel 25 Oct reference datacenter (1.6T total)", status = "ruled" }
@@ -83,6 +85,23 @@ families = ["full"]
 [scenario.reference-onsite-nvl72]
 fleet = "world-nvl72"
 regime = "onsite"
+policy = "v4-pro-session"
+horizon = "year"
+run = "v4-pretrain"
+families = ["full"]
+
+# The sensitivity: today's wipe, per device.
+[scenario.reference-onsite-h200-per-device]
+fleet = "world-h200"
+regime = "onsite-per-device"
+policy = "v4-pro-session"
+horizon = "year"
+run = "v4-pretrain"
+families = ["full"]
+
+[scenario.reference-onsite-nvl72-per-device]
+fleet = "world-nvl72"
+regime = "onsite-per-device"
 policy = "v4-pro-session"
 horizon = "year"
 run = "v4-pretrain"

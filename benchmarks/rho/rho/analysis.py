@@ -1,7 +1,7 @@
 """Sensitivity: how ρ moves with every parameter, and where it falls below a target.
 
 Every function takes a registry and a scenario name and varies registry keys, so any parameter of any layer (a GPU's
-FLOP/s, a wipe's residual, a premise's bits, a family's efficiency, a choice of regime) is swept the same way. The
+FLOP/s, a wipe's `k_wipe`, a premise's bits, a family's efficiency, a choice of regime) is swept the same way. The
 metric is a function of a `Result`: by default ρ's lower end `LO` (the least lower bound over the adversary's
 families); `HI` is the best attack's, and `upto(status)` is `LO` from only the bounds and cuts at least as strong as
 `status`. Results are cached per registry and override, so the functions below share their evaluations.
@@ -15,7 +15,7 @@ families); `HI` is the best attack's, and `upto(status)` is `LO` from only the b
 * `corner`: every ranged parameter at its adversarial end at once.
 * `margins`: for every ranged parameter, ρ along a window around its plausible range and where it crosses each target.
 * `phase`: ρ over a grid of two keys; `frontier`, the curve in that plane where ρ crosses a target.
-* `attribution`: what sets ρ: the adversary's rate split into the dark pool and g's terms.
+* `attribution`: what sets ρ: the bound's weight per gate split into the dark leaves and g's terms.
 """
 
 from __future__ import annotations
@@ -29,8 +29,8 @@ from functools import cache
 from typing import Any
 
 from rho import lean
+from rho.envelopes import Context, Delta, Regime
 from rho.params import Param, Registry
-from rho.regimes import Context, Regime
 from rho.scenario import Result, Scenario, evaluate, evaluate_named, reads
 from rho.theorem import Partition
 
@@ -54,7 +54,8 @@ def _rank(cites: Iterable[str]) -> int:
 
 @dataclass(frozen=True)
 class _Restricted:
-    """A regime whose cuts are only those at least as strong as `status` (a region left with none is unconstrained)."""
+    """A regime whose cuts are only those at least as strong as `status` (a serving block left with none is
+    unconstrained)."""
 
     regime: Regime
     status: str
@@ -66,8 +67,11 @@ class _Restricted:
     def partition(self, ctx: Context) -> Partition:
         p = self.regime.partition(ctx)
         top = STATUSES.index(self.status)
-        return replace(p, regions=tuple(replace(r, cuts=tuple(c for c in r.cuts if _rank(c.cites) <= top))
-                                        for r in p.regions))
+        return replace(p, serving=tuple(replace(b, cuts=tuple(c for c in b.cuts if _rank(c.cites) <= top))
+                                        for b in p.serving))
+
+    def delta(self, ctx: Context) -> Delta:
+        return self.regime.delta(ctx)
 
 
 def restrict(s: Scenario, status: str) -> Scenario:
@@ -340,10 +344,9 @@ def frontier(registry: Registry, scenario: str, x: str, xs: Sequence[float], y: 
 
 @dataclass(frozen=True)
 class Term:
-    #: `dark` (`ε_dark`), or one of g's terms: a block kind or a free source (`Slowdown.terms`)
+    #: `dark` (the dark leaves), or one of g's terms: a block kind or an uncertified route (`Slowdown.terms`)
     name: str
-    #: its part of the adversary's rate `ε_dark + (1 − ε_dark) g`, in multiples of the unencumbered rate, and its share
-    #: of the rate
+    #: its part of the weight per gate `dark + (1 − ε_dark) g`, in multiples of the reference's, and its share of it
     part: float
     share: float
     #: `m / part`: ρ can't exceed it while this term remains
@@ -351,8 +354,8 @@ class Term:
 
 
 def attribution(r: Result, side: str = "bound") -> list[Term]:
-    """What sets ρ, largest first: the adversary's rate `ε_dark + (1 − ε_dark) g` split into the dark pool and g's
-    terms, for the family the adversary picks (the least `lo`; with `side="attack"`, the least `hi` under its best attack)."""
+    """What sets ρ, largest first: the weight per gate `dark + (1 − ε_dark) g` split into the dark leaves and g's terms,
+    for the family the adversary picks (the least `lo`; with `side="attack"`, the least `hi` under its best attack)."""
     if side == "bound":
         fam = min(r.families, key=lambda f: f.lo, default=None)
         s = fam.combined.slowdown if fam else None
@@ -362,7 +365,7 @@ def attribution(r: Result, side: str = "bound") -> list[Term]:
         s = best.slowdown if best else None
     if s is None:
         return []
-    parts = {"dark": s.eps_dark} | {t: (1 - s.eps_dark) * v for t, v in s.terms.items()}
+    parts = {"dark": s.dark} | {t: (1 - s.eps_dark) * v for t, v in s.terms.items()}
     rate = math.fsum(parts.values())
     return sorted((Term(t, v, v / rate, s.efficiency / v) for t, v in parts.items() if v > 0),
                   key=lambda t: -t.part)

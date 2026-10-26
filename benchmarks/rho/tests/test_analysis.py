@@ -167,7 +167,7 @@ def test_run_writes_markdown_json_and_figures_into_out(tmp_path, monkeypatch, ca
     monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", NAMES[0]])
     run.main()
     text = capsys.readouterr().out
-    assert text.startswith("# ρ") and "## Regions where ρ falls below target" in text and "**Corner:**" in text
+    assert text.startswith("# ρ") and "## Where ρ falls below target" in text and "**Corner:**" in text
     assert (tmp_path / "rho.md").read_text() == text
     record = json.loads((tmp_path / "rho.json").read_text(), parse_constant=lambda c: pytest.fail(f"JSON has {c}"))
     assert set(record["scenarios"]) == {NAMES[0]}

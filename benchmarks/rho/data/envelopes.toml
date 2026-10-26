@@ -46,7 +46,7 @@ kind = "onsite"
 base = "remote"
 wipe_s = { value = 86400, unit = "s", low = 3600, high = 604800, source = "ruling: Daniel 25 Oct, 24 h wipes", status = "ruled" }
 per = "server"
-k_wipe = { value = 4e10, unit = "bit/server", low = 2e10, high = 3.12e11, source = "ruling: Daniel 26 Oct 12:16 PM PDT, the wipe leaves at most 5 GB of the server's assumed memory capacity M_s, every tier included (the operating point; the per-server statement is memory-accounting's, Wed 28 Oct 06:00Z); low: half; high: today's 39 GB a server (8 x 5 GB of HBM and 36.5 GB of host and DPU unwiped: regime.onsite-per-device)", status = "ruled" }
+k_wipe = { value = 4e10, unit = "bit/server", low = 2e10, high = 9.32e11, source = "ruling: Daniel 26 Oct 12:16 PM PDT, the wipe leaves at most 5 GB of the server's assumed memory capacity M_s, every tier included (the operating point; the per-server statement is memory-accounting's, Wed 28 Oct 06:00Z); low: half; high: today's wipe, 116.5 GB a server (8 x 10 GB of HBM and 36.5 GB of host, DPU, BMC and flash unwiped: regime.onsite-per-device)", status = "ruled" }
 game_delta_coin = { value = 2.938735877055719e-39, source = "the streamed wipe's retention game (#4707): accepted with probability at most 2^-128 + Adv_PRF; the coins' 2^-128", status = "derived" }
 prf_advantage = { value = 2.938735877055719e-39, source = "Adv_PRF of the streamed wipe's label function, taken at the PoUS statements' epsilon_crypto = 2^-128 (Security/Definitions/Pous/Guarantees.lean)", status = "assumed" }
 intake = { value = 1, unit = "x", low = 1, high = 1.3e6, source = "benchmarks/nci/tiers.py DEFAULTS intake_x: the declared novel intake at alpha Phi once NET-35's count check is in the ZK flow; high: line rate until then", status = "assumed" }

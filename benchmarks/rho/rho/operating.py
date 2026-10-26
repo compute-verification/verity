@@ -1,10 +1,11 @@
 """Operating points: what ρ means in time, at the work and exfiltration references (`work.*`, `exfil.*` in the registry).
 
-* **Work** (`work.<name>.flops`, reference-algorithm FLOPs): the adversary's whole compute does it in `ρ · flops / rate`
-  seconds (`Scenario.rate` is its unencumbered FLOP/s), at ρ's lower end and at the best attack's; its dark pool alone
-  in `flops / (ε_dark · rate)`, `ε_dark` its share of progress (`Fleet.eps_dark_rate`).
-* **Exfiltration** (`exfil.<name>.bits`): onsite, what monitored locations produce reaches the dark pool only through
-  the channels no certifier reads (the regime's `timing` and `side` bit/s per host, times the location's hosts;
+* **Work** (`work.<name>.flops`, reference-algorithm FLOPs, `T_0` gates through `hardware.Units`): the inventory does it
+  in `ρ T_0 / Φ_total` seconds at ρ's lower end and at the best attack's (`Scenario.seconds`, the idealized
+  normalization); the reference itself in `T_0 / (MFU₀ Φ_total)` (`unencumbered`, at the training MFU), and the dark
+  leaves alone in `T_0 / (mfu_dark ε_dark Φ_total)`.
+* **Exfiltration** (`exfil.<name>.bits`): onsite, what monitored locations produce reaches the dark leaves only through
+  the channels no certifier reads (the certifier's `timing` and `side` bit/s per host, times the location's hosts;
   certified egress is the declared circuit's output, fixed by its registered inputs), from one location or from every
   location at once. Remotely nothing bounds it (0 s).
 * **Faulty outputs** (`faulty.*`): a block the sampled proofs let go unchecked returns outputs the adversary chose, in
@@ -18,6 +19,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from rho.params import Registry
 from rho.scenario import Result, Scenario
@@ -31,17 +33,27 @@ class Point:
     seconds: Mapping[str, float]
 
 
+def _inner(regime: Any) -> Any:
+    """The regime a wrapper (`pofc.Pofc`, `analysis.restrict`'s) runs inside."""
+    while hasattr(regime, "regime"):
+        regime = regime.regime
+    return regime
+
+
 def work(result: Result, flops: float) -> dict[str, float]:
     s = result.scenario
-    d = s.context.fleet.eps_dark_rate
-    return {"unencumbered": flops / s.rate, "lower end": result.lo * flops / s.rate,
-            "best attack": result.hi * flops / s.rate, "dark pool": flops / (d * s.rate) if d > 0 else math.inf}
+    f, phi = s.context.fleet, s.total_phi
+    gates = s.context.units.gates(flops)
+    dark = f.eps_dark * f.dark_mfu * phi
+    return {"unencumbered": gates / (f.mfu_train * phi), "lower end": result.lo * gates / phi,
+            "best attack": result.hi * gates / phi, "dark pool": gates / dark if dark > 0 else math.inf}
 
 
 def exfil(scenario: Scenario, bits: float) -> dict[str, float]:
-    if not hasattr(scenario.regime, "side"):
+    certifier = getattr(_inner(scenario.regime), "certifier", None)
+    if certifier is None:
         return {"one location": 0.0, "every location": 0.0}
-    side = (getattr(scenario.regime, "timing", 0.0) + scenario.regime.side) * scenario.context.location.hosts
+    side = (certifier.timing + certifier.side) * scenario.context.location.hosts
     return {"one location": bits / side if side > 0 else math.inf,
             "every location": bits / (side * scenario.context.fleet.count) if side > 0 else math.inf}
 
@@ -83,18 +95,17 @@ class Row:
 
 def faulty(registry: Registry, scenario: Scenario) -> Row:
     """The faulty-outputs row at the regime's identities, at the reporting confidence `faulty.delta`. A sampled regime
-    draws at its own rate (`Remote.q`, with its step bits and floor); an unsampled one proves every unit (`q = 1`);
+    draws at its own rate (`Detection.q`, with its step bits and floor); an unsampled one proves every unit (`q = 1`);
     unmonitored, nothing detects it."""
     refs = {n: registry[f"exfil.{n}.bits"] for n in registry.names("exfil")}
-    regime = scenario.regime
-    identities = getattr(regime, "identities", None)
+    d = getattr(_inner(scenario.regime), "detection", None)
     delta = registry["faulty.delta"]
-    if identities is None:
+    if d is None:
         return Row("faulty outputs", math.inf, dict.fromkeys(refs, 0.0), 0.0, delta)
-    if getattr(regime, "sampled", False):
-        f = Faulty(regime.q(), delta, regime.step_bits, regime.floor_steps, identities)
+    if d.sampled:
+        f = Faulty(d.q(), delta, d.step_bits, d.floor_steps, d.identities)
     else:
-        f = Faulty(1.0, delta, registry["faulty.step_bits"], registry["faulty.floor_steps"], identities)
+        f = Faulty(1.0, delta, registry["faulty.step_bits"], registry["faulty.floor_steps"], d.identities)
     return Row("faulty outputs", f.capacity, {n: f.detect(b) for n, b in refs.items()}, f.q, delta)
 
 

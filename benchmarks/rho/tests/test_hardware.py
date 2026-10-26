@@ -6,7 +6,6 @@ import pytest
 from rho import hardware
 from rho.hardware import Fleet, Location
 from rho.params import Registry
-from rho.theorem import rho
 
 REG = Registry.load()
 CENSUS = {d["id"]: d for d in json.loads(
@@ -16,9 +15,10 @@ CENSUS = {d["id"]: d for d in json.loads(
 @pytest.mark.parametrize(("name", "device"), [("h100-hgx", "h100-sxm5-80gb"), ("h200-hgx", "h100-sxm5-80gb"),
                                               ("rtx-pro-6000-server", "rtx-pro-6000-server")])
 def test_a_location_is_its_census_devices_where_the_census_has_them(name, device):
-    loc = hardware.location(REG, name)
-    assert math.isclose(loc.phi, loc.devices * CENSUS[f"{device}/e4m3"]["flop_per_second"])
-    assert math.isclose(REG.param(f"location.{name}.phi").low, loc.devices * CENSUS[f"{device}/bf16"]["flop_per_second"])
+    loc, u = hardware.location(REG, name), hardware.units(REG)
+    assert math.isclose(loc.phi, u.gates(loc.devices * CENSUS[f"{device}/e4m3"]["flop_per_second"]))
+    assert math.isclose(REG.param(f"location.{name}.flops").low,
+                        loc.devices * CENSUS[f"{device}/bf16"]["flop_per_second"])
     if name != "h200-hgx":
         assert math.isclose(loc.memory, loc.devices * CENSUS[f"{device}/e4m3"]["memory_bytes"] * 8)
 
@@ -39,20 +39,29 @@ def test_the_reference_fleets_are_100k_or_400k_gpus(name, gpus):
 
 def test_a_rack_of_four_servers_is_four_servers():
     one, four = hardware.location(REG, "h200-hgx"), hardware.location(REG, "h200-hgx-rack4")
-    for field in ("devices", "phi", "memory", "hosts", "host_memory", "host_ops", "links"):
+    for field in ("devices", "phi", "memory", "hosts", "host_memory", "host_phi", "links"):
         assert math.isclose(getattr(four, field), 4 * getattr(one, field)), field
+    assert math.isclose(four.server_memory, one.server_memory)
 
 
 def test_a_location_without_hosts_is_one_host_with_nothing_counted():
     loc = Location("bare", 8, 1e16, 1e12)
-    assert (loc.hosts, loc.host_memory, loc.host_ops, loc.links) == (1, 0.0, 0.0, math.inf)
+    assert (loc.hosts, loc.host_memory, loc.host_phi, loc.links) == (1, 0.0, 0.0, math.inf)
+    assert loc.server_memory == 1e12
 
 
-def test_the_dark_pool_counts_at_its_own_mfu():
-    assert Fleet("f", "h200-hgx", 1, 0.01, 0.4, 0.4).eps_dark_rate == 0.01
-    assert Fleet("f", "h200-hgx", 1, 0.01, 0.4, 0.4, 0.4).eps_dark_rate == pytest.approx(0.01)
-    fast = Fleet("f", "h200-hgx", 1, 0.01, 0.4, 0.4, 0.55)
-    assert fast.eps_dark_rate > 0.01
-    # ρ at the effective share is the ratio of progress rates, each pool at its own MFU, the monitored one slowed to g
-    d, mt, md, g = fast.eps_dark, fast.mfu_train, fast.mfu_dark, 0.3
-    assert rho(fast.eps_dark_rate, g) == pytest.approx((d * md + (1 - d) * mt) / (d * md + (1 - d) * mt * g))
+def test_a_construction_gets_the_dark_leaves_at_their_own_mfu():
+    assert Fleet("f", "h200-hgx", 1, 0.01, 0.4, 0.4).dark_mfu == 0.4
+    assert Fleet("f", "h200-hgx", 1, 0.01, 0.4, 0.4, 0.55).dark_mfu == 0.55
+
+
+def test_units_is_the_one_conversion_from_flops_to_gates():
+    u = hardware.units(REG)
+    p = REG.param("units.gates_per_flop")
+    assert u.gates_per_flop == p.value and p.ranged and p.status
+    assert u.gates(2.0) == 2 * p.value and u.flops(u.gates(3.0)) == pytest.approx(3.0)
+
+
+def test_a_servers_memory_is_every_tier_over_its_hosts():
+    loc = hardware.location(REG, "gb200-nvl72")
+    assert loc.server_memory == pytest.approx((loc.memory + loc.host_memory + loc.disk) / loc.hosts)

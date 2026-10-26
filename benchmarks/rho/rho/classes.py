@@ -6,7 +6,7 @@ statement needs is unknown). A budget at which the statement's premises fail get
 the Lean statement it instantiates first, then its named assumptions; `lean.weakest(cites)` is its status, and
 `premise_status(cites, k)` is where those assumptions stand at a block of `k` bits (`data/premises.toml`).
 
-The statements are about inference blocks of `s` gates reading `k` novel bits; here `k` is `budget.inputs`. Adding a
+The statements are about inference blocks of `c` gates reading `k` novel bits; here `k` is `budget.inputs`. Adding a
 class is one more `Argument` in `CLASSES`: a premise set, the profile fields it reads, and its count.
 
 **Counted sets.** Each statement counts its own products: the covering family and the partial-sum and E1 bounds count
@@ -15,6 +15,10 @@ theorems count whatever products their certificate covers. A count on a set `S` 
 profile's counted products (`counted`), and where a premise covers only a share of `S` at `k` (the layers deep enough to
 be chained, the layers whose inputs aren't cheap) the count is divided by that share, with no cap where it is 0. Both
 conversions are exact over a whole cover, and per block they assume each block does a representative mix of products.
+
+**Units.** The statements, and the attacks' constructions, are in the FLOP model: a block's compute in FLOPs
+(`FlopBudget`), its count in counted products. `per_block` turns one into the exclusion layer's per-block cap
+`q_T(c, k)` on gates through `hardware.Units`, and `weight_per_gate` is the weight `w` a gate holds.
 """
 
 from __future__ import annotations
@@ -26,9 +30,35 @@ from functools import lru_cache
 from typing import Literal, Protocol
 
 from rho import lean
+from rho.hardware import Units
 from rho.params import Registry
 from rho.profile import Profile
-from rho.theorem import Allowance
+from rho.theorem import Cap
+
+
+@dataclass(frozen=True)
+class FlopBudget:
+    """A block's budget as the FLOP-model statements read it: `Budget` with its gates as FLOPs (`compute`)."""
+
+    compute: float
+    inputs: float
+    cut: float = math.inf
+
+
+#: The most counted products one block with this budget finishes, in the FLOP model: a cap for a bound, a construction
+#: for an attack. `math.inf` is no cap (a bound whose premises fail at this budget).
+Allowance = Callable[[FlopBudget], float]
+
+
+def per_block(a: Allowance, units: Units) -> Cap:
+    """`q_T(c, k)`: allowance `a` on a block of `c` gates."""
+    return lambda b: a(FlopBudget(units.flops(b.gates), b.inputs, b.cut))
+
+
+def weight_per_gate(p: Profile, units: Units) -> float:
+    """`w = ω_max / s_×`, the counted weight a gate holds, at the reference's gates per counted product (`s_× = 2G/κ`,
+    `ω_max = 1`): the reference's counted products at face value, `κ/2` a FLOP."""
+    return p.kappa / (2 * units.gates_per_flop)
 
 
 class Outside(Exception):

@@ -76,7 +76,7 @@ class Registry:
         return self.param(key).value
 
     def get(self, key: str, default: Any = None) -> Any:
-        return self._params[key].value if key in self._params else default
+        return self.param(key).value if key in self._params else default
 
     def param(self, key: str) -> Param:
         try:

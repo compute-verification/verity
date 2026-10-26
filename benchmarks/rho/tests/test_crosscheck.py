@@ -11,10 +11,9 @@ computed. What is matched, and what each side does differently:
   products against `kappa_forward` = κ · forward/counted (0.298 at κ = 0.602: a forward product is 6.71 FLOP of the
   recipe, attention included); thread and cover count κ's own set. Matched: κ_forward = 1/3 for fan, κ = 2/3 for thread,
   κ = 1/3 for cover.
-* **Compute.** Mine runs at σ = 1 throughout. rho counts free capacity and inference blocks at peak (as Lean does) and the
-  region's training at `mfu_train`, so `g`'s free share is share/MFU₀. Matched: `mfu_train` = 1. At rho's defaults the
-  remote audit's r̂ = 0.323 + 0.064 + 0.029 (GPU floor, clock, host CPUs at peak) is 0.416 of peak, more than the 0.4
-  the location trains at, so remote g = 1: no slowdown, against my 131 at r̂ = 0.
+* **Compute.** Mine runs at σ = 1 throughout, and rho's bound counts every gate at capacity, so they agree unmatched.
+  At rho's defaults the remote audit's r̂ = 0.323 + 0.064 + 0.029 (GPU floor, clock, host CPUs at peak) is 0.416 of
+  capacity, so remote 1/g is about 2.4, against my 131 at r̂ = 0.
 * **The inference block.** Mine is c = k φ_F with φ_F = 2 × 49e9 / 17 FLOP per novel bit (17-bit tokens). rho's
   Γ = 9.8e16 is a 1M-token session. Matched to mine.
 * **U.** Mine is r̂ + ε_W(1 − r̂) + p_fail/δ + JΔ/H, with r̂ = 0 and p_fail/δ = 3·2⁻⁴⁰/1e-6. Matched: `residual`,
@@ -33,10 +32,11 @@ computed. What is matched, and what each side does differently:
   (8.3e12) is past both, so onsite NVL72 is the remote cut in both.
 * **I_cert.** rho's certified ingress is `intake` α Φ with α = k/Γ, the declared intake at full use; mine is the
   location's share of the committed requests' input tokens at σ = 1, Φ/φ_F. They agree at matched Γ. At rho's own policy
-  α Φ is 20/17 of mine, since the session's 2e7 bits over 1M tokens are 20 bits a token. rho also adds what a wipe leaves
-  on each host (`host_residual_bits`, 2.92e11) and the certifier's timing channel (860 bit/s a host), matched to 0, and
-  counts side channels per host (18 on an NVL72 rack), mine per location: matched to 1 kb/s a location. Mine's R is
-  Daniel's 5 GB a GPU; rho's value is today's 10 GB.
+  α Φ is 20/17 of mine, since the session's 2e7 bits over 1M tokens are 20 bits a token. rho also adds the certifier's
+  timing channel (860 bit/s a host), matched to 0, and counts side channels per host (18 on an NVL72 rack), mine per
+  location: matched to 1 kb/s a location.
+* **R.** Mine is Daniel's earlier 5 GB a GPU; rho's wipe leaves 5 GB a server (Daniel, 26 Oct). Matched with the
+  per-device wipe (`onsite-per-device`) at 5 GB a GPU and nothing on the host.
 * **β_x.** Mine is 0.66, the cheapest boundary (d = 7168, FP8); rho's 0.87 is the exact-block measurement on
   Qwen2.5-1.5B. Matched to 0.66.
 * **Thread.** rho's family has d = 10 and e = aOut; mine has d = 1 (what Lean certifies for a run that trains its
@@ -84,14 +84,15 @@ def forward_share() -> float:
 
 def matched(fleet: str, onsite: bool = False, **family: float) -> Registry:
     reg = Registry.load()
-    values = {f"fleet.{fleet}.mfu_train": 1, "regime.remote.residual": 0, "regime.remote.clock_share": 0,
+    values = {"regime.remote.residual": 0, "regime.remote.clock_share": 0,
               "regime.remote.host": 0, "regime.remote.eps_agg": SLACK,
               "policy.v4-pro-session.gamma": reg["policy.v4-pro-session.k"] * PHI_F,
               "family.full.kappa": 1 / 3 / forward_share(), "family.full.beta_x": 0.66}
     values |= {f"family.full.{k}": v for k, v in family.items()}
     if onsite:
         hosts = reg[f"location.{reg[f'fleet.{fleet}.location']}.hosts"]
-        values |= {"regime.onsite.residual_bits": 4e10, "regime.onsite.host_residual_bits": 0,
+        values |= {f"scenario.reference-onsite-{fleet.removeprefix('world-')}.regime": "onsite-per-device",
+                   "regime.onsite-per-device.residual_bits": 4e10, "regime.onsite-per-device.host_residual_bits": 0,
                    "regime.onsite.timing": 0, "regime.onsite.side": reg["regime.onsite.side"] / hosts}
     return reg.override(values)
 
@@ -126,7 +127,7 @@ def test_onsite_h200_fanout_priced_is_mine_but_for_whole_layers():
     continuous one (0.1475 against 0.1393, 0.95%) so is 1/g."""
     s = build(matched("world-h200", onsite=True), "reference-onsite-h200")
     budget = s.regime.budget(s.context)
-    assert math.isclose(budget.compute, MINE["C h200"], rel_tol=1e-3)
+    assert math.isclose(s.context.units.flops(budget.gates), MINE["C h200"], rel_tol=1e-3)
     assert math.isclose(budget.inputs, MINE["K h200"], rel_tol=1e-3)
     p = s.families[0].profile(s.model, s.run)
     x = cheap(budget.inputs, p.layer_bits, p.layers)
@@ -136,25 +137,27 @@ def test_onsite_h200_fanout_priced_is_mine_but_for_whole_layers():
 
 
 def test_onsite_h200_threaded_is_the_remote_cut():
-    """Thread is quadratic at the window (and unchecked past `thread_k`), so the physical cut doesn't bind, in rho as in
+    """Thread is quadratic at the window (and unchecked past `thread_k`), so the serving cut doesn't bind, in rho as in
     mine."""
     r = evaluate_named(matched("world-h200", onsite=True, kappa=2 / 3, thread_d=1), "reference-onsite-h200")
     assert math.isclose(inverse_g(r, "threaded"), MINE["remote thread"], rel_tol=1e-3)
 
 
 def test_at_its_defaults_rho_differs_from_mine_by_the_named_factors():
-    """rho's own onsite H200 fan-out-priced 1/g (615) is mine (3,545) times 3 κ_forward (0.894), its window's training
-    work over mine (mfu_train 0.4, and Φ's rounding), β_x/0.66 (1.32), mine's K over its own (0.460: 10 GB a GPU
-    against 5, the host's 2.92e11, the timing channel, ingress at 20-bit tokens) and (1 − x)/(1 − x_mine) (0.800, x at
-    19 of 61 layers): nothing else, within 0.1%."""
+    """rho's own onsite H200 fan-out-priced 1/g is mine (3,545) times 3 κ_forward (0.894), its serving block's gates
+    over mine (Φ's rounding), β_x/0.66 (1.32), mine's K over its own (1.75: 5 GB a server against 5 GB a GPU, the timing
+    channel, ingress at 20-bit tokens) and (1 − x)/(1 − x_mine) (1.07, x at 5 of 61 layers): nothing else, within
+    0.1%."""
     reg = Registry.load()
     s = build(reg, "reference-onsite-h200")
     budget = s.regime.budget(s.context)
     p = s.families[0].profile(s.model, s.run)
-    factors = (3 * p.kappa_forward * budget.compute * s.context.fleet.mfu_train / MINE["C h200"] * p.beta_x / 0.66
+    factors = (3 * p.kappa_forward * s.context.units.flops(budget.gates) / MINE["C h200"] * p.beta_x / 0.66
                * MINE["K h200"] / budget.inputs * (1 - cheap(budget.inputs, p.layer_bits, p.layers))
                / (1 - MINE["x h200"]))
     assert math.isclose(inverse_g(evaluate(s), "fanout-priced"), MINE["onsite fan h200"] * factors, rel_tol=1e-3)
+    assert math.isclose(MINE["K h200"] / budget.inputs, 1.75, rel_tol=5e-3)
+    assert (1 - cheap(budget.inputs, p.layer_bits, p.layers)) == 1 - 5 / 61
 
 
 def test_the_nvl72_window_holds_the_whole_update_in_both():
@@ -176,4 +179,5 @@ def test_ingress_is_mine_at_matched_tokens(fleet):
     quiet = {"regime.onsite.timing": 0, "regime.onsite.side": 0}
     for reg, tokens in ((matched(f"world-{fleet}", onsite=True), 1.0), (Registry.load(), 20 / 17)):
         s = build(reg.override(quiet), f"reference-onsite-{fleet}")
-        assert math.isclose(s.regime.rate_in(s.context), s.context.location.phi / PHI_F * tokens, rel_tol=1e-9)
+        loc = s.context.location
+        assert math.isclose(s.regime.rate_in(s.context), s.context.units.flops(loc.phi) / PHI_F * tokens, rel_tol=1e-9)

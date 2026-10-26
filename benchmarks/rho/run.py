@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from rho import analysis, operating
 from rho.figures import jsonable
 from rho.params import Registry
-from rho.scenario import YEAR, Estimate, Result, Scenario
+from rho.scenario import Estimate, Result, Scenario
 
 
 def fmt(x: float) -> str:
@@ -35,16 +35,16 @@ def row(e: Estimate) -> dict:
     s = e.slowdown
     return {"argument": e.argument, "side": e.side, "status": e.status, "premise": e.premise, "rho": s.rho if s else None,
             "g": s.g if s else None, "declared_rho": e.declared, "outside": e.outside,
-            "binding": {k: v.cut for k, v in s.regions.items()} if s else {},
+            "binding": {k: v.cut for k, v in s.serving.items()} if s else {},
             "terms": dict(s.terms) if s else {}}
 
 
 def when(s: Scenario, rho: float) -> str:
-    return operating.human(s.years(rho) * YEAR)
+    return operating.human(s.seconds(rho))
 
 
 def monitored(r: Result) -> float:
-    """The share of the adversary's training done on monitored compute, for the family the adversary picks."""
+    """The share of the adversary's counted weight on monitored gates, for the family the adversary picks."""
     best = min(r.families, key=lambda f: f.lo, default=None)
     return best.combined.slowdown.monitored if best and best.combined.slowdown else math.nan
 
@@ -77,20 +77,27 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
                 points: list[operating.Point], faulty: list[str]) -> list[str]:
     s = r.scenario
     c = s.context
-    delta = s.regime.delta()
-    setting = (f"{s.regime.name} regime, {c.fleet.count:g} × {c.location.name} (ε_dark {c.fleet.eps_dark:g}), policy "
-               f"{c.policy.name} (Γ = {c.policy.gamma:.3g} FLOP, k = {c.policy.k:.3g} bit), {c.horizon.name}; target "
-               f"{s.run.name} ({s.run.target(s.model):.3g} FLOP, {when(s, 1.0)} unencumbered).")
+    delta = s.regime.delta(c)
+    by = "; ".join(f"{k} {fmt(co)} + {fmt(cr)}" for k, (co, cr) in delta.by.items())
+    prf = ", the wipe's PRF" if "wipe" in delta.by else ""
+    unencumbered = operating.human(s.reference / (c.fleet.mfu_train * s.total_phi))
+    setting = (f"{s.regime.name} regime, {c.fleet.count:g} × {c.location.name} (Φ = {c.location.phi:.3g} gate/s, "
+               f"ε_dark {c.fleet.eps_dark:g}), policy {c.policy.name} (c = {c.c:.3g} gates, k = {c.policy.k:.3g} bit), "
+               f"{c.horizon.name}, {c.units.gates_per_flop:g} gates a FLOP; target {s.run.name} (T_0 = "
+               f"{s.reference:.3g} gates; the reference at the training MFU takes {unencumbered}).")
     out = [f"## {s.name}", "", setting, "",
-           f"**ρ̄ ∈ [{fmt(r.lo)}, {fmt(r.hi)}]**: {when(s, r.lo)} to {when(s, r.hi)} to the target. The declared cut's "
-           f"free terms exceed their stated shares with probability at most δ_coin = {fmt(delta['coin'])} (the coins' "
-           f"draws) plus δ_crypto = {fmt(delta['crypto'])} (binding and knowledge soundness); this covers no other term "
-           f"(onsite, not the wipe's or the certifier's).", "",
+           (f"**ρ ∈ [{fmt(r.lo)}, {fmt(r.hi)}]**, the circuit's size over the reference's. **Time to the target:** "
+            f"{when(s, r.lo)} to {when(s, r.hi)} (`ρ T_0 / Φ_total`, the reference at the inventory's full capacity)."),
+           "",
+           (f"The envelopes fail, summed over subprotocols and serving blocks, with probability at most δ_coin = "
+            f"{fmt(delta.coin)} (the coins' draws) plus δ_crypto = {fmt(delta.crypto)} (binding, knowledge soundness"
+            f"{prf}), plus Pr[Break] (a forgery of the logged coins, not bounded here); by subprotocol, coin + "
+            f"crypto: {by or 'none'}."), "",
            "ρ's lower end from only the bounds and cuts at least as strong as: "
            + ", ".join(f"{st} {fmt(v)}" for st, v in by_status.items()) + ".", "",
-           "What sets ρ̄ (each part's share of the adversary's rate `ε_dark + (1 − ε_dark) g`, and the most ρ̄ can be "
+           "What sets ρ (each part's share of the bound's weight per gate `dark + (1 − ε_dark) g`, and the most ρ can be "
            "while it remains): " + ", ".join(f"{t.name} {t.share:.1%} (≤ {fmt(t.ceiling)})" for t in terms) + ".", "",
-           f"The adversary does {monitored(r):.1%} of its training on monitored compute.", ""]
+           f"The adversary holds {monitored(r):.1%} of its counted weight on monitored gates.", ""]
     out += operating_md(points) + faulty
     for f in r.families:
         out += [f"### {f.family} (μ = {fmt(f.profile.efficiency)})", "",
@@ -114,7 +121,7 @@ def crossings(ds: list[analysis.Danger]) -> str:
     return "; ".join(f"`{d.key}` past {fmt(d.crossing)} (ρ {fmt(d.rho_worst)} at {fmt(d.worst)})" for d in ds)
 
 
-def regions_md(name: str, base: float, by_status: dict[str, float], corner: analysis.Corner,
+def below_md(name: str, base: float, by_status: dict[str, float], corner: analysis.Corner,
                dangers: dict[float, list[analysis.Danger]], rescues: dict[float, list[analysis.Danger]]) -> list[str]:
     out = [f"### {name} (ρ = {fmt(base)} today)", ""]
     if corner.path:
@@ -164,10 +171,10 @@ def main() -> None:
     targets = sorted(args.target or [10.0, 100.0])
 
     md: list[str] = []
-    head = ("| scenario | ρ ∈ | the bound that sets it: status, premises | from conditional or stronger bounds and cuts | "
-            "on monitored compute | set by | at the corner |")
-    summary = ["# ρ", "", head, "|---|---|---|---|---|---|---|"]
-    regions = ["## Regions where ρ falls below target", ""]
+    head = ("| scenario | ρ ∈ | time to the target | the bound that sets it: status, premises | from conditional or "
+            "stronger bounds and cuts | on monitored gates | set by | at the corner |")
+    summary = ["# ρ", "", head, "|---|---|---|---|---|---|---|---|"]
+    below = ["## Where ρ falls below target", ""]
     record: dict = {"targets": targets, "scenarios": {}}
     for name in names:
         r = analysis.result(reg, name)
@@ -185,15 +192,18 @@ def main() -> None:
         dangers = {t: analysis.dangers(reg, name, t, swings=swings) for t in targets}
         rescues = {t: analysis.rescues(reg, name, t, swings=swings) for t in targets}
         corner = analysis.corner(reg, name, swings=swings)
-        regions += regions_md(name, r.lo, by_status, corner, dangers, rescues)
+        below += below_md(name, r.lo, by_status, corner, dangers, rescues)
         met = [e for e in min(r.families, key=lambda f: f.lo).bounds if e.slowdown] if r.families else []
         best = max(met, key=lambda e: e.rho, default=None)
         standing = f"{best.argument}: {best.status}, {best.premise}" if best else ""
-        summary.append(f"| {name} | [{fmt(r.lo)}, {fmt(r.hi)}] | {standing} | {fmt(by_status['conditional'])} | "
+        s = r.scenario
+        summary.append(f"| {name} | [{fmt(r.lo)}, {fmt(r.hi)}] | {when(s, r.lo)} to {when(s, r.hi)} | {standing} | "
+                       f"{fmt(by_status['conditional'])} | "
                        f"{monitored(r):.1%} | " + (f"{terms[0].name} {terms[0].share:.0%}" if terms else "")
                        + f" | {fmt(corner.rho)} |")
         record["scenarios"][name] = {
-            "lo": r.lo, "hi": r.hi, "delta": r.scenario.regime.delta(), "years_lo": r.scenario.years(r.lo),
+            "lo": r.lo, "hi": r.hi, "delta": s.regime.delta(s.context).json(),
+            "seconds": {"lo": s.seconds(r.lo), "hi": s.seconds(r.hi)},
             "lo_by_status": by_status,
             "attribution": [vars(t) for t in terms], "monitored": monitored(r),
             "operating": [{"name": p.name, "kind": p.kind, "seconds": dict(p.seconds)} for p in points],
@@ -207,7 +217,7 @@ def main() -> None:
             "corner": {"rho": corner.rho, "base": corner.base, "joint": corner.joint, "values": dict(corner.values),
                        "path": corner.path},
         }
-    text = "\n".join(summary + [""] + md + regions)
+    text = "\n".join(summary + [""] + md + below)
     print(text)
     out = Path(args.out) if args.out else None
     figures = Path(args.figures) if args.figures else (out / "figures" if out else None)

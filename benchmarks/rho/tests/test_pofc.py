@@ -4,11 +4,10 @@ from dataclasses import dataclass, replace
 
 import pytest
 from rho import instances, lean, pofc
-from rho.classes import Outside
+from rho.classes import FlopBudget, Outside
 from rho.params import Registry
 from rho.profile import Profile
 from rho.scenario import build, evaluate
-from rho.theorem import Budget
 
 REG = Registry.load()
 RULES = pofc.rules(REG)
@@ -68,37 +67,39 @@ def reference():
 
 def test_the_wrapper_gives_episodes_the_forward_cut_and_leaves_nci_blocks_without_one():
     s, inner = reference()
-    (r0,), (r,) = inner.regions, pofc.wrap(s.regime, RULES, s.model).partition(s.context).regions
+    (r0,), (r,) = inner.serving, pofc.wrap(s.regime, RULES, s.model).partition(s.context).serving
     cuts = {c.name: c for c in r.cuts}
-    assert set(cuts) == {"declared", "server-time", "declared+pofc"}
+    assert set(cuts) == {"inference", "serving", "inference+pofc"}
     assert r.cuts[:2] == r0.cuts and all(math.isinf(b.budget.cut) for c in r0.cuts for b in c.blocks)
-    (ep,), (decl,) = cuts["declared+pofc"].blocks, cuts["declared"].blocks
+    (ep,), (decl,) = cuts["inference+pofc"].blocks, cuts["inference"].blocks
     assert ep.kind == "episode" and ep.budget.cut == RULES.n_max * s.model.d_model * RULES.act_bits
-    assert ep.budget.inputs == RULES.x and cuts["declared+pofc"].free == cuts["declared"].free
-    assert pofc.RULES in cuts["declared+pofc"].cites and set(cuts["declared"].cites) <= set(cuts["declared+pofc"].cites)
-    # at the reference n_max an episode is the 1M-token session the NCI policy declares, with its cut
-    assert math.isclose(ep.budget.compute, decl.budget.compute) and math.isclose(ep.budget.inputs, decl.budget.inputs)
+    assert ep.budget.inputs == RULES.x and cuts["inference+pofc"].uncertified == cuts["inference"].uncertified
+    assert pofc.RULES in cuts["inference+pofc"].cites
+    assert set(cuts["inference"].cites) <= set(cuts["inference+pofc"].cites)
+    # at the reference n_max an episode is the 1M-token session the NCI policy declares, with its cut, in gates
+    assert math.isclose(ep.budget.gates, decl.budget.gates) and math.isclose(ep.budget.inputs, decl.budget.inputs)
     assert math.isclose(ep.count, decl.count)
     layout = {b.kind: b.budget for b in r.layout.blocks}
     assert set(layout) == {"episode", "uncertified"} and math.isinf(layout["uncertified"].cut)
 
 
-def test_a_shorter_episode_recuts_the_declared_compute_without_changing_it():
+def test_a_shorter_episode_recuts_the_declared_gates_without_changing_them():
     s, inner = reference()
-    r = pofc.wrap(s.regime, replace(RULES, n_max=1e4), s.model).partition(s.context).regions[0]
-    (decl,), (ep,) = inner.regions[0].cuts[0].blocks, next(c for c in r.cuts if c.name == "declared+pofc").blocks
-    assert math.isclose(ep.count * ep.budget.compute, decl.count * decl.budget.compute)
+    r = pofc.wrap(s.regime, replace(RULES, n_max=1e4), s.model).partition(s.context).serving[0]
+    (decl,), (ep,) = inner.serving[0].cuts[0].blocks, next(c for c in r.cuts if c.name == "inference+pofc").blocks
+    assert math.isclose(ep.count * ep.budget.gates, decl.count * decl.budget.gates)
     assert math.isclose(ep.count, 100 * decl.count) and ep.budget.inputs == 1e4 * RULES.input_bits
 
 
 def test_the_physical_instantiation_gives_the_window_the_links_bits():
     s, _ = reference()
     bw = pofc.link(REG, s.context.location.name)
-    r = pofc.wrap(s.regime, RULES, s.model, bw).partition(s.context).regions[0]
+    r = pofc.wrap(s.regime, RULES, s.model, bw).partition(s.context).serving[0]
     cuts = {c.name: c for c in r.cuts}
-    (phys,) = cuts["server-time+pofc"].blocks
-    assert math.isclose(phys.budget.cut, bw * s.regime.wipe_s) and pofc.PHYSICAL in cuts["server-time+pofc"].cites
-    assert all(math.isinf(b.budget.cut) for b in cuts["server-time"].blocks)
+    (phys,) = cuts["serving+pofc"].blocks
+    assert math.isclose(phys.budget.cut, bw * s.regime.wipe.wipe_s, rel_tol=1e-12)
+    assert pofc.PHYSICAL in cuts["serving+pofc"].cites
+    assert all(math.isinf(b.budget.cut) for b in cuts["serving"].blocks)
     assert math.isinf({b.kind: b.budget for b in r.layout.blocks}["uncertified"].cut)
     # the window's link carries many episodes' cuts: a matched link is three orders slower than NVLink's forward half
     assert 1e3 < bw / pofc.matched_link(RULES, s.model, s.context) < 1e4
@@ -108,7 +109,7 @@ def test_the_useful_share_is_the_pages_when_a_token_costs_a_position():
     t = pofc.Trained("x", kappa=0.5, depth=2, layer_params=1e3, weight_bits=16, held=0, spare=0.0, position_bits=8,
                      token_flops=10)
     n = 1e4
-    budget = Budget(compute=t.token_flops * n, inputs=0.0, cut=n * t.position_bits)
+    budget = FlopBudget(compute=t.token_flops * n, inputs=0.0, cut=n * t.position_bits)
     assert math.isclose(t.toll(budget), 0.4)
     assert math.isclose(t.within(budget), (1 - 0.4) * t.kappa * budget.compute / 2)
     assert t.within(replace(budget, cut=t.behind())) == 0.0
@@ -124,7 +125,7 @@ def test_backprop_caps_only_under_a_forward_cut_below_a_toll_of_one():
     s, _ = reference()
     a = pofc.Backprop(s.model, RULES).allowance(profile())
     ep = pofc.episode(RULES, s.model)
-    assert math.isinf(a(ep)) and math.isinf(a(Budget(ep.compute, ep.inputs)))
+    assert math.isinf(a(ep)) and math.isinf(a(FlopBudget(ep.compute, ep.inputs)))
     wide = pofc.episode(replace(RULES, n_max=5e8), s.model)
     t = pofc.trained(profile(), s.model, RULES)
     # above a toll of 2/3 the free positions hold fewer training tokens (3 forwards each) than the compute pays for
@@ -155,7 +156,7 @@ def test_the_constructions_open_where_the_page_says():
     assert pofc.trained(p, m, RULES).held == pofc.trained(p, m, replace(PAGE_RULES, per_operator=2.0)).held == 1
     ep = pofc.episode(RULES, m)
     assert pofc.LastLayers(m, RULES, 1).allowance(p)(ep) == 0.6 * ep.compute / 2
-    assert pofc.LastLayers(m, RULES, 1).allowance(p)(Budget(ep.compute, ep.inputs)) == 0.0
+    assert pofc.LastLayers(m, RULES, 1).allowance(p)(FlopBudget(ep.compute, ep.inputs)) == 0.0
     for rules in (RULES, replace(PAGE_RULES, commit=3.0)):
         with pytest.raises(Outside):
             pofc.Palindrome(m, rules).allowance(p)
@@ -190,13 +191,17 @@ def test_an_update_leaves_an_episode_only_through_its_outputs():
 
 
 def test_in_episode_training_no_longer_sets_the_upper_end_where_its_update_cant_leave():
-    """At `n_max = 1e8` training the top layer inside an episode reached ρ = 1 when its update persisted for free; under
-    `outputs` its 2e11-bit state can't leave through `Y`, so the upper end is the scenario's own attacks'."""
+    """At `n_max = 1e8` training the top layer inside an episode reached the unencumbered `ρ = 1/MFU₀` (the construction
+    at the training MFU, padded to capacity) when its update persisted for free; under `outputs` its 2e11-bit state
+    can't leave through `Y`, so the upper end is the scenario's own attacks'."""
+    s = build(REG, "reference-onsite-h200")
+    f = s.context.fleet
+    unencumbered = 1 / (f.eps_dark * f.dark_mfu + (1 - f.eps_dark) * f.mfu_train)
     (top1,) = (q for q in pofc.versus(REG, n_maxes=(1e8,), depths=(1,)))
-    assert top1.hi > 1.5
+    assert top1.hi > 1.5 * unencumbered
     (free,) = (q for q in pofc.versus(REG.override({"pofc.rules.reference.persist": "recommit"}), n_maxes=(1e8,),
                                          depths=(1,)))
-    assert free.hi == pytest.approx(1.0)
+    assert free.hi == pytest.approx(unencumbered)
 
 
 def test_every_pofc_number_says_where_it_comes_from_and_how_sure_it_is():
