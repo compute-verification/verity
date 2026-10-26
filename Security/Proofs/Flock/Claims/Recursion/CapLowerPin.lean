@@ -192,6 +192,129 @@ open FlockVBridge.Family (bytesAt outCol)
 open RecDeploy.OpenLower (AtPieces AtPiecesP atPiecesP_of AtOpened copyR schAt sideAtR sideLevel CopyBitsR CopyTopRP
   OpenTieRP openTieRP_of)
 
+/-! ## The level part's `out` port and RecCap's `top` port are 64-word rows -/
+
+/-- **The port found by name is a parsed row of that name**: where the circuit's row ports are `R` (by name, words and
+bits), the port `findIdx?` finds by `nm` is an entry of `R` named `nm`. -/
+theorem port_mem_rows {c : Circuit} {R : List (String × ℕ × ℕ)}
+    (hr : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) = R) {nm : String} {q : ℕ}
+    (hq : c.ports.findIdx? (·.name == nm) = some q) :
+    ∃ hq' : q < c.ports.size, (nm, c.ports[q].words, c.ports[q].bits) ∈ R := by
+  obtain ⟨hqs, hname, -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hq
+  have hn : c.ports[q].name = nm := by simpa using hname
+  refine ⟨hqs, ?_⟩
+  rw [← hr, ← hn]
+  exact List.mem_map.2 ⟨c.ports[q], Array.getElem_mem_toList hqs, rfl⟩
+
+/-- **A parsed row's name is some port's**: where the circuit's row ports are `R`, `findIdx?` finds a port by the
+name of any entry of `R`. -/
+theorem port_of_rows {c : Circuit} {R : List (String × ℕ × ℕ)}
+    (hr : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) = R) {e : String × ℕ × ℕ} (he : e ∈ R) :
+    ∃ q, c.ports.findIdx? (·.name == e.1) = some q := by
+  cases h : c.ports.findIdx? (·.name == e.1) with
+  | some q => exact ⟨q, rfl⟩
+  | none =>
+    rw [← hr] at he
+    obtain ⟨p, hp, rfl⟩ := List.mem_map.1 he
+    have := Array.findIdx?_eq_none_iff.1 h p (Array.mem_toList_iff.1 hp)
+    simp at this
+
+/-- A port's row prefix is its word count's. -/
+theorem rowPfx_of_words {c : Circuit} {q k : ℕ} (hq : q < c.ports.size) (hk : c.ports[q].words = k) :
+    rowPfx c q = (HmRow.rowPrefix k).data.toList := by
+  unfold rowPfx
+  rw [Array.getElem?_eq_getElem hq, Option.map_some, Option.getD_some, hk]
+
+/-- **A staged part's circuit has V\*'s row ports**: V\*'s parse check at the part's table (`stagedTables`,
+`checkParsed_ok`), whose circuit is the part's (`partCircuit_staged`). -/
+theorem rows_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {r : XR}
+    (hr : readX x = some r) {ss : Array VStar.Stmt} (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss)
+    {sv : VStar.Stmt} (hsv : ss[s]? = some sv) {c : Circuit} (hc : r.w.parts[s]?.bind partCircuit = some c) :
+    ∃ u, sv.unit = .ok u ∧
+      c.ports.toList.map (fun p => (p.name, p.words, p.bits)) = _root_.Flock.RecVStar.vstarRows sv.sub u := by
+  obtain ⟨p, r', sv', hx, ht, hpi, hr', ⟨ss', hss', hsv'⟩, h0, htab⟩ := stagedTables hS
+  rw [hr] at hr'
+  cases hr'
+  rw [hss] at hss'
+  cases hss'
+  rw [hsv] at hsv'
+  cases hsv'
+  have hc0 := partCircuit_staged hS hx ht hpi hr hc h0
+  obtain ⟨u, hu, -, -, -, hrows⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok (htab 0 h0).2.2
+  rw [hc0] at hrows
+  exact ⟨u, hu, hrows⟩
+
+/-- **A level part's `out` port is a 64-word row**: V\*'s rows of `rec-open` (`vstarRows`) name `out` once, an output
+of `OUT_WORDS = 64` words (`recOpenUnit_ok`). -/
+theorem out_port_recOpen {lv LANES HH n : ℕ} {u : VStar.UnitC}
+    (hu : (VStar.Stmt.recOpen lv LANES HH n).unit = .ok u) {c : Circuit}
+    (hr : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) =
+      _root_.Flock.RecVStar.vstarRows (VStar.Stmt.recOpen lv LANES HH n).sub u) :
+    ∃ q, c.ports.findIdx? (·.name == "out") = some q ∧ ∃ hq : q < c.ports.size, c.ports[q].words = 64 := by
+  obtain ⟨-, -, -, hout⟩ := FlockVBridge.OfVStar.recOpenUnit_ok (show VStar.recOpenUnit LANES HH = .ok u from hu)
+  have hm : (("out" : String), (64 : ℕ), (1024 : ℕ)) ∈
+      _root_.Flock.RecVStar.vstarRows (VStar.Stmt.recOpen lv LANES HH n).sub u := by
+    unfold _root_.Flock.RecVStar.vstarRows
+    rw [hout]
+    refine List.mem_append_right _ (List.mem_map.2 ⟨("out", VStar.OUT_WORDS), ?_, rfl⟩)
+    show ("out", VStar.OUT_WORDS) ∈ [("out", VStar.OUT_WORDS), ("acc_out", VStar.ACC_WORDS)]
+    exact List.mem_cons_self
+  obtain ⟨q, hq⟩ := port_of_rows hr hm
+  have hq0 : c.ports.findIdx? (·.name == "out") = some q := hq
+  obtain ⟨hq', hm'⟩ := port_mem_rows hr hq0
+  refine ⟨q, hq0, hq', ?_⟩
+  unfold _root_.Flock.RecVStar.vstarRows at hm'
+  rw [hout] at hm'
+  rcases List.mem_append.1 hm' with h | h
+  · obtain ⟨⟨a, k⟩, hy, he⟩ := List.mem_map.1 h
+    have ha : a = "out" := congrArg Prod.fst he
+    subst ha
+    have hin := (List.of_mem_zip hy).1
+    exact absurd hin (show "out" ∉ (["row", "aux", "acc", "coef", "dirs"] : List String) by decide)
+  · obtain ⟨⟨a, k⟩, hy, he⟩ := List.mem_map.1 h
+    have hy' : (a, k) ∈ [("out", VStar.OUT_WORDS), ("acc_out", VStar.ACC_WORDS)] := hy
+    rcases List.mem_cons.1 hy' with h1 | h1
+    · cases h1
+      have h2 : (VStar.OUT_WORDS + 63) / 64 * 64 = c.ports[q].words := congrArg (fun e => e.2.1) he
+      rw [← h2]
+      rfl
+    · rw [List.mem_singleton] at h1
+      cases h1
+      exact absurd (congrArg Prod.fst he : ("acc_out" : String) = "out") (by decide)
+
+/-- **RecCap's `top` port is a 64-word row**: V\*'s rows of `rec-cap` (`vstarRows`) name `top` once, its one input of
+`CAP_TOP_WORDS = 64` words (`capUnit`). -/
+theorem top_port_cap {l N : ℕ} {u : VStar.UnitC} (hu : (VStar.Stmt.cap l N).unit = .ok u) {c : Circuit}
+    (hr : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) =
+      _root_.Flock.RecVStar.vstarRows (VStar.Stmt.cap l N).sub u) :
+    ∃ q, capPort c = some q ∧ ∃ hq : q < c.ports.size, c.ports[q].words = 64 := by
+  have hu' : (Except.ok (VStar.capUnit l N) : Except String VStar.UnitC) = .ok u := hu
+  obtain rfl := Except.ok.inj hu'
+  have hm : (("top" : String), (64 : ℕ), (1024 : ℕ)) ∈
+      _root_.Flock.RecVStar.vstarRows (VStar.Stmt.cap l N).sub (VStar.capUnit l N) := by
+    unfold _root_.Flock.RecVStar.vstarRows
+    refine List.mem_append_left _ (List.mem_map.2 ⟨("top", VStar.CAP_TOP_WORDS), ?_, rfl⟩)
+    show ("top", VStar.CAP_TOP_WORDS) ∈ [("top", VStar.CAP_TOP_WORDS)]
+    exact List.mem_cons_self
+  obtain ⟨q, hq⟩ := port_of_rows hr hm
+  have hq0 : c.ports.findIdx? (·.name == "top") = some q := hq
+  obtain ⟨hq', hm'⟩ := port_mem_rows hr hq0
+  refine ⟨q, hq0, hq', ?_⟩
+  unfold _root_.Flock.RecVStar.vstarRows at hm'
+  rcases List.mem_append.1 hm' with h | h
+  · obtain ⟨⟨a, k⟩, hy, he⟩ := List.mem_map.1 h
+    have hy' : (a, k) ∈ [("top", VStar.CAP_TOP_WORDS)] := hy
+    rw [List.mem_singleton] at hy'
+    cases hy'
+    have h2 : VStar.CAP_TOP_WORDS = c.ports[q].words := congrArg (fun e => e.2.1) he
+    rw [← h2]
+    rfl
+  · obtain ⟨⟨a, k⟩, hy, he⟩ := List.mem_map.1 h
+    have hy' : (a, k) ∈ [("out", VStar.CAP_OUT_WORDS)] := hy
+    rw [List.mem_singleton] at hy'
+    cases hy'
+    exact absurd (congrArg Prod.fst he : ("out" : String) = "top") (by decide)
+
 section Deployed
 
 variable (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (shape : Claims.Recursion.Form → Prop)
@@ -278,6 +401,59 @@ theorem outBindRP_of (elem : (r : XR) → List (Fin r.w.parts.length × List (Ms
   have hrow := out_top_rows elem hJ.2.1 hJ.2.2.1 hr' hsvO hcc hqo hi hw hsvC hc' hqc hlt hw' hpfx hcm
   rw [hcopy, hrow]
   rfl
+
+/-- **The level part's `out` slot at the copy's opening** (`OutTopTie` past its ports): at a level part's piece and its
+witness `ws[s]`, its circuit and `out` port, and a RecCap part of the piece's level holding the row the opening
+climbs to (`capIdx`), with its circuit and `top` port, some opening `i < n` of the `out` port is the copy's (its
+`outRowForms` row's node is the copy's `out` columns), and its slot and RecCap's `top` slot there carry one commit
+string. -/
+def OutSlotTie (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
+  AtPiecesP H D shape untr b cmt L pieces fun x c ws LANES HH s _ w p ht q =>
+    ∀ (r : XR) (ss : Array VStar.Stmt), readX x = some r →
+      _root_.Flock.RecVStar.statements r.shape = .ok ss →
+    ∀ (lv n : ℕ) (cc : Circuit) (qo : ℕ), ss[s]? = some (.recOpen lv LANES HH n) →
+      r.w.parts[s]?.bind partCircuit = some cc → cc.ports.findIdx? (·.name == "out") = some qo →
+    ∀ (s' N' : ℕ) (c' : Circuit) (w' : Claims.Flock.Wit) (qc : ℕ), ss[s']? = some (.cap q.level N') →
+      r.w.parts[s']?.bind partCircuit = some c' → ws[s']? = some w' → capPort c' = some qc →
+      capIdx (Claims.Recursion.xI D x) q
+          (posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q) HH < N' →
+      ∃ i < n,
+        readForms w (hmCommit cc qo i) = readForms w' (hmCommit c' qc (capIdx (Claims.Recursion.xI D x) q
+          (posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q) HH)) ∧
+        bytesAt (copyR (Claims.Recursion.xI D x) w p ht q) (outCol LANES HH) 64 =
+          nodeOf ⟨(readForms w (DeployedR.outRowForms cc qo i)).toArray⟩
+
+/-- **The two slots' ports, from V\*'s parse check**: both parts are staged (`StagedAt`, and `JointP` at `s'`), so their
+circuits have V\*'s row ports (`rows_staged`): the level part's `out` and RecCap's `top` are 64-word rows
+(`out_port_recOpen`, `top_port_cap`), with one row prefix. The rest is `OutSlotTie`. -/
+theorem outTopTie_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
+    (hT : OutSlotTie H D shape untr b cmt L Bd pieces posAt) : OutTopTie H D shape untr b cmt L Bd pieces posAt := by
+  intro x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hw hst q hq ho ht r' ss' hr' hss' s' N' c' w'
+    hs' hc' hw' hlt
+  have e1 : r' = r := Option.some.inj (hr'.symm.trans hr)
+  rw [e1] at hss' hc' ⊢
+  have e2 : ss' = ss := Except.ok.inj (hss'.symm.trans hss)
+  rw [e2] at hs' ⊢
+  have hSP := hst.2.2.2.2.2.2.2.2
+  obtain ⟨cc, hcc⟩ := staged_circuit hSP hr
+  obtain ⟨u, hu, hrows⟩ := rows_staged hSP hr hss hsv hcc
+  obtain ⟨qo, hqo, hqo', hwo⟩ := out_port_recOpen hu hrows
+  obtain ⟨hsl, -⟩ := List.getElem?_eq_some_iff.1 hw'
+  obtain ⟨-, xO', -, -, -, hsh, -⟩ := hJ.2.2.2 s' hsl
+  obtain ⟨u', hu', hrows'⟩ := rows_staged hsh.2 hr hss hs' hc'
+  obtain ⟨qc, hqc, hqc', hwc⟩ := top_port_cap hu' hrows'
+  obtain ⟨i, hi, hcm, hcopy⟩ :=
+    hT x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hw hst q hq ho ht r ss hr hss lv n cc qo hsv hcc hqo s' N' c' w' qc hs' hc' hw' hqc hlt
+  exact ⟨lv, n, cc, qo, i, qc, hsv, hcc, hqo, hi, hqc,
+    (rowPfx_of_words hqo' hwo).trans (rowPfx_of_words hqc' hwc).symm, hcm, hcopy⟩
+
+/-- **The binding at the layout of record, past the ports**: `outBindRP_of` from `OutSlotTie` (`outTopTie_of`). -/
+theorem outBindRP_of_slot (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
+    (hT : OutSlotTie FlockDeploy.sha512 D shape untr b cmt (DeployedR.layR elem) Bd pieces posAt) :
+    OutBindRP FlockDeploy.sha512 D shape untr b cmt (DeployedR.layR elem) Bd pieces posAt :=
+  outBindRP_of D shape untr b cmt Bd elem pieces posAt
+    (outTopTie_of FlockDeploy.sha512 D shape untr b cmt (DeployedR.layR elem) Bd pieces posAt hT)
 
 end Deployed
 
