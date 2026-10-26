@@ -58,11 +58,10 @@ theorem value_inj {r r' : StreamedWipe.Batch} {v : ByteArray} (h : r.value = .ok
   obtain ⟨e5, e⟩ := beInt_split h5 k5 e
   obtain ⟨e6, e⟩ := beInt_split h6 k6 e
   have ed := bs_inj e
-  obtain ⟨_, _, _, _, _, _, _⟩ := r
-  obtain ⟨_, _, _, _, _, _, _⟩ := r'
-  simp only at e1 e2 e3 e4 e5 e6 ed
-  subst e1 e2 e3 e4 e5 e6 ed
-  rfl
+  cases r
+  cases r'
+  simp only [StreamedWipe.Batch.mk.injEq]
+  exact ⟨e1, e2, e3, e4, e5, e6, ed⟩
 
 theorem forall₂_of_mapM {f : StreamedWipe.Batch → E ByteArray} :
     ∀ {l : List StreamedWipe.Batch} {vs : List ByteArray}, l.mapM f = .ok vs →
