@@ -12,6 +12,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
 import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
 import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteHP
 import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
+import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyHP
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Inst
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.AcceptsP
@@ -45,6 +46,8 @@ Since #757 main's prover writes the hidden-output statement (`verity/flock-circu
   off a public leaf, returned outputs and the rows' `b ‖ c`.
 * `KeyH`: `lay` and `rs` at `keyProg`'s places (`keyLayoutH`, `keyRowsH`, `keyRowsH_computes`): every row a commit
   string, a unit's computed committed gates bits of its output rows.
+* `KeyHP`: `KeyH` at `Placed.keyProgP`'s places at public inputs (`keyLayoutHP`, `keyRowsHP`, `keyRowsHP_computes`): a
+  unit's public gates hold its public input words' bits in the population's public file (`pub_siteHP`).
 * `Inst`: the same at `instProg`'s places (`instLayoutH`, `instRowsH`, `instRowsH_computes`), from `InstKeysRow`.
 * `HeadlineExec`: `flock_headline_exec_hidden`, #828's `flock_headline_exec` for hidden-output sessions, `hdec` open.
 * `HeadlineInst`: `flock_headline_exec_hidden_inst`, the same at `instProg`, with no condition on the unit's input
