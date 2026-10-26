@@ -51,3 +51,4 @@ Tell me if you want different binders. I'll post the SHA when it builds.
   - `OpenCopyW`, `openCopyW_deployed key wE w b untr cmt` (at `DeployedR.rdR`, `DeployedR.finalR`, `OpenRows.elemR`, Dense).
   - `openCopy_sideAt` (sideAtR → Rows.sideAt at a decision) and `stagedAt_of_jointP`.
 - Build r20261026-202626-b46e on cpu-1. It queues behind f2f7 and builds incrementally in wt-decompb. I'll post the verdict.
+- 20:27Z coordinator: state StepsW at the deployed readers (DeployedR.rdR, OpenRows.elemR, DeployedR.finalR), as RecursiveKSAt is; then STEPRLAST's openCopyW_deployed (openlev-3735 50c97cbe6d, OpenLevW.lean; with levelOutsW and stagedAt_of_jointP) closes OpenCopy and LevelOuts. Target its shapes in AtPiecesP.
