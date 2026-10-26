@@ -29,7 +29,7 @@ namespace has no other interface. On real hosts it is only the route of the meas
 **The served plan** (`plan`, `served_plan`). The endpoint is probed with the one request body every session sends,
 straight from the host, `--in-flight` requests at a time after one uncounted round: `/v1/completions`, streamed, a
 prompt of exactly `--prompt-tokens` tokens (`PROMPT` padded with `FILLER` in the endpoint's own tokenizer, `/tokenize`,
-and cut there), exactly `--tokens` tokens out (`min_tokens` and `max_tokens`, `ignore_eos`), at `--temperature` (0)
+and cut there), exactly `--tokens` tokens out (`max_tokens` and `ignore_eos`), at `--temperature` (0)
 and `--top-p` (1), both always sent, since an endpoint applies its own generation config to a request that omits
 them. F, the
 frames of a response, is that token count, not the endpoint's events: vLLM v1 merges a request's tokens that its API
@@ -83,8 +83,10 @@ or ignore_eos. `--requests` requests arrive as a Poisson process at `--rate` a s
 the middle of the bucket before the one its arrival falls in. Each prompt is a list of the endpoint's token ids, a chat
 turn (a question that the model answers in a word or at length, and filler) cut to a length log-uniform in
 `--prompt-range`, with `max_tokens` uniform in 1 … `--tokens`, a seed of its own, temperature 0 and the model's own
-EOS. Its session is the body's `user`, the request's id, `--name`.j (j its index, five digits), which the shim forwards
-the endpoint, so a run named apart from every other one the endpoint served names each of its requests there as the
+EOS; with `--prompts-file` (a JSON array of prompts of token ids, the gate's `certifier-rehearse --prompts`) request
+j's prompt is the (j mod n)-th of the file's n instead, at the same seed's arrivals, `max_tokens` and seeds. Its
+session is the body's `user`, the request's id, `--name`.j (j its index, five digits), which the shim forwards the
+endpoint, so a run named apart from every other one the endpoint served names each of its requests there as the
 certified I/O does. Each is an id request (`active.id_request`): its sampling
 fields at fixed places, each prompt id in a field of its own, in `active.id_request_frames(prompt length)` link frames,
 a function of its length alone. The proxy opens each request's connection to the shim with the request's ingress
@@ -118,14 +120,15 @@ certified, the I/O, the audit and the salt accept.
     python certifier_serve.py plan --upstream URL --out DIR [--model NAME] [--requests 400] [--in-flight 4]
         [--temperature 0] [--top-p 1]
         [--tokens 64] [--response-frames F] [--prompt-tokens 128] [--probes 8] [--delta-buckets D]
-        [--profile planned|served] [--traffic fixed|varied] [--rate 2] [--prompt-range 16:1024] [--seed 0]
-        [--eos-ids ID,...] [--name varied]
+        [--profile planned|served] [--traffic fixed|varied] [--rate 2] [--prompt-range 16:1024 | --prompts-file FILE]
+        [--seed 0] [--eos-ids ID,...] [--compact B] [--margin 2] [--name varied]
     python certifier_serve.py serve --plan PLAN --calibration REPORT --upstream URL --out DIR --link HOST:PORT
         --reveal HOST:PORT --key KEYDIR --challenger-key PUBLIC.json --session HEX [--start-in 10]
-        [--tamper late|extra|drop|token]
+        [--tamper late|extra|drop|token|byte] [--out-program DIGEST]
     python certifier_serve.py client --plan PLAN --calibration REPORT --deployment DEPLOYMENT.json --out DIR
     python certifier_serve.py check --run DIR --challenger KEYDIR [--expect accepted|refused]
     python certifier_serve.py rehearse (--upstream URL | --vllm MODEL) --out DIR [plan's options] [--strategies S,...]
+        [--out-program DIGEST]
 
 - `keys` makes an LMS key (`seed`, 0600, `public`, its tree, and its leaf state `state.json`), or loads one, and writes
   `public.json`, the public key a deployment record carries. The certifier's key and the challenger's are each one.
@@ -141,7 +144,12 @@ certified, the I/O, the audit and the salt accept.
   frame written before it is due), which the certifier's own audit faults; `extra` writes one event more at the end of
   the first session's response, after its padding (F + 1 in all), on time and logged, so the records are complete and
   only N2's counts against the profile refuse it (on a varied plan, an id event of token 0, which the certified I/O's
-  finish rule refuses). The key's directory may not be inside `--out`.
+  finish rule refuses). The key's directory may not be inside `--out`. `--out-program DIGEST`: at each egress
+  link-window's close the network certifier commits the output it relayed, its canonical events' text read as the hex
+  of u16 words, one a row (`out_rows`), as that reading program's registered value ``out`` and signs its head with its
+  own key in its session (`certify_out`, `out_commit.commit_out` under the `CertifierProcess`'s running `Issuer`):
+  the record in `out-records.jsonl`, what the auditor's `out_commit.check_out` reads, and the rows with their salts in
+  `out-witness.jsonl`, the prover's.
 - `client` sends the plan's requests on the link as `active_replay.Peer` does, at the deployment's origin, and reads
   the wire to its end (`peer.json`). Then it asks the reveal endpoint for each window's certificates and keeps those
   that verify under the deployment's certifier key and session (`keep_certificates`: `certificates.jsonl`, and the
@@ -155,13 +163,17 @@ certified, the I/O, the audit and the salt accept.
   (`active_replay.audit_salt`: the salt frames, and that the shim received each revealed salt). It must run while
   `serve` serves reveals.
 - `rehearse` makes both keys in a scratch directory outside `--out`, plans, and for each of `--strategies` (honest, late,
-  extra by default, or any of `--tamper`'s) runs `serve` and `client` as processes and `check`; `summary.json` holds
-  each run's verdicts, and it exits 0 when `check` accepts honest and token and refuses the rest. With `--vllm MODEL`
-  it starts vLLM on this host's GPU first (`active_replay.start_vllm`). Besides late and extra, `--tamper drop` leaves
-  out the first event of the first session's response (F − 1), on time and logged, so only N2's counts refuse it, and
+  extra by default, or any of `--tamper`'s) runs `serve` (with `--out-program` when given) and `client` as processes
+  and `check`; `summary.json` holds
+  each run's verdicts, and it exits 0 when `check` accepts honest, token and byte and refuses the rest. With
+  `--vllm MODEL` it starts vLLM on this host's GPU first (`active_replay.start_vllm`). Besides late and extra,
+  `--tamper drop` leaves out the first event of the first session's response (F − 1), on time and logged, so only N2's
+  counts refuse it, and
   `--tamper token` writes every token of window 0's responses carrying other bytes (`active_replay.other_token`), so
   its frame counts are honest's and `check` accepts it: only the I/O tie, which `check` doesn't run, refuses certified
-  tokens that aren't the committed sampled ones.
+  tokens that aren't the committed sampled ones. `--tamper byte` changes one hex digit of the first session's response
+  (`active_replay.other_hex`): one output byte of a response whose text is its outputs' hex, which `check` accepts and
+  only the output tie refuses.
 
 **Outputs** in a run's directory: `plan.json`, `calibration.json`, `deployment.json`, the proxy's records
 (`requests.records`, `responses.records`, `committed.jsonl`) and `certified.jsonl` (each record's head, the
@@ -169,7 +181,8 @@ certifier's salt for it and certificate, or the link-window the signer refused),
 salted clock certificate of each egress window's sync with its opening, the sync and its salt, which an advised
 link's verifier of record reads: `read_clocks`), `proxy.json.gz`, the shim's `server.json` and `server.events.gz`, the
 client's `peer.json`, `certificates.jsonl` and `clocks.jsonl` (in `client/` in a rehearsal), `serve.json` and
-`check.json`. Records, their heads, the syncs the certifier signed, the certifier's salts and the shim's events are
+`check.json`, and with `--out-program` `out-records.jsonl` (public) and `out-witness.jsonl` (the out value's rows and
+salts, witness). Records, their heads, the syncs the certifier signed, the certifier's salts and the shim's events are
 witness, kept behind the firewall in a deployment; a rehearsal publishes them so that its check can be replayed. A
 certificate's public part is public, which the client keeps: its key id, link, direction and window, the digest it
 signs and its LMS signature, in the deployment's session. The digest is the head's, or the sync's clock digest,
@@ -189,6 +202,7 @@ import math
 import multiprocessing
 import os
 import random
+import re
 import secrets
 import shutil
 import socket
@@ -207,12 +221,12 @@ from pathlib import Path
 
 import active_replay as ar
 from verity.ml.crypto import lms
-from verity.core.protocols.certifier import audit as host_audit, calibration
+from verity.core.protocols.certifier import audit as host_audit, calibration, out_commit
 from verity.core.protocols.certifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, REVEAL_LINE_BYTES, \
-    Events, Proxy, RemoteCertifier, Requests, compact_record_data, decode_frame, event_body, fresh_salt, \
+    Events, Proxy, RemoteCertifier, Requests, compact_record_data, decode_frame, event_body, event_data, fresh_salt, \
     id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
 from verity.core.protocols.certifier.certificate import Certificate, CertifiedClock, CertifiedRecord, Direction, \
-    Issuer, LmsKey, LmsSigner, RecordHead, parameters_digest
+    Issuer, LmsKey, LmsSigner, RecordHead, SignerRefused, parameters_digest
 from verity.core.protocols.certifier.grid import COMPLETE, Reason, Status, occupancy, row_count
 from verity.core.protocols.certifier.lean_audit import Audit
 from verity.core.protocols.certifier.schedule import ClockSync, expected_grids, handing_buckets
@@ -237,8 +251,8 @@ PROOF_DEADLINE_S = 600.0
 DELTA = 2.0 ** -40
 STRATEGIES = ("honest", "late", "extra")
 TAMPERS = ("late", *ar.LIVE_TAMPERS)
-# `check`'s verdict on each run it expects to accept: honest, and token, whose frames only the I/O tie reads
-ACCEPTED = ("honest", "token")
+# `check`'s verdict on each run it expects to accept: honest, and token and byte, whose frames only the I/O tie reads
+ACCEPTED = ("honest", "token", "byte")
 PROFILES = ("planned", "served")
 TRAFFIC = ("fixed", "varied")
 #: a varied plan's N2 profile: the egress counts derive from the ingress head and the advice (N2-ADVICE)
@@ -262,6 +276,9 @@ VARIED_FILLER = ("Notes: the meeting moved to Thursday, the printer on the third
 #: what the shim and the probe add to each body they send the endpoint, so that each chunk carries its token ids
 UPSTREAM_FIELDS = {"return_token_ids": True}
 CHALLENGER = "certifier-serve-check"
+#: `--out-program`'s files in a run: each egress link-window's out record (public, what the auditor receives) and its
+#: witness, the rows and their salts (the prover's alone)
+OUT_RECORDS, OUT_WITNESS = "out-records.jsonl", "out-witness.jsonl"
 NO_N2 = ("no verdict on the advice profile: N2 derives the egress counts from the ingress head and the advice "
          "(N2-ADVICE), which this check doesn't read")
 
@@ -400,18 +417,60 @@ def read_certified(path: Path) -> tuple[dict[tuple[Direction, int], CertifiedRec
     return got, refused
 
 
+def out_rows(record) -> list[list[int]] | None:
+    """The output value an egress record carries (`--out-program`): the bytes of its canonical events in record order
+    (`active.event_data`), read as the hex of u16 little-endian words, one word a row, as the torch loop's stub sends
+    its outputs; None when it carries no event or their text isn't that."""
+    text = b"".join(d for row in record.grid for slot in row if slot is not None
+                    for kind, _, payload in (decode_frame(slot),) if kind == DATA
+                    for d in (event_data(payload),) if d is not None)
+    try:
+        raw = bytes.fromhex(text.decode("ascii"))
+    except ValueError:
+        return None
+    if not raw or len(raw) % 2:
+        return None
+    return [[int.from_bytes(raw[i:i + 2], "little")] for i in range(0, len(raw), 2)]
+
+
+def certify_out(out: Path, record, issuer: Issuer, program: str) -> out_commit.CertifiedOut | None:
+    """The network certifier's output value at an egress link-window's close (`--out-program`): what the record carries
+    (`out_rows`) committed as the reading `program`'s registered value ``out``, its head signed by the running `issuer`
+    in its session for the link-window (`out_commit.commit_out`). Its public record is one line of `OUT_RECORDS`, or the
+    link-window under ``refused`` when the signer refuses; its witness, the rows and their salts, one line of
+    `OUT_WITNESS`, which goes to the prover alone. A record that carries no output value commits none."""
+    rows = out_rows(record)
+    if rows is None:
+        return None
+    try:
+        got = out_commit.commit_out(rows, program=program, words=1, key=issuer, session=issuer.session,
+                                    window=record.window)
+    except SignerRefused:
+        got, line = None, {"refused": [out_commit.LINK, out_commit.DIRECTION.value, record.window]}
+    else:
+        line = got.public
+        with open(out / OUT_WITNESS, "a") as fh:
+            fh.write(json.dumps({"window": record.window, "program": program, "rows": rows,
+                                 "salts": [s.hex() for s in got.salts]}) + "\n")
+    with open(out / OUT_RECORDS, "a") as fh:
+        fh.write(json.dumps(line, sort_keys=True) + "\n")
+    return got
+
+
 class CertifyingPublisher(ar.Publisher):
     """The served proxy's `publish`: `Publisher`'s files, and each record certified by `issuer` as the network certifier
     hands it over, under the N2 link's name `link`, the one name both ends of a link-window share
     (`service.LinkWindows.link`): one line of `certified.jsonl` each, or the link-window under `refused` when the
     signer refuses. An egress record handed with the sync the shaper ran its window under (`ServedProxy`) gets that
     sync's salted clock certificate too (`Issuer.salted_clock`), one line of `clocks.jsonl` with its opening, none when
-    the signer refuses. `public` gives a window's certificates without the heads, syncs and salts, for the reveal
+    the signer refuses. With `out_program`, each egress record's output value is committed and signed by the same
+    issuer (`certify_out`). `public` gives a window's certificates without the heads, syncs and salts, for the reveal
     endpoint to serve."""
 
-    def __init__(self, out: Path, setup: ar.Setup, issuer: Issuer, link: str, threaded: bool = True) -> None:
+    def __init__(self, out: Path, setup: ar.Setup, issuer: Issuer, link: str, threaded: bool = True,
+                 out_program: str | None = None) -> None:
         super().__init__(out, setup, threaded)
-        self.issuer, self.link = issuer, link
+        self.issuer, self.link, self.out_program = issuer, link, out_program
         self.ends = {setup.egress_link: (Direction.EGRESS, parameters_digest(setup.egress_params, setup.sync_set)),
                      setup.ingress_link: (Direction.INGRESS, parameters_digest(setup.ingress_params))}
         self.timing: list | None = [] if os.environ.get("CERTIFIER_SERVE_TIMING") else None
@@ -452,6 +511,8 @@ class CertifyingPublisher(ar.Publisher):
             with open(self.out / "clocks.jsonl", "a") as fh:
                 fh.write(json.dumps(clock_json(clock)) + "\n")
         self.issued.setdefault(record.window, []).append((direction, certified, clock))
+        if self.out_program is not None and direction is Direction.EGRESS:
+            certify_out(self.out, record, self.issuer, self.out_program)
         if self.timing is not None:
             end = time.monotonic(), time.thread_time()
             self.timing.append({"link": record.link, "window": record.window, "start": start[0], "kept": kept[0],
@@ -461,10 +522,11 @@ class CertifyingPublisher(ar.Publisher):
 _CERTIFIER: dict = {}
 
 
-def _certifier_start(key: Path, out: Path, report: dict, session: bytes, link: str) -> None:
+def _certifier_start(key: Path, out: Path, report: dict, session: bytes, link: str,
+                     out_program: str | None = None) -> None:
     own = signer(key)
     _CERTIFIER.update(signer=own, publish=CertifyingPublisher(out, ar.Setup(report), Issuer(own, session), link,
-                                                              threaded=False))
+                                                              threaded=False, out_program=out_program))
 
 
 def _certifier_call(name: str, *args):
@@ -486,11 +548,14 @@ class CertifierProcess:
     reveal signed, one call at a time in the order they are made. Certifying a window's records hashes for
     milliseconds, so a thread would hold the proxy's GIL at its window's end. `close` waits for every record (the
     signer stays up for the reveals), `refused` gives the issuer's refusals, `certificates` a window's public part
-    (`CertifyingPublisher.public`, after every record handed before it) and `shutdown` closes the signer."""
+    (`CertifyingPublisher.public`, after every record handed before it) and `shutdown` closes the signer. With
+    `out_program`, each egress link-window's output value is committed and signed in that process too (`certify_out`)."""
 
-    def __init__(self, key: Path, out: Path, report: dict, session: bytes, link: str) -> None:
+    def __init__(self, key: Path, out: Path, report: dict, session: bytes, link: str,
+                 out_program: str | None = None) -> None:
         self.pool = ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"),
-                                        initializer=_certifier_start, initargs=(key, out, report, session, link))
+                                        initializer=_certifier_start,
+                                        initargs=(key, out, report, session, link, out_program))
         self.key: LmsKey = self.pool.submit(_certifier_call, "public_key").result()
         self.futures: list = []
         self.submits: list | None = [] if os.environ.get("CERTIFIER_SERVE_TIMING") else None
@@ -540,10 +605,11 @@ class CertifierProcess:
 
 def request_body(model: str, tokens: int, prompt: str | list[int] = PROMPT, temperature: float = 0.0,
                  top_p: float = 1.0) -> dict:
-    """The request every session of a served plan sends: exactly `tokens` tokens (`min_tokens` and `max_tokens`, never
-    stopped early), streamed, at `temperature` and `top_p` (greedy by default). Both are always sent: an endpoint
-    applies its own generation config to a request that omits them."""
-    return {"model": model, "prompt": prompt, "max_tokens": tokens, "min_tokens": tokens, "stream": True,
+    """The request every session of a served plan sends: exactly `tokens` tokens (`max_tokens`, never stopped early:
+    `ignore_eos`), streamed, at `temperature` and `top_p` (greedy by default). Both are always sent: an endpoint
+    applies its own generation config to a request that omits them. No `min_tokens`: it masks the EOS logit, which the
+    served Program's sampling doesn't model, so vllm's advice refuses it."""
+    return {"model": model, "prompt": prompt, "max_tokens": tokens, "stream": True,
             "ignore_eos": True, "temperature": temperature, "top_p": top_p}
 
 
@@ -629,9 +695,9 @@ def served_plan(probed: dict, requests: int = 8, delta_buckets: int | None = Non
     body = probed["body"]
     tokens = body["max_tokens"]
     F = frames or tokens
-    if body.get("min_tokens") != tokens or not body.get("ignore_eos"):
-        raise ValueError("a served plan's body asks for exactly its tokens (min_tokens = max_tokens, ignore_eos), "
-                         f"not {body}")
+    if body.get("ignore_eos") is not True or not isinstance(tokens, int) or tokens < 1 or "min_tokens" in body:
+        raise ValueError("a served plan's body asks for exactly its tokens (max_tokens, ignore_eos) and no min_tokens, "
+                         f"which vllm's advice refuses: not {body}")
     if F < tokens:
         raise ValueError(f"F, a response's frames, is at least the body's {tokens} tokens, not {F}")
     lengths = sorted({r["events"] for r in probed["responses"]})
@@ -766,25 +832,31 @@ def varied_body(model: str, q: dict) -> dict:
 
 def varied_requests(url: str, model: str, n: int, *, rate: float = 2.0, prompt_tokens: tuple[int, int] = (16, 1024),
                     max_tokens: int = 64, seed: int = 0, name: str = "varied",
-                    api_key_env: str | None = None) -> list[dict]:
+                    api_key_env: str | None = None, prompts: Sequence[list[int]] | None = None) -> list[dict]:
     """`n` requests of varied traffic: Poisson arrivals at `rate` a second from `START_MS`; each prompt a chat turn
     (`CHAT_HEAD`, one of `QUESTIONS`, `VARIED_FILLER` and `CHAT_TAIL`, in the endpoint's tokens, `/tokenize`) cut to a
-    length log-uniform in `prompt_tokens`; `max_tokens` uniform in 1 … `max_tokens`; a u32 `seed` of its own. Its
+    length log-uniform in `prompt_tokens`, or with `prompts` request j's the (j mod n)-th of them, at the same seed's
+    arrivals, `max_tokens` and seeds; `max_tokens` uniform in 1 … `max_tokens`; a u32 `seed` of its own. Its
     session, the body's `user`, is `name.j` with j its index, five digits."""
     lo, hi = prompt_tokens
     if not 1 <= lo <= hi or max_tokens < 1 or rate <= 0:
         raise ValueError(f"prompts of 1 ≤ {lo} … {hi} tokens, max_tokens ≥ 1 and a positive rate, not {rate}")
-    bos = tokenize(url, model, "", api_key_env)
-    tail = tokenize(url, model, CHAT_TAIL, api_key_env)[len(bos):]
-    filler, k = [], 1
-    while len(filler) < hi:
-        filler, k = tokenize(url, model, VARIED_FILLER * k, api_key_env)[len(bos):], 2 * k
-    heads = [tokenize(url, model, CHAT_HEAD + q, api_key_env) for q in QUESTIONS]
+    if prompts is not None and not (prompts and all(prompts)):
+        raise ValueError("prompts: at least one, each of at least one token id")
+    if prompts is None:
+        bos = tokenize(url, model, "", api_key_env)
+        tail = tokenize(url, model, CHAT_TAIL, api_key_env)[len(bos):]
+        filler, k = [], 1
+        while len(filler) < hi:
+            filler, k = tokenize(url, model, VARIED_FILLER * k, api_key_env)[len(bos):], 2 * k
+        heads = [tokenize(url, model, CHAT_HEAD + q, api_key_env) for q in QUESTIONS]
     rng, seeds, at, out = random.Random(seed), random.Random(f"{seed}/seeds"), START_MS, []
     for j in range(n):
         at += rng.expovariate(rate) * 1000
         length = round(lo * (hi / lo) ** rng.random())
-        prompt = ((heads[rng.randrange(len(heads))] + filler)[:max(0, length - len(tail))] + tail)[:length]
+        head = rng.randrange(len(QUESTIONS))
+        prompt = list(prompts[j % len(prompts)]) if prompts is not None else \
+            ((heads[head] + filler)[:max(0, length - len(tail))] + tail)[:length]
         out.append({"session": f"{name}.{j:05d}", "at_ms": at, "prompt": prompt,
                     "max_tokens": rng.randint(1, max_tokens), "seed": seeds.randrange(1 << 32)})
     return out
@@ -948,12 +1020,19 @@ def _address(text: str) -> tuple[str, int]:
     return host, int(port)
 
 
+def _program_digest(text: str) -> str:
+    if not re.fullmatch("[0-9a-f]{128}", text):
+        raise argparse.ArgumentTypeError(f"a program digest is lowercase hex of 64 bytes, not {text!r}")
+    return text
+
+
 async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict, link: tuple[str, int],
                 reveal: tuple[str, int], key: Path, challenger_key: LmsKey, session: bytes,
                 start_in: float = 10.0, reveal_deadline: float | None = None, n2_link: str = N2_LINK,
-                tamper: str | None = None, announce=_announce) -> dict:
+                tamper: str | None = None, out_program: str | None = None, announce=_announce) -> dict:
     """One served run on the host's clock (the module docstring's `serve`), the certifier's key (the directory `key`)
-    held by its `CertifierProcess`. Returns what `serve.json` holds."""
+    held by its `CertifierProcess`, which with `out_program` also commits each egress link-window's output value.
+    Returns what `serve.json` holds."""
     out.mkdir(parents=True, exist_ok=True)
     setup = ar.Setup(report)
     e, i, windows = setup.egress_params, setup.ingress_params, plan["windows"]
@@ -968,7 +1047,7 @@ async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict
     shim.start()
     loop = asyncio.get_running_loop()
     shim_port = await loop.run_in_executor(None, conn.recv)
-    certifier = CertifierProcess(key, out, report, session, n2_link)
+    certifier = CertifierProcess(key, out, report, session, n2_link, out_program)
     origin = time.monotonic() + start_in
     proxy = ServedProxy(("127.0.0.1", shim_port), e, i, setup.sync_set,
                         [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]], origin=origin, publish=certifier,
@@ -1399,9 +1478,9 @@ def table(result: dict) -> str:
 # The rehearsal.
 
 def rehearse_one(out: Path, strategy: str, *, url: str, certifier_dir: Path, challenger_dir: Path,
-                 api_key_env: str | None, start_in: float) -> dict:
-    """One served run of the plan in `out` as processes: `serve` (with `--tamper` unless honest), then `client` (into
-    the run's `client/`), then `check` while `serve` serves reveals."""
+                 api_key_env: str | None, start_in: float, out_program: str | None = None) -> dict:
+    """One served run of the plan in `out` as processes: `serve` (with `--tamper` unless honest, and `--out-program`
+    when given), then `client` (into the run's `client/`), then `check` while `serve` serves reveals."""
     run = out / strategy
     run.mkdir(parents=True, exist_ok=True)
     me = [sys.executable, str(HERE / "certifier_serve.py")]
@@ -1410,7 +1489,7 @@ def rehearse_one(out: Path, strategy: str, *, url: str, certifier_dir: Path, cha
                    "--key", str(certifier_dir), "--challenger-key", str(challenger_dir / "public.json"),
                    "--session", secrets.token_hex(32), "--start-in", str(start_in)]
     served += (["--tamper", strategy] if strategy != "honest" else []) + \
-        (["--api-key-env", api_key_env] if api_key_env else [])
+        (["--api-key-env", api_key_env] if api_key_env else []) + (["--out-program", out_program] if out_program else [])
     with open(run / "serve.log", "w") as log:
         proc = subprocess.Popen(served, stdout=subprocess.PIPE, stderr=log, text=True)
         try:
@@ -1443,19 +1522,24 @@ def rehearse_one(out: Path, strategy: str, *, url: str, certifier_dir: Path, cha
 def plan_of(args, url: str, clock=time.monotonic, sleep=time.sleep) -> tuple[dict, dict, dict]:
     """(probe, calibration, plan) of the endpoint at `url` (`plan`'s): each request `--tokens` tokens out of a prompt of
     exactly `--prompt-tokens` tokens (`PROMPT` as text with 0), probed and planned `--in-flight` at a time; or, with
-    `--traffic varied`, `--requests` requests of varied traffic (`varied_requests`: `--rate`, `--prompt-range`,
-    `--tokens` the cap, `--seed`, `--name` the users'), the first `--probes` of them probed at their arrival times."""
+    `--traffic varied`, `--requests` requests of varied traffic (`varied_requests`: `--rate`, `--prompt-range` or
+    `--prompts-file`'s prompts, `--tokens` the cap, `--seed`, `--name` the users'), the first `--probes` of them probed
+    at their arrival times."""
     model = args.model or served_model(url, args.api_key_env)
+    prompts_file = getattr(args, "prompts_file", None)
     if getattr(args, "traffic", TRAFFIC[0]) == "varied":
         lo, _, hi = args.prompt_range.partition(":")
         name = getattr(args, "name", None) or "varied"
         requests = varied_requests(url, model, args.requests, rate=args.rate, prompt_tokens=(int(lo), int(hi)),
-                                   max_tokens=args.tokens, seed=args.seed, name=name, api_key_env=args.api_key_env)
+                                   max_tokens=args.tokens, seed=args.seed, name=name, api_key_env=args.api_key_env,
+                                   prompts=None if prompts_file is None else json.loads(prompts_file.read_text()))
         probed = probe_varied(url, model, requests[:args.probes], args.api_key_env, clock, sleep)
         eos = [int(t) for t in args.eos_ids.split(",")] if args.eos_ids else None
         report, plan = varied_plan(probed, requests, seed=args.seed, eos=eos, compact=getattr(args, "compact", None),
                                    margin=getattr(args, "margin", 2.0))
         return probed, report, plan
+    if prompts_file is not None:
+        raise SystemExit("--prompts-file: varied traffic's (--traffic varied); fixed traffic's prompts are --prompts")
     prompts = parse_prompts(args.prompts) if getattr(args, "prompts", None) else None
     if prompts:
         prompt = prompts[0]
@@ -1505,7 +1589,7 @@ def rehearse(args) -> int:
         (out / "plan.json").write_text(json.dumps(plan))
         (out / "calibration.json").write_text(json.dumps(report))
         results = {s: rehearse_one(out, s, url=url, certifier_dir=certifier_dir, challenger_dir=challenger_dir,
-                                   api_key_env=args.api_key_env, start_in=args.start_in)
+                                   api_key_env=args.api_key_env, start_in=args.start_in, out_program=args.out_program)
                    for s in args.strategies.split(",")}
     finally:
         shutil.rmtree(scratch)
@@ -1551,7 +1635,7 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--requests", type=int, default=400)
         q.add_argument("--in-flight", type=int, default=4, help="requests sent together, served side by side")
         q.add_argument("--tokens", type=int, default=64,
-                       help="fixed: min_tokens and max_tokens of every request (ignore_eos); varied: max_tokens' cap")
+                       help="fixed: max_tokens of every request (ignore_eos, no min_tokens); varied: max_tokens' cap")
         q.add_argument("--response-frames", type=int,
                        help="fixed: F, a response's canonical events, padded to (default: --tokens); a token of more "
                             "than 64 bytes is one event per 64")
@@ -1573,6 +1657,9 @@ def parser() -> argparse.ArgumentParser:
                             "profile)")
         q.add_argument("--rate", type=float, default=2.0, help="varied: arrivals a second")
         q.add_argument("--prompt-range", default="16:1024", help="varied: LO:HI, the prompts' lengths in tokens")
+        q.add_argument("--prompts-file", type=Path,
+                       help="varied: a JSON array of prompts of token ids, request j's the (j mod n)-th of the n "
+                            "(in place of --prompt-range's chat turns); the gate's certifier-rehearse --prompts")
         q.add_argument("--name", default="varied",
                        help="varied: the users' prefix: request j's user, its session, is NAME.j (j five digits)")
         q.add_argument("--seed", type=int, default=0, help="varied: the traffic's seed")
@@ -1599,6 +1686,10 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--reveal-deadline", type=float, help="seconds past a window's end (default: the run's + 300)")
     for q in (s, r):
         q.add_argument("--start-in", type=float, default=10.0, help="the origin, seconds after the proxy is up")
+        q.add_argument("--out-program", type=_program_digest, metavar="DIGEST",
+                       help="the network certifier commits each egress link-window's output (the hex of u16 words) "
+                            "as this reading program's registered value out and signs its head (out-records.jsonl; "
+                            "its rows and salts in out-witness.jsonl, the prover's)")
     s.add_argument("--tamper", choices=TAMPERS,
                    help="late: the shim holds a window-0 session past every sync; extra: it writes one event more; "
                         "drop: one fewer; token: window 0's tokens' bytes changed")
@@ -1641,7 +1732,7 @@ def main(argv=None) -> int:
                                 link=args.link, reveal=args.reveal, key=args.key,
                                 challenger_key=read_public(json.loads(args.challenger_key.read_text())),
                                 session=session, start_in=args.start_in, reveal_deadline=args.reveal_deadline,
-                                n2_link=args.n2_link, tamper=args.tamper))
+                                n2_link=args.n2_link, tamper=args.tamper, out_program=args.out_program))
         return 1 if "error" in log else 0
     if args.command == "client":
         ar._quiet_runtime()

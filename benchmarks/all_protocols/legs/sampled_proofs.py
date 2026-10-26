@@ -12,8 +12,9 @@ against their pin (``records_audit.py --registered``).
 commitment is the registration's digest, the verdict the audit record's, and on acceptance the public outputs and profile
 are the ones `SampledProofs.OneStage.check` makes public (the drawn and proved units, the bound on wrong units at δ, each
 template's under a stratified or work law; `audit.profile` as `Core.Integrity`, δ an exact ratio). A refusal before the
-draw (the records, a check on the registration, the draw) rejects with its codes. An audit that ended with no summary is
-the leg's error, not a verdict.
+draw (the records, a check on the registration, the draw) rejects with its codes; an audit record that doesn't accept,
+with its failed checks and the first of Lean's refusals by member (a registered read that doesn't open its root names
+its port). An audit that ended with no summary is the leg's error, not a verdict.
 
 The audit also writes sampled proofs' case for onsite (`a5.write_case`: ``{"commitment": hex(canon(registration
 record)), "evidence": hex(canon(evidence)), "params"}`` as `SampledProofs.OneStage` reads them), which the leg hands on as
@@ -44,7 +45,8 @@ ROOT = Path(__file__).resolve().parents[3]
 RECORDS_AUDIT = ROOT / "benchmarks" / "prove_path" / "records_audit.py"
 #: the δ a window's audit record is decided at when its ``period.json`` names none
 DELTA = "1/100"
-#: the ports one audit's sessions may listen on, from its base (a session per drawn member, at most k)
+#: the ports one audit's sessions may listen on, from its base (a session per member with a proved unit, its drawn ones
+#: and a work draw's closure); records_audit refuses a draw that needs more (``--ports``, `a5.port_refusal`)
 SPAN = 128
 PORTS = range(10000, 32000)
 _held: set[int] = set()
@@ -58,6 +60,32 @@ def _refusal(reason: str, commitment: str | None) -> dict[str, Any]:
 
 def _codes(checks: Mapping[str, Any]) -> list[str]:
     return sorted(c for c, v in checks.items() if not (v.get("ok") if isinstance(v, Mapping) else v))
+
+
+#: a refused member's verdicts, said in this order: its live session's verifier of record first, whose rejection leaves
+#: no proof files, then the Lean replay that finds none, then the draw check
+SAID = ("m0-verifier/", "lean-verify/", "lean-draw/")
+
+
+def _said_first(kv: tuple[str, Any]) -> tuple[int, str]:
+    k = kv[0]
+    return next((i for i, p in enumerate(SAID) if k.startswith(p)), len(SAID)), k
+
+
+def unproved(rec: Mapping[str, Any]) -> str:
+    """The audit record's drawn units its statement doesn't prove (its ``proved`` check), by the draw's template
+    strata: `` (drawn units not proved: T u0-u1, ...)``, or nothing."""
+    units = (((rec.get("checks") or {}).get("proved") or {}).get("detail") or {}).get("units") or {}
+    missing = sorted(set(units.get("drawn") or ()) - set(units.get("statement") or ()))
+    if not missing:
+        return ""
+    named = []
+    for s in (rec.get("draw") or {}).get("strata") or []:
+        got = [u for u in missing if any(lo <= u < hi for lo, hi in s["units"])]
+        if got:
+            named.append(f"{s['template']} {got[0]}-{got[-1]}" if got == list(range(got[0], got[-1] + 1))
+                         else f"{s['template']} {','.join(map(str, got))}")
+    return f" (drawn units not proved: {'; '.join(named) or ','.join(map(str, missing))})"
 
 
 def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -83,8 +111,12 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
         raise RuntimeError(f"the records audit wrote no audit record and no refusal under {out}")
     rec = json.loads(rec_file.read_text())
     if rec.get("accepted") is not True:
-        why = _codes(rec.get("checks") or {}) or sorted((summary.get("audit") or {}).get("why") or {}) or ["not accepted"]
-        return _refusal("audit record: " + ", ".join(why), commitment)
+        lean = {k: v for k, v in sorted(((summary.get("audit") or {}).get("why") or {}).items(), key=_said_first) if v}
+        why = _codes(rec.get("checks") or {}) or sorted(lean) or ["not accepted"]
+        said = [f"{k}: {v}" for k, v in lean.items()]
+        more = f"; and {len(said) - 3} more" if len(said) > 3 else ""
+        return _refusal("audit record: " + ", ".join(why) + unproved(rec) + "".join(f"; {s}" for s in said[:3]) + more,
+                        commitment)
     fixed = summary.get("fixed_before_draw")
     if fixed is not None and not fixed.get("ok"):
         return _refusal("not fixed before the draw: " + ", ".join(fixed.get("codes") or []), commitment)
@@ -163,8 +195,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     with ports() as base:
         argv = [sys.executable, str(RECORDS_AUDIT), "audit", "--window", str(period_dir), "--law", p["law"],
                 "--circuit", p["circuit"], "--run", p["run_root"], "--delta", repr(float(delta)), "--port", str(base),
-                "--m0-pythonpath", t["m0-pythonpath"], "--bin", t["flock-circuit"], "--lean", t["flock-verify"],
-                "--firewall", t["flock-firewall"], "--out", str(work), "--session-jobs", str(p.get("session_jobs") or 1),
+                "--ports", str(SPAN), "--m0-pythonpath", t["m0-pythonpath"], "--bin", t["flock-circuit"], "--lean", t["flock-verify"],
+                "--firewall", t["flock-firewall"], "--out", str(work),
                 *(["--registered", p["registered"]] if p.get("registered") else [])]
         with open(out / "audit.log", "w") as log, open(out / "audit.err", "w") as err:
             subprocess.run(argv, cwd=ROOT, env=env, stdout=log, stderr=err, check=False)

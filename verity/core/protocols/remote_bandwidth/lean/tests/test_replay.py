@@ -27,16 +27,18 @@ def server():
 
 def verifier_json(r: M.Run) -> dict:
     """`r`'s session as `verifier.py` records it: arrivals of the roots its session took, each window's draws and the
-    time they were sent, and an accepted session's record."""
-    s, reg = r.s, r.store.registration
+    time they were sent (its draw's, at its draw's last window's close, for every window of a draw that drew), its
+    `groups_per_coin` above 1, and an accepted session's record."""
+    s, reg, g = r.s, r.store.registration, r.params.groups_per_coin
     arrivals: dict[int, list[int]] = {}
     for e in r.events:
         if e["kind"] == "receive" and 0 <= e["t"] < len(s.windows):
             arrivals.setdefault(e["t"], []).append(e["now"])
     drawn_at = {e["t"]: e["now"] for e in r.events if e["kind"] == "close"}
+    drew = {t // g for t, w in enumerate(s.windows) if w.draws}
     v = s.failed
     pace = r.params.pace
-    session = {
+    session = ({"groups_per_coin": g} if g != 1 else {}) | {
         "k": 0, "accepted": s.outcome == "accepted",
         "failure": None if v is None else {"t": v.window, "failure": v.failure, "at": None if v.at is None else list(v.at)},
         "allowance_ns": r.params.deadline_ns, "samples": r.params.samples, "window_ns": r.params.window_ns,
@@ -46,7 +48,8 @@ def verifier_json(r: M.Run) -> dict:
         "windows_seen": [{"t": t, "released_ns": w.released_ns, "boundary_ns": w.boundary_ns,
                           "deadline_ns": s.deadline(t) if w.boundary_ns is not None else None,
                           "passes": len(w.roots), "arrivals_ns": arrivals.get(t, [])[:len(w.roots)],
-                          "draws_sent_ns": drawn_at.get(t) if w.draws else None} for t, w in enumerate(s.windows)]}
+                          "draws_sent_ns": drawn_at.get(R.last_of(t, g, len(s.windows))) if t // g in drew else None}
+                         for t, w in enumerate(s.windows)]}
     if s.outcome == "accepted":
         rec = s.record()
         session["record"] = {"public": rec.public(), "profile": rec.profile(), "end_ns": rec.end_ns}
@@ -154,6 +157,39 @@ def test_a_verifier_json_replays_to_its_recorded_verdict(server, tmp_path, name)
     row, = R.replay_record(path, server)
     assert row["agree"] and row["held"] and row["digest"], row
     assert row["lean"]["rejected"] is None and row["lean"]["refused"] == 0
+
+
+@pytest.mark.parametrize("name, outcome", [("honest-shared-4", "accepted"), ("honest-shared-paced-uneven", "accepted"),
+                                           ("few-shared", "few")])
+def test_a_verifier_json_drawn_more_than_one_window_a_coin_replays_to_its_recorded_verdict(server, tmp_path, name,
+                                                                                            outcome) -> None:
+    """Drawn g > 1 windows a coin (`groups_per_coin`) at two windows in flight, each draw closes at its last window
+    under W + ⌈W/g⌉ coins and draws as many receipts as its windows' shares recorded: an honest session, even and
+    uneven, replays every draw, and a draw with a window short of its passes is rejected `few` at that window."""
+    r = run(name)
+    assert r.s.outcome == outcome and r.params.groups_per_coin > 1
+    v = verifier_json(r)
+    case, _ = R.case_of(v["registration"], v["sessions"][0])
+    W, g = r.params.windows, r.params.groups_per_coin
+    assert case["params"]["groups_per_coin"] == g and len(case["coins"]) == W + -(-W // g)
+    assert {e["t"] for e in case["events"] if e["kind"] == "close"} <= {R.last_of(t, g, W) for t in range(W)}
+    path = tmp_path / "verifier.json"
+    path.write_text(json.dumps(v))
+    row, = R.replay_record(path, server)
+    assert row["agree"] and row["held"] and row["lean"]["refused"] == 0, row
+    if outcome == "accepted":
+        assert len(row["lean"]["drawn"]) == -(-W // g) and row["why"] == "every draw drawn, as many as recorded"
+
+
+def test_a_verifier_json_drawn_more_than_one_window_a_coin_at_one_in_flight_isnt_replayed(server, tmp_path) -> None:
+    """At one window in flight no property covers a session drawn g > 1 windows a coin, and the driver refuses one:
+    a record of one has no verdict to replay."""
+    v = verifier_json(run("honest-shared-4"))
+    v["sessions"][0]["pace"] = {"k": 2, "window_ns": 10, "in_flight": 1}
+    path = tmp_path / "verifier.json"
+    path.write_text(json.dumps(v))
+    row, = R.replay_record(path, server)
+    assert row["agree"] is None and row["held"] is None and "one window in flight" in row["why"], row
 
 
 def test_too_few_passes_replays_to_the_same_rejection(server, tmp_path) -> None:

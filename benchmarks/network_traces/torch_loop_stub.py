@@ -14,7 +14,7 @@ It prints ``{"listening": URL}`` once it listens, then serves until it is stoppe
   ``text`` is their hex, and its one token id the step's (`step_id`). The first chunk carries ``prompt_token_ids``, the
   last ``finish_reason`` "length". A request is greedy (temperature 0, top_p 1) and either varied, asking for its
   token ids (``return_token_ids``) with no stop strings, as the certifier's shim forwards a varied request
-  (`certifier_serve.varied_body`), or fixed, exactly its ``max_tokens`` (``min_tokens`` the same, ``ignore_eos``, at
+  (`certifier_serve.varied_body`), or fixed, exactly its ``max_tokens`` (``ignore_eos`` and no ``min_tokens``, at
   most ``--steps``), as a fixed plan's (`certifier_serve.request_body`), whose shim frames each chunk's text, 512 hex
   characters at H = 128, as 8 canonical events of 64 bytes (`active.TOKEN_BYTES`); any other is answered 400.
 - a warden's id request (`id_request_of`: `active.id_request` exactly, in the scan's B = P + 9-byte cells from their
@@ -128,18 +128,19 @@ def tampered(outputs: list[bytes], kind: str | None) -> list[bytes]:
 
 def refusal(body: dict, steps: int | None = None) -> str | None:
     """Why the endpoint answers 400 (None: it serves the body): a varied body (module docstring), or a fixed one
-    (`certifier_serve.request_body`: exactly ``max_tokens`` tokens, ``min_tokens`` the same and ``ignore_eos``, at
-    most the endpoint's ``steps``)."""
-    fixed = body.get("ignore_eos") is True and "min_tokens" in body
-    if fixed:
-        if body["min_tokens"] != body.get("max_tokens") or (steps is not None and body["min_tokens"] > steps):
-            return f"min_tokens = max_tokens, at most the loop's {steps} steps"
-    elif body.get("return_token_ids") is not True:
-        return "return_token_ids must be true"
-    elif {"ignore_eos", "min_tokens"} & set(body):
-        return "ignore_eos and min_tokens together, or neither"
-    elif body.get("stop") != [] or type(body.get("seed")) is not int:
-        return "stop [] and an int seed"
+    (`certifier_serve.request_body`: exactly ``max_tokens`` tokens, ``ignore_eos`` and no ``min_tokens``, at most the
+    endpoint's ``steps``). A body with ``min_tokens`` is refused: it masks the EOS logit, which the served Program's
+    sampling doesn't model."""
+    if "min_tokens" in body:
+        return "no min_tokens (it masks the EOS logit, which the served Program's sampling doesn't model)"
+    fixed = body.get("ignore_eos") is True
+    if not fixed:
+        if body.get("return_token_ids") is not True:
+            return "return_token_ids must be true"
+        if "ignore_eos" in body:
+            return "ignore_eos true (a fixed body) or absent (a varied one)"
+        if body.get("stop") != [] or type(body.get("seed")) is not int:
+            return "stop [] and an int seed"
     if body.get("temperature") != 0 or body.get("top_p") != 1:
         return "greedy (temperature 0, top_p 1)"
     prompt = body.get("prompt")
@@ -147,6 +148,8 @@ def refusal(body: dict, steps: int | None = None) -> str | None:
         return "the prompt is a list of token ids"
     if not 0 <= prompt[-1] < L.VOCAB or type(body.get("max_tokens")) is not int or body["max_tokens"] < 1:
         return f"the last prompt id below {L.VOCAB} and max_tokens >= 1"
+    if fixed and steps is not None and body["max_tokens"] > steps:
+        return f"a fixed body's max_tokens at most the loop's {steps} steps"
     return None
 
 

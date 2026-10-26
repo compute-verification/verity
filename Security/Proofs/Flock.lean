@@ -2,10 +2,13 @@ import Proofs.Flock.Verifier
 import Proofs.Flock.Level3
 import Proofs.Flock.Soundness
 import Proofs.Flock.EndToEnd
+import Proofs.Flock.EndToEnd.Window
+import Proofs.Flock.EndToEnd.WindowShare
 import Proofs.Flock.EndToEndDrawn
 import Proofs.Flock.EndToEndHidden
 import Proofs.Flock.EndToEnd.Period
 import Proofs.Flock.EndToEnd.Blocks
+import Proofs.Flock.EndToEnd.Joint
 import Proofs.Flock.EndToEndRegistered
 import Proofs.Flock.EndToEndRegisteredRows
 import Proofs.Flock.SoundAtBridge
@@ -21,6 +24,8 @@ import Proofs.Flock.VBridge.Family.RegistrantFinder
 import Proofs.Flock.Sampled
 import Proofs.Flock.Claims
 import Proofs.Flock.SamplingClaims
+import Proofs.Flock.Bridge
+import Proofs.Flock.Bridge.Transports
 import Proofs.Flock.SamplingBoundary
 import Proofs.Flock.SamplingScope
 

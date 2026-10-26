@@ -12,29 +12,29 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from verity.ml.circuits.defs import bind as ir_bind
-from verity_vllm.program.registry import act as _act
-from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
-from verity_vllm.program.registry import dsa as _dsa, dsa_norm as _dsa_norm, dsa_topk as _dsa_topk
-from verity_vllm.program.registry import dsv4_indexer as _dsv4_indexer, dsv4_qnorm_insert as _dsv4_qnorm
-from verity_vllm.program.registry import dsv4_compressor as _dsv4_compressor, dsv4_moe as _dsv4_moe
-from verity_vllm.program.registry.dsv4_decode_indices import gather_i32
-from verity_vllm.program.registry import flashmla as _flashmla, flashmla_prefill as _flashmla_prefill
-from verity_vllm.program.registry import deepgemm as _deepgemm
-from verity_vllm.program.registry import boolean_rope as _rope
-from verity_vllm.program.registry import cublas_bf16 as _cublas_bf16, ll_bf16 as _ll_bf16
-from verity_vllm.program.registry import cuda_rmsnorm as _cuda_rmsnorm
-from verity_vllm.program.registry import sparse_mla as _sparse_mla, sparse_mla_split as _sparse_mla_split
-from verity_vllm.program.registry import tp_allreduce as _tp_allreduce
-from verity_vllm.program.registry import fa2_check_inf as _f2
-from verity_vllm.program.registry import fa3_check_inf as _f3
-from verity_vllm.program.registry import fp8 as _fp8
-from verity_vllm.program.registry import fp8_vocab as _fp8_vocab
-from verity_vllm.program.registry import marlin_moe as _marlin
-from verity_vllm.program.registry import mhc as _mhc
-from verity_vllm.program.registry import moe as _moe
-from verity_vllm.program.registry import pouw_rows as _pouw_rows
+from verity.ml.definitions.registry import act as _act
+from verity.ml.definitions.registry import b1, gemm_bias as _gemm_bias
+from verity.ml.definitions.registry import dsa as _dsa, dsa_norm as _dsa_norm, dsa_topk as _dsa_topk
+from verity.ml.definitions.registry import dsv4_indexer as _dsv4_indexer, dsv4_qnorm_insert as _dsv4_qnorm
+from verity.ml.definitions.registry import dsv4_compressor as _dsv4_compressor, dsv4_moe as _dsv4_moe
+from verity.ml.definitions.registry.dsv4_decode_indices import gather_i32
+from verity.ml.definitions.registry import flashmla as _flashmla, flashmla_prefill as _flashmla_prefill
+from verity.ml.definitions.registry import deepgemm as _deepgemm
+from verity.ml.definitions.registry import boolean_rope as _rope
+from verity.ml.definitions.registry import cublas_bf16 as _cublas_bf16, ll_bf16 as _ll_bf16
+from verity.ml.definitions.registry import cuda_rmsnorm as _cuda_rmsnorm
+from verity.ml.definitions.registry import sparse_mla as _sparse_mla, sparse_mla_split as _sparse_mla_split
+from verity.ml.definitions.registry import tp_allreduce as _tp_allreduce
+from verity.ml.definitions.registry import fa2_check_inf as _f2
+from verity.ml.definitions.registry import fa3_check_inf as _f3
+from verity.ml.definitions.registry import fp8 as _fp8
+from verity.ml.definitions.registry import fp8_vocab as _fp8_vocab
+from verity.ml.definitions.registry import marlin_moe as _marlin
+from verity.ml.definitions.registry import mhc as _mhc
+from verity.ml.definitions.registry import moe as _moe
+from verity.ml.definitions.registry import pouw_rows as _pouw_rows
 from verity_vllm.program.frontend import targets as _targets
-from verity_vllm.program.registry import value_inputs as _vi
+from verity.ml.definitions.registry import value_inputs as _vi
 from verity_vllm.program.frontend.rules import ref_kinds as R
 
 
@@ -75,14 +75,14 @@ class Vocabulary:
 
 def _int8():
     """`registry.int8_exact`, loaded on a profile's first int8 kind (it builds the s8 family's circuits)."""
-    from verity_vllm.program.registry import int8_exact
+    from verity.ml.definitions.registry import int8_exact
     return int8_exact
 
 
 def _attention_dot_value(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM):
     """Off the accepted target the scale is an input only under FA2's per-iteration Check_inf (Attention_v11): without
     `FA2_MASKED_FROM` the kind does not bind (`Vocabulary.kind`)."""
-    from verity_vllm.program.registry import fa2_check_inf as _f2v  # noqa: PLC0415
+    from verity.ml.definitions.registry import fa2_check_inf as _f2v  # noqa: PLC0415
     return ir_bind(_f2v.AttentionV11, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
 
 
@@ -158,11 +158,11 @@ PROFILE_B1_EAGER = Vocabulary(
                               "BLOCK-thread reduction and epilogue (registry.cuda_rmsnorm)",
     })
 
-# -- reference: NUMERIC's reference kinds (`verity_vllm/program/registry/ref_prims.py`, vocabulary `verity-ref-vocab/1`) ----------
+# -- reference: NUMERIC's reference kinds (`verity/ml/definitions/registry/ref_prims.py`, vocabulary `verity-ref-vocab/1`) ----------
 # The reference kinds define the arithmetic (sequential f32 chains, one DT rounding at stated points); agreement with torch
 # CPU is measured over a tested domain (docs/data/ref-prims/), never assumed. The vocabulary version pins NUMERIC's
 # `REF_VOCAB_VERSION` and `ref_vocab_digest()` (a hash over every reference kind's evaluator/body source).
-from verity_vllm.program.registry import ref_prims as RP
+from verity.ml.definitions.registry import ref_prims as RP
 
 
 def _ref_doc(d) -> str:
@@ -210,13 +210,13 @@ REFERENCE_CPU_F32 = Vocabulary(
 
 # -- profile "b1-eager-v2": the same Ampere eager profile over the v2 skeleton (`Serve_v2`/`Serve_v3`: `Gemm_v2{K,N,DOT}`,
 # `Attention_v2{..,BN,DOT,INV}`, the `NORM` bundle) + the `pad-serve@1` kinds of the padded circuit (`serve3.py`) ------------
-from verity_vllm.program.registry import b1_tp2 as TP2
-from verity_vllm.program.registry import pad_prims as PP
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry import sampling as _sampling  # [R15 stoch]
-from verity_vllm.program.registry import sampling_vocab
-from verity_vllm.program.registry import topp_words as _topp_words  # the keep word as word gates at a constant S
-from verity_vllm.program.registry import layer_norm as _LN
+from verity.ml.definitions.registry import b1_tp2 as TP2
+from verity.ml.definitions.registry import pad_prims as PP
+from verity.ml.definitions.registry import prims as P
+from verity.ml.definitions.registry import sampling as _sampling  # [R15 stoch]
+from verity.ml.definitions.registry import sampling_vocab
+from verity.ml.definitions.registry import topp_words as _topp_words  # the keep word as word gates at a constant S
+from verity.ml.definitions.registry import layer_norm as _LN
 
 
 PROFILE_B1_EAGER_V2 = Vocabulary(
@@ -259,10 +259,10 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
 # UNFUSED under the eager batch-invariant profile when a model's norm is `forward_native` (`ir.ops.rms_norm` / `fused_add_rms_norm` as
 # an ATen chain on an f32 copy), its activation is GeGLU, its attention has a logit soft cap, or its logits are soft-capped. Every kind
 # is op-shaped (an ATen CUDA kernel on a bf16 / f32 row, a Triton reduction, a softcapped FA2 head) — nothing here names a model; the
-# Definitions live in `verity_vllm.program.registry.dense` (promoted from `quarantine.dense`, the X-08 pattern: same name / version / body, so the
+# Definitions live in `verity.ml.definitions.registry.dense` (promoted from `quarantine.dense`, the X-08 pattern: same name / version / body, so the
 # specialization ids the accepted `GEMMA2_2B` record resolved to are unchanged). `rules/vllm_bindings.py` asks for them. ----------------
 def _dense_kinds() -> tuple[dict, dict]:
-    from verity_vllm.program.registry import dense as DN
+    from verity.ml.definitions.registry import dense as DN
     kinds = {
         "scale_tensor": lambda N: ir_bind(b1.Bf16MulScalarTensor, N=N),
         "gelu_tanh_mul": lambda I: ir_bind(DN.GeluTanhMul, I=I),
@@ -324,12 +324,12 @@ _DNK, _DNN = _dense_kinds()
 def _moe_ffn_fixed(E: int, TOPK: int, VPT: int, H: int, I: int):
     """[route A (3)] `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}` (registry.moe_pad), imported on first use: the padded registry (pad's lifted
     registry + the hand-lift hook) is not loaded by a dense derivation that never asks for the kind."""
-    from verity_vllm.program.registry import moe_pad as _mp  # noqa: PLC0415
+    from verity.ml.definitions.registry import moe_pad as _mp  # noqa: PLC0415
     return ir_bind(_mp.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
 
 
 def _silu_mul_fp8_block_quant(I: int, G: int):
-    from verity_vllm.program.registry import fp8_moe as _fm  # noqa: PLC0415
+    from verity.ml.definitions.registry import fp8_moe as _fm  # noqa: PLC0415
     return ir_bind(_fm.SiluMulFp8BlockQuant, I=I, G=G)
 
 
@@ -338,21 +338,21 @@ def _moe_expert_dot(routed, E, K, N, DOT, G, KB, SWAP):
         return ir_bind(_moe.MoeExpertGemmWV2 if routed else _moe.MoeExpertGemmV2, E=E, K=K, N=N, DOT=DOT)
     if G is None or KB is None or SWAP is None:
         raise TypeError("the block-FP8 pair forms take G, KB and SWAP together")
-    from verity_vllm.program.registry import fp8_moe_experts as _x  # noqa: PLC0415
+    from verity.ml.definitions.registry import fp8_moe_experts as _x  # noqa: PLC0415
     return ir_bind(_x.MoeExpertFp8GemmW if routed else _x.MoeExpertFp8Gemm, E=E, K=K, N=N, G=G, KB=KB, SWAP=SWAP, DOT=DOT)
 
 
 def _attention_softcap_dot(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM, CAP):
     if FA2_MASKED_FROM is None:
         raise TypeError("a softcap off the accepted target is registered only under FA2's per-iteration Check_inf")
-    from verity_vllm.program.registry import fa2_softcap as _f2s  # noqa: PLC0415
+    from verity.ml.definitions.registry import fa2_softcap as _f2s  # noqa: PLC0415
     return ir_bind(_f2s.AttentionSoftcapV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, CAP=CAP, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
 
 
 def _attention_split_dot(T, NH, KVH, D, BN, DOT, INV, MASKED_FROM, PER):
     if MASKED_FROM is None:
         raise TypeError("FA3's split prefill is registered only under FA3's per-iteration Check_inf")
-    from verity_vllm.program.registry import fa3_split as _f3s  # noqa: PLC0415
+    from verity.ml.definitions.registry import fa3_split as _f3s  # noqa: PLC0415
     return ir_bind(_f3s.AttentionSplit, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM, PER=PER)
 
 # -- profile "b1-eager-v3" [CB-A 2026-09-18]: the admitted `vllm_d9105ea80_sm89_eager` profile as the accepted records bind it —

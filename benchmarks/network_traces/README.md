@@ -6,6 +6,36 @@ The network certifier's measured runs and their zero-knowledge proofs: the certi
 driver's docstring says what it runs and what its verifier receives. `n2_lean_replay.py` replays the recorded N2 proving
 runs' link-window verdicts through the Lean verdict of record beside the Python, against what each run recorded.
 
+## The demo's load
+
+The H200 demo serves CMP-95 interface 1's plain INT8 weights, generated from the public seed
+`verity/cmp92/h200/weights/v1`. They are relayed to the H200 once per serving session and committed as they cross
+(CMP-97 option (a)), through two gate verbs on vy-challenger-1:
+
+- `vy-challenger-gate weights-write [--shape h200|tiny]` writes the shape's weights stream onto the auditor's store disk
+  (`/var/lib/vy-challenger/store`) once. It keeps the stream only when its tensors' SHA-256 fold to the pin of
+  interface 1's manifest digests (`load_relay.STORE_DIGESTS`, from
+  art:a6775aeef1f6d11badf5a7a38460cff7d4d59f27e70dbc3bf8dd995fbb4c82da).
+- `vy-challenger-gate load-relay --peer vy-dc-h200-2 --port PORT --sink-port PORT --program SHA512 --minutes M` (with
+  `warden-rehearse`'s flags) is the warden's rehearsal with the load first. The store goes over 4 TCP streams, an SSH
+  tunnel each, to `load_relay.py sink` on the H200's loopback; each value is held to its digest and committed under the
+  reading program's domain as it crosses. The serving session's one signer then signs the load's 733 heads before its
+  first window, so one LMS key and one session carry the load and the windows. `load.json` (the registrations the
+  block record pins) and `load-relay.json` are public in the run's `out/`.
+- The witness, every row's salts (4.85 GB at H200), is the sink's `--witness` file (0600) on the prover's host,
+  vy-dc-h200-2. The certifier's host never writes a salt.
+
+## The wipe's egress
+
+Memory accounting's streamed wipe signs its egress `UNCOUNTED` when its challenger is on another host. The count over its
+session [t0, t1) comes after, from a warden session that spans it: `wipe_gate.sh` runs that session through the gate
+(`warden-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the card's loopback), at a given UTC time
+when asked, and fetches the run's bundle. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the
+`wipe-egress/v1` record from what the gate published. Each link-window meeting [t0 − 1 s, t1 + 1 s) counts at the
+schedule's capacity, 2,621,440 bits a link-window, with K that count and δ 0. The record is covered only when every one
+of those windows is certified. The wipe's reader takes `wipe_period.certify(p, egress_mib)` from a covered record and
+keeps the wipe uncounted otherwise.
+
 ## The chain's run of record
 
 The run of record takes the network chain end to end on the gate's machines:
@@ -20,7 +50,11 @@ The run of record takes the network chain end to end on the gate's machines:
 
 **How it runs.** vy-admin runs the gate on vy-challenger-1: `sudo vy-challenger-gate certifier-rehearse --peer
 vy-nebius-1 --port PORT --minutes 30 --traffic varied --requests 100 --tokens 64 --seed 1 --eos-ids 128001 --height 20`
-(and `warden-rehearse --scan`, where it functions as an active warden), then `status` and `fetch`. The fetched tarballs go to one job, `chain_record.sh`, with the
+(and `warden-rehearse --scan`, where it functions as an active warden), then `status` and `fetch`. A prompt range shorter
+than the chat turn's tail (`CHAT_TAIL`, as the toy's 8-byte prompts are) makes every chat turn one prompt, so such an
+endpoint takes its prompts on stdin and a wider margin: `demo_stub.py prompts --count 100 | sudo vy-challenger-gate
+certifier-rehearse … --traffic varied --requests 100 --rate 0.2 --tokens 24 --eos-ids 0 --prompts --margin 4`
+(`--prompts`: request j sends the (j mod n)-th; `--margin`: the plan's over the probes, 1 to 8, 2 otherwise). The fetched tarballs go to one job, `chain_record.sh`, with the
 endpoint's records (`benchmarks/network_e2e/chain.py`'s `ENDPOINT`: `advice_trace.jsonl`, `requests.jsonl`, `windows.jsonl` and
 `serve.json` from the endpoint's serve directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps,
 network-e2e's binding and the two provers, and writes `out/report/report.json` and `report.md`:

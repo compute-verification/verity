@@ -1,11 +1,15 @@
 """The communication leg (`legs/certifier.py`) on what it reads and what it writes, without a certifier session:
 
 * a served plan of the period's prompts, a link-window per group, puts period p's requests in link-window p, each with
-  its own prompt, and has no period past the session's; the stub serves those bodies and refuses any other;
+  its own prompt, and has no period past the session's; the toy's stub serves those bodies (``ignore_eos``, no
+  ``min_tokens``) and refuses any other, a body that still sends ``min_tokens`` among them;
 * N2's outcome of record is one-stage's answer on the link-window's one unit, and its refusal a reject;
 * the integrity leg's accepted audit is re-decided at the leg's δ (one-stage's bound on wrong units), and its refusal
   kept as it is;
-* the certified text matches the registered outputs by stream, else by content, and a changed byte is no match;
+* the certified text matches the registered outputs by stream, else by content, and a changed byte is no match; a
+  period's relayed outputs are its link-window's responses in the plan's order, and a short or non-hex one is refused;
+* a tied period reports its integrity audit's output class and Lean's refusals at the output port's registered read,
+  and the leg asserts an honest relay's accepted audit proved the class and a tampered relay's was refused there;
 * `case_of`'s case of signed link-windows and the period's audit is the period check's (its Python mirror, which
   `network-period` is held to): accepted with K and eps at each δ, refused when N2 refused a link-window or the case
   names another first window;
@@ -113,10 +117,21 @@ def test_a_period_is_its_own_link_window_with_its_own_prompts_and_the_last_takes
 def test_the_stub_serves_each_fixed_plan_body_of_the_loops_steps():
     _, p = plan(1)
     model = f"torch-loop/mlp-w8a8-h{H}"
+    assert all(q["body"]["ignore_eos"] is True and "min_tokens" not in q["body"] for q in p["requests"])
     assert [S.refusal(q["body"] | {"model": model}, STEPS) for q in p["requests"]] == [None, None]
-    assert S.refusal(cs.request_body(model, STEPS + 1, [3]), STEPS)
-    assert S.refusal(cs.request_body(model, STEPS, [3], temperature=1.0), STEPS)
-    assert S.refusal(cs.request_body(model, STEPS, [3]) | {"min_tokens": 1}, STEPS)
+    assert "steps" in S.refusal(cs.request_body(model, STEPS + 1, [3]), STEPS)
+    assert "greedy" in S.refusal(cs.request_body(model, STEPS, [3], temperature=1.0), STEPS)
+    assert "ignore_eos" in S.refusal(cs.request_body(model, STEPS, [3]) | {"ignore_eos": False,
+                                                                           "return_token_ids": True}, STEPS)
+
+
+def test_the_stub_refuses_a_body_that_still_sends_min_tokens():
+    model = f"torch-loop/mlp-w8a8-h{H}"
+    fixed = cs.request_body(model, STEPS, [3])
+    varied = cs.varied_body(model, {"prompt": [3], "max_tokens": STEPS, "seed": 1}) | {"return_token_ids": True}
+    assert S.refusal(fixed, STEPS) is None and S.refusal(varied, STEPS) is None
+    for body in (fixed | {"min_tokens": STEPS}, fixed | {"min_tokens": 1}, varied | {"min_tokens": 1}):
+        assert "min_tokens" in S.refusal(body, STEPS)
 
 
 def test_n2s_outcome_is_one_stages_answer_on_the_link_windows_one_unit():
@@ -168,6 +183,51 @@ def test_the_certified_text_is_matched_to_the_registered_outputs():
     assert not L.match_outputs(reqs, events[:-1], FRAMES, outputs, STEPS)["equal"]
     with pytest.raises(ValueError, match="plan requests"):
         L.match_outputs(reqs[:1], events, FRAMES, outputs, STEPS)
+
+
+def test_a_periods_relayed_outputs_are_its_link_windows_responses_in_the_plans_order(tmp_path, monkeypatch):
+    report, p = plan(2)
+    run = tmp_path / "rehearsal" / "honest"
+    run.mkdir(parents=True)
+    (run / "plan.json").write_text(json.dumps(p))
+    (run / "calibration.json").write_text(json.dumps(report))
+    said = [bytes([16 * i + k for k in range(STEPS)]) * 2 * H for i in range(2)]
+    events = [t[j:j + L.TOKEN_BYTES] for t in (s.hex().encode() for s in said) for j in range(0, len(t), L.TOKEN_BYTES)]
+    got: dict[str, list] = {"events": events}
+    monkeypatch.setattr(L, "certified_events", lambda r, fb, ws: got["events"] if ws == [1] else [])
+    rec = {"dir": str(tmp_path), "prompts": [3, 7], "frames": FRAMES, "h": H, "steps": STEPS}
+    assert L.relayed(rec, "honest", 1) == (1, said)
+    with pytest.raises(RuntimeError, match="canonical events"):
+        L.relayed(rec, "honest", 0)
+    got["events"] = events[:-1] + [b"zz" * (L.TOKEN_BYTES // 2)]
+    with pytest.raises(RuntimeError, match="not the hex of"):
+        L.relayed(rec, "honest", 1)
+
+
+def test_a_tied_period_reports_its_audits_output_class_and_lean_refusals_of_the_output_port(tmp_path):
+    (tmp_path / "p").mkdir()
+    audit = tmp_path / "out" / "integrity" / "audit"
+    audit.mkdir(parents=True)
+    period = {"period": 0}
+    (tmp_path / "p" / "period.json").write_text(json.dumps(period))
+    assert L.tie_of(tmp_path / "p", tmp_path / "out" / "communication") is None
+    tie = {"value": "out", "port": "o0", "stratum": "output class", "strategy": "byte", "window": 0}
+    (tmp_path / "p" / "period.json").write_text(json.dumps(period | {"tie": tie}))
+    why = {"lean-verify/m17": "registered reads: port o0: table row 0 does not open out's registered root at position 0",
+           "lean-verify/m3": "zk inner: τ does not match its commitment"}
+    (audit / "summary.json").write_text(json.dumps({"audit": {"why": why},
+                                                    "outputs": {"units": 128, "proved": False}}))
+    got = L.tie_of(tmp_path / "p", tmp_path / "out" / "communication")
+    assert got == {**tie, "outputs": {"units": 128, "proved": False}, "refused": {"lean-verify/m17": why["lean-verify/m17"]}}
+    L.tie_holds(0, got, "reject")
+    for t, integrity in ((got | {"refused": {}}, "reject"), (got, "accept"),
+                         (got | {"strategy": "honest", "refused": {}}, "accept")):
+        with pytest.raises(RuntimeError, match="registered|output class"):
+            L.tie_holds(0, t, integrity)
+    L.tie_holds(0, got | {"strategy": "honest", "outputs": {"units": 128, "proved": True}}, "accept")
+    L.tie_holds(0, got | {"strategy": "honest"}, "reject")
+    assert L.STUBBED["tied"] == (L._PROXY_GAP, L._OFF_HOST_GAP) and "out-records.jsonl" in L.PUBLIC_SESSION
+    assert not any("witness" in f for f in L.PUBLIC_SESSION)
 
 
 def session_run(windows: list[int], refused: frozenset[int] = frozenset()) -> dict:
@@ -723,5 +783,20 @@ def test_a_registered_weights_window_reads_unit_for_unit_as_the_plain_one(tmp_pa
     for u, (lab, rows) in want.items():
         assert got[u][0] == lab and all(np.array_equal(got[u][1][p], r) for p, r in rows.items())
     circuit = json.loads((d / "circuit.json").read_text())
-    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit)["free"] == 1024 * (1024 + 32)
+    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit, pins={"w", "sw"})["free"] == 1024 * (1024 + 32)
     assert L.free_inputs(json.loads((plain / "circuit.json").read_text()))["bits"] == FREE
+
+
+def test_a_wired_windows_requests_and_registered_outputs_are_the_per_coordinate_windows(tmp_path):
+    """The wired circuit records each linear once for all requests (a record's ``requests``, one a unit) and its quantize
+    units carry no layer: the leg reads the same prompts, steps and outputs off it as off the per-coordinate circuit."""
+    from verity_torch_loop import serve
+
+    shape = ["--requests", "3,7", "--steps", "2", "--law", "stratified:3", "--run-id", "allp-cert-wired"]
+    assert serve.main([*shape, "--out", str(tmp_path / "coord")]) == 0
+    assert serve.main([*shape, "--out", str(tmp_path / "wired"), "--cap", "2", "--wired"]) == 0
+    coord, wired = (L.loop_units(tmp_path / d) for d in ("coord", "wired"))
+    assert L.requests_of(tmp_path / "wired", wired) == L.requests_of(tmp_path / "coord", coord) == ([3, 7], 2, 128)
+    outputs = L.registered_outputs(wired)
+    assert outputs == L.registered_outputs(coord) and sorted(outputs) == [(r, s) for r in ("r0", "r1") for s in (0, 1)]
+    assert all(len(v) == 2 * 128 for v in outputs.values())
