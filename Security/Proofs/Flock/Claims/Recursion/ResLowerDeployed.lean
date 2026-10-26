@@ -810,6 +810,60 @@ def VVTie (untr : TrReader) (b : Brings) (vvAt : Msg → List Coin → ℕ × �
             vvAt (xIOf x) ((List.range (Bk (xIOf x))).map c) (t, o, g, 0) =
               wordsElems nv rows[instOf sts[t].c o g]!
 
+/-- **Check 5's tie at a piece's copy** (the `ResTie` conjunct `resPieces_computesAt` asks of each piece): at copy
+`(0, o, g, 0)` of an instance `n` check 5 holds (`n < 2`), between the verifier's values the coins give there and the
+copy's columns. `resTie_staged` at `n`, with the copy's columns where the slots read (`hVc`, `hOc`) and the coins'
+values check 5's row (`VVTie`). -/
+theorem resTie_copyOf {b : Brings} {IV : Claims.Verifier Coin}
+    {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {s : ℕ} {x xO : Msg}
+    {w : Claims.Flock.Wit} {cs : ℕ → Coin} {untr : TrReader}
+    {vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128} {Bk : Msg → ℕ}
+    (hT : ∀ e ∈ (layVR elem).calls x s w, FlockDeploy.sha512 e.1 = e.2)
+    (hnc : (Claims.findColl ((layVR elem).calls x s w ++ vcallsAt FlockDeploy.sha512
+      (recBound _root_.Flock.Readable.relation b (layVR elem) IV) xO)).isSome = false)
+    (hsh : showsPart untr b s x xO cs)
+    (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true)
+    {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss)
+    {j : ℕ} {nm' : String} {pt : VStar.Part} (hsv : ss[s]? = some (.inner j nm' pt)) {c : Circuit}
+    (hpc : r.w.parts[s]?.bind partCircuit = some c) {p : Flock.Readable.Parsed} (ht : 0 < p.sts.size)
+    {i : RecIns} {spec : SessionSpec} {sts : Array Stmt} (hsu : setupO xO = some (i, spec, sts)) (h0 : 0 < sts.size)
+    (hidx : Registered.unitIndices sts[0].pub = .ok (Array.range sts[0].pub.n))
+    {own : Array Registered.Port} (hown : i.base.registered = some own)
+    {m k cl jj : ℕ} (hres : RecResiduals.params sts[0].c.unit.name = some (m, k, cl, jj))
+    (hso : RecCoins.stackedParams sts[0].c.unit.name = none) (hop : RecOpening.params sts[0].c.unit.name = none)
+    (hsp : RecSparse.params sts[0].c.unit.name = none) (ho : RecOpen.params sts[0].c.unit.name = none)
+    {f : RecCoins.Source} (hf : RecCoins.Source.atC3 i.src i.inner i.commits = some f)
+    (hset : ∀ u ∈ resSetup xO, u ∈ b.setup xO) (hvv : VVTie untr b vvAt Bk s x cs)
+    {sh : _root_.Flock.Shape} {holo : Bool} {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
+    (hshp : RecResiduals.shape? m k cl = some sh) (hholo : RecResiduals.holoOf sts[0].c = .ok holo)
+    (hpart : RecResiduals.part { sh with holo } jj = .ok (S, ns, nv))
+    {o g n : ℕ} (hg : g < sts[0].c.g) (hn : instOf sts[0].c o g = n) (hn2 : n < 2) (hnp : n < sts[0].pub.n)
+    {qv qo : ℕ} (hqv : c.ports.findIdx? (·.name == "v") = some qv)
+    (hqo : c.ports.findIdx? (·.name == "out") = some qo) (hvin : qv < HmOut.nIn c) (hoout : ¬ qo < HmOut.nIn c)
+    {ptv pto : Port} (hptv : c.ports[qv]? = some ptv) (hpto : c.ports[qo]? = some pto)
+    (hslo : readForms w (hmCommit c qo n) = FlockSoundness.Binding.commitString
+      (rowPfx c qo ++ readForms w (outForms c qo n)) (readForms w (hmSalt c qo n)))
+    (hrows : ∀ (inn : RecCoins.Inner) (rows : Array (Array ℕ)), f.load sts[0].c.unit.name = .ok inn →
+      FlockSoundness.Discharge.Recursion.residualRows inn jj = some rows →
+      ptv.words = (RecCoins.padTo rows[n]! (Registered.rowWords rows[n]!.size 16)).size ∧ n < rows.size ∧
+        8 * nv ≤ rows[n]!.size)
+    (hwo : pto.words = (RecCoins.padTo (RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!
+      (Registered.rowWords (RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!.size 16)).size)
+    (hVc : ∀ i < 128 * nv, ∃ hl : i < (rowForms c "v" qv n).length,
+      Flock.Readable.copyOf p 0 ht w o g 0 (FlockVBridge.OfVStar.vBase (FlockVBridge.OfVStar.partRep ns nv) + i) =
+        formBit w (rowForms c "v" qv n)[i])
+    (hOc : ∀ q < 128 * S.res.length, ∃ hl : q < (rowForms c "out" qo n).length,
+      Flock.Readable.copyOf p 0 ht w o g 0 (FlockVBridge.OfVStar.partBase S ns nv + q) =
+        formBit w (rowForms c "out" qo n)[q]) :
+    ResTie S ns nv (vvAt (xIOf x) ((List.range (Bk (xIOf x))).map cs) (0, o, g, 0))
+      (Flock.Readable.copyOf p 0 ht w o g 0) := by
+  obtain ⟨inn, rows, hinn, hrw, hall⟩ := resTie_staged hT hnc hsh.2 hck hr hss hsv hpc hsu h0 hidx hown hres hso hop
+    hsp ho hf hset hn2 hnp hqv hqo hvin hoout hslo
+  obtain ⟨hwv, hnr, hsz⟩ := hrows inn rows hinn hrw
+  rw [hvv xO hsh i spec sts hsu 0 h0 m k cl jj hres f inn rows hf hinn hrw sh holo S ns nv hshp hholo hpart o g hg
+    (by rw [hn]; exact hn2), hn]
+  exact hall hptv hpto hwv hwo hnr hsz hVc hOc
+
 /-- **The `rec-residuals` pieces' share of `hlowP` at the deployed layout** (U12's statement): at the compiled record
 `recBound` over V\*'s bound layout with check 5's calls (`layVR elem`), the deployed outer record and the staging
 `showsPart`, wherever part `s` accepts and its V\* statement at `x`'s inner shape is an algebra part (`.inner`), each
