@@ -44,7 +44,7 @@ theorem verifyJPWith_ok (hs : Flock.Hashes Flock.V) (spec : SessionSpec) (tabs :
   unfold verifyJPWith
   have hpub : forIn (tabs.zip sess.publics) PUnit.unit (fun x _ => do
       liftM (x.1.publics x.2)
-      pure (ForInStep.yield PUnit.unit) : _ → _ → V _) = Except.ok () := by
+      pure (ForInStep.yield PUnit.unit) : _ → _ → Flock.V _) = Except.ok () := by
     rw [← Array.forIn_toList]
     refine FlockComplete.forIn_ok _ _ fun a ha => ?_
     simp only [liftM, monadLift_self, hU a ha]
@@ -55,7 +55,7 @@ theorem verifyJPWith_ok (hs : Flock.Hashes Flock.V) (spec : SessionSpec) (tabs :
       if (c0 != c1) = true then do
         throw (toString "S18/R1: " ++ toString spec.tables[i]! ++ toString ": the reps' caps differ")
         pure (ForInStep.yield PUnit.unit)
-      else pure (ForInStep.yield PUnit.unit) : _ → _ → V _) = Except.ok () := by
+      else pure (ForInStep.yield PUnit.unit) : _ → _ → Flock.V _) = Except.ok () := by
     rw [Std.Legacy.Range.forIn_eq_forIn_range']
     refine FlockComplete.forIn_ok _ _ fun i hi => ?_
     have hi' : i < tabs.size := by
@@ -161,7 +161,8 @@ theorem verdict_of_runs (hT : D.sts.size = D.spec.tables.size) (h0 : D.sts.size 
     obtain ⟨st, -, rfl⟩ := Array.mem_map.1 ha'
     have hp : b.size = 0 := by
       simpa using Array.all_eq_true_iff_forall_mem.1 hU b hb
-    (simp only [Setup.ofCircuit, hp, beq_self_eq_true, ↓reduceIte]) <;> rfl
+    simp only [Setup.ofCircuit, hp, beq_self_eq_true, ↓reduceIte]
+    rfl
   · intro st hst
     obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 hst)
     have hf := (hG i (hsz ▸ hi)).fast
