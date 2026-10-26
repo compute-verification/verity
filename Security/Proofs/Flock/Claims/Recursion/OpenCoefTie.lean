@@ -45,7 +45,7 @@ open FlockDeploy (Coin setupOf tabsOf pointsOf)
 open Claims.Recursion.VStarB
 open ResLower
 open RecDeploy.DeployedR (rowForms portCalls)
-open RecDeploy.OpenDirs (instR DR four_lt_nIn getD_of_lt)
+open RecDeploy.OpenDirs (DR four_lt_nIn getD_of_lt)
 open FlockSoundness.Discharge.Recursion (openRows openCoef openDirs innerLevels)
 open FlockSoundness.Refine (shapeOf)
 
@@ -670,8 +670,8 @@ theorem copyCoefTieR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.le
     by_contra hge
     rw [getElem!_neg _ s hge] at hqry
     exact Nat.not_lt_zero _ hqry
-  have hinst : instR (Claims.Recursion.xI (DR b elem IV) x) q < n := by
-    unfold instR OpenLower.qAt
+  have hinst : OpenDirs.instR (Claims.Recursion.xI (DR b elem IV) x) q < n := by
+    unfold OpenDirs.instR OpenLower.qAt
     rw [hxI, hql, hnq]
     generalize ((OpenLower.schAt (xIOf x) 0).levels[s]!).q = Q at hqry ⊢
     have h1 : q.rep * Q ≤ 1 * Q := Nat.mul_le_mul_right _ (by omega)
@@ -712,21 +712,21 @@ theorem copyCoefTieR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.le
   -- which is the words of `coefRead`
   have hct := coefTieR_of hx' hd hR (hI s x cs st hx' hd) xO (And.intro hshow hS) i0 spec sts hsu h0 f inn hf' hinn
     r ss lv LANES HH n hr hss hsv cr dr hrows q (by rw [← hxI]; exact hq) ho
-  have hct' : cr[instR (Claims.Recursion.xI (DR b elem IV) x) q]! =
+  have hct' : cr[OpenDirs.instR (Claims.Recursion.xI (DR b elem IV) x) q]! =
       RecCoins.words (Rows.coefRead (Claims.Recursion.xI (DR b elem IV) x)
         ((List.range (Bd.DE.V.k (Claims.Recursion.xI (DR b elem IV) x))).map cs) q) := by
     rw [hxI]
     exact hct
-  have hcr : instR (Claims.Recursion.xI (DR b elem IV) x) q < cr.size := by rw [hcrs]; exact hinst
+  have hcr : OpenDirs.instR (Claims.Recursion.xI (DR b elem IV) x) q < cr.size := by rw [hcrs]; exact hinst
   have hw16 := crRow_size hrows hcr
   rw [hct', words_size] at hw16
   show Flock.Readable.openCoefs (OpenLower.copyR (Claims.Recursion.xI (DR b elem IV) x) w p ht q) LANES HH =
     Rows.coefRead (Claims.Recursion.xI (DR b elem IV) x)
       ((List.range (Bd.DE.V.k (Claims.Recursion.xI (DR b elem IV) x))).map cs) q
   have hcp : OpenLower.copyR (Claims.Recursion.xI (DR b elem IV) x) w p ht q =
-      Flock.Readable.copyOf p 0 ht w (instR (Claims.Recursion.xI (DR b elem IV) x) q / cc.g)
-        (instR (Claims.Recursion.xI (DR b elem IV) x) q % cc.g) 0 := by
-    simp only [OpenLower.copyR, OpenLower.copyAtR, instR, getElem!_pos p.sts 0 ht, hc0]
+      Flock.Readable.copyOf p 0 ht w (OpenDirs.instR (Claims.Recursion.xI (DR b elem IV) x) q / cc.g)
+        (OpenDirs.instR (Claims.Recursion.xI (DR b elem IV) x) q % cc.g) 0 := by
+    simp only [OpenLower.copyR, OpenLower.copyAtR, OpenDirs.instR, getElem!_pos p.sts 0 ht, hc0]
   rw [hcp]
   refine openCoefs_of_words (by omega) fun h hh => ?_
   rw [htie hcr h hh, hct']
