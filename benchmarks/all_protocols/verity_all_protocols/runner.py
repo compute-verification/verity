@@ -27,11 +27,14 @@ scratch and the verifier's pin in ``DIR/weights-pin.json``, which ``period.json`
 integrity leg's audit holds every period's reads to; its members are then shared-row.
 
 ``--tie``: the loop's outputs tied to what the network certifier relayed (`tie`). Before the first period the
-communication leg's session is relayed (its `relay`, in scratch, where the leg finds it), and each period, before the
-loop serves, the output the network certifier relayed in the period's link-window is committed as the registered value
-``out`` and its head signed (``DIR/pP/out-record.json``), the verifier pins its root from that record alone
-(``DIR/pP/pin.json``, beside the weights' pin, which ``period.json`` then names), and the loop serves with each output
-unit's ``o0`` a registered read of ``out`` (`serve --tie --out-opening`). ``period.json``'s ``tie`` names the value,
+communication leg's session is relayed (its `relay`, in scratch, where the leg finds it) with the reading program's
+digest (``serve --circuit-only``'s, the same every period), and the network certifier commits the output it relayed in
+each link-window as the registered value ``out`` and signs its head with its session's own key. Each period, before
+the loop serves, the verifier pins the root of the period's link-window's record (``DIR/pP/out-record.json``) from
+that record alone under the deployment's certifier key and session (``DIR/pP/pin.json``, beside the weights' pin,
+which ``period.json`` then names), and the loop serves with each output unit's ``o0`` a registered read of ``out``,
+opened from the rows and salts the certifier handed the prover (`serve --tie --out-opening`). ``period.json``'s ``tie``
+names the value,
 the port, the stratum the integrity audit proves whole (`tie.STRATUM`), the relay's run and link-window and the pinned
 root. ``--tie-tamper P,...``: those periods' output is the ``CERTIFIER_TAMPER=byte`` relay's, one output byte changed on
 the egress, which Lean's registered read of ``o0`` must refuse.
@@ -139,21 +142,27 @@ def serve(argv: Sequence[str]) -> dict[str, Any]:
     return json.loads(p.stdout.strip().splitlines()[-1])
 
 
+def shape_of(index: int, run: str, a: argparse.Namespace) -> list[str]:
+    """The loop's shape and period ``index``'s run id, as ``serve`` takes them."""
+    return ["--law", a.law, "--cap", str(a.cap), "--requests", a.requests, "--steps", str(a.steps), "--run-id",
+            f"{run}/p{index}", *(["--registered"] if a.weights else []),
+            *(["--tie"] if getattr(a, "tie", False) else [])]
+
+
 def loop_period(index: int, run: str, a: argparse.Namespace, scratch: Path, out: Path) -> tuple[Path, dict]:
     """The period's loop: the circuit registered before it runs, then its window in scratch with ``period.json``; its
-    public files in ``out/window``. With ``--tie``, the output the network certifier relayed in the period's link-window
-    committed and pinned before the loop serves (`tie.period`), the period's pins ``out/pin.json`` (the weights' and
+    public files in ``out/window``. With ``--tie``, the out record the network certifier signed for the period's
+    link-window pinned before the loop serves (`tie.period`), the period's pins ``out/pin.json`` (the weights' and
     ``out``'s). -> the period's directory and what the loop printed."""
-    weights, tied = a.weights, getattr(a, "certifier", None)
-    shape = ["--law", a.law, "--cap", str(a.cap), "--requests", a.requests, "--steps", str(a.steps), "--run-id",
-             f"{run}/p{index}", *(["--registered"] if weights else []), *(["--tie"] if tied else [])]
+    weights, tied = a.weights, getattr(a, "tie", False)
+    shape = shape_of(index, run, a)
     registered = serve([*shape, "--circuit-only"])
     circuit, pins, tie = registered["circuit"], weights and weights["pin"], None
     window = scratch / f"p{index}"
     tampered = index in a.tamper
     if tied:
         rows = len(a.requests.split(",")) * a.steps * a.relay["h"]
-        tie = T.period(tied, a.relay, index, "byte" if index in a.tie_tamper else "honest", registered["program"], rows,
+        tie = T.period(a.relay, index, "byte" if index in a.tie_tamper else "honest", registered["program"], rows,
                        scratch, out)
         pins = out / "pin.json"
         pins.write_text(json.dumps([*([json.loads(weights["pin"].read_text())] if weights else []), tie.pop("pin")],
@@ -211,9 +220,9 @@ def main(argv: list[str] | None = None) -> int:
         if a.weights:
             serve(["--commit-weights", str(a.weights["opening"]), "--pin", str(a.weights["pin"])])
         if a.tie:
+            program = serve([*shape_of(0, run, a), "--circuit-only"])["program"]
             a.relay = T.relay(Path(scratch), [int(x) for x in a.requests.split(",")], a.steps, a.periods, a.tools,
-                              bool(a.tie_tamper))
-            a.certifier = T.certifier(Path(scratch) / "out-certifier")
+                              bool(a.tie_tamper), program)
         t0 = time.monotonic()
         for p in range(a.periods):
             wait = t0 + p * a.period_s - time.monotonic()

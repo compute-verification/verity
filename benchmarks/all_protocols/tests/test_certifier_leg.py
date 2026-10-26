@@ -211,7 +211,8 @@ def test_a_tied_period_reports_its_audits_output_class_and_lean_refusals_of_the_
             L.tie_holds(0, t, integrity)
     L.tie_holds(0, got | {"strategy": "honest", "outputs": {"units": 128, "proved": True}}, "accept")
     L.tie_holds(0, got | {"strategy": "honest"}, "reject")
-    assert L.STUBBED["tied"][-1] is L._OUT_KEY_GAP and L._TIE_GAP not in L.STUBBED["tied"]
+    assert L.STUBBED["tied"] == (L._PROXY_GAP, L._OFF_HOST_GAP) and "out-records.jsonl" in L.PUBLIC_SESSION
+    assert not any("witness" in f for f in L.PUBLIC_SESSION)
 
 
 def session_run(windows: list[int], refused: frozenset[int] = frozenset()) -> dict:

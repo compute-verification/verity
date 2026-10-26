@@ -1,43 +1,41 @@
 """The runner's output tie (``--tie``, `verity_all_protocols.runner`): each period, the output the network certifier
-relayed in the period's link-window committed as the loop's registered value ``out`` and its head signed
-(`out_commit.commit_out`), the verifier's pin of its root from that record alone (`out_commit.check_out`), and the
-loop's opening of it (`loop.out_opening`: the rows and the certifier's salts, the prover's).
+relayed in the period's link-window, which it committed itself as the loop's registered value ``out`` and whose head it
+signed with its session's own key at the link-window's close (`certifier_serve.py --out-program`,
+`out_commit.commit_out` under its running `Issuer`); the verifier's pin of its root from that record alone, under the
+certifier key and session the run's deployment names (`out_commit.check_out`); and the loop's opening of it
+(`loop.out_opening`) from the witness the certifier hands the prover (its rows and their salts).
 
-A period's rows are its requests' responses as the egress carried them (the communication leg's `relayed`), in the
-plan's order: response j's step s word n (u16, little-endian) is row ``(j·steps + s)·h + n``, one word, which the loop's
-output unit (request j, step s, last layer, n) reads at its ``o0`` (`TorchLoop.circuit`). The verifier derives the
-value's domain from its own registration of the reading program (`pin`: the circuit's program digest and the loop's
-shape's ``out`` rows), so a record of another program, value or row count is refused (``out-domain``), as is one of
-another window, key or session. The output units are the circuit's uncut registered reads of an output port, the class
-the integrity audit proves whole beside its draw (`STRATUM`). The key (`certifier`) is an LMS key the runner makes for
-the network certifier, in a certifier session of its own (the communication leg's ``_OUT_KEY_GAP``).
+A period's rows are its requests' responses as the egress carried them, in the plan's order: response j's step s word
+n (u16, little-endian) is row ``(j·steps + s)·h + n``, one word, which the loop's output unit (request j, step s, last
+layer, n) reads at its ``o0`` (`TorchLoop.circuit`); the prover checks the certifier's rows are those (`out_rows`
+over the communication leg's `relayed`). The verifier derives the value's domain from its own registration of the
+reading program (`pin`: the circuit's program digest and the loop's shape's ``out`` rows), so a record of another
+program, value or row count is refused (``out-domain``), as is one of another window, key or session. The output
+units are the circuit's uncut registered reads of an output port, the class the integrity audit proves whole beside its
+draw (`STRATUM`).
 """
 from __future__ import annotations
 
 import json
-import os
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from verity.core.protocols.certifier import out_commit as OC
-from verity.core.protocols.certifier.certificate import Issuer, LmsKey, LmsSigner
+from verity.core.protocols.certifier.certificate import PublicKey
 from verity.core.protocols.sampled_proofs.one_stage import registered as REG
-from verity.ml.crypto import lms
 
 from .table import load
 
 ROOT = Path(__file__).resolve().parents[3]
+TRACES = ROOT / "benchmarks" / "network_traces"
 VALUE, PORT = OC.VALUE, "o0"
 #: the stratum the tie rests on: every unit with an uncut registered read of an output port (`records_audit.output_class`,
 #: a5's ``output_closure``), proved whole beside the draw, rate 1
 STRATUM = "output class"
-#: the runner's network certifier key: 2^6 out certificates, one a period
-LMS = lms.Params(64, 1, 6)
 
 
 def _loop():
@@ -47,22 +45,11 @@ def _loop():
     return L
 
 
-@dataclass(frozen=True)
-class Certifier:
-    """The network certifier's key as the runner holds it: its issuer in its session, and the public key the verifier
-    holds."""
+def _cs():
+    sys.path.insert(0, str(TRACES))
+    import certifier_serve as cs
 
-    issuer: Issuer
-    key: LmsKey
-    session: bytes
-
-
-def certifier(directory: Path) -> Certifier:
-    """A fresh key and certifier session, its leaf state in ``directory``."""
-    directory.mkdir(parents=True, exist_ok=True)
-    signer = LmsSigner.create(lms.keygen(LMS, os.urandom(LMS.N)), directory / "signer-state.json")
-    session = os.urandom(32)
-    return Certifier(Issuer(signer, session), signer.public_key(), session)
+    return cs
 
 
 def out_rows(responses: Sequence[bytes], h: int, steps: int) -> list[list[int]]:
@@ -72,44 +59,71 @@ def out_rows(responses: Sequence[bytes], h: int, steps: int) -> list[list[int]]:
     return [[int(w)] for r in responses for w in np.frombuffer(r, "<u2")]
 
 
-def pin(record: Mapping[str, Any], c: Certifier, *, program: str, rows: int, window: int) -> dict[str, Any]:
-    """The verifier's pin of ``out`` (records_audit's ``--registered`` form) from the certifier's record alone: the root
-    `check_out` returns for link-window ``window`` under the domain the verifier derives for ``rows`` one-word rows of
-    the reading ``program``; `OutRefused` names the check that fails."""
+def device(run: Path) -> tuple[PublicKey, bytes]:
+    """The network certifier's key and certifier session as the relay run's ``deployment.json`` names them, the ones the
+    communication leg checks the session's certificates under."""
+    dep = json.loads((run / "deployment.json").read_text())
+    return _cs().read_public(dep["certifier_key"]), bytes.fromhex(dep["session"])
+
+
+def certified_out(run: Path, window: int) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Link-window ``window``'s out record (public, the verifier's) and its witness (``rows``, ``salts``: the prover's)
+    as the network certifier wrote them in the relay run ``run``."""
+    cs = _cs()
+    records = [json.loads(x) for x in (run / cs.OUT_RECORDS).read_text().splitlines()]
+    if [OC.LINK, OC.DIRECTION.value, window] in [r.get("refused") for r in records]:
+        raise RuntimeError(f"the network certifier's signer refused link-window {window}'s out certificate")
+    mine = [r for r in records if r.get("window") == window]
+    witness = [w for w in map(json.loads, (run / cs.OUT_WITNESS).read_text().splitlines()) if w["window"] == window]
+    if len(mine) != 1 or len(witness) != 1:
+        raise RuntimeError(f"{run}: {len(mine)} out records and {len(witness)} witnesses of link-window {window}, not one")
+    return mine[0], witness[0]
+
+
+def pin(record: Mapping[str, Any], key: PublicKey, session: bytes, *, program: str, rows: int,
+        window: int) -> dict[str, Any]:
+    """The verifier's pin of ``out`` (records_audit's ``--registered`` form) from the network certifier's record alone:
+    the root `check_out` returns for link-window ``window`` under the certifier's ``key`` in ``session`` and the domain
+    the verifier derives for ``rows`` one-word rows of the reading ``program``; `OutRefused` names the check that
+    fails."""
     want = REG.domain(program, VALUE, 1, rows, REG.WORD_BITS)
-    root = OC.check_out(record, c.key, c.session, want, window=window)
+    root = OC.check_out(record, key, session, want, window=window)
     return {"program": program, "values": {VALUE: {"value": VALUE, "root": root, "leaves": rows, "words": 1,
                                                    **REG.width_entry(REG.WORD_BITS), "domain": want.domain_id.hex()}}}
 
 
-def relay(scratch: Path, tokens: Sequence[int], steps: int, periods: int, tools: Mapping[str, str],
-          tampered: bool) -> dict[str, Any]:
+def relay(scratch: Path, tokens: Sequence[int], steps: int, periods: int, tools: Mapping[str, str], tampered: bool,
+          program: str) -> dict[str, Any]:
     """The communication leg's session relayed before the loop serves (`relay`, in its scratch directory, where the leg
-    finds it); ``tampered``: some period's output is the tampered relay's, which must be ``byte``'s."""
+    finds it), the network certifier committing each link-window's output for the reading ``program``; ``tampered``:
+    some period's output is the tampered relay's, which must be ``byte``'s."""
     leg = load("certifier")
-    rec = leg.relay(scratch / leg.SESSION, list(tokens), steps, _loop().H, periods, tools)
+    rec = leg.relay(scratch / leg.SESSION, list(tokens), steps, _loop().H, periods, tools, out_program=program)
     if tampered and rec["tamper"] != "byte":
         raise ValueError(f"--tie-tamper ties a period to the CERTIFIER_TAMPER=byte relay, not {rec['tamper']!r}")
     return rec
 
 
-def period(c: Certifier, rec: Mapping[str, Any], index: int, strategy: str, program: str, rows: int, scratch: Path,
+def period(rec: Mapping[str, Any], index: int, strategy: str, program: str, rows: int, scratch: Path,
            out: Path) -> dict[str, Any]:
-    """Period ``index``'s tie: the ``strategy`` relay's output in its link-window committed by the certifier, its record
-    in ``out/out-record.json``, the loop's opening in ``scratch`` and the verifier's pin of it. -> what ``period.json``'s
-    ``tie`` names, with the ``opening`` and the ``pin``."""
+    """Period ``index``'s tie: the ``strategy`` relay's out record of the period's link-window, copied to
+    ``out/out-record.json``, the verifier's pin of it, and the loop's opening from the certifier's witness in
+    ``scratch``. -> what ``period.json``'s ``tie`` names, with the ``opening`` and the ``pin``."""
     window, responses = load("certifier").relayed(rec, strategy, index)
-    values = out_rows(responses, rec["h"], rec["steps"])
-    got = OC.commit_out(values, program=program, words=1, key=c.issuer, session=c.session, window=window)
+    run = Path(rec["dir"]) / "rehearsal" / strategy
+    record, witness = certified_out(run, window)
+    if witness["rows"] != out_rows(responses, rec["h"], rec["steps"]):
+        raise RuntimeError(f"the network certifier's out rows of link-window {window} aren't its responses' words")
+    pinned = pin(record, *device(run), program=program, rows=rows, window=window)
     scratch.mkdir(parents=True, exist_ok=True)
     opening = scratch / f"p{index}-out-opening.json"
-    opening.write_text(json.dumps(_loop().out_opening(program, values, list(got.salts))))
+    opening.write_text(json.dumps(_loop().out_opening(program, witness["rows"],
+                                                      [bytes.fromhex(s) for s in witness["salts"]])))
     out.mkdir(parents=True, exist_ok=True)
-    (out / "out-record.json").write_text(json.dumps(got.public, indent=1, sort_keys=True))
-    pinned = pin(got.public, c, program=program, rows=rows, window=window)
+    (out / "out-record.json").write_text(json.dumps(record, indent=1, sort_keys=True))
     return {"value": VALUE, "port": PORT, "stratum": STRATUM, "strategy": strategy, "window": window,
             "root": pinned["values"][VALUE]["root"], "record": str(out / "out-record.json"), "opening": opening,
             "pin": pinned}
 
 
-__all__ = ["LMS", "PORT", "STRATUM", "VALUE", "Certifier", "certifier", "out_rows", "period", "pin", "relay"]
+__all__ = ["PORT", "STRATUM", "VALUE", "certified_out", "device", "out_rows", "period", "pin", "relay"]

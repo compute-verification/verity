@@ -529,6 +529,69 @@ def test_the_served_proxy_hands_its_certifier_each_egress_windows_sync_which_it_
     assert cs.read_clocks(tmp_path / "absent.jsonl") == []
 
 
+def _egress_record(window: int, text: bytes, frame_bytes: int = 4096):
+    """An egress record whose canonical events carry `text`, 64 bytes an event, then a padding slot and an id event."""
+    def frame(kind, body):
+        return (active.HEADER.pack(kind, active.CANONICAL_STREAM, len(body)) + body).ljust(frame_bytes, b"\0")
+
+    slots = [frame(active.DATA, active.event(text[i:i + active.TOKEN_BYTES]))
+             for i in range(0, len(text), active.TOKEN_BYTES)]
+    return SimpleNamespace(window=window, grid=[slots, [None, frame(active.PAD, b""),
+                                                        frame(active.DATA, active.id_event(0, 7))]])
+
+
+def test_the_network_certifier_commits_and_signs_each_egress_windows_output_in_its_own_session(tmp_path):
+    """`--out-program`'s commitment (`certify_out`): the output an egress record's canonical events carry, as the hex
+    of u16 little-endian words, committed under the running issuer, which signs its head in the certifier's session
+    for the link-window: the public record `check_out` pins under the certifier's key, and the witness (each row and
+    its salt) apart, for the prover. A record whose text isn't that commits nothing, and a refused signature is the
+    link-window under ``refused``, with no witness."""
+    from verity.core.protocols.certifier import out_commit as OC
+    from verity.core.protocols.sampled_proofs.one_stage import registered as REG
+
+    program, words = "cd" * 64, [0x0102, 0xfffe, 7, 0]
+    text = b"".join(w.to_bytes(2, "little") for w in words).hex().encode() * 40
+    signer = cs.signer(tmp_path / "key", 4)
+    try:
+        issuer, key = Issuer(signer, SESSION), signer.public_key()
+        assert cs.out_rows(_egress_record(2, text)) == [[w] for w in words] * 40
+        got = cs.certify_out(tmp_path, _egress_record(2, text), issuer, program)
+        assert cs.certify_out(tmp_path, _egress_record(3, b"not hex " * 8), issuer, program) is None
+        assert cs.certify_out(tmp_path, _egress_record(3, b"abc"), issuer, program) is None
+        assert cs.certify_out(tmp_path, _egress_record(4, text), Issuer(signer, bytes(32)), program) is None
+    finally:
+        signer.close()
+    records = [json.loads(x) for x in (tmp_path / cs.OUT_RECORDS).read_text().splitlines()]
+    assert records[1:] == [{"refused": [OC.LINK, "egress", 4]}] and records[0] == got.public
+    want = REG.domain(program, "out", 1, 160, REG.WORD_BITS)
+    assert OC.check_out(records[0], key, SESSION, want, window=2) == got.root
+    witness = [json.loads(x) for x in (tmp_path / cs.OUT_WITNESS).read_text().splitlines()]
+    assert witness == [{"window": 2, "program": program, "rows": [[w] for w in words] * 40,
+                        "salts": [s.hex() for s in got.salts]}]
+    assert not any(s.hex() in json.dumps(records) for s in got.salts)
+
+
+def test_the_out_program_reaches_each_rehearsed_serve_and_is_a_program_digest(tmp_path, monkeypatch):
+    digest = "cd" * 64
+    serve = ["serve", "--plan", "p", "--calibration", "c", "--upstream", "u", "--out", "o", "--link", "h:1",
+             "--reveal", "h:2", "--key", "k", "--challenger-key", "c", "--session", "00"]
+    assert cs.parser().parse_args(serve).out_program is None
+    assert cs.parser().parse_args(["rehearse", "--out", "o", "--out-program", digest]).out_program == digest
+    with pytest.raises(SystemExit):
+        cs.parser().parse_args([*serve, "--out-program", digest.upper()])
+    seen = []
+
+    def popen(argv, **_):
+        seen.append(argv)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cs.subprocess, "Popen", popen)
+    with pytest.raises(KeyboardInterrupt):
+        cs.rehearse_one(tmp_path, "honest", url="u", certifier_dir=tmp_path / "k", challenger_dir=tmp_path / "c",
+                        api_key_env=None, start_in=1.0, out_program=digest)
+    assert cs.parser().parse_args(seen[0][2:]).out_program == digest
+
+
 def test_each_salt_is_revealed_once_to_the_challengers_signed_request(served):
     *_, runs = served
     for strategy in cs.STRATEGIES:

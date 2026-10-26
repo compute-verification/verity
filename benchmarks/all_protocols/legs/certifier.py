@@ -16,8 +16,8 @@ each proved ``--zk`` behind the Lean firewall (`n2_zk.py prove`): its exit and l
 (`n2_refusal`). The session is one LMS key (height `CERTIFIER_HEIGHT`) and one certifier session per run, its leaf state
 kept across both. Its records (heads and salts, syncs, request and response records, the shim's events, the plan's
 prompts) are witness and stay in the scratch; the runner's ``--out/certifier-session/`` gets each run's deployment,
-calibration and the client's certificates and clock certificates alone (`publish`, `PUBLIC_SESSION`), and
-``summary.json`` the session's counts.
+calibration, the client's certificates and clock certificates, and on a tied run the network certifier's out records
+alone (`publish`, `PUBLIC_SESSION`), and ``summary.json`` the session's counts.
 
 **A period** (`leg`): its link-window, and for the first period every link-window N2 decided before it and for the last
 every one after (`period_windows`), so each certified link-window is some period's. Their certified outputs (the egress
@@ -37,11 +37,14 @@ holding the tampered link-window (`TAMPERED_WINDOW`) must reject there, which th
 periods may accept. A run whose tamper N2 proves no member of (``byte``) has no link-window answer, and the leg decides
 only the runs N2 proved.
 
-**The output tie** (the runner's ``--tie``): the runner relays the session before the loop serves (`relay`), and for
-each period the network certifier commits the output it relayed in the period's link-window (`relayed`: the honest
-run's, or under ``--tie-tamper`` the ``CERTIFIER_TAMPER=byte`` run's, one output byte changed on the egress) as the
-registered value ``out``, its head signed (`out_commit.commit_out`). The verifier pins ``out``'s root from that record
-alone (`out_commit.check_out`), and each output unit's ``o0`` is a registered read of ``out``, so the integrity leg's
+**The output tie** (the runner's ``--tie``): the runner relays the session before the loop serves (`relay`, with the
+reading program's digest), and at each egress link-window's close the network certifier commits the output it relayed
+as the registered value ``out`` and signs its head with the session's own key in its session (`certifier_serve.py
+--out-program`, `out_commit.commit_out` under its running `Issuer`): the record public (``out-records.jsonl``, in
+`PUBLIC_SESSION`), the rows and salts the prover's. A period's is its link-window's (`relayed`: the honest run's, or
+under ``--tie-tamper`` the ``CERTIFIER_TAMPER=byte`` run's, one output byte changed on the egress). The verifier pins
+``out``'s root from that record alone under the deployment's certifier key and session (`out_commit.check_out`), and
+each output unit's ``o0`` is a registered read of ``out``, so the integrity leg's
 audit proves the output class whole (every unit with an uncut registered read of an output port, records_audit's
 `output_class`, a5's output closure) and Lean's registered reads refuse any output unit whose row doesn't open the
 signed root. The leg reports what that audit established (`tie_of`, ``tie`` in ``summary.json``) and asserts it
@@ -141,21 +144,18 @@ _SCAN_GAP = {
            "own cells, `scan_free`), and its draw the verifier's own Lean coins on link-window 0 alone",
     "fix": "LEAK-LEAN's exact K terms against the Lean, and IO-TIE's scan_zk --window W on the challenger's coins "
            "(#4387)"}
-_OUT_KEY_GAP = {
-    "gap": "the output value is committed and its head signed after the relay, from the egress records the network "
-           "certifier certified, under a key the runner holds for it (verity_all_protocols.tie), not the session's own "
-           "key in its session",
-    "fix": "certifier_serve.py commits each egress link-window's output inside the relay (out_commit.commit_out under "
-           "its own Issuer), its out record beside the window's certificates"}
 #: what each path's verdict still stands on that isn't the network certifier's own, each with its fix (``stubbed`` in
 #: ``summary.json``); ``tied``: the certifier path on a period whose outputs the runner tied (``--tie``), where Lean's
-#: registered reads refuse an output unit whose row doesn't open the certified value's root, so no clear check remains
+#: registered reads refuse an output unit whose row doesn't open the root the network certifier signed, so no clear
+#: check remains
 STUBBED = {"certifier": (_PROXY_GAP, _OFF_HOST_GAP, _TIE_GAP), "warden": (_OFF_HOST_GAP, _TIE_GAP, _SCAN_GAP),
-           "tied": (_PROXY_GAP, _OFF_HOST_GAP, _OUT_KEY_GAP)}
+           "tied": (_PROXY_GAP, _OFF_HOST_GAP)}
 #: a canonical event's most bytes (`active.TOKEN_BYTES`)
 TOKEN_BYTES = 64
 #: what `publish` copies of each run of the session into the runner's ``--out``: nothing the prover holds as witness
-PUBLIC_SESSION = ("deployment.json", "calibration.json", "client/certificates.jsonl", "client/clocks.jsonl")
+#: (an out record is public; its rows and salts, ``out-witness.jsonl``, are the prover's)
+PUBLIC_SESSION = ("deployment.json", "calibration.json", "client/certificates.jsonl", "client/clocks.jsonl",
+                  "out-records.jsonl")
 #: the link-window each shim tamper changes (`certifier_serve.py`'s ``late``, ``extra``, ``drop``), whose period's case
 #: must reject; ``token`` changes bytes only the I/O tie reads, which the network check accepts
 TAMPERED_WINDOW = {"late": 0, "extra": 0, "drop": 0}
@@ -357,11 +357,13 @@ def _env(tools: Mapping[str, str], exes: Mapping[str, str]) -> dict[str, str]:
                                                         os.environ.get("PYTHONPATH")]))}
 
 
-def relay(s: Path, prompts: Sequence[int], steps: int, h: int, periods: int, tools: Mapping[str, str]) -> dict[str, Any]:
+def relay(s: Path, prompts: Sequence[int], steps: int, h: int, periods: int, tools: Mapping[str, str],
+          out_program: str | None = None) -> dict[str, Any]:
     """The session's relay (module docstring): `certifier_serve.py rehearse` of the run's ``periods`` periods of
     ``prompts`` through the network certifier into ``s``, honest and under `CERTIFIER_TAMPER`, before any proof; its
     record ``relay.json``. The runner relays before the loop serves when the loop's outputs are tied to the certified
-    ones (``--tie``); `session` relays at the first period otherwise."""
+    ones (``--tie``), the network certifier then committing each link-window's output for the reading program
+    ``out_program`` (``--out-program``); `session` relays at the first period otherwise."""
     if (s / "relay.json").exists():
         return json.loads((s / "relay.json").read_text())
     s.mkdir(parents=True, exist_ok=True)
@@ -376,7 +378,8 @@ def relay(s: Path, prompts: Sequence[int], steps: int, h: int, periods: int, too
                    "--prompts", ";".join(map(str, prompts)), "--requests", str(len(prompts) * periods),
                    "--in-flight", str(len(prompts)), "--tokens", str(steps), "--response-frames", str(frames),
                    "--probes", str(len(prompts)), "--window-per-group", "--strategies", ",".join(strategies),
-                   "--height", str(height)], s / "rehearse.log", _env(tools, exes))
+                   "--height", str(height), *(["--out-program", out_program] if out_program else [])],
+                  s / "rehearse.log", _env(tools, exes))
     finally:
         stub.terminate()
         stub.wait()
@@ -384,7 +387,7 @@ def relay(s: Path, prompts: Sequence[int], steps: int, h: int, periods: int, too
         raise RuntimeError(f"certifier_serve.py rehearse exited {rc} with no summary ({s / 'rehearse.log'})")
     rec = {"prompts": list(prompts), "steps": steps, "h": h, "periods": periods, "height": height,
            "strategies": strategies, "tamper": tamper or None, "frames": frames, "rehearse_exit": rc, "exes": exes,
-           "dir": str(s)}
+           "dir": str(s), "out_program": out_program}
     (s / "relay.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     return rec
 
@@ -426,9 +429,9 @@ def session(period_dir: Path) -> dict[str, Any]:
 
 def publish(sess: Mapping[str, Any], out: Path) -> None:
     """The session's public files into ``out`` (the runner's ``--out/certifier-session``), each run's alone: its
-    deployment, calibration and the client's certificates and clock certificates (`PUBLIC_SESSION`). The records with
-    their heads and salts, the syncs, the request and response records, the shim's events and the plan's prompts stay
-    in the session, in the runner's scratch."""
+    deployment, calibration, the client's certificates and clock certificates, and its out records (`PUBLIC_SESSION`).
+    The records with their heads and salts, the syncs, the request and response records, the shim's events, the out
+    value's rows and salts and the plan's prompts stay in the session, in the runner's scratch."""
     for strategy in sess["strategies"]:
         run = Path(sess["dir"]) / "rehearsal" / strategy
         for f in PUBLIC_SESSION:
