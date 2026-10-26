@@ -209,8 +209,8 @@ the standing rulings stated nowhere else.
 - **Results are per monitoring period, over all compute** (Daniel, 25 Oct). The time length of interest is the
   *monitoring period* (`ARCHITECTURE.md`, Glossary), not the window, the run or the demo. Every result, in a report, a
   table, a PR or a message to Daniel, is presented for monitoring periods of one week, one month and one year, and over
-  all compute: every machine of a deployment, a whole datacenter, though a demo checks one. The datacenter's size and
-  the window's length are stated parameters (from `benchmarks/census/`), and a figure scaled from one machine says which
+  all compute: every machine of a deployment, a whole datacenter, though a demo checks one. The datacenter's size (from
+  `benchmarks/census/`) and the window's length are stated parameters, and a figure scaled from one machine says which
   parts are proved and which are scaled. Give each bound as its pooled total over the period and as a share of the
   compute it covers, beside the per-window figure, never the per-window figure alone: a per-window δ that looks weak is
   not the result.
