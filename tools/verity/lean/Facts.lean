@@ -566,12 +566,13 @@ def assertedParts (env : Environment) (meaning premises : Array Name) (moduleOf 
   unless ← forallTelescopeReducing v.type fun _ r => return r.isProp do return none
   lambdaTelescope (← plain v.value) fun _ b => return some (← parts env meaning premises moduleOf 4 b)
 
-/-- For a premise headed by `h`, a definition outside an assumptions module that the lock doesn't list (`listed`): the
-parts it asserts (`assertedParts`), and those of each definition among them that the lock doesn't list, breadth first,
-at most 64 definitions; `{definition: [{head, module, props}]}`. Null for any other head. -/
-def unfoldsOf (env : Environment) (meaning premises : Array Name) (listed : NameSet) (moduleOf : Name → Option Name)
-    (h : Name) : MetaM Json := do
-  if listed.contains h then return Json.null
+/-- For a premise headed by `h`, a definition of a module this repository builds (`built`), outside an assumptions module,
+that the lock doesn't list (`listed`): the parts it asserts (`assertedParts`), and those of each such definition among
+them, breadth first, at most 64 definitions; `{definition: [{head, module, props}]}`. Null for any other head. -/
+def unfoldsOf (env : Environment) (meaning premises : Array Name) (listed built : NameSet)
+    (moduleOf : Name → Option Name) (h : Name) : MetaM Json := do
+  let mine (c : Name) : Bool := !listed.contains c && ((moduleOf c).map built.contains).getD false
+  if !mine h then return Json.null
   let some ps ← assertedParts env meaning premises moduleOf h | return Json.null
   let part (p : Option Name × Bool) : Json := Json.mkObj [("head", toJson (p.1.map toString)),
     ("module", toJson ((p.1.bind moduleOf).map toString)), ("props", toJson p.2)]
@@ -582,7 +583,7 @@ def unfoldsOf (env : Environment) (meaning premises : Array Name) (listed : Name
   while h : i < queue.size do
     let c := queue[i]
     i := i + 1
-    if seen.contains c || listed.contains c then continue
+    if seen.contains c || !mine c then continue
     seen := seen.insert c
     if out.size ≥ 64 then break
     if let some qs ← assertedParts env meaning premises moduleOf c then
@@ -748,8 +749,8 @@ partial def conclusionOf (env : Environment) (meaning : Array Name) (t : Expr) (
       ("defs", toJson ((defs.qsort Name.lt).map toString)), ("refl", toJson refl), ("assumed", toJson (hs.contains b))]],
       hs.any (·.isConstOf ``False))
 
-def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning premises : Array Name) (listed : NameSet)
-    (axioms : Std.HashMap Name NameSet)
+def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning premises : Array Name)
+    (listed built : NameSet) (axioms : Std.HashMap Name NameSet)
     (ranges : Std.HashMap Name DeclarationRanges) (rs : Array (Name × Name × ConstantInfo) × Array (Name × Name)) (n : Name) :
     MetaM Json := do
   let some ci := env.find? n | return Json.mkObj [("kind", "missing")]
@@ -781,7 +782,7 @@ def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning
       let ps ← premisesOf env meaning premises moduleOf false (← plain ci.type)
       return toJson (← ps.mapM fun p => do
         let some h := (p.getObjValAs? String "head").toOption | return p
-        return p.setObjVal! "unfolds" (← unfoldsOf env meaning premises listed moduleOf h.toName))) <|> pure Json.null),
+        return p.setObjVal! "unfolds" (← unfoldsOf env meaning premises listed built moduleOf h.toName))) <|> pure Json.null),
     ("body", ← (do
       let (h, neg) ← bodyHead ci.type
       let (cs, absurd) ← conclusionOf env meaning ci.type
@@ -967,10 +968,20 @@ unsafe def main (args : List String) : IO UInt32 := do
         acc := acc.insert pins[i] rs
     return acc
   lap "reads" readsOf.size
+  let found ← (List.range ((mnames.size + 255) / 256)).toArray.mapM fun k => IO.asTask do
+    (mnames.extract (256 * k) (256 * k + 256)).mapM fun m => return toString (← findOLean m)
+  let mut oleans := #[]
+  for t in found do
+    oleans := oleans ++ (← IO.ofExcept t.get)
+  -- the modules a package of this repository builds (an `.olean` in its own `.lake/build`), as `check.py`'s `own_modules`
+  let built : NameSet := (List.range mnames.size).foldl (init := {}) fun s i =>
+    let o := oleans[i]!
+    if (o.splitOn "/.lake/build/").length > 1 && (o.splitOn "/.lake/packages/").length == 1 then s.insert mnames[i]! else s
   -- each pin's facts are a function of the environment and the maps above, so each pin is a task, joined in order
   let tasks ← pins.mapM fun p => IO.asTask do
     let (out, _) ← (MetaM.run' do
-      return (p.toString, ← pinInfo env table meaning premises listed axioms ranges (readsOf.getD p (#[], #[])) p)).toIO ctx { env }
+      return (p.toString, ← pinInfo env table meaning premises listed built axioms ranges (readsOf.getD p (#[], #[])) p)).toIO
+        ctx { env }
     return out
   let pinned ← tasks.mapM fun t => IO.ofExcept t.get
   lap "pins" pinned.size
@@ -1021,11 +1032,6 @@ unsafe def main (args : List String) : IO UInt32 := do
       else
         took := took.insert (rn c) c
   lap "canon" conflicts.size
-  let found ← (List.range ((mnames.size + 255) / 256)).toArray.mapM fun k => IO.asTask do
-    (mnames.extract (256 * k) (256 * k + 256)).mapM fun m => return toString (← findOLean m)
-  let mut oleans := #[]
-  for t in found do
-    oleans := oleans ++ (← IO.ofExcept t.get)
   let mut graph := #[]
   for h : i in [0:mnames.size] do
     let olean := oleans[i]!
