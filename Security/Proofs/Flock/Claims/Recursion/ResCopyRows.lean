@@ -14,7 +14,8 @@ row at instance `n` (`rowHidden`'s forms, read off the witness), which is the ro
 * `port_at`: row port `i` of V\*'s part is the circuit's port `i`: its name finds it, its bits are its words', and the
   words before it are the row ports'.
 * `rowCol_start`, `rowPortCol_eq`: the verifier's row column of port `i` is `16` times the row ports' words before it.
-* `copy_rowElems`: the copy's row port elements are the committed row's.
+* `copy_rowElems`: the copy's row port elements are the committed row's, and row port `i` is named for the verifier's
+  port `P[i]` (`checkPart_ok`).
 -/
 
 namespace RecDeploy.ResLower
@@ -180,9 +181,11 @@ theorem copy_rowElems {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
     (hres : RecResiduals.params c.unit.name = some (m, k, cl, jj)) (hshp : RecResiduals.shape? m k cl = some sh)
     (hholo : RecResiduals.holoOf c = .ok holo) (hpart : RecResiduals.part { sh with holo } jj = .ok (S, ns, nv))
     {i o : ℕ} (hi : i < ns.length) (ho : o < ns[i]) (n : ℕ) :
-    ∃ hi' : i < pt.S.ports.length, pt.S.ports[i].1 ≠ "out" →
+    ∃ hi' : i < pt.S.ports.length, (∀ P, RecVStar.partPorts { sh with holo } jj = .ok P →
+      ∃ hP : i < P.size, pt.S.ports[i].1 = (RecVStar.portNames { sh with holo })[P[i]]!) ∧
+      (pt.S.ports[i].1 ≠ "out" →
       _root_.Flock.Readable.rowsRead ns nv (Flock.Readable.copyOf p 0 ht w (n / c.g) (n % c.g) 0) ((ns.take i).sum + o) =
-        elemsOf (readForms w (((rowHidden c pt.S.ports[i].1 n).getD []).map HmNets.Lin.var)) ns[i] o := by
+        elemsOf (readForms w (((rowHidden c pt.S.ports[i].1 n).getD []).map HmNets.Lin.var)) ns[i] o) := by
   obtain ⟨p', r', sv, hx', ht', hpi, hr', ⟨ss', hss', hsv'⟩, h0, htab⟩ := stagedTables hS
   rw [hx] at hx'
   cases hx'
@@ -205,12 +208,19 @@ theorem copy_rowElems {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
   rw [hpart] at hpart'
   simp only [Except.ok.injEq, Prod.mk.injEq] at hpart'
   obtain ⟨rfl, rfl, rfl⟩ := hpart'
-  obtain ⟨hns, -⟩ := checkPart_ns hpk hres hshp hholo hpart
+  obtain ⟨hns, -, hnames⟩ := FlockSoundness.Discharge.Recursion.checkPart_ok hpk rfl hres hshp hholo hpart
   have hi' : i < pt.S.ports.length := by
     have := congrArg List.length hns
     simp only [List.length_map] at this
     omega
-  refine ⟨hi', fun hnout => ?_⟩
+  refine ⟨hi', fun P hP => ?_, fun hnout => ?_⟩
+  · have heq := hnames P hP
+    have hlen := congrArg List.length heq
+    simp only [List.length_map, Array.length_toList] at hlen
+    refine ⟨by omega, ?_⟩
+    have h2 := List.getElem_of_eq heq (by simpa using hi')
+    simp only [List.getElem_map, Array.getElem_toList] at h2
+    exact h2
   have hnsi : ns[i] = pt.S.ports[i].2 := by subst hns; simp
   have hpos : 0 < ns[i] := by omega
   obtain ⟨hcs, hfind, hbits, hwords⟩ := port_at hu hrows hi'
