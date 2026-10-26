@@ -228,7 +228,8 @@ def narrow(name: str, lmax: int, pairs=((2, 128), (2, 129), (128, 255), (256, 25
     """Operands narrower than int8 (Dither's chosen data): at each depth budget, the least cost of any schedule and of
     one with a scheme, at each pair of operand ranges, against naive int8 (8^(l+1))."""
     T = Tables(name, lmax, [STRASSEN, WINOGRAD, TRIVIAL],
-               extra=[v for p in pairs for v in p] + [2 ** a + 1 for a in range(1, 13)] + [2 ** a for a in range(13)])
+               extra=[(v - 1) * k + 1 for p in pairs for v in p for k in range(1, 33)]
+               + [2 ** a + 1 for a in range(1, 13)] + [2 ** a for a in range(13)])
     tabs = T.level(None, None, None, None, 0)
     for l in range(lmax + 1):
         if l:
@@ -238,7 +239,8 @@ def narrow(name: str, lmax: int, pairs=((2, 128), (2, 129), (128, 255), (256, 25
         cells = []
         for VA, VB in pairs:
             a = (at(T, lo, VA, VB), at(T, up, VA, VB), at(T, hlo, VA, VB), at(T, hup, VA, VB))
-            cells.append(f"({VA},{VB}) any [{a[0] / n:.6f}, {a[1] / n:.6f}] scheme [{a[2] / n:.6f}, {a[3] / n:.6f}]")
+            cells.append(f"({VA},{VB}) any [{a[0] / n:.6f}, {a[1] / n:.6f}] scheme [{a[2] / n:.6f}, {a[3] / n:.6f}]"
+                         f" minus naive [{a[2] - n}, {a[3] - n}]")
         print(f"{name} l={l:2d}: " + "; ".join(cells), flush=True)
 
 
