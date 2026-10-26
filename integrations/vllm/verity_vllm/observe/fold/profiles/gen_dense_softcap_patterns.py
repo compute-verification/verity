@@ -34,7 +34,7 @@ from typing import Any
 from verity_vllm.program.frontend import targets as TG
 
 from verity_vllm.observe.fold.patterns import FA2_OP_NAMES, AttentionScope, ComputeGroup, as_float, bound_args, find_descendants, op_name, unsupported
-from verity_vllm.engine.profiles.gen_dense2_patterns import AttentionScopeInertWindow, _annotate, _replace_descendant, _rewrite_args
+from verity_vllm.observe.fold.profiles.gen_dense2_patterns import AttentionScopeInertWindow, _annotate, _replace_descendant, _rewrite_args
 from verity_vllm.observe.fold.resolver import Compute, Resolution, StepContext, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
 

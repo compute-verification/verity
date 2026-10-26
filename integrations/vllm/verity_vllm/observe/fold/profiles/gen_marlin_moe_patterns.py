@@ -45,8 +45,8 @@ from verity_vllm.observe.fold.patterns import (SCRATCH_INT_FILLS, SiluAndMulWith
 from verity_vllm.observe.fold.resolver import (Compute, Const, Gather, PerRow, Pieces, Resolution, Shared, StepContext, Unsupported, WeightField,
                                                Witness, scratch_view)
 from verity_vllm.observe.fold.tree import TreeNode
-from verity_vllm.engine.profiles.gen_ov_moe_patterns import K_ALIGN_KERNELS, K_SUM, _contig, _flat, _same
-from verity_vllm.engine.profiles.gen_shared_moe_patterns import (K_DYN_MM, SHARED_OP, _weight_root, scope_gate, scope_group, scope_hidden,
+from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import K_ALIGN_KERNELS, K_SUM, _contig, _flat, _same
+from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import (K_DYN_MM, SHARED_OP, _weight_root, scope_gate, scope_group, scope_hidden,
                                                                  shared_expert)
 
 K_HASH_ROUTER = "topk_softplus_sqrt"

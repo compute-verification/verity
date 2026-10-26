@@ -1476,6 +1476,34 @@
       "paths": {
         "integrations/vllm/verity_vllm/check/kernel_identity.py": "integrations/vllm/verity_vllm/engine/kernel_identity.py"
       }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/engine/profiles/__init__.py": "integrations/vllm/verity_vllm/observe/fold/profiles/__init__.py",
+        "integrations/vllm/verity_vllm/engine/profiles/generic.py": "integrations/vllm/verity_vllm/observe/fold/profiles/generic.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_dense2_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_dense2_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_dense_gemma2_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_dense_gemma2_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_dense_softcap_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_dense_softcap_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_llama_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_llama_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_ln_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_ln_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_marlin_moe_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_marlin_moe_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_mhc_moe.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_mhc_moe.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_ov_easy_family.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_ov_easy_family.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_ov_moe_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_ov_moe_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_ov_sampling_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_ov_sampling_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/gen_shared_moe_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_shared_moe_patterns.py",
+        "integrations/vllm/verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py": "integrations/vllm/verity_vllm/observe/fold/profiles/vllm_d9105ea80_sm89_eager.py",
+        "integrations/vllm/verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager_qwen15.py": "integrations/vllm/verity_vllm/observe/fold/profiles/vllm_d9105ea80_sm89_eager_qwen15.py",
+        "integrations/vllm/verity_vllm/engine/profiles/admission_calibration.py": "integrations/vllm/verity_vllm/engine/profiles/admission_calibration.py",
+        "integrations/vllm/verity_vllm/engine/profiles/cases.py": "integrations/vllm/verity_vllm/engine/profiles/cases.py",
+        "integrations/vllm/verity_vllm/engine/profiles/coverage_roles.py": "integrations/vllm/verity_vllm/engine/profiles/coverage_roles.py",
+        "integrations/vllm/verity_vllm/engine/profiles/dense_generic.py": "integrations/vllm/verity_vllm/engine/profiles/dense_generic.py",
+        "integrations/vllm/verity_vllm/engine/profiles/devices.py": "integrations/vllm/verity_vllm/engine/profiles/devices.py",
+        "integrations/vllm/verity_vllm/engine/profiles/family_facts.py": "integrations/vllm/verity_vllm/engine/profiles/family_facts.py",
+        "integrations/vllm/verity_vllm/engine/profiles/int8_gemm_configs.py": "integrations/vllm/verity_vllm/engine/profiles/int8_gemm_configs.py",
+        "integrations/vllm/verity_vllm/engine/profiles/layer_classes.py": "integrations/vllm/verity_vllm/engine/profiles/layer_classes.py",
+        "integrations/vllm/verity_vllm/engine/profiles/transport.py": "integrations/vllm/verity_vllm/engine/profiles/transport.py"
+      }
     }
   ]
 }

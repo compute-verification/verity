@@ -26,7 +26,6 @@
     {"file": "verity_vllm/pipeline/workload.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "doc-date", "symbol": "dump_normalizer", "detail": "date"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "module-name", "symbol": "<module>", "detail": "m1_capture"},
-    {"file": "verity_vllm/engine/profiles/gen_dense_softcap_patterns.py", "kind": "doc-date", "symbol": "<module>", "detail": "date", "count": 2},
     {"file": "verity_vllm/program/frontend/rules/family.py", "kind": "def-name", "symbol": "<module>", "detail": "_serve_v3_binder"},
     {"file": "verity_vllm/program/frontend/rules/vllm_sampling.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "doc-round", "symbol": "TargetProfile.from_run_profile", "detail": "R1N"},
@@ -194,6 +193,7 @@
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_probe"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_profiler_start"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_profiler_stop"},
-    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_repo_modules"}
+    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_repo_modules"},
+    {"file": "verity_vllm/observe/fold/profiles/gen_dense_softcap_patterns.py", "kind": "doc-date", "symbol": "<module>", "detail": "date", "count": 2}
   ]
 }

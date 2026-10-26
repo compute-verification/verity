@@ -54,8 +54,9 @@ manifest, versions), `code_identity.py` (executed code objects; `kernel_identity
 `chunks.py` (chunk attribution, the run loop's `on_step`),
 `vllm_adapter.py` (workloads and request driving; the stages import the engine's names from it), `engine_driver.py`,
 `engine_profile.py`, `arrivals.py`, `static_schedule.py` (a `sampling.ignore_eos` run held to the schedule its declaration alone
-decides), `served_seed.py` (the public default seed a served request without one is sampled under), `rank_worker.py` (the TP rank worker extension), and `profiles/` (kappa: capture profiles and workload JSON; one generic
-constructor + a facts table; the adapter's fixed cases, `cases.py`).  Never: commit, decide what is required.
+decides), `served_seed.py` (the public default seed a served request without one is sampled under), and `profiles/` (the model
+facts: the families' facts table, HF configs, devices and workload JSON; the adapter's fixed cases, `cases.py`).  Never: commit,
+decide what is required.
 
 **`program/`** implements *Program*: Definitions (`registry/`, the registered library; importing it registers the on-demand
 primitive families through `verity.ml.circuits.codec.register_lazy_family`), lowering (`frontend/`: the torch frontend, `derive`, `rules/`
@@ -86,7 +87,8 @@ verification policy, commitment positions, requiredness, verdicts.
 `log.py` / `storage.py`, `contract.py` (the one observation contract), `triton_adapter.py`, `runtime_tree.py`, `capture.py`
 (the step observer and run header; `pinned.py` its host buffers), `kernel_trace.py` (a Kineto trace's device kernels, which the
 census and each TP rank read), and `fold/` (raw log -> Program: `fold.py`, `tree.py`, `memory.py`, `views.py`, `resolver.py`,
-`patterns/` (one module per kernel family, the TP collectives included), `patterns_prefix.py`).  Never: commit, decide what is
+`patterns/` (one module per kernel family, the TP collectives included), `patterns_prefix.py`, and `profiles/`, the κ profiles a
+Match folds with: one generic constructor over the model facts, and the pinned base modules).  Never: commit, decide what is
 required, name a model.
 
 **`acquire/`** implements *value acquisition*: `plan.py` (required values + correspondence -> acquisition plan), `install.py`,
@@ -384,7 +386,7 @@ A row's one config is its file `workloads/<row-id>.json`, schema `verity-vllm/wo
 checkpoint's repo (`model`) and role (`case`), an `engine` block (`config.RowEngine`: the checkpoint's full `revision`, the
 `vllm` commit, the engine `args`, the `env` that selects kernels, the declared `target`, and `reasons`: why the row sets a served
 switch away from vLLM's default), and the workload (requests, sampling, the sweep's parameters).  `verity-vllm workload` writes it.  The κ profile a Match folds with is the role's
-(`engine.profiles.generic.module_name`), never a field.  The stages' flags and variables override how a run goes, never the
+(`observe.fold.profiles.generic.module_name`), never a field.  The stages' flags and variables override how a run goes, never the
 file; `row run` writes what a run used, its effective config, to `<sweep dir>/<row>/effective_config.json`.  Every Commit reads back,
 on every rank, the switches that select its kernels (`engine/served.py`: batch invariance, DeepGEMM, the shared-experts stream,
 the FlashInfer sampler, the model runner, NCCL P2P, the custom all-reduce, eager and compilation modes, the attention backend and

@@ -20,14 +20,14 @@ from verity_vllm.program import model as analytic
 from verity_vllm.pipeline.report import workload_summary
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.patterns import GemmLaunch
-from verity_vllm.engine.profiles import gen_llama_patterns as GP
-from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
-from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as BASE
-from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager_qwen15 as Q15
+from verity_vllm.observe.fold.profiles import gen_llama_patterns as GP
+from verity_vllm.observe.fold.profiles import profile_for_case, profile_module_for_case
+from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as BASE
+from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager_qwen15 as Q15
 
-L = importlib.import_module("verity_vllm.engine.profiles.derived_LLAMA32_1B")
-Q = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN05")
-B7 = importlib.import_module("verity_vllm.engine.profiles.derived_B7")
+L = importlib.import_module("verity_vllm.observe.fold.profiles.derived_LLAMA32_1B")
+Q = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN05")
+B7 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_B7")
 from verity.ml.definitions.registry import b1
 
 REPO = Path(__file__).resolve().parents[2]
@@ -250,9 +250,9 @@ def _weights_intervals(C):
 
 
 def test_serve_family_is_serve_v4_for_a_tied_and_an_untied_config():
-    """Every dense profile's serving-family reference is the registered `Serve_v4` (BN by the FA2 rule, C without
-    BN).  An untied checkpoint (B7) has its own `lm_head` field after `cos_sin` in `b1.weights_type`; a tied one has none."""
-    from verity_vllm.engine.profiles import gen_ov_easy_family as F
+    """Every dense profile's serving-family reference is the registered `Serve_v4` (compare_structure's default: BN by the FA2 rule,
+    C without BN).  An untied checkpoint (B7) has its own `lm_head` field after `cos_sin` in `b1.weights_type`; a tied one has none."""
+    from verity_vllm.observe.fold.profiles import gen_ov_easy_family as F
     assert B7.SERVE_FAMILY is F.serve_family
     untied, tied = F.serve_family(B7.C), F.serve_family(L.C)
     assert untied.id == b1.ServeV4.bind(C={k: v for k, v in B7.C.items() if k != "BN"}, LP=32, STEPS=15, BN=64).id
@@ -267,7 +267,7 @@ def test_an_untied_serve_v4_differs_from_the_tied_binding_only_at_the_lm_head_op
     every operand) except that its 16 lm_head Gemm leaves read the `lm_head` field where the tied one reads `embed`
     (`b1.lm_head_of`)."""
     from verity_vllm.program.frontend.rules.family import _runs, expand_leaves
-    from verity_vllm.engine.profiles import gen_ov_easy_family as F
+    from verity_vllm.observe.fold.profiles import gen_ov_easy_family as F
     LP, STEPS = 4, 2                                           # small statics: the same construction, seconds on the laptop
     C = {k: v for k, v in B7.C.items() if k != "BN"}
     untied = F.serve_family(B7.C, LP=LP, STEPS=STEPS)

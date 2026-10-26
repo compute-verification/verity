@@ -15,11 +15,11 @@ import pytest
 from verity_vllm.program import model as analytic
 from verity_vllm.check.fold_compare import _f16_words_to_bf16, _layernorm_family_fields, _qkv_neox_permute
 from verity_vllm.observe.events import RunHeader
-from verity_vllm.engine.profiles import profile_module_for_case
-from verity_vllm.engine.profiles.gen_ln_patterns import (GeluErfPattern, LayerNormAtenPattern, ResidualAddPattern,
+from verity_vllm.observe.fold.profiles import profile_module_for_case
+from verity_vllm.observe.fold.profiles.gen_ln_patterns import (GeluErfPattern, LayerNormAtenPattern, ResidualAddPattern,
                                                      RotaryEmbeddingPartial)
 
-pythia = importlib.import_module("verity_vllm.engine.profiles.derived_PYTHIA160M")
+pythia = importlib.import_module("verity_vllm.observe.fold.profiles.derived_PYTHIA160M")
 from verity_vllm.observe.fold.patterns import BiasAdd, RotaryEmbedding
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import act, gelu_erf_table, layer_norm
@@ -64,7 +64,7 @@ def test_layernorm_family_weights_record():
     assert cs.n == 2048 and cs.elem.n == 16                       # partial rotary: the table is [MAX_POS, ROT]
     assert analytic.cos_sin_table(C).shape == (2048, 16)
     # RMSNorm families are unchanged
-    from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as base
+    from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as base
     assert analytic.weights_type(base.C).fields == b1.weights_type(base.C).fields or "lm_head" in dict(analytic.weights_type(base.C).fields)
 
 
