@@ -15,7 +15,9 @@ verifier's `PrBad` at `RLeakTap` (`window_le`), which `PeriodLeakAccepted`'s per
 
 The per-window conjunct of `PeriodLeakAccepted` reads neither the period's windows nor the network certifier device,
 so it is read off at the period of no windows (`ksLin_of_periodLeak`). Its count of the secrets is what the claim at
-`K` stands for, and the error doesn't use it.
+`K` stands for, and the error doesn't use it. The network certifier's trust (`trusted-host`) is the realization's
+`trusted`, which this proof doesn't read: `window_le` is the per-window bound its records give, and deriving it from
+`PeriodLeakAccepted` at the deployed period and `trusted` is the follow-up.
 -/
 
 namespace Accounting.SecurityProofs.Bridge
