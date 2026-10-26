@@ -91,7 +91,7 @@ def _split_path_strings(data: bytes) -> tuple[bytes, list[str]]:
 
 
 def cubin_section_detail(b: bytes) -> dict[str, dict[str, Any]]:
-    """[rev F-r16-09 (3)] For every NON-deny-listed section: sha256, size, sha256 of the bytes with absolute-path strings normalised
+    """For every NON-deny-listed section: sha256, size, sha256 of the bytes with absolute-path strings normalised
     (`residue_sha256`), and the path strings themselves -- so a cross-arm difference in device data can be DECODED from the record:
     residue equal + only path strings differ = per-process source path embedded in device data; anything else = not one specialization."""
     import hashlib
