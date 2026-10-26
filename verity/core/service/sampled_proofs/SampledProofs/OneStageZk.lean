@@ -191,12 +191,134 @@ def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := do
     | none => throw "the record draws an instance the public file's units.indices does not name"
   return units.qsort (· < ·)
 
-/-- One `flock-verify verify --zk` over the evidence's sessions on the blobs, as `one_stage.proofs.verify` runs it: each
-session's verdict (`flock-verify/<name>`, of record), with the units an accepted one proved. A refusal for what
-`proofs.verify` refuses: registered values read without the verifier's registered file, a file no blob holds, an
-accepted session naming another program than the partition object's, or proved units other than the evidence's. -/
-def verdicts (p : Own) (pub : String) (sessions : Array Session) (provedUnits? : Option (Array Nat))
-    (bs : Core.Blobs) : V (Array (String × Json)) := do
+/-- The pinned MUFU lookup tables the blobs hold, each found under its pinned SHA-512 as `flock-verify --archive` finds
+it. -/
+def tablesOf (bs : Core.Blobs) : List (String × ByteArray) :=
+  Flock.MUFU_TABLES.filterMap fun t =>
+    (bs.entries.find? fun (d, _) => Flock.hexOf d == t.sha512).map fun (_, b) => (t.name, b)
+
+/-- What `flock-verify verify --zk` reads besides a session's directory, as `verdicts` runs it: the statement's tags
+`tags`, the circuit and public files, one table, the lookup tables the blobs hold, and the verifier's own partition
+object and program. -/
+def inputsOf (tags : Flock.Tags) (p : Own) (circuitB pubB : ByteArray) (bs : Core.Blobs) : Flock.Witness.Inputs :=
+  { tags, circuitFile := circuitB, publicFile := pubB, count := 1, tables := tablesOf bs, partition := some p.partition,
+    program := some p.program }
+
+/-- The verifier's registered reads, as `verifyCmd` derives them from its registered file: its own ports, whether it
+holds every port's reads (`complete`), the reads it knows, and the registered parameters. -/
+structure Reads where
+  registered : Option (Array Flock.Registered.Port)
+  complete : Bool
+  known : Array (String × Array (Array Nat × ByteArray))
+  params : Array String
+
+def readsOf : Option Json → V Reads
+  | none => pure ⟨none, false, #[], #[]⟩
+  | some j => do
+    let own ← Flock.Registered.ofJson j
+    let known ← Flock.Registered.knownOf j
+    Flock.Registered.checkKnownAll own known
+    pure ⟨some own, ← Flock.Registered.completeOf j, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j),
+      ← Flock.Registered.paramsOf j⟩
+
+/-- The checks `verifyCmd` makes on a session's tables once they are set up, before `Zk.shapeOk`. -/
+def setupChecks (I : Flock.Witness.Inputs) (rd : Reads) (sts : Array Flock.Stmt) : V Unit := do
+  if rd.complete then sts.forM fun (st : Flock.Stmt) => Flock.Registered.checkComplete st.c (rd.registered.getD #[])
+  sts.forM fun (st : Flock.Stmt) => Flock.Registered.checkCover st.c I.program I.partition rd.registered rd.params
+  sts.forM fun (st : Flock.Stmt) => Flock.KnownRead.check st.c rd.known
+  Flock.RecSetup.checks none none I.tags I.tables sts I.circuitFile I.partition I.program rd.registered none none none
+  Flock.RecSetup.oneFull none sts
+
+/-- The checks `verifyCmd` makes on a session's tables after `Zk.shapeOk`. -/
+def recChecks (rd : Reads) (sts : Array Flock.Stmt) : V Unit := do
+  sts.forM (Flock.RecCoins.check · rd.registered (Flock.RecCoins.Source.atC3 none none none) (Flock.RecSetup.c3 none none))
+  sts.forM (Flock.RecVStar.checkPubRows · rd.registered none none)
+  sts.forM (Flock.RecVStar.checkTopRows · rd.registered none)
+  sts.forM (Flock.RecCoins.checkLink · rd.registered (Flock.RecCoins.Source.atC3 none none none) none)
+
+/-- The session `verifyCmd` sets up at `draw` on `I` (`buildSessionOf` under `--zk`'s tags and coins), with the checks it
+makes there: the tables' statements, their verifier-side setups, the partition finding and the registered openings. -/
+def setupAt (I : Flock.Witness.Inputs) (rd : Reads) (draw : Option Json) :
+    V (Flock.SessionSpec × Array Flock.Setup × Json × Json) :=
+  let tags := Flock.Witness.zkTags I
+  match (do
+      Flock.Registered.checkProgram I.program rd.registered.isSome
+      Flock.RecSetup.checkInner none none (pure (none, none))
+      let r ← buildSessionOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags I.circuitFile I.publicFile
+        (Flock.Witness.zkCoins I) I.tables I.count draw I.partition I.program rd.registered
+      setupChecks I rd r.2
+      r.2.forM Flock.Zk.shapeOk
+      recChecks rd r.2
+      pure r) with
+  | .ok (spec, sts) => (if draw.isSome then Flock.ProvedScope.drawLaw true tags false draw else .ok ()).map fun () =>
+      (spec, sts.map Flock.Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Json.null,
+        Flock.registeredOpenings sts rd.registered)
+  | .error e => Except.error s!"setup: {e}"
+
+/-- What `verdicts` carries from one session to the next: the coin-tree keys the earlier sessions used, the verdicts so
+far, the units the accepted ones proved, and whether every one accepted. -/
+structure Run where
+  coinKeys : Array String
+  out : Array (String × Json)
+  proved : Array Nat
+  all : Bool
+
+/-- One session's `flock-verify verify --zk` on the blobs, after the sessions `r` holds: set up at its record's own draw
+(`setupAt`), its rep files the blobs its `reps` name, its coin-tree key fresh, `Zk.verify` and the checks `verifyCmd`
+makes after it. Its verdict is pushed (`flock-verify/<name>`, of record), with the units it proved when it accepted. A
+refusal when its record is in no blob or not UTF-8, or it accepted naming another program than the partition object's
+(`programSha` against `want`). -/
+def step (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope : V Unit) (programSha : Option String)
+    (want : Json) (r : Run) (s : Session) : V Run := do
+  let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
+    | throw s!"session {s.name}'s record is not UTF-8"
+  let draw := Flock.Witness.recordDraw record
+  let st := setupAt I rd draw
+  let files : V (Array ByteArray) := do
+    let (spec, _, _) ← st
+    spec.repStreams.mapM fun (_, _, w) => do
+      let n := s!"{w.replace "/" "."}.bin"
+      let some (_, d) := s.reps.find? (·.1 == n) | throw s!"session files: the session names no rep file {n}"
+      (bs.get d s!"session files: {n}")
+  let coinKey : Option String := match st with
+    | .ok (spec, _, _) =>
+      if spec.coinTree.isNone then none
+      else (Json.parse record).toOption.bind fun j =>
+        (j.getObjVal? "coin_tree").toOption.bind fun ct => (ct.getObjValAs? String "key").toOption
+    | .error _ => none
+  let verdict : V Unit := do
+    let proofs ← files
+    if let some k := coinKey then Flock.CoinTree.checkFresh r.coinKeys k
+    let (spec, tabs, _) ← st
+    Flock.Zk.verify spec tabs record proofs
+    scope
+    Flock.ProvedScope.sizesOk true (tabs.map (·.m))
+    if draw.isNone then Flock.ProvedScope.drawLaw true (Flock.Witness.zkTags I) false draw
+    Flock.RecSetup.fullDraw none false draw record
+    Flock.RecSetup.innerDrawn none
+    Flock.ProvedScope.programHeld I.program
+    Flock.RecordText.check record
+  let coinKeys := match coinKey with | some k => r.coinKeys.push k | none => r.coinKeys
+  let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
+  if ok && (programSha.map Json.str) != some want then
+    throw s!"session {s.name}'s verdict names program {programSha.getD "none"}, not the partition object's {want.compress}"
+  let units ← if ok then provedUnits I.publicFile record else pure #[]
+  let (part, opened) := match st with | .ok (_, _, p, o) => (p, o) | .error _ => (Json.null, Json.null)
+  pure { coinKeys, all := r.all && ok, proved := r.proved ++ units,
+         out := r.out.push (s!"flock-verify/{s.name}", Json.mkObj ([("accepted", Json.bool ok),
+           ("of_record", Json.bool true), ("session", Json.str s.name), ("why", Json.str why), ("units", natsJson units)] ++
+           (if part.isNull then [] else [("partition", part)]) ++
+           (match programSha with | some h => [("program_sha512", Json.str h)] | none => []) ++
+           (match rd.registered with | some r => [("registered", Flock.Registered.finding r)] | none => []) ++
+           (if opened.isNull then [] else [("openings", opened)]))) }
+
+/-- One `flock-verify verify --zk` over the evidence's sessions on the blobs, as `one_stage.proofs.verify` runs it, each
+session set up at its own record's draw: every session's verdict, the units the accepted ones proved and whether all
+accepted. A refusal for what `proofs.verify` refuses: registered values read without the verifier's registered file, a
+file no blob holds, an accepted session naming another program than the partition object's, or proved units other than
+the evidence's. -/
+def run (p : Own) (pub : String) (sessions : Array Session) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) :
+    V Run := do
   let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
   if tags0.plainLeaves then throw s!"{tags0.name}: a statement with plain SHA-512 leaves: --zk's hiding needs hm96 leaves"
   if p.registered.isNone && readsRegistered p.programJ then
@@ -204,109 +326,32 @@ def verdicts (p : Own) (pub : String) (sessions : Array Session) (provedUnits? :
       "verifier holds no registered reads: verify with its own registered file")
   let circuitB ← bs.get p.circuit "circuit"
   let pubB ← bs.get pub "public file"
-  let tables := Flock.MUFU_TABLES.filterMap fun t =>
-    (bs.entries.find? fun (d, _) => Flock.hexOf d == t.sha512).map fun (_, b) => (t.name, b)
-  let count := 1
-  let coins := Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames count))
-  let tags := Flock.Zk.tags (tags0.withCoins coins) (Flock.Zk.maskLogOf circuitB) count
-  let (registered, complete, known, regParams) ← match p.registered with
-    | none => pure (none, false, #[], #[])
-    | some j => do
-      let own ← Flock.Registered.ofJson j
-      let known ← Flock.Registered.knownOf j
-      Flock.Registered.checkKnownAll own known
-      pure (some own, ← Flock.Registered.completeOf j, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j),
-        ← Flock.Registered.paramsOf j)
-  let partition := some p.partition
-  let program := some p.program
-  let parsed := Flock.ProvedScope.circuitOf tags circuitB tables
-  let scope := Flock.ProvedScope.checkOf parsed tags true pubB count false registered.isSome
-  let setupOf := fun (draw : Option Json) =>
-    match (do
-        Flock.Registered.checkProgram program registered.isSome
-        Flock.RecSetup.checkInner none none (pure (none, none))
-        let r ← buildSessionOf parsed tags circuitB pubB coins tables count draw partition program registered
-        if complete then r.2.forM fun (st : Flock.Stmt) => Flock.Registered.checkComplete st.c (registered.getD #[])
-        r.2.forM fun (st : Flock.Stmt) => Flock.Registered.checkCover st.c program partition registered regParams
-        r.2.forM fun (st : Flock.Stmt) => Flock.KnownRead.check st.c known
-        Flock.RecSetup.checks none none tags0 tables r.2 circuitB partition program registered none none none
-        Flock.RecSetup.oneFull none r.2
-        r.2.forM Flock.Zk.shapeOk
-        r.2.forM (Flock.RecCoins.check · registered (Flock.RecCoins.Source.atC3 none none none)
-          (Flock.RecSetup.c3 none none))
-        r.2.forM (Flock.RecVStar.checkPubRows · registered none none)
-        r.2.forM (Flock.RecVStar.checkTopRows · registered none)
-        r.2.forM (Flock.RecCoins.checkLink · registered (Flock.RecCoins.Source.atC3 none none none) none)
-        pure r) with
-    | .ok (spec, sts) => (if draw.isSome then Flock.ProvedScope.drawLaw true tags false draw else .ok ()).map fun () =>
-        (spec, sts.map Flock.Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Json.null,
-          Flock.registeredOpenings sts registered)
-    | .error e => Except.error s!"setup: {e}"
-  let programSha := programDigest p.program
-  let want := getD p.partition "program"
-  let mut setups : Array (Option String × V (Flock.SessionSpec × Array Flock.Setup × Json × Json)) := #[]
-  let mut coinKeys : Array String := #[]
-  let mut out : Array (String × Json) := #[]
-  let mut proved : Array Nat := #[]
-  let mut all := true
-  for s in sessions do
-    let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
-      | throw s!"session {s.name}'s record is not UTF-8"
-    let draw := Flock.Witness.recordDraw record
-    let key := draw.map fun d => (Flock.canon d).toOption.getD ""
-    let mut st : V (Flock.SessionSpec × Array Flock.Setup × Json × Json) := .error "setup: none"
-    match setups.find? (·.1 == key) with
-    | some (_, x) => st := x
-    | none =>
-      st := setupOf draw
-      setups := setups.push (key, st)
-    let files : V (Array ByteArray) := do
-      let (spec, _, _) ← st
-      spec.repStreams.mapM fun (_, _, w) => do
-        let n := s!"{w.replace "/" "."}.bin"
-        let some (_, d) := s.reps.find? (·.1 == n) | throw s!"session files: the session names no rep file {n}"
-        (bs.get d s!"session files: {n}")
-    let coinKey : Option String := match st with
-      | .ok (spec, _, _) =>
-        if spec.coinTree.isNone then none
-        else (Json.parse record).toOption.bind fun j =>
-          (j.getObjVal? "coin_tree").toOption.bind fun ct => (ct.getObjValAs? String "key").toOption
-      | .error _ => none
-    let verdict : V Unit := do
-      let proofs ← files
-      if let some k := coinKey then Flock.CoinTree.checkFresh coinKeys k
-      let (spec, tabs, _) ← st
-      Flock.Zk.verify spec tabs record proofs
-      scope
-      Flock.ProvedScope.sizesOk true (tabs.map (·.m))
-      if draw.isNone then Flock.ProvedScope.drawLaw true tags false draw
-      Flock.RecSetup.fullDraw none false draw record
-      Flock.RecSetup.innerDrawn none
-      Flock.ProvedScope.programHeld program
-      Flock.RecordText.check record
-    if let some k := coinKey then coinKeys := coinKeys.push k
-    let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
-    all := all && ok
-    if ok && (programSha.map Json.str) != some want then
-      throw s!"session {s.name}'s verdict names program {programSha.getD "none"}, not the partition object's {want.compress}"
-    let units ← if ok then provedUnits pubB record else pure #[]
-    proved := proved ++ units
-    let (part, opened) := match st with | .ok (_, _, p, o) => (p, o) | .error _ => (Json.null, Json.null)
-    out := out.push (s!"flock-verify/{s.name}", Json.mkObj ([("accepted", Json.bool ok), ("of_record", Json.bool true),
-      ("session", Json.str s.name), ("why", Json.str why), ("units", natsJson units)] ++
-      (if part.isNull then [] else [("partition", part)]) ++
-      (match programSha with | some h => [("program_sha512", Json.str h)] | none => []) ++
-      (match registered with | some r => [("registered", Flock.Registered.finding r)] | none => []) ++
-      (if opened.isNull then [] else [("openings", opened)])))
+  let I := inputsOf tags0 p circuitB pubB bs
+  let rd ← readsOf p.registered
+  let tags := Flock.Witness.zkTags I
+  let scope := Flock.ProvedScope.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags true pubB I.count
+    false rd.registered.isSome
+  let r ← sessions.foldlM (step I rd bs scope (programDigest p.program) (getD p.partition "program"))
+    ⟨#[], #[], #[], true⟩
   if let some want := provedUnits? then
-    if all && proved.qsort (· < ·) != want then throw "the units the sessions proved are not the evidence's proved_units"
-  return out
+    if r.all && r.proved.qsort (· < ·) != want then throw "the units the sessions proved are not the evidence's proved_units"
+  return r
 
+/-- The sessions' verdicts in order (`run`'s). -/
+def verdicts (p : Own) (pub : String) (sessions : Array Session) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) :
+    V (Array (String × Json)) :=
+  (·.out) <$> run p pub sessions provedUnits? bs
+
+/-- v1's check on the computed verdicts. v1 accepts only verdicts that all accepted (`VerdictsAccept`); the run's own
+`all` says it again, so an acceptance reads the run rather than the verdicts' JSON. -/
 def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
-  match verdicts p.own e.pub e.sessions (some e.base.provedUnits) bs with
+  match run p.own e.pub e.sessions (some e.base.provedUnits) bs with
   | .error err => .reject s!"proofs: {err}"
-  | .ok vs => OneStage.check p.base c { e.base with verdicts := vs }
+  | .ok r =>
+    match OneStage.check p.base c { e.base with verdicts := r.out } with
+    | .accept pub prof => if r.all then .accept pub prof else .reject "proofs: a session's verifier did not accept"
+    | o => o
 
 def protocol : Core.BlobProtocol where
   id := PROTOCOL
