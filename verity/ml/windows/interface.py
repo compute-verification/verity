@@ -42,14 +42,20 @@ public positions (`Read`), a registered table's root or domain id (`TableRead`),
 (`Opening`), and the system's ingress at its step (`Ingress`). Every input row is wired, one of these, or free, and no row
 is two of them (`check_inputs`); `input_count` counts the free rows' bits from the record alone, at the size of its
 description, a registered row free unless the verifier pinned its parameter's root before the run. The window commits
-the first kind (`Window`'s ``registered``): a member whose units read a registered parameter is a shared-row member, each
-read port a table of the registered rows its units read (`member_reads`), committed under the registered value's salts
-(core's ``one_stage.registered``), so each row's public string is the registered one, and its header names each row's
-position and path to the value's root; the verifier's ``--registered`` file of the member comes from the record and the
-root it pinned alone (`registered_reads`), and Lean's registered reads open each row against it. Cuts, tables, roots,
-openings and ingress are refused by the committer until it commits them. A `Read` may also name an output row ``o<j>``:
-that row's words are the parameter's leaves at the pattern's positions (a value a server sends out, its response or a
-wire to another server). It fills no input row, and wires may read the row too.
+each as a registered read at public positions (`Window`'s ``registered``, `committed_reads`): a member whose units read a
+registered value is a shared-row member, each read port a table of the registered rows its units read, committed under
+the registered value's salts (core's ``one_stage.registered``), so each row's public string is the registered one, and
+its header names each row's position and path to the value's root; the verifier's ``--registered`` file of the member
+comes from the record and the roots it pinned alone (`registered_reads`), and Lean's registered reads open each row
+against them. A table is a registered parameter of its own, every row of it (CMP-164's default); a table read takes a
+supplied value (`supplied`), one row the verifier fills from its pin of the table's parameter, the root or the domain id,
+under public salts; an opening's verdict reads the table's supplied 1, so a verdict of 0 opens no root, and the
+opening's row, salt and path are its units' own values, which the verdict holds to the pinned root inside the proof at
+the hidden key. An ingress at step s reads row ``bucket + s - 1`` of the network certifier's scan state (`INGRESS`,
+NET-89's default), ``bucket`` the window's first bucket in the certifier's scan, the row committed under the certifier's
+salt and pinned by the root it signs. A cut registered read is refused by the committer until it commits one. A `Read`
+may also name an output row ``o<j>``: that row's words are the parameter's leaves at the pattern's positions (a value a
+server sends out, its response or a wire to another server). It fills no input row, and wires may read the row too.
 
 The circuit's blocks (`Blocks`, ``verity/blocks/v1``, the record's ``blocks``) are stated per template and step, never per
 unit: ``proof``, the partition into proof units (its units and partition digest, which the verifier holds to the record's,
@@ -99,6 +105,11 @@ BLOCKS = "verity/blocks/v1"
 AXES = ("slot", "step", "-")
 #: network accounting's keys of the blocks, carried as given for its check; the members read the servers' unit ranges
 NETWORK = ("server", "server_time", "transfers")
+#: what a table's supplied values hold (`supplied`): its root, its domain id, and 1, what an opening's verdict reads
+SUPPLIED = ("root", "domain", "opened")
+#: the network certifier's scan state (network accounting's `ingress_scan`, NET-89): its row t the state after the scan's
+#: bucket t, which the certifier commits and the verifier pins by the root it signs (#4441)
+INGRESS = "verity/certifier/scan-state/v1"
 #: the advice tree's binding tag (`advice_tree_binding`): its bytes are its first records', a later rename
 ADVICE_SCHEME = "verity-vllm/advice-windows/advice/v1"
 #: the advice's bytes as rows of this many bits, the last zero-padded (`advice_rows`)
@@ -517,7 +528,8 @@ class Registered:
 @dataclass(frozen=True)
 class Ingress:
     """Template ``reader``'s units ``[at, at + units)`` read their ``port`` whole as the system's ingress at step ``step``
-    (a request's slot, its prompt's ids and length, at its Program's anchor)."""
+    (a request's slot, its prompt's ids and length, at its Program's anchor): the network certifier's scan state's row
+    ``bucket + step - 1``, the state after the bucket before it (`committed_reads`)."""
     reader: str
     port: str
     at: int
@@ -644,14 +656,73 @@ def check_inputs(templates: Mapping[str, tuple[Layout, int]], cuts: Mapping[str,
     _disjoint(rects, "inputs")
 
 
-def _committable(registered: Registered | None, ingress: Sequence[Ingress], what: str) -> None:
-    """Refuse (ValueError) declarations the committer doesn't commit yet: a window commits registered reads at public
-    positions, whole and uncut, and nothing else of them."""
-    if ingress or (registered is not None and (registered.tables or registered.roots or registered.openings
-                                               or any(r.cut != (0, 1) for r in registered.reads))):
-        raise ValueError(f"{what}: a window commits uncut registered reads at public positions (`Read`); its tables, table "
-                         "reads, openings, cut reads and ingress are recorded by their description until the committer "
-                         "commits them")
+def _committable(registered: Registered | None, what: str) -> None:
+    """Refuse (ValueError) declarations the committer doesn't commit: a cut registered read, and a table that isn't its
+    parameter's every row, since its reads take its parameter's root and domain (`supplied`)."""
+    reg = registered or Registered({})
+    if any(r.cut != (0, 1) for r in reg.reads):
+        raise ValueError(f"{what}: a window commits uncut registered reads (`Read`); its cut reads are recorded by their "
+                         "description until the committer commits them")
+    if bad := [t.doc() for t in reg.tables if t.offset or t.words * t.rows != reg.params[t.param]]:
+        raise ValueError(f"{what}: tables {bad} are not their parameters' every row; a table's reads take its parameter's "
+                         "root, so a table is a registered parameter of its own")
+
+
+def digest_words(d: bytes) -> list[int]:
+    """A 64-byte digest as a `Digest` port's 32 words (`gates.rowleaf.digest_bits`: its eight words big-endian, each least
+    significant bit first, so each word's little-endian bytes)."""
+    if len(d) != 64:
+        raise ValueError(f"a digest is 64 bytes, not {len(d)}")
+    return np.frombuffer(d, ">u8").astype("<u8").view("<u2").tolist()
+
+
+def supplied_param(table: Table, of: str) -> str:
+    """The supplied value a read of ``table``'s ``of`` (`SUPPLIED`) takes: ``<its parameter>/<of>``."""
+    return f"{table.param}/{of}"
+
+
+def committed_reads(rows: Mapping[str, Mapping[str, int]], registered: Registered | None, ingress: Sequence[Ingress],
+                    bucket: int | None = None) -> tuple[Read, ...]:
+    """Every registered read a window commits (`Window.close`) and its verifier opens (`registered_reads`): the circuit's
+    reads (`Read`); each table read, of its table's supplied root or domain id; each opening's verdict, of its table's
+    supplied 1 (an output row, so a verdict of 0 opens no root: `gates.embedding`'s ``ok``); and each ingress at step s,
+    of the network certifier's scan state (`INGRESS`) at row ``bucket + s - 1``, the state the Programs of a boundary at
+    step s read, ``bucket`` the window's first bucket in the certifier's scan (`Window.bucket`). A table read, verdict or
+    ingress reads one row for all its units; an opening's other ports are its units' own rows, which its verdict holds to
+    the table's pinned root inside the proof, its key hidden. ``rows``: by template, its input rows' words. With no
+    ``bucket`` an ingress reads row 0: the members read which units a read covers and how many rows it reads, never which
+    (`_members`)."""
+    reg = registered or Registered({})
+    tables = {t.name: t for t in reg.tables}
+    out = list(reg.reads)
+    out += [Read(r.reader, r.port, supplied_param(tables[r.table], r.of), r.at, (r.units,), 0, (0,)) for r in reg.roots]
+    out += [Read(o.reader, o.verdict, supplied_param(tables[o.table], "opened"), o.at, (o.units,), 0, (0,))
+            for o in reg.openings]
+    for g in ingress:
+        row, words = 0 if bucket is None else bucket + g.step - 1, rows[g.reader].get(g.port)
+        if words is None or row < 0:
+            raise ValueError(f"ingress {g.doc()} at the window's first bucket {bucket}: row {row} of the scan state, read "
+                             "whole by an uncut port; a row before its first or a cut port is refused")
+        out.append(Read(g.reader, g.port, INGRESS, g.at, (g.units,), row * words, (0,)))
+    return tuple(out)
+
+
+def supplied(registered: Registered | None, entries: Mapping[str, Mapping[str, Any]], program: str, *,
+             module: Any) -> dict[str, Any]:
+    """The values a window's table reads and verdicts read (`committed_reads`), by name, each one row filled from the entry
+    of its table's parameter alone (``entries``, core's ``Registered.entry()`` by parameter, as the verifier pinned it):
+    the root's and the domain id's 64 bytes as a `Digest` port's 32 words (`digest_words`) and 1 as one word, each
+    committed as core's ``registered.Registered`` (``module``, core's ``one_stage.registered`` as the caller passes it)
+    under ``program`` (the window's partition digest) at its public salts (``supplied_salts``), so the prover and the
+    verifier make the same value and the prover chooses none of it. A table whose parameter has no entry has none."""
+    out = {}
+    for t in (registered.tables if registered is not None else ()):
+        if (e := entries.get(t.param)) is None:
+            continue
+        for of, row in zip(SUPPLIED, (digest_words(bytes.fromhex(e["root"])), digest_words(bytes.fromhex(e["domain"])), [1])):
+            name = supplied_param(t, of)
+            out[name] = module.Registered.commit(program, name, [row], module.supplied_salts(program, name, 1), schema=V2)
+    return out
 
 
 def _cuts(cuts: Any) -> dict[str, dict[str, int]]:
@@ -886,6 +957,11 @@ class Circuit:
     def reads(self) -> tuple[Read, ...]:
         return self.registered.reads if self.registered is not None else ()
 
+    @property
+    def port_words(self) -> dict[str, dict[str, int]]:
+        """Each template's input rows' words, by descriptor id and port (`committed_reads`)."""
+        return {tid: dict(lay.rows) for tid, (lay, _) in self.layouts.items()}
+
     def declared(self) -> dict[str, Any]:
         """The record's fields for its cuts, registered reads and ingress, each only when the circuit has one, so a circuit
         without them records as before."""
@@ -914,9 +990,10 @@ def members(circuit: Circuit, cap: int) -> tuple[CS.Member, ...]:
     """The window's members: each template's units in the partition's order, cut where a wire's reader units begin or end and
     where a server block's units begin or end (`Circuit.server_ends`), in chunks ``<descriptor id>/c<j>`` of at most ``cap``
     (one statement each), on the template's bit rows under its cuts, each row wired by the circuit's wire that covers it,
-    and each port a registered read fills a table of the rows it reads."""
+    and each port a registered read fills a table of the rows it reads (`committed_reads`)."""
     program, query = circuit.program()
-    return _members(circuit.templates, program, query, cap, circuit.wires, circuit.cuts, circuit.server_ends(), circuit.reads)
+    return _members(circuit.templates, program, query, cap, circuit.wires, circuit.cuts, circuit.server_ends(),
+                    committed_reads(circuit.port_words, circuit.registered, circuit.ingress))
 
 
 def _reads_of(tid: str, lo: int, n: int, reads: Sequence[Read], rows: Mapping[str, int]) -> dict[str, tuple[str, list[int], np.ndarray]]:
@@ -939,11 +1016,6 @@ def _reads_of(tid: str, lo: int, n: int, reads: Sequence[Read], rows: Mapping[st
                         dtype=np.int64)
         out[r.port] = (r.param, list(order), refs)
     return out
-
-
-def member_reads(circuit: Circuit, m: CS.Member, base: int) -> dict[str, tuple[str, list[int], np.ndarray]]:
-    """Member ``m``'s registered reads (`_reads_of`), its template's first unit the global index ``base``."""
-    return _reads_of(m.template, m.base - base, m.n, circuit.reads, dict(m.rows + m.outs))
 
 
 def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[str, Any], cap: int,
@@ -1224,20 +1296,29 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
 
 
 def registered_reads(doc: Mapping[str, Any], w: CS.Window, pins: Mapping[str, Mapping[str, Any]], *,
-                     registered: Any) -> dict[str, dict[str, Any]]:
+                     registered: Any, bucket: int | None = None) -> dict[str, dict[str, Any]]:
     """The Lean verifier's ``--registered`` file of each member reading a registered parameter (``registered-reads/v1``, in
     the format of ``registered``, core's ``one_stage.registered``, by member key), from the stated record ``doc`` and its
     window ``w`` (`window_of_record`'s) alone, but for each parameter's entry from ``pins`` (``{param: entry}``: the value's
-    ``root``, ``leaves``, ``words``, ``word_bits`` and ``domain`` as the verifier pinned them before the run): each read port
-    reads its parameter's rows in the port's row format, and unit ``m.base + i`` the row its ``i``-th unit reads (`_reads_of`).
-    Refused (ValueError) where a read's parameter has no pin, or a pin's rows are not the port's."""
-    _wires, _cuts_, reg, _ingress = declarations(doc)
-    if reg is None or not reg.reads:
+    ``root``, ``leaves``, ``words``, ``word_bits`` and ``domain`` as the verifier pinned them before the run; `INGRESS`'s
+    from the network certifier's signed root): each read port (`committed_reads`) reads its parameter's rows in the port's
+    row format, and unit ``m.base + i`` the row its ``i``-th unit reads (`_reads_of`). A table's supplied values the
+    verifier makes itself from its pin of the table's parameter (`supplied`, under ``w``'s partition digest), and an
+    ingress reads the scan state from ``bucket``, the window's first bucket in the certifier's scan as the verifier holds
+    it. Refused (ValueError) where a read's parameter has no pin, a pin's rows are not the port's, or the record has an
+    ingress and no ``bucket`` is given."""
+    _wires, _cuts_, reg, ingress = declarations(doc)
+    if ingress and bucket is None:
+        raise ValueError("an ingress reads the network certifier's scan state from the window's first bucket in its scan; "
+                         "give the bucket")
+    reads = committed_reads({m.template: dict(m.rows) for m in w.members}, reg, ingress, bucket)
+    if not reads:
         return {}
+    pins = {**pins, **{v: x.entry() for v, x in supplied(reg, pins, w.partition_digest, module=registered).items()}}
     base = {t: b for _k, t, b, _n in CS.template_partition(w.program, w.query).ranges}
     out: dict[str, dict[str, Any]] = {}
     for m in w.members:
-        got = _reads_of(m.template, m.base - base[m.template], m.n, reg.reads, dict(m.rows + m.outs))
+        got = _reads_of(m.template, m.base - base[m.template], m.n, reads, dict(m.rows + m.outs))
         if not got:
             continue
         ports = {}
@@ -1288,7 +1369,8 @@ def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Ca
         check_wires(lays, wires, cuts)
         check_inputs(lays, cuts, wires, registered, ingress)
         servers = Blocks.of(doc["blocks"], {t: n for t, (_, n) in lays.items()}, doc["partition"])[1] if "blocks" in doc else {}
-        ms = _members(defs, program, query, doc["cap"], wires, cuts, servers, registered.reads if registered is not None else ())
+        ms = _members(defs, program, query, doc["cap"], wires, cuts, servers,
+                      committed_reads({t: dict(lay.rows) for t, (lay, _) in lays.items()}, registered, ingress))
     else:
         ms = tuple(CS.Member(m["template"], tuple(map(tuple, m["rows"])), tuple(map(tuple, m["outs"])), m["n"], m["base"],
                              tuple(map(tuple, m["tables"])), m["name"], tuple(map(tuple, m["schemas"])), tuple(m["link_units"]),
@@ -1333,10 +1415,12 @@ class Window:
     """One window of an integration's values: ``circuit``'s units under ``run`` (the record's run root, hex) and ``law`` (the
     proof service's law of the window, as its draw parses it), in members of at most ``cap`` units, with ``advice`` its
     compiler and advice (`advice_binding`) when the circuit depends on run-time choices, and ``registered`` the values its
-    registered reads read (`Read`), by parameter: each committed once, before the run, as core's
-    ``one_stage.registered.Registered`` (rows of the reading port's words, its salts the prover's), which the verifier
-    pinned by its entry. Each template's units are `record`ed in order, then `close` commits them and `write` writes and
-    registers the window."""
+    registered reads read (`committed_reads`), by parameter: each committed once, before the run, as core's
+    ``one_stage.registered.Registered`` (rows of the reading port's words, its salts the prover's; a table's in its
+    opening's row format), which the verifier pinned by its entry; its tables' supplied values (`supply`); and the network
+    certifier's scan state (`INGRESS`, its rows and salts from the certifier), which its ingress reads from ``bucket``, the
+    window's first bucket in the certifier's scan. Each template's units are `record`ed in order, then `close` commits them
+    and `write` writes and registers the window."""
     circuit: Circuit
     run: str
     law: Mapping[str, Any]
@@ -1344,12 +1428,13 @@ class Window:
     advice: Mapping[str, Any] | None = None
     registered: Mapping[str, Any] | None = None
     work_table: Mapping[str, Any] | None = None
+    bucket: int | None = None
     window: CS.Window = field(init=False)
     _recorded: dict[str, list[_Recorded]] = field(init=False, default_factory=dict)
     _entries: dict[str, dict[str, Any]] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
-        _committable(self.circuit.registered, self.circuit.ingress, self.circuit.name)
+        _committable(self.circuit.registered, self.circuit.name)
         params = self.circuit.registered.params if self.circuit.registered is not None else {}
         for r in self.circuit.reads:
             v = (self.registered or {}).get(r.param)
@@ -1363,6 +1448,14 @@ class Window:
                                 work_table=None if self.work_table is None else dict(self.work_table))
         if self.advice is not None:
             self.advice = advice_binding(self.advice["compiler"], self.advice["advice"]["root"], self.advice["advice"]["bits"])
+
+    def supply(self, module: Any) -> None:
+        """Add its tables' supplied values (`supplied`) to ``registered``, from its tables' parameters' committed values (each
+        with core's ``entry()``) under the window's partition digest, ``module`` core's ``one_stage.registered`` as the
+        caller passes it."""
+        reg = dict(self.registered or {})
+        entries = {p: v.entry() for p, v in reg.items() if p in {t.param for t in (self.circuit.registered or Registered({})).tables}}
+        self.registered = {**reg, **supplied(self.circuit.registered, entries, self.window.partition_digest, module=module)}
 
     def count(self, tid: str) -> int:
         """Template ``tid``'s units recorded so far."""
@@ -1410,6 +1503,10 @@ class Window:
                    if self.count(tid) != n}
         if missing:
             raise ValueError(f"units recorded / in the circuit by template: {missing}; a window closes over all of them")
+        if self.circuit.ingress and self.bucket is None:
+            raise ValueError(f"{self.circuit.name}: an ingress reads the network certifier's scan state from the window's first "
+                             "bucket in its scan; give its bucket")
+        committed = committed_reads(self.circuit.port_words, self.circuit.registered, self.circuit.ingress, self.bucket)
         base, cat = self._bases(), {}
         data, salts_of, self._entries = [], {}, {}
         for m in self.window.members:
@@ -1425,12 +1522,16 @@ class Window:
                     # row j of a port cut k ways is its outer elements [j·n/k, (j+1)·n/k): its words' j-th k-th (`Layout.cut`)
                     d["rows"][row_name(p, j, k)] = (ports[g][lo:lo + m.n] if k == 1 else
                                                     np.ascontiguousarray(ports[g][lo:lo + m.n, j * w // k:(j + 1) * w // k]))
-            reads = member_reads(self.circuit, m, base[m.template])
+            reads = _reads_of(m.template, m.base - base[m.template], m.n, committed, dict(m.rows + m.outs))
             if reads:
                 d["refs"] = np.stack([reads[p][2] if p in reads else np.arange(m.n) for p, _ in m.rows], axis=1)
                 for p, (param, positions, refs) in reads.items():
                     if (v := (self.registered or {}).get(param)) is None:
-                        raise ValueError(f"{m.key} {p} reads registered parameter {param!r}: give its committed value")
+                        raise ValueError(f"{m.key} {p} reads registered parameter {param!r}: give its committed value"
+                                         + (" (`Window.supply`)" if param.rsplit("/", 1)[-1] in SUPPLIED else ""))
+                    if v.words != dict(m.rows + m.outs)[p]:
+                        raise ValueError(f"{m.key} {p} reads {param!r}, committed as rows of {v.words} words, not the port's "
+                                         f"{dict(m.rows + m.outs)[p]}")
                     if p in d["outs"]:
                         # an output row stays the unit's own, committed under the value's salt, so a row other than
                         # the value's opens no pinned root

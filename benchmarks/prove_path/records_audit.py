@@ -563,7 +563,7 @@ def audit(a: argparse.Namespace) -> int:
         if twice := sorted((set(ties) | set(untied)) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the window's own")
         pins |= ties | untied
-        reads = IF.registered_reads(doc, mine, pins, registered=REG)
+        reads = IF.registered_reads(doc, mine, pins, registered=REG, bucket=a.bucket)
     except (ValueError, KeyError, TypeError) as e:
         row = {"ok": False, "refused": {"records": f"{type(e).__name__}: {e}"}, "seconds": round(time.time() - t0, 1)}
         (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True))
@@ -706,6 +706,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--main", help="with --challenger: the verifier's copy of main's first-parent history")
     p.add_argument("--registered", help="the registered values' entries the verifier pinned before the run, {program, "
                    "values} (`pinned`), for a circuit that reads them")
+    p.add_argument("--bucket", type=int, help="the window's first bucket in the network certifier's scan, as the verifier "
+                   "holds it, for a circuit with an ingress (`interface.committed_reads`)")
     p = sub.add_parser("count", help="a stated circuit record's leak count from its description alone (declared_count)")
     p.add_argument("--circuit", required=True, help="the circuit record (circuit.json), or its description")
     p.add_argument("--bits", type=int, required=True, help="the advice's registered length in bits, the charge")
