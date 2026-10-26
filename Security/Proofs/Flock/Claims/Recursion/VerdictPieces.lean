@@ -14,11 +14,11 @@ states the `rec-residuals` pieces' half.
   among the split's).
 * **The composition at the shares** (`decompB_lastSplitP_shares`): `decompB_lastSplitP` with `hlow` given as the two
   shares, so the pieces' share can be proved apart from the reading, the salts and the rows.
-* **The `rec-residuals` pieces' share** (`ResPiece`, `ResZero`, `resHolds`, `resPieces_computes`): a piece keyed by a
-  copy `(t, o, g, u)` of a residuals table holds where its group's residuals vanish at the values the opened messages
-  give (`elemAt`) and the verifier's values at the coins (`vvAt`). At an `.inner` part, `partAccepts_resZero` gives it
-  from two hypotheses: check 5's tie at those verifier values (`ResTie`, waiting on the vcalls ask,
-  `note:20261024T2340Z-draft-vcalls-ask`), and the layout fact `hcopy`: each piece `ownQ` gives the part is one of its
+* **The `rec-residuals` pieces' share** (`ResPiece`, `ResZero`, `resHolds`, `resPieces_computes`): a piece keyed by its
+  group and a copy of its part's residuals table, `(jj, o, g, u)`, holds where its group's residuals vanish at the
+  values the opened messages give (`elemAt`) and the verifier's values at the coins (`vvAt`). At an `.inner` part,
+  `partAccepts_resZero` gives it from two hypotheses: check 5's tie at those verifier values (`ResTie`, waiting on the
+  vcalls ask, `note:20261024T2340Z-draft-vcalls-ask`), and the layout fact `hcopy`: each piece `ownQ` gives the part is one of its
   statement's copies, with that copy's group, and the elements the copy reads are those `elemAt` reads off the opened
   messages. `rowsRead_msgs` gives the second half of `hcopy` at the raw messages wherever a port is a carried row; the
   step to the opened messages reads `final`, the concrete statement's.
@@ -172,8 +172,9 @@ end Shares
 
 /-! ## The `rec-residuals` pieces -/
 
-/-- **A `rec-residuals` piece**: a copy of a residuals table, `(t, o, g, u)` as `Readable.copyOf` indexes it, and the
-group of residuals it computes. -/
+/-- **A `rec-residuals` piece**: its key `(jj, o, g, u)`, the verifier's group `jj` its part computes and the copy
+`(o, g, u)` of that part's one table (`ResLower.resPieces_computesAt`; `resPieces_computes` reads the first component
+as the table instead), and the group of residuals it computes. -/
 structure ResPiece where
   key : ℕ × ℕ × ℕ × ℕ
   S : _root_.Flock.RecOpen.GfS

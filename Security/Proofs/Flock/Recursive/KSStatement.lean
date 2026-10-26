@@ -1,11 +1,13 @@
 import Proofs.Flock.Claims.Recursion.KSLin2R
+import Proofs.Flock.Claims.Recursion.DeployedR
 
 /-!
 # The recursive verifier's knowledge soundness at the deployed reader (trusted)
 
 `RecursiveKSAt` is `KSLin2On` at SHA-512 at the deployed relation (`Flock.Readable.relation`), at the bound record
 whose steps are the deployed recursive verifier's (`FlockDeploy.nextR rd`) and whose columns are the ones it opens,
-trimmed (`FlockDeploy.deployPlainTrimR`), at V\*'s layout `layoutBTops (finOpen rest)`, the coin server's record
+trimmed (`FlockDeploy.deployPlainTrimR`), at V\*'s layout of record `DeployedR.layR rest` (every hm96 call the
+deployed circuit performs, recorded), the coin server's record
 (`recTr aux nOf hd recRest`), the deployed caps (`FlockDeploy.KS.CpDep`) and the dense statements (`DenseAt`).
 
 It is stated at the deployment's parameters (the reader `rd`, V\*'s last message's reader `final`, the last part's
@@ -29,7 +31,7 @@ def RecursiveKSAt (rd : Msg → Option FinalP)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8) : Prop :=
   Claims.Recursion.KSLin2On FlockDeploy.sha512
     (RecDeploy.recBoundAt _root_.Flock.Readable.relation { b with tr := RecDeploy.recTr aux nOf hd recRest }
-      (RecDeploy.layoutBTops (RecDeploy.finOpen rest)))
+      (RecDeploy.DeployedR.layR rest))
     (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR rd)
       (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
       RecDeploy.rowInDeployed final w)

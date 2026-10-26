@@ -18,7 +18,10 @@ import Proofs.Flock.VBridge.Family.Encode
 
 At a dense inner statement where the last step reads and the base checks hold, the record value the verdict reads
 (`jAt`) decodes at the setup SHA-512 gives (`decode_at`, RECINT's `TargetDecode` with `At` unfolded), under the JSON
-library's specification (`Claims.JsonSpec`). `jAt` is the reader's record (`recJ`) with its digests and coins
+library's specification (`Claims.JsonSpec`), which it reads only for what `Json.parse` (a `partial def`) returns: the
+public header's draw is well-formed (`parse_wf`; the statement's draw is the verifier's rebuilt one, `draw_wf`), and
+the statement's `Hello` parses back to its
+coins (`parse_canon`, so no coin tree). `jAt` is the reader's record (`recJ`) with its digests and coins
 substituted, so it is alike the honest record whose rounds hold the fill's coins (`same_coinSubJ`, with the fill finding
 a coin wherever `liveOf` reads, `fill_of_live`), and an honest record of a one-table statement decodes
 (`decodeJ_same`). What `decodeJ_same` asks:
@@ -335,7 +338,7 @@ theorem decode_jAt (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) {rd : 
   rw [hj, FlockDeploy.recJ, hlk] at hlv
   unfold FlockDeploy.jAt
   rw [hj, FlockDeploy.recJ, hlk]
-  refine ⟨_, FlockComplete.JsonRT.decodeJ_same S h64 ht hct hdraw hsig hrb hpts hpm (hss _) (hrs _) _
+  refine ⟨_, FlockComplete.JsonRT.decodeJ_same h64 ht hct hdraw hsig hrb hpts hpm (hss _) (hrs _) _
     (same_coinSubJ ht _ _ _ _ _ _ hdg ?_)⟩
   intro i hi hS k hk
   rw [streamOffset_shaSubJ]
@@ -343,7 +346,7 @@ theorem decode_jAt (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) {rd : 
 
 /-- **`TargetDecode`** (RECINT's, `At` unfolded): at a dense inner statement where the last step reads and the base
 checks hold, a decision's record value the verdict reads decodes at the setup SHA-512 gives, under the JSON library's
-specification. -/
+specification, which `dense_stmt` alone reads (`parse_wf`, `parse_canon`). -/
 theorem decode_at (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) (rd : Msg → Option FinalP)
     (P : Msg → List Msg → List Coin → Prop) :
     ∀ (x : Msg) (ms : List Msg) (cs : List Coin),
