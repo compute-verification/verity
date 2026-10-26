@@ -307,7 +307,7 @@ class Circuit:
     """An integration's circuit in proof units: ``templates``, each ``(template, units)`` in order, every template `catalog`'s
     and of its own descriptor id; ``external``, the ports (``<descriptor id>/<port>``) that are the system's external I/O;
     ``wires``, the units whose input rows are other units' output rows (`Wire`, `check_wires`); ``boundary``, its I/O
-    layout (network-accounting's N1, ``verity/boundary/v3``), a JSON object carried as given."""
+    layout (network-accounting's N1, ``verity/boundary/v1``), a JSON object carried as given."""
     name: str
     templates: tuple[tuple[Any, int], ...]
     external: tuple[str, ...] = ()

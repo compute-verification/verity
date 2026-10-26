@@ -367,6 +367,28 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
         sz.host(tmp_path / "h3", other)
 
 
+def test_a_fails_reason_outside_its_fails_bucket_is_refused_by_name_and_one_outside_the_group_is_not_read(tmp_path):
+    """A connection's reason in the warden's ``fails`` record is in the bucket of its egress `FAIL` (a void run, whose
+    link-windows the scan answers refused): a reason in a scanned bucket whose egress row has no `FAIL` is refused,
+    naming the run's ``check.json`` problems that say a connection failed closed; one in a link-window past the group
+    is another group's, and the group is read as if it weren't there."""
+    run = published(tmp_path / "run")
+    rec = WS.ar.unpack_record(WS.ar.read_blobs(run / "responses.records")[0], sz.PARAMS.cell_bytes)
+    t, j = next((t, j) for t, row in enumerate(rec.grid) for j, f in enumerate(row) if f is not None)
+    grid = tuple(tuple(f if (u, k) == (t, j) else None for k, f in enumerate(row)) for u, row in enumerate(rec.grid))
+    (run / "check.json").write_text(json.dumps({"problems": ["audit: connection 7 failed closed (late) at egress cell 2",
+                                                             "connection 7: fail, HTTP None, complete False"]}))
+    _rewrite(run / "fails.records", [WS.ar.pack_record(replace(rec, grid=grid, window=0))])
+    with pytest.raises(SystemExit, match=re.escape(f"egress buckets [] hold a FAIL and the warden's fails record has a "
+                                                   f"reason in buckets [{t}], not the same: a failed connection's "
+                                                   "reason is in its FAIL's bucket (connection 7 failed closed (late) "
+                                                   "at egress cell 2)")):
+        sz.host(tmp_path / "h", run)
+    _rewrite(run / "fails.records", [WS.ar.pack_record(replace(rec, grid=grid, window=3))])
+    at = sz.host(tmp_path / "h2", run).at
+    assert (at.void, at.failed, at.failed_why) == ([], 0, [])
+
+
 @pytest.mark.parametrize("flags,why", [
     (["--challenger", "local", "--main", "m.txt"], "give --draw"),
     (["--challenger", "remote", "--draw", "16", "--main", "m.txt"], "local or gate:USER@HOST, not 'remote'"),

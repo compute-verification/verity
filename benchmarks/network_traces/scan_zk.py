@@ -320,7 +320,8 @@ def synthetic(out: Path, setup: Setup, windows: list[int]) -> SimpleNamespace:
             sides[side].append(SimpleNamespace(cells=cells, registration=registration, head=head, dom=dom))
     return SimpleNamespace(source="the synthetic run (scan_traffic.serve), signed with the driver's own key",
                            params=setup.params, session=SESSION, sides=sides, outputs=served.outputs, run_id=None,
-                           issuer=issuer, key=signer.public_key(), key_of="the run's (the driver's)", failed=0)
+                           issuer=issuer, key=signer.public_key(), key_of="the run's (the driver's)", failed=0,
+                           fail_buckets=[], failed_why=[])
 
 
 def _found(run: Path, name: str) -> Path:
@@ -338,8 +339,9 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
     link-window in ``cells.jsonl`` verified under that key and session (`warden_rows.check_registration`: the warden's
     signature over the head of the rows' root); and the records' rows under ``cells.salts`` (`warden_rows.Cells.of`)
     that head. The units read those rows. The Programs' outputs (the ``prog`` row's stand-in) are each connection's ids
-    as its egress record carries them (`io_tie.parse_cell`), every egress cell an id-form one or a `FAIL` (a void run,
-    ``failed`` the reasons in its ``fails`` record). The tampered round's
+    as its egress record carries them (`io_tie.parse_cell`), every egress cell an id-form one or a `FAIL` (a void run:
+    ``failed`` the reasons its ``fails`` record has in the link-windows, ``fail_buckets`` the buckets they're in, and
+    ``failed_why`` the run's ``check.json`` problems that name a connection failed closed). The tampered round's
     re-signed link-window is signed by a key of the driver's own (``out``), under which the verifier reads it."""
     import warden_serve as WS
 
@@ -382,7 +384,12 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
                 raise SystemExit(f"--warden-run {run}: {side} link-window {w}'s record under cells.salts isn't the rows "
                                  "whose root the warden signed")
             sides[side].append(SimpleNamespace(cells=cells, registration=registration, head=head, dom=dom))
-    failed = sum(f is not None for r in records[WS.FAILS] if r.window in windows for row in r.grid for f in row)
+    fails = [((r.window - windows[0]) * params.window + t, sum(f is not None for f in row))
+             for r in records[WS.FAILS] if r.window in windows for t, row in enumerate(r.grid)]
+    fail_buckets = sorted(t for t, n in fails if n)
+    check = next((d / "check.json" for d in (run, run / "witness", run / "out") if (d / "check.json").is_file()), None)
+    named = [p.removeprefix("audit: ") for p in (json.loads(check.read_text()).get("problems") or [])
+             if "failed closed" in p] if fail_buckets and check else []
     B, outputs = params.cell_bytes, {}
     for rec in sorted(records[WS.EGRESS], key=lambda r: r.window):
         for t, row in enumerate(WR.window_rows(rec, params)):
@@ -403,7 +410,7 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
                            params=params, session=session, sides=sides,
                            outputs={q: tuple(xs) for q, xs in outputs.items()}, run_id=dep.get("run_id"),
                            issuer=Issuer(signer, session), key=signer.public_key(), key_of="the driver's own",
-                           failed=failed)
+                           failed=sum(n for _, n in fails), fail_buckets=fail_buckets, failed_why=named)
 
 
 def _tamper(got: SimpleNamespace, egress: list[bytes], T: int, B: int, R: int) -> SimpleNamespace:
@@ -452,8 +459,10 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
     if bad != void:
         raise SystemExit(f"egress buckets {bad} don't compute the warden's rows from the views their ingress buckets "
                          f"wrote, and the warden failed a connection in buckets {void}")
-    if void and not got.failed:
-        raise SystemExit(f"egress buckets {void} hold a FAIL, and the warden's fails record no reason")
+    if void != got.fail_buckets:
+        raise SystemExit(f"egress buckets {void} hold a FAIL and the warden's fails record has a reason in buckets "
+                         f"{got.fail_buckets}, not the same: a failed connection's reason is in its FAIL's bucket"
+                         + (f" ({'; '.join(got.failed_why)})" if got.failed_why else ""))
     if not 1 <= setup.A < setup.A + 1 < group * T:
         raise SystemExit(f"the chain round swaps S_A and S_(A+1) of ingress units, 1 <= A < {group * T - 1}")
     heads = [w.head for w in got.sides["ingress"]]
@@ -472,7 +481,7 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
                            sides=got.sides, trees=trees, swapped=tree("state", swapped, heads, got.session),
                            tampered=None if void else _tamper(got, ch.egress, T, cls.B, cls.egress.R),
                            ordinals=sorted(admitted), admitted=dict(sorted(admitted.items())), void=void,
-                           failed=got.failed, run_s=round(time.time() - t0, 1))
+                           failed=got.failed, failed_why=got.failed_why, run_s=round(time.time() - t0, 1))
 
 
 def _bits(reg: ADV.Registration, i: int) -> list[int]:
@@ -1142,7 +1151,8 @@ def prove(a) -> int:
                      "swap": [setup.A, setup.A + 1],
                      "tampered": at.tampered and {"bucket": at.tampered.bucket,
                                                   "window": at.windows[at.tampered.window], "key": at.tampered.key_of},
-                     "void": at.void and {"buckets": at.void, "failed": at.failed, "refused": targets(at, "honest")},
+                     "void": at.void and {"buckets": at.void, "failed": at.failed, "why": at.failed_why,
+                                          "refused": targets(at, "honest")},
                      "cells": {side: {"data": sum(r[s * cls.B] == DATA for r in rows for s in range(sh.R)),
                                       "end": sum(r[s * cls.B] == W.END for r in rows for s in range(sh.R))}
                                for side, rows in (("ingress", ch.ingress), ("egress", ch.egress))},

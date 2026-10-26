@@ -163,16 +163,16 @@ A spec-level reference for network accounting's timing channel:
   the sender's unit opens a cell's row as its output and the receiver's as its input, and the verifier places each
   read, the (connection, cell) the Program's units' wiring pins (`Units`, whose digest the port's value names), with
   the warden's wiring (`PROTOCOL.md`, "The warden's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
-- the run's boundary in a window's circuit (`boundary`): the circuit record's ``boundary`` (`verity/boundary/v3`),
-  which names the template whose unit ℓ·T + t holds bucket t of egress link ℓ (`EgressBucket`'s frame, the row it
-  computes and returns, committed as a registered read of the warden's row, and its u16 verdict, whose bit 0 is the
-  slots' presence) and of ingress link ℓ (its frame parameter row, the warden's registered row; with ``first``,
-  `IngressScanFirst` holds bucket 0), the same gates whatever the load, so arrival steps and prompt lengths stay private
-  (`NetTiming.Layout`). `refusal`, the verifier's check before it draws, checks that the layout fits the circuit
-  (`NetTiming.Layout.Fits`: no egress gate is an input, and each is one the circuit returns) at the record's grain,
-  which contains the gate grain's, held to `prog_fits`, `Layout.Fits` itself on a flattened program; the scan's state
-  and view chains are wires of the record. A frame that is a parameter row, an input, is refused by name. `Fits` stays
-  structural: a served window fits in the step-indexed scan's form, and a window in any other form is refused;
+- the run's boundary in a window's circuit (`boundary`): the circuit record's ``boundary``, which names the template
+  whose unit ℓ·T + t holds bucket t of egress link ℓ (`EgressBucket`'s frame, the row it computes and returns,
+  committed as a registered read of the warden's row, and its u16 verdict, whose bit 0 is the slots' presence) and of
+  ingress link ℓ (its frame parameter row, the warden's registered row; with ``first``, `IngressScanFirst` holds bucket
+  0), the same gates whatever the load, so arrival steps and prompt lengths stay private (`NetTiming.Layout`); its
+  format is `verity/boundary/v3`. `refusal`, the verifier's check before it draws, checks that the layout fits the
+  circuit (`NetTiming.Layout.Fits`: no egress gate is an input, and each is one the circuit returns) at the record's
+  grain, which contains the gate grain's, held to `prog_fits`, `Layout.Fits` itself on a flattened program; the scan's
+  state and view chains are wires of the record. A frame that is a parameter row, an input, is refused by name. `Fits`
+  stays structural: a served window fits in the step-indexed scan's form, and a window in any other form is refused;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
   warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), and computes
   the next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt
