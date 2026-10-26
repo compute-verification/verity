@@ -2,6 +2,8 @@ import Proofs.Flock.Soundness.Discharge.Aliased.Keys
 import Proofs.Flock.Soundness.Discharge.Zero.Stack
 import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 import Proofs.Flock.Soundness.Discharge.Hidden.Commit
+import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
 
 /-!
 # The committed circuit's keys from the statement circuit's (PRF-133, ASK-112 option A)
@@ -9,7 +11,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Commit
 A templated session commits `cs`, its unit net `Tmpl.unitNet`'s, and its statement circuit is `HmOut.unrolled cs`, the
 same circuit with the logical unit net. The two read the same input ports, leaves, cuts and wires; only a wire out of a
 unit slot reads an output column, which the committed unit holds at `upos` of the logical one: its output groups are
-the logical groups placed at `posMap` (`Group.at`, `outsOk`), so each output port is as wide, bit `t` at `upos` of the
+the logical groups placed at `posMap` (`Net.Group.at`, `outsOk`), so each output port is as wide, bit `t` at `upos` of the
 logical bit (`portCols_at`).
 
 So Δ's source key in the committed circuit is the statement circuit's with a unit output column moved to `upos`
@@ -72,17 +74,17 @@ theorem portCols_one_at {pos : Array ℕ} {g : Group}
     (h0 : pos.getD (g.col * WORD) 0 % (g.words * WORD) = 0)
     (hin : ∀ i < g.words * WORD, pos.getD (g.col * WORD + i) 0 = pos.getD (g.col * WORD) 0 + i)
     (hfit : g.bits.toList.sum ≤ g.words * WORD) :
-    (portCols #[Group.at pos g]).toList.length = (portCols #[g]).toList.length ∧
-      ∀ j (h : j < (portCols #[g]).toList.length) (h' : j < (portCols #[Group.at pos g]).toList.length),
-        PortAt pos ((portCols #[g]).toList[j]) ((portCols #[Group.at pos g]).toList[j]) := by
+    (portCols #[Net.Group.at pos g]).toList.length = (portCols #[g]).toList.length ∧
+      ∀ j (h : j < (portCols #[g]).toList.length) (h' : j < (portCols #[Net.Group.at pos g]).toList.length),
+        PortAt pos ((portCols #[g]).toList[j]) ((portCols #[Net.Group.at pos g]).toList[j]) := by
   have hd : pos.getD (g.col * WORD) 0 / WORD * WORD = pos.getD (g.col * WORD) 0 := by
     have : WORD ∣ pos.getD (g.col * WORD) 0 :=
       Nat.dvd_trans (Nat.dvd_mul_left WORD g.words) (Nat.dvd_of_mod_eq_zero h0)
     exact Nat.div_mul_cancel this
   rw [portCols_one_closed, portCols_one_closed]
-  refine ⟨by simp [Group.at], fun j h h' => ?_⟩
+  refine ⟨by simp [Net.Group.at], fun j h h' => ?_⟩
   simp only [List.length_map, List.length_range] at h
-  simp only [List.getElem_map, List.getElem_range, Group.at]
+  simp only [List.getElem_map, List.getElem_range, Net.Group.at]
   refine ⟨rfl, fun t ht => ?_⟩
   have hle := take_sum_getD_le g.bits.toList j (by simpa using h)
   dsimp only at ht ⊢
@@ -95,10 +97,10 @@ def AtOk (pos : Array ℕ) (g : Group) : Prop :=
     g.bits.toList.sum ≤ g.words * WORD
 
 theorem flatMap_at {pos : Array ℕ} : ∀ (A : List Group), (∀ g ∈ A, AtOk pos g) →
-    (A.flatMap fun g => (portCols #[Group.at pos g]).toList).length = (A.flatMap fun g => (portCols #[g]).toList).length ∧
+    (A.flatMap fun g => (portCols #[Net.Group.at pos g]).toList).length = (A.flatMap fun g => (portCols #[g]).toList).length ∧
       ∀ j (h : j < (A.flatMap fun g => (portCols #[g]).toList).length)
-        (h' : j < (A.flatMap fun g => (portCols #[Group.at pos g]).toList).length),
-        PortAt pos ((A.flatMap fun g => (portCols #[g]).toList)[j]) ((A.flatMap fun g => (portCols #[Group.at pos g]).toList)[j])
+        (h' : j < (A.flatMap fun g => (portCols #[Net.Group.at pos g]).toList).length),
+        PortAt pos ((A.flatMap fun g => (portCols #[g]).toList)[j]) ((A.flatMap fun g => (portCols #[Net.Group.at pos g]).toList)[j])
   | [], _ => ⟨rfl, fun j h => absurd h (by simp)⟩
   | g :: A, hA => by
     obtain ⟨h0, hin, hfit⟩ := hA g (List.mem_cons_self ..)
@@ -111,20 +113,20 @@ theorem flatMap_at {pos : Array ℕ} : ∀ (A : List Group), (∀ g ∈ A, AtOk 
       exact hp1 j hj _
     · have hj' : (portCols #[g]).toList.length ≤ j := Nat.le_of_not_lt hj
       rw [List.getElem_append_right hj', List.getElem_append_right (by rw [hl1]; exact hj'),
-        getElem_congr_idx (show j - (portCols #[Group.at pos g]).toList.length = j - (portCols #[g]).toList.length by
+        getElem_congr_idx (show j - (portCols #[Net.Group.at pos g]).toList.length = j - (portCols #[g]).toList.length by
           rw [hl1])]
       exact hp2 _ (by omega) _
 
 /-- **Output groups placed at `pos`** (`outsOk`, as `Net.ofRowsAt` places them): as many ports, each the logical port
 placed at `pos`. -/
-theorem portCols_at {pos : Array ℕ} {gs : Array Group} (hout : outsOk pos gs = true)
+theorem portCols_at {pos : Array ℕ} {gs : Array Group} (hout : Net.outsOk pos gs = true)
     (hfit : ∀ g ∈ gs.toList, g.bits.foldl (· + ·) 0 ≤ g.words * WORD) :
-    (portCols (gs.map (Group.at pos))).size = (portCols gs).size ∧
+    (portCols (gs.map (Net.Group.at pos))).size = (portCols gs).size ∧
       ∀ j < (portCols gs).size,
-        PortAt pos ((portCols gs).getD j default) ((portCols (gs.map (Group.at pos))).getD j default) := by
+        PortAt pos ((portCols gs).getD j default) ((portCols (gs.map (Net.Group.at pos))).getD j default) := by
   have hok : ∀ g ∈ gs.toList, AtOk pos g := by
     intro g hg
-    unfold outsOk at hout
+    unfold Net.outsOk at hout
     simp only [Array.all_eq_true', Bool.and_eq_true, beq_iff_eq, List.all_eq_true, List.mem_range] at hout
     obtain ⟨h0, hin⟩ := hout g (Array.mem_toList_iff.1 hg)
     refine ⟨h0, hin, ?_⟩
@@ -132,20 +134,20 @@ theorem portCols_at {pos : Array ℕ} {gs : Array Group} (hout : outsOk pos gs =
     exact hfit g hg
   obtain ⟨hl, hp⟩ := flatMap_at gs.toList hok
   have e1 := portCols_toList gs
-  have e2 := portCols_toList (gs.map (Group.at pos))
+  have e2 := portCols_toList (gs.map (Net.Group.at pos))
   rw [Array.toList_map, List.flatMap_map] at e2
-  have hs : (portCols (gs.map (Group.at pos))).size = (portCols gs).size := by
+  have hs : (portCols (gs.map (Net.Group.at pos))).size = (portCols gs).size := by
     rw [← Array.length_toList, ← Array.length_toList, e1, e2, hl]
   refine ⟨hs, fun j hj => ?_⟩
   have hj1 : j < (gs.toList.flatMap fun g => (portCols #[g]).toList).length := by
     rw [← e1, Array.length_toList]; exact hj
-  have hj2 : j < (gs.toList.flatMap fun g => (portCols #[Group.at pos g]).toList).length := by
+  have hj2 : j < (gs.toList.flatMap fun g => (portCols #[Net.Group.at pos g]).toList).length := by
     rw [hl]; exact hj1
   have g1 : (portCols gs).getD j default = (gs.toList.flatMap fun g => (portCols #[g]).toList)[j] := by
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hj, Option.getD_some, ← Array.getElem_toList]
     exact List.getElem_of_eq e1 _
-  have g2 : (portCols (gs.map (Group.at pos))).getD j default =
-      (gs.toList.flatMap fun g => (portCols #[Group.at pos g]).toList)[j] := by
+  have g2 : (portCols (gs.map (Net.Group.at pos))).getD j default =
+      (gs.toList.flatMap fun g => (portCols #[Net.Group.at pos g]).toList)[j] := by
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (by rw [hs]; exact hj), Option.getD_some,
       ← Array.getElem_toList]
     exact List.getElem_of_eq e2 _
@@ -174,11 +176,11 @@ theorem tmpl_unit_at {tags : Tags} {cf : ByteArray} {tables : List (String × By
     ∃ (n : Net) (pos : Array ℕ), cs.unitNet < cs.nets.size ∧
       HmOut.unrolled cs = { cs with nets := cs.nets.set! cs.unitNet ("unit", n), tmpl := none } ∧
       upos cs = (fun x => pos.getD x 0) ∧ n.inGroups = cs.unit.inGroups ∧ n.inWords = cs.unit.inWords ∧
-      Built n ∧ cs.unit.outGroups = n.outGroups.map (Group.at pos) ∧
-      (portCols (n.outGroups.map (Group.at pos))).size = (portCols n.outGroups).size ∧
+      Built n ∧ cs.unit.outGroups = n.outGroups.map (Net.Group.at pos) ∧
+      (portCols (n.outGroups.map (Net.Group.at pos))).size = (portCols n.outGroups).size ∧
       (∀ j < (portCols n.outGroups).size,
-        PortAt pos ((portCols n.outGroups).getD j default) ((portCols (n.outGroups.map (Group.at pos))).getD j default)) ∧
-      outsOk pos n.outGroups = true := by
+        PortAt pos ((portCols n.outGroups).getD j default) ((portCols (n.outGroups.map (Net.Group.at pos))).getD j default)) ∧
+      Net.outsOk pos n.outGroups = true := by
   obtain ⟨tu, n, ht, hn, hl, -, hsz, hu, he⟩ := unrolled_of_parseTmpl hT
   have A := UnitAt.tmpl ht hu
   have hB : Built n := hl ▸ built_tmpl ht
@@ -207,35 +209,39 @@ theorem outCol_tmpl {tags : Tags} {cf : ByteArray} {tables : List (String × Byt
   rw [he, hU, hog, hup]
   have hne : 0 < n.outGroups.size := Nat.pos_of_ne_zero (FlockSoundness.Discharge.Layout.built_out hB).1
   have e0 : n.outGroups.getD 0 default = n.outGroups[0] := by simp [Array.getD_eq_getD_getElem?, hne]
-  have e1 : (n.outGroups.map (Group.at pos)).getD 0 default = Group.at pos n.outGroups[0] := by
+  have e1 : (n.outGroups.map (Net.Group.at pos)).getD 0 default = Net.Group.at pos n.outGroups[0] := by
     simp [Array.getD_eq_getD_getElem?, hne]
   rw [e1, e0]
   rw [e0] at hi
-  unfold outsOk at hok
+  unfold Net.outsOk at hok
   simp only [Array.all_eq_true', Bool.and_eq_true, beq_iff_eq, List.all_eq_true, List.mem_range] at hok
   obtain ⟨h0, hin⟩ := hok _ (Array.getElem_mem hne)
   have hd : pos.getD (n.outGroups[0].col * WORD) 0 / WORD * WORD = pos.getD (n.outGroups[0].col * WORD) 0 :=
     Nat.div_mul_cancel (Nat.dvd_trans (Nat.dvd_mul_left WORD _) (Nat.dvd_of_mod_eq_zero h0))
-  simp only [Group.at]
+  simp only [Net.Group.at]
   rw [hd, hin _ hi]
 
 /-- **Δ's committed key with a unit output column moved by `f`**: every other key is the same. -/
-def _root_.FlockSoundness.Discharge.Aliased.Src.atUnit (u : ℕ) (f : ℕ → ℕ) : Src → Src
+def _root_.FlockSoundness.Discharge.Aliased.Src.atUnit (u : ℕ) (f : ℕ → ℕ) : Aliased.Src → Aliased.Src
   | .wire m i col => .wire m i (if m = u then f col else col)
   | s => s
 
-theorem atUnit_id (u : ℕ) (s : Src) : s.atUnit u id = s := by
-  cases s <;> simp [Src.atUnit]
+theorem atUnit_id (u : ℕ) (s : Aliased.Src) : s.atUnit u id = s := by
+  cases s <;> simp [Aliased.Src.atUnit]
 
-theorem atUnit_zero {u : ℕ} {f : ℕ → ℕ} {s : Src} : s.atUnit u f = .zero ↔ s = .zero := by
-  cases s <;> simp [Src.atUnit]
+theorem atUnit_zero {u : ℕ} {f : ℕ → ℕ} {s : Aliased.Src} : s.atUnit u f = .zero ↔ s = .zero := by
+  cases s <;> simp [Aliased.Src.atUnit]
+
+theorem atUnit_msg {u : ℕ} {f : ℕ → ℕ} {s : Aliased.Src} {q byte bit : ℕ} :
+    s.atUnit u f = .msg q byte bit ↔ s = .msg q byte bit := by
+  cases s <;> simp [Aliased.Src.atUnit]
 
 theorem srcAt_unrolled {cs : Circuit} {n : Net} {pos : Array ℕ} {k p t : ℕ}
     (hsz : cs.unitNet < cs.nets.size) (hg : n.inGroups = cs.unit.inGroups)
-    (hog : cs.unit.outGroups = n.outGroups.map (Group.at pos))
-    (hat : (portCols (n.outGroups.map (Group.at pos))).size = (portCols n.outGroups).size ∧
+    (hog : cs.unit.outGroups = n.outGroups.map (Net.Group.at pos))
+    (hat : (portCols (n.outGroups.map (Net.Group.at pos))).size = (portCols n.outGroups).size ∧
       ∀ j < (portCols n.outGroups).size,
-        PortAt pos ((portCols n.outGroups).getD j default) ((portCols (n.outGroups.map (Group.at pos))).getD j default))
+        PortAt pos ((portCols n.outGroups).getD j default) ((portCols (n.outGroups.map (Net.Group.at pos))).getD j default))
     (hwire : ∀ w ∈ cs.wires.toList, w.dst = (cs.unitNet, k, p) →
       w.src.2.2 < (portCols (cs.nets.getD w.src.1 default).2.outGroups).size ∧
         t < ((portCols (cs.nets.getD w.src.1 default).2.outGroups).getD w.src.2.2 default).2) :
@@ -264,9 +270,9 @@ theorem srcAt_unrolled {cs : Circuit} {n : Net} {pos : Array ℕ} {k p t : ℕ}
           rw [hw]; exact List.mem_cons_self ..
         obtain ⟨hmem, hd⟩ := List.mem_filter.1 hm
         obtain ⟨hj, htw⟩ := hwire w hmem (of_decide_eq_true hd)
-        simp only [hw, Src.atUnit, getD_set_unit _ _ _ _ hsz]
+        simp only [hw, Aliased.Src.atUnit, getD_set_unit _ _ _ _ hsz]
         by_cases hu : w.src.1 = cs.unitNet
-        · simp only [hu, ↓reduceIte, Src.wire.injEq, true_and]
+        · simp only [hu, ↓reduceIte, Aliased.Src.wire.injEq, true_and]
           have eu : (cs.nets.getD cs.unitNet default).2 = cs.unit := rfl
           rw [hu, eu] at hj htw
           show ((portCols cs.unit.outGroups).getD w.src.2.2 default).1 + t = _
@@ -318,6 +324,75 @@ theorem zeroIn_tmpl {tags : Tags} {cf : ByteArray} {tables : List (String × Byt
   rw [hU, hg, hw]
   exact Iff.rfl
 
+theorem srcKey_withTmpl (c : Circuit) (t : Option TmplUnit) (x : ℕ) : srcKey { c with tmpl := t } x = srcKey c x :=
+  rfl
+
+/-- **`KeysRow` at a templated session's statement circuit**: its unit has only its leaf group, and every input a unit
+row reads is a port bit (`PortReads`). A row key is the zero or a message bit, which the committed circuit's key is too
+(`Layout.rowKey_of_cutsPre`), and `srcKey_tmpl` moves only wire keys. -/
+theorem keysRow_of_tmpl {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Circuit}
+    (hty : tags.typed = false) (hT : HmOut.parseTmpl tags cf tables = .ok cs) (h1 : cs.unit.inGroups.size = 1)
+    {hU : Built (HmOut.unrolled cs).unit} (hpr : Layout.PortReads (HmOut.unrolled cs) hU) :
+    Layout.KeysRow (HmOut.unrolled cs) hU (Layout.portRowW (HmOut.unrolled cs)) := by
+  have C : CheckFacts cs := by
+    obtain ⟨hty', ⟨ls, hls⟩, -⟩ := Committed.check hty (Or.inr hT)
+    exact check_facts hty' hls
+  obtain ⟨n, pos, hsz, heu, -, hg, hw, hB, -⟩ := tmpl_unit_at hT
+  have hU' : (HmOut.unrolled cs).unit = n := by
+    rw [heu]
+    show ((cs.nets.set! cs.unitNet ("unit", n)).getD cs.unitNet default).2 = n
+    rw [getD_set_unit _ _ _ _ hsz, ite_eq_left rfl]
+  refine Layout.keysRow_of_rowKey hpr fun x hm hu => ?_
+  rw [hU', hg, hw] at hm
+  rw [hU', hw, heu] at hu
+  have hkc := srcKey_tmpl hT C x
+  unfold Layout.RowKey
+  rw [heu] at hkc ⊢
+  obtain ⟨tu, c₀, hp0, -, -, he⟩ := TmplValue.parseTmpl_cases hT
+  subst he
+  rw [srcKey_withTmpl c₀ (some tu) x] at hkc
+  have hnd : (portBits c₀.unit.inGroups).Nodup := by
+    have := Aliased.portBits_nodup hB
+    rw [hg] at this
+    exact this
+  rcases Layout.rowKey_of_cutsPre hp0 (Layout.cutsFromRows_of_singlePre hp0 h1) hnd hm hu with
+    h0 | ⟨q, byte, bit, hq0, hq, hlt, hb⟩
+  · exact Or.inl (atUnit_zero.1 (hkc.symm.trans h0))
+  · exact Or.inr ⟨q, byte, bit, atUnit_msg.1 (hkc.symm.trans hq0), hq, hlt, hb⟩
+
+/-- **`KeysRow` at a session's statement circuit**, flat (`Layout.keysRow_of_parse`) or templated (`keysRow_of_tmpl`). -/
+theorem keysRow_commit {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Circuit}
+    (hty : tags.typed = false) (h : Committed tags cf tables cs) (h1 : cs.unit.inGroups.size = 1)
+    {hU : Built (HmOut.unrolled cs).unit} (hpr : Layout.PortReads (HmOut.unrolled cs) hU) :
+    Layout.KeysRow (HmOut.unrolled cs) hU (Layout.portRowW (HmOut.unrolled cs)) := by
+  rcases h with h | h
+  · have hf := parse_tmpl_none hty h
+    revert hU
+    rw [unrolled_flat hf]
+    intro hU hpr
+    exact Layout.keysRow_of_parse (parse_untyped hty h).1 h1 hpr
+  · exact keysRow_of_tmpl hty h h1 hpr
+
+/-- **The statement circuit's unit has the committed unit's input groups.** -/
+theorem Committed.unrolled_inGroups {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Circuit}
+    (hty : tags.typed = false) (h : Committed tags cf tables cs) :
+    (HmOut.unrolled cs).unit.inGroups = cs.unit.inGroups := by
+  rcases h with h | h
+  · rw [unrolled_flat (parse_tmpl_none hty h)]
+  · obtain ⟨n, _pos, hsz, heu, -, hg, -⟩ := tmpl_unit_at h
+    rw [heu]
+    show ((cs.nets.set! cs.unitNet ("unit", n)).getD cs.unitNet default).2.inGroups = _
+    rw [getD_set_unit _ _ _ _ hsz, ite_eq_left rfl, hg]
+
+/-- **`KeysRow` at a session's statement circuit** (`HmOut.parseStmt`, untyped tags): its committed circuit's
+(`keysRow_commit`), when the statement's unit has only its leaf group. -/
+theorem keysRow_stmt {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (hty : tags.typed = false) (h : HmOut.parseStmt tags cf tables = .ok c) (h1 : c.unit.inGroups.size = 1)
+    {hU : Built c.unit} (hpr : Layout.PortReads c hU) : Layout.KeysRow c hU (Layout.portRowW c) := by
+  obtain ⟨cs, hcs, rfl⟩ := commit_of_parseStmt hty h
+  have hC := committed_of_commit hcs
+  exact keysRow_commit hty hC (by rw [← hC.unrolled_inGroups hty]; exact h1) hpr
+
 /-! ## On the committed circuit, flat or templated -/
 
 variable {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Circuit}
@@ -351,5 +426,49 @@ theorem outCol_commit (hty : tags.typed = false) (h : Committed tags cf tables c
   · have hf := parse_tmpl_none hty h
     rw [unrolled_flat hf, upos_flat hf]
   · exact outCol_tmpl h hi
+
+/-- **A committed circuit's message columns are in the block** (`Layout.msgCol_lt_of_parsePre`). -/
+theorem Committed.msgCol_lt (hty : tags.typed = false) (h : Committed tags cf tables cs) {g : ℕ} (hg : g < cs.g)
+    {p : ℕ} (hp : p < cs.ports.size) (byte b : ℕ) (hb : b < 8) : Typed.msgCol cs g p byte b < 2 ^ cs.kLog := by
+  rcases h with h | h
+  · exact Layout.msgCol_lt_of_parse (parse_untyped hty h).1 hg hp byte b hb
+  · obtain ⟨tu, c₀, h0, -, -, he⟩ := TmplValue.parseTmpl_cases h
+    rw [he] at hg hp ⊢
+    exact Layout.msgCol_lt_of_parsePre h0 (fun x hx => by
+      obtain rfl : x = ("unit", tu.net) := by simpa using hx
+      exact tu.netOK) hg hp byte b hb
+
+
+theorem foldl_add16 : ∀ (m s : ℕ), (List.replicate m 16).foldl (· + ·) s = s + 16 * m
+  | 0, s => by simp
+  | m + 1, s => by rw [List.replicate_succ, List.foldl_cons, foldl_add16 m (s + 16)]; omega
+
+/-- **A unit's committed output column is `upos` of its statement one**, at an output of 16-bit outputs. -/
+theorem outCol_commit16 (hty : tags.typed = false) (h : Committed tags cf tables cs) {j t : ℕ}
+    (h16 : ∀ b ∈ (cs.unit.outGroups.getD 0 default).bits.toList, b = 16)
+    (hj : j < (cs.unit.outGroups.getD 0 default).bits.size) (ht : t < 16) :
+    Layout.outCol cs j t = upos cs (Layout.outCol (HmOut.unrolled cs) j t) := by
+  rcases h with h | h
+  · have hf := parse_tmpl_none hty h
+    rw [unrolled_flat hf, upos_flat hf]
+  · refine outCol_tmpl h ?_
+    obtain ⟨n, pos, hsz, he, -, -, -, hB, hog, -, -, -⟩ := tmpl_unit_at h
+    have hU : ({ cs with nets := cs.nets.set! cs.unitNet ("unit", n), tmpl := none } : Circuit).unit = n := by
+      show ((cs.nets.set! cs.unitNet ("unit", n)).getD cs.unitNet default).2 = n
+      rw [getD_set_unit _ _ _ _ hsz, ite_eq_left rfl]
+    rw [he, hU]
+    have hne : 0 < n.outGroups.size := Nat.pos_of_ne_zero (FlockSoundness.Discharge.Layout.built_out hB).1
+    have e0 : n.outGroups.getD 0 default = n.outGroups[0] := by simp [Array.getD_eq_getD_getElem?, hne]
+    have e1 : cs.unit.outGroups.getD 0 default = Net.Group.at pos n.outGroups[0] := by
+      rw [hog]; simp [Array.getD_eq_getD_getElem?, hne]
+    rw [e1] at h16 hj
+    rw [e0]
+    have hfit := ((FlockSoundness.Discharge.Layout.built_out hB).2 _ (Array.getElem_mem_toList hne)).2
+    have hr : n.outGroups[0].bits.toList = List.replicate n.outGroups[0].bits.size 16 :=
+      List.eq_replicate_iff.2 ⟨Array.length_toList, h16⟩
+    have hs : n.outGroups[0].bits.foldl (· + ·) 0 = 16 * n.outGroups[0].bits.size := by
+      rw [← Array.foldl_toList, hr, foldl_add16]; omega
+    change j < n.outGroups[0].bits.size at hj
+    omega
 
 end FlockSoundness.Discharge.Hidden
