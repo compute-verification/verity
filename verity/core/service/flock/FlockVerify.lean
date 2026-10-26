@@ -731,7 +731,10 @@ so is a session without a draw, under `--rec-inner` a session whose draw is not 
 session with `--rec-part`, `--rec-bindings` or `--rec-rows` but no `--rec-inner` (`RecSetup.fullDraw`), and a session
 over an inner session whose record (`--rec-inner-session`) holds no draw (`RecSetup.innerDrawn`), and a session
 verified without the verifier's own `--program` (`ProvedScope.programHeld`, `ProvedScope.NO_PROGRAM`: a verifier that cannot read the Program
-cannot know what it verifies), and last a record not in its canonical text (`RecordText.check`, S0), all after every
+cannot know what it verifies), then a record not in its canonical text (`RecordText.check`, S0), and last under `--zk`
+files outside the form the sampled audit's knowledge soundness covers (`PortRoots.checkOf`: a port that is not an
+unsegmented `sha512/row/v2` row, two ports of one name, or two ports whose registered roots over the public file's
+population are one root under different domains), all after every
 check has passed (so the reason is the refusal only when nothing else
 fails; the form's first). Exit 0 iff every
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
@@ -858,6 +861,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
   let programSha := program.bind programDigest
+  let files := if zk then
+      PortRoots.checkOf (if tags.hiddenOutputs && !templated then parsed else HmOut.parse tags circuitB tables) tags pubB
+    else .ok ()
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
   -- each statement is set up once, when a session first needs it: the population's, and each draw's
   let mut setups : Array (Option String × Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json)) := #[]
@@ -900,7 +906,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
       -- last, so a session that fails a check keeps that check's reason: the form's refusal (its statement's, then its
       -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
       -- short of every unit, then a session's over an inner record without a draw, then a session's without the program,
-      -- then a record not in its canonical text (S0)
+      -- then a record not in its canonical text (S0), then under --zk files whose rows or port roots the sampled audit's
+      -- knowledge soundness doesn't cover (`PortRoots.checkOf`)
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
       if draw.isNone then ProvedScope.drawLaw zk tags draw
@@ -908,6 +915,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       RecSetup.innerDrawn recCoins
       ProvedScope.programHeld program
       RecordText.check record
+      files
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
