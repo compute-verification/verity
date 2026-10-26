@@ -515,4 +515,53 @@ theorem copy_at (s t : Store) (len : ℕ) (h : Avail (.copy s t len)) (a b : ℕ
     rw [Nat.mod_eq_of_lt (by omega), Nat.mod_eq_of_lt hq] at e2
     exact hin ⟨rfl, by omega, by omega⟩
 
+/-! ## The loads -/
+
+theorem load_eq (n c : ℕ) (h4 : 4 ∣ n) :
+    load n c = copyN .dram .smem (n / 4) (Or.inr (Or.inr ⟨rfl, by decide⟩)) (c * (n / 4)) (c * (n / 4)) := by
+  unfold load
+  split
+  · simp [addrA]
+  · rename_i hc
+    obtain ⟨k, rfl⟩ := h4
+    obtain ⟨d, rfl⟩ : ∃ d, c = 4 * k + d := ⟨c - 4 * k, by omega⟩
+    have e1 : 4 * k / 4 = k := by omega
+    have e2 : 4 * k * (4 * k) / 4 = 4 * k * k := by
+      rw [show 4 * k * (4 * k) = 4 * (4 * k * k) by ring]
+      exact Nat.mul_div_cancel_left _ (by norm_num)
+    simp only [addrB, e1, e2, Nat.add_sub_cancel_left]
+    congr 1 <;> ring
+
+/-- One tick's effect on the stores. -/
+def tickExec (M : (machine x cap oracle).Mem) (is : List Ins) : (machine x cap oracle).Mem :=
+  is.foldl (fun M a => instrExec a.instr M) M
+
+theorem loads_exec (n : ℕ) (h4 : 4 ∣ n) (hsz : 2 * n * (n / 4) ≤ (machine x cap oracle).size .smem)
+    (hsd : (machine x cap oracle).size .smem ≤ (machine x cap oracle).size .dram)
+    (M : (machine x cap oracle).Mem) :
+    ∀ c ≤ 2 * n, ∀ (u : Store) (q : ℕ), q < (machine x cap oracle).size u →
+      ((List.range c).map fun c => [load n c]).foldl tickExec M ((machine x cap oracle).loc u q) =
+        if u = .smem ∧ q < c * (n / 4) then M ((machine x cap oracle).loc .dram q)
+        else M ((machine x cap oracle).loc u q)
+  | 0, _, u, q, _ => by simp
+  | c + 1, hc, u, q, hq => by
+    have hb : c * (n / 4) + n / 4 ≤ (machine x cap oracle).size .smem := by
+      have := Nat.mul_le_mul_right (n / 4) hc
+      rw [add_mul, one_mul] at this
+      omega
+    rw [List.range_succ, List.map_append, List.foldl_append, List.map_cons, List.map_nil, List.foldl_cons,
+      List.foldl_nil, tickExec, List.foldl_cons, List.foldl_nil, load_eq n c h4]
+    erw [copy_at .dram .smem (n / 4) _ (c * (n / 4)) (c * (n / 4)) _ u q hq hb]
+    have ih := loads_exec n h4 hsz hsd M c (by omega)
+    by_cases hu : u = .smem
+    · subst hu
+      by_cases h1 : c * (n / 4) ≤ q ∧ q < c * (n / 4) + n / 4
+      · rw [ite_eq_left ⟨rfl, h1⟩, ih .dram _ (by omega), ite_eq_right (by simp),
+          ite_eq_left ⟨rfl, by rw [add_mul, one_mul]; omega⟩, show c * (n / 4) + (q - c * (n / 4)) = q by omega]
+      · rw [ite_eq_right (fun h => h1 h.2), ih .smem q hq]
+        by_cases h2 : q < c * (n / 4)
+        · rw [ite_eq_left ⟨rfl, h2⟩, ite_eq_left ⟨rfl, by rw [add_mul, one_mul]; omega⟩]
+        · rw [ite_eq_right (fun h => h2 h.2), ite_eq_right (fun h => by rw [add_mul, one_mul] at h; omega)]
+    · rw [ite_eq_right (fun h => hu h.1), ih u q hq, ite_eq_right (fun h => hu h.1), ite_eq_right (fun h => hu h.1)]
+
 end Verity.Accel.H200.Resident
