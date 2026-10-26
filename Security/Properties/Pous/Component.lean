@@ -96,7 +96,7 @@ within `c`'s deadline, and the first batch sent after the fill ended. -/
 def WipeChecked (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
     (c : StreamedWipe.Commitment) : Prop :=
   (∃ p, schemes.lookup s.scheme = some p ∧ s.publicKey ∈ trusted ∧
-      (s.message >>= fun m => lmsVerify p s.publicKey s.commitment.session m s.signature) = .ok true) ∧
+      ∃ m, s.message = .ok m ∧ lmsVerify p s.publicKey s.commitment.session m s.signature = .ok true) ∧
     s.commitment = c ∧ c.params.batch = 1 ∧ s.ended = StreamedWipe.COMPLETE ∧ s.batches.size = c.params.batches ∧
     ∀ (b : Nat) (hb : b < s.batches.size),
       s.batches[b].b = (b : Int) ∧ s.batches[b].first = ((b * c.params.batch : Nat) : Int) ∧
