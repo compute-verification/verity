@@ -17,7 +17,7 @@ open scoped ENNReal
 
 /-- **The integrity audit of a period** (`Accounting.Guarantees.Bridge.IntegrityOfIntegrityPeriod`). -/
 theorem IntegrityOfIntegrityPeriod : Accounting.Guarantees.Bridge.IntegrityOfIntegrityPeriod := by
-  intro ι d α _ C I Ω _ _ r W T q δ hq hδ hqt hA3 R hCR c p hcert hfin ξ
+  intro ι d α _ C I Ω _ _ r W T q δ hq hδ hqt hA3 R hT hL c p hcert hfin ξ
   have hsub : ∀ x : Ω (r.own .sampled),
       (r.accepts .sampled (Function.update ξ (r.own .sampled) x) ∧
         ¬ r.Holds c p .sampled (Function.update ξ (r.own .sampled) x)) →
@@ -40,7 +40,7 @@ theorem IntegrityOfIntegrityPeriod : Accounting.Guarantees.Bridge.IntegrityOfInt
         (Flock.Guarantees.Period.run W T (R.strat ξ)) :=
     R.law ξ fun l => (∀ w ∈ l, w.accepted) ∧
       Real.log (1 / δ) / q ≤ ((l.map Flock.Guarantees.WindowRec.wrong).sum : ℝ)
-  have hsrc := Flock.SecurityProofs.IntegrityHorizon W T q δ hq hδ hqt hA3 (R.strat ξ) (hCR ξ)
+  have hsrc := Flock.SecurityProofs.IntegrityHorizon W T q δ hq hδ hqt hA3 (R.strat ξ) (hT ξ) (hL ξ)
   refine (Pouw.pr_mono hsub).trans ?_
   rw [← ENNReal.toReal_ofReal (Pouw.pr_nonneg _), hlaw]
   exact ENNReal.toReal_mono hfin hsrc

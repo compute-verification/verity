@@ -19,9 +19,9 @@ so a block's sessions may depend on everything the prover saw in the blocks befo
   horizon total at least `ln(1/δ)/q` is at most `δ + Σ_b Σ_{t ∈ b} (ε_ks,t + δ_link,t)`, the pooled reading.
 
 The named assumptions are `IntegrityHorizon`'s, at the sessions each statement reads: A3 (`uniform/io-getrandombytes`)
-for each session's draw bytes, `live-verifier` (`HiddenWindow.hCust`), and `cr/sha-512` and `ecr/sha-512` at the
-strategy each session is played with, on every run (`Period.CR`). The proofs are `Flock.SecurityProofs.IntegrityBlock`,
-`IntegrityBlocks` and `IntegrityHorizonBlocks`.
+for each session's draw bytes, `live-verifier` (`HiddenWindow.hCust`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512`
+(`LinkCRZC`) at every strategy a session is played with on some run (`Period.Plays`). The proofs are
+`Flock.SecurityProofs.IntegrityBlock`, `IntegrityBlocks` and `IntegrityHorizonBlocks`.
 
 A wrong unit is counted in the session that holds it (`HiddenWindow.wrongSet`). The state a block carries across a wipe
 (the KV cache, committed before the wipe and read after it) is an input of the next block's sessions, and these
@@ -30,7 +30,9 @@ statements say nothing of whether the value a session reads there is the one the
 
 namespace Flock.Guarantees
 
-open FlockSoundness FlockSoundness.Game
+open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
+  FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
+  FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
 open scoped ENNReal
 
 /-- **A server's sessions over a horizon, cut at wipes into `B` server-time blocks.** Session `t` is `W t`, in serve
@@ -81,7 +83,13 @@ def IntegrityBlock : Prop :=
   ∀ (S : ServerBlocks) (b : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t ∈ S.sessions b, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
     (∀ t ∈ S.sessions b, Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src) →
-    ∀ s : Strategy S.game, Period.CR S.W S.T s →
+    ∀ s : Strategy S.game,
+    (∀ t (τ : Strategy (S.W t).game), Period.Plays S.W S.T s t τ → ∀ ω j,
+      TableCRZ execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀ ((S.W t).L.draw ω) (reg ((S.W t).sim τ))) j
+        (zcStrat execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀) (cont ((S.W t).sim τ) ω)) (S.W t).qF (S.W t).qS) →
+    (∀ t (τ : Strategy (S.W t).game), Period.Plays S.W S.T s t τ →
+      LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
+        (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') →
     value (S.BlockEscapes q δ b) (S.run s) ≤ ENNReal.ofReal δ + S.err b
 
 /-- **The integrity audit per server-time block, over a horizon of `B` blocks.** In a horizon as in `IntegrityBlock`
@@ -93,7 +101,13 @@ def IntegrityBlocks : Prop :=
   ∀ (S : ServerBlocks) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < S.T, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
     (∀ t < S.T, Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src) →
-    ∀ s : Strategy S.game, Period.CR S.W S.T s →
+    ∀ s : Strategy S.game,
+    (∀ t (τ : Strategy (S.W t).game), Period.Plays S.W S.T s t τ → ∀ ω j,
+      TableCRZ execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀ ((S.W t).L.draw ω) (reg ((S.W t).sim τ))) j
+        (zcStrat execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀) (cont ((S.W t).sim τ) ω)) (S.W t).qF (S.W t).qS) →
+    (∀ t (τ : Strategy (S.W t).game), Period.Plays S.W S.T s t τ →
+      LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
+        (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') →
     value (fun l => ∃ b < S.B, S.BlockEscapes q δ b l) (S.run s) ≤
       ∑ b ∈ Finset.range S.B, (ENNReal.ofReal δ + S.err b)
 
@@ -106,7 +120,13 @@ def IntegrityHorizonBlocks : Prop :=
   ∀ (S : ServerBlocks) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < S.T, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
     (∀ t < S.T, Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src) →
-    ∀ s : Strategy S.game, Period.CR S.W S.T s →
+    ∀ s : Strategy S.game,
+    (∀ t (τ : Strategy (S.W t).game), Period.Plays S.W S.T s t τ → ∀ ω j,
+      TableCRZ execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀ ((S.W t).L.draw ω) (reg ((S.W t).sim τ))) j
+        (zcStrat execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀) (cont ((S.W t).sim τ) ω)) (S.W t).qF (S.W t).qS) →
+    (∀ t (τ : Strategy (S.W t).game), Period.Plays S.W S.T s t τ →
+      LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
+        (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') →
     value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map WindowRec.wrong).sum : ℝ)) (S.run s) ≤
       ENNReal.ofReal δ + ∑ b ∈ Finset.range S.B, S.err b
 

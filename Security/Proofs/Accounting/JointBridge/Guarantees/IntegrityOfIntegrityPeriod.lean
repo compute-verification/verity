@@ -61,17 +61,26 @@ namespace Guarantees.Bridge
 /-- **The integrity audit of a period, from C-Flock's integrity audit over a horizon.** For a period `r` whose
 sampled-proofs audit realizes C-Flock's integrity audit over `T` windows `W t` (`RealizesIntegrityOfIntegrityPeriod`),
 each window's draw covering at least a fraction `q > 0` of its units, under A3 for every window's draw bytes and
-`cr/sha-512`, `ecr/sha-512` at the strategy the node plays (`Period.CR`), at certificates whose share `ε` of the
+`cr/sha-512` (`TableCRZ`) and `ecr/sha-512` (`LinkCRZC`) at every strategy the node plays a window with on some run
+(`Period.Plays`), at certificates whose share `ε` of the
 period's units is at least `ln(1/δ)/q`, the sampled audit has its per-period guarantee (`PeriodRun.Sound`) at error
 $$\delta + \sum_t (\varepsilon_{ks,t} + \delta_{link,t}),$$
 `Flock.Guarantees.IntegrityHorizon`'s, when that is finite. -/
+open FlockSoundness.Audit FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
+  FlockSoundness.Discharge.ZkHidden in
 def IntegrityOfIntegrityPeriod : Prop :=
   ∀ (ι : Type) (d : Device ι) (α : Type) [Fintype α] (C : Verity.Circuit) (I : Type) (Ω : I → Type)
     [DecidableEq I] [∀ i, Fintype (Ω i)] (r : PeriodRun d α C Ω) (W : ℕ → Flock.Guarantees.HiddenWindow) (T : ℕ)
     (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < T, q ≤ ((W t).kd : ℝ) / (W t).n) →
     (∀ t < T, FlockSoundness.Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
-    ∀ R : RealizesIntegrityOfIntegrityPeriod r W T, (∀ ξ, Flock.Guarantees.Period.CR W T (R.strat ξ)) →
+    ∀ R : RealizesIntegrityOfIntegrityPeriod r W T,
+    (∀ ξ t (τ : Strategy (W t).game), Flock.Guarantees.Period.Plays W T (R.strat ξ) t τ → ∀ ω j,
+      TableCRZ execArith hs512 (planZHJ (W t).dj (W t).y₀ ((W t).L.draw ω) (reg ((W t).sim τ))) j
+        (zcStrat execArith hs512 (planZHJ (W t).dj (W t).y₀) (cont ((W t).sim τ) ω)) (W t).qF (W t).qS) →
+    (∀ ξ t (τ : Strategy (W t).game), Flock.Guarantees.Period.Plays W T (R.strat ξ) t τ →
+      LinkCRZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
+        (reg ((W t).sim τ)) (cont ((W t).sim τ)) (W t).k (W t).Rw (W t).M (W t).t') →
     ∀ (c : Certificates) (p : Price), Real.log (1 / δ) / q ≤ c.ε * r.units →
     ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ((W t).ks + (W t).link) ≠ ⊤ →
     r.Sound c p .sampled (ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ((W t).ks + (W t).link)).toReal
