@@ -127,7 +127,7 @@ theorem Bound.opensRound_commitRound (Bd : Bound Coin Col T) {H : Msg → Msg} (
     (os : List (Msg × (Fin Bd.saltLen → UInt8))) :
     ((Bd.opensRound (Bd.commitRound H os) os).eval H).1 = true := by
   unfold Bound.opensRound
-  rw [if_pos (Bd.commitRound_length h64 os)]
+  rw [ite_eq_left (Bd.commitRound_length h64 os)]
   refine eval_allOC_true H _ fun p hp => ?_
   obtain ⟨i, hi, rfl⟩ := List.mem_mapIdx.1 hp
   rw [Bd.commitRound_block h64 os i hi]
@@ -174,7 +174,7 @@ theorem Bound.ivstar_honest (Bd : Bound Coin Col T) {H : Msg → Msg} (h64 : Out
   have hc : os.length + 1 = (Bd.honestAs H os lastO).length ∧ ∀ j < os.length, (os.getD j []).length = Bd.nAt x j :=
     ⟨hl.symm, hn⟩
   simp only [Bound.IVStar, hlt, ↓reduceIte, hlast, hfin]
-  rw [if_pos hc, hdrop, Bd.zip_commitRound H os, eval_bindOC, hopen]
+  rw [ite_eq_left hc, hdrop, Bd.zip_commitRound H os, eval_bindOC, hopen]
   simp only [↓reduceIte]
   rw [eval_bindOC, hag]
   rfl
@@ -223,7 +223,7 @@ theorem sha512_out64 : Claims.Out64 sha512 := fun m => by
 
 theorem getLast?_take_succ {α : Type} {l : List α} {j : ℕ} (hj : j < l.length) :
     (l.take (j + 1)).getLast? = some l[j] := by
-  rw [List.take_succ, List.getElem?_eq_getElem hj, Option.toList_some, List.getLast?_concat]
+  rw [List.take_add_one, List.getElem?_eq_getElem hj, Option.toList_some, List.getLast?_concat]
 
 /-- **A round of tag `0` is answered with its coin**: at a statement that sets up, the deployed plain verifier answers
 the prefix ending at round `j` with coin `j` where round `j`'s message is of tag `0`. -/
@@ -645,7 +645,7 @@ theorem cutRound_encRound (rest : Msg) :
       simp [encRound, List.append_assoc]
     rw [hm]
     simp only [List.map_cons, cutRound]
-    rw [if_pos (by simp only [List.length_append, hy]; omega), List.drop_left, List.drop_left' hy,
+    rw [ite_eq_left (by simp only [List.length_append, hy]; omega), List.drop_left, List.drop_left' hy,
       cutRound_encRound rest os, List.take_left, List.take_left' hy, saltOf_ofFn]
     rfl
 
@@ -665,6 +665,11 @@ theorem cutRounds_encRounds (rest : Msg) :
 theorem finalR_lastOR (oss : List (List (Msg × Salt))) (last : Msg) :
     finalR (lastOR oss last) = some (oss, last) := by
   rw [lastOR, finalR_trailer, cutRounds_encRounds]
+
+/-- **The honest element-level last message is of tag `1`**, so the deployed plain verifier answers it with no coin
+(HONEST-VERDICT's `h0` at `last := encLast`). -/
+theorem encLast_head (stmt : Msg) (ps : List Flock.Proof) : (encLast stmt ps).head? ≠ some 0 := by
+  simp [encLast]
 
 /-- **The honest reps' rows at the pure session's files**: rep `k`'s `repRows` at its proof `filePs[k]`, the caps
 `fileCaps` and the coins between the first and the last (`ivstarR_honest_files`' reps). -/
