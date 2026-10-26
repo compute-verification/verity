@@ -204,10 +204,12 @@ A spec-level reference for network accounting's timing channel:
   timestep (ASK-122): a timestep is `EVERY` buckets, the warden's `every`, which divides its window, with
   `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a slot's
   Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy word
-  `occ` (the prompt's length, 0 for an empty slot) and its prompt ids, which the scan reads off the warden's signed
-  ingress cells, so no other tie holds them to the certified bytes; an empty slot's entry of the Programs' row is zero
-  (its outputs masked by `occ`, never on the egress). A window whose warden refused a connection, traffic past its
-  slots, has no certified record, and the period check refuses it. `Class.serves` names the warden parameters it
+  `occ` (1 for a slot whose Program starts at b, 0 for an empty slot), its prompt's length `fields` and its prompt ids,
+  which the scan reads off the warden's signed ingress cells, so no other tie holds them to the certified bytes;
+  `slot_row` gives each one's bits in the state row, for a reader that takes them as i32s (vllm's `SlotRow_v1`). A
+  Program gives all its outputs to the Programs' row at its anchor (n, u32, and 64 ids of 17 bits at w63's class); an
+  empty slot's entry is all zero (its outputs masked by `occ`, never on the egress). A window whose warden refused a
+  connection, traffic past its slots, has no certified record, and the period check refuses it. `Class.serves` names the warden parameters it
   takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides of a group of link-windows in one
   registration: ingress unit t's state and view outputs are committed as registered reads of the scan's state and view
   rows t, which ingress unit t + 1 and egress unit t read, and egress unit t's row as a registered read of the warden's
