@@ -37,7 +37,7 @@ open FlockSoundness.Discharge.Recursion (HClass)
 noncomputable section
 
 /-- The comb a table's fold gives at a shape's residual coins, as `combOf` computes it from a table's files. -/
-def combRead (st : Stmt) (sh : Shape) (rounds : Array (Array F128)) (extras : Array Claim) : Array F128 :=
+def combRead (st : Setup) (sh : Shape) (rounds : Array (Array F128)) (extras : Array Claim) : Array F128 :=
   let c : Array F128 :=
     match Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.Coins.ofRounds rounds) extras with
     | .ok (_, info) =>
@@ -84,7 +84,7 @@ def resVRead (x : Claims.Msg) (cs : List Coin) (key : ℕ × ℕ × ℕ × ℕ) 
   | none => 0
 
 theorem resVOf_eq {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim} {comb : Array F128}
-    {v : Array F128} {info : RecAlgebra.Info RecAlgebra.Lin} {kappa : Array (Array F128)} {S : RecAlgebra.GfS}
+    {v : Array F128} {info : RecAlgebra.Info RecAlgebra.Lin} {kappa : Array (Array (Array F128))} {S : RecAlgebra.GfS}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hv : verifierRows sh rounds extras comb = .ok (v, info, kappa))
     (hS : structureOf sh = .ok S) (hg : groups S (portSizes sh) = .ok gs) {p k : ℕ} (hp : p < gs.size)
     (hk : k < gs[p].2.2.size) : resVOf sh rounds extras comb p k = el v gs[p].2.2[k] := by
@@ -103,7 +103,7 @@ theorem resVRead_eq {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size) (r : Fin 2)
     {S : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hS : structureOf (D.sh cls i) = .ok S)
     (hg : groups S (portSizes (D.sh cls i)) = .ok gs) {p : ℕ} (hp : p < gs.size) {o g u : ℕ} (hog : o + g = r.val)
-    (v : Array F128) (info : RecAlgebra.Info RecAlgebra.Lin) (kappa : Array (Array F128))
+    (v : Array F128) (info : RecAlgebra.Info RecAlgebra.Lin) (kappa : Array (Array (Array F128)))
     (hv : verifierRows (D.sh cls i) (D.rep cls acc i r).rounds (D.rep cls acc i r).extras
       (D.rep cls acc i r).comb = .ok (v, info, kappa)) (k : ℕ) (hk : k < gs[p].2.2.size) :
     resVRead x cs (p, o, g, u) k = el v gs[p].2.2[k] := by
