@@ -5902,6 +5902,9 @@
    "assumptions": [],
    "type_hash": "444c06834fcb5e3f93c0a11fe5912b8345f27f03f6e8b816b86488ca566ed779"
   },
+  "Flock.SecurityProofs.SampledKSLivePub": {
+   "owner": "@proofs"
+  },
   "Flock.SecurityProofs.SampledKSLiveStated": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated"],
