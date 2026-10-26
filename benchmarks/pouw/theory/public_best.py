@@ -1323,6 +1323,58 @@ V2_PICKS = {
 }
 
 
+SMS_MHZ = {"sm_90": (132, 1980), "sm_120": (188, 2092)}
+PUB_SHA = {"sm_90": ("A-wide + R-hi", ("default build",)),
+           "sm_120": ("R-hi, IMAD.HI at 32 (unmeasured)", ("R-shf", "default build"))}
+
+
+def units(card: Card, p: Priced) -> dict:
+    """A priced program's units a naive MAC by resource: tensor in s8 MAC-times, lanes in lane-ops."""
+    caps = cap(card)
+    return {r: p.loads[r] if r == "tensor" else p.loads[r] * caps[r] / card.s8 for r in RES if r in p.loads}
+
+
+def pub_programs() -> dict:
+    """D5's named programs for WORKSOUND-INST's PubBest, per card at v2 as frozen (A = B = 0, V and U ±80, the frozen
+    qkv shape at v2's L): pub_mm standalone (lanes idle: the plain product with every route beside the tensor pipe,
+    O-IO's lookups included) and with the lanes busy (the honest dense kernel, c = 1, wherever V2_PICKS' tile route
+    doesn't win); pub_sha, the best paper schedule at θ, with the measured rates beside it. SHA-512's fma units are
+    θ's fma lanes (an IMAD takes two)."""
+    out = {}
+    print("\n== D5's named public programs (units a naive MAC: tensor in s8 MAC-times, lanes in lane-ops; SHA-512 a "
+          "compression)")
+    zero = data_pmf("zero")
+    eX, eW = entry_pmf(zero, V2_V), entry_pmf(zero, V2_U)
+    for card in (H200, SM120):
+        fam = card.family
+        L = V2_T[fam] * V2_PICKS[fam][0][4]
+        K, n = V2_PICKS[fam][0][1:3]
+        naive = leaves_of(None, 0, eX, eW)
+        alone = price(card, naive, L, n, TOKENS, beside=True, lookups=True)
+        dense = price(card, naive, L, n, TOKENS, beside=False)
+        name = f"pub_mm.{card.name.replace(' ', '')}.v2"
+        out[name] = dict(standalone=alone, job=dense)
+        for label, p in (("standalone", alone), ("lanes busy (v2's periods)", dense)):
+            u = ", ".join(f"{r} {x:.4g}" for r, x in units(card, p).items())
+            routes = ", ".join(f"{r} {x:.3f}" for r, x in p.routes.items())
+            print(f"  {name} {label}: c {p.c:.3f} bound by {','.join(p.binding)} (L {L}, K {K}, n {n}); routes {routes}; "
+                  f"units {u}")
+        sms, mhz = SMS_MHZ[fam]
+        best, others = PUB_SHA[fam]
+        for sch in (best,) + others:
+            t, r = sha_clocks(card, sch)
+            ld = sha_loads(card, sch)
+            tag = f"pub_sha.{card.name.replace(' ', '')}" if sch == best else "  beside it"
+            out[tag, sch] = dict(clocks=t, rate=sms * mhz * 1e6 / t, loads=ld)
+            print(f"  {tag}: {sch}: {t:.2f} SM-clocks a compression at θ ({r}-bound), {sms * mhz * 1e6 / t / 1e9:.2f} G/s "
+                  f"at {mhz} MHz on {sms} SMs; units " + ", ".join(f"{k} {v:g}" for k, v in ld.items()))
+        for f, what, rate, s_, m_, factor, src in SHA_MEASURED:
+            if f == fam:
+                clk = s_ * m_ * 1e6 / rate * factor
+                print(f"    measured: {what}: {clk:.1f} SM-clocks a compression [{src}]")
+    return out
+
+
 def v2_report(ts: dict | None = None) -> dict:
     """c_mm of v2 as frozen per static shape: the tile route inside the job at the shape's L' and honest ALU/tensor
     (V2_PICKS), c = min(1, route / honest); per model the leak sum w h (1 - c) / sum w h, w the shape's MACs and h the
@@ -1404,6 +1456,7 @@ def main() -> None:
         tile_lane_report()
         v2_report()
         v2_report({"sm_90": 2, "sm_120": 3})
+        pub_programs()
         return
     print("catalogue: " + ", ".join(f"{k} rank {len(v[0])}, {len(v)} orientations" for k, v in cat.items())
           + "; not integral (left out): " + ", ".join(n for n in CATALOGUE if n not in cat))
@@ -1428,6 +1481,7 @@ def main() -> None:
     tile_lane_report()
     v2_report()
     v2_report({"sm_90": 2, "sm_120": 3})
+    pub_programs()
 
 
 if __name__ == "__main__":

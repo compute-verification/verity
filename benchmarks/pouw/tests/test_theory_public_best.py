@@ -81,6 +81,14 @@ def test_fixed_tensor_load_counts_in_the_joint_facets():
     assert max(p.loads.values()) <= p.c * (1 + 1e-6)
 
 
+def test_named_public_programs_for_worksound_inst():
+    out = PB.pub_programs()
+    assert out["pub_mm.H200.v2"]["job"].c == pytest.approx(1.0)
+    assert out["pub_mm.RTXPRO6000.v2"]["standalone"].c == pytest.approx(0.876, abs=0.002)
+    assert out["pub_sha.H200", "A-wide + R-hi"]["rate"] == pytest.approx(6.69e9, rel=0.01)
+    assert out["pub_sha.RTXPRO6000", "R-hi, IMAD.HI at 32 (unmeasured)"]["rate"] == pytest.approx(10.22e9, rel=0.01)
+
+
 def test_v2_tile_route_on_h200_wins_through_the_joint_facet_when_peels_pass_three_eighths():
     _, bit, depth = PB.BIT_COST["sm_90"][0]
     big = PB.tile_job_at(PB.H200, 2, 1024, 4096, 6144, bit, depth, 80, 1.15)
