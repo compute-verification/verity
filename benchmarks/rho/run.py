@@ -33,7 +33,7 @@ def fmt(x: float) -> str:
 
 def row(e: Estimate) -> dict:
     s = e.slowdown
-    return {"argument": e.argument, "side": e.side, "status": e.status, "rho": s.rho if s else None,
+    return {"argument": e.argument, "side": e.side, "status": e.status, "premise": e.premise, "rho": s.rho if s else None,
             "g": s.g if s else None, "declared_rho": e.declared, "outside": e.outside,
             "binding": {k: v.cut for k, v in s.regions.items()} if s else {},
             "terms": dict(s.terms) if s else {}}
@@ -79,14 +79,14 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
     out += operating_md(points)
     for f in r.families:
         out += [f"### {f.family} (m = {fmt(f.profile.efficiency)})", "",
-                "| argument | side | status | ρ | g | ρ in one declared block | binding cut |",
-                "|---|---|---|---|---|---|---|"]
+                "| argument | side | status | premises | ρ | g | ρ in one declared block | binding cut |",
+                "|---|---|---|---|---|---|---|---|"]
         for e in f.bounds + (f.combined,) + f.attacks:
             d = row(e)
             if e.slowdown is None:
-                out.append(f"| {e.argument} | {e.side} | outside | | | | {e.outside} |")
+                out.append(f"| {e.argument} | {e.side} | outside | | | | | {e.outside} |")
             else:
-                out.append(f"| {e.argument} | {e.side} | {e.status} | {fmt(d['rho'])} | {fmt(d['g'])} | "
+                out.append(f"| {e.argument} | {e.side} | {e.status} | {e.premise} | {fmt(d['rho'])} | {fmt(d['g'])} | "
                            f"{fmt(e.declared)} | {', '.join(f'{k}: {v}' for k, v in d['binding'].items())} |")
         terms_ = f.combined.slowdown.terms
         out += ["", "g's terms (lower bound): " + ", ".join(f"{k} {fmt(v)}" for k, v in terms_.items() if v), ""]

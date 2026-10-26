@@ -305,11 +305,13 @@ def premises(registry: Registry | None = None) -> dict[str, dict]:
     return {reg[f"premise.{n}.lean"]: reg.table(f"premise.{n}") for n in reg.names("premise")}
 
 
-def premise_status(cites: Iterable[str], k: float, registry: Registry | None = None) -> str:
+def premise_status(cites: Iterable[str], k: float, registry: Registry | None = None,
+                   table: Mapping[str, Mapping] | None = None) -> str:
     """The weakest standing (`STANDINGS`) of the premises among `cites` at a block of `k` bits: each premise's
     `standing` up to its `credible_bits`, its `beyond` above. Statements (`proved`, `draft:E1-Prop…`) and evidence
-    don't count; an assumption `data/premises.toml` doesn't list is `assumed`."""
-    table = premises(registry)
+    don't count; an assumption `data/premises.toml` doesn't list is `assumed`. `table` is `premises(registry)`, read
+    once by a caller that asks often."""
+    table = premises(registry) if table is None else table
     out = "supported"
     for c in cites:
         if c in table:
