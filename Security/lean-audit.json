@@ -878,6 +878,10 @@
    "owner": "@proofs",
    "digest": "562df1c19fb3ddb0861a89b741ca695aa0276bfceb9fef4fd2a682c6041393cb"
   },
+  "Flock.Guarantees.HiddenWindow.CR": {
+   "owner": "@training",
+   "digest": "2f35aff2693b2a37400d572183a21f7c1183a75a51849c7d83dcdb2e3c05b64f"
+  },
   "Flock.Guarantees.LoopInnerRound0": {
    "owner": "@proofs"
   },
@@ -1856,10 +1860,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Flock.Guarantees.HiddenWindow.CR": {
-   "owner": "@training",
-   "digest": "2f35aff2693b2a37400d572183a21f7c1183a75a51849c7d83dcdb2e3c05b64f"
   }
  },
  "meaning": [
@@ -13382,10 +13382,10 @@
    ]
   },
   "Definitions.Accounting.Guarantees.ComposeWindow": {
-   "digest": "f0ce654ec28e8faf9ee052a8cf30a928ed10044c74201616b12077586833f022",
+   "digest": "7a1e1b9c29f79dcfd3b6b9c7cb795faaf86994d18dd50d05533a364b0afeaf45",
    "definitions": {
-    "Accounting.Guarantees.Compose.CircuitCreditPerWindow": "4ab91af47fa0ba47136022a6c9b2e4eae9db179e362eb1be8940885e51ec35ee",
-    "Accounting.Guarantees.Compose.CreditPlayOn": "3219b86e30d412b987cf267e278e276400592bfd5c04fbd66fce6dc1f90b2311"
+    "Accounting.Guarantees.Compose.CircuitCreditPerWindow": "7b49511ca95922d68777766b00c723226451c3d7abcfb300a1f6ecc0ea9448ad",
+    "Accounting.Guarantees.Compose.CreditPlayOn": "b9a1beecaa14941b8c4011b36347e51c2e8fa22165a599a7d618bbc3904753ca"
    },
    "guarantees": ["Accounting.SecurityProofs.Compose.CircuitCreditPerWindow"]
   },
