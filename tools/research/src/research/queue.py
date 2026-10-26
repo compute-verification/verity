@@ -95,7 +95,7 @@ Preflight.  Each of 17 Oct's marks that broke or cancelled a train was cheap to 
 on `next`, a stale Lake pin, a module string naming a module only an unlanded PR adds, a workspace member without its REAL_ROOTS
 entry, a test that read a row another queued PR refits away (an error at collection), and one lane's unlanded branch carried in
 two PRs.  20 Oct's two failed `tests/test_repository.py` (a Markdown cap, a report-genre name), which the preflight now runs
-too, as it runs the landing gates the sync would.  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
+too, as it runs the landing gates the sync would (on the head; the sync, on its merge onto `next`).  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
 failure `next` has too refuses nothing, and what keeps a check from running is said and refuses nothing (the train's check is the
 gate).  `--no-preflight` skips it, for the lander.
 
@@ -112,7 +112,8 @@ on its diff against `main`, or against the PR it's stacked on) and contains none
 change, `--first`'s order and then admission's within each part, so it doesn't wait above a Lean change for its Lean check.
 Members the sync keeps never move for it.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
 which files conflict and which queued PRs touched them.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
-`main`, `gate_refusal`), with the gate's fix: each PR the sync merges is judged first, a new one or one merged again above a
+`main`, `gate_refusal`) on its merge onto `next` (`tools/verity/check/gates/markdown_caps.py`: one it puts over a cap),
+with the gate's fix: each PR the sync merges is judged, a new one or one merged again above a
 dropped or moved member, never one in the prefix it keeps, so a refusal never takes a running check's commit off `next`.
 
 Landing.  `land` walks `next` down from its tip and fast-forwards `main` to the first commit the gate accepts: `main` gets exactly
@@ -340,8 +341,8 @@ class DriveFlags:
     land: str = "check"
     #: the after-landing run of `land = "review"` reuses no pass (`check.py --no-cache`)
     after_landing_no_cache: bool = False
-    #: scripts a PR's head passes to be admitted (`gate_refusal`: the ready mark's preflight, and the sync that merges it onto
-    #: `next`), each by its path from the repository's root, run as it is at `main`; drive's landing runs none
+    #: scripts a PR passes to be admitted (`gate_refusal`: its head at the ready mark's preflight, its merge onto `next` at the
+    #: sync), each by its path from the repository's root, run as it is at `main`; drive's landing runs none
     landing_gates: tuple[str, ...] = ()
     #: the most Lean checks of `land = "review"` running at once: a lower one and those stacked above it (`drive.lean_stack`)
     max_lean_checks: int = 2
@@ -500,10 +501,15 @@ def run_gate(repo: Path, main: str, head: str, path: str) -> tuple[int | None, s
 
 
 def gate_refusal(repo: Path, main: str, head: str, gates: Iterable[str],
-                 run: Callable[[Path, str, str, str], tuple[int | None, str]] = run_gate) -> tuple[list[str], list[str]]:
+                 run: Callable[[Path, str, str, str], tuple[int | None, str]] = run_gate,
+                 onto: str | None = None) -> tuple[list[str], list[str]]:
     """What the landing ``gates`` say of ``head`` against ``main`` (each judges the change from their merge base): (each failure,
-    with its fix and how to run the gate; each gate that couldn't judge, with why).  A gate exits 0 to pass, and 1 with `--json`'s
-    `{"failures": [{"why": ..., "fix": [...]}]}` to fail; anything else is unable to judge."""
+    with its fix and how to run the gate; each gate that couldn't judge, with why).  ``head`` is a PR's head, or with ``onto``
+    its merge onto that branch, as the sync judges it: what the members below add counts too (26 Oct: #4238's merge took
+    AGENTS.md over its cap with #4603 and #4604 below it, though its head alone was under).  A gate exits 0 to pass, and 1 with
+    `--json`'s `{"failures": [{"why": ..., "fix": [...]}]}` to fail; anything else is unable to judge."""
+    what, merged = (head[:12], "") if onto is None else (f"its merge onto `{onto}` ({head[:12]})", f" on its merge onto `{onto}`")
+    rerun = "in the branch" if onto is None else f"on the branch merged with `origin/{onto}`"
     refused, unjudged = [], []
     for path in gates:
         rc, out = run(repo, main, head, path)
@@ -516,11 +522,11 @@ def gate_refusal(repo: Path, main: str, head: str, gates: Iterable[str],
                             for f in json.loads(out)["failures"]]
         if not failures:
             why = out if rc is None else f"exit {rc}" + (f": {out}" if rc != 1 else ": no failure it names")
-            unjudged.append(f"the landing gate {path} can't judge {head[:12]} on `main` {main[:12]} ({why.strip()[-400:]})")
+            unjudged.append(f"the landing gate {path} can't judge {what} on `main` {main[:12]} ({why.strip()[-400:]})")
             continue
         for why, fix in failures:
-            refused.append(f"the landing gate {path} at `main` {main[:12]}: {why}" + "".join(f"; {x}" for x in fix)
-                           + f" (`python3 {path} origin/main HEAD` in the branch runs it)")
+            refused.append(f"the landing gate {path} at `main` {main[:12]}{merged}: {why}" + "".join(f"; {x}" for x in fix)
+                           + f" (`python3 {path} origin/main HEAD` {rerun} runs it)")
     return refused, unjudged
 
 
@@ -1106,11 +1112,11 @@ class Queue:
                 e.state, e.why = "waiting", f"contains #{blocked[0]}, which didn't merge"
                 dropped.add(n)
                 continue
-            refused, unjudged = gate_refusal(self.workdir, main, e.pr.head, gates)
-            if refused or unjudged:
-                commit, why = None, " | ".join(refused + unjudged)
-            else:
-                (commit, why), merged = self._merge(tip, e.pr, members), True
+            (commit, why), merged = self._merge(tip, e.pr, members), True
+            if commit is not None:
+                refused, unjudged = gate_refusal(self.workdir, main, commit, gates, onto=self.branch)
+                if refused or unjudged:
+                    commit, why = None, " | ".join(refused + unjudged)
             if commit is None:
                 e.state, e.why = "refused", why
                 dropped.add(n)
