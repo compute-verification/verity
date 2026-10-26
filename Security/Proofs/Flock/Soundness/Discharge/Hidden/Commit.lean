@@ -47,6 +47,21 @@ theorem parseCommit_untyped (ht : tags.typed = false) (h : HmOut.parseCommit tag
     obtain ⟨tu, c₀, hp, hc, -, rfl⟩ := TmplValue.parseTmpl_cases h
     exact ⟨_, c₀, hp, (parse_factsPre_nets hp).1, hc, rfl, .inr ⟨tu, rfl, rfl, rfl⟩⟩
 
+/-- **A committed untyped circuit passed `HmRow.check`.** -/
+theorem parseCommit_check (ht : tags.typed = false) (h : HmOut.parseCommit tags cf tables = .ok c) :
+    ∃ ls, HmRow.check c tags ls = .ok () := by
+  obtain ⟨pre, c₀, -, P, -, he, -⟩ := parseCommit_untyped ht h
+  obtain ⟨ls, hl⟩ := P.check
+  exact ⟨ls, by rw [he]; exact hl⟩
+
+/-- `parseCommit_check`'s `CheckFacts`. -/
+theorem parseCommit_checkFacts (ht : tags.typed = false) (h : HmOut.parseCommit tags cf tables = .ok c) :
+    CheckFacts c := by
+  obtain ⟨pre, c₀, -, P, -, he, -⟩ := parseCommit_untyped ht h
+  obtain ⟨ls, hl⟩ := parseCommit_check ht h
+  have hty : c.typed = none := by rw [he]; exact P.typed
+  exact check_facts (tags := tags) (ls := ls) hty hl
+
 /-- A committed circuit has the tags' leaf scheme. -/
 theorem parseCommit_leafScheme (h : HmOut.parseCommit tags cf tables = .ok c) : c.leafScheme = tags.merkleLeaf := by
   cases hi : tags.isTmpl
@@ -71,20 +86,15 @@ theorem parseCommit_slots (h : HmOut.parseCommit tags cf tables = .ok c) :
 
 /-! ## The session -/
 
-/-- **A flat session commits `HmOut.parseCommit`'s circuit**: `Stmt.setupHidden` reads `HmOut.parse`, which is
-`HmOut.parseCommit` when the tags are not templated. -/
-theorem setupHidden_parseCommit (hi : tags.isTmpl = false)
-    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
-    HmOut.parseCommit tags cf tables = .ok st.c := by
-  rw [parseCommit_flat hi]
-  exact (setupHidden_spec' h).parse
+/-- **A session commits `HmOut.parseCommit`'s circuit** (`Spec.parse`). -/
+theorem setupHidden_parseCommit (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
+    HmOut.parseCommit tags cf tables = .ok st.c :=
+  (setupHidden_spec' h).parse
 
-/-- **A flat session's `SpecOf` at `HmOut.parseCommit`.** -/
-theorem setupHidden_specC (hi : tags.isTmpl = false)
-    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
-    SpecOf (HmOut.parseCommit tags cf tables) tags pf coins draw st := by
-  rw [parseCommit_flat hi]
-  exact setupHidden_specOf h
+/-- **A session's `SpecOf` at `HmOut.parseCommit`.** -/
+theorem setupHidden_specC (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
+    SpecOf (HmOut.parseCommit tags cf tables) tags pf coins draw st :=
+  setupHidden_specOf h
 
 /-- **A templated session's `SpecOf` at `HmOut.parseCommit`**: `Stmt.setupHiddenOf` on `HmOut.parseTmpl`'s circuit. -/
 theorem setupHiddenOf_specC (hi : tags.isTmpl = true)
@@ -189,6 +199,29 @@ theorem hidden_layoutC (ht : tags.typed = false) (s : SpecOf (HmOut.parseCommit 
     exact hidden_layout_of (layout_of_tmpl hT s.pin rfl rfl s.m s.kLog) hty s.da s.db
       (outPairs_inBit_of (fun n => (hok n).1.2.2) hun hsh hhm C hc)
 
+theorem hidden_layout' : HiddenLayout := fun ht h => hidden_layoutC ht (setupHidden_specC h)
+
+/-! ## The facts read off `Spec` on the committed circuit -/
+
+/-- **The leaf scheme**: under `hm96-sha512/v1` tags, a statement `Stmt.setupHidden` accepts commits its rows with
+`hm96Sha512`. -/
+theorem setupHidden_hm96 (hl : tags.merkleLeaf = "hm96-sha512/v1")
+    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
+    st.merkle = MerkleScheme.hm96Sha512 :=
+  specC_hm96 hl (setupHidden_specC h)
+
+/-- **The leaf scheme, plain**: under tags with plain SHA-512 leaves, a statement `Stmt.setupHidden` accepts commits its
+rows with `MerkleScheme.sha512 "flock-leaf/sha512-unsalted"`. -/
+theorem setupHidden_plain (hl : tags.merkleLeaf = "flock-leaf/sha512-unsalted")
+    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
+    st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" :=
+  specC_plain hl (setupHidden_specC h)
+
+/-- **The statement is well formed** (`StmtWF`, `RegionsWF`), as `setupH_wf` for `Stmt.setupH`. -/
+theorem setupHidden_wf (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
+    StmtWF st ∧ RegionsWF st :=
+  specC_wf (setupHidden_specC h)
+
 /-! ## The flat twin -/
 
 /-- **What the copy positions read, of a templated circuit** whose Δ is `HmRow.delta`'s: the unit is the template's
@@ -239,11 +272,6 @@ theorem flat_unitFactsC (ht : tags.typed = false)
     rw [parseCommit_tmpl hi] at hT
     exact unitFacts_tmpl (st := flatTwin st) hT rfl
 
-/-- **`hidden_layout'` on a flat session, through `hidden_layoutC`.** -/
-theorem hidden_layout_flat (ht : tags.typed = false) (hi : tags.isTmpl = false)
-    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) : Layout st :=
-  hidden_layoutC ht (setupHidden_specC hi h)
-
 /-! ## A session from either setup -/
 
 /-- **A committed circuit**: `HmOut.parse`'s (a flat file, or a flat session at any tags) or `HmOut.parseTmpl`'s. -/
@@ -267,7 +295,7 @@ def SpecC (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List (Stri
 /-- `Stmt.setupHidden`'s accept is a `SpecC`. -/
 theorem setupHidden_specCC (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     SpecC tags cf pf coins tables draw st :=
-  .inr (setupHidden_specOf h)
+  .inl (setupHidden_specOf h)
 
 /-- `SpecOf` at the committed circuit itself. -/
 theorem SpecC.self (s : SpecC tags cf pf coins tables draw st) : SpecOf (.ok st.c) tags pf coins draw st :=
@@ -341,6 +369,25 @@ theorem Committed.netKinds (hty : tags.typed = false) (h : Committed tags cf tab
   · obtain ⟨tu, c₀, P, -, he, -, -⟩ := TmplValue.parseTmpl_facts h
     subst he
     exact P.kinds
+
+/-- **What a committed circuit's parse accepted, whatever its template** (`ParseFactsU`): `HmRow.parse`'s facts for a
+flat file, its parsed file's with the template's committed unit net first for a templated one. -/
+theorem Committed.factsU (hty : tags.typed = false) (h : Committed tags cf tables c) :
+    ∃ pre, ParseFactsU tags pre c := by
+  rcases h with h | h
+  · exact ⟨#[], (parse_facts (parse_untyped hty h).1).toU⟩
+  · obtain ⟨tu, c₀, P, -, rfl, -, -⟩ := TmplValue.parseTmpl_facts h
+    exact ⟨_, P.toU.retmpl _⟩
+
+/-- **A committed circuit's `sha512/row/v1` output rows** (`out_rows_v1`): unsegmented, one per output port, each after
+the input rows and of `2 · words = 128 · chunks` bytes; a templated file's are its parsed file's. -/
+theorem Committed.outRows (hty : tags.typed = false) (h : Committed tags cf tables c)
+    (hv1 : ∀ p ∈ c.ports.toList, p.v2 = false) : OutRows c := by
+  rcases h with h | h
+  · obtain ⟨hp, hc⟩ := parse_untyped hty h
+    exact out_rows_v1 hp hc hv1
+  · obtain ⟨tu, c₀, hp, hck, -, rfl⟩ := TmplValue.parseTmpl_cases h
+    exact out_rows_v1Pre hp (parse_factsPre_nets hp).1 hck hv1
 
 /-- **A session's layout**, flat or templated (`hidden_layoutC`). -/
 theorem SpecC.layout (ht : tags.typed = false) (s : SpecC tags cf pf coins tables draw st) : Layout st :=

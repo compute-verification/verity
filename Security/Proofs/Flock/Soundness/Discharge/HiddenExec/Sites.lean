@@ -45,7 +45,7 @@ variable {S : Finset (Fin n)} (x : TableH I mPts S)
 
 include hc in
 /-- A drawn table's statement is on the session's one circuit. -/
-theorem c_eq : x.st.c = c := Except.ok.inj ((setupHidden_parseC x.h).symm.trans hc)
+theorem c_eq : x.st.c = c := setupHidden_c_of_parse hc x.h
 
 include ht hcS in
 /-- **A drawn table's statement circuit is the session's**: its committed circuit unrolls to `c`. -/

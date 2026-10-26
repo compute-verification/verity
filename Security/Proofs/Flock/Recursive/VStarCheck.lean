@@ -218,6 +218,8 @@ theorem checkParsed_ok {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkP
   unfold RecVStar.checkParsed at h
   dsimp only at h
   split at h
+  · cases h
+  split at h
   · rename_i u hs
     refine ⟨u, hs, ?_⟩
     rw [pure_bind] at h
@@ -234,6 +236,18 @@ theorem checkParsed_ok {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkP
             Classical.not_not, Bool.not_eq_false] at h1 h2 h3
           exact ⟨h1.1, h1.2, h2, h3⟩
   · cases h
+
+/-- **A circuit V*'s parse check passed carries no template.** -/
+theorem checkParsed_flat {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkParsed s c = .ok ()) :
+    c.tmpl = none := by
+  unfold RecVStar.checkParsed at h
+  dsimp only at h
+  split at h
+  · cases h
+  · rename_i h0
+    cases ht : c.tmpl with
+    | none => rfl
+    | some _ => simp [ht] at h0
 
 /-- **The unit check, as V*'s statement `j`**: a unit named `name` over `n` instances is statement `j` of V*'s
 statements at `i` (the one statement so named, and statement `j`'s name is it), and `n` is its instance count. -/

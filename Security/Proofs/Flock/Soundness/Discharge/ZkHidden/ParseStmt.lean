@@ -66,7 +66,7 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (Strin
 /-- **A session commits `HmOut.parseCommit`'s circuit**: the circuit `Stmt.setupHidden` reads. -/
 theorem setupHidden_commit (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     HmOut.parseCommit tags cf tables = .ok st.c :=
-  Hidden.setupHidden_parseCommit (HmOut.parse_isTmpl (setupHidden_parseC h)) h
+  Hidden.setupHidden_parseCommit h
 
 /-- **The statement circuit is the session's committed circuit unrolled**, for untyped tags. -/
 theorem stmt_of_setupHidden (ht : tags.typed = false) (hc : HmOut.parseStmt tags cf tables = .ok c)

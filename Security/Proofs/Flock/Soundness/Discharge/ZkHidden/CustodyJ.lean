@@ -129,8 +129,8 @@ theorem drawOkZKHJ_of_file (I : Inputs) (ht : I.tags.typed = false) {c : Flock.C
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.subset kd) pop) (S : Finset (Fin n)) :
     DrawOkZKHJ I dj (mPtsOf c.g (kd / nTab I)) S :=
-  drawOkZKHJ_of_fileG I (fun _ _ _ h => congrArg Flock.Circuit.g (Except.ok.inj ((setupHidden_parseC h).symm.trans
-    ((parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc)))) kd pop hdiv dj hdj S
+  drawOkZKHJ_of_fileG I (fun _ _ _ h => congrArg Flock.Circuit.g (setupHidden_c_of_parse
+    ((parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc) h)) kd pop hdiv dj hdj S
 
 /-- `drawOkZKHJ_of_file` at the statement circuit (`HmOut.parseStmt`, a templated file's template unrolled): each
 table's session commits the circuit the statement circuit unrolls (`stmt_g_of_setupHidden`). -/

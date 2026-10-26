@@ -319,6 +319,23 @@ theorem outGroup_single {c : Circuit} (hr : c.outRowPorts = Array.replicate c.ou
 /-- **`sha512/row/v1` rows' output rows**: unsegmented, one per output port, each after the input rows and of
 `2 · words = 128 · chunks` bytes (`ParseFacts.portWords`): a `sha512/row/v1` row is no bit row, so each output row is a
 padded lone port (`checkRows_out`). -/
+theorem out_rows_v1Pre {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
+    {c : Circuit} (hp : HmRow.parse tags cf tables (pre := pre) = .ok c) (P : ParseFactsPre tags pre c)
+    (hc : HmOut.checkRows c = .ok ()) (hv1 : ∀ p ∈ c.ports.toList, p.v2 = false) :
+    (∀ p ∈ c.ports.toList, p.segs = none) ∧ c.outRowPorts = Array.replicate c.outPorts.size 1 ∧
+      ∀ j < c.outPorts.size, HmOut.nIn c + j < c.ports.size ∧
+        2 * (c.ports.getD (HmOut.nIn c + j) default).words = 128 * (c.ports.getD (HmOut.nIn c + j) default).chunks := by
+  have hu : ∀ p ∈ c.ports.toList, p.segs = none := fun p hm => P.v1Segs p hm (hv1 p hm)
+  have hr := outRows_single (parse_rowPorts hp).2 fun j hj => by
+    obtain ⟨hlt, h1 | ⟨hs, -⟩⟩ := checkRows_out hc hj
+    · exact h1.1
+    · rw [hu _ (getD_mem_toList (d := default) hlt), hv1 _ (getD_mem_toList (d := default) hlt)] at hs
+      simp at hs
+  refine ⟨hu, hr, fun j hj => ?_⟩
+  have hj' : j < c.outRowPorts.size := by rw [hr, Array.size_replicate]; exact hj
+  have hlt := (checkRows_out hc hj').1
+  exact ⟨hlt, P.portWords _ (getD_mem_toList (d := default) hlt) (hv1 _ (getD_mem_toList (d := default) hlt))⟩
+
 theorem out_rows_v1 {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ())
     (hv1 : ∀ p ∈ c.ports.toList, p.v2 = false) :

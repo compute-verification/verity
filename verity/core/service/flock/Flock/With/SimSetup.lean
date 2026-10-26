@@ -259,6 +259,24 @@ theorem hmOutParseWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : T
   sim_walk [parseWith_sim S tM tN hh, readWith_sim S tM tN hh]
   iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [parseWith_sim S tM tN hh, readWith_sim S tM tN hh])
 
+theorem hmOutParseTmplWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
+    {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (tags : Tags) (bytes : ByteArray)
+    (tables : List (String × ByteArray)) :
+    S.R (HmOut.parseTmplWith hs tags bytes tables) (HmOut.parseTmplWith hs' tags bytes tables) := by
+  unfold HmOut.parseTmplWith
+  simp -zeta only [tM.bind, tN.bind]
+  sim_walk [parseWith_sim S tM tN hh]
+  iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [parseWith_sim S tM tN hh])
+
+theorem hmOutParseCommitWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
+    {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (tags : Tags) (bytes : ByteArray)
+    (tables : List (String × ByteArray)) :
+    S.R (HmOut.parseCommitWith hs tags bytes tables) (HmOut.parseCommitWith hs' tags bytes tables) := by
+  unfold HmOut.parseCommitWith
+  split
+  · exact hmOutParseTmplWith_sim S tM tN hh tags bytes tables
+  · exact hmOutParseWith_sim S tM tN hh tags bytes tables
+
 theorem hmOutCheckPublicWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
     {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (c : Circuit) (pub : Public) :
     S.R (HmOut.checkPublicWith hs c pub) (HmOut.checkPublicWith hs' c pub) := by
@@ -298,13 +316,13 @@ theorem setupHiddenWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : 
       (Stmt.setupHiddenWith hs' tags circuitFile publicFile coins tables draw partition program publicInputs) := by
   unfold Stmt.setupHiddenWith
   simp -zeta only [tM.bind, tN.bind]
-  sim_walk [hmOutParseWith_sim S tM tN hh, Sim.map S, checkPartitionWith_sim S tM tN hh,
+  sim_walk [hmOutParseCommitWith_sim S tM tN hh, Sim.map S, checkPartitionWith_sim S tM tN hh,
     hmInLoadPublicWith_sim S tM tN hh, hmInDrawnWith_sim S tM tN hh, stratifiedLawWith_sim S tM tN hh,
     hmOutCheckPublicWith_sim S tM tN hh, deriveTemplateUnitsWith_sim S tM tN hh, hmLinksCheckWith_sim S tM tN hh,
     qwordFindingWith_sim S tM tN hh]
   iterate 40
     all_goals try (dsimp +zetaDelta -zeta only)
-    all_goals sim_walk [hmOutParseWith_sim S tM tN hh, Sim.map S, checkPartitionWith_sim S tM tN hh,
+    all_goals sim_walk [hmOutParseCommitWith_sim S tM tN hh, Sim.map S, checkPartitionWith_sim S tM tN hh,
       hmInLoadPublicWith_sim S tM tN hh, hmInDrawnWith_sim S tM tN hh, stratifiedLawWith_sim S tM tN hh,
       hmOutCheckPublicWith_sim S tM tN hh, deriveTemplateUnitsWith_sim S tM tN hh, hmLinksCheckWith_sim S tM tN hh,
       qwordFindingWith_sim S tM tN hh]

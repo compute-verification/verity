@@ -77,10 +77,10 @@ theorem bc_drawnW {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : Li
 open Hm Compose Flock.DeriveAll Types.Dag
 
 theorem outputs_committed_wide' : OutputsCommittedWide := by
-  intro tags cf pf coins tables d partition program st ht h pop hpop D hD hlt hupv hu hor h64 L regs hregs z hz o g j hg
+  intro tags cf pf coins tables d partition program st ht hi h pop hpop D hD hlt hupv hu hor h64 L regs hregs z hz o g j hg
     hg2 hj hr
   have s := setupHidden_spec' h
-  obtain ⟨hp, hcr⟩ := parse_untyped ht s.parse
+  obtain ⟨hp, hcr⟩ := parse_untyped ht (s.parseF hi)
   have P := parse_facts hp
   have L0 : FlockSoundness.Layout (flatTwin st) := layout_of (st := flatTwin st) P s.pin rfl rfl s.m s.kLog
   have F0 : Aliased.UnitFacts tags (flatTwin st) := unitFacts_of_parse (st := flatTwin st) hp rfl
@@ -109,7 +109,7 @@ theorem outputs_committed_wide' : OutputsCommittedWide := by
 
 /-- **`OutputsBindingWide` from `OutputsCommittedWide`**. -/
 theorem outputs_binding_wide_of (hC : OutputsCommittedWide) : OutputsBindingWide := by
-  intro tags cf pf coins coins' tables d d' partition partition' program program' st st' ht hs hs' pop hpop D D' hD
+  intro tags cf pf coins coins' tables d d' partition partition' program program' st st' ht hi hs hs' pop hpop D D' hD
     hDp hD' hDp' hupv hu hor h64 L regs hregs L' regs' hregs' z hz z' hz' o o' g g' j hg hg2 hg' hg2' hj hr hr' hidx hne
   have hcc : st.c = st'.c := setupHidden_c hs hs'
   have hpop' : HmOut.loadPublic tags st'.c pf = .ok pop := by rw [← hcc]; exact hpop
@@ -119,8 +119,8 @@ theorem outputs_binding_wide_of (hC : OutputsCommittedWide) : OutputsBindingWide
   have hor' : st'.c.outRowPorts = Array.replicate st'.c.outPorts.size 1 := by rw [← hcc]; exact hor
   have h64' : ∀ j < st'.c.outPorts.size, (st'.c.ports.getD (HmOut.nIn st'.c + j) default).words % 64 = 0 := by
     rw [← hcc]; exact h64
-  have e1 := hC ht hs hpop hD hDp hupv hu hor h64 L regs hregs hz o hg hg2 hj hr
-  have e2 := hC ht hs' hpop' hD' hDp' hupv' hu' hor' h64' L' regs' hregs' hz' o' hg' hg2' hj' hr'
+  have e1 := hC ht hi hs hpop hD hDp hupv hu hor h64 L regs hregs hz o hg hg2 hj hr
+  have e2 := hC ht hi hs' hpop' hD' hDp' hupv' hu' hor' h64' L' regs' hregs' hz' o' hg' hg2' hj' hr'
   have hp : HmRow.prefixOf (st.c.ports.getD (HmOut.nIn st.c + j) default) =
       HmRow.prefixOf (st'.c.ports.getD (HmOut.nIn st'.c + j) default) := by rw [hcc]
   refine commitPair_spec' _ _ _ _ (fun e => ?_) (e1.symm.trans (Eq.trans ?_ e2))

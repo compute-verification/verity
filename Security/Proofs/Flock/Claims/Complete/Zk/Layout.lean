@@ -60,6 +60,19 @@ theorem hmOut_parse_mask {tags : Tags} {bytes : ByteArray} {tables : List (Strin
       dsimp only
       exact hm_check_mask hls
 
+/-- **`hmOut_parse_mask` at the committed circuit** (`HmOut.parseCommit`): a templated file's is `HmRow.parse`'s with the
+template's net first, which passed `HmRow.check` (`hm_parse_checkPre`). -/
+theorem hmOut_parseCommit_mask {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (h : HmOut.parseCommit tags bytes tables = .ok c) :
+    ∀ r ∈ c.ranges.toList, r.kind = Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ c.kLog := by
+  cases hi : tags.isTmpl
+  · rw [parseCommit_flat hi] at h
+    exact hmOut_parse_mask h
+  · rw [parseCommit_tmpl hi] at h
+    obtain ⟨tu, c₀, hp, -, -, rfl⟩ := TmplValue.parseTmpl_cases h
+    obtain ⟨_, hls⟩ := hm_parse_checkPre hp
+    exact hm_check_mask hls
+
 /-- **A table's setup places its mask slot in the block**, and its `m` is `k_log + nbl`, with or without hidden
 outputs. -/
 theorem setupOne_layout {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
@@ -72,7 +85,7 @@ theorem setupOne_layout {tags : Tags} {cf pf : ByteArray} {coins : Coins} {table
     exact ⟨(setupH_mask h).2, (setupH_mask h).1⟩
   · rw [HiddenExec.setupOne_hidden hh] at h
     have S := Hidden.setupHidden_spec' h
-    exact ⟨S.m, hmOut_parse_mask S.parse⟩
+    exact ⟨S.m, hmOut_parseCommit_mask S.parse⟩
 
 /-- **Every table of a masked session in scope has the layout the rank bound reads** (`LayoutOk`). -/
 theorem layoutOk_of_scope {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg} {s : Ins}
