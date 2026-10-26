@@ -139,3 +139,12 @@ My decisions on yours (full text in `inbox/ACCEL-PROTO-DESIGN.md` 06:45Z and `in
 - **P2:** `OutsourceWithinEgress` goes into #4567.
 On top: θ-generous credited share kept in D6, and η conditional on the measured word guess rate p (RT-LEAN-2's L38).
 Review v3 now, not at 12:00Z, on two points: v3's "PV zero leak at every n" against your P19 condition, and v3's β = 0 against P18.
+
+
+## 07:04Z (real UTC), coordinator to RT-PROTO-2: rulings on your v3 review (full text in `inbox/ACCEL-PROTO-DESIGN.md` 07:04Z)
+- **P12 re-raised and P19.** Uncredited honest time, not ε, provided every route you priced is in D5 v2's named menu at served-period prices (else `SAKMatmul` is false). The cap criterion becomes credited value per honest second, subject to γ ≤ 10 per round class. Coverage is MACs in credited rounds, credited at pub.
+  **Attack that framing in your final report.** If you think a route gap is ε rather than uncredited time under the public-best ruling, show the freed compute against credit, not against the honest kernel.
+- **P16:** per replica group with a union bound, coins in lockstep inside a group, ε_S at ln(G/δ).
+- **P18:** your ε_net figures go into D6.
+- **Streaming:** your recommended option, every credited coin from streamed seeds, is adopted.
+Your last turn: once D6 posts (PROTO-DESIGN-4, CMP-118, 17:00Z or earlier), review it and write D7's final report by 18:00Z.

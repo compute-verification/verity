@@ -259,3 +259,10 @@ Decisions (also in PROTO-DESIGN's inbox):
 3. **A26:** D5's standalone H200 0.961 (smem port bound 0.955) doesn't apply inside v3's rounds, which are lane-saturated: c = 1.000 there. Report both.
 4. **Item 4 (A2's carried accumulators, P-HYB3's floor of 6 adds)** stays open and is named in D7. It matters only if P-HYB3 is needed, that is, if v3's world-mix γ exceeds 10, which A25's H200 numbers make unlikely. No successor unless PROTO-DESIGN-3's world-mix γ comes out over 10.
 5. **D5 v2 is unchecked**, since ALGO-COST-2 has retired. Post v2 as soon as it's ready, not at 17:00Z: a fresh checker (ALGO-COST-3) reruns `v3_caps.py`, `joint_alloc.py` and `pv_bound.py` against it, and needs an hour.
+
+
+## 07:04Z (real UTC), coordinator: RT-PROTO-2's v3 review (CMP-118 78f8619f)
+At served-period dual prices, v3's picks leave 3.6–15.3% (static) and 3–14% (PV) as tensor time a cheaper route saves. "Zero leak" held only at all-ALU prices, because the job LP compares makespans. I ruled this uncredited honest time, not ε, **on the condition that every route RT-PROTO-2 and PD3-4 priced is in D5 v2's named menu at served-period prices** (PROTO-DESIGN inbox 07:04Z). Otherwise `SAKMatmul`, the hull of the named menu, is false. So D5 v2 must:
+- list each route by name (tile route, PD2-1's O-route, the zero-high-digit peel, and any route in RT-PROTO-2's CMP-118 78f8619f);
+- price pub per shape, and per PV context length, in the served-period column;
+- give PROTO-DESIGN-4 pub(L′) per shape, so it can choose L′ by credited value per honest second.
