@@ -1,0 +1,150 @@
+# ONE-14: the protocols' circuit builders move out of core into `verity.ml.definitions`, so that core's Python reaches
+# neither the catalog (`verity.ml.circuits.ops`, `.silicon`) nor the kernels (`verity.ml.kernels`): what
+# `tools/move/layout.py --map tools/move/one14_map.toml --no-lock` moves, renames and rewrites
+# (note:proofs/20261026T0332Z-report-onethm, row ONE-14; Linear CIR-111).
+#
+# Whole modules move; nothing is split, edited or deleted, and no file is added (the three packages they land in are
+# added before the move):
+# - PoUW's circuits (`pouw/circuit/`) and named schemes (`pouw/schemes/`), with their sidecars and pins, to
+#   `verity/ml/definitions/pouw/`; `live_reads`, the live-read tables PoUW's credit reads, stays in core beside it.
+# - PoUS's four circuit modules to `verity/ml/definitions/pous/`.
+# - The certifier's Boolean Definitions to `verity/ml/definitions/certifier/`, all but `head_check` and `served`, which
+#   the link-window verdict (`active`) reads.
+# - The tests stay in each protocol's `tests/`, which import the builders from their new place.
+# The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+
+[paths]
+# --- PoUW
+"verity/core/protocols/pouw/circuit/live_reads.py" = "verity/core/protocols/pouw/live_reads.py"
+"verity/core/protocols/pouw/circuit/" = "verity/ml/definitions/pouw/circuit/"
+"verity/core/protocols/pouw/schemes/" = "verity/ml/definitions/pouw/schemes/"
+
+# --- PoUS
+"verity/core/protocols/pous/circuit.py" = "verity/ml/definitions/pous/circuit.py"
+"verity/core/protocols/pous/circuit.circuit-check.py" = "verity/ml/definitions/pous/circuit.circuit-check.py"
+"verity/core/protocols/pous/circuit.circuit-check.json" = "verity/ml/definitions/pous/circuit.circuit-check.json"
+"verity/core/protocols/pous/answer_circuit.py" = "verity/ml/definitions/pous/answer_circuit.py"
+"verity/core/protocols/pous/answer_circuit.circuit-check.py" = "verity/ml/definitions/pous/answer_circuit.circuit-check.py"
+"verity/core/protocols/pous/decode_circuit.py" = "verity/ml/definitions/pous/decode_circuit.py"
+"verity/core/protocols/pous/decode_circuit.circuit-check.py" = "verity/ml/definitions/pous/decode_circuit.circuit-check.py"
+"verity/core/protocols/pous/verdict_circuit.py" = "verity/ml/definitions/pous/verdict_circuit.py"
+"verity/core/protocols/pous/verdict_circuit.circuit-check.py" = "verity/ml/definitions/pous/verdict_circuit.circuit-check.py"
+
+# --- the certifier
+"verity/core/protocols/certifier/advice_check.py" = "verity/ml/definitions/certifier/advice_check.py"
+"verity/core/protocols/certifier/advice_check.circuit-check.py" = "verity/ml/definitions/certifier/advice_check.circuit-check.py"
+"verity/core/protocols/certifier/advice_check.circuit-check.json" = "verity/ml/definitions/certifier/advice_check.circuit-check.json"
+"verity/core/protocols/certifier/advised.py" = "verity/ml/definitions/certifier/advised.py"
+"verity/core/protocols/certifier/advised.circuit-check.py" = "verity/ml/definitions/certifier/advised.circuit-check.py"
+"verity/core/protocols/certifier/advised.circuit-check.json" = "verity/ml/definitions/certifier/advised.circuit-check.json"
+"verity/core/protocols/certifier/arith_encode.py" = "verity/ml/definitions/certifier/arith_encode.py"
+"verity/core/protocols/certifier/arith_encode.circuit-check.py" = "verity/ml/definitions/certifier/arith_encode.circuit-check.py"
+"verity/core/protocols/certifier/arith_encode.circuit-check.json" = "verity/ml/definitions/certifier/arith_encode.circuit-check.json"
+"verity/core/protocols/certifier/cache_step.py" = "verity/ml/definitions/certifier/cache_step.py"
+"verity/core/protocols/certifier/cache_step.circuit-check.py" = "verity/ml/definitions/certifier/cache_step.circuit-check.py"
+"verity/core/protocols/certifier/cache_step.circuit-check.json" = "verity/ml/definitions/certifier/cache_step.circuit-check.json"
+"verity/core/protocols/certifier/cache_step_v2.py" = "verity/ml/definitions/certifier/cache_step_v2.py"
+"verity/core/protocols/certifier/cache_step_v2.circuit-check.py" = "verity/ml/definitions/certifier/cache_step_v2.circuit-check.py"
+"verity/core/protocols/certifier/cache_step_v2.circuit-check.json" = "verity/ml/definitions/certifier/cache_step_v2.circuit-check.json"
+"verity/core/protocols/certifier/charge_chain.py" = "verity/ml/definitions/certifier/charge_chain.py"
+"verity/core/protocols/certifier/charge_chain.circuit-check.py" = "verity/ml/definitions/certifier/charge_chain.circuit-check.py"
+"verity/core/protocols/certifier/charge_chain.circuit-check.json" = "verity/ml/definitions/certifier/charge_chain.circuit-check.json"
+"verity/core/protocols/certifier/compile_slice.py" = "verity/ml/definitions/certifier/compile_slice.py"
+"verity/core/protocols/certifier/compile_slice.circuit-check.py" = "verity/ml/definitions/certifier/compile_slice.circuit-check.py"
+"verity/core/protocols/certifier/compile_slice.circuit-check.json" = "verity/ml/definitions/certifier/compile_slice.circuit-check.json"
+"verity/core/protocols/certifier/compile_slice_v2.py" = "verity/ml/definitions/certifier/compile_slice_v2.py"
+"verity/core/protocols/certifier/compile_slice_v2.circuit-check.py" = "verity/ml/definitions/certifier/compile_slice_v2.circuit-check.py"
+"verity/core/protocols/certifier/compile_slice_v2.circuit-check.json" = "verity/ml/definitions/certifier/compile_slice_v2.circuit-check.json"
+"verity/core/protocols/certifier/compile_slice_v3.py" = "verity/ml/definitions/certifier/compile_slice_v3.py"
+"verity/core/protocols/certifier/compile_slice_v3.circuit-check.py" = "verity/ml/definitions/certifier/compile_slice_v3.circuit-check.py"
+"verity/core/protocols/certifier/compile_slice_v3.circuit-check.json" = "verity/ml/definitions/certifier/compile_slice_v3.circuit-check.json"
+"verity/core/protocols/certifier/egress.py" = "verity/ml/definitions/certifier/egress.py"
+"verity/core/protocols/certifier/egress.circuit-check.py" = "verity/ml/definitions/certifier/egress.circuit-check.py"
+"verity/core/protocols/certifier/egress.circuit-check.json" = "verity/ml/definitions/certifier/egress.circuit-check.json"
+"verity/core/protocols/certifier/ingress_scan.py" = "verity/ml/definitions/certifier/ingress_scan.py"
+"verity/core/protocols/certifier/ingress_scan.circuit-check.py" = "verity/ml/definitions/certifier/ingress_scan.circuit-check.py"
+"verity/core/protocols/certifier/ingress_scan.circuit-check.json" = "verity/ml/definitions/certifier/ingress_scan.circuit-check.json"
+"verity/core/protocols/certifier/io_ids.py" = "verity/ml/definitions/certifier/io_ids.py"
+"verity/core/protocols/certifier/io_ids.circuit-check.py" = "verity/ml/definitions/certifier/io_ids.circuit-check.py"
+"verity/core/protocols/certifier/io_ids.circuit-check.json" = "verity/ml/definitions/certifier/io_ids.circuit-check.json"
+"verity/core/protocols/certifier/io_request.py" = "verity/ml/definitions/certifier/io_request.py"
+"verity/core/protocols/certifier/io_request.circuit-check.py" = "verity/ml/definitions/certifier/io_request.circuit-check.py"
+"verity/core/protocols/certifier/io_request.circuit-check.json" = "verity/ml/definitions/certifier/io_request.circuit-check.json"
+"verity/core/protocols/certifier/io_tie.py" = "verity/ml/definitions/certifier/io_tie.py"
+"verity/core/protocols/certifier/io_tie.circuit-check.py" = "verity/ml/definitions/certifier/io_tie.circuit-check.py"
+"verity/core/protocols/certifier/io_tie.circuit-check.json" = "verity/ml/definitions/certifier/io_tie.circuit-check.json"
+"verity/core/protocols/certifier/replay_chain.py" = "verity/ml/definitions/certifier/replay_chain.py"
+"verity/core/protocols/certifier/replay_chain.circuit-check.py" = "verity/ml/definitions/certifier/replay_chain.circuit-check.py"
+"verity/core/protocols/certifier/replay_chain.circuit-check.json" = "verity/ml/definitions/certifier/replay_chain.circuit-check.json"
+"verity/core/protocols/certifier/replay_step.py" = "verity/ml/definitions/certifier/replay_step.py"
+"verity/core/protocols/certifier/replay_step.circuit-check.py" = "verity/ml/definitions/certifier/replay_step.circuit-check.py"
+"verity/core/protocols/certifier/replay_step.circuit-check.json" = "verity/ml/definitions/certifier/replay_step.circuit-check.json"
+"verity/core/protocols/certifier/served_statics.py" = "verity/ml/definitions/certifier/served_statics.py"
+"verity/core/protocols/certifier/served_statics.circuit-check.py" = "verity/ml/definitions/certifier/served_statics.circuit-check.py"
+"verity/core/protocols/certifier/served_statics.circuit-check.json" = "verity/ml/definitions/certifier/served_statics.circuit-check.json"
+"verity/core/protocols/certifier/served_tie.py" = "verity/ml/definitions/certifier/served_tie.py"
+"verity/core/protocols/certifier/served_tie.circuit-check.py" = "verity/ml/definitions/certifier/served_tie.circuit-check.py"
+"verity/core/protocols/certifier/served_tie.circuit-check.json" = "verity/ml/definitions/certifier/served_tie.circuit-check.json"
+"verity/core/protocols/certifier/window_charge.py" = "verity/ml/definitions/certifier/window_charge.py"
+"verity/core/protocols/certifier/window_charge.circuit-check.py" = "verity/ml/definitions/certifier/window_charge.circuit-check.py"
+"verity/core/protocols/certifier/window_charge.circuit-check.json" = "verity/ml/definitions/certifier/window_charge.circuit-check.json"
+
+[retired]
+paths = ["verity/core/protocols/pouw/circuit/", "verity/core/protocols/pouw/schemes/"]
+
+[drop]
+paths = []
+
+[split]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"verity.core.protocols.certifier.advice_check" = "verity.ml.definitions.certifier.advice_check"
+"verity.core.protocols.certifier.advised" = "verity.ml.definitions.certifier.advised"
+"verity.core.protocols.certifier.arith_encode" = "verity.ml.definitions.certifier.arith_encode"
+"verity.core.protocols.certifier.cache_step" = "verity.ml.definitions.certifier.cache_step"
+"verity.core.protocols.certifier.cache_step_v2" = "verity.ml.definitions.certifier.cache_step_v2"
+"verity.core.protocols.certifier.charge_chain" = "verity.ml.definitions.certifier.charge_chain"
+"verity.core.protocols.certifier.compile_slice" = "verity.ml.definitions.certifier.compile_slice"
+"verity.core.protocols.certifier.compile_slice_v2" = "verity.ml.definitions.certifier.compile_slice_v2"
+"verity.core.protocols.certifier.compile_slice_v3" = "verity.ml.definitions.certifier.compile_slice_v3"
+"verity.core.protocols.certifier.egress" = "verity.ml.definitions.certifier.egress"
+"verity.core.protocols.certifier.ingress_scan" = "verity.ml.definitions.certifier.ingress_scan"
+"verity.core.protocols.certifier.io_ids" = "verity.ml.definitions.certifier.io_ids"
+"verity.core.protocols.certifier.io_request" = "verity.ml.definitions.certifier.io_request"
+"verity.core.protocols.certifier.io_tie" = "verity.ml.definitions.certifier.io_tie"
+"verity.core.protocols.certifier.replay_chain" = "verity.ml.definitions.certifier.replay_chain"
+"verity.core.protocols.certifier.replay_step" = "verity.ml.definitions.certifier.replay_step"
+"verity.core.protocols.certifier.served_statics" = "verity.ml.definitions.certifier.served_statics"
+"verity.core.protocols.certifier.served_tie" = "verity.ml.definitions.certifier.served_tie"
+"verity.core.protocols.certifier.window_charge" = "verity.ml.definitions.certifier.window_charge"
+"verity.core.protocols.pous.answer_circuit" = "verity.ml.definitions.pous.answer_circuit"
+"verity.core.protocols.pous.circuit" = "verity.ml.definitions.pous.circuit"
+"verity.core.protocols.pous.decode_circuit" = "verity.ml.definitions.pous.decode_circuit"
+"verity.core.protocols.pous.verdict_circuit" = "verity.ml.definitions.pous.verdict_circuit"
+"verity.core.protocols.pouw.circuit" = "verity.ml.definitions.pouw.circuit"
+"verity.core.protocols.pouw.circuit.live_reads" = "verity.core.protocols.pouw.live_reads"
+"verity.core.protocols.pouw.schemes" = "verity.ml.definitions.pouw.schemes"
+
+[rewrite]
+# Never rewritten: records of what was, and files whose bytes a digest pins.
+exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "benchmarks/numerical/reports/**", "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json",
+           "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
+           "integrations/vllm/manifests/**", "integrations/vllm/workloads/**", "integrations/vllm/data/**",
+           "integrations/vllm/verity_vllm/pins/**",
+           "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py",
+           "tools/research/src/research/store/moves.json",
+           "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py",
+           "benchmarks/network_e2e/tests/data/**",
+           # the superseded-quarantine migration and its test, which run on a synthetic tree of the layout they migrated
+           "integrations/vllm/tools/migrate/superseded_quarantine.py",
+           "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "integrations/vllm/manifests/definitions.json"]

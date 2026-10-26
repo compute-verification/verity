@@ -53,7 +53,6 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from verity.core.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
@@ -170,6 +169,12 @@ def bits_words(bits: Sequence[int]) -> list[int]:
     return [sum(x << t for t, x in enumerate(b[i:i + 16])) for i in range(0, len(b), 16)]
 
 
+def _leaf_bits(data: bytes) -> list[int]:
+    """`data`'s bits as the unit's seed reads them (`seeds.leaves`): its big-endian 32-bit halves, each least significant
+    bit first."""
+    return [(h >> j) & 1 for i in range(0, len(data), 4) for h in [int.from_bytes(data[i:i + 4], "big")] for j in range(32)]
+
+
 def pub_words(salt: bytes, position: int, roots: Sequence[bytes], ln: int) -> list[int]:
     """Lane ln's ``pub`` row: the salt's, the position's and the two roots' leaves as the unit's seed reads them
     (`seeds.leaves`, `seeds.position_leaves`: big-endian 32-bit halves, each least significant bit first), 100 words, then
@@ -178,7 +183,9 @@ def pub_words(salt: bytes, position: int, roots: Sequence[bytes], ln: int) -> li
         raise ValueError("the salt and the two roots are 64-byte digests")
     if not 0 <= int(ln) < 1 << 16:
         raise ValueError(f"the lane index is a u16 word, not {ln!r}")
-    bits = SD.leaves(salt, True) + SD.position_leaves(position, True) + SD.leaves(roots[0], True) + SD.leaves(roots[1], True)
+    if not 0 <= position < 1 << 64:
+        raise ValueError(f"a position is a u64, not {position!r}")
+    bits = _leaf_bits(salt) + _leaf_bits(position.to_bytes(8, "big")) + _leaf_bits(roots[0]) + _leaf_bits(roots[1])
     assert len(bits) == sum(PUBLIC_BITS[:-1])
     return bits_words(bits) + [int(ln)]
 
