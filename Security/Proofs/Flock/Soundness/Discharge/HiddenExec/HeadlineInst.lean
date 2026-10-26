@@ -81,7 +81,7 @@ at the layout of the statement the draw `x₀` sets up). -/
 theorem instKeysRowH (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : ProvedScope.wiresAcyclic c = true) :
     InstKeysRow c (portRowW c) := by
   have hcx : x₀.st.c = c := Except.ok.inj ((setupHidden_parseC x₀.h).symm.trans hc)
-  have L := Hidden.hidden_layout ht x₀.h
+  have L := flat_layout ht x₀.h
   subst hcx
   exact instKeysRow_of_parse L (parse_untyped ht hc).1 hpr hw
 
