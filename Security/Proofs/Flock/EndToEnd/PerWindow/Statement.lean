@@ -2,7 +2,7 @@ import Proofs.Flock.EndToEnd.Period.Statement
 import Definitions.Nci.Remote
 
 /-!
-# Sampled proofs, window by window over a monitoring period: the bridge to the remote dampener (trusted, stated)
+# Sampled proofs, window by window over a monitoring period: the bridge to the remote dampener (trusted)
 
 `Nci.Guarantees.DampenerRemotePeriod` takes sampled proofs' legs per window, over a period of `T` windows on live
 coins, window `t`'s coins `Ω t` uniform and independent of the others': the developer's faulty proof blocks `bad ξ`
@@ -29,17 +29,17 @@ game by a map `out : Ω t → outcome` whose law under uniform coins is the game
   block's time its sampled-proofs coordinate's: it holds as long as one identity's live coins are drawn one at a time,
   which is the service's schedule, not either protocol's guarantee, so it stays `DampenerRemotePeriod`'s hypothesis.
 
-Reviewer: proofs. A proof needs, at each window with a block: `HiddenWindow.drawMiss_le` (under A3) at the image of the
-window's faulty blocks under `unit` (injective there, so of size `m`), then `HiddenWindow.one_sub_le` for
-`(1 − kd/n)^m ≤ (1 − q)^m` (at `q > 0`; `q = 0` is the bound 1); `HiddenWindow.accepted_drawnWrong_le` (under `CR`)
-for the second leg, the event within acceptance with a drawn wrong unit, since a rejected window detects all its faulty
-blocks; `PlayOn.law` to carry each game probability to `Nci.Dampener.prob` on `Ω t`; `Nci.SecurityProofs.prob_mono`;
-and, for the first two conclusions, that `D t` reads the past only. What no proof here gives is that the deployment's
+Reviewer: proofs. The proof, `Flock.SecurityProofs.HiddenWindowPerWindow`, takes, at each window with a block:
+`HiddenWindow.drawMiss_le` (under A3) at the image of the window's faulty blocks under `unit` (injective there, so of
+size `m`), then `HiddenWindow.one_sub_le` for `(1 − kd/n)^m ≤ (1 − q)^m` (at `q > 0`; `q = 0` is the bound 1);
+`HiddenWindow.accepted_drawnWrong_le` (under `CR`) for the second leg, the event within acceptance with a drawn wrong
+unit, since a rejected window detects all its faulty blocks; `PlayOn.law` to carry each game probability to
+`Nci.Dampener.prob` on `Ω t`; `Nci.SecurityProofs.prob_mono`; and, for the first two conclusions, that `D t` reads the
+past only. What no proof here gives is that the deployment's
 window is such a play: nothing ties the sampled-proofs service's window (`verity/core/protocols/sampled_proofs/`) to a
 `HiddenWindow`'s statement, law and record, or its live coins to a uniform tape.
 
-C-Flock's definitions are still in its proofs package, so, like `IntegrityPeriod`, this module imports them. The
-statement is not proved: `HiddenWindowPerWindowStated` holds its text for the lock.
+C-Flock's definitions are still in its proofs package, so, like `IntegrityPeriod`, this module imports them.
 -/
 
 namespace Flock.Guarantees
@@ -102,11 +102,5 @@ def HiddenWindowPerWindow : Prop :=
       Nci.Dampener.prob (PMF.uniformOfFintype (Ω t))
           (fun a => (∃ b ∈ bad ξ, win b = t ∧ b ∈ drawn (Function.update ξ t a)) ∧
             ∀ b ∈ bad ξ, win b = t → b ∉ detected (Function.update ξ t a)) ≤ ks t)
-
-/-- **Sampled proofs, window by window, is stated**: `HiddenWindowPerWindow`, equal to itself, so the lock records its
-text and every definition it reads until it is proved. -/
-def HiddenWindowPerWindowStated : Prop :=
-  let s := HiddenWindowPerWindow
-  s = s
 
 end Flock.Guarantees

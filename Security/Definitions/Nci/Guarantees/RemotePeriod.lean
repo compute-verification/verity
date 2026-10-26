@@ -26,8 +26,9 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   `C(n − m, kd)/C(n, kd) ≤ (1 − kd/n)^m`), and the window is accepted with a drawn faulty block with probability at most
   `ε_ks,t + δ_link,t` (`HiddenWindow.accepted_drawnWrong_le`, from `Flock.SecurityProofs.EndToEndHiddenDrawn`). That
   the deployment's window `t`, at each value of the other windows' coins, is such a window with its faulty blocks as
-  its wrong units is a bridge not stated either: `IntegrityPeriod` plays the windows as one sequential game, not over a
-  product of window coins. No guarantee implies `SampledDetection`'s per-block form: it conditions each block on its
+  its wrong units is the bridge `Flock.Guarantees.HiddenWindowPerWindow`, proved, with the window's play
+  (`HiddenWindow.PlayOn`, chosen from the earlier windows' coins) its premise, which nothing in Lean yet builds from the
+  deployment: `IntegrityPeriod` plays the windows as one sequential game, not over a product of window coins. No guarantee implies `SampledDetection`'s per-block form: it conditions each block on its
   own window's other blocks, and it folds the knowledge term into `q`, where the protocol's is additive per window. The
   statement does not need it: a block's time is its window's, and each identity's escaped blocks are bounded at the
   predictable time its faulty blocks reach `K + 1`, the stopped, per-identity form of `IntegrityHorizon`'s own
