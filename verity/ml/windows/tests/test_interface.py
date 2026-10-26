@@ -464,7 +464,7 @@ def test_a_circuit_declares_its_registered_reads_and_the_record_counts_its_free_
             I.input_count({**doc, "registered": bad}, BY_ID.__getitem__)
 
 
-def test_a_reads_ends_cut_members_and_a_read_reads_whole_rows():
+def test_a_read_covers_whole_members_and_reads_whole_rows():
     """Members are cut where a read's units begin or end, as where a wire's do, so a read covers whole members: units 2..11
     read the weight's rows as tables and units 0 and 1 hold their own rows."""
     reg = lambda r: I.Registered({"w": 6 * K // 2}, reads=(r,))  # noqa: E731
