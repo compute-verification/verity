@@ -889,10 +889,6 @@
    "owner": "@proofs",
    "digest": "002a8a72fb2acb6018f56a8187b93d942d09335444dca0828c4f13f5e91d000c"
   },
-  "Flock.Guarantees.Period.CR": {
-   "owner": "@proofs",
-   "digest": "7674ea20b0d5386d4b3fa68d2d6a86ccc3bebce6b17e6e48446443e429c9b9de"
-  },
   "Flock.Guarantees.SessionsCoined": {
    "owner": "@proofs",
    "digest": "ab28d1707da3d17764910d77bb753fff4d819a925426b03e90595154924c080d"
