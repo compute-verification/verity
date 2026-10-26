@@ -3876,6 +3876,12 @@
    "assumptions": [],
    "type_hash": "9a2761d958d2d306a7d19b3244834d2b40d50f94d9553792ff9ad8de177c92ab"
   },
+  "Accounting.SecurityProofs.Remote.SketchBoundP2": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Remote.SketchBoundP2 : Accounting.Guarantees.Remote.SketchBoundP2"],
+   "assumptions": [],
+   "type_hash": "95231e6b3429b39ef547efa5374afdc67d4d10d42ccc1ea105c29600255be1ab"
+  },
   "Accounting.SecurityProofs.Remote.SketchBoundSession": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Remote.SketchBoundSession : Accounting.Guarantees.Remote.SketchBoundSession"],
@@ -11775,7 +11781,8 @@
    "Verity.SecurityProofs.NaiveBeatsStrassenServed": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.NaiveBeatsStrassenServedSize": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance.",
    "Nci.SecurityProofs.DampenerRemotePeriodStated": "frozen (no-function): It states no property: it reads Nci.Guarantees.DampenerRemotePeriod, so the lock records its text, and it leaves when DampenerRemotePeriod's own theorem is proved and listed.",
-   "Nci.Guarantees.DampenerRemotePeriod": "unstated: DampenerRemote over a monitoring period of T windows on live coins, each protocol's premise replaced by its own guarantee's per-window form (CircuitCredit's conclusion for PouwSound; HiddenWindow.drawMiss_le and EndToEndHiddenDrawn for SampledDetection; NciCheck.Properties.Throttled's conclusion, which DescThrottles gives on the check of record's verdicts, for the thread bound), with TerminalDetection kept as a named premise; stated first, per Daniel's 17 Oct order (statement, red team, card, proof), its text recorded under DampenerRemotePeriodStated, and its theorem Nci.SecurityProofs.DampenerRemotePeriod is not proved yet."
+   "Nci.Guarantees.DampenerRemotePeriod": "unstated: DampenerRemote over a monitoring period of T windows on live coins, each protocol's premise replaced by its own guarantee's per-window form (CircuitCredit's conclusion for PouwSound; HiddenWindow.drawMiss_le and EndToEndHiddenDrawn for SampledDetection; NciCheck.Properties.Throttled's conclusion, which DescThrottles gives on the check of record's verdicts, for the thread bound), with TerminalDetection kept as a named premise; stated first, per Daniel's 17 Oct order (statement, red team, card, proof), its text recorded under DampenerRemotePeriodStated, and its theorem Nci.SecurityProofs.DampenerRemotePeriod is not proved yet.",
+   "Accounting.SecurityProofs.Remote.SketchBoundP2": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.SketchBoundSession at the P2 store's receipts (units of four 2,056-byte blocks, 257 sectors, 16 sign rows, SHA-512 tags) and rank 12, as Accounting.SecurityProofs.Remote.SketchBoundDeployed is at 4096-byte blocks' 128 sectors, with at most Q + P candidate seeds and Q receipt-hash queries for Q the hashes the prover can try over the session: SketchBound at Q/2^96 + (Q + P)(ε + N/2^512) + (Q + P)^2/2^257 under SketchRank 16 257 12 ε and SketchHashRandom at ε_ro = (Q + P)^2/2^257, the sign keys' birthday among at most Q + P seeds (drafted for the P2 store, not decided; note:20261025T2335Z-report-bw-block)"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -12039,6 +12046,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
+    "Accounting.SecurityProofs.Remote.SketchBoundP2",
     "Accounting.SecurityProofs.Remote.SketchBoundSession",
     "Accounting.SecurityProofs.RemoteSessionConservation",
     "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
@@ -12096,6 +12104,7 @@
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
     "Accounting.SecurityProofs.Remote.SketchBoundLine",
+    "Accounting.SecurityProofs.Remote.SketchBoundP2",
     "Accounting.SecurityProofs.Remote.SketchBoundSession"
    ]
   },
@@ -12116,6 +12125,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
+    "Accounting.SecurityProofs.Remote.SketchBoundP2",
     "Accounting.SecurityProofs.Remote.SketchBoundSession"
    ]
   },
@@ -14114,6 +14124,13 @@
    },
    "guarantees": ["Accounting.SecurityProofs.Remote.SketchBoundLine"]
   },
+  "Definitions.Accounting.Guarantees.RemoteSketchP2": {
+   "digest": "47a18e25c5d7f0d519635325bfbbe628c5618d0728d5137548f539c135ad2d23",
+   "definitions": {
+    "Accounting.Guarantees.Remote.SketchBoundP2": "6ccd02d822a0bf11815b61ac9b628897c5ddec7d3d0afc1cf5ecba997bf65dcc"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Remote.SketchBoundP2"]
+  },
   "Definitions.Accounting.Guarantees.Requirement": {
    "digest": "7a21f16296c6f5514f2dd726a10ec31d1e2e1490f70224f575c8f058aade0f4b",
    "definitions": {
@@ -15431,6 +15448,7 @@
     "Accounting.SecurityProofs.RateTensorSketchTable",
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
     "Accounting.SecurityProofs.Remote.SketchBoundLine",
+    "Accounting.SecurityProofs.Remote.SketchBoundP2",
     "Accounting.SecurityProofs.Remote.SketchBoundSession",
     "Accounting.SecurityProofs.RemoteSessionConservationSketch",
     "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
@@ -15666,6 +15684,7 @@
     "Accounting.SecurityProofs.Remote.PooledDraw",
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
     "Accounting.SecurityProofs.Remote.SketchBoundLine",
+    "Accounting.SecurityProofs.Remote.SketchBoundP2",
     "Accounting.SecurityProofs.Remote.SketchBoundSession"
    ]
   },
@@ -15744,6 +15763,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
     "Accounting.SecurityProofs.Remote.SketchBoundLine",
+    "Accounting.SecurityProofs.Remote.SketchBoundP2",
     "Accounting.SecurityProofs.Remote.SketchBoundSession"
    ]
   },
@@ -16640,6 +16660,7 @@
     "Accounting.SecurityProofs.RateAuditTensorSketchRank",
     "Accounting.SecurityProofs.RateTensorSketchTable",
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
+    "Accounting.SecurityProofs.Remote.SketchBoundP2",
     "Accounting.SecurityProofs.Remote.SketchBoundSession",
     "Accounting.SecurityProofs.RemoteSessionConservationSketch",
     "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
@@ -22422,6 +22443,7 @@
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
     "Accounting.SecurityProofs.Remote.SketchBoundLine",
+    "Accounting.SecurityProofs.Remote.SketchBoundP2",
     "Accounting.SecurityProofs.Remote.SketchBoundSession",
     "Accounting.SecurityProofs.RemoteSessionConservation",
     "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
@@ -23931,6 +23953,7 @@
     "Accounting.SecurityProofs.Remote.PooledDraw",
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
     "Accounting.SecurityProofs.Remote.SketchBoundLine",
+    "Accounting.SecurityProofs.Remote.SketchBoundP2",
     "Accounting.SecurityProofs.Remote.SketchBoundSession",
     "Accounting.SecurityProofs.RemoteSessionRoutes",
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
