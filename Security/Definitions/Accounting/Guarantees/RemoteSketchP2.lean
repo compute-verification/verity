@@ -8,8 +8,9 @@ blocks, 8,224 bytes, `m = 257` sectors of 32 bytes: the trace's block (`Accounti
 `N` counts units (`⌊blocks/4⌋`; a store's last `blocks mod 4` blocks are not audited). A block's own receipt would not
 do: 2,056 bytes is not a whole number of 32-byte sectors, and the sketch's guess term is per sector, `2^-(8r)` at rank
 `r ≤` a sector's bytes, so 8-byte sectors would bound it at `Q/2^64`; four blocks are 257 whole sectors and keep
-`Q/2^96` at `r = 12`. The decode computes each block's partial sketch against its 2,056 bytes of the unit's signs
-(bytes `2,056·(j mod 4)` on of each row), and the unit's sketch is the four partials' sum, so the bound is on the unit.
+`Q/2^96` at `r = 12`. The decode computes each block's partial sketch against the unit's signs of its 2,056 bytes
+(those of unit bytes `2,056·(j mod 4)` on, bytes `257·(j mod 4)` on of each 1,028-byte sign row), and the unit's sketch
+is the four partials' sum, so the bound is on the unit.
 
 * `SketchBoundP2`: `SketchBoundSession` at P2's receipts (`m = 257`, 16 sign rows, SHA-512 tags, `h = 512`) and rank
   `r = 12`, with `Q` the prover's SHA-512 compressions over the session (the node's `C` times the outside-compute factor
