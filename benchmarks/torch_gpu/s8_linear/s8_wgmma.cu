@@ -34,8 +34,12 @@ struct alignas(128) Params {
   const float* sw;     // s_w [N]
   uint16_t* y;         // y [M, N], bf16 words, row-major
   int M, N, K, group;  // group: tile rows a raster group
+  int splits, pad0;    // splits of K (1: none)
+  int32_t* ws;         // with splits > 1: [M, N] s32 partial sums, zero between launches
+  uint32_t* cnt;       // with splits > 1: a counter a consumer warp of each tile, zero between launches
 };
-static_assert(offsetof(Params, sa) == 256 && offsetof(Params, M) == 280 && sizeof(Params) == 384, "wgmma.py's Params");
+static_assert(offsetof(Params, sa) == 256 && offsetof(Params, M) == 280 && offsetof(Params, ws) == 304 && sizeof(Params) == 384,
+              "wgmma.py's Params");
 
 // ---------------------------------------------------------------- mbarriers, TMA, wgmma (pearl_c_sm90.cu's)
 DEV uint32_t smem_at(const void* p) { return (uint32_t)__cvta_generic_to_shared(p); }
@@ -190,6 +194,7 @@ template <int TM, int BN, int CL> DEV void body(const Params& p) {
   const uint32_t base = (smem_at(smem) + 1023) & ~1023u, bars = base + STAGES * T::STAGE;
   const int M = p.M, N = p.N, KB = (p.K + BK - 1) / BK;
   const int tiles_m = (M + TM - 1) / TM, tiles_n = (N + BN - 1) / BN, rows_u = (tiles_m + CL - 1) / CL, units = rows_u * tiles_n;
+  const int splits = p.splits, total = units * splits;
   const int tid = threadIdx.x, wg = tid / 128, rank = CL == 1 ? 0 : (int)cta_rank();
   const int first_u = blockIdx.x / CL, step_u = gridDim.x / CL;
   if (tid == 0) {
@@ -213,11 +218,12 @@ template <int TM, int BN, int CL> DEV void body(const Params& p) {
       constexpr uint32_t B_HALF = BN / CL * BK;
       int s = 0;
       uint32_t ph = 0;
-      for (int t = first_u; t < units; t += step_u) {
+      for (int t = first_u; t < total; t += step_u) {
         int tm, tn;
-        raster(t, rows_u, tiles_n, p.group, tm, tn);
+        raster(t % units, rows_u, tiles_n, p.group, tm, tn);
         tm = tm * CL + rank;
-        for (int kb = 0; kb < KB; kb++) {
+        const int z = t / units, kb1 = (z + 1) * KB / splits;
+        for (int kb = z * KB / splits; kb < kb1; kb++) {
           const uint32_t st = base + s * T::STAGE, full = bars + 8 * s;
           if constexpr (CL == 1)
             mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
@@ -256,23 +262,25 @@ template <int TM, int BN, int CL> DEV void body(const Params& p) {
   int s = 0;
   uint32_t ph = 0;
   int32_t d[NA];
-  for (int t = first_u; t < units; t += step_u) {
+  for (int t = first_u; t < total; t += step_u) {
     int tm, tn;
-    raster(t, rows_u, tiles_n, p.group, tm, tn);
+    const int u = t % units;
+    raster(u, rows_u, tiles_n, p.group, tm, tn);
     tm = tm * CL + rank;
-    // one accumulator over all of K: each stage's four atoms issued before the stage before it is waited on, which is then
-    // released; none in flight past the tile
-    for (int kb = 0; kb < KB; kb++) {
+    const int z = t / units, kb0 = z * KB / splits, kb1 = (z + 1) * KB / splits;
+    // one accumulator over the unit's K (all of it, or split z's blocks): each stage's four atoms issued before the stage
+    // before it is waited on, which is then released; none in flight past the unit
+    for (int kb = kb0; kb < kb1; kb++) {
       mbar_wait_warp(bars + 8 * s, ph);
       const uint32_t a0 = base + s * T::STAGE + wg * 64 * BK, b0 = base + s * T::STAGE + T::A_BYTES;
       WG_FENCE;
-      imma<BN>(d, desc_sw128(a0), desc_sw128(b0), kb > 0);
+      imma<BN>(d, desc_sw128(a0), desc_sw128(b0), kb > kb0);
       imma<BN>(d, desc_sw128(a0 + 32), desc_sw128(b0 + 32), 1);
       imma<BN>(d, desc_sw128(a0 + 64), desc_sw128(b0 + 64), 1);
       imma<BN>(d, desc_sw128(a0 + 96), desc_sw128(b0 + 96), 1);
       WG_COMMIT;
       WG_WAIT(1);
-      if (kb > 0 && lane == 0) release<CL>(bars + 8 * (STAGES + (s == 0 ? STAGES - 1 : s - 1)));
+      if (kb > kb0 && lane == 0) release<CL>(bars + 8 * (STAGES + (s == 0 ? STAGES - 1 : s - 1)));
       if (++s == STAGES) { s = 0; ph ^= 1; }
     }
     WG_WAIT(0);
@@ -281,6 +289,38 @@ template <int TM, int BN, int CL> DEV void body(const Params& p) {
 
     const int row = tm * TM + wg * 64 + 16 * (x / 32) + (x % 32) / 4, col0 = tn * BN + 2 * (x % 4);
     const bool live0 = row < M, live1 = row + 8 < M;
+    if (splits > 1) {
+      // split K: each split adds its s32 sums into ws (integer addition, so the total is exact in any order); the warp
+      // whose split arrives last for its 16 rows reads the whole sum back, leaves ws and its counter zero, and runs the
+      // epilogue on it
+      int32_t* w0 = p.ws + (size_t)row * N;
+      int32_t* w1 = p.ws + (size_t)(row + 8) * N;
+#pragma unroll
+      for (int j = 0; j < NA / 4; j++) {
+        const int col = col0 + 8 * j;
+        if (col < N) {
+          if (live0) { atomicAdd(w0 + col, d[4 * j]); atomicAdd(w0 + col + 1, d[4 * j + 1]); }
+          if (live1) { atomicAdd(w1 + col, d[4 * j + 2]); atomicAdd(w1 + col + 1, d[4 * j + 3]); }
+        }
+      }
+      __threadfence();
+      __syncwarp();
+      uint32_t* c = p.cnt + (size_t)u * (NWG * 4) + wg * 4 + x / 32;
+      uint32_t arrived = 0;
+      if (lane == 0) arrived = atomicAdd(c, 1u);
+      arrived = __shfl_sync(0xffffffffu, arrived, 0);
+      if (arrived != (uint32_t)(splits - 1)) continue;
+      __threadfence();
+#pragma unroll
+      for (int j = 0; j < NA / 4; j++) {
+        const int col = col0 + 8 * j;
+        if (col < N) {
+          if (live0) { d[4 * j] = __ldcg(w0 + col); d[4 * j + 1] = __ldcg(w0 + col + 1); w0[col] = 0; w0[col + 1] = 0; }
+          if (live1) { d[4 * j + 2] = __ldcg(w1 + col); d[4 * j + 3] = __ldcg(w1 + col + 1); w1[col] = 0; w1[col + 1] = 0; }
+        }
+      }
+      if (lane == 0) *c = 0;
+    }
     const float r0 = live0 ? p.sa[row] : 0.0f, r1 = live1 ? p.sa[row + 8] : 0.0f;
     uint32_t* y0 = reinterpret_cast<uint32_t*>(p.y + (size_t)row * N);
     uint32_t* y1 = reinterpret_cast<uint32_t*>(p.y + (size_t)(row + 8) * N);

@@ -19,13 +19,20 @@ SM90_SMEM = 232448
 
 
 def test_a_config_round_trips_and_refuses_an_unbuilt_tile():
-    for text in ("128x256:c0:g8", "64x64:c32:g1", "128x128:c66:g16", "128x256:c0:g8:m2", "64x64:c32:g1:m2"):
+    for text in ("128x256:c0:g8", "64x64:c32:g1", "128x128:c66:g16", "128x256:c0:g8:m2", "64x64:c32:g1:m2", "64x64:c0:g8:k0",
+                 "128x64:c0:g1:k4"):
         assert str(W.Cfg.parse(text)) == text
-    assert W.Cfg.parse("64x128") == (64, 128, 0, 8, 1)
-    assert str(W.Cfg.parse("64x128:m1")) == "64x128:c0:g8"
-    for bad in ((256, 128), (128, 256, 0, 0), (128, 256, 0, 8, 3), (128, 256, 1, 8, 2)):
+    assert W.Cfg.parse("64x128") == (64, 128, 0, 8, 1, 1)
+    assert str(W.Cfg.parse("64x128:m1:k1")) == "64x128:c0:g8"
+    for bad in ((256, 128), (128, 256, 0, 0), (128, 256, 0, 8, 3), (128, 256, 1, 8, 2), (128, 256, 0, 8, 2, 4),
+                (128, 256, 0, 8, 1, -1)):
         with pytest.raises(ValueError):
             W.Cfg(*bad)
+
+
+def test_split_k_fills_the_sms_and_keeps_two_blocks_a_split():
+    assert W.auto_splits(2, 128) == 64 and W.auto_splits(1, 128) == 64 and W.auto_splits(40, 128) == 3
+    assert W.auto_splits(200, 128) == 1 and W.auto_splits(1, 3) == 1 and W.auto_splits(1, 1) == 1
 
 
 def test_every_tile_fits_the_cards_shared_memory_and_its_swizzle():
@@ -36,9 +43,9 @@ def test_every_tile_fits_the_cards_shared_memory_and_its_swizzle():
 
 def test_params_is_the_kernels_layout():
     src = (HERE / "s8_wgmma.cu").read_text()
-    sa, m, size = map(int, re.search(r"offsetof\(Params, sa\) == (\d+) && offsetof\(Params, M\) == (\d+) && sizeof\(Params\) == (\d+)",
-                                     src).groups())
-    assert (W.Params.sa.offset, W.Params.M.offset, W.C.sizeof(W.Params)) == (sa, m, size)
+    sa, m, ws, size = map(int, re.search(r"offsetof\(Params, sa\) == (\d+) && offsetof\(Params, M\) == (\d+) && "
+                                         r"offsetof\(Params, ws\) == (\d+) && sizeof\(Params\) == (\d+)", src).groups())
+    assert (W.Params.sa.offset, W.Params.M.offset, W.Params.ws.offset, W.C.sizeof(W.Params)) == (sa, m, ws, size)
     assert re.findall(r"^S8MM\((\d+), (\d+)\)", src, re.M) == [(str(tm), str(bn)) for tm, bn in W.TILES]
     assert int(re.search(r"constexpr int BK = (\d+)", src).group(1)) == W.BK
     assert int(re.search(r"SMEM_BUDGET = (\d+) \* 1024", src).group(1)) * 1024 == W.SMEM_BUDGET
