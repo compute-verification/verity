@@ -12,9 +12,12 @@ declared before the run predicts.  This command writes it from what the run reco
 and refuses a run whose two records disagree (a prompt or output length, a request the trace never saw), a row whose first
 position isn't where the request's last row ended (`continuity`: no position is computed twice and none is skipped, except
 from a prefix-cache hit at first scheduling or at a resume from preemption), a finish the advice can't say (a stop string; an
-abort outside a Commit window; an abort before the request's first output, or while it waits after a preemption, neither of
-which has a row in the step it is freed at), and a row after an abort's step.  A cache hit's KV `sources` are the runs of earlier-computed
-positions whose requests share the hit's tokens, read
+abort outside a Commit window; an abort mid-prefill, before the request's first output, since an aborted request's Program
+ends at its last kept output; an abort while it waits after a preemption, since it has no row in the step it is freed at), a
+request that arrived and never ran, and a row after an abort's step.  A request its client aborted before it was ever
+scheduled has no row and no output, so the advice drops it, exactly; the Commit record keeps it, aborted after 0 ids, and must
+hold no output for it.  A cache hit's KV `sources` are the runs of earlier-computed positions whose requests share the hit's
+tokens, read
 from the Commit record's token ids.  Each kept output's `release` bucket is the bucket of width `--tau` seconds, counted from
 the first step, in which the engine emitted it (the step's clock reading): with no certifier on the path, the earliest bucket
 its frame could be released in.  A trace without a clock takes the step index as the bucket.
@@ -66,7 +69,7 @@ from . import window_advice as WA
 SCHEMA = "verity-vllm/advice-report/v3"
 REGISTRATION = "verity-vllm/advice-registration/v1"
 SERVED = "verity-vllm/advice-windows-index/v1"
-COMPILER = "verity_vllm.predict.steps.compile_steps"
+COMPILER = "verity_vllm.program.predict.steps.compile_steps"
 
 
 #: ℓ when the registration names none (`advice_windows.CAP_BITS`, `predict.steps.CAP_BITS`: 1 MiB of advice)
@@ -211,6 +214,25 @@ class Built:
     advice: WA.Advice
     release_rule: dict[str, Any]
     left: tuple[Left, ...] = ()
+    dropped: tuple[str, ...] = ()               # the requests aborted before they were ever scheduled (`_dropped`)
+
+
+def _dropped(reqs: dict[str, _Req], outside: dict[str, dict[str, Any]], io: dict[str, dict[str, Any]] | None) -> tuple[str, ...]:
+    """The requests that arrived and were never scheduled, each one its client aborted, which the advice drops: with no row, the
+    advice of the others is the same without them.  The Commit record keeps each, aborted after 0 ids; one it says kept an
+    output, or the trace says emitted one, is refused, and so is a request that never ran and wasn't aborted."""
+    unscheduled = [rid for rid, q in reqs.items() if q.index is None]
+    gone = tuple(rid for rid in unscheduled if (outside.get(rid) or {}).get("reason") == "abort")
+    if never := [rid for rid in unscheduled if rid not in gone]:
+        raise ValueError(f"{len(never)} requests arrived and never ran: {never[:3]}")
+    for rid in gone:
+        rec = (io or {}).get(rid) or {"output_ids": [], "finish": None}
+        fin = rec.get("finish") or {"reason": "abort"}
+        if reqs[rid].emitted or rec["output_ids"] or fin.get("reason") != "abort" or fin.get("k"):
+            raise ValueError(f"request {rid} was aborted before it was ever scheduled, which the advice drops, and the trace emitted "
+                             f"{reqs[rid].emitted} tokens for it, the Commit record {len(rec['output_ids'])}, finished by "
+                             f"{fin.get('reason')}" + (f" after {fin['k']} ids" if fin.get("k") is not None else ""))
+    return gone
 
 
 def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None = None, *, tau: float = 0.1,
@@ -219,7 +241,8 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
     is held to, and the tokens a cache hit's sources are read from).  ``carry`` makes it a served Commit window's
     (`window_advice`): what the last window left (`Built.left`; ``()`` for a window that opens on an idle engine), each
     request it must carry and each it may that has a row here coming first, held to its state; and a request may end the window
-    unfinished, its record then the Commit record's.  Without it the trace is a whole session's, every request finished."""
+    unfinished, its record then the Commit record's.  Without it the trace is a whole session's, every request finished.  Either
+    way a request its client aborted before it was ever scheduled is dropped (`Built.dropped`)."""
     window = carry is not None
     ids = {row[0] for r in recs if r["kind"] == "step" for row in r["rows"]}
     carried = [x for x in carry or () if x.must or x.q.rid in ids]
@@ -287,10 +310,7 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
                 if f["reason"] == "abort" and reqs[rid].preempted:
                     raise ValueError(_aborted_preempted(rid, s))
                 reqs[rid].finish = {**f, "at": s}
-    if unscheduled := [rid for rid, q in reqs.items() if q.index is None]:
-        if gone := [rid for rid in unscheduled if (outside.get(rid) or {}).get("reason") == "abort"]:
-            raise ValueError(_aborted_before_output(gone[0]))
-        raise ValueError(f"{len(unscheduled)} requests arrived and never ran: {unscheduled[:3]}")
+    dropped = _dropped(reqs, outside, io)
     advice_reqs = []
     for q in order:
         was = carried[q.index].record if q.index < len(carried) else None
@@ -353,7 +373,7 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
                              f"{a.requests[c.request].output_len} outputs")
         f = None if q.finish is None else {**q.finish, "at": q.finish["at"] - len(steps)}
         left.append(Left(replace(q, index=None, finish=f, made=[list(m) for m in q.made]), a.requests[c.request], c.state, c.must))
-    return Built(a, rule, tuple(left))
+    return Built(a, rule, tuple(left), dropped)
 
 
 def _sha(p: Path) -> str:
@@ -520,7 +540,9 @@ def _written(run: Path, out: Path, b: Built, recs: list[dict[str, Any]], trace: 
                          "prefill_rows": sum(1 for r in rows if r.kind == "prefill"), "decode_rows": sum(1 for r in rows if r.kind == "decode"),
                          "preempted_rows": sum(1 for r in rows if r.preempted), "cache_hit_rows": sum(1 for r in rows if r.cache_hit),
                          "mixed_steps": sum(1 for s in a.steps if len({r.kind for r in s.rows}) > 1),
-                         "arrivals_during_decode": sum(1 for r in recs if r["kind"] == "arrive" and 0 < r["before_step"] < len(steps)),
+                         "arrivals_during_decode": sum(1 for r in recs if r["kind"] == "arrive" and 0 < r["before_step"] < len(steps)
+                                                       and r["request"] not in b.dropped),
+                         "aborted_unscheduled": len(b.dropped),
                          "finishes": {f: sum(1 for q in a.requests if q.finish == f) for f in sorted({q.finish for q in a.requests})},
                          "row_order": sorted({s["order"] for s in steps})}}
     (private / "report.json").write_text(json.dumps(report, indent=1) + "\n")

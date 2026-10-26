@@ -94,7 +94,7 @@ def _register(blk: Any, mm: Any, times: dict[str, float] | None = None) -> None:
 def _pinned_block(nbytes: int, exact: bool, threads: int, times: dict[str, float] | None = None) -> tuple[Any, Any, str]:
     """One page-locked host block of `nbytes`.  Returns (block view, its owner tensor, mode).
 
-    [R17 fp8, F-fp8-POW2] `torch.empty(n, pin_memory=True)` goes through torch's CachingHostAllocator, which rounds EVERY request up to
+    [F-fp8-POW2] `torch.empty(n, pin_memory=True)` goes through torch's CachingHostAllocator, which rounds EVERY request up to
     the next power of two and never returns a freed block to the OS (torch 2.13.0+cu129 on cp-h100, measured: 3 GiB -> RSS +4 GiB,
     5 GiB + 7 B -> +8 GiB, 1 GiB + 1 B -> +2 GiB; `del` -> +0).  Pinned pages are committed at allocation, so the process RSS and the
     cgroup (as shmem) take the ROUNDED size at once while `bytes_total` counts the requested one: on the B8 FP8 row that gap was
@@ -102,7 +102,7 @@ def _pinned_block(nbytes: int, exact: bool, threads: int, times: dict[str, float
     exact=True: a MAP_SHARED|MAP_ANONYMOUS mmap of the page-rounded size + `cudaHostRegister` on it -> page-locked for the D2H copies
     (measured 29 GB/s, = torch's pinned blocks), RSS == the pool's accounting, `cudaHostUnregister` + munmap on `release()` returns it to
     the OS.
-    [R17 fp8, F-fp8-FORKPIN (B8 attempt 2, 03:0xZ)] the block MUST be a SHARED mapping, not private anonymous memory: Linux >= 5.9 copies
+    [F-fp8-FORKPIN (B8 attempt 2, 03:0xZ)] the block MUST be a SHARED mapping, not private anonymous memory: Linux >= 5.9 copies
     DMA-pinned PRIVATE pages eagerly at fork() (copy_present_pte -> page_needs_cow_for_dma), so every child the C2 sampled replay forks
     (its evaluator Pool) got its own copy of the whole 59,350 MiB frozen pool at fork time -- cgroup anon 135 -> 239 GB (the cap) in a
     minute, 20 OOM-killed children in three (measured on a 2 GiB block: private-registered fork -> cgroup anon +2,653 MiB; shared-registered

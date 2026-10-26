@@ -1,6 +1,6 @@
 import Definitions.Nci.BitView
-import Models.Nci.Assumptions.Baseline
-import Models.Nci.Assumptions.Cover
+import Definitions.Nci.Assumptions.Baseline
+import Definitions.Nci.Assumptions.Cover
 import NciCheck.Baseline
 import Properties.NciDesc.Verdict
 
@@ -18,7 +18,7 @@ the check of record, on every expansion of the instance gate by gate (`OnExpansi
 
 It is not a guarantee yet: `checkedCoverTraining_of_descAgrees` (`Proofs.Nci.Cover.Checked`, package `security_proofs`,
 whose proof needs `Nci.Cover.SecurityProofs.CoverTraining`) proves it from `DescAgrees`, whose proof rests on one open
-statement, `Novel.ReadsExact` (`descAgrees_of_readsExact`, `Properties.Proofs.Nci.Agrees`).
+statement, `Novel.ReadsExact` (`descAgrees_of_readsExact`, `Proofs.Properties.Nci.Agrees`).
 -/
 
 namespace NciCheck.Properties
