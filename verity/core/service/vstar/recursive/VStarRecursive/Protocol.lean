@@ -328,12 +328,17 @@ def partVerdicts (o : Own) (pr : Proofs) (bs : Core.Blobs) : V (InnerHeld × Arr
     throw s!"recursive: the verifier holds {o.parts.size} parts, and V* has {ss.size} statements at the inner shape"
   if pr.parts.size != ss.size then
     throw s!"recursive: the evidence has {pr.parts.size} part sessions, and V* has {ss.size} statements at the inner shape"
-  let mut out := #[]
-  for j in [0:ss.size] do
-    match ss[j]?, o.parts[j]?, pr.parts[j]? with
-    | some sj, some p, some s => out := out.push (sj.name, ← partVerdict h j p s bs)
-    | _, _, _ => throw "recursive: a part out of range"
-  pure (h, out)
+  pure (h, (← partsAt h ss o pr bs (List.range ss.size)).toArray)
+where
+  /-- The parts `js`' verdicts, in order: part `j`'s at V*'s statement `j`. -/
+  partsAt (h : InnerHeld) (ss : Array VStar.Stmt) (o : Own) (pr : Proofs) (bs : Core.Blobs) :
+      List Nat → V (List (String × V Unit))
+    | [] => pure []
+    | j :: js => match ss[j]?, o.parts[j]?, pr.parts[j]? with
+      | some sj, some p, some s => do
+        let v ← partVerdict h j p s bs
+        pure ((sj.name, v) :: (← partsAt h ss o pr bs js))
+      | _, _, _ => throw "recursive: a part out of range"
 
 /-- The units the recursive session proved: the inner public file's unit indices (`units.indices`) of the instances the
 inner record drew (`unit_draw.units`), ascending (`OneStageZk.provedUnits`). -/
