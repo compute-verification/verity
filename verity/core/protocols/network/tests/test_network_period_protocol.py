@@ -11,6 +11,7 @@ draws onsite's certifier cases from `build` and answers them with `reference`
 from __future__ import annotations
 
 import dataclasses
+import json
 import shutil
 from collections import Counter
 from fractions import Fraction
@@ -91,8 +92,9 @@ def test_a_small_period_reaches_its_verdict(server):
 
 def test_each_kind_of_case_is_answered_as_lean_answers(server):
     """`case(kind, seed)` reaches its kind's verdict for each kind, the ones that fail to decode refused where they fail
-    (a digest only once the commitment decodes); `cases(seed)` is one of each with its answer; and Lean gives every one
-    of them the mirror's answer."""
+    (a digest only once the commitment decodes); an accepted period's evidence holds each clock certificate alone and its
+    profile no sync; `cases(seed)` is one of each with its answer; and Lean gives every one of them the mirror's
+    answer."""
     drawn = {(k, s): PC.case(k, s) for k in KINDS for s in range(6)}
     answers = {ks: PC.answer(c) for ks, c in drawn.items()}
     assert {ks: a["verdict"] for ks, a in answers.items()} == {(k, s): verdict_of(k) for k, s in drawn}
@@ -102,6 +104,10 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server):
     accepted = [a["public"] for (k, _), a in answers.items() if k == ACCEPT]
     assert all(isinstance(x["K"], int)
                and x["eps"] == str(sum((Fraction(t["delta"]) for t in x["audits"]), Fraction(0))) for x in accepted)
+    assert all(sorted(a["profile"]) == ["link", "windows"] for (k, _), a in answers.items() if k == ACCEPT)
+    assert all(sorted(w["clock"]) == PC.CERTIFICATE_KEYS
+               for (k, _), c in drawn.items() if k == ACCEPT
+               for w in json.loads(bytes.fromhex(c["evidence"]))["windows"])
     assert PC.cases(3) == {k: (drawn[k, 3], answers[k, 3]) for k in KINDS}
     D.run(dataclasses.replace(PORT, inputs=st.sampled_from(list(drawn.values()))), examples=2 * len(drawn),
           server=server)
@@ -111,7 +117,7 @@ def test_the_bound_counts_what_it_says():
     """K's terms on a period worked by hand: 10 units drawn subset:3 at δ = 1/10 with at most 4 wrong, 7 cells on one
     connection and none on another, 2 syncs over 3 link-windows, jitter below 2 over 3 steps; and eps over audits at
     δ = 1/10, 1/15 and 1/6, and over none (Lean's `#guard`s)."""
-    p = Params(((0, 3),), (7, 0), 2, "a", None, b"", "", SyncSet((0,), (Fraction(1), Fraction(2))), 3)
+    p = Params(((0, 3),), (7, 0), 0, 2, "a", None, b"", "", SyncSet((0,), (Fraction(1), Fraction(2))), 3)
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)])
     assert (out["schedules"], out["cells"], out["audits"][0]["faulty_sets"], out["audits"][0]["faulty_bits"],
             out["audits"][0]["jitter"], out["K"]) == (3, 3, 9, 64, 3, 3 + 3 + 9 + 64 + 3)

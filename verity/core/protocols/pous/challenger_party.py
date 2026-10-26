@@ -4,9 +4,12 @@
 The challenger listens and the prover connects. Each round is one frame each way: the challenger sends `u64be index`
 (reading the send time) and the prover answers with the whole block, `block_bytes` of it (the challenger reads the receipt
 time); `u64be 2^64 − 1` ends the session, after its last round or a late one. A batched session (the request's `batch`
-= b > 1) sends b indices in one frame and reads b blocks back. The challenger draws its coins on its own
-host, designates the session id from them, the node and the setup's root (`period.SESSION_DOMAIN`), signs under its own
-key and claims the id in its own session log. It reports `{"host", "public_key", "session", "session_id"}`.
+= b > 1) sends b indices in one frame and reads b blocks back. Before round 0 the challenger sends `WARMUPS` frames on
+`WARMUP_INDEX` (b of it a frame when batched), which no coin chose, and discards their answers: nothing times, records or
+signs them, so the first timed round doesn't pay for waking both processes and the prover's memory path after the
+session's setup. The challenger draws its coins on its own host, designates the session id from them, the node and the
+setup's root (`period.SESSION_DOMAIN`), signs under its own key and claims the id in its own session log. It reports
+`{"host", "public_key", "session", "session_id", "warmups"}`.
 
 `python -m verity.core.protocols.pous.challenger_party --device DIR [--listen HOST:PORT]` is the challenger's side
 (`main`): it reads the request `{"binding", "block_bytes", "blocks", "k", "limit_ns", "node"}` (and `batch` when it
@@ -37,6 +40,8 @@ from . import memory_challenger as mc
 from . import run as R
 
 END = 2 ** 64 - 1
+#: the untimed exchanges before round 0 (module docstring); the index is public, so they reveal no coin
+WARMUPS, WARMUP_INDEX = 8, 0
 MODULE = "verity.core.protocols.pous.challenger_party"
 PREMISE = "trusted-nebius-host"
 
@@ -49,10 +54,12 @@ def _read(f: BinaryIO, n: int) -> bytes:
 
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog, coins: bytes,
-          domain: str, clock: Callable[[], int] = time.perf_counter_ns) -> tuple[bytes, R.Session]:
+          domain: str, clock: Callable[[], int] = time.perf_counter_ns,
+          warmups: int = WARMUPS) -> tuple[bytes, R.Session]:
     """The challenger's side of one session over the connection `f`: the coin tree drawn from `coins` under the id it
-    designates from them, `request`'s node and binding (`domain`'s derivation), each index sent and its block read on
-    `clock`, the session signed by `signer`; its id and record."""
+    designates from them, `request`'s node and binding (`domain`'s derivation), `warmups` untimed exchanges on
+    `WARMUP_INDEX`, then each index (each batch's indices) sent and its block read on `clock`, the session signed by
+    `signer`; its id and record."""
     binding, n, batch = bytes.fromhex(request["binding"]), request["block_bytes"], request.get("batch", 1)
     sid = derive(coins, domain, {"node": request["node"], "setup": binding}).stream("session", 32)
     tree = mc.CoinTree.draw(coins, sid, request["blocks"], request["k"])
@@ -70,7 +77,13 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc
         got = _read(f, n * len(indices))
         return [got[n * t:n * (t + 1)] for t in range(len(indices))]
 
-    signed = c.run(respond) if batch == 1 else c.run_batch(respond_batch)
+    with mc.collector_paused():
+        for _ in range(warmups):
+            if batch == 1:
+                respond(WARMUP_INDEX)
+            else:
+                respond_batch([WARMUP_INDEX] * batch)
+        signed = c.run(respond) if batch == 1 else c.run_batch(respond_batch)
     f.write(END.to_bytes(8, "big"))
     f.flush()
     return sid, R.Session(signed, c.commitment, c.openings())
@@ -79,9 +92,9 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc
 def answer(f: BinaryIO, block_bytes: int, respond: Callable[[int], bytes] | None, *, batch: int = 1,
            respond_batch: Callable[[Sequence[int]], Sequence[bytes]] | None = None) -> int:
     """The prover's side over the connection `f`: each index answered with `respond(index)` until the challenger ends the
-    session, the collector paused as on the challenger's side (`memory_challenger.collector_paused`); the rounds
-    answered. With `batch` > 1, each frame of `batch` indices is answered with `respond_batch(indices)`, every block
-    sent before the next frame is read."""
+    session, the collector paused as on the challenger's side (`memory_challenger.collector_paused`); the blocks
+    answered, the warm-ups' among them. With `batch` > 1, each frame of `batch` indices is answered with
+    `respond_batch(indices)`, every block sent before the next frame is read."""
     n = 0
     with mc.collector_paused():
         while (i := int.from_bytes(_read(f, 8), "big")) != END:
@@ -102,9 +115,9 @@ def answer(f: BinaryIO, block_bytes: int, respond: Callable[[int], bytes] | None
     return n
 
 
-def report(sid: bytes, session: R.Session, public_key: bytes) -> dict[str, Any]:
+def report(sid: bytes, session: R.Session, public_key: bytes, warmups: int = WARMUPS) -> dict[str, Any]:
     return {"host": socket.gethostname(), "public_key": public_key.hex(), "session": session.to_json(),
-            "session_id": sid.hex()}
+            "session_id": sid.hex(), "warmups": warmups}
 
 
 @dataclass(frozen=True)
@@ -150,8 +163,8 @@ def placement(node: str, host: str, *, verifier: str | None = None) -> dict[str,
 def session(party: Party, request: Mapping[str, Any], respond: Callable[[int], bytes] | None, *,
             respond_batch: Callable[[Sequence[int]], Sequence[bytes]] | None = None) -> dict[str, Any]:
     """One session with the challenger's side `party` starts: `request` sent, each index answered with `respond` (each
-    batch with `respond_batch` when the request's `batch` > 1), the side's report back, with `rounds`, the rounds the
-    prover answered."""
+    batch with `respond_batch` when the request's `batch` > 1), the side's report back, with `rounds`, the timed rounds
+    the prover answered (the blocks less the side's warm-ups')."""
     p = subprocess.Popen(list(party.command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
     try:
         p.stdin.write(json.dumps(dict(request), sort_keys=True) + "\n")
@@ -165,7 +178,7 @@ def session(party: Party, request: Mapping[str, Any], respond: Callable[[int], b
         rc = p.wait()
     if rc != 0:
         raise RuntimeError(f"the challenger's side on {party.host} exited {rc}")
-    return out | {"rounds": rounds}
+    return out | {"rounds": rounds - out.get("warmups", 0) * request.get("batch", 1)}
 
 
 def request_of(node: str, point: R.Point, binding: bytes) -> dict[str, Any]:
@@ -198,7 +211,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["END", "PREMISE", "Party", "answer", "main", "placement", "report", "request_of", "serve", "session"]
+__all__ = ["END", "PREMISE", "WARMUPS", "WARMUP_INDEX", "Party", "answer", "main", "placement", "report", "request_of",
+           "serve", "session"]
 
 if __name__ == "__main__":
     sys.exit(main())
