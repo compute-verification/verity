@@ -102,6 +102,27 @@ def test_a_three_digit_fold_is_refused():
         C.fold_split(3)
 
 
+def test_a_rotated_dot_is_exact_with_an_anchor_and_small_digits():
+    """`hadamard_anchor`: exact on fresh signs and at the ℓ1 bound; one digit more a block (past ℓ1 127 at the bound), or
+    no anchor (the amax then rides on the signs), and the codes aren't the integers."""
+    rng = random.Random(3)
+    assert all(C.hadamard_anchor(rng, 4, 3, extreme=e) for e in (True, False, False))
+    assert not C.hadamard_anchor(rng, 4, 3, extreme=True, q=C.anchor_q(4) + 1)
+    assert not all(C.hadamard_anchor(rng, 4, 3, anchor=False) for _ in range(4))
+
+
+def test_the_anchor_squaring_is_right_at_40x_the_macs():
+    """`hadamard_anchor_b4`, the cheater's best under the MAC bound at Llama-3.1-8B: its squaring right, Proven, within
+    OperandBits 128 and its seam bound, its longest column's dot exact through the rotation, at 40x `seam_square`'s
+    MACs instead of the 128x of one nonzero a block."""
+    r = C.measure("hadamard_anchor_b4", trials=4)
+    assert (r["right"], r["proven"], r["operand_bits_128"]) == (4, True, True)
+    assert r["rotation_right"] == r["rotation_trials"] == 2
+    assert r["seam_fail_log2"] <= C.reference_fail_log2()
+    assert (r["units"], r["macs"]) == (518, 655232)
+    assert r["macs"] / 16384 == pytest.approx(40, rel=0.01)
+
+
 def test_prf_floor():
     assert C.prf_units()["compression_floor"] == 80 * 16 - 48
 

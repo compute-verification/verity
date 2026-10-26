@@ -69,8 +69,12 @@ def mechanisms(rows: dict) -> list[dict]:
          "units": seam, "ratio": 1.0, "macs": rows["anyfn_seam"]["macs"], "how": "anyfn_seam"},
         {"mechanism": "signed permutation (any)", "units": seam, "ratio": 1.0, "macs": rows["anyfn_seam"]["macs"],
          "how": "exact: commutes with every exact dot"},
-        {"mechanism": "fresh Hadamard rotation of every dot (block 128)", "units": seam, "ratio": 1.0,
-         "macs": rows["anyfn_seam"]["macs"] * 128, "how": "one nonzero a block: exact, 128x the MACs"},
+        {"mechanism": "fresh Hadamard rotation inside every free dot (block 128, one scale a row)", "units": seam,
+         "ratio": 1.0, "macs": rows["anyfn_seam"]["macs"] * 128,
+         "how": "one nonzero a block: exact, 128x the MACs (under the MAC bound: an anchor block, hadamard_anchor_b*)",
+         "candidates": [{"how": "one nonzero a block", "ratio": 1.0, "macs": rows["anyfn_seam"]["macs"] * 128}] + [
+             {"how": n, "ratio": r["units"] / seam, "macs": r["macs"]} for n, r in rows.items()
+             if n.startswith("hadamard_anchor") and ok(r) and r["rotation_right"] == r["rotation_trials"]]},
         {"mechanism": "primitive semantics, no coins (det floors + clamps)",
          "units": rows["restricted_det_b8"]["units"], "ratio": rows["restricted_det_b8"]["units"] / seam,
          "macs": rows["restricted_det_b8"]["macs"], "how": "restricted_det_b8"},

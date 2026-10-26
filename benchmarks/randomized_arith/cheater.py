@@ -41,13 +41,19 @@ computed the same way, is at most the reference's (`reference_fail_log2`): compa
   `(y − sext8(y))/256` the carry, `S32LowByte` the digit, `verity/ml/circuits/ops/boolean/s8.py`); `sr` needs signed
   radix-128 digits (`d = x − 128·SR(x/128)` always lies in `[−128, 127]`); `noise1` radix 64.
 * `restricted_acc(mech, g, rep, b)`: both mechanisms: each unfolded noisy column cleaned exactly (one `nfloor` under
-  `det`, as a byte carry does; `nfloor` + `cmp` under SR), then `restricted`'s ripple."""
+  `det`, as a byte carry does; `nfloor` + `cmp` under SR), then `restricted`'s ripple.
+* `hadamard_anchor_b{b}`: a fresh random-sign block-Hadamard rotation inside every free dot, quantized with one scale a
+  row as `honest.py`'s `had` does. One nonzero a block is exact at 128x the MACs; cheaper, an anchor coordinate pins
+  the row's scale, so blocks of `⌊127/2^(b−1)⌋` balanced digits rotate to exact integer codes (`hadamard_anchor`,
+  checked in binary32), and `anyfn_fixup`'s pass reads the `128 ·` columns. A per-block scale would close the anchor,
+  but each block's float rescale is then a budgeted rounding a block, which grows the honest budget instead."""
 
 from __future__ import annotations
 
 import functools
 import math
 import random
+import struct
 import sys
 from collections import Counter
 from dataclasses import dataclass
@@ -359,18 +365,24 @@ def restricted_acc(bld: RBuilder, a: list[int], b: int, g: int, rep: int, s: int
 
 
 def anyfn_fixup(bld: RBuilder, a: list[int], b: int, g: int = 0, rep: int = 0, fixup: int | None = None,
-                cap: int = 128) -> list[int]:
+                cap: int = 128, rot: bool = False) -> list[int]:
     """One greedy carry pass of any-function gates over `b`-bit canonical digits (scaled into u8 by `2^(8−b)`, so the
     dots carry `2(8 − b) + rep` guard bits), each group gate reading the carry in and its positions' noisy columns and
     cleaning them inside; the top carry folded into the low digits and one fixup group of `fixup` digit gates (no carry,
-    wrong when `δ·c_top` moves the group's carry out: `group_fail_log2`)."""
+    wrong when `δ·c_top` moves the group's carry out: `group_fail_log2`). With `rot` the columns are `anchor_columns`'
+    (unscaled digits, `HAD_BLOCK ·` each column, no noise)."""
     assert bld.mech.kind == "det"
     n, R = n_digits(b), 1 << b
-    scale_bits = 8 - b
-    G = 2 * scale_bits + rep
-    assert g <= G, f"guard {G} < noise {g}"
-    sa = [bld.affine(0, [(1 << scale_bits, x)]) for x in a] if scale_bits else a
-    ys = unfolded_columns(bld, sa, U8, g, rep)
+    if rot:
+        assert g == 0 and rep == 0
+        G = HAD_BLOCK.bit_length() - 1
+        ys = anchor_columns(bld, a, b)
+    else:
+        scale_bits = 8 - b
+        G = 2 * scale_bits + rep
+        assert g <= G, f"guard {G} < noise {g}"
+        sa = [bld.affine(0, [(1 << scale_bits, x)]) for x in a] if scale_bits else a
+        ys = unfolded_columns(bld, sa, U8, g, rep)
     split = fold_split(b)
     half = (1 << (G - 1)) if G else 0
 
@@ -464,11 +476,12 @@ class Spec:
     noise_g: int = 0
     rep: int = 0
     window: bool = True  # whether the construction takes a seam window to size (`seam_square`'s is fixed)
+    rot: bool = False  # its dots run under the rotation (`hadamard_anchor`)
 
 
 def spec(name: str) -> Spec:
     """A construction by name: `anyfn_seam`, `anyfn_fixup_b{b}[_g{g}_r{rep}]`, `restricted_{det|sr|noise1}_b{b}`,
-    `restricted_acc_{det|sr}_b{b}_g{g}_r{rep}`."""
+    `restricted_acc_{det|sr}_b{b}_g{g}_r{rep}`, `hadamard_anchor_b{b}`."""
     parts = name.split("_")
     kw = {p[0]: int(p[1:]) for p in parts if len(p) > 1 and p[0] in "bgr" and p[1:].isdigit()}
     b, g, rep = kw.get("b", 8), kw.get("g", 0), kw.get("r", 0)
@@ -476,6 +489,9 @@ def spec(name: str) -> Spec:
         return Spec(name, DET, 8, lambda bld, a, w: seam_square(bld, a), U8, window=False)
     if name.startswith("anyfn_fixup"):
         return Spec(name, DET, b, lambda bld, a, w: anyfn_fixup(bld, a, b, g, rep, w), (0, (1 << b) - 1), g, rep)
+    if name.startswith("hadamard_anchor"):
+        return Spec(name, DET, b, lambda bld, a, w: anyfn_fixup(bld, a, b, fixup=w, rot=True), (0, (1 << b) - 1),
+                    rot=True)
     acc = name.startswith("restricted_acc")
     mech = {"det": DET, "sr": SR, "noise1": Mech("noise", 1)}[parts[2] if acc else parts[1]]
     if acc:
@@ -520,7 +536,13 @@ def measure(name: str, trials: int = 32, seed: int = 20261026) -> dict:
         hold += h
     budgeted = [g for g in bld.gates if g.op.kind == "budgeted"]
     units = bld.fixed_units
-    return {"name": name, "mech": sp.mech.name, "b": sp.b, "digits": n, "noise_g": sp.noise_g, "rep": sp.rep,
+    rot = {}
+    if sp.rot:
+        # the longest column's dot, through the rotation's binary32 arithmetic; the first at the ℓ1 bound
+        blocks, rt = 1 + -(-n // anchor_q(sp.b)), max(2, trials // 4)
+        rot = {"rotation_trials": rt,
+               "rotation_right": sum(hadamard_anchor(rng, sp.b, blocks, extreme=t == 0) for t in range(rt))}
+    return {**rot, "name": name, "mech": sp.mech.name, "b": sp.b, "digits": n, "noise_g": sp.noise_g, "rep": sp.rep,
             "units": units, "units_by_class": bld.units_by_class(), "macs": bld.macs, "gates": len(bld.gates),
             "proven": Q.proven(bld.gates) == [], "operand_bits_128": Q.operand_bits(128, bld.gates),
             "max_operand_bits": max((sum(bld.gates[j].bits for j in g.args) for g in budgeted), default=0),
@@ -555,8 +577,88 @@ def prf_units() -> dict:
             "per_coin_byte_estimate": est / 64}
 
 
+# ---- a fresh block-Hadamard rotation inside every free dot ------------------------------------------------------------
+
+#: `honest.py`'s `ROT_BLOCK`
+HAD_BLOCK = 128
+
+
+def f32(x: float) -> float:
+    """`x` rounded to binary32, to nearest even."""
+    return struct.unpack("<f", struct.pack("<f", x))[0]
+
+
+def rotated_codes(x: list[float], sign: list[int], blk: int = HAD_BLOCK) -> list[int]:
+    """One row of `honest.py`'s `QLinear` under `had`: the signs, the block Hadamard in binary32 (Sylvester's
+    `H[j][i] = (−1)^popcount(i & j)` times `1/√blk`, one rounding a multiply-add, as an FMA chain), one scale
+    `amax / 127` for the whole row, and round-to-nearest-even into `[−128, 127]`."""
+    r = f32(1 / math.sqrt(blk))
+    v = []
+    for b0 in range(0, len(x), blk):
+        xs = [(j, f32(x[b0 + j] * sign[b0 + j])) for j in range(blk) if x[b0 + j]]
+        for i in range(blk):
+            acc = 0.0
+            for j, xj in xs:
+                acc = f32(acc + xj * (-r if (i & j).bit_count() & 1 else r))
+            v.append(acc)
+    s = f32(max(map(abs, v)) / 127)
+    return [max(-128, min(127, round(f32(t / s)))) for t in v]
+
+
+def anchor_q(b: int) -> int:
+    """Balanced radix-`2^b` digits (`[−2^(b−1), 2^(b−1))`) a block can hold with its ℓ1 norm at most 127."""
+    return 127 >> (b - 1)
+
+
+def hadamard_anchor(rng: random.Random, b: int, blocks: int, extreme: bool = False, q: int | None = None,
+                    anchor: bool = True, blk: int = HAD_BLOCK) -> bool:
+    """One dot of two rows of balanced radix-`2^b` digits under fresh signs, through `rotated_codes`, against
+    `blk · Σ x_j w_j`. Block 0 holds the anchors: 127 at coordinate 0 of `x` and at coordinate 1 of `w`. Rows 0 and 1 of
+    `H` are orthogonal, so the anchors add nothing to the dot, and each pins its row's amax at `127/√blk` whatever the
+    signs. Every other block holds `q = anchor_q(b)` digits of each row, so each rotated entry there is an integer of
+    magnitude at most 127 over `√blk`, and its code is that integer. `extreme` puts every digit at `−2^(b−1)` and picks
+    the signs that reach the ℓ1 bound at entry 0."""
+    q, h = anchor_q(b) if q is None else q, 1 << (b - 1)
+    n = blocks * blk
+    x, w = [0.0] * n, [0.0] * n
+    if anchor:
+        x[0] = w[1] = 127.0
+    sign = [rng.choice((-1, 1)) for _ in range(n)]
+    want = 0
+    for b0 in range(blk, n, blk):
+        for j in rng.sample(range(b0, b0 + blk), q):
+            dx, dw = (-h, -h) if extreme else (rng.randrange(-h, h), rng.randrange(-h, h))
+            x[j], w[j] = float(dx), float(dw)
+            if extreme:
+                sign[j] = 1
+            want += dx * dw
+    got = sum(p * t for p, t in zip(rotated_codes(x, sign, blk), rotated_codes(w, sign, blk)))
+    return got == blk * want
+
+
+def anchor_columns(bld: RBuilder, a: list[int], b: int) -> list[int]:
+    """The columns `blk · Σ_{i+j=m} a_i a_j` of canonical digits as `hadamard_anchor`'s dots give them: each column a dot
+    of the balanced digits `a_i − 2^(b−1)` (`blk ·` the sum, exact), recentred by a free affine map. Its MACs are the
+    rotated blocks it spans, the anchor's and `⌈|column| / anchor_q(b)⌉` of digits, `blk` each."""
+    n, h, q = len(a), 1 << (b - 1), anchor_q(b)
+    assert q >= 1, f"a radix-2^{b} digit alone is past ℓ1 127"
+    bal = [bld.affine(-h, [(1, x)]) for x in a]
+    macs0, macs = bld.macs, 0
+    cols = []
+    for m in range(2 * n - 1):
+        idx = list(range(max(0, m - n + 1), min(m, n - 1) + 1))
+        d = bld.noisy_mma([bal[i] for i in idx], [bal[m - i] for i in idx], S8, S8, 0, HAD_BLOCK.bit_length() - 1)
+        corr = [(HAD_BLOCK * h, a[i]) for i in idx] + [(HAD_BLOCK * h, a[m - i]) for i in idx]
+        cols.append(bld.affine(-HAD_BLOCK * h * h * len(idx), [(1, d)] + corr))
+        macs += HAD_BLOCK * (1 + -(-len(idx) // q))
+    bld.macs = macs0 + macs
+    return cols
+
+
 BASE = ["anyfn_seam", "anyfn_fixup_b8", "restricted_det_b8", "restricted_sr_b7", "restricted_noise1_b6"]
 NOISE_BITS = (4, 6, 8, 10, 12)
+#: the anchor construction at each digit width the fold allows (b ≥ 4) and a block holds (b ≤ 7)
+ROTATED = [f"hadamard_anchor_b{b}" for b in range(4, 8)]
 
 
 def grid() -> list[str]:
@@ -582,9 +684,9 @@ def main() -> None:
     ap.add_argument("names", nargs="*", help="constructions (default: BASE and the accumulator-noise grid)")
     a = ap.parse_args()
     rows = {}
-    for nm in a.names or BASE + grid():
+    for nm in a.names or BASE + grid() + ROTATED:
         try:
-            rows[nm] = measure(nm, a.trials if nm in BASE else a.grid_trials)
+            rows[nm] = measure(nm, a.trials if nm in BASE + ROTATED else a.grid_trials)
         except AssertionError as e:  # an s32 or guard bound: the construction doesn't exist at these parameters
             rows[nm] = {"name": nm, "infeasible": str(e)}
         print(json.dumps(rows[nm]), flush=True)
