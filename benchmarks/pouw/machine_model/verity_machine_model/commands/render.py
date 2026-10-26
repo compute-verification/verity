@@ -206,15 +206,16 @@ def _theta(data: Path) -> str | None:
            _table(["form", "products", "group", "alignment", "accumulation", "promotion", "rate", "source"],
                   [[x[k] for k in ("form", "products", "group", "alignment", "accumulation", "promotion", "rate",
                                    "source")] for x in t.fp8])]
-    f = T.fold(t, data)
+    hs = T.folds(t, data)
+    L = hs[0].L
     body = []
     rs = {rd: {r.name: r for r in T.routes(t, rd)} for rd in T.READINGS}
     for name in rs["sheet"]:
         body.append([f"d: {name}", *(f"{rs[rd][name].d:.2f}" if name in rs[rd] else "–" for rd in T.READINGS),
                      "ρ₈ over deliveries a SM-clock"])
-    ss = {rd: T.strassen(t, rd, f.L) for rd in T.READINGS}
-    body.append([f"Strassen at L = {f.L}: tensor time over naive", *(f"{ss[rd].tensor:.4f}" for rd in T.READINGS),
-                 f"7/8 · ρ_k{f.L} / ρ_k{f.L // 2}"])
+    ss = {rd: T.strassen(t, rd, L) for rd in T.READINGS}
+    body.append([f"Strassen at L = {L}: tensor time over naive", *(f"{ss[rd].tensor:.4f}" for rd in T.READINGS),
+                 f"7/8 · ρ_k{L} / ρ_k{L // 2}"])
     for name in T.ADDING:
         body.append([f"exchange: {name}", *(f"{ss[rd].rates[name]:.3f}" if name in ss[rd].rates else "none"
                                             for rd in T.READINGS),
@@ -225,12 +226,16 @@ def _theta(data: Path) -> str | None:
                  f"LP over the writers; measured only: {mo.words:.1f}"])
     body.append(["c ≈ ρ₈/B_RF (bits)", f"{bs['sheet'].c:.4f}", f"{bs['measured'].c:.4f}",
                  f"measured only: {mo.c:.4f}"])
-    body.append([f"r_H, honest `{f.profile}` ({f.status})", f"{f.r_h:.4f}", f"{f.r_h:.4f}",
-                 ", ".join(f"{c} {v:.4f}" for c, v in f.per_word.items())])
-    body.append([f"r_min, {f.fold}'s own", f"{f.r_min:g}", f"{f.r_min:g}",
-                 ", ".join(f"{c} {v:g}" for c, v in f.minimal.items())])
-    body.append(["slack over the cheapest exchange", *(f"{100 * f.eps(rd):.2f}%" for rd in T.READINGS),
-                 "(r_H − r_min) in tensor MAC-times a MAC, over the cheapest adding route's exchange"])
+    for f in hs:
+        body.append([f"r_H, honest `{f.profile}` ({f.status}, {f.fold})", f"{f.r_h:.4f}", f"{f.r_h:.4f}",
+                     ", ".join(f"{c} {v:.4f}" for c, v in f.per_word.items())])
+        body.append([f"r_min, {f.fold}'s own", f"{f.r_min:g}", f"{f.r_min:g}",
+                     ", ".join(f"{c} {v:g}" for c, v in f.minimal.items())])
+        body.append([f"slack over the cheapest exchange, `{f.profile}`",
+                     *(f"{100 * f.eps(rd):.2f}%" for rd in T.READINGS),
+                     "(r_H − r_min) in tensor MAC-times a MAC, over the cheapest adding route's exchange"])
+        body.append([f"γ, `{f.profile}`", "–", f"{f.gamma:.3f}" if f.gamma is not None else "not measured",
+                     f"measured SMSP-cycles a MMA over the lone INT8 MMA's {f.lone:.2f}"])
     out += ["### Derived (`machine-model theta` prints the arithmetic)",
             _table(["derived", "sheet", "measured", "how"], body)]
     return "\n\n".join(out)

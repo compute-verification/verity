@@ -7,7 +7,8 @@
 gpu = "H200 SXM 141 GB (sm_90a)"
 sms = 132
 sms_source = "H100 whitepaper V1.04, Table 3, H100 SXM5: 'SMs 132'; the H200 data sheet states none (its peaks are H100 SXM5's); the device reports 132 (sheet.toml)"
-honest = "dc90-l32"
+# Duo (provisional), LI (provisional), and RT-HOPPER's measured LI loop that folds its own wgmma accumulators.
+honest = ["dc90-l32", "dc90-li-l32", "dc90-licpw-redux-l32"]
 documents = [
   "DS: NVIDIA H200 data sheet (nvidia.com/en-us/data-center/h200), Technical Specifications, H200 SXM column; footnote 1 'Preliminary specifications', footnote 2 'With sparsity'",
   "WP: NVIDIA H100 Tensor Core GPU Architecture whitepaper V1.04, Table 3 (p. 39), H100 SXM5 column: the same GH100 die and SM count as the H200",
@@ -132,6 +133,17 @@ measured = 1343.8
 runs = "census HMMA16816_F16 0.656135 × 2,048; the DC census runs"
 
 [[rate]]
+key = "tensor.f16.k8.sync"
+what = "FP16 mma.sync m16n8k8 (HMMA.1688.F32), FP32 accumulate"
+unit = "MACs/SM/clk"
+sheet = 2048
+clock = "tensor"
+figure = 989.5
+grade = "data sheet (one figure a type)"
+source = "DS FP16 1,979 sparse; the DS and WP give no shape (PTX §9.7.14 lists mma.sync .f16 m16n8k8)"
+gap = "not timed: the shape's instruction rate isn't k16's (IMMA16816_S8 issues at 0.974 a SM-clock, IMMA16832_S8 and HMMA16816_F16 at 0.656), so a census row HMMA1688_F16 on the H200 closes it"
+
+[[rate]]
 key = "tensor.bf16.k16"
 what = "BF16 wgmma m64nNk16 (HGMMA ... BF16), FP32 accumulate"
 unit = "MACs/SM/clk"
@@ -154,6 +166,29 @@ grade = "data sheet"
 source = "DS 'TF32 Tensor Core 989' with sparsity; WP Table 3 'Peak TF32 Tensor TFLOPS 494.7/989.4'"
 measured = 1023.9
 runs = "census HGMMA_TF32_N256 0.0312467 × 32,768 (mma.sync HMMA1688_TF32 0.65613 × 1,024 = 671.9); the DC census runs"
+
+[[rate]]
+key = "tensor.tf32.k8.sync"
+what = "TF32 mma.sync m16n8k8 (HMMA.1688.F32.TF32)"
+unit = "MACs/SM/clk"
+sheet = 1024
+clock = "tensor"
+figure = 494.5
+grade = "data sheet (one figure a type)"
+source = "DS TF32 989 sparse; the DS and WP give no shape"
+measured = 671.9
+runs = "census HMMA1688_TF32 0.65613 × 1,024; the DC census runs"
+
+[[rate]]
+key = "tensor.tf32.k4.sync"
+what = "TF32 mma.sync m16n8k4 (HMMA.1684.F32.TF32)"
+unit = "MACs/SM/clk"
+sheet = 1024
+clock = "tensor"
+figure = 494.5
+grade = "data sheet (one figure a type)"
+source = "DS TF32 989 sparse; the DS and WP give no shape (PTX §9.7.14 lists mma.sync .tf32 m16n8k4)"
+gap = "not timed: a census row HMMA1684_TF32 on the H200 closes it (k8 issues at 0.656 a SM-clock; k4 at k8's MAC rate would be 1.31)"
 
 [[rate]]
 key = "tensor.f64"
@@ -560,6 +595,27 @@ joint = { JI90_0 = 62.741 }
 name = "mma.sync m16n8k16 s8"
 rate = "tensor.s8.k16"
 per = 2048
+words = 128
+pipe = "tensor"
+
+[[writer]]
+name = "mma.sync m16n8k8 f16.f32"
+rate = "tensor.f16.k8.sync"
+per = 1024
+words = 128
+pipe = "tensor"
+
+[[writer]]
+name = "mma.sync m16n8k8 tf32"
+rate = "tensor.tf32.k8.sync"
+per = 1024
+words = 128
+pipe = "tensor"
+
+[[writer]]
+name = "mma.sync m16n8k4 tf32"
+rate = "tensor.tf32.k4.sync"
+per = 512
 words = 128
 pipe = "tensor"
 

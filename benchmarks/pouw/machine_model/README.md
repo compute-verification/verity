@@ -44,7 +44,7 @@ uv run machine-model --device sm_100 sheet --eps --uni 0.1 0.02   # ... with a u
 uv run machine-model capacity 0.745/duo:0.6+lane:0.3 0.255/served:0.15   # the certified share σ of a window's capacity
 uv run machine-model counts e-l7qs 2048 28672 4096   # H's closed-form instruction counts and model bound at a shape
 uv run machine-model counts e-l7qs --check           # every ncu observation of H against them
-uv run machine-model --device sm_90 theta    # θ: each figure at its clock, d by route, Strassen's exchange rate, B_RF, r_H
+uv run machine-model --device sm_90 theta    # θ: each figure at its clock, d by route, Strassen's exchange rate, B_RF, r_H, γ
 uv run machine-model render theta            # θ's rates, capacities, clocks, exact paths and FP8 atoms with sources
 ~~~
 
@@ -113,8 +113,8 @@ The code:
 - `verity_machine_model/headline.py`: the per-family headline, every number computed from the design files and vectors.
 - `verity_machine_model/theta.py`: reading `theta.toml` and holding it to its rules, and what it derives on the data
   sheet and measured: d, one delivery in INT8 MAC units by route; Strassen's ALU-for-tensor-core exchange rate at the
-  honest kernel's L; B_RF, the most register bits all units write a SM-clock, and c ≈ ρ₈/B_RF; and honest's r_H against
-  the fold's r_min.
+  honest kernel's L; B_RF, the most register bits all units write a SM-clock, and c ≈ ρ₈/B_RF; and, for each honest
+  profile `honest` lists (duo's and LI's), r_H against the fold's r_min and, measured, γ against the lone INT8 MMA.
 - `verity_machine_model/cli.py` and `verity_machine_model/commands/`: the `machine-model` command. `cli.py` only
   dispatches; each command is a module of `commands/` with its usage as its docstring, `add(sub)` its arguments and
   `run(args)` its body, so a new command is a new module and touches no other.

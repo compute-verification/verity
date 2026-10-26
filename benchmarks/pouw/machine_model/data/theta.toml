@@ -6,7 +6,8 @@
 gpu = "RTX PRO 6000 Blackwell Server Edition (sm_120)"
 sms = 188
 sms_source = "RTX Blackwell whitepaper v1.1, Appendix A, Table 4 (pp. 46-47): 'SMs 188' for the RTX PRO 6000 Blackwell (Workstation and Max-Q); the Server Edition's page states none; the device reports 188"
-honest = "e-l7qs"
+# Duo's measured profile; LI has none on this card (no sm_120 kernel folds with LI): a timed LI e_l7qs closes it.
+honest = ["e-l7qs"]
 documents = [
   "WP: NVIDIA RTX Blackwell GPU Architecture whitepaper v1.1, Appendix A, Table 4 (pp. 46-47), RTX PRO 6000 Blackwell Workstation Edition column, footnote 1 'Peak rates are based on GPU Boost Clock', footnote 2 'Effective TOPS / TFLOPS using the Sparsity Feature'; p. 11 (INT32 unified with FP32)",
   "DS: NVIDIA RTX PRO 6000 Blackwell Server Edition product page and data sheet (Apr 2025), Technical Specifications (census rtx-pro-6000-server/*)",

@@ -52,16 +52,23 @@ def test_b_rf():
     assert b["sm_120", "sheet"].words == pytest.approx(352)
     assert b["sm_120", "measured"].words == pytest.approx(265.8, abs=0.1)
     assert b["sm_90", "measured only"].dropped and not b["sm_90", "sheet"].dropped
-    assert set(b["sm_90", "measured"].filled) == {"smem.bcast", "dfma", "imad.wide"}
+    assert set(b["sm_90", "measured"].filled) == {"tensor.f16.k8.sync", "tensor.tf32.k4.sync", "smem.bcast", "dfma",
+                                                  "imad.wide"}
+    assert b["sm_90", "measured"].words == pytest.approx(447.9, abs=0.1)
+    assert b["sm_90", "measured"].mix["mma.sync m16n8k8 f16.f32"] == pytest.approx(2)
+    assert b["sm_90", "measured only"].words == pytest.approx(246.8, abs=0.1)
     assert all(0.05 < x.c < 0.6 for x in b.values())
 
 
-def test_r_h_against_r_min():
-    f = T.fold(T.theta(SM120), SM120)
+def test_r_h_against_r_min_and_gamma():
+    [f] = T.folds(T.theta(SM120), SM120)
     assert f.r_min == 3 and f.r_h == pytest.approx(3.2206, abs=1e-4)
     assert f.eps("sheet") == pytest.approx(f.slack["sheet"] / 1.25) and f.eps("measured") == 0
-    h = T.fold(T.theta(SM90), SM90)
-    assert h.r_h == h.r_min == 3 and h.status == "provisional"
+    assert f.gamma == pytest.approx(26.1221 / (128 * 32 * 4 / 1023.8))
+    duo, li, loop = T.folds(T.theta(SM90), SM90)
+    assert duo.r_h == duo.r_min == 3 and duo.status == "provisional" and duo.gamma is None
+    assert (li.fold, li.r_h, li.r_min, li.gamma) == ("li", 1, 1, None)
+    assert loop.gamma == pytest.approx(280.89 / 128.01, abs=1e-3) and loop.r_h == pytest.approx(1.0547, abs=1e-4)
 
 
 def test_the_rules_refuse_an_unsourced_or_wrong_rate(tmp_path):
@@ -82,7 +89,8 @@ def test_the_command_and_the_render(capsys):
     out = capsys.readouterr().out
     assert "4096 / 128 [2 · alu.iadd3 64] = 32.00" in out
     assert "7/8 · 4095.6 / 1995.7 = 1.7957 of naive: the level saves no tensor time" in out
-    assert "r_H = 3.0000, r_min = 3" in out
+    assert "r_H = 3.0000, r_min = 3" in out and "the least r_min here is li's 1" in out
+    assert "280.89 / 128.01 = 2.194" in out
     assert main(["theta", "--check"]) == 0
     assert "holds" in capsys.readouterr().out
     assert main(["render", "theta"]) == 0

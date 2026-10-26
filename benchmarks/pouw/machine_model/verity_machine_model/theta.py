@@ -17,9 +17,10 @@ value, and the sheet's where no run has one, which the result lists as filled).
   a SM-clock under the issue row, each pipe and, measured, the joint issue rows; c ≈ ρ₈/B_RF, since the transcript is
   one bit a MAC at L = 32 and the fold reads each word from a register. Measured, it is also read with the unmeasured
   writers left out (`measured only`).
-- `fold`: the honest kernel's ALU and IMAD lane instructions a committed word, r_H (its honest profile), against the
-  fold's own, r_min, and the ALU slack r_H − r_min in tensor MAC-times a MAC over the cheapest adding route's exchange
-  rate: the ε that slack would buy if ε were slack over exchange.
+- `folds`: for each honest profile `honest` lists (duo's and LI's), its lane instructions a committed word, r_H,
+  against the fold's own, r_min, and the slack r_H − r_min in tensor MAC-times a MAC over the cheapest adding route's
+  exchange rate: the ε that slack would buy if ε were slack over exchange. A measured profile also gives γ, its
+  SMSP-cycles a MMA over the lone INT8 MMA's at the measured rate.
 
 `figures` holds each rate's `figure`, the per-second number its document prints at `clock`, to 2 · sheet · SMs · clock.
 """
@@ -40,7 +41,7 @@ SMSPS = 4                   # a joint issue row's SMSP-cycles a SM-clock
 TOL = 0.005                 # a figure holds within 0.5%: the documents round, and a DS prints the sparse figure
 INT8 = "tensor.s8.k32"
 READINGS = ("sheet", "measured")
-FOLD_RATE = {"ALU": "alu.lop3", "IMAD": "imad"}   # the lane rate each fold class issues at: its pipe's width
+FOLD_RATE = {"ALU": "alu.lop3", "IMAD": "imad", "SHFL": "shfl"}   # the lane rate each fold class issues at
 ADDING = ("IADD3, two deliveries a lane instruction", "IADD3, one delivery a lane instruction",
           "IMAD a·1 + c, one delivery a lane instruction", "IADD3 on the ALU pipe and IMAD beside it")
 
@@ -103,7 +104,7 @@ class Theta:
     gpu: str
     sms: int
     sms_source: str
-    honest: str
+    honest: tuple[str, ...]  # the honest profiles r_H is read from, the first the one Strassen's L is
     documents: tuple[str, ...]
     clocks: dict[str, Clock]
     rates: dict[str, Rate]
@@ -142,7 +143,7 @@ def theta(data: Path) -> Theta:
     writers = tuple(Writer(v["name"], v["rate"], v["per"], v["words"], v["pipe"], dict(v.get("joint", {})))
                     for v in t.get("writer", ()))
     joints = {v["name"]: Joint(v["name"], v["other"], v["source"]) for v in t.get("joint", ())}
-    th = Theta(gpu=t["gpu"], sms=t["sms"], sms_source=t["sms_source"], honest=t["honest"],
+    th = Theta(gpu=t["gpu"], sms=t["sms"], sms_source=t["sms_source"], honest=tuple(t["honest"]),
                documents=tuple(t["documents"]), clocks=clocks, rates=rates, capacities=caps,
                paths=tuple(t.get("path", ())), fp8=tuple(t.get("fp8", ())), writers=writers, joints=joints)
     if problems := check(th):
@@ -176,6 +177,8 @@ def check(t: Theta) -> list[str]:
     for k in ("issue", INT8):
         if k not in t.rates:
             out.append(f"no rate {k}; every derivation reads it")
+    if not t.honest:
+        out.append("`honest` lists no profile; r_H and Strassen's L read one")
     return out
 
 
@@ -344,6 +347,9 @@ class Fold:
     minimal: dict[str, float]   # the fold's own: r_min's
     slack: dict[str, float]     # by reading: (r_H − r_min) in tensor MAC-times a MAC
     exchange: dict[str, float | None]  # by reading: the cheapest adding route's exchange rate, None if Strassen saves none
+    lone: float                 # the lone INT8 MMA's SMSP-cycles at the measured rate: words · depth · SMSPs / ρ₈
+    measured: float | None      # the profile's measured SMSP-cycles a MMA, None if provisional
+    measured_source: str
 
     @property
     def r_h(self) -> float:
@@ -353,14 +359,22 @@ class Fold:
     def r_min(self) -> float:
         return sum(self.minimal.values())
 
+    @property
+    def gamma(self) -> float | None:
+        return None if self.measured is None else self.measured / self.lone
+
     def eps(self, reading: str) -> float:
         """Slack over exchange: 0 when Strassen frees no tensor time to trade for."""
         x = self.exchange[reading]
         return 0.0 if x is None else self.slack[reading] / x
 
 
-def fold(t: Theta, data: Path) -> Fold:
-    h = E.honest(t.honest, data)
+def folds(t: Theta, data: Path) -> list[Fold]:
+    return [fold(t, data, name) for name in t.honest]
+
+
+def fold(t: Theta, data: Path, name: str) -> Fold:
+    h = E.honest(name, data)
     words = h.words * h.depth / h.L
     per_word = {c: h.per_mma.get(c, 0.0) * LANES / words for c in h.fold}
     if missing := set(h.fold) - set(FOLD_RATE):
@@ -371,4 +385,6 @@ def fold(t: Theta, data: Path) -> Fold:
         slack[reading] = sum((per_word[c] - h.fold[c]) * rho8 / t.at(FOLD_RATE[c], reading)[0] / h.L for c in h.fold)
         rates = strassen(t, reading, h.L).rates
         exchange[reading] = min(rates.values()) if rates else None
-    return Fold(h.name, h.status, h.fold_name, h.L, per_word, dict(h.fold), slack, exchange)
+    lone = h.words * h.depth * SMSPS / t.at(INT8, "measured")[0]
+    return Fold(h.name, h.status, h.fold_name, h.L, per_word, dict(h.fold), slack, exchange, lone, h.measured,
+                h.measured_source)
