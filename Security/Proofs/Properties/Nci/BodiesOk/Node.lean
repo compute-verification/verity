@@ -449,4 +449,63 @@ theorem op_ok (c : Defn) (nd : Node) (hn : NodeOk c nd) : Resolve.OpOk nd c := b
     rw [hcnt i hi]
     exact hb t (by rw [hmt]; exact ht) m hm
 
+/-- **Every reference of a node calling a primitive is read by a member**, unless it is a batch of none: a batch over
+an axis of length `n` and leaf stride `L` covers its argument by `memberIdx`'s `(j / L * n + m) * L + j % L`. -/
+theorem cover_of_nodeOk (c : Defn) (nd : Node) (hn : NodeOk c nd) (hp : c.prim = true)
+    (hb : ¬ (nd.form == .batch && nd.n == 0) = true) :
+    ∀ i < nd.args.size, ∀ t < (nd.args[i]!).seq.count, ∃ m < nd.members,
+      ∃ t' < (if (nd.form == .batch && (nd.args[i]!).dims.isSome) = true then (c.params[i]!).2.leaves
+        else (nd.args[i]!).seq.count),
+      (if (nd.form == .batch) = true then Resolve.memberIdx (nd.args[i]!) m t' else t') = t := by
+  obtain ⟨-, hcnt, -, hco, hsh, -⟩ := hn
+  intro i hi t ht
+  obtain ⟨form, fn, args, out, axes, n, nxs⟩ := nd
+  dsimp only at *
+  cases form
+  · refine ⟨0, by simp [Node.members, beq_prim_batch, show (Form.prim == Form.scan) = false from rfl], t, ?_, ?_⟩
+    · simpa [beq_prim_batch] using ht
+    · simp [beq_prim_batch]
+  · exact absurd (hco (.inl rfl)) (by simp [hp])
+  · have hn0 : 0 < n := by simp only [beq_batch_batch, Bool.true_and, beq_iff_eq] at hb; omega
+    have hmem : (Node.mk .batch fn args out axes n nxs).members = n := by simp [Node.members, beq_batch_batch]
+    rw [hmem]
+    obtain ⟨-, hargs⟩ := hsh
+    rcases hargs i hi with ⟨hd, -⟩ | ⟨ax, mt, hrm, hmt, hd⟩
+    · refine ⟨0, hn0, t, by simpa [hd] using ht, ?_⟩
+      simp [Resolve.memberIdx, hd]
+    · obtain ⟨L, hax, hlv, ⟨s, hs⟩, -⟩ := axis_spec ax _ _ _ hrm
+      rw [hcnt i hi, hlv, hs] at ht
+      have hL : 0 < L := by
+        rcases Nat.eq_zero_or_pos L with h0 | h0
+        · rw [h0] at ht; simp at ht
+        · exact h0
+      have hq : t / L < n * s := by
+        rw [Nat.div_lt_iff_lt_mul hL]
+        calc t < n * (L * s) := ht
+          _ = n * s * L := by ring
+      have hq' : t / L / n < s := by
+        rw [Nat.div_lt_iff_lt_mul hn0]
+        calc t / L < n * s := hq
+          _ = s * n := by ring
+      have hr := Nat.mod_lt t hL
+      refine ⟨t / L % n, Nat.mod_lt _ hn0, t / L / n * L + t % L, ?_, ?_⟩
+      · simp only [hd, hax, Option.isSome_some, ← hmt, hs]
+        calc t / L / n * L + t % L < t / L / n * L + L := by omega
+          _ = (t / L / n + 1) * L := by ring
+          _ ≤ s * L := Nat.mul_le_mul_right _ hq'
+          _ = L * s := by ring
+      · simp only [Resolve.memberIdx, hd, hax]
+        have h1 : (t / L / n * L + t % L) / L = t / L / n := by
+          rw [show t / L / n * L + t % L = t % L + t / L / n * L by ring, Nat.add_mul_div_right _ _ hL,
+            Nat.div_eq_of_lt hr, Nat.zero_add]
+        have h2 : (t / L / n * L + t % L) % L = t % L := by
+          rw [show t / L / n * L + t % L = t % L + t / L / n * L by ring, Nat.add_mul_mod_self_right,
+            Nat.mod_eq_of_lt hr]
+        rw [h1, h2]
+        have e1 := Nat.div_add_mod (t / L) n
+        have e2 := Nat.div_add_mod t L
+        calc (t / L / n * n + t / L % n) * L + t % L = (n * (t / L / n) + t / L % n) * L + t % L := by ring
+          _ = t := by rw [e1, Nat.mul_comm]; exact e2
+  · exact absurd (hco (.inr rfl)) (by simp [hp])
+
 end NciCheck.Properties.SecurityProofs.BodiesOk

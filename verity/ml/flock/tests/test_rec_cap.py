@@ -3,19 +3,16 @@ past the node's 32, then zeros, so its outputs, which V* registers as zero rows,
 (`rec_live.top_rows`: the node's 32 words, then 32 zero words). The unit through its M0 layout, and the Definition evaluated
 from its descriptor, are that reference; the unit has no AND; its name and directory say its level; and staging refuses
 tops that are not a level's (level 0's one cap, or a later level's rep 0 then rep 1). The Lean verifier's side is
-`Flock.Test.RecCapSmall` (one of Flock's audit roots), `Flock.Test.RecCap` (built here) and `test_lean_rec_coins`."""
+`Flock.Test.RecCapSmall` (one of Flock's audit roots), `Flock.Test.RecCap` (built after landing by
+`test_lean_rec_cap_guards`) and `test_lean_rec_coins`."""
 from __future__ import annotations
 
 import random
-import subprocess
-from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 from verity_flock import rec_cap as RC
-
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 
 
 def _rows(rng: random.Random) -> list[list[int]]:
@@ -75,14 +72,3 @@ def test_staging_refuses_tops_that_are_not_a_levels(tmp_path):
             RC.stage(SimpleNamespace(own={"value": "rec-top-L1", "leaves": 128}, first=first, reg=None), tmp_path / "cap")
     with pytest.raises(ValueError, match="RecCap holds a level's tops"):
         RC.stage(SimpleNamespace(own={"value": "rec-top-stacked-L1", "leaves": 128}, first={0: 0}, reg=None), tmp_path / "c")
-
-
-@pytest.mark.slow
-def test_lean_statements_end_with_the_caps_at_the_deployed_shape():
-    """`lake build Flock.Test.RecCap`: `RecVStar.statements` at the deployed inner shape (m 25, k_log 22, claims 8) builds
-    and ends with the later levels' caps, then level 0's. About 20 minutes in the interpreter, which is why the module is
-    out of Flock's audit roots and runs here, after landing (lean-suites). It catches what `Flock.Test.RecCapSmall` can't:
-    `statements` itself, whose parts and the verifier's groups RecCapSmall doesn't build (over 3 minutes even at m 22),
-    holding its list checks to the list `statements` assembles at m 22 instead."""
-    r = subprocess.run(["lake", "build", "Flock.Test.RecCap"], cwd=LEAN, capture_output=True, text=True, check=False)
-    assert r.returncode == 0, r.stdout[-4000:] + r.stderr[-2000:]

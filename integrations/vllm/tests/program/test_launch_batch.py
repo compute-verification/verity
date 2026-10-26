@@ -24,7 +24,7 @@ from verity_vllm.program.frontend.outcomes import Refuse
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.registry import tp_allreduce as TA
+from verity.ml.definitions.registry import tp_allreduce as TA
 
 #: request steps 0 and 1 of the 65-row prompt of GLM-5.3's B8 row: its prefill beside two decoders, then six sequences
 BATCH = [[[1, 17], [1, 231], [65, 0]], [[1, 18], [1, 65], [187, 0]]]

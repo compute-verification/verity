@@ -41,7 +41,7 @@ def _qwen3(name: str, **kw):
     from verity.ml.circuits.ops import prims as P
 
     if name.startswith("registry"):
-        from verity_vllm.program.registry import moe as VM
+        from verity.ml.definitions.registry import moe as VM
 
         d = VM.MoeExpertCoordinateWV2 if name.endswith("-w") else VM.MoeExpertCoordinateV2
     else:
@@ -54,7 +54,7 @@ def _qwen3(name: str, **kw):
 def _glm(form: str, **kw):
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.prims import HopperE4m3QgmmaDot32
-    from verity_vllm.program.registry import fp8_moe_experts as X
+    from verity.ml.definitions.registry import fp8_moe_experts as X
 
     return bind(getattr(X, form), E=256, G=128, KB=128, SWAP=True, DOT=HopperE4m3QgmmaDot32, **kw)
 
@@ -66,7 +66,7 @@ def _select(e: int):
 
 
 def _gather(v: int):
-    from verity_vllm.program.registry import fp8_moe_experts as X
+    from verity.ml.definitions.registry import fp8_moe_experts as X
 
     return X.gather_e4m3(v)
 

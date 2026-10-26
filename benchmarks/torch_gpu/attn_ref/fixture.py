@@ -1,15 +1,17 @@
 """attn_ref's check data: random sequences and every word the kernels must write for them, from the Definition.
 
-Every word is `GemmCoordinate_v2{K, GEMM_HOPPER}` (verity.ml.circuits.ops.gemm), evaluated by its numpy twin
-(`evaluate_batch`, kernel "auto": verity.ml.kernels.tc's gemm_coordinate_kernel), and the twin is held to the Definition's
-reference evaluator (kernel "reference") on a sample of every sequence's words, those with a special operand first.  Any
-disagreement exits 1 before anything is written.
+QK^T's words are `GemmCoordinate_v2{K=D, GEMM_HOPPER}` and PV's `GemmCoordinatePad_v1{T=n, K=pv_k(n), GEMM_HOPPER}`
+(verity.ml.circuits.ops.gemm), pv_k(n) = max(KPV, pad16(n)) with KPV = 32, the H200 circuit's PV.  Each is evaluated by
+the numpy twin of `GemmCoordinate_v2{K}` on the zero-padded operands (`evaluate_batch`, kernel "auto":
+verity.ml.kernels.tc's gemm_coordinate_kernel), and the twin is held to the Definition's reference evaluator (kernel
+"reference") on a sample of every sequence's words, those with a special operand first.  Any disagreement exits 1 before
+anything is written.
 
 CHECK/pool.npz, the frozen decode shape's sequences (256 query heads of head dim 64 on one KV head, 32 cached keys):
   Q [NX, 256, 64], K and V [NX, 32, 64], P [NX, 256, 32]   the inputs (bf16 words)
   S [NX, 256, 32]                                         S[i, h, j] = GemmCoordinate{K=64}(Q[i, h], K[i, j]), at any length > j
-  O [NX, 32, 256, 64]                                     O[i, n-1, h, d] = GemmCoordinate{K=pad16(n)}(P[i, h, :n] ++ 0,
-                                                          V[i, :n, d] ++ 0), the output at KV length n = 1..32
+  O [NX, 32, 256, 64]                                     O[i, n-1, h, d] = GemmCoordinatePad{T=n, K=32}(P[i, h, :n],
+                                                          V[i, :n, d]), the output at KV length n = 1..32
   kind [NX]                                               each sequence's generator (KINDS)
 check.py builds every batch it runs from copies of these sequences, so every word of every batch has its expected word.  A
 position past a length n holds the generator's words like any other (NaN, infinities and huge values in some kinds), which
@@ -36,10 +38,11 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as G
 
 H, D, LCAP = 256, 64, 32
-KINDS = ("normal", "softmax", "wide", "unit", "tiny", "specials", "cancel_in", "cancel_across", "uniform")
+KINDS = ("normal", "softmax", "wide", "unit", "tiny", "specials", "cancel_in", "cancel_across", "uniform", "subacc")
 NX = 4 * len(KINDS)
 SEED = 20261026
 FILL = 0xFF80
+KPV = 32
 SPECIALS = np.array([0x0000, 0x8000, 0x7F80, 0xFF80, 0x7FC0, 0xFFC0, 0x7F81, 0xFFFF, 0x0001, 0x8001, 0x007F, 0x807F,
                      0x0080, 0x7F7F, 0xFF7F, 0x3F80, 0xBF80], np.uint16)
 SIGN = np.uint16(0x8000)
@@ -55,6 +58,21 @@ def coordinate(x: np.ndarray, w: np.ndarray, kernel: str = "auto") -> np.ndarray
 
 def pad16(n: int) -> int:
     return -(-n // 16) * 16
+
+
+def pv_k(n: int) -> int:
+    """PV's K at KV length n: attn_ref.pv's default kpv = KPV, or pad16(n) past it."""
+    return max(KPV, pad16(n))
+
+
+def pad_reference(x: np.ndarray, w: np.ndarray, n: int) -> np.ndarray:
+    """`GemmCoordinatePad_v1{T=n, K}` by the reference evaluator on the first n words of rows ``x`` and ``w`` (N, K); at
+    n = 0, which the Definition refuses, the coordinate of K words of +0."""
+    if not n:
+        return coordinate(x, w, kernel="reference")
+    spec = bind(G.GemmCoordinatePad, T=n, K=x.shape[1], **G.GEMM_HOPPER)
+    return np.asarray(E.evaluate_batch(spec, np.ascontiguousarray(x[:, :n]), np.ascontiguousarray(w[:, :n]),
+                                       kernel="reference"), np.uint16)
 
 
 def bf16(v: np.ndarray) -> np.ndarray:
@@ -123,13 +141,18 @@ def sequence(i: int) -> dict:
         V[LCAP // 2:] = V[:LCAP // 2]
     elif kind == "uniform":
         Q, K, V, P = (rng.integers(0, 1 << 16, size=a.shape).astype(np.uint16) for a in (Q, K, V, P))
+    elif kind == "subacc":
+        # products around 2^-130, so PV's accumulator after its first step is a nonzero FP32 subnormal for most words at
+        # n <= 16, where K = 32's second step is all +0
+        P = clustered(rng, (H, LCAP), 55 + np.arange(H) % 10, spread=2)
+        V = clustered(rng, (LCAP, D), 63 + rng.integers(-1, 2, size=LCAP), spread=2)
     return dict(Q=Q, K=K, V=V, P=P, kind=kind)
 
 
 def pv_operands(P: np.ndarray, V: np.ndarray, n: int) -> tuple[np.ndarray, np.ndarray]:
-    """Rows (h, d) of PV at length n: P[h, :n] ++ 0 against V[:n, d] ++ 0, each pad16(n) wide."""
+    """Rows (h, d) of PV at length n: P[h, :n] ++ 0 against V[:n, d] ++ 0, each pv_k(n) wide."""
     h, d = P.shape[0], V.shape[1]
-    k = pad16(n)
+    k = pv_k(n)
     x = np.zeros((h, k), np.uint16)
     x[:, :n] = P[:, :n]
     w = np.zeros((d, k), np.uint16)
@@ -163,7 +186,7 @@ def expected(i: int) -> dict:
         x, w = pv_operands(P, V, n)
         O[n - 1] = coordinate(x, w).reshape(H, D)
         xs, ws, got = _sample(rng, x, w, O[n - 1].reshape(-1), REF_PER_SEQ // LCAP)
-        ref["pv"] = [ref["pv"][0] + len(got), ref["pv"][1] + int((coordinate(xs, ws, kernel="reference") != got).sum())]
+        ref["pv"] = [ref["pv"][0] + len(got), ref["pv"][1] + int((pad_reference(xs, ws, n) != got).sum())]
     return dict(Q=Q, K=K, V=V, P=P, S=S, O=O, kind=seq["kind"], ref=ref)
 
 
@@ -188,7 +211,7 @@ def odd() -> tuple[dict, dict]:
                 ref["qk"] = [ref["qk"][0] + n, ref["qk"][1] + int((r != S[b, h, :n]).sum())]
             x, w = pv_operands(P[b, h][None], V[b, kv], n)
             O[b, h] = coordinate(x, w)
-            r = coordinate(x, w, kernel="reference")
+            r = pad_reference(x, w, n)
             ref["pv"] = [ref["pv"][0] + Dd, ref["pv"][1] + int((r != O[b, h]).sum())]
     return dict(Q=Q, K=K, V=V, P=P, lens=lens, S=S, O=O, H=np.int32(Hq), Hkv=np.int32(Hkv)), ref
 
@@ -213,7 +236,9 @@ def main(argv: list[str]) -> int:
     np.savez(os.path.join(out, "odd.npz"), **odd_doc)
     ref = {k: [sum(s["ref"][k][0] for s in seqs), sum(s["ref"][k][1] for s in seqs)] for k in ("qk", "pv")}
     doc = {
-        "definition": "GemmCoordinate_v2{K, GEMM_HOPPER} (verity.ml.circuits.ops.gemm), DOT HopperBF16WgmmaDot16_v1",
+        "definition": "QK^T GemmCoordinate_v2{K=D, GEMM_HOPPER}, PV GemmCoordinatePad_v1{T=n, K=max(32, pad16(n)), GEMM_HOPPER} "
+                      "(verity.ml.circuits.ops.gemm), DOT HopperBF16WgmmaDot16_v1",
+        "kpv": KPV,
         "twin": "verity.ml.kernels.tc.gemm_coordinate_kernel (evaluate_batch kernel auto)",
         "seed": SEED, "pool": {"sequences": NX, "kinds": list(KINDS), "H": H, "D": D, "L": LCAP,
                                "qk_words": NX * H * LCAP, "pv_words": NX * LCAP * H * D},

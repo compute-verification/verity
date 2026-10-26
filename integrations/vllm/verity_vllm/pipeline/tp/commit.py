@@ -51,8 +51,7 @@ from verity_vllm.pipeline.tp.import_path import write_import_path_runtime
 from verity_vllm.pipeline.tp.negatives import negatives_applied, parse_serve_shard_from
 from verity_vllm.commit import step_rows
 from verity_vllm.pipeline.tp import run_root as RT
-
-SCHEMA = "verity/commit-integ/delta-tp/v1"
+from verity_vllm.records.commit_run import TP_SCHEMA as SCHEMA
 
 
 def tree_of_record(root: str | os.PathLike | None = None) -> dict:

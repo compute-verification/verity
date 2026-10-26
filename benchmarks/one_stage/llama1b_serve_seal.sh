@@ -118,7 +118,7 @@ advice_pass() {
     [ -f "$D/advice/.w$k/windows.json" ] && continue
     # shellcheck disable=SC2086
     vv advice "$D" --window "$k" --cap "$CAP" $CA --out "$D/advice/.w$k" >> "$OUT/advice.log" 2>&1; rc=$?
-    [ -f "$D/advice/.w$k/windows.json" ] || continue        # not yet in the step trace: next pass
+    [ -f "$D/advice/.w$k/windows.json" ] || continue        # not yet in the step trace, or pending (rc 3) on a record: next pass
     [ -d "$D/advice/.w$k/w$k" ] && mv "$D/advice/.w$k/w$k" "$D/advice/w$k"
     "$PY" - "$D/advice" "$k" "$rc" <<'EOF' | tee -a "$OUT/advice_windows.jsonl"
 import json, sys, time
@@ -179,13 +179,14 @@ if [ "$ADMIT" = release-order ] && "$PY" -c "import pytest" 2>/dev/null; then   
 fi
 
 if [ "$MAX_MODEL_LEN" -gt 512 ]; then  # one request filling the context: MAX_MODEL_LEN - 64 prompt ids, then all 64 new ones, its window sealed
+  # (ignore_eos at max_tokens, not min_tokens: that masks the EOS logit, which the Program's sampling doesn't model, so compile_steps refuses it)
   "$PY" - "$PORT" "$REPO" "$D" "$MAX_MODEL_LEN" <<'EOF2' 2>&1 | tee "$OUT/long_smoke.txt"
 import json, sys, time, urllib.request
 from pathlib import Path
 port, model, d, L = sys.argv[1], sys.argv[2], Path(sys.argv[3]), int(sys.argv[4])
 P = L - 64
 body = {"model": model, "user": "long-smoke", "prompt": [128000] + [1000 + (7 * i) % 100000 for i in range(P - 1)],
-        "max_tokens": 64, "min_tokens": 64, "temperature": 0, "top_p": 1.0, "return_token_ids": True, "ignore_eos": True}
+        "max_tokens": 64, "temperature": 0, "top_p": 1.0, "return_token_ids": True, "ignore_eos": True}
 rq = urllib.request.Request(f"http://127.0.0.1:{port}/v1/completions", json.dumps(body).encode(), {"content-type": "application/json"})
 with urllib.request.urlopen(rq, timeout=300) as r:
     resp = json.loads(r.read())
