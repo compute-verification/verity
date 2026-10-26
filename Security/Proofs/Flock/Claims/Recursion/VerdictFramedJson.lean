@@ -154,7 +154,6 @@ theorem arr_streams_jAt {H : Claims.Msg → Claims.Msg} {spec : SessionSpec} {st
     refine ⟨by simp, fun i h₁ h₂ => ?_⟩
     simp only [Array.getElem_toList, Array.getElem_map]
     refine (keptS_mapStream _ (fun _ _ r => keptR_coins _ r) _).trans (keptS_mapStream _ (fun n k r => ?_) _)
-    dsimp only
     split
     · exact keptR_coins _ _
     · exact ⟨rfl, rfl⟩
