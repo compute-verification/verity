@@ -14,11 +14,12 @@ The final guarantee of the ACCEL program (`Models.Pouw.Guarantees.Dither.DitherW
   in device-seconds when `λ` is a probability vector;
 * **a round** of a commit-then-check protocol (`RoundProto`), parametric in the protocol (R-ACCEL-2), with today's
   Dither as one instance (`ditherRound`) whose knobs (`Knobs`: `L`, U's range and placement) are parameters;
-* **Theorem O's slot** (`TheoremO`): a statement about the model alone, to be proved in it (O-CHARGE, CMP-111;
-  O-BITS, CMP-112), never an assumption about algorithms;
-* **a monitoring period's play** round by round (`PeriodPlay`, `PeriodRun`, `PeriodMap`), **ABSORB's slot**
-  (`Absorb`: the rounds an accepted run is cut into are pieces of it; a named slot whose standing is Daniel's open
-  decision, never an unnamed premise), its priced floors, on the rounds (`RoundsFloor`) and on the whole run
+* **Theorem O's slot** (`TheoremO`): a round program's moment bound, which R-ACCEL-6 splits into SAK(matmul) (the one
+  computational premise, `Models.Pouw.Assumptions.SAKMatmul`) and the tensor-core ring count (proved,
+  BET-K-DISCHARGE's `RingKCount`);
+* **a monitoring period's play** round by round (`PeriodPlay`, `PeriodRun`, `PeriodMap`), **the direct-sum cut**
+  (`DirectSum`: the rounds an accepted run is cut into are pieces of it; one half of SAK(matmul), never a premise on
+  its own), its priced floors, on the rounds (`RoundsFloor`) and on the whole run
   (`WorkFloor`, `WorkSound`), and the error `epsDither`;
 * **freed compute** (`Period`, `Period.FreedWithin`): R-ACCEL-1's definition, kept in this one place.
 -/
@@ -172,16 +173,15 @@ The program is chosen after the instance, so it may carry as constants anything 
 round (the undithered product `A B`, say), within (G1)'s memory. That precomputation is not in the round's cost, so
 Theorem O's constant must hold against it: the rounds' floor counts only what the rounds themselves use.
 
-**This is a theorem to be proved in the model, not an assumption.** It is true or false of `G` and `P` alone, with
-nothing about which algorithms anyone runs: O-CHARGE (CMP-111) and O-BITS (CMP-112) prove it, and the constant they
-reach is the guarantee's model slack `1 − c`. A round program outputs its transcript, so Theorem O is a counting
-statement (per-word costs of each instruction class, and the ring count for the tensor cores), outside ABSORB-THM's
-barrier. The barrier sits in whether an accepted run is cut into such programs (`Absorb`). Where Theorem O holds,
-`c H` is at most the cost of every program that always passes, so at `H` the honest kernel's priced cost of a round,
-`c ≤ 1` is the honest kernel's share of the model's optimum. Theorem K's floor of record (`StagedFloorKOneSided`)
-reaches the same period floor on its scope, at the parity luck `η = 0.146` and `c H = St κ L n n' B`
-(`ChargeVF3j16`'s charge); outside that scope Theorem O holds on paper only, at `c ≥ 1 − δ` given CoincCharged_θ and
-at `c = ¼` without it (VF3e/VF3f price LDS.128 and LDG.128 at 8 MACs a word against the honest kernel's 32). -/
+**R-ACCEL-6 splits it.** At `c = pub/H`, `pub` the public best matmul method's priced cost of a round, the bound is
+SAK(matmul) at the round: no round program computes the dithered products (or all but a small fraction of their
+words) more cheaply at `λ` than the public best. That half is assumed (`Models.Pouw.Assumptions.SAKMatmul`). The other
+half is a theorem: the public best's cost on the tensor cores is the ring count (BET-K-DISCHARGE's `RingKCount`), so
+`pub` is a model quantity. A round program outputs its transcript, so this is a statement about matrix products, not
+about hashing or the proof layer. Where it holds, `c H` is at most the cost of every program that always passes, so
+`c ≤ 1` is the honest kernel's share of the public best. Theorem K's floor of record (`StagedFloorKOneSided`) reaches
+the same period floor on its scope, at the parity luck `η = 0.146` and `c H = St κ L n n' B` (`ChargeVF3j16`'s
+charge). -/
 def TheoremO (G : Accel) (P : RoundProto) (p : G.Res → ℝ) (c η β H : ℝ) : Prop :=
   G.G1 → G.G2 → G.P1 → G.P2 → ∀ (a : P.Inst) (M : G.Mc.Alg P.Draw P.Tr), roundMoment G P p c η β H a M ≤ 1
 
@@ -233,24 +233,18 @@ value of its own coins, its run. -/
 abbrev PeriodMap (G : Accel) (S : Service) (P : RoundProto) (R : ℕ) : Type 1 :=
   ∀ (Ω' : Type) [Fintype Ω'], G.Mc.Alg (S.Seed × Ω') (S.Com × S.Ans) → Ω' → PeriodRun G P R
 
-/-- **ABSORB's slot**: in the accelerator model `G` at its device premises, the analysis `run` cuts every accepted
-period of every adversary that commits first into rounds that are pieces of the adversary's run: on every run the
-verifier accepts, the rounds' uses of each resource sum to at most the run's, and their imported bits to at most the
-run's. The cut is at the commitments, so the rounds are disjoint stretches of the period's devices' time (rounds are
-period-wide epochs: round `w`'s transcript is committed before round `w + 1`'s first coin).
+/-- **The direct-sum cut** (one conjunct of `Models.Pouw.Assumptions.SAKMatmul`): in the accelerator model `G` at its
+device premises, the analysis `run` cuts every accepted period of every adversary that commits first into rounds that
+are pieces of the adversary's run: on every run the verifier accepts, the rounds' uses of each resource sum to at most
+the run's, and their imported bits to at most the run's. The cut is at the commitments, so the rounds are disjoint
+stretches of the period's devices' time (round `w`'s transcript is committed before round `w + 1`'s first coin).
 
-**This is ABSORB, the one statement beyond the model's parameters, the cryptography and the live coins that the
-guarantee rests on, and its standing is Daniel's open decision.** What is to hold is that some analysis map meets it
-beside `Models.Pouw.Assumptions.ServiceSoundDither`: every accepted run computes the transcripts it commits to (through
-the hash and the fold) within its own resources. It is a statement over every program of `G`, true or false of `G`,
-the service and the protocol. ABSORB-THM's Theorem B shows that proving it over the full instruction set would be an
-explicit superlinear circuit lower bound. It may become a named computational assumption, follow from SHA-512 as a
-random oracle at a cost in overhead, or be dropped for the unconditional floor alone. Until Daniel rules, it is a
-slot, never an unnamed premise. It carries the floor's whole link to the adversary: without it, an analysis could cut
-any accepted run into honest rounds, and the floor would read nothing of the run. This is ABSORB's cut form. It
-implies the cost form (every committed word is written into a register) wherever the model charges a program's output
-words, and it is the weakest form this route needs, because Theorem O reads a round program's whole cost. -/
-def Absorb (G : Accel) (S : Service) (P : RoundProto) {R : ℕ} (run : PeriodMap G S P R)
+It is the direct-sum form of SAK(matmul) (R-ACCEL-6) in its commit-and-open reading: a program that commits to the
+credited dithered products (by SHA-512 trees, then opens what the check draws) together with other work costs at least
+those products' rounds plus the other work. It is not a premise on its own, and SHA-512's collision resistance gives
+binding only, not that the committed words were computed. Whether Daniel's scoping covers the commit-and-open reading
+is his decision; without it the cut needs SHA-512's speed in composite form or SHA-512 as a random oracle. -/
+def DirectSum (G : Accel) (S : Service) (P : RoundProto) {R : ℕ} (run : PeriodMap G S P R)
     (e : S.Seed ≃ Paths (P.Draw × P.Chk) R) : Prop :=
   G.G1 → G.G2 → G.P1 → G.P2 →
     ∀ (Ω' : Type) [Fintype Ω'] (M : G.Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
