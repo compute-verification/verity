@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Recursion.ResChainW
+import Proofs.Flock.Claims.Recursion.ResStepsW
 import Proofs.Flock.Claims.Recursion.ResCopyRows
 import Proofs.Flock.Claims.Recursion.TopsOpens
 import Proofs.Flock.VBridge.AlgHolds
@@ -17,7 +18,7 @@ import Proofs.Flock.VBridge.Family.PartKeys
 * `acc0_held`, `acc1_held`: an algebra part holds row `n · R` at `("acc0", n)` and row `n · R + R` at `("acc1", n)`
   (`accRead`), so the row has an owner (`accCanon_some`), whose bytes `chainW` reads (`chainW_get`).
 * `InnerAccTie`: the holder's and the owner's slots carry one commit string (named; its proof is RECE's
-  `innerAccCommit_eq`/`innerInnerCommit_eq` at the joint acceptance), so they hold one row (`held_rows_eq_layR`).
+  `innerAccCommit_eq`/`innerInnerCommit_eq` at the joint acceptance), so they hold one row (`held_rows_eq`).
 * `repOpens_eq`: the rep's run length `R` is `D.accE`'s `nOpen` at table 0's schedule.
 -/
 
@@ -43,8 +44,19 @@ theorem split_sum : ∀ (ns : List ℕ) (e : ℕ), e < ns.sum →
       omega
 
 theorem sizes_sum {α : Type} (A : Array (Array α)) : (A.map (·.size)).toList.sum = A.flatten.size := by
-  rw [← Array.length_toList, Array.toList_flatten, List.length_flatten, Array.toList_map, List.map_map, List.map_map]
+  rw [← Array.length_toList, Array.toList_flatten, List.length_flatten, Array.toList_map, List.map_map]
   rfl
+
+theorem take_sum_append (l : List ℕ) (a b : ℕ) : ((l ++ [a, b]).take (l.length + 1)).sum = l.sum + a := by
+  induction l with
+  | nil => simp
+  | cons x l ih =>
+    rw [List.cons_append, List.length_cons, List.take_succ_cons, List.sum_cons, ih, List.sum_cons]
+    omega
+
+theorem lit4_get (a b c d : _root_.Flock.F128) :
+    #[a, b, c, d][0]! = a ∧ #[a, b, c, d][1]! = b ∧ #[a, b, c, d][2]! = c ∧ #[a, b, c, d][3]! = d :=
+  ⟨rfl, rfl, rfl, rfl⟩
 
 theorem sizes_acc (B : Array ℕ) {b : ℕ} (hb : b < 2) : (B ++ #[2, 2])[B.size + b]! = 2 := by
   rw [getElem!_pos (B ++ #[2, 2]) (B.size + b) (by simp; omega), Array.getElem_append_right (by omega)]
@@ -99,8 +111,9 @@ theorem acc_elem {B P : Array ℕ} {e j : ℕ} (he : (FlockVBridge.PartS.wIdx (B
         rcases (show P[i] = B.size ∨ P[i] = B.size + 1 by omega) with h | h <;> rw [h]
         · rw [List.take_append_of_le_length (by simp), List.take_of_length_le (by simp)]
           omega
-        · rw [List.take_append_eq_append_take, List.take_of_length_le (by simp)]
-          simp
+        · have e := take_sum_append B.toList 2 2
+          rw [Array.length_toList] at e
+          rw [e]
           omega
       · exact hae.trans (by simp)
     · exfalso
@@ -156,7 +169,7 @@ theorem acc0_held {r : XR} {s j : ℕ} {nm : String} {pt : VStar.Part}
     (ha : "acc0" ∈ pt.S.ports.map (·.1)) : ("acc0", n) ∈ accHoldings r s (n * repOpens r) := by
   have hR : accRead r (.inner j nm pt) "acc0" n = some (n * repOpens r) := by
     simp only [accRead]
-    rw [if_pos ⟨hn, acc0_mem ha⟩, if_pos rfl]
+    rw [if_pos ⟨hn, acc0_mem ha⟩, if_pos trivial]
   unfold accHoldings
   rw [hsv]
   refine List.mem_filter.2 ⟨?_, by simp only [hR, beq_self_eq_true]⟩
@@ -169,7 +182,7 @@ theorem acc1_held {r : XR} {s j : ℕ} {nm : String} {pt : VStar.Part}
     (ha : "acc1" ∈ pt.S.ports.map (·.1)) : ("acc1", n) ∈ accHoldings r s (n * repOpens r + repOpens r) := by
   have hR : accRead r (.inner j nm pt) "acc1" n = some (n * repOpens r + repOpens r) := by
     simp only [accRead]
-    rw [if_pos ⟨hn, acc1_mem ha⟩, if_neg (by decide), if_pos rfl]
+    rw [if_pos ⟨hn, acc1_mem ha⟩, if_neg (by decide), if_pos trivial]
   unfold accHoldings
   rw [hsv]
   refine List.mem_filter.2 ⟨?_, by simp only [hR, beq_self_eq_true]⟩
@@ -192,7 +205,8 @@ theorem repOpens_eq {rd : Msg → Option FinalP} {xi : Msg} {ms : List Msg} {cs 
   have hvv : v' = v := Option.some.inj (hv'.symm.trans hv)
   have hds : D.sts = #[st] := by rw [hsts, hd, hvv, hst]
   have hm0 : (FlockDeploy.tabsOf D.sts)[0]!.m = r.shape.m := by
-    rw [hds, ← hm]
+    have htabs : FlockDeploy.tabsOf #[st] = #[_root_.Flock.Setup.ofCircuit st] := by simp [FlockDeploy.tabsOf]
+    rw [hds, htabs, ← hm]
     rfl
   rw [hm0]
   unfold repOpens
@@ -226,28 +240,19 @@ def InnerAccTie (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg →
 
 /-! ## The ends -/
 
-/-- **A held row is its owner's**: under the commit tie, part `s`'s row at a holding `h` of row `p` is what `chainW`
-reads at `p`, element by element. -/
-theorem held_chainW {rd : Msg → Option FinalP} {wE : Msg → ℝ}
-    {final : Msg → Option (List (List (Msg × Salt)) × Msg)} {w : Msg → ℝ} {b : Brings}
-    {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
-    {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg}
-    (hC : InnerAccTie rd wE final w b elem shape untr cmt) {x : Msg} {st : Claims.Recursion.Stmt}
-    (hx : (DRL rd wE final w b elem).parse x = some st) (hf : shape st.form) {c : ℕ → Coin}
-    {ws : List Claims.Flock.Wit}
-    (hJ : RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
-      (AccP rd wE final w b elem shape untr cmt) x c ws)
-    {r : XR} (hr : readX x = some r) {s : ℕ} {cS : Circuit} (hpc : r.w.parts[s]?.bind partCircuit = some cS)
-    {j : ℕ} {nm : String} {pt : VStar.Part}
-    (hsv : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.inner j nm pt))
-    {p : ℕ} {h : String × ℕ} (hh : h ∈ accHoldings r s p) {wt : Claims.Flock.Wit} (hw : ws[s]? = some wt)
-    {q : ℕ} (hq : cS.ports.findIdx? (·.name == h.1) = some q) (t : ℕ) {k : ℕ} (hk : k < 2) :
+/-- **A held row is its owner's**: where the holder's slot and the owner's carry one commit string (`hC`), part `s`'s
+row at a holding `h` of row `p` is what `chainW` reads at `p`, element by element. -/
+theorem held_chainW (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg}
+    {ws : List Claims.Flock.Wit} (hT : ∀ e ∈ (DeployedR.layR elem).allCalls x ws, FlockDeploy.sha512 e.1 = e.2)
+    (hnc : (Claims.findColl ((DeployedR.layR elem).allCalls x ws)).isSome = false) {r : XR} (hr : readX x = some r)
+    (hl : ws.length = r.w.parts.length) {s : ℕ} {cS : Circuit} (hpc : r.w.parts[s]?.bind partCircuit = some cS)
+    {p : ℕ} {h : String × ℕ} (hh : h ∈ accHoldings r s p) {wt : Claims.Flock.Wit} (hw : ws[s]? = some wt) {q : ℕ}
+    (hq : cS.ports.findIdx? (·.name == h.1) = some q)
+    (hC : ∀ o co ho, accCanon r p = some (o, co, ho) → ∀ wo, ws[o]? = some wo →
+      ∃ q', co.ports.findIdx? (·.name == ho.1) = some q' ∧
+        readForms wt (hmCommit cS q h.2) = readForms wo (hmCommit co q' ho.2))
+    (t : ℕ) {k : ℕ} (hk : k < 2) :
     elemsOf (readSegs wt (accSegs cS h)) 2 k = (chainW x ws t p)[k]! := by
-  have hl : ws.length = r.w.parts.length := by
-    have h1 : ws.length = nS x := hJ.1
-    rw [h1]
-    unfold nS
-    rw [hr]
   have hsl : s < r.w.parts.length := by
     rw [← hl]
     exact (List.getElem?_eq_some_iff.1 hw).1
@@ -256,11 +261,11 @@ theorem held_chainW {rd : Msg → Option FinalP} {wE : Msg → ℝ}
   dsimp only at hol hpco hhd
   have hol' : o < ws.length := by rw [hl]; exact hol
   have hwo : ws[o]? = some ws[o] := List.getElem?_eq_getElem hol'
-  obtain ⟨q', hq', hpfx, hcm⟩ := hC x st hx hf c ws hJ r hr s cS hpc j nm pt hsv p h hh o co ho hcan wt ws[o] hw hwo q hq
+  obtain ⟨q', hq', hcm⟩ := hC o co ho hcan ws[o] hwo
   have hho : ho ∈ accHoldings r o p := List.mem_of_mem_head? hhd
   rw [chainW_get hr hcan hwo t hk]
   congr 1
-  exact held_rows_eq_layR elem hJ.2.1 hJ.2.2.1 hr hpc hpco hw hwo (mem_accHeld hh) (mem_accHeld hho) hq hq' hpfx hcm
+  exact held_rows_eq elem hT hnc hr hpc hpco hw hwo (mem_accHeld hh) (mem_accHeld hho) hq hq' hcm
 
 /-- **`part`'s row sizes are its ports'**: where `part sh j` builds, S's structure and groups return at `sh`, group `j`
 is `(R, P, V)`, and the part's row sizes are `P`'s ports' (`portSizes`). -/
@@ -286,7 +291,7 @@ theorem part_ns {sh : _root_.Flock.Shape} {jj : ℕ} {S : _root_.Flock.RecOpen.G
       obtain ⟨S2, hS2, h⟩ := FlockVBridge.PartS.bind_ok h
       simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
       obtain ⟨-, rfl, -⟩ := h
-      exact ⟨S0, gs, R, P, V, hS0, hgs, rfl, rfl⟩
+      exact ⟨S0, gs, R, P, V, hS0, hgs, hj, rfl⟩
 
 theorem partPorts_of {sh : _root_.Flock.Shape} {jj : ℕ} {S0 : _root_.Flock.RecAlgebra.GfS}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} {R P V : Array ℕ}
@@ -296,7 +301,7 @@ theorem partPorts_of {sh : _root_.Flock.Shape} {jj : ℕ} {S0 : _root_.Flock.Rec
   unfold RecVStar.partPorts
   simp only [hS, hg, hj, bind, Except.bind, pure, Except.pure]
 
-open Flock.RecAlgebra (el) in
+set_option maxHeartbeats 1000000 in
 /-- **P3's ends half**, under the commit tie (`InnerAccTie`): in a piece's port context, at a decision, each element
 of the copy past the frame is one of `w`'s last four, `acc0`'s or `acc1`'s element `o` (`acc_elem`), and the copy holds
 there its committed row's element at the piece's instance `n` (`copy_rowElems`), which is the row its port reads
@@ -307,24 +312,25 @@ theorem endsW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
     (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
     (hC : InnerAccTie rd wE final w b elem Claims.Recursion.Form.Dense untr cmt) :
     EndsW rd wE final w b elem Claims.Recursion.Form.Dense untr cmt := by
-  intro x st hx hf c ws hJ s wt hw r hr ss hss j nm pt hsv xO p hxO hck hsh hAg hT hc q hq ho ht m k cl jj sh holo
-    S ns nv hpar hshp hholo hpart os last hfin hos D e j' he hj
+  intro x st hx hf c ws hJ s wt hw r hr ss hss j nm pt hsv xO p hxO hck hsh hAg hT hc q hq ho ht m k
+    cl jj sh holo S ns nv hpar hshp hholo hpart os last hfin hos D e j' he hj
   -- the piece's part is group `q.key.1`'s, at the read shape
   obtain ⟨r', ss', nm', pt', hr', hss', hsv'⟩ := DecompBR.ownRD_some ho
   obtain rfl : r = r' := Option.some.inj (hr.symm.trans hr')
   obtain rfl : ss = ss' := Except.ok.inj (hss.symm.trans hss')
-  have hsv3 := hsv'.symm.trans hsv
-  simp only [Option.some.injEq, VStar.Stmt.inner.injEq] at hsv3
-  obtain ⟨rfl, rfl, rfl⟩ := hsv3
-  have hsvO : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.inner q.key.1 nm' pt') := by
+  have hsv3 : VStar.Stmt.inner q.key.1 nm' pt' = .inner j nm pt := Option.some.inj (hsv'.symm.trans hsv)
+  simp only [VStar.Stmt.inner.injEq] at hsv3
+  obtain ⟨hj1, -, -⟩ := hsv3
+  subst hj1
+  have hsvO : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.inner q.key.1 nm pt) := by
     rw [hss]
     exact hsv
   obtain ⟨p', r'', sv, hx', htg, hpi, hr'', ⟨ss'', hss'', hsv''⟩, -, htab⟩ := stagedTables hsh.2
   obtain rfl : p = p' := Option.some.inj (hxO.symm.trans hx')
   obtain rfl : r = r'' := Option.some.inj (hr.symm.trans hr'')
   obtain rfl : ss = ss'' := Except.ok.inj (hss.symm.trans hss'')
-  obtain rfl : VStar.Stmt.inner q.key.1 nm' pt' = sv := Option.some.inj (hsv.symm.trans hsv'')
-  have hname : p.sts[0].c.unit.name = nm' := (htab 0 ht).1
+  obtain rfl : VStar.Stmt.inner q.key.1 nm pt = sv := Option.some.inj (hsv.symm.trans hsv'')
+  have hname : p.sts[0].c.unit.name = nm := (htab 0 ht).1
   have hn : RecResiduals.unitName m k cl jj =
       RecResiduals.unitName r.shape.m r.shape.kLog r.shape.claims q.key.1 :=
     (FlockVBridge.Family.resUnitName_params hpar).trans (hname.trans (DecompBR.inner_named hss hsv))
@@ -363,24 +369,21 @@ theorem endsW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
   have hnsi : (P.toList.map ((_root_.Flock.RecResiduals.portSizes (DecompBR.shI v.2.1 v.2.2))[·]!))[i] = 2 := by
     simp only [List.getElem_map, Array.getElem_toList]
     rw [hPi]
-    exact sizes_acc _ hb
+    exact sizes_acc ((_root_.Flock.RecAlgebra.rounds (DecompBR.shI v.2.1 v.2.2)).map (·.size)) hb
   have hoN : o < (P.toList.map ((_root_.Flock.RecResiduals.portSizes (DecompBR.shI v.2.1 v.2.2))[·]!))[i] := by
     rw [hnsi]
     exact ho2
   have he2 : e = ((P.toList.map ((_root_.Flock.RecResiduals.portSizes (DecompBR.shI v.2.1 v.2.2))[·]!)).take i).sum +
       o := he'
-  -- the copy's element is its committed row's, at the piece's instance
+  -- the copy's element is its committed row's, at the piece's instance `r0`
   obtain ⟨cS, hpc⟩ := staged_circuit hsh.2 hr
   have hc0 : p.sts[0].c = cS := partCircuit_staged hsh.2 hxO htg hpi hr hpc ht
   rw [hc0] at hpar hholo
-  set n := q.key.2.1 + q.key.2.2.1 with hn_def
-  have hn2 : n < 2 := by simp only [hn_def, hk]; omega
-  have hk3 : q.key.2.2.2 = 0 := by simp only [hk]
-  have hkc : keyCopy p ht wt q.key = Flock.Readable.copyOf p 0 ht wt (n / cS.g) (n % cS.g) 0 := by
-    simp only [keyCopy]
-    rw [hc0, hk3]
+  have hkn : q.key.2.1 + q.key.2.2.1 = r0 := by simp only [hk, Nat.add_zero]
+  have hkc : keyCopy p ht wt q.key = _root_.Flock.Readable.copyOf p 0 ht wt (r0 / cS.g) (r0 % cS.g) 0 := by
+    simp only [keyCopy, hk, hc0, Nat.add_zero]
   rw [hkc, he2]
-  obtain ⟨hi', hnames, hrow⟩ := copy_rowElems hsh.2 hr hss hsv hpc hxO ht hpar hshp hholo hpart hiN hoN n
+  obtain ⟨hi', hnames, hrow⟩ := copy_rowElems hsh.2 hr hss hsv hpc hxO ht hpar hshp hholo hpart hiN hoN r0
   have hPP : RecVStar.partPorts (DecompBR.shI v.2.1 v.2.2) q.key.1 = .ok P := partPorts_of hS1 hgs hgj
   rw [hshI] at hPP
   obtain ⟨-, hnm⟩ := hnames P hPP
@@ -388,40 +391,54 @@ theorem endsW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
   have hA : P[i] = (_root_.Flock.RecAlgebra.rounds (DecompBR.shI v.2.1 v.2.2)).size + bb := by
     rw [hPi]
     simp
-  have hnm2 : pt'.S.ports[i].1 = if bb = 0 then "acc0" else "acc1" := by
+  have hnm2 : pt.S.ports[i].1 = if bb = 0 then "acc0" else "acc1" := by
     rw [hnm]
     unfold RecVStar.portNames
     rw [hA]
     exact names_acc _ _ hb
-  have hmem : pt'.S.ports[i].1 ∈ pt'.S.ports.map (·.1) := List.mem_map.2 ⟨_, List.getElem_mem hi', rfl⟩
-  have hnout : pt'.S.ports[i].1 ≠ "out" := by
+  have hmem : pt.S.ports[i].1 ∈ pt.S.ports.map (·.1) := List.mem_map.2 ⟨pt.S.ports[i], List.getElem_mem .., rfl⟩
+  have hnout : pt.S.ports[i].1 ≠ "out" := by
     rw [hnm2]
     split_ifs <;> decide
   rw [hrow hnout, hnsi]
   -- the row it reads is its rep's end, its owner's
-  obtain ⟨-, hpk, hpa⟩ := htab 0 ht
-  obtain ⟨u, hu, hupv, -, -, hrows⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok hpa
+  obtain ⟨-, -, hpa⟩ := htab 0 ht
+  obtain ⟨u, hu, -, -, -, hrows⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok hpa
   rw [hc0] at hrows
   obtain ⟨-, hfind, -, -⟩ := port_at hu hrows hi'
   have hR := repOpens_eq D hv hst1 hm1
-  have hW : ∀ (nmb : String) (row : ℕ), (nmb, n) ∈ accHoldings r s row → pt'.S.ports[i].1 = nmb →
-      elemsOf (readForms wt (((rowHidden cS pt'.S.ports[i].1 n).getD []).map HmNets.Lin.var)) 2 o =
-        (chainW x ws 0 row)[o]! := fun nmb row hh hnb => by
+  have hl : ws.length = r.w.parts.length := by
+    have h1 : ws.length = nS x := hJ.1
+    rw [h1]
+    unfold nS
+    rw [hr]
+  have hW : ∀ (nmb : String) (row : ℕ), (nmb, r0) ∈ accHoldings r s row → pt.S.ports[i].1 = nmb →
+      elemsOf (readForms wt (((rowHidden cS pt.S.ports[i].1 r0).getD []).map HmNets.Lin.var)) 2 o =
+        (chainW x ws 0 row)[o]! := fun nmb row hh' hnb => by
     rw [hnb] at hfind ⊢
-    have e1 := readSegs_accSegs wt cS (nmb, n)
+    have e1 := readSegs_accSegs wt cS (nmb, r0)
     dsimp only at e1
     rw [← e1]
-    exact held_chainW hC hx hf hJ hr hpc hsvO hh hw hfind 0 ho2
-  rw [← Flock.RecAlgebra.getElem!_el]
-  have hn22 : n / 2 = 0 := by omega
-  have hn2m : n % 2 = n := Nat.mod_eq_of_lt hn2
+    exact held_chainW elem hJ.2.1 hJ.2.2.1 hr hl hpc hh' hw hfind
+      (fun o' co ho' hcan wo hwo =>
+        let ⟨q', hq', _, hcm⟩ := hC x st hx hf c ws hJ r hr s cS hpc _ nm pt hsvO row (nmb, r0) hh' o' co ho' hcan wt wo
+          hw hwo i hfind
+        ⟨q', hq', hcm⟩) 0 ho2
+  rw [hkn, ← _root_.Flock.RecAlgebra.getElem!_el]
+  have hn22 : r0 / 2 = 0 := by omega
+  have hn2m : r0 % 2 = r0 := Nat.mod_eq_of_lt hr0
   simp only [Rows.DecAt.accE, hn22, hn2m, ← hR]
   rcases (show bb = 0 ∨ bb = 1 by omega) with rfl | rfl
-  · rw [hW "acc0" (n * repOpens r) (acc0_held hsvO hn2 (by rw [hnm2] at hmem; simpa using hmem)) (by simpa using hnm2)]
-    rcases (show o = 0 ∨ o = 1 by omega) with rfl | rfl <;> first | rfl | simp
-  · rw [hW "acc1" (n * repOpens r + repOpens r) (acc1_held hsvO hn2 (by rw [hnm2] at hmem; simpa using hmem))
+  · rw [hW "acc0" (r0 * repOpens r) (acc0_held hsvO hr0 (by rw [hnm2] at hmem; simpa using hmem))
       (by simpa using hnm2)]
-    rcases (show o = 0 ∨ o = 1 by omega) with rfl | rfl <;> first | rfl | simp
+    rcases (show o = 0 ∨ o = 1 by omega) with rfl | rfl
+    · exact (lit4_get _ _ _ _).1.symm
+    · exact (lit4_get _ _ _ _).2.1.symm
+  · rw [hW "acc1" (r0 * repOpens r + repOpens r) (acc1_held hsvO hr0 (by rw [hnm2] at hmem; simpa using hmem))
+      (by simpa using hnm2)]
+    rcases (show o = 0 ∨ o = 1 by omega) with rfl | rfl
+    · exact (lit4_get _ _ _ _).2.2.1.symm
+    · exact (lit4_get _ _ _ _).2.2.2.symm
 
 /-- **P3 under the commit tie**: `AccPorts` at the dense form from the steps half and `InnerAccTie`. -/
 theorem accPorts_of_tie (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
