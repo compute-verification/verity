@@ -62,11 +62,12 @@ A spec-level reference for network accounting's timing channel:
   Commit's `c00.input/ids` rows to the same scan and holds every prompt id to them;
 - the capacity counts;
 - the egress side of the step-indexed scan (`egress`, N2) on a fake upstream, in no Spec: one unit a link and bucket
-  t (`EgressBucket`) that reads the scan's slot state S_t and the warden's egress row t, both registered reads of
-  input ports (`warden_rows.bucket_port` for the row), computes the bucket's cells from the state with every switch
-  computed and none witness, and outputs one u16 verdict, `ACCEPT` exactly when the row is the one the state renders.
-  It has the reference (`bucket_map`, `rendered`, `verdict`) and the state's egress-view layout (`Shape`'s offsets),
-  which the scan's ingress step writes;
+  t (`EgressBucket`) that reads the scan's slot state S_t, a registered read, and computes the bucket's row of cells
+  from it with every switch computed and none witness (the generator form): its outputs are a u16, `ACCEPT` exactly
+  when the state renders a row, the one public output, and the row, committed as a registered read of the warden's
+  egress row t (`warden_rows.bucket_port`), which opens only if the computed row is the warden's. It has the reference
+  (`bucket_map`, `computed`, `rendered`, `outputs`) and the state's egress-view layout (`Shape`'s offsets), which the
+  scan's ingress step writes;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
@@ -172,13 +173,15 @@ A spec-level reference for network accounting's timing channel:
   what passes it by name until Lean's `Layout.Fits` takes the checked row. `Fits` stays structural: a served window fits
   in the step-indexed scan's form, and a window in any other form is refused;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
-  warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), computes the
-  next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt ids
-  appended, a due slot's output count and ids taken from the Programs' row at its anchor, a slot held through its last
-  egress bucket, `admitted + D + ⌊n/r⌋`) and its egress view, the state as `egress.EgressBucket` reads it (bucket, then
-  per slot live, q, admitted, n and the output ids), as a row of its own, and outputs one ok bit; `Class.serves` names
-  the warden parameters it takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides at w63's class
-  in one registration: ingress unit t writes the state and view egress unit t reads, chained by registered reads;
+  warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), and computes
+  the next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt
+  ids appended, a due slot's output count and ids taken from the Programs' row at its anchor, a slot held through its
+  last egress bucket, `admitted + D + ⌊n/r⌋`) and its egress view, the state as `egress.EgressBucket` reads it (bucket,
+  then per slot live, q, admitted, n and the output ids), its outputs beside a public ok bit; `IngressScanFirst`, the
+  first bucket's, starts from the empty state, constants of its circuit. `Class.serves` names the warden parameters it
+  takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides in one registration: ingress unit t's
+  state and view outputs are committed as registered reads of the scan's state and view rows t, which ingress unit
+  t + 1 and egress unit t read, so the chain is wires through the registered roots;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
