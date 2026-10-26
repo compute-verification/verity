@@ -219,14 +219,14 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
 - `outputs_eq_of_separates`, **the influence cap**: two traces with the anchors' inputs, whose faulty proof blocks lie in
   $B$, and that agree on a committed separator $K$ of $B$, deliver the same values on $D$;
 - `card_delivered_le`: so they deliver at most $2^{|K|}$ values on $D$;
-- `separates_exits`: the committed wires of the units of $B$ separate $B$ (a replay unit's exports); `Separates.mono`,
+- `separates_exits`: the committed wires of the units of $B$ separate $B$ (a replay block's exports); `Separates.mono`,
   `Separates.union`;
 - `card_influenceSet_le`: the influence set at $\delta$, what is delivered with the faulty proof blocks inside some set of
   acceptance probability at least $\delta$, fixed before the prover, has at most $\sum_{B : e(B) \ge \delta} 2^{|K_B|}$
   members;
 - `audit_influence`: $\Pr[\text{accept} \wedge \mathrm{out}_D(X) \notin \mathrm{influenceSet}] \le \delta +
   \varepsilon_{ks} + \delta_{link} + \delta_{in}$, so the prover's influence over what is delivered is
-  $\log_2 |\mathrm{influenceSet}|$ bits; `Refines.twoStage_influence` is the same over replay units, with $e_{\text{eff}}$
+  $\log_2 |\mathrm{influenceSet}|$ bits; `Refines.twoStage_influence` is the same over replay blocks, with $e_{\text{eff}}$
   and the two-stage input hypothesis `AnchorsSound₂` (`Audit/TwoStage.lean`).
 - `card_influenceSet_le_harm` and `card_admissible_le`: that influence is at most $H + \log_2 \sum_{j \le K}
   \binom{n}{j}$ bits, for a harm bound $H$ (`IsHarmBound`, `Audit/Harm.lean`: the specification of core's `harm_bound`) with

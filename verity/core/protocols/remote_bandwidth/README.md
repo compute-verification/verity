@@ -103,7 +103,7 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   `lean/tests/test_p2.py`; the Lean session doesn't take a P2 store yet.
 - `wire.py`: the openings frame a prover sends a window's openings in, and a window's openings from its frames
   (`openings_of`), beside `lean/RemoteAudit/Wire.lean`'s.
-- `memory_map.py`: memory-map/v1, serving's record of the KV blocks it wrote and freed, as the audit's appends,
+- `memory_map.py`: memory-map/v1, serving's record of the KV pages it wrote and freed, as the audit's appends,
   releases and plan changes, and as the schedule the prover publishes (`schedule`).
 - `schedule.py`: the schedule check, without which `ledger` credits nothing after the seed: each pass's plan is the
   verifier's plan of the published schedule at its step, the schedule is within the cap on its bits the session
