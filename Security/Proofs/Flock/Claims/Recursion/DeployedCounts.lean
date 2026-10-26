@@ -29,8 +29,10 @@ deployment-size condition on public data, `RegSize x K`, beside `lamLin2_deploye
   registration bytes `x`'s parts carry (`RegSize`).
 
 So each statement has at most `65792 + 2^34 · K` setup inputs (`deployedSetup_staged_le`), the run at most
-`nS x · (65792 + 2^34 · K)` (`setupCalls_deployedB_le_reg`), and at `nS x ≤ 2^16` and `K = 31` at most `2^55`
-(`setupCalls_deployedB_le_31`), the call bound `lamLin2_deployedB_ge` charges (`lamLin2_deployedB_ge_reg`).
+`nS x · (65792 + 2^34 · K)` (`setupCalls_deployedB_le_reg`), and within the budget `nS x · (65792 + 2^34 · K) ≤ 2^55`
+at most `2^55` (`setupCalls_deployedB_le_joint`), the call bound `lamLin2_deployedB_ge` charges
+(`lamLin2_deployedB_ge_joint`); at `nS x ≤ 2^10` and `K = 2047` (`lamLin2_deployedB_ge_2047`). A deployment's `K` is at
+least `36` (`setupCalls_deployedB_le_2047`), so no budget at `nS x ≤ 2^16` holds there.
 -/
 
 set_option Elab.async false
@@ -433,26 +435,40 @@ theorem setupCalls_deployedB_le_reg (rel : _root_.Flock.Readable.Parsed → _roo
     obtain ⟨ms, s, rfl⟩ := mem_vstar_staged hx
     exact deployedSetup_staged_le hK
 
-/-- **`v ≤ 2^55` at the deployed brings**, at `nS x ≤ 2^16` V\* parts and registrations of size at most 31, both
-deployment-size conditions on public data: `lamLin2_deployed_ge_dep`'s `hV`. -/
-theorem setupCalls_deployedB_le_31 (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+/-- **`v ≤ 2^55` at the deployed brings**, under one budget on public data: `x`'s registrations of size at most `K`
+(`RegSize`) and `nS x · (65792 + 2^34 · K) ≤ 2^55`: `lamLin2_deployed_ge_dep`'s `hV`. -/
+theorem setupCalls_deployedB_le_joint (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (IV : Claims.Verifier Coin) (H : Msg → Msg) (x : Msg)
-    (ps : List (Msg × Out)) (hn : nS x ≤ 2 ^ 16) (hK : RegSize x 31) :
+    (ps : List (Msg × Out)) {K : ℕ} (hK : RegSize x K) (hNK : nS x * (65792 + 17179869184 * K) ≤ 2 ^ 55) :
     (Claims.Recursion.setupCalls H (recBound rel (deployedB b) L IV)
       ((recBound rel (deployedB b) L IV).vstar x ps)).length ≤ 2 ^ 55 :=
-  (setupCalls_deployedB_le_reg rel b L IV H x ps hK).trans ((Nat.mul_le_mul_right _ hn).trans (by norm_num))
+  (setupCalls_deployedB_le_reg rel b L IV H x ps hK).trans hNK
+
+/-- **`v ≤ 2^55` at the deployed brings**, at `nS x ≤ 2^10` V\* parts and registrations of size at most `2047`. A
+deployment's registrations are of size at least `36`: every `fast100` schedule has at least three levels, of
+`q = 218, 106, 71`, so `rec-acc`, the chain of both reps' openings, has more than `2 · 395` rows (`2 + log2ceil ≥ 12`),
+and a level registers `out`, `acc` and `acc_out` (`RecVStar.checkAcc`). -/
+theorem setupCalls_deployedB_le_2047 (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (IV : Claims.Verifier Coin) (H : Msg → Msg) (x : Msg)
+    (ps : List (Msg × Out)) (hn : nS x ≤ 2 ^ 10) (hK : RegSize x 2047) :
+    (Claims.Recursion.setupCalls H (recBound rel (deployedB b) L IV)
+      ((recBound rel (deployedB b) L IV).vstar x ps)).length ≤ 2 ^ 55 :=
+  setupCalls_deployedB_le_joint rel b L IV H x ps hK ((Nat.mul_le_mul_right _ hn).trans (by norm_num))
 
 /-- **Route 2C's `λ₂ ≥ 100` at the deployed brings, with its call bound**: `lamLin2_deployedB_ge` at `v = 2^55`, and
-the compiled verifier's own evaluations at its V\* statements at most `2^55` (`setupCalls_deployedB_le_31`).
+the compiled verifier's own evaluations at its V\* statements at most `2^55` (`setupCalls_deployedB_le_joint`).
 
 What is left are deployment-size conditions on public data, read off `x`, none a hash premise or a statement about the
-prover: `hn` (at most `2^16` V\* parts), `hS` (the inner setup at most `2^56` hm96 inputs), `hO` (the scope condition
-`PartIn` at each staged part, which the verifier's own `setupO` evaluates on the staged public statement), `hin` (the
-inner statement's plain setup) and `hK` (`RegSize x 31`, the registrations `x`'s parts carry). The tables (at most
+prover: `hn` (at most `2^16` V\* parts; `readX` refuses unless `nS x` is the length of `RecVStar.statements` at the
+verifier's own inner shape), `hS` (the inner setup at most `2^56` hm96 inputs), `hO` (the scope condition `PartIn` at
+each staged part, which the verifier's own `setupO` evaluates on the staged public statement), `hin` (the inner
+statement's plain setup), and `hK` with `hNK` (`RegSize x K`, the registrations `x`'s parts carry, within the budget
+`nS x · (65792 + 2^34 · K) ≤ 2^55`). The verifier caps neither a registration's ports nor its leaves, and holds a
+part's to other files `x` carries (`--rec-rows`), so `K` is a condition on `x`, not a constant. The tables (at most
 `Tags.MAX_TABLES`), each statement's instances (at most `2^28`, from the `m ≤ 35` refusal, `HmRow.check`'s slots and
 `HmRow.pin`'s refusal of a range of no slots), statements with public inputs (`setupTables_counts`) and check 5's
 query count (`q < 256`, `fast100`'s, a verifier constant) need no hypothesis. -/
-theorem lamLin2_deployedB_ge_reg (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
+theorem lamLin2_deployedB_ge_joint (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
@@ -461,8 +477,8 @@ theorem lamLin2_deployedB_ge_reg (rel : _root_.Flock.Readable.Parsed → _root_.
     (hin : FlockDeploy.PlainIn (xIOf x) s spec sts)
     (hO : ∀ j < nS x, ∃ i spec' sts',
       PartIn (staged (deployedB b).st x (pick (deployedB b).st x j) j) i spec' sts')
-    (hn : nS x ≤ 2 ^ 16) (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 56) (hK : RegSize x 31)
-    (ps : List (Msg × Out)) {n : ℕ} (hU : n ≤ 2 ^ 55) :
+    (hn : nS x ≤ 2 ^ 16) (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 56) {K : ℕ} (hK : RegSize x K)
+    (hNK : nS x * (65792 + 17179869184 * K) ≤ 2 ^ 55) (ps : List (Msg × Out)) {n : ℕ} (hU : n ≤ 2 ^ 55) :
     100 ≤ Claims.Recursion.lamLin2
       ((recBoundAt rel (deployedB b) L).record (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
       (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI)
@@ -472,6 +488,29 @@ theorem lamLin2_deployedB_ge_reg (rel : _root_.Flock.Readable.Parsed → _root_.
       ((recBound rel (deployedB b) L (bdDeployed rel nextE colsE wE join rowIn final w).IVStar).vstar x
         ps)).length ≤ 2 ^ 55 :=
   ⟨lamLin2_deployedB_ge rel b L nextE colsE wE join rowIn final w decI hin hO hn hS hU,
-    setupCalls_deployedB_le_31 rel b L _ H x ps hn hK⟩
+    setupCalls_deployedB_le_joint rel b L _ H x ps hK hNK⟩
+
+/-- **`lamLin2_deployedB_ge_joint` at `nS x ≤ 2^10` and `K = 2047`** (`setupCalls_deployedB_le_2047`). -/
+theorem lamLin2_deployedB_ge_2047 (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
+    (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
+    (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
+    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
+    (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (H : Msg → Msg)
+    {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
+    (hin : FlockDeploy.PlainIn (xIOf x) s spec sts)
+    (hO : ∀ j < nS x, ∃ i spec' sts',
+      PartIn (staged (deployedB b).st x (pick (deployedB b).st x j) j) i spec' sts')
+    (hn : nS x ≤ 2 ^ 10) (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 56) (hK : RegSize x 2047)
+    (ps : List (Msg × Out)) {n : ℕ} (hU : n ≤ 2 ^ 55) :
+    100 ≤ Claims.Recursion.lamLin2
+      ((recBoundAt rel (deployedB b) L).record (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
+      (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI)
+      FlockDeploy.KS.CpDep x n (2 ^ 55) ∧
+    (Claims.Recursion.setupCalls H
+      (recBound rel (deployedB b) L (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
+      ((recBound rel (deployedB b) L (bdDeployed rel nextE colsE wE join rowIn final w).IVStar).vstar x
+        ps)).length ≤ 2 ^ 55 :=
+  ⟨lamLin2_deployedB_ge rel b L nextE colsE wE join rowIn final w decI hin hO (hn.trans (by norm_num)) hS hU,
+    setupCalls_deployedB_le_2047 rel b L _ H x ps hn hK⟩
 
 end RecDeploy
