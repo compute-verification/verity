@@ -19,13 +19,13 @@ SM90_SMEM = 232448
 
 
 def test_a_config_round_trips_and_refuses_an_unbuilt_tile():
-    for text in ("128x256:c0:g8", "64x64:c32:g1", "128x128:c66:g16"):
+    for text in ("128x256:c0:g8", "64x64:c32:g1", "128x128:c66:g16", "128x256:c0:g8:m2", "64x64:c32:g1:m2"):
         assert str(W.Cfg.parse(text)) == text
-    assert W.Cfg.parse("64x128") == (64, 128, 0, 8)
-    with pytest.raises(ValueError):
-        W.Cfg(256, 128)
-    with pytest.raises(ValueError):
-        W.Cfg(128, 256, 0, 0)
+    assert W.Cfg.parse("64x128") == (64, 128, 0, 8, 1)
+    assert str(W.Cfg.parse("64x128:m1")) == "64x128:c0:g8"
+    for bad in ((256, 128), (128, 256, 0, 0), (128, 256, 0, 8, 3), (128, 256, 1, 8, 2)):
+        with pytest.raises(ValueError):
+            W.Cfg(*bad)
 
 
 def test_every_tile_fits_the_cards_shared_memory_and_its_swizzle():
@@ -65,6 +65,9 @@ def test_the_grid_keeps_the_rounds_and_holds_at_most_its_ctas():
     grid = lambda tiles, ctas: W.Lib.grid(lib, tiles, ctas)  # noqa: E731
     assert grid(128, 0) == 128 and grid(264, 0) == 132 and grid(200, 0) == 100 and grid(1, 0) == 1
     assert grid(40960, 32) == 32 and grid(40960, 500) == 132
+    pairs = lambda units, ctas: W.Lib.grid(lib, units, ctas, 66)  # noqa: E731
+    assert pairs(64, 0) == 128 and pairs(200, 0) == 100 and pairs(200, 32) == 32 and pairs(1, 0) == 2
+    assert pairs(40960, 500) == 132 and pairs(40960, 0) == 132
 
 
 LISTING = """
@@ -80,13 +83,21 @@ LISTING = """
 PTXAS = "ptxas info    : Compiling entry function 's8mm_64x64' for 'sm_90a'\nptxas info    : Used 66 registers, 0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads\n"
 
 
-def _gate(igmma: str = "IGMMA.64x64x32.S8.S8 R24, gdesc[UR4], R24 ;", extra: str = "") -> list[str]:
-    funcs, problems = SG.gate(PTXAS, LISTING.format(igmma="\n".join([igmma] * 4), extra=extra))
+def _gate(igmma: str = "IGMMA.64x64x32.S8.S8 R24, gdesc[UR4], R24 ;", extra: str = "", name: str = "s8mm_64x64") -> list[str]:
+    listing = LISTING.format(igmma="\n".join([igmma] * 4), extra=extra).replace("s8mm_64x64", name)
+    funcs, problems = SG.gate(PTXAS.replace("s8mm_64x64", name), listing)
     return [p for p in problems if "missing from the cubin" not in p]
 
 
 def test_the_sass_gate_passes_the_s8_atom_and_integer_divisions_f2i():
-    assert _gate() == []
+    assert _gate() == [] and _gate(name="s8mm2_64x64") == []
+    assert _gate(name="s8mm2_64x64", igmma="IGMMA.64x128x32.S8.S8 R24, gdesc[UR4], R24 ;")
+
+
+def test_the_sass_gate_wants_every_kernel_and_its_pair():
+    _, problems = SG.gate(PTXAS, LISTING.format(igmma="IGMMA.64x64x32.S8.S8 R24, gdesc[UR4], R24 ;", extra=""))
+    missing = next(p for p in problems if "missing from the cubin" in p)
+    assert "'s8mm2_128x256'" in missing and "'s8mm_128x256'" in missing and "'s8mm_64x64'" not in missing
 
 
 @pytest.mark.parametrize("bad", ["FFMA R1, R2, R3, R4 ;", "FMUL.FTZ R1, R2, R3 ;", "LDL R1, [R2] ;",

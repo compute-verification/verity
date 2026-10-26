@@ -38,13 +38,13 @@ GROUPS = (1, 2, 4, 8, 16, 32)
 def coarse(m: int, kern) -> list:
     if kern.name == "wgmma":
         tms = (64,) if m <= 64 else (64, 128) if m <= 256 else (128,)
-        return [W.Cfg(tm, bn) for tm in tms for bn in (64, 128, 256)]
+        return [W.Cfg(tm, bn, 0, 8, cl) for tm in tms for bn in (64, 128, 256) for cl in (1, 2) if cl == 1 or m > tm]
     return coarse_triton(m)
 
 
 def refine(cfgs: list, kern) -> list:
     if kern.name == "wgmma":
-        return [W.Cfg(c[0], c[1], c[2], g) for c in cfgs for g in GROUPS]
+        return [W.Cfg(c[0], c[1], c[2], g, c[4]) for c in cfgs for g in GROUPS]
     return [X.Cfg(*c[:3], w, s, *c[5:]) for c in cfgs for w in WARPS for s in STAGES]
 
 
