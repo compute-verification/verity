@@ -1,0 +1,4 @@
+order = 375
+path = "`theory/v3_reconcile.py`"
+runs_on = "CPU"
+what = "ACCEL ALGO-COST-3's reconciliation of A25 (`v3_caps.py`) with PROTO-DESIGN-3's v3 caps: D5's job LP with the honest job's hashing as compressions (v3), lane-matched to nofold (A25) or with D5's `pub_sha` in the menu, v3's cap rule per shape and reading, least-γ picks, and P19's L′ ≤ n/32 check of v3's PV caps (note:compute-research/20261026T0650Z-draft-accel-algo-cost-3)"
