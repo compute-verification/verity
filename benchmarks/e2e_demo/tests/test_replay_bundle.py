@@ -1,5 +1,5 @@
-"""The drawn-unit replay bundle: the checked-in fixture checks clean and fits its schema, each kind of tampering is refused by
-name, and a fresh bundle from the torch loop's window agrees with the fixture and refuses a tampered loop's outputs."""
+"""The drawn-unit replay bundle: the fixture, built from the torch loop's window, is its pinned digests, checks clean and fits
+its schema, each kind of tampering is refused by name, and a tampered loop's outputs are refused."""
 from __future__ import annotations
 
 import copy
@@ -12,14 +12,32 @@ import pytest
 
 from verity_e2e_demo import replay_bundle as B
 
-HERE = Path(__file__).parent
-FIXTURE = HERE / "fixtures" / "drawn-unit-bundle.json"
 SCHEMA = Path(B.__file__).parent / "schemas" / "drawn-unit-bundle.v1.schema.json"
+#: `B.digests` of `B.fixture_bundle`: a change to the bundle's bytes changes these (`python -m verity_e2e_demo.replay_bundle
+#: fixture` writes it to look at)
+GOLDEN = {"json": "f0b20b8bb1a20e4f3655c0f7686241185d86d73ac84cd46989e1b9c751e36c14abd3f5d7663073c5539aaed584b350bf1b7332ee407a31ce4be9dec63368d5c4",
+          "bin": "50ecc8eb128090c1c0ff7a3b5e279383b5e6e5413014073007fc3b7fce93e5188dcd78dafb31149ef4d05db862bc0fb422ffe846ef11947583697c57b78294a5"}
 
 
 @pytest.fixture(scope="module")
-def bundle() -> tuple[dict, bytes]:
-    return B.read(FIXTURE)
+def fresh(tmp_path_factory) -> tuple[Path, dict]:
+    d = tmp_path_factory.mktemp("window")
+    _, weights = B.torch_loop_window(d)
+    return d, weights
+
+
+@pytest.fixture(scope="module")
+def bundle(fresh) -> tuple[dict, bytes]:
+    d, weights = fresh
+    doc, payload = B.build(d, B.FIXTURE_DRAW, reads=B.torch_loop_reads, weights=weights,
+                           draw={"source": "fixture", "law": {"law": "subset", "k": len(B.FIXTURE_DRAW)}})
+    return json.loads(json.dumps(doc)), payload
+
+
+def test_the_fixture_is_its_digests(fresh, bundle) -> None:
+    doc, payload = bundle
+    assert B.digests(doc, payload) == GOLDEN
+    assert B.check(doc, payload, registration=json.loads((fresh[0] / "registration.json").read_text())) == {}
 
 
 def _repay(doc: dict, payload: bytes) -> dict:
@@ -89,22 +107,6 @@ def test_a_tampered_output_is_refused_by_replay(bundle) -> None:
     bad = bytearray(payload)
     bad[o["row"][0]] ^= 1
     assert B.replay(u, payload) and not B.replay(u, bytes(bad))
-
-
-@pytest.fixture(scope="module")
-def fresh(tmp_path_factory) -> tuple[Path, dict]:
-    d = tmp_path_factory.mktemp("window")
-    _, weights = B.torch_loop_window(d)
-    return d, weights
-
-
-def test_a_fresh_bundle_is_the_fixture(fresh) -> None:
-    d, weights = fresh
-    doc, payload = B.build(d, B.FIXTURE_DRAW, reads=B.torch_loop_reads, weights=weights,
-                           draw={"source": "fixture", "law": {"law": "subset", "k": len(B.FIXTURE_DRAW)}})
-    assert B.check(doc, payload, registration=json.loads((d / "registration.json").read_text())) == {}
-    want, want_payload = B.read(FIXTURE)
-    assert payload == want_payload and json.loads(json.dumps(doc)) == want
 
 
 def test_another_registration_is_refused(fresh, bundle) -> None:
