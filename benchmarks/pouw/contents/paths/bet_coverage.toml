@@ -1,0 +1,4 @@
+order = 367
+path = "`bet_coverage.py`"
+runs_on = "CPU"
+what = "SHA-512 compressions and lane work per credited INT8 MAC at the frozen H200 shape (M = 20,480) for each H1 tile and commitment design (v1, per-unit 32×32, J10-R as built, K = 4,096 chunks, W′ once a call, the li fold, L = 64, lane-chunk draws), the share each credits at γ ≤ 10 beside the served GEMM and as one stream, its drawn unit against C-Flock's limits, Pearl-C -h3's leaf and tickets, operand rows per tile against once a call, the period's proving at ε < 1% (#4363's K_d and Λ) a week, month and year, and the model against the H200's measured `h1jr_cols` and M = 8,192 kernel γ (ACCEL BET-COVERAGE, CMP-124, note:compute-research/20261026T0136Z-draft-accel-bet-coverage)"
