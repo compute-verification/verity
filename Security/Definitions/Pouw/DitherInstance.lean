@@ -137,10 +137,11 @@ def OnCard (G : Accel) (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devi
         G.wall Mw (M₀, d) = (((sched d).length + x.slack : ℕ) : ℝ) / D.f ∧
         G.ext Mw (M₀, d) = 0
 
-/-- **The public best methods on the card table `c`** (RT-LEAN L3, L31): the units, resource by resource, that the
+/-- **The public best methods on the card table `c`** (RT-LEAN L3, L27, L31): the units, resource by resource, that the
 public best matmul method takes for one round's words (`mm`) and that the pinned public SHA-512 implementation takes
-for the round's commitment (`sha`), each a named public program run on the card. The headline prices them at its dual
-price (`pubCost`), so `pub_mm` and `pub_sha` are fixed per card, not chosen per reading. -/
+for the round's commitment (`sha`), each a named public program run on the card, at the cheapest instance a prover can
+register (the coordinator's L27 decision: one constant must hold at every instance the prover may pick). The headline
+prices them at its dual price (`pubCost`), so `pub_mm` and `pub_sha` are fixed per card, not chosen per reading. -/
 structure PubBest (c : Verity.Accel.Card) where
   mm : Verity.Accel.Res → ℚ≥0
   sha : Verity.Accel.Res → ℚ≥0
