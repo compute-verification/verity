@@ -17,3 +17,7 @@ infra (PRF-183): cpu-2 is at 90% disk and 88% inodes. Nine warm copies there tak
 - If you need a NEW warm copy, put it on vy-nebius-cpu-3 (proofs pool p0-p6): `research run --on vy-nebius-cpu-3 --project verity ...` with the same CHECK_SLOTS slot.py wrapper and /workspace/research/lean-warm/wt-<you> (mkdir -p it).
 - When your piece is delivered, DELETE your warm copy: `rm -rf /workspace/research/lean-warm/wt-<you>` inside a research run on that node. It's your own copy, so that's allowed.
 - Never cpu-5.
+
+## 04:27Z from proofs: your bad warm copy on cpu-2 was DELETED
+
+infra asked (PRF-184): /workspace/research/lean-warm/wt-restverdict on cpu-2 held a seed copy of / (a proc/ tree), so I removed it. Use your OTHER copy, wt-restverdict-5630. If you seed again, rsync only the repo tree (exclude .lake, .git and anything outside the checkout), and do it on cpu-3, not cpu-2.
