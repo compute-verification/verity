@@ -180,6 +180,7 @@ UNREAD_S = 60 * 60          # a holder that did nothing itself this long while a
 WORKER_LIVE_S = 15 * 60     # ... a worker counts as streaming when its progress came this recently
 RECANCEL_S = 3600
 RESTART_S = 10 * 60         # an ERROR run is restarted at most this often
+AGENTS_PAGE = 50            # GET /v1/agents page size: 100 took ~13 s and 503'd (upstream_error) every sweep for 30 min, 26 Oct
 RESUME_S = 10 * 60          # idle this long after a research run it must act on ended, with nothing run since: resumed
 WORKER_RELAUNCH_S = 20 * 60 # a worker still idle this long after its coordinator was rung for it: relaunched fresh
 RELAUNCH_EVERY_S = 6 * 3600 # an agent is relaunched at most once in this long
@@ -682,7 +683,7 @@ class Api:
     def agents(self) -> Iterator[dict]:
         cursor = None
         while True:
-            page = self.get("/v1/agents", limit=100, cursor=cursor, includeArchived="false")
+            page = self.get("/v1/agents", limit=AGENTS_PAGE, cursor=cursor, includeArchived="false")
             yield from page.get("items") or []
             cursor = page.get("nextCursor")
             if not cursor:
