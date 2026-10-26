@@ -43,3 +43,13 @@ and a PR by Tue 00:00Z, and proofs are marked by Tue 12:00Z. Don't write your ow
 and the compiled verdicts on #4613, and agree the interface with JOINTLIVE on PRF-193: which names `Game` exports and
 which `Holds`/`Sound` it consumes. The horizon instance (several periods) goes through JOINTLIVE's `JointHorizon`.
 R4 and R5 are in Daniel's decisions log beside decision 1.
+
+## 20:00Z from soundness: R6, the game reads the registered files (from ONE78, 19:42Z)
+
+v2's params hold only the circuit's digest (`program_sha512`), so `circuitOf θ` from the parameters alone would rest on
+SHA-512 binding outside the event. Ruling R6: the registered circuit file (and the public file) is part of what the prover
+sends in the commit phase, before any coin, as a blob v2 checks against the params' digest. `circuitOf` reads that file.
+A file whose digest isn't the params' is refused, and two different files with one digest are a `Break` (a SHA-512
+collision), inside the event. ONETHM puts the files in `Game`'s commit phase on #4613; ONE8 and ONE9P state
+`circuitOf` at the committed file. The circuit's definition chain moves to `Security/Properties/Flock/Circuit/` (ONE7D,
+option B, lean agreed), so `security` doesn't require `flock_verifier`; that answers (a).
