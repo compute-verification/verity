@@ -565,6 +565,27 @@ def test_p2_family_certificate_is_the_proved_block_range():
     assert schemes.P2(P2Params(16448, 21065, 256, 1)).certificate is None
 
 
+def test_p2_wide_certificate_is_period_held_at():
+    """`p2.wide_certificate` is `Pous.Period.SecurityProofs.periodHeldAt`, the family's audit (k = 105, no root within
+    `Δ + RTT`, `2^20` queries, `⌊ρ·|C|⌋` at `1% + 2^-128`) for a v4 store of 2^19 to 2^27 blocks at the registered width
+    and prime in any number of segments, Demo B's 1038 segments among them, resting on `P2_CLAIMS` and a claim for each
+    of `periodHeldAt`'s premises at `N`; there is none off that range, at another width, or for v2's ChaCha8 keys."""
+    from verity.core.protocols.pous.schemes.p2 import CERT_WIDE_BLOCKS, P2_CLAIMS, WIDE_CLAIMS, family_certificate
+    from verity.core.protocols.pous.schemes.p2 import wide_certificate
+
+    fam = family_certificate(P2Params(16448, 21065, 256, 1)).to_json()
+    assert CERT_WIDE_BLOCKS == (1 << 19, 1 << 27)
+    assert WIDE_CLAIMS == (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at", "statistical-hiding")
+    for bps, segments in ((1 << 16, 8), (1 << 12, 128), (1 << 16, 129), (1 << 16, 1038), (1 << 16, 1 << 11)):
+        cert = wide_certificate(P2Params(16448, 21065, bps, segments))
+        assert cert.to_json() == fam | {"theorem": "Pous.Period.SecurityProofs.periodHeldAt",
+                                        "claims": list(WIDE_CLAIMS)}, (bps, segments)
+        assert all(protocol.claim(c).id == c for c in cert.claims)
+    for q in (P2Params(16448, 21065, (1 << 16) - 1, 8), P2Params(16448, 21065, 1 << 16, (1 << 11) + 1),
+              P2Params(1024, 105, 1 << 16, 1038), P2Params(16448, 21065, 1 << 16, 1038, CHACHA8)):
+        assert wide_certificate(q) is None, q
+
+
 def test_p2_encode_blocks_are_slices_of_the_segment():
     """`p2.encode_blocks` from block `j0` of a segment gives those blocks of `encode_segment`, and refuses payloads that
     are not whole blocks inside the segment."""

@@ -27,10 +27,12 @@ import PousCheck.Run
 On acceptance it publishes the storage it certifies and the error that holds at, `{"certified", "eps", "s_bits"}`
 (`certify`): when a certificate covers the point (`certificate`: P2's registered one, `Certificate.p2`, at its
 `(w, c0, blocks per segment)` and segment count, else P2's proved family, `familyCertificate`, at the registered width
-and prime for `2^8` to `2^23` blocks; `k` at least its own and `Δ + RTT` within its rounds), `s_bits` is
-`⌊ρ·blocks·w⌋` and `eps` is `δ + 2^eps_log2`: a node holding fewer bits when the challenges arrived passes with
-probability at most `eps`, under the certificate's claims. Off it, `s_bits` is 0 and `eps` 0, the vacuous statement,
-and the profile names each gap.
+and prime for `2^8` to `2^23` blocks, else the per-period guarantee, `wideCertificate`, there for `2^19` to `2^27`
+blocks; `k` at least its own and `Δ + RTT` within its rounds), `s_bits` is `⌊ρ·blocks·w⌋` and `eps` is
+`δ + 2^eps_log2`: a node holding fewer bits when the challenges arrived passes with probability at most `eps`, under
+the certificate's claims. Off it, `s_bits` is 0 and `eps` 0, the vacuous statement, and the profile names each gap.
+At Demo B's store, 1038 segments of `2^16` blocks, that is `Pous.Period.PeriodHeldDemo`'s 1,060,008,348,186 bits at
+`1% + 2^-128`.
 
 `protocol` (`verity/pous/p2/v4/run`) accepts S1's LMS (`SCHEMES`) only; `testProtocol`, under an id of its own, the test
 signers' schemes and only them.
@@ -115,13 +117,28 @@ def familyCertificate (w c0 blocks : Nat) : Option Certificate.Certificate :=
            theoremName := "Pous.SecurityProofs.P2SlackFamilyUncond", segments := none, claims := Certificate.P2_CLAIMS }
   else none
 
+/-- `p2.WIDE_CLAIMS`: `P2_CLAIMS`, and one claim for each premise `periodHeldAt` takes at `N` blocks
+(`P2RingRoundSecureWide`, `RingDeviceAt`, `CoinCommitHides (coinViewAt N)`). -/
+def WIDE_CLAIMS : List String :=
+  Certificate.P2_CLAIMS ++ ["p2-ring-round-secure-wide", "pous-ring-device-at", "statistical-hiding"]
+
+/-- `p2.wide_certificate`: `Pous.Period.SecurityProofs.periodHeldAt` for a store at the registered width and prime of
+any block count from `2^19` to `2^27` (`p2.CERT_WIDE_BLOCKS`), in any number of segments: an accepted period with no
+break while the node held fewer than `⌊ρ·N·16448⌋` bits has probability at most `δ + ε_max`, read at `N` = the blocks. -/
+def wideCertificate (w c0 blocks : Nat) : Option Certificate.Certificate :=
+  if w == Certificate.POINT.1 && c0 == Certificate.POINT.2.1 && 2 ^ 19 ≤ blocks && blocks ≤ 2 ^ 27 then
+    some { k := Certificate.CERT_K, rounds := 0, work := 2 ^ 20, callNs := Certificate.ROOT_CALL_NS,
+           theoremName := "Pous.Period.SecurityProofs.periodHeldAt", segments := none, claims := WIDE_CLAIMS }
+  else none
+
 /-- `period.certificate`: P2's registered certificate (`Certificate.p2`) when the store is its point, segment count and
-all, else P2's proved family's (`familyCertificate`), else none. -/
+all, else P2's proved family's (`familyCertificate`), else the per-period guarantee's (`wideCertificate`), else none. -/
 def certificate (q : Run.Point) : Option Certificate.Certificate :=
   let p := q.params
+  let rest := (familyCertificate p.w p.c0 p.blocks).orElse fun _ => wideCertificate p.w p.c0 p.blocks
   match Certificate.p2 p.w p.c0 p.blocksPerSegment with
-  | some c => if c.segments == some p.segments then some c else familyCertificate p.w p.c0 p.blocks
-  | none => familyCertificate p.w p.c0 p.blocks
+  | some c => if c.segments == some p.segments then some c else rest
+  | none => rest
 
 /-- What an accepted run certifies at `pt`: the certificate when it covers the point, and why it doesn't otherwise. -/
 def gaps (pt : Run.Point) : Option Certificate.Certificate × List String :=
@@ -155,6 +172,13 @@ def profileJson (pt : Run.Point) : Json :=
   Json.mkObj [("block_bits", natJ pt.params.w), ("blocks", natJ pt.params.blocks),
     ("certificate", match c with | some c => c.toJson | none => .null), ("experimental", .str Certificate.EXPERIMENTAL),
     ("gaps", .arr (gs.map Json.str).toArray), ("k", natJ pt.k), ("limit_ns", natJ pt.limitNs)]
+
+/-- `certify` and `profileJson` at the point of the difftest's line `{"point": …}`, as `{"profile", "public"}`:
+`pous-run serve`'s `certify`, which `tests/test_run_protocol.py` drives against `period.certify` and `period.profile`
+at points no setup could reach, Demo B's among them. -/
+def certifyFn (j : Json) : V Json := do
+  let pt ← Run.Point.ofJson (← J.get j "point" "certify")
+  pure (Json.mkObj [("profile", profileJson pt), ("public", (certify pt).toJson)])
 
 deriving instance DecidableEq for SetupProtocol.Public
 
@@ -287,6 +311,19 @@ private def TIE_PUB : SetupProtocol.Public :=
 #guard (certify { Run.DEPLOYED with params := ⟨16448, 21065, 2 ^ 16, 2⟩ }).certified
 #guard !(certify { Run.DEPLOYED with params := ⟨16448, 21065, 255, 1⟩ }).certified
 #guard ((certificate Run.DEPLOYED).map (·.segments)) == some (some 8)
+#guard ((certificate { Run.DEPLOYED with params := ⟨16448, 21065, 2 ^ 16, 128⟩ }).map (·.theoremName)) ==
+  some "Pous.SecurityProofs.P2SlackFamilyUncond"
+#guard ((certificate { Run.DEPLOYED with params := ⟨16448, 21065, 2 ^ 16, 129⟩ }).map (·.theoremName)) ==
+  some "Pous.Period.SecurityProofs.periodHeldAt"
+#guard (certify { Run.DEPLOYED with params := ⟨16448, 21065, 2 ^ 16, 1038⟩ }).sBits == 1060008348186
+#guard (certify { Run.DEPLOYED with params := ⟨16448, 21065, 2 ^ 16, 1038⟩ }).eps.toString ==
+  s!"{2 ^ 126 + 25}/{25 * 2 ^ 128}"
+#guard (gaps { Run.DEPLOYED with params := ⟨16448, 21065, 2 ^ 16, 1038⟩, k := 104 }).2 ==
+  ["k = 104 is below the certificate's 105"]
+#guard (certify { Run.DEPLOYED with params := ⟨16448, 21065, 2 ^ 16, 2 ^ 11⟩ }).certified
+#guard !(certify { Run.DEPLOYED with params := ⟨16448, 21065, 2 ^ 16 - 1, 2 ^ 11 + 1⟩ }).certified
+#guard (gaps { Run.DEPLOYED with params := ⟨16448, 21065, 2 ^ 16, 2 ^ 11 + 1⟩ }).2 ==
+  [s!"P2 has no certificate at (w, c0, blocks) = (16448, 21065, {2 ^ 27 + 2 ^ 16})"]
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason.map (·.startsWith "params: ") == some true
 
 end PousCheck.RunProtocol
