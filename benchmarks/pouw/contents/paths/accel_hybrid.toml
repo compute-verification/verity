@@ -1,0 +1,4 @@
+order = 101
+path = "`accel_hybrid/`"
+runs_on = "CPU"
+what = "BET-HYBRID (CMP-120): Dither/H1 with wide periodic noise on both operands (V ±64 on activations, U ±96 on weights), 8-bit data, and the operands' mod-2^8 wraps corrected sparsely, as an exact CPU reference: honest prover (s32 prefix words, a per-cell fold, SHA-512 row leaves, the served product from the last word, the peels and the wrap corrections) and a verifier that recomputes a drawn cell; plus Theorem K's F2 rank of a word (`hyb.py`)"
