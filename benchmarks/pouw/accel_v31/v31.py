@@ -38,6 +38,10 @@ mod 2^16. The operand rows A[i], B[j] are taken in the clear (their commitments 
     python3 v31.py gpu-prep DIR M N K [...]     the challenger's side before a GPU run: A, B, seeds, params (CGP1), meta
     python3 v31.py gpu-check DIR [--q 64]       a GPU run's dump against the reference (every word, O, tree level), then
                                                 the protocol's verdict on the GPU's own commitment and values
+    python3 v31.py gpu-sample DIR               a bench shape's two sampled tiles (from `v31 bench`) against the reference,
+                                                built from the tiles' A and B rows and those rows' coins alone
+    python3 v31.py params DIR NAME:M:N:K ...    CGP1 params for `v31 bench` (a fresh Ks each)
+    python3 v31.py table BENCH.jsonl ...        gamma beside D6 v1.1's prediction, shape by shape
 
 Run from the source tree's root with ``PYTHONPATH=.``.
 """
@@ -46,7 +50,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import os
 import sys
 from dataclasses import dataclass, field
@@ -56,14 +59,20 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "commit_gpu"))
-import reference as cref  # noqa: E402
+import reference as cref
 
-from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402
-from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
-from verity.ml.commitments.limits import VerificationLimits  # noqa: E402
-from verity.ml.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening  # noqa: E402
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
-from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest  # noqa: E402
+from verity.ml.commitments.identity import identity_digest_sha512
+from verity.ml.commitments.indexed import RangeIndexedDomain
+from verity.ml.commitments.limits import VerificationLimits
+from verity.ml.commitments.merkle import (
+    Commitment,
+    CommitmentDomain,
+    Opening,
+    tree_levels,
+    verify_opening,
+)
+from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest
 
 TAG = "verity/accel-v31/call/v1"
 INST, KEY = cref.INST, cref.KEY
@@ -181,6 +190,20 @@ def perms(seed: bytes, tiles: int, lp: int) -> np.ndarray:
     return out
 
 
+def bits_rows(seed: bytes, tag: str, rows: range, k: int) -> np.ndarray:
+    """``bits`` for some rows only (a sampled tile's)."""
+    kb = -(-k // 512)
+    raw = np.frombuffer(b"".join(prg(seed, tag, i * kb + b) for i in rows for b in range(kb)), dtype=np.uint8)
+    return np.unpackbits(raw.reshape(len(rows), kb * 64), axis=1, bitorder="little")[:, :k].astype(np.int64)
+
+
+def noise_rows(seed: bytes, tag: str, rows: range, lp: int) -> np.ndarray:
+    """``noise`` for some rows only: row r's words are blocks r L' / 16 .. (L' a multiple of 16)."""
+    per = lp // 16
+    w = np.frombuffer(b"".join(prg(seed, tag, r * per + b) for r in rows for b in range(per)), dtype="<u4").astype(np.uint64)
+    return (((w * np.uint64(2 * NOISE + 1)) >> np.uint64(32)).astype(np.int64) - NOISE).reshape(len(rows), lp)
+
+
 @dataclass
 class Coins:
     dA: np.ndarray
@@ -190,9 +213,16 @@ class Coins:
     perm: np.ndarray
 
     @staticmethod
-    def expand(sh: Shape, seeds: dict[str, bytes]) -> "Coins":
+    def expand(sh: Shape, seeds: dict[str, bytes]) -> Coins:
         return Coins(bits(seeds["dA"], "dA", sh.m, sh.k), bits(seeds["dB"], "dB", sh.n, sh.k), noise(seeds["U"], "U", sh.n, sh.lp),
                      noise(seeds["V"], "V", sh.m, sh.lp), perms(seeds["P"], sh.k // sh.lp, sh.lp))
+
+    @staticmethod
+    def rows(sh: Shape, seeds: dict[str, bytes], ia: range, ja: range) -> Coins:
+        """The coins of A's rows ia and B's rows ja (and every permutation)."""
+        return Coins(bits_rows(seeds["dA"], "dA", ia, sh.k), bits_rows(seeds["dB"], "dB", ja, sh.k),
+                     noise_rows(seeds["U"], "U", ja, sh.lp), noise_rows(seeds["V"], "V", ia, sh.lp),
+                     perms(seeds["P"], sh.k // sh.lp, sh.lp))
 
 
 def seeds_bytes(seeds: dict[str, bytes]) -> bytes:
@@ -454,7 +484,7 @@ def cheat_values(sh: Shape, v: Values, kind: str, rng: np.random.Generator) -> V
 
 def tile_mask(sh: Shape, frac: float, rng: np.random.Generator) -> np.ndarray:
     """Cells of a fraction of the output tiles (at least one)."""
-    tm, tn = sh.m // TILE, sh.n // TILE
+    tn = sh.n // TILE
     pick = rng.permutation(sh.tiles)[:max(1, round(frac * sh.tiles))]
     mask = np.zeros((sh.m, sh.n), dtype=bool)
     for t in pick:
@@ -544,7 +574,7 @@ def operands(sh: Shape, rng: np.random.Generator, kind: str = "llm") -> tuple[np
         return (rng.integers(-128, 128, size=(sh.m, sh.k)).astype(np.int8), rng.integers(-128, 128, size=(sh.n, sh.k)).astype(np.int8))
     a = rng.standard_t(3, size=(sh.m, sh.k))
     b = rng.standard_normal(size=(sh.n, sh.k))
-    q = lambda x: np.clip(np.rint(127 * x / np.abs(x).max(axis=1, keepdims=True)), -127, 127).astype(np.int8)  # noqa: E731
+    q = lambda x: np.clip(np.rint(127 * x / np.abs(x).max(axis=1, keepdims=True)), -127, 127).astype(np.int8)
     return q(a), q(b)
 
 
@@ -566,7 +596,7 @@ def cmd_cpu_run(a: argparse.Namespace) -> int:
     A, B = operands(sh, rng, a.operands)
     ch = StubChallenger(None if a.secret is None else bytes.fromhex(a.secret))
     seeds = ch.seeds(0, operand_roots(A, B))
-    prover, v = prove(sh, A, B, seeds, os.urandom(64), 0, a.cheat)
+    prover, _ = prove(sh, A, B, seeds, os.urandom(64), 0, a.cheat)
     ok, fails, line = verdict(sh, ch, 0, prover, a.q)
     print(line)
     out = Path(a.out)
@@ -630,6 +660,11 @@ def cmd_gpu_check(a: argparse.Namespace) -> int:
         fp = d / f"{name}.bin"
         if fp.exists():
             rep[f"{name}_equal"] = fp.read_bytes() == ref.astype(np.int8).tobytes()
+    ctl = d / "control"
+    if ctl.exists():
+        # the no-write control (the same buffers poisoned, nothing run) must fail every comparison
+        rep["control_rejected"] = ((ctl / "words.bin").read_bytes() != r_words and (ctl / "O.bin").read_bytes() != r_o
+                                   and (ctl / "levels.bin").read_bytes() != r_lv)
     # the protocol's verdict on the GPU's own commitment: the prover's answers come from the GPU's rows and levels
     gcm = Committed(sh, ks, meta.get("salt_off", 0), g_words, g_o)
     gcm.levels = levels_from(sh, g_lv)
@@ -642,8 +677,90 @@ def cmd_gpu_check(a: argparse.Namespace) -> int:
     print(json.dumps(rep))
     print(line)
     (d / "check.json").write_text(json.dumps(rep, indent=1))
-    good = (rep["exact"] and ok) if not meta.get("cheat") else not ok
+    good = (rep["exact"] and ok and rep.get("control_rejected", True)) if not meta.get("cheat") else not ok
     return 0 if good else 1
+
+
+def cmd_gpu_sample(a: argparse.Namespace) -> int:
+    """A bench shape's sampled tiles (DIR from `v31 bench`): each tile's words, O and leaves against the reference, from
+    the tile's A and B rows and the call's seeds (the coins of those rows only)."""
+    d = Path(a.dir)
+    meta = json.loads((d / "sample.json").read_text())
+    sh = Shape(meta["m"], meta["n"], meta["k"], meta["lp"], meta["t"], meta["row"])
+    tl = Shape(TILE, TILE, sh.k, sh.lp, sh.t, sh.row)
+    seeds = seeds_from((d / "seeds.bin").read_bytes())
+    p = (d / "params.bin").read_bytes()
+    ks = p[4 + 3 * 128 + 64:4 + 3 * 128 + 128]
+    rep: dict = {"shape": sh.label(), "params_match": p == params_file(sh, ks), "tiles": []}
+    dom = sh.domain()
+    for idx, tile in enumerate(meta["tiles"]):
+        tm, tn = divmod(tile, sh.n // TILE)
+        A = np.frombuffer((d / f"t{idx}_A.bin").read_bytes(), dtype=np.int8).reshape(TILE, sh.k)
+        B = np.frombuffer((d / f"t{idx}_B.bin").read_bytes(), dtype=np.int8).reshape(TILE, sh.k)
+        c = Coins.rows(sh, seeds, range(tm * TILE, (tm + 1) * TILE), range(tn * TILE, (tn + 1) * TILE))
+        f = form(tl, A, B, c)
+        v = values(tl, f)
+        words, obuf = words_buffer(tl, v.T), o_buffer(v.O)
+        g_leaves = (d / f"t{idx}_leaves.bin").read_bytes()
+        bad = 0
+        for j in range(sh.lpt):
+            pos = tile * sh.lpt + j
+            leaf = row_leaf(dom, pos, leaf_h(row_bytes(tl, words, obuf, j), cref.prf_salt(ks, pos)), V2)
+            bad += leaf != g_leaves[64 * j:64 * j + 64]
+        rep["tiles"].append({"tile": tile, "words_equal": (d / f"t{idx}_words.bin").read_bytes() == words,
+                             "O_equal": (d / f"t{idx}_O.bin").read_bytes() == obuf, "leaves": sh.lpt, "leaves_bad": bad,
+                             "binding_identity": bool((binding(tl, f, c, v.T_full) == v.O).all())})
+    rep["exact"] = rep["params_match"] and all(t["words_equal"] and t["O_equal"] and not t["leaves_bad"] and t["binding_identity"]
+                                               for t in rep["tiles"])
+    print(json.dumps(rep))
+    (d / "sample-check.json").write_text(json.dumps(rep, indent=1))
+    return 0 if rep["exact"] else 1
+
+
+def params_name(m: int, n: int, k: int, lp: int, t: int, row: int) -> str:
+    return f"{m}x{n}x{k}-lp{lp}-t{t}-r{row}.bin"
+
+
+def cmd_params(a: argparse.Namespace) -> int:
+    """CGP1 params (a fresh Ks each) for `v31 bench`'s shapes, named as it looks them up."""
+    d = Path(a.dir)
+    d.mkdir(parents=True, exist_ok=True)
+    for s in a.shapes:
+        m, n, k = (int(x) for x in s.split(":")[-3:])
+        sh = Shape(m, n, k, a.lp, a.t, a.row)
+        (d / params_name(m, n, k, a.lp, a.t, a.row)).write_bytes(params_file(sh, os.urandom(64)))
+    return 0
+
+
+# D6 v1.1's predictions (art:6926be1c98b7855aca699278551040538e83843d28b72fdf85044cfd291bf3ef), RTX PRO 6000, v3.1 at
+# L' 256, t 3, m 8192, overlapped as served: (K, N) -> (model, gamma). V4's 7168 x 64 and the F32 mHC 28672 x 24 aren't
+# 128-column tiles and are left out here.
+D6 = {
+    (4096, 6144): ("8B", 1.70), (4096, 4096): ("8B", 1.71), (4096, 28672): ("8B", 1.70), (14336, 4096): ("8B", 1.29),
+    (4096, 128256): ("8B", 1.70),
+    (8192, 10240): ("70B", 1.39), (8192, 8192): ("70B", 1.39), (8192, 57344): ("70B", 1.39), (28672, 8192): ("70B", 1.23),
+    (8192, 128256): ("70B", 1.39),
+    (7168, 43008): ("V4", 1.46), (3072, 50176): ("V4", 1.70), (7168, 1536): ("V4", 1.48), (1536, 65536): ("V4", 2.25),
+    (7168, 512): ("V4", 1.52), (4096, 16384): ("V4", 1.70), (16384, 7168): ("V4", 1.29), (7168, 129280): ("V4", 1.46),
+    (7168, 2048): ("V4", 1.48), (7168, 1024): ("V4", 1.49), (1536, 8192): ("V4", 2.26), (7168, 384): ("V4", 1.53),
+}
+
+
+def cmd_table(a: argparse.Namespace) -> int:
+    """`v31 bench`'s JSON lines beside D6's predictions: gamma overlapped (and serial, and the GEMM alone) and the ratio."""
+    rows = []
+    for path in a.files:
+        for line in Path(path).read_text().splitlines():
+            if line.startswith("{") and '"gamma_ovl"' in line:
+                rows.append(json.loads(line))
+    print("| shape | model | m x N x K | lt ms | ovl ms | gamma ovl | gamma call | gamma gemm | D6 | ovl / D6 | wraps A, B |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|")
+    for r in rows:
+        model, pred = D6.get((r["k"], r["n"]), ("", float("nan")))
+        print(f"| {r['shape']} | {model} | {r['m']} x {r['n']} x {r['k']} | {r['arms']['lt']['ms']:.3f} | {r['arms']['ovl']['ms']:.3f} | "
+              f"{r['gamma_ovl']:.2f} | {r['gamma_call']:.2f} | {r['gamma_gemm']:.2f} | {pred:.2f} | {r['gamma_ovl'] / pred:.2f} | "
+              f"{100 * r['wrap_rate_A']:.2f}%, {100 * r['wrap_rate_B']:.2f}% |")
+    return 0
 
 
 def main(argv: list[str]) -> int:
@@ -662,8 +779,19 @@ def main(argv: list[str]) -> int:
     p = sub.add_parser("gpu-check")
     p.add_argument("dir")
     p.add_argument("--q", type=int, default=64)
+    p = sub.add_parser("gpu-sample")
+    p.add_argument("dir")
+    p = sub.add_parser("params")
+    p.add_argument("dir")
+    p.add_argument("shapes", nargs="+", help="[name:]M:N:K")
+    p.add_argument("--lp", type=int, default=256)
+    p.add_argument("--t", type=int, default=3)
+    p.add_argument("--row", type=int, default=1024)
+    p = sub.add_parser("table")
+    p.add_argument("files", nargs="+")
     a = ap.parse_args(argv[1:])
-    return {"cpu-run": cmd_cpu_run, "gpu-prep": cmd_gpu_prep, "gpu-check": cmd_gpu_check}[a.cmd](a)
+    return {"cpu-run": cmd_cpu_run, "gpu-prep": cmd_gpu_prep, "gpu-check": cmd_gpu_check, "gpu-sample": cmd_gpu_sample,
+            "params": cmd_params, "table": cmd_table}[a.cmd](a)
 
 
 if __name__ == "__main__":
