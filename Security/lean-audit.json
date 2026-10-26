@@ -1898,8 +1898,7 @@
   "Definitions.Hash.Guarantees",
   "Definitions.Population",
   "Proofs.Accounting.TS.Session",
-  "SampledProofs.Program",
-  "SampledProofs.Slots"
+  "SampledProofs"
  ],
  "claims": {
   "modules": ["Definitions.Claims"],
