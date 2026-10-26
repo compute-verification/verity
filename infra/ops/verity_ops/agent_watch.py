@@ -182,6 +182,8 @@ WORKER_LIVE_S = 15 * 60     # ... a worker counts as streaming when its progress
 RECANCEL_S = 3600
 RESTART_S = 10 * 60         # an ERROR run is restarted at most this often
 AGENTS_PAGE = 50            # GET /v1/agents page size: 100 took ~13 s and 503'd (upstream_error) every sweep for 30 min, 26 Oct
+SWEEP_READS_S = 12 * 60     # a sweep's reads stop after this long (a sweep takes ~6 min; with reads near their 60 s timeout, one
+#                             took 24 min, 26 Oct, and the cloud watch alerts after 20 min without a finished sweep)
 RESUME_S = 10 * 60          # idle this long after a research run it must act on ended, with nothing run since: resumed
 WORKER_RELAUNCH_S = 20 * 60 # a worker still idle this long after its coordinator was rung for it: relaunched fresh
 RELAUNCH_EVERY_S = 6 * 3600 # an agent is relaunched at most once in this long
@@ -660,11 +662,13 @@ def started(x: dict) -> bool:
 
 
 class Api:
-    """Cursor's Cloud Agents API, v1."""
+    """Cursor's Cloud Agents API, v1. Past `reads_until` (by `clock`), a GET raises TimeoutError without asking; POSTs, the
+    watch's actions, always go."""
 
-    def __init__(self, key: str, base: str = API, timeout: float = 60):
+    def __init__(self, key: str, base: str = API, timeout: float = 60, clock: Callable[[], float] = time.monotonic):
         self.auth = "Basic " + base64.b64encode(f"{key}:".encode()).decode()
-        self.base, self.timeout = base, timeout
+        self.base, self.timeout, self.clock = base, timeout, clock
+        self.reads_until: float | None = None
 
     def _req(self, method: str, path: str, body: dict | None = None, headers: dict | None = None):
         data = json.dumps(body).encode() if body is not None else None
@@ -675,7 +679,11 @@ class Api:
 
     def get(self, path: str, **params) -> dict:
         q = ("?" + urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})) if params else ""
-        with urllib.request.urlopen(self._req("GET", path + q), timeout=self.timeout) as r:
+        timeout = self.timeout
+        if self.reads_until is not None:
+            if (timeout := min(timeout, self.reads_until - self.clock())) <= 0:
+                raise TimeoutError(f"this sweep's reads are spent ({SWEEP_READS_S // 60} min); the next sweep reads again")
+        with urllib.request.urlopen(self._req("GET", path + q), timeout=timeout) as r:
             return json.load(r)
 
     def post(self, path: str, body: dict | None = None) -> dict:
@@ -1200,6 +1208,9 @@ class Watch:
                 self.record("unreadable", r, status=f"HTTP {e.code}")
             elif first is not None and t - first >= UNREADABLE_S and self.once(run + "#unreadable", t):
                 self.record("unreadable", r, status=f"HTTP {e.code}", since=iso(first), minutes=int((t - first) // 60))
+            return None
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            print(f"{iso(self.clock())} run {run} of {a['id']}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
             return None
         if info.get("status") in TERMINAL:
             self.final[run] = info
@@ -2062,6 +2073,7 @@ def main(argv: list[str] | None = None) -> int:
         watch.sweep(lambda r: None)
         return 0
     while True:
+        api.reads_until = api.clock() + SWEEP_READS_S
         try:
             watch.sweep(lambda r: follow(watch, r))
         except (urllib.error.URLError, OSError, ValueError) as e:
