@@ -73,7 +73,8 @@ rounds at some `T`, and the rounds and the record (`recJ`) are at the proofs' fr
 theorem decR_frames {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) :
     ∃ (r₀ : List ByteArray) (rss : List (List ByteArray)) (Ts : ℕ → F128),
-      rowsOf (as.headD []) = some r₀ ∧ as.tail.dropLast.mapM rowsOf = some rss ∧ d.f.ps.size = 2 * d.sts.size ∧
+      (rowsOf (as.headD [])).map (List.map nodeOf) = some r₀ ∧ as.tail.dropLast.mapM rowsOf = some rss ∧
+      d.f.ps.size = 2 * d.sts.size ∧
       (∀ (k : ℕ) (hk : k < d.f.ps.size), FitsRep (repCtx d.spec d.sts d.c₁ r₀ cs.tail.dropLast k)
         ((cutLens (repLens d.spec d.sts) rss).getD k []) d.f.ps[k] (Ts k)) ∧
       d.mids = ((List.range d.f.ps.size).map fun k =>

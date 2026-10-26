@@ -10,9 +10,9 @@ fits every rep, and the proof `readPs` reads is the prover's. This file defines 
 that.
 
 * **What the honest prover sends** (`honestRows`, `repRows`, `capRows`, `honestMsgs`): round 0 carries each table's
-  level-0 cap nodes, in table order. Round `j` of rep `k`, along the rep's schedule (`RecDeploy.repSchedAt`,
-  `rec_live.rep_rounds`), carries the nodes of the tops the round commits, its proof's next recursive caps in order
-  (`rec_live.top_rows`), then, where the round absorbs, one row of the values the `j`-th chunk of the rep's frames
+  level-0 cap nodes, in table order, each as its 128-byte row (`nodeRow`, `rec_live.top_rows`). Round `j` of rep `k`,
+  along the rep's schedule (`RecDeploy.repSchedAt`, `rec_live.rep_rounds`), carries the node rows of the tops the
+  round commits, its proof's next recursive caps in order (`rec_live.top_rows`), then, where the round absorbs, one row of the values the `j`-th chunk of the rep's frames
   absorbs (`message_rows`, `vals`). Each round's rows are joined (`joinR`). The last message is any that the reader `rd`
   reads as the proofs.
 * **The honest proofs** (`HonestRep`, `SchedOf`): each rep's proof has the lengths a proof decoded at the rep's shape
@@ -42,11 +42,11 @@ open FlockSoundness.Discharge.Exec (chunks chunks_flatten repFrames repFrames_ch
 /-- A row's bytes, as a message. -/
 def rowMsg (b : ByteArray) : Claims.Msg := b.data.toList
 
-/-- **The honest prover's rows at a rep's rounds**, along its schedule: each round's top nodes (the next of `caps`, in
-order), then, where the round absorbs, one row of the values its frames `ch` absorb. -/
+/-- **The honest prover's rows at a rep's rounds**, along its schedule: each round's top nodes' rows (the next of
+`caps`, in order, each `nodeRow`), then, where the round absorbs, one row of the values its frames `ch` absorb. -/
 def honestRows : List RecVStar.SchedRound → List (List Frame) → List (Array ByteArray) → List (List ByteArray)
   | s :: ss, ch :: chs, caps =>
-    ((caps.take s.2.1.size).flatMap Array.toList ++
+    (((caps.take s.2.1.size).flatMap Array.toList).map nodeRow ++
         (if s.2.2.2 then [(⟨(colBytes (vals ch)).toArray⟩ : ByteArray)] else [])) ::
       honestRows ss chs (caps.drop s.2.1.size)
   | _, _, _ => []
@@ -58,11 +58,11 @@ def repRows (c : RepCtx) (p : Flock.Proof) (T : F128) : List (List ByteArray) :=
 /-- Round 0's rows at the honest prover: each table's level-0 cap nodes, in table order. -/
 def capRows (caps : Array (Array ByteArray)) : List ByteArray := (caps.toList.map Array.toList).flatten
 
-/-- **The honest prover's element-level messages**: round 0's rows (`capRows`), then each rep's rounds' rows, rep by
-rep, each round joined (`joinR`); then the last message. -/
+/-- **The honest prover's element-level messages**: round 0's rows (`capRows`, each `nodeRow`), then each rep's
+rounds' rows, rep by rep, each round joined (`joinR`); then the last message. -/
 def honestMsgs (caps : Array (Array ByteArray)) (reps : List (List (List ByteArray))) (last : Claims.Msg) :
     List Claims.Msg :=
-  (joinR ((capRows caps).map rowMsg) :: reps.flatten.map fun rs => joinR (rs.map rowMsg)) ++ [last]
+  (joinR (((capRows caps).map nodeRow).map rowMsg) :: reps.flatten.map fun rs => joinR (rs.map rowMsg)) ++ [last]
 
 /-- **An honest rep's proof**: the lengths a proof decoded at the rep's shape has (`DecodeZL.ProofSizes`, which
 `ProofShaped` gives), at a schedule of at least two levels, every nonce `0`, and the fields the transcript never absorbs
@@ -108,9 +108,10 @@ def RepReadsBack : Prop :=
 /-- **An honest prover's rounds read back.** Take a statement that sets up as `(s, spec, sts)` and coins whose first is
 `c₁`. The honest prover sends round 0 from each table's level-0 cap `caps[i]` (of its `2^cap₀` nodes), and each rep's
 rounds from its proof `ps[k]` (honest, at its table's cap) at its batched value `Ts k`, with a last message the reader
-reads as `fl`, whose proofs are `ps`. On those messages `decR` decides. It reads round 0 as the link of the caps, each
-table's `root_B` its cap's nodes joined, with no public words; every rep's proof as `ps[k]`; the round messages as
-the honest proofs' framed bytes; and the record as the reader's (`recJ`) at them. -/
+reads as `fl`, whose statement is the statement and whose proofs are `ps`, each shaped for its file (`ShapedAt`). On
+those messages `decR` decides. It reads round 0 as the link of the caps, each table's `root_B` its cap's nodes joined,
+with no public words; every rep's proof as `ps[k]`; the round messages as the honest proofs' framed bytes; and the
+record as the reader's (`recJ`) at the statement. -/
 def ReadsBack : Prop :=
   ∀ (rd : Claims.Msg → Option FinalP) (x last : Claims.Msg) (cs : List Coin) (s : Ins) (spec : SessionSpec)
     (sts : Array Stmt) (c₁ : Coin) (caps : Array (Array ByteArray)) (ps : Array Flock.Proof) (Ts : ℕ → F128)
@@ -120,9 +121,9 @@ def ReadsBack : Prop :=
     ps.size = 2 * sts.size →
     (∀ k < ps.size, SchedOf (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ∧
       HonestRep (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! ∧ ps[k]!.cap = caps[k / 2]!) →
-    RowsFit (capRows caps) →
+    RowsFit ((capRows caps).map nodeRow) →
     (∀ k < ps.size, ∀ rs ∈ repRows (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k), RowsFit rs) →
-    rd last = some fl → fl.ps = ps →
+    rd last = some fl → fl.ps = ps → fl.stmt = x → ShapedAt spec sts c₁ ps →
     decR rd x (honestMsgs caps ((List.range ps.size).map fun k =>
         repRows (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k)) last) cs =
       some ⟨s, spec, sts,
@@ -131,7 +132,7 @@ def ReadsBack : Prop :=
         c₁, ((List.range ps.size).map fun k =>
           framesOf (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k)).flatten.zip
           cs.tail.dropLast,
-        ⟨fl.stmt, recJ spec sts
+        ⟨x, recJ spec sts
           ((caps.toList.map Array.toList).map (·.foldl (· ++ ·) ByteArray.empty),
             sts.toList.map fun _ => ByteArray.empty) c₁
           ((List.range ps.size).map fun k =>
@@ -406,7 +407,7 @@ theorem range_map_getElem! {α : Type} [Inhabited α] (a : Array α) :
 
 /-- **The session reads back where each rep does.** -/
 theorem readsBack_of_rep (hR : RepReadsBack) : ReadsBack := by
-  intro rd x last cs s spec sts c₁ caps ps Ts fl hx hc1 hs hcs hps hrep h0 hrows hrd hfl
+  intro rd x last cs s spec sts c₁ caps ps Ts fl hx hc1 hs hcs hps hrep h0 hrows hrd hfl hst hsh
   set reps := (List.range ps.size).map fun k =>
     repRows (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k)
     with hreps
@@ -441,7 +442,7 @@ theorem readsBack_of_rep (hR : RepReadsBack) : ReadsBack := by
     unfold readPs
     rw [ite_eq_left hif, ← hlens, cutLens_flatten_eq, ← hps, hm]
     simp only [Option.map_some, List.map_map, Function.comp_def, range_map_getElem!]
-  have hhead : (honestMsgs caps reps last).head? = some (joinR ((capRows caps).map rowMsg)) := rfl
+  have hhead : (honestMsgs caps reps last).head? = some (joinR (((capRows caps).map nodeRow).map rowMsg)) := rfl
   have hlast : (honestMsgs caps reps last).getLast? = some last := List.getLast?_concat
   have hmid : (honestMsgs caps reps last).tail.dropLast.mapM rowsOf = some reps.flatten := by
     rw [show (honestMsgs caps reps last).tail.dropLast = reps.flatten.map fun rs => joinR (rs.map rowMsg) from
@@ -451,7 +452,13 @@ theorem readsBack_of_rep (hR : RepReadsBack) : ReadsBack := by
     rw [hreps] at hl
     obtain ⟨k, hk, rfl⟩ := List.mem_map.1 hl
     exact hrows k (List.mem_range.1 hk) rs hrl
-  simp only [decR, hx, hlast, hhead, hc1, hrd, rowsOf_rows h0, hmid, linkR_capRows hs hcs, hpf,
-    Option.bind_eq_bind, Option.bind_some, Option.pure_def]
+  have hrd' : (rd last).filter (·.stmt == x) = some fl := Option.filter_eq_some_iff.2 ⟨hrd, beq_iff_eq.2 hst⟩
+  have hpf' : (readPs spec sts c₁ (capRows caps) reps.flatten cs.tail.dropLast fl).filter (fun pf =>
+      @decide (ShapedAt spec sts c₁ pf.1) (Classical.propDecidable _)) =
+      some (ps, ((List.range ps.size).map fun k =>
+        framesOf (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k)).flatten) :=
+    Option.filter_eq_some_iff.2 ⟨hpf, @decide_eq_true _ (Classical.propDecidable _) hsh⟩
+  simp only [decR, hx, hlast, hhead, hc1, hrd', rowsOf_rows h0, Option.map_some, map_nodeOf_nodeRow, hmid,
+    linkR_capRows hs hcs, hpf', Option.bind_eq_bind, Option.bind_some, Option.pure_def]
 
 end FlockDeploy

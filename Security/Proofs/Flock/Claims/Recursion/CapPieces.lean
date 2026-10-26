@@ -11,10 +11,10 @@ row's padding, words 32 to 63, then 32 zero words (`VStar.capForms`), and V\* re
 (`rec-cap-zero`, `RecCoins.checkCap`), so the statement holds exactly where every `top` row is a node's row.
 
 The verdict's checks S16 (each rep's cap is the committed `root_B`) and S18 (the two reps' caps agree) need no piece
-at the reading: `decR` reads both caps and `root_B` off round 0's rows (`linkR`, `FitsRep.cap`), so S16 holds by
-construction (`DecAt.rowL_cap`) and S18 follows from it (`verifyJPWith_ok`). What the cap parts give the verdict is
-that each row the opened messages carry at a cap position is a node's row (`isNodeRow`), so its node (`nodeOf`)
-determines it (`nodeRow_nodeOf`, `nodeRows_of_all`). This file is that share of the parts' lowering fact, in the
+at the reading: `decR` reads both caps and `root_B` off round 0's rows' nodes (`FlockDeploy.nodeOf`, `linkR`,
+`FitsRep.cap`), so S16 holds by construction (`DecAt.rowL_cap`) and S18 follows from it (`verifyJPWith_ok`). What the
+cap parts give the verdict is that each row the opened messages carry at a cap position is a node's row
+(`isNodeRow`), so its node determines it (`nodeRow_nodeOf`, `nodeRows_of_all`). This file is that share of the parts' lowering fact, in the
 shape of the `rec-open` and `rec-residuals` pieces' (`openPieces_computes`, `resPieces_computes`):
 
 * **The share** (`CapPiece`, `capHolds`): a piece is one node of one level's tops, at the RecCap copy (`key`: table,
@@ -28,48 +28,10 @@ shape of the `rec-open` and `rec-residuals` pieces' (`openPieces_computes`, `res
 namespace RecDeploy
 
 open Claims (Msg)
-open FlockDeploy (Coin)
+open FlockDeploy (Coin nodeRow nodeOf isNodeRow nodeRow_nodeOf)
 open Claims.Recursion.VStarB
 
 /-! ## Node rows -/
-
-/-- The bytes of a cap node (`Flock.NODE_BYTES`). -/
-def capNodeBytes : ℕ := 64
-
-/-- A node's registered row (`rec_live.top_rows`): its bytes, then 64 zero bytes. -/
-def nodeRow (node : ByteArray) : ByteArray := ⟨(node.data.toList ++ List.replicate 64 0).toArray⟩
-
-/-- The node a row holds: its first 64 bytes. -/
-def nodeOf (row : ByteArray) : ByteArray := ⟨(row.data.toList.take 64).toArray⟩
-
-/-- **A row is a node's row**: 128 bytes, the last 64 zero (`VStar.CAP_TOP_WORDS` u16 words, the last
-`VStar.CAP_TOP_WORDS - VStar.CAP_NODE_WORDS` zero). -/
-def isNodeRow (row : ByteArray) : Bool :=
-  row.data.size == 128 && row.data.toList.drop 64 == List.replicate 64 0
-
-/-- A node row is its node's row. -/
-theorem nodeRow_nodeOf {row : ByteArray} (h : isNodeRow row = true) : nodeRow (nodeOf row) = row := by
-  unfold isNodeRow at h
-  simp only [Bool.and_eq_true, beq_iff_eq] at h
-  unfold nodeRow nodeOf
-  rw [List.toList_toArray, ← h.2, List.take_append_drop, Array.toArray_toList]
-
-/-- A 64-byte node's row is a node row. -/
-theorem isNodeRow_nodeRow {node : ByteArray} (h : node.data.size = capNodeBytes) : isNodeRow (nodeRow node) = true := by
-  have hl : node.data.toList.length = 64 := by rw [Array.length_toList]; exact h
-  unfold isNodeRow nodeRow
-  simp only [Bool.and_eq_true, beq_iff_eq]
-  refine ⟨?_, ?_⟩
-  · show (node.data.toList ++ List.replicate 64 0).toArray.size = 128
-    rw [List.size_toArray, List.length_append, hl, List.length_replicate]
-  · show (node.data.toList ++ List.replicate 64 0).toArray.toList.drop 64 = List.replicate 64 0
-    rw [List.toList_toArray, ← hl, List.drop_left]
-
-/-- A 64-byte node is its row's node. -/
-theorem nodeOf_nodeRow {node : ByteArray} (h : node.data.size = capNodeBytes) : nodeOf (nodeRow node) = node := by
-  unfold nodeOf nodeRow
-  unfold capNodeBytes at h
-  rw [List.toList_toArray, ← h, ← Array.length_toList, List.take_left, Array.toArray_toList]
 
 /-- **Rows that are all node rows are their nodes' rows**: round 0 read as nodes (`nodeOf`) loses nothing. -/
 theorem nodeRows_of_all {rs : List ByteArray} (h : ∀ r ∈ rs, isNodeRow r = true) :
