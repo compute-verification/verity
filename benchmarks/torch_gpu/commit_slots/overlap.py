@@ -23,13 +23,14 @@ every micro-batch's attention. Each run here is ``--steps`` lockstep steps at po
 
 A run is ``MODE:LAYOUT[:STEPS[:SMS]]``, LAYOUT ``shared`` (circuits' shared-row Layout JSON, ``--shared``) or ``families``
 (today's, `e2e_h200.commit.layout`). SMS ``N`` puts the commit on a green context of N SMs (`slots_gpu.Plan`'s ``sms``),
-the forward on every SM as before; ``Nr`` puts the forward on the green context of the other SMs too. A step's time is
+the forward on every SM as before; ``Nr`` puts the forward on the green context of the other SMs too (``serve`` with
+``Nr``: the served step alone there, against the served step on every SM). A step's time is
 the median interval between step ends after the first; the hidden fraction is (serve + commit - step) / commit, commit
 the commit alone at the run's SMS, the overhead step - serve. Salt keys are the fixture's (`fixture_salt`), so every
 overlapped or capped step's root must equal ``serial``'s at that step, and a capped commit alone's the commit alone's on
 every SM, or the exit is 1. An nvidia-smi thread samples the device through every run (SM clock, power, temperature,
 memory, clock event reasons), each run's statistics skipping its first ``--skip`` seconds; HBM is torch's peak
-allocation in each run. ``--leaf-minb`` is `slots_gpu.Plan`'s ``leaf_minb`` (a tree whose Plan takes it). The summary
+allocation in each run, and each run records its allocator's counters (`ALLOCATOR`). ``--leaf-minb`` is `slots_gpu.Plan`'s ``leaf_minb`` (a tree whose Plan takes it). The summary
 ends with a ``VERDICT`` line a run, each number beside its target and their ratio.
 """
 from __future__ import annotations
@@ -74,6 +75,8 @@ HIGH = -(1 << 20)
 SMI = ("clocks.sm", "power.draw.average", "power.draw.instant", "temperature.gpu", "memory.used",
        "clocks_event_reasons.active")
 SMI_MIN = ("clocks.sm", "power.draw", "temperature.gpu", "memory.used")
+#: torch's allocator counters a run records: a retry frees the cache, waiting on every stream a freed block was used on
+ALLOCATOR = ("num_alloc_retries", "num_sync_all_streams", "num_device_alloc", "num_device_free", "num_ooms")
 #: NVML's clock event reasons, by bit
 REASONS = {0x1: "gpu_idle", 0x2: "applications_clocks", 0x4: "sw_power_cap", 0x8: "hw_slowdown", 0x10: "sync_boost",
            0x20: "sw_thermal", 0x40: "hw_thermal", 0x80: "hw_power_brake", 0x100: "display_clocks"}
@@ -338,20 +341,22 @@ def _median(xs: list[float]) -> float | None:
 
 
 def run_one(name: str, mode: str, steps: int, d: OverlapDriver, plan: G.Plan | None, a: argparse.Namespace,
-            ctx: bytes, key: bytes, prompts: np.ndarray, smi: Smi, sms: int = 0, rest: bool = False) -> dict[str, Any]:
+            ctx: bytes, key: bytes, prompts: np.ndarray, smi: Smi, sms: int = 0, rest: bool = False,
+            rest_of: G.SmPartition | None = None) -> dict[str, Any]:
+    """``rest_of``: the partition whose other SMs a served step alone runs on."""
     dev, shape = d.device, d.shape
     salt = CM.fixture_salt(a.run_id)
     fwd = torch.cuda.current_stream(dev)
-    part = plan.partition if plan is not None else None
+    part = plan.partition if plan is not None else rest_of
     every = torch.cuda.get_device_properties(dev).multi_processor_count
     if plan is not None:
         torch.cuda.synchronize(dev)
         prio = HIGH if mode.startswith("high") else 0
         plan.stream = part.stream(prio) if part else torch.cuda.Stream(dev, priority=prio)
-        if rest:
-            fwd = part.rest_stream(HIGH if mode.startswith("low") else 0)
-        elif mode.startswith("low"):
+        if not rest and mode.startswith("low"):
             fwd = torch.cuda.Stream(dev, priority=HIGH)
+    if rest:
+        fwd = part.rest_stream(HIGH if mode.startswith("low") else 0)
     committer: Any = Null() if mode == "serve" else \
         Threaded(plan, ctx, key, shape, salt) if mode.endswith("-thread") else \
         Pipelined(plan, ctx, key, shape, salt) if mode in OVERLAPPED else LayoutCommitter(plan, ctx, key, shape, salt)
@@ -359,7 +364,7 @@ def run_one(name: str, mode: str, steps: int, d: OverlapDriver, plan: G.Plan | N
     tabs = stand_in(shape, a.batch, dev, a.table_seed) if mode == "commit" else None
     torch.cuda.synchronize(dev)
     torch.cuda.reset_peak_memory_stats(dev)
-    m0 = torch.cuda.memory_allocated(dev)
+    m0, c0 = torch.cuda.memory_allocated(dev), torch.cuda.memory_stats(dev)
     ends, walls, secs, roots = [], [], [], []
     t0 = time.perf_counter()
     with torch.cuda.stream(fwd):
@@ -410,6 +415,7 @@ def run_one(name: str, mode: str, steps: int, d: OverlapDriver, plan: G.Plan | N
         "forward_sms": None if mode == "commit" else part.rest if rest else every, "forward_on_rest": rest,
         "hbm": {"before_gb": round(m0 / 1e9, 3), "peak_gb": round(torch.cuda.max_memory_allocated(dev) / 1e9, 3),
                 "peak_over_before_gb": round((torch.cuda.max_memory_allocated(dev) - m0) / 1e9, 3)},
+        "allocator": {k: torch.cuda.memory_stats(dev).get(k, 0) - c0.get(k, 0) for k in ALLOCATOR},
         "telemetry": smi.stats(t0 + a.skip, t1),
     }
     del tabs, committer
@@ -422,8 +428,9 @@ def derive(runs: list[dict], equal: dict[str, bool]) -> dict[str, Any]:
     """Per layout: the served step alone, the commit alone at each SMS, and today's loop and each overlapped run, with its
     hidden fraction (of the commit alone at its SMS, and of the commit alone on every SM) and its overhead a step against
     `TARGET_S`; ``best``, the run of least overhead whose roots are its reference's."""
-    serve = next((r["step_s"] for r in runs if r["mode"] == "serve"), None)
-    out: dict[str, Any] = {"serve_s": serve, "target_s": TARGET_S, "layouts": {}}
+    serve = next((r["step_s"] for r in runs if r["mode"] == "serve" and not r["sms"]), None)
+    out: dict[str, Any] = {"serve_s": serve, "target_s": TARGET_S, "layouts": {},
+                           "serve_s_on_rest": {str(r["forward_sms"]): r["step_s"] for r in runs if r["mode"] == "serve" and r["sms"]}}
     for lay in sorted({r["layout"] for r in runs if r["layout"]}):
         rs = [r for r in runs if r["layout"] == lay]
         alone = {r["sms"]: r["step_s"] for r in rs if r["mode"] == "commit"}
@@ -475,7 +482,13 @@ def verdicts(doc: dict) -> list[str]:
         lay = dv["layouts"].get(r["layout"] or "", {})
         n = _checked(doc["runs"], r)
         eq = doc["roots_equal"].get(name)
-        if r["mode"] == "serve":
+        if r["mode"] == "serve" and r["sms"]:
+            base, f = dv.get("serve_s"), r["forward_sms"]
+            scaled = "" if not base else (f", {_ratio(r['step_s'], base)}x the served step on every SM ({base:.3f} s; "
+                                          f"{base * every / f:.3f} s if it scaled as its SMs)")
+            out.append(f"VERDICT {name}: served step alone on the other {f} of {every} SMs {r['step_s']:.3f} s{scaled}; "
+                       f"{_power(t, limits)}")
+        elif r["mode"] == "serve":
             out.append(f"VERDICT {name}: served step alone {r['step_s']:.3f} s, the overheads' base; {_power(t, limits)}")
         elif r["mode"] == "commit":
             full = lay.get("commit_s")
@@ -520,11 +533,13 @@ def summary(doc: dict) -> str:
         lines.append(f"{r['run']:20s} step {r['step_s']:8.3f} s (intervals {r['intervals_s']}, drain {r['drain_s']} s) "
                      f"{json.dumps(r['seconds'])}; SM {t.get('sm_mhz')} MHz (min {t.get('sm_mhz_min')}), "
                      f"{t.get('power_w')} W (instant max {t.get('power_instant_w_max')}), {t.get('temp_c')} C, "
-                     f"{t.get('reasons')}; HBM peak {h['peak_gb']} GB (+{h['peak_over_before_gb']} over the run's start)")
+                     f"{t.get('reasons')}; HBM peak {h['peak_gb']} GB (+{h['peak_over_before_gb']} over the run's start); "
+                     f"allocator {r.get('allocator')}")
     for r in doc.get("errors", []):
         lines.append(f"{r['run']:20s} not run: {r['error']}")
     dv = doc["derived"]
-    lines.append(f"served step alone {dv['serve_s']} s; target: overhead <= {dv['target_s']} s a step")
+    lines.append(f"served step alone {dv['serve_s']} s (on the other SMs of a partition, by their count: "
+                 f"{dv.get('serve_s_on_rest')}); target: overhead <= {dv['target_s']} s a step")
     for lay, v in dv["layouts"].items():
         lines.append(f"{lay}: commit alone {v.get('commit_s')} s on every SM; at each SMS {v.get('commit_s_at_sms')}")
         for name, e in v["runs"].items():
@@ -656,15 +671,23 @@ def main(argv: list[str] | None = None) -> int:
         steps = int(n[0]) if n and n[0] else a.steps
         cap = n[1] if len(n) > 1 else ""
         rest, sms = cap.endswith("r"), int(cap.removesuffix("r") or 0)
-        if (sms or rest) and (mode == "serve" or not sms or (rest and mode not in OVERLAPPED)):
-            raise SystemExit(f"--runs: {spec!r}: SMS is N or, for an overlapped mode, Nr")
+        if (sms or rest) and (not sms or (mode == "serve" and not rest) or (rest and mode not in OVERLAPPED + ("serve",))):
+            raise SystemExit(f"--runs: {spec!r}: SMS is N, or Nr for an overlapped mode or serve")
+        alone = None
         try:
             plan = plan_for(lay, sms) if mode != "serve" else None
-            r = run_one(spec, mode, steps, d, plan, a, ctx, key, prompts, smi, sms, rest)
+            if mode == "serve" and rest:
+                drop(True)
+                alone = G.SmPartition(sms, dev)
+            r = run_one(spec, mode, steps, d, plan, a, ctx, key, prompts, smi, sms, rest, alone)
         except Exception as e:  # noqa: BLE001  (recorded; the next run starts clean)
             r = {"run": spec, "mode": mode, "layout": lay, "error": f"{type(e).__name__}: {(str(e).splitlines() or [''])[0]}"}
             d.committer, d.results = Null(), []
             torch.cuda.empty_cache()
+        if alone is not None:
+            torch.cuda.synchronize(dev)
+            torch.cuda.empty_cache()
+            alone.close()
         if "error" in r:
             doc.setdefault("errors", []).append(r)
         else:
