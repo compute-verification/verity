@@ -82,6 +82,10 @@ one computational slot `Pouw.Assumptions.SAKMatmul` moves to WORKSOUND (single o
 
 ## Sprint rules
 
+0. **Find the findings addressed to you at every checkpoint** (two builders missed theirs in the first round):
+   `research notes sync && rg -n "(FINDING|RESULT) [A-Z]+[0-9]+ → [^:]*<YOUR-NAME>" ~/.research/notes/lanes/compute-research/`
+   Red-team notes so far: `20261026T0310Z-draft-accel-rt-lean`, `20261026T0310Z-draft-accel-rt-model`,
+   `20261026T0315Z-draft-accel-rt-proto`, `20261026T0320Z-draft-accel-rt-units`, plus ALGO-COST's once written.
 1. **Statement first, then straight to its red team.** Red teams read builders' notes and branches directly; no relay.
    A red team writes each finding in its note as `FINDING <id> → <builder>: <one line>` and comments it on the builder's
    Linear issue (rule O prefix). The builder answers in its note within an hour: fixed (commit), refuted (why), or open.
