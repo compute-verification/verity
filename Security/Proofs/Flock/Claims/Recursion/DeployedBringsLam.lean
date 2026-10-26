@@ -114,6 +114,7 @@ theorem regIns_eq_nil {xO : Msg}
   | none => rfl
   | some v =>
     obtain ⟨s, spec, sts⟩ := v
+    dsimp only
     cases hown : s.base.registered with
     | none => rfl
     | some own => exact absurd hown (h s spec sts own hs)
