@@ -63,6 +63,7 @@ import Proofs.Pouw.LiveCredit
 import Proofs.Pouw.M1
 import Proofs.Pouw.MerkleExtract
 import Proofs.Pouw.ShaRealize
+import Proofs.Pouw.ShaRealizeWitness
 import Proofs.Pouw.Milestone
 import Proofs.Pouw.NCP
 import Proofs.Pouw.NCP.ChainProofs

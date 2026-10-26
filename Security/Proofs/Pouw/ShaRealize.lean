@@ -88,15 +88,27 @@ theorem link_noFold {G : Accel} {nf : NoFold} {k : ℕ} {X D : Type} [Inhabited 
     rw [hext, Option.getD_some] at hwc
     exact hj (hwc.trans hA.2)
 
-/-- `Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`. -/
-theorem ExtractOfRealize : Pouw.Guarantees.ShaRealize.ExtractOfRealize := by
-  intro G nf k X D _ _ _ _ _ E eo rD pl dirs q τ hopens hR hG1 hG2 hP1 hP2 A
-  obtain ⟨L, Adv, adv, Mw, Mh, hadv, hMh, huse, hext, hroot, hN2, hwalk⟩ := hR hG1 hG2 hP1 hP2 A
+/-- **One prover**: a `Realization` of `A` at query budget `q` and schedule `τ` gives `ExtractAdvAt` at
+`ξ = k · ξw + q · ξl` and `κ_x = (q² + ∑_w q (2 τ_w + 1)) / |D|`. -/
+theorem extract_of_realization {G : Accel} {nf : NoFold} {k : ℕ} {X D : Type} [Fintype X] [DecidableEq X]
+    [Fintype D] [DecidableEq D] [Inhabited D] (E : Enc X D Word) (eo : nf.Orc ≃ (X → D)) (rD : nf.Root → D)
+    (pl : nf.Path → List (Bool × D × D)) (dirs : Fin nf.n × Fin nf.n' × Fin nf.nb → List Bool)
+    (hopens : ∀ o r c v p, nf.opens o r c v p → Opens (eo o) E (rD r) (pl p) v ∧ (pl p).map Prod.fst = dirs c)
+    {ξw ξl : G.Res → ℝ} (A : Prover G (noFoldRound nf) k) {q : ℕ} {τ : Fin k → ℕ}
+    (hR : Realization G nf k E eo rD pl dirs ξw ξl A q τ) :
+    ExtractAdvAt G (noFoldRound nf) k (fun r => k * ξw r + q * ξl r)
+      (((q * q + ∑ w, q * (2 * τ w + 1) : ℕ) : ℝ) / Fintype.card D) A := by
+  obtain ⟨L, Adv, adv, Mw, Mh, hadv, hMh, huse, hext, hroot, hN2, hwalk⟩ := hR
   refine ⟨Adv, adv, Mw, Mh, hadv, hMh, huse, hext, ?_⟩
   exact prob_bad_le E eo L
     (fun o x => A.Accepted o x ∧
       ∃ w, ¬ (noFoldRound nf).ok (A.instAt o x w) (x w).1 (x w).2 (G.Mc.eval (Mw w) (adv o x w, (x w).1)))
     fun o x u hu hb => link_noFold E eo rD pl dirs hopens A L adv Mw hroot hN2 hwalk o x u hu hb.1 hb.2
+
+/-- `Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`. -/
+theorem ExtractOfRealize : Pouw.Guarantees.ShaRealize.ExtractOfRealize := by
+  intro G nf k X D _ _ _ _ _ E eo rD pl dirs ξw ξl q τ hopens hR hG1 hG2 hP1 hP2 A
+  exact extract_of_realization E eo rD pl dirs hopens A (hR hG1 hG2 hP1 hP2 A)
 
 /-- A prover's state at the start of round `n` reads only the coins of the rounds before `n`. -/
 theorem state_congr {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (o : P.Orc)
@@ -110,12 +122,14 @@ theorem state_congr {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (o
     · rw [ih, h ⟨n, hn⟩ (by simp)]
     · exact ih
 
-/-- **`Extract` implies its advice form**: the advice is the prover's state after the round's instance. -/
+/-- **`Extract` implies its advice form** at `ξ = 0` and a constant `κx`: the advice is the prover's state after the
+round's instance, and the period's cost clause is the sum of `Extract`'s per-round clauses. -/
 theorem extractAdv_of_extract {G : Accel} {P : RoundProto} {k : ℕ} {κx : ℝ} (hE : Extract G P k κx) :
-    ExtractAdv G P k κx := by
+    ExtractAdv G P k (fun _ _ => 0) (fun _ => κx) := by
   intro hG1 hG2 hP1 hP2 A
   obtain ⟨Mw, Mh, hMh, huse, hext, hprob⟩ := hE hG1 hG2 hP1 hP2 A
-  refine ⟨A.St, fun o x w => (G.Mc.eval (A.inst w) (o, A.state o x w)).1, Mw, Mh, ?_, hMh, huse, hext, hprob⟩
+  refine ⟨A.St, fun o x w => (G.Mc.eval (A.inst w) (o, A.state o x w)).1, Mw, Mh, ?_, hMh,
+    fun o x r => (Finset.sum_le_sum fun w _ => huse o x w r).trans (le_add_of_nonneg_right le_rfl), hext, hprob⟩
   intro o x x' w hx
   simp only
   rw [state_congr A o (w : ℕ) fun v hv => hx v hv]
