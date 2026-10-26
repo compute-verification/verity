@@ -483,16 +483,17 @@ theorem openTieR_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin
     And.intro (hB x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht os last hfin hl)
       (hT x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht os last hfin hl)
 
-/-- **`OpenCopyR` from the copy's range and its opened row and siblings**, at the deployed reader's statements at
-the dense form: the level's shape is the statement's (`levelMatch`). -/
-theorem openCopyR_of (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse x = parse x)
-    (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f)
-    (hF : CopyFitsR H D shape untr b cmt L pieces) (hO : CopyOpensR H D shape untr b cmt L Bd rd pieces) :
-    OpenCopyR H D shape untr b cmt L Bd rd pieces := by
-  intro x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht
-  obtain ⟨hob, hgb, hub⟩ := hF x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht
-  refine ⟨hob, hgb, hub, fun os last hfin hl => ?_⟩
-  obtain ⟨hrow, hsib⟩ := hO x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht os last hfin hl
+/-- **The level a piece's side reads is its statement's**: at a dense statement the deployed reader reads, where
+`ownQR` gives piece `q` the level part `s` (`.recOpen lv LANES HH n`), the side's schedule's level `q.level` has
+`LANES` lanes and `HH` siblings below its cap (`levelMatch`), at every message list. -/
+theorem sideLevel (hP : ∀ x, D.parse x = parse x) (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f)
+    {x : Msg} {st : Claims.Recursion.Stmt} (hx : D.parse x = some st) (hf : shape st.form) {r : XR}
+    {ss : Array VStar.Stmt} {s lv LANES HH n : ℕ} (hr : readX x = some r)
+    (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss) (hsv : ss[s]? = some (.recOpen lv LANES HH n))
+    {q : OpenPiece} (ho : ownQR x q = some s) (ms : List Msg) :
+    LANES = 2 ^ ((sideAtR rd (Claims.Recursion.xI D x) ms q).sch.levels[q.level]!).lanes ∧
+      HH = ((sideAtR rd (Claims.Recursion.xI D x) ms q).sch.levels[q.level]!).d -
+        ((sideAtR rd (Claims.Recursion.xI D x) ms q).sch.levels[q.level]!).cap := by
   have hx' : parse x = some st := (hP x).symm.trans hx
   have hxI : Claims.Recursion.xI D x = xIOf x := by
     unfold Claims.Recursion.xI xIOf
@@ -504,14 +505,61 @@ theorem openCopyR_of (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse x = 
   cases hss'
   rw [hsv] at hsv'
   cases hsv'
-  obtain ⟨rfl, hL, hH⟩ := levelMatch hx' (hS _ hf) hr hss hsv
-  have hsch : (sideAtR rd (Claims.Recursion.xI D x) (Bd.opened os last) q).sch = schAt (xIOf x) 0 := by
+  obtain ⟨hls, hL, hH⟩ := levelMatch hx' (hS _ hf) hr hss hsv
+  have hsch : (sideAtR rd (Claims.Recursion.xI D x) ms q).sch = schAt (xIOf x) 0 := by
     show schAt (Claims.Recursion.xI D x) q.table = _
     rw [hxI, h0]
+  rw [hsch, hls]
+  exact ⟨hL, hH⟩
+
+/-- **`OpenCopyR` from the copy's range and its opened row and siblings**, at the deployed reader's statements at
+the dense form: the level's shape is the statement's (`sideLevel`). -/
+theorem openCopyR_of (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse x = parse x)
+    (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f)
+    (hF : CopyFitsR H D shape untr b cmt L pieces) (hO : CopyOpensR H D shape untr b cmt L Bd rd pieces) :
+    OpenCopyR H D shape untr b cmt L Bd rd pieces := by
+  intro x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht
+  obtain ⟨hob, hgb, hub⟩ := hF x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht
+  refine ⟨hob, hgb, hub, fun os last hfin hl => ?_⟩
+  obtain ⟨hrow, hsib⟩ := hO x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht os last hfin hl
+  obtain ⟨hL, hH⟩ := sideLevel D shape rd hP hS hx hf hr hss hsv ho (Bd.opened os last)
   unfold OpenCopy
-  refine ⟨?_, ?_, hrow, hsib⟩
-  · rw [hsch]; exact hL
-  · rw [hsch]; exact hH
+  exact ⟨hL, hH, hrow, hsib⟩
+
+/-- The column of a rec-open copy's position bit `h`, where `openIdx` reads it. -/
+def idxCol (LANES HH h : ℕ) : ℕ := 128 * LANES + 1024 * max 1 ((HH + 1) / 2) + 1024 + 256 * LANES + h
+
+theorem openIdx_testBit {v : ℕ → Bool} {LANES HH h : ℕ} (hh : h < HH) :
+    (_root_.Flock.Readable.openIdx v LANES HH).testBit h = v (idxCol LANES HH h) := by
+  simp [_root_.Flock.Readable.openIdx, idxCol, FlockVBridge.Family.testBit_natOfBits, hh]
+
+/-- **Check 5's `dirs` tie at a copy**: the copy's position columns hold `pos`'s `dirs` row (`RecCoins.dirsRow`, which
+`RecCoins.checkOpen` registers at each opening), 16 bits a word. -/
+def DirsTie (v : ℕ → Bool) (LANES HH pos : ℕ) : Prop :=
+  ∀ h < HH, v (idxCol LANES HH h) = ((_root_.Flock.RecCoins.dirsRow pos HH)[h / 16]!).testBit (h % 16)
+
+/-- **The `dirs` tie gives the position's bits** (`bits_of_dirsRow`), at `HH ≤ 32`. -/
+theorem bits_of_dirsTie {v : ℕ → Bool} {LANES HH pos : ℕ} (hH : HH ≤ 32) (ht : DirsTie v LANES HH pos) :
+    ∀ h < HH, (_root_.Flock.Readable.openIdx v LANES HH).testBit h = pos.testBit h :=
+  bits_of_dirsRow hH fun k hk => (openIdx_testBit hk).trans (ht k hk)
+
+/-- **Check 5's `dirs` tie at the deployed layout** (`CopyDirsR`): the level's `HH` is at most 32 and the piece's copy
+holds the `dirs` row of the position `posAt` reads off the coins. -/
+def CopyDirsR (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
+  AtPieces H D shape untr b cmt L pieces fun x c ws LANES HH _ _ w p ht q =>
+    HH ≤ 32 ∧ DirsTie (copyR (Claims.Recursion.xI D x) w p ht q) LANES HH
+      (posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q)
+
+/-- **`CopyBitsR` from check 5's `dirs` tie**, at the deployed reader's statements at the dense form: the side's
+`d − cap` is the statement's `HH` (`sideLevel`), and the tie spells the position's low `HH` bits (`bits_of_dirsTie`). -/
+theorem copyBitsR_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
+    (hP : ∀ x, D.parse x = parse x) (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f)
+    (hD : CopyDirsR H D shape untr b cmt L Bd pieces posAt) : CopyBitsR H D shape untr b cmt L Bd rd pieces posAt := by
+  intro x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht os last _ _
+  obtain ⟨hH32, htie⟩ := hD x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht
+  obtain ⟨-, hH⟩ := sideLevel D shape rd hP hS hx hf hr hss hsv ho (Bd.opened os last)
+  intro h hh
+  exact bits_of_dirsTie hH32 htie h (by rw [hH]; exact hh)
 
 /-- **The `rec-open` pieces' share at the deployed layout**: at the parts' own messages, every part accepting, each
 piece `ownQR` gives part `s` holds (`openHolds` at `sideAtR rd` and `posAt`), from `OpenCopyR` and `OpenTieR`. A
