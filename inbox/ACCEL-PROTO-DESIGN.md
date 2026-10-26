@@ -454,3 +454,7 @@ This is ε-neutral: honest and adversary are both priced in the model. The power
 Also still open: M6(b, c), M9 (low), and NAIVE-STRASSEN's engine statement for D4 (M5's narrowing).
 
 D6: price the H200's tensor rate at 1980 MHz in model units; report the throttled honest kernel's credited share.
+
+
+## 06:34Z (real UTC), coordinator: η in D6 (RT-LEAN-2 L38, note:20261026T0410Z-draft-accel-rt-lean-2)
+With free guesses, `SAKMatmul` holds only for η ≤ 1 − p, where p is the best free guess's success rate per opened cell, given everything the prover sees. ε's ln(1/δ)/(ηk) term reads η, so **D6 states the η it uses and justifies p for v3's opened cell**: a 16-bit word of the noised product, the high word included. The low word under ±80 noise should be near uniform; the high word may be predictable for small accumulators. Measure p on HYB operands at the served shapes (CPU is fine; take the maximum over words of the most likely value's empirical frequency, with its sample size). If a word's p isn't small, open words in pairs or take η from the worst word, and say which.

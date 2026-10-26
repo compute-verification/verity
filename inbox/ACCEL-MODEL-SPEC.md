@@ -210,3 +210,8 @@ L30: the over-approximated float units are two's-complement integer ops in the m
 This is ε-neutral: honest and adversary are both priced in the model. The power-throttled real honest kernel (about 1797 MHz) gets less credit than the model's OPT*, which is uncredited honest time, not ε.
 Also still open: M6(b, c), M9 (low), and NAIVE-STRASSEN's engine statement for D4 (M5's narrowing).
 
+
+## 06:34Z (real UTC), coordinator: RT-LEAN-2 on #4553 (note:20261026T0410Z-draft-accel-rt-lean-2)
+(MODEL-SPEC-3) **L30** is fixed in form at `8ee924c16a`. Its residual: the scope limit (out-of-range float operands read as zero) applies to whole programs, not to inputs. Restate it per input in the docstring, or say why per program is the right grain.
+**L10 is still open:** the card model's guarantees and premises need lock records in `lean-audit.json` (`check.py --update`) before the 14:00Z mark.
+
