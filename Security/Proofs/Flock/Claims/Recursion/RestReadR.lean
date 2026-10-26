@@ -7,8 +7,9 @@ import Proofs.Flock.Claims.Recursion.DeployedR
 `hrest_read` takes `ReadsAt rd final fin`: wherever `final` reads V\*'s last message, `nextR rd`'s last step reads the
 opened messages (`ReadOkR`). This file splits that reading into its parts at any reader (`readOkR_of`): the plain
 verifier answers no coin at a last message not tagged `0` (`act_not_coin`), `decR` reads (the statement sets up, the
-rows read back, round 0 carries the link's nodes, the rounds after it the reps' blocks, a fit at every rep), and the
-record value `decR` builds reads as custody's (`DecLive`).
+last message's statement is the statement, the rows read back, round 0's rows' nodes are the link's, the rounds after
+it the reps' blocks, a fit at every rep, and the proofs read are shaped for their files), and the record value `decR`
+builds reads as custody's (`DecLive`).
 
 The fits are the one part that reads the rows' contents. `FitsLift` is what they need: a fit at some rows gives a fit
 at every rows of the same byte sizes. The honest proof fits the honest rows (`RepFits`), so with `FitsLift`, every
@@ -61,11 +62,14 @@ theorem readOkR_of {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : 
     {v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt} {a : Msg} {fl : FinalP} {c₁ : Coin}
     {r₀ : List ByteArray} {rss : List (List ByteArray)}
     (hv : FlockDeploy.setupOf false x = some v) (hlast : ms.getLast? = some a) (ha : ∀ t, a ≠ 0 :: t)
-    (hrd : rd a = some fl) (hc : cs.head? = some c₁) (h0 : rowsOf (ms.headD []) = some r₀)
+    (hrd : rd a = some fl) (hst : fl.stmt = x) (hc : cs.head? = some c₁)
+    (h0 : (rowsOf (ms.headD [])).map (List.map FlockDeploy.nodeOf) = some r₀)
     (hr₀ : (level0Lens v.2.2).sum = r₀.length) (hmid : ms.tail.dropLast.mapM rowsOf = some rss)
     (hps : fl.ps.size = 2 * v.2.2.size) (hrss : (repLens v.2.1 v.2.2).sum = rss.length)
     (hfit : ∀ k < 2 * v.2.2.size, ∃ pT : Flock.Proof × F128,
       FitsRep (repCtx v.2.1 v.2.2 c₁ r₀ cs.tail.dropLast k) ((cutLens (repLens v.2.1 v.2.2) rss).getD k []) pT.1 pT.2)
+    (hsh : ∀ pf, FlockDeploy.readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl = some pf →
+      FlockDeploy.ShapedAt v.2.1 v.2.2 c₁ pf.1)
     (hlen : ms.length = cs.length) (hck : v.1.read.check = .ok ()) (hlive : DecLive rd) : ReadOkR rd x ms cs := by
   obtain ⟨d, hd⟩ : ∃ d, decR rd x ms cs = some d := by
     have hm : ∃ a₁, ms.head? = some a₁ := by
@@ -73,7 +77,7 @@ theorem readOkR_of {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : 
       | nil => cases hlast
       | cons b l => exact ⟨b, rfl⟩
     obtain ⟨a₁, ha₁⟩ := hm
-    have h0' : rowsOf a₁ = some r₀ := by
+    have h0' : (rowsOf a₁).map (List.map FlockDeploy.nodeOf) = some r₀ := by
       cases ms with
       | nil => cases ha₁
       | cons b l => cases Option.some.inj ha₁; exact h0
@@ -94,7 +98,11 @@ theorem readOkR_of {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : 
       obtain ⟨ys, hys⟩ := mapM_some_of hk
       rw [hys]
       exact ⟨_, rfl⟩
-    simp only [decR, Option.bind_eq_bind, Option.pure_def, hv, hlast, ha₁, hc, hrd, h0', hmid, hl, hpf,
+    have hrd' : (rd a).filter (·.stmt == x) = some fl := Option.filter_eq_some_iff.2 ⟨hrd, beq_iff_eq.2 hst⟩
+    have hpf' : (FlockDeploy.readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl).filter (fun pf =>
+        @decide (FlockDeploy.ShapedAt v.2.1 v.2.2 c₁ pf.1) (Classical.propDecidable _)) = some pf :=
+      Option.filter_eq_some_iff.2 ⟨hpf, @decide_eq_true _ (Classical.propDecidable _) (hsh pf hpf)⟩
+    simp only [decR, Option.bind_eq_bind, Option.pure_def, hv, hlast, ha₁, hc, hrd', h0', hmid, hl, hpf',
       Option.bind_some, Option.some.injEq, exists_eq']
   have ha := actR_of_decR hlast ha hd
   unfold ReadOkR
