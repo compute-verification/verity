@@ -180,14 +180,16 @@ theorem checkLevelTopReads_ok {unit : String} {own : Array Registered.Port} {l q
   | none => simp [hf, throw, throwThe, MonadExceptOf.throw] at h
   | some reg =>
     simp only [hf] at h
-    by_cases hv : reg.value = s!"rec-top-L{l}"
-    · refine ⟨reg, rfl, hv, ?_⟩
-      by_contra hr
-      have hr' : (reg.reads != (Array.range (2 * q)).map fun i =>
-          some (if i < q then pos0[i]! >>> H else (if l == 0 then 0 else t0) + (pos1[i - q]! >>> H))) = true := by
-        simpa [bne_iff_ne, outRead] using hr
-      simp [hv, hr', throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
-    · simp [hv, bne_iff_ne, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+    dsimp only at h
+    cases hv : (reg.value != s!"rec-top-L{l}")
+    · rw [hv] at h
+      cases hr : (reg.reads != (Array.range (2 * q)).map fun i =>
+          some (if i < q then pos0[i]! >>> H else (if l == 0 then 0 else t0) + (pos1[i - q]! >>> H)))
+      · exact ⟨reg, rfl, by simpa using hv, by simpa [outRead] using hr⟩
+      · rw [hr] at h
+        simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+    · rw [hv] at h
+      simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
 
 /-- **What `checkOpenTops` accepting checked**: the inner session's algebra, its one level `l` of `LANES` lanes and
 `H` siblings, both reps' `q` query positions there, and the level's `out` reads at them (`checkLevelTopReads`). -/
@@ -339,6 +341,7 @@ theorem outRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   obtain ⟨hscope, -⟩ := staged_scope hS hx h0p
   have hv1 := FlockSoundness.Discharge.Layout.scopeOk_ports
     ((FlockSoundness.Discharge.FailClosed.scopeOk_eq _).symm.trans hscope)
+  obtain ⟨_, -, hupv, -, -, -⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok (htab 0 h0p).2.2
   obtain ⟨-, hg0, hnbl, -⟩ := table_rows ht' hd (by omega) hv1 L _ hz1
   have htop := Flock.Readable.array_forM_ok (RecIns.setup_topRows hset) 0 h0
   have hreg := RecIns.setup_registered hset sts[0] (Array.getElem_mem h0)
@@ -371,8 +374,8 @@ theorem outRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   cases hq2
   refine ⟨spec, sts, h0, f, inn, sh, extras, l, r0, r1, hsu, hf', hinn, halg, hl, h0r, h1r, fun N hN => ?_⟩
   have hN2 : N < 2 * (sh.sched.levels[l]!).q := by omega
-  have hnN : N < p.sts[0].n := by omega
-  have hnp : N < p.sts[0].pub.n := by omega
+  have hnp : N < p.sts[0].pub.n := by rw [e0]; omega
+  have hnN : N < p.sts[0].n := by rw [setupOne_n hd]; exact hnp
   obtain ⟨hq', -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hqo
   have hsl := slotPub_table ht' hd (by omega) hv1 L hz1 hq' hnp (div_lt_blocks hg0 hnN hnbl)
   rw [digest_tables htt] at hsl
@@ -429,6 +432,9 @@ theorem root_link (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {s
   obtain ⟨e1, n1⟩ := cmt_zero hS hi hl
   obtain ⟨e2, n2⟩ := cmt_zero hS' hi' hl'
   exact nodes_eq n1 n2 (e1.symm.trans (h1.symm.trans (h2.trans e2)))
+
+theorem getD_lt {a : Array ℕ} {e : ℕ} (h : e < a.size) : a.getD e 0 = a[e] := by
+  simp [Array.getD, h]
 
 theorem flatMap_inv {α β : Type} (f : β → List α) (d : β) :
     ∀ (L : List β) (g : ℕ), g < (L.flatMap f).length →
@@ -494,7 +500,9 @@ theorem tops_link (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {s
   have hfx : (layoutBTops fin).fixedAt x (rep * rs.size + k + 1) = none := by
     show (streamRound x (rep * rs.size + k)).bind _ = none
     rw [hsr]
-    simp [hne]
+    show (if ((rs.getD k default).2.1.isEmpty && !(rs.getD k default).2.2.2) = true then some [] else none) = none
+    rw [hne]
+    rfl
   have hpc : (layoutBTops fin).pieceAt x (rep * rs.size + k + 1) = topsPiecesAt r rs (rep * rs.size + k) := by
     show stepPieces fin x (rep * rs.size + k + 1) = _
     unfold stepPieces
@@ -523,7 +531,7 @@ theorem tops_link (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {s
     simp only [List.getElem_map, Array.getElem_toList]
     rw [hfl, tops_len hz he']
     have he2 : e < ((rs.getD k default).2.1).size := by rw [← hzl]; exact he'
-    simp [Array.getD, he2]
+    rw [getD_lt he2]
   have hm1 := hML y hlens fun e he => by
     obtain ⟨kt, top, -, hye, h128⟩ := htops e he
     exact ⟨top, hye, h128⟩
@@ -540,7 +548,7 @@ theorem tops_link (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {s
     unfold Claims.Recursion.VStarB.LayoutB.piecesLen
     rw [hpc]
     unfold topsPiecesAt
-    rw [hjm, ite_eq_right (by simp [hne])]
+    rw [hjm, if_neg (by rw [hne]; decide)]
     rw [List.map_append, List.sum_append]
     have hcap : ((List.range ((rs.getD k default).2.1).size).map (capPieceAt r rs (rep * rs.size + k))).map
         (fun p => Claims.Recursion.VStarB.pieceLen p.2) = ((rs.getD k default).2.1).toList.map (128 * ·) := by
@@ -548,7 +556,7 @@ theorem tops_link (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {s
       intro e h1 h2
       have he2 : e < ((rs.getD k default).2.1).size := by simpa using h1
       simp only [List.getElem_map, List.getElem_range, capPieceAt, pieceLen_topPiece, hjm, Array.getElem_toList]
-      simp [Array.getD, he2]
+      rw [getD_lt he2]
     rw [hcap]
     omega
   have hTe : (y.tops.map List.flatten).flatten = (y'.tops.map List.flatten).flatten := by
@@ -669,8 +677,7 @@ theorem top0_eq {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) 
   rw [hkt, Option.map_some, tops_size hlens hey hye]
   rw [topSizes_at hk he] at hn
   have := Option.some.inj hn
-  rw [← this]
-  simp [Array.getD, he]
+  rw [← this, getD_lt he]
 
 end RecDeploy
 
@@ -821,7 +828,7 @@ theorem outCommitTie_deployed {b : Brings}
     exact Nat.not_lt_zero _ hqry
   -- the level part's slot
   obtain ⟨i, -, -, -, -, -, -, lk, hi, -, -, hlk, -⟩ := staged_reads_link hS
-  have hIC := innerCoinsR_staged (b := b) (Bk := Bd.DE.V.k) (s := s) (c := c) hx' hd (hB x)
+  have hIC := OpenLower.innerCoinsR_staged (b := b) (Bk := Bd.DE.V.k) (s := s) (c := c) hx' hd (hB x)
   obtain ⟨spec, sts, h0, f, inn, sh, extras, l, r0, r1, hsu, hf', hinn, halg, hl, h0r, h1r, hbytes⟩ :=
     outRow_bytes hS hck hr hcc hss hsv hx' hd hlev hi hlk hqo fun spec sts hsu h0 f inn hf hload => by
       obtain ⟨v, hv, hm, -⟩ := hIC xO ⟨hshow, hS⟩ i spec sts hsu h0 f inn hf hload
