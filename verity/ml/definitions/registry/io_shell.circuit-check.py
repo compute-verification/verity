@@ -11,7 +11,10 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import io_shell as X
 
-    return [*[(f"TokenFeed_v1:{NP}:{int(first)}", lambda NP=NP, first=first: bind(X.TokenFeed, NP=NP, FIRST=first))
-              for NP in (4, 1024) for first in (True, False)],
-            *[(f"SlotRow_v1:{NP}", lambda NP=NP: bind(X.SlotRow, NP=NP)) for NP in (4, 1024)],
+    return [("TokenFeed_v1:4:1", lambda: bind(X.TokenFeed, NP=4, FIRST=True)),
+            ("TokenFeed_v1:4:0", lambda: bind(X.TokenFeed, NP=4, FIRST=False)),
+            ("TokenFeed_v1:1024:1", lambda: bind(X.TokenFeed, NP=1024, FIRST=True)),
+            ("TokenFeed_v1:1024:0", lambda: bind(X.TokenFeed, NP=1024, FIRST=False)),
+            ("SlotRow_v1:4", lambda: bind(X.SlotRow, NP=4)),
+            ("SlotRow_v1:1024", lambda: bind(X.SlotRow, NP=1024)),
             ("SlotMask_v1", lambda: bind(X.SlotMask))]
