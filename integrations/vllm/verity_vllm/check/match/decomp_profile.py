@@ -4,10 +4,10 @@ when `X09_PROFILE_OUT` names it."""
 from __future__ import annotations
 
 import collections
-import os
 import sys
 import time
 
+from verity_vllm import settings
 from verity_vllm.check.match import program_compare as C
 
 # [R18 x09, F-r18-x09-1] PHASE ACCOUNTING of the per-request leg.  `X09_PROFILE_OUT=<path>` writes one JSON sidecar beside the document
@@ -22,7 +22,7 @@ _profile_counters = collections.Counter()   # process-local: per-run fallback / 
 
 
 def _profile_on() -> bool:
-    return bool(os.environ.get(PROFILE_ENV, "").strip())
+    return bool((settings.get(PROFILE_ENV) or "").strip())
 
 
 def _memo_stats():

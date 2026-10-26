@@ -26,9 +26,9 @@ def world(tmp_path):
 
 class Review(Harness):
     """A drive landing on reviews, whose verdicts are `reviewed` labels in the world's store, and whose after-landing launches are
-    recorded (`posted`) as `r-post-N`; the Harness's `launched` holds its Lean checks, and `m1` has no free check slot unless a
-    test frees one (`d.slots`).  Unless ``baseline`` is off, ci has recorded `main` green (`research queue baseline`), so a tick
-    lands without first running the after-landing run on `main`."""
+    recorded (`posted`) as `r-post-N`; the Harness's `launched` holds its Lean checks, and `m1` has no free check slot, which no
+    Lean check waits for.  Unless ``baseline`` is off, ci has recorded `main` green (`research queue baseline`), so a tick lands
+    without first running the after-landing run on `main`."""
 
     def __init__(self, world, monkeypatch, baseline: bool = True, **kw):
         super().__init__(world, monkeypatch, **kw)
@@ -265,35 +265,98 @@ def test_a_member_that_came_onto_next_a_tick_ago_no_longer_stops_the_lean_check(
     assert h.launched == [(_tip(world), "m1", False)], world.logs         # #3 came a tick ago: the check reaches it
 
 
-def test_a_lean_check_is_stacked_at_the_reviewed_top_while_a_lower_one_runs_when_a_slot_is_free(world, monkeypatch):
-    """A check capped below churn ran alone until it ended, then the top was checked after it: two checks in a row before a
-    landing.  While the lower one runs, one at the top starts in the same tick when a machine has a free Lean check slot, at
-    most two running, and the landing takes the highest that passed."""
+def _stacked(world, monkeypatch) -> tuple[Review, str, str]:
+    """A Lean check running at #2, the reviewed top, and one stacked at #3, an unreviewed Lean change that came above it a tick
+    later: (the harness, #2's commit, #3's)."""
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     h.review(1)
     assert h.tick().startswith("landed #1")
     world.gh.put(2, world.change({"pkg/lean-audit.json": "{}"}))
-    world.gh.put(3, world.change({"c.txt": "3\n"}))
-    for n in (2, 3):
-        h.review(n)
+    world.gh.put(3, world.change({"pkg/T.lean": "theorem T : True := trivial\n"}))
+    h.review(2)
     h.tick()
     two, three = (m.commit for m in h.q.chain())
-    assert h.launched == [(two, "m1", False)]                             # capped below #3, which just came
-    assert not h.tick().startswith("landed") and len(h.launched) == 1    # no free slot: it waits
-    h.d.slots = lambda repo, on: {"m1": 1}
+    assert h.launched == [(two, "m1", False)], world.logs                 # #3 just came: nothing stacked through it yet
     assert not h.tick().startswith("landed")
     assert h.launched == [(two, "m1", False), (three, "m1", False)], world.logs
-    world.gh.put(4, world.change({"d.txt": "4\n"}))
-    h.review(4)
+    assert h.d.q.load_state()["drive"]["lean"][three]["stacked"] is True
+    return h, two, three
+
+
+def test_a_lean_check_is_stacked_at_nexts_top_for_a_lean_change_above_a_running_one(world, monkeypatch):
+    """25 Oct: Lean changes that came onto `next` above a running Lean check's commit waited for it to pass, then for a whole
+    check of their own (~1 h).  While it runs, one is stacked at `next`'s top, reviewed or not, with no free check slot needed,
+    at most `max_lean_checks` running; the lower one is never cancelled for it, and the landing takes the highest that passed."""
+    h, two, three = _stacked(world, monkeypatch)
+    world.gh.put(4, world.change({"pkg/U.lean": "theorem U : True := trivial\n"}))
     h.tick()
     h.tick()                                                              # #4 settled: two running, so no third
-    assert len(h.launched) == 2 and _tip(world) != three
+    assert len(h.launched) == 2 and h.cancelled == [], world.logs
+    h.d.max_lean_checks = 3
+    h.tick()
+    assert len(h.launched) == 3 and h.launched[2][0] == _tip(world) and h.cancelled == [], world.logs
     rid = h.lean_ids()[1]
     h.run_state[rid] = ("done", 0, None)
     h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
-    assert h.tick().startswith("landed #4"), world.logs                   # the top's check passed, the lower one still runs
-    assert _main(world) == _tip(world) and len(h.launched) == 2
+    h.review(3)
+    assert h.tick().startswith("landed #3"), world.logs                   # #3's check passed, #2's still runs
+    assert _main(world) == three
+
+
+def test_nothing_is_stacked_for_a_member_above_the_running_check_that_changes_no_lean(world, monkeypatch):
+    """CI-167 stacked a check at the reviewed top whenever a check slot was free, though a member above the running check that
+    changes no Lean lands on that check alone."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    h.review(1)
+    h.tick()
+    one = _tip(world)
+    assert h.launched == [(one, "m1", False)]
+    world.gh.put(2, world.change({"c.txt": "2\n"}))
+    h.review(2)
+    h.tick()
+    h.tick()
+    assert h.launched == [(one, "m1", False)], world.logs
+    h.run_state[h.lean_ids()[0]] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, h.lean_ids()[0], {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #2"), world.logs
+
+
+def test_an_ejection_from_a_stacked_checks_prefix_rebuilds_next_at_once_and_cancels_only_that_check(world, monkeypatch):
+    """An ejection from a running Lean check's prefix waits for it to end before `next` is rebuilt; a stacked check reaches
+    `next`'s top, so that would hold every sync for its whole run.  It is rebuilt at once, the stacked check cancelled, and the
+    lower one runs on."""
+    h, two, three = _stacked(world, monkeypatch)
+    world.gh.ready.discard((3, world.gh.prs[3].head))
+    assert Q.lean_running(h.d.q.load_state(), 3) is None
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [2] and h.cancelled == [], world.logs
+    h.tick()
+    assert h.cancelled == [h.lean_ids()[1]] and list(h.d.q.load_state()["drive"]["lean"]) == [two]
+
+
+@pytest.mark.parametrize("case, lean, changes, churned, want", [
+    ("a Lean change above the running check: the top", {"c1": None}, "13", None, 4),
+    ("capped below what came just now", {"c1": None}, "13", 4, 3),
+    ("only what came just now changes Lean", {"c1": None}, "14", 4, None),
+    ("no Lean change above the running check", {"c3": None}, "13", None, None),
+    ("nothing runs", {"c1": "passed"}, "13", None, None),
+    ("one failed", {"c1": None, "c0": "failed"}, "13", None, None),
+    ("at the bound", {"c1": None, "c3": None}, "134", None, None),
+    ("the bound counts a check off `next`", {"c1": None, "gone": None}, "13", None, None),
+    ("covered by a passed check above", {"c1": None, "c3": "passed"}, "13", None, None),
+    ("a Lean change above a passed check above the running one", {"c1": None, "c2": "passed"}, "13", None, 4),
+])
+def test_lean_stack_decides_from_the_checks_verdicts_where_a_lean_check_is_stacked(case, lean, changes, churned, want):
+    """`next` is c0..c4; ``changes`` names the members that change Lean, and ``churned`` the one that came onto it just now."""
+    from research.drive import lean_stack
+    from research.queue import Member
+
+    chain = [Member(n, f"h{n}", "o", f"c{n}") for n in range(5)]
+    got = lean_stack(chain, {c: {"ids": ["r"], "state": st} for c, st in lean.items()}, lambda m: str(m.pr) in changes,
+                     lambda m: m.pr == churned, 2)
+    assert got == want, case
 
 
 def test_an_ejection_during_a_lean_check_of_its_prefix_waits_to_rebuild_next_and_lands_nothing_from_it_up(

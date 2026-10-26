@@ -37,7 +37,7 @@ import os
 import shutil
 import threading
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
@@ -185,8 +185,11 @@ class CommitWindows:
                  clock: Callable[[], float] = time.perf_counter, wall: Callable[[], float] = time.time,
                  marks: Callable[[int, str], None] | None = None, seal: Mapping[str, Any] | None = None,
                  served: Mapping[str, int] | None = None, sealer: Any = None, window_bytes: int | None = None, disk: Any = None,
-                 on_floor: Callable[[str], None] | None = None, mirror: Callable[[], None] | None = None) -> None:
+                 on_floor: Callable[[str], None] | None = None, mirror: Callable[[], None] | None = None,
+                 request_cap: int = 0) -> None:
         self.com, self.out, self.clock, self.wall, self.marks = committer, Path(out), clock, wall, marks
+        self.request_cap = int(request_cap)              # --window-requests: at most this many distinct requests a window (0: any)
+        self.in_window: set[str] = set()                 # the engine ids live at any step of the open window
         self.seal = dict(seal) if seal is not None else None     # `seal_window`'s label, code and engine_of_record: seal every window
         self.served = dict(served) if served is not None else None   # the compile slice's statics: commit every window's rows
         self.arrivals: dict[str, int] = {}               # every admitted engine id -> its arrival id, in admission order
@@ -236,18 +239,25 @@ class CommitWindows:
         if self.is_open and int(self.com._step_index) >= self.idle_close_steps:
             self.close()
 
-    def before_step(self) -> None:
+    def before_step(self, live: Iterable[str] = ()) -> None:
+        """``live``: the engine ids the next step may run. With ``request_cap``, the open window closes before a step that
+        would bring its distinct requests past the cap; the engine loop holds ``live`` to the cap, so the next window
+        opens within it."""
+        live = set(live)
         if self.is_open and (int(self.com._step_index) >= self.window_steps
-                             or (self.window_bytes and committed_bytes(self.com) >= self.window_bytes)):
+                             or (self.window_bytes and committed_bytes(self.com) >= self.window_bytes)
+                             or (self.request_cap and len(self.in_window | live) > self.request_cap)):
             self.close()
         if not self.is_open:
             self.open()
+        self.in_window |= live
 
     # -- windows
     def open(self) -> None:
         t0 = self.clock()
         self.window += 1
         self.step_t = {}
+        self.in_window = set()
         self.com.reset()
         self.com.install()
         self.open_s = self.clock() - t0

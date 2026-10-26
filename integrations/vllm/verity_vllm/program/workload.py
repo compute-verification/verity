@@ -411,7 +411,7 @@ WORKLOAD = CompositeDefinition("Workload", 1, ("requests", "shared", "lag"), _wo
 
 
 def served_lengths_rule(lag: int) -> dict:
-    """[R17-1] The two lengths the Program keeps distinct for every request, stated once (GM-01 G6 and the finalizer carry the same
+    """The two lengths the Program keeps distinct for every request, stated once (GM-01 G6 and the finalizer carry the same
     names): `served_output_len` = a_r, the tokens designated as output (the events up to and including the FIRST declared EOS, or all
     `cap` events on a length stop); `executed_prefix_len` = the steps that ran = a_r + LAG after an EOS stop before the cap (the LAG
     step(s) are active internal computation: their VUs are required, their sampled tokens are not output), a_r on a length stop (the
