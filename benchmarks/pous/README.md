@@ -88,7 +88,10 @@ Implementations:
     salt from the auditor's coin and encodes C* on every GPU of a node (`pod.sh IMPL=p2-store ... -- encode ...`), as
     canonical segment files a rerun resumes; `--segments LO:HI --order down` encodes a part and `finish` joins the
     parts. `verify --decode` rereads a store and decodes it into the commitment, `spot` decodes random blocks against W
-    regenerated from the seed, and `tie` binds the store to the weights' registration digest.
+    regenerated from the seed, and `tie` binds the store to the weights' registration digest. `p2_v1/parts/` moves
+    parts between machines without an agent VM: `part-out.sh` publishes a node's segments through its run's custody,
+    and `fetch-records.sh` fetches those records into another machine's store, checking every file against its
+    segment's digests (`join.py`).
 
 - `p2-gpu`: the efficient-cryptography campaign's tuned P2 kernel (`p2_gpu/`, CGBN) for the **experimental**
   `p2-16448/v2`, whose ChaCha8 keys the spec does not allow (its F4 names counter-mode SHA-512). The registered P2 with the
