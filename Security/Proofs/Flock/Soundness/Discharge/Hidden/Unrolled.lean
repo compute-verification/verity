@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.Discharge.Aliased.Keys
 import Proofs.Flock.Soundness.Discharge.Zero.Stack
 import Proofs.Flock.Soundness.Discharge.Layout.OutShape
-import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
+import Proofs.Flock.Soundness.Discharge.Hidden.Commit
 
 /-!
 # The committed circuit's keys from the statement circuit's (PRF-133, ASK-112 option A)
@@ -176,8 +176,9 @@ theorem tmpl_unit_at {tags : Tags} {cf : ByteArray} {tables : List (String × By
       upos cs = (fun x => pos.getD x 0) ∧ n.inGroups = cs.unit.inGroups ∧ n.inWords = cs.unit.inWords ∧
       Built n ∧ cs.unit.outGroups = n.outGroups.map (Group.at pos) ∧
       (portCols (n.outGroups.map (Group.at pos))).size = (portCols n.outGroups).size ∧
-      ∀ j < (portCols n.outGroups).size,
-        PortAt pos ((portCols n.outGroups).getD j default) ((portCols (n.outGroups.map (Group.at pos))).getD j default) := by
+      (∀ j < (portCols n.outGroups).size,
+        PortAt pos ((portCols n.outGroups).getD j default) ((portCols (n.outGroups.map (Group.at pos))).getD j default)) ∧
+      outsOk pos n.outGroups = true := by
   obtain ⟨tu, n, ht, hn, hl, -, hsz, hu, he⟩ := unrolled_of_parseTmpl hT
   have A := UnitAt.tmpl ht hu
   have hB : Built n := hl ▸ built_tmpl ht
@@ -187,9 +188,36 @@ theorem tmpl_unit_at {tags : Tags} {cf : ByteArray} {tables : List (String × By
   have hgo : n.outGroups = tu.t.outGroups := by rw [← e1]; exact (Net.ofRows_ok hn').2.2.2.2.2.2.1
   have hP := portCols_at hok fun g hg =>
     ((FlockSoundness.Discharge.Layout.built_out hB).2 g (by rw [hgo]; exact hg)).2
-  rw [← hgo] at hog hP
+  rw [← hgo] at hog hP hok
   refine ⟨n, Tmpl.posMap tu.t tu.lays, hsz, he, upos_tmpl ht, by rw [← hl]; exact A.groups,
-    by rw [← hl]; exact A.in_eq, hB, by rw [hu]; exact hog, hP.1, hP.2⟩
+    by rw [← hl]; exact A.in_eq, hB, by rw [hu]; exact hog, hP.1, hP.2, hok⟩
+
+/-- **A templated unit's output column is `upos` of its logical one**: the committed output group is the logical one
+placed at `posMap` (`outsOk`), each of its bits at `posMap` of the logical bit. -/
+theorem outCol_tmpl {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Circuit}
+    (hT : HmOut.parseTmpl tags cf tables = .ok cs) {j t : ℕ}
+    (hi : 16 * j + t < ((HmOut.unrolled cs).unit.outGroups.getD 0 default).words * WORD) :
+    Layout.outCol cs j t = upos cs (Layout.outCol (HmOut.unrolled cs) j t) := by
+  obtain ⟨n, pos, hsz, he, hup, -, -, hB, hog, -, -, hok⟩ := tmpl_unit_at hT
+  have hU : ({ cs with nets := cs.nets.set! cs.unitNet ("unit", n), tmpl := none } : Circuit).unit = n := by
+    show ((cs.nets.set! cs.unitNet ("unit", n)).getD cs.unitNet default).2 = n
+    rw [getD_set_unit _ _ _ _ hsz, ite_eq_left rfl]
+  rw [he, hU] at hi
+  unfold Layout.outCol
+  rw [he, hU, hog, hup]
+  have hne : 0 < n.outGroups.size := Nat.pos_of_ne_zero (FlockSoundness.Discharge.Layout.built_out hB).1
+  have e0 : n.outGroups.getD 0 default = n.outGroups[0] := by simp [Array.getD_eq_getD_getElem?, hne]
+  have e1 : (n.outGroups.map (Group.at pos)).getD 0 default = Group.at pos n.outGroups[0] := by
+    simp [Array.getD_eq_getD_getElem?, hne]
+  rw [e1, e0]
+  rw [e0] at hi
+  unfold outsOk at hok
+  simp only [Array.all_eq_true', Bool.and_eq_true, beq_iff_eq, List.all_eq_true, List.mem_range] at hok
+  obtain ⟨h0, hin⟩ := hok _ (Array.getElem_mem hne)
+  have hd : pos.getD (n.outGroups[0].col * WORD) 0 / WORD * WORD = pos.getD (n.outGroups[0].col * WORD) 0 :=
+    Nat.div_mul_cancel (Nat.dvd_trans (Nat.dvd_mul_left WORD _) (Nat.dvd_of_mod_eq_zero h0))
+  simp only [Group.at]
+  rw [hd, hin _ hi]
 
 /-- **Δ's committed key with a unit output column moved by `f`**: every other key is the same. -/
 def _root_.FlockSoundness.Discharge.Aliased.Src.atUnit (u : ℕ) (f : ℕ → ℕ) : Src → Src
@@ -255,7 +283,8 @@ theorem srcAt_unrolled {cs : Circuit} {n : Net} {pos : Array ℕ} {k p t : ℕ}
 theorem srcKey_tmpl {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Circuit}
     (hT : HmOut.parseTmpl tags cf tables = .ok cs) (C : CheckFacts cs) (x : ℕ) :
     srcKey cs x = (srcKey (HmOut.unrolled cs) x).atUnit cs.unitNet (upos cs) := by
-  obtain ⟨n, pos, hsz, he, hup, hg, hw, hB, hog, hat⟩ := tmpl_unit_at hT
+  obtain ⟨n, pos, hsz, he, hup, hg, hw, hB, hog, hat1, hat2, -⟩ := tmpl_unit_at hT
+  have hat := And.intro hat1 hat2
   have hnd : (portBits cs.unit.inGroups).Nodup := by rw [← hg]; exact Aliased.portBits_nodup hB
   have hU : ({ cs with nets := cs.nets.set! cs.unitNet ("unit", n), tmpl := none } : Circuit).unit = n := by
     show ((cs.nets.set! cs.unitNet ("unit", n)).getD cs.unitNet default).2 = n
@@ -295,28 +324,32 @@ variable {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c
 
 /-- **A session's committed key is its statement key with a unit output column moved to `upos`**, flat (`upos = id`)
 or templated (`srcKey_tmpl`). -/
-theorem srcKey_commit (hty : tags.typed = false) (h : HmOut.parseCommit tags cf tables = .ok cs) (C : CheckFacts cs)
-    (x : ℕ) : srcKey cs x = (srcKey (HmOut.unrolled cs) x).atUnit cs.unitNet (upos cs) := by
-  cases hi : tags.isTmpl
-  · rw [parseCommit_flat hi] at h
-    have hf := parse_tmpl_none hty h
+theorem srcKey_commit (hty : tags.typed = false) (h : Committed tags cf tables cs) (C : CheckFacts cs) (x : ℕ) :
+    srcKey cs x = (srcKey (HmOut.unrolled cs) x).atUnit cs.unitNet (upos cs) := by
+  rcases h with h | h
+  · have hf := parse_tmpl_none hty h
     rw [unrolled_flat hf, show upos cs = id from funext (upos_flat hf), atUnit_id]
-  · rw [parseCommit_tmpl hi] at h
-    exact srcKey_tmpl h C x
+  · exact srcKey_tmpl h C x
 
 /-- **Inputs with one statement key have one committed key.** -/
-theorem srcKey_eq_commit (hty : tags.typed = false) (h : HmOut.parseCommit tags cf tables = .ok cs)
-    (C : CheckFacts cs) {x x' : ℕ} (hk : srcKey (HmOut.unrolled cs) x = srcKey (HmOut.unrolled cs) x') :
-    srcKey cs x = srcKey cs x' := by
+theorem srcKey_eq_commit (hty : tags.typed = false) (h : Committed tags cf tables cs) (C : CheckFacts cs) {x x' : ℕ}
+    (hk : srcKey (HmOut.unrolled cs) x = srcKey (HmOut.unrolled cs) x') : srcKey cs x = srcKey cs x' := by
   rw [srcKey_commit hty h C, srcKey_commit hty h C, hk]
 
 /-- **An input reads the zero in the committed circuit exactly when it does in the statement circuit.** -/
-theorem zeroIn_commit (hty : tags.typed = false) (h : HmOut.parseCommit tags cf tables = .ok cs) (x : ℕ) :
+theorem zeroIn_commit (hty : tags.typed = false) (h : Committed tags cf tables cs) (x : ℕ) :
     ZeroIn (HmOut.unrolled cs) x ↔ ZeroIn cs x := by
-  cases hi : tags.isTmpl
-  · rw [parseCommit_flat hi] at h
-    rw [unrolled_flat (parse_tmpl_none hty h)]
-  · rw [parseCommit_tmpl hi] at h
-    exact zeroIn_tmpl h x
+  rcases h with h | h
+  · rw [unrolled_flat (parse_tmpl_none hty h)]
+  · exact zeroIn_tmpl h x
+
+/-- **A unit's committed output column is `upos` of its statement one**, flat or templated (`outCol_tmpl`). -/
+theorem outCol_commit (hty : tags.typed = false) (h : Committed tags cf tables cs) {j t : ℕ}
+    (hi : 16 * j + t < ((HmOut.unrolled cs).unit.outGroups.getD 0 default).words * WORD) :
+    Layout.outCol cs j t = upos cs (Layout.outCol (HmOut.unrolled cs) j t) := by
+  rcases h with h | h
+  · have hf := parse_tmpl_none hty h
+    rw [unrolled_flat hf, upos_flat hf]
+  · exact outCol_tmpl h hi
 
 end FlockSoundness.Discharge.Hidden
