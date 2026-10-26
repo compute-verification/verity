@@ -518,6 +518,12 @@
   "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure": {
    "owner": "@memory-accounting"
   },
+  "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.EndToEnd.SecurityProofs.endToEndRingDemo": {
+   "owner": "@memory-accounting"
+  },
   "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": {
    "owner": "@memory-accounting",
    "signature": ["Pous.EndToEnd.SecurityProofs.honestPassesAccepts : Pous.EndToEnd.HonestPassesAccepts"],
@@ -3031,6 +3037,8 @@
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
    "Pous.EndToEnd.SecurityProofs.endToEndRingAt": "frozen: endToEndRing's game at every block count N, a bound on a game's probability in the ring model, not a property of one function: c + ε from a bound c on P2's audit at N and the coin commitments' hiding ε at N; it speaks of the deployed system as endToEndRing does",
    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure": "frozen: endToEndRingAt with c from P2RingRoundSecure (PousP2Rounds.graded), at every N it covers (2^19 to 2^25); a bound on a game's probability in the ring model, not a property of one function",
+   "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide": "frozen: endToEndRingAt with c from P2RingRoundSecureWide, at every N it covers (2^19 to 2^27); a bound on a game's probability in the ring model, not a property of one function, resting on the open conjecture P2RingRoundSecureWide, unchecked in N above 2^25",
+   "Pous.EndToEnd.SecurityProofs.endToEndRingDemo": "frozen: endToEndRingOfRoundSecureWide at Demo B's store (1038*2^16 blocks, state bound 1,060,008,348,186 bits); a bound on a game's probability in the ring model, not a property of one function, resting on the open conjecture P2RingRoundSecureWide, unchecked in N above 2^25",
    "Pous.EndToEnd.SecurityProofs.honestPassesRing": "completeness: the honest full-state server passes P2's ring audit with probability 1, so P2RingAuditSecure's and EndToEndRing's events are not vacuous",
    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": "completeness: the honest full-state server passes EndToEndRing's event with probability 1 (the coin tree is always built and the draw never rejects)",
    "NciCheck.Properties.DescAgrees": "unstated: descAgrees_of_readsExact (Proofs.Properties.Nci.Agrees) proves it from ReadsExact (Proofs.Properties.Nci.Novel: Desc.analyze's reads per root node are the unrolled operands outside it), the one open statement: descAgrees_of_open (Proofs.Properties.Nci.Novel) proves it from OperandsResolve (Proofs.Properties.Nci.Walk), BodiesOk and ReadsExact, bodiesOk (Proofs.Properties.Nci.BodiesOk) proves BodiesOk (Proofs.Properties.Nci.Resolve: every body resolution reaches names parameters and earlier nodes at a leaf, its indices in range), operandsResolve_of (Proofs.Properties.Nci.OperandsResolve) proves OperandsResolve from it, and novelExact_of proves NovelExact from ReadsExact with novelWidthExact (Proofs.Properties.Nci.Width: Desc.novelWidth is the width of the union of the gates it is given)",
