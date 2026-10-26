@@ -20,13 +20,20 @@ from word 1's, `t_i = i·t_1 mod p` (`Draw.tweak`: `t_i = τ·i mod p`, so `t_1 
 `(const, r, l)`, `(mask, l)` and `(tweak, 1, l)` once: `8·(k + 2)·n/8` units for the whole block, whatever its number
 of words. At p1024 and `k = 3` that is 5,120 units, so `EncodeChainHardness p1024 3 B E ε`'s conclusion
 `q·E·(n − 1) ≤ budgeted·(n − 1)` fails at every `q > 5120/E`, for every `B` (there is no budgeted gate) and every
-`ε < 1` (it is right on every draw). The stacking property caps no MAC (`Property` caps rounding, compare-select,
-gather and fold units; property/v1's census reads its MACs as informational), so these circuits also satisfy it at any
-caps that allow the key's gather units.
+`ε < 1` (it is right on every draw). The stacking property then capped no MAC (`Property` capped rounding,
+compare-select, gather and fold units; property/v1's census reads its MACs as informational), so these circuits also
+satisfied it at any caps that allowed the key's gather units.
 
 The cost has moved to MACs: one a gate-level AND. A field product here is ≈ 17n² of them (measured: 36,214 MACs a
 word at n = 8 and 336,688 at n = 16, three rounds), so at p1024 a word, ≈ 3 · 2,040 products (`(p+1)/4`'s 1,021
 squarings and 1,018 multiplications a root), is ≈ 1.1·10^11 MACs (modeled from those two fields).
+
+**Nonlinear units.** The model's only free operations are now linear maps whose coefficients are fixed before the
+coins, so every product of two values that both depend on run or coin data is a data product, one unit whatever its
+operands' ranges (`dataProducts`, `nonlinear`), and `Property` caps the data products per certified byte read. Every
+AND here on two run-time bits is a data product, so the block costs its key's 40 units and 36,152 data products a word
+at n = 8 (`Builder.nonlinear_units`), and a squaring ≈ 17n² of them; `EncodeChainHardness` is replaced by
+`SquaringFloor` and `ChainSum`, priced in nonlinear units (`test_bitwise_codec.py`).
 """
 
 from __future__ import annotations

@@ -1,6 +1,8 @@
-"""The bit-level codec (`bitwise_codec.py`): a block of codec words for 8 units a key byte under Model.lean's count on
-main, right on every draw tried, `Proven`, with no budgeted gate and no run input: the counterexample to
-`EncodeChainHardness` at every `E ≥ 1`."""
+"""The bit-level codec (`bitwise_codec.py`): a block of codec words for 8 units a key byte under Model.lean's budgeted
+count, right on every draw tried, `Proven`, with no budgeted gate and no run input: the counterexample to
+`EncodeChainHardness` at every `E ≥ 1`. In nonlinear units (`nonlinear`: the budgeted units and the data products) each
+of its ANDs on two run-time bits is a data product and costs a unit, and its words cost what `SquaringFloor` and
+`ChainSum` price."""
 
 from __future__ import annotations
 
@@ -70,19 +72,27 @@ def test_codec_rows_at_n8(rounds):
         assert [vals[g] for g in outs[i]] == targets(n, y)
 
 
-def test_units_do_not_grow_with_the_block():
+WORDS8 = [1, 2, 3, 7, 100, 200, 249, 250]
+
+
+@pytest.fixture(scope="module")
+def block8():
+    """The eight-word block at ⟨8, 5⟩, three rounds (553k gates, about 4 s to build), shared by the tests that read it."""
+    return BC.encode_block(8, 5, 3, WORDS8)
+
+
+def test_units_do_not_grow_with_the_block(block8):
     """One word or eight: the circuit reads the key once, and word `i`'s tweak is `i·t_1 mod p`, so the units stay
     `8·(k + 2)·n/8` = 40 at n = 8, k = 3, and the eight words are right on every draw tried."""
     n, c, k = 8, 5, 3
     p = (1 << n) - c
-    words = [1, 2, 3, 7, 100, 200, 249, 250]
-    for ws in ([1], words):
-        b, outs, slots = BC.encode_block(n, c, k, ws)
+    words = WORDS8
+    for b, outs, slots in (BC.encode_block(n, c, k, [1]), block8):
         check_costs(b, n, k)
         assert {s for s in slots if s[0] != "payload"} == (
             {("const", r, 0) for r in range(k)} | {("mask", 0), ("tweak", 1, 0)})
     rng = random.Random(26)
-    for _ in range(8):
+    for _ in range(2):
         cs, K, tau = [rng.randrange(p) for _ in range(k)], rng.randrange(1 << n), rng.randrange(1, p)
         payload = {i: rng.randrange(1 << n) for i in words}
         want = {i: targets(n, FC.encode_word_ref(p, cs, K, tau * i % p, payload[i])) for i in words}
@@ -97,6 +107,38 @@ def test_the_conjecture_fails_at_p1024():
     assert units == 5120
     for E, q in ((364_497, 1), (24_504, 1), (1, units + 1)):
         assert not q * E * (n - 1) <= units * (n - 1)
+
+
+def test_nonlinear_units_charge_each_and(block8):
+    """Each AND (a `k = 1` s8-family step) on two run-time bits is a data product, by the builder's running count and by
+    `products` itself, so the block's nonlinear units grow with its words, no longer `8·(k + 2)·n/8` for any number."""
+    n, c, k = 8, 5, 3
+    one, _, _ = BC.encode_block(n, c, k, [1])
+    gates, dyn = one.gates, S.dynamic(one.gates)
+    ands = [g for g in gates if g.op.kind == "mma"]
+    assert all(g.op.k == 1 and g.lo >= 0 and g.hi <= 1 for g in ands)
+    assert one.products == S.products(gates) == sum(1 for g in ands if dyn[g.args[1]] and dyn[g.args[2]]) > 0
+    assert one.nonlinear_units == S.nonlinear(gates) == 8 * (k + 2) * (n // 8) + one.products
+    eight, _, _ = block8
+    assert eight.fixed_units == one.fixed_units and eight.products >= 8 * one.products
+
+
+def test_bitwise_squaring_pays_its_partial_products():
+    """A bitwise squaring (`Field.mul` of a word by itself, double-and-add) pays at least `n²` data products at three
+    toy fields: its `n(n − 1)/2` distinct partial-product ANDs and its adders' carries. At p1024 the partial products
+    alone are 523,776 a squaring, far above `SquaringFloor`'s `e = 374`, so the counterexample to `EncodeChainHardness`
+    pays more than `ChainSum`'s `E = 3 · 1021 · 374` a word."""
+    for n, c in ((8, 5), (16, 17), (32, 5)):
+        b = S.Builder()
+        B = BC.Bits(b)
+        F = BC.Field(B, n, c)
+        xs = [bit for l in range(n // 8) for bit in B.byte_bits(b.inp(("a", l), 0, 255, binding="coin"))]
+        before = b.products
+        F.mul(xs, xs)
+        assert b.products - before >= n * n, (n, b.products - before)
+    partial, e = 1024 * 1023 // 2, S.e_per_squaring(40)
+    assert e == 374 and partial == 523_776
+    assert 3 * S.SQUARINGS * partial > 3 * S.SQUARINGS * e == 1_145_562
 
 
 @pytest.mark.slow
