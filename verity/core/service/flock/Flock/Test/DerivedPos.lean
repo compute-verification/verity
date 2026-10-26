@@ -26,8 +26,8 @@ def ports (ps : Array (String × String × String)) (words : Nat := 1) : HmIn.Po
 #guard HmIn.derivedGroups (ports #[("pos", "instance", "mod:4")] (words := 2)) == none
 
 def pub (outputs : Array Nat) (population : Option (Array Nat) := none) : Public :=
-  { (default : Public) with n := outputs.size, outputs := outputs,
-    population := population.map fun ws => (ws.size, #[], ws) }
+  { (default : Public) with
+    n := outputs.size, outputs := outputs, population := population.map fun ws => (ws.size, #[], ws) }
 
 def two := ports #[("pos", "instance", "mod:2"), ("q", "instance", "mod:3")]
 
