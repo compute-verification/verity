@@ -125,16 +125,22 @@ theorem innerOk_iff {inner : Msg} : innerOk inner = .ok () ↔
     · intro h
       obtain ⟨u, hu, h⟩ := FlockSoundness.Refine.ebind_ok h
       cases u
-      cases hd : s.read.draw with
-      | none =>
-        rw [hd] at h
-        first | cases h | exact absurd h nofun
-      | some _ =>
-        cases ht : drawTiedB s spec sts with
+      refine ⟨s, spec, sts, hs, hu, ?_, ?_⟩
+      · cases hd : s.read.draw with
+        | none =>
+          rw [hd] at h
+          cases h
+        | some _ => rfl
+      · cases ht : drawTiedB s spec sts with
         | false =>
-          rw [hd, ht] at h
-          first | cases h | exact absurd h nofun
-        | true => exact ⟨s, spec, sts, hs, hu, by simp [hd], ht⟩
+          cases hd : s.read.draw with
+          | none =>
+            rw [hd] at h
+            cases h
+          | some _ =>
+            rw [hd, ht] at h
+            cases h
+        | true => rfl
     · rintro ⟨s', spec', sts', hs', hc, hd, ht⟩
       rw [hs] at hs'
       cases hs'
