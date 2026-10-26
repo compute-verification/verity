@@ -65,6 +65,14 @@ path = "../../verity/core/protocols/remote_bandwidth/lean"
 name = "core_requirement"
 path = "../../verity/core/primitives/requirement"
 
+[[require]]
+name = "core_composition"
+path = "../../verity/core/protocols/composition"
+
+[[require]]
+name = "core_onsite"
+path = "../../verity/core/protocols/onsite"
+
 [[lean_lib]]
 name = "Properties"
 roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Pouw.LiveSalt",
@@ -78,5 +86,6 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Accounting.Requirement", "Properties.Accounting.Compose", "Properties.RemoteAudit",
   "Properties.RemoteAudit.Coins", "Properties.RemoteAudit.Pooled", "Properties.Accounting.Served",
   "Properties.Accounting.DeclaredCircuit", "Properties.RemoteAudit.Line", "Properties.RemoteAudit.Schedule",
-  "Properties.RemoteAudit.Shared", "Properties.RemoteAudit.Live",
+  "Properties.RemoteAudit.Shared", "Properties.RemoteAudit.Live", "Properties.Composition",
+  "Properties.Verity.Soundness", "Properties.Verity.Game",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod"]
