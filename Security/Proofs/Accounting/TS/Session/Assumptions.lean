@@ -55,7 +55,7 @@ and of how `sess` is built:
    `EndToEndRegisteredRows`' `bound` is small only because they are fresh and uniform given the prover. Under `--zk`
    they are the verifier's keyed coin tree, committed at `Hello` after the prover's nonce and opened round by round.
    So the session's audit coins come from the auditor's verifier, on a machine the prover doesn't control, fresh for
-   each session, under the named assumption `trusted-nebius-host`. Neither `CoinTree.checkFresh`, which refuses only a
+   each session, under the named assumption `trusted-host`. Neither `CoinTree.checkFresh`, which refuses only a
    key reused within a run, nor the coin tree's commitment, which protects the prover, gives this.
 
 If 1 fails, `δ` weakens; if 2, 3 or 5 fails, it breaks. 1–3 are the challenger's and the firewall's code, which a check

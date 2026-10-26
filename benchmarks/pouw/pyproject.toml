@@ -36,6 +36,8 @@ verity-exact-kit = { workspace = true }
 # CUDA sources. test_served_h1_producer's H1 window commits its hiding tables through pouw_h1_requests.hiding_rows, whose
 # ChaCha20 is verity.ml.windows.rows' (the commit files named below: serving_rows and what it imports).
 # test_dither_j10r_form imports dither's J10-R host units (j10r_units.py, over served_h1's receipts) and forms.py.
+# pouw_h1 imports its table commits' module and pouw_h1_served its word encodings' module, each named at its path
+# before and after vllm's layout move (#3854).
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/claims/__init__.py",
@@ -78,6 +80,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/kernel.py",
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/lanes.py",
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/manifest.py",
+          "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/ends.py",
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
@@ -86,7 +89,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "integrations/vllm/verity_vllm/protocols/pouw/h1/kept.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/live.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/served_files.py",
-          "integrations/vllm/verity_vllm/commit",
+          "integrations/vllm/verity_vllm/commit", "integrations/vllm/verity_vllm/records",
           "integrations/vllm/verity_vllm/query/__init__.py", "integrations/vllm/verity_vllm/query/manifest",
           "integrations/vllm/verity_vllm/program/__init__.py", "integrations/vllm/verity_vllm/program/frontend/__init__.py",
           "integrations/vllm/verity_vllm/program/frontend/correspond.py",
@@ -113,7 +116,9 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
           "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/forms.py", "benchmarks/hash/dither/h1c.py",
           "benchmarks/hash/dither/h1r.py", "benchmarks/hash/dither/j10r_units.py",
-          "benchmarks/hash/dither/hb_side.py", "benchmarks/hash/exactlin/exactlin.py"]
+          "benchmarks/hash/dither/hb_side.py", "benchmarks/hash/exactlin/exactlin.py",
+          "integrations/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
+          "integrations/vllm/verity_vllm/protocols/pouw/h1/words.py"]
 # Build outputs the served challenger's checks of record run or skip on (`check` runs this suite after its Lean steps).
 artifacts = ["verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-check",
              "verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-check-difftest",

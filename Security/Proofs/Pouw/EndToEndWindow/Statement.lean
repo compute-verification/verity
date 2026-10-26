@@ -164,7 +164,7 @@ theorem coordDomain_inhabited : ∃ U : Workload, U.InDomain coordDomain ∧ U.l
 salt (`play`: the registration, then the sessions on every draw), with what the model charges for it. `cost` is the
 work of its online phase, from the salt's release to the registration's receipt, in PoUW's cost units; `received` and
 `cutoff` are places in the challenger's record of the epoch's coins, which logs each root's receipt and then its coin's
-release (`LiveRecord.log`, #2584; that the challenger keeps that order is `trusted-nebius-host`'s): the registration's
+release (`LiveRecord.log`, #2584; that the challenger keeps that order is `trusted-host`'s): the registration's
 receipt, and the release of the epoch's draw coin (`pouw/draw`); `calls` is the registration's oracle calls, the
 commitments', which `RegQueries` ties to the queries of the program that computes it; `sessCalls` is the sessions'
 oracle calls, the most over every draw and every coin of the sessions. The extraction reads none of the sessions'
