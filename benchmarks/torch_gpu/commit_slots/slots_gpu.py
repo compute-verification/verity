@@ -144,27 +144,44 @@ class SmPartition:
             raise RuntimeError(f"the device's SMs split into {n} groups of {sms}, not one")
         self.sms, self.rest, self.device_sms = int(groups[0].sm.smCount), int(self._rest.sm.smCount), int(whole.sm.smCount)
         self._ctx, self._rest_ctx = self._green(groups[0]), None
+        self._streams: dict[tuple[bool, int], Any] = {}
 
     def _green(self, resource: Any) -> Any:
         drv, ok = self.drv, self.ok
         desc = ok(drv.cuDevResourceGenerateDesc([resource], 1))
         return ok(drv.cuGreenCtxCreate(desc, self.dev, drv.CUgreenCtxCreate_flags.CU_GREEN_CTX_DEFAULT_STREAM))
 
-    def _stream(self, ctx: Any, priority: int) -> Any:
+    def _stream(self, rest: bool, priority: int) -> Any:
         least, greatest = self.ok(self.drv.cuCtxGetStreamPriorityRange())
         priority = min(max(priority, greatest), least)
-        s = self.ok(self.drv.cuGreenCtxStreamCreate(ctx, self.drv.CUstream_flags.CU_STREAM_NON_BLOCKING, priority))
-        return self.torch.cuda.ExternalStream(int(s), self.index)
+        if (rest, priority) not in self._streams:
+            if rest and self._rest_ctx is None:
+                self._rest_ctx = self._green(self._rest)
+            ctx = self._rest_ctx if rest else self._ctx
+            s = self.ok(self.drv.cuGreenCtxStreamCreate(ctx, self.drv.CUstream_flags.CU_STREAM_NON_BLOCKING, priority))
+            self._streams[(rest, priority)] = (s, self.torch.cuda.ExternalStream(int(s), self.index))
+        return self._streams[(rest, priority)][1]
 
     def stream(self, priority: int = 0) -> Any:
-        """A stream on the partition's ``sms`` SMs (``priority`` as torch's, lower first, clamped to the device's)."""
-        return self._stream(self._ctx, priority)
+        """The stream on the partition's ``sms`` SMs at ``priority`` (torch's, lower first, clamped to the device's)."""
+        return self._stream(False, priority)
 
     def rest_stream(self, priority: int = 0) -> Any:
-        """A stream on the other ``rest`` SMs."""
-        if self._rest_ctx is None:
-            self._rest_ctx = self._green(self._rest)
-        return self._stream(self._rest_ctx, priority)
+        """The stream on the other ``rest`` SMs at ``priority``."""
+        return self._stream(True, priority)
+
+    def close(self) -> None:
+        """Destroys the partition's streams and green contexts, each of which holds device memory, once their work is done:
+        after this no tensor may still wait on one of its streams, and the caller has freed (``torch.cuda.empty_cache``)
+        what was allocated on them."""
+        for s, ext in self._streams.values():
+            ext.synchronize()
+            self.ok(self.drv.cuStreamDestroy(s))
+        self._streams = {}
+        for ctx in (self._ctx, self._rest_ctx):
+            if ctx is not None:
+                self.ok(self.drv.cuGreenCtxDestroy(ctx))
+        self._ctx = self._rest_ctx = None
 
 
 class Plan:

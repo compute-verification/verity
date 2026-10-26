@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import gc
 import hashlib
 import itertools
 import json
@@ -609,11 +610,23 @@ def main(argv: list[str] | None = None) -> int:
     plans: dict[tuple[str, int], G.Plan] = {}
     current: tuple[str, S.Layout] | None = None
 
+    def drop(capped_only: bool) -> None:
+        """Frees the plans (or the capped ones), and their partitions' streams and green contexts."""
+        torch.cuda.synchronize(dev)
+        parts = []
+        for k in [k for k, p in plans.items() if not capped_only or p.partition is not None]:
+            parts.append(plans.pop(k).partition)
+        gc.collect()
+        torch.cuda.synchronize(dev)
+        torch.cuda.empty_cache()
+        for part in parts:
+            if part is not None:
+                part.close()
+
     def plan_for(lay: str, sms: int) -> G.Plan:
         nonlocal current
         if current is None or current[0] != lay:
-            plans.clear()
-            torch.cuda.empty_cache()
+            drop(False)
             layout = load_layout(a.shared) if lay == "shared" else CM.layout(shape) if lay == "families" else None
             if layout is None:
                 raise SystemExit(f"--runs: {lay!r} is shared or families")
@@ -621,6 +634,8 @@ def main(argv: list[str] | None = None) -> int:
             doc["layouts"][lay] = describe(layout)
             print(json.dumps({"layout": doc["layouts"][lay]}), flush=True)
         if (lay, sms) not in plans:
+            if sms:
+                drop(True)
             torch.cuda.synchronize(dev)
             m0, p0 = torch.cuda.memory_allocated(dev), time.perf_counter()
             kw = ({"leaf_minb": a.leaf_minb} if a.leaf_minb else {}) | ({"sms": sms} if sms else {})
@@ -634,6 +649,7 @@ def main(argv: list[str] | None = None) -> int:
         return plans[(lay, sms)]
 
     for spec in a.runs:
+        plan = None
         mode, lay, *n = spec.split(":") + [""] * (spec.count(":") == 0)
         if mode not in MODES:
             raise SystemExit(f"--runs: {spec!r}'s mode is one of {MODES}")
