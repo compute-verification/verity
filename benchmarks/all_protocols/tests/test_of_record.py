@@ -72,9 +72,9 @@ def test_a_run_of_record_is_the_joint_run_and_records_its_flags(tmp_path, monkey
     mode = json.loads((tmp_path / "out" / "mode.json").read_text())
     assert mode["of_record"] is True and mode["argv"][4:] == argv
     assert {k: mode["flags"][k] for k in ("tie", "pouw", "registered", "wired", "law", "jobs", "session_jobs",
-                                          "tie_tamper", "certifier_tamper")} \
+                                          "tie_tamper", "certifier_tamper", "pouw_coins")} \
         == {"tie": True, "pouw": "h1", "registered": True, "wired": True, "law": "work:14", "jobs": 1,
-            "session_jobs": 1, "tie_tamper": [0], "certifier_tamper": "byte"}
+            "session_jobs": 1, "tie_tamper": [0], "certifier_tamper": "byte", "pouw_coins": "gate:research@204.12.178.84"}
     assert "gap" not in mode and "companion" not in mode
     for w in (0, 1):
         assert json.loads((tmp_path / "out" / f"w{w}" / "report.json").read_text())["mode"] == mode
@@ -115,6 +115,7 @@ def test_a_development_run_says_it_is_not_of_record(tmp_path, capsys):
     assert RN.main(["--out", str(tmp_path), "--tools", "/dev/null", "--check", "--windows", "2"]) == 0
     mode = json.loads(capsys.readouterr().out)
     assert mode["of_record"] is False and mode["flags"]["tie"] is False and mode["flags"]["pouw"] is None
+    assert mode["flags"]["pouw_coins"] == "seeded"
 
 
 def test_check_prints_a_run_of_records_mode_without_reading_its_tools(tmp_path, monkeypatch, capsys):
