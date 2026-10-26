@@ -419,6 +419,7 @@ theorem fill_of_live {spec : SessionSpec} {h : ByteArray → ByteArray} {rootB :
   | some mc => rfl
   | none =>
     exfalso
+    simp only [List.get_eq_getElem, Array.getElem_toList] at hr
     rw [hmc] at hr
     obtain ⟨-, hc⟩ := roundJ_ok hr
     obtain ⟨a, ha, -⟩ := bind_ok hc
