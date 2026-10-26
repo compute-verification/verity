@@ -1,4 +1,6 @@
 import Definitions.NetworkCertifier.Guarantees.HorizonLeak
+import Proofs.Flock.Claims.Sampling.Draws
+import Proofs.Flock.Soundness.Audit.Periods
 import Proofs.NetworkCertifier.Horizon
 import Proofs.NetworkCertifier.Period
 import Proofs.NetworkCertifier.Tap
@@ -6,16 +8,18 @@ import Proofs.NetworkCertifier.Tap
 /-!
 # The leak through the network certifier over a monitoring period of sampled audits
 
-The probability half is `horizonWrongUnits`'s argument with the conditional escape as its input: each window's audit,
-given the earlier windows' coins, accepts with probability at most the escape of its witness's faulty set plus `e i`,
-and the escapes multiply over the windows with the errors adding (`pr_adaptive_add_le`, by induction over the windows);
-a union bound adds the leak relations' errors `e' i`.
+The probability half: each window's audit, given the earlier windows' coins, accepts with probability at most
+`(1 - q)^|W_i| + e_i`, and the escapes multiply over the windows with the errors adding (`pr_adaptive_add_le`). That is
+the monitoring-period step (`FlockSoundness.Audit.Periods.prCoin_forall_prod_le`) at each window's bound capped at `1`,
+whose product is at most the product of the escapes plus the errors' sum (`prod_min_add_le`); a union bound adds the
+leak relations' errors `e' i`.
 
 The count half: a family of faulty sets with fewer than `Fmax` units in total is the units listed by some
 `Fin Fmax → Option (Σ i, Fin (n i))` (`exists_famOf_eq`), so there are at most `(N + 1)^Fmax` of them. At one family,
 each window's observations number at most `2^#(freeInputs \ reg) · 2^(faultyBits) · Dj^k` (`encard_leakAt_le`, from
 `encard_acceptedFaulty_le` at `AsReg`), and the faulty bits sum to at most `b · Fmax`. Under `trusted-host` the cells
-the client receives read back from the network certifier's record under the schedule (`tap_cells_read`), so they
+the client receives read back from the network certifier's record under the schedule, one its record format holds
+(`tap_cells_read`), so they
 number at most `#Ss` times those records, which bounds the secrets they decode to (`encard_horizonGood_le`);
 `∏_c (cap_c + 1)` is room, as in the period's bound.
 -/
@@ -26,93 +30,70 @@ open Claims Claims.Sampling Finset
 
 /-! ### The escapes multiply, each with an additive error -/
 
-theorem choose_ratio_le {n kd w : ℕ} (hw : w ≤ n) {q : ℝ} (hq1 : q ≤ 1) (hq : q * n ≤ kd) :
-    ((n - w).choose kd : ℝ) / n.choose kd ≤ (1 - q) ^ w := by
-  rcases le_or_gt kd n with hk | hk
-  · have hC : (0 : ℝ) < n.choose kd := by exact_mod_cast Nat.choose_pos hk
-    rw [div_le_iff₀ hC]
-    refine (choose_sub_le n kd hk w).trans ?_
-    rw [mul_comm]
-    refine mul_le_mul_of_nonneg_right ?_ hC.le
-    rcases Nat.eq_zero_or_pos n with hn | hn
-    · subst hn
-      have : w = 0 := by omega
-      rw [this, pow_zero, pow_zero]
-    · have hn' : (0 : ℝ) < n := by exact_mod_cast hn
-      have hkn : (kd : ℝ) / n ≤ 1 := (div_le_one hn').2 (by exact_mod_cast hk)
-      have hqk : q ≤ kd / n := (le_div_iff₀ hn').2 hq
-      exact pow_le_pow_left₀ (by linarith) (by linarith) _
-  · rw [Nat.choose_eq_zero_of_lt hk, Nat.cast_zero, div_zero]
-    exact pow_nonneg (by linarith) _
+/-- Bounds capped at `1`, each an escape `a i ≤ 1` plus an error `e i`, multiply to at most the escapes' product plus
+the errors' sum. -/
+theorem prod_min_add_le : ∀ {m : ℕ} (a e : Fin m → ℝ), (∀ i, 0 ≤ a i) → (∀ i, a i ≤ 1) → (∀ i, 0 ≤ e i) →
+    ∏ i, min 1 (a i + e i) ≤ ∏ i, a i + ∑ i, e i
+  | 0, _, _, _, _, _ => by simp
+  | m + 1, a, e, ha0, ha1, he => by
+    have ih : ∏ i : Fin m, min 1 (a i.succ + e i.succ) ≤ ∏ i : Fin m, a i.succ + ∑ i : Fin m, e i.succ :=
+      prod_min_add_le _ _ (fun i => ha0 _) (fun i => ha1 _) (fun i => he _)
+    have hm0 : ∀ i : Fin m, 0 ≤ min 1 (a i.succ + e i.succ) := fun i => le_min zero_le_one (add_nonneg (ha0 _) (he _))
+    have hX0 : 0 ≤ ∏ i : Fin m, min 1 (a i.succ + e i.succ) := Finset.prod_nonneg fun i _ => hm0 i
+    have hX1 : ∏ i : Fin m, min 1 (a i.succ + e i.succ) ≤ 1 :=
+      Finset.prod_le_one₀ (fun i _ => hm0 i) fun i _ => min_le_left _ _
+    have hE0 : 0 ≤ ∑ i : Fin m, e i.succ := Finset.sum_nonneg fun i _ => he _
+    rw [Fin.prod_univ_succ, Fin.prod_univ_succ, Fin.sum_univ_succ]
+    calc min 1 (a 0 + e 0) * ∏ i : Fin m, min 1 (a i.succ + e i.succ)
+        ≤ (a 0 + e 0) * ∏ i : Fin m, min 1 (a i.succ + e i.succ) := mul_le_mul_of_nonneg_right (min_le_right _ _) hX0
+      _ = a 0 * ∏ i : Fin m, min 1 (a i.succ + e i.succ) + e 0 * ∏ i : Fin m, min 1 (a i.succ + e i.succ) :=
+          add_mul _ _ _
+      _ ≤ a 0 * (∏ i : Fin m, a i.succ + ∑ i : Fin m, e i.succ) + e 0 * 1 :=
+          add_le_add (mul_le_mul_of_nonneg_left ih (ha0 0)) (mul_le_mul_of_nonneg_left hX1 (he 0))
+      _ ≤ a 0 * ∏ i : Fin m, a i.succ + (e 0 + ∑ i : Fin m, e i.succ) := by
+          rw [mul_add, mul_one]
+          linarith [mul_le_of_le_one_left hE0 (ha1 0)]
 
-theorem pr_adaptive_add_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0 : 0 ≤ r) (hr1 : r ≤ 1) :
-    ∀ (m : ℕ) (A : Fin m → (Fin m → Ω) → Ω → Prop) (f : Fin m → (Fin m → Ω) → ℕ) (e : Fin m → ℝ),
-      (∀ i ω ω', (∀ j, j < i → ω j = ω' j) → A i ω = A i ω') →
-      (∀ i ω ω', (∀ j, j < i → ω j = ω' j) → f i ω = f i ω') → (∀ i, 0 ≤ e i) →
-      (∀ i ω, Pr (A i ω) ≤ r ^ f i ω + e i) → ∀ F : ℕ,
-      Pr (fun ω => (∀ i, A i ω (ω i)) ∧ F ≤ ∑ i, f i ω) ≤ r ^ F + ∑ i, e i := by
-  intro m
-  induction m with
-  | zero =>
-    intro A f e _ _ _ _ F
-    rcases Nat.eq_zero_or_pos F with rfl | hF
-    · simpa using Pr_le_one (fun ω : Fin 0 → Ω => (∀ i, A i ω (ω i)) ∧ 0 ≤ ∑ i, f i ω)
-    · calc _ ≤ Pr (fun _ : Fin 0 → Ω => False) := Pr_mono fun ω h => by simp at h; omega
-        _ = 0 := Pr_false
-        _ ≤ r ^ F + ∑ i, e i := by simpa using pow_nonneg hr0 F
-  | succ m ih =>
-    intro A f e hA hf he hesc F
-    classical
-    let eq : Ω × (Fin m → Ω) ≃ (Fin (m + 1) → Ω) :=
-      { toFun := fun p => (Fin.cons p.1 p.2 : Fin (m + 1) → Ω), invFun := fun ω => (ω 0, Fin.tail ω),
-        left_inv := fun p => by simp, right_inv := fun ω => by simp }
-    let ω₀ : Fin (m + 1) → Ω := fun _ => Classical.arbitrary Ω
-    have hA0 : ∀ ω, A 0 ω = A 0 ω₀ := fun ω => hA 0 ω ω₀ fun j hj => absurd hj (Fin.not_lt_zero j)
-    have hf0 : ∀ ω, f 0 ω = f 0 ω₀ := fun ω => hf 0 ω ω₀ fun j hj => absurd hj (Fin.not_lt_zero j)
-    have hcons : ∀ (x : Ω) (ω₁ ω₂ : Fin m → Ω) (i : Fin m), (∀ j, j < i → ω₁ j = ω₂ j) →
-        ∀ j, j < i.succ → (Fin.cons x ω₁ : Fin (m + 1) → Ω) j = (Fin.cons x ω₂ : Fin (m + 1) → Ω) j := by
-      intro x ω₁ ω₂ i h j hj
-      cases j using Fin.cases with
-      | zero => simp
-      | succ j => simpa only [Fin.cons_succ] using h j (Fin.succ_lt_succ_iff.1 hj)
-    set T := ∑ i : Fin m, e i.succ with hT
-    have hT0 : 0 ≤ T := Finset.sum_nonneg fun i _ => he i.succ
-    have hx : ∀ x, (Pr fun ω' => (fun ω => (∀ i, A i ω (ω i)) ∧ F ≤ ∑ i, f i ω) (eq (x, ω'))) ≤
-        if A 0 ω₀ x then r ^ (F - f 0 ω₀) + T else 0 := by
-      intro x
-      split_ifs with h0
-      · refine (Pr_mono ?_).trans (ih (fun i ω' => A i.succ (Fin.cons x ω')) (fun i ω' => f i.succ (Fin.cons x ω'))
-          (fun i => e i.succ) (fun i ω₁ ω₂ h => hA i.succ _ _ (hcons x ω₁ ω₂ i h))
-          (fun i ω₁ ω₂ h => hf i.succ _ _ (hcons x ω₁ ω₂ i h)) (fun i => he i.succ) (fun i ω' => hesc i.succ _)
-          (F - f 0 ω₀))
-        rintro ω' ⟨hall, hF⟩
-        refine ⟨fun i => by simpa only [eq, Equiv.coe_fn_mk, Fin.cons_succ] using hall i.succ, ?_⟩
-        have := hF
-        simp only [eq, Equiv.coe_fn_mk, Fin.sum_univ_succ, hf0] at this
-        omega
-      · calc _ ≤ Pr (fun _ : Fin m → Ω => False) := Pr_mono fun ω' h => by
-              obtain ⟨hall, -⟩ := h
-              have := hall 0
-              simp only [eq, Equiv.coe_fn_mk, Fin.cons_zero] at this
-              rw [hA0] at this
-              exact h0 this
-          _ = 0 := Pr_false
-          _ ≤ 0 := le_rfl
-    rw [← Pr_equiv eq, Pr_prod_eq_Ex]
-    have hR0 : 0 ≤ r ^ (F - f 0 ω₀) := pow_nonneg hr0 _
-    have hR1 : r ^ (F - f 0 ω₀) ≤ 1 := pow_le_one₀ hr0 hr1
-    have h1 := mul_le_mul_of_nonneg_right (hesc 0 ω₀) hR0
-    have h2 : r ^ f 0 ω₀ * r ^ (F - f 0 ω₀) ≤ r ^ F := by
-      rw [← pow_add]
-      exact pow_le_pow_of_le_one hr0 hr1 (by omega)
-    have h3 : Pr (A 0 ω₀) * T ≤ T := mul_le_of_le_one_left hT0 (Pr_le_one _)
-    have h4 : e 0 * r ^ (F - f 0 ω₀) ≤ e 0 := mul_le_of_le_one_right (he 0) hR1
-    rw [add_mul] at h1
-    calc _ ≤ Ex fun x => if A 0 ω₀ x then r ^ (F - f 0 ω₀) + T else 0 := Ex_mono hx
-      _ = Pr (A 0 ω₀) * (r ^ (F - f 0 ω₀) + T) := Ex_ite_const _ _
-      _ ≤ r ^ F + ∑ i, e i := by
-        rw [Fin.sum_univ_succ, ← hT, mul_add]
-        linarith
+open FlockSoundness.Game in
+/-- **The escapes multiply with additive errors**: windows whose audits, given the earlier windows' coins, accept with
+probability at most `r^(f i) + e i`, `f i` fixed before window `i`'s coins, all accept with `Σ_i f i ≥ F` with
+probability at most `r^F + Σ_i e i`: the monitoring-period step at the bounds capped at `1`. -/
+theorem pr_adaptive_add_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0 : 0 ≤ r) (hr1 : r ≤ 1)
+    (m : ℕ) (A : Fin m → (Fin m → Ω) → Ω → Prop) (f : Fin m → (Fin m → Ω) → ℕ) (e : Fin m → ℝ)
+    (hA : ∀ i ω ω', (∀ j, j < i → ω j = ω' j) → A i ω = A i ω')
+    (hf : ∀ i ω ω', (∀ j, j < i → ω j = ω' j) → f i ω = f i ω') (he : ∀ i, 0 ≤ e i)
+    (hesc : ∀ i ω, Pr (A i ω) ≤ r ^ f i ω + e i) (F : ℕ) :
+    Pr (fun ω => (∀ i, A i ω (ω i)) ∧ F ≤ ∑ i, f i ω) ≤ r ^ F + ∑ i, e i := by
+  have hle1 : ∀ p : Ω → Prop, prCoin p ≤ 1 := fun p =>
+    (prCoin_mono (q := fun _ => True) fun _ _ => trivial).trans_eq (by simp [prCoin, avg_const])
+  have hstep : ∀ (t : Fin m) (ω : Fin m → Ω), prCoin (fun a : Ω => A t (Function.update ω t a)
+      (Function.update ω t a t)) ≤ ENNReal.ofReal (min 1 (r ^ f t ω + e t)) := fun t ω => by
+    have hupd : (fun a : Ω => A t (Function.update ω t a) (Function.update ω t a t)) = A t ω := funext fun a => by
+      rw [Function.update_self, hA t (Function.update ω t a) ω fun j hj => Function.update_of_ne (ne_of_lt hj) _ _]
+    rw [hupd, ← ENNReal.ofReal_toReal (ne_top_of_le_ne_top ENNReal.one_ne_top (hle1 _)),
+      ← Claims.Sampling.Pr_eq_toReal_prCoin]
+    exact ENNReal.ofReal_le_ofReal (le_min (Pr_le_one _) (hesc t ω))
+  have key := FlockSoundness.Audit.Periods.prCoin_forall_prod_le (Ω := fun _ : Fin m => Ω)
+    (fun t ω => A t ω (ω t)) (fun t ω => ENNReal.ofReal (min 1 (r ^ f t ω + e t)))
+    (fun t ω ω' h => by
+      show A t ω (ω t) = A t ω' (ω' t)
+      rw [hA t ω ω' fun j hj => h j hj.le, h t le_rfl])
+    (fun t ω ω' h => by simp only [hf t ω ω' h]) hstep (ENNReal.ofReal (r ^ F + ∑ i, e i))
+  have he0 : 0 ≤ r ^ F + ∑ i, e i := add_nonneg (pow_nonneg hr0 F) (Finset.sum_nonneg fun i _ => he i)
+  have hprod : ∀ ω : Fin m → Ω, F ≤ ∑ i, f i ω →
+      ∏ t, ENNReal.ofReal (min 1 (r ^ f t ω + e t)) ≤ ENNReal.ofReal (r ^ F + ∑ i, e i) := fun ω hF => by
+    rw [← ENNReal.ofReal_prod_of_nonneg fun i _ => le_min zero_le_one (add_nonneg (pow_nonneg hr0 _) (he i))]
+    refine ENNReal.ofReal_le_ofReal ((prod_min_add_le (fun i => r ^ f i ω) e (fun i => pow_nonneg hr0 _)
+      (fun i => pow_le_one₀ hr0 hr1) he).trans ?_)
+    rw [Finset.prod_pow_eq_pow_sum]
+    exact add_le_add (pow_le_pow_of_le_one hr0 hr1 hF) le_rfl
+  have hmono : prCoin (fun ω : Fin m → Ω => (∀ i, A i ω (ω i)) ∧ F ≤ ∑ i, f i ω) ≤
+      ENNReal.ofReal (r ^ F + ∑ i, e i) :=
+    (prCoin_mono (q := fun ω : Fin m → Ω => (∀ t, A t ω (ω t)) ∧
+      ∏ t, ENNReal.ofReal (min 1 (r ^ f t ω + e t)) ≤ ENNReal.ofReal (r ^ F + ∑ i, e i))
+      fun ω hω => ⟨hω.1, hprod ω hω.2⟩).trans key
+  rw [Claims.Sampling.Pr_eq_toReal_prCoin]
+  exact (ENNReal.toReal_mono ENNReal.ofReal_ne_top hmono).trans_eq (ENNReal.toReal_ofReal he0)
 
 /-! ### The families of faulty sets -/
 
@@ -205,7 +186,7 @@ theorem encard_horizonGood_le {L K S : ℕ} (lay : Stmt → Layout L S) (k : Stm
     (f : TapRecord Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
     (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
     (htrust : Verity.Assumptions.TrustedHost tap run fun p => tapCode f p.1 (arr p.2))
-    (cap : Conn → ℕ) (Ss : Set (WardenSchedule Conn))
+    (cap : Conn → ℕ) (Ss : Set (WardenSchedule Conn)) (hfit : ∀ s ∈ Ss, f.fits s)
     (Zs : Set Z) (sched : Z → WardenSchedule Conn) (srv : Z → Srv) (hs : ∀ z ∈ Zs, sched z ∈ Ss)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run tap (sched z, srv z)).1 = z)
     (W : Z → Fin m → Finset ℕ) (hWn : ∀ z i, W z i ⊆ range (n i)) (Fmax : ℕ) :
@@ -233,7 +214,7 @@ theorem encard_horizonGood_le {L K S : ℕ} (lay : Stmt → Layout L S) (k : Stm
       exact hleak i
   have hsub : G ⊆ dec '' V := fun z hz =>
     ⟨(run tap (sched z, srv z)).1, ⟨(sched z, (run tap (sched z, srv z)).2), ⟨hs z hz.1, hgood z hz⟩,
-      (tap_cells_read f arr tap run htrust _ _).symm⟩, hdz z hz.1⟩
+      (tap_cells_read f arr tap run htrust _ (hfit _ (hs z hz.1)) _).symm⟩, hdz z hz.1⟩
   have hX : ∀ g ∈ s, (X g).encard ≤ ((B : ℕ) : ℕ∞) := by
     intro g hg
     have hlt : ∑ i, (famOf g i).card < Fmax := (Finset.mem_filter.1 hg).2
@@ -285,20 +266,18 @@ theorem encard_horizonGood_le {L K S : ℕ} (lay : Stmt → Layout L S) (k : Stm
 /-! ### The monitoring period -/
 
 /-- **The leak through the network certifier over a monitoring period**: `Guarantees.HorizonLeakAccepted`, from
-`pr_adaptive_add_le` at the conditional escape with `choose_ratio_le`, a union bound over the leak relations, and
-`encard_horizonGood_le` at each draw of the coins. -/
+`pr_adaptive_add_le` at the conditional escape, a union bound over the leak relations, and `encard_horizonGood_le` at
+each draw of the coins. -/
 theorem horizonLeak : Guarantees.HorizonLeakAccepted := by
-  intro L K S lay k reg Dj m sw Pw ρ op n kd b hb Ω _ _ Conn Cell Srv Dev Z _ arr f tap run htrust cap Ss hcap Zs
-    schedOf srvOf hs dec hdz acc hacc W hW hWn e e' he hesc hleak q hq0 hq1 hq δ hδ Fmax hF
+  intro L K S lay k reg Dj m sw Pw ρ op n b hb Ω _ _ Conn Cell Srv Dev Z _ arr f tap run htrust cap Ss hcap hfit Zs
+    schedOf srvOf hs dec hdz acc hacc W hW hWn e e' he q hq0 hq1 hesc hleak δ hδ Fmax hF
   refine ⟨fun z hz => ?_, fun ω => encard_horizonGood_le lay k reg Dj sw Pw ρ op n b hb arr f tap run htrust cap Ss
-    Zs (fun z => schedOf z ω) (fun z => srvOf z ω) (fun z hz => hs z hz ω) (dec ω) (fun z hz => hdz z hz ω)
+    hfit Zs (fun z => schedOf z ω) (fun z => srvOf z ω) (fun z hz => hs z hz ω) (dec ω) (fun z hz => hdz z hz ω)
     (fun z => W z ω) (fun z i => hWn z ω i) Fmax⟩
   classical
   have hmiss := pr_adaptive_add_le (Ω := Ω) (r := 1 - q) (by linarith) (by linarith) m (acc z)
     (fun i ω => (W z ω i).card) e (fun i ω ω' h => hacc z i ω ω' h)
-    (fun i ω ω' h => by simp only [hW z i ω ω' h]) he
-    (fun i ω => (hesc z hz i ω).trans (add_le_add (choose_ratio_le
-      ((card_le_card (hWn z ω i)).trans_eq (card_range _)) hq1 (hq i)) le_rfl)) Fmax
+    (fun i ω ω' h => by simp only [hW z i ω ω' h]) he (fun i ω => hesc z hz i ω) Fmax
   have hpow : (1 - q) ^ Fmax ≤ δ := by
     have h1 : 1 - q ≤ Real.exp (-q) := by linarith [Real.add_one_le_exp (-q)]
     calc (1 - q) ^ Fmax ≤ Real.exp (-q) ^ Fmax := pow_le_pow_left₀ (by linarith) h1 Fmax

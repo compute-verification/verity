@@ -16,9 +16,9 @@ The check of record is `NciCheck.Baseline.evaluate`: `Desc.evaluate`, θ and the
 provenance, its verdict `Desc.evaluate`'s. `CheckedCoverTraining` states the cover theorem's factor of every verdict of
 the check of record, on every expansion of the instance gate by gate (`OnExpansions`), of which there is one.
 
-It is not a guarantee yet: `checkedCoverTraining_of_descAgrees` (`Proofs.Nci.Cover.Checked`, package `security_proofs`,
-whose proof needs `Nci.Cover.SecurityProofs.CoverTraining`) proves it from `DescAgrees`, whose proof rests on one open
-statement, `Novel.ReadsExact` (`descAgrees_of_readsExact`, `Proofs.Properties.Nci.Agrees`).
+`SecurityProofs.CheckedCoverTraining` (`Proofs.Nci.Cover.Checked`, package `security_proofs`, whose proof needs
+`Nci.Cover.SecurityProofs.CoverTraining`) proves it from `DescAgrees` (`SecurityProofs.DescAgrees`,
+`Proofs.Properties.Nci.Agrees`).
 -/
 
 namespace NciCheck.Properties
