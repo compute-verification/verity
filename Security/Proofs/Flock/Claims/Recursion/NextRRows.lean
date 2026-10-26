@@ -253,7 +253,7 @@ theorem flatMap_length_le {B : ℕ} : ∀ {l : List (Array ByteArray)}, (∀ a �
 value row. -/
 theorem honestRows_rows : ∀ (ss : List RecVStar.SchedRound) (chs : List (List Frame)) (caps : List (Array ByteArray)),
     ∀ rs ∈ honestRows ss chs caps, rs.length ≤ (caps.flatMap Array.toList).length + 1 ∧
-      ∀ r ∈ rs, (∃ a ∈ caps, ∃ b ∈ a, r = nodeRow b) ∨ ∃ ch ∈ chs, r = ⟨(colBytes (vals ch)).toArray⟩
+      ∀ r ∈ rs, (∃ a ∈ caps, ∃ b ∈ a, r = nodeRow b) ∨ ∃ ch ∈ chs, r = ⟨(padRow (colBytes (vals ch))).toArray⟩
   | s :: ss, ch :: chs, caps, rs, hrs => by
     simp only [honestRows, List.mem_cons] at hrs
     rcases hrs with rfl | hrs
@@ -323,8 +323,10 @@ theorem repRows_fit {c : RepCtx} {p : Flock.Proof} (T : F128) (hs : SchedOf c) (
     have : b.size = c.st.merkle.digestLen := (hps.rcapsEach i hi).2 b hb
     rw [size_nodeRow]
     omega
-  · show (colBytes (vals ch)).toArray.size < 2 ^ 64
-    rw [List.size_toArray, Frame.colBytes_length]
+  · show (padRow (colBytes (vals ch))).toArray.size < 2 ^ 64
+    rw [List.size_toArray]
+    have hp := padRow_length_le (colBytes (vals ch))
+    rw [Frame.colBytes_length] at hp
     have := vals_chunk_le (fs := repFrames c.st c.sch c.dom c.n p T) hch
     omega
 

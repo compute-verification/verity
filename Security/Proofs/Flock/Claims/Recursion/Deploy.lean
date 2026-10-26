@@ -17,7 +17,8 @@ record and the coin server's transcript). `RecDeploy.V` is that as one `Claims.V
   shape (`--rec-inner`) and bindings (`--rec-bindings`), the circuit registration, and per V* part its Flock statement
   and `--rec-rows`. `parse` and `scopeCheck` are the deployed parser's (`Flock.RecScope.parseOf`, `scopeCheckOf`) at
   `decodeR`: what `readX` reads (it refuses unless the inner statement's dimensions read, `RecVStar.innerOf`, Flock's
-  plain verifier sets the inner statement up, its statement check passes and it carries a draw, `innerOk`, and there is
+  plain verifier sets the inner statement up, its statement check passes and it carries a draw, which at one table is
+  the public file's header's, `innerOk`, and there is
   one part per V*
   statement of the verifier's inner shape, `RecVStar.statements`, each part's circuit V*'s statement's of its index,
   `partsVStar`, as each part's session holds it, `RecVStar.checkCircuit`), as the verifier's inner
@@ -143,15 +144,35 @@ structure XR where
   shape : RecVStar.Inner
   dims : RecVStar.Inner
 
+/-- The draw `FlockDeploy.drawOfJ` reads off a record whose `unit_draw` is `u`, rebuilt (`Flock.norm`), or none where it
+is absent or `null`. -/
+def drawOfU : Option Json → Option Json
+  | some .null => none
+  | some d => some (Flock.norm d)
+  | none => none
+
+/-- **The session's draw is the statement's at one table**: at one table the setup reads the session's `unitDraw` back
+from the public file's header, so this is where the two can differ; at several tables the setup sets it to the draw. -/
+def drawTiedB (s : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt) : Bool :=
+  sts.size != 1 || FlockDeploy.drawEq (drawOfU spec.unitDraw) s.read.draw
+
+theorem drawTiedB_iff {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} :
+    drawTiedB s spec sts = true ↔ (sts.size = 1 → FlockDeploy.drawEq (drawOfU spec.unitDraw) s.read.draw = true) := by
+  unfold drawTiedB
+  by_cases h : sts.size = 1 <;> simp [h]
+
 /-- **Flock's own checks on the inner statement**: Flock's plain verifier sets it up (`FlockDeploy.setupOf false`), its
-statement check passes (`Readable.Read.check`, `ProvedScope.check`), and it carries a draw, the inner session's record's
+statement check passes (`Readable.Read.check`, `ProvedScope.check`), it carries a draw, the inner session's record's
 (`Raw.draw`): the recursion's inner session is drawn (#2468), and the compiled verifier refuses a session over an inner
-session whose record holds none (`RecSetup.innerDrawn`, `noInnerDraw`). -/
+session whose record holds none (`RecSetup.innerDrawn`, `noInnerDraw`), and at one table the public file's header
+carries that draw (`drawTiedB`): the deployed verifier refuses a record whose draw is not the session's (`Draw.check`,
+U1, in `Record.check`), and at one table the session's is the header's. -/
 def innerOk (inner : Claims.Msg) : Except String Unit :=
   match FlockDeploy.setupOf false inner with
-  | some (s, _, _) => do
+  | some (s, spec, sts) => do
     s.read.check
     if s.read.draw.isNone then throw RecSetup.noInnerDraw
+    if !drawTiedB s spec sts then throw "U1: the record's unit draw is not the statement's"
   | none => .error "rec: Flock's verifier does not set the inner statement up"
 
 /-- A part's circuit, as the setup parses it (`ProvedScope.circuitOf`) at its session's tags. -/
