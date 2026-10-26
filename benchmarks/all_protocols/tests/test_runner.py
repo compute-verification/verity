@@ -173,7 +173,7 @@ def test_onsite_reads_the_blobs_a_case_names(tmp_path):
     case = {"commitment": "01", "evidence": "02", "params": {"k": 1}}
     every = {e.name: fake("accept", case) for e in T.TABLE}
     every["integrity"] = fake("accept", case | {"blobs": [str(tmp_path / "circuit.txt"), str(tmp_path / "pub.bin")]})
-    r = decide(tmp_path, **every, onsite=EVERY_PORT, exe=str(exe))
+    r = decide(tmp_path, **every, onsite=C.onsite_components(), exe=str(exe))
     assert r["composed"]["verdict"] == "accept"
     got = json.loads((tmp_path / "seen.json").read_text())
     assert got["blobs"] == [b"circuit".hex(), b"public".hex()]
