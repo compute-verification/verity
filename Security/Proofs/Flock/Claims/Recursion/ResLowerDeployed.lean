@@ -404,6 +404,73 @@ theorem resTie_copy {Coin' : Type} {H : Msg → Msg} (hH : H = FlockDeploy.sha51
   rw [← wordsElems_padTo nv rowV (Registered.rowWords rowV.size 16)]
   exact resTie_of_rows (le_trans hsz (size_padTo_ge _ _)) (fun i => by rw [getD_padTo, hzr]) hv ho hVc hOc
 
+theorem mem_valPorts {r : XR} {s : ℕ} {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss)
+    {j : ℕ} {nm' : String} {pt : VStar.Part} (hsv : ss[s]? = some (.inner j nm' pt)) {c : Circuit}
+    (hc : r.w.parts[s]?.bind partCircuit = some c) {nm : String} (hnm : nm ∈ resPorts) {q : ℕ}
+    (hq : c.ports.findIdx? (·.name == nm) = some q) {n : ℕ} (hn : n < 2) : (nm, q, n) ∈ valPorts r s := by
+  have hst : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.inner j nm' pt) := by
+    rw [hss]; exact hsv
+  unfold valPorts
+  rw [hst, hc]
+  dsimp only
+  exact List.mem_flatMap.2 ⟨nm, hnm, by rw [hq]; exact List.mem_map.2 ⟨n, List.mem_range.2 hn, rfl⟩⟩
+
+/-- **`layVR` records check 5's calls**: at an algebra part, each instance `n < 2`'s hm96 calls at ports `v` and `out`
+are among part `s`'s recorded calls. -/
+theorem portCalls_sub_layVR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {ss : Array VStar.Stmt}
+    (hss : RecVStar.statements r.shape = .ok ss) {j : ℕ} {nm' : String} {pt : VStar.Part}
+    (hsv : ss[s]? = some (.inner j nm' pt)) {c : Circuit} (hc : r.w.parts[s]?.bind partCircuit = some c)
+    {nm : String} (hnm : nm ∈ resPorts) {q : ℕ} (hq : c.ports.findIdx? (·.name == nm) = some q) {n : ℕ}
+    (hn : n < 2) : ∀ e ∈ portCalls c nm q n, e ∈ (layVR elem).shaAt x s := fun e he => by
+  show e ∈ (layoutBTops _).shaAt x s ++ ((readX x).map fun r => valCalls r s).getD []
+  rw [hr]
+  refine List.mem_append_right _ ?_
+  simp only [Option.map_some, Option.getD_some, valCalls, hc]
+  exact List.mem_flatMap.2 ⟨_, mem_valPorts hss hsv hc hnm hq hn, he⟩
+
+/-- **Check 5's tie at one instance of a part, at `layVR`**: `resTie_copy` at the compiled record over `layVR`, whose
+calls hold check 5's (`portCalls_sub_layVR`), with `v`'s slot at its unit input columns (`SlotCommits`) and `out`'s
+at its output bits (`outForms`). What is left are facts of the code: the slots' commit strings, check 5's public rows
+and the setup's evaluations of them (`hset` gives these at `resSetup`), and where the copy's columns sit. -/
+theorem resTie_layVR {b : Brings} {IV : Claims.Verifier Coin}
+    {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {s : ℕ} {x xO : Msg}
+    {w : Claims.Flock.Wit}
+    (hT : ∀ e ∈ (layVR elem).calls x s w, FlockDeploy.sha512 e.1 = e.2)
+    (hnc : (Claims.findColl ((layVR elem).calls x s w ++ vcallsAt FlockDeploy.sha512
+      (recBound _root_.Flock.Readable.relation b (layVR elem) IV) xO)).isSome = false)
+    {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss)
+    {j : ℕ} {nm' : String} {pt : VStar.Part} (hsv : ss[s]? = some (.inner j nm' pt)) {c : Circuit}
+    (hc : r.w.parts[s]?.bind partCircuit = some c) {qv qo n : ℕ} (hn : n < 2)
+    (hqv : c.ports.findIdx? (·.name == "v") = some qv) (hqo : c.ports.findIdx? (·.name == "out") = some qo)
+    (hvin : qv < HmOut.nIn c) (hoout : ¬ qo < HmOut.nIn c)
+    (hslv : SlotCommits c "v" qv n w)
+    (hslo : readForms w (hmCommit c qo n) = FlockSoundness.Binding.commitString
+      (rowPfx c qo ++ readForms w (outForms c qo n)) (readForms w (hmSalt c qo n)))
+    {ptv pto : Port} (hptv : c.ports[qv]? = some ptv) (hpto : c.ports[qo]? = some pto)
+    {rowV zr : Array ℕ} {sv so : ByteArray}
+    (hwv : ptv.words = (RecCoins.padTo rowV (Registered.rowWords rowV.size 16)).size)
+    (hwo : pto.words = (RecCoins.padTo zr (Registered.rowWords zr.size 16)).size) (hzr : ∀ i, zr.getD i 0 = 0)
+    (hpv : (RecCoins.commitRow rowV sv).data.toList = readForms w (hmCommit c qv n))
+    (hpo : (RecCoins.commitRow zr so).data.toList = readForms w (hmCommit c qo n))
+    (hvv : rowInput (RecCoins.padTo rowV (Registered.rowWords rowV.size 16)) ∈ b.setup xO)
+    (hsv' : (Hm96.Default512.saltPrefix ++ sv).data.toList ∈ b.setup xO)
+    (hvo : rowInput (RecCoins.padTo zr (Registered.rowWords zr.size 16)) ∈ b.setup xO)
+    (hso : (Hm96.Default512.saltPrefix ++ so).data.toList ∈ b.setup xO)
+    {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} {v : ℕ → Bool} (hsz : 8 * nv ≤ rowV.size)
+    (hVc : ∀ i < 128 * nv, ∃ hl : i < (rowForms c "v" qv n).length,
+      v (FlockVBridge.OfVStar.vBase (FlockVBridge.OfVStar.partRep ns nv) + i) = formBit w (rowForms c "v" qv n)[i])
+    (hOc : ∀ q < 128 * S.res.length, ∃ hl : q < (rowForms c "out" qo n).length,
+      v (FlockVBridge.OfVStar.partBase S ns nv + q) = formBit w (rowForms c "out" qo n)[q]) :
+    ResTie S ns nv (wordsElems nv rowV) v := by
+  have hfv : rowForms c "v" qv n = ((rowHidden c "v" n).getD []).map HmNets.Lin.var := by
+    rw [rowForms, if_pos hvin]
+  have hfo : rowForms c "out" qo n = outForms c qo n := by rw [rowForms, if_neg hoout]
+  refine resTie_copy rfl hT hnc
+    (portCalls_sub_layVR elem hr hss hsv hc (by simp [resPorts]) hqv hn)
+    (portCalls_sub_layVR elem hr hss hsv hc (by simp [resPorts]) hqo hn)
+    (by rw [hfv]; exact hslv) (by rw [hfo]; exact hslo) hptv hpto hwv hwo hzr hpv hpo hvv hsv' hvo hso hsz hVc hOc
+
 /-! ## The share at the pieces' copies -/
 
 /-- **`resPieces_computes` with the tie at the pieces' copies only**, and the whole acceptance at hand: wherever part
