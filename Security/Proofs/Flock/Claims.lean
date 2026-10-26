@@ -218,6 +218,7 @@ import Proofs.Flock.Claims.Recursion.RowDLevels
 import Proofs.Flock.Claims.Recursion.RowDMerkle
 import Proofs.Flock.Claims.Recursion.RowDAccept
 import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+import Proofs.Flock.Claims.Recursion.CapLower
 import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 import Proofs.Flock.Claims.Recursion.RestReadsAt
 import Proofs.Flock.Claims.KS.PlainRConflict

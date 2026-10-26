@@ -11,6 +11,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
 import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Inst
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.AcceptsP
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Headline
 import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec

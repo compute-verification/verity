@@ -420,24 +420,32 @@ def free_inputs(circuit: dict) -> int:
 
 def audit_of(d: Path) -> dict:
     """A compute audit's window as one-stage registers it (``registration.json`` and ``circuit.json``): its units, the
-    units its subset law draws, and its free inputs (`free_inputs`); no jitter term, N2 holding the egress counts
-    exactly."""
+    units its law draws (a subset law's ``k``, a stratified law's ``Σ k``, as `NetworkCheck.Period` counts them), the
+    least rate it draws a unit at (``q``: ``k/n``, or the least stratum's ``k/n``) and its free inputs (`free_inputs`); no
+    jitter term, N2 holding the egress counts exactly."""
     reg = json.loads((d / "registration.json").read_text())
-    law = reg["law"]
-    if law.get("law") != "subset":
-        raise SystemExit(f"--audit {d}: K's q is a subset law's k/n, not {law}")
+    law, n = reg["law"], reg["population"]
+    if law.get("law") == "subset":
+        drawn, q = law["k"], Fraction(law["k"], n)
+    elif law.get("law") == "stratified" and law.get("strata"):
+        sizes = [sum(hi - lo for lo, hi in s["units"]) for s in law["strata"]]
+        drawn, q = sum(s["k"] for s in law["strata"]), min(Fraction(s["k"], m) for s, m in zip(law["strata"], sizes))
+        if q == 0 or sum(sizes) != n:
+            raise SystemExit(f"--audit {d}: a stratified law whose strata cover its {n} units, each drawn, not {law}")
+    else:
+        raise SystemExit(f"--audit {d}: K's q is a subset or stratified law's, not {law}")
     return {"window": str(d), "registration": hashlib.sha512(json.dumps(reg, sort_keys=True).encode()).hexdigest(),
-            "units": reg["population"], "drawn": law["k"],
+            "units": n, "drawn": drawn, "q": str(q),
             "free": free_inputs(json.loads((d / "circuit.json").read_text())), "jitter": 0}
 
 
 def horizon_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
     """`NetTiming.Guarantees.HorizonLeakAccepted`'s K over one monitoring period, as #4404's `compose.horizon_leak`
     counts it: the faulty units paid once over the period, ``Fmax = ⌈ln(1/δ)/q⌉`` with ``q`` the least ``k_i/n_i`` of
-    its compute audits, so K = the network's own terms (``network``: the advice's and the syncs' bits, and the cells')
+    its compute audits (a stratified audit's least stratum's, `audit_of`'s ``q``), so K = the network's own terms (``network``: the advice's and the syncs' bits, and the cells')
     + ``Fmax·16 + ⌈log2 (N + 1)^Fmax⌉ + Σ_i (free_i + jitter_i)``, ``N = Σ_i n_i``, except with probability
     ``δ + Σ_i (e_i + e'_i)``. #4367 is conditional on its per-window inputs, so this K is cited as conditional."""
-    q = min(Fraction(a["drawn"], a["units"]) for a in audits)
+    q = min(Fraction(a["q"]) if "q" in a else Fraction(a["drawn"], a["units"]) for a in audits)
     fmax = math.ceil(math.log(1 / float(delta)) / float(q) * (1 + 1e-12))
     n = sum(a["units"] for a in audits)
     terms = {**network, "faulty_bits": OUT_BITS * fmax, "faulty_sets": ((n + 1) ** fmax - 1).bit_length(),
