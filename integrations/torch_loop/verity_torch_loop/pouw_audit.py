@@ -1,7 +1,7 @@
 """The audit of the loop's PoUW window (`pouw`) and PoUW's answer on it.
 
     python -m verity_torch_loop.pouw_audit --window DIR --circuit SHA512 --run HEX --m0-pythonpath PATH --bin flock-circuit \\
-        --lean flock-verify --firewall flock-firewall --out DIR [--forged] [--pouw-check BIN]
+        --lean flock-verify --firewall flock-firewall --out DIR [--forged] [--pouw-check BIN] [--skip-negatives]
 
 The audit is one-stage's from the records alone (`benchmarks/prove_path/records_audit.py`, `a5.audit`): the registration
 checked by Lean and Python, the draw on the verifier's live coins read after the receipt, C-Flock ``--zk`` behind the Lean
@@ -181,6 +181,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--delta-audit", default="0.5", help="the one-stage audit's own δ (records_audit's --delta)")
     ap.add_argument("--forged", action="store_true")
     ap.add_argument("--pouw-check", help="a built Lean pouw-check, which must agree with core_check")
+    ap.add_argument("--skip-negatives", action="store_true", help="records_audit's --skip-negatives: a run of several "
+                    "periods runs the negatives in its first")
     a = ap.parse_args(argv)
     wdir, out = Path(a.window), Path(a.out)
     rec, prov = _provenance(wdir)
@@ -197,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
                   "--run", a.run, "--m0-pythonpath", a.m0_pythonpath, "--bin", a.bin, "--lean", a.lean,
                   "--firewall", a.firewall, "--out", str(out / "audit"), "--delta", a.delta_audit,
                   "--registered", str(out / "operands.json"),
-                  *(["--forged"] if a.forged else [])])
+                  *(["--forged"] if a.forged else []), *(["--skip-negatives"] if a.skip_negatives else [])])
     items = rec["window"]["public"]
     params = {"check": PW.check_item(), "context": a.run, "delta": str(PW.DELTA), "eps": str(PW.EPS),
               "grid_bits": Wd.GRID_BITS, "length": {"max_tokens": items["length"]["max_tokens"], "stop": Wd.STOP_FIXED},

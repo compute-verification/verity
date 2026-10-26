@@ -154,7 +154,7 @@ import shutil
 import sys
 import time
 from collections.abc import Iterator, Sequence
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import replace
 from pathlib import Path
 from typing import Callable
@@ -592,54 +592,64 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     served_units, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
     linked = None       # the first drawn chunk with registered reads: its session, for the registered-reads negatives
     row_verdicts: dict[str, dict] = {}      # each drawn chunk's Lean verdict with registered reads, whose finding the record carries
+    archived: dict = {}     # the members' circuit, archived once for every Lean verify (`a0.lean_verify`)
     for mm in members:
+        mm["st"]["archived"] = archived
+    # each member's Lean verify runs while the next member is proved; the proofs stay one at a time
+    pending: list[tuple[dict, Path, Future, str]] = []
+    with ThreadPoolExecutor(max_workers=1) as lean_pool:
+        for mm in members:
+            m, k = mm["m"], mm["k"]
+            local = sorted(u - m.base for u in union_draw["units"] if m.base <= u < m.base + m.n)
+            counts[m.template] = counts.get(m.template, 0) + len(local)
+            if not local:
+                continue
+            sdir = out / f"session-m{k}"
+            sdir.mkdir(parents=True, exist_ok=True)
+            # a plain session is served the stream's stratified draw itself, its one member the whole window (`plain_refusal`)
+            session_draw, session_law = ((union_draw, drawn_law) if plain(a) else
+                                         ({"law": "subset", "population": m.n, "k": len(local), "units": local}, {"law": "subset", "k": len(local)}))
+            (sdir / "draw.json").write_text(json.dumps(session_draw, sort_keys=True))
+            t = time.time()
+            stage(served, mm, files)
+            summary["staging"]["drawn_s"] = round(summary["staging"].get("drawn_s", 0) + time.time() - t, 1)
+            summary["staging"]["prover_files"] = summary["staging"].get("prover_files", 0) + 1
+            t = time.time()
+            env = {"FC_COINS": "os"} if plain(a) else {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])}
+            record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + len(statement), sdir, draw_file=sdir / "draw.json",
+                                      zk=not plain(a), env=env, prove_timeout=a.session_timeout)
+            session_s = round(time.time() - t, 1)
+            draw_t = (record or {}).get("unit_draw") or {}
+            v = V.check_draw(draw_t, {"population": session_draw["population"]}, session_law)
+            served_units += [m.base + u for u in draw_t.get("units", [])]
+            session_roots.update({m.port(p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()})
+            proved += a0.proved_units(mm["header"], live or {})
+            instances += (live or {}).get("instances", 0)
+            lean_u = a0.lean_draw_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
+                                                 "instances": (live or {}).get("instances", 0)}], sdir, "u1-u3")
+            verdicts[f"m0-verifier/m{k}"] = {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
+                                             and (live or {}).get("roots") == mm["header"]["frame_v3"]["roots"] and v.ok,
+                                             "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
+            verdicts[f"lean-draw/m{k}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
+            if plain(a):
+                flags = ("--coins", "os", "--stratified", str(drawn_law["k"]))
+                job = lean_pool.submit(a0.lean_verify, a.lean, mm["st"], m.n, sdir, flags=flags)
+                pending.append((mm, sdir, job, f"flock-verify verify {' '.join(flags)} --archive"))
+            else:
+                pending.append((mm, sdir, lean_pool.submit(a0.lean_verify, a.lean, mm["st"], m.n, sdir, zk=True),
+                                "flock-verify verify --zk --archive"))
+            statement[m.key] = {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
+                                "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
+                                "verify_s": ((record or {}).get("verdict") or {}).get("verify_s")}
+            sessions += [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]
+    for mm, sdir, job, tool in pending:
         m, k = mm["m"], mm["k"]
-        local = sorted(u - m.base for u in union_draw["units"] if m.base <= u < m.base + m.n)
-        counts[m.template] = counts.get(m.template, 0) + len(local)
-        if not local:
-            continue
-        sdir = out / f"session-m{k}"
-        sdir.mkdir(parents=True, exist_ok=True)
-        # a plain session is served the stream's stratified draw itself, its one member the whole window (`plain_refusal`)
-        session_draw, session_law = ((union_draw, drawn_law) if plain(a) else
-                                     ({"law": "subset", "population": m.n, "k": len(local), "units": local}, {"law": "subset", "k": len(local)}))
-        (sdir / "draw.json").write_text(json.dumps(session_draw, sort_keys=True))
-        t = time.time()
-        stage(served, mm, files)
-        summary["staging"]["drawn_s"] = round(summary["staging"].get("drawn_s", 0) + time.time() - t, 1)
-        summary["staging"]["prover_files"] = summary["staging"].get("prover_files", 0) + 1
-        t = time.time()
-        env = {"FC_COINS": "os"} if plain(a) else {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])}
-        record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + len(statement), sdir, draw_file=sdir / "draw.json",
-                                  zk=not plain(a), env=env, prove_timeout=a.session_timeout)
-        session_s = round(time.time() - t, 1)
-        draw_t = (record or {}).get("unit_draw") or {}
-        v = V.check_draw(draw_t, {"population": session_draw["population"]}, session_law)
-        served_units += [m.base + u for u in draw_t.get("units", [])]
-        session_roots.update({m.port(p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()})
-        proved += a0.proved_units(mm["header"], live or {})
-        instances += (live or {}).get("instances", 0)
-        lean_u = a0.lean_draw_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
-                                             "instances": (live or {}).get("instances", 0)}], sdir, "u1-u3")
-        verdicts[f"m0-verifier/m{k}"] = {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
-                                         and (live or {}).get("roots") == mm["header"]["frame_v3"]["roots"] and v.ok,
-                                         "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
-        verdicts[f"lean-draw/m{k}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
-        if plain(a):
-            flags = ("--coins", "os", "--stratified", str(drawn_law["k"]))
-            verdicts[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, flags=flags),
-                                             "tool": f"flock-verify verify {' '.join(flags)} --archive"}
-        else:
-            verdicts[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True), "tool": "flock-verify verify --zk --archive"}
+        verdicts[f"lean-verify/m{k}"] = {**job.result(), "tool": tool}
         if m.key in reads:
             row_verdicts[m.key] = verdicts[f"lean-verify/m{k}"]
             linked = linked or (mm, sdir)
-        statement[m.key] = {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
-                            "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
-                            "verify_s": ((record or {}).get("verdict") or {}).get("verify_s"),
-                            "lean_verify_s": verdicts[f"lean-verify/m{k}"].get("verify_s"),
-                            "lean_partition": verdicts[f"lean-verify/m{k}"].get("partition")}
-        sessions += [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]
+        statement[m.key].update(lean_verify_s=verdicts[f"lean-verify/m{k}"].get("verify_s"),
+                                lean_partition=verdicts[f"lean-verify/m{k}"].get("partition"))
     coin_neg: dict[str, dict] = {}
     if not streamed(a):
         result = V.audit_record(rec, receipt, union_draw, drawn_law, sorted(proved), instances, statement, verdicts, a.delta,
@@ -669,38 +679,43 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     result["checks_before_draw"] = checks
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
 
-    # negatives: each re-decides one input altered
+    # negatives: each re-decides one input altered (``a.skip_negatives``: not this audit; a run of several audits runs them
+    # once, in its first)
     neg: dict[str, dict] = dict(more_negatives or {})
-    by_template: dict[str, list] = {}
-    for mm in members:
-        by_template.setdefault(mm["m"].template, [mm["defn"], 0])[1] += mm["m"].n
-    defs = [tuple(x) for x in by_template.values()]
-    fewer = resized_program(defs) if len(defs) > 1 or defs[0][1] == 1 \
-        else P.population_program(defs[0][0], defs[0][1] - 1)
-    v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table)
-    neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    other = CS.expected_ports(replace(mine, run="00" * 32))
-    v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer, work_table=table)
-    neg["domains-bound-to-another-run-root (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    first = members[0]["m"].key
-    flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
-    v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped), work_table=table)
-    neg["public-body-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
-    neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
-    neg.update(wiring_negatives(mine.members, publics))
-    if proved:
-        v = V.check_proved(union_draw, proved[1:], len(proved) - 1)
-        neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
-    neg.update(transfer_gate_negatives(getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_draw, drawn_law, proved))
-    neg.update(a0.audit_negatives(result, drawn_law, a.delta, session_roots, served=sorted(served_units)))
-    neg.update(coin_neg)
-    if linked is not None:
-        neg.update(registered_negatives(a, *linked))
-        key = next(iter(row_verdicts))
-        other = {p: {**e, "root": "00" * 64} for p, e in (row_verdicts[key].get("registered") or {}).items()}
-        neg["verdict-reports-another-registered-root"] = {
-            "refused": not TB.reported_reads(reads, {**row_verdicts, key: {**row_verdicts[key], "registered": other}})["ok"]}
+    if getattr(a, "skip_negatives", False):
+        neg.update(coin_neg)
+        summary["negatives_skipped"] = True
+    else:
+        by_template: dict[str, list] = {}
+        for mm in members:
+            by_template.setdefault(mm["m"].template, [mm["defn"], 0])[1] += mm["m"].n
+        defs = [tuple(x) for x in by_template.values()]
+        fewer = resized_program(defs) if len(defs) > 1 or defs[0][1] == 1 \
+            else P.population_program(defs[0][0], defs[0][1] - 1)
+        v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table)
+        neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
+        other = CS.expected_ports(replace(mine, run="00" * 32))
+        v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer, work_table=table)
+        neg["domains-bound-to-another-run-root (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
+        first = members[0]["m"].key
+        flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
+        v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped), work_table=table)
+        neg["public-body-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
+        v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
+        neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
+        neg.update(wiring_negatives(mine.members, publics))
+        if proved:
+            v = V.check_proved(union_draw, proved[1:], len(proved) - 1)
+            neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
+        neg.update(transfer_gate_negatives(getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_draw, drawn_law, proved))
+        neg.update(a0.audit_negatives(result, drawn_law, a.delta, session_roots, served=sorted(served_units)))
+        neg.update(coin_neg)
+        if linked is not None:
+            neg.update(registered_negatives(a, *linked))
+            key = next(iter(row_verdicts))
+            other = {p: {**e, "root": "00" * 64} for p, e in (row_verdicts[key].get("registered") or {}).items()}
+            neg["verdict-reports-another-registered-root"] = {
+                "refused": not TB.reported_reads(reads, {**row_verdicts, key: {**row_verdicts[key], "registered": other}})["ok"]}
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
 
     summary["audit"] = {x: result.get(x) for x in ("accepted", "complete", "wrong_units")}

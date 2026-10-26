@@ -35,13 +35,17 @@ leave the free inputs: `declared_count` counts them registered.
 A registration whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, the torch
 loop's activation rows, `TorchLoop.commit_activations`) has them fixed before the draw with the rest of the registration;
 the audit holds each entry's domain to the one core's ``registered.domain`` makes of the program, the value, its rows and
-the window's run root (`committed_activations`), and reports their roots. The circuit reads none of them, so they take
-nothing from the free inputs.
+the window's run root (`committed_activations`), and reports their roots. The loop's own circuit reads none of them; a
+circuit that does (PoUW's H1 tiles, `verity_torch_loop.pouw_audit`) reads them as registered reads, pinned from the
+window's entries.
+
+The negatives (`negatives` before the draw, a5's after it) cost Lean verifies of their own; ``--skip-negatives`` leaves
+them out of an audit (its summary says so), for a run of several audits of one circuit, which runs them in its first.
 
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
         --out DIR [--delta D] [--port P] [--forged] [--challenger local|gate:USER@HOST --main FILE] \\
-        [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE]
+        [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--skip-negatives]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...]
 
 ``count``: a stated record that declares its inputs (registered reads, ingress: `interface.Circuit.declared`) counted from
@@ -442,7 +446,7 @@ def audit(a: argparse.Namespace) -> int:
                     advice=(bound or {}).get("advice") or w.get("advice"), compilers=compilers, opening=opening, repo=repo,
                     output=json.loads(output.read_text()) if compiled["ok"] else None)
     window_s = round(time.time() - t0, 2)
-    more = negatives(w, held, doc, out / "negatives")
+    more = {} if a.skip_negatives else negatives(w, held, doc, out / "negatives")
     a.port = a.port if a.port is not None else free_ports(A5.RANK_PORTS)
     a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.law
     a.compose_cache = None
@@ -464,7 +468,8 @@ def audit(a: argparse.Namespace) -> int:
     row = {"seconds": round(time.time() - t0, 1), "verifier_window_s": window_s, "circuit": held["circuit"],
            "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": law,
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
-                                    "audit", "draw", "draw_counts", "negatives", "coins", "timing")}}
+                                    "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
+                                    "timing")}}
     bits = int((held["advice"] or {}).get("bits", 0))
     row["leak"] = (declared_count(doc, bits, lambda t: sets[t][1] if t in sets else IF.resolve(t))
                    if set(IF.DECLARED) & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))
@@ -547,6 +552,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--main", help="with --challenger: the verifier's copy of main's first-parent history")
     p.add_argument("--registered", help="the registered values' entries the verifier pinned before the run, {program, "
                    "values} (`pinned`), for a circuit that reads them")
+    p.add_argument("--skip-negatives", action="store_true", help="no negatives in this audit (module docstring): a run of "
+                   "several audits runs them in its first")
     p = sub.add_parser("count", help="a stated circuit record's leak count from its description alone (declared_count)")
     p.add_argument("--circuit", required=True, help="the circuit record (circuit.json), or its description")
     p.add_argument("--bits", type=int, required=True, help="the advice's registered length in bits, the charge")
