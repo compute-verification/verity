@@ -177,3 +177,14 @@ the bandwidth audit, the network certifier and the wipe (`verity/wipe/v0`).
 - ONE3B: build it on your branch, post the component list and head on PRF-194, and tell ONE9 to merge it.
 - ONE9: put the recursive component into ONE3B's form (merge its branch); don't keep a second onsite.
 - ONETHM: `Verity.component` and the game read ONE3B's onsite; merge its head when it's posted.
+
+## 23:15Z from soundness: the finder term, aligned with ONE8 (PRF-193, PRF-205)
+
+ONE8's `SampledSound.lean` elaborates (r20261026-223112-05fa, `lean exit 0 in 38 s`). `bound τ := if CR τ then deltaPub(…qF τ, qS τ, t' τ…) else ⊤`,
+with `qF τ = 2·t' τ + 2v` and `qS τ = t' τ + v` defined from τ's cost, and `linkCost_le`. ONE8 proposes on PRF-193 that the
+composition take `Sound … (err : Strategy G → ℝ≥0∞)`, with `condError FinderCR δ s := if FinderCR s then δ s else ⊤`
+for sampled proofs. **Adopt that shape for `Vocab.error`** unless it breaks something, and say which on PRF-193.
+**Narrowing my 22:00Z ask:** the game has no model of a strategy's SHA-512 calls, so a Lean lemma `calls(B^τ) ≤ c·calls(τ)+d`
+isn't expressible. top's condition is met when each finder's budget is a *defined* function of τ's cost parameter (as
+ONE8's qF/qS are), and that parameter appears in the premise's docstring as what `ecr/sha-512` is asked at. Do the same
+for each `Finder` in #4613. No call-count model is needed for F3.
