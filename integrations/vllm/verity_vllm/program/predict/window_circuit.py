@@ -60,9 +60,9 @@ gather is its reader's. An allocation's units are one entry, its slots' runs at 
 the run), and like entries that follow on merge, at one step and then at consecutive steps (`_inference`).
 
 Refused by name (`Unexpressible`): a window past its class's slots (more requests than slots, more anchored at a boundary
-than its lanes, an anchor that is no boundary, a prompt past the cap, more outputs than the cap), a request whose last
-output is past the window's last bucket (`ACROSS`), a request whose Program would read more than its prompt and the weights
-(a stochastic request's seed, a prefix-cache hit's prefix, a TP rank's peers), a request a Commit window carries in or out,
+than its lanes, an anchor that is no boundary, a prompt past the cap, more outputs than the cap), a request whose Program
+would read more than its prompt and the weights (a stochastic request's seed, a prefix-cache hit's prefix, a TP rank's
+peers), a request a Commit window carries in or out,
 byte ingress, a family this lowering doesn't know, a weight whose leaves aren't whole u16 words, a row form the cut rule
 can't state and a unit of more than ``grain.rows`` rows. The circuit is completeness only: that it computes what serving ran
 is held by the units' proofs on their committed rows, never by this lowering.
@@ -94,10 +94,6 @@ GREEDY = {"kind": "greedy"}
 #: accounting's BLOCKS-NET PR names (ASK-122: token ids in a committed row with a private occupancy word, tied to the
 #: certified bytes by #4548's id form); the lowering reads a slot's row only through this
 SLOT_ROW = IO.SlotRow
-#: a request held across the window's end, which the class doesn't take: whether the network certifier's lanes hold one
-#: across a window boundary is open (thread 1793030365.246499), and a slot that does needs a Program running into the next
-#: window
-ACROSS = "held across the window's end"
 
 
 @dataclass(frozen=True)
@@ -633,9 +629,10 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
                    placed: Sequence[tuple[int, int | None]] | None = None) -> IF.Circuit:
     """``compiled``'s window (`steps.Compiled`, of ``registered``) as ``cls``'s circuit, every slot's class Program whatever
     its traffic, refused where the class's slots don't take the window: nothing of the window reaches the circuit.
-    ``placed`` is each request's anchor bucket and the bucket of its last output in the window, in its request order, as the
-    network certifier's scan placed it (the end None: unchecked); by default every request is at the window's first
-    boundary, its end unchecked."""
+    ``placed`` is each request's anchor bucket and the bucket of its last output, in its request order, as the network
+    certifier's scan placed it (the end None: unchecked); by default every request is at the window's first boundary, its
+    end unchecked. A last output past the window's end is the scan's to carry (VLLM-126: a slot's Program hands every output
+    to the scan at its anchor, `SC_GROUP` carries them across windows), so no Program runs into the next window."""
     units = [u for u in compiled.requests if u is not None]
     if len(units) > cls.slots:
         raise Unexpressible(f"{len(units)} requests in a window of a class of {cls.slots} slots")
@@ -649,9 +646,6 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
                                 f"{list(cls.boundaries)}")
         if end is not None and end < anchor:
             raise Unexpressible(f"request {u.request}: its last output at bucket {end}, before its anchor {anchor}")
-        if end is not None and end >= cls.buckets:
-            raise Unexpressible(f"request {u.request}: anchored at bucket {anchor}, its last output at bucket {end}, past the "
-                                f"window's {cls.buckets} buckets: {ACROSS}")
         anchored[anchor] = anchored.get(anchor, 0) + 1
     for anchor, n in sorted(anchored.items()):
         if n > cls.lanes:
@@ -669,5 +663,5 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     return class_circuit(registered, cls, None, grain, name)
 
 
-__all__ = ["ACROSS", "CLASS_OF_RECORD", "FAMILIES", "Grain", "NAME", "Row", "SLOT_ROW", "WindowClass", "class_circuit",
+__all__ = ["CLASS_OF_RECORD", "FAMILIES", "Grain", "NAME", "Row", "SLOT_ROW", "WindowClass", "class_circuit",
            "class_program", "window_circuit"]

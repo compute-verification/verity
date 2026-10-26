@@ -122,6 +122,20 @@ def test_the_class_of_record_takes_both_windows_to_its_one_class_circuit(monkeyp
     assert calls == [(CLASS_OF_RECORD, None, WC._GRAIN, WC.NAME)] * 2
 
 
+def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
+    """VLLM-126: a slot's Program hands all its outputs to the scan at its anchor bucket and the scan carries them across
+    windows (`SC_GROUP`), so a request at the class of record's second boundary (bucket 16) keeping all 64 outputs, its last
+    at bucket 16 + D + 64 / r = 59 past the 32-bucket window's end, is taken to the one class circuit."""
+    calls = []
+    monkeypatch.setattr(WC, "class_circuit", lambda *a: calls.append(a[1:]) or "the class circuit")
+    reg = S._registered()
+    window = ([(1, 64, {**S.GREEDY, "max_tokens": 64})], [[(0, 0, 1)]] + [[(0, p, 1)] for p in range(1, 64)])
+    compiled = S.compile_steps(reg, *S._session(*window))
+    assert [(u.LP, u.T + 1) for u in compiled.requests if u is not None] == [(1, 64)]
+    assert window_circuit(reg, compiled, CLASS_OF_RECORD, placed=[(16, 59)]) == "the class circuit"
+    assert calls == [(CLASS_OF_RECORD, None, WC._GRAIN, WC.NAME)]
+
+
 def test_the_description_grows_with_the_class_programs_nodes_not_its_slots():
     """Each allocation's slots sit side by side in its template, so every slot's copy of a wire or read pattern is one: the
     class of record's slots at 2 and at 8 Programs have the same 145 wires, 63 weight reads, root reads, openings and 79
@@ -407,22 +421,20 @@ def test_what_the_class_doesnt_take_is_refused_by_name():
 
 def test_a_window_its_slots_dont_place_is_refused_by_name():
     """At a class of one slot at each of buckets 0 and 16 (a 32-bucket window), a window placed as the network certifier's
-    scan placed it is the class's circuit; refused by name are two requests at one boundary, an anchor that is no boundary,
-    a last output before its anchor, and a request anchored at bucket 16 whose last output is at bucket 32: held across the
-    window's end (`ACROSS`), until the lanes' answer on holding one across a window boundary. A placement that isn't one a
-    request is a caller's error."""
+    scan placed it is the class's circuit, a last output past the window's end included (the scan carries it across
+    windows); refused by name are two requests at one boundary, an anchor that is no boundary and a last output before its
+    anchor. A placement that isn't one a request is a caller's error."""
     cls = WindowClass(2, 4, 2, lanes=1, every=16)
     assert (cls.boundaries, cls.buckets, cls.anchor(0), cls.anchor(1)) == ((0, 16), 32, 0, 16)
     ok = _circuit(WINDOW, cls=cls, placed=[(0, 15), (16, 31)])
     assert _bytes(ok) == _bytes(class_circuit(S._registered(), cls, None, GRAIN))
+    assert _bytes(_circuit(WINDOW, cls=cls, placed=[(0, 15), (16, 47)])) == _bytes(ok)
     assert [(g.at, g.units, g.step) for g in ok.ingress] == [(0, 1, 0), (1, 1, 16)]
     for placed, match in (
             (None, "2 requests anchored at bucket 0, past the 1 slots a boundary has"),
             ([(16, None), (16, None)], "2 requests anchored at bucket 16, past the 1 slots"),
             ([(0, None), (8, None)], r"request 1: anchored at bucket 8, none of its class's boundaries \[0, 16\]"),
-            ([(16, 3), (0, None)], "request 0: its last output at bucket 3, before its anchor 16"),
-            ([(0, 15), (16, 32)], f"request 1: anchored at bucket 16, its last output at bucket 32, past the window's 32 "
-                                  f"buckets: {WC.ACROSS}")):
+            ([(16, 3), (0, None)], "request 0: its last output at bucket 3, before its anchor 16")):
         with pytest.raises(Unexpressible, match=match):
             _circuit(WINDOW, cls=cls, placed=placed)
     with pytest.raises(ValueError, match="1 placements for the window's 2 requests"):
