@@ -706,24 +706,57 @@ def test_an_after_landing_failure_rings_its_culprit_and_the_suites_owner_and_rev
     assert h.postland()["verified"] == main and not h.postland()["red"] and h.postland()["green"]["suite pkg"] == main
 
 
-@pytest.mark.parametrize("fix", ["names-the-suite", "names-the-culprit", "new-head"])
+@pytest.mark.parametrize("fix", ["names-the-culprit", "fixes-suite", "touches-the-failure", "new-head"])
 def test_a_marked_fix_holds_the_culprits_revert_while_it_stays_marked(world, monkeypatch, tmp_path, fix):
+    """A fix is a ready PR whose body names the culprit or says `fixes suite NAME`, or whose change touches what the failure
+    named, or a new head of the culprit; each body case changes an unrelated file, so only its body can count."""
     from research.drive import FIX_WINDOW_S
 
     h, tip = _red_landing(world, monkeypatch, tmp_path)
     if fix == "new-head":
-        world.gh.put(2, head := world.change({"pkg/tests/test_x.py": "def test_y():\n    pass\n"}))
-        n = 2
+        world.gh.put(n := 2, head := world.change({"pkg/tests/test_x.py": "def test_y():\n    pass\n"}))
+    elif fix == "touches-the-failure":
+        world.gh.put(n := 9, head := world.change({"pkg/tests/test_x.py": "def test_y():\n    pass\n"}), body="Lane `lane-9`.")
     else:
-        world.gh.put(9, head := world.change({"pkg/tests/test_x.py": "def test_y():\n    pass\n"}),
-                     body="Lane `lane-9`. " + ("Fixes suite pkg's test_y." if fix == "names-the-suite" else "Fixes #2's test."))
-        n = 9
+        world.gh.put(n := 9, head := world.change({"elsewhere.txt": "9\n"}),
+                     body="Lane `lane-9`. " + ("FIXES suite pkg: test_y." if fix == "fixes-suite" else "Fixes #2's test."))
     h.clock += FIX_WINDOW_S + 1
     h.tick()
     assert _main(world) == tip and any(f"a fix is marked, #{n} at {head[:8]}" in x for x in world.logs), world.logs
     world.gh.ready.discard((n, head))                                   # its owner withdrew the fix: the clock ran out
     h.tick()
     assert _git(world.origin, "rev-parse", "main^") == tip and any("#2 reverted on `main`" in p for p in h.posts), h.posts
+
+
+def test_an_unrelated_pr_that_names_the_red_suite_holds_no_revert(world, monkeypatch, tmp_path):
+    """26 Oct, top's review of #4737: counting any ready PR whose body names the suite let a suite called `research` be held
+    for good by whatever PR mentions research.  Neither the name nor `suite research` without `fixes` holds the revert."""
+    from research.drive import FIX_WINDOW_S
+
+    _owning(world, {"lane-2": [], "ci": ["tools/research/"]})
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"tools/research/tests/test_x.py": "def test_y():\n    assert False\n"}))
+    for n in (1, 2):
+        h.review(n)
+    assert h.tick().startswith("landed #2")
+    tip = _main(world)
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "steps.jsonl").write_text(json.dumps({"step": "pytest", "status": "failed"}) + "\n")
+    (run / "suites.json").write_text(json.dumps([{"name": "research", "suite": "tools/research", "status": "failed",
+                                                  "failed_tests": ["tests/test_x.py::test_y"]}]))
+    h.run_state["r-post-0"] = ("done", 1, None)
+    h.evidence = [run]
+    h.tick()
+    (ring,) = [p for p in h.posts if "is red on" in p]
+    assert "suite research is red" in ring and "Culprit: #2" in ring and "says `fixes suite research`" in ring, ring
+    world.gh.put(9, world.change({"docs/notes.txt": "9\n"}),
+                 body="Lane `lane-9`. research: the research store's docs, as suite research reads them.")
+    h.clock += FIX_WINDOW_S + 1
+    h.tick()
+    assert _git(world.origin, "rev-parse", "main^") == tip and any("#2 reverted on `main`" in p for p in h.posts), h.posts
+    assert not any("a fix is marked, #" in x for x in world.logs), world.logs
 
 
 def test_a_red_after_landing_run_runs_on_and_is_cancelled_only_with_its_circuit_check_tail_left(world, monkeypatch, tmp_path):

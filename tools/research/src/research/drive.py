@@ -1601,9 +1601,11 @@ class Driver:
         paths = suite_paths(d, rec) if key.startswith("suite ") else step_paths(d, rec)
         hits = [x for x in members if touches(self._own(x), paths)] if paths else []
         why = f"its change touches {', '.join(sorted({f for x in hits for f in touches(self._own(x), paths)})[:4])}"
+        r["paths"] = sorted(paths or ()) + sorted({f for x in hits for f in touches(self._own(x), paths)})
         if not hits and (rule := self._input_rule(key, d, rec, tip)):
             label, ok = rule
             hits, why = [x for x in members if any(ok(f) for f in self._own(x))], f"its change touches {label}"
+            r["paths"] += sorted({f for x in hits for f in self._own(x) if ok(f)})
         since = f"{len(members)} landing(s) since `main` {base[:12]}, where it last passed"
         if len(hits) == 1:
             r.update(culprit=[hits[0].pr, hits[0].head, hits[0].owner, hits[0].commit], why=why, rung=self.now())
@@ -1627,7 +1629,8 @@ class Driver:
         owner = self._owner(Member(*c)) if c else None
         nr = f" Not run (a cancel stopped them): {', '.join(r['not_run'])}." if r.get("not_run") else ""
         clock = (f" Drive reverts #{c[0]} at {time.strftime('%H:%MZ', time.gmtime(r['rung'] + FIX_WINDOW_S))} unless a fix is "
-                 f"marked by then: a ready PR whose body names `{key.split(' ', 1)[1]}` or #{c[0]}, or a new head of #{c[0]}"
+                 f"marked by then: a ready PR whose body names #{c[0]} or says `fixes {key}`, or whose change touches what "
+                 f"failed, or a new head of #{c[0]}"
                  if c else "")
         self.refuse(drive, f"red:{key}:{c[3] if c else r['tip']}{tag}",
                     f"{key} is red on `main` {r['tip'][:12]} (run {' '.join(r['ids'])}): {r['first']}. {what[:1].upper()}{what[1:]}."
@@ -1683,21 +1686,36 @@ class Driver:
                 r["reverted"] = self.now()
 
     def _fix(self, key: str, r: dict) -> str | None:
-        """A marked fix of red ``key``: an open PR marked ready at its head that is a new head of the culprit, or whose body
-        names the failing suite (or step) or the culprit; None when there is none."""
+        """A marked fix of red ``key``: an open PR marked ready at its head that is a new head of the culprit, or whose body names
+        the culprit (`#N`) or says `fixes suite NAME` (case aside), or whose diff touches a path the failure named (`r["paths"]`,
+        those the culprit was named by).  A body that merely mentions the suite doesn't count: `research` or `check` is in
+        almost any body, and would hold the revert for good.  None when there is none."""
         pr, head = r["culprit"][0], r["culprit"][1]
         name = key.split(" ", 1)[1]
         if self._prs is None:
             self._prs = {p.number: p for p in self.q.github.open_prs()}
+        says = re.compile(rf"#{pr}\b|\bfixes\s+(?:suite|step)\s+`?{re.escape(name)}(?![\w/.-])", re.I)
         for p in sorted(self._prs.values(), key=lambda p: p.number):
-            if p.number == pr and p.head == head:
+            if p.number == pr and p.head == head or not self.q.ready(p.number, p.head):
                 continue
-            if p.number != pr and not (re.search(rf"#{pr}\b", p.body or "") or re.search(rf"(?<![\w/.-]){re.escape(name)}(?![\w/-])",
-                                                                                    p.body or "")):
-                continue
-            if self.q.ready(p.number, p.head):
-                return f"#{p.number} at {p.head[:8]}" + (", a new head of the culprit" if p.number == pr else "")
+            if p.number == pr:
+                return f"#{p.number} at {p.head[:8]}, a new head of the culprit"
+            if says.search(p.body or ""):
+                return f"#{p.number} at {p.head[:8]}"
+            if r.get("paths") and (hit := touches(self._pr_files(p), set(r["paths"]))):
+                return f"#{p.number} at {p.head[:8]}, whose change touches {', '.join(sorted(hit)[:3])}"
         return None
+
+    def _pr_files(self, p) -> set[str]:
+        """The files an open PR's head changes against `main` (from their merge base), read once per tick; none when its head
+        can't be fetched."""
+        cache = self.__dict__.setdefault("_own_files", {})
+        if (k := f"pr:{p.head}") not in cache:
+            if _git(self.repo, "cat-file", "-e", f"{p.head}^{{commit}}", check=False).returncode:
+                _git(self.repo, "fetch", "-q", "origin", f"+refs/pull/{p.number}/head:refs/queue/fix/{p.number}", check=False)
+            mb = _git(self.repo, "merge-base", "origin/main", p.head, check=False)
+            cache[k] = changed(self.repo, mb.stdout.strip(), p.head) if not mb.returncode and mb.stdout.strip() else set()
+        return cache[k]
 
     def _tail_left(self, run: dict) -> bool:
         """Whether every step of an after-landing run but `TAIL` (and those it skips by name) has ended, by its steps.jsonl."""
