@@ -870,8 +870,11 @@ def report(D: dict) -> str:
              f"GPU busy about {ANS_GPU_S:g} s: {ANS_RUN}), run beside the group's later rounds. A group's checks go "
              f"through the firewall one at a time, so k(Δ + τ_ans) ≤ T: {K_DRAWS:,} × {DELTA_S + TAU_ANS_S:g} s = "
              f"{K_DRAWS * (DELTA_S + TAU_ANS_S) / 86400:.2f} days, and {a_h['draws_hi']:,.0f} draws (the H200 8B "
-             f"group's at its 1 − 1e-6 quantile) take {a_h['t_min_h'] / 24:.2f} days of the {PERIOD_S / 86400:g}. No "
-             "coins go out in a period's last Δ + τ_ans.\n"
+             f"group's at its 1 − 1e-6 quantile) take {a_h['t_min_h'] / 24:.2f} days of the {PERIOD_S / 86400:g}. "
+             f"The margin is thin: at that quantile Δ + τ_ans may be at most {PERIOD_S / a_h['draws_hi']:.1f} s, so "
+             f"with Δ = {DELTA_S:g} s an answer has {PERIOD_S / a_h['draws_hi'] - DELTA_S:.1f} s against the proof's "
+             f"{ANS_FLOOR_S:g} s floor; a slower answer needs a longer period (the union over periods then shrinks) "
+             "or a shorter Δ. No coins go out in a period's last Δ + τ_ans.\n"
              "- **ε.** ε_S + ε_net at the model's group, times 1 + H_o/H for the honest answers (P25), with "
              "ln(P)/(ηk) added over a window's P periods (P26).\n")
     L.append(f"### The world (rule L2): pooled, every window, both δ, {HEADLINE}, V4 as the world's request (8B, 70B "
