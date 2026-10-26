@@ -2,8 +2,9 @@
 in order (`F32Mul_v2`, `F32Add_v2`, `F32Div_v2`, `Bf16MulF32_v1`, `Bf16MulBf16_v1`, and IEEE's correctly rounded square root
 with the GPU's NaN), on rows of activations, uniform words, special words, and words whose squares overflow or underflow; the
 copied square root is sqrt.rn.f32; the two-level form sums in its stated grouping and, at one chunk and G = 1, is the row's
-function; a row of activations is RMSNorm within bf16's rounding; and a row, chunk or sum count below 1 or an EPS whose f32 is
-zero or infinite is refused."""
+function; `RmsSumSqChunks`' chunks are `RmsSumSqPart`s and `RmsNormOutSums` is the four-part composition word for word; a row of
+activations is RMSNorm within bf16's rounding; and a row, chunk or sum count below 1, a count that doesn't divide its whole, or
+an EPS whose f32 is zero or infinite is refused."""
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -166,6 +167,39 @@ def test_one_chunk_and_one_sum_is_the_row(N: int) -> None:
     assert np.array_equal(two, _words(bind(R.RmsNormRow, N=N, EPS=1e-5), x, w).reshape(-1, N))
 
 
+def test_sum_chunks_are_sum_parts() -> None:
+    """Chunk i of `RmsSumSqChunks{C, K}` is `RmsSumSqPart{K}` of words iK to iK + K - 1; at K = C it is `RmsSumSqPart{C}`."""
+    rng = np.random.default_rng(7)
+    x = _rows(rng, 2000, 12)
+    for K in (1, 3, 4, 12):
+        got = _words(bind(R.RmsSumSqChunks, C=12, K=K), x).reshape(-1, 12 // K)
+        want = np.stack([_words(bind(R.RmsSumSqPart, C=K), x[:, i:i + K]).reshape(-1) for i in range(0, 12, K)], 1)
+        assert np.array_equal(got, want), K
+
+
+@pytest.mark.parametrize("G", [2, 3])
+def test_the_fused_output_unit_is_the_four_part_composition(G: int) -> None:
+    """N = 24 in S = 6 chunk sums of 4 words, in G groups: each output chunk of `RmsNormOutSums` is `RmsNormOut`'s at
+    `RmsNormRecip` of `F32SumPart`'s group sums, word for word, at an output chunk as wide as a sum's (C = 4) and twice as wide
+    (C = 8). The chunk sums are the row's own, special or uniform words, or words that absorb and cancel (1, 2 and ±2^25), so
+    that summing a group, or the group sums, in another order changes rs by far more than bf16's rounding hides."""
+    rng = np.random.default_rng(8 + G)
+    N, K, S = 24, 4, 6
+    x, w = _rows(rng, 3000, N), _rows(rng, 3000, N)
+    s = _words(bind(R.RmsSumSqChunks, C=N, K=K), x).reshape(-1, S)
+    s[:200, 1] = rng.choice(F32_SPECIALS, 200)
+    s[200:400, 4] = rng.integers(0, 1 << 32, 200, dtype=np.uint64).astype(np.uint32)
+    s[1000:] = rng.choice(np.array([1, 2, 2 ** 25, -2 ** 25], np.float32).view(np.uint32), (2000, S))
+    per = S // G
+    groups = [_words(bind(R.F32SumPart, G=per), s[:, g:g + per]).reshape(-1) for g in range(0, S, per)]
+    rs = _words(bind(R.RmsNormRecip, N=N, G=G, EPS=1e-5), np.stack(groups, 1)).reshape(-1)
+    for C in (4, 8):
+        fused = bind(R.RmsNormOutSums, C=C, S=S, G=G, N=N, EPS=1e-5)
+        for i in range(0, N, C):
+            want = _words(bind(R.RmsNormOut, C=C), x[:, i:i + C], rs, w[:, i:i + C]).reshape(-1, C)
+            assert np.array_equal(_words(fused, x[:, i:i + C], w[:, i:i + C], s).reshape(-1, C), want), (C, i)
+
+
 def test_a_row_of_activations_is_rmsnorm_within_bf16_rounding() -> None:
     """Against float64's ``w * x / sqrt(mean(x^2) + eps)``: two bf16 roundings and a few f32 ones, so within 2^-7 relative."""
     rng = np.random.default_rng(6)
@@ -181,6 +215,8 @@ def test_outputs_fill_their_size_class_and_bad_statics_are_refused() -> None:
     S = SimpleNamespace
     assert R.RmsNormRow.signature(S(N=16384, EPS=1e-5))[1].n == 16384
     assert R.RmsNormOut.signature(S(C=128))[1].n == 128
+    assert R.RmsNormOutSums.signature(S(C=128, S=128, G=2, N=16384, EPS=1e-5))[1].n == 128
+    assert R.RmsSumSqChunks.signature(S(C=2048, K=128))[1].n == 16
     for d, s in ((R.RmsSumSqPart, S(C=128)), (R.F32SumPart, S(G=64)), (R.RmsNormRecip, S(N=16384, G=2, EPS=1e-5))):
         assert d.signature(s)[1] == R.F32
     for bad in (S(N=0, EPS=1e-5), S(N=True, EPS=1e-5), S(N=4, EPS=0.0), S(N=4, EPS=-1e-5), S(N=4, EPS=1e-50),
@@ -188,6 +224,8 @@ def test_outputs_fill_their_size_class_and_bad_statics_are_refused() -> None:
         with pytest.raises(ValueError):
             R.RmsNormRow.signature(bad)
     for d, bad in ((R.RmsSumSqPart, S(C=0)), (R.F32SumPart, S(G=0)), (R.RmsNormRecip, S(N=4, G=0, EPS=1e-5)),
-                   (R.RmsNormOut, S(C=-1))):
+                   (R.RmsNormOut, S(C=-1)), (R.RmsSumSqChunks, S(C=12, K=5)), (R.RmsSumSqChunks, S(C=12, K=0)),
+                   (R.RmsNormOutSums, S(C=4, S=6, G=4, N=24, EPS=1e-5)), (R.RmsNormOutSums, S(C=0, S=6, G=2, N=24, EPS=1e-5)),
+                   (R.RmsNormOutSums, S(C=4, S=6, G=2, N=24, EPS=0.0))):
         with pytest.raises(ValueError):
             d.signature(bad)

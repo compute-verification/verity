@@ -44,11 +44,12 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
         [--temperature T] [--top-p P]
     python warden_serve.py fake --listen HOST:PORT [--token-ms 20] [--id-payload P]
     python warden_serve.py serve --upstream HOST:PORT --listen HOST:PORT --out DIR --key KEYDIR --session HEX
-        --windows N [--start-in 5] [schedule]
+        --windows N [--start-in 5] [--load-heads FILE] [schedule]
     python warden_serve.py client --deployment DIR/deployment.json --traffic TRAFFIC.json --out DIR
     python warden_serve.py check --run DIR
     python warden_serve.py rehearse (--upstream HOST:PORT | --fake) --out DIR [--requests 100] [--temperature T]
-        [--top-p P] [--ids [--prompts FILE [--window-per-group]]] [schedule]
+        [--top-p P] [--ids [--prompts FILE [--window-per-group]]] [--load-store DIR --load-sinks HOST:PORT,...
+        --load-program HEX [--load-shape h200|tiny] [--load-workers N] [--load-ready-s 900]] [schedule]
 
 - `serve` writes `deployment.json` (the warden's public key, the session, the schedule's parameters and their digest,
   the origin, the listener), runs the warden for `--windows` windows, and writes `warden.json` (each connection's
@@ -78,6 +79,16 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   egress record's; `check.json`.
 - `rehearse` makes a key in a scratch directory, writes the traffic, starts the fake endpoint when `--fake`, and runs
   `serve` and `client` as processes, then `check`.
+
+**The load** (`--load-store`, the gate's `load-relay`): the serving session's weights' load, relayed and committed by
+this device and signed by its one signer. `rehearse` first relays the store to the H200's sink
+(`load_relay.relay_load`: `--load-sinks`, one stream an address, each value committed under the verifier's domain for
+`--load-program`, its salts sent on to the sink's witness and kept nowhere here), writing `load-heads.json` and
+`load-relay.json`; a refused load serves nothing. It then waits up to `--load-ready-s` for the endpoint, which the
+prover starts on the weights its sink wrote, and runs `serve --load-heads`: the publisher process signs every head in
+the run's session before its first window (`sign_load`), so one LMS key and one session carry the load and the windows,
+and writes `load.json`, the client's kept registrations of the load. `check` reads it under the deployment's key and
+session (`check_load`) at the relay's roots.
 """
 
 from __future__ import annotations
@@ -88,6 +99,7 @@ import ctypes
 import dataclasses
 import fcntl
 import hashlib
+import http.client
 import json
 import math
 import multiprocessing
@@ -109,6 +121,7 @@ from pathlib import Path
 
 import active_replay as ar
 import certifier_serve as cs
+import load_relay as lr
 import stall_probe
 from verity.core.protocols.certifier import io_tie as IT, warden_rows as WR
 from verity.core.protocols.certifier.active import DATA, PAD, id_request
@@ -490,14 +503,29 @@ def grid_digest(grid) -> bytes:
     return h.digest()
 
 
-def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params: WardenParams, commit) -> None:
-    """`PublisherProcess`'s process: the warden's key and its leaf state are this process's alone. It sends the public
-    key, rebuilds each record from its released rows, keeps it as `Publisher` does at its close once the rebuilt grid's
-    digest is the close marker's, and at the end sends the issuer's refusals and its own usage."""
+def sign_load(issuer: Issuer, key: LmsKey, heads: Path, out: Path) -> dict:
+    """The load's heads (`heads`, the relay's ``load-heads.json``) signed by the warden's `issuer` in its session, before
+    it serves: ``load.json`` in `out` (`load_relay.load_doc`), the load's registrations the block record pins, under
+    the key and session that then certify the run's windows. Raises `load_relay.Refused` when the signer refuses."""
+    shape, heads_ = lr.heads_of(json.loads(heads.read_text()))
+    doc = lr.load_doc(shape, heads_, lr.sign_heads(issuer, heads_), cs.public_json(key), issuer.session)
+    (out / "load.json").write_text(json.dumps(doc, indent=1) + "\n")
+    return doc
+
+
+def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params: WardenParams, commit,
+                    load_heads: Path | None = None) -> None:
+    """`PublisherProcess`'s process: the warden's key and its leaf state are this process's alone. It signs the load's
+    heads first when there are any (`sign_load`), sends the public key, rebuilds each record from its released rows,
+    keeps it as `Publisher` does at its close once the rebuilt grid's digest is the close marker's, and at the end
+    sends the issuer's refusals and its own usage."""
     try:
         own = cs.signer(key)
+        issuer = Issuer(own, session)
+        if load_heads is not None:
+            sign_load(issuer, own.public_key(), load_heads, out)
         results.send(("key", own.public_key()))
-        publisher = Publisher(out, Issuer(own, session), params, commit or WR.Cells.of)
+        publisher = Publisher(out, issuer, params, commit or WR.Cells.of)
         grids = {INGRESS: params.grid, EGRESS: params.grid, FAILS: params.fails_grid}
         filling: dict[str, list] = {link: [] for link in grids}
         B = params.cell_bytes
@@ -532,16 +560,18 @@ class PublisherProcess:
     marker's, and keeps, certifies and commits it, so neither a commit nor a signature takes the ticker's GIL. `key`
     is the warden's public key; `close` waits for every record and gives the issuer's refusals; `usage` is then the
     process's own. A process that exits early, killed or failed, raises at the next close or at `close`. `commit`
-    stands in for `Cells.of` (a test's). The queue's thread is started at construction, with a row of the grid's size
-    that the process drops, so that the first tick starts no thread and the thread's buffers have grown to a row's;
-    `feeder` is its thread id."""
+    stands in for `Cells.of` (a test's). With `load_heads` the process signs the load's heads before anything else
+    (`sign_load`), so construction returns once ``load.json`` is written. The queue's thread is started at
+    construction, with a row of the grid's size that the process drops, so that the first tick starts no thread and
+    the thread's buffers have grown to a row's; `feeder` is its thread id."""
 
-    def __init__(self, out: Path, key: Path, session: bytes, params: WardenParams, commit=None) -> None:
+    def __init__(self, out: Path, key: Path, session: bytes, params: WardenParams, commit=None,
+                 load_heads: Path | None = None) -> None:
         ctx = multiprocessing.get_context("spawn")
         self.rows = ctx.Queue()
         self.results, results = ctx.Pipe(duplex=False)
         self.process = ctx.Process(target=_publisher_main, name="warden-publisher", daemon=True,
-                                   args=(self.rows, results, out, key, session, params, commit))
+                                   args=(self.rows, results, out, key, session, params, commit, load_heads))
         self.process.start()
         results.close()
         self.usage: dict | None = None
@@ -689,17 +719,18 @@ def prepare_process(params: WardenParams) -> dict:
 
 async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], listen: tuple[str, int], key: Path,
                 session: bytes, windows: int, start_in: float = 5.0, slack: float = 0.025,
-                announce=cs._announce, probe: bool = False, process: dict | None = None) -> dict:
+                announce=cs._announce, probe: bool = False, process: dict | None = None,
+                load_heads: Path | None = None) -> dict:
     """One run of the warden on the host's clock (the module docstring's `serve`), its records published by a
-    `PublisherProcess` that holds the key in `key`, its threads sampled by `stall_probe` when `probe`. Returns what
-    `warden.json` holds, with `process`, what `prepare_process` did. The loop's errors are kept, not logged: the
-    ticker writes no file."""
+    `PublisherProcess` that holds the key in `key` and first signs the load's heads `load_heads` when given, its
+    threads sampled by `stall_probe` when `probe`. Returns what `warden.json` holds, with `process`, what
+    `prepare_process` did. The loop's errors are kept, not logged: the ticker writes no file."""
     out.mkdir(parents=True, exist_ok=True)
     loop = asyncio.get_running_loop()
     errors: list[str] = []
     loop.set_exception_handler(lambda _, context: errors.append(f"{context.get('message')}: "
                                                                f"{context.get('exception')!r}"))
-    publish = PublisherProcess(out, key, session, params)
+    publish = PublisherProcess(out, key, session, params, load_heads=load_heads)
     origin = time.monotonic() + start_in
     warden = Warden(params, lambda: asyncio.open_connection(*upstream), origin=origin, windows=windows,
                     publish=publish, release=publish.release, slack=slack)
@@ -852,6 +883,31 @@ def egress_cells(records: list[Record], params: WardenParams) -> dict[int, list[
     return out
 
 
+def check_load(run: Path, dep: dict, key: LmsKey, session: bytes) -> tuple[dict | None, list[str]]:
+    """A run's load read as the verifier reads it, None when it carried none: ``load.json`` signed under the
+    deployment's own key and session, every value's registration accepted (`load_relay.check_load`), each at the root
+    the relay committed (``load-heads.json``)."""
+    doc_path, heads_path = run / "load.json", run / "load-heads.json"
+    if not doc_path.exists() and not heads_path.exists():
+        return None, []
+    try:
+        doc = json.loads(doc_path.read_text())
+    except (OSError, ValueError):
+        return {"values": 0, "registered": 0, "relayed": False}, ["load: the relay's heads aren't signed (no load.json)"]
+    problems = [] if (doc.get("key"), doc.get("session")) == (dep["key"], dep["session"]) else \
+        ["load: not signed under the deployment's key and session"]
+    summary, found = lr.check_load(doc, key, session)
+    try:
+        heads = json.loads(heads_path.read_text())
+        relayed = (heads.get("program"), heads.get("link"), list(heads.get("roots", {}).items())) == \
+            (doc.get("program"), doc.get("link"), [(r.get("value"), r.get("root")) for r in doc.get("values", [])])
+    except (OSError, ValueError, AttributeError):
+        relayed = False
+    if not relayed:
+        problems.append("load: its registrations aren't the relay's heads (load-heads.json)")
+    return summary | {"relayed": relayed}, problems + found
+
+
 def check(run: Path) -> dict:
     """The offline check of a served run (the module docstring's `check`)."""
     dep = json.loads((run / "deployment.json").read_text())
@@ -860,6 +916,8 @@ def check(run: Path) -> dict:
     certified, refused = read_certified(run / "certified.jsonl")
     records = read_records(run, params)
     problems = [] if params.digest.hex() == dep["digest"] else ["the deployment's digest isn't its parameters'"]
+    load, load_problems = check_load(run, dep, key, session)
+    problems += load_problems
     windows = []
     for name, (link, direction) in CERTIFIED.items():
         got = {r.window: r for r in records[name]}
@@ -927,6 +985,7 @@ def check(run: Path) -> dict:
                           max((r.get("prompt_tokens") or 0 for r in served), default=None)],
         "finish_reasons": {f: sum(r.get("finish_reason") == f for r in served)
                            for f in sorted({str(r.get("finish_reason")) for r in served})},
+        **({} if load is None else {"load": load}),
     }
     return {"accepted": not problems, "problems": problems[:50], "summary": summary, "windows": windows,
             "connections": rows}
@@ -934,7 +993,9 @@ def check(run: Path) -> dict:
 
 def table(result: dict) -> str:
     s = result["summary"]
-    return (f"{'ACCEPTED' if result['accepted'] else 'REFUSED'}: {s['ended']}/{s['requests']} ended, "
+    load = "" if "load" not in s else (f"load {s['load']['registered']}/{s['load']['values']} values registered"
+                                       f"{'' if s['load'].get('relayed') else ', not the relay heads'}; ")
+    return (f"{'ACCEPTED' if result['accepted'] else 'REFUSED'}: {load}{s['ended']}/{s['requests']} ended, "
             f"{s['refused']} refused, failed {s['failed']}; {s['certified_windows']}/{len(CERTIFIED) * s['windows']} "
             f"link-windows "
             f"certified; cells in their bucket {s['cells_in_their_bucket'][0]}/{s['cells_in_their_bucket'][1]}; "
@@ -970,11 +1031,31 @@ def _flags(args) -> list[str]:
                                                                  str(getattr(args, f.name)))]
 
 
+def await_model(url: str, seconds: float, poll: float = 5.0) -> str:
+    """The endpoint's one model (`cs.served_model`), asked again each `poll` seconds while it doesn't answer, for at most
+    `seconds`: after the load the prover starts its server on the weights its sink wrote."""
+    deadline = time.monotonic() + seconds
+    while True:
+        try:
+            return cs.served_model(url)
+        except (OSError, ValueError, http.client.HTTPException) as e:
+            if time.monotonic() >= deadline:
+                raise SystemExit(f"{url} didn't answer within {seconds:g} s of the load: {e}") from None
+            time.sleep(poll)
+
+
+def _addresses(text: str) -> list[tuple[str, int]]:
+    return [cs._address(a) for a in text.split(",")]
+
+
 def rehearse(args) -> int:
     if args.prompts is not None and not args.ids:
         raise SystemExit("--prompts: id requests' prompts, with --ids")
     if args.window_per_group and args.prompts is None:
         raise SystemExit("--window-per-group: groups of the --prompts")
+    load = args.load_store is not None
+    if load and not (args.load_sinks and args.load_program and lr.HEX64.fullmatch(args.load_program)):
+        raise SystemExit("--load-store: with --load-sinks and --load-program, the reading program's digest in hex")
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
     params = _params(args)
@@ -983,6 +1064,15 @@ def rehearse(args) -> int:
     procs: list[subprocess.Popen] = []
     try:
         cs.load_key(scratch / "warden", args.height)
+        if load:
+            try:
+                lr.relay_load(args.load_store, lr.SHAPES[args.load_shape], args.load_sinks, args.load_program, out,
+                              workers=args.load_workers, progress=lr.progress_lines())
+            except lr.Refused as e:
+                (out / "check.json").write_text(json.dumps({"accepted": False, "problems": [f"load: {e}"],
+                                                            "summary": {}}, indent=1))
+                print(f"REFUSED: the load: {e}", flush=True)
+                return 1
         if args.fake:
             ids = ["--id-payload", str(params.payload)] if args.ids else []
             fake = subprocess.Popen(me + ["fake", "--listen", "127.0.0.1:0", "--token-ms", str(args.token_ms), *ids],
@@ -991,8 +1081,8 @@ def rehearse(args) -> int:
             upstream = tuple(json.loads(fake.stdout.readline())["listening"])
             model = "fake"
         else:
-            upstream = args.upstream
-            model = args.model or cs.served_model("http://%s:%d" % upstream)
+            upstream, url = args.upstream, "http://%s:%d" % args.upstream
+            model = args.model or (await_model(url, args.load_ready_s) if load else cs.served_model(url))
         traffic = traffic_of(args, model)
         (out / "traffic.json").write_text(json.dumps(traffic))
         window_s = params.window * params.bucket_ms / 1000
@@ -1006,7 +1096,8 @@ def rehearse(args) -> int:
             serving = subprocess.Popen(me + ["serve", "--upstream", "%s:%d" % upstream, "--listen", "127.0.0.1:0",
                                              "--out", str(out), "--key", str(scratch / "warden"), "--session",
                                              secrets.token_hex(32), "--windows", str(windows), "--start-in",
-                                             str(args.start_in), "--slack", str(args.slack), *_flags(args)],
+                                             str(args.start_in), "--slack", str(args.slack), *_flags(args),
+                                             *(["--load-heads", str(out / "load-heads.json")] if load else [])],
                                        stdout=subprocess.PIPE, stderr=log, text=True)
             procs.append(serving)
             if "listening" not in json.loads(serving.stdout.readline() or "{}"):
@@ -1070,6 +1161,17 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--windows", required=True, type=int)
     s.add_argument("--stall-probe", action=argparse.BooleanOptionalAction, default=True,
                    help="sample the warden's threads every millisecond for D episodes (stall_probe.py; stalls.json)")
+    s.add_argument("--load-heads", type=Path,
+                   help="the load's heads (load_relay.py's load-heads.json), signed first in the session: load.json")
+    r.add_argument("--load-store", type=Path,
+                   help="relay the load first: the store's directory (load_relay.py write), its stream sent to "
+                        "--load-sinks and committed as it crosses, its heads signed by the warden before it serves")
+    r.add_argument("--load-shape", choices=sorted(lr.SHAPES), default="h200")
+    r.add_argument("--load-sinks", type=_addresses, help="the H200 sink's HOST:PORT, one a stream, comma-separated")
+    r.add_argument("--load-program", help="the reading program's digest, 64 bytes in lowercase hex")
+    r.add_argument("--load-workers", type=int, default=os.cpu_count() or 1, help="processes committing the load")
+    r.add_argument("--load-ready-s", type=float, default=900.0,
+                   help="seconds the endpoint has after the load to answer /v1/models")
     up = r.add_mutually_exclusive_group(required=True)
     up.add_argument("--upstream", type=cs._address, help="the server's HOST:PORT (an OpenAI endpoint)")
     up.add_argument("--fake", action="store_true", help="start the fake endpoint and use it")
@@ -1134,7 +1236,7 @@ def main(argv=None) -> int:
             os.environ.pop(name, None)
         asyncio.run(serve(params, args.out, upstream=args.upstream, listen=args.listen, key=args.key,
                           session=session, windows=args.windows, start_in=args.start_in, slack=args.slack,
-                          probe=args.stall_probe, process=process))
+                          probe=args.stall_probe, process=process, load_heads=args.load_heads))
         return 0
     if args.command == "client":
         ar._quiet_runtime()
