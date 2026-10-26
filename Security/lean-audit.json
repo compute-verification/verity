@@ -3702,6 +3702,9 @@
    "assumptions": [],
    "type_hash": "9a2761d958d2d306a7d19b3244834d2b40d50f94d9553792ff9ad8de177c92ab"
   },
+  "Accounting.SecurityProofs.Remote.SketchBoundP2": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.Remote.SketchBoundSession": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Remote.SketchBoundSession : Accounting.Guarantees.Remote.SketchBoundSession"],
