@@ -2,6 +2,7 @@ import Proofs.Flock.Claims.KS.PlainDrawRColsE
 import Proofs.Flock.Claims.Recursion.NextRTables
 import Proofs.Flock.Claims.Recursion.BoundRun
 import Proofs.Flock.Claims.Recursion.DeployHonest
+import Proofs.Flock.Claims.Recursion.DeployedR
 
 /-!
 # The honest prover's run passes `IVStar` at the deployed reader (`bdR`, `nextR`)
@@ -574,3 +575,117 @@ theorem innerAccepts_honest (rel : _root_.Flock.Readable.Parsed → _root_.Flock
   exact ivstarR_honest_files rel rd cols wE rowIn final w hx hP hc1 hresp hk hS hfin hacc
 
 end RecDeploy
+
+namespace RecDeploy.DeployedR
+
+open Flock FlockDeploy FlockDeploy.KS
+open Claims (Msg)
+
+/-- **One round's openings as the honest prover lays them in V\*'s last message**: each row, then its salt. -/
+def encRound (os : List (Msg × Salt)) : Msg := os.flatMap fun o => o.1 ++ List.ofFn o.2
+
+/-- Every earlier round's openings, round by round. -/
+def encRounds (oss : List (List (Msg × Salt))) : Msg := oss.flatMap encRound
+
+/-- Each round's opened rows' byte lengths, the trailer's contents. -/
+def lensOf (oss : List (List (Msg × Salt))) : List (List ℕ) := oss.map fun os => os.map fun o => o.1.length
+
+/-- **The honest prover's last message to V\***: every earlier round's openings (`encRounds`), then the element-level
+last message `last`, then the trailer of the openings' row lengths. -/
+def lastOR (oss : List (List (Msg × Salt))) (last : Msg) : Msg := encRounds oss ++ last ++ trailer (lensOf oss)
+
+theorem saltOf_ofFn (y : Salt) : saltOf (List.ofFn y) = y := by
+  funext i
+  simp only [saltOf]
+  rw [List.getD_eq_getElem _ _ (by simp), List.getElem_ofFn]
+
+theorem cutRound_encRound (rest : Msg) :
+    ∀ os : List (Msg × Salt), cutRound (os.map fun o => o.1.length) (encRound os ++ rest) = some (os, rest)
+  | [] => by simp [encRound, cutRound]
+  | (r, y) :: os => by
+    have hy : (List.ofFn y).length = Hm96.sha512.saltBytes := List.length_ofFn
+    have hm : encRound ((r, y) :: os) ++ rest = r ++ (List.ofFn y ++ (encRound os ++ rest)) := by
+      simp [encRound, List.append_assoc]
+    rw [hm]
+    simp only [List.map_cons, cutRound]
+    rw [if_pos (by simp only [List.length_append, hy]; omega), List.drop_left, List.drop_left' hy,
+      cutRound_encRound rest os, List.take_left, List.take_left' hy, saltOf_ofFn]
+    rfl
+
+theorem cutRounds_encRounds (rest : Msg) :
+    ∀ oss : List (List (Msg × Salt)), cutRounds (lensOf oss) (encRounds oss ++ rest) = some (oss, rest)
+  | [] => by simp [lensOf, encRounds, cutRounds]
+  | os :: oss => by
+    have hm : encRounds (os :: oss) ++ rest = encRound os ++ (encRounds oss ++ rest) := by
+      simp [encRounds, List.append_assoc]
+    rw [hm]
+    show cutRounds ((os.map fun o => o.1.length) :: lensOf oss) _ = _
+    simp only [cutRounds]
+    rw [cutRound_encRound]
+    simp [cutRounds_encRounds rest oss]
+
+/-- **`finalR` reads the honest last message** as the openings it lays out and the element-level last message, where
+the trailer's numbers fit its 8-byte fields. -/
+theorem finalR_lastOR (oss : List (List (Msg × Salt))) (last : Msg) (hl : (lensOf oss).length < 2 ^ 64)
+    (hl' : ∀ l ∈ lensOf oss, l.length < 2 ^ 64 ∧ ∀ n ∈ l, n < 2 ^ 64)
+    (hh : (encList (encList encNat) (lensOf oss)).length < 2 ^ 64) :
+    finalR (lastOR oss last) = some (oss, last) := by
+  rw [lastOR, finalR_trailer _ _ hl hl' hh, cutRounds_encRounds]
+
+/-- **The honest reps' rows at the pure session's files**: rep `k`'s `repRows` at its proof `filePs[k]`, the caps
+`fileCaps` and the coins between the first and the last (`ivstarR_honest_files`' reps). -/
+noncomputable def filesReps (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (pfs : Array ByteArray)
+    (cs : List Coin) (Ts : ℕ → F128) : List (List (List ByteArray)) :=
+  (List.range (filePs spec sts c₁ pfs).size).map fun k =>
+    repRows (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast k) (filePs spec sts c₁ pfs)[k]!
+      (Ts k)
+
+/-- **The honest rows under their salts at the pure session's files.** -/
+noncomputable def filesOs (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (pfs : Array ByteArray)
+    (cs : List Coin) (Ts : ℕ → F128) (ys : ℕ → ℕ → Salt) : List (List (Msg × Salt)) :=
+  salted ys (honestRounds (fileCaps spec sts c₁ pfs) (filesReps spec sts c₁ pfs cs Ts))
+
+/-- **The honest session passes `IVStar` at `final := finalR`**: `ivstarR_honest_files` with its last message
+`lastOR` of the salted honest rows, which `finalR` reads (`finalR_lastOR`), so only the honest verdict (`nextR rd`
+accepting `honestMsgs`) and the trailer's 8-byte bounds stay hypotheses. -/
+theorem ivstar_honest_filesR (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (rd : Msg → Option FinalP) (cols : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ)
+    (rowIn : Msg → Msg) (w : Msg → ℝ) {x : Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
+    {cs : List Coin} {resp : ℕ → Msg} {wI : Claims.Flock.Wit} {ω : FlockComplete.Tape} {Ts : ℕ → F128}
+    {ys : ℕ → ℕ → Salt} {last : Msg} (hx : setupOf false x = some (s, spec, sts)) (hP : PlainTablesOk s.read sts)
+    (hc1 : cs.head? = some c₁) (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes)
+    (hk : cs.length = (V false).k x) {rec : String} {pfs : Array ByteArray} {bs : Array Msg}
+    (hS : FlockComplete.sessionS sha512 resp spec sts wI ω = (.ok (rec, pfs), bs))
+    (hl : (lensOf (filesOs spec sts c₁ pfs cs Ts ys)).length < 2 ^ 64)
+    (hl' : ∀ l ∈ lensOf (filesOs spec sts c₁ pfs cs Ts ys), l.length < 2 ^ 64 ∧ ∀ n ∈ l, n < 2 ^ 64)
+    (hh : (encList (encList encNat) (lensOf (filesOs spec sts c₁ pfs cs Ts ys))).length < 2 ^ 64)
+    (hacc : ((nextR rd x (honestMsgs (fileCaps spec sts c₁ pfs) (filesReps spec sts c₁ pfs cs Ts) last) cs).eval
+      sha512).1 = .acc) :
+    (Claims.run sha512 (Claims.replay (honestAsR rel rd cols wE rowIn finalR w (fileCaps spec sts c₁ pfs)
+      (filesReps spec sts c₁ pfs cs Ts) ys (lastOR (filesOs spec sts c₁ pfs cs Ts ys) last)))
+      (bdC rel rd cols wE joinR rowIn finalR w).IVStar x () fun i => cs.getD i.val default).out = .acc :=
+  ivstarR_honest_files rel rd cols wE rowIn finalR w hx hP hc1 hresp hk hS (finalR_lastOR _ _ hl hl' hh) hacc
+
+/-- **Recursion completeness's inner premise at `final := finalR`** (`InnerAccepts`): `innerAccepts_honest` with the
+honest last message `lastOR`, which `finalR` reads. -/
+theorem innerAccepts_honestR (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (rd : Msg → Option FinalP) (cols : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ)
+    (rowIn : Msg → Msg) (w : Msg → ℝ) {xC : Msg} {v : List (Msg × Msg)} {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {c₁ : Coin} {cs : List Coin} {resp : ℕ → Msg} {wI : Claims.Flock.Wit}
+    {ω : FlockComplete.Tape} {Ts : ℕ → F128} {ys : ℕ → ℕ → Salt} {last : Msg}
+    (hx : setupOf false (xIOf xC) = some (s, spec, sts)) (hP : PlainTablesOk s.read sts) (hc1 : cs.head? = some c₁)
+    (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes) (hk : cs.length = (V false).k (xIOf xC))
+    {rec : String} {pfs : Array ByteArray} {bs : Array Msg}
+    (hS : FlockComplete.sessionS sha512 resp spec sts wI ω = (.ok (rec, pfs), bs))
+    (hl : (lensOf (filesOs spec sts c₁ pfs cs Ts ys)).length < 2 ^ 64)
+    (hl' : ∀ l ∈ lensOf (filesOs spec sts c₁ pfs cs Ts ys), l.length < 2 ^ 64 ∧ ∀ n ∈ l, n < 2 ^ 64)
+    (hh : (encList (encList encNat) (lensOf (filesOs spec sts c₁ pfs cs Ts ys))).length < 2 ^ 64)
+    (hacc : ((nextR rd (xIOf xC) (honestMsgs (fileCaps spec sts c₁ pfs) (filesReps spec sts c₁ pfs cs Ts) last)
+      cs).eval sha512).1 = .acc)
+    (hv : (v.take ((bdC rel rd cols wE joinR rowIn finalR w).IVStar.k (xIOf xC))).map Prod.fst =
+      honestAsR rel rd cols wE rowIn finalR w (fileCaps spec sts c₁ pfs) (filesReps spec sts c₁ pfs cs Ts) ys
+        (lastOR (filesOs spec sts c₁ pfs cs Ts ys) last)) :
+    InnerAccepts sha512 (bdC rel rd cols wE joinR rowIn finalR w).IVStar xC cs v :=
+  innerAccepts_honest rel rd cols wE rowIn finalR w hx hP hc1 hresp hk hS (finalR_lastOR _ _ hl hl' hh) hacc hv
+
+end RecDeploy.DeployedR
