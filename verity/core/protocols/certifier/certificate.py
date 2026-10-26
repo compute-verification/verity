@@ -63,11 +63,8 @@ What the certifier signs is witness: the sync and its salt never reach the audit
 certificate, a signature over a hiding commitment, is public. N2's advised verifier reads each window's sync only
 through its opening against the salted digest its certificate signs (`CertifiedClock.refusal`,
 `advised.SignedClocks`). A record certificate signs a record digest salted and a clock certificate a clock digest,
-each under its own tag, so one opens as the other only on a SHA-512 collision.
-
-`ClockCertificate` and `Issuer.clock`, which sign the clock digest itself, unsalted, are the form the Lean device
-(`CertifierDevice.Issuer`) and its difftest still hold to this module; nothing serves or reads them, and they go when
-the device signs the salted form.
+each under its own tag, so one opens as the other only on a SHA-512 collision. The Lean device's issuer
+(`CertifierDevice.Issuer.clock`) signs the same, and its difftest holds it to `Issuer.salted_clock`.
 
 The scheme is LMS over SHA-512 (`lms.DEPLOYED`: n = 64, w = 1, h = 20, the whole SHA-512 output, not truncated), whose
 unforgeability is ``euf-cma/lms-sha512-n64``. The certifier's signing step (`Issuer`) is handed it as a `Signer`
@@ -522,35 +519,6 @@ class CertifiedClock:
         return self.refusal(key, session) is None
 
 
-@dataclass(frozen=True, slots=True)
-class ClockCertificate:
-    """The Lean device's form of the clock certificate, unsalted (the module docstring): the sync and the certificate of
-    its clock digest (`clock_digest`) itself. Nothing serves or reads it."""
-
-    sync: ClockSync
-    certificate: Certificate
-
-    @property
-    def link(self) -> str:
-        return self.certificate.link
-
-    @property
-    def window(self) -> int:
-        return self.certificate.window
-
-    def verify(self, key: PublicKey, session: bytes) -> bool:
-        """The certificate is an egress one, signs this sync's clock digest, and verifies under `key` in certifier
-        session `session` (`Certificate.verify`)."""
-        c = self.certificate
-        if type(c) is not Certificate or c.direction is not Direction.EGRESS:
-            return False
-        try:
-            digest = clock_digest(self.sync)
-        except ValueError:
-            return False
-        return c.digest == digest and c.verify(key, session)
-
-
 @dataclass
 class Issuer:
     """The network certifier's signing step, beside its grid (`grid.Certifier`): one certificate per closed link-window,
@@ -558,8 +526,8 @@ class Issuer:
     session its state has already started. A refusal, of the start or of a leaf, leaves the link-window without a
     certificate (fail-closed) and is listed in `refused`; a refused start is asked again at the next link-window, and
     refused again. Each record's salt and each clock's is `SALT_BYTES` fresh bytes of `coins`, the certifier's own
-    randomness (the operating system's by default; a test injects its own), and `clock_salts` are those its clocks
-    have taken, none of which it takes again."""
+    randomness (the operating system's by default; a test injects its own), and `clock_salts` are those its signed
+    clock certificates have taken, none of which it takes again."""
 
     signer: Signer
     session: bytes
@@ -581,24 +549,20 @@ class Issuer:
     def salted_clock(self, link: str, window: int, sync: ClockSync) -> CertifiedClock | None:
         """The clock certificate of the egress link-window, `sync` being the one the certifier's shaper ran it under:
         the sync's clock digest salted by `SALT_BYTES` fresh bytes of `coins` (`clock_commitment`), or None when the
-        signer refuses. Raises `ValueError` on coins of another length and on a salt they gave an earlier clock of
-        this issuer, under which two windows of one sync would sign one digest."""
+        signer refuses. Raises `ValueError` on coins of another length and on a salt they gave an earlier signed clock
+        certificate of this issuer, under which two windows of one sync would sign one digest. A salt is taken once
+        signed under: a refused one signed nothing, so nothing public shares it."""
         salt = self.coins(SALT_BYTES)
         if len(salt) != SALT_BYTES:
             raise ValueError(f"the certifier's coins gave {len(salt)} bytes for a {SALT_BYTES}-byte salt")
         if salt in self.clock_salts:
             raise ValueError("the certifier's coins gave an earlier clock certificate's salt again, under which two "
                              "windows of one sync would sign one digest, so it signs no clock under it")
-        digest = clock_commitment(salt, sync)
+        certificate = self.sign(link, Direction.EGRESS, window, clock_commitment(salt, sync))
+        if certificate is None:
+            return None
         self.clock_salts.add(salt)
-        certificate = self.sign(link, Direction.EGRESS, window, digest)
-        return None if certificate is None else CertifiedClock(sync, salt, certificate)
-
-    def clock(self, link: str, window: int, sync: ClockSync) -> ClockCertificate | None:
-        """The Lean device's unsalted clock certificate of the egress link-window (`ClockCertificate`), or None when
-        the signer refuses. Nothing serves it: a certifier signs `salted_clock`."""
-        certificate = self.sign(link, Direction.EGRESS, window, clock_digest(sync))
-        return None if certificate is None else ClockCertificate(sync, certificate)
+        return CertifiedClock(sync, salt, certificate)
 
     def sign(self, link: str, direction: Direction, window: int, digest: bytes) -> Certificate | None:
         """A certificate of the 64-byte `digest` for the link-window in this session, or None when the signer refuses
