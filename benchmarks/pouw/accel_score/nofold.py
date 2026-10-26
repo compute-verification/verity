@@ -399,14 +399,22 @@ def world_macs(m: dict) -> tuple[dict, float, float, float, float]:
     return hist, m["static"] * WORLD_TOKENS, qk, pv, ix
 
 
-def static_pipes(card: str, model: str, budget: float, max_tiles: int = 6, frozen: bool = False, **kw) -> dict:
+def static_pipes(card: str, model: str, budget: float, max_tiles: int = 6, frozen: bool = False, p1: bool = False,
+                 **kw) -> dict:
     """v2's static rounds with tiles, picked under overlapped accounting: MAC-weighted tensor, ALU without wraps, wraps,
     the tensor saving at A = B = 0, and the worst shape's pipe maximum. `frozen` fixes the card's tile count (TILES)."""
     tot = T = A = W = S = 0.0
     worst = (0.0, None)
     tile_set = (TILES[card],) if frozen else range(1, max_tiles + 1)
     for K, N, reps in SHAPES[model]:
-        r = v2_pick(card, K, N, 16, budget, tile_set=tile_set, overlap=True, **kw)
+        if p1:
+            # P1 (RT-PROTO; SKIP-FIX §4): O is not a drawn word, so one word a cell (L = K) and nothing cheap is credited
+            # (ε_alg 0); the noise period L' = K/t is free and the peel to O is serving work.
+            r = min((v2_round(card, K, N, K, 16, tiles=K // Lp, **kw) for Lp in range(64, K + 1, 64) if K % Lp == 0),
+                    key=lambda r: r["gamma_max"])
+            r = {**r, "saved": 0.0}
+        else:
+            r = v2_pick(card, K, N, 16, budget, tile_set=tile_set, overlap=True, **kw)
         w = K * N * reps
         tot, T, A, W, S = tot + w, T + w * r["T"], A + w * r["A_nw"], W + w * r["wrap"], S + w * r["saved"]
         if r["gamma_max"] > worst[0]:
@@ -470,6 +478,7 @@ def v2_world(budget: float = 0.01, built: bool = False, max_tiles: int = 6, card
             s1 = min(st * s["saved"], slack)
             s2 = min(pv - x, (slack - s1) / (1 + ell))
             label = card + (" built" if built else "") + (" t=1" if max_tiles == 1 else "")
+            label += " P1" if kw.get("p1") else ""
             label += f" t={TILES[card]}" if kw.get("frozen") else ""
             label += f" V±{kw.get('u_x', V_WIDTH[card])}" if kw.get("frozen") else ""
             rows.append({"card": label, "model": m["name"], "gamma_add": g_add, "gamma": honest / tot,
@@ -522,6 +531,49 @@ def v2_frozen_print(budget: float = 0.0) -> list[dict]:
             print(f"  {card:13} V±{u_x}: worst eps_alg {e:.2%} at K {K} N {N} L {L} (gamma {g:.2f}); least lane load "
                   f"(A10: Strassen gains below 0.71 at ±80, 0.49 at ±96) {load:.2f}")
     return rows
+
+
+WORLD_FLOP = {"week": 1.8e29, "month": 7.8e29, "year": 9.36e30}   # brief rule L2 (Sept 2027 rate, R-ACCEL-7)
+K_DRAWS = 13816                                                     # ε_S 0.1% at δ 1e-6
+C_MM, C_SHA = 1.0, 1.0   # public best over honest at the cheapest registrable instance; D5 v1 (12:00Z) replaces them
+
+
+def eps_worksound(row: dict, delta: float, c_mm: float = C_MM, c_sha: float = C_SHA, net: float = 0.0) -> float:
+    """WORKSOUND's ε = (H_mm(1 − c_mm) + H_sha(1 − c_sha) + H_o)/H + ln(1/δ)/(ηk) + βK/(kH), at the period's binding
+    resource (the dual's vertex under the per-resource maximum): an ALU-bound period prices its ALU (SHA-512 for the
+    words, tree and coins; H_o 0, since wraps are outside credit), a tensor-bound one its tensor pipe (matmul, peels
+    included). ε_alg (PD2-1's and the tiles' routes) is part of 1 − c_mm. `net` is βK/(kH), 0 at no import."""
+    alu_bound = row["A"] - row["wrap_share"] >= row["T"]
+    h_mm, h_sha = (0.0, 1.0) if alu_bound else (1.0, 0.0)
+    eta = 1 - 2 ** -16
+    return h_mm * (1 - c_mm + row["eps_alg"]) + h_sha * (1 - c_sha) + math.log(1 / delta) / (eta * K_DRAWS) + net
+
+
+def d6(budget: float = 0.0) -> None:
+    """D6's number table: v2 as frozen and P1 beside it, ε at δ 1% and 1e-6 (WORKSOUND's form, a lower bound until D5),
+    γ overlapped and additive, tensor utilization, coverage, and the world model in FLOP (V4 is the world's request)."""
+    print("\nD6 (pre-D5: c_mm = c_sha = 1 at the paper SHA-512 rate, so eps is a lower bound; CALIB's theta pending)")
+    print(f"  {'design, card':34} {'model':16} {'g_ovl':>6} {'g_add':>6} {'util':>5} {'eps 1%':>7} {'eps 1e-6':>8} "
+          f"{'eps 1e-6 if honest hashes at the built rate':>10}")
+    rows = (v2_world(budget, frozen=True) + v2_world(budget, built=True, frozen=True) + v2_world(budget, p1=True)
+            + v2_world(budget, built=True, p1=True))
+    for r in rows:
+        r["wrap_share"] = r["A"] - r["gamma"] * (1 - r["wrap_uncredited"]) if r["A"] >= r["T"] else 0.0
+        card = r["card"].split(" built")[0].split(" t=")[0].split(" P1")[0]
+        built = " built" in r["card"]
+        c_sha = SHA_BUILT[card] / V2_CARDS[card][1] if built else 1.0
+        r["eps"] = {d: eps_worksound(r, d, c_sha=c_sha) for d in (0.01, 1e-6)}
+        print(f"  {r['card']:34} {r['model']:16} {r['gamma']:6.2f} {r['gamma_add']:6.2f} {r['util']:5.1%} "
+              f"{r['eps'][0.01]:7.3%} {r['eps'][1e-6]:8.3%}" + (f"   (c_sha {c_sha:.3f})" if built else ""))
+    print("  world model (V4 rows), FLOP a window: eps C at delta 1% / 1e-6; credited, ATT copy, uncredited (indexer)")
+    for r in rows:
+        if r["model"] != "DeepSeek-V4-Pro":
+            continue
+        cells = []
+        for w, F in WORLD_FLOP.items():
+            cells.append(f"{w} {r['eps'][0.01] * F:.2e} / {r['eps'][1e-6] * F:.2e}; cred {(1 - r['uncredited']) * F:.2e}"
+                         f", copy {r['copy_share'] * F:.2e}, uncr {r['uncredited'] * F:.2e}")
+        print(f"  {r['card']:34} " + " | ".join(cells))
 
 
 def v2_decode(budget: float = 0.01) -> None:
@@ -627,5 +679,6 @@ if __name__ == "__main__":
     v2_tiles()
     v2_world_print()
     v2_frozen_print()
+    d6()
     v2_decode()
     seg_coins()
