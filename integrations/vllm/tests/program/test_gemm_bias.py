@@ -27,12 +27,12 @@ from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import gemm_pins_for, vllm_ruleset
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.kernels import rows as RK
-from verity_vllm.program.registry import b1, gemm_bias, hopper
+from verity.ml.definitions.numerics import rows as RK
+from verity.ml.definitions.registry import b1, gemm_bias, hopper
 from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.kernels.serve3_reference import materialize
+from verity.ml.definitions.numerics.serve3_reference import materialize
 from verity_vllm.query import required as RQ
-from verity_vllm.query import word as W
+from verity.ml.definitions import word as W
 
 BF = torch.bfloat16
 M, K, N = 3, 32, 8

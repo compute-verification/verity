@@ -28,8 +28,9 @@ from __future__ import annotations
 import atexit
 import contextlib
 import gc
-import os
 from collections.abc import Iterator
+
+from verity_vllm import settings
 
 ENV = "VERITY_GC_THRESHOLDS"
 TUNED = (100_000, 50, 1000)
@@ -39,7 +40,7 @@ _freeze_registered = False
 
 def thresholds(env: str = ENV) -> tuple[int, int, int] | None:
     """The configured thresholds, or None when the interpreter is to be left alone."""
-    raw = os.environ.get(env, "").strip().lower()
+    raw = settings.get(env)
     if raw in LEAVE:
         return None
     if not raw:

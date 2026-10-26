@@ -311,7 +311,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         return 2
     if getattr(ns, "auto", False):
         _auto_size(ns, harness_opts, command)
-        harness_opts = _auto_spill(ns, harness_opts)
+        if (harness_opts := _auto_spill(ns, harness_opts)) is None:
+            return 2
     if ns.claimed:
         _survive_stray_signals()
     mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
@@ -1014,10 +1015,10 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
     return None
 
 
-def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str]:
+def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str] | None:
     """`--on auto` once sized: queued onto AUTO_NODE as `_auto_placement` set it, or, where research.auto finds it starts sooner,
     a CPU-phase run of AUTO_KIND sent to a pool instead (`--on MACHINE --pool POOL`, under `--as`, else `auto`), with the
-    kind's time as its --timeout. The harness options it runs with."""
+    kind's time as its --timeout. The harness options it runs with, or None when it is refused (`auto.Unplaceable`)."""
     from . import auto
 
     cpus = ns.cpus or AUTO_CPUS
@@ -1025,7 +1026,11 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str]:
     gpu = ns.gpus or ns.gpu_model or ns.gpu_ids or ns.gpu_host or ns.quiet or ns.queue_phase == "gpu"
     target, why = None, "a GPU or quiet job, which only the queue books" if gpu else None
     if why is None:
-        target, why = auto.choose(auto.read(Path(ns.source), cpus), cpus, mem)
+        try:
+            target, why = auto.choose(auto.read(Path(ns.source), cpus), cpus, mem)
+        except auto.Unplaceable as e:
+            print(f"research run --on auto: refused: {e}", file=sys.stderr)
+            return None
     if target is None:
         print(f"research run --on auto: queued onto {auto.AUTO_NODE} as {ns.queue_kind}, from {ns.source} ({why})", file=sys.stderr)
         return harness_opts

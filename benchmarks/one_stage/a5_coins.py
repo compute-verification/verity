@@ -137,6 +137,26 @@ def lines(path: Path) -> list[str]:
     return [x for x in path.read_text().split("\n") if x]
 
 
+#: how long a client waits for an opened session's address to listen: the gate's open answers once the session's challenger
+#: has signed its commitment, before its `ssh -R` tunnel listens on the peer's 127.0.0.1:PORT (live_challenger/serve.py)
+TUNNEL_WAIT_S = 120
+
+
+def connect_when_listening(address: str, secret: bytes | None, connect: Callable[..., Any] = R.RemoteChallenger.connect,
+                           wait_s: float = TUNNEL_WAIT_S, clock: Callable[[], float] = time.monotonic,
+                           sleep: Callable[[float], None] = time.sleep) -> Any:
+    """The session's client at `address` once something listens there. A refused connection sends no hello and opens no
+    coin, so it is tried again every half second for up to `wait_s`; any other failure raises at once."""
+    deadline = clock() + wait_s
+    while True:
+        try:
+            return connect(address, secret)
+        except ConnectionRefusedError:
+            if clock() >= deadline:
+                raise
+            sleep(0.5)
+
+
 class Draws:
     """The step's coins over the window root `window_root` for every rank of `ranks`. Each rank plans its draw (`plan`).
     Once every rank has planned or ended (`wait_planned`), the session either opens (`connect`: its client, one
@@ -184,7 +204,7 @@ class Draws:
         refusing every rank's draw, when either fails."""
         client = None
         try:
-            client = R.RemoteChallenger.connect(address, None if secret is None else bytes.fromhex(secret))
+            client = connect_when_listening(address, None if secret is None else bytes.fromhex(secret))
             if commitment is not None and client.commitment.root.hex() != commitment:
                 raise Ch.CoinError(f"the challenger's hello answered commitment {client.commitment.root.hex()[:16]}…, not "
                                    f"the gate's {commitment[:16]}…")
@@ -463,12 +483,13 @@ class Local:
         argv += ["--params", ",".join(map(str, LOCAL_PARAMS)), "--keygen-workers", "1"]
         A.run(host, session, signer=self.signer, pinned=self.pin, now=lambda: datetime.now(timezone.utc), argv=argv)
 
-    def open(self, root: str, layout: list, minutes: int = MINUTES) -> tuple[str, str, str]:
-        """Reserve and open the session on `root` with the coins `layout`, as the gate does: (address, secret, commitment)."""
+    def open(self, root: str, layout: list, minutes: int = MINUTES, scheme: str = SCHEME) -> tuple[str, str, str]:
+        """Reserve and open the session on `root` with the coins `layout` of `scheme`, as the gate does: (address, secret,
+        commitment)."""
         A, host, now = self.A, self.host, datetime.now(timezone.utc)
         hooks = dict(by=self.by, now=now, own=lambda p: None, token=secrets.token_hex(2),
                      reserve=lambda s: A.reserve(host, s, signer=self.signer, pinned=self.pin, now=now))
-        rc, out = A.gate(["reserve", "--peer", LOCAL_PEER, "--scheme", SCHEME, "--families", json.dumps(layout),
+        rc, out = A.gate(["reserve", "--peer", LOCAL_PEER, "--scheme", scheme, "--families", json.dumps(layout),
                           "--minutes", str(minutes)], host, **hooks)
         if rc:
             raise Ch.CoinError(f"the local gate refused the reserve: {out.decode().strip()}")
@@ -487,7 +508,8 @@ class Local:
         if rc or got.get("commitment") is None:
             raise Ch.CoinError(f"the local gate refused the open, or its challenger signed no commitment: {out.decode().strip()}")
         address = host.sessions / self.session / "out" / "address.json"
-        while not address.exists() and alive(self.session):
+        # serve.py writes the file in place, its newline last: read it only once it is whole
+        while not (address.exists() and address.read_text().endswith("\n")) and alive(self.session):
             time.sleep(0.1)
         return json.loads(address.read_text())["address"], got["secret"], got["commitment"]
 
@@ -522,9 +544,9 @@ class Gate:
             raise Ch.CoinError(f"infra's gate refused {words.split()[0]}: {p.stderr.decode().strip() or p.stdout.decode().strip()}")
         return p.stdout
 
-    def open(self, root: str, layout: list, minutes: int = MINUTES) -> tuple[str, str, str]:
-        """Reserve and open the root's one session, once the host's pins log pins, in its last line, a commit on `main`: a
-        session from any other tree gives coins `pinned_session` refuses, and the gate opens a root once, ever."""
+    def open(self, root: str, layout: list, minutes: int = MINUTES, scheme: str = SCHEME) -> tuple[str, str, str]:
+        """Reserve and open the root's one session, of `scheme`, once the host's pins log pins, in its last line, a commit on
+        `main`: a session from any other tree gives coins `pinned_session` refuses, and the gate opens a root once, ever."""
         pins = [x for x in self._raw("pins").decode().split("\n") if x]
         pin = json.loads(pins[-1]).get("commit") if pins else None
         if pin not in self.main:
@@ -532,7 +554,7 @@ class Gate:
                                f"verifier's copy ({len(self.main)} commits from {self.main[0][:10] if self.main else None}): "
                                "repin the host to a commit on it (vy-challenger-pin), or refresh --main, before spending the "
                                "root's one session")
-        got = self.H1.gate_call(self.gate, ["reserve", "--peer", self.peer, "--scheme", SCHEME, "--families",
+        got = self.H1.gate_call(self.gate, ["reserve", "--peer", self.peer, "--scheme", scheme, "--families",
                                             json.dumps(layout, separators=(",", ":")), "--minutes", str(minutes)], self.ssh)
         self.session = got["session"]
         session, _ = self.H1.open_window(self.gate, self.session, bytes.fromhex(root), self.ssh)

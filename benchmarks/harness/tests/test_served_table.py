@@ -21,6 +21,7 @@ BY_SPEC = {
     "factors": served_table.Protocol("conversion factor", ("llama31-8b-fp8-1gpu-compiled-full",), served_table.SERVED,
                                      "stock-fp8"),
     "live": (),
+    "breakdowns": (),
 }
 LIVE_ARM, LIVE_CONTROL = "dither-a@x", "exact-fused"
 # Time per output token by arm; every arm slows by the same factor each rep, so the paired ratios are exact.
@@ -237,7 +238,7 @@ def test_a_run_of_record_is_read_by_run_id_or_through_an_arts_runs_from_a_fresh_
 
     table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, added=never, protocols=protocols,
                                factors=served_table.Protocol("factor", (), served_table.SERVED, "stock-fp8",
-                                                             record=(listed,)), live=())
+                                                             record=(listed,)), live=(), breakdowns=())
 
     rows = {(row["protocol"], row["point"]): row for row in table["rows"]}
     art_row = rows["by art", "b32-p512-mixed"]
@@ -293,7 +294,8 @@ def test_a_live_pouw_row_is_its_runs_median_decode_step_over_its_controls_and_st
     live = tuple(served_table.Live("H200", run, LIVE_ARM, LIVE_CONTROL) for run in runs)
 
     table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, protocols=(),
-                               factors=served_table.Protocol("factor", (), served_table.SERVED, "stock-fp8"), live=live)
+                               factors=served_table.Protocol("factor", (), served_table.SERVED, "stock-fp8"), live=live,
+                               breakdowns=())
 
     [row] = table["live"]
     assert (row["run"], row["record"], row["machine"], row["batch"], row["t"], row["reps"], row["coins"]) == (
@@ -322,6 +324,7 @@ def test_the_served_table_command_prints_markdown_and_json(tmp_path, monkeypatch
     monkeypatch.setattr(served_table, "PROTOCOLS", BY_SPEC["protocols"])
     monkeypatch.setattr(served_table, "FACTORS", BY_SPEC["factors"])
     monkeypatch.setattr(served_table, "LIVE", BY_SPEC["live"])
+    monkeypatch.setattr(served_table, "BREAKDOWNS", BY_SPEC["breakdowns"])
 
     assert main(["served-table"]) == 0
     out = capsys.readouterr().out
@@ -338,6 +341,8 @@ def test_every_record_names_runs_or_arts_and_every_live_row_a_run():
     for protocol in (*served_table.PROTOCOLS, served_table.FACTORS):
         assert not (protocol.record and protocol.specs), protocol.name
         assert all(ids.is_run_id(entry) or ids.is_art(entry) for entry in protocol.record), protocol.name
+    for entry in served_table.BREAKDOWNS:
+        assert entry.record and all(ids.is_run_id(e) or ids.is_art(e) for e in entry.record), entry.protocol
     assert all(ids.is_run_id(live.run) for live in served_table.LIVE)
     assert len({(live.run, live.arm) for live in served_table.LIVE}) == len(served_table.LIVE)
 

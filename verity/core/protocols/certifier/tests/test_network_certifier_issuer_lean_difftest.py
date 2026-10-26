@@ -5,8 +5,9 @@
 on each in a certifier session (its id 32 bytes, or 31 or 33, which the issuer refuses), and what this package's real
 `certificate.Issuer` does with them, its signer at the leaf the host reserves for each call (the parameters digest, the
 certified record or none, `verify` under the key and after a tamper, its certificate passed as a clock, and the
-issuer's `refused`), and clock calls on the same issuer (`Issuer.clock`: the clock certificate or none, `verify` under
-the key and after a tamper). `check` runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`,
+issuer's `refused`), and clock calls on the same issuer (`Issuer.salted_clock`: the salted clock certificate or none,
+refused under a salt an earlier signed one took, `verify` under the key and after a tamper). `check` runs the Lean
+half in its Lean audit (`runs` in that package's `lean-audit.json`,
 about a minute interpreted, since every key and signature is hashed by the Lean side's SHA-512):
 `CertifierDevice/IssuerDifftestMain.lean` threads one `Issuer` through each instance's calls and fails on any result
 that differs. The audit checks the data against the record's SHA-256, and its pass is cached on the Lean package's files
@@ -64,11 +65,17 @@ def test_the_generator_covers_what_it_says():
                 refused.append([c["record"]["link"], c["direction"], c["record"]["window"]])
         assert res["refused"] == refused
         seen_refusal = False
+        salts, taken = set(), set()
         for c, r in zip(inst["calls"], res["calls"], strict=True):
+            shared, salts = c["salt"] in salts, salts | {c["salt"]}
             if "clock" in c:
                 clock = r["clock"]
                 if c["malformed"] is not None:
                     clock_malformed[c["malformed"], clock is None] += 1
+                if c["salt"] in taken:
+                    calls["clock salt reused"] += 1
+                    assert clock is None
+                    continue
                 if clock is None:
                     calls["clock refused"] += 1
                     assert c["malformed"] is not None or session != 32
@@ -80,8 +87,10 @@ def test_the_generator_covers_what_it_says():
                     seen_refusal = True
                     continue
                 calls["clocked"] += 1
+                calls["clock salt shared, not taken"] += shared
+                taken.add(c["salt"])
                 calls["clock reduced"] += clock["certified"]["sync"] != c["clock"]["sync"]
-                assert clock["certified"]["verify"]
+                assert clock["certified"]["verify"] and clock["certified"]["salt"] == c["salt"]
                 if c["tamper"] is not None:
                     clock_tampers[c["tamper"][0]] += 1
                     assert clock["certified"]["tampered"] is (c["tamper"][0] == "resign-window"), c["tamper"]
@@ -114,6 +123,7 @@ def test_the_generator_covers_what_it_says():
     assert all(refused for _, refused in clock_malformed)
     assert set(as_clock) == {"egress", "ingress"}
     assert calls["clocked"] > 50 and calls["clock leaf refused"] > 5 and calls["clock reduced"] > 5
+    assert calls["clock salt reused"] > 3 and calls["clock salt shared, not taken"] > 3
     assert {k for k, _ in malformed} == set(vectors.MALFORMED)
     for kind in vectors.MALFORMED:
         assert malformed[kind, True] > malformed[kind, False], kind
