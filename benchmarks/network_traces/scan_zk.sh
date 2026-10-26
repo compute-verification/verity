@@ -10,6 +10,10 @@
 #      SC_WARDEN_RUN=DIR (a warden_serve run's directory, `prove --warden-run`)  SC_REHEARSE=1 (first a rehearsal,
 #      `warden_serve.py rehearse --fake --ids` at scan_zk's schedule, SC_REQUESTS requests at SC_RATE a second, and
 #      prove its run)  SC_DRAW=K (`prove --draw K`: Lean draw --stratified K on the verifier's coins)
+#      SC_CHALLENGER=local|gate:USER@HOST (with SC_DRAW: the honest round's K on the challenger's coins, `prove
+#      --challenger`, pinned on main's first-parent history fetched from the clone's origin; gate: also SC_PEER, this
+#      node as the gate's /etc/vy/peers names it, SC_CHALLENGER_KEY, the deployment's challenger-key/v1 record, and
+#      SC_GATE_KEY, the lane's gate key)
 # Kept in $OUT/sczk: the driver's summary and logs and everything the verifier received; never a prover's file (inst-*)
 # nor a circuit (its pin is kept), nor a session's archive. A rehearsal's public files go in $OUT/warden, its records
 # and salts (the prover's) nowhere.
@@ -41,9 +45,21 @@ if [ -n "${SC_REHEARSE:-}" ]; then
   done
   SC_WARDEN_RUN=$W/warden
 fi
-log "sczk: proving${SC_DRY:+, dry}${SC_WARDEN_RUN:+, warden run $SC_WARDEN_RUN}${SC_DRAW:+, draw $SC_DRAW}"
+CH=()
+if [ -n "${SC_CHALLENGER:-}" ]; then   # the verifier's own copy of main's first-parent history, which the session's pin must be on
+  UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
+  git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main > "$OUT/fetch-main.log" 2>&1 \
+    || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main >> "$OUT/fetch-main.log" 2>&1 \
+    && git rev-list --first-parent refs/remotes/origin/main > "$OUT/main.txt" || { tail -5 "$OUT/fetch-main.log"; exit 4; }
+  CH=(--challenger "$SC_CHALLENGER" --main "$OUT/main.txt")
+  case $SC_CHALLENGER in gate:*)
+    [ -n "${SC_PEER:-}" ] && [ -n "${SC_CHALLENGER_KEY:-}" ] || { log "sczk: SC_CHALLENGER=gate:… needs SC_PEER and SC_CHALLENGER_KEY"; exit 4; }
+    CH+=(--peer "$SC_PEER" --challenger-key "$SC_CHALLENGER_KEY" ${SC_GATE_KEY:+--gate-key "$SC_GATE_KEY"});;
+  esac
+fi
+log "sczk: proving${SC_DRY:+, dry}${SC_WARDEN_RUN:+, warden run $SC_WARDEN_RUN}${SC_DRAW:+, draw $SC_DRAW}${SC_CHALLENGER:+, the honest draw on the coins of $SC_CHALLENGER}"
 "$PY" benchmarks/network_traces/scan_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/sczk" ${SC_DRY:+--dry} \
-  ${SC_WARDEN_RUN:+--warden-run "$SC_WARDEN_RUN"} ${SC_DRAW:+--draw "$SC_DRAW"} 2>&1 \
+  ${SC_WARDEN_RUN:+--warden-run "$SC_WARDEN_RUN"} ${SC_DRAW:+--draw "$SC_DRAW"} "${CH[@]}" 2>&1 \
   | tee -a "$OUT/sczk.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/sczk"

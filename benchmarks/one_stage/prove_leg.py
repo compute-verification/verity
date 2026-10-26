@@ -650,7 +650,7 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
     from verity.ml.circuits.defs import bind
     from verity_vllm.program.frontend import targets as TG
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity_vllm.program.registry import b1, dead_free as DF
+    from verity.ml.definitions.registry import b1, dead_free as DF
 
     fam, model, *arg = shape.split(":")
     L = LLAMA[model]
