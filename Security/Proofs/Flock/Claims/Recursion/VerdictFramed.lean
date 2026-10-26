@@ -8,14 +8,14 @@ import Proofs.Flock.Claims.Recursion.CallsAgree
 
 `DecAt.runs_assembled` takes `hframed`: rep `r` of table `i`'s rounds in the decoded session hold the rep's frames at
 the batched value `T` its `w` reads. It holds at every decision whose rep streams have distinct names (`DecAt.framed`),
-which a dense inner statement's do (`DecAt.names_nodup`):
+which a dense inner statement's do (`DecAt.names_nodup_dense`):
 
 * **`w`'s `T` is the reader's** (`DecAt.valOf_T`): `w` holds the frames' values at the `T` the decided proof fits its
   opened rounds at (`DecAt.ctx_rows_fit`), and `T` is one of them (`T_mem`).
 * **The decoded streams are the reader's** (`decoded_streams`): the decoder reads stream `k` of the verdict's record at
   the `k`-th rep stream's name, with the reader's rounds' counts and messages (`arr_streams_jAt`).
 * **The reader's rounds are the frames** (`DecAt.framed_ctx`): round `j` of rep `k` is the `j`-th message of the rep's
-  block, the framed bytes of its `j`-th chunk (`decR_frames`, the `T` unique by `fitUnique`), at its schedule's count,
+  block, the framed bytes of its `j`-th chunk (`decR_framesR`, the `T` unique by `fitUnique`), at its schedule's count,
   which is the chunk's closing squeeze's (`sqCount_repFrames`).
 -/
 
@@ -160,7 +160,7 @@ variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128)
 
 /-- **A dense decision's rep streams have distinct names**: its statement sets up with no public inputs. -/
-theorem names_nodup {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem names_nodup_dense {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) :
     (D.spec.repStreams.toList.map (·.2.2)).Nodup := by
   obtain ⟨s, spec, st, sch, hset, -, hpi, -⟩ := dense_inner hst hf
@@ -253,7 +253,7 @@ theorem framed_ctx (hG : D.RowG cls acc i) (hi : i < D.sts.size)
   obtain ⟨hfa, -, rsch, hrr, hsc⟩ := hsched
   rw [hn] at hrr
   -- the record's rep blocks are the frames at `T`
-  obtain ⟨r₀, rss, ms', h1, h1', hj, hfr⟩ := FlockDeploy.decR_frames D.dec
+  obtain ⟨r₀, rss, ms', h1, h1', hj, hfr⟩ := FlockDeploy.decR_framesR D.dec
   have e1 : D.r₀ = r₀ := by simp only [DecAt.r₀, h1, Option.getD_some]
   have e2 : D.rss = rss := by simp only [DecAt.rss, h1', Option.getD_some]
   obtain ⟨T', hT', hblk⟩ := hfr _ hk2
@@ -363,7 +363,7 @@ theorem framed_dense {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : pars
       ((D.files cls i).spec.domain (D.files cls i).spec.tables[(D.files cls i).i]! r).toUTF8
       (2 + (D.files cls i).extras.size) ((D.files cls i).proof r)
       (valOf (D.sh cls i) (D.rep cls acc i r).w (D.rep cls acc i r).comb (D.rep cls acc i r).cons .T)) :=
-  D.framed cls acc r (D.rowG cls acc hst hf hx hi) hi (D.names_nodup hst hf hx)
+  D.framed cls acc r (D.rowG cls acc hst hf hx hi) hi (D.names_nodup_dense hst hf hx)
 
 end DecAt
 

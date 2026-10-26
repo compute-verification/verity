@@ -84,7 +84,7 @@ theorem publics_empty (D : DecAt rd x ms cs) : (D.sess.publics.all fun p => p.si
   rw [Record.decodeJWith_eq_decodeJWithK] at hdec
   obtain ⟨l, pubs, hl, hp, hF⟩ := FlockDeploy.decodeJWithK_publics id _ hdec
   obtain ⟨l₀, hl₀, hpub⟩ := FlockDeploy.fld_link_jAt hl
-  obtain ⟨r₀, rss, ms', -, -, hj, -⟩ := FlockDeploy.decR_frames D.dec
+  obtain ⟨r₀, rss, ms', -, -, hj, -⟩ := FlockDeploy.decR_framesR D.dec
   rw [hj, FlockDeploy.recJ, FlockDeploy.fld_recordObj_link] at hl₀
   injection hl₀ with hl₀
   subst hl₀

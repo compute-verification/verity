@@ -10,7 +10,7 @@ record the verdict decodes (`jAt`) is the reader's (`recJ`) with its coins subst
 and the reader's rep streams carry, round by round, the round messages `readPs` read with its schedule's coin counts
 (`recStreams`):
 
-* **The round messages are the frames** (`readPs_frames`, `decR_frames`): rep `k`'s block of the round messages is its
+* **The round messages are the frames** (`readPs_framesR`, `decR_framesR`): rep `k`'s block of the round messages is its
   proof's framed bytes at the `T` it fits at.
 * **The substitutions keep what custody reads** (`arr_streams_jAt`): every stream's name, and every round's count and
   message, read in `jAt` as in the reader's record (`KeptS`, `KeptR`); only the coins and the link's points change.
@@ -30,7 +30,7 @@ open Claims.Bridge.Custody (RoundFields)
 
 /-- **Each rep's block of the round messages `readPs` reads is its proof's framed bytes**, at a `T` the proof fits its
 opened rounds at. -/
-theorem readPs_frames {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray}
+theorem readPs_framesR {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray}
     {rss : List (List ByteArray)} {cs : List Coin} {fl : FinalP} {pf : Array Flock.Proof × List Claims.Msg}
     (h : readPs spec sts c₁ r₀ rss cs fl = some pf) :
     ∀ k < 2 * sts.size, ∃ T, FitsRep (repCtx spec sts c₁ r₀ cs k) ((cutLens (repLens spec sts) rss).getD k [])
@@ -75,7 +75,7 @@ theorem readPs_frames {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r�
 
 /-- **At a decision, the record's round messages are the reps' frames**: the reader's record is `recJ` at round
 messages `ms` whose `k`-th block is rep `k`'s proof's framed bytes, at a `T` the proof fits its opened rounds at. -/
-theorem decR_frames {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem decR_framesR {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) :
     ∃ (r₀ : List ByteArray) (rss : List (List ByteArray)) (ms : List Claims.Msg),
       rowsOf (as.headD []) = some r₀ ∧ as.tail.dropLast.mapM rowsOf = some rss ∧
@@ -85,7 +85,7 @@ theorem decR_frames {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : L
         (cutLens (repLens d.spec d.sts) ms).getD k [] =
           framesOf (repCtx d.spec d.sts d.c₁ r₀ cs.tail.dropLast k) d.f.ps[k]! T := by
   obtain ⟨v, c₁, r₀, rss, fl, link, pf, -, -, h6, h7, -, h9, rfl⟩ := decR_some h
-  exact ⟨r₀, rss, pf.2, h6, h7, rfl, readPs_frames h9⟩
+  exact ⟨r₀, rss, pf.2, h6, h7, rfl, readPs_framesR h9⟩
 
 /-! ## The substitutions keep the streams' names, counts and messages -/
 
