@@ -21,6 +21,11 @@ units of Program 0, then of Program 1 and so on, in every template, so a node's 
   ``path`` an `Opening` at the hidden key ``tok``, pinned by its verdict ``o1``. Its ``tok`` is its position's feed.
 - `Gemm_v2{K, N}` is ⌈N / n⌉ slices `Gemm_v2{K, n}`, n = ``grain.gemm_words`` // K output columns a slice, each reading
   its weight rows from the weights record (`Read`) and its ``x`` whole.
+- An int8 linear (`registry.int8_exact`) is its quantizer `Int8RowQuant_v1{K}`, one unit, and its product `ScaledMmS8_v1{K, N}`,
+  ⌈N / n⌉ slices `ScaledMmS8_v1{K, n}` at the same weight words a slice (n = ``grain.gemm_words`` // (K / 2): an s8 weight row
+  is K / 2 words), each reading its s8 weight rows and their f32 row scales from the weights record and the quantizer's codes
+  ``x`` and scale ``sx`` whole. Words are laid out by each field's leaf width (`_spans`): a weight or node output whose leaves
+  aren't one byte width filling whole u16 words, and a read that starts inside a word, are refused.
 - `RoPE_v1{NHEADS, D}` and `Attention_v18{T, NH, KVH, D}` are their heads (`RoPEHead_v1{D}`, `AttentionHead_v18{T}`).
   A head's keys and values are one row of an `AllGather_v1{T, D}` over every key position's row (T at most `KEYS`), each
   position's row gathered first when it spans several writers (the K and V slices).
@@ -107,7 +112,8 @@ KEYS = 136
 @dataclass(frozen=True)
 class Grain:
     """The units' size (CIR-95's at Llama-3.2-1B by default): a GEMM slice reads ``gemm_words`` weight words (N = gemm_words
-    // K output columns: `Gemm_v2{2048, 16}`, `Gemm_v2{8192, 4}`), no unit holds more than ``rows`` rows in and out (C-Flock's
+    // K output columns: `Gemm_v2{2048, 16}`, `Gemm_v2{8192, 4}`; an s8 one twice the columns: `ScaledMmS8_v1{2048, 32}`,
+    `ScaledMmS8_v1{8192, 8}`), no unit holds more than ``rows`` rows in and out (C-Flock's
     composer gives each row a unit reads or writes an hm96 slot, so a unit fits its 2^27-bit block with at most 256: a gather
     of at most 255 parts), and a token select is chunks of ``select`` logits (768: 167 chunks at V = 128,256, each chunk's
     row past one SHA-512 block)."""
@@ -231,6 +237,29 @@ class _Builder:
                                     f"{self.grain.rows}")
 
 
+def _spans(what: str, fields: Sequence[tuple[str, Any]]) -> list[tuple[int, int, int]]:
+    """``fields`` laid end to end as u16 words: each one's ``(first leaf, first word, leaf bits)``, then ``(leaves, words, 0)``;
+    refused where a field isn't leaves of one whole-byte width filling whole words (an s8 weight's are two a word)."""
+    out, leaf, word = [], 0, 0
+    for label, ty in fields:
+        ws = ty.width_set()
+        bits = next(iter(ws))
+        if len(ws) != 1 or bits % 8 or ty.leaves * bits % 16:
+            raise Unexpressible(f"{what} {label}'s {ty.leaves} leaves are {sorted(ws)} bits, not one byte width filling whole u16 "
+                                "words")
+        out.append((leaf, word, bits))
+        leaf, word = leaf + ty.leaves, word + ty.leaves * bits // 16
+    return out + [(leaf, word, 0)]
+
+
+def _word(spans: Sequence[tuple[int, int, int]], leaf: int, what: str) -> int:
+    """The u16 word leaf ``leaf`` of ``spans`` (`_spans`) starts, refused inside a word."""
+    first, word, bits = spans[bisect.bisect_right([s[0] for s in spans], leaf) - 1]
+    if (leaf - first) * bits % 16:
+        raise Unexpressible(f"{what}: leaf {leaf} starts inside a u16 word of {bits}-bit leaves")
+    return word + (leaf - first) * bits // 16
+
+
 def _rows(fn: Any, cuts: dict[str, int] | None) -> int:
     """A unit of ``fn``'s rows in and out under ``cuts``, each an hm96 slot C-Flock's composer gives it
     (`interface.unit_rows`)."""
@@ -261,18 +290,10 @@ class _Program:
             raise Unexpressible(f"{name}: its inputs are {params}; the window's lowering takes a prompt and the weights record "
                                 "(no seed, prefix-cache hit, carried state or peers)")
         self.params = params
-        self.fields: list[tuple[int, int, int]] = []
-        leaf = word = 0
-        for field_name, ty in dict(self.fn.signature()[0])[WEIGHTS].fields:
-            ws = ty.width_set()
-            if len(ws) != 1 or next(iter(ws)) % 16:
-                raise Unexpressible(f"{name}: weight {field_name}'s leaves are {sorted(ws)} bits, not one width of whole u16 words")
-            self.fields.append((leaf, word, next(iter(ws)) // 16))
-            leaf, word = leaf + ty.leaves, word + ty.leaves * next(iter(ws)) // 16
-        self.fields.append((leaf, word, 0))
-        self.weights = word
+        self.fields = _spans(f"{name}: weight", dict(self.fn.signature()[0])[WEIGHTS].fields)
+        self.weights = self.fields[-1][1]
         self.outs: dict[int, list[tuple[int, int, Row]]] = {}
-        self.words: dict[int, int] = {}
+        self.words: dict[int, list[tuple[int, int, int]]] = {}
         self.gemms: dict[int, tuple[Any, tuple[Row, ...], int]] = {}
         self.position = 0
         self.slot: tuple[Row, Row] | None = None
@@ -282,14 +303,14 @@ class _Program:
         out = []
         for space, idx, lo, hi in runs(refs):
             if space == "n":
-                w = self.words[idx]
-                out.append(("n", idx, lo * w, hi * w))
+                spans = self.words[idx]
+                out.append(("n", idx, _word(spans, lo, f"{self.name}: node {idx}"), _word(spans, hi, f"{self.name}: node {idx}")))
             elif self.params[idx] == WEIGHTS:
                 k = bisect.bisect_right([f[0] for f in self.fields], lo) - 1
-                leaf, word, w = self.fields[k]
                 if hi > self.fields[k + 1][0]:
                     raise Unexpressible(f"{self.name}: a weight read of leaves [{lo}, {hi}) spans two weights")
-                out.append(("p", WEIGHTS, word + (lo - leaf) * w, word + (hi - leaf) * w))
+                out.append(("p", WEIGHTS, _word(self.fields, lo, f"{self.name}: a weight read"),
+                            _word(self.fields, hi, f"{self.name}: a weight read")))
             else:
                 out.append(("p", self.params[idx], lo, hi))
         return out
@@ -303,9 +324,13 @@ class _Program:
             for a, b, r in self.outs[j]:
                 if b <= lo or a >= hi:
                     continue
-                if a < lo or b > hi:
-                    raise Unexpressible(f"{self.name}: node {j}'s words [{lo}, {hi}) cut its row {r} at [{a}, {b})")
-                out.append(r)
+                w = r.words
+                i0, i1 = (max(a, lo) - a) // w, -(-(min(b, hi) - a) // w)
+                if a + i0 * w < lo or a + i1 * w > hi:
+                    k = i0 if a + i0 * w < lo else i1 - 1
+                    raise Unexpressible(f"{self.name}: node {j}'s words [{lo}, {hi}) cut its row "
+                                        f"{Row(r.tid, r.unit + k, r.out, w)} at [{a + k * w}, {a + (k + 1) * w})")
+                out += [r] if b - a == w else [Row(r.tid, r.unit + i, r.out, w) for i in range(i0, i1)]
         return tuple(out)
 
     def weight(self, refs: Refs, words: int) -> int:
@@ -321,10 +346,8 @@ class _Program:
         if node.form != "call":
             raise Unexpressible(f"{self.name}: node {j} is a {node.form}, not a call")
         ret = node.fn.signature()[1]
-        ws = ret.width_set()
-        if not ws <= {16, 32} or len(ws) != 1:
-            raise Unexpressible(f"{self.name}: node {j} ({node.fn.id}) returns leaves of {sorted(ws)} bits")
-        self.words[j] = next(iter(ws)) // 16
+        fields = [f[1] if isinstance(f, tuple) else f for f in (getattr(ret, "fields", None) or (ret,))]
+        self.words[j] = _spans(f"{self.name}: node {j} ({node.fn.id}) return", [(f"o{i}", t) for i, t in enumerate(fields)])
         family = node.fn.name
         lower = getattr(self, f"_{family}", None) if family in FAMILIES else None
         if lower is None:
@@ -383,7 +406,7 @@ class _Program:
             at += words
         self.outs[j] = pieces
 
-    _RMSNormTriton = _RMSNormFusedCuda = _SiluMul = _one
+    _RMSNormTriton = _RMSNormFusedCuda = _SiluMul = _Int8RowQuant = _one
 
     def _Gemm(self, j: int, node: Any) -> None:
         b = node.fn.bindings
@@ -399,9 +422,29 @@ class _Program:
             tid, u = self.b.unit(bind(node.fn.defn, **{**b, "N": m}), count)
             self.b.feed(tid, "x", u, count, xs)
             self.b.read(tid, "w", u, (count,), lo + s0 * K, (m * K,))
-            pieces += [(s0 + i * m, s0 + (i + 1) * m, Row(tid, u + i, "o0", m)) for i in range(count)]
+            pieces.append((s0, s0 + count * m, Row(tid, u, "o0", m)))
         self.outs[j] = pieces
         self.gemms[j] = (node.fn, xs, lo)
+
+    def _ScaledMmS8(self, j: int, node: Any) -> None:
+        b = node.fn.bindings
+        K, N = b["K"], b["N"]
+        n = max(1, min(N, self.b.grain.gemm_words // (K // 2)))
+        x, sx, w, sw = node.args
+        xs, ss = self.rows(x.refs), self.rows(sx.refs)
+        lo, slo = self.weight(w.refs, N * K // 2), self.weight(sw.refs, 2 * N)
+        full, rest = divmod(N, n)
+        pieces = []
+        for s0, m, count in ((0, n, full), (full * n, rest, int(rest > 0))):
+            if not count:
+                continue
+            tid, u = self.b.unit(bind(node.fn.defn, **{**b, "N": m}), count)
+            self.b.feed(tid, "x", u, count, xs)
+            self.b.feed(tid, "sx", u, count, ss)
+            self.b.read(tid, "w", u, (count,), lo + s0 * K // 2, (m * K // 2,))
+            self.b.read(tid, "sw", u, (count,), slo + 2 * s0, (2 * m,))
+            pieces.append((s0, s0 + count * m, Row(tid, u, "o0", m)))
+        self.outs[j] = pieces
 
     def _heads(self, node: Any, family: str, count: int) -> Any:
         nodes = node.fn.body.nodes
@@ -465,7 +508,8 @@ class _Program:
         self.outs[j] = [(0, 2, Row(ctid, cu, "o0", 2))]
 
 
-FAMILIES = ("Embedding", "RMSNormTriton", "RMSNormFusedCuda", "Gemm", "RoPE", "Attention", "SiluMul", "TokenSelect")
+FAMILIES = ("Embedding", "RMSNormTriton", "RMSNormFusedCuda", "Gemm", "Int8RowQuant", "ScaledMmS8", "RoPE", "Attention", "SiluMul",
+            "TokenSelect")
 
 
 def _runs(xs: Sequence[Any], key: Any, at: Any, n: Any, make: Any) -> list[Any]:
