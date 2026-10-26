@@ -165,3 +165,14 @@ Lean verdict and `streamed_wipe.verdict`. It writes `resume.json` and fails if a
 ~~~bash
 research run --on <CPU node> --project verity --source . --cwd clone -- bash benchmarks/pous/wipe_resume/run.sh
 ~~~
+
+`block/` is PoUS's block run on a store in MEM-69's layout (Demo B's C*, 1,038 segments of 2^16 blocks): `block.py` holds
+C* in the GPU's memory (or host memory, or mmapped), takes honest and 10%-drop sessions with `challenger_party` wherever
+its command starts it, and judges each with `run.check_at` at the store's point, reporting `period.certify`'s S_cert.
+`run.sh` takes the sessions under `gpu-lease` and the checks after it; `peer.sh` puts the challenger on a cluster peer, over
+direct TCP when it connects, else an ssh forward:
+
+~~~bash
+research run --on vy-dc-h200-2 --project verity --source . --cwd clone --timeout 60m -- bash benchmarks/pous/block/run.sh \
+  --store /workspace/research/pous-store/mem69-v2 --challenger HOST --challenger-address H:P --challenger-command 'ARGV'
+~~~
