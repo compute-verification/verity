@@ -327,7 +327,7 @@ def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive:
     `lag_attested` (declared == record_attests == tokens.json), `eos_declared` (served token a_r-1 is a declared EOS id), `rows_past_stop`
     (committed rows of the request at steps >= arrival + n_exec, from the Commit's coverage) -- this function only fixes the arithmetic and
     NAMES the faults: `faults` non-empty means the class is NOT applicable to this request and the record fails by name (conditions (a)(b)(c)
-    of `commit.executed_prefix`, F-pm-24).  Every condition is fail-closed: an unasserted fact (None) is a fault, not a default.
+    of `check.executed_prefix`, F-pm-24).  Every condition is fail-closed: an unasserted fact (None) is a fault, not a default.
     [revb S-r17b-09 n1] `a_r_source` is REQUIRED and names WHERE a_r was read (the Match record file + digest, as moe's executed_prefix_facts
     passes it); it has no default, so a caller passing the Commit's own count cannot put 'match record' on the record by omission -- an own
     count must be labelled as such by the caller, and (a) then faults on `linked`.
