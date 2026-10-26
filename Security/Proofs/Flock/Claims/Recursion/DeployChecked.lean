@@ -190,14 +190,13 @@ theorem parse_drawTiedOne {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x 
 
 /-- **In Flock's scope, at one table, the session's draw is the statement's** (`innerOk`'s `drawTiedB`): the setup writes
 the statement's draw into the public file's header, whose draw the session's `unitDraw` is
-(`FlockComplete.JsonRT.unitDraw_one`), under the JSON library's specification. -/
-theorem drawTied_of_scope (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
-    {rel : Flock.Readable.Parsed → Flock.Readable.Relation} {inner : Msg} {s : FlockDeploy.Ins}
+(`FlockComplete.JsonRT.unitDraw_one`). -/
+theorem drawTied_of_scope {rel : Flock.Readable.Parsed → Flock.Readable.Relation} {inner : Msg} {s : FlockDeploy.Ins}
     {spec : Flock.SessionSpec} {sts : Array Flock.Stmt} (hS : Claims.Flock.Scope (FlockDeploy.deployPlain rel) inner)
     (hs : FlockDeploy.setupOf false inner = some (s, spec, sts)) (hd : s.read.draw.isSome = true) :
     sts.size = 1 → FlockDeploy.drawEq (drawOfU spec.unitDraw) s.read.draw = true := by
   intro h1
-  obtain ⟨d, hU, hdd, hn⟩ := FlockComplete.JsonRT.unitDraw_one S hS hs h1 hd
+  obtain ⟨d, hU, hdd, hn⟩ := FlockComplete.JsonRT.unitDraw_one hS hs h1 hd
   have hu : drawOfU (some d) = some d := by
     cases d <;> first | exact absurd rfl hn | rfl
   rw [hU, hdd, hu]
@@ -207,7 +206,6 @@ theorem drawTied_of_scope (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
 admits**, wherever Flock's honest prover is complete (`innerAccSha_of_complete`, at `δc < 1` from the draw and the
 sizes, `FlockComplete.δc_sha512_lt_one`); the reader's draw tie at one table is the setup's (`drawTied_of_scope`). -/
 theorem admitted_acc {rel : Flock.Readable.Parsed → Flock.Readable.Relation} (hA : PlainLeavesAdmitted rel)
-    (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
     (hC : Claims.Flock.Complete FlockDeploy.sha512 (FlockDeploy.deployPlain rel))
     (h64 : Claims.Out64 FlockDeploy.sha512) :
     ∃ (inner : Msg) (ri : FlockDeploy.Raw) (partition : Option Json) (dims : Flock.RecVStar.Inner),
@@ -217,7 +215,7 @@ theorem admitted_acc {rel : Flock.Readable.Parsed → Flock.Readable.Relation} (
   obtain ⟨inner, ri, partition, dims, w, s, spec, sts, hri, hpa, hdims, hs, hck, hd, hl, hε, hreg, hrec, hS, hR⟩ :=
     hA
   exact ⟨inner, ri, partition, dims, hri, hpa, hdims,
-    innerOk_iff.2 ⟨s, spec, sts, hs, hck, hd, drawTiedB_iff.2 (drawTied_of_scope S hS hs hd)⟩,
+    innerOk_iff.2 ⟨s, spec, sts, hs, hck, hd, drawTiedB_iff.2 (drawTied_of_scope hS hs hd)⟩,
     innerAccSha_of_complete hC h64 hS hR
       (FlockComplete.δc_sha512_lt_one hs hd (hl.trans (by norm_num)) hreg hrec hε)⟩
 
@@ -230,7 +228,7 @@ theorem admitted_acc_plain (hA : PlainLeavesAdmitted Flock.Readable.relation)
       FlockDeploy.decode inner = some ri ∧ (ri.partition.mapM (FlockDeploy.jsonOf "partition")).toOption = some partition ∧
         Flock.RecVStar.innerOf ri.circuit ri.publicFile partition ri.program = .ok dims ∧ innerOk inner = .ok () ∧
         ∃ (c : ℕ → Coin) (ms : List Msg), InnerAccSha inner c ms :=
-  admitted_acc hA S (FlockComplete.Replay.complete_plain FlockDeploy.sha512 S h64 hfin) h64
+  admitted_acc hA (FlockComplete.Replay.complete_plain FlockDeploy.sha512 S h64 hfin) h64
 
 /-! ## The inner readiness the deployed stop reads -/
 
