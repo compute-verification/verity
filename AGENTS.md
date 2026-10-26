@@ -29,10 +29,10 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       side and record.
   - `verity/ml/` (`verity.ml`): Python and CUDA: the provers, and Python that mirrors the Lean for the prover's speed.
     Until each protocol's verifier of record is Lean, these units are on the soundness path, because its Python verifier
-    reads them: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`, `ml.kernels`, `ml.commitments`,
-    `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH` in `tests/test_boundaries.py`, all that
-    `ALLOWED` lets core reach; it only shrinks). The rest, C-Flock's prover, the private circuits and `ml.definitions`,
-    can't affect soundness.
+    reads them: `ml.circuits`, `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH` in
+    `tests/test_boundaries.py`, all that `ALLOWED` lets core reach; it only shrinks). The rest can't affect soundness:
+    the catalog (`ml.circuits.ops`, `ml.circuits.silicon`), the kernels, C-Flock's prover, the private circuits,
+    `ml.definitions` and `ml.protocols`.
     - `circuits` (format in `circuits/PROTOCOL.md`): circuits and their evaluator (`evaluation`), the Boolean profile
       (`boolean`), what models compute (`ops`, the primitive circuits' Definitions), what the GPUs actually compute
       (`silicon`, the exact hardware semantics) and `targets`.
@@ -42,6 +42,9 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     - `private_circuits`: the universal unit, one public Definition that runs any private circuit of a size class.
     - `definitions`: the served workloads' kernel Definitions (`registry`, twins in `numerics`), their Boolean versions,
       the proof-unit cut (`word`), and their encoding and digest (`encoding`).
+    - `protocols`: the circuits core's protocols' provers build and their verifiers don't read: PoUW's circuits and
+      schemes (`pouw`), PoUS's circuits (`pous`) and the network certifier's Boolean Definitions core doesn't import
+      (`certifier`).
     - `flock/` (`verity_flock`, a distribution of its own, `flock/pyproject.toml` with its package in `flock/python/`):
       C-Flock, the proof system. Its patches on upstream Flock, the CUDA prover, the zero-knowledge prover (`live/`,
       `flock-circuit --zk`), and `verifier/`: the verifier's specification and the scripts that run it, with upstream's
@@ -86,13 +89,15 @@ Dependencies point inward, and `tests/test_boundaries.py` enforces them:
 - A verifier imports no `verity.ml` code (Design rules). Until its protocol's verifier of record is Lean, a Python
   verifier in `verity.core` keeps the edges into `verity.ml` it had on 18 Oct (`CORE_ML_EDGES`) and gains none, and
   what they reach (`SOUNDNESS_PATH`) only shrinks. `verity.ml` never imports `verity.core`, apart from the files
-  `ML_IMPORTS_CORE` names (C-Flock's tests and V*'s builders, and hm96's test of its claims).
+  `ML_IMPORTS_CORE` names (C-Flock's tests and V*'s builders, hm96's test of its claims, and the protocols' circuit
+  builders in `ml.protocols`, stated over their protocols' records).
 - Everything outside `verity/` may import `verity`. `verity` imports no other distribution of the workspace.
 - Inside `verity`, each unit imports only what `ALLOWED` lists. `ml.circuits`, `ml.randomness`, `ml.crypto` and
   `core.claims` import no other unit.
 - A protocol imports the parts of `verity.ml` it's allowed, the profile, itself, and the protocols `ALLOWED` lists for it
-  (PoUW and the network certifier import sampled proofs). PoUW is the one protocol that reads the primitive circuits'
-  Definitions and silicon semantics (`ml.circuits.ops`, `silicon`).
+  (PoUW and the network certifier import sampled proofs). No protocol reads the primitive circuits' Definitions or
+  silicon semantics (`ml.circuits.ops`, `silicon`): PoUW's circuits and schemes, which do, are its prover's
+  (`ml.protocols.pouw`).
 - Nothing outside `infra/` imports `infra/`, apart from the files `INFRA_IMPORTERS` names.
 - Nothing under `verity/` imports an integration, apart from the sites `KNOWN` lists in
   `tests/test_integration_boundaries.py`, which only shrinks (Design rules, "Integrations are frontends").
