@@ -284,23 +284,25 @@ def test_past_one_key_block_a_head_reads_its_full_blocks_gather_made_once(long):
 def test_the_class_of_record_lowers_within_the_grain_and_its_description_is_its_nodes(monkeypatch):
     """The class of record itself (8 slots of 1,087 positions, a head over up to 1,087 keys: 8 full key blocks and a first
     of 63) lowers at TINY's geometry and a grain of 256 rows: no unit past the grain's rows (the largest a full block's
-    gather, its 128 parts and its output), every input row wired, registered or ingress, the 8 Programs 8 times one
-    Program's units over one Program's wires, reads and entries, which grow with the class Program's nodes (its heads'
-    Calls among them), not with its units. About a minute and 2 GB: the class of record's own lowering, which no cheaper
-    class reaches (each full block's gather read by every later position, the 4,088 full-block Calls a head)."""
+    gather, its 128 parts and its output), every input row wired, registered or ingress, and its 8 Programs' 8 x 296,711
+    units (4 times 2 Programs') over 2 Programs' 33,278 wires, 13,047 weight reads and 13,062 inference entries, which grow
+    with the class Program's 26,088 nodes (its heads' Calls among them), not with its units or its slots. The baseline is 2
+    Programs, as in `test_the_description_grows_with_the_class_programs_nodes_not_its_slots`: one Program's entries have a
+    slot digit of 1, under which a step's unlike allocations run together (2,194 entries here), and from 2 on every
+    allocation's slots are one entry's slot digit, so the entries are one list at any slot count. About a minute and a half
+    and 3 GB: the class of record's own lowering, which no cheaper class reaches (each full block's gather read by every
+    later position, the 4,088 full-block Calls a head)."""
     reg = S._registered({**S.TINY, "max_position_embeddings": 2048})
     grain, built, program = Grain(gemm_words=512, rows=256, select=64), WC.class_program(reg, CLASS_OF_RECORD), WC.class_program
     monkeypatch.setattr(WC, "class_program", lambda r, cls: built if cls == CLASS_OF_RECORD else program(r, cls))
-    one, circuit = class_circuit(reg, CLASS_OF_RECORD, 1, grain), class_circuit(reg, CLASS_OF_RECORD, None, grain)
+    two, circuit = class_circuit(reg, CLASS_OF_RECORD, 2, grain), class_circuit(reg, CLASS_OF_RECORD, None, grain)
     n = {_label(fn): k for fn, k in circuit.templates}
     assert (n["AttnBlock_v5{D=16,NVIS=128,FIRST=false,BN=128,CHECK=false}"], n["AllGather_v1{WORLD=128,N=16}"]) == (
         8 * 2 * 4 * 4088, 8 * 8 * 8)
     assert max(_unit_rows(circuit).values()) == 129
-    units = sum(n.values())
-    assert units == 8 * sum(k for _, k in one.templates)
-    shape = [(len(c.wires), len(c.registered.reads), len(c.blocks.inference)) for c in (one, circuit)]
-    nodes = len(built.program.fn.body.nodes)
-    assert shape[0] == shape[1] and (nodes, units, shape[1]) == (26088, 0, (0, 0, 0))
+    assert sum(n.values()) == 4 * sum(k for _, k in two.templates) == 8 * 296_711
+    shape = [(len(c.wires), len(c.registered.reads), len(c.blocks.inference)) for c in (two, circuit)]
+    assert shape == [(33278, 13047, 13062)] * 2 and len(built.program.fn.body.nodes) == 26088
     assert IF.input_count(circuit.description(), pins={WC.WEIGHTS})["free"] == 0
 
 
