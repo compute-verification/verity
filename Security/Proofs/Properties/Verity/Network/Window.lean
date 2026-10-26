@@ -7,10 +7,11 @@ import Proofs.Properties.Verity.Network.Coupling
 /-!
 # NET-85: the network certifier's per-window bound at its compiled component, from named steps
 
-`Verity.Legs.NetworkWindowLe` (ONE-12's `window_le` at the compiled verdict) bounds, at each window `i` and each value
-`ξ` of the other coins, the probability over the network audit's own coin that onsite's network component accepts while
-window `i` fails its good event (`NetTiming.WindowGood`) by the sampled verifier's `PrBad` at the leak relation at the
-network certifier's rows (`Rlt`). `windowLe` proves it in that form, from these steps:
+`Verity.Legs.NetworkWindowLe R A` (ONE-12's `window_le` at the verdict `A`) bounds, at each window `i` and each value
+`ξ` of the other coins, the probability over the network audit's own coin that `A` holds while window `i` fails its
+good event (`NetTiming.WindowGood`) by the sampled verifier's `PrBad` at the leak relation at the network certifier's
+rows (`Rlt`). `windowLe` proves it with `A` onsite's network component accepting what the prover sent, from these steps
+(`Verity.Legs.networkWindowLe` takes it to any `A` that implies that acceptance, `Vocab.Logged` among them):
 
 | step | content | owner |
 | --- | --- | --- |
@@ -206,11 +207,11 @@ theorem exists_of_ext {W : Type} {Q : Rel W} {x : Msg} : ∀ {o : Option W}, Q.e
   | none, h => h.elim
 
 /-- **NET-85: the network certifier's per-window bound at its compiled component** (`Verity.Legs.NetworkWindowLe`,
-unfolded), from S2–S6, the ρ gap and S8's two premises, with S1, S7 and S8 proved here. At each window and each value of
-the other coins, an accepted run of the network audit with window `i` not good maps, through the live coin map (S4), to
-an accepting run of the sampled verifier (S2, S3, S5) at whose every extractor coin the extraction fails the leak
-relation: an extracted witness would make the realization's witness one (S6), and with the component's acceptance,
-window `i` good (S8). -/
+unfolded, at the component's acceptance), from S2–S6, the ρ gap and S8's two premises, with S1, S7 and S8 proved here.
+At each window and each value of the other coins, an accepted run of the network audit with window `i` not good maps,
+through the live coin map (S4), to an accepting run of the sampled verifier (S2, S3, S5) at whose every extractor coin
+the extraction fails the leak relation: an extracted witness would make the realization's witness one (S6), and with
+the component's acceptance, window `i` good (S8). -/
 theorem windowLe (W : WindowRuns R) {s : ((i : I) → Ω i) → Sent} (h2 : PeriodRunsV2 W s) (h3 : V2AcceptMeans W)
     (h4 : WindowCoinsLive W) (h5 : SessionIsSampledRun W) (h6 : NetworkCouples R s W)
     (hρ : WindowValuesRegistered R s) (hreg : WindowRegistersAs W s) (hcov : RecordCovers W s) :
