@@ -28,7 +28,8 @@
   warden rows, accepted only when every round's verdict is the one scan_zk expects and no witness piece reached the
   verifier (`scan_step`). A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden run) never makes
   the report accepted. Without ``--n2`` the report is the scan's part of the record alone (`SCAN_ONLY`, its
-  ``scope``): N2 isn't required, and the rest is held as before. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan
+  ``scope``), and its verdict is ``scan accepted`` or ``scan refused``: N2 isn't required, and the rest is held as
+  before. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan
   isn't run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its
   negatives are N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each
   tampered run that check lets through. d1's K (`horizon_k`) counts the served units' compute audits (``--audit``: each
@@ -72,7 +73,8 @@ CLEAR = {
 #: the certifier-only path (``--job``'s ``path``): the records are the certifier rehearsal's alone
 CERTIFIER_ONLY = "certifier-only"
 #: a report given no N2 summary (``report`` without ``--n2``, `chain_record.sh`'s ``CR_SCAN_ONLY=1``): the scan's
-#: part of the record, whose N2 runs in jobs of its own
+#: part of the record, whose N2 runs in jobs of its own; its verdict is ``scan accepted`` or ``scan refused``, never the
+#: whole chain's ``accepted``
 SCAN_ONLY = "scan only, N2 not given"
 #: what a report on the certifier-only path stands on that isn't the chain's own
 STUBBED = (
@@ -635,7 +637,8 @@ def report(a) -> dict:
                  **{f"n2/{k}": v for k, v in n2.get("negatives", {}).items()},
                  **{f"scan/{k}": v for k, v in scan.get("negatives", {}).items()}}
     audits = [audit_of(Path(d)) for d in getattr(a, "audit", None) or []]
-    return {"schema": SCHEMA, "job": job, "verdict": "accepted" if accepted else "refused", "path": job.get("path"),
+    return {"schema": SCHEMA, "job": job,
+            "verdict": ("scan " if scan_only else "") + ("accepted" if accepted else "refused"), "path": job.get("path"),
             "scope": SCAN_ONLY if scan_only else None, "stubbed": stubbed(job, cust),
             "negatives_refused": negatives, "steps": steps,
             "d1": d1_terms(cert, n2, scan, cust, endpoint, audits)}
@@ -716,7 +719,7 @@ def main(argv=None) -> int:
         a.out = a.out / "report.json"
     a.out.write_text(json.dumps(doc, indent=1, sort_keys=True, default=str))
     print(json.dumps({k: doc.get(k) for k in ("verdict", "scope", "why", "negatives_refused") if k in doc}))
-    return 0 if doc.get("verdict") == "accepted" else 1
+    return 0 if doc.get("verdict") in ("accepted", "scan accepted") else 1
 
 
 if __name__ == "__main__":

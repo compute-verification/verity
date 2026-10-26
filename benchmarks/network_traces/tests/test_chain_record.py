@@ -9,9 +9,9 @@ warden run's files, and refuses a sampled draw and a warden the scan's class doe
 gates' records into its output keeps no gate run's witness/. On the certifier-only path the report needs no scan,
 names what it stubs, and counts the rehearsal's refused runs and the I/O tie's verdict on each tampered run the check
 let through as negatives; d1's K is #4404's horizon count over the compute audits' draws and free inputs and the
-network's own terms. Given no N2 summary the report is the scan's alone and exits 0 when the honest round is accepted,
-every other refused and no witness piece reached the verifier, and 1 on a wrong verdict, a leak or a missing record;
-the full report holds the scan to its negatives too."""
+network's own terms. Given no N2 summary the report is the scan's alone, its verdict `scan accepted` (exit 0) when the
+honest round is accepted, every other refused and no witness piece reached the verifier, and `scan refused` (exit 1)
+on a wrong verdict, a leak or a missing record; the full report holds the scan to its negatives too."""
 
 from __future__ import annotations
 
@@ -237,30 +237,39 @@ def test_a_scan_only_report_exits_0_on_the_expected_verdicts_and_1_on_a_wrong_on
 
     put(rnd(True), rnd(False))
     rc, got = run("pass")
-    assert rc == 0 and got["verdict"] == "accepted" and got["scope"] == cr.SCAN_ONLY == "scan only, N2 not given"
+    assert rc == 0 and got["verdict"] == "scan accepted" and got["scope"] == cr.SCAN_ONLY == "scan only, N2 not given"
     assert got["steps"]["n2"]["verdict"] == "not given" and got["negatives_refused"] == {"scan/forged": True}
-    assert "Verdict: **accepted**, scan only, N2 not given." in (tmp_path / "pass" / "report.md").read_text()
+    assert "Verdict: **scan accepted**, scan only, N2 not given." in (tmp_path / "pass" / "report.md").read_text()
 
     put(rnd(True), rnd(True))
     rc, got = run("forged-accepted")
-    assert rc == 1 and got["scope"] == cr.SCAN_ONLY and got["verdict"] == "refused"
+    assert rc == 1 and got["scope"] == cr.SCAN_ONLY and got["verdict"] == "scan refused"
+    md = (tmp_path / "forged-accepted" / "report.md").read_text()
+    assert "Verdict: **scan refused**, scan only, N2 not given." in md
     assert (got["steps"]["scan"]["verdict"], got["steps"]["scan"]["why"]) == ("failed", "forged: window accepted")
     put(rnd(False), rnd(False))
-    assert run("honest-refused")[0] == 1
+    rc, got = run("honest-refused")
+    assert rc == 1 and got["verdict"] == "scan refused"
     put(rnd(True, ["head egress 3 @64"]), rnd(False))
     rc, got = run("leak")
-    assert rc == 1 and got["steps"]["scan"]["why"] == "honest: witness pieces found at the verifier: ['head egress 3 @64']"
+    assert rc == 1 and got["verdict"] == "scan refused"
+    assert got["steps"]["scan"]["why"] == "honest: witness pieces found at the verifier: ['head egress 3 @64']"
     put(rnd(True), rnd(False), ok=False)
     assert run("not-ok")[0] == 1
     Path(steps.scan).unlink()
     rc, got = run("no-scan")
-    assert rc == 1 and got["steps"]["scan"]["verdict"] == "failed"
+    assert rc == 1 and got["verdict"] == "scan refused" and got["steps"]["scan"]["verdict"] == "failed"
     put(rnd(True), rnd(False))
     Path(steps.custody).unlink()
-    assert run("no-custody")[0] == 1
+    rc, got = run("no-custody")
+    assert rc == 1 and got["verdict"] == "scan refused"
 
     steps.n2 = n2_summary
     Path(steps.custody).write_text(json.dumps({"verdict": "accepted"}))
+    put(rnd(True), rnd(False))
+    got = cr.report(steps)
+    assert got["scope"] is None and got["verdict"] == "accepted"
+    assert "Verdict: **accepted**." in cr.markdown(got)
     put(rnd(True), rnd(True))
     got = cr.report(steps)
     assert got["scope"] is None and got["verdict"] == "refused" and got["negatives_refused"]["scan/forged"] is False
