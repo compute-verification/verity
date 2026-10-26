@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Recursion.VerdictAssembly
+import Proofs.Flock.Claims.KS.PlainDrawJRun
 import Proofs.Flock.VBridge.Family.Tape
 
 /-!
@@ -18,9 +19,11 @@ four hold by the reader's definition:
   `finalC` exactly where the stream's round-2 coin is the live one the reader read `z` from (`hz`).
 * **`cap`** (`rowL_cap`): the proof's cap is its table's level-0 nodes among round 0's rows (`FitsRep.cap`), which the
   link joins into the table's `root_B` (`decR_rootB`), so the cap joined is the session's `root_B` exactly where the
-  session's `root_B` is the link's (`hroot`, custody's first check read at the session).
+  session's `root_B` is the link's (`hroot`). The `after` check gives that (`rootB_link`): its custody compares
+  `liveOfJ`'s `root_B` with the link's, and the decoder reads `liveOfJ`'s (`decodeJWithK_live`).
 
-`rowL_of` is the row; `runs_assembled_L` is `runs_assembled` with `hL` replaced by `hroot` and `hz`.
+`rowL_of` is the row; `rowL_at` is it at the checks where the rows are asked, with `hz` the one hypothesis left;
+`runs_assembled_L` is `runs_assembled` with `hL` replaced by the `after` check and `hz`.
 -/
 
 namespace FlockDeploy
@@ -214,9 +217,31 @@ theorem rowL_of (hG : D.RowG cls acc i) (hC : D.RowC cls acc i r) (hk : 2 * i + 
   fc := D.rowL_fc cls acc i r hG hk hC.c hne hz
   cap := D.rowL_cap cls i r hk hroot
 
-/-- **Table `i`'s reps run at the decision**, as `runs_assembled`, with row L from `rowL_of`: in place of `hL`, the
-session's `root_B` is the link's (`hroot`) and each rep stream's round-2 coin is the live one the reader takes `z`
-from (`hz`). -/
+/-- **The session's `root_B` is the link's** where the `after` check passes at the decision: custody compares
+`liveOfJ`'s `root_B` at the record value with the link's, and the decoder reads `liveOfJ`'s. -/
+theorem rootB_link
+    (ha : FlockDeploy.VerdictR.At FlockDeploy.sha512 .after D.d.s x D.d.link D.d.c₁ D.d.mids D.d.f) :
+    D.sess.rootB.toList = D.d.link.1 := by
+  obtain ⟨-, lv, hlv, hcu⟩ := Claims.Bridge.Custody.checksAtJ_ok (ha D.spec D.sts D.setup)
+  have hd := D.decode
+  rw [Flock.Record.decodeJWith_eq_decodeJWithK] at hd
+  rw [(FlockDeploy.KS.decodeJWithK_live id _ hd hlv).1]
+  exact (Claims.Bridge.Custody.custody_ok hcu).1
+
+/-- **Row L where the rows are asked**: at a dense inner statement's table, from the decision's points, the proof's
+index and shape, the `after` check and the stream's round-2 coin being the live one (`hz`). -/
+theorem rowL_at {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+    (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hi : i < D.sts.size)
+    (hti : i < D.spec.tables.size) (hpts : D.sess.points = pointsOf D.spec D.d.c₁) (hk : 2 * i + r < D.d.f.ps.size)
+    (hsh : ProofShaped (shapeAt (tabsOf D.sts) (pointsOf D.spec D.d.c₁) (2 * i + r)) (D.d.f.ps[2 * i + r]'hk))
+    (ha : FlockDeploy.VerdictR.At FlockDeploy.sha512 .after D.d.s x D.d.link D.d.c₁ D.d.mids D.d.f)
+    (hz : (((D.files cls i).stream r).rounds[2]!).coins.getD 0 0 = (D.ctx (2 * i + r)).z) :
+    D.RowL cls acc i r :=
+  have hG := D.rowG cls acc hst hf hx hi
+  D.rowL_of cls acc i r hG (D.rowC_of cls acc i r hG hpts hk hsh) hk (D.noEmpty cls acc hti r) (D.rootB_link ha) hz
+
+/-- **Table `i`'s reps run at the decision**, as `runs_assembled`, with row L from `rowL_at`: in place of `hL`, the
+`after` check passes (`ha`) and each rep stream's round-2 coin is the live one the reader takes `z` from (`hz`). -/
 theorem runs_assembled_L {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size)
@@ -228,7 +253,7 @@ theorem runs_assembled_L {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : 
     (hk : ∀ r : Fin 2, 2 * i + r < D.d.f.ps.size)
     (hsh : ∀ r : Fin 2,
       ProofShaped (shapeAt (tabsOf D.sts) (pointsOf D.spec D.d.c₁) (2 * i + r)) (D.d.f.ps[2 * i + r]'(hk r)))
-    (hroot : D.sess.rootB.toList = D.d.link.1)
+    (ha : FlockDeploy.VerdictR.At FlockDeploy.sha512 .after D.d.s x D.d.link D.d.c₁ D.d.mids D.d.f)
     (hz : ∀ r : Fin 2, (((D.files cls i).stream r).rounds[2]!).coins.getD 0 0 = (D.ctx (2 * i + r)).z)
     (pieces : List OpenPiece) (sideAt : Claims.Msg → List Claims.Msg → OpenPiece → OpenSide)
     (posAt : Claims.Msg → List Coin → OpenPiece → ℕ)
@@ -248,10 +273,8 @@ theorem runs_assembled_L {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : 
     (hu : ∀ r : Fin 2, UnitSums (D.sh cls i) (accC r) (D.opens cls acc i r (p0 r)))
     (hrd : ∀ r : Fin 2, ReadsEnds (D.sh cls i) (D.rep cls acc i r) (accC r) (D.opens cls acc i r (p0 r))) :
     (D.files cls i).Runs := by
-  have hG := D.rowG cls acc hst hf hx hi
   have hL : ∀ r, D.RowL cls acc i r := fun r =>
-    D.rowL_of cls acc i r hG (D.rowC_of cls acc i r hG hpts (hk r) (hsh r)) (hk r) (D.noEmpty cls acc hti r) hroot
-      (hz r)
+    D.rowL_at cls acc i r hst hf hx hi hti hpts (hk r) (hsh r) ha (hz r)
   exact D.runs_assembled cls acc hst hf hx hi hti hframed hpts hk hsh hL pieces sideAt posAt hholds hside hpos hcover
     hS hg hsz hw hparts accC p0 hu hrd
 
