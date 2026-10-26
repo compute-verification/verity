@@ -99,7 +99,9 @@ head ending in its id's last four characters (a coordinator's `cursor/...-1037`)
 watch first saw its sha (`heads.json` beside `--log`). The 90 min count from the latest of its ACTIVE spell's start, its newest
 note, its newest push and the first heads read, so a fresh deploy judges nobody for 90 min. It is recorded once, and again
 after a second window (`SILENT_RINGS`), then not until one of those moves; the relay rings its handle (a coordinator's own, a
-worker's launcher's). Without `--notes` and heads read in the last `HEADS_STALE_S`, nobody is judged.
+worker's launcher's). A silent agent still showing nothing `NO_STEP_S` (6 h) after its last activity is recorded once more,
+as **no_step**, rung to @top: on 26 Oct nine workers sat ACTIVE with no step for 30-64 h, each rung twice and then by no one.
+Without `--notes` and heads read in the last `HEADS_STALE_S`, nobody is judged.
 
 When a `research run` on a node ends, its sender learns of it only by polling, and a worker that ended its turn to wait never
 does. Every `every_s` of `--nodes` (`infra/control/agent_watch_nodes.json`, deployed as `/data/agent-watch/nodes.json`: the
@@ -251,7 +253,7 @@ RUN_STATUSES = ("CREATING", "RUNNING", "WAITING_FOR_BACKGROUND_WORK", "FINISHED"
                 "unknown")
 WATCH_STATES = ("ok", "followed", "held", "held_again", "continued", "continue_failed", "cancel_refused", "long_call", "stuck",
                 "crashed", "erroring", "unreadable", "ready_to_wake", "worker_idle", "worker_long", "silent", "run_ended",
-                "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread")
+                "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread", "no_step")
 BURST_S = 15 * 60               # workers of one parent failing within this of the first are one alert (proofs' 14: 16:49-17:03Z)
 BURST_QUIET_S = 3 * 60          # ... posted once none has joined for this long (so a lone failure waits about a sweep)
 CONV_MSGS = 6                   # a failed worker's last assistant messages read for a wake-up it set itself
@@ -277,6 +279,8 @@ WORKERS_NEW = 20                # workers read for the first time per sweep: a f
 SILENT_S = 90 * 60              # ACTIVE with no note of its and no push to its branches this long: rung, again a window later
 COORD_SILENT_S = 60 * 60        # ... a coordinator's window, rung to @top (TOP-90 row 37: memory-accounting hung 01:47-04:39Z)
 SILENT_RINGS = 2                # rings per silent spell; then none until it shows activity
+NO_STEP_S = 6 * 3600            # ... and still nothing this long: one `no_step`, rung to @top (top, 26 Oct: nine workers ACTIVE
+                                # with no step for 30-64 h, each rung twice as silent and then by no one)
 HEADS_EVERY_S = 5 * 60          # the branch heads (`git ls-remote --heads`) are read this often
 HEADS_STALE_S = 3 * HEADS_EVERY_S   # heads older than this tell no push apart from none: nobody is judged silent
 RUN_ENDS_EVERY_S = 5 * 60       # the nodes' ended runs are read this often (nodes.json `every_s`)
@@ -1371,7 +1375,14 @@ class Watch:
                 s, changed = None, True
             n = s["rings"] if s else 0
             coord = agent in self.coords
-            if n >= SILENT_RINGS or t - last < (COORD_SILENT_S if coord else SILENT_S) * (n + 1):
+            if n >= SILENT_RINGS:
+                if s and not s.get("no_step") and t - last >= NO_STEP_S:
+                    s["no_step"] = True
+                    changed = True
+                    self.record("no_step", Run(agent, k["run"], k["name"]), since=iso(last), hours=int((t - last) // 3600),
+                                lane=k["lane"], **({"handle": k["handle"]} if k["handle"] else {}), owner="top")
+                continue
+            if t - last < (COORD_SILENT_S if coord else SILENT_S) * (n + 1):
                 continue
             self.silent[agent] = {"from": last, "rings": n + 1}
             changed = True
