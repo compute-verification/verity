@@ -79,8 +79,9 @@ The steps stay in this process's group, which a runner's timeout and a manual st
 appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run, and mirrored
 as a trace/v1 span line in `spans.jsonl` (`spans.py`: the run opens a root span, each step is a completed child, the run's end
 completes the root), the frozen shape the observability watcher reads.  A SIGTERM
-(`research cancel`, a runner's timeout) stops the steps the same way, and a recorded run still writes its result, validation
-`not_run`, and the pack of the passes its steps stored before it, then exits 143: a cancelled check's passes are reused.
+(`research cancel`, a runner's timeout) stops the steps the same way (a step it reaches first and kills is `stopped` too, not
+failed), and a recorded run still writes its result, validation `not_run`, and the pack of the passes its steps stored before
+it, then exits 143: a cancelled check's passes are reused.
 
 Then the independent groups run at once, the cores split between the first two (`--cores N`, default the CPUs this process may
 use). Which group a step is in, its order there, a step in another group it waits on, and whether its failure halts the run
@@ -850,7 +851,7 @@ def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
     w = out / "flock-agreement"
     for name, src in (("upstream", upstream), ("inputs", inputs)):
         if _sha256(src) != pin[name]["sha256"]:
-            print(f"check: {src} is not the pinned {name} ({pin[name]['art']})", file=sys.stderr)
+            print(f"check: lean-agreement: error: {src} is not the pinned {name} ({pin[name]['art']})", file=sys.stderr)
             return 1
         with tarfile.open(src) as t:
             t.extractall(w / name, filter="data")
@@ -858,12 +859,14 @@ def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
     for c, h in sorted(pin["upstream"]["binaries"].items()):
         b = w / "upstream" / f"upstream-{c}"
         if not b.is_file() or _sha256(b) != h:
-            print(f"check: upstream-{c} does not match the pin", file=sys.stderr)
+            print(f"check: lean-agreement: error: upstream-{c} does not match the pin", file=sys.stderr)
             return 1
         b.chmod(0o755)
         ups += ["--upstream", f"{c}={b}"]
+    print(f"check: lean-agreement: unpacked the pinned upstream build ({len(ups) // 2} binaries) and inputs; preflight: one "
+          f"stored honest session replayed per binary", flush=True)
     if why := agreement_preflight(pin, [w / "upstream" / f"upstream-{c}" for c in sorted(pin["upstream"]["binaries"])], w):
-        print(f"check: lean-agreement cannot run here: {why}", file=sys.stderr)
+        print(f"check: lean-agreement: error: cannot run here: {why}", file=sys.stderr)
         return 1
     ci = pin.get("ci", {})
     sets = json.loads((FLOCK_VERIFIER / "vectors.json").read_text())["replayable"]["sets"]    # ci.py --jobs: sets at once
@@ -871,7 +874,11 @@ def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
             *ups, "--work", str(w / "work"), "--inputs", str(w / "inputs"), "--jobs", str(max(1, min(cores(), len(sets)))),
             "--session-jobs", str(session_jobs()),
             "--seed", str(ci.get("seed", 20260926)), "--fuzz", str(ci.get("fuzz", 20)), "--out", str(w)]
-    return subprocess.run(argv, cwd=ROOT).returncode
+    print(f"check: lean-agreement: preflight passed; ci.py on {len(sets)} sets (it prints its results when every set ends)",
+          flush=True)
+    if rc := subprocess.run(argv, cwd=ROOT).returncode:
+        print(f"check: lean-agreement: error: ci.py exited {rc}; its verdicts are in {w}", file=sys.stderr, flush=True)
+    return rc
 
 
 def landable(base: str) -> bool:
@@ -1830,6 +1837,11 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
             rec = {"step": name, "status": "stopped", "detail": f"not started: {steps.why}"}
         elif hung:
             rec = {"step": name, "status": "failed", "rc": rc, "log": log.name, "detail": hung}
+        elif rc == -signal.SIGTERM:
+            # a cancel (`research cancel`) signals the run's whole process group, so a step can die of it before this check's
+            # handler marks it stopped: it found nothing (lean-agreement "failed" with an empty log, r20261026-062546-11fc)
+            rec = {"step": name, "status": "stopped", "rc": rc, "log": log.name,
+                   "detail": "stopped: killed by a SIGTERM this check did not send (a cancel of the run)"}
         elif rc == 0 and name == "lean-audit" and (why := lean_fast(out)):
             print(f"check: {name}: {why}", flush=True)
             rec = {"step": name, "status": "failed", "rc": rc, "log": log.name, "detail": why}

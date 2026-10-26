@@ -7,7 +7,7 @@ import Proofs.Flock.Bridge.Canon
 
 `faultyRightC`, the canonical form of `FaultyRightTarget` (`Bridge.Targets`), proves `FaultyRightTargetC`
 (`Bridge.Canon`). `canon g v` is any predicate on the value of an opening at wire `g`; the bridge's is `canonRow`: the
-wire has a row, and the value is RowShaped at its row/v2 width. A unit `u` is not faulty in `witDep C Cm H roots Xr`
+wire has a row, and the value is RowShaped at its row's width. A unit `u` is not faulty in `witDep C Cm H roots Xr`
 when its committed wires each carry, in some canonical opening of their registered commit string, their value in `C`'s
 evaluation on `Xr`'s inputs (`RightRegZc`'s second conjunct), and each of its canonical registered openings opens its
 wire's position under `Cm` and `roots`. It reads the transport only at the right openings, so at

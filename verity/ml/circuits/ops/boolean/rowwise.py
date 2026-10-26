@@ -1,11 +1,14 @@
 """CMP-92's row ops as Boolean Definitions split so that each outputs at most 16 bits (a proof unit's outputs, the 16-bit forms
-of CIR-100's fallback): a bf16 row's softmax, and the embedding's coordinate.
+of CIR-100's fallback): a bf16 row's softmax, the embedding's coordinate, and the 16-bit halves of RMSNorm's f32 parts.
 
-    SoftmaxMax_v1{N}           (x: Array<N, Array<16, Value<1>>>) -> Array<16, Value<1>>
-    SoftmaxRecip_v1{N, HALF}   (x: Array<N, Array<16, Value<1>>>, m: Array<16, Value<1>>) -> Array<16, Value<1>>
-    SoftmaxOut_v1              (x, m: Array<16, Value<1>>, r: Array<32, Value<1>>) -> Array<16, Value<1>>
-    EmbeddingCoordinate_v1{V}  (tok: Array<16, Value<1>>, col: Array<V, Array<16, Value<1>>>, pos: Array<16, Value<1>>)
-                               -> Array<16, Value<1>>
+    SoftmaxMax_v1{N}                   (x: Array<N, Array<16, Value<1>>>) -> Array<16, Value<1>>
+    SoftmaxRecip_v1{N, HALF}           (x: Array<N, Array<16, Value<1>>>, m: Array<16, Value<1>>) -> Array<16, Value<1>>
+    SoftmaxOut_v1                      (x, m: Array<16, Value<1>>, r: Array<32, Value<1>>) -> Array<16, Value<1>>
+    EmbeddingCoordinate_v1{V}          (tok: Array<16, Value<1>>, col: Array<V, Array<16, Value<1>>>, pos: Array<16, Value<1>>)
+                                       -> Array<16, Value<1>>
+    RmsSumSqPartHalf_v1{C, HALF}       (x: Array<C, Array<16, Value<1>>>) -> Array<16, Value<1>>
+    F32SumPartHalf_v1{G, HALF}         (s: Array<G, Array<32, Value<1>>>) -> Array<16, Value<1>>
+    RmsNormRecipHalf_v1{N, G, EPS, HALF}  (s: Array<G, Array<32, Value<1>>>) -> Array<16, Value<1>>
 
 Softmax over x_0 .. x_{N-1} is `SoftmaxRef_v1{N, bf16}`'s dataflow (`verity.ml.definitions.registry.ref_prims`) on the GPU's
 operations, so a kernel matches it bit for bit with ``add.rn.f32``, ``mul.rn.f32``, ``div.rn.f32``, ``ex2.approx.ftz.f32``
@@ -27,6 +30,13 @@ row gives. col and pos are registered reads at public positions (j and t), and t
 inside the proof. The select is `MoeSelectBf16x{E}_v2`'s: the multiplexer tree (`boolean.gather`) over tok's low
 b = ceil(log2 V) bits, with a word past V standing for 0x7FFF, then 0x7FFF wherever any of tok's other 16 - b bits is set.
 
+**RMSNorm** is `ops.boolean.rmsnorm`'s two-level form. Its f32 parts each become two units, one for each 16-bit half: the low
+16 bits (HALF = 0) or the high 16 bits (HALF = 1) of `RmsSumSqPart_v1{C}`, `F32SumPart_v1{G}` or `RmsNormRecip_v1{N, G, EPS}`.
+Each half is traced from that part's builder, so a half's circuit holds only the gates its own bits read. Each takes the part's
+statics and refuses what the part's signature refuses. A later part, or `RmsNormOut_v1{C}` (C = 1 is its 16-bit form), reads
+an f32 as the two halves' rows. At Phase 1's N = 128 the row is one chunk with G = 1: 2 halves of the chunk's sum, then 2 of
+rs. At Phase 2's N = 16,384, with chunks of 128 and groups of 64: 256 chunk halves, 4 group halves, then 2 of rs.
+
 Every f32 operation's NaN is the GPU's 0x7FFFFFFF and every bf16 rounding F2FP's (NaN 0x7FFF), as in `elementwise`'s `_v4`s;
 none is flushed but MUFU.EX2's operand. An f32 sum is not associative, so a split of a longer row is a new Definition that
 states its order, never a regrouping of this one.
@@ -43,12 +53,13 @@ from verity.ml.circuits.boolean.gather import gather
 from verity.ml.circuits.boolean.trace import definition
 
 from .. import fp32 as W
+from . import rmsnorm as R
 from .elementwise import bf16_add_f2fp, specialized
 from .mufu import mufu_ex2
 from .scalar import bf16_key, gt_u
 
-__all__ = ["EMBEDDING_FILL", "EmbeddingCoordinate", "LOG2E", "SoftmaxMax", "SoftmaxOut", "SoftmaxRecip", "embedding_coordinate",
-           "softmax_exp", "softmax_max", "softmax_out", "softmax_recip"]
+__all__ = ["EMBEDDING_FILL", "EmbeddingCoordinate", "F32SumPartHalf", "LOG2E", "RmsNormRecipHalf", "RmsSumSqPartHalf", "SoftmaxMax",
+           "SoftmaxOut", "SoftmaxRecip", "embedding_coordinate", "softmax_exp", "softmax_max", "softmax_out", "softmax_recip"]
 
 BF16 = U16 = Array(16, BL.BIT)
 F32 = Array(32, BL.BIT)
@@ -140,6 +151,20 @@ def _embedding_signature(S: Any):
     return (("tok", U16), ("col", Array(_vocabulary(S), BF16)), ("pos", BF16)), BF16
 
 
+def _f32_half(part, f):
+    """The builder and signature of the 16-bit half (HALF) of the f32 part ``part``, whose builder at statics S is ``f(S)``:
+    ``part``'s own signature function refuses its statics, and its parameters are the half's."""
+    def build(S: Any):
+        part.signature(S)
+        lo, g = 16 * _half(S), f(S)
+        return lambda C, *e: g(C, *e)[lo:lo + 16]
+
+    def signature(S: Any):
+        _half(S)
+        return part.signature(S)[0], U16
+    return build, signature
+
+
 SoftmaxMax = specialized("SoftmaxMax", 1, ("N",), lambda S: lambda C, *xs: softmax_max(C, xs),
                          lambda S: ((("x", Array(_row(S), BF16)),), BF16),
                          doc="a bf16 row's softmax max on bits: the first greatest x_i (+0 == -0), 0x7FFF if any is a NaN")
@@ -151,3 +176,16 @@ SoftmaxOut = definition("SoftmaxOut", 1, softmax_out, (("x", BF16), ("m", BF16),
 EmbeddingCoordinate = specialized("EmbeddingCoordinate", 1, ("V",), _embedding, _embedding_signature,
                                   doc="one coordinate of the embedding plus position on bits: Bf16AddF2fp_v1(col[tok], pos), "
                                       "col[tok] 0x7FFF for a 16-bit tok >= V, NaN 0x7FFF")
+RmsSumSqPartHalf = specialized("RmsSumSqPartHalf", 1, ("C", "HALF"),
+                               *_f32_half(R.RmsSumSqPart, lambda S: lambda C, *xs: R.sum_squares(C, xs)),
+                               doc="16 bits (HALF) of RmsSumSqPart_v1{C} on bits: RN(x_i^2) summed from +0 in ascending order, "
+                                   "every NaN 0x7FFFFFFF")
+F32SumPartHalf = specialized("F32SumPartHalf", 1, ("G", "HALF"),
+                             *_f32_half(R.F32SumPart, lambda S: lambda C, *s: R.f32_sum(C, s)),
+                             doc="16 bits (HALF) of F32SumPart_v1{G} on bits: G f32 words summed from +0 in ascending order, "
+                                 "every NaN 0x7FFFFFFF")
+RmsNormRecipHalf = specialized("RmsNormRecipHalf", 1, ("N", "G", "EPS", "HALF"),
+                               *_f32_half(R.RmsNormRecip, lambda S: lambda C, *s: R.recip_root(C, R.f32_sum(C, s), S.N,
+                                                                                               R.f32_bits(S.EPS))),
+                               doc="16 bits (HALF) of RmsNormRecip_v1{N, G, EPS} on bits: RN(1 / RN(sqrt(RN(RN(acc / N) + "
+                                   "EPS)))), acc the G sums summed from +0 in ascending order; every NaN 0x7FFFFFFF")

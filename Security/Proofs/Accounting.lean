@@ -14,6 +14,7 @@ import Proofs.Accounting.Prob
 import Proofs.Accounting.Joint
 import Proofs.Accounting.JointBlocks
 import Proofs.Accounting.JointPeriod
+import Proofs.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
 import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
 import Proofs.Accounting.JointBridge.IntegrityOfIntegrityPeriod
 import Proofs.Accounting.JointBlocksAbstract
@@ -45,6 +46,7 @@ import Proofs.Accounting.RemoteHeld.Draw
 import Proofs.Accounting.RemoteHeld.Binding
 import Proofs.Accounting.RemoteHeld.Sketch
 import Proofs.Accounting.RemoteHeld.SketchLine
+import Proofs.Accounting.RemoteHeld.SketchP2
 import Proofs.Accounting.RemoteHeld.Line
 import Proofs.Accounting.RemoteHeld.Component
 import Proofs.Accounting.Requirement
