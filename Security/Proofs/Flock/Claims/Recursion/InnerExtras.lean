@@ -430,4 +430,17 @@ theorem staged_comb {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin} {st0 
   show stL.circuitFold.folded _ _ _ _ _ = st.circuitFold.folded _ _ _ _ _
   rw [hfold, hstLe]
 
+/-- **The inner session check 5 loads is the deployed setup's, as its algebra reads it**: at a dense compiled
+statement, wherever check 5 loads it at a staged part that shows the coins `c`, its extra claims are table 0's at
+`pointsOf` the first coin (`staged_extrasR`) and its comb is table 0's circuit fold (`staged_comb`). -/
+theorem staged_bridges {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.Stmt}
+    (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form) (hB : RestRead.kI x ≤ Bk (xIOf x)) :
+    ExtrasR recRead b Bk s x c ∧
+      ∀ xO, showsPart recRead b s x xO c → ∀ i, insO xO = some i → ∀ (f : RecCoins.Source) unit inn,
+        RecCoins.Source.atC3 i.src i.inner i.commits = some f → f.load unit = .ok inn →
+        ∃ v, setupOf false (xIOf x) = some v ∧
+          inn.combOf = fun _ info => (tabsOf v.2.2)[0]!.fold.folded info.lc.fold.alpha info.lc.fold.beta
+            info.lc.fold.lw info.lc.fold.rhoIn info.lc.fold.ts :=
+  ⟨staged_extrasR hst hd hB, fun _ hsh _ hins _ _ _ hf hload => staged_comb hst hsh hins hf hload⟩
+
 end RecDeploy.OpenLower
