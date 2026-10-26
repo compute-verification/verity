@@ -18,13 +18,19 @@ Programs' tie, IO-TIE's, is in the circuit). `window_circuit(registered, compile
 the class's slots don't take and emits the class's circuit.
 
 `class_circuit` walks the class Program's nodes in order and lowers each to units at ``grain``, once a slot: node j's units
-of slot 0, then of slot 1 and so on, each allocation's slots side by side in its template (`_Builder.unit`):
+of slot 0, then of slot 1 and so on, each allocation's slots side by side in its template (`window_builder`, which holds
+the units, their feeds, gathers and weight reads, and wires them):
 
 - `Embedding_v1{V, H}` is the registered read `EmbeddingRead_v1{V, H}` (`commitments.gates.embedding`): its ``root`` and
   ``domain`` are the embedding table's (a `Table` over the weights record, read by `TableRead`), its ``row``, ``salt`` and
   ``path`` an `Opening` at the hidden key ``tok``, pinned by its verdict ``o1``. Its ``tok`` is its position's feed.
 - `Gemm_v2{K, N}` is ⌈N / n⌉ slices `Gemm_v2{K, n}`, n = ``grain.gemm_words`` // K output columns a slice, each reading
   its weight rows from the weights record (`Read`) and its ``x`` whole.
+- An int8 linear (`registry.int8_exact`) is its quantizer `Int8RowQuant_v1{K}`, one unit, and its product `ScaledMmS8_v1{K, N}`,
+  ⌈N / n⌉ slices `ScaledMmS8_v1{K, n}` at the same weight words a slice (n = ``grain.gemm_words`` // (K / 2): an s8 weight row
+  is K / 2 words), each reading its s8 weight rows and their f32 row scales from the weights record and the quantizer's codes
+  ``x`` and scale ``sx`` whole. Words are laid out by each field's leaf width (`_spans`): a weight or node output whose leaves
+  aren't one byte width filling whole u16 words, and a read that starts inside a word, are refused.
 - `RoPE_v1{NHEADS, D}` is its heads (`RoPEHead_v1{D}`), each reading its slice of ``x``.
 - `Attention_v18{T, NH, KVH, D, BN, ...}` is `Attention_v19`'s cut (#4263, CIR-96): each head's Calls (`AttentionHead_v19`'s
   body, read once a T) are its units, its first visited key block `AttnBlockFirst_v1{D, NVIS}` (keys (nb - 1)·BN ... T - 1,
@@ -64,7 +70,6 @@ is held by the units' proofs on their committed rows, never by this lowering.
 from __future__ import annotations
 
 import bisect
-import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -75,15 +80,14 @@ from verity.ml.circuits.refs import Refs, runs
 from verity.ml.circuits.types import Tuple
 from verity.ml.commitments.gates import embedding as E
 from verity.ml.definitions.registry import io_shell as IO
-from verity.ml.definitions.registry.b1_tp2 import AllGather
 from verity.ml.definitions.registry.dead_free import AttentionV19
 from verity.ml.windows import interface as IF
 
 from .build import Unexpressible
 from .steps import RequestUnit, request_program
+from .window_builder import WEIGHTS, Grain, Row, _Builder, _step
 
 NAME = "verity-vllm/window"
-WEIGHTS = "weights"
 PROMPT = "prompt"
 GREEDY = {"kind": "greedy"}
 #: the Definition that reads a slot's ingress row, (occupancy, prompt length, ids). A placeholder for the row network-
@@ -142,195 +146,30 @@ class WindowClass:
 CLASS_OF_RECORD = WindowClass(8, 1024, 64, lanes=4, every=16)
 
 
-@dataclass(frozen=True)
-class Grain:
-    """The units' size (CIR-95's at Llama-3.2-1B by default): a GEMM slice reads ``gemm_words`` weight words (N = gemm_words
-    // K output columns: `Gemm_v2{2048, 16}`, `Gemm_v2{8192, 4}`), no unit holds more than ``rows`` rows in and out (C-Flock's
-    composer gives each row a unit reads or writes an hm96 slot, so a unit fits its 2^27-bit block with at most 256: a gather
-    of at most 255 parts), and a token select is chunks of ``select`` logits (768: 167 chunks at V = 128,256, each chunk's
-    row past one SHA-512 block)."""
-    gemm_words: int = 32768
-    rows: int = 256
-    select: int = 768
-
-
 _GRAIN = Grain()
 
 
-@dataclass(frozen=True, slots=True)
-class Row:
-    """One unit's output row: template ``tid``'s unit ``unit``, its output ``out`` of ``words`` u16 words."""
-    tid: str
-    unit: int
-    out: str
-    words: int
+def _spans(what: str, fields: Sequence[tuple[str, Any]]) -> list[tuple[int, int, int]]:
+    """``fields`` laid end to end as u16 words: each one's ``(first leaf, first word, leaf bits)``, then ``(leaves, words, 0)``;
+    refused where a field isn't leaves of one whole-byte width filling whole words (an s8 weight's are two a word)."""
+    out, leaf, word = [], 0, 0
+    for label, ty in fields:
+        ws = ty.width_set()
+        bits = next(iter(ws))
+        if len(ws) != 1 or bits % 8 or ty.leaves * bits % 16:
+            raise Unexpressible(f"{what} {label}'s {ty.leaves} leaves are {sorted(ws)} bits, not one byte width filling whole u16 "
+                                "words")
+        out.append((leaf, word, bits))
+        leaf, word = leaf + ty.leaves, word + ty.leaves * bits // 16
+    return out + [(leaf, word, 0)]
 
 
-@dataclass(slots=True)
-class _Feed:
-    """Units ``[at, at + count)`` of template ``tid`` read port ``port`` as ``rows``, in order, at their (slot, step)
-    ``label``: each unit the same rows, or under ``lead`` (digits ``(radix, step)`` of the reader units, slowest first, the
-    radices' product ``count``) unit ``at + i`` each row's writer unit plus ``i``'s digits times their steps."""
-    tid: str
-    port: str
-    at: int
-    count: int
-    rows: tuple[Row, ...]
-    label: tuple[int, int]
-    lead: tuple[tuple[int, int], ...] = ()
-
-
-def _runs_of(rows: Sequence[Row]) -> list[tuple[int, int, int]]:
-    """``rows`` as runs ``(first, length, unit step)``, each of one writer's output at a constant unit step."""
-    out, j = [], 0
-    while j < len(rows):
-        k = j + 1
-        while k < len(rows) and (rows[k].tid, rows[k].out) == (rows[j].tid, rows[j].out) and \
-                rows[k].unit - rows[k - 1].unit == rows[j + 1].unit - rows[j].unit:
-            k += 1
-        out.append((j, k - j, rows[j + 1].unit - rows[j].unit if k > j + 1 else 0))
-        j = k
-    return out
-
-
-def _step(rowss: Sequence[Sequence[Row]]) -> int | None:
-    """The unit step σ with ``rowss[i]`` each of ``rowss[0]``'s rows σ·i units on, None where there is none."""
-    r0 = rowss[0]
-    s = rowss[1][0].unit - r0[0].unit if len(rowss) > 1 and rowss[1] else 0
-    for i, rs in enumerate(rowss):
-        if len(rs) != len(r0) or any((a.tid, a.out, a.words, a.unit + s * i) != (b.tid, b.out, b.words, b.unit)
-                                     for a, b in zip(r0, rs)):
-            return None
-    return s
-
-
-@dataclass
-class _Builder:
-    grain: Grain
-    programs: int = 1
-    fns: dict[str, Any] = field(default_factory=dict)
-    units: dict[str, int] = field(default_factory=dict)
-    local: dict[tuple[int, str], int] = field(default_factory=dict)
-    feeds: list[_Feed] = field(default_factory=list)
-    cuts: dict[str, dict[str, int]] = field(default_factory=dict)
-    wires: list[IF.Wire] = field(default_factory=list)
-    reads: list[IF.Read] = field(default_factory=list)
-    tables: dict[tuple[int, int, int], IF.Table] = field(default_factory=dict)
-    roots: list[IF.TableRead] = field(default_factory=list)
-    openings: list[IF.Opening] = field(default_factory=list)
-    ingress: list[IF.Ingress] = field(default_factory=list)
-    gathered: dict[tuple[tuple[str, str, int, int, int], ...], Row] = field(default_factory=dict)
-    #: the (slot, step) the next units are of, and each template's runs of units by theirs, ``(at, count, slot, step)``
-    label: tuple[int, int] | None = None
-    spans: dict[str, list[tuple[int, int, int, int]]] = field(default_factory=dict)
-    #: each attention Definition's head plan (`_Program._plan`), read once whatever its slots and layers
-    plans: dict[str, list[tuple[Any, list[tuple[str, tuple[Any, ...]]]]]] = field(default_factory=dict)
-
-    def unit(self, fn: Any, count: int = 1) -> tuple[str, int]:
-        """``count`` new units of ``fn`` at the current label: its descriptor id and the first one's index. Every slot makes
-        the same allocations in the same order, so a slot's allocation of a template whose earlier ones took ``base`` of its
-        units takes units ``base · programs + slot · count`` on: each allocation's slots sit side by side, and the slots'
-        copies of a wire or read coalesce into one pattern."""
-        tid = descriptor_id(fn)
-        if self.label is None:
-            raise Unexpressible(f"{tid}: a unit of no slot's step")
-        slot = self.label[0]
-        self.fns.setdefault(tid, fn)
-        base = self.local.get((slot, tid), 0)
-        self.local[(slot, tid)] = base + count
-        self.units[tid] = max(self.units.get(tid, 0), (base + count) * self.programs)
-        at = base * self.programs + slot * count
-        self.spans.setdefault(tid, []).append((at, count, *self.label))
-        return tid, at
-
-    def feed(self, tid: str, port: str, at: int, count: int, rows: Sequence[Row],
-             lead: tuple[tuple[int, int], ...] = ()) -> None:
-        if not rows:
-            raise Unexpressible(f"{tid} {port}: reads no unit's rows")
-        if lead and math.prod(r for r, _ in lead) != count:
-            raise ValueError(f"{tid} {port}: reader digits {lead} for {count} units")
-        self.feeds.append(_Feed(tid, port, at, count, tuple(rows), self.label, lead))
-
-    def _gatherer(self, rows: Sequence[Row]) -> Any:
-        w = {r.words for r in rows}
-        if len(w) != 1 or len(rows) >= self.grain.rows:
-            raise Unexpressible(f"a gather of {len(rows)} rows of {sorted(w)} words: rows of one width, at most "
-                                f"{self.grain.rows - 1} (with its output, a unit's {self.grain.rows} rows)")
-        return bind(AllGather, WORLD=len(rows), N=w.pop())
-
-    def gather(self, rows: Sequence[Row]) -> Row:
-        """One row holding ``rows`` in order: the row itself, or an `AllGather_v1{len(rows), w}` unit's (one a row sequence,
-        keyed by its runs)."""
-        rows = tuple(rows)
-        if len(rows) == 1:
-            return rows[0]
-        key = tuple((rows[j].tid, rows[j].out, rows[j].unit, n, s) for j, n, s in _runs_of(rows))
-        if key in self.gathered:
-            return self.gathered[key]
-        tid, u = self.unit(self._gatherer(rows))
-        self.cuts.setdefault(tid, {})["parts"] = len(rows)
-        self._wire(tid, "parts", u, 1, rows)
-        out = self.gathered[key] = Row(tid, u, "o0", len(rows) * rows[0].words)
-        return out
-
-    def gathers(self, rowss: Sequence[Sequence[Row]]) -> tuple[Row, ...]:
-        """One row a group of ``rowss`` (a KV group's rows of a key or a block): a group's one row as it is, else one
-        `AllGather_v1` unit a group, allocated together and wired as one pattern where each group's rows are the first's
-        shifted (`_step`), never shared."""
-        if all(len(rs) == 1 for rs in rowss):
-            return tuple(rs[0] for rs in rowss)
-        if (s := _step(rowss)) is None:
-            return tuple(self.gather(rs) for rs in rowss)
-        rows, n = rowss[0], len(rowss)
-        tid, u = self.unit(self._gatherer(rows), n)
-        self.cuts.setdefault(tid, {})["parts"] = len(rows)
-        self._wire(tid, "parts", u, n, rows, ((n, s),))
-        return tuple(Row(tid, u + i, "o0", len(rows) * rows[0].words) for i in range(n))
-
-    def read(self, tid: str, port: str, at: int, radix: Sequence[int], base: int, step: Sequence[int]) -> None:
-        self.reads.append(IF.Read(tid, port, WEIGHTS, at=at, radix=tuple(radix), base=base, step=tuple(step)))
-
-    def _wire(self, tid: str, port: str, at: int, count: int, rows: Sequence[Row],
-              lead: tuple[tuple[int, int], ...] = ()) -> None:
-        """Units ``[at, at + count)`` read ``rows`` (each shifted by ``lead``'s digits, `_Feed`) as their port's rows
-        ``0 .. len(rows) - 1``: one pattern per run of rows from one writer's output at a constant unit step."""
-        lead_ = [d for d in (lead or ((count, 0),)) if d[0] > 1]
-        for j, C, unit_step in _runs_of(rows):
-            r = rows[j]
-            digits = lead_ + ([(C, unit_step)] if C > 1 else []) or [(1, 0)]
-            self.wires.append(IF.Wire(tid, port, r.tid, r.out, at=at, radix=tuple(a for a, _ in digits), base=r.unit,
-                                      step=tuple(s for _, s in digits), cut=(j, C) if len(rows) > 1 else (0, 1)))
-
-    def settle(self) -> None:
-        """Each feed's port cut (`_cut`) within the rows its reader has left, its rows gathered to the cut's (at its reader's
-        label), and wired; refused where a unit would hold more than ``grain.rows`` rows in and out."""
-        uses: dict[tuple[str, str], dict[int, int]] = {}
-        for f in self.feeds:
-            m = uses.setdefault((f.tid, f.port), {})
-            m[len(f.rows)] = m.get(len(f.rows), 0) + 1
-        for (tid, port), ms in uses.items():
-            cuts = self.cuts.get(tid, {})
-            d = _cut((tid, port), ms, self.grain.rows - _rows(self.fns[tid], cuts) + cuts.get(port, 1), self.grain.rows)
-            if d > 1:
-                self.cuts.setdefault(tid, {})[port] = d
-        for f in self.feeds:
-            d = self.cuts.get(f.tid, {}).get(f.port, 1)
-            g, self.label = len(f.rows) // d, f.label
-            if g > 1 and any(s for _, s in f.lead):
-                raise Unexpressible(f"{f.tid} {f.port}: units each reading their own {len(f.rows)} rows through a cut of {d}, "
-                                    "a gather a unit")
-            self._wire(f.tid, f.port, f.at, f.count, [self.gather(f.rows[i * g:(i + 1) * g]) for i in range(d)], f.lead)
-        for tid, fn in self.fns.items():
-            if (n := _rows(fn, self.cuts.get(tid))) > self.grain.rows:
-                raise Unexpressible(f"{fn.id}: {n} rows in and out under its cuts {self.cuts.get(tid)}, past a unit's "
-                                    f"{self.grain.rows}")
-
-
-def _rows(fn: Any, cuts: dict[str, int] | None) -> int:
-    """A unit of ``fn``'s rows in and out under ``cuts``, each an hm96 slot C-Flock's composer gives it
-    (`interface.unit_rows`)."""
-    lay = IF.layout(fn)
-    return len(lay.cut(cuts)) + len(lay.outs)
+def _word(spans: Sequence[tuple[int, int, int]], leaf: int, what: str) -> int:
+    """The u16 word leaf ``leaf`` of ``spans`` (`_spans`) starts, refused inside a word."""
+    first, word, bits = spans[bisect.bisect_right([s[0] for s in spans], leaf) - 1]
+    if (leaf - first) * bits % 16:
+        raise Unexpressible(f"{what}: leaf {leaf} starts inside a u16 word of {bits}-bit leaves")
+    return word + (leaf - first) * bits // 16
 
 
 def _field(fn: Any, lo: int, hi: int) -> tuple[str, int]:
@@ -342,18 +181,6 @@ def _field(fn: Any, lo: int, hi: int) -> tuple[str, int]:
     if k is None or starts[k + 1] != hi:
         raise Unexpressible(f"{fn.id}: its return leaves [{lo}, {hi}) are not one of its output rows")
     return IF.layout(fn).outs[k]
-
-
-def _cut(key: tuple[str, str], uses: dict[int, int], room: int, most: int) -> int:
-    """The cut of a port its feeds read as ``uses`` (row count -> feeds): a divisor ``d`` of every count, at most ``room`` (the
-    rows its reader has left) and leaving at most ``most - 1`` rows a gather (its output row is its last of ``most``), with
-    the fewest gather units (``d`` for each feed of more than ``d`` rows)."""
-    g = math.gcd(*uses)
-    ok = [d for d in range(1, min(g, room) + 1) if g % d == 0 and max(uses) // d < most]
-    if not ok:
-        raise Unexpressible(f"{key[0]} {key[1]}: read as {sorted(uses)} rows, which no cut of at most {room} rows a port and "
-                            f"{most - 1} a gather divides")
-    return min(ok, key=lambda d: (sum(n * d for m, n in uses.items() if m > d), -d))
 
 
 @dataclass
@@ -378,18 +205,10 @@ class _Program:
             raise Unexpressible(f"{name}: its inputs are {params}; the window's lowering takes a prompt and the weights record "
                                 "(no seed, prefix-cache hit, carried state or peers)")
         self.params = params
-        self.fields: list[tuple[int, int, int]] = []
-        leaf = word = 0
-        for field_name, ty in dict(self.fn.signature()[0])[WEIGHTS].fields:
-            ws = ty.width_set()
-            if len(ws) != 1 or next(iter(ws)) % 16:
-                raise Unexpressible(f"{name}: weight {field_name}'s leaves are {sorted(ws)} bits, not one width of whole u16 words")
-            self.fields.append((leaf, word, next(iter(ws)) // 16))
-            leaf, word = leaf + ty.leaves, word + ty.leaves * next(iter(ws)) // 16
-        self.fields.append((leaf, word, 0))
-        self.weights = word
+        self.fields = _spans(f"{name}: weight", dict(self.fn.signature()[0])[WEIGHTS].fields)
+        self.weights = self.fields[-1][1]
         self.outs: dict[int, list[tuple[int, int, Row]]] = {}
-        self.words: dict[int, int] = {}
+        self.words: dict[int, list[tuple[int, int, int]]] = {}
         self.gemms: dict[int, tuple[Any, tuple[Row, ...], int]] = {}
         self.keys: dict[tuple[str, tuple[str, Any, int, int]], _Keys] = {}
         self.position = 0
@@ -401,14 +220,14 @@ class _Program:
         out = []
         for space, idx, lo, hi in runs(refs):
             if space == "n":
-                w = self.words[idx]
-                out.append(("n", idx, lo * w, hi * w))
+                spans = self.words[idx]
+                out.append(("n", idx, _word(spans, lo, f"{self.name}: node {idx}"), _word(spans, hi, f"{self.name}: node {idx}")))
             elif self.params[idx] == WEIGHTS:
                 k = bisect.bisect_right([f[0] for f in self.fields], lo) - 1
-                leaf, word, w = self.fields[k]
                 if hi > self.fields[k + 1][0]:
                     raise Unexpressible(f"{self.name}: a weight read of leaves [{lo}, {hi}) spans two weights")
-                out.append(("p", WEIGHTS, word + (lo - leaf) * w, word + (hi - leaf) * w))
+                out.append(("p", WEIGHTS, _word(self.fields, lo, f"{self.name}: a weight read"),
+                            _word(self.fields, hi, f"{self.name}: a weight read")))
             else:
                 out.append(("p", self.params[idx], lo, hi))
         return out
@@ -462,10 +281,8 @@ class _Program:
         if node.form != "call":
             raise Unexpressible(f"{self.name}: node {j} is a {node.form}, not a call")
         ret = node.fn.signature()[1]
-        ws = ret.width_set()
-        if not ws <= {16, 32} or len(ws) != 1:
-            raise Unexpressible(f"{self.name}: node {j} ({node.fn.id}) returns leaves of {sorted(ws)} bits")
-        self.words[j] = next(iter(ws)) // 16
+        fields = [f[1] if isinstance(f, tuple) else f for f in (getattr(ret, "fields", None) or (ret,))]
+        self.words[j] = _spans(f"{self.name}: node {j} ({node.fn.id}) return", [(f"o{i}", t) for i, t in enumerate(fields)])
         family = node.fn.name
         lower = getattr(self, f"_{family}", None) if family in FAMILIES else None
         if lower is None:
@@ -528,7 +345,7 @@ class _Program:
             at += words
         self.outs[j] = pieces
 
-    _RMSNormTriton = _RMSNormFusedCuda = _SiluMul = _one
+    _RMSNormTriton = _RMSNormFusedCuda = _SiluMul = _Int8RowQuant = _one
 
     def _Gemm(self, j: int, node: Any) -> None:
         b = node.fn.bindings
@@ -547,6 +364,26 @@ class _Program:
             pieces.append((s0, s0 + count * m, Row(tid, u, "o0", m)))
         self.outs[j] = pieces
         self.gemms[j] = (node.fn, xs, lo)
+
+    def _ScaledMmS8(self, j: int, node: Any) -> None:
+        b = node.fn.bindings
+        K, N = b["K"], b["N"]
+        n = max(1, min(N, self.b.grain.gemm_words // (K // 2)))
+        x, sx, w, sw = node.args
+        xs, ss = self.rows(x.refs), self.rows(sx.refs)
+        lo, slo = self.weight(w.refs, N * K // 2), self.weight(sw.refs, 2 * N)
+        full, rest = divmod(N, n)
+        pieces = []
+        for s0, m, count in ((0, n, full), (full * n, rest, int(rest > 0))):
+            if not count:
+                continue
+            tid, u = self.b.unit(bind(node.fn.defn, **{**b, "N": m}), count)
+            self.b.feed(tid, "x", u, count, xs)
+            self.b.feed(tid, "sx", u, count, ss)
+            self.b.read(tid, "w", u, (count,), lo + s0 * K // 2, (m * K // 2,))
+            self.b.read(tid, "sw", u, (count,), slo + 2 * s0, (2 * m,))
+            pieces.append((s0, s0 + count * m, Row(tid, u, "o0", m)))
+        self.outs[j] = pieces
 
     def _heads(self, fn: Any, family: str, count: int) -> Any:
         nodes = fn.body.nodes
@@ -697,7 +534,8 @@ class _Program:
         self.b.feed(mtid, "tok", mu, 1, self.outs[j][0][2:])
 
 
-FAMILIES = ("Embedding", "RMSNormTriton", "RMSNormFusedCuda", "Gemm", "RoPE", "Attention", "SiluMul", "TokenSelect")
+FAMILIES = ("Embedding", "RMSNormTriton", "RMSNormFusedCuda", "Gemm", "Int8RowQuant", "ScaledMmS8", "RoPE", "Attention", "SiluMul",
+            "TokenSelect")
 
 
 def _runs(xs: Sequence[Any], key: Any, at: Any, n: Any, make: Any) -> list[Any]:

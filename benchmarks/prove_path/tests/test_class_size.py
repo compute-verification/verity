@@ -22,7 +22,6 @@ import math
 import os
 import resource
 import sys
-import time
 from pathlib import Path
 
 import pytest
@@ -96,21 +95,17 @@ def test_v19s_heads_are_key_blocks_with_their_gathers():
 def test_the_class_of_record_lowers_at_llama_3_2_1b(monkeypatch):
     """The class of record (8 slots of 1,087 positions) at Llama-3.2-1B's geometry and CIR-95's grain lowers whole: no unit
     past 256 rows in and out (`Grain.rows`), so none past C-Flock's 2^27-bit block (`size` refuses one), and its census is 8
-    times the projection of one Program from a probe of 3 positions. Its numbers (nodes, units, wires, seconds, peak RSS,
-    then ANDs and m) are printed as JSON lines."""
+    times the projection of one Program from a probe of 3 positions. Its numbers (nodes, units, wires, peak RSS, then ANDs
+    and m) are printed as JSON lines."""
     reg = _registered(json.loads(LLAMA_1B.read_text()))
-    t0 = time.perf_counter()
     built, program = WC.class_program(reg, CLASS_OF_RECORD), WC.class_program
-    t1 = time.perf_counter()
     monkeypatch.setattr(WC, "class_program", lambda r, cls: built if cls == CLASS_OF_RECORD else program(r, cls))
     circuit = class_circuit(reg, CLASS_OF_RECORD)
-    t2 = time.perf_counter()
     census = CZ.census(circuit)
     rows = max(sum(map(len, IF.unit_rows(fn, circuit.cuts.get(IF.descriptor_id(fn))))) for fn, _ in circuit.templates)
     print(json.dumps({"positions": CLASS_OF_RECORD.positions, "nodes": len(built.program.fn.body.nodes),
                       "units": sum(census.values()), "templates": len(circuit.templates), "wires": len(circuit.wires),
                       "reads": len(circuit.registered.reads), "entries": len(circuit.blocks.inference), "most_rows": rows,
-                      "seconds": {"program": round(t1 - t0), "lowering": round(t2 - t1)},
                       "max_rss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 1), "census": census},
                      sort_keys=True), flush=True)
     assert rows <= WC._GRAIN.rows
