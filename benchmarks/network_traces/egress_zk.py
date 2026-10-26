@@ -26,7 +26,8 @@ by the Lean verifier's registered reads (`flock-verify verify --zk --registered`
 * **What the verifier receives** is scanned for every 16-byte piece of every unit's state and row and every salt but
   ``o0``'s (`a8.received`), less the pieces public anyway: the staged circuit, zero bytes, and the pad and `END`
   cells of the window's ordinals (a piece of them is a small integer among zeros). The prover's instance file, which
-  holds them all, is the control.
+  holds them all, is the control; it lays the ``state`` table's 204-byte rows back to back, each followed by the next
+  rather than by zeros, so a state's zero-padded last chunk isn't held there (`leak_scan.public_pieces`' ``fields``).
 """
 from __future__ import annotations
 
@@ -377,7 +378,7 @@ def prove(a) -> int:
     ok = True
     for j, (name, m) in enumerate(staged.items()):
         res = audit_member(M, av, sg, m, at, out / name, a.port + j)
-        blobs, held, public = WZ.public_pieces(M.a8, *blobs_of(m), known(sg, at))
+        blobs, held, public = WZ.public_pieces(M.a8, *blobs_of(m), known(sg, at), fields=True)
         res["received"] = {**M.a8.received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held),
                            "public_pieces": public}
         good = expected(name, res) and not res["received"]["verifier_found"] and res["received"]["control"]["holds_all"]

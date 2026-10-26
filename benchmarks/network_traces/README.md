@@ -39,14 +39,19 @@ command (`CR_N2_CMD`), IO-TIE's `--warden-run DIR --draw K` points the scan at t
 reads when it is there (`CR_CLIENT`). A step on a stand-in (the scan on its own synthetic run, or N2 on
 `CR_N2_STANDIN=simulated`) never makes the report accepted, and a step that fails or doesn't run says why.
 
-One gap is in the binding, not a command: `chain.served_advice` reads each Commit window's advice as I1 v0, so a window
-that carries a request across its open or close (`verity_vllm.pipeline.window_advice`, schema
-`verity-vllm/window-advice/v1`) is refused, and with it the whole run's advice. On the :18097 endpoint, 8 of the 56
-Commit windows of c20261025T062158Z-9ff3 are such windows (4 carry requests in), so the advised N2 can't take that run.
+A Commit window that carries a request across its open or close (`verity_vllm.pipeline.window_advice`, schema
+`verity-vllm/window-advice/v1`) is bound with the window before it: `chain.served_advice` joins them into one I1 v0
+advice (`window_chain.join`), and `n2_advised_zk --e2e` joins the run's windows the same way. A carried request's
+record and state are the earlier window's, as its registered advice closed them (`window_advice.follows`), never the
+later window's own string's, so the advice's bits, and N2's K, charge the carry once. A window that carries a request
+in from a window the run doesn't hold, or that leaves a request with outputs still to keep and no next window, is
+refused. On the :18097 endpoint, 8 of the 56 Commit windows of c20261025T062158Z-9ff3 carry a request (114–115,
+143–144, 147–148 and 152–153), and all 56 bind and rebuild from the certified I/O. N2 proves the joined advice at
+that link's size class, T = 60 and R_in = 2, whose advised counts circuit-check pins (`advised.circuit-check.py`).
 
-**The dry runs.** Two runs on vy-nebius-cpu-2's network slot, on the honest gate run c20261025T062158Z-9ff3
+**The dry runs.** Three runs on vy-nebius-cpu-2's network slot, on the honest gate run c20261025T062158Z-9ff3
 (art:140f0e61b266a8f22b5153323d37b32e2645a2e7d5c564749745e87568feaecb: :18097, 100 varied requests at 0.6/s, 26
-windows, the advice profile, a certifier key of H = 10). Neither is of record.
+windows, the advice profile, a certifier key of H = 10). None is of record.
 
 - r20261025-180338-1dca, at f5f67ea462:
   - Custody: accepted.
@@ -59,19 +64,33 @@ windows, the advice profile, a certifier key of H = 10). Neither is of record.
 - r20261025-183805-7c27, at bbf4a5e6e1, adds the endpoint's records (the four files of :18097's serve directory), and
   its scan step reuses 1dca's summary:
   - I/O tie, in the clear: accepted the honest run (100 requests, 3,172 outputs placed).
-  - Advice: didn't bind (the gap above).
+  - Advice: didn't bind: the binding read each Commit window's advice as I1 v0, and refused window advice v1.
   - N2: ran its stand-in, the advised unit (NetworkAdvisedLinkWindow_v2 at T = 512, 8,063,826 ANDs, k_log 24) on
     `n2_advised_zk`'s simulated link, under the certifier's signed clocks.
     - Verdicts: every window was proved, held by Lean and as expected. Honest was accepted in all 4 windows, and extra
       was refused at window 0 by its advised counts.
     - Cost per window on 21 cores: a proving session of 128–149 s and a Lean verify of about 104 s.
     - No witness piece was found in what the verifier received.
-    - The driver still failed, on its control: the prover's own `prover-instances.bin` holds 57 of the 337 pieces the
-      scan looks for, so the scan isn't shown to find a leak in this unit's layout.
+    - The driver still failed, on its control: the prover's own `prover-instances.bin` held 57 of the 337 pieces the
+      scan looks for, and lacked 8 the control expects there, each head's zero-padded last chunk (`head egress 0
+      @2208` …). The expectation was wrong, not the file: an advised head (157 + L + 4T bytes, 2,214 at T = 512) is a
+      field of the `wit` row, followed there by its salt, so no instance holds that chunk. N2's control now expects a
+      head's pieces but that one (`leak_scan.public_pieces`'s `fields`); the head's last 16 bytes still cover its tail.
+- r20261025-195722-188d, at eb21221d4e, on 7c27's inputs with its scan again 1dca's, and N2 on the run's first 4
+  link-windows (`CR_N2_WINDOWS=4`):
+  - Endpoint: accepted. All 56 Commit windows were bound and rebuilt, and the I/O tie accepted the honest run. Beside
+    it, on copies of the registered advice with window 115's carried state lied (re-registered, or only changed) or
+    with window 114 dropped, the binding refused each.
+  - N2: `n2_advised_zk --e2e` on the joined advice, NetworkAdvisedLinkWindow_v2 at T = 60 and R_in = 2 (3,453,596 ANDs,
+    k_log 23). Honest was accepted in all 4 windows, and moved, short and tampered were refused at window 0. Every
+    proof was held by Lean.
+    - Cost per window on 21 cores: a proving session of 57–108 s and a Lean verify of 41–63 s.
+    - No witness piece was found in what the verifier received, and the control held every piece it expects.
+  - Verdict: refused, only because the scan step is still `scan_zk`'s own synthetic run, a stand-in.
 
 **The theorem.** The run instantiates `NetTiming.Guarantees.PeriodLeakAccepted` (#4326, proved as
 `NetTiming.SecurityProofs.PeriodLeakAccepted`), with `Claims.Sampling.KS`, `Claims.Flock.ListWithin` and
-`trusted-nebius-host` as hypotheses. Over a period of n windows, each window's audit has `KSLinOn`'s bound,
+`trusted-host` as hypotheses. Over a period of n windows, each window's audit has `KSLinOn`'s bound,
 
 Pr[window i accepted ∧ ¬RLeak δ] ≤ δ + ε_ks + ε_bind,
 
@@ -97,4 +116,3 @@ What it doesn't cover:
 - B_reg: the trace's values at reg are the registration's (proofs' #4253). No probability covers it yet.
 - #(freeInputs \ reg) is not bounded by the advice bits until V3's padding, so b_w is vacuous (NET-68).
 - No carry across windows: each window's terms stand alone, and a request that spans two windows is charged in each.
-  The endpoint's Commit windows that carry a request don't bind to the run yet (above).

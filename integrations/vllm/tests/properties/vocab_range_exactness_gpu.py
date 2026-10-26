@@ -184,7 +184,7 @@ def run(case: str, out: str, max_tokens: int = 8) -> dict[str, Any]:
               "tensor_parallel_size": X.WORLD, "enforce_eager": True}
     else:
         cp = prof.checkpoint_for(case, "manifests/checkpoints.json")
-        kw = prof.engine_kwargs(cp, replay=False, enforce_eager=True, tensor_parallel_size=X.WORLD)
+        kw = prof.engine_kwargs(cp, replay=False, seed=prof.ENGINE_SEED, enforce_eager=True, tensor_parallel_size=X.WORLD)
     kw.update(enable_prefix_caching=False, max_num_seqs=4)
     doc: dict[str, Any] = {"schema": X.SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "argv": sys.argv, "case": case,
                            "model": cp.get("repo") if case != "tiny" else cp, "revision": cp.get("revision"), "env_flags": env_flags,

@@ -163,7 +163,7 @@ def test_gm01_fails_a_component_whose_constant_S_is_not_the_folds(within_step):
 
     assert g3([32, 32, 32]) == []
     fails = g3([32, 16, 32])
-    assert [f[0] for f in fails] == ["G3"] and "constant S differs from the fold's at 1 event(s)" in fails[0][1] and "[1, 32, 16]" in fails[0][1]
+    assert [f[0] for f in fails] == [PR.SUBCIRCUITS] and "constant S differs from the fold's at 1 event(s)" in fails[0][1] and "[1, 32, 16]" in fails[0][1]
 
 
 def test_x09_refuses_a_component_whose_constant_S_is_not_the_folds(tmp_path, monkeypatch):

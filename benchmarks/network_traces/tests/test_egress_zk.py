@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parents[1]
 
@@ -43,3 +44,17 @@ def test_each_members_host_read_is_the_members(tmp_path):
     a, b = moved.changed["units"]
     assert moved.rows[a] == honest.rows[b] and moved.rows[b] == honest.rows[a] != honest.rows[b]
     assert moved.states[a] == honest.states[b] and moved.verdicts == [1] * T
+
+
+def test_the_control_holds_every_held_piece_of_the_states(tmp_path):
+    """The instance file lays the ``state`` table's 204-byte rows back to back, so a state's zero-padded last chunk
+    isn't there when its tail isn't zeros (the honest member's states 3 to 5): `prove` cuts with ``fields``, which holds
+    every other piece, all of them there."""
+    mr = ez.member_rows("honest", ez.link(tmp_path))
+    states = {f"state {i}": b"".join(w.to_bytes(2, "little") for w in ws) for i, ws in enumerate(mr.words)}
+    assert {len(s) for s in states.values()} == {ez.SHAPE.state_bits // 8} and ez.SHAPE.state_bits // 8 % 16
+    laid = b"".join(states.values())
+    a8 = SimpleNamespace(PIECE=16, needles=lambda p: {x: k for k, x in p.items()}, find=lambda d, t: {})
+    kept, held, _ = ez.WZ.LS.public_pieces(a8, states, set(states), b"", fields=True)
+    assert held and all(kept[k] in laid for k in held)
+    assert any(kept[k] not in laid for k in set(kept) - held)
