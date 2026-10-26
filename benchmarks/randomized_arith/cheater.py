@@ -1,0 +1,512 @@
+"""The stacking cheater's cheapest exact squaring mod p1024 under randomized arithmetic, built and measured in 6b's gate
+model (`benchmarks/property_redteam/squaring.py`, a port of `Security/Definitions/Accounting/Gates/Model.lean`).
+
+**What the randomization does to a gate.** property/v1 lets a budgeted gate compute any function of at most 128 operand
+bits. Randomized rounding can't bite in that model: a cheater picks a gate whose exact pre-rounding value is already an
+integer, and stochastic rounding (SR) or a dither of an integer returns it unchanged. So the randomized protocol has to
+restrict the gates to real primitive semantics, and this module models them that way:
+
+* a **rounding** gate (`nfloor`) computes an exact linear form `y` of its operands and returns `⌊y / 2^k⌋` perturbed by
+  the mechanism: SR (`⌊(y + U) / 2^k⌋`, `U` a fresh uniform `k`-bit coin, so `⌊y/2^k⌋` or one more), dither (the same
+  law, since an offset drawn per op is a fresh uniform per gate), or bounded noise (round-to-nearest, then a uniform
+  integer in `[−N, N]` added, even on integer inputs). Under `det` it is the exact floor.
+* the **compare_select** gates stay deterministic, as no randomization applies to them: `clamp(x, lo, hi)` (S32ClampS8,
+  a saturating cast of an integer), and `cmp`, the bit `[y < 0]` of a linear form (a comparison).
+* **any-function** gates (`anyfn`, property/v1's own budgeted gate) exist only where nothing is randomized (`det`): they
+  are the baseline model, in which `seam_square` costs 160.
+* **noisy dots** (`noisy_mma`): an s8-family dot whose int32 output carries a fresh uniform integer in
+  `[−2^(g−1), 2^(g−1))` (the accumulator-noise mechanism). The cheater buys `G ≥ g` guard bits, by repeating each product
+  `2^rep` times in the dot (free in units, `2^rep` times the MACs) or by scaling `b`-bit digits up by `2^(8−b)` in the u8
+  operands (`2(8 − b)` bits), and cleans each column with `⌊(y + 2^(G−1)) / 2^G⌋`.
+
+The coins are never inputs the cheater's gates read; predicting them means computing the verifier's PRF in the circuit
+(`prf_units`). Every construction is run on random inputs and fresh coins and checked exact mod p, `Proven` and within
+`OperandBits 128`; its units are counted by class, with its MACs (products summed by its dots).
+
+**The constructions** (`CONSTRUCTIONS`), each one squaring of a 1024-bit word:
+
+* `anyfn_seam`: property/v1's cheapest, `squaring.seam_square` (160 units), the reference.
+* `anyfn_fixup(b, G, rep)`: one greedy any-function carry pass over `b`-bit digits, its top carry folded into a fixup group;
+  with `G > 0` the group gates read noisy columns and clean them inside (accumulator noise, deterministic roundings).
+* `restricted(mech, b)`: rounding gates are `nfloor`s and narrowing is a `clamp`: a ripple a digit (`nfloor` carry +
+  `clamp` digit), with an exact precomputed seam carry. `det` (exact floors) is the restricted model's own baseline;
+  `sr` needs signed radix-128 digits (`d = x − 128·SR(x/128)` always lies in `[−128, 127]`); `noise1` radix 64.
+* `restricted_acc(mech, g, rep, b)`: both mechanisms: each unfolded noisy column cleaned exactly (`nfloor` + `cmp` under
+  SR), then `restricted`'s ripple."""
+
+from __future__ import annotations
+
+import random
+import sys
+from collections import Counter
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / "property_redteam"))
+
+import squaring as Q  # noqa: E402
+
+P = Q.P
+NBITS = 1024
+S8, U8 = Q.S8, Q.U8
+COIN_SLOT0 = 1 << 20
+
+
+@dataclass(frozen=True)
+class Mech:
+    """A rounding gate's law: `det` (exact floor), `sr` (stochastic rounding, ≡ dither), or `noise` (RNE then ±n)."""
+
+    kind: str = "det"
+    n: int = 0
+
+    @property
+    def name(self) -> str:
+        return self.kind if self.kind != "noise" else f"noise{self.n}"
+
+
+DET, SR = Mech("det"), Mech("sr")
+
+
+class RBuilder(Q.Builder):
+    """`squaring.Builder` with randomized gates. Coins come from `self.rng` as each gate evaluates (rounding noise) or
+    are coin inputs (accumulator noise) that only the noisy dot's own affine reads."""
+
+    def __init__(self, mech: Mech = DET) -> None:
+        super().__init__()
+        self.mech = mech
+        self.rng = random.Random(0)
+        self.macs = 0
+        self.coins: list[tuple[int, int, int]] = []  # (slot, lo, hi) of each accumulator-noise coin
+
+    def mma(self, head, a, b, fa, fb):  # noqa: D102
+        self.macs += len(a)
+        return super().mma(head, a, b, fa, fb)
+
+    def nfloor(self, terms: list[tuple[int, int]], k: int, c: int = 0) -> int:
+        """`⌊(c + Σ coeff·v) / 2^k⌋` under the mechanism, one rounding unit (operands: the terms' gates)."""
+        args = [g for _, g in terms]
+        w = [cf for cf, _ in terms]
+        lo = c + sum(min(cf * self.gates[g].lo, cf * self.gates[g].hi) for cf, g in terms)
+        hi = c + sum(max(cf * self.gates[g].lo, cf * self.gates[g].hi) for cf, g in terms)
+        m, rng = self.mech, self
+        if m.kind == "det":
+            def f(v):
+                return (c + sum(x * y for x, y in zip(w, v))) >> k
+            dlo, dhi = lo >> k, hi >> k
+        elif m.kind == "sr":
+            def f(v):
+                return (c + sum(x * y for x, y in zip(w, v)) + rng.rng.randrange(1 << k)) >> k
+            dlo, dhi = lo >> k, (hi >> k) + 1
+        elif m.kind == "noise":
+            half = 1 << (k - 1)
+
+            def f(v):
+                return ((c + sum(x * y for x, y in zip(w, v)) + half) >> k) + rng.rng.randint(-m.n, m.n)
+            dlo, dhi = ((lo + half) >> k) - m.n, ((hi + half) >> k) + m.n
+        else:
+            raise ValueError(m.kind)
+        return self.budgeted(f, args, dlo, dhi, "rounding")
+
+    def clamp(self, x: int, lo: int, hi: int) -> int:
+        return self.budgeted(lambda v: min(max(v[0], lo), hi), [x], lo, hi, "compare_select")
+
+    def cmp(self, terms: list[tuple[int, int]], c: int = 0) -> int:
+        """`[c + Σ coeff·v < 0]`, one compare_select unit."""
+        w = [cf for cf, _ in terms]
+        return self.budgeted(lambda v: int(c + sum(x * y for x, y in zip(w, v)) < 0), [g for _, g in terms], 0, 1,
+                             "compare_select")
+
+    def anyfn(self, f: Callable[[list[int]], int], args: list[int], lo: int, hi: int) -> int:
+        assert self.mech.kind == "det", "any-function gates exist only where nothing is randomized"
+        return self.budgeted(f, args, lo, hi, "rounding")
+
+    def noisy_mma(self, a: list[int], b: list[int], fa, fb, g: int, rep: int = 0) -> int:
+        """`2^rep · Σ a_i b_i + η` (each product repeated `2^rep` times in the dot), `η` uniform in `[−2^(g−1), 2^(g−1))`;
+        with `g = 0` no noise. The exact sum is internal: callers only get the noisy one."""
+        exact = self.mma(self.const(0), a, b, fa, fb)
+        self.macs += len(a) * ((1 << rep) - 1)
+        if g <= 0:
+            return self.affine(0, [(1 << rep, exact)]) if rep else exact
+        slot = COIN_SLOT0 + len(self.coins)
+        lo, hi = -(1 << (g - 1)), (1 << (g - 1)) - 1
+        self.coins.append((slot, lo, hi))
+        eta = self.inp(slot, lo, hi, "coin")
+        return self.affine(0, [(1 << rep, exact), (1, eta)])
+
+    def draw_coins(self) -> dict[int, int]:
+        return {s: self.rng.randint(lo, hi) for s, lo, hi in self.coins}
+
+    def units_by_class(self) -> dict[str, int]:
+        c: Counter = Counter()
+        for g, u in zip(self.gates, self._fixed):
+            if u:
+                c[g.op.budget or "input"] += u
+        return dict(c)
+
+
+# ---- digits ---------------------------------------------------------------------------------------------------------------
+
+
+def n_digits(b: int) -> int:
+    return -(-NBITS // b)
+
+
+def fold_split(b: int) -> list[int]:
+    """`R^n mod p` for `R = 2^b`, `n = ⌈1024/b⌉`, as radix-`R` digits: `2^(bn) ≡ 105·2^(bn − 1024)`."""
+    delta = Q.DELTA << (b * n_digits(b) - NBITS)
+    out = []
+    while delta:
+        out.append(delta % (1 << b))
+        delta >>= b
+    return out
+
+
+def to_digits(x: int, b: int, signed: bool) -> list[int]:
+    """`x`'s `n` radix-`2^b` digits, canonical in `[0, R)` or balanced in `[−R/2, R/2)`."""
+    R, n = 1 << b, n_digits(b)
+    out = []
+    for _ in range(n):
+        d = x % R
+        if signed and d >= R // 2:
+            d -= R
+        out.append(d)
+        x = (x - d) // R
+    out[-1] += x * R  # a balanced top digit absorbs what is left (0 for x < 2^1024 at b | 1024; small otherwise)
+    return out
+
+
+def value(ds: list[int], b: int) -> int:
+    return sum(d << (b * i) for i, d in enumerate(ds))
+
+
+def unfolded_columns(bld: RBuilder, a: list[int], fmt, g: int = 0, rep: int = 0) -> list[int]:
+    """The `2n − 1` columns `Σ_{i+j=m} a_i a_j`, each one dot (noisy with `g > 0`, products repeated `2^rep` times)."""
+    n = len(a)
+    cols = []
+    for m in range(2 * n - 1):
+        idx = list(range(max(0, m - n + 1), min(m, n - 1) + 1))
+        cols.append(bld.noisy_mma([a[i] for i in idx], [a[m - i] for i in idx], fmt, fmt, g, rep))
+    return cols
+
+
+def fold(bld: RBuilder, cols: list[int], b: int) -> list[int]:
+    """Fold the top columns down by `R^n ≡ Σ_t δ_t R^t`: position `j` gets `col_j + Σ_t δ_t col_{j+n−t}`."""
+    n = n_digits(b)
+    split = fold_split(b)
+    out = []
+    for j in range(n):
+        terms = [(1, cols[j])]
+        for t, dt in enumerate(split):
+            m = j + n - t
+            if dt and n <= m < len(cols):
+                terms.append((dt, cols[m]))
+        out.append(bld.affine(0, terms))
+    return out
+
+
+# ---- the restricted model: nfloor carries and clamp digits -----------------------------------------------------------
+
+
+def digit_range(mech: Mech, b: int) -> tuple[int, int]:
+    """Where `x − R·carry` always lands for the mechanism's carry `nfloor(x / R)`."""
+    R = 1 << b
+    if mech.kind == "det":
+        return 0, R - 1
+    if mech.kind == "sr":
+        return -R, R - 1
+    return -R // 2 - mech.n * R, R // 2 + mech.n * R - 1
+
+
+def exact_floor(bld: RBuilder, x: int, k: int, c: int = 0) -> int:
+    """`⌊(c + x) / 2^k⌋` exactly: one `nfloor`, then as many `cmp` corrections as its law needs."""
+    q = bld.nfloor([(1, x)], k, c)
+    m = bld.mech
+    if m.kind == "det":
+        return q
+    R = 1 << k
+    if m.kind == "sr":  # q ∈ {⌊⌋, ⌊⌋ + 1}: down one when c + x − R·q < 0
+        return bld.affine(0, [(1, q), (-1, bld.cmp([(1, x), (-R, q)], c))])
+    # noise n: q = RNE + e ∈ ⌊⌋ + [−n, n + 1], so r = c + x − R·q ∈ [−(n+1)R, (n+1)R) and ⌊⌋ = q + ⌊r/R⌋, with
+    # ⌊r/R⌋ = −Σ_{t=1}^{n+1} [r < −(t−1)R] + Σ_{t=1}^{n} (1 − [r < tR]): 2n + 1 comparisons
+    terms = [(1, q)]
+    for t in range(1, m.n + 2):
+        terms.append((-1, bld.cmp([(1, x), (-R, q)], c + (t - 1) * R)))
+    for t in range(1, m.n + 1):
+        terms.append((-1, bld.cmp([(1, x), (-R, q)], c - t * R)))
+    return bld.affine(m.n, terms)
+
+
+def restricted_ripple(bld: RBuilder, f: list[int], b: int, s: int, signed_out: bool) -> list[int]:
+    """The ripple over folded positions `f` (each an s32 affine), `R = 2^b`: an exact carry into position `s` first
+    (rounded to nearest under a randomized law, so the last low digit centers), then `nfloor` carries and `clamp` digits
+    over `s … n−1`, the top carry folded into positions `0 …` by `fold_split`, and the low window `0 … s−1` last, closed
+    by the precomputed carry. Returns the `n` digit gates."""
+    n, R = len(f), 1 << b
+    mech = bld.mech
+    lo, hi = digit_range(mech, b)
+    if not signed_out:
+        assert mech.kind == "det"
+    c = bld.const(0)
+    for j in range(s):
+        x = bld.affine(0, [(1, f[j]), (1, c)])
+        off = R // 2 if (j == s - 1 and mech.kind != "det") else 0
+        c = exact_floor(bld, x, b, off)
+    cs = c
+    out: list[int] = [0] * n
+    for j in range(s, n):
+        x = bld.affine(0, [(1, f[j]), (1, c)])
+        c = bld.nfloor([(1, x)], b)
+        out[j] = bld.clamp(bld.affine(0, [(1, x), (-R, c)]), lo, hi)
+    c_top = c
+    split = fold_split(b)
+    c = bld.const(0)
+    for j in range(s):
+        terms = [(1, f[j]), (1, c)]
+        if j < len(split) and split[j]:
+            terms.append((split[j], c_top))
+        x = bld.affine(0, terms)
+        if j < s - 1:
+            c = bld.nfloor([(1, x)], b)
+            out[j] = bld.clamp(bld.affine(0, [(1, x), (-R, c)]), lo, hi)
+        else:
+            out[j] = bld.clamp(bld.affine(0, [(1, x), (-R, cs)]), lo, hi)
+    return out
+
+
+def restricted(bld: RBuilder, a: list[int], b: int, s: int = 5) -> list[int]:
+    """One squaring in the restricted model: honest columns, the fold, `restricted_ripple`."""
+    signed = bld.mech.kind != "det"
+    f = fold(bld, unfolded_columns(bld, a, S8 if signed else U8), b)
+    return restricted_ripple(bld, f, b, s, signed)
+
+
+def clean_column(bld: RBuilder, y: int, G: int) -> int:
+    """The exact column `c` from `y = 2^G c + η`, `|η| < 2^(G−1)`: `⌊(y + 2^(G−1)) / 2^G⌋` exactly."""
+    return exact_floor(bld, y, G, 1 << (G - 1))
+
+
+def restricted_acc(bld: RBuilder, a: list[int], b: int, g: int, rep: int, s: int = 5) -> list[int]:
+    """Both mechanisms: noisy dots (`g`) with `rep` repetition bits and `b`-bit digits scaled into s8 (guard
+    `2(7 − b) + rep ≥ g`... the clean needs `G ≥ g`), every unfolded column cleaned exactly, then the ripple."""
+    signed = bld.mech.kind != "det"
+    scale_bits = (7 if signed else 8) - b
+    G = 2 * scale_bits + rep
+    assert G >= g, f"guard {G} < noise {g}"
+    sa = [bld.affine(0, [(1 << scale_bits, x)]) for x in a] if scale_bits else a
+    fmt = S8 if signed else U8
+    ys = unfolded_columns(bld, sa, fmt, g, rep)
+    cols = [clean_column(bld, y, G) if G else y for y in ys]
+    f = fold(bld, cols, b)
+    return restricted_ripple(bld, f, b, s, signed)
+
+
+# ---- the any-function model with noisy dots (deterministic roundings) ---------------------------------------------------
+
+
+def anyfn_fixup(bld: RBuilder, a: list[int], b: int, g: int = 0, rep: int = 0, fixup: int | None = None,
+                cap: int = 128) -> list[int]:
+    """One greedy carry pass of any-function gates over `b`-bit canonical digits (scaled into u8 by `2^(8−b)`, so the
+    dots carry `2(8 − b) + rep` guard bits), each group gate reading the carry in and its positions' noisy columns and
+    cleaning them inside; the top carry folded into the low digits and one fixup group of `fixup` digit gates (no carry,
+    wrong with probability about `δ·c_top / R^fixup`)."""
+    assert bld.mech.kind == "det"
+    n, R = n_digits(b), 1 << b
+    scale_bits = 8 - b
+    G = 2 * scale_bits + rep
+    assert g <= G, f"guard {G} < noise {g}"
+    sa = [bld.affine(0, [(1 << scale_bits, x)]) for x in a] if scale_bits else a
+    ys = unfolded_columns(bld, sa, U8, g, rep)
+    split = fold_split(b)
+    half = (1 << (G - 1)) if G else 0
+
+    def clean(v: int) -> int:
+        return (v + half) >> G
+
+    # position j reads y_j and y_{j+n−t} for each nonzero δ_t; noiseless columns fold first, free
+    if G == 0:
+        reads = [[(1, f)] for f in fold(bld, ys, b)]
+    else:
+        reads = []
+        for j in range(n):
+            r = [(1, ys[j])]
+            for t, dt in enumerate(split):
+                m = j + n - t
+                if dt and n <= m < len(ys):
+                    r.append((dt, ys[m]))
+            reads.append(r)
+
+    def bits(gate: int) -> int:
+        return Q.clog2(bld.gates[gate].hi + 1 - bld.gates[gate].lo)
+
+    def pos_max(j: int) -> int:
+        return sum(w * clean(bld.gates[y].hi) for w, y in reads[j])
+
+    out: list[int] = [0] * n
+    carry, carry_hi, base = bld.const(0), 0, 0
+    while base < n:
+        ops, w, used = [carry], 0, bits(carry)
+        while base + w < n:
+            need = sum(bits(y) for _, y in reads[base + w])
+            if w and used + need > cap:
+                break
+            ops += [y for _, y in reads[base + w]]
+            used += need
+            w += 1
+        layout = [(base + i, [wt for wt, _ in reads[base + i]]) for i in range(w)]
+
+        def total(v: list[int], layout=layout) -> int:
+            acc, k = v[0], 1
+            for pos, wts in layout:
+                for wt in wts:
+                    acc += (wt * clean(v[k])) << (b * (pos - layout[0][0]))
+                    k += 1
+            return acc
+
+        vmax = carry_hi + sum(pos_max(p) << (b * (p - base)) for p, _ in layout)
+        for i in range(w):
+            out[base + i] = bld.anyfn(lambda v, i=i, total=total: (total(v) >> (b * i)) % R, ops, 0, R - 1)
+        carry_hi = vmax >> (b * w)
+        carry = bld.anyfn(lambda v, total=total, w=w: total(v) >> (b * w), ops, 0, carry_hi)
+        base += w
+    if fixup is None:
+        fixup = -(-48 // b)
+    t0 = bld.affine(0, [(1, out[0])] + ([(split[0], carry)] if split[0] else []))
+    low = [t0] + [bld.affine(0, [(1, out[i])] + ([(split[i], carry)] if i < len(split) and split[i] else []))
+                  for i in range(1, fixup)]
+    for i in range(fixup):
+        out[i] = bld.anyfn(lambda v, i=i: (sum(x << (b * j) for j, x in enumerate(v)) >> (b * i)) % R, low, 0, R - 1)
+    return out
+
+
+# ---- measuring ------------------------------------------------------------------------------------------------------------
+
+
+@dataclass
+class Spec:
+    name: str
+    mech: Mech
+    b: int
+    build: Callable[[RBuilder, list[int]], list[int]]
+    digits: tuple[int, int]  # the input digits' range, which is the output's (squarings chain)
+    noise_g: int = 0
+    rep: int = 0
+
+
+def spec(name: str) -> Spec:
+    """A construction by name: `anyfn_seam`, `anyfn_fixup_b{b}[_g{g}_r{rep}]`, `restricted_{det|sr|noise1}_b{b}`,
+    `restricted_acc_{det|sr}_b{b}_g{g}_r{rep}`."""
+    parts = name.split("_")
+    kw = {p[0]: int(p[1:]) for p in parts if len(p) > 1 and p[0] in "bgr" and p[1:].isdigit()}
+    b, g, rep = kw.get("b", 8), kw.get("g", 0), kw.get("r", 0)
+    if name == "anyfn_seam":
+        return Spec(name, DET, 8, lambda bld, a: Q.seam_square(bld, a)[0], U8)
+    if name.startswith("anyfn_fixup"):
+        return Spec(name, DET, b, lambda bld, a: anyfn_fixup(bld, a, b, g, rep), (0, (1 << b) - 1), g, rep)
+    acc = name.startswith("restricted_acc")
+    mech = {"det": DET, "sr": SR, "noise1": Mech("noise", 1)}[parts[2] if acc else parts[1]]
+    if acc:
+        return Spec(name, mech, b, lambda bld, a: restricted_acc(bld, a, b, g, rep), digit_range(mech, b), g, rep)
+    return Spec(name, mech, b, lambda bld, a: restricted(bld, a, b), digit_range(mech, b))
+
+
+def measure(name: str, trials: int = 32, seed: int = 20261026) -> dict:
+    """Build the construction once; run it on `trials` random digit vectors over the whole input range (so redundant
+    and out-of-[0, p) values too), each with fresh coins; check the output ≡ input² (mod p); count units and MACs."""
+    sp = spec(name)
+    bld = RBuilder(sp.mech)
+    n = n_digits(sp.b)
+    lo, hi = sp.digits
+    a = [bld.inp(i, lo, hi, "coin") for i in range(n)]
+    out = sp.build(bld, a)
+    rng = random.Random(seed)
+    right = window = hold = 0
+    for t in range(trials):
+        if t % 2:
+            ds = [rng.randint(lo, hi) for _ in range(n)]
+        else:
+            ds = to_digits(rng.randrange(P), sp.b, lo < 0)
+        x = value(ds, sp.b)
+        bld.rng = random.Random(rng.getrandbits(64))
+        xin = dict(enumerate(ds))
+        xin.update(bld.draw_coins())
+        vals, w, h = bld.evaluate(xin)
+        o = [vals[g] for g in out]
+        right += all(lo <= v <= hi for v in o) and value(o, sp.b) % P == x * x % P
+        window += w
+        hold += h
+    budgeted = [g for g in bld.gates if g.op.kind == "budgeted"]
+    units = bld.fixed_units
+    return {"name": name, "mech": sp.mech.name, "b": sp.b, "digits": n, "noise_g": sp.noise_g, "rep": sp.rep,
+            "units": units, "units_by_class": bld.units_by_class(), "macs": bld.macs, "gates": len(bld.gates),
+            "proven": Q.proven(bld.gates) == [], "operand_bits_128": Q.operand_bits(128, bld.gates),
+            "max_operand_bits": max((sum(bld.gates[j].bits for j in g.args) for g in budgeted), default=0),
+            "trials": trials, "right": right, "in_window": window, "declared_hold": hold}
+
+
+# ---- the PRF a cheater would compute to predict the coins -------------------------------------------------------------
+
+#: SHA-512's compression, in property/v1 units (modeled, `prf_units`)
+SHA512_ROUNDS = 80
+
+
+def prf_units() -> dict:
+    """What predicting one coin byte costs a cheater who computes the verifier's stream (`verity.ml.randomness`, SHA-512
+    over the key and the op's index) inside its circuit. Modeled two ways, both per 64-byte block:
+
+    * a floor from fan-in: each round's new `e` reads `d, e, f, g, h, W_t` (384 bits) and its new `a` reads also `a, b, c`
+      (576 bits); a gate reads at most 128 operand bits, so a 64-bit output over `r` input bits needs at least
+      `⌈(r − 64) / 64⌉` gates of 64-bit outputs chained: 5 for `e`, 8 for `a`; the schedule's `W_t` reads 256 bits, 3.
+      That is 16 a round, 1,280 a compression less the 16 schedule-free rounds' 48: **1,232**.
+    * an estimate with 16-bit limbs (s32 affine maps can't hold 64-bit sums): per round `T1` (Σ1, Ch, h, K, W and the
+      carries) 8 gates, `T2` (Σ0, Maj) 8, `a' = T1 + T2` and `e' = d + T1` 4 each, and the schedule 8: **32 a round,
+      2,560 a compression**.
+
+    So one coin byte costs at least 1,232 / 64 ≈ 19 units, about 40 by the estimate, against the 1 unit (`cmp`) that
+    corrects an SR'd carry without knowing its coin."""
+    floor = SHA512_ROUNDS * (5 + 8 + 3) - 16 * 3
+    est = SHA512_ROUNDS * 32
+    return {"compression_floor": floor, "compression_estimate": est, "per_coin_byte_floor": floor / 64,
+            "per_coin_byte_estimate": est / 64}
+
+
+BASE = ["anyfn_seam", "anyfn_fixup_b8", "restricted_det_b8", "restricted_sr_b7", "restricted_noise1_b6"]
+NOISE_BITS = (4, 6, 8, 10, 12)
+
+
+def grid() -> list[str]:
+    """Every accumulator-noise construction the cheater could pick at each noise `g`: each digit width `b`, with just
+    enough repetition bits to reach `g` guard bits (digits scaled into the operand give `2(8 − b)`, or `2(7 − b)` signed)."""
+    names = []
+    for g in NOISE_BITS:
+        names += [f"anyfn_fixup_b{b}_g{g}_r{max(0, g - 2 * (8 - b))}" for b in range(8, 1, -1)]
+        names += [f"restricted_acc_sr_b{b}_g{g}_r{max(0, g - 2 * (7 - b))}" for b in range(7, 1, -1)]
+    return names
+
+
+def main() -> None:
+    import argparse
+    import json
+
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--trials", type=int, default=32, help="random inputs (with fresh coins) a base construction runs")
+    ap.add_argument("--grid-trials", type=int, default=8, help="the same for each accumulator-noise construction")
+    ap.add_argument("names", nargs="*", help="constructions (default: BASE and the accumulator-noise grid)")
+    a = ap.parse_args()
+    rows = {}
+    for nm in a.names or BASE + grid():
+        try:
+            rows[nm] = measure(nm, a.trials if nm in BASE else a.grid_trials)
+        except AssertionError as e:  # an s32 or guard bound: the construction doesn't exist at these parameters
+            rows[nm] = {"name": nm, "infeasible": str(e)}
+        print(json.dumps(rows[nm]), flush=True)
+    res = {"model": "squaring.py's port of Model.lean, extended with randomized gates (this module's docstring)",
+           "squarings_per_word": Q.ROUNDS * Q.SQUARINGS, "constructions": rows, "prf": prf_units()}
+    with open(a.out, "w") as fh:
+        json.dump(res, fh, indent=1)
+
+
+if __name__ == "__main__":
+    main()

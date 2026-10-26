@@ -14,7 +14,8 @@ added to the int32 accumulators, or the basis the linears' dots run in:
 * `noise1`: RTN, then ±1 LSB uniform on every activation code (bounded noise that survives integer inputs).
 * `accG`: RTN, then a uniform integer in `[−2^(G−1), 2^(G−1))` added to every int32 accumulator of every dot.
 * `sr+accG`: both.
-* `had`: a fresh random-sign block-Hadamard rotation (block 128) of each linear's input dimension, weights rotated and
+* `had`: a fresh random-sign block-Hadamard rotation (block 128, or the largest power of two dividing a narrower
+  width) of each linear's input dimension, weights rotated and
   requantized after the coins; `perm`: a fresh signed permutation (exact, so bit-identical to `rtn`).
 
 Metrics: perplexity on the ppl bench's pinned windows (WikiText-2 and C4 at 2048, `benchmarks/ppl/windows.py`), MMLU
@@ -181,8 +182,9 @@ def rotate(x: torch.Tensor, rot: dict) -> torch.Tensor:
     if "perm" in rot:
         return x[..., rot["perm"]] * rot["sign"]
     k = x.shape[-1]
-    xs = (x * rot["sign"]).reshape(*x.shape[:-1], k // ROT_BLOCK, ROT_BLOCK)
-    return (xs @ hadamard(ROT_BLOCK, x.device)).reshape(x.shape)
+    blk = min(ROT_BLOCK, k & -k)
+    xs = (x * rot["sign"]).reshape(*x.shape[:-1], k // blk, blk)
+    return (xs @ hadamard(blk, x.device)).reshape(x.shape)
 
 
 def int_mm(xq: torch.Tensor, wq: torch.Tensor) -> torch.Tensor:
