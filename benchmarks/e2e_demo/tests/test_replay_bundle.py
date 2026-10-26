@@ -17,7 +17,7 @@ SCHEMA = Path(B.__file__).parent / "schemas" / "drawn-unit-bundle.v2.schema.json
 PATHS = "its paths do not reach its unit, slot and step roots"
 #: `B.digests` of `B.fixture_bundle`: a change to the bundle's bytes changes these (`python -m verity_e2e_demo.replay_bundle
 #: fixture` writes it to look at)
-GOLDEN = {"json": "c41601971a18420ee6c1205fd96d16a123dd215c12c089ce7e373873f8d81ce4f79f94c0e4b4f41c0a35a1812fb8c742f7d18c21dc0c1151f3cad02af92c9ade",
+GOLDEN = {"json": "bff29e1f61c7d41d28d4f5566a1e9cedf7f7cdf8a9ecb03dc5ee793c5ea3a2c80ad27a4eef89ddda1f5a4709553cfdea9b90467627ffeb4ac1935eef0fb13aa4",
           "bin": "183e9e504664b5d831135407b51246829dc10eedf9587917cd88cef516599d2c9685bb19e9b013f403bba1aba68e270495c2e830139fea7efa961f0c823b3db3"}
 #: SHA-512 of kernels' fixtures/commit-slots-v1.json at the commit `B.REFERENCE` pins, which `S.fixture()` writes as
 #: ``json.dumps(fixture, indent=1) + "\n"``
