@@ -148,7 +148,9 @@ class CostModel:
     """Measured subcircuits, and the rates that derive the rest from their features, `ands` being a unit's ANDs with its
     rows' openings (`row_ands`), as `costfit` measures them: per touched statement `statement_fixed + statement_per_and *
     ands` (the session and the verifier's parse), per staged unit `staged_per_and * ands + staged_per_unit`, and per
-    proved unit `per_and * ands`.  Serving commits each unit's outputs at `commit_per_bit` and `commit_per_row`, and
+    proved unit `per_and * ands`.  When `shared`, a template's statements hold only its drawn units (`IntegrityPeriod`'s
+    hidden window: one session, its k drawn units split evenly over `ceil(k / cap)` statements), so only they are staged;
+    otherwise its units are cut in order into statements and every touched statement is staged whole.  Serving commits each unit's outputs at `commit_per_bit` and `commit_per_row`, and
     `serve`, every other serve-time commitment, which every plan pays; `replay` names the replay domains that build
     witnesses; `sigma` is a derived cost's relative uncertainty; `source` is the fit's `art:` id."""
 
@@ -164,6 +166,7 @@ class CostModel:
     replay: Mapping[str, ReplayDomain] = field(default_factory=dict)
     sigma: float = 0.0
     source: str = ""
+    shared: bool = False
 
     def of(self, c: Candidate) -> TemplateCost:
         if c.template in self.templates:
@@ -303,6 +306,10 @@ def template_cost(c: Candidate, costs: CostModel, k: int) -> tuple[float, int, d
     one on a tie, for fewer roots), and the cost's parts.  Serving's commitments and the replay domains are the plan's."""
     a0, a1 = costs.statement(c)
     units = k * (costs.unit(c) + costs.of(c).replay)
+    if costs.shared:
+        count = ceil(k / c.cap)
+        st = count * a0 + k * a1
+        return st + units, ceil(k / count) if count else c.cap, {"statements": st, "units": units}
     best = None
     for size in _statement_sizes(c.cap, c.units):
         st = touched(c.units, size, k) * (a0 + a1 * size)
