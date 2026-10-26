@@ -8,7 +8,7 @@ decides nothing.
 
     python benchmarks/network_traces/n2_zk.py virtual --out DIR [--requests 40] [--tokens 4]
     python benchmarks/network_traces/n2_zk.py prove --run DIR [--extra DIR] [--late DIR] --bin flock-circuit
-      --lean flock-verify --out DIR [--jobs 1] [--debug-clear] [--dry]
+      --lean flock-verify --out DIR [--jobs 1] [--gpu] [--debug-clear] [--dry]
     python benchmarks/network_traces/n2_zk.py prove --warden-run DIR --bin flock-circuit --lean flock-verify --out DIR
 
 * **The runs.** A certifier-serve run's directory (`certifier_serve.py rehearse`'s per strategy, or `virtual`'s): its
@@ -482,7 +482,10 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     k = getattr(a, "draw", 0) or None
     stream = lw.stream(budget=rd.plan["windows"], delta=getattr(a, "delta", None) or cs.DELTA, challenger="n2-zk",
                        coins=cs._no_coins, clock=time.monotonic)
-    env, av = firewall(M, sg), SimpleNamespace(bin=a.bin, lease=[], gpu=False)
+    gpu = getattr(a, "gpu", False)
+    # the firewall rechecks a witness the host computed, so a device prover takes the host's, as n2_tie_zk's does
+    env = {**firewall(M, sg), **({"FC_HOST_WITNESS": "1"} if gpu else {})}
+    av = SimpleNamespace(bin=a.bin, lease=[], gpu=gpu)
     vdir = out / "verifier"
     vdir.mkdir(parents=True, exist_ok=True)
     drawn, windows, segment = None, rd.windows, None
@@ -600,7 +603,7 @@ def prove(a) -> int:
     warden = a.warden_run is not None
     run = Path(a.warden_run if warden else a.run)
     summary: dict = {"run": str(run), "extra": a.extra and str(a.extra), "late": a.late and str(a.late),
-                     "debug_clear": a.debug_clear, "received": RECEIVED}
+                     "debug_clear": a.debug_clear, "gpu": a.gpu, "received": RECEIVED}
     t = time.time()
     members = {"honest": link_windows(run, warden=warden), "tampered": link_windows(run, edit=one_count, warden=warden)}
     if warden:
@@ -698,6 +701,7 @@ def main(argv=None) -> int:
                                                        "is refused")
     p.add_argument("--debug-clear", action="store_true",
                    help="each verdict also carries the in-the-clear check on the opening, which decides nothing")
+    p.add_argument("--gpu", action="store_true", help="each session's prover on the GPU (`flock-circuit prove --gpu`)")
     p.add_argument("--dry", action="store_true", help="the instances and their references only: nothing lowered or proved")
     a = ap.parse_args(argv)
     if a.command == "virtual":

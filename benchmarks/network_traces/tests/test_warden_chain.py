@@ -123,9 +123,9 @@ def test_a_certifier_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path,
 
 def test_n2_on_a_warden_run_expects_honest_accepted_and_tampered_refused_on_its_signed_digest(tmp_path):
     run = gate_run(tmp_path)
-    assert n2.main(["prove", "--warden-run", str(run), "--dry", "--out", str(tmp_path / "n2")]) == 0
+    assert n2.main(["prove", "--warden-run", str(run), "--gpu", "--dry", "--out", str(tmp_path / "n2")]) == 0
     s = json.loads((tmp_path / "n2" / "summary.json").read_text())
-    assert s["warden_run"] == "00" * 32 and "no sync" in s["warden"]["syncs"]
+    assert s["warden_run"] == "00" * 32 and "no sync" in s["warden"]["syncs"] and s["gpu"] is True
     honest, tampered = (s["members"][k]["reference"] for k in ("honest", "tampered"))
     assert [x["expect"] for x in honest] == [1] * sz.WINDOWS and all(not any(x["failed"].values()) for x in honest)
     assert [x["expect"] for x in tampered] == [0] + [1] * (sz.WINDOWS - 1)
