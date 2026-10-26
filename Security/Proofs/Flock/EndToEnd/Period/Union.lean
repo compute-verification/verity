@@ -5,16 +5,17 @@ import Proofs.Flock.Soundness.Game.Interleave
 /-!
 # A period's run: the union bound and the horizon escape
 
-* `period_union`: if every window's event has probability at most `ε i` at every strategy satisfying `good i`, then in
-  a period whose prover satisfies `good` at every window on every run (`PeriodGood`), some window's event happens with
-  probability at most `Σ_i ε i`.
-* `period_horizon`: if at every such strategy the window's records all carry one weight `w` and the window's "miss"
-  event has probability at most `x ^ w`, then every window misses with total weight at least `M` with probability at
-  most `x ^ M`, for `x ≤ 1`. It is `FlockSoundness.Audit.Law.horizon_escape`'s induction on the period's game tree:
-  window `i`'s weight is fixed by the strategy that plays it, before its coins.
+* `period_union`: if every sampling block's event has probability at most `ε i` at every strategy satisfying `good i`,
+  then in a period whose prover satisfies `good` at every sampling block on every run (`PeriodGood`), some sampling
+  block's event happens with probability at most `Σ_i ε i`.
+* `period_horizon`: if at every such strategy the sampling block's records all carry one weight `w` and the sampling
+  block's "miss" event has probability at most `x ^ w`, then every sampling block misses with total weight at least `M`
+  with probability at most `x ^ M`, for `x ≤ 1`. It is `FlockSoundness.Audit.Law.horizon_escape`'s induction on the
+  period's game tree: sampling block `i`'s weight is fixed by the strategy that plays it, before its coins.
 
-Both are inductions on the windows; within a window, `value_runBind_le_add` and `value_runBind_le_mul` take the window's
-own probability out of the run, with the rest of the period bounded at every end of the window.
+Both are inductions on the sampling blocks; within a sampling block, `value_runBind_le_add` and `value_runBind_le_mul`
+take the sampling block's own probability out of the run, with the rest of the period bounded at every end of the
+sampling block.
 -/
 
 namespace FlockSoundness.Game
@@ -34,8 +35,8 @@ private theorem avg_inv_card {C : Type} [Fintype C] [Nonempty C] :
   simp only [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
   exact ENNReal.mul_inv_cancel (by exact_mod_cast Fintype.card_ne_zero) (ENNReal.natCast_ne_top _)
 
-/-- **One window, then the rest: the union step.** If the rest of the run has `p` with probability at most `c` from
-every end of `g` outside `q`, the run has `p` with probability at most `g`'s probability of `q`, plus `c`. -/
+/-- **One sampling block, then the rest: the union step.** If the rest of the run has `p` with probability at most `c`
+from every end of `g` outside `q`, the run has `p` with probability at most `g`'s probability of `q`, plus `c`. -/
 theorem value_runBind_le_add (f : α → Game δ) (k : (a : α) → Strategy (f a) → Game γ) (p : γ → Prop)
     (q : α → Prop) (c : ℝ≥0∞) :
     ∀ (g : Game α) (s : Strategy (g.bind f)),
@@ -66,9 +67,9 @@ theorem value_runBind_le_add (f : α → Game δ) (k : (a : α) → Strategy (f 
             rfl
 
 open Classical in
-/-- **One window, then the rest: the product step.** If the rest of the run has `p` with probability at most `c` from
-every end of `g` in `q`, and never from an end outside `q`, the run has `p` with probability at most `g`'s probability
-of `q`, times `c`. -/
+/-- **One sampling block, then the rest: the product step.** If the rest of the run has `p` with probability at most `c`
+from every end of `g` in `q`, and never from an end outside `q`, the run has `p` with probability at most `g`'s
+probability of `q`, times `c`. -/
 theorem value_runBind_le_mul (f : α → Game δ) (k : (a : α) → Strategy (f a) → Game γ) (p : γ → Prop)
     (q : α → Prop) (c : ℝ≥0∞) :
     ∀ (g : Game α) (s : Strategy (g.bind f)),
@@ -109,7 +110,27 @@ theorem periodGood_mono (G : (i : ℕ) → Game (β i)) {good good' : (i : ℕ) 
         atEnds_mono (fun _ s' hb => periodGood_mono G T (i + 1) s'
           (fun j τ h1 h2 => h j τ (by omega) (by omega)) hb) (G i) s hs.2⟩
 
-/-- **The union bound over a period's windows.** -/
+theorem atEnds_of_atSomeEnd {ι : Type} {f : α → Game δ} {P : ι → (a : α) → Strategy (f a) → Prop}
+    {Q : (a : α) → Strategy (f a) → Prop} {good : ι → Prop} (hQ : ∀ a s', (∀ x, P x a s' → good x) → Q a s') :
+    ∀ (g : Game α) (s : Strategy (g.bind f)), (∀ x, AtSomeEnd f (P x) g s → good x) → AtEnds f Q g s
+  | .ret a, s, h => hQ a s h
+  | .send _ kk, s, h => atEnds_of_atSomeEnd hQ (kk s.1) s.2 h
+  | @Game.coin _ _ _ _ kk, s, h => fun c => atEnds_of_atSomeEnd hQ (kk c) (s c) fun x hx => h x ⟨c, hx⟩
+
+/-- **`PeriodGood` from its flat form**: `good` at every strategy the period plays a sampling block with
+(`PeriodPlays`). -/
+theorem periodGood_of_plays (G : (i : ℕ) → Game (β i)) (good : (i : ℕ) → Strategy (G i) → Prop) :
+    ∀ (T i : ℕ) (s : Strategy (periodG G i T)), (∀ j τ, PeriodPlays G i T s j τ → good j τ) →
+      PeriodGood G good i T s
+  | 0, _, _, _ => trivial
+  | T + 1, i, s, h =>
+      ⟨h i _ (Or.inl ⟨rfl, HEq.rfl⟩),
+        atEnds_of_atSomeEnd (ι := (j : ℕ) × Strategy (G j))
+          (P := fun x _ s' => PeriodPlays G (i + 1) T s' x.1 x.2) (good := fun x => good x.1 x.2)
+          (fun _ s' h' => periodGood_of_plays G good T (i + 1) s' fun j τ hp => h' ⟨j, τ⟩ hp) (G i) s
+          fun x hx => h x.1 x.2 (Or.inr hx)⟩
+
+/-- **The union bound over a period's sampling blocks.** -/
 theorem period_union {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → Strategy (G i) → β i → ρ)
     (bad : ρ → Prop) (good : (i : ℕ) → Strategy (G i) → Prop) (ε : ℕ → ℝ≥0∞)
     (hstage : ∀ i τ, good i τ → prob (fun b => bad (rec i τ b)) (G i) τ ≤ ε i) :
@@ -140,7 +161,7 @@ theorem period_union {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ
             congr 1
             exact Finset.sum_congr rfl fun t _ => by rw [Nat.add_assoc, Nat.add_comm 1 t]
 
-/-- **The horizon escape over a period's windows.** -/
+/-- **The horizon escape over a period's sampling blocks.** -/
 theorem period_horizon {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → Strategy (G i) → β i → ρ)
     (miss : ρ → Prop) (wt : ρ → ℕ) (good : (i : ℕ) → Strategy (G i) → Prop) (x : ℝ≥0∞) (hx : x ≤ 1)
     (hstage : ∀ i τ, good i τ →
