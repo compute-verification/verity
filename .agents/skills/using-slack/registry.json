@@ -133,7 +133,8 @@
         "benchmarks/sampling_plan/",
         "integrations/vllm/verity_vllm/protocols/sampled_proofs.py",
         "Security/Definitions/Hash/",
-        "Security/Proofs/Hash/"
+        "Security/Proofs/Hash/",
+        "verity/core/protocols/interface/"
       ],
       "branch_suffixes": [
         "95d4",
