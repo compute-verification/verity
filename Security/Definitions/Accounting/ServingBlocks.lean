@@ -28,8 +28,12 @@ A serving block `block A X κ (s, j)` is `A[X s, [τ_s j, τ_s (j + 1))]`, the r
 its wipe ticks, the cuts `κ s` of `[0, t)`.
 
 The named hypotheses: `PerBlockCap` (a), `Alignment` (b), `UncertifiedCap` (c), `InferenceBlocks` (each inference block
-counted for a serving block is a `(c, k)`-block) and `ServingBlocksPartition` (the serving blocks hold every counted
-operation off the dark leaves, `ServingBlocksCover`, each with at most `c_S` gates and `k_S` unregistered input bits).
+counted for a serving block is a `(c, k)`-block), `ServingBlocksPartition` (the serving blocks hold every counted
+operation off the dark leaves, `ServingBlocksCover`, each with at most `c_S` gates and `k_S` unregistered input bits),
+`OperationBodies` (an operation's gates are unregistered and lead to its representative) and `Overlap` (a gate is in at
+most `μ` operations' bodies). The last two bound the operations assigned to a serving block but not computed wholly
+inside it: each has a gate outside the block that a gate of the block reads, an unregistered input of the block, so at
+most `ω_max μ k_S` of `Ω_S` escapes the per-block cap.
 
 Everything here is on `Accounting.Placed` and `Verity.Circuit` as they are on main, whose gates may be wider than one
 bit; at width 1 (the Boolean profile, `Verity.Boolean.Circuit.toCircuit`) input bits are input gates. LEAN-63 moves every
@@ -109,8 +113,8 @@ def Alignment {C : Circuit} (R : Finset (Fin C.N)) {ι : Type*} (B : ι → Fins
   ∀ g ∈ R, g ∈ W → ∃ i, g ∈ B i
 
 /-- **(c) An uncertified cap** `q_U`: the weight of `R`'s counted operations computed wholly inside none of the blocks
-`B i` is at most `qU`. At a serving block with its inference blocks this is `q_U(S)`; with the one block `S` itself it is
-the boundary term `q_B(S)`; at the dark leaves, with no blocks, `q_U(L_dark)`. -/
+`B i` is at most `qU`. At a serving block with its inference blocks this is `q_U(S)`; at the dark leaves, with no
+blocks, `q_U(L_dark)`. -/
 def UncertifiedCap {C : Circuit} (J : Counted C) (R : Finset (Fin C.N)) {ι : Type*} [Fintype ι]
     (B : ι → Finset (Fin C.N)) (qU : ℝ) : Prop :=
   J.outside R B ≤ qU
@@ -129,5 +133,17 @@ def ServingBlocksPartition (A : Placed L) (θ : Finset (Fin A.N)) (J : Counted A
     (X : σ → Finset L) {t : ℕ} (κ : σ → Cuts t) (cS kS : Block κ → ℕ) : Prop :=
   ServingBlocksCover A J dark X t ∧
     ∀ S, A.size (block A X κ S) ≤ cS S ∧ A.width (A.into (block A X κ S) \ θ) ≤ kS S
+
+/-- **Operation bodies**: every gate of a counted operation is unregistered (outside `θ`), and each one but its
+representative is read by another gate of the operation, so the operation's gates lead to its representative inside the
+operation. It allows an operation split across a wipe or between servers; such an operation then has a gate outside its
+serving block that a gate of the block reads. -/
+def OperationBodies (C : Circuit) (θ : Finset (Fin C.N)) (J : Counted C) : Prop :=
+  ∀ v ∈ J.V, ∀ u ∈ J.body v, u ∉ θ ∧ (u ≠ v → ∃ g ∈ J.body v, u ∈ C.reads g)
+
+/-- **Overlap** `μ`: every gate is in the bodies of at most `μ` counted operations (`μ = 1` when no two operations share
+a gate). -/
+def Overlap {C : Circuit} (J : Counted C) (μ : ℕ) : Prop :=
+  ∀ g, (J.V.filter fun v => g ∈ J.body v).card ≤ μ
 
 end Accounting.ServingBlocks

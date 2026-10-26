@@ -8,7 +8,8 @@ import Mathlib.Tactic.Linarith
 `assigned_le` is Theorem 3 on one family of blocks inside a set `R` of gates, with what the family leaves: split `R`'s
 operations by whether one of the blocks computes them wholly; those it does weigh at most the blocks' caps summed (the
 union bound, `sum_le_sum_sum_filter`, as weights are nonnegative), and the rest is `J.outside R B`. The serving cap is
-the family `{S}`, the inference cap the inference blocks counted for `S`, and the dark leaves the empty family.
+the family `{S}`, whose rest `boundary_le` charges to `in(S) \ θ`; the inference cap is the inference blocks counted for
+`S`, and the dark leaves the empty family.
 `total_le` assigns each counted operation to the dark leaves or to the serving block holding its representative: the
 server's windows cover `[0, t)` (`cuts_exists_mem`).
 -/
@@ -122,21 +123,77 @@ theorem assigned_le_inference {C : Circuit} (θ : Finset (Fin C.N)) (J : Counted
   rw [Fintype.card_fin] at h
   exact h.trans (add_le_add le_rfl hU)
 
+/-- An operation assigned to `R` but not computed wholly inside it has a gate in `in(R) \ θ`: of its gates outside `R`
+take the last; it is not the representative, so another gate of the operation reads it, a later one, which is in `R`. -/
+theorem exists_crossing {C : Circuit} {θ : Finset (Fin C.N)} {J : Counted C} (hB : OperationBodies C θ J)
+    {R : Finset (Fin C.N)} {v : Fin C.N} (hv : v ∈ J.V) (hvR : v ∈ R) (hout : ¬ J.body v ⊆ R) :
+    ∃ a ∈ C.into R \ θ, a ∈ J.body v := by
+  classical
+  set T := (J.body v).filter (· ∉ R)
+  have hT : T.Nonempty := by
+    obtain ⟨u, hu, huR⟩ := Finset.not_subset.1 hout
+    exact ⟨u, Finset.mem_filter.2 ⟨hu, huR⟩⟩
+  obtain ⟨hub, huR⟩ := Finset.mem_filter.1 (T.max'_mem hT)
+  obtain ⟨hθ, hfeed⟩ := hB v hv _ hub
+  obtain ⟨g, hg, hug⟩ := hfeed fun h => huR (h ▸ hvR)
+  have hgR : g ∈ R := by
+    by_contra hgR
+    exact not_le.2 (C.reads_lt g _ hug) (T.le_max' g (Finset.mem_filter.2 ⟨hg, hgR⟩))
+  refine ⟨_, Finset.mem_sdiff.2 ⟨?_, hθ⟩, hub⟩
+  simp only [Circuit.into, Finset.mem_filter, Finset.mem_univ, true_and]
+  exact ⟨huR, g, hgR, hug⟩
+
+/-- **The boundary charge**: the weight assigned to `R` that is not computed wholly inside `R` is at most
+`ω_max μ |in(R) \ θ|`, each such operation charged to one of its gates in `in(R) \ θ`, each in at most `μ` of them. -/
+theorem boundary_le {C : Circuit} (θ : Finset (Fin C.N)) (J : Counted C) (R : Finset (Fin C.N)) (ωmax : ℝ) (μ : ℕ)
+    (hB : OperationBodies C θ J) (hμ : Overlap J μ) (hω0 : 0 ≤ ωmax) (hω : ∀ v ∈ J.V, J.ω v ≤ ωmax) :
+    J.outside R (fun _ : Unit => R) ≤ ωmax * μ * (C.into R \ θ).card := by
+  classical
+  unfold Counted.outside
+  calc _ ≤ ∑ a ∈ C.into R \ θ, ∑ v ∈ J.V.filter (fun v => v ∈ R ∧ ∀ _ : Unit, ¬ J.body v ⊆ R) with a ∈ J.body v,
+          J.ω v :=
+        sum_le_sum_sum_filter _ _ (fun a v => a ∈ J.body v) J.ω
+          (fun v hv => J.ω_nonneg v (Finset.mem_of_mem_filter v hv))
+          (fun v hv => by
+            obtain ⟨hvV, hvR, hout⟩ := Finset.mem_filter.1 hv
+            exact exists_crossing hB hvV hvR (hout ()))
+    _ ≤ ∑ _a ∈ C.into R \ θ, ωmax * μ := by
+        refine Finset.sum_le_sum fun a _ => ?_
+        calc _ ≤ ∑ v ∈ J.V with a ∈ J.body v, J.ω v := by
+              rw [Finset.filter_filter]
+              refine Finset.sum_le_sum_of_subset_of_nonneg (fun v hv => ?_)
+                fun v hv _ => J.ω_nonneg v (Finset.mem_of_mem_filter v hv)
+              simp only [Finset.mem_filter] at hv ⊢
+              exact ⟨hv.1, hv.2.2⟩
+          _ ≤ ∑ v ∈ J.V with a ∈ J.body v, ωmax :=
+              Finset.sum_le_sum fun v hv => hω v (Finset.mem_of_mem_filter v hv)
+          _ = (J.V.filter fun v => a ∈ J.body v).card * ωmax := by rw [Finset.sum_const, nsmul_eq_mul]
+          _ ≤ μ * ωmax := mul_le_mul_of_nonneg_right (by exact_mod_cast hμ a) hω0
+          _ = ωmax * μ := mul_comm _ _
+    _ = ωmax * μ * (C.into R \ θ).card := by rw [Finset.sum_const, nsmul_eq_mul, mul_comm]
+
+theorem card_le_width {C : Circuit} (hw : ∀ g, 1 ≤ C.w g) (S : Finset (Fin C.N)) : S.card ≤ C.width S := by
+  rw [Finset.card_eq_sum_ones]
+  exact Finset.sum_le_sum fun g _ => hw g
+
 /-- **The serving cap** of a block `R` of at most `c` gates reading at most `k` unregistered input bits:
-`Ω_R ≤ q(c, k) + q_B(R)`, Theorem 3 on its one-block partition. -/
+`Ω_R ≤ q(c, k) + ω_max μ k`, Theorem 3 on its one-block partition with the boundary charge. -/
 theorem assigned_le_serving {C : Circuit} (θ : Finset (Fin C.N)) (J : Counted C) (q : ℕ → ℕ → ℝ) (c k : ℕ)
-    (R : Finset (Fin C.N)) (qB : ℝ) (hq : PerBlockCap C θ J q c k) (hR : R ⊆ C.computed) (hc : C.size R ≤ c)
-    (hk : C.width (C.into R \ θ) ≤ k) (hB : UncertifiedCap J R (fun _ : Unit => R) qB) :
-    J.assigned R ≤ q c k + qB := by
+    (R : Finset (Fin C.N)) (ωmax : ℝ) (μ : ℕ) (hq : PerBlockCap C θ J q c k) (hR : R ⊆ C.computed)
+    (hc : C.size R ≤ c) (hk : C.width (C.into R \ θ) ≤ k) (hB : OperationBodies C θ J) (hμ : Overlap J μ)
+    (hw : ∀ g, 1 ≤ C.w g) (hω0 : 0 ≤ ωmax) (hω : ∀ v ∈ J.V, J.ω v ≤ ωmax) :
+    J.assigned R ≤ q c k + ωmax * μ * k := by
   have h := Counted.assigned_le J R (fun _ : Unit => R) (q c k) fun _ => hq R hR hc hk
   simp only [Fintype.card_unit, Nat.cast_one, one_mul] at h
-  exact h.trans (add_le_add le_rfl hB)
+  have hcard : ((C.into R \ θ).card : ℝ) ≤ k := by exact_mod_cast (card_le_width hw _).trans hk
+  have := mul_le_mul_of_nonneg_left hcard (mul_nonneg hω0 (Nat.cast_nonneg μ))
+  linarith [boundary_le θ J R ωmax μ hB hμ hω0 hω]
 
 theorem ServingBlockBound : Guarantees.ServingBlocks.ServingBlockBound := by
-  intro L σ _ A θ J q c k dark X t κ cS kS n inf qB qU qD hP hqS hq hinf hB hU hD
+  intro L σ _ A θ J q c k dark X t κ cS kS n inf ωmax μ qU qD hP hqS hq hinf hB hμ hw hω0 hω hU hD
   have hS := Finset.sum_le_sum fun S (_ : S ∈ (univ : Finset (Block κ))) =>
-    le_min (assigned_le_serving θ J q (cS S) (kS S) (block A X κ S) (qB S) (hqS S) (block_subset A X κ S)
-        (hP.2 S).1 (hP.2 S).2 (hB S))
+    le_min (assigned_le_serving θ J q (cS S) (kS S) (block A X κ S) ωmax μ (hqS S) (block_subset A X κ S)
+        (hP.2 S).1 (hP.2 S).2 hB hμ hw hω0 hω)
       (assigned_le_inference θ J q c k (block A X κ S) (n S) (inf S) (qU S) hq (hinf S) (hU S))
   linarith [total_le A J dark X κ hP.1, assigned_dark_le J _ hD]
 
