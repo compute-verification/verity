@@ -327,10 +327,12 @@ def time_layout(a: argparse.Namespace, path: Path, out: Path) -> dict[str, Any]:
         start.record(plan.stream)
         if marks is not None:
             marks.append(("start", start))
+        torch.cuda.nvtx.range_push("enqueue")
         sc = G.StepCommitter(plan, STEP, slots, KEY, marks=marks)
         for g in layout.groups:
             sc.add(bufs[id(g)])
         enq = time.perf_counter() - t0
+        torch.cuda.nvtx.range_pop()
         pend = sc.finish()
         end.record(plan.stream)
         res = pend.result()

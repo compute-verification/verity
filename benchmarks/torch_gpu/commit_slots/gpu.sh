@@ -7,7 +7,8 @@
 #   research run --on vy-dc-h200 --project verity --campaign e2e-demo --cwd source --env GPU_LEASE_WHO=kernels-kcommit \
 #     -- bash benchmarks/torch_gpu/commit_slots/gpu.sh
 # STEPS (default "tests check bench"; a failing tests step ends the lease; "step" runs step.py's time on STEP_ARGS, layout
-# files and options), CHECK_ARGS, BENCH_ARGS, STEP_ARGS, LEASE_MIN (default 25), PY,
+# files and options; STEP_WRAP, a command it runs under, e.g. nsys profile ...), CHECK_ARGS, BENCH_ARGS, STEP_ARGS,
+# LEASE_MIN (default 25), PY,
 # LEASE_END (a UTC time, e.g. 2026-10-26T02:40Z, on a card lent until then: a lease that starts too late to end by it runs
 # nothing).
 set -uo pipefail
@@ -26,6 +27,7 @@ CAP=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d
 $PY -c "import slots_gpu as G; print(G.build('$CAP'))" > "$O/build.txt" 2>&1
 echo "build rc $?" > "$O/rc.txt"
 export O PY D ROOT STEPS=${STEPS:-tests check bench} CHECK_ARGS=${CHECK_ARGS:-} BENCH_ARGS=${BENCH_ARGS:-} STEP_ARGS=${STEP_ARGS:-}
+export STEP_WRAP=${STEP_WRAP:-}
 export LEASE_MIN=${LEASE_MIN:-25} LEASE_END=${LEASE_END:-}
 # shellcheck disable=SC2016
 gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
@@ -40,7 +42,7 @@ gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
       tests) (cd "$D" && $PY -m pytest -q -p no:cacheprovider tests) > "$O/tests.txt" 2>&1 ;;
       check) $PY "$D/check.py" --out "$O" ${CHECK_ARGS:-} > "$O/check.jsonl" 2> "$O/check.err" ;;
       bench) $PY "$D/bench.py" --out "$O" ${BENCH_ARGS:-} > "$O/bench.jsonl" 2> "$O/bench.err" ;;
-      step) $PY "$D/step.py" time ${STEP_ARGS:-} --out "$O" > "$O/step.jsonl" 2> "$O/step.err" ;;
+      step) ${STEP_WRAP:-} $PY "$D/step.py" time ${STEP_ARGS:-} --out "$O" > "$O/step.jsonl" 2> "$O/step.err" ;;
     esac
     rc=$?
     echo "$s rc $rc" >> "$O/rc.txt"
