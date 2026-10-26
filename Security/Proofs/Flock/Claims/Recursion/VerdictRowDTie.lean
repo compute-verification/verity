@@ -53,17 +53,115 @@ end Side
 
 /-! ## The verifier rows read only the algebra's fields of the shape -/
 
+section Congr
+
+variable {sh sh' : Shape}
+
+/-- The fields of a shape the rep's algebra reads: not the Merkle widths. -/
+abbrev algFields (sh : Shape) : ℕ × ℕ × ℕ × Schedule × Bool := (sh.m, sh.kLog, sh.claims, sh.sched, sh.holo)
+
+theorem algFields_eq (h : algFields sh = algFields sh') :
+    sh.m = sh'.m ∧ sh.kLog = sh'.kLog ∧ sh.claims = sh'.claims ∧ sh.sched = sh'.sched ∧ sh.holo = sh'.holo := by
+  simpa only [algFields, Prod.mk.injEq] using h
+
+theorem rounds_congr (h : algFields sh = algFields sh') : RecAlgebra.rounds sh = RecAlgebra.rounds sh' := by
+  obtain ⟨hm, hk, hc, hs, hh⟩ := algFields_eq h
+  simp only [RecAlgebra.rounds, RecAlgebra.hRound, hm, hk, hc, hs, hh]
+
+theorem wi_congr (h : algFields sh = algFields sh') : RecAlgebra.wi sh = RecAlgebra.wi sh' := by
+  funext k
+  simp only [RecAlgebra.wi, RecAlgebra.wNames, rounds_congr h]
+
+theorem order_congr (h : algFields sh = algFields sh') : RecAlgebra.order sh = RecAlgebra.order sh' := by
+  obtain ⟨-, -, hc, -, -⟩ := algFields_eq h
+  funext k
+  simp only [RecAlgebra.order, RecAlgebra.wNames, rounds_congr h, wi_congr h, hc]
+
+theorem symbolic_congr (h : algFields sh = algFields sh') : RecAlgebra.symbolic sh = RecAlgebra.symbolic sh' := by
+  obtain ⟨hm, hk, hc, hs, -⟩ := algFields_eq h
+  simp only [RecAlgebra.symbolic, hm, hk, hc, hs]
+
+theorem atomTerm_congr (h : algFields sh = algFields sh') (c : ℕ) (k : RecAlgebra.Key) :
+    RecAlgebra.atomTerm sh c k = RecAlgebra.atomTerm sh' c k := by
+  unfold RecAlgebra.atomTerm
+  rw [wi_congr h]
+
+theorem atomOp_congr (h : algFields sh = algFields sh') (c : ℕ) (k : RecAlgebra.Key) :
+    RecAlgebra.atomOp sh c k = RecAlgebra.atomOp sh' c k := by
+  obtain ⟨-, -, -, -, hh⟩ := algFields_eq h
+  unfold RecAlgebra.atomOp
+  rw [hh, wi_congr h, atomTerm_congr h]
+
+theorem varOp_congr (h : algFields sh = algFields sh') (c : ℕ) (k : RecAlgebra.Key) :
+    RecAlgebra.varOp sh c k = RecAlgebra.varOp sh' c k := by
+  unfold RecAlgebra.varOp
+  simp only [atomOp_congr h]
+
+theorem orderOf_congr (h : algFields sh = algFields sh') : RecAlgebra.orderOf sh = RecAlgebra.orderOf sh' := by
+  funext k
+  unfold RecAlgebra.orderOf
+  rw [order_congr h]
+
+theorem coefOps_congr (h : algFields sh = algFields sh') (c ri : ℕ) (l : List (RecAlgebra.Key × F128)) :
+    RecAlgebra.coefOps sh c ri l = RecAlgebra.coefOps sh' c ri l := by
+  induction l with
+  | nil => simp only [RecAlgebra.coefOps]
+  | cons p rest ih =>
+    obtain ⟨k, x⟩ := p
+    simp only [RecAlgebra.coefOps, varOp_congr h, ih]
+
+theorem prodOps_congr (h : algFields sh = algFields sh') (c ri : ℕ)
+    (l : List ((RecAlgebra.Key × RecAlgebra.Key) × F128)) :
+    RecAlgebra.prodOps sh c ri l = RecAlgebra.prodOps sh' c ri l := by
+  induction l with
+  | nil => simp only [RecAlgebra.prodOps]
+  | cons p rest ih =>
+    obtain ⟨⟨a, b⟩, x⟩ := p
+    simp only [RecAlgebra.prodOps, varOp_congr h, ih]
+
+theorem accTerms_congr (h : algFields sh = algFields sh') (fin ri : ℕ) (cons : List (RecAlgebra.Key × F128)) :
+    RecAlgebra.accTerms sh fin ri cons = RecAlgebra.accTerms sh' fin ri cons := by
+  unfold RecAlgebra.accTerms
+  rw [wi_congr h]
+
+theorem buildRes_congr (h : algFields sh = algFields sh') (fin c ri : ℕ) (f : RecAlgebra.Lin) :
+    RecAlgebra.buildRes sh fin c ri f = RecAlgebra.buildRes sh' fin c ri f := by
+  unfold RecAlgebra.buildRes
+  simp only [accTerms_congr h, coefOps_congr h, prodOps_congr h, orderOf_congr h]
+
+theorem buildAll_congr (h : algFields sh = algFields sh') (fin c : ℕ) (l : List RecAlgebra.Lin) (ri : ℕ) :
+    RecAlgebra.buildAll sh fin c l ri = RecAlgebra.buildAll sh' fin c l ri := by
+  induction l generalizing ri with
+  | nil => simp only [RecAlgebra.buildAll]
+  | cons f rest ih => simp only [RecAlgebra.buildAll, buildRes_congr h, ih]
+
+theorem build_congr (h : algFields sh = algFields sh') (lins : Array RecAlgebra.Lin) :
+    RecAlgebra.build sh lins = RecAlgebra.build sh' lins := by
+  obtain ⟨-, -, hc, hs, -⟩ := algFields_eq h
+  unfold RecAlgebra.build
+  simp only [hc, hs, buildAll_congr h, RecAlgebra.wNames, rounds_congr h]
+
+theorem residualLins_congr (h : algFields sh = algFields sh') (coins : RecAlgebra.Coins) (extras : Array Claim) :
+    RecAlgebra.residualLins sh coins extras = RecAlgebra.residualLins sh' coins extras := by
+  obtain ⟨hm, hk, hc, hs, -⟩ := algFields_eq h
+  unfold RecAlgebra.residualLins RecAlgebra.run
+  simp only [hm, hk, hc, hs, symbolic_congr h]
+
+theorem structureOf_congr (h : algFields sh = algFields sh') :
+    RecAlgebra.structureOf sh = RecAlgebra.structureOf sh' := by
+  obtain ⟨hm, -, hc, -, -⟩ := algFields_eq h
+  unfold RecAlgebra.structureOf RecAlgebra.extrasLike
+  simp only [hm, hc, residualLins_congr h, build_congr h]
+
 /-- **`verifierRows` doesn't read the Merkle widths**: at shapes of the same `m`, `k_log`, claims, schedule and
 `holo`, it computes the same rows. -/
-theorem verifierRows_congr {sh sh' : Shape} (hm : sh.m = sh'.m) (hk : sh.kLog = sh'.kLog)
-    (hc : sh.claims = sh'.claims) (hs : sh.sched = sh'.sched) (hh : sh.holo = sh'.holo)
-    (rounds : Array (Array F128)) (extras : Array Claim) (comb : Array F128) :
+theorem verifierRows_congr (h : algFields sh = algFields sh') (rounds : Array (Array F128)) (extras : Array Claim)
+    (comb : Array F128) :
     RecAlgebra.verifierRows sh rounds extras comb = RecAlgebra.verifierRows sh' rounds extras comb := by
-  obtain ⟨m, k, c, s, h₁, s₁, o⟩ := sh
-  obtain ⟨m', k', c', s', h₂, s₂, o'⟩ := sh'
-  dsimp only at hm hk hc hs hh
-  subst hm hk hc hs hh
-  rfl
+  unfold RecAlgebra.verifierRows
+  simp only [residualLins_congr h, build_congr h, structureOf_congr h]
+
+end Congr
 
 /-! ## Check 5's `dirs` rows -/
 
@@ -92,7 +190,7 @@ theorem openRows_dirs {inn : RecCoins.Inner} {LANES H : ℕ} {cr dr : Array (Arr
           simp only [reduceCtorEq] at h
         rename_i r0 r1
         simp only [Option.some.injEq, Prod.mk.injEq] at h
-        exact ⟨sh, extras, l, r0, r1, rfl, rfl, rfl, rfl, h.2.symm⟩
+        exact ⟨sh, extras, l, r0, r1, ha, hl, h0, h1, h.2.symm⟩
 
 /-- **`dirs` row `r q + j` is rep `r`'s query `j`**: at level `l` of `q` queries, instance `r q + j` (`r < 2`,
 `j < q`) holds the low `H` bits of rep `r`'s `j`-th position there. -/
@@ -105,7 +203,7 @@ theorem openDirs_get (sh : Shape) (l H : ℕ) (r0 r1 : RecCoins.Rep) {r j : ℕ}
     rw [Array.size_map, Array.size_range]
     have : r * (sh.sched.levels[l]!).q ≤ 1 * (sh.sched.levels[l]!).q := Nat.mul_le_mul_right _ (by omega)
     omega
-  rw [getElem!_pos _ _ hlt]
+  rw [getElem!_pos (openDirs sh l H r0 r1) _ hlt]
   unfold openDirs
   simp only [Array.getElem_map, Array.getElem_range]
   obtain rfl | rfl : r = 0 ∨ r = 1 := by omega
@@ -120,6 +218,7 @@ theorem openDirs_get (sh : Shape) (l H : ℕ) (r0 r1 : RecCoins.Rep) {r j : ℕ}
 theorem innerLevels_unique {sh : Shape} {LANES H l l' : ℕ} (h : innerLevels sh LANES H = [l])
     (hl' : l' < sh.sched.levels.size) (hL : 2 ^ (sh.sched.levels[l']!).lanes = LANES)
     (hH : (sh.sched.levels[l']!).d - (sh.sched.levels[l']!).cap = H) : l' = l := by
+  rw [getElem!_pos sh.sched.levels l' hl'] at hL hH
   have hm : l' ∈ innerLevels sh LANES H := by
     unfold innerLevels
     simp [List.mem_filter, hl', hL, hH]
@@ -138,7 +237,8 @@ theorem algebra_ok {inn : RecCoins.Inner} {sh : Shape} {extras : Array Claim}
     | some s =>
       simp [he, hs, bind, Except.bind, pure, Except.pure] at h
       obtain ⟨rfl, rfl⟩ := h
-      exact ⟨he, hs⟩
+      refine ⟨rfl, ?_⟩
+      first | exact hs | rfl
 
 theorem shape?_ok {m k c : ℕ} {sh : Shape} (h : RecResiduals.shape? m k c = some sh) :
     ∃ sch, fast100 m = some sch ∧ sh.m = m ∧ sh.kLog = k ∧ sh.claims = c ∧ sh.sched = sch ∧ sh.holo = false := by
@@ -147,11 +247,9 @@ theorem shape?_ok {m k c : ℕ} {sh : Shape} (h : RecResiduals.shape? m k c = so
   | none => simp [hf] at h
   | some s =>
     refine ⟨s, rfl, ?_⟩
-    by_cases hc : (k < 6 || c < 2) = true
-    · simp [hf, hc] at h
-    · simp [hf, hc] at h
-      subst h
-      exact ⟨rfl, rfl, rfl, rfl, rfl⟩
+    simp [hf] at h
+    obtain ⟨-, rfl⟩ := h
+    exact ⟨rfl, rfl, rfl, rfl, rfl⟩
 
 /-! ## The position tie -/
 
@@ -214,7 +312,7 @@ theorem posTieR_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPie
   rw [hq0, hS] at hquery
   have hlev : q.level < sch.levels.size := by
     by_contra hge
-    rw [getElem!_neg _ _ hge] at hquery
+    rw [getElem!_neg sch.levels q.level hge] at hquery
     exact Nat.not_lt_zero _ hquery
   rw [hS, ← hlvs, hlvq] at hLANES hHH
   have hql : q.level = l := innerLevels_unique hl (by rw [hshs]; exact hlev) (by rw [hshs]; exact hLANES.symm)
@@ -243,8 +341,10 @@ theorem posTieR_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPie
   rw [hq0, hexs]
   simp only [Except.toOption, Option.getD_some, Nat.mul_zero, Nat.zero_add]
   rw [verifierRows_congr (sh := shapeOf (tabsOf v.2.2)[0]! ((fast100 (tabsOf v.2.2)[0]!.m).getD default) extras.size)
-    (sh' := sh) (by rw [hshm, hm]; rfl) (by rw [hshk, hk]; rfl) (by rw [hshc]; rfl) (by rw [hshs, ← hm, hsch]; rfl)
-    (by rw [hshh]; rfl)]
+    (sh' := sh) (by
+      simp only [algFields, Prod.mk.injEq]
+      refine ⟨by rw [hshm, hm]; rfl, by rw [hshk, hk]; rfl, by rw [hshc]; rfl, by rw [hshs, ← hm, hsch]; rfl,
+        by rw [hshh]; rfl⟩)]
   cases h : RecAlgebra.verifierRows sh (canonRounds v.2.1 v.2.2 ((List.range (Bk (xIOf x))).map c).tail.dropLast q.rep)
       extras #[] with
   | error e => rw [h] at hvr; cases hvr
