@@ -193,6 +193,7 @@ import Proofs.Flock.Claims.Recursion.PartAcceptsPin
 import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
 import Proofs.Flock.Claims.Recursion.OpenLowerJointV
 import Proofs.Flock.Claims.Recursion.VerdictRowEJoint
+import Proofs.Flock.Claims.Recursion.VerdictRowEFree
 import Proofs.Flock.Claims.Recursion.VerdictRowEBytes
 import Proofs.Flock.Claims.Recursion.VPiecesDeployed
 import Proofs.Flock.Claims.Recursion.VerdictRowL
