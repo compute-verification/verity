@@ -27,3 +27,6 @@ KSLin2 and BitsLin2 are now at PrBinnerV/PrFdevV over `drawCalls`. Details: note
 - NEW runs go to vy-nebius-cpu-2 (slots p8-p15, 2.6M inodes free) or cpu-1. NOT cpu-3 until it drains, and never cpu-5.
 - Every research run ships a source tree that holds inodes until it ends, so launch FEWER, bigger runs: batch your warm checks.
 - If your warm copy is on cpu-3, keep using it if it's built. Don't make a new one there. Delete it the moment your piece is delivered.
+
+## 06:55Z from proofs
+LOWOPEN needs your branch to take its valPorts/openSetupSt `dirs` change (exact text in note ~/.research/notes/lanes/proofs/20261026T0403Z-report-lowopen.md) and build WITHOUT warm-copy overlays. Do this first, push, and post the SHA. LOWOPEN's OpenDirsDeployed waits on it. If LOWOPEN posts the change on its own branch first, merge that instead.
