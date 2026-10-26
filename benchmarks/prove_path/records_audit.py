@@ -542,6 +542,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--delta", type=float, default=0.5)
     p.add_argument("--port", type=int, default=None, help="the sessions' base port (default a base whose ports are free now)")
     p.add_argument("--session-timeout", type=float, default=14400)
+    p.add_argument("--session-jobs", type=int, default=1, help="run up to this many drawn members' sessions at once (a5.session_jobs)")
     p.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")
     p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins), not the verifier's: local, or "
                    "gate:USER@HOST (vy-challenger-1 through infra's gate, with --peer and --challenger-key)")

@@ -200,7 +200,7 @@ def test_a_targeted_run_without_the_catalog_reports_what_one_with_it_does(monkey
             "not a candidate" if TG.family(TG.definition(t)) not in short["candidates"] else "?" for t in DECIDED} == DECIDED
 
     def strip(rep):
-        return {**rep, "targets": [{k: v for k, v in t.items() if k != "seconds"} for t in rep["targets"]]}
+        return {**rep, "targets": [{k: v for k, v in t.items() if k not in ("seconds", "seconds_by_check")} for t in rep["targets"]]}
 
     assert strip(fast) == strip(full)
     assert [t["partition"]["applies"] for t in full["targets"]] == [v != "not a candidate" for v in DECIDED.values()]
@@ -882,8 +882,9 @@ def test_redundant_ands_are_counted():
 def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     from circuit_check import cli
 
-    # Every target here is a Call of a served Program, which `targets.is_call` decides without the catalog.
-    call = ["-q"]
+    # Every target here is a Call of a served Program, which `targets.is_call` decides without the catalog.  Uncached: a cache
+    # would trace this test process for good (`cache.trace`).
+    call = ["-q", "--no-cache"]
     out = tmp_path / "r.json"
     assert cli.main(["RoPEHead_v1{D=8}", BOOL_RECOMPUTE, "--out", str(out), *call]) == 0
     r = json.loads(out.read_text())
@@ -1022,11 +1023,11 @@ def test_two_writers_of_one_entry_at_once_both_store_it(tmp_path, monkeypatch):
 def test_parallel_jobs_give_the_serial_report(tmp_path):
     """It checks four real targets serially and in worker processes, so it catches a `--jobs` worker whose report differs from
     the serial one. Opt-in: run it after a change to `cli.run`, `cli.parallel` or the task list's order. Only an isolated
-    result has ``peak_gb`` and ``rss_start_gb`` (`cli.run`), so they are stripped with ``seconds``."""
+    result has ``peak_gb`` and ``rss_start_gb`` (`cli.run`), so they are stripped with ``seconds`` and ``seconds_by_check``."""
     from circuit_check import cli
 
     specs = ["F32Mul_v1", "RMSNormTriton_v1{N=64,EPS=1e-05}", "TokenSelect_v1{V=64}", "rope-head"]
-    measured = {"seconds", "peak_gb", "rss_start_gb"}
+    measured = {"seconds", "seconds_by_check", "peak_gb", "rss_start_gb"}
     strip = lambda rep: [{k: v for k, v in t.items() if k not in measured} for t in rep["targets"]]  # noqa: E731
     assert strip(cli.run(specs, OPTS, log=None, jobs=3)) == strip(cli.run(specs, OPTS, log=None, jobs=1))
 

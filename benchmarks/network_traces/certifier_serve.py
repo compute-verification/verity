@@ -29,7 +29,7 @@ namespace has no other interface. On real hosts it is only the route of the meas
 **The served plan** (`plan`, `served_plan`). The endpoint is probed with the one request body every session sends,
 straight from the host, `--in-flight` requests at a time after one uncounted round: `/v1/completions`, streamed, a
 prompt of exactly `--prompt-tokens` tokens (`PROMPT` padded with `FILLER` in the endpoint's own tokenizer, `/tokenize`,
-and cut there), exactly `--tokens` tokens out (`min_tokens` and `max_tokens`, `ignore_eos`), at `--temperature` (0)
+and cut there), exactly `--tokens` tokens out (`max_tokens` and `ignore_eos`), at `--temperature` (0)
 and `--top-p` (1), both always sent, since an endpoint applies its own generation config to a request that omits
 them. F, the
 frames of a response, is that token count, not the endpoint's events: vLLM v1 merges a request's tokens that its API
@@ -540,10 +540,11 @@ class CertifierProcess:
 
 def request_body(model: str, tokens: int, prompt: str | list[int] = PROMPT, temperature: float = 0.0,
                  top_p: float = 1.0) -> dict:
-    """The request every session of a served plan sends: exactly `tokens` tokens (`min_tokens` and `max_tokens`, never
-    stopped early), streamed, at `temperature` and `top_p` (greedy by default). Both are always sent: an endpoint
-    applies its own generation config to a request that omits them."""
-    return {"model": model, "prompt": prompt, "max_tokens": tokens, "min_tokens": tokens, "stream": True,
+    """The request every session of a served plan sends: exactly `tokens` tokens (`max_tokens`, never stopped early:
+    `ignore_eos`), streamed, at `temperature` and `top_p` (greedy by default). Both are always sent: an endpoint
+    applies its own generation config to a request that omits them. No `min_tokens`: it masks the EOS logit, which the
+    served Program's sampling doesn't model, so vllm's advice refuses it."""
+    return {"model": model, "prompt": prompt, "max_tokens": tokens, "stream": True,
             "ignore_eos": True, "temperature": temperature, "top_p": top_p}
 
 
@@ -615,20 +616,23 @@ class DoesntFit(ValueError):
 
 def served_plan(probed: dict, requests: int = 8, delta_buckets: int | None = None,
                 name: str = "served", in_flight: int = 1, profile: str = "planned",
-                frames: int | None = None) -> tuple[dict, dict]:
+                frames: int | None = None, prompts: Sequence[list[int]] | None = None,
+                window_per_group: bool = False) -> tuple[dict, dict]:
     """The calibration report and the plan of a served run of `requests` requests of the probed body, sent `in_flight`
     at a time (the module docstring's "The served plan"), with N2's `profile` (`occupancy`, "N2's profile"): the
     planned egress occupancy, or the served profile, at the latency budget `delta_buckets`, or else at the largest of 4
     down to 2 times the slowest response plus half a second that fits. F, a response's frames, is `frames`, by default
-    the body's tokens."""
+    the body's tokens. `prompts`: request j's prompt is ``prompts[j % len(prompts)]`` (each its own body, which its peer
+    entry carries), the probed body's the first. `window_per_group`: each group starts a window of its own, so group g
+    is window g's traffic alone."""
     if profile not in PROFILES:
         raise ValueError(f"N2's profile is one of {PROFILES}, not {profile!r}")
     body = probed["body"]
     tokens = body["max_tokens"]
     F = frames or tokens
-    if body.get("min_tokens") != tokens or not body.get("ignore_eos"):
-        raise ValueError("a served plan's body asks for exactly its tokens (min_tokens = max_tokens, ignore_eos), "
-                         f"not {body}")
+    if body.get("ignore_eos") is not True or not isinstance(tokens, int) or tokens < 1 or "min_tokens" in body:
+        raise ValueError("a served plan's body asks for exactly its tokens (max_tokens, ignore_eos) and no min_tokens, "
+                         f"which vllm's advice refuses: not {body}")
     if F < tokens:
         raise ValueError(f"F, a response's frames, is at least the body's {tokens} tokens, not {F}")
     lengths = sorted({r["events"] for r in probed["responses"]})
@@ -639,11 +643,11 @@ def served_plan(probed: dict, requests: int = 8, delta_buckets: int | None = Non
                          "(--response-frames)")
     slowest = max(r["last_s"] for r in probed["responses"])
     if delta_buckets:
-        return _served_plan(probed, requests, delta_buckets, name, in_flight, profile, F)
+        return _served_plan(probed, requests, delta_buckets, name, in_flight, profile, F, prompts, window_per_group)
     most, least = (math.ceil((k * slowest * 1000 + 500) / BUCKET_MS) for k in (4, 2))
     for D in range(most, least - 1, -1):
         try:
-            return _served_plan(probed, requests, D, name, in_flight, profile, F)
+            return _served_plan(probed, requests, D, name, in_flight, profile, F, prompts, window_per_group)
         except DoesntFit:
             pass
     raise DoesntFit(f"{in_flight} responses of {F} events don't fit in a window of {WINDOW_BUCKETS} buckets at a "
@@ -652,22 +656,26 @@ def served_plan(probed: dict, requests: int = 8, delta_buckets: int | None = Non
 
 
 def _served_plan(probed: dict, requests: int, D: int, name: str, in_flight: int,
-                 profile: str = "planned", F: int | None = None) -> tuple[dict, dict]:
+                 profile: str = "planned", F: int | None = None, prompts: Sequence[list[int]] | None = None,
+                 window_per_group: bool = False) -> tuple[dict, dict]:
     body = probed["body"]
     F = F or body["max_tokens"]
     lengths = sorted({r["events"] for r in probed["responses"]})
     slowest = max(r["last_s"] for r in probed["responses"])
     names = [f"{name}.{j}" for j in range(requests)]
+    bodies = [body | {"prompt": list(prompts[j % len(prompts)])} if prompts else body for j in range(requests)]
     groups = [names[j:j + in_flight] for j in range(0, requests, in_flight)]
-    frames_in = max(request_frame_count(len(ar.live_request_bytes(s, body, None, FRAME_BYTES)), FRAME_BYTES)
-                    for s in names)
+    frames_in = max(request_frame_count(len(ar.live_request_bytes(s, b, None, FRAME_BYTES)), FRAME_BYTES)
+                    for s, b in zip(names, bodies))
     served = profile == "served"
     if served:  # the served counts take requests of a power of two of frames
         frames_in = 1 << (frames_in - 1).bit_length()
     T = WINDOW_BUCKETS
     for span in range(D + 1, T - 1):
         starts, a = [], 2
-        for _ in groups:
+        for g, _ in enumerate(groups):
+            if window_per_group and g:
+                a = max(a, (starts[-1] // T + 1) * T + (0 if served else 1))
             if a % T == 0 and not served:
                 a += 1
             elif a % T + span > T - 1:
@@ -691,7 +699,8 @@ def _served_plan(probed: dict, requests: int, D: int, name: str, in_flight: int,
             raise DoesntFit(f"the calibration's envelope δ = {envelope.delta} is below the latency budget D = {D}")
         sessions = [[s, j + 1, [D] * F] for j, s in enumerate(names)]
         peer = [{"stream": j + 1, "session": s, "frames": frames_in, "trace_ms": t,
-                 "enqueue": math.ceil(t / i.bucket_ms), "send_ms": t} for j, (s, t) in enumerate(zip(names, sends))]
+                 "enqueue": math.ceil(t / i.bucket_ms), "send_ms": t, **({"body": bodies[j]} if prompts else {})}
+                for j, (s, t) in enumerate(zip(names, sends))]
         windows = anchors[-1] // T + 2
         if served:
             occ = {"kind": "served", "egress": None, "ingress": None, "response_frames": F, "request_frames": frames_in,
@@ -720,7 +729,8 @@ def _served_plan(probed: dict, requests: int, D: int, name: str, in_flight: int,
             "syncs": [[envelope.delta, str(envelope.rho)]] * windows, "sync_policy": "envelope",
             "model_syncs": [[s.delta, str(s.rho)] for s in chosen], "live_model": body["model"], "body": body,
             "seed": 0, "occupancy": occ, "request_major": True,
-            "pad_to": F,
+            "pad_to": F, **({"prompts": [list(p) for p in prompts]} if prompts else {}),
+            **({"window_per_group": True} if window_per_group else {}),
             "served": {"tokens": body["max_tokens"], "response_frames": F, "probe_events": lengths,
                        "delta_buckets": D, "gap_buckets": D + 1, "span_buckets": span, "slowest_s": slowest,
                        "request_frames": frames_in, "in_flight": in_flight, "requests": requests}}
@@ -1447,13 +1457,26 @@ def plan_of(args, url: str, clock=time.monotonic, sleep=time.sleep) -> tuple[dic
         report, plan = varied_plan(probed, requests, seed=args.seed, eos=eos, compact=getattr(args, "compact", None),
                                    margin=getattr(args, "margin", 2.0))
         return probed, report, plan
-    prompt = prompt_tokens(url, model, args.prompt_tokens, args.api_key_env) if args.prompt_tokens else PROMPT
+    prompts = parse_prompts(args.prompts) if getattr(args, "prompts", None) else None
+    if prompts:
+        prompt = prompts[0]
+    else:
+        prompt = prompt_tokens(url, model, args.prompt_tokens, args.api_key_env) if args.prompt_tokens else PROMPT
     probed = probe(url, request_body(model, args.tokens, prompt, args.temperature, args.top_p), args.probes,
                    args.api_key_env, clock,
                    in_flight=args.in_flight, warmup=args.in_flight)
     report, plan = served_plan(probed, args.requests, args.delta_buckets, in_flight=args.in_flight,
-                               profile=args.profile, frames=args.response_frames)
+                               profile=args.profile, frames=args.response_frames, prompts=prompts,
+                               window_per_group=getattr(args, "window_per_group", False))
     return probed, report, plan
+
+
+def parse_prompts(text: str) -> list[list[int]]:
+    """``--prompts``: prompts of token ids, ``;`` between prompts and ``,`` between ids (``3;7``: [[3], [7]])."""
+    prompts = [[int(t) for t in p.split(",")] for p in text.split(";") if p.strip()]
+    if not prompts or not all(prompts):
+        raise SystemExit(f"--prompts: token ids, ',' between them and ';' between prompts, not {text!r}")
+    return prompts
 
 
 def rehearse(args) -> int:
@@ -1529,12 +1552,16 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--requests", type=int, default=400)
         q.add_argument("--in-flight", type=int, default=4, help="requests sent together, served side by side")
         q.add_argument("--tokens", type=int, default=64,
-                       help="fixed: min_tokens and max_tokens of every request (ignore_eos); varied: max_tokens' cap")
+                       help="fixed: max_tokens of every request (ignore_eos, no min_tokens); varied: max_tokens' cap")
         q.add_argument("--response-frames", type=int,
                        help="fixed: F, a response's canonical events, padded to (default: --tokens); a token of more "
                             "than 64 bytes is one event per 64")
         q.add_argument("--prompt-tokens", type=int, default=128,
                        help="the prompt's length in the endpoint's tokens (/tokenize); 0: the text prompt as is")
+        q.add_argument("--prompts", help="fixed: request j's prompt is the (j mod n)-th of these n prompts of token "
+                                         "ids, ';' between prompts and ',' between ids (in place of --prompt-tokens)")
+        q.add_argument("--window-per-group", action="store_true",
+                       help="fixed: each group of --in-flight requests starts a window of its own")
         q.add_argument("--probes", type=int, default=8)
         q.add_argument("--delta-buckets", type=int,
                        help="the latency budget D (default: 4 × the slowest + 0.5 s, or the most that fits down to 2 ×)")

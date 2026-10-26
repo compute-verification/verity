@@ -25,7 +25,7 @@ the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEM
 """
 from __future__ import annotations
 
-from verity.ml.definitions.registry.dense import AttentionSoftcap, AttentionHeadSoftcap, AttnBlockSoftcap, softcap_mul_bits, softcap_scale_log2_bits, M_LOG2E  # noqa: F401
+from verity.ml.definitions.registry.dense import AttentionSoftcap, AttentionHeadSoftcap, AttnBlockSoftcap, softcap_mul_bits, softcap_scale_log2_bits, M_LOG2E
 
 SEMANTIC_ID = "dense/AttentionSoftcap@v1"
 

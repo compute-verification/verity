@@ -5,14 +5,23 @@ certificate's, a kept certificate whose signature is changed, and a key under `l
 the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
 several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
 window was drawn; the draw's bound at δ is C(n − b − 1, k) / C(n, k)'s; leak counts the scan's widths and terms on a
-warden run's files, and refuses a sampled draw and a warden the scan's class doesn't serve."""
+warden run's files, and refuses a sampled draw and a warden the scan's class doesn't serve; the job's copy of the
+gates' records into its output keeps no gate run's witness/. On the certifier-only path the report needs no scan,
+names what it stubs, and counts the rehearsal's refused runs and the I/O tie's verdict on each tampered run the check
+let through as negatives; d1's K is #4404's horizon count over the compute audits' draws and free inputs and the
+network's own terms. Given no N2 summary the report is the scan's alone, its verdict `scan accepted` (exit 0) when the
+honest round is accepted, every other refused and no witness piece reached the verifier, and `scan refused` (exit 1)
+on a wrong verdict, a leak or a missing record; the full report holds the scan to its negatives too."""
 
 from __future__ import annotations
 
 import hashlib
 import importlib.util
 import json
+import math
+import os
 import shutil
+import subprocess
 import sys
 from fractions import Fraction
 from pathlib import Path
@@ -121,6 +130,23 @@ def test_custody(tmp_path):
     assert cr.custody(tmp_path / "none")["verdict"] == "refused"
 
 
+def test_job_keeps_no_gate_runs_witness(tmp_path):
+    """chain_record.sh's copy of the gates' records into $OUT, which custody uploads, leaves every witness/ behind."""
+    lines = (HERE / "chain_record.sh").read_text().splitlines()
+    i = next(k for k, line in enumerate(lines) if line.startswith('(cd "$G" && find'))
+    copy = "\n".join(lines[i:i + 2])
+    run = tmp_path / "G" / "g2" / "c20261026T000000Z-0000"
+    for name in ("end.json", "out/deployment.json", "witness/check.json", "witness/cells.jsonl"):
+        (run / name).parent.mkdir(parents=True, exist_ok=True)
+        (run / name).write_text("{}")
+    (tmp_path / "OUT" / "gates").mkdir(parents=True)
+    subprocess.run(["bash", "-c", copy], check=True, env={"G": str(tmp_path / "G"), "OUT": str(tmp_path / "OUT"),
+                                                          "PATH": os.environ["PATH"]})
+    kept = sorted(p.relative_to(tmp_path / "OUT" / "gates" / "g2" / run.name).as_posix()
+                  for p in (tmp_path / "OUT").rglob("*") if p.is_file())
+    assert kept == ["end.json", "out/deployment.json"]
+
+
 def _steps(tmp_path, job: dict, endpoint: bool = True) -> SimpleNamespace:
     def put(name, doc):
         (tmp_path / name).write_text(json.dumps(doc))
@@ -198,6 +224,57 @@ def test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw(tmp_path
     assert got["why"].startswith("honest: witness pieces leaked to the verifier: ['head egress 45 @320']")
 
 
+def test_a_scan_only_report_exits_0_on_the_expected_verdicts_and_1_on_a_wrong_one_a_leak_or_a_missing_record(tmp_path):
+    steps = _steps(tmp_path, {"profile": "advice", "rc": {"n2": None, "scan": "0"}, "scan_only": True})
+    n2_summary, steps.n2 = steps.n2, None
+    rnd = lambda accepted, found=(): {"audit": {"window_accepted": accepted, "received": {"verifier_found": list(found)}}}
+    put = lambda honest, forged, ok=True: Path(steps.scan).write_text(json.dumps(
+        {"ok": ok, "T": 32, "rounds": {"honest": honest, "forged": forged}}))
+    args = ["report", "--custody", steps.custody, "--certs", steps.certs, "--endpoint", steps.endpoint, "--scan",
+            steps.scan, "--job", steps.job, "--warden-run", steps.warden_run]
+    run = lambda name: (cr.main(args + ["--out", str(tmp_path / name)]),
+                        json.loads((tmp_path / name / "report.json").read_text()))
+
+    put(rnd(True), rnd(False))
+    rc, got = run("pass")
+    assert rc == 0 and got["verdict"] == "scan accepted" and got["scope"] == cr.SCAN_ONLY == "scan only, N2 not given"
+    assert got["steps"]["n2"]["verdict"] == "not given" and got["negatives_refused"] == {"scan/forged": True}
+    assert "Verdict: **scan accepted**, scan only, N2 not given." in (tmp_path / "pass" / "report.md").read_text()
+
+    put(rnd(True), rnd(True))
+    rc, got = run("forged-accepted")
+    assert rc == 1 and got["scope"] == cr.SCAN_ONLY and got["verdict"] == "scan refused"
+    md = (tmp_path / "forged-accepted" / "report.md").read_text()
+    assert "Verdict: **scan refused**, scan only, N2 not given." in md
+    assert (got["steps"]["scan"]["verdict"], got["steps"]["scan"]["why"]) == ("failed", "forged: window accepted")
+    put(rnd(False), rnd(False))
+    rc, got = run("honest-refused")
+    assert rc == 1 and got["verdict"] == "scan refused"
+    put(rnd(True, ["head egress 3 @64"]), rnd(False))
+    rc, got = run("leak")
+    assert rc == 1 and got["verdict"] == "scan refused"
+    assert got["steps"]["scan"]["why"] == "honest: witness pieces found at the verifier: ['head egress 3 @64']"
+    put(rnd(True), rnd(False), ok=False)
+    assert run("not-ok")[0] == 1
+    Path(steps.scan).unlink()
+    rc, got = run("no-scan")
+    assert rc == 1 and got["verdict"] == "scan refused" and got["steps"]["scan"]["verdict"] == "failed"
+    put(rnd(True), rnd(False))
+    Path(steps.custody).unlink()
+    rc, got = run("no-custody")
+    assert rc == 1 and got["verdict"] == "scan refused"
+
+    steps.n2 = n2_summary
+    Path(steps.custody).write_text(json.dumps({"verdict": "accepted"}))
+    put(rnd(True), rnd(False))
+    got = cr.report(steps)
+    assert got["scope"] is None and got["verdict"] == "accepted"
+    assert "Verdict: **accepted**." in cr.markdown(got)
+    put(rnd(True), rnd(True))
+    got = cr.report(steps)
+    assert got["scope"] is None and got["verdict"] == "refused" and got["negatives_refused"]["scan/forged"] is False
+
+
 def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     import math
     from dataclasses import asdict
@@ -228,3 +305,51 @@ def test_subset_bound():
     assert cr.subset_bound(256, 64, 0.5) == 2
     assert cr.subset_bound(256, 2, 0.5) == 74
     assert cr.subset_bound(0, 0, 0.5) is None
+
+
+def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_tampers(tmp_path):
+    job = {"profile": "advice", "rc": {"n2": "0", "scan": "2"}, "path": cr.CERTIFIER_ONLY}
+    steps = _steps(tmp_path, job)
+    steps.scan = steps.warden_run = None
+    Path(steps.custody).write_text(json.dumps({"verdict": "accepted", "gate_runs": [
+        {"gate_run": "c1", "request": {"where": "off-host: a pool slot", "engine": "seeded:phase1"},
+         "strategies": {"honest": "accepted", "late": "refused", "extra": "refused", "token": "accepted"}}]}))
+    ep = json.loads(Path(steps.endpoint).read_text())
+    ep["chain"]["tie"]["runs"] |= {"token": {"verdict": "refused", "ok": True}, "extra": {"verdict": "n/a"},
+                                   "late": {"verdict": "refused", "ok": None}}
+    ep["negatives"] = {"late": {"own_code": "audit.status:coverage-never-established"}, "token": {"own_code": None}}
+    Path(steps.endpoint).write_text(json.dumps(ep))
+    got = cr.report(steps)
+    assert got["verdict"] == "accepted" and got["steps"]["scan"]["verdict"] == "not run"
+    assert got["stubbed"][:3] == list(cr.STUBBED) and len(got["stubbed"]) == 5
+    assert got["negatives_refused"] == {"rehearsal/c1/late": True, "rehearsal/c1/extra": True, "tie/token": True,
+                                        "n2/tampered": True}
+    assert "on the certifier-only path" in cr.markdown(got) and "Stubbed:" in cr.markdown(got)
+    ep["chain"]["tie"]["runs"]["token"] = {"verdict": "accepted", "ok": False}
+    Path(steps.endpoint).write_text(json.dumps(ep))
+    assert cr.report(steps)["negatives_refused"]["tie/token"] is False
+    Path(steps.job).write_text(json.dumps(job | {"path": None}))
+    off = cr.report(steps)
+    assert off["verdict"] == "refused" and off["stubbed"] == []
+
+
+def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_period(tmp_path):
+    h = cr.horizon_k([{"units": 6, "drawn": 6, "free": 2, "jitter": 4}], Fraction(1, 100),
+                     {"advice": 8, "syncs": 0, "cells": 6})
+    assert (h["Fmax"], h["terms"]["faulty_sets"], h["K"]) == (5, 15, 8 + 6 + 80 + 15 + 2 + 4)
+    assert h["conditional"] == cr.HORIZON_CONDITION
+    circuit = {"templates": [["T", 4]], "external": ["T/y"], "wires": [],
+               "statements": {"T": {"in_rows": [["x", 0, 8, ["x"]], ["y", 1, 16, ["y"]]]}}}
+    assert cr.free_inputs(circuit) == 4 * 8
+    (tmp_path / "circuit.json").write_text(json.dumps(circuit))
+    (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": 2}}))
+    audit = cr.audit_of(tmp_path)
+    assert (audit["units"], audit["drawn"], audit["free"], audit["jitter"]) == (4, 2, 32, 0)
+    cert = {"sync_bits": 7.0, "rows": [{"window": w, "certified": True} for w in range(3)]}
+    assert cr.network_terms(cert, {"advice_bits": {"derived": 40, "v0_total": 90}}) == {"advice": 40, "syncs": 21,
+                                                                                        "cells": 0}
+    assert cr.network_terms(cert, {"advice_bits": {"derived": None, "v0_total": 90}})["advice"] == 90
+    d1 = cr.d1_terms(cert, {}, {}, {}, {"advice_bits": {"derived": 40}}, [audit])
+    k = d1["K"][f"{2.0 ** -20:.3g}"]
+    assert k["Fmax"] == math.ceil(20 * math.log(2) * 2) and k["K"] == sum(k["terms"].values())
+    assert "open" in cr.d1_terms(cert, {}, {}, {}, {"advice_bits": {"derived": 40}})["K"]

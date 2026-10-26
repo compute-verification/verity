@@ -1,8 +1,8 @@
 """The torch loop's window, written for the audit from its records alone (`benchmarks/prove_path/records_audit.py`).
 
     python -m verity_torch_loop.serve --out DIR [--law L] [--requests 3,7] [--steps 2] [--h 128] [--cap 8] [--run-id ID] \\
-        [--tamper] [--opening FILE]
-    python -m verity_torch_loop.serve --circuit-only [the same shape and --run-id]
+        [--tamper] [--opening FILE] [--pouw h1 [--pouw-out DIR] [--pouw-salt HEX]]
+    python -m verity_torch_loop.serve --circuit-only [the same shape and --run-id] [--pouw h1]
 
 The first serves the requests (`loop.TorchLoop`), commits every unit and its activations (`TorchLoop.commit_activations`,
 their entries in the registration's window and their salts in `ACTIVATIONS_PRIVATE`) and writes the window
@@ -11,7 +11,10 @@ SHA-512, the run root, the population and the units whose outputs are not their 
 unless ``--tamper``). With ``--opening FILE`` the circuit is its compiler's (`compile`): the loop's schedule is committed as
 advice under that compiler, the registration binds both, and the advice's opening (the prover's private file) goes to
 ``FILE``. The second prints the circuit record's SHA-512 alone, from the loop's shape and no value: the circuit the verifier
-registers before the loop runs, when it has no compiler.
+registers before the loop runs, when it has no compiler. With ``--pouw h1`` the first also writes the loop's PoUW
+window (`pouw`: its linears as the pinned H1 tile) to ``--pouw-out`` (default ``DIR/pouw``), its tiles salted by
+``--pouw-salt`` (64 bytes in hex, the auditor's coin; fresh when absent), and the second prints that window's circuit
+record's SHA-512 beside the first's.
 
     python -m verity_torch_loop.serve --commit-weights OPENING --pin PIN [--h 128]
 
@@ -30,7 +33,7 @@ from pathlib import Path
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R
 from verity.ml.windows import interface as IF
 
-from . import compile as C, loop as L
+from . import compile as C, loop as L, pouw as PW
 
 #: the run's committed activations' salts (`loop.activations_opening`), the prover's, beside the members' private bodies
 ACTIVATIONS_PRIVATE = "activations-private.json"
@@ -48,6 +51,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--run-id", default="", help="the run's name, which its root binds (`TorchLoop`)")
     ap.add_argument("--tamper", action="store_true")
     ap.add_argument("--opening")
+    ap.add_argument("--pouw", choices=["h1"], help="also the loop's PoUW window, its linears as the pinned H1 tile")
+    ap.add_argument("--pouw-out")
+    ap.add_argument("--pouw-salt", help="the H1 tiles' salt, 64 bytes in hex (default fresh)")
     ap.add_argument("--registered", action="store_true", help="the circuit reads the weights as registered values")
     ap.add_argument("--weights", help="with --registered --out: the weights' opening (--commit-weights)")
     ap.add_argument("--tamper-weights", action="store_true")
@@ -72,7 +78,12 @@ def main(argv: list[str] | None = None) -> int:
     law = D.parse_law(a.law)
     if a.circuit_only:
         empty = IF.Window(loop.circuit(), loop.run_root, law, a.cap)
-        print(json.dumps({"circuit": hashlib.sha512(IF.circuit_bytes(empty.circuit_record())).hexdigest()}))
+        out = {"circuit": hashlib.sha512(IF.circuit_bytes(empty.circuit_record())).hexdigest()}
+        if a.pouw:
+            h1 = PW.H1Loop(loop, bytes(PW.SALT_BYTES))
+            h1w = IF.Window(h1.circuit(), loop.run_root, h1.law, PW.CAP)
+            out["pouw"] = hashlib.sha512(IF.circuit_bytes(h1w.circuit_record())).hexdigest()
+        print(json.dumps(out))
         return 0
     advice = None
     if a.opening:
@@ -89,7 +100,14 @@ def main(argv: list[str] | None = None) -> int:
     with os.fdopen(fd, "w") as f:
         json.dump(L.activations_opening(loop.model, acts), f)
     rec = json.loads((Path(a.out) / "registration.json").read_text())
-    print(json.dumps({"circuit": rec["window"]["circuit"], "run": loop.run_root, "population": win.window.population,
+    pouw = None
+    if a.pouw:
+        h1 = PW.H1Loop(loop, bytes.fromhex(a.pouw_salt) if a.pouw_salt else PW.fresh_salt())
+        pdir = Path(a.pouw_out or Path(a.out) / "pouw")
+        prec = h1.write(h1.window(), pdir, {"loop": "torch-loop/pouw-h1"})
+        pouw = {"circuit": json.loads((pdir / "provenance.json").read_text())["circuit"], "tiles": h1.real,
+                "work": prec["window"]["public"]["work"], "law": prec["law"], "registration": R.digest(prec), "out": str(pdir)}
+    print(json.dumps({"pouw": pouw, "circuit": rec["window"]["circuit"], "run": loop.run_root, "population": win.window.population,
                       "members": len(win.window.members), "mismatched": {t: len(v) for t, v in bad.items()},
                       "compiler": rec["window"].get("compiler"), "registration": R.digest(rec), "out": str(Path(a.out)),
                       "activations": {v: e["root"] for v, e in rec["window"]["activations"]["values"].items()}}))
