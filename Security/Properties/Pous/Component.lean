@@ -35,7 +35,7 @@ the same steps for the composition that takes it.
   the accepted session that `MemoryChallenger.Properties.WipeSurvivorBound` reads.
 * `WipeDigest`: the wipe's `RunDigest`.
 
-None of them is proved yet; each is under the lock's `shape.frozen` as `unstated` until its proof lists it.
+Each is proved in `Proofs.Properties.Pous.Component` (`Pous.Component.SecurityProofs`) and listed in the lock.
 -/
 
 open MemoryChallenger MemoryChallenger.Properties

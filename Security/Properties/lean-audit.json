@@ -647,6 +647,21 @@
    "assumptions": [],
    "type_hash": "d9f255e477992784b174c2ec19e62a74285cab29e74c5516ab850ccd97937f29"
   },
+  "Pous.Component.SecurityProofs.runAccepts": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Component.SecurityProofs.runBinds": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Component.SecurityProofs.runDigest": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Component.SecurityProofs.wipeAccepts": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Component.SecurityProofs.wipeDigest": {
+   "owner": "@memory-accounting"
+  },
   "Pous.EndToEnd.SecurityProofs.drawAtMost": {
    "owner": "@memory-accounting",
    "signature": ["Pous.EndToEnd.SecurityProofs.drawAtMost : Pous.EndToEnd.DrawAtMost"],
@@ -3305,6 +3320,26 @@
    "PousCheck.Properties.SecurityProofs.publishesRoot": {
     "function": "PousCheck.SetupProtocol.protocol.check",
     "outcome": "accept"
+   },
+   "Pous.Component.SecurityProofs.runAccepts": {
+    "function": "PousCheck.RunProtocol.protocol.check",
+    "outcome": "accept"
+   },
+   "Pous.Component.SecurityProofs.runDigest": {
+    "function": "PousCheck.RunProtocol.decodeCommitment",
+    "outcome": "accept"
+   },
+   "Pous.Component.SecurityProofs.runBinds": {
+    "function": "PousCheck.RunProtocol.protocol.check",
+    "outcome": "accept"
+   },
+   "Pous.Component.SecurityProofs.wipeAccepts": {
+    "function": "MemoryChallenger.WipeProtocol.protocol.check",
+    "outcome": "accept"
+   },
+   "Pous.Component.SecurityProofs.wipeDigest": {
+    "function": "MemoryChallenger.WipeProtocol.decodeCommitment",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -3333,12 +3368,7 @@
    "Pous.Period.SecurityProofs.periodHeldAt": "frozen (premise): periodHeld at every point of the composed check (Pous.EndToEnd.AcceptedAt: SetupProtocol.protocol.check at the point's parameters and PousCheck.Run.checkAt) and every block count N of the ring game from 2^19 to 2^27; stated over an abstract joint run of the device model and takes CoinCommitHides at N, the open conjecture P2RingRoundSecureWide and Pous.Period.RingDeviceAt (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run, read at N), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldDemo": "frozen (premise): periodHeldAt at Demo B's store, N = 1038*2^16 blocks, state bound 1,060,008,348,186 bits; its premises are periodHeldAt's.",
    "Pous.Period.SecurityProofs.obligationHeld": "frozen (premise): PeriodHeld at an audit window's snapshot of the mutable store, averaged over the other tags' key pairs: its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted), but it is stated over an abstract joint run of the device model (Accounting.Run) and takes PeriodHeld's premises (CoinCommitHides, P2RingAuditSecure and Pous.Period.RingDevice with the other tags' keys among the other audits' coins) and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
-   "Pous.EndToEnd.RunCertifiesAt": "unstated: RunCertifies at every point; it joins the composed check's runCheckAcceptsAt with the setup check's acceptsDecodes and publishesRoot, all three proved and the last two at every parameter set, and runCertifiesAt proves it from them",
-   "Pous.Component.RunAccepts": "unstated: ONE-10's statement (MEM-93) that PoUS's compiled check gives AcceptedAt, the decision PeriodHeldAt reads; the one-theorem's PoUS leg (ONE-18, ONE-20) takes it as a hypothesis until its proof lists it",
-   "Pous.Component.RunDigest": "unstated: ONE-10's statement (MEM-93) that PoUS's commitment digest is SHA-512 of its bytes, the composition's binding of PoUS's case; the one-theorem's PoUS leg takes it as a hypothesis until its proof lists it",
-   "Pous.Component.RunBinds": "unstated: ONE-10's statement (MEM-93), the fork form of PoUS's commit-then-coin step that makes AuditsOf's setup, store and table functions of the earlier coins; the one-theorem's PoUS leg takes it as a hypothesis until its proof lists it",
-   "Pous.Component.WipeAccepts": "unstated: ONE-10's statement (MEM-93) that the wipe's compiled check gives the checked signed session WipeSurvivorBound reads; a hypothesis of the composition that takes the wipe until its proof lists it",
-   "Pous.Component.WipeDigest": "unstated: ONE-10's statement (MEM-93) that the wipe's commitment digest is SHA-512 of its bytes; a hypothesis of the composition that takes the wipe until its proof lists it"
+   "Pous.EndToEnd.RunCertifiesAt": "unstated: RunCertifies at every point; it joins the composed check's runCheckAcceptsAt with the setup check's acceptsDecodes and publishesRoot, all three proved and the last two at every parameter set, and runCertifiesAt proves it from them"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
