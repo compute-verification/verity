@@ -10,8 +10,9 @@ capture fixes yet (`Open`). Both instances (`Accel.H200`, `Accel.Sm120`) are tab
   the card.
 * **Resources** (`Res`): the tensor core (one pipe every format shares, a MAC of format `f` using `weight f` units:
   the formats' peaks are one pipe's rate at different widths), the warp schedulers' issue slots, the integer `alu` and
-  `imad` pipes, the shuffle pipe, the FP64 pipe, shared memory's banks, and device memory's bandwidth. The FP32 pipe's rate is the
-  issue rate, so it is not a resource of its own; L2's bandwidth and the register file's ports are in no document, so they are free.
+  `imad` pipes, the shuffle pipe, the FP64 pipe, shared memory's banks, and device memory's bandwidth. The FP32 pipe's
+  rate is the issue rate, so it is not a resource of its own; L2's bandwidth and the register file's ports are in no
+  document, so they are free.
 * **Units** (`use`): an MMA uses `m·n·k·weight` tensor units and an issue slot; a lane function `1/32` of a slot
   (a warp instruction is 32 lanes' functions) and one lane of its pipe; a uniform instruction a whole slot (the
   uniform datapath has its own ALU, but its instruction takes the warp's issue slot); a copy `1/32` of a slot and, per
@@ -69,7 +70,9 @@ def port : Store → Res → ℚ≥0
 /-- **The units an opcode uses**, `weight f` tensor units a MAC of format `f` at shape scale `scale sh`. An MMA's
 operand words read from shared memory pay its banks, a word a bank unit, as a copy's do (`wgmma` reads `B`, and
 maybe `A`, there). Every unit is per word or per product, so a price vector over the resources prices an MMA per
-product, a lane function per result, and a copy per word moved. An `IMAD.HI` uses `hi` lanes of `imad`, its own
+product, a lane function per result, and a copy per word moved; an MMA with `D ≠ C` delivers its accumulators to
+new words at no units beyond its own (P2's fork, RT-MODEL M5), so no such pricing covers a per-seed delivery cost.
+An `IMAD.HI` uses `hi` lanes of `imad`, its own
 price, not tied to `IMAD`'s. -/
 def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) : Op Store → Res → ℚ≥0
   | .mma fa fb _ sh sa sb, r =>
