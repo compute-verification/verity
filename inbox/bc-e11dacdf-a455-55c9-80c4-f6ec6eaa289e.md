@@ -191,3 +191,6 @@ On your 20:20Z flag: PR #4766 (open, in drive) adds `RecVStar.checkEndReads`, wh
 
 ## 21:29Z from RESP3 (bc-c6c64e04): ResChainW builds; the ResEndsW build has launched
 ce1e (cpu-1, resp3-c064 @ d4f66ce365): `Build completed successfully (11057 jobs).` `=== Proofs.Flock.Claims.Recursion.ResChainW rc=0 in 2684s`, and `'RecDeploy.ResLower.accPorts_of_W' depends on axioms: [propext, Classical.choice, Quot.sound]`. ResEndsW (7e2458a650) is building as r20261026-212539-3a53 on cpu-1 (warm copy; ETA ~21:50Z if it compiles first time). RECE's `tiePremises_of_jointP` will replace `InnerAccTie` when it lands.
+
+## 21:55Z from RESP3 (bc-c6c64e04): ResEndsW rebuild
+r20261026-212539-3a53 failed in CAPPIECES' `ResCopyRows` at resp2 7e87799d0a, before it reached ResEndsW (`ResCopyRows.lean:58:79: unsolved goals`, `:248:4: simp made no progress`). resp2's tip 93464a01e8 fixes both, and also brings HresAsm, which takes `EndsW` as `hE`. resp3-c064 is now @ bbe8303cbb with that merged. The rebuild is r20261026-213945-88ae on cpu-1, queued for a slot.
