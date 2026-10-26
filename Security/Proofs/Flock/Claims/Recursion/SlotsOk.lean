@@ -124,11 +124,11 @@ theorem evalNet_rows {net : Net} {ins : Array Bool} {ra rb : Array (Array ℕ)}
   · have e1 : net.useful - net.inWords * WORD = (i - net.inWords * WORD) + (net.constPos - i + 1) := by omega
     rw [e1, ← List.range'_append_1, show net.inWords * WORD + (i - net.inWords * WORD) = i by omega,
       List.range'_succ, List.foldl_append, List.foldl_cons]
-    generalize hZ : (List.range' (net.inWords * WORD) (i - net.inWords * WORD)).foldl (evStep net) (ev0 net ins) = Z
-    have hZs : Z.size = 2 ^ net.unitLog := by rw [← hZ, evFold_size, h0s]
+    generalize hZ : (List.range' (net.inWords * WORD) (i - net.inWords * WORD)).foldl (evStep net) (ev0 net ins) = zr
+    have hZs : zr.size = 2 ^ net.unitLog := by rw [← hZ, evFold_size, h0s]
     have hrest : ∀ k, (k < i + 1 ∨ k = net.constPos) →
-        ((List.range' (i + 1) (net.constPos - i)).foldl (evStep net) (evStep net Z i)).getD k false =
-          (evStep net Z i).getD k false := by
+        ((List.range' (i + 1) (net.constPos - i)).foldl (evStep net) (evStep net zr i)).getD k false =
+          (evStep net zr i).getD k false := by
       intro k hk
       refine evFold_keep _ _ fun j hj => ?_
       have := List.mem_range'_1.1 hj
@@ -138,18 +138,18 @@ theorem evalNet_rows {net : Net} {ins : Array Bool} {ra rb : Array (Array ℕ)}
         · exact Or.inr hj'
         · exact Or.inl (by omega)
     have hi' : i ≠ net.constPos := by omega
-    have hZi : (evStep net Z i).getD i false =
-        ((net.a.row i).foldl (fun s k => s ^^ Z.getD k false) false &&
-          (net.b.row i).foldl (fun s k => s ^^ Z.getD k false) false) := by
+    have hZi : (evStep net zr i).getD i false =
+        ((net.a.row i).foldl (fun s k => s ^^ zr.getD k false) false &&
+          (net.b.row i).foldl (fun s k => s ^^ zr.getD k false) false) := by
       unfold evStep
       rw [ite_f (by simpa using hi'), getD_set! (by omega)]
       exact if_pos rfl
     have hkeep : ∀ k, (k = net.constPos ∨ k < i) →
-        ((List.range' (i + 1) (net.constPos - i)).foldl (evStep net) (evStep net Z i)).getD k false = Z.getD k false := by
+        ((List.range' (i + 1) (net.constPos - i)).foldl (evStep net) (evStep net zr i)).getD k false = zr.getD k false := by
       intro k hk
       rw [hrest k (hk.elim Or.inr fun h => Or.inl (by omega)), evStep_keep (Or.inl (by rcases hk with h | h <;> omega))]
-    rw [hrest i (Or.inl (by omega)), hZi, hra i, hrb i, foldl_xorRow (fun k => Z.getD k false),
-      foldl_xorRow (fun k => Z.getD k false)]
+    rw [hrest i (Or.inl (by omega)), hZi, hra i, hrb i, foldl_xorRow (fun k => zr.getD k false),
+      foldl_xorRow (fun k => zr.getD k false)]
     congr 1
     · refine xorRow_congr fun k hk => ?_
       exact hkeep k ((hord i hi1 hi2 k (List.mem_append_left _ hk)).imp id And.left)
@@ -229,7 +229,7 @@ theorem putWords_spec (w : Array Bool) (col : ℕ) (ws : Array UInt64) :
 theorem getD_u64 (a : Array UInt64) (i : ℕ) : a.getD i 0 = a[i]! := Array.getElem!_eq_getD.symm
 
 /-- **The slot's inputs**: `cv` the chain's last value, `pad` the message's last block. -/
-theorem slot_in (hck : HmNets.check c = .ok ()) {q n : ℕ} (hq : q < c.ports.size)
+theorem slot_in (hck : _root_.Flock.HmNets.check c = .ok ()) {q n : ℕ} (hq : q < c.ports.size)
     (hC8 : ((chain c pin q n).2.getD (c.ports.getD q default).chunks #[]).size = 8) :
     (∀ i < 512, (hmSlot c pin ((Array.range c.ports.size).map fun p => chain c pin p n) n q).getD i false =
       ((((chain c pin q n).2.getD (c.ports.getD q default).chunks #[]).getD (i / 64) 0 >>> (i % 64).toUInt64)
@@ -244,11 +244,10 @@ theorem slot_in (hck : HmNets.check c = .ok ()) {q n : ℕ} (hq : q < c.ports.si
   have hB : (blockWords (chain c pin q n).1 (c.ports.getD q default).chunks).size = 16 := by
     simp [blockWords, _root_.Flock.HmRow.wordsBE]
   unfold hmSlot
-  simp only [hq, ↓reduceIte]
-  rw [getD_map_range hq]
+  rw [getD_map_range hq, ite_t hq]
   generalize chain c pin q n = ch at hC8 hB ⊢
   obtain ⟨msg, cvs⟩ := ch
-  simp only [] at hC8 hB ⊢
+  dsimp only at hC8 hB ⊢
   rw [hi0, hi1, hi2]
   generalize hw0 : Array.replicate ((c.nets.getD c.hmNet default).2.inWords * WORD) false = w0
   generalize hCV : cvs.getD (c.ports.getD q default).chunks #[] = CV at hC8 ⊢
@@ -333,7 +332,8 @@ theorem data_len : 𝑫.length = 128 * 𝑵 := by
 /-- **The row's message after its prefix**: its bytes, then the padding of `128 (chunks + 1)` bytes. -/
 theorem msg_data : (chain c pin q n).1.data.toList = 𝑫 ++ Hm.rowPadT 𝑵 := by
   have hsz : (wordBytes rw.words 𝑾).size = 2 * 𝑾 := by simp [wordBytes, ByteArray.size]
-  have hby : (c.ports.getD q default).bytes = 2 * 𝑾 := by simp [Port.bytes, hv2]
+  have hby : (c.ports.getD q default).bytes = 2 * 𝑾 := by
+    unfold Port.bytes; simp only [hv2, Bool.false_eq_true, ↓reduceIte]
   have he : (wordBytes rw.words 𝑾).extract 0 (2 * 𝑾) = wordBytes rw.words 𝑾 := by
     have := @ByteArray.extract_zero_size (wordBytes rw.words 𝑾)
     rwa [hsz] at this
@@ -359,7 +359,8 @@ theorem pad_msg (y : ℕ) : 𝑷.get! (128 + y) = (chain c pin q n).1.get! y := 
 theorem chain_cvs : (chain c pin q n).2.getD 𝑵 #[] = Hm.chain 𝑷 (𝑵 + 1) := by
   have hd := data_len hn hr hv2 hsg hwN
   have hpre : _root_.Flock.HmRow.prefixOf (c.ports.getD q default) = _root_.Flock.HmRow.rowPrefix 𝑾 := by
-    simp [_root_.Flock.HmRow.prefixOf, hsg, hv2]
+    unfold _root_.Flock.HmRow.prefixOf
+    simp only [hsg, hv2, Option.isSome_none, Bool.false_eq_true, ↓reduceIte]
   have h1 : _root_.Flock.Sha512.compress _root_.Flock.Sha512.iv 𝑷 0 =
       _root_.Flock.Sha512.compress _root_.Flock.Sha512.iv (_root_.Flock.HmRow.rowPrefix 𝑾) 0 := by
     refine Hm.compress_congr _ fun k hk => ?_
@@ -396,7 +397,7 @@ end Row
 /-- **The trace assigner's hm96 slots commit** (`HpEarly.SlotsOk`): where `TraceOk` holds, the circuit's row nets are
 the verifier's (`HmNets.check`), its blocks' columns fit 32 bits and every port is a `sha512/row/v1` row of whole
 chunks, each port's hm96 slot at an instance with a placed row outputs the commit string of its row and salt. -/
-theorem _root_.RecDeploy.HpEarly.slotsOk_assign (h : TraceOk c pin) (hck : HmNets.check c = .ok ())
+theorem _root_.RecDeploy.HpEarly.slotsOk_assign (h : TraceOk c pin) (hck : _root_.Flock.HmNets.check c = .ok ())
     (hk : c.kLog ≤ 32)
     (hv1 : ∀ q (hq : q < c.ports.size), c.ports[q].v2 = false ∧ c.ports[q].segs = none ∧
       2 * c.ports[q].words = 128 * c.ports[q].chunks)
