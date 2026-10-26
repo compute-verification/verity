@@ -82,7 +82,8 @@
         "infra/cluster/",
         "tools/agent-guard/",
         "tools/research/",
-        ".cursor/"
+        ".cursor/",
+        ".python-version"
       ],
       "branch_suffixes": [
         "558b",
@@ -223,12 +224,15 @@
         "Security/Definitions/Nci.lean",
         "Security/Definitions/Nci/",
         "Security/Proofs/Nci/",
+        "benchmarks/all_protocols/",
         "benchmarks/pouw/",
         "benchmarks/pouw/machine_model/",
         "benchmarks/pouw/receipts/",
+        "benchmarks/all_protocols/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
         "benchmarks/nci/",
+        "benchmarks/e2e_demo/",
         ".agents/skills/kernel-engineering/",
         "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
         "integrations/vllm/verity_vllm/protocols/pouw/circuit.py",
@@ -295,7 +299,8 @@
       "handle": "compute-research",
       "holder": "compute-accounting's research lane (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac): the machine model (W1 and the device records), the Lean accounting statements (NCI, DeclaredCircuitRequirement) and their red and blue teams, and PoUW's protocol statements (period, salt, credit form)",
       "remit": "The machine model, the Lean accounting statements (NCI and the rest) and their red and blue teams, and PoUW's protocol statements.",
-      "charter": "note:compute-accounting/20261019T2230Z-report-lane-split"
+      "charter": "note:compute-accounting/20261019T2230Z-report-lane-split",
+      "usergroup": "S0CBZ2L8542"
     },
     {
       "handle": "memory-accounting",
@@ -618,7 +623,8 @@
       "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top); renamed from @hash by Daniel, 2026-10-18 9:40 AM PDT",
       "usergroup": "S0CAYGG5BDW",
       "owns": [
-        "benchmarks/hash/"
+        "benchmarks/hash/",
+        "benchmarks/torch_gpu/"
       ],
       "branch_suffixes": [
         "15ad"

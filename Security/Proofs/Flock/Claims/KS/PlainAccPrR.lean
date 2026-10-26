@@ -148,10 +148,11 @@ theorem accR_draw {rd : Claims.Msg → Option FinalP} {x : Claims.Msg}
 
 /-! ## The simulator -/
 
-/-- **The roots `VR rd` links at `P`'s first message**: `linkR` at the statement's tables and the first message's rows
+/-- **The roots `VR rd` links at `P`'s first message**: `linkR` at the statement's tables and the first message's rows' nodes
 (`plainRoot` at `decR`'s link). -/
 noncomputable def plainRootR {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) : Array ByteArray :=
-  (((setupOf false x).bind fun v => (rowsOf ((P.next x [] ω).eval sha512).1).bind (linkR v.2.2)).getD default).1.toArray
+  (((setupOf false x).bind fun v =>
+    ((rowsOf ((P.next x [] ω).eval sha512).1).map (List.map nodeOf)).bind (linkR v.2.2)).getD default).1.toArray
 
 /-- **A prover of the live session at one table simulates `P` at `VR rd`** (`PlainSimRunK` at `VR rd`): wherever
 `VR rd` accepts at `Φ (u, r')`, the live outcome of `P'` at the tape `(ω, u)` and `r'` is the run's (`viewOfJ` at the
@@ -230,7 +231,7 @@ theorem plain_first_of_simDR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P 
     rw [hhead, List.headD_cons] at hr₀
     simp only [DecR.mk.injEq] at hd'
     obtain ⟨-, -, -, rfl, -⟩ := hd'
-    simp [plainRootR, hv', hr₀, hl]
+    simp only [plainRootR, hv', Option.bind_some, hr₀, hl, Option.getD_some]
   rw [hroot, hsim u r' hacc s spec sts link c₁ mids f hact]
   rw [colsRV_run hacc] at hno
   exact hv d hd C hno

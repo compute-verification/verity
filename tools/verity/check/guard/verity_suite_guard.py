@@ -250,8 +250,8 @@ def pytest_runtest_protocol(item, nextitem):
 
 
 def heavy_first(nodeids: list[str], heavy: list[str], workers: int) -> list[int]:
-    """The order (indices into ``nodeids``) that starts each of the ``heavy`` tests (longest first) at the head of its own
-    worker's first share under xdist's `worksteal` with ``workers`` workers, the other tests in collection order. `worksteal`
+    """The order (indices into ``nodeids``) that starts the first ``workers`` of the ``heavy`` tests (longest first) found in
+    ``nodeids`` each at the head of its own worker's first share under xdist's `worksteal`, the other tests in collection order. `worksteal`
     splits the collection into contiguous shares, one per worker, and steals from a share's tail, so a long test deep in a share
     starts late and ends the run late."""
     starts, at = [], 0

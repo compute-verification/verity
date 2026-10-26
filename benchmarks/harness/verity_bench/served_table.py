@@ -8,6 +8,9 @@ meta names them) or, without one, the newest passing `vllm_bench_point` run of a
 catalog (after pulling the remote's attempts started since the spec was added), so a newer passing run supersedes an
 older one. A result labelled `superseded_by` is skipped. Ratios are paired by rep from the result's own reps; caveats are
 the `label` and `note` assertions on the result and its run.
+
+Beside a protocol's row of record, `BREAKDOWNS` puts where its time goes by span: `verity_bench.breakdown`'s rows (ms an
+output token, not ratios) at each run its record names.
 """
 
 from __future__ import annotations
@@ -86,8 +89,10 @@ PROTOCOLS = (
     # art:33b8cc62's three results (#3817); its meta names no runs.
     Protocol("Commit (#3817)", (), "commit@compiled", None,
              record=("r20261024-172755-61f0", "r20261024-172748-dd9d", "r20261024-172623-d8fe")),
-    Protocol("H1 reference commit path, CPU-bound", (), "pouw:eps1-sm120-h1fx1", "stock-int8",
-             record=("r20261024-173246-460d", "r20261024-175022-5237")),
+    # art:a94655c4's quiet runs at 595cce6dda (#3939): the served spec's b8 and b32, then the H1 spec's.
+    Protocol("H1 served, GPU commit path (cost only, in-process coins)", (), "pouw:eps1-sm120-h1fx1", "stock-int8",
+             record=("r20261025-113633-fd71", "r20261025-113621-0c4a", "r20261025-113639-775f",
+                     "r20261025-113628-088d")),
 )
 # The factor that restates a ratio over batch-invariant eager stock as one over stock as served (#3409's factor table).
 FACTORS = Protocol("conversion factor", (), SERVED, "stock-fp8",
@@ -99,6 +104,21 @@ LIVE = (
     Live("H200", "r20261024-212837-2302", f"{_DITHER}-j10r-smq25o32-zy1-rd0-zs-mmc@rcs25", "exact-fused"),
     Live("B200", "r20261024-214613-f760", f"{_DITHER}-j10r-smq126o256-zy1-rd0-zs-mmc@pcs4p", "exact-fused"),
     Live("B200", "r20261024-212644-f308", f"{_DITHER}-j10r-smq126o256-zy1-rd0-zs-mmc@pcs4p", "exact-fused"),
+)
+
+
+@dataclass(frozen=True)
+class Breakdown:
+    """Where `protocol`'s time over its plain engine goes, by span (`verity_bench.breakdown`), at each run `record`
+    names (an `art:` id whose `runs` meta names the breakdown spec's runs, or run ids)."""
+
+    protocol: str
+    record: tuple[str, ...]
+
+
+BREAKDOWNS = (
+    Breakdown("PoUS bandwidth audit (#3847)",
+              ("art:b95a662684a8d62181a763e2bcd6fd39003cfd8dd2b40b8d2733f3df45a4f5ed",)),
 )
 
 
@@ -341,13 +361,37 @@ def live_row(store: Any, live: Live, pull: bool) -> tuple[dict[str, Any], str | 
     return row, None
 
 
+def breakdown_points(store: Any, entry: Breakdown, pull: bool, skipped: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """`verity_bench.breakdown`'s attribution at every point of `entry`'s runs; a run that can't stand goes to
+    `skipped`."""
+
+    from verity_bench import breakdown  # noqa: PLC0415  (breakdown imports this module)
+
+    points = []
+    for run, named_by in record_runs(store, entry.record):
+        spec, found, why = _recorded(store, run, breakdown.ARMS, pull, named_by)
+        rows = []
+        for row in found:
+            try:
+                rows.append({"protocol": entry.protocol, **_source(spec, row.point["point"]["id"], row, named_by),
+                             **breakdown.attribution(row.point)})
+            except ValueError as error:
+                why = str(error)
+        if why is not None:
+            skipped.append({"spec": spec, "point": None, "run": run, "art": named_by, "why": why})
+            continue
+        points += rows
+    return points
+
+
 def collect(store: Any, *, pull: bool, protocols: Sequence[Protocol] | None = None, factors: Protocol | None = None,
-            live: Sequence[Live] | None = None) -> dict[str, Any]:
+            live: Sequence[Live] | None = None, breakdowns: Sequence[Breakdown] | None = None) -> dict[str, Any]:
     """The table's rows from what `store` holds; `pull` reads each result's labels through from the remote."""
 
     protocols = PROTOCOLS if protocols is None else protocols
     factors = FACTORS if factors is None else factors
     live = LIVE if live is None else live
+    breakdowns = BREAKDOWNS if breakdowns is None else breakdowns
     skipped: list[dict[str, Any]] = []
     live_rows = []
     for entry in live:
@@ -377,14 +421,15 @@ def collect(store: Any, *, pull: bool, protocols: Sequence[Protocol] | None = No
             row["factor"] = {metric: _over(found.point, SERVED, factors.eager_stock, metric)
                              for metric in (PER_OUTPUT, PER_DECODE)}
         factor_rows.append(row)
+    split = [point for entry in breakdowns for point in breakdown_points(store, entry, pull, skipped)]
     return {"schema": SCHEMA, "served_stock": SERVED, "live": live_rows, "rows": rows, "factors": factor_rows,
-            "skipped": skipped}
+            "breakdowns": split, "skipped": skipped}
 
 
 def build(*, store: Any = None, root: Path | None = None, local_only: bool = False,
           added: Callable[[str], int] | None = None, log: Callable[[str], None] | None = None,
           protocols: Sequence[Protocol] | None = None, factors: Protocol | None = None,
-          live: Sequence[Live] | None = None) -> dict[str, Any]:
+          live: Sequence[Live] | None = None, breakdowns: Sequence[Breakdown] | None = None) -> dict[str, Any]:
     """`collect` after pulling the remote's attempts started since the oldest spec without a record was added (#3406's
     pull), unless `local_only`. A run of record is read by id, from the remote where this machine lacks it."""
 
@@ -396,7 +441,8 @@ def build(*, store: Any = None, root: Path | None = None, local_only: bool = Fal
     if not local_only and specs:
         when = added or (lambda spec: spec_added(root, spec))
         completion.pull_since(min(when(spec) for spec in specs))
-    return collect(completion.store, pull=not local_only, protocols=protocols, factors=factors, live=live)
+    return collect(completion.store, pull=not local_only, protocols=protocols, factors=factors, live=live,
+                   breakdowns=breakdowns)
 
 
 def _ratio(summary: Mapping[str, Any] | None) -> str:
@@ -424,6 +470,50 @@ def _sources(row: Mapping[str, Any]) -> list[str]:
         return ["—", "no passing run", "—", ""]
     record = f" (record {_art(row['record'])})" if row.get("record") else ""
     return [str(row["reps"]), row["run"], _art(row["art"]) + record, _caveat(row["caveats"])]
+
+
+def _ms(summary: Mapping[str, Any]) -> str:
+    ci = summary.get("ci95")
+    return f"{summary['mean']:.3f}" if ci is None else f"{summary['mean']:.3f} ± {(ci[1] - ci[0]) / 2:.3f}"
+
+
+def _breakdown(points: Sequence[Mapping[str, Any]]) -> list[str]:
+    from verity_bench.breakdown import AUDIT, AUDIT_SPANS, DECODE_ROWS, PLAIN, PLAIN_SPANS  # noqa: PLC0415
+
+    lines = [
+        "",
+        "## Where the bandwidth audit's time goes, by span (`verity-bench breakdown`)",
+        "",
+        "Each cell is ms an output token, a difference and not a ratio: the mean over the point's paired reps ± its "
+        f"95% half-width (Student t). `{AUDIT_SPANS}` − `{PLAIN_SPANS}` is split into rows that sum to it: the "
+        "top-up's contention from the arms with the top-up off, every other row a part of the spans arms with the "
+        f"top-up off. `{AUDIT}` − `{PLAIN}` (spans off) is the audit's cost; the spans' marks add their own time to "
+        "the spans arms. Each spans arm's step by part: `verity-bench breakdown`.",
+    ]
+    for protocol in dict.fromkeys(point["protocol"] for point in points):
+        group = [point for point in points if point["protocol"] == protocol]
+        rows = [{row["row"]: row for row in point["rows"]} for point in group]
+        lines += ["", f"{protocol}:", "",
+                  "| row | " + " | ".join(f"{point['point']}, ms an output token | share" for point in group) + " |",
+                  "|---|" + "---:|---:|" * len(group),
+                  f"| `{AUDIT}` − `{PLAIN}` (credited lines, spans off) | "
+                  + " | ".join(f"{_ms(point['credited'])} | " for point in group) + " |",
+                  f"| **`{AUDIT_SPANS}` − `{PLAIN_SPANS}`** | "
+                  + " | ".join(f"**{_ms(point['total'])}** | 100%" for point in group) + " |"]
+        for name in rows[0]:
+            part = name.removeprefix("decode ")
+            label = f"{name}: {DECODE_ROWS[part]}" if part in DECODE_ROWS else name
+            cells = []
+            for by_name in rows:
+                row = by_name.get(name)
+                share = "—" if row is None or row["share"] is None else f"{row['share']:.0%}"
+                cells.append(("—" if row is None else _ms(row["ms_per_token"])) + f" | {share}")
+            lines.append(f"| {label} | " + " | ".join(cells) + " |")
+        lines.append("| sum of the rows | " + " | ".join(f"{point['sum']:.3f} | " for point in group) + " |")
+        lines += [""] + [f"- {point['point']}: `{point['spec']}`, {point['reps']} reps, run {point['run']}, art "
+                         f"{_art(point['art'])}" + (f" (record {_art(point['record'])})" if point["record"] else "")
+                         + (f"; {caveat}" if (caveat := _caveat(point["caveats"])) else "") for point in group]
+    return lines
 
 
 def render(table: Mapping[str, Any]) -> str:
@@ -493,6 +583,8 @@ def render(table: Mapping[str, Any]) -> str:
         factor = row["factor"] or {}
         lines.append("| " + " | ".join([f"`{row['spec']}`", row["point"], _ratio(factor.get(PER_OUTPUT)),
                                         _ratio(factor.get(PER_DECODE)), *_sources(row)]) + " |")
+    if table.get("breakdowns"):
+        lines += _breakdown(table["breakdowns"])
     if table["skipped"]:
         lines += ["", "Passed over (a run that can't stand):", ""]
         lines += [f"- `{s['spec']}` {s['point'] or ''}: {s['run']} ({_art(s['art'])}): {_cell(s['why'])}"
