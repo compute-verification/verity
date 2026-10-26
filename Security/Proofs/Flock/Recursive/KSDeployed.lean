@@ -21,7 +21,7 @@ the setup's listing (`hset`) proved (`resSetup_deployedB`). Its other leaves are
 theorem recursiveKSAt_of_leaves_deployed (wE w : Msg → ℝ)
     (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
-    (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (hPOk : PartsOkD)
+    (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
     (hEJ : Top.RowEJoint DeployedR.rdR key FlockDeploy.sha512
       (recL DeployedR.rdR (deployedB b) aux nOf hd recRest wE DeployedR.finalR w (DeployedR.layR OpenRows.elemR))
       (bdR DeployedR.rdR wE DeployedR.finalR w) (DeployedR.layR OpenRows.elemR) Claims.Recursion.Form.Dense
@@ -29,17 +29,11 @@ theorem recursiveKSAt_of_leaves_deployed (wE w : Msg → ℝ)
     (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
     (hF : RestRead.FinalReads DeployedR.finalR (DeployedR.restR OpenRows.elemR))
     (hRd : RestRead.ReadsAt DeployedR.rdR DeployedR.finalR (DeployedR.restR OpenRows.elemR))
-    (hL : ResListedD) (hQ : OpenOwned key)
-    (hres : ResLowJ DeployedR.rdR (deployedB b) aux nOf hd recRest wE DeployedR.finalR w (DeployedR.layR OpenRows.elemR)
-      resPD (Rows.elemReadC (Top.accRC DeployedR.rdR key)) Rows.resVRead ownRD)
-    (hCap : CapLower.SideCapR FlockDeploy.sha512
-      (recL DeployedR.rdR (deployedB b) aux nOf hd recRest wE DeployedR.finalR w (DeployedR.layR OpenRows.elemR))
-      Claims.Recursion.Form.Dense recRead (bB (deployedB b) aux nOf hd recRest) (cmtTr recRead)
-      (DeployedR.layR OpenRows.elemR)
-      (bdR DeployedR.rdR wE DeployedR.finalR w) DeployedR.rdR (Rows.rowDPieces key) Rows.posAt) :
+    (hres : ResLower.ResLowered DeployedR.rdR wE DeployedR.finalR w (bB (deployedB b) aux nOf hd recRest)
+      OpenRows.elemR Claims.Recursion.Form.Dense recRead (cmtTr recRead) resPD ownRD
+      (Rows.elemReadC (Top.accRC DeployedR.rdR key)) Rows.resVRead) :
     Flock.Guarantees.RecursiveKSAt DeployedR.rdR DeployedR.finalR OpenRows.elemR wE w (deployedB b) aux nOf hd
       recRest :=
-  recursiveKSAt_of_leaves wE w (deployedB b) aux nOf hd recRest key hPOk hEJ S hF hRd hL hQ hres
-    (resSetup_deployedB b) hCap
+  recursiveKSAt_of_leaves wE w (deployedB b) aux nOf hd recRest key hEJ S hF hRd hres (resSetup_deployedB b)
 
 end Flock.SecurityProofs
