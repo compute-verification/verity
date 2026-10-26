@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Recursion.VerdictRowDCover
 import Proofs.Flock.Claims.Recursion.RoundSizes
 import Proofs.Flock.Claims.Complete.Replay.LigeritoWalk
+import Proofs.Flock.Verifier.Hash
 
 /-!
 # Row D's `hlev`: the verifier's query positions, and the honest proof's Merkle checks
@@ -20,6 +21,9 @@ round `k + qOff sch ℓ`.
   (`repP_opens`, `merkleOk_of_opens`), at any hashes whose digests have the scheme's width. `DecAt.hlev_of_repP`: row
   D's `hlev` at a rep whose decided proof is such a run's output, and whose replies' coins at the queried rounds are its
   recorded rounds'.
+* **At the deployed hashes** (`DecAt.hlev_deployed`): `Hashes.ofSha512 Sha512.hash` makes the plain scheme its own
+  closures (`plain_ops_std`) with 64-byte digests (`plain_widths_std`), so only the honest rep's `hrun`, `h0` and
+  `hcoin` remain.
 -/
 
 namespace FlockVBridge.Family
@@ -315,6 +319,24 @@ open FlockSoundness.Discharge.Recursion (HClass)
 open FlockComplete.Replay.Lg (qOff)
 open FlockComplete (repP asksS commitP Commit Trace)
 
+/-- **At the deployed hashes the plain scheme is its own closures** (`levels_of_merkleOk`'s `hops`). -/
+theorem plain_ops_std : plain.opsWith (Hashes.ofSha512 Sha512.hash : Hashes Flock.V) = MerkleOps.ofScheme plain := rfl
+
+/-- **The plain scheme's digests are 64 bytes at the deployed hashes**, at its nodes and leaves. -/
+theorem plain_widths_std :
+    (∀ a b v, (plain.opsWith (Hashes.ofSha512 Sha512.hash : Hashes Flock.V)).node a b = .ok v →
+      v.size = plain.digestLen) ∧
+    ∀ row s v, (plain.opsWith (Hashes.ofSha512 Sha512.hash : Hashes Flock.V)).leaf row s = .ok v →
+      v.size = plain.digestLen := by
+  rw [plain_ops_std]
+  refine ⟨fun a b v e => ?_, fun row s v e => ?_⟩
+  · simp only [MerkleOps.ofScheme, pure, Except.pure, Except.ok.injEq] at e
+    rw [← e]
+    exact Sha512.hash_size _
+  · simp only [MerkleOps.ofScheme, pure, Except.pure, Except.ok.injEq] at e
+    rw [← e]
+    exact Sha512.hash_size _
+
 namespace DecAt
 
 variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
@@ -394,6 +416,32 @@ theorem hlev_of_repP {i : ℕ} (hG : D.RowG cls acc i) (hti : i < D.spec.tables.
     rfl
   rw [hN, hG.merkle] at hM
   exact D.hlev_of_merkleOk cls acc hG hti r hops hM hcoin
+
+/-- **Row D's `hlev` at the deployed hashes**: `hlev_of_repP` at `Hashes.ofSha512 Sha512.hash`, where the plain
+scheme is its own closures (`plain_ops_std`) and its digests are 64 bytes (`plain_widths_std`). What is left are the
+honest rep's equations: its decided proof is `repP`'s output (`hrun`) on a `commitP` of its table (`h0`), and its
+replies' coins at the queried rounds are its recorded ones (`hcoin`). -/
+theorem hlev_deployed {i : ℕ} (hG : D.RowG cls acc i) (hti : i < D.spec.tables.size) (r : Fin 2)
+    (resp : ℕ → Claims.Msg) (tr : Trace) (tbl : Array F128) (cm0 : Commit) (salt : ℕ → ℕ → ByteArray)
+    (nonce : ℕ → ℕ → UInt64) {s0 : ℕ → ByteArray}
+    (h0 : commitP (Hashes.ofSha512 Sha512.hash : Hashes Flock.V) (D.files cls i).st.merkle
+      ((D.files cls i).sch.levels.getD 0 default) tbl s0 = .ok cm0)
+    (t : Transcript) (ht : t.k = 0) (l : Array Claims.Msg) {t' : Transcript} {l' : Array Claims.Msg}
+    (hrun : ((repP (asksS resp) (Hashes.ofSha512 Sha512.hash) (D.files cls i).st
+      (D.files cls i).sch tr tbl cm0 (D.files cls i).extras salt nonce).run t).go l =
+        (.ok ((D.files cls i).proof r, t'), l'))
+    (hcoin : ∀ j < (D.files cls i).sch.levels.size, ∀ t < ((D.files cls i).sch.levels.getD j default).q,
+      FlockComplete.Replay.Lg.cfOf resp l.size
+          (lgStart (D.sh cls i) (D.files cls i).extras.size + qOff (D.files cls i).sch j) t =
+        cfOf (D.rep cls acc i r).rounds (lgStart (D.sh cls i) (D.files cls i).extras.size + qOff (D.files cls i).sch j) t) :
+    ∀ v info kappa,
+      verifierRows (D.sh cls i) (D.rep cls acc i r).rounds (D.rep cls acc i r).extras (D.rep cls acc i r).comb =
+        .ok (v, info, kappa) →
+      ∀ ℓ < (D.files cls i).sch.levels.size, ((D.files cls i).sch.levels[ℓ]!).q ≤ (info.lg.conss[ℓ]!).pos.size ∧
+        levelCheck (D.files cls i).sch ((D.files cls i).proof r).cap ((D.files cls i).proof r).ligerito ℓ
+          (info.lg.conss[ℓ]!).pos = .ok () :=
+  D.hlev_of_repP cls acc hG hti r Sha512.hash plain_ops_std resp tr tbl cm0 salt nonce
+    (by rw [hG.merkle]; exact plain_widths_std.1) (by rw [hG.merkle]; exact plain_widths_std.2) h0 t ht l hrun hcoin
 
 end DecAt
 
