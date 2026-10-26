@@ -2,6 +2,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Statements
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
+import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Count
 import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDefs
 import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
