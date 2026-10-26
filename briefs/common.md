@@ -16,8 +16,8 @@
 - **Linear is the status.** Post your exact Lean statement as a comment on your issue as soon as it's fixed (namespace,
   name, full type, module, the named assumptions it takes), and one comment per state change with the run id and its
   verdict line, or the PR. If you can't comment on Linear, put it in your note and your final message.
-- **Heavy work never on your VM** (16 GB, shared). Lean edits: `verity lean try FILE` (ships your checkout to
-  vy-nebius-cpu-1's research pool). Records: `research run --on vy-nebius-cpu-1 --pool research --project verity --source . --cwd clone --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records PKG --update`.
+- **Heavy work never on your VM** (16 GB, shared). Lean edits: `verity lean try FILE --on vy-nebius-cpu-4 --pool soundness`
+  (soundness's own 12-slot pool). Records: `research run --on vy-nebius-cpu-4 --pool soundness --project verity --source . --cwd clone --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records PKG --update`.
   Suites: `research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py --changed <main sha> --quick"`.
   Never cpu-5 for warm copies; never a bare `rm` of data you don't own on a node.
 - **Never block more than 20 minutes in one tool call.** Launch runs detached; when you'd wait on one, end your turn
