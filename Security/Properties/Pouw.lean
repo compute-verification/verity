@@ -4,7 +4,7 @@ import PouwWindow
 # PoUW's window: what its Lean code (`PouwWindow`) does
 
 The properties of the executable window (`verity/core/protocols/pouw/lean/window/`, the port of
-`verity/core/protocols/pouw/window.py`), stated against its functions as they run. Each covers every input the
+`verity/ml/pouw/window.py`), stated against its functions as they run. Each covers every input the
 function takes: a function on Python's integers (`floorPoint?`, `kPrime`) either answers or refuses, and a property says
 what an answer is, so its domain comes from the answer. That the function answers every input on its domain is
 completeness, proved beside it. Each is a `Prop`, and `Proofs.Properties.Pouw` proves every one, on Lean core.

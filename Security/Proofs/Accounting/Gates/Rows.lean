@@ -5,7 +5,7 @@ import Definitions.Accounting.Gates.Registry
 # The circuit model against the running Python, row by row
 
 Rows the kernel evaluates the model on, each set recomputed from the Python by
-`verity/ml/circuits/tests/test_lean_gates.py`, and the H1 rows by PoUW's `verity/core/protocols/pouw/tests/test_h1_gates.py`
+`verity/ml/circuits/tests/test_lean_gates.py`, and the H1 rows by PoUW's `verity/ml/pouw/tests/test_h1_gates.py`
 (the tile is PoUW's, which `verity.ml` doesn't import):
 
 * `s8Rows`: `intervals` over an `S8Dot_v1` coordinate (`s8Dot`, `ops/s8.py`'s `_dot_body`) whose operands and incoming

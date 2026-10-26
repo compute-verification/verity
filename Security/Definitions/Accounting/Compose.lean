@@ -16,7 +16,7 @@ window's grid-padded tiles, one a proof unit, and proves each drawn tile with th
 Each round's coin is `live` (the verifier's, released after the round's served values are committed) or `seeded`
 (a seed: SHA-512 of the window's salt, the unit's position and its operands' roots, Fiat–Shamir). The live statements
 (`CircuitWork`, `CircuitCredit`) describe the designed protocol: PoUW's code today has one salt a window and derives
-the noise in the scheme (`verity/core/protocols/pouw/coins.py`'s `LABELS`, `PROTOCOL.md`), so every window it runs is
+the noise in the scheme (`verity/ml/pouw/coins.py`'s `LABELS`, `PROTOCOL.md`), so every window it runs is
 seeded, and its credit is the seeded statements' (`CircuitWorkSeeded`, `CircuitCreditSeeded`), at a grinding premium
 per seed group (GRIND, decision 122's one seed a call), once its seeds name what each round reads (`SeedNamed`, which
 today's code doesn't meet).
@@ -68,7 +68,7 @@ The logical layer:
 * `creditedWords`, `wordsOf`, `floorOf`, `kindCount`: the circuit's credited words, `N_w` (W3: from the IR, not a
   parameter), its floor `♭ = Σ_words ♭_{kind}` and its words per kind.
 * `tileWords`, `tileWeight`, `tileStage`, `tileKind`, `tileLuck`, `tileLuck0`: the service's `N_p` grid-padded tiles
-  (`verity/core/protocols/pouw/window.py`): unit `t` for `t < units`, and fillers of no words past them.
+  (`verity/ml/pouw/window.py`): unit `t` for `t < units`, and fillers of no words past them.
 * `tileCone`, `shareCone`, `zeroCone`, `kindF`: a tile's late cone's weight (decision 119), which the service's share
   charges a skipped tile, its detected weight (its cone when it carries words), the cone weight on tiles of no words
   (W4, `0` for every Program COMPILE accepts), and `F` per kind: the most tiles one late cone of a kind holds (`1` for
@@ -360,11 +360,11 @@ later round's root up to the draw's. A run input committed after its reader's co
 decode feedback to match the reader's noise: that breaks (H-μ)'s salt-independence (E3) for the reader.
 
 Today's code has a coin a round, and nothing shows that it meets this order. A live window's coins are its salt coin, its
-draw coin and one round coin a round (`verity/core/protocols/pouw/window.py`'s `live_families`). Round r's coin opens
+draw coin and one round coin a round (`verity/ml/pouw/window.py`'s `live_families`). Round r's coin opens
 once, after the round root the challenger's signed log shows it received (`core_check.rounds`), and round r's noise key
 is that coin's and that root's (`window.round_key`). Each round's root commits that round's rows of every A value
 before its coin (`credit.a_link`, RT4-INT-34). A seeded window's coins are still one salt a window and the draw
-(`verity/core/protocols/pouw/coins.py`'s `LABELS = ("salt", "draw")`), with no per-round coin or root, and the salt opens
+(`verity/ml/pouw/coins.py`'s `LABELS = ("salt", "draw")`), with no per-round coin or root, and the salt opens
 before the activations are committed (RT-COMPOSE r3). No code checks this order itself: that every value the served
 Program writes is committed under the root of the round its `commitRound` names. A served Program's commit coins reach
 `Declared` only through `Properties.Compose.UnitsOfLayout`, which is unproved. The seeded statements don't read it: they

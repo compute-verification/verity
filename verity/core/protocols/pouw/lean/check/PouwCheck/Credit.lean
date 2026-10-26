@@ -17,7 +17,7 @@ import SampledProofs.Registered
 /-!
 # A served window's credited set, its drawn units and their outcome, its A rows and its period (`credit.py`; RT4-INT-32, -34 and -42)
 
-The verifier of record of `verity/core/protocols/pouw/credit.py`, which the difftest (`tests/test_difftest.py`) holds to
+The verifier of record of `verity/ml/pouw/credit.py`, which the difftest (`tests/test_difftest.py`) holds to
 it, string for string:
 
 **`window` and `periodCredit` are the only entries.** On one window's evidence and one round log, `window` runs every
