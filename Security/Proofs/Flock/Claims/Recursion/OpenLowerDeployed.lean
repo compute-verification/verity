@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Recursion.OpenPieces
 import Proofs.Flock.Claims.Recursion.SchedDense
 import Proofs.Flock.Claims.Recursion.VerdictRowDCover
+import Proofs.Flock.Claims.Recursion.SlotsCheck
 
 /-!
 # The `rec-open` pieces' lowering at the deployed layout (`OpenCopy`, `OpenTie`)
@@ -151,6 +152,7 @@ theorem openPieces_computesA {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
       (∀ sv, ss[s]? = some sv → _root_.Flock.Readable.StmtCopies sv p w) → L.Agrees cmt x s w xO ms →
       (∀ e ∈ L.calls x s w, H e.1 = e.2) →
       (Claims.findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false → showsTr untr s x xO c →
+      Claims.Flock.check (deployZkRec _root_.Flock.Readable.relation).parse xO w = true → StagedPart b.st s x xO →
       ∀ q ∈ pieces (Claims.Recursion.xI D x), ownQ x q = some s →
         ∃ t, ∃ ht : t < p.sts.size, ∃ o g u, o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog) ∧ g < p.sts[t].c.g ∧
           u < p.sts[t].c.upv ∧
@@ -162,7 +164,13 @@ theorem openPieces_computesA {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
                 (posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q)
                 (_root_.Flock.Readable.copyOf p t ht w o g u)) :
     PiecesComputes Bd D pieces (openHolds sideAt posAt) ownQ s x c ms := by
-  obtain ⟨xO, w, p, r', sv, hx, -, -, hr', ⟨ss', hss', hsv'⟩, hsz, hcp, hA, hT, hc, hs⟩ := partAccepts_staged h
+  obtain ⟨-, xO, w, hck, hT, hc, hs, hh, hp, hm, hrw⟩ := h
+  obtain ⟨p, r', sv, hx, ht, hpi, hr', ⟨ss', hss', hsv'⟩, hsz, htab⟩ := stagedReads hs
+  have hck' : Claims.Flock.check (_root_.Flock.Readable.parseOf _root_.Flock.Readable.relation readOfO) xO w =
+      true := hck
+  have hcp := _root_.Flock.Readable.stmtCopies_of_allOuts htab
+    (_root_.Flock.Readable.allOuts_of_check hck' hx ht hpi)
+  have hA : L.Agrees cmt x s w xO ms := ⟨hh, hp, hm, hrw⟩
   rw [hr] at hr'
   cases hr'
   rw [hss] at hss'
@@ -179,7 +187,7 @@ theorem openPieces_computesA {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
     · exact fun t ht o g u ho hg hu => _root_.Flock.Readable.levelCopies ht ho hg hu hcp
     · exact fun t ht o g u ho hg hu => _root_.Flock.Readable.stackedCopies ht ho hg hu hcp
   intro q hq ho os last hf hl
-  obtain ⟨t, ht, o, g, u, hob, hgb, hub, hcq⟩ := hopen xO w p hx hsz hcps hA hT hc hs q hq ho
+  obtain ⟨t, ht, o, g, u, hob, hgb, hub, hcq⟩ := hopen xO w p hx hsz hcps hA hT hc hs.1 hck hs.2 q hq ho
   obtain ⟨⟨hLA, hHH, hrow, hsib⟩, hbits, htop⟩ := hcq os last hf hl
   have hout := (hlev t ht o g u hob hgb hub).1
   obtain ⟨hrs, -, -, -, hsl, -⟩ := _root_.Flock.Readable.openIns_reads
@@ -392,12 +400,13 @@ variable (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (shape : Claims.Re
   (side : Msg → List Msg → OpenPiece → OpenSide)
 
 /-- **Part `s` accepts at its staged statement `xO` and witness `w`**, at messages `ms`: what `partAccepts_staged`
-names at a level part `sv`, that `openPieces_computesA`'s `hopen` is given. -/
+names at a level part `sv`, with the outer check and the staging, that `openPieces_computesA`'s `hopen` is given. -/
 def StagedAt (s : ℕ) (x : Msg) (c : ℕ → Coin) (ms : List Msg) (sv : VStar.Stmt) (xO : Msg) (w : Claims.Flock.Wit)
     (p : _root_.Flock.Readable.Parsed) : Prop :=
   _root_.Flock.Readable.parseBytes readOfO xO = some p ∧ 0 < p.sts.size ∧ _root_.Flock.Readable.StmtCopies sv p w ∧
     L.Agrees cmt x s w xO ms ∧ (∀ e ∈ L.calls x s w, H e.1 = e.2) ∧
-    (Claims.findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false ∧ showsTr untr s x xO c
+    (Claims.findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false ∧ showsTr untr s x xO c ∧
+    Claims.Flock.check (deployZkRec _root_.Flock.Readable.relation).parse xO w = true ∧ StagedPart b.st s x xO
 
 /-- **The context of a piece's facts at the deployed layout**: at a statement the record reads at the shape, at the
 parts' own messages with every part accepting (`Joint`), a level part `s` (`.recOpen lv LANES HH n`), its staged
@@ -411,7 +420,7 @@ abbrev AtPieces (pieces : Msg → List OpenPiece)
     ∀ (r : XR) (ss : Array VStar.Stmt) (s lv LANES HH n : ℕ), readX x = some r →
       _root_.Flock.RecVStar.statements r.shape = .ok ss → ss[s]? = some (.recOpen lv LANES HH n) →
     ∀ (xO : Msg) (w : Claims.Flock.Wit) (p : _root_.Flock.Readable.Parsed),
-      StagedAt H D untr cmt L s x c (L.msgs x ws) (.recOpen lv LANES HH n) xO w p →
+      StagedAt H D untr b cmt L s x c (L.msgs x ws) (.recOpen lv LANES HH n) xO w p →
     ∀ q ∈ pieces (Claims.Recursion.xI D x), ownQR x q = some s → ∀ ht : 0 < p.sts.size,
       Fact x c ws LANES HH s xO w p ht q
 
@@ -575,14 +584,70 @@ def StagedFitsR : Prop :=
     ∀ (c : ℕ → Coin) (ms : List Msg) (r : XR) (ss : Array VStar.Stmt) (s lv LANES HH n : ℕ), readX x = some r →
       _root_.Flock.RecVStar.statements r.shape = .ok ss → ss[s]? = some (.recOpen lv LANES HH n) →
     ∀ (xO : Msg) (w : Claims.Flock.Wit) (p : _root_.Flock.Readable.Parsed),
-      StagedAt H D untr cmt L s x c ms (.recOpen lv LANES HH n) xO w p → ∀ ht : 0 < p.sts.size,
+      StagedAt H D untr b cmt L s x c ms (.recOpen lv LANES HH n) xO w p → ∀ ht : 0 < p.sts.size,
       0 < p.sts[0].c.g ∧ 0 < p.sts[0].c.upv ∧ n ≤ p.sts[0].c.g * 2 ^ (p.sts[0].m - p.sts[0].c.kLog)
+
+/-- **A staged level circuit holds its statement's instances**: the setup's check makes the table's population the
+statement's `n` (`staged_scope`) and its instances at least that (`oneFull_staged`); V\*'s parse puts one unit in a VU
+(`checkParsed_ok`); and the setup has a VU and `2 ^ nbl` blocks of `g` VUs for its instances (`table_rows`), at
+`m = k_log + nbl` (`Layout.m`). -/
+theorem stagedFitsR : StagedFitsR H D shape untr b cmt L := by
+  intro x st hx hf c ms r ss s lv LANES HH n hr hss hsv xO w p hst ht
+  obtain ⟨hxO, -, -, -, -, -, -, hck, hS⟩ := hst
+  have hS' := hS
+  obtain ⟨-, i, spec, sts, -, hsu, -⟩ := hS'
+  have hp : p = { i.base.read with sts } := Option.some.inj (hxO.symm.trans (parse_of_setupO hsu))
+  have h0 : 0 < sts.size := by subst hp; exact ht
+  have e0 : p.sts[0] = sts[0] := by subst hp; rfl
+  have hle : _root_.Flock.RecVStar.population p.sts[0] ≤ p.sts[0].n := by
+    rw [e0]
+    exact (oneFull_staged hS hsu).2 0 h0
+  obtain ⟨hscope, r', ss', sv', hr', hss', hsv', hn⟩ := staged_scope hS hxO ht
+  rw [hr] at hr'
+  cases hr'
+  rw [hss] at hss'
+  cases hss'
+  rw [hsv] at hsv'
+  cases hsv'
+  have hn' : _root_.Flock.RecVStar.population p.sts[0] = n := hn
+  obtain ⟨p', -, -, hx', htyp, hpi, -, -, -, htab⟩ := stagedTables hS
+  rw [hxO] at hx'
+  cases hx'
+  obtain ⟨_, -, hupv, -, -, -⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok (htab 0 ht).2.2
+  obtain ⟨-, hts⟩ := tablesOf_of_parse hxO
+  obtain ⟨_, hset0⟩ := _root_.Flock.Readable.setup_of_tablesOf hts
+  unfold _root_.Flock.Readable.Read.setup at hset0
+  rw [hpi] at hset0
+  obtain ⟨-, hall⟩ := FlockSoundness.Discharge.HiddenExec.setupTables_setupOne hset0
+  obtain ⟨d, hd, -⟩ := hall 0 ht
+  have htt : (FlockSoundness.Discharge.Exec.tagsAt p.tags p.I.count 0).typed = false :=
+    (FlockSoundness.Discharge.Exec.tagsAt_typed _ _ _).trans htyp
+  have hv1 := FlockSoundness.Discharge.Layout.scopeOk_ports
+    ((FlockSoundness.Discharge.FailClosed.scopeOk_eq _).symm.trans hscope)
+  obtain ⟨Lt, regs, hz⟩ := _root_.Flock.Readable.layout_of_check hck hxO htyp hpi ht
+  obtain ⟨-, hg, hnbl, -⟩ := table_rows htt hd (by omega) hv1 Lt regs hz
+  have hm : p.sts[0].m - p.sts[0].c.kLog = p.sts[0].nbl := by
+    have := Lt.m
+    omega
+  refine ⟨hg, by omega, ?_⟩
+  rw [hm]
+  have hN : p.sts[0].n ≤ p.sts[0].c.g * 2 ^ p.sts[0].nbl := by
+    rcases Nat.eq_zero_or_pos p.sts[0].n with h | h
+    · rw [h]
+      exact Nat.zero_le _
+    · have hd' := div_lt_blocks hg (show p.sts[0].n - 1 < p.sts[0].n by omega) hnbl
+      have hdm := Nat.div_add_mod (p.sts[0].n - 1) p.sts[0].c.g
+      have hml := Nat.mod_lt (p.sts[0].n - 1) hg
+      have hmul := Nat.mul_le_mul_left p.sts[0].c.g (Nat.succ_le_of_lt hd')
+      rw [Nat.mul_succ] at hmul
+      omega
+  omega
 
 /-- **`CopyFitsR` from the pieces' range and the staged circuit's capacity**: instance `rep · q + query` of a level
 part is below its statement's `n = 2 q` (`levelMatch`), which the staged table holds. -/
 theorem copyFitsR_of (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse x = parse x)
     (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f) (hR : PiecesInRangeR pieces)
-    (hC : StagedFitsR H D shape untr cmt L) : CopyFitsR H D shape untr b cmt L pieces := by
+    (hC : StagedFitsR H D shape untr b cmt L) : CopyFitsR H D shape untr b cmt L pieces := by
   intro x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht
   obtain ⟨hg, hu, hcap⟩ := hC x st hx hf c (L.msgs x ws) r ss s lv LANES HH n hr hss hsv xO w p hst ht
   obtain ⟨hrep, hqry⟩ := hR _ q hq
@@ -608,6 +673,12 @@ theorem copyFitsR_of (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse x = 
   refine ⟨?_, Nat.mod_lt _ hg, hu⟩
   rw [Nat.div_lt_iff_lt_mul hg]
   exact lt_of_lt_of_eq hidx (Nat.mul_comm _ _)
+
+/-- **`CopyFitsR` at row D's pieces**, outright: `copyFitsR_of` at `piecesInRangeR_rowDPieces` and `stagedFitsR`. -/
+theorem copyFitsR_rowD (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (hP : ∀ x, D.parse x = parse x)
+    (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f) :
+    CopyFitsR H D shape untr b cmt L (RecDeploy.Rows.rowDPieces key) :=
+  copyFitsR_of H D shape untr b cmt L _ hP hS (piecesInRangeR_rowDPieces key) (stagedFitsR H D shape untr b cmt L)
 
 /-- The column of a rec-open copy's position bit `h`, where `openIdx` reads it. -/
 def idxCol (LANES HH h : ℕ) : ℕ := 128 * LANES + 1024 * max 1 ((HH + 1) / 2) + 1024 + 256 * LANES + h
@@ -659,9 +730,9 @@ theorem openPieces_deployed (pieces : Msg → List OpenPiece) (posAt : Msg → L
   intro q hq ho
   obtain ⟨-, r, ss, hr, hss, LANES, HH, n, hsv⟩ := ownQR_some ho
   refine openPieces_computesA (hJ.2.2 s hs) hr hss (Or.inl hsv) Bd pieces ownQR side posAt
-    (fun xO w p hxO hsz hcp hA hT' hc hsh q' hq' ho' => ?_) q hq ho
-  have hst : StagedAt H D untr cmt L s x c (L.msgs x ws) (.recOpen q.level LANES HH n) xO w p :=
-    ⟨hxO, hsz, hcp _ hsv, hA, hT', hc, hsh⟩
+    (fun xO w p hxO hsz hcp hA hT' hc hsh hck hsg q' hq' ho' => ?_) q hq ho
+  have hst : StagedAt H D untr b cmt L s x c (L.msgs x ws) (.recOpen q.level LANES HH n) xO w p :=
+    ⟨hxO, hsz, hcp _ hsv, hA, hT', hc, hsh, hck, hsg⟩
   obtain ⟨hob, hgb, hub, hcp'⟩ :=
     hC x st hx hf c ws hJ r ss s q.level LANES HH n hr hss hsv xO w p hst q' hq' ho' hsz
   exact ⟨0, hsz, _, _, _, hob, hgb, hub, fun os last hfin hl =>
