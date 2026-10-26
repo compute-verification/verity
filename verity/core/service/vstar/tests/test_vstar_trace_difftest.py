@@ -1,7 +1,8 @@
 """The Lean trace assigner (`VStar.Trace.assign`, served by ``vstar-trace``) against the witness the deployed C-Flock prover
 assigns (``flock-trace``: `Stmt::row_inputs`, `Stmt::unit_inputs`, `Stmt::converge`, `Stmt::witness`, M0's zero mask), on
 V*'s staged parts: each block's SHA-512 and each block's ranges' (the ``sha512x3`` compressions, the ``hm96`` slots, the
-units, the mask) must be equal.
+units, the mask) must be equal, and every port's row whole 16-bit words (`VStar.Trace.fullRows`, which
+`RecDeploy.VStarTrace.TraceOk` reads for the row width).
 
 The drawn cases stage a level, a part of the algebra and a cap with the stager's own code on small consistent sessions
 (`test_vstar_in_difftest`'s, whose ``inst.bin`` `VStar.In.partIn` is held to). With ``VERITY_VSTAR_IN_DEPLOYED=1``,
@@ -60,6 +61,7 @@ def agree(lean: Path, d: Path) -> dict:
     bad = [(b, r) for b, (x, y) in enumerate(zip(ours["ranges"], rust["ranges"], strict=True))
            for r, (u, v) in enumerate(zip(x, y, strict=True)) if u != v]
     assert not bad and ours["blocks"] == rust["blocks"], f"{d}: (block, range) where the traces differ: {bad[:12]}"
+    assert ours["full_rows"] is True, f"{d}: a port's row is not whole 16-bit words (the port lemma's row width)"
     return rust
 
 

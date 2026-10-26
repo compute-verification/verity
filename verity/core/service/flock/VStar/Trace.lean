@@ -206,6 +206,10 @@ def supported (c : Circuit) : Bool :=
   c.typed.isNone && c.nets.all (·.2.lookup.isNone) && c.ports.all (·.segs.isNone) &&
     c.wires.all fun w => w.dst.1 == c.shaNet || w.dst.1 == c.hmNet
 
+/-- Every port's row is whole words, 16 bits each (`sha512/row/v1`'s, which a port without `row_schemas` parses to), so
+a row's opening at the port's width is all of its words' bits. -/
+def fullRows (c : Circuit) : Bool := c.ports.all fun p => p.bits == 16 * p.words
+
 /-- **The trace**: the hidden vector the deployed prover assigns circuit `c` at port inputs `pin` under mask `mask`,
 `2^m` bits block-major; `none` where the circuit is outside what it mirrors (`supported`). -/
 def assign (c : Circuit) (pin : In.PartIn) (mask : Nat → Nat → Bool) : Option (List Bool) :=

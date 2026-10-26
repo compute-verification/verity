@@ -6,7 +6,8 @@ import Flock.ProvedScope
 
 `vstar-trace CIRCUIT INST` reads a staged V\* part (its `circuit.txt`, parsed as the setup parses it,
 `ProvedScope.circuitOf` under `Tags.circuit`, and its `inst.bin` with shared rows, decoded to its port inputs) and prints
-`VStar.Trace.digests` under M0's zero mask as one JSON line: `m`, `k_log`, each block's SHA-512 (`blocks`) and each block's
+`VStar.Trace.digests` under M0's zero mask as one JSON line: `m`, `k_log`, whether every port's row is whole 16-bit
+words (`full_rows`, `VStar.Trace.fullRows`, which the port lemma's row width reads), each block's SHA-512 (`blocks`) and each block's
 ranges' (`ranges`), hex. `flock-trace` (`verity/ml/flock/live/src/bin/flock-trace.rs`) prints the same of the witness the
 deployed prover assigns; `tests/test_vstar_trace_difftest.py` holds the two equal.
 -/
@@ -58,6 +59,7 @@ def run (circuitPath instPath : String) : IO UInt32 := do
       | some ds =>
         IO.println (Json.compress (Json.mkObj [
           ("m", (Trace.m c pin : Json)), ("k_log", (c.kLog : Json)), ("instances", (Trace.count pin : Json)),
+          ("full_rows", Json.bool (Trace.fullRows c)),
           ("blocks", Json.arr (ds.map fun d => Json.str (hexOf d.1))),
           ("ranges", Json.arr (ds.map fun d => Json.arr (d.2.map fun r => Json.str (hexOf r))))]))
         return 0
