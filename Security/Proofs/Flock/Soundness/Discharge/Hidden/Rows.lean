@@ -131,8 +131,7 @@ theorem parse_rowPorts {tags : Tags} {bytes : ByteArray} {tables : List (String 
   split at h
   swap
   · obtain ⟨_, hte, -⟩ := except_bind_ok h; cases hte
-  (have hh := except_bind_ok h; clear h; obtain ⟨mj, hte, h⟩ := hh)
-  cases hte
+  (have hh := except_bind_ok h; clear h; obtain ⟨mj, -, h⟩ := hh)
   simp (config := { zeta := false }) only [jp3] at h
   (have hh := except_bind_ok h; clear h; obtain ⟨f1, hf1, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨f2, hf2, h⟩ := hh)
