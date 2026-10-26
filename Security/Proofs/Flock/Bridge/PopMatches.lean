@@ -41,7 +41,7 @@ def popCheck (desc : Claims.Msg) (q : Lean.Json) (n : ℕ) : Bool :=
 
 /-- **The registration's population is `n` units, in order**: `desc` parses, its layout under the query `q` is
 defined, and the layout's population is `n` replay units with slot `u` unit `u`. -/
-def PopMatches (desc : Claims.Msg) (q : Lean.Json) (n : ℕ) : Prop := popCheck desc q n = true
+@[reducible] def PopMatches (desc : Claims.Msg) (q : Lean.Json) (n : ℕ) : Prop := popCheck desc q n = true
 
 instance instDecidablePopMatches (desc : Claims.Msg) (q : Lean.Json) (n : ℕ) : Decidable (PopMatches desc q n) :=
   inferInstanceAs (Decidable (_ = true))

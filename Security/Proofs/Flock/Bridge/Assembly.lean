@@ -62,7 +62,8 @@ theorem _root_.Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC := by
     rw [hk0]
     simp
   have hkd1 : 1 ≤ kd := Nat.pos_of_ne_zero hk0
-  have hTu := hT n Reg I ht D hD hU pub hpub hpt hscope hv2 hdup hroots kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hTags
+  have hTu := hT n Reg I ht D hD hU pub hpub hpt hscope hv2 hdup (Bridge.PortRoots.fixes_of_none hroots) kd hkd hdiv
+    dj S₀ d₀ y₀ wr dg N Ω Lb src hTags
     hCust τ
   have hκin : ∀ g b, κ g = some b → (Cc.op g).isInput = true := fun g b h =>
     Bridge.constsOf_isInput (Discharge.Layout.outsOf D.unroll hU n) h

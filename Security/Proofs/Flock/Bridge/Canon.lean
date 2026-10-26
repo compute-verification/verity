@@ -225,7 +225,8 @@ def _root_.Flock.Bridge.TransportsLiveC : Prop :=
 open Classical in
 /-- **`SampledKSLive` at row/v2 circuit files**: `SampledKSLive`'s statement at a circuit file whose ports are all
 unsegmented row/v2 rows (`Bridge.RowsV2`), the rows the deployed sampling commitment's leaves hash
-(`SamplingDeploy.row`), with the registration's ports and roots distinct (`dupName`, `PortRoots.RootFixesDomain`) and
+(`SamplingDeploy.row`), with the registration's ports and roots distinct (`dupName`, and no colliding pair of ports, `PortRoots.rootsColl`, which
+`PortRoots.rootsColl_none_iff` reads as `PortRoots.RootFixesDomain`) and
 its descriptor `desc` and query `qr` evaluating to a population of `n` units in order (`Bridge.PopMatches`).
 `SampledKSLive` implies it (`sampledKSLiveV2_of`). -/
 def SampledKSLiveV2 : Prop :=
@@ -235,7 +236,7 @@ def SampledKSLiveV2 : Prop :=
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (_hv2 : Bridge.RowsV2 D.unroll)
-    (_hdup : Flock.Registered.dupName D.unroll = none) (_hroots : Bridge.PortRoots.RootFixesDomain D.unroll pub n)
+    (_hdup : Flock.Registered.dupName D.unroll = none) (_hroots : Bridge.PortRoots.rootsColl D.unroll pub n = none)
     -- the statement's descriptor, and the registration's query, whose population is the game's n units in order
     (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)

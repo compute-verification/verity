@@ -91,7 +91,7 @@ def portsOf (c : Flock.Circuit) (nl : ℕ) (roots : List Msg) : Array Flock.Regi
 
 /-- **Every port of the circuit file is an unsegmented `sha512/row/v2` row** (`v2`, no `segs`): the ports `portsOf`
 registers at the `hm96-sha512/row/v2` schema are then the circuit file's own. -/
-def RowsV2 (c : Flock.Circuit) : Prop := c.ports.all (fun p => p.v2 && p.segs.isNone) = true
+@[reducible] def RowsV2 (c : Flock.Circuit) : Prop := c.ports.all (fun p => p.v2 && p.segs.isNone) = true
 
 instance instDecidableRowsV2 (c : Flock.Circuit) : Decidable (RowsV2 c) := inferInstanceAs (Decidable (_ = true))
 
