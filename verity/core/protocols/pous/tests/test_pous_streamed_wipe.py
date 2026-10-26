@@ -198,6 +198,19 @@ def test_deployed_bound():
     assert math.log2(k) + 36 * (d - 1) + (d - 1) * sw.LABEL_BITS + 41 <= 8_600_000_000
 
 
+@pytest.mark.parametrize("n", [1 << 19, (1 << 19) + 7, 1_610_612_736, 2_203_125_000, 1 << 50])
+def test_bound_at_2152_reads(n: int) -> None:
+    """The Lean family's point (`Pous.Guarantees.StreamedWipeMeetsFamily`, `⌈M/19⌉ + E` at `2^-128` with 2152 reads):
+    `D = ⌈n/24⌉` labels missed, its crude count `C(n, r) ≤ 2^n`, each term `2^-129`; the exact count needs less."""
+    k, m = 2152, n * sw.LABEL_BITS
+    d = -(-n // 24)
+    assert k * d / n >= 129 * 0.6931471808 and k * math.log2(1 - d / n) < -129
+    assert 12 + n + (d - 1) * sw.LABEL_BITS + 129 <= -(-m // 19)
+    q, _ = sw.retained_bits(n, k, m, 0, -128)
+    assert q <= -(-m // 19)
+    assert 18**k * 2**128 <= 19**k  # (18/19)^2152 ≤ 2^-128, though the proof's sampling is at 23/24
+
+
 def test_bound_against_an_exhaustive_count():
     """N = 3 labels of 2 bits, k = 2, q = 2 bits of prior content, M = 4 bits inside, no egress: a prover that keeps the
     prior content and label 0, and answers 0 for every other label, wins exactly as often as counted, and the bound
