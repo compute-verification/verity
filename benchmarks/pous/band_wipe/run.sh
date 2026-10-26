@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # The band-fill wipe (benchmarks/pous/band_wipe/) as research runs: the prover on the GPU node, the memory challenger on another
-# machine, which reaches the prover's 127.0.0.1 through ssh (its line of /etc/vy/peers):
+# machine, which reaches the prover's 127.0.0.1 through ssh (its line of /etc/vy/peers). A node with /etc/vy/runs-via-slot
+# (vy-nebius-1 and -2) takes it only through a GPU slot, with the GPU from gpu-lease:
 #
-#   research run --on vy-nebius-2 --queue --gpus 1 --cwd source --source . -- \
+#   research run --on vy-nebius-1 --cwd source --source . -- env CHECK_SLOTS=/workspace/research/locks/gpu/slots \
+#     python3 tools/verity/check/slot.py --by LANE -- gpu-lease 1 --wait --max-min 45 --mem-gb 24 --preemptible -- \
 #     bash benchmarks/pous/band_wipe/run.sh ROLE=prover [SEGMENTS=N]
 #   research run --on vy-nebius-cpu-3 --cwd source --source . -- \
-#     bash benchmarks/pous/band_wipe/run.sh ROLE=challenger PEER=vy-nebius-2 [MODES=honest,cheat] [SESSIONS=1] [SIGNER=lms]
+#     bash benchmarks/pous/band_wipe/run.sh ROLE=challenger PEER=vy-nebius-1 [MODES=honest,cheat] [SESSIONS=1] [SIGNER=lms]
 #   research run --on vy-dc-h200-2 --gpus 1 --cwd source --source . -- \
 #     bash benchmarks/pous/band_wipe/run.sh ROLE=loopback [SEGMENTS=N] [VERIFY=0]
 #   research run --on vy-nebius-cpu-2 --cwd source --source . --send <run's out/> -- \
@@ -16,12 +18,13 @@
 # control. VERIFY=0 leaves the verdict to a ROLE=verify run on a CPU node (at the full device, the honest session's 2152
 # blocks take the reference encoder hours of CPU). CTRL_PORT and RESP_PORT (47610, 47611) are the prover's control and
 # responder ports on its 127.0.0.1; CCPU, SSHCPU and RCPU the cores of the memory challenger, its ssh and the responder.
-# WORK=<dir> holds the venvs (default /workspace, as pod.sh: $WORK/pous-bench) and POUS_BUILD the pous_native build (default
-# $WORK/pous-bench/band_wipe_build). S1's key and its session log are in ~/.local/state/verity-band-wipe on the challenger's
-# machine (challenger.STATE), made there by the first run.
+# WORK=<dir> holds the venvs (default /workspace as pod.sh, else $HOME where /workspace isn't writable: $WORK/pous-bench) and
+# POUS_BUILD the pous_native build (default $WORK/pous-bench/band_wipe_build). S1's key and its session log are in
+# ~/.local/state/verity-band-wipe on the challenger's machine (challenger.STATE), made there by the first run.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
-REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=${OUT:-$RESEARCH_RUN_DIR/out}; W=${WORK:-/workspace}/pous-bench
+REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=${OUT:-$RESEARCH_RUN_DIR/out}
+W=${WORK:-$([ -w /workspace ] && echo /workspace || echo "$HOME")}/pous-bench
 CTRL_PORT=${CTRL_PORT:-47610}; RESP_PORT=${RESP_PORT:-47611}; ROLE=${ROLE:?ROLE=prover, challenger, loopback or verify}
 export PYTHONPATH=$REPO:$REPO/benchmarks/pous
 mkdir -p "$O" "$W"
