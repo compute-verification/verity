@@ -70,9 +70,9 @@ theorem decompB_of_joint {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {I
         ∀ s < D.nS x, chk s x c (L.msgs x ws))
     (hD : DecompB H D IV L shape chk) : DecompB H D IV L shape chk' := by
   intro x st hx hf c ws hl hT hC
-  cases hcol : (Claims.findColl (L.allCalls x ws)).isSome
-  · exact hD x st hx hf c ws hl hT (hle x st hx hf c ws ⟨hl, hT, hcol, hC⟩)
+  by_cases hcol : (Claims.findColl (L.allCalls x ws)).isSome = true
   · exact Or.inr hcol
+  · exact hD x st hx hf c ws hl hT (hle x st hx hf c ws ⟨hl, hT, by simpa using hcol, hC⟩)
 
 section Compose
 
