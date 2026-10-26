@@ -33,13 +33,16 @@ open _root_.VStar.Algebra (Name)
 
 /-! ## The size of `Algebra.rounds` -/
 
+/-- `rounds`' state in its loops: the rounds so far, the message counter and the out-of-domain counter. -/
+abbrev VSt := Array (Array Name) × ℕ × ℕ
+
 /-- `rounds`' push of a message, at the message counter. -/
-def vF1 (b : ℕ × Array (Array Name)) (_ : ℕ) : ℕ × Array (Array Name) :=
-  (b.fst + 1, b.snd.push (_root_.VStar.Algebra.msgNames b.fst))
+def vF1 (b : Array (Array Name) × ℕ) (_ : ℕ) : Array (Array Name) × ℕ :=
+  (b.1.push (_root_.VStar.Algebra.msgNames b.2), b.2 + 1)
 
 /-- `rounds`' push of an out-of-domain value with a message, at the message and out-of-domain counters. -/
-def vF2 (b : ℕ × ℕ × Array (Array Name)) (_ : ℕ) : ℕ × ℕ × Array (Array Name) :=
-  (b.fst + 1, b.snd.fst + 1, b.snd.snd.push (#[Name.ood b.snd.fst] ++ _root_.VStar.Algebra.msgNames b.fst))
+def vF2 (b : VSt) (_ : ℕ) : VSt :=
+  (b.1.push (#[Name.ood b.2.2] ++ _root_.VStar.Algebra.msgNames b.2.1), b.2.1 + 1, b.2.2 + 1)
 
 /-- `rounds` before `T`: the zerocheck's, the lincheck's and the ring switches' rounds. -/
 def vPre (sh : _root_.VStar.Algebra.Shape) : Array (Array Name) :=
@@ -50,42 +53,41 @@ def vPre (sh : _root_.VStar.Algebra.Shape) : Array (Array Name) :=
       ((Array.range 64).map Name.zp)))
 
 /-- `rounds` before its level loop. -/
-def v0 (s : Schedule) (pre : Array (Array Name)) : ℕ × ℕ × Array (Array Name) :=
-  let a := List.foldl vF2 ((List.foldl vF1 (0, (pre.push #[Name.T]).push #[Name.ood 0]) (List.range' 0 (s.k0 + 1))).fst,
-    1, (List.foldl vF1 (0, (pre.push #[Name.T]).push #[Name.ood 0]) (List.range' 0 (s.k0 + 1))).snd) (List.range' 0 2)
-  (a.fst + 1, a.snd.fst, a.snd.snd.push (_root_.VStar.Algebra.msgNames a.fst))
+def v0 (s : Schedule) (pre : Array (Array Name)) : VSt :=
+  let a1 := List.foldl vF1 ((pre.push #[Name.T]).push #[Name.ood 0], 0) (List.range' 0 (s.k0 + 1))
+  let a := List.foldl vF2 (a1.1, a1.2, 1) (List.range' 0 2)
+  (a.1.push (_root_.VStar.Algebra.msgNames a.2.1), a.2.1 + 1, a.2.2)
 
 /-- A level of `rounds`' loop but the last. -/
-def vMid (s : ℕ × ℕ × Array (Array Name)) : ℕ × ℕ × Array (Array Name) :=
-  let a := List.foldl vF2 ((List.foldl vF1 (s.fst, s.snd.snd) (List.range' 0 4)).fst, s.snd.fst,
-    (List.foldl vF1 (s.fst, s.snd.snd) (List.range' 0 4)).snd) (List.range' 0 2)
-  (a.fst + 1, a.snd.fst, a.snd.snd.push (_root_.VStar.Algebra.msgNames a.fst))
+def vMid (s : VSt) : VSt :=
+  let a1 := List.foldl vF1 (s.1, s.2.1) (List.range' 0 4)
+  let a := List.foldl vF2 (a1.1, a1.2, s.2.2) (List.range' 0 2)
+  (a.1.push (_root_.VStar.Algebra.msgNames a.2.1), a.2.1 + 1, a.2.2)
 
 /-- The last level of `rounds`' loop, with the final `yr`. -/
-def vLast (ext : ℕ) (s : ℕ × ℕ × Array (Array Name)) : ℕ × ℕ × Array (Array Name) :=
-  let a := List.foldl vF1 (s.fst, s.snd.snd) (List.range' 0 3)
-  (a.fst + 1, s.snd.fst, a.snd.push (_root_.VStar.Algebra.msgNames a.fst ++ Array.map Name.yr (Array.range (2 <<< ext))))
+def vLast (ext : ℕ) (s : VSt) : VSt :=
+  let a := List.foldl vF1 (s.1, s.2.1) (List.range' 0 3)
+  (a.1.push (_root_.VStar.Algebra.msgNames a.2 ++ Array.map Name.yr (Array.range (2 <<< ext))), a.2 + 1, s.2.2)
 
 /-- `rounds`' level loop over the levels `l`, of `R` after the first: `G1` at each but the last, `G2` there. -/
-def vLevels (R : ℕ) (G1 G2 : ℕ × ℕ × Array (Array Name) → ℕ × ℕ × Array (Array Name)) (l : List ℕ)
-    (init : ℕ × ℕ × Array (Array Name)) : ℕ × ℕ × Array (Array Name) :=
+def vLevels (R : ℕ) (G1 G2 : VSt → VSt) (l : List ℕ) (init : VSt) : VSt :=
   Id.run (forIn l init fun i s => if i + 1 < R then pure (ForInStep.yield (G1 s)) else pure (ForInStep.yield (G2 s)))
 
 theorem rounds_eq (sh : _root_.VStar.Algebra.Shape) (s : Schedule) : _root_.VStar.Algebra.rounds sh s =
-    (vLevels (s.levels.size - 1) vMid (vLast s.ext) (List.range' 0 (s.levels.size - 1)) (v0 s (vPre sh))).2.2 := by
+    (vLevels (s.levels.size - 1) vMid (vLast s.ext) (List.range' 0 (s.levels.size - 1)) (v0 s (vPre sh))).1 := by
   unfold _root_.VStar.Algebra.rounds
   simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, List.forIn_pure_yield_eq_foldl,
     bind_pure_comp, map_pure, pure_bind, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
   rfl
 
-theorem vF1_size : ∀ (l : List ℕ) (b : ℕ × Array (Array Name)), (l.foldl vF1 b).2.size = b.2.size + l.length
+theorem vF1_size : ∀ (l : List ℕ) (b : Array (Array Name) × ℕ), (l.foldl vF1 b).1.size = b.1.size + l.length
   | [], _ => rfl
   | a :: l, b => by
     rw [List.foldl_cons, vF1_size l]
     simp only [vF1, Array.size_push, List.length_cons]
     omega
 
-theorem vF2_size : ∀ (l : List ℕ) (b : ℕ × ℕ × Array (Array Name)), (l.foldl vF2 b).2.2.size = b.2.2.size + l.length
+theorem vF2_size : ∀ (l : List ℕ) (b : VSt), (l.foldl vF2 b).1.size = b.1.size + l.length
   | [], _ => rfl
   | a :: l, b => by
     rw [List.foldl_cons, vF2_size l]
@@ -103,23 +105,21 @@ theorem vPre_size (sh : _root_.VStar.Algebra.Shape) :
   simp
   omega
 
-theorem v0_size (s : Schedule) (pre : Array (Array Name)) : (v0 s pre).2.2.size = pre.size + s.k0 + 6 := by
+theorem v0_size (s : Schedule) (pre : Array (Array Name)) : (v0 s pre).1.size = pre.size + s.k0 + 6 := by
   simp only [v0, Array.size_push, vF2_size, vF1_size, List.length_range']
   omega
 
-theorem vMid_size (s : ℕ × ℕ × Array (Array Name)) : (vMid s).2.2.size = s.2.2.size + 7 := by
+theorem vMid_size (s : VSt) : (vMid s).1.size = s.1.size + 7 := by
   simp only [vMid, Array.size_push, vF2_size, vF1_size, List.length_range']
 
-theorem vLast_size (ext : ℕ) (s : ℕ × ℕ × Array (Array Name)) : (vLast ext s).2.2.size = s.2.2.size + 4 := by
+theorem vLast_size (ext : ℕ) (s : VSt) : (vLast ext s).1.size = s.1.size + 4 := by
   simp only [vLast, Array.size_push, vF1_size, List.length_range']
 
-theorem vLevels_foldl (R : ℕ) (G1 G2 : ℕ × ℕ × Array (Array Name) → ℕ × ℕ × Array (Array Name)) (l : List ℕ)
-    (init : ℕ × ℕ × Array (Array Name)) :
+theorem vLevels_foldl (R : ℕ) (G1 G2 : VSt → VSt) (l : List ℕ) (init : VSt) :
     vLevels R G1 G2 l init = l.foldl (fun s i => if i + 1 < R then G1 s else G2 s) init := by
   unfold vLevels
   have e : (fun i s => if i + 1 < R then pure (ForInStep.yield (G1 s)) else pure (ForInStep.yield (G2 s)) :
-      ℕ → ℕ × ℕ × Array (Array Name) → Id (ForInStep (ℕ × ℕ × Array (Array Name)))) =
-      fun i s => pure (ForInStep.yield (if i + 1 < R then G1 s else G2 s)) := by
+      ℕ → VSt → Id (ForInStep VSt)) = fun i s => pure (ForInStep.yield (if i + 1 < R then G1 s else G2 s)) := by
     funext i s
     split <;> rfl
   rw [e, List.forIn_pure_yield_eq_foldl]
@@ -128,11 +128,10 @@ theorem vLevels_foldl (R : ℕ) (G1 G2 : ℕ × ℕ × Array (Array Name) → �
 /-- A level's message rounds: seven at each but the last, four there. -/
 def levelAbs (R : ℕ) : ℕ := ((List.range' 0 R).map fun i => if i + 1 < R then 7 else 4).sum
 
-theorem foldl_levels_size (R : ℕ) (G1 G2 : ℕ × ℕ × Array (Array Name) → ℕ × ℕ × Array (Array Name))
-    (h1 : ∀ s, (G1 s).2.2.size = s.2.2.size + 7) (h2 : ∀ s, (G2 s).2.2.size = s.2.2.size + 4) :
-    ∀ (l : List ℕ) (init : ℕ × ℕ × Array (Array Name)),
-      (l.foldl (fun s i => if i + 1 < R then G1 s else G2 s) init).2.2.size =
-        init.2.2.size + (l.map fun i => if i + 1 < R then 7 else 4).sum
+theorem foldl_levels_size (R : ℕ) (G1 G2 : VSt → VSt)
+    (h1 : ∀ s, (G1 s).1.size = s.1.size + 7) (h2 : ∀ s, (G2 s).1.size = s.1.size + 4) :
+    ∀ (l : List ℕ) (init : VSt), (l.foldl (fun s i => if i + 1 < R then G1 s else G2 s) init).1.size =
+        init.1.size + (l.map fun i => if i + 1 < R then 7 else 4).sum
   | [], _ => by simp
   | i :: l, init => by
     rw [List.foldl_cons, foldl_levels_size R G1 G2 h1 h2 l, List.map_cons, List.sum_cons]
@@ -196,9 +195,11 @@ theorem repRounds_countP {m kLog claims : ℕ} {sch : Schedule} {rs : Array RecV
           exact ⟨_, ht.symm, by simp [passAbs, lvAbs, hi, FlockDeploy.rep3], trivial⟩
         · simp [h4, hi] at ht
           exact ⟨_, ht.symm, by simp [passAbs, hi, FlockDeploy.rep3], trivial⟩) _ _ _ _ trivial hl
-  rw [← count_map_true, key, List.count_append, count_flatMap_passAbs, ← levelAbs]
-  simp [List.count_replicate]
-  omega
+  rw [← count_map_true, key, List.count_append]
+  simp only [Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
+  rw [show ((List.range' 0 (sch.levels.size - 1)).flatMap (passAbs (sch.levels.size - 1))).count true =
+      levelAbs (sch.levels.size - 1) from count_flatMap_passAbs _ _ 0]
+  simp [List.count_replicate] <;> omega
 
 theorem countP_splice {α : Type} (p : α → Bool) (l : List α) (k : ℕ) (x a b : α) (hx : l[k]? = some x)
     (hpx : p x = true) (ha : p a = true) (hb : p b = true) :
@@ -389,7 +390,7 @@ theorem checkRepS_sizes {S : _root_.VStar.RepS} {whole : Bool} {u : Unit}
   · obtain ⟨_, h1, -⟩ := ebind_ok h
     first | cases h1 | simp [throw, throwThe, MonadExceptOf.throw] at h1
   · rename_i hc
-    simp [hany] at hc
+    exact hc (by rw [hany]; simp)
 
 theorem innerUnit_sizes {S : _root_.VStar.RepS} {name : String} {u} (h : _root_.VStar.innerUnit S name = .ok u) :
     ∀ q ∈ S.ports, 1 ≤ q.2 := by
