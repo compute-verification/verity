@@ -11,7 +11,7 @@ at a `fast100` schedule (`sqCount_repFrames`):
 * **The frames' side** (`sqs`): a chunk ends in the squeeze that closes it, so the chunks' counts are the closing
   squeezes' counts, in order (`sqCount_chunks`), and they compose over `++`. Each part of a rep's frames has its
   closed list (`sqs_zc`, `sqs_lc`, `sqs_rs`, `sqs_levelFr`, `sqs_lig`), whatever the proof's values.
-* **The schedule's side** (`schedN`): `RecVStar.repRounds`' coin counts, round by round (`repRounds_counts`), at a
+* **The schedule's side** (`schedN`): `RecVStar.repRounds`' coin counts, round by round (`repRounds_sqs`), at a
   schedule whose levels' columns shrink by three a level (`DimSeam`, as every `fast100` schedule's do).
 * **The queries**: `RecVStar.bitLength (q − 1)` is the frames' `log₂ (q − 1) + 1` at `q ≥ 2`, which every `fast100`
   level has (`fast100_q_two`).
@@ -100,14 +100,14 @@ theorem sqs_flatMap {α : Type} (F : α → List Frame) : ∀ (L : List α), sqs
   | [] => rfl
   | a :: L => by rw [List.flatMap_cons, sqs_append, sqs_flatMap F L, List.flatMap_cons]
 
-theorem flatMap_range'_congr {β : Type} {F G : ℕ → List β} :
+private theorem flatMap_range'_congr {β : Type} {F G : ℕ → List β} :
     ∀ a k, (∀ i, a ≤ i → i < a + k → F i = G i) → (List.range' a k).flatMap F = (List.range' a k).flatMap G
   | _, 0, _ => rfl
   | a, k + 1, h => by
     rw [List.range'_succ, List.flatMap_cons, List.flatMap_cons, h a (Nat.le_refl a) (by omega),
       flatMap_range'_congr (a + 1) k fun i h1 h2 => h i (by omega) (by omega)]
 
-theorem flatMap_range'_const {β : Type} (b : β) : ∀ a k, (List.range' a k).flatMap (fun _ => [b]) = List.replicate k b
+private theorem flatMap_range'_const {β : Type} (b : β) : ∀ a k, (List.range' a k).flatMap (fun _ => [b]) = List.replicate k b
   | _, 0 => rfl
   | a, k + 1 => by rw [List.range'_succ, List.flatMap_cons, flatMap_range'_const b (a + 1) k]; rfl
 
@@ -194,7 +194,7 @@ theorem forIn_range'_inv {σ β : Type} (f : ℕ → σ → Option (ForInStep σ
         List.append_assoc]
 
 /-- **`RecVStar.repRounds`' coin counts are `schedN`'s**, at a schedule whose columns shrink by three a level. -/
-theorem repRounds_counts {m kLog claims : ℕ} {sch : Flock.Schedule} {rs : Array RecVStar.SchedRound}
+theorem repRounds_sqs {m kLog claims : ℕ} {sch : Flock.Schedule} {rs : Array RecVStar.SchedRound}
     (hs : fast100 m = some sch) (hd : DimSeam sch) (h : RecVStar.repRounds m kLog claims = some rs) :
     rs.toList.map (·.1) = schedN sch m kLog claims := by
   obtain ⟨-, -, -, hc0, -, hcs, -⟩ := hd
@@ -301,7 +301,7 @@ theorem sqCount_repFrames {st : Flock.Setup} {sch : Flock.Schedule} (d : ByteArr
     (hj : j < (chunks (repFrames st sch d (2 + e) p T)).1.length) :
     sqCount ((chunks (repFrames st sch d (2 + e) p T)).1.getD j []) = (rs.toList.getD j default).1 := by
   have h1 := sqCount_chunks (repFrames st sch d (2 + e) p T)
-  rw [sqs_repFrames d e p T hs, ← repRounds_counts hs (FlockSoundness.Refine.fast100_dims _ _ hs).1 hr] at h1
+  rw [sqs_repFrames d e p T hs, ← repRounds_sqs hs (FlockSoundness.Refine.fast100_dims _ _ hs).1 hr] at h1
   have hl := congrArg List.length h1
   simp only [List.length_map] at hl
   have h3 := List.getElem_of_eq h1 (i := j) (by rw [List.length_map]; exact hj)
