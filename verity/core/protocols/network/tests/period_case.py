@@ -45,6 +45,7 @@ from verity.core.protocols.certifier.certificate import (SALT_BYTES, Certificate
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import lms
 
@@ -815,13 +816,19 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     audit_params, audit_regs, audits = [], [], []
     for i in range(n_audits):
         units = r.randint(1, 40)
-        cut = r.randint(1, units - 1) if units > 1 and r.random() < 0.5 else units
-        strata = [{"k": r.randint(1, n), "name": f"s{j}", "size": n} for j, n in enumerate([cut, units - cut]) if n] \
-            if r.random() < 0.5 else None
-        k = sum(s["k"] for s in strata) if strata else r.randint(1, units)
-        rec = {"format": r.choice(FORMATS), "law": {"k": k, "law": "subset" if strata is None else "stratified"},
-               "partition": f"loop/{i}", "population": units, "program": hashlib.sha512(b"loop %d" % i).hexdigest(),
-               "protocol": ONE_STAGE, "window": {"kind": "served", "window": i}}
+        k, strata = r.randint(1, units), None
+        law = {"k": k, "law": "subset"}
+        if r.random() < 0.5:
+            cuts = [0, *([r.randint(1, units - 1)] if units > 1 and r.random() < 0.5 else []), units]
+            law = {"k": k, "law": "stratified", "strata": [
+                {"k": stratum_k(k, hi - lo, units), "template": f"s{j}", "units": [[lo, hi]]}
+                for j, (lo, hi) in enumerate(zip(cuts, cuts[1:]))]}
+            strata = [{"k": s["k"], "name": s["template"], "size": s["units"][0][1] - s["units"][0][0]}
+                      for s in law["strata"]]
+            k = sum(s["k"] for s in strata)
+        rec = {"format": r.choice(FORMATS), "law": law, "partition": f"loop/{i}", "population": units,
+               "program": hashlib.sha512(b"loop %d" % i).hexdigest(), "protocol": ONE_STAGE,
+               "window": {"kind": "served", "window": i}}
         digest = registration_digest(rec)
         answer = _accepted(digest, rec["program"], rec["partition"], units, k, r.choice(["1/100", "1/1000000", "1/10"]),
                            r.randint(0, units), strata)
