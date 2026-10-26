@@ -10,14 +10,15 @@ import Proofs.Flock.Claims.Recursion.RestLowR
 /-!
 # `RecursiveKSAt` from its open premises
 
-`recursiveKSAt_of` is `ksLin2_deployedR_layR` at the deployed join (`FlockDeploy.joinR`), at the layout of record
+`recursiveKSAt_of` is `ksLin2_deployedR_layRP` at the deployed join (`FlockDeploy.joinR`), at the layout of record
 `DeployedR.layR rest`. At the plain record at the deployed reader, conflicts are tied to collisions
 (`plainR_conflictTied`) and the table bound at the abort law is `plainR_tableBoundAbortLin_R`, from `PlainRdInR` alone
 (`hIn`; the cap prefix is `capPrefixR`, proved with no hypotheses). Its last-message binding is `rColsBind_sha512` and
 `rCallsBind_sha512`, and it needs no `StepsLogFree` (the finders search the inner verifier's calls at each draw's
-coins). It also takes the extra calls `layR` records true at the outer relation (`hM`, `MoreSlotsTrue`) and `DecompB`
-at what each part's circuit accepts (`hD`). `recursiveKSAt_of_decomp` takes that last one as `RecKSDecompL` at
-`layR`, and `recursiveKSAt_of_leaves` proves it from chain B's leaves (`RestLow.recKSDecompD_of_leavesJ`).
+coins). It also takes the extra calls `layR` records true at the outer relation (`hM`, `MoreSlotsTrue`) and `DecompBP`
+at what each part's circuit accepts at its own witness `ws[s]` (`hD`, `PartAcceptsP`). `recursiveKSAt_of_decomp` takes
+`DecompB` at `PartAccepts` instead, as `RecKSDecompL` at `layR`, which pins (`decompBP_of_decompB`), and
+`recursiveKSAt_of_leaves` proves that from chain B's leaves (`RestLow.recKSDecompD_of_leavesJ`).
 -/
 
 
@@ -34,7 +35,7 @@ theorem recursiveKSAt_of (rd : Msg → Option FinalP)
     (hIn : ∀ x, ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.VR rd) x → FlockDeploy.KS.PlainRdInR rd x)
     (hM : RecDeploy.MoreSlotsTrue (RecDeploy.deployZkRec _root_.Flock.Readable.relation) b.st)
     (hD : ∀ shape ∈ [Claims.Recursion.Form.Dense],
-      Claims.Recursion.VStarB.DecompB FlockDeploy.sha512
+      Claims.Recursion.VStarB.DecompBP FlockDeploy.sha512
         (RecDeploy.recBound _root_.Flock.Readable.relation { b with tr := RecDeploy.recTr aux nOf hd recRest }
           (RecDeploy.DeployedR.layR rest)
           (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR rd)
@@ -44,7 +45,7 @@ theorem recursiveKSAt_of (rd : Msg → Option FinalP)
           (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
           RecDeploy.rowInDeployed final w).IVStar
         (RecDeploy.DeployedR.layR rest) shape
-        (Claims.Recursion.VStarB.PartAccepts FlockDeploy.sha512
+        (Claims.Recursion.VStarB.PartAcceptsP FlockDeploy.sha512
           (RecDeploy.recBound _root_.Flock.Readable.relation { b with tr := RecDeploy.recTr aux nOf hd recRest }
             (RecDeploy.DeployedR.layR rest)
             (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR rd)
@@ -54,7 +55,7 @@ theorem recursiveKSAt_of (rd : Msg → Option FinalP)
           (RecDeploy.showsPart RecDeploy.recRead { b with tr := RecDeploy.recTr aux nOf hd recRest })
           (RecDeploy.cmtTr RecDeploy.recRead))) :
     Flock.Guarantees.RecursiveKSAt rd final rest wE w b aux nOf hd recRest :=
-  RecDeploy.ksLin2_deployedR_layR rd b aux nOf hd recRest rest wE FlockDeploy.joinR final w hIn hM hD
+  RecDeploy.ksLin2_deployedR_layRP rd b aux nOf hd recRest rest wE FlockDeploy.joinR final w hIn hM hD
 
 /-- **`RecursiveKSAt` from `RecKSDecompL` at the layout of record**: `recursiveKSAt_of` with `DecompB` at the dense
 form as `RecDeploy.DecompBR.RecKSDecompL` at `DeployedR.layR rest`, the last part's pieces `rest` and the record
@@ -70,7 +71,7 @@ theorem recursiveKSAt_of_decomp (rd : Msg → Option FinalP)
     Flock.Guarantees.RecursiveKSAt rd final rest wE w b aux nOf hd recRest :=
   recursiveKSAt_of rd final rest wE w b aux nOf hd recRest hIn hM fun shape hs => by
     obtain rfl := List.mem_singleton.1 hs
-    exact hD
+    exact Claims.Recursion.VStarB.decompBP_of_decompB hD
 
 section Leaves
 
