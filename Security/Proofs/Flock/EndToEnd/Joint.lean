@@ -1,7 +1,6 @@
-import Proofs.Flock.EndToEnd.Joint.Statement
+import Proofs.Flock.EndToEnd.Joint.Bound
 
-/-! `Flock.SecurityProofs.JointStratifiedStated : Flock.Guarantees.JointStratifiedStated`, by reflexivity: the guarantee
-is there for its record, which holds `JointStratified`'s and `JointStratifiedHorizon`'s text. Neither is proved yet. -/
-
-/-- **The joint stratified bounds are stated** (`Flock.Guarantees.JointStratifiedStated`). -/
-theorem Flock.SecurityProofs.JointStratifiedStated : Flock.Guarantees.JointStratifiedStated := rfl
+/-! The sampled proofs' joint stratified bound, per sampling block and pooled over a period:
+`Flock.SecurityProofs.JointStratified : Flock.Guarantees.JointStratified` and
+`Flock.SecurityProofs.JointStratifiedHorizon : Flock.Guarantees.JointStratifiedHorizon` (`Joint/Bound.lean`), stated in
+`Joint/Statement.lean`. -/
