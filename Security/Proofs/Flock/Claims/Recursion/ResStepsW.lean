@@ -226,13 +226,15 @@ def CoefW (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → �
 /-- **A row D piece's copy reads `chainW`'s rows at its position and the next** on its `acc` and `acc_out` columns,
 at its owner's witness, at every reading of the last message and decision (`AtDecW`): bytes `bi` on the copy's `acc`
 columns and `bo` on its `acc_out` columns whose first two elements are `chainW`'s rows at the piece's position
-(`Rows.chainPos` at the decided side's schedule) and the next. -/
+(`Rows.chainPos` at the decided side's schedule) and the next. `Φ` is a side condition on the joint acceptance (`XsW`,
+or none). -/
 def RowsW (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
-    (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
+    (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
+    (Φ : Msg → (ℕ → Coin) → List Claims.Flock.Wit → Prop) : Prop :=
   OpenLower.AtPiecesP FlockDeploy.sha512 (DRL rd wE final w b elem) shape untr b cmt (DeployedR.layR elem)
-    (Rows.rowDPieces key) fun x c ws LANES HH _ _ wt p ht q =>
+    (Rows.rowDPieces key) fun x c ws LANES HH _ _ wt p ht q => Φ x c ws →
       AtDecW rd wE final w b elem x c ws fun ms =>
         ∃ bi bo : ByteArray,
           FlockVBridge.ColsHold (OpenLower.copyR (Claims.Recursion.xI (DRL rd wE final w b elem) x) wt p ht q)
@@ -243,6 +245,50 @@ def RowsW (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → �
               q.rep q.level q.query) = #[elemsOf bi.data.toList 2 0, elemsOf bi.data.toList 2 1] ∧
           chainW x ws q.table (Rows.chainPos (Rows.sideAt rd (Claims.Recursion.xI (DRL rd wE final w b elem) x) ms q).sch
               q.rep q.level q.query + 1) = #[elemsOf bo.data.toList 2 0, elemsOf bo.data.toList 2 1]
+
+/-- **`StepsW` under a side condition `Φ`** on the joint acceptance: `StepsW` is `Φ := True` (`stepsW_of_G`), the
+22:25Z ruling's shape (`xs`, every part's acceptance there, no collision with its setups) is `Φ := XsW A`. -/
+def StepsWG (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
+    (final : Msg → Option (List (List (Msg × Salt)) × Msg))
+    (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
+    (Φ : Msg → (ℕ → Coin) → List Claims.Flock.Wit → Prop) : Prop :=
+  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+    ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
+    RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
+      (AccP rd wE final w b elem shape untr cmt) x c ws → Φ x c ws →
+    ∀ os last, (_root_.RecDeploy.bdR rd wE final w).final
+        (((DeployedR.layR elem).msgs x ws).getD
+          ((_root_.RecDeploy.bdR rd wE final w).DE.V.k (Claims.Recursion.xI (DRL rd wE final w b elem) x) - 1)
+          []) = some (os, last) →
+      os.length + 1 = (_root_.RecDeploy.bdR rd wE final w).DE.V.k (Claims.Recursion.xI (DRL rd wE final w b elem) x) →
+      Nonempty (Rows.DecAt rd (Claims.Recursion.xI (DRL rd wE final w b elem) x)
+        ((_root_.RecDeploy.bdR rd wE final w).opened os last)
+        ((List.range ((_root_.RecDeploy.bdR rd wE final w).DE.V.k
+          (Claims.Recursion.xI (DRL rd wE final w b elem) x))).map c)) →
+      Top.ChainHolds rd key (Claims.Recursion.xI (DRL rd wE final w b elem) x)
+        ((_root_.RecDeploy.bdR rd wE final w).opened os last)
+        ((List.range ((_root_.RecDeploy.bdR rd wE final w).DE.V.k
+          (Claims.Recursion.xI (DRL rd wE final w b elem) x))).map c) (chainW x ws)
+
+/-- **The 22:25Z ruling's side condition** at the per-part acceptance `A` (`AccV`): part statements `xs`, each part
+accepted at its own (`xs.getD s []`), and no collision among the layout's calls and the parts' setups. -/
+def XsW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
+    (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    (A : ℕ → Msg → (ℕ → Coin) → Msg → Claims.Flock.Wit → List Msg → Prop)
+    (x : Msg) (c : ℕ → Coin) (ws : List Claims.Flock.Wit) : Prop :=
+  ∃ xs : List Msg, (∀ s' (hs' : s' < ws.length), A s' x c (xs.getD s' []) ws[s'] ((DeployedR.layR elem).msgs x ws)) ∧
+    (Claims.findColl ((DeployedR.layR elem).allCalls x ws ++
+      Claims.Recursion.setupCalls FlockDeploy.sha512 (DRL rd wE final w b elem) xs)).isSome = false
+
+/-- `StepsW` is `StepsWG` with no side condition. -/
+theorem stepsW_of_G {rd : Msg → Option FinalP} {key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ} {wE : Msg → ℝ}
+    {final : Msg → Option (List (List (Msg × Salt)) × Msg)} {w : Msg → ℝ} {b : Brings}
+    {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
+    {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg}
+    (h : StepsWG rd key wE final w b elem shape untr cmt fun _ _ _ => True) :
+    StepsW rd key wE final w b elem shape untr cmt :=
+  fun x st hx hf c ws hJ => h x st hx hf c ws hJ trivial
 
 section Assembly
 
@@ -275,15 +321,15 @@ private theorem stagedAt_jointP {x : Msg} {c : ℕ → Coin} {ws : List Claims.F
 
 end Assembly
 
-/-- **`StepsW` from four facts at each row D piece's copy**, at the dense form: the copy is a level table's outputs
+/-- **`StepsWG` from four facts at each row D piece's copy**, at the dense form: the copy is a level table's outputs
 (`hL`, `OpenLevW.LevelOutsW`'s), reads the piece's opening at the decided side (`hO`, `OpenLevW.OpenCopyW`'s), its
 coefficients are `coefRead`'s (`hC`), and its `acc` and `acc_out` columns read `chainW`'s rows at its position and the
 next (`hR`). Each piece has its level's part as owner (`openOwned_D`), staged at its own witness under `JointP`, and
 `accHolds_of_copy` steps `chainW` there. -/
-theorem stepsW_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
+theorem stepsWG_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (untr : TrReader)
-    (cmt : Msg → ℕ → Msg → Msg)
+    (cmt : Msg → ℕ → Msg → Msg) (Φ : Msg → (ℕ → Coin) → List Claims.Flock.Wit → Prop)
     (hL : OpenLower.AtPiecesP FlockDeploy.sha512 (DRL rd wE final w b elem) Claims.Recursion.Form.Dense untr b cmt
       (DeployedR.layR elem) (Rows.rowDPieces key) fun x _ _ LANES HH _ _ wt p ht q =>
         _root_.Flock.Readable.LevelOuts
@@ -294,9 +340,9 @@ theorem stepsW_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → �
           OpenCopy (Rows.sideAt rd (Claims.Recursion.xI (DRL rd wE final w b elem) x) ms q) q LANES HH
             (OpenLower.copyR (Claims.Recursion.xI (DRL rd wE final w b elem) x) wt p ht q))
     (hC : CoefW rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt)
-    (hR : RowsW rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt) :
-    StepsW rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt := by
-  intro x st hx hf c ws hJ os last hfin hos hD q hq
+    (hR : RowsW rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt Φ) :
+    StepsWG rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt Φ := by
+  intro x st hx hf c ws hJ hΦ os last hfin hos hD q hq
   obtain ⟨s, hs, ho⟩ := DecompBR.openOwned_D key x ⟨st, hx, hf⟩ q hq
   obtain ⟨-, r, ss, hr, hss, LANES, HH, n, hsv⟩ := OpenLower.ownQR_some ho
   have hsw : s < ws.length := lt_of_lt_of_eq hs hJ.1.symm
@@ -308,7 +354,8 @@ theorem stepsW_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → �
     hD.some
   have hCf := hC x st hx hf c ws hJ r ss s q.level LANES HH n hr hss hsv xO ws[s] p hw hst q hq ho ht
   obtain ⟨bi, bo, hbi, hszi, hbo, hszo, hin, hout⟩ :=
-    hR x st hx hf c ws hJ r ss s q.level LANES HH n hr hss hsv xO ws[s] p hw hst q hq ho ht os last hfin hos hD.some
+    hR x st hx hf c ws hJ r ss s q.level LANES HH n hr hss hsv xO ws[s] p hw hst q hq ho ht hΦ os last hfin hos
+      hD.some
   exact accHolds_of_copy (Rows.sideAt rd) Rows.coefRead (fun _ _ => chainW x ws) q _ _ _ hLO hOC.1 hOC.2.2.1 hCf
     hbi hszi hbo hszo hin hout
 
@@ -467,6 +514,24 @@ def AccCommitW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → 
       cc'.ports.findIdx? (·.name == h'.1) = some q' →
       readForms wt (hmCommit cc qn u) = readForms wt' (hmCommit cc' q' h'.2)
 
+/-- **`AccCommitW` under a side condition `Φ`** on the joint acceptance. At `Φ := XsW … (AccV …)` it is
+`AccCommitV` (`AccTies`) with its `xs`, `hxs` and `hcol` packed in one `∃`; at `Φ := True` it is `AccCommitW`. -/
+def AccCommitWG (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
+    (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
+    (Φ : Msg → (ℕ → Coin) → List Claims.Flock.Wit → Prop) : Prop :=
+  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+    ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
+    RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
+      (AccP rd wE final w b elem shape untr cmt) x c ws → Φ x c ws →
+    ∀ (r : XR), readX x = some r → ∀ (s s' : ℕ) (cc cc' : Circuit) (wt wt' : Claims.Flock.Wit),
+      r.w.parts[s]?.bind partCircuit = some cc → r.w.parts[s']?.bind partCircuit = some cc' →
+      ws[s]? = some wt → ws[s']? = some wt' →
+    ∀ (p u : ℕ) (nm : String) (d : ℕ), (nm, d) ∈ [("acc", 0), ("acc_out", 1)] → ("acc", u) ∈ accHoldings r s p →
+    ∀ h' ∈ accHoldings r s' (p + d), ∀ (qn q' : ℕ), cc.ports.findIdx? (·.name == nm) = some qn →
+      cc'.ports.findIdx? (·.name == h'.1) = some q' →
+      readForms wt (hmCommit cc qn u) = readForms wt' (hmCommit cc' q' h'.2)
+
 /-- **Hypothesis: the row after a level unit's has an owner**: at a statement of the shape, where a level part's unit
 holds `acc` at row `p`, some part holds row `p + 1` (the next unit's `acc`, or an algebra part's `acc1` at its rep's
 end). Owner: STEPSW. -/
@@ -495,11 +560,11 @@ position's and the next row's owners (`held_rows_eq`, `out_rows_eq`), which `cha
 theorem rowsW_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (untr : TrReader)
-    (cmt : Msg → ℕ → Msg → Msg)
-    (hCm : AccCommitW rd wE final w b elem Claims.Recursion.Form.Dense untr cmt)
+    (cmt : Msg → ℕ → Msg → Msg) (Φ : Msg → (ℕ → Coin) → List Claims.Flock.Wit → Prop)
+    (hCm : AccCommitWG rd wE final w b elem Claims.Recursion.Form.Dense untr cmt Φ)
     (hN : NextHeldW rd wE final w b elem Claims.Recursion.Form.Dense) :
-    RowsW rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt := by
-  intro x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO wt p hw hst q hq ho ht os last hfin hos Dc
+    RowsW rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt Φ := by
+  intro x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO wt p hw hst q hq ho ht hΦ os last hfin hos Dc
   beta_reduce
   have hxI : Claims.Recursion.xI (DRL rd wE final w b elem) x = xIOf x := rfl
   obtain ⟨h0, r', ss', hr', hss', LANES', HH', n', hsv'⟩ := OpenLower.ownQR_some ho
@@ -565,9 +630,9 @@ theorem rowsW_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ
     n hsv _ _ hh)
   obtain ⟨hc₀, hm₀⟩ := accHeld_of_canon hcan₀
   obtain ⟨hc₁, hm₁⟩ := accHeld_of_canon hcan₁
-  have hcm₀ := hCm x st hx hf c ws hJ r hr s o₀ cc c₀ wt w₀ hc hc₀ hw hw₀ _ _ "acc" 0 List.mem_cons_self hh h₀ hm₀
-    qa q₀ hqa hq₀
-  have hcm₁ := hCm x st hx hf c ws hJ r hr s o₁ cc c₁ wt w₁ hc hc₁ hw hw₁ _ _ "acc_out" 1
+  have hcm₀ := hCm x st hx hf c ws hJ hΦ r hr s o₀ cc c₀ wt w₀ hc hc₀ hw hw₀ _ _ "acc" 0 List.mem_cons_self hh h₀
+    hm₀ qa q₀ hqa hq₀
+  have hcm₁ := hCm x st hx hf c ws hJ hΦ r hr s o₁ cc c₁ wt w₁ hc hc₁ hw hw₁ _ _ "acc_out" 1
     (List.mem_cons_of_mem _ List.mem_cons_self) hh h₁ hm₁ qo q₁ hqo hq₁
   have e₀ := held_rows_eq elem hJ.2.1 hJ.2.2.1 hr hc hc₀ hw hw₀ (mem_accHeld hh) (mem_accHeld hm₀) hqa hq₀ hcm₀
   have e₁ := out_rows_eq elem hJ.2.1 hJ.2.2.1 hr hc hc₁ hw hw₁ (mem_accHeld hh) (mem_accHeld hm₁) hqo hq₁ hcm₁
@@ -575,8 +640,28 @@ theorem rowsW_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ
   · rw [chainW_owner hr hcan₀ hw₀ q.table, hbi', e₀]
   · rw [chainW_owner hr hcan₁ hw₁ q.table, hbo', e₁]
 
-/-- **`StepsW` at the dense form**, from the copy's outputs (`hL`) and openings (`hO`), its coefficients (`hC`), the
-chain's commit strings (`hCm`) and the next rows' owners (`hN`): `stepsW_of` at `rowsW_of`. -/
+/-- **`StepsWG` at the dense form**, from the copy's outputs (`hL`) and openings (`hO`), its coefficients (`hC`), the
+chain's commit strings (`hCm`) and the next rows' owners (`hN`): `stepsWG_of` at `rowsW_of`. -/
+theorem stepsWG_of_commits (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
+    (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
+    (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (untr : TrReader)
+    (cmt : Msg → ℕ → Msg → Msg) (Φ : Msg → (ℕ → Coin) → List Claims.Flock.Wit → Prop)
+    (hL : OpenLower.AtPiecesP FlockDeploy.sha512 (DRL rd wE final w b elem) Claims.Recursion.Form.Dense untr b cmt
+      (DeployedR.layR elem) (Rows.rowDPieces key) fun x _ _ LANES HH _ _ wt p ht q =>
+        _root_.Flock.Readable.LevelOuts
+          (OpenLower.copyR (Claims.Recursion.xI (DRL rd wE final w b elem) x) wt p ht q) LANES HH)
+    (hO : OpenLower.AtPiecesP FlockDeploy.sha512 (DRL rd wE final w b elem) Claims.Recursion.Form.Dense untr b cmt
+      (DeployedR.layR elem) (Rows.rowDPieces key) fun x c ws LANES HH _ _ wt p ht q =>
+        AtDecW rd wE final w b elem x c ws fun ms =>
+          OpenCopy (Rows.sideAt rd (Claims.Recursion.xI (DRL rd wE final w b elem) x) ms q) q LANES HH
+            (OpenLower.copyR (Claims.Recursion.xI (DRL rd wE final w b elem) x) wt p ht q))
+    (hC : CoefW rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt)
+    (hCm : AccCommitWG rd wE final w b elem Claims.Recursion.Form.Dense untr cmt Φ)
+    (hN : NextHeldW rd wE final w b elem Claims.Recursion.Form.Dense) :
+    StepsWG rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt Φ :=
+  stepsWG_of rd key wE final w b elem untr cmt Φ hL hO hC (rowsW_of rd key wE final w b elem untr cmt Φ hCm hN)
+
+/-- **`StepsW` at the dense form**: `stepsWG_of_commits` with no side condition. -/
 theorem stepsW_of_commits (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (untr : TrReader)
@@ -594,6 +679,7 @@ theorem stepsW_of_commits (rd : Msg → Option FinalP) (key : ℕ → ℕ → �
     (hCm : AccCommitW rd wE final w b elem Claims.Recursion.Form.Dense untr cmt)
     (hN : NextHeldW rd wE final w b elem Claims.Recursion.Form.Dense) :
     StepsW rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt :=
-  stepsW_of rd key wE final w b elem untr cmt hL hO hC (rowsW_of rd key wE final w b elem untr cmt hCm hN)
+  stepsW_of_G (stepsWG_of_commits rd key wE final w b elem untr cmt (fun _ _ _ => True) hL hO hC
+    (fun x st hx hf c ws hJ _ => hCm x st hx hf c ws hJ) hN)
 
 end RecDeploy.ResLower
