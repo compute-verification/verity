@@ -25,7 +25,7 @@ hypothesis (`Definitions/NetworkCertifier/Guarantees/SampledCharge`): every valu
 ingress, the faulty units' committed bits and `log2` of the number of possible faulty sets, except with probability
 `δ + ε_ks + ε_bind` over the selection. Its last two terms are the content term `k` below, for the circuit's Program.
 
-The warden runs its code by `trusted-nebius-host` (`Verity.Assumptions.TrustedNebiusHost`), read by name: it is the
+The warden runs its code by `trusted-host` (`Verity.Assumptions.TrustedHost`), read by name: it is the
 auditor's device, on a host the prover doesn't control, and its code's output includes each cell's bucket, so the
 assumption covers the warden's timing too (its CPU isolation and its monotonic clock, which the rename to
 `trusted-host` states). The content term is a premise of the run, not an assumption: the egress data no proved unit
@@ -45,12 +45,12 @@ set_option linter.unusedVariables false
 
 /-- **The client's view factors through the fail cells.** The warden device `w` runs the warden's code on the schedule
 and on what reaches it from the server, whose behavior `σ` (accept time, send timing, ACKs, flow control, its data)
-reaches it as the arrivals `arr σ` (`trusted-nebius-host`). Then what the client receives from the server side is the
+reaches it as the arrivals `arr σ` (`trusted-host`). Then what the client receives from the server side is the
 client view of the schedule `s`, the data in the cells, and each connection's fail cell. -/
 def WardenViewEqClientView : Prop :=
   ∀ {κ Cell Srv Dev : Type} (arr : Srv → κ → Arrivals Cell) (w : Dev)
     (run : Dev → WardenSchedule κ × Srv → κ → List (ℕ × CellView Cell))
-    (htrust : Verity.Assumptions.TrustedNebiusHost w run fun p => wardenCode p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedHost w run fun p => wardenCode p.1 (arr p.2))
     (s : WardenSchedule κ) (σ : Srv),
     run w (s, σ) = clientView s (fun c => (arr σ c).stream) (failCell s (arr σ))
 
@@ -60,7 +60,7 @@ behaviors in `Srvs` whose data lies in `Ds`, the client's views of the server si
 def EncardWardenViewsLe : Prop :=
   ∀ {κ Cell Srv Dev : Type} [Fintype κ] (arr : Srv → κ → Arrivals Cell) (w : Dev)
     (run : Dev → WardenSchedule κ × Srv → κ → List (ℕ × CellView Cell))
-    (htrust : Verity.Assumptions.TrustedNebiusHost w run fun p => wardenCode p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedHost w run fun p => wardenCode p.1 (arr p.2))
     (cap : κ → ℕ) (Ss : Set (WardenSchedule κ)) (hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c)
     (Srvs : Set Srv) (Ds : Set (κ → List Cell)) (hD : ∀ σ ∈ Srvs, (fun c => (arr σ c).stream) ∈ Ds),
     {v | ∃ s ∈ Ss, ∃ σ ∈ Srvs, run w (s, σ) = v}.encard ≤ Ss.encard * ((∏ c, (cap c + 1) : ℕ) : ℕ∞) * Ds.encard
@@ -75,7 +75,7 @@ advice string and the content together. -/
 def EncardWardenDecodableLe : Prop :=
   ∀ {κ Cell Srv Dev Z Adv U : Type} {W : ℕ} [Fintype κ] (arr : Srv → κ → Arrivals Cell) (w : Dev)
     (run : Dev → WardenSchedule κ × Srv → κ → List (ℕ × CellView Cell))
-    (htrust : Verity.Assumptions.TrustedNebiusHost w run fun p => wardenCode p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedHost w run fun p => wardenCode p.1 (arr p.2))
     (cap : κ → ℕ) (Ss : Set (WardenSchedule κ)) (hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c)
     (bits : Adv → Fin W → ℕ) (hbits : BitsCount bits) (b : Fin W → ℕ)
     (dataOf : Adv → U → κ → List Cell) (Us : Set U) (k : ℕ) (hUs : Us.encard ≤ ((2 ^ k : ℕ) : ℕ∞))

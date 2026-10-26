@@ -12,8 +12,11 @@
                  index) as circuits over `forms`, for `verity_vllm.program.registry.boolean_int8`'s Definitions
     moe          a padded static MoE layer's pair GEMMs on bits: MoeSelectBf16x{E}_v2 (the multiplexer tree over the expert id's
                  low bits and its range bit), MoePairCoordinate(W)_v2 and MoePairGemm(W)_v2
+    sqrt         sqrt.rn.f32 as a circuit over `forms` (PoUW's `PouwF32SqrtRn_v2` is traced from it) and its digit-by-digit root
     scalar       the bf16 comparator, the selects, the bit AND, PTX max / min and the E4M3 and E2M1 casts as Boolean Definitions
                  (and names the IEEE f32 arithmetic of `elementwise` and the bf16 widening of `cast`)
+    rowwise      CMP-92's row ops split so that each Definition outputs at most 16 bits: a bf16 row's softmax (its max, a
+                 16-bit half of its reciprocal sum, one output) and the embedding's coordinate
 
 The builders live elsewhere: `forms`, `gather` and `trace` in `verity.ml.circuits.boolean`; `fp`, `fp4` and `tc_step` in
 `verity.ml.circuits.silicon`; the universal unit in `verity.ml.private_circuits.universal`; `sha512` and `merkle` in

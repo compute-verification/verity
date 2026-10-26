@@ -18,7 +18,24 @@ network verdict of record is `LinkWindows.network_verdict`, the AND over the lin
 credit: it accepts only when every window of the egress profile (a served or advised link's profile) is registered in
 order and its outcome of record accepted, so a rejected or late window, one with no outcome, and a gap in the
 registrations each reject the link. A
-run's is the AND over its links'. The datacenter model (`benchmarks/datacenter`, a Python model) builds no
+run's is the AND over its links'.
+
+**The period draw** (`LinkWindows.period_draw`) samples the link-windows instead. The prover first commits the
+period: every window's salted root (`root`) and, on an advised link, the advice's digest (`advised.digest`), which the
+challenger records before it reads a coin (a coin source with a `commit` is first committed to the period's digest, as
+a remote challenger's is). It then draws `subset:K` of the n windows, and only the drawn windows are registered, in
+window order, each held to its committed root (`register(drawn=…)`), selected and proved. `network_verdict(drawn=…)`
+accepts when exactly the drawn windows are registered, in order, each under its committed root, with an accepted
+outcome of record (on an advised link naming the committed advice), and it states what the draw established: except
+with probability δ, at most `wrong_units["bound"]` of the n committed windows are wrong (the uniform K-subset's exact
+bound, one-stage's `wrong_units` over windows), so ε = bound / n at δ. The challenger's draw is Python's
+(`service.select_draw`), which records the coin bytes it read (`read`); the draw of record is the Lean verifier of
+record's on those bytes (`lean_draw`: C-Flock's `flock-verify draw --population n --k K --stream-file`, the Lean
+`draw` the one-stage drivers run, `Flock.Draw.drawOn`), which the network verdict runs itself, as a registration's own
+draw is the Lean's `Select.select` on the bytes it read. The verdict accepts only when the windows registered and
+proved are exactly that draw's, and otherwise refuses by name (`PERIOD_DRAWN`), whatever units the draw object it is
+handed lists. Selection `All` (K None) draws every window and reads no coin, and K = n leaves nothing to draw.
+The datacenter model (`benchmarks/datacenter`, a Python model) builds no
 `LinkWindows` outcomes, so its account doesn't read it, though `Account.sound` is the same AND over its own port
 records.
 
@@ -175,6 +192,8 @@ from __future__ import annotations
 import hashlib
 import json
 import struct
+import subprocess
+import tempfile
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
 from pathlib import Path
@@ -198,7 +217,7 @@ from verity.core.protocols.certifier.certificate import Certificate, CertifiedCl
 from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet
 from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, proofs as PF, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import audit as OA, partition as P, proofs as PF, registration as R
 from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding
 from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict
 
@@ -207,6 +226,10 @@ SESSION = "verity-network-certifier/session/v0"
 STATEMENT = "verity-network-certifier/statement/v0"
 VERDICT = "verity-network-certifier/verdict/v0"
 NETWORK_VERDICT = "verity-network-certifier/network-verdict/v0"
+PERIOD_DRAW = "verity-network-certifier/period-draw/v0"
+#: the sampled network verdict's refusal by name: the windows registered and proved are not the period's draw of record
+#: (`lean_draw` on the coins the period draw read), or that draw can't be made
+PERIOD_DRAWN = "period-draw"
 VALUE = "certificates"
 SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
 VERIFIER = "network-audit"
@@ -417,6 +440,36 @@ def rows(records: Sequence[CertifiedRecord]) -> list[bytes]:
 
 def _sha512(obj: Any) -> str:
     return hashlib.sha512(canonical_json(obj)).hexdigest()
+
+
+def _root_of(record: Any) -> Any:
+    """A link-window record's one salted root, None when it holds no such root."""
+    roots = record.get("roots") if isinstance(record, Mapping) else None
+    if isinstance(roots, list) and len(roots) == 1 and isinstance(roots[0], Mapping):
+        return roots[0].get("root")
+    return None
+
+
+def lean_draw(k: int, n: int, read: bytes) -> dict[str, Any]:
+    """The period's draw of record: C-Flock's Lean verifier of record (`proofs.executable`, which verifies the
+    windows' proofs) drawing `subset:k` of n on `read`, the coin bytes the period draw read, in order
+    (``flock-verify draw --population n --k k --stream-file``, `Flock.Draw.drawOn`, which `select_draw`'s sampler is
+    byte for byte: `test_lean_verifier.test_unit_draw_samplers_are_the_exact_reduction` and `test_coins`); its ``DRAW``
+    object, or ``{"refused": why}`` where the bytes run out or the Lean refuses or can't run."""
+    try:
+        with tempfile.TemporaryDirectory(prefix="verity-period-draw-") as d:
+            (Path(d) / "coins.bin").write_bytes(read)
+            p = subprocess.run([str(PF.executable()), "draw", "--population", str(n), "--k", str(k), "--stream-file",
+                                str(Path(d) / "coins.bin")], capture_output=True, text=True)
+    except (OSError, PF.LeanError) as e:
+        return {"refused": f"flock-verify draw can't run: {e}"}
+    lines = [x[len("DRAW "):] for x in p.stdout.splitlines() if x.startswith("DRAW ")]
+    if p.returncode != 0 or len(lines) != 1:
+        return {"refused": f"flock-verify draw: exit {p.returncode}: {(p.stderr or p.stdout)[-300:]}"}
+    try:
+        return json.loads(lines[0])
+    except ValueError:
+        return {"refused": f"flock-verify draw answered a DRAW line that is not JSON: {lines[0][:300]}"}
 
 
 _NO_PROFILE = ("N2 compares no egress grid, so a link whose egress end has no occupancy profile has no verdict: "
@@ -742,13 +795,25 @@ class LinkWindows:
 
     # the challenger
 
-    def register(self, stream: S.Stream, record: Mapping[str, Any]) -> S.Registration:
+    def register(self, stream: S.Stream, record: Mapping[str, Any],
+                 drawn: Mapping[str, Any] | None = None) -> S.Registration:
         """`stream.register` with the link-window's own ports, after holding the record's `window` provenance to exactly
-        `{"kind": "served", "window": order}`: the service declares the provenance one public item and doesn't read it,
-        and anything else there would reach the auditor."""
-        window = len(stream.records)
+        `{"kind": "served", "window": w}`: the service declares the provenance one public item and doesn't read it,
+        and anything else there would reach the auditor. w is the registration's order in the stream, or with `drawn`,
+        a period draw (`period_draw`) over this stream, the order-th drawn window, whose record's root must be the one
+        the period committed. Raises `Refused` (`window`, `period`) otherwise."""
+        order = len(stream.log)
+        if drawn is None:
+            window = order
+        else:
+            units = self._drawn(stream, len(drawn.get("roots") or ()) if isinstance(drawn, Mapping) else 0, drawn)
+            if order >= len(units):
+                raise S.Refused(Verdict(False, ("period",), {"period": {"drawn": units, "registered": order}}))
+            window = units[order]
         if not isinstance(record, Mapping) or record.get("window") != self.provenance(window):
             raise S.Refused(Verdict(False, ("window",), {"window": {"expected": self.provenance(window)}}))
+        if drawn is not None and _root_of(record) != drawn["roots"][window]:
+            raise S.Refused(Verdict(False, ("period",), {"period": {"window": window, "root": "not the committed one"}}))
         return stream.register(record, self.ports(window))
 
     # the prover's side: the unit's arguments and outputs on the opening
@@ -1082,7 +1147,92 @@ class LinkWindows:
         return stream.outcome(draw, {VERIFIER: verdict}, self.statement(draw),
                               session_roots={VALUE: self.root(opening)})
 
-    def network_verdict(self, stream: S.Stream, windows: int | None = None) -> dict[str, Any]:
+    def _period(self, stream: S.Stream, windows: int | None) -> int:
+        default = self.windows
+        if stream.spec.digest() != self.spec.digest():
+            raise ValueError("the stream is not this link's: its spec isn't LinkWindows.spec")
+        n = default if windows is None else windows
+        if not (type(n) is int and n >= 1):
+            raise ValueError(f"a link has one or more link-windows, not {n!r}")
+        return n
+
+    def _committed(self, stream: S.Stream, roots: Sequence[str], advice: str | None) -> str:
+        """The period's digest, what the coins come after: this stream, and the committed roots and advice."""
+        return _sha512({"format": PERIOD_DRAW, "stream": stream.digest, "roots": list(roots), "advice": advice})
+
+    def period_draw(self, stream: S.Stream, roots: Sequence[str], k: int | None, coins: Any, *,
+                    advice: str | None = None) -> dict[str, Any]:
+        """The period's draw over its link-windows 0 … n − 1, after the prover committed them: `roots`, window w's
+        salted root (`root`, hex) at w, n of them (by default the link's windows, which `network_verdict` takes), and on
+        an advised link `advice`, the advice's digest (`advised.digest`), which every accepted window must name. Every
+        window for `k` None (`All`, reading no coins), else `subset:k`, 1 <= k <= n, on `coins` (a callable of a byte
+        count, as a stream's); a coin source with a `commit` method is first committed to the period's digest
+        (`commitment`), so the coins come after every commitment of the period. Call it before the stream's first
+        registration. The object is `{format, stream, law, k, population, units, roots, advice, commitment, read}`,
+        `read` the coin bytes the draw read, in order (hex), from which the network verdict's Lean draws its own
+        (`lean_draw`); `register` and `network_verdict` take it as `drawn`. Raises `ValueError` for a stream that isn't
+        this link's or holds a registration, roots that aren't n SHA-512 hex digests, an advice on a link that isn't
+        advised or none on one that is, and k outside [1, n]."""
+        n = self._period(stream, len(roots) if isinstance(roots, Sequence) and not isinstance(roots, str) else None)
+        if stream.log:
+            raise ValueError("the period is committed and drawn before the stream's first registration")
+        roots = list(roots)
+        if not all(isinstance(r, str) and len(r) == 128 and all(c in "0123456789abcdef" for c in r) for r in roots):
+            raise ValueError("a period commits each window's salted root, a SHA-512 in lowercase hex")
+        if (self.advised is not None) != (advice is not None) or not (advice is None or (
+                isinstance(advice, str) and len(advice) == 128)):
+            raise ValueError("an advised link's period commits its advice's digest (advised.digest), and only an advised "
+                             "link's does")
+        if k is not None and not (type(k) is int and 1 <= k <= n):
+            raise ValueError(f"a period draw takes 1 <= K <= {n} of the link-windows, not {k!r}")
+        commitment = self._committed(stream, roots, advice)
+        rule = S.All() if k is None else S.Law(f"subset:{k}")
+        if k is not None and callable(getattr(coins, "commit", None)):
+            coins.commit(bytes.fromhex(commitment))
+        read = bytearray()
+
+        def reading(m: int) -> bytes:
+            b = coins(m)
+            read.extend(b)
+            return b
+        draw = S.select_draw(rule, S.selection_law(rule, n), n, reading)
+        return {"format": PERIOD_DRAW, "stream": stream.digest, "law": "subset", "k": draw["k"], "population": n,
+                "units": list(draw["units"]), "roots": roots, "advice": advice, "commitment": commitment,
+                "read": read.hex()}
+
+    def _drawn(self, stream: S.Stream, n: int, drawn: Mapping[str, Any]) -> list[int]:
+        """The drawn windows, once `drawn` is a period draw over this stream's n windows; else `ValueError`."""
+        get = drawn.get if isinstance(drawn, Mapping) else (lambda _: None)
+        units, k, roots, read = get("units"), get("k"), get("roots"), get("read")
+        if not (isinstance(drawn, Mapping) and get("format") == PERIOD_DRAW and get("law") == "subset"
+                and get("population") == n and type(k) is int and 1 <= k <= n and isinstance(units, list)
+                and all(type(u) is int and 0 <= u < n for u in units) and units == sorted(set(units))
+                and len(units) == k and isinstance(roots, list) and len(roots) == n and isinstance(read, str)
+                and len(read) % 2 == 0 and all(c in "0123456789abcdef" for c in read)):
+            raise ValueError(f"not a period draw of subset:K over this link's {n} windows")
+        if get("stream") != stream.digest or get("commitment") != self._committed(stream, roots, get("advice")):
+            raise ValueError("the period draw is not this stream's, or not over the period it committed")
+        return list(units)
+
+    @staticmethod
+    def _of_record(n: int, drawn: Mapping[str, Any]) -> tuple[list[int] | None, str | None]:
+        """The period's draw of record over its n windows, ascending, and None; or None and why there is none: every
+        window at K = n, else `lean_draw` on the coins `drawn` read, which must be `subset:K` over n."""
+        k = drawn["k"]
+        if k == n:
+            return list(range(n)), None
+        got = lean_draw(k, n, bytes.fromhex(drawn["read"]))
+        if not isinstance(got, Mapping) or "refused" in got:
+            return None, str(got.get("refused") if isinstance(got, Mapping) else got)
+        units = got.get("units")
+        if not (got.get("law") == "subset" and got.get("k") == k and got.get("population") == n
+                and isinstance(units, list) and all(type(u) is int and 0 <= u < n for u in units)
+                and len(set(units)) == len(units) == k):
+            return None, f"the Lean's draw is not subset:{k} over the {n} windows: {json.dumps(got)[:300]}"
+        return sorted(units), None
+
+    def network_verdict(self, stream: S.Stream, windows: int | None = None,
+                        drawn: Mapping[str, Any] | None = None) -> dict[str, Any]:
         """The link's network verdict of record: the AND over its link-windows 0 … `windows` − 1 (by default the egress
         profile's windows, fixed before the run), with no ε and no share credit. It accepts only when, for every w,
         the stream's w-th registration is window w and its outcome of record accepted. A window registered out of
@@ -1091,34 +1241,75 @@ class LinkWindows:
         `records` is each window's outcome record SHA-512 (`S.Outcome.record`, None without one), and `digest` binds
         the verdict to the stream and those records. On a served or advised link the windows are by default its
         profile's (`windows`), and on an advised link every accepted window must name the first accepted window's advice
-        (its `advice` output, `advised.digest`), which the verdict reports as `advice`, or it is refused. Raises
-        `ValueError` on a link with no egress occupancy, served or advised profile, as `verify` does, and on a stream
-        that isn't this link's."""
-        default = self.windows
-        if stream.spec.digest() != self.spec.digest():
-            raise ValueError("the stream is not this link's: its spec isn't LinkWindows.spec")
-        n = default if windows is None else windows
-        if not (type(n) is int and n >= 1):
-            raise ValueError(f"a link has one or more link-windows, not {n!r}")
+        (its `advice` output, `advised.digest`), which the verdict reports as `advice`, or it is refused.
+
+        With `drawn`, the period draw (`period_draw`) over this stream's n windows, the stream's registrations must be
+        exactly the drawn windows, in order, each under the root the period committed for it, and each needs an
+        accepted outcome; on an advised link each names the committed advice. An undrawn window has no registration and
+        its record is None; a registration past the drawn windows is listed in `refused` as n, n + 1, … The verdict
+        then carries `selection` (the draw) and `wrong_units`, what it established at the stream's δ: except with
+        probability δ, an accepted link has at most `bound` wrong windows of the `of` committed, and `epsilon` is
+        bound / of (the uniform K-subset's exact bound, one-stage's `wrong_units` over windows); `digest` binds the
+        draw too.
+
+        The drawn windows are the draw of record's, never the units `drawn` lists: the verdict runs `lean_draw` on
+        `drawn`'s coins (`read`), and every window at K = n, which leaves nothing to draw. It refuses the link by name,
+        `why[PERIOD_DRAWN]` with the Lean's draw (or why there is none), `drawn`'s units and the windows registered,
+        when the Lean can't draw, when `drawn`'s units aren't the Lean's, and when a registered window isn't one the
+        Lean drew; a drawn window not registered is in `refused`. `selection` is the draw of record, ``by`` ``lean``
+        (or ``all`` at K = n), and its units are the Lean's. Raises `ValueError` on a link with no egress occupancy,
+        served or advised profile, as `verify` does, on a stream that isn't this link's, and on a draw that isn't this
+        stream's period draw."""
+        n = self._period(stream, windows)
+        why: dict[str, Any] = {}
+        if drawn is None:
+            expected = list(range(n))
+        else:
+            claimed = self._drawn(stream, n, drawn)
+            lean, no = self._of_record(n, drawn)
+            expected = claimed if lean is None else lean
+            by = None if lean is None else "all" if drawn["k"] == n else "lean"
+            registered = [p.get("window") if isinstance(p := r.get("window"), Mapping) else None for r in stream.log]
+            if lean is None or lean != claimed or any(w not in lean for w in registered):
+                why[PERIOD_DRAWN] = {"lean": lean if lean is not None else {"refused": no}, "drawn": claimed,
+                                     "registered": registered,
+                                     "why": no or "the windows registered and proved are not the Lean verifier of "
+                                                  "record's draw on the period's coins"}
         outcomes = {r["registration"]: r for r in stream.records}
-        records: list[str | None] = []
+        records: list[str | None] = [None] * n
         refused: list[int] = []
-        advice = None
-        for w in range(max(n, len(stream.log))):
-            reg = stream.log[w] if w < len(stream.log) else None
-            body = outcomes.get(R.digest(reg)) if reg is not None and reg.get("window") == self.provenance(w) else None
-            records.append(None if body is None else _sha512(body))
-            ok = w < n and body is not None and body["symbol"] == S.ACCEPT
+        advice = None if drawn is None else drawn.get("advice")
+        for i in range(max(len(expected), len(stream.log))):
+            reg = stream.log[i] if i < len(stream.log) else None
+            w = expected[i] if i < len(expected) else n + i - len(expected)
+            in_order = reg is not None and reg.get("window") == self.provenance(w)
+            body = outcomes.get(R.digest(reg)) if in_order else None
+            record = None if body is None else _sha512(body)
+            if w < n:
+                records[w] = record
+            else:
+                records.append(record)
+            ok = (w < n and in_order and body is not None and body["symbol"] == S.ACCEPT
+                  and (drawn is None or _root_of(reg) == drawn["roots"][w]))
             if ok and self.advised is not None:
                 named = body["public"].get("advice")
                 advice = named if advice is None else advice
                 ok = named is not None and named == advice
             if not ok:
                 refused.append(w)
-        accepted = not refused
+        accepted = not refused and not why
+        sampled = {} if drawn is None else {"drawn": dict(drawn), "of_record": expected, "why": why}
         digest = _sha512({"format": NETWORK_VERDICT, "stream": stream.digest, "windows": n, "records": records,
-                          "accepted": accepted})
+                          "accepted": accepted, **sampled})
         out = {"accepted": accepted, "windows": n, "refused": refused, "records": records, "digest": digest}
+        if drawn is not None:
+            bound = OA.core_law({"law": "subset", "k": drawn["k"]}, n).count_bound(stream.delta)
+            out |= {"why": why,
+                    "selection": {**{k: drawn[k] for k in ("law", "k", "population", "commitment")}, "units": expected,
+                                  "by": by},
+                    "wrong_units": {"delta": stream.delta, "of": n, "bound": bound, "epsilon": bound / n,
+                                    "rule": "except with probability delta, an accepted link has at most `bound` wrong "
+                                            "link-windows of the `of` its period committed"}}
         return out if self.advised is None else out | {"advice": advice}
 
 

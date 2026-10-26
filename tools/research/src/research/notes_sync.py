@@ -109,8 +109,11 @@ CITE_HINTS = {"run": "a run is in the store once its attempt is on the remote: `
 
 
 def _run(root: Path, *args: str, timeout: float = 120, input: str | None = None) -> subprocess.CompletedProcess:
-    """git in `root`; output that is not UTF-8 (a diff of a binary or Latin-1 file) is decoded with replacement characters."""
-    return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, errors="replace", timeout=timeout, input=input)
+    """git in `root`; output that is not UTF-8 (a diff of a binary or Latin-1 file) is decoded with replacement characters.
+    Commits are unsigned: the notes repo needs no signatures, and an agent VM's signing key is often missing from its agent,
+    which made every commit and rebase here fail (TOP-90 row 27)."""
+    return subprocess.run(["git", "-C", str(root), "-c", "commit.gpgsign=false", *args], capture_output=True, text=True,
+                          errors="replace", timeout=timeout, input=input)
 
 
 def _out(root: Path, *args: str) -> str | None:

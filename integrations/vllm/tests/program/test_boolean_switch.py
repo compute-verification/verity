@@ -154,13 +154,14 @@ def test_the_lifted_program_is_bits_throughout_and_the_word_program_is_not():
 
 def test_a_word_derivation_report_becomes_its_program_on_bits():
     from verity.ml.circuits.codec import encode_program, program_digest
+    from verity_vllm.program.frontend.boolean import derived
     from verity_vllm.program.frontend.derive import DeriveReport
 
     P = Program(_derived(), annotations={"note": "carried"})
     desc = encode_program(P)
     prov = {"result": {"root": _spec_id(P.fn), "digest": program_digest(desc), "gates": P.gates}}
     word = DeriveReport(P, None, prov, prov["result"]["digest"], _spec_id(P.fn), P.gates, descriptor=desc)
-    rep = BB.derived(word)
+    rep = derived(word)
     bits = Program(BB.lift(P.fn))
     assert rep.ok and rep.digest == program_digest(bits) == program_digest(rep.descriptor) != word.digest
     assert rep.root == _spec_id(bits.fn) and rep.gates == bits.gates and rep.program.annotations == {"note": "carried"}
@@ -202,6 +203,7 @@ def test_a_definition_with_no_boolean_version_is_refused_by_name():
 
 def test_derive_refuses_a_call_with_no_boolean_version_by_name():
     torch = pytest.importorskip("torch")
+    from verity_vllm.program.frontend.boolean import derived
     from verity_vllm.program.frontend.derive import derive_report
 
     class M(torch.nn.Module):
@@ -211,11 +213,11 @@ def test_derive_refuses_a_call_with_no_boolean_version_by_name():
     ex = [torch.empty(4, dtype=torch.float32, device="meta")] * 2
     word = derive_report(M(), ex, mode="reference")
     assert word.ok and "ir" not in word.provenance
-    rep = BB.derived(word)
+    rep = derived(word)
     assert not rep.ok and rep.unsupported.reason == "numerics_unregistered"
     assert sorted(rep.unsupported.detail["missing"]) == ['AddRef_v1{N=4,DT="f32"}', 'MulRef_v1{N=4,DT="f32"}']
     assert rep.provenance["ir"] == {"ir": "boolean", "word_root": word.root, "word_digest": word.digest}
-    assert BB.derived(rep) is rep
+    assert derived(rep) is rep
 
 
 def test_bit_offsets_are_the_prefix_sums_of_the_leaf_widths():
