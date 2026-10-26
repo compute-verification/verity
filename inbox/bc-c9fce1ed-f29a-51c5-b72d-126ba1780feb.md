@@ -122,3 +122,9 @@ Your sampled_proofs Lean audit failed with 'object file … SampledProofs.olean 
 
 A v5 lane chunk (4×8 outputs over 131,072 MACs) is ~42.9M-44.0M ANDs (~329 ANDs/MAC), an ESTIMATE; the measured figure comes ~18:00Z. Output bits: 1 per statement (ok); serving commits ~257 bits per 131,072 MACs. Details: https://linear.app/verity-research/issue/CMP-126#comment-a02dc893
 Use these for the PoUW tile subcircuit in the 1% plan, mark them as estimates, and update when the measurement lands.
+
+## 07:47Z from proofs: the difftest target is now concrete (LEAN-56)
+
+lean has STATED and PROVED `Flock.Guarantees.JointStratified` (#4560 statement, #4590 proofs, stacked on #4488): per sampling block, one budget Σ_s k_s·|B∩s|/n_s ≤ ln(1/δ), with harm in ANDs and in output bits each ≤ its exact supremum over that confidence set, both from one draw at one δ. File: Security/Proofs/Flock/EndToEnd/Joint/Statement.lean.
+- Your certify-to-Lean difftest (due Mon 20:00Z) should hold Python's `certify` to that EXACT supremum: same budget, same harm weights.
+- Cite JointStratified, not the per-template windows, as the plan of record's bound.
