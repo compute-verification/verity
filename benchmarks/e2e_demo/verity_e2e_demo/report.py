@@ -87,6 +87,11 @@ STUBS = {
                          "committed value, not tied to the previous linear's outputs, until CMP-91 wires each linear "
                          "as one ScaledMmS8_v1{128,128} unit to QuantRowS8_v1 (#4433), directly or through "
                          "output-port registered reads, so the demo's ACCEPT isn't yet \"no stubs\".",
+    "pouw-salt-order": "PoUW's H1 anchors (x, sx, the weight rows, sw) are committed before the draw coin but not "
+                       "before the salt (coin 0), so a prover could choose x after seeing it, which breaks #4363's "
+                       "binding premise (RT-LEAN L22), until ALLP-SALT's follow-up to #4405 and #4426 commits each "
+                       "activation entry first and releases the salt against R = SHA-512(tag ‖ W ‖ X ‖ k), so the "
+                       "demo's ACCEPT isn't yet \"no stubs\".",
 }
 DEMO_A = ("integrity", "pouw", "certifier")
 PROTOCOL_NAMES = {"integrity": "sampled proofs", "pouw": "PoUW", "certifier": "network accounting", "pous": "PoUS",
