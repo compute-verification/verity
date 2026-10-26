@@ -217,7 +217,7 @@ open Claims.Recursion
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **SHA-512's outputs are 64 bytes.** -/
-theorem out64_sha512 : Claims.Out64 sha512 := fun m => by
+theorem sha512_out64 : Claims.Out64 sha512 := fun m => by
   rw [sha512, Claims.toMsg, Array.length_toList, ByteArray.size_data]
   exact Sha512.hash_size _
 
@@ -292,7 +292,7 @@ theorem ivstarR_honest_run (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     (hacc : ((nextR rd x (os.map (fun o => joinR (o.map Prod.fst)) ++ [last]) cs).eval sha512).1 = .acc) :
     (Claims.run sha512 (Claims.replay ((bdC rel rd cols wE joinR rowIn final w).honestAs sha512 os lastO))
       (bdC rel rd cols wE joinR rowIn final w).IVStar x () fun i => cs.getD i.val default).out = .acc := by
-  refine (bdC rel rd cols wE joinR rowIn final w).run_honest_acc out64_sha512 hfin hk hn hcs ?_
+  refine (bdC rel rd cols wE joinR rowIn final w).run_honest_acc sha512_out64 hfin hk hn hcs ?_
   refine agrees_bdR sha512 rel rd cols wE joinR rowIn final w
     (ms := (bdC rel rd cols wE joinR rowIn final w).opened os last) hx
     (by have := (bdC rel rd cols wE joinR rowIn final w).opened_length os last; omega) (fun j hj => ?_) hacc
@@ -543,9 +543,9 @@ theorem ivstarR_honest_files (rel : _root_.Flock.Readable.Parsed → _root_.Floc
       simp only [List.head?_cons, Option.some.injEq] at hc1
       subst hc1
       simpa using hresp 0 (by simp)
-  have hfc := filesFinalC out64_sha512 hc (setup_tables hx).2.symm htab hS hresp
+  have hfc := filesFinalC sha512_out64 hc (setup_tables hx).2.symm htab hS hresp
     (hlen_of_k hx (fun i hi => (htab i hi).1) hk)
-  obtain ⟨hsz, hall⟩ := sessionS_reps out64_sha512 hc (setup_tables hx).2.symm htab hS
+  obtain ⟨hsz, hall⟩ := sessionS_reps sha512_out64 hc (setup_tables hx).2.symm htab hS
     (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast
   have hcaps : ∀ i < (fileCaps spec sts c₁ pfs).size,
       (fileCaps spec sts c₁ pfs)[i]!.size = RecDeploy.level0Nodes sts[i]! := by
