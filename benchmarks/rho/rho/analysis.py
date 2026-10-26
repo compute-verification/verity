@@ -2,7 +2,7 @@
 
 Every function takes a registry and a scenario name and varies registry keys, so any parameter of any layer (a GPU's
 FLOP/s, a wipe's residual, a premise's bits, a family's efficiency, a choice of regime) is swept the same way. The
-metric is a function of a `Result`: by default the guaranteed slowdown `LO` (the least lower bound over the adversary's
+metric is a function of a `Result`: by default ρ's lower end `LO` (the least lower bound over the adversary's
 families); `HI` is the best attack's, and `upto(status)` is `LO` from only the bounds and cuts at least as strong as
 `status`. Results are cached per registry and override, so the functions below share their evaluations.
 

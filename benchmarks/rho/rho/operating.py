@@ -1,7 +1,7 @@
 """Operating points: what ρ means in time, at the work and exfiltration references (`work.*`, `exfil.*` in the registry).
 
 * **Work** (`work.<name>.flops`, reference-algorithm FLOPs): the adversary's whole compute does it in `ρ · flops / rate`
-  seconds (`Scenario.rate` is its unencumbered FLOP/s), at the guaranteed ρ and at the best attack's; its dark pool alone
+  seconds (`Scenario.rate` is its unencumbered FLOP/s), at ρ's lower end and at the best attack's; its dark pool alone
   in `flops / (d · rate)`, `d` its share of progress (`Fleet.dark_effective`).
 * **Exfiltration** (`exfil.<name>.bits`): onsite, what monitored locations produce reaches the dark pool only through
   the channels no certifier reads (the regime's `timing` and `side` bit/s per host, times the location's hosts;
@@ -34,7 +34,7 @@ class Point:
 def work(result: Result, flops: float) -> dict[str, float]:
     s = result.scenario
     d = s.context.fleet.dark_effective
-    return {"unencumbered": flops / s.rate, "guaranteed": result.lo * flops / s.rate,
+    return {"unencumbered": flops / s.rate, "lower end": result.lo * flops / s.rate,
             "best attack": result.hi * flops / s.rate, "dark pool": flops / (d * s.rate) if d > 0 else math.inf}
 
 

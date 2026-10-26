@@ -71,7 +71,7 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
                f"{s.run.name} ({s.run.target(s.model):.3g} FLOP, {when(s, 1.0)} unencumbered).")
     out = [f"## {s.name}", "", setting, "",
            f"**ρ ∈ [{fmt(r.lo)}, {fmt(r.hi)}]**: {when(s, r.lo)} to {when(s, r.hi)} to the target.", "",
-           "Guaranteed ρ from only the bounds and cuts at least as strong as: "
+           "ρ's lower end from only the bounds and cuts at least as strong as: "
            + ", ".join(f"{st} {fmt(v)}" for st, v in by_status.items()) + ".", "",
            "What sets ρ (each part's share of the adversary's rate `d + (1 − d) g`, and the most ρ can be while it "
            "remains): " + ", ".join(f"{t.name} {t.share:.1%} (≤ {fmt(t.ceiling)})" for t in terms) + ".", "",
@@ -149,8 +149,9 @@ def main() -> None:
     targets = sorted(args.target or [10.0, 100.0])
 
     md: list[str] = []
-    head = "| scenario | ρ ∈ | from conditional or stronger bounds and cuts | on monitored compute | set by | at the corner |"
-    summary = ["# ρ", "", head, "|---|---|---|---|---|---|"]
+    head = ("| scenario | ρ ∈ | the bound that sets it: status, premises | from conditional or stronger bounds and cuts | "
+            "on monitored compute | set by | at the corner |")
+    summary = ["# ρ", "", head, "|---|---|---|---|---|---|---|"]
     regions = ["## Regions where ρ falls below target", ""]
     record: dict = {"targets": targets, "scenarios": {}}
     for name in names:
@@ -160,7 +161,7 @@ def main() -> None:
         points = operating.points(reg, r)
         md += scenario_md(r, by_status, terms, points)
         swings = analysis.tornado(reg, name)
-        md += ["Tornado (guaranteed ρ at each parameter's plausible ends):", "",
+        md += ["Tornado (ρ's lower end at each parameter's plausible ends):", "",
                "| parameter | low | high | ρ at low | ρ at high | decades |", "|---|---|---|---|---|---|"]
         md += [f"| {s.key} | {fmt(s.low)} | {fmt(s.high)} | {fmt(s.at_low)} | {fmt(s.at_high)} | {fmt(s.size)} |"
                for s in swings[:12]]
@@ -169,7 +170,10 @@ def main() -> None:
         rescues = {t: analysis.rescues(reg, name, t, swings=swings) for t in targets}
         corner = analysis.corner(reg, name, swings=swings)
         regions += regions_md(name, r.lo, by_status, corner, dangers, rescues)
-        summary.append(f"| {name} | [{fmt(r.lo)}, {fmt(r.hi)}] | {fmt(by_status['conditional'])} | "
+        met = [e for e in min(r.families, key=lambda f: f.lo).bounds if e.slowdown] if r.families else []
+        best = max(met, key=lambda e: e.rho, default=None)
+        standing = f"{best.argument}: {best.status}, {best.premise}" if best else ""
+        summary.append(f"| {name} | [{fmt(r.lo)}, {fmt(r.hi)}] | {standing} | {fmt(by_status['conditional'])} | "
                        f"{monitored(r):.1%} | " + (f"{terms[0].name} {terms[0].share:.0%}" if terms else "")
                        + f" | {fmt(corner.rho)} |")
         record["scenarios"][name] = {

@@ -391,7 +391,7 @@ def phase(registry: Registry, out: Path, names: Sequence[str] | None = None, tar
         ax.set_xlabel(_short(p["x"]) + _unit(registry, p["x"]))
         ax.set_ylabel(_short(p["y"]) + _unit(registry, p["y"]))
         ax.set_title(p["scenario"], fontsize=10)
-    fig.colorbar(mesh, ax=axes[0].tolist(), label="ρ (guaranteed lower end)" if metric is LO else "ρ", shrink=0.9)
+    fig.colorbar(mesh, ax=axes[0].tolist(), label="ρ (lower end)" if metric is LO else "ρ", shrink=0.9)
     fig.suptitle("ρ over pairs of parameters: contours from the grid and frontier dots by bisection at the targets, "
                  "★ today's values, dashed box the plausible ranges", fontsize=10)
     return _save(fig, out, "phase", {"metric": getattr(metric, "__name__", str(metric)), "targets": list(targets),
@@ -424,7 +424,7 @@ def tornado(registry: Registry, out: Path, names: Sequence[str] | None = None, t
         ax.set_yticks(range(len(ss)), [f"{_short(s.key)}  [{s.low:.3g}, {s.high:.3g}]{_unit(registry, s.key)}"
                                        for s in reversed(ss)], fontsize=8)
         ax.set_xscale("log")
-        ax.set_xlabel("ρ (guaranteed lower end)" if metric is LO else "ρ")
+        ax.set_xlabel("ρ (lower end)" if metric is LO else "ρ")
         ax.set_title(f"{name}: ρ = {base:.3g} at today's values", fontsize=10)
         ax.grid(True, axis="x", which="major", alpha=0.3)
         ax.legend(fontsize=8, loc="lower right")
@@ -492,7 +492,7 @@ def vulnerability(registry: Registry, out: Path, names: Sequence[str] | None = N
     handles += [Line2D([], [], c="k", lw=1.2, label="plausible range"), Line2D([], [], c="k", lw=2.2, ls="",
                                                                                marker="|", ms=12, label="today")]
     axes[0][0].legend(handles=handles, fontsize=8, loc="upper left", bbox_to_anchor=(1.01, 1.0))
-    fig.colorbar(mesh, ax=axes[:, 0].tolist(), label="ρ (guaranteed lower end)" if metric is LO else "ρ",
+    fig.colorbar(mesh, ax=axes[:, 0].tolist(), label="ρ (lower end)" if metric is LO else "ρ",
                  location="bottom", shrink=0.5)
     fig.suptitle("How far each parameter is from where ρ crosses a target: ρ along a window around its plausible range",
                  fontsize=11)
@@ -524,7 +524,7 @@ def corner(registry: Registry, out: Path, names: Sequence[str] | None = None, ta
                       rotation=60, ha="right", fontsize=7.5)
         _targets(ax, targets)
         ax.set_yscale("log")
-        ax.set_ylabel("ρ (guaranteed lower end)" if metric is LO else "ρ")
+        ax.set_ylabel("ρ (lower end)" if metric is LO else "ρ")
         note = "" if c.joint == c.rho else f" (all at once: {c.joint:.3g})"
         ax.set_title(f"{name}: {c.base:.3g} today → {c.rho:.3g} at the corner{note}", fontsize=10)
         ax.grid(True, which="major", alpha=0.3)
