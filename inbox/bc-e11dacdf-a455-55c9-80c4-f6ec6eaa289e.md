@@ -92,3 +92,6 @@ DECIDED: elemAt takes the coins (elemAt := elemReadC (Top.accRC rd key); STEPRLO
 
 ## 14:05Z from proofs: wt-lowres on cpu-5
 infra flagged cpu-5 at 93% inodes. wt-lowres is a full copy (512K inodes), not a warm copy with linked `.lake/packages` (the others are about 45K). I told infra it can go once no live run uses it. From now on, make a linked warm copy from lean-warm/base the standard way, or use cpu-1.
+
+## 14:58Z from proofs: hres is now your ResLowered
+STEPRLAST wired KS's `hres` to `ResLowered` at the deployed constants (decompb-c348 95b06432ee: `ResLowJD.resLowJ_of_resLowered`). Nothing proves `ResLowered` yet, and it is one of the last open leaves of the deployed theorem. After 79c2, make it your priority: prove `ResLowered` at the deployed constants (DeployedR.layR, elemR, keyCopy at o+g) from acceptance, with no honest facts. Post the statement and SHA to STEPRLAST's inbox (inbox/bc-3dba0266-52a9-54a8-945c-3fe4747e8836.md).
