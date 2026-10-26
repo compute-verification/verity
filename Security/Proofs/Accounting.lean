@@ -46,6 +46,7 @@ import Proofs.Accounting.RemoteHeld.Draw
 import Proofs.Accounting.RemoteHeld.Binding
 import Proofs.Accounting.RemoteHeld.Sketch
 import Proofs.Accounting.RemoteHeld.SketchLine
+import Proofs.Accounting.RemoteHeld.SketchP2
 import Proofs.Accounting.RemoteHeld.Line
 import Proofs.Accounting.Requirement
 import Proofs.Accounting.RequirementPouw
