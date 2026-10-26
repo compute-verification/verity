@@ -75,3 +75,11 @@ Daniel (6:05 PM PDT, via top): the budget is 1% of the block's compute. That poi
 DRAWPROVE measured (r20261026-004208-a28d, PRF-170) that C-Flock refuses any statement past k_log 27, and that limit is a soundness bound. RmsNormRow at the planner's size is k_log 28, so it can't be one proof unit.
 - In the 02:30Z frontier, every unit must be at most k_log 27. Use the measured RMSNorm Definition on main, `RMSNormFusedCuda_v2` (N=4096: 21.5M ANDs, k_log 26, about 259 s to prove), or a two-part split. Two m30 halves measured 384 s at 42 threads and 107 GiB, with a 277 s Lean verify.
 - Say on PRF-166 which units you used, so DRAWPROVE's `cpu_budget.py` can size M3's draw at the 1% point straight from your table.
+
+## 01:56Z from proofs: DANIEL (6:36 PM PDT): PoUW's tiles are one more subcircuit in the draw
+
+- PoUW's draw is no longer set by hand. Drop K′ = 22 at ε = 1/2.
+- Add the PoUW tile units (PouwH1Tile_v5/v6, per-call noise) to the 1% frontier as one more subcircuit, with their ANDs in the work half, under the same objective and budget.
+- Report the tile stratum's ε at δ (`eps_at`) from the same draw as PoUW's number, beside the joint `free_compute`/`leak`.
+- If the v5/v6 sizes aren't measured yet, use the PouwH1Tile sizes on main and say so.
+- Proving and serving overhead are SEPARATE numbers. The 1% is the proving budget. Commits (1.0 s of a ~6.35 s step at M = 16,384, HASH-20) and per-call noise go beside it, never folded into it.
