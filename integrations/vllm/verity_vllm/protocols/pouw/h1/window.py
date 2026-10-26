@@ -120,10 +120,9 @@ def open_period(lines: Iterable[str], lane: str) -> dict[str, Any] | None:
     entry a line), None when the lane has none open."""
     opened = None
     for e in map(json.loads, lines):
-        body = e.get("body") or {}
-        if e.get("kind") == "period-open" and body.get("lane") == lane:
-            opened = body
-        elif e.get("kind") == "period-close" and opened is not None and body.get("period") == opened.get("period"):
+        if e["kind"] == "period-open" and e["body"].get("lane") == lane:
+            opened = e["body"]
+        elif e["kind"] == "period-close" and opened is not None and e["body"]["period"] == opened["period"]:
             opened = None
     return opened
 
