@@ -196,7 +196,7 @@ class UnifiedAttentionWithOutputRule(StateRule):
         outs = []
         obs_sel = (_OBSERVED["attention_impls"] or {}).get(layer_name, {})
         role, extra, window = attn_kind_for(obs_sel)
-        # [R15 dense] both registered chains fold `softmax_scale = float(D ** -0.5)` into their constants (`b1._scale_log2_bits`,
+        # [R15 dense] both registered chains fold `softmax_scale = float(D ** -0.5)` into their constants (`b1.scale_log2_bits`,
         # `dense.softcap_mul_bits`); a layer whose selector scale differs (Gemma-2-9B/27B: `query_pre_attn_scalar != head_dim`) has no kind.
         obs_scale = obs_sel.get("scale")
         if obs_scale is not None and (not isinstance(obs_scale, (int, float)) or float(obs_scale) != float(D ** -0.5)):

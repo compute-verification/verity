@@ -58,6 +58,7 @@ def of_record(dirs: dict[str, str], digs: dict[str, str], rows: dict[str, list[d
 def kernel_refusal(specs: Iterable[str]) -> str | None:
     """Why a row kernel this tree grades ``specs`` by is not its family's Definition, or None: each family's row kernel against
     the reference by core `self_check` (`kernel_registry.check`; module docstring), once a family per process."""
+    from verity_vllm.commit import challenge as CH
     from verity_vllm.program.kernels import kernel_registry as KR
     from verity_vllm.program.kernels.rows import KERNEL, ROWS
     from verity_vllm.query.manifest.format import spec_family
@@ -65,7 +66,7 @@ def kernel_refusal(specs: Iterable[str]) -> str | None:
     bad: list[str] = []
     for family in sorted({spec_family(str(s)) for s in specs} & set(ROWS)):
         if family not in _KERNEL_CHECKS:
-            _KERNEL_CHECKS[family] = KR.check(family, KERNEL)
+            _KERNEL_CHECKS[family] = KR.check(family, KERNEL, CH.generator)
         bad += [f"{family}: {why}" for why in _KERNEL_CHECKS[family]]
     if not bad:
         return None

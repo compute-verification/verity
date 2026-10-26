@@ -120,20 +120,6 @@ def compilation_facts(block: dict | None) -> dict:
 _MODE_NAMES = {"0": "NONE", "1": "STOCK_TORCH_COMPILE", "2": "DYNAMO_TRACE_ONCE", "3": "VLLM_COMPILE"}
 
 
-def eos_lag_rows_declared(engine: dict | None) -> int | None:
-    """The post-EOS rows a DECLARED engine block computes: async_scheduling True -> 1, False -> 0, undeclared /
-    non-boolean -> None.  GP-01 always declares it (`workload_lag`), so None here means a Program built before it did: GM-01 G6 then FAILS
-    by name on any EOS stop (nothing is read from the record as the rule) and labels a record without an EOS stop `lag.exercised false`."""
-    if not isinstance(engine, dict):
-        return None
-    v = engine.get("async_scheduling")
-    if isinstance(v, bool):
-        return 1 if v else 0
-    if isinstance(v, str) and v.strip().lower() in ("true", "false"):
-        return 1 if v.strip().lower() == "true" else 0
-    return None
-
-
 def workload_target(target: dict | None):
     """The row's declared TargetProfile as GP-01 reads it: its declared `target` block (the row file's `engine.target`, the ONE
     declared target source; the row driver passes the same block to derive_step as --target and every GPU stage builds its engine for it)
@@ -727,7 +713,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     art["stop_rule"]["eos_lag_rows"] = art["stop_rule"]["lag"] = wl.lag
     art["stop_rule"]["eos_lag_source"] = ("Workload_v1 static `lag` = TargetProfile.lag() of the row's declared target (" + lag["source"] + "); "
                                           "applicability.engine.async_scheduling carries the resolved value the record must attest (G1/G6)")
-    assert eos_lag_rows_declared(app.get("engine")) == wl.lag, "applicability.engine.async_scheduling and the lag static disagree"
+    assert W.eos_lag_rows_declared(app.get("engine")) == wl.lag, "applicability.engine.async_scheduling and the lag static disagree"
     # a stochastic row declares its top-p split geometry: the registered split count of the declared num_SMs, which GM-01 holds every
     # launch to. Greedy rows carry no declaration (None -> omitted).
     sgeo = sampler_geometry(app, reqs)
