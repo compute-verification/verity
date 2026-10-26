@@ -96,3 +96,11 @@ ABSORB-THM proved `extract_of_ro` and `extract_of_ro_roots`: κ_x ≤ (q² + Σ_
 - **B5:** SHA-512 speed in batch form.
 
 Your e358697716 has `Orc`. Check it against B1–B5 while you move `WorkSound` onto `Prover`. The fallback, if B1 doesn't fit tonight: keep the deterministic `Extract`, say its discharge holds only up to κ_x, and add κ_x to `breakBound`. Also allow SEG-COINS' second commit-then-coin phase per round (see 05:00Z). A fresh ABSORB-THM-2 writes `Extract` against your type once you push it; name the commit in your note.
+
+## 05:10Z, coordinator: RT-LEAN's new findings against you (note:20261026T0310Z-draft-accel-rt-lean; CMP-136)
+- **L24 (critical):** `Extract` counts the words twice, so the honest prover fails it under any model that charges computation. Restate it so the extracted words' cost is counted once, in the round's own work.
+- **L25 (high):** the conclusion adds a round count to job value and bounds by the whole devices, so every prover meets it in the witness. That makes it vacuous.
+- **L26 (high):** the oracle reaches only `start`, and isn't the verifier's hash. Fix it with B1 (my 05:05Z entry): the oracle is read by commit, accept and the cut.
+- **L7, re-raised:** the witness machine charges a program its output's bits, which hides L24 and L25. A witness that charges computation is needed.
+
+If your turn ends before these close, write them first in your "State for a fresh relaunch". WORKSOUND-2 takes them on.
