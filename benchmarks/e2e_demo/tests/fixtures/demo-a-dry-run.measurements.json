@@ -1,0 +1,46 @@
+{
+  "format": "verity/demo-a-measurements/v1",
+  "values": {
+    "ZK_SESSIONS": {
+      "value": 53,
+      "source": "r20261025-230005-b71a out/w30/integrity/audit.log: A5's lean-verify verdicts, one a C-Flock --zk session",
+      "label": "PyTorch dry run"
+    },
+    "PROVE_RUN": {
+      "value": "r20261025-230005-b71a",
+      "source": "the all-protocols run whose sampled proofs proved its drawn units (vy-nebius-cpu-4)",
+      "label": "PyTorch dry run"
+    },
+    "JOINT_LOCKED": {
+      "value": false,
+      "source": "LEAN-56 at 26 Oct 02:00Z: JointStratified's statement not yet marked, so not locked"
+    },
+    "COMMIT_GBPS": {
+      "value": 225,
+      "source": "kernels HASH-7, r20261025-234226-299c: the commit with its roots equal to the CPU reference (note:compute-accounting/20261025T2215Z-draft-allp-gpu)",
+      "label": "H200 bench HASH-7, not the demo block"
+    },
+    "SERVE_COMMIT_S": {
+      "value": 1.0,
+      "source": "HASH-20, as CMP-98 cites it: the commits of one step at M = 16,384",
+      "label": "HASH-20 bench, not the demo block"
+    },
+    "SERVE_STEP_S": {
+      "value": 6.35,
+      "source": "HASH-20, as CMP-98 cites it: one step at M = 16,384",
+      "label": "HASH-20 bench, not the demo block"
+    }
+  },
+  "subcircuits": [
+    {
+      "name": "ScaledMmS8Coordinate_v1{K=128}",
+      "units": 1024,
+      "drawn": 64,
+      "source": "r20261025-230005-b71a out/w30/integrity/audit.log: RECORDS' population and draw_counts",
+      "label": "PyTorch dry run"
+    }
+  ],
+  "caveats": [
+    "The PyTorch dry run (r20261025-230005-b71a) served a two-layer W8A8 MLP on CPU, not the demo's transformer on the H200, and its draw's coins were the verifier's own (A5's coins.source), not the challenger's. PoUW's 24 tiles were its own draw, not among sampled proofs' 64 units."
+  ]
+}
