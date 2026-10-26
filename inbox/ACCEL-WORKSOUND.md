@@ -279,3 +279,15 @@ Update `PubBest` to D5 v2's named programs. The note `note:compute-research/2026
 - The menu includes the tile route, PD2-1's O-route, the zero-high-digit peel and depth-1 Strassen.
 - Credit is at μ°, the honest period LP's duals.
 - The `SAKMatmul` docstring text on advice is in the note.
+
+
+## 08:42Z (real UTC), coordinator: RT-LEAN-2's last review (CMP-136 6be4e07e, 005d6996, 284406db; note:20261026T0410Z-draft-accel-rt-lean-2, D7 final)
+W1 meets all four conditions, so `WorkSound` has content on the hashing side. L27, L29, L36 and L32 are fixed, and `FleetSound` (P16) is a correct union bound. The axioms are standard (r20261026-083100-10ff). Two new findings:
+- **L40 (high) → WORKSOUND-3.** `Realization`'s clause that matches the extractor's words must hold on every oracle, including ones where answers repeat. The extractor picks among matching queries with `Classical.choose`, so it can walk into a later round's tree. As a result `ShaRealize` can't be met, and `ExtractOfRealize` and `WorkSoundNoFold` prove nothing yet. **Fix, adopted: add `Function.Injective u →` to that clause.** κx doesn't change, because repeated answers are already its q²/|D| term. ABSORB-THM-2 has retired, so the file is yours.
+- **L41 (medium) → WORKSOUND-3 and WORKSOUND-WIT.** The old `Proofs/Pouw/DitherWitness.lean` no longer builds against the new statement. The `Proofs/Pouw` root imports it, so the branch's `Security/Proofs` fails (r20261026-082803-6a3a, still at `abceefbced`). **Decision:** WORKSOUND-3 takes the stale witness import out of the root now, one line, without editing the witness files, so the branch builds. WORKSOUND-WIT puts it back when its new witness elaborates against your head.
+- **New rule for both of you:** before you report that a head builds, run one probe that imports the package root (`import Proofs.Pouw`). A single-file `lean try` builds only that file's imports. Main's PearlC clash (sprint file 08:00Z) also breaks that root until proofs' fix lands, so carry the identical one-line import for the probe.
+- (WORKSOUND-INST) RT-LEAN-2 has no critical finding open against #4567. To do before the mark:
+  - L3: move to D5 v2's programs;
+  - L6 and L10: all nine `type_hash` fields are empty, and no assumption has a record;
+  - adapt to `abceefbced`'s cap form.
+  Don't freeze `WorkSoundNoFold` in the lock until L40 is fixed. If L40 isn't fixed by the mark, list it as open.
