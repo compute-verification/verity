@@ -21,14 +21,16 @@ commitments (R-ACCEL-3, pending Daniel) and its realization, not a premise of it
   - The cost clause is the period's, with a term `ξ A` for the walk and the log's upkeep (B4). `ξ A`, `κx A` and
     `Badv A` are the prover's own.
   - The event is on runs whose work makes at most `Q` oracle calls (`Prover.calls`, RT-LEAN-2 L39). A run whose work
-    fits the period's devices makes at most `cap_μ / shaPub_μ` (G3), so `WorkSound` reads it at that `Q`.
+    fits the period's devices makes at most `cap_r / callUse_r` for each resource `r` a call uses (G3), so
+    `WorkSound` reads it at such a `Q`.
 * `Realization` and `ShaRealize`: the realization premise on the no-fold round, prover by prover. On every run whose
   work makes at most `Q` oracle calls, a prover's commitment-path hashing is its own calls and the verifier's
   evaluations, logged as `q A` black-box SHA-512 queries (the log). Its round words program is the walk of the
   extractor over that log, its commitment program is its own commitment path, and the two cost at most the prover's
   own work plus `k · ξw + q A · ξl`. Programs reach the oracle only through calls (`Accel.OracleCalls`, a device
-  premise of `ShaRealize`), so the log can be the prover's calls: at `q = ⌈Q⌉ + V`, `V` the verifier's evaluations,
-  a prover can't pad the log past the cap (RT-LEAN-2 L39).
+  premise of `ShaRealize`), so the log can be the prover's calls. At `q = ⌈Q⌉ + V`, `V` the verifier's evaluations,
+  the cap bounds the rounds' `work` calls, the timed window (RT-LEAN-2 L39, I1); the `answer` programs' calls are
+  untimed and uncapped (see Open).
 
 The modelling choices, each a hypothesis or a clause RT-LEAN can check:
 * **(N1) distinct queries**: `QueryLog.fresh`. A repeat needs no query, so `q` counts distinct SHA-512 inputs.
@@ -38,13 +40,19 @@ The modelling choices, each a hypothesis or a clause RT-LEAN can check:
 * **(N3) each prover's own query budget `q A` and schedule `τ A`**: `q A` bounds `A`'s distinct commitment-path
   SHA-512 inputs over the period, with the verifier's evaluations, on runs within the cap `Q`; `τ A w` bounds the
   queries before round `w`'s root (padding with dummy queries is free in the analysis). A prover with more queries has
-  a larger `q A`, and so a larger `ξ A` and `κx A`; at the cap, `q A = ⌈Q⌉ + V` serves every prover
-  (`Definitions.Pouw.Guarantees.Dither.WorkSoundNoFold`).
+  a larger `q A`, and so a larger `ξ A` and `κx A`; at the cap, `q A = ⌈Q⌉ + V` is one budget for every prover whose
+  answers make no oracle call that reaches a later root (`Definitions.Pouw.Guarantees.Dither.WorkSoundNoFold`).
 
-Open: the cost half's split of one program's use into a words part and a commitment part is `Realization`'s cost
-clause, a premise. The oracle calls are priced steps (G3) and the only way to the oracle (`Accel.OracleCalls`), but
-the machine's composition doesn't yet say which of a program's steps are its commitment path (RT-LEAN-2 L28's
-remainder).
+Open:
+* the cost half's split of one program's use into a words part and a commitment part is `Realization`'s cost clause,
+  a premise. The oracle calls are priced steps (G3) and the only way to the oracle (`Accel.OracleCalls`), but the
+  machine's composition doesn't yet say which of a program's steps are its commitment path (RT-LEAN-2 L28's
+  remainder);
+* the cap reads only the rounds' `work` calls, since only `work` is timed and fits the period's devices (I1).
+  `answer w` reads the oracle and feeds round `w + 1`'s state, so its calls can reach later roots and belong in the
+  log, and nothing bounds them. At `q = ⌈Q⌉ + V`, `ShaRealize` is false for a prover that hashes in its answers. The
+  per-prover form (`q A` its own) is unaffected. Closing this needs the answers' use in `Period.Fits` or an argument
+  that the answers' queries needn't be logged (L39's answer half).
 -/
 
 namespace Pouw.Assumptions
