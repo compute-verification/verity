@@ -222,7 +222,7 @@ def test_G1_a_profile_that_cannot_be_loaded_fails_by_name_rather_than_skipping_t
     assert r.status == "fail" and f"expected_layers={NL} not checked against the profile's NL" in r.reason
     assert "profile 'no_such_profile_zz' could not be loaded: ModuleNotFoundError" in r.reason
     with pytest.raises(G.ArtifactError, match="no_such_profile_zz"):
-        G.RunArtifacts(tmp_path).C
+        _ = G.RunArtifacts(tmp_path).C
 
 
 def test_G1_steps_hashes_census(tmp_path):
