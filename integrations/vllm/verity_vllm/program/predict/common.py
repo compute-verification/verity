@@ -1,6 +1,7 @@
 """What every decoder of `build.decoder` writes with: the refusal (`Unexpressible`), the vocabulary's kinds (`kind`), the served
 class, the IR types of a shape, the tensor-parallel rank's view of the other ranks' partials and of the schedule (`_Peers`), the
-batch a request's calls run in (`_Launch`) and the token select over a row's whole-vocabulary logits (`select_token`)."""
+batch a request's calls run in (`_Launch`) or a batch-invariant row's launch context (`launch_rows`, `launch_seqlen_q`) and the
+token select over a row's whole-vocabulary logits (`select_token`)."""
 
 from __future__ import annotations
 
@@ -142,3 +143,31 @@ class _Launch:
         if Counter(own) - Counter(keys):
             raise Unexpressible(f"request step {self.step}: the launch batch's key counts {keys} do not hold this request's {own}")
         return keys
+
+
+def launch_rows(phi, LP: int, T: int, C: int = 0) -> dict | None:
+    """The launch context a batch-invariant row's (LP, T[, C]) request runs under, as the Build is given it (`launch_context.spec_for`:
+    per request step, the launch's max_seqlen_q, every co-scheduled sequence's rows counted), parsed as `targets.parse_launch_context`
+    parses `--launch-context`; None without the workload's requests, or for a shape none of them has (the Build's own rows)."""
+    if not phi.requests:
+        return None
+    from verity_vllm.pipeline import launch_context as LC
+    from verity_vllm.program.frontend import targets as TG
+    from verity_vllm.program.prefix_plan import shape
+    v = LC.shape_contexts({"requests": phi.requests, "engine": {"target": {"batch_invariant": True}}}).get(shape(LP, T, C))
+    return None if v is None else TG.parse_launch_context(v)
+
+
+def launch_seqlen_q(ctx: dict, own_rows: int, step: int, tp, accepted: bool) -> int:
+    """The max_seqlen_q a request's attention at request `step` reads under its launch context (`targets.launch_seqlen_q`, as the
+    Build's attention binding reads it): FA3's tile has no one value for a shape whose requests run in different launches ('conflict');
+    FA2's reads the request's own rows."""
+    from verity_vllm.program.frontend import targets as TG
+    try:
+        return TG.launch_seqlen_q(own_rows, step, ctx)[0]
+    except TG.LaunchContextConflict as e:
+        if tp.effective_flash_attn_version() == 3 and not accepted:
+            raise Unexpressible(f"vocabulary cannot express: request step {step}: FA3's tile (kBlockN) is not one value -- {e}") from None
+        return own_rows
+    except TG.LaunchContextInvalid as e:
+        raise Unexpressible(f"vocabulary cannot express: request step {step}: {e}") from None
