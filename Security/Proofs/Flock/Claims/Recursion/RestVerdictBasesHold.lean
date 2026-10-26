@@ -25,7 +25,7 @@ namespace FlockComplete.ZkTables
 
 open Flock
 open Lean (Json)
-open FlockDeploy (setupOf drawEq drawOfU)
+open FlockDeploy (setupOf drawEq)
 
 open private setupOne_stmt unitDraw_of from Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 
@@ -61,7 +61,7 @@ namespace RecDeploy
 open Flock
 open Lean (Json)
 open Claims (Msg)
-open FlockDeploy (Coin FinalP VerdictR holdsR decR DecR actR checksAtJ drawOfJ drawEq drawOfU setupOf)
+open FlockDeploy (Coin FinalP VerdictR holdsR decR DecR actR checksAtJ drawOfJ drawEq setupOf)
 open Claims.Recursion.VStarB
 
 noncomputable section
