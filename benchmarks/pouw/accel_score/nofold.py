@@ -7,10 +7,13 @@ collision resistance plus Theorem S's draws. Costs are in plain INT8 tensor time
   4.79 G compressions/s, so γ_hash = C/L with C = 2·η·MAC_RATE/(32·SHA) ≈ 11,000 (the leaves alone at the data-sheet
   rate are 6460/L, the coordinator's figure);
 - the peel: noise of rank r ≥ L costs γ_rm = r/K, and 2r/K if both sides carry noise (HYB's U and V);
-- serving skip: when the cheater knows the served output (its own workload, A = 0), one segment's words follow from
-  the output and the other segments, so the longest segment, L MACs of every output's γ·K, is skippable unchecked;
-  ε_skip = L/(γK). The peel must sit inside the words (extended inner dimension [Ã | −ÃΠ], [B̃; Uᵀ]); an unchecked
-  peel adds γ_rm/γ to ε_skip.
+- serving skip: a cheater that gets the served output O = (A+b)(B+c)ᵀ by a cheaper product (at A = B = 0 it is the
+  bit product bcᵀ, on the live dither) derives one segment's word from O and the others, saving L − K/s_b MACs of
+  every output's γ·K, s_b that route's speed over INT8. v1 bounds it for any s_b: ε_skip ≤ L/(γK) ≤ e. O is the
+  last committed word, so the peels and wrap corrections that turn the words into O are checked, not skippable.
+
+`v1()` scores protocol v1 on both cards: HYB at U ±80, V ±64 (wrap density 1.26%, BET-HYBRID-2 section H), the peel's
+five products of inner size L, wraps on the ALU pipe, e = 0.75%, ε_S = 0.1%.
 
 Under an ε_skip budget e, γ solves γ = 1 + a + C/L + ρL/K with L = eγK; `solve` returns it. h = γ_hash/γ is the
 share an r-times faster SHA-512 frees h·(1 − 1/r) of. The proof unit is one word's segment: 370 ANDs a MAC
@@ -61,6 +64,75 @@ def unit_ands(L: float) -> float:
 
 def draws(eps: float, delta: str) -> int:
     return math.ceil(LN[delta] / eps)
+
+
+CARDS = {
+    # name: (INT8 dense MAC/s, SHA-512 compressions/s measured, tensor MACs per ALU lane-op on the ALU pipe)
+    "H200": (MAC_RATE, 4.79e9, 64),
+    "RTX PRO 6000": (1.0e15 / 2, 7.13e9, 8),   # census rtx-pro-6000-server (INT8 at the FP8 rate); r20261016-110413-c5d1
+}
+HYB_RHO = 5          # U ±80, V ±64: two base-128 digits of Y_X and of Y_W, and V Uᵀ, each of inner size L
+HYB_P = 0.0119 + 0.00071   # p_W at ±80 plus p_X at ±64 (BET-HYBRID-2 section H, Llama-3.1-8B): 1.26%
+E_V1, EPS_S_V1 = 0.0075, 0.001
+
+
+def v1_card(name: str, e: float = E_V1):
+    mac, sha, c_op = CARDS[name]
+    c = 2 * ETA * mac / (32 * sha)
+    a = 1 + A_COMMIT * c / C + c_op * HYB_P / 2
+    rows = []
+    for shape, K, N in STATIC:
+        q = 1 - HYB_RHO * e
+        g = (a + math.sqrt(a * a + 4 * q * c / (e * K))) / (2 * q)
+        L = max(128, 128 * math.floor(e * g * K / 128))
+        g = a + c / L + HYB_RHO * L / K
+        rows.append((shape, K, N, L, c / L, HYB_RHO * L / K, a - 1, g, c / L / g, L / (g * K)))
+    return c, rows
+
+
+def v1() -> None:
+    print(f"\nprotocol v1: HYB (U ±80, V ±64, p {HYB_P:.2%}), no fold, e {E_V1:.2%}, eps_S {EPS_S_V1:.1%}, "
+          f"L a multiple of 128 (64 for PV) at or below e*gamma*K; the last segment may be shorter")
+    for name in CARDS:
+        c, rows = v1_card(name)
+        tot = sum(k * n for _, k, n in STATIC)
+        gw = sum(r[1] * r[2] * r[7] for r in rows) / tot
+        hw = sum(r[1] * r[2] * r[4] for r in rows) / tot / gw
+        print(f"  {name}: C {c:.0f}; MAC-weighted static gamma {gw:.2f}, h {hw:.2f}")
+        print(f"    {'shape':6} {'K':>6} {'L':>5} {'g_hash':>6} {'g_rm':>5} {'g_A+wrap':>8} {'gamma':>6} {'h':>5} "
+              f"{'skip':>6} {'unit':>8}")
+        for shape, K, N, L, gh, gr, ga, g, h, sk in rows:
+            print(f"    {shape:6} {K:6} {L:5} {gh:6.2f} {gr:5.2f} {ga:8.2f} {g:6.2f} {h:5.2f} {sk:6.2%} "
+                  f"{unit_ands(L):8.2e}")
+        mac, sha, c_op = CARDS[name]
+        a = 1 + A_COMMIT * c / C + c_op * HYB_P / 2
+        g_qk = a + c / 64 + 3
+        for T in (2048, 4096, 8192, 16384, 32768):
+            _, pv = v1_card_pv(name, T)
+            d = ATTN_WIDTH * T / STATIC_MACS
+            best = (0.0, 0.0, "none")
+            for credit_pv, credit_qk in ((True, True), (True, False), (False, False)):
+                g = (gw + d * (pv if credit_pv else 1) + d * (g_qk if credit_qk else 1)) / (1 + 2 * d)
+                cov = (1 + d * credit_pv + d * credit_qk) / (1 + 2 * d)
+                if g <= 10 and cov > best[1]:
+                    best = (g, cov, "PV+QK" if credit_qk else ("PV" if credit_pv else "static"))
+            print(f"    avg context {T:6}: PV gamma {pv:5.1f}, QK^T gamma {g_qk:5.1f} (d_head 64); credit {best[2]:6}: "
+                  f"step gamma {best[0]:5.2f}, coverage of all matmul MACs {best[1]:6.1%}")
+    k6, k2 = draws(EPS_S_V1, "1e-6"), draws(EPS_S_V1, "1%")
+    print(f"  draws: k = {k6} (eps_S {EPS_S_V1:.1%} at delta 1e-6), which gives eps_S {LN['1%'] / k6:.3%} at delta 1%"
+          f" ({k2} draws would)")
+    print(f"  O-unit (served output, recomputed over all K): {unit_ands(16384):.2e} at K 16384, "
+          f"{unit_ands(65536):.2e} at K 65536 ANDs (limit {UNIT_LIMIT:.2e})")
+
+
+def v1_card_pv(name: str, T: int, e: float = E_V1) -> tuple[int, float]:
+    mac, sha, c_op = CARDS[name]
+    c = 2 * ETA * mac / (32 * sha)
+    a = 1 + A_COMMIT * c / C + c_op * HYB_P / 2
+    q = 1 - HYB_RHO * e
+    g = (a + math.sqrt(a * a + 4 * q * c / (e * T))) / (2 * q)
+    L = max(64, 64 * math.floor(e * g * T / 64))
+    return L, a + c / L + HYB_RHO * L / T
 
 
 def main() -> None:
@@ -123,3 +195,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+    v1()
