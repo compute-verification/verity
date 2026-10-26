@@ -76,11 +76,11 @@ def window(store: audit.Store, prover_store: audit.Store, passes: int = 2) -> tu
     s = Session(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins"), appends=1), not_before_ns=0,
                 clock=clock)
     prover = audit.Prover(prover_store, None, s.commitment, entropy=Entropy(b"receipt salts"))
-    challenge, previous, out = s.start(), reg.digest, []
+    s.start()
+    out = []
     for i in range(passes):
-        out.append(prover.run(challenge, i, previous))
+        out.append(prover.run(s.seed(), 0, i))
         assert s.receive(0, i, out[-1].root, step=i) is None
-        previous = out[-1].root
     clock.now = p.window_ns
     assert s.boundary() is None
     clock.now = s.deadline(0) + 1
@@ -179,7 +179,7 @@ def test_under_the_bound_key_a_picked_encoding_has_no_payload_without_a_search()
     for d in tries:
         m = one_decode(PICKED, KV, k, d)
         assert codec.digest(m) != d and codec.decode(PICKED, KV, k, d) is None
-    seed = receipts.seed(bytes(receipts.CHALLENGE_BYTES), 0, bytes(receipts.DIGEST_BYTES))
+    seed = hashlib.sha512(b"a pass seed").digest()
     for d in tries[:2]:
         stored = codec.encode(one_decode(PICKED, KV, k, d), KV, k, bound=True)
         assert stored != PICKED

@@ -60,15 +60,15 @@ def test_the_boundary_is_due_at_the_windows_kth_root_at_one_in_flight(store) -> 
     clock = Clock()
     p = params(windows=3, window_ns=5, pace=Pace(2, 1000, 1))
     s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
-    coin = s.start()
+    s.start()
     assert s.next_boundary_ns() == 2 * A, "not due before its k roots: at the latest k allowances after its coin"
     prover = audit.Prover(store, None, s.commitment, entropy=Entropy(b"receipt salts"))
     clock.now = 100
-    ps = prover.run(coin, 0, store.registration.digest, None)
+    ps = prover.run(s.seed(), 0, 0, None)
     assert s.receive(0, 0, ps.root, step=0) is None
     assert s.next_boundary_ns() == 2 * A, "at k − 1 roots it is still not due"
     clock.now = 200
-    ps = prover.run(coin, 1, ps.root, None)
+    ps = prover.run(s.seed(), 0, 1, None)
     assert s.receive(0, 1, ps.root, step=1) is None
     assert s.next_boundary_ns() == 200, "due at its k-th root, when that root arrived"
 
@@ -79,15 +79,15 @@ def two_roots_across_a_boundary(store, f: int, *, back: bool = False):
     clock = Clock()
     p = params(windows=3, window_ns=5, pace=Pace(2, 1000, f))
     s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
-    coin = s.start()
+    s.start()
     prover = audit.Prover(store, None, s.commitment, entropy=Entropy(b"receipt salts"))
     clock.now = 100
-    ps = prover.run(coin, 0, store.registration.digest, None)
+    ps = prover.run(s.seed(), 0, 0, None)
     assert s.receive(0, 0, ps.root, step=0) is None
     clock.now = 50 if back else 150
     s.boundary()
     clock.now = 200
-    return s.receive(0, 1, prover.run(coin, 1, ps.root, None).root, step=1)
+    return s.receive(0, 1, prover.run(s.seed(), 0, 1, None).root, step=1)
 
 
 def test_a_root_after_its_windows_boundary_is_out_of_turn_at_one_in_flight(store) -> None:

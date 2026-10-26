@@ -78,10 +78,10 @@ def pages(first: int, count: int) -> list[bytes]:
 
 class Run:
     """One session over `store`, the verifier's side and the prover's in step, every receipt drawn by default.  The
-    prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends, each encoded
-    under the coin the verifier replies with (`coins`, by first index), each pass's seed binding every append it sent
-    before the pass's root (`head`).  With a `registry`, the session is its next over the store's registration.  Its
-    parameters commit `schedule_cap` (`CAP` by default) on its schedule's bits."""
+    prover computes its passes from `prover_store` (`store` by default), each under the coin the verifier releases for
+    it, and commits `store`'s appends between passes, each encoded under the coin the verifier replies with (`coins`,
+    by first index; `head` the chain over them).  With a `registry`, the session is its next over the store's
+    registration.  Its parameters commit `schedule_cap` (`CAP` by default) on its schedule's bits."""
 
     def __init__(self, store: audit.Store, prover_store: audit.Store | None = None, windows: int = 2,
                  samples: int = 10**6, lifetime: int | None = None, registry: audit.Registry | None = None,
@@ -128,7 +128,10 @@ class Run:
         `step` (None: the step after the last pass's)."""
         if change is not None:
             plan = self.plan.changed(*change, self.store.extent)
-        ps = self.prover.run(self.challenges[self.t], self.i, self.previous, plan, head=self.head)
+        coin = self.s.seed()
+        if isinstance(coin, audit.Verdict):
+            return coin
+        ps = self.prover.run(coin, self.t, self.i, plan)
         self.passes[self.t, self.i], self.previous, self.plan = ps, ps.root, ps.plan
         self.i += 1
         self.step = self.step + 1 if step is None else step
@@ -739,6 +742,7 @@ def test_a_plan_holding_a_block_not_appended_or_released_is_refused() -> None:
     """A plan is over the store's blocks so far: one holding a block before the append that commits it, or after its
     release, is refused (`plan`), whole or as a change."""
     r = Run(store())
+    r.s.seed()
     assert r.s.receive(0, 0, bytes(64), ((0, N + 1),), step=0).failure == "plan"
 
     r = Run(store())
@@ -750,9 +754,11 @@ def test_a_plan_holding_a_block_not_appended_or_released_is_refused() -> None:
     r.append(2)
     assert r.run(change=(((N, 2),), ())) is None
     assert r.s.release(((N + 1, 1),)) is None
+    r.s.seed()
     assert r.s.receive(0, 1, bytes(64), change=((), ()), step=1).failure == "plan"
 
     r = Run(store())
+    r.s.seed()
     assert r.s.receive(0, 0, bytes(64), ((0, N),), change=((), ()), step=0).failure == "plan"
 
 

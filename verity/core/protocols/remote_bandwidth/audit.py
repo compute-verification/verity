@@ -1,5 +1,5 @@
 """The remote bandwidth audit v0 (`verity/remote-bandwidth/v0`): a verifier with no hardware at the site certifies how
-many reads of a node's registered blocks the node made in each window, from receipts chained pass to pass.
+many reads of a node's registered blocks the node made in each window, from receipts under a live coin a pass.
 
 1. Registration.  The prover commits to its payload blocks (`payload_tree`: the weights, KV pages and filler, each an
    hm96-sha512/row/v2 leaf) and sends the root.  Only then does the verifier draw the codec seed from its own secret and
@@ -14,26 +14,27 @@ many reads of a node's registered blocks the node made in each window, from rece
    second while one is live is refused and draws nothing, and a registration ends only when the verifier closes it,
    counting its sessions, an unended one as failed.
 2. Coins.  Before the session the proof service's challenger draws two live coins a window, its challenge `σ_t` and
-   its openings coin, and a coin an append, and commits to them (`coins.Coins`: session k's epoch of the one challenger,
-   on its own host when it is remote).  The prover gets the commitment first (`Session.commitment`).  Each coin opens
+   its openings coin, a coin a pass and a coin an append, and commits to them (`coins.Coins`: session k's epoch of the
+   one challenger, on its own host when it is remote).  The prover gets the commitment first (`Session.commitment`).  Each coin opens
    once, after the root the verifier recorded for it, which the challenger's signed log keeps
    (`Session.released_reason`).
 3. A session of `windows` windows.  The verifier releases `σ_0` (`Session.start`), and at each window's end the next
    window's challenge, or the close after the last (`Session.boundary`), one-way.  A window lasts at least the stated
    `T` (`Params.window_ns`, 60 s by default).
-4. Chained passes.  Pass i of window t reads the blocks of its plan (`receipts.Plan`: distinct blocks, the whole store by
-   default) and computes their receipts under `seed_(t,i) = H(σ_t, i, root_(t,i−1))` (`receipts.seed`; the root
-   before chained to every append received before the pass's own root, `chained`), each of its block alone, or under
+4. Passes under live coins.  Pass i of window t reads the blocks of its plan (`receipts.Plan`: distinct blocks, the
+   whole store by default) and computes their receipts under its seed, the pass's own live coin (`receipts.SEED`),
+   which the verifier releases when the prover asks for it, after the root of the pass before (`Session.seed`: one
+   round trip a pass), each of its block alone, or under
    a registration that binds z also of PoUW's tile output `z` before the read (`Tiles`); it commits them in a tree
    bound to the plan and sends the root and the plan, whole or as its change from the previous pass's
    (`Plan.changed`), with the step it covers, as soon as the pass ends (`Session.receive`).  A pass covers one
    step `s` of the served circuit's execution (the engine step), and its plan holds every complete block the circuit
    reads at `s`, filler beside them allowed (`PlanMatches`): the steps are public, and strictly increase over the
-   session's passes.  The chain runs across the session's windows: a window's first
-   pass follows the root of the previous window's last.  On a boundary message the prover finishes the pass in flight,
-   which is its window's last, and starts the next window's chain.  Blocks written after the codec seed (KV pages)
-   join the store mid-session: their payloads committed (`append_tree`, `Session.append`) before any pass whose plan
-   holds them, and so bound into its seed, at fresh store indices from N up, each encoded under its bound key and its
+   session's passes.  The passes run in sequence across the session's windows, each coin after the root before it.
+   On a boundary message the prover finishes the pass in flight, which is its window's last, and the next coin it
+   asks for is the next window's first pass's.  Blocks written after the codec seed (KV pages)
+   join the store mid-session: their payloads committed (`append_tree`, `Session.append`) between passes, before the
+   seed of any pass whose plan holds them, at fresh store indices from N up, each encoded under its bound key and its
    append's coin `c_a`, which the verifier draws and sends in reply to the append (`codec.encode(..., bound=True,
    coin=c_a)`, `Store.encode`), so no choice the prover made before committing them depends on their encodings;
    every coin is drawn once, and an append no root follows, or one sent again, rejects the session (`coin`);
@@ -63,7 +64,7 @@ many reads of a node's registered blocks the node made in each window, from rece
    and a rejected window ends its session.
 8. The record (`Session.record`): per window each pass's length and step, its challenge's release and its deadline on the
    verifier's clock, its openings coin's release, an `IntegrityProfile` over its receipts with `Subset(s)` drawn, and
-   each pass's head (the append chain its seed binds) and stale bound (`WindowRecord.heads`, `WindowRecord.stale`);
+   each pass's head (the append chain received before its seed left) and stale bound (`WindowRecord.heads`, `WindowRecord.stale`);
    and the chain over the session's appends (`Record.appends`);
    `ledger` turns it, with the node's measured capacities and a squaring ceiling at its codec's width (`Rebuild`), into
    each γ term over the session's span and over each window's own (`WindowLedger`), μ_sample read per window and
@@ -116,7 +117,6 @@ OPENINGS_DOMAIN = "verity/remote-bandwidth/openings/v0"
 PAYLOAD_DOMAIN = b"verity/remote-bandwidth/payload/v0\0"
 APPEND_DOMAIN = b"verity/remote-bandwidth/append/v0\0"
 APPENDS_DOMAIN = b"verity/remote-bandwidth/appends/v0\0"
-CHAINED_DOMAIN = b"verity/remote-bandwidth/chained/v0\0"
 REGISTRATION_DOMAIN = b"verity/remote-bandwidth/registration/v0\0"
 TILE_DOMAIN = b"verity/remote-bandwidth/stub-tile/v0\0"
 PAYLOAD_SCHEMA = receipts.SCHEMA
@@ -232,8 +232,12 @@ class Params:
     parameters, so before the session's first coin: the schedule check refuses a schedule over it, and the ledger
     credits it as the layout's steering (`Ledger.steering`, the `a` of `SteeredLayout`) at every coin alike.  None (the
     default) commits none, and the session credits no appended block (`Session.scheduled` refuses)."""
+    seed: str = receipts.SEED
+    """The receipt format, `receipts.SEED`: each pass's seed a live coin of its own (`Session.seed`); seed/v0, whose
+    seeds are Fiat–Shamir over the prover's roots, is refused by name (`receipts.seed_format`)."""
 
     def __post_init__(self) -> None:
+        receipts.seed_format(self.seed)
         if type(self.deferred) is not bool:
             raise ValueError("deferred is a bool")
         if self.schedule_cap is not None and (type(self.schedule_cap) is not int or self.schedule_cap < 0):
@@ -338,19 +342,6 @@ def append_head(head: bytes | None, first: int, count: int, root: bytes) -> byte
         raise ValueError(f"an append's root and the chain's head are {DIGEST_BYTES} bytes")
     return hashlib.sha512(APPENDS_DOMAIN + (head or bytes(DIGEST_BYTES)) + first.to_bytes(8, "big")
                           + count.to_bytes(8, "big") + root).digest()
-
-
-def chained(previous: bytes, head: bytes | None) -> bytes:
-    """What a pass's seed takes as the root before it (`receipts.seed`'s `previous`): that root itself while no block
-    has been appended before the pass's own root (`head` None), else SHA512(CHAINED_DOMAIN ‖ root ‖ head), `head` the
-    chain over every append received before the pass's root (`append_head`).  So the seed of a pass comes after every
-    block its plan can hold: a block appended after it is in no plan of the pass, and one that carried the pass's
-    receipts of other blocks would be a fixed point of SHA-512."""
-    if head is None:
-        return previous
-    if type(previous) is not bytes or len(previous) != DIGEST_BYTES or type(head) is not bytes or len(head) != DIGEST_BYTES:
-        raise ValueError(f"the root before a pass and the appends' head are {DIGEST_BYTES} bytes")
-    return hashlib.sha512(CHAINED_DOMAIN + previous + head).digest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -502,8 +493,8 @@ class Store:
 
     @property
     def head(self) -> bytes | None:
-        """The chain over the store's appends (`append_head`), None without one: what the seed of a pass binds once
-        the verifier has every one of them (`chained`)."""
+        """The chain over the store's appends (`append_head`), None without one: a pass's head once the verifier has
+        every one of them (`WindowRecord.heads`)."""
         out = None
         for a in self.appends:
             out = append_head(out, a.first, a.count, a.root)
@@ -598,17 +589,13 @@ class Prover:
         self.store, self.commitment, self.entropy = store, commitment, entropy
         self.tiles = _tiles(tiles, store.registration.bind)
 
-    def run(self, challenge: coins.LiveOpening, i: int, previous: bytes, plan: Plan | None = None, *,
-            head: bytes | None = None) -> Pass:
-        """Pass i of the window whose challenge is `challenge`, after the root `previous`, its seed binding `head`, the
-        chain over every append the verifier will have received before this pass's root (`chained`; None without
-        one, the honest prover's `Store.head`): refused unless the coin is a window's challenge and opens against the
-        session's commitment."""
-        t = getattr(challenge, "index", None)
-        reason = coins.coin_reason(self.commitment, challenge, coins.CHALLENGE, t)
+    def run(self, coin: coins.LiveOpening, window: int, i: int, plan: Plan | None = None) -> Pass:
+        """Pass i of `window` under the pass coin `coin` the verifier released for it (`Session.seed`), its seed:
+        refused unless the coin is a pass's and opens against the session's commitment."""
+        reason = coins.coin_reason(self.commitment, coin, coins.PASS, getattr(coin, "index", None))
         if reason is not None:
             raise ValueError(reason)
-        return self.pass_under(t, i, receipts.seed(coins.coin(challenge), i, chained(previous, head)), plan)
+        return self.pass_under(window, i, coins.seed(coin), plan)
 
     def pass_under(self, window: int, i: int, seed: bytes, plan: Plan | None = None) -> Pass:
         """Pass i of `window`'s receipts and tree under `seed`, however it was derived."""
@@ -641,13 +628,14 @@ class Verdict:
 
 @dataclass(frozen=True, slots=True)
 class WindowRecord:
-    """What an accepted window established: chained passes of `lengths` reads of distinct registered blocks each, made
+    """What an accepted window established: passes of `lengths` reads of distinct registered blocks each, made
     after its challenge left at `released_ns` and committed by `deadline_ns` on the verifier's clock, each pass's root
     arriving at `arrived_ns` on that clock (one a pass, empty in a record no session made); its openings coin
     released at `opened_ns`; the openings' law (`profile`); of each pass's reads, `post_seed` of blocks appended
     after the codec seed (none if empty), which the ledger credits only on the property's verdict; the step each
     pass covers, `steps`, strictly increasing; each pass's head, `heads`, the chain over every append received
-    before its root (`append_head`, None before the first), which its seed binds (`chained`); and each pass's stale
+    before its root (`append_head`, None before the first), each of them before its seed left (`Session.append`
+    takes none while a pass's coin is out); and each pass's stale
     bound, `stale`: N, the registered store's size, plus the counts of the session's appends that joined window
     `window` − L or before (L `Params.lifetime`), an append joining the window of the first root received after it,
     which is the window of the first pass whose head chains it.  That is the store index below which every appended
@@ -835,6 +823,7 @@ class _Window:
     challenge: bytes
     released_ns: int
     roots: list[bytes] = field(default_factory=list)
+    seeds: list[bytes] = field(default_factory=list)
     plans: list[Plan] = field(default_factory=list)
     post: list[int] = field(default_factory=list)
     steps: list[int] = field(default_factory=list)
@@ -914,6 +903,7 @@ class Session:
         self._plan = Plan.whole(registration.blocks)
         self._step = -1
         self._latest = coins_.window
+        self._seeded: tuple[int, bytes] | None = None
 
     @property
     def commitment(self) -> coins.LiveCommitment:
@@ -1017,20 +1007,42 @@ class Session:
     def _one_in_flight(self) -> bool:
         return self.params.pace is not None and self.params.pace.in_flight == 1
 
+    def seed(self) -> coins.LiveOpening | Verdict:
+        """The next pass's coin, its seed (`coins.seed`), released now after the last root received (R before any:
+        `coins.Coins.pass_`): one round trip a pass, and no pass's seed is a function of the prover's roots.  The pass
+        is of the window it names when its root arrives (`receive`), one whose challenge had left by now.  Refused
+        while a coin is out (its root comes first), and once the last window's roots are final; its rejection,
+        `coin`, releasing none, once the session's pass coins are all released."""
+        self._live()
+        if not self.windows:
+            raise SessionError("the session has not started")
+        if self._seeded is not None:
+            raise SessionError("a pass's coin is out: its root comes before the next coin")
+        if len(self.windows) == self.params.windows and self.windows[-1].final:
+            raise SessionError("the last window's roots are final")
+        if self.coins.passes == self.coins.commitment.family(coins.PASS):
+            return self._fail(self.filling, "coin")
+        opening = self.coins.pass_(self._latest)
+        self._seeded = (len(self.windows) - 1, coins.seed(opening))
+        return opening
+
     def append(self, root: bytes, count: int) -> tuple[int, bytes] | Verdict:
         """The root of an append's payload tree (`append_tree`), `count` blocks written after the codec seed: they take
         the store's next fresh indices, from the first returned, and a plan received after this may hold them, until
         the lifetime cap: they join the window of the next root received, and no plan of a window `Params.lifetime` or
-        more after it may hold them.  The seed of every pass whose root comes after this binds it (`chained`).  The
-        reply is the first index and the append's coin `c_a`, released now after the append's root (`coins.Coins.append`),
-        under which the prover encodes the blocks (`Store.encode`) and an opening decodes them.  Its rejection, `append`,
-        if it is malformed or would take the store past its codec's `max_blocks`; `coin`, releasing none, if its root was
-        sent before (a retry never redraws), the last window's roots are final, so no root can follow it, or the session's
+        more after it may hold them.  It comes between passes: one received while a pass's coin is out (`seed`) is out
+        of turn (`order`), so no block appended after a pass's seed left is in its plan.  The reply is the first index
+        and the append's coin `c_a`, released now after the append's root (`coins.Coins.append`), under which the
+        prover encodes the blocks (`Store.encode`) and an opening decodes them.  Its rejection, `append`, if it is
+        malformed or would take the store past its codec's `max_blocks`; `coin`, releasing none, if its root was sent
+        before (a retry never redraws), the last window's roots are final, so no root can follow it, or the session's
         append coins are all released (or it reserved none: `coins.families`)."""
         self._live()
         if (type(root) is not bytes or len(root) != DIGEST_BYTES or type(count) is not int or count < 1
                 or self.extent + count > self.params.codec.max_blocks):
             return self._fail(self.filling, "append")
+        if self._seeded is not None:
+            return self._fail(self.filling, "order")
         if (root in self._roots or (len(self.windows) == self.params.windows and self.windows[-1].final)
                 or self.coins.appends == (self.coins.commitment.family(coins.APPEND) or 0)):
             return self._fail(self.filling, "coin")
@@ -1085,8 +1097,9 @@ class Session:
         plan's proof unit checks against the prover's memory map (`PROTOCOL.md` §8); its rejection, `step`, if it is
         missing or not above.  A paced session's window holds at
         most k roots, and a later one is out of turn (`order`), as is, at one window in flight (`Pace.in_flight`), a
-        root that passes every other check after its window's boundary.  The root's arrival, the clock now, goes in
-        the record.
+        root that passes every other check after its window's boundary.  A root is its pass's under the coin out
+        (`seed`), and one with no coin out, or of a window whose challenge left after that coin, is out of turn
+        (`order`).  The root's arrival, the clock now, goes in the record.
         Returns the rejection they cause, if any."""
         self._live()
         if not self.windows:
@@ -1094,6 +1107,8 @@ class Session:
         now = self.clock()
         if type(t) is not int or type(i) is not int or type(root) is not bytes or len(root) != DIGEST_BYTES:
             return self._fail(self.filling, "malformed")
+        if self._seeded is None or t > self._seeded[0]:
+            return self._fail(self.filling, "order")
         if t == self.filling + 1 and i == 0 and t < len(self.windows):
             self.windows[self.filling].final = True
             self.filling = t
@@ -1132,6 +1147,8 @@ class Session:
             if held:
                 self._planned = _merged(self._planned + held)
         self.windows[t].roots.append(root)
+        self.windows[t].seeds.append(self._seeded[1])
+        self._seeded = None
         self.windows[t].plans.append(plan)
         self.windows[t].post.append(0 if extent == N else sum(max(0, f + c - max(f, N)) for f, c in plan.runs))
         self.windows[t].steps.append(step)
@@ -1163,7 +1180,7 @@ class Session:
         if t != group[-1]:
             raise SessionError(f"window {t} is drawn with its draw's last window, {group[-1]}")
         if any(v.draws is None for v in self.windows[:group[0]]):
-            raise SessionError("windows are drawn in order: a window's first pass chains from the window before")
+            raise SessionError("windows are drawn in order: a window's first pass follows the window before's last")
         d = self.deadline(t)
         now = self.clock()
         full = self.params.pace is not None and d is not None and len(w.roots) >= self.params.pace.k
@@ -1195,15 +1212,6 @@ class Session:
             base += n
         return tuple(draws)
 
-    def _previous(self, t: int, i: int) -> bytes:
-        """What pass i of window t's seed takes as the root before it: that root, chained to the appends received
-        before the pass's own root (`chained`)."""
-        if i > 0:
-            root = self.windows[t].roots[i - 1]
-        else:
-            root = self.windows[t - 1].roots[-1] if t > 0 else self.registration.digest
-        return chained(root, self.windows[t].heads[i])
-
     def verify(self, t: int, openings: Sequence[Opening]) -> Verdict:
         """Window t's verdict on the prover's openings of its draws, in the order drawn: `malformed` on a window with
         no draws, whatever its openings."""
@@ -1234,7 +1242,7 @@ class Session:
         j = plan.block(p)
         if type(o.digest) is not bytes or len(o.digest) != (0 if j < N else DIGEST_BYTES):
             return "malformed"
-        seed = receipts.seed(self.windows[t].challenge, i, self._previous(t, i))
+        seed = self.windows[t].seeds[i]
         y = receipts.leaf_receipt(o.leaf, p, plan.length)
         if y is None:
             return "malformed"

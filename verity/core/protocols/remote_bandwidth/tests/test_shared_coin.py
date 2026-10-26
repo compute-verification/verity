@@ -59,7 +59,7 @@ def test_a_coin_a_window_is_the_default_and_draws_each_window_alone(store) -> No
     assert p.groups_per_coin == 1 and p.coins == 2 * p.windows
     assert [list(p.draw_of(t)) for t in range(p.windows)] == [[0], [1], [2]]
     assert coins.families(3, APPENDS) == coins.families(3, APPENDS, 1) == (
-        (coins.CHALLENGE, 3), (coins.OPENINGS, 3), (coins.APPEND, APPENDS))
+        (coins.CHALLENGE, 3), (coins.OPENINGS, 3), (coins.PASS, coins.PASSES), (coins.APPEND, APPENDS))
     s, prover, passes, clock = drive(store, p, SCHEDULE)
     assert all(v.accepted for v in finish_draws(s, prover, passes, clock))
     assert s.coins.afters(coins.OPENINGS) == tuple(w.roots[-1] for w in s.windows)
@@ -168,12 +168,12 @@ def test_the_last_draw_may_hold_fewer_windows(store) -> None:
 def skipping(window: int):
     """A prover that reads nothing in `window`: its receipts there are of zeros, the blocks it would hold had it
     dropped the store, and every other window's are honest. It opens with the honest blocks, fetched again."""
-    def run(prover, t, i, challenges, previous, plan):
+    def run(prover, t, i, coin, plan):
         if t != window:
-            return prover.run(challenges[t], i, previous, plan)
+            return prover.run(coin, t, i, plan)
         held = copy.copy(prover.store)
         held.blocks = [bytes(codec.BLOCK_BYTES)] * N
-        return audit.Prover(held, None, prover.commitment, entropy=prover.entropy).run(challenges[t], i, previous, plan)
+        return audit.Prover(held, None, prover.commitment, entropy=prover.entropy).run(coin, t, i, plan)
     return run
 
 
@@ -204,6 +204,9 @@ def test_a_session_drawn_two_windows_a_coin_through_a_challenger_service_holds_t
     assert all(v.accepted for v in finish_draws(s, prover, passes, clock)) and service.close() is None
     signed, received = service.signed()
     assert signed == s.commitment and s.released_reason(signed, received) is None
-    assert [f for f in signed.families if f[0] != coins.APPEND] == [(coins.CHALLENGE, 3), (coins.OPENINGS, 2)]
+    assert [f for f in signed.families if f[0] not in (coins.APPEND, coins.PASS)] == [
+        (coins.CHALLENGE, 3), (coins.OPENINGS, 2)]
+    roots = [r for w in s.windows for r in w.roots]
+    assert received[coins.PASS] == (s.coins.window, *roots[:-1])
     assert received[coins.OPENINGS] == (s.windows[1].roots[-1], s.windows[2].roots[-1])
     assert coins.layout_reason(signed, 0, p.windows, 2) is None and "openings 3" in coins.layout_reason(signed, 0, 3)

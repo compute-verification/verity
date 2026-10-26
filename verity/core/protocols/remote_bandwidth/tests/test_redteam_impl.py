@@ -98,19 +98,20 @@ def test_rb3_a_session_refuses_to_start_while_another_reads_the_store(store) -> 
                         not_before_ns=0, clock=clock) for k in (0, 1)]
     provers = [audit.Prover(store, None, s.commitment, entropy=Entropy(b"unused")) for s in sessions]
     reads, entropy = [0], Entropy(b"joint salts")
-    challenges = [s.start() for s in sessions]
-    previous = [store.registration.digest] * 2
+    for s in sessions:
+        s.start()
     passes: list[dict] = [{}, {}]
     for t in range(2):
         for i in range(3):
             clock.now += 300
-            seeds = tuple(receipts.seed(coins.coin(challenges[k]), i, previous[k]) for k in (0, 1))
+            seeds = tuple(coins.seed(s.seed()) for s in sessions)
             pair = joint_pass(store, t, i, seeds, reads, entropy)
             for k in (0, 1):
-                passes[k][t, i], previous[k] = pair[k], pair[k].root
+                passes[k][t, i] = pair[k]
                 assert sessions[k].receive(t, i, pair[k].root, pair[k].plan.runs, step=3 * t + i) is None
         clock.now += 10
-        challenges = [s.boundary() for s in sessions]
+        for s in sessions:
+            s.boundary()
     for k in (0, 1):
         verdicts = finish(sessions[k], provers[k], passes[k], clock)
         assert [v.accepted for v in verdicts] == [True, True]

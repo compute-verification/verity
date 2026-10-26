@@ -34,13 +34,15 @@ def paced(store, p: audit.Params, plan=None):
     """A paced session driven on its own schedule: each pass takes `PASS_NS` from its coin's arrival or the pass before,
     each message `DOWN_NS` to the prover and `UP_NS` back; the prover runs at most k passes under a coin, moves to the
     next coin once it has arrived, and stops at the close; the verifier sends each boundary message at
-    `Session.next_boundary_ns`, recomputed after every root.  Returns the session, prover, passes, clock and each
-    root's arrival."""
+    `Session.next_boundary_ns`, recomputed after every root.  Each pass's own coin (`Session.seed`) is asked for as
+    its root arrives, which keeps the pace's times; its round trip is `timing`'s.  Returns the session, prover,
+    passes, clock and each root's arrival."""
     clock = Clock()
     s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
     prover = audit.Prover(store, None, s.commitment, entropy=Entropy(b"receipt salts"))
-    challenges, coin_at, closed_at = {0: s.start()}, {0: DOWN_NS}, None
-    passes, arrivals, previous = {}, {}, store.registration.digest
+    s.start()
+    coin_at, closed_at = {0: DOWN_NS}, None
+    passes, arrivals = {}, {}
     t = i = ready = step = 0
     pending = None
     while True:
@@ -50,22 +52,21 @@ def paced(store, p: audit.Params, plan=None):
             stopped = closed_at is not None and closed_at <= ready
             if not stopped and i < p.pace.k and t in coin_at:
                 start = max(ready, coin_at[t])
-                ps = prover.run(challenges[t], i, previous, plan and plan(t, i))
-                pending, ready = (start + PASS_NS + UP_NS, t, i, ps), start + PASS_NS
+                pending, ready = (start + PASS_NS + UP_NS, t, i), start + PASS_NS
         b = s.next_boundary_ns()
         if b is not None and (pending is None or b <= pending[0]):
             clock.now = max(clock.now, b)
-            coin = s.boundary()
-            if coin is None:
+            if s.boundary() is None:
                 closed_at = clock.now + DOWN_NS
             else:
-                challenges[len(s.windows) - 1], coin_at[len(s.windows) - 1] = coin, clock.now + DOWN_NS
+                coin_at[len(s.windows) - 1] = clock.now + DOWN_NS
             continue
         if pending is None:
             break
-        clock.now, u, j, ps = pending
+        clock.now, u, j = pending
+        ps = prover.run(s.seed(), u, j, plan and plan(u, j))
         assert s.receive(u, j, ps.root, ps.plan.runs, step=step) is None
-        passes[u, j], arrivals[u, j], previous, pending, step, i = ps, clock.now, ps.root, None, step + 1, i + 1
+        passes[u, j], arrivals[u, j], pending, step, i = ps, clock.now, None, step + 1, i + 1
     return s, prover, passes, clock, arrivals
 
 
@@ -101,15 +102,15 @@ def test_next_boundary_is_the_stated_window_unpaced_and_the_pace_when_paced(stor
     assert s.next_boundary_ns() == p.window_ns
     p = params(windows=3, window_ns=5, pace=Pace(2))
     s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
-    coin = s.start()
+    s.start()
     assert s.next_boundary_ns() == A, "not due before its first root: at the latest one allowance after its coin"
     prover = audit.Prover(store, None, s.commitment, entropy=Entropy(b"receipt salts"))
     clock.now = 100
-    ps = prover.run(coin, 0, store.registration.digest, None)
+    ps = prover.run(s.seed(), 0, 0, None)
     assert s.receive(0, 0, ps.root, step=0) is None
     assert s.next_boundary_ns() == 5, "due at k − 1 = 1 root: as soon as the stated window allows"
     for i in (1, 2):
-        ps = prover.run(coin, i, ps.root, None)
+        ps = prover.run(s.seed(), 0, i, None)
         v = s.receive(0, i, ps.root, step=i)
     assert v == audit.Verdict(0, False, "order"), "a window's (k + 1)-th root is out of turn"
 

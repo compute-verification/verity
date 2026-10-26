@@ -75,8 +75,9 @@ once it arrives.  Residency waits for that encode, so the coin's round trip is o
 writer records the blocks' writes, in their appends' order and at the indices they took, at the step before the first
 step whose attention reads them encoded.  `Replay.apply` gives each step's `Change`: when every coin is back before
 the next step's reads, its blocks are the step's own append (`Change.append_tree`); deferred, they are those of the
-appends sent before whose writes the step records.  The appends are sent before the root of any pass whose plan
-holds them, and that pass's seed binds them (`audit.chained`), so it is computed after they are sent.
+appends sent before whose writes the step records.  The appends are sent between passes, before the seed of any pass
+whose plan holds them leaves (`audit.Session.seed`; the session takes no append while a pass's coin is out), so the
+seed is drawn after they are sent.
 That the session's appends, re-keys and frees are this record's, in its order and at its steps, is the memory-map
 unit's to prove against the record's append chain and each pass's head (`audit.Record.appends`,
 `WindowRecord.heads`, `RequirementLink.mapped`, `PROTOCOL.md` §8 "The memory map's choices"): frees, re-keys and

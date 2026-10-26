@@ -248,9 +248,9 @@ def test_vectors_cover_zero_weights_a_short_last_leaf_a_partial_plan_and_the_cha
     coin_0 = pinned["coins"]["coin_0"]
     assert pinned["passes"]["challenge"] == coin_0["coin"][:2 * coins.COIN_BYTES] != pinned["openings"]["coin"]
     assert coin_0["after"] == pinned["coins"]["window"] and pinned["openings"]["after"] == passes[-1]["root"]
-    assert passes[0]["previous"] == pinned["registration"]["digest"]
-    assert all(b["previous"] == a["root"] for a, b in itertools.pairwise(passes))
-    assert len({p["seed"] for p in passes}) == 3
+    assert pinned["passes"]["seed_format"] == receipts.SEED and passes[0]["after"] == pinned["coins"]["window"]
+    assert all(b["after"] == a["root"] for a, b in itertools.pairwise(passes))
+    assert len({p["seed"] for p in passes}) == 3 and all(len(bytes.fromhex(p["seed"])) == coins.SEED_BYTES for p in passes)
     assert passes[0]["plan_digest"] == passes[2]["plan_digest"] != passes[1]["plan_digest"]
     assert pinned["openings"]["position"] == rv.PARAMS.windows and pinned["payload"]["schema"] == "hm96-sha512/row/v2"
     chains = {rv.DEFAULT: pinned["passes"]} | {v: pinned["variants"][rv.name(*v)]["passes"] for v in rv.VARIANTS}
@@ -265,8 +265,9 @@ def test_vectors_cover_zero_weights_a_short_last_leaf_a_partial_plan_and_the_cha
                           tuple(map(bytes.fromhex, coin_0["path"])))
     assert coins.layout_reason(c, 0, rv.PARAMS.windows) is None and coins.coin_reason(c, o, coins.CHALLENGE, 0) is None
     for (kind, bind, rows), c in chains.items():
-        assert c["passes"][0]["previous"] in digests and all(b["previous"] == a["root"]
-                                                             for a, b in itertools.pairwise(c["passes"]))
+        assert c["passes"][0]["after"] in windows and all(b["after"] == a["root"]
+                                                          for a, b in itertools.pairwise(c["passes"]))
+        assert [p["seed"] for p in c["passes"]] == [p["seed"] for p in passes]  # the same pass coins, after other roots
         assert [p["plan_digest"] for p in c["passes"]] == [p["plan_digest"] for p in passes]
         assert c["challenge"] == pinned["passes"]["challenge"]              # the same coins, another window R
         assert ("z_bytes" in c) == bind and all(("z_1" in p) == bind for p in c["passes"])   # z only where it is bound
@@ -292,7 +293,7 @@ def test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones(kin
     as `test_vectors_are_reproduced`, which encodes it once for all of them."""
     store = rv.store() if (kind, bind, rows) == rv.DEFAULT else rv.registered(kind, bind, rows)
     reg = store.registration
-    challenger = coins.local(reg.digest, 0, rv.PARAMS.windows, rv.Entropy(rv.COIN_LABEL))
+    challenger = rv.challenger_of(reg)
     clock = Clock()
     tiles = audit.NoiseTiles(96) if bind else None
     s = audit.Session(dataclasses.replace(rv.PARAMS, receipt=kind, bind=bind, rows=rows), reg, tiles, challenger,
@@ -300,13 +301,14 @@ def test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones(kin
     prover = audit.Prover(store, tiles, s.commitment, entropy=rv.Entropy(rv.LEAF_SALT_LABEL))
     pinned = json.loads(rv.PATH.read_text())
     pinned = pinned if (kind, bind, rows) == rv.DEFAULT else pinned["variants"][rv.name(kind, bind, rows)]
-    challenge, previous, passes = s.start(), reg.digest, []
+    s.start()
+    passes = []
     for i, (plan, want) in enumerate(zip(rv.PLANS, pinned["passes"]["passes"], strict=True)):
-        passes.append(prover.run(challenge, i, previous, plan))
+        passes.append(prover.run(s.seed(), 0, i, plan))
         ps = passes[-1]
+        assert ps.seed.hex() == want["seed"]
         assert ps.root.hex() == want["root"] and ps.plan.runs == tuple(map(tuple, want["plan"]))
         assert s.receive(0, i, ps.root, ps.plan.runs, step=i) is None
-        previous = ps.root
     clock.now = rv.PARAMS.window_ns
     assert s.boundary() is None
     clock.now = s.deadline(0) + 1

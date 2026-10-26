@@ -7,12 +7,13 @@ below p (two pieces a word at p1024, one at p512), and payload 0 is all zeros (t
 the default codec, p1024 masked at k = 3.  Every coin and salt comes from `entropy(label)`, SHA-512 in counter mode:
 call c returns the first n bytes of `SHA512(label ‖ u64be c) ‖ SHA512(label ‖ u64be c + 1) ‖ …`, the counter running on
 across calls (`Entropy`).  The challenger (`coins.local`, session 0's epoch of the one challenger) draws each coin of its
-layout and then its salt, in layout order: window 0's challenge, its openings coin, then the append coins; a coin is 64
-bytes and the audit's is its first 32, so one SHA-512 block a coin.  `coins.window` is R, the session's window over its
-registration, which σ_0 is opened after; the commitment names no registration, so every variant's coins are the same
-coins under the same root, each opened after its own R.  The payload salts are drawn in block order and the receipt
-leaves' salts pass by pass, leaf by leaf.  The
-three passes are one window's chain: pass 0 follows the registration's digest and each later pass the root before it.
+layout and then its salt, in layout order: window 0's challenge, its openings coin, the three pass coins, then the
+append coins; a coin is 64 bytes and the audit's is its first 32, so one SHA-512 block a coin, and a pass's seed is its
+pass coin whole (receipt format seed/v1).  `coins.window` is R, the session's window over its registration, which σ_0
+and pass 0's coin are opened after; the commitment names no registration, so every variant's coins are the same coins
+under the same root, each opened after its own R.  The payload salts are drawn in block order and the receipt leaves'
+salts pass by pass, leaf by leaf.  The three passes are one window's: pass i's coin is opened after the root before it
+(`after`, R for pass 0).
 A GPU receipter fills its store with the same payloads, encodes them under the pinned codec seed, and checks its blocks,
 receipts and roots against these.  `codec.bound` holds blocks 0 and 20 encoded under their bound keys, as blocks
 written after the codec seed are: d_j, b_j, the first word and the block's SHA-512; `codec.coin` the same blocks under
@@ -113,19 +114,25 @@ def registered(receipt: str, bind: bool, rows: int) -> audit.Store:
     return out
 
 
+def challenger_of(reg: audit.Registration) -> coins.Coins:
+    """Session 0's coins over `reg`: a pass coin for each of the three passes, and the default append coins."""
+    return coins.local(reg.digest, 0, PARAMS.windows, Entropy(COIN_LABEL), passes=len(PLANS))
+
+
 def chain(st: audit.Store) -> tuple[coins.LiveOpening, list[dict], coins.LiveOpening, coins.Coins]:
     """Window 0's challenge, opened after R, its three passes under the registration's receipt kind and `bind` (the
-    stub tiles' z when it binds them), its openings coin, opened after the last pass's root, and the session's coins."""
+    stub tiles' z when it binds them), each seeded by its pass coin opened after the root before it (R before the
+    first), its openings coin, opened after the last pass's root, and the session's coins."""
     reg, blocks = st.registration, st.blocks
     tiles = TILES if reg.bind else None
-    challenger = coins.local(reg.digest, 0, PARAMS.windows, Entropy(COIN_LABEL))
+    challenger = challenger_of(reg)
     leaf_salts = Entropy(LEAF_SALT_LABEL)
     sketched = reg.receipt == receipts.SKETCH_SHA512
 
     challenge = challenger.challenge(0, challenger.window)
-    passes, previous = [], reg.digest
+    passes, previous = [], challenger.window
     for i, plan in enumerate(PLANS):
-        s = receipts.seed(coins.coin(challenge), i, previous)
+        s = coins.seed(challenger.pass_(previous))
         receipter = receipts.receipter(reg.receipt, s, reg.rows)
         zs = {j: None if tiles is None else tiles.output(s, j) for j in plan}
         ys = [receipter(j, blocks[j], zs[j]) for j in plan]
@@ -133,7 +140,7 @@ def chain(st: audit.Store) -> tuple[coins.LiveOpening, list[dict], coins.LiveOpe
         leaf0 = b"".join(ys[:receipts.PER_LEAF])
         root = receipts.tree(s, plan, ys, ss).commitment.root
         ends = (0, 1, plan.length - 1)
-        passes.append({"i": i, "previous": previous.hex(), "seed": s.hex(),
+        passes.append({"i": i, "after": previous.hex(), "seed": s.hex(),
                        "prefix": (receipts.sketch_prefix if sketched else receipts.prefix)(s).hex(),
                        "plan": [list(r) for r in plan.runs], "plan_encoding": plan.encode().hex(),
                        "plan_digest": plan.digest.hex(), "binding": receipts.binding(s, plan).hex(),
@@ -151,7 +158,7 @@ def chain(st: audit.Store) -> tuple[coins.LiveOpening, list[dict], coins.LiveOpe
 
 
 def _passes(st: audit.Store, challenge: coins.LiveOpening, passes: list[dict]) -> dict:
-    out = {"window": 0, "challenge": coins.coin(challenge).hex(), "passes": passes}
+    out = {"window": 0, "challenge": coins.coin(challenge).hex(), "seed_format": receipts.SEED, "passes": passes}
     return out | {"z_bytes": TILES.z_bytes} if st.registration.bind else out
 
 

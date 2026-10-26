@@ -3,10 +3,10 @@ commits them.
 
 ~~~text
 Z(x)          x zero-padded to whole 128-byte blocks (one SHA-512 block here)
-seed_(t,i)    SHA512(SEED_DOMAIN ‖ σ_t ‖ u32be i ‖ root_(t,i−1)),  SEED_DOMAIN = "verity/remote-bandwidth/seed/v0\0",
-              σ_t window t's challenge (its live coin, `coins.py`), root_(t,−1) = root_(t−1,last) in a session and the
-              registration's digest for its first window; in a session with appends, the root chained to them
-              (`audit.chained`)
+seed_(t,i)    c_n, the challenger's live coin of the session's n-th pass, pass i of window t, whole: 64 bytes, released
+              only after the root before the pass (`coins.Coins.pass_`, `audit.Session.seed`): the receipt format
+              SEED = "verity/remote-bandwidth/seed/v1".  seed/v0's SHA512(σ_t ‖ i ‖ root_(t,i−1)), Fiat–Shamir over
+              the prover's roots, is refused by name (`seed_format`)
 plan_(t,i)    R runs (first, count) in read order: count ≥ 1, inside the store, pairwise disjoint, and no run starting
               where the one before it ends (it would be the same run).  Position p is the p-th block of the runs
               concatenated, L_i positions in all.
@@ -32,7 +32,8 @@ root_(t,i)    frame-v3-sha512 over the leaves: CommitmentDomain(binding = SHA512
 ~~~
 
 `frame` is `verity.ml.randomness.frame`.  A receipt is seed-first: the seed fills the first SHA-512 block, so no state
-over a block's bytes exists before the seed, and the seed exists only after the previous pass's root.  A receipt is of
+over a block's bytes exists before the seed, and the seed leaves the challenger only after the previous pass's root.
+A receipt is of
 the block alone unless the registration binds z, PoUW's opt-in join: a receipter takes `z` = None, or `z_(i,j)`,
 PoUW's noised output of the tile before block j's read in pass i, which then enters elementwise, before any
 compression, so a relay that meets the block and z over a link carries `min(|z|, b)` bytes per block, not a digest of
@@ -80,7 +81,8 @@ from verity.ml.randomness import derive, frame
 
 from .codec import BLOCK_BYTES
 
-SEED_DOMAIN = b"verity/remote-bandwidth/seed/v0\0"
+SEED = "verity/remote-bandwidth/seed/v1"
+SEED_V0 = "verity/remote-bandwidth/seed/v0"
 PLAN_DOMAIN = b"verity/remote-bandwidth/plan/v0\0"
 RECEIPT_DOMAIN = b"verity/remote-bandwidth/receipt/v0\0"
 SKETCH_RECEIPT_DOMAIN = b"verity/remote-bandwidth/sketch-receipt/v0\0"
@@ -107,14 +109,15 @@ def _digest(value: bytes, name: str) -> bytes:
     return value
 
 
-def seed(challenge: bytes, i: int, previous: bytes) -> bytes:
-    """`seed_(t,i)`: pass `i`'s seed under the window's challenge, after the root before it (`previous`, chained to
-    the session's appends by `audit.chained`)."""
-    if type(challenge) is not bytes or len(challenge) != CHALLENGE_BYTES:
-        raise ValueError(f"a window's challenge is {CHALLENGE_BYTES} bytes")
-    if type(i) is not int or not 0 <= i < 1 << 32:
-        raise ValueError("a pass index is a u32")
-    return hashlib.sha512(SEED_DOMAIN + challenge + i.to_bytes(4, "big") + _digest(previous, "a root")).digest()
+def seed_format(name: object) -> str:
+    """`name` if it is the receipt format, `SEED`; seed/v0, whose pass seeds are Fiat–Shamir over the prover's roots,
+    refused by name."""
+    if name == SEED_V0:
+        raise ValueError(f"{SEED_V0} is refused: its pass seeds are Fiat–Shamir, SHA-512 of the prover's previous root, "
+                         f"which the prover can grind; {SEED} takes each pass's seed as a live coin")
+    if name != SEED:
+        raise ValueError(f"the receipt format is {SEED}, not {name!r}")
+    return name
 
 
 def store_blocks(blocks: object) -> int:
