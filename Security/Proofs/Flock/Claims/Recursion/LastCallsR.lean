@@ -408,7 +408,8 @@ theorem decisionAtS_log (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : Sessio
   show l ++ ((decisionAtP s spec sts x link c₁ mids ⟨f.stmt, shaSubJ spec ((filesAt (tabsOf sts)
     (pointsOf spec c₁) f.ps).map (FlockComplete.dgOf spec (Claims.hOf H))) f.j, f.ps⟩).run.eval H).2 = _
   unfold decisionAtP
-  (rw [decisionAtJ_log]) <;> rfl
+  rw [decisionAtJ_log]
+  rfl
 
 /-- **A decision of `nextR` calls the setup's digests, then `decisionAtS`'s** (`nextE_decide_calls` at `nextR`). -/
 theorem nextR_calls (H : Claims.Msg → Claims.Msg) {rd : Claims.Msg → Option FinalP} {x : Claims.Msg}
