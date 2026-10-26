@@ -11,6 +11,7 @@ import Models.Accounting.Guarantees.BoundReceipt
 import Models.Accounting.Guarantees.BoundSketch
 import Models.Accounting.Guarantees.Bridges
 import Models.Accounting.Guarantees.Capacity
+import Models.Accounting.Guarantees.CheckedCarrier
 import Models.Accounting.Guarantees.CoinFlow
 import Models.Accounting.Guarantees.Compose
 import Models.Accounting.Guarantees.ComposePeriod
@@ -74,5 +75,6 @@ guarantee, their per-run forms, PoUW's work lower bound on an isolated node, PoU
 circuit compiled to its templates, a declared circuit's live and read bits from the blocks the audit credits, PoUW's
 credits and help as its placed execution's gates, the grinding premium under hashed seeds and the deployed tile's
 moment, stacking's carrier lemma with the deployed remote audit for devices that read from carriers, also read against
-a declared circuit's requirement, and the composed guarantee for a declared circuit that passes the stacking property:
-its credited live and read bits from an accepted stacked audit. -/
+a declared circuit's requirement, the bound a value check puts on a carrier, the min-cut bound on the words a circuit
+computes priced on one side of a cut, and the composed guarantee for a declared circuit that passes the stacking
+property: its credited live and read bits from an accepted stacked audit. -/

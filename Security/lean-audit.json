@@ -2724,6 +2724,9 @@
    "assumptions": [],
    "type_hash": "ea4f70e25ce50c4ed37d62528245c1c2801cb1b6060e5831f971206042aa4789"
   },
+  "Accounting.SecurityProofs.CheckedCarrierBits": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.CoinFlow.CoinsThroughNoise": {
    "owner": "@compute-accounting",
    "signature": [
@@ -11472,7 +11475,8 @@
    "NetTiming.SecurityProofs.SampledAuditAccepted": "frozen (no-function): It is stated over a sampling deployment's knowledge soundness (Claims.Sampling.KS, its one hypothesis) and the circuit's Program (circuitProgram), not runs of the network check's code: it carries an accepted sampled audit to RAcc delta (the faulty set in M_delta, none of it drawn all, and Accepted with the faulty units' committed gates as advice), the runs EncardAccSeqsSampledLe counts.",
    "Accounting.SecurityProofs.Cut.MinCut": "frozen (conjecture,no-function): It is a consequence of the named open conjecture EncodeChainHardness, over every circuit of the gate model and every cut of it that holds its writes (Accounting.Gates.cut), not a property of a Lean function: the property's check has no Lean code yet.",
    "Accounting.SecurityProofs.Cut.Units": "frozen (no-function): A bound on the units of every circuit of the gate model's cut (Accounting.Gates.cut) by its side's units in the circuit, not a property of a Lean function: the property's census check has no Lean code yet.",
-   "Accounting.SecurityProofs.Cut.Whole": "frozen (no-function): The trivial cut of every circuit of the gate model (Accounting.Gates.cut at every gate) has its units and run-input bits and no boundary, not a property of a Lean function: the property's census check has no Lean code yet."
+   "Accounting.SecurityProofs.Cut.Whole": "frozen (no-function): The trivial cut of every circuit of the gate model (Accounting.Gates.cut at every gate) has its units and run-input bits and no boundary, not a property of a Lean function: the property's census check has no Lean code yet.",
+   "Accounting.SecurityProofs.CheckedCarrierBits": "frozen (no-function): A counting bound over every function of the store that a value check's accepted set holds and a decoder reads the carried sectors back from (Security/Models/Accounting/Guarantees/CheckedCarrier.lean), about no function of the code: the audit has no value check in Lean."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
