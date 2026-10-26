@@ -1,6 +1,6 @@
 import Proofs.Pouw.PearlC.DeviceCapGamma
-import Models.Pouw.Assumptions.PearlC.TTOutUOnly
-import Models.Pouw.Guarantees.PearlC
+import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
+import Definitions.Pouw.Guarantees.PearlC
 import Proofs.Pouw.PearlC.TTOutW1Variants
 
 /-!

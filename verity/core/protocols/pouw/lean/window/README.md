@@ -41,7 +41,7 @@ Python's; a Python refusal (`ValueError`) is an `Except` error. The suite draws 
 domain and reaches every reason each of those three returns.
 
 Its properties are stated in `Security/Properties/Pouw.lean` (the package `security_properties`), and the proved ones
-are in `Security/Properties/Proofs/Pouw.lean`.
+are in `Security/Proofs/Properties/Pouw.lean`.
 
 ~~~text
 lake build                                                         the library and pouw-window-difftest

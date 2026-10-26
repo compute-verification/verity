@@ -1368,6 +1368,69 @@
         "integrations/vllm/verity_vllm/commit/tables.py": "verity/ml/windows/tables.py",
         "integrations/vllm/verity_vllm/commit/flock_inputs.py": "verity/ml/windows/flock_inputs.py"
       }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/protocol_options/__init__.py": "integrations/vllm/verity_vllm/protocols/__init__.py",
+        "integrations/vllm/verity_vllm/protocol_options/interface.py": "integrations/vllm/verity_vllm/protocols/interface.py",
+        "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py": "integrations/vllm/verity_vllm/protocols/sampled_proofs.py",
+        "integrations/vllm/verity_vllm/protocol_options/pous.py": "integrations/vllm/verity_vllm/protocols/pous.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw.py": "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
+        "integrations/vllm/verity_vllm/protocol_options/credit_gate.py": "integrations/vllm/verity_vllm/protocols/pouw/credit_gate.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_circuit.py": "integrations/vllm/verity_vllm/protocols/pouw/circuit.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_device.py": "integrations/vllm/verity_vllm/protocols/pouw/device.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_native.py": "integrations/vllm/verity_vllm/protocols/pouw/native.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_cuda/": "integrations/vllm/verity_vllm/protocols/pouw/pouw_cuda/",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_challenger.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/challenger.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_commit.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/commit.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_handoff.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/handoff.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_hooks.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/hooks.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_kept.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/kept.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_live.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/live.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_prover.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/prover.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_ranks.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/ranks.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_records.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/records.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_registered.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/registered.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_registered_device.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/registered_device.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_requests.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/requests.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_served.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/served.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_served_files.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/served_files.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_settings.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/settings.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_static.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/static.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_tables_device.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_window.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/window.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_h1_words.py": "integrations/vllm/verity_vllm/protocols/pouw/h1/words.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_device.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/__init__.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_graphs.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/graphs.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_grouped.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/grouped.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_host.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/host.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_kernel.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/kernel.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_lanes.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/lanes.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_manifest.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/manifest.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_screen.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_triton.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_whole.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pass.py": "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/passes.py",
+        "integrations/vllm/verity_vllm/linear/": "integrations/vllm/verity_vllm/protocols/linear/",
+        "integrations/vllm/verity_vllm/store/": "integrations/vllm/verity_vllm/protocols/remote_bandwidth/",
+        "integrations/vllm/verity_vllm/predict/": "integrations/vllm/verity_vllm/program/predict/",
+        "integrations/vllm/verity_vllm/collectives/": "integrations/vllm/verity_vllm/engine/collectives/",
+        "integrations/vllm/verity_vllm/pipeline/engine_spec.py": "integrations/vllm/verity_vllm/engine/spec.py",
+        "integrations/vllm/verity_vllm/pipeline/llm.py": "integrations/vllm/verity_vllm/llm.py",
+        "integrations/vllm/tests/protocol_options/": "integrations/vllm/tests/protocols/",
+        "integrations/vllm/tests/linear/": "integrations/vllm/tests/protocols/linear/",
+        "integrations/vllm/tests/store/": "integrations/vllm/tests/protocols/remote_bandwidth/",
+        "integrations/vllm/tests/store/int8_store_gpu.py": "integrations/vllm/tests/engine/int8_store_gpu.py",
+        "integrations/vllm/tests/predict/": "integrations/vllm/tests/program/predict/",
+        "integrations/vllm/tests/collectives/": "integrations/vllm/tests/engine/collectives/"
+      }
+    },
+    {
+      "paths": {
+        "Security/Models/": "Security/Definitions/",
+        "Security/Properties/Proofs/": "Security/Proofs/Properties/"
+      }
     }
   ]
 }

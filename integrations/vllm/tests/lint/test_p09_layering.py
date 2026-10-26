@@ -65,13 +65,13 @@ LEAF_MODULES = frozenset(p.removesuffix(".py").replace("/", ".") for p in PATCH_
 #: The unit a package cycle counts these modules and subpackages in (longest prefix wins), whatever package they sit in:
 #: the allowlist's cycles are between these units.
 PACKAGE_OF = {
-    "verity_vllm.protocol_options": "protocol_options",
-    "verity_vllm.linear": "linear",
-    "verity_vllm.store": "store",
-    "verity_vllm.predict": "predict",
-    "verity_vllm.collectives": "collectives",
-    "verity_vllm.pipeline.engine_spec": "pipeline",
-    "verity_vllm.pipeline.llm": "pipeline",
+    "verity_vllm.protocols": "protocol_options",
+    "verity_vllm.protocols.linear": "linear",
+    "verity_vllm.protocols.remote_bandwidth": "store",
+    "verity_vllm.program.predict": "predict",
+    "verity_vllm.engine.collectives": "collectives",
+    "verity_vllm.engine.spec": "pipeline",
+    "verity_vllm.llm": "pipeline",
 }
 
 

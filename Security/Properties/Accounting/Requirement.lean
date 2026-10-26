@@ -8,9 +8,9 @@ import CircuitRequirement
 of `Security/`: on one instance it computes `Accounting.Requirement`'s definitions, a set as a list. These are those
 equalities, each a `Prop` stated against the code's function and the definition it computes, on the wiring, execution,
 layout, store and placement the instance denotes (`wiring`, `execution`, `layout`, `store`, `placement`), and
-`Properties.Proofs.Accounting.Requirement` proves every one. The code's difftest holds it to
+`Proofs.Properties.Accounting.Requirement` proves every one. The code's difftest holds it to
 `verity.ml.circuits.requirement`, so these carry the Python requirement to the definitions that
-`Models/Accounting/Guarantees/Requirement.lean`'s guarantees are stated over.
+`Definitions/Accounting/Guarantees/Requirement.lean`'s guarantees are stated over.
 
 An instance's values are the natural numbers, of which it describes `0 … n - 1`, and a gate uses, at any circuit's
 values, the operands it uses at the execution's: the definitions read `uses` only at `Execution.value`.

@@ -222,13 +222,13 @@ none: their bounds carry the collision events.
   `PlainLiveAcc` isn't listed, since no locked statement reads it.
 - The rest of what locked statements take from `trees.except`: [e2e_chains/README.md](e2e_chains/README.md).
 
-No link above reads the rest. `TrustedNebiusHost` is why `Carries` holds of the real run, and the wire and advice
+No link above reads the rest. `TrustedHost` is why `Carries` holds of the real run, and the wire and advice
 assumptions enter through the wire bounds, which have no sampled form yet.
-- `Verity.Assumptions.TrustedNebiusHost` (`Security/Models/Core/Assumptions.lean`).
-- The certifier's wire (`Security/Models/NetworkCertifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
+- `Verity.Assumptions.TrustedHost` (`Security/Definitions/Core/Assumptions.lean`).
+- The certifier's wire (`Security/Definitions/NetworkCertifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
   `NetTiming.Packed` and `NetTiming.Allocated`, and J `NetTiming.JitterBounded`. W3 (`Padded`), W5 (`UntimedStatus`) and W6
   (`FailClosed`) are stated there, but no listed guarantee reads them, so the lock doesn't list them.
-- The advice (`Security/Models/NetworkCertifier/Assumptions/AdviceString.lean`): `NetTiming.BitsCount`,
+- The advice (`Security/Definitions/NetworkCertifier/Assumptions/AdviceString.lean`): `NetTiming.BitsCount`,
   `NetTiming.CompilerDeterministic` and `NetTiming.CompilerPrecommitted`.
 - For privacy, not soundness, under `--zk`: `Claims.Hm96Hiding` (`Security/Definitions/Claims/Hm96.lean`).
 

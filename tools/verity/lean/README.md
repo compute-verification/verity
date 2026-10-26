@@ -270,7 +270,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
 - **The trees** (Daniel, 24 Oct): `trees` names which module prefixes are the definitions tree (what a reader reads:
   each area's vocabulary, named assumptions and guarantee statements), the properties tree (statements about the code)
   and the proofs tree (every proof, lemma and proof-only definition); a module's tree is that of its longest prefix
-  (`Properties.Proofs` before `Properties`), and a package's trees reach the packages that require it by path
+  (`Proofs.Properties` before `Properties`), and a package's trees reach the packages that require it by path
   (`Security`'s reach `Security/Properties` and `Security/Proofs`). The check refuses a guarantee or property whose
   statement reads a definition of a module of the proofs tree (move it into the definitions tree, or take the statement
   off the guarantees: it is a lemma), and a module of the definitions or properties tree that imports one. `except`

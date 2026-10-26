@@ -1,7 +1,7 @@
 import Definitions.Pouw.Barrier.Pinned
 import Proofs.Pouw.NCP.Proofs
 import Proofs.Pouw.Prob
-import Models.Pouw.Guarantees.Barrier
+import Definitions.Pouw.Guarantees.Barrier
 
 /-!
 # The degenerate-input barrier: proofs

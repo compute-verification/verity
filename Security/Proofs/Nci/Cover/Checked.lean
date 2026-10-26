@@ -1,6 +1,6 @@
 import Properties.NciDesc.Cover
-import Properties.Proofs.Nci.Agrees
-import Properties.Proofs.Nci.DescVerdict
+import Proofs.Properties.Nci.Agrees
+import Proofs.Properties.Nci.DescVerdict
 import Proofs.Nci.Cover.Training
 
 /-!

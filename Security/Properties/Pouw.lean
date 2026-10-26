@@ -7,7 +7,7 @@ The properties of the executable window (`verity/core/protocols/pouw/lean/window
 `verity/core/protocols/pouw/window.py`), stated against its functions as they run. Each covers every input the
 function takes: a function on Python's integers (`floorPoint?`, `kPrime`) either answers or refuses, and a property says
 what an answer is, so its domain comes from the answer. That the function answers every input on its domain is
-completeness, proved beside it. Each is a `Prop`, and `Properties.Proofs.Pouw` proves every one, on Lean core.
+completeness, proved beside it. Each is a `Prop`, and `Proofs.Properties.Pouw` proves every one, on Lean core.
 
 The numbers are the served ones: the 3-bit grid (`gridBits`), tiles of 4096 multiply-adds (an FP8 tile), ε = 1/2, and δ
 from 1/10 to 2⁻⁴⁰, over tile counts up to 2⁴⁰.

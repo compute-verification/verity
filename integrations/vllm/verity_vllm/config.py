@@ -178,7 +178,7 @@ def row_target(row: str) -> str | None:
     return parts[2] if len(parts) >= 4 and parts[3].startswith("tp") else None
 
 
-#: The protocols a run can enable (`verity_vllm.protocol_options`), in install order, innermost first: PoUW replaces the
+#: The protocols a run can enable (`verity_vllm.protocols`), in install order, innermost first: PoUW replaces the
 #: linear layers' GEMMs, POUS decodes the weights those GEMMs read, sampled proofs commits what the model computed.
 PROTOCOLS = ("pouw", "pous", "sampled-proofs")
 #: The set a row runs when its target declares none: sampled proofs alone, the Commit as it has always run.
@@ -192,7 +192,7 @@ def parse_protocols(value: str | Mapping[str, str] | Any | None) -> tuple[str, .
     ``value`` is None, ``""`` or ``"none"`` (the empty set), a comma-separated string, an iterable of entries, or a mapping
     ``{name: scheme}``.  Refuses (ValueError) an unknown protocol, an entry without a scheme, a malformed scheme and two
     entries of one protocol.  Whether a scheme is registered is the protocol package's to say
-    (`verity_vllm.protocol_options.refusals`)."""
+    (`verity_vllm.protocols.refusals`)."""
     if value is None or (isinstance(value, str) and value.strip() in ("", "none")):
         return ()
     if isinstance(value, Mapping):
@@ -463,7 +463,7 @@ class BuildConfig:
                                            "check (the Commit builds the manifest it runs over); `verity-vllm neutrality`'s heavy tier")
     build_construction: str = option("--build-construction", env="BUILD_CONSTRUCTION", default="record", choices=("record", "trace"),
                                      help="TP: record = the row's construction of record, the AOT Build for a switched row (its `aot` in "
-                                          "manifests/records.json, verity_vllm.predict.aot) and the trace for any other; trace = the trace "
+                                          "manifests/records.json, verity_vllm.program.predict.aot) and the trace for any other; trace = the trace "
                                           "(`verity-vllm neutrality`'s heavy tier)")
     aot_trace: str | None = option("--aot-trace", env="AOT_TRACE", default=None,
                                    help="TP, a switched row: the dir holding its `aot.trace` Build (build/rank<r>/build_*), e.g. a job's "
@@ -574,7 +574,7 @@ class CommitConfig:
                                            "rank, from tp-commit itself (verity_vllm.pipeline.tp.serving_rows; needs REPLAY_DEFERRED=1)")
     remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
                                          help="the remote bandwidth session's verifier: the Commit proves its store to it in lockstep "
-                                              "with its first instrumented run (verity_vllm.store.remote; single-GPU rows)")
+                                              "with its first instrumented run (verity_vllm.protocols.remote_bandwidth.remote; single-GPU rows)")
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
                                 "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")

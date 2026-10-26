@@ -23,7 +23,7 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
   `Security/`: a definition in `Definitions/<Area>/`, an assumption or guarantee statement in
   `Models/<Area>/{Assumptions,Guarantees}` (package `security`, Mathlib only), a proof in `Proofs/<Area>/` (package
   `security_proofs`, ArkLib allowed), a property of code in `Properties.<Protocol>` with its proof in
-  `Properties.Proofs.<Protocol>` (package `security_properties`, never requiring `security_proofs`). No new package: an
+  `Proofs.Properties.<Protocol>` (package `security_properties`, never requiring `security_proofs`). No new package: an
   area is a directory in each tree.
 - **Lean is the definition and the verifier of record.** A verifier is Lean code and imports nothing from `verity.ml`;
   the Python that mirrors it is held to it by difftest (`verity/core/difftest/`).

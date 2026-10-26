@@ -64,7 +64,7 @@ class _LLM:
 def stand_ins(monkeypatch):
     """The drivers' engine-side calls stood in, and the target's environment knobs restored after the test; ``use(llm, target)``
     returns the profiles the Commit's guard was given."""
-    from verity_vllm import protocol_options as PO
+    from verity_vllm import protocols as PO
     from verity_vllm.engine import engine_profile as prof
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline import commit as PC

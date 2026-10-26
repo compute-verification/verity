@@ -1953,7 +1953,7 @@ def tree_roles(pkg: Path, policy: dict) -> dict[str, str]:
 
 
 def tree_of(roles: dict[str, str], module: str) -> str | None:
-    """The tree of ``module``: that of the longest prefix ``roles`` names it under (`Properties.Proofs` before
+    """The tree of ``module``: that of the longest prefix ``roles`` names it under (`Proofs.Properties` before
     `Properties`), or None."""
     hits = [p for p in roles if under([p], module)]
     return roles[max(hits, key=len)] if hits else None

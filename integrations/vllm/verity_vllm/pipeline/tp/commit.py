@@ -208,7 +208,7 @@ def main(args: Options) -> int:
     from verity_vllm.engine.rank_worker import EXTENSION
     from verity_vllm.commit.challenge import challenge_positions
     from verity_vllm.commit.partition import require_partition
-    from verity_vllm import protocol_options as PO
+    from verity_vllm import protocols as PO
     from verity_vllm.acquire.sources.oracle_witness import SUMMARY_KEYS as TPS_SUMMARY_KEYS
     if args.world is not None:
         args.tp = int(args.world)

@@ -66,7 +66,7 @@ from . import window_advice as WA
 SCHEMA = "verity-vllm/advice-report/v3"
 REGISTRATION = "verity-vllm/advice-registration/v1"
 SERVED = "verity-vllm/advice-windows-index/v1"
-COMPILER = "verity_vllm.predict.steps.compile_steps"
+COMPILER = "verity_vllm.program.predict.steps.compile_steps"
 
 
 #: ℓ when the registration names none (`advice_windows.CAP_BITS`, `predict.steps.CAP_BITS`: 1 MiB of advice)

@@ -8,7 +8,7 @@ import Proofs.Pouw.SteinerRigidity
 Neekon Vafa's definition (`note:20261015T1810Z-draft-relative-security-def`) as RS-DEF froze it
 (`note:20261015T1815Z-draft-rs-definition-frozen`, v1), in an abstract machine model, so that the construction and
 proof workers' results land here as theorems or as named hypotheses. The definitions the guarantees
-(`Models.Pouw.Guarantees.RelativeSecurity`) read are in `Definitions.Pouw.RelativeSecurity`, under the same names.
+(`Definitions.Pouw.Guarantees.RelativeSecurity`) read are in `Definitions.Pouw.RelativeSecurity`, under the same names.
 
 * The machine model (`Machine`, `MatMachine`): algorithms from inputs to outputs, their semantics with the coins as
   part of the input, a per-run `cost` and its worst case `time`, with axioms: nonnegativity, monotonicity (running `f`
@@ -7838,7 +7838,7 @@ theorem relativelySecure_edited120θ_of_floor (kd : K120 → Kind) (G : MatGates
 /-- **Route (c) on sm_120 in B_θ, on the int8 grid, from any B floor per adversary** (proposed, a claim change; CMP-33;
 `relativelySecure_edited120θ_of_floor` adversary by adversary, which it supersedes): B's service floor per adversary
 `F_B ≤ n³` u, at each adversary's own `κf` (a named hypothesis, `ServiceFloorPerProver`; the floors per prover of
-`Models.Pouw.Guarantees.RelativeSecurity` give it at `κf = breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz`,
+`Definitions.Pouw.Guarantees.RelativeSecurity` give it at `κf = breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz`,
 `relativelySecurePerProver_edited120θ_at_breakBound`), carries to `0.8 F_B` u in B_θ
 (`serviceFloorPerProver_θ`), and the edited protocol is relatively secure per adversary with
 `relativelySecure_edited120θ_of_floor`'s `ε`, `γ` and `N`, at each B_θ adversary's threshold `κf(M.projθ) + δ'`: its B
@@ -7882,7 +7882,7 @@ theorem relativelySecurePerProver_edited120θ_of_floor (kd : K120 → Kind) (G :
 
 /-- **Route (c) on sm_120 in B_θ at the floors' error per prover** (proposed, a claim change; CMP-33):
 `relativelySecurePerProver_edited120θ_of_floor` at `κf = breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz`, the
-error the floors per prover of `Models.Pouw.Guarantees.RelativeSecurity` conclude. Each B_θ
+error the floors per prover of `Definitions.Pouw.Guarantees.RelativeSecurity` conclude. Each B_θ
 adversary's threshold is its B shadow's error plus `δ'`: the shadow's finders read through `ecr/sha-512` at budgets of
 `cb · time + db` and `cz · time + dz` SHA-512 calls, `time` the shadow's B time, which the adversary's gates fix and no
 choice of finder lowers. -/
@@ -8020,7 +8020,7 @@ theorem relativelySecure_edited120θ_half (kd : K120 → Kind) (G : MatGates kd 
 Superseded per adversary (CMP-33). Every theorem of the `certifiedFraction120θ` family reads one `κf`, or one `δb` and
 `δz` for every adversary through its `RoundsHyp*`, so over SHA-512 commitments it holds only at a bound about 1: an
 adversary that hard-codes a collision breaks binding in every round. Its form per adversary is
-`serviceFloorPerProver_θ` at the floors per prover of `Models.Pouw.Guarantees.RelativeSecurity` (the same floor, each
+`serviceFloorPerProver_θ` at the floors per prover of `Definitions.Pouw.Guarantees.RelativeSecurity` (the same floor, each
 adversary's error its `breakBound`, read at its B shadow, its finders at budgets computed from the shadow's B time),
 proved in `Proofs.Pouw.RelativeSecurityGuarantees` and `Proofs.Pouw.RelativeSecurityJ10R`; their reader is
 `relativelySecurePerProver_edited120θ_at_breakBound`.

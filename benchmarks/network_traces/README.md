@@ -71,7 +71,7 @@ windows, the advice profile, a certifier key of H = 10). Neither is of record.
 
 **The theorem.** The run instantiates `NetTiming.Guarantees.PeriodLeakAccepted` (#4326, proved as
 `NetTiming.SecurityProofs.PeriodLeakAccepted`), with `Claims.Sampling.KS`, `Claims.Flock.ListWithin` and
-`trusted-nebius-host` as hypotheses. Over a period of n windows, each window's audit has `KSLinOn`'s bound,
+`trusted-host` as hypotheses. Over a period of n windows, each window's audit has `KSLinOn`'s bound,
 
 Pr[window i accepted ∧ ¬RLeak δ] ≤ δ + ε_ks + ε_bind,
 

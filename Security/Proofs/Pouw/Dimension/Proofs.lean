@@ -1,5 +1,5 @@
 import Definitions.Pouw.Dimension.Defs
-import Models.Pouw.Assumptions.Dimension.Pinned
+import Definitions.Pouw.Assumptions.Dimension.Pinned
 import Proofs.Pouw.NCP.RelationProofs
 import Proofs.Pouw.NCP.RelationWitness
 import Proofs.Pouw.NCP.ChainProofs
