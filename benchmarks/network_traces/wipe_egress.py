@@ -72,18 +72,21 @@ def read_run(path: Path) -> dict[str, bytes]:
     if path.is_dir():
         return {name: (path / name).read_bytes() for name in FILES if (path / name).is_file()}
     got = {}
-    with tarfile.open(path, "r:gz") as tar:
-        for member in tar:
-            name = member.name.partition("/")[2]
-            if name in FILES and member.isfile():
-                got[name] = tar.extractfile(member).read()
+    try:
+        with tarfile.open(path, "r:gz") as tar:
+            for member in tar:
+                name = member.name.partition("/")[2]
+                if name in FILES and member.isfile():
+                    got[name] = tar.extractfile(member).read()
+    except (OSError, tarfile.TarError) as e:
+        raise ValueError(f"{path} is neither a gate run's `fetch` bundle nor the directory it unpacks to: {e}") from None
     return got
 
 
 def record(files: dict[str, bytes], t0: int, t1: int, pad: int = PAD_NS) -> dict:
     """The ``wipe-egress/v1`` record of the gate run `files` (`read_run`) over [t0, t1) in Unix ns (module docstring)."""
     if not t0 < t1:
-        raise ValueError(f"the wipe's window [{t0}, {t1}) is empty: t0 is before t1")
+        raise ValueError(f"the wipe's window [{t0}, {t1}) is empty: t0 must be before t1")
     if pad < 0:
         raise ValueError(f"the pad is {pad} ns: it is at least 0")
     missing = [name for name in FILES if name not in files]
@@ -104,7 +107,7 @@ def record(files: dict[str, bytes], t0: int, t1: int, pad: int = PAD_NS) -> dict
     if params.digest.hex() != dep["digest"]:
         why.append("the deployment's schedule isn't the one its digest names")
     if windows.start < 0:
-        why.append(f"the window starts {windows.start} link-windows before the session's origin")
+        why.append(f"the window starts at link-window {windows.start}, before the session's origin")
     if windows.stop > n:
         why.append(f"the window ends at link-window {windows.stop}, past the session's {n}")
     certificates = {}
