@@ -50,9 +50,9 @@
    "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean:79",
    "premise": "N1, 'X-RO commitments'",
    "class": "C-RO",
-   "deployed": "unread: confirm whether N1 needs the random oracle or only CR",
+   "deployed": "confirmed C-RO: N1 is the hiding of hm96 leaves (the coin stays hidden from hello to release; Properties/Pouw/LiveSalt.lean:54), which collision resistance doesn't give",
    "owner": null,
-   "removal": "Daniel confirms (R-ACCEL-3), or restate on collision resistance"
+   "removal": "Daniel confirms (R-ACCEL-3); or fold it into C-Flock's zero knowledge if that claim covers the same leaves"
   },
   {
    "id": "StagedPlay-form",
@@ -372,17 +372,6 @@
    "removal": "none (θ)"
   },
   {
-   "id": "LI-binding",
-   "source": "honest-design TOML [mand.fold]",
-   "file": "benchmarks/pouw/machine_model/data/devices/sm_90/designs/dither-1s-li-l32.toml:42",
-   "premise": "LI's binding rests on KLI₂₄ (decision 65), (RT), (G₃), (HO_U)",
-   "class": "D?",
-   "kind": "unread; next turn",
-   "deployed": "named in the TOML",
-   "owner": "FOLD-LUCK (CMP pending)",
-   "removal": "unread"
-  },
-  {
    "id": "ABSORB",
    "source": "BET-BANDWIDTH; brief 4(c)",
    "file": "note:compute-research/20261026T0122Z-draft-accel-bet-bandwidth",
@@ -403,12 +392,242 @@
    "deployed": "conjectured",
    "owner": "PEARLC-MODEL",
    "removal": "proof in the model (W1 with P2), or protocol change"
+  },
+  {
+   "id": "LI.KLI24",
+   "source": "honest-design TOML [mand.fold]: LI's binding",
+   "file": "benchmarks/pouw/receipts/README.md:24,49-55; note:compute-accounting/20261017T1723Z-draft-ledger",
+   "premise": "key rule |a0 ∓ a1⁻¹ mod 2²⁴| ≥ 32 suffices (decision 65); sufficiency empirical",
+   "class": "D",
+   "kind": "claim about the fold and the adversary's error",
+   "deployed": "assumed",
+   "owner": "FOLD-LUCK (CMP pending)",
+   "removal": "proof about the fold; or protocol change: pinned openings + a checkpoint a segment, under which li needs none of (RT), (G₃), (HO) (LiHalfBijective, LiCheckpointWordInjective, LiCheckpointLowBit, proved)"
+  },
+  {
+   "id": "LI.RT",
+   "source": "honest-design TOML [mand.fold]: LI's binding",
+   "file": "benchmarks/pouw/receipts/README.md:24,49-55; note:compute-accounting/20261017T1723Z-draft-ledger",
+   "premise": "(RT): no root of the error reaches several rows; open, no lemma removes it (RS-E-REF IX.3)",
+   "class": "D",
+   "kind": "claim about the fold and the adversary's error",
+   "deployed": "assumed",
+   "owner": "FOLD-LUCK (CMP pending)",
+   "removal": "proof about the fold; or protocol change: pinned openings + a checkpoint a segment, under which li needs none of (RT), (G₃), (HO) (LiHalfBijective, LiCheckpointWordInjective, LiCheckpointLowBit, proved)"
+  },
+  {
+   "id": "LI.G3",
+   "source": "honest-design TOML [mand.fold]: LI's binding",
+   "file": "benchmarks/pouw/receipts/README.md:24,49-55; note:compute-accounting/20261017T1723Z-draft-ledger",
+   "premise": "(G₃): the chain's algebraic no-cancellation at the key rule; proved at one MMA (r11 Thm 1), open for chains",
+   "class": "D",
+   "kind": "claim about the fold and the adversary's error",
+   "deployed": "assumed",
+   "owner": "FOLD-LUCK (CMP pending)",
+   "removal": "proof about the fold; or protocol change: pinned openings + a checkpoint a segment, under which li needs none of (RT), (G₃), (HO) (LiHalfBijective, LiCheckpointWordInjective, LiCheckpointLowBit, proved)"
+  },
+  {
+   "id": "LI.HO_U",
+   "source": "honest-design TOML [mand.fold]: LI's binding",
+   "file": "benchmarks/pouw/receipts/README.md:24,49-55; note:compute-accounting/20261017T1723Z-draft-ledger",
+   "premise": "(HO_U): no hand-off joins words whose rows or columns are equal or complementary; (HO) fails in serving",
+   "class": "D",
+   "kind": "claim about the fold and the adversary's error",
+   "deployed": "assumed",
+   "owner": "FOLD-LUCK (CMP pending)",
+   "removal": "proof about the fold; or protocol change: pinned openings + a checkpoint a segment, under which li needs none of (RT), (G₃), (HO) (LiHalfBijective, LiCheckpointWordInjective, LiCheckpointLowBit, proved)"
+  },
+  {
+   "id": "J10R.H1-twins",
+   "source": "H1J10RCheckedCreditPeriod (CMP-127)",
+   "file": "branch cursor/compute-research-j10r-credit-ea24 @79c5a21ad5, Security/Properties/Pouw/PeriodJ10R.lean:343",
+   "premise": "Scope, shares, lucks, game form, MovedIn, RegisteredBeforeDraw, SaltIsLiveCoin, OperandHMu, ReceiptLuckAt, GuessLuckAt: as in H1CheckedCreditPeriod",
+   "class": "as H1 rows",
+   "deployed": "as H1",
+   "owner": "as H1 rows",
+   "removal": "as H1 rows"
+  },
+  {
+   "id": "J10R.TileDrawIsCoin",
+   "source": "H1J10RCheckedCreditPeriod",
+   "file": "branch cursor/compute-research-j10r-credit-ea24 @79c5a21ad5, Security/Properties/Pouw/PeriodJ10R.lean:343",
+   "premise": "the check's drawn tiles are the stratified draw coin's",
+   "class": "F",
+   "deployed": "code fact of the challenger's stratified draw",
+   "owner": null,
+   "removal": "code fact"
+  },
+  {
+   "id": "J10R.TileServiceSound",
+   "source": "H1J10RCheckedCreditPeriod",
+   "file": "branch cursor/compute-research-j10r-credit-ea24 @79c5a21ad5, Security/Properties/Pouw/PeriodJ10R.lean:343",
+   "premise": "a drawn tile's opening fails its relation w.p. ≤ δks",
+   "class": "C",
+   "deployed": "not reduced to C-Flock",
+   "owner": null,
+   "removal": "proof from C-Flock soundness"
+  },
+  {
+   "id": "J10R.StagedPinsJ10R",
+   "source": "H1J10RCheckedCreditPeriod",
+   "file": "branch cursor/compute-research-j10r-credit-ea24 @79c5a21ad5, Security/Properties/Pouw/PeriodJ10R.lean:343:304",
+   "premise": "staged statement at a place pins j10r_reference; neither side has a Lean function",
+   "class": "F",
+   "deployed": "unproved; two descriptions of one circuit, against main's one-description rule",
+   "owner": "J10R-CREDIT (CMP-127)",
+   "removal": "define both from the parsed circuit file"
+  },
+  {
+   "id": "J10R.UnitFixed",
+   "source": "H1J10RCheckedCreditPeriod",
+   "file": "branch cursor/compute-research-j10r-credit-ea24 @79c5a21ad5, Security/Properties/Pouw/PeriodJ10R.lean:343:374",
+   "premise": "UnitFixed, still a hypothesis at 79c5a21ad5",
+   "class": "D",
+   "kind": "modeling gap",
+   "deployed": "assumed",
+   "owner": "J10R-CREDIT (CMP-127)",
+   "removal": "definition change inside the J10-R statement"
+  },
+  {
+   "id": "MODEL.store-capacities",
+   "source": "MODEL-SPEC (CMP-109)",
+   "file": "branch cursor/compute-research-accel-model-spec-ea24 @738a30c30f, Security/Definitions/Core/Accel/Card.lean",
+   "premise": "store capacities (G1)",
+   "class": "P",
+   "deployed": "checkable against documents or a capture/microbenchmark",
+   "owner": null,
+   "removal": "none (θ)"
+  },
+  {
+   "id": "MODEL.text-bound",
+   "source": "MODEL-SPEC (CMP-109)",
+   "file": "branch cursor/compute-research-accel-model-spec-ea24 @738a30c30f, Security/Definitions/Core/Accel/Card.lean",
+   "premise": "text bound (G1)",
+   "class": "P",
+   "deployed": "checkable against documents or a capture/microbenchmark",
+   "owner": null,
+   "removal": "none (θ)"
+  },
+  {
+   "id": "MODEL.rates",
+   "source": "MODEL-SPEC (CMP-109)",
+   "file": "branch cursor/compute-research-accel-model-spec-ea24 @738a30c30f, Security/Definitions/Core/Accel/Card.lean",
+   "premise": "resource rates ρ_r (G2)",
+   "class": "P",
+   "deployed": "checkable against documents or a capture/microbenchmark",
+   "owner": null,
+   "removal": "none (θ)"
+  },
+  {
+   "id": "MODEL.unit-costs",
+   "source": "MODEL-SPEC (CMP-109)",
+   "file": "branch cursor/compute-research-accel-model-spec-ea24 @738a30c30f, Security/Definitions/Core/Accel/Card.lean",
+   "premise": "unit costs opUse (G2)",
+   "class": "P",
+   "deployed": "checkable against documents or a capture/microbenchmark",
+   "owner": null,
+   "removal": "none (θ)"
+  },
+  {
+   "id": "MODEL.slack",
+   "source": "MODEL-SPEC (CMP-109)",
+   "file": "branch cursor/compute-research-accel-model-spec-ea24 @738a30c30f, Security/Definitions/Core/Accel/Card.lean",
+   "premise": "backlog Open.slack",
+   "class": "P",
+   "deployed": "checkable against documents or a capture/microbenchmark",
+   "owner": null,
+   "removal": "none (θ)"
+  },
+  {
+   "id": "MODEL.semantics",
+   "source": "MODEL-SPEC (CMP-109)",
+   "file": "branch cursor/compute-research-accel-model-spec-ea24 @738a30c30f, Security/Definitions/Core/Accel/Card.lean",
+   "premise": "opcode semantics eval",
+   "class": "P",
+   "deployed": "checkable against documents or a capture/microbenchmark",
+   "owner": null,
+   "removal": "none (θ)"
+  },
+  {
+   "id": "MODEL.Avail",
+   "source": "MODEL-SPEC (CMP-109)",
+   "file": "branch cursor/compute-research-accel-model-spec-ea24 @738a30c30f, Security/Definitions/Core/Accel/Card.lean",
+   "premise": "opcode-set completeness Avail: no instruction does more than one of these",
+   "class": "P",
+   "deployed": "checkable against documents or a capture/microbenchmark",
+   "owner": null,
+   "removal": "none (θ)"
+  },
+  {
+   "id": "MODEL.AccelProductForm",
+   "source": "MODEL-SPEC (CMP-109)",
+   "file": "branch cursor/compute-research-accel-model-spec-ea24 @738a30c30f, Security/Definitions/Core/Assumptions.lean:64",
+   "premise": "AccelProductForm: an uncaptured MMA reads its pairs only through multiplier outputs",
+   "class": "P",
+   "deployed": "checkable against documents or a capture/microbenchmark",
+   "owner": null,
+   "removal": "none (θ)"
+  },
+  {
+   "id": "RingKCount",
+   "source": "BET-K-DISCHARGE (CMP-123)",
+   "file": "#4521, branch cursor/compute-research-accel-bet-k-discharge-ea24 @6135a26c1e, Security/Proofs/Pouw/RingFragment.lean",
+   "premise": "ring-fragment programs pay Theorem K's count",
+   "class": "T",
+   "kind": "theorem-to-be in the model (statement, unproved), not a premise",
+   "deployed": "nothing on main uses it",
+   "owner": "BET-K-DISCHARGE",
+   "removal": "proof"
+  },
+  {
+   "id": "RingKCount.degree2",
+   "source": "RingKCount's fragment",
+   "file": "#4521, branch cursor/compute-research-accel-bet-k-discharge-ea24 @6135a26c1e, Security/Proofs/Pouw/RingFragment.lean",
+   "premise": "products of two bit-affine operands (AffOps); degree > 2 excluded",
+   "class": "D-if-used",
+   "kind": "a defect once anything uses the count for all programs; today nothing does",
+   "deployed": "hypothesis of RingKCount",
+   "owner": "O-CHARGE (luck question, cubeQuad_err)",
+   "removal": "proof in the model over the excluded programs"
+  },
+  {
+   "id": "RingKCount.no-free-fork",
+   "source": "RingKCount's fragment",
+   "file": "#4521, branch cursor/compute-research-accel-bet-k-discharge-ea24 @6135a26c1e, Security/Proofs/Pouw/RingFragment.lean",
+   "premise": "Flow.WF: no free fan-out of an accumulator; out-of-place mma.sync on sm_120 is free on the card",
+   "class": "D-if-used",
+   "kind": "a defect once anything uses the count for all programs; today nothing does",
+   "deployed": "hypothesis of RingKCount",
+   "owner": "BET-K-DISCHARGE / O-CHARGE",
+   "removal": "proof in the model over the excluded programs"
+  },
+  {
+   "id": "RingKCount.ring-only",
+   "source": "RingKCount's fragment",
+   "file": "#4521, branch cursor/compute-research-accel-bet-k-discharge-ea24 @6135a26c1e, Security/Proofs/Pouw/RingFragment.lean",
+   "premise": "non-ring instructions excluded: IMAD.HI/WIDE high, shifts, LOP3, PRMT, compares, selects, floats",
+   "class": "D-if-used",
+   "kind": "a defect once anything uses the count for all programs; today nothing does",
+   "deployed": "hypothesis of RingKCount",
+   "owner": "O-BITS",
+   "removal": "proof in the model over the excluded programs"
+  },
+  {
+   "id": "RingKCount.one-sided",
+   "source": "RingKCount's fragment",
+   "file": "#4521, branch cursor/compute-research-accel-bet-k-discharge-ea24 @6135a26c1e, Security/Proofs/Pouw/RingFragment.lean",
+   "premise": "KScopeOneSided not discharged (the parity luck reads short words)",
+   "class": "D-if-used",
+   "kind": "a defect once anything uses the count for all programs; today nothing does",
+   "deployed": "hypothesis of RingKCount",
+   "owner": "O-CHARGE",
+   "removal": "proof in the model over the excluded programs"
   }
  ],
  "lock": {
   "Security/lean-audit.json": 468,
   "Security/Properties/lean-audit.json": 21,
   "@compute-accounting": 195,
-  "classified_here": "the chain's rows above; the rest next turn"
+  "classified_here": "the chain rows only; the 195 @compute-accounting records are next turn (docstring heads extracted, not yet classified)"
  }
 }
