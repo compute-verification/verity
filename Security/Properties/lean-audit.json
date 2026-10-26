@@ -200,8 +200,7 @@
   "CircuitRequirement",
   "Definitions.Accounting",
   "Definitions.Claims",
-  "Definitions.Pouw.Basic",
-  "Definitions.Accounting"
+  "Definitions.Pouw.Basic"
  ],
  "layers": {
   "Properties.Pouw": {
@@ -2414,14 +2413,6 @@
     "function": "NetworkCheck.Records.protocol.answer",
     "outcome": "accept"
    },
-   "Properties.NetworkRecords.noGridAcceptsMore": {
-    "function": "NetworkCheck.Records.evaluate",
-    "outcome": "accept"
-   },
-   "Properties.NetworkRecords.noGridMeans": {
-    "function": "NetworkCheck.Records.evaluateNoGrid",
-    "outcome": "accept"
-   },
    "Properties.Pouw.Check.acceptMeans": {
     "function": "PouwCheck.protocol.check",
     "outcome": "accept"
@@ -2862,6 +2853,14 @@
    },
    "Properties.Pouw.Strata.strataTile": {
     "function": "PouwCheck.Credit.strata",
+    "outcome": "accept"
+   },
+   "Properties.NetworkRecords.noGridAcceptsMore": {
+    "function": "NetworkCheck.Records.evaluate",
+    "outcome": "accept"
+   },
+   "Properties.NetworkRecords.noGridMeans": {
+    "function": "NetworkCheck.Records.evaluateNoGrid",
     "outcome": "accept"
    },
    "Properties.RemoteAudit.pooledCovers": {
@@ -6900,7 +6899,7 @@
    ]
   },
   "PousCheck.Certificate": {
-   "digest": "60823f15802d0eb0a2e159b2f45adfffc1580587e706ffadbbc4d43e1e6387e5",
+   "digest": "bdcb1248cdaeb1a49cabb8a7d72cfc246f65f76268eede5dbd65a09e0272a8bd",
    "definitions": {
     "PousCheck.Certificate.CERT_BLOCKS": "527a535310faba8aa56f092321903ed2e63717da90fc818c5d33f64adf2ee150",
     "PousCheck.Certificate.CERT_K": "0e598d7eecf34d7a14549ca1d5ad7c92eb232b00a0277a0cf35a96e83595ba9b",
@@ -6923,7 +6922,7 @@
     "PousCheck.Certificate.DELTA_NS": "4b84567ed5f9dd0ab146197e2b350a7db560485b2cf171eb688efa94523856fc",
     "PousCheck.Certificate.EXPANDER": "8ad0c71b473db38ddea742e5af358ab62af97d7c4eb4748c2c6471396dc697fb",
     "PousCheck.Certificate.EXPERIMENTAL": "a730548391c11e720bb37368e46efc73b777fd3778e10f13a4e6f11c38ffad4f",
-    "PousCheck.Certificate.P2_CLAIMS": "e054e1a3fb12da8e794c3dd2b76aac1f17c69c58b7cd8f11b486db209b6ea7fb",
+    "PousCheck.Certificate.P2_CLAIMS": "bf841bc90163ebe6435f0f12b88577035246cd584f4f25c8cf562b7d9fbaf805",
     "PousCheck.Certificate.POINT": "37763dd35b0ebb14b2e10cf745c68af7037b1bfb6e3c0ffa60dc31a1aa0ff93a",
     "PousCheck.Certificate.ROOT_CALL_NS": "36506525f90c759c0282adfdceb7c3e1a4eb9c0c58b0427895755abe6fdcaa94",
     "PousCheck.Certificate.RTT_ALLOWANCE_CAP_NS": "d52a9ee75015071fb87984490579465a67ae22651112bcd0e379a59423053846",
