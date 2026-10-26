@@ -1,5 +1,5 @@
 """The remote bandwidth session's verifier and challenger as a party of their own, so they run on a host the prover
-doesn't control (the challenger host, `trusted-nebius-host`) while the prover stays on its node.
+doesn't control (the challenger host, `trusted-host`) while the prover stays on its node.
 
 The verifier's side listens and the prover connects; each message is one line of JSON. The prover opens with its
 store's block count and payload root (`{"register": {"blocks", "payload_root"}}`). The verifier registers it from
@@ -35,7 +35,7 @@ from . import coins as C
 from . import period as P
 
 MODULE = "verity.core.protocols.remote_bandwidth.verifier_party"
-PREMISE = "trusted-nebius-host"
+PREMISE = "trusted-host"
 
 
 def _send(f: BinaryIO, doc: Mapping[str, Any]) -> None:
@@ -146,7 +146,7 @@ class Party:
 
 
 def placement(node: str, host: str) -> dict[str, Any]:
-    """Which host ran each party, and whether `trusted-nebius-host`'s premise holds: that the verifier and its challenger
+    """Which host ran each party, and whether `trusted-host`'s premise holds: that the verifier and its challenger
     ran on a machine the prover doesn't control, which is never the prover's node."""
     return {"parties": {"challenger": host, "prover": node, "verifier": host},
             PREMISE: (f"holds: the verifier and its challenger ran on {host}, not the prover's {node}" if host != node else
