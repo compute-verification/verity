@@ -50,6 +50,9 @@
    "owner": "@memory-accounting",
    "digest": "fe631f101be2748e869a59f9a122a639f83cd5b6c7fc8e51e971f4b7f9595f18"
   },
+  "Accounting.Assumptions.LiveSeedRandom": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.Assumptions.LiveVerdicts": {
    "owner": "@memory-accounting",
    "digest": "930f3b00f63507822ce5d1efb42692c8e75bb0cdfce7adc553e70faaf5305d9d"
@@ -3641,6 +3644,18 @@
    "signature": ["Accounting.SecurityProofs.RateHorizon : Accounting.Guarantees.RateHorizon"],
    "assumptions": [],
    "type_hash": "978df53b8d5406d4c1cfc0ed7b58ae594e04804e49dbe854a06795060be35828"
+  },
+  "Accounting.SecurityProofs.RateLivePaid": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateLivePaidRO": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateLiveSeedPaid": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateLiveSeedPaidRO": {
+   "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.RateOfAudit": {
    "owner": "@memory-accounting",
@@ -11250,6 +11265,10 @@
    "Accounting.SecurityProofs.RateChainPaid": "frozen (no-function,hash): As Accounting.SecurityProofs.RateChainPaidRO, from Accounting.SecurityProofs.RatePaid at each pass.",
    "Accounting.SecurityProofs.RateGrindPaidRO": "frozen (no-function,hash): As Accounting.SecurityProofs.RateChainPaidRO for a chained window whose roots are each picked from G candidates as any function of the pass's oracle family (Security/Definitions/Accounting/RateAuditRemote.lean, GrindChain), from Accounting.SecurityProofs.RatePaidRO at each pass of the chain that keeps each candidate and a union bound over the passes and the candidates.",
    "Accounting.SecurityProofs.RateGrindPaid": "frozen (no-function,hash): As Accounting.SecurityProofs.RateGrindPaidRO, from Accounting.SecurityProofs.RatePaid at each pass.",
+   "Accounting.SecurityProofs.RateLivePaidRO": "frozen (no-function,hash): As Accounting.SecurityProofs.RateChainPaidRO for a chained window with live pass coins, each pass's device any function of the earlier passes' coins and its own coins drawn after it (Security/Definitions/Accounting/RateAuditRemote.lean, LiveChain), from Accounting.SecurityProofs.RateGrindPaidRO at G = 1 over roots of no bits at each value of the live coins; no grinding term.",
+   "Accounting.SecurityProofs.RateLivePaid": "frozen (no-function,hash): As Accounting.SecurityProofs.RateLivePaidRO, from Accounting.SecurityProofs.RateGrindPaid at G = 1.",
+   "Accounting.SecurityProofs.RateLiveSeedPaidRO": "frozen (no-function,hash): As Accounting.SecurityProofs.RateLivePaidRO at the oracles a hash family gives at the window's live coins (Security/Definitions/Accounting/RateAuditRemote.lean, atSeeds), under the named random-oracle premise Accounting.Assumptions.LiveSeedRandom, plus its epsilon.",
+   "Accounting.SecurityProofs.RateLiveSeedPaid": "frozen (no-function,hash): As Accounting.SecurityProofs.RateLiveSeedPaidRO, from Accounting.SecurityProofs.RateLivePaid.",
    "Accounting.SecurityProofs.HorizonSampling": "frozen (no-function): It bounds uniform samples over an abstract causal family of rounds whose good sets are any functions of the earlier rounds' coins and of the round's own coins other than its sample (Security/Definitions/Accounting/RateAuditHorizon.lean, Causal), not a deployed sampler or verifier.",
    "Accounting.SecurityProofs.RateHorizon": "frozen (no-function,hash): As Accounting.SecurityProofs.HorizonSampling for the passes of a chained window of abstract chip programs in the random-oracle model (Security/Definitions/Accounting/RateAuditRemote.lean, Chain), each pass's correct receipts its good set, not the rate audit's code.",
    "Accounting.SecurityProofs.RateChainSampledRO": "frozen (no-function,hash): It joins Accounting.SecurityProofs.RateHorizon and Accounting.SecurityProofs.RateChainPaidRO by a union bound, a bound on a chained window of abstract chip programs in the random-oracle model, not the rate audit's code.",
