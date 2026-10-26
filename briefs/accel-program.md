@@ -472,13 +472,10 @@ scores the bets against each other. A bet that's killed reports why: that is a r
   - *Context:* today's H1 tile, at 17 compressions per 2,048 MACs, credits 0.075–0.15% (CMP-107).
   - *Kill:* a hashing floor per credited MAC that exceeds the budget for every design within C-Flock's limits.
   - *Deliverable:* a table, plus a recommendation.
-- **BET-ATTACK-LAB** (CMP-125).
-  - *Empirical.* Implement the top attacks on Dither in exact CPU emulation, with instruction counts by model class: depth-1
-    Strassen on narrow noise with sparse correction, IMAD packing, bit-sliced arithmetic, Four Russians, and cheaper
-    receipts. Implement the honest kernel the same way. Compute each attack's priced cost from its counted instructions
-    times data-sheet rates.
-  - Prepare GPU versions to run on an H200 after M3 (Mon 23:00Z), with the coordinator's OK.
-  - *Deliverable:* the code, the counted costs, and \(\varepsilon_{\text{attack}}\) per attack.
+- **BET-ALGO-LAB** (CMP-125; relaunched 02:08Z under this name).
+  - *What it is:* an algorithm-cost lab. Implement in exact CPU emulation the reference Dither kernel and the cheaper-looking alternative exact algorithms for the same transcript: depth-1 Strassen on narrow inputs with sparse correction, packed integer multiplies, bit-sliced arithmetic, Four Russians tables, and alternative receipt-fold implementations.
+  - *Method:* count each algorithm's instructions by model class, and price them at data-sheet rates.
+  - *Deliverable:* the code, the counted costs, and each algorithm's cost relative to the reference. CPU only.
 
 ## 6. Coordination
 
