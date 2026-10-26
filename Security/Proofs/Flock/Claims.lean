@@ -244,6 +244,7 @@ import Proofs.Flock.Claims.Recursion.SlotsOk
 import Proofs.Flock.Claims.Recursion.HpEarlyTrace
 import Proofs.Flock.Claims.Recursion.SlotsDeployed
 import Proofs.Flock.Claims.Recursion.VStarTraceAt
+import Proofs.Flock.Claims.Recursion.HpEarlyStaged
 import Proofs.Flock.Claims.Recursion.LastSharedR
 import Proofs.Flock.Claims.Recursion.LastFilesR
 import Proofs.Flock.Claims.Recursion.RowDLevels
