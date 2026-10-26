@@ -146,7 +146,7 @@ SX_HD u64 rotr(u64 x) {
     u32 lo = (u32)x, hi = (u32)(x >> 32);
     if constexpr (N > 32) { const u32 t = lo; lo = hi; hi = t; }
     u32 rlo, rhi, clo;
-    rotr3<MODE, N > 32 ? N - 32 : N>(lo, hi, rlo, rhi, clo);
+    rotr3<MODE, (N > 32 ? N - 32 : N)>(lo, hi, rlo, rhi, clo);
     return (u64)rlo << 32 | rhi;
   } else if constexpr (MODE != 0) {
     u32 lo = (u32)x, hi = (u32)(x >> 32);
