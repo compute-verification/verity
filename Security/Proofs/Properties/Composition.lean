@@ -142,7 +142,7 @@ theorem acceptMeans : AcceptMeans := by
   rw [hd]
 
 theorem acceptRegistration : AcceptRegistration := by
-  intro id R cs n ps b d k ev pub prof h
+  intro id R s cs n ps b d k ev pub prof h
   simp only [checkRegistered] at h
   split at h
   · cases h
@@ -159,10 +159,27 @@ theorem acceptRegistration : AcceptRegistration := by
   split at h
   · cases h
   rename_i hd
+  split at h
+  · cases h
+  rename_i answers hrun
+  split at h
+  · cases h
+  rename_i hs
   have hv' : (registrationAnswer R n k).verdict = .accept := Decidable.of_not_not hv
-  refine ⟨Decidable.of_not_not hn, Decidable.of_not_not hk, Decidable.of_not_not hp, answerAccepts _ _ _ _ hv', ?_,
-    acceptMeans _ _ _ _ _ _ _ h⟩
-  rw [← answer_digest hv']
-  exact Decidable.of_not_not hd
+  have hc : check id cs ps b ev = .accept pub prof := by
+    unfold check
+    rw [hrun]
+    exact h
+  refine ⟨Decidable.of_not_not hn, Decidable.of_not_not hk, Decidable.of_not_not hp, answerAccepts _ _ _ _ hv', ?_, ?_,
+    acceptMeans _ _ _ _ _ _ _ hc⟩
+  · rw [← answer_digest hv']
+    exact Decidable.of_not_not hd
+  · have hs' : committedBy s cs ev = some d := Decidable.of_not_not hs
+    unfold committedBy at hs'
+    cases hf : (cs.zip ev).find? (fun x => x.1.id == s) with
+    | none => rw [hf] at hs'; cases hs'
+    | some x =>
+      rw [hf] at hs'
+      exact ⟨x, List.mem_of_find?_eq_some hf, by simpa using List.find?_some hf, hs'⟩
 
 end Properties.Composition
