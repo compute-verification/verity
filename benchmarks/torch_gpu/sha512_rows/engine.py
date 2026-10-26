@@ -9,7 +9,7 @@ A digest is 8 u64 words, each the big-endian value of its 8 bytes (int64 tensors
     x = E.row_digests(rows, slots)                       # (G, S, 8): SHA-512(P(8 nbytes) || row g of slot s)
     lt = E.leaf_table(dids, did_of_row, rank, position, salt_row)   # each row's frame leaf and its salt's index
     leaves = E.leaves(lt, x, SaltKey(key))               # (G, S, 8): the hm96 leaves' frame leaves; or salts=(G, S, 192)
-    up = E.level(children, dids, level)                  # (T, w, 8) nodes over (T, 2w, 8) children
+    up = E.level(children, dids, level, first)           # (T, w, 8) nodes first .. first + w - 1 over (T, 2w, 8) children
     roots = E.root(leaves_of_trees, dids)                # (T, 8): pads to a power of two, then every level
 
 ``tensors`` are (slots, ...) arrays whose slot rows are contiguous bytes (any dtype); a part reads ``nbytes`` at a byte offset
@@ -108,7 +108,7 @@ def _abi(dll: ctypes.CDLL, path: Path) -> ctypes.CDLL:
     dll.sxr_leaves.argtypes = [vp, ctypes.POINTER(LeafArgs)]
     dll.sxr_frame_leaves.argtypes = [vp, vp, u32, vp, u32, u32, u64, vp, u32, vp]
     dll.sxr_node_mids.argtypes = [vp, vp, u32, u32, vp]
-    dll.sxr_level.argtypes = [vp, vp, u32, vp, u32, u32, vp]
+    dll.sxr_level.argtypes = [vp, vp, u32, vp, u32, u32, u64, vp]
     dll.sxr_pads.argtypes = [vp, vp, u32, u32, u64, u32, vp]
     for f in ("sxr_row_setup", "sxr_rows", "sxr_leaf_setup", "sxr_leaves", "sxr_frame_leaves", "sxr_node_mids", "sxr_level",
               "sxr_pads"):
@@ -408,19 +408,28 @@ class Engine:
         self._ok(rc, "frame leaves")
         return out
 
-    def level(self, children: Any, dids: Any, level: int) -> Any:
-        """(T, w, 8): node (level, i) over children [2i] and [2i + 1] of (T, 2w, 8), in tree t's domain."""
-        T, n = int(children.shape[0]), int(children.shape[1])
-        if n % 2 or not 0 <= level < 256:
-            raise ValueError("a level has an even width and is below 256")
+    def node_mids(self, dids: Any, level: int) -> Any:
+        """(D, 8): each domain's node midstate at ``level``, what ``level(..., mids=)`` takes."""
+        if not 0 <= level < 256:
+            raise ValueError("a level is below 256")
         dw = self._wordsof(dids)
-        D = int(dw.shape[0])
+        mids = self._words(int(dw.shape[0]))
+        self._ok(self.lib.sxr_node_mids(self._stream(), self._ptr(dw), int(dw.shape[0]), level, self._ptr(mids)), "node midstates")
+        return mids
+
+    def level(self, children: Any, dids: Any, level: int, first: int = 0, mids: Any = None) -> Any:
+        """(T, w, 8): node (level, first + i) over children [2i] and [2i + 1] of (T, 2w, 8), contiguous, in tree t's domain
+        (``mids``: ``node_mids(dids, level)``, if already computed)."""
+        T, n = int(children.shape[0]), int(children.shape[1])
+        if n % 2 or not 0 <= level < 256 or not 0 <= first < 1 << 64:
+            raise ValueError("a level has an even width and is below 256, and its first index is a u64")
+        mids = self.node_mids(dids, level) if mids is None else mids
+        D = int(mids.shape[0])
         if D not in (1, T):
             raise ValueError("one domain, or one a tree")
-        mids = self._words(D)
-        self._ok(self.lib.sxr_node_mids(self._stream(), self._ptr(dw), D, level, self._ptr(mids)), "node midstates")
         out = self._words(T, n // 2)
-        rc = self.lib.sxr_level(self._stream(), self._ptr(mids), D, self._ptr(self._wordsof(children)), T, n // 2, self._ptr(out))
+        rc = self.lib.sxr_level(self._stream(), self._ptr(mids), D, self._ptr(self._wordsof(children)), T, n // 2, first,
+                                self._ptr(out))
         self._ok(rc, "level")
         return out
 

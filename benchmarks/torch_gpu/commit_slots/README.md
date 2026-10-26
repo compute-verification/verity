@@ -16,7 +16,8 @@ import slots as S, slots_gpu as G
 S.commit(context, layout, step, salt_key, outputs, slots) -> S.StepCommit(root, slot_roots)
 
 # GPU, the same signature with a plan in place of (context, layout)
-plan = G.Plan(context, layout)                     # once a run: domains, pad tails, midstates, hm96's table on the device
+plan = G.Plan(context, layout)                     # once a run: domains, pad tails, midstates, hm96's table on the device;
+                                                   # temp_bytes= bounds a step's temporaries (default 1 GiB)
 G.commit(plan, step, salt_key, outputs, slots) -> S.StepCommit(root, slot_roots)
 
 # GPU, streaming as a step's groups (e.g. layers) come out of the forward pass
@@ -36,6 +37,13 @@ plan = G.Plan(context, G.regroup(layout, 4))
   A plan is linear in the layout's units: the layout digest is computed once (`Layout.digest`), every unit's domain id in
   one pass (`S.unit_domain_ids`, two SHA-512s a unit), and a group the layout repeats (its layers) is laid out once, so
   `add` rebinds that group's row table to the step's tensors without a Python step a row.
+  A step's memory is its slots' frontiers and one pass's temporaries. It holds no slot's leaves: a slot's tree is its
+  frontier, one node a level (the left sibling still waiting for its right one), 24 nodes or 1.5 KB a slot at six
+  million units. `add` folds a group's unit leaves into the frontiers a level at a time (the engine's `level` at any
+  first index), and `finish` closes each with pad(units) and the subtrees of pads alone, which the plan hashes once. A
+  group goes through in passes of as many slots as keep its temporaries within `temp_bytes`: about four (rows, slots)
+  digest buffers, so a group of 117,400 rows takes 35 slots a pass at 1 GiB. A pass's salts are its slots' own
+  (nonce `nonce0 + s`), so passes change no root.
 - `step`: the step's index; `slots`: how many sequence slots it has.
 - `salt_key`: 32 bytes, `S.fresh_salt_key()` (the OS generator), fresh each step and the prover's alone, kept with the
   step's record to open from.
@@ -104,31 +112,42 @@ quantizer (2 units of codes and one of the scale), down and residual.
 
 ## Measured on the H200
 
-Run `r20261026-014030-c476` (vy-dc-h200, one H200, commit 3934f0782e, `gpu.sh`), on the engine:
+Run `r20261026-082348-7996` (vy-dc-h200, one H200, this directory at 83c0cc7636 in a tree merged with #4612 for
+FAMILIES' layout, `gpu.sh` and one FAMILIES step), on the engine:
 
-- **Bit-exact.** The tests passed (21, the device against the host twin included), and so did every `check.py` check:
+- **Bit-exact.** The tests passed (60, the device against the host twin included), and so did every `check.py` check:
   - the fixture's root;
   - the edge layout at 1 to 300 slots against the reference, and at 4,097 and 20,480 against the host twin;
   - two and three H200 layers, and three layers in two groups;
   - the frozen layout at 4,096, 16,384 and 20,480 slots (141, 566 and 707 GB), each with six sampled slots rebuilt by
     the reference and the step root from the device's slot roots.
+- **FAMILIES at 4,096 slots** (#4612's layout: 6,102,102 units of 6,102,832 rows, 41 MB a slot, 168 GB a step). A step
+  holds 0.76 GiB beyond its plan (2.07 GiB) and inputs, 6 MiB of it frontiers, and takes 108.2 s (104.7 s and 3.0 GiB
+  with `temp_bytes` at 4 GiB). The split: hiding leaves 67.5 s, unit roots and their frame leaves 16.1 s, the fold
+  17.6 s and row digests 7.0 s. Its rows average 6.7 bytes, so the step is the hashing of 25.0G row-slots, not their
+  bytes: about ten SHA-512 compressions, three ChaCha20 blocks and the hm96 mask each. The roots of six slots (0, 1,
+  3,321, 3,322, 4,094 and 4,095) equal the leaf-matrix path's, and the step root equals the reference's step tree.
+  Over the same random unit leaves at 35 slots (one pass), the fold and close take 0.153 s and 0.37 GiB, against the
+  leaf matrix's `engine.root` at 0.160 s and 26.4 GiB, with equal roots: 6.1M nodes a slot against 8.4M, since the
+  matrix padded every slot to 2^23 leaves (run r20261026-083415-a945).
 - **Alone,** every op committed, 52 layers. The share is of a step whose rest (the int8 GEMMs, attention and the
   elementwise ops) takes 5.33 s at 16,384 slots and scales with the slots:
 
   | slots | layers a group | s a step | GB/s | rows | leaves | trees | share of the step |
   | --- | --- | --- | --- | --- | --- | --- | --- |
-  | 16,384 | 1 | 1.032 | 548 | 0.950 s | 48 ms | 34 ms | 16% |
-  | 20,480 | 1 | 1.289 | 548 | 1.182 s | 65 ms | 41 ms | 16% |
-  | 12,288 | 1 | 0.776 | 546 | 0.712 s | 38 ms | 26 ms | 16% |
-  | 4,096 | 4 | 0.262 | 540 | 0.240 s | 13 ms | 9 ms | 16% |
-  | 4,096 | 1 | 0.315 | 449 | 0.290 s | 15 ms | 11 ms | 19% |
-  | 1,024 | 1 | 0.111 | 318 | 0.101 s | 6 ms | 4 ms | 25% |
+  | 16,384 | 1 | 1.045 | 541 | 0.963 s | 47 ms | 35 ms | 16% |
+  | 20,480 | 1 | 1.303 | 543 | 1.199 s | 62 ms | 42 ms | 16% |
+  | 12,288 | 1 | 0.792 | 535 | 0.727 s | 36 ms | 30 ms | 17% |
+  | 4,096 | 4 | 0.263 | 538 | 0.242 s | 12 ms | 10 ms | 16% |
+  | 4,096 | 1 | 0.334 | 423 | 0.304 s | 15 ms | 16 ms | 20% |
+  | 1,024 | 1 | 0.132 | 267 | 0.115 s | 6 ms | 11 ms | 28% |
 
-  At 16,384 slots that's 4.30 G SHA-512 compressions/s of row data. Rows are the engine's `rows` and `row_digests`;
-  trees are the unit, slot and step trees.
-- **Beside a layer's four int8 GEMMs** (`torch._int_mm`, M = 16,384, 933 TOPS): the GEMMs take 94.3 ms alone and
-  112.8 ms beside the commit (+20%). Overlapped, a layer takes 112.8 ms, against 117.0 ms run one after the other, so
-  overlap saves little. Over a step, the commit costs 24% of the GEMMs' 4.91 s.
+  At 16,384 slots that's 4.25 G SHA-512 compressions/s of row data. Rows are the engine's `rows` and `row_digests`;
+  trees are the unit trees, the slot trees' fold and close, and the step tree. The leaf matrix's trees (run
+  r20261026-014030-c476) took 34 ms at 16,384 slots and 4 ms at 1,024: a fold at a few slots a group is launch-bound.
+- **Beside a layer's four int8 GEMMs** (`torch._int_mm`, M = 16,384, 939 TOPS): the GEMMs take 93.8 ms alone and
+  109.2 ms beside the commit (+16%). Overlapped, a layer takes 109.2 ms, against 114.8 ms run one after the other, so
+  overlap saves little. Over a step, the commit costs 22% of the GEMMs' 4.88 s.
 
 ## Files
 
@@ -139,5 +158,7 @@ Run `r20261026-014030-c476` (vy-dc-h200, one H200, commit 3934f0782e, `gpu.sh`),
   sampled slots); `bench.py`: GB/s and the share of a serving step at the frozen shape, alone and beside the layer's int8
   GEMMs; `gpu.sh`: both, with the tests, under one GPU lease (its header has the `research run` line).
 - `tests/`: the reference against the fixture and C-Flock's salts and an independent tree build, openings and their
-  refusals, the host twin against the reference (regrouped layouts included), and (with a GPU) the device against the
-  host twin.
+  refusals, the host twin against the reference (regrouped layouts included), the streamed slot trees against the leaf
+  matrix they replaced and the reference (unit counts around powers of two, groups cut anywhere, one-slot passes), a
+  step's memory (counted: its frontier and one pass), planning at six million units, and (with a GPU) the device
+  against the host twin.
