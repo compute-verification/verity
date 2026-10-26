@@ -1895,6 +1895,30 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "Accounting.ServingBlocks.Alignment": {
+   "owner": "@training",
+   "digest": "db78bb47c701979e51997ef531f8465093c6508d1680742bebf5e99171195e00"
+  },
+  "Accounting.ServingBlocks.InferenceBlocks": {
+   "owner": "@training",
+   "digest": "c2c5ddfebd8de50ec6c08ba3c9acae0e934e3ed0dc25e6fa8307704e419c60bf"
+  },
+  "Accounting.ServingBlocks.PerBlockCap": {
+   "owner": "@training",
+   "digest": "56548653487f0cc4daddb11528fb4b2c0829dbdf8dd5aa2325355e2ead73ead4"
+  },
+  "Accounting.ServingBlocks.ServingBlocksCover": {
+   "owner": "@training",
+   "digest": "ccf9c7974fe23f51a2790caab664ab9b4d5d6e694508b4e9e54dfbfafed2fed6"
+  },
+  "Accounting.ServingBlocks.ServingBlocksPartition": {
+   "owner": "@training",
+   "digest": "e1b2517304ece0e23810215c9f5bda0089645c572a3ac28b1600f6fdfa4ab35e"
+  },
+  "Accounting.ServingBlocks.UncertifiedCap": {
+   "owner": "@training",
+   "digest": "acb85aaa7512f7b8637311d33f5370cdafd46e1a1f411f05e5aafd9ad91bca48"
   }
  },
  "meaning": [
@@ -3980,13 +4004,31 @@
    "type_hash": "6e558489a11f959d9bdc38f44692b44329f9e318d310bdc34bc8e985e8d6f6ca"
   },
   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound.{u_3, u_4} :",
+    "  Accounting.Guarantees.ServingBlocks.ServingBlockBound"
+   ],
+   "assumptions": [],
+   "type_hash": "b16977eeb6a0fb699bc69e3a3b149d3d54b166682d6e1719262fe3254ae4d908"
   },
   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote.{u_3, u_4} :",
+    "  Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote"
+   ],
+   "assumptions": [],
+   "type_hash": "7b60f71dc0966c273ada4bf69ae68fc28dc0a748f7fdef2e8f4c439de57fe45b"
   },
   "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary.{u_3} :",
+    "  Accounting.Guarantees.ServingBlocks.UncertifiedElementary"
+   ],
+   "assumptions": [],
+   "type_hash": "db71cc8b3f4c79c53c151b088daad6bb2bb6f050a9539f7503cfb3c7cfe660e7"
   },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
@@ -11825,6 +11867,8 @@
     "Accounting.SecurityProofs.RequirementCreditsSteps",
     "Accounting.SecurityProofs.RequirementHelp",
     "Accounting.SecurityProofs.RequirementHelpBound",
+    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound",
+    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote",
     "Accounting.SecurityProofs.pouwRow",
     "Bandwidth.SecurityProofs.B3",
     "Bandwidth.SecurityProofs.B3Capacity",
@@ -14051,6 +14095,19 @@
     "Accounting.SecurityProofs.TimelyTicks"
    ]
   },
+  "Definitions.Accounting.Guarantees.ServingBlocks": {
+   "digest": "9fcd199d40d740a6ad6367d22a93568d680fa83c6dc945ddc91620652085dd4f",
+   "definitions": {
+    "Accounting.Guarantees.ServingBlocks.ServingBlockBound": "4f744ab7150fb6e453681c69a007f6f6e1584f6608ff068611ba0c4ac8e9cb41",
+    "Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote": "c4a17f2f9018f5fb1f35e54cf41a9a7a09f022cbf2c923597740ac4ba26ba43b",
+    "Accounting.Guarantees.ServingBlocks.UncertifiedElementary": "6c0deca9a6e1d7a017409bb64719ad476b9bc43a1151c82a595403f43543f9c3"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound",
+    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary"
+   ]
+  },
   "Definitions.Accounting.Guarantees.Sheet": {
    "digest": "58e46b2c2e135fe61b791f31d973eddf337907405f23f2f564a283152cc1f7fc",
    "definitions": {
@@ -15737,6 +15794,32 @@
     "Accounting.Served.Held": "7f0e04f7760c1c5d90e49708cf9ee8a3ccbf3a3e5b57b5a7e7f3136e31e67486"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.HeldSessionSound"]
+  },
+  "Definitions.Accounting.ServingBlocks": {
+   "digest": "32dcaf7e0c07e015b34ab4d9aac6ce60ee5f508bd487f204a4740aed8178aede",
+   "definitions": {
+    "Accounting.ServingBlocks.Alignment": "db78bb47c701979e51997ef531f8465093c6508d1680742bebf5e99171195e00",
+    "Accounting.ServingBlocks.Block": "cf11d61bcd70788fc128f7f9599a6e87e9622bedf9afb0d7d721fbac3012ae90",
+    "Accounting.ServingBlocks.Counted": "de3ae8c57db9d37ff650b997aa6c10b9425cdaed9a1977f2f4c4abf9ad6a9829",
+    "Accounting.ServingBlocks.Counted.V": "d0a9ef76265f98a5ba41e8fc2c482a0ff509d190c835c4339b7d01c0035f2f22",
+    "Accounting.ServingBlocks.Counted.body": "b5adb9a16bf6d4115077a96be38c926bd2f42a420e4f56a038e80f757ce52865",
+    "Accounting.ServingBlocks.Counted.inside": "8adb7680ff2cf65cc15a5d34861884ed3d3899f898f4b6b521335ff1c88abeed",
+    "Accounting.ServingBlocks.Counted.outside": "d3cc5bd1c7a2cb407186d64d4f21b455743e8df142a7b77ebfd560705917cc1d",
+    "Accounting.ServingBlocks.Counted.split": "c07162d58c2e61e800e1f650d5deac1fd7b9108c720cb96e5f3ab291f39b6c2f",
+    "Accounting.ServingBlocks.Counted.total": "2d05a9abb767950db1a10ca10854323644e71676d027d85c548c4adbfa34c1d5",
+    "Accounting.ServingBlocks.Counted.ω": "b9dab826e85c1f597f85da7279bb0e507469a38b643e59197c82f4a5efeb50c4",
+    "Accounting.ServingBlocks.InferenceBlocks": "c2c5ddfebd8de50ec6c08ba3c9acae0e934e3ed0dc25e6fa8307704e419c60bf",
+    "Accounting.ServingBlocks.PerBlockCap": "56548653487f0cc4daddb11528fb4b2c0829dbdf8dd5aa2325355e2ead73ead4",
+    "Accounting.ServingBlocks.ServingBlocksCover": "ccf9c7974fe23f51a2790caab664ab9b4d5d6e694508b4e9e54dfbfafed2fed6",
+    "Accounting.ServingBlocks.ServingBlocksPartition": "e1b2517304ece0e23810215c9f5bda0089645c572a3ac28b1600f6fdfa4ab35e",
+    "Accounting.ServingBlocks.UncertifiedCap": "acb85aaa7512f7b8637311d33f5370cdafd46e1a1f411f05e5aafd9ad91bca48",
+    "Accounting.ServingBlocks.block": "875e9cc4a493f1c98508253437d187a827348add6dea5fa9a76f16cdffb1c387"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound",
+    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary"
+   ]
   },
   "Definitions.Accounting.TS.Drawn": {
    "digest": "32e35a1db7d3af15b74e44f1f18f6aff730ab88a5967e84247b1902da1b09e59",
@@ -17571,6 +17654,9 @@
     "Accounting.SecurityProofs.RequirementCreditsSteps",
     "Accounting.SecurityProofs.RequirementHelp",
     "Accounting.SecurityProofs.RequirementHelpBound",
+    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound",
+    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary",
     "Accounting.SecurityProofs.pouwRow",
     "Bandwidth.SecurityProofs.B3",
     "Bandwidth.SecurityProofs.B3Capacity",
