@@ -13,15 +13,15 @@ import Proofs.Flock.Claims.Recursion.AccFits
 Row E's commit ties (`accCommit_eq`, `innerAccCommit_eq`, `innerInnerCommit_eq`) take, at each of the two parts, its
 staged statement and check, its setup's table labelled in order, its reads file, its unit below the table's instance
 count, and, across both, a record listing the registered reads (`RegListed`) and no collision among the true calls and
-the setups' evaluations at a list `xs` holding both staged statements. Each part's premises come from `JointV` at
-`showsDec` (`tiePremises_of_jointV`): the staged statement is `xs.getD s []`, which sets up and so is in `xs`; its
-decision labels the table (`idx_of_dec`); V\* gives its unit count, at most the table's (`instances_le`); and a level or
-algebra part's unit is one `RecCoins.check` refuses without the reads file (`registered_recOpen`, `registered_inner`).
-`JointV`'s collision clause is the ties' across both setups. At the dense form a part holds rows only as a level
-(`acc`) or an algebra part (`acc0`, `acc1`) (`slotAt_of_holding`; R's levels are absent, `stacked_none`), at the
-positions `accRead` names, so any two slots of one row tie (`slotCommit_eq`): STEPSW's `AccCommitW` and RESP3's
-`InnerAccTie` at `JointV` (`accCommitV`, `innerAccTieV`), wherever the brings list the registered reads (`RegSetup`,
-which `deployedB` gives).
+the setups' evaluations at a list `xs` holding both staged statements. Each part's premises come from its `AccV` at
+`xs.getD s []` (`tiePremises_of_accV`): its staged statement and decision (`showsDec`) label the table (`idx_of_dec`);
+V\* gives its unit count, at most the table's (`instances_le`); and a level or algebra part's unit is one
+`RecCoins.check` refuses without the reads file (`registered_recOpen`, `registered_inner`). The statement sets up, so it
+is in `xs` (`getD_mem_of_setup`), and the collision clause is `hcol`, which `PortsAtV` carries beside `JointP`. At the
+dense form a part holds rows only as a level (`acc`) or an algebra part (`acc0`, `acc1`) (`slotAt_of_holding`; R's
+levels are absent, `stacked_none`), at the positions `accRead` names, so any two slots of one row tie
+(`slotCommit_eq`): STEPSW's `AccCommitW` and RESP3's `InnerAccTie` with `xs`, `hxs` and `hcol` after `JointP`
+(`accCommitV`, `innerAccTieV`), wherever the brings list the registered reads (`RegSetup`, which `deployedB` gives).
 -/
 
 namespace RecDeploy.ResLower
@@ -32,13 +32,6 @@ open FlockDeploy (Coin FinalP)
 open Claims.Recursion.VStarB
 
 noncomputable section
-
-/-- What each part accepts at its staged statement `xs.getD s []` and its own witness, showing its decision. -/
-abbrev AccV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
-    (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
-    (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) :=
-  PartAcceptsV FlockDeploy.sha512 (DRL rd wE final w b elem) (deployZkRec _root_.Flock.Readable.relation)
-    (DeployedR.layR elem) shape (showsDec untr b) cmt
 
 /-! ## The shape's schedule -/
 
@@ -272,57 +265,53 @@ theorem registered_inner {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st
     unfold RecCoins.check at hcoin
     simp [hpar] at hcoin
 
-/-- **The commit ties' premises at part `s`, from `JointV` at the decision**: its staged statement `xs.getD s []`
-(`showsDec`), which its witness checks against and which is in `xs` (it sets up, and `[]` doesn't, `insO_nil`); its
-setup, one table at least, labelled in order (`idx_of_dec`, at the decision `showsDec` carries); and at every V\*
-statement it has, at most the table's instances (`instances_le`), with the reads file wherever it is a level or an
-algebra part (`registered_recOpen`, `registered_inner`). -/
-theorem tiePremises_of_jointV {rd : Msg → Option FinalP} {wE : Msg → ℝ}
+/-- **The commit ties' premises at part `s`, from its acceptance at its staged statement `xO` with its decision**
+(`AccV`, `PortsAtV`'s `hxs`): `xO` is staged (`showsDec`) and its witness checks against it; its setup has at least
+one table, labelled in order (`idx_of_dec`, at the decision `showsDec` carries); and at every V\* statement it has, at
+most the table's instances (`instances_le`), with the reads file wherever it is a level or an algebra part
+(`registered_recOpen`, `registered_inner`). -/
+theorem tiePremises_of_accV {rd : Msg → Option FinalP} {wE : Msg → ℝ}
     {final : Msg → Option (List (List (Msg × Salt)) × Msg)} {w : Msg → ℝ} {b : Brings}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
-    {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg} {x : Msg} {c : ℕ → Coin}
-    {xs : List Msg} {ws : List Claims.Flock.Wit}
-    (hJ : OpenLower.JointV FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
-      (AccV rd wE final w b elem shape untr cmt) x c xs ws) {s : ℕ} (hs : s < ws.length) :
-    ∃ (i : RecIns) (spec : SessionSpec) (sts : Array Stmt), StagedPart b.st s x (xs.getD s []) ∧
-      Claims.Flock.check (deployZkRec _root_.Flock.Readable.relation).parse (xs.getD s []) ws[s] = true ∧
-      xs.getD s [] ∈ xs ∧ setupO (xs.getD s []) = some (i, spec, sts) ∧ ∃ h0 : 0 < sts.size,
+    {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg} {s : ℕ} {x : Msg}
+    {c : ℕ → Coin} {xO : Msg} {wt : Claims.Flock.Wit} {ms : List Msg}
+    (h : AccV rd wE final w b elem shape untr cmt s x c xO wt ms) :
+    ∃ (i : RecIns) (spec : SessionSpec) (sts : Array Stmt), StagedPart b.st s x xO ∧
+      Claims.Flock.check (deployZkRec _root_.Flock.Readable.relation).parse xO wt = true ∧
+      setupO xO = some (i, spec, sts) ∧ ∃ h0 : 0 < sts.size,
       Registered.unitIndices sts[0].pub = .ok (Array.range sts[0].pub.n) ∧
       ∀ r, readX x = some r → ∀ sv, (RecVStar.statements r.shape).toOption.bind (·[s]?) = some sv →
         sv.instances ≤ sts[0].pub.n ∧ (ReadsAcc sv → ∃ own, i.base.registered = some own) := by
-  obtain ⟨-, hck, -, -, ⟨⟨-, hS⟩, hdec⟩, -⟩ := hJ.2.2.2 s hs
+  obtain ⟨-, hck, -, -, ⟨⟨-, hS⟩, hdec⟩, -⟩ := h
   obtain ⟨-, i, spec, sts, -, hsu, -⟩ := id hS
   have h0 : 0 < sts.size := by
     have := (oneFull_staged hS hsu).1
     omega
-  refine ⟨i, spec, sts, hS, hck, ?_, hsu, h0, idx_of_dec hS hsu (hdec i spec sts hsu) h0, ?_⟩
-  · by_cases hl : s < xs.length
-    · rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hl, Option.getD_some]
-      exact List.getElem_mem hl
-    · exfalso
-      rw [List.getD_eq_getElem?_getD, List.getElem?_eq_none (by omega), Option.getD_none] at hsu
-      have h1 := (setupO_some hsu).1
-      rw [insO_nil] at h1
-      cases h1
-  · intro r hr sv hsv
-    refine ⟨instances_le hS hsu h0 hr hsv, ?_⟩
-    rintro (⟨l, LANES, HH, m, rfl⟩ | ⟨k, name, pt, rfl⟩)
-    · exact registered_recOpen hS hr hsv hsu
-    · exact registered_inner hS hr hsv hsu
+  refine ⟨i, spec, sts, hS, hck, hsu, h0, idx_of_dec hS hsu (hdec i spec sts hsu) h0, ?_⟩
+  intro r hr sv hsv
+  refine ⟨instances_le hS hsu h0 hr hsv, ?_⟩
+  rintro (⟨l, LANES, HH, m, rfl⟩ | ⟨k, name, pt, rfl⟩)
+  · exact registered_recOpen hS hr hsv hsu
+  · exact registered_inner hS hr hsv hsu
 
 /-! ## Two slots of one row carry one commit string -/
 
-/-- **Two slots of one row carry one commit string**, at a joint acceptance at a dense statement whose brings list the
-registered reads: each slot is a level's or an algebra part's (`SlotAt`), so `accCommit_eq`, `innerAccCommit_eq` (both
-ways) or `innerInnerCommit_eq`, at each part's premises (`tiePremises_of_jointV`) and `JointV`'s calls. -/
+/-- **Two slots of one row carry one commit string**, at a dense statement whose brings list the registered reads,
+where every part accepts at its staged statement in `xs` (`hxs`) and the true calls `hl` and the setups' evaluations at
+`xs` have no collision (`hcol`): each slot is a level's or an algebra part's (`SlotAt`), so `accCommit_eq`,
+`innerAccCommit_eq` (both ways) or `innerInnerCommit_eq`, at each part's premises (`tiePremises_of_accV`). -/
 theorem slotCommit_eq {rd : Msg → Option FinalP} {wE : Msg → ℝ}
     {final : Msg → Option (List (List (Msg × Salt)) × Msg)} {w : Msg → ℝ} {b : Brings}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
     {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg} (hRS : RegSetup b)
     {x : Msg} {st : Claims.Recursion.Stmt} (hx : (DRL rd wE final w b elem).parse x = some st)
-    (hf : Claims.Recursion.Form.Dense st.form) {c : ℕ → Coin} {xs : List Msg} {ws : List Claims.Flock.Wit}
-    (hJ : OpenLower.JointV FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
-      (AccV rd wE final w b elem shape untr cmt) x c xs ws) {r : XR} (hr : readX x = some r) {s s' : ℕ}
+    (hf : Claims.Recursion.Form.Dense st.form) {c : ℕ → Coin} {ws : List Claims.Flock.Wit}
+    (hl : ∀ e ∈ (DeployedR.layR elem).allCalls x ws, FlockDeploy.sha512 e.1 = e.2) {xs : List Msg}
+    (hxs : ∀ s' (hs' : s' < ws.length), AccV rd wE final w b elem shape untr cmt s' x c (xs.getD s' []) ws[s']
+      ((DeployedR.layR elem).msgs x ws))
+    (hcol : (Claims.findColl ((DeployedR.layR elem).allCalls x ws ++
+      Claims.Recursion.setupCalls FlockDeploy.sha512 (DRL rd wE final w b elem) xs)).isSome = false)
+    {r : XR} (hr : readX x = some r) {s s' : ℕ}
     {cc cc' : Circuit} (hpc : r.w.parts[s]?.bind partCircuit = some cc)
     (hpc' : r.w.parts[s']?.bind partCircuit = some cc') {wt wt' : Claims.Flock.Wit} (hw : ws[s]? = some wt)
     (hw' : ws[s']? = some wt') {sch : Schedule} (hsch : fast100 r.shape.m = some sch) {nm nm' : String}
@@ -331,8 +320,10 @@ theorem slotCommit_eq {rd : Msg → Option FinalP} {wE : Msg → ℝ}
     readForms wt (hmCommit cc qn u) = readForms wt' (hmCommit cc' q' u') := by
   obtain ⟨hs, rfl⟩ := List.getElem?_eq_some_iff.1 hw
   obtain ⟨hs', rfl⟩ := List.getElem?_eq_some_iff.1 hw'
-  obtain ⟨i, spec, sts, hS, hck, hxs, hsu, h0, hidx, hI⟩ := tiePremises_of_jointV hJ hs
-  obtain ⟨i', spec', sts', hS', hck', hxs', hsu', h0', hidx', hI'⟩ := tiePremises_of_jointV hJ hs'
+  obtain ⟨i, spec, sts, hS, hck, hsu, h0, hidx, hI⟩ := tiePremises_of_accV (hxs s hs)
+  obtain ⟨i', spec', sts', hS', hck', hsu', h0', hidx', hI'⟩ := tiePremises_of_accV (hxs s' hs')
+  have hxs1 := getD_mem_of_setup hsu
+  have hxs1' := getD_mem_of_setup hsu'
   have hD : RegListed (DRL rd wE final w b elem) := regListed_recBound _ hRS _ _
   rcases h1 with ⟨l, LANES, HH, m, d, hsv, hnd, hu, hP⟩ | ⟨k, name, pt, d, hsv, hnm, hd, hu, hP⟩ <;>
     rcases h2 with ⟨l', LANES', HH', m', d', hsv', hnd', hu', hP'⟩ | ⟨k', name', pt', d', hsv', hnm', hd', hu', hP'⟩
@@ -345,7 +336,7 @@ theorem slotCommit_eq {rd : Msg → Option FinalP} {wE : Msg → ℝ}
     have hn2 : m ≤ sts[0].pub.n := hn
     have hn2' : m' ≤ sts'[0].pub.n := hn'
     exact accCommit_eq hS hS' hck hck' hr hpc hpc' hsv hsv' hsch hsu hsu' h0 h0' hidx hidx' hown hown' hnd hnd' hq hq'
-      hu (by omega) hu' (by omega) (hP.symm.trans hP') hD hJ.2.1 hJ.2.2.1 hxs hxs'
+      hu (by omega) hu' (by omega) (hP.symm.trans hP') hD hl hcol hxs1 hxs1'
   · have hm := recOpen_n hx hf hr hsch hsv
     obtain ⟨hn, hreg⟩ := hI r hr _ hsv
     obtain ⟨hn', hreg'⟩ := hI' r hr _ hsv'
@@ -354,7 +345,7 @@ theorem slotCommit_eq {rd : Msg → Option FinalP} {wE : Msg → ℝ}
     have hn2 : m ≤ sts[0].pub.n := hn
     have hn2' : 2 ≤ sts'[0].pub.n := hn'
     exact (innerAccCommit_eq hS' hS hck' hck hr hpc' hpc hsv' hsv hsch hsu' hsu h0' h0 hidx' hidx hown' hown hnm' hd'
-      hnd hq' hq (by omega) hu (by omega) (hP'.symm.trans hP) hD hJ.2.1 hJ.2.2.1 hxs' hxs).symm
+      hnd hq' hq (by omega) hu (by omega) (hP'.symm.trans hP) hD hl hcol hxs1' hxs1).symm
   · have hm' := recOpen_n hx hf hr hsch hsv'
     obtain ⟨hn, hreg⟩ := hI r hr _ hsv
     obtain ⟨hn', hreg'⟩ := hI' r hr _ hsv'
@@ -363,7 +354,7 @@ theorem slotCommit_eq {rd : Msg → Option FinalP} {wE : Msg → ℝ}
     have hn2 : 2 ≤ sts[0].pub.n := hn
     have hn2' : m' ≤ sts'[0].pub.n := hn'
     exact innerAccCommit_eq hS hS' hck hck' hr hpc hpc' hsv hsv' hsch hsu hsu' h0 h0' hidx hidx' hown hown' hnm hd
-      hnd' hq hq' (by omega) hu' (by omega) (hP.symm.trans hP') hD hJ.2.1 hJ.2.2.1 hxs hxs'
+      hnd' hq hq' (by omega) hu' (by omega) (hP.symm.trans hP') hD hl hcol hxs1 hxs1'
   · obtain ⟨hn, hreg⟩ := hI r hr _ hsv
     obtain ⟨hn', hreg'⟩ := hI' r hr _ hsv'
     obtain ⟨own, hown⟩ := hreg (Or.inr ⟨_, _, _, rfl⟩)
@@ -371,20 +362,25 @@ theorem slotCommit_eq {rd : Msg → Option FinalP} {wE : Msg → ℝ}
     have hn2 : 2 ≤ sts[0].pub.n := hn
     have hn2' : 2 ≤ sts'[0].pub.n := hn'
     exact innerInnerCommit_eq hS hS' hck hck' hr hpc hpc' hsv hsv' hsch hsu hsu' h0 h0' hidx hidx' hown hown' hnm hd
-      hnm' hd' hq hq' (by omega) (by omega) (hP.symm.trans hP') hD hJ.2.1 hJ.2.2.1 hxs hxs'
+      hnm' hd' hq hq' (by omega) (by omega) (hP.symm.trans hP') hD hl hcol hxs1 hxs1'
 
-/-! ## STEPSW's and RESP3's ties at `JointV` -/
+/-! ## STEPSW's and RESP3's ties, with every part's acceptance in `xs` and `hcol` -/
 
-/-- **`AccCommitW` at `JointV`**: where part `s`'s unit `u` holds `acc` at row `p`, its `nm` port (`acc`, or `acc_out`
-for row `p + 1`) and any holding `h'` of row `p + d` at part `s'` read one commit string, at the parts' own witnesses
-and staged statements `xs`. -/
+/-- **`AccCommitW` with the parts' staged statements**: at `JointP`, and wherever every part accepts at its statement
+in `xs` with its decision (`hxs`, `PortsAtV`'s) and the true calls and the setups' evaluations at `xs` have no
+collision (`hcol`): where part `s`'s unit `u` holds `acc` at row `p`, its `nm` port (`acc`, or `acc_out` for row
+`p + 1`) and any holding `h'` of row `p + d` at part `s'` read one commit string at the parts' own witnesses. -/
 def AccCommitV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
   ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
-    ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit),
-    OpenLower.JointV FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
-      (AccV rd wE final w b elem shape untr cmt) x c xs ws →
+    ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
+    RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
+      (AccP rd wE final w b elem shape untr cmt) x c ws →
+    ∀ (xs : List Msg), (∀ s' (hs' : s' < ws.length), AccV rd wE final w b elem shape untr cmt s' x c (xs.getD s' [])
+      ws[s'] ((DeployedR.layR elem).msgs x ws)) →
+    (Claims.findColl ((DeployedR.layR elem).allCalls x ws ++
+      Claims.Recursion.setupCalls FlockDeploy.sha512 (DRL rd wE final w b elem) xs)).isSome = false →
     ∀ (r : XR), readX x = some r → ∀ (s s' : ℕ) (cc cc' : Circuit) (wt wt' : Claims.Flock.Wit),
       r.w.parts[s]?.bind partCircuit = some cc → r.w.parts[s']?.bind partCircuit = some cc' →
       ws[s]? = some wt → ws[s']? = some wt' →
@@ -400,7 +396,7 @@ theorem accCommitV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg 
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) (hRS : RegSetup b) :
     AccCommitV rd wE final w b elem Claims.Recursion.Form.Dense untr cmt := by
-  intro x st hx hf c xs ws hJ r hr s s' cc cc' wt wt' hpc hpc' hw hw' p u nm d hnd hh h' hh' qn q' hq hq'
+  intro x st hx hf c ws hJ xs hxs hcol r hr s s' cc cc' wt wt' hpc hpc' hw hw' p u nm d hnd hh h' hh' qn q' hq hq'
   obtain ⟨sch, hsch⟩ := fast100_of_read hr
   have hstk := stacked_none hx hf hr
   have h1 : SlotAt r sch s nm u (p + d) := by
@@ -409,19 +405,23 @@ theorem accCommitV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg 
     · rw [Nat.add_zero]
       exact slotAt_of_holding hstk hsch hh
     · exact slotAt_out hstk hsch hh
-  exact slotCommit_eq hRS hx hf hJ hr hpc hpc' hw hw' hsch h1 (slotAt_of_holding hstk hsch hh') hq hq'
+  exact slotCommit_eq hRS hx hf hJ.2.1 hxs hcol hr hpc hpc' hw hw' hsch h1 (slotAt_of_holding hstk hsch hh') hq hq'
 
-/-- **`InnerAccTie` at `JointV`**: wherever part `s` (an algebra part) holds row `p` at `h` (port `q`) and `accCanon`
-names the row's owner `(o, co, ho)`, the owner's port `ho.1` is a port `q'` of its circuit and the two slots carry one
-commit string. (`InnerAccTie`'s `rowPfx` conjunct is not needed: `held_rows_eq` takes prefixes of one length,
-`rowPfx_length`.) -/
+/-- **`InnerAccTie` with the parts' staged statements** (`hxs`, `hcol` as in `AccCommitV`): wherever part `s` (an
+algebra part) holds row `p` at `h` (port `q`) and `accCanon` names the row's owner `(o, co, ho)`, the owner's port
+`ho.1` is a port `q'` of its circuit and the two slots carry one commit string. (`InnerAccTie`'s `rowPfx` conjunct is
+not needed: `held_rows_eq` takes prefixes of one length, `rowPfx_length`.) -/
 def InnerAccTieV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
   ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
-    ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit),
-    OpenLower.JointV FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
-      (AccV rd wE final w b elem shape untr cmt) x c xs ws →
+    ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
+    RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
+      (AccP rd wE final w b elem shape untr cmt) x c ws →
+    ∀ (xs : List Msg), (∀ s' (hs' : s' < ws.length), AccV rd wE final w b elem shape untr cmt s' x c (xs.getD s' [])
+      ws[s'] ((DeployedR.layR elem).msgs x ws)) →
+    (Claims.findColl ((DeployedR.layR elem).allCalls x ws ++
+      Claims.Recursion.setupCalls FlockDeploy.sha512 (DRL rd wE final w b elem) xs)).isSome = false →
     ∀ (r : XR), readX x = some r → ∀ s (cS : Circuit), r.w.parts[s]?.bind partCircuit = some cS →
     ∀ (j : ℕ) (nm : String) (pt : VStar.Part),
       (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.inner j nm pt) →
@@ -440,7 +440,7 @@ theorem innerAccTieV (rd : Msg → Option FinalP) (wE : Msg → ℝ)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (untr : TrReader)
     (cmt : Msg → ℕ → Msg → Msg) (hRS : RegSetup b) :
     InnerAccTieV rd wE final w b elem Claims.Recursion.Form.Dense untr cmt := by
-  intro x st hx hf c xs ws hJ r hr s cS hpc _ _ _ _ p h hh o co ho hcan wt wo hw hwo q hq
+  intro x st hx hf c ws hJ xs hxs hcol r hr s cS hpc _ _ _ _ p h hh o co ho hcan wt wo hw hwo q hq
   obtain ⟨-, hpco, hhd⟩ := accCanon_spec hcan
   dsimp only at hpco hhd
   have hho : ho ∈ accHoldings r o p := List.mem_of_mem_head? hhd
@@ -448,7 +448,7 @@ theorem innerAccTieV (rd : Msg → Option FinalP) (wE : Msg → ℝ)
   refine ⟨q', hq', ?_⟩
   obtain ⟨sch, hsch⟩ := fast100_of_read hr
   have hstk := stacked_none hx hf hr
-  exact slotCommit_eq hRS hx hf hJ hr hpc hpco hw hwo hsch (slotAt_of_holding hstk hsch hh)
+  exact slotCommit_eq hRS hx hf hJ.2.1 hxs hcol hr hpc hpco hw hwo hsch (slotAt_of_holding hstk hsch hh)
     (slotAt_of_holding hstk hsch hho) hq hq'
 
 end
