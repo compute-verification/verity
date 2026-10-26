@@ -78,8 +78,8 @@ theorem stepsW_deployed (wE w : Msg → ℝ) (b : Brings) (key : ℕ → ℕ →
     hCm hN
 
 /-- **KS's residual leaf at the deployed readers**: `ResLoweredPD` at `DeployedR.rdR`, `DeployedR.finalR`,
-`OpenRows.elemR` and the deployed brings, from the frame ports (`hF`), the chain's commit strings (`hCm`), the next rows'
-owners (`hN`) and the algebra parts' commit tie (`hT`). -/
+`OpenRows.elemR` and the deployed brings, from the frame ports (`hF`), the chain's commit strings (`hCm`), the next
+rows' owners (`hN`) and the algebra parts' commit tie (`hT`). -/
 theorem hres_deployed (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round)
     (nOf : Msg → ℕ → ℕ) (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
