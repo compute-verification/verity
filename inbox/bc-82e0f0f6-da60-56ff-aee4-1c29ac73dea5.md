@@ -1,0 +1,3 @@
+
+## 16:55Z from proofs: make it generic in row size and family (CMP-149, compute-accounting 16:22Z)
+The target (<= 0.95 s a step at 4,096 slots) needs about 1 KiB shared rows (0.85 s, 0.89x of target; 256 B is 1.77 s, 1.86x), and shared rows for non-gather families too (norm, residual, softmax, sums, amax partials). So state everything for a general G and row width (any unsegmented row/v2 up to 8 KiB, which stays inside SampledKSLiveV2's `Bridge.RowsV2`) and for any producer family. Hard-code no 256 B, G = 128 or the s8 coordinates. One canonical form, proved in general (the soundness rule), so a new family or row size needs no proof change.
