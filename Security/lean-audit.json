@@ -1864,6 +1864,10 @@
    "owner": "@lean",
    "digest": "6c8b0ffd3222a58091c7755158d171c1f1f37b959832b0ad5b40c4452c431481"
   },
+  "Verity.Evaluates": {
+   "owner": "@lean",
+   "digest": "e6ffb734aa9967ab730adf8846a81aa573d0a5e1c738580a49d710731725d020"
+  },
   "Verity.Partition.Fits": {
    "owner": "@proofs",
    "digest": "456fe0bfb32a76c54987890b6b913fb75e37419dd3cbaf4607c4903ee32ef8c9"
@@ -1872,9 +1876,17 @@
    "owner": "@proofs",
    "digest": "8bc2d5170ca9e1848fc8e9cfa283d048b98ed61ec44e401861ed89b9bb01bb19"
   },
+  "Verity.Partition.IsCK": {
+   "owner": "@lean",
+   "digest": "a78011b108a9369070c518c56ec7264ee084cb9aab661d2ab5ba77a6b4c26cd2"
+  },
   "Verity.Registered": {
    "owner": "@proofs",
    "digest": "44fbee7cd7d31f7adb92e7492e86f4ff6c2eeba04b9b1ced3c424e83271053c3"
+  },
+  "Verity.Registration.Honest": {
+   "owner": "@lean",
+   "digest": "0a4f2c916452e983bb5f36924f0e135a1f795b58b155960c67cfcce3b12ca7ec"
   },
   "Verity.Sound": {
    "owner": "@proofs",
@@ -1895,18 +1907,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Verity.Evaluates": {
-   "owner": "@lean",
-   "digest": "e6ffb734aa9967ab730adf8846a81aa573d0a5e1c738580a49d710731725d020"
-  },
-  "Verity.Partition.IsCK": {
-   "owner": "@lean",
-   "digest": "a78011b108a9369070c518c56ec7264ee084cb9aab661d2ab5ba77a6b4c26cd2"
-  },
-  "Verity.Registration.Honest": {
-   "owner": "@lean",
-   "digest": "0a4f2c916452e983bb5f36924f0e135a1f795b58b155960c67cfcce3b12ca7ec"
   }
  },
  "meaning": [
