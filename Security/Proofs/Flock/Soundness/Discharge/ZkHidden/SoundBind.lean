@@ -83,12 +83,11 @@ noncomputable def sitesShH : SitesH (planShH (Reg := Reg) dj y₀) (tabShH dj y�
   hvu S _ u h := (tableShH dj y₀ S).hvu u h
   o S _ u h := (tableShH dj y₀ S).o u h
 
-/-- **One circuit per session**: every site's acceptance parses the session's one circuit file to `c`. -/
+/-- **One circuit per session**: every site's statement circuit is the session's one circuit `c`. -/
 theorem sitesShH_parse :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
-      HmRow.parse ((sitesShH dj y₀ ht hc hscope).acc S R u h).tags ((sitesShH dj y₀ ht hc hscope).acc S R u h).cf
-        ((sitesShH dj y₀ ht hc hscope).acc S R u h).tables = .ok c :=
-  fun _ _ _ _ => (parse_untyped (zkTyped ht) hc).1
+      HmOut.unrolled ((sitesShH dj y₀ ht hc hscope).acc S R u h).st.c = c :=
+  fun S _ _ _ => (tableShH dj y₀ S).acc_unrolled (zkTyped ht) hc (rowsFit_of_scopeH (zkTyped ht) hc hscope)
 
 variable (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
   (hpt : pub.tables = none)

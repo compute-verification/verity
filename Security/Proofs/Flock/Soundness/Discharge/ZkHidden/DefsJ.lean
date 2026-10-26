@@ -393,12 +393,12 @@ noncomputable def sitesShHJ : SitesH (planShHJ (Reg := Reg) dj y₀) (tabShHJ dj
   o S R u h := Fin.cast (congrArg (fun T : TabSpec mPts => 2 ^ T.S.nbl) (tabOfShHJ_eq dj y₀ S R u)).symm
     ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.o u (mem_partS h))
 
-/-- **One circuit per session**: every site's acceptance parses the session's one circuit file to `c`. -/
+/-- **One circuit per session**: every site's statement circuit is the session's one circuit `c`. -/
 theorem sitesShHJ_parse :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
-      HmRow.parse ((sitesShHJ dj y₀ ht hc hscope).acc S R u h).tags ((sitesShHJ dj y₀ ht hc hscope).acc S R u h).cf
-        ((sitesShHJ dj y₀ ht hc hscope).acc S R u h).tables = .ok c :=
-  fun S _ _ _ => (parse_untyped (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _)).1
+      HmOut.unrolled ((sitesShHJ dj y₀ ht hc hscope).acc S R u h).st.c = c :=
+  fun S _ u _ => (tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.acc_unrolled (tableShHJ_typed dj y₀ ht S _)
+    (tableShHJ_parse dj y₀ ht hc S _) (rowsFit_of_scopeH (zkTyped ht) hc hscope)
 
 variable (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
   (hpt : pub.tables = none)
