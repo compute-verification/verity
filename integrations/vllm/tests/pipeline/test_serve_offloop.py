@@ -225,14 +225,47 @@ class Counted(Committer):
         self._done[step] = SimpleNamespace(n_bytes=sum(m.nbytes for m in self._layouts[step]))
 
 
+class Detached(Counted):
+    """`Counted` whose windows close off the loop as `NativeHostCommitter.detach` closes them: each into a view of its own
+    steps, rows and byte counts (the next window's reset rebinds the committer's, its first step the rows), whose
+    ``wait_absorbed`` and ``finalize`` run on the sealer's thread. ``gates``: window -> the event its finalize waits on,
+    once it has set ``entered[window]``."""
+
+    def __init__(self, runner: Any, gates: dict[int, threading.Event] | None = None) -> None:
+        self.window_views, self.detached, self.gates = False, 0, dict(gates or {})
+        self.entered = {k: threading.Event() for k in self.gates}
+        super().__init__(runner)
+
+    def enable_window_views(self) -> None:
+        self.window_views = True
+
+    def detach(self) -> Any:
+        view = copy.copy(self)
+        view.sources = [copy.copy(s) for s in self.sources]
+        view.window, view.staged_bytes = self.detached, ss.committed_bytes(self)
+        self.detached += 1
+        return view
+
+    def wait_absorbed(self) -> float:
+        return 0.0
+
+    def finalize(self) -> Any:
+        k = getattr(self, "window", None)
+        if k in self.gates:
+            self.entered[k].set()
+            self.gates[k].wait()
+        return super().finalize()
+
+
 class Sealed(Serving):
-    """`Serving` with every window sealed by ``seal`` (in place of `seal_window`), off the loop on ``sealer``."""
+    """`Serving` with every window sealed by ``seal`` (in place of `seal_window`), off the loop on ``sealer``; ``com`` makes
+    its committer over the runner."""
 
     def __init__(self, out: Path, *, sealer: Any, mirror: Any = None, disk: Any = None, window_bytes: int | None = None,
-                 window_steps: int = 64) -> None:
+                 window_steps: int = 64, com: Any = Counted) -> None:
         super().__init__(out, window_steps=window_steps)
         w = self.windows
-        w.com = Counted(self.runner)
+        w.com = com(self.runner)
         w.seal, w.sealer, w.mirror, w.disk, w.window_bytes, w.on_floor = {"label": "t"}, sealer, mirror, disk, window_bytes, self.loop.drain
 
 
@@ -273,6 +306,195 @@ def test_the_engine_serves_the_next_windows_while_a_seal_is_held(tmp_path, monke
     assert len(reqs) == 3 and all(r["check"]["passed"] for r in reqs.values())
     assert s.windows.summary()["passed"] and s.windows.summary()["seals"]["sealed"] == 3
     assert records(tmp_path / "OUT", "seals.jsonl") == seals and (tmp_path / "OUT" / "windows.jsonl").read_bytes() == (out / "windows.jsonl").read_bytes()
+
+
+def test_while_a_windows_finalize_blocks_the_loop_opens_the_next_window_and_serves_a_request_there(tmp_path, monkeypatch):
+    """The finalize of a window detached at its close runs on the sealer's thread: while window 0's is held, the loop has
+    closed window 0, opened window 1 and served a request in it, and window 0's records (its line, its requests' checks)
+    wait for its finalize; once it returns, both windows land in order and every request passes."""
+    monkeypatch.setattr(sc, "seal_window", lambda com, rc, d, **kw: {"row_dir": str(d)})
+    gate, marks = threading.Event(), []
+    sealer = ss.Sealer(1 << 40)
+    s = Sealed(tmp_path, sealer=sealer, com=lambda r: Detached(r, {0: gate}))
+    s.windows.marks = lambda k, ev: marks.append((k, ev))
+    with s:
+        assert events(s.post("/v1/completions", _body(0))[1])[-1] == "[DONE]"
+        s.windows.com.entered[0].wait()
+        status, raw = s.post("/v1/completions", _body(1))
+        assert status == 200 and events(raw)[-1] == "[DONE]", "served while window 0's finalize is held"
+        assert marks[:3] == [(0, "open"), (0, "close"), (1, "open")] and s.windows.window == 1
+        assert not (tmp_path / "windows.jsonl").exists() and not (tmp_path / "requests.jsonl").exists()
+        held = s.windows.summary()
+        assert 0 in held["closing"] and not held["passed"] and held["unchecked"]
+        gate.set()
+    sealer.close()
+    wins = records(tmp_path, "windows.jsonl")
+    assert [w["window"] for w in wins] == [0, 1] and all(w["passed"] and w["seal"]["off_loop"] for w in wins)
+    assert all(list(w["close_phases_s"])[:4] == ["on_loop", "finalize_wait", "finalize", "readback"]
+               and list(w["on_loop_phases_s"]) == ["detach", "uninstall", "ledgers", "seal_wait"]
+               and set(w["seconds"]) == {"open", "close", "on_loop", "finalize_wait", "seal_wait", "queued"} for w in wins)
+    reqs = records(tmp_path, "requests.jsonl")
+    assert len(reqs) == 2 and all(r["check"]["passed"] for r in reqs) and [r["windows"] for r in reqs] == [[0], [1]]
+    assert [x["window"] for x in records(tmp_path, "seals.jsonl")] == [0, 1]
+    got = s.windows.summary()
+    assert got["passed"] and got["closing"] == [] and got["finalize_on_loop"] is None
+
+
+def test_a_full_sealer_holds_the_loop_at_the_close_and_the_window_says_how_long(tmp_path, monkeypatch):
+    """The windows queued for their finalize and seal hold the sealer's bound: a close past it waits on the loop for room,
+    and its line (``seconds.seal_wait``) and its seal's (``seal_wait_s``) say how long."""
+    monkeypatch.setattr(sc, "seal_window", lambda com, rc, d, **kw: {"row_dir": str(d)})
+    gate, waiting, calls = threading.Event(), threading.Event(), [0]
+
+    def clock() -> float:
+        calls[0] += 1
+        if calls[0] == 3:
+            waiting.set()                       # window 1's close asks for room while window 0 holds the bound
+        return 5.0 if calls[0] >= 4 else 0.0
+
+    sealer = ss.Sealer(1, clock=clock)
+    s = Sealed(tmp_path, sealer=sealer, com=lambda r: Detached(r, {0: gate}))
+    with s:
+        for i in range(2):
+            assert events(s.post("/v1/completions", _body(i))[1])[-1] == "[DONE]"
+        waiting.wait()
+        gate.set()
+    sealer.close()
+    w0, w1 = records(tmp_path, "windows.jsonl")
+    assert (w0["seconds"]["seal_wait"], w1["seconds"]["seal_wait"]) == (0.0, 5.0)
+    assert [x["seal_wait_s"] for x in records(tmp_path, "seals.jsonl")] == [0.0, 5.0] and s.windows.summary()["passed"]
+
+
+def test_a_window_closed_off_the_loop_writes_the_records_one_closed_on_it_writes(tmp_path, monkeypatch):
+    """The same requests served twice, every window finalized on the loop (a committer that detaches none, frozen for its
+    seal) and off it (detached): windows.jsonl, seals.jsonl, requests.jsonl and step_trace.jsonl hold the same lines in the
+    same order, timings aside, and each seal read its own window's steps, rows, requests and tokens."""
+    def seal(com: Any, rc: Any, d: Path, **kw: Any) -> dict[str, Any]:
+        return {"row_dir": str(d), "steps": sorted(com._layouts), "rows": served_rows(com), "tokens": kw["tokens"],
+                "requests": [q["request_id"] for q in kw["reqs"]], "run_root": rc.run_root.hex()}
+
+    monkeypatch.setattr(sc, "seal_window", seal)
+    timing = {"windows.jsonl": ("seconds", "close_phases_s", "on_loop_phases_s"), "seals.jsonl": ("queued_s", "seal_wait_s"),
+              "requests.jsonl": ("times",), "step_trace.jsonl": ()}
+    got = {}
+    for name, com in (("on", Counted), ("off", Detached)):
+        out = tmp_path / name
+        out.mkdir()
+        ids = iter(range(1 << 20))
+        monkeypatch.setattr(so, "new_http_id", lambda: f"cmpl-{next(ids):04x}")
+        sealer = ss.Sealer(1 << 40)
+        with Sealed(out, sealer=sealer, com=com, window_steps=2) as s:
+            for i in range(3):
+                assert events(s.post("/v1/completions", _body(i, n=3 + i))[1])[-1] == "[DONE]"
+        sealer.close()
+        assert s.windows.summary()["passed"] and (s.windows.finalize_on_loop is None) == (name == "off")
+        got[name] = {f: [json.dumps({k: v for k, v in x.items() if k not in drop}).replace(str(out), "OUT") for x in records(out, f)]
+                     for f, drop in timing.items()}
+    assert len(got["on"]["windows.jsonl"]) > 3 and len(got["on"]["requests.jsonl"]) == 3
+    assert got["off"] == got["on"]
+
+
+def test_a_detached_windows_late_steps_land_in_its_view_and_its_end_hands_its_blocks_over_in_the_workers_order(host_blocks, monkeypatch):
+    """`NativeHostCommitter.detach`: the worker commits each step into the view of the window it began in, so a step it
+    absorbs after its window was detached and the next one reset lands in the closed window's view. The window's end,
+    queued behind its last step, lends the window's pinned blocks to its view and resets the pool there, so the next
+    window's takes never reuse them; the view's ``wait_absorbed`` returns only then."""
+    from tests.check.opened import committer
+    from verity_vllm.commit.committer import native_host as NH
+
+    com = committer()
+    com.pool = PP.PinnedPool(1 << 10, exact=False, populate_threads=0)
+    com.enable_window_views()
+    at_1, gate = threading.Event(), threading.Event()
+
+    def commit_step(self: Any, job: Any) -> None:
+        if job.seq == 1:
+            at_1.set()
+            gate.wait()
+        v = self.pool.take(64)
+        v.fill_(job.seq + 1)
+        self._done[job.step] = SimpleNamespace(blk=v, n_bytes=64)
+
+    def steps(n: int) -> None:
+        for _ in range(n):
+            com._q.put(NH._StepJob(com._step_index, [], None, com=com._window_view(), seq=com._seq))
+            com._step_index += 1
+            com._seq += 1
+
+    monkeypatch.setattr(NH.NativeHostCommitter, "_commit_step", commit_step)
+    worker = threading.Thread(target=com._run_worker, daemon=True)
+    worker.start()
+    com.reset()
+    steps(2)
+    a = com.detach()
+    com.reset()
+    at_1.wait()
+    assert com.pool.in_use and not a._ended.is_set(), "window 1's reset leaves the pool to window 0's end"
+    steps(1)
+    b = com.detach()
+    assert (a._step_index, b._step_index) == (2, 1)
+    gate.set()
+    a.wait_absorbed()
+    b.wait_absorbed()
+    assert sorted(a._done) == [0, 1] and sorted(b._done) == [0]
+    assert [int(a._done[s].blk[0]) for s in (0, 1)] == [1, 2] and int(b._done[0].blk[0]) == 3
+    assert a.lent and b.lent and not {id(x) for x in a.lent} & {id(x) for x in b.lent}, "each window's blocks its own"
+    assert com._windows_detached == com._windows_ended == 2 and com.detach() is None
+    ss.thaw(a)
+    assert not a.lent and com.pool._returned
+    com._q.put(com._stop)
+    worker.join()
+    with pytest.raises(ValueError, match="arena staging"):
+        NH.NativeHostCommitter.enable_window_views(SimpleNamespace(staging="direct", inline_d2h=False))
+
+
+def test_a_detached_windows_sources_keep_their_stats_and_rows_as_they_stood_at_the_detach():
+    """`window_views.window_source`: the next window's steps rebind the live source's rows and its native counters run on,
+    so the detached window's copy is synced once at the detach and then frozen (`stats_frozen`, honored by both native
+    hidden taps' ``sync_stats``), its stats and rows its own."""
+    from verity_vllm.commit.committer import native_hidden as NHID
+    from verity_vllm.commit.committer.window_views import window_source
+
+    class Src:
+        stats_frozen = False
+
+        def __init__(self) -> None:
+            self.stats, self.rows, self.live = {}, {"runner-a": 1}, 1
+
+        def sync_stats(self) -> None:
+            if not self.stats_frozen:
+                self.stats["launches"] = self.live
+
+    src = Src()
+    view = window_source(src)
+    src.live, src.rows["runner-a"] = 2, 2
+    src.sync_stats()
+    view.sync_stats()
+    assert (view.stats, view.rows, src.stats) == ({"launches": 1}, {"runner-a": 1}, {"launches": 2})
+    for tap in (NHID.NativeHiddenM1Source, NHID.NativeHiddenM1SourceFA3):
+        tap.sync_stats(SimpleNamespace(stats_frozen=True))          # no `_w`: a frozen copy never reads the live counters
+
+
+def test_the_serving_thread_counts_on_a_plan_only_if_it_survives_the_window_ends_ahead_of_its_step():
+    """`NativeCollectCommitter._plan_held`: each detached window the worker has yet to end retires a generation of its
+    plans (`PlanCache.end_run`) before it absorbs the step ending now, so with one such end ahead only the current
+    generation's plans are still there for the step, and with two none is."""
+    from verity_vllm.commit.committer import native_collect as NC
+    from verity_vllm.commit.committer.plan_cache import PlanCache
+
+    cache = PlanCache()
+    cache[("old", 1)] = "o"
+    cache.end_run()
+    cache[("new", 1)] = "n"
+
+    def held(behind: int, kv: tuple) -> bool:
+        return NC.NativeCollectCommitter._plan_held(SimpleNamespace(_windows_detached=3 + behind, _windows_ended=3, _metas_cache=cache), kv)
+
+    assert held(0, ("old", 1)) and held(0, ("new", 1)) and not held(0, ("gone", 1))
+    assert not held(1, ("old", 1)) and held(1, ("new", 1))
+    assert not held(2, ("new", 1))
+    cache.end_run()
+    assert ("new", 1) in cache and ("old", 1) not in cache, "what one window end leaves"
 
 
 def test_a_window_closes_once_its_steps_have_committed_window_bytes(tmp_path):

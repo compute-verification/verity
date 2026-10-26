@@ -7,7 +7,6 @@
     {"file": "verity_vllm/acquire/sources/hidden_source.py", "kind": "class-name", "symbol": "<module>", "detail": "HiddenM1SourceFA3"},
     {"file": "verity_vllm/commit/committer/native_hidden.py", "kind": "class-name", "symbol": "<module>", "detail": "NativeHiddenM1Source"},
     {"file": "verity_vllm/commit/committer/native_hidden.py", "kind": "class-name", "symbol": "<module>", "detail": "NativeHiddenM1SourceFA3"},
-    {"file": "verity_vllm/commit/committer/native_host.py", "kind": "def-name", "symbol": "NativeHostCommitter", "detail": "_acquire_fast"},
     {"file": "verity_vllm/check/gates.py", "kind": "def-name", "symbol": "<module>", "detail": "gate_G1"},
     {"file": "verity_vllm/check/gates.py", "kind": "def-name", "symbol": "<module>", "detail": "gate_G2"},
     {"file": "verity_vllm/check/gates.py", "kind": "def-name", "symbol": "<module>", "detail": "gate_G3"},

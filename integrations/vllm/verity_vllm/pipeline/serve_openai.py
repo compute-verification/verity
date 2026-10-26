@@ -58,16 +58,19 @@ whose rows and salts go to ``served_rows/w<k>.json``), ``requests.jsonl``
 the runner's ids, the prompt ids, the streamed ids, its ingress, its finish, its committed rows and seeds, and its check)
 and `serve_commit.advice_trace`'s file. ``--scheme rows-sha512`` commits as the bench row's declared Commit does, with its
 committer parts built from the row's ``--required-manifest`` and taps (the acquisition plan under ``acquisition/``), and
-``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. The
-seals run on a thread of their own (`serve_seal.Sealer`) while the engine serves the next window; a close waits only while
-the windows awaiting their seal hold ``--seal-hold-gb`` of committed values, in the committer's pinned pool, which
+``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. Each
+window's finalize, its readback and records, then its seal run on a thread of their own (`serve_seal.Sealer`), in window
+order, while the engine serves the next window: the engine loop's part of a close only detaches the window from the
+committer (`NativeHostCommitter.detach`), and it waits only while the windows awaiting their finalize and seal hold
+``--seal-hold-gb`` of committed values, in the committer's pinned pool, which
 ``--seal-warm-gb`` grows before serving rather than on the engine loop. A window closes once its steps have committed
 ``--window-gb``, which bounds each bundle on disk; under ``--seal`` the server refuses to start unless ``--out``'s filesystem
 has ``--disk-floor-gb`` free beyond one such window, and once a window's seal would take it under that floor, the window is
 not sealed and the server stops: it refuses new requests, finishes those in flight, and exits. ``--copy-records-to`` (the
 run's ``$OUT``) gets a copy of the records (`serve_commit.MIRRORED`) after each close and each seal, and at the stop before
 the seals still pending. SIGTERM or SIGINT stops it: the open window is closed and its requests checked, the pending seals
-finish, and ``summary.json`` counts the requests and checks, the seals, and the admissions' order (`ReleaseOrder.summary`).
+finish, and ``summary.json`` counts the requests and checks, the seals, and the admissions' order (`ReleaseOrder.summary`);
+it is written before the pending seals too, and its ``final`` is true only once every window's records are written.
 
 The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
 the seal's thread runs Python, each take waits out the interpreter's switch interval, so the server serves with
@@ -154,8 +157,9 @@ class Options:
     seal: bool = option("--seal", action="boolean_optional", default=False,
                         help="seal each closed window as a deferred Commit's row dir, OUT/windows/w<k>/ (serve_seal.seal_window)")
     seal_off_loop: bool = option("--seal-off-loop", action="boolean_optional", default=True,
-                                 help="seal on a thread of its own while the engine serves the next window (serve_seal.Sealer; default "
-                                      "on); --no-seal-off-loop seals on the engine loop, which stops serving for the seal")
+                                 help="finalize and seal each window on a thread of its own while the engine serves the next one "
+                                      "(serve_seal.Sealer; default on); --no-seal-off-loop does both on the engine loop, which "
+                                      "stops serving for them")
     seal_hold_gb: float = option("--seal-hold-gb", type=float, default=64.0,
                                  help="the committed GB the windows awaiting their seal may hold (pinned host memory) before a "
                                       "close waits for room")
@@ -710,6 +714,8 @@ def main(opts: Options) -> int:
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
               "served_rows_statics": windows.served if windows is not None else None,
               "seal_off_loop": sealer is not None, "seal_hold_gb": opts.seal_hold_gb if sealer is not None else None, "pool_warmed": warmed,
+              "finalize_off_loop": sealer is not None and windows.finalize_on_loop is None,
+              "finalize_on_loop": windows.finalize_on_loop if windows is not None else None,
               "window_gb": opts.window_gb or None, "disk_floor": disk_record(windows), "copy_records_to": opts.copy_records_to,
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
               "window_requests": opts.window_requests or None,
@@ -729,8 +735,8 @@ def main(opts: Options) -> int:
         http.shutdown()
         if mirror is not None:
             mirror()                                     # the requests closed at the stop, before the seals still pending
-        def stopped() -> dict[str, Any]:
-            got = {"served": server.served, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
+        def stopped(final: bool) -> dict[str, Any]:
+            got = {"final": final, "served": server.served, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
                    "commit": windows.summary() if windows is not None else None, "admit": order and order.summary(),
                    "sealer": sealer.summary() if sealer is not None else None, "pauses": watchdog.summary(),
                    "mirror_errors": mirror.errors[:10] if mirror else None}
@@ -740,11 +746,11 @@ def main(opts: Options) -> int:
             return got
 
         if sealer is not None:                           # a cancel's SIGKILL can land before the pending seals end
-            stopped()
+            stopped(False)
             print(f"SERVE-OPENAI stopping: {sealer.summary()['held'] / SS.GB:.1f} GB of windows still to seal", flush=True)
             sealer.close()
         watchdog.stop()
-        summary = stopped()
+        summary = stopped(True)
         print(f"SERVE-OPENAI stopped: {json.dumps(summary)}", flush=True)
         trace.uninstall()
         if rows is not None:
