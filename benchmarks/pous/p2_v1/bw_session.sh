@@ -3,12 +3,14 @@
 # kernels' staging decode, and the cheat that skips a layer's reads; cwd = the source tree's root:
 #
 #   research run --on vy-dc-h200-2 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
-#     --env GPU_LEASE_WHO=bw-h200 [--env CONNECT=127.0.0.1:PORT] [--send store-layout.json] [--send p2lib.tar] \
-#     -- bash benchmarks/pous/p2_v1/bw_session.sh
+#     --env GPU_LEASE_WHO=bw-h200 [--env CONNECT=127.0.0.1:PORT [--env TUNNEL='SSH_OPTIONS USER@HOST']] \
+#     [--send store-layout.json] [--send p2lib.tar] -- bash benchmarks/pous/p2_v1/bw_session.sh
 #
 # The verifier is `p2_party` on this host by default (VERIFIER, a shell command speaking --stdio), which certifies
-# nothing; CONNECT=HOST:PORT (and CHEAT_CONNECT for the cheat) reaches the auditor's `p2_party --listen` instead
-# (vy-auditor-2's gate port, through the tunnel the gate opens), one session a listener. The registration the verifier
+# nothing. CONNECT=HOST:PORT reaches the auditor's `p2_party --listen --sessions 2` instead (vy-auditor-2's gate port),
+# which serves the honest session and then the cheat (CHEAT_CONNECT, by default the same listener): on this host's
+# 127.0.0.1 when the gate forwards its port here (`ssh -R`), or with TUNNEL through `ssh -L` to TUNNEL's host, CONNECT
+# then the address there. The registration the verifier
 # holds is the tracked bandwidth-mem69-v2.json, and the store must be it. ENC is only ever read. The lib is kernels'
 # build: p2lib.tar from the run's inputs (LIB_SHA256), else that build's out/ on this host (BUILD), else build.sh's in
 # scratch, each held to its MANIFEST.sha256 and its sources to the kernels' build's (LIB_SOURCES_SHA256); the layout is
@@ -40,8 +42,9 @@ WINDOWS=${WINDOWS:-2} PASSES=${PASSES:-1} SAMPLES=${SAMPLES:-1024} WINDOW_S=${WI
 SKIP_LAYER=${SKIP_LAYER:-51} CHEAT_SAMPLES=${CHEAT_SAMPLES:-1024}
 LEASE_MIN=${LEASE_MIN:-10}
 VERIFIER=${VERIFIER:-$PY -m verity.core.protocols.remote_bandwidth.p2_party --registration $REG --stdio}
-CONNECT=${CONNECT:-} CHEAT_CONNECT=${CHEAT_CONNECT:-}
-S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
+CONNECT=${CONNECT:-}; CHEAT_CONNECT=${CHEAT_CONNECT:-$CONNECT}; TUNNEL=${TUNNEL:-}
+S=$(mktemp -d)
+trap 'for c in "$S"/ctl-*; do [ -S "$c" ] && ssh -S "$c" -O exit tunnel 2>/dev/null; done; rm -rf "$S"' EXIT
 LIB_TAR=$IN/p2lib.tar; [ -f "$LIB_TAR" ] || LIB_TAR=$KSTAGE/inputs/p2lib.tar
 LAYOUT=$IN/store-layout.json; [ -f "$LAYOUT" ] || LAYOUT=$KSTAGE/inputs/store-layout.json
 export O D PY ENC NODE REG LAYOUT S MODE WINDOWS PASSES SAMPLES WINDOW_S DEADLINE_S SKIP_LAYER CHEAT_SAMPLES LEASE_MIN \
@@ -84,6 +87,20 @@ nvidia-smi --query-gpu=index,uuid,name,driver_version,memory.total,memory.used -
 "$PY" -c 'import torch; print(torch.__version__, torch.version.cuda)' > "$O/python.txt" 2>&1
 gpu-lease status > "$O/lease-before.txt" 2>&1
 export LIB=$S/lib/lib
+forward() {  # HOST:PORT as TUNNEL's host sees it, forwarded to a port of this host's 127.0.0.1, which it prints
+  local lport
+  lport=$("$PY" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
+  # shellcheck disable=SC2086
+  ssh -f -N -M -S "$S/ctl-$lport" -o BatchMode=yes -o ExitOnForwardFailure=yes -o ConnectTimeout=20 \
+    -L "127.0.0.1:$lport:$1" $TUNNEL > /dev/null 2>> "$O/tunnel.err" && echo "127.0.0.1:$lport"
+}
+if [ -n "$TUNNEL" ] && [ -n "$CONNECT" ]; then
+  c=$(forward "$CONNECT"); step tunnel $?
+  if [ "$CHEAT_CONNECT" = "$CONNECT" ]; then CHEAT_CONNECT=$c; else CHEAT_CONNECT=$(forward "$CHEAT_CONNECT"); fi
+  CONNECT=$c
+  echo "through $TUNNEL: the honest session at $CONNECT, the cheat at $CHEAT_CONNECT" >> "$O/inputs.txt"
+  grep -q "^tunnel rc [1-9]" "$O/rc.txt" && { cat "$O/rc.txt" "$O/tunnel.err"; exit 2; }
+fi
 
 echo "bw_session: asking for the GPU at $(date -u +%H:%M:%SZ)"
 # shellcheck disable=SC2016

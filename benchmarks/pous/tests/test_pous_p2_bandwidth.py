@@ -119,22 +119,26 @@ def test_the_toy_served_through_the_staging_decode_is_accepted_and_a_skipped_lay
     assert a["verdict"] == "reject" and a["failure"] == "receipt"
 
 
-def test_a_session_reaches_a_listening_verifier_which_records_its_answer(tmp_path) -> None:
-    """The gate's shape: `p2_party --listen` on the auditor, the prover at `--connect`, the answer in `--answer`."""
+def test_sessions_reach_a_listening_verifier_which_records_their_answers(tmp_path) -> None:
+    """The gate's shape: `p2_party --listen --sessions 2` on the auditor, the honest prover and then the cheat at
+    `--connect`, each answer a line of `--answer`."""
     reg = B.toy(tmp_path / "toy")
     verifier = subprocess.Popen([sys.executable, "-m", "verity.core.protocols.remote_bandwidth.p2_party",
-                                 "--registration", str(tmp_path / "toy" / "registration.json"),
-                                 "--listen", "127.0.0.1:0", "--answer", str(tmp_path / "answer.json")],
+                                 "--registration", str(tmp_path / "toy" / "registration.json"), "--listen",
+                                 "127.0.0.1:0", "--sessions", "2", "--answer", str(tmp_path / "answers.jsonl")],
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, cwd=ROOT)
     port = json.loads(verifier.stdout.readline())["listening"]
-    assert B.main(["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
-                   "--node", reg.node.decode(), "--connect", f"127.0.0.1:{port}", "--device", "cpu", "--ref-decode",
-                   "--samples", "8", "--windows", "1", "--passes", "1", "--window-s", "0.001", "--deadline-s", "0.001",
-                   "--workers", "1", "--out", str(tmp_path / "out"), "--expect", "accept"]) == 0
+    base = ["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
+            "--node", reg.node.decode(), "--connect", f"127.0.0.1:{port}", "--device", "cpu", "--ref-decode",
+            "--samples", "8", "--windows", "1", "--passes", "1", "--window-s", "0.001", "--deadline-s", "0.001",
+            "--workers", "1"]
+    assert B.main(base + ["--out", str(tmp_path / "honest"), "--expect", "accept"]) == 0
+    assert B.main(base + ["--out", str(tmp_path / "cheat"), "--skip-layer", "1", "--expect", "reject"]) == 0
     assert verifier.wait() == 0
-    mine = json.loads((tmp_path / "answer.json").read_text())
-    assert mine == json.loads((tmp_path / "out" / "session.json").read_text())["answer"]
-    assert mine["verdict"] == "accept" and mine["receipts"] == reg.blocks
+    mine = [json.loads(x) for x in (tmp_path / "answers.jsonl").read_text().splitlines()]
+    assert mine == [json.loads((tmp_path / s / "session.json").read_text())["answer"] for s in ("honest", "cheat")]
+    assert mine[0]["verdict"] == "accept" and mine[0]["receipts"] == reg.blocks
+    assert mine[1]["verdict"] == "reject" and mine[1]["failure"] == "receipt"
 
 
 def test_the_cli_runs_as_a_script(tmp_path) -> None:
