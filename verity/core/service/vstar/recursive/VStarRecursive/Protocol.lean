@@ -41,7 +41,7 @@ import Flock
 namespace VStar.Recursive
 
 open Lean (Json)
-open Flock (V RecVStar RecSetup RecCoins)
+open Flock (V)
 open SampledProofs
 
 def PROTOCOL : String := "verity/sampled-proofs/recursive/v1"
@@ -198,12 +198,12 @@ def metaOf (b : ByteArray) : V Json := do
 
 /-- **The verifier's inner shape**, dense: `flock-verify rec-inner --circuit --public --partition --program` without
 `--hide` or `--sparse`, which refuses an inner circuit whose META names R's shape. -/
-def shapeOf (circuitB pubB : ByteArray) (partition : Json) (program : ByteArray) : V RecVStar.Inner := do
-  let stacked ← (do RecVStar.stackedShapeOf (← metaOf circuitB)).mapError (s!"rec-inner: " ++ ·)
+def shapeOf (circuitB pubB : ByteArray) (partition : Json) (program : ByteArray) : V Flock.RecVStar.Inner := do
+  let stacked ← (do Flock.RecVStar.stackedShapeOf (← metaOf circuitB)).mapError (s!"rec-inner: " ++ ·)
   if let some r := stacked then
     throw (s!"rec-inner: the inner circuit's META names R's shape (m {r.m}, claims {r.claims}), and the verifier names " ++
       "no RecSparse shape (--sparse NU,ELL,S_LOG,T_LOG): R opens the sparse phase's claims, so V*'s list would miss RecSparse")
-  let i ← (RecVStar.innerOf circuitB pubB (some partition) (some program) false).mapError (s!"rec-inner: " ++ ·)
+  let i ← (Flock.RecVStar.innerOf circuitB pubB (some partition) (some program) false).mapError (s!"rec-inner: " ++ ·)
   pure { i with sparse := none, stacked := none }
 
 /-- `flock-verify`'s `registeredFile` on a canonical object: the ports, whether the file is complete, the known rows
@@ -219,11 +219,11 @@ def registeredOf (j : Json) :
 /-- What every part's check reads of the inner session: the inner shape, the inner statement's files (check 5's
 source), what the inner circuit's META binds, the coin server's transcript as `verify` holds it and its link points. -/
 structure InnerHeld where
-  shape : RecVStar.Inner
-  src : RecCoins.Source
-  bound : V (Option String × Option RecVStar.StackedShape)
-  commits : RecVStar.InnerCommits
-  link : RecVStar.InnerLink
+  shape : Flock.RecVStar.Inner
+  src : Flock.RecCoins.Source
+  bound : V (Option String × Option Flock.RecVStar.StackedShape)
+  commits : Flock.RecVStar.InnerCommits
+  link : Flock.RecVStar.InnerLink
 
 /-- The inner session's inputs on the blobs, as `verifyCmd` reads them before any session (`recInnerInput`,
 `RecCoins.filesInput`, `innerMetaRegistration`, `recTranscriptInput`, `recLinkInput`). -/
@@ -234,18 +234,18 @@ def innerHeld (o : Own) (pr : Proofs) (bs : Core.Blobs) : V InnerHeld := do
   let some record := String.fromUTF8? (← bs.get pr.record "the inner session's record")
     | throw "rec inner session: the record is not UTF-8"
   let drawB ← bs.get pr.draw "the inner statement's draw"
-  let src : RecCoins.Source := .files
+  let src : Flock.RecCoins.Source := .files
     { circuit := circuitB, pub := pubB, partition := o.partition, record,
       form := some { statement := INNER_STATEMENT, os := true, tables := [], draw := some drawB } }
-  let bound : V (Option String × Option RecVStar.StackedShape) := do RecSetup.metaBound (← metaOf circuitB)
+  let bound : V (Option String × Option Flock.RecVStar.StackedShape) := do Flock.RecSetup.metaBound (← metaOf circuitB)
   let some t := String.fromUTF8? (← bs.get pr.transcript "rec inner transcript")
     | throw "rec inner transcript: not UTF-8"
   let reg ← pr.registration.mapM fun d => do
     let some s := String.fromUTF8? (← bs.get d "rec inner registration") | throw "rec inner registration: not UTF-8"
     pure s
-  let commits ← RecSetup.commits (some shape) (pure t) (pure reg) bound record
+  let commits ← Flock.RecSetup.commits (some shape) (pure t) (pure reg) bound record
   let link ← match Json.parse t with
-    | .ok j => RecVStar.innerLink j record
+    | .ok j => Flock.RecVStar.innerLink j record
     | .error e => throw s!"rec inner transcript: not JSON: {e}"
   pure { shape, src, bound, commits, link }
 
@@ -264,7 +264,7 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
     | none => pure (none, false, #[], #[])
     | some r => (fun (own, c, k, ps) => (some own, c, k, ps)) <$> registeredOf r
   let rows ← p.rows.mapM fun r => (do pure (← registeredOf r).1).mapError (s!"rec rows: " ++ ·)
-  let bindings ← RecVStar.ownBindingsOfJson p.bindings
+  let bindings ← Flock.RecVStar.ownBindingsOfJson p.bindings
   let partition := some p.partition
   let program := some p.program
   let inner := some h.shape
@@ -275,22 +275,22 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
   let setupOf := fun (draw : Option Json) =>
     match (do
         Flock.Registered.checkProgram program registered.isSome
-        RecSetup.checkInner inner recCoins h.bound
+        Flock.RecSetup.checkInner inner recCoins h.bound
         let r ← OneStageZk.buildSessionOf parsed tags circuitB pubB coins tables count draw partition program registered
         if complete then r.2.forM fun (st : Flock.Stmt) => Flock.Registered.checkComplete st.c (registered.getD #[])
         r.2.forM fun (st : Flock.Stmt) => Flock.Registered.checkCover st.c program partition registered regParams
         r.2.forM fun (st : Flock.Stmt) => Flock.KnownRead.check st.c known
-        RecSetup.checks inner recCommits tags0 tables r.2 circuitB partition program registered (some j) (some bindings)
+        Flock.RecSetup.checks inner recCommits tags0 tables r.2 circuitB partition program registered (some j) (some bindings)
           rows
-        RecSetup.oneFull inner r.2
+        Flock.RecSetup.oneFull inner r.2
         r.2.forM Flock.Zk.shapeOk
-        r.2.forM (RecCoins.check · registered (RecCoins.Source.atC3 recCoins inner recCommits)
-          (RecSetup.c3 inner recCommits))
-        r.2.forM (RecVStar.checkPubRows · registered recCommits (inner.bind (·.sparse)))
-        RecVStar.checkLinkRounds h.shape h.link
-        r.2.forM (RecVStar.checkTopRows · registered (some h.link))
-        r.2.forM (RecCoins.checkLink · registered (RecCoins.Source.atC3 recCoins inner recCommits) (some h.link))
-        RecVStar.checkLabels draw count r.2
+        r.2.forM (Flock.RecCoins.check · registered (Flock.RecCoins.Source.atC3 recCoins inner recCommits)
+          (Flock.RecSetup.c3 inner recCommits))
+        r.2.forM (Flock.RecVStar.checkPubRows · registered recCommits (inner.bind (·.sparse)))
+        Flock.RecVStar.checkLinkRounds h.shape h.link
+        r.2.forM (Flock.RecVStar.checkTopRows · registered (some h.link))
+        r.2.forM (Flock.RecCoins.checkLink · registered (Flock.RecCoins.Source.atC3 recCoins inner recCommits) (some h.link))
+        Flock.RecVStar.checkLabels draw count r.2
         pure r) with
     | .ok (spec, sts) => (if draw.isSome then Flock.ProvedScope.drawLaw true tags false draw else .ok ()).map fun () =>
         (spec, sts.map Flock.Setup.ofCircuit)
@@ -312,8 +312,8 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
     scope
     Flock.ProvedScope.sizesOk true (tabs.map (·.m))
     if draw.isNone then Flock.ProvedScope.drawLaw true tags false draw
-    RecSetup.fullDraw inner true draw record
-    RecSetup.innerDrawn recCoins
+    Flock.RecSetup.fullDraw inner true draw record
+    Flock.RecSetup.innerDrawn recCoins
     Flock.ProvedScope.programHeld program
     Flock.RecordText.check record
   pure verdict
@@ -323,7 +323,7 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
 and the session's: accepted exactly when every part's is. -/
 def partVerdicts (o : Own) (pr : Proofs) (bs : Core.Blobs) : V (InnerHeld × Array (String × V Unit)) := do
   let h ← innerHeld o pr bs
-  let ss ← RecVStar.statements h.shape
+  let ss ← Flock.RecVStar.statements h.shape
   if o.parts.size != ss.size then
     throw s!"recursive: the verifier holds {o.parts.size} parts, and V* has {ss.size} statements at the inner shape"
   if pr.parts.size != ss.size then
