@@ -7,7 +7,7 @@
 # decided by Lean `verify --zk`. The negatives are the first session's one-bit proof edits, refused by Lean, and the tampered
 # loop's member, stopped by the firewall and refused by Lean without it.
 #   research run --on vy-nebius-cpu-4 --pool proofs --as proofs --project verity --source . --cwd clone \
-#     -- bash benchmarks/one_stage/prove_bundle.sh [PB_K=8] [PB_MEMBERS=N]
+#     -- bash benchmarks/one_stage/prove_bundle.sh [PB_K=8] [PB_MEMBERS=N] [PB_FLIPS=1]
 # Kept in $OUT: the summary, the logs, the session records and a live draw's receipt and record; never a window's private
 # file or the bundle's payload.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -48,7 +48,7 @@ BUNDLE=$W/bundle/bundle.json
 
 log "prove: the bundle's drawn members, then the negatives"
 "$PY" benchmarks/one_stage/prove_bundle.py --bundle "$BUNDLE" --window "$W/window" --tampered "$W/tampered" \
-  --bin "$BIN" --lean "$LEAN" --firewall "$FWL" --out "$W/pb" ${PB_MEMBERS:+--members $PB_MEMBERS} ${PB_K:+--live} \
+  --bin "$BIN" --lean "$LEAN" --firewall "$FWL" --out "$W/pb" ${PB_MEMBERS:+--members $PB_MEMBERS} ${PB_K:+--live} ${PB_FLIPS:+--flips $PB_FLIPS} \
   > "$O/prove_bundle.log" 2> "$O/prove_bundle.err"
 rc=$?
 grep '^PROVEBUNDLE' "$O/prove_bundle.log" | tee -a "$O/job.log"

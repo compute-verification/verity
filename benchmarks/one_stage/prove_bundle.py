@@ -5,7 +5,7 @@ tampered window's member, whose proof must not be accepted.
 
     python benchmarks/one_stage/prove_bundle.py make --scratch DIR --out DIR [--k K --lean flock-verify]
     python benchmarks/one_stage/prove_bundle.py --bundle B.json --window DIR --bin flock-circuit --lean flock-verify \\
-        --firewall flock-firewall --out DIR [--members N] [--tampered DIR] [--live]
+        --firewall flock-firewall --out DIR [--members N] [--tampered DIR] [--live] [--flips N]
 
 * **The draw** (`make`): the torch loop's window and its tampered twin written under the fixture's test key, then the
   bundle. With ``--k K`` the draw is live (`live_draw`): the challenger logs its receipt of the window's registration,
@@ -26,9 +26,9 @@ tampered window's member, whose proof must not be accepted.
   check (``FC_FIREWALL=1``, Lean's `flock-firewall`), and Lean `verify --zk --archive --partition --program` decides it.
   A unit is accepted when its session's M0 and Lean verdicts accept, the served draw is the bundle's, and the proved
   units are the bundle's units.
-* **Flipped bits** (`flipped`): `zk_mutants.py`'s one-bit proof edits of the first honest session (each with the
+* **Flipped bits** (`flipped`): `zk_mutants.py`'s one-bit proof edits of the honest session of least k_log (each with the
   retained rounds a prover sending it would have made), each verified by Lean, which must refuse it with the reason the
-  mutant names.
+  mutant names. ``--flips N`` verifies only the first N edits (M3's one flipped bit at m30 costs a Lean verify each).
 * **Tampered** (``--tampered DIR``): the same member of a window whose outputs are not its Definition's, proved with
   the prover's self-check skipped, once behind the firewall (whose Lean recheck must stop it) and once without it (Lean
   `verify --zk` must refuse the proof that reaches it).
@@ -221,14 +221,14 @@ def session(a, mm: dict, draw: dict, sdir: Path, firewall: bool = True, forged: 
 
 
 def flipped(a, mm: dict, honest: Path, out: Path) -> dict[str, dict]:
-    """`zk_mutants.py`'s one-bit proof edits of the session in ``honest``, each verified by Lean: ``{name: verdict}``."""
+    """`zk_mutants.py`'s one-bit proof edits of the session in ``honest`` (the first ``a.flips``, else all), each verified
+    by Lean: ``{name: verdict}``."""
     made = out / "mutants"
     ZM.main(honest, made)
     cases = {}
-    for c in json.loads((made / "zk_mutants.json").read_text()):
+    edits = [c for c in json.loads((made / "zk_mutants.json").read_text()) if c.get("rep") is not None]
+    for c in edits[:a.flips] if a.flips else edits:
         name = c["name"]
-        if c.get("rep") is None:
-            continue
         case = out / name
         sd = case / "sessions" / honest.name
         shutil.copytree(honest, sd, copy_function=os.link, dirs_exist_ok=True)
@@ -257,6 +257,7 @@ def main(argv=None) -> int:
     ap.add_argument("--tampered", help="a tampered window of the same shape: its first drawn member must not be accepted")
     ap.add_argument("--session-timeout", type=float, default=14400)
     ap.add_argument("--live", action="store_true", help="the bundle's draw must be live, with its receipt")
+    ap.add_argument("--flips", type=int, default=0, help="Lean-verify only the first N one-bit proof edits (0: all)")
     a = ap.parse_args(argv)
     out, wdir = Path(a.out), Path(a.window)
     out.mkdir(parents=True, exist_ok=True)
@@ -286,13 +287,15 @@ def main(argv=None) -> int:
         s["accepted"] = (all(mm["checks"].values()) and s["m0"]["accepted"] and s["lean"]["accepted"] is True and s["roots"]
                          and sorted(s["served_draw"] or []) == sorted(bm["local"]) and sorted(s["proved"]) == units)
         rows[f"m{bm['k']}"] = {**s, "units": units}
-        first = first or (mm, s)
+        if s["session"] and (first is None or mm["k_log"] < first[0]["k_log"]):
+            first = (mm, s)
         print(f"PROVEBUNDLE member m{bm['k']} units {units}: accepted {s['accepted']} (M0 {s['m0']['accepted']}, Lean "
               f"{s['lean']['accepted']} {s['lean']['why'] or ''}), k_log {mm['k_log']}, e2e {s['timing']['e2e_s']} s, "
               f"Lean verify {s['lean']['verify_s']} s", flush=True)
     summary["members"] = rows
     negatives: dict[str, dict] = {}
-    if first and first[1]["session"]:
+    if first:
+        summary["flipped_member"] = first[0]["k"]
         for name, v in flipped(a, first[0], Path(first[1]["session"]), out / "flipped").items():
             negatives[f"flipped/{name}"] = v
         n_ok = sum(v["refused"] for k, v in negatives.items() if k.startswith("flipped/"))
