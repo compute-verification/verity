@@ -10,8 +10,8 @@ every prover `τ` with no hypothesis on `τ`: `ecr/sha-512` and cr/sha-512 are a
 from `τ`, and where they fail the bound is `⊤`, as C-Flock's link bound reads its collision premise (`linkBoundZC`).
 
 * `Flock.Guarantees.LiveAt n D hU kd K₀ desc`: `SampledKSLivePub`'s setting at one session (the inputs flock-verify
-  reads, the registration, the draw's setup, the verifier's bytes and A3, the analysis' `k`, `R_w`, `M`, `ρ`, `t'` and
-  the budgets), at the parsed circuit file `D` with `n` units, the draw size `kd`, `K₀` and the descriptor `desc`;
+  reads, the registration, the draw's setup, the verifier's bytes and A3, the analysis' `k`, `R_w`, `M`, `ρ`, and the
+  SHA-512 evaluations of a run of the strategy `t'` and of a verification `v`), at the parsed circuit file `D` with `n` units, the draw size `kd`, `K₀` and the descriptor `desc`;
   `LiveAt.CR τ`, the two collision-resistance premises `SampledKSLivePub` reads at the finders built from `τ`;
   `LiveAt.ks`, its conclusion where they hold.
 * `LiveAt.wrongE q τ`: the units wrong in the extractor's transcript at `τ`; `LiveAt.Holds q ε τ`, the claim;
@@ -33,8 +33,9 @@ open Classical
 
 /-- **`SampledKSLivePub`'s setting at one session**: at the parsed circuit file `D` (its unit built, `hU`) with `n`
 units, the draw size `kd`, `K₀` and the descriptor `desc`, everything else `SampledKSLivePub` quantifies before its
-collision-resistance premises, named assumption A3 included. The SHA-512 evaluations of one session run (`t'`) and the
-table finders' budgets (`qF`, `qS`) are read off the strategy, so the bound at `τ` is at `τ`'s own cost. -/
+collision-resistance premises, named assumption A3 included. `t' τ` bounds the SHA-512 evaluations of one run of the
+strategy `τ`, and `v` those of one verification, public; every finder's budget is a function of the two (`qF`, `qS`),
+so the bound at `τ` is at `τ`'s own cost. -/
 structure LiveAt (n : ℕ) (D : Flock.Desc) (hU : Built D.unroll.unit) (kd K₀ : ℕ) (desc : Claims.Msg) where
   Reg : Type
   I : Inputs
@@ -79,8 +80,8 @@ structure LiveAt (n : ℕ) (D : Flock.Desc) (hU : Built D.unroll.unit) (kd K₀ 
   t' : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) → ℝ
   ht' : ∀ τ, 0 ≤ t' τ
   hK₀ : K₀ ≤ n
-  qF : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) → ℝ
-  qS : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) → ℝ
+  v : ℝ
+  hv : 0 ≤ v
 
 attribute [instance] LiveAt.fΩ LiveAt.nΩ
 
@@ -132,16 +133,35 @@ noncomputable abbrev Cd := Bridge.commitDep A.Cc A.rows D.unroll n A.roots
 /-- The circuit's constants. -/
 noncomputable abbrev κ (_A : LiveAt n D hU kd K₀ desc) : Fin _A.Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hU n g
 
+/-- **The rewinding finders' budget at `τ`**: two runs of `τ` and the two conflicting openings verified. -/
+noncomputable def qF (τ : Strategy A.G) : ℝ := 2 * A.t' τ + 2 * A.v
+
+/-- **The self-clash finder's budget at `τ`**: one run of `τ` and one further verification. -/
+noncomputable def qS (τ : Strategy A.G) : ℝ := A.t' τ + A.v
+
 /-- **The collision-resistance premises at a strategy**, each a bound on the probability that a finder C-Flock builds
-from `τ` outputs a SHA-512 collision, at that finder's cost read off `τ`'s: each table's knowledge finders, at most
-`q²/2^513` at the budget `q = qF τ`, `qS τ` (cr/sha-512, `SHA512CRStrict`); each committed position's link finder, at
-most its expected cost over `2^256`, its cost `t' τ` per run of `τ` it plays, so at most `t' τ · (1 + k)` per trial
-(ecr/sha-512, `SHA512CRExpected`; `expect_cT_leZC`). -/
+from `τ` outputs a SHA-512 collision, at that finder's cost as a function of `τ`'s: each table's knowledge finders, at
+most `q²/2^513` at the budget `q = qF τ = 2 t' τ + 2v` or `qS τ = t' τ + v` (cr/sha-512, `SHA512CRStrict`); each
+committed position's link finder, at most its expected cost over `2^256`, its cost `t' τ` per run of `τ` it plays, so
+at most `t' τ · (1 + k)` per trial (ecr/sha-512, `SHA512CRExpected`; `expect_cT_leZC`). -/
 def CR (τ : Strategy A.G) : Prop :=
   (∀ ω j, TableCRZ execArith hs512 (planZHJ A.dj A.y₀ (A.L.draw ω) (reg (A.sim τ))) j
     (zcStrat execArith hs512 (planZHJ A.dj A.y₀) (cont (A.sim τ) ω)) (A.qF τ) (A.qS τ)) ∧
   LinkCRZC execArith hs512 A.P (planZHJ A.dj A.y₀) (tabZHJ A.dj A.y₀) A.vb (reg (A.sim τ)) (cont (A.sim τ)) A.k A.Rw
     A.M (A.t' τ)
+
+/-- **The link finders' cost at `τ`**: a trial for any committed position plays `τ` at most `1 + k` times in
+expectation, so its expected SHA-512 evaluations are at most `t' τ · (1 + k)`, the cost `LinkCRZC` reads. -/
+theorem linkCost_le (τ : Strategy A.G) (c : A.vb.Pos)
+    [Nonempty (ΩcZ execArith A.P (planZHJ A.dj A.y₀) (tabZHJ A.dj A.y₀) A.vb A.L c)] :
+    expect (cTZC (planZHJ A.dj A.y₀) (reg (A.sim τ)) (A.t' τ))
+      (trialGZC execArith hs512 A.P (planZHJ A.dj A.y₀) (tabZHJ A.dj A.y₀) A.vb (reg (A.sim τ)) (cont (A.sim τ)) c
+        A.k A.Rw)
+      (trialStratZC execArith hs512 A.P (planZHJ A.dj A.y₀) (tabZHJ A.dj A.y₀) A.vb (reg (A.sim τ)) (cont (A.sim τ)) c
+        A.k A.Rw) ≤
+      A.t' τ * (1 + A.k) :=
+  expect_cT_leZC execArith hs512 A.P (planZHJ A.dj A.y₀) (tabZHJ A.dj A.y₀) A.vb (reg (A.sim τ)) (cont (A.sim τ)) c
+    A.k A.Rw (A.ht' τ)
 
 /-- **`SampledKSLivePub` at the session**: at a strategy where the premises hold, flock-verify accepts with the
 extracted witness outside the sampling relation with probability at most `deltaPub`. -/
