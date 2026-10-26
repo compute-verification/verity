@@ -29,6 +29,21 @@ picks its algorithm, so the scenario's ρ is the least over the families it may 
 (evaluated on the region's *layout*: what a protocol-abiding strategy actually gets), and a bound above an attack is a
 **contradiction**: a premise is false for that algorithm at that budget.
 
+Read a result as: `ρ ∈ [lo, hi]`, with `g` beside it and the **monitored share** `(1 − d) g / (d + (1 − d) g)` (the
+part of the adversary's training done on monitored compute: the protocols do their job for an algorithm when it is
+small, `g ≪ d`). Its **ladder** gives `lo` admitting bounds by status: proved, proved under named premises
+(`conditional`), and with drafts. Its **operating points** (`operating.py`) turn ρ into time: an optimizer step or a
+pretraining run, and exfiltrating a reference through side channels.
+
+## The hierarchy
+
+The slowdown theorem has one shape (above). Below it, **training classes** each derive a per-block bound from a premise
+set (cover, fan-out, partial sums, threads, ...). Below those, **algorithm families** (pretraining, post-training,
+adapters, communication-efficient training, seed-based methods, ...) are parameterized, and each lands in the classes
+whose premises it meets, through its profile. Last, **instances** fix scales and architectures (a model, a run's
+target). Beside that stack, the **actual circuit**: the hardware, and the regime that maps what the fleet computes onto
+the theorem's blocks.
+
 ## The layers
 
 Each layer is one interface with interchangeable implementations. A different assumption is a different
@@ -54,13 +69,14 @@ implementation (or different numbers in `data/`), never an edit to the layers ar
 | attacks | `attacks.py` | the same `Argument`, side `attack` | comply, state-fits (N1) | a construction |
 | profile | `profile.py` | `Profile`: κ, state bits, `m`, and every field a class reads, named as in Lean | — | (the interface between the two) |
 | families | `families.py` | `Family.profile(Model, Run) → Profile` | full | an algorithm family and its parameters |
-| instances | `instances.py` | `Model`, `Run` (a target: `6 N_active T` FLOPs unless given) | kimi-k2, kimi-k2-pretrain | an architecture, a scale |
-| hardware | `hardware.py` | `Location` (Φ, memory), `Fleet` (count, dark share, MFU), `Horizon` | h200-hgx, reference-h200 | the actual datacenter |
+| instances | `instances.py` | `Model`, `Run` (a target: `6 N_active T` FLOPs unless given) | kimi-k2, deepseek-v4-pro; their pretraining runs, one V4 optimizer step | an architecture, a scale |
+| hardware | `hardware.py` | `Location` (Φ, memory), `Fleet` (count, dark share, MFU), `Horizon` | h200-hgx, nvl72; reference-h200, world-h200, world-nvl72 | the actual datacenter |
 | regimes | `regimes.py` | `Regime.partition(Context) → Partition`, with `Policy` (Γ, k) | unmonitored, remote, onsite | what the protocols certify, and how |
 | params | `params.py` | `Registry`: dotted keys over `data/*.toml`, `override`, `fields` | — | every number, with `low`/`high`, `source`, `status` |
 | scenario | `scenario.py` | `build`, `evaluate → Result` (per family: each bound, all bounds at once, each attack) | `data/scenarios.toml` | a choice per layer |
 | analysis | `analysis.py` | `sweep`, `tornado`, `threshold`, `dangers`, `phase` over any keys | — | — |
 | Lean status | `lean.py` | `status(name)`, `weakest(cites)` from the locks | — | — |
+| operating points | `operating.py` | `work`, `exfil`, `points`: ρ as time at the registry's `work.*` and `exfil.*` references | — | a reference |
 
 ### Declared and actual circuits
 
@@ -81,7 +97,9 @@ rack). Remotely nothing bounds what enters a location, so free FLOPs are free; o
 ### Status
 
 Every estimate carries the weakest status among its citations, read from the locks (`lean.py`): `proved`,
-`conditional` (proved under named assumptions), `draft` (a paper statement not in Lean) or `absent`. Every number in
+`conditional` (proved under named assumptions), `draft` (a paper statement not in Lean) or `absent`. Its citations are
+its argument's and those of the cuts that bound it (the declared cut's `DampenerRemote` premises, the physical cut's
+`WindowsAt`). Every number in
 `data/` carries its own `status` (`datasheet`, `measured`, `declared`, `assumed`, `ruled`, `conjecture`, `derived`) and
 `source`.
 
@@ -94,5 +112,6 @@ Every estimate carries the weakest status among its citations, read from the loc
 - **A model or run**: a table in `data/models.toml`.
 - **Hardware, a fleet**: a table in `data/hardware.toml`.
 - **A regime**: a dataclass with `partition` in `regimes.KINDS` and its table in `data/regimes.toml`.
-- **A scenario**: a table in `data/scenarios.toml`.
+- **A scenario**: a table in `data/scenarios.toml` (Daniel's reference datacenter is `data/reference.toml`).
+- **A work or exfiltration reference**: a `work.<name>.flops` or `exfil.<name>.bits` table.
 - **A sensitivity**: give the parameter `low` and `high`; `tornado` and `dangers` pick it up.
