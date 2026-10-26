@@ -42,8 +42,7 @@ theorem built_tmpl {c : Circuit} {tu : TmplUnit} (ht : c.tmpl = some tu) : Built
 /-- **A templated unit is its logical net placed at `upos`**: `posMap` keeps the input rows, puts every other column
 between them and the constant, the constant at the committed constant, and committed row `posMap[x]` is logical row `x`
 read through `posMap`. -/
-theorem UnitAt.tmpl {c : Circuit} {tu : TmplUnit} (ht : c.tmpl = some tu) (hu : c.unit = tu.net)
-    (hlog : tu.net.unitLog ≤ 32) : UnitAt c := by
+theorem UnitAt.tmpl {c : Circuit} {tu : TmplUnit} (ht : c.tmpl = some tu) (hu : c.unit = tu.net) : UnitAt c := by
   obtain ⟨acc, n, -, hn, hat, hun⟩ := TmplValue.unroll_of_unrollAt tu.unrolled
   have el := lunit_tmpl ht hun
   have ep := upos_tmpl ht
@@ -66,14 +65,14 @@ theorem UnitAt.tmpl {c : Circuit} {tu : TmplUnit} (ht : c.tmpl = some tu) (hu : 
   have hlogle : n₀.unitLog ≤ tu.net.unitLog := by
     rw [hlog0, hl]
     exact max_le_max (le_refl _) (log2ceil_mono hUle)
-  have w32 : 2 ^ n₀.unitLog ≤ 2 ^ 32 := Nat.pow_le_pow_right (by decide) (by omega)
-  have w32' : 2 ^ tu.net.unitLog ≤ 2 ^ 32 := Nat.pow_le_pow_right (by decide) hlog
   have hle : ∀ x ≤ K, pos.getD x 0 ≤ pos.getD K 0 := fun x hx => Nat.lt_succ_iff.1 (h1 x (by omega)).1
-  have hrow : ∀ (ra : Array (Array ℕ)) (m m' : Sparse), Sparse.ofRows ra (2 ^ n₀.unitLog) = .ok m →
+  have hrow : tu.net.unitLog ≤ 32 → ∀ (ra : Array (Array ℕ)) (m m' : Sparse), Sparse.ofRows ra (2 ^ n₀.unitLog) = .ok m →
       Sparse.ofRows (Net.placed pos (Net.invOf pos (pos.getD K 0 + 1)) ra) (2 ^ tu.net.unitLog) = .ok m' →
       ∀ x < U, ∀ j, sparseEntry m' (pos.getD x 0) j =
         ((((m.row x).toList.map fun y => pos.getD y 0).count j : ℕ) : ZMod 2) := by
-    intro ra m m' hm hm' x hx j
+    intro hlog ra m m' hm hm' x hx j
+    have w32 : 2 ^ n₀.unitLog ≤ 2 ^ 32 := Nat.pow_le_pow_right (by decide) (by omega)
+    have w32' : 2 ^ tu.net.unitLog ≤ 2 ^ 32 := Nat.pow_le_pow_right (by decide) hlog
     rw [sparseEntry_ofRows hm', ofRows_row hm' w32', Net.placed_at hp ra hx, ofRows_row hm w32, Array.toList_map]
   refine
     { in_eq := (by rw [el, hu, hiw])
@@ -85,8 +84,8 @@ theorem UnitAt.tmpl {c : Circuit} {tu : TmplUnit} (ht : c.tmpl = some tu) (hu : 
       le := fun x hx => (by rw [ep, hu, hcp]; rw [el, hc0] at hx; exact hle x hx)
       inputs := fun x hx => (by rw [ep]; rw [hu, hiw] at hx; exact hinp x hx)
       comp := fun x hx1 hx2 => ?_
-      row_a := fun x _ hx2 j => ?_
-      row_b := fun x _ hx2 j => ?_ }
+      row_a := fun x _ hx2 hlog j => ?_
+      row_b := fun x _ hx2 hlog j => ?_ }
   · rw [ep, hu, hcp, hiw]
     beta_reduce
     rw [hu, hiw] at hx1
@@ -98,9 +97,11 @@ theorem UnitAt.tmpl {c : Circuit} {tu : TmplUnit} (ht : c.tmpl = some tu) (hu : 
     omega
   · rw [el, hc0] at hx2
     rw [el, ep, hu]
-    exact hrow _ _ _ ha ha' x (by omega) j
+    rw [hu] at hlog
+    exact hrow hlog _ _ _ ha ha' x (by omega) j
   · rw [el, hc0] at hx2
     rw [el, ep, hu]
-    exact hrow _ _ _ hb hb' x (by omega) j
+    rw [hu] at hlog
+    exact hrow hlog _ _ _ hb hb' x (by omega) j
 
 end FlockSoundness
