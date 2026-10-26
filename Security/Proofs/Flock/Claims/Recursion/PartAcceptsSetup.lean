@@ -114,6 +114,17 @@ theorem jointP_of_jointV {Col T : Type} {H : Msg → Msg} {D : Claims.Recursion.
   ⟨h.1, h.2.1, findColl_false_of_append (allCalls_setup_true h.2.1 xs) h.2.2.1,
     fun s hs => partAcceptsP_of_V (h.2.2.2 s hs)⟩
 
+/-- **`JointV` is monotone in what each part shows.** -/
+theorem jointV_shows {Col T : Type} {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
+    {DO : Claims.Flock.Deploy Coin Col T} {L : LayoutB} {shape : Claims.Recursion.Form → Prop}
+    {shows shows' : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {cmt : Msg → ℕ → Msg → Msg} {x : Msg} {c : ℕ → Coin}
+    {xs : List Msg} {ws : List Claims.Flock.Wit} (hw : ∀ {s x xO c}, shows s x xO c → shows' s x xO c)
+    (h : JointV H D L (PartAcceptsV H D DO L shape shows cmt) x c xs ws) :
+    JointV H D L (PartAcceptsV H D DO L shape shows' cmt) x c xs ws := by
+  refine ⟨h.1, h.2.1, h.2.2.1, fun s hs => ?_⟩
+  obtain ⟨hst, h1, h2, h3, h4, h5⟩ := h.2.2.2 s hs
+  exact ⟨hst, h1, h2, h3, hw h4, h5⟩
+
 /-- **`decompB_of_joint` landing on `DecompBV`**: `DecompBV` at `chkV` wherever `DecompB` holds at `chk` and, under
 `JointV` at `chkV`, every part's `chk` holds at the parts' own messages. A collision among the recorded calls and the
 verifier's evaluations is `DecompBV`'s own second outcome, so `JointV` may assume none. -/

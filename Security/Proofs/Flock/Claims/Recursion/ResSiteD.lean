@@ -5,8 +5,9 @@ import Proofs.Flock.Claims.Recursion.LabelsFull
 /-!
 # `ResSite` from the verifier's checks, at part `s`'s decision
 
-`ResSiteDec` is `ResLower.ResSite` (ResLowerD) with part `s`'s own decision in its context (`PartDec`: its staged
-statement's session decided, its checks and last refusals passed), and `resSite_of_dec` proves it at every brings `b`:
+`ResSiteDec` is the site facts `resTie_resVRead` takes, at a piece's context and part `s`'s own decision (`PartDec`:
+its staged statement's session decided, its checks and last refusals passed), and `resSite_of_dec` proves it at every
+brings `b`:
 
 * the piece's key is `(p, r, 0, 0)` with `r < 2` (`mem_resPD'`), so its instance `r` is one of the two the staged part's
   table holds, in a block (`resSite_staged`), at unit `0 < upv = 1`;
