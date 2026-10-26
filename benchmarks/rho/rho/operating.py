@@ -6,6 +6,10 @@
 * **Exfiltration** (`exfil.<name>.bits`): onsite, what monitored locations produce reaches the dark pool only through
   side channels (the regime's `side` bit/s per location; certified egress is the declared circuit's output, fixed by its
   registered inputs), from one location or from every location at once. Remotely nothing bounds it (0 s).
+* **Faulty outputs** (`faulty.*`): a block the sampled proofs let go unchecked returns outputs the adversary chose, in
+  certified egress, in either regime. Each faulty step carries `step_bits` and is drawn with chance `q`, and a drawn one
+  ends its identity, so time doesn't bound the channel; detection does. Its row gives the bits it carries before the
+  first detection, except with chance `δ`, and the chance of detection moving each reference.
 """
 
 from __future__ import annotations
@@ -39,6 +43,48 @@ def exfil(scenario: Scenario, bits: float) -> dict[str, float]:
         return {"one location": 0.0, "every location": 0.0}
     return {"one location": bits / side if side > 0 else math.inf,
             "every location": bits / (side * scenario.context.fleet.count) if side > 0 else math.inf}
+
+
+@dataclass(frozen=True)
+class Faulty:
+    """The faulty-outputs channel: `identities` identities, each ended by its first drawn faulty step."""
+
+    #: the sampled proofs' draw rate per step
+    q: float
+    delta: float
+    #: the output bits a faulty step chooses
+    step_bits: float
+    #: steps in a class drawn at a floor of one
+    floor_steps: float
+    identities: float = 1.0
+
+    @property
+    def capacity(self) -> float:
+        """Bits it carries before the first detection, except with chance `δ`: `J ln(1/δ) (1/q + floor_steps)` steps."""
+        return self.identities * math.log(1 / self.delta) * (1 / self.q + self.floor_steps) * self.step_bits
+
+    def detect(self, bits: float) -> float:
+        """The chance of detection moving `bits`: `1 − exp(−q n)` over its `n = bits / step_bits` steps, at any rate."""
+        return -math.expm1(-self.q * bits / self.step_bits)
+
+
+@dataclass(frozen=True)
+class Row:
+    name: str
+    #: bits, before the first detection at δ
+    capacity: float
+    #: the chance of detection, by exfiltration reference
+    detect: Mapping[str, float]
+
+
+def faulty(registry: Registry, scenario: Scenario) -> Row:
+    """The faulty-outputs row at the regime's identities; with no sampled proofs (unmonitored) nothing detects it."""
+    refs = {n: registry[f"exfil.{n}.bits"] for n in registry.names("exfil")}
+    identities = getattr(scenario.regime, "identities", None)
+    if identities is None:
+        return Row("faulty outputs", math.inf, dict.fromkeys(refs, 0.0))
+    f = registry.fields(Faulty, "faulty", identities=identities)
+    return Row("faulty outputs", f.capacity, {n: f.detect(b) for n, b in refs.items()})
 
 
 def points(registry: Registry, result: Result) -> list[Point]:
