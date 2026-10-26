@@ -43,7 +43,11 @@ theorem chainPos_inj {sch : Schedule} {r r' ℓ ℓ' j j' : ℕ} (hr : r < 2) (h
     (hℓ : ℓ < sch.levels.size) (hℓ' : ℓ' < sch.levels.size) (hj : j < (sch.levels[ℓ]!).q)
     (hj' : j' < (sch.levels[ℓ']!).q) (h : chainPos sch r ℓ j = chainPos sch r' ℓ' j') :
     r = r' ∧ ℓ = ℓ' ∧ j = j' := by
-  rw [Array.getElem!_eq_getD] at hj hj'
+  have hg : ∀ i (hi : i < sch.levels.size), (sch.levels[i]!).q = (sch.levels.getD i default).q := fun i hi => by
+    rw [getElem!_pos sch.levels i hi, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi]
+    rfl
+  rw [hg ℓ hℓ] at hj
+  rw [hg ℓ' hℓ'] at hj'
   have hu : ∀ {ℓ j : ℕ}, ℓ < sch.levels.size → j < (sch.levels.getD ℓ default).q →
       ((List.range ℓ).map fun ℓ' => (sch.levels.getD ℓ' default).q).sum + j < nOpen sch := fun {ℓ j} hl hjl => by
     have h1 := levSum_mono (fun ℓ' => (sch.levels.getD ℓ' default).q) (show ℓ + 1 ≤ sch.levels.size by omega)
