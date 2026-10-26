@@ -5,10 +5,11 @@ certificate's, a kept certificate whose signature is changed, and a key under `l
 the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
 several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
 window was drawn; the draw's bound at δ is C(n − b − 1, k) / C(n, k)'s; leak counts the scan's widths and terms on a
-warden run's files, and refuses a sampled draw and a warden the scan's class doesn't serve. On the certifier-only path
-the report needs no scan, names what it stubs, and counts the rehearsal's refused runs and the I/O tie's verdict on
-each tampered run the check let through as negatives; d1's K is #4404's horizon count over the compute audits' draws
-and free inputs and the network's own terms."""
+warden run's files, and refuses a sampled draw and a warden the scan's class doesn't serve; the job's copy of the
+gates' records into its output keeps no gate run's witness/. On the certifier-only path the report needs no scan,
+names what it stubs, and counts the rehearsal's refused runs and the I/O tie's verdict on each tampered run the check
+let through as negatives; d1's K is #4404's horizon count over the compute audits' draws and free inputs and the
+network's own terms."""
 
 from __future__ import annotations
 
@@ -16,7 +17,9 @@ import hashlib
 import importlib.util
 import json
 import math
+import os
 import shutil
+import subprocess
 import sys
 from fractions import Fraction
 from pathlib import Path
@@ -123,6 +126,23 @@ def test_custody(tmp_path):
     got = cr.custody(tmp_path)
     assert got["verdict"] == "refused" and got["gate_runs"][0]["mismatches"] == {"honest/a.json": "sha512 differs"}
     assert cr.custody(tmp_path / "none")["verdict"] == "refused"
+
+
+def test_job_keeps_no_gate_runs_witness(tmp_path):
+    """chain_record.sh's copy of the gates' records into $OUT, which custody uploads, leaves every witness/ behind."""
+    lines = (HERE / "chain_record.sh").read_text().splitlines()
+    i = next(k for k, line in enumerate(lines) if line.startswith('(cd "$G" && find'))
+    copy = "\n".join(lines[i:i + 2])
+    run = tmp_path / "G" / "g2" / "c20261026T000000Z-0000"
+    for name in ("end.json", "out/deployment.json", "witness/check.json", "witness/cells.jsonl"):
+        (run / name).parent.mkdir(parents=True, exist_ok=True)
+        (run / name).write_text("{}")
+    (tmp_path / "OUT" / "gates").mkdir(parents=True)
+    subprocess.run(["bash", "-c", copy], check=True, env={"G": str(tmp_path / "G"), "OUT": str(tmp_path / "OUT"),
+                                                          "PATH": os.environ["PATH"]})
+    kept = sorted(p.relative_to(tmp_path / "OUT" / "gates" / "g2" / run.name).as_posix()
+                  for p in (tmp_path / "OUT").rglob("*") if p.is_file())
+    assert kept == ["end.json", "out/deployment.json"]
 
 
 def _steps(tmp_path, job: dict, endpoint: bool = True) -> SimpleNamespace:

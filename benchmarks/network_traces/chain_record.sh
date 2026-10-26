@@ -36,8 +36,8 @@
 #      CR_AUDIT (the served units' compute audit windows, space-separated directories: the report's --audit, d1's K)
 #      CR_SERIAL=1 (n2 then scan; at once by default)  CR_CACHE (the build cache; hidden_zk's by default)
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
-# file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive or a signer's
-# state.
+# file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive, a signer's
+# state or a gate run's witness/ (custody uploads all of $OUT; a warden run's witness is its lane key's only).
 set -uo pipefail
 export HZ_CONFIGS=chain HZ_MEM_GB=${CR_MEM_GB:?}
 CR_CACHE=${CR_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -70,8 +70,8 @@ else CLIENT=$HONEST/client; [ -d "$CLIENT" ] || CLIENT=$HONEST; fi
 WARDEN=; [ -z "${CR_WARDEN_RUN:-}" ] || WARDEN=$(find "$G" -path "*$CR_WARDEN_RUN" -print -quit)
 log "chain: certifier run ${HONEST#$G/}, client ${CLIENT#$G/}, warden run ${WARDEN:-none}"
 mkdir -p "$OUT/gates"
-(cd "$G" && find . -type f \( -name '*.json' -o -name '*.jsonl' -o -name '*.log' \) -size -64M -print0 \
-  | xargs -0 -r -I{} cp --parents {} "$OUT/gates/")
+(cd "$G" && find . -type f \( -name '*.json' -o -name '*.jsonl' -o -name '*.log' \) -size -64M ! -path '*/witness/*' \
+  -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/gates/")
 
 setup
 "$PY" "$CR" custody --gates "$G" --out "$OUT/custody.json" 2>&1 | tee -a "$OUT/job.log" | cut -c1-2000
