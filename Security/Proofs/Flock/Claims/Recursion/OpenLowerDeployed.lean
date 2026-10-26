@@ -344,7 +344,7 @@ theorem levelMatch {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some 
     have htabs : tabsOf #[t] = #[_root_.Flock.Setup.ofCircuit t] := by simp [tabsOf]
     have h0 : (tabsOf #[t])[0]!.m = t.m := by
       rw [htabs]
-      first | rfl | simp [_root_.Flock.Setup.ofCircuit]
+      rfl
     dsimp only
     rw [h0, htm, hsch]
     rfl
