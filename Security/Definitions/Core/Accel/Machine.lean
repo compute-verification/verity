@@ -1,5 +1,5 @@
 import Definitions.Core.Device
-import Mathlib.Data.NNRat.Defs
+import Mathlib.Algebra.Field.Rat
 
 /-!
 # The accelerator model (trusted)
