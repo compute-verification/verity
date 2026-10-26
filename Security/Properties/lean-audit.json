@@ -46,6 +46,8 @@
   "Properties.Proofs.Evaluate",
   "Properties.NetworkRecords",
   "Properties.Proofs.NetworkRecords",
+  "Properties.NetworkPeriod",
+  "Properties.Proofs.NetworkPeriod",
   "Properties.SampledProofs",
   "Properties.Proofs.SampledProofs",
   "Properties.SampledProofs.Draw",
@@ -229,6 +231,7 @@
   "Definitions.Core.TC.Pipeline",
   "Definitions.Core.TC.Spec",
   "Properties.NetworkRecords",
+  "Properties.NetworkPeriod",
   "Properties.SampledProofs",
   "SampledProofs",
   "Properties.Pous.TimedAudit",
@@ -325,6 +328,11 @@
    "imports": ["NetworkCheck.RecordsGrid", "Properties.NetworkCertifier"],
    "except": [],
    "why": "what the records check's acceptance means is stated against its own functions and the reference Program's grid, with v2's statements of the evidence, the syncs and the heads, never a proof"
+  },
+  "Properties.NetworkPeriod": {
+   "imports": ["NetworkCheck.Period", "Mathlib.Algebra.BigOperators.Fin"],
+   "except": [],
+   "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, never a proof"
   },
   "Properties.SampledProofs": {
    "imports": ["SampledProofs"],
@@ -1195,6 +1203,9 @@
    ],
    "assumptions": [],
    "type_hash": "3336933546d64f572ec7438b455edf45e362bad2977349e223b6eaa67961b9e5"
+  },
+  "Properties.NetworkPeriod.rowsKBoundsCount": {
+   "owner": "@network-accounting"
   },
   "Properties.NetworkRecords.acceptMeans": {
    "owner": "@network-accounting",
@@ -2448,6 +2459,10 @@
    "Properties.NetworkCertifier.undigestedParamsReject": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.rowsKBoundsCount": {
+    "function": "NetworkCheck.Period.rowsTerms",
+    "outcome": "none"
    },
    "Properties.NetworkRecords.acceptMeans": {
     "function": "NetworkCheck.Records.protocol.check",
