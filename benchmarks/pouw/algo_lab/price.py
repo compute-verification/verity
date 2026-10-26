@@ -27,8 +27,10 @@ RESOURCES = ("tensor", "issue", "ALU", "IMAD", "SHFL", "uniform", "smem")
 KIND = {"LOP3": "ALU", "IADD3": "ALU", "SHF": "ALU", "LEA": "ALU", "LEA.HI": "ALU", "PRMT": "ALU", "POPC": "ALU",
         "IMAD": "IMAD", "IMAD.HI": "IMAD", "IMAD.WIDE": "IMAD", "IDP4A": "IMAD", "FFMA": "FFMA", "F2I": "UNLISTED",
         "SHFL": "SHFL", "REDUX": "REDUX", "REDG": "REDG32", "UNI": "UNI", "LDS": "LDS128", "STS": "STS32", "STG": "STG32",
-        "MMA.S8": "IGMMA_S8_N256", "MMA.BF16": "HGMMA_BF16_N256", "MMA.B1": "BGMMA_B1_N256"}
-MMA_MACS = {"MMA.S8": 64 * 256 * 32 // 4, "MMA.BF16": 64 * 256 * 16 // 4, "MMA.B1": 64 * 256 * 256 // 4}
+        "MMA.S8": "IGMMA_S8_N256", "MMA.S8.K16": "IMMA16816_S8", "MMA.BF16": "HGMMA_BF16_N256",
+        "MMA.B1": "BGMMA_B1_N256"}
+MMA_MACS = {"MMA.S8": 64 * 256 * 32 // 4, "MMA.S8.K16": 16 * 8 * 16, "MMA.BF16": 64 * 256 * 16 // 4,
+            "MMA.B1": 64 * 256 * 256 // 4}
 ROW = {"DS_issue": "issue", "DS_alu": "ALU", "DS_imad": "IMAD", "DS_shfl": "SHFL", "DS_uniform": "uniform",
        "DS_tensor": "tensor"}
 #: classes counted a warp, not a lane

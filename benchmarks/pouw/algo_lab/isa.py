@@ -220,8 +220,10 @@ class Kernel:
 
     # ---- tensor cores -----------------------------------------------------------------------------------------------
 
-    def mma_s8(self, a: np.ndarray, b: np.ndarray, c=None) -> np.ndarray:
-        """c + a @ b mod 2^32 on the s8 tensor path; a is (m, k), b is (k, n), both in [-128, 127]."""
+    def mma_s8(self, a: np.ndarray, b: np.ndarray, c=None, cls: str = "MMA.S8", k_instr: int = 32) -> np.ndarray:
+        """c + a @ b mod 2^32 on the s8 tensor path; a is (m, k), b is (k, n), both in [-128, 127]. ``cls`` names the
+        instruction (wgmma k32, or ``MMA.S8.K16``, mma.sync m16n8k16), whose K is ``k_instr``: a k not a multiple of it
+        is padded with zeros, and the padding's MACs are counted, since the tensor core does them."""
         a = np.asarray(a, dtype=np.int64)
         b = np.asarray(b, dtype=np.int64)
         for name, x in (("a", a), ("b", b)):
@@ -229,8 +231,8 @@ class Kernel:
                 raise DomainError(f"MMA.S8: operand {name} spans [{x.min()}, {x.max()}], outside s8")
         prod = (a @ b) & M32
         out = prod.astype(U32) if c is None else (prod.astype(U32) + u32(c)).astype(U32)
-        macs = a.shape[0] * a.shape[1] * b.shape[1]
-        self.add("MMA.S8", macs)
+        kk = -(-a.shape[1] // k_instr) * k_instr
+        self.add(cls, a.shape[0] * kk * b.shape[1])
         return out
 
     def mma_bf16(self, a: np.ndarray, b: np.ndarray, c=None) -> np.ndarray:
