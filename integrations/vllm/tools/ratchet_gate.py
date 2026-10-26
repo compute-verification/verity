@@ -37,7 +37,10 @@ It runs on git, in the repository of the current directory, and runs no code but
 and BASE's move_check), so the merge queue runs `main`'s copy of it, which a PR can't weaken, on `main` and a PR's head (or,
 at the sync, its merge onto `next`, each member below judged again) as it admits the PR (a landing gate in drive.toml's ``landing_gates``: `research queue ready`'s preflight refuses the mark, and the
 sync onto `next` leaves the PR out).  The lints run on the Python that runs it, the ruff lint too when that Python's ruff is
-the base's pin, else on one ``uv run --with`` gives the pin.  Before marking a branch, run
+the base's pin, else on one ``uv run --with`` gives the pin.  A sync gates each PR on its merge onto `next`, which holds every
+PR below it, so each change's verdict is kept under ``$RATCHET_GATE_CACHE`` (default ``~/.cache/verity/ratchet-gate``; empty:
+none), keyed by this file's bytes, BASE and the change's commits, which are all it reads: a sync of N PRs judges each once,
+not N times.  An entry that can't be read is judged again, and an error is never kept.  Before marking a branch, run
 ``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes, 1 when one fails
 (with the fix), 2 on a usage or git error, or when the base's lints can't run (the ruff lint, with no ``uv``).  ``--json``
 prints `KIND`, whose ``failures`` name each failing change's top ``commit``.
@@ -45,8 +48,10 @@ prints `KIND`, whose ``failures`` name each failing change's top ``commit``.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -59,6 +64,8 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 KIND = "vllm-ratchet-gate/v2"
+#: this file's bytes, part of every cached verdict's key, so a changed gate judges every change again
+SELF = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 INTEGRATION = "integrations/vllm"
 TESTS = f"{INTEGRATION}/tests/"
 LINT = f"{TESTS}lint"
@@ -491,11 +498,50 @@ def judge(c: Change, base: str) -> None:
         c.fix = found[:CHEAPEST] + ([f"... and {len(found) - CHEAPEST} more"] if len(found) > CHEAPEST else [])
 
 
+#: what `judge` decides, the fields a cached verdict restores
+JUDGED = ("verdict", "why", "before", "after", "touched", "lints", "fix", "noqa_added", "noqa_removed", "pooled")
+
+
+def cache_path(c: Change, base: str) -> Path | None:
+    root = os.environ.get("RATCHET_GATE_CACHE")
+    if root == "":
+        return None
+    root = Path(root) if root else Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "verity" / "ratchet-gate"
+    return root / (hashlib.sha256(json.dumps([SELF, base, c.lo, c.hi, c.commits]).encode()).hexdigest() + ".json")
+
+
+def recall(c: Change, p: Path | None) -> bool:
+    try:
+        doc = json.loads(p.read_text()) if p is not None else None
+    except (OSError, ValueError):
+        return False
+    if not (isinstance(doc, dict) and set(JUDGED) <= doc.keys() and doc["verdict"] in ("untouched", "passed", "exempt", "failed")):
+        return False
+    for k in JUDGED:
+        setattr(c, k, doc[k])
+    return True
+
+
+def keep(c: Change, p: Path | None) -> None:
+    if p is None:
+        return
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_name(f".{p.name}.{os.getpid()}")
+        tmp.write_text(json.dumps({k: getattr(c, k) for k in JUDGED}))
+        tmp.replace(p)
+    except OSError:
+        pass
+
+
 def gate(base: str, top: str) -> dict:
     base, top = (git("rev-parse", "--verify", f"{r}^{{commit}}").strip() for r in (base, top))
     cs = changes(base, top)
     for c in cs:
-        judge(c, base)
+        p = cache_path(c, base)
+        if not recall(c, p):
+            judge(c, base)
+            keep(c, p)
     failed = [c for c in cs if c.verdict == "failed"]
     return {"kind": KIND, "base": base, "top": top, "changes": [c.doc() for c in cs],
             "failures": [{"commit": c.hi, "pr": c.pr, "why": c.why, "fix": c.fix} for c in failed]}
