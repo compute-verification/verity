@@ -336,6 +336,17 @@ def test_gc_does_nothing_unless_the_filesystem_is_over_high_pct_or_forced(tmp_pa
     assert plan["acting"] and by_path(plan)["pouw/a"]["action"] == "delete" and not a.exists()
 
 
+def test_gc_acts_on_a_filesystem_out_of_inodes_with_blocks_to_spare(tmp_path):
+    """vy-dc-h200, 26 Oct: inodes at 100% with blocks at 32%, and gc skipped every path as "not needed"."""
+    a = kept(tmp_path, "pouw/a")
+    disk = Disk(100 * UNIT, 31 * UNIT, [a])                                   # blocks 32%
+    full = lambda _p: (1000, 990 if a.exists() else 0)                         # inodes 99% while a exists
+    assert not run_gc(tmp_path, disk)["acting"]
+    plan = run_gc(tmp_path, disk, apply=True, inodes=full)
+    assert (plan["acting"], plan["pct_before"], plan["inodes_pct_before"]) == (True, 99.0, 99.0)
+    assert by_path(plan)["pouw/a"]["action"] == "delete" and not a.exists() and plan["pct_after"] == 31.0
+
+
 def test_gc_deletes_low_before_normal_then_the_oldest_expiry_and_stops_under_low_pct(tmp_path):
     normal_old = kept(tmp_path, "pouw/normal-old", priority="normal", expires="2026-09-01T00:00:00Z")
     low_new = kept(tmp_path, "pouw/low-new", expires="2026-09-30T00:00:00Z")

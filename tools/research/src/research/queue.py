@@ -51,6 +51,13 @@ eyeball review, and the full check runs after landing); `land` below, and drive'
     research queue baseline SHA --by ci             record `main` at SHA as green for the review landing, which otherwise first
                                                    runs the after-landing run on `main` itself, and lands nothing until it ends
                                                    (on the control pod: `/data/infra/drive.sh queue baseline SHA --by ci`)
+    research queue lean-check COMMIT [--on MACHINES] [--by LANE] [--again]
+                                                   a hand Lean check (`train.sh COMMIT MACHINES --deferred lean-audit`, MACHINES
+                                                   default drive.toml's `on`) of a member's commit on `next`, recorded in drive's
+                                                   state at its launch, so it holds `next` and lands what it covers as drive's own
+                                                   (`Driver.hand_lean`); refused off `next`, under a running check at or above
+                                                   it, or where drive records a passed one at it (--again reruns it)
+                                                   (on the control pod: `/data/infra/drive.sh queue lean-check COMMIT`)
     research queue report --on MACHINE [--max-running N] [--dry-run]
                                                    one tick of the reporter for GitHub's merge queue (`research.mergequeue`): check
                                                    each merge group's head, post its `verity/check` status
@@ -759,6 +766,8 @@ class Queue:
         self._attr_source = True
         #: the files each merge commit of `next` changed (`touched_by`)
         self._touched: dict[str, set[str]] = {}
+        #: main's registry as `handle` reads it (its handles, {agent id: handle}), until the next `fetch`
+        self._registry: tuple[set, dict[str, str]] | None = None
 
     # -- the clone and its state
 
@@ -792,6 +801,7 @@ class Queue:
         """Forced refspecs only: `main`, the queue's branch when it exists, and each open PR's head as `refs/queue/pr/{n}`;
         return each fetched pull ref's commit, which can briefly differ from GitHub's API head."""
         prs = list(prs)
+        self._registry = None
         specs = ["+refs/heads/main:refs/remotes/origin/main", *(f"+refs/pull/{p.number}/head:refs/queue/pr/{p.number}" for p in prs)]
         self._remote(self.workdir, "fetch", "-q", "--prune", "origin", *specs)
         # exit 2: no such branch; any other failure is the remote's, never an empty queue
@@ -1044,14 +1054,9 @@ class Queue:
         """The Slack handle of the lane that owns ``pr``, from main's registry (`.agents/skills/using-slack/registry.json`): the
         lane its body names, the agent id it carries, the ready mark's author, else the agent whose id ends in its branch's
         suffix (`cursor/<name>-4292`); None when none of them is a handle."""
-        r = _git(self.workdir, "show", f"origin/main:{REGISTRY}", check=False)
-        try:
-            reg = json.loads(r.stdout).get("handles", []) if r.returncode == 0 else []
-        except (ValueError, AttributeError):
+        if (got := self._read_registry()) is None:
             return None
-        names = {h.get("handle") for h in reg if isinstance(h, dict)}
-        holders = {a: h["handle"] for h in reg if isinstance(h, dict) and "handle" in h
-                   for a in AGENT_RE.findall(str(h.get("holder", "")))}
+        names, holders = got
         by = self.marked_by(pr.number, pr.head) if self.marked_by else None
         suffix = pr.branch.rpartition("-")[2] if "-" in pr.branch else ""
         tail = sorted({n for a, n in holders.items() if len(suffix) == 4 and a.endswith(suffix)})
@@ -1059,6 +1064,21 @@ class Queue:
             if c in names:
                 return c
         return None
+
+    def _read_registry(self) -> tuple[set, dict[str, str]] | None:
+        """(the handles, {agent id: handle}) of `main`'s registry, read once per `fetch`: a review tick asks `handle` of each
+        member of `next` (`Driver._owners`), and each `git show` is ~70 ms in drive's clone on the control pod's network volume
+        (26 Oct: 127 members).  None when it can't be parsed."""
+        if self._registry is None:
+            r = _git(self.workdir, "show", f"origin/main:{REGISTRY}", check=False)
+            try:
+                reg = json.loads(r.stdout).get("handles", []) if r.returncode == 0 else []
+            except (ValueError, AttributeError):
+                return None
+            self._registry = ({h.get("handle") for h in reg if isinstance(h, dict)},
+                              {a: h["handle"] for h in reg if isinstance(h, dict) and "handle" in h
+                               for a in AGENT_RE.findall(str(h.get("holder", "")))})
+        return self._registry
 
     def _held(self, state: dict) -> str | None:
         """`hold` with drive's launches (`drive.launched` in ``state``): a member's check runs while a run of its launch is active
@@ -1312,9 +1332,18 @@ def reruns_suites(files: Iterable[str]) -> bool:
 
 def conflicting_files(repo: Path, base: str, head: str) -> list[str]:
     """The files a merge of ``head`` onto ``base`` would leave conflicted, from `git merge-tree` (no worktree touched), so
-    `status` names a conflict on any VM, not only on the one whose last sync recorded it; [] when it merges cleanly."""
-    r = _git(repo, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head, check=False)
-    return sorted({f for f in r.stdout.splitlines()[1:] if f}) if r.returncode == 1 else []
+    `status` names a conflict on any VM, not only on the one whose last sync recorded it; [] when it merges cleanly.  It
+    merges as `Queue._merge` does: with ``base``'s merge drivers (`--attr-source`, where the clone has them installed), and
+    a conflict only in pins counts as none, since the sync rebuilds them (`repinned`; 26 Oct: the preflight refused #4491
+    over PoUS's TRUSTED.sha256, which the sync merges)."""
+    r = _git(repo, f"--attr-source={base}", "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head,
+             check=False)
+    if r.returncode == 129 and "attr-source" in r.stderr:
+        r = _git(repo, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head, check=False)
+    if r.returncode != 1:
+        return []
+    files = sorted({f for f in r.stdout.splitlines()[1:] if f})
+    return [] if repinned(repo, r.stdout.split()[0], base, head, files) else files
 
 
 def pins_at(repo: Path, ref: str) -> dict[str, tuple[str | None, str]]:
@@ -2616,9 +2645,9 @@ def _checked_heads(a: argparse.Namespace) -> int:
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
     ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive", "report", "open",
-                                            "stats", "checked-heads", "review", "baseline"])
+                                            "stats", "checked-heads", "review", "baseline", "lean-check"])
     ap.add_argument("pr", nargs="?", help="eject, ready, review: the PR number; judge: the quick tier's run id; baseline: the "
-                    "commit of `main` ci knows is green")
+                    "commit of `main` ci knows is green; lean-check: the commit of `next` to Lean-check")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--steps", help="baseline: the after-landing steps green at SHA (default every one): a later failure of "
                     "another step reverts nothing")
@@ -2639,10 +2668,12 @@ def main(argv: list[str]) -> int:
                                                     "M1,M2: the one with a free check slot, as `check.py --on` picks), waiting for it "
                                                     f"{waitcap.WAIT_CAP_S} s at most (then exit {waitcap.STILL_GOING}, the run going "
                                                     "on: `judge RUN` marks the PR once it ends); judge: look "
-                                                    "for a run another VM launched there only")
+                                                    "for a run another VM launched there only; lean-check: train.sh's MACHINES "
+                                                    "(default drive.toml's `on` at `main`)")
     ap.add_argument("--local", action="store_true", help="ready: run the quick tier here")
     ap.add_argument("--mark", action="store_true", help="ready: mark it with no quick tier (the train's full check tests it)")
-    ap.add_argument("--again", action="store_true", help="ready: mark a head that was ejected (only when the ejection was wrong)")
+    ap.add_argument("--again", action="store_true", help="ready: mark a head that was ejected (only when the ejection was wrong); "
+                                                          "lean-check: rerun a commit whose recorded Lean check passed")
     ap.add_argument("--no-preflight", action="store_true",
                     help="ready: skip the preflight (the lander's): the head merged onto a fresh `next` must merge cleanly, contain "
                          "no open PR that isn't admitted, and pass `pins.py --stale`, the invariant tests (module strings, pins, "
@@ -2754,8 +2785,11 @@ def main(argv: list[str]) -> int:
         ap.error("review N records one verdict: --land [--ref NOTE] or --hold REASON, with --by <reviewer lane> (or $RESEARCH_LANE)")
     if a.command == "baseline" and not (a.pr and a.by):
         ap.error("baseline SHA records a green `main` for the review landing: pass the commit and --by ci")
+    if a.command == "lean-check" and not (a.pr and a.by):
+        ap.error("lean-check COMMIT launches a Lean check of a commit of `next` through drive: pass the commit and --by <lane> "
+                 "(or set $RESEARCH_LANE)")
     a.by = a.by or "merge-queue"
-    if a.command not in ("judge", "baseline") and a.pr is not None:
+    if a.command not in ("judge", "baseline", "lean-check") and a.pr is not None:
         if not a.pr.isdigit():
             ap.error(f"{a.command}: {a.pr!r} is not a PR number")
         a.pr = int(a.pr)
@@ -2818,6 +2852,21 @@ def main(argv: list[str]) -> int:
                 raise QueueError(f"baseline: drive's state is the control pod's, and this isn't drive (no {DRIVE_ENV}=1): run "
                                  f"`/data/infra/drive.sh queue baseline {a.pr} --by {a.by}` there")
             return baseline(q, a.pr, a.by, a.steps)
+        if a.command == "lean-check":
+            if not on_drive():
+                raise QueueError(f"lean-check: drive's state is the control pod's, and this isn't drive (no {DRIVE_ENV}=1): run "
+                                 f"`/data/infra/drive.sh queue lean-check {a.pr}` there")
+            from .drive import Driver
+
+            if not a.on:
+                q._clone()
+                q.fetch()
+            if not (on := a.on or drive_flags(DRIVE_FLAGS, q.workdir)[0].on):
+                raise QueueError(f"lean-check: {DRIVE_FLAGS} at `main` names no machines (`on`): pass --on MACHINES")
+            rec = Driver(q, on=on).hand_lean(a.pr, a.by, again=a.again)
+            print(f"research queue: the Lean check of {a.pr} on {on} is drive's, by {a.by}: "
+                  f"{' '.join(rec['ids']) or 'launching (log ' + rec['launch']['dir'] + '/log)'}")
+            return 0
 
         if a.command in ("sync", "land") and not (a.dry_run or on_drive()):
             raise QueueError(off_drive(q.branch if a.command == "sync" else "main", f"queue {a.command}"))

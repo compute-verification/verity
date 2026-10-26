@@ -397,7 +397,11 @@ def test_prs_whose_only_conflicts_are_in_pins_merge_with_each_pin_rebuilt_from_t
            "z.lean": "z\n"}
     world.gh.put(2, _pinned(world, two, ["lean-toolchain", "lakefile.toml", UP, "New2.lean"],
                             ["Security/Proofs/lakefile.toml", "x.lean", "z.lean"]))
-    assert conflicting_files(world.dev, world.gh.prs[1].head, world.gh.prs[2].head) == sorted([TRUSTED, EXFIL])
+    raw = subprocess.run(["git", "merge-tree", "--write-tree", "--name-only", "--no-messages", world.gh.prs[1].head,
+                          world.gh.prs[2].head], cwd=world.dev, capture_output=True, text=True)
+    assert sorted(raw.stdout.splitlines()[1:]) == sorted([TRUSTED, EXFIL])
+    # the preflight and `status` judge it as the sync merges it: no conflict (26 Oct: #4491 marked --no-preflight over it)
+    assert conflicting_files(world.dev, world.gh.prs[1].head, world.gh.prs[2].head) == []
     q = world.queue()
     members, entries = q.sync()
     assert [m.pr for m in members] == [1, 2], entries[2].why
@@ -419,6 +423,7 @@ def test_a_conflict_in_any_file_besides_the_pins_still_refuses_the_merge(world):
     paths = ["lean-toolchain", "lakefile.toml", "Old.lean", UP]
     for n, f in ((1, "lakefile.toml"), (2, "lean-toolchain")):
         world.gh.put(n, _pinned(world, {**tree, "a.txt": f"{n}\n", f"{POUS}/{f}": f"{n}\n"}, paths, ["x.lean"]))
+    assert conflicting_files(world.dev, world.gh.prs[1].head, world.gh.prs[2].head) == sorted(["a.txt", TRUSTED])
     q = world.queue()
     members, entries = q.sync()
     assert [m.pr for m in members] == [1]
@@ -2172,6 +2177,31 @@ def test_a_gh_call_that_never_answers_fails_the_tick_instead_of_holding_it(monke
     with pytest.raises(M.Refused, match=f"no answer in {M.GH_TIMEOUT_S} s"):
         M._gh_cli(Path("."), "pr", "view", "1")
     assert asked == [Q.GH_TIMEOUT_S, M.GH_TIMEOUT_S]
+
+
+def test_handle_reads_mains_registry_once_per_fetch(world, monkeypatch):
+    """26 Oct: a review tick asks `handle` of every member of `next` (`Driver._owners`), and each read of main's registry was a
+    `git show` of ~70 ms in drive's clone on the network volume, 127 members a tick.  A fetch reads it afresh."""
+    from research import queue as Q
+
+    def registry(*handles: str) -> None:
+        main = world.change({".agents/skills/using-slack/registry.json": json.dumps({"handles": [{"handle": h} for h in handles]})})
+        _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+
+    registry("circuits")
+    q = world.queue()
+    q._clone()
+    q.fetch()
+    shows = []
+    real = Q._git
+    monkeypatch.setattr(Q, "_git", lambda repo, *a, **kw: (shows.append(a) if a[:1] == ("show",) else None) or real(repo, *a, **kw))
+    prs = [PR(n, "h", "t", body) for n, body in ((1, "Lane circuits"), (2, "Lane infra"), (3, "Lane circuits"))]
+    assert [q.handle(p) for p in prs] == ["circuits", None, "circuits"]
+    assert len(shows) == 1
+    registry("circuits", "infra")
+    q.fetch()
+    assert [q.handle(p) for p in prs] == ["circuits", "infra", "circuits"]
+    assert len(shows) == 2
 
 
 def test_a_lane_line_names_its_handle_without_a_trailing_period():

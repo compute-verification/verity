@@ -72,7 +72,9 @@ no Lean seldom waits above a Lean change for its check.  A failed Lean check is 
 failure there is told to its owner; nothing at or above a failed commit lands until it leaves `next`.  And every .py file the
 landing leaves must compile (`py_compile`): the PR that last changed one that doesn't is ejected.  No train is checked.  While
 any Lean check of a commit of `next` runs, drive's or a hand one of its run registry (`_running_lean`), the members up to it keep
-their place, as under a train's check (`--first` goes above them).  Each
+their place, as under a train's check (`--first` goes above them).  ci's hand Lean check goes through drive
+(`/data/infra/drive.sh queue lean-check COMMIT`, `Driver.hand_lean`): recorded in drive's state at its launch, it holds `next`
+from its first second and counts, is followed and covers as drive's own.  Each
 landing awaits the after-landing run, the post-landing run above with every ci.toml job (`AFTER_LANDING`), `--no-cache` while
 `after_landing_no_cache`, and `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `main`
 itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
@@ -2542,7 +2544,8 @@ class Driver:
 
     # -- the review landing (`land = "review"`, the module's "Review landing").  `drive["lean"]`: {the commit of `next` a Lean
     #    check ran on: {"ids" ([] with "launch", `detach`'s record, while its train.sh runs detached: `_resolve`), "at",
-    #    "members": [[PR, head], ...] up to it, "state": None while it runs, else "passed" (with
+    #    "members": [[PR, head], ...] up to it, "tree", "stacked" or "hand" and "by" (`hand_lean`) when it is either,
+    #    "state": None while it runs, else "passed" (with
     #    "run", the id that passed) or "failed" (with "why")}}, each dropped once its commit leaves `next`.  `drive["postland"]`
     #    also keeps "verified_as" ({"steps", "no_cache"} of the run that verified `verified`, or ci's `research queue baseline`)
     #    and "bisect" (a failed after-landing run's implicated landings, being bisected: `_bisect_step`)
@@ -2906,9 +2909,10 @@ class Driver:
             self._launch_lean(drive, chain, t, f"the Lean changes up to #{chain[t].pr}, above the running one", dry_run,
                               stacked=True)
 
-    def _launch_lean(self, drive: dict, chain: list[Member], t: int, what: str, dry_run: bool, stacked: bool = False) -> None:
+    def _launch_lean(self, drive: dict, chain: list[Member], t: int, what: str, dry_run: bool, stacked: bool = False,
+                     by: str | None = None) -> None:
         """Launch the Lean check of ``chain[t]``, for ``what``, and save it at once, so a tick that fails after it doesn't launch
-        it again."""
+        it again.  ``by``: a hand check's (`hand_lean`), recorded with `hand` and who asked, and refused to its caller."""
         q, top = self.q, chain[t]
         if dry_run or q.shadow:
             q.log(f"research queue drive: would launch train.sh {top.commit[:12]} {self.on} --deferred {LEAN_STEP} for {what}")
@@ -2916,13 +2920,48 @@ class Driver:
         with slot_rank(None):                  # a running check below stays: its prefix is on `next`, and it may land it
             rec, tail = self._started(self.launch_lean(self.repo, top.commit, self.on))
         if rec is None:
-            self.refuse(drive, f"launch:lean:{top.commit}", f"train.sh {top.commit[:12]} {self.on} --deferred {LEAN_STEP} registered "
-                                                            f"no run: {tail}")
+            why = f"train.sh {top.commit[:12]} {self.on} --deferred {LEAN_STEP} registered no run: {tail}"
+            if by:
+                raise QueueError(f"lean-check: {why}")
+            self.refuse(drive, f"launch:lean:{top.commit}", why)
             return
         drive["lean"][top.commit] = {**rec, "at": self.now(), "members": [[x.pr, x.head] for x in chain[: t + 1]],
-                                     "tree": self._tree(top.commit), "state": None, **({"stacked": True} if stacked else {})}
+                                     "tree": self._tree(top.commit), "state": None, **({"stacked": True} if stacked else {}),
+                                     **({"hand": True, "by": by} if by else {})}
         q.log(f"research queue drive: the Lean check of {top.commit[:12]} for {what}: {_ids(rec)}")
         q.save_state({**q.load_state(), "drive": drive})
+
+    def hand_lean(self, commit: str, by: str, again: bool = False) -> dict:
+        """`research queue lean-check COMMIT`: a Lean check of a commit of `next` that ``by`` chose, launched as drive's own
+        (`_launch_lean`, detached) and in `drive["lean"]` from its launch, marked `hand`, so the hold on `next`,
+        `max_lean_checks`, the cut points, `_follow_lean` and `_cover` take it as drive's own before its train.sh registers a
+        run (26 Oct 10:36Z: a tick in those minutes reordered `next`, non-Lean first, and threw away S1's hand check at
+        19a382ca).  Refused for a commit that isn't a member's merge on `next`, one a running Lean check at or above it
+        holds, or, unless ``again`` (a deliberate rerun, which replaces the record), one whose recorded check passed.  Run
+        between ticks, under drive's tick lock (`/data/infra/drive.sh queue lean-check COMMIT`); returns the record."""
+        q = self.q
+        if q.shadow:
+            raise QueueError("lean-check: the shadow launches nothing")
+        q._clone()
+        q.fetch()
+        full = _git(self.repo, "rev-parse", "--verify", "-q", f"{commit}^{{commit}}", check=False).stdout.strip()
+        base, chain = self._chain()
+        pos = {m.commit: i for i, m in enumerate(chain)}
+        if full not in pos:
+            raise QueueError(f"lean-check: {commit} is not a commit of `{q.branch}` (a member's merge above {base[:12]}): "
+                             f"`git log --first-parent origin/main..origin/{q.branch}` lists them")
+        state = q.load_state()
+        drive = state.setdefault("drive", {})
+        lean = drive.setdefault("lean", {})
+        self._rekey_lean(drive, chain)
+        if c := next((c for c, rec in lean.items() if rec.get("state") is None and pos.get(c, -1) >= pos[full]), None):
+            raise QueueError(f"lean-check: the running Lean check {_ids(lean[c])} of {c[:12]} (#{chain[pos[c]].pr}) already "
+                             f"holds {full[:12]} (#{chain[pos[full]].pr}): its pass covers it")
+        if (rec := lean.get(full)) and rec.get("state") == "passed" and not again:
+            raise QueueError(f"lean-check: the Lean check of {full[:12]} (#{chain[pos[full]].pr}) already passed: run "
+                             f"{rec.get('run')} (run ids {_ids(rec)}); a deliberate rerun takes --again")
+        self._launch_lean(drive, chain, pos[full], f"{by}'s hand check", False, by=by)
+        return lean[full]
 
     def _tree(self, commit: str) -> str | None:
         return _git(self.repo, "rev-parse", "-q", "--verify", f"{commit}^{{tree}}", check=False).stdout.strip() or None

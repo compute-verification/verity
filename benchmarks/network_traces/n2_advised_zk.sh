@@ -20,7 +20,7 @@
 #      gate:…, N2_PEER (this node as the gate's /etc/vy/peers names it), N2_CHALLENGER_KEY (the challenger's key record,
 #      challenger-key/v1) and N2_GATE_KEY (the lane's gate key)
 #      N2_MEMBERS (--members, comma-separated; every member by default)
-#      N2_JOBS (--jobs, members proved at once, 2 by default)  N2_PORT (--port; a free port a session by default)
+#      N2_PORT (--port; a free port a session by default; the members are proved one after another)
 #      N2_CACHE (the build cache, kept across runs where writable)  N2_DEBUG_CLEAR=1 (--debug-clear)
 #      N2_DRY=1 (the instances and references only)
 # Kept in $OUT/n2adv: the driver's records and logs, the public files and everything the verifier received; never a
@@ -63,13 +63,13 @@ if [ -n "${N2_CHALLENGER:-}" ]; then   # the verifier's own copy of main's first
   esac
 fi
 log "n2adv: proving, ${E2E:+e2e $E2E windows ${N2_WINDOWS:-all}${N2_CLOCK_STAND_IN:+ clock stand-in}${N2_ADVICE_FROM_IO:+ advice from io}, }seed" \
-  "${N2_SEED:-7}, members ${N2_MEMBERS:-all}, draw ${N2_DRAW:-all}${N2_CHALLENGER:+ on $N2_CHALLENGER}, jobs ${N2_JOBS:-2}${N2_DRY:+, dry}"
+  "${N2_SEED:-7}, members ${N2_MEMBERS:-all}, draw ${N2_DRAW:-all}${N2_CHALLENGER:+ on $N2_CHALLENGER}${N2_DRY:+, dry}"
 "$PY" benchmarks/network_traces/n2_advised_zk.py prove --seed "${N2_SEED:-7}" ${E2E:+--e2e "$E2E"} \
   ${N2_WINDOWS:+--windows "$N2_WINDOWS"} ${N2_CLOCK_STAND_IN:+--clock-stand-in} ${N2_ADVICE_FROM_IO:+--advice-from-io} \
   ${N2_DRAW:+--draw "$N2_DRAW"} "${CH[@]}" ${N2_DELTA:+--delta "$N2_DELTA"} \
   ${N2_MEMBERS:+--members "$N2_MEMBERS"} \
   --bin "$BIN" --lean "$LEAN" --out "$W/n2adv" \
-  --jobs "${N2_JOBS:-2}" ${N2_PORT:+--port "$N2_PORT"} ${N2_DEBUG_CLEAR:+--debug-clear} ${N2_DRY:+--dry} 2>&1 \
+  ${N2_PORT:+--port "$N2_PORT"} ${N2_DEBUG_CLEAR:+--debug-clear} ${N2_DRY:+--dry} 2>&1 \
   | tee -a "$OUT/n2adv.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/n2adv"

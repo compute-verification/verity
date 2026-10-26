@@ -562,16 +562,13 @@ theorem PrBadGood_le_abort {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
       (Bad H D I DO decO P x)
   linarith
 
-/-- **A draw is bad at most as `√(k_I·k(x)·Pr[Be])`**: it misses `P_I` at some inner round `j`, at most
-`√(Pr[two extractions forked at j open round j differently])` (`Pr_plur_fork`), which is a collision `Be` finds; the
-rounds' roots sum under one (Cauchy–Schwarz) to at most `√(k_I·Σ_j Pr[…])`, and `Σ_j ≤ k(x)·Pr[Be]`
-(`sum_opensDiffer_le`, from the played rounds' openings). -/
-theorem Pr_bad_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
-    {opening : Opening} (hV : InnerViewRun H D I DO) (hO : CallsOpenPlayed H D I DO opening)
-    (hT : CallsTrue H D I DO) (hR : InnerRounds D I)
+/-- **A draw is bad at most as `√(k_I·Σ_{j<k_I} Pr[OpensDiffer j])`**: it misses `P_I` at some inner round `j`, at
+most `√(Pr[two extractions forked at j open round j differently])` (`Pr_plur_fork`), and the rounds' roots sum under
+one (Cauchy–Schwarz). Each `Pr_bad_le` form bounds the sum. -/
+theorem Pr_bad_le_opens (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
     Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) ≤
-      Real.sqrt (I.V.k (xI D x) * D.V.k x * PrBe H D I DO decO P x) := by
+      Real.sqrt (I.V.k (xI D x) * ∑ j : Fin (I.V.k (xI D x)), Pr (OpensDiffer H D I DO decO P x j)) := by
   have h1 : Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) ≤
       ∑ j : Fin (I.V.k (xI D x)), Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
         (eoOut H D I DO decO P x t.1 t.2).isSome = true ∧
@@ -594,11 +591,11 @@ theorem Pr_bad_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : F
       obtain ⟨ws', hws'⟩ := Option.isSome_iff_exists.1 hg₂
       refine ⟨ws, ws', eoGives_of_some hws, eoGives_of_some hws', ?_⟩
       simpa [eoMsg, hws, hws', dec] using hf
-  have hcs := Real.sum_sqrt_mul_sqrt_le (Finset.univ : Finset (Fin (I.V.k (xI D x)))) (f := fun _ : Fin (I.V.k (xI D x)) => (1 : ℝ))
-    (g := fun j => Pr (OpensDiffer H D I DO decO P x j)) (fun _ => zero_le_one) (fun j => Pr_nonneg _)
+  have hcs := Real.sum_sqrt_mul_sqrt_le (Finset.univ : Finset (Fin (I.V.k (xI D x))))
+    (f := fun _ : Fin (I.V.k (xI D x)) => (1 : ℝ)) (g := fun j => Pr (OpensDiffer H D I DO decO P x j))
+    (fun _ => zero_le_one) (fun j => Pr_nonneg _)
   simp only [Real.sqrt_one, one_mul, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul,
     mul_one] at hcs
-  have h4 := sum_opensDiffer_le hV hO hT hR decO x P
   calc Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2)
       ≤ ∑ j : Fin (I.V.k (xI D x)), Real.sqrt (Pr (OpensDiffer H D I DO decO P x j)) :=
         h1.trans (Finset.sum_le_sum fun j _ => h2 j)
@@ -606,9 +603,20 @@ theorem Pr_bad_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : F
         hcs
     _ = Real.sqrt (I.V.k (xI D x) * ∑ j : Fin (I.V.k (xI D x)), Pr (OpensDiffer H D I DO decO P x j)) :=
         (Real.sqrt_mul (Nat.cast_nonneg _) _).symm
-    _ ≤ Real.sqrt (I.V.k (xI D x) * (D.V.k x * PrBe H D I DO decO P x)) :=
-        Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left h4 (Nat.cast_nonneg _))
-    _ = Real.sqrt (I.V.k (xI D x) * D.V.k x * PrBe H D I DO decO P x) := by rw [mul_assoc]
+
+/-- **A draw is bad at most as `√(k_I·k(x)·Pr[Be])`**: it misses `P_I` at some inner round `j`, at most
+`√(Pr[two extractions forked at j open round j differently])` (`Pr_plur_fork`), which is a collision `Be` finds; the
+rounds' roots sum under one (Cauchy–Schwarz) to at most `√(k_I·Σ_j Pr[…])`, and `Σ_j ≤ k(x)·Pr[Be]`
+(`sum_opensDiffer_le`, from the played rounds' openings). -/
+theorem Pr_bad_le {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
+    {opening : Opening} (hV : InnerViewRun H D I DO) (hO : CallsOpenPlayed H D I DO opening)
+    (hT : CallsTrue H D I DO) (hR : InnerRounds D I)
+    (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
+    Pr (fun t : Ω × (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x => Bad H D I DO decO P x t.1 t.2) ≤
+      Real.sqrt (I.V.k (xI D x) * D.V.k x * PrBe H D I DO decO P x) := by
+  rw [mul_assoc]
+  exact (Pr_bad_le_opens H D I DO decO x P).trans
+    (Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left (sum_opensDiffer_le hV hO hT hR decO x P) (Nat.cast_nonneg _)))
 
 /-- **`B` at `P_I`'s aborting runs finds only collisions `B_I` finds**: each kept run's calls are recorded by `E_O`'s
 witnesses at the draw it extends to, or those recorded calls collide (`CallsLogColl`), which `B_I` finds as well; an

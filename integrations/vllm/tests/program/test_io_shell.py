@@ -7,9 +7,9 @@ import json
 
 import numpy as np
 import pytest
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.registry import boolean_io_shell as BX
-from verity_vllm.program.registry import io_shell as X
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.registry import boolean_io_shell as BX
+from verity.ml.definitions.registry import io_shell as X
 
 from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.defs import bind

@@ -72,14 +72,15 @@ path = "../../verity/core/protocols/composition"
 [[lean_lib]]
 name = "Properties"
 roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Pouw.LiveSalt",
-  "Properties.Pouw.Strata", "Properties.Pouw.Credit", "Properties.Nci", "Properties.Nci.Threads",
-  "Properties.CertifierDevice", "Properties.Pous", "Properties.Pous.TimedAudit", "Properties.Pous.MemoryChallenger",
-  "Properties.Pous.EndToEnd", "Properties.Pous.Period", "Properties.NetworkCertifier", "Properties.CertifierNetwork",
-  "Properties.CertifierNetwork.Runs", "Properties.Identity", "Properties.NciDesc", "Properties.NciDesc.Verdict",
-  "Properties.NciDesc.Cover", "Properties.Nci.Baseline", "Properties.SampledProofs", "Properties.SampledProofs.Draw",
+  "Properties.Pouw.Period", "Properties.Pouw.Strata", "Properties.Pouw.Credit", "Properties.Nci",
+  "Properties.Nci.Threads", "Properties.CertifierDevice", "Properties.Pous", "Properties.Pous.TimedAudit",
+  "Properties.Pous.MemoryChallenger", "Properties.Pous.EndToEnd", "Properties.Pous.Period",
+  "Properties.NetworkCertifier", "Properties.CertifierNetwork", "Properties.CertifierNetwork.Runs",
+  "Properties.Identity", "Properties.NciDesc", "Properties.NciDesc.Verdict", "Properties.NciDesc.Cover",
+  "Properties.Nci.Baseline", "Properties.SampledProofs", "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt", "Properties.Evaluate", "Properties.NetworkRecords",
   "Properties.Accounting.Requirement", "Properties.Accounting.Compose", "Properties.RemoteAudit",
   "Properties.RemoteAudit.Coins", "Properties.RemoteAudit.Pooled", "Properties.Accounting.Served",
-  "Properties.RemoteAudit.Line", "Properties.RemoteAudit.Schedule", "Properties.RemoteAudit.Shared",
-  "Properties.RemoteAudit.Live", "Properties.Composition",
-  "Properties.Nci.Protocol"]
+  "Properties.Accounting.DeclaredCircuit", "Properties.RemoteAudit.Line", "Properties.RemoteAudit.Schedule",
+  "Properties.RemoteAudit.Shared", "Properties.RemoteAudit.Live",
+  "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod", "Properties.Composition", "Properties.Nci.Protocol"]

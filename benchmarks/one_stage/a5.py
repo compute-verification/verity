@@ -137,9 +137,11 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   context); `a5_row_tables.py` is their stand-in.
 * **Wiring across statements** (`commit.wiring`, verifier PROTOCOL §16.13 ``Wiring``): a w13 coordinate's K-chunks
   (`pipeline.kchunk_rows`) are three templates, each chunk's ``acc`` row the output row of the chunk before it, committed under
-  that row's salt. Lean's links hold only inside a statement, so before the draw every wire is held on the public bodies the leaf
-  layer binds (`wiring.check`: the two rows' strings are one), and a drawn chunk's ``acc`` is then the committed output of the
-  chunk that wrote it, drawn or not. A sparse-MLA row's combine reads its splits' partials and lses the same way
+  that row's salt. Lean's links hold only inside a statement, so after the draw each drawn unit's wires are held on the public
+  bodies the leaf layer binds (`wiring.check_drawn`, Lean's `Wires.Summary.drawnOk`: the two rows' strings are one), and a
+  drawn chunk's ``acc`` is then the committed output of the chunk that wrote it, drawn or not. A unit whose wired row is
+  not its writer's is faulty in the wired flattening, so the drawn units' wires are the check; every unit's
+  (`wiring.check`) is recorded beside it as the reference (``wiring_reference``), never gating. A sparse-MLA row's combine reads its splits' partials and lses the same way
   (`pipeline.split_rows`, `a5_sparse_mla.py` its stand-in). The negatives (`wiring_negatives`) wire a unit to another unit, swap
   two of a combine's slots, and flip a wired row's string in its reader's public body.
 """
@@ -376,9 +378,10 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
 
 
 def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) -> dict[str, dict]:
-    """The verifier's wiring check (§16.13) on altered wires: the first wire's writers rotated (each unit reading another unit's
-    row), two wires of one output swapped (a split's partial read into another combine slot), and a wired row's string flipped
-    in its reader's public body (a partial that is not the one its writer committed)."""
+    """The verifier's wiring check (§16.13, `wiring.check_drawn`) on altered wires, each with the units it alters drawn: the first
+    wire's writers rotated (each unit reading another unit's row), two wires of one output swapped (a split's partial read into
+    another combine slot), and a wired row's string flipped in its reader's public body (a partial that is not the one its
+    writer committed), its unit 0 drawn."""
     neg: dict[str, dict] = {}
     k = next((k for k, m in enumerate(members) if m.wired), None)
     if k is None:
@@ -388,19 +391,25 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
         return [replace(m, wired=wired) if i == j else m for i, m in enumerate(members)]
 
     (p, o, ws), *rest = members[k].wired
-    neg["chunk-wired-to-another-unit (§16.13)"] = {"refused": bool(WI.check(rewired(k, ((p, o, ws[1:] + ws[:1]), *rest)), publics))}
+    def units(j: int) -> range:
+        return range(members[j].base, members[j].base + members[j].n)
+
+    neg["chunk-wired-to-another-unit (§16.13)"] = {
+        "refused": bool(WI.check_drawn(rewired(k, ((p, o, ws[1:] + ws[:1]), *rest)), publics, units(k)))}
     swap = next(((j, a, b) for j, m in enumerate(members) for a in range(len(m.wired)) for b in range(a + 1, len(m.wired))
                  if m.wired[a][1] == m.wired[b][1] and m.wired[a][2] != m.wired[b][2]), None)
     if swap is not None:
         j, a, b = swap
         w = list(members[j].wired)
         w[a], w[b] = (w[a][0], w[a][1], w[b][2]), (w[b][0], w[b][1], w[a][2])
-        neg["partial-wired-to-another-combine-slot (§16.13)"] = {"refused": bool(WI.check(rewired(j, tuple(w)), publics))}
+        neg["partial-wired-to-another-combine-slot (§16.13)"] = {
+            "refused": bool(WI.check_drawn(rewired(j, tuple(w)), publics, units(j)))}
     m = members[k]
     names = [q for q, _ in m.all_rows]
     body = bytearray(publics[m.key])
     body[names.index(p) * WI.BC_BYTES] ^= 1
-    neg["wired-row-not-its-writer-s-output (§16.13)"] = {"refused": bool(WI.check(members, {**publics, m.key: bytes(body)}))}
+    neg["wired-row-not-its-writer-s-output (§16.13)"] = {
+        "refused": bool(WI.check_drawn(members, {**publics, m.key: bytes(body)}, [m.base]))}
     return neg
 
 
@@ -496,7 +505,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         st_dir = out / f"m{k}"
         st_dir.mkdir(parents=True, exist_ok=True)
         t = time.time()
-        if m.template in composed:      # a chunked template's chunks: one circuit, bound to the same partition and program
+        if m.template in composed:      # a template's members: one circuit, composed from the same input set, partition and program
             circuit, made, circ = composed[m.template]
         elif own:
             circuit = st_dir / "circuit.txt"
@@ -513,8 +522,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
                 raise RuntimeError(f"composing member {k}'s circuit failed: {p.stderr[-2000:]}")
             circuit, made = st_dir / "circuit.txt", json.loads(p.stdout.strip().splitlines()[-1])
             circ = FI.flock_circuit(circuit.read_bytes())
-            if chunked:
-                composed[m.template] = (circuit, made, circ)
+            composed[m.template] = (circuit, made, circ)
         compose_s = round(time.time() - t, 1)
         got = FI.flock_input_files(served, k, circ, st_dir / "prover", write=("pub",), files=files)
         link(Path(got["pub"]), st_dir / f"pub-{m.n}.bin")
@@ -550,7 +558,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
     if any(m.wired for m in mine.members):
         bad = WI.check(mine.members, publics)
-        checks["wiring"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
+        summary["wiring_reference"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
     w = rec.get("window", {})
     checks["source"] = source(w)
     summary["source"], summary["commitment"] = w.get("kind"), w.get("commitment")
@@ -590,6 +598,15 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         union_draw, drawn_law, receipt = dict(draw.draw), dict(draw.law), dict(draw.registration.receipt)
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     (out / "draw.json").write_text(json.dumps(union_draw, sort_keys=True))
+    after: dict[str, dict] = {}
+    if any(m.wired for m in mine.members):
+        bad = WI.check_drawn(mine.members, publics, union_draw["units"])
+        after["wiring"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
+        if bad:
+            summary.update(checks={**checks, **after})
+            (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+            print("A5 " + json.dumps({"refused_after_draw": {"wiring": False}, "checks": after}, default=str))
+            return summary, False
     served_units, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
     linked = None       # the first drawn chunk with registered reads: its session, for the registered-reads negatives
     row_verdicts: dict[str, dict] = {}      # each drawn chunk's Lean verdict with registered reads, whose finding the record carries
@@ -600,13 +617,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         counts[m.template] = counts.get(m.template, 0) + len(local)
         if local:
             drawn.append((mm, local))
-    jobs = max(1, min(session_jobs(a), len(drawn) or 1))
-    cores = int(os.environ.get("RAYON_NUM_THREADS") or os.cpu_count() or 1)
-    threads = {} if jobs == 1 else {"RAYON_NUM_THREADS": str(max(1, cores // jobs))}
 
     def member_session(i: int, mm: dict, local: list[int]) -> dict:
-        """Member ``mm``'s session on its drawn units ``local``, on port ``port + i`` (``i`` its place among the drawn
-        members), and Lean's verdicts on it; the members' sessions are independent, so `session_jobs` run at once."""
+        """Member ``mm``'s firewalled session on its drawn units ``local``, on port ``port + i`` (``i`` its place among the
+        drawn members); `member_checks` adds Lean's verdicts on it."""
         m, k = mm["m"], mm["k"]
         sdir = out / f"session-m{k}"
         sdir.mkdir(parents=True, exist_ok=True)
@@ -620,10 +634,18 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         t = time.time()
         env = {"FC_COINS": "os"} if plain(a) else {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])}
         record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / "draw.json",
-                                  zk=not plain(a), env={**env, **threads}, prove_timeout=a.session_timeout)
+                                  zk=not plain(a), env=env, prove_timeout=a.session_timeout)
         session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": session_draw["population"]}, session_law)
+        return {"mm": mm, "sdir": sdir, "staged_s": staged_s, "session_s": session_s, "record": record, "live": live,
+                "draw_t": draw_t, "draw_check": v}
+
+    def member_checks(s: dict) -> dict:
+        """Lean's verdicts on member session ``s`` (`member_session`) and what the audit takes from it. They read only the
+        session's archive, so they run while the next member is proved."""
+        mm, sdir, record, live, draw_t, v = s["mm"], s["sdir"], s["record"], s["live"], s["draw_t"], s["draw_check"]
+        m, k, session_s = mm["m"], mm["k"], s["session_s"]
         lean_u = a0.lean_draw_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
                                              "instances": (live or {}).get("instances", 0)}], sdir, "u1-u3")
         got = {f"m0-verifier/m{k}": {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
@@ -637,7 +659,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         else:
             got[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True), "tool": "flock-verify verify --zk --archive"}
         lean_v = got[f"lean-verify/m{k}"]
-        return {"mm": mm, "sdir": sdir, "staged_s": staged_s, "verdicts": got, "lean_verify": lean_v,
+        return {"mm": mm, "sdir": sdir, "staged_s": s["staged_s"], "verdicts": got, "lean_verify": lean_v,
                 "served": [m.base + u for u in draw_t.get("units", [])],
                 "roots": {m.port(p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()},
                 "proved": a0.proved_units(mm["header"], live or {}), "instances": (live or {}).get("instances", 0),
@@ -647,13 +669,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
                               "lean_verify_s": lean_v.get("verify_s"), "lean_partition": lean_v.get("partition")},
                 "sessions": [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]}
 
-    if jobs == 1:
-        done = [member_session(i, mm, local) for i, (mm, local) in enumerate(drawn)]
-    else:
-        with ThreadPoolExecutor(jobs) as pool:
-            done = list(pool.map(lambda x: member_session(x[0], *x[1]), enumerate(drawn)))
-    summary["sessions_at_once"] = jobs
-    for got in done:        # in the members' order, as one session after another would have left them
+    # outer proofs go through the firewall one at a time (`ONE_AT_A_TIME`): the sessions run here in the members' order, and
+    # only Lean's checks of one member, outside the firewall, overlap the next member's session
+    with ThreadPoolExecutor(1) as lean:
+        checks = [lean.submit(member_checks, member_session(i, mm, local)) for i, (mm, local) in enumerate(drawn)]
+        done = [c.result() for c in checks]
+    for got in done:
         mm = got["mm"]
         summary["staging"]["drawn_s"] = round(summary["staging"].get("drawn_s", 0) + got["staged_s"], 1)
         summary["staging"]["prover_files"] = summary["staging"].get("prover_files", 0) + 1
@@ -702,6 +723,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
     result["checks_before_draw"] = checks
+    if after:
+        result["checks_after_draw"] = after
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
 
     # negatives: each re-decides one input altered
@@ -806,10 +829,15 @@ def streamed(a: argparse.Namespace) -> bool:
     return a.coins is not None or a.verifier_coins
 
 
-def session_jobs(a: argparse.Namespace) -> int:
-    """How many drawn members' sessions run at once (``--session-jobs``, default one after another), each on its own port and
-    with its share of ``RAYON_NUM_THREADS``."""
-    return max(1, int(getattr(a, "session_jobs", None) or 1))
+#: AGENTS.md's live-coins rule, which keeps an audit's drawn members' sessions one after another
+ONE_AT_A_TIME = "outer proofs go through the firewall one at a time (AGENTS.md, \"Live coins only\")"
+
+
+def one_session(s: str) -> int:
+    """``--session-jobs``: 1, the only value, kept so commands that pass it still run; anything else is refused."""
+    if s.strip() != "1":
+        raise argparse.ArgumentTypeError(f"{s}: {ONE_AT_A_TIME}, so an audit runs its sessions one at a time; pass 1 or omit it")
+    return 1
 
 
 def plain(a: argparse.Namespace) -> bool:
@@ -1041,7 +1069,7 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=7551)
-    ap.add_argument("--session-jobs", type=int, default=1, help="run up to this many drawn members' sessions at once (session_jobs)")
+    ap.add_argument("--session-jobs", type=one_session, default=1, help="1 only: the sessions run one at a time (ONE_AT_A_TIME)")
     ap.add_argument("--session-timeout", type=float, default=14400,
                     help="each drawn member's prover limit in seconds, and each template's compose: one firewalled session of a MoE "
                          "w2 coordinate chunk (MoeExpertFp8GemmW_v2{N=1}, k_log 26) takes ~8 min, and over an hour on a loaded "

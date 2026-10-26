@@ -62,7 +62,7 @@ def violation(finding: dict) -> R.Violation:
 @lru_cache(maxsize=None)
 def scan() -> tuple[R.Violation, ...]:
     cmd = [sys.executable, "-m", "ruff", "check", "--config", str(CONFIG), "--no-cache", "--exit-zero",
-           "--output-format", "json", "."]
+           "--output-format", "json", ".", str(R.DEFINITIONS)]
     r = subprocess.run(cmd, cwd=R.ROOT, capture_output=True, text=True)
     assert r.returncode == 0, (f"{' '.join(cmd[1:])} exited {r.returncode} (no ruff? `uv sync --all-packages`: the root `dev` "
                                f"group pins it):\n{r.stderr[-2000:]}")

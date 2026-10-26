@@ -17,7 +17,8 @@ and the game's rows, none a free parameter:
 * `saltOf`, `pathOf`, `bitsOf`: an opening's data is its row's salt (`saltLen` bytes), its frame-v3 path
   (`64 · log2ceil nl` bytes) and the row's bits, one byte each.
 * `portsOf`: the circuit file's ports, each with its root among the statement's roots, `nl` leaves, its name as its
-  frame-v3 domain and the `hm96-sha512/row/v2` leaf schema.
+  frame-v3 domain and the `hm96-sha512/row/v2` leaf schema. `RowsV2 c`: every port of `c` is an unsegmented row/v2
+  row, so that schema is its own.
 
 `rootsOf c pub nl`: the frame-v3 roots of the registration's rows: per port, the root over the `nl` units' tree leaves of
 C-Flock's hm96 leaf of the public file's `b ‖ c` there (`Hm96.Default512.treeLeaf (pub.digest u q np)`, what the game's
@@ -87,6 +88,12 @@ def portsOf (c : Flock.Circuit) (nl : ℕ) (roots : List Msg) : Array Flock.Regi
   (Array.range c.ports.size).map fun q =>
     { name := (c.ports[q]?.map (·.name)).getD "", value := "", root := bytes (roots.getD q []), leaves := nl,
       words := none, wordBits := 0, domain := domOf c q, readsRel := #[], schema := Flock.HmRow.ROW_SCHEMA_V2 }
+
+/-- **Every port of the circuit file is an unsegmented `sha512/row/v2` row** (`v2`, no `segs`): the ports `portsOf`
+registers at the `hm96-sha512/row/v2` schema are then the circuit file's own. -/
+@[reducible] def RowsV2 (c : Flock.Circuit) : Prop := c.ports.all (fun p => p.v2 && p.segs.isNone) = true
+
+instance instDecidableRowsV2 (c : Flock.Circuit) : Decidable (RowsV2 c) := inferInstanceAs (Decidable (_ = true))
 
 /-- **The registered tree leaf of row `(u, q)`**: C-Flock's hm96 tree leaf of the public file's `b ‖ c` there. -/
 def regLeafOf (c : Flock.Circuit) (pub : Flock.Public) (q u : ℕ) : ByteArray :=
