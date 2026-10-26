@@ -3,7 +3,8 @@
 The network certifier's measured runs and their zero-knowledge proofs: the certifier in front of a served endpoint
 (`certifier_serve.py`), the network certifier functioning as an active warden (`warden_serve.py`), N2's units proved by C-Flock `--zk` (`n2_zk.py`,
 `n2_advised_zk.py`), the scan's chained units (`scan_zk.py`), and the chain's run of record (`chain_record.sh`). Each
-driver's docstring says what it runs and what its verifier receives.
+driver's docstring says what it runs and what its verifier receives. `n2_lean_replay.py` replays the recorded N2 proving
+runs' link-window verdicts through the Lean verdict of record beside the Python, against what each run recorded.
 
 ## The demo's load
 
@@ -58,6 +59,17 @@ The pieces not yet on `main` change only the commands the job runs. N2's sampled
 `certificates.jsonl` and `clocks.jsonl` are `CR_CLIENT`, by default the network certifier rehearsal's own `client/`.
 A step on a stand-in (the scan on its own synthetic run, or N2 on `CR_N2_STANDIN=simulated`) never makes the report
 accepted, and a step that fails or doesn't run says why.
+
+**The warden path** (`CR_PATH=warden`, `chain_record.WARDEN`). Every step reads the active warden's own run (the
+gate's `warden-rehearse`, its witness under `witness/`; `warden_chain.py`), and a network certifier rehearsal's run,
+whose records come through `active.Proxy` in front of the endpoint, is refused by name wherever it is given. The
+certificates step reruns the warden's own offline check on its witness (`warden_serve.check`) and holds the public
+`certificates.jsonl` to the certified lines. The warden signs no clock certificate, so none is read. The endpoint step
+binds the endpoint's own advice to the certified I/O read off the warden's cells (`chain_record.py endpoint`, with
+`CR_EOS_IDS` the model's EOS ids). N2 is the plain unit on the warden link (`n2_zk.py prove --warden-run`: both heads
+at the warden's grid and parameters digest, no sync declared or charged). The I/O tie is proved on the warden's ingress
+(`n2_tie_zk.py prove --class warden`, the report's `tie` step), and the scan is `scan_zk.py prove --warden-run`'s.
+Each step is held to the one warden run the certificates step read, and every one is required.
 
 A Commit window that carries a request across its open or close (`verity_vllm.pipeline.window_advice`, schema
 `verity-vllm/window-advice/v1`) is bound with the window before it: `chain.served_advice` joins them into one I1 v0
