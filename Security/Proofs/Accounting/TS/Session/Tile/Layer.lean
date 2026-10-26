@@ -18,7 +18,8 @@ with, not what the tile's Definition computes. This layer states that, on words,
   (`Registered.checkComplete`), opens the committed rows at the registered reads (`openedReg`), and its relation is
   `TileRel`.
 
-What ties the circuit to the Definition is the premise `Accounting.Assumptions.TS.TileChecks`.
+What ties the circuit to the Definition is the premise `Accounting.TS.Tile.TileComputes`, from which
+`tileChecks_of_computes` gives `Accounting.Assumptions.TS.TileChecks`.
 
 These definitions read `RowsSession`, in the proofs package, so they sit here under `reads_exempt`'s
 `Proofs.Accounting.TS.Session`, as `Accounting.TS.Held`'s do.

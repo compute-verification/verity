@@ -169,9 +169,11 @@ theorem build_facts {name : String} {table : ByteArray} {n lo bits : ℕ} {net :
   refine ⟨rfl, rfl, rfl, hn, Array.size_push _, rfl, fun hu => ⟨?_, fun j => ?_, fun j => ?_⟩⟩
   · show 1 * 128 ≤ s4.a.size
     omega
-  · rw [sparseEntry_ofRows ha, ofRows_row ha (Nat.pow_le_pow_right (by norm_num) hu), fix_push_getD rfl,
+  · show sparseEntry a _ j = _
+    rw [sparseEntry_ofRows ha, ofRows_row ha (Nat.pow_le_pow_right (by norm_num) hu), fix_push_getD rfl,
       count_singleton_zmod]
-  · rw [sparseEntry_ofRows hb, ofRows_row hb (Nat.pow_le_pow_right (by norm_num) hu)]
+  · show sparseEntry b _ j + _ = _
+    rw [sparseEntry_ofRows hb, ofRows_row hb (Nat.pow_le_pow_right (by norm_num) hu)]
     have hlt : ¬ s4.a.size < bd2.a.size + bits * 2 ^ (n - lo) := by rw [← hnh]; omega
     simp only [lookupEntry, hlt, false_and, and_false, ↓reduceIte, add_zero]
     rw [fix_push_getD (by omega), count_singleton_zmod]

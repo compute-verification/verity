@@ -193,14 +193,16 @@ theorem plainKSAbort_bd (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
 
 /-- **The readers' rounds before the last are the run's** (a code fact about V*'s circuits and the readers, option (d)'s
 `ReadersOpenPlayed`): at outer witnesses in the outer relation at the V* statements staged at inner and staging messages
-`as` and coins `cs`, whose recorded calls are true evaluations, at each round before `IV`'s last that `IV`'s run of the
-readers' messages plays, the readers' message is the run's (`as[j]`, the coin server's commit strings), or two recorded
-calls collide. `ReadersOpenPlayed` can't hold at `IVStar`'s last round: its message, the openings, is never sent in the
-run, and `IVStar` checks the openings itself (`Bound.opens`). -/
+`as` and coins `cs`, each part's staged as V\* stages it (`StagedPart`), whose recorded calls are true evaluations, at
+each round before `IV`'s last that `IV`'s run of the readers' messages plays, the readers' message is the run's
+(`as[j]`, the coin server's commit strings), or two recorded calls collide. `ReadersOpenPlayed` can't hold at
+`IVStar`'s last round: its message, the openings, is never sent in the run, and `IVStar` checks the openings itself
+(`Bound.opens`). -/
 def ReadersRunPlayed {Col T : Type} (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings)
     (DO : Claims.Flock.Deploy Coin Col T) : Prop :=
   ∀ (x : Msg) (as : List Msg) (cs : List Coin) (ws : List Claims.Flock.Wit), as.length = IV.k (xIOf x) + kS x →
-    cs.length = as.length → Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
+    cs.length = as.length → (∀ s < nS x, StagedPart b.st s x ((stagedAll b.st x as cs).getD s [])) →
+      Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
       (∀ e ∈ callsOf b.rd x ws, H e.1 = e.2) →
         (∀ j < (innerRunAt H IV b.rd x ws cs).msgs.length, j + 1 < IV.k (xIOf x) →
           ((innerRunAt H IV b.rd x ws cs).msgs.map Prod.fst).getD j [] = as.getD j []) ∨
@@ -257,7 +259,7 @@ def KSBoundRoute (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Reada
           (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows chk s) ∧
+          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →

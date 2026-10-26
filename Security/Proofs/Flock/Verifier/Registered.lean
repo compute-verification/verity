@@ -2,6 +2,7 @@
 Level 3: registered reads (PROTOCOL.md §16.10). `check_ok`: when `Registered.check` accepts, each of the verifier's
 registered ports has the registered rows' width, and every instance's row of it climbs, from its frame-v3-sha512 leaf at
 the position the verifier's program reads for the instance's unit, to the registered root the verifier holds.
+`complete_opens`: when the complete check (`checkComplete`) accepts too, every port of the circuit is such a port.
 `opensLeaf_binding`: two openings the verifier accepts at
 one position under one registered root, with different leaves, give an explicit SHA-512 collision (`openPair`), and
 `opens_binding` the same of two commit strings (`bcPair`). No random oracle. `checkDescription_ok` (PROTOCOL.md §16.16):
@@ -67,7 +68,7 @@ theorem checkPort_ok {c : Circuit} {pub : Public} {t : Tables} {indices : Array 
               simp only [Bool.not_eq_true', Bool.and_eq_false_iff, decide_eq_false_iff_not, not_or, Classical.not_not] at hi'
               obtain ⟨hr, hreads⟩ := hi'
               have ho := List.find?_eq_none.mp hrow _ (List.mem_range.mpr hr)
-              exact ⟨hr, _, _, hreads, by simpa using ho⟩
+              exact ⟨hr, _, _, (reg.readAt_eq _).symm.trans hreads, by simpa using ho⟩
             · split at h
               · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
               · split at h <;> exact absurd h (throw_ne_ok _ _)
@@ -108,6 +109,30 @@ theorem check_ok {c : Circuit} {pub : Public} {own : Array Port} {derived : Bool
         exact ⟨pos, path, hr, ho.1.1, ho.1.2, by simpa only [Public.digest, ht, tableRow, ref] using ho.2⟩
       · exact absurd h (throw_ne_ok _ _)
     · exact absurd h (throw_ne_ok _ _)
+
+/-- **Every port of a complete statement opens at its registered root.** If `check` accepts the statement and the
+complete check does too (`checkComplete`, which flock-verify runs when the `--registered` file sets `complete`), and the
+circuit names each port once, then every port `q` of the circuit, each input port and each output row (so whatever an
+output's cone reads), is a port `reg` of `own` of its name, `reg`'s schema and rows, and every instance's row of it
+climbs, from its frame-v3-sha512 leaf at the position the verifier's program reads for the instance's unit, to `reg`'s
+root. -/
+theorem complete_opens {c : Circuit} {pub : Public} {own : Array Port} {derived : Bool}
+    (h : check c pub (some own) derived = .ok ()) (hc : checkComplete c own = .ok ())
+    (hN : ∀ p < c.ports.size, ∀ q < c.ports.size, c.ports[p]!.name = c.ports[q]!.name → p = q) :
+    ∃ indices, unitIndices pub = .ok indices ∧
+      ∀ q < c.ports.size, ∃ reg ∈ own, reg.name = c.ports[q]!.name ∧ portSchema c.ports[q]! = reg.schema ∧
+        reg.fits c.ports[q]! = true ∧
+        ∀ i < pub.n, ∃ pos path, reg.reads[indices.getD i 0]? = some (some pos) ∧ pos < reg.leaves ∧
+          path.size = 64 * log2ceil reg.leaves ∧
+          climb reg.domain (leafAs reg.schema reg.domain pos (Hm96.Default512.treeLeaf (pub.digest i q c.ports.size)))
+            pos (log2ceil reg.leaves) path = reg.root := by
+  obtain ⟨-, indices, hidx, hall⟩ := check_ok h
+  refine ⟨indices, hidx, fun q hq => ?_⟩
+  obtain ⟨reg, hreg, hname⟩ :=
+    checkComplete_ok hc c.ports[q]! (by rw [getElem!_pos c.ports q hq]; exact Array.getElem_mem hq)
+  obtain ⟨p, hp, hpn, hs, hf, hr⟩ := hall reg hreg
+  obtain rfl : p = q := hN p hp q hq (hpn.trans hname)
+  exact ⟨reg, hreg, hname, hs, hf, hr⟩
 
 /-! ### The extractor: two accepted openings at one position give an explicit SHA-512 collision
 

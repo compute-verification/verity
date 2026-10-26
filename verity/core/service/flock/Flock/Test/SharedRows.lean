@@ -10,7 +10,7 @@ namespace Flock.Test.SharedRows
 
 def port (name value : String) (root : UInt8 := 1) (leaves : Nat := 64) (domain : UInt8 := 7)
     (reads : Array (Option Nat) := #[some 0]) : Registered.Port :=
-  { name, value, root := ⟨#[root]⟩, leaves, words := some 64, wordBits := 16, domain := ⟨#[domain]⟩, reads }
+  { name, value, root := ⟨#[root]⟩, leaves, words := some 64, wordBits := 16, domain := ⟨#[domain]⟩, readsRel := reads }
 
 def level : VStar.Stmt := .recOpenStacked 1 16 4 53
 

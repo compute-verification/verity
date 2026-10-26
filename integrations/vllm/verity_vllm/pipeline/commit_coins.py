@@ -17,8 +17,9 @@ and its served C2 replay challenge after each run's root of record.
   and its coins credit nothing, as H1's in-process coins (`pouw_h1_challenger.session_reason`). ``--replay-challenge``
   still names the C2 replay's challenge there (``source`` ``flag``).
 * **Checking** (`reason`): the verifier reads the auditor's signed ledger as infra published it (every head,
-  `challenger.ledger_head`), the one session it opens for the Commit's root (`challenger.audited_session`), and that
-  session's files from the gate's ``fetch`` (never the prover's bundle) under the key the deployment pins
+  `challenger.ledger_head`), the one session it opens for the Commit's root, run from a commit the host's pins log
+  records on the verifier's own first-parent history of main (`challenger.pinned_session`, the log's heads read by
+  `pouw_h1_challenger.pins_head`, main's history by `remote.main_lines`), and that session's files from the gate's ``fetch`` (never the prover's bundle) under the key the deployment pins
   (`remote.trusted_session`): the coin commitment the challenger signed and the roots its signed release log shows it
   received. The Commit's session must be that session, its coins that commitment's, and the log must show each run's
   coin of each family released after that run's root of record: coins held in the Commit's process, a session opened on
@@ -40,8 +41,8 @@ from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveOpening, live_reason
 
-from verity_vllm.protocol_options import pouw_h1_challenger as PHC
-from verity_vllm.protocol_options import pouw_h1_window as PHW
+from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity_vllm.protocols.pouw.h1 import window as PHW
 
 SCHEME = "verity/vllm/commit-coins/v1"
 POSITIONS, IDENTITIES, REPLAY = "opening-positions", "opening-identities", "replay"
@@ -69,12 +70,7 @@ class Gate:
 
     def call(self, *words: str) -> dict[str, Any]:
         """The gate's JSON answer to `words`; `CoinError` naming a refusal (exit 3, ``{"refused"}``) or a broken answer."""
-        argv = [*self.command, shlex.join(words)]
-        if self._run is not None:
-            rc, text = self._run(argv)
-        else:
-            p = subprocess.run(argv, capture_output=True, text=True, check=False)
-            rc, text = p.returncode, p.stdout
+        rc, text = self._answer(words)
         try:
             doc = json.loads(text)
         except ValueError:
@@ -83,6 +79,20 @@ class Gate:
             why = doc.get("refused") if isinstance(doc, dict) else (text or "").strip()[:300]
             raise CoinError(f"the challenger gate refused {words[0]} (exit {rc}): {why}")
         return doc
+
+    def ledger(self) -> list[str]:
+        """The auditor's ledger as the gate's ``ledger`` answers it, one entry a line; `CoinError` when the gate refuses."""
+        rc, text = self._answer(("ledger",))
+        if rc != 0:
+            raise CoinError(f"the challenger gate refused ledger (exit {rc}): {(text or '').strip()[:300]}")
+        return text.splitlines()
+
+    def _answer(self, words: Sequence[str]) -> tuple[int, str]:
+        argv = [*self.command, shlex.join(words)]
+        if self._run is not None:
+            return self._run(argv)
+        p = subprocess.run(argv, capture_output=True, text=True, check=False)
+        return p.returncode, p.stdout
 
 
 def _connect(at: str, given: Mapping[str, Any], tries: int = 60) -> Any:
@@ -232,11 +242,14 @@ def tp_keys(rec: Mapping[str, Any]) -> tuple[bytes, bytes]:
 
 
 def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Sequence[Any], directory: Any,
-           key: Ch.ChallengerKey, verify: Ch.Verify = PHC.lms_verify) -> str | None:
+           key: Ch.ChallengerKey, verify: Ch.Verify = PHC.lms_verify, *, pins: Sequence[Any] | None,
+           main: Sequence[str] | None) -> str | None:
     """Why the Commit's coins (`runs`, each instrumented run's ``coins`` record, in order) aren't the auditor host's
     challenger's, drawn after `roots` (each run's root of record as the verifier holds it); None when they are. The
     session is read from `directory` (its ``out/`` from the gate's ``fetch``) and the ledger from `heads` (every head infra
-    published, each a ``windows.jsonl``), under `key`, the challenger key the deployment pins. Fails closed."""
+    published, each a ``windows.jsonl``), under `key`, the challenger key the deployment pins, the host's pins log
+    from `pins` (every head infra published, each a ``pins.jsonl``) and `main`, the verifier's own first-parent history
+    of main (``git rev-list --first-parent origin/main``), which must hold the session's pin. Fails closed."""
     if not runs or len(runs) != len(roots):
         return f"the Commit's coins name {len(runs)} runs' draws, not one for each of its {len(roots)} runs of record"
     if any(r.get("source") != CHALLENGER for r in runs):
@@ -247,7 +260,9 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
         return f"a run's root of record is not {ROOT_BYTES} bytes (rows-sha512 or the TP run root v2)"
     window = {"root": roots[0].hex()}
     try:
-        audited = Ch.audited_session(Ch.ledger_head([remote.ledger_lines(p) for p in heads], key, verify), window, key, verify)
+        lines = Ch.ledger_head([remote.ledger_lines(p) for p in heads], key, verify)
+        audited = Ch.pinned_session(lines, window, key, PHC.pins_head(pins), None if main is None else list(main),
+                                    verify)
         trusted, received = remote.trusted_session(directory, heads, window, key, verify)
     except CoinError as e:
         return f"the Commit's challenger session is not trusted: {e}"

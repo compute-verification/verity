@@ -15,9 +15,9 @@ from verity.ml.circuits import library
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.ops import mufu as MU
-from verity_vllm.program.kernels import dsv4_moe_twin as T
-from verity_vllm.program.registry import dsv4_moe as D
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.numerics import dsv4_moe_twin as T
+from verity.ml.definitions.registry import dsv4_moe as D
+from verity.ml.definitions.registry import prims as P
 
 from tests.properties import dsv4_moe_capture_gpu as S
 
@@ -96,7 +96,6 @@ def test_the_twins_are_the_programs_at_small_widths(rows):
     assert [list(evaluate(d, r.tolist())) for r in C9] == T.clamp_twin(C9, S.LIMIT).tolist()
 
 
-@pytest.mark.slow
 def test_the_twins_are_the_served_programs(rows):
     """At the served statics (E = 384, I = 384 and 9): one row of each row kind under the cancelling and the non-finite bias, and
     one of each hash and clamp kind."""
@@ -123,7 +122,6 @@ def _router_trace(R):
     return s, cur, ranked, unbiased
 
 
-@pytest.mark.slow
 def test_the_router_rows_reach_the_routers_edges(rows):
     R = rows["router"]
     again = S.router_rows(2026, 8192)
@@ -203,7 +201,6 @@ def test_the_clamp_inputs_are_the_definitions_clamps():
     assert np.array_equal(gc[:, 1], (u.view(U32) >> 16).astype(np.uint16))
 
 
-@pytest.mark.slow
 def test_the_mufu_probes_expectations_are_the_models():
     want = S.mufu_expect()
     assert len(S.SQRT_IN) == 1 << 24 and S.SQRT_IN[0] == S.ONE and S.SQRT_IN[1 << 23] == S.TWO

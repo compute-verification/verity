@@ -147,6 +147,17 @@ theorem liveReadsZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.
     RunZk.json S h64 hS hP o
   exact hlv
 
+/-- **The record is in its canonical text** (S0): the goal `RecordCanonicalZk`, the printed honest record
+(`check_printJ`). -/
+theorem canonicalZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+    (hP : ProverOkZk H rel) : RecordCanonicalZk H rel := by
+  intro o
+  obtain ⟨st, rb, streams, hz, ct, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
+    RunZk.json S h64 hS hP o
+  obtain ⟨-, hdraw, -, -⟩ := hS o.toCaseZk
+  rw [hrec]
+  exact check_printJ S (good_recordObjZk ht _ hz ct rb _ streams o.proofs (good_draw hdraw))
+
 /-- **The record's draw is the statement's**: the goal `DrawMatches`. -/
 theorem drawMatchesZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
     (hP : ProverOkZk H rel) : DrawMatchesZk H rel := by
@@ -163,7 +174,7 @@ theorem drawMatchesZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claim
   | some d =>
     rintro ⟨d', hd', hs⟩
     rw [hd']
-    exact (drawEq_iff _ _).2 (.some hs.symm.jsonEquiv)
+    exact (drawEq_iff _ _).2 (.some hs)
 
 /-- **Custody: the record's `root_B` is the link message's**: the goal `CustodyRootB`. -/
 theorem custodyRootBZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)

@@ -12,8 +12,9 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   add `supplied`, the ones it fills itself (`Supplied.sources`: `{value: [[{"port" | "value" | "bytes" | "position" |
   "window": string}, ...], ...]}`), and `pinned`, the roots it held before the record for others (`{value: root}`, each
   of a value it expects registered and doesn't fill, lowercase hex of 64 bytes), and `outputs`, the ones that are
-  outputs of an earlier run (`{value: {"record", "port"}}`, each of a value it expects registered and neither fills nor
-  pinned, `record` lowercase hex of 64 bytes and `port` a string), each refused with any other form or when it expects
+  outputs of an earlier run or reuse an earlier record's registered value (`{value: {"record", "port" | "value"}}`, each
+  of a value it expects registered and neither fills nor pinned, `record` lowercase hex of 64 bytes and `port` or `value`
+  a string), each refused with any other form or when it expects
   none registered; and `row_schemas`, the ones whose rows are not `row/v1` rows (`{value: schema}`, each of a value it
   expects registered and doesn't fill, one of `Registered.SCHEMAS`), which R7 counts a row's leaves in, refused in any
   other form; and it may add `binding`, `{"stream", "prover"}`: its stream's digest (lowercase hex of 64 bytes) and the
@@ -172,11 +173,12 @@ def paramsOfJson (j : Json) : V Params := do
         throw "output values are registered values' earlier ports: the verifier expects none registered"
       kvs.toArray.mapM fun (v, o) => do
         let fail := s!"output value {v}: not a registered value it neither fills nor pinned, with an earlier record's " ++
-          "digest and a port"
+          "digest and a port or a value"
         if !(registered.any (·.1 == v) && !supplied.any (·.1 == v) && !pinned.any (·.1 == v)) then throw fail
-        if keys? o != some #["port", "record"] then throw fail
-        match getD o "record", getD o "port" with
-        | .str d, .str p => if d.length == 128 && isHex d then pure (v, d, p) else throw fail
+        let (key, mk) ← if keys? o == some #["port", "record"] then pure ("port", Registration.Earlier.port)
+          else if keys? o == some #["record", "value"] then pure ("value", Registration.Earlier.value) else throw fail
+        match getD o "record", getD o key with
+        | .str d, .str p => if d.length == 128 && isHex d then pure (v, d, mk p) else throw fail
         | _, _ => throw fail
     | some _ => throw "output values are not an object"
   let schemas ← match field? j "row_schemas" with

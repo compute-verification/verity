@@ -19,6 +19,7 @@ turn with lane checks (the shadow never takes a priority slot, ci 21 Oct), where
 priority."""
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import re
 import statistics
@@ -101,17 +102,29 @@ def verdict_at(run_dir: Path, landed: datetime) -> datetime | None:
     return max(ends, default=None)
 
 
+#: how many landings' check records and PRs' marks `rows` reads at once: each is a fetch over ssh or from the store (22 Oct:
+#: one at a time, a day of 30 landings and 134 PRs took over 20 min)
+READ_JOBS = 8
+
+
+def _each(fn, items: list) -> dict:
+    """{item: fn(item)} for each of ``items``, `READ_JOBS` at a time."""
+    with concurrent.futures.ThreadPoolExecutor(max_workers=READ_JOBS) as ex:
+        return dict(zip(items, ex.map(fn, items)))
+
+
 def rows(launches: list[Launch], landings: list[Landing], start: datetime, end: datetime,
          marked: Callable[[int], datetime | None], run_dir: Callable[[str], Path]) -> list[dict]:
     """One row per PR landed in [start, end]: each step's start, and how many trains with the PR were checked."""
     out = []
-    for ld in landings:
-        if not start <= ld.at <= end:
-            continue
-        d = run_dir(ld.check)
+    todo = [ld for ld in landings if start <= ld.at <= end]
+    dirs = _each(run_dir, list(dict.fromkeys(ld.check for ld in todo)))
+    marks = _each(marked, list(dict.fromkeys(pr for ld in todo for pr in ld.prs)))
+    for ld in todo:
+        d = dirs[ld.check]
         launch, took, verdict = rid_time(ld.check), slot_took(d), verdict_at(d, ld.at)
         for pr in ld.prs:
-            mark = marked(pr)
+            mark = marks[pr]
             tried = [x for x in launches if pr in x.prs and (mark is None or x.at >= mark) and x.at <= launch]
             first = min((x.at for x in tried), default=launch)
             out.append({"pr": pr, "tip": ld.tip, "marked": mark, "first": first, "launch": launch, "took": took,

@@ -85,6 +85,7 @@ import dither_fused as DF
 import dither_one as DO
 import forms as F
 from dither_fused import CM, CR, H1R, Call, unwords
+import h1c as H1CM
 from h1c import Dom, Tab
 from hb_side import auto_j
 
@@ -120,9 +121,23 @@ ZY_KIND = "zy-unit-table"
 # records' y halves) in this one domain and label, so their roots are equal exactly when the bytes are
 Y_KIND = "y-unit-table"
 ZY1_ENV = "DITHER_ZY1"
+# "1": the z/y and y tables' rows in a row block past m take their x from `dead_rows` (hashed once a window, from the
+# bytes such a row holds) and hash no segments; the same leaves and roots
+ZDEAD_ENV = "DITHER_ZDEAD"
+# "1" (-zy under DITHER_ZDEAD): RT4-INT-11's compare of the served y with the records' y halves made on their bytes in
+# `dithera_ycommit` (the rows the two y tables hash), a call that differs refusing its step as unequal roots do; the
+# units' y tables are built, and their roots compared, only at a captured step, whose check reads them and whose
+# verdict wants both compares to refuse the same calls
+YCMP_ENV = "DITHER_YCMP"
 # the gate step's option A partials against SERVE-REG's gated lane (served_h1/lane_refs.py): 1 checks them in the gate
 # (one process: the arm's worker is a daemon); a path saves their records there for `lane_refs.py PATH` after serving
 LANE_REFS_ENV = "DITHER_LANE_REFS"
+# "N,K,MMAX=CFG+..." (exactlin's Cfg text): call (N, K)'s GEMM config in place of exactlin.pick's at the M its CONFIGS
+# entry (MMAX, ..) takes, a CFG's ":gG" its tile group (`mm_group`).  A split K's int32 partial sums add up to the same z,
+# so z and y are the same bits
+MM_CFG_ENV = "DITHER_MM_CFG"
+# the units' stream priority (torch's: lower runs first; default 0, below the serving stream's -1 under DITHER_SO_PRIO)
+UNITS_PRIO_ENV = "DITHER_SO_UNITS_PRIO"
 UNIT = (32, 32)     # (UR, UC): the receipts' units; a narrower down_proj unit changes only this
 H1R_BLOCK, H1R_SPLIT = 3, 4     # h1r_launch's versions: a unit a block, a unit six warps
 M32 = DO.M32
@@ -189,16 +204,40 @@ def _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, o
 
 
 @triton.jit
+def _tile(pid, T, N, BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, GROUP_M: tl.constexpr):
+    # launch pid's (row tile, column tile): row-major, or GROUP_M row tiles a group with its column tiles outer, so the
+    # CTAs resident at once share a few weight tiles over GROUP_M activation tiles (the same tiles in another order)
+    num_pid_n = tl.cdiv(N, BLOCK_N)
+    if GROUP_M == 1:
+        pid_m = pid // num_pid_n
+        pid_n = pid % num_pid_n
+    else:
+        per = GROUP_M * num_pid_n
+        first = (pid // per) * GROUP_M
+        size = tl.minimum(tl.cdiv(T, BLOCK_M) - first, GROUP_M)
+        pid_m = first + (pid % per) % size
+        pid_n = (pid % per) // size
+    return pid_m, pid_n
+
+
+@triton.jit
+def _rows_written(S_ptr, T, m):
+    # the rows whose z/y records a step writes: all T, or with S[2] > 0 (DITHER_DEAD_ONCE) those below max(m, S[2]),
+    # the rows at or past S[2] holding a row past m's records already
+    c = tl.load(S_ptr + 2)
+    return tl.where(c > 0, tl.minimum(T, tl.maximum(m, c)), T)
+
+
+@triton.jit
 def dithera_mm(a_ptr, b_ptr, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, S_ptr, ws_ptr, cnt_ptr, M, N, K, T, stride_am,
                stride_bn, stride_cm, BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr,
-               SPLIT_K: tl.constexpr, ZL: tl.constexpr, UR: tl.constexpr, UC: tl.constexpr):
+               SPLIT_K: tl.constexpr, ZL: tl.constexpr, UR: tl.constexpr, UC: tl.constexpr, GROUP_M: tl.constexpr = 1):
     # exactlin_scaled_mm over T rows: a row tile at or past M multiplies nothing and stores only its zero z rows
     pid = tl.program_id(0)
-    num_pid_n = tl.cdiv(N, BLOCK_N)
-    pid_m = pid // num_pid_n
-    pid_n = pid % num_pid_n
+    pid_m, pid_n = _tile(pid, T, N, BLOCK_M, BLOCK_N, GROUP_M)
     m = tl.load(S_ptr + 1)
     flags = tl.load(S_ptr + 3)
+    TW = _rows_written(S_ptr, T, m)
     live = pid_m * BLOCK_M < M
     nk = tl.cdiv(K, BLOCK_K)
     per = tl.cdiv(nk, SPLIT_K)
@@ -220,7 +259,7 @@ def dithera_mm(a_ptr, b_ptr, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, S_ptr, 
         a_ptrs += BLOCK_K
         b_ptrs += BLOCK_K
     if SPLIT_K == 1:
-        _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, offs_n, M, N, T, m, flags, stride_cm, ZL, UR, UC)
+        _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, offs_n, M, N, TW, m, flags, stride_cm, ZL, UR, UC)
     else:
         if live:
             # exactlin_scaled_mm's split-K: the workspace and the tile's counter zero again after the last split
@@ -234,19 +273,18 @@ def dithera_mm(a_ptr, b_ptr, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, S_ptr, 
                 EL._membar_gl(pid)
                 tot = tl.atomic_xchg(ws_ptrs, tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.int32), mask=mask, sem="relaxed")
                 tl.atomic_xchg(cnt_ptr + pid, 0, sem="relaxed")
-                _dithera_epilogue(tot, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, offs_n, M, N, T, m, flags, stride_cm, ZL, UR, UC)
+                _dithera_epilogue(tot, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, offs_n, M, N, TW, m, flags, stride_cm, ZL, UR, UC)
         elif tl.program_id(1) == 0:
-            _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, offs_n, M, N, T, m, flags, stride_cm, ZL, UR, UC)
+            _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, offs_n, M, N, TW, m, flags, stride_cm, ZL, UR, UC)
 
 
 @triton.jit
 def dithera_mm_tma(a_desc, b_desc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, S_ptr, M, N, K, T, stride_cm,
                    BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr, WARP_SPECIALIZE: tl.constexpr,
-                   ZL: tl.constexpr, UR: tl.constexpr, UC: tl.constexpr):
-    pid = tl.program_id(0)
-    num_pid_n = tl.cdiv(N, BLOCK_N)
-    off_m = (pid // num_pid_n) * BLOCK_M
-    off_n = (pid % num_pid_n) * BLOCK_N
+                   ZL: tl.constexpr, UR: tl.constexpr, UC: tl.constexpr, GROUP_M: tl.constexpr = 1):
+    pid_m, pid_n = _tile(tl.program_id(0), T, N, BLOCK_M, BLOCK_N, GROUP_M)
+    off_m = pid_m * BLOCK_M
+    off_n = pid_n * BLOCK_N
     m = tl.load(S_ptr + 1)
     flags = tl.load(S_ptr + 3)
     acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.int32)
@@ -257,16 +295,19 @@ def dithera_mm_tma(a_desc, b_desc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, S
         acc = tl.dot(a, b.T, acc, out_dtype=tl.int32)
     offs_m = off_m + tl.arange(0, BLOCK_M).to(tl.int64)
     offs_n = off_n + tl.arange(0, BLOCK_N).to(tl.int64)
-    _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, offs_n, M, N, T, m, flags, stride_cm, ZL, UR, UC)
+    _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, offs_n, M, N, _rows_written(S_ptr, T, m), m,
+                      flags, stride_cm, ZL, UR, UC)
 
 
 @triton.jit
-def dithera_ycommit(y_ptr, sb_ptr, dst_ptr, S_ptr, M, N, T, stride_y, UR: tl.constexpr, UC: tl.constexpr,
-                    BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr):
+def dithera_ycommit(y_ptr, sb_ptr, dst_ptr, S_ptr, rec_ptr, bad_ptr, M, N, T, stride_y, UR: tl.constexpr,
+                    UC: tl.constexpr, BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, CMP: tl.constexpr):
     # the served y (int16 view; the bytes the next layer reads), rows < m, into the call's y records (unit row block,
     # then column block; Y_KIND), and past m the epilogue's empty-slot y, dq(0, +0, s_w); F_NW_TILES = 2: nothing
     # written; F_FAULT_Y = 64: bit 0 of y[0, 0] flipped in place first, so the next layer and the record read the
-    # tampered y
+    # tampered y.  CMP (YCMP_ENV): those bytes against the y halves of the call's z/y records (rec_ptr, int16) on the
+    # rows of the live UR-row blocks, the rows the y tables hash under DITHER_ZDEAD, and bad_ptr (int32) set to 1 on any
+    # that differs
     m = tl.load(S_ptr + 1)
     flags = tl.load(S_ptr + 3)
     if (flags & 2) == 0:
@@ -284,7 +325,13 @@ def dithera_ycommit(y_ptr, sb_ptr, dst_ptr, S_ptr, M, N, T, stride_y, UR: tl.con
         v = tl.where(ld, v, pad[None, :])
         u = (offs_m[:, None] // UR) * (N // UC) + offs_n[None, :] // UC
         tl.store(dst_ptr + u * (UR * UC) + (offs_m[:, None] % UR) * UC + offs_n[None, :] % UC, v,
-                 mask=(offs_m < T)[:, None] & mask_n)
+                 mask=(offs_m < _rows_written(S_ptr, T, m))[:, None] & mask_n)
+        if CMP:
+            cm = (offs_m < tl.minimum(T, (m + UR - 1) // UR * UR))[:, None] & mask_n
+            r = tl.load(rec_ptr + u * (UR * UC * 3) + 2 * UR * UC + (offs_m[:, None] % UR) * UC + offs_n[None, :] % UC,
+                        mask=cm, other=0)
+            if tl.max(tl.max((cm & (r != v)).to(tl.int32), axis=1), axis=0) > 0:
+                tl.store(bad_ptr, 1)
 
 
 @triton.jit
@@ -307,6 +354,11 @@ def dithera_fault(dst_ptr, S_ptr, at_ptr, L, bit, BLOCK: tl.constexpr):
         tl.store(dst_ptr + at, v ^ bit, mask=i < L)
 
 
+def mm_group(text: str) -> int:
+    """A $DITHER_MM_CFG config's tile group, its ":gG" (`_tile`; exactlin's Cfg.parse ignores it), else 1."""
+    return next((int(r[1:]) for r in text.split(":")[1:] if r[:1] == "g"), 1)
+
+
 def _piecewise() -> bool:
     """Whether vLLM is capturing or running piecewise graphs (its forward context's mode); unknown counts as yes."""
     try:
@@ -327,8 +379,12 @@ class Side:
         """The arm's parts no ruling has taken in (`forms.UNADOPTED_PARTS`)."""
         return ()
 
+    def adopted(self) -> tuple[str, ...]:
+        """The arm's parts a ruling has taken in (`forms.ADOPTED_PARTS`)."""
+        return ()
+
     def label(self) -> dict:
-        return F.form_of("dither-a", self.z, self.in_order, self.unadopted())
+        return F.form_of("dither-a", self.z, self.in_order, self.unadopted(), self.adopted())
 
     def __init__(self, win: DO.Window, unit: str, h1u: str | None, z: str = "row", ao: str = "", pt: bool = False):
         if unit not in UNITS:
@@ -337,7 +393,13 @@ class Side:
             raise ValueError(f"dither-a's ao: one of {AO} ({AO_SEEDS} for kh and hbk, whose seeds are a launch of their "
                              f"own), not {ao!r} with unit {unit!r}")
         self.win, self.unit, self.z, self.zl, self.ao, self.pt, dev = win, unit, z, ZMODES[z], ao, pt, win.dev
-        self.side = torch.cuda.Stream(device=dev)
+        self.zdead = z == "zy" and os.environ.get(ZDEAD_ENV) == "1"
+        if os.environ.get(YCMP_ENV) == "1" and not (self.zdead and not getattr(win, "overlap", 0)):
+            raise RuntimeError(f"{YCMP_ENV}=1 needs -zy and {ZDEAD_ENV}=1, without -ov")
+        self.ycmp: torch.Tensor | None = None
+        # under YCMP_ENV each capture's calls refused by the byte compare and by the roots' (`y_leaves`)
+        self.ycmp_at: dict[str, dict] = {}
+        self.side = torch.cuda.Stream(device=dev, priority=int(os.environ.get(UNITS_PRIO_ENV) or 0))
         self.fork, self.join = torch.cuda.Event(), torch.cuda.Event()
         if pt:
             win.tree_streams = (torch.cuda.Stream(device=dev), torch.cuda.Stream(device=dev))
@@ -358,6 +420,8 @@ class Side:
             self.u_rec: set[int] = set()
         self.work = EL.Workspace(dev)
         self.arch = EL.arch(dev.index)
+        self.mm_cfg = {tuple(int(v) for v in nk.split(",")): (EL.Cfg.parse(c), mm_group(c))
+                       for nk, c in (e.split("=") for e in os.environ.get(MM_CFG_ENV, "").split("+") if e)}
         self.stage = torch.empty_like(win.plan.out)
         self.at = torch.tensor([win.plan.offs[w][0] for w in range(win.L)], dtype=torch.int64, device=dev)
         self.shift = int(win.o.h1o_fault_shift())
@@ -376,13 +440,15 @@ class Side:
             win.z = [torch.empty(0, dtype=torch.int32, device=dev) for _ in win.z]
         if z == "zy":
             self.unit_of = [UNIT] * win.L
+            dead = self.dead_rows() if self.zdead else None
             self.zy = [torch.empty(zy_count(win, w, self.unit_of[w]) * zy_bytes(self.unit_of[w]), dtype=torch.uint8,
                                    device=dev) for w in range(win.L)]
             self.zyset = win.c.set([Tab(Dom(ZY_KIND, zy_fields(win, w, 0, self.unit_of[w]), zy_count(win, w, self.unit_of[w]),
                                             {"step": (1, 0)}), zy_count(win, w, self.unit_of[w]), data=self.zy[w],
                                         stride=zy_bytes(self.unit_of[w]), body=zy_bytes(self.unit_of[w]),
                                         length=zy_bytes(self.unit_of[w]), lab=("zy/", f"/{w}"),
-                                        out=win.pre["mid"].leaves_addr(2) + 64 * w) for w in range(win.L)])
+                                        out=win.pre["mid"].leaves_addr(2) + 64 * w, **(dead[w]["zy"] if dead else {}))
+                                    for w in range(win.L)])
             win.pre["z"] = self.zyset
             # RT4-INT-11: the served y committed under the round (its roots the y-step leaves) and the units' y (the
             # records' y halves, read in place), compared by root between steps
@@ -392,10 +458,11 @@ class Side:
             self.ysv = [torch.empty(cnt[w] * yb[w], dtype=torch.uint8, device=dev) for w in range(win.L)]
             self.ysset = win.c.set([Tab(Dom(Y_KIND, y_fields(win, w, 0, self.unit_of[w]), cnt[w], {"step": (1, 0)}), cnt[w],
                                         data=self.ysv[w], stride=yb[w], body=yb[w], length=yb[w], lab=("y/", f"/{w}"),
-                                        out=win.pre["mid"].leaves_addr(yi) + 64 * w) for w in range(win.L)])
+                                        out=win.pre["mid"].leaves_addr(yi) + 64 * w, **(dead[w]["y"] if dead else {}))
+                                    for w in range(win.L)])
             self.yuset = win.c.set([Tab(Dom(Y_KIND, y_fields(win, w, 0, self.unit_of[w]), cnt[w], {"step": (1, 0)}), cnt[w],
                                         data=self.zy[w][ub[w] - yb[w]:], stride=ub[w], body=yb[w], length=yb[w],
-                                        lab=("y/", f"/{w}")) for w in range(win.L)])
+                                        lab=("y/", f"/{w}"), **(dead[w]["y"] if dead else {})) for w in range(win.L)])
             self.ybad = torch.zeros(win.L, dtype=torch.bool, device=dev)
             self.y_refused: list[dict] = []
             # DITHER_ZY1=1: the y tables read nothing the z tables write and are built right after them, so the three
@@ -403,6 +470,13 @@ class Side:
             self.zy1 = os.environ.get(ZY1_ENV) == "1"
             if self.zy1:
                 win.pre["z"] = win.c.union([self.zyset, self.ysset, self.yuset])
+            if os.environ.get(YCMP_ENV) == "1":
+                self.ycmp = torch.zeros(win.L, dtype=torch.int32, device=dev)
+                if self.zy1:
+                    # a step no capture reads builds the union without the units' y tables
+                    full, lite, zbuild = win.pre["z"], win.c.union([self.zyset, self.ysset]), win.c.build
+                    win.c.build = lambda st, step, domains=True: zbuild(lite if st is full and win.cap is None else st,
+                                                                        step, domains)
             win.before_mid.append(self.y_leaves)
         if unit in ("kh",) + KONE:
             if not h1u:
@@ -446,8 +520,12 @@ class Side:
         win = self.win
         M, k = xq.shape
         n = wt.shape[0]
-        cfg = EL.pick(M, n, k, self.arch)
-        self.cfgs[(n, k, M)] = str(cfg)
+        cfg, group = None, 1
+        if self.mm_cfg:
+            mmax = next((m for m, _ in EL.CONFIGS.get(self.arch, {}).get((n, k), ()) if M <= m), None)
+            cfg, group = self.mm_cfg.get((n, k, mmax), (None, 1))
+        cfg = cfg or EL.pick(M, n, k, self.arch)
+        self.cfgs[(n, k, M)] = str(cfg) + (f":g{group}" if group > 1 else "")
         bm, bn, bk, warps, stages, split, tma = cfg
         if self.zy:
             z, yl = self.zy[w].view(torch.int32), self.zy[w].view(torch.int16)
@@ -460,8 +538,8 @@ class Side:
             from triton.tools.tensor_descriptor import TensorDescriptor
             dithera_mm_tma[(tiles,)](TensorDescriptor.from_tensor(xq, [bm, bk]), TensorDescriptor.from_tensor(wt, [bn, bk]),
                                      s_a, s_w, y, z, yl, d, win.S, M, n, k, win.t, y.stride(0), BLOCK_M=bm, BLOCK_N=bn,
-                                     BLOCK_K=bk, WARP_SPECIALIZE=tma == 2, ZL=self.zl, UR=ur, UC=uc, num_warps=warps,
-                                     num_stages=stages, **EL.OPTS)
+                                     BLOCK_K=bk, WARP_SPECIALIZE=tma == 2, ZL=self.zl, UR=ur, UC=uc, GROUP_M=group,
+                                     num_warps=warps, num_stages=stages, **EL.OPTS)
             return
         if split > 1:
             assert M * n <= self.work.ws.numel() and tiles <= self.work.cnt.numel(), (M, n, tiles)
@@ -470,7 +548,7 @@ class Side:
             ws, cnt = y, y
         dithera_mm[(tiles, split)](xq, wt, s_a, s_w, y, z, yl, d, win.S, ws, cnt, M, n, k, win.t, xq.stride(0),
                                    wt.stride(0), y.stride(0), BLOCK_M=bm, BLOCK_N=bn, BLOCK_K=bk, SPLIT_K=split, ZL=self.zl,
-                                   UR=ur, UC=uc, num_warps=warps, num_stages=stages, **EL.OPTS)
+                                   UR=ur, UC=uc, GROUP_M=group, num_warps=warps, num_stages=stages, **EL.OPTS)
 
     def ycommit(self, w: int, y: torch.Tensor, s_w: torch.Tensor) -> None:
         """On the serving stream after call w's GEMM: the served y into the call's y records, dq(0, +0, s_w) past m
@@ -479,21 +557,52 @@ class Side:
             return
         n, t = y.shape[1], self.win.t
         ur, uc = self.unit_of[w]
+        cmp = self.ycmp is not None
         dithera_ycommit[(triton.cdiv(t, 32), triton.cdiv(n, 128))](y.view(torch.int16), s_w,
                                                                    self.ysv[w].view(torch.int16), self.win.S,
+                                                                   self.zy[w].view(torch.int16),
+                                                                   self.ycmp[w:] if cmp else self.win.S,
                                                                    y.shape[0], n, t, y.stride(0), UR=ur, UC=uc,
-                                                                   BLOCK_M=32, BLOCK_N=128, **EL.OPTS)
+                                                                   BLOCK_M=32, BLOCK_N=128, CMP=cmp, **EL.OPTS)
+
+    def dead_rows(self) -> list[dict]:
+        """$DITHER_ZDEAD's `Tab` fields, each call's {"zy": its z/y table's, "y": its y tables'}: a row block past m (the
+        window's `live` 0) holds z 0 and y dq(0, +0, s_w) in every step, so each column block's x is hashed here once."""
+        from verity_vllm.engine import int8_exact as E
+        win, out = self.win, []
+        for w in range(win.L):
+            (ur, uc), n = self.unit_of[w], win.nk[w][0]
+            if ur != 32:
+                raise RuntimeError(f"${ZDEAD_ENV}: the window's live flags are 32-row blocks, linear {w}'s units {ur} rows")
+            pad = E.dequantize(torch.zeros((1, n), dtype=torch.int32, device=win.dev),
+                               torch.zeros(1, dtype=torch.float32, device=win.dev), win.sw[w]).view(torch.int16)
+            pad = pad.reshape(n // uc, 1, uc).expand(n // uc, ur, uc).cpu().numpy().astype("<i2")
+            y, zero = [pad[c].tobytes() for c in range(n // uc)], bytes(4 * ur * uc)
+            out.append({"zy": {"xd": H1CM.dead_x([zero + b for b in y], win.dev), "rlive": win.live, "rbw": n // uc},
+                        "y": {"xd": H1CM.dead_x(y, win.dev), "rlive": win.live, "rbw": n // uc}})
+        return out
 
     def y_leaves(self) -> None:
         """Between steps (the window's `before_mid`): the served y's tables, whose roots are the round's y-step leaves,
         and the units' y tables (under DITHER_ZY1 built with the z tables); `ybad` the calls whose two roots differ (a
-        refused window, RT4-INT-11)."""
+        refused window, RT4-INT-11); under YCMP_ENV, at a step no capture reads, the calls `dithera_ycommit` flagged."""
         win = self.win
+        roots = self.ycmp is None or win.cap is not None
         if not self.zy1:
             win.c.build(self.ysset, win.stepv[0:1])
-            win.c.build(self.yuset, win.stepv[0:1])
-        o = win.pre["mid"].level_off[win.round_kinds.index("y-step")]
-        self.ybad = (win.pre["mid"].level[o:o + 8 * win.L].view(win.L, 8) != self.yuset.roots.view(win.L, 8)).any(1)
+            if roots:
+                win.c.build(self.yuset, win.stepv[0:1])
+        if roots:
+            o = win.pre["mid"].level_off[win.round_kinds.index("y-step")]
+            self.ybad = (win.pre["mid"].level[o:o + 8 * win.L].view(win.L, 8) != self.yuset.roots.view(win.L, 8)).any(1)
+        if self.ycmp is not None:
+            flagged = self.ycmp != 0
+            if roots:
+                self.ycmp_at[win.cap] = {"bytes": flagged.nonzero().flatten().tolist(),
+                                         "roots": self.ybad.nonzero().flatten().tolist()}
+            else:
+                self.ybad = flagged
+            self.ycmp.zero_()
 
     def seeds(self, w: int, st: int) -> int:
         """kh's, hbk's and hbr's seeds of call w (h1r version 0), from the window's salt and the call's A root."""
@@ -604,8 +713,9 @@ class Side:
     def info(self) -> dict:
         return {**self.label(), "unit": self.unit, "z": self.z, "a_overlap": self.ao, "trees_parallel": self.pt,
                 "leaf_bytes_per_step": self.leaf_bytes(), "round_leaves": list(self.win.round_kinds),
-                "y_root_refused_steps": self.y_refused[:8] if self.zy else None,
-                "a_form": self.win.c.a_form, "calls": self.calls, "joins": self.joins,
+                "y_root_refused_steps": self.y_refused[:8] if self.zy else None, "z_dead_rows_x_once": self.zdead,
+                "y_compared_in_commit": self.ycmp is not None, "a_form": self.win.c.a_form, "calls": self.calls,
+                "joins": self.joins,
                 "h1r_versions": {DF.SITES[w % 4]: self.versions[w] for w in range(min(4, self.win.L))}
                 if self.unit == "h1r" else None, "gemm_cfgs": {f"{n}x{k}@M{m}": c for (n, k, m), c in self.cfgs.items()}}
 
@@ -690,7 +800,7 @@ def side() -> Side:
         def before_a(self: DO.Window, m: int) -> None:
             before(self, m)
             if SIDE[0].unit in KONE:
-                SIDE[0].s_unit.copy_(torch.tensor([0, m, 0, 0], dtype=torch.int32))
+                self._put(SIDE[0].s_unit, torch.tensor([0, m, 0, 0], dtype=torch.int32))
             if self.cap:
                 SIDE[0].stage.view(torch.uint8).fill_(DF.POISON)
                 for x in SIDE[0].zy + SIDE[0].ysv:
@@ -773,6 +883,36 @@ def stats(win: DO.Window):
 
 # -- the gate ----------------------------------------------------------------------------------------------------------------
 
+# N > 0: `check` hashes a table's leaves in a spawned pool of N processes once it has POOL_MIN rows or more (a prefill
+# capture's 2.75M z/y units take ~4 min on one core); unset or 0, in this process
+CHECK_WORKERS_ENV = "DITHER_CHECK_WORKERS"
+POOL_MIN = 4096
+_POOL: list = []
+
+
+def table_root(dom, key: bytes, label: str, rows) -> bytes:
+    """`CM.levels`' root over each row's `CM.leaf` (rows: byte strings or a 2-D uint8 array), the leaves hashed in
+    CHECK_WORKERS_ENV's pool when there are POOL_MIN or more."""
+    n = int(os.environ.get(CHECK_WORKERS_ENV) or 0)
+    if n <= 0 or len(rows) < POOL_MIN:
+        return CM.levels(dom, [CM.leaf(dom, key, label, i, bytes(r))[0] for i, r in enumerate(rows)])[-1][0]
+    if not _POOL:
+        import multiprocessing as mp
+        # sbench's arm workers are daemons, which multiprocessing won't let start children; the pool's own workers
+        # are daemons, ended with this process
+        cfg = mp.current_process()._config
+        daemon = cfg.get("daemon")
+        cfg["daemon"] = False
+        try:
+            _POOL.append(mp.get_context("spawn").Pool(n))
+        finally:
+            cfg["daemon"] = daemon
+    step = -(-len(rows) // (4 * n))
+    got = _POOL[0].map(CM.leaves, [(dom.binding, dom.count, key, label, at, rows[at:at + step])
+                                   for at in range(0, len(rows), step)], chunksize=1)
+    return CM.levels(dom, [x for part in got for x in CM.split(part)])[-1][0]
+
+
 def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3, g: dict | None = None,
           r_round: dict | None = None) -> dict:
     """`which`'s capture (`g`, else the window's) against references other than the served kernels (the module
@@ -792,12 +932,10 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
     zy = bool(SIDE) and bool(SIDE[0].zy)
     bits = np.arange(t) < m
     wrows = CR.word_rows(CR.words(bits))
-    a_cpu, s_cpu, z_cpu = {}, {}, {}
+    a_cpu = DO.a_roots_cpu(win, s, range(L), lambda v: g["a"][v].cpu().numpy(), lambda v: g["sa"][v].cpu().numpy())
+    s_cpu, z_cpu = {}, {}
     for w in range(L):
         n, k = win.nk[w]
-        q, sc = g["a"][w].cpu().numpy(), g["sa"][w].cpu().numpy()
-        fa = {"window": W, "step": s, "linear": w, "module": win.names[w], "slots": t, "k": k, "schema": CM.SCHEMA}
-        a_cpu[w] = CM.s8_table(CM.domain(fa, t, "a-table"), key, f"a/{s}/{w}", q, sc).root
         fs = {"window": W, "step": s, "linear": w, "module": win.names[w], "slots": t, "schema": CM.SCHEMA}
         sd = CM.domain(fs, len(wrows), "admit")
         s_cpu[w] = CM.levels(sd, [CM.leaf(sd, key, f"s/{s}/{w}", i, x)[0] for i, x in enumerate(wrows)])[-1][0]
@@ -809,7 +947,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
             fz = {"window": W, "step": s, "linear": w, "module": win.names[w], "slots": t, "n": n, "schema": CM.SCHEMA}
             zd = CM.domain(fz, t, "z-table")
             zb, lab = g["z"][w].cpu().numpy().astype("<i4").view(np.uint8).reshape(t, -1), f"z/{s}/{w}"
-        z_cpu[w] = CM.levels(zd, [CM.leaf(zd, key, lab, i, bytes(zb[i]))[0] for i in range(len(zb))])[-1][0]
+        z_cpu[w] = table_root(zd, key, lab, zb)
     doc["a_roots_bad"] = [w for w in range(L) if a_cpu[w] != g["a_roots"][w]]
     doc["a_bad_diag"] = DO.a_bad_diag(g, doc["a_roots_bad"])
     doc["admit_roots_bad"] = [w for w in range(L) if s_cpu[w] != g["admit_roots"][w]]
@@ -834,12 +972,12 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
             yd_ = CM.domain(y_fields(win, w, s, u), cnt, Y_KIND)
             yrec = g["ysv"][w].cpu().numpy().reshape(cnt, y_bytes(u))
             urec = g["zy"][w].cpu().numpy().reshape(cnt, zy_bytes(u))[:, zy_bytes(u) - y_bytes(u):]
-            ys_cpu[w] = CM.levels(yd_, [CM.leaf(yd_, key, f"y/{s}/{w}", i, bytes(yrec[i]))[0] for i in range(cnt)])[-1][0]
+            ys_cpu[w] = table_root(yd_, key, f"y/{s}/{w}", yrec)
             if not np.array_equal(yrec, urec):
                 cpu_bad.append(w)
             if g["y"] is not None:
-                yr = y_rows(g["ysv"][w], t, n, u)
-                x = yr[:m] ^ g["y"][w].view(torch.int16)
+                yr = y_rows(g["ysv"][w].to(win.dev), t, n, u)
+                x = yr[:m] ^ g["y"][w].to(win.dev).view(torch.int16)
                 past = bool((yr[m:] != pads[w]).any())
                 if bool(x.any()) or past:
                     dump_bad.append(w)
@@ -866,7 +1004,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
                   "units": units, "words": nw, "schema": CM.SCHEMA}
             rd = CM.domain(fr, units, "receipts")
             rrows = CM.receipt_rows(g["receipts"][o_:o_ + units * nw].view(units, nw).cpu().numpy().view(np.uint32))
-            if CM.levels(rd, [CM.leaf(rd, key, f"r/{s}/{w}", i, bytes(rrows[i]))[0] for i in range(units)])[-1][0] != r_dev[w]:
+            if table_root(rd, key, f"r/{s}/{w}", rrows) != r_dev[w]:
                 rr_bad.append(w)
         doc["receipt_roots_bad"] = rr_bad
     rnd = CM.step_root(CM.domain({"window": W, "step": s, "leaves": DO.round_leaves(kinds)}, len(kinds), "round"),
@@ -892,14 +1030,17 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
             yl.append(b)
         else:
             zr.append(g["z"][w])
+    dev = win.dev
     for w in range(L):
-        zt = E.int_mm(g["a"][w][:m], win.wt[w])
-        if not (torch.equal(zr[w][:m], zt) and not bool(zr[w][m:].any())):
+        zt = E.int_mm(g["a"][w][:m].to(dev), win.wt[w])
+        zw = zr[w].to(dev)
+        if not (torch.equal(zw[:m], zt) and not bool(zw[m:].any())):
             z_bad.append(w)
-        yd = E.dequantize(zr[w][:m], g["sa"][w][:m], win.sw[w]).view(torch.int16)
-        if g["y"] is not None and not torch.equal(yd, g["y"][w].view(torch.int16)):
+        yd = E.dequantize(zw[:m], g["sa"][w][:m].to(dev), win.sw[w]).view(torch.int16)
+        if g["y"] is not None and not torch.equal(yd, g["y"][w].to(dev).view(torch.int16)):
             y_bad.append(w)
-        if zy and not (torch.equal(yl[w][:m].view(torch.int16), yd) and not bool((yl[w][m:].view(torch.int16) != pads[w]).any())):
+        yw = yl[w].to(dev) if zy else None
+        if zy and not (torch.equal(yw[:m].view(torch.int16), yd) and not bool((yw[m:].view(torch.int16) != pads[w]).any())):
             yleaf_bad.append(w)
     doc["z_vs_int_mm_bad"], doc["y_vs_dequant_z_bad"] = z_bad, y_bad if g["y"] is not None else None
     doc["y_leaf_vs_dequant_z_bad"] = yleaf_bad if zy else None
@@ -908,7 +1049,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
     live = torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)).to(win.dev)
     roots = [torch.from_numpy(np.concatenate([np.frombuffer(a_cpu[w], ">u8"), np.frombuffer(g["b_roots"][w], ">u8")])
                               .astype("<u8").view("<i8").copy()).to(win.dev) for w in range(L)]
-    plan = r.plan([Call(g["a"][w], win.wt[w], s * win.u_step + win.offs[w], roots[w], live) for w in range(L)])
+    plan = r.plan([Call(g["a"][w].to(dev), win.wt[w], s * win.u_step + win.offs[w], roots[w], live) for w in range(L)])
     salt = DO.cap_salt(win, g)
     r.launch(plan, salt[1], version=1)
     torch.cuda.synchronize()
@@ -917,7 +1058,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
 
     def got_of(w: int) -> torch.Tensor:
         o_, units, nw = win.plan.offs[w]
-        return got[o_:o_ + units * nw].view(units, nw)
+        return got[o_:o_ + units * nw].view(units, nw).to(dev)
 
     rc_bad, fault_bad = [], []
     for w in range(L):
@@ -1009,8 +1150,16 @@ def gate_verdict(gate: dict, control: dict, fault: dict, *more: dict) -> dict:
     fault_refused = bool(fault.get("complete") and not fault.get("ok") and fault.get("conforming"))
     extra = {f"{x.get('which')}_refused": bool(x.get("complete") and not x.get("ok") and x.get("conforming"))
              for x in more}
+    if SIDE and SIDE[0].ycmp is not None:
+        # YCMP_ENV: at every capture the byte compare refused the calls the roots' did, at fault_y every call
+        at = SIDE[0].ycmp_at
+        extra["y_compare_agrees"] = bool(at.get("fault_y", {}).get("bytes") == list(range(SIDE[0].win.L))
+                                         and all(x["bytes"] == x["roots"] for x in at.values()))
+        y_cmp = {"y_compare_at_captures": {k: {j: len(v) for j, v in x.items()} for k, x in at.items()}}
+    else:
+        y_cmp = {}
     return {"ok": bool(gate.get("ok")) and refused and fault_refused and all(extra.values()),
-            **arm_label(),
+            **arm_label(), **y_cmp,
             "gate_ok": bool(gate.get("ok")), "control_refused": refused, "fault_refused": fault_refused, **extra,
             "control_bad": {k: len(control.get(k) or []) for k in ("z_vs_int_mm_bad", "y_vs_dequant_z_bad",
                                                                     "receipts_vs_h1r_bad", "a_roots_bad", "z_roots_bad")},

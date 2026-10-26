@@ -9,7 +9,7 @@
   which the caller gives (128 lowercase hex digits, no other open's, ever), and gives the port its challenger listens on
   at the peer's 127.0.0.1, the session's secret, which only that answer carries and nothing here prints, and the root of
   the coin commitment its challenger signed; the challenger opens the salt coin only after R. The gated served window
-  of record is vllm's H1 path, `integrations/vllm/verity_vllm/protocol_options/pouw_h1.py` (#3053), which holds its
+  of record is vllm's H1 path, `integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py` (#3053), which holds its
   salt, round-0 request table, R, session S and requests_root rules (#2950, PRF-132); serve.py refuses ``--gate``.
   ``coins.py open`` reserves and opens a session by hand, for development and timing rows only, on `stand_in_root` of
   its session, a stand-in and never a window's root, passed as ``--challenger HOST:PORT``, ``--session ID``,
@@ -33,9 +33,11 @@ prover's bundle. The session is core's to establish, the one check the auditor h
 (`remote.trusted_session`, through `audited_window`), under the challenger's key from its deployment record
 (``--key-record``, infra's challenger-key/v1, never the ledger's key_sha512; no key is pinned in code): the ledger's
 heads, signatures, chain and entries; the one session it opens on the window's root, binding its reserve and carrying
-its request, by its prover, inside its minutes and its period; its end, closed by its client; and the session's
-record, close, release log and refused hellos the files that end sealed (`challenger.audited_session`,
-`challenger.session_named`). On top of it `check` holds the manifest's session and window to that session's, the open's
+its request, by its prover, inside its minutes and its period; its end, closed by its client; the session's record,
+close, release log and refused hellos the files that end sealed (`challenger.session_named`); and its open's pin a
+commit the host's pins log records (``--pins``, infra's published `challenger-pins head`) on the verifier's own
+first-parent history of main (``--main``, `challenger.pinned_session`), so a session the log doesn't record is refused
+though this check credits nothing. On top of it `check` holds the manifest's session and window to that session's, the open's
 layout to the signed commitment's, and its period to the verifier's; then the salt coin after the window's root, round
 s's coin after round s's root for every round the challenger logged, and the draw coin after the root the manifest
 names. The key record, the window's root and its period are the verifier's to name; while it names any not, the coins
@@ -44,8 +46,8 @@ period), and only with all three are they ``off-node HOST (checked)``.
 
     python3 coins.py families --rounds S                        # the challenger's FAMILIES for a window of S rounds
     python3 coins.py open --gate USER@HOST --peer NODE --epoch E --rounds S [--minutes M] --secret-file F
-    python3 coins.py check --challenger-out SESSION_DIR --ledger HEAD [--ledger HEAD ...] --manifest OUT/manifest.json
-        [--key-record KEY] [--period P] [--root R]
+    python3 coins.py check --challenger-out SESSION_DIR --ledger HEAD [--ledger HEAD ...] --pins LOG --main FILE
+        --manifest OUT/manifest.json [--key-record KEY] [--period P] [--root R]
 """
 from __future__ import annotations
 
@@ -409,17 +411,19 @@ def published(directory: str | os.PathLike) -> Path:
     return d / "out" if (d / "out").is_dir() else d
 
 
-def audited_window(directory: str | os.PathLike, heads: Sequence[str | os.PathLike], root: bytes, key: Ch.ChallengerKey
+def audited_window(directory: str | os.PathLike, heads: Sequence[str | os.PathLike], root: bytes, key: Ch.ChallengerKey,
+                   pins: Any, main: Any
                    ) -> tuple[Ch.LiveCommitment, dict[str, tuple[bytes, ...]], Ch.Audited, dict[str, dict]]:
     """Window `root`'s session as core's verifier takes it from the session `directory` (`published`) and every head of
     the auditor's ledger infra published, `heads`, under the challenger key `key` (`remote.trusted_session`): the coin
     commitment the challenger signed, the roots its signed release log shows it received, the session the ledger opens
-    on `root` (`challenger.audited_session`), and that session's entries in the ledger by kind.  Raises `CoinError`
-    naming why the ledger or the session is refused."""
+    on `root`, run from a commit the host's pins log `pins` (its lines, the one infra published) records on the
+    verifier's own first-parent history of main `main` (`challenger.pinned_session`), and that session's entries in the
+    ledger by kind.  Raises `CoinError` naming why the ledger, the session or its pin is refused."""
     window = {"root": root.hex()}
     commitment, roots = R.trusted_session(published(directory), heads, window, key, lms_verify)
     ledger = Ch.ledger_head([R.ledger_lines(p) for p in heads], key, lms_verify)
-    audited = Ch.audited_session(ledger, window, key, lms_verify)
+    audited = Ch.pinned_session(ledger, window, key, pins, main, lms_verify)
     entries = {e["kind"]: e for e in map(json.loads, ledger) if e["session"] == audited.session}
     return commitment, roots, audited, entries
 
@@ -462,11 +466,13 @@ def key_record(path: str | os.PathLike) -> Ch.ChallengerKey:
     return Ch.key_of_record(json.loads(Path(path).read_text()))
 
 
-def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.PathLike], rounds: list[bytes],
-          salts: dict[int, str] | None = None, draw_after: bytes | None = None, key: Ch.ChallengerKey | None = None,
-          period: str | None = None, root: bytes | None = None) -> dict:
+def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.PathLike], pins: Any, main: Any,
+          rounds: list[bytes], salts: dict[int, str] | None = None, draw_after: bytes | None = None,
+          key: Ch.ChallengerKey | None = None, period: str | None = None, root: bytes | None = None) -> dict:
     """The verifier's check of a window's coins against the session `directory` as infra's gate publishes it
-    (`published`) and every head of the auditor's ledger infra published, `heads`, read from the challenger's own run.
+    (`published`) and every head of the auditor's ledger infra published, `heads`, read from the challenger's own run,
+    with the host's pins log infra published `pins` (its lines) and the verifier's own first-parent history of main
+    `main`, which the session's pin must be on (`audited_window`).
     `coins` is the manifest's ``coins`` item (the openings the prover received, the session id and the window's root and
     period), and the rest is what the verifier recomputes from the window's committed roots: the round roots `rounds` in
     order, round r's unit salt `salts[r]` (hex) where it holds them, and `draw_after`, the root the draw coin follows
@@ -497,7 +503,7 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
         return {**out, "reason": "the verifier names no window root, and the manifest's window none"}
     root = root if root is not None else bytes.fromhex(window["root"])
     try:
-        commitment, roots, audited, entries = audited_window(d, heads, root, key)
+        commitment, roots, audited, entries = audited_window(d, heads, root, key, pins, main)
         mine = Ch.LiveCommitment.from_json(coins.get("commitment"))
         salt = _openings([coins["salt_coin"]])
         openings = _openings([r["opening"] for r in coins.get("rounds", [])])
@@ -551,6 +557,10 @@ def main(argv: list[str] | None = None) -> int:
                    "open.json and out/), or its out/")
     c.add_argument("--ledger", action="append", required=True, help="a head of the auditor's ledger as infra published "
                    "it (ssh GATE ledger, or its published challenger-ledger head); once for each head the verifier holds")
+    c.add_argument("--pins", type=Path, required=True, help="the challenger host's pins log as infra published it, a "
+                   "line a pin (its `challenger-pins head` label)")
+    c.add_argument("--main", type=Path, required=True, help="the verifier's own `git rev-list --first-parent "
+                   "origin/main`, a commit a line")
     c.add_argument("--manifest", required=True, help="the window's manifest.json")
     c.add_argument("--key-record", help="the challenger's key record from its deployment (challenger-key/v1, an art: "
                    "fetched with `research data fetch`)")
@@ -587,8 +597,9 @@ def main(argv: list[str] | None = None) -> int:
     spec.loader.exec_module(SV)
     m = json.loads(Path(a.manifest).read_text())
     key = key_record(a.key_record) if a.key_record else None
-    got = check(a.challenger_out, m.get("coins", {}), a.ledger, **SV.coins_expect(m), key=key, period=a.period,
-                root=bytes.fromhex(a.root) if a.root else None)
+    pins = [x for x in a.pins.read_text().split("\n") if x]
+    got = check(a.challenger_out, m.get("coins", {}), a.ledger, pins, R.main_lines(a.main), **SV.coins_expect(m),
+                key=key, period=a.period, root=bytes.fromhex(a.root) if a.root else None)
     print(json.dumps(got, indent=1))
     return 0 if got["ok"] else 1
 

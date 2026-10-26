@@ -253,3 +253,28 @@ def test_a_reads_file_naming_a_port_twice_is_refused(one_value):
         assert code == 2 and f"registered reads: an object of the file names the key {key} twice" in out, (name, out)
     code, out = _statement(one_value, one_value.dir / "own.json")
     assert code == 0, out
+
+
+def test_a_circuit_naming_a_port_twice_is_refused(one_value, monkeypatch):
+    """A registered read names its port by name, so under `--registered` a circuit naming a port twice is refused: x and cs
+    are both 64-word `row/v2` rows, and the circuit with cs renamed x (its META alone; the gates as they are) is refused by
+    the statement writer and, staged with the honest port list, by flock-verify, whose hidden-output parse refuses a row
+    named twice (`HmOut.checkRows`) before the registered check's own refusal (`Registered.namesOnce`)."""
+    head, line, rest = one_value.text.split("\n", 2)
+    ports = json.loads(line[5:])["ports"]
+    old = next(t for t in (json.dumps(ports), json.dumps(ports, separators=(",", ":"))) if t in line)
+    twice = json.dumps([["x" if p[0] == "cs" else p[0], *p[1:]] for p in ports], separators=(", ", ": ") if ", " in old else (",", ":"))
+    text = "\n".join([head, line.replace(old, twice, 1), rest])
+    d = one_value.dir / "twice"
+    d.mkdir()
+    (d / "circuit.txt").write_text(text)
+    st = SimpleNamespace(**{**vars(one_value), "dir": d, "text": text})
+    want = "registered reads: the circuit names port x twice, and a registered read names one port"
+    with pytest.raises(ValueError, match=want):
+        _write(st, "writer", {p: (one_value.regs["rows"], r) for p, r in one_value.reads.items()})
+    honest = json.loads(one_value.text.split("\n", 2)[1][5:])
+    real = FC.write
+    monkeypatch.setattr(FC, "write", lambda *a, **k: real(*a, **{**k, "meta": honest}))
+    public = _write(st, "staged", {p: (one_value.regs["rows"], r) for p, r in one_value.reads.items()})
+    code, out = _statement(st, one_value.dir / "own.json", public)
+    assert code == 1 and out.startswith("setup: the rows are not the input rows") and out.endswith("each name once"), out

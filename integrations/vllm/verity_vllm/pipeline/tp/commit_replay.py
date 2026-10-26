@@ -77,8 +77,11 @@ def result_path(out: str | os.PathLike, pair: int, rank: int) -> Path:
 
 # ------------------------------------------------------------------------------------------------ one rank, on CPU
 
-def _of_record(out: Path, dd: dict[str, Any], b: dict[str, Any], pair: int, rank: int) -> tuple[dict, dict, Any, Any, dict]:
-    """(the run's row, the rank's commit block, store, run, binding map) once the bundle is shown to be the record's; else Refused."""
+def _of_record(out: Path, dd: dict[str, Any], b: dict[str, Any], pair: int, rank: int, *,
+               awaiting: bool = True) -> tuple[dict, dict, Any, Any, dict]:
+    """(the run's row, the rank's commit block, store, run, binding map) once the bundle is shown to be the record's; else Refused.
+    ``awaiting=False`` (a reader of the committed values, `tp.serving_rows.from_bundle`): the rank's replay was deferred to this
+    bundle and is pending or passed; a rank whose replay failed is refused."""
     from verity_vllm.commit import store_dump as SD
     from verity_vllm.pipeline.tp import run_root as RT
 
@@ -90,8 +93,9 @@ def _of_record(out: Path, dd: dict[str, Any], b: dict[str, Any], pair: int, rank
         raise Refused(f"{bdir}: its context is pair {ctx['pair']} tp {ctx['tp']}, not pair {pair} rank {rank} of world {dd['world']}")
     row = next((r for r in _rows(out) if r["pair"] == pair and r["arm"] != "control"), None)
     c = ((row or {}).get("commit") or {}).get("per_rank", {}).get(str(rank))
-    if c is None or c.get("commit_pass") is not None or "replay_deferred" not in c:
-        raise Refused(f"pair {pair} rank {rank}: no rank awaiting its deferred replay in {out / 'runs.jsonl'}")
+    if c is None or "replay_deferred" not in c or c.get("commit_pass") is not None and (awaiting or c["commit_pass"] is not True):
+        raise Refused(f"pair {pair} rank {rank}: no rank " + ("awaiting its deferred replay" if awaiting else "whose deferred replay is pending or passed")
+                      + f" in {out / 'runs.jsonl'}")
     vec = {int(v["rank"]): bytes.fromhex(v["run_root"]) for v in row["commit"].get("commitment_vector") or []}
     try:
         combined = RT.combine(json.loads((out / "versions.json").read_text()).get("root_tag"), int(dd["world"]), vec).hex()
@@ -292,7 +296,7 @@ def fold(out: Path) -> bool | None:
 
 def main(o: Options) -> int:
     from verity_vllm.check.replay.driver import PoolDoesNotFit
-    from verity_vllm.program.kernels.compiled_relations import warm_vml
+    from verity_vllm.program.compiled_relations import warm_vml
 
     out = Path(o.commit_out)
     try:

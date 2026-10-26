@@ -49,7 +49,8 @@
 # words (quotes group one, as `--challenger-ssh '-i KEY HOST'` needs), under ROLE=both too: with `--challenger serve
 # --challenger-key DIR` each session's coins come from the challenger's own process,
 # `benchmarks/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under out/challenger; with `--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
-# --challenger-period P`, from the auditor host's challenger through its gate, its fetched sessions and ledger there
+# --challenger-period P --challenger-main FILE` (FILE: `git rev-list --first-parent origin/main`, the auditor's own),
+# from the auditor host's challenger through its gate, its fetched sessions, ledger and pins log there
 # (PORT then outside the gate's 7811-7899). A registration left live by a run that ended early refuses the node until
 # CLOSE=NODE_HEX closes it (the same ROLE=verifier run, which closes it in REGISTRY and exits). VERDICT (lean, both or
 # python; default verifier.py's, lean) is who decides (`verifier.py --verdict`): under lean and both the verifier builds
@@ -58,7 +59,8 @@
 # CPU=BLOCKS makes the prover the driver's reference over a store of BLOCKS blocks under CODEC (default p512/k2): no
 # GPU, no lease, no build, and kv:P and kvdrop:P sessions (KV pages appended and released mid-session, `prover.py`)
 # with PROVER_ARGS such as --kv-every and --kv-pool. Its passes take the CPU's time, so JITTER_MS must cover one.
-# LIFETIME (windows) sets the verifier's cap L on an appended block, after which the prover re-keys it.
+# LIFETIME (windows) sets the verifier's cap L on an appended block, after which the prover re-keys it (default: the
+# windows of WINDOW_MS in 30 s, or a paced session's groups, `audit.lifetime_windows`).
 #
 # SERVE makes the prover vLLM serving under the audit, on one leased GPU in vLLM's venv (VLLM_PY, default
 # /workspace/jobs/venv312/bin/python, its `verity-vllm` launcher beside it), this tree's verity_vllm first on its path,
@@ -66,7 +68,7 @@
 # tiny Llama, PLAN serve or servedrop:K). SERVE=row runs row ROW, `verity-vllm row run ROW CHECKPOINT REPO REV` with
 # the checkpoint `verity-vllm epoch resolve ROW` names, ROW_ARGS (such as --stages commit) and REMOTE_VERIFIER at the
 # tunnel; its Commit puts the store binder on its engine and proves the store in lockstep with its first instrumented
-# run, a pass an engine step (`verity_vllm.store.remote.CommitSession`: one GPU, synchronous scheduling declared in the
+# run, a pass an engine step (`verity_vllm.protocols.remote_bandwidth.remote.CommitSession`: one GPU, synchronous scheduling declared in the
 # row's target, its store the weights and --remote-filler-gib of filler, the KV pool outside it). Milestone 3's thin slice,
 # int8 Llama-3.1-8B:
 #

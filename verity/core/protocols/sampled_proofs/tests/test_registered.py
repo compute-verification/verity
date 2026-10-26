@@ -73,7 +73,7 @@ def _registered(prog: Program) -> G.Registered:
 def _record(prog: Program, reg: G.Registered, **kw):
     part = P.partition(prog, Q)
     n = P.units(prog, Q)
-    ports = {p: {"leaves": leaves, "domain": R.served_domain(part["program"], P.digest(part), p, schema, leaves, "r-registered")}
+    ports = {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, schema, leaves, "r-registered")}
              for p, schema, leaves in (("x", "hm96-sha512/row/v1", n), ("out", "u16", n))}
     roots = [{"port": p, "root": "ab" * 64, **ports[p]} for p in ports]
     return R.record(prog, Q, LAW, SCHEME, roots, SERVED, registered=[reg.entry()], **kw), ports
@@ -250,6 +250,23 @@ def test_a_bit_row_value_is_its_leaves_bit_row_under_its_ports_schema(schema, wo
         G.Registered.commit(prog, "W", rows, salts, word_bits, "hm96-sha512/row/v3")
 
 
+def test_a_row_seg_table_one_token_a_row_is_what_the_embedding_read_opens():
+    """`gates.embedding`'s read at a hidden position (`EmbeddingRead_v1`) reads a table registered here under
+    ``hm96-sha512/row-seg/v1`` with one token a row (``words = H``): each row opens at its token's position under the
+    registration's root and domain id, and at no other token's."""
+    from verity.ml.commitments.gates import embedding as E
+
+    V, H = 5, 3
+    rows = [[(7919 * t + 31 * j) & 0xFFFF for j in range(H)] for t in range(V)]
+    salts = [bytes([t + 1]) * 192 for t in range(V)]
+    reg = G.Registered.commit(P.program_digest(_program()), "W", rows, salts, schema=G.SCHEMA_SEG)
+    dom, D = reg.domain.domain_id, merkle_depth(V)
+    for t in range(V):
+        path = [reg.path(t)[64 * k:64 * (k + 1)] for k in range(D)]
+        assert E.reference(V, t, reg.root, dom, rows[t], salts[t], path) == (rows[t], 1)
+        assert E.reference(V, (t + 1) % V, reg.root, dom, rows[t], salts[t], path)[1] == 0
+
+
 def test_the_verifiers_reads_file_names_a_bit_row_values_format():
     """`row_schema` is the reads file's key for a value read by a bit-row port (`schemas`), absent for `row/v1`, so a v1
     file is the bytes it was. A bit row is its leaves' bits: W's two 8-bit leaves are one u16 word of a `row/v2` row, where
@@ -321,7 +338,8 @@ def test_a_parameter_of_several_rows_reads_each_at_its_own_port():
                        schemas={"A": G.SCHEMA_V2})
     port = {"value": "A", "root": reg.root.hex(), "leaves": 4, "words": K // 2, "word_bits": 16,
             "domain": reg.domain.domain_id.hex(), "row_schema": G.SCHEMA_V2}
-    assert doc == {"format": G.READS, "ports": {"a0": {**port, "reads": [0, 2]}, "a1": {**port, "reads": [1, 3]}}}
+    assert doc == {"format": G.READS, "ports": {"a0": {**port, "reads": [0, 2], "param": "a[0]"},
+                                                "a1": {**port, "reads": [1, 3], "param": "a[1]"}}}
     for p, reads in (("a0", [0, 2]), ("a1", [1, 3])):
         for u, r in enumerate(reads):
             assert G.verify_read(reg.domain, reg.root, r, reg.bcs[r], reg.path(r), G.SCHEMA_V2)
@@ -592,6 +610,20 @@ def test_the_window_root_and_held_values_are_the_verifiers_never_the_records():
         assert R.check({**recs[1], "registered": entries}, prog, Q, **kw, **win).codes == ("R7-registered",)
 
 
+def test_a_session_bound_domain_binds_the_session_alone():
+    """A value whose root the window's open root contains (PoUW's round-0 input-ids table) binds the window's session in
+    the open root's place: its domain differs from the unbound one, the window-bound one and another session's, and a
+    domain binds at most one of a window, a registration and a session."""
+    prog = P.program_digest(_program())
+    rec = G.Registered.commit(prog, "x", X_ROWS, session="s-1")
+    doms = {G.domain(prog, "x", 2, len(X_ROWS), **kw).domain_id for kw in
+            ({}, {"window": WINDOWS[0]}, {"session": "s-1"}, {"session": "s-2"})}
+    assert len(doms) == 4 and rec.domain.domain_id == G.domain(prog, "x", 2, len(X_ROWS), session="s-1").domain_id
+    for kw in ({"window": WINDOWS[0], "session": "s-1"}, {"produced": "0" * 128, "session": "s-1"}, {"session": ""}):
+        with pytest.raises(ValueError):
+            G.domain(prog, "x", 2, len(X_ROWS), **kw)
+
+
 def _prefixed(prefix: str) -> Program:
     """The program as a window-dependent path wrote it before the window's root was in the domain: every parameter's name
     carries its window's prefix."""
@@ -712,7 +744,7 @@ def _seeded_case(bits: int = 32, x_root: str = "ab" * 64, roots=None, **kw):
     prog = _seeded(bits)
     q = P.template_instance_query(bind(SEEDED, BITS=bits).id)
     part, n = P.partition(prog, q), P.units(prog, q)
-    ports = {p: {"leaves": n, "domain": R.served_domain(part["program"], P.digest(part), p, s, n, "r-registered")}
+    ports = {p: {"leaves": n, "domain": R.window_domain(part["program"], P.digest(part), p, s, n, "r-registered")}
              for p, s in (("x", "hm96-sha512/row/v1"), ("out", "u16"))}
     served = [{"port": p, "root": x_root if p == "x" else "cd" * 64, **ports[p]} for p in ports]
     w = G.Registered.commit(P.program_digest(prog), "W", TABLE)
@@ -959,7 +991,7 @@ def test_r7_reuses_an_earlier_outputs_commitment():
     reg = _registered(prog)
     first, ports = _record(prog, reg)
     part = P.partition(prog, Q)
-    dom = R.served_domain(part["program"], P.digest(part), "prev.out", "hm96-sha512/row/v1", len(TABLE), "r-earlier")
+    dom = R.window_domain(part["program"], P.digest(part), "prev.out", "hm96-sha512/row/v1", len(TABLE), "r-earlier")
     earlier = R.record(prog, Q, LAW, SCHEME, [*first["roots"], {"port": "prev.out", "root": "cd" * 64, "leaves": len(TABLE),
                                                                "domain": dom},
                                               {"port": "short", "root": "cd" * 64, "leaves": 4, "domain": dom}],
@@ -987,7 +1019,48 @@ def test_r7_reuses_an_earlier_outputs_commitment():
     assert {e["domain"] for e in G.reads_file(prog, Q, {"W": 2}, {"W": "cd" * 64})["ports"].values()} == {reg.entry()["domain"]}
 
 
-#: an AROW row table's port (`verity_vllm.commit.serving_rows.RowTable.port`: `row-table/<engine step>/<op_path>`)
+def test_r7_reuses_an_earlier_records_registered_value():
+    """A value may reuse an earlier record's registered value (`outputs: {value: {"record", "value"}}`, H1's `a/<K>@<s>` as
+    a Commit's AROW, say): its entry takes that entry's domain and root, with no tree of its own, under another name or the
+    same. A record entry of another root is `R7-held`, of another domain `R7-domain` too; a record or value the log
+    doesn't hold, or an earlier entry of other leaves, words or word bits, is `R7-output`; and a malformed `outputs` is
+    refused before the record is read."""
+    prog = _program()
+    reg = _registered(prog)
+    first, ports = _record(prog, reg)
+    dom = "da" * 64
+    theirs = {**reg.entry(), "value": "a/16@0", "root": "cd" * 64, "domain": dom}
+    earlier = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 6},
+                       registered=[{**theirs, "root": "ce" * 64}, theirs])
+    entry = {**reg.entry(), "root": "cd" * 64, "domain": dom}
+    rec = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=R.digest(earlier),
+                   registered=[entry])
+    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "log": [earlier]}
+    out = {"W": {"record": R.digest(earlier), "value": "a/16@0"}}
+    assert R.check(rec, prog, Q, **kw, outputs=out).ok
+    assert R.check(rec, prog, Q, **kw).codes == ("R7-domain",)
+    assert R.check({**rec, "registered": [{**entry, "root": "ef" * 64}]}, prog, Q, **kw, outputs=out).codes == ("R7-held",)
+    assert R.check({**rec, "registered": [{**entry, "domain": "db" * 64}]}, prog, Q, **kw,
+                   outputs=out).codes == ("R7-domain",)
+    assert R.check({**rec, "registered": [reg.entry()]}, prog, Q, **kw, outputs=out).codes == ("R7-domain", "R7-held")
+    same = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[{**theirs, "value": "W"}])
+    assert R.check({**rec, "previous": R.digest(same)}, prog, Q, **{**kw, "log": [same]},
+                   outputs={"W": {"record": R.digest(same), "value": "W"}}).ok
+    for e in ({**theirs, "leaves": 4}, {**theirs, "words": 1}, {**theirs, G.WIDTH_KEY: 32}, {**theirs, "domain": 1},
+              {**theirs, "root": None}, {**theirs, "leaves": True}):
+        other = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[e])
+        assert R.check({**rec, "previous": R.digest(other)}, prog, Q, **{**kw, "log": [other]},
+                       outputs={"W": {"record": R.digest(other), "value": "a/16@0"}}).codes[0] == "R7-output", e
+    for bad in ({"record": "ee" * 64, "value": "a/16@0"}, {"record": R.digest(earlier), "value": "nope"},
+                {"record": R.digest(earlier), "value": "W"}, {"record": R.digest(rec), "value": "a/16@0"}):
+        assert R.check(rec, prog, Q, **kw, outputs={"W": bad}).codes[0] == "R7-output", bad
+    for bad in ({"W": {**out["W"], "port": "prev.out"}}, {"W": {**out["W"], "value": 1}}, {"W": {"value": "a/16@0"}},
+                {"W": {**out["W"], "record": "EE" * 64}}):
+        with pytest.raises(ValueError):
+            R.check(rec, prog, Q, **kw, outputs=bad)
+
+
+#: an AROW row table's port (`verity.ml.windows.rows.RowTable.port`: `row-table/<engine step>/<op_path>`)
 ROW_TABLE = "row-table/3/model.layers.0.mlp.down_proj"
 
 
@@ -998,7 +1071,7 @@ def test_pouw_roots_reads_an_arow_row_table_root():
     _, check, w, _ = _seeded_case()
     prog, q = check["program"], check["query"]
     part = P.partition(prog, q)
-    dom = R.served_domain(part["program"], P.digest(part), ROW_TABLE, "hm96-sha512/row-seg/v1", 5, "r-registered")
+    dom = R.window_domain(part["program"], P.digest(part), ROW_TABLE, "hm96-sha512/row-seg/v1", 5, "r-registered")
     ports = {**check["ports"], ROW_TABLE: {"leaves": 5, "domain": dom}}
     sup = {"pouw.roots": [[{"port": ROW_TABLE}, {"value": "W"}]] * 2}
     check = {**check, "ports": ports, "supplied": sup}

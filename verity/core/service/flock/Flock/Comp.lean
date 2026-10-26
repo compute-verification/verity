@@ -13,6 +13,31 @@ open Lean (Json)
 @[inline] def rd32 (b : ByteArray) (o : Nat) : Nat :=
   (b.get! o).toNat ||| ((b.get! (o + 1)).toNat <<< 8) ||| ((b.get! (o + 2)).toNat <<< 16) ||| ((b.get! (o + 3)).toNat <<< 24)
 
+/-- `rd32` as compiled code computes it (`rd32Fast_eq`): the shifts in `UInt32`, where compiled `Nat.shiftLeft` makes a
+GMP integer each time. -/
+@[inline] def rd32Fast (b : ByteArray) (o : Nat) : Nat :=
+  ((b.get! o).toUInt32 ||| ((b.get! (o + 1)).toUInt32 <<< 8) ||| ((b.get! (o + 2)).toUInt32 <<< 16) |||
+    ((b.get! (o + 3)).toUInt32 <<< 24)).toNat
+
+theorem rd32Fast_shl (x : UInt8) (k : UInt32) (hk : k.toNat + 8 ≤ 32) :
+    (x.toUInt32 <<< k).toNat = x.toNat <<< k.toNat := by
+  have hk32 : k.toNat % 32 = k.toNat := Nat.mod_eq_of_lt (by omega)
+  rw [UInt32.toNat_shiftLeft, UInt8.toNat_toUInt32, hk32, Nat.shiftLeft_eq]
+  apply Nat.mod_eq_of_lt
+  calc x.toNat * 2 ^ k.toNat < 2 ^ 8 * 2 ^ k.toNat := Nat.mul_lt_mul_of_pos_right x.toNat_lt (Nat.two_pow_pos _)
+    _ = 2 ^ (8 + k.toNat) := (Nat.pow_add 2 8 k.toNat).symm
+    _ ≤ 2 ^ 32 := Nat.pow_le_pow_right (by decide) (by omega)
+
+theorem rd32Fast_eq (b : ByteArray) (o : Nat) : rd32Fast b o = rd32 b o := by
+  simp only [rd32Fast, rd32, UInt32.toNat_or, UInt8.toNat_toUInt32,
+    rd32Fast_shl _ 8 (by decide), rd32Fast_shl _ 16 (by decide), rd32Fast_shl _ 24 (by decide)]
+  rfl
+
+/-- Compiled code runs `rd32Fast`; the kernel and every proof see `rd32`. `@[csimp]` rewrites only code compiled after
+it, so it stays directly below `rd32`. -/
+@[csimp] theorem rd32_eq_rd32Fast : @rd32 = @rd32Fast :=
+  funext fun b => funext fun o => (rd32Fast_eq b o).symm
+
 def findByte (b : ByteArray) (x : UInt8) (from_ : Nat := 0) : Option Nat := Id.run do
   for i in [from_:b.size] do
     if b.get! i == x then return some i

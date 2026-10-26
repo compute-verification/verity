@@ -1,52 +1,68 @@
 {
  "pieces": {
   "AmpereBF16TcDot16_v2": {
-   "and": 8623
+   "and": 8623,
+   "type": "a693d27cf03277ce17e6c1310090757d36c2e01236ae2da4ad7a55e68fc1ade9a4dea405fbd940a780a4915e27d44bff96a01d202209a453ea18bc745871bd82"
   },
   "Bf16ToF32_v1": {
-   "and": 0
+   "and": 0,
+   "type": "b8fef7282a51d9255073904c830a19c189015152c35aa89d8a829d661ed8853711e0369a34ed74ec94cafcad410be27c9928a686cc7d578b6a562d4f05ed6fc2"
   },
   "BlackwellE4m3QmmaDot32_v1": {
-   "and": 9793
+   "and": 9793,
+   "type": "78ec6bf5c22150be484f864932bad82ea7ef96ecede7feed1a647832ccba40cfcce90e5d7a840ea2013cc0d4524d6ce48fb3d837bbac13f239562236f7316f60"
   },
   "BlackwellMxf4OmmaDot64_v1": {
-   "and": 6140
+   "and": 6140,
+   "type": "8965062c0b90dbb074016d235ef8a2b4cdd0a84348e548403db8bb57e6bcf06f294babcf0536d0b286739d4af4899ce34867ce6dd315974212515854f6bbd31e"
   },
   "BlackwellNvf4OmmaDot64_v1": {
-   "and": 7002
+   "and": 7002,
+   "type": "e6c2293dea3a017dad42534c19286e63f179723e1ff8ca82d875928743ca789a5faca7c25ec0558631be4d7238d2dbeff7f24f7354567bc16613bfa197817f07"
   },
   "BlackwellS8ImmaDot32_v1": {
-   "and": 4190
+   "and": 4190,
+   "type": "df576ecd1c0ee15498a4388e8cad0688d3e8e0cbb8dee5d6e473137b1796d24f2b70f4bac2502830b4a841a731344d1c75ffc963436d3113d00f18f11f8af6b6"
   },
   "BlackwellU8S8ImmaDot32_v1": {
-   "and": 4157
+   "and": 4157,
+   "type": "8313e5c9343b583dc74bb75fbd5e95e312f9368d8122c3017104780aee28799a5d1c758b5d4033d4fbad15d0b60bacf22b2ce3d4b5838c6f01c76f58dacf98d9"
   },
   "E4m3ToF32_v1": {
-   "and": 15
+   "and": 15,
+   "type": "09605a1ca9afa6fbab1b4ed8fd823ead84d7a64329b3523292eca813967441c9397bd82e30fdc37bd12d39624cfd5fdde26bca52467aeada344d1172e49bbed0"
   },
   "F2fpBf16_v1": {
-   "and": 77
+   "and": 77,
+   "type": "54e44968136da779888da15bdb10213ca2508639d6420b79732cf0ebe28e3b1fc4ee59585cb9be19aa81ee9a8547612934953ebe90271e4ff66cdc24806c6541"
   },
   "F32ToBf16Rn_v1": {
-   "and": 77
+   "and": 77,
+   "type": "c026559ab1376b3b787a29f0db00a96abefe9a04820e3136d8f9d7c19ac3438a6de64d7bae74e80af571325db906bf0264b4085288c537b0da20b2cbe540ab3d"
   },
   "F32ToE2m1Sat_v1": {
-   "and": 60
+   "and": 60,
+   "type": "1d311d6ec263ac01be4cc0d5d83bfc683d6eb7f76b6f9ce5cc566f62056d995ed3e9b3008e43bc7ecff44dae95576be8625819de1e7e7530430183f4d4b6b7ea"
   },
   "F32ToE4m3Sat_v1": {
-   "and": 238
+   "and": 238,
+   "type": "1cfba2f6b70300dcc67c10896767d220a85676038f74932a371c53fcf489f058e33aaefcdc46d5259f66813f65fdffa49c8a38046b06e34cf5a4e8830f3d379e"
   },
   "HopperBF16WgmmaDot16_v1": {
-   "and": 8233
+   "and": 8233,
+   "type": "64f68d5903a41bfba1a97bf05b3f66d52b6a2ebc108f8aade3fa1b8222c4f754afa603b869570bac0b2e03378401a89890603c4fe9767fa28d4552f902c193db"
   },
   "HopperE4m3MmaV2Dot32_v1": {
-   "and": 10367
+   "and": 10367,
+   "type": "d52fe534bf1cde99c746c1800f2aabf503094ff0380385d92cf24cc7df80fee28e262d079c7238f75a5246465a2f67125689e00871121119b9fd2ee25f9896e4"
   },
   "HopperE4m3QgmmaDot32_v1": {
-   "and": 7377
+   "and": 7377,
+   "type": "63ec29a2ff040c44176efb7b54cdd595c35b342ca7897f733a56d68c7a6869327d80313185b7a8a4f5dcaa1450734ca3fa341d837830d1831210e82411ec49a2"
   },
   "S32ToF32Rn_v1": {
-   "and": 368
+   "and": 368,
+   "type": "988310cf723bfb9334859b3f990b1ae7834109f8d3995119e31aa242d40807a8b8e2756e7f2c5857da44cff0b382d813d31b4348efd3b875a5abd02db9653365"
   }
  }
 }

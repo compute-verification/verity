@@ -147,6 +147,7 @@ def _commit_resident(snapshot: tracemalloc.Snapshot) -> int:
     return sum(t.size for t in traces if t.domain != 0 or not t.traceback[-1].filename.startswith(np_dir))
 
 
+@pytest.mark.slow
 def test_transient_storage_is_released() -> None:
     """After commit only roots + declared per-tile state remain: the fixture's arrays and every leaf/level are gone."""
     # A first commit pays every first use (numpy's dispatch caches, lazy imports), so the measured one counts the same bytes

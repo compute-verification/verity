@@ -5,7 +5,7 @@ import Proofs.Accounting.TS.Session.Held.Layer
 
 `OkRealizes`: the session's key program computes, at each unit, the checks of one unit of the declared circuit `Cd`,
 so that its `ok` wires carrying the `ok` row means those checks hold. It belongs in
-`Security/Models/Accounting/Assumptions/TS`, but it reads `RowsSession`, which is in the proofs package, so it is here
+`Security/Definitions/Accounting/Assumptions/TS`, but it reads `RowsSession`, which is in the proofs package, so it is here
 beside `Accounting.Assumptions.TS`'s other session premises (`Proofs.Accounting.TS.Session.Assumptions`).
 -/
 

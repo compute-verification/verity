@@ -29,6 +29,8 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.records import workload as workload_record
+
 #: The source tree holding the ``verity_vllm`` package, ``manifests/`` and ``workloads/``.
 ROOT = Path(str(resources.files("verity_vllm"))).resolve().parent
 MANIFESTS = ROOT / "manifests"
@@ -149,6 +151,15 @@ class RowId:
                           f"o{self.max_output}", self.arrivals, self.sampling, self.execution))
 
 
+#: A row id inside text (a workload path, a log line): ten ``__``-separated fields, the four integer ones by their prefix.
+ROW_ID_PATTERN = r"[\w\-]+__[\w\-]+__[\w\-]+__tp\d+__b\d+__i\d+__o\d+__\w+__\w+__[\w\-]+"
+
+
+def row_tokens(row: str) -> list[str]:
+    """A row id's ``__``-separated fields as written, unvalidated (`RowId.parse` validates them)."""
+    return row.split("__")
+
+
 def row_int(row: str, prefix: str, default: int = 1) -> int:
     """The ``__<prefix><N>__`` field of a row id (``tp``, ``b``, ``i``, ``o``), ``default`` when the id has none."""
     for m in _TOKEN.finditer(str(row)):
@@ -178,7 +189,7 @@ def row_target(row: str) -> str | None:
     return parts[2] if len(parts) >= 4 and parts[3].startswith("tp") else None
 
 
-#: The protocols a run can enable (`verity_vllm.protocol_options`), in install order, innermost first: PoUW replaces the
+#: The protocols a run can enable (`verity_vllm.protocols`), in install order, innermost first: PoUW replaces the
 #: linear layers' GEMMs, POUS decodes the weights those GEMMs read, sampled proofs commits what the model computed.
 PROTOCOLS = ("pouw", "pous", "sampled-proofs")
 #: The set a row runs when its target declares none: sampled proofs alone, the Commit as it has always run.
@@ -192,7 +203,7 @@ def parse_protocols(value: str | Mapping[str, str] | Any | None) -> tuple[str, .
     ``value`` is None, ``""`` or ``"none"`` (the empty set), a comma-separated string, an iterable of entries, or a mapping
     ``{name: scheme}``.  Refuses (ValueError) an unknown protocol, an entry without a scheme, a malformed scheme and two
     entries of one protocol.  Whether a scheme is registered is the protocol package's to say
-    (`verity_vllm.protocol_options.refusals`)."""
+    (`verity_vllm.protocols.refusals`)."""
     if value is None or (isinstance(value, str) and value.strip() in ("", "none")):
         return ()
     if isinstance(value, Mapping):
@@ -283,8 +294,9 @@ def checkpoint_dir(model: str, revision: str, hf_home: str, checkpoints: str | P
 #: The vLLM commit this tree derives and serves on: ``vllm.__version__`` must carry ``+g<VLLM>`` (``TargetProfile.vllm_revision``).
 VLLM = "d9105ea80"
 
-#: A row file (``workloads/<row>.json``): the workload and its pinned ``engine`` block (:class:`RowConfig`).
-WORKLOAD_SCHEMA = "verity-vllm/workload/v2"
+#: A row file (``workloads/<row>.json``): the workload and its pinned ``engine`` block (:class:`RowConfig`), the typed record
+#: ``records.workload.Workload``.
+WORKLOAD_SCHEMA = workload_record.SCHEMA
 
 #: How a row's requests are done: at their public cap (``sampling.ignore_eos``: every request runs its ``max_tokens`` steps), or at an
 #: EOS the model samples before it.  A row of record is done only at its public cap (Daniel, ASK-39, 18 Oct), so its served length is
@@ -441,7 +453,13 @@ class BuildConfig:
     build_ram_budget_gb: float | None = option("--build-ram-budget-gb", env="BUILD_RAM_BUDGET_GB", type=float, default=None,
                                                help="auto's memory budget when the host's headroom is shared (a sweep's per-config share)")
     build_timeout: int | None = option("--build-timeout", env="BUILD_TIMEOUT", type=int, default=None,
-                                       help="seconds per derive; default scales with the envelope (TP: 7200)")
+                                       help="seconds for one derive (and for one workload Program compose; TP: one rank's GP-01 and the "
+                                            "call-boundary check); default scales with the envelope (TP: 7200).  Never the TP manifest, "
+                                            "which --manifest-timeout bounds")
+    manifest_timeout: int | None = option("--manifest-timeout", env="MANIFEST_TIMEOUT", type=int, default=None,
+                                          help="TP: seconds for the required-value manifest over the W ranks, the Build's and a Commit's "
+                                               "rebuild (default 4 h + 1200 s a component build, W x declared requests: "
+                                               "row_records.manifest_timeout; 0 = no limit).  manifest.log reports each component built")
     lp: int | None = option("--lp", env="LP", type=int, default=None,
                             help="request wrapper prompt length (default: the longest prompt; a stochastic row: r0's)")
     t: int | None = option("--t", env="T", type=int, default=None,
@@ -457,7 +475,7 @@ class BuildConfig:
                                            "check (the Commit builds the manifest it runs over); `verity-vllm neutrality`'s heavy tier")
     build_construction: str = option("--build-construction", env="BUILD_CONSTRUCTION", default="record", choices=("record", "trace"),
                                      help="TP: record = the row's construction of record, the AOT Build for a switched row (its `aot` in "
-                                          "manifests/records.json, verity_vllm.predict.aot) and the trace for any other; trace = the trace "
+                                          "manifests/records.json, verity_vllm.program.predict.aot) and the trace for any other; trace = the trace "
                                           "(`verity-vllm neutrality`'s heavy tier)")
     aot_trace: str | None = option("--aot-trace", env="AOT_TRACE", default=None,
                                    help="TP, a switched row: the dir holding its `aot.trace` Build (build/rank<r>/build_*), e.g. a job's "
@@ -488,14 +506,22 @@ class MatchConfig:
     compare_timeout: int | None = option("--compare-timeout", env="COMPARE_TIMEOUT", type=int, default=None,
                                          help="seconds per comparator (default scales with B and the envelope)")
     fold_timeout: int | None = option("--fold-timeout", env="FOLD_TIMEOUT", type=int, default=None,
-                                      help="TP: seconds for each leg of the per-rank fold Match (fold, compare, GM-01; default 7200); "
-                                           "tp-fold-match as a whole gets four legs' worth, the cross-rank leg included")
+                                      help="TP: seconds for each leg of the per-rank fold Match (fold, compare, GM-01; default 350 s a GiB of a "
+                                           "rank's summed request derive peaks, at least 7200: row_records.fold_plan); tp-fold-match as a "
+                                           "whole gets the folds' rounds, the compare and GM-01 rounds and the cross-rank leg "
+                                           "(row_records.fold_phase_s: four legs when every rank runs at once)")
+    fold_mem_gb: float | None = option("--fold-mem-gb", env="RESEARCH_RUN_MEM_GB", type=float, default=None,
+                                       help="TP: the memory (GB) the fold Match's concurrent legs are sized to (default: research run's "
+                                            "--mem-gb, RESEARCH_RUN_MEM_GB; without one, the host's headroom); one that holds no planned "
+                                            "GM-01 leg beside one fold runs one rank at a time, with a warning in row.log")
     fold_rank_workers: int = option("--fold-rank-workers", env="FOLD_RANK_WORKERS", type=int, default=0,
-                                    help="TP: ranks whose fold Match legs run at once (0 = every rank; a GLM-5.3 B8 rank's X-09 compare "
-                                         "passes 200 GB, so 8 at once overfill a 1.5 TB host)")
+                                    help="TP: ranks whose compare and GM-01 legs run at once (0 = as many as --fold-mem-gb holds at a GM-01 "
+                                         "leg's planned peak beside one fold, 5.5x a rank's summed request derive peaks: GLM-5.3 B8 I256's "
+                                         "339 GiB; every rank when the checkpoint's layers are unknown)")
     fold_workers: int = option("--fold-workers", env="FOLD_WORKERS", type=int, default=0,
-                               help="TP: ranks whose fold leg runs at once (0 = as --fold-rank-workers, which then bounds only their compare "
-                                    "and GM-01 legs; a GLM-5.3 B8 I256 rank's fold peaks at 40 GB, its GM-01 with the shared X-09 near 400 GB)")
+                               help="TP: ranks whose fold leg runs at once (0 = as many as the memory those GM-01 legs leave holds at a "
+                                    "fold's planned peak, 0.6x the same sum: B8 I256's 40 GB; as --fold-rank-workers when it is given or "
+                                    "the layers are unknown)")
     match_reuse: str = option("--match-reuse", env="MATCH_REUSE", default="off", choices=("off", "fold", "legs"),
                               help="TP, --match-phase cpu, rerunning a CPU half that stopped part way under the same code: fold = keep each "
                                    "rank's persisted fold of the capture in place; legs = also each rank's written compare and GM-01 "
@@ -560,7 +586,7 @@ class CommitConfig:
                                            "rank, from tp-commit itself (verity_vllm.pipeline.tp.serving_rows; needs REPLAY_DEFERRED=1)")
     remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
                                          help="the remote bandwidth session's verifier: the Commit proves its store to it in lockstep "
-                                              "with its first instrumented run (verity_vllm.store.remote; single-GPU rows)")
+                                              "with its first instrumented run (verity_vllm.protocols.remote_bandwidth.remote; single-GPU rows)")
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
                                 "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")

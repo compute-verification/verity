@@ -61,17 +61,16 @@ theorem ksLin2_deployed_caps (b : Brings) (fin : Msg → List (ℕ × List (Msg 
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
           (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-            L shape shows chk s) ∧
+            L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
             L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
-    ReadersLogColl FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro L Bd D bL hP hRT hRL hRP
-  refine ksLin2_deployed_rows b fin wE join final w ?_ hRT hRL hRP
+  intro L Bd D bL hP hRT hRP
+  refine ksLin2_deployed_rows b fin wE join final w ?_ hRT hRP
   obtain ⟨decC, hRun, hS⟩ := hP
   refine ⟨decC, hRun, fun shape hsh => ?_⟩
   obtain rfl := List.mem_singleton.1 hsh

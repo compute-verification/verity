@@ -15,7 +15,7 @@ from torch import nn
 
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.derive import Unsupported, derive, derive_report
-from verity_vllm.program.kernels.serve3_reference import materialize
+from verity.ml.definitions.numerics.serve3_reference import materialize
 from verity.ml.circuits.types import Array, Value
 
 REF = dict(mode="reference")
@@ -624,6 +624,7 @@ def test_grh7_f32_inv_freq_records_no_cast_and_the_program_is_unchanged():
     assert torch.equal(got, want)
 
 
+@pytest.mark.slow
 def test_grh7_bf16_tiny_llama_forward_greedy_token_matches_torch():
     """`HFTinyLM` (HF `LlamaForCausalLM` at the op interface) cast to bf16 as HF does: bf16 weights AND bf16 `inv_freq`."""
     m = _bf16_model(ex.HFTinyLM, _C_BF16, torch.bfloat16)
@@ -642,6 +643,7 @@ def test_grh7_bf16_tiny_llama_forward_greedy_token_matches_torch():
         assert w == 32 and got == want.tolist(), (ids, got, want)  # greedy token bit-equal to torch CPU bf16
 
 
+@pytest.mark.slow
 def test_grh7_bf16_tiny_llama_greedy_request_tokens_match_torch():
     m = _bf16_model(ex.HFGreedy, _C_BF16, 2, torch.bfloat16)
     assert m.lm.rotary_emb.inv_freq.dtype == torch.bfloat16

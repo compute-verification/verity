@@ -54,6 +54,7 @@ src/cluster/
 │               SSH, logged in its override log and read back
 └── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate | status | policy
 descriptions/nebius.toml   vy-nebius-1 and vy-nebius-2 as their owners describe them on 30 Sep 2026, and their policy
+descriptions/nebius-after-n1.toml   node 2 alone, staged for node 1's retirement (INF-57): it replaces nebius.toml then
 kinds/<owner>.toml         each owner lane's job kinds, read from the tree a submitter ships (kinds.py's docstring)
 vy-cluster-agent.service   node 2's live agent as a systemd unit: install, stop and restart in its header
 tests/          one scenario per rule (test_plan.py), random workloads checked against every rule (test_simulation.py),

@@ -22,7 +22,8 @@ import torch
 from verity.ml.circuits.refs import Coll, array_of
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import StaticIndex, _LiftedConstant
-from verity_vllm.program.frontend.torch_frontend import _permute, _tensor_type, shape_of
+from verity_vllm.program.frontend.strided_views import _permute, _tensor_type
+from verity_vllm.program.frontend.value_types import shape_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import shape
 

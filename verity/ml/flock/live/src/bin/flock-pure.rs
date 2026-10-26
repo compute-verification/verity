@@ -932,6 +932,7 @@ fn replay(p: &Arc<Pure>, inst: &Instances, rec: &Value, proofs: &[Vec<u8>]) -> R
 }
 
 fn main() {
+    flock_live::init_threads();
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let inst = Instances::load(&arg("--instances", "instances.bin"));
     let net = Arc::new(UnitNet::load(&arg("--netlist", "net.txt")));
@@ -1033,7 +1034,7 @@ fn serve_loop(make: impl Fn() -> Server) {
         let rec = s.record_json();
         let d = out.join(&id);
         std::fs::create_dir_all(&d).unwrap();
-        std::fs::write(d.join("session.json"), serde_json::to_string_pretty(&rec).unwrap()).unwrap();
+        std::fs::write(d.join("session.json"), flock_live::record_text::canonical_json(&rec)).unwrap();
         let line = json!({"session": id, "accepted": rec["verdict"]["accepted"], "why": rec["verdict"]["why"], "aborted": rec["aborted"],
                           "link_mode": rec["link_mode"], "link_sha256": rec["link_sha256"], "require_link": rec["config"]["require_link"],
                           "sigma": rec["hello"], "verify_s": rec["verdict"]["verify_s"], "rounds": rec["verdict"]["rounds"]});

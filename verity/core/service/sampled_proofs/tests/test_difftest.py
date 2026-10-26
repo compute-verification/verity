@@ -9,7 +9,8 @@ Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the
 `OwnRandomness` over the given bytes, for the `select` piece the challenger's draw from a Spec's selection rule on
 (`service.selection_law`, `draw.derive` and `service.select_draw` on fixed coins, with the bytes it read), for the
 `slots` piece that draw in the claims' slots, read off `partition.strata`, `partition.unit_gates` and the root's input
-nodes (`slots`), for `check_public` and `check_verdicts` the proof service's own (`service.check_public`,
+nodes (`slots`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
+arbitrary calls tables, for `check_public` and `check_verdicts` the proof service's own (`service.check_public`,
 `service.check_verdicts`), and for the `run` piece (a registration's whole run, `Run.run`) those references in a
 `Stream`'s order. The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
 programs of random members of three templates, and rarely of `FORK` and of `IDENTITY`, of no gate, which one-stage
@@ -22,7 +23,8 @@ the programs with a pair of digests to fill (`SUPPLIED_SETUPS`, 32- and 1-bit le
 the record, the log's positions and its coin bound to its binding and the record's window (`supplied`,
 `registered.supplied_root`), which the record registers as it fills it, and it may pin a value's root (`pinned`, R7-held)
 or take W as an output of the log's earlier record (`outputs`: W's entry is that record's port `EARLIER_OUT`, its domain
-and root, R7-output), and be bound to a stream and a prover (`binding`, which the record's window names: R6-stream,
+and root, or that record's registered value `EARLIER_VALUE`, its domain and root at W's leaves, words and word bits,
+R7-output), and be bound to a stream and a prover (`binding`, which the record's window names: R6-stream,
 R6-prover). A verifier may name its window's open root (`window_root`, `WROOT`) and the values it holds across windows
 (`held`): the record registers every other value it doesn't fill, pin or take as an output under `WROOT`'s domain, and
 the log's earlier record under another window's (`EARLIER_WROOT`), its own or none.
@@ -37,6 +39,7 @@ import copy
 import functools
 import hashlib
 import json
+import random
 import re
 import shutil
 from fractions import Fraction
@@ -52,14 +55,17 @@ import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
 from verity.core.protocols.sampled_proofs import service
-from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, partition as P, produced as PD,
-                                                            registered as G, registration as R)
-from verity.core.protocols.sampled_proofs.coins import OwnRandomness, draw_first
+from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
+                                                            partition as P, produced as PD, registered as G,
+                                                            registration as R)
+from verity.core.protocols.sampled_proofs.coins import OwnRandomness, coins_reason, draw_first
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program, input_id, is_input
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Record, Tuple, Value
+
+from test_challenger_difftest import DRAW_MUTATIONS, Drawn, _mutated, lms_verify
 
 PACKAGE = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -130,6 +136,8 @@ EARLIER = {"kind": "served", "row": 100, "run": "r-test"}
 #: the earlier record's output port a verifier's `outputs` may name as W's commitment, and its domain
 EARLIER_OUT = "earlier.out"
 EARLIER_OUT_DOMAIN = "dd" * 64
+#: the earlier record's registered value a verifier's `outputs` may reuse as W's commitment, under that domain
+EARLIER_VALUE = "earlier.W"
 #: the window's open root a verifier may name, and an earlier window's
 WROOT = "a7" * 64
 EARLIER_WROOT = "e0" * 64
@@ -151,7 +159,7 @@ class Setup:
         self.population = P.units(program, query)
         self.templates = [t for t, _ in P.strata(program, query)]
         part = P.partition(program, query)
-        self.ports = {p: {"domain": R.served_domain(self.sha512, P.digest(part), p, schema, leaves, "r-test"), "leaves": leaves}
+        self.ports = {p: {"domain": R.window_domain(self.sha512, P.digest(part), p, schema, leaves, "r-test"), "leaves": leaves}
                       for p, schema, leaves in (("out", "u16", 2 * self.population),
                                                 ("x", "hm96-sha512/row/v1", self.population))}
 
@@ -871,6 +879,51 @@ def bernoulli_bound(j):
     return {"bound": Bernoulli(p).count_bound(j["population"], delta)}
 
 
+def _hidden_width(j) -> int:
+    if not _nat(j["width"]) or j["width"] < 1:
+        raise D.Reject("width is not a positive integer")
+    return j["width"]
+
+
+def _hidden_nats(x, what: str) -> list[int]:
+    if not isinstance(x, list) or not all(_nat(n) for n in x):
+        raise D.Reject(f"{what} is not a list of natural numbers")
+    return x
+
+
+def _hidden_calls(x) -> list[HD.Call]:
+    if not isinstance(x, list) or not all(isinstance(c, list) and len(c) == 2 and all(_nat(n) for n in c) for c in x):
+        raise D.Reject("calls is not a list of [offset, rows] of natural numbers")
+    return [HD.Call(*c) for c in x]
+
+
+def _hidden_witness(w):
+    return None if w is None else list(w)
+
+
+def hidden_offsets(j):
+    j = _json(j)
+    _exactly(j, {"rows", "width"}, "the input")
+    width, rows = _hidden_width(j), _hidden_nats(j["rows"], "rows")
+    return {"offsets": HD.offsets(width, rows), "total": HD.total(width, rows)}
+
+
+def hidden_locate(j):
+    j = _json(j)
+    _exactly(j, {"calls", "positions", "width"}, "the input")
+    width, calls, positions = _hidden_width(j), _hidden_calls(j["calls"]), _hidden_nats(j["positions"], "positions")
+    return {"located": [_hidden_witness(HD.locate(width, calls, r)) for r in positions]}
+
+
+def hidden_witness(j):
+    j = _json(j)
+    _exactly(j, {"call", "calls", "position", "width"}, "the input")
+    width, calls = _hidden_width(j), _hidden_calls(j["calls"])
+    if not _nat(j["call"]) or not _nat(j["position"]):
+        raise D.Reject("call or position is not a natural number")
+    return {"witness": _hidden_witness(HD.witness(width, calls, j["call"], j["position"]))}
+
+
 def _fixed_audit():
     """One valid audit whose verdicts the `verdict` piece replaces."""
     s = SETUPS[2]
@@ -1052,7 +1105,8 @@ def run(j):
     order. `register`: `check_public` on the values and declared items, the population, R1-R7 under
     `service.selection_law` over it (a rate law's count of none or more than N: `rate`), a law whose drawn count varies
     (`service.count_varies`: `shapes`), and the
-    receipt; `select`: the draw from the source's bytes (`select`); `deliver`: one or more sessions, each matching
+    receipt; `select`: the draw from the source's bytes (`select`), its coins what `coin_source` says (`_coins_hold`:
+    code `coins`); `deliver`: one or more sessions, each matching
     `service._DIGEST`; `outcome`: `check_verdicts`, then the audit record (`record`) over the draw's proved units unless
     given, its acceptance the symbol and the first verdict of record's public outputs shown on an accept. A step that refuses gives `{"step",
     "codes"}`; inputs the Lean decodes before the run (`Pieces.run`) are refused up front."""
@@ -1078,6 +1132,8 @@ def run(j):
     if not isinstance(j.get("source"), str):
         raise D.Reject("source is not hex")
     PR.unhex(j["source"])
+    if j.get("coin_source") not in ("verifier", "challenger"):
+        raise D.Reject("coin_source is verifier or challenger")
     rec = j.get("record")
     pub = check_public({"public": ps, "query": j["params"]["query"], "record": rec, "scheme": p["scheme"], "values": vs})
     if pub["codes"]:
@@ -1103,6 +1159,8 @@ def run(j):
         raise D.Reject(str(e)) from None
     drawn = select({"closure": closure, "program": j["params"]["program"], "query": j["params"]["query"], "rule": j["rule"],
                     "source": j["source"], "work_table": j["params"].get("work_table")})
+    if not _coins_hold(j, rec, PR.unhex(j["source"])[:drawn["read"]]):
+        return {"codes": ["coins"], "step": "select"}
     codes = DR.check_draw(drawn["draw"], rec, derived).codes
     if codes:
         return {"codes": list(codes), "step": "select"}
@@ -1123,6 +1181,16 @@ def run(j):
     return {"audit": codec.canonical_json(out).decode(), "draw": drawn["draw"],
             "public": shown if accepted else {}, "read": drawn["read"], "receipt": receipt,
             "symbol": "accept" if accepted else "reject"}
+
+
+def _coins_hold(j: dict, rec: dict, read: bytes) -> bool:
+    """`Run.coinsHold`: a draw from the verifier's own coins carries no evidence; one from the challenger carries
+    evidence that holds (`coins_reason`) for the verifier's window root, after the registration's digest."""
+    if j["coin_source"] == "verifier":
+        return j.get("coins") is None
+    window = j["params"].get("window_root")
+    return window is not None and coins_reason(j.get("coins"), window, bytes.fromhex(R.digest(rec)), read,
+                                               lms_verify) is None
 
 
 def hello(j):
@@ -1256,15 +1324,20 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
     if earlier and values and "W" in values and "W" not in sup and draw(st.booleans()):
         # W is an output of the earlier run: its port, of W's rows, under a root and domain of its own
         output = {"root": "c1" * 64, "domain": EARLIER_OUT_DOMAIN}
+    reuse = bool(output) and draw(st.booleans())
     pin = not output and bool(values) and "W" in values and "W" not in sup and draw(st.booleans())
     fixed = [*keep, *(["W"] if pin or output else []), *sup]
     if earlier:
         # the log's commitment of a supplied value is any other: it is the record's own, never held
         roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
-        if output:
+        given = list(s.entries(held, log_window, fixed)) if held else []
+        if reuse:
+            # W reuses the earlier record's registered value: an entry of W's rows, words and word bits, under that root
+            given.append({**s.committed["W", values["W"]].entry(), "value": EARLIER_VALUE, **output})
+        elif output:
             roots.append({"port": EARLIER_OUT, "leaves": s.committed["W", values["W"]].entry()["leaves"], **output})
         log = [R.record(s.program, s.query, law, SCHEME, roots, EARLIER, leaf_layer=LEAF, partition=part, work_table=table,
-                        registered=s.entries(held, log_window, fixed) if held else ())]
+                        registered=given)]
     anchors = draw(st.sampled_from([[], ["weights"]]))
     binding = BINDING if _reads_window(sup) or draw(st.booleans()) else None
     rec = _record_of(s, values, law, {**WINDOW, **(binding or {})}, log, binding, output=output,
@@ -1279,7 +1352,8 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
     if isinstance(s, RegisteredSetup) and s.supplied(values):
         params["supplied"] = s.supplied(values)
     if output:
-        params["outputs"] = {"W": {"port": EARLIER_OUT, "record": R.digest(log[-1])}}
+        params["outputs"] = {"W": {**({"value": EARLIER_VALUE} if reuse else {"port": EARLIER_OUT}),
+                                   "record": R.digest(log[-1])}}
     elif pin:
         params["pinned"] = {"W": next(e["root"] for e in rec["registered"] if e["value"] == "W")}
     if values and s.formats and draw(st.integers(0, 3)):
@@ -1496,8 +1570,31 @@ def _earlier_out(a: dict, x: int) -> None:
     a["params"]["log"] = [{**r, "roots": [
         {**e, ["leaves", "domain", "root"][x % 3]: [1, 1000, True, None, "x", -1][x // 3 % 6]} if e["port"] == EARLIER_OUT
         else e for e in r["roots"]]} for r in a["params"]["log"]]
+    _repoint(a)
+
+
+def _earlier_value(a: dict, x: int) -> None:
+    """The earlier record's registered value `EARLIER_VALUE` changed (its leaves, words, word bits, domain, root or name,
+    to another form or value, or its word bits left out), with `outputs` naming the changed record, so R7 reads the entry
+    itself."""
+    def change(e):
+        if not (isinstance(e, dict) and e.get("value") == EARLIER_VALUE):
+            return e
+        if x % 7 == 6:
+            return {k: v for k, v in e.items() if k != G.WIDTH_KEY}
+        return {**e, ["leaves", "words", G.WIDTH_KEY, "domain", "root", "value"][x % 7]:
+                [1, 1000, True, None, "x", -1, 16, 32, "W"][x // 7 % 9]}
+    a["params"]["log"] = [{**r, "registered": [change(e) for e in r["registered"]]}
+                          if isinstance(r.get("registered"), list) else r for r in a["params"]["log"]]
+    _repoint(a)
+
+
+def _repoint(a: dict) -> None:
+    """`outputs`, if any, naming the log's last record in the form it had (a port, else a registered value)."""
     if "outputs" in a["params"]:
-        a["params"]["outputs"] = {"W": {"port": EARLIER_OUT, "record": _earlier(a)}}
+        o = a["params"]["outputs"]
+        kind = {"value": EARLIER_VALUE} if isinstance(o, dict) and "value" in (o.get("W") or {}) else {"port": EARLIER_OUT}
+        a["params"]["outputs"] = {"W": {**kind, "record": _earlier(a)}}
 
 
 def _earlier(a: dict) -> str:
@@ -1534,9 +1631,15 @@ REGISTERED_PARAMS = [
         {"W": {"port": EARLIER_OUT, "record": _earlier(a)}}, {"S": {"port": EARLIER_OUT, "record": _earlier(a)}},
         {"nope": {"port": EARLIER_OUT, "record": _earlier(a)}}, {"W": {"port": EARLIER_OUT, "record": "EE" * 64}},
         {"W": {"port": EARLIER_OUT}}, {"W": {"port": 1, "record": _earlier(a)}},
-        {"W": {"port": EARLIER_OUT, "record": _earlier(a), "x": 1}}, {"W": EARLIER_OUT}, ["W"], None, {}][x % 15]),
+        {"W": {"port": EARLIER_OUT, "record": _earlier(a), "x": 1}}, {"W": EARLIER_OUT}, ["W"], None, {},
+        {"W": {"value": EARLIER_VALUE, "record": "ee" * 64}}, {"W": {"value": "nope", "record": _earlier(a)}},
+        {"W": {"value": "W", "record": _earlier(a)}}, {"W": {"value": EARLIER_VALUE, "record": _earlier(a)}},
+        {"W": {"value": EARLIER_VALUE, "record": R.digest(a["record"])}}, {"W": {"value": 1, "record": _earlier(a)}},
+        {"W": {"value": EARLIER_VALUE, "port": EARLIER_OUT, "record": _earlier(a)}}, {"W": {"value": EARLIER_VALUE}},
+        {"S": {"value": EARLIER_VALUE, "record": _earlier(a)}}][x % 24]),
     lambda a, x: a["params"].pop("outputs"),
     _earlier_out,
+    _earlier_value,
     _set("params", "row_schemas", lambda a, x: [
         {"A": G.SCHEMA}, {"A": G.SCHEMA_SEG}, {"B": G.SCHEMA_V2}, {"W": G.SCHEMA_V2}, {"T": G.SCHEMA_SEG}, {"x": G.SCHEMA_V2},
         {"S": G.SCHEMA_V2}, {"nope": G.SCHEMA_V2}, {"A": "u16"}, {"A": "hm96-sha512/row/v2 "}, {"A": 1}, ["A"], "A", None,
@@ -1741,6 +1844,31 @@ def test_an_accepted_case_is_compared_whole(server):
         assert verdict_ == "accept" and json.loads(line) == answer(case) | {"reason": None}, (kind, line)
 
 
+def committed_bits(j):
+    """`Q_call` v1 at X over a program of root Calls (`partition_object.evaluate`): per distinct Definition, in Call order,
+    its units' committed bits (`partition._committed_bits`), twice, as Lean gives them read off its layout and by the walk
+    that layout replaced."""
+    j = _json(j)
+    if not isinstance(j, dict):
+        raise D.Reject("not an object")
+    desc, x = _obj(j.get("program"), "program"), j.get("X")
+    if not (_int(x) and x >= 0):
+        raise D.Reject("X is not a natural number")
+    sha = PO.program_sha512(desc)
+    if sha not in PROGRAMS:
+        raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
+    try:
+        part = PO.evaluate(PROGRAMS[sha], PO.call_query(x))
+    except ValueError as e:
+        raise D.Reject(str(e)) from None
+    cuts = {codec.descriptor_id(cut.fn): cut for _k, cut in part.calls}
+    out = []
+    for fid, cut in cuts.items():
+        bits = P._committed_bits(cut.fn, [(lo, hi) for lo, hi, _path in cut.units])
+        out.append([fid, bits, bits])
+    return out
+
+
 PIECES = "sampled-proofs-difftest"
 
 
@@ -1765,6 +1893,10 @@ PARTITION = D.Port(PIECES, "partition", partition, st.one_of(
         "partition": {"program": PO.program_sha512(pq[0]), "query": pq[1]} if pre else None}},
         changed_audits(most=0, setups=SETUPS), partitions(), laws(24),
         st.one_of(st.none(), st.fixed_dictionaries({t: WORK_ENTRY for t in WORK_IDS})), st.booleans()),
+    JSON), package=PACKAGE)
+COMMITTED_BITS = D.Port(PIECES, "committed_bits", committed_bits, st.one_of(
+    st.builds(lambda m, x: {"program": json.loads(_calls(tuple(m))), "X": x},
+              st.lists(st.sampled_from(range(len(CALLEES))), min_size=1, max_size=5), st.sampled_from([4, 8, 16, 32])),
     JSON), package=PACKAGE)
 _REGISTRATION_OF = lambda a: {"params": a["params"], "record": a["record"]}  # noqa: E731
 REGISTRATION = D.Port(PIECES, "registration", registration, st.one_of(
@@ -2324,7 +2456,8 @@ def _run_case(a: dict, source: str, sessions: int, outputs: list) -> dict:
     if isinstance(verdicts, dict) and all(isinstance(v, dict) for v in verdicts.values()):
         verdicts = {k: {**v, "public": {o: 12 for o in outputs}, "sessions": delivered} if v.get("of_record") else v
                     for k, v in verdicts.items()}
-    return {"challenger": "verifier-test", "closure": None, "delta": "1/4", "instances": None, "outputs": outputs,
+    return {"challenger": "verifier-test", "closure": None, "coin_source": "verifier", "delta": "1/4", "instances": None,
+            "outputs": outputs,
             "params": p, "proved_units": None, "public": pub["public"], "received": RECEIVED, "record": a["record"],
             "rule": rule, "served": None, "session_roots": e.get("session_roots"), "sessions": delivered,
             "source": source, "statement": e.get("statement"), "values": pub["values"], "verdicts": verdicts}
@@ -2368,7 +2501,7 @@ def _as_rate(c: dict, x: int) -> dict:
 
 #: One change each to the run's own inputs: the rule (a law text of any form, its subset law as a rate law, a rule the
 #: stream doesn't run, or junk), the declared items and values, the challenger's name and place, the closure map, the
-#: coins, the sessions, a verdict, the outputs, the statement, δ, the proved units and instances, the served units, the
+#: coins, where they came from and their evidence, the sessions, a verdict, the outputs, the statement, δ, the proved units and instances, the served units, the
 #: session roots, or a field missing.
 RUN_CHANGES = [
     (_with("rule", None), st.one_of(LAW_TEXTS.map(lambda t: {"law": t, "rule": "law"}), st.just({"rule": "all"}),
@@ -2380,6 +2513,8 @@ RUN_CHANGES = [
     (_with("closure", None), st.sampled_from([[], [[0, []]], [[0, [1]], [0, [2]]], [[0, 1]], [["0", [1]]], {"0": [1]}, 5])),
     (_with("closure", None), st.integers(0, 6).flatmap(closure_maps)),
     (_with("source", None), SHORT_SOURCE | st.sampled_from(["", "0", "zz", "AB", 5, None])),
+    (_with("coin_source", None), st.sampled_from(["challenger", "challenger", "", "Verifier", 5, None])),
+    (_with("coins", None), st.sampled_from([{}, {"segment": None}, 5, []])),
     (_with("sessions", None), st.sampled_from([[], ["zz"], ["AB" * 64], [RUN_SESSIONS[0] + "\n"], [5], "s", RUN_SESSIONS[::-1],
                                                [RUN_SESSIONS[0]] * 2, {"s": 1}])),
     (_verdict_change(lambda v, c, x: {**v, "accepted": [False, None, 1][x % 3]}), st.integers(0, 63)),
@@ -2397,7 +2532,8 @@ RUN_CHANGES = [
     (_with("session_roots", None), st.sampled_from([{}, {"x": "00" * 64}, dict(ROOTS), {**ROOTS, "y": "00" * 64}, 5,
                                                     None])),
     (lambda c, k: {kk: v for kk, v in c.items() if kk != k},
-     st.sampled_from(["challenger", "closure", "delta", "instances", "outputs", "params", "proved_units", "public",
+     st.sampled_from(["challenger", "closure", "coin_source", "delta", "instances", "outputs", "params", "proved_units",
+                      "public",
                       "received", "record", "rule", "served", "session_roots", "sessions", "source", "statement",
                       "values", "verdicts"])),
 ]
@@ -2720,13 +2856,46 @@ def fleet_cases(draw) -> dict:
 
 FLEET = D.Port(PIECES, "fleet", fleet, st.one_of(fleet_cases(), fleet_cases(), JSON), package=PACKAGE)
 
+@st.composite
+def hidden_cases(draw, piece: str):
+    """A width, a calls table, the honest one over drawn rows or any (overlapping, out of order, with gaps), and
+    positions inside and past it; one field malformed or a key changed now and then."""
+    width = draw(st.integers(1, 5)) if not _one_in(draw, 10) else draw(st.sampled_from([0, -1, True, "2", None]))
+    rows = draw(st.lists(st.integers(0, 6), max_size=6))
+    if draw(st.booleans()):
+        calls = [list(c) for c in HD.table(width if _nat(width) and width else 1, rows)]
+    else:
+        calls = draw(st.lists(st.tuples(st.integers(0, 40), st.integers(0, 6)).map(list), max_size=6))
+    end = max([o + m * (width if _nat(width) else 1) for o, m in calls], default=0) + 3
+    case = {"hidden_offsets": {"rows": rows, "width": width},
+            "hidden_locate": {"calls": calls, "positions": draw(st.lists(st.integers(0, end), max_size=8)), "width": width},
+            "hidden_witness": {"call": draw(st.integers(0, len(calls) + 1)), "calls": calls,
+                               "position": draw(st.integers(0, end)), "width": width}}[piece]
+    if _one_in(draw, 10):
+        key = draw(st.sampled_from(sorted(case)))
+        case[key] = (draw(MALFORMED) if not isinstance(case[key], list) or not case[key] or _one_in(draw, 2)
+                     else [*case[key][:-1], draw(st.sampled_from([-1, True, "1", [1], [1, -1], [True, 2], [1, 2, 3]]))])
+    elif _one_in(draw, 30):
+        del case[draw(st.sampled_from(sorted(case)))]
+    elif _one_in(draw, 30):
+        case["extra"] = 1
+    return case
+
+
+HIDDEN_OFFSETS = D.Port(PIECES, "hidden_offsets", hidden_offsets, st.one_of(*[hidden_cases("hidden_offsets")] * 4, JSON),
+                        package=PACKAGE)
+HIDDEN_LOCATE = D.Port(PIECES, "hidden_locate", hidden_locate, st.one_of(*[hidden_cases("hidden_locate")] * 4, JSON),
+                       package=PACKAGE)
+HIDDEN_WITNESS = D.Port(PIECES, "hidden_witness", hidden_witness, st.one_of(*[hidden_cases("hidden_witness")] * 4, JSON),
+                        package=PACKAGE)
+
 pieces = D.server_fixture(DECODE)
 
 
-PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
+PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
-              (BERNOULLI_BOUND, 500), (VERDICT, 300),
+              (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400)]
 
@@ -3079,6 +3248,41 @@ def test_a_root_with_a_trailing_newline_is_refused(pieces):
         assert D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces) == ("output", D.canonical({"codes": codes}))
 
 
+def _many_ports(a: dict, n: int, seed: int = 0) -> dict:
+    """`a` with `n` more ports, a MoE window's shape (64 experts' tiles of 8), registered at roots in shuffled order."""
+    b = copy.deepcopy(a)
+    roots = []
+    for i in range(n):
+        p = f"w13/e{i // 8:04d}/t{i % 8}"
+        b["params"]["ports"][p] = {"domain": hashlib.sha512(p.encode()).hexdigest(), "leaves": 1 + i % 64}
+        roots.append({"port": p, "root": f"{i:0128x}", **b["params"]["ports"][p]})
+    random.Random(seed).shuffle(roots)
+    b["record"]["roots"] = [*b["record"]["roots"], *roots]
+    return b
+
+
+def test_a_many_port_registration_agrees(pieces):
+    """R3 over a window of 4096 ports, the shape whose quadratic walk `Registration.portIndex` replaced, Lean and Python
+    agreeing: accepted as registered, and each change to one port reaches its code and no other."""
+    a = _many_ports(_REGISTRATION_OF(_v1_audit("subset")), 4096)
+
+    def codes(change):
+        b = copy.deepcopy(a)
+        change(b["record"]["roots"])
+        kind, out = D.replay(REGISTRATION, _json(b), pieces)
+        return json.loads(out)["codes"] if kind == "output" else kind
+
+    def bump(r, k):
+        r[k] = r[k] + 1 if k == "leaves" else "ab" * 64
+
+    assert codes(lambda rs: None) == []
+    assert codes(lambda rs: rs.append({**rs[1000], "root": "not hex"})) == ["R3-ports", "R3-root"]
+    assert codes(lambda rs: rs.pop(2000)) == ["R3-ports"]
+    assert codes(lambda rs: rs[3000].update(port=7)) == ["R3-ports"]
+    assert codes(lambda rs: bump(rs[123], "leaves")) == ["R3-leaves"]
+    assert codes(lambda rs: bump(rs[4000], "domain")) == ["R3-domain"]
+
+
 def test_every_public_items_code_is_reached(pieces):
     """Each change to the rule's input on a v1 audit and a v2 one, Lean and Python agreeing on each: together they reach
     every code of `check_public` and a reject, which the drawn runs only probably do, and the unchanged audits none."""
@@ -3176,7 +3380,9 @@ def test_the_run_reaches_every_step(pieces):
     the Python's whole: each accepts, on the draw from the coins, showing the verdicts' public
     outputs. The same runs refused at each step (a
     declared item missing, a record R1-R7 refuses, no session, a verdict of record about other sessions) and rejected (a
-    verdict that ran and did not accept), which the drawn runs reach only probably."""
+    verdict that ran and did not accept), which the drawn runs reach only probably. A run whose coins came from the
+    challenger is refused at its select step without their evidence, or with empty evidence, and so is one from the
+    verifier's own coins that carries evidence (`coins`): the provenance check is never skipped."""
     source = hashlib.shake_256(b"run").hexdigest(600)
     v2 = _v2_audit(REGISTERED_SETUPS[0], REGISTERED_SETUPS[0].values[1])
     v2["evidence"]["verdicts"]["upstream"] = {"accepted": True, "of_record": False}
@@ -3188,12 +3394,84 @@ def test_the_run_reaches_every_step(pieces):
         for changed in (case, {**case, "public": case["public"][1:]},
                         {**case, "record": {**case["record"], "previous": "11" * 64}}, {**case, "sessions": []},
                         {**case, "verdicts": {**case["verdicts"], "lean": other}},
-                        {**case, "verdicts": {**case["verdicts"], "upstream": {"accepted": False, "of_record": False}}}):
+                        {**case, "verdicts": {**case["verdicts"], "upstream": {"accepted": False, "of_record": False}}},
+                        {**case, "coin_source": "challenger"}, {**case, "coin_source": "challenger", "coins": {}},
+                        {**case, "coins": {"segment": None}}):
             out = run(copy.deepcopy(changed))
             assert D.replay(RUN, changed, pieces) == ("output", D.canonical(out)), (a["params"]["law"], out)
             seen.append(out.get("step") or out["symbol"])
+            if "coins" in changed or changed["coin_source"] == "challenger":
+                assert out["codes"] == ["coins"], out
         assert run(copy.deepcopy(case))["public"] == {"credited": 12} and run(copy.deepcopy(case))["read"] > 0
-    assert seen == ["accept", "register", "register", "deliver", "outcome", "reject"] * 9
+    assert seen == ["accept", "register", "register", "deliver", "outcome", "reject", "select", "select", "select"] * 9
+
+
+def test_a_windows_run_from_the_challengers_coins(pieces):
+    """A window of two templates' run (`SETUPS[3]`: PAIR and TRIPLE, one stratum each under `stratified:3`) drawing from
+    the auditor's challenger, as a `Stream` over a window runs it: its coins a ledger session's challenger opened after
+    the registration's digest and read by the selection rule's draw (`Drawn`), Lean's `Run.run` the Python's whole. The
+    honest run is accepted, each stratum drawn at least its floor. It is refused at its registration for a window of
+    other counts (`R2-program`) or the templates in the other order (`query`), and for a record whose law draws a
+    stratum short of its floor (`R1-law`); at its select (`coins`) for each mutation of the coins that changes the
+    segment or the bytes, coins opened after another digest, evidence for another window, none or empty, and evidence
+    on a draw from the verifier's own coins."""
+    rule, s = service.Law("stratified:3"), SETUPS[3]
+    a = _v1_audit("stratified", s)
+    rec = a["record"]
+    law = DR.derive(s.program, s.query, service.selection_law(rule, rec["population"]))
+
+    def reads(coins):
+        got = bytearray()
+
+        def source(n):
+            b = coins(n)
+            got.extend(b)
+            return b
+        service.select_draw(rule, law, rec["population"], source)
+        return bytes(got)
+
+    def case_of(d: Drawn, segment: dict, read: bytes, **change) -> dict:
+        c = _run_case(a, read.hex(), 2, ["credited"])
+        c["params"] = {**c["params"], "window_root": d.ledger.window["root"]}
+        return {**c, "coin_source": "challenger", "coins": d.evidence(segment), **change}
+
+    def ran(c: dict) -> dict:
+        out = run(copy.deepcopy(c))
+        assert D.replay(RUN, c, pieces) == ("output", D.canonical(out)), out
+        return out
+
+    for seed in range(3):
+        rng = random.Random(f"window/{seed}")
+        d = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads)
+        honest = case_of(d, d.segment.to_json(), d.read)
+        out = ran(honest)
+        assert out["symbol"] == "accept" and out["read"] == len(d.read), out
+        for stratum in law["strata"]:
+            drawn = [u for u in out["draw"]["units"] if any(lo <= u < hi for lo, hi in stratum["units"])]
+            assert len(drawn) == stratum["k"] >= 1, (stratum, out["draw"])
+        other_counts = json.loads(_population(((0, 3), (1, 2))))
+        reordered = Setup(P.mixed_population_program([(TRIPLE, 3), (PAIR, 2)]), P.template_instances_query([TRIPLE.id, PAIR.id]))
+        PROGRAMS[reordered.sha512] = reordered.program
+        short = copy.deepcopy(rec)
+        short["law"]["strata"][0]["k"] = 0
+        registers = {"R2-program": {**honest, "params": {**honest["params"], "program": other_counts}},
+                     "query": {**honest, "params": {**honest["params"], "program": reordered.desc, "query": reordered.query}},
+                     "R1-law": {**honest, "record": short}}
+        for code, c in registers.items():
+            out = ran(c)
+            assert out["step"] == "register" and code in out["codes"], (code, out)
+        tampered = bytearray(d.read)
+        tampered[rng.randrange(len(tampered))] ^= 1 << rng.randrange(8)
+        selects = [case_of(d, _mutated(rng, d, name)[0], d.read) for name in DRAW_MUTATIONS
+                   if name not in ("unread", "read-tampered", "other-after")]
+        selects.append(case_of(d, d.segment.to_json(), bytes(tampered)))
+        elsewhere = Drawn(rng, reads=reads)
+        selects += [case_of(elsewhere, elsewhere.segment.to_json(), elsewhere.read),
+                    {**honest, "params": {**honest["params"], "window_root": d.other_window(rng)}},
+                    {**honest, "coins": None}, {**honest, "coins": {}}, {**honest, "coin_source": "verifier"}]
+        for c in selects:
+            out = ran(c)
+            assert (out.get("step"), out.get("codes")) == ("select", ["coins"]), out
 
 
 def test_the_run_refuses_a_count_that_varies(pieces):

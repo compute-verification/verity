@@ -1,7 +1,7 @@
 """`PouwWindow.Lanes`, a drawn H1 leaf's lane and combine statements port by port (option A), held to the Python on the
 shared harness (`verity_difftest`): each port's fields to `h1zy.statement_ports` (their bits from the Definitions'
-signatures), each port's row to `h1tile.Layout`'s rows and columns as #3116's `pouw.leaf_lanes` reads them (`reads`,
-`known`), which `_source` restates until that module is on the tree, and the unit's input wires (`wires?`, `wireOf?`) to
+signatures), each port's row to `pouw.leaf_lanes`' (`reads`, `known`), each known port's row to `leaf_lanes.known_rows`
+(its words, and each field's bits where Lean's layout puts it), and the unit's input wires (`wires?`, `wireOf?`) to
 the circuits C-Flock lowers the statements to (`class_statement.unit_lowering` on `h1zy.statement_rows`, and the circuit
 file's META as `UnitStager` writes it, as #3131's h1_lanes stages them).
 
@@ -27,8 +27,10 @@ import verity_difftest as D
 from hypothesis import strategies as st
 from verity_flock import class_statement as CS
 
+from verity.core.protocols.pouw import leaf_lanes as LL
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw.circuit import h1zy as Z
+from verity.core.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.pouw.circuit import segment as SG
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.boolean import gemm as BG
@@ -65,16 +67,18 @@ def _statement(x: dict, defn: Any = H.PouwH1Tile) -> tuple[Any, H.Layout, int | 
 
 
 def _source(lay: H.Layout, ln: int | None, port: str) -> dict:
-    """Where the verifier opens ``port``'s row, as `leaf_lanes.reads` and `known` state it: a read of a registered value's
-    row, or a known row (statement i's ``o0`` the value ``ok<i>``, i = lane, then the combine)."""
-    if port == "o0":
-        return {"known": f"ok{lay.lanes if ln is None else ln}"}
-    if ln is None:
-        return {"read": "receipt", "row": 0} if port == "receipt" else {"read": "partials", "row": int(port[1:])}
-    if port[0] in "ab" and port[1:].isdigit():
-        return {"read": port[0], "row": (lay.rows if port[0] == "a" else lay.cols)(ln)[int(port[1:])]}
-    return {"admit": {"known": "admit"}, "pub": {"known": f"pub{ln}"}, "zy": {"read": "zy", "row": 0},
-            "partials": {"read": "partials", "row": ln}}[port]
+    """Where the verifier opens ``port``'s row (`leaf_lanes.reads`, `known`): a read of a registered value's row, or a
+    known row (statement i's ``o0`` the value ``ok<i>``, i = lane, then the combine)."""
+    kind = LL.COMBINE if ln is None else LL.LANE
+    reads = LL.reads(lay.r, lay.c, kind, ln)
+    if port in reads:
+        return {"read": reads[port][0], "row": reads[port][1]}
+    return {"known": LL.known(lay.r, lay.c, kind, ln)[port]}
+
+
+def _bits_n(words: list[int], lo: int, n: int) -> int:
+    """Bits ``[lo, lo + n)`` of a row as a number, least significant first (`Accounting.TS.Lanes.bitsN`)."""
+    return sum(((words[(lo + i) // 16] >> ((lo + i) % 16)) & 1) << i for i in range(n))
 
 
 def _field(at: int, bits: int) -> dict:
@@ -205,7 +209,8 @@ def lowered_wire_of(x: dict) -> dict | None:
 def _leaf(rng: random.Random) -> dict:
     r = rng.choice((4, 8, 8, 16, 32, 32, 64, rng.choice((0, 3, 12, 20))))
     c = rng.choice((8, 16, 16, 32, 32, 64, 128, rng.choice((0, 12, 24, 40))))
-    k = rng.choice((0, 32, 64, 384, 448, 896, 4096, 14336, 32 * rng.randint(1, 512), rng.randint(1, 20000)))
+    k = rng.choice((0, 32, 64, 384, 448, 896, 4096, 14336, 32 * rng.randint(1, 512), rng.randint(1, 20000),
+                    (1 << 17) - 32, 1 << 17, 32 * rng.randint(4090, 4200)))
     return {"r": r, "c": c, "k": k}
 
 
@@ -304,6 +309,38 @@ def test_the_served_rows_are_proved_rows(r: int, c: int, k: int, server) -> None
         rows = [p for p in got if not p["output"]]
         assert all(p["bits"] % 16 == 0 for p in rows), [p["name"] for p in rows]
         assert ln is not None or max(2 * p["words"] for p in rows) + 17 > 128
+
+
+@pytest.mark.parametrize("r,c,k", SERVED[:1] + [SIDECAR], ids=lambda v: str(v))
+def test_the_known_rows_are_the_known_ports(r: int, c: int, k: int, server) -> None:
+    """Each statement's known rows (`leaf_lanes.known_rows`) are its known ports in Lean's layout: the same ports and
+    values, each row its port's words (lane l's ``pub`` 101, ``admit`` the leaf's R bits, ``o0`` one) with no bit set past
+    its port's, and each field read least significant bit first where Lean puts it (`fieldOf?`, as
+    `Accounting.TS.Lanes.decLane` reads it) the value it was built of: the salt and roots with their big-endian 32-bit
+    halves least significant first, the position with its halves swapped, the index, the admit bits and ok = 1."""
+    rng = random.Random(r * c * k)
+    salt, roots, position = rng.randbytes(64), [rng.randbytes(64), rng.randbytes(64)], rng.getrandbits(64)
+    admit = [rng.getrandbits(1) for _ in range(r)]
+
+    def halves_up(b: bytes) -> int:
+        return sum(h << 32 * i for i, h in enumerate(SD.halves(b)))
+
+    want = {"salt": halves_up(salt), "position": (position & 0xFFFFFFFF) << 32 | position >> 32,
+            "roots": halves_up(roots[0] + roots[1]), "admit": sum(b << i for i, b in enumerate(admit)), "ok": 1}
+    for ln in [*range(H.Layout(r, c, k).lanes), None]:
+        x = {"r": r, "c": c, "k": k, "lane": ln}
+        got = json.loads(D.replay(PORTS["combine_ports" if ln is None else "lane_ports"][0], x, server)[1])
+        lean = {p["name"]: p for p in got if "known" in p["source"]}
+        mine = LL.known_rows(r, c, LL.COMBINE if ln is None else LL.LANE, ln, admit=admit, salt=salt, position=position,
+                             roots=roots)
+        assert {p: v for p, (v, _) in mine.items()} == {p: q["source"]["known"] for p, q in lean.items()}
+        assert ln is None or (lean["pub"]["words"], lean["admit"]["bits"]) == (101, r)
+        assert lean["o0"]["words"] == 1
+        for p, (_v, words) in mine.items():
+            port = lean[p]
+            assert len(words) == port["words"] and _bits_n(words, port["bits"], 16 * len(words) - port["bits"]) == 0, p
+            for f in port["fields"]:
+                assert _bits_n(words, f["bit"], f["bits"]) == {**want, "lane": ln}[f["path"]], (ln, p, f["path"])
 
 
 def _lowered_wires(x: dict, server) -> None:

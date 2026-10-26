@@ -4,47 +4,65 @@
   "NciCheck.CheckMain": "the nci-check exe: reads an instance file and the service's trusted input and prints NciCheck.Baseline.check (or, with --unrolled, NciCheck.Baseline.checkUnrolled) on them, or with --policy NciCheck.Desc.check (NciCheck.check) on the instance alone; IO around the audited check, not a proof",
   "NciCheck.DescDifftestMain": "the description-sized check's difftest, under `runs`: compiled evaluation of NciCheck.DescDifftest.main, audited under NciCheck, a test and not a proof",
   "NciCheck.DifftestMain": "the difftest against the Python reference, under `runs`: compiled evaluation of NciCheck.Difftest.main, audited under NciCheck, a test and not a proof",
-  "NciCheck.BaselineDifftestMain": "the provenance check's difftest, under `runs`: compiled evaluation of NciCheck.BaselineDifftest.main, audited under NciCheck, a test and not a proof"
+  "NciCheck.BaselineDifftestMain": "the provenance check's difftest, under `runs`: compiled evaluation of NciCheck.BaselineDifftest.main, audited under NciCheck, a test and not a proof",
+  "NciCheck.DescLivenessMain": "the description-sized check's liveness test, under `runs`: compiled evaluation of NciCheck.DescLiveness.main, audited under NciCheck, a test and not a proof",
+  "NciCheck.DescFuzzMain": "the description-sized check's fuzz run, under `runs`: compiled evaluation of NciCheck.DescFuzz.main, audited under NciCheck, a test and not a proof"
  },
  "runs": {
   "NciCheck.DescDifftestMain": {
-   "why": "3,658 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, 6 on a composite keyed with an input id, which is no input node, and 2 on a gate reading a nested scan's carry, one of them past NciCheck.Desc.walkBound's limit, then the unrolled difftest's two pinned ones) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
+   "why": "4,009 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, 6 on a composite keyed with an input id, which is no input node, 2 on a gate reading a nested scan's carry, one of them past NciCheck.Desc.walkBound's limit, 4 on a scan of no iterations, the 3 whose carry is a value (read or not) refused by NciCheck.Desc.resolvable, 12 on whole members of a batch returning leaves of two arguments they share, each another node's, and 335 whose references name leaves of other widths than their types give them, E_REINTERPRET, which both sides refuse, or are their well-typed neighbours: the shapes on which PRF-151's first liveness test gave NciCheck mistyped Programs, arrays of up to 2^20 (V8, V16) pairs read whole, by leaf, shifted and as quads and 300 random declarations with one reference moved, then the unrolled difftest's two pinned ones) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
    "args": [
     "{desc_difftest/instances.jsonl}",
     "{desc_difftest/expanded.jsonl}",
     "{desc_difftest/python.jsonl}",
-    "3658"
+    "4009"
    ],
    "data": {
-    "desc_difftest/expanded.jsonl": "2c7095c72510098d6500cfddb2b344408d9f1b1a8a49bc003b3c470126ce1102",
-    "desc_difftest/instances.jsonl": "a74e847c5496abd9acd931bc9f6e6bdf44dd745dfe8ff86d71a82357dfc715aa",
-    "desc_difftest/python.jsonl": "2905caf60da672551533de861ae83f5e116b0c3ff8d6ce7ba98e3847c0e24eeb"
+    "desc_difftest/expanded.jsonl": "bb0b615ca47e1ce32ba08493c7a42f77e5f0d7b724aedeaa3dd17031d3a5c9d7",
+    "desc_difftest/instances.jsonl": "32f59bcec1e5f04cb14d7f48e75596b97469954842fbfae3d569074576408b6a",
+    "desc_difftest/python.jsonl": "d3a4adb4de58135cdadc12bec6ff482cac0c7de3a6d8aa6182cb36a549bda18e"
    },
    "generate": ["python3", "scripts/desc_difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
   "NciCheck.DifftestMain": {
-   "why": "4,000 random declarations and divisions, and two pinned ones (θ with an input bound per run, refused theta-not-registered, and θ the registered input, accepted), on which NciCheck.check gives what scripts/nci_reference.py computes from Nci.Complies' definitions: per IU its size and novel reads, the verdict and the first failing IU with its rule, or the first malformation's code",
-   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "4002"],
+   "why": "4,000 random declarations and divisions, the description-sized difftest's 335 on E_REINTERPRET (references naming leaves of other widths than their types give them, which both sides refuse as program, and their well-typed neighbours, expanded gate by gate where the Program decodes), and two pinned ones (θ with an input bound per run, refused theta-not-registered, and θ the registered input, accepted), on which NciCheck.check gives what scripts/nci_reference.py computes from Nci.Complies' definitions: per IU its size and novel reads, the verdict and the first failing IU with its rule, or the first malformation's code",
+   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "4337"],
    "data": {
-    "difftest/instances.jsonl": "e730205a6b5e7e48666c132a81ae2746b3f09b6864cd54f9bbd215816b22877a",
-    "difftest/python.jsonl": "61ecdd5542bdeabd85836ed8e2fd7dca22767f016a77b941d5563e74d9f60666"
+    "difftest/instances.jsonl": "a29efe48563e56c3a83587c9f2ab3519332f1919a9c236178564b7deb17f1fb4",
+    "difftest/python.jsonl": "4c60f0d64ef3a4e1e74ab4808a95b902692be1e7efd1b481f2f43a4077762751"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
   "NciCheck.BaselineDifftestMain": {
-   "why": "1,211 declarations with θ, θ's provenance and the service's trusted input (the deployment's registration log in R6's chain, the run's digest and its parameters): 1,200 random, just under half of them broken in one way, and 11 pinned on a declaration worked by hand (two accepted, citing the log's first record from the deployment's first run and from its third, one negative per refusal code, theta-not-at-deployment-start citing a record registered mid-deployment, an entry of the output kind θ no longer takes, refused theta-provenance as any unknown kind is, and theta-not-registered), on which NciCheck.Baseline.check gives what scripts/nci_reference.py's check_baseline computes, and, on each one the policy check gives a verdict on, what NciCheck.Baseline.checkUnrolled gives on the case expanded gate by gate",
+   "why": "1,213 declarations with θ, θ's provenance and the service's trusted input (the deployment's registration log in R6's chain, the run's digest and its parameters): 1,200 random, just under half of them broken in one way, and 13 pinned on a declaration worked by hand (two accepted, citing the log's first record from the deployment's first run and from its third, one negative per refusal code, theta-not-at-deployment-start citing a record registered mid-deployment, an entry of the output kind θ no longer takes, refused theta-provenance as any unknown kind is, theta-not-registered, and two of a field of another JSON type than the string or null the check compares it with: the cited entry's root a number, refused theta-root, and a record's previous neither its predecessor's digest nor null, refused trusted), on which NciCheck.Baseline.check gives what scripts/nci_reference.py's check_baseline computes, and, on each one the policy check gives a verdict on, what NciCheck.Baseline.checkUnrolled gives on the case expanded gate by gate",
    "args": [
     "{baseline_difftest/cases.jsonl}",
     "{baseline_difftest/expanded.jsonl}",
     "{baseline_difftest/python.jsonl}",
-    "1211"
+    "1213"
    ],
    "data": {
-    "baseline_difftest/cases.jsonl": "93c1bc1cd1f75038f6745282d4ab5cba45cd0cab9551c41280ba113156fe4560",
-    "baseline_difftest/expanded.jsonl": "04e7377c14f721f8ecd205fb86b021e1b35963df94fbe96990bd69734acefaad",
-    "baseline_difftest/python.jsonl": "2bcea153a2af0595349922c515d3bd7e337271f3561af6d482c3f2aee0e4a1af"
+    "baseline_difftest/cases.jsonl": "beaf9b3eef9bc3b73f83f357c49ac6ef17edd6a1cd24c2e3c29db5430bb0e56d",
+    "baseline_difftest/expanded.jsonl": "f7f663ee7fd475103c74652da0be7f35596c76ad722d554ff5d695c3a2c79d7d",
+    "baseline_difftest/python.jsonl": "46a62e2b44122e4f53fb0bb1899a92aa2a1951c95beecc856fe51435b0b1a1b7"
    },
    "generate": ["python3", "scripts/baseline_difftest_vectors.py", "{repo}", "--out", "{out}"]
+  },
+  "NciCheck.DescLivenessMain": {
+   "why": "13 descriptions naming 2^22 to 2^52 + 1 scan iterations or batch members, past what NciCheck.Desc walks one by one (NciCheck.Desc.WALK): a scan of pass-through iterations a gate reads and one nothing reads, a batch returning its shared input read whole, by a gate and through a mapped argument, scans swapping their carry an odd and an even number of times, carries leaving through an xs row, and gates reading a carry or part of an xs row; on each one NciCheck.Desc.check gives a verdict, the one it gives on the same description at a small count (the novel reads for a description whose reads grow with it), which NciCheck.check gives on that one expanded gate by gate",
+   "args": ["{desc_liveness/cases.jsonl}", "13"],
+   "data": {
+    "desc_liveness/cases.jsonl": "481b3a6d30e820f52e496e918a7a6653b4f2bcd903f75cd1f24f5332cd5e18a2"
+   },
+   "generate": ["python3", "scripts/desc_liveness_vectors.py", "{repo}", "--out", "{out}"]
+  },
+  "NciCheck.DescFuzzMain": {
+   "why": "1,330 descriptor v1 Programs from fixed seeds: the 14 worked by hand; the lane's shared-members family (fuzz/gen/shared.py): the 6 declarations of the desc difftest's shared members (whole members of a batch returning leaves of arguments they share, each another root node's output, which NciCheck.Desc read as its first piece's node's alone before Seg.split) and 263 drawn after them (200 seeds and 63 mutants: two or three shared arguments, each a gate, a call, a batch member or the input itself; two to four members, with a mapped argument or none; their leaves in any order, with the member's own gate; read whole, by a run of members or a run cut inside them, directly or through composites), each with its IU assignments (1 to 12, 1,670 in all); 789 random (600 and 189), 183 of segment copies (150 and 33), 23 chains (20 and 3) and 52 big (40 and 12). On each one past NciCheck.Desc.evaluate's refusals NciCheck.DescFuzz.check decides the statements behind DescAgrees: OperandsResolve on primitive nodes, BodiesOk and ReadsExact, and DescAgrees itself, NciCheck.Desc.evaluate against NciCheck.evaluate on the instance expanded gate by gate, on the line's IU assignments and 4 instances of its own on each worked and seed one, 1 on the rest. About 60 s on one core, 15 s on four; NciCheck.Desc without Seg.split fails it on 122 of them, every one shared, in ReadsExact and DescAgrees",
+   "args": ["{desc_fuzz/programs.jsonl}", "1330"],
+   "data": {
+    "desc_fuzz/programs.jsonl": "e8ae76049303e94b60e0aecf2a817afde9824ade5e3493a536817f1db1de7f02"
+   },
+   "generate": ["python3", "scripts/desc_fuzz_programs.py", "{repo}", "--out", "{out}"]
   }
  },
  "layers": {

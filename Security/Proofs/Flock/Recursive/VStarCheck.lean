@@ -482,7 +482,15 @@ theorem scope_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (t : Exec
 /-- **V*'s statement `j`'s file, where the verifier parses it into scope, parses to `Vs j`'s circuit, and `Vs j` has
 its instances**: `VStarParses` at the files whose parse, at V*'s constant tags and no lookup tables, is a circuit in
 `Layout.scopeOk`. An accepted session's file is one (`ScopeZR.parseH`, `scope_of_accepts`), so this asks nothing of a
-file the verifier refuses; `VStarParses` gives it (`vstarParsesScoped_of`). -/
+file the verifier refuses; `VStarParses` gives it (`vstarParsesScoped_of`).
+
+Assumption record. No claim: an obligation, a fact about our code, open until gap 4 builds `Vs` from the partition. It
+assumes that the V* statement files `vstar stage` writes parse to the circuits the guarantee names, which is a
+deterministic computation on public inputs. It follows from `VStarParses` (`vstarParsesScoped_of`), which the lock
+already lists, and it asks less: `VStarParses` also asks every listed file to parse. At every inner shape and binding,
+`FlockC3.VStarList.vstarParsesScoped_of_list` builds a family `Vs` that satisfies it. So it fixes which `Vs` the
+guarantee speaks of, and taking `VStarParses` instead would weaken the guarantee. It is no hash premise and no premise
+about the world. -/
 def VStarParsesScoped {S : ℕ} (t₀ : Flock.Tags) (i : RecVStar.Inner) (bind : Fin S → VStar.Bindings)
     (Vs : Fin S → VStmt) : Prop :=
   ∀ (j : Fin S) (ss : Array VStar.Stmt) (s : VStar.Stmt) (cf : ByteArray) (c : Flock.Circuit),

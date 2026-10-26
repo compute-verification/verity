@@ -63,11 +63,8 @@ def SessionSpec.dgWith (hs : Hashes M) (spec : SessionSpec) (b : ByteArray) : M 
 
 namespace Record
 
-/-- `Record.decode` with the record's digests through the oracle. -/
-def decodeWith (hs : Hashes M) (spec : SessionSpec) (text : String) : M Session := do
-  let j ← match Json.parse text with
-    | .ok j => pure j
-    | .error e => throw s!"record: not JSON: {e}"
+/-- `Record.decodeWith` at the record's parsed value `j`: S1–S14 after the parse. -/
+def decodeJWith (hs : Hashes M) (spec : SessionSpec) (j : Json) : M Session := do
   -- S1
   check ((← str j "kind") == "flock-live-session/v1") "S1: not a flock-live-session/v1 record"
   check (isNull j "aborted") "S1: the live session aborted"
@@ -80,7 +77,8 @@ def decodeWith (hs : Hashes M) (spec : SessionSpec) (text : String) : M Session 
     let _ ← CoinTree.checkRecord ct nonce (← fld j "coin_tree")
   -- S3
   let cfg ← fld j "config"
-  check ((← fld cfg "require_link") == Json.bool true) "S3/F1: require_link is not true"
+  -- a match, not `Json`'s `==` (a `partial def`, so no proof can evaluate it)
+  check ((← fld cfg "require_link") matches Json.bool true) "S3/F1: require_link is not true"
   check ((← str j "link_mode") == "exchange") "S3/E1: link_mode is not exchange"
   let l ← fld j "link"
   check ((← str l "mode") == "exchange") "S3/E1: link.mode is not exchange"
@@ -157,6 +155,17 @@ def decodeWith (hs : Hashes M) (spec : SessionSpec) (text : String) : M Session 
   check ((← str j s!"link_{dk}") == hexOf (← spec.dgWith hs lb)) s!"S14: link_{dk} is not the exchange it covers"
   let proofSha ← (← arr j s!"proof_{dk}").mapM fun p => do pure ((← str p "stream"), (← str p dk))
   return { rootF, rootB, publics, points := pts, y, streams, proofSha }
+
+/-- `Record.decode` with the record's digests through the oracle: the parse, then `decodeJWith` at its value. -/
+def decodeWith (hs : Hashes M) (spec : SessionSpec) (text : String) : M Session := do
+  let j ← match Json.parse text with
+    | .ok j => pure j
+    | .error e => throw s!"record: not JSON: {e}"
+  decodeJWith hs spec j
+
+theorem decodeWith_of_parse [LawfulMonad M] (hs : Hashes M) (spec : SessionSpec) {text : String} {j : Json}
+    (h : Json.parse text = .ok j) : decodeWith hs spec text = decodeJWith hs spec j := by
+  simp only [decodeWith, h, pure_bind]
 
 end Record
 

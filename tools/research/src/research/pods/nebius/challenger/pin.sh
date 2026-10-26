@@ -1,17 +1,20 @@
 #!/bin/bash
 # vy-challenger-pin COMMIT < TAR: pin the tree the challenger runs from, as root. COMMIT must be on origin/main's first-parent
 # history, which this script fetches from GitHub itself (a commits-only partial clone in /var/cache/vy-challenger/main.git), so the
-# host pins only what drive landed. TAR is infra's `git archive COMMIT verity benchmarks/live_challenger` of that commit; it is
+# host pins only what drive landed. TAR is infra's `git archive COMMIT verity benchmarks/live_challenger benchmarks/network_traces
+# integrations/vllm/manifests/checkpoints-int8.json` of that commit (the manifest pins the checkpoints `model-register` takes, and
+# network_traces is the certifier rehearsal's, `certifier-rehearse`); it is
 # unpacked root-owned at /opt/vy-challenger/COMMIT, never changed after. The Lean toolchain its sampled_proofs package names is
 # installed under /opt/elan (root's) and linked as COMMIT/.lean-bin; elan itself is release ELAN, its archive checked against
-# ELAN_SHA256 before it runs. Each Lake package's .lake is auditor's, and `lake build sampled-proofs-verifier` runs there as
-# auditor, so a session's first coin doesn't wait on a build. The pin (COMMIT, the main it was checked against, UTC time) is
+# ELAN_SHA256 before it runs. Each Lake package's .lake is auditor's, and `lake build sampled-proofs-verifier` (and
+# `network-records`, the certifier rehearsal's check) runs there as auditor, so a session's first coin doesn't wait on a build. The pin (COMMIT, the main it was checked against, UTC time) is
 # appended to /opt/vy-challenger/pins.jsonl, root's and append-only (auditor.py `record_pin`, `chattr +a`), which each ledger
 # open seals (RT4-INT-40). Last, /opt/vy-challenger/current -> COMMIT. A session runs from the tree it was admitted at:
 # auditor.py refuses one whose pin moved. Rerunning it for an installed COMMIT skips the unpack and reads no TAR, and logs the
 # pin again.
 #
-#   git archive COMMIT verity benchmarks/live_challenger | ssh vy-admin@HOST sudo vy-challenger-pin COMMIT
+#   git archive COMMIT verity benchmarks/live_challenger benchmarks/network_traces integrations/vllm/manifests/checkpoints-int8.json \
+#     | ssh vy-admin@HOST sudo vy-challenger-pin COMMIT
 set -euo pipefail
 die() { echo "vy-challenger-pin: $*" >&2; exit "${2:-1}"; }
 c=${1:-}
@@ -62,6 +65,11 @@ find "$T" \( -name lakefile.toml -o -name lakefile.lean \) -printf '%h\n' | whil
 done
 runuser -u auditor -- env -i HOME=/var/lib/vy-challenger PATH="$T/.lean-bin:/usr/bin:/bin" sh -c "cd '$pkg' && lake build sampled-proofs-verifier" \
   | tail -1
+net=$T/verity/core/protocols/network/lean
+if [ -d "$net" ] && [ -f "$T/benchmarks/network_traces/certifier_serve.py" ]; then
+  runuser -u auditor -- env -i HOME=/var/lib/vy-challenger PATH="$T/.lean-bin:/usr/bin:/bin" sh -c "cd '$net' && lake build network-records" \
+    | tail -1
+fi
 /usr/bin/python3 -I "$T/benchmarks/live_challenger/auditor.py" pinned "$c" "$m"
 ln -sfn "$c" "$O/current.tmp"
 mv -Tf "$O/current.tmp" "$O/current"

@@ -72,7 +72,16 @@ def load(cfg: dict[str, Any], rank: int, world: Any, *, definitions: bool = True
     """The rank's request Programs (B1: the request Program at the rank's Build dir; B>=2: one component per (LP, T) under it, by the
     manifest's lookup of record), REFUSED by name unless every loaded digest is of record for the rank (`cfg["of_record"]`), the
     Definitions this tree evaluates their rows by are the ones their Builds bound (`check.replay.definitions`; ``definitions=False``
-    for a caller that evaluates none) and every Program's TP context (result.json `tp`) is this rank's of this world."""
+    for a caller that evaluates none) and every Program's TP context (result.json `tp`) is this rank's of this world.  Loaded under
+    `gc_tuning.tuned`'s thresholds: the load builds the rank's resident graph (GBs), which the interpreter's defaults walk again
+    every time it grows a quarter."""
+    from verity_vllm.pipeline import gc_tuning
+
+    with gc_tuning.tuned():
+        return _load(cfg, rank, world, definitions)
+
+
+def _load(cfg: dict[str, Any], rank: int, world: Any, definitions: bool) -> Loaded:
     from verity_vllm.check.replay import definitions as DF
     from verity_vllm.check.replay import driver as SR
     from verity_vllm.query.manifest import format as RM

@@ -54,23 +54,41 @@ block (`charge`, `datacenter.account` on a profile that credits no work): withou
 at the uplink's full capacity; with it, everything the block's devices hold. With `--salt` its proxy reveals the salts
 of the windows it served, so the certifier's salt check, like its audit, finds nothing for window 1.
 
+`seal` measures what a sealed pair link costs (the certifier's `Proxy(pair=…)`, its PROTOCOL.md "Sealed pair links"), in
+bytes of frames per second per core, at each `--frame-bytes` (the calibrated 4096 and the tests' 512 by default), into
+`<out>/seal.json`: the Python halves in one process (`seal_python`: `active.Sealer`, then `active.Opener`, each on its
+CPU seconds); the same across the fabric, the first block's certifier sealing frames as fast as the link takes them to
+the second's, which opens them (the roles `sealer` and `opener`, each its own core); the construction in C over
+OpenSSL's SHA-512 (`seal_fast.c`, `fast_path`), whose units it first checks against the Python's, byte for byte; and
+OpenSSL's own SHA-512 rate (`openssl speed`), the bound on any CPU path without SHA-512 instructions. It reports the CPU,
+its SHA flags and the cores one 400 Gb/s uplink would take on each path. Every path seals under a public bench secret
+(`BENCH_SECRET`), never a pair's.
+
     python mockdc.py up | status | down [--fleet --blocks 2]
     python mockdc.py run --out DIR [--salt] [--block b0=honest --block b1=late ...]
+    python mockdc.py seal --out DIR [--frame-bytes 512 --frame-bytes 4096] [--megabytes 256]
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import ctypes.util
 import dataclasses
+import hashlib
 import importlib.util
 import json
 import os
+import random
 import re
+import shutil
+import socket
 import subprocess
 import sys
+import tempfile
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -84,8 +102,10 @@ import records  # noqa: E402
 from datacenter import (Carried, Datacenter, Fleet, Interval, Maintenance, Plan, Profile, Refused,  # noqa: E402
                         account, check_records)
 from datacenter.examples import leaf_spine, two_sites  # noqa: E402
-from verity.core.protocols.certifier import calibration  # noqa: E402
+from verity.core.protocols.certifier import active, calibration  # noqa: E402
 from verity.core.protocols.certifier.audit import Audit  # noqa: E402
+from verity.core.protocols.certifier.grid import GridParams  # noqa: E402
+from verity.ml.crypto import aead  # noqa: E402
 
 T = 60
 SERVER_PORT, LINK_PORT = 8000, 9000
@@ -312,6 +332,8 @@ ROLES = {
                                          Path(cfg["out"]), host=cfg["host"], port=LINK_PORT,
                                          salt=cfg.get("salt", False)),
     "peer": lambda cfg, pipe: ar._peer(cfg["plan"], cfg["params"], LINK_PORT, pipe, Path(cfg["out"]), cfg["link"]),
+    "sealer": lambda cfg, pipe: _sealer(cfg, pipe),
+    "opener": lambda cfg, pipe: _opener(cfg, pipe),
 }
 
 
@@ -516,10 +538,211 @@ def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dic
     return summary
 
 
+# What a sealed pair link costs (`seal`).
+
+SEAL_PORT = 9100
+SEAL_FRAME_BYTES = (512, 4096)
+#: what `seal` seals under: public, so nothing it measures or writes is a pair's key
+BENCH_SECRET = hashlib.sha512(b"mockdc seal: a public bench secret, never a pair's").digest()
+BENCH_SESSION = b"mockdc seal"
+LINE_RATE_BPS = 400e9
+CHUNK = 1024  # frames sealed, or opened, between two readings of the clock
+
+
+def seal_grid(frame_bytes: int) -> GridParams:
+    """The grid every path seals: the cost is per frame, so only the frame size matters."""
+    return GridParams(buckets=600, allocation=4, frame_bytes=frame_bytes)
+
+
+def frame_pool(frame_bytes: int) -> list[bytes]:
+    rng = random.Random(frame_bytes)
+    return [rng.randbytes(frame_bytes) for _ in range(64)]
+
+
+def bench_keys() -> aead.Keys:
+    return aead.keys(BENCH_SECRET, BENCH_SESSION, "a>b")
+
+
+def rates(frame_bytes: int, frames: int, seconds: dict[str, float]) -> dict[str, float]:
+    """Each timing's bytes of frames per second, and the cores one 400 Gb/s uplink takes at it."""
+    out = {}
+    for name, s in seconds.items():
+        out[name] = s
+        out[name.removesuffix("_s") + "_Bps"] = frames * frame_bytes / s if s > 0 else float("inf")
+        out[name.removesuffix("_s") + "_cores_at_line_rate"] = LINE_RATE_BPS / 8 / out[name.removesuffix("_s") + "_Bps"]
+    return out
+
+
+def seal_python(frame_bytes: int, frames: int, cpu: Callable[[], float] = time.process_time) -> dict:
+    """The certifier's two halves in this process, on one core: `frames` frames of `frame_bytes` bytes sealed
+    (`active.Sealer`, the k-th at slot k of `seal_grid`), then opened (`active.Opener`), `CHUNK` at a time, each half
+    on `cpu`'s seconds. A unit that doesn't open to its frame stops the bench."""
+    grid, keys, pool = seal_grid(frame_bytes), bench_keys(), frame_pool(frame_bytes)
+    sealer, opener = active.Sealer(keys, grid), active.Opener(keys, grid)
+    seal_s = open_s = 0.0
+    for k in range(0, frames, CHUNK):
+        js = range(k, min(frames, k + CHUNK))
+        c0 = cpu()
+        units = [sealer.seal(*divmod(j, grid.allocation), pool[j % len(pool)]) for j in js]
+        c1 = cpu()
+        opened = [opener.open(u) for u in units]
+        c2 = cpu()
+        if opened != [pool[j % len(pool)] for j in js]:
+            raise SystemExit(f"a sealed unit of {frame_bytes} bytes didn't open to its frame")
+        seal_s, open_s = seal_s + c1 - c0, open_s + c2 - c1
+    return {"frame_bytes": frame_bytes, "frames": frames} | rates(frame_bytes, frames, {"seal_cpu_s": seal_s,
+                                                                                        "open_cpu_s": open_s})
+
+
+def fast_vector(frame_bytes: int) -> str:
+    """The SHA-512 of `seal_fast.c`'s first 64 units, as the Python seals them: frame k is `frame_bytes` bytes of k, at
+    nonce (0, k, 0)."""
+    k = bench_keys()
+    return hashlib.sha512(b"".join(aead.seal(k, aead.nonce(0, j, 0), bytes([j]) * frame_bytes)
+                                   for j in range(64))).hexdigest()
+
+
+def build_fast(where: Path) -> Path | str:
+    """`seal_fast.c` built against the host's libcrypto, or why it can't be."""
+    cc, crypto = shutil.which("cc"), ctypes.util.find_library("crypto")
+    if cc is None or crypto is None:
+        return f"no {'C compiler' if cc is None else 'libcrypto'} on this host"
+    exe = where / "seal_fast"
+    built = subprocess.run([cc, "-O2", "-o", str(exe), str(HERE / "seal_fast.c"), f"-l:{crypto}"], capture_output=True,
+                           text=True)
+    return exe if built.returncode == 0 else f"seal_fast.c didn't build: {built.stderr[-400:]}"
+
+
+def fast_path(exe: Path, frame_bytes: int, frames: int) -> dict:
+    """The construction in C over OpenSSL's SHA-512 at `frame_bytes`, on one core: reported only once its units are the
+    Python's, byte for byte (`fast_vector`), and every one opened."""
+    k = bench_keys()
+    ran = subprocess.run([str(exe), str(frame_bytes), str(frames), k.enc.hex(), k.mac.hex()], capture_output=True,
+                         text=True)
+    out = json.loads(ran.stdout) if ran.stdout else {}
+    if ran.returncode or out.get("digest") != fast_vector(frame_bytes):
+        raise SystemExit(f"seal_fast's units at {frame_bytes} bytes aren't the Python's ({ran.returncode}): {ran.stderr}")
+    return {"frame_bytes": frame_bytes, "frames": frames} | rates(
+        frame_bytes, frames, {n: out[n] for n in ("seal_cpu_s", "open_cpu_s", "seal_wall_s", "open_wall_s")})
+
+
+def openssl_speed(sizes: tuple[int, ...] = (88, 1024, 8192), seconds: int = 2) -> dict:
+    """OpenSSL's SHA-512 on one core, bytes hashed per second at each input size (`openssl speed -evp sha512 -mr`):
+    at 88 bytes, one keystream block's input, a call is one compression, and the bound on any CPU path without SHA-512
+    instructions is about 64 bytes of keystream per such call."""
+    if shutil.which("openssl") is None:
+        return {"skipped": "no openssl on this host"}
+    out = {}
+    for n in sizes:
+        ran = subprocess.run(["openssl", "speed", "-mr", "-seconds", str(seconds), "-bytes", str(n), "-evp", "sha512"],
+                             capture_output=True, text=True)
+        rate = next((line.split(":")[3] for line in ran.stdout.splitlines() if line.startswith("+F:")), None)
+        out[f"sha512_{n}B_Bps"] = float(rate) if rate is not None else None
+    if out.get("sha512_88B_Bps"):
+        out["keystream_bound_Bps"] = out["sha512_88B_Bps"] / 88 * 64
+    version = subprocess.run(["openssl", "version"], capture_output=True, text=True).stdout.strip()
+    return out | {"version": version}
+
+
+def cpu_info() -> dict:
+    """The host's CPU: its model, cores, load, and the flags that hash SHA in hardware (`sha_ni` is SHA-1 and SHA-256
+    only on x86; `sha512` is the x86 SHA512 extension, or ARMv8.2's SHA-512 instructions)."""
+    text = Path("/proc/cpuinfo").read_text() if Path("/proc/cpuinfo").exists() else ""
+    found = re.search(r"^(?:flags|Features)\s*:(.*)$", text, re.M)
+    flags = set(found.group(1).split()) if found else set()
+    model = re.search(r"^model name\s*:\s*(.*)$", text, re.M)
+    return {"model": model.group(1) if model else None, "cores": os.cpu_count(), "load": os.getloadavg(),
+            "flags": sorted(flags & {"sha_ni", "sha512", "sha2", "avx2", "avx512f", "avx512vl"})}
+
+
+async def _sealer(cfg: dict, pipe: Pipe) -> None:
+    """The pair's sending certifier: seals `frames` frames as fast as the link takes them and writes them to the
+    opener across the fabric, then sends its CPU and wall seconds."""
+    b, n = cfg["frame_bytes"], cfg["frames"]
+    grid, pool = seal_grid(b), frame_pool(b)
+    sealer = active.Sealer(bench_keys(), grid)
+    pipe.send(None)
+    pipe.recv()
+    with socket.create_connection((cfg["link"], SEAL_PORT)) as s:
+        c0, w0 = time.process_time(), time.perf_counter()
+        for k in range(0, n, CHUNK):
+            s.sendall(b"".join(sealer.seal(*divmod(j, grid.allocation), pool[j % len(pool)])
+                               for j in range(k, min(n, k + CHUNK))))
+        s.shutdown(socket.SHUT_WR)
+        c1, w1 = time.process_time(), time.perf_counter()
+    pipe.send({"cpu_s": c1 - c0, "wall_s": w1 - w0})
+
+
+async def _opener(cfg: dict, pipe: Pipe) -> None:
+    """The pair's receiving certifier: opens each unit it reads off the link, and sends how many opened, how many were
+    refused, and its CPU and wall seconds from the connection on."""
+    b = cfg["frame_bytes"]
+    pool = frame_pool(b)
+    opener = active.Opener(bench_keys(), seal_grid(b))
+    size, buf, opened = opener.unit_bytes, bytearray(), 0
+    with socket.create_server((cfg["host"], SEAL_PORT)) as srv:
+        pipe.send(None)
+        conn, _ = srv.accept()
+        with conn:
+            c0, w0 = time.process_time(), time.perf_counter()
+            while data := conn.recv(1 << 20):
+                buf += data
+                whole = len(buf) - len(buf) % size
+                for i in range(0, whole, size):
+                    opened += opener.open(bytes(buf[i : i + size])) == pool[(opener.position - 1) % len(pool)]
+                del buf[:whole]
+            c1, w1 = time.process_time(), time.perf_counter()
+    pipe.send({"opened": opened, "refused": opener.refused, "left": len(buf), "cpu_s": c1 - c0, "wall_s": w1 - w0})
+
+
+def seal_fabric(args, out: Path, frame_bytes: int, frames: int) -> dict:
+    """The first block's certifier seals to the second's across the lab's fabric, each in its namespace."""
+    dc = lab(args)
+    plan_ns = plan_of(args, dc)
+    if diff := differences(plan_ns):
+        raise SystemExit(f"{'; '.join(diff)}: {RESHAPE}")
+    (_, a), (_, b) = (records.uplink(dc, x.name) for x in dc.blocks[:2])
+    d = out / f"fabric-{frame_bytes}"
+    d.mkdir(parents=True, exist_ok=True)
+    common = {"out": str(d), "frame_bytes": frame_bytes, "frames": frames}
+    opener = Process(graph.netns_name(b), "opener", common | {"host": plan_ns.fabric_address(b)})
+    opener.ready()
+    sealer = Process(graph.netns_name(a), "sealer", common | {"link": plan_ns.fabric_address(b)})
+    sealer.ready()
+    sealer.send(json.dumps("go"))
+    sent, got = sealer.ready()["sent"], opener.ready()["sent"]
+    if sealer.wait() or opener.wait() or got["refused"] or got["left"] or got["opened"] != frames:
+        raise SystemExit(f"the fabric run at {frame_bytes} bytes didn't open every frame: {got}")
+    return {"frame_bytes": frame_bytes, "frames": frames, "from": a, "to": b} | rates(
+        frame_bytes, frames, {"seal_cpu_s": sent["cpu_s"], "seal_wall_s": sent["wall_s"], "open_cpu_s": got["cpu_s"],
+                              "open_wall_s": got["wall_s"]})
+
+
+def seal(args) -> None:
+    out = Path(args.out).resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    sizes = tuple(args.frame_bytes) or SEAL_FRAME_BYTES
+    frames = {b: max(CHUNK, int(args.megabytes * 2**20) // b) for b in sizes}
+    doc: dict = {"cpu": cpu_info(), "line_rate_bps": LINE_RATE_BPS, "openssl": openssl_speed()}
+    doc["python"] = [seal_python(b, frames[b]) for b in sizes]
+    with tempfile.TemporaryDirectory() as tmp:
+        exe = build_fast(Path(tmp))
+        doc["c"] = [fast_path(exe, b, frames[b]) for b in sizes] if isinstance(exe, Path) else {"skipped": exe}
+    doc["fabric"] = [seal_fabric(args, out, b, frames[b]) for b in sizes] if not args.no_fabric else \
+        {"skipped": "--no-fabric"}
+    (out / "seal.json").write_text(json.dumps(doc, indent=1))
+    for path in ("python", "c", "fabric"):
+        for r in doc[path] if isinstance(doc[path], list) else []:
+            print(f"{path:6} B={r['frame_bytes']:5}: seal {r['seal_cpu_Bps'] / 1e6:7.1f} MB/s/core, open "
+                  f"{r['open_cpu_Bps'] / 1e6:7.1f} MB/s/core; one 400 Gb/s uplink takes "
+                  f"{max(r['seal_cpu_cores_at_line_rate'], r['open_cpu_cores_at_line_rate']):.0f} cores each end")
+    print(f"openssl sha512: {doc['openssl']}; cpu: {doc['cpu']}")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name, fn in (("up", up), ("down", down), ("status", status), ("run", run)):
+    for name, fn in (("up", up), ("down", down), ("status", status), ("run", run), ("seal", seal)):
         p = sub.add_parser(name)
         p.set_defaults(fn=fn)
         p.add_argument("--declaration", metavar="FILE.py:NAME", help="a Datacenter or Fleet, or a function returning "
@@ -541,6 +764,12 @@ def main(argv: list[str] | None = None) -> int:
             p.add_argument("--block", action="append", default=[], metavar="BLOCK=STRATEGY",
                            help=f"a block's server strategy, one of {STRATEGIES} (default: the blocks take them in turn)")
             p.add_argument("--salt", action="store_true", help="turn each certifier's per-window salt on")
+        if name == "seal":
+            p.add_argument("--out", required=True)
+            p.add_argument("--frame-bytes", type=int, action="append", default=[],
+                           help=f"a frame size to measure (default: {SEAL_FRAME_BYTES})")
+            p.add_argument("--megabytes", type=float, default=256, help="the frames sealed on each path, in MiB")
+            p.add_argument("--no-fabric", action="store_true", help="skip the run across the lab's fabric")
     r = sub.add_parser("role")
     r.set_defaults(fn=role)
     r.add_argument("name", choices=sorted(ROLES))

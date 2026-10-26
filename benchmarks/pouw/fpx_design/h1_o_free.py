@@ -20,7 +20,7 @@ eps of the design, floor credit, operands free, its skip moved by ε_skip's chan
 TS_EPS as written, which must reproduce 5.860% and 0.591%, and on each pricing, and gives the literal each guarantee
 would need. With --lean-headline-dc it runs that file's `reading` on the H200's and B200's sheet and measured vectors
 under each pricing: their designs are two-sided on every TS component, so each must come out the same, at or under
-the literal `Security/Models/Accounting/Guarantees/HeadlineDc.lean` states.
+the literal `Security/Definitions/Accounting/Guarantees/HeadlineDc.lean` states.
 
 g1 on H1 serves 4 O - 2 sum X - 2 sum P^ + k (`g1h_eps.py`), so its correction is free beside O. The fix commits that
 centred word S as one more receipted word beside O' and the D_d: the cheater then computes S, through the recombination
@@ -192,7 +192,7 @@ def lean_dc(path: Path, pricings: dict) -> dict:
     DC_ = _load("lean_headline_dc_probe", path)
     DC_.LH._eps_budget = lambda: eb
     stated = {ns: int(k) for ns, k in DC_STATED.findall(
-        (Path.cwd() / "Security" / "Models" / "Accounting" / "Guarantees" / "HeadlineDc.lean").read_text())}
+        (Path.cwd() / "Security" / "Definitions" / "Accounting" / "Guarantees" / "HeadlineDc.lean").read_text())}
     out = {}
     for title, ts in pricings.items():
         eb.TS_EPS["co32c"] = ts

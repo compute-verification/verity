@@ -1,0 +1,36 @@
+{
+ "definitions": {
+  "DsaTopKOrder_v2{N=20,TOPK=16}": {
+   "and": 3288,
+   "type": "d22dd38139356fd21671ac0f7e413feea3a3945909abfd87e7686bfec2f70284079f37a67f2e3e61a5050912b2d0cc88462654f56f3eabd822e14ed02affcd2e"
+  },
+  "DsaWaksmanOrder_v2{N=9,TOPK=8}": {
+   "and": 46,
+   "type": "c57736f7fa334ceae7302d865d7ab28aab9f24be021536fe682df92085415d189b606d4f7ef5f2cfdd9d91c5c6ddccace7011dc60cf70d10da553dc894459b8b"
+  },
+  "DsaWaksmanPick_v2{W=2,E=16}": {
+   "and": 32,
+   "type": "eed3339f5434e383d37c9eebe402680234fd3bb3a61e40bf1bc1bd4cea8ec1a910d5bddb3820fe308161dc2af1a3fc3f2f1c0622a5dfe8e8c82f8217516af503"
+  },
+  "DsaWaksmanRows_v2{N=6,K=3,W=2,E=16}": {
+   "and": 352,
+   "type": "0960eeeeb18558923724b31c3fc64243056f201573502c6b733c977489e60e36edd125d307a7fde2cd68ddb7a676c847dde80ad4d458d3a73f75dfe93ce3bcda"
+  },
+  "DsaWaksmanRows_v2{N=9,K=8,W=3,E=16}": {
+   "and": 1008,
+   "type": "654274a06952c53726d77730ede0b65cf5863191c961a75d817f37502c761efe1a8f7d9d369c8fe9367adec9024d4072bd90dea0fbce2c928537c9b8eac80325"
+  },
+  "DsaWaksmanSwap_v2{W=576,E=16}": {
+   "and": 9216,
+   "type": "709560c40683811aa9450011a811ca400ebaddefbb865efc6416e9c2646091987f5b929a7f0ba460b085f5c747bbd597bc06c1e6070bc291107412e483932e54"
+  },
+  "Xor3x16_v2": {
+   "and": 0,
+   "type": "1a8e6bb395100c714c6f5b36c216ac6a923630b1758cfa108becd8768857beb577967c3f7b26f8b8b9317185009139efdbcf79daa63300861ce7a5b0451a3af6"
+  },
+  "Xor3x32_v2": {
+   "and": 0,
+   "type": "efeb84529f75829d22cabe53cbaa1d6e76e03b0cd9ef3c0b08231668604f6d67cb4dc8d41592664f2334e472eee881592a53f3628e5b4e94a992bba5ae97e494"
+  }
+ }
+}

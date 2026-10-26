@@ -27,7 +27,7 @@ def net (inWords : Nat) (reads : List (List Nat)) : Net :=
   let rows := Array.replicate nIn #[] ++ (reads.map List.toArray).toArray
   let w := nIn + reads.length + 1
   match Sparse.ofRows rows w, Sparse.ofRows (Array.replicate rows.size #[]) w with
-  | .ok a, .ok b => { (default : Net) with constPos := nIn + reads.length, inWords, a, b }
+  | .ok a, .ok b => { (default : Net) with constPos := nIn + reads.length, inWords, aT := .pure a, bT := .pure b }
   | _, _ => default
 
 def partly (inWords : Nat) (ns : List Nat) (reads : List (List Nat)) : Option (Nat × Nat) :=

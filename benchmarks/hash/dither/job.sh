@@ -24,6 +24,9 @@
 #            unitsbench.py (the served noise and units launches at the served window, each build gated against
 #            receipts.py and the base's every word, then timed: each call's units and the step's 128)
 #   unitsprof  the same builds under ncu (--set full; kernels h1u and h1k): unitsbench.py --profile, then the text pages
+#   j10r90   h1u_kr.so (the base) and every h1u_kr*.so shipped: unitsbench.py --multi --j10r --j10r-sm, gated only, then
+#            j10r90.py check (J10-R's units at the frozen shape's linears, M = 4,096 and 16,384); j10r90t: j10r90.py time
+#            (the same calls against plain INT8); j10r90.sh builds the sm_90a arms
 #   partials h1u.so and every h1u_*.so shipped: benchmarks/pouw/tests/test_partials.py and test_lane_refs.py with
 #            PARTIALS_LIB each (option A's partials: kh_seeds_at and kh_lanes byte for byte served_h1/partials.py's cpu
 #            backend and SERVE-REG's gated lane rows)
@@ -40,12 +43,14 @@
 #     --send BUILD_RUN/out/lib/sm_90a/h1u.so --send ... --send BUILD_RUN/out/lib/sm_90a/BUILD.txt \
 #     -- bash benchmarks/hash/dither/job.sh sm_90a h1u
 #
-# Env: VARIANTS (default below), JOBS (builds at once, default 8), BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), HB_WHO (the lease owner, default kernels-dither-hb), LEASE (gpu-lease flags, default
+# Env: VARIANTS (default below), BUILDS (the base libraries a build makes, default "kb h1noise h1u h1zref h1c" and
+# kb_pg on sm_100a; set empty, only the variants), NVCC_EXTRA (nvcc flags every build adds, e.g. --no-compress for the
+# SASS gate), JOBS (builds at once, default 8), BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), HB_WHO (the lease owner, default kernels-dither-hb), LEASE (gpu-lease flags, default
 # "--max-min 14"), LIBS (the shipped libraries, default $RESEARCH_RUN_DIR/inputs), VERITY_BENCH_VENV (default
 # /workspace/cp/venv312), NVCC (default CUDA 13.0's), NCU (default the ncu beside NVCC).
 # Exit: the bench's (4 a gate failed), 2 a build failed or the shipped libraries are missing or another commit's.
 set -uo pipefail
-ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|h1z|j10hb|prof|units|unitsprof|partials|z|zprof[,...]}
+ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|h1z|j10hb|prof|units|unitsprof|j10r90|j10r90t|partials|z|zprof[,...]}
 BENCH=${2:-kbench}
 HERE=$(cd "$(dirname "$0")" && pwd)
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
@@ -68,6 +73,7 @@ if [ "$BENCH" = build ]; then
     [ "$src" = kb ] && flags+=(-lcublasLt -Xlinker "-rpath=$LIB64")
     file=${file:-$src}
     [ -n "$def" ] && flags+=(${def//,/ })
+    [ -n "${NVCC_EXTRA:-}" ] && flags+=($NVCC_EXTRA)
     "$NVCC" "${flags[@]}" "$HERE/$file.cu" -o "$dir/$src.so" 2> "$dir/build-$src.log" || { echo "build $arch $src failed:"; cat "$dir/build-$src.log"; return 2; }
     "$(dirname "$NVCC")/cuobjdump" --dump-resource-usage "$dir/$src.so" > "$dir/$src.res.txt" 2>&1
     "$(dirname "$NVCC")/cuobjdump" -sass "$dir/$src.so" | gzip > "$dir/$src.sass.gz"
@@ -79,8 +85,8 @@ if [ "$BENCH" = build ]; then
   for arch in ${ARCH//,/ }; do
     dir="$OUT/lib/$arch"
     mkdir -p "$dir"
-    builds=(kb h1noise h1u h1zref h1c)
-    [ "$arch" = sm_100a ] && builds+=(kb_pg)
+    read -r -a builds <<< "${BUILDS-kb h1noise h1u h1zref h1c}"
+    [ "$arch" = sm_100a ] && [ -z "${BUILDS+set}" ] && builds+=(kb_pg)
     # h1c.cu's variants in $H1C_VARIANTS (NAME=FLAGS: h1c_NAME.so), for z|zprof
     for v in ${H1C_VARIANTS:-}; do builds+=("h1c_${v%%=*}:h1c:${v#*=}"); done
     # h1u.cu's knobs: H1U_MINB (CTAs an SM the registers leave room for), H1U_PF (the fused form prefetches too), H1U_PD
@@ -167,6 +173,21 @@ for b in ${BENCH//,/ }; do
         NCU=${NCU:-$(dirname "$NVCC")/ncu}
         CMDS+=("$NCU --profile-from-start off --clock-control none --set full --nvtx -k regex:h1u|h1k -f -o $OUT/prof $PY $HERE/unitsbench.py$ul --profile --out $OUT ${BENCH_ARGS:-}")
         CMDS+=("$PY $HERE/hb_prof.py --pages $OUT/prof.ncu-rep --ncu $NCU --out $OUT")
+      fi ;;
+    j10r90|j10r90t)
+      # h1u_kr.so (the base) and every other h1u_kr*.so shipped: j10r90 is unitsbench.py's J10-R gates at its own shapes
+      # (--profile: gated, not timed), then j10r90.py check at the frozen shape; j10r90t is j10r90.py time
+      jl=""
+      for f in "$LIBS"/h1u_kr.so "$LIBS"/h1u_kr?*.so; do
+        [ -f "$f" ] || continue
+        v=$(basename "$f" .so); NEED+=("$v"); jl+=" --lib ${v#h1u_}=$f"
+      done
+      [ -f "$LIBS/h1u_kr.so" ] || { echo "job.sh: $b needs $LIBS/h1u_kr.so, the base" >&2; exit 2; }
+      if [ "$b" = j10r90 ]; then
+        CMDS+=("$PY $HERE/unitsbench.py$jl --multi --j10r --j10r-sm --profile --out $OUT/units")
+        CMDS+=("$PY $HERE/j10r90.py check$jl --out $OUT ${BENCH_ARGS:-}")
+      else
+        CMDS+=("$PY $HERE/j10r90.py time$jl --out $OUT ${BENCH_ARGS:-}")
       fi ;;
     partials)
       # every h1u*.so shipped: test_partials.py and test_lane_refs.py with PARTIALS_LIB, their gpu tests (kh_seeds_at and

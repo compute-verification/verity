@@ -93,6 +93,28 @@ def test_a_get_whose_body_stalls_is_cut_off_and_retried(server, tmp_path):
     assert _fired() == [remote_s3.REQUEST_DEADLINE_S] and server.deadline_hits[0]["method"] == "GET"
 
 
+def test_a_large_get_that_trickles_is_cut_off_after_one_slow_window_and_retried(server, tmp_path, monkeypatch):
+    # INF-214: a 16 GiB part trickled at 13-170 KB/s for an hour under a 73 h whole-body deadline; a fresh connection got 45-70 MB/s
+    monkeypatch.setattr(remote_s3, "GET_STALL_MIN_BYTES", 1000)
+    windowed, start = threading.Event(), _Deadline.start
+
+    def arm(self):
+        start(self)
+        if self.seconds == remote_s3.STALL_WINDOW_S:
+            windowed.set()
+    monkeypatch.setattr(_Deadline, "start", arm)
+    orig = _Stall._stall
+
+    def stall_once_windowed(self):                         # the trickle stops only once the client watches the body's window
+        windowed.wait()
+        orig(self)
+    monkeypatch.setattr(_Stall, "_stall", stall_once_windowed)
+    server.get("k", tmp_path / "out")
+    assert (tmp_path / "out").read_bytes() == BODY and _Stall.calls == ["GET", "GET"]
+    assert _fired() == [remote_s3.STALL_WINDOW_S]
+    assert server.deadline_hits == [{"method": "GET", "key": "k", "try": 1, "of": remote_s3.RETRIES + 1, "deadline_s": remote_s3.STALL_WINDOW_S}]
+
+
 def test_a_head_that_never_answers_is_cut_off_and_retried(server, capsys):
     assert server.head("k") == {"bytes": len(BODY), "etag": "0123456789abcdef0123456789abcdef"}
     assert _Stall.calls == ["HEAD", "HEAD"] and _fired() == [remote_s3.HEAD_DEADLINE_S]

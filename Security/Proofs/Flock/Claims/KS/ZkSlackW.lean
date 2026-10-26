@@ -324,57 +324,6 @@ namespace FlockDeploy.KS
 
 open Flock FlockSoundness
 
-/-- **The masked weight's room for one more event per round**: at a statement whose tables `st j` are C-Flock ZK's,
-when each table's pads' weight is at most its deployed pads' domain and only level 0's event of a table is at round
-`0`, the fork of weight `k` and the joined escapes, round `0`'s charged twice, leave every table's level caps' and pads
-roots' weights (`Claims.Flock.roomW`) of twice the deployed weight: each table's weight pays for its events
-(`cZW_sum_le_tableWeight`), round `0` holds at most level 0's, the room and level 0's are every table's but `2`
-(`Claims.Flock.roomW_add`), and `2·k < 8·N₀/e + 2`. -/
-theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) {spec : SessionSpec}
-    (st : ℕ → Stmt) (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
-    (sch : ℕ → Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
-    (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
-      Np j ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new (st j).m (st j).c.kLog
-        (Claims.Flock.zkSched (st j).m).1.k0))
-    (rd : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Fin ((deployZk rel).V.k x))
-    (hr0 : ∀ j i, (rd j i).val = 0 → i = .inr ()) (r₀ : Fin ((deployZk rel).V.k x)) (hr₀ : r₀.val = 0) :
-    2 * ((deployZk rel).k x : ℝ) + Claims.Flock.joinCW (tables true x).length sch Np rd r₀ +
-        ∑ r, Claims.Flock.joinCW (tables true x).length sch Np rd r +
-        Claims.Flock.roomW (tables true x).length sch Np ≤
-      2 * (deployZk rel).weight x := by
-  set n := (tables true x).length with hn
-  have hz := Claims.Flock.joinCW_zero_le n sch Np rd hr0 r₀ hr₀
-  have hroom := Claims.Flock.roomW_add n sch Np
-  rw [Claims.Flock.joinCW_sum]
-  have hw : weight true x = ∑ j ∈ Finset.range n, tableWeight true (st j) :=
-    sum_map_eq_range (tables true x) (fun j => (spec, st j)) hst _
-  have hN : N₀ true x = ∑ j ∈ Finset.range n, tableLen true (st j) :=
-    sum_map_eq_range (tables true x) (fun j => (spec, st j)) hst _
-  have hk : ((deployZk rel).k x : ℝ) = (⌈4 * N₀ true x / Real.exp 1⌉₊ : ℝ) := rfl
-  show 2 * ((deployZk rel).k x : ℝ) + _ + _ + _ ≤ 2 * weight true x
-  rcases Nat.eq_zero_or_pos n with h0 | hpos
-  · have := k_le_weight true x
-    have hj0 : Claims.Flock.joinCW n sch Np rd r₀ = 0 := by
-      unfold Claims.Flock.joinCW
-      rw [h0, Finset.sum_range_zero]
-    have hr0' : Claims.Flock.roomW n sch Np = 0 := by
-      unfold Claims.Flock.roomW
-      rw [h0, Finset.sum_range_zero]
-    rw [hj0, hr0', h0, Finset.sum_range_zero, hk]
-    linarith
-  have hper : ∀ j ∈ Finset.range n, 4 * tableLen true (st j) / Real.exp 1 +
-      ∑ i, Claims.Flock.cZW (sch j) (Np j) i ≤ tableWeight true (st j) := fun j hj => by
-    have hj := Finset.mem_range.1 hj
-    exact cZW_sum_le_tableWeight (hsch j hj) (Np j) (hNp j hj)
-  have hs := Finset.sum_le_sum hper
-  rw [Finset.sum_add_distrib, ← Finset.sum_div, ← Finset.mul_sum, ← hN, ← hw] at hs
-  have he := Real.exp_pos 1
-  have hceil := Nat.ceil_lt_add_one (div_nonneg (mul_nonneg (by norm_num : (0 : ℝ) ≤ 4) (N₀_nonneg true x)) he.le)
-  have hn1 : (1 : ℝ) ≤ n := by exact_mod_cast hpos
-  rw [hk]
-  linarith
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -431,32 +380,26 @@ theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.M
 
 end Gen
 
-/-- **The merged escapes fit the deployed masked weight with the fork event of weight `k`, counted per round**, at a
-statement whose tables `st j` are C-Flock ZK's, when each table's pads' weight is at most its deployed pads' domain,
-only level 0's event of a table is at round `0` and the slack fits the room (`zk_fork_room`,
-`Claims.Flock.slackEscW_fitsForkR`). -/
-theorem slackEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
-    (x : Claims.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
-    (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
+/-- **The masked weight's room for one more event per round**: at a statement whose tables `st j` are C-Flock ZK's,
+when each table's pads' weight is at most its deployed pads' domain and only level 0's event of a table is at round
+`0`, the fork of weight `k` and the joined escapes, round `0`'s charged twice, leave every table's level caps' and pads
+roots' weights (`Claims.Flock.roomW`) of twice the deployed weight: each table's weight pays for its events
+(`cZW_sum_le_tableWeight`), round `0` holds at most level 0's, the room and level 0's are every table's but `2`
+(`Claims.Flock.roomW_add`), and `2·k < 8·N₀/e + 2`. -/
+theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) {spec : SessionSpec}
+    (st : ℕ → Stmt) (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
     (sch : ℕ → Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
       Np j ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new (st j).m (st j).c.kLog
         (Claims.Flock.zkSched (st j).m).1.k0))
     (rd : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Fin ((deployZk rel).V.k x))
-    (hr0 : ∀ j i, (rd j i).val = 0 → i = .inr ())
-    (ev : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Ω → (Fin ((deployZk rel).V.k x) → Coin) →
-      (Fin ((deployZk rel).V.k x) → Coin) → Prop)
-    (ev₁ : ℕ → Ω → (Fin ((deployZk rel).V.k x) → Coin) → Prop)
-    (tied : ∀ j i ω s s', ev j i ω s s' → Claims.TiedColl sha512
-      ((Claims.run sha512 P (deployZk rel).V x ω s).vLog ++
-        (Claims.run sha512 P (deployZk rel).V x ω (Claims.forkCoins (rd j i) s s')).vLog))
-    (tied₁ : ∀ j ω s, ev₁ j ω s → Claims.TiedColl sha512 (Claims.run sha512 P (deployZk rel).V x ω s).vLog)
-    (δ : ℕ → ℝ) (hfit : Claims.Flock.SlackFitW (tables true x).length sch Np rd δ) :
-    (Claims.Flock.slackEscW sha512 (deployZk rel).V P x (tables true x).length sch Np rd ev ev₁ tied tied₁
-      δ).FitsForkR ((deployZk rel).weight x) ((deployZk rel).k x) :=
-  Claims.Flock.slackEscW_fitsForkR (tables true x).length sch Np rd ev ev₁ tied tied₁ δ hfit _ _ (V_k_pos true x)
-    (zk_fork_room rel x st hst sch hsch Np hNp rd hr0 ⟨0, V_k_pos true x⟩ rfl)
-
+    (hr0 : ∀ j i, (rd j i).val = 0 → i = .inr ()) (r₀ : Fin ((deployZk rel).V.k x)) (hr₀ : r₀.val = 0) :
+    2 * ((deployZk rel).k x : ℝ) + Claims.Flock.joinCW (tables true x).length sch Np rd r₀ +
+        ∑ r, Claims.Flock.joinCW (tables true x).length sch Np rd r +
+        Claims.Flock.roomW (tables true x).length sch Np ≤
+      2 * (deployZk rel).weight x :=
+  Gen.zk_fork_room (S := S₀) (rel := rel) (x := x) (spec := spec) (st := st) (hst := hst) (sch := sch) (hsch := hsch)
+    (Np := Np) (hNp := hNp) (rd := rd) (hr0 := hr0) (r₀ := r₀) (hr₀ := hr₀)
 
 namespace Gen
 
@@ -489,5 +432,32 @@ theorem slackEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω
     (zk_fork_room rel x st hst sch hsch Np hNp rd hr0 ⟨0, V_k_pos true x⟩ rfl)
 
 end Gen
+
+/-- **The merged escapes fit the deployed masked weight with the fork event of weight `k`, counted per round**, at a
+statement whose tables `st j` are C-Flock ZK's, when each table's pads' weight is at most its deployed pads' domain,
+only level 0's event of a table is at round `0` and the slack fits the room (`zk_fork_room`,
+`Claims.Flock.slackEscW_fitsForkR`). -/
+theorem slackEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
+    (x : Claims.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
+    (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
+    (sch : ℕ → Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
+    (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
+      Np j ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new (st j).m (st j).c.kLog
+        (Claims.Flock.zkSched (st j).m).1.k0))
+    (rd : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Fin ((deployZk rel).V.k x))
+    (hr0 : ∀ j i, (rd j i).val = 0 → i = .inr ())
+    (ev : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Ω → (Fin ((deployZk rel).V.k x) → Coin) →
+      (Fin ((deployZk rel).V.k x) → Coin) → Prop)
+    (ev₁ : ℕ → Ω → (Fin ((deployZk rel).V.k x) → Coin) → Prop)
+    (tied : ∀ j i ω s s', ev j i ω s s' → Claims.TiedColl sha512
+      ((Claims.run sha512 P (deployZk rel).V x ω s).vLog ++
+        (Claims.run sha512 P (deployZk rel).V x ω (Claims.forkCoins (rd j i) s s')).vLog))
+    (tied₁ : ∀ j ω s, ev₁ j ω s → Claims.TiedColl sha512 (Claims.run sha512 P (deployZk rel).V x ω s).vLog)
+    (δ : ℕ → ℝ) (hfit : Claims.Flock.SlackFitW (tables true x).length sch Np rd δ) :
+    (Claims.Flock.slackEscW sha512 (deployZk rel).V P x (tables true x).length sch Np rd ev ev₁ tied tied₁
+      δ).FitsForkR ((deployZk rel).weight x) ((deployZk rel).k x) :=
+  Gen.slackEscW_fitsForkR_zk (S := S₀) (rel := rel) (Ω := Ω) (P := P) (x := x) (spec := spec) (st := st) (hst := hst)
+    (sch := sch) (hsch := hsch) (Np := Np) (hNp := hNp) (rd := rd) (hr0 := hr0) (ev := ev) (ev₁ := ev₁) (tied := tied)
+    (tied₁ := tied₁) (δ := δ) (hfit := hfit)
 
 end FlockDeploy.KS

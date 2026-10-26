@@ -183,6 +183,11 @@ def coins(n: int) -> bytes:
     return bytes.fromhex(body)
 
 
+#: the claim instance naming `coins`'s bytes, which a served challenger reads (`challenger.coin_claim`)
+CLAIM = "uniform/io-getrandombytes"
+coins.claim = CLAIM  # type: ignore[attr-defined]
+
+
 def _canon(x: Any) -> str | None:
     """`x` under `canonical_json`, or None where it isn't JSON (which then equals nothing)."""
     try:
@@ -220,7 +225,7 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
             registered: Mapping[str, int] | None, supplied: Mapping[str, Any] | None = None,
             pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None,
             schemas: Mapping[str, str] | None = None, window_root: str | None = None,
-            held: Sequence[str] | None = None) -> dict[str, Any]:
+            held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None) -> dict[str, Any]:
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`)."""
     p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(law), "leaf_layer": leaf_layer,
          "log": [dict(r) for r in log], "partition": None if partition is None else dict(partition),
@@ -241,6 +246,8 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
         p["window_root"] = window_root
     if held is not None:
         p["held"] = list(held)
+    if outputs is not None:
+        p["outputs"] = {v: dict(o) for v, o in outputs.items()}
     return p
 
 
@@ -250,14 +257,15 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None,
           supplied: Mapping[str, Any] | None = None, pinned: Mapping[str, str] | None = None,
           binding: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
-          window_root: str | None = None, held: Sequence[str] | None = None) -> Verdict:
+          window_root: str | None = None, held: Sequence[str] | None = None,
+          outputs: Mapping[str, Mapping[str, str]] | None = None) -> Verdict:
     """`registration.check` (R1-R7) by the verifier of record."""
     log = list(log)
     py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
-                 supplied, pinned, binding, schemas=schemas, window_root=window_root, held=held)
+                 supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held)
     got = lean("registration", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
                                                   work_table, registered, supplied, pinned, binding, schemas,
-                                                  window_root, held),
+                                                  window_root, held, outputs),
                        "record": dict(rec)})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"]}
@@ -333,13 +341,17 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         session_roots: Mapping[str, str] | None = None, *, supplied: Mapping[str, Any] | None = None,
         pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None,
         schemas: Mapping[str, str] | None = None, window_root: str | None = None,
-        held: Sequence[str] | None = None) -> Verdict:
+        held: Sequence[str] | None = None, coin_source: str, coins: Mapping[str, Any] | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
     `verifiers`): on `check`'s copies, `check_public`'s values and declared items, the receipt's challenger and place in
     the log, `select`'s rule, the bytes of the coins the draw read and the closure map, and `audit_record`'s arguments
-    with the sessions' roots whole. Where the two differ, or the Lean refuses a step, the verdict fails with `DISAGREE`
-    alone."""
+    with the sessions' roots whole. `coin_source` is where the draw's coins came from (`"verifier"` or `"challenger"`,
+    the stream's `coin_source`, required): from the challenger, the Lean also checks `coins`, their evidence
+    (`coins.coins_reason`'s), that the bytes the draw read are the coins the session the ledger opens for `window_root`
+    released after the registration's digest, and refuses the select step where they aren't or `coins` is missing
+    (code `coins`); from the verifier, `coins` must be None. Where the two differ,
+    or the Lean refuses a step, the verdict fails with `DISAGREE` alone."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
     got = lean("run", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
                                          registered, supplied, pinned, binding, schemas, window_root, held),
@@ -350,7 +362,8 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
                        "outputs": list(outputs), "statement": dict(statement), "delta": exact,
                        "proved_units": None if proved_units is None else list(proved_units), "instances": instances,
                        "served": None if served is None else list(served),
-                       "session_roots": None if session_roots is None else dict(session_roots)})
+                       "session_roots": None if session_roots is None else dict(session_roots),
+                       "coin_source": coin_source, "coins": None if coins is None else dict(coins)})
     if isinstance(got.get("audit"), str):
         try:
             got = {**got, "audit": json.loads(got["audit"])}

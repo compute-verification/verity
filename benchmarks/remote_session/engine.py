@@ -7,9 +7,11 @@ arena      at load (`GPUModelRunner.load_model`, after), every parameter of two 
            buffer of --arena-gib, each from a block boundary in module order, and the parameter pointed at its copy;
            the rest of the buffer zeros (through host memory, one engine at a time, when the GPU can't hold the buffer
            beside the loaded weights: `Arena`). The buffer is exported over CUDA IPC (`engine.<g>.json` in --dir: the
-           GPU's UUID, the handle, the offset and size, the weights' blocks), so the prover's pass reads these bytes
-           as they are served. Norms and other one-dimensional parameters stay outside it
-plain      a greedy probe alone in the batch (`probe`), then the arena's SHA-256 a GiB at a time, then the steady load
+           GPU's UUID, the handle, the offset and size, the weights' blocks and each entry's name, offset and bytes),
+           so the prover's pass reads these bytes as they are served. Norms and other one-dimensional parameters stay
+           outside it
+plain      a greedy probe alone in the batch (`probe`), then the arena's SHA-256 a GiB at a time (`plain_sha256` in
+           the status, which `node.py --model-dir` holds to the pinned checkpoint's arena), then the steady load
            (`Load`) at --step-hz, with --align-steps at the host clock's multiples of 1/hz so the node's engines
            step together: `status.<g>.json` says ready, then baseline once --plain-s of it has run
 encode     the prover's ctl.json sets pause: the engine aborts what it serves, waits for its GPU, says paused and
@@ -367,6 +369,7 @@ def main() -> int:
     info = {"gpu": g, "uuid": uuid, "bytes": arena.buf.numel(), "weights_bytes": arena.weights_bytes,
             "weights_blocks": arena.weights_blocks, "outside_bytes": arena.outside_bytes,
             "params": len(arena.entries), "model": a.model, "staged": arena.staged, "pack_s": arena.pack_s,
+            "entries": [[f"{owners[0][0]}.{owners[0][2]}", off, n] for off, n, _, owners in arena.entries],
             **export(arena.buf.data_ptr())}
     write_json(d / f"engine.{g}.json", info)
     rng = random.Random(a.seed)
@@ -374,7 +377,7 @@ def main() -> int:
     plain = probe(engine, "plain", prompts, a.probe_tokens)
     largest = max(-(-n // BLOCK) * BLOCK for _, n, _, _ in arena.entries)
     scratch = torch.empty(max(GIB, largest), dtype=torch.uint8, device="cuda:0")
-    plain_hash = arena.hashes(scratch)
+    plain_hash = info["plain_sha256"] = arena.hashes(scratch)
     status("ready", **info)
     load = Load(engine, a.concurrency, a.prompt_tokens, a.max_tokens, a.step_hz, a.seed + 1 + g, align=a.align_steps)
     log = (a.out / f"engine.{g}.steps.jsonl").open("w")

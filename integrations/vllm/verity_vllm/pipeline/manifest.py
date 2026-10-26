@@ -37,16 +37,16 @@ from verity_vllm.config import option
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.query.compare import compare, summarize
 from verity_vllm.correspondence.reader_for_query import Correspondence
-from verity_vllm.query.program_view import from_instances
+from verity_vllm.query.program_view import from_instances, iter_instance_rows
 from verity_vllm.query.compose import compose_global, merge_ranks
 from verity_vllm.query.required import QUERIES, QUERY_OF_RECORD, Q_WORD_ID, request_manifest
-from verity_vllm.query import cross_call
+from verity.ml.definitions import cross_call
 from verity_vllm.query import guarded_max as GM
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query import vocab_range as VR
-from verity_vllm.query import word as word_query
+from verity.ml.definitions import word as word_query
 
 __all__ = ["TAPS", "DEFAULT_TAPS", "taps_of", "word_record", "cpus", "prefetch_word_rules", "build_components", "build", "build_global",
            "build_global_ranks", "cross_call_check", "main"]
@@ -126,7 +126,8 @@ def recorded_program_digest(program_dir: str, res: dict[str, Any]) -> str | None
 def cross_call_check(program_dir: str, *, strict: bool = True, log=None) -> dict[str, Any]:
     """Cross-Call recomputes (`cross_call.check_program`) over the Build's instance sequence; `strict` raises
     `cross_call.RecomputeViolation` naming every one.  The manifest is not touched."""
-    return cross_call.check_program(os.path.join(program_dir, "instances.json.gz"), strict=strict, log=log)
+    path = os.path.join(program_dir, "instances.json.gz")
+    return cross_call.check_program(lambda: iter_instance_rows(path), strict=strict, log=log)
 
 
 def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_id: str | None = None, rank: int = 0, ranks: int = 1,
@@ -252,9 +253,15 @@ def build_components(tasks: list[tuple[str, dict[str, Any]]], *, jobs: int = 1, 
     import multiprocessing
     after = after or (lambda _i, _m: None)
     if jobs <= 1 or len(tasks) < 2 or "fork" not in multiprocessing.get_all_start_methods():
-        return _build_in_turn(tasks, after)
+        return _build_in_turn(tasks, after, log)
     with _pool_headroom(budget_gb, "components", log) as head:
-        return _build_in_turn(tasks, after) if head is None else _build_forked(tasks, jobs, after, head, log)
+        return _build_in_turn(tasks, after, log) if head is None else _build_forked(tasks, jobs, after, head, log)
+
+
+def _progress(log, done: int, total: int, t0: float, running: int = 0) -> None:
+    """The line each component's end adds to the manifest's log: a limit of none (`row_tp --manifest-timeout 0`) leaves only these."""
+    if log:
+        log(f"  components: {done}/{total} built in {time.time() - t0:.0f}s" + (f", {running} running" if running else ""))
 
 
 @contextmanager
@@ -293,11 +300,12 @@ def _own_budget(budget_gb: float | None = None) -> int | None:
     return head if lim.isdigit() and int(lim) < total else None
 
 
-def _build_in_turn(tasks: list[tuple[str, dict[str, Any]]], after: Callable[[int, dict[str, Any]], None]) -> list[dict[str, Any]]:
-    out = []
+def _build_in_turn(tasks: list[tuple[str, dict[str, Any]]], after: Callable[[int, dict[str, Any]], None], log=None) -> list[dict[str, Any]]:
+    out, t0 = [], time.time()
     for i, (d, kw) in enumerate(tasks):
         out.append(build(d, **kw))
         after(i, out[-1])
+        _progress(log, i + 1, len(tasks), t0)
     return out
 
 
@@ -370,7 +378,7 @@ def _build_forked(tasks: list[tuple[str, dict[str, Any]]], jobs: int, after: Cal
     pending = sorted(range(len(tasks)), key=lambda i: (-need[i], i))
     results: dict[int, tuple[str, Any]] = {}
     running: dict[Any, tuple[int, Any]] = {}
-    used, first_bad = 0, len(tasks)
+    used, first_bad, t0 = 0, len(tasks), time.time()
     if log:
         log(f"  components: {len(tasks)} builds, {jobs} processes, memory budget {budget / 2**30:.1f} GiB")
     while pending or running:
@@ -396,6 +404,7 @@ def _build_forked(tasks: list[tuple[str, dict[str, Any]]], jobs: int, after: Cal
             if p.exitcode not in (0, None) and results[i][0] == "ok":
                 results[i] = ("error", RuntimeError(f"{os.path.basename(tasks[i][0])}: the build process exited {p.exitcode}"))
             used -= need[i]
+            _progress(log, len(results), len(tasks), t0, len(running))
             if results[i][0] == "error" and i < first_bad:
                 first_bad = i
                 pending = [j for j in pending if j < i]
@@ -573,8 +582,8 @@ NORM_SCALES_HELP = ("on by default, --no-norm-scales for A/B only: the norm-scal
 WORD_CHECK_HELP = ("the partition of record's check: Q_word_v1{X,W} (\"16/32[+extras]\", the default) over the Program -- widths, recomputes, "
                    "every Call boundary committed; fails the Build naming every violation.  \"off\" skips it (A/B only)")
 QUERY_HELP = f"the query the manifest is built under: {QUERY_OF_RECORD} (the record) or Q_module_body_v1 (A/B only; pair it with --word-check off)"
-CROSS_CALL_HELP = "check that no value is computed in two Calls (verity_vllm.query.cross_call); fail the Build naming every recompute"
-WORD_MAX_GATES_HELP = ("--word-check's gate limits (verity_vllm.query.word.gate_limits): a Definition over its limit is a too-large violation, "
+CROSS_CALL_HELP = "check that no value is computed in two Calls (verity.ml.definitions.cross_call); fail the Build naming every recompute"
+WORD_MAX_GATES_HELP = ("--word-check's gate limits (verity.ml.definitions.word.gate_limits): a Definition over its limit is a too-large violation, "
                        "not cut.  N for every Definition or FAMILY=N for one, comma-separated (default 24000000; about 0.5 KB of host memory "
                        "per gate cut and 20 bytes per operand it reads); the query id is the same under any")
 GUARDED_MAX_HELP = ("on by default, --no-guarded-max for A/B only: the guarded-max policy (verity_vllm.query.guarded_max) -- the attention "

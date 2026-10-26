@@ -75,6 +75,16 @@ def pointsWhy : String :=
 #guard why (innerLink (transcript (top0 := [])) (record)) ==
   some "rec inner transcript: circuit/rep0 round 1's top 0 has no nodes"
 
+-- Every node kept is a `b ‖ c` of 128 bytes, which a top's piece length rests on; a shorter node is refused
+#guard link.root.all (·.size == 128) && link.tops.all (·.all fun (_, t) => t.all (·.size == 128))
+def shortTop : Json :=
+  (transcript).setObjVal! "rounds" (Json.arr #[round "circuit/rep1" 1 [[5]], round "circuit/rep0" 0 [],
+    (round "circuit/rep0" 1 []).setObjVal! "tops"
+      (Json.arr #[Json.arr #[hx 3, Json.str (hexOf (ByteArray.mk (Array.replicate 64 4)))]]),
+    round "circuit/rep1" 0 []])
+#guard why (innerLink (transcript) (record)) == none && why (innerLink shortTop (record)) ==
+  some "rec inner transcript: circuit/rep0 round 1's top 0: a b ‖ c of 64 bytes, not 128"
+
 -- `rec-top-L<l>`'s rows: root_B at level 0, both reps'; above it rep 0's top, then rep 1's
 def row (lk : InnerLink) (l x : Nat) : Option (List UInt8) := (topRow lk l x).toOption.map (·.2.data.toList)
 def is (n : Nat) : Option (List UInt8) := some (b n).data.toList
@@ -133,7 +143,7 @@ and 7; at level 0 both reps read `root_B` from row 0. -/
 
 def port (name value : String) (reads : List Nat) : Registered.Port :=
   { name, value, root := .empty, leaves := 8, words := some 64, wordBits := 16, domain := .empty,
-    reads := (reads.map some).toArray }
+    readsRel := (reads.map some).toArray }
 def pos0 : Array Nat := #[5, 13, 6]
 def pos1 : Array Nat := #[1, 2, 15]
 def reads (own : Array Registered.Port) (l : Nat) : Option String :=

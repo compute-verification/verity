@@ -2,10 +2,12 @@
 warm-up runs are learn-only, a run of theirs left without a root is a declared warm-up named in the custom gate's verdict, and a
 measured run without a root fails the gate. Its ``ready``, and the stock profiling arm's (`prof_arm.py`), read only the engine's
 public names (``vllm``, ``model``, ``pin``), for ``verity_vllm.LLM`` and for the harness's local checkpoint, and the committer
-gets every field it reads of its engine. The committer and the compiled source are fakes; the roots are the GPU suites'."""
+gets every field it reads of its engine. The profiling arms write each run's records after its timed window (``end_run`` writes
+nothing). The committer and the compiled source are fakes; the roots are the GPU suites'."""
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -174,16 +176,14 @@ def test_a_local_checkpoint_commits_under_vllms_model_path_without_the_private_e
 
     runner = _Runner()
     direct = _DirectLLM(_vllm(runner), {})
-    vars(direct).pop("_engine", None)
     com = _ready(monkeypatch, direct).committer
     assert (com.engine.runner, com.engine.model) == (runner, runner.model)
     assert com.engine.cp == {"repo": "/models/local", "revision": None}
     assert len(_geo_digest(com.engine)) == 32
 
 
-def test_the_stock_profiling_arm_ranges_the_runner_of_a_local_checkpoint_without_the_private_engine(monkeypatch):
-    from verity_bench.vllm.runner import _DirectLLM
-
+def _prof_module(monkeypatch) -> tuple[ModuleType, list[str]]:
+    """prof_arm.py with torch's NVTX ranges recorded; the module and the ranges."""
     ranges: list[str] = []
     nvtx = SimpleNamespace(range_push=ranges.append, range_pop=lambda: ranges.append("pop"))
     monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(cuda=SimpleNamespace(nvtx=nvtx)))
@@ -191,10 +191,72 @@ def test_the_stock_profiling_arm_ranges_the_runner_of_a_local_checkpoint_without
     spec = importlib.util.spec_from_file_location("served_commit_prof_arm", PROF_ARM)
     prof = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(prof)
+    return prof, ranges
+
+
+def test_the_stock_profiling_arm_ranges_the_runner_of_a_local_checkpoint_without_the_private_engine(monkeypatch):
+    from verity_bench.vllm.runner import _DirectLLM
+
+    prof, ranges = _prof_module(monkeypatch)
     runner = _Runner()
     direct = _DirectLLM(_vllm(runner), {})
-    vars(direct).pop("_engine", None)
     prof.StockProfArm("stock-prof").ready(SimpleNamespace(engine=direct))
     assert runner.execute_model(SimpleNamespace(total_num_scheduled_tokens=7)) == "executed"
     assert runner.sample() == "sampled"
     assert ranges == ["exec:7", "pop", "sample", "pop"]
+
+
+class _RootsCommitter(_Committer):
+    name, native_end, rows_off_thread = "native_collect", True, True
+
+    def __init__(self) -> None:
+        super().__init__(bounded=True)
+        self.runner = _Runner()
+        self._nc = SimpleNamespace(slot_fast=True, stats=lambda: {"plans": 1})
+        self.spans = SimpleNamespace(total={"hashing": 0.5}, calls={"hashing": 2})
+
+
+def _lines(path: Path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+
+def test_the_roots_arm_writes_each_runs_records_after_its_timed_window(monkeypatch, tmp_path):
+    prof, ranges = _prof_module(monkeypatch)
+    (tmp_path / "out").mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    monkeypatch.setattr(prof.RootsArm, "dumped", set())
+    arm, com = prof.RootsArm("served-commit-prof", retain="none"), _RootsCommitter()
+    arm.committer, arm.windows = com, {}
+    arm.source = SimpleNamespace(stats=dict(_Source.stats), errors=[], codegen={}, native_drain=True, begin_run=lambda: None,
+                                 summary=dict)
+    roots, layouts = tmp_path / "out" / "roots.jsonl", tmp_path / "out" / "layouts.jsonl"
+    written = []
+    for phase, root in (("warmup", b"w" * 32), ("measure", b"m" * 32)):
+        target = SimpleNamespace(phase=phase, point="B8")
+        arm.begin_run(target)
+        com._layouts = {0: [SimpleNamespace(name="lm_head", dtype="bfloat16", shape=(8, 16), nbytes=256)]}
+        arm.plan_log.append((0, 7, 0))
+        com.result = SimpleNamespace(run_root=root, extra={"bounded_staging": {"enabled": True}})
+        arm.end_run(target)
+        written.append(len(_lines(roots)))
+    assert written == [0, 1] and ranges[-1] == "pop"
+    assert arm.extras(target)["steps"] == 1
+    got = [(r["name"], r["run"], r["run_root"], r["steps_log"], r["plan_hits"]) for r in _lines(roots)]
+    assert got == [("warmup:B8", 0, (b"w" * 32).hex(), [[0, 7, 0, 256]], 1), ("measure:B8", 1, (b"m" * 32).hex(), [[0, 7, 0, 256]], 1)]
+    assert [(r["run"], r["steps"]) for r in _lines(layouts)] == [(0, {"0": [["lm_head", "bfloat16", [8, 16], 256]]})]
+    assert [r["run"] for r in arm.runs] == ["warmup:B8", "measure:B8"]
+
+
+def test_the_stock_profiling_arm_writes_its_cpu_line_after_the_timed_window(monkeypatch, tmp_path):
+    prof, _ = _prof_module(monkeypatch)
+    (tmp_path / "out").mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    roots, arm, target = tmp_path / "out" / "roots.jsonl", prof.StockProfArm("stock-prof"), SimpleNamespace()
+    arm.begin_run(target)
+    arm.end_run(target)
+    assert not roots.exists()
+    assert arm.extras(target) == {}
+    arm.begin_run(target)
+    arm.end_run(target)
+    arm.begin_run(target)
+    assert [r["arm"] for r in _lines(roots)] == ["stock-prof", "stock-prof"]

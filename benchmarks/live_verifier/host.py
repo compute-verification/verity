@@ -5,6 +5,7 @@ pinned, one run at a time, each run's parameters a lane's request held to a fixe
     vy-verifier-gate run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS]
                          | --sessions N [--windows W] [--window-ms MS] [--samples S])
                          [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L] [--verdict lean|both]
+                         [--model ROLE [--engines E] --arena-blocks A]
     vy-verifier-gate status [RUN] | fetch RUN [--transcripts] | replay RUN | stop RUN | close NODE_HEX
 
 - **Who reaches it.** Every key in `research`'s authorized_keys on the host is forced to `vy-verifier-gate` (`command=`),
@@ -25,7 +26,10 @@ pinned, one run at a time, each run's parameters a lane's request held to a fixe
   `verifier.json`).
 - **A run** (`run`) is verifier.py with the whitelisted parameters and the host's own: it listens on 127.0.0.1 at
   `--port` (one of `PORTS`), takes each session's coins from vy-challenger-1 through its gate (`--challenger gate`, the
-  host's key and this host's name there, under the lane's `--period` and `--pin`), writes every session's transcript
+  host's key and this host's name there, under the lane's `--period` and `--pin`), holds each session's pin to the
+  challenger's pins log, which it fetches through the same gate (`pins`), and to main's first-parent history at
+  `/opt/vy-verifier/main-first-parent.txt` (`--challenger-main`; infra writes `git rev-list --first-parent origin/main`
+  there, root's and 0644, whenever it pins either host, and no run starts without it), writes every session's transcript
   (`--transcript`) and keeps the registry. The audited node's capacities, which its memory line is measured against
   (`--host-bytes`, `--ingress-bytes-per-s`, `--hbm-bytes`), are the host's for `--peer` (`/etc/vy/verifier.json`),
   never the request's. The prover reaches the port only through its tunnel account's `ssh -L` (`vy-verifier-tunnel`),
@@ -34,6 +38,25 @@ pinned, one run at a time, each run's parameters a lane's request held to a fixe
   does (`verifier.json`, `challenger/`, `verifier.log`, `registry.json`), which `auditor_line.py` reads, and the
   transcripts gzipped in `out/transcripts/` with their `SHA256SUMS`; then `end.json` (exit code, who stopped it, each
   file's SHA-512). One unit runs at a time, a run or a replay, so a replay never takes a live session's cores.
+- **A bound run** (`--model ROLE --arena-blocks A [--engines E]`, ROLE of [A-Z0-9_], E 1..8 and verifier.py's 8 by
+  default, A at most 2^25) binds the registered store to a pinned model (`verifier.py --model`,
+  `remote_bandwidth.store.Binding`), which `auditor_line.py`'s `bound` check needs. The lane names the role and the store's shape, never a path: the gate
+  adds `--checkpoint <models>/<ROLE>`, the host's directory of the role's checkpoint, and `--pin` core's pin in the
+  pinned tree (`verity/core/protocols/pouw/lean/check/models.json`, `MODEL_PINS`), which the gate's own `--pin` (the
+  challenger's key, verifier.py's `--challenger-pin`) is not. It refuses the run, before writing or starting anything,
+  when the role has no directory there or the pinned tree has no `models.json`; verifier.py then holds every file the
+  role's entry pins to its SHA-512 before it listens, and refuses a role the pin lacks. `<models>` is `verifier.json`'s
+  `models`, default `/var/lib/vy-verifier/models`. Infra provisions a role's directory: every file the role's entry
+  pins, at the pinned revision, as a root-held regular file (0644, in a root-held 0755 directory), copied out of a
+  download, never an HF cache's snapshot, whose files are symlinks into its blobs and which
+  `remote_bandwidth.store.check` refuses. Qwen2.5-32B in BF16, role `QWEN25_32B_BF16`, about 66 GB:
+
+      hf download Qwen/Qwen2.5-32B --revision 1818d35814b8319459f4bd55ed1ac8709630f003 --local-dir /tmp/q
+      install -d -m 0755 -o root -g root /var/lib/vy-verifier/models/QWEN25_32B_BF16
+      install -m 0644 -o root -g root /tmp/q/* /var/lib/vy-verifier/models/QWEN25_32B_BF16/
+
+  The files are held to the pin, not to where they came from: a run binds to the role once the pinned tree's
+  `models.json` pins it.
 - **A replay** (`replay RUN`, `vy-verifier-replay@<run>.service`) checks each transcript against `SHA256SUMS` and
   against the sha256 and bytes `verifier.json` recorded for it, and replays them through both verifiers
   (`verity/core/protocols/remote_bandwidth/lean/tests/replay.py transcript --record verifier.json`), or the record
@@ -92,6 +115,13 @@ SPECS = 16
 INTS = {"--sessions": (1, 16), "--windows": (1, 64), "--samples": (1, 100_000), "--lifetime": (1, 1024),
         "--minutes": MINUTES}
 DECIMALS = {"--window-ms": (1.0, 600_000.0), "--jitter-ms": (0.0, 1_000.0), "--pace-pass-ms": (0.0, 1_000.0)}
+ROLE = re.compile(r"[A-Z0-9_]{1,64}")
+STORE = {"--engines": (1, 8), "--arena-blocks": (1, 1 << 25)}
+"""A bound run's store: its arenas, one a GPU of the node's 8, and each arena's 4 KiB blocks, at most 128 GiB (an RTX
+PRO 6000 has 96 GB of HBM)."""
+STORE_INT = re.compile(r"[1-9][0-9]{0,7}")
+MODEL_PINS = Path("verity/core/protocols/pouw/lean/check/models.json")
+"""Core's pin of each model role, in the pinned tree: a bound run's `verifier.py --pin`."""
 UNIT = "vy-verifier@{}.service"
 REPLAY_UNIT = "vy-verifier-replay@{}.service"
 LOG_LINES = 20
@@ -108,6 +138,7 @@ class Host:
     root: Path = Path("/var/lib/vy-verifier")
     config: Path = Path("/etc/vy/verifier.json")
     pins: Path = Path("/opt/vy-verifier/pins.jsonl")
+    main: Path = Path("/opt/vy-verifier/main-first-parent.txt")
 
     @property
     def runs(self) -> Path:
@@ -123,6 +154,11 @@ class Host:
 
     def settings(self) -> dict:
         return json.loads(self.config.read_text())
+
+    def models(self, settings: dict) -> Path:
+        """Where infra keeps each bound role's checkpoint, `<models>/<ROLE>/`: `verifier.json`'s `models`, else
+        `root/models`."""
+        return Path(settings.get("models") or self.root / "models")
 
 
 def utc(now: datetime) -> str:
@@ -208,7 +244,7 @@ def parse_run(argv: list[str], settings: dict) -> dict:
     for flag in ("--peer", "--port", "--period", "--pin"):
         p.add_argument(flag, required=True)
     p.add_argument("--paced", nargs="+")
-    for flag in (*INTS, *DECIMALS, "--quantile", "--verdict"):
+    for flag in (*INTS, *DECIMALS, "--quantile", "--verdict", "--model", *STORE):
         p.add_argument(flag)
 
     def refuse(why: object) -> None:
@@ -262,20 +298,52 @@ def parse_run(argv: list[str], settings: dict) -> dict:
         raise Refused("run: --paced SPEC ... or --sessions N")
     elif "pace-pass-ms" in req:
         raise Refused("--pace-pass-ms is a paced run's")
+    if a.model is not None:
+        if not ROLE.fullmatch(a.model):
+            raise Refused(f"--model {a.model!r}: a role of core's pin ({MODEL_PINS}), 1 to 64 of [A-Z0-9_]")
+        req["model"] = a.model
+    for flag, (lo, hi) in STORE.items():
+        v = getattr(a, flag[2:].replace("-", "_"))
+        if v is not None:
+            if a.model is None:
+                raise Refused(f"{flag} shapes a bound run's store: it comes with --model ROLE")
+            if not STORE_INT.fullmatch(v) or not lo <= int(v) <= hi:
+                raise Refused(f"{flag} {v!r}: an integer, {lo} to {hi}")
+            req[flag[2:]] = int(v)
+    if a.model is not None and "arena-blocks" not in req:
+        raise Refused("--model needs --arena-blocks A, each arena's blocks (verifier.py's)")
     return req
+
+
+def bound_paths(host: Host, settings: dict, role: str, tree: Path = TREE) -> tuple[Path, Path]:
+    """A bound run's checkpoint, the host's `<models>/<ROLE>/`, and its pin, core's `models.json` in the pinned tree;
+    refused when either is missing. Neither is the request's: the role names both."""
+    checkpoint, pin = host.models(settings) / role, tree / MODEL_PINS
+    if not checkpoint.is_dir():
+        raise Refused(f"--model {role}: this host has no {checkpoint}, the role's checkpoint (infra provisions it, "
+                      "root-held regular files)")
+    if not pin.is_file():
+        raise Refused(f"--model {role}: the pinned tree has no {MODEL_PINS}, core's pin of each role, which the "
+                      "verifier binds the store to")
+    return checkpoint, pin
 
 
 def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: str = "/usr/bin/python3",
                   tree: Path = TREE) -> list[str]:
-    """verifier.py's command line for the run: the request's whitelisted values, and the host's paths, challenger and
-    the peer's capacities."""
+    """verifier.py's command line for the run: the request's whitelisted values, and the host's paths, challenger,
+    first-parent list of main (`Host.main`, refused when infra hasn't written it) and the peer's capacities; a bound
+    run's (`--model`) its role's checkpoint and core's pin (`bound_paths`), refused when either is missing."""
     ch, node = settings["challenger"], settings["peers"][req["peer"]]
+    if not host.main.is_file():
+        raise Refused(f"this host has no {host.main}, main's first-parent history (infra writes `git rev-list "
+                      "--first-parent origin/main` there, root's, 0644): the verifier refuses every gate session whose "
+                      "challenger pin it can't find on it, so no run starts without it")
     argv = [python, "-I", str(tree / "benchmarks" / "remote_session" / "verifier.py"),
             "--host", "127.0.0.1", "--port", str(req["port"]), "--out", str(host.runs / run / "out"),
             "--registry", str(host.registry), "--transcript", str(host.scratch / run / "transcripts"),
             "--verdict", req["verdict"],
             "--challenger", "gate", "--challenger-ssh", ch["ssh"], "--challenger-peer", ch["peer"],
-            "--challenger-pin", req["pin"], "--challenger-period", req["period"]]
+            "--challenger-pin", req["pin"], "--challenger-period", req["period"], "--challenger-main", str(host.main)]
     for key in (*INTS, *DECIMALS, "--quantile"):
         name = key.lstrip("-")
         if name in req:
@@ -283,6 +351,12 @@ def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: st
     for key in ("host_bytes", "hbm_bytes", "ingress_bytes_per_s"):
         if key in node:
             argv += ["--" + key.replace("_", "-"), str(node[key])]
+    if "model" in req:
+        checkpoint, pin = bound_paths(host, settings, req["model"], tree)
+        argv += ["--model", req["model"], "--checkpoint", str(checkpoint), "--pin", str(pin)]
+        for key in STORE:
+            if key[2:] in req:
+                argv += [key, str(req[key[2:]])]
     if "paced" in req:
         argv += ["--paced", *req["paced"]]
     return argv
@@ -325,7 +399,8 @@ def request_of(host: Host, run: str) -> dict:
 
 
 def gate_run(argv: list[str], host: Host, *, by: str, now: datetime, token: str, pinned: str,
-             busy: Callable[[], list[str]], start: Callable[[str], None], own: Callable[[Path], None]) -> dict:
+             busy: Callable[[], list[str]], start: Callable[[str], None], own: Callable[[Path], None],
+             tree: Path = TREE) -> dict:
     """Validate a request, write it as the run's `request.json` and start its unit; refused while a unit runs."""
     settings = host.settings()
     req = parse_run(argv, settings)
@@ -334,10 +409,10 @@ def gate_run(argv: list[str], host: Host, *, by: str, now: datetime, token: str,
             raise Refused(f"{', '.join(units)} runs: one unit at a time (stop RUN ends a run)")
         logged = pin_of(host, pinned)
         run = f"v{now.astimezone(timezone.utc):%Y%m%dT%H%M%SZ}-{token}"
+        req = {"run": run, "by": by, "requested_utc": utc(now), "pinned": pinned, "pin_log": logged, **req}
+        req["argv"] = verifier_argv(host, run, req, settings, tree=tree)
         d = host.runs / run
         d.mkdir(mode=0o755, parents=False)
-        req = {"run": run, "by": by, "requested_utc": utc(now), "pinned": pinned, "pin_log": logged, **req}
-        req["argv"] = verifier_argv(host, run, req, settings)
         (d / "request.json").write_text(json.dumps(req, indent=1, sort_keys=True) + "\n")
         own(d)
         own(d / "request.json")
@@ -450,8 +525,8 @@ def gate_close(rest: list[str], host: Host, *, by: str, busy: Callable[[], list[
 
 USAGE = ("verbs: run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS] | --sessions N "
          "[--windows W] [--window-ms MS] [--samples S]) [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L] "
-         "[--verdict lean|both] | replay RUN | stop RUN | close NODE_HEX (a lane's own gate key, or vy-admin) "
-         "| status [RUN] | fetch RUN [--transcripts]")
+         "[--verdict lean|both] [--model ROLE [--engines E] --arena-blocks A] | replay RUN | stop RUN | close NODE_HEX "
+         "(a lane's own gate key, or vy-admin) | status [RUN] | fetch RUN [--transcripts]")
 
 
 def gate(argv: list[str], host: Host = Host(), sink: BinaryIO | None = None, **hooks: Any) -> int:
@@ -493,7 +568,8 @@ def gate(argv: list[str], host: Host = Host(), sink: BinaryIO | None = None, **h
                           "lane's own gate key, which infra registers for it (send infra the public half)")
         if verb == "run":
             doc = gate_run(rest, host, by=by, now=now, token=hooks.get("token") or secrets.token_hex(2),
-                           pinned=pinned or pinned_commit(), busy=busy, start=hooks.get("start") or start_unit, own=own)
+                           pinned=pinned or pinned_commit(), busy=busy, start=hooks.get("start") or start_unit, own=own,
+                           tree=hooks.get("tree") or TREE)
         elif verb == "status" and len(rest) <= 1:
             try:
                 pin = pinned or pinned_commit()

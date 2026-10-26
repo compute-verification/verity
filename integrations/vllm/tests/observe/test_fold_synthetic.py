@@ -21,8 +21,8 @@ from verity_vllm.observe.fold.patterns.norms import eps_input
 from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, Supplied, Transparent
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.refs import Affine, Explicit, concat
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import value_inputs as VI
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import value_inputs as VI
 from verity.ml.circuits.types import Array, Record, Value
 
 # ---------------------------------------------------------------------------------------------------------
@@ -289,7 +289,7 @@ def p_attention(node, ctx):
         operands = (Gather(q3, (i,)), GatherMany(_kv_flat(kc), (slots,)), GatherMany(_kv_flat(vc), (slots,)))
         if ctx.profile.registered_values:
             spec = bind(VI.AttentionV10, T=T, NH=C["NH"], KVH=C["KVH"], D=C["D"], BN=BN)
-            operands += (Supplied("registration", f"scale_log2_d{C['D']}", 32, b1._scale_log2_bits(C["D"])),)
+            operands += (Supplied("registration", f"scale_log2_d{C['D']}", 32, b1.scale_log2_bits(C["D"])),)
         parts.append(Compute(spec, 1, operands, (Gather(out, (i,)),), (), node.enter.module or "", attribution=((req, p),)))
     return Group(tuple(parts), (node.id, ch.id), node.enter.module or "")
 
@@ -483,13 +483,13 @@ def test_registered_values_are_inputs_of_the_program(memory):
     import numpy as np
 
     from verity.ml.circuits.constants import REGISTRATION, RUN, inputs, program_data
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     r = fold(toy_log(), toy_profile(registered_values=True), strict=True)
     legacy = fold(toy_log(), toy_profile(), strict=True)
     assert r.report.unsupported == 0 and not r.errors and r.digest != legacy.digest
     assert [n for n, _ in r.params] == ["prompt", "run", "values", "weights"]
-    eps, scale = int(P.bits_of(np.float32(C["EPS"]))), b1._scale_log2_bits(C["D"])
+    eps, scale = int(P.bits_of(np.float32(C["EPS"]))), b1.scale_log2_bits(C["D"])
     assert r.params[2][1] == Record(("eps", Value(32)), ("scale_log2_d8", Value(32))) and r.params[1][1] == Record()
     assert r.supplied == {"registration": {"param": 2, "name": "values", "fields": [
                               {"name": "eps", "width": 32, "bits": f"0x{eps:08x}", "offset": 0},
@@ -559,6 +559,17 @@ def test_int64_token_buffers_are_admitted(memory):
     ts0 = instance_nodes(r, spec_prefix="TokenSelect_v1", step=0)[0]["node"]
     emb1 = instance_nodes(r, spec_prefix="Embedding_v1", step=1)[0]["node"]
     assert list(r.body.nodes[emb1].args[0].refs) == [("n", ts0, 0)]
+
+
+def test_a_served_id_with_a_nonzero_high_word_is_refused(memory):
+    """vLLM serves int64 ids and the circuit's id is a 32-bit word, which each served id must be zero-extended
+    (`sampling_event.circuit_token_id`): the Match's fold refuses the sample, not only the hook."""
+    import dataclasses
+
+    bad = SAMPLED[0] + (1 << 32)
+    evs = [dataclasses.replace(e, sampled_token_ids=[bad]) if isinstance(e, SampleEnd) and e.step == 0 else e for e in toy_log(ids_dtype=I64D)]
+    with pytest.raises(FoldError, match=f"step 0: sampled row 0 of .*: token id {bad} has a nonzero high word"):
+        fold(evs, toy_profile(), strict=True, with_program=False)
 
 
 def test_unresolved_read_before_write(memory):

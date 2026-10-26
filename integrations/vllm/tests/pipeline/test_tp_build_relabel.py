@@ -90,6 +90,7 @@ def assert_same_files(real: str, relabeled: str) -> None:
             assert a[name] == b[name], name
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("W", [2, 4])
 def test_every_relabeled_rank_writes_the_bytes_its_full_derive_writes(W, tmp_path):
     t = RB.template_rank(W)
@@ -133,6 +134,19 @@ def test_a_relabel_leaves_the_template_derivation_as_it_was(tmp_path):
                                       json.dumps(T.derive_rank(W, r)[0].descriptor, sort_keys=True))))
     plain = T.derive_rank(W, t)[0]
     assert (json.dumps(plain.to_json(), default=str), json.dumps(plain.descriptor, sort_keys=True)) == blob, "a session changes no byte"
+
+
+def test_a_dead_free_template_relabels_each_rank_to_its_dead_free_derive():
+    """`--dead-free` (a TP rank's request in the registered compiler's form): rank 1 written from rank 0's derivation is rank 1's own
+    dead-free derive, without the reduces of the rows no logit reads, which the derive of record keeps."""
+    from verity_vllm.program.prune import dead_units
+    sess: list = []
+    T.derive_rank(2, 0, session=sess, last=True, dead_free=True)
+    rep = relabel.rank_report(sess[0], 1, shards=relabel.shard_map(T.embedding_shards(2, 0), T.embedding_shards(2, 1)))
+    real, kept = T.derive_rank(2, 1, last=True, dead_free=True)[0], T.derive_rank(2, 1, last=True)[0]
+    assert json.dumps(rep.descriptor, sort_keys=True) == json.dumps(real.descriptor, sort_keys=True)
+    body = kept.program.fn.body
+    assert not dead_units(real.program.fn.body) and "AllReduce2_v1" in {body.nodes[i].fn.id.split("{")[0] for i in dead_units(body)}
 
 
 def test_the_relabel_refuses_what_it_cannot_rewrite(monkeypatch):
@@ -350,36 +364,3 @@ def test_compare_dirs_names_a_file_it_cannot_read_as_a_difference(tmp_path):
     (a / "result.json").write_text("{}")
     assert RB.compare_dirs(str(a), str(b))["files"] == ["descriptor.json.gz", "result.json"], "a summary that is not JSON too"
     assert RB._where({"file": "x", "only_in": "real"}) == "only in the real directory"
-
-
-# ------------------------------------------------------------------------------------------------ flag off: the Build it was
-def _tp_build(tmp_path, monkeypatch, *argv) -> tuple[list, list]:
-    from tests.pipeline.test_row import TP_DENSE, _tp_row
-    t = _tp_row(tmp_path, TP_DENSE, *argv)
-    os.makedirs(t.d, exist_ok=True)
-    t.shapes, t.to_b = [(4, 2), (8, 3)], 1
-    plain, relabeled = [], []
-    monkeypatch.setattr(t, "derive_all", lambda todo, jobs: plain.append((list(todo), jobs)))
-    monkeypatch.setattr(RB, "derive", lambda row, todo, jobs: relabeled.append((list(todo), jobs)))
-    monkeypatch.setattr(t, "compose_all", lambda ranks: None)
-    monkeypatch.setattr(t, "guarded_summary", lambda: "FAIL")
-    with pytest.raises(Stop):
-        t.build()
-    return plain, relabeled
-
-
-def _jobs(todo: list) -> list[tuple]:
-    return [(j[0], f"{os.path.basename(os.path.dirname(j[1]))}/{os.path.basename(j[1])}", *j[2:]) for j in todo]
-
-
-def test_with_the_flag_off_the_build_issues_the_derives_it_did(tmp_path, monkeypatch):
-    plain, relabeled = _tp_build(tmp_path / "off", monkeypatch)
-    assert relabeled == [] and len(plain) == 1
-    assert sorted(_jobs(plain[0][0])) == sorted((r, *x) for r in (0, 1) for x in (
-        (f"rank{r}/build_step", "--wrapper", "step", "--M", "2", "--pos0", "8"),
-        (f"rank{r}/build_request_LP4_T2", "--wrapper", "request", "--LP", "4", "--T", "2"),
-        (f"rank{r}/build_request_LP8_T3", "--wrapper", "request", "--LP", "8", "--T", "3")))
-    plain_on, relabeled_on = _tp_build(tmp_path / "on", monkeypatch, "--build-relabel", "on")
-    assert plain_on == [] and len(relabeled_on) == 1
-    assert (_jobs(relabeled_on[0][0]), relabeled_on[0][1]) == (_jobs(plain[0][0]), plain[0][1]), \
-        "the relabel gets the derives and the pool width the plain Build has"

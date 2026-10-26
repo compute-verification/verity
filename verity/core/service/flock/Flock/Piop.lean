@@ -11,6 +11,37 @@ open Transcript
 /-- One coordinate of `eqTable`: the table so far for bit 0, then for bit 1 of the new index bit. -/
 def eqStep (t : Array F128) (rj : F128) : Array F128 := t.map (· * (rj + 1)) ++ t.map (· * rj)
 
+/-- `t.map (· * r)`, from `r`'s table (`F128.mulBy_mulTable`) once `t` has four times the 512 products the table costs. -/
+def mulMap (t : Array F128) (r : F128) : Array F128 :=
+  if t.size < 2048 then t.map (· * r) else let tb := F128.mulTable r; t.map (F128.mulBy tb ·)
+
+theorem mulMap_eq (t : Array F128) (r : F128) : mulMap t r = t.map (· * r) := by
+  unfold mulMap
+  split
+  · rfl
+  · exact Array.map_congr_left fun v _ => F128.mulBy_mulTable r v
+
+/-- `eqStep` with one product an entry: bit 0's half is bit 1's plus the table (`F128.mul_add_one`). -/
+def eqStepFast (t : Array F128) (rj : F128) : Array F128 :=
+  let hi := mulMap t rj
+  t.mapIdx (fun i x => hi[i]! + x) ++ hi
+
+theorem eqStepFast_eq (t : Array F128) (rj : F128) : eqStepFast t rj = eqStep t rj := by
+  have h : t.mapIdx (fun i x => (t.map (· * rj))[i]! + x) = t.map (· * (rj + 1)) := by
+    apply Array.ext
+    · simp
+    · intro i h1 _
+      rw [Array.size_mapIdx] at h1
+      rw [Array.getElem_mapIdx, Array.getElem_map, getElem!_pos (t.map (· * rj)) i (by simpa using h1),
+        Array.getElem_map, F128.mul_add_one]
+  show t.mapIdx (fun i x => (mulMap t rj)[i]! + x) ++ mulMap t rj = _
+  rw [mulMap_eq, h, eqStep]
+
+/-- Compiled code runs `eqStepFast`; the kernel and every proof see `eqStep`. `@[csimp]` rewrites only code compiled
+after it, so it stays above `eqTable`. -/
+@[csimp] theorem eqStep_eq_eqStepFast : @eqStep = @eqStepFast :=
+  funext fun t => funext fun rj => (eqStepFast_eq t rj).symm
+
 /-- `eq(r, u)` for every `u ∈ {0,1}^|r|`, index bit `j` ↔ `r[j]` (LSB first). -/
 def eqTable (r : Array F128) : Array F128 := r.foldl eqStep #[1]
 

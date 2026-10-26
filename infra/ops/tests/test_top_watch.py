@@ -125,6 +125,32 @@ def test_only_daniels_new_reply_text_is_quoted_and_a_lanes_answer_under_it_is_no
     assert len(ring.rings) == 2 and "And one more thing." in ring.rings[0][1]
 
 
+def test_a_lanes_answer_signed_with_its_name_and_a_colon_is_not_quoted_as_daniels():
+    n, ring, state = Notion(page("p1")), Ring(), {}
+    n.body("p1")
+    T.asks_pass(state, n, None, "ds", NOW, False)
+    n.body("p1", ("b1", "proofs: Default A applied (6:05 PM PDT, Fri 23 Oct, under your night orders)."),
+           ("b2", "top: logged."))
+    T.asks_pass(state, n, ring, "ds", NOW + 900, False)
+    assert ring.rings == []
+    n.body("p1", ("b1", "x"), ("b2", "x"), ("b3", "Note: keep TileChecks on the same plan."))
+    T.asks_pass(state, n, ring, "ds", NOW + 1800, False)
+    assert [to for to, _, _ in ring.rings] == ["proofs", "top"] and "Note: keep TileChecks" in ring.rings[0][1]
+
+
+def test_a_comment_signed_with_the_lanes_name_and_a_time_is_the_lanes():
+    n, ring, state = Notion(page("p1")), Ring(), {}
+    n.body("p1")
+    n.comments["p1"] = [{"id": "c1", "rich_text": rt("proofs, 26 Oct 03:20Z: provisionally accepted A now.")},
+                        {"id": "c2", "rich_text": rt("proofs 03:25Z: the lock DM will show it.")},
+                        {"id": "c3", "rich_text": rt("top, 26 Oct 03:40Z: logged.")}]
+    T.asks_pass(state, n, ring, "ds", NOW, False)
+    assert ring.rings == []
+    n.comments["p1"].append({"id": "c4", "rich_text": rt("proofs, please wait for the Fri default.")})
+    T.asks_pass(state, n, ring, "ds", NOW + 900, False)
+    assert [to for to, _, _ in ring.rings] == ["proofs", "top"] and "please wait" in ring.rings[0][1]
+
+
 def test_a_new_comment_is_quoted_unless_it_starts_with_a_handle():
     n, ring, state = Notion(page("p1")), Ring(), {}
     n.body("p1")

@@ -644,7 +644,8 @@ theorem Flock.zk_server_lean_loop
     (hL : L = LeanRelease.loop Loop.loopNr T L₀)
     (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) (hR : Flock.R (FlockDeploy.deployZk rel).parse x w)
     (pc : Msg → List (CoinLayer.session Loop.loopNr T).Coin → Masker)
-    (hPr : LeanRelease.ProgReads (CoinLayer.session Loop.loopNr T) L pc x)
+    (fc : Msg → List (CoinLayer.session Loop.loopNr T).Coin → Except String Masker)
+    (hPr : LeanRelease.ProgReads (CoinLayer.session Loop.loopNr T) L pc fc x)
     (hLk : LeanRelease.LinkRoundEq (CoinLayer.session Loop.loopNr T) vs L x w)
     (hF : LeanRelease.FinalRoundEq (CoinLayer.session Loop.loopNr T) vs L CoinOpen.shaH wk x w)
     (hE : LeanRelease.LiveRoundEq (CoinLayer.session Loop.loopNr T) vs L CoinOpen.shaH wk x w)
@@ -656,26 +657,26 @@ theorem Flock.zk_server_lean_loop
           (runStar CoinOpen.shaH (L.toSrv.proverD L.fillOf (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk w) Vs x ω
             θ).msgs)) ≤
       2 * (Pr (fun c : (leaky1 ((((CoinLayer.session Loop.loopNr T).withStops
-                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc Loop.readCoins) L.stop).refP.withSim fun x _ c =>
+                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins) L.stop).refP.withSim fun x _ c =>
               ((CoinLayer.session Loop.loopNr T).withStops
-                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc Loop.readCoins) L.stop).coinModel x c).simulatorE t (t * 3 ^ t))
+                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins) L.stop).coinModel x c).simulatorE t (t * 3 ^ t))
             (fun x => (FlockDeploy.deployZk rel).V.k x + 1) L.toSrv.stop).C x =>
           Ev (L.toSrv.timed x ((leaky1 ((((CoinLayer.session Loop.loopNr T).withStops
-                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc Loop.readCoins) L.stop).refP.withSim fun x _ c =>
+                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins) L.stop).refP.withSim fun x _ c =>
               ((CoinLayer.session Loop.loopNr T).withStops
-                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc Loop.readCoins) L.stop).coinModel x c).simulatorE t (t * 3 ^ t))
+                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins) L.stop).coinModel x c).simulatorE t (t * 3 ^ t))
             (fun x => (FlockDeploy.deployZk rel).V.k x + 1) L.toSrv.stop).out CoinOpen.shaH Vs θ x c))) +
-          (8 * ((CoinLayer.session Loop.loopNr T).withStops (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc Loop.readCoins)
+          (8 * ((CoinLayer.session Loop.loopNr T).withStops (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins)
               L.stop).nLeaves x * δ₁.toReal +
-            8 * t * ((CoinLayer.session Loop.loopNr T).withStops (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc Loop.readCoins)
+            8 * t * ((CoinLayer.session Loop.loopNr T).withStops (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins)
               L.stop).nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t) +
           4 * t * 3 ^ t *
             (Fork CoinOpen.shaH ((((CoinLayer.session Loop.loopNr T).withStops
-                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc Loop.readCoins) L.stop).swP vs).prover w) Vs θ x).Pr
+                (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins) L.stop).swP vs).prover w) Vs θ x).Pr
               CoinOpen.shaH) := by
   subst hL
   exact Flock.zk_server_lean_coinLayer rel Loop.loopNr T vs t ht hT1 hδ₁ hS hV hD hc hsc hT _ wk x w hR
-    (LeanRelease.loop_last Loop.loopNr T L₀ x) pc Loop.readCoins ⟨hPr, LeanRelease.loop_coinsRead Loop.loopNr T L₀ x⟩
+    (LeanRelease.loop_last Loop.loopNr T L₀ x) pc fc Loop.readCoins ⟨hPr, LeanRelease.loop_coinsRead Loop.loopNr T L₀ x⟩
     (LeanRelease.loop_helloIs Loop.loopNr T L₀ x)
     (LeanRelease.loop_helloParses Loop.loopNr T L₀ x) (LeanRelease.loop_reqsFollow T L₀ x) hLk hF hE hEf Vs θ hk Ev
 

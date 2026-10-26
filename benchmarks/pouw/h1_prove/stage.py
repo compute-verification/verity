@@ -17,7 +17,9 @@ record's its ok). WORK/requests/END stops it.
 The stager's check of the outputs against the IR reference (`UnitStager.reference_check`, the Boolean Definition's
 bit-sliced evaluation, hours at K = 4096) is replaced by `h1zy.reference`, the word reference, on each instance's codes,
 scales, record, salt, position and roots: the staged receipt and ok are the lowered circuit's, held to that reference
-word for word. `HZ_STAGE` as `hidden_zk/stage.py`'s: ``fast`` (`fast_stage`, the default) or ``library``.
+word for word. `HZ_STAGE` as `hidden_zk/stage.py`'s: ``fast`` (`fast_stage`, the default) or ``library``. ``H1_TMPL``
+(`h1unit.layout`): unset or ``flat``, the flat statement, which `job.sh` stages; ``structural``, the templated statement of
+the unit's structural lowering (`h1unit.stager`).
 """
 from __future__ import annotations
 
@@ -88,7 +90,7 @@ def main() -> None:
         raise SystemExit(f"the statement's ports {_ports(stager.ports)} are not h1unit.Shape's {_ports(shape.ports())}")
     counts = stager.low.layout.counts
     head = {"definition": shape.definition().id, "k": k, "r": shape.r, "c": shape.c, "name": NAME, "subcircuit": stager.sub.id,
-            "meta": stager.meta, "pin": stager.pin, "class": stager.class_sha512, "ands": counts["ands"],
+            "statement": stager.meta["statement"], "layout": stager.meta.get("layout"), "meta": stager.meta, "pin": stager.pin, "class": stager.class_sha512, "ands": counts["ands"],
             "k_log": stager.meta["k_log"], "vus_per_block": stager.meta["vus_per_block"],
             "circuit_bytes": (work / "circuit.txt").stat().st_size, "staging": stage,
             "build_seconds": round(time.time() - t_bind, 1), "waited_for_window_seconds": round(t_bind - t0, 1),

@@ -1,0 +1,28 @@
+{
+ "pieces": {
+  "BitAtx16_v1": {
+   "and": 43,
+   "type": "0b3de4caba59597a6b9f4da1f43e0efaed4e07f0ae8b1567b82c2abd8f6fe1caabc187ade5873582f7e2ebb5855bffb6ee6bdd4859d8ce570f42ac8ddde36464"
+  },
+  "BitAtx32_v1": {
+   "and": 58,
+   "type": "775454ba651a238bd90a675cf0eaca2e52ec982ed38a4b7311102b5aee4e2962ef4d56a69a94486ba82b7006f0e32d9aa9e00d45ba4a38845508c73e63ec85af"
+  },
+  "BitAtx64_v1": {
+   "and": 89,
+   "type": "68f8f1aa5f081e266533f24fcb76186dc8b07c56807948e26eb470cd0bbab12b1f889f79c7ce6cdbb4fcf8be87d710ca09b6f422dcb71a5bffd55799c52662f7"
+  },
+  "GumbelNoiseLane_v1": {
+   "and": 109421,
+   "type": "1c8dec4353e8ba221e5548522de1f523ccc6a0549d87fda06614c1dfad48459173eb39941870e4d0d4191e09a8af80ebb8b23d850a2b9dbe947b5b3c11b1d583"
+  },
+  "GumbelNoiseLane_v2": {
+   "and": 109391,
+   "type": "a70273b7d2996ede6778b991f649f5f42782ab8bd4368b2ef8d31fe784e8b914f4878fbbfffe565accc0172940442757a6849f6d4fc39f6d7a1b562a153a061f"
+  },
+  "GumbelStreamKey_v1": {
+   "and": 9758,
+   "type": "ede972c34a281692e5dc41af0593ab21866a50464525dfed627cde2f80501d7b46bf58625da12fe39875d063944a4071981524052f90a8b04153e2153c0d1785"
+  }
+ }
+}

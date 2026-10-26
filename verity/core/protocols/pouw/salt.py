@@ -53,7 +53,8 @@ SALT_TAG = b"verity/pouw-salt/v1"
 RECORD_TAG = b"verity/pouw-record/v1"
 #: `prover_id`'s domain tag
 PROVER_TAG = b"verity/pouw-prover/v1"
-#: `audit.weights_root`, a SHA-512 `tagged`
+#: a weights' root, a SHA-512 `tagged`: an H1 window's `weights.weights_root` (`window_open_root`), an epoch's
+#: `audit.weights_root` (`pouw_record`)
 WEIGHTS_ROOT_BYTES = 64
 #: a certified window's stream, the SHA-512 digest that names it, and its prover, the 64-byte id it is registered under
 STREAM_BYTES = 64
@@ -61,6 +62,8 @@ PROVER_BYTES = 64
 WINDOW_SEGMENT = "pouw-window"
 #: `window_open_root`'s domain tag
 WINDOW_OPEN_TAG = b"verity/pouw-window-open/v1"
+#: `epoch_open_root`'s domain tag
+EPOCH_OPEN_TAG = b"verity/pouw-epoch-open/v1"
 #: a live window's round-0 request table's root, a frame-v3-sha512 root
 REQUESTS_ROOT_BYTES = 64
 #: a challenger session's id, as the auditor's gate assigns it when it reserves the session (``s20261020T114752Z-9e52``)
@@ -120,9 +123,10 @@ def window_open_root(weights_root: bytes, requests_root: bytes, session: str) ->
     part 64 bytes, the session's id hashed from its ASCII (Lean's `PouwCheck.windowOpenRoot` mirrors it, and
     `test_window_open_root_form` pins it).
 
-    `weights_root` is `audit.weights_root`, `requests_root` the root of the window's round-0 request table, committed
-    before its salt, and `session` the id the auditor's gate assigned when it reserved the window's challenger session,
-    which the prover can't relabel. The gate opens that session on this root (``open --session S --root R``), its
+    `weights_root` is `weights.weights_root`, the fold of each K's registered ``<PREFIX>b/<K>`` root (the B rows, int8
+    codes and s_w, of the window's linears of that K; not `audit.weights_root`, the epoch's commitment to int8 rows
+    alone), `requests_root` the root of the window's round-0 request table, committed before its salt, and `session` the
+    id the auditor's gate assigned when it reserved the window's challenger session, which the prover can't relabel. The gate opens that session on this root (``open --session S --root R``), its
     challenger opens the salt coin only after it, and the verifier recomputes it from the window's record and the
     session its signed reserve names (`core_check.salt`). Each session has its own root, and a root fixes one window's
     weights and requests, so one session salts one window."""
@@ -134,6 +138,23 @@ def window_open_root(weights_root: bytes, requests_root: bytes, session: str) ->
         raise DomainError(f"a challenger session's id is 1 to 64 of [A-Za-z0-9._:-], starting alphanumeric, not {session!r}")
     return hashlib.sha512(WINDOW_OPEN_TAG + weights_root + requests_root
                           + hashlib.sha512(session.encode("ascii")).digest()).digest()
+
+
+def epoch_open_root(weights_root: bytes, k: int) -> bytes:
+    """A Pearl-C salt epoch's open root: SHA-512(`EPOCH_OPEN_TAG` ‖ weights_root ‖ u64be(k)), 97 bytes hashed with no
+    separator, every part at a fixed offset (Lean's `PouwCheck.epochOpenRoot` mirrors it, and `test_epoch_open_root_form`
+    pins it).
+
+    `weights_root` is the pass's `audit.weights_root`, W, and `k` its manifest's ``pass_index``: the epoch's number among
+    the epochs over W (one install, or one measured interval of an install), from 0, the same in every pass of the
+    epoch. The gate opens the epoch's salt-only session on this root, its challenger opens the salt coin only after it,
+    and the verifier recomputes it from the pass's manifest (`core_check.live_salt`). The ledger opens a root once, so
+    the passes of one epoch read one session and one salt."""
+    if type(weights_root) is not bytes or len(weights_root) != WEIGHTS_ROOT_BYTES:
+        raise DomainError(f"a weights' root is {WEIGHTS_ROOT_BYTES} bytes")
+    if not (type(k) is int and 0 <= k < 1 << 64):
+        raise DomainError(f"a salt epoch's number is an integer in [0, 2^64), not {k!r}")
+    return hashlib.sha512(EPOCH_OPEN_TAG + weights_root + k.to_bytes(8, "big")).digest()
 
 
 def prover_id(public_key: bytes) -> bytes:
@@ -268,7 +289,7 @@ def pouw_window(windows: Sequence[int], k: int) -> int:
     return ws[0] // k
 
 
-__all__ = ["PROVER_BYTES", "PROVER_TAG", "RECORD_TAG", "REQUESTS_ROOT_BYTES", "Registrations", "Reregistered", "SALT_BYTES",
-           "SALT_TAG", "SESSION", "STREAM_BYTES", "Unrevealed", "WEIGHTS_ROOT_BYTES", "WINDOW_OPEN_TAG", "WINDOW_SEGMENT",
-           "committed", "context", "pouw_record", "pouw_salt", "pouw_window", "prover_id", "registered", "revealed",
-           "unit_reason", "window_of", "window_open_root"]
+__all__ = ["EPOCH_OPEN_TAG", "PROVER_BYTES", "PROVER_TAG", "RECORD_TAG", "REQUESTS_ROOT_BYTES", "Registrations",
+           "Reregistered", "SALT_BYTES", "SALT_TAG", "SESSION", "STREAM_BYTES", "Unrevealed", "WEIGHTS_ROOT_BYTES",
+           "WINDOW_OPEN_TAG", "WINDOW_SEGMENT", "committed", "context", "epoch_open_root", "pouw_record", "pouw_salt",
+           "pouw_window", "prover_id", "registered", "revealed", "unit_reason", "window_of", "window_open_root"]

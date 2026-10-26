@@ -31,7 +31,7 @@ from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHea
 from verity_vllm.observe.fold.patterns import TokenSelectArgmax, TokenSelectGumbelTwoStage
 from verity_vllm.engine.profiles import profile_module_for_case
 from verity_vllm.engine.profiles.gen_ov_moe_patterns import FUSED_MOE_PINS, MoEFusedExperts
-from verity_vllm.collectives.embedding_shard import EmbeddingShardCuda
+from verity_vllm.engine.collectives.embedding_shard import EmbeddingShardCuda
 
 Q3 = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN3_30B_A3B_tp2")
 from verity_vllm.observe.fold.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
@@ -40,8 +40,8 @@ from verity_vllm.observe.fold.patterns.gemm import GemmLaunch
 from verity_vllm.observe.fold.patterns.target import gemm_target_of, pinned_num_sms
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.registry import moe as MOE
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.registry import moe as MOE
+from verity.ml.definitions.registry import prims as P
 
 C = Q3.C
 H, I, E, TOPK, NL = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"], C["NL"]

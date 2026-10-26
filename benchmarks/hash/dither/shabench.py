@@ -16,7 +16,15 @@ from pathlib import Path
 
 import torch
 
-VARIANTS = {0: "sha512.cuh (unroll 1, K by index)", 1: "fully unrolled", 2: "fully unrolled, 32-bit halves"}
+VARIANTS = {0: "sha512.cuh (unroll 1, K by index)", 1: "fully unrolled", 2: "fully unrolled, 32-bit halves",
+            3: "V2, 2 Sigma rotations on IMAD", 4: "V2, 4 Sigma rotations on IMAD", 5: "V2, 6 Sigma rotations on IMAD",
+            6: "V2, 4 Sigma and 2 sigma rotations on IMAD", 7: "V2, 2 Sigma rotations on mad.lo/mad.hi",
+            8: "V2, 4 Sigma rotations on mad.lo/mad.hi", 9: "V2, 6 Sigma rotations on mad.lo/mad.hi",
+            10: "V2, 4 Sigma and 2 sigma rotations on mad.lo/mad.hi", 11: "V2, 6 Sigma and 4 sigma rotations on mad.lo/mad.hi",
+            12: "V2, 2 Sigma rotations on mul.hi/mul.lo/mad.wide", 13: "V2, 4 Sigma rotations on mul.hi/mul.lo/mad.wide",
+            14: "V2, 6 Sigma rotations on mul.hi/mul.lo/mad.wide",
+            15: "V2, 4 Sigma and 2 sigma rotations on mul.hi/mul.lo/mad.wide",
+            16: "V2, 6 Sigma and 4 sigma rotations on mul.hi/mul.lo/mad.wide"}
 
 
 def run(lib, v: int, blocks: int, threads: int, n: int, d0: torch.Tensor) -> tuple:

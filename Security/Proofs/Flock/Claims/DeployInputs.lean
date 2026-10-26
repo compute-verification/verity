@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Scope.Matches
 import Flock.Registered
 import Flock.RecSetup
+import Proofs.Flock.Claims.JsonNorm
 
 /-!
 # The deployed verifier's statement: its bytes, its parser and its setup
@@ -15,7 +16,8 @@ injective (`decode_injective`).
 
 The verifier's own parsers then run on those bytes, as `Main.verifyCmd` runs them (`Raw.ins`): `Tags.find?` on the
 statement id, the refusals of a plain-leaf statement under `--zk` and of `--zk` with `--coins`, the coins (`--zk`'s keyed coin tree,
-else `--coins`), `Json.parse` then `Draw.workTableOfJson`, `Draw.closureMapOfJson` and `Registered.ofJson` on the files.
+else `--coins`), `Json.parse` then, for the draw, `norm` (as `Main.recordDraw` rebuilds the record's), and
+`Draw.workTableOfJson`, `Draw.closureMapOfJson` and `Registered.ofJson` on the files.
 The result is C's `Readable.Read` (`readOf`), so the claims' parser is C's `parseOf` (`parse`: `Read.parse`,
 `Stmt.setupTables` and under `--zk` every table's `Zk.shapeOk`, read as `Claims.Flock.Stmt` by `toReadable`), and the
 scope check C's `scopeCheckOf`, the verifier's own scope refusal (`scopeCheck`: `ProvedScope.check`, then
@@ -27,7 +29,7 @@ session's statement (`Stmt.setupTables`), each table's registered reads (`checkR
 (`checkIdentifier` without `--identifier`), `Registered.checkFull`, `RecSetup.checks`, `Zk.shapeOk` under `--zk`,
 `RecCoins.check`, `RecVStar.checkPubRows`, and the draw's law (`ProvedScope.drawLaw`). It refuses a statement without
 hm96-sha512 rows, which `verifyCmd` sets up on its compression circuit and then always refuses (such a session has no
-draw, `drawLaw zk none`); the deployed form does not carry `--comp`.
+draw, `drawLaw zk tags false none`); the deployed form does not carry `--comp`.
 -/
 
 namespace FlockDeploy
@@ -186,7 +188,7 @@ def Raw.ins (w : Raw) : Except String Ins := do
   if w.zk && tags.plainLeaves then throw s!"verify --zk: refused: {tags.name}, a statement with plain SHA-512 leaves"
   if w.zk && w.osCoins then throw "verify --zk: a --zk session's coins are its keyed coin tree, so --coins does not apply"
   let coins : Coins := if w.zk then .tree (Zk.coinSpec (tags.tableNames w.count)) else if w.osCoins then .os else .seed
-  let draw ← w.draw.mapM (jsonOf "draw")
+  let draw := (← w.draw.mapM (jsonOf "draw")).map Flock.norm
   let partition ← w.partition.mapM (jsonOf "partition")
   let table ← w.workTable.mapM fun b => do Draw.workTableOfJson (← jsonOf "work table" b)
   let closure ← w.closure.mapM fun b => do Draw.closureMapOfJson (← jsonOf "closure map" b)
@@ -221,7 +223,7 @@ def Ins.setup (s : Ins) : V (SessionSpec × Array Stmt) := do
   if r.zk then sts.forM Zk.shapeOk
   sts.forM (RecCoins.check · s.registered (RecCoins.Source.atC3 none none none) (RecSetup.c3 none none))
   sts.forM (RecVStar.checkPubRows · s.registered none none)
-  if r.draw.isSome then ProvedScope.drawLaw r.zk r.draw
+  if r.draw.isSome then ProvedScope.drawLaw r.zk r.tags false r.draw
   pure (spec, sts)
 
 /-- The statement's inputs, for the verifier that is masked exactly when `zk`: a statement of the other verifier does not
@@ -267,6 +269,14 @@ theorem Raw.ins_zk {w : Raw} {s : Ins} (h : w.ins = .ok s) : s.read.zk = w.zk :=
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; rfl)
 
+/-- **The statement's draw is rebuilt** (`norm`) from the JSON its bytes parse to. -/
+theorem Raw.ins_draw {w : Raw} {s : Ins} (h : w.ins = .ok s) :
+    ∃ draw, w.draw.mapM (jsonOf "draw") = .ok draw ∧ s.read.draw = draw.map Flock.norm := by
+  unfold Raw.ins at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | (cases h; exact ⟨_, by assumption, rfl⟩)
+
 /-- A statement of the verifier that is masked exactly when `zk` is read as masked exactly when `zk`. -/
 theorem readOf_zk {zk : Bool} {x : Claims.Msg} {r : Readable.Read} (h : readOf zk x = some r) : r.zk = zk := by
   unfold readOf insOf at h
@@ -282,6 +292,24 @@ theorem readOf_zk {zk : Bool} {x : Claims.Msg} {r : Readable.Read} (h : readOf z
     rw [hi] at hw
     cases hw
     exact Raw.ins_zk hi
+
+/-- **A statement's draw is rebuilt** (`Flock.norm`, `Raw.ins_draw`). -/
+theorem insOf_draw_norm {zk : Bool} {x : Claims.Msg} {s : Ins} (h : insOf zk x = some s) {d : Json}
+    (hd : s.read.draw = some d) : Flock.norm d = d ∧ Claims.Json.Wf d := by
+  unfold insOf at h
+  obtain ⟨w, -, hw⟩ := Option.bind_eq_some_iff.1 h
+  split_ifs at hw with hz
+  · cases hw
+  change w.ins.toOption = some s at hw
+  cases hi : w.ins with
+  | error e => rw [hi] at hw; cases hw
+  | ok s' =>
+    rw [hi] at hw
+    cases hw
+    obtain ⟨draw, -, hdr⟩ := Raw.ins_draw hi
+    rw [hdr] at hd
+    obtain ⟨d₀, -, rfl⟩ := Option.map_eq_some_iff.1 hd
+    exact ⟨norm_norm d₀, wf_norm d₀⟩
 
 /-- **The claims' parser**: C's `parseOf` at the verifier's reading of the bytes: `Read.parse` (the verifier's setup of
 the session's statement), read as `Claims.Flock.Stmt` (`toReadable`, with the relation's fields `rel`). -/

@@ -8,7 +8,7 @@ import json
 from dataclasses import dataclass
 
 from verity_vllm.check.match import global_match_fast as GMF
-from verity_vllm.check.match import program_compare as C
+from verity_vllm.check.match import program_loaders as PL
 from verity_vllm.config import option
 
 
@@ -20,7 +20,7 @@ class Options:
 
 
 def main(a: Options) -> int:
-    res = GMF.dag_multiset(C.load_derived(a.a, "derived", compact=True), C.load_oracle(a.b, "oracle", compact=True))
+    res = GMF.dag_multiset(PL.load_derived(a.a, "derived", compact=True), PL.load_oracle(a.b, "oracle", compact=True))
     with open(a.out, "w") as f:
         json.dump(res, f, indent=1)
     print(json.dumps(res))

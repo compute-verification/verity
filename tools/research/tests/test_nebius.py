@@ -110,7 +110,8 @@ needs_flock = pytest.mark.skipif(shutil.which("flock") is None or shutil.which("
 def gpu_env(tmp_path: Path, count: int = 3) -> dict[str, str]:
     env = {k: v for k, v in os.environ.items() if k != "RESEARCH_RUN_DIR"}
     return {**env, "GPU_LEASE_DIR": str(tmp_path / "gl"), "GPU_LEASE_COUNT": str(count), "RESEARCH_RUN_ID": "r-test",
-            "GPU_LEASE_USAGE_LOG": str(tmp_path / "lease-usage.jsonl"), "GPU_LEASE_UTIL_LOG": str(tmp_path / "util-*.jsonl")}
+            "GPU_LEASE_USAGE_LOG": str(tmp_path / "lease-usage.jsonl"), "GPU_LEASE_UTIL_LOG": str(tmp_path / "util-*.jsonl"),
+            "GPU_LEASE_PREEMPT_GRACE_S": "0", "GPU_LEASE_PREEMPT_GRACE_MAX_S": "0"}
 
 
 @needs_flock
@@ -841,6 +842,33 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
     assert s["resources"] == {"platform": "gpu-rtx6000-a", "preset": "8gpu-192vcpu-1744gb"}
     nic = s["network_interfaces"][0]
     assert nic["public_ip_address"] == {"static": True} and nic["security_groups"] and s["secondary_disks"][0]["device_id"] == "data"
+    assert "# data disk vy-nebius-1-data: attached as it is if it exists, else created (5022 GiB" in ud
+
+
+def test_a_vm_can_boot_on_another_ones_kept_data_disk():
+    """n1's replacement (INF-57) may boot on vy-nebius-1-data: launch.sh and teardown.sh look the data disk up by this name."""
+    r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_VM_NAME="vy-nebius-cpu-4", NEBIUS_PLATFORM_PREFIX="cpu-d3",
+               NEBIUS_PRESET="192vcpu-768gb", NEBIUS_DATA_DISK="vy-nebius-1-data")
+    assert r.returncode == 0, r.stderr
+    assert "# data disk vy-nebius-1-data: attached as it is if it exists" in r.stdout
+    assert json.loads(r.stdout.split("(ids are placeholders)\n")[1])["metadata"]["name"] == "vy-nebius-cpu-4"
+    for script in ("launch.sh", "teardown.sh"):
+        assert 'disk_id "$DATA_NAME"' in (NEBIUS / script).read_text() and '"$VM_NAME-data"' not in (NEBIUS / script).read_text()
+
+
+@pytest.mark.parametrize("path, nodes", [("now", 2), ("quota", 2), ("reattach", 1)])
+def test_n1s_replacement_plan_prints_each_create_for_a_deploy_node_and_calls_nothing(path, nodes):
+    """n1_replacement.sh plan (INF-57) prints the creates, which spend, for the coordinator: it runs no Nebius call, and each node it
+    creates is a deploy.toml node, so the install it prints next has entries to install."""
+    r = subprocess.run(["bash", str(NEBIUS / "n1_replacement.sh"), "plan", path], capture_output=True, text=True,
+                       env={**os.environ, "NEBIUS_BIN": "/bin/false", "PATH": "/usr/bin:/bin"})
+    assert r.returncode == 0, r.stderr
+    creates = re.findall(r"NEBIUS_VM_NAME=(\S+) .*\\\n\s+bash launch.sh --max-hours \d+ --yes --register --deadline \S+\)", r.stdout)
+    assert len(creates) == nodes and set(creates) <= set(tomllib.loads((NEBIUS / "deploy.toml").read_text())["nodes"])
+    for n in creates:
+        assert f"research deploy install {n} --by infra --ref origin/main --apply" in r.stdout
+    assert ("NEBIUS_DATA_DISK=vy-nebius-1-data" in r.stdout) == (path == "reattach")
+    assert subprocess.run(["bash", str(NEBIUS / "n1_replacement.sh"), "plan", "elsewhere"], capture_output=True).returncode == 2
 
 
 def test_launch_refuses_to_spend_without_yes_and_a_lease():

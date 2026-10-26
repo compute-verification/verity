@@ -1,20 +1,21 @@
-import Proofs.Accounting.TS.Session.Lanes.Assumptions
 import Proofs.Accounting.TS.Session.Lanes.Layout
 import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
 import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
+import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
 
 /-!
 # The leaf's decodes, over its statements' port layout
 
-`Accounting.Assumptions.TS.LeafReads` reads a session's registered rows through a decode per statement (`decL` for a
-lane's, `decC` for the combine's), which it takes as parameters. These are the decodes, from INT-TIE's layout
-(`PouwWindow.Lanes`) and the session's own circuit:
+`Accounting.Guarantees.TS.LeafLanesSound` reads a session's registered rows through a decode per statement (`decL` for
+a lane's, `decC` for the combine's). These are the decodes, from INT-TIE's layout (`PouwWindow.Lanes`) and the
+session's own circuit:
 
 * `portBit s v name k`: bit `k` of the row of the port named `name`, at unit 0, in a layer value `v` (the registered reads
-  `openedReg` or `rowsReg` give): `v` at the key program's input gate that carries it, `keyRowOf` at the session's row
-  widths (`portRowW`, the ones its rows are laid out at): input gate `2 + u·B + b` is bit `8·byte + bit` of unit `u`'s
-  row port `q` where input `b`'s key is that message bit of the parsed circuit's row `q`. No circuit file is assumed:
-  the gate is the parsed circuit's;
+  `openedReg` or `rowsReg` give): `v` at a gate of the key program that carries it and is a wire of unit 0, by the
+  hidden-output layout (`HiddenExec.rowOfH`) at the session's row widths (`portRowW`, the ones its rows are laid out
+  at). At an input row (`keyRowOf`), input gate `2 + u·B + b` is bit `8·byte + bit` of unit `u`'s row port `q` where
+  input `b`'s key is that message bit of the parsed circuit's row `q`; at an output row (`outRowOf`), the gate a copy of
+  `u` returns on that bit. No circuit file is assumed: the gate is the parsed circuit's;
 * `bitsN`, `sgnBits`: a field's bits as a natural number, least significant first, and its two's complement;
 * `decLane T rd`, `decComb T rd`: lane `l`'s and the combine's view from a reader `rd` of ports' row bits, each field at
   its port and first bit in the layout (`fieldBit`, `PouwWindow.Lanes.fieldOf?`): an A row's codes (s8) and scale (its
@@ -26,8 +27,8 @@ A field's place in its port's row is the same in every lane (`lanePorts`' fields
 reads them at lane 0's ports.
 
 `decL_congr` and `decC_congr`: a decode reads only the ports' row bits, so two sessions or layer values that agree on
-them decode alike. What `LeafReads` asks beyond the decodes is of the rows: that the bits each port's row holds at the
-registered reads are the leaf's committed values' encodings (registration), and the known values' content.
+them decode alike. The leaf `LeafLanesSound` opens is the one the data ports' rows decode to (`Lanes.Committed`); the
+known values' content is flock-verify's to check (`Lanes.KnownRead`).
 -/
 
 namespace Accounting.TS.Lanes
@@ -36,16 +37,33 @@ open PouwWindow.Lanes Flock.SoundAtBridge Accounting.TS.Checked
 open FlockSoundness.Discharge.Layout (keyN keyRowOf portRowW)
 
 open Classical in
-/-- **Bit `k` of the row of the port named `name`**, at unit 0, in the layer value `v`: `v` at the key program's input
-gate that `keyRowOf` (at the session's row widths `portRowW`) places on that bit, or nothing where no gate is. -/
+/-- **Bit `k` of the row of the port named `name`**, at unit 0, in the layer value `v`: `v` at a key program gate that
+the hidden-output layout (`HiddenExec.rowOfH`, at the session's row widths `portRowW`) places on that bit and that is a
+wire of unit 0 (`P.io`), or nothing where no such gate is: an input gate on an input row's bit (`keyRowOf`), which unit 0
+reads, or a gate unit 0 returns on an output row's bit (`outRowOf`). Several input columns can carry one message bit;
+only the first is wired, so only it is read. -/
 noncomputable def portBit (s : RowsSession) (v : ℕ → ℕ → Option Bool) (name : String) (k : ℕ) : Option Bool :=
   if h : ∃ (g : Fin (keyN s.c s.hU s.n)) (u : Fin s.n) (q : Fin s.c.ports.size) (b : Fin (portRowW s.c q)),
-      u.val = 0 ∧ s.c.ports[q].name = name ∧ b.val = k ∧ keyRowOf s.c s.hU s.n (portRowW s.c) g = some (u, ⟨q, b⟩)
+      u.val = 0 ∧ s.c.ports[q].name = name ∧ b.val = k ∧
+        FlockSoundness.Discharge.HiddenExec.rowOfH s.c s.hU s.n (FlockSoundness.Discharge.Layout.outsOf s.c s.hU s.n) g =
+          some (u, ⟨q, b⟩) ∧
+        (g : Fin s.Circ.N) ∈ s.P.io u
   then v 0 (Classical.choose h).val else none
 
 /-- The natural number a reader's bits `[lo, lo + n)` spell, least significant first, a missing bit read as 0. -/
 def bitsN (rd : ℕ → Option Bool) (lo n : ℕ) : ℕ :=
   ∑ i ∈ Finset.range n, if rd (lo + i) = some true then 2 ^ i else 0
+
+/-- A field's `n` bits spell a number below `2^n`. -/
+theorem bitsN_lt (rd : ℕ → Option Bool) (lo : ℕ) : ∀ n, bitsN rd lo n < 2 ^ n
+  | 0 => by simp [bitsN]
+  | n + 1 => by
+    have ih := bitsN_lt rd lo n
+    have e : bitsN rd lo (n + 1) = bitsN rd lo n + (if rd (lo + n) = some true then 2 ^ n else 0) := by
+      unfold bitsN
+      rw [Finset.sum_range_succ]
+    rw [e, pow_succ]
+    split <;> omega
 
 /-- Two's complement at `n` bits. -/
 def sgnBits (n x : ℕ) : ℤ := if x < 2 ^ (n - 1) then (x : ℤ) else (x : ℤ) - 2 ^ n
@@ -53,12 +71,16 @@ def sgnBits (n x : ℕ) : ℤ := if x < 2 ^ (n - 1) then (x : ℤ) else (x : ℤ
 /-- The first bit of the field at `path` among the ports `ps` (`fieldOf?`), 0 where none holds it. -/
 def fieldBit (ps : List Port) (path : String) : ℕ := ((fieldOf? ps path).map fun pf => pf.2.bit).getD 0
 
-/-- **A lane's public inputs** as its statement reads them: its admit bits and the salt, position and roots. -/
+/-- **A lane's public inputs** as its statement reads them: its admit bits and the salt, position and roots, each
+within its field's width (a digest's 512 bits, a u64, two digests), as the decode reads them from those bits. -/
 structure LanePub where
   admit : Fin 32 → Bool
   salt : ℕ
   position : ℕ
   roots : ℕ
+  salt_lt : salt < 2 ^ digestBits
+  position_lt : position < 2 ^ positionBits
+  roots_lt : roots < 2 ^ (2 * digestBits)
 
 /-- **Lane `l`'s view from a reader of its ports' row bits**, each field at its port and first bit in the tile's layout:
 an A row at row slot `s` from port `a<s>`, a B row at column slot `t` from `b<t>` (its `K` s8 codes, then its scale's
@@ -75,7 +97,8 @@ noncomputable def decLane (K nw : ℕ) (T : Tile) (rd : String → ℕ → Optio
   pub := ⟨fun i => rd "admit" (fieldBit (lanePorts T 0) "admit" + i.val) == some true,
     bitsN (rd "pub") (fieldBit (lanePorts T 0) "salt") digestBits,
     bitsN (rd "pub") (fieldBit (lanePorts T 0) "position") positionBits,
-    bitsN (rd "pub") (fieldBit (lanePorts T 0) "roots") (2 * digestBits)⟩
+    bitsN (rd "pub") (fieldBit (lanePorts T 0) "roots") (2 * digestBits), bitsN_lt _ _ _, bitsN_lt _ _ _,
+    bitsN_lt _ _ _⟩
   lane := ⟨bitsN (rd "pub") (fieldBit (lanePorts T 0) "lane") laneBits % 32, Nat.mod_lt _ (by norm_num)⟩
   ok := rd "o0" 0 == some true
 
@@ -108,23 +131,5 @@ theorem decC_congr {nw : ℕ} (T : Tile) {s s' : RowsSession} {v v' : ℕ → �
   have e : portBit s v = portBit s' v' := funext fun name => funext fun k => h name k
   unfold decC
   rw [e]
-
-/-- **`LeafReads` at these decodes is a statement of the sessions' port bits**: on every path, at proof `i` of round
-`w`, where the registrants' rows agree and the known rows hold, lane `l`'s committed port bits (`portBit` at `openedReg`) read through
-`decLane` are `laneView` of the leaf, its public inputs, its partials row and `l`, and the combine's through `decComb`
-are the partials rows, the receipt and `ok = 1`. -/
-theorem leafReads_iff {Ω : Type} {S nπ K nw : ℕ} (T : Tile)
-    (sess : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → RowsSession)
-    (known : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Option (Fin 32) → Known)
-    (pub : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → LanePub)
-    (parts : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Fin 32 → Fin nw → BitVec 32)
-    (receipt : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Fin nw → BitVec 32)
-    (leaf : Pouw.RelativeSecurity.Paths Ω S → Fin S → Fin nπ → Leaf K) :
-    Accounting.Assumptions.TS.LeafReads sess known (decL K nw T) (decC nw T) pub parts receipt leaf ↔
-      ∀ x w i, RowsAgree (sess x w i) → (∀ k, KnownHeld (sess x w i k) (known x w i k)) →
-        (∀ l, decLane K nw T (portBit (sess x w i (some l)) (openedReg (sess x w i (some l)))) =
-          laneView (leaf x w i) (pub x w i) (parts x w i l) l) ∧
-        decComb nw T (portBit (sess x w i none) (openedReg (sess x w i none))) = ⟨parts x w i, receipt x w i, true⟩ :=
-  Iff.rfl
 
 end Accounting.TS.Lanes

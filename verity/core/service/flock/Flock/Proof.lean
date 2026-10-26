@@ -83,8 +83,8 @@ structure Shape where
 /-! ## A plain proof's one file (§8.1)
 
 `Wire.proofFile sh p` is the file a prover writes for `p` at `sh`: `bincode 1.3` of the pair, each `Vec` as its `u64`
-length then its elements, each `F128` as `le64(lo) ‖ le64(hi)`, the vectors the verifier requires empty empty, each ring
-switch's grinding nonce `0`, then `Wire.plainEnd`. `decodeProof` accepts a file only if it is this encoding of what it
+length then its elements, each `F128` as `le64(lo) ‖ le64(hi)`, the vectors the verifier requires empty empty, every
+grinding nonce `0` (R4), then `Wire.plainEnd`. `decodeProof` accepts a file only if it is this encoding of what it
 decodes to. -/
 
 namespace Wire
@@ -217,11 +217,11 @@ def decodeRead (sh : Shape) (bytes : ByteArray) : V Proof := do
       ← vecExact lR.q (vecExact 16 f128 "row") "opened_rows", ← vecExact (lR.q * (lR.d - lR.cap)) hash "merkle_proof", ← salts lR.q⟩
     let _ ← vecExact 0 (do let _ ← f128; let _ ← f128; pure ()) "sumcheck_transcript"
     let msgs ← vecExact (s.k0 + 8 + 7 * (R - 1)) (do let a ← f256; let b ← f256; pure (a, b)) "sumcheck_transcript_f256"
-    let qn ← vecExact (R + 1) u64 "grinding_nonces"
+    let qn ← vecExact (R + 1) (nonce0 "grinding_nonce") "grinding_nonces"
     let ood ← vecExact (1 + 2 * R) f128 "ood_values"
     let _ ← vecExact 0 u64 "fold_grinding_nonces"
-    let cbn ← vecExact (3 * R + 2) u64 "claim_batch_grinding_nonces"
-    let con ← vecExact (R + 1) u64 "consistency_batch_grinding_nonces"
+    let cbn ← vecExact (3 * R + 2) (nonce0 "claim_batch_grinding_nonce") "claim_batch_grinding_nonces"
+    let con ← vecExact (R + 1) (nonce0 "consistency_batch_grinding_nonce") "consistency_batch_grinding_nonces"
     return { cap, params, zerocheck := ⟨r1ab, r1c, rounds, fa, fb, fc⟩, lincheck := ⟨lr, zp⟩, ringSwitches := rs,
              ligerito := ⟨icap, iproof, rcaps, rproofs, fproof, msgs, qn, ood, cbn, con⟩ }
   runPlain prog bytes "proof"

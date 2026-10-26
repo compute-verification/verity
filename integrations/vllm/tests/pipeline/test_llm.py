@@ -20,7 +20,7 @@ import pytest
 import verity_vllm
 from verity_vllm import config
 from verity_vllm.config import EnginePin
-from verity_vllm.pipeline import llm as L
+from verity_vllm import llm as L
 
 LLAMA = ("unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da")
 
@@ -30,7 +30,7 @@ def test_the_package_exports_llm():
     assert "LLM" in verity_vllm.__all__
 
 
-@pytest.mark.parametrize("opt", ["tokenizer", "enable_prefix_caching"])
+@pytest.mark.parametrize("opt", ["tokenizer", "speculative_config"])
 def test_an_unsupported_option_raises_with_its_name_and_the_supported_list(opt):
     with pytest.raises(TypeError) as e:
         L.LLM(LLAMA[0], revision=LLAMA[1], **{opt: None})
@@ -123,6 +123,21 @@ def test_the_engine_is_built_from_the_pin_with_only_the_options_set(built):
     }
 
 
+def test_prefix_caching_stays_off_unless_the_caller_turns_it_on(built, monkeypatch, tmp_path):
+    L.LLM(LLAMA[0], revision=LLAMA[1])
+    assert "enable_prefix_caching" not in built["engine_args"]
+    L.LLM(LLAMA[0], revision=LLAMA[1], enable_prefix_caching=True)
+    assert built["engine_args"] == {"enable_prefix_caching": True}
+    from verity_vllm.engine import build as B
+    from verity_vllm.engine import engine_profile as prof
+    monkeypatch.setattr(prof, "apply_env", lambda: {})
+    monkeypatch.setattr(B.served, "apply", lambda execution: {})
+    cps = tmp_path / "checkpoints.json"
+    cps.write_text(json.dumps({"checkpoints": [{"repo": "r/m", "role": "M", "downloaded": True, "local_path": str(tmp_path)}]}))
+    assert B.engine_kwargs_for(cps, case="M")[0]["enable_prefix_caching"] is False
+    assert B.engine_kwargs_for(cps, case="M", engine_args={"enable_prefix_caching": True})[0]["enable_prefix_caching"] is True
+
+
 def test_an_execution_label_sets_enforce_eager_and_a_contradicting_one_raises(built):
     L.LLM(LLAMA[0], revision=LLAMA[1], execution="compiled")
     assert built["execution"] == "compiled"
@@ -181,7 +196,7 @@ def test_a_build_dependent_option_refuses_kernel_profile_overrides_before_build(
 
 
 def test_protocols_install_on_the_built_model_and_close_uninstalls_them(built, monkeypatch):
-    from verity_vllm import protocol_options as PO
+    from verity_vllm import protocols as PO
     from verity_vllm.engine import vllm_adapter as va
     model, seen = SimpleNamespace(name="model"), []
 
@@ -192,7 +207,7 @@ def test_protocols_install_on_the_built_model_and_close_uninstalls_them(built, m
         return PO.Option(name=f"pous:{scheme}", hooks=h, commits={"storage_root": "c"})
 
     fake = SimpleNamespace(NAME="pous", schemes=lambda: ("band-chain/d12/v1",), refusals=lambda scheme, ctx: (), install=install)
-    monkeypatch.setitem(sys.modules, "verity_vllm.protocol_options.fake_pous", fake)
+    monkeypatch.setitem(sys.modules, "verity_vllm.protocols.fake_pous", fake)
     monkeypatch.setitem(PO.ADAPTERS, "pous", "fake_pous")
     real = va.build_engine
     monkeypatch.setattr(va, "build_engine", lambda *a, **kw: SimpleNamespace(**vars(real(*a, **kw)), model=model))

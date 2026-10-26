@@ -195,7 +195,7 @@ def test_the_window_is_padded_to_a_grid_level_with_filler(served):
     assert Wd.window_problem([e.row() for e in entries], work, params["entries"], root_h3) is None
     _, _, part = SC.population(K, work.n)
     (wroot,) = [r for r in public["roots"] if r["port"] == SC.PORT]
-    assert wroot["domain"] == R.served_domain(part["program"], SC.PT.digest(part), SC.PORT, SC.ENTRY_SCHEMA, params["entries"],
+    assert wroot["domain"] == R.window_domain(part["program"], SC.PT.digest(part), SC.PORT, SC.ENTRY_SCHEMA, params["entries"],
                                               params["context"])
     for e in (0, 2):
         for side in "ab":
@@ -320,6 +320,25 @@ def test_the_challenger_on_the_serving_controllers_state_holds_its_coins(served,
     assert json.loads((tmp_path / "salt.json").read_text()) == controller.open("salt", after).to_json()
     with pytest.raises(SystemExit, match="no challenger state"):
         SC.main(["challenger", f"{tmp_path}/params.json", f"{tmp_path}/log2", "--state", str(tmp_path / "none")])
+
+
+def test_a_served_challenger_refuses_coins_no_claim_instance_names(tmp_path, monkeypatch):
+    """CMP-52: the serving controller's coins (e2e.py's `Coins`) and `served_commit.py challenger`'s are named by a claim
+    instance, the Lean verifier of record's (`pouw.verifier.CLAIM`) or its state file's, which an earlier start drew from
+    it; a source no claim instance names, `os.urandom` among them, is refused before any coin is drawn or published."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
+    import e2e
+    for source in (os.urandom, random.Random(0).randbytes):
+        with pytest.raises(Ch.CoinError, match="coins-without-claim"):
+            e2e.Coins(0, source)
+    state = tmp_path / "state"
+    state.write_bytes(random.Random(1).randbytes(512))
+    assert e2e.Coins(0, e2e.state_entropy(str(state))).challenger.claim == SC.PV.CLAIM == "uniform/io-getrandombytes"
+    monkeypatch.setattr(SC.PV, "coins", random.Random(2).randbytes)
+    (tmp_path / "params.json").write_text("{}")
+    with pytest.raises(SystemExit, match="coins-without-claim"):
+        SC.main(["challenger", f"{tmp_path}/params.json", f"{tmp_path}/log"])
+    assert not (tmp_path / "log" / "coins.json").exists()
 
 
 @LEAN
@@ -478,12 +497,27 @@ def test_a_window_without_a_registration_deadline_is_refused(served, tmp_path):
     assert json.loads((tmp_path / "q.json").read_text())["registration_deadline"] == 60.0
 
 
+def test_a_pass_registered_again_on_another_stream_is_refused(served):
+    """Windows credited together hold each call index of their salt once (`credit.passes_distinct`): the same pass
+    registered again on another stream would credit every call twice under the same seeds and tickets, so it is refused
+    (``repeated-call``) and not held, while the first stays (CMP-84)."""
+    *_, words = served
+    params, public, _, _ = _window(words)
+    rec = _register(params, public)
+    ch = _challenger(params, record=OR.Record(lean=False))
+    _held(ch, "honest", rec)
+    with pytest.raises(S.Refused) as e:
+        _held(ch, "again", rec, stream="again")
+    assert _codes(e) == {"repeated-call"} and "both hold call index" in e.value.verdict.detail["repeated-call"]
+    assert "again" not in ch.regs and list(ch.manifests) == ["honest"] and ch.passes == {"honest": "coin"}
+
+
 def test_a_window_received_after_the_epochs_draw_coin_is_refused(served, tmp_path):
     """The record's order is each window's receipt before the epoch's draw coin's release: once the draw coin is open, a
     window is refused (`late-registration`), even one whose pass and record are honest and within the deadline, and its
     stream is left as it was.  A control replaying the honest draw opens no coin and still registers.  A record whose
-    parameters predate the deadline replays as it ran (`replay`), its post-draw registration refused for what refused
-    it then, byte for byte."""
+    parameters predate the deadline replays as it ran (`replay`), byte for byte: its post-draw registration of the same
+    pass on another stream is refused there too, as a repeated call (`credit.passes_distinct`)."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
@@ -508,7 +542,7 @@ def test_a_window_received_after_the_epochs_draw_coin_is_refused(served, tmp_pat
     reqs = [{"op": "salt", "after": _salt_after(params).hex()}, {"op": "register", "name": "honest", **reg},
             {"op": "select", "name": "honest"}, {"op": "register", "name": "after", "stream": "later", **reg}]
     replies = [SC.answer(old, json.dumps(r)) for r in reqs]
-    assert [x.split(" ", 1)[0] for x in replies] == ["OPENED", "REGISTERED", "DRAWN", "REGISTERED"]
+    assert [x.split(" ", 1)[0] for x in replies] == ["OPENED", "REGISTERED", "DRAWN", "REFUSED"] and "repeated-call" in replies[3]
     (log / "requests.jsonl").write_text("".join(json.dumps({"request": json.dumps(r), "reply": x}) + "\n"
                                                 for r, x in zip(reqs, replies)))
     (log / "openings.jsonl").write_text("".join(json.dumps(o.to_json()) + "\n" for o in old.openings.values()))

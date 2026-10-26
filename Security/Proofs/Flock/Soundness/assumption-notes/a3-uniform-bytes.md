@@ -30,10 +30,12 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   knowledge form, `Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`, about 65 bits per SHA-512 call at the
   deployed shape, below the 100-bit floor and the 2^-128 target under every weight (ASK-73). Route 2C's bound λ₂
   (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but
-  `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still
-  open: `PartChecksB`, `PartOpensB`, `DecompB`, the readers' three facts and the coin server's transcript reading
-  back (`RecDeploy.ReadsBack`, `RecDeploy.ksLin2_deployed_open`, with the last round's pieces at the parts that commit
-  the earlier rounds, `RecDeploy.finOpen`). Holo statements are candidate 3's own model, and `BitsLin2` at the dense
+  `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from a premise still
+  open. At the coin server's record (`recTr`) read by `recRead` (`RecDeploy.ksLin2_deployed_partAccepts`), `PartOpensB`
+  is proved, `PartChecksB` is no premise of its own (`VStarB.exists_chk_iff`), `recRead` reads the record back
+  (`readsBack_recTr`) and the readers' calls are true (`readersTrue_layoutBTops`), so what stays open there is
+  `DecompB` at what each part's circuit accepts (`PartAccepts`).
+  Holo statements are candidate 3's own model, and `BitsLin2` at the dense
   statements follows from it (`bitsLin2On_of_ksLin2On`).
 - **The salts** (Daniel, 9 Oct, decisions 4(a) and 4(c)). C-Flock's prover reads every hm96 leaf salt, 192 bytes a leaf,
   from the operating system (`getrandom`, the kernel's `getrandom(2)`, which `/dev/urandom` also reads; under the
@@ -58,7 +60,7 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   repeated state is total: two sessions under one pad reveal the XOR of their values.
   - A hardware RNG doesn't close it. From 5.18 the kernel mixes RDSEED in only when it reseeds (`extract_entropy`),
     about once a minute, and a read is the per-CPU key's ChaCha20 stream (`crng_make_state`).
-  - Our Nebius VMs (Linux 6.11 under KVM) expose no VM generation counter: there is no ACPI device for it, and
+  - Our VMs (Linux 6.11 under KVM) expose no VM generation counter: there is no ACPI device for it, and
     `vmgenid`, built as a module, isn't loaded (art:c30daddf7c7fc9e555c7bdb379e65a288388e8234e1f3d46b5479967cf5ddee0).
     There, restoring a VM's memory more than once is outside A3. A boot from a disk image is a fresh kernel, seeded
     anew.

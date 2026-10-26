@@ -1,0 +1,19 @@
+[Unit]
+Description=the network certifier's rehearsal %i, as auditor from the pinned tree (benchmarks/live_challenger/auditor.py certifier-run)
+
+[Service]
+Type=exec
+User=auditor
+Group=auditor
+UMask=0022
+WorkingDirectory=/opt/vy-challenger/current
+Environment=PYTHONDONTWRITEBYTECODE=1 HOME=/var/lib/vy-challenger PATH=/opt/vy-challenger/current/.lean-bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 -I /opt/vy-challenger/current/benchmarks/live_challenger/auditor.py certifier-run %i
+# past the gate's longest --minutes (170, the network-records build within them) and 10 minutes for the tunnels and the
+# outcome (test_auditor_load), so only a run the runner lost track of meets it
+RuntimeMaxSec=3h
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/vy-challenger /opt/vy-challenger

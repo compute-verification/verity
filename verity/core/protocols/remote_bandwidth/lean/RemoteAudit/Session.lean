@@ -15,11 +15,12 @@ its openings coin at W + t, and the append coins in the order drawn). Each event
   held (memory-map/v1's withdrawn blocks, released before their encode landed);
 * `receive(t, i, root, plan, step)`: rejected `malformed` (a root not 64 bytes), `order` (not the next root, a window
   already final, or past a paced window's k roots), `late` (past `D_t = b_t + A`), `step` (missing, not above the previous pass's, or 2^64 or more), `plan`
-  (not a canonical plan of the store so far, whole, as runs or as a change of the previous pass's, or one holding a
-  released block), `lifetime` (an appended block that joined a window L or more before);
+  (not a canonical plan of the store so far, whole, as runs or as a change of the previous pass's, one holding a
+  released block, or one that would take its window's receipts to `RECEIPT_LIMIT`, 2^64), `lifetime` (an appended block that joined a window L or more before);
 * `close(t)`: the window's draws, once its roots are final (the next window's first root, `D_t` passed, or a paced
   window's k roots once its boundary has left); rejected `few` under `min_passes` roots, `coin` at the last window if an append's coin went unused;
-* `verify(t, openings)`: `verifyWindow`'s verdict (`checkWindow` on the draws).
+* `verify(t, openings)`: `verifyWindow`'s verdict (`checkWindow` on the draws); rejected `malformed` on a window with
+  no draws, whatever its openings, so a frame that doesn't decode (`Wire.openingsOf`'s `#[]`) is refused on any window.
 
 A call `Session` refuses with `SessionError` (out of turn, after the session ended, before a window's roots are final)
 is `refused`. After a rejection every later call but `start` is refused, as `_live` raises.
@@ -28,6 +29,10 @@ is `refused`. After a rejection every later call but `start` is refused, as `_li
 namespace RemoteAudit.Session
 
 def STEP_LIMIT : Nat := 2 ^ 64
+
+/-- A window's receipts stay below this (`receive` rejects with `plan` a pass that would take them to it), so each
+draw's sampler word lies in its stream's first SHA-512 block (`Key._uniform` at `U < 2^448`). -/
+def RECEIPT_LIMIT : Nat := 2 ^ 64
 
 /-- `audit.Pace`: a paced session's windows hold at most `k` roots each, and its γ is declared per `windowNs`. -/
 structure Pace where
@@ -60,6 +65,9 @@ structure Win where
   openedNs : Option Nat := none
   verdict : Option Verdict := none
 deriving Inhabited
+
+/-- `U`, a window's receipts: its passes' lengths summed. -/
+def Win.receipts (w : Win) : Nat := (w.plans.map (·.length)).toList.sum
 
 structure Failed where
   window : Nat
@@ -230,6 +238,7 @@ def receive (s : State) (t i : Int) (root : ByteArray) (runs : Option (Array (In
     | none, some rs => Plan.make? rs extent
   let some plan := plan? | return s.fail t .plan
   if !s.gone.isEmpty && plan.runs.any fun (f, c) => s.isReleased f c then return s.fail t .plan
+  if RECEIPT_LIMIT ≤ s.windows[t]!.receipts + plan.length then return s.fail t .plan
   s := { s with joined := s.joined ++ Array.replicate (s.appends.size - s.joined.size) t }
   let below := s.staleBelow t
   if below > N && plan.runs.any fun (f, c) => f < below && f + c > N then return s.fail t .lifetime
@@ -274,6 +283,7 @@ def verify (s : State) (t : Int) (openings : Array Opening) : Result × State :=
   let w := s.windows[t]!
   let some drawn := w.drawn | return (.refused "the window has no draws awaiting openings", s)
   if w.verdict.isSome then return (.refused "the window has no draws awaiting openings", s)
+  if drawn.isEmpty then return s.fail t .malformed
   match checkWindow s.reg s.digest s.appends (s.record t) drawn openings with
   | .accept => return (.accepted t, { s with windows := s.windows.modify t ({· with verdict := some .accept}) })
   | .reject f at? => return s.fail t f at?
@@ -296,6 +306,7 @@ def verifyBy (s : State) (t : Int) (check : Array (Nat × Nat) → Verdict) : Re
   let w := s.windows[t]!
   let some drawn := w.drawn | return (.refused "the window has no draws awaiting openings", s)
   if w.verdict.isSome then return (.refused "the window has no draws awaiting openings", s)
+  if drawn.isEmpty then return s.fail t .malformed
   match check drawn with
   | .accept => return (.accepted t, { s with windows := s.windows.modify t ({· with verdict := some .accept}) })
   | .reject f at? => return s.fail t f at?

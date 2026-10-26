@@ -18,9 +18,10 @@ setup alone, under the JSON library's specification (`JsonSpec`).
 * `Σ` is a SHA-512 digest (`setupH_stmt`, `Hidden.setupHidden_spec'`).
 * The public header is the population's with the draw put in (`HmRow.drawn`), so its `unit_draw` is the draw
   (`unitDraw_of`), which decodes to the statement's instances (`PublicTies.instances`).
-* The draw is the statement's parsed JSON (`jsonOf`) and stratified (the setup's `ProvedScope.drawLaw`,
-  `Ins.setup_drawLaw`), and a stratified draw that decodes has exactly the keys it reads, each a string, a natural number
-  or an array of them (`good_stratified`), so it is printable.
+* The draw is the statement's parsed JSON (`jsonOf`) and stratified or, at hidden outputs, a subset (the setup's
+  `ProvedScope.drawLaw`, `Ins.setup_drawLaw`, `law_of_lawWhy`), and a stratified or subset draw that decodes has exactly
+  the keys it reads, each a string, a natural number or an array of them (`good_stratified`, `good_subset`), so it is
+  printable.
 -/
 
 namespace FlockComplete.JsonRT
@@ -37,35 +38,22 @@ open private stratumOfJson from Flock.Draw
 draw. -/
 theorem Raw.ins_read {w : Raw} {s : Ins} (h : w.ins = .ok s) :
     s.read.zk = w.zk ∧ (w.zk = false → s.read.I.coins = .os ∨ s.read.I.coins = .seed) ∧
-      w.draw.mapM (jsonOf "draw") = .ok s.read.draw := by
+      ∃ draw, w.draw.mapM (jsonOf "draw") = .ok draw ∧ s.read.draw = draw.map Flock.norm := by
+  refine ⟨Raw.ins_zk h, ?_, Raw.ins_draw h⟩
   unfold Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
   all_goals first
     | (cases h; done)
-    | (cases h; exact ⟨rfl, fun hz => by simp_all, by assumption⟩)
+    | (cases h; exact fun hz => by simp_all)
 
-/-- The draw is JSON that `Json.parse` read. -/
-theorem draw_parse {w : Raw} {draw : Option Json} (h : w.draw.mapM (jsonOf "draw") = .ok draw) {d : Json}
-    (hd : draw = some d) : ∃ t, Json.parse t = .ok d := by
-  subst hd
-  cases hw : w.draw with
-  | none => rw [hw] at h; cases h
-  | some b =>
-    rw [hw] at h
-    simp only [Option.mapM_some] at h
-    cases hj : jsonOf "draw" b with
-    | error e => rw [hj] at h; cases h
-    | ok d' =>
-      rw [hj] at h
-      cases h
-      unfold jsonOf at hj
-      split at hj
-      · cases hj
-      · rename_i t _
-        cases hp : Json.parse t with
-        | error e => rw [hp] at hj; cases hj
-        | ok j => rw [hp] at hj; cases hj; exact ⟨t, hp⟩
+/-- The draw is well formed: the verifier rebuilt it (`Flock.norm`, `wf_norm`). -/
+theorem draw_wf {w : Raw} {draw : Option Json}
+    (h : ∃ dr, w.draw.mapM (jsonOf "draw") = .ok dr ∧ draw = dr.map Flock.norm) {d : Json} (hd : draw = some d) :
+    Claims.Json.Wf d := by
+  obtain ⟨dr, -, rfl⟩ := h
+  obtain ⟨d₀, -, rfl⟩ := Option.map_eq_some_iff.1 hd
+  exact wf_norm d₀
 
 /-- A statement of the plain verifier decodes to inputs that `Raw.ins` read. -/
 theorem insOf_false {x : Claims.Msg} {s : Ins} (h : insOf false x = some s) :
@@ -188,7 +176,8 @@ theorem mapM_ok_mem {α β : Type} {f : α → V β} {a : Array α} {b : Array �
 
 /-- A drawn session's setup checked its draw's law (`ProvedScope.drawLaw`). -/
 theorem Ins.setup_drawLaw {s : Ins} {p : SessionSpec × Array Stmt} (h : s.setup = .ok p)
-    (hd : s.read.draw.isSome = true) : ProvedScope.drawLaw s.read.zk s.read.draw = .ok () := by
+    (hd : s.read.draw.isSome = true) :
+    ProvedScope.drawLaw s.read.zk s.read.tags false s.read.draw = .ok () := by
   unfold Ins.setup at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
@@ -489,11 +478,45 @@ theorem good_stratified {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.Uni
       cases hw' with
       | arr ha => exact good_stratum (ha x hx) hy
 
-theorem stratified_of_lawWhy {D : Draw.UnitDraw} (h : ProvedScope.lawWhy false D = none) :
-    ∃ K strata, D.law = .stratified K strata := by
+set_option maxHeartbeats 4000000 in
+/-- **A subset draw that decodes is printable**: an object of exactly `law`, `population`, `units` and `k`, a string,
+natural numbers and an array of them. -/
+theorem good_subset {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) {k : ℕ}
+    (hl : D.law = .subset k) : Good j := by
+  unfold Draw.UnitDraw.ofJson at h
+  dsimp only at h
+  simp only [throw_bind'] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+  all_goals
+    have hp := ‹(pure _ : V Draw.Law) = Except.ok _›
+    simp only [pure, Except.pure, Except.ok.injEq, reduceCtorEq] at hp
+  all_goals
+    try simp only [reduceCtorEq] at hl
+  all_goals
+    have hj := getObj_ok ‹j.getObj? = _›
+    subst hj
+    cases hw with
+    | obj hm hwv =>
+    have hc := ‹¬ (_ != 4) = true›
+    simp only [bne_iff_ne, ne_eq, not_not] at hc
+    refine good_obj_of hm (L := ["law", "population", "units", "k"]) (by decide) (by simpa using hc) ?_
+    simp only [List.mem_cons, List.mem_nil_iff, or_false]
+    rintro key (rfl | rfl | rfl | rfl)
+    · exact ⟨_, str_ok ‹J.str _ "law" _ = _›, .str _⟩
+    · exact ⟨_, nat_ok ‹J.nat _ "population" _ = _›, .num _⟩
+    · exact ⟨_, arr_ok ‹J.arr _ "units" _ = _›, good_of_asNat_mapM ‹Array.mapM _ _ = Except.ok _›⟩
+    · exact ⟨_, nat_ok ‹J.nat _ "k" _ = _›, .num _⟩
+
+/-- A draw a soundness claim draws by is stratified or a subset (a subset only where `lawWhy`'s form covers it). -/
+theorem law_of_lawWhy {zk : Bool} {tags : Tags} {D : Draw.UnitDraw} (h : ProvedScope.lawWhy zk tags false D = none) :
+    (∃ K strata, D.law = .stratified K strata) ∨ ∃ k, D.law = .subset k := by
   revert h
   cases hl : D.law with
-  | stratified K s => exact fun _ => ⟨K, s, rfl⟩
+  | stratified K s => exact fun _ => Or.inl ⟨K, s, rfl⟩
+  | subset k => exact fun _ => Or.inr ⟨k, rfl⟩
   | _ => simp [ProvedScope.lawWhy, hl]
 
 /-! ## The statement at a good case -/
@@ -561,13 +584,14 @@ theorem stmtOk (S : Claims.JsonSpec printJ Flock.canon) : StmtOk H rel := by
     have hdl := Ins.setup_drawLaw (setupOf_some c.setup).2 c.ready_parts.1
     rw [hdd, hz] at hdl
     simp only [ProvedScope.drawLaw, hD] at hdl
-    have hlw : ProvedScope.lawWhy false D = none := by
-      cases e : ProvedScope.lawWhy false D with
+    have hlw : ProvedScope.lawWhy false c.s.read.tags false D = none := by
+      cases e : ProvedScope.lawWhy false c.s.read.tags false D with
       | none => rfl
       | some _ => rw [e] at hdl; cases hdl
-    obtain ⟨K, strata, hK⟩ := stratified_of_lawWhy hlw
-    obtain ⟨t, ht⟩ := draw_parse hdraw hdd
-    have hg := good_stratified (S.parse_wf _ _ ht) hD hK
+    have hg : Good d := by
+      rcases law_of_lawWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
+      · exact good_stratified (draw_wf hdraw hdd) hD hK
+      · exact good_subset (draw_wf hdraw hdd) hD hk
     refine ⟨fun hn' => ?_, hg, D, hD, by rw [hspec]; exact hn⟩
     rw [hn'] at hg
     rw [hn'] at hD

@@ -20,12 +20,10 @@ from __future__ import annotations
 __models__ = ("zai-org/GLM-5.3",)
 
 import importlib
-import importlib.abc
-import importlib.machinery
-import os
 import sys
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.engine import hooks
 
 ENV = "VERITY_SPARSE_MLA_NUM_SPLITS"
@@ -38,7 +36,7 @@ _PIN: hooks.Patch | None = None
 
 def wanted() -> int | None:
     """The split count `ENV` asks for: `SPLITS` for ``"1"``, None (vLLM's heuristic) when unset or ``"0"``."""
-    v = os.environ.get(ENV, "0").strip()
+    v = settings.get(ENV)
     if v not in ("0", str(SPLITS)):
         raise ValueError(f"{ENV}={v!r}: {SPLITS} pins FA3's sparse MLA to one split, 0 leaves vLLM's heuristic; nothing else is modelled")
     return None if v == "0" else SPLITS
@@ -67,26 +65,11 @@ def install(module: Any = None) -> hooks.Patch | None:
     return _PIN
 
 
-class _OnImport(importlib.abc.MetaPathFinder):
-    """Finds ``site`` as the path finder would and runs `install` on the module once its own code has run."""
+class _OnImport(hooks.OnImport):
+    """Runs `install` on ``site`` once its own code has run."""
 
     def __init__(self, site: str) -> None:
-        self.site = site
-
-    def find_spec(self, name: str, path: Any = None, target: Any = None) -> Any:
-        if name != self.site:
-            return None
-        spec = importlib.machinery.PathFinder.find_spec(name, path)
-        if spec is None or spec.loader is None or not hasattr(spec.loader, "exec_module"):
-            return spec
-        def exec_module(run: Any) -> Any:
-            def exec_then_pin(module: Any) -> None:
-                run(module)
-                install(module)
-            return exec_then_pin
-
-        hooks.wrap(spec.loader, "exec_module", exec_module)
-        return spec
+        super().__init__(site, install)
 
 
 def arm(site: str = SITE) -> None:

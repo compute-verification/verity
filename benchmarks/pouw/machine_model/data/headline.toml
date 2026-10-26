@@ -9,7 +9,7 @@ scope = "ε is per node (ASK-65 = A): an accepted window's node, its GPUs, host 
 
 [floor]             # (I3) ScalarRoute, the floor a vector- or table-headed word pays; a row names the one it needs
 half = "the ½-slot floor ((I3) at q* = ½: Lean Accounting.SecurityProofs.TS.SheetScalarRouteHalf, from A6)"
-issue = "the 1.22-slot issue floor (Theorem C, unproved in Lean: ClassPPacked is a stub, the per-opcode κ count not run)"
+issue = "the 1.22-slot issue floor (Theorem C, unproved in Lean: its packed form is retired, the per-opcode κ count not run)"
 
 [reading.sheet]
 title = "data sheet"

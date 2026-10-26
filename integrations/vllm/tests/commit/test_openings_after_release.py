@@ -228,6 +228,7 @@ def test_sparse_host_ranges_hold_exactly_the_retained_bytes():
         assert bytes(blk[0:2 * GPU_CHUNK_BYTES].numpy().tobytes()) == full[step][0:2 * GPU_CHUNK_BYTES]
 
 
+@pytest.mark.slow
 def test_sparse_retention_opens_held_leaves_from_host_and_excluded_leaves_by_replay_with_replay_paths():
     orig = _committer("host")
     rc = _run(orig)

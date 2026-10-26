@@ -18,6 +18,8 @@ the record's roots, link points and rounds are the run's link message, first coi
   digest that of its bytes (S12).
 * `checks_ok`, `custody_ok`, `checks_draw`: what the checks establish, the record's draw the statement's whatever its
   key order among it (`drawEq`, `JsonEquiv`).
+* `recordDraw_of_checks`, `recordDraw_of_decide`: and so the record's draw is the statement's as a value, since the
+  verifier rebuilds both (`Flock.norm`, `JsonNorm`): the `hdraw` of `setupOf_record` and `recordsLiveAt_of_checks`.
 * `viewOf`: the run's live outcome (`LiveOutJ`), its rounds the record's (`viewOf_rounds`: the round messages with
   their coins, in `spec.repStreams` order). Each round's coin count and each stream's share of the rounds are the
   record's: a round message carries no count.
@@ -394,6 +396,20 @@ theorem checks_ok {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {l
   obtain ⟨_, h4, -⟩ := ebind_ok h
   exact ⟨beq_iff_eq.1 (check_ok_iff.1 h1), lv, h3, h4⟩
 
+/-- **The checks hold the record to its canonical text** (S0, last): it is what `printT` prints of what it parses to
+(`Flock.RecordText.check_ok`). -/
+theorem checks_canonical {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    (h : checks zk s spec x link c₁ mids f = .ok ()) : Flock.RecordText.check f.record = .ok () := by
+  unfold checks at h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  exact h
+
 /-- **The checks pin the record's draw to the statement's, whatever its key order**: `drawEq` passes exactly on
 equivalent values (`drawEq_iff`). -/
 theorem checks_draw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
@@ -404,6 +420,34 @@ theorem checks_draw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
   obtain ⟨_, -, h⟩ := ebind_ok h
   obtain ⟨_, h2, -⟩ := ebind_ok h
   exact (drawEq_iff _ _).1 (check_ok_iff.1 h2)
+
+/-- **A record's draw is rebuilt** (`Flock.norm`, as `Main.recordDraw` keeps it). -/
+theorem recordDraw_norm {record : String} {d : Json} (h : Exec.recordDraw record = some d) : Flock.norm d = d := by
+  unfold Exec.recordDraw at h
+  split at h
+  · split at h
+    · cases h
+    · cases h
+      exact norm_norm _
+    · cases h
+  · cases h
+
+/-- **The record's draw is the statement's, as a value**, wherever the checks pass on a statement the verifier read
+(`insOf`): both draws are rebuilt (`recordDraw_norm`, `insOf_draw_norm`), and two rebuilt values the draw check passes
+on are equal (`eq_of_rel_norm`). This is the `hdraw` of `setupOf_record` and `recordsLiveAt_of_checks`, with no premise
+on the JSON parser. -/
+theorem recordDraw_of_checks {zk zk' : Bool} {s : Ins} {spec : SessionSpec} {x x' : Claims.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    (hs : insOf zk' x' = some s) (h : checks zk s spec x link c₁ mids f = .ok ()) :
+    Exec.recordDraw f.record = s.read.draw :=
+  eq_of_rel_norm (checks_draw h) (fun _ hd => recordDraw_norm hd) (fun _ hd => (insOf_draw_norm hs hd).1)
+
+/-- **An accepting decision's record carries the statement's draw, as a value** (`recordDraw_of_checks`). -/
+theorem recordDraw_of_decide {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
+    {mids : List (Claims.Msg × Coin)} {f : Final} (ha : act zk x as cs = .decide s spec sts link c₁ mids f)
+    (hacc : ((next zk x as cs).eval sha512).1 = .acc) : Exec.recordDraw f.record = s.read.draw :=
+  recordDraw_of_checks (setupOf_some (act_decide ha)).1 ((next_decide_sha512 ha).1 hacc).2
 
 /-- **What the custody check establishes**: the record's `root_B` and public words are the link message's, its link
 points the first coin's, and its rounds, flattened in `spec.repStreams` order, the round messages with their coins: each
@@ -698,16 +742,16 @@ theorem recordCustodyZKJ_wrD {n mPts : ℕ} {Reg : Type} (I : Exec.Inputs) (dj :
   ⟨recordsLiveZKJ_wrD I dj Jf, hdf⟩
 
 /-- **An accepting decision of `Deploy.V --zk` at SHA-512 is an accepting `verify --zk` on a record of its live
-outcome**: on a statement of draw `d` whose record's draw is the statement's (`hdraw`), the last message's record and
-proof files are accepted by `verify --zk` (`AcceptsZK`) at the statement's inputs, and record the run's live outcome
-`viewOf` (`RecordsLiveAt`). -/
+outcome**: on a statement of draw `d`, the last message's record and proof files are accepted by `verify --zk`
+(`AcceptsZK`) at the statement's inputs, and record the run's live outcome `viewOf` (`RecordsLiveAt`): the record's
+draw is the statement's as a value (`recordDraw_of_decide`). -/
 theorem accepts_of_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
     {f : Final} {J mPts : ℕ} {d : Json} (ha : act true x as cs = .decide s spec sts link c₁ mids f)
-    (hacc : ((next true x as cs).eval sha512).1 = .acc) (hdraw : Exec.recordDraw f.record = s.read.draw)
-    (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size) :
+    (hacc : ((next true x as cs).eval sha512).1 = .acc) (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size) :
     ZkExec.AcceptsZK s.read.I ⟨f.record, f.proofs⟩ ∧
       RecordsLiveAt s.read.I d (viewOf J mPts spec link c₁ f) ⟨f.record, f.proofs⟩ := by
+  have hdraw := recordDraw_of_decide ha hacc
   obtain ⟨hv, hc⟩ := (next_decide_sha512 ha).1 hacc
   simp only [ite_true] at hv
   obtain ⟨hins, hs⟩ := setupOf_some (act_decide ha)
@@ -716,18 +760,18 @@ theorem accepts_of_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coi
     setup_shapeOk hs hzk, hv⟩, recordsLiveAt_of_checks hs hzk hdraw hd hJ hc⟩
 
 /-- **The old event holds on `Deploy.V --zk`'s accepting runs**: where its decision accepts at SHA-512, on a statement
-of draw `dj S` whose record's draw is the statement's, `verify --zk` accepts what `wrD` writes for the run's live
-outcome at `Jf S R ≤` the session's tables, the event the old theorems bound under `RecordsLiveZKJ`. -/
+of draw `dj S`, `verify --zk` accepts what `wrD` writes for the run's live outcome at `Jf S R ≤` the session's
+tables, the event the old theorems bound under `RecordsLiveZKJ`. -/
 theorem acceptsZK_wrD {n mPts : ℕ} {Reg : Type} (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) → Reg → ℕ)
     {S : Finset (Fin n)} {R : Reg} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (ha : act true x as cs = .decide s spec sts link c₁ mids f)
-    (hacc : ((next true x as cs).eval sha512).1 = .acc) (hdraw : Exec.recordDraw f.record = s.read.draw)
-    (hd : s.read.draw = some (dj S)) (hJ : Jf S R ≤ spec.tables.size) :
+    (hacc : ((next true x as cs).eval sha512).1 = .acc) (hd : s.read.draw = some (dj S))
+    (hJ : Jf S R ≤ spec.tables.size) :
     ZkExec.AcceptsZK s.read.I (wrD s.read.I dj Jf S R (viewOf (Jf S R) mPts spec link c₁ f)) := by
   have hex : ∃ t, ZkExec.AcceptsZK s.read.I t ∧
       RecordsLiveAt s.read.I (dj S) (viewOf (Jf S R) mPts spec link c₁ f) t :=
-    ⟨_, accepts_of_decide ha hacc hdraw hd hJ⟩
+    ⟨_, accepts_of_decide ha hacc hd hJ⟩
   unfold wrD
   rw [dite_eq_left_of_eq_true (eq_true hex)]
   exact (Classical.choose_spec hex).1

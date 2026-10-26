@@ -12,6 +12,10 @@ statement is in ``Flock/Tmpl.lean``; :func:`unroll` mirrors its ``unroll`` (subs
 over GF(2)). The emitter's output unrolls to its input by construction; ``benchmarks/verifier_cost/flock_tmpl`` holds
 the Lean unroll to it byte for byte.
 
+:func:`layout` mirrors ``Tmpl.layoutM`` (``Flock/TmplLayout.lean``): layout (iv) under a mode (:func:`mode_of`), where
+the verifier commits each of the unrolled unit's columns. The templated statement (`circuit.compose`'s ``layout``) puts
+the unit's range at the slot of the laid-out size, the root's ``Lay.size``.
+
 The unit is held as arrays (each row's A and B as one run of int32 columns), since the H1 tile's flat unit at K = 4096 has
 about 3·10⁹ of them.
 
@@ -22,6 +26,7 @@ reads the circuit file's largest block (or ``NET``), writes its templated form a
 """
 from __future__ import annotations
 
+import bisect
 import json
 import sys
 import time
@@ -127,6 +132,20 @@ def read_flat(path, name: str | None = None) -> tuple[Flat, int]:
         leaves = rest[0].rstrip("\n") if rest and rest[0].startswith("LEAVES ") else None
         assert len(rest) == (leaves is not None), f"{nm}: lines past the rows and LEAVES"
     return _flat(head, chunks, leaves), size
+
+
+def of_layout(lay, name: str) -> Flat:
+    """A laid-out unit (`ir_lower.Layout`) as the unit `ir_lower.netlist` writes of it (no ``LEAVES`` line), read off its
+    rows rather than its text."""
+    head = [FLAT, name, str(lay.useful), str(lay.const)]
+    for groups in (lay.in_groups, lay.out_groups):
+        head.append(str(len(groups)))
+        for col, words, bits in groups:
+            head += [str(col), str(words), str(len(bits)), *map(str, bits)]
+    na = np.fromiter((len(a) for a in lay.rows_a), np.int64, len(lay.rows_a))
+    lens = na + np.fromiter((len(b) for b in lay.rows_b), np.int64, len(lay.rows_b))
+    refs = np.fromiter((c for a, b in zip(lay.rows_a, lay.rows_b) for r in (a, b) for c in r), np.int32, int(lens.sum()))
+    return _flat(head, [(lens, na, refs)], None)
 
 
 def flat_lines(f: Flat) -> list[str]:
@@ -416,6 +435,453 @@ def pack(t: Tmpl) -> Tmpl:
             calls.append(Call(c.e, c.count, c.base, c.stride, tuple(out)))
         defs.append(Def(D.cols, D.ins, D.rows, tuple(calls)))
     return Tmpl(t.name, t.root, t.groups, defs, t.leaves)
+
+
+# --- layout (iv): where the unrolled unit's columns are committed (``Flock.TmplLayout``) -----------------------------------
+
+def mode_of(name: str) -> tuple[str, int]:
+    """``Tmpl.modeOf``: ``iv`` (lenient), ``iv/strict``, ``iv/hybrid`` (``T = 0``) or ``iv/hybrid/T``, as ``(kind, T)``."""
+    if name in ("iv", "iv/strict", "iv/hybrid"):
+        return {"iv": "lenient", "iv/strict": "strict", "iv/hybrid": "hybrid"}[name], 0
+    if name.startswith("iv/hybrid/") and name[10:].isdigit():
+        return "hybrid", int(name[10:])
+    raise ValueError(f"{name!r} is not a layout mode (iv, iv/strict, iv/hybrid, iv/hybrid/T)")
+
+
+def _next_pow2(n: int) -> int:
+    return 1 if n <= 1 else 1 << (n - 1).bit_length()
+
+
+def _up(x: int, a: int) -> int:
+    return -(-x // a) * a
+
+
+@dataclass(frozen=True)
+class Lay:
+    """``Tmpl.Lay``: a Definition's laid-out size and alignment, its own columns' runs ``(x0, x1, p0)`` (column ``x`` of
+    ``[x0, x1)`` at ``p0 + x − x0``), each call's place ``(nb, cs, ms)`` (copy ``j``'s column at callee position ``p`` at
+    ``nb + j·cs + p·ms``), whether every column is at its own index, and the alignment its copies are placed at."""
+
+    size: int
+    align: int
+    runs: tuple[tuple[int, int, int], ...]
+    places: tuple[tuple[int, int, int], ...]
+    ident: bool
+    palign: int
+
+
+def _out_groups(t: Tmpl) -> list[tuple[int, int]]:
+    """Each output group's first column and its width in columns, from the header's tokens."""
+    g, at, out = t.groups, 1, []
+    for _ in range(int(g[0])):
+        at += 3 + int(g[at + 2])
+    n, at = int(g[at]), at + 1
+    for _ in range(n):
+        out.append((int(g[at]) * WORD, int(g[at + 1]) * WORD))
+        at += 3 + int(g[at + 2])
+    return out
+
+
+def _lay_def(t: Tmpl, lays: list[Lay], kind: str, T: int, paths: list[int], ic: int, d: int) -> Lay:
+    """``Tmpl.layDefM``: Definition ``d`` laid out from its callees' layouts."""
+    D, root = t.defs[d], d == t.root
+    outs = sorted(_out_groups(t)) if root else []
+    pos, x, al, ident = 0, 0, 1, True
+    runs: list[tuple[int, int, int]] = []
+    places: list[tuple[int, int, int]] = []
+    done: set[int] = set()
+
+    def own(x0: int, hi: int) -> None:
+        nonlocal pos
+        for p, w in outs:
+            if x0 <= p <= hi and p not in done:
+                if x0 < p:
+                    runs.append((x0, p, pos))
+                pos = _up(pos + (p - x0), w)
+                x0 = p
+                done.add(p)
+        if x0 < hi:
+            runs.append((x0, hi, pos))
+        pos += hi - x0
+
+    for c in D.calls:
+        Le, E = t.defs[c.e].cols, lays[c.e]
+        if c.base < x:
+            raise ValueError(f"layout: definition {d}: its calls are not in order of their columns")
+        if c.count > 1 and c.stride != Le:
+            raise ValueError(f"layout: definition {d}: a call's copies are not side by side")
+        own(x, c.base)
+        in_rows = root and c.base < ic
+        if in_rows or any(p <= c.base < p + w for p, w in outs):
+            if E.size != Le or (in_rows and not E.ident):
+                raise ValueError(f"layout: definition {d}: a call in the input rows or an output group to a definition laid out apart")
+            places.append((pos, Le, 1))
+            pos += c.count * Le
+        elif c.count == 1:
+            nb = _up(pos, E.palign)
+            al = max(al, E.palign)
+            places.append((nb, Le, 1))
+            pos = nb + E.size
+        else:
+            M = _next_pow2(c.count)
+            nb = _up(pos, M * E.palign)
+            al = max(al, M * E.palign)
+            places.append((nb, 1, M))
+            pos = nb + E.size * M
+        ident = ident and E.ident and places[-1][0] == c.base and (c.count == 1 or places[-1][2] == 1)
+        x = c.base + c.count * Le
+    own(x, D.cols)
+    ident = ident and pos == D.cols and all(a == p for a, _b, p in runs)
+    whole = kind == "strict" or (kind == "hybrid" and paths[d] > 1)
+    palign = max(al, _next_pow2(pos) >> (T if kind == "hybrid" else 0)) if whole else al
+    return Lay(pos, al, tuple(runs), tuple(places), ident, palign)
+
+
+def pos_of(t: Tmpl, lays: list[Lay]):
+    """``Tmpl.posOf``: the root's column ``x`` at its committed position, through the call tree, as a function of ``x``."""
+    bases = [[c.base for c in D.calls] for D in t.defs]
+    starts = [[a for a, _b, _p in L.runs] for L in lays]
+
+    def at(x: int) -> int:
+        d, A, B = t.root, 0, 1
+        for _ in range(len(t.defs) + 1):
+            D, L = t.defs[d], lays[d]
+            i = bisect.bisect_right(bases[d], x)
+            if i and x < D.calls[i - 1].base + D.calls[i - 1].count * t.defs[D.calls[i - 1].e].cols:
+                c = D.calls[i - 1]
+                j, x = divmod(x - c.base, t.defs[c.e].cols)
+                nb, cs, ms = L.places[i - 1]
+                A, B, d = A + B * (nb + j * cs), B * ms, c.e
+                continue
+            r = bisect.bisect_right(starts[d], x)
+            if r and x < L.runs[r - 1][1]:
+                a, _b, p = L.runs[r - 1]
+                return A + B * (p + x - a)
+            break
+        return A + B * x
+
+    return at
+
+
+def layout(t: Tmpl, mode: str) -> list[Lay]:
+    """``Tmpl.layoutM``: every Definition's layout (iv) under ``mode`` (:func:`mode_of`), callees first, refused unless the
+    input rows keep their columns, each output group starts at a multiple of its width with its columns in order, and the
+    constant is the layout's last column. The root's ``size`` is the committed unit's: the constant's position plus one."""
+    kind, T = mode_of(mode)
+    ic, _ = _ports(t)
+    paths = [0] * len(t.defs)
+    paths[t.root] = 1
+    for d in range(len(t.defs) - 1, -1, -1):
+        for c in t.defs[d].calls:
+            paths[c.e] += paths[d]
+    lays: list[Lay] = []
+    for d in range(len(t.defs)):
+        lays.append(_lay_def(t, lays, kind, T, paths, ic, d))
+    R, L = t.defs[t.root], lays[t.root]
+    if not (all(ic <= a or a == p for a, _b, p in L.runs)
+            and all(ic <= c.base or (nb == c.base and lays[c.e].ident) for c, (nb, _cs, _ms) in zip(R.calls, L.places))):
+        raise ValueError("layout: the input rows do not keep their columns")
+    at = pos_of(t, lays)
+    for col, w in _out_groups(t):
+        p = at(col)
+        if p % w or any(at(col + i) != p + i for i in range(w)):
+            raise ValueError(f"layout: output group at word {col // WORD} does not keep its columns at a multiple of its width")
+    if at(R.cols - 1) + 1 != L.size:
+        raise ValueError("layout: the constant is not the layout's last column")
+    return lays
+
+
+# --- evaluation from the template, never unrolled ------------------------------------------------------------------------
+
+_ALL = np.uint64(0xFFFFFFFFFFFFFFFF)
+#: a frame's bytes past which `_Evaluator` splits its lanes and chunks a run's copies
+BUDGET = 1 << 28
+
+
+def out_ports(t: Tmpl) -> list[tuple[int, int]]:
+    """Each output group's port bits ``[lo, hi)``, from the header's tokens."""
+    g, at, out = t.groups, 1, []
+    for _ in range(int(g[0])):
+        at += 3 + int(g[at + 2])
+    for _ in range(int(g[at])):
+        col, nb = int(g[at + 1]), int(g[at + 3])
+        out.append((col * WORD, col * WORD + sum(map(int, g[at + 4:at + 4 + nb]))))
+        at += 3 + nb
+    return out
+
+
+def _bindings(c: Call) -> tuple[np.ndarray, np.ndarray]:
+    """Call ``c``'s references for copy 0, in its callee's input order, and their step per copy: copy ``j`` binds
+    ``p0 + j·step`` (``unroll``'s ``at + r·rstride + j·step + i``)."""
+    p0, st = [np.zeros(0, np.int64)], [np.zeros(0, np.int64)]
+    for ln, at, step, reps, rs in c.segs:
+        p0.append((at + rs * np.arange(reps, dtype=np.int64)[:, None] + np.arange(ln, dtype=np.int64)[None, :]).reshape(-1))
+        st.append(np.full(ln * reps, step, np.int64))
+    return np.concatenate(p0), np.concatenate(st)
+
+
+def _pow2(n: int) -> int:
+    return 1 << max(0, n - 1).bit_length()
+
+
+@dataclass
+class _Plan:
+    """How one Definition is evaluated: the own columns its frame holds (``keep``, ascending; frame row ``i`` is
+    ``keep[i]``, then the inputs, the constant's all-ones and a zero row), and its steps by level, each ``("rows", dst, A,
+    B)`` (frame rows, A and B padded with the zero row) or ``("call", c, p0, step, chained, need)``."""
+
+    cols: int
+    ins: int
+    keep: np.ndarray
+    steps: list
+    given: tuple = ()
+
+    @property
+    def frame(self) -> int:
+        return len(self.keep) + self.ins + 2
+
+    def at(self, refs: np.ndarray) -> np.ndarray:
+        """Template references as frame rows: an own column its slot in ``keep``, an input after them, the constant the
+        all-ones row."""
+        refs = np.asarray(refs, np.int64)
+        K = len(self.keep)
+        out = np.empty(refs.shape, np.int64)
+        own = refs < self.cols
+        pos = np.searchsorted(self.keep, refs[own])
+        if pos.size and (pos.max() >= K or not np.array_equal(self.keep[pos], refs[own])):
+            raise ValueError("evaluate: a reference to an own column the frame does not hold")
+        out[own] = pos
+        if (refs > self.cols + self.ins).any():
+            raise ValueError("evaluate: a reference past the constant")
+        out[~own] = K + refs[~own] - self.cols
+        return out
+
+
+class _Evaluator:
+    """`evaluate`'s walk: each Definition planned once, from the columns its callers read of it (`_plan`), and evaluated
+    once per call path, every copy of a run at once (a chained run, whose copies read earlier copies, one copy at a time),
+    each lane a word of 64 instances: memory is the frames along one call path, each at most ``budget`` bytes a lane
+    chunk, never the unrolled unit."""
+
+    def __init__(self, t: Tmpl, out_cols: np.ndarray, given: np.ndarray, budget: int = BUDGET):
+        self.t, self.budget = t, budget
+        need: list[list[np.ndarray]] = [[] for _ in t.defs]
+        need[t.root].append(np.asarray(out_cols, np.int64))
+        self.need: list[np.ndarray | None] = [None] * len(t.defs)
+        self.plans: list[_Plan | None] = [None] * len(t.defs)
+        self.given = np.asarray(given, np.int64)
+        self.given_set = set(self.given.tolist())
+        for d in range(len(t.defs) - 1, -1, -1):
+            if not need[d]:
+                continue
+            for c in t.defs[d].calls:
+                if c.e >= d:
+                    raise ValueError(f"evaluate: definition {d} calls {c.e}, not an earlier definition")
+            self.need[d] = np.unique(np.concatenate(need[d]))
+            self.plans[d] = self._plan(d, self.need[d], need)
+
+    def _plan(self, d: int, want: np.ndarray, need: list[list[np.ndarray]]) -> _Plan:
+        D = self.t.defs[d]
+        cols, ins = D.cols, D.ins
+        given = self.given if d == self.t.root else np.zeros(0, np.int64)
+        rows = [r for r in D.rows if not (d == self.t.root and r[0] in self.given_set)]
+        binds = [_bindings(c) for c in D.calls]
+        spans = [(c.base, c.base + c.count * c.stride) for c in D.calls]
+        for c in D.calls:
+            if c.count > 1 and c.stride < self.t.defs[c.e].cols:
+                raise ValueError(f"evaluate: definition {d}: a call's copies overlap")
+        # candidate own columns: everything wanted, given or read, so liveness is marks on one sorted array
+        reads = [want, given, np.fromiter((x for _c, a, b in rows for x in a + b if x < cols), np.int64)]
+        reads.append(np.fromiter((c for c, _a, _b in rows), np.int64, len(rows)))
+        for c, (p0, st) in zip(D.calls, binds):
+            R = (p0[None, :] + np.arange(c.count, dtype=np.int64)[:, None] * st[None, :]).reshape(-1)
+            reads.append(np.unique(R[R < cols]))
+        cand = np.unique(np.concatenate(reads))
+        live = np.zeros(len(cand), bool)
+        live[np.searchsorted(cand, want)] = True
+
+        def pos(x) -> np.ndarray:
+            return np.searchsorted(cand, x)
+
+        # backward liveness over the rows and calls in column order (every read is of an earlier column)
+        items = sorted([(r[0], 0, i) for i, r in enumerate(rows)] + [(s[0], 1, k) for k, s in enumerate(spans)])
+        row_pos = pos(np.fromiter((r[0] for r in rows), np.int64, len(rows)))
+        evaluated: set[tuple[int, int]] = set()
+        call_need: dict[int, np.ndarray] = {}
+        for _col, kind, i in reversed(items):
+            if kind == 0:
+                if not live[row_pos[i]]:
+                    continue
+                evaluated.add((0, i))
+                _c, a, b = rows[i]
+                own = [x for x in a + b if x < cols]
+                if own:
+                    live[pos(np.asarray(own, np.int64))] = True
+                continue
+            c, (lo, hi) = D.calls[i], spans[i]
+            a, z = np.searchsorted(cand, [lo, hi])
+            if not live[a:z].any():
+                continue
+            evaluated.add((1, i))
+            p0, st = binds[i]
+            R = (p0[None, :] + np.arange(c.count, dtype=np.int64)[:, None] * st[None, :]).reshape(-1)
+            R = R[R < cols]
+            if R.size:
+                live[pos(R)] = True
+            got = cand[a:z][live[a:z]]
+            off = (got - lo) % c.stride if c.count > 1 else got - lo
+            Le = self.t.defs[c.e].cols
+            if (off >= Le).any():
+                raise ValueError(f"evaluate: definition {d} reads a column between a call's copies")
+            call_need[i] = np.unique(off)
+            need[c.e].append(call_need[i])
+        keep = cand[live]
+        plan = _Plan(cols, ins, keep, [])
+        held = np.isin(given, keep)
+        plan.given = (np.flatnonzero(held), np.searchsorted(keep, given[held]))
+        for col, a, b in rows:
+            if any(col <= x < cols for x in a + b):
+                raise ValueError(f"evaluate: definition {d}: row {col} reads a later column")
+        for c, (p0, st) in zip(D.calls, binds):
+            js = np.arange(c.count, dtype=np.int64)[:, None]
+            R = p0[None, :] + js * st[None, :]
+            if ((R < cols) & (R >= c.base + js * c.stride)).any():
+                raise ValueError(f"evaluate: definition {d}: a call's copy reads a column at or past its own")
+        # levels: a row or call one past the latest item it reads; a chained run's copies read their own span
+        level = np.zeros(len(keep), np.int64)
+        K = len(keep)
+        by_level: dict[int, list] = {}
+        for _col, kind, i in items:
+            if (kind, i) not in evaluated:
+                continue
+            if kind == 0:
+                col, a, b = rows[i]
+                own = [x for x in a + b if x < cols]
+                lv = 1 + (int(level[np.searchsorted(keep, own)].max()) if own else 0)
+                level[np.searchsorted(keep, col)] = lv
+                by_level.setdefault(lv, []).append((0, i))
+                continue
+            c, (lo, hi) = D.calls[i], spans[i]
+            p0, st = binds[i]
+            R = (p0[None, :] + np.arange(c.count, dtype=np.int64)[:, None] * st[None, :]).reshape(-1)
+            chained = bool(((R >= lo) & (R < hi)).any())
+            R = R[(R < cols) & ~((R >= lo) & (R < hi))]
+            lv = 1 + (int(level[np.searchsorted(keep, R)].max()) if R.size else 0)
+            a, z = np.searchsorted(keep, [lo, hi])
+            level[a:z] = lv
+            by_level.setdefault(lv, []).append((1, i, chained))
+        for lv in sorted(by_level):
+            groups: dict[tuple[int, int], list] = {}
+            for it in by_level[lv]:
+                if it[0] == 1:
+                    i = it[1]
+                    p0, st = binds[i]
+                    plan.steps.append(("call", D.calls[i], p0, st, it[2], call_need[i]))
+                    continue
+                col, a, b = rows[it[1]]
+                groups.setdefault((_pow2(len(a)), _pow2(len(b))), []).append((col, a, b))
+            for (pa, pb), rs in groups.items():
+                zero = K + ins + 1
+                A = np.full((len(rs), pa), zero, np.int64)
+                B = np.full((len(rs), pb), zero, np.int64)
+                for j, (_col, a, b) in enumerate(rs):
+                    A[j, :len(a)] = plan.at(np.asarray(a, np.int64))
+                    B[j, :len(b)] = plan.at(np.asarray(b, np.int64))
+                dst = np.searchsorted(keep, np.fromiter((r[0] for r in rs), np.int64, len(rs)))
+                plan.steps.append(("rows", dst, A.astype(np.int32), B.astype(np.int32)))
+        return plan
+
+    def run(self, d: int, X: np.ndarray, given: np.ndarray | None = None) -> np.ndarray:
+        """Definition ``d``'s wanted columns (``need[d]``) on its inputs ``X`` ``(ins, lanes)``; the root's ``given`` columns
+        ``(given, lanes)``."""
+        p = self.plans[d]
+        L = X.shape[1]
+        if L > 1 and p.frame * L * 8 > self.budget:
+            h = L // 2
+            return np.concatenate([self.run(d, X[:, :h], None if given is None else given[:, :h]),
+                                   self.run(d, X[:, h:], None if given is None else given[:, h:])], axis=1)
+        K = len(p.keep)
+        V = np.zeros((p.frame, L), np.uint64)
+        V[K:K + p.ins] = X
+        V[K + p.ins] = _ALL
+        if given is not None:
+            gi, gs = p.given
+            V[gs] = given[gi]
+        for s in p.steps:
+            if s[0] == "rows":
+                _, dst, A, B = s
+                per = max(1, self.budget // (8 * L * (A.shape[1] + B.shape[1])))
+                for r0 in range(0, len(dst), per):
+                    a = np.bitwise_xor.reduce(V[A[r0:r0 + per]], axis=1)
+                    a &= np.bitwise_xor.reduce(V[B[r0:r0 + per]], axis=1)
+                    V[dst[r0:r0 + per]] = a
+                continue
+            _, c, p0, st, chained, want = s
+            e = self.plans[c.e]
+            cc = 1 if chained else max(1, min(c.count, self.budget // (8 * L * max(1, e.frame))))
+            for j0 in range(0, c.count, cc):
+                j1 = min(c.count, j0 + cc)
+                js = np.arange(j0, j1, dtype=np.int64)
+                Xe = V[p.at(p0[None, :] + js[:, None] * st[None, :])]  # (copies, ins_e, L)
+                Y = self.run(c.e, Xe.transpose(1, 0, 2).reshape(e.ins, (j1 - j0) * L))
+                if len(want) != len(self.need[c.e]):
+                    Y = Y[np.searchsorted(self.need[c.e], want)]
+                dst = c.base + js[:, None] * c.stride + want[None, :]  # (copies, want)
+                Y = Y.reshape(len(want), j1 - j0, L).transpose(1, 0, 2)
+                at = np.searchsorted(p.keep, dst)
+                ok = at < K
+                ok[ok] = p.keep[at[ok]] == dst[ok]
+                V[at[ok]] = Y[ok]
+        return V[np.searchsorted(p.keep, self.need[d])]
+
+
+def evaluate(t: Tmpl, inputs: np.ndarray, out_cols=None, budget: int = BUDGET) -> np.ndarray:
+    """The unit's columns ``out_cols`` (root columns; by default every output port bit, in order), bit-sliced, from the
+    template itself: ``inputs`` ``(bits, lanes)`` uint64 are the input port bits' columns (every input group's, in order),
+    each lane a word of 64 instances. Rows are evaluated a Definition at a time over a run's copies at once, so the walk is
+    O(description) Python steps and its memory one call path's frames (`_Evaluator`), what ``unroll`` then evaluating
+    would give (`struct_lower.evaluate`)."""
+    _ic, ports = _ports(t)
+    given = np.concatenate([np.arange(lo, hi, dtype=np.int64) for lo, hi in ports]) if ports else np.zeros(0, np.int64)
+    inputs = np.asarray(inputs, np.uint64)
+    if inputs.shape[0] != len(given):
+        raise ValueError(f"evaluate: {inputs.shape[0]} input bits for the template's {len(given)}")
+    if out_cols is None:
+        out_cols = np.concatenate([np.arange(lo, hi, dtype=np.int64) for lo, hi in out_ports(t)])
+    out_cols = np.asarray(out_cols, np.int64)
+    ev = _Evaluator(t, out_cols, given, budget)
+    got = ev.run(t.root, np.zeros((0, inputs.shape[1]), np.uint64), inputs)
+    return got[np.searchsorted(ev.need[t.root], out_cols)]
+
+
+def totals(t: Tmpl) -> dict:
+    """The unrolled unit's rows and their A and B references, counted per Definition and multiplied through its calls:
+    ``unroll``'s rows without the cancellations its ``canon`` makes where two of a row's references bind one column."""
+    tot: list[tuple[int, int, int]] = []
+    for d in t.defs:
+        r, a, b = len(d.rows), sum(len(x[1]) for x in d.rows), sum(len(x[2]) for x in d.rows)
+        for c in d.calls:
+            r, a, b = r + c.count * tot[c.e][0], a + c.count * tot[c.e][1], b + c.count * tot[c.e][2]
+        tot.append((r, a, b))
+    rows, nnz_a, nnz_b = tot[t.root]
+    return {"rows": rows, "nnz_a": nnz_a, "nnz_b": nnz_b}
+
+
+def slice_lanes(bits: np.ndarray) -> np.ndarray:
+    """``(n, bits)`` 0/1 per instance as ``(bits, ceil(n / 64))`` uint64 lanes, instance ``i`` bit ``i mod 64`` of word
+    ``i // 64``."""
+    bits = np.asarray(bits, np.uint8)
+    n = bits.shape[0]
+    W = -(-n // 64)
+    pad = np.zeros((W * 64, bits.shape[1]), np.uint8)
+    pad[:n] = bits
+    return np.ascontiguousarray(np.packbits(pad.T, axis=1, bitorder="little")).view("<u8").astype(np.uint64)
+
+
+def unslice_lanes(lanes: np.ndarray, n: int) -> np.ndarray:
+    """`slice_lanes`' inverse: ``(bits, W)`` lanes as ``(n, bits)`` 0/1."""
+    b = np.unpackbits(np.ascontiguousarray(np.asarray(lanes, "<u8")).view(np.uint8), axis=1, bitorder="little")
+    return b[:, :n].T.copy()
 
 
 # --- the emitter ------------------------------------------------------------------------------------------------------

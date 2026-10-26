@@ -112,77 +112,6 @@ open FlockSoundness.Discharge.Tables (LiveOutJ DecodesTable)
 open FlockSoundness.Discharge.Composed (outJ repJ)
 open Claims.Bridge.Custody
 
-/-- **A pads clash at an accepting run's view is a collision in its log**: at the view the deployed decoders are right
-at `OpensRows` (`decodesTableR_deploy`), so table `j`'s rep `r` reads `Q` queries and its pads openings are its proof
-file's inner-proof openings at `wrS`'s transcript, drawn at the positions its rep stream's last round's coins give; that
-stream has the run's rep stream's coins (`recordsLiveAtS_wrS`) and the proof file is the run's, so two of them at one
-position with different pairs collide in the run's log (`zk_padsClash_tied`). -/
-theorem zkViewClashQP (x : Claims.Msg) : ZkViewClashQ x PadsZ := by
-  intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C _ r hacc s' spec' sts' link c₁ mids f hact hret
-  obtain ⟨a, ⟨hV, pend, hpl, ha⟩, hcl⟩ := hret
-  subst a
-  have e := (act_decide hact).symm.trans hset
-  simp only [Option.some.injEq, Prod.mk.injEq] at e
-  obtain ⟨e₁, e₂, e₃⟩ := e
-  subst s' spec' sts'
-  have hrun : Runs sha512 (decision true ins x link c₁ mids f) ()
-      ((Claims.run sha512 P (V true) x ω r).vLog.map Prod.fst) := by
-    obtain ⟨s₂, spec₂, sts₂, link₂, c₂, mids₂, f₂, hact₂, hrun⟩ := acc_decide hacc
-    rw [hact] at hact₂
-    cases hact₂
-    exact hrun
-  have hjJ : j < (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length := by
-    rw [tabsJ_length]
-    exact hj
-  obtain ⟨jj, rfl⟩ : ∃ jj : Fin (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length, jj.val = j :=
-    ⟨⟨j, hjJ⟩, rfl⟩
-  rw [getD_ofFnJ] at hcl
-  obtain ⟨-, spec₂, sts₂, sess, sch, tPad, s₀, s₁, hj₂, hsA₂, hdec, hsch, hs₀, hs₁, -, -, hq, hp₀, hp₁, -⟩ :=
-    Tables.DecodesTable.ok_of_plays (decodesTableR_deploy hs hin hset h0 L hz hk hlay hd
-      (viewOf _ spec.mPts spec link c₁ f) jj) ⟨hV.1, rfl⟩ (pend jj) (hpl jj 0) (hpl jj 1)
-  have hacc' := run_acc_next sha512 P (V true) x ω r hacc
-  replace hacc' : ((next true x ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst)
-      ((List.range ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst).length).map
-        (Claims.coinSeq r))).eval sha512).1 = .acc := hacc'
-  obtain ⟨-, hc⟩ := (next_decide_sha512 hact).1 hacc'
-  obtain ⟨hins, hsu⟩ := setupOf_some (act_decide hact)
-  obtain ⟨hvr, -⟩ := decision_runs hsu hrun
-  have hv' : Zk.verifyWithM (hashesIn ((Claims.run sha512 P (V true) x ω r).vLog.map Prod.fst)) spec
-      (tabsOf sts) f.record f.proofs = .ok () := verdict_within hvr
-  have hzk : ins.read.zk = true := readOf_zk (x := x) (by simp [readOf, hins])
-  have hsA := setupAt_of_setup hsu hzk (publicInputs_none_of_checks hc)
-  rw [hd] at hsA
-  obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj (hsA.symm.trans hsA₂))
-  obtain ⟨hpr, hall⟩ := recordsLiveAtS_wrS ins.read.I d (viewOf _ spec.mPts spec link c₁ f) hV.1
-  obtain ⟨-, hrs⟩ := hall spec sts sess hsA hdec
-  obtain ⟨y₀, hy₀, hr₀⟩ := (hrs jj).2 ⟨0, by omega⟩
-  obtain ⟨y₁, hy₁, hr₁⟩ := (hrs jj).2 ⟨1, by omega⟩
-  obtain rfl : y₀ = s₀ := Option.some.inj (hy₀.symm.trans hs₀)
-  obtain rfl : y₁ = s₁ := Option.some.inj (hy₁.symm.trans hs₁)
-  obtain ⟨-, lv, hlv, -⟩ := checks_ok hc
-  have hD : liveD spec f.record = lv := by simp [liveD, hlv]
-  have hco : ∀ (q : ℕ) (y : StreamRec),
-      y.rounds.toList = ((liveD spec f.record).streams[q]!).toList.map (withSha spec) →
-      ∀ i : ℕ, y.rounds[i]?.map (fun rd : Flock.Round => rd.coins) =
-        (lv.streams.getD q #[])[i]?.map (fun rd : Flock.Round => rd.coins) := by
-    intro q y hy i
-    rw [← Array.getElem?_toList, hy, hD, show (#[] : Array Flock.Round) = default from rfl, getD_eq_getElem!]
-    simp [withSha, Option.map_map, Function.comp_def]
-  have hpr' : (wrS ins.read.I d (viewOf _ spec.mPts spec link c₁ f)).proofs = f.proofs := hpr
-  have hp2 := (HiddenExec.setupTables_pointsAny hsA).1
-  rw [hpr'] at hp₀ hp₁
-  rw [tabsJ_get] at hq
-  obtain ⟨rr, hrr, root, k, hkq, k', hkq', p, hqk, hqk', -, -, hne⟩ := hcl
-  rw [hq] at hkq hkq'
-  obtain rfl | rfl : rr = 0 ∨ rr = 1 := by omega
-  · rw [ite_eq_left rfl] at hqk hqk'
-    exact Or.inr (zk_padsClash_tied (rr := 0) (y := y₀) hv' hlv hj₂ hsch hp2 (by omega)
-      (by rw [Nat.add_zero]; exact hco _ _ hr₀) (by rw [Nat.add_zero]; exact hp₀) hkq hkq' (hqk.trans hqk'.symm) hne)
-  · rw [ite_eq_right (show (1 : ℕ) ≠ 0 by omega)] at hqk hqk'
-    exact Or.inr (zk_padsClash_tied (rr := 1) (y := y₁) hv' hlv hj₂ hsch hp2 (by omega) (hco _ _ hr₁) hp₁ hkq hkq'
-      (hqk.trans hqk'.symm) hne)
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -258,6 +187,14 @@ theorem zkViewClashQP (x : Claims.Msg) : ZkViewClashQ x PadsZ := by
       (hqk.trans hqk'.symm) hne)
 
 end Gen
+
+/-- **A pads clash at an accepting run's view is a collision in its log**: at the view the deployed decoders are right
+at `OpensRows` (`decodesTableR_deploy`), so table `j`'s rep `r` reads `Q` queries and its pads openings are its proof
+file's inner-proof openings at `wrS`'s transcript, drawn at the positions its rep stream's last round's coins give; that
+stream has the run's rep stream's coins (`recordsLiveAtS_wrS`) and the proof file is the run's, so two of them at one
+position with different pairs collide in the run's log (`zk_padsClash_tied`). -/
+theorem zkViewClashQP (x : Claims.Msg) : ZkViewClashQ x PadsZ :=
+  Gen.zkViewClashQP (S := S₀) (x := x)
 
 end Clash
 

@@ -2,6 +2,11 @@
 
     DotBf16_v2{K, DOT}          f32 accumulator after K/16 `DOT` steps in ascending k from a zero accumulator
     GemmCoordinate_v2{K, DOT}   bf16 word: cvt.rn.bf16.f32(DotBf16)   (Triton `acc.to(bf16)`; the same on sm_80/sm_90)
+    GemmCoordinatePad_v1{T, K, DOT}  (x, wrow: bf16[T]) -> bf16: `GemmCoordinate_v2{K, DOT}` on x and wrow each padded with
+                                K - T bf16 +0 words (a masked k loop's loads), for T <= K: attention's PV at T keys
+    PvRow_v1{T, K, D, DOT}      (p: bf16[T], v0..v{T-1}: bf16[D]) -> bf16[D]: one head's attention output row, dim d
+                                `GemmCoordinatePad_v1{T, K, DOT}` of p and (v0[d], ..., v{T-1}[d]); each key's V row is its own
+                                D-word row (128 bytes at D = 64), as a unit reads it whole from the unit that wrote it
     Gemm_v2{K, N, DOT}          x[K] @ W[N,K]^T -> [N], no epilogue
 
 `DOT` is a static naming the step: `GEMM_AMPERE` binds `AmpereBF16TcDot16_v2`, `GEMM_HOPPER` binds
@@ -16,12 +21,18 @@ one `F2fpBf16`:
     GemmCoordinateMxf4_v1{K, DOT}   (x, wrow: e2m1[K], sx, sw: ue8m0[K/32]) -> bf16; k = 64   GEMM_SM120_MXF4: BlackwellMxf4OmmaDot64_v1
 
 and over the sm_120 s8 step (`GEMM_SM120_S8`: `BlackwellS8ImmaDot32_v1`), whose sum is exact while it stays in s32, so the
-word does not depend on the order the k steps run in:
+word does not depend on the order the k steps run in. `s8_gemm` gives another card's binding from its s8 step: the
+registered step when the card's step is its function (`GEMM_SM90_S8`, the H200's `integer.HOPPER_SM90_S8_K32`), so a circuit
+over it names no architecture (`prims`), and a refusal for any other step:
 
     GemmAccumulatorS8_v1{K, DOT}      (x, wrow: s8[K]) -> s32: K/32 `DOT` steps from a zero accumulator
     ScaledMmS8Coordinate_v1{K, DOT}   (x: s8[K], sx: f32, wrow: s8[K], sw: f32) -> bf16: the accumulator scaled as
                                       `benchmarks/ppl/steps.py`'s `int8_linear` (sx per token, sw per channel):
                                       cvt.rn.bf16.f32((cvt.rn.f32.s32(acc) * sx) * sw)
+    ScaledMmS8CoordinateRows_v1{K, R, DOT}  (x0..x{R-1}: s8[K/R], sx: f32, wrow0..wrow{R-1}: s8[K/R], sw: f32) -> bf16:
+                                      `ScaledMmS8Coordinate_v1{K, DOT}` on the concatenations of x's and wrow's R parts, so
+                                      that each operand is R rows of at most 262,144 bits (`UNIT_CLASS_MAX`) when K is
+                                      past 32,768
     ScaledMmS8_v1{K, N, DOT}          (x: s8[K], sx: f32, w: s8[N][K], sw: f32[N]) -> bf16[N]: the linear on one token row,
                                       `ScaledMmS8Coordinate_v1` over W's rows (each coordinate a `Q_word` unit)
 
@@ -43,16 +54,18 @@ from collections.abc import Callable
 
 from verity.ml.circuits.census import FAMILY_COUNTS, serves_none
 from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.silicon.integer import exact_k_limit
+from verity.ml.circuits.refs import Coll, broadcast, concat
+from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, HOPPER_SM90_S8_K32, IntegerMma, exact_k_limit
 from verity.ml.circuits.types import Array, Value
 
 from . import fp32 as F
 from . import prims as P
 from .prims import BF16, E2M1, E4M3, F32, S8, S32, ZERO32
 
-__all__ = ["DotBf16", "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4", "GEMM_SM120_S8", "Gemm",
-           "GemmAccumulatorS8", "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4", "GemmCoordinateNvf4", "S8_K_LIMIT",
-           "ScaledMmS8", "ScaledMmS8Coordinate"]
+__all__ = ["DotBf16", "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4", "GEMM_SM120_S8",
+           "GEMM_SM90_S8", "Gemm", "GemmAccumulatorS8", "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4",
+           "GemmCoordinateNvf4", "GemmCoordinatePad", "PvRow", "S8_K_LIMIT", "ScaledMmS8", "ScaledMmS8Coordinate",
+           "ScaledMmS8CoordinateRows", "s8_gemm"]
 
 _SCALE = Value(8)
 
@@ -82,6 +95,42 @@ def _refuse_k(k: int, limit: int | None = None) -> Callable[[dict], str | None]:
 _K16, _K32, _K64, _S8 = _refuse_k(16), _refuse_k(32), _refuse_k(64), _refuse_k(32, S8_K_LIMIT)
 
 
+def _refuse_t(base: Callable[[dict], str | None]) -> Callable[[dict], str | None]:
+    """`base`'s refusal for K, and a T outside 1..K (a coordinate on T of its K words)."""
+
+    def refuse(b: dict) -> str | None:
+        T, K = b.get("T"), b.get("K")
+        if isinstance(T, int) and isinstance(K, int) and not 1 <= T <= K:
+            return f"T={T} is not in 1..K={K}: the coordinate reads T words of each operand and pads them to K with +0"
+        return base(b)
+
+    return refuse
+
+
+def _refuse_r(base: Callable[[dict], str | None]) -> Callable[[dict], str | None]:
+    """`base`'s refusal for K, and an R that is not a positive divisor of K (K/R codes a part)."""
+
+    def refuse(b: dict) -> str | None:
+        R, K = b.get("R"), b.get("K")
+        if isinstance(R, int) and isinstance(K, int) and (R < 1 or K % R):
+            return f"R={R} does not divide K={K} into R parts of K/R codes each"
+        return base(b)
+
+    return refuse
+
+
+def _refuse_d(base: Callable[[dict], str | None]) -> Callable[[dict], str | None]:
+    """`base`'s refusal, and a D under 1 (the width of V's key rows)."""
+
+    def refuse(b: dict) -> str | None:
+        D = b.get("D")
+        if isinstance(D, int) and D < 1:
+            return f"D={D} is not a head width: each of V's key rows is D >= 1 words"
+        return base(b)
+
+    return refuse
+
+
 @composite("DotBf16", 2, ["K", "DOT"], lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.K, BF16))), F32),
            conformance="exact-model-tested", refuse=_K16)
 def DotBf16(B, S, x, w):
@@ -98,6 +147,31 @@ def DotBf16(B, S, x, w):
 def GemmCoordinate(B, S, x, wrow):
     """One output word of `x @ W^T`: bf16_rne(DotBf16{K, DOT}(x, W[j, :])) (`cvt.rn.bf16.f32`)."""
     return B.call(P.F2fpBf16, B.call(bind(DotBf16, K=S.K, DOT=S.DOT), x, wrow))
+
+
+@composite("GemmCoordinatePad", 1, ["T", "K", "DOT"],
+           lambda S: ((("x", Array(S.T, BF16)), ("wrow", Array(S.T, BF16))), BF16),
+           conformance="exact-model-tested", refuse=_refuse_t(_K16))
+def GemmCoordinatePad(B, S, x, wrow):
+    """`GemmCoordinate_v2{K, DOT}` on T words of x and of W's row, each padded with K - T bf16 +0 words: what a k loop that
+    masks its loads past T to 0.0 multiplies (attention's PV at T <= K keys)."""
+    if S.T == S.K:
+        return B.call(bind(GemmCoordinate, K=S.K, DOT=S.DOT), x, wrow)
+    space, idx, leaf = B.call(P.const(16, 0)).refs[0]
+    zeros = broadcast(space, idx, leaf, S.K - S.T)
+    pad = lambda a: Coll(Array(S.K, BF16), concat([a.refs, zeros]))
+    return B.call(bind(GemmCoordinate, K=S.K, DOT=S.DOT), pad(x), pad(wrow))
+
+
+@composite("PvRow", 1, ["T", "K", "D", "DOT"],
+           lambda S: ((("p", Array(S.T, BF16)), *((f"v{t}", Array(S.D, BF16)) for t in range(S.T))), Array(S.D, BF16)),
+           conformance="exact-model-tested", refuse=_refuse_d(_refuse_t(_K16)))
+def PvRow(B, S, p, *vs):
+    """One head's attention output row at T <= K keys: for each of V's D dims, `GemmCoordinatePad_v1{T, K, DOT}` of the
+    probability row p and that dim's column of the T key rows v0..v{T-1}. One unit a head: each key row is D words (128 bytes
+    at D = 64), over the 111 bytes C-Flock needs of some row of a unit, where a coordinate's own two rows are 2T bytes."""
+    v = Coll(Array(S.T, Array(S.D, BF16)), concat([r.refs for r in vs]))
+    return B.batch(bind(GemmCoordinatePad, T=S.T, K=S.K, DOT=S.DOT), p, v, axes=(None, 1))
 
 
 @composite("Gemm", 2, ["K", "N", "DOT"], lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, BF16)))), Array(S.N, BF16)),
@@ -171,6 +245,20 @@ def ScaledMmS8Coordinate(B, S, x, sx, wrow, sw):
     return B.call(P.F2fpBf16, B.call(F.F32MulV2, B.call(F.F32MulV2, acc, sx), sw))
 
 
+@composite("ScaledMmS8CoordinateRows", 1, ["K", "R", "DOT"],
+           lambda S: ((*((f"x{r}", Array(S.K // S.R, S8)) for r in range(S.R)), ("sx", F32),
+                       *((f"wrow{r}", Array(S.K // S.R, S8)) for r in range(S.R)), ("sw", F32)), BF16),
+           conformance=ScaledMmS8Coordinate.conformance, refuse=_refuse_r(_S8))
+def ScaledMmS8CoordinateRows(B, S, *ports):
+    """`ScaledMmS8Coordinate_v1{K, DOT}` on x and W's row each given as R consecutive parts of K/R codes, called on their
+    concatenations: the same word for every input. Past K = 32,768 an s8 operand is wider than `partition_v2.UNIT_CLASS_MAX`
+    (262,144 bits), so a unit reads it as R rows."""
+    R = S.R
+    cat = lambda parts: Coll(Array(S.K, S8), concat([p.refs for p in parts]))
+    x, sx, wrow, sw = cat(ports[:R]), ports[R], cat(ports[R + 1:2 * R + 1]), ports[2 * R + 1]
+    return B.call(bind(ScaledMmS8Coordinate, K=S.K, DOT=S.DOT), x, sx, wrow, sw)
+
+
 @composite("ScaledMmS8", 1, ["K", "N", "DOT"],
            lambda S: ((("x", Array(S.K, S8)), ("sx", F32), ("w", Array(S.N, Array(S.K, S8))), ("sw", Array(S.N, F32))),
                       Array(S.N, BF16)),
@@ -190,6 +278,22 @@ GEMM_SM120_MXF4: dict = {"DOT": P.BlackwellMxf4OmmaDot64}
 GEMM_SM120_S8: dict = {"DOT": P.BlackwellS8ImmaDot32}
 
 
+def s8_gemm(model: IntegerMma) -> dict:
+    """The s8 binding of a card whose s8 tensor-core step is ``model``: `GEMM_SM120_S8`'s step when ``model`` computes its
+    function, s8 x s8 at k = 32 clamped once at D (the fields `IntegerMma.step` reads), whatever the card. Refused
+    (ValueError) for any other step: a wrapping or u8 step is another function, with no registered Definition of its own here."""
+    ref = BLACKWELL_SM120_S8_M16N8K32
+    got, want = ((m.dtype, m.b_dtype, m.k, m.satfinite) for m in (model, ref))
+    if got != want:
+        raise ValueError(f"{model.name} ({model.arch}) computes {got} (dtype, b_dtype, k, satfinite), not {ref.name}'s {want}: "
+                         f"BlackwellS8ImmaDot32_v1 is not its step, and no s8 binding here is")
+    return dict(GEMM_SM120_S8)
+
+
+#: sm_90's (the H200's `wgmma` m64nNk32 and `mma.sync` m16n8k32, PINNED as `silicon.instructions` sm90.*.s8)
+GEMM_SM90_S8: dict = s8_gemm(HOPPER_SM90_S8_K32)
+
+
 def _register_kernels() -> None:
     from verity.ml.circuits.evaluation import register_kernel
 
@@ -203,6 +307,8 @@ def _register_kernels() -> None:
     domain = "every encoding; DOT one of the core BF16 steps (other steps fall back to the reference)"
     register_kernel(DotBf16, K.dot_kernel(steps), domain=domain, sample=K.sample_tc)
     register_kernel(GemmCoordinate, K.gemm_coordinate_kernel(steps), domain=domain, sample=K.sample_tc)
+    register_kernel(GemmCoordinatePad, K.gemm_coordinate_pad_kernel(steps), domain=domain, sample=K.sample_tc)
+    register_kernel(PvRow, K.pv_row_kernel(steps), domain=domain, sample=K.sample_tc)
     register_kernel(Gemm, K.gemm_kernel(steps), domain=domain)
     e4m3 = {P.BlackwellE4m3QmmaDot32: BLACKWELL_SM120_E4M3_M16N8K32, P.HopperE4m3QgmmaDot32: HOPPER_E4M3_WGMMA_K32}
     register_kernel(GemmCoordinateE4m3, K.gemm_coordinate_kernel(e4m3), sample=K.sample_tc,

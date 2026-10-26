@@ -31,8 +31,8 @@ TOKEN = "dummy-verity-bot"
 BOT = "B0VERITY"
 BOT_USER = "U0VERITYBOT"                                 # the bot's user, as auth.test names it
 COORD, ALERTS = "CCOORD", "CALERTS"
-HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console",
-           "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels", "training"]
+HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "compute-research", "memory-accounting", "network-accounting",
+           "console", "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels", "training", "counters"]
 
 
 class FakeSlack:
@@ -172,8 +172,6 @@ def routes_dirs(tmp_path, monkeypatch):
     monkeypatch.setenv("RESEARCH_NOTES", str(tmp_path / "notes"))
     monkeypatch.setenv("RESEARCH_ROUTES_URL", f"file://{remote}")
     monkeypatch.setenv("RESEARCH_SLACK_SEEN", str(tmp_path / "seen"))
-    monkeypatch.setenv("RESEARCH_PR_BRANCHES", str(tmp_path / "pr-branches.json"))
-    monkeypatch.setattr(slack, "GH", str(tmp_path / "no-gh"))
     monkeypatch.setattr(slack, "acting_as", lambda ns, reg, name: slack.name_entry(ns, reg, name))  # tests post as any name
     return local, remote
 
@@ -262,6 +260,16 @@ def test_the_old_channel_name_still_selects_ask_daniel_and_an_alias_may_not_shad
     registry.write_text(json.dumps(reg))
     with pytest.raises(slack.SlackError, match="alias"):
         slack.load_registry(registry)
+
+
+def test_every_handle_names_exactly_one_holder_and_a_predecessor_goes_in_its_lineage(registry):
+    """Reach PR 9: two holders in one handle split its doorbells and the watch's view (two compute-accounting
+    coordinators answering one chat, 21 Oct; 18.2 h held, F5).  A handover's outgoing id goes in `lineage`."""
+    reg = json.loads(REAL_REGISTRY.read_text())
+    many = {h["handle"]: slack.AGENT_ID_RE.findall(h.get("holder") or "") for h in reg["handles"]}
+    assert {h: ids for h, ids in many.items() if len(ids) != 1} == {}, "one agent per handle: a second lane gets its own handle"
+    with pytest.raises(slack.SlackError, match="lineage"):
+        slack.check_registry({**reg, "handles": [{**reg["handles"][0], "lineage": ["gen-3"]}, *reg["handles"][1:]]}, "r")
 
 
 def test_a_handles_examples_are_a_few_one_line_questions(registry):
@@ -1078,7 +1086,28 @@ def test_a_post_carries_slack_date_tokens_and_read_shows_both_zones(fake, regist
     assert "note:20260930T2020Z-handoff-infra" in posted and "`--since 2026-11-01T09:30Z`" in posted
     fake.messages[COORD][0]["ts"] = "1793525400.000100"
     rc, out, _ = run(capsys, "read", "--thread", "1793525400.000100")
-    assert rc == 0 and out.startswith("1793525400.000100 @infra: @memory-accounting freeze 1:30 AM PST (09:30Z), see note:")
+    assert rc == 0 and out.startswith("1793525400.000100 09:30:00Z @infra: @memory-accounting freeze 1:30 AM PST (09:30Z), see note:")
+
+
+@pytest.mark.parametrize("text,stamped", [
+    ("compute-research 13:07Z: outcome 1 MET", "compute-research 13:07Z (sent 13:22Z): outcome 1 MET"),
+    ("*compute-accounting 11:45Z* (quiet): x", "*compute-accounting 11:45Z* (sent 13:22Z) (quiet): x"),
+    ("top 00:15Z, how this works", "top 00:15Z (sent 13:22Z), how this works"),
+    ("<!subteam^S1|@ci> infra 13:00Z: free", "<!subteam^S1|@ci> infra 13:00Z (sent 13:22Z): free"),       # --to's tag first
+    ("@top comms 13:21Z: on track", None),                                     # within 2 min of the send
+    ("can node 2 take a job by 20:00Z?", None), ("infra, outcomes by 18:40Z:", None),   # deadlines, not headers
+    ("The 13:00Z checkpoint is late", None), ("comms 23:59Z: late", "comms 23:59Z (sent 13:22Z): late"),
+])
+def test_a_hand_typed_header_time_gets_the_real_send_time_beside_it(text, stamped):
+    """26 Oct: hand-typed times in posts ran up to 15 min off, which misordered MEM-69's salts (top, TOP-90)."""
+    now = datetime(2026, 10, 26, 13, 22, 10, tzinfo=timezone.utc)
+    assert slack.stamp_time(text, now) == (stamped or text)
+
+
+def test_send_stamps_a_hand_typed_header_time(fake, registry, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime(2026, 10, 26, 13, 22, 10, tzinfo=timezone.utc))
+    assert run(capsys, "send", "--as", "infra", "--to", "@ci", "--kind", "fyi", "--text", "infra 13:00Z: node 2 is free")[0] == 0
+    assert "infra 13:00Z (sent 13:22Z): node 2 is free" in fake.messages[COORD][-1]["text"]
 
 
 def test_verify_author_fetches_the_message_and_fails_closed(fake, registry, capsys):
@@ -1852,12 +1881,18 @@ def test_a_decided_card_rings_tops_inbox_once_with_its_question_outcome_and_aske
     assert run(capsys, "ask-daniel", "status", "43")[0] == 1 and len(bells(fake, top)) == 1          # pending rings no one
 
 
-def test_status_404_says_no_card_has_that_id(route, registry, capsys):
+def test_status_404_says_no_card_has_that_id_and_a_prefix_is_looked_up_in_ask_daniel(route, fake, registry, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     route.answer = (404, {"error": "not_found"})
     rc, _, err = run(capsys, "ask-daniel", "status", "1790800000.000100")
-    assert rc == 2 and "HTTP 404: no card has that ID" in err and "not the card's Slack ts" in err and "prefix" not in err
+    assert rc == 2 and "HTTP 404: no card has that ID" in err and "not the card's Slack ts" in err
     rc, _, err = run(capsys, "ask-daniel", "status", "81f010d2")
-    assert rc == 2 and "looks up no prefix" in err and "its mention in the card's thread also ends with" in err
+    assert rc == 2 and "no card in #ask-daniel's last 14 days has an ID starting 81f010d2" in err
+    whole = "81f010d2-1111-2222-3333-444455556666"
+    card = fake.add(ASK, text="a decision for you", username="infra", bot_id=BOT, reply_count=1)
+    fake.add(ASK, text=f"<@UDANIEL> a decision for you: ship it? `{whole}`", username="infra", bot_id=BOT, thread_ts=card["ts"])
+    run(capsys, "ask-daniel", "status", "81f010d2")                                   # TOP-90 row 31: posts show 8 hex
+    assert route.requests[-1][:2] == ("GET", f"/api/agent-approvals/{whole}")
 
 
 def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_card(route, registry, capsys):
@@ -1868,6 +1903,11 @@ def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_
     assert rc == 0 and out == "decided no thread -\n"
     assert route.requests[-1] == ("POST", "/api/agent-approvals/42/resolve", {"choice": "no", "note": "needs changes"})
     assert run(capsys, "ask-daniel", "resolve", "42")[0] == 2
+    run(capsys, "ask-daniel", "resolve", "42", "--choice", "a", "--provisional")
+    assert route.requests[-1][2] == {"choice": "a", "provisional": True}
+    note = "Provisionally accepted (Daniel, 19 Oct 21:59Z standing rule): a. Page: https://app.notion.com/p/x"
+    run(capsys, "ask-daniel", "resolve", "42", "--choice", "a", "--note", note)
+    assert route.requests[-1][2] == {"choice": "a", "note": note, "provisional": True}
     route.answer = (403, {"error": "not_your_card"})
     rc, _, err = run(capsys, "ask-daniel", "resolve", "42", "--choice", "no")
     assert rc == 2 and "only a card's own asker" in err
@@ -2098,8 +2138,7 @@ def test_the_routing_rule_matches_every_vector(v):
     if v.get("chat"):
         assert slack.chat_targets(v["msg"], v["thread"], doc["registry"]) == v["targets"]
         return
-    assert slack.route_targets(v["msg"], v["root"], doc["registry"], set(doc["inboxes"]), v.get("history", []),
-                               v.get("branches")) == v["targets"]
+    assert slack.route_targets(v["msg"], v["root"], doc["registry"], set(doc["inboxes"])) == v["targets"]
 
 
 def bells(fake, inbox_ts):
@@ -2166,6 +2205,33 @@ def test_deliver_rings_for_a_persons_typed_post_once(fake, registry, routes_dirs
 
 
 ASK_TEAM = "C0CA1JZSYNR"
+
+
+def test_traffic_replay_reads_the_people_s_channels_and_keeps_a_chat_s_text_out(fake, registry, routes_dirs, people_d, capsys):
+    """19-23 Oct the Slack events service routed nothing in the people's channels while five daily replays were clean:
+    the replay read only the front door (COMM-61)."""
+    people_d.mkdir()
+    (people_d / "luke.json").write_text(json.dumps(chat_person("chat-luke", LUKE, "Luke Example")))
+    chat = "CCHATLUKE"
+    circuits, top = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "top")
+    human = json.loads(registry.read_text())["humans"][0]["slack_user"]
+    missed = fake.add(ASK_TEAM, text="@circuits when does the sweep land?", user=human)
+    rang = fake.add(ASK_TEAM, text="@circuits is node 2 free?", user=human)
+    fake.add(COORD, text=slack.doorbell("daniel", rang["ts"], rang["ts"], rang["text"], channel="ask-the-team"),
+             username="router", bot_id=BOT, thread_ts=circuits)
+    lost = fake.add(ASK_TEAM, text="what is the TP8 status?", user=human)              # names no one, and nothing rang
+    secret = fake.add(chat, text="the private question, no lane named", user=LUKE)
+    routed = fake.add(chat, text="another one, no lane named", user=LUKE)
+    fake.add(COORD, text=slack.doorbell("luke", routed["ts"], routed["ts"], "", channel="chat-luke", private=True),
+             username="router", bot_id=BOT, thread_ts=top)
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
+    rep = {(x.get("channel"), x["ts"]): x for x in json.loads(out)["replay"]}
+    assert rc == 0 and set(rep) == {("ask-the-team", missed["ts"]), ("ask-the-team", lost["ts"]), ("chat-luke", secret["ts"])}
+    assert rep[("ask-the-team", missed["ts"])]["missed"] == ["circuits"] and rep[("ask-the-team", lost["ts"])]["missed"] == ["top"]
+    assert rep[("chat-luke", secret["ts"])] == {"ts": secret["ts"], "by": "luke", "channel": "chat-luke", "missed": ["top"],
+                                                "extra": [], "first": ""}
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay")
+    assert f"REPLAY #chat-luke {secret['ts']} by @luke: missed @top (private)" in out and "private question" not in out
 
 
 def unreadable_ask_team(monkeypatch):
@@ -2282,32 +2348,31 @@ def test_an_ask_rings_the_owners_doorbell_once_and_the_doorbell_cannot_route(fak
     assert len(bells(fake, box)) == 1                                                  # one doorbell per (post, target)
 
 
-def test_a_reply_in_the_merge_thread_rings_the_owners_of_the_prs_it_names_and_no_one_else(fake, registry, routes_dirs, capsys, tmp_path, monkeypatch):
+def test_a_reply_under_an_announcement_rings_only_the_names_it_starts_with(fake, registry, routes_dirs, capsys, monkeypatch):
+    """Reach PR 7: replies to announcements to every handle were about 3,000 doorbells a week, most by inferring PR owners
+    from the numbers a reply named.  Now a reply rings only its leading names, and of its status lines only a decline rings
+    the announcer."""
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
-    boxes = {n: inbox(fake, routes_dirs, n, branch_suffixes=["8c79"] if n == "circuits" else []) for n in ("circuits", "proofs", "compute-accounting")}
-    (tmp_path / "pr-branches.json").write_text(json.dumps({"1585": "cursor/gemm-rows-8c79"}))
+    boxes = {n: inbox(fake, routes_dirs, n, branch_suffixes=["8c79"] if n == "circuits" else []) for n in ("circuits", "proofs", "infra")}
     root = fake.add(COORD, text="\U0001f4e3 *Announcement* from @infra to every handle\nmerge thread", username="infra", bot_id=BOT)
     fake.add(COORD, text="#1600 is ready for the next train", username="proofs", bot_id=BOT, thread_ts=root["ts"])
-    rc, _, err = run(capsys, "send", "--as", "infra", "--thread", root["ts"], "--text", "Landed #1585; #1600 failed its suites")
-    assert rc == 0 and "route: PR owners unknown for #1600" in err
-    assert [len(bells(fake, b)) for b in boxes.values()] == [1, 1, 0]                 # #1585's owner, #1600's namer; not compute-accounting
-    rc, _, err = run(capsys, "send", "--as", "infra", "--thread", root["ts"], "--text", "the next train starts at 3 PM")
-    assert rc == 0 and [len(bells(fake, b)) for b in boxes.values()] == [1, 1, 0]
+    assert run(capsys, "send", "--as", "infra", "--thread", root["ts"], "--text", "Landed #1585; #1600 failed its suites")[0] == 0
+    assert [len(bells(fake, b)) for b in boxes.values()] == [0, 0, 0]
+    assert run(capsys, "send", "--as", "infra", "--thread", root["ts"], "--text", "@circuits landed #1585; #1600 failed")[0] == 0
+    assert [len(bells(fake, b)) for b in boxes.values()] == [1, 0, 0]
+    assert run(capsys, "close", "--as", "proofs", "--thread", root["ts"])[0] == 0
+    assert len(bells(fake, boxes["infra"])) == 0                                      # done: roster reads it
+    assert run(capsys, "close", "--as", "proofs", "--thread", root["ts"], "--declined", "past the budget line")[0] == 0
+    assert len(bells(fake, boxes["infra"])) == 1                                      # a decline wants the announcer
 
-
-def test_a_successors_pr_rings_its_handle_through_the_inbox_route_with_no_registry_edit(fake, registry, routes_dirs, capsys, tmp_path, monkeypatch):
-    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+def test_a_successors_pr_finds_its_handle_through_the_inbox_route_with_no_registry_edit(fake, registry, routes_dirs):
+    """drive names a PR's owner from its branch: a successor's suffix, and its predecessor's, come from the route."""
     root_box = fake.add(COORD, text=f"{slack.INBOX_HEAD}compute-accounting. pointers", username="compute-accounting", bot_id=BOT)
     add_route(routes_dirs[0], "compute-accounting", root_box["ts"], holder="bc-abcdef12-0000-0000-0000-00000000c0de",
               branch_suffixes=["zz99"])
-    (tmp_path / "pr-branches.json").write_text(json.dumps({"1700": "cursor/new-lead-zz99", "1701": "cursor/other-c0de"}))
-    root = fake.add(COORD, text="\U0001f4e3 *Announcement* from @infra to every handle\nmerge thread", username="infra", bot_id=BOT)
-    assert run(capsys, "send", "--as", "infra", "--thread", root["ts"], "--text", "Landed #1700")[0] == 0
-    assert run(capsys, "send", "--as", "infra", "--thread", root["ts"], "--text", "Landed #1701")[0] == 0
-    assert len(bells(fake, root_box["ts"])) == 2                                       # its branch suffix, then its id's
     reg = slack.with_routes(json.loads(registry.read_text()), slack.Routes())
     assert slack.branch_owners("cursor/new-lead-zz99", reg) == ["compute-accounting"]
-
+    assert slack.branch_owners("cursor/other-c0de", reg) == ["compute-accounting"]
 
 def test_names_open_succeeds_records_the_working_branch_and_keeps_the_predecessors_suffix(fake, registry, routes_dirs, tmp_path, capsys, monkeypatch):
     notes_clone(tmp_path)
@@ -2362,24 +2427,6 @@ def test_names_open_poster_lets_another_agent_post_as_it_and_a_successor_keeps_i
     assert run(capsys, "names", "open", "--as", "compute-accounting", "--holder", successor, "--succeeds")[0] == 0
     r = json.loads(path.read_text())
     assert (r["holder"], r["posters"], r["succeeds"], r["branch_suffixes"]) == (successor, [lane], holder, ["61ef"])
-
-
-def test_pr_branches_asks_gh_once_per_unknown_number_and_keeps_its_answers(tmp_path, monkeypatch):
-    import sys
-    calls = tmp_path / "calls"
-    gh = tmp_path / "gh"
-    gh.write_text(f"#!{sys.executable}\nimport json, pathlib\np = pathlib.Path({str(calls)!r})\np.write_text(p.read_text() + 'x' if p.exists() else 'x')\n"
-                  "print(json.dumps([{'number': 1585, 'headRefName': 'cursor/gemm-rows-8c79'}]))\n")
-    gh.chmod(0o755)
-    monkeypatch.setattr(slack, "GH", str(gh))
-    assert slack.pr_branches({"1585"}) == {"1585": "cursor/gemm-rows-8c79"}
-    assert slack.pr_branches({"1585"}) == {"1585": "cursor/gemm-rows-8c79"} and calls.read_text() == "x"
-    log = io.StringIO()
-    assert slack.pr_branches({"1585", "1999"}, log) == {"1585": "cursor/gemm-rows-8c79"} and calls.read_text() == "xx"
-    assert log.getvalue() == ""
-    gh.write_text("#!/bin/sh\necho 'HTTP 401: Bad credentials' >&2\nexit 1\n")
-    assert slack.pr_branches({"1999"}, log) == {}
-    assert "PR owners unknown for #1999 (gh: HTTP 401: Bad credentials)" in log.getvalue()
 
 
 def test_as_takes_only_a_name_this_agent_holds(fake, registry, routes_dirs, capsys, monkeypatch):
@@ -2532,23 +2579,33 @@ def test_an_announcement_to_every_handle_refuses_leading_names(registry, capsys)
     assert run(capsys, "announce", "--as", "infra", "--dry-run", "--text", "@lean @ci daily wasters")[0] == 2
 
 
-def test_a_handle_named_past_the_start_is_refused_since_nothing_rings_it(registry, capsys):
+def test_a_handle_named_past_the_start_posts_with_a_note_that_it_isnt_rung(registry, capsys):
+    """Refusing such a post cost re-sends (TOP-90 row 30); it posts, and the sender is told which names weren't woken."""
     reply = ["reply", "--as", "top", "--thread", "1700000000.000001", "--dry-run", "--text"]
     rc, _, err = run(capsys, *reply, "@proofs stack point is 4. @lean, rebase onto it")
-    assert rc == 2 and "names @lean past its start" in err and "Move them to the start" in err
+    assert rc == 0 and "names @lean past its start, so they aren't rung" in err and "move them to the start" in err
     rc, _, err = run(capsys, *reply, "@proofs two things:\ncompute-accounting: your ask is open\n- @lean: rebase")
-    assert rc == 2 and "names @lean @compute-accounting past its start" in err
-    for bad in ("@proofs compute-accounting: 98c5 is yours", "@proofs the slot is #1574 (9987, 2000). lean: stack on 8cf4. done"):
-        assert run(capsys, *reply, bad)[0] == 2, bad
-    assert run(capsys, "send", "--as", "top", "--to", "@ci", "--dry-run", "--text", "can @ci rebuild? not @lean")[0] == 2
+    assert rc == 0 and "names @lean @compute-accounting past its start" in err
+    for late in ("@proofs compute-accounting: 98c5 is yours", "@proofs the slot is #1574 (9987, 2000). lean: stack on 8cf4. done"):
+        rc, _, err = run(capsys, *reply, late)
+        assert rc == 0 and "aren't rung" in err, late
+    rc, _, err = run(capsys, "send", "--as", "top", "--to", "@ci", "--dry-run", "--text", "can @ci rebuild? not @lean")
+    assert rc == 0 and "names @lean past its start" in err
     for ok in ("@proofs @lean stack point is 4", "@proofs stack point is 4; lean rebases onto it",
                "@proofs run `research msg read --as @lean`", "@proofs\n> @lean said 4\nagreed", "top: @top is me",
                "@proofs mail a@lean.example", "@proofs @lean stack point is 4. @lean, rebase", "lean: stack point is 4",
                "@proofs note: the slot is 4"):
-        assert run(capsys, *reply, ok)[0] == 0, ok
-    assert run(capsys, "send", "--as", "top", "--to", "@ci", "--dry-run", "--text", "can @ci rebuild?")[0] == 0
-    assert run(capsys, "ask", "--as", "top", "--to", "@ci", "--dry-run", "--text", "@ci, can you rebuild")[0] == 0
-    assert run(capsys, "ask", "--as", "top", "--to", "@ci", "--dry-run", "--text", "rebuild for @lean")[0] == 2
+        rc, _, err = run(capsys, *reply, ok)
+        assert rc == 0 and "aren't rung" not in err, ok
+    rc, _, err = run(capsys, "ask", "--as", "top", "--to", "@ci", "--dry-run", "--text", "rebuild for @lean")
+    assert rc == 0 and "names @lean past its start" in err
+
+
+def test_an_ask_with_two_to_owners_is_refused_with_the_send_that_reaches_both(registry, capsys):
+    """TOP-90 row 29: `ask --to @a --to @b` kept only @b."""
+    rc, _, err = run(capsys, "ask", "--as", "top", "--to", "@ci", "--to", "@lean", "--dry-run", "--text", "rebuild")
+    assert rc == 2 and "an ask goes to one owner" in err and "send --as ME --to @ci @lean" in err
+    assert run(capsys, "ask", "--as", "top", "--to", "@ci", "--dry-run", "--text", "rebuild")[0] == 0
 
 
 def test_an_fyi_from_the_starter_wakes_only_its_to_names(fake, registry, routes_dirs, capsys):
@@ -2597,7 +2654,7 @@ def test_a_long_multi_line_merge_thread_reply_rings_only_the_names_it_starts_wit
     assert rc == 0 and "route @infra: rang" in err and "vy-monitors" not in err
     assert len(bells(fake, infra)) == 1 and bells(fake, proofs) == [] and bells(fake, lean) == []
     rc, _, err = run(capsys, "reply", "--as", "circuits", "--thread", root["ts"], "--text", "#1600 and #1601 are on the next train")
-    assert rc == 0 and len(bells(fake, lean)) == 1 and "vy-monitors" not in err   # naming no one, a PR's namer is rung
+    assert rc == 0 and bells(fake, lean) == [] and "vy-monitors" not in err      # naming no one, it rings no one
 
 
 def test_a_finished_name_forwards_to_its_successor(fake, registry, routes_dirs, capsys):
@@ -3513,13 +3570,6 @@ def test_traffic_does_not_count_the_askers_own_comment_as_taken_when_linear_writ
     assert slack.issue_state("INF-1", "infra", {})[0] is False
     nodes[1:] = [{"botActor": None, "user": {"name": "Daniel Reuter"}, "body": "looking now"}]
     assert slack.issue_state("INF-1", "infra", {}) == (True, "commented on by Daniel Reuter")
-
-
-def test_a_bare_run_suffix_needs_a_letter_and_a_digit():
-    """18 Oct: "work dead through the weights" named run `dead`, so a reply under top's program announcement rang comms,
-    which had named its own PR beside "dead code" earlier in the thread."""
-    assert slack.run_ids("prove from r20261018-234409-19cd, after dd21 and 2584; dead code, a bead, the face of 2026") == {"19cd", "dd21"}
-    assert slack.run_ids("r20261018-234409-dead") == {"dead"}
 
 
 def test_a_reply_in_a_channel_the_bot_cannot_read_posts_in_the_thread_it_was_given(fake, registry, capsys, monkeypatch):

@@ -24,13 +24,23 @@ The covert budget is only what goes beyond the committed computation. Beside it,
 declared crossings (`Profile.exported`). It counts as novel information read by its receivers once the declaration's
 certifiers cover every link, so that `Datacenter.uncovered_links()`, the links no trusted device ends (a
 switch-to-switch link, an outside host's link to a switch), is empty; until then it is reported as not applicable, with
-those links named. The registration commits the occupancy profiles the developer may choose from
+those links named. With the certifiers' pair links sealed (`Datacenter(sealed=True)`, off by default; the certifier's
+`PROTOCOL.md`, "Sealed pair links"), a crossing from one block to another is ciphertext between the two blocks'
+certifiers, so the export counts only the crossings to a reader off every block, the facility boundary
+(`Placement._exported`). The registration commits the occupancy profiles the developer may choose from
 (`register(..., profiles=...)`), the plan reads their number from it (`Plan(..., profiles=registration)`), so the
 choice is public advice of log2 of that number, and the audit refuses a declared occupancy that isn't one of them; with
 none registered the one profile is the placement's own. `Ledger.custody(registered_bits)` is the share of the
 registered weights that the ledger's epochs could have carried out: their covert budgets, their exports where charged,
 and a side channel of σ a server over each epoch (`DEDICATED_RACKS`, 1 kbit/s, Daniel's premise that no untrusted
-machine shares a block's rack). Weight custody over a horizon needs that share well below 1.
+machine shares a block's rack). Weight custody over a monitoring period needs that share well below 1.
+
+A result here is about a monitoring period: the stretch of time it covers, not one epoch, window or run. Present it
+for a week, a month and a year, over all of the datacenter's compute, even though the demo checks two nodes. Lead with
+the pooled total over the period and its share of the compute it covers, at δ = 1% and 10⁻⁶, with the per-epoch figure
+beside it, never alone. Each epoch draws its own live coins, so the pooled total stays about the same as the period
+grows. The datacenter's size and the epoch's length are stated parameters (from `benchmarks/census`), and a figure
+scaled up from the demo's machines says which parts are proved and which are scaled.
 
 `examples` is the one place hardware is declared, every number with its source: `rtx_node` (one of our measured
 nodes), `with_dpu` (a BlueField-3 between its NIC and its certifier, with its BMC behind it), `leaf_spine` (nodes behind

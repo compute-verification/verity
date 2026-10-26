@@ -24,11 +24,11 @@ from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import Circuit
-from verity_vllm.program.kernels import twins  # noqa: F401  (registers RoPE_v1's kernel, which the served shapes' word side runs)
-from verity_vllm.program.kernels.twins import rand_bf16, tie_pairs_mul
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import boolean_rope as R
-from verity_vllm.program.registry import ref_prims
+from verity.ml.definitions.numerics import twins  # noqa: F401  (registers RoPE_v1's kernel, which the served shapes' word side runs)
+from verity.ml.definitions.numerics.twins import rand_bf16, tie_pairs_mul
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import boolean_rope as R
+from verity.ml.definitions.registry import ref_prims
 
 U16 = np.uint16
 HALVES = [R.RopeOut, R.RopeOutAdd]
@@ -222,7 +222,7 @@ def _random_heads(target, heads: int) -> tuple[np.ndarray, np.ndarray]:
     return x, cs
 
 
-@pytest.mark.parametrize("target", ROPES, ids=lambda t: t.id)
+@pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.bindings['D'] == 256 else t for t in ROPES], ids=lambda t: t.id)
 def test_every_served_binding_agrees_with_rope_v1(target) -> None:
     """1,024 random heads of each binding the served Programs call against `RoPE_v1`'s registered kernel (`twins.RoPETwin`,
     self-checked against the IR reference by the kernel registry): `RoPE_v2`'s batch over the heads and its shared cos/sin row
@@ -230,6 +230,7 @@ def test_every_served_binding_agrees_with_rope_v1(target) -> None:
     _agree(target, list(_random_heads(target, 1024)))
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 @pytest.mark.parametrize("target", LARGE, ids=lambda t: t.id)
 def test_each_served_head_width_agrees_with_rope_v1_on_16k_heads(target) -> None:

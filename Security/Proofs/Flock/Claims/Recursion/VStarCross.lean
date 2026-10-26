@@ -141,6 +141,28 @@ def ReadsBack (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (shape 
         ps.map Prod.fst = ((run H P (V IV b.st) x ω r).msgs.take (IV.k (xIOf x))).map Prod.fst ∧
         ∀ i < ps.length, Drawn (coinSeq r i) (ps.getD i ([], #[])).2
 
+/-- **The reader reads the coin server's transcript back before the last round** (a named premise): `ReadsBack` at
+the inner rounds before the last. The coin server records no last round, the openings, so a reader of its record reads
+that round back nowhere; the bound layout reads no commit string there (`VStarB.StagedB`). -/
+def ReadsBackB (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (shape : Claims.Recursion.Form → Prop)
+    (untr : TrReader) : Prop :=
+  ∀ x st, parse x = some st → shape st.form → ∀ (Ω : Type) (P : Prover Ω) (ω : Ω)
+    (r : Fin ((V IV b.st).k x) → Coin), (run H P (V IV b.st) x ω r).out = .acc →
+      ∃ ps, untr x (b.tr x ((run H P (V IV b.st) x ω r).msgs.take (IV.k (xIOf x)))) = some ps ∧
+        (∀ i, i + 1 < IV.k (xIOf x) →
+          (ps.map Prod.fst).getD i [] = ((run H P (V IV b.st) x ω r).msgs.map Prod.fst).getD i []) ∧
+        ∀ i < ps.length, Drawn (coinSeq r i) (ps.getD i ([], #[])).2
+
+/-- `ReadsBack` reads back before the last round. -/
+theorem readsBackB_of_readsBack {H : Msg → Msg} {IV : Claims.Verifier Coin} {b : Brings}
+    {shape : Claims.Recursion.Form → Prop} {untr : TrReader} (h : ReadsBack H IV b shape untr) :
+    ReadsBackB H IV b shape untr := by
+  intro x st hst hf Ω P ω r hacc
+  obtain ⟨ps, hps, hfst, hdrawn⟩ := h x st hst hf Ω P ω r hacc
+  refine ⟨ps, hps, fun i hi => ?_, hdrawn⟩
+  rw [hfst, List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_map,
+    List.getElem?_take_of_lt (by omega)]
+
 /-- **The rounds a V\* statement's transcript shows**: its transcript, read by `untr`. -/
 def shownOf (untr : TrReader) (x xO : Msg) : Option (List (Msg × Array Flock.F128)) :=
   ((decodeRec xO).bind RecRaw.transcript).bind (untr x)
@@ -415,6 +437,7 @@ theorem innerAcc_public {H : Msg → Msg} {x : Msg} {c : ℕ → Coin} {ms : Lis
   obtain ⟨_, -, hc⟩ := FlockSoundness.Refine.ebind_ok hc
   obtain ⟨_, -, hc⟩ := FlockSoundness.Refine.ebind_ok hc
   obtain ⟨_, -, hc⟩ := FlockSoundness.Refine.ebind_ok hc
+  obtain ⟨_, hc, -⟩ := FlockSoundness.Refine.ebind_ok hc
   cases hd : s.read.draw with
   | none => simp [hd, Flock.ProvedScope.drawLaw] at hc
   | some d => exact ⟨d, rfl⟩

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.ml.circuits.defs import bind
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_weight_view, is_row_major
@@ -27,7 +27,7 @@ class GemmLaunch:
     `aten.mm/matmul/linear/addmm` dispatcher node that wraps exactly one such launch (the launch fired inside the
     op's CUDA implementation), consuming the wrapper as scope.
 
-    Constexpr pins (`constexprs`, `num_warps`, `num_stages`) must match exactly.  [R13 ampere] The TILING pinned is the
+    Constexpr pins (`constexprs`, `num_warps`, `num_stages`) must match exactly.  The TILING pinned is the
     record target's launch geometry for (M, N, K) — `gemm_target_of(ctx)`: the registered GEMM specialization of the
     header's capability (`verity_vllm.program.frontend.gemm_targets`; `ada` = vLLM's sm_89 tuned table rows else the default, `ampere`
     = the default for every shape); `constexprs` / `num_warps` / `num_stages` given at construction are the profile's default
