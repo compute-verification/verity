@@ -228,10 +228,11 @@ calls recorded too (`outsCalls`), so that the level parts' `out` rows bind to Re
 abbrev layR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) :
     Claims.Recursion.VStarB.LayoutB :=
   { layoutBTops (finOpen (restR elem)) with
-    shaAt := fun x s => (layoutBTops (finOpen (restR elem))).shaAt x s ++ ((readX x).map fun r => outsCalls r s).getD [] }
+    shaAt := fun x s =>
+      (layoutBTops (finOpen (restR elem))).shaAt x s ++ ((readX x).map fun r => outsCalls r s).getD [] }
 
-theorem layR_calls (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (x : Msg) (s : ℕ)
-    (w : Claims.Flock.Wit) : (layR elem).calls x s w = (layoutBTops (finOpen (restR elem))).calls x s w ++
+theorem layR_calls (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (x : Msg)
+    (s : ℕ) (w : Claims.Flock.Wit) : (layR elem).calls x s w = (layoutBTops (finOpen (restR elem))).calls x s w ++
       (((readX x).map fun r => outsCalls r s).getD []).map fun p =>
         (p.1 ++ Claims.Recursion.VStarB.readForms w p.2.1, Claims.Recursion.VStarB.readForms w p.2.2) := by
   unfold Claims.Recursion.VStarB.LayoutB.calls

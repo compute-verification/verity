@@ -106,15 +106,15 @@ theorem commit_of_true {c : Circuit} {q n : ℕ} {w : Claims.Flock.Wit} {R : Msg
           (FlockSoundness.Discharge.Hm.bitL (readForms w (hmSalt c q n))) := by
       rw [List.map_map]
       exact List.map_congr_left fun j hj => hy j (List.mem_range.1 (List.mem_filter.1 hj).1)
+    simp only [← hmap]
     simp only [hmDigest, List.getElem_map, List.getElem_range, formBit, List.foldr_cons, List.foldr_map]
-    simp only [← hmap, List.foldr_map]
     rw [Bool.xor_assoc, Bool.xor_self, Bool.xor_false]
   · obtain ⟨u, rfl⟩ : ∃ u, t = 512 + u := ⟨t - 512, by omega⟩
     have e := bitL_readForms (w := w) (fs := (hmCommit c q n).drop 512) (q := u) (by simp [hmCommit]; omega)
-    rw [← hs, sha512_eq, ← hsp] at e
-    rw [FlockSoundness.Binding.commitString, FlockSoundness.Discharge.Hm.bitL_append_hi (length_xorMask _ _), e,
-      List.getElem_drop]
-    simp only [hmCommit, List.getElem_map, List.getElem_range, formBit_var]
+    rw [← hs, sha512_eq, List.getElem_drop] at e
+    simp only [hmCommit, List.getElem_map, List.getElem_range, formBit_var] at e
+    rw [FlockSoundness.Binding.commitString, FlockSoundness.Discharge.Hm.bitL_append_hi (length_xorMask _ _)]
+    exact e.symm
 
 /-- **Two hm96 slots with one commit string hold one row**, wherever both slots' salt and row calls are among true
 evaluations `l` with no collision and their rows are hashed under one prefix (`rowPfx`: ports of one word count).
@@ -134,18 +134,28 @@ theorem rows_eq_of_calls {l : List (Msg × Msg)} (hT : ∀ e ∈ l, FlockDeploy.
     readForms w row = readForms w' row' := by
   have hsp : FlockSoundness.Refine.K512.saltPrefix = Hm96.Default512.saltPrefix.data.toList := by
     unfold FlockSoundness.Refine.K512; rfl
-  have e := commit_of_true (hT _ hs) (hT _ hr)
-  have e' := commit_of_true (hT _ hs') (hT _ hr')
-  have hy0 := List.mem_map_of_mem (f := Prod.fst) hs
-  have hy0' := List.mem_map_of_mem (f := Prod.fst) hs'
-  dsimp only at hy0 hy0'
+  have hs1 : FlockDeploy.sha512 (Hm96.Default512.saltPrefix.data.toList ++ readForms w (hmSalt c q n)) =
+      readForms w ((hmCommit c q n).drop 512) := by
+    have h := hT _ hs; exact h
+  have hr1 : FlockDeploy.sha512 (rowPfx c q ++ readForms w row) = readForms w (hmDigest c q n) := by
+    have h := hT _ hr; exact h
+  have hs1' : FlockDeploy.sha512 (Hm96.Default512.saltPrefix.data.toList ++ readForms w' (hmSalt c' q' n')) =
+      readForms w' ((hmCommit c' q' n').drop 512) := by
+    have h := hT _ hs'; exact h
+  have hr1' : FlockDeploy.sha512 (rowPfx c' q' ++ readForms w' row') = readForms w' (hmDigest c' q' n') := by
+    have h := hT _ hr'; exact h
+  have e := commit_of_true (c := c) (q := q) (n := n) (w := w) (R := rowPfx c q ++ readForms w row) hs1 hr1
+  have e' := commit_of_true (c := c') (q := q') (n := n') (w := w') (R := rowPfx c' q' ++ readForms w' row') hs1' hr1'
+  have hy0 : Hm96.Default512.saltPrefix.data.toList ++ readForms w (hmSalt c q n) ∈ l.map Prod.fst :=
+    List.mem_map.2 ⟨_, hs, rfl⟩
+  have hy0' : Hm96.Default512.saltPrefix.data.toList ++ readForms w' (hmSalt c' q' n') ∈ l.map Prod.fst :=
+    List.mem_map.2 ⟨_, hs', rfl⟩
   have hy : FlockSoundness.Refine.K512.saltPrefix ++ readForms w (hmSalt c q n) ∈ l.map Prod.fst := by
     rw [hsp]; exact hy0
   have hy' : FlockSoundness.Refine.K512.saltPrefix ++ readForms w' (hmSalt c' q' n') ∈ l.map Prod.fst := by
     rw [hsp]; exact hy0'
-  have hr0 := List.mem_map_of_mem (f := Prod.fst) hr
-  have hr0' := List.mem_map_of_mem (f := Prod.fst) hr'
-  dsimp only at hr0 hr0'
+  have hr0 : rowPfx c q ++ readForms w row ∈ l.map Prod.fst := List.mem_map.2 ⟨_, hr, rfl⟩
+  have hr0' : rowPfx c' q' ++ readForms w' row' ∈ l.map Prod.fst := List.mem_map.2 ⟨_, hr', rfl⟩
   have hb := commit_bind (r := rowPfx c q ++ readForms w row) (r' := rowPfx c' q' ++ readForms w' row')
     (y := readForms w (hmSalt c q n)) (y' := readForms w' (hmSalt c' q' n')) hT hnc hr0 hr0' hy hy'
     (e.symm.trans (hcm.trans e'))
@@ -211,10 +221,29 @@ theorem out_top_rows (elem : (r : XR) → List (Fin r.w.parts.length × List (Ms
       refine List.mem_append_left _ ?_
       simp only [LayoutB.calls, layoutBTops, hr, Option.map_some, Option.getD_some, List.map_append]
       exact List.mem_append_right _ (List.mem_map.2 ⟨p, mem_capsCalls_of hsv' hc' hq' hm hp, rfl⟩))
-  exact rows_eq_of_calls (c := c) (q := q) (n := i) (w := w) (row := DeployedR.outRowForms c q i) (c' := c')
-    (q' := q') (n' := m) (w' := w') (row' := ((rowHidden c' "top" m).getD []).map HmNets.Lin.var) hT hnc
-    (hL _ List.mem_cons_self) (hL _ (List.mem_cons_of_mem _ List.mem_cons_self))
-    (hC _ List.mem_cons_self) (hC _ (List.mem_cons_of_mem _ List.mem_cons_self)) hpfx hcm
+  have h1 : (Hm96.Default512.saltPrefix.data.toList ++ readForms w (hmSalt c q i),
+      readForms w ((hmCommit c q i).drop 512)) ∈ (DeployedR.layR elem).allCalls x ws := by
+    have h := hL (Hm96.Default512.saltPrefix.data.toList, hmSalt c q i, (hmCommit c q i).drop 512)
+      (by unfold DeployedR.outCalls; exact List.mem_cons_self)
+    exact h
+  have h2 : (rowPfx c q ++ readForms w (DeployedR.outRowForms c q i), readForms w (hmDigest c q i)) ∈
+      (DeployedR.layR elem).allCalls x ws := by
+    have h := hL ((c.ports[q]?.map fun p => (HmRow.rowPrefix p.words).data.toList).getD [],
+      DeployedR.outRowForms c q i, hmDigest c q i)
+      (by unfold DeployedR.outCalls; exact List.mem_cons_of_mem _ List.mem_cons_self)
+    exact h
+  have h3 : (Hm96.Default512.saltPrefix.data.toList ++ readForms w' (hmSalt c' q' m),
+      readForms w' ((hmCommit c' q' m).drop 512)) ∈ (DeployedR.layR elem).allCalls x ws := by
+    have h := hC (Hm96.Default512.saltPrefix.data.toList, hmSalt c' q' m, (hmCommit c' q' m).drop 512)
+      (by unfold hmCalls; exact List.mem_cons_self)
+    exact h
+  have h4 : (rowPfx c' q' ++ readForms w' (((rowHidden c' "top" m).getD []).map HmNets.Lin.var),
+      readForms w' (hmDigest c' q' m)) ∈ (DeployedR.layR elem).allCalls x ws := by
+    have h := hC ((c'.ports[q']?.map fun p => (HmRow.rowPrefix p.words).data.toList).getD [],
+      ((rowHidden c' "top" m).getD []).map HmNets.Lin.var, hmDigest c' q' m)
+      (by unfold hmCalls; exact List.mem_cons_of_mem _ List.mem_cons_self)
+    exact h
+  exact rows_eq_of_calls hT hnc h1 h2 h3 h4 hpfx hcm
 
 /-! ## `OpenTie`'s two halves -/
 
