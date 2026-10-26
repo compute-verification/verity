@@ -348,6 +348,7 @@ theorem arr_mapKey_null' {k : String} {j : Json} {a : Array Json}
     rw [hf] at h
     cases h
 
+set_option maxHeartbeats 1600000 in
 /-- **The fill finds a coin for every recorded round** of the record of streams `S` wherever `liveOf` reads its
 substituted value, at rep streams of distinct names. -/
 theorem fill_of_live {spec : SessionSpec} {h : ByteArray → ByteArray} {rootB : Array ByteArray}
@@ -365,6 +366,7 @@ theorem fill_of_live {spec : SessionSpec} {h : ByteArray → ByteArray} {rootB :
         (spec.repStreams.toList.map (·.2.2))[t']'(by simpa using ht') := by simpa using e
     exact (List.Nodup.getElem_inj_iff hnd).1 e'
   unfold liveOfJ at hl
+  obtain ⟨_, -, hl⟩ := bind_ok hl
   obtain ⟨_, -, hl⟩ := bind_ok hl
   obtain ⟨_, -, hl⟩ := bind_ok hl
   obtain ⟨_, -, hl⟩ := bind_ok hl
