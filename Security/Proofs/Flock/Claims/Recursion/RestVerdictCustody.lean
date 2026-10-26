@@ -350,12 +350,13 @@ theorem liveOfJ_sub (spec : SessionSpec) (c₁ : Coin) (mids : List (Msg × Coin
       (fun k (y : Round) => y.bytes = some ((streams[i][k]!).bytes.getD ByteArray.empty)) (fun k hk => by
         have hk' : k < streams[i].size := by simpa using hk
         have hlt := htot i hi' k hk'
-        refine ⟨_, ?_, ?_⟩
-        · simp only [Array.getElem_mapIdx, Array.getElem_map, Array.getElem_range]
-          unfold fillG
-          rw [hof, List.getElem?_eq_getElem hlt]
-          exact roundJ_fill spec h k _ _
-        · rfl)
+        refine ⟨⟨(streams[i][k]!).n, ByteArray.empty,
+          (mids[((streams.toList.take i).map Array.size).sum + k]'hlt).2.vals (streams[i][k]!).n,
+          some ((streams[i][k]!).bytes.getD ByteArray.empty)⟩, ?_, rfl⟩
+        simp only [Array.getElem_mapIdx, Array.getElem_map, Array.getElem_range]
+        unfold fillG
+        rw [hof, List.getElem?_eq_getElem hlt]
+        exact roundJ_fill spec h k _ _)
     refine ⟨ys, hys, ?_⟩
     rw [getElem!_pos streams i hi']
     apply List.ext_getElem (by simp [hsz])
