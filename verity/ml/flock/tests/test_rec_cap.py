@@ -84,5 +84,5 @@ def test_lean_statements_end_with_the_caps_at_the_deployed_shape():
     out of Flock's audit roots and runs here, after landing (lean-suites). It catches what `Flock.Test.RecCapSmall` can't:
     `statements` itself, whose parts and the verifier's groups RecCapSmall doesn't build (over 3 minutes even at m 22),
     holding its list checks to the list `statements` assembles at m 22 instead."""
-    r = subprocess.run(["lake", "build", "Flock.Test.RecCap"], cwd=LEAN, capture_output=True, text=True)
+    r = subprocess.run(["lake", "build", "Flock.Test.RecCap"], cwd=LEAN, capture_output=True, text=True, check=False)
     assert r.returncode == 0, r.stdout[-4000:] + r.stderr[-2000:]
