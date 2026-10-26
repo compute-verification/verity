@@ -54,7 +54,8 @@ theorem winIdeal_le_of_family (hfam : Pous.Guarantees.StreamedWipeMeetsFamily) {
 def stateEquiv {ι : Type} (d : Device ι) : d.State ≃ (Fin d.chip → Bool) × (Fin d.mem → Bool) :=
   ⟨fun σ => (σ.chip, σ.store), fun x => ⟨x.1, x.2⟩, fun _ => rfl, fun _ => rfl⟩
 
-noncomputable local instance {ι : Type} (d : Device ι) : Fintype d.State := Fintype.ofEquiv _ (stateEquiv d).symm
+noncomputable local instance instFintypeState {ι : Type} (d : Device ι) : Fintype d.State :=
+  Fintype.ofEquiv _ (stateEquiv d).symm
 
 theorem card_state {ι : Type} (d : Device ι) : Fintype.card d.State = 2 ^ d.chip * 2 ^ d.mem := by
   rw [Fintype.card_congr (stateEquiv d)]
