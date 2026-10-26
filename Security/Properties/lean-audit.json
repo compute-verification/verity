@@ -4172,14 +4172,14 @@
    ]
   },
   "Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": {
-   "digest": "6805273d6b6792ae282bef0922788d3d8ae78e64fc91c1b284dfae17cb9a6373",
+   "digest": "e986e2e4419f0efbc3fe07720f4e125386aeb5ffb4beef134265f5e4c4179b6a",
    "definitions": {
-    "Accounting.RealizesWorkOfH1CheckedCreditPeriod": "e9e8f8c962219d49450458d19dc5861702987b69a39240c12f28092e5637cf67"
+    "Accounting.RealizesWorkOfH1CheckedCreditPeriod": "3eefc6f0ba5556612cac52e30d038e749824c8a63c3c8576908df655545b0438"
    },
    "guarantees": ["Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod"]
   },
   "Definitions.Accounting.JointPeriod": {
-   "digest": "e45bbf940aa1d96d8e362fbb766558aa8d2dc58cf690c9e20936c201d5f021a5",
+   "digest": "b9067509b6445f17d6df3b247896a566b2a221df6535b0e5894015b8da03f8a5",
    "definitions": {
     "Accounting.Audit": "f63dc62d5c08feba2df8b80cb7056be3f03373ad1ce530558c4a5b54162263b6",
     "Accounting.Audit.casesOn": "8c5ba045db80396171393ed0d92d169a6beaea158cf10b5acc088abe20f7aa0a",
@@ -4195,21 +4195,21 @@
     "Accounting.Certificates.S": "d961884546f751772d9b9cf3fbcbc4aa8b7aa03823c8a2b2e57c24320835731b",
     "Accounting.Certificates.W": "4d187c7591cdb0444f77276781b0ec8c687d894db0248ee32c639e7d4d723306",
     "Accounting.Certificates.ε": "088e88c395306b9ce00599770c82842fe27841b44758c9c786575193d84d09ce",
-    "Accounting.PeriodRun": "27c7512ccfeeef20165e13c5a78f9e0c4bdbd2359da21a5ef0347e7921a61566",
-    "Accounting.PeriodRun.Holds": "93597b4bcd0c480242ea310d15e3cdb2a04d0ced23c96b57a23c8e8c565d371f",
-    "Accounting.PeriodRun.Sound": "4513323da308735e615d853a84c02fad17a033e83cf23d466e4519a31bcae2ba",
-    "Accounting.PeriodRun.accepts": "246639cbb492699197e6367bb72487734503a606448072dc1faf6f1791d80d70",
-    "Accounting.PeriodRun.acct": "aa7dc6a05bc08c377716b91dd0790415ca206b919f0d274d021bab5cf1cf4f5d",
-    "Accounting.PeriodRun.commWithin": "260b264c364a933d9a6a3e448cd972eee4e11ad36925e15805d4e248587cca35",
-    "Accounting.PeriodRun.held": "4bb98d4ecd9fdda93b5e51ba2e926c66aed5c8d315e3ea79217ee6c13f8f8404",
-    "Accounting.PeriodRun.own": "20c4dc87f04315d78211ee21f3dd9e3425fb25e6dd5136b6a022d2ce15f89d38",
-    "Accounting.PeriodRun.parts": "b0a036f62794727b4ff8dd119991f8f8b2ab57e07b4b4a3efe32ea4689f01182",
-    "Accounting.PeriodRun.read": "924f66b5dcfc521a86fe1cd81348760bf649e3fa7e395eb787b6123daed196d5",
-    "Accounting.PeriodRun.schedule": "26ff345a15088968c86c2774474711e86a2af4458c5a8f3fbf3eb929f630c8f0",
-    "Accounting.PeriodRun.transcript": "c7bca93d401247175c85e8ea74958ffc1979c03aab471388e80322cce91f68ce",
-    "Accounting.PeriodRun.units": "0c7063d3dce2a6618f36fb4c9b91a33e04f32ed170652a9fa419b3c7948901c7",
-    "Accounting.PeriodRun.win": "80d4e5812f3db69b114ea8f3bf4be5c962e466ead6984657c30f390af92d183c",
-    "Accounting.PeriodRun.work": "27c0e52af8765509bbce45b3428e2b0bfe368ce8f2d688e55ad8c79cb540cb67"
+    "Accounting.PeriodRun": "006d978297b311f2853c33cace8fc1b707cf14114b3f7d13da8da8cca1a965a3",
+    "Accounting.PeriodRun.Holds": "0d03780b6f3715b0ce451d3b40c2ebb12f1fb1548bca8ca3230a83f40c2b7734",
+    "Accounting.PeriodRun.Sound": "95ddd6cd99604ffeefd02a94924c4f5bea6af8ec0a143cbeea9ab57b43555370",
+    "Accounting.PeriodRun.accepts": "d019c7e329715e5863447d18f584530b6250aeb4efcd51da26e941464244bd1f",
+    "Accounting.PeriodRun.acct": "3dd007e7aabbcc0c3438d3d90e22741c824379aeab863d75efd6d264b0ccb95f",
+    "Accounting.PeriodRun.commWithin": "da8e10f712e77bcd39c969d2a0cd316444c61623c7d4a6280657f57db0c23efb",
+    "Accounting.PeriodRun.held": "b103a384064d8fc3099c9421a828636e7a82b10cebfcbd584c2ea334e77c8fc6",
+    "Accounting.PeriodRun.own": "45a9aa5eee90e98310f810996f4e2c3501a4413dee894a3152f5a616cafff75d",
+    "Accounting.PeriodRun.parts": "b8e4f372196e23c824f61b08dd8878733a45c062ddbad045497390ee65ab3e3b",
+    "Accounting.PeriodRun.read": "24dd9c06381731611cfff7f678ad1ab5daffac218aa6c2abed3176109bdd491e",
+    "Accounting.PeriodRun.schedule": "2b6f577fc00b4b892fa48f00a6ba00895bcd42b843590831e94d51bf67e333b4",
+    "Accounting.PeriodRun.transcript": "a33321986c7812ed3c96dbe22596354c660bf7313eb54bd273ac3db516face87",
+    "Accounting.PeriodRun.units": "cbb6d864826b8f634b80c3fb4d2288bbc2b9a30215b23c955a5148acd9ebf5c3",
+    "Accounting.PeriodRun.win": "d08398d328df8f33870595e77a19fad60c754904970db193b3e08c2e2f24273d",
+    "Accounting.PeriodRun.work": "62be63da30099854c76b837b9879519cd75b19d8a295a8199695e28e90d4870b"
    },
    "guarantees": ["Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod"]
   },
@@ -4626,7 +4626,7 @@
    ]
   },
   "Definitions.Core.Device": {
-   "digest": "fcbfe93968e477a007731b2fb1e6ccef5c031b99c2f6882bc327e27532db8a6c",
+   "digest": "e4e88f12f604b7de6d6f6ef05b6d18bd117071bf7573476d76a3a6524a042488",
    "definitions": {
     "Verity.Device": "42346d0601e37da72b34b33562bd114741a663bf2d4ffe497143752a86bc16aa",
     "Verity.Device.bw": "626eef8d01c195dfef3cea452542b3d7fb04b7361ecceb15afbe5e8b92265d7d",
@@ -4635,12 +4635,19 @@
     "Verity.Device.mem": "4294c8bc4e997c4dc85c6758fd8f90f746c11089a0dc76f6f7fd4f8fe98c4f3c",
     "Verity.Device.rate": "99db79433e0b837c24ab91627d3a27826988a41842629accb4fecf05498dfbac",
     "Verity.OpClass": "6e1dab175475fc73d6f6839677bd0927a667604b6803d9f4deedcff235b16de1",
+    "Verity.OpClass.casesOn": "580b92f74dfded6898064e8678ea36f12789138ee5e64b1f878d2799a9bf5164",
+    "Verity.OpClass.ctorIdx": "bac243fc94810195b3f8abe90ce212752c59daf55627168cf93c39d20f50bd34",
     "Verity.OpClass.cuda": "28abbe9db08ff5c6ca7c8e7ebedc5fdfc50072d57e49ed251cdf085655a4d7a6",
     "Verity.OpClass.oracle": "83b7636f0dfcf82f3bb931701c190d413b73d2b91b10ba027d0ee1271aa36384",
+    "Verity.OpClass.rec": "091a12383fd09c4136169f8ff2a9a0cee6774997799e6ff1812a7e6abfcaf701",
     "Verity.OpClass.tc": "e8a2c8431fdc3806b0761afca20b1e4ae27242316cdda7931485e5afc82c9b05",
+    "Verity.Price": "0cf4ebdf32074d9c5a2614a9f12a9280d04df949ec9ea0da4da64aa6ac618053",
     "Verity.Schedule": "c96cd9be82bfa715c317e062f07c37fbd5ede12da4ca164f7dd97e02e0805312",
     "Verity.Schedule.Fits": "5ecc2bf80c859f26739ef9208fbb743560ebdc4b86528a7ab72cb78bef43214e",
     "Verity.Schedule.held": "aee2f3dafc19308a2e04acb44a90afe5d9d28d894855edd540fd375db26e9be4",
+    "Verity.Schedule.ops": "422f71efa829e276ae5412c127c63627ab878fcaa6dc75a42d144bfe03ce342b",
+    "Verity.Schedule.read": "ae88fed42f7149292cb1ecc0c6598018c0b6e8f5237990a829340ccb47e4aaa6",
+    "Verity.Schedule.work": "bdbe001cc567291021047a69aaed1310e52b60f9be68d6597541f90430b8c4d5",
     "Verity.Step": "31c1f36f99030031561c4fc2480ec0a69c2f377dcb0bfddb60e4643dc402e0a5",
     "Verity.Step.Fits": "ad23cc27ab86143013b9034ed0cd616f89cb5b0a8bd12439cd42cbdfc94ad567",
     "Verity.Step.chip": "1387086410daf71a5d9fe70fcde187006a8ac4a212250467ba50bebe055ed37d",
@@ -4651,9 +4658,12 @@
     "Verity.Window": "f01762989648e912f5b7bc87bff1bdf7528c043f443a373c5ff443b607556e41",
     "Verity.Window.len": "149625b2a120f855a54623001bf3aa060c17f04bef5d87ffbf503308d9e09703",
     "Verity.Window.start": "c9064cb096963dc360a05c881e43cf5784826fd261d364d270ccf26cc4b3f3f4",
-    "Verity.Window.ticks": "313adc2f76aeabfdb1c20851914e57495e06e959fb6a1b358aab50cdcba9f5ce"
+    "Verity.Window.ticks": "313adc2f76aeabfdb1c20851914e57495e06e959fb6a1b358aab50cdcba9f5ce",
+    "Verity.instDecidableEqOpClass": "0ef811364f1f46a972076846e81f4c8981074d9cb1e9d4b718c14934aa7592f9",
+    "Verity.instFintypeOpClass": "d4056210f741261f7b45298505c49dbdf8cc1b65cc59bba2751c66b1782aac8d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
     "Properties.Requirement.held",
@@ -8751,9 +8761,9 @@
    ]
   },
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": {
-   "digest": "7e01bb9dc433589159d1bb3c3990cb8d8a47a723963ef4088cdd2987e675f900",
+   "digest": "1b414bdb2b1d15d32c1e7a15383994ab75b07b0272a7383da464783cd95b10ec",
    "definitions": {
-    "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": "1e652b8f3c34d35a993e6280fd5db965151aa7eaa66b973f618b8255a1b6715d"
+    "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": "e009acb289ca503a3a6d4e546d764390364ddca18dde2e4310c007e020ab3eb8"
    },
    "guarantees": ["Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod"]
   },
