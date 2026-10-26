@@ -179,7 +179,7 @@ theorem hpEarly_run (mask : ℕ → ℕ → Bool) (I : InnerRec) (IV : Claims.Ve
       (witFin (VStarTrace.A mask) I x w ω.1 (((Claims.run FlockDeploy.sha512
         (refP IV (finB b (VStarTrace.A mask) I x) w) (RecDeploy.V IV (finB b (VStarTrace.A mask) I x).st) x ω
           r).msgs.take (IV.k (xIOf x))).map histOf) s) i →
-      (((((Claims.run FlockDeploy.sha512 (refP IV (finB b (VStarTrace.A mask) I x) w)
+      ((((Claims.run FlockDeploy.sha512 (refP IV (finB b (VStarTrace.A mask) I x) w)
         (RecDeploy.V IV (finB b (VStarTrace.A mask) I x).st) x ω r).msgs.map Prod.fst).getD i []).drop o).take
           m.length = m :=
   hpEarly hs hi hfit hT (hmsg_run (VStarTrace.A mask) I IV b w hx hk ω r hi)
