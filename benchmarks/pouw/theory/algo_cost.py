@@ -63,6 +63,13 @@ def form_cost(p: float) -> float:
     return 0.5 * (1 + (1 - (1 - q) ** 256))
 
 
+def best_form_cost(p: float, c_op: float) -> float:
+    """Additive price of one summed form: the cheapest of two 2:4 passes, one pass with each group's third and fourth
+    nonzeros added on the lanes, and every nonzero on the lanes (c_op MAC-times a lane add)."""
+    leftover = (4 * p**3 * (1 - p) + 2 * p**4) / 4
+    return min(form_cost(p), 0.5 + c_op * leftover, c_op * p)
+
+
 STRASSEN_NU = [(2, 2), (2, 1), (1, 2), (1, 2), (2, 1), (2, 2), (2, 2)]
 WINOGRAD_NU = [(1, 1), (1, 1), (4, 1), (1, 4), (2, 2), (3, 3), (2, 2)]
 
@@ -144,6 +151,10 @@ def describe(path: Path, m: int, k: int, n: int, R: dict) -> None:
     print(f"   s_A={sA} terms {sorted(tA)}; s_B={sB} terms {sorted(tB)}; products with both sides summed {both}")
     print(f"   sum(f_p - 1)={sum(fp) - rank}; criterion R + 0.5(s_A+s_B) = {crit:.1f} vs 1.2 mkn = {1.2 * m * k * n:.1f} "
           f"(standard {m * k * n}); tensor price at +-{U} with 2:4 passes {cost:.2f} = {cost / (m * k * n):.3f}x standard")
+    best = {card: (rank + sum(best_form_cost(R[min(t, 8)][1], c) for t in tA + tB if t > 1)) / (m * k * n)
+            for card, c in (("H200", 32), ("RTX PRO 6000", 8))}
+    print(f"   additive, best route per form (2:4 twice | 2:4 + lane leftovers | lanes): "
+          f"H200 {best['H200']:.3f}x, RTX PRO 6000 {best['RTX PRO 6000']:.3f}x")
     adds = sum(R[min(t, 8)][1] for t in tA + tB if t > 1) / (m * k * n)
     print(f"   lanes route (idle lanes, A8): tensor {rank / (m * k * n):.3f}, {adds:.4f} correction adds a MAC; "
           f"RTX PRO 6000 port {8 * adds:.2f} lanes {6 * adds:.2f}; H200 port {32 * adds:.2f} lanes {24 * adds:.2f} "
