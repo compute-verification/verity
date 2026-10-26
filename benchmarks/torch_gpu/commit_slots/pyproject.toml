@@ -1,0 +1,22 @@
+[project]
+name = "verity-commit-slots"
+version = "0.0.0"
+description = "The serve-time commit call: a step's unit outputs as hm96 rows, one subtree per sequence slot, on the GPU (HASH-13)."
+requires-python = ">=3.12"
+dependencies = ["verity", "numpy"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+verity = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# slots_gpu runs HASH-20's engine (sha512_rows: engine.py and the host twin's sources), whose device build includes
+# commit_gpu's SHA-512 and hashes it into the build's cache key.
+inputs = ["benchmarks/torch_gpu/sha512_rows", "benchmarks/pouw/commit_gpu/sha512.cuh"]
