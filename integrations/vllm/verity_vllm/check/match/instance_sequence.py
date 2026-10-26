@@ -8,6 +8,7 @@ import re
 import sys
 
 from verity.ml.circuits.program import RUN, input_id
+from verity_vllm.check.match import compiler_form
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import split_selects
 from verity_vllm.check.match import supplied_inputs as SI
@@ -34,9 +35,9 @@ def const_value(spec: str) -> tuple[int, int] | None:
 
 
 def _registry():
-    """The registry every module loaded (`verity_vllm.program.registry.load`); a module that fails to import is named on stderr (its
+    """The registry every module loaded (`verity.ml.definitions.registry.load`); a module that fails to import is named on stderr (its
     Programs, e.g. Hopper's under Python < 3.12, then fail to decode with that reason)."""
-    from verity_vllm.program.registry.catalog import load
+    from verity.ml.definitions.registry.catalog import load
     reg, errors = load()
     for e in errors:
         print(f"[compare] registry module unavailable ({e}): Programs naming its Definitions will not decode", file=sys.stderr)
@@ -47,6 +48,7 @@ class Prog(PeerReads, PX.PrefixInput):
     """A decoded root body as an instance sequence."""
 
     compact = False   # operand representation: runs (record) | run progressions ([R17 mfast] cb_a.compact); set per instance in __init__
+    fold_form: dict | None = None   # a fold's `compiler_form.fold_in_form` record, set by its loader's caller
 
     def __init__(self, label: str, desc: dict, weight_fields: dict[int, str], tok_node: int, oracle_rows: list[dict] | None = None,
                  compact: bool = False):
@@ -199,6 +201,15 @@ class Prog(PeerReads, PX.PrefixInput):
             self.inst = [r for i, r in enumerate(self.inst) if i not in bound_consts]
             self.k2i = {r["k"]: i for i, r in enumerate(self.inst)}
         self.n_splits_consts_bound = len(bound_consts)
+
+    def to_compiler_form(self) -> dict:
+        """Put this fold's instances in the registered compiler's form (`compiler_form.compiled`) and resegment them; returns what
+        that dropped, swapped and narrowed.  Call it before any comparison reads the sequence."""
+        self.inst, facts = compiler_form.compiled(self.inst, self.compact)
+        self.k2i = {r["k"]: i for i, r in enumerate(self.inst)}
+        self.__dict__.pop("_fast_canon", None)
+        self._segment()
+        return facts
 
     def _segment(self):
         """Steps at TokenSelect boundaries (inclusive)."""

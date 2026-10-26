@@ -7,7 +7,7 @@ Two readers of ONE flat body (`program.fn.body.nodes` of the derived request Pro
 * :func:`from_instances` -- the Build's instance sequence (`instances.json.gz`, `derive_step._instance_sequence`): the same nodes
   written one row per Call (`i`, `spec`, `form`, `name`, `args` = operand runs) -- a projection of the descriptor body plus the
   name annotation, produced by the same derivation on meta tensors (nothing executed).  The output type is not in a row: it is
-  the registered Definition's signature bound to the row's statics (`verity_vllm.program.registry`), read once per distinct spec.
+  the registered Definition's signature bound to the row's statics (`verity.ml.definitions.registry`), read once per distinct spec.
 
 Both yield the same :class:`ProgramView`: Calls with ports, reads and names; prescribed inputs as Values of negative ids
 (`-(k + 1)` for parameter `k`; a record parameter has one port per field, anything else the port `out`); outputs as the reader
@@ -41,7 +41,7 @@ from collections.abc import Sequence as _SequenceABC
 from dataclasses import dataclass
 from typing import Any, Iterable, Iterator, Sequence
 
-from verity_vllm.query.call_scope import spec_base, spec_statics
+from verity.ml.definitions.call_scope import spec_base, spec_statics
 from verity_vllm.query.type_repr import parse_type_repr
 from verity_vllm.query.units import ValueRef
 
@@ -529,14 +529,14 @@ def ports_of_type(t) -> tuple[Port, ...]:
 
 
 def _registry():
-    """(REGISTRY, import errors) of the integration's registry, every module loaded (`verity_vllm.program.registry.catalog.load`); a module that
+    """(REGISTRY, import errors) of the integration's registry, every module loaded (`verity.ml.definitions.registry.catalog.load`); a module that
     fails to import is reported with the lookup that needed it, never treated as "not registered"."""
     try:
         from verity.ml.circuits.defs import REGISTRY  # noqa: F401
     except Exception as e:  # noqa: BLE001  -- the core package missing is an ENVIRONMENT fault, named (never a "not registered" answer)
         from verity_vllm.query.manifest.format import RegistryUnavailable
         raise RegistryUnavailable(e) from e
-    from verity_vllm.program.registry.catalog import load
+    from verity.ml.definitions.registry.catalog import load
     return load()
 
 

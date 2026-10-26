@@ -37,7 +37,7 @@ from verity_vllm.check.replay.index import SAMPLER_OP
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit.executed_prefix import ACTIVE_REFERENCE_ONLY
 from verity_vllm.commit.opened import OpenedReader, UnverifiedUnlinked
-from verity_vllm.program.kernels.rows import SAMPLED_MEMBER
+from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
 from verity_vllm.program.sampling_event import circuit_token_id
 
 #: the committed family a served token is opened from

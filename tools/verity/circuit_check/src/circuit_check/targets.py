@@ -73,11 +73,11 @@ def load_registries() -> None:
 
     for mod in SC.discover():
         importlib.import_module(mod)
-    import verity_vllm.program.registry as R
+    import verity.ml.definitions.registry as R
     for m in pkgutil.iter_modules(R.__path__):
         if m.name != "quarantine":
             importlib.import_module(f"{R.__name__}.{m.name}")
-    from verity_vllm.program.kernels import rows, twins  # noqa: F401  (their kernels register with core)
+    from verity.ml.definitions.numerics import rows, twins  # noqa: F401  (their kernels register with core)
     CC.registries(SC.discover())
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
@@ -151,7 +151,7 @@ def _static(text: str) -> Any:
 def _element(text: str) -> Any:
     """A tuple element (`_static`), a bare id among them the registered Definition it names, as `call_scope.specialization`
     resolves a function-valued static, else its text."""
-    from verity_vllm.query import word as W
+    from verity.ml.definitions import word as W
 
     v = _static(text)
     if v is not text or not _BARE.fullmatch(text):
@@ -215,7 +215,7 @@ def definition(spec: str) -> Any:
     own id, ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=BlackwellS8ImmaDot32_v2}``, bound the same way), or else the suite's target of
     that id: a Definition that only tracing the catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers,
     or one whose id writes a dict static as its digest, such as `gf2k.GfResiduals`'s schema."""
-    from verity_vllm.query import word as W
+    from verity.ml.definitions import word as W
 
     load_registries()
     m = re.fullmatch(r"([^{]+)(?:\{(.*)\})?", spec.strip())
@@ -373,7 +373,7 @@ def templates() -> list[tuple[str, Any, list[dict]]]:
 
 
 def _kernel_roots() -> list[Any]:
-    from verity_vllm.program.kernels import kernel_registry as KR
+    from verity.ml.definitions.numerics import kernel_registry as KR
 
     out = []
     for r in KR.registered():
@@ -383,7 +383,7 @@ def _kernel_roots() -> list[Any]:
 
 def _tanh_rn_probe(reads: Callable[[int], Any]) -> Any:
     """`tanh_rn` (2^27 entries of two words) as parameter 1, probed at its ends and its regions' edges (`TANH_RN_REGIONS`)."""
-    from verity_vllm.program.registry import tables
+    from verity.ml.definitions.registry import tables
 
     from .vectors import TableProbe
 
@@ -392,7 +392,7 @@ def _tanh_rn_probe(reads: Callable[[int], Any]) -> Any:
 
 def _tanh_rn_word(i: int) -> int:
     """The word of `tanh_rn`'s region whose low 27 bits are entry ``i`` (past HI where no region word has them)."""
-    from verity_vllm.program.registry import tables
+    from verity.ml.definitions.registry import tables
 
     return 0x38000000 | i if (0x38000000 | i) >= tables.TANH_RN_LO else 0x40000000 | i
 
@@ -421,11 +421,11 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
     binding its Definition module's sidecar already checks, so they add no task."""
     from verity.ml.circuits.boolean.trace import word_of
     from verity.ml.circuits.ops.boolean import gemm as BG
-    from verity_vllm.program.registry import dsv4_compressor as DC, dsv4_qnorm_insert as DQ
-    from verity_vllm.program.registry import flashmla as FM, flashmla_prefill as FP
-    from verity_vllm.program.registry import marlin_moe as MM
-    from verity_vllm.program.registry import sparse_mla as SM
-    from verity_vllm.program.registry import tp_allreduce as TA
+    from verity.ml.definitions.registry import dsv4_compressor as DC, dsv4_qnorm_insert as DQ
+    from verity.ml.definitions.registry import flashmla as FM, flashmla_prefill as FP
+    from verity.ml.definitions.registry import marlin_moe as MM
+    from verity.ml.definitions.registry import sparse_mla as SM
+    from verity.ml.definitions.registry import tp_allreduce as TA
 
     hop = word_of(BG.HopperBF16WgmmaDot16)
     mla = {k: SM.SPARSE_MLA_GLM53[k] for k in ("NH", "DR", "DV", "BN", "DOT", "INV")} | {"SM_SCALE": SM.SPARSE_MLA_GLM53["SCALE"]}
@@ -468,7 +468,7 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
     from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32
     from verity_vllm.program.frontend.rules import vocab as V
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,
              "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,
@@ -570,12 +570,12 @@ def _kinds_and_templates() -> list[Any]:
 
 
 def word_call_families() -> set[str]:
-    """The word Call families of a served Program: the replay's row families (`verity_vllm.program.kernels.rows.ROWS`), every
+    """The word Call families of a served Program: the replay's row families (`verity.ml.definitions.numerics.rows.ROWS`), every
     frontend vocabulary kind's Definition and every template's.  Their bindings build in seconds, without the catalog.  A kind that
     doesn't bind is refused by name: left out, its family's partition would be judged as no Call's."""
     if "words" not in _SHORT:
         load_registries()
-        from verity_vllm.program.kernels import rows
+        from verity.ml.definitions.numerics import rows
 
         made = _kinds_and_templates()
         if _BOUND["unbound"]:
@@ -623,7 +623,7 @@ def boolean_call_candidates(word_calls: set[str]) -> set[str]:
     Definition whose ``word`` is a Definition of such a family, or whose ``word`` is a function of its bindings and whose name is
     such a family's name.  Each candidate it returns is one of those Definitions, bound."""
     from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity_vllm.program.boolean import _load
+    from verity.ml.definitions.boolean import _load
 
     exact, by_name, _errors = _load()
     names = {m[1] for f in word_calls if (m := re.fullmatch(r"(.+)_v(\d+)", f))}
@@ -634,10 +634,10 @@ def boolean_call_candidates(word_calls: set[str]) -> set[str]:
 
 
 def on_demand_boolean_families(word_calls: set[str]) -> set[str]:
-    """The Boolean version's family of each word Call family made on demand, by its id (`verity_vllm.program.boolean.
+    """The Boolean version's family of each word Call family made on demand, by its id (`verity.ml.definitions.boolean.
     made_on_demand`: `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`).  No module registers such a family's members ahead,
     so these come from the families' own patterns, not from the catalog."""
-    from verity_vllm.program.boolean import made_on_demand
+    from verity.ml.definitions.boolean import made_on_demand
 
     return {family(d) for f in word_calls if (d := made_on_demand(f)) is not None}
 
@@ -663,7 +663,7 @@ def certified_boolean_calls(word_calls: set[str], only: set[str] | None = None) 
     Call family, so its body (most of the catalog's build) never is.  With them, `on_demand_boolean_families` (in ``only``)."""
     from verity.ml.circuits import boolean as BL
     from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
-    from verity_vllm.program.boolean import boolean_version
+    from verity.ml.definitions.boolean import boolean_version
 
     linked: dict[str, list[Any]] = {}
     for fn in binding_roots():
@@ -688,7 +688,7 @@ def certified_boolean_calls(word_calls: set[str], only: set[str] | None = None) 
 
 
 def boolean_call_families(word_calls: set[str], found: dict[str, Any] | None = None) -> set[str]:
-    """Sigma's image of the word Call families ``word_calls``: the family of `verity_vllm.program.boolean.boolean_version` (the
+    """Sigma's image of the word Call families ``word_calls``: the family of `verity.ml.definitions.boolean.boolean_version` (the
     switch's table of `word=` links) of each catalog specialization of a word Call family that has one, and of each word Call
     family made on demand (`on_demand_boolean_families`)."""
     from verity.ml.circuits.evaluation import ScalarReference
@@ -703,8 +703,8 @@ def boolean_call_families(word_calls: set[str], found: dict[str, Any] | None = N
 
 
 def boolean_family(fn: Any) -> str | None:
-    """The family of ``fn``'s Boolean version (`verity_vllm.program.boolean.boolean_version`), or None when it has none."""
-    from verity_vllm.program.boolean import NoBooleanVersion, boolean_version
+    """The family of ``fn``'s Boolean version (`verity.ml.definitions.boolean.boolean_version`), or None when it has none."""
+    from verity.ml.definitions.boolean import NoBooleanVersion, boolean_version
 
     try:
         return family(boolean_version(fn))
@@ -713,10 +713,10 @@ def boolean_family(fn: Any) -> str | None:
 
 
 def boolean_links() -> tuple[dict[str, set[str]], dict[str, set[str]]]:
-    """The Boolean table's two lookups (`verity_vllm.program.boolean._load`) as families: each word Definition's descriptor id
+    """The Boolean table's two lookups (`verity.ml.definitions.boolean._load`) as families: each word Definition's descriptor id
     with the Boolean families linked to it exactly, and each name with the Boolean families whose word is a function of their
     bindings.  `boolean_family` of a Definition is among those of its descriptor id and of its name, or None."""
-    from verity_vllm.program.boolean import _load
+    from verity.ml.definitions.boolean import _load
 
     exact, by_name, _errors = _load()
     return ({k: {f"{d.name}_v{d.version}" for d in ds} for k, ds in exact.items()},
