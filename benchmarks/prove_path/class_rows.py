@@ -1,8 +1,11 @@
-"""The class circuit's row census: per template, its units' rows by what fills them and their bytes, and the SHA-512
-compressions `rows.commit`'s form needs to commit every unit's rows (V3c's commit cost).
+"""The class circuit's row census (V3c): per template, its units' input rows by what fills them (``wired``, ``registered``,
+``table_root``, ``opening``, ``ingress``, else ``free``) and their bytes, its output rows and their bytes, and the SHA-512
+compressions a by-reference commit spends on them: every output row hashed fresh, every input row only re-leafed in its
+port's tree, since a wired row's b||c is its writer's and a registered row's the registration's.
 
-    python class_rows.py --tiny [--slots]          # TINY, locally
-    python class_rows.py --llama1b [--class 8,1024,64,4,16]  # Llama-3.2-1B at the class of record (~22 min, ~42 GB)
+    python class_rows.py --tiny [--slots]                                 # TINY, locally
+    python class_rows.py --llama1b [--int8] --probe 1,2,2                 # one Program at a probe class, ~2 s
+    python class_rows.py --llama1b [--class 8,1024,64,4,16] --out FILE    # the class of record (~22 min, ~42 GB)
 """
 from __future__ import annotations
 
@@ -13,8 +16,6 @@ import sys
 import time
 from collections import Counter, defaultdict
 from pathlib import Path
-
-
 
 
 def kinds_of(circuit, IF):
@@ -69,6 +70,8 @@ def census(circuit, IF) -> dict:
         reused = REUSED * sum(v for k, v in row.items() if k != "out")
         comp = n * (fresh + reused)
         lab = fn.id.split("{")[0] + "{" + ",".join(f"{k}={v}" for k, v in fn.bindings.items() if type(v) in (int, bool)) + "}"
+        while lab in out:
+            lab += "'"
         out[lab] = {"units": n, "rows": dict(row), "bytes": dict(rb), "compressions_a_unit": fresh + reused}
         tot["units"] += n
         for k, v in row.items():
@@ -87,6 +90,7 @@ def main(argv=None) -> int:
     ap.add_argument("--slots", action="store_true", help="TINY at the class of record's slots (8, 4 a boundary)")
     ap.add_argument("--class", dest="cls", default=None)
     ap.add_argument("--probe", default=None, help="lower one Program at this class only")
+    ap.add_argument("--int8", action="store_true", help="the exact-int8 checkpoint on the H200 (int8_exact linears)")
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     sys.path.insert(0, str(Path.cwd() / "integrations/vllm"))
@@ -104,7 +108,12 @@ def main(argv=None) -> int:
         circuit = class_circuit(reg, cls, None, Grain(gemm_words=512, rows=9, select=64))
     else:
         cfg = json.loads((Path.cwd() / "integrations/vllm/tests/program/predict/fixtures/llama32-1b.config.json").read_text())
-        phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target={"compute_capability": [12, 0], "num_sms": 188})
+        target = {"compute_capability": [12, 0], "num_sms": 188}
+        if a.int8:
+            from verity_vllm.program.model import INT8_EXACT_QUANT
+            cfg = {**cfg, "quantization_config": dict(INT8_EXACT_QUANT)}
+            target = {"compute_capability": [9, 0], "num_sms": 132, "int8_exact": "linears"}
+        phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=target)
         reg = Registered.of(phi, default_seed=7)
         cls = WindowClass(*map(int, a.cls.split(","))) if a.cls else CLASS_OF_RECORD
         if a.probe:
