@@ -101,7 +101,7 @@ abbrev openE (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ →
 
 /-- What each piece says: `resHolds` and `openE`. -/
 abbrev holdsD (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
-    (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+    (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (side : Msg → List Msg → OpenPiece → OpenSide) (posAt : Msg → List Coin → OpenPiece → ℕ) :
     VPiece → Msg → List Msg → List Coin → Prop :=
@@ -113,7 +113,7 @@ abbrev ownD (ownR : Msg → ResPiece → Option ℕ) : Msg → Top.Piece VPiece 
 
 /-- Where the rows are asked: the parts' pieces hold. -/
 abbrev PD (rd : Msg → Option FinalP) (resP : Msg → List ResPiece) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
-    (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+    (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (side : Msg → List Msg → OpenPiece → OpenSide) (posAt : Msg → List Coin → OpenPiece → ℕ) :
     Msg → List Msg → List Coin → Prop :=
@@ -121,7 +121,7 @@ abbrev PD (rd : Msg → Option FinalP) (resP : Msg → List ResPiece) (key : ℕ
 
 /-- **Row E's pieces hold their running sums where the parts' pieces hold**: `accPiece` is a conjunct of `openE`. -/
 theorem rowEHolds_PD (rd : Msg → Option FinalP) (resP : Msg → List ResPiece) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
-    (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+    (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (side : Msg → List Msg → OpenPiece → OpenSide) (posAt : Msg → List Coin → OpenPiece → ℕ) :
     ∀ (x : Msg) (ms : List Msg) (cs : List Coin), PD rd resP key elemAt vvAt side posAt x ms cs →
@@ -132,7 +132,7 @@ theorem rowEHolds_PD (rd : Msg → Option FinalP) (resP : Msg → List ResPiece)
 /-- **`TargetDMerkle` at the parts' pieces, at `nextR`'s side and the decision's positions, with nothing open**:
 RECL's `targetDMerkle_of_accept_sideAtR`, whose pieces say `openHolds` alone, which `openE` gives. -/
 theorem targetDMerkle_PD (rd : Msg → Option FinalP) (resP : Msg → List ResPiece)
-    (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+    (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (acc : Msg → List Msg → List Coin → ℕ → Array _root_.Flock.F128) :
     Top.TargetDMerkle rd (PD rd resP key elemAt vvAt (OpenLower.sideAtR rd) Rows.posAt) acc := by
@@ -154,7 +154,7 @@ variable (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.
   (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8) (wE : Msg → ℝ)
   (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (L : LayoutB)
   (resP : Msg → List ResPiece) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
-  (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+  (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
   (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
   (side : Msg → List Msg → OpenPiece → OpenSide) (posAt : Msg → List Coin → OpenPiece → ℕ)
   (ownR : Msg → ResPiece → Option ℕ)
@@ -243,7 +243,7 @@ variable (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.
   (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8) (wE : Msg → ℝ)
   (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (L : LayoutB)
   (resP : Msg → List ResPiece) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
-  (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+  (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
   (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
   (side : Msg → List Msg → OpenPiece → OpenSide) (posAt : Msg → List Coin → OpenPiece → ℕ)
   (ownR : Msg → ResPiece → Option ℕ)
@@ -397,7 +397,7 @@ variable (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.
   (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
   (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
   (resP : Msg → List ResPiece) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
-  (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+  (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
   (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
   (ownR : Msg → ResPiece → Option ℕ)
 

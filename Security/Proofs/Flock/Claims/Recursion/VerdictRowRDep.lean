@@ -37,7 +37,7 @@ open FlockSoundness.Discharge.Recursion (HClass)
 noncomputable section
 
 /-- The comb a table's fold gives at a shape's residual coins, as `combOf` computes it from a table's files. -/
-def combRead (st : Stmt) (sh : Shape) (rounds : Array (Array F128)) (extras : Array Claim) : Array F128 :=
+def combRead (st : Setup) (sh : Shape) (rounds : Array (Array F128)) (extras : Array Claim) : Array F128 :=
   let c : Array F128 :=
     match Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.Coins.ofRounds rounds) extras with
     | .ok (_, info) =>
@@ -84,7 +84,7 @@ def resVRead (x : Claims.Msg) (cs : List Coin) (key : ℕ × ℕ × ℕ × ℕ) 
   | none => 0
 
 theorem resVOf_eq {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim} {comb : Array F128}
-    {v : Array F128} {info : RecAlgebra.Info RecAlgebra.Lin} {kappa : Array (Array F128)} {S : RecAlgebra.GfS}
+    {v : Array F128} {info : RecAlgebra.Info RecAlgebra.Lin} {kappa : Array (Array (Array F128))} {S : RecAlgebra.GfS}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hv : verifierRows sh rounds extras comb = .ok (v, info, kappa))
     (hS : structureOf sh = .ok S) (hg : groups S (portSizes sh) = .ok gs) {p k : ℕ} (hp : p < gs.size)
     (hk : k < gs[p].2.2.size) : resVOf sh rounds extras comb p k = el v gs[p].2.2[k] := by
@@ -103,7 +103,7 @@ theorem resVRead_eq {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size) (r : Fin 2)
     {S : RecAlgebra.GfS} {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hS : structureOf (D.sh cls i) = .ok S)
     (hg : groups S (portSizes (D.sh cls i)) = .ok gs) {p : ℕ} (hp : p < gs.size) {o g u : ℕ} (hog : o + g = r.val)
-    (v : Array F128) (info : RecAlgebra.Info RecAlgebra.Lin) (kappa : Array (Array F128))
+    (v : Array F128) (info : RecAlgebra.Info RecAlgebra.Lin) (kappa : Array (Array (Array F128)))
     (hv : verifierRows (D.sh cls i) (D.rep cls acc i r).rounds (D.rep cls acc i r).extras
       (D.rep cls acc i r).comb = .ok (v, info, kappa)) (k : ℕ) (hk : k < gs[p].2.2.size) :
     resVRead x cs (p, o, g, u) k = el v gs[p].2.2[k] := by
@@ -178,7 +178,7 @@ open FlockSoundness.Discharge.Recursion (HClass)
 open RecDeploy.Rows (DecAt)
 
 variable {resP : Msg → List ResPiece} {key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ}
-  {elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128}
+  {elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128}
   {vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128}
   {side : Msg → List Msg → OpenPiece → OpenSide} {posAt : Msg → List Coin → OpenPiece → ℕ}
 
@@ -202,7 +202,7 @@ theorem targetRDep_of_cover (rd : Msg → Option FinalP)
         ∀ (r : Fin 2) p (hp : p < gs.size), ∃ q ∈ resP x,
           (∃ ns nv, RecResiduals.part (D.sh cls i) p = .ok (q.S, ns, nv)) ∧
           (∀ k (hk : k < (wIdx (portSizes (D.sh cls i)) gs[p].2.1).size),
-            elemAt x ms q.key k =
+            elemAt x ms cs q.key k =
               el (D.rep cls (acc x ms cs) i r).w (wIdx (portSizes (D.sh cls i)) gs[p].2.1)[k]) ∧
           ∀ v info kappa, verifierRows (D.sh cls i) (D.rep cls (acc x ms cs) i r).rounds
               (D.rep cls (acc x ms cs) i r).extras (D.rep cls (acc x ms cs) i r).comb =
@@ -248,7 +248,7 @@ each rep `r` and group `p` of S has a piece of `resP x` of the verifier's part `
 `acc`. -/
 def ElemCover (rd : Msg → Option FinalP) (resP : Msg → List ResPiece)
     (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
-    (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+    (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (side : Msg → List Msg → OpenPiece → OpenSide) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (acc : Msg → List Msg → List Coin → ℕ → Array _root_.Flock.F128) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs : List Coin),
@@ -260,7 +260,7 @@ def ElemCover (rd : Msg → Option FinalP) (resP : Msg → List ResPiece)
         (∃ ns nv, RecResiduals.part (D.sh cls i) p = .ok (q.S, ns, nv)) ∧
         q.key.1 = p ∧ q.key.2.1 + q.key.2.2.1 = r.val ∧
         ∀ k (hk : k < (wIdx (portSizes (D.sh cls i)) gs[p].2.1).size),
-          elemAt x ms q.key k =
+          elemAt x ms cs q.key k =
             el (D.rep cls (acc x ms cs) i r).w (wIdx (portSizes (D.sh cls i)) gs[p].2.1)[k]
 
 /-- **Row R's leaf at the coins' verifier values**: `TargetRDep` at `vvAt := resVRead`, from `ElemCover`. -/
