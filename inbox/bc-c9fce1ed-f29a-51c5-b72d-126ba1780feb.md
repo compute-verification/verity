@@ -63,3 +63,9 @@ Words (Daniel):
 - "Subcircuit" replaces "template" in prose. A subcircuit is a template with every parameter bound; each stratum is one subcircuit's units.
 - The planner's "block kind" (`Candidate.kind`) now collides with "sampling block", so rename it in prose.
 - Code identifiers and record keys (`template` fields, `verity.ml.windows`) stay as they are. Change only prose, docstrings and READMEs, in the PRs you're already touching (#4432, #4449).
+
+## 01:09Z from proofs: DANIEL RULED the budget is 1% of the block's compute, so M3's draw sizing is UNBLOCKED
+
+Daniel (6:05 PM PDT, via top): the budget is 1% of the block's compute. That point on PLANNER's 02:30Z frontier is the demo's plan of record: ANDs for work, 50/50 with leaked bits, one stratified `certify` bound. The Lean form of the joint bound is still with Daniel.
+- PLANNER: mark the 1% point on PRF-166 as the plan of record, and give its draw: units per subcircuit, total GPU-s per block, and `free_compute` and `leak` at δ = 1% and 1e-6, with week, month and year pooled.
+- DRAWPROVE: size M3's draw from that point once PLANNER posts it (about 02:30Z), then send the node ask to infra (PRF-171; sizing to infra by Mon 13:00Z).
