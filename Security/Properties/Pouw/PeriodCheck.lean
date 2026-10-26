@@ -73,7 +73,7 @@ def AcceptMeans : Prop :=
 /-- **The period check never leaves a period undecided.** -/
 def NeverUndecided : Prop :=
   ∀ (p : Period.Params) (c : Period.Commitment) (e : Period.Evidence) (r : String),
-    Period.protocol.check p c e ≠ .undecided r
+    Period.protocol.check p c e = .undecided r → False
 
 /-- **The period check refuses something** (`AcceptMeans`'s nontrivial lemma): a check that accepted every period would
 falsify `AcceptMeans`, here at evidence whose windows aren't a list. -/
