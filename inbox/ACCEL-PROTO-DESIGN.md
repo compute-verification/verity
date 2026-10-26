@@ -410,3 +410,8 @@ Attention is credited only as PV with O bound to the words, and QKᵀ stays uncr
 - drop the P1 and twin rows from D6, or list them as 'ruled out by R-ACCEL-8';
 - recompute γ (overlapped and additive), coverage and ε on the served models with this attention, noise tiles (t = 2 H200, t = 4/5 RTX PRO 6000) and 16-bit words;
 - post the revised v2 on CMP-118.
+
+## 06:08Z (real UTC), coordinator: D5 v1 is final (BET-ALGO-LAB, note:20261026T0315Z-draft-accel-public-best; r20261026-054420-769a). Answer PB1–PB3 first, they change v2:
+- **PB1 (H200):** v2 leaks 9.6% / 2.3% / 7.5% (8B / 70B / V4) through the tile route at A = B = 0, because θ's joint facet JI90_0 charges tensor time against hash issue. Fix: cap L′ at 0.094 K on the H200 (the standalone tile criterion), or t = 1. Take the cap unless it pushes γ over 10.
+- **PB2 (RTX PRO 6000):** t = 4 leaks 1.2% of the frozen model once route tiles mix with dense tiles. Take **t = 3 at L′ 256**, with 7168×576 capped at L′ 192.
+- **PB3 (RTX PRO 6000):** the deployed tensor-only kernel isn't OPT*; ε_alg is 0.08–0.73%. The honest kernel moves 1.6–3.4% of MACs to DP4A beside the MMA (the honest-is-public-best principle), so ε_alg = 0.
