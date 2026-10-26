@@ -188,13 +188,14 @@ theorem innerAccRow_table {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.
   exact ⟨reg, rws, a0, hmem, hname, hrws, ha0, hsite, hn2, t, positions, paths, htt, hpp, hent, hlt, hpos, hop, hsl⟩
 
 /-- **An algebra part's `acc0`/`acc1` slot and a rec-open part's `acc`/`acc_out` slot carry one commit string at one
-chain position**: at a staged `.inner` part `s` and a staged `.recOpen` part `s'` of `x` the witnesses check against,
+chain position**: at a staged `.inner` part `s` and a staged `.recOpen` part `s'` of `x`, at one staging message (`hxO`, `hxO'`), the witnesses check against,
 with their tables labelled in order and the reads files `own`, `own'`, where `s`'s slot at unit `n` (`(n + d) · n₀`,
 `innerAccRow_table`) and `s'`'s at unit `n'` (`accRow_table`) are one chain position (`hpos`), the two slots read one
 commit string, wherever the true calls `L` and the setups' evaluations at `xs ∋ xO, xO'` have no collision, at a record
 that lists the registered reads' evaluations (`RegListed`). -/
-theorem innerAccCommit_eq {st st' : Stage} {s s' : ℕ} {x xO xO' : Msg} {w w' : Claims.Flock.Wit}
-    (hS : StagedPart st s x xO) (hS' : StagedPart st' s' x xO')
+theorem innerAccCommit_eq {st : Stage} {s s' : ℕ} {x xO xO' : Msg} {w w' : Claims.Flock.Wit}
+    (hS : StagedPart st s x xO) (hS' : StagedPart st s' x xO')
+    {ms : List (Msg × Claims.Out)} (hxO : xO = staged st x ms s) (hxO' : xO' = staged st x ms s')
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true)
     (hck' : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO' w' = true) {r : XR}
     (hr : readX x = some r) {c c' : Circuit} (hpc : r.w.parts[s]?.bind partCircuit = some c)
@@ -234,19 +235,19 @@ theorem innerAccCommit_eq {st st' : Stage} {s s' : ℕ} {x xO xO' : Msg} {w w' :
     rw [hps, hps']
     exact hpos
   rw [hpp] at ho
-  obtain ⟨ms, -, -, -, rfl, -, -⟩ := hS
-  obtain ⟨ms', -, -, -, rfl, -, -⟩ := hS'
+  subst hxO hxO'
   have hsite := accRow_site_eq (setupO_some hsu).1 (setupO_some hsu').1 hrw ha0 hs hrw' ha' hs'
   have hbc := bc_eq_of_setup hD hl hc hx hx' ho ho' (sameRoot_of_site hsite)
   rw [hrdc, hrd', hbc]
 
 /-- **Two algebra parts' `acc0`/`acc1` slots carry one commit string at one chain position**: at staged `.inner` parts
-`s` and `s'` of `x` the witnesses check against, with their tables labelled in order and the reads files `own`, `own'`,
+`s` and `s'` of `x` at one staging message (`hxO`, `hxO'`) the witnesses check against, with their tables labelled in order and the reads files `own`, `own'`,
 where port `nm` (`d`) at unit `n` and port `nm'` (`d'`) at unit `n'` read one chain position (`hpos`), the two slots read
 one commit string, wherever the true calls `L` and the setups' evaluations at `xs ∋ xO, xO'` have no collision, at a
 record that lists the registered reads' evaluations (`RegListed`). -/
-theorem innerInnerCommit_eq {st st' : Stage} {s s' : ℕ} {x xO xO' : Msg} {w w' : Claims.Flock.Wit}
-    (hS : StagedPart st s x xO) (hS' : StagedPart st' s' x xO')
+theorem innerInnerCommit_eq {st : Stage} {s s' : ℕ} {x xO xO' : Msg} {w w' : Claims.Flock.Wit}
+    (hS : StagedPart st s x xO) (hS' : StagedPart st s' x xO')
+    {ms : List (Msg × Claims.Out)} (hxO : xO = staged st x ms s) (hxO' : xO' = staged st x ms s')
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true)
     (hck' : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO' w' = true) {r : XR}
     (hr : readX x = some r) {c c' : Circuit} (hpc : r.w.parts[s]?.bind partCircuit = some c)
@@ -283,8 +284,7 @@ theorem innerInnerCommit_eq {st st' : Stage} {s s' : ℕ} {x xO xO' : Msg} {w w'
     rw [hps, hps']
     exact hpos
   rw [hpp] at ho
-  obtain ⟨ms, -, -, -, rfl, -, -⟩ := hS
-  obtain ⟨ms', -, -, -, rfl, -, -⟩ := hS'
+  subst hxO hxO'
   have hsite := accRow_site_eq (setupO_some hsu).1 (setupO_some hsu').1 hrw ha0 hs hrw' ha0' hs'
   have hbc := bc_eq_of_setup hD hl hc hx hx' ho ho' (sameRoot_of_site hsite)
   rw [hrdc, hrdc', hbc]
