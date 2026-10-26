@@ -209,11 +209,11 @@ A spec-level reference for network accounting's timing channel:
   `slot_row` gives each one's bits in the state row, for a reader that takes them as i32s (vllm's `SlotRow_v1`). A
   Program gives all its outputs to the Programs' row at its anchor (n, u32, and 64 ids of 17 bits at w63's class); an
   empty slot's entry is all zero (its outputs masked by `occ`, never on the egress). A window whose warden refused a
-  connection, traffic past its slots, has no certified record, and the period check refuses it. `Class.serves` names the warden parameters it
-  takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides of a group of link-windows in one
-  registration: ingress unit t's state and view outputs are committed as registered reads of the scan's state and view
-  rows t, which ingress unit t + 1 and egress unit t read, and egress unit t's row as a registered read of the warden's
-  egress row t, so the chains are wires through the registered roots;
+  connection, traffic past its slots, has no certified record, and the period check refuses it. `Class.serves` names
+  the warden parameters it takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides of a group of
+  link-windows in one registration: ingress unit t's state and view outputs are committed as registered reads of the
+  scan's state and view rows t, which ingress unit t + 1 and egress unit t read, and egress unit t's row as a
+  registered read of the warden's egress row t, so the chains are wires through the registered roots;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
