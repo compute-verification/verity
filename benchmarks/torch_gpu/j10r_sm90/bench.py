@@ -1,0 +1,236 @@
+"""J10-R's units against plain exact INT8 at the frozen shape's linears, interleaved, on one GPU (HASH-22):
+
+    python bench.py --fixtures DIR --out OUT --scratch S [--h1u NAME=PATH ...] [--ref PATH] [--sm] [--s8-simple FILE]
+                    [--check check.json] [--ms 4096,16384] [--linears q,kv,o,up,down,head] [--reps 7] [--ref-reps 2]
+
+One call a linear and M, every row live, its operands `shape.whole`'s (the demo's served weights, the fixtures' A), its
+scales `shape.weight_scales` and `activation_scales`. The arms, timed by CUDA events one call at a time, in an order that
+rotates each rep:
+
+* `plain`: s8_simple's `linear(x, sx, w, sw)` (#4472; --s8-simple names its file: `torch._int_mm` and the fused
+  epilogue), else `torch._int_mm` and s8_simple's eager `scale`, restated;
+* `int_mm`: `torch._int_mm` alone, the s32 GEMM;
+* each h1u build NAME: the call's J10-R receipts, kh_seeds_j10r then kh_units_multi_j10r (with --sm
+  kh_units_multi_j10r_sm on every SM, the served launch);
+* `plain+NAME`: plain, then NAME's units, in one timed region (what serving them one after the other costs);
+* `ref` (--ref, --ref-reps reps): the fallback's seeds and receipts over every unit of the call (jr_seeds, jr_units).
+
+After the reps, every arm's last run is held to the fixtures: the units' sampled receipts (and seed words) and plain's
+s32 sums at the sampled tiles, so every number comes from a run that was exact. overhead = units / plain and gamma =
+(plain + units) / plain, per call, per layer (q, kv, o, up and down) and per step (52 layers and the head). check.json
+(--check), when given, is copied into the report's `check` verdicts.
+"""
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+import statistics
+import sys
+import time
+from functools import partial
+from pathlib import Path
+
+import numpy as np
+import torch
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import shape as S
+import units as UN
+
+import fixtures as F
+
+
+def plain_of(path: str | None):
+    """(name, fn(x, sx, w, sw)): s8_simple's linear from its file, else int_mm and its eager scale restated."""
+    if path:
+        spec = importlib.util.spec_from_file_location("s8_simple", path)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["s8_simple"] = mod
+        spec.loader.exec_module(mod)
+        epi = "fused" if getattr(mod, "triton", None) is not None else "eager"
+        return f"s8_simple.linear ({epi})", lambda x, sx, w, sw: mod.linear(x, sx, w, sw, epilogue=epi)
+
+    def eager(x, sx, w, sw):
+        y = torch._int_mm(x, w.t()).to(torch.float32)
+        y.mul_(sx[:, None])
+        y.mul_(sw[None, :])
+        return y.to(torch.bfloat16)
+    return "torch._int_mm + scale (eager, restated)", eager
+
+
+def libs_of(h1u: list[str], ref: str | None, sm: bool) -> dict:
+    libs: dict = {}
+    for spec in h1u:
+        name, _, path = spec.partition("=")
+        libs[name] = UN.H1u(path, sm=sm and UN.H1u.has_sm(path))
+    if ref:
+        libs["ref"] = UN.Ref(ref)
+    return libs
+
+
+def tiles(z: torch.Tensor, n: int, picks: list[int]) -> np.ndarray:
+    ncb = n // S.T
+    return np.stack([z[S.T * (u // ncb):S.T * (u // ncb) + S.T, S.T * (u % ncb):S.T * (u % ncb) + S.T].cpu().numpy()
+                     for u in picks]).view(np.uint32)
+
+
+def bench_call(key: str, c: dict, arrays: dict, libs: dict, plain, args, scratch: Path) -> dict:
+    lin, m, n = c["linear"], c["m"], c["n"]
+    a = torch.from_numpy(np.ascontiguousarray(S.whole("a", lin, m, scratch, args.jobs))).cuda()
+    b = torch.from_numpy(np.ascontiguousarray(S.whole("b", lin, m, scratch, args.jobs))).cuda()
+    sx = torch.from_numpy(S.activation_scales(lin, m)).cuda()
+    sw = torch.from_numpy(S.weight_scales(lin)).cuda()
+    salt, roots = S.SALT, (bytes.fromhex(c["root_a"]), bytes.fromhex(c["root_b"]))
+    picks = [int(u) for u in arrays[f"{key}/units"]] if f"{key}/units" in arrays else []
+    bt = b.t()
+    arms: dict = {"plain": partial(plain, a, sx, b, sw), "int_mm": partial(torch._int_mm, a, bt)}
+    calls: dict = {}
+    for nm, lib in libs.items():
+        if isinstance(lib, UN.Ref):
+            calls[nm] = UN.RefCall(lib, a, b, salt, roots, c["base"], z=False)
+            arms[nm] = partial(calls[nm].run, z=False)
+        else:
+            calls[nm] = UN.H1uCall(lib, a, b, salt, roots, c["base"])
+            arms[nm] = calls[nm].run
+            arms[f"plain+{nm}"] = partial(_serial, arms["plain"], calls[nm].run)
+    for fn in arms.values():
+        fn()
+    torch.cuda.synchronize()
+    e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+    ms: dict = {k: [] for k in arms}
+    order = list(arms)
+    for rep in range(args.reps):
+        for k in order[rep % len(order):] + order[:rep % len(order)]:
+            if k == "ref" and rep >= args.ref_reps:
+                continue
+            e0.record()
+            arms[k]()
+            e1.record()
+            e1.synchronize()
+            ms[k].append(e0.elapsed_time(e1))
+    exact: dict = {}
+    if picks:
+        want = arrays[f"{key}/receipts"]
+        want_sc, want_sig = arrays[f"{key}/seed_c"].tobytes(), [r.tobytes() for r in arrays[f"{key}/sigma"]]
+        pk = torch.tensor(picks, device="cuda")
+        exact["plain_s32"] = int((tiles(torch._int_mm(a, bt), n, picks) != arrays[f"{key}/z"]).sum()) == 0
+        for nm, cl in calls.items():
+            cl.poison()
+            arms[nm]()
+            torch.cuda.synchronize()
+            got = cl.out[pk].cpu().numpy().view(np.uint32)
+            if isinstance(cl, UN.RefCall):
+                sc = [UN.digest(cl.seedc.cpu().numpy())] * len(picks)
+                sig = [UN.digest(r) for r in cl.sigma[pk].cpu().numpy()]
+            else:
+                sd = cl.seeds[pk].cpu().numpy()
+                sc, sig = [UN.digest(r[:8]) for r in sd], [UN.digest(r[8:]) for r in sd]
+            exact[nm] = (bool((got == want).all()) and int((cl.out == UN.POISON).sum()) == 0
+                         and sc == [want_sc] * len(picks) and sig == want_sig)
+    med = {k: statistics.median(v) for k, v in ms.items() if v}
+    units_of = [nm for nm in libs if nm in med]
+    rec = {"call": key, "linear": lin, "m": m, "n": n, "k": c["k"], "units": c["units"],
+           "median_ms": {k: round(v, 4) for k, v in med.items()}, "ms": {k: [round(x, 4) for x in v] for k, v in ms.items()},
+           "overhead": {nm: round(med[nm] / med["plain"], 4) for nm in units_of},
+           "gamma": {nm: round((med["plain"] + med[nm]) / med["plain"], 4) for nm in units_of},
+           "gamma_serial": {nm: round(med[f"plain+{nm}"] / med["plain"], 4) for nm in units_of if f"plain+{nm}" in med},
+           "exact": exact}
+    return rec
+
+
+def _serial(*fns) -> None:
+    for fn in fns:
+        fn()
+
+
+def totals(calls: list[dict], ms_: list[int], arms: list[str]) -> dict:
+    out: dict = {}
+    for m in ms_:
+        rows = {r["linear"]: r for r in calls if r["m"] == m and "median_ms" in r}
+        if not all(x in rows for x in S.LAYER):
+            continue
+        t: dict = {}
+        for arm in arms:
+            if not all(arm in rows[x]["median_ms"] for x in S.LAYER):
+                continue
+            layer = sum(rows[x]["median_ms"][arm] for x in S.LAYER)
+            head = rows["head"]["median_ms"].get(arm) if "head" in rows else None
+            t[arm] = {"layer_ms": round(layer, 3),
+                      "step_ms": round(S.LAYERS * layer + head, 2) if head is not None else None}
+        pl = t["plain"]
+        for arm, v in t.items():
+            if arm in ("plain", "int_mm") or arm.startswith("plain+"):
+                continue
+            v["layer_overhead"] = round(v["layer_ms"] / pl["layer_ms"], 4)
+            v["layer_gamma"] = round((pl["layer_ms"] + v["layer_ms"]) / pl["layer_ms"], 4)
+            if v["step_ms"] is not None and pl["step_ms"] is not None:
+                v["step_overhead"] = round(v["step_ms"] / pl["step_ms"], 4)
+                v["step_gamma"] = round((pl["step_ms"] + v["step_ms"]) / pl["step_ms"], 4)
+            ser = t.get(f"plain+{arm}")
+            if ser is not None:
+                v["layer_gamma_serial"] = round(ser["layer_ms"] / pl["layer_ms"], 4)
+                if ser["step_ms"] is not None and pl["step_ms"] is not None:
+                    v["step_gamma_serial"] = round(ser["step_ms"] / pl["step_ms"], 4)
+        out[str(m)] = t
+    return out
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--fixtures", required=True)
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--scratch", required=True)
+    ap.add_argument("--h1u", action="append", default=[], metavar="NAME=PATH")
+    ap.add_argument("--ref")
+    ap.add_argument("--sm", action="store_true")
+    ap.add_argument("--s8-simple")
+    ap.add_argument("--check")
+    ap.add_argument("--ms", default=",".join(map(str, S.MS)))
+    ap.add_argument("--linears", default=",".join(S.ORDER))
+    ap.add_argument("--reps", type=int, default=7)
+    ap.add_argument("--ref-reps", type=int, default=2)
+    ap.add_argument("--jobs", type=int, default=32)
+    args = ap.parse_args()
+    out, scratch = Path(args.out), Path(args.scratch)
+    out.mkdir(parents=True, exist_ok=True)
+    scratch.mkdir(parents=True, exist_ok=True)
+    doc_f, arrays = F.load(Path(args.fixtures))
+    libs = libs_of(args.h1u, args.ref, args.sm)
+    pname, plain = plain_of(args.s8_simple)
+    ms_ = [int(x) for x in args.ms.split(",")]
+    lins = args.linears.split(",")
+    doc: dict = {"schema": "j10r-sm90/bench/v1", "device": torch.cuda.get_device_name(0),
+                 "sms": torch.cuda.get_device_properties(0).multi_processor_count, "torch": torch.__version__,
+                 "plain": pname, "libs": {n: lib.path for n, lib in libs.items()},
+                 "served_launch": {n: bool(getattr(lib, "sm", False)) for n, lib in libs.items()},
+                 "reps": args.reps, "ref_reps": args.ref_reps, "layers": S.LAYERS,
+                 "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "calls": []}
+    if args.check and Path(args.check).exists():
+        ck = json.loads(Path(args.check).read_text())
+        doc["check"] = {"verdict": ck.get("verdict"), "ok": ck.get("ok")}
+    for m in ms_:
+        for lin in lins:
+            key = f"{lin}-{m}"
+            c = doc_f["calls"].get(key) or S.call(lin, m)
+            try:
+                r = bench_call(key, c, arrays, libs, plain, args, scratch)
+            except Exception as e:  # noqa: BLE001
+                import traceback
+                r = {"call": key, "error": "".join(traceback.format_exception(e))[-3000:]}
+            torch.cuda.empty_cache()
+            print(json.dumps({k: v for k, v in r.items() if k != "ms"}), flush=True)
+            doc["calls"].append(r)
+            (out / "bench.json").write_text(json.dumps(doc, indent=1))
+    arms = sorted({k for r in doc["calls"] for k in r.get("median_ms", {})})
+    doc["totals"] = totals(doc["calls"], ms_, arms)
+    doc["exact"] = all(all(r.get("exact", {}).values()) and "error" not in r for r in doc["calls"])
+    doc["finished"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    (out / "bench.json").write_text(json.dumps(doc, indent=1))
+    print(json.dumps({"totals": doc["totals"], "exact": doc["exact"]}, indent=1), flush=True)
+    return 0 if doc["exact"] else 4
+
+
+if __name__ == "__main__":
+    sys.exit(main())

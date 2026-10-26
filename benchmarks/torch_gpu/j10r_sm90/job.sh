@@ -57,7 +57,9 @@ case $WHAT in
     [ -n "$SM" ] && LA+=("$SM")
     $PY "$D/check.py" --fixtures "$LIBS" --out "$OUT" --scratch "$S" --operands-only ${CHECK_ARGS:-} > "$OUT/operands.out" 2>&1
     echo "operands rc $?" > "$OUT/rc.txt"
-    export O=$OUT PY D S STEPS=${STEPS:-check bench} CHECK_ARGS=${CHECK_ARGS:-} BENCH_ARGS=${BENCH_ARGS:-} LIBS
+    BA=${BENCH_ARGS:-}
+    [ -f "$LIBS/s8_simple.py" ] && BA="--s8-simple $LIBS/s8_simple.py $BA"
+    export O=$OUT PY D S STEPS=${STEPS:-check bench} CHECK_ARGS=${CHECK_ARGS:-} BENCH_ARGS=$BA LIBS
     export LA_S="${LA[*]}"
     # shellcheck disable=SC2016
     gpu-lease 1 --wait --max-min "${LEASE_MIN:-25}" -- bash -c '
