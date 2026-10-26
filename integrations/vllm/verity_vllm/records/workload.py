@@ -7,7 +7,7 @@ Its writers are `config.RowConfig.to_json` (the row files), `pipeline.workload.w
 row file for running it (v2 only, with the engine's checks); this is the record a check reads.
 
     w = Workload.load(path)                     # MissingField / UnknownField name the file and the field
-    w.requests[0].prompt_length, w.sampling_variant, w.doc_sha256
+    w.requests[0].prompt_length, w.sampling_variant, w.arrive_step(0), w.doc_sha256
 """
 from __future__ import annotations
 
@@ -149,6 +149,14 @@ class Workload:
     @property
     def sampling_variant(self) -> str | None:
         return None if self.sampling is None else self.sampling.variant
+
+    def arrive_step(self, i: int) -> int:
+        """Request `i`'s arrival: its `arrive_step`, else the sweep's `arrive_steps[i]`, else 0."""
+        own = self.requests[i].arrive_step
+        if own is not None:
+            return own
+        steps = None if self.sweep is None else self.sweep.get("arrive_steps")
+        return int(steps[i]) if steps is not None and i < len(steps) else 0
 
     @classmethod
     def of(cls, doc: Workload | Mapping[str, Any], where: str) -> Workload:

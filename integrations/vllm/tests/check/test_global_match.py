@@ -21,6 +21,7 @@ from verity_vllm.pipeline import cli
 from verity_vllm.check.match import declaration as GD
 from verity_vllm.check.match import sampler_geometry as SG
 from verity_vllm.records.global_match import GlobalMatch
+from verity_vllm.records import workload as WL
 from tests.check import test_batch_decomp_e2e as e2e
 from tests.check.test_batch_decomp_e2e import (A_DOWN_W, A_EMBED, A_GU_W, A_IDS, A_LN1, A_LN2, A_NORM, A_O_W, A_POS, A_QKV_W, BF,
                                                                             BS, I32D, I64D, W_COS, W_DOWN, W_EMBED, W_GU, W_LN1, W_LN2, W_NORM,
@@ -347,9 +348,16 @@ def move_consumer_before_producer(oracle_dir, rid="r1", sampler_to_head=False):
     return new_of[c_old] - n_in, new_of[p_old] - n_in
 
 
+def workload_doc(**fields):
+    """A workload (`records.workload`) with the fields every writer writes, and `fields`."""
+    return {"schema": WL.SCHEMA, "model": "toy", "engine": {}, "variants": {"greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0}},
+            "requests": [], **fields}
+
+
 def workload(reqs, path):
-    json.dump({"requests": [{"request_id": r["id"], "prompt_token_ids": list(r["prompt"]), "max_tokens": _cap(r), "arrive_step": _arr(r), "seed": r.get("seed")} for r in reqs],
-               "sampling": {"temperature": 0.0, "variant": "greedy"}, "sweep": {"arrive_steps": [_arr(r) for r in reqs]}}, open(path, "w"))
+    json.dump(workload_doc(requests=[{"request_id": r["id"], "prompt_token_ids": list(r["prompt"]), "max_tokens": _cap(r), "arrive_step": _arr(r),
+                                      **({"seed": r["seed"]} if r.get("seed") is not None else {})} for r in reqs],
+                           sampling={"temperature": 0.0, "variant": "greedy"}, sweep={"arrive_steps": [_arr(r) for r in reqs]}), open(path, "w"))
     return str(path)
 
 
@@ -1388,7 +1396,7 @@ def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_field
     assert res["verdict"] == "PASS", res["reasons"]
 
     def delete(wl):
-        wl["requests"][1]["seed"] = None
+        del wl["requests"][1]["seed"]
     res = gm.check(recomposed(delete), oracle)
     pr = _check(res, "G1")["problems"]
     assert res["verdict"] == "FAIL" and any("no declared seed for r1 but the run header records seed=2097394646" in p for p in pr), pr
@@ -1401,18 +1409,18 @@ def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_field
     assert res["verdict"] == "FAIL"
     assert any("sampling variant='stoch-t0.8-p0.95' but the run header records variant='greedy'" in p for p in pr), pr
     assert any("sampling temperature=0.8 but the run header records temperature=0.0" in p for p in pr), pr
-    lab = GD.manifest_sampling({"sampling": {"variant": "stoch-t0.8-p0.95-k20"}})
+    lab = GD.manifest_sampling(workload_doc(sampling={"variant": "stoch-t0.8-p0.95-k20"}, variants={"stoch-t0.8-p0.95-k20": {}}))
     assert {k: lab[k] for k in ("variant", "temperature", "top_p", "top_k")} == {"variant": "stoch-t0.8-p0.95-k20", "temperature": 0.8, "top_p": 0.95, "top_k": 20}
-    assert "conflict" not in lab
+    assert "conflict" not in lab and lab["sources"] == {"temperature": ["label"], "top_p": ["label"], "top_k": ["label"]}
     # [rev-pm M-0667 TIP N5] the driver consumes variants[variant] (vllm_adapter.load_workload), not the label: the table is the value of
     # record, and label / table / explicit fields / sweep params must agree -- a laundered header (sha recomputed over the edited doc) with
     # variants[v].top_p edited 0.95 -> 0.9 under the label p0.95 is caught by the manifest's OWN disagreement, fail closed, named
-    tab = GD.manifest_sampling({"sampling": {"variant": "stoch-t0.8-p0.95"}, "variants": {"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.9, "top_k": 0}}})
+    tab = GD.manifest_sampling(workload_doc(sampling={"variant": "stoch-t0.8-p0.95"}, variants={"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.9, "top_k": 0}}))
     assert tab["top_p"] == 0.9 and tab["conflict"] == ["top_p: label=0.95, variants_table=0.9"]
-    agree = GD.manifest_sampling({"sampling": {"variant": "stoch-t0.8-p0.95"}, "variants": {"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}},
-                                  "sweep": {"sampling_params": {"top_p": 0.95}}})
+    agree = GD.manifest_sampling(workload_doc(sampling={"variant": "stoch-t0.8-p0.95"}, variants={"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}},
+                                              sweep={"sampling_params": {"top_p": 0.95}}))
     assert "conflict" not in agree and agree["sources"]["top_p"] == ["label", "sweep.sampling_params", "variants_table"]
-    assert "not in the manifest's `variants` table" in GD.manifest_sampling({"sampling": {"variant": "stoch-t0.8-p0.95"}, "variants": {"greedy": {}}})["conflict"][0]
+    assert "not in the manifest's `variants` table" in GD.manifest_sampling(workload_doc(sampling={"variant": "stoch-t0.8-p0.95"}, variants={"greedy": {}}))["conflict"][0]
 
     # [rev-pm BLOCKER M-0717 (i)] a per-request variant pin added AFTER the run: the header has no per-request sampling record -> FAIL named
     def pin_r1_greedy(wl):
