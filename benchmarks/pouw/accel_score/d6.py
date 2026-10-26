@@ -1,24 +1,26 @@
 """D6, the number table for protocol v3 (D1, CMP-118 e0cd4061) and v3.1, printed from code (PROTO-DESIGN-4).
 
 Credit is pub, the public best at the period's dual prices (06:10Z, 06:37Z, 07:04Z): one LP over every credited round
-of the period with every public method and route of D5 v2's hull (`build_job`: its fast schemes, O-IO's lookups, and
-the peels on DP4A beside the MMA; `d5_routes.period`), priced at the honest served period's duals, so a winning route
-lowers pub and leaves honest time uncredited, never ε. The world FP8 FLOP rows are a tensor-unit claim (08:24Z): the
-same LP priced at the tensor-only price μ_t, a column of its own beside the model-unit share at μ°. v3.1 is v3 with L′
-chosen by the coordinator's 07:04Z rule, taken at the period (`rule`). ε, in model units, is the sampling term
-(P15/P20's Poisson draw, η from the measured free-guess rate, P16's replica groups) plus ε_net (P18). γ is from
-measured hashing, with the paper ceiling beside it. Every LP (v3.1's picks, the period, the routes) hashes at every
-SHA-512 schedule θ admits (U13; ALGO-COST-3's A27b: R-hi on sm_120, unmeasured), so it is one for both hashing rates;
-v3's own picks stay as adopted (measured schedules).
+of the period with every public method and route of D5's hull (`build_job`: its fast schemes, O-IO's lookups, the peels
+on DP4A beside the MMA and, from D5 v2.1, route (iii), b cᵀ with b1 emulated on the RTX PRO 6000's lanes;
+`d5_routes.period`), priced at the honest served period's duals μ°, so a winning route lowers pub and leaves honest
+time uncredited, never ε. The world rows are μ°-priced device capacity scaled to the world's C (12:02Z), with the
+tensor-only price μ_t as a labelled sensitivity and, beside them, credit at a fixed served price μ¹ (the honest period's
+duals at beside load x = 1, published as a protocol parameter: P22's alternative). v3.1 is v3 with L′ chosen by the
+coordinator's 07:04Z rule, taken at the period (`rule`). ε, in model units, is the sampling term (P15/P20's Poisson
+draw, normalised by the period's registered total, published before its first check (P21); η from the measured
+free-guess rate; the union over P16's replica groups, V4's the least replica that holds its weights (P23), and over the
+window's periods (P26)) plus ε_net (P18), times 1 + H_o/H for the timed answers (P25). γ is from measured hashing, with
+the paper ceiling beside it. Every LP (v3.1's picks, the period, the routes) hashes at every SHA-512 schedule θ admits
+(U13; ALGO-COST-3's A27b: R-hi on sm_120, unmeasured), so it is one for both hashing rates; v3's own picks stay as
+adopted (measured schedules).
 
-    PUBLIC_BEST_DIR=<checkout of cursor/compute-research-accel-bet-algo-lab-ea24 at 34866fd9f8 or later, which has
-    d5_v2.py>/benchmarks/pouw/theory python3 benchmarks/pouw/accel_score/d6.py [--json OUT] [--pickle OUT]
+    PUBLIC_BEST_DIR=<checkout of cursor/compute-research-accel-bet-algo-lab-ea24 at 0588f18015 (D5 v2.1) or later>/
+    benchmarks/pouw/theory python3 benchmarks/pouw/accel_score/d6.py [--json OUT] [--pickle OUT]
 
---from PKL prints the report from a build's pickle (--pickle) without rebuilding. --census JSON [--census-ref REF]
-adds the RTX PRO 6000's beside-load rows with emulated b1 from ALGO-COST-3's census routes (`algo_cost3/b1alu_check.py
---census` run at this build's picks; keys "design | card | model | x", or "card | model | x" for v3.1, with
-leak_served and c_inc). --census-vector JSON [--census-vector-ref REF] adds the same rows with the RTX PRO 6000's joint
-issue rows from a machine-model vector (ALGO-COST-3's A36; {"vector": name, "rows": rows keyed as --census's}).
+--from PKL prints the report from a build's pickle (--pickle) without rebuilding. --census-vector JSON
+[--census-vector-ref REF] adds the RTX PRO 6000's beside-load rows with its joint issue rows from a machine-model vector
+(ALGO-COST-3's A36; {"vector": name, "rows": {"design | card | model | x": {leak_served, c_inc}}}).
 """
 import contextlib
 import io
@@ -29,7 +31,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from scipy.stats import binom
+from scipy.stats import binom, poisson
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import d5_routes as dr  # noqa: E402
@@ -362,6 +364,18 @@ def fixed_alone(c, lp: dict, F: dict) -> float:
     return float(max(np.array(f) / -np.array([row[0] for row in lp["A_ub"]]))) * c.s8
 
 
+def mu_load(c, served: dict, F: dict) -> float:
+    """μ·F, load F's price at `served`'s duals (`d5_routes.period`'s mu and caps), honest-kernel units."""
+    x = 0.0
+    for r, mu in served["mu"].items():
+        if r.startswith("joint"):
+            a, b = c.facets[int(r[5:])]
+            x += mu * (a * F.get("tensor", 0.0) + b * F.get(c.facet_other, 0.0) / 32) / 4
+        else:
+            x += mu * F.get(r, 0.0) / served["caps"][r]
+    return x * c.s8
+
+
 def period(card: str, model: dict, static: dict, pv: dict, beside: float = 0.0, peel_lanes: bool = True,
            bounded: bool = False) -> dict:
     """Per credited MAC, in honest-kernel units at θ (c = SM-clocks · s8): OPT*'s period (`dense`: the honest words'
@@ -377,7 +391,8 @@ def period(card: str, model: dict, static: dict, pv: dict, beside: float = 0.0, 
     OPT* the routes free at that row's single-row dual (`d5_routes.freed`, makespan ≤ OPT*'s), cost-weighted over the
     credited rounds (P12 re-raised). Also Σ_w q_w (P20's draw multiplier): each round's own makespan share of the
     honest period, and PB4's c_inc, the credited rounds' share of the period's makespan increment over its fixed load
-    alone (pub's period over OPT*'s, no duals)."""
+    alone (pub's period over OPT*'s, no duals). `unit`: one plain INT8 MAC of beside work, its standalone time and its
+    price at μ°, so beside work hidden from credit at μ° is x (alone − at_served) a credited MAC (P22)."""
     c = vc.CARDS[card][0]
     hist, _, qk, _, ix = nf.world_macs(model)
     jobs, rounds = {"dense": [], "hull": []}, {"dense": 0.0, "hull": 0.0}
@@ -411,15 +426,13 @@ def period(card: str, model: dict, static: dict, pv: dict, beside: float = 0.0, 
                freed={r: x / rounds["dense"] for r, x in freed_.items()})
     for wh in jobs:
         alone, served = dr.period(c, jobs[wh]), dr.period(c, jobs[wh], F)
-        muF = 0.0
-        for r, mu in served["mu"].items():
-            if r.startswith("joint"):
-                a, b = c.facets[int(r[5:])]
-                muF += mu * (a * F.get("tensor", 0.0) + b * F.get(c.facet_other, 0.0) / 32) / 4
-            else:
-                muF += mu * F.get(r, 0.0) / served["caps"][r]
         out[wh] = dict(alone=alone["c"], alone_binding=alone["binding"], alone_mu=alone["mu"], served=served["c"],
-                       served_binding=served["binding"], served_mu=served["mu"], own_dual=served["c"] - muF * c.s8)
+                       served_binding=served["binding"], served_mu=served["mu"],
+                       own_dual=served["c"] - mu_load(c, served, F))
+        if wh == "dense":
+            # One plain INT8 MAC of beside work: its standalone time and its price at μ° (P22's hidden work).
+            out["unit"] = dict(alone=fixed_alone(c, jobs[wh][0][1], serve_loads(c)),
+                               at_served=mu_load(c, served, serve_loads(c)))
     # Both priced at the honest served period's duals μ°, where the honest prover's period sits.
     mu0 = out["dense"]["served_mu"]
     kinds = {"static": True, "pv": False}
@@ -457,8 +470,19 @@ YEAR_S = 365.25 * 86400
 DELTAS = (0.01, 1e-6)
 EPS_S_AT_1E6 = 0.001                                      # the sampling term's target at δ 1e-6, which sets k
 K_DRAWS = math.ceil(math.log(1e6) / EPS_S_AT_1E6)         # 13,816
-GROUP_GPUS = (1, 8, 64)                                   # P16: a serving replica group's GPUs (scaled, not a census)
-WIRE_BITS = 32                                            # bits a token across the node's boundary (RT-PROTO-2 P18)
+GROUP_GPUS = (1, 8, 64)                                   # P16's table: group sizes beside each model's own
+NODE_GPUS = 8
+GPU_MEM = {"H200": 141e9, "RTX PRO 6000": 96e9}           # HBM bytes a GPU
+PARAMS = {"Llama-3.1-8B": 8.0e9, "Llama-3.1-70B": 70.6e9, "DeepSeek-V4-Pro": 1.6e12}   # weights, INT8 (P23)
+EP_BITS = 1e7                                             # P23: V4's expert-parallel bits a token out of one node
+WINDOW_S = {"week": 7 * 86400, "month": YEAR_S / 12, "year": YEAR_S}
+# P25: the timed answers. A group's checks go through the firewall one at a time, so a period holds them all only if
+# its draws N satisfy N(Δ + τ_ans) ≤ T.
+PERIOD_S = 7 * 86400                                      # T, one period: a week
+DELTA_S = 30.0                                            # Δ: a round's coins to its commitment at the certifier
+TAU_ANS_S = 10.0                                          # τ_ans: a draw to its answer
+ANS_GPU_S, ANS_FLOOR_S, ANS_RUN = 1.0, 8.0, "r20261024-092255-2edd"   # C-Flock CUDA --zk: GPU-s a proof, latency floor
+WIRE_BITS = 32                                            # bits a token across the group's boundary (RT-PROTO-2 P18)
 HTTP_FACTOR = 6.5                                         # RT-PROTO-2: wire bytes a token if HTTP/SSE crosses it
 CLOCK = {"H200": 1797 / 1980, "RTX PRO 6000": 1.0}        # M14: the throttled honest kernel over θ's clock
 R_SHA = {"H200": 1.54, "RTX PRO 6000": 1.55}              # U13: θ's SHA-512 over the card's (PD3's share formula)
@@ -485,28 +509,50 @@ def model_of(name: str) -> dict:
 
 
 def shape_scale(model: dict) -> float:
-    """The model's stated static MACs a token over its listed shapes' (1 for the Llamas; V4's 49e9 against 47.46e9):
-    the shapes stand for the stated count as its mix, as nofold's `static_pipes` takes them."""
+    """The model's static MACs a token over its listed shapes' (1 for the Llamas; V4's 48.07e9, its 49e9 active
+    parameters less the input embedding (P24), against 47.46e9): the shapes stand for the count as its mix, as
+    nofold's `static_pipes` takes them (12:02Z: V4's 0.61e9 without a listed shape are credited at that mix)."""
     return model["static"] / sum(K * N * reps for K, N, reps in nf.SHAPES[model["name"]])
 
 
-def eps_terms(card: str, model: dict, eta_: float, per: dict) -> dict:
-    """ε in model units, a share of C at every dual (P20): ε_S = ln(1/δ)/(ηk) with P15's Poisson draw (expected draws
-    k Σ_w q_w); P16 per replica group, the union bound over G groups (ε_S at k a group, and the k a group that holds
-    ε_S at 0.1%); ε_net = n_max E / credited MACs (P18, n_max the largest N of a credited round, E the wire bits).
-    `at`: ε at 8-GPU groups as a share of the claim at μ° and at μ_t, with ε_net priced at that μ: a bit exported in
-    round k stands for N_k of its MACs at its price, so ε_net = E max_k(N_k price_k) / (credited MACs × the mean
-    price), n_max E / credited MACs where prices are equal; None where the claim at that μ is 0."""
+def group_gpus(card: str, model: dict) -> int:
+    """P23: a group is a serving replica, its coins released in lockstep. Where replicas fit in a node (the Llamas),
+    a node's 8 GPUs, its replicas released together; else the least replica that holds the INT8 weights (V4: 12 H200s,
+    17 RTX PRO 6000s, before KV cache), the most groups such replicas allow, with the network certifier's boundary
+    around the whole group."""
+    return max(NODE_GPUS, math.ceil(PARAMS[model["name"]] / GPU_MEM[card]))
+
+
+def answer_time(card: str, model: dict, per: dict) -> float:
+    """P25: the honest answers' GPU time over the group's, H_o/H in time: k Σ_w q_w draws a period, each one C-Flock
+    --zk proof of the opened unit (ANS_GPU_S, run beside later rounds), over g·T with the group busy all period."""
+    return K_DRAWS * per["q_sum"] * ANS_GPU_S / (group_gpus(card, model) * PERIOD_S)
+
+
+def eps_terms(card: str, model: dict, eta_: float, per: dict, share_: dict) -> dict:
+    """ε in model units, a share of the claim at every dual (P20), the claim's draw normalised by the period's
+    registered total C_reg, published before the period's first check (P21): ε_S = ln(1/δ)/(ηk) with P15's Poisson
+    draw (expected draws k Σ_w q_w); P16 per replica group, the union bound over G groups (ε_S at k a group, and the k
+    a group that holds ε_S at 0.1%), at the model's group (`group_gpus`, P23); ε_net = n_max E / credited MACs (P18,
+    n_max the largest N of a credited round, E the wire bits across the group's boundary). `at`: ε at the model's
+    group as a share of the claim at μ° and at μ_t, with ε_net priced at that μ: a bit exported in round k stands for
+    N_k of its MACs at its price, so ε_net = E max_k(N_k price_k) / (credited MACs × the mean price), n_max E /
+    credited MACs where prices are equal; None where the claim at that μ is 0. `head`: at μ°, times 1 + H_o/H in
+    model units (P25: the answers' time over the claim, s·g·T); `no_c_reg`: P21's variant, the draw normalised by the
+    wall-clock period instead, so ε_S is a share of s·T, ε_S/s + ε_net; `union`: ln(P)/(ηk) over a window's P periods
+    (P26), to add to ε_S."""
     cred_macs, q_sum = per["cred_macs"], per["q_sum"]
-    out = dict(eta=eta_, k=K_DRAWS, draws=K_DRAWS * q_sum, q_sum=q_sum)
+    g_m = group_gpus(card, model)
+    out = dict(eta=eta_, k=K_DRAWS, draws=K_DRAWS * q_sum, q_sum=q_sum, g=g_m)
     out["eps_S"] = {d: math.log(1 / d) / (eta_ * K_DRAWS) for d in DELTAS}
     n_max = max([N for _, N, _ in nf.SHAPES[model["name"]]] + [model["dv"]])
     E = WIRE_BITS * nf.WORLD_TOKENS
     out["n_max"], out["eps_net"] = n_max, n_max * E / cred_macs
     out["eps_net_http"] = out["eps_net"] * HTTP_FACTOR
+    out["eps_net_node"] = n_max * EP_BITS * nf.WORLD_TOKENS / cred_macs if g_m > NODE_GPUS else None
     out["eps"] = {d: out["eps_S"][d] + out["eps_net"] for d in DELTAS}
     groups = {}
-    for g in GROUP_GPUS:
+    for g in sorted({*GROUP_GPUS, g_m, NODE_GPUS * math.ceil(g_m / NODE_GPUS)}):
         G = n_gpus(card) / g
         groups[g] = dict(G=G, eps_S={d: math.log(G / d) / (eta_ * K_DRAWS) for d in DELTAS},
                          k_group=math.ceil(math.log(G / 1e-6) / (eta_ * EPS_S_AT_1E6)))
@@ -521,24 +567,43 @@ def eps_terms(card: str, model: dict, eta_: float, per: dict) -> dict:
             continue
         net = E * h["net_most"][mu] / (cred_macs * mean)
         out["at"][mu] = dict(net_scale=net / out["eps_net"], eps_net=net,
-                             eps={d: groups[8]["eps_S"][d] + net for d in DELTAS})
+                             eps={d: groups[g_m]["eps_S"][d] + net for d in DELTAS})
+    s = share_["share"]
+    out["ho_claim"] = ho = share_["answers"] / s
+    out["head"] = {d: out["at"]["served"]["eps"][d] * (1 + ho) for d in DELTAS}
+    out["no_c_reg"] = {d: (groups[g_m]["eps_S"][d] / s + out["at"]["served"]["eps_net"]) * (1 + ho) for d in DELTAS}
+    out["union"] = {w: math.log(WINDOW_S[w] / PERIOD_S) / (eta_ * K_DRAWS) for w in WINDOW_S}
     return out
 
 
-def share(card: str, row: dict, per: dict) -> dict:
+def answers(eps: dict) -> dict:
+    """P25's timing at the model's group: its draws N (Poisson, mean k Σ_w q_w) at their 1 − 1e-6 quantile must fit
+    the period one at a time, N(Δ + τ_ans) ≤ T; with the group stalled for each answer instead of pipelined, the
+    answers would take N τ_ans / T of it; and rounds in the period's last Δ + τ_ans can't be checked, so they go
+    uncredited (no coins near the period's end, P5)."""
+    n_hi = float(poisson.ppf(1 - 1e-6, eps["draws"]))
+    return dict(draws=eps["draws"], draws_hi=n_hi, busy=n_hi * (DELTA_S + TAU_ANS_S) / PERIOD_S,
+                t_min_h=n_hi * (DELTA_S + TAU_ANS_S) / 3600, serial=eps["draws"] * TAU_ANS_S / PERIOD_S,
+                tail=(DELTA_S + TAU_ANS_S) / PERIOD_S)
+
+
+def share(card: str, row: dict, per: dict, model: dict) -> dict:
     """The credited share of honest device time (06:45Z: r and the clock kept in it): credit at pub (the served
     period's duals, D5's θ) over the measured honest time, decomposed into factors that multiply to it: the clock
     (M14), the wraps (outside credit), the uncredited served ops (QKᵀ, the indexer, plain PV, where they don't hide in
     a slack pipe), θ's generosity (D5's price of the credited rounds' best programs over the built kernel's time:
-    hashing r and the matmul's η together) and the routes (pub over OPT* at the served duals)."""
+    hashing r and the matmul's η together), the routes (pub over OPT* at the served duals) and the timed answers'
+    GPU time (P25, `answer_time`)."""
     cov = 1 - row["uncredited"]
     honest, credit_b = row["honest"], row["credit"]
+    ho = answer_time(card, model, per)
     # nofold's units are a MAC at η of θ's INT8 rate; D5's are a MAC at θ's rate.
     f = {"clock": CLOCK[card],
          "wraps": max(row["T_all"], row["A_nw"]) / honest,
          "uncredited ops": credit_b / max(row["T_all"], row["A_nw"]),
          "θ's generosity": per["dense"]["at_served"] * cov * nf.ETA / credit_b,
-         "routes": per["hull"]["at_served"] / per["dense"]["at_served"]}
+         "routes": per["hull"]["at_served"] / per["dense"]["at_served"],
+         "answers": 1 / (1 + ho)}
     s = math.prod(f.values())
     pd3 = max(row["T_c"], row["A_nw"] / R_SHA[card]) / max(row["T_c"], row["A_nw"])
     # 08:24Z: the same honest time credited in tensor MAC-times at μ_t (FP8 FLOP / 2), pub's against OPT*'s, the
@@ -549,7 +614,7 @@ def share(card: str, row: dict, per: dict) -> dict:
     if "tensor_bounded" in per["hull"]:
         tensor["bounded"] = {s: to_t * x for s, x in per["hull"]["tensor_bounded"].items()}
     return dict(share=s, factors=f, pd3_r_reading=pd3, routes_job=1 - per["leak_job"], cov=cov,
-                with_hosts=s / (1 + HOST[card][1]), tensor=tensor)
+                with_hosts=s / (1 + HOST[card][1]), tensor=tensor, answers=ho)
 
 
 def worst_gamma(card: str, model: dict, static: dict, pv: dict, built: bool) -> dict:
@@ -637,7 +702,7 @@ def evaluate(static: dict, pv: dict, rates=(True, False), bounded: bool = False)
             per = pers[card, model["name"]]
             out[card, "measured" if built else "paper", model["name"]] = dict(
                 card=card, rate="measured" if built else "paper", model=model["name"], world=row, period=per,
-                share=share(card, row, per), worst=worst_gamma(card, model, static, pv, built))
+                share=share(card, row, per, model), worst=worst_gamma(card, model, static, pv, built))
     return out
 
 
@@ -648,7 +713,9 @@ def beside_sweep(P: dict, tau_picks: dict) -> dict:
     period's binding rows. The credited share at x is the share at x = 0 with its routes factor moved to x's: beside
     work overlaps the credited rounds, and at the period's duals their OPT* price is at least the period time they
     add, so dividing it by their standalone honest time would count the overlap as a loss. The rule's value test
-    stays at x = 0. Also PB4's c_inc at each x (`period`), and PB5's case, the RTX PRO 6000's PV at L′ 64."""
+    stays at x = 0. Also PB4's c_inc at each x (`period`), and PB5's case, the RTX PRO 6000's PV at L′ 64. For P22,
+    each x's pub and OPT* at its own duals μ_x, the dearest credited round's N × price (ε_net), the unit beside MAC's
+    time and price at μ_x, and the honest period's makespan and its fixed load's alone."""
     sets = {d: P[d] for d in ("v3", HEADLINE, *RTX_ONLY, "dual-safe")}
     sets.update({f"τ {tau:g}": p for tau, p in tau_picks.items()})
     out = {}
@@ -662,7 +729,10 @@ def beside_sweep(P: dict, tau_picks: dict) -> dict:
                 out[name, card, mname, x] = dict(leak=per["leak_served"], binding=per["dense"]["served_binding"],
                                                  c_inc=per["c_inc"], leak_kind=per["leak_kind"],
                                                  gamma=e["world"]["gamma"],
-                                                 share0=e["share"]["share"], leak0=e["period"]["leak_served"])
+                                                 share0=e["share"]["share"], leak0=e["period"]["leak_served"],
+                                                 pub=per["hull"]["at_served"], opt=per["dense"]["at_served"],
+                                                 net_most=per["hull"]["net_most"]["served"], unit=per["unit"],
+                                                 served=per["dense"]["served"], fixed_alone=per["fixed_alone"])
                 out[name, card, mname, x]["share"] = (e["share"]["share"] * (1 - per["leak_served"])
                                                       / (1 - e["period"]["leak_served"]))
     return out
@@ -678,7 +748,8 @@ def build() -> dict:
         for (card, rate, mname), e in evaluate(static, pv, bounded=design == HEADLINE).items():
             model = model_of(mname)
             e["design"] = design
-            e["eps"] = eps_terms(card, model, eta_min, e["period"])
+            e["eps"] = eps_terms(card, model, eta_min, e["period"], e["share"])
+            e["answers"] = answers(e["eps"])
             if design == HEADLINE and rate == "measured":
                 e["streaming"] = streaming(card, model, e["world"], pv)
                 # 08:24Z's gap: the peels and the zero-high-digit peel on the MMA only, as `tile_job` has them.
@@ -702,38 +773,58 @@ def report(D: dict) -> str:
     rows, L = D["rows"], []
     models = [m["name"] for m in nf.WORLD]
     short = {"Llama-3.1-8B": "8B", "Llama-3.1-70B": "70B", "DeepSeek-V4-Pro": "V4"}
-    w = lambda f, design, card, rate: " / ".join(f(rows[design, card, rate, m]) for m in models)  # noqa: E731
 
     def mma_t(r):
         return r["share"]["share"] * r["mma_peels"]["at_tensor"] / r["period"]["hull"]["at_served"]
 
-    L.append("## D6: protocol v3 (D1) and v3.1 (v3's L′ by the 07:04Z rule), printed by "
+    L.append("## D6 v1.1: protocol v3 (D1) and v3.1 (v3's L′ by the 07:04Z rule), printed by "
              "`benchmarks/pouw/accel_score/d6.py`\n")
     L.append(f"The headline is {HEADLINE}. Columns are 8B / 70B / V4 unless stated. ε is in model units, a share of "
              "the credited claim at every dual price (P20). "
              "Credit is pub at the period's dual prices: one LP over the period's credited rounds with every public "
-             "method and route of D5 v2's hull (its fast schemes and lookups, and the peels on DP4A beside the MMA; "
-             "`d5_routes.period`). A route that wins there leaves honest time uncredited and never adds to ε.\n")
-    L.append(f"### The goals at the headline ({HEADLINE}, measured hashing, 8-GPU groups)\n")
-    L.append("| card, model | ε at δ 1e-6 (goal ≤ 1%) | γ overlapped, measured / paper (goal ≤ 10) | coverage (goal ≥ 95%) "
-             "| perplexity (goal < 5%) | credited share at μ° |")
-    L.append("|---|---|---|---|---|---|")
+             "method and route of D5 v2.1's hull (its fast schemes and lookups, the peels on DP4A beside the MMA and, "
+             "on the RTX PRO 6000, route (iii), b cᵀ with b1 emulated on the lanes; `d5_routes.period`). A route that "
+             "wins there leaves honest time uncredited and never adds to ε.\n")
+    L.append("What changed from v1 (RT-PROTO-2's P21–P26, CMP-118 71d22b4c; the coordinator's 12:36Z decisions): "
+             "D5 v2.1 (0588f18015) carries route (iii), so the RTX PRO 6000's x > 0 cells are no longer upper bounds "
+             "(x = 0 doesn't move); the period's registered total is published before its first check (P21, in the "
+             "spec below, with the no-publication variant beside ε); a group is a serving replica, V4's 12 H200s or "
+             "17 RTX PRO 6000s with the network certifier's boundary around it (P23); V4's input embedding is "
+             "credited no MACs (P24); the timed answers are priced (P25); the week, month and year rows carry the "
+             "union over periods (P26); and the world rows say what they bound, with credit at a fixed served price "
+             "μ¹ as one alternative row (P22).\n")
+
+    def gamma_ans(r):
+        return r["world"]["gamma"] * (1 + r["share"]["answers"])
+
+    L.append(f"### The goals at the headline ({HEADLINE}, measured hashing, a period, replica groups)\n")
+    L.append("ε is a period's, at the model's replica group, times 1 + H_o/H for the timed answers (P25); γ includes the "
+             "answers' GPU time.\n")
+    L.append("| card, model | GPUs a group | ε at δ 1e-6 (goal ≤ 1%) | γ overlapped, measured / paper (goal ≤ 10) | "
+             "coverage (goal ≥ 95%) | perplexity (goal < 5%) | credited share at μ° |")
+    L.append("|---|---|---|---|---|---|---|")
     for card in vc.CARDS:
         for m in models:
             r, p = rows[HEADLINE, card, "measured", m], rows[HEADLINE, card, "paper", m]
-            L.append(f"| {card}, {short[m]} | {pct(r['eps']['at']['served']['eps'][1e-6], 3)} | "
-                     f"{r['world']['gamma']:.2f} / {p['world']['gamma']:.2f} | {pct(1 - r['world']['uncredited'], 1)} | "
+            cov = 1 - r["world"]["uncredited"]
+            L.append(f"| {card}, {short[m]} | {r['eps']['g']} | {pct(r['eps']['head'][1e-6], 3)} | "
+                     f"{gamma_ans(r):.2f} / {gamma_ans(p):.2f} | {pct(cov, 1)}{'' if cov >= 0.95 else ' (miss)'} | "
                      f"{PPL[m][2]} | {pct(r['share']['share'], 1)} |")
     v4 = next(m for m in nf.WORLD if shape_scale(m) != 1)
     _, st, qk, pvm, ix = nf.world_macs(v4)
     unshaped = st * (1 - 1 / shape_scale(v4)) / (st + qk + pvm + ix)
-    L.append(f"\n{short[v4['name']]}'s coverage takes its stated {v4['static'] / 1e9:.2f}e9 static MACs a token as "
-             f"credited, with its listed shapes as their mix; the shapes hold {v4['static'] / shape_scale(v4) / 1e9:.2f}e9. "
-             "Credited at "
-             f"its listed shapes only, its coverage would be "
-             + " and ".join(f"{pct(1 - rows[HEADLINE, card, 'measured', v4['name']]['world']['uncredited'] - unshaped, 1)}"
-                            f" ({card})" for card in vc.CARDS)
-             + ", below the goal. Which reading is right is a world-model question (what the unshaped MACs are).")
+    listed = {card: 1 - rows[HEADLINE, card, "measured", v4["name"]]["world"]["uncredited"] - unshaped
+              for card in vc.CARDS}
+    L.append(f"\n{short[v4['name']]}'s static MACs are its 49e9 active parameters a token less its input embedding "
+             f"(129,280 × 7,168 = {nf.V4_EMBED / 1e9:.3f}e9, a lookup with no MACs: P24), {v4['static'] / 1e9:.2f}e9. Its "
+             f"listed shapes hold {v4['static'] / shape_scale(v4) / 1e9:.2f}e9; the other "
+             f"{v4['static'] * (1 - 1 / shape_scale(v4)) / 1e9:.2f}e9 have no listed shape (the router and other "
+             "projections, presumably), and the coverage above credits them at the listed shapes' mix (shape scale "
+             f"{shape_scale(v4):.4f}; 12:02Z), an assumption. Credited at its listed shapes only, V4's coverage is "
+             + " and ".join(f"{pct(x, 1)} ({card})" for card, x in listed.items()) + ". "
+             + " ".join(f"That is a goal miss for {card}'s V4 row in that reading." for card, x in listed.items()
+                        if x < 0.95)
+             + " Which reading holds is a world-model question: what the unlisted MACs are, at what shapes.")
 
     def g_max(designs):
         return max((r["world"]["gamma"], k) for k, r in rows.items() if k[0] in designs and k[2] == "measured")
@@ -744,33 +835,143 @@ def report(D: dict) -> str:
              + ("is not needed." if g[0] <= 10 else "is needed.")
              + (f" Over every design it is {g_all[0]:.2f} ({g_all[1][0]}, {g_all[1][1]}, {short[g_all[1][3]]}), a "
                 "sensitivity that isn't adopted." if g_all[1][0] not in (HEADLINE, "v3") else "") + "\n")
+    a_h = rows[HEADLINE, "H200", "measured", models[0]]["answers"]
+    v4h = {card: rows[HEADLINE, card, "measured", v4["name"]]["eps"]["g"] for card in vc.CARDS}
+    L.append(f"### Protocol {HEADLINE} as D6 prices it (v3's spec, CMP-118 e0cd4061, with the 07:04Z rule's L′ and "
+             "P21, P23, P25)\n")
+    L.append("- **Words.** v2's: 16-bit prefix sums of the noised product every L = t·L′ inner indices, committed as "
+             "SHA-512 hiding leaves (8 blocks, a 16-ary frame-v3-sha512 tree), O the last 32-bit word, bound to them. "
+             "HYB's noise U, V uniform on ±80, U's columns freshly permuted every noise tile (t tiles a segment), and a "
+             "1-bit dither on both sides. PV is credited with O bound and a fresh bit on P; QKᵀ and V4's indexer are "
+             "served plain, uncredited. L′ per round class by the 07:04Z rule (the picks below).\n"
+             "- **Credit.** pub(μ°) of every credited round: its least price over D5 v2.1's menu at the honest served "
+             "period's duals μ°, which follow from the period's public shapes.\n"
+             "- **Coins.** Live, from the challenger. A round is the calls whose coins go out together (P13). Every "
+             "credited coin is drawn from seeds the network certifier streams (at most 512·N_max MACs a seed; "
+             "07:04Z); weight-side coins may be reused across decode calls (P14, P17).\n"
+             "- **The registered total (P21).** Before the period's first check, the prover registers the period's "
+             "rounds (each round's registered instance, L27) and the verifier publishes their total C_reg = Σ_w "
+             "H(reg w), at most the group's capacity at the card's rate. Each round w is then checked independently "
+             "with probability π_w = k·H_w / C_reg (P15, P20's Poisson draw, H_w its public cost). The bound is ε·C_reg, "
+             "so a prover that registers more than it serves only raises its own ε. Without the publication, the draw "
+             "has to be normalised by the wall-clock period, and ε_S becomes a share of s·T (the ε table's variant "
+             "column).\n"
+             f"- **Groups (P23).** A group is a serving replica with its coins in lockstep, so its rounds are totally "
+             f"ordered, and the theorem holds per group with a union bound over the world's G groups. A Llama replica "
+             f"fits in a node, so the group is a node's {NODE_GPUS} GPUs, its replicas released together. V4-Pro's "
+             f"{PARAMS[v4['name']] / 1e12:.1f}e12 INT8 weights need at least {v4h['H200']} H200s or "
+             f"{v4h['RTX PRO 6000']} RTX PRO 6000s (before KV cache), so its group is that replica (the least, so the "
+             "most groups: the larger ε), with whole nodes beside it in the P16 table. The network certifier's "
+             "boundary goes around the whole group: every port out of it is behind the certifier, so the "
+             "expert-parallel traffic inside it doesn't count against ε_net.\n"
+             f"- **Timing (P25).** A period is T = {PERIOD_S / 86400:g} days. A round's commitment reaches the "
+             f"certifier within Δ = {DELTA_S:g} s of its coins, and a draw's answer within τ_ans = {TAU_ANS_S:g} s: "
+             f"one C-Flock --zk proof of the opened unit (a session's latency floor is about {ANS_FLOOR_S:g} s, its "
+             f"GPU busy about {ANS_GPU_S:g} s: {ANS_RUN}), run beside the group's later rounds. A group's checks go "
+             f"through the firewall one at a time, so k(Δ + τ_ans) ≤ T: {K_DRAWS:,} × {DELTA_S + TAU_ANS_S:g} s = "
+             f"{K_DRAWS * (DELTA_S + TAU_ANS_S) / 86400:.2f} days, and {a_h['draws_hi']:,.0f} draws (the H200 8B "
+             f"group's at its 1 − 1e-6 quantile) take {a_h['t_min_h'] / 24:.2f} days of the {PERIOD_S / 86400:g}. No "
+             "coins go out in a period's last Δ + τ_ans.\n"
+             "- **ε.** ε_S + ε_net at the model's group, times 1 + H_o/H for the honest answers (P25), with "
+             "ln(P)/(ηk) added over a window's P periods (P26).\n")
     L.append(f"### The world (rule L2): pooled, every window, both δ, {HEADLINE}, V4 as the world's request (8B, 70B "
              "below)\n")
+    L.append("**How to read the world rows (P22).** They are μ°-priced device capacity: credited is the honest device "
+             "time the claim covers, valued at pub(μ°) and scaled to the world's C as FP8 FLOP-equivalents of that "
+             "time. They are not FP8 FLOP of other work. εC bounds other work valued at the same μ° (at a fixed μ°, "
+             "other work's μ°-price plus the claim is at most the period's makespan, times 1 + ε, whatever routes or "
+             "mix the prover runs). At x = 0, μ° prices the H200's tensor pipe at 0 (its honest period binds the ALU "
+             "and the FMA pipe) and prices the RTX PRO 6000's low (ALU and register file), so plain INT8 tensor work "
+             "beside the credited rounds is valued at little or nothing: neither εC nor the uncredited column bounds "
+             "it. The P22 table below gives that hidden work, and the one alternative, credit at a fixed served "
+             "price μ¹ published as a protocol parameter.\n")
     L.append("Two tables in different units. C is the world's FP8 FLOP in the window (brief rule L2). What is scaled: "
              "the whole fleet is taken to be one card serving one model, so every figure is that card's share times "
-             "C, and P16's groups are C's GPUs at the card's FP8 rate over 8 (not a census). V4's static MACs are its "
-             "stated 49e9 a token with its listed shapes (47.46e9) as their mix, as nofold takes them, so 3.2% of them "
-             "have no shape of their own. εC is ε times the claim "
-             "beside it: ε is a share of the claim at every dual (P20), at 8-GPU groups, with ε_net's MACs each at the "
-             "dearest credited round's price at that table's μ over the period's mean. (D6 v0 and v0.1 printed εC "
-             "as ε times C, too large by the credited share; corrected here.) Credit at a period's duals adds up only "
-             "if everything credited in the period is priced at those duals (ALGO-COST-3's A30b); D6 credits one "
-             "workload a card in one LP, with the beside work uncredited, so it holds here.\n")
+             "C, and P16's groups are C's GPUs at the card's FP8 rate over the model's group (not a census). V4's "
+             "static MACs are 48.07e9 a token (its 49e9 active parameters less the input embedding), with its listed "
+             "shapes (47.46e9) as their mix. εC is ε times the claim beside it: ε is a share of the claim at every "
+             "dual (P20), at the model's group, with ε_net's MACs each at the dearest credited round's price at that "
+             "table's μ over the period's mean, times 1 + H_o/H, plus the union over the window's periods (P26: "
+             + ", ".join(f"{win} {WINDOW_S[win] / PERIOD_S:.2f}" for win in WINDOW_S)
+             + " one-week periods). Credit at a period's duals adds up only if everything credited in the period is "
+             "priced at those duals (ALGO-COST-3's A30b); D6 credits one workload a card in one LP, with the beside "
+             "work uncredited, so it holds here.\n")
+
+    def eps_win(r, d, win):
+        e = r["eps"]
+        return e["head"][d] + e["union"][win] * (1 + e["ho_claim"])
+
+    def var_win(r, d, win):
+        e = r["eps"]
+        return e["no_c_reg"][d] + e["union"][win] * (1 + e["ho_claim"]) / r["share"]["share"]
+
     L.append("**Model units at μ°, the cards' headline.** Credited is honest device time at pub(μ°), the honest served "
              "period's duals, as FP8 FLOP-equivalents of that time (share × C).\n")
     L.append("| card, model | window | C (FP8 FLOP) | credited (FLOP-eq.) | εC δ 1% | εC δ 1e-6 | "
-             "honest time uncredited (FLOP-eq.) | QKᵀ + indexer + plain PV, uncredited MACs |")
-    L.append("|---|---|---|---|---|---|---|---|")
+             "εC δ 1e-6 without C_reg (P21's variant) | honest time uncredited (FLOP-eq.) | "
+             "QKᵀ + indexer + plain PV, uncredited MACs |")
+    L.append("|---|---|---|---|---|---|---|---|---|")
     for card in vc.CARDS:
         for m in reversed(models):
             r = rows[HEADLINE, card, "measured", m]
             for win, F in WORLD_FLOP.items():
                 s = r["share"]["share"]
-                e = r["eps"]["at"]["served"]["eps"]
-                L.append(f"| {card}, {short[m]} | {win} | {F:.2e} | {s * F:.2e} | {e[0.01] * s * F:.1e} | "
-                         f"{e[1e-6] * s * F:.1e} | {(1 - s) * F:.1e} | {pct(r['world']['uncredited'], 1)} |")
+                L.append(f"| {card}, {short[m]} | {win} | {F:.2e} | {s * F:.2e} | {eps_win(r, 0.01, win) * s * F:.1e} | "
+                         f"{eps_win(r, 1e-6, win) * s * F:.1e} | {var_win(r, 1e-6, win) * s * F:.1e} | "
+                         f"{(1 - s) * F:.1e} | {pct(r['world']['uncredited'], 1)} |")
     L.append("")
-    L.append("**Tensor units at μ_t (08:24Z), the world FP8 FLOP claim.** Credited FP8 FLOP is twice the tensor MACs of "
+    B = D["beside"]
+
+    def fixed_price(card, m, xp):
+        """Credit at the fixed price μ_xp (the honest period's duals at beside load xp), published: the credited share
+        with the honest period at x = 0 and at x = 1, ε at δ 1e-6, and the plain INT8 beside work it leaves unpriced,
+        x′ (alone − μ_xp-price) a credited MAC over pub(μ_xp), at x′ in BESIDE."""
+        r = rows[HEADLINE, card, "measured", m]
+        b0, bx, b1 = (B[HEADLINE, card, m, x] for x in (0.0, xp, 1.0))
+        pub, s0 = bx["pub"], b0["share0"]
+        sh0, sh1 = s0 * pub / b0["pub"], s0 * pub / b1["opt"] * b0["opt"] / b0["pub"]
+        e = r["eps"]
+        net = WIRE_BITS * nf.WORLD_TOKENS * bx["net_most"] / (r["period"]["cred_macs"] * pub)
+        ho = r["share"]["answers"] / sh0
+        eps = (e["groups"][e["g"]]["eps_S"][1e-6] + net) * (1 + ho)
+        hid = {x: x * (bx["unit"]["alone"] - bx["unit"]["at_served"]) / pub for x in BESIDE if x > 0}
+        rtp = {x: (B[HEADLINE, card, m, x]["fixed_alone"] - b0["fixed_alone"]
+                   - (B[HEADLINE, card, m, x]["served"] - b0["served"])) / b0["pub"] for x in BESIDE if x > 0}
+        return dict(sh0=sh0, sh1=sh1, eps=eps, eps_year=eps + e["union"]["year"] * (1 + ho), hid=hid, rtp=rtp,
+                    binding=bx["binding"])
+
+    L.append("**P22: credit at a fixed served price.** The headline credits at μ°, the honest period's duals with only "
+             "its own uncredited work beside (x = 0). The alternative publishes μ¹, the honest period's duals at x = 1 "
+             "(one plain INT8 MAC of other tensor work a credited MAC beside the period), as a protocol parameter "
+             "and credits pub(μ¹) whatever the period holds. ε holds at either fixed price (P15/P20). Hidden beside "
+             "work is plain INT8 tensor work beside the credited rounds that the price doesn't value: x (its "
+             "standalone time − its price) a credited MAC, over the claim. RT-PROTO-2's measure (its standalone time "
+             "less the honest period's growth, over the claim at μ°) is beside it for μ°. A year's figures are "
+             "FLOP-equivalents at that row's credited share with the honest period at x = 0.\n")
+    L.append("| card, model | credit at | binding rows at that price | credited share, honest period at x = 0 / "
+             "x = 1 | ε δ 1e-6, a period | hidden beside work, x = "
+             + " / ".join(f"{x:g}" for x in BESIDE if x > 0) + " | RT-PROTO-2's measure, x = "
+             + " / ".join(f"{x:g}" for x in BESIDE if x > 0)
+             + " | a year: credited / εC δ 1e-6 / hidden at x = 0.25 (FLOP-eq.) |")
+    L.append("|---|---|---|---|---|---|---|---|")
+    for card in vc.CARDS:
+        for m in models:
+            for lab, xp in (("μ° (the headline)", 0.0), ("μ¹ (x = 1, published)", 1.0)):
+                f = fixed_price(card, m, xp)
+                cy = f["sh0"] * WORLD_FLOP["year"]
+                L.append(f"| {card}, {short[m]} | {lab} | {', '.join(f['binding'])} | {pct(f['sh0'], 1)} / "
+                         f"{pct(f['sh1'], 1)} | {pct(f['eps'], 3)} | "
+                         + " / ".join(pct(v, 1) for v in f["hid"].values()) + " | "
+                         + (" / ".join(pct(v, 1) for v in f["rtp"].values()) if xp == 0 else "—")
+                         + f" | {cy:.2e} / {f['eps_year'] * cy:.1e} / {f['hid'].get(0.25, 0.0) * cy:.1e} |")
+    L.append("")
+    L.append("μ¹ moves the price onto the tensor pipe and the joint facets, so plain INT8 work beside the claim is "
+             "valued at about its time. What μ¹ values below its time is lane work (ALU, FMA, register file) beside "
+             "the claim, which the world's FP8 model doesn't count. The cost is the credited share with nothing "
+             "beside (x = 0): pub(μ¹) values the credited rounds' lane work below μ°. Whether the claim moves to μ¹ "
+             "is Daniel's call (19:00Z); the coordinator recommends it.\n")
+    L.append("**Tensor units at μ_t, a labelled sensitivity, not a claim (12:02Z reversed 08:24Z's tensor-unit "
+             "claim).** Credited FP8 FLOP is twice the tensor MACs of "
              "the cheapest public route at the tensor-only price μ_t: every lane is free, so it counts only work the "
              "tensor pipe must do however long the lanes take. Every product in D5's menu may run on the lanes "
              "(DP4A, the integer ALU), so where that column is 0, no tensor work is forced at all. A nonzero tensor "
@@ -793,8 +994,9 @@ def report(D: dict) -> str:
                          f"{mma_t(r) * F:.2e} | "
                          + " | ".join(f"{t['bounded'][s] * F:.2e}" for s in sl) + f" | {t['honest'] * F:.2e} |")
     L.append("")
-    L.append("The same as shares of C, beside the model-unit share, with ε at each μ (8-GPU groups, δ 1e-6; in brackets "
-             "ε_net's scale over the equal-price n_max E / credited MACs). OPT* is the honest words' best program.\n")
+    L.append("The same as shares of C, beside the model-unit share, with ε at each μ (the model's group, δ 1e-6, before "
+             "the answers' 1 + H_o/H; in brackets ε_net's scale over the equal-price n_max E / credited MACs). OPT* is "
+             "the honest words' best program.\n")
     L.append("| card, model | model units at μ° | ε at μ° | μ_t: pub | μ_t: OPT* | ε at μ_t | peels on the MMA only | "
              + " | ".join(f"deadline × {1 + s:g}" for s in sl) + " | deployed kernel's tensor |")
     L.append("|---|---|---|---|---|---|---|" + "---|" * len(sl) + "---|")
@@ -812,31 +1014,61 @@ def report(D: dict) -> str:
                      + f" | {pct(t['honest'], 1)} |")
     L.append("")
     L.append("### ε (goal ≤ 1% at δ = 1e-6)\n")
-    L.append("ε = ε_S + ε_net. P16 (07:04Z): the theorem holds per serving-replica group (coins in lockstep inside a "
-             "group), with a union bound over the world fleet's G groups, so ε_S = ln(G/δ)/(ηk) at k = 13,816 a group; "
-             "G is the world model's GPUs at the card's FP8 rate over the group size (scaled from one card, not a "
-             "census). 8-GPU groups lead; 1 and 64 GPUs are in the P16 table. ε_net: RT-PROTO-2's assumptions (n_max "
-             "the largest credited N, 4 bytes a token crossing the node's boundary, 4,500-token requests; ×6.5 if "
-             "HTTP/SSE crosses it).\n")
-    L.append("The last column is ε at δ 1e-6 as a share of the claim at μ° (the world table's), ε_net's MACs each at its "
-             "round's price.\n")
-    L.append("| card | η | k a group (expected draws, P20) | ε_S δ 1% / 1e-6, 8-GPU groups | ε_net | "
-             "ε δ 1%, 8-GPU groups | **ε δ 1e-6, 8-GPU groups** | ε δ 1e-6, one sequence (no P16) | "
-             "ε δ 1e-6, a share of the claim at μ° |")
-    L.append("|---|---|---|---|---|---|---|---|---|")
+    L.append("ε = (ε_S + ε_net)(1 + H_o/H), a period's, as a share of the claim at μ°. P16 (07:04Z): the theorem holds "
+             "per serving-replica group (coins in lockstep inside a group), with a union bound over the world fleet's "
+             f"G groups, so ε_S = ln(G/δ)/(ηk) at k = {K_DRAWS:,} a group; G is the world model's GPUs at the card's "
+             "FP8 rate over the model's group (P23; scaled from one card, not a census); other group sizes are in the "
+             "P16 table. ε_net: RT-PROTO-2's assumptions (n_max the largest credited N, 4 bytes a token crossing the "
+             "group's boundary, 4,500-token requests; ×6.5 if HTTP/SSE crosses it), each MAC at its round's price at "
+             "μ° (in brackets, the scale over the equal-price n_max E / credited MACs). H_o/H is the timed answers' "
+             "time over the claim (P25). P21's variant is ε with the draw normalised by the wall-clock period "
+             "instead of the published C_reg: ε_S/s + ε_net, s the credited share (RT-PROTO-2: 0.42 / 0.38 / 0.37% "
+             "H200, 0.32 / 0.27 / 0.28% RTX PRO 6000 at v1's figures). P26 adds ln(P)/(ηk) over a window's P one-week "
+             "periods: " + ", ".join(f"{win} +{pct(math.log(WINDOW_S[win] / PERIOD_S) / (rows[HEADLINE, 'H200', 'measured', models[0]]['eps']['eta'] * K_DRAWS), 3)}"
+                                     for win in WINDOW_S) + " (times 1 + H_o/H). V4's node-boundary column is ε_net with "
+             f"the certifier's boundary at one node instead of the group, where expert-parallel traffic (about "
+             f"{EP_BITS:.0e} bits a token, RT-PROTO-2's estimate) crosses it: vacuous, so the boundary goes around the "
+             "group.\n")
+    L.append("| card, model | η | GPUs a group (G) | k a group (expected draws, P20) | ε_S δ 1% / 1e-6 | ε_net at μ° | "
+             "H_o/H | ε δ 1% | **ε δ 1e-6** | P21's variant (no C_reg), δ 1e-6 | one sequence (no P16), δ 1e-6 | "
+             "a year (P26), δ 1e-6 | ε_net, boundary at a node |")
+    L.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for card in vc.CARDS:
-        r0 = rows[HEADLINE, card, "measured", models[0]]["eps"]
-        g8 = r0["groups"][8]
-        L.append(f"| {card} | 1 − {1 - r0['eta']:.1e} | {r0['k']:,} "
-                 f"({w(lambda r: f'{r['eps']['draws']:,.0f}', HEADLINE, card, 'measured')}) | "
-                 f"{pct(g8['eps_S'][0.01], 3)} / {pct(g8['eps_S'][1e-6], 3)} | "
-                 f"{w(lambda r: pct(r['eps']['eps_net'], 4), HEADLINE, card, 'measured')} | "
-                 f"{w(lambda r: pct(r['eps']['groups'][8]['eps'][0.01], 3), HEADLINE, card, 'measured')} | "
-                 f"{w(lambda r: pct(r['eps']['groups'][8]['eps'][1e-6], 3), HEADLINE, card, 'measured')} | "
-                 f"{w(lambda r: pct(r['eps']['eps'][1e-6], 3), HEADLINE, card, 'measured')} | "
-                 f"{w(lambda r: pct(r['eps']['at']['served']['eps'][1e-6], 3), HEADLINE, card, 'measured')} |")
+        for m in models:
+            r = rows[HEADLINE, card, "measured", m]
+            e = r["eps"]
+            gg = e["groups"][e["g"]]
+            a = e["at"]["served"]
+            L.append(f"| {card}, {short[m]} | 1 − {1 - e['eta']:.1e} | {e['g']} ({gg['G']:.2e}) | {e['k']:,} "
+                     f"({e['draws']:,.0f}) | {pct(gg['eps_S'][0.01], 3)} / {pct(gg['eps_S'][1e-6], 3)} | "
+                     f"{pct(a['eps_net'], 4)} (×{a['net_scale']:.2f}) | {pct(e['ho_claim'], 2)} | "
+                     f"{pct(e['head'][0.01], 3)} | **{pct(e['head'][1e-6], 3)}** | {pct(e['no_c_reg'][1e-6], 3)} | "
+                     f"{pct(e['eps'][1e-6], 3)} | {pct(eps_win(r, 1e-6, 'year'), 3)} | "
+                     + (pct(e["eps_net_node"], 0) if e["eps_net_node"] else "— (the group is a node)") + " |")
+    L.append("")
+    L.append("### The timed answers (P25), at each model's group\n")
+    L.append(f"T = {PERIOD_S / 86400:g} days, Δ = {DELTA_S:g} s, τ_ans = {TAU_ANS_S:g} s, {ANS_GPU_S:g} GPU-s an "
+             f"answer ({ANS_RUN}). The draws must fit the period one at a time, N(Δ + τ_ans) ≤ T; RT-PROTO-2's bound is "
+             f"T ≥ {K_DRAWS / 3600:.2f} h per second of Δ + τ_ans. The answers' cost is in γ and the credited share (the "
+             "answers' GPU time over the group's) and in ε (over the claim). If each answer stalled the whole group "
+             "instead of running beside its later rounds, it would cost the share in the stall column. Rounds in "
+             "the period's last Δ + τ_ans go uncredited.\n")
+    L.append("| card, model | GPUs a group | draws a period, mean / 1 − 1e-6 | N(Δ + τ_ans), a share of T | "
+             "H_o/H in time / over the claim | γ without / with the answers | if answers stalled the group | "
+             "uncredited tail |")
+    L.append("|---|---|---|---|---|---|---|---|")
+    for card in vc.CARDS:
+        for m in models:
+            r = rows[HEADLINE, card, "measured", m]
+            a, e = r["answers"], r["eps"]
+            L.append(f"| {card}, {short[m]} | {e['g']} | {a['draws']:,.0f} / {a['draws_hi']:,.0f} | "
+                     f"{pct(a['busy'], 1)}{'' if a['busy'] <= 1 else ' (does not fit)'} | "
+                     f"{pct(r['share']['answers'], 3)} / {pct(e['ho_claim'], 3)} | "
+                     f"{r['world']['gamma']:.3f} / {gamma_ans(r):.3f} | {pct(a['serial'], 1)} | {pct(a['tail'], 4)} |")
     L.append("")
     L.append("### γ (goal ≤ 10), credited share and coverage (goal ≥ 95%)\n")
+    L.append("γ here is the serving overhead before the timed answers (the goals table adds their H_o/H, at most "
+             f"{pct(max(r['share']['answers'] for r in rows.values()), 2)}); the credited share includes them.\n")
     L.append("| design, card, SHA-512 rate | γ overlapped | γ additive | worst round's γ | tensor util. | "
              "credited share (served duals) | routes uncredited, period / job | coverage of matmul MACs |")
     L.append("|---|---|---|---|---|---|---|---|")
@@ -908,6 +1140,10 @@ def report(D: dict) -> str:
             L.append(f"| {name}, {card} | " + " | ".join(
                 " / ".join(pct(B[name, card, m, x]["share"], 1) for m in models) + " ("
                 + " / ".join(pct(B[name, card, m, x]["leak"], 1) for m in models) + ")" for x in BESIDE) + " |")
+    L.append("\nOn the RTX PRO 6000 these cells carry route (iii), b cᵀ with b1 emulated on the lanes, which D5 v2.1 "
+             "prices from the sm_120 census (ALGO-COST-3's A35, A38), so from x = 0.25 they are no longer upper bounds "
+             "as v1's were. On the H200 b1 is native.")
+
     def census_rows(rows, label):
         cz = {k if k.count(" | ") == 3 else f"{HEADLINE} | {k}": v for k, v in rows.items()}
         L.append("| picks, card | " + " | ".join(f"x = {x:g}" for x in BESIDE) + " |")
@@ -924,24 +1160,14 @@ def report(D: dict) -> str:
             L.append(f"| {name}, {card}, {label}: 1 − c_inc | " + " | ".join(
                 " / ".join(pct(1 - cen(m, x)["c_inc"], 1) for m in models) for x in BESIDE) + " |")
 
-    if "census" in D:
-        L.append("\nD5 v2's job LPs leave out A7's b cᵀ with b1 emulated on the lanes (ALGO-COST-3's A34, route iii). "
-                 "Priced as A35's census routes (`algo_cost3/b1alu_check.py --census` at b4830ae7b1: LOP3 and IADD3 on "
-                 "the ALU, POPC on a 16-lane XU row, IMAD and IDP.4A on the FMA pipe, each instruction on issue, vec "
-                 "and the register file) in these period LPs at each design's picks, the RTX PRO 6000's credited "
-                 "share is this (in brackets the routes' uncredited share at the served duals, as above), and its "
-                 f"routes save 1 − c_inc of the makespan increment, 8B / 70B / V4 ({D['census']['ref']}). So the RTX "
-                 "PRO 6000's cells above from x = 0.25 are upper bounds on its share until D5's menu carries the "
-                 "route. On the H200 b1 is native.\n")
-        census_rows(D["census"]["rows"], "with emulated b1")
     if "census_vector" in D:
         cv = D["census_vector"]
         L.append(f"\nThe same with the RTX PRO 6000's joint issue rows (MMA beside lane work) from {cv['vector']}, the "
                  "machine model's vector, at IMMA16832's coefficient in D5's form, instead of θ's JI3e_0–2, which "
-                 "D5's card prices and which the machine model closed at VF3n-16 (ALGO-COST-3's A36, "
-                 f"`algo_cost3/theta_facets.py` at a68f6b5ed2; {cv['ref']}). A sensitivity: D5 v2's card is the "
-                 "hull of record (08:24Z).\n")
-        census_rows(cv["rows"], f"{cv['vector']}, with emulated b1")
+                 "D5's card prices and which the machine model closed at VF3n-16 (ALGO-COST-3's A36's swap, on D5 "
+                 f"v2.1's menu with route (iii) in it; {cv['ref']}). A sensitivity: D5 v2.1's card is the hull of "
+                 "record (08:24Z).\n")
+        census_rows(cv["rows"], cv["vector"])
     L.append("\nPB4: the same periods by makespan, which needs no duals. Cells: 1 − c_inc, the share of the credited "
              "rounds' honest makespan increment over the period's fixed load alone that pub's period saves, 8B / 70B / "
              "V4, beside the dual-price figure above. Credit stays at the duals (P12); c_inc shows how much of that "
@@ -1040,13 +1266,19 @@ def report(D: dict) -> str:
             L.append(f"| {design}, {card} | " + " | ".join(cells) + " |")
     L.append("")
     L.append("### P16: per replica group (union bound), G from the world model at the card's FP8 rate (scaled)\n")
-    L.append("| card | GPUs a group | G | ε_S δ 1% / 1e-6 at k = 13,816 a group | k a group for ε_S 0.1% at 1e-6 | "
+    L.append("V4's groups, with each model's own marked (P23: the Llamas' a node, V4's its least replica; whole nodes "
+             "beside it).\n")
+    L.append(f"| card | GPUs a group | G | ε_S δ 1% / 1e-6 at k = {K_DRAWS:,} a group | k a group for ε_S 0.1% at 1e-6 | "
              "world draws a period (V4) |")
     L.append("|---|---|---|---|---|---|")
     for card in vc.CARDS:
+        own = {}
+        for m in models:
+            own.setdefault(rows[HEADLINE, card, "measured", m]["eps"]["g"], []).append(short[m])
         for g, x in rows[HEADLINE, card, "measured", models[-1]]["eps"]["groups"].items():
-            L.append(f"| {card} | {g} | {x['G']:.2e} | {pct(x['eps_S'][0.01], 3)} / {pct(x['eps_S'][1e-6], 3)} | "
-                     f"{x['k_group']:,} | {x['draws_world']:.2e} |")
+            mark = f" ({', '.join(own[g])}'s)" if g in own else ""
+            L.append(f"| {card} | {g}{mark} | {x['G']:.2e} | {pct(x['eps_S'][0.01], 3)} / "
+                     f"{pct(x['eps_S'][1e-6], 3)} | {x['k_group']:,} | {x['draws_world']:.2e} |")
     L.append("")
     L.append("### Streaming b (P2): what the network certifier sends, measured honest rate, 100% of time credited\n")
     L.append("| card, model | option | GB/s a GPU | GB/s an 8-GPU node | n_max | ε_net |")
@@ -1099,11 +1331,9 @@ def jsonable(x):
 
 
 if __name__ == "__main__":
-    arg = {k: sys.argv[sys.argv.index(k) + 1] for k in ("--json", "--pickle", "--from", "--census", "--census-ref",
-                                                         "--census-vector", "--census-vector-ref") if k in sys.argv}
+    arg = {k: sys.argv[sys.argv.index(k) + 1] for k in ("--json", "--pickle", "--from", "--census-vector",
+                                                         "--census-vector-ref") if k in sys.argv}
     D = pickle.loads(Path(arg["--from"]).read_bytes()) if "--from" in arg else build()
-    if "--census" in arg:
-        D["census"] = dict(rows=json.loads(Path(arg["--census"]).read_text()), ref=arg.get("--census-ref", "unpublished"))
     if "--census-vector" in arg:
         cv = json.loads(Path(arg["--census-vector"]).read_text())
         D["census_vector"] = dict(rows=cv["rows"], vector=cv["vector"],

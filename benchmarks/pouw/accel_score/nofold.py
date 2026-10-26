@@ -379,13 +379,17 @@ def _dense(name, layers, hidden, hq, hkv, d, ffn, vocab):
             "att": lambda t: [(layers, t)], "indexer": lambda t: 0}
 
 
+V4_EMBED = 129_280 * 7_168    # V4's input embedding (vocab × hidden): inside its 49e9 active parameters, a lookup
+
+
 def _dsv4():
     def att(t):
         w = min(t, 128)
         return [(30, w + min(1024, t // 4)), (31, w + t // 128)]
 
-    return {"name": "DeepSeek-V4-Pro", "static": 49e9, "hq": 128, "hkv": 1, "dqk": 512, "dv": 512, "att": att,
-            "indexer": lambda t: 30 * 64 * 128 * (t // 4)}
+    # Static MACs a token: the 49e9 active parameters less the input embedding, which does no MACs (RT-PROTO-2's P24).
+    return {"name": "DeepSeek-V4-Pro", "static": 49e9 - V4_EMBED, "hq": 128, "hkv": 1, "dqk": 512, "dv": 512,
+            "att": att, "indexer": lambda t: 30 * 64 * 128 * (t // 4)}
 
 
 # COVER-ATTN's world model and final ATT block (cover_attn.py at 27fc89418f on cursor/compute-research-accel-cover-attn-ea24):
