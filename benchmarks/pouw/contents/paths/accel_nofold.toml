@@ -1,0 +1,4 @@
+order = 288
+path = "`accel_score/nofold.py`"
+runs_on = "CPU"
+what = "the receipt with no fold (every word a SHA-512 Merkle leaf) per matmul of the frozen model on the H200: hashing, the peel, the serving skip's ε and the γ it forces, SHA-512 speed exposure, Theorem S draws, the proof unit's size and coverage with attention"
