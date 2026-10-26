@@ -141,9 +141,9 @@ class Class:
     lanes: int
     C: int
     IDB: int = 17
-    EVERY: int = 8
+    EVERY: int = 16
     WITHIN: int = 12
-    D: int = 21
+    D: int = 27
     KO: int = 64
 
     def __post_init__(self) -> None:

@@ -302,9 +302,9 @@ WARDEN_TOKENS = (16, 256)
 WARDEN_RATE, WARDEN_TAIL_S, WARDEN_SEED = 0.5, 60, 0
 #: a scan rehearsal's (`--scan`) schedule, scan_zk's (`scan_zk.PARAMS`, `scan_zk.py schedule`), the only one
 #: `scan_zk.py prove --warden-run` takes, as `warden_serve.py`'s flags
-SCAN_SCHEDULE = ("--cell-bytes", "512", "--slots", "4", "--bucket-ms", "100", "--delay", "21", "--lanes", "4",
+SCAN_SCHEDULE = ("--cell-bytes", "512", "--slots", "4", "--bucket-ms", "100", "--delay", "27", "--lanes", "4",
                  "--queue", "4", "--window", "32", "--ingress-cells", "47", "--ingress-buckets", "12",
-                 "--egress-cells", "65", "--every", "8")
+                 "--egress-cells", "65", "--every", "16")
 #: the scan's schedule by flag, which `--window-per-group` sizes a group's link-windows on (`scan_group_windows`)
 SCAN = {f: int(v) for f, v in zip(SCAN_SCHEDULE[::2], SCAN_SCHEDULE[1::2])}
 #: a scan rehearsal's `--prompts`, read off the gate's stdin: at most `WARDEN_PROMPTS_BYTES` of JSON, an array of

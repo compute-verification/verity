@@ -142,9 +142,9 @@ def test_scan_traffic_ticks_the_warden_s_rows(run):
 
 
 def test_the_state_is_the_layout_neg_sized():
-    w63 = IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=8, WITHIN=12)
-    assert (w63.K0, w63.K, w63.D, w63.KO, w63.SLOTS, IS.state_bits(w63)) == (12, 45, 21, 64, 4, 149_648)
-    assert (IS.prog_bits(w63), IS.view_bits(w63), w63.egress) == (4480, 4832, EG.Shape(512, 16, 4, 4, 64, 17, 21))
+    w63 = IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12)
+    assert (w63.K0, w63.K, w63.D, w63.KO, w63.SLOTS, IS.state_bits(w63)) == (12, 45, 27, 64, 4, 149_648)
+    assert (IS.prog_bits(w63), IS.view_bits(w63), w63.egress) == (4480, 4832, EG.Shape(512, 16, 4, 4, 64, 17, 27))
     lay = IS.layout(w63)
     at = 0
     for name, (o, w) in lay.items():
@@ -154,17 +154,17 @@ def test_the_state_is_the_layout_neg_sized():
     assert lay["3.ids"] == (149_644 - 47 * 45 * 17, 47 * 45 * 17) and lay["3.out"][1] == 64 * 17
     assert lay["3.occ"][1] == 32 and lay["3.n"][0] == lay["3.occ"][0] + 32
     assert [IS.position(w63, p) for p in (0, 11, 12, 56, 57)] == [0, 11, 45, 89, 90]
-    assert [w63.anchor(t, t % 8) for t in (0, 4, 5, 12, 13)] == [16, 16, 24, 24, 32]
-    for bad in ({"B": 256}, {"C": 1 << 16}, {"IDB": 33}, {"EVERY": 0}, {"D": 18}, {"KO": 1 << 16}):
+    assert [w63.anchor(t, t % 16) for t in (0, 4, 5, 20, 21)] == [16, 16, 32, 32, 48]
+    for bad in ({"B": 256}, {"C": 1 << 16}, {"IDB": 33}, {"EVERY": 0}, {"D": 26}, {"KO": 1 << 16}):
         with pytest.raises(ValueError):
             IS.Class(**{"B": 512, "r": 4, "lanes": 4, "C": 47, **bad})
-    served = WardenParams(cell_bytes=512, slots=4, lanes=4, delay=21, ingress_cells=47, ingress_buckets=12,
-                          egress_cells=65, window=32, every=8)
+    served = WardenParams(cell_bytes=512, slots=4, lanes=4, delay=27, ingress_cells=47, ingress_buckets=12,
+                          egress_cells=65, window=32, every=16)
     w63.serves(served)
-    assert (served.program_slots, served.window_programs) == (w63.SLOTS, 16)
-    for bad, fix in (({"delay": 22}, "= D = 21"), ({"ingress_buckets": 13}, "<= WITHIN = 12"),
+    assert (served.program_slots, served.window_programs) == (w63.SLOTS, 8)
+    for bad, fix in (({"delay": 28}, "= D = 27"), ({"ingress_buckets": 13}, "<= WITHIN = 12"),
                      ({"ingress_cells": 48}, "<= C = 47"), ({"lanes": 5}, "= lanes = 4"),
-                     ({"egress_cells": 66}, "<= KO + 1 = 65"), ({"every": 16}, "= EVERY = 8")):
+                     ({"egress_cells": 66}, "<= KO + 1 = 65"), ({"every": 8}, "= EVERY = 16")):
         with pytest.raises(ValueError, match=re.escape(fix)):
             w63.serves(replace(served, **bad))
 
