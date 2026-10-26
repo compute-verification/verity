@@ -298,6 +298,32 @@ def power(scheme, d: int):
     return s
 
 
+FORK_FLOOR_222 = 4      # ALGO-COST A2 (fork_deliveries.py 24d9d2e6e4): IADD3s a segment for one 2x2 level, forked chains
+
+
+def _iadd3(scheme) -> int:
+    """IADD3s a segment to add every product into the output words, flat: an output block with t contributions takes
+    ceil(t / 2) (two terms and the running word an IADD3; signs are free)."""
+    t = sum((c != 0).astype(int) for _, _, c in scheme)
+    return int(np.ceil(t / 2).sum())
+
+
+def assembly(scheme, d: int) -> float:
+    """IADD3s a segment a output entry for the depth-d scheme's output assembly, the cheaper of flat (every leaf into
+    the words) and level by level (each level's products assembled first, the forked-chain floor on one 2x2 level)."""
+    if d == 0:
+        return 0.0
+    bm, _, bn = grid(scheme)
+    one = _iadd3(scheme)
+    if (bm, bn) == (2, 2) and len(scheme) == 7:
+        one = min(one, FORK_FLOOR_222)
+    per_level = one / (bm * bn)
+    hier = per_level * sum((len(scheme) / (bm * bn)) ** j for j in range(d))
+    pw = power(scheme, d)
+    gm, _, gn = grid(pw)
+    return min(hier, _iadd3(pw) / (gm * gn))
+
+
 # Sedoglavic's catalogue (fmm.univ-lille.fr, the `<shape>_LRP.mpl` files, kept in `fmm/`): Hopcroft–Kerr's <2,k,n>
 # family (RT-ALGO A2; the catalogue's <2,3,5;25> is a parametric family, left out) and Laderman's <3,3,3;23> (the
 # catalogue's family, read at l = 1).
@@ -511,7 +537,7 @@ class Priced:
 
 def price(card: Card, leaves: list, L: int, n: int, m: int, g: tuple = NAIVE, beside: bool = True,
           wgmma_smem: bool = True, facets: bool = True, items: tuple = (), extra_fixed: dict | None = None,
-          lookups: bool = False, rest: Leaf | None = None) -> Priced:
+          lookups: bool = False, rest: Leaf | None = None, asm: float | None = None) -> Priced:
     """LP: minimize T (SM-clocks a naive MAC) with every resource's load at most T times its rate, and θ's joint
     facets a·tensor + b·other ≤ 4T. c = T over the honest kernel's 1/s8.
 
@@ -522,7 +548,8 @@ def price(card: Card, leaves: list, L: int, n: int, m: int, g: tuple = NAIVE, be
     items: more work a naive MAC, each (name, weight, {route: loads a unit}), one convex mix of routes an item.
     extra_fixed: loads a naive MAC with no choice of route.
     lookups: O-IO's lookup routes for naive leaves (`lookup_routes`; valid at B = 0 only).
-    rest: the operands' naive leaf, for the part the scheme's blocks don't cover (default: generic int8 entries)."""
+    rest: the operands' naive leaf, for the part the scheme's blocks don't cover (default: generic int8 entries).
+    asm: the scheme's output assembly, IADD3s a segment a output entry (`assembly`)."""
     tile = leaf_tile(card, g)
     if tile is None:
         return Priced(math.inf, ["no tile"], {}, {}, False)
@@ -601,13 +628,17 @@ def price(card: Card, leaves: list, L: int, n: int, m: int, g: tuple = NAIVE, be
             var(f"{name}:{r}", ld)
             row[f"{name}:{r}"] = 1.0
         eqs.append((row, w))
-    # Fixed loads a naive MAC: every word stored for the hash (STS, both kernels), Strassen's output assembly in
-    # registers (one IADD a leaf entry it enters) and the forms (amortized over the other operand's rows).
+    # Fixed loads a naive MAC: every word stored for the hash (STS, both kernels), the scheme's output assembly in
+    # registers (`assembly`'s IADD3s; without it, one IADD a leaf entry it enters) and the forms (amortized over the
+    # other operand's rows).
     fixed = dict(issue=1 / L, smem=4 / L)
     for r, v in (extra_fixed or {}).items():
         fixed[r] = fixed.get(r, 0.0) + v
     if g != NAIVE:
-        adds = sum(lf.weight * lf.nnz_c * BK / L for lf in leaves)
+        if asm is None:
+            adds = sum(lf.weight * lf.nnz_c * BK / L for lf in leaves)
+        else:
+            adds = f * asm / L
         forms = sum(lf.weight * (BN * (lf.A.terms - 1 + 2 * (lf.A.terms > 1)) / n
                                  + BM * (lf.B.terms - 1 + 2 * (lf.B.terms > 1)) / m) for lf in leaves)
         for r, v in (("alu", adds + forms), ("rf", 3 * (adds + forms)), ("vec", adds + forms), ("issue", adds + forms)):
@@ -679,7 +710,7 @@ def profile(scheme) -> str:
 
 def price_scheme(card: Card, scheme, d: int, eX, eW, L: int, n: int, m: int, **kw) -> Priced:
     return price(card, leaves_of(scheme, d, eX, eW), L, n, m, grid(powered(scheme, d)),
-                 rest=leaves_of(None, 0, eX, eW)[0], **kw)
+                 rest=leaves_of(None, 0, eX, eW)[0], asm=assembly(scheme, d), **kw)
 
 
 def best_scheme(card: Card, d: int, eX, eW, L: int, n: int, m: int, schemes, **kw):
@@ -687,11 +718,12 @@ def best_scheme(card: Card, d: int, eX, eW, L: int, n: int, m: int, schemes, **k
     best, seen = None, set()
     for s in schemes:
         lv = leaves_of(s, d, eX, eW)
-        key = (grid(powered(s, d)), tuple(sorted((lf.A, lf.B, lf.nnz_c) for lf in lv)))
+        key = (grid(powered(s, d)), tuple(sorted((lf.A, lf.B, lf.nnz_c) for lf in lv)), assembly(s, d))
         if key in seen:
             continue
         seen.add(key)
-        p = price(card, lv, L, n, m, grid(powered(s, d)), rest=leaves_of(None, 0, eX, eW)[0], **kw)
+        p = price(card, lv, L, n, m, grid(powered(s, d)), rest=leaves_of(None, 0, eX, eW)[0], asm=assembly(s, d),
+                  **kw)
         if best is None or p.c < best[0].c:
             best = (p, s)
     return best

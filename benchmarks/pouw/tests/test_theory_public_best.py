@@ -29,6 +29,11 @@ def test_words_are_exact(cat, name, depth, data, uX):
     assert ok and cnt.sp > 0
 
 
+def test_assembly_counts_iadd3_with_algo_costs_fork_floor():
+    assert PB._iadd3(PB.STRASSEN) == 6 and PB.assembly(PB.STRASSEN, 1) == 1.0
+    assert PB.assembly(PB.STRASSEN, 2) == pytest.approx(1 + 7 / 4)
+
+
 def test_v1_permutation_breaks_the_packing_pattern():
     without, with_perm = PB.check_packing_invariance()
     assert without > 0.9 and with_perm < 0.3
