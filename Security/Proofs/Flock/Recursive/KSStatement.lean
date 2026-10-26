@@ -1,5 +1,7 @@
 import Proofs.Flock.Claims.Recursion.KSLin2R
 import Proofs.Flock.Claims.Recursion.DeployedR
+import Proofs.Flock.Claims.Recursion.DeployedBrings
+import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
 
 /-!
 # The recursive verifier's knowledge soundness at the deployed reader (trusted)
@@ -12,7 +14,10 @@ deployed circuit performs, recorded), the coin server's record
 
 It is stated at the deployment's parameters (the reader `rd`, V\*'s last message's reader `final`, the last part's
 pieces `rest`, the weights `wE` and `w`, the brings `b` and the record's `aux`, `nOf`, `hd` and `recRest`) so that the
-guarantee `RecursiveKS` is this at the deployed values, once each is pinned.
+guarantee `RecursiveKS` is this at the deployed values: the reader `DeployedR.rdR`, V\*'s last message's reader
+`DeployedR.finalR`, the last part's pieces `OpenRows.elemR`, the weights `DeployedR.wER` and `DeployedR.wR` (ASK-72) and
+the brings' setup `deployedB` (the compiled verifier's own evaluations), for every other field of the brings and every
+record the coin server keeps (`aux`, `nOf`, `hd`, `recRest`).
 -/
 
 namespace Flock.Guarantees
@@ -36,5 +41,13 @@ def RecursiveKSAt (rd : Msg → Option FinalP)
       (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
       RecDeploy.rowInDeployed final w)
     (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep RecDeploy.DenseAt
+
+/-- **Knowledge soundness of the recursive verifier at the deployed reader** (`RecursiveKSAt` at the deployed values),
+for every other field of the brings and every record the coin server keeps. -/
+def RecursiveKS : Prop :=
+  ∀ (b : RecDeploy.Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
+    (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8),
+    RecursiveKSAt RecDeploy.DeployedR.rdR RecDeploy.DeployedR.finalR RecDeploy.OpenRows.elemR RecDeploy.DeployedR.wER
+      RecDeploy.DeployedR.wR (RecDeploy.deployedB b) aux nOf hd recRest
 
 end Flock.Guarantees

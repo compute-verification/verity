@@ -27,12 +27,26 @@ theorem recursiveKSAt_of_leaves_deployed (wE w : Msg → ℝ)
     (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
-    (hres : ResLower.ResLoweredP DeployedR.rdR wE DeployedR.finalR w (bB (deployedB b) aux nOf hd recRest)
+    (hres : ResLower.ResLoweredPD DeployedR.rdR wE DeployedR.finalR w (bB (deployedB b) aux nOf hd recRest)
       OpenRows.elemR Claims.Recursion.Form.Dense recRead (cmtTr recRead) resPD ownRD
       (Rows.elemReadC (Top.accRC DeployedR.rdR key)) Rows.resVRead) :
     Flock.Guarantees.RecursiveKSAt DeployedR.rdR DeployedR.finalR OpenRows.elemR wE w (deployedB b) aux nOf hd
       recRest :=
   recursiveKSAt_of_leaves wE w (deployedB b) aux nOf hd recRest key (RestRead.finalReads OpenRows.elemR)
     RestElem.readsAt_elemR_closed hres (resSetup_deployedB b)
+
+/-- **`RecursiveKS` from chain B's residual leaf**: `recursiveKSAt_of_leaves_deployed` at the deployed weights, for every
+brings and record, wherever the residual's lowering (`ResLoweredPD`, at each part's decision) holds there at some key. -/
+theorem recursiveKS_of_resLowered
+    (hres : ∀ (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
+      (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8),
+      ∃ key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ,
+        ResLower.ResLoweredPD DeployedR.rdR DeployedR.wER DeployedR.finalR DeployedR.wR
+          (bB (deployedB b) aux nOf hd recRest) OpenRows.elemR Claims.Recursion.Form.Dense recRead (cmtTr recRead) resPD
+          ownRD (Rows.elemReadC (Top.accRC DeployedR.rdR key)) Rows.resVRead) :
+    Flock.Guarantees.RecursiveKS := by
+  intro b aux nOf hd recRest
+  obtain ⟨key, h⟩ := hres b aux nOf hd recRest
+  exact recursiveKSAt_of_leaves_deployed DeployedR.wER DeployedR.wR b aux nOf hd recRest key h
 
 end Flock.SecurityProofs
