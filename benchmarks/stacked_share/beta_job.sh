@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# β(C) (beta.py) on the exact-int8 Llama-3.1-8B request Program (job.sh's Build, digest 8c683b2a..., LP=256, T=31), with the
-# input term shared over the 8B row's KV pool (share.py's M_dyn for 8 engines). ART=art:... reads another Build's tree,
-# M_NODE=BYTES another pool, CHUNKS="N ..." the coarse bounds before the fine one, PROBE=1 stops once the Program decodes.
-# Where /workspace/jobs/venv312 isn't (the CPU nodes), it syncs the workspace with CPU torch into scratch. A node with no store
-# remote takes the descriptor sent along (`research data fetch ART --path descriptor.json.gz`, then --send it). A descriptor
-# whose primitives' signatures have since changed under the same id decodes only against its own registry: send that commit's
-# packages, `git archive C verity integrations/vllm/verity_vllm | gzip > tree.tar.gz`, and they go ahead on PYTHONPATH (the
-# 8B Build decodes at a4f5a429c5, the census's commit: LutIndex_v1 has returned 8 bits since, not 32).
+# β(C) (beta.py) on the exact-int8 Llama-3.1-8B request Program the census read (job.sh's Build in r20261018-045058-23f7 at
+# a4f5a429c5, LP=256, T=31, 724,643 root nodes), with the input term shared over the 8B row's KV pool (share.py's M_dyn for 8
+# engines). ART=art:... and ART_PATH read another Build, M_NODE=BYTES another pool, CHUNKS="N ..." the coarse bounds before the
+# fine one, PROBE=1 stops once the Program decodes. Where /workspace/jobs/venv312 isn't (the CPU nodes), it syncs the workspace
+# with CPU torch into scratch. A node with no store remote takes the descriptor sent along (`research data fetch ART --path
+# out/descriptor.json.gz`, then --send it). A descriptor whose primitives' signatures have since changed under the same id
+# decodes only against its own registry: send that commit's packages, `git archive C verity integrations/vllm/verity_vllm |
+# gzip > tree.tar.gz`, and they go ahead on PYTHONPATH (this Build decodes at a4f5a429c5: LutIndex_v1 has returned 8 bits
+# since, not 32).
 #
 #   research run --on vy-nebius-cpu-5 --timeout 5h --source . --project verity --send DIR/descriptor.json.gz \
 #     --send DIR/tree.tar.gz --cwd clone/integrations/vllm -- bash ../../benchmarks/stacked_share/beta_job.sh
@@ -14,7 +15,7 @@ set -euo pipefail
 export HF_HUB_OFFLINE=1
 ROOT=$(cd ../.. && pwd)
 HERE=$ROOT/benchmarks/stacked_share
-ART=${ART:-art:c2086c4c7da0041dcbf0776357bce6c3d7127bef6d6245c8652a772024af240f}
+ART=${ART:-art:e268a20b5c85a225f3e16281979e7c2ecfcc05eb79f36455b8e50e00a0e71aa8}
 d=$(mktemp -d)
 trap 'rm -rf "$d"' EXIT
 if [ -x /workspace/jobs/venv312/bin/python3 ]; then
@@ -31,7 +32,8 @@ if [ -f "$tree" ]; then
 fi
 desc=${RESEARCH_RUN_DIR:-/nonexistent}/inputs/descriptor.json.gz
 if [ ! -f "$desc" ]; then
-  "$PY" -m research data fetch "$ART" --to "$d/build" --path descriptor.json.gz > "$OUT/fetch.log" 2>&1 || { cat "$OUT/fetch.log"; exit 3; }
+  "$PY" -m research data fetch "$ART" --to "$d/build" --path "${ART_PATH:-out/descriptor.json.gz}" > "$OUT/fetch.log" 2>&1 \
+    || { cat "$OUT/fetch.log"; exit 3; }
   desc=$(find "$d/build" -name descriptor.json.gz | head -1)
   [ -n "$desc" ] || { cat "$OUT/fetch.log"; exit 3; }
 fi
