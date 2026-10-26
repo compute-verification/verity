@@ -305,9 +305,9 @@ elements (`ResTie` at `wordsElems nv row`). -/
 theorem resTie_of_rows {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} {v : ℕ → Bool} {w : Claims.Flock.Wit}
     {fv fo : List HmNets.Lin} {row zrow : Array ℕ} (hsz : 8 * nv ≤ row.size) (hz : ∀ i, zrow.getD i 0 = 0)
     (hvb : readForms w fv = wordBytes row) (hob : readForms w fo = wordBytes zrow)
-    (hVc : ∀ i (hi : i < 128 * nv), ∃ hl : i < fv.length,
+    (hVc : ∀ i < 128 * nv, ∃ hl : i < fv.length,
       v (FlockVBridge.OfVStar.vBase (FlockVBridge.OfVStar.partRep ns nv) + i) = formBit w fv[i])
-    (hOc : ∀ q (hq : q < 128 * S.res.length), ∃ hl : q < fo.length,
+    (hOc : ∀ q < 128 * S.res.length, ∃ hl : q < fo.length,
       v (FlockVBridge.OfVStar.partBase S ns nv + q) = formBit w fo[q]) :
     ResTie S ns nv (wordsElems nv row) v := by
   refine ⟨fun q hq => ?_, funext fun e => ?_⟩
@@ -328,7 +328,7 @@ theorem resTie_of_rows {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
         show (128 * e + t) / 16 = 8 * e + t / 16 by omega, show (128 * e + t) % 16 = t % 16 by omega]
       rcases Nat.lt_or_ge (8 * e + t / 16) row.size with hk | hk
       · simp [List.getD_eq_getElem?_getD, Array.getD, hk]
-      · simp [List.getD_eq_getElem?_getD, Array.getD, hk, Nat.not_lt.2 hk]
+      · simp [List.getD_eq_getElem?_getD, Array.getD, Nat.not_lt.2 hk]
     · rfl
 
 /-! ## Check 5's tie at one port and instance -/
@@ -354,14 +354,55 @@ theorem port_tie {Coin' : Type} {H : Msg → Msg} (hH : H = FlockDeploy.sha512) 
     List.mem_map.2 ⟨_, List.mem_append_left _ (List.mem_map.2 ⟨e, hmem e he, rfl⟩), rfl⟩
   have hver : ∀ u ∈ D.setup xO, u ∈ (L.calls x s w ++ vcallsAt H D xO).map Prod.fst := fun u hu =>
     List.mem_map.2 ⟨(u, H u), List.mem_append_right _ (List.mem_map.2 ⟨u, hu, rfl⟩), rfl⟩
+  have hy : FlockSoundness.Refine.K512.saltPrefix ++ readForms w (hmSalt c q n) ∈
+      (L.calls x s w ++ vcallsAt H D xO).map Prod.fst := by
+    have h := hcall _ List.mem_cons_self
+    dsimp only at h
+    rw [show Hm96.Default512.saltPrefix.data.toList = FlockSoundness.Refine.K512.saltPrefix from rfl] at h
+    exact h
   subst hH
-  refine commit_tie (y := readForms w (hmSalt c q n)) (σ := salt.data.toList) hT' hnc
-    (hcall _ (List.mem_cons_of_mem _ List.mem_cons_self)) (hver _ hv) (hcall _ List.mem_cons_self) ?_ ?_
+  refine commit_tie (σ := salt.data.toList) hT' hnc
+    (hcall _ (List.mem_cons_of_mem _ List.mem_cons_self)) (hver _ hv) hy ?_ ?_
   · rw [show FlockSoundness.Refine.K512.saltPrefix ++ salt.data.toList =
       (Hm96.Default512.saltPrefix ++ salt).data.toList by
         rw [ByteArray.data_append, Array.toList_append]; rfl]
     exact hver _ hs
   · rw [← hslot, ← hpub, RecCoins.commitRow, rowDigest_eq, commitString_exec]
+
+theorem size_padTo_ge (ws : Array ℕ) (n : ℕ) : ws.size ≤ (RecCoins.padTo ws n).size := by
+  simp [RecCoins.padTo]
+
+/-- **Check 5's tie at one instance**: `port_tie` at the instance's `v` row (the verifier's `rowV`) and its `out` row
+(a zero row `zr`), each port's word count the padded row's, and the copy's `v` and residual columns those rows' form
+bits, give `ResTie` at `rowV`'s elements. -/
+theorem resTie_copy {Coin' : Type} {H : Msg → Msg} (hH : H = FlockDeploy.sha512) {D : Claims.Recursion.Deploy Coin'}
+    {L : LayoutB} {x xO : Msg} {s : ℕ} {w : Claims.Flock.Wit} {c : Circuit} {qv qo n : ℕ} {ptv pto : Port}
+    (hT : ∀ e ∈ L.calls x s w, H e.1 = e.2) (hnc : (Claims.findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false)
+    (hmv : ∀ e ∈ portCalls c "v" qv n, e ∈ L.shaAt x s) (hmo : ∀ e ∈ portCalls c "out" qo n, e ∈ L.shaAt x s)
+    (hslv : readForms w (hmCommit c qv n) = FlockSoundness.Binding.commitString
+      (rowPfx c qv ++ readForms w (rowForms c "v" qv n)) (readForms w (hmSalt c qv n)))
+    (hslo : readForms w (hmCommit c qo n) = FlockSoundness.Binding.commitString
+      (rowPfx c qo ++ readForms w (rowForms c "out" qo n)) (readForms w (hmSalt c qo n)))
+    (hptv : c.ports[qv]? = some ptv) (hpto : c.ports[qo]? = some pto)
+    {rowV zr : Array ℕ} {sv so : ByteArray}
+    (hwv : ptv.words = (RecCoins.padTo rowV (Registered.rowWords rowV.size 16)).size)
+    (hwo : pto.words = (RecCoins.padTo zr (Registered.rowWords zr.size 16)).size) (hzr : ∀ i, zr.getD i 0 = 0)
+    (hpv : (RecCoins.commitRow rowV sv).data.toList = readForms w (hmCommit c qv n))
+    (hpo : (RecCoins.commitRow zr so).data.toList = readForms w (hmCommit c qo n))
+    (hvv : rowInput (RecCoins.padTo rowV (Registered.rowWords rowV.size 16)) ∈ D.setup xO)
+    (hsv : (Hm96.Default512.saltPrefix ++ sv).data.toList ∈ D.setup xO)
+    (hvo : rowInput (RecCoins.padTo zr (Registered.rowWords zr.size 16)) ∈ D.setup xO)
+    (hso : (Hm96.Default512.saltPrefix ++ so).data.toList ∈ D.setup xO)
+    {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} {v : ℕ → Bool} (hsz : 8 * nv ≤ rowV.size)
+    (hVc : ∀ i < 128 * nv, ∃ hl : i < (rowForms c "v" qv n).length,
+      v (FlockVBridge.OfVStar.vBase (FlockVBridge.OfVStar.partRep ns nv) + i) = formBit w (rowForms c "v" qv n)[i])
+    (hOc : ∀ q < 128 * S.res.length, ∃ hl : q < (rowForms c "out" qo n).length,
+      v (FlockVBridge.OfVStar.partBase S ns nv + q) = formBit w (rowForms c "out" qo n)[q]) :
+    ResTie S ns nv (wordsElems nv rowV) v := by
+  have hv := readForms_of_rowInput hptv hwv (port_tie hH hT hnc hmv hslv hpv hvv hsv)
+  have ho := readForms_of_rowInput hpto hwo (port_tie hH hT hnc hmo hslo hpo hvo hso)
+  rw [← wordsElems_padTo nv rowV (Registered.rowWords rowV.size 16)]
+  exact resTie_of_rows (le_trans hsz (size_padTo_ge _ _)) (fun i => by rw [getD_padTo, hzr]) hv ho hVc hOc
 
 /-! ## The share at the pieces' copies -/
 
