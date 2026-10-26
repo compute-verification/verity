@@ -1,7 +1,11 @@
 """The audit of the loop's PoUW window (`pouw`) and PoUW's answer on it.
 
     python -m verity_torch_loop.pouw_audit --window DIR --circuit SHA512 --run HEX --m0-pythonpath PATH --bin flock-circuit \\
-        --lean flock-verify --firewall flock-firewall --out DIR [--forged | --late] [--pouw-check BIN] [--skip-negatives]
+        --lean flock-verify --firewall flock-firewall --out DIR [--forged | --late] [--pouw-check BIN] [--skip-negatives] \\
+        [--challenger gate:USER@HOST --peer NAME --challenger-key RECORD --main FILE [--gate-key KEY]]
+
+``--challenger``: the draw is on vy-challenger-1's coins, one session on the window's run root through infra's gate
+(records_audit's ``--challenger``), not the verifier's own.
 
 The audit is one-stage's from the records alone (`benchmarks/prove_path/records_audit.py`, `a5.audit`): the registration
 checked by Lean and Python, the draw on the verifier's live coins read after the receipt, C-Flock ``--zk`` behind the Lean
@@ -225,6 +229,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--pouw-check", help="a built Lean pouw-check, which must agree with core_check")
     ap.add_argument("--skip-negatives", action="store_true", help="records_audit's --skip-negatives: a run of several "
                     "periods runs the negatives in its first")
+    for f, what in (("--challenger", "the draw on the auditor's challenger's coins: gate:USER@HOST"),
+                    ("--peer", "with --challenger: this machine as the gate's /etc/vy/peers names it"),
+                    ("--challenger-key", "with --challenger: the deployment's challenger-key/v1 record"),
+                    ("--gate-key", "with --challenger: the lane's own gate key"),
+                    ("--main", "with --challenger: the verifier's `git rev-list --first-parent origin/main`")):
+        ap.add_argument(f, help=f"records_audit's {f}: {what}")
     a = ap.parse_args(argv)
     wdir, out = Path(a.window), Path(a.out)
     rec, prov = _provenance(wdir)
@@ -244,7 +254,9 @@ def main(argv: list[str] | None = None) -> int:
                   "--run", a.run, "--m0-pythonpath", a.m0_pythonpath, "--bin", a.bin, "--lean", a.lean,
                   "--firewall", a.firewall, "--out", str(out / "audit"), "--delta", a.delta_audit,
                   "--registered", str(out / "operands.json"),
-                  *(["--forged"] if a.forged else []), *(["--skip-negatives"] if a.skip_negatives else [])])
+                  *(["--forged"] if a.forged else []), *(["--skip-negatives"] if a.skip_negatives else []),
+                  *(x for f in ("challenger", "peer", "challenger_key", "gate_key", "main") if getattr(a, f)
+                    for x in (f"--{f.replace('_', '-')}", getattr(a, f)))])
     items = rec["window"]["public"]
     salt = json.loads((wdir / PW.SALT).read_text()) if (wdir / PW.SALT).exists() else None
     params = {"check": PW.check_item(live=salt is not None), "context": a.run, "delta": str(PW.DELTA), "eps": str(PW.EPS),
