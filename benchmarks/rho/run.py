@@ -149,8 +149,8 @@ def main() -> None:
     targets = sorted(args.target or [10.0, 100.0])
 
     md: list[str] = []
-    summary = ["# ρ", "", "| scenario | ρ ∈ | from conditional or stronger bounds and cuts | on monitored compute | "
-               "set by | at the corner |", "|---|---|---|---|---|---|"]
+    head = "| scenario | ρ ∈ | from conditional or stronger bounds and cuts | on monitored compute | set by | at the corner |"
+    summary = ["# ρ", "", head, "|---|---|---|---|---|---|"]
     regions = ["## Regions where ρ falls below target", ""]
     record: dict = {"targets": targets, "scenarios": {}}
     for name in names:
