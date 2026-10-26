@@ -33,9 +33,12 @@ open FlockDeploy (Coin)
 def openSegs (c : Circuit) (nm : String) (q n : ℕ) : List (Msg × List HmNets.Lin) :=
   [(([] : Msg), ((rowHidden c nm n).getD []).map HmNets.Lin.var), (([] : Msg), hmSalt c q n)]
 
-/-- **A cap's openings** at part `s`: at port `top`, the openings of its instances `ns`, in order. -/
+/-- **A cap's openings** at part `s`: at port `top`, the openings of its instances `ns`, in order. At a part with no
+circuit or no port `top` they are read at the default circuit and port 0 instead, as `topPiece` reads its strings, so
+every cap opens one row and salt an instance wherever it sits. -/
 def capOpen (r : XR) (s : ℕ) (ns : List ℕ) : List (Msg × List HmNets.Lin) :=
-  ((r.w.parts[s]?.bind partCircuit).bind fun c => (capPort c).map fun q => ns.flatMap (openSegs c "top" q)).getD []
+  let c := (r.w.parts[s]?.bind partCircuit).getD default
+  ns.flatMap (openSegs c "top" ((capPort c).getD 0))
 
 /-- **The opening of the row stream round `j` absorbs**, at the part `rowPiece` holds it at: the first part with a held
 row of round `j` (`heldRows`). None where no part has one. -/
