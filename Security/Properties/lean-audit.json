@@ -2259,6 +2259,36 @@
    "signature": ["Properties.SampledProofs.noAcceptAfterHalt : Properties.SampledProofs.NoAcceptAfterHalt"],
    "assumptions": [],
    "type_hash": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
+  },
+  "Pous.Component.SecurityProofs.runAccepts_by": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Component.SecurityProofs.runBinds_by": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Component.SecurityProofs.wipeAccepts_by": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Component.SecurityProofs.runAccepts_fails": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Component.SecurityProofs.runBinds_fails": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Component.SecurityProofs.runBinds_break_fails": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Component.SecurityProofs.wipeAccepts_fails": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Component.SecurityProofs.runAccepts_complete": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Component.SecurityProofs.wipeAccepts_complete": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Component.SecurityProofs.wipeAccepts_meets": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -3383,7 +3413,17 @@
    "Pous.Period.SecurityProofs.periodHeldAt": "frozen (premise): periodHeld at every point of the composed check (Pous.EndToEnd.AcceptedAt: SetupProtocol.protocol.check at the point's parameters and PousCheck.Run.checkAt) and every block count N of the ring game from 2^19 to 2^27; stated over an abstract joint run of the device model and takes CoinCommitHides at N, the open conjecture P2RingRoundSecureWide and Pous.Period.RingDeviceAt (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run, read at N), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldDemo": "frozen (premise): periodHeldAt at Demo B's store, N = 1038*2^16 blocks, state bound 1,060,008,348,186 bits; its premises are periodHeldAt's.",
    "Pous.Period.SecurityProofs.obligationHeld": "frozen (premise): PeriodHeld at an audit window's snapshot of the mutable store, averaged over the other tags' key pairs: its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted), but it is stated over an abstract joint run of the device model (Accounting.Run) and takes PeriodHeld's premises (CoinCommitHides, P2RingAuditSecure and Pous.Period.RingDevice with the other tags' keys among the other audits' coins) and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
-   "Pous.EndToEnd.RunCertifiesAt": "unstated: RunCertifies at every point; it joins the composed check's runCheckAcceptsAt with the setup check's acceptsDecodes and publishesRoot, all three proved and the last two at every parameter set, and runCertifiesAt proves it from them"
+   "Pous.EndToEnd.RunCertifiesAt": "unstated: RunCertifies at every point; it joins the composed check's runCheckAcceptsAt with the setup check's acceptsDecodes and publishesRoot, all three proved and the last two at every parameter set, and runCertifiesAt proves it from them",
+   "Pous.Component.SecurityProofs.runAccepts_by": "lemma: RunAccepts is RunAcceptsBy at PoUS's compiled run check (Iff.rfl), which ties runAccepts_fails to the guarantee",
+   "Pous.Component.SecurityProofs.runBinds_by": "lemma: RunBinds is RunBindsBy at PoUS's compiled run check (Iff.rfl), which ties runBinds_fails to the guarantee",
+   "Pous.Component.SecurityProofs.wipeAccepts_by": "lemma: WipeAccepts is WipeAcceptsBy at the wipe's compiled check (Iff.rfl), which ties wipeAccepts_fails to the guarantee",
+   "Pous.Component.SecurityProofs.runAccepts_fails": "lemma: RunAccepts' nontrivial lemma: at a check that accepts everything RunAcceptsBy is false, on evidence whose public salt its setup's commitment doesn't carry",
+   "Pous.Component.SecurityProofs.runBinds_fails": "lemma: RunBinds' nontrivial lemma: at a check that accepts everything RunBindsBy is false, on two evidences with different commitments and no hashed strings",
+   "Pous.Component.SecurityProofs.runBinds_break_fails": "lemma: RunBinds' break is not always true: with no blocks and empty stores forkStrings is empty, so no SHA-512 collision among them exists",
+   "Pous.Component.SecurityProofs.wipeAccepts_fails": "lemma: WipeAccepts' nontrivial lemma: at a check that accepts everything WipeAcceptsBy is false, on a session signed by a key the run doesn't trust",
+   "Pous.Component.SecurityProofs.runAccepts_complete": "completeness: RunAccepts' and RunBinds' honest lemma: evidence AcceptedAt describes makes the compiled run check accept, so neither guarantee's acceptance is out of reach; a concrete accepting run waits on setup's completeness (AcceptsComplete)",
+   "Pous.Component.SecurityProofs.wipeAccepts_complete": "completeness: WipeAccepts' honest lemma: a session WipeChecked describes makes the compiled wipe check accept",
+   "Pous.Component.SecurityProofs.wipeAccepts_meets": "completeness: WipeAccepts' honest instance: a key of the deployed LMS parameters signs a one-batch session that the compiled wipe check accepts"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -13114,5 +13154,29 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+ },
+ "guarantee_lemmas": {
+  "witnesses": {
+   "Pous.Component.SecurityProofs.runAccepts": {
+    "fails": "Pous.Component.SecurityProofs.runAccepts_fails",
+    "meets": ["Pous.Component.SecurityProofs.runAccepts_complete"],
+    "by": "Pous.Component.SecurityProofs.runAccepts_by"
+   },
+   "Pous.Component.SecurityProofs.runBinds": {
+    "fails": "Pous.Component.SecurityProofs.runBinds_fails",
+    "meets": ["Pous.Component.SecurityProofs.runAccepts_complete"],
+    "break": "Pous.Component.SecurityProofs.runBinds_break_fails",
+    "by": "Pous.Component.SecurityProofs.runBinds_by"
+   },
+   "Pous.Component.SecurityProofs.wipeAccepts": {
+    "fails": "Pous.Component.SecurityProofs.wipeAccepts_fails",
+    "meets": ["Pous.Component.SecurityProofs.wipeAccepts_complete", "Pous.Component.SecurityProofs.wipeAccepts_meets"],
+    "by": "Pous.Component.SecurityProofs.wipeAccepts_by"
+   }
+  },
+  "not": {
+   "Pous.Component.SecurityProofs.runDigest": "an equation between two functions of the commitment's bytes that no check takes part in, so no verifier's decision can falsify it, and its one hypothesis (the bytes decode) is what the composition establishes before it binds a digest",
+   "Pous.Component.SecurityProofs.wipeDigest": "the same equation for the wipe's commitment: no check takes part in it"
+  }
  }
 }
