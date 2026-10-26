@@ -440,23 +440,27 @@ def pv_bucket(n: int) -> int:
 
 
 def pv_pipes(card: str, m: dict, hist: dict, budget: float, built: bool = False,
-             picks: dict | None = None) -> tuple[float, float, float]:
+             picks: dict | None = None) -> tuple[float, float, float, float]:
     """R-ACCEL-8's attention: PV credited as a v2 round with O bound (COVER-ATTN's PV design), K = n attended keys,
     N = d_v, the weight side (Ṽ's dither and noise) streamed once a key, so a call expands only P̃'s side. Picked
     like a static shape (overlapped) at each n rounded to 64; MAC-weighted (tensor, ALU without wraps, A = B = 0
-    saving) a PV MAC."""
-    rounds, w, T, A, S = {}, 0.0, 0.0, 0.0, 0.0
+    saving) a credited PV MAC, and the share of PV MACs left uncredited (a pick of None: served plain, P19)."""
+    rounds, w, T, A, S, u = {}, 0.0, 0.0, 0.0, 0.0, 0.0
     for n, c in hist.items():
         nb = pv_bucket(n)
         if nb not in rounds:
             if picks and (card, nb, m["dv"]) in picks:
-                t, Lp = picks[card, nb, m["dv"]]
-                rounds[nb] = v2_round(card, nb, m["dv"], t * Lp, 16, tiles=t, weight_coins=False, built=built)
+                p = picks[card, nb, m["dv"]]
+                rounds[nb] = p and v2_round(card, nb, m["dv"], p[0] * p[1], 16, tiles=p[0], weight_coins=False,
+                                            built=built)
             else:
                 rounds[nb] = v2_pick(card, nb, m["dv"], 16, budget, overlap=True, weight_coins=False, built=built)
         r, x = rounds[nb], c * n
+        if r is None:
+            u += x
+            continue
         w, T, A, S = w + x, T + x * r["T"], A + x * r["A_nw"], S + x * r["saved"]
-    return T / w, A / w, S / w
+    return (T / w, A / w, S / w, u / (u + w)) if w else (0.0, 0.0, 0.0, 1.0)
 
 
 def lookup_alu(card: str, hist: dict) -> float:
@@ -484,8 +488,10 @@ def v2_world(budget: float = 0.01, built: bool = False, max_tiles: int = 6, card
             hist, st, qk, pv, ix = world_macs(m)
             tot = st + qk + pv + ix
             s = static_pipes(card, m["name"], budget, max_tiles, built=built, picks=picks, **kw)
-            pv_t, pv_a, pv_s = pv_pipes(card, m, hist, budget, built=built, picks=picks)
-            T = st * s["T"] + pv * pv_t + qk * (1 + SOFTMAX_PASS) + ix
+            pv_t, pv_a, pv_s, pv_u = pv_pipes(card, m, hist, budget, built=built, picks=picks)
+            plain = qk * (1 + SOFTMAX_PASS) + ix + pv * pv_u
+            pv, unc = pv * (1 - pv_u), qk + ix + pv * pv_u
+            T = st * s["T"] + pv * pv_t + plain
             A_nw = st * s["A_nw"] + pv * pv_a
             Wr = st * s["wrap"] + pv * a_wrap
             g_add = (T + A_nw + Wr) / tot
@@ -493,9 +499,9 @@ def v2_world(budget: float = 0.01, built: bool = False, max_tiles: int = 6, card
             x = min(pv, max(0.0, T - A_nw - Wr) / (1 + ell))
             T, A_nw = T - x, A_nw + ell * x
             honest = max(T, A_nw + Wr)
-            # A prover after credit skips the uncredited QKᵀ and indexer, so credit and its slack are the credited
-            # rounds' own period.
-            T_c = T - qk * (1 + SOFTMAX_PASS) - ix
+            # A prover after credit skips the uncredited QKᵀ, indexer and plain PV, so credit and its slack are the
+            # credited rounds' own period.
+            T_c = T - plain
             credit = max(T_c, A_nw)
             slack = max(0.0, T_c - A_nw)
             s1 = min(st * s["saved"] + pv * pv_s, slack)
@@ -507,9 +513,11 @@ def v2_world(budget: float = 0.01, built: bool = False, max_tiles: int = 6, card
             rows.append({"card": label, "model": m["name"], "gamma_add": g_add, "gamma": honest / tot,
                          "util": T / honest,
                          "T": T_c / tot, "A": (A_nw + Wr) / tot, "eps_alg": (s1 + s2) / credit,
-                         "wrap_uncredited": (honest - max(T, A_nw)) / honest, "lookup": x / pv,
-                         "uncredited": (qk + ix) / tot, "worst": s["worst"],
-                         "static_gamma": max(s["T"], s["A_nw"] + s["wrap"])})
+                         "wrap_uncredited": (honest - max(T, A_nw)) / honest, "lookup": x / pv if pv else 0.0,
+                         "uncredited": unc / tot, "pv_uncredited": pv_u, "worst": s["worst"],
+                         "static_gamma": max(s["T"], s["A_nw"] + s["wrap"]), "credit": credit / tot,
+                         "honest": honest / tot, "T_all": T / tot, "A_nw": A_nw / tot, "Wr": Wr / tot,
+                         "T_c": T_c / tot})
     return rows
 
 
@@ -554,114 +562,6 @@ def v2_frozen_print(budget: float = 0.0) -> list[dict]:
             print(f"  {card:13} V±{u_x}: worst eps_alg {e:.2%} at K {K} N {N} L {L} (gamma {g:.2f}); least lane load "
                   f"(A10: Strassen gains below 0.71 at ±80, 0.49 at ±96) {load:.2f}")
     return rows
-
-
-WORLD_FLOP = {"week": 1.8e29, "month": 7.8e29, "year": 9.36e30}   # brief rule L2 (Sept 2027 rate, R-ACCEL-7)
-K_DRAWS = 13816                                                     # ε_S 0.1% at δ 1e-6
-C_MM, C_SHA = 1.0, 1.0   # public best over honest at the cheapest registrable instance; D5 v1 (12:00Z) replaces them
-# P1's lanes are nearly idle (lane load 0.05–0.15 on the RTX PRO 6000), ALGO-COST A10/A14's idle-lane regime: HK
-# ⟨2,3,3;15⟩ at 0.870 of a naive honest kernel, 0.994 of one that runs Strassen itself. The H200's port keeps
-# Strassen at ≥ 1.68 there (A10).
-P1_C_MM = {"H200": 1.0, "RTX PRO 6000": 0.870}
-# D5's LP with PD2-1's O-route and the zero-high-digit peel (`d5_routes.py` at af8b754017; PD3-4), v2's picks at the
-# frozen tiles (H200 t = 2, RTX PRO 6000 t = 4), hashing at the ceiling: 1 − the MAC-weighted leak over OPT*.
-C_MM_D5 = {("H200", "Llama-3.1-8B"): 1 - 0.1484, ("H200", "Llama-3.1-70B"): 1 - 0.0785,
-           ("H200", "DeepSeek-V4-Pro"): 1 - 0.1112, ("RTX PRO 6000", "Llama-3.1-8B"): 1 - 0.0083,
-           ("RTX PRO 6000", "Llama-3.1-70B"): 1 - 0.0167, ("RTX PRO 6000", "DeepSeek-V4-Pro"): 1 - 0.0088}
-
-
-# θ's joint facets: on the H200 a saturated IGMMA takes 62.741 SMSP-cycles plus 0.981 per other warp instruction
-# (JI90_0), so tensor and issue time add and a tensor saving is a leak even in an ALU-bound period (PB1, PD3-4); sm_120's
-# joint1 (3.757 tensor + 0.317 vec) keeps the pipes overlapped.
-ADDITIVE = {"H200": True, "RTX PRO 6000": False}
-
-
-def eps_worksound(row: dict, delta: float, c_mm: float = C_MM, c_sha: float = C_SHA, net: float = 0.0,
-                  additive: bool = False) -> float:
-    """WORKSOUND's ε = (H_mm(1 − c_mm) + H_sha(1 − c_sha) + H_o)/H + ln(1/δ)/(ηk) + βK/(kH).
-
-    Overlapped pipes (`additive` False): at the period's binding resource (the dual's vertex under the per-resource
-    maximum), an ALU-bound period prices its ALU (SHA-512 for the words, tree and coins; H_o 0, since wraps are outside
-    credit), a tensor-bound one its tensor pipe (matmul, peels included). Additive pipes (the H200 under JI90_0): both
-    terms enter at their shares of T + A. ε_alg (PD2-1's and the tiles' routes) is part of 1 − c_mm; a c_mm from D5's
-    LP (`d5_routes.py`) is the whole job's leak over OPT*, so it enters in full. `net` is βK/(kH), 0 at no import."""
-    a = row["A"] - row["wrap_share"]
-    if additive:
-        h_mm, h_sha = row["T"] / (row["T"] + a), a / (row["T"] + a)
-    else:
-        alu_bound = a > row["T"] * (1 + 1e-6)   # a balanced period also frees a matmul saving
-        h_mm, h_sha = (0.0, 1.0) if alu_bound else (1.0, 0.0)
-    mm = 1 - c_mm if c_mm < 1 else h_mm * row["eps_alg"]
-    eta = 1 - 2 ** -16
-    return mm + h_sha * (1 - c_sha) + math.log(1 / delta) / (eta * K_DRAWS) + net
-
-
-PPL_H1 = {"Llama-3.1-8B": "+0.80%", "Llama-3.1-70B": "+1.77%", "DeepSeek-V4-Pro": "not run"}  # H1's (Qwen2.5-7B +0.51%)
-
-
-def d6(budget: float = 0.0, c_mm: dict | None = None, c_sha: dict | None = None) -> list[dict]:
-    """D6's number table, as markdown: v2 at the paper SHA-512 rate and at the built rate. P1 and the twin are ruled out
-    by R-ACCEL-8 (credited work is the useful product), so they have no row.
-
-    ε is WORKSOUND's form at δ 1% and 1e-6 with c_mm, c_sha per card (1 until D5 v1, so ε is a lower bound). The two
-    ShaSpeed readings: (a) the paper ceiling, honest hashing at it (c_sha 1); (b) the built rate, today's kernel against
-    hashcat's structured mode (C_SHA_TODAY). P1 on the RTX PRO 6000 takes P1_C_MM.
-    Then the world model (rule L2; V4 is the world's request): εC and the uncredited FLOP a week, a month and a year."""
-    c_mm, c_sha = C_MM_D5 if c_mm is None else c_mm, c_sha or {}
-    rows = v2_world(budget, frozen=True) + v2_world(budget, built=True, frozen=True)
-    for r in rows:
-        r["wrap_share"] = r["A"] - r["gamma"] * (1 - r["wrap_uncredited"]) if r["A"] >= r["T"] else 0.0
-        card = r["card"].split(" built")[0].split(" t=")[0].split(" P1")[0]
-        r["base"] = card
-        r["design"] = "P1" if " P1" in r["card"] else "v2"
-        r["rate"] = "built" if " built" in r["card"] else "paper"
-        cs = c_sha.get(card, 1.0) * (C_SHA_TODAY[card] if r["rate"] == "built" else 1.0)
-        cm = c_mm.get((card, r["model"]), c_mm.get(card, 1.0))
-        r["eps"] = {d: eps_worksound(r, d, c_mm=cm, c_sha=cs, additive=ADDITIVE[card]) for d in (0.01, 1e-6)}
-    print(f"\nD6 (c_mm {'D5 + PD3-4 routes' if c_mm is C_MM_D5 else c_mm or 1}, c_sha {c_sha or 1} x the reading; theta: "
-          f"CALIB's θ #4513)")
-    print("| design, card, SHA-512 rate | γ overlapped 8B / 70B / V4 | γ additive | tensor util. | ε δ 1% (V4) | "
-          "ε δ 1e-6 (V4) | coverage | perplexity (H1's) |")
-    print("|---|---|---|---|---|---|---|---|")
-    groups = {}
-    for r in rows:
-        groups.setdefault((r["design"], r["base"], r["rate"]), []).append(r)
-    for (design, card, rate), g in groups.items():
-        rate_s = f"{(SHA_BUILT[card] if rate == 'built' else V2_CARDS[card][1]) / 1e9:.2f} G/s ({rate})"
-        v4 = g[-1]
-        print(f"| {design}, {card}, {rate_s} | " + " / ".join(f"{r['gamma']:.2f}" for r in g) + " | "
-              + " / ".join(f"{r['gamma_add']:.2f}" for r in g) + " | "
-              + " / ".join(f"{r['util']:.0%}" for r in g) + f" | {v4['eps'][0.01]:.3%} | {v4['eps'][1e-6]:.3%} | "
-              + " / ".join(f"{1 - r['uncredited']:.1%}" for r in g) + " | "
-              + " / ".join(PPL_H1[r["model"]] for r in g) + " |")
-    print("\n| design, card, rate | window | world FLOP | εC δ 1% | εC δ 1e-6 | credited | uncredited (QKᵀ, indexer) |")
-    print("|---|---|---|---|---|---|---|")
-    for (design, card, rate), g in groups.items():
-        v4 = g[-1]
-        for w, F in WORLD_FLOP.items():
-            C = (1 - v4["uncredited"]) * F
-            print(f"| {design}, {card}, {rate} | {w} | {F:.2e} | {v4['eps'][0.01] * C:.1e} | {v4['eps'][1e-6] * C:.1e} "
-                  f"| {C:.2e} | {v4['uncredited'] * F:.1e} |")
-    return rows
-
-
-def v2_decode(budget: float = 0.0, frozen: bool = True) -> None:
-    """Static rounds at decode batches, overlapped, with weight-side coins (c, U, π) fresh a call or reused across
-    calls (ALGO-COST A11: reuse opens nothing algorithmically; RT-PROTO checks freshness). v2 as frozen by default."""
-    print(f"\nv2 decode, static rounds with tiles (16-bit words, overlapped, eps_alg budget {budget:.0%}): compute gamma "
-          f"fresh / reused weight-side coins, then the roofline (int8 weights from HBM, +1/8 B a weight for reused c)")
-    for card in V2_CARDS:
-        mem_mac = ETA * V2_CARDS[card][0] / HBM[card]
-        for model in ("Llama-3.1-8B", "Llama-3.1-70B", "DeepSeek-V4-Pro"):
-            cells = []
-            for m in (1, 32, 256):
-                f = static_pipes(card, model, budget, m=m, frozen=frozen)
-                r = static_pipes(card, model, budget, m=m, weight_coins=False, frozen=frozen)
-                gf, gr = max(f["T"], f["A_nw"] + f["wrap"]), max(r["T"], r["A_nw"] + r["wrap"])
-                plain = max(1.0, mem_mac / m)
-                cells.append(f"m {m}: {gf:.2f} / {gr:.2f}, roofline {max(gf, mem_mac / m) / plain:.2f} / "
-                             f"{max(gr, 1.125 * mem_mac / m) / plain:.2f}")
-            print(f"  {card:13} {model:16} " + "; ".join(cells))
 
 
 def seg_coins() -> None:
@@ -748,6 +648,4 @@ if __name__ == "__main__":
     v2_tiles()
     v2_world_print()
     v2_frozen_print()
-    d6()
-    v2_decode()
     seg_coins()
