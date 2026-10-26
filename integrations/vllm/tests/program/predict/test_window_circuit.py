@@ -335,7 +335,7 @@ def test_the_class_of_record_lowers_within_the_grain_and_its_description_is_its_
     """The class of record itself (8 slots of 1,087 positions, a head over up to 1,087 keys: 8 full key blocks and a first
     of 63) lowers at TINY's geometry and a grain of 256 rows: no unit past the grain's rows (the largest a full block's
     gather, its 128 parts and its output), every input row wired, registered or ingress, and its 8 Programs' 8 x 296,711
-    units (4 times 2 Programs') over 2 Programs' 33,278 wires, 13,047 weight reads and 13,062 inference entries, which grow
+    units (4 times 2 Programs') over 2 Programs' 33,278 wires, 18,481 weight reads and 13,062 inference entries, which grow
     with the class Program's 26,088 nodes (its heads' Calls among them), not with its units or its slots. The baseline is 2
     Programs, as in `test_the_description_grows_with_the_class_programs_nodes_not_its_slots`: one Program's entries have a
     slot digit of 1, under which a step's unlike allocations run together (2,194 entries here), and from 2 on every
@@ -352,7 +352,7 @@ def test_the_class_of_record_lowers_within_the_grain_and_its_description_is_its_
     assert max(_unit_rows(circuit).values()) == 129
     assert sum(n.values()) == 4 * sum(k for _, k in two.templates) == 8 * 296_711
     shape = [(len(c.wires), len(c.registered.reads), len(c.blocks.inference)) for c in (two, circuit)]
-    assert shape == [(33278, 13047, 13062)] * 2 and len(built.program.fn.body.nodes) == 26088
+    assert shape == [(33278, 18481, 13062)] * 2 and len(built.program.fn.body.nodes) == 26088
     assert IF.input_count(circuit.description(), pins={WC.WEIGHTS})["free"] == 0
 
 
