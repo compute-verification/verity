@@ -112,7 +112,7 @@ def test_the_party_follows_period_json() -> None:
     wired = verifier_party.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"bandwidth": {
         "command": ["ssh", "vy-auditor-1", "verifier"], "address": "10.0.0.7:7961"}}}, "n0")
     assert wired == verifier_party.Party("vy-auditor-1", ("ssh", "vy-auditor-1", "verifier"), ("10.0.0.7", 7961))
-    assert verifier_party.placement("n0", "n0")["trusted-nebius-host"].startswith("unmet: ")
+    assert verifier_party.placement("n0", "n0")["trusted-host"].startswith("unmet: ")
     held = verifier_party.placement("n0", "vy-auditor-1")
     assert held["parties"] == {"challenger": "vy-auditor-1", "prover": "n0", "verifier": "vy-auditor-1"}
-    assert held["trusted-nebius-host"].startswith("holds: ")
+    assert held["trusted-host"].startswith("holds: ")
