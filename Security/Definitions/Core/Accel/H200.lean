@@ -42,7 +42,7 @@ uniform opcodes, integer only, and no document gives their issue cost; measured 
 1.08–1.19 SMSP cycles, RT-H200-EMP, run r20261019-064443-0ae6, and 0.984 beside a saturated lane stream, the census's
 UNI line, DC-90; `[uniform_issue]` of the sm_90 sheet); copies of at most 4 words (a lane's 128-bit load or store),
 and bulk copies of any length with shared memory at one end (TMA); atomics on shared memory, L2 and HBM; integer
-reductions (`Lane.reduces`) of up to 4 registers into memory (`red`), and of any length from shared memory into L2 or
+reductions (`Lane.reduces`) of up to 8 registers into memory (`red`), and of any length from shared memory into L2 or
 HBM (`cp.reduce.async.bulk`), priced as the copy.
 
 **Captured dots** (`captured`): the integer path exactly, `silicon.integer.HOPPER_SM90_S8_K32` (the clamp or wrap at

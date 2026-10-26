@@ -76,10 +76,11 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 | MOVM (`movmatrix`) | missing | |
 | LDGSTS (`cp.async`) | coarse | a copy from device memory or L2 to shared memory, with no latency |
 | UTMALDG, UTMASTG, UBLKCP (TMA, `cp.async.bulk`) | coarse | a bulk copy of any length with shared memory at one end |
-| UTMAREDG (TMA reduce), TMA multicast | missing | |
+| UTMAREDG (TMA reduce, `cp.reduce.async.bulk`), integer add, min, max and bitwise | covered | `Op.red` from shared memory into L2 or device memory, priced as the bulk copy |
+| UTMAREDG 64-bit, float, `inc`, `dec`; TMA multicast | missing | |
 | ATOMS, ATOMG, ATOM, RED (add, exch) | covered | `atom` add and exch on shared memory, L2 and device memory. RED is an `atom` whose old value is discarded |
-| RED vector forms (`red.v2`, `.v4`), integer | coarse | `Op.red` from up to 4 registers, any `Lane.reduces` function (integer forms are scalar on the card) |
-| RED float forms (`.f32`, `.f16x2`, `.bf16x2`, `.v8`) | missing | the card flushes subnormals, unlike `Lane.fadd` |
+| RED vector forms (`red.v2`, `.v4`), integer | coarse | `Op.red` from up to 8 registers, any `Lane.reduces` function (integer forms are scalar on the card) |
+| RED float forms (`.f32`, `.f16x2`, `.bf16x2`, `.v8`) | over-approximated | `Op.red` by `iadd3` and `add2`: exact integer adds, from up to 8 registers |
 | ATOMS, ATOMG (min, max, and, or, xor, inc, dec, cas), float atomics | missing | |
 | LDC (constant bank operands) | missing | constant-bank operands |
 | TEX, TLD, TLD4, TXD, TMML, SULD, SUST, SURED, SUATOM | **missing, important** | the texture path has its own bandwidth and filtering arithmetic (weighted sums of texels) outside every resource here |
