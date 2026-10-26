@@ -4,6 +4,8 @@ import Definitions.NetworkCertifier.Guarantees.AdviceV1
 import Definitions.NetworkCertifier.Guarantees.WindowCharge
 import Definitions.NetworkCertifier.Guarantees.Warden
 import Definitions.NetworkCertifier.Guarantees.Horizon
+import Definitions.NetworkCertifier.Guarantees.Period
+import Definitions.NetworkCertifier.Guarantees.HorizonLeak
 import Proofs.NetworkCertifier.Lemmas
 import Proofs.NetworkCertifier.Occupancy
 import Proofs.NetworkCertifier.Counting
@@ -17,6 +19,9 @@ import Proofs.NetworkCertifier.SampledLeakReg
 import Proofs.NetworkCertifier.SampledLeakRegPlain
 import Proofs.NetworkCertifier.PeriodSum
 import Proofs.NetworkCertifier.Horizon
+import Proofs.NetworkCertifier.TapRows
+import Proofs.NetworkCertifier.Period
+import Proofs.NetworkCertifier.HorizonLeak
 import Proofs.NetworkCertifier.Schedule
 import Proofs.NetworkCertifier.PerWindow
 import Proofs.NetworkCertifier.Sanity
@@ -26,6 +31,8 @@ import Proofs.NetworkCertifier.AdviceString
 import Proofs.NetworkCertifier.AdviceV1
 import Proofs.NetworkCertifier.WindowCharge
 import Proofs.NetworkCertifier.Warden
+import Proofs.NetworkCertifier.Tap
+import Proofs.NetworkCertifier.RecordRows
 
 /-!
 # Proofs of the network certifier's guarantees
@@ -47,6 +54,9 @@ moves its count to the registration's values
 check accepts is a run of the constant-rate Program under the declared advice, so the guarantees here count it.
 `SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection.
 `SampledAuditInstance` takes its `KS` hypothesis from `Claims.Sampling.sampling_assembled_of`, at the assembled records.
+`TapRows` bounds the leak at the network certifier's rows (`TapProof.sampledLeak_tap`): an accepted audit's extracted
+trace carries the network certifier's registered rows outside the faulty units, unless its openings collide with the
+network certifier's; `Period` counts with it.
 -/
 
 namespace NetTiming.SecurityProofs
@@ -166,6 +176,8 @@ theorem WardenViewEqClientView : NetTiming.Guarantees.WardenViewEqClientView := 
 theorem EncardWardenViewsLe : NetTiming.Guarantees.EncardWardenViewsLe := @NetTiming.encard_wardenViews_le
 theorem EncardWardenDecodableLe : NetTiming.Guarantees.EncardWardenDecodableLe :=
   @NetTiming.encard_wardenDecodable_le
+theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTiming.periodLeak
 theorem HorizonWrongUnitsLe : NetTiming.Guarantees.HorizonWrongUnitsLe := NetTiming.horizonWrongUnits
+theorem HorizonLeakAccepted : NetTiming.Guarantees.HorizonLeakAccepted := NetTiming.horizonLeak
 
 end NetTiming.SecurityProofs

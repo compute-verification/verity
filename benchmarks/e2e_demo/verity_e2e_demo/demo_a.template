@@ -35,7 +35,7 @@ With one bit of a drawn unit's committed values flipped, it answered **⟨FLIP_V
   except with ⟨POUW_ERROR⟩. The block's one draw establishes ε = ⟨POUW_EPS⟩ at δ = 1%, over ⟨POUW_COVERAGE⟩ of the
   block's static INT8 MACs, and a certified share of ⟨POUW_CERTIFIED_SHARE⟩ at ρ = ⟨POUW_RHO⟩.
 - Network accounting: at most K = ⟨NET_K⟩ bits leaked, except with ⟨NET_ERROR⟩.
-- Each protocol's error, summed as JointHorizon states it (⟨JOINT_HORIZON_STATUS⟩): sampled proofs ⟨INTEGRITY_ERROR⟩,
+- Each protocol's error, summed as JointHorizonLive states it (⟨JOINT_HORIZON_STATUS⟩): sampled proofs ⟨INTEGRITY_ERROR⟩,
   PoUW ⟨POUW_ERROR⟩ and network accounting ⟨NET_ERROR⟩, ⟨DEMO_A_ERROR_SUM⟩ in all.
 
 Said plainly: proving this block cost ⟨Y⟩× the block's own GPU time (⟨PROVING_GPU_S⟩ GPU-seconds of proving against

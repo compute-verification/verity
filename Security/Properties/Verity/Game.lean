@@ -1,7 +1,7 @@
 import CoreOnsite
 import Properties.Composition
 import Properties.Flock.Circuit.CircuitOf
-import Definitions.Accounting.JointPeriod
+import Definitions.Accounting.JointLive
 import Definitions.Core.Game
 import Definitions.Hash.RowLeaf
 import Flock.Hash
@@ -38,16 +38,18 @@ The statement's form is soundness's rulings R1, R4′, R5 and R6 and Daniel's on
   acceptance until onsite's sampled component is v2, ONE-3b).
 * **Sampled proofs' claim reads one fixed extractor's transcript (R4′).** The extractor (`extract`, the one
   `SampledKSLive*` is stated with, `XplurZC`) is a construction applied to the strategy, never chosen per strategy.
-  The claim is that at most an `ε` share of the file's units are unbound in its transcript (`unbound`): wrong in it, or
+  The claim is that at most an `ε` share of the file's units are unbound in its transcript (`Accounting.unbound`): wrong in it, or
   with a committed input or output the commitment doesn't open to its value there (`Opens`: a registered constant to its
   constant, any other wire by an opening of its row leaf that `Hash.RowLeaf.accepts` passes under the compiled SHA-512).
 * **One adversary form: every prover, and collisions a fixed finder outputs.** There is no strategy class and no break
-  in the event. Subprotocol `a`'s error at a strategy is its published `δ` plus `f(Pr[B^τ outputs a SHA-512
-  collision])` (`loss a θ`, not necessarily additive), where the finder `B` (`finder a`) is a fixed construction
-  applied to the strategy whose SHA-512 calls are at most `c·time(τ) + d` (`Finder.collides`). Two openings of one
-  position, a forged device release (LMS is hash-based) and a second file with the registered digest (`fileFinder`)
-  each enter that way. The named assumption `ecr/sha-512` is asked only of the finder and turns the bound into a
-  number at the strategy's time.
+  in the event. The finder `B` (`finder a`, a `Claims.Finder`) is a fixed construction applied to the strategy whose
+  SHA-512 calls are at most `c · calls(τ) + d` (`finder_calls`). Subprotocol `a`'s error at a strategy (`error`) is,
+  where `B^τ` outputs a SHA-512 collision with probability at most the published `ε_cr` at the strategy's calls
+  (`FinderCR`, quantitative), its published `δ` at those calls plus its loss at `Pr[B^τ]`; elsewhere `⊤`. That admits
+  C-Flock's conditional bound (`loss = 0`, F3) and the additive one (`crBound = 1`). Two openings of one position, a
+  forged device release (LMS is hash-based) and a second file with the registered digest (`fileFinder`) each enter
+  that way. The named assumption `ecr/sha-512` is asked only of the finder.
+* **The one vocabulary.** The period is `Accounting.PeriodLive` (`live`), and the claim is its `Holds`.
 * **Each component's acceptance in what the prover sent.** Subprotocol `a`'s verdict (`Verdict`) is the file check,
   NCI's acceptance of the registration sampled proofs committed to (`RegistrationAccepts`, the conclusion of
   `Properties.Composition.AcceptRegistration`), and `a`'s compiled component's acceptance of its own case. The releases
@@ -151,16 +153,9 @@ def play (ns : List ℕ) (θ F c : ByteArray) : Game Outcome :=
 /-- SHA-512, the compiled one (`Flock.Sha512.hash`), as a 64-byte digest. -/
 def sha512 (m : Hash.Msg) : Hash.Digest := fun i => (Flock.Sha512.hash ⟨m.toArray⟩).data.getD i.val 0
 
-/-- **A collision finder applied to a strategy**: a game and the strategy it plays (the finder's own coins, and its
-runs of the prover's strategy), ending with two messages or nothing. -/
-structure Finder where
-  game : Game (Option (Hash.Msg × Hash.Msg))
-  strategy : Game.Strategy game
-
-/-- **The probability that the finder outputs a SHA-512 collision**: two different messages with one compiled
-SHA-512. -/
-noncomputable def Finder.collides (B : Finder) : ℝ≥0∞ :=
-  Game.prob (fun x => ∃ m m', x = some (m, m') ∧ m ≠ m' ∧ sha512 m = sha512 m') B.game B.strategy
+/-- SHA-512, the compiled one, as the message-to-message hash `Claims.Finder.Pr` and `ecr/sha-512`
+(`Claims.ExpectedCR`) read. -/
+def sha512Msg (m : Claims.Msg) : Claims.Msg := (Flock.Sha512.hash ⟨m.toArray⟩).data.toList
 
 /-- **How v2 reads the committed blob**: its statement's tags (derived from the circuit file), the circuit file, its
 lookup tables and the public file. -/
@@ -210,21 +205,20 @@ structure Place where
   offset : ℕ
 
 /-- The fields of a period's run that the prover's world realizes in a play: whose account each resource is charged to,
-the window, the device schedule, and what the network certifiers saw. -/
-structure World {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
-  acct : Resource → α
-  win : Window
-  schedule : Schedule ι α
-  fits : schedule.Fits d
-  commWithin : ℝ → Prop
+the window, the device schedule, and what the network certifiers saw (`Accounting.PeriodWorld`, the one definition). -/
+abbrev World {ι : Type} (d : Device ι) (α : Type) [Fintype α] := Accounting.PeriodWorld d α
 
 /-- **The names the subprotocols define.** v2's reading of the committed blob (ONE-3b); the positions from the files and
 the commitment, the circuit file's digest in the parameters and the registered blob (ONE-7); the device's rounds, and
 the releases each component's check read, decoded from the device's signed log entries in what the prover sent
-(ONE-4); the extractor applied to a strategy, and each subprotocol's collision finder (ONE-8 and each target's); the
-committed circuit's gates a play computed after their window's coin (ONE-16); the world each play realizes (ONE-10,
-ONE-11, ONE-12); and the certificates, errors and collision terms the product publishes, from the parameters alone
-(ONE-19). -/
+(ONE-4); the extractor applied to a strategy, and each subprotocol's collision finder (ONE-8 and each target's), with
+the finder's SHA-512 calls bounded by the strategy's (`finder_calls`); the committed circuit's gates a play computed
+after their window's coin (ONE-16); the world each play realizes (ONE-10, ONE-11, ONE-12); the deployment's honest
+prover; and the certificates, errors, collision bounds and losses the product publishes, from the parameters and the
+strategy's SHA-512 calls alone (ONE-19).
+
+`cost θ F c σ` is the strategy's SHA-512 calls in one run (ONE8's `t' τ`): `Verity.Game` has no call model of
+strategies, so it is declared, as `Claims.Finder.cost` is. -/
 structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   read : ByteArray → FileRead
   place : (θ F c : ByteArray) → Fin (read F).circuit.N → Option Place
@@ -233,11 +227,19 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   rounds : ByteArray → List ℕ
   coinsRead : Audit → Sent → List Release
   extract : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → (read F).circuit.Transcript
-  finder : Audit → (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Finder
+  finder : Audit → (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Claims.Finder
+  cost : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → ℕ
+  callsMul : ByteArray → Audit → ℕ
+  callsAdd : ByteArray → Audit → ℕ
+  /-- **The finder's SHA-512 calls are at most `c · calls(τ) + d`**, on every coin of the finder. -/
+  finder_calls : ∀ a θ F c σ (x : (finder a θ F c σ).S),
+    (finder a θ F c σ).cost x ≤ callsMul θ a * cost θ F c σ + callsAdd θ a
   computed : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Outcome → Finset (Fin (read F).circuit.N)
   world : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Outcome → World d α
+  honest : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c)
   certOf : ByteArray → Certificates
-  delta : ByteArray → Audit → ℝ≥0∞
+  crBound : ByteArray → Audit → ℕ → ℝ
+  delta : ByteArray → Audit → ℕ → ℝ≥0∞
   loss : Audit → ByteArray → ℝ≥0∞ → ℝ≥0∞
 
 namespace Vocab
@@ -269,45 +271,59 @@ def Opens (θ F c : ByteArray) (g : Fin (V.circuitOf F).N) (v : BitVec ((V.circu
       Hash.RowLeaf.accepts sha512 sha512 p.verifier p.root p.rank o ∧
         ∀ i : Fin ((V.circuitOf F).w g), o.row[p.offset + i.val]? = some (v.getLsbD i.val)
 
-open Classical in
-/-- The units the commitment doesn't bind correctly in the transcript `X`: those not correct in `X`, and those with a
-committed input or output that `c` does not open to its value in `X`. -/
-noncomputable def unbound (θ F c : ByteArray) (X : (V.circuitOf F).Transcript) : Finset (Fin (V.units F)) :=
-  Finset.univ.filter fun u =>
-    ¬ (V.partsOf F).Correct X u ∨ ∃ g ∈ (V.partsOf F).io u, ¬ V.Opens θ F c g (X g)
-
-/-- **The claim subprotocol `a` certifies** in the play of `σ` that ended with `o`: sampled proofs' on the extractor's
-transcript at `σ` (at most an `ε` share of the units unbound in it), PoUW's in gates (at least `W` gates of the committed
-circuit computed after their window's coin over the period's windows), and the others' on the world the play realized
-(at least `S` bits of device memory held on average, at least `Q` bits read, at most `K` bits through the network
-certifiers). -/
-def Holds (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Audit → Outcome → Prop
-  | .sampled, _ => ((V.unbound θ F c (V.extract θ F c σ)).card : ℝ) ≤ (V.certOf θ).ε * V.units F
-  | .pouw, o => (V.certOf θ).W ≤ ((V.circuitOf F).size (V.computed θ F c σ o) : ℝ)
-  | .pous, o => (V.certOf θ).S * (V.world θ F c σ o).win.len ≤
-      ((V.world θ F c σ o).schedule.held (V.world θ F c σ o).win ((V.world θ F c σ o).acct .capacity) : ℝ)
-  | .poub, o => (V.certOf θ).Q ≤
-      ((V.world θ F c σ o).schedule.read (V.world θ F c σ o).win ((V.world θ F c σ o).acct .bandwidth) : ℝ)
-  | .network, o => (V.world θ F c σ o).commWithin (V.certOf θ).K
-
 /-- **Subprotocol `a`'s verdict**: the committed blob passed the commit phase's check, NCI accepted the registration
 sampled proofs committed to, and `a`'s compiled component accepts its own case in what the prover sent. -/
 def Verdict (a : Audit) (o : Outcome) : Prop :=
   V.Registered o.params o.file ∧ RegistrationAccepts o.sent ∧ ComponentAccepts a o.sent
 
+/-- **The period after `θ`, `F` and `c`, as the one vocabulary's `Accounting.PeriodLive`**: the committed files'
+units, the commitment's openings, the extractor, the finders, the gates computed, the world and the verdicts. -/
+noncomputable def live (θ F c : ByteArray) : PeriodLive d α (V.circuitOf F) (V.game θ F c) where
+  units := V.units F
+  parts := V.partsOf F
+  opens := V.Opens θ F c
+  extract σ _ := V.extract θ F c σ
+  finder a σ := V.finder a θ F c σ
+  computed := V.computed θ F c
+  world := V.world θ F c
+  accepts := V.Verdict
+
+/-- **The claim subprotocol `a` certifies** in the play of `σ` that ended with `o`: `Accounting.PeriodLive.Holds` at the
+period and the published certificates. Sampled proofs' on the extractor's transcript at `σ` (at most an `ε` share of
+the units unbound in it under the commitment's openings), PoUW's in gates (at least `W` gates of the committed circuit
+computed after their window's coin), and the others' on the world the play realized (at least `S` bits of device memory
+held on average, at least `Q` bits read, at most `K` bits through the network certifiers). -/
+def Holds (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Audit → Outcome → Prop :=
+  (V.live θ F c).Holds (V.certOf θ) σ
+
 /-- Every release `a`'s check read is in the device's log; outside it, the release is a forgery of the device's LMS
 signature, which `a`'s finder turns into a collision. -/
 def Logged (a : Audit) (o : Outcome) : Prop := ∀ r ∈ V.coinsRead a o.sent, r ∈ o.log
 
-/-- **The finder for a second file with the registered digest**: it outputs the committed blob and the registered one
-when they differ, a SHA-512 collision when the blob passed the file check. -/
-def fileFinder (θ F : ByteArray) : Finder :=
-  ⟨.ret (if F = V.registered θ then none else some (F.data.toList, (V.registered θ).data.toList)), PUnit.unit⟩
+/-- **The finder for a second file with the registered digest**: on its one coin it hashes the committed blob and the
+registered one, and outputs them when they differ, a SHA-512 collision when the blob passed the file check. -/
+def fileFinder (θ F : ByteArray) : Claims.Finder where
+  S := Unit
+  out _ := if F = V.registered θ then none else some (F.data.toList, (V.registered θ).data.toList)
+  cost _ := 2
 
-/-- **Subprotocol `a`'s error at a strategy**: its published `δ`, plus its collision term at the probability that its
-finder applied to the strategy outputs a SHA-512 collision. -/
+/-- **`B^τ`'s collision premise, quantitative**: subprotocol `a`'s finder applied to the strategy outputs a SHA-512
+collision with probability at most the published bound at the strategy's SHA-512 calls (`ε_cr`). `ecr/sha-512` is asked
+at the finder's budget, `callsMul θ a * cost θ F c σ + callsAdd θ a` calls (`finder_calls`), a defined function of the
+strategy's `cost` as ONE8's `qF`/`qS` are of `t'`. -/
+def FinderCR (a : Audit) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Prop :=
+  (V.finder a θ F c σ).Pr sha512Msg ≤ V.crBound θ a (V.cost θ F c σ)
+
+open Classical in
+/-- **Subprotocol `a`'s error at a strategy**: where its finder meets its collision premise (`FinderCR`), its
+period's error (`Accounting.PeriodLive.error`: its published `δ` at the strategy's SHA-512 calls plus its loss at the
+probability that the finder outputs a collision); elsewhere no bound (`⊤`). This is ONE8's
+`condError FinderCR δ σ := if FinderCR σ then δ σ else ⊤`; C-Flock's conditional bound is the case `loss = 0` (F3), the
+additive one the case `crBound = 1`. -/
 noncomputable def error (a : Audit) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : ℝ≥0∞ :=
-  V.delta θ a + V.loss a θ (V.finder a θ F c σ).collides
+  if V.FinderCR a θ F c σ then
+    (V.live θ F c).error sha512Msg a (V.delta θ a (V.cost θ F c σ)) (V.loss a θ) σ
+  else ⊤
 
 /-- **Soundness for the acceptance `acc`, in the causal game.** At all parameters `θ`, committed files `F` and
 commitments `c`, and for every strategy, the probability that `acc` holds of what the prover sent for a blob that passed
@@ -344,6 +360,13 @@ def BandwidthAuditSound : Prop := V.Target .poub
 /-- **The network certifier's target (ONE-12)**: at most `K` bits through the network certifiers, where NCI accepted
 the registration sampled proofs committed to. -/
 def NetworkCertifierSound : Prop := V.Target .network
+
+/-- **Subprotocol `a`'s honest lemma at the deployment**: at registered files, the deployment's honest prover meets
+`a`'s claim on almost every play. Each subprotocol's piece proves its own (sampled proofs from
+`Flock.Bridge.card_wrong_lt_of_relS_honest`; the others from their owners' `_honest` lemmas). -/
+def HonestHolds (a : Audit) : Prop :=
+  ∀ θ F c : ByteArray, V.Registered θ F →
+    Game.prob (fun o => ¬ V.Holds θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c) = 0
 
 end Vocab
 
