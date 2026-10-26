@@ -6,6 +6,7 @@
   "Flock.Test.Labels",
   "Flock.Test.FullDraw",
   "Flock.Test.OneFull",
+  "Flock.Test.RegBudget",
   "Flock.Test.Sha512",
   "Flock.Test.InnerStreams",
   "Flock.Test.InnerLink",

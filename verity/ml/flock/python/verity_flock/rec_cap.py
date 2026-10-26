@@ -34,6 +34,7 @@ from verity.ml.circuits.boolean.forms import ZERO
 
 from . import circuit as FC
 from . import ir_lower as IL
+from . import rec_budget as RB
 from . import rec_residuals as RR
 from .class_statement import ClassDefinition
 
@@ -166,7 +167,9 @@ def stage(tops, out_dir: Path, evaluate: bool = True) -> dict:
     (d / "circuit.txt").write_text(text)
     (d / "program.json").write_bytes(canonical_json(encode_program(program_)))
     (d / "partition.json").write_text(json.dumps(part))
-    (d / "registered.json").write_text(json.dumps({"format": G.READS, "ports": {"top": read(tops.own), "out": read(zero.entry())}}))
+    own = {"format": G.READS, "ports": {"top": read(tops.own), "out": read(zero.entry())}}
+    RB.check(own, TEMPLATE, N)
+    (d / "registered.json").write_text(json.dumps(own))
     FC.write(text, SimpleNamespace(name=TEMPLATE, subcircuit=sub), 0, N, d / "inst.bin", d / "pub.bin", None, list(range(N)),
              share_rows=True, outs={"out": np.asarray(out_rows, np.uint16)}, tables={"top": rows}, refs={"top": list(range(N))},
              salts={"top": top_salts, "out": out_salts}, registered={"top": top_entry, "out": out_entry})

@@ -64,6 +64,7 @@ from verity.ml.circuits.ops.boolean import gf2k as G
 
 from . import circuit as FC
 from . import ir_lower as IL
+from . import rec_budget as RB
 from .class_statement import ClassDefinition
 
 __all__ = ["HOLO_KEY", "InnerRepCheck", "MAX_LONE_SLOTS", "MAX_REGIONS", "MAX_SLOTS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words", "regions",
@@ -517,6 +518,7 @@ def write_rows(st: SimpleNamespace, reads: dict, vrows: list[list[int]], out_dir
     (d / "circuit.txt").write_text(text)
     (d / "program.json").write_bytes(canonical_json(encode_program(st.program)))
     (d / "partition.json").write_text(json.dumps(st.part))
+    RB.check({"format": RG.READS, "ports": entries}, st.defn.id, n)
     (d / "registered.json").write_text(json.dumps({"format": RG.READS, "ports": entries}))
     ds = getattr(st, "digests", None) or (FC.digest(text), FC.class_digest(text))
     FC.write(text, SimpleNamespace(name=st.zero_value, subcircuit=sub), 0, n, d / "inst.bin", d / "pub.bin", None, list(range(n)),
