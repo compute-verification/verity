@@ -23,6 +23,7 @@ import verity_difftest as D
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_vstar_in_difftest as IN  # noqa: E402
 
+from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import rec_vstage as S  # noqa: E402
 
 LEAN = IN.LEAN
@@ -84,11 +85,20 @@ CLAIMED = "rec-residuals/m22-k6-c2-p0"
 def unclaim(d: Path) -> Path:
     """``d``'s circuit with its unit renamed to one no verifier check claims: ``ALG_S`` is not the part at the shape its
     name gives, so the parse refuses it as the verifier does (`test_a_part_the_verifier_refuses_has_no_trace`); renamed, it
-    is the same gates and ports, which neither assigner reads the name of."""
+    is the same gates and ports, which neither assigner reads the name of. The instance file is restaged for the renamed
+    circuit: its header's ``circuit_sha512`` and unit classes, as `inner_registered`'s restaging writes them."""
     f = d / "circuit.txt"
     text = f.read_text()
     assert CLAIMED in text
-    f.write_text(text.replace(CLAIMED, "vstar-trace/alg-p0"))
+    text = text.replace(CLAIMED, "vstar-trace/alg-p0")
+    f.write_text(text)
+    inst = d / "inst.bin"
+    line, body = inst.read_bytes().split(b"\n", 1)
+    head = json.loads(line)
+    head["circuit_sha512"] = FC.digest(text)
+    if "units" in head:
+        head["units"] = dict(head["units"], classes=[FC.class_digest(text)] * len(head["units"]["classes"]))
+    inst.write_bytes(json.dumps(head, sort_keys=True).encode() + b"\n" + body)
     return d
 
 
