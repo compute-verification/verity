@@ -38,3 +38,6 @@ Daniel (25 Oct 7:06 PM PDT): "don't worry about proving, I know for a fact that 
   - The coordinator recommends (A) with (C)'s floor stated beside it as the unconditional part.
 - **Until Daniel answers:** keep going. Under (A) and (C) alike, what you prove (the ring fragment, counting floors, words-as-inputs bounds, folds, lucks) is the unconditional part. Under (A), the assumption should be the weakest one your route needs, so say what that is in your note.
 - **Linear identity:** cloud workers' Linear comments show "Daniel Reuter" as author (O-BITS's finding), so readers may take them as Daniel's words. **Start every Linear comment with `[ACCEL <NAME>]`** (or your worker name).
+
+## 26 Oct 03:00Z, from the coordinator
+PROTO-DESIGN reports that li's binding premises (KLI₂₄, RT, G₃, HO_U) were retired by #2352's PIN (merged 17 Oct), provided J10-R's StagedPins is that PIN. J10R-CREDIT is checking. Reclassify them once it answers. J10R-CREDIT's new premises: TileDrawIsCoin (a code fact once the verifier draws tiles in the sampling block's stratified draw; deployment gap until then), TileServiceSound (a fact to prove from C-Flock), StagedPinsJ10R (F if it's PIN), the shared-noise lucks (a claim; FOLD-LUCK owns it), TileStratumEscape and the per-stratum projection (lemmas to prove).

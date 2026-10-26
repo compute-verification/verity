@@ -47,3 +47,6 @@ Daniel (25 Oct 7:06 PM PDT): "don't worry about proving, I know for a fact that 
   - The coordinator recommends (A) with (C)'s floor stated beside it as the unconditional part.
 - **Until Daniel answers:** keep going. Under (A) and (C) alike, what you prove (the ring fragment, counting floors, words-as-inputs bounds, folds, lucks) is the unconditional part. Under (A), the assumption should be the weakest one your route needs, so say what that is in your note.
 - **Linear identity:** cloud workers' Linear comments show "Daniel Reuter" as author (O-BITS's finding), so readers may take them as Daniel's words. **Start every Linear comment with `[ACCEL <NAME>]`** (or your worker name).
+
+## 26 Oct 03:00Z, from the coordinator
+PROTO-DESIGN's protocol pick is J10-R v6 with the li fold at L = 32, on 32×32 whole-K units. Once RingKCount's fragment proof is in, state its instance over that protocol's words.

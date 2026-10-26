@@ -69,3 +69,6 @@ Daniel (25 Oct 7:06 PM PDT): "don't worry about proving, I know for a fact that 
   - The coordinator recommends (A) with (C)'s floor stated beside it as the unconditional part.
 - **Until Daniel answers:** keep going. Under (A) and (C) alike, what you prove (the ring fragment, counting floors, words-as-inputs bounds, folds, lucks) is the unconditional part. Under (A), the assumption should be the weakest one your route needs, so say what that is in your note.
 - **Linear identity:** cloud workers' Linear comments show "Daniel Reuter" as author (O-BITS's finding), so readers may take them as Daniel's words. **Start every Linear comment with `[ACCEL <NAME>]`** (or your worker name).
+
+## 26 Oct 03:00Z, from the coordinator
+PROTO-DESIGN's smell: "the H200 headline design" in the earlier relays, `dither-1s-li-l32`, has model ε 12.5% (its peel is unchecked and can be skipped at A = 0). The li headline should be `dither-2s-li-l32` (ε 0.68%). Re-read your FOLD-OPT finding against it.

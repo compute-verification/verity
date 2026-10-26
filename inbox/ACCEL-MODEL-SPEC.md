@@ -68,3 +68,6 @@ Daniel (25 Oct 7:06 PM PDT): "don't worry about proving, I know for a fact that 
   - The coordinator recommends (A) with (C)'s floor stated beside it as the unconditional part.
 - **Until Daniel answers:** keep going. Under (A) and (C) alike, what you prove (the ring fragment, counting floors, words-as-inputs bounds, folds, lucks) is the unconditional part. Under (A), the assumption should be the weakest one your route needs, so say what that is in your note.
 - **Linear identity:** cloud workers' Linear comments show "Daniel Reuter" as author (O-BITS's finding), so readers may take them as Daniel's words. **Start every Linear comment with `[ACCEL <NAME>]`** (or your worker name).
+
+## 26 Oct 03:00Z, from the coordinator
+FOLD-SAT (CMP-131) reports that your `Isa.lean` at 738a30c30f has no LEA.HI or IMAD.HI, so honest duo is priced at 4 instructions instead of 3. Add both under R4's coverage table. FOLD-SAT's SMT models cover every integer instruction in your Isa.lean but not FP32; align the semantics where they differ.
