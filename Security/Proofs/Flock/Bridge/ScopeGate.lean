@@ -47,7 +47,8 @@ structure KsScoped (I : Inputs) (D : Flock.Desc) (pub : Flock.Public) (kd : ℕ)
 `verify --zk`'s verdict outside `--rec-inner`). -/
 def AcceptsScoped (I : Inputs) (t : FlockSoundness.Discharge.Exec.Transcript) : Prop :=
   AcceptsZK I t ∧ Flock.PortRoots.check (zkTags I) I.circuitFile I.publicFile I.tables = .ok () ∧
-    Flock.KsScope.check (zkTags I) I.circuitFile I.publicFile I.tables I.count (recordDraw t.record) = .ok ()
+    Flock.KsScope.check (zkTags I) I.circuitFile I.publicFile I.tables I.count
+      (FlockSoundness.Discharge.Exec.recordDraw t.record) = .ok ()
 
 /-- **`verify --zk` accepts the live audit's transcript** (`AcceptsScoped` at it). -/
 def LiveAcceptsScoped {n : ℕ} {Reg : Type} (I : Inputs)
@@ -104,7 +105,8 @@ theorem div_of_drawWhy {n mPts : ℕ} {Reg : Type} {I : Inputs} {dj : Finset (Fi
     {wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (Jf S R) mPts → FlockSoundness.Discharge.Exec.Transcript}
     {kd : ℕ} (hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJ I dj Jf wr kd) {S : Finset (Fin n)} {R : Reg}
     {lo : LiveOutJ (Jf S R) mPts} (hacc : AcceptsZK I (wr S R lo))
-    (hd : Flock.KsScope.drawWhy I.count (recordDraw (wr S R lo).record) = none) : kd % nTab I = 0 := by
+    (hd : Flock.KsScope.drawWhy I.count (FlockSoundness.Discharge.Exec.recordDraw (wr S R lo).record) = none) :
+    kd % nTab I = 0 := by
   unfold nTab
   split
   · exact Nat.mod_one kd
