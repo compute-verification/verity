@@ -385,6 +385,9 @@ variable (hscope : Layout.scopeOkH c = true)
 
 /-- **The public plan's sites**: each drawn unit's acceptance, VU and block are its table's public table's. -/
 noncomputable def sitesShHJ : SitesH (planShHJ (Reg := Reg) dj y₀) (tabShHJ dj y₀) where
+  A S R u _ := (Partition.tabOf _ _ S R u).S.A₀
+  B S R u _ := (Partition.tabOf _ _ S R u).S.B₀
+  sat _ _ _ _ _ hz := hz
   acc S R u _ := recastAccH ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.acc
     (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _)
       (rowsFit_of_scopeH (zkTyped ht) hc hscope))

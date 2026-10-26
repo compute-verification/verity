@@ -57,6 +57,9 @@ theorem tablePHJ_parse (S : Finset (Fin n)) (j : Fin (nTab I)) :
 
 /-- **The plan's sites**: each drawn unit's acceptance (at the rows' fit `hrf`), VU and block are its table's. -/
 noncomputable def sitesPHJI : SitesH (planPHJ (Reg := Reg) dj x₀) (tabPHJ dj x₀) where
+  A S R u _ := (Partition.tabOf _ _ S R u).S.A₀
+  B S R u _ := (Partition.tabOf _ _ S R u).S.B₀
+  sat _ _ _ _ _ hz := hz
   acc S R u _ := recastAccH ((tablePHJ dj x₀ S (partOf I (dj S) u.val)).2.acc
     (tablePHJ_typed dj x₀ ht S _) (tablePHJ_parse dj x₀ ht hc S _) hrf)
     (congrArg TabSpec.S (tabOfPHJ_eq dj x₀ S R u)).symm

@@ -78,6 +78,9 @@ variable (ht : I.tags.typed = false) {c : Flock.Circuit} (hc : HmOut.parse (zkTa
 
 /-- **The public plan's sites** (`sitesAtH`'s, at `tableShH`). -/
 noncomputable def sitesShH : SitesH (planShH (Reg := Reg) dj y₀) (tabShH dj y₀) where
+  A S R u _ := (Partition.tabOf _ _ S R u).S.A₀
+  B S R u _ := (Partition.tabOf _ _ S R u).S.B₀
+  sat _ _ _ _ _ hz := hz
   acc S _ _ _ := (tableShH dj y₀ S).acc (zkTyped ht) hc (rowsFit_of_scopeH (zkTyped ht) hc hscope)
   vu S _ u h := (tableShH dj y₀ S).vu u h
   hvu S _ u h := (tableShH dj y₀ S).hvu u h

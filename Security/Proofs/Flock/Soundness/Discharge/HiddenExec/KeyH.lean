@@ -327,7 +327,7 @@ theorem keyProgH_copies : (keyReadersH hparse outs popOf).Copies (keyPlaceH hpar
     obtain ⟨hgu, -, hb⟩ := outRowOf_wire_some outs x ho'
     obtain ⟨u'', j, t, hoc⟩ := houts u _ hx hgu x rfl
     rw [Layout.outDecode_of hoc] at hb
-    have := out_copy_key (si.acc S R u hu) hc ho hrf hM (si.o S R u hu) (si.hvu S R u hu)
+    have := out_copy_key (si.acc S R u hu) hc ho hrf (si.sat S R u hu _ hM) (si.o S R u hu) (si.hvu S R u hu)
       (Fin.cast (congrArg FlockSoundness.Rows.w hrw) x) hoc hb
     simp only [keyRowAddrH, hu, ↓reduceDIte]
     exact this
@@ -341,7 +341,7 @@ theorem keyProgH_copies : (keyReadersH hparse outs popOf).Copies (keyPlaceH hpar
       have hv := si.hvu S R u hu
       rw [hc] at hv ⊢
       exact Layout.msgCol_lt_of_parse (hparse S R u hu) hv q.isLt _ _ (Nat.mod_lt _ (by norm_num))
-    have := copy_siteH (si.acc S R u hu) hM (si.o S R u hu) (si.hvu S R u hu)
+    have := copy_siteH (si.acc S R u hu) (si.sat S R u hu _ hM) (si.o S R u hu) (si.hvu S R u hu)
       (Fin.cast (congrArg FlockSoundness.Rows.w hrw) x) (lt_of_lt_of_eq hxn (congrArg FlockSoundness.Rows.nIn hrw))
       hk' hin'
     simp only [keyRowAddrH, hu, ↓reduceDIte]
@@ -360,7 +360,7 @@ theorem keyProgH_bcPinned
   rw [rowOfH_wire_unit outs x hr]
   have hc := (si.acc S R u hu).c_eq (hparse S R u hu)
   have hnp : (si.acc S R u hu).st.c.ports.size = c.ports.size := by rw [hc]
-  have := bc_site_ofH (hsite S R u hu M hM) hM (si.hvu S R u hu) (p := q.val) (by rw [hnp]; exact q.isLt)
+  have := bc_site_ofH (hsite S R u hu M hM) (si.sat S R u hu _ hM) (si.hvu S R u hu) (p := q.val) (by rw [hnp]; exact q.isLt)
   rw [hnp] at this
   unfold keyBcAddrH
   simp only [hu, ↓reduceDIte]
@@ -485,7 +485,7 @@ theorem keyRowsH_computes
     have hbq : c.ports[q.val]!.bits = 16 * c.ports[q.val]!.words :=
       hrf.bits16 _ (by rw [getElem!_pos c.ports q.val q.isLt]; exact Array.getElem_mem_toList q.isLt)
     have hb := bc_site_commitH (si.acc S R u hu)
-      (Hm.upv_pos (si.acc S R u hu).unitFacts.check (by rw [hce]; exact ho)) (by rw [hce]; exact hrf) hM
+      (Hm.upv_pos (si.acc S R u hu).unitFacts.check (by rw [hce]; exact ho)) (by rw [hce]; exact hrf) (si.sat S R u hu _ hM)
       (si.o S R u hu) (si.hvu S R u hu) hq
     have hpq : (si.acc S R u hu).st.c.ports[q.val]! = c.ports[q.val]! := by rw [hce]
     rw [hpq] at hb

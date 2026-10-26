@@ -60,6 +60,9 @@ variable (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : Dra
 /-- **The sites of the one-table hidden plan**: each drawn unit's acceptance, template instance and block are its draw's
 table's. -/
 noncomputable def sitesAtH : SitesH (planAtH (Reg := Reg) dj x₀) (tabAtH dj x₀) where
+  A S R u _ := (Partition.tabOf _ _ S R u).S.A₀
+  B S R u _ := (Partition.tabOf _ _ S R u).S.B₀
+  sat _ _ _ _ _ hz := hz
   acc S _ _ _ := (tableAtH dj x₀ S).acc ht hc hv1
   vu S _ u h := (tableAtH dj x₀ S).vu u h
   hvu S _ u h := (tableAtH dj x₀ S).hvu u h

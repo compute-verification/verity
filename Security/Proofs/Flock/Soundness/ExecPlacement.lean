@@ -728,7 +728,7 @@ noncomputable def unitPlace (regs : List (Model.Region st.c.kLog (st.m - st.c.kL
   o := o
   col := stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
     (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg)
-  placed := L.placement regs hg
+  placed := (L.placement regs hg).sat
   aliased := hal
 
 end Layout

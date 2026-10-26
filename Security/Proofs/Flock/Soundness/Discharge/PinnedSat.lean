@@ -54,4 +54,16 @@ theorem sat_unpin {S : Model.Statement} {A B : Matrix (Fin (2 ^ S.kLog)) (Fin (2
     exact pin_row hr (hone o r)
   exact ⟨⟨fun o r => (row o r).1, hz.2.1, hz.2.2⟩, fun o r hr => (row o r).2 hr⟩
 
+/-- **The forced-zero row carries 0** in every block of a satisfying witness, when it has no copies (`μ zero = 0`) and
+its `A` without them is empty. -/
+theorem zero_block {S : Model.Statement} {A B : Matrix (Fin (2 ^ S.kLog)) (Fin (2 ^ S.kLog)) (ZMod 2)}
+    {zero : Fin (2 ^ S.kLog)} {μ : Fin (2 ^ S.kLog) → ZMod 2} (h : PinRows S A B zero μ) (hμ0 : μ zero = 0)
+    (hA0 : ∀ j, A zero j = 0) {z : Model.Witness S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl)) :
+    S.block z o zero = 0 := by
+  have hr := hz.1 o zero
+  have ha : A.mulVec (S.block z o) zero = 0 := by
+    simp only [Matrix.mulVec, dotProduct, hA0, zero_mul, Finset.sum_const_zero]
+  rw [mulVec_pin S.A₀ A (fun j => (h zero j).1), hμ0, ha, zero_mul, add_zero, zero_mul] at hr
+  exact hr.symm
+
 end FlockSoundness.Discharge.Pinned

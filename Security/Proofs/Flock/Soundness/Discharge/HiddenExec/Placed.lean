@@ -129,16 +129,29 @@ end AcceptedH
 
 /-! ## Each drawn unit's place -/
 
+/-- **`T` with other matrices**: the same blocks, pin and regions, at `A` and `B`. -/
+abbrev twin (T : Model.Statement) (A B : Matrix (Fin (2 ^ T.kLog)) (Fin (2 ^ T.kLog)) (ZMod 2)) : Model.Statement :=
+  { T with A₀ := A, B₀ := B }
+
 section Sites
 
 variable {N n : ℕ} {Reg : Type} {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
 /-- **Each drawn unit's site**, as `Placed.Sites`: the hidden-output acceptance whose statement is the statement of the
-table unit `u` is drawn into (`acc`), and the unit's template instance (`vu`, below `vus_per_block`) and block (`o`)
-there. -/
+table unit `u` is drawn into at other matrices `A`, `B` (`acc`), which every witness satisfying the table satisfies
+(`sat`), and the unit's template instance (`vu`, below `vus_per_block`) and block (`o`) there. A pinned output's Δ
+copies are the table's and not `A`'s or `B`'s. -/
 structure SitesH where
-  acc : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n), u ∈ S → AcceptedH (Partition.tabOf plan tab S R u).S
+  A : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n), u ∈ S →
+    Matrix (Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog)) (Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog)) (ZMod 2)
+  B : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n), u ∈ S →
+    Matrix (Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog)) (Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog)) (ZMod 2)
+  acc : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
+    AcceptedH (twin (Partition.tabOf plan tab S R u).S (A S R u h) (B S R u h))
+  sat : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) (z : Model.Witness (Partition.tabOf plan tab S R u).S.m),
+    (Partition.tabOf plan tab S R u).S.Satisfies z →
+      (twin (Partition.tabOf plan tab S R u).S (A S R u h) (B S R u h)).Satisfies z
   vu : ∀ (S : Finset (Fin n)) (_ : Reg) (u : Fin n), u ∈ S → ℕ
   hvu : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S), vu S R u h < (acc S R u h).st.c.g
   o : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n), u ∈ S → Fin (2 ^ (Partition.tabOf plan tab S R u).S.nbl)
@@ -160,8 +173,9 @@ noncomputable def SitesH.col (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
 /-- **W6's placement**: the statement of the table each drawn unit is drawn into places the unit's rows at its template
 instance. -/
 theorem SitesH.placed (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
-    Placement (Partition.tabOf plan tab S R u).S (p.rows u) (si.col hrows S R u h) :=
-  Placed.placement_rows (hrows S R u h) ((si.acc S R u h).placement (si.hvu S R u h))
+    PlacedSat (Partition.tabOf plan tab S R u).S (p.rows u) (si.col hrows S R u h) :=
+  ⟨si.A S R u h, si.B S R u h, Placed.placement_rows (hrows S R u h) ((si.acc S R u h).placement (si.hvu S R u h)),
+    si.sat S R u h⟩
 
 /-- **`ProgPlaces` from setupHidden's accept**, its aliasing from `Layout.Aliased` at each drawn unit's template
 instance and block. -/
@@ -174,8 +188,9 @@ noncomputable def SitesH.progPlaces_of_layout (outs : Finset (Fin N))
   o := si.o
   col := si.col hrows
   placed := si.placed hrows
-  aliased S R u h :=
+  aliased S R u h c c' hw hc hc' z hz :=
     (si.acc S R u h).aliased_of_layout (hrows S R u h) (inst u) (si.o S R u h) (si.hvu S R u h) (hal S R u h)
+      c c' hw hc hc' z (si.sat S R u h z hz)
 
 end Sites
 
@@ -283,7 +298,8 @@ theorem zeroCols_uniformH (si : SitesH plan tab)
     have hza : ZeroIn (si.acc S R u h).st.c x.val := by
       rw [(si.acc S R u h).c_eq (hparse S R u h)]
       exact hzi
-    exact (si.acc S R u h).zero_block (si.hvu S R u h) (Fin.cast (congrArg Rows.w (hrows S R u h)) x) hxa hza hsat _
+    exact (si.acc S R u h).zero_block (si.hvu S R u h) (Fin.cast (congrArg Rows.w (hrows S R u h)) x) hxa hza
+      (si.sat S R u h z hsat) _
 
 /-- **`hZero` for the circuit's program on source-indexed input gates**, as `Zero.zeroCols_circuitProg`. -/
 theorem zeroCols_circuitProgH {B : ℕ} {src : Fin (Placed.circuitRows c hU).nIn → Option (Fin B)}

@@ -247,8 +247,9 @@ noncomputable def SitesH.progPlaces_instProg : ProgPlaces (instProg c n) outs pl
   inst := Const.Prog.instC (instProg c n) outs
   o := si.o
   col := SitesH.instCol hparse
-  placed S R u h := placement_rows (SitesH.rows_instProg hparse S R u h)
-    ((si.acc S R u h).placement_inst (by rw [(si.acc S R u h).c_eq (hparse S R u h)]; exact hrows) (si.hvu S R u h))
+  placed S R u h := ⟨si.A S R u h, si.B S R u h, placement_rows (SitesH.rows_instProg hparse S R u h)
+    ((si.acc S R u h).placement_inst (by rw [(si.acc S R u h).c_eq (hparse S R u h)]; exact hrows) (si.hvu S R u h)),
+    si.sat S R u h⟩
   aliased S R u h x x' hw hx hx' z hz := by
     have hc := (si.acc S R u h).c_eq (hparse S R u h)
     have e := congrArg Rows.nIn (SitesH.rows_instProg hparse S R u h)
@@ -257,7 +258,7 @@ noncomputable def SitesH.progPlaces_instProg : ProgPlaces (instProg c n) outs pl
     exact (si.acc S R u h).inst_aliased (si.hvu S R u h) (si.o S R u h)
       (Fin.cast (congrArg Rows.w (SitesH.rows_instProg hparse S R u h)) x)
       (Fin.cast (congrArg Rows.w (SitesH.rows_instProg hparse S R u h)) x') (lt_of_lt_of_eq hx e)
-      (lt_of_lt_of_eq hx' e) hk hz
+      (lt_of_lt_of_eq hx' e) hk (si.sat S R u h z hz)
 
 /-- `progPlaces_instProg`'s instance is the program's own. -/
 theorem SitesH.progPlaces_instProg_inst (u : Fin n) :
@@ -290,7 +291,7 @@ theorem zeroCols_instProgH :
     have e := congrArg Rows.nIn (SitesH.rows_instProg hparse S R u h)
     have hkz' : keyOf (si.acc S R u h).st.c x.val = .zero := by rw [hc]; exact hkz
     exact (si.acc S R u h).inst_zero (si.hvu S R u h)
-      (Fin.cast (congrArg Rows.w (SitesH.rows_instProg hparse S R u h)) x) (lt_of_lt_of_eq hx e) hkz' hsat _
+      (Fin.cast (congrArg Rows.w (SitesH.rows_instProg hparse S R u h)) x) (lt_of_lt_of_eq hx e) hkz' (si.sat S R u h z hsat) _
 
 end prog
 
@@ -640,7 +641,7 @@ theorem instProgH_copies : (instReadersH hparse hrf outs popOf).Copies (instPlac
   · have ho' : instOutRowOf c n outs ((Const.Prog.instC (instProg c n) outs u).wire x) = some (u', ⟨q, k⟩) :=
       (instRowOfH_of_none outs hk).symm.trans hr
     obtain ⟨-, o, t, hoc, hb⟩ := instOutRowOf_wire outs x ho'
-    have := out_copy_instH (si.acc S R u hu) hc hrf hM (si.o S R u hu) (si.hvu S R u hu)
+    have := out_copy_instH (si.acc S R u hu) hc hrf (si.sat S R u hu _ hM) (si.o S R u hu) (si.hvu S R u hu)
       (Fin.cast (congrArg Rows.w hrw) x) (o := o) (t := t) hoc hb
     simp only [keyRowAddrH, hu, ↓reduceDIte]
     exact this
@@ -654,7 +655,7 @@ theorem instProgH_copies : (instReadersH hparse hrf outs popOf).Copies (instPlac
       have hv := si.hvu S R u hu
       rw [hc] at hv ⊢
       exact Layout.msgCol_lt_of_parse (hparse S R u hu) hv q.isLt _ _ (Nat.mod_lt _ (by norm_num))
-    have := copy_site_instH (si.acc S R u hu) hM (si.o S R u hu) (si.hvu S R u hu)
+    have := copy_site_instH (si.acc S R u hu) (si.sat S R u hu _ hM) (si.o S R u hu) (si.hvu S R u hu)
       (Fin.cast (congrArg Rows.w hrw) x) (lt_of_lt_of_eq hxn (congrArg Rows.nIn hrw)) hk' hin'
     simp only [keyRowAddrH, hu, ↓reduceDIte]
     exact this
@@ -671,7 +672,7 @@ theorem instProgH_bcPinned
   rw [instRowOfH_wire_unit outs x hr]
   have hc := (si.acc S R u hu).c_eq (hparse S R u hu)
   have hnp : (si.acc S R u hu).st.c.ports.size = c.ports.size := by rw [hc]
-  have := bc_site_ofH (hsite S R u hu M hM) hM (si.hvu S R u hu) (p := q.val) (by rw [hnp]; exact q.isLt)
+  have := bc_site_ofH (hsite S R u hu M hM) (si.sat S R u hu _ hM) (si.hvu S R u hu) (p := q.val) (by rw [hnp]; exact q.isLt)
   rw [hnp] at this
   unfold keyBcAddrH
   simp only [hu, ↓reduceDIte]
@@ -781,7 +782,7 @@ theorem instRowsH_computes (hupv : 0 < c.upv)
       rfl
     have hbq : c.ports[q.val]!.bits = 16 * c.ports[q.val]!.words :=
       hrf.bits16 _ (by rw [getElem!_pos c.ports q.val q.isLt]; exact Array.getElem_mem_toList q.isLt)
-    have hb := bc_site_commitH (si.acc S R u hu) (by rw [hce]; exact hupv) (by rw [hce]; exact hrf) hM
+    have hb := bc_site_commitH (si.acc S R u hu) (by rw [hce]; exact hupv) (by rw [hce]; exact hrf) (si.sat S R u hu _ hM)
       (si.o S R u hu) (si.hvu S R u hu) hq
     have hpq : (si.acc S R u hu).st.c.ports[q.val]! = c.ports[q.val]! := by rw [hce]
     rw [hpq] at hb

@@ -50,7 +50,7 @@ def ofRowsAt (q : Prog N n) (outs : Finset (Fin N)) (inst : ∀ u, (q.partition 
   inst := inst
   o S R u h := (pl S R u h).o
   col S R u h := (pl S R u h).col
-  placed S R u h := (pl S R u h).placed
+  placed S R u h := (pl S R u h).placed.sat
   aliased := hal
 
 end OfRowsAt
