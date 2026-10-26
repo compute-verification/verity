@@ -247,7 +247,7 @@
         "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
         "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
         "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
-        "integrations/torch_loop/",
+        "examples/toy/",
         "fixtures/bench-instances/",
         "fixtures/redteam/",
         "fixtures/redteam-3/",

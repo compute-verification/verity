@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# `verity bench all-protocols`: every window, one run of the torch loop (integrations/torch_loop, a W8A8 MLP on CPU) audited
+# `verity bench all-protocols`: every window, one run of the torch loop (examples/toy, a W8A8 MLP on CPU) audited
 # by every protocol's leg (verity_all_protocols.table: legs/<component>.py), each window's report in $OUT/w<W>/report.json and
 # $OUT/reports.jsonl, and the monitoring-period report over the windows so far in $OUT/monitoring-period.json
 # (verity_all_protocols.runner, .monitoring). Builds what the legs run first, as benchmarks/prove_path/run.sh does: M0's
@@ -7,7 +7,7 @@
 # Its arguments go to the runner (--windows N, --start I, --jobs J, --tamper W,..., --pouw h1); ALLP_FLOCK_WORK=DIR keeps
 # M0's build across runs.
 #   research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 64 -- \
-#     bash benchmarks/all_protocols/run.sh --windows 4 --jobs 4 --tamper 3
+#     bash examples/toy/run.sh --windows 4 --jobs 4 --tamper 3
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; mkdir -p $O
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
@@ -31,4 +31,4 @@ M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REP
 $PY -c 'import json, sys; print(json.dumps(dict(zip(["flock-circuit", "flock-verify", "flock-firewall", "m0-pythonpath"], sys.argv[1:]))))' \
   $BIN $LEAN $FWL $M0PATH > $O/tools.json
 export RAYON_NUM_THREADS=$(nproc) RUST_MIN_STACK=$((64 << 20))
-PYTHONPATH=$REPO/benchmarks/all_protocols:$REPO/integrations/torch_loop $PY -m verity_all_protocols.runner --out $O --tools $O/tools.json --scratch $W "$@"
+PYTHONPATH=$REPO/benchmarks/all_protocols:$REPO/examples/toy $PY -m verity_all_protocols.runner --out $O --tools $O/tools.json --scratch $W "$@"

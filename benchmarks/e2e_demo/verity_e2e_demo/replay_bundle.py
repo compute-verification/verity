@@ -129,7 +129,7 @@ def target(binding: str) -> dict[str, Any]:
 
 
 def torch_loop_coords(label: Mapping[str, Any], offset: int, block: int = 0) -> dict[str, Any]:
-    """`integrations/torch_loop`'s unit labels (``{request: "r<j>", step, layer, op}``, one per linear's run of units) as
+    """`examples/toy`'s unit labels (``{request: "r<j>", step, layer, op}``, one per linear's run of units) as
     coordinates: slot j, and ``unit`` the output coordinate within the run."""
     return {"block": block, "step": int(label["step"]), "slot": int(str(label["request"]).lstrip("r")),
             "layer": int(label["layer"]), "op": str(label["op"]), "unit": int(offset)}
@@ -681,7 +681,7 @@ def torch_loop_window(out: str | Path, requests: Sequence[int] = (3, 7), steps: 
     """The torch loop's window written to ``out`` with its step commitments (a test salt key a step, from ``salt_key``): every
     row a unit commits or reads in the step commitment carries that commitment's salt, and every weight row its registered
     value's, so each window string is the one its opening reaches: -> (the loop, its registered weights, its commitment).
-    Needs torch and `integrations/torch_loop` on the path."""
+    Needs torch and `examples/toy` on the path."""
     from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R
     from verity_torch_loop import loop as L
 
