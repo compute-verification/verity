@@ -380,6 +380,23 @@ def test_a_windows_committed_activations_are_held_to_domains_binding_its_run():
         assert not v["ok"] and code in v["codes"], (bad, v)
 
 
+def test_the_windows_own_values_the_circuit_reads_are_pinned_from_the_registration_under_its_run():
+    """`window_pins`: the per-window values the circuit reads (a wired loop's ties) are the registration's entries, each held
+    to a domain binding the window's run root; one it doesn't read isn't pinned, and one committed under another run, or
+    naming another value, is refused."""
+    rows = [[1, 2], [3, 4]]
+    mine = {v: REG.Registered.commit("test/model", v, rows, schema=REG.SCHEMA_V2, window=RUN).entry() for v in ("x", "up")}
+    w = {"run": RUN, "activations": {"program": "test/model", "values": mine}}
+    circuit = {"registered": {"params": {"up": 4}, "reads": []}}
+    assert RA.window_pins(w, circuit) == {"up": mine["up"]}
+    assert RA.window_pins(w, {}) == {} and RA.window_pins({"run": RUN}, circuit) == {}
+    elsewhere = REG.Registered.commit("test/model", "up", rows, schema=REG.SCHEMA_V2, window="cd" * 64).entry()
+    for bad in ({**w, "run": "cd" * 64}, {**w, "activations": {"program": "test/model", "values": {"up": elsewhere}}},
+                {**w, "activations": {"program": "test/model", "values": {"up": mine["x"]}}}):
+        with pytest.raises(ValueError, match="another value or a domain"):
+            RA.window_pins(bad, circuit)
+
+
 def test_a_window_with_row_tables_is_refused_until_its_records_carry_their_segment_roots(written, monkeypatch):
     mine, doc = IF.of_records(written.dir, D.parse_law(LAW), IF.resolve)
     assert not mine.row_tables
@@ -554,6 +571,23 @@ def test_the_output_class_is_the_given_ranges_and_every_uncut_registered_read_of
     assert RA.output_class(circuit, [[2, 4], [20, 24]]) == [[0, 4], [12, 16], [20, 24]]
     assert RA.output_class({"templates": [["a", 8]]}, [[4, 8]]) == [[4, 8]]
     assert RA.output_class({"templates": [["a", 8]]}) == []
+    tie = {"templates": [["a", 8], ["b", 8]], "registered": {"reads": [
+        {"reader": "a", "port": "o0", "param": "y", "at": 0, "radix": [8]},
+        {"reader": "b", "port": "x", "param": "y", "at": 0, "radix": [8]},
+        {"reader": "b", "port": "o0", "param": "out", "at": 4, "radix": [4]}]}}
+    assert RA.output_class(tie, own={"y"}) == [[12, 16]]
+    assert RA.output_class(tie) == [[0, 8], [12, 16]]
+
+
+def test_a_served_output_that_the_next_step_reads_keeps_its_units_in_the_output_class():
+    """A decode loop's served ``out``, pinned from outside the window, is read by an output port and by the next step's
+    input port: it isn't one of the window's own values, so its writers stay in the class (keying the exclusion on any
+    value an input port reads would leave the class empty)."""
+    decode = {"templates": [["a", 8], ["b", 8]], "registered": {"reads": [
+        {"reader": "b", "port": "o0", "param": "out", "at": 0, "radix": [8]},
+        {"reader": "a", "port": "x", "param": "out", "at": 0, "radix": [8]}]}}
+    assert RA.output_class(decode) == [[8, 16]]
+    assert RA.output_class(decode, own={"y"}) == [[8, 16]]
 
 
 def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_ignored_by_the_compile_check(tmp_path, monkeypatch):
