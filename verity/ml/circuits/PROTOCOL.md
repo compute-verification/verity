@@ -628,7 +628,8 @@ as declared, so a composite over exact steps declares the intervals its operands
   from the words its receipt folds by the Definitions that peel the noise back out (`stream`). No dataflow rule can tell
   a peeled value from a noised one: the peel removes the noise by its arithmetic. So a seed is minted only by PoUW's
   `verity/core/protocols/pouw/circuit/seeds.py`, and a `"kind": "position"` port is declared only there, beside a unit's
-  sink return, or in a test named with its reason (`tests/test_seed_ports.py`).
+  sink return, in a named Definition with no coin port (never a seed), or in a test named with its reason
+  (`tests/test_seed_ports.py`).
 - **`E_COIN_REUSE`** (one use): in the flattened Program (every call, batch member and scan iteration counted), an input leaf
   of origin `coin` that a noise primitive reads is read more than once, by it or by anything else; or a leaf a noise
   primitive returns is read more than once, the Program's outputs counting as one read. A primitive returns one value, so
