@@ -21,6 +21,16 @@ every machine of a census deployment, the pooled total first and the per-window 
     certifier's itemized K every window and the faulty units once, `⌈ln(1/δ)/q⌉ · (16 + log2(N + 1))` bits
     (`HorizonLeakAccepted`, #4367, conditional on its per-window inputs until they are discharged).
   - `python -m verity_all_protocols.monitoring A/reports.jsonl B/reports.jsonl` pools windows run on several machines.
+  - Communication per machine, beside it: the network certifier's `K` over a week, a month and a year
+    (`communication`, `compose.communication`), at δ = 1/100 and 10⁻⁶. Where `resources.communication` pools every
+    machine's windows as one sequence, this pools one machine's: each window draws its own live coins, so the faulty
+    units are paid for once over that machine's windows (`HorizonLeakAccepted`, #4367): `Fmax = ⌈ln(1/δ)/q⌉` with `q`
+    the least `k_i/n_i`, `16 · Fmax + ⌈log2 (N + 1)^Fmax⌉` bits for them with `N = Σ n_i`, plus each window's schedule,
+    cell, free-input and jitter terms, which add over the period (free inputs dominate while the loop's window registers
+    none of its inputs), except with probability `δ + Σ_i (e_i + e'_i)`. Its `share` is K over the period's output bits,
+    16 a unit; `fleet` is the deployment's machines joined by a union bound at δ/machines each (not in Lean); each
+    window's own `K` stands beside it. #4367 is conditional on two per-window inputs not yet discharged (proofs' `SampledKSLive`
+    and the live `SampledLeakAccepted`), so this K is cited as conditional.
 - `verity_all_protocols/table.py`: the protocols (`TABLE`) and the one leg interface. A leg is
   `legs/<component>.py` defining `leg(period_dir, node, out) -> dict`. `period_dir` is the window's loop records (the
   window the loop wrote) with `period.json` (the window's index, the circuit registered before the loop ran, the run
@@ -37,14 +47,37 @@ every machine of a census deployment, the pooled total first and the per-window 
 - `verity_all_protocols/compose.py`: the composed verdict. A rejecting leg rejects it (onsite's reject dominance). It is
   `pending-ports` while a leg is missing or has no case, or any of onsite's components (read from `CoreOnsite.lean`) is
   still a stub, since a stub answers for itself, not for the protocol. Once all of them are ports, `onsite check` decides
-  on the legs' cases. Bandwidth is not an onsite component yet: a rejection there rejects, but its acceptance completes
-  nothing.
-- `verity_all_protocols/runner.py`: the windows, each report in `$OUT/w<W>/report.json` and `$OUT/reports.jsonl`, and one
-  `ALLP` line per window, led by the monitoring period. `--jobs J` audits J windows at once, each on its own ports, and
-  `--session-jobs S` (default 16) runs S of each audit's drawn members' proof sessions at once (`a5 --session-jobs`).
+  on the legs' cases. `run.sh` builds `onsite` and the runner runs `onsite check` every window regardless: each port on its
+  leg's case, each stub undecided (no statement yet), a port with no case on one it refuses. Its answer is `composed.answer`,
+  where each case came from `composed.inputs`.
+- `legs/certifier.py`: communication, real. One network certifier session over the run's windows (`period.json`'s
+  `period` of `periods`), in front of the loop's model (`benchmarks/network_traces/torch_loop_stub.py`), a link-window
+  per window; N2's verdict of record on each link-window (`--zk` behind the Lean firewall); the certified outputs
+  checked against the period's registered ones; then `NetworkCheck.Period` (`verity/certifier/v0`,
+  `network-period check`) on the period's link-windows and its compute audit, whose free inputs are the window's
+  unregistered input rows (`circuit.json`): on acceptance `public.K`, the bits a covert sender in the server can move over the link in the
+  period, except with probability `public.eps`, at δ = 1/100 (beside it the case at 10⁻⁶ and the tampered run's, whose
+  tampered period must reject). `eps` sums its terms' δ (each audit's, and in the rows form each link-window's scan's),
+  so each term is decided at δ over their count (`term_delta`) and an accepted answer's `eps` is δ itself. The session
+  stays in the runner's scratch; `$OUT/certifier-session/` gets each run's deployment, calibration and client
+  certificates only, and `summary.json` counts, N2's exit and its leak scan. Its `stubbed` names what the verdict still
+  stands on: the records are the certifier-only path's, not the network certifier's own cells; the device runs beside
+  the server, not on the auditor's machine through the gate; and the output tie is computed in the clear, not proved.
+  `CERTIFIER_PATH=warden` takes the network certifier's own cells instead (`warden_serve.py rehearse --ids --prompts
+  --window-per-group`, the gate's scan rehearsal, a period's link-windows its group's in `groups.json`), honest and with
+  the stub's tampers (`WARDEN_TAMPER`, default `late,byte`), publishing the gate's public files alone to
+  `$OUT/warden-session/`. Its link-window 0 is proved by the scan (`scan_zk.py prove --warden-run --draw`), and a period
+  whose every link-window has a scan answer is decided in certifier/v0's rows form; a later period waits on
+  `scan_zk --window W`, and the stub's `byte` and `extra` pass the scan, so only the in-the-clear tie refuses them. `block_leg`
+  turns a period's accepted answer of either path into the block record's certifier leg (`verity/block-record/v1`,
+  CMP-95 item 6), the one shape a loop's leg and the H200 fallback write.
+- `verity_all_protocols/runner.py`: the windows, each report in `$OUT/w<W>/report.json` and `$OUT/reports.jsonl`, and
+  one `ALLP` line per window, led by the monitoring period. `--jobs J` audits J windows at once, each on its own ports,
+  and `--session-jobs S` (default 16) runs S of each audit's drawn members' proof sessions at once (`a5 --session-jobs`).
   `--start I` numbers another machine's windows apart. `--tamper W,...` makes those windows' loop record outputs that
-  aren't its model's. `--pouw h1` (until ALLP-H1LOOP's `serve --pouw h1` lands) also serves PoUW's H1 window and audits
-  it with `verity_torch_loop.pouw_audit` before the legs.
+  aren't its model's. `--registered` has the loop read its weights as registered values, committed once a run.
+  `--pouw h1` (until ALLP-H1LOOP's `serve --pouw h1` lands) also serves PoUW's H1 window and audits it with
+  `verity_torch_loop.pouw_audit` before the legs.
 
 | name | protocol | leg file | owner | state |
 | --- | --- | --- | --- | --- |
@@ -52,7 +85,7 @@ every machine of a census deployment, the pooled total first and the per-window 
 | work | PoUW | `legs/pouw.py` | compute-accounting | missing |
 | space | PoUS | `legs/pous.py` | memory-accounting | missing |
 | bandwidth | the bandwidth audit over PoUS's store, or remote bandwidth | `legs/bandwidth.py` | memory-accounting | missing |
-| communication | the network certifier | `legs/certifier.py` | network-accounting | missing |
+| communication | the network certifier | `legs/certifier.py` | network-accounting | real |
 
 ~~~sh
 research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 -- \
