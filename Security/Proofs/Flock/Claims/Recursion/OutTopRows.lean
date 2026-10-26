@@ -890,4 +890,18 @@ theorem outCommitTie_deployed {b : Brings}
       rwa [getD_getElem?, getD_getElem?] at this
   rw [hb, hb', hlink]
 
+/-- **`OutBindRP` at the layout of record**, from `OutCommitTie` there (`outCommitTie_deployed`) and the instance
+bound (`outBindRP_of_tie`). -/
+theorem outBindRP_deployed {b : Brings}
+    {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {IV : Claims.Verifier Coin}
+    {shape : Claims.Recursion.Form → Prop}
+    {Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace}
+    (pieces : Msg → List OpenPiece) (hP : ∀ x, (OpenDirs.DR b elem IV).parse x = parse x)
+    (hSh : ∀ f, shape f → Claims.Recursion.Form.Dense f) (hR : PiecesInRangeR pieces)
+    (hB : ∀ x, RestRead.kI x ≤ Bd.DE.V.k (xIOf x)) :
+    OutBindRP FlockDeploy.sha512 (OpenDirs.DR b elem IV) shape recRead b (cmtTr recRead) (DeployedR.layR elem) Bd
+      pieces Rows.posAt :=
+  outBindRP_of_tie (D := OpenDirs.DR b elem IV) (shape := shape) (untr := recRead) (b := b) (cmt := cmtTr recRead)
+    (Bd := Bd) elem pieces Rows.posAt hP hSh hR (outCommitTie_deployed pieces hP hSh hR hB)
+
 end RecDeploy.CapLower
