@@ -13,3 +13,9 @@ vllm-sha512 just served Llama-3.2-1B on vy-dc-h200-2 using the H200-built row of
 - It built the guarded FA3 hidden tap at head dim 64 (`FA3-TAP-OK`, 112 s) and the norm-scale tap on the node from pinned sources (CUDA 13.0 against torch cu12.9).
 - Its job script is art:c0b57f7e (run r20261026-180911-9108, note 20261026T1820Z-report-h200-gpu-check).
 - Reuse that tap build for the int8 row on vy-dc-h200 instead of starting from scratch.
+
+# 19:05Z, on #4757 (G3, int8 in window_circuit)
+
+V3b's worker (bc-90570968) reviewed #4757 while merging its v19 attention work (`cursor/vllm-v3b-attn19-5209`, stacked on #4747). Two things:
+1. **`_ScaledMmS8` writes one output piece a unit.** That's O(units), but the class of record needs the description to grow with nodes. Use `_Gemm`'s one-piece-a-slice-run form so it stays O(nodes).
+2. **Expect two conflict hunks with the v19 branch:** the module docstring's attention bullet (yours still describes `KEYS`, which is gone), and `_heads` (it now takes a Definition), next to your `_ScaledMmS8`. Whichever lands second merges.
