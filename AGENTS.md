@@ -309,9 +309,9 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
 - After each landing one run checks `main`'s tip with every check step (`train.sh MAIN MACHINES --deferred JOBS
   --no-regenerate`, with `--no-cache` while `after_landing_no_cache = true`), and nothing lands before one such run of `main`
   itself has ended, its baseline (or ci records `main` green on the control pod: `/data/infra/drive.sh queue baseline SHA
-  --by ci`). A red suite's culprit, the landing since its last pass that its failure touches, is rung and reverted (`git
-  revert -m 1`) 60 min later unless a fix is marked; `main` 3 h unverified rings @ci and @top hourly (drive.py's
-  docstring). Citations and tables read only commits whose after-landing run passed.
+  --by ci`). A red suite's culprit, the landing since its last pass its failure touches, is rung and reverted (`git
+  revert -m 1`) 60 min later unless a fix is marked; `main` 3 h unverified rings @ci and @top hourly (drive.py).
+  Citations and tables read only commits whose after-landing run passed.
 - A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies lands alone, ahead
   of the queue: the lander lands it with `research merge --push` on its own passing check, from the control pod
   (`/data/infra/drive.sh merge ...`), and drive's next sync rebuilds `next` on it. Only drive's App pushes `main` and `next`
