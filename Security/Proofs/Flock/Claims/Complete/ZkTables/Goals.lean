@@ -199,7 +199,7 @@ theorem recordJsonJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt 
     | some d =>
       rintro ⟨d', hd', hs⟩
       rw [hd']
-      exact (drawEq_iff _ _).2 (.some hs.symm.jsonEquiv)
+      exact (drawEq_iff _ _).2 (.some hs)
   · rw [hlive, hlink]
     dsimp only
     have : (o.spec.tables.map fun _ => ByteArray.empty).toList = (o.tabs.map fun _ => ByteArray.empty).toList := by
