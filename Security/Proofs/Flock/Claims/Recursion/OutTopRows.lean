@@ -180,7 +180,6 @@ theorem checkLevelTopReads_ok {unit : String} {own : Array Registered.Port} {l q
   | none => simp [hf, throw, throwThe, MonadExceptOf.throw] at h
   | some reg =>
     simp only [hf] at h
-    dsimp only at h
     cases hv : (reg.value != s!"rec-top-L{l}")
     · rw [hv] at h
       cases hr : (reg.reads != (Array.range (2 * q)).map fun i =>
@@ -851,6 +850,7 @@ theorem outCommitTie_deployed {b : Brings}
   -- the level's instance reads node `capIdx`
   have hNn : q.rep * qAt (xIOf x) q.level + q.query < n := by
     rw [hnq, ← hql]
+    rw [← hql] at hqry
     simp only [qAt]
     generalize ((schAt (xIOf x) 0).levels[q.level]!).q = Q at hqry ⊢
     have h1 : q.rep * Q ≤ 1 * Q := Nat.mul_le_mul_right _ (by omega)
