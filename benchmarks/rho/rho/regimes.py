@@ -153,7 +153,7 @@ class Remote:
 
     def delta(self) -> dict[str, float]:
         """A bound on the chance that the declared cut's free terms exceed their stated shares, split by what it rests
-        on: `δ_coin` (the work draw's `δ_s / ε'` by Markov, and with sampled proofs the escape bound's `δ`) and
+        on: `δ_coin` (PoUW's draw, `δ_s / ε'` by Markov, and with sampled proofs the escape bound's `δ`) and
         `δ_crypto` (`(δ_bind + δ_ks) / ε'`). It covers nothing else: onsite, the wipe's and the certifier's failure bounds are not
         included."""
         coin = self.window_delta_coin / self.eps_agg + (self.p_evade if self.sampled else 0.0)
