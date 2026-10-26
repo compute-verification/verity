@@ -59,7 +59,7 @@ def src_sha(jit_fn: Any) -> str:
     if s is None:
         try:
             src = jit_fn.src
-        except Exception:  # noqa: BLE001
+        except AttributeError:
             src = ""
         s = hashlib.sha256(src.encode("utf-8")).hexdigest()
         _SRC_SHA[k] = s
@@ -72,7 +72,7 @@ def constexpr_names(jit_fn: Any) -> frozenset[str]:
     if names is None:
         try:
             names = frozenset(p.name for p in jit_fn.params if p.is_constexpr)
-        except Exception:  # noqa: BLE001
+        except (AttributeError, TypeError):
             names = frozenset()
         _CONSTEXPR_NAMES[k] = names
     return names

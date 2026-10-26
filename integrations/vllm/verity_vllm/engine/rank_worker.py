@@ -39,10 +39,11 @@ from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASS
 from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.engine import hooks, sparse_mla, topp_pin  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
 from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
+from verity_vllm import settings
 
 
 def repo_modules_loaded() -> dict[str, Any]:
-    """[R16 tp TP-11, rev F-r16-19] the repo-local files THIS process has imported (sys.modules, filtered to the repo root and vllm-poc) plus
+    """The repo-local files THIS process has imported (sys.modules, filtered to the repo root and vllm-poc) plus
     the collector's JIT C++/CUDA sources when native_collect was loaded -- what RAN, written from the running process (not a static closure).
     Paths relative to the repo root; a module outside the repo (site-packages, vllm) is not listed."""
     import sys as _sys
@@ -147,7 +148,7 @@ def _tp_facts(worker: Any) -> dict[str, Any]:
         out["tp"]["pp_world_size"] = int(ps.get_pp_group().world_size)
     except Exception as e:  # noqa: BLE001
         out["tp_error"] = repr(e)
-    out["nccl_env"] = {k: v for k, v in os.environ.items() if k.startswith("NCCL_")}
+    out["nccl_env"] = settings.redact({k: v for k, v in os.environ.items() if k.startswith("NCCL_")})
     pc = worker.vllm_config.parallel_config
     out["parallel_config"] = {k: getattr(pc, k, None) for k in ("tensor_parallel_size", "pipeline_parallel_size", "world_size",
                                                                  "distributed_executor_backend", "disable_custom_all_reduce",
@@ -157,7 +158,7 @@ def _tp_facts(worker: Any) -> dict[str, Any]:
 
 
 def parse_swap_spec(spec: list | None) -> dict | None:
-    """`[ra, rb]` = swap at EVERY step (rev-cb M-0359 T6-3); `[ra, rb, lo, hi]` = swap ONLY on engine steps lo..hi inclusive (rev M-0460: the
+    """`[ra, rb]` = swap at EVERY step; `[ra, rb, lo, hi]` = swap ONLY on engine steps lo..hi inclusive (the
     decode-only swap -- prefill rows untouched, every swapped row one token, coverage/composition blind; attribution alone must catch it)."""
     if not spec or len(spec) < 2:
         return None
@@ -405,7 +406,7 @@ class TP2CaptureWorkerExtension:
                 st["witness"].step(st["step"])
 
         def observer_rec() -> Any:
-            """[R17 tp D90] the aten observer of `tp2_install`, when this rank runs BOTH (one engine run = one fold + one recorder): the
+            """The aten observer of `tp2_install`, when this rank runs BOTH (one engine run = one fold + one recorder): the
             recorder's own bookkeeping (device->host copies, digests) is hidden from it, the collective launch itself stays observed."""
             cap = (getattr(self, "_tp2", None) or {}).get("cap")
             return getattr(cap, "rec", None) if cap is not None else None
@@ -867,7 +868,7 @@ class TP2CaptureWorkerExtension:
         return swap_label(lg, st.get("swap_rule"), step)     # the swap NEGATIVE (all steps, or steps lo..hi only) -- identity on the honest path
 
     def _tp2_attribution(self, rc: Any) -> dict[str, Any] | None:
-        """[R15 rev-cb M-0359 T6-3] per-(request, engine step) attribution of THIS rank's committed values against the MATCH RECORD: the
+        """Per-(request, engine step) attribution of THIS rank's committed values against the MATCH RECORD: the
         committed `runner.sampler/sampled_token_ids` row j of step s belongs (by the rank's request->rows map) to request r; its value must
         be the Match record's k-th generated token of r (k = how many steps r has been sampled in so far).  The Match record is
         tp2_match's capture arm tokens.json (per request generated ids), the same greedy workload -- an independent run, not this one.
@@ -953,7 +954,7 @@ class TP2CaptureWorkerExtension:
                 "missing_steps": missing[:8], "swap_requests_negative": st.get("swap_requests"), "value_source": rd.record(), "why": why}
 
     def _tp2_binding(self, rc: Any) -> dict[str, Any] | None:
-        """[R14 TP-03 x BIND-01] THIS rank's binding map (`verity_vllm.commit.binding`: identity -> commitment location, fixed at finalize
+        """THIS rank's binding map (`verity_vllm.commit.binding`: identity -> commitment location, fixed at finalize
         before any challenge) and its coverage against the rank's required manifest, whose rows the committed tensors bind (`query.manifest.bind`);
         without one, against model structure x workload steps x this rank plus each collective site's `part_rank<r>` / `shard_rank<r>`."""
         st = self._tp2_commit
@@ -1049,7 +1050,7 @@ class TP2CaptureWorkerExtension:
             return {"error": repr(e)[:400], "trace": traceback.format_exc()[-1200:]}
 
     def _tp2_sampled_replay(self, rc: Any) -> dict[str, Any]:
-        """[TP-08; manbind MAN-06 (`verity_vllm.check.replay.sampled_replay`, taken verbatim), coord M-0451 form (A), interface note M-0523]
+        """[TP-08; manbind MAN-06 (`verity_vllm.check.replay.sampled_replay`, taken verbatim)]
         The C2 OF RECORD on THIS rank (`pipeline.tp.rank_replay`): a seeded stratified sample of the rank Program's rows is re-evaluated
         from the rank's COMMITTED input members + the rank's registered weight SHARDS (the rank Program's weights params ARE the shards
         this worker holds) and compared bit-for-bit with the rank's committed output members; plus the exhaustive boundary linkage
@@ -1058,7 +1059,7 @@ class TP2CaptureWorkerExtension:
         root), REFUSED by name unless every loaded digest is a digest of record for this rank (the GP-01 workload_program's component
         list / the manifest's per-rank Program, both already checked against the Build by the driver).  Rows that read a peer rank's
         partial (`peers_*` inputs of AllReduce2 / AllGather2) have no evaluator and are counted by name -- never PASS by omission.  The
-        stratum key's rank label comes from manbind's population(rank=0) at v1 (M-0523 (1) pending); this record carries the true rank
+        stratum key's rank label comes from manbind's population(rank=0) at v1; this record carries the true rank
         beside it."""
         from verity_vllm.pipeline.tp import rank_replay as RR
 
@@ -1081,7 +1082,7 @@ class TP2CaptureWorkerExtension:
 
         from verity_vllm.engine import env as engine_env
         from verity_vllm.pipeline.tp import xrank_dump as XD
-        from verity_vllm.program.registry.tp_allreduce import device_of, settings_of
+        from verity.ml.definitions.registry.tp_allreduce import device_of, settings_of
 
         settings = settings_of(self.vllm_config.parallel_config.disable_custom_all_reduce, engine_env.snapshot())
         p = torch.cuda.get_device_properties(torch.cuda.current_device())
@@ -1089,7 +1090,7 @@ class TP2CaptureWorkerExtension:
                        device=device_of((p.major, p.minor), p.multi_processor_count))
 
     def tp2_commit_binding_map_dump(self, *, out_dir: str) -> dict[str, Any]:
-        """[R15 TP-04] write THIS rank's binding map of the last finalized run (identity -> commitment location, fixed at finalize before any
+        """Write THIS rank's binding map of the last finalized run (identity -> commitment location, fixed at finalize before any
         challenge) beside the driver's evidence (`binding_map_rank<r>.json`), so a reviewer can attack the map itself and not only its digest."""
         st = self._tp2_commit
         bmap = st.get("bmap")
@@ -1108,7 +1109,7 @@ class TP2CaptureWorkerExtension:
         import dataclasses
         try:
             return dataclasses.replace(rc, run_root=bytes.fromhex(claimed_root_hex))
-        except Exception:  # noqa: BLE001
+        except (TypeError, ValueError):
             import copy
             rc2 = copy.copy(rc)
             rc2.run_root = bytes.fromhex(claimed_root_hex)

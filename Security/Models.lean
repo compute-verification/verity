@@ -38,6 +38,7 @@ import Definitions.NetworkCertifier.Guarantees.AdviceString
 import Definitions.NetworkCertifier.Guarantees.AdviceV1
 import Definitions.NetworkCertifier.Guarantees.WindowCharge
 import Definitions.NetworkCertifier.Guarantees.Warden
+import Definitions.NetworkCertifier.Guarantees.Horizon
 import Definitions.Flock.Guarantees
 import Definitions.Accounting.Assumptions.Remote
 import Definitions.Accounting.Assumptions.RemoteOutside
