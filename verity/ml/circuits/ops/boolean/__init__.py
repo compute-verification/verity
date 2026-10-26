@@ -4,7 +4,8 @@
                  MXFP4 steps and their coordinates
     attention    FA2 attention's FTZ f32 operations, max, -inf guard and inverse sum as Boolean Definitions
     softmax      attention's FTZ f32 operations, strict compare, max and -inf guard as circuits over `forms`
-    softmax_row  a bf16 row's softmax as one Boolean Definition, SoftmaxRow_v1, one proof unit a row
+    softmax_row  a head's QK scores and their softmax as one Boolean Definition, QkSoftmaxRow_v1, one proof unit a head, over
+                 SoftmaxRow_v1, a bf16 row's softmax
     mufu         the MUFU operations as Boolean Definitions, every table read a plain And/Xor/Not circuit
     elementwise  element-wise FP32, BF16 and I32 arithmetic as Boolean Definitions
     cast         the bf16 <-> f32 casts as Boolean Definitions

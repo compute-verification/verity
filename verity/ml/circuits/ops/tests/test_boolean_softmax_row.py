@@ -1,7 +1,8 @@
 """`verity.ml.circuits.ops.boolean.softmax_row`: `SoftmaxRow_v1{N}` is its stated dataflow, the word primitives each step names
 composed in order (`F32Add_v2`, `F32Mul_v2`, `F32Div_v2`, `MufuEx2Ftz_v1`, `F2fpBf16_v1`), on rows of scores, uniform words,
-special words and ties, at N = 1 up to CMP-92's context of 32; it is within bf16's rounding of the exact softmax; it is Boolean
-with N 16-bit outputs; and a row of no words is refused."""
+special words and ties, at N = 1 up to CMP-92's context of 32; it is within bf16's rounding of the exact softmax; and
+`QkSoftmaxRow_v1{T, D=64}` on the H200's step is `GemmCoordinate_v2{K=64}`'s words over the key rows followed by that
+composition. Each is Boolean with one 16-bit output a key, and a row of no words, no keys or a D off the step is refused."""
 from __future__ import annotations
 
 import numpy as np
@@ -12,8 +13,10 @@ from verity.ml.circuits import evaluation as E
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.ops import fp32 as W
+from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops import mufu as M
 from verity.ml.circuits.ops import prims as P
+from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import softmax_row as SR
 
 #: signed zeros, the smallest and largest subnormals, the smallest normal, 1.0 and its neighbours, 2, the largest finite,
@@ -108,13 +111,65 @@ def test_the_row_is_a_softmax_within_bf16_rounding() -> None:
     assert np.all(np.abs(got - exact) <= (2.0 ** -8 + 2.0 ** -15) * exact + 2.0 ** -125)
 
 
-@pytest.mark.parametrize("N", [1, 3])
-def test_it_is_boolean_with_n_16_bit_outputs(N: int) -> None:
-    target = bind(SR.SoftmaxRow, N=N)
+def _operands(rng, shape) -> np.ndarray:
+    """bf16 words of either sign with magnitudes in [2^-9, 2), so a 64-long dot is a score of at most a few hundred."""
+    s = rng.integers(0, 2, shape) << 15
+    return (s | rng.integers(118, 128, shape) << 7 | rng.integers(0, 128, shape)).astype(np.uint16)
+
+
+def _heads(rng, n: int, T: int, D: int = 64) -> tuple[np.ndarray, np.ndarray]:
+    """``n`` heads' q (n, D) and key rows (n, T, D): a third clean operands, a third with one word of the head a uniform or
+    special word (so one score may be large, infinite or NaN), and a third uniform words."""
+    third = n // 3
+    head = _operands(rng, (n, (T + 1) * D))
+    one = third + np.arange(third)
+    at = rng.integers(0, (T + 1) * D, third)
+    head[one, at] = np.where(rng.random(third) < 0.5, rng.integers(0, 1 << 16, third), rng.choice(BF16_SPECIALS, third))
+    head[2 * third:] = rng.integers(0, 1 << 16, head[2 * third:].shape)
+    return head[:, :D], head[:, D:].reshape(n, T, D)
+
+
+def _scores_words(q: np.ndarray, k: np.ndarray) -> np.ndarray:
+    coord = bind(G.GemmCoordinate, K=q.shape[1], **G.GEMM_HOPPER)
+    return np.stack([np.asarray(E.evaluate_batch(coord, q, k[:, j])).astype(np.uint16).reshape(-1)
+                     for j in range(k.shape[1])], axis=1)
+
+
+def _qk(T: int) -> object:
+    return bind(SR.QkSoftmaxRow, T=T, D=64, **BG.GEMM_HOPPER)
+
+
+def _fused(q: np.ndarray, k: np.ndarray) -> np.ndarray:
+    T = k.shape[1]
+    return np.asarray(BS.evaluate_words(_qk(T), q, k)).astype(np.uint32).reshape(len(q), T)
+
+
+@pytest.mark.parametrize("T", [1, 2, 5])
+def test_the_fused_unit_is_gemm_coordinate_words_then_the_softmax_composition(T: int) -> None:
+    rng = np.random.default_rng(600 + T)
+    q, k = _heads(rng, 600, T)
+    assert np.array_equal(_fused(q, k), _softmax_words(_scores_words(q, k)))
+
+
+@pytest.mark.slow
+def test_the_fused_unit_at_the_context_length_is_gemm_coordinate_words_then_the_softmax_composition() -> None:
+    """T = 32, CMP-92's longest attention row, which the sidecar binds."""
+    rng = np.random.default_rng(632)
+    q, k = _heads(rng, 90, 32)
+    assert np.array_equal(_fused(q, k), _softmax_words(_scores_words(q, k)))
+
+
+@pytest.mark.parametrize("target", [bind(SR.SoftmaxRow, N=1), bind(SR.SoftmaxRow, N=3), _qk(1), _qk(3)], ids=lambda t: t.id)
+def test_each_is_boolean_with_one_16_bit_output_a_key(target) -> None:
     assert BL.is_boolean(target)
-    assert BL.elements(target.signature()[1]) == [16] * N
+    n = target.bindings.get("N", target.bindings.get("T"))
+    assert BL.elements(target.signature()[1]) == [16] * n
 
 
-def test_a_row_of_no_words_is_refused() -> None:
+def test_a_row_of_no_words_no_keys_or_a_d_off_the_step_is_refused() -> None:
     with pytest.raises(ValueError, match="at least 1"):
         bind(SR.SoftmaxRow, N=0).signature()
+    with pytest.raises(ValueError, match="at least 1"):
+        bind(SR.QkSoftmaxRow, T=0, D=64, **BG.GEMM_HOPPER).signature()
+    with pytest.raises(ValueError, match="multiple of the 16-wide step"):
+        bind(SR.QkSoftmaxRow, T=2, D=40, **BG.GEMM_HOPPER)
