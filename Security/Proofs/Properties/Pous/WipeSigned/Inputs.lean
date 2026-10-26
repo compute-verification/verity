@@ -164,8 +164,9 @@ theorem tags_differ (a b c a' b' c' : ByteArray) :
   intro e
   have e := congrArg (fun x => (bs x)[12]?) e
   simp only [bs_append, List.append_assoc] at e
-  rw [List.getElem?_append_left (by rw [bs_length]; exact tag_size),
-    List.getElem?_append_left (by rw [bs_length]; exact wipe_tag_size), tag_byte, wipe_tag_byte] at e
+  have h1 : 12 < (bs SESSION_TAG).length := by rw [bs_length]; exact tag_size
+  have h2 : 12 < (bs StreamedWipe.SESSION_TAG).length := by rw [bs_length]; exact wipe_tag_size
+  rw [List.getElem?_append_left h1, List.getElem?_append_left h2, tag_byte, wipe_tag_byte] at e
   exact absurd e (by decide)
 
 end MemoryChallenger.Properties.SecurityProofs.WipeInputs
