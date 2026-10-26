@@ -14,7 +14,12 @@ schedules that apply no scheme; has[i, j] is the least cost of a schedule that a
 """
 from __future__ import annotations
 
+import ctypes
+import hashlib
+import os
+import subprocess
 import sys
+import tempfile
 
 import numpy as np
 
@@ -24,6 +29,29 @@ STRASSEN = [(2, 2), (2, 1), (1, 2), (1, 2), (2, 1), (2, 2), (2, 2)]
 WINOGRAD = [(1, 1), (1, 1), (4, 1), (1, 4), (2, 2), (3, 3), (2, 2)]
 TRIVIAL = [(1, 1)] * 8
 BIG = np.int64(2 ** 58)
+
+
+def _kernel():
+    src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "splits.c")
+    with open(src, "rb") as fh:
+        tag = hashlib.sha256(fh.read()).hexdigest()[:16]
+    so = os.path.join(tempfile.gettempdir(), f"strassen-splits-{tag}.so")
+    if not os.path.exists(so):
+        tmp = so + f".{os.getpid()}"
+        subprocess.run(["cc", "-O2", "-shared", "-fPIC", "-o", tmp, src], check=True)
+        os.replace(tmp, so)
+    lib = ctypes.CDLL(so)
+    p = ctypes.POINTER(ctypes.c_int64)
+    lib.splits.argtypes = [ctypes.c_int, p, p, p, p, ctypes.c_int64]
+    return lib.splits
+
+
+def _splits(T, H, rest, g):
+    for a in (T, H, rest, g):
+        assert a.dtype == np.int64 and a.flags["C_CONTIGUOUS"]
+    p = ctypes.POINTER(ctypes.c_int64)
+    _splits.fn = getattr(_splits, "fn", None) or _kernel()
+    _splits.fn(len(g), T.ctypes.data_as(p), H.ctypes.data_as(p), rest.ctypes.data_as(p), g.ctypes.data_as(p), int(BIG))
 
 
 def grid(Vmax: int, extra=()) -> np.ndarray:
@@ -83,8 +111,9 @@ class Tables:
         idx = rnd(v)
         return idx, self.over(v)
 
-    def level(self, prev_lo, prev_up, prev_has_lo, prev_has_up, l):
-        """W_l's tables from W_{l-1}'s (prev_* None at l = 0)."""
+    def level(self, prev_lo, prev_up, prev_has_lo, prev_has_up, l, full=False):
+        """W_l's tables from W_{l-1}'s (prev_* None at l = 0). full: every leaf at depth l (no atom above depth 0, no
+        trivial split), so every root-to-leaf path applies l non-trivial schemes."""
         g, G = self.g, len(self.g)
         lo = self.atom.copy()
         up = self.atom.copy()
@@ -95,16 +124,19 @@ class Tables:
             up *= 8 ** l
             lo[self.atom >= BIG] = BIG
             up[self.atom >= BIG] = BIG
+            if full:
+                lo[:], up[:] = BIG, BIG
+                lo[0, :] = lo[:, 0] = up[0, :] = up[:, 0] = 0
             for sch in self.schemes:
                 trivial = sch is TRIVIAL
+                if full and trivial:
+                    continue
                 s_lo = np.zeros((G, G), dtype=np.int64)
                 s_up = np.zeros((G, G), dtype=np.int64)
-                h_lo = np.full((G, G), BIG, dtype=np.int64)  # the best with one child holding a non-trivial scheme
-                h_up = np.full((G, G), BIG, dtype=np.int64)
                 kids = []
                 for na, nb in sch:
-                    ia, oa = self.child(na, self.down)
-                    ib, ob = self.child(nb, self.down)
+                    ia, _ = self.child(na, self.down)
+                    ib, _ = self.child(nb, self.down)
                     ja, pa = self.child(na, self.upi)
                     jb, pb = self.child(nb, self.upi)
                     klo = prev_lo[np.ix_(ia, ib)]
@@ -128,46 +160,58 @@ class Tables:
                         # the trivial split's children are equal; one child with a scheme, the others its best
                         has_lo = np.minimum(has_lo, np.minimum(s_lo - klo + khlo, BIG))
                         has_up = np.minimum(has_up, np.minimum(s_up - kup + khup, BIG))
-        # splits, in increasing i then j: A-splits of row i vectorised over j, B-splits sequential in j
+        # splits, in increasing i then j (each reads only finished entries): splits.c
         for T, H, rest in ((lo, has_lo, self.rest_lo), (up, has_up, self.rest_up)):
-            for i in range(G):
-                es = np.nonzero((g[:i] >= 2))[0]
-                if len(es):
-                    r = rest[i, es]
-                    a = T[es, :] + T[r, :]
-                    T[i, :] = np.minimum(T[i, :], np.minimum(a.min(axis=0), BIG))
-                    ha = np.minimum(H[es, :] + T[r, :], T[es, :] + H[r, :])
-                    H[i, :] = np.minimum(H[i, :], np.minimum(ha.min(axis=0), BIG))
-                for j in range(G):
-                    fs = np.nonzero(g[:j] >= 2)[0]
-                    if not len(fs):
-                        continue
-                    r = rest[j, fs]
-                    b = T[i, fs] + T[i, r]
-                    T[i, j] = min(T[i, j], min(b.min(), BIG))
-                    hb = np.minimum(H[i, fs] + T[i, r], T[i, fs] + H[i, r])
-                    H[i, j] = min(H[i, j], min(hb.min(), BIG))
+            _splits(T, H, rest, g)
         return lo, up, has_lo, has_up
 
 
-def run(name: str, lmax: int, schemes, at=((256, 256),)):
-    T = Tables(name, lmax, schemes)
+def at(T, tab, VA, VB):
+    i, j = int(T.down(VA)), int(T.down(VB))
+    assert T.g[i] == VA and T.g[j] == VB
+    return int(tab[i, j])
+
+
+def run(name: str, lmax: int):
+    """Print: the per-product cost (depth 0) at operands of 8 + i and 8 + j bits; uniform-depth Strassen and Winograd
+    with those leaves; and, at each depth budget l, the least cost of any schedule, of one with a scheme, and of one
+    applying l schemes on every path."""
+    from .depth import profile
+
+    T = Tables(name, lmax, [STRASSEN, WINOGRAD, TRIVIAL])
     g = T.g
     print(f"{name}: grid {len(g)} points up to {g[-1]}", flush=True)
-    prev = (None, None, None, None)
-    out = []
-    for l in range(lmax + 1):
-        prev = T.level(*prev, l)
-        lo, up, hlo, hup = prev
-        for VA, VB in at:
-            i, j = int(T.down(VA)), int(T.down(VB))
-            assert g[i] == VA and g[j] == VB
-            n = 8 ** (l + 1)
-            print(f"{name} l={l:2d} ({VA},{VB}) any: [{lo[i, j] / n:.6f}, {up[i, j] / n:.6f}]"
-                  f"  with a scheme: [{hlo[i, j] / n:.6f}, {hup[i, j] / n:.6f}]", flush=True)
-        out.append(prev)
-    return T, out
+    adaptive = T.level(None, None, None, None, 0)
+    full = adaptive
+    lo0, up0 = adaptive[0], adaptive[1]
+    print("per-product cost x 8, operand ranges 255*2^i+1 by 255*2^j+1 (lower/upper):")
+    for i in range(13):
+        row = []
+        for j in range(13):
+            a, b = at(T, lo0, 255 * 2 ** i + 1, 255 * 2 ** j + 1), at(T, up0, 255 * 2 ** i + 1, 255 * 2 ** j + 1)
+            row.append(f"{a}" if a == b else f"{a}/{b}")
+        print(f"  {i:2d} " + " ".join(f"{x:>7}" for x in row))
+    for sname, sch in (("strassen", STRASSEN), ("winograd", WINOGRAD)):
+        for r in range(1, lmax + 1):
+            kl = ku = 0
+            for (na, nb), cnt in profile(sch, r).items():
+                kl += cnt * at(T, lo0, 255 * na + 1, 255 * nb + 1)
+                ku += cnt * at(T, up0, 255 * na + 1, 255 * nb + 1)
+            d = 8 * 8 ** r
+            print(f"{name} uniform {sname} r={r:2d}: [{kl / d:.6f}, {ku / d:.6f}]" + ("" if kl == ku else " GAP"),
+                  flush=True)
+    for l in range(1, lmax + 1):
+        adaptive = T.level(*adaptive, l)
+        full = T.level(*full, l, full=True)
+        n = 8 ** (l + 1)
+        lo, up, hlo, hup = adaptive
+        flo, fup = full[0], full[1]
+        print(f"{name} l={l:2d} any: [{at(T, lo, 256, 256) / n:.6f}, {at(T, up, 256, 256) / n:.6f}]"
+              f"  with a scheme, minus naive, in 8^-(l+1) s8 MACs per block MAC: "
+              f"[{at(T, hlo, 256, 256) - n}, {at(T, hup, 256, 256) - n}]"
+              f"  depth {l} on every path: [{at(T, flo, 256, 256) / n:.6f}, {at(T, fup, 256, 256) / n:.6f}]",
+              flush=True)
 
 
 if __name__ == "__main__":
-    run(sys.argv[1], int(sys.argv[2]), [STRASSEN, WINOGRAD, TRIVIAL])
+    run(sys.argv[1], int(sys.argv[2]))
