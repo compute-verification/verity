@@ -117,7 +117,7 @@ theorem sideAtR_opens (hi : i < D.sts.size) (r : Fin 2) (q : OpenPiece) (ht : q.
   rw [sideOf, hrep, Option.map_some] at hs
   have hRS : sideAt rd x ms q = ⟨(fast100 (FlockDeploy.tabsOf v.2.2)[q.table]!.m).getD default,
       (pf.1[2 * q.table + q.rep]!).cap, (pf.1[2 * q.table + q.rep]!).ligerito⟩ := by
-    unfold sideAt
+    unfold sideAt schOf capLigAt
     rw [hv, hfl, hr₀, hrss]
     dsimp only
     rw [← hs]
