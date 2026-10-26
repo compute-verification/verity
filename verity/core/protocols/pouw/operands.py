@@ -22,8 +22,10 @@ from typing import Any
 
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
-#: the root X of a window's operands: SHA-512 over this tag, the program and each value's name and root in name order
-TAG = b"verity/pouw/operands/v1\0"
+#: the root X of a window's operands (`root`): SHA-512 over this tag, the program, and each value's name, domain and root in
+#: name order, the root of the window's committed values that its salt epoch's root binds (ALLP-SALT's
+#: ``core_check.values_root``, the same bytes)
+TAG = b"verity/pouw-window-values/v1"
 KEY = "activations"
 #: what a window's operands don't establish yet, named wherever a record reports them (`stated`)
 GAPS = ("the A rows are not proved to be the served activations x (an x row is one token's codes, an A row R tokens' "
@@ -45,12 +47,17 @@ def block(program: str, values: Mapping[str, G.Registered]) -> dict[str, Any]:
 
 
 def root(b: Mapping[str, Any]) -> bytes:
-    """X: the operands' root, which the window's salt is released against."""
-    h = hashlib.sha512(TAG)
-    for part in (b["program"], *(x for v in sorted(b["values"]) for x in (v, b["values"][v]["root"]))):
-        data = part.encode()
-        h.update(len(data).to_bytes(8, "big") + data)
-    return h.digest()
+    """X: the operands' root, which the window's salt is released against: SHA-512(`TAG` ‖ u64be(len program) ‖ program ‖
+    for each value in name order: u64be(len name) ‖ name ‖ domain ‖ root), strings as UTF-8, domain and root as bytes."""
+    out = TAG + _sized(b["program"].encode())
+    for v in sorted(b["values"]):
+        e = b["values"][v]
+        out += _sized(v.encode()) + bytes.fromhex(e["domain"]) + bytes.fromhex(e["root"])
+    return hashlib.sha512(out).digest()
+
+
+def _sized(data: bytes) -> bytes:
+    return len(data).to_bytes(8, "big") + data
 
 
 def held(window: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
