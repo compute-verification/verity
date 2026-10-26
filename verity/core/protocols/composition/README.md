@@ -38,28 +38,6 @@ component's `answer` on its case, then decides, reject first:
 On acceptance the product makes public each component's public outputs and keeps each one's profile, both as JSON objects
 keyed by the component's id. On rejection or undecided nothing is public.
 
-### A registration check
-
-`registered id R s components` checks a registration before composing, in its commit phase, and `registeredB` is the
-same over blobs. It is onsite's shape once NCI's check of record is a core protocol (`NciCheck.Protocol.protocol`,
-`verity/nci/v1`, #4616): `registeredB "verity/onsite/v0" NciCheck.Protocol.protocol
-SampledProofs.OneStageZk.protocol.id components`, whose registration is the one sampled proofs' one-stage audit commits
-to, one registration digest in both. NCI is a registration check, not a component (Daniel's ruling: onsite has six
-subprotocols, and NCI is none of them). Its formats are the product's with the registration's beside the components':
-
-| input | format |
-| --- | --- |
-| params | `{"components":[...],"registration":{"id":ID,"params":PARAMS}}` |
-| commitment | the product's 64 bytes, then the registration's digest; its own digest |
-| evidence | `{"components":[...],"registration":{"commitment":HEX,"evidence":HEX,"id":ID,"params":PARAMS}}` |
-
-It rejects when the registration isn't the registration check's or carries other params, when the registration check
-doesn't accept it, or when the commitment doesn't end in its digest, whatever the components answer. When the cases fit
-it rejects too when the committing component's case (the first under the id `s`) doesn't commit to that digest, again
-whatever the components answer (`mismatch`: `registration: R checked D, s committed D'`, `D'` hex or `no digest`).
-Otherwise it answers as the product of the components does under the commitment's first 64 bytes, and the registration
-adds nothing to what is public or kept.
-
 ## Components
 
 | component | onsite | remote | `Core.Protocol` | id |
@@ -84,6 +62,28 @@ proof files) makes the product one too: `productB` (`CoreComposition/Blobs.lean`
 component, those that read none ignore them (`Protocol.withoutBlobs`), and on the blobs it is `product` of its
 components on them (`productB_on`). `onsite check P C E [BLOB ...]` reads them after the evidence, and a `serve` case
 carries them as hex under `blobs`.
+
+## A registration check
+
+`registered id R s components` checks a registration before composing, in its commit phase, and `registeredB` is the
+same over blobs. It is onsite's shape once NCI's check of record is a core protocol (`NciCheck.Protocol.protocol`,
+`verity/nci/v1`, #4616): `registeredB "verity/onsite/v0" NciCheck.Protocol.protocol
+SampledProofs.OneStageZk.protocol.id components`, whose registration is the one sampled proofs' one-stage audit commits
+to, one registration digest in both. NCI is a registration check, not a component (Daniel's ruling: onsite has six
+subprotocols, and NCI is none of them). Its formats are the product's with the registration's beside the components':
+
+| input | format |
+| --- | --- |
+| params | `{"components":[...],"registration":{"id":ID,"params":PARAMS}}` |
+| commitment | the product's 64 bytes, then the registration's digest; its own digest |
+| evidence | `{"components":[...],"registration":{"commitment":HEX,"evidence":HEX,"id":ID,"params":PARAMS}}` |
+
+It rejects when the registration isn't the registration check's or carries other params, when the registration check
+doesn't accept it, or when the commitment doesn't end in its digest, whatever the components answer. When the cases fit
+it rejects too when the committing component's case (the first under the id `s`) doesn't commit to that digest, again
+whatever the components answer (`mismatch`: `registration: R checked D, s committed D'`, `D'` hex or `no digest`).
+Otherwise it answers as the product of the components does under the commitment's first 64 bytes, and the registration
+adds nothing to what is public or kept.
 
 ## The difftest
 
