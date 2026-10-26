@@ -371,8 +371,6 @@ def test_a_tampered_activation_is_its_quantize_units_refusal_and_a_row_read_othe
     assert tie_reads(loop, win, c, tmp_path / "t") == {}
     with pytest.raises(ValueError, match="give wired"):
         L.TorchLoop(L.Model(), [3], tamper_activations=True)
-    with pytest.raises(ValueError, match="give tie or wired"):
-        L.TorchLoop(L.Model(), [3], tie=True, wired=True)
     for k, (tid, i) in enumerate(((descriptor_id(L.linear_template(L.H)), -1), (descriptor_id(L.linear_template(L.H)), 0))):
         honest = L.TorchLoop(L.Model(), [3, 7], steps=2, wired=True)
         bad = honest.window(D.parse_law("stratified:3"), cap=1)
@@ -384,6 +382,37 @@ def test_a_tampered_activation_is_its_quantize_units_refusal_and_a_row_read_othe
         why = tie_reads(honest, bad, bc, tmp_path / f"b{k}")
         refused = 2 * 2 + 2 if i == -1 else 0
         assert list(why) == [refused] and "does not open" in why[refused]
+
+
+def test_the_wired_output_tie_reads_each_down_proj_row_and_the_next_steps_quantize_reads_it_too(tmp_path):
+    """With ``tie`` the wired circuit's `OUT` is R·S rows of H words, request-major (`interface.read_shape`): down_proj
+    unit (s, r)'s ``o0`` reads row r·S + s and, below the last step, plain quantize unit (s, r)'s ``x`` the same row, in
+    place of the ``down`` tie. Served from the loop's own outputs every unit is its Definition and every member's rows
+    open ``out``'s root and its ties'; one changed word leaves exactly the two units that read its row unopened."""
+    plain = L.TorchLoop(L.Model(), [3, 7], steps=2, wired=True)
+    plain.window(D.parse_law("stratified:3"), cap=1)
+    rows = [L.bits(plain.outputs[r, s].to(torch.bfloat16))[0].tolist() for r in range(2) for s in range(2)]
+    loop = L.TorchLoop(L.Model(), [3, 7], steps=2, wired=True, tie=True)
+    circuit = loop.circuit()
+    assert IF.read_shape(circuit, "out") == {"value": "out", "words": L.H, "rows": 4, "word_bits": 16,
+                                             "row_schema": REG.SCHEMA_V2}
+    assert "down" not in {v for v, *_ in loop.ties_of()}
+    assert IF.read_shape(L.TorchLoop(L.Model(), [3, 7], steps=2, tie=True).circuit(), "out")["words"] == 1
+    program = IF.Window(circuit, loop.run_root, D.parse_law("stratified:3"), 1).window.partition["program"]
+    for k, changed in enumerate((False, True)):
+        served = [list(r) for r in rows]
+        if changed:
+            served[0][0] ^= 1
+        out = REG.Registered.commit(program, "out", served, None, schema=REG.SCHEMA_V2)
+        tied = L.TorchLoop(L.Model(), [3, 7], steps=2, wired=True, tie=True)
+        win = tied.window(D.parse_law("stratified:3"), cap=1, out=out)
+        assert win.mismatches() == {}
+        c = win.close(salt_key=bytes(32))
+        win.write(c, tmp_path / f"t{k}", {"loop": "torch-loop", "activations": L.activations(tied.model,
+                                                                                               tied.commit_activations())},
+                  registrar=R)
+        why = tie_reads(tied, win, c, tmp_path / f"t{k}", {"out": out})
+        assert sorted(why) == ([2 * 2, 2 * 2 * 2 + 2 * 2] if changed else [])
 
 
 def test_registered_weights_in_the_wired_loop_leave_only_the_requests_rows_free_and_open_the_pinned_root(tmp_path):
