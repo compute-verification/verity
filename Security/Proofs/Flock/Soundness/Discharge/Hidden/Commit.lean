@@ -299,7 +299,7 @@ theorem Committed.unrolled_unit (hty : tags.typed = false) (h : Committed tags c
   · have hf := parse_tmpl_none hty h
     rw [unrolled_flat hf, lunit_flat hf]
     exact ⟨rfl, hf, rfl⟩
-  · obtain ⟨-, -, -, -, -, -, -, -, he⟩ := unrolled_of_parseTmpl h
+  · obtain ⟨_tu, _n, -, -, -, -, -, -, he⟩ := unrolled_of_parseTmpl h
     exact ⟨FlockSoundness.unrolled_unit h, unrolled_tmpl h, by rw [he]⟩
 
 /-- **The statement circuit is the committed one with other nets and no template**: every other field (ports, leaves,
@@ -314,7 +314,7 @@ theorem Committed.unrolled_eq (hty : tags.typed = false) (h : Committed tags cf 
     simp only at hf
     subst hf
     rfl
-  · obtain ⟨-, -, -, -, -, -, -, -, he⟩ := unrolled_of_parseTmpl h
+  · obtain ⟨_tu, _n, -, -, -, -, -, -, he⟩ := unrolled_of_parseTmpl h
     exact ⟨_, he⟩
 
 /-- **A committed circuit is untyped and passes `HmRow.check` and `HmOut.checkRows`.** -/
