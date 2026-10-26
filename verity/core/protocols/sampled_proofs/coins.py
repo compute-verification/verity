@@ -295,6 +295,27 @@ def coins_reason(coins: Any, window: str, after: bytes, read: bytes, verify: Ver
     return read_reason(commitment, segment, after, read, roots.get(label, ()) if type(label) is str else ())
 
 
+DRAW_FORM = ("a draw's coin evidence is {ledger, main, pins, segment, session}: the auditor's ledger, the verifier's copy "
+             "of main's first-parent history, the host's pins log, the draw's coins (Segment.to_json) and the challenger "
+             "session's files")
+
+
+def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins: Any, verify: Verify) -> bytes:
+    """Lean `Challenger.drawCoins`: the coins of family `label` that the session the auditor's ledger opens on `window` (its
+    open root) under `key` released after `after`, read from `coins`, `{ledger, main, pins, segment, session}`, in order.
+    Unlike `coins_reason`'s evidence, this carries no key: the key, the window and the family are the verifier's, so a
+    prover can't sign a ledger of its own. One-stage's check reads its draw's coins through it (`OneStage.coinsOf`).
+    Raises `CoinError`."""
+    if not isinstance(coins, Mapping) or sorted(coins) != ["ledger", "main", "pins", "segment", "session"]:
+        raise CoinError(DRAW_FORM)
+    commitment, roots = trusted_session_of(coins["ledger"], {"root": window}, key, coins["pins"], coins["main"],
+                                           coins["session"], verify)
+    segment = coins["segment"]
+    if not (isinstance(segment, Mapping) and segment.get("label") == label):
+        raise CoinError(f"the draw's coins are not the challenger's {label} family's")
+    return challenger_stream(commitment, segment, after, roots.get(label, ()))
+
+
 def closure_of(closure: Mapping[int, Sequence[int]], units: Sequence[int]) -> list[int]:
     """A draw's closure under the verifier's closure map (Lean `Flock.Draw.closureOf`): every unit in a drawn unit's
     closure that is not itself drawn, ascending."""
@@ -351,5 +372,5 @@ def _nth(ranges: Sequence[Sequence[int]], j: int) -> int:
     raise IndexError(j)
 
 
-__all__ = ["COINS_FORM", "ChallengerCoins", "OwnRandomness", "SEGMENT_FORM", "Segment", "challenger_stream",
-           "closure_of", "coins_reason", "draw_first", "read_reason"]
+__all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "OwnRandomness", "SEGMENT_FORM", "Segment",
+           "challenger_stream", "closure_of", "coins_reason", "draw_coins", "draw_first", "read_reason"]
