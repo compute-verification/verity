@@ -78,6 +78,11 @@ Implementations:
     roots, the fastest of `--reps` on a pseudo-random block, against twice the limit (SeqRoot; the root is untuned, so an upper
     bound on the fastest GPU root).
   The transport is the harness's responder wire, not `p2-audit-wire/v4`'s frames.
+  - `store.py`: the served model's encoded weights store. It lays the MQA16K INT8 weights out in W with every tensor
+    starting on a block (`store.py layout` writes the layout JSON), and its `decode_layer` is the reference a
+    decode-to-staging kernel matches byte for byte. `store-toy/` is a 2-layer store at the registered width: its salt,
+    C*, negative blocks, and spot vectors at the real store's indices, with W and the staging buffers pinned by digest
+    (`store.py toy --plain` writes them). `tests/test_pous_p2_store.py` regenerates both.
 
 - `p2-gpu`: the efficient-cryptography campaign's tuned P2 kernel (`p2_gpu/`, CGBN) for the **experimental**
   `p2-16448/v2`, whose ChaCha8 keys the spec does not allow (its F4 names counter-mode SHA-512). The registered P2 with the

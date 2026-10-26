@@ -16,7 +16,7 @@ reader and its tie, and states the target at those.
 * `DecAt.coefRead_eq`, `DecAt.hcoef`: at a decision of an inner statement read at the dense form, `coefRead` reads
   `D.coefAt`, from `coins_of_decode` as `DecAt.posAt_eq` does.
 * `Top.targetE_rowD`: `TargetE` at `accR`, row D's pieces and side reader, and `coefRead`. What it still takes:
-  row C's points (`TargetPoints`), one table per statement (`TargetTables`) and the pieces' running sums (`hholds`).
+  the pieces' running sums (`hholds`).
 -/
 
 namespace RecDeploy.Rows
@@ -137,19 +137,19 @@ open RecDeploy.Rows (accHolds sideAt coefRead rowDPieces)
 
 /-- **Row E's target at row D's pieces**: `targetE` at `accR`, the pieces `rowDPieces key`, their side reader
 `sideAt rd` and `coefRead`. The side, coin and cover ties are `DecAt.hside`, `DecAt.hcoef` and
-`DecAt.rowDPieces_cover`; what's left is row C's points (`hpts`), one table per statement (`hT`) and that the pieces
-hold their running sums where `P` does (`hholds`). -/
+`DecAt.rowDPieces_cover`, and the dense statement's one table is `DecAt.tables_of_dense`; what's left is that the
+pieces hold their running sums where `P` does (`hholds`). -/
 theorem targetE_rowD (rd : Msg → Option FinalP) (P : Msg → List Msg → List Coin → Prop)
     (chainAt : Msg → List Msg → ℕ → ℕ → Array F128) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
-    (hpts : TargetPoints rd P) (hT : TargetTables rd P)
     (hholds : ∀ (x : Msg) (ms : List Msg) (cs : List Coin), P x ms cs →
       ∀ q ∈ rowDPieces key x, accHolds (sideAt rd) coefRead chainAt q x ms cs) :
     TargetE rd P (accR rd chainAt) :=
-  targetE rd P chainAt (rowDPieces key) (sideAt rd) coefRead hpts hholds
+  targetE rd P chainAt (rowDPieces key) (sideAt rd) coefRead hholds
     (fun x ms _ _ D cls i hi => D.hside cls i hi (rowDPieces key x))
     (fun x ms cs hA D cls i hi => by
       obtain ⟨⟨xo, sto, hst, hf, hx⟩, -⟩ := id hA
-      exact D.hcoef cls (accR rd chainAt x ms cs) i hst hf hx hi (by rw [← hT x ms cs hA D]; exact hi) _)
+      have hT := D.tables_of_dense hst hf hx
+      exact D.hcoef cls (accR rd chainAt x ms cs) i hst hf hx hi (by omega) _)
     (fun _ _ _ _ D cls _ hi r => D.rowDPieces_cover cls key hi r)
 
 end RecDeploy.Top

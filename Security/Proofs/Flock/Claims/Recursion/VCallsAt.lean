@@ -7,7 +7,12 @@ import Proofs.Flock.Claims.Recursion.VStarBound
 A V\* part's check is accepted, or its recorded calls collide with each other or with the compiled verifier's own
 SHA-512 evaluations at its V\* statement (`VStarB.PartChecksBV`; check 5's row commitments are among them). No witness
 records those evaluations, so the facts route 2C reads of V*'s parts escape to a collision among a draw's evaluations
-(`drawCalls`: its witnesses' recorded calls and `setupCalls` at the run's V\* statements):
+(`drawCalls`: its witnesses' recorded calls, the inner verifier's own at the draw's coins, `Deploy.callsAt`, and
+`setupCalls` at the run's V\* statements):
+
+* `CallsLogCollAt`: `CallsLogColl` with the inner run's calls among those `callsAt` lists at the draw's coins (or a
+  collision among them); `CallsLogColl.toAt` gives it, and at the deployed record it holds by construction
+  (`RecDeploy.callsLogCollAt_deployRec`).
 
 * `VStarAcceptsV`, `InnerAcceptsCollAtV` and `ForksBindAtV` (with `forkCollV`): `VStarAccepts`, `InnerAcceptsCollAt`
   and `ForksBindAt` with that escape. Each old fact gives its twin (`VStarAccepts.toV`, `InnerAcceptsCollAt.toV`,
@@ -27,9 +32,50 @@ theorem coll_append {H : Msg → Msg} {l l' : List (Msg × Msg)} (hl : ∀ e ∈
   exact VStar.coll_of_sub (fun e he => (List.mem_append.1 he).elim (hl e) (hl' e))
     (fun p hp => List.mem_append_left _ hp) (Option.isSome_iff_exists.2 ⟨_, huv⟩)
 
+theorem setup_true (H : Msg → Msg) (us : List Msg) : ∀ e ∈ us.map (fun u => (u, H u)), H e.1 = e.2 := by
+  intro e he
+  obtain ⟨u, -, rfl⟩ := List.mem_map.1 he
+  rfl
+
 section Facts
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+
+/-- **The inner verifier's calls are among those a finder searches at the draw, off a collision** (`CallsLogCollBy` at
+`Deploy.callsAt`): the recorded calls, the inner setup's and the inner verifier's own at the draw's coins. -/
+abbrev CallsLogCollAt (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
+  CallsLogCollBy H D I DO fun x r ws => D.callsAt H x r ws
+
+theorem mem_callsAt {H : Msg → Msg} {D : Deploy Coin} {x : Msg} {r : Fin (D.V.k x) → Coin} {ws : List Flock.Wit}
+    {p : Msg × Msg} (hp : p ∈ D.calls x ws) : p ∈ D.callsAt H x r ws :=
+  List.mem_append_left _ hp
+
+theorem mem_callsAt_append {H : Msg → Msg} {D : Deploy Coin} {x : Msg} {r : Fin (D.V.k x) → Coin}
+    {ws : List Flock.Wit} {L : List (Msg × Msg)} {p : Msg × Msg} (hp : p ∈ D.calls x ws ++ L) :
+    p ∈ D.callsAt H x r ws ++ L :=
+  (List.mem_append.1 hp).elim (fun h => List.mem_append_left _ (mem_callsAt h)) (List.mem_append_right _)
+
+/-- The calls a finder searches at a draw are true where the recorded ones are: the rest are `H`'s answers. -/
+theorem callsAt_true_of {H : Msg → Msg} {D : Deploy Coin} {x : Msg} {r : Fin (D.V.k x) → Coin}
+    {ws : List Flock.Wit} (h : ∀ e ∈ D.calls x ws, H e.1 = e.2) : ∀ e ∈ D.callsAt H x r ws, H e.1 = e.2 :=
+  fun e he => (List.mem_append.1 he).elim (h e) (setup_true H _ e)
+
+/-- The calls a finder searches at a draw are true evaluations (`calls_true`, and `H`'s answers). -/
+theorem callsAt_true {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
+    {decO : List (ℕ × Col) → List T} {Ω : Type} {P : Prover Ω} {x : Msg} (hT : CallsTrue H D I DO)
+    (hN0 : CallsNil H D) (ω : Ω) (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) :
+    ∀ e ∈ D.callsAt H x d.1 ((eoOut H D I DO decO P x ω d).getD []), H e.1 = e.2 :=
+  callsAt_true_of (calls_true hT hN0 ω d)
+
+/-- **`CallsLogColl` gives `CallsLogCollAt`**: more calls hold the inner verifier's, and a collision among the recorded
+ones, which are true, is one among them all. -/
+theorem CallsLogColl.toAt {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
+    (hL : CallsLogColl H D I DO) (hT : CallsTrue H D I DO) : CallsLogCollAt H D I DO := by
+  intro decO x Ω P ω r c ws hg
+  rcases hL decO x Ω P ω r c ws hg with h | ⟨u, v, huv, -⟩
+  · exact Or.inl fun e he => mem_callsAt (h e he)
+  · exact Or.inr (VStar.coll_of_sub (callsAt_true_of (hT decO x Ω P ω r c ws hg)) (fun p hp => mem_callsAt hp)
+      (Option.isSome_iff_exists.2 ⟨_, huv⟩))
 
 /-- **V\*'s circuits compute the inner verifier at the inner shape `shape`, off a collision with the verifier's
 evaluations**: `VStarAccepts`, its escape a collision among the witnesses' recorded calls and the compiled verifier's
@@ -73,18 +119,18 @@ theorem drawCalls_eq [DecidableEq Col] {H : Msg → Msg} {D : Deploy Coin} {I : 
     {DO : Flock.Deploy Coin Col T} {decO : List (ℕ × Col) → List T} {Ω : Type} {P : Prover Ω} {x : Msg} {ω : Ω}
     {r : Fin (D.V.k x) → Coin} {c : (EO D I DO decO).C x} {ws : List Flock.Wit}
     (hg : EOGives H D I DO decO P x ω r c ws) :
-    drawCalls H D I DO decO P x ω (r, c) = D.calls x ws ++ setupCalls H D (runVstar H D I P x ω r) := by
+    drawCalls H D I DO decO P x ω (r, c) = D.callsAt H x r ws ++ setupCalls H D (runVstar H D I P x ω r) := by
   have hw : drawWits H D I DO decO P x ω (r, c) = ws := by
     show ((EO D I DO decO).eval H P x ω r c).1.getD [] = ws
     rw [hg.2]; rfl
-  show D.calls x (drawWits H D I DO decO P x ω (r, c)) ++ setupCalls H D (runStmts H D I P x ω r) = _
+  show D.callsAt H x r (drawWits H D I DO decO P x ω (r, c)) ++ setupCalls H D (runStmts H D I P x ω r) = _
   rw [hw]; rfl
 
 theorem drawCalls_true [DecidableEq Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {decO : List (ℕ × Col) → List T} {Ω : Type} {P : Prover Ω} {x : Msg}
     (hT : CallsTrue H D I DO) (hN0 : CallsNil H D) (ω : Ω) (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) :
     ∀ e ∈ drawCalls H D I DO decO P x ω d, H e.1 = e.2 := fun e he =>
-  (List.mem_append.1 he).elim (calls_true (decO := decO) (P := P) hT hN0 ω d e) (setupCalls_true H D _ e)
+  (List.mem_append.1 he).elim (callsAt_true (decO := decO) (P := P) hT hN0 ω d e) (setupCalls_true H D _ e)
 
 theorem drawCalls_pair_true [DecidableEq Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {decO : List (ℕ × Col) → List T} {Ω : Type} {P : Prover Ω} {x : Msg}
@@ -103,8 +149,8 @@ theorem forkCollV_of [DecidableEq Col] {H : Msg → Msg} {D : Deploy Coin} {I : 
   unfold forkCollV
   refine VStar.coll_of_sub (drawCalls_pair_true hT hN0 _ _ _) (fun p hp => ?_) hs
   rcases List.mem_append.1 hp with hp | hp
-  · exact List.mem_append_left _ (List.mem_append_left _ hp)
-  · exact List.mem_append_right _ (List.mem_append_left _ hp)
+  · exact List.mem_append_left _ (List.mem_append_left _ (mem_callsAt hp))
+  · exact List.mem_append_right _ (List.mem_append_left _ (mem_callsAt hp))
 
 theorem ForksBindAt.toV [DecidableEq Col] {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W}
     {DO : Flock.Deploy Coin Col T} {x : Msg} (h : ForksBindAt H D I DO x) (hT : CallsTrue H D I DO)
@@ -145,11 +191,11 @@ theorem Pr_innerRejects_le_forkV_at [DecidableEq Col] {H : Msg → Msg} {D : Dep
   obtain ⟨ws, hg, hrej⟩ := ht
   rcases hA decO Ω P t.1 t.2.1 t.2.2.2.1 ws hg with hacc | ⟨u, v, huv, -⟩
   · exact absurd hacc hrej
-  · have hs : (findColl (drawCalls H D I DO decO P x t.1 (t.2.1, t.2.2.2.1))).isSome := by
-      rw [drawCalls_eq (ω := t.1) (r := t.2.1) (c := t.2.2.2.1) hg]
-      exact Option.isSome_iff_exists.2 ⟨_, huv⟩
-    unfold forkCollV
-    exact VStar.coll_of_sub (drawCalls_pair_true hT hN0 _ _ _) (fun p hp => List.mem_append_left _ hp) hs
+  · unfold forkCollV
+    refine VStar.coll_of_sub (drawCalls_pair_true hT hN0 _ _ _) (fun p hp => List.mem_append_left _ ?_)
+      (Option.isSome_iff_exists.2 ⟨_, huv⟩)
+    rw [drawCalls_eq (ω := t.1) (r := t.2.1) (c := t.2.2.2.1) hg]
+    exact mem_callsAt_append hp
 
 theorem PrBinnerV_nonneg [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) {Ω : Type} [Fintype Ω] [Nonempty Ω]

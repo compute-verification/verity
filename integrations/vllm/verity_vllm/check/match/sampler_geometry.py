@@ -11,10 +11,10 @@ _SPLITS_OPERAND = 5   # GumbelTopPTokenSelect_v1{V}(logits, top_p, seed, pos, te
 
 
 def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None:
-    """The launch's top-p split count S carried by a fold TokenSelect instance.  [R16 stoch M-0254 / global M-0169 (4)] The value of
+    """The launch's top-p split count S carried by a fold TokenSelect instance.  The value of
     the select's `Const32[S]` splits operand (compare.Prog._bind_splits keeps it in `B.splits_values[select node]`; the constant itself
     is bound to the Program's request-owned `splits` input entry, or held equal to a single-request Program's own `Const32[S]` by
-    `constant_splits_agree`), else the `S=<n>` static of the R15 form `GumbelTopPTokenSelect_v1{V,S}` (the fold's spec strings may carry
+    `constant_splits_agree`), else the `S=<n>` static of the older form `GumbelTopPTokenSelect_v1{V,S}` (the fold's spec strings may carry
     a `prefix:`).  None when the instance carries no readable S."""
     if B is not None and inst is not None:
         v = getattr(B, "splits_values", {}).get(inst.get("k"))
@@ -28,7 +28,7 @@ def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None
             if len(run) == 4 and run[0] == "n" and (run[2], run[3]) == (0, 1):
                 j = (getattr(B, "k2i", None) or {}).get(run[1])
                 if j is not None:
-                    from verity_vllm.check.match.program_compare import const_value
+                    from verity_vllm.check.match.instance_sequence import const_value
                     cv = const_value(B.inst[j]["spec"])
                     if cv is not None and cv[0] == 32:
                         return int(cv[1])
@@ -61,14 +61,14 @@ def _splits_by_event(P) -> dict[int, int]:
 
 
 def scheduled_live_counts(requests: list[dict], present: dict[str, list[int]]) -> dict:
-    """[R17 stoch, BRIEF §6 Stochastic / COORD R17-1] The SCHEDULED workload state per engine step, built from the per-request facts G6
+    """The SCHEDULED workload state per engine step, built from the per-request facts G6
     has just established -- never from the record's per-step row list.
 
     For every request r with rows: its sampler-active steps are the contiguous range
         E_r = [first_r, first_r + (prefill_chunks_r - 1) + a_r + lag_r)
     where first_r is its verified arrival (== the declared step, or admitted by the declared idle rule), prefill_chunks_r - 1 the chunk
     steps whose sample is discarded, a_r its answer length (the cap on a length stop; the position of the first declared EOS on a
-    VERIFIED EOS stop) and lag_r the placeholder rows after an EOS stop = the attested AND declared scheduler lag (`eos_lag_rows`, R17-1:
+    VERIFIED EOS stop) and lag_r the placeholder rows after an EOS stop = the attested AND declared scheduler lag (`eos_lag_rows`:
     LAG is a declared specialization parameter; the post-EOS step is active internal computation whose row IS in the sampler batch).
     |live(t)| = #{r : t in E_r}.  A request whose G6 evidence is not established (a problem on it, an unverified early stop) leaves the
     state UNESTABLISHED at every step it touches -- the caller fails closed there instead of falling back to the observed rows.

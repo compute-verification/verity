@@ -635,12 +635,12 @@ def recStatementsCmd (args : List String) : IO UInt32 := do
   IO.println s!"RECVSTAR {line.compress}"
   return (if res.toBool then 0 else 1)
 
-/-- A record's `unit_draw`, when it is a draw (not absent, not null). -/
+/-- A record's `unit_draw`, when it is a draw (not absent, not null), rebuilt (`norm`). -/
 def recordDraw (record : String) : Option Lean.Json :=
   match Lean.Json.parse record with
   | .ok j => match j.getObjVal? "unit_draw" with
     | .ok Lean.Json.null => none
-    | .ok d => some d
+    | .ok d => some (Flock.norm d)
     | .error _ => none
   | .error _ => none
 
