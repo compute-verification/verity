@@ -94,7 +94,7 @@ def Shows (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (pr : VStar.Recursi
     ∃ f, finalAt IV st x s v = some f ∧ f.stmt = vstarAt st x (v.msgs.take (kIS IV x)) s ∧
       bs.get q.record "a part's record" = .ok f.record.toUTF8 ∧
       ∀ i spec sts, setupO (vstarAt st x (v.msgs.take (kIS IV x)) s) = some (i, spec, sts) →
-        ∀ k (h : k < spec.repStreams.size), ∃ d,
+        f.proofs.size = spec.repStreams.size ∧ ∀ k (h : k < spec.repStreams.size), ∃ d,
           (q.reps.find? (·.1 == repName spec.repStreams[k].2.2)).map (·.2) = some d ∧
           ∃ hk : k < f.proofs.size, bs.get d "session files" = .ok f.proofs[k]
 
@@ -123,14 +123,14 @@ Piece B of PRF-202's split owns this definition, and refines it where the model 
 def Names (p : VStar.Recursive.Params) (e : VStar.Recursive.Evidence) (bs : Core.Blobs) (x : Msg) : Prop :=
   ∃ w ri, decodeX x = some w ∧ FlockDeploy.decode w.inner = some ri ∧
     bs.get p.own.circuit "the inner circuit" = .ok ri.circuit ∧
-    bs.get e.proofs.pub "the inner public file" = .ok ri.publicFile ∧
+    bs.get p.own.pub "the inner public file" = .ok ri.publicFile ∧
     ri.statement = VStar.Recursive.INNER_STATEMENT ∧ ri.tables = [] ∧
     ri.partition.map (FlockDeploy.jsonOf "partition") = some (.ok p.own.partition) ∧
     ri.program = some p.own.program ∧
-    ri.draw = (bs.get e.proofs.draw "the inner statement's draw").toOption ∧
+    ri.draw = (bs.get p.own.draw "the inner statement's draw").toOption ∧
     (∀ h, VStar.Recursive.innerHeld p.own e.proofs bs = .ok h →
       (do Flock.RecVStar.Inner.ofJson (← FlockDeploy.jsonOf "rec-inner" w.recInner)) = .ok h.shape) ∧
-    (e.proofs.registration.mapM fun d => (bs.get d "rec inner registration").toOption) = some w.registration ∧
+    (p.own.registration.mapM fun d => (bs.get d "rec inner registration").toOption) = some w.registration ∧
     w.parts.length = p.own.parts.size ∧
     ∀ j (hj : j < p.own.parts.size) (q : PartX), w.parts[j]? = some q →
       FlockDeploy.jsonOf "rec-bindings" w.bindings = .ok p.own.parts[j].bindings ∧
