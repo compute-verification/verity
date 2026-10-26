@@ -55,10 +55,18 @@ def netLs (name : String) (l : Laid) : List String := VStar.header name l :: row
 def secLs (nm net : String) (l : Laid) : List String :=
   ("CIRCUIT " ++ nm ++ " " ++ toString (VStar.netLines l)) :: netLs net l
 
-/-- V\*'s file's lines: the head's two, then the unit's, `sha512x3`'s and `hm96`'s sections. -/
-def fileLs (name d : String) (l : Laid) : List String :=
-  ["flock-circuit " ++ name, "META " ++ d] ++ secLs "unit" name l ++ secLs VStar.SHA_NET VStar.SHA_NET (shaLaid ()) ++
-    secLs VStar.HM_NET VStar.HM_NET (hmLaid ())
+/-- V\*'s file's lines: the head's two, then the unit's, `sha512x3`'s and `hm96`'s sections. The two fixed nets'
+layouts are parameters, so that no proof term over these lines makes the kernel evaluate `shaLaid ()` or `hmLaid ()`. -/
+def fileLs (name d : String) (l ls lh : Laid) : List String :=
+  ["flock-circuit " ++ name, "META " ++ d] ++ secLs "unit" name l ++ secLs VStar.SHA_NET VStar.SHA_NET ls ++
+    secLs VStar.HM_NET VStar.HM_NET lh
+
+theorem idRun {α : Type} (x : α) : Id.run x = x := rfl
+
+theorem run_put {E : StateM String PUnit} (X s : String) :
+    ((do (fun x => (modify (· ++ x) : StateM String PUnit)) X; E : StateM String PUnit).run s) = E.run (s ++ X) := by
+  rw [StateT.run_bind]
+  first | rfl | simp [StateT.run_modify]
 
 theorem forIn_put (g : ℕ → String) : ∀ (xs : List ℕ) (s : String),
     (forIn (m := StateM String) xs PUnit.unit (fun i _ => do
@@ -82,11 +90,14 @@ theorem emitNet_run (name : String) (l : Laid) (s : String) :
   simp only [netLs, rowsLs, joinNl_cons, String.append_assoc]
   rfl
 
+set_option maxHeartbeats 1000000 in
 theorem emitSections_run (u : VStar.UnitC) (l : Laid) (s : String) :
     (VStar.emitSections (m := StateM String) (fun x => modify (· ++ x)) u l).run s =
       (PUnit.unit, s ++ joinNl (secLs "unit" u.name l ++ secLs VStar.SHA_NET VStar.SHA_NET (shaLaid ()) ++
         secLs VStar.HM_NET VStar.HM_NET (hmLaid ()))) := by
   unfold VStar.emitSections
+  generalize shaLaid () = ls
+  generalize hmLaid () = lh
   simp [List.forIn_cons, List.forIn_nil, StateT.run_bind, StateT.run_modify, emitNet_run, secLs, joinNl_cons,
     joinNl_append, String.append_assoc]
   refine Prod.ext rfl ?_
@@ -96,13 +107,14 @@ theorem emitSections_run (u : VStar.UnitC) (l : Laid) (s : String) :
 
 /-- **V\*'s file is its lines** (`RecVStar.circuitFile`): the head `flock-circuit <unit>`, `META <d>`, then the three
 sections. -/
+set_option maxHeartbeats 1000000 in
 theorem file_text (u : VStar.UnitC) (l : Laid) (d : String) :
     ((do (fun x => (modify (· ++ x) : StateM String PUnit)) (s!"{VStar.FORMAT_CIRCUIT} {u.name}\nMETA " ++ d ++ "\n"); VStar.emitSections (m := StateM String) (fun x => modify (· ++ x)) u l : StateM String PUnit).run "").2 =
-      joinNl (fileLs u.name d l) := by
-  rw [StateT.run_bind]
-  show (StateT.run (VStar.emitSections (m := StateM String) (fun x => modify (· ++ x)) u l)
-    ("" ++ (s!"{VStar.FORMAT_CIRCUIT} {u.name}\nMETA " ++ d ++ "\n"))).2 = _
-  rw [emitSections_run]
+      joinNl (fileLs u.name d l (shaLaid ()) (hmLaid ())) := by
+  rw [run_put, emitSections_run]
+  generalize shaLaid () = ls
+  generalize hmLaid () = lh
+  try dsimp only
   simp only [fileLs, List.append_assoc, joinNl_append, joinNl_cons, joinNl_nil]
   simp only [String.empty_append, String.append_empty, String.append_assoc]
   rfl
@@ -181,7 +193,8 @@ theorem secLs_noNl (nm net : String) (l : Laid) (hm : NoNl nm) (h : NoNl net) : 
   · exact noNl_append.2 ⟨noNl_append.2 ⟨noNl_append.2 ⟨by simp [NoNl], hm⟩, by simp [NoNl]⟩, nat_noNl _⟩
   · exact netLs_noNl net l h x hx
 
-theorem fileLs_noNl (name d : String) (l : Laid) (hn : NoNl name) (hd : NoNl d) : ∀ x ∈ fileLs name d l, NoNl x := by
+theorem fileLs_noNl (name d : String) (l ls lh : Laid) (hn : NoNl name) (hd : NoNl d) :
+    ∀ x ∈ fileLs name d l ls lh, NoNl x := by
   intro x hx
   simp only [fileLs, List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hx
   rcases hx with (((rfl | rfl) | hx) | hx) | hx
@@ -267,7 +280,7 @@ theorem secLs_length (nm net : String) (l : Laid) : (secLs nm net l).length = 1 
 
 theorem sec_at (pre post : List String) (nm net : String) (l : Laid) (hn : NoWs nm) (he : nm ≠ "") :
     Sec (pre ++ secLs nm net l ++ post).toArray pre.length (pre.length + (secLs nm net l).length) := by
-  refine ⟨by simp [secLs_length]; omega, VStar.netLines l, ?_, by rw [secLs_length]; omega⟩
+  refine ⟨by simp [secLs_length] <;> omega, VStar.netLines l, ?_, by rw [secLs_length]; omega⟩
   have hl : (pre ++ secLs nm net l ++ post).toArray.getD pre.length "" =
       "CIRCUIT" ++ " " ++ nm ++ " " ++ toString (VStar.netLines l) := by
     rw [Array.getD_eq_getD_getElem?, List.getElem?_toArray, List.append_assoc,
@@ -279,21 +292,21 @@ theorem sec_at (pre post : List String) (nm net : String) (l : Laid) (hn : NoWs 
   exact Nat.toNat?_repr _
 
 /-- **V\*'s file's three sections**: at line 2 the unit's, then `sha512x3`'s, then `hm96`'s, which ends the file. -/
-theorem fileLs_secs (name d : String) (l : Laid) :
-    Sec (fileLs name d l).toArray 2 (2 + (secLs "unit" name l).length) ∧
-      Sec (fileLs name d l).toArray (2 + (secLs "unit" name l).length)
-        (2 + (secLs "unit" name l).length + (secLs VStar.SHA_NET VStar.SHA_NET (shaLaid ())).length) ∧
-      Sec (fileLs name d l).toArray
-        (2 + (secLs "unit" name l).length + (secLs VStar.SHA_NET VStar.SHA_NET (shaLaid ())).length)
-        (fileLs name d l).toArray.size := by
+theorem fileLs_secs (name d : String) (l ls lh : Laid) :
+    Sec (fileLs name d l ls lh).toArray 2 (2 + (secLs "unit" name l).length) ∧
+      Sec (fileLs name d l ls lh).toArray (2 + (secLs "unit" name l).length)
+        (2 + (secLs "unit" name l).length + (secLs VStar.SHA_NET VStar.SHA_NET ls).length) ∧
+      Sec (fileLs name d l ls lh).toArray
+        (2 + (secLs "unit" name l).length + (secLs VStar.SHA_NET VStar.SHA_NET ls).length)
+        (fileLs name d l ls lh).toArray.size := by
   have h1 := sec_at ["flock-circuit " ++ name, "META " ++ d]
-    (secLs VStar.SHA_NET VStar.SHA_NET (shaLaid ()) ++ secLs VStar.HM_NET VStar.HM_NET (hmLaid ())) "unit" name l
+    (secLs VStar.SHA_NET VStar.SHA_NET ls ++ secLs VStar.HM_NET VStar.HM_NET lh) "unit" name l
     (by simp [NoWs]) (by decide)
   have h2 := sec_at (["flock-circuit " ++ name, "META " ++ d] ++ secLs "unit" name l)
-    (secLs VStar.HM_NET VStar.HM_NET (hmLaid ())) VStar.SHA_NET VStar.SHA_NET (shaLaid ())
+    (secLs VStar.HM_NET VStar.HM_NET lh) VStar.SHA_NET VStar.SHA_NET ls
     (by simp [NoWs, VStar.SHA_NET]) (by decide)
   have h3 := sec_at (["flock-circuit " ++ name, "META " ++ d] ++ secLs "unit" name l ++
-    secLs VStar.SHA_NET VStar.SHA_NET (shaLaid ())) [] VStar.HM_NET VStar.HM_NET (hmLaid ())
+    secLs VStar.SHA_NET VStar.SHA_NET ls) [] VStar.HM_NET VStar.HM_NET lh
     (by simp [NoWs, VStar.HM_NET]) (by decide)
   simp only [List.append_assoc, List.length_append, List.append_nil, List.length_cons, List.length_nil] at h1 h2 h3
   simp only [fileLs, List.append_assoc, List.size_toArray, List.length_append, List.length_cons, List.length_nil]
@@ -564,6 +577,27 @@ theorem parse_nets (p1 p2 : ℕ) {tags : Tags} {bytes : ByteArray} {tables : Lis
 /-- **The circuit parsed from V\*'s file has three nets**: `circuitFile` writes the head and three sections
 (`emit_head`, `file_text`), none of whose lines holds a newline (`fileLs_noNl`: the unit's name is the parsed unit's,
 one word), so `HmRow.parse` without tables reads one net per section (`parse_nets`, `fileLs_secs`). -/
+theorem nets_of_lines {tags : Tags} {c : Circuit} {name d : String} {l ls lh : Laid}
+    (hp : HmRow.parse tags (joinNl (fileLs name d l ls lh)).toUTF8 [] = .ok c) (hd : NoNl d)
+    (hn : name = c.unit.name) (hun : c.unitNet < c.nets.size) : c.nets.size = 3 := by
+  have hP := parse_nets (2 + (secLs "unit" name l).length)
+    (2 + (secLs "unit" name l).length + (secLs VStar.SHA_NET VStar.SHA_NET ls).length) hp
+    (fromUTF8?_toUTF8 _) rfl
+  have hcu : NoWs c.unit.name := by
+    have hm : c.nets[c.unitNet] ∈ c.nets.toList := Array.mem_toList_iff.mpr (Array.getElem_mem hun)
+    rw [show c.unit = (c.nets.getD c.unitNet default).2 from rfl, Array.getD_eq_getD_getElem?,
+      Array.getElem?_eq_getElem hun, Option.getD_some]
+    exact hP.1 _ hm
+  have hnm : NoNl name := by
+    rw [hn]
+    exact noNl_of_noWs hcu
+  rw [linesOf_join _ (fileLs_noNl _ _ _ _ _ hnm hd)] at hP
+  obtain ⟨s1, s2, s3⟩ := fileLs_secs name d l ls lh
+  exact hP.2 s1 s2 s3
+
+/-- **The circuit parsed from V\*'s file has three nets**: `circuitFile` writes the head and three sections
+(`emit_head`, `file_text`), none of whose lines holds a newline (`fileLs_noNl`: the unit's name is the parsed unit's,
+one word), so `HmRow.parse` without tables reads one net per section (`parse_nets`, `fileLs_secs`). -/
 theorem nets_of_file {sv : VStar.Stmt} {f : VStar.Bindings} {holo : Bool} {b : ByteArray} {tags : Tags} {c : Circuit}
     (hf : RecVStar.circuitFile sv f holo = .ok b) (hp : HmRow.parse tags b [] = .ok c) (hn : sv.name = c.unit.name)
     (hun : c.unitNet < c.nets.size) : c.nets.size = 3 := by
@@ -573,24 +607,8 @@ theorem nets_of_file {sv : VStar.Stmt} {f : VStar.Bindings} {holo : Bool} {b : B
   obtain ⟨e, he, hf⟩ := FlockSoundness.except_bind_ok hf
   cases hf
   obtain ⟨d, hd, he'⟩ := emit_head he
-  have hb : (Id.run (e.run "")).2 = joinNl (fileLs u.name d l) := by
-    rw [he']
-    exact file_text u l d
-  rw [hb] at hp
-  have hP := parse_nets (2 + (secLs "unit" u.name l).length)
-    (2 + (secLs "unit" u.name l).length + (secLs VStar.SHA_NET VStar.SHA_NET (shaLaid ())).length) hp
-    (fromUTF8?_toUTF8 _) rfl
-  have hcu : NoWs c.unit.name := by
-    have hm : c.nets[c.unitNet] ∈ c.nets.toList := Array.mem_toList_iff.mpr (Array.getElem_mem hun)
-    rw [show c.unit = (c.nets.getD c.unitNet default).2 from rfl, Array.getD_eq_getD_getElem?,
-      Array.getElem?_eq_getElem hun, Option.getD_some]
-    exact hP.1 _ hm
-  have hnm : NoNl u.name := by
-    rw [unit_name hu, hn]
-    exact noNl_of_noWs hcu
-  rw [linesOf_join _ (fileLs_noNl _ _ _ hnm hd)] at hP
-  obtain ⟨s1, s2, s3⟩ := fileLs_secs u.name d l
-  exact hP.2 s1 s2 s3
+  rw [idRun, he', file_text u l d] at hp
+  exact nets_of_lines hp hd (by rw [unit_name hu, hn]) hun
 
 /-- `checkStmt` at an inner shape refuses lookup tables. -/
 theorem checkStmt_tables {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
