@@ -601,8 +601,8 @@ def party(svc, words, units: Units | None = None, *, key=LANE, out=b'{"listening
     """`words` sent by `key`; the party's run is recorded, and prints `out` and exits `rc`."""
     ran: list[list[str]] = []
 
-    def run(argv, sink, log):
-        ran.append(argv)
+    def run(argv, sink, log, minutes):
+        ran.append([*argv, f"minutes={minutes}"])
         sink.write(out)
         log.write_bytes(out)
         return rc
@@ -616,13 +616,13 @@ def test_a_party_runs_its_module_from_the_pinned_tree_as_auditor_with_its_own_de
     assert ran == [["runuser", "-u", "auditor", "--", "/usr/bin/env", "-i", "PYTHONDONTWRITEBYTECODE=1",
                     "HOME=/var/lib/vy-verifier", "PATH=/usr/bin:/bin", "/usr/bin/python3", "-s", "-E",
                     "-m", "verity.core.protocols.pous.wipe_party", "--device", str(svc.parties / "wipe"),
-                    "--listen", "0.0.0.0:47611", "--reads", "1024", "--streamer", "build", "--threads", "16"]]
+                    "--listen", "0.0.0.0:47611", "--reads", "1024", "--streamer", "build", "--threads", "16", "minutes=60"]]
     reqs = [json.loads(ln) for ln in (svc.parties / "wipe" / "requests.jsonl").read_text().splitlines()]
     assert [(r["verb"], r["by"], r.get("rc")) for r in reqs] == [("wipe_party", LANE, None), ("wipe_party", LANE, 0)]
     assert (svc.parties / "wipe" / "log" / reqs[0]["log"]).read_bytes() == out
-    (rc, _), ran = party(svc, ["challenger_party"])
-    assert rc == 0 and ran[0][-6:] == ["-m", "verity.core.protocols.pous.challenger_party", "--device",
-                                       str(svc.parties / "pous"), "--listen", "0.0.0.0:47610"]
+    (rc, _), ran = party(svc, ["challenger_party", "--minutes", "5"])
+    assert rc == 0 and ran[0][-7:] == ["-m", "verity.core.protocols.pous.challenger_party", "--device",
+                                       str(svc.parties / "pous"), "--listen", "0.0.0.0:47610", "minutes=5"]
 
 
 @pytest.mark.parametrize("words, why", [
@@ -634,6 +634,8 @@ def test_a_party_runs_its_module_from_the_pinned_tree_as_auditor_with_its_own_de
     (["wipe_party", "--threads", "8"], "give --native too"),
     (["wipe_party", "--streamer", "/tmp/s"], "got '--streamer'"),
     (["challenger_party", "--reads", "8"], "challenger_party takes no flags"),
+    (["challenger_party", "--minutes", "181"], "--minutes takes one integer"),
+    (["wipe_party", "--minutes"], "--minutes takes one integer"),
 ])
 def test_a_party_is_refused_any_flag_its_whitelist_lacks_before_it_starts(svc, words, why):
     got, ran = party(svc, words)
@@ -674,3 +676,27 @@ def test_the_wipe_party_and_its_key_import_on_a_python_with_no_site_packages():
     code = "import verity.core.protocols.pous.wipe_party, verity.core.protocols.pous.period; print('ok')"
     p = subprocess.run([sys.executable, "-S", "-s", "-E", "-c", code], capture_output=True, text=True, cwd=ROOT)
     assert p.returncode == 0 and p.stdout.strip() == "ok", p.stderr[-2000:]
+
+
+def test_a_party_is_killed_when_its_minutes_run_out_and_its_log_says_so(tmp_path, monkeypatch):
+    """`exec_party` with a party that never exits (no prover joined): its timer kills it, and the log records why."""
+    armed: list[float] = []
+
+    class Timer:
+        """Runs out the moment it starts: the party is killed whatever it was doing."""
+
+        def __init__(self, seconds, fn):
+            armed.append(seconds)
+            self.fn = fn
+
+        def start(self):
+            self.fn()
+
+        def cancel(self):
+            pass
+    monkeypatch.setattr(H.threading, "Timer", Timer)
+    monkeypatch.setattr(H, "TREE", tmp_path)
+    sink, log = io.BytesIO(), tmp_path / "log.jsonl"
+    rc = H.exec_party([sys.executable, "-c", "import sys; sys.stdin.read()"], sink, log, 2)
+    assert armed == [120] and rc == -9
+    assert json.loads(log.read_bytes().splitlines()[-1]) == {"killed": "the session's 2 min ran out"}
