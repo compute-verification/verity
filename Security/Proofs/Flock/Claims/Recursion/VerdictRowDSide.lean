@@ -124,7 +124,8 @@ cap and Ligerito proof it gives at the default coin and none after. -/
 theorem sideOf_repCtx {spec : SessionSpec} {sts : Array Stmt} {k : ℕ} (hk : k / 2 < sts.size) (c₁ : Coin)
     (r₀ : List ByteArray) (cs : List Coin) (rows : List (List ByteArray)) (q : Flock.Proof) :
     sideOf (repCtx spec sts c₁ r₀ cs k) rows q = sideOf (repCtx spec sts default r₀ [] k) rows q :=
-  readRep_side rfl rfl rfl (repCtx_n hk _ _ _ _ _ _) rfl rfl rows q
+  readRep_side (c := repCtx spec sts c₁ r₀ cs k) (c' := repCtx spec sts default r₀ [] k) rfl rfl rfl
+    (repCtx_n hk _ _ _ _ _ _) rfl rfl rows q
 
 /-- **`readPs` reads each rep with `readRep`**: rep `k`'s proof is the one `readRep` reads from its block of rounds,
 with the last message's `k`-th proof. -/
@@ -220,7 +221,6 @@ theorem sideAt_eq (hi : i < D.sts.size) (r : Fin 2) (q : OpenPiece) (ht : q.tabl
   unfold DecAt.side DecAt.files
   dsimp only
   rw [hsts', hps]
-  rfl
 
 /-- **`hside`, the layout tie, in `runs_assembled`'s form**: at a decision and a table `i < sts.size`, every piece of
 rep `r` of table `i` reads `D.side cls i r` through `sideAt rd`. -/
