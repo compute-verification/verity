@@ -1,5 +1,5 @@
 import Proofs.Nci.Cover.Paths
-import Models.Nci.Assumptions.CoverAdditive
+import Definitions.Nci.Assumptions.CoverAdditive
 
 /-!
 # The cover theorem's vocabulary on a declaration's gates

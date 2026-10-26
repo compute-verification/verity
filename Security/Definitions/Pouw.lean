@@ -1,6 +1,3 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
-import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
-import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 import Definitions.Pouw.Barrier.Defs
 import Definitions.Pouw.Barrier.Pinned
 import Definitions.Pouw.Basic.Mat
@@ -105,7 +102,7 @@ import Definitions.Pouw.Witness.Model
 /-!
 # PoUW's protocol: the definitions the statements read
 
-This layer, `Models.Pouw.Assumptions` and `Models.Pouw.Guarantees` are the trusted text: they import only each other,
+This layer, `Definitions.Pouw.Assumptions` and `Definitions.Pouw.Guarantees` are the trusted text: they import only each other,
 Mathlib and core's `Definitions.Core` (`Definitions.Pouw.PearlC.Defs` also Batteries), so their diff, with core's, is everything a
 statement reviewer reads.
 `Proofs.Pouw` holds the proofs and every lemma, which nobody reviews for meaning. A topic's modules keep their
@@ -147,7 +144,7 @@ assumption `TTH1T` (`H1TTileAssumptions`), and its two form checks (`H1TTileProo
 The encodings (`Encoding`): E4M3's integer grid to a bound, the doubled E2M1 grid, round to nearest onto a grid, the
 coin, an operand entry and a device's g1 grids. The int8 GEMM, the coin's rank-one terms and the epilogue (`Gemm`).
 g1 on sm_120's record H1: its grids and a round's operand leaves (`H1`). `Proofs.Pouw.FpG1` proves the arithmetic.
-`Models.Accounting.Guarantees.FpG1`'s headlines read H1's leaves; they are the record's bound at g1's windows, which
+`Definitions.Accounting.Guarantees.FpG1`'s headlines read H1's leaves; they are the record's bound at g1's windows, which
 the record's headlines already cover by their own quantifier over committed values.
 
 ## `H1Zy`: H1's drawn-leaf statements on words
@@ -184,7 +181,7 @@ two (`Completeness`).
 `Duo`: duo's step, runs of one to four words and of any length (`benchmarks/pouw/receipts/receipt_folds.py`,
 `duo_word`). `Fx1`: sm_120's fold, one keyed IMAD by an odd multiplier in front of duo's step (decision 83). `Li`: li's
 half step, a chain of them and a checkpoint, the XOR of several chains' states (`li_step`). Their binding statements
-are `Models.Pouw.Guarantees.Receipt`, proved in `Proofs.Pouw.Receipt`.
+are `Definitions.Pouw.Guarantees.Receipt`, proved in `Proofs.Pouw.Receipt`.
 
 ## `TileBound`: the FP4-tile model (`docs/pouw/fp4-tile-model.md`, bc-d9842080)
 
@@ -202,7 +199,7 @@ what the served pass committed (`ServedPass`) and the transcripts that are its (
 served (`ServedTie`, open on main), and the deployed draw, sampled proofs' service's uniform subset in rank-ordered
 sessions (`serviceLaw`, `sessionLaw`, `CopyClosed`) with its units' statements, the tiles' read in every session
 (`UnitStmts.copies`, `WrongCopyClosed`).
-The window's ε from its calls' (M2) and the service's draw at `η = 0` are `Models.Pouw.Guarantees.Window`, stated and
+The window's ε from its calls' (M2) and the service's draw at `η = 0` are `Definitions.Pouw.Guarantees.Window`, stated and
 not yet proved. `Proofs.Pouw.Window`: the deployed wrong sets are copy-closed, PoUW's reading with the served tie, the
 collision term on average over the oracle, and the bridge from the window's game to C-Flock's, with C-Flock's knowledge
 bound at main's `--zk` sessions.

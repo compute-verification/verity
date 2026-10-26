@@ -268,8 +268,8 @@ class SignedClocks:
     (`service.LinkWindows.certified_clocks`), never a public answer, which carries the certificates alone.
     `syncs(link)` is window 0's on, each the sync of the openings that name `link` and the window and hold
     (`CertifiedClock.refusal`), up to the first window without exactly one such sync. `refused` says why each
-    opening it took no sync from was refused: not a salted clock's opening (the unsalted `ClockCertificate` among
-    them), not an egress certificate, another key's, a sync and salt that don't open the digest signed (an altered
+    opening it took no sync from was refused: not a salted clock's opening (a record's `CertifiedRecord` among them),
+    not an egress certificate, another key's, a sync and salt that don't open the digest signed (an altered
     digest or sync), a signature that doesn't verify (forged, or another session's, or relabelled to another link or
     window), a salt another link-window's opening has too, or a window with two signed syncs. Whoever delivers the
     openings, the prover included, can't forge one."""
