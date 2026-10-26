@@ -74,7 +74,7 @@ theorem regOpenings_opens {xO : Claims.Msg} {reg : _root_.Flock.Registered.Port}
       obtain ⟨rfl, rfl⟩ := Prod.mk.inj he
       have hcr := RecIns.setup_registered (setupO_some hS).2 st (by simpa using hst)
       rw [hown] at hcr
-      exact portOpenings_opens hcr hreg' _ hoo
+      exact portOpenings_opens hcr hreg' (bc, pos, path) hoo
 
 /-- **`bc_eq_of_regOpenings` at the setup's own openings**: two openings the setup lists at V\* statements of `xs`, at
 one position under one tree, have one commit string wherever the true calls `l` and the setup's evaluations at `xs`
