@@ -19,7 +19,7 @@ episodes_per_day = { value = 1.24e6, unit = "episode/location/day", source = "Da
 [pofc.link.h200-hgx]
 bandwidth = { value = 3.6e12, low = 5.12e11, high = 7.2e12, unit = "bit/s", source = "Daniel's Notion page Proof of forward computation: forward-only NVLink; NVIDIA H200 NVLink 900 GB/s a GPU both ways, 450 GB/s forward; low: a PCIe 5 x16 link (64 GB/s); high: every link turned forward", status = "assumed" }
 
-[pofc.link.nvl72]
+[pofc.link.gb200-nvl72]
 bandwidth = { value = 7.2e12, low = 7.2e12, high = 1.44e13, unit = "bit/s", source = "Daniel's Notion page Proof of forward computation: forward-only NVLink; GB200 NVLink 5 1.8 TB/s a GPU both ways, 900 GB/s forward; high: every link turned forward", status = "assumed" }
 
 [pofc.model.llama-3.1-405b]
@@ -31,3 +31,33 @@ d_model = { value = 16384, source = "Daniel's Notion page Proof of forward compu
 n_total = { value = 2.78e12, unit = "param", source = "Daniel's Notion page Proof of forward computation: Kimi K3, MoE, 2.78T params", status = "assumed" }
 layers = { value = 61, low = 61, high = 64, source = "Daniel's Notion page Proof of forward computation: about 61 layers; high: its table's top 64 (whole)", status = "assumed" }
 d_model = { value = 7168, source = "Daniel's Notion page Proof of forward computation: Kimi K3, d_model 7168", status = "assumed" }
+
+# The reference datacenter under the proof of forward computation's rules: declared work runs as n_max-token episodes
+# (scenario.<name>.pofc names the rules; pofc_physical adds the forward-only links to the physical block).
+[scenario.reference-onsite-h200-pofc]
+fleet = "world-h200"
+regime = "onsite"
+policy = "v4-pro-session"
+horizon = "year"
+run = "v4-pretrain"
+families = ["full"]
+pofc = "reference"
+
+[scenario.reference-onsite-h200-pofc-physical]
+fleet = "world-h200"
+regime = "onsite"
+policy = "v4-pro-session"
+horizon = "year"
+run = "v4-pretrain"
+families = ["full"]
+pofc = "reference"
+pofc_physical = true
+
+[scenario.reference-remote-h200-pofc]
+fleet = "world-h200"
+regime = "remote"
+policy = "v4-pro-session"
+horizon = "year"
+run = "v4-pretrain"
+families = ["full"]
+pofc = "reference"

@@ -79,6 +79,7 @@ implementation (or different numbers in `data/`), never an edit to the layers ar
 | figures | `figures.py` | `render`: each class's per-block ρ against k, brackets by status, ρ against d, phase maps, tornado, vulnerability, corner (PNG plus the JSON plotted) | — | — |
 | Lean status | `lean.py` | `status(name)`, `weakest(cites)` from the locks | — | — |
 | operating points | `operating.py` | `work`, `exfil`, `points`: ρ as time at the registry's `work.*` and `exfil.*` references | — | a reference |
+| proof of forward computation | `pofc.py`, `data/pofc.toml` | `apply(Scenario, Rules)`: declared work as `n_max`-token episodes whose operators form a one-way chain (`Budget.cut`), with the class `pofc-backprop` (the weight toll, draft) and the page's attacks; `toll`, `versus` (ρ against `n_max`); a scenario opts in with `pofc = "<rules>"` | rules `reference`; the page's Llama-405B and Kimi K3 toll tables | a declared-circuit policy beside NCI's |
 
 ### Declared and actual circuits
 

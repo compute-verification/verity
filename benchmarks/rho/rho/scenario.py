@@ -2,7 +2,8 @@
 
 A scenario names a fleet (with its location and dark share), a regime, the NCI policy, a horizon, a run (the target and
 its model), the algorithm families the adversary may use, and the bounds and attacks to apply (all of them unless it
-lists some). Every choice is a registry key (`scenario.<name>.<choice>`), so a sweep can vary a choice like any number.
+lists some). With `pofc = "<rules>"` its declared work also runs under the proof of forward computation's rules
+(`rho.pofc`), and `pofc_physical = true` adds the forward-only links to the physical block. Every choice is a registry key (`scenario.<name>.<choice>`), so a sweep can vary a choice like any number.
 
 `evaluate` gives, for each family, ρ under each bound alone, under every bound it meets at once (`lo`: each block gets
 the least of their caps, under the union of their premises) and under each attack (`hi`: the best construction). The
@@ -60,11 +61,17 @@ def build(registry: Registry, name: str) -> Scenario:
     ctx = Context(fl, hardware.location(registry, fl.location), regimes.policy(registry, registry[f"{t}.policy"]),
                   hardware.horizon(registry, registry[f"{t}.horizon"]))
     run = instances.run(registry, registry[f"{t}.run"])
-    return Scenario(
+    s = Scenario(
         name, regimes.regime(registry, registry[f"{t}.regime"]), ctx, instances.model(registry, run.model), run,
         tuple(family(registry, n) for n in registry[f"{t}.families"]),
         tuple(CLASSES[n] for n in registry.get(f"{t}.bounds", list(CLASSES))),
         tuple(ATTACKS[n] for n in registry.get(f"{t}.attacks", list(ATTACKS))), premises(registry))
+    if f"{t}.pofc" in registry:
+        from rho import pofc  # pofc builds on this module's Scenario
+
+        link = pofc.link(registry, fl.location) if registry.get(f"{t}.pofc_physical", False) else None
+        s = pofc.apply(s, pofc.rules(registry, registry[f"{t}.pofc"]), link=link)
+    return s
 
 
 @dataclass(frozen=True)
