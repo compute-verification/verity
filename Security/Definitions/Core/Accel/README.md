@@ -29,7 +29,7 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 | HMMA with f16 accumulators | `mma.sync` `.f16` D | missing | f16 accumulators |
 | BMMA (b1 `.and.popc`, `.xor.popc`) | `mma.sync` `.b1` | coarse | `mma` b1 at `Open.b1` tensor units and an issue slot. `.xor.popc` is missing |
 | HGMMA, IGMMA, QGMMA, BGMMA (sm_90) | `wgmma.mma_async` | covered | `mma` at m = 64, A in registers or shared memory, B in shared memory, its operand words paying bank units (R2) |
-| QMMA.16832 (sm_120: e4m3, e5m2, e2m1) | `mma.sync` `kind::f8f6f4` | covered | `mma`. Same-format dots are pinned; mixed pairings are `Open.dot`. FP6 (e3m2, e2m3) is missing |
+| QMMA.16832 (sm_120: e4m3, e5m2, e2m1) | `mma.sync` `kind::f8f6f4` | covered | `mma`. The E4M3 and E5M2 same-format K32 dots are pinned at every accumulator (`Sm120.f8Pipeline`, RT-MODEL M8); E2M1 and the mixed pairings are `Open.dot`. FP6 (e3m2, e2m3) is missing |
 | OMMA.SF.16864 (sm_120: nvf4, mxf4) | `mma.sync` `kind::mxf4nvf4` `.block_scale` | covered | `mma` nvf4/mxf4. The dot is `Open.dot` (pinned in Python only) |
 | QMMA.SF (sm_120 `kind::mxf8f6f4`) | `mma.sync` `.block_scale` | missing | block-scaled FP8 and FP6 |
 | HMMA.SP, IMMA.SP, QMMA.SP, the sparse GMMA | `mma.sp`, `wgmma.mma_async.sp` | covered | `Op.mmaSp`: the kept pairs (each kept element of A with the element of B its 2-bit selector names) at the dense forms' tensor units a real product, so twice the logical rate; dots `Open.dotSp` under `AccelProductForm` |

@@ -46,10 +46,16 @@ shared memory, L2 and GDDR7; integer reductions as on the H200.
 
 **Captured dots** (`captured`): the integer path exactly (`models.BLACKWELL_SM120_S8_M16N8K32`, `_WRAP`,
 `_U8S8_M16N8K32`); `bf16` at `k = 16`, `TC.HOPPER_BF16_M16N8K16` (its docstring: `mma.sync.m16n8k16.bf16` on Hopper and
-on sm_120). `e4m3`, `e5m2` and `e2m1` with themselves at `k = 32` are `Open.dot`: their candidate is one group of 32
-on a 26-bit adder, floor −133 (`f8Pipeline`; `models.BLACKWELL_SM120_E4M3_M16N8K32`, `_E5M2_M16N8K32`,
-`_E2M1_M16N8K32`; LIT: one group of 32 at width 26), but PEARLC-MODEL found the atom to be the exact sum's FP32
-truncation in 99.96–99.997% of atoms only, so no capture pins it. The block-scaled FP4 dots
+on sm_120); `e4m3` and `e5m2` with themselves at `k = 32`, one group of 32 and the accumulator on a 26-bit truncating
+adder, floor −133 (`f8Pipeline`; `models.BLACKWELL_SM120_E4M3_M16N8K32`: `QMMA.16832.F32.E4M3.E4M3`, fitted by run
+r20260930-031244-ecbc on 6,434,816 elements, then fresh-seed captures under total semantics, specials included,
+r20260930-052000-e32d with 25,040,128 elements and r20260930-063457-5410 with 25,041,024, each 0 mismatches;
+`_E5M2_M16N8K32`: r20260930-031447-a5ad, 6,434,816 elements, and r20260930-063527-4d6b, 25,041,024, 0 mismatches; the
+families include random nonzero accumulators over 2^±20, cancellation and near-overflow accumulators, so the dot is
+pinned at every accumulator, RT-MODEL M8; PEARLC-MODEL's 99.96–99.997% compared the atom with the exact sum's FP32
+truncation, not with this pipeline). `e2m1` with itself at `k = 32` is `Open.dot`: its captures
+(`_E2M1_M16N8K32`, r20260930-071201-d356 and r20260930-073334-fdac, 0 mismatches on finite accumulators) left NaN and
+infinite accumulators record-only. The mixed FP8 pairs and the block-scaled FP4 dots
 (`models.BLACKWELL_SM120_NVF4`, `_MXF4`, captured in Python, a block-scaled adder this module doesn't transcribe) and
 every other dot are `Open.dot`.
 
@@ -121,8 +127,8 @@ def Avail : Op Store → Prop
   | .red s t n g => g.reduces ∧ ((s = .reg ∧ t ≠ .reg ∧ n ≤ 8) ∨ (s = .smem ∧ (t = .l2 ∨ t = .dram)))
   | .dmma sh => (sh.m = 8 ∧ sh.n = 8 ∧ sh.k = 4) ∨ (sh.m = 16 ∧ sh.n = 8 ∧ (sh.k = 4 ∨ sh.k = 8 ∨ sh.k = 16))
 
-/-- The candidate for sm_120's FP8 and `kind::f8f6f4` E2M1 atom (`models.BLACKWELL_SM120_E4M3_M16N8K32`, `_E5M2_`,
-`_E2M1_`), not pinned (`captured`). -/
+/-- sm_120's FP8 and `kind::f8f6f4` E2M1 atom (`models.BLACKWELL_SM120_E4M3_M16N8K32`, `_E5M2_`, `_E2M1_`): pinned for
+E4M3 and E5M2 (`captured`), E2M1's candidate. -/
 def f8Pipeline : TC.Pipeline := { groups := [32], width := 26, zeroExponent := -133 }
 
 /-- The dots the RTX PRO 6000's captures pin. The integer ones (`intCaptured`) ignore `k` and the shape, so the `k16`
@@ -132,7 +138,10 @@ def captured (fa fb : Fmt) (sat : Bool) (k : ℕ) : Option Dot :=
   match intCaptured fa fb sat with
   | some d => some d
   | none =>
-    if fa = .bf16 ∧ fb = .bf16 ∧ k = 16 then some (floatDot .bf16 TC.HOPPER_BF16_M16N8K16) else none
+    if fa = .bf16 ∧ fb = .bf16 ∧ k = 16 then some (floatDot .bf16 TC.HOPPER_BF16_M16N8K16)
+    else if fa = .e4m3 ∧ fb = .e4m3 ∧ k = 32 then some (floatDot .e4m3 f8Pipeline)
+    else if fa = .e5m2 ∧ fb = .e5m2 ∧ k = 32 then some (floatDot .e5m2 f8Pipeline)
+    else none
 
 /-- **The RTX PRO 6000's table.** A program's code is at most GDDR7's bytes over 16-byte instructions; the coarse
 device's rates are the tensor core's s8 MACs, the 188 · 128 FP32 lanes, and GDDR7's bits a tick rounded up

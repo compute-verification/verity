@@ -12,8 +12,8 @@ are statements to prove (in `Proofs/Core/Accel`), not assumptions: they follow f
   exact product with its exponent, nothing else of the pair (`ProductForm`). The integer path is exact on its whole
   range (`P1Int`); a float pipeline of adder width `w` is exact on integers whose magnitudes sum below
   `2^min(w, 24)` (`P1Float`), which covers the captured float atoms of each card (`H200.P1Captured`,
-  `Sm120.P1Captured`). Where no capture pins a float dot (the H200's FP8 at a nonzero accumulator, sm_120's FP8 and
-  E2M1), P1 is a property of the open parameter (`H200.P1Open`, `Sm120.P1Open`), measurable on the card. A wider
+  `Sm120.P1Captured`). Where no capture pins a float dot (the H200's FP8 at a nonzero accumulator, sm_120's E2M1),
+  P1 is a property of the open parameter (`H200.P1Open`, `Sm120.P1Open`), measurable on the card. A wider
   operand therefore takes several MMAs: that much is semantics, not an assumption. P1 is a statement of exactness,
   not of cost: the cheapest exact route for a wide operand is a minimum over the card's formats, block scales
   included (on sm_120 a block-scaled `nvf4` or `mxf4` MMA, at half an `s8` MAC's units, shifts base-8 digits through
@@ -85,18 +85,18 @@ def H200.P1Captured : Prop :=
 def H200.P1Open (x : Open) : Prop :=
   ∀ f ∈ [Fmt.e4m3, .e5m2], ∀ sat, P1Dot f 32 14 false (x.dot f f sat 32)
 
-/-- **P1 on the RTX PRO 6000's captured float atom**: BF16 on `TC.HOPPER_BF16_M16N8K16`, exact below `2^24`. -/
-def Sm120.P1Captured : Prop := P1Float .bf16 HOPPER_BF16_M16N8K16
+/-- **P1 on the RTX PRO 6000's captured float atoms**: BF16 on `TC.HOPPER_BF16_M16N8K16`, and the E4M3 and E5M2 K32
+atom on `Sm120.f8Pipeline` (one group of 32 at width 26, at every accumulator), each exact below `2^24`. -/
+def Sm120.P1Captured : Prop :=
+  P1Float .bf16 HOPPER_BF16_M16N8K16 ∧ P1Float .e4m3 Sm120.f8Pipeline ∧ P1Float .e5m2 Sm120.f8Pipeline
 
-/-- **P1 at the RTX PRO 6000's FP8 and E2M1 K32 atom**, a property of the open parameter `x`. LIT reports one group
-of 32 at width 26 (`Sm120.f8Pipeline`, exact below `2^24` if it were the dot), but PEARLC-MODEL found the atom the
-exact sum's FP32 truncation in 99.96–99.997% of atoms only, so the dot is not captured. -/
+/-- **P1 at the RTX PRO 6000's E2M1 K32 atom**, a property of the open parameter `x`: its captures left NaN and
+infinite accumulators record-only, so the dot is not pinned. -/
 def Sm120.P1Open (x : Open) : Prop :=
-  ∀ f ∈ [Fmt.e4m3, .e5m2, .e2m1], ∀ sat, P1Dot f 32 26 false (x.dot f f sat 32)
+  ∀ sat, P1Dot .e2m1 32 26 false (x.dot .e2m1 .e2m1 sat 32)
 
-/-- The candidate pipelines' P1, a statement about the semantics alone (`Sm120.f8Pipeline` is no card's dot). -/
-def P1Pipelines : Prop := P1Float .e4m3 Sm120.f8Pipeline ∧ P1Float .e5m2 Sm120.f8Pipeline ∧
-  P1Float .e2m1 Sm120.f8Pipeline
+/-- E2M1's candidate pipeline's P1, a statement about the semantics alone (no card's E2M1 dot is pinned to it). -/
+def P1Pipelines : Prop := P1Float .e2m1 Sm120.f8Pipeline
 
 /-- **P2, locality**: an MMA's output `o` changes only with row `o / n` of `A`, column `o % n` of `B` and accumulator
 `o`. -/
