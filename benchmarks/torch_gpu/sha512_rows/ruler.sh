@@ -4,13 +4,12 @@
 # is (SHA_ADD 0, SHA_ROT 0, SHA_ROLL 1), and sx<variant> with as_commit_gpu.cuh force-included, so its sha::compress is
 # sx::compress<V, ROLL>. Each build is checked bit for bit against reference.py before it is timed, as
 # benchmarks/hash/intpipe/sha512_baseline.sh does.
-# cwd = the source tree's root. Outside the leases: the builds (sm_90a on an H200), reference.py's full cases (the quick ones
-# linked apart), and each build's sha_rate SASS with its opcode and pipe counts (sass_count.py). Lease 1 (as many leases as
-# it takes): selftest and the quick check per build. Lease 2: ROUNDS rounds of `commit_gpu sha 20`, the builds interleaved,
-# nvidia-smi every 200 ms, then ncu's issue and pipe utilization of one sha_rate launch per build (its clocks left alone).
-# Lease 3: the full check of the fastest sx build. Clocks are read, never set; a lease waits its turn and holds the GPU at
-# most LEASE_MIN minutes. mix.jsonl: per build, the rate and clock beside the SASS pipe mix's bound (ALU/64,
-# IMAD slots/64 with IMAD.WIDE 2 and IMAD.HI 2.09, issue/128; SM-clocks a compression).
+# cwd = the source tree's root. Outside the leases: the builds (sm_90a on an H200), reference.py's full cases, and each
+# build's sha_rate SASS with its opcode and pipe counts (sass_count.py). Check leases (as many as it takes): selftest and the
+# full check per build. Timing lease: ROUNDS rounds of `commit_gpu sha 20`, the builds interleaved, nvidia-smi every 200 ms,
+# then ncu's issue and pipe utilization of one sha_rate launch per build (its clocks left alone). Clocks are read, never
+# set; a lease waits its turn and holds the GPU at most LEASE_MIN minutes. mix.jsonl: per build, the rate and clock beside
+# the SASS pipe mix's bound (ALU/64, IMAD slots/64 with IMAD.WIDE 2 and IMAD.HI 2.09, issue/128; SM-clocks a compression).
 #
 #   research run --on vy-dc-h200-3 --project verity --campaign hash --source . --cwd source --timeout 240m \
 #     --env GPU_LEASE_WHO=kernels-kcommit -- bash benchmarks/torch_gpu/sha512_rows/ruler.sh
@@ -52,9 +51,6 @@ builds=$!
 if [ "${LEASES:-1}" != 0 ]; then
   $PY $D/reference.py prepare "$W/cases" full > "$O/prepare.jsonl" 2> "$O/prepare.err"
   echo "prepare rc $?" >> "$O/rc.txt"
-  NQ=$($PY -c "import sys; sys.path.insert(0, '$D'); import reference; print(len(reference.cases('quick')))")
-  mkdir -p "$W/quick"
-  for i in $(seq 0 $((NQ - 1))); do d=$(printf 'c%03d' "$i"); ln -s "$W/cases/$d" "$W/quick/$d"; done
 fi
 wait $builds
 BUILT=""
@@ -119,8 +115,8 @@ while [ -n "${TODO// /}" ]; do
     for t in $TODO; do
       if [ -n "$left" ] || [ $((SECONDS - start)) -gt $((LEASE_MIN * 60 - 300)) ]; then left="$left $t"; continue; fi
       "$W/commit_gpu_$t" selftest >> "$O/selftest.jsonl"; s=$?
-      $PY $D/reference.py check "$W/commit_gpu_$t" "$W/quick" "$t" > "$O/check-quick-$t.jsonl" 2> "$O/check-quick-$t.err"; c=$?
-      echo "selftest $t rc $s; check quick $t rc $c ($((SECONDS - start)) s into the lease)" >> "$O/rc.txt"
+      $PY $D/reference.py check "$W/commit_gpu_$t" "$W/cases" "$t" > "$O/check-$t.jsonl" 2> "$O/check-$t.err"; c=$?
+      echo "selftest $t rc $s; check $t rc $c ($((SECONDS - start)) s into the lease)" >> "$O/rc.txt"
       [ $s = 0 ] && [ $c = 0 ] && echo "$t" >> "$W/timed"
     done
     echo "$left" > "$W/left"'
@@ -161,18 +157,5 @@ c.cuDeviceGet(ctypes.byref(d), 0); c.cuDeviceGetAttribute(ctypes.byref(n), 16, d
   done'
 echo "timing lease rc $?" >> "$O/rc.txt"
 mix
-
-FAST=$($PY -c "
-import json, sys
-rs = [json.loads(x) for x in open('$O/mix.jsonl') if x.startswith('{')]
-rs = [r for r in rs if r['build'].startswith('sx') and 'gcomp_per_s' in r]
-print(max(rs, key=lambda r: r['gcomp_per_s'])['build'] if rs else '')")
-export FAST
-echo "fastest sx build: $FAST" >> "$O/rc.txt"
-# shellcheck disable=SC2016
-[ -n "$FAST" ] && gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
-  $PY $D/reference.py check "$W/commit_gpu_$FAST" "$W/cases" "$FAST" > "$O/check-full-$FAST.jsonl" 2> "$O/check-full-$FAST.err"
-  echo "check full $FAST rc $?" >> "$O/rc.txt"'
-echo "full-check lease rc $?" >> "$O/rc.txt"
 cat "$O/rc.txt"
 for f in "$O"/check-*.jsonl; do [ -e "$f" ] && tail -1 "$f"; done
