@@ -12,6 +12,7 @@ namespace RecDeploy.ResLower
 open Flock
 open Claims (Msg)
 open FlockDeploy (Coin)
+open Claims.Recursion.VStarB
 
 /-- **`ResTie` at a piece's copy, at `Rows.resVRead`** (the `ResTie` conjunct `resPieces_computesAt` asks of a piece at
 key `(jj, o, g, 0)`, instance `o + g`): `resTie_site`, with `VVTie` from `vvTie_dense`. -/
