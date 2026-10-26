@@ -20,7 +20,7 @@ linear, QK^T and PV coordinate is one unit (`ScaledMmS8Coordinate_v1{K}`, no K-s
 | Piece | Here now | Replaced by |
 |---|---|---|
 | Weights | ALLP-IFACE's generator and weights stream (`verity_torch_loop.weights`, CMP-95 item 1); the record carries the registration digest under the test salt key for small shapes | the prover's salt key's digest |
-| Store and decode call | `store.py`: P2 v4 (`p2-16448/v4`) rows over the weights stream, the P2 reference decode on the CPU, or kernels' `Stage.decode` with `--stage-lib`; `--store generator` regenerates instead | memory-accounting's layout and decode call (CMP-95 item 2), MEM-69's store on the card |
+| Store and decode call | `store.py`: P2 v4 (`p2-16448/v4`) rows over the weights stream, the P2 reference decode on the CPU, or kernels' `Stage.decode` with `--stage-lib`; `--store generator` regenerates instead, over `--workers` processes | memory-accounting's layout and decode call (CMP-95 item 2), MEM-69's store on the card |
 | W8A8 linears | `ops.s8_linear`: `torch._int_mm` on CUDA (int64 matmul on the CPU), then `bf16((f32(acc) · sx) · sw)` | kernels' KP2-S8 |
 | Row ops | `ops.py`: the plan's row functions; sums sequential (on the host), division and sqrt correctly rounded through f64 | circuits' row-op kernels |
 | Attention | `attention.py`: `GemmCoordinate_v2{GEMM_HOPPER}` and the MUFU ex2 table, numpy on the CPU | KP2-ATTN |
@@ -38,6 +38,7 @@ independent CPU decode step; the suite holds the driver's rows equal to `cpu_ste
 uv run python benchmarks/e2e_h200/run.py --out /tmp/e2e --commit host           # the small shape, CPU, generator store
 uv run python benchmarks/e2e_h200/run.py --out /tmp/e2e --shape tiny --store p2-encode --workers 8   # the tiny shape's P2 store (~1 s a block)
 uv run python benchmarks/e2e_h200/run.py --out /tmp/e2e --tamper l1.wup   # exits 3: replay finds it
+uv run python benchmarks/e2e_h200/run.py --out OUT --shape h200 --device cuda --commit device --workers "$(nproc)"   # frozen, generator store
 uv run python benchmarks/e2e_h200/run.py --out OUT --shape h200 --seed demo --device cuda --commit device --store p2:C.bin --stage-lib DIR
 ~~~
 
