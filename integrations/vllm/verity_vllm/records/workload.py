@@ -112,6 +112,9 @@ class WorkloadSampling:
     # stops before the cap: no writer writes them; `config.done_source_refusal` refuses them on a row of record
     stop_token_ids: Sequence[Any] | None
     stop: Sequence[Any] | str | None
+    # the EOS set pinned into the workload: no writer writes it; GP-01's stop rule takes it as the declaration of record, and a
+    # checkpoint given beside it must agree (`pipeline.global_program.stop_rule`)
+    eos_token_ids: tuple[int, ...] | None = None
 
     @classmethod
     def of(cls, doc: Mapping[str, Any], where: str) -> WorkloadSampling:
@@ -124,11 +127,14 @@ class WorkloadSampling:
                    top_p=optional(doc, "top_p", where, _NUMBER, "sampling.top_p"),
                    top_k=optional(doc, "top_k", where, int, "sampling.top_k"),
                    stop_token_ids=optional(doc, "stop_token_ids", where, (list, tuple), "sampling.stop_token_ids"),
-                   stop=optional(doc, "stop", where, (list, tuple, str), "sampling.stop"))
+                   stop=optional(doc, "stop", where, (list, tuple, str), "sampling.stop"),
+                   eos_token_ids=_ints(optional(doc, "eos_token_ids", where, (list, tuple), "sampling.eos_token_ids"),
+                                       where, "sampling.eos_token_ids"))
 
     def dump(self) -> dict[str, Any]:
         return _put({"variant": self.variant, "seed": self.seed}, n=self.n, ignore_eos=self.ignore_eos, temperature=self.temperature,
-                    top_p=self.top_p, top_k=self.top_k, stop_token_ids=self.stop_token_ids, stop=self.stop)
+                    top_p=self.top_p, top_k=self.top_k, stop_token_ids=self.stop_token_ids, stop=self.stop,
+                    eos_token_ids=None if self.eos_token_ids is None else list(self.eos_token_ids))
 
 
 @dataclass(frozen=True)
