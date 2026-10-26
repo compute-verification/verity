@@ -21,7 +21,7 @@ verity_vllm/
   program/            Program            registry/ frontend/ lifting/ verity/ml/kernels/ model.py workload.py compact.py dtypes.py
   query/              verification query module_body.py word.py cross_call.py required.py program_view.py manifest/ compare.py
   correspondence/     runtime corresp.   runtime.py reader_for_*.py resolve*.py capture_identities.py
-  observe/            value observation  observer.py events.py log.py storage.py contract.py runtime_tree.py capture.py pinned.py fold/
+  observe/            value observation  observer.py events.py log.py storage.py contract.py runtime_tree.py capture.py pinned.py kernel_trace.py fold/
   acquire/            value acquisition  plan.py install.py stage.py gate.py compiled.py sources/ *_tap_src/
   protocol_options/   protocol options   __init__.py (selector, composition) interface.py sampled_proofs.py pous.py pouw.py
   commit/             commitment         merkle.py hashing.py identity.py binding.py padding_steps.py hidden_*.py committer/
@@ -84,7 +84,8 @@ verification policy, commitment positions, requiredness, verdicts.
 
 **`observe/`** implements *value observation* (the Match-side capture): `observer.py` (the TorchDispatchMode), `events.py` /
 `log.py` / `storage.py`, `contract.py` (the one observation contract), `triton_adapter.py`, `runtime_tree.py`, `capture.py`
-(the step observer and run header; `pinned.py` its host buffers), and `fold/` (raw log -> Program: `fold.py`, `tree.py`, `memory.py`, `views.py`, `resolver.py`,
+(the step observer and run header; `pinned.py` its host buffers), `kernel_trace.py` (a Kineto trace's device kernels, which the
+census and each TP rank read), and `fold/` (raw log -> Program: `fold.py`, `tree.py`, `memory.py`, `views.py`, `resolver.py`,
 `patterns/` (one module per kernel family, the TP collectives included), `patterns_prefix.py`).  Never: commit, decide what is
 required, name a model.
 
