@@ -90,6 +90,16 @@ def test_a_marked_step_on_graphs_marks_each_add() -> None:
         assert marks[0][1].elapsed_time(marks[-1][1]) >= 0
 
 
+def test_a_plan_on_some_sms_gives_the_reference_s_roots_on_graphs() -> None:
+    """Graphs captured on a green context's stream, their leaf grid sized to its SMs, replayed under a second key."""
+    layout = S.h200_layout(layers=3)
+    plan = G.Plan(CTX, layout, sms=16)
+    for step, key in ((6, KEY), (7, bytes(range(32)))):
+        out = S.random_outputs(layout, 5, np.random.default_rng(step))
+        assert G.commit(plan, step, key, _cuda(out), 5, graphs=True) == S.commit(CTX, layout, step, key, out, 5)
+    assert {k[-1] for k in plan._graphs} == {plan.sms}
+
+
 def test_a_plan_has_one_step_on_graphs_open() -> None:
     layout = S.edge_layout()
     plan = G.Plan(CTX, layout)
