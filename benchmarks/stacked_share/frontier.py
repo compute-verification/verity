@@ -4,8 +4,11 @@ property/v1 units (`verity.ml.circuits.stacking`) by class and by role, with the
 
 A model is composed from atoms: the exact-int8 profile's Definitions (vLLM's registry: `int8_exact`, `moe`, `b1`, `act`) bound
 at the model's statics, whose units `atoms.py` counts (measured), and a few operations the registry has no Definition for
-(linear-attention state updates, a depthwise conv, bias adds, gate products, combine adds: ``model:`` atoms, one rounding or
-one compare-select an operation, modeled). Each term of a composition is one of them times its instances a token, under a
+(linear-attention state updates, a depthwise conv, bias adds, gate products, combine adds, DSA's indexer scores, top-k and
+row selection: ``model:`` atoms, one rounding, compare-select or gather unit an operation, modeled). DSA's served circuit
+(`verity_vllm.program.registry.dsa_topk`: a Waksman network over the whole history and a top-k check of N f32 scores in one
+primitive) is refused by property/v1 (`Xor3x16`, `DsaTopKOrderCheck` unlisted), so its row selection is costed as gathers,
+each selected row's words and its index bits. Each term of a composition is one of them times its instances a token, under a
 role; `compose` builds them, `evaluate` sums them, and `check_anchor` holds the composition of Llama-3.1-8B to the units the
 int8 census measured on its whole Program (art:dc25549e).
 
@@ -77,10 +80,11 @@ EMB_DYN_TABLE = "@table-dynamic"
 MODELED: dict[str, dict[str, int]] = {
     "model:fp": {"roundings": 1},
     "model:cs": {"compare_select": 1},
+    "model:gather": {"gathers": 1},
 }
 #: a modeled MoE dispatch reads one expert index a slot: ceil(log2(E + 1)) gather bits (property/v1's ``range`` kind), when the
 #: registry's `MoeExpertRow_v1` isn't counted
-FP, CS = "model:fp", "model:cs"
+FP, CS, GA = "model:fp", "model:cs", "model:gather"
 
 
 def key(family: str, **statics: Any) -> str:
@@ -209,8 +213,62 @@ def attention_gqa(b: Build, m: Mapping[str, Any], phase: str, kv: str, S: int, P
                 "cut_bits": {"residual": 16 * H, "write inputs": 16 * stored, "stored, at write": 8 * stored}})
 
 
+def indexer_layers(m: Mapping[str, Any]) -> int:
+    """The layers that build a DSA indexer (vLLM's DeepseekV32 attention: layer l skips when max(l - offset + 1, 0) % freq != 0
+    and reuses the last indexer's top-k); 0 without DSA."""
+    d = m.get("dsa")
+    if not d:
+        return 0
+    freq, off = d.get("topk_freq", 1), d.get("skip_offset", 2)
+    return sum(max(i - off + 1, 0) % freq == 0 for i in range(m["layers"]))
+
+
+def dsa_keys(m: Mapping[str, Any], phase: str, S: int, P: int) -> dict[str, Fraction]:
+    """A token's DSA counts, the mean over a prompt's positions in prefill: ``soft`` the keys its softmax reads (min(n, top-k)
+    of n), ``rows`` the rows it selects (top-k where n > top-k), ``bits`` a selected row's index bits (property/v1's ``range``
+    kind over n rows), ``scored`` the keys the indexer scores (n) and ``ranked`` those it ranks (n where n > top-k)."""
+    K = m["dsa"]["topk"]
+    ns = [S] if phase == "decode" else range(1, P + 1)
+    c = Fraction(1, len(ns))
+    return {"soft": c * sum(min(n, K) for n in ns), "rows": c * sum(K for n in ns if n > K),
+            "bits": c * sum(K * n.bit_length() for n in ns if n > K), "scored": c * sum(ns), "ranked": c * sum(n for n in ns if n > K)}
+
+
+def attention_dsa_indexer(b: Build, m: Mapping[str, Any], phase: str, S: int, P: int, dyn: list) -> None:
+    """The lightning indexer of a DSA layer, in the exact-int8 profile: index q from q_c, index k and the head weights from the
+    residual (their rows' quantizations shared), k's LayerNorm and both RoPEs, int8 q and k (k stored), then a key's score
+    sum_h w_h ReLU(q_h k) (the dots the s8 family's, a ReLU, a weight product and an accumulate a head-key, the key's scale a
+    key: modeled) and the top-k past top-k keys (modeled: a threshold compare and its tie rule a key). Served, q and k are
+    FP8 (`DsaMqaLogits`), which property/v1 refuses past B = 128."""
+    H, ql, rope = m["H"], m["q_lora"], m["rope"]
+    Hi, di = m["dsa"]["heads"], m["dsa"]["dim"]
+    r = Fraction(indexer_layers(m), m["layers"])
+    k = dsa_keys(m, phase, S, P)
+    keep, b.mult = b.mult, b.mult * r
+    b.linear(ql, Hi * di, quant=False)
+    b.linear(H, di, quant=False)
+    b.linear(H, Hi, quant=False)
+    b.add("norm", NT(di, 1e-06))
+    b.add("rope", ROPE(Hi, rope))
+    b.add("rope", ROPE(1, rope))
+    b.add("requantization", RQ(di), Hi)
+    b.add("KV write", RQ(di))
+    b.add("DSA indexer", CS, Hi * k["scored"])
+    b.add("DSA indexer", FP, 2 * Hi * k["scored"] + k["scored"])
+    b.add("DSA top-k", CS, 2 * k["ranked"])
+    b.products("indexer q k^T", Hi * di * k["scored"])
+    b.products("indexer weights", Hi * k["scored"])
+    dyn.append({"kind": "DSA indexer key", "layers": b.mult, "values_per_token_layer": di,
+                "bytes_per_token_layer": {"as built": di + 4, "at write": di + 4}, "state_bytes_per_request_layer": 0,
+                "write_path": (f"residual ({H}) -> wk ({H} -> {di}) -> LayerNorm -> RoPE on {rope} of {di} -> int8 under its "
+                               f"f32 scale (served: e4m3 under its f32 scale) ({di} values + 4 B)"),
+                "cut_bits": {"residual": 16 * H, "write inputs": 16 * di, "stored, at write": 8 * di + 32}})
+    b.mult = keep
+
+
 def attention_mla(b: Build, m: Mapping[str, Any], phase: str, kv: str, S: int, P: int, dyn: list) -> None:
     H, Hq, ql, kl, nope, rope, vh, eps = (m[k] for k in ("H", "heads", "q_lora", "kv_lora", "nope", "rope", "v_head", "eps"))
+    dsa = "dsa" in m
     keys = S if phase == "decode" else Fraction(P + 1, 2)
     b.add("norm", NF(H, eps))
     b.linear(H, ql + kl + rope)
@@ -219,13 +277,19 @@ def attention_mla(b: Build, m: Mapping[str, Any], phase: str, kv: str, S: int, P
     b.linear(ql, Hq * (nope + rope))
     b.add("rope", ROPE(Hq, rope))
     b.add("rope", ROPE(1, rope))
-    if phase == "decode":
+    if dsa:
+        attention_dsa_indexer(b, m, phase, S, P, dyn)
+        k = dsa_keys(m, phase, S, P)
+        keys = k["soft"]
+        b.add("DSA selection", GA, k["rows"] * (kl + rope) + k["bits"])
+    if phase == "decode" or dsa:
         b.linear(nope, kl, n=Hq)
         b.add("attention", ROW(kl + rope), Hq, s=keys)
         b.add("attention", ATTN_OUT, -Hq * rope)
         if kv == "as built":
-            b.add("KV requant at read", KVQ(kl), 1, s=S)
-            b.add("KV requant at read", SQ(rope), S)
+            read, w = (keys, 1) if phase == "decode" else (P, Fraction(1, P))
+            b.add("KV requant at read", KVQ(kl), w, s=read)
+            b.add("KV requant at read", SQ(rope), w * read)
         else:
             b.add("KV write", SQ(kl + rope), 1)
         b.linear(kl, vh, n=Hq)
@@ -400,7 +464,11 @@ def compose(m: Mapping[str, Any], phase: str, kv: str, S: int, P: int, *, anchor
         if d["kind"] in merged:
             merged[d["kind"]]["layers"] += d["layers"]
         else:
-            merged[d["kind"]] = d
+            merged[d["kind"]] = dict(d)
+    for d in merged.values():
+        if Fraction(d["layers"]).denominator != 1:
+            raise AssertionError(f"{d['kind']}: {d['layers']} layers")
+        d["layers"] = int(d["layers"])
     return {"terms": b.terms, "macs": b.macs, "dd": dict(b.dd), "dyn": list(merged.values())}
 
 
@@ -469,6 +537,7 @@ KINDS = {
 #: the roles a token's units are grouped by in the markdown's shares (the last takes every other role)
 SHARES = (("softmax attention", ("attention",)), ("requantization and linear epilogues", ("requantization", "linear epilogue")),
           ("KV quantization", ("KV requant at read", "KV write")), ("linear-attention state", ("state update", "conv")),
+          ("sparse attention: indexer, top-k, selection", ("DSA indexer", "DSA top-k", "DSA selection")),
           ("MoE routing and dispatch", ("MoE routing", "MoE dispatch")), ("other", ()))
 
 
@@ -484,16 +553,16 @@ SOFTMAX_ROUNDINGS = r"LowByte|LutIndex|I32Sub"
 
 
 def kinds(prim: Mapping[str, Fraction]) -> dict[str, dict[str, Fraction]]:
-    """Units by class and operation kind, from ``role|primitive|class``; MoE routing's and the attention's compare-selects
-    apart (the routing's top-k, the softmax's max), and the softmax's own roundings apart from the requantizations."""
+    """Units by class and operation kind, from ``role|primitive|class``; the top-k's (MoE routing's, DSA's) and the attention's
+    compare-selects apart (the softmax's max), and the softmax's own roundings apart from the requantizations."""
     out: dict[str, Counter] = {}
     for k, v in prim.items():
         role, p, c = k.split("|")
         kind = next(name for name, pat in KINDS[c] if re.search(pat, p))
         if c == "roundings" and role == "attention" and re.search(SOFTMAX_ROUNDINGS, p):
             kind = "softmax: max subtract, LUT index, low byte"
-        elif c == "compare_select" and role == "MoE routing":
-            kind = "MoE routing (top-k)"
+        elif c == "compare_select" and role in ("MoE routing", "DSA top-k"):
+            kind = "top-k (MoE routing, DSA)"
         elif c == "compare_select" and role == "attention" and kind in ("select", "compare"):
             kind = "softmax max"
         elif c == "compare_select" and role == "sampling":
@@ -563,6 +632,9 @@ def params(m: Mapping[str, Any]) -> dict[str, int]:
             f = H * mlp["experts"] + e + 3 * H * mlp.get("shared", 0) * mlp.get("shared_I", 0)
         total += n * (a + f)
         experts += n * e
+    if m.get("dsa"):
+        d = m["dsa"]
+        total += indexer_layers(m) * (m["q_lora"] * d["heads"] * d["dim"] + H * d["dim"] + H * d["heads"])
     head = 0 if m.get("tied") else V * H
     return {"total": total + V * H + head, "experts": experts, "lm_head": V * H, "embedding": V * H}
 
@@ -729,7 +801,7 @@ def markdown(t: Mapping[str, Any]) -> str:
     lines.append("")
     lines += ["**Honest operations a token, KV at write** (decode at S, prefill at P; MACs and units a token).", "",
               "| model | phase | const-weight MACs | data x data MACs | units | roundings (requant) | softmax roundings | division "
-              "| rsqrt | compare-select | of which top-k routing | of which softmax max | gathers (exp table / index bits) "
+              "| rsqrt | compare-select | of which top-k (MoE routing, DSA) | of which softmax max | gathers (exp table / index bits) "
               "| modeled share |",
               "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for name, r in t["models"].items():
@@ -742,7 +814,7 @@ def markdown(t: Mapping[str, Any]) -> str:
                 f"| {name} | {phase} | {g(x['macs'])} | {g(sum(x['dd'].values()))} | {g(u['total'])} | "
                 f"{g(u['by_class'].get('roundings', 0))} ({g(rd.get('requantization: round or convert', 0))}) | "
                 f"{g(rd.get('softmax: max subtract, LUT index, low byte', 0))} | {g(rd.get('division', 0))} | {g(rd.get('rsqrt / sqrt', 0))} | {g(u['by_class'].get('compare_select', 0))} | "
-                f"{g(cs.get('MoE routing (top-k)', 0))} | {g(cs.get('softmax max', 0))} | "
+                f"{g(cs.get('top-k (MoE routing, DSA)', 0))} | {g(cs.get('softmax max', 0))} | "
                 f"{g(ga.get('exp table', 0))} / {g(ga.get('index bits', 0))} | {mod:.1%} |")
     lines += ["", "**Writes and cuts** (bits a token-layer; the narrowest cut in front of each write).", "",
               "| model | dynamic memory | layers | write path | residual | write inputs | stored at write | narrowest |",

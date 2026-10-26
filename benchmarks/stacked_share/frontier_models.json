@@ -58,6 +58,15 @@
            "router": "sigmoid", "scale": 2.5, "n_group": 8, "topk_group": 4},
    "vocab": 129280, "eps": 1e-06, "tp": 8, "weights": "fp8 e4m3, 128x128 blocks"
   },
+  "DeepSeek-V3.2-Exp": {
+   "hf": "deepseek-ai/DeepSeek-V3.2-Exp", "revision": "194c67e1",
+   "source": "HF config.json (DeepseekV32ForCausalLM): V3's shapes and a DSA indexer in every layer (no index_topk_freq); the MTP layer is left out",
+   "arch": "mla", "H": 7168, "layers": 61, "heads": 128, "q_lora": 1536, "kv_lora": 512, "nope": 128, "rope": 64, "v_head": 128,
+   "dsa": {"heads": 64, "dim": 128, "topk": 2048},
+   "mlp": {"dense": 18432, "first_dense": 3, "experts": 256, "topk": 8, "expert_I": 2048, "shared": 1, "shared_I": 2048,
+           "router": "sigmoid", "scale": 2.5, "n_group": 8, "topk_group": 4},
+   "vocab": 129280, "eps": 1e-06, "tp": 8, "weights": "fp8 e4m3, 128x128 blocks"
+  },
   "Kimi-K2": {
    "hf": "moonshotai/Kimi-K2-Instruct", "revision": "fd1984e2", "source": "HF config.json (DeepseekV3ForCausalLM)",
    "arch": "mla", "H": 7168, "layers": 61, "heads": 64, "q_lora": 1536, "kv_lora": 512, "nope": 128, "rope": 64, "v_head": 128,
@@ -87,6 +96,15 @@
    "mlp": {"dense": 12288, "first_dense": 3, "experts": 160, "topk": 8, "expert_I": 1536, "shared": 1, "shared_I": 1536,
            "router": "sigmoid", "scale": 2.5, "n_group": 1, "topk_group": 1},
    "vocab": 151552, "eps": 1e-05, "tp": 8, "weights": "bf16"
+  },
+  "GLM-5.3": {
+   "hf": "zai-org/GLM-5.3", "revision": "aca966e4",
+   "source": "the checkpoint's config.json as integrations/vllm pins it (verity_vllm/engine/profiles/hf_configs/GLM53.config.json, GlmMoeDsaForCausalLM = DeepseekV32ForCausalLM): an indexer where max(l - 3 + 1, 0) % 4 == 0 (index_skip_topk_offset 3, index_topk_freq 4), the rest reusing its top-k; the MTP layer is left out",
+   "arch": "mla", "H": 6144, "layers": 78, "heads": 64, "q_lora": 2048, "kv_lora": 512, "nope": 192, "rope": 64, "v_head": 256,
+   "dsa": {"heads": 32, "dim": 128, "topk": 2048, "topk_freq": 4, "skip_offset": 3},
+   "mlp": {"dense": 12288, "first_dense": 3, "experts": 256, "topk": 8, "expert_I": 2048, "shared": 1, "shared_I": 2048,
+           "router": "sigmoid", "scale": 2.5, "n_group": 1, "topk_group": 1},
+   "vocab": 154880, "eps": 1e-05, "tp": 8, "weights": "fp8 e4m3, 128x128 blocks"
   },
   "MiniMax-M1": {
    "hf": "MiniMaxAI/MiniMax-M1-80k", "revision": "8d1494b1", "source": "HF config.json (attn_type_list: 1 at every 8th layer)",

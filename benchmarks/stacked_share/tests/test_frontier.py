@@ -58,10 +58,11 @@ def test_the_8b_composition_is_the_census_programs():
         F.check_anchor(SPEC["models"], atoms, SPEC["anchor"], S, P)
 
 
-#: published total parameters (the model cards; MTP layers left out) and the layers' kinds
+#: published total parameters (the model cards; MTP layers left out; GLM-5.3: its block-FP8 checkpoint's bytes, about one a
+#: parameter, integrations/vllm/manifests/checkpoints.json) and the layers' kinds
 PUBLISHED = {"Llama-3.1-8B": 8.03e9, "Llama-3.1-70B": 70.6e9, "Qwen3-0.6B": 0.6e9, "Qwen3-8B": 8.2e9,
-             "DeepSeek-V3/R1/V3.1": 671e9, "Kimi-K2": 1.04e12, "Qwen3-235B-A22B": 235e9, "Qwen3-Next-80B-A3B": 80e9,
-             "GLM-4.5/4.6": 355e9, "MiniMax-M1": 456e9, "MiniMax-M2": 230e9}
+             "DeepSeek-V3/R1/V3.1": 671e9, "DeepSeek-V3.2-Exp": 671e9, "Kimi-K2": 1.04e12, "Qwen3-235B-A22B": 235e9,
+             "Qwen3-Next-80B-A3B": 80e9, "GLM-4.5/4.6": 355e9, "GLM-5.3": 755.7e9, "MiniMax-M1": 456e9, "MiniMax-M2": 230e9}
 
 
 @pytest.mark.parametrize("name", list(PUBLISHED))
@@ -77,6 +78,32 @@ def test_layer_kinds():
     assert kinds["Qwen3-Next-80B-A3B"] == [("full", "moe", 12), ("linear", "moe", 36)]
     assert kinds["MiniMax-M1"] == [("full", "moe", 10), ("linear", "moe", 70)]
     assert kinds["Llama-3.1-8B"] == [("full", "dense", 32)]
+    assert kinds["GLM-5.3"] == [("full", "dense", 3), ("full", "moe", 75)]
+
+
+def test_sparse_attention():
+    """DSA: the softmax over the top-k keys, each selected latent row a gather of its words and its index bits, the indexer in
+    its layers (all of V3.2's, 21 of GLM-5.3's 78: 0-2, then every 4th from 6) scoring every key, and its key in the pool."""
+    ms = SPEC["models"]
+    v32, glm = ms["DeepSeek-V3.2-Exp"], ms["GLM-5.3"]
+    assert [F.indexer_layers(m) for m in (v32, glm, ms["DeepSeek-V3/R1/V3.1"])] == [61, 21, 0]
+
+    def role(c, r):
+        return sum(t.n for t in c["terms"] if t.role == r)
+
+    c = F.compose(v32, "decode", "at write", S, P)
+    assert {t.s for t in c["terms"] if t.role == "attention" and t.s is not None} == {2048}
+    assert role(c, "DSA selection") == 61 * 2048 * (576 + S.bit_length())
+    assert sum(t.n for t in c["terms"] if t.role == "DSA indexer" and t.atom == F.CS) == 61 * 64 * S
+    assert role(c, "DSA top-k") == 61 * 2 * S
+    assert c["dd"]["QK^T"] == 61 * 128 * 576 * 2048 and c["dd"]["indexer q k^T"] == 61 * 64 * 128 * S
+    assert F.dynamic_bytes(c["dyn"], "at write", S)["per_token"] == 61 * 576 + 61 * (128 + 4)
+    g = F.compose(glm, "decode", "at write", S, P)
+    assert {d["kind"]: d["layers"] for d in g["dyn"]} == {"MLA latent c_KV and the RoPE key": 78, "DSA indexer key": 21}
+    assert sum(t.n for t in g["terms"] if t.role == "DSA indexer" and t.atom == F.CS) == 21 * 32 * S
+    k = F.dsa_keys(glm, "prefill", S, P)
+    assert k["soft"] == Fraction(2048 * 2049 // 2 + (P - 2048) * 2048, P) and k["rows"] == Fraction((P - 2048) * 2048, P)
+    assert F.dsa_keys(glm, "decode", 2048, P)["rows"] == 0
 
 
 def synthetic(key: str) -> dict:
@@ -141,7 +168,7 @@ def test_modeled_terms_and_kinds():
     assert blocked == 70 * 64 * (3 * 128 * 128 // 256 + 256 + 2 * 128 + 3 * 128)
     k = F.kinds({"MoE routing|F32GtStrict_v1|compare_select": Fraction(5), "attention|SelectI32_v1|compare_select": Fraction(2),
                  "requantization|F32Fmaxf_v1|compare_select": Fraction(3), "norm|F32Div_v1|roundings": Fraction(1)})
-    assert k == {"compare_select": {"MoE routing (top-k)": 5, "softmax max": 2, "max, min, clamp": 3}, "roundings": {"division": 1}}
+    assert k == {"compare_select": {"top-k (MoE routing, DSA)": 5, "softmax max": 2, "max, min, clamp": 3}, "roundings": {"division": 1}}
     k = F.kinds({"attention|LutIndex_v1|roundings": Fraction(1), "attention|S32LowByte_v1|roundings": Fraction(1),
                  "requantization|F32Rint_v1|roundings": Fraction(4)})
     assert k == {"roundings": {"softmax: max subtract, LUT index, low byte": 2, "requantization: round or convert": 4}}

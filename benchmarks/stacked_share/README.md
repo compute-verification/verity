@@ -57,16 +57,17 @@ a throughput int8 serving hasn't been measured at.
 
 ## Frontier models
 
-The same law for models no Program has been built for (DeepSeek-V3/R1, Kimi K2, Qwen3-235B-A22B, Qwen3-Next, GLM-4.5/4.6,
-MiniMax-M1/M2, with the Llama-3.1 baseline), each costed as the exact-int8 profile would serve it:
+The same law for models no Program has been built for (DeepSeek-V3/R1, DeepSeek-V3.2-Exp, Kimi K2, Qwen3-235B-A22B,
+Qwen3-Next, GLM-4.5/4.6, GLM-5.3, MiniMax-M1/M2, with the Llama-3.1 baseline), each costed as the exact-int8 profile would
+serve it:
 
 - `frontier_models.json`: each model's shapes from its published config (revision recorded), the reference node and workload,
   and the 8B census it is anchored to.
 - `atoms.py --out atoms.json` counts each Definition a composition reads (vLLM's registry, bound at the model's statics) by
   property/v1, and fits the attention row and KV window exactly in S. It runs where `verity_vllm` imports, without torch.
 - `frontier.py --atoms atoms.json --out frontier.json` composes a decode token-step and a prefill token per model and layer
-  kind (GQA, MLA, Gated DeltaNet, lightning attention, dense or MoE FFN) from the atoms, with the KV quantized as built or once
-  at its write. It refuses atoms that don't reproduce the census's measured 8B token units. It gives:
+  kind (GQA, MLA with or without DSA, Gated DeltaNet, lightning attention, dense or MoE FFN) from the atoms, with the KV
+  quantized as built or once at its write. It refuses atoms that don't reproduce the census's measured 8B token units. It gives:
   - the units and honest operations by class;
   - the dynamic memory's kind, bytes, write path and cut widths;
   - the roofline serving model's R_cap, M_dyn and turnover;
@@ -80,5 +81,6 @@ MiniMax-M1/M2, with the Llama-3.1 baseline), each costed as the exact-int8 profi
 | units per atom | measured: property/v1 on the registry's Definitions at the model's statics |
 | units per token | modeled: the atoms composed per layer, checked exact against the 8B census |
 | linear attention, DeltaNet and routed-weight arithmetic | modeled: one rounding per FP output (`MODELED`) |
+| DSA's indexer scores, top-k and row selection | modeled: a unit per operation (`MODELED`); the served Waksman form is refused by property/v1 |
 | shapes, experts, KV and state sizes | config: each model's `config.json` at its recorded revision |
 | R_cap, batch, t_step | modeled: roofline on the reference node (`node` in `frontier_models.json`) |
