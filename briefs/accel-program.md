@@ -3,6 +3,58 @@
 Program brief, compute-research lane (coordinator bc-ebc09a9a, handle @compute-research). Written 26 Oct 00:50Z. Every ACCEL
 worker reads all of it, then does its own section. Rules: `briefs/brief-rules.md` on this branch (cloud overrides first).
 
+## 0. The target end state (agreed with Daniel, 26 Oct 02:15Z)
+
+The deliverable is one theorem in Lean, with nothing else in the lock. Every workstream works toward it.
+
+**The trust base (R-ACCEL-4):**
+
+1. **The accelerator model at θ.** (G1) capacity, (G2) rate on every resource including issue, and the instruction set's
+   documented exact semantics, from which P1 and P2 follow. θ is at most the data sheet's, cross-checked by
+   microbenchmarks with run ids.
+2. **Standard cryptography.** SHA-512 collision resistance, and C-Flock sound and zero-knowledge. SHA-512 as a random
+   oracle is allowed only where a result names it (R-ACCEL-3).
+3. **Live coins and the auditor's devices.**
+
+Nothing else: no circuit class, no "this algorithm is optimal", no empirical premise. ASSUMPTION-AUDIT's defect list is
+empty.
+
+**The guarantee (R-ACCEL-1).** For a fleet over a monitoring period \(T\), with \(C\) the fleet's capacity, and for
+every prover strategy:
+\[\Pr\big[\text{accepted} \wedge W_{\text{cred}} + W_{\text{other}} > \mathrm{OPT}_{\text{honest}} + \varepsilon C\big] \le \delta,\]
+\[\varepsilon = \varepsilon_{\text{model}}(\theta) + \varepsilon_{\text{sample}}(\delta,k) + \varepsilon_{\text{net}}(K).\]
+It is proved for the deployed protocol's Lean verifier (tied to the code by difftest) and instantiated at the H200's
+and the RTX PRO 6000's θ.
+
+**The adversary resource model: the world's compute.** The source is Daniel's 3-pager, "Computational integrity via
+sampled zero-knowledge proofs" (Notion `3e6399515d9e80bb86a6fea6920829ec`), and its figure script; the census entry is
+coming. The figures:
+
+- all inference worldwide over a one-year horizon (to Sept 2027): \(R \approx 2.1\times10^{16}\) requests;
+- DeepSeek-V4-Pro (49B active parameters), with about 4,500 tokens per request at 2 FLOP per active parameter per
+  token, so about \(4.4\times10^{14}\) FLOP per request;
+- **total about \(9.4\times10^{30}\) FP8 FLOP a year**, about \(1.8\times10^{29}\) a week;
+- 1 H100-hour is \(7.1\times10^{18}\) FLOP (FP8 dense peak).
+
+The base stated in the script is 30M H100-equivalents at \(2\times10^{15}\) FLOP/s, growing 3.3× a year. Every
+result is stated against this model, for a week, a month and a year (rule L).
+
+**Targets:**
+
+| Quantity | Target |
+|---|---|
+| \(\varepsilon\) | ≤ 1% at \(\delta = 10^{-6}\), also reported at 1% |
+| \(\gamma\) (honest serving overhead) | ≤ 10 |
+| Coverage | ≥ 95% of the served workload's matmul MACs, static and dynamic (Daniel: "that's the goal for now") |
+| Usefulness | perplexity < 5% for now, optimized last (Daniel) |
+| Proving cost | not a constraint (R-ACCEL-5) |
+
+**Demonstrated, beside the proof:**
+
+- the served kernel meets γ, coverage and perplexity on real H200s;
+- θ holds on the cards;
+- every alternative algorithm we can build, priced in the model, loses to honest.
+
 ## 1. The goal (Daniel, 25 Oct; quotes are his)
 
 "We need to develop an elegant, minimalistic accelerator model and we need to prove the security of Dither under it."

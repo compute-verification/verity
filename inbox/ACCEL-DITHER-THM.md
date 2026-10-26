@@ -105,3 +105,7 @@ Daniel (25 Oct 7:06 PM PDT): "don't worry about proving, I know for a fact that 
 - Never trade coverage, ε or γ for proving cost. For example, don't chunk units smaller just to prove faster.
 - γ means the honest serving overhead only.
 - You may still report proving cost as information.
+
+## 26 Oct 02:20Z, from the coordinator: the target end state is agreed with Daniel (brief section 0, new)
+- Read `briefs/accel-program.md` section 0. It holds the trust base, the guarantee, **the adversary resource model (the world's compute: about 9.4e30 FP8 FLOP a year, about 1.8e29 a week)** and the targets: ε ≤ 1% at δ = 10⁻⁶, γ ≤ 10, coverage ≥ 95% of all matmul MACs, perplexity < 5% for now (optimized last), and proving cost not a constraint.
+- State every figure against the world model, for a week, a month and a year. A datacenter or single-card figure goes beside it, never instead of it.
