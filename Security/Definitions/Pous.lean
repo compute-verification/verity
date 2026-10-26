@@ -29,6 +29,7 @@ import Definitions.Pous.Model.Scheme
 import Definitions.Pous.Model.SecureErasure
 import Definitions.Pous.Model.SegLift
 import Definitions.Pous.Model.StreamedWipe
+import Definitions.Pous.Model.StreamedWipeServer
 import Definitions.Pous.P2.Cost
 import Definitions.Pous.P2.Rounds
 
