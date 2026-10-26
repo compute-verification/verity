@@ -1,27 +1,29 @@
 """A step's units, read from its committed tables, and their replay on the CPU against circuits' semantics.
 
-The units are circuits' plan's, one unit a row (CMP-92 af6de1f1, revised 23:30Z, section 1b; `driver` names the tables).
-Each `Family` is one template over one table: its units are the table's rows (a row unit) or the rows' words (a coordinate
-unit), and `Family.replay` gives a unit's opened inputs, its committed output words and the words replay computes:
+The units are circuits' FAMILIES map's (`plan.Map`, PRF-166 db928eb0): each `Family` is one `plan.Units`, one template key
+over one table, its unit i's output that table's bytes at ``offset + i * stride``. `Family.replay` gives a unit's opened
+inputs, its committed outputs (its output rows' bytes, as 16- or 32-bit words where the rows are) and what replay computes.
 
-Every unit's words are ``replay.template(key).evaluate`` (`tpl`, the replay lane's `benchmarks/e2e_h200/replay.py`): the one
-reference of each template, main's Definition where it exists.
+Every unit's words are compositions of the replay lane's templates (`tpl`, ``replay.template(key).evaluate``: main's
+Definition where it exists, else the lane's reference), until the replay lane adds the map's templates:
 
-* coordinate units are one template each: ``ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}`` (Q, K, V, O, up, down, head),
-  ``GemmCoordinate_v2{K=d, GEMM_HOPPER}`` (QK^T) and ``GemmCoordinatePad_v1{T, K=32}`` (PV);
-* row units are the plan's compositions of the replay lane's templates (`rms_norm_row`, `quant_row`, `softmax_row`,
-  `argmax_row`, `embedding_row`, `bf16_add_row`), until circuits' row Definitions (``RmsNormRow_v1``, ``QuantRowS8_v1``,
-  ``SoftmaxRow_v1``, ``Bf16AddRow_v1``, the embedding and argmax rows) are on main: their status is
-  ``pending-definition``.
+* ``EmbeddingCoordinate_v1{V}``: that template;
+* ``RmsSumSqChunks_v1{C, K}``: ``RmsSumSqPart_v1{C = K}`` a chunk; ``RmsNormOutSums_v1{C, S, G, N, EPS}``:
+  ``F32SumPart_v1{G = S / G}`` a group, ``RmsNormRecip_v1{N, G, EPS}`` and ``RmsNormOut_v1`` a word;
+* ``RowAbsMax_v1{N, RELU}``: that template; ``QuantChunkS8_v1{N, RELU}``: ``QuantS8Pair_v1{RELU}`` a pair and
+  ``QuantS8Scale_v1``;
+* ``ScaledMmS8CoordinateRows_v1{K, R, DOT}``: ``ScaledMmS8Coordinate_v1{K}`` on the R rows joined (main's test holds the two
+  equal);
+* ``QkSoftmaxRowPad_v1{T, D}``: ``GemmCoordinate_v2{K = D}`` a key and `softmax_row` over the slot's n = position + 1 keys,
+  +0 past them; ``PvRow_v1{T, K, D, DOT}``: ``GemmCoordinatePad_v1{T, K}`` a dimension, absent keys' V rows all-zero;
+* ``Bf16AddRow_v2{N}``: ``Bf16Add_v2`` a word; ``Argmax_v2{V}``: `argmax_row`;
+* ``AllGather_v1{WORLD, N}``: the copy of its parts' rows. Its parts and its output are the same table bytes here, so its
+  replay only restates them; the commit holds both, and a drawn gather opens its own rows against the step's root.
 
 A unit's inputs are read from the committed tables (an earlier op's row, an earlier step's K or V row) and the registered
-weights (`weights.Weights`, from the generator, not the store, so a wrong decode shows as a mismatch).
-
-Row b of a step is slot ``slots[b]`` at its own position p. Its attention reads the slot's K and V rows committed at positions
-0 .. p, each at the step and row the slot ran it (`Replayer.history`), never the live cache. The attention families come one
-per group of rows at one position t, so each is one template (``SoftmaxRow_v1{N = t + 1}``, ``GemmCoordinatePad_v1{T = t +
-1}``). QK^T's unit (head, j), j <= t, is index head * (t + 1) + j of its family and word head * context + j of the
-``scores`` row.
+weights (`weights.Weights`, from the generator, not the store, so a wrong decode shows as a mismatch). Row b of a step is
+slot ``slots[b]`` at its own position p; its attention reads the slot's K and V rows committed at positions 0 .. p, each at
+the step and row the slot ran it (`Replayer.history`), never the live cache.
 
 A `Subcircuit` joins the step's integrity registration as one more sampling block, drawn with the step's families: PoUW's
 per-call-noise tiles (H200-PERCALL, CMP-126) plug in as ``MODULE:FACTORY`` (`load_subcircuit`, ``run.py --subcircuit``).
@@ -40,10 +42,11 @@ import numpy as np
 import replay as RP
 
 from .commit import StepTables
+from .plan import Map, Units
 from .shape import EPS, PV_K, Shape
 from .weights import Weights
 
-ROW, COORD = "pending-definition", "definition"
+Replay = Callable[[int, int], tuple[list[np.ndarray], np.ndarray, np.ndarray]]
 
 
 def tpl(name: str, **statics: Any) -> RP.Template:
@@ -61,22 +64,36 @@ def _word(name: str, *arrays: np.ndarray, **statics: Any) -> np.ndarray:
     return RP.join16(*(_ev(tpl(name, **statics, HALF=h), *arrays)[:, 0] for h in (0, 1)))
 
 
-def rms_norm_row(x: np.ndarray, w: np.ndarray, eps: int = EPS) -> np.ndarray:
-    """``RmsNormRow_v1{N, EPS}``: x, w (n, N) bf16 words -> (n, N), as ``RmsSumSqPart_v1{C = N}``,
-    ``RmsNormRecip_v1{N, G = 1, EPS}`` and ``RmsNormOut_v1`` a word."""
-    n, N = x.shape
-    s = _word("RmsSumSqPart_v1", x, C=N)
-    rs = _word("RmsNormRecip_v1", s[:, None], N=N, G=1, EPS=eps)
-    return _ev(tpl("RmsNormOut_v1"), x.reshape(-1), np.repeat(rs, N), w.reshape(-1)).reshape(n, N).astype(np.uint16)
+def sums_chunks(x: np.ndarray, k: int) -> np.ndarray:
+    """``RmsSumSqChunks_v1{C, K}``: x (C,) bf16 words -> each K-chunk's sum of RN(x_i^2) from +0, (C / K,) f32 words."""
+    return _word("RmsSumSqPart_v1", x.reshape(-1, k), C=k)
+
+
+def norm_out_sums(x: np.ndarray, w: np.ndarray, sums: np.ndarray, n: int, groups: int, eps: int = EPS) -> np.ndarray:
+    """``RmsNormOutSums_v1{C, S, G, N, EPS}``: a chunk's x and w (C,) bf16 words and the row's S chunk sums -> (C,): each
+    group's sum of its S / G chunk sums from +0, rs from the G group sums, then ``RmsNormOut_v1`` a word."""
+    g = _word("F32SumPart_v1", sums.reshape(groups, -1), G=len(sums) // groups)
+    rs = _word("RmsNormRecip_v1", g[None], N=n, G=groups, EPS=eps)
+    return _ev(tpl("RmsNormOut_v1"), x, np.repeat(rs, len(x)), w)[:, 0].astype(np.uint16)
+
+
+def row_abs_max(x: np.ndarray, relu: bool) -> np.uint16:
+    """``RowAbsMax_v1{N, RELU}``: x (N,) bf16 words -> max |x| (relu'd first)."""
+    return np.uint16(_ev(tpl("RowAbsMax_v1", N=len(x), RELU=relu), x[None])[0, 0])
+
+
+def quant_chunk(x: np.ndarray, amax: np.uint16, relu: bool) -> tuple[np.ndarray, np.uint32]:
+    """``QuantChunkS8_v1{N, RELU}``: a chunk's x (N,) bf16 words and the row's amax -> codes (N,) s8 words and the scale's f32
+    word."""
+    codes = _ev(tpl("QuantS8Pair_v1", RELU=relu), x.reshape(-1, 2), np.full(len(x) // 2, amax, np.uint16)).reshape(-1)
+    return codes.astype(np.uint8), np.uint32(_word("QuantS8Scale_v1", np.array([amax], np.uint16))[0])
 
 
 def quant_row(x: np.ndarray, relu: bool) -> tuple[np.ndarray, np.ndarray]:
-    """``QuantRowS8_v1{N, RELU}``: x (n, N) bf16 words -> codes (n, N) s8 words, scale (n,) f32 words, as
-    ``RowAbsMax_v1{N, RELU}``, ``QuantS8Pair_v1{RELU}`` a pair and ``QuantS8Scale_v1``."""
-    n, N = x.shape
-    amax = _ev(tpl("RowAbsMax_v1", N=N, RELU=relu), x)[:, 0]
-    codes = _ev(tpl("QuantS8Pair_v1", RELU=relu), x.reshape(-1, 2), np.repeat(amax, N // 2)).reshape(n, N)
-    return codes.astype(np.uint8), _word("QuantS8Scale_v1", amax)
+    """``QuantRowS8_v1{N, RELU}``: x (n, N) bf16 words -> codes (n, N) s8 words, scale (n,) f32 words: one part and one
+    chunk."""
+    out = [quant_chunk(r, row_abs_max(r, relu), relu) for r in x]
+    return np.stack([c for c, _ in out]), np.array([s for _, s in out], np.uint32)
 
 
 def softmax_row(x: np.ndarray) -> np.ndarray:
@@ -88,22 +105,30 @@ def softmax_row(x: np.ndarray) -> np.ndarray:
     return _ev(tpl("SoftmaxOut_v1"), x.reshape(-1), np.repeat(m, N), np.repeat(r, N)).reshape(n, N).astype(np.uint16)
 
 
+def qk_softmax_pad(q: np.ndarray, keys: np.ndarray, t: int = PV_K) -> np.ndarray:
+    """``QkSoftmaxRowPad_v1{T, D}``: a head's q (D,) and the slot's n key rows (n, D) -> (T,): ``GemmCoordinate_v2{K = D}``
+    a key, `softmax_row` over the n scores, +0 past them."""
+    n, d = keys.shape
+    s = _qk(d).evaluate(np.repeat(q[None], n, 0), keys)[:, 0].astype(np.uint16)
+    return np.concatenate([softmax_row(s[None])[0], np.zeros(t - n, np.uint16)])
+
+
+def pv_row(p: np.ndarray, values: np.ndarray, t: int = PV_K) -> np.ndarray:
+    """``PvRow_v1{T, K, D}``: a head's T probabilities and its T value rows (T, D), absent keys' rows zero -> (D,):
+    ``GemmCoordinatePad_v1{T, K}`` a dimension."""
+    return _pv(t).evaluate(np.repeat(p[None], values.shape[1], 0), values.T)[:, 0].astype(np.uint16)
+
+
 def argmax_row(x: np.ndarray) -> np.ndarray:
-    """The argmax row unit: logits (n, V) bf16 words -> (n,), `TokenSelect` over one chunk (``ArgmaxChunkBest_v1{C = V}``,
+    """``Argmax_v2{V}``: logits (n, V) bf16 words -> (n,), `TokenSelect` over one chunk (``ArgmaxChunkBest_v1{C = V}``,
     ``ArgmaxChunkIdx_v1{C = V}``, ``ArgmaxCombine_v1{V, C = V}``): the first index of the greatest, a NaN never taken."""
     V = x.shape[1]
     best, idx = _ev(tpl("ArgmaxChunkBest_v1", C=V), x), _ev(tpl("ArgmaxChunkIdx_v1", C=V), x)
     return _ev(tpl("ArgmaxCombine_v1", V=V, C=V), x[:, 0], best, idx)[:, 0].astype(np.uint16)
 
 
-def embedding_row(tok: int, table: np.ndarray, pos: np.ndarray) -> np.ndarray:
-    """The embedding row: token ``tok``'s column of ``table`` (N, V) plus ``pos`` (N,), ``EmbeddingCoordinate_v1{V}`` a word."""
-    N, V = table.shape
-    return _ev(tpl("EmbeddingCoordinate_v1", V=V), np.full(N, tok, np.uint16), table, pos)[:, 0].astype(np.uint16)
-
-
 def bf16_add_row(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """``Bf16AddRow_v1{N}``: ``Bf16Add_v2`` a word."""
+    """``Bf16AddRow_v2{N}``: ``Bf16Add_v2`` a word."""
     return _ev(tpl("Bf16Add_v2"), a.reshape(-1), b.reshape(-1))[:, 0].astype(np.uint16).reshape(a.shape)
 
 
@@ -118,7 +143,6 @@ class Unit:
     inputs: list[np.ndarray]
     got: np.ndarray
     want: np.ndarray
-    span: tuple[int, int, bool] | None = None
     opened: dict | None = None
 
     @property
@@ -142,14 +166,7 @@ class Family:
     template: str
     status: str
     per_slot: int
-    replay: Callable[[int, int], tuple[list[np.ndarray], np.ndarray, np.ndarray]]   # (row, index) -> (inputs, got, want)
-    #: unit index -> (first byte, end byte, whether the row's scale too) of its outputs in the table's row (None: the row)
-    span: Callable[[int], tuple[int, int, bool]] | None = None
-    rows: tuple[int, ...] | None = None     # the rows of one position group (the attention families), else every row
-    position: int | None = None
-
-    def rows_of(self, batch: int) -> Sequence[int]:
-        return range(batch) if self.rows is None else self.rows
+    replay: Replay      # (row, index) -> (inputs, got, want)
 
 
 def _s8mm(k: int) -> RP.Template:
@@ -185,6 +202,23 @@ def load_subcircuit(spec: str, **kw: Any) -> Subcircuit:
     return getattr(importlib.import_module(module), factory)(**kw)
 
 
+def sources(shape: Shape) -> dict[str, Any]:
+    """What each of the map's ops reads: an RMSNorm's residual row, a quantizer's row, a linear's quantizer, a residual
+    add's two rows."""
+    src: dict[str, Any] = {}
+    prev = "embed"
+    for i in range(shape.layers):
+        p = f"l{i}."
+        src |= {p + "attn": prev, p + "mlp": p + "attn_residual",
+                p + "attn_quant": p + "attn_norm", p + "o_quant": p + "pv", p + "up_quant": p + "mlp_norm",
+                p + "down_quant": p + "wup",
+                p + "wq": p + "attn", p + "wk": p + "attn", p + "wv": p + "attn", p + "wo": p + "o", p + "wup": p + "up",
+                p + "wdown": p + "down",
+                p + "attn_residual": (prev, p + "wo"), p + "mlp_residual": (p + "attn_residual", p + "wdown")}
+        prev = p + "mlp_residual"
+    return src | {"final": prev, "head_quant": "final_norm", "head": "head"}
+
+
 class Replayer:
     def __init__(self, shape: Shape, weights: Weights, steps: list[StepTables], tokens: list[np.ndarray],
                  subcircuits: Sequence[Subcircuit] = ()) -> None:
@@ -192,6 +226,8 @@ class Replayer:
         its rows embedded."""
         self.shape, self.weights, self.steps, self.tokens = shape, weights, steps, tokens
         self.subcircuits = list(subcircuits)
+        self.map = Map(shape)
+        self.src = sources(shape)
         self._array = lru_cache(maxsize=8)(weights.array)
 
     # -- committed words
@@ -204,6 +240,11 @@ class Replayer:
 
     def word(self, step: int, op: str, row: int) -> np.uint32:
         return np.asarray(self.steps[step].tables[op][1][row], np.float32).view(np.uint32)
+
+    def out(self, step: int, u: Units, row: int, i: int) -> np.ndarray:
+        """Unit i's committed output bytes in its table's row."""
+        lo = u.offset + i * u.stride
+        return self.raw(step, u.table, row)[lo:lo + u.nbytes]
 
     def history(self, step: int, b: int) -> list[tuple[int, int]]:
         """The (step, row) at which row ``b`` of ``step``'s slot ran each of its positions 0 .. p."""
@@ -235,24 +276,13 @@ class Replayer:
         return self.model_families(step) + [f for sub in self.subcircuits for f in sub.families(self, step)]
 
     def model_families(self, step: int) -> list[Family]:
-        sh = self.shape
-        out = [self._embed(step)]
-        prev = "embed"
-        for layer in range(sh.layers):
-            p = f"l{layer}."
-            out += [self._rms(step, p + "attn_norm", prev), self._quant(step, p + "attn_quant", p + "attn_norm", False)]
-            out += [self._linear(step, p + k, p + "attn_quant") for k in ("wq", "wk", "wv")]
-            out += self._attention(step, layer)
-            out += [self._quant(step, p + "o_quant", p + "pv", False), self._linear(step, p + "wo", p + "o_quant"),
-                    self._add(step, p + "attn_residual", prev, p + "wo"),
-                    self._rms(step, p + "mlp_norm", p + "attn_residual"),
-                    self._quant(step, p + "up_quant", p + "mlp_norm", False), self._linear(step, p + "wup", p + "up_quant"),
-                    self._quant(step, p + "down_quant", p + "wup", True), self._linear(step, p + "wdown", p + "down_quant"),
-                    self._add(step, p + "mlp_residual", p + "attn_residual", p + "wdown")]
-            prev = p + "mlp_residual"
-        out += [self._rms(step, "final_norm", prev), self._quant(step, "head_quant", "final_norm", False),
-                self._linear(step, "head", "head_quant"), self._argmax(step)]
-        return out
+        """One family a `plan.Units` of the map, in the order the step writes them."""
+        build = {"EmbeddingCoordinate_v1": self._embed, "AllGather_v1": self._gather, "RmsSumSqChunks_v1": self._sums,
+                 "RmsNormOutSums_v1": self._norm, "RowAbsMax_v1": self._amax, "QuantChunkS8_v1": self._quant,
+                 "ScaledMmS8CoordinateRows_v1": self._linear, "QkSoftmaxRowPad_v1": self._softmax, "PvRow_v1": self._pv,
+                 "Bf16AddRow_v2": self._add, "Argmax_v2": self._argmax}
+        return [Family(u.name, u.key, u.status, u.count, build[u.template](step, u))
+                for g in self.map.groups() for _, us in g for u in us]
 
     def registration(self, step: int) -> dict:
         """The step's sampling blocks: the model's families by template, then each subcircuit's."""
@@ -260,99 +290,118 @@ class Replayer:
         return {"blocks": [{"name": "model", "families": len(fams), "templates": sorted({f.template for f in fams})}]
                 + [{"name": sub.name, **sub.manifest()} for sub in self.subcircuits]}
 
-    def _embed(self, step: int) -> Family:
-        sh = self.shape
-
-        def replay(b: int, _: int):
+    def _embed(self, step: int, u: Units) -> Replay:
+        def replay(b: int, i: int):
             tok, t = int(self.tokens[step][b]), int(self.steps[step].positions[b])
-            table, pos = self._gain("tok"), self._gain("pos")[:, t]
-            return [np.array([tok], np.uint16), table[:, tok], pos], self.u16(step, "embed", b), embedding_row(tok, table, pos)
-        return Family("embed", RP.key_of("EmbeddingRow_v1", {"V": sh.vocab}), ROW, 1, replay)
+            col, pos = self._gain("tok")[i], self._gain("pos")[i, t]
+            want = _ev(tpl("EmbeddingCoordinate_v1", V=len(col)), np.array([tok], np.uint16), col[None], np.array([pos]))[0]
+            return [np.array([tok], np.uint16), col, np.array([pos], np.uint16)], self.out(step, u, b, i).view(np.uint16), \
+                want.astype(np.uint16)
+        return replay
 
-    def _rms(self, step: int, op: str, src: str) -> Family:
-        n = self.shape.width
+    def _gather(self, step: int, u: Units) -> Replay:
+        def replay(b: int, i: int):
+            got = self.out(step, u, b, i).view(np.uint16)
+            return [got.copy()], got, got.copy()
+        return replay
 
-        def replay(b: int, _: int):
-            x, w = self.u16(step, src, b), self._gain(op)
-            return [x, w], self.u16(step, op, b), rms_norm_row(x[None], w[None])[0]
-        return Family(op, RP.key_of("RmsNormRow_v1", {"N": n, "EPS": EPS}), ROW, 1, replay)
+    def _sums(self, step: int, u: Units) -> Replay:
+        op, c = u.table[:-len("_sums")], self.map.f.chunk
+        n = c * (u.nbytes // 4)
 
-    def _quant(self, step: int, op: str, src: str, relu: bool) -> Family:
-        n = self.steps[step].tables[src][0].shape[1] // 2
+        def replay(b: int, i: int):
+            x = self.u16(step, self.src[op], b)[i * n:(i + 1) * n]
+            return [x], self.out(step, u, b, i).view(np.uint32), sums_chunks(x, c)
+        return replay
 
-        def replay(b: int, _: int):
-            x = self.u16(step, src, b)
-            codes, scale = quant_row(x[None], relu)
-            got = np.concatenate([self.raw(step, op, b).view(np.uint8).astype(np.uint32), [self.word(step, op, b)]])
-            return [x], got, np.concatenate([codes[0].astype(np.uint32), scale])
-        return Family(op, RP.key_of("QuantRowS8_v1", {"N": n, "RELU": relu}), ROW, 1, replay, lambda _: (0, n, True))
+    def _norm(self, step: int, u: Units) -> Replay:
+        op, c, n = u.table[:-len("_norm")], self.map.f.chunk, self.shape.width
+        groups = self.map.f.groups(n)
 
-    def _linear(self, step: int, op: str, qop: str) -> Family:
-        tensor = op
-        n, k = self.weights.dims[tensor]
-        tpl = _s8mm(k)
+        def replay(b: int, i: int):
+            x = self.u16(step, self.src[op], b)[i * c:(i + 1) * c]
+            w = self._gain(op + "_norm")[i * c:(i + 1) * c]
+            sums = self.raw(step, op + "_sums", b).view(np.uint32)
+            return [x, w, sums], self.out(step, u, b, i).view(np.uint16), norm_out_sums(x, w, sums, n, groups)
+        return replay
+
+    def _amax(self, step: int, u: Units) -> Replay:
+        op = u.table[:-len("_amax")]
+        relu = op.endswith("down")
+
+        def replay(b: int, i: int):
+            x = self.u16(step, self.src[op + "_quant"], b)
+            parts, w = self.map.f.parts(len(x))
+            if u.name.endswith(".part"):
+                x = x[i * w:(i + 1) * w]
+            elif parts > 1:
+                x = np.concatenate([x[(parts - 1) * w:], self.u16(step, u.table, b)[:parts - 1]])
+            return [x], self.out(step, u, b, i).view(np.uint16), np.array([row_abs_max(x, relu)], np.uint16)
+        return replay
+
+    def _quant(self, step: int, u: Units) -> Replay:
+        op = u.table
+        relu, q = op.endswith("down_quant"), u.nbytes
+
+        def replay(b: int, i: int):
+            x = self.u16(step, self.src[op], b)[i * q:(i + 1) * q]
+            amax = self.u16(step, op[:-len("_quant")] + "_amax", b)[-1]
+            codes, scale = quant_chunk(x, amax, relu)
+            got = np.concatenate([self.out(step, u, b, i).view(np.uint8), np.atleast_1d(self.word(step, op, b)).view(np.uint8)])
+            return [x, np.array([amax], np.uint16)], got, np.concatenate([codes, np.array([scale], np.uint32).view(np.uint8)])
+        return replay
+
+    def _linear(self, step: int, u: Units) -> Replay:
+        tensor, qop = u.table, self.src[u.table] + "_quant"
+        k = self.weights.dims[tensor][1]
+        t = _s8mm(k)
 
         def replay(b: int, i: int):
             x = self.raw(step, qop, b).view(np.uint8)
             sx = self.word(step, qop, b)
             wrow = self.weights.row(tensor, i).view(np.uint8)
             sw = np.asarray(self._array(f"{tensor}.scale")[i], np.float32).view(np.uint32)
-            want = tpl.evaluate(x[None], np.array([sx]), wrow[None], np.array([sw]))[0]
-            return [x, np.array([sx]), wrow, np.array([sw])], self.u16(step, op, b)[i:i + 1], want.astype(np.uint16)
-        return Family(op, tpl.key, COORD, n, replay, lambda i: (2 * i, 2 * i + 2, False))
+            want = t.evaluate(x[None], np.array([sx]), wrow[None], np.array([sw]))[0]
+            return [x, np.array([sx]), wrow, np.array([sw])], self.out(step, u, b, i).view(np.uint16), want.astype(np.uint16)
+        return replay
 
-    def _attention(self, step: int, layer: int) -> list[Family]:
-        positions = self.steps[step].positions
-        out = []
-        for t in np.unique(positions).tolist():
-            out += self._attention_at(step, layer, int(t), tuple(np.flatnonzero(positions == t).tolist()))
-        return out
+    def _softmax(self, step: int, u: Units) -> Replay:
+        layer, d = int(u.table[1:].split(".")[0]), self.shape.head_dim
 
-    def _attention_at(self, step: int, layer: int, t: int, rows: tuple[int, ...]) -> list[Family]:
-        """QK^T, softmax and PV of the rows at position ``t``: a row's scores and probabilities are words head * context + j,
-        j <= t, of its (heads, context) row."""
-        sh, p = self.shape, f"l{layer}."
-        d, h, t1, c = sh.head_dim, sh.heads, t + 1, sh.context
-        qk, pv = _qk(d), _pv(t1)
+        def replay(b: int, head: int):
+            q = self.u16(step, f"l{layer}.wq", b)[head * d:(head + 1) * d]
+            keys = self.kv(step, layer, b)[0]
+            padded = np.zeros((PV_K, d), np.uint16)
+            padded[:len(keys)] = keys
+            return [q, padded, np.array([len(keys)], np.uint16)], self.out(step, u, b, head).view(np.uint16), \
+                qk_softmax_pad(q, keys)
+        return replay
 
-        def scores(b: int, i: int):
-            head, j = divmod(i, t1)
-            q = self.u16(step, p + "wq", b)[head * d:(head + 1) * d]
-            k = self.kv(step, layer, b)[0][j]
-            want = qk.evaluate(q[None], k[None])[0]
-            return [q, k], self.u16(step, p + "scores", b)[head * c + j:head * c + j + 1], want.astype(np.uint16)
+    def _pv(self, step: int, u: Units) -> Replay:
+        layer = int(u.table[1:].split(".")[0])
 
-        def soft(b: int, head: int):
-            x = self.u16(step, p + "scores", b)[head * c:head * c + t1]
-            return [x], self.u16(step, p + "softmax", b)[head * c:head * c + t1], softmax_row(x[None])[0]
+        def replay(b: int, head: int):
+            p = self.u16(step, f"l{layer}.softmax", b)[head * PV_K:(head + 1) * PV_K]
+            values = self.kv(step, layer, b)[1]
+            padded = np.zeros((PV_K, values.shape[1]), np.uint16)
+            padded[:len(values)] = values
+            return [p, padded], self.out(step, u, b, head).view(np.uint16), pv_row(p, padded)
+        return replay
 
-        def pvu(b: int, i: int):
-            head, c_ = divmod(i, d)
-            pr = self.u16(step, p + "softmax", b)[head * c:head * c + t1]
-            v = self.kv(step, layer, b)[1][:, c_]
-            want = pv.evaluate(pr[None], v[None])[0]
-            return [pr, v], self.u16(step, p + "pv", b)[i:i + 1], want.astype(np.uint16)
+    def _add(self, step: int, u: Units) -> Replay:
+        a_op, b_op = self.src[u.table]
+        c = u.nbytes // 2
 
-        def at(i: int) -> tuple[int, int, bool]:
-            head, j = divmod(i, t1)
-            return 2 * (head * c + j), 2 * (head * c + j) + 2, False
+        def replay(b: int, i: int):
+            x, y = self.u16(step, a_op, b)[i * c:(i + 1) * c], self.u16(step, b_op, b)[i * c:(i + 1) * c]
+            return [x, y], self.out(step, u, b, i).view(np.uint16), bf16_add_row(x, y)
+        return replay
 
-        return [Family(p + "scores", qk.key, COORD, h * t1, scores, at, rows, t),
-                Family(p + "softmax", RP.key_of("SoftmaxRow_v1", {"N": t1}), ROW, h, soft,
-                       lambda head: (2 * head * c, 2 * (head * c + t1), False), rows, t),
-                Family(p + "pv", pv.key, pv.status, h * d, pvu, lambda i: (2 * i, 2 * i + 2, False), rows, t)]
-
-    def _add(self, step: int, op: str, a: str, b_op: str) -> Family:
-        def replay(b: int, _: int):
-            x, y = self.u16(step, a, b), self.u16(step, b_op, b)
-            return [x, y], self.u16(step, op, b), bf16_add_row(x, y)
-        return Family(op, RP.key_of("Bf16AddRow_v1", {"N": self.shape.width}), ROW, 1, replay)
-
-    def _argmax(self, step: int) -> Family:
+    def _argmax(self, step: int, u: Units) -> Replay:
         def replay(b: int, _: int):
             logits = self.u16(step, "head", b)
-            return [logits], self.u16(step, "argmax", b), argmax_row(logits[None])
-        return Family("argmax", RP.key_of("ArgmaxRow_v1", {"V": self.shape.vocab}), ROW, 1, replay)
+            return [logits], self.out(step, u, b, 0).view(np.uint16), argmax_row(logits[None])
+        return replay
 
     # -- the draw
 
@@ -360,28 +409,25 @@ class Replayer:
         inputs, got, want = fam.replay(row, index)
         st = self.steps[step]
         return Unit(fam.name, fam.template, step, int(st.positions[row]), int(st.slots[row]), index, inputs,
-                    np.asarray(got).reshape(-1), np.asarray(want).reshape(-1).astype(np.asarray(got).dtype),
-                    fam.span(index) if fam.span else None)
+                    np.asarray(got).reshape(-1), np.asarray(want).reshape(-1).astype(np.asarray(got).dtype))
 
     def draw(self, step: int, k: int, seed: bytes, only: Callable[[Family], bool] = lambda f: True) -> list[Unit]:
         """``k`` units of every family of ``step`` (or of those ``only`` keeps), replayed: a FIXTURE coin per family, until
         PRF-170's plan draws from live coins (`replay.draw`)."""
-        st = self.steps[step]
+        batch = self.steps[step].batch
         units = []
         for fam in self.families(step):
             if not only(fam):
                 continue
-            at = b"" if fam.position is None else fam.position.to_bytes(4, "big")
-            h = hashlib.sha512(b"e2e-h200/draw-fixture\0" + seed + fam.name.encode() + step.to_bytes(4, "big") + at).digest()
+            h = hashlib.sha512(b"e2e-h200/draw-fixture\0" + seed + fam.name.encode() + step.to_bytes(4, "big")).digest()
             rng = np.random.Generator(np.random.PCG64(int.from_bytes(h[:16], "big")))
-            rows = fam.rows_of(st.batch)
-            for u in rng.integers(0, fam.per_slot * len(rows), size=k):
+            for u in rng.integers(0, fam.per_slot * batch, size=k):
                 r, idx = divmod(int(u), fam.per_slot)
-                units.append(self.unit(fam, step, rows[r], idx))
+                units.append(self.unit(fam, step, r, idx))
         return units
 
     def every(self, step: int, only: Callable[[Family], bool] = lambda f: True) -> list[Unit]:
         """Every unit of ``step``'s families that ``only`` keeps."""
-        st = self.steps[step]
-        return [self.unit(f, step, b, i) for f in self.families(step) if only(f)
-                for b in f.rows_of(st.batch) for i in range(f.per_slot)]
+        batch = self.steps[step].batch
+        return [self.unit(f, step, b, i) for f in self.families(step) if only(f) for b in range(batch)
+                for i in range(f.per_slot)]
