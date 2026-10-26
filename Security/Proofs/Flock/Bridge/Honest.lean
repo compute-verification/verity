@@ -44,7 +44,7 @@ def SampledKSLiveHonest : Prop :=
       Flock.hexOf (Flock.Sha512.hash I.circuitFile) =
         "7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0" ∧
       Flock.hexOf (Flock.Sha512.hash I.publicFile) =
-        "142731972d7b8f4cf0b89a9eaa33530ead7eb86c2628fd24ed14a54c9850965659cba8b8dac42454d3794de98f9e93fe84c4a1525ed729483fe8aa347f968663" ∧
+        "6bea4647565a87a873bc66670482ec0cdb86c4424d061ccb03354b81ec55cbe302564836f08c4a9757085746f6000b904657749c2f84b028fe56fde816c26dd1" ∧
       I.tags.typed = false ∧
       Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D ∧ Built D.unroll.unit ∧
       HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub ∧ pub.tables = none ∧
