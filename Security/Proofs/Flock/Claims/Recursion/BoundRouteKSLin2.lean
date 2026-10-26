@@ -225,7 +225,7 @@ def DenseAt (x : Msg) : Prop := ∀ s, parse x = some s → s.form.Dense
 /-- **`KSLin2` at the deployed records' dense statements from `KSFlockLin` at `DE`**: `KSBoundRouteLinMerged`'s
 premises with `KSFlockLin` for (P1), no weight premise, and V*'s facts at the dense shape only give `KSLin2` at the
 dense statements (`DenseAt`) of the record whose inner view runs `IVStar`: `InnerAcceptsColl` at a dense statement
-(`innerAcceptsCollAt_of_dense`), `ksBoundRouteLin_merged`'s facts at `deployRecC` there,
+(`innerAcceptsCollAtV_of_dense`), `ksBoundRouteLin_merged`'s facts at `deployRecC` there,
 `Bound.ksLin2_of_flockLin_binds` there, carried back by `ksLin2_of_C`. -/
 theorem ksLin2_route (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (hRows : L.ReadsRows FlockDeploy.sha512) (Cp : Claims.Recursion.Caps Coin) :
@@ -269,8 +269,8 @@ theorem ksLin2_route (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.R
     exact vstarAccepts_bound FlockDeploy.sha512 I ivScope b L (deployZkRec relO) shape decC chk shows cmt hplay
       (hRP decI) (hHe decI) (hSh decI) hCk hOp hDc hRows hRRP
   have hTc := callsTrue FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT
-  have hA := Claims.Recursion.innerAcceptsCollAt_of_dense (refuses I.V ivScope bL FlockDeploy.sha512) hTc
-    (hacc _ (by simp)) hx
+  have hA := Claims.Recursion.innerAcceptsCollAtV_of_dense (refuses I.V ivScope bL FlockDeploy.sha512) hTc
+    (hacc _ (by simp)).toV hx
   have hLc := callsLogCollS FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT
     (readersLogCollS_ivstar hL bL (deployZkRec relO))
   have hFk := forksBindAt_C_setup FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) hEC hCF hTc hLc
@@ -281,7 +281,7 @@ theorem ksLin2_route (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.R
       (Function.leftInverse_invFun Claims.Bridge.coin_bytes_injective c)
   have hM := roundsMargin_deployRec FlockDeploy.sha512 I ivScope bL fun x => V_k_pos_flock false x
   have hLn := callsLogColl_C_setup FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) hCF hLc
-  have hAn := innerAcceptsCollAt_C FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) hCF x hA
+  have hAn := innerAcceptsCollAtV_C FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) hCF x hA
   have hbody := Claims.Recursion.Bound.ksLin2_of_flockLin_binds_setup (Bd := Bd) (decI := decI)
     (H := FlockDeploy.sha512) (D := deployRecC Bd ivScope bL) (DO := deployZkRec relO) (decO := decO) (P := P)
     (x := x) FlockDeploy.decCoin Cp hF hKS hdI hdO hdecC hBinds (refuses I.V ivScope bL FlockDeploy.sha512)
