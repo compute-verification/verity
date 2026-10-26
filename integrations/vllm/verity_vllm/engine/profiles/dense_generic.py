@@ -61,14 +61,14 @@ def role_of_module(name: str) -> str | None:
 
 def checkpoint_entry(role: str) -> dict[str, Any] | None:
     """The manifest entry of a role: `role == case`, else (the contract's B0 / B1 / B7 / SMOL360 cases, whose manifest `role` is prose) the
-    entry of the repo `verity_vllm.engine.engine_profile.CASES[case]` names."""
+    entry of the repo `verity_vllm.engine.profiles.cases.CASES[case]` names."""
     if not MANIFEST.exists():
         return None
     entries = checkpoint_entries(MANIFEST)
     for e in entries:
         if e.get("role") == role:
             return e
-    from verity_vllm.engine.engine_profile import CASES
+    from verity_vllm.engine.profiles.cases import CASES
     repo = (CASES.get(role) or {}).get("repo")
     if repo:
         for e in entries:
