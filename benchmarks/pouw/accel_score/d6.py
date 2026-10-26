@@ -14,7 +14,9 @@ v3's own picks stay as adopted (measured schedules).
     PUBLIC_BEST_DIR=<checkout of cursor/compute-research-accel-bet-algo-lab-ea24 at 34866fd9f8 or later, which has
     d5_v2.py>/benchmarks/pouw/theory python3 benchmarks/pouw/accel_score/d6.py [--json OUT] [--pickle OUT]
 
---from PKL prints the report from a build's pickle (--pickle) without rebuilding.
+--from PKL prints the report from a build's pickle (--pickle) without rebuilding. --census JSON [--census-ref REF]
+adds the RTX PRO 6000's beside-load row with emulated b1 from ALGO-COST-3's census routes (`algo_cost3/b1alu_check.py
+--census` run at this build's v3.1 picks; keys "card | model | x" with leak_served and c_inc).
 """
 import contextlib
 import io
@@ -893,6 +895,21 @@ def report(D: dict) -> str:
             L.append(f"| {name}, {card} | " + " | ".join(
                 " / ".join(pct(B[name, card, m, x]["share"], 1) for m in models) + " ("
                 + " / ".join(pct(B[name, card, m, x]["leak"], 1) for m in models) + ")" for x in BESIDE) + " |")
+    if "census" in D:
+        cz = D["census"]["rows"]
+        L.append("\nD5 v2's job LPs leave out A7's b cᵀ with b1 emulated on the lanes (ALGO-COST-3's A34, route iii). "
+                 "Priced as A35's census routes (`algo_cost3/b1alu_check.py --census` at b4830ae7b1: LOP3 and IADD3 on "
+                 "the ALU, POPC on a 16-lane XU row, IMAD and IDP.4A on the FMA pipe, each instruction on issue, vec "
+                 "and the register file) in these period LPs at v3.1's picks, the RTX PRO 6000's routes leave this "
+                 f"much uncredited, at the served duals and as 1 − c_inc, 8B / 70B / V4 ({D['census']['ref']}). So "
+                 "the RTX PRO 6000's cells above from x = 0.25 are lower bounds until D5's menu carries the route; "
+                 "x = 0 doesn't move. On the H200 b1 is native.\n")
+        L.append("| picks, card | " + " | ".join(f"x = {x:g}" for x in BESIDE) + " |")
+        L.append("|---|" + "---|" * len(BESIDE))
+        L.append(f"| {HEADLINE}, RTX PRO 6000, with emulated b1 | " + " | ".join(
+            " / ".join(pct(cz[f"RTX PRO 6000 | {m} | {x}"]["leak_served"], 1) for m in models) + " ("
+            + " / ".join(pct(1 - cz[f"RTX PRO 6000 | {m} | {x}"]["c_inc"], 1) for m in models) + ")"
+            for x in BESIDE) + " |")
     L.append("\nPB4: the same periods by makespan, which needs no duals. Cells: 1 − c_inc, the share of the credited "
              "rounds' honest makespan increment over the period's fixed load alone that pub's period saves, 8B / 70B / "
              "V4, beside the dual-price figure above. Credit stays at the duals (P12); c_inc shows how much of that "
@@ -1050,8 +1067,11 @@ def jsonable(x):
 
 
 if __name__ == "__main__":
-    arg = {k: sys.argv[sys.argv.index(k) + 1] for k in ("--json", "--pickle", "--from") if k in sys.argv}
+    arg = {k: sys.argv[sys.argv.index(k) + 1] for k in ("--json", "--pickle", "--from", "--census", "--census-ref")
+           if k in sys.argv}
     D = pickle.loads(Path(arg["--from"]).read_bytes()) if "--from" in arg else build()
+    if "--census" in arg:
+        D["census"] = dict(rows=json.loads(Path(arg["--census"]).read_text()), ref=arg.get("--census-ref", "unpublished"))
     if "--pickle" in arg:
         Path(arg["--pickle"]).write_bytes(pickle.dumps(D))
     if "--json" in arg:
