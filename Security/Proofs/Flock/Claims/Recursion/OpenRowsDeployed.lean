@@ -25,8 +25,8 @@ it, so a `rec-open` copy reads exactly the row and siblings the last message car
 * **A part's pieces are its witness's** (`readSegs_piece`): `Agrees`' second conjunct holds part `s`'s pieces of the last
   round to its staged witness `w`, and the round is assembled off `ws`, so both read the same bytes there; `encLevel`
   reads back (`rdLevel_encLevel`), so the level's rows and siblings are `w`'s.
-* `copyOpensR_elemR`: `CopyOpensR` at any layout with `layR elemR`'s messages and pieces (`layR` itself, or
-  `ResLower.layVR`), the deployed `final`, `opened` and `k`, and `sideAtR rdR`, for pieces in range.
+* `copyOpensR_elemR`: `CopyOpensR` at any layout with `layAt (restR elemR)`'s messages and pieces, the deployed
+  `final`, `opened` and `k`, and `sideAtR rdR`, for pieces in range; `copyOpensR_layR` at the layout of record.
 -/
 
 namespace RecDeploy.OpenRows
@@ -662,8 +662,8 @@ theorem lvl_eq {u v : Claims.Flock.Wit} {c : Circuit} {q LANES HH : ℕ} (k : �
 variable (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (shape : Claims.Recursion.Form → Prop)
   (untr : TrReader) (b : Brings) (cmt : Msg → ℕ → Msg → Msg) (L : LayoutB)
 
-/-- **`CopyOpensR` at `elemR`**: at a layout with `layR elemR`'s rounds, messages and pieces (`layR elemR`, or
-`ResLower.layVR elemR`), the deployed bound record `bdR`, `sideAtR rdR` and pieces in range, each piece's copy reads
+/-- **`CopyOpensR` at `elemR`**: at a layout with `layAt (restR elemR)`'s rounds, messages and pieces (`layR elemR`),
+the deployed bound record `bdR`, `sideAtR rdR` and pieces in range, each piece's copy reads
 the row and siblings the last message opens. The last message is `elemR`'s pieces (`finalR_last`), which `rdR` reads
 back as each rep's openings off the witnesses (`rdR_elemR`); part `s`'s are its staged witness's (`readSegs_piece`),
 and those are its copy's columns (`copyOf_colBits`). -/
@@ -835,6 +835,15 @@ theorem copyOpensR_elemR (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse 
       q.rep) (((schR r).levels[q.level]!).d - ((schR r).levels[q.level]!).cap) q.query = _
     rw [← hwA, ← hSw, sibsOf_lvlSibs _ _ _ _ _ hqq, hLr', hHr']
     rfl
+
+/-- **`CopyOpensR` at the layout of record `layR elemR`**: its rounds, messages and pieces are `layAt (restR elemR)`'s
+(`layR` adds only calls). -/
+theorem copyOpensR_layR (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse x = parse x)
+    (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f) (hN : ∀ x, D.nS x = nS x) (hrange : PiecesInRangeR pieces) :
+    CopyOpensR H D shape untr b cmt (layR elemR) bdR (sideAtR rdR) pieces :=
+  copyOpensR_elemR (H := H) (D := D) (shape := shape) (untr := untr) (b := b) (cmt := cmt) (L := layR elemR)
+    (pieces := pieces) (hP := hP) (hS := hS) (hN := hN) (hLr := fun _ => rfl) (hLm := fun _ _ => rfl)
+    (hLf := fun _ _ => rfl) (hLp := fun _ _ => rfl) (hrange := hrange)
 
 end
 

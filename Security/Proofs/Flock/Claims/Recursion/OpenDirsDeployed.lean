@@ -8,14 +8,14 @@ import Proofs.Flock.C3.RegLevels.OpensRegs
 `CopyDirsR` asks that a `rec-open` piece's copy hold, at its position columns (`idxCol`), the `dirs` row of the
 position the verifier drew (`DirsTie`). Check 5 (`RecCoins.checkOpen`, at the statement's recursive setup) holds each
 instance's public commit string of port `dirs` to `commitRow` of the verifier's own row `openDirs` under `verifierSalt`,
-and `layVR` records the part's hm96 calls at `dirs` (`openPorts`, `portCalls_sub_layVR_open`), whose verifier
+and `DeployedR.layR` records the part's hm96 calls at `dirs` (`openPorts`, `portCalls_sub_layR_open`), whose verifier
 evaluations are `openSetupSt`. So `port_tie` gives the part's `dirs` bytes as the verifier's row, at every instance of
 the table, not only the first two.
 
 * `check5_bytes_lt`: `check5_bytes` at any instance of the table (`div_lt_blocks`).
 * `slotDirs_staged`: the `dirs` slot commits at a staged level part.
-* `dirsCols_staged`: port `dirs` is row 4 of the `rec-open` unit (`rowsOk`), from column `idxCol LANES HH 0` of each copy
-  (`preBits`, `inGroups_of_laid`), so its forms are the copy's position columns.
+* `dirsCols_staged`: port `dirs` is row 4 of the `rec-open` unit (`rowsOk`), from column `idxCol LANES HH 0` of each
+  copy (`preBits`, `inGroups_of_laid`), so its forms are the copy's position columns.
 * `openPos`, `openRows_dirs`: the position `openDirs` registers at instance `i`.
 * `dirsTie_staged`: the tie, at the position `openPos` reads off the inner session check 5 loads.
 -/
@@ -27,6 +27,7 @@ open Claims (Msg)
 open FlockDeploy (Coin)
 open Claims.Recursion.VStarB
 open ResLower
+open RecDeploy.DeployedR (rowForms openPorts)
 
 noncomputable section
 
@@ -334,9 +335,9 @@ theorem getD_of_lt {a : Array ℕ} {j : ℕ} (hj : j < a.size) : a.getD j 0 = a[
 
 /-! ## The tie -/
 
-/-- **Check 5's `dirs` tie at a level part's instance, at `layVR`**: at a staged `rec-open` part whose calls at
-`layVR` are true and collision-free with the verifier's evaluations, and whose check 5 runs `checkOpen` (`hso`, `hop`,
-`hsp`: the unit is no other recursive unit), the inner session check 5 loads gives `dirs` rows `dr`, and at each
+/-- **Check 5's `dirs` tie at a level part's instance, at `layR`**: at a staged `rec-open` part whose calls at `layR`
+are true and collision-free with the verifier's evaluations, and whose check 5 runs `checkOpen` (`hso`, `hop`, `hsp`:
+the unit is no other recursive unit), the inner session check 5 loads gives `dirs` rows `dr`, and at each
 instance `i < n` of them, the copy `(i / g, i % g, 0)` holds `dirsRow` of the position `openPos` reads there
 (`DirsTie`): `port_tie` at the `dirs` slot (`slotDirs_staged`) and check 5's public row (`check5_bytes_lt`), with the
 verifier's evaluations of it in `openSetupSt` (`hset`), and the slot's forms the copy's position columns
@@ -344,9 +345,9 @@ verifier's evaluations of it in `openSetupSt` (`hset`), and the slot's forms the
 theorem dirsTie_staged {b : Brings} {IV : Claims.Verifier Coin}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {s : ℕ} {x xO : Msg}
     {w : Claims.Flock.Wit}
-    (hT : ∀ e ∈ (layVR elem).calls x s w, FlockDeploy.sha512 e.1 = e.2)
-    (hnc : (Claims.findColl ((layVR elem).calls x s w ++ vcallsAt FlockDeploy.sha512
-      (recBound _root_.Flock.Readable.relation b (layVR elem) IV) xO)).isSome = false)
+    (hT : ∀ e ∈ (DeployedR.layR elem).calls x s w, FlockDeploy.sha512 e.1 = e.2)
+    (hnc : (Claims.findColl ((DeployedR.layR elem).calls x s w ++ vcallsAt FlockDeploy.sha512
+      (recBound _root_.Flock.Readable.relation b (DeployedR.layR elem) IV) xO)).isSome = false)
     (hS : StagedPart b.st s x xO) (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true)
     {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss)
     {lv LANES HH n : ℕ} (hsv : ss[s]? = some (.recOpen lv LANES HH n)) {c : Circuit}
@@ -418,7 +419,7 @@ theorem dirsTie_staged {b : Brings} {IV : Claims.Verifier Coin}
     unfold rowForms
     rw [ite_eq_left hdin]
   have htie := port_tie rfl hT hnc
-    (portCalls_sub_layVR_open elem hr hss hsv hpc (by simp [openPorts]) hqd hi)
+    (portCalls_sub_layR_open elem hr hss hsv hpc (by simp [openPorts]) hqd hi)
     (by rw [hfd]; exact slotDirs_staged hS hck hr hss hsv hpc hqd hi) hpv.symm
     (hmemS _ hci.1) (hmemS _ hci.2)
   have hdr := openRows_dirs hrows hnr
@@ -435,15 +436,15 @@ theorem dirsTie_staged {b : Brings} {IV : Claims.Verifier Coin}
   rw [hcol, ← bitL_readForms hl, hrb, wordBytes, bitL_wordBytes _ h hb16, List.getD_eq_getElem?_getD,
     Array.getElem?_toList, ← Array.getD_eq_getD_getElem?, getD_padTo, hdr, getD_of_lt hj]
 
-/-! ## `CopyDirsTieR` at `layVR` -/
+/-! ## `CopyDirsTieR` at `layR` -/
 
 /-- Piece `q`'s instance of its level's table: rep `r`'s opening `j` is `r · q + j` (`copyAtR`). -/
 def instR (xI : Msg) (q : OpenPiece) : ℕ := q.rep * OpenLower.qAt xI q.level + q.query
 
-/-- The deployed record over `layVR elem`. -/
+/-- The deployed record over `DeployedR.layR elem`. -/
 abbrev DR (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (IV : Claims.Verifier Coin) : Claims.Recursion.Deploy Coin :=
-  recBound _root_.Flock.Readable.relation b (layVR elem) IV
+  recBound _root_.Flock.Readable.relation b (DeployedR.layR elem) IV
 
 /-- **What `dirsTie_staged` takes beyond `StagedAt`**, at each piece a level part owns, at its instance `instR`: the
 part's circuit, with `dirs` among its inputs; the staged setup's registered rows (`hidx`, `hown`) and check 5's source
@@ -454,7 +455,7 @@ def DirsSideR (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × Li
     (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
     (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)
     (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
-  OpenLower.AtPieces FlockDeploy.sha512 (DR b elem IV) shape untr b cmt (layVR elem) pieces
+  OpenLower.AtPieces FlockDeploy.sha512 (DR b elem IV) shape untr b cmt (DeployedR.layR elem) pieces
     fun x cs _ LANES HH s xO _ _ _ q =>
     ∃ (cc : Circuit) (i0 : RecIns) (spec : SessionSpec) (sts : Array Stmt) (own : Array Registered.Port)
       (f : RecCoins.Source),
@@ -474,14 +475,15 @@ def DirsSideR (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × Li
             ((List.range (Bd.DE.V.k (Claims.Recursion.xI (DR b elem IV) x))).map cs) q =
           openPos inn LANES HH (instR (Claims.Recursion.xI (DR b elem IV) x) q)
 
-/-- **`CopyDirsTieR` at the deployed layout `layVR`**, from `DirsSideR`: `dirsTie_staged` at each piece's instance
+/-- **`CopyDirsTieR` at the layout of record `layR`**, from `DirsSideR`: `dirsTie_staged` at each piece's instance
 `instR`, whose block and VU are `copyAtR`'s (`partCircuit_staged`: the part's circuit is the staged table's). -/
-theorem copyDirsTieR_layVR {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
+theorem copyDirsTieR_layR {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
     {IV : Claims.Verifier Coin} {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg}
     {Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace}
     (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hside : DirsSideR b elem IV shape untr cmt Bd pieces posAt) :
-    OpenLower.CopyDirsTieR FlockDeploy.sha512 (DR b elem IV) shape untr b cmt (layVR elem) Bd pieces posAt := by
+    OpenLower.CopyDirsTieR FlockDeploy.sha512 (DR b elem IV) shape untr b cmt (DeployedR.layR elem) Bd pieces
+      posAt := by
   intro x st hx hf cs ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht
   obtain ⟨cc, i0, spec, sts, own, f, hpc, hdin, hsu, hown, hf', hset, hidx, hso, hop, hsp, hin, hnp, hrows⟩ :=
     hside x st hx hf cs ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht
@@ -510,15 +512,15 @@ theorem copyDirsTieR_layVR {b : Brings} {elem : (r : XR) → List (Fin r.w.parts
   rw [hcp]
   exact htie hdr
 
-/-- **`CopyDirsR` at the deployed layout `layVR`**, from `DirsSideR` (`copyDirsR_of`: `HH ≤ 32` at a staged part). -/
-theorem copyDirsR_layVR {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
+/-- **`CopyDirsR` at the layout of record `layR`**, from `DirsSideR` (`copyDirsR_of`: `HH ≤ 32` at a staged part). -/
+theorem copyDirsR_layR {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
     {IV : Claims.Verifier Coin} {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg}
     {Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace}
     (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hside : DirsSideR b elem IV shape untr cmt Bd pieces posAt) :
-    OpenLower.CopyDirsR FlockDeploy.sha512 (DR b elem IV) shape untr b cmt (layVR elem) Bd pieces posAt :=
-  OpenLower.copyDirsR_of FlockDeploy.sha512 (DR b elem IV) shape untr b cmt (layVR elem) Bd pieces posAt
-    (copyDirsTieR_layVR pieces posAt hside)
+    OpenLower.CopyDirsR FlockDeploy.sha512 (DR b elem IV) shape untr b cmt (DeployedR.layR elem) Bd pieces posAt :=
+  OpenLower.copyDirsR_of FlockDeploy.sha512 (DR b elem IV) shape untr b cmt (DeployedR.layR elem) Bd pieces posAt
+    (copyDirsTieR_layR pieces posAt hside)
 
 end
 
