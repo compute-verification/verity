@@ -28,6 +28,7 @@ import Proofs.Accounting.DeclaredCircuit.Credit
 import Proofs.Accounting.DeclaredCircuit.Slack
 import Proofs.Accounting.DeclaredCircuit.Session
 import Proofs.Accounting.DeclaredCircuit.Requirement
+import Proofs.Accounting.DeclaredCircuit.Scheduled
 import Proofs.Accounting.Remote
 import Proofs.Accounting.PerRunTruncation
 import Proofs.Accounting.PerRunPouw
