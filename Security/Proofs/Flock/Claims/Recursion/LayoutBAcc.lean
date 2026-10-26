@@ -547,8 +547,9 @@ theorem accRowAt_eq (r : XR) (s σ : ℕ) : accRowAt r s σ = (accHoldAt r s σ)
     dsimp only
     split_ifs
     · rfl
-    · simp only [Option.map_bind, Option.map_map]
-      rfl
+    · cases r.w.parts[s]?.bind partCircuit with
+      | none => rfl
+      | some c' => cases (accHoldings r s σ.unpair.1)[σ.unpair.2]? <;> rfl
 
 /-- **What a part holds at a slot is one of its holdings of the slot's row**, at its circuit. -/
 theorem accHoldAt_spec {r : XR} {s σ : ℕ} {c : Circuit} {h : String × ℕ} (he : accHoldAt r s σ = some (c, h)) :
@@ -564,7 +565,7 @@ theorem accHoldAt_spec {r : XR} {s σ : ℕ} {c : Circuit} {h : String × ℕ} (
     · cases he
       subst hso
       obtain ⟨-, hc, hh⟩ := accCanon_spec hcan
-      exact ⟨hc, List.mem_of_mem_head? hh⟩
+      exact ⟨hc, List.mem_of_mem_head? (Option.mem_def.2 hh)⟩
     · obtain ⟨c'', hc'', he⟩ := Option.bind_eq_some_iff.1 he
       obtain ⟨h'', hj, he⟩ := Option.map_eq_some_iff.1 he
       cases he

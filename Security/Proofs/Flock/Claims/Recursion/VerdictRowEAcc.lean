@@ -243,6 +243,7 @@ theorem accFrame_inj : ∀ v σ v' σ', accFrame v σ = accFrame v' σ' → v = 
   have hl : ∀ k, (HmRow.rowPrefix k).data.toList.length = 128 := fun k => by
     rw [Array.length_toList]
     exact FlockSoundness.Discharge.Hm.size_rowPrefix k
+  unfold accFrame at h
   exact (List.append_inj h (by rw [hl, hl])).2
 
 /-- **Slot `σ`'s digest at part `s`**: its holding's port's hm96 digest (`hmDigest`), read off `s`'s witness; empty
@@ -255,8 +256,8 @@ def accDig (x : Msg) (ws : List Claims.Flock.Wit) (σ s : ℕ) : Msg :=
 evaluation at its holding (`rowCall_held`), framed by `accFrame` at the port's words, to the slot's digest
 (`accDig`), where each holding's port is the circuit's. -/
 theorem accCommit_layoutBAcc {x : Msg} {ws : List Claims.Flock.Wit}
-    (hq : ∀ r s c h, readX x = some r → r.w.parts[s]?.bind partCircuit = some c → h ∈ accHeld r s →
-      (c.ports.findIdx? (·.name == h.1)).isSome = true) :
+    (hq : ∀ (r : XR) (s : ℕ) (c : Circuit) (h : String × ℕ), readX x = some r →
+      r.w.parts[s]?.bind partCircuit = some c → h ∈ accHeld r s → (c.ports.findIdx? (·.name == h.1)).isSome = true) :
     ∀ σ s w v, ws[s]? = some w → (layoutBAcc rest).rowHeld x s w σ = some v →
       ∃ σ', (accFrame v σ', accDig x ws σ s) ∈ (layoutBAcc rest).calls x s w := by
   intro σ s w v hw hv
@@ -284,8 +285,8 @@ stays open is each holding's climb from its digest (`accDig`) to the row's regis
 verifier's evaluations and the climbs' steps apart. -/
 theorem rowsAgree_layoutBAcc {H : Msg → Msg} {x : Msg} {ws : List Claims.Flock.Wit} {b : Brings} {xs : List Msg}
     (hT : ∀ e ∈ (layoutBAcc rest).allCalls x ws, H e.1 = e.2) (hws : ws.length = nS x)
-    (hq : ∀ r s c h, readX x = some r → r.w.parts[s]?.bind partCircuit = some c → h ∈ accHeld r s →
-      (c.ports.findIdx? (·.name == h.1)).isSome = true)
+    (hq : ∀ (r : XR) (s : ℕ) (c : Circuit) (h : String × ℕ), readX x = some r →
+      r.w.parts[s]?.bind partCircuit = some c → h ∈ accHeld r s → (c.ports.findIdx? (·.name == h.1)).isSome = true)
     (path : ℕ → ℕ → List (Msg → Msg)) (root : ℕ → Msg)
     (hclimb : ∀ σ s w v, ws[s]? = some w → (layoutBAcc rest).rowHeld x s w σ = some v →
       Claims.Recursion.VStar.chainH H (path σ s) (accDig x ws σ s) = root σ)
@@ -304,8 +305,8 @@ calls. The copy's two row calls are recorded (`rowCall_held`, `outCall_held`), a
 theorem accHolds_layoutBAcc_recorded {H : Msg → Msg} {l : List (Msg × Msg)} (hT : ∀ e ∈ l, H e.1 = e.2)
     (hnc : (Claims.findColl l).isSome = false) {x : Msg} {ws : List Claims.Flock.Wit}
     (hl : ∀ e ∈ (layoutBAcc rest).allCalls x ws, e ∈ l)
-    (hq : ∀ r s c h, readX x = some r → r.w.parts[s]?.bind partCircuit = some c → h ∈ accHeld r s →
-      (c.ports.findIdx? (·.name == h.1)).isSome = true)
+    (hq : ∀ (r : XR) (s : ℕ) (c : Circuit) (h : String × ℕ), readX x = some r →
+      r.w.parts[s]?.bind partCircuit = some c → h ∈ accHeld r s → (c.ports.findIdx? (·.name == h.1)).isSome = true)
     (sideAt : Msg → List Msg → OpenPiece → OpenSide) (coefAt : Msg → List Coin → OpenPiece → Array F128)
     (q : OpenPiece) (cs : List Coin) {v : ℕ → Bool} {LANES HH : ℕ} (hO : Flock.Readable.LevelOuts v LANES HH)
     (hLA : LANES = 2 ^ ((sideAt x ((layoutBAcc rest).msgs x ws) q).sch.levels[q.level]!).lanes)
