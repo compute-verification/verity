@@ -493,6 +493,15 @@ def test_credit(pass_server):
     assert any(k.startswith("window a-link: ") and "the window's layout gives it" in k for k in CREDITED)
 
 
+def test_honest_j10r_windows_are_credited(pass_server):
+    """The compiled `Credit.window` credits honest J10-R windows (`window_instance`'s ``j10r``: J10-R units, two row tiles
+    a call), as the Python verifier does: the code fact `Proofs.Pouw.PeriodJ10R.Honest`'s `j10r_meets` takes as `hacc`.
+    `test_credit` replays these cases but holds only the two sides to each other."""
+    for seed in range(3):
+        kind, out = D.replay(WINDOW, credit_cases.window_instance(random.Random(f"j10r/{seed}"), "j10r"), pass_server)
+        assert kind == "output" and json.loads(out).get("credited"), out
+
+
 def leaf_words(case: dict) -> dict:
     try:
         return {"leaf_words": W.leaf_words(case["k"])}
