@@ -69,7 +69,11 @@ def test_instruction_models():
         assert _eval_op("IMAD.WIDE", a, b, c, d, signed=False) == (wide & F.M32, (wide >> 32) & F.M32)
         assert _eval_op("LEA.HI", a, a, c, n=13)[0] == (S.rotl(a, 13) + c) & F.M32
         assert _eval_op("SHF", a, b, c, n=7, mode=0)[0] == ((b << 32 | a) >> 7) & F.M32
+        assert _eval_op("SHF", a, b, 40, mode=0, fn=3)[0] == b   # clamped: min(40, 32)
+        assert _eval_op("SHF", a, b, 40, mode=0, fn=1)[0] == ((b << 32 | a) >> 8) & F.M32
         assert _eval_op("PRMT", a, b, 0x3210)[0] == a
+        assert _eval_op("PRMT", a, b, 1, fn=1)[0] == ((b << 32 | a) >> 8) & F.M32   # f4e, c[1:0] = 1
+        assert _eval_op("SEL", a, b, c, d, fn=0, signed=False)[0] == (c if a < b else d)
 
 
 def test_li_one_instruction_unsat_small_menu():

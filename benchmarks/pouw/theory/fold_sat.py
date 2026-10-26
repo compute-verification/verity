@@ -27,18 +27,21 @@ IMAD, IMAD.HI, IMAD.WIDE, SHF, LEA/LEA.HI, PRMT, IMNMX, POPC, FLO, BREV, BMSK, S
   IMAD.HI(a, b, c; s)       hi(a b) + c, signed or unsigned product
   IMAD.WIDE(a, b, c, d; s)  (lo, hi) of a b + {d:c}, signed or unsigned product (two registers)
   IADD64(a, b, c, d)        (lo, hi) of {b:a} + {d:c} (two registers)
-  SHF(a, b, c; dir, s, n)   funnel: lo({b:a} >> n) or hi({b:a} << n), n = c's low 6 bits (wrap) or the immediate count
-                            n; right shifts may fill from b's sign
+  SHF(a, b, c; dir, s, n)   funnel: lo({b:a} >> n) or hi({b:a} << n); n is the immediate (0..63) or register c
+                            wrapped (& 31, & 63) or clamped (min(c, 32), min(c, 64)); right shifts may fill from b's sign
   LEA(a, c; n)              (a << n) + c
   LEA.HI(a, b, c; n)        lo({b:a} >> (32 - n)) + c
-  PRMT(a, b, c)             byte i = byte (c >> 4 i) & 7 of {b:a}, replicated sign if (c >> 4 i) & 8
+  PRMT(a, b, c; mode)       default: byte i = byte (c >> 4 i) & 7 of {b:a}, replicated sign if (c >> 4 i) & 8; or
+                            f4e, b4e, rc8, ecl, ecr, rc16 on c[1:0]
   IMNMX(a, b; s, max)       min or max, signed or unsigned
   UNARY(a; f)               POPC, FLO (clz), BREV, NOT, IABS, SGXT(a, n), BMSK(a, n)
-  SEL(a, b; cmp)            ISETP + SEL fused: (a cmp c) ? a : b over the six comparisons, signed or unsigned
+  SEL(a, b, c, d; cmp)      ISETP + SEL fused in one slot: (a cmp b) ? c : d, six comparisons, signed or unsigned
 
 MOV with an immediate is an operand; IADD (32) is IADD3 with RZ. Not modelled, so not covered: the FP pipes (FFMA,
 HFMA2, DFMA on integer bit patterns), IDP.4A and IDP.2A, memory (table lookups through LDS or constant memory),
-shuffles and predicates beyond SEL's fused compare. A bound from this file is a bound over the modelled set.
+shuffles, a predicate read by more than one instruction (predicated execution beyond one fused SEL), and carry chains
+other than IADD64 (IADD3.X and IMAD.X with a three-input low half). A bound from this file is a bound over the
+modelled set.
 
 Run: `python fold_sat.py cell TARGET K [--vectors N] [--timeout S]`, or `python fold_sat.py sweep --out DIR`.
 """
@@ -174,17 +177,31 @@ def _prod(a, b):
     return lo, hi_u, hi_s
 
 
+def _n64(n):
+    return n if n.size() == 2 * W else z3.ZeroExt(2 * W - n.size(), n)
+
+
 def _funnel_r(lo, hi, n, arith):
-    """lo({hi:lo} >> n) for n in 0..63, with an arithmetic fill when ``arith``."""
+    """lo({hi:lo} >> n), with an arithmetic fill when ``arith``; n of any width, a count of 64 or more shifts out."""
     x = z3.Concat(hi, lo)
-    n64 = z3.ZeroExt(2 * W - 6, n)
-    return z3.Extract(W - 1, 0, z3.If(arith, x >> n64, z3.LShR(x, n64)))
+    return z3.Extract(W - 1, 0, z3.If(arith, x >> _n64(n), z3.LShR(x, _n64(n))))
 
 
 def _funnel_l(lo, hi, n):
-    """hi({hi:lo} << n) for n in 0..63."""
+    """hi({hi:lo} << n), n of any width."""
     x = z3.Concat(hi, lo)
-    return z3.Extract(2 * W - 1, W, x << z3.ZeroExt(2 * W - 6, n))
+    return z3.Extract(2 * W - 1, W, x << _n64(n))
+
+
+def _shf_count(c, fn, n_imm):
+    """SHF's count: the immediate, or register c wrapped (& 31, & 63) or clamped (min(c, 32), min(c, 64))."""
+    c64 = z3.ZeroExt(W, c)
+    cases = [z3.ZeroExt(2 * W - 6, n_imm), c64 & 31, c64 & 63,
+             z3.If(z3.ULT(c, 32), c64, z3.BitVecVal(32, 2 * W)), z3.If(z3.ULT(c, 64), c64, z3.BitVecVal(64, 2 * W))]
+    v = cases[0]
+    for k in range(1, len(cases)):
+        v = z3.If(fn == k, cases[k], v)
+    return v
 
 
 def _clz(a):
@@ -202,7 +219,16 @@ def _brev(a):
     return z3.Concat(*[z3.Extract(i, i, a) for i in range(W)])
 
 
-def _prmt(a, b, c):
+#: PRMT's special modes (PTX prmt .f4e .b4e .rc8 .ecl .ecr .rc16): per c[1:0], the source byte of d's bytes 3..0
+PRMT_MODES = {
+    "f4e": ("3210", "4321", "5432", "6543"), "b4e": ("5670", "6701", "7012", "0123"),
+    "rc8": ("0000", "1111", "2222", "3333"), "ecl": ("3210", "3211", "3222", "3333"),
+    "ecr": ("0000", "1110", "2210", "3210"), "rc16": ("1010", "3232", "1010", "3232"),
+}
+
+
+def _prmt(a, b, c, fn=None):
+    """PRMT: default mode (fn 0) or a special mode (fn 1..6, PRMT_MODES' order)."""
     x = z3.Concat(b, a)
     bytes_ = [z3.Extract(8 * i + 7, 8 * i, x) for i in range(8)]
     out = []
@@ -213,7 +239,17 @@ def _prmt(a, b, c):
             sel = z3.If(z3.Extract(2, 0, nib) == j, bytes_[j], sel)
         sign = z3.If(z3.Extract(7, 7, sel) == 1, z3.BitVecVal(0xFF, 8), z3.BitVecVal(0, 8))
         out.append(z3.If(z3.Extract(3, 3, nib) == 1, sign, sel))
-    return z3.Concat(*reversed(out))
+    v = z3.Concat(*reversed(out))
+    if fn is None:
+        return v
+    c2 = z3.Extract(1, 0, c)
+    for m, table in enumerate(PRMT_MODES.values(), start=1):
+        mv = None
+        for s, digits in enumerate(table):
+            word = z3.Concat(*[bytes_[int(ch)] for ch in digits])
+            mv = word if mv is None else z3.If(c2 == s, word, mv)
+        v = z3.If(fn == m, mv, v)
+    return v
 
 
 class Slot:
@@ -273,14 +309,14 @@ class Slot:
             elif name == "SHF":
                 left = z3.Extract(0, 0, self.mode) == 1
                 arith = z3.Extract(1, 1, self.mode) == 1
-                n = z3.If(z3.Extract(2, 2, self.mode) == 1, z3.Extract(5, 0, c), self.n)
+                n = _shf_count(c, self.fn, self.n)
                 res[name] = (z3.If(left, _funnel_l(a, b, n), _funnel_r(a, b, n, arith)), _bv(0))
             elif name == "LEA":
                 res[name] = ((a << z3.ZeroExt(W - 6, self.n)) + c, _bv(0))
             elif name == "LEA.HI":
                 res[name] = (_funnel_l(a, b, self.n) + c, _bv(0))
             elif name == "PRMT":
-                res[name] = (_prmt(a, b, c), _bv(0))
+                res[name] = (_prmt(a, b, c, self.fn), _bv(0))
             elif name == "IMNMX":
                 mx = z3.Extract(0, 0, self.mode) == 1
                 lt = z3.If(self.signed, a < b, z3.ULT(a, b))
@@ -295,12 +331,12 @@ class Slot:
                     v = z3.If(self.fn == k, fns[k], v)
                 res[name] = (v, _bv(0))
             elif name == "SEL":
-                cmps = [z3.If(self.signed, a < c, z3.ULT(a, c)), z3.If(self.signed, a <= c, z3.ULE(a, c)), a == c,
-                        a != c, z3.If(self.signed, a > c, z3.UGT(a, c)), z3.If(self.signed, a >= c, z3.UGE(a, c))]
+                cmps = [z3.If(self.signed, a < b, z3.ULT(a, b)), z3.If(self.signed, a <= b, z3.ULE(a, b)), a == b,
+                        a != b, z3.If(self.signed, a > b, z3.UGT(a, b)), z3.If(self.signed, a >= b, z3.UGE(a, b))]
                 p = cmps[0]
                 for k in range(1, 6):
                     p = z3.If(self.fn == k, cmps[k], p)
-                res[name] = (z3.If(p, a, b), _bv(0))
+                res[name] = (z3.If(p, c, d), _bv(0))
         lo, hi = res[self.ops[0]]
         for k in range(1, len(self.ops)):
             lo = z3.If(self.op == k, res[self.ops[k]][0], lo)
