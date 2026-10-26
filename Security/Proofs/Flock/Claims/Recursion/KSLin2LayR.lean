@@ -234,11 +234,10 @@ theorem ksLin2_stepsC_layR (nextE : Msg → List Msg → List Coin → Claims.OC
         (Claims.Recursion.VStarB.PartAccepts FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
           shape (showsPart recRead bR) (cmtTr recRead))) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
-      (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro bR L Bd D hD
-  exact ksLin2_stepsC_at nextE colsE b aux nOf hd recRest L (readsRows_layR elem) (heldWhole_layR elem) wE join final w
-    hB (readersTrue_layR elem Bd.IVStar bR _ hmSlotsCommit_of_full hM)
-    (heldB_dense_layR elem nextE colsE bR wE join final w) (partOpensB_dense_layR elem bR Bd.IVStar) hD
+      (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt :=
+  fun hD => ksLin2_stepsC_at nextE colsE b aux nOf hd recRest (DeployedR.layR elem) (readsRows_layR elem)
+    (heldWhole_layR elem) wE join final w hB (readersTrue_layR elem _ _ _ hmSlotsCommit_of_full hM)
+    (heldB_dense_layR elem nextE colsE _ wE join final w) (partOpensB_dense_layR elem _ _) hD
 
 /-- **`BitsLin2` at the same choice**: `ksLin2_stepsC_layR` through `bitsLin2On_of_ksLin2On` (`sessionAccepts`). -/
 theorem bitsLin2_stepsC_layR (nextE : Msg → List Msg → List Coin → Claims.OC Out)
@@ -331,11 +330,10 @@ theorem ksLin2_stepsC_layRP (nextE : Msg → List Msg → List Coin → Claims.O
         (Claims.Recursion.VStarB.PartAcceptsP FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
           shape (showsPart recRead bR) (cmtTr recRead))) →
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
-      (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
-  intro bR L Bd D hD
-  exact ksLin2_stepsC_atP nextE colsE b aux nOf hd recRest L (readsRows_layR elem) (heldWhole_layR elem) wE join final
-    w hB (readersTrue_layR elem Bd.IVStar bR _ hmSlotsCommit_of_full hM)
-    (heldB_dense_layR elem nextE colsE bR wE join final w) (partOpensB_dense_layR elem bR Bd.IVStar) hD
+      (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt :=
+  fun hD => ksLin2_stepsC_atP nextE colsE b aux nOf hd recRest (DeployedR.layR elem) (readsRows_layR elem)
+    (heldWhole_layR elem) wE join final w hB (readersTrue_layR elem _ _ _ hmSlotsCommit_of_full hM)
+    (heldB_dense_layR elem nextE colsE _ wE join final w) (partOpensB_dense_layR elem _ _) hD
 
 /-- **`KSLin2` at the deployed reader's steps, at the layout of record, from the pinned form**:
 `ksLin2_stepsC_layRP` at `stepsBase_R`. What stays open: `DecompBP` at `PartAcceptsP`, `PlainRdInR` and
