@@ -8659,6 +8659,18 @@
    "assumptions": [],
    "type_hash": "560ed1990f5de6f57790315c444cee8b3cfc454b0ef9520275c93c4b19262b16"
   },
+  "Pous.SecurityProofs.ObligationOfRoundSecure": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.ObligationOfRoundSecure : Pous.Guarantees.ObligationOfRoundSecure"],
+   "assumptions": [],
+   "type_hash": "9a650409c05617bb5c6c7fe77cce181a101ca6dec515c598247cefbd657922ef"
+  },
+  "Pous.SecurityProofs.P2ContentAbsorbs": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.P2ContentAbsorbs : Pous.Guarantees.P2ContentAbsorbs"],
+   "assumptions": [],
+   "type_hash": "71e018996c96ef41dcc6076ce305af4355a005b7a5e01a8924ccce21baf22750"
+  },
   "Pous.SecurityProofs.P2ErrorSplitB19Uncond": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.P2ErrorSplitB19Uncond : Pous.Guarantees.P2ErrorSplitB19Uncond"],
@@ -8695,17 +8707,11 @@
    "assumptions": [],
    "type_hash": "657909e6a4c868866789d83939045ceb45c1f1bb4a1e6f5d21e773c64941f781"
   },
-  "Pous.SecurityProofs.ObligationOfRoundSecure": {
-   "owner": "@memory-accounting"
-  },
   "Pous.SecurityProofs.P2RingGradedOfRoundSecure": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.P2RingGradedOfRoundSecure : Pous.Guarantees.P2RingGradedOfRoundSecure"],
    "assumptions": [],
    "type_hash": "f03289550b64710615f1e173ecce8c8aaf1163cfeb2840fbd432aa70355c517e"
-  },
-  "Pous.SecurityProofs.P2ContentAbsorbs": {
-   "owner": "@memory-accounting"
   },
   "Pous.SecurityProofs.P2SlackB19Uncond": {
    "owner": "@memory-accounting",
@@ -8780,7 +8786,10 @@
    "type_hash": "2e77fb239fa74898926e096ad501674a523e7a90980fa8146860d259070978ad"
   },
   "Pous.SecurityProofs.SnapshotFresh": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.SnapshotFresh : Pous.Guarantees.SnapshotFresh"],
+   "assumptions": [],
+   "type_hash": "87d257b44d582fbed8e5f67a752da0f74dc5370a63267a9b5ea9e6bc4fbbd42f"
   },
   "Pous.SecurityProofs.StreamedWipe": {
    "owner": "@memory-accounting",
@@ -21166,6 +21175,7 @@
     "Pous.SecurityProofs.ChainDenseMeets64",
     "Pous.SecurityProofs.DenseMeets",
     "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -21224,6 +21234,7 @@
     "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure",
     "Pous.SecurityProofs.P2RingGradedOfRoundSecure"
@@ -21296,6 +21307,7 @@
     "Pous.SecurityProofs.ContinuousAudit",
     "Pous.SecurityProofs.DenseMeets",
     "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -21456,6 +21468,8 @@
     "Pous.SecurityProofs.ContinuousAudit",
     "Pous.SecurityProofs.DenseMeets",
     "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
+    "Pous.SecurityProofs.P2ContentAbsorbs",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -21475,6 +21489,7 @@
     "Pous.SecurityProofs.SecureErasureMeetsFamily",
     "Pous.SecurityProofs.SegMeets14",
     "Pous.SecurityProofs.SegTagMeets14",
+    "Pous.SecurityProofs.SnapshotFresh",
     "Pous.SecurityProofs.StreamedWipe",
     "Pous.SecurityProofs.StreamedWipeMeets2600GB"
    ]
@@ -21544,6 +21559,19 @@
     "Pous.SecurityProofs.P3ConcreteMeets64D12",
     "Pous.SecurityProofs.SegMeets14",
     "Pous.SecurityProofs.SegTagMeets14"
+   ]
+  },
+  "Definitions.Pous.Guarantees.Obligation": {
+   "digest": "18c1c7e28519095addbc14d141e2fb72b6c35335c9608ae2e890833f9206b074",
+   "definitions": {
+    "Pous.Guarantees.ObligationOfRoundSecure": "94292f511eadaa13ece6940b67cc38584dc4e5668e07a68f9d48afec1d9f4b5b",
+    "Pous.Guarantees.P2ContentAbsorbs": "d8c36c9972b654a211b48bd6ec829a7b3a6d4015092dee2658e7dd5faf2738f1",
+    "Pous.Guarantees.SnapshotFresh": "c106431b1609a11713c846d06df14838be4982fb3536019917533a3b5a0bf335"
+   },
+   "guarantees": [
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
+    "Pous.SecurityProofs.P2ContentAbsorbs",
+    "Pous.SecurityProofs.SnapshotFresh"
    ]
   },
   "Definitions.Pous.Guarantees.P2": {
@@ -21653,6 +21681,7 @@
     "Pous.SecurityProofs.ContinuousAudit",
     "Pous.SecurityProofs.DenseMeets",
     "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -21932,6 +21961,7 @@
     "Pous.SecurityProofs.ChainDenseMeets64",
     "Pous.SecurityProofs.DenseMeets",
     "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -21986,6 +22016,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
+    "Pous.SecurityProofs.P2ContentAbsorbs",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -22167,6 +22199,7 @@
     "Pous.SecurityProofs.ContinuousAudit",
     "Pous.SecurityProofs.DenseMeets",
     "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -22292,10 +22325,23 @@
     "Accounting.SecurityProofs.Memory.AddsOnIsolated",
     "Accounting.SecurityProofs.Memory.AddsP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
+    "Pous.SecurityProofs.P2ContentAbsorbs",
     "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure",
     "Pous.SecurityProofs.P2RingGradedOfRoundSecure"
    ]
+  },
+  "Definitions.Pous.P2.Mutable": {
+   "digest": "ffd3597559e55fe73bda60076023f704f758c93e045a588fa5f3c5409974d162",
+   "definitions": {
+    "Pous.Mutable.Oracle": "69d20918cd32af8b5b555241d091dd80ab77485c46800c30f386d27f1296f1b3",
+    "Pous.Mutable.Rest": "03a2b01b68655f2a02bc80ded2b321df1781823ee578844a78ef4aaa875ed807",
+    "Pous.Mutable.RestKeys": "74272f69f57823ba75dba586096b7c29fc5b02c188dfd1fe68bfafdd4d2bf9df",
+    "Pous.Mutable.rest": "43c53f646327ce1b8b23ef6c18c677b4d494d75244036bc42a51257d1010d551",
+    "Pous.Mutable.snap": "2b04a49908528f2689ff3a2781d3552a94e34e804f86dcd749831e62b125df70"
+   },
+   "guarantees": ["Pous.SecurityProofs.ObligationOfRoundSecure"]
   },
   "Definitions.Pous.P2.Rounds": {
    "digest": "2520b6c7fc6153587f030ac0b87172863d95c6b666eb9440a66b3b9d3d4f49c0",
@@ -22306,7 +22352,11 @@
     "Pous.varAnswers": "f46e52cc7f22f537498e84dc6d1ae75aef6958d23e60c3df6cb2d0e9fbc0ee5d",
     "Pous.varPassesOn": "0dc8f405a0c20d1994fa6ddc97d5660fc93c51660f1b89e40982ffb969d4d81e"
    },
-   "guarantees": ["Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure", "Pous.SecurityProofs.P2RingGradedOfRoundSecure"]
+   "guarantees": [
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
+    "Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure",
+    "Pous.SecurityProofs.P2RingGradedOfRoundSecure"
+   ]
   },
   "Definitions.Pouw.Assumptions.Deadline": {
    "digest": "efde32e6e0055ddbe420d8f4b410840f185cbf92a03b58e3e2e3c54dcbf0cd03",
