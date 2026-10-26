@@ -522,6 +522,15 @@ sampling, and with the count `C(N, r) ≤ 2^N` the compression term needs `q ≥
 `(18/19)^2152 ≈ 2^-167.9`, but sampling can't take all of `f = 1/19`: the missing labels' bits and the count come out of
 the same `M/19`. At `k = 2152` this split reaches about `f = 1/23`, and `f = 1/19` from about `k = 1,765`.
 
+For any read count, `StreamedWipeMeetsReads` (`Security/Definitions/Pous/Guarantees/StreamedWipeReads.lean`, proved in
+the same `Family.lean`, the family being its instance at `r = 24`) proves `512 · (⌈N/r⌉ − 1) + N + ⌊log₂ k⌋ + 130 + R + E`
+bits at `2^-128` for every `k` and `r` with `(r − 1)^k · 2^129 ≤ r^k` (that is `(1 − 1/r)^k ≤ 2^-129`), every fill of
+`N ≥ 1` labels and `R` bits of the server outside the fill, which count in full. So `f ≈ 1/r + 1/512` at
+`k ≈ 129 · ln 2 · r ≈ 89.4 · r`. Its H200 instance, `StreamedWipeMeets141GB5`, meets the onsite target of at most
+5 GB a device: at `N = 2,203,125,000` (141·10⁹ bytes) with the 2.3 GB driver reserve, the least ratio is `r = 59` and its
+least read count `k = 5231`, for `39,721,768,854 + E` bits (the fill's 21,321,768,854, about 2.665 GB, plus the reserve:
+about 4.965 GB). At `r = 58` the fill's share alone is 2.706 GB.
+
 **What it rests on.** No named assumption. The PRF enters as the advantage term in the conclusion, which C3 bounds for
 an efficient prover. The physical premises are the game's shape, and the deployment must make them true:
 
@@ -874,6 +883,7 @@ The properties of the Lean verdicts `PousCheck.TimedAudit` and `MemoryChallenger
 | `BandTwoWay220_12`, `BandTwoWay220_12D11`, `BandTwoWay220_16` | the band certificate for the two-directional column game (`Pous.ColumnGame`): `B(220, 12)` at game depths 10 and 11, and `B(220, 16)` at depth 12, save at most `X = 3` labels | proved |
 | `StreamedWipe`, `StreamedWipeMeets2600GB` | the streamed-label wipe ("The streamed-label wipe"): for every prover of the sequential wipe, `Pr[accepted ∧ the prior content survives] ≤ (g/N)^k + k·C(N, g+1)·2^(M+E)/2^(q+(g+1)·b) + Adv_PRF`, with no named assumption; at 2.6 TB and `k = 74,000`, at most `2^-40 + Adv_PRF` for `q ≥ E + 8.6·10⁹` bits | proved |
 | `StreamedWipeMeetsFamily`, `StreamedWipeMeets96GiB`, `StreamedWipeMeets141GB` | the streamed-label wipe at `k = 2152` reads, `verity/wipe/v0`'s figure: for every fill of at least one 32 MiB segment, at most `2^-128 + Adv_PRF` for `q ≥ ⌈M/19⌉ + E`; at 96 GiB and 141 GB the explicit thresholds | proved |
+| `StreamedWipeMeetsReads`, `StreamedWipeMeets141GB5` | the streamed-label wipe at any `k` reads with `(1 − 1/r)^k ≤ 2^-129`: for every fill and `R` bits outside it, at most `2^-128 + Adv_PRF` for `q ≥ 512·(⌈N/r⌉ − 1) + N + ⌊log₂ k⌋ + 130 + R + E`; an H200 (141 GB and its 2.3 GB reserve) at `k = 5231`, `q ≥ 39,721,768,854 + E` bits, at most 5 GB | proved |
 
 **Why N10 fails.** Top label `v` reads only column `v` of the lower layer, so an adversary can pay for a lower label a
 column at a time, where whole-label pebbling charges it a whole label. N10′, the column-aware restatement over
