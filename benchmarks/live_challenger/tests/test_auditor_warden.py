@@ -330,7 +330,7 @@ def test_a_scan_rehearsal_takes_its_prompts_off_stdin_into_its_witness_alone_and
     (got, work, url), = seen
     assert got == req and work == w and end["rc"] == 0 and end["witness"][A.PROMPTS] == len(b"[[70001,3],[5],[7]]")
     argv = A.warden_command(got, work, url)
-    assert argv[argv.index("--egress-cells") + 2:] == ["--prompts", str(w / A.PROMPTS), "--window-per-group",
+    assert argv[argv.index(A.SCAN_SCHEDULE[-2]) + 2:] == ["--prompts", str(w / A.PROMPTS), "--window-per-group",
                                                        "--max-tokens", "2"]
     assert "groups.json" in end["files"] and json.loads((d / "out" / "groups.json").read_text())["groups"]
     public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
