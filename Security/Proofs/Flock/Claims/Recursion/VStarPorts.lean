@@ -69,7 +69,16 @@ theorem topsAt_same {src : VStar.In.Src} {l : ℕ} {a : Array (ByteArray × Byte
       { rows := #[a].flatMap (fun t => t.flatMap fun (n, _) => (Firewall.topRows n).toArray),
         salts := #[a].flatMap (fun t => t.map (·.2)), first := #[0, 0] } := by
   have hr : List.range' 0 2 1 = [0, 1] := rfl
-  simp [VStar.In.topsAt, h2, h0, h1, ha, sameTop_self, hr]
+  have h0' : (src.tops[0]'(by omega))[l]? = some a := by
+    rw [← getElem!_pos src.tops 0 (by omega)]
+    exact h0
+  have h1' : (src.tops[1]'(by omega))[l]? = some a := by
+    rw [← getElem!_pos src.tops 1 (by omega)]
+    exact h1
+  have ha' : ∀ (i : ℕ) (hi : i < a.size), a[i].1.size = 64 := by simpa using ha
+  have hf : Array.findIdx? (VStar.In.sameTop a) #[a] = some 0 :=
+    Array.findIdx?_eq_some_iff_getElem.2 ⟨by simp, by simpa using sameTop_self a, fun j hj => absurd hj (by omega)⟩
+  simp [VStar.In.topsAt, h2, h0', h1', ha', hf, sameTop_self, hr]
 
 /-- **RecCap's port inputs** where its level's tops number its `N` instances. -/
 theorem capIn_ok {src : VStar.In.Src} {l N : ℕ} {T : VStar.In.Tops} (h : VStar.In.topsAt src l = .ok T)

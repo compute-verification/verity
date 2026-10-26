@@ -30,8 +30,12 @@ theorem commitString_rowMsg (ws : Array ℕ) (y : Salt) :
   have hsp : FlockSoundness.Refine.K512.saltPrefix = Hm96.Default512.saltPrefix.data.toList := by
     unfold FlockSoundness.Refine.K512; rfl
   unfold FlockSoundness.Binding.commitString hmLeaf saltH
+  dsimp only
   refine congrArg₂ HAppend.hAppend ?_ ?_
-  · have hl := length_xorMask (rowMsg ws) (List.ofFn y)
+  · rw [show List.ofFn (asX (digestOf ws) + maskX y) =
+      List.ofFn (fun i : Fin 64 => asX (digestOf ws) i ^^^ maskX y i) from rfl]
+    unfold asX maskX
+    have hl := length_xorMask (rowMsg ws) (List.ofFn y)
     have hd := FlockSoundness.Discharge.Hm.length_digBytes (FlockSoundness.Refine.H512 (rowMsg ws))
     have hk := FlockSoundness.Refine.K512.mask_len (List.ofFn y)
     apply List.ext_getElem (by rw [hl, List.length_ofFn])
@@ -39,7 +43,6 @@ theorem commitString_rowMsg (ws : Array ℕ) (y : Salt) :
     have hi : i < 64 := by rw [hl] at h1; exact h1
     rw [List.getElem_ofFn]
     simp only [FlockSoundness.Merkle.xorBytes, List.getElem_zipWith]
-    show _ = digestOf ws ⟨i, hi⟩ ^^^ maskOf y ⟨i, hi⟩
     refine congrArg₂ HXor.hXor ?_ ?_
     · unfold digestOf
       rw [sha512_eq, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem (by rw [hd]; exact hi)]
@@ -52,7 +55,7 @@ theorem commitString_rowMsg (ws : Array ℕ) (y : Salt) :
         have hL : FlockSoundness.Refine.K512.L = 64 := rfl
         omega)]
       rfl
-  · rw [hsp, ← sha512_eq]
+  · rw [hsp, sha512_eq]
     rfl
 
 /-- **The port's row prefix is the placed row's**, where `TraceOk` holds: its rows are of the port's words. -/
@@ -102,14 +105,14 @@ theorem rowHidden_staged {st : Stage} {x : Msg} {ms : List (Msg × Claims.Out)} 
   have hsv' : (Flock.RecVStar.statements r.shape).toOption.bind (·[s]?) = some sv := by
     rw [hss]
     exact hsv
-  subst hc0
+  rw [hc0] at hrows hl
   refine ⟨fun h hh => ?_, fun l N hN q hq n => ?_⟩
   · obtain ⟨q, hq, k, hk, hrep, hnm, hqi⟩ := mem_heldRows hsv' hpc hh
     obtain ⟨hout, -⟩ := ownPorts_held hq
     rw [hnm]
     have hqs := (Array.findIdx?_eq_some_iff_getElem.1 hqi).1
     have hN := in_block hrows hout hqi
-    rw [getElem!_pos _ _ hqs] at hN
+    rw [getElem!_pos c.ports q hqs] at hN
     exact ⟨_, rowHidden_eq _ hl hqi hqs hN⟩
   · rw [hsv'] at hN
     have e : sv = .cap l N := Option.some.inj hN
@@ -117,7 +120,7 @@ theorem rowHidden_staged {st : Stage} {x : Msg} {ms : List (Msg × Claims.Out)} 
     have htop : "top" ∉ (VStar.Stmt.cap l N).sub.outputs := by show "top" ∉ ["out"]; decide
     have hqs := (Array.findIdx?_eq_some_iff_getElem.1 hq).1
     have hN' := in_block hrows htop hq
-    rw [getElem!_pos _ _ hqs] at hN'
+    rw [getElem!_pos c.ports q hqs] at hN'
     exact ⟨_, rowHidden_eq _ hl hq hqs hN'⟩
 
 /-- **A slot at the deployed builder's witness outputs the inner prover's commit string** of the row the stager placed
