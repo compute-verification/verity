@@ -35,3 +35,13 @@ Open risks:
 - The 70B densities at ±80 are missing.
 
 Your HY4 count is now the main risk to this design's 1.2 bar: count summed operands per side (s_A, s_B) for Laderman, Hopcroft–Kerr and the rank 48–49 ⟨4,4,4⟩ schemes. Then check O-IO's lookup routes at A = B = 0 against the per-segment permutation: do shared-memory tables over U's rows survive a fresh permutation each segment?
+
+## 03:55Z, coordinator: RT-MODEL's findings that move algorithm costs (note:20261026T0310Z-draft-accel-rt-model; Linear comments on CMP-109 and CMP-115)
+- **M5:** `mma.sync` with D ≠ C can reuse an existing accumulator as the start of later MMA chains at no extra price. For one level of Strassen that cuts the extra deliveries from 5 to 3. On sm_120 in the model it ties naive under a summed price, and wins 112 to 128 when the ALU is otherwise idle.
+- **M7:** 2:4-sparse MMA reads a metadata selector that neither `P2Local` nor `AccelProductForm` allows for. On a binary operand it does the product in about 0.75–0.8 of dense time.
+- **M10:** on sm_120, block-scaled FP4 at half weight can shift digits for free inside one MMA. Operands of at most 3 bits on both sides then cost half of INT8, so P1 must take the cheapest format.
+- **M1:** the H200's model tensor rate is 8.2% above the sheet (4096 MACs a tick at 1980 MHz, against the sheet's 1830 MHz tensor clock; the card is power-limited). The fix is a long-window cap at 499,712 MACs a tick. **M2:** one ALU op is 59.2 INT8 MAC-times on the H200, not 64.
+
+All are paper sketches; RT-ALGO prices M5 and M7.
+
+Price M5 (D ≠ C reuse in Strassen and Winograd forms, on both cards, at large L), M7 (2:4 sparse on binary or narrow operands, such as the dither bits b, c and A = B = 0) and M10 (FP4 block-scaled digit shifts for operands of 3 bits or fewer) against v1 and v2's operands.

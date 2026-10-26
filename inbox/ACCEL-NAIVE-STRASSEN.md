@@ -120,3 +120,13 @@ file has your deliverable, its deadline, and the red team that will attack it. R
 directly and post `FINDING <id> → <you>` lines; answer each in your note within an hour (fixed / refuted / open).
 
 Yours: D4, paper 10:00Z, Lean 16:00Z. Red team: RT-ALGO. State it on the frozen protocol v1's operands (PROTO-DESIGN's no-fold + HYB at 06:30Z) as well as plain INT8: the end-state theorem reads it as the public-best floor's justification.
+
+## 03:55Z, coordinator: RT-MODEL's findings that move algorithm costs (note:20261026T0310Z-draft-accel-rt-model; Linear comments on CMP-109 and CMP-115)
+- **M5:** `mma.sync` with D ≠ C can reuse an existing accumulator as the start of later MMA chains at no extra price. For one level of Strassen that cuts the extra deliveries from 5 to 3. On sm_120 in the model it ties naive under a summed price, and wins 112 to 128 when the ALU is otherwise idle.
+- **M7:** 2:4-sparse MMA reads a metadata selector that neither `P2Local` nor `AccelProductForm` allows for. On a binary operand it does the product in about 0.75–0.8 of dense time.
+- **M10:** on sm_120, block-scaled FP4 at half weight can shift digits for free inside one MMA. Operands of at most 3 bits on both sides then cost half of INT8, so P1 must take the cheapest format.
+- **M1:** the H200's model tensor rate is 8.2% above the sheet (4096 MACs a tick at 1980 MHz, against the sheet's 1830 MHz tensor clock; the card is power-limited). The fix is a long-window cap at 499,712 MACs a tick. **M2:** one ALU op is 59.2 INT8 MAC-times on the H200, not 64.
+
+All are paper sketches; RT-ALGO prices M5 and M7.
+
+D4 must account for M5. With D ≠ C accumulator reuse, Strassen's deliveries drop from 5 to 3 a level, and on sm_120 Strassen ties naive. State the theorem with mma.sync's D ≠ C in the instruction set, and say where naive still wins: on the H200, at θ, or under the protocol's operand widths.
