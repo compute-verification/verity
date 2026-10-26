@@ -336,7 +336,7 @@ theorem keyProgH_copies : (keyReadersH hparse outs popOf).Copies (keyPlaceH hpar
     have hk' : Aliased.srcKey (si.acc S R u hu).st.c x.val = .msg q.val (k.val / 8) (k.val % 8) := by
       rw [Hidden.srcKey_commit (si.acc S R u hu).ht (si.acc S R u hu).committed (si.acc S R u hu).unitFacts.check,
         hparse S R u hu, hkey]
-      rfl
+      try rfl
     have hin' : Typed.msgCol (si.acc S R u hu).st.c (si.vu S R u hu) q.val (k.val / 8) (k.val % 8) <
         2 ^ (si.acc S R u hu).st.c.kLog :=
       Hidden.Committed.msgCol_lt (si.acc S R u hu).ht (si.acc S R u hu).committed (si.hvu S R u hu)
