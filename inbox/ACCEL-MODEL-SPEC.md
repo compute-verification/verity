@@ -170,3 +170,18 @@ L30: the over-approximated float units are two's-complement integer ops in the m
 - **The coordinator's decision on `ShaSpeed`:** it names the pinned best public implementation, and the honest kernel is that implementation, so c_sha = 1. Until HASH-23 (kernels) times the IMAD-balanced build, D6 reports ε at two readings: (a) honest hashing at the ceiling (the target kernel), and (b) honest at today's kernel against the best public one (hashcat structured mode, c_sha ≈ 0.88). Report the ceiling as the conservative premise.
 
 (MODEL-SPEC-3) Wire CALIB's θ (#4513, 188907341d; rows with run ids are in its note's 04:33Z checkpoint) into both instances. Also its M6(b, c): price L2 reads at θ's `l2.read` and a broadcast at its bank count. Until then, a 4(g) bound over the model reads c = 0.25 on the H200, not 0.286.
+
+## 04:38Z (real UTC), coordinator: ALGO-COST final (note:20261026T0340Z-draft-accel-algo-cost, notes 56badeeb2; code f08881cfa0)
+- **Verdict:** on v1 and v2's operands, no known exact method beats standard INT8 wherever the honest program is lane-bound, which both cards are under v2's overlapped accounting.
+  - Bilinear schemes, Laderman's own forms included: 1.30–1.98×.
+  - Accumulator reuse saves nothing (at least 6 adds a quadrant).
+  - 2:4, FP4 and Four Russians don't beat 1.0 on 8-bit operands.
+- **Close cases:**
+  - RTX PRO 6000 with idle lanes: depth-1 Strassen with lane fixes at about 0.875. Fix: the honest kernel runs it (A14: depth 2 then loses; HK ⟨2,3,3;15⟩ leaves c_mm ≈ 0.994, within the cost constants' error).
+  - Words mod 2^8 open Strassen (A6: 0.66–0.96×), so keep 16 bits.
+- **Noise tiles:** H200 t = 2 holds with 0.86 tiles of margin; RTX PRO 6000 t = 4 holds by only 0.12 (A12, A13).
+- **A15:** PV lookups bind on the shared-memory port; the RTX PRO 6000 route survives, so the honest kernel runs it; H200 ε = 0.
+- **A16:** P-HYB3's RTX PRO 6000 c_O^min is 0.5.
+- **A18:** FP64 DMMA was measured sharing the H200's tensor pipe, so it adds nothing. The device sheet has no FP64 tensor rate, so the model currently prices DMMA at 0.
+
+(MODEL-SPEC-3) A18: put DMMA on the `tensor` resource at its measured rate (it shares the H200's tensor pipe), not on `f64`. BMMA b1 is priced at issue only, with no tensor row; add one. And ALGO-COST's question: does a divergent warp instruction pay a whole issue slot, or only its active lanes? If only active lanes, the model undercharges correction loops.

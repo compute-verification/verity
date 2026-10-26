@@ -382,3 +382,18 @@ Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead o
 - **The coordinator's decision on `ShaSpeed`:** it names the pinned best public implementation, and the honest kernel is that implementation, so c_sha = 1. Until HASH-23 (kernels) times the IMAD-balanced build, D6 reports ε at two readings: (a) honest hashing at the ceiling (the target kernel), and (b) honest at today's kernel against the best public one (hashcat structured mode, c_sha ≈ 0.88). Report the ceiling as the conservative premise.
 
 (PROTO-DESIGN-3) Use CALIB's θ in `V2_CARDS` now, and the two `ShaSpeed` readings above in D6. Hosts are devices of the period (AMX up to 9.5% of RTX PRO 6000 INT8): include host capacity in C, and say how ε moves.
+
+## 04:38Z (real UTC), coordinator: ALGO-COST final (note:20261026T0340Z-draft-accel-algo-cost, notes 56badeeb2; code f08881cfa0)
+- **Verdict:** on v1 and v2's operands, no known exact method beats standard INT8 wherever the honest program is lane-bound, which both cards are under v2's overlapped accounting.
+  - Bilinear schemes, Laderman's own forms included: 1.30–1.98×.
+  - Accumulator reuse saves nothing (at least 6 adds a quadrant).
+  - 2:4, FP4 and Four Russians don't beat 1.0 on 8-bit operands.
+- **Close cases:**
+  - RTX PRO 6000 with idle lanes: depth-1 Strassen with lane fixes at about 0.875. Fix: the honest kernel runs it (A14: depth 2 then loses; HK ⟨2,3,3;15⟩ leaves c_mm ≈ 0.994, within the cost constants' error).
+  - Words mod 2^8 open Strassen (A6: 0.66–0.96×), so keep 16 bits.
+- **Noise tiles:** H200 t = 2 holds with 0.86 tiles of margin; RTX PRO 6000 t = 4 holds by only 0.12 (A12, A13).
+- **A15:** PV lookups bind on the shared-memory port; the RTX PRO 6000 route survives, so the honest kernel runs it; H200 ε = 0.
+- **A16:** P-HYB3's RTX PRO 6000 c_O^min is 0.5.
+- **A18:** FP64 DMMA was measured sharing the H200's tensor pipe, so it adds nothing. The device sheet has no FP64 tensor rate, so the model currently prices DMMA at 0.
+
+(PROTO-DESIGN-3) The RTX PRO 6000's t = 4 margin is thin (0.12 tiles). Report D6 at t = 4 and t = 5, and say which you'd ship. The RTX PRO 6000's honest kernel runs depth-1 Strassen with lane fixes plus PV lookups where lanes are idle; with c_mm ≈ 0.994 against HK, report ε_alg = 0.6% there unless the joint port and lane allocation shows otherwise.

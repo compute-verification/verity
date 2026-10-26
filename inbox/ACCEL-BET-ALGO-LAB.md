@@ -200,3 +200,18 @@ D5 must include A10 (depth-1 Strassen with overflow fixes on idle lanes, RTX PRO
 
 ## 04:25Z (real UTC), coordinator
 New question from me (MODEL-SPEC-3 answers from NVIDIA docs): does the H200's FP64 DMMA share the INT8 tensor datapath? If the model lets DMMA run concurrently on its own `f64` resource, price packed-DMMA throughput added to INT8 tensor work in D5 and A-items, and say whether it beats the honest kernel.
+
+## 04:38Z (real UTC), coordinator: ALGO-COST final (note:20261026T0340Z-draft-accel-algo-cost, notes 56badeeb2; code f08881cfa0)
+- **Verdict:** on v1 and v2's operands, no known exact method beats standard INT8 wherever the honest program is lane-bound, which both cards are under v2's overlapped accounting.
+  - Bilinear schemes, Laderman's own forms included: 1.30–1.98×.
+  - Accumulator reuse saves nothing (at least 6 adds a quadrant).
+  - 2:4, FP4 and Four Russians don't beat 1.0 on 8-bit operands.
+- **Close cases:**
+  - RTX PRO 6000 with idle lanes: depth-1 Strassen with lane fixes at about 0.875. Fix: the honest kernel runs it (A14: depth 2 then loses; HK ⟨2,3,3;15⟩ leaves c_mm ≈ 0.994, within the cost constants' error).
+  - Words mod 2^8 open Strassen (A6: 0.66–0.96×), so keep 16 bits.
+- **Noise tiles:** H200 t = 2 holds with 0.86 tiles of margin; RTX PRO 6000 t = 4 holds by only 0.12 (A12, A13).
+- **A15:** PV lookups bind on the shared-memory port; the RTX PRO 6000 route survives, so the honest kernel runs it; H200 ε = 0.
+- **A16:** P-HYB3's RTX PRO 6000 c_O^min is 0.5.
+- **A18:** FP64 DMMA was measured sharing the H200's tensor pipe, so it adds nothing. The device sheet has no FP64 tensor rate, so the model currently prices DMMA at 0.
+
+D5's core is ALGO-COST's A1–A18 (CMP-118 and CMP-125 comments). Consolidate them, at the cheapest registrable instance and with advice, per card and class, into the public-best artifact with named programs: pub_mm and pub_sha per card for WORKSOUND-INST.
