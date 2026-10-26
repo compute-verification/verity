@@ -45,7 +45,7 @@ import slots as S
 
 from verity.ml.commitments.merkle import merkle_depth
 
-__all__ = ["TEMP_BYTES", "E", "Pending", "Plan", "StepCommitter", "build", "commit", "regroup"]
+__all__ = ["TEMP_BYTES", "E", "Pending", "Plan", "SmPartition", "StepCommitter", "build", "commit", "regroup"]
 
 HERE = Path(__file__).resolve().parent
 ENGINE = HERE.parent / "sha512_rows" / "engine.py"
@@ -120,23 +120,79 @@ class _Group:
     first_unit: int
 
 
+class SmPartition:
+    """``sms`` of a CUDA device's SMs as a green context (the driver's ``cuGreenCtxCreate``, through the bindings torch's
+    ``GreenContext`` uses), and the rest as another, made on first use: a stream of either runs its kernels on its SMs
+    alone, while the primary context's streams still run on every SM. The split rounds ``sms`` up to the device's
+    granularity; ``sms`` and ``rest`` are the counts it gave."""
+
+    def __init__(self, sms: int, device: Any) -> None:
+        import torch
+        from torch.cuda._utils import _check_cuda_bindings, _cuda_bindings_driver
+
+        self.torch, self.ok, self.drv = torch, _check_cuda_bindings, _cuda_bindings_driver
+        self.index = torch.device(device).index
+        self.index = torch.cuda.current_device() if self.index is None else self.index
+        torch.cuda.init()
+        drv, ok = self.drv, self.ok
+        self.dev = ok(drv.cuDeviceGet(self.index))
+        whole = ok(drv.cuDeviceGetDevResource(self.dev, drv.CUdevResourceType.CU_DEV_RESOURCE_TYPE_SM))
+        if not 0 < sms < whole.sm.smCount:
+            raise ValueError(f"a partition takes 1 .. {whole.sm.smCount - 1} of the device's {whole.sm.smCount} SMs, not {sms}")
+        groups, n, self._rest = ok(drv.cuDevSmResourceSplitByCount(1, whole, 0, sms))
+        if n != 1:
+            raise RuntimeError(f"the device's SMs split into {n} groups of {sms}, not one")
+        self.sms, self.rest, self.device_sms = int(groups[0].sm.smCount), int(self._rest.sm.smCount), int(whole.sm.smCount)
+        self._ctx, self._rest_ctx = self._green(groups[0]), None
+
+    def _green(self, resource: Any) -> Any:
+        drv, ok = self.drv, self.ok
+        desc = ok(drv.cuDevResourceGenerateDesc([resource], 1))
+        return ok(drv.cuGreenCtxCreate(desc, self.dev, drv.CUgreenCtxCreate_flags.CU_GREEN_CTX_DEFAULT_STREAM))
+
+    def _stream(self, ctx: Any, priority: int) -> Any:
+        least, greatest = self.ok(self.drv.cuCtxGetStreamPriorityRange())
+        priority = min(max(priority, greatest), least)
+        s = self.ok(self.drv.cuGreenCtxStreamCreate(ctx, self.drv.CUstream_flags.CU_STREAM_NON_BLOCKING, priority))
+        return self.torch.cuda.ExternalStream(int(s), self.index)
+
+    def stream(self, priority: int = 0) -> Any:
+        """A stream on the partition's ``sms`` SMs (``priority`` as torch's, lower first, clamped to the device's)."""
+        return self._stream(self._ctx, priority)
+
+    def rest_stream(self, priority: int = 0) -> Any:
+        """A stream on the other ``rest`` SMs."""
+        if self._rest_ctx is None:
+            self._rest_ctx = self._green(self._rest)
+        return self._stream(self._rest_ctx, priority)
+
+
 class Plan:
     """What a run's ``context`` and ``layout`` fix, on ``device`` (a CUDA device, or ``"host"`` for the engine's host twin).
     Its work is linear in the layout's units: each unit's domain id is hashed once (``slots.unit_domain_ids``), each group
     the layout repeats is laid out once, and the pads that close a slot's tree are hashed once. A step's passes keep their
     temporaries within ``temp_bytes``, and run the leaf kernel at ``leaf_minb`` blocks an SM (the engine's ``minb``: 0, the
     build's default, 1; on an H200, 1 is 4% faster at FAMILIES' passes of 35 slots of 117k rows and 2 is 8% faster at
-    CIR-113's shared rows, 2,134 slots of 1,965 rows, with the same bytes)."""
+    CIR-113's shared rows, 2,134 slots of 1,965 rows, with the same bytes).
+
+    With ``sms``, the side stream is on an ``SmPartition`` of that many SMs (``partition``; ``sms`` becomes the count it
+    gave), and the leaf kernel's persistent grid fills those alone: the commit then shares the device with work on the
+    other SMs instead of taking turns with it for all of them. The bytes are the same at every ``sms``."""
 
     def __init__(self, context: bytes, layout: S.Layout, device: Any = "cuda", arch: str | None = None,
-                 temp_bytes: int = TEMP_BYTES, leaf_minb: int = 0) -> None:
+                 temp_bytes: int = TEMP_BYTES, leaf_minb: int = 0, sms: int = 0) -> None:
         self.context, self.layout, self.temp_bytes, self.leaf_minb = context, layout, temp_bytes, leaf_minb
         self.engine = _Engine(device, arch)
         self.host, self.torch, self.device = self.engine.host, self.engine.torch, self.engine.device
         self.unit_dids = E.words(S.unit_domain_ids(context, layout))
         self.slot_did = S.slot_domain(context, layout).domain_id
         self.depth = merkle_depth(layout.unit_count)
-        self.stream = None if self.host else self.torch.cuda.Stream(self.device)
+        self.partition = SmPartition(sms, self.device) if sms and not self.host else None
+        self.sms = self.partition.sms if self.partition else 0
+        if self.host:
+            self.stream = None
+        else:
+            self.stream = self.partition.stream() if self.partition else self.torch.cuda.Stream(self.device)
         shapes: dict[int, _Shape] = {}
         with self.side():
             self.groups = []
@@ -149,6 +205,7 @@ class Plan:
             self.mids = [self.engine.node_mids([self.slot_did], k) for k in range(self.depth)]
             self.pad0, self.pads_right = self._closing()
         if not self.host:
+            self.stream.synchronize()
             self.torch.cuda.synchronize(self.device)
 
     def side(self) -> Any:
@@ -432,7 +489,7 @@ class StepCommitter:
         S_ = table.slots
         run, rest = plan.empty(S_, shape.units), plan.empty(shape.rest, S_)
         eng.leaves(grp.leaf_table, x, E.SaltKey(self.salts.key, self.salts.nonce0 + s0), rest, plan.leaf_minb, frames=frames,
-                   dest=shape.dest, run=run)
+                   dest=shape.dest, run=run, sms=plan.sms)
         del x
         self._mark("leaves")
         if shape.multi:

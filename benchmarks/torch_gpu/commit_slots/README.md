@@ -19,6 +19,9 @@ S.commit(context, layout, step, salt_key, outputs, slots) -> S.StepCommit(root, 
 plan = G.Plan(context, layout)                     # once a run: domains, pad tails, midstates, hm96's table on the device;
                                                    # temp_bytes= bounds a step's temporaries (default 1 GiB), leaf_minb=
                                                    # runs the leaf kernel at 1 or 2 blocks an SM (same bytes)
+plan = G.Plan(context, layout, sms=32)             # the side stream on a green context of 32 SMs (G.SmPartition; plan.sms
+                                                   # is the count the driver gave), the leaf kernel's grid filling those
+                                                   # alone: work on the other SMs runs beside it (same bytes)
 G.commit(plan, step, salt_key, outputs, slots) -> S.StepCommit(root, slot_roots)
 
 # GPU, streaming as a step's groups (e.g. layers) come out of the forward pass
@@ -203,6 +206,7 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
   step's memory (counted: its frontier and one pass), a row-slot's compressions (counted), planning at six million
   units, and (with a GPU) the device against the host twin.
 - `overlap.py`: the commit beside `../../e2e_h200/`'s served step on one GPU: serving alone, the commit alone, today's
-  loop, and overlapped at low, high and equal priority (from the forward's host thread or one of its own), with
-  nvidia-smi's clocks, power and HBM, and each overlapped step's roots against today's loop's; `overlap.sh`: it under one
-  GPU lease (its header has the `research run` line).
+  loop, and overlapped at low, high and equal priority (from the forward's host thread or one of its own), each with the
+  commit on every SM or on a green context of N (`MODE:LAYOUT:STEPS:N`, the forward on every SM, or `:Nr`, on the other
+  SMs' green context), with nvidia-smi's clocks, power and HBM, each overlapped or capped step's roots against today's
+  loop's and a `VERDICT` line a run; `overlap.sh`: it under one GPU lease (its header has the `research run` line).

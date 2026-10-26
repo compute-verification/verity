@@ -21,13 +21,16 @@ every micro-batch's attention. Each run here is ``--steps`` lockstep steps at po
   their own, so the forward's launches never wait behind the commit's on the host (an ``add`` holds its caller while
   the launch queue is full, and on a pageable upload's synchronization).
 
-A run is ``MODE:LAYOUT[:STEPS]``, LAYOUT ``shared`` (circuits' shared-row Layout JSON, ``--shared``) or ``families``
-(today's, `e2e_h200.commit.layout`). A step's time is the median interval between step ends after the first; the hidden
-fraction is (serve + commit - step) / commit, the overhead step - serve. Salt keys are the fixture's (`fixture_salt`), so
-every overlapped step's root must equal ``serial``'s at that step or the exit is 1. An nvidia-smi thread samples the
-device through every run (SM clock, power, temperature, memory, clock event reasons), each run's statistics skipping its
-first ``--skip`` seconds; HBM is torch's peak allocation in each run. ``--leaf-minb`` is `slots_gpu.Plan`'s
-``leaf_minb`` (a tree whose Plan takes it).
+A run is ``MODE:LAYOUT[:STEPS[:SMS]]``, LAYOUT ``shared`` (circuits' shared-row Layout JSON, ``--shared``) or ``families``
+(today's, `e2e_h200.commit.layout`). SMS ``N`` puts the commit on a green context of N SMs (`slots_gpu.Plan`'s ``sms``),
+the forward on every SM as before; ``Nr`` puts the forward on the green context of the other SMs too. A step's time is
+the median interval between step ends after the first; the hidden fraction is (serve + commit - step) / commit, commit
+the commit alone at the run's SMS, the overhead step - serve. Salt keys are the fixture's (`fixture_salt`), so every
+overlapped or capped step's root must equal ``serial``'s at that step, and a capped commit alone's the commit alone's on
+every SM, or the exit is 1. An nvidia-smi thread samples the device through every run (SM clock, power, temperature,
+memory, clock event reasons), each run's statistics skipping its first ``--skip`` seconds; HBM is torch's peak
+allocation in each run. ``--leaf-minb`` is `slots_gpu.Plan`'s ``leaf_minb`` (a tree whose Plan takes it). The summary
+ends with a ``VERDICT`` line a run, each number beside its target and their ratio.
 """
 from __future__ import annotations
 
@@ -81,7 +84,7 @@ class Smi:
     def __init__(self, device: str, ms: int = 100) -> None:
         self.samples: list[tuple[float, dict[str, Any]]] = []
         self.fields, self.error = SMI, None
-        base = ["nvidia-smi", "-i", device, "--format=csv,noheader,nounits"]
+        self.base = base = ["nvidia-smi", "-i", device, "--format=csv,noheader,nounits"]
         if subprocess.run(base + ["--query-gpu=" + ",".join(SMI)], check=False, capture_output=True).returncode:
             self.fields = SMI_MIN
         try:
@@ -129,6 +132,16 @@ class Smi:
         if "clocks_event_reasons.active" in self.fields:
             out["reasons"] = [n for b, n in REASONS.items() if bits & b]
         return out
+
+    def limits(self) -> dict[str, float]:
+        """The device's power limit and highest SM clock: the power's and the clocks' targets."""
+        try:
+            p = subprocess.run(self.base + ["--query-gpu=power.limit,clocks.max.sm"], check=False, capture_output=True,
+                               text=True)
+            w, mhz = (float(v) for v in p.stdout.strip().split(","))
+        except (OSError, ValueError):
+            return {}
+        return {"power_limit_w": w, "sm_mhz_max": mhz}
 
     def stop(self) -> None:
         if self.proc is not None:
@@ -324,14 +337,19 @@ def _median(xs: list[float]) -> float | None:
 
 
 def run_one(name: str, mode: str, steps: int, d: OverlapDriver, plan: G.Plan | None, a: argparse.Namespace,
-            ctx: bytes, key: bytes, prompts: np.ndarray, smi: Smi) -> dict[str, Any]:
+            ctx: bytes, key: bytes, prompts: np.ndarray, smi: Smi, sms: int = 0, rest: bool = False) -> dict[str, Any]:
     dev, shape = d.device, d.shape
     salt = CM.fixture_salt(a.run_id)
     fwd = torch.cuda.current_stream(dev)
+    part = plan.partition if plan is not None else None
+    every = torch.cuda.get_device_properties(dev).multi_processor_count
     if plan is not None:
         torch.cuda.synchronize(dev)
-        plan.stream = torch.cuda.Stream(dev, priority=HIGH if mode.startswith("high") else 0)
-        if mode.startswith("low"):
+        prio = HIGH if mode.startswith("high") else 0
+        plan.stream = part.stream(prio) if part else torch.cuda.Stream(dev, priority=prio)
+        if rest:
+            fwd = part.rest_stream(HIGH if mode.startswith("low") else 0)
+        elif mode.startswith("low"):
             fwd = torch.cuda.Stream(dev, priority=HIGH)
     committer: Any = Null() if mode == "serve" else \
         Threaded(plan, ctx, key, shape, salt) if mode.endswith("-thread") else \
@@ -371,6 +389,9 @@ def run_one(name: str, mode: str, steps: int, d: OverlapDriver, plan: G.Plan | N
                 if isinstance(committer, Threaded):
                     committer.close()
             roots = [committer.roots[t].hex() for t in range(steps)]
+        if plan is not None:
+            plan.stream.synchronize()
+        fwd.synchronize()
         torch.cuda.synchronize(dev)
     t1 = time.perf_counter()
     intervals = [ends[0] - t0] + [b - e for e, b in itertools.pairwise(ends)]
@@ -384,6 +405,8 @@ def run_one(name: str, mode: str, steps: int, d: OverlapDriver, plan: G.Plan | N
         "roots": roots, "priorities": {"forward": "high" if mode.startswith("low") else "0",
                                        "commit": "high" if mode.startswith("high") else "0"} if plan is not None else None,
         "leaf_minb": getattr(plan, "leaf_minb", None) if plan is not None else None,
+        "sms": sms, "commit_sms": None if plan is None else part.sms if part else every,
+        "forward_sms": None if mode == "commit" else part.rest if rest else every, "forward_on_rest": rest,
         "hbm": {"before_gb": round(m0 / 1e9, 3), "peak_gb": round(torch.cuda.max_memory_allocated(dev) / 1e9, 3),
                 "peak_over_before_gb": round((torch.cuda.max_memory_allocated(dev) - m0) / 1e9, 3)},
         "telemetry": smi.stats(t0 + a.skip, t1),
@@ -394,63 +417,145 @@ def run_one(name: str, mode: str, steps: int, d: OverlapDriver, plan: G.Plan | N
     return r
 
 
-def derive(runs: list[dict]) -> dict[str, Any]:
-    """Per layout: the served step alone, the commit alone, today's loop and each overlapped run, with the hidden fraction
-    and the overhead a step against `TARGET_S`."""
+def derive(runs: list[dict], equal: dict[str, bool]) -> dict[str, Any]:
+    """Per layout: the served step alone, the commit alone at each SMS, and today's loop and each overlapped run, with its
+    hidden fraction (of the commit alone at its SMS, and of the commit alone on every SM) and its overhead a step against
+    `TARGET_S`; ``best``, the run of least overhead whose roots are its reference's."""
     serve = next((r["step_s"] for r in runs if r["mode"] == "serve"), None)
     out: dict[str, Any] = {"serve_s": serve, "target_s": TARGET_S, "layouts": {}}
     for lay in sorted({r["layout"] for r in runs if r["layout"]}):
-        rs = {r["mode"]: r for r in runs if r["layout"] == lay}
-        commit = rs.get("commit", {}).get("step_s")
-        v: dict[str, Any] = {"commit_s": commit}
-        for mode in ("serial", *OVERLAPPED):
-            if mode not in rs or serve is None:
+        rs = [r for r in runs if r["layout"] == lay]
+        alone = {r["sms"]: r["step_s"] for r in rs if r["mode"] == "commit"}
+        v: dict[str, Any] = {"commit_s": alone.get(0), "commit_s_at_sms": {str(k): s for k, s in sorted(alone.items())},
+                             "runs": {}}
+        for r in rs:
+            if r["mode"] == "commit" or serve is None:
                 continue
-            step = rs[mode]["step_s"]
-            e = {"step_s": step, "overhead_s": round(step - serve, 4), "overhead_share": round((step - serve) / serve, 4),
-                 "meets_target": step - serve <= TARGET_S}
+            step, commit, full = r["step_s"], alone.get(r["sms"]), alone.get(0)
+            e = {"commit_sms": r["commit_sms"], "forward_sms": r["forward_sms"], "step_s": step,
+                 "overhead_s": round(step - serve, 4), "overhead_share": round((step - serve) / serve, 4),
+                 "ratio_to_target": round((step - serve) / TARGET_S, 3), "meets_target": step - serve <= TARGET_S,
+                 "commit_s": commit}
             if commit:
                 e["hidden_s"] = round(serve + commit - step, 4)
                 e["hidden_fraction"] = round((serve + commit - step) / commit, 4)
-            v[mode] = e
+            if full:
+                e["hidden_fraction_of_full_commit"] = round((serve + full - step) / full, 4)
+            v["runs"][r["run"]] = e
+        ok = [k for k in v["runs"] if equal.get(k) or k == _reference_run(rs, "serial")]
+        if ok:
+            v["best"] = min(ok, key=lambda k: v["runs"][k]["overhead_s"])
         out["layouts"][lay] = v
     return out
 
 
+def _reference_run(runs: list[dict], mode: str) -> str | None:
+    return next((x["run"] for x in runs if x["mode"] == mode and not x["sms"]), None)
+
+
+def _power(t: dict, limits: dict) -> str:
+    lim, top = limits.get("power_limit_w"), limits.get("sm_mhz_max")
+    p, pi = t.get("power_w"), t.get("power_instant_w_max")
+    return (f"power {p} W median against the {lim} W limit (ratio {_ratio(p, lim)}), instant max {pi} W (ratio "
+            f"{_ratio(pi, lim)}); SM {t.get('sm_mhz')} MHz median, min {t.get('sm_mhz_min')}, against {top} MHz max (ratio "
+            f"{_ratio(t.get('sm_mhz_min'), top)}); clock event reasons {t.get('reasons')}")
+
+
+def _ratio(x: float | None, y: float | None) -> float | None:
+    return round(x / y, 3) if x is not None and y else None
+
+
+def verdicts(doc: dict) -> list[str]:
+    """A ``VERDICT`` line a run, and the best."""
+    dv, limits, out = doc["derived"], doc["env"].get("limits", {}), []
+    every = doc["env"].get("sms")
+    for r in doc["runs"]:
+        t, name = r["telemetry"], r["run"]
+        lay = dv["layouts"].get(r["layout"] or "", {})
+        n = _checked(doc["runs"], r)
+        eq = doc["roots_equal"].get(name)
+        if r["mode"] == "serve":
+            out.append(f"VERDICT {name}: served step alone {r['step_s']:.3f} s, the overheads' base; {_power(t, limits)}")
+        elif r["mode"] == "commit":
+            full = lay.get("commit_s")
+            line = f"VERDICT {name}: commit alone on {r['commit_sms']} of {every} SMs {r['step_s']:.3f} s"
+            if r["sms"] and full:
+                line += (f", {_ratio(r['step_s'], full)}x the commit alone on every SM ({full:.3f} s; "
+                         f"{full * every / r['commit_sms']:.3f} s if it scaled as its SMs), roots equal the commit alone's on "
+                         f"every SM at its {n} steps: {eq}")
+            out.append(f"{line}; {_power(t, limits)}")
+        else:
+            e = lay.get("runs", {}).get(name)
+            if e is None:
+                continue
+            ref = "" if name == _reference_run(doc["runs"], "serial") else \
+                f", roots equal today's loop's at its {n} steps: {eq}"
+            hid = "" if e.get("hidden_s") is None else \
+                (f", commit alone at its SMs {e['commit_s']:.3f} s, hidden {e['hidden_s']:.3f} s "
+                 f"({100 * e['hidden_fraction']:.1f}% of it; {100 * e.get('hidden_fraction_of_full_commit', 0):.1f}% of the "
+                 f"commit alone on every SM)")
+            out.append(f"VERDICT {name}: commit on {e['commit_sms']} SMs, forward on {e['forward_sms']}: step "
+                       f"{e['step_s']:.3f} s, overhead {e['overhead_s']:+.3f} s against <= {TARGET_S} s (ratio "
+                       f"{e['ratio_to_target']:.3f}, target met {e['meets_target']}){hid}{ref}; {_power(t, limits)}; HBM "
+                       f"peak {r['hbm']['peak_gb']} GB")
+    for lay, v in dv["layouts"].items():
+        if v.get("best"):
+            e = v["runs"][v["best"]]
+            out.append(f"VERDICT best on {lay}: {v['best']}, overhead {e['overhead_s']:+.3f} s against <= {TARGET_S} s "
+                       f"(ratio {e['ratio_to_target']:.3f}, target met {e['meets_target']})")
+    return out
+
+
 def summary(doc: dict) -> str:
-    lines = [f"{doc['env'].get('name')} {doc['env'].get('uuid', '')} batch {doc['batch']} micro-batch {doc['micro_batch']}"]
+    lines = [(f"{doc['env'].get('name')} {doc['env'].get('uuid', '')} batch {doc['batch']} micro-batch {doc['micro_batch']}; "
+              f"limits {doc['env'].get('limits')}")]
     for lay in doc["layouts"].values():
         lines.append(f"layout {lay['name']} {lay['digest'][:16]}: {lay['units_a_slot']:,} units, {lay['rows_a_slot']:,} rows, "
-                     f"{lay['bytes_a_slot']:,} B a slot; plan {lay.get('plan_gb')} GB, built in {lay.get('plan_s')} s")
+                     f"{lay['bytes_a_slot']:,} B a slot")
+    for k, p in doc.get("plans", {}).items():
+        lines.append(f"plan {k}: {p}")
     for r in doc["runs"]:
         t, h = r["telemetry"], r["hbm"]
-        lines.append(f"{r['run']:18s} step {r['step_s']:8.3f} s (intervals {r['intervals_s']}, drain {r['drain_s']} s) "
+        lines.append(f"{r['run']:20s} step {r['step_s']:8.3f} s (intervals {r['intervals_s']}, drain {r['drain_s']} s) "
                      f"{json.dumps(r['seconds'])}; SM {t.get('sm_mhz')} MHz (min {t.get('sm_mhz_min')}), "
                      f"{t.get('power_w')} W (instant max {t.get('power_instant_w_max')}), {t.get('temp_c')} C, "
                      f"{t.get('reasons')}; HBM peak {h['peak_gb']} GB (+{h['peak_over_before_gb']} over the run's start)")
+    for r in doc.get("errors", []):
+        lines.append(f"{r['run']:20s} not run: {r['error']}")
     dv = doc["derived"]
     lines.append(f"served step alone {dv['serve_s']} s; target: overhead <= {dv['target_s']} s a step")
     for lay, v in dv["layouts"].items():
-        lines.append(f"{lay}: commit alone {v.get('commit_s')} s")
-        for mode in ("serial", *OVERLAPPED):
-            if mode in v:
-                e = v[mode]
-                lines.append(f"  {mode:7s} step {e['step_s']:.3f} s, overhead {e['overhead_s']:+.3f} s "
-                             f"({100 * e['overhead_share']:.1f}% of the step), hidden "
-                             f"{e.get('hidden_s')} s ({None if 'hidden_fraction' not in e else round(100 * e['hidden_fraction'], 1)}%"
-                             f" of the commit), target met {e['meets_target']}")
-    lines.append(f"roots equal to serial's: {doc['roots_equal']}")
+        lines.append(f"{lay}: commit alone {v.get('commit_s')} s on every SM; at each SMS {v.get('commit_s_at_sms')}")
+        for name, e in v["runs"].items():
+            lines.append(f"  {name:20s} step {e['step_s']:.3f} s, overhead {e['overhead_s']:+.3f} s "
+                         f"({100 * e['overhead_share']:.1f}% of the step), hidden {e.get('hidden_s')} s "
+                         f"({None if 'hidden_fraction' not in e else round(100 * e['hidden_fraction'], 1)}% of the commit alone "
+                         f"at its SMs), target met {e['meets_target']}")
+    lines.append(f"roots equal to their reference's: {doc['roots_equal']}")
+    lines += verdicts(doc)
     return "\n".join(lines) + "\n"
 
 
+def _reference(runs: list[dict], r: dict) -> dict | None:
+    """``r``'s reference: the commit alone on every SM for a capped commit alone, else today's loop on every SM; none for
+    those two themselves and the served step."""
+    if r["mode"] == "serve" or (r["mode"] in ("serial", "commit") and not r["sms"]):
+        return None
+    mode = "commit" if r["mode"] == "commit" else "serial"
+    return next((x for x in runs if x["mode"] == mode and x["layout"] == r["layout"] and not x["sms"]), None)
+
+
+def _checked(runs: list[dict], r: dict) -> int:
+    ref = _reference(runs, r)
+    return 0 if ref is None else min(len(ref["roots"]), len(r["roots"]))
+
+
 def roots_equal(runs: list[dict]) -> dict[str, bool]:
+    """Each run's roots against its reference's (`_reference`) at every step both ran."""
     out = {}
     for r in runs:
-        if r["mode"] not in OVERLAPPED:
-            continue
-        ref = next((x for x in runs if x["mode"] == "serial" and x["layout"] == r["layout"]), None)
+        ref, n = _reference(runs, r), _checked(runs, r)
         if ref is not None:
-            n = min(len(ref["roots"]), len(r["roots"]))
             out[r["run"]] = n > 0 and ref["roots"][:n] == r["roots"][:n]
     return out
 
@@ -481,11 +586,12 @@ def main(argv: list[str] | None = None) -> int:
     props = torch.cuda.get_device_properties(dev)
     doc: dict[str, Any] = {"env": {"name": props.name, "uuid": os.environ.get("GPU_LEASE_UUID"), "sms": props.multi_processor_count,
                                    "hbm_gb": round(props.total_memory / 1e9, 2), "torch": torch.__version__,
-                                   "cuda": torch.version.cuda, "smi_fields": list(smi.fields)},
+                                   "cuda": torch.version.cuda, "smi_fields": list(smi.fields), "limits": smi.limits()},
                            "shape": shape.name, "batch": a.batch, "micro_batch": a.micro_batch, "layouts": {}, "runs": []}
 
     def write() -> None:
-        doc["derived"], doc["roots_equal"] = derive(doc["runs"]), roots_equal(doc["runs"])
+        doc["roots_equal"] = roots_equal(doc["runs"])
+        doc["derived"] = derive(doc["runs"], doc["roots_equal"])
         (a.out / "overlap.json").write_text(json.dumps(doc, indent=1) + "\n")
         (a.out / "summary.txt").write_text(summary(doc))
 
@@ -500,28 +606,45 @@ def main(argv: list[str] | None = None) -> int:
     for t in range(a.warm):
         d.step(t, prompts[:, t])
     d.results = []
-    plans: dict[str, G.Plan] = {}
-    current: str | None = None
-    for spec in a.runs:
-        mode, lay, *n = spec.split(":") + [""] * (spec.count(":") == 0)
-        if mode not in MODES:
-            raise SystemExit(f"--runs: {spec!r}'s mode is one of {MODES}")
-        if mode != "serve" and lay != current:
+    plans: dict[tuple[str, int], G.Plan] = {}
+    current: tuple[str, S.Layout] | None = None
+
+    def plan_for(lay: str, sms: int) -> G.Plan:
+        nonlocal current
+        if current is None or current[0] != lay:
             plans.clear()
             torch.cuda.empty_cache()
             layout = load_layout(a.shared) if lay == "shared" else CM.layout(shape) if lay == "families" else None
             if layout is None:
-                raise SystemExit(f"--runs: {spec!r}'s layout is shared or families")
+                raise SystemExit(f"--runs: {lay!r} is shared or families")
+            current = (lay, layout)
+            doc["layouts"][lay] = describe(layout)
+            print(json.dumps({"layout": doc["layouts"][lay]}), flush=True)
+        if (lay, sms) not in plans:
             torch.cuda.synchronize(dev)
             m0, p0 = torch.cuda.memory_allocated(dev), time.perf_counter()
-            plans[lay] = G.Plan(ctx, layout, device=dev, **({"leaf_minb": a.leaf_minb} if a.leaf_minb else {}))
-            doc["layouts"][lay] = describe(layout) | {"plan_s": round(time.perf_counter() - p0, 1),
-                                                      "plan_gb": round((torch.cuda.memory_allocated(dev) - m0) / 1e9, 3)}
-            current = lay
-            print(json.dumps({"layout": doc["layouts"][lay]}), flush=True)
+            kw = ({"leaf_minb": a.leaf_minb} if a.leaf_minb else {}) | ({"sms": sms} if sms else {})
+            plan = plans[(lay, sms)] = G.Plan(ctx, current[1], device=dev, **kw)
+            p = plan.partition
+            doc.setdefault("plans", {})[f"{lay}:{sms}"] = {
+                "asked_sms": sms, "commit_sms": p.sms if p else None, "rest_sms": p.rest if p else None,
+                "plan_s": round(time.perf_counter() - p0, 1),
+                "plan_gb": round((torch.cuda.memory_allocated(dev) - m0) / 1e9, 3)}
+            print(json.dumps({"plan": {f"{lay}:{sms}": doc["plans"][f"{lay}:{sms}"]}}), flush=True)
+        return plans[(lay, sms)]
+
+    for spec in a.runs:
+        mode, lay, *n = spec.split(":") + [""] * (spec.count(":") == 0)
+        if mode not in MODES:
+            raise SystemExit(f"--runs: {spec!r}'s mode is one of {MODES}")
         steps = int(n[0]) if n and n[0] else a.steps
+        cap = n[1] if len(n) > 1 else ""
+        rest, sms = cap.endswith("r"), int(cap.removesuffix("r") or 0)
+        if (sms or rest) and (mode == "serve" or not sms or (rest and mode not in OVERLAPPED)):
+            raise SystemExit(f"--runs: {spec!r}: SMS is N or, for an overlapped mode, Nr")
         try:
-            r = run_one(spec, mode, steps, d, plans.get(lay) if mode != "serve" else None, a, ctx, key, prompts, smi)
+            plan = plan_for(lay, sms) if mode != "serve" else None
+            r = run_one(spec, mode, steps, d, plan, a, ctx, key, prompts, smi, sms, rest)
         except Exception as e:  # noqa: BLE001  (recorded; the next run starts clean)
             r = {"run": spec, "mode": mode, "layout": lay, "error": f"{type(e).__name__}: {(str(e).splitlines() or [''])[0]}"}
             d.committer, d.results = Null(), []
