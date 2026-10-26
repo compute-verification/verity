@@ -186,7 +186,7 @@ first coin.
   rehearsal's. Its run opens one more tunnel a stream (`--streams`, 4 by default) to `--sink-port` on the peer's
   loopback, where the prover's `load_relay.py sink --streams N --weights W --witness S` listens, and `warden_serve.py
   rehearse --load-store` relays the store over them: each value's bytes held to its digest and committed as they
-  cross (`load_relay.relay_load`), every row's salts sent on with them. The witness (106.4 GB at H200) is the sink's
+  cross (`load_relay.relay_load`), every row's salts sent on with them. The witness (4.85 GB at H200) is the sink's
   `--witness` file on the prover's host and nowhere here: this host never writes a salt. The prover then starts its
   endpoint on the weights the sink wrote, and the warden's one signer (its publisher process) signs the load's 733
   heads in the serving session before its first window, so one key and one session carry the load and the windows;

@@ -21,7 +21,7 @@ The H200 demo serves CMP-95 interface 1's plain INT8 weights, generated from the
   reading program's domain as it crosses. The serving session's one signer then signs the load's 733 heads before its
   first window, so one LMS key and one session carry the load and the windows. `load.json` (the registrations the
   block record pins) and `load-relay.json` are public in the run's `out/`.
-- The witness, every row's salts (106.4 GB at H200), is the sink's `--witness` file (0600) on the prover's host,
+- The witness, every row's salts (4.85 GB at H200), is the sink's `--witness` file (0600) on the prover's host,
   vy-dc-h200-2. The certifier's host never writes a salt.
 
 ## The chain's run of record
