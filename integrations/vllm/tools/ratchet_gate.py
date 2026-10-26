@@ -31,8 +31,8 @@ Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR 
 BASE's ``tools/verity/check/move_check.py`` certifies.
 
 It runs on git, in the repository of the current directory, and runs no code but the base's (its lints and the ruff it pins,
-and BASE's move_check), so the merge queue runs `main`'s copy of it, which a PR can't weaken, on `main` and a PR's head as it
-admits the PR (a landing gate in drive.toml's ``landing_gates``: `research queue ready`'s preflight refuses the mark, and the
+and BASE's move_check), so the merge queue runs `main`'s copy of it, which a PR can't weaken, on `main` and a PR's head (or,
+at the sync, its merge onto `next`, each member below judged again) as it admits the PR (a landing gate in drive.toml's ``landing_gates``: `research queue ready`'s preflight refuses the mark, and the
 sync onto `next` leaves the PR out).  The lints run on the Python that runs it, the ruff lint too when that Python's ruff is
 the base's pin, else on one ``uv run --with`` gives the pin.  Before marking a branch, run
 ``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes, 1 when one fails

@@ -291,7 +291,7 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   ready mark's author doesn't count, and a new head needs a new one. No change waits on any other per-head grant: not
   red-team's, the vLLM coordinator's or a statement reviewer's (Daniel, 8 Oct).
 - Each tick, drive fast-forwards `main` to the top of the longest prefix of `next` whose every member has a land verdict and
-  no hold. Before it lands, in minutes: the merge onto `next` is clean, and every `.py` file the landing leaves compiles
+  no hold. Before it lands, in minutes: the merge onto `next` is clean and leaves no Markdown file over its cap, and every `.py` file the landing leaves compiles
   (drive ejects the PR that broke one). A PR that changes Lean (a `.lean` file of a package with a `lean-audit.json` lock, or
   the lock) waits for its Lean check: a `lean-audit` that passed on a commit of `next` at or above it, which drive launches on
   the reviewed prefix's top (`train.sh TOP MACHINES --deferred lean-audit`), and after a failure there on the PR's own commit;

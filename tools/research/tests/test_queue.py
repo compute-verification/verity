@@ -328,10 +328,12 @@ sys.exit(1 if failures else 0)
 GATED = {DRIVE_FLAGS: 'landing_gates = ["gates/g.py"]\n', "gates/g.py": GATE, "gates/banned.txt": "bad.txt\n"}
 
 
-def _gate_says(main: str, what: str) -> str:
+def _gate_says(main: str, what: str, merged: bool = False) -> str:
+    """A refusal of `GATE`'s: of a head (the preflight's), or of its merge onto `next` (the sync's)."""
     f = what.split(" ", 1)[1]
-    return (f"the landing gate gates/g.py at `main` {main[:12]}: {what}; delete {f} (`python3 gates/g.py origin/main HEAD` in "
-            "the branch runs it)")
+    on, where = (" on its merge onto `next`", "on the branch merged with `origin/next`") if merged else ("", "in the branch")
+    return (f"the landing gate gates/g.py at `main` {main[:12]}{on}: {what}; delete {f} (`python3 gates/g.py origin/main HEAD` "
+            f"{where} runs it)")
 
 
 def test_a_pr_a_landing_gate_at_main_refuses_is_left_out_with_its_fix_and_only_the_members_a_sync_merges_are_judged(world, monkeypatch):
@@ -341,8 +343,13 @@ def test_a_pr_a_landing_gate_at_main_refuses_is_left_out_with_its_fix_and_only_t
     from research import queue as Q
 
     main = _move_main(world, GATED)
-    real, judged = Q.gate_refusal, []
-    monkeypatch.setattr(Q, "gate_refusal", lambda repo, m, head, gates: judged.append(head) or real(repo, m, head, gates))
+    real, judged = Q.gate_refusal, {}
+
+    def gate_refusal(repo, m, merge, gates, onto):
+        judged[_git(repo, "rev-parse", f"{merge}^2")] = merge            # each judged commit is a PR's merge onto `next`
+        return real(repo, m, merge, gates, onto=onto)
+
+    monkeypatch.setattr(Q, "gate_refusal", gate_refusal)
     world.gh.put(1, h1 := world.change({"a.txt": "1\n"}))
     world.gh.put(2, h2 := world.change({"bad.txt": "2\n", "gates/g.py": "import sys\nsys.exit(0)\n"}))   # its own copy is moot
     world.gh.put(3, world.change({"c.txt": "3\n"}, base=h2))
@@ -351,10 +358,11 @@ def test_a_pr_a_landing_gate_at_main_refuses_is_left_out_with_its_fix_and_only_t
     q = world.queue()
     members, entries = q.sync()
     assert [m.pr for m in members] == [1, 4] == world.on_next(q)
-    assert entries[2].state == "refused" and entries[2].why == _gate_says(main, "touches bad.txt")
+    assert entries[2].state == "refused" and entries[2].why == _gate_says(main, "touches bad.txt", merged=True)
     assert entries[3].state == "waiting" and entries[3].why == "contains #2, which didn't merge"
-    assert entries[5].state == "refused" and entries[5].why == (f"the landing gate gates/g.py can't judge {h5[:12]} on `main` "
-                                                                f"{main[:12]} (exit 2: gate: can't read crash.txt)")
+    assert entries[5].state == "refused" and entries[5].why == (
+        f"the landing gate gates/g.py can't judge its merge onto `next` ({judged[h5][:12]}) on `main` {main[:12]} "
+        f"(exit 2: gate: can't read crash.txt)")
     assert {n: c["why"] for n, c in q.load_state()["conflicts"].items()} == {"2": entries[2].why, "5": entries[5].why}
     assert q.status()[2].why == entries[2].why + " (at the last sync)"
 
@@ -366,7 +374,49 @@ def test_a_pr_a_landing_gate_at_main_refuses_is_left_out_with_its_fix_and_only_t
     main = _move_main(world, {"gates/banned.txt": "bad.txt\na.txt\n"})       # `main` moves: `next` is rebuilt on it
     members, entries = q.sync()
     assert [m.pr for m in members] == [4]
-    assert entries[1].state == "refused" and entries[1].why == _gate_says(main, "touches a.txt")
+    assert entries[1].state == "refused" and entries[1].why == _gate_says(main, "touches a.txt", merged=True)
+
+
+#: a landing gate like `tools/verity/check/gates/markdown_caps.py`: refuses a change that leaves a `.md` file over the cap
+#: `gates/cap.txt` at `main` names, judged at its size in the top commit
+CAP_GATE = """\
+import json, subprocess, sys
+main, top = sys.argv[1:3]
+git = lambda *a: subprocess.run(["git", *a], capture_output=True, text=True, check=True).stdout
+cap = int(git("show", f"{main}:gates/cap.txt"))
+files = [f for f in git("diff", "--name-only", "--diff-filter=d", f"{main}...{top}").split() if f.endswith(".md")]
+over = [(f, n) for f in files if (n := int(git("cat-file", "-s", f"{top}:{f}"))) > cap]
+failures = [{"why": f"{f} is {n} bytes, over its {cap}-byte cap", "fix": [f"trim {f} to {cap} bytes or fewer"]} for f, n in over]
+print(json.dumps({"failures": failures}))
+sys.exit(1 if failures else 0)
+"""
+
+
+def test_a_pr_whose_merge_onto_next_puts_a_markdown_file_over_its_cap_is_left_out_and_the_members_below_stay(world):
+    """26 Oct (TOP-90): #4238 merged onto `next` at 20 and took AGENTS.md to 49,358 B with #4603 and #4604 below it, over its
+    48 KiB cap, though its head alone was under; every Lean check above it failed `preflight-lints` until #4629 trimmed it by
+    hand.  The sync gives the landing gates each PR's merge onto `next`, so the bytes the members below add count."""
+    lines = [f"line {i}\n" for i in range(10)]
+    doc = lambda at, text: "".join(text if i == at else line for i, line in enumerate(lines))
+    main = _move_main(world, {DRIVE_FLAGS: 'landing_gates = ["gates/cap.py"]\n', "gates/cap.py": CAP_GATE,
+                              "gates/cap.txt": "120\n", "doc.md": "".join(lines)})           # 70 bytes
+    world.gh.put(1, h1 := world.change({"doc.md": doc(1, "x" * 50 + "\n")}))                  # 114 bytes: under
+    world.gh.put(2, h2 := world.change({"doc.md": doc(8, "y" * 50 + "\n")}))                  # 114 alone, 158 merged onto #1
+    world.gh.put(3, h3 := world.change({"doc.md": doc(5, "short\n")}))                        # 113 merged onto #1: under
+    for h in (h1, h2, h3):                                                                    # each head alone passes
+        assert subprocess.run([sys.executable, "-c", CAP_GATE, main, h], cwd=world.dev, capture_output=True).returncode == 0
+    q = world.queue()
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1, 3] == world.on_next(q)
+    assert entries[2].state == "refused" and entries[2].why == (
+        f"the landing gate gates/cap.py at `main` {main[:12]} on its merge onto `next`: doc.md is 158 bytes, over its 120-byte "
+        "cap; trim doc.md to 120 bytes or fewer (`python3 gates/cap.py origin/main HEAD` on the branch merged with "
+        "`origin/next` runs it)")
+    assert q.load_state()["conflicts"]["2"]["why"] == entries[2].why
+    assert int(_git(world.origin, "cat-file", "-s", "refs/heads/next:doc.md")) == 113
+
+    again, entries = q.sync()                                    # the members below stay; #2 is judged again, and refused
+    assert [m.commit for m in again] == [m.commit for m in members] and entries[2].state == "refused"
 
 
 def test_status_names_a_ready_pr_that_conflicts_with_main_without_a_sync_here(world):
