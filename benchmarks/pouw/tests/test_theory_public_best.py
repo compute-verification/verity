@@ -84,7 +84,8 @@ def test_fixed_tensor_load_counts_in_the_joint_facets():
 def test_named_public_programs_for_worksound_inst():
     out = PB.pub_programs()
     assert out["pub_mm.H200.v2"]["job"].c == pytest.approx(1.0)
-    assert out["pub_mm.RTXPRO6000.v2"]["standalone"].c == pytest.approx(0.876, abs=0.002)
+    rtx = out["pub_mm.RTXPRO6000.v2"]["standalone"]
+    assert rtx.c == pytest.approx(0.863, abs=0.002) and set(rtx.mix) == {"naive", "2x2 orbit d1"}
     assert out["pub_sha.H200", "A-wide + R-hi"]["rate"] == pytest.approx(6.69e9, rel=0.01)
     assert out["pub_sha.RTXPRO6000", "R-hi, IMAD.HI at 32 (unmeasured)"]["rate"] == pytest.approx(10.22e9, rel=0.01)
 
@@ -94,16 +95,31 @@ def test_v2_tile_route_on_h200_wins_through_the_joint_facet_when_peels_pass_thre
     big = PB.tile_job_at(PB.H200, 2, 1024, 4096, 6144, bit, depth, 80, 1.15)
     small = PB.tile_job_at(PB.H200, 2, 384, 4096, 6144, bit, depth, 80, 1.10)
     assert "joint0" in big["honest"].binding and big["c"] < 0.9
-    assert small["c"] >= 1
+    assert small["c_route"] >= 1 and small["c"] == pytest.approx(1.0)
 
 
-def test_v2_tile_route_in_the_job_beats_four_tiles_on_sm120_at_alu_load_one_but_not_three():
+def test_v2_tile_route_in_the_job_beats_four_tiles_on_sm120_and_mixed_with_dense_tiles_reaches_further():
     _, bit, depth = PB.BIT_COST["sm_120"][0]
     four = PB.tile_job_at(PB.SM120, 4, 256, 16384, 16512, bit, depth, 80, 1.0)
     past = PB.tile_job_at(PB.SM120, 4, 256, 16384, 16512, bit, depth, 80, 1.1)
-    three = PB.tile_job_at(PB.SM120, 3, 256, 16384, 16512, bit, depth, 80, 0.82)
-    assert four["alu"] == pytest.approx(1.0, abs=1e-3) and four["c"] < 0.98
-    assert past["c"] >= 1 and three["c"] >= 1
+    three = PB.tile_job_at(PB.SM120, 3, 256, 16384, 16512, bit, depth, 80, 1.0)
+    assert four["alu"] == pytest.approx(1.0, abs=1e-3) and four["c"] < four["c_route"] < 0.98
+    assert past["c_route"] >= 1 and past["c"] < 1 and 0 < past["route"].mix["tiles"] < 1
+    assert three["c_route"] >= 1 and three["route"].mix.get("tiles", 0.0) < 1e-6
+
+
+def test_the_hull_of_methods_beats_each_method_where_they_bind_different_resources():
+    """ALGO-COST A19: a method a tile, so the public best is the methods' convex hull. On the H200 with tensor routes
+    only, the plain product binds the tensor pipe and depth-1 Strassen the shared-memory port; the mix beats both."""
+    eX, eW, _ = PB.operand_cases()["A=B=0, v1 (V ±64, U ±80)"]
+    chosen = {"naive": (None, 0), "strassen d1": (PB.STRASSEN, 1)}
+    singles = [PB.price_scheme(PB.H200, s, d, eX, eW, 1280, 16512, PB.TOKENS, beside=False).c
+               for s, d in chosen.values()]
+    h = PB.price_hull(PB.H200, chosen, eX, eW, 1280, 16512, PB.TOKENS, beside=False)
+    assert min(singles) == pytest.approx(1.0) and h.c < 0.97
+    assert set(h.mix) == set(chosen) and sum(h.mix.values()) == pytest.approx(1.0)
+    one = PB.price_methods(PB.H200, [PB.scheme_method("naive", None, 0, eX, eW)], 1280, 16512, PB.TOKENS, beside=False)
+    assert one.c == pytest.approx(1.0)
 
 
 def test_sha_schedules_match_rt_units():

@@ -533,6 +533,21 @@ class Priced:
     loads: dict
     routes: dict
     feasible: bool = True
+    mix: dict = field(default_factory=dict)
+
+
+@dataclass
+class Method:
+    """One way to compute the product, for `price_methods`: a scheme's leaves on block grid g (rest and asm as in
+    `price`), the loads a naive MAC it adds with no choice of route when it runs the whole product (fixed), and work
+    that scales with its share (items, as in `price`)."""
+    label: str
+    leaves: list
+    g: tuple = NAIVE
+    rest: Leaf | None = None
+    asm: float | None = None
+    fixed: dict = field(default_factory=dict)
+    items: tuple = ()
 
 
 def price(card: Card, leaves: list, L: int, n: int, m: int, g: tuple = NAIVE, beside: bool = True,
@@ -550,99 +565,128 @@ def price(card: Card, leaves: list, L: int, n: int, m: int, g: tuple = NAIVE, be
     lookups: O-IO's lookup routes for naive leaves (`lookup_routes`; valid at B = 0 only).
     rest: the operands' naive leaf, for the part the scheme's blocks don't cover (default: generic int8 entries).
     asm: the scheme's output assembly, IADD3s a segment a output entry (`assembly`)."""
-    tile = leaf_tile(card, g)
-    if tile is None:
-        return Priced(math.inf, ["no tile"], {}, {}, False)
-    ml, nl, rate = tile
-    BM, BK, BN = g
-    if g != NAIVE:
-        f = (L // (32 * BK)) * 32 * BK / L * ((n // (BN * nl)) * BN * nl / n)
-        if f <= 0:
-            return Priced(math.inf, ["no block"], {}, {}, False)
-        one = FormStats(1, 0.0, 0.0, 128)
-        rest = replace(rest, weight=1 - f) if rest is not None else Leaf(1 - f, one, one, 0)
-        leaves = [replace(lf, weight=lf.weight * f) for lf in leaves] + ([rest] if f < 1 else [])
-    smem_mma = (1 / ml + 1 / nl) if (wgmma_smem or card.family != "sm_90") else 1 / nl
-    tens = 1 / (card.s8 * rate)
+    return price_methods(card, [Method("main", leaves, g, rest, asm)], L, n, m, beside=beside, wgmma_smem=wgmma_smem,
+                         facets=facets, items=items, extra_fixed=extra_fixed, lookups=lookups)
+
+
+def price_methods(card: Card, methods: list, L: int, n: int, m: int, beside: bool = True, wgmma_smem: bool = True,
+                  facets: bool = True, items: tuple = (), extra_fixed: dict | None = None,
+                  lookups: bool = False) -> Priced:
+    """`price` over several methods at once. The prover picks a method a tile, so the LP picks every method's share
+    of the product (the shares sum to 1) together with every route: the convex hull of the methods, which can beat
+    each of them when they bind different resources (ALGO-COST A19). A method's leaves, fixed loads and items scale
+    with its share; `items` and `extra_fixed` are the job's, whichever method runs. Priced.mix: the shares."""
     names, cols, eqs = [], [], []
 
     def var(name, loads):
         names.append(name)
         cols.append([loads.get(r, 0.0) for r in RES])
 
-    mma = dict(smem=smem_mma, rf=card.mma_rf, issue=card.mma_issue)
-    t = BESIDE_TILE
-    route_loads = {
-        "s8": dict(mma, tensor=tens),
-        "f16": {**{k: 2 * v for k, v in mma.items()}, "tensor": 1 / (card.f16 * rate)},
-        "split": {**{k: 2 * v for k, v in mma.items()}, "tensor": 2 * tens},
-        "dp4a": dict(fma=0.5, issue=0.25 + 1 / (8 * t), smem=2 / t, rf=0.75, vec=0.25),
-        "ffma": dict(fma=1.0, issue=1 + 1 / (2 * t), smem=8 / t, rf=3.0, vec=1.0),
-    }
-    main = ["s8", "f16", "split"] + (["dp4a", "ffma"] if beside else [])
-    if lookups and beside:
-        lk = lookup_routes(L, n, m)
-        route_loads.update(lk)
     sc0 = scatter_loads("s16-alu")
-    sp = dict(mma, tensor=1 / (card.sp * rate))
     rows_of = {"A": m, "B": n}
-    for k, lf in enumerate(leaves):
-        mrow = {}
-        naive_leaf = lf.A.terms == 1 and lf.B.terms == 1
-        for r in main + (list(lk) if lookups and beside and naive_leaf else []):
-            if r == "f16" and max(lf.A.max_abs, lf.B.max_abs) > 2048:
+    lk = lookup_routes(L, n, m) if lookups and beside else {}
+    shares = []
+    for i, mt in enumerate(methods):
+        tile = leaf_tile(card, mt.g)
+        if tile is None:
+            continue
+        ml, nl, rate = tile
+        BM, BK, BN = mt.g
+        leaves, f = list(mt.leaves), 1.0
+        if mt.g != NAIVE:
+            f = (L // (32 * BK)) * 32 * BK / L * ((n // (BN * nl)) * BN * nl / n)
+            if f <= 0:
                 continue
-            ld = dict(route_loads[r])
-            if r in ("s8", "dp4a") and lf.A.q > 0 and lf.B.q > 0:
-                for res_, x in sc0.items():         # the double term 65536 eA eB^T, scattered
-                    ld[res_] = ld.get(res_, 0.0) + lf.A.q * lf.B.q * x
-            var(f"{k}:{r}", ld)
-            mrow[f"{k}:{r}"] = 1.0
-        bins = [(s, o) for s, fs, o in (("A", lf.A, "B"), ("B", lf.B, "A")) if fs.binary > 0]
-        for s, o in bins:
-            var(f"{k}:2:4 bin {s}", binary_loads(sp, sc0, (lf.A if s == "A" else lf.B).binary, rows_of[s],
-                                                  rows_of[o]))
-            mrow[f"{k}:2:4 bin {s}"] = 1.0
-        eqs.append((mrow, lf.weight))
-        needs = [f"{k}:s8"] + ([f"{k}:dp4a"] if beside else []) + [f"{k}:2:4 bin {s}" for s, _ in bins]
-        for side, fs, other_side in (("A", lf.A, lf.B), ("B", lf.B, lf.A)):
-            if fs.q <= 0:
-                continue
-            row = {nm: -1.0 for nm in needs}
-            var(f"{k}:{side}:2:4", {r: sp.get(r, 0) + fs.left24 * sc0.get(r, 0) for r in RES})
-            var(f"{k}:{side}:2:4x2", {r: 2 * sp.get(r, 0) for r in RES})
-            for v in SCATTER:
-                var(f"{k}:{side}:{v}", {r: fs.q * x for r, x in scatter_loads(v).items()})
-            names_c = ["2:4", "2:4x2"] + list(SCATTER)
-            if other_side.max_abs <= PACK_MAX:
-                other_rows = rows_of["B" if side == "A" else "A"]
-                for C, ld in packed_loads(sp, sc0, fs.q, other_side.max_abs, other_rows).items():
-                    var(f"{k}:{side}:2:4 packed C{C}", ld)
-                    names_c.append(f"2:4 packed C{C}")
-            for nm in names_c:
-                row[f"{k}:{side}:{nm}"] = 1.0
+            one = FormStats(1, 0.0, 0.0, 128)
+            rest = replace(mt.rest, weight=1 - f) if mt.rest is not None else Leaf(1 - f, one, one, 0)
+            leaves = [replace(lf, weight=lf.weight * f) for lf in leaves] + ([rest] if f < 1 else [])
+        # The method's own loads a naive MAC: its output assembly in registers (`assembly`'s IADD3s; without it, one
+        # IADD a leaf entry it enters) and the forms (amortized over the other operand's rows).
+        own = dict(mt.fixed)
+        if mt.g != NAIVE:
+            if mt.asm is None:
+                adds = sum(lf.weight * lf.nnz_c * BK / L for lf in leaves)
+            else:
+                adds = f * mt.asm / L
+            forms = sum(lf.weight * (BN * (lf.A.terms - 1 + 2 * (lf.A.terms > 1)) / n
+                                     + BM * (lf.B.terms - 1 + 2 * (lf.B.terms > 1)) / m) for lf in leaves)
+            for r, v in (("alu", adds + forms), ("rf", 3 * (adds + forms)), ("vec", adds + forms),
+                         ("issue", adds + forms)):
+                own[r] = own.get(r, 0.0) + v
+        share = f"share:{mt.label}"
+        shares.append(share)
+        var(share, own)
+        pre = f"{i}." if len(methods) > 1 else ""
+        smem_mma = (1 / ml + 1 / nl) if (wgmma_smem or card.family != "sm_90") else 1 / nl
+        tens = 1 / (card.s8 * rate)
+        mma = dict(smem=smem_mma, rf=card.mma_rf, issue=card.mma_issue)
+        t = BESIDE_TILE
+        route_loads = {
+            "s8": dict(mma, tensor=tens),
+            "f16": {**{k: 2 * v for k, v in mma.items()}, "tensor": 1 / (card.f16 * rate)},
+            "split": {**{k: 2 * v for k, v in mma.items()}, "tensor": 2 * tens},
+            "dp4a": dict(fma=0.5, issue=0.25 + 1 / (8 * t), smem=2 / t, rf=0.75, vec=0.25),
+            "ffma": dict(fma=1.0, issue=1 + 1 / (2 * t), smem=8 / t, rf=3.0, vec=1.0),
+            **lk,
+        }
+        main = ["s8", "f16", "split"] + (["dp4a", "ffma"] if beside else [])
+        sp = dict(mma, tensor=1 / (card.sp * rate))
+        for k, lf in enumerate(leaves):
+            k = f"{pre}{k}"
+            mrow = {share: -lf.weight}
+            naive_leaf = lf.A.terms == 1 and lf.B.terms == 1
+            for r in main + (list(lk) if naive_leaf else []):
+                if r == "f16" and max(lf.A.max_abs, lf.B.max_abs) > 2048:
+                    continue
+                ld = dict(route_loads[r])
+                if r in ("s8", "dp4a") and lf.A.q > 0 and lf.B.q > 0:
+                    for res_, x in sc0.items():         # the double term 65536 eA eB^T, scattered
+                        ld[res_] = ld.get(res_, 0.0) + lf.A.q * lf.B.q * x
+                var(f"{k}:{r}", ld)
+                mrow[f"{k}:{r}"] = 1.0
+            bins = [(s, o) for s, fs, o in (("A", lf.A, "B"), ("B", lf.B, "A")) if fs.binary > 0]
+            for s, o in bins:
+                var(f"{k}:2:4 bin {s}", binary_loads(sp, sc0, (lf.A if s == "A" else lf.B).binary, rows_of[s],
+                                                      rows_of[o]))
+                mrow[f"{k}:2:4 bin {s}"] = 1.0
+            eqs.append((mrow, 0.0))
+            needs = [f"{k}:s8"] + ([f"{k}:dp4a"] if beside else []) + [f"{k}:2:4 bin {s}" for s, _ in bins]
+            for side, fs, other_side in (("A", lf.A, lf.B), ("B", lf.B, lf.A)):
+                if fs.q <= 0:
+                    continue
+                row = {nm: -1.0 for nm in needs}
+                var(f"{k}:{side}:2:4", {r: sp.get(r, 0) + fs.left24 * sc0.get(r, 0) for r in RES})
+                var(f"{k}:{side}:2:4x2", {r: 2 * sp.get(r, 0) for r in RES})
+                for v in SCATTER:
+                    var(f"{k}:{side}:{v}", {r: fs.q * x for r, x in scatter_loads(v).items()})
+                names_c = ["2:4", "2:4x2"] + list(SCATTER)
+                if other_side.max_abs <= PACK_MAX:
+                    other_rows = rows_of["B" if side == "A" else "A"]
+                    for C, ld in packed_loads(sp, sc0, fs.q, other_side.max_abs, other_rows).items():
+                        var(f"{k}:{side}:2:4 packed C{C}", ld)
+                        names_c.append(f"2:4 packed C{C}")
+                for nm in names_c:
+                    row[f"{k}:{side}:{nm}"] = 1.0
+                eqs.append((row, 0.0))
+        for name, w, routes_ in mt.items:
+            row = {share: -w}
+            for r, ld in routes_.items():
+                var(f"{pre}{name}:{r}", ld)
+                row[f"{pre}{name}:{r}"] = 1.0
             eqs.append((row, 0.0))
+    if not shares:
+        return Priced(math.inf, ["no tile"], {}, {}, False)
+    eqs.append(({s: 1.0 for s in shares}, 1.0))
     for name, w, routes_ in items:
         row = {}
         for r, ld in routes_.items():
             var(f"{name}:{r}", ld)
             row[f"{name}:{r}"] = 1.0
         eqs.append((row, w))
-    # Fixed loads a naive MAC: every word stored for the hash (STS, both kernels), the scheme's output assembly in
-    # registers (`assembly`'s IADD3s; without it, one IADD a leaf entry it enters) and the forms (amortized over the
-    # other operand's rows).
+    # Every word stored for the hash (STS, both kernels).
     fixed = dict(issue=1 / L, smem=4 / L)
     for r, v in (extra_fixed or {}).items():
         fixed[r] = fixed.get(r, 0.0) + v
-    if g != NAIVE:
-        if asm is None:
-            adds = sum(lf.weight * lf.nnz_c * BK / L for lf in leaves)
-        else:
-            adds = f * asm / L
-        forms = sum(lf.weight * (BN * (lf.A.terms - 1 + 2 * (lf.A.terms > 1)) / n
-                                 + BM * (lf.B.terms - 1 + 2 * (lf.B.terms > 1)) / m) for lf in leaves)
-        for r, v in (("alu", adds + forms), ("rf", 3 * (adds + forms)), ("vec", adds + forms), ("issue", adds + forms)):
-            fixed[r] = fixed.get(r, 0.0) + v
     caps = cap(card)
     nv = len(names)
     ix = {r: i for i, r in enumerate(RES)}
@@ -668,12 +712,15 @@ def price(card: Card, leaves: list, L: int, n: int, m: int, g: tuple = NAIVE, be
         for i, (a, b) in enumerate(card.facets):
             loads[f"joint{i}"] = (a * tot["tensor"] + b * tot[other] / 32) / 4 * card.s8
     binding = [r for r, v in loads.items() if v >= T * card.s8 * (1 - 1e-6)]
-    routes = {}
+    routes, mix = {}, {}
     for nm, v in zip(names, x):
         if v > 1e-9:
-            key = nm.split(":", 1)[1]
-            routes[key] = routes.get(key, 0.0) + v
-    return Priced(T * card.s8, binding, loads, routes)
+            kind, key = nm.split(":", 1)
+            if kind == "share":
+                mix[key] = v
+            else:
+                routes[key] = routes.get(key, 0.0) + v
+    return Priced(T * card.s8, binding, loads, routes, mix=mix)
 
 
 _STATS: dict = {}
@@ -727,6 +774,20 @@ def best_scheme(card: Card, d: int, eX, eW, L: int, n: int, m: int, schemes, **k
         if best is None or p.c < best[0].c:
             best = (p, s)
     return best
+
+
+def scheme_method(label: str, scheme, d: int, eX, eW) -> Method:
+    return Method(label, leaves_of(scheme, d, eX, eW), grid(powered(scheme, d)), leaves_of(None, 0, eX, eW)[0],
+                  assembly(scheme, d))
+
+
+def price_hull(card: Card, chosen: dict, eX, eW, L: int, n: int, m: int, **kw) -> Priced:
+    """The convex hull of the methods (label -> (scheme, depth)), priced as one LP (`price_methods`)."""
+    return price_methods(card, [scheme_method(lb, s, d, eX, eW) for lb, (s, d) in chosen.items()], L, n, m, **kw)
+
+
+def shares(p: Priced) -> str:
+    return "+".join(f"{k} {v:.2f}" for k, v in sorted(p.mix.items(), key=lambda kv: -kv[1]) if v > 0.005)
 
 
 # --------------------------------------------------------------------------------------------------------------------
@@ -971,16 +1032,23 @@ def report(menu) -> dict:
                 top = ", ".join(f"{k} {v:.3f}" for k, v in sorted(p.routes.items(), key=lambda kv: -kv[1])[:6])
                 print(f"      cheapest {best_m}: c {p.c:.3f} bound by {','.join(p.binding)}"
                       + (f"; {profile(s)}" if s is not None else "") + f"; routes {top}")
-            print(f"    {'class':10} {'K':>6} {'L':>5} | " + " | ".join(f"{v:>34}" for v, _ in vs))
+                h = price_hull(card, {mn: (chosen[vname, mn][1], d) for mn, (_, d) in menu.items()}, eX, eW, L0, N0,
+                               TOKENS, **kw)
+                top = ", ".join(f"{k} {v:.3f}" for k, v in sorted(h.routes.items(), key=lambda kv: -kv[1])[:6])
+                print(f"      hull of the methods: c {h.c:.3f} bound by {','.join(h.binding)}; shares {shares(h)}; "
+                      f"routes {top}")
+            print(f"    {'class':10} {'K':>6} {'L':>5} | " + " | ".join(f"{v + ' (hull)':>41}" for v, _ in vs))
             for nm, K, N, L in rows:
                 cells = []
                 for vname, kw in vs:
                     cand = [(mn, price_scheme(card, chosen[vname, mn][1], d, eX, eW, L, N, TOKENS, **kw))
                             for mn, (_, d) in menu.items()]
                     mname, p = min(cand, key=lambda t: t[1].c)
-                    out[(case, card.name, vname, nm)] = (mname, p)
-                    cells.append(f"{p.c:6.3f} {mname[:14]:>14} {','.join(p.binding)[:11]:>11}")
-                print(f"    {nm:10} {K:6} {L:5} | " + " | ".join(f"{c:>34}" for c in cells))
+                    h = price_hull(card, {mn: (chosen[vname, mn][1], d) for mn, (_, d) in menu.items()}, eX, eW, L,
+                                   N, TOKENS, **kw)
+                    out[(case, card.name, vname, nm)] = (mname, p, h)
+                    cells.append(f"{p.c:6.3f} ({h.c:.3f}) {mname[:14]:>14} {','.join(h.binding)[:11]:>11}")
+                print(f"    {nm:10} {K:6} {L:5} | " + " | ".join(f"{c:>41}" for c in cells))
     return out
 
 
@@ -1104,12 +1172,16 @@ def job(card: Card, L: int, K: int, n: int, eX, eW, menu: dict, lookups: bool, h
     deployed = price(card, naive, L, n, TOKENS, beside=False, items=items(True, False, hs[:1]))
     hon = price(card, naive, L, n, TOKENS, beside=False, items=items(True, False, hs))
     dense = price(card, naive, L, n, TOKENS, beside=False, items=items(False, False, hs))
-    best = None
+    best, chosen = None, {}
     for mname, (schemes, d) in menu.items():
         r = best_scheme(card, d, eX, eW, L, n, TOKENS, schemes, beside=True, lookups=lookups,
                         items=items(False, True, hs))
+        chosen[mname] = (r[1], d)
         if best is None or r[0].c < best[1].c:
             best = (mname, r[0])
+    h = price_hull(card, chosen, eX, eW, L, n, TOKENS, beside=True, lookups=lookups, items=items(False, True, hs))
+    if h.c < best[1].c * (1 - 1e-6):
+        best = (f"hull {shares(h)}", h)
     return dict(additive=add, deployed=deployed, honest=hon, dense=dense, best=best,
                 hash_share=comps * sha_clocks(card, "default build")[0] * card.s8 / add)
 
@@ -1227,13 +1299,10 @@ def tile_job(card: Card, t: int, Lp: int, K: int, n: int, bit: float, depth: int
     product of X = b + V and W' = c + U pi (both within int8 at A = B = 0, so no wraps), v2's peels and every word's
     SHA-512 leaf at the best schedule. Route: the same words and hashing; b c^T (`bit` of tensor time, its MMAs' lane
     loads in proportion, and at Strassen `depth` its output assembly and one conversion a word on the ALU) and
-    V (sum c)^T as fixed loads; Z U^T a leaf of weight 1/t priced on any route beside the hash; no peels."""
-    eX, eW, zleaf = _tile_operands(t, v)
-    L = t * Lp
-    hs = sha_menu(card)
-    items = job_items(card, L, K, False, False, hs, hash_scale)
-    peels = ("peels", V2_PEEL_DIGITS * Lp / K, items[1][2])
-    honest = price(card, leaves_of(None, 0, eX, eW), L, n, TOKENS, beside=False, items=(peels, items[2]))
+    V (sum c)^T as fixed loads; Z U^T a leaf of weight 1/t priced on any route beside the hash; no peels. The
+    prover may run the route on some groups of t tiles and the dense product (with its peels) on the rest, so c is
+    the hull of the two over honest (`price_methods`); route_only is the route on every group."""
+    L, zleaf, sha, peels, dense, honest = _tile_honest(card, t, Lp, K, n, v, hash_scale)
     mma = dict(smem=1 / card.honest_tile[0] + 1 / card.honest_tile[1], rf=card.mma_rf, issue=card.mma_issue)
     fixed = {r: x * (bit + 1 / t) for r, x in mma.items()}
     fixed["tensor"] = (bit + 1 / t) / card.s8
@@ -1241,22 +1310,41 @@ def tile_job(card: Card, t: int, Lp: int, K: int, n: int, bit: float, depth: int
         ops = (assembly(STRASSEN, depth) + 1) / L
         for r, x in (("alu", ops), ("issue", ops), ("rf", 3 * ops), ("vec", ops)):
             fixed[r] = fixed.get(r, 0.0) + x
-    route = price(card, [replace(zleaf, weight=1 / t)], L, n, TOKENS, beside=True, items=(items[2],),
-                  extra_fixed=fixed)
-    return dict(lane=lane_load(honest), alu=honest.loads["alu"] / honest.loads["tensor"], honest=honest, route=route,
-                c=route.c / honest.c)
+    tiles = Method("tiles", [replace(zleaf, weight=1 / t)], fixed=fixed)
+    route = price_methods(card, [tiles], L, n, TOKENS, beside=True, items=(sha,))
+    hull = price_methods(card, [tiles, Method("dense", dense, items=(peels,))], L, n, TOKENS, beside=True,
+                         items=(sha,))
+    return dict(lane=lane_load(honest), alu=_alu_load(honest), honest=honest, route=hull, route_only=route,
+                c=hull.c / honest.c, c_route=route.c / honest.c)
+
+
+def _alu_load(p: Priced) -> float:
+    return p.loads["alu"] / p.loads["tensor"]
+
+
+def _tile_honest(card: Card, t: int, Lp: int, K: int, n: int, v: int, hash_scale: float) -> tuple:
+    eX, eW, zleaf = _tile_operands(t, v)
+    L = t * Lp
+    items = job_items(card, L, K, False, False, sha_menu(card), hash_scale)
+    peels = ("peels", V2_PEEL_DIGITS * Lp / K, items[1][2])
+    dense = leaves_of(None, 0, eX, eW)
+    honest = price(card, dense, L, n, TOKENS, beside=False, items=(peels, items[2]))
+    return L, zleaf, items[2], peels, dense, honest
 
 
 def tile_job_at(card: Card, t: int, Lp: int, K: int, n: int, bit: float, depth: int, v: int, alu: float,
                 s_max: float = 4.0, steps: int = 30) -> dict | None:
     """`tile_job` with the hashing scaled so that the honest kernel's ALU time over its tensor time is `alu` (the
     lane load nofold states), by bisection on the scale; None if no scale up to s_max reaches it."""
+    def load(s):
+        return _alu_load(_tile_honest(card, t, Lp, K, n, v, s)[-1])
+
     lo, hi = 0.0, s_max
-    if tile_job(card, t, Lp, K, n, bit, depth, v, hi)["alu"] < alu:
+    if load(hi) < alu:
         return None
     for _ in range(steps):
         mid = (lo + hi) / 2
-        if tile_job(card, t, Lp, K, n, bit, depth, v, mid)["alu"] < alu:
+        if load(mid) < alu:
             lo = mid
         else:
             hi = mid
@@ -1334,12 +1422,13 @@ def units(card: Card, p: Priced) -> dict:
     return {r: p.loads[r] if r == "tensor" else p.loads[r] * caps[r] / card.s8 for r in RES if r in p.loads}
 
 
-def pub_programs() -> dict:
+def pub_programs(menu: dict | None = None) -> dict:
     """D5's named programs for WORKSOUND-INST's PubBest, per card at v2 as frozen (A = B = 0, V and U ±80, the frozen
-    qkv shape at v2's L): pub_mm standalone (lanes idle: the plain product with every route beside the tensor pipe,
-    O-IO's lookups included) and with the lanes busy (the honest dense kernel, c = 1, wherever V2_PICKS' tile route
-    doesn't win); pub_sha, the best paper schedule at θ, with the measured rates beside it. SHA-512's fma units are
-    θ's fma lanes (an IMAD takes two)."""
+    qkv shape at v2's L): pub_mm standalone (lanes idle: the hull of the menu's methods, each in its best scheme, with
+    every route beside the tensor pipe, O-IO's lookups included) and with the lanes busy (the honest dense kernel,
+    c = 1, wherever V2_PICKS' tile route doesn't win); pub_sha, the best paper schedule at θ, with the measured rates
+    beside it. SHA-512's fma units are θ's fma lanes (an IMAD takes two)."""
+    menu = menu or methods(orbit(), catalogue())
     out = {}
     print("\n== D5's named public programs (units a naive MAC: tensor in s8 MAC-times, lanes in lane-ops; SHA-512 a "
           "compression)")
@@ -1349,16 +1438,18 @@ def pub_programs() -> dict:
         fam = card.family
         L = V2_T[fam] * V2_PICKS[fam][0][4]
         K, n = V2_PICKS[fam][0][1:3]
-        naive = leaves_of(None, 0, eX, eW)
-        alone = price(card, naive, L, n, TOKENS, beside=True, lookups=True)
-        dense = price(card, naive, L, n, TOKENS, beside=False)
+        chosen = {mn: (best_scheme(card, d, eX, eW, L, n, TOKENS, schemes, beside=True, lookups=True)[1], d)
+                  for mn, (schemes, d) in menu.items()}
+        alone = price_hull(card, chosen, eX, eW, L, n, TOKENS, beside=True, lookups=True)
+        dense = price(card, leaves_of(None, 0, eX, eW), L, n, TOKENS, beside=False)
         name = f"pub_mm.{card.name.replace(' ', '')}.v2"
-        out[name] = dict(standalone=alone, job=dense)
+        out[name] = dict(standalone=alone, job=dense, schemes={mn: chosen[mn] for mn in alone.mix})
         for label, p in (("standalone", alone), ("lanes busy (v2's periods)", dense)):
             u = ", ".join(f"{r} {x:.4g}" for r, x in units(card, p).items())
             routes = ", ".join(f"{r} {x:.3f}" for r, x in p.routes.items())
-            print(f"  {name} {label}: c {p.c:.3f} bound by {','.join(p.binding)} (L {L}, K {K}, n {n}); routes {routes}; "
-                  f"units {u}")
+            print(f"  {name} {label}: c {p.c:.3f} bound by {','.join(p.binding)} (L {L}, K {K}, n {n}); "
+                  + (f"shares {shares(p)} ({'; '.join(profile(chosen[mn][0]) for mn in p.mix if chosen[mn][0])}); "
+                     if label == "standalone" else "") + f"routes {routes}; units {u}")
         sms, mhz = SMS_MHZ[fam]
         best, others = PUB_SHA[fam]
         for sch in (best,) + others:
@@ -1395,8 +1486,9 @@ def v2_report(ts: dict | None = None) -> dict:
                 c = min(1.0, r["c"])
                 w = K * N * reps * r["honest"].c
                 num, den = num + w * (1 - c), den + w
-                out[card.name, t, model, K, N] = dict(Lp=Lp, alu=alu, c=c)
-                cells.append(f"{K}x{N} {Lp} {alu:.2f}: {c:.3f}")
+                out[card.name, t, model, K, N] = dict(Lp=Lp, alu=alu, c=c, c_route=r["c_route"], mix=r["route"].mix)
+                cells.append(f"{K}x{N} {Lp} {alu:.2f}: {c:.3f}" + (
+                    f" (route only {r['c_route']:.3f}; {shares(r['route'])})" if c < 1 - 1e-6 else ""))
             out[card.name, t, model] = num / den
             print(f"  {card.name:12} t {t} {model:16} leak {num / den:6.2%} | " + "; ".join(cells))
     return out
