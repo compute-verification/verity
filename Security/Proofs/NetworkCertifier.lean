@@ -3,6 +3,7 @@ import Definitions.NetworkCertifier.Guarantees.AdviceString
 import Definitions.NetworkCertifier.Guarantees.AdviceV1
 import Definitions.NetworkCertifier.Guarantees.WindowCharge
 import Definitions.NetworkCertifier.Guarantees.Warden
+import Definitions.NetworkCertifier.Guarantees.Horizon
 import Definitions.NetworkCertifier.Guarantees.Period
 import Proofs.NetworkCertifier.Lemmas
 import Proofs.NetworkCertifier.Occupancy
@@ -13,6 +14,10 @@ import Proofs.NetworkCertifier.SampledAuditAccepted
 import Proofs.NetworkCertifier.SampledAuditInstance
 import Proofs.NetworkCertifier.SampledCharge
 import Proofs.NetworkCertifier.SampledLeak
+import Proofs.NetworkCertifier.SampledLeakReg
+import Proofs.NetworkCertifier.SampledLeakRegPlain
+import Proofs.NetworkCertifier.PeriodSum
+import Proofs.NetworkCertifier.Horizon
 import Proofs.NetworkCertifier.Period
 import Proofs.NetworkCertifier.Schedule
 import Proofs.NetworkCertifier.PerWindow
@@ -35,7 +40,9 @@ the leak bound with it), `WindowCharge` (advice v1's whole-window charge counts,
 `SampledCharge` (the leak bound under a sampled audit: the faulty units' charge) or `Warden`
 (the warden's channel bound),
 and every lemma behind them. `SampledLeak` composes `SampledCharge`'s count with `SampledAuditAccepted`, taken as a hypothesis until
-PRF-144 proves it (`NetTiming.sampledLeak`). `Sanity` shows every named assumption satisfiable. `Code` proves the certifier's program
+PRF-144 proves it (`NetTiming.sampledLeak`), and `SampledLeakReg` moves its count to the registration's values
+(`NetTiming.sampledLeak_registered`);
+`SampledLeakRegPlain` states it at the deployed plain record (`NetTiming.sampledLeak_registered_plain_sha512`). `Sanity` shows every named assumption satisfiable. `Code` proves the certifier's program
 (`certifier_program`, `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
 `Accepted` proves `security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate
 check accepts is a run of the constant-rate Program under the declared advice, so the guarantees here count it.
@@ -149,11 +156,18 @@ theorem EncardDecodableWithinLeCompiledPerWindowV1Whole :
 theorem EncardAccSeqsSampledLe : NetTiming.Guarantees.EncardAccSeqsSampledLe := @NetTiming.encard_accSeqsSampled_le
 theorem SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted :=
   fun hSA => NetTiming.sampledLeak_reg hSA
+theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
+  intro hSA _ _ _ _ _ _ _ _ H D hks hb L K S lay k δ decode hδ hdec reg ops β Dj hβ
+  exact ⟨fun x hx hreg Ω _ _ P =>
+      NetTiming.sampledLeak_registered hSA H D hks hb L K S lay k δ decode hδ hdec reg ops Dj x hx hreg Ω P,
+    fun x hx s P hs hP op =>
+      (NetTiming.sampledLeak_reg hSA H D hks L K S lay k δ decode hδ hdec reg β Dj hβ).2 x hx s P hs hP op _⟩
 
 theorem WardenViewEqClientView : NetTiming.Guarantees.WardenViewEqClientView := @NetTiming.wardenView_eq_clientView
 theorem EncardWardenViewsLe : NetTiming.Guarantees.EncardWardenViewsLe := @NetTiming.encard_wardenViews_le
 theorem EncardWardenDecodableLe : NetTiming.Guarantees.EncardWardenDecodableLe :=
   @NetTiming.encard_wardenDecodable_le
 theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTiming.periodLeak
+theorem HorizonWrongUnitsLe : NetTiming.Guarantees.HorizonWrongUnitsLe := NetTiming.horizonWrongUnits
 
 end NetTiming.SecurityProofs

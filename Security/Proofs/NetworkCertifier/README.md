@@ -57,6 +57,8 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                audits (PeriodLeakAccepted)
 ../../Definitions/NetworkCertifier/Assumptions/Period.lean  trusted: the period's named assumption: the wardens see what
                                the certifier observed (WardenCertifierEgress)
+../../Definitions/NetworkCertifier/Guarantees/Horizon.lean  trusted: the wrong units over a horizon of sampled audits on
+                               independent live coins (HorizonWrongUnitsLe)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
                                each a `def G : Prop` under the same namespace (`Guarantees.G`)
 ../NetworkCertifier.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee and lemma, from the modules below
@@ -91,6 +93,12 @@ Period.lean     the leak through the wardens over a period: each good window's o
                                          AccSeqsSampled at its registration (mem_accSeqsSampled_of_windowGood), and the
                                          secrets the wardens' views decode to, counted over the windows
                                          (encard_periodGood_le, periodLeak)
+PeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved w] ≤ ε w` summed over a
+                                         period's windows by a union bound (Pr_exists_mem_le_sum, periodLeak_le_sum)
+Horizon.lean    the wrong units over a horizon: a uniform draw misses `f` units with probability at most
+                                         `(1 - k/n)^f` (pr_disjoint_le), the escapes multiply over windows on
+                                         independent coins (pr_adaptive_le), and with each window's soundness error
+                                         added, the horizon's bound (horizonWrongUnits)
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
@@ -192,9 +200,11 @@ The lock (`lean-audit.json`'s `guarantees`) holds the 22 statements of `Guarante
 (`Guarantees/AdviceString.lean`), advice v1's eight, four for decision-only windows and four with a separate count
 code (`../../Definitions/NetworkCertifier/Guarantees/AdviceV1Kraft.lean` and `Guarantees/AdviceV1.lean`), the whole window's
 four (`../../Definitions/NetworkCertifier/Guarantees/WindowChargeKraft.lean` and `Guarantees/WindowCharge.lean`), the warden's three (`Guarantees/Warden.lean`), the sampled audit's charge
-(`../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`) and the period's leak through the wardens
-(`Guarantees/Period.lean`), each listed as `NetTiming.SecurityProofs.G` and proved
-by the lemma of the same statement whose name it spells in UpperCamelCase. All 42 are under `shape.frozen` as
+(`../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`), the period's leak through the wardens
+(`Guarantees/Period.lean`) and the horizon's wrong units
+(`../../Definitions/NetworkCertifier/Guarantees/Horizon.lean`), each listed as `NetTiming.SecurityProofs.G` and proved
+by the lemma of the same statement whose name it spells in UpperCamelCase (the period's by `periodLeak`, the horizon's
+by `horizonWrongUnits`). All 43 are under `shape.frozen` as
 `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `Program`'s `AccSeqs`,
 `expectedRow`, or the grids themselves; the leak bound also over an abstract charge and compiler; advice v1's over its
 charge as `Definitions` states it, the mirror of `ChargeCount_v1{N}`'s or `ChargeCount_v2{N, H, O}`'s Python reference,
@@ -272,6 +282,14 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   not yet stated.
   `Claims.Sampling.KS` stands in for proofs' live bound (`Flock.Guarantees.SampledKSLive`), which replaces it once
   locked, with live forms of `SampledAuditAccepted` and `SampledLeakAccepted`.
+- **The wrong units over a horizon** (`Horizon.lean`): `HorizonWrongUnitsLe` is the bound over many periods, cumulative
+  rather than per window, and a fact of probability with no named assumption. Over `m` windows on independent live
+  coins (the horizon's coins are the product `Fin m → Ω`), window `i` drawing a uniform `k_i`-subset of its `n_i` units,
+  with the units wrong at its registration fixed by the earlier windows' coins and its audit accepting while its draw
+  meets one with probability at most `ε_i`: for `q ≤ k_i / n_i` in every window, every window accepts while the horizon
+  holds at least `F` wrong units with probability at most `(1 - q)^F + Σ_i ε_i`, whatever `m` is, and
+  `(1 - q)^F ≤ δ` once `F ≥ ln(1/δ)/q`. The draw's law and each window's error are hypotheses, which A3 and
+  `Claims.Sampling.KS` discharge where the bound is applied to the sampled verifier.
 
 **The program's agreements, proved and audited, not guarantees.** Six theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references

@@ -10,7 +10,7 @@ import sys
 
 import pytest
 
-from verity_vllm.program.kernels import compiled_relations as CR
+from verity_vllm.program import compiled_relations as CR
 
 
 def test_without_torch_it_does_nothing(monkeypatch):
@@ -82,7 +82,7 @@ def test_each_compiled_check_warms_when_it_is_made(monkeypatch, module, cls):
     monkeypatch.setattr(mod, "warm_vml", lambda: calls.append("warm"))
     model = torch.nn.Linear(1, 1)
     if cls == "CompiledKernelCheck":
-        mod.CompiledKernelCheck(None, model, None, seed=0)
+        mod.CompiledKernelCheck(None, model, None, seed=0, seed_source=None)
     else:
         mod.CompiledValueCheck(None, model, None)
     assert calls == ["warm"]

@@ -181,7 +181,7 @@ def test_the_plan_takes_the_scale_at_the_norm_module():
 
 
 def test_word_check_sees_the_tapped_scale_as_committed():
-    from verity_vllm.query import word as W_
+    from verity.ml.definitions import word as W_
 
     g = {"family": "RMSNormTriton_v1", "statics": {"N": 64, "EPS": 1e-05}, "definition": "RMSNormTriton_v1{N=64,EPS=1e-05}", "calls": 3,
          "where": "model.layers.0.input_layernorm"}
@@ -195,6 +195,7 @@ def test_word_check_sees_the_tapped_scale_as_committed():
 
 def test_manifest_verify_rebuilds_under_the_callers_policy(tmp_path, monkeypatch):
     from verity_vllm.pipeline import manifest as M
+    from verity_vllm.pipeline import manifest_verify as MV
     from verity_vllm.query.manifest import verify as V
 
     P = kernel_program()
@@ -203,5 +204,5 @@ def test_manifest_verify_rebuilds_under_the_callers_policy(tmp_path, monkeypatch
     assert V.verify(on, on)["ok"] and not V.verify(on, off)["ok"] and not V.verify(off, on)["ok"]
     seen = {}
     monkeypatch.setattr(M, "build", lambda program, **kw: seen.setdefault("kw", kw) and on)
-    V.rebuild(program="p", norm_scales=True)
+    MV.rebuild(program="p", norm_scales=True)
     assert seen["kw"]["norm_scales"] is True

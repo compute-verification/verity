@@ -411,7 +411,7 @@ WORKLOAD = CompositeDefinition("Workload", 1, ("requests", "shared", "lag"), _wo
 
 
 def served_lengths_rule(lag: int) -> dict:
-    """[R17-1] The two lengths the Program keeps distinct for every request, stated once (GM-01 G6 and the finalizer carry the same
+    """The two lengths the Program keeps distinct for every request, stated once (GM-01 G6 and the finalizer carry the same
     names): `served_output_len` = a_r, the tokens designated as output (the events up to and including the FIRST declared EOS, or all
     `cap` events on a length stop); `executed_prefix_len` = the steps that ran = a_r + LAG after an EOS stop before the cap (the LAG
     step(s) are active internal computation: their VUs are required, their sampled tokens are not output), a_r on a length stop (the
@@ -426,6 +426,21 @@ def served_lengths_rule(lag: int) -> dict:
             "inactivity": f"positions >= a_r + {int(lag)} of an EOS-stopped request are programmed-but-unexecuted (bot in the lifted baseline)",
             "capacity_covers_lag": "cap events per request; a_r <= cap - 1 on an EOS stop, so a_r + LAG <= cap for LAG in {0, 1}",
             "rule": "R17-1 / DP-pad-02 (b); one definition for Build (this Program), GM-01 G6 and the finalizer"}
+
+
+def eos_lag_rows_declared(engine: dict | None) -> int | None:
+    """The post-EOS rows a declared engine block computes: `async_scheduling` True -> 1, False -> 0, undeclared or non-boolean ->
+    None.  GP-01 always declares it (`workload_lag`), so None here means a Program from before the lag was declared: GM-01 G6 then
+    fails by name on any EOS stop (nothing is read from the record as the rule) and labels a record without an EOS stop
+    `lag.exercised false`."""
+    if not isinstance(engine, dict):
+        return None
+    v = engine.get("async_scheduling")
+    if isinstance(v, bool):
+        return 1 if v else 0
+    if isinstance(v, str) and v.strip().lower() in ("true", "false"):
+        return 1 if v.strip().lower() == "true" else 0
+    return None
 
 
 class WorkloadProgram:

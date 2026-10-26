@@ -1,4 +1,4 @@
-"""R15 `compiled`: value correspondence (C2) for the compiled boundary, from the COMMITTED bytes alone (no reference taps -- Python hooks
+"""`compiled`: value correspondence (C2) for the compiled boundary, from the COMMITTED bytes alone (no reference taps -- Python hooks
 cannot observe values inside a replayed CUDA graph, so the eager `ValueChecker` (tap clones) does not apply).
 
 Three relations the committed step streams must satisfy if every value was read at its module boundary at the right step:
@@ -17,7 +17,7 @@ from typing import Any
 
 import torch
 
-from verity_vllm.program.kernels.compiled_relations import warm_vml
+from verity_vllm.program.compiled_relations import warm_vml
 
 _DT = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": torch.float32, "int64": torch.int64, "int32": torch.int32,
        "uint8": torch.uint8, "int8": torch.int8, "float8_e4m3fn": torch.float8_e4m3fn}
