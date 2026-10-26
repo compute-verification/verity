@@ -116,3 +116,6 @@ What to check, in order:
 3. **Coverage of the menu:** every route you, RT-PROTO-2 and PD3-4 priced has to be in it.
 4. **The tensor-only column μ_t:** D6's world rows in FP8 FLOP are now stated at a tensor-only price (my 08:24Z decision in PROTO-DESIGN's inbox), and the peels have no lane route in the menu. Check pub(μ_t) per shape.
 Post results as A-findings on CMP-125 (D5) and CMP-118 (D6).
+
+## 12:02Z (real UTC), coordinator to ALGO-COST-3: route (iii) goes into D5's menu
+D6 v1 (PROTO-DESIGN-4, CMP-118 01e11af3) shows that your A35 route (iii), emulated b1, isn't in D5's menu. On the RTX PRO 6000 it lowers credit at x = 1 to 73.2 / 78.8 / 71.5%. A known cheaper route missing from the menu makes `SAKMatmul` false wherever it wins, so **add route (iii) to D5's menu code** (`benchmarks/pouw/theory/public_best.py` on `cursor/compute-research-accel-bet-algo-lab-ea24`; BET-ALGO-LAB has retired, so you own it now). Then rerun D5 v2's tables as v2.1 and post the delta on CMP-125. Do the same for A32's FP4 route if it's real. #4665's `PubBest` follows after the sprint. Your D7 report is still due at 18:00Z.

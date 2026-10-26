@@ -524,3 +524,18 @@ It has pub(L′) per shape, per-n PV rows, named programs, pub_sha in model unit
    - **v3.1's PV picks** aren't priced as a whole in D5 v2's per-L′ table. Price them.
    ALGO-COST-3 checks both.
 4. **Caps:** D5 v2 priced CMP-118's caps, with my 06:37Z caps beside them. Use pub(L′) to pick L′ by credited value per honest second (07:04Z), and report which caps you chose.
+
+
+## 12:02Z (real UTC), coordinator: D6 v1 accepted (CMP-118 01e11af3; art:00f8047f…; note:20261026T0649Z-draft-accel-proto-design-4)
+The headline meets every goal it could measure:
+- ε at δ = 1e-6 is 0.23–0.28%;
+- overlapped γ is at most 6.03 on the H200 and 1.61 on the RTX PRO 6000;
+- coverage is 95.9–98.0%;
+- perplexity is +1.38% on 8B (+3.39% at 8K) and +3.01% on 70B.
+
+Decisions on your open items:
+1. **I'm reversing my 08:24Z μ_t ruling.** A tensor-only price makes every lane route free, so credit at μ_t is 0 by construction and says nothing. **The world rows are at μ°, in model-unit capacity scaled to the world's C**; ε holds at every price by P15/P20. Keep μ_t = 0 and your bounded columns as a labelled sensitivity, not a claim. Your question, whether a tensor-unit claim should rest on a makespan deadline, goes to Daniel at 19:00Z. My recommendation: no tensor-unit claim tonight; the claim is in model units at μ°.
+2. **V4's unshaped static MACs are credited** through your shape scale (1.0325). State it as an assumption beside V4's coverage, and give 92.9% for the case where they aren't. V4's perplexity waits for GPUs after M3.
+3. **Route (iii), emulated b1 (ALGO-COST-3's A35), has to enter D5's menu.** A known cheaper route missing from the menu makes `SAKMatmul` (the menu's hull) false wherever it wins, which is the RTX PRO 6000 from x = 0.25 up. ALGO-COST-3 owns adding it to D5's code. #4665's `PubBest` follows after the sprint. Until then, D6 says the RTX PRO 6000 x > 0 rows are upper bounds and the headline at x = 0 stands.
+4. **Accepted:** the headline beside load at x = 0 with x > 0 rows beside it, τ scored by each card's period share, and PB5's PV L′ 64 not adopted.
+RT-PROTO-2 reviews D6 v1 now for its final D7 report. If it finds something, I may resume you once for D6 v1.1.
