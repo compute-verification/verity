@@ -30,6 +30,7 @@ for v in ${VERITY_BENCH_VENV:-} /workspace/cp/venv312 /workspace/jobs/venv312; d
   [ -z "${PY:-}" ] && [ -x "$v/bin/python" ] && PY=$v/bin/python
 done
 PY=${PY:-python3}
+"$PY" -c 'import torch' 2>/dev/null || { PATH=$HOME/.local/bin:$PATH uv sync -q --all-packages --extra torch > "$O/sync.log" 2>&1; PY=$PWD/.venv/bin/python; }
 TV=$($PY -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)
 for c in ${CUDA:-} /usr/local/cuda-13.0 "/usr/local/cuda-$TV" /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { CUDA=$c; break; }; done
 ENC=${ENC:-/workspace/research/pous-store/mem69-v2}
