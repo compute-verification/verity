@@ -97,7 +97,7 @@ theorem finMsg_eq {A : Circuit → _root_.VStar.In.PartIn → Claims.Flock.Wit} 
     OpenRows.readPieces_elemR r hl h0]
   congr 2
   unfold DeployedR.trailerPiece
-  rw [dif_pos h0]
+  rw [dite_eq_left h0]
   simp only [List.map_cons, List.map_nil]
   rw [OpenRows.readPieces_one (by rw [hl]; omega), OpenRows.readSegs_const]
 
@@ -115,8 +115,10 @@ theorem bytesOf_append8 {a bs : List Bool} (ha : a.length = 8) :
     intro j _
     show Claims.Recursion.VStar.byte (((a ++ bs).drop (8 * (j + 1))).take 8) =
       Claims.Recursion.VStar.byte ((bs.drop (8 * j)).take 8)
-    rw [List.drop_append_eq_append_drop, List.drop_eq_nil_of_le (by rw [ha]; omega), List.nil_append, ha,
-      show 8 * (j + 1) - 8 = 8 * j by omega]
+    first
+    | rw [List.drop_append, List.drop_eq_nil_of_le (by rw [ha]; omega), List.nil_append, ha,
+        show 8 * (j + 1) - 8 = 8 * j by omega]
+    | rw [show 8 * (j + 1) = a.length + 8 * j by rw [ha]; omega, List.drop_append]
 
 /-- A salt's bits read back as its bytes. -/
 theorem bytesOf_saltBits (b : ByteArray) : Claims.Recursion.VStar.bytesOf (saltBits b) = b.data.toList := by

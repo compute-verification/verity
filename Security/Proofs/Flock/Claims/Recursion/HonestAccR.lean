@@ -285,7 +285,8 @@ theorem honest_drawJ (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) (o :
   show drawEq (drawOfJ (recJ o.spec o.sts o.recLink o.recC₁ (o.recFrames cs) cs.tail.dropLast o.recPs))
     o.s.read.draw = true
   rw [recJ, RecDeploy.drawOfJ_recordObj]
-  exact honest_drawTied S o
+  exact RecDeploy.drawEq_map_norm
+    (fun e he => (FlockDeploy.insOf_draw_norm (FlockDeploy.setupOf_some o.setup).1 he).1) (honest_drawTied S o)
 
 /-! ## The reading and the checks -/
 
