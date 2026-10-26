@@ -224,6 +224,14 @@ theorem rowDigest_eq (row : Array ℕ) : Firewall.rowDigest row = Sha512.hash �
 /-- A row's words as `Firewall.rowDigest` lays them after its prefix: each two bytes, little-endian. -/
 def wordBytes (ws : Array ℕ) : Msg := ws.toList.flatMap fun w => [(w % 256).toUInt8, (w / 256 % 256).toUInt8]
 
+/-- The instance copy `(o, g, 0)` of a part's table is: block `o`'s VU `g`, its first unit (`rowHidden`'s index). Check 5
+holds instances `0` and `1` (reps `0` and `1`), so only copies `(o, g, 0)` with `instOf c o g < 2` are tied. -/
+def instOf (c : Circuit) (o g : ℕ) : ℕ := o * c.g + g
+
+/-- The `nv` elements a row of words carries, 8 words an element (`RecCoins.words`), zero past `nv`. -/
+def wordsElems (nv : ℕ) (ws : Array ℕ) (e : ℕ) : _root_.Flock.F128 :=
+  if e < nv then FlockVBridge.ofBits fun t => (ws.getD (8 * e + t / 16) 0).testBit (t % 16) else 0
+
 theorem foldl_words (l : List ℕ) (b : ByteArray) :
     (l.foldl (fun b w => (b.push (w % 256).toUInt8).push (w / 256 % 256).toUInt8) b).data.toList =
       b.data.toList ++ l.flatMap fun w => [(w % 256).toUInt8, (w / 256 % 256).toUInt8] := by
@@ -250,20 +258,45 @@ theorem bitL_wordBytes : ∀ (ws : List ℕ) (i : ℕ), i < 16 * ws.length →
       by_cases h8 : i < 8
       · rw [Nat.div_eq_of_lt h8]
         simp only [List.cons_append, List.getElem?_cons_zero, Option.getD_some, List.getD_cons_zero]
-        rw [Nat.toUInt8, UInt8.toNat_ofNat', Nat.mod_mod_of_dvd _ (by norm_num), show (256 : ℕ) = 2 ^ 8 from rfl,
-          Nat.testBit_mod_two_pow, Nat.mod_eq_of_lt h8]
+        rw [Nat.toUInt8, UInt8.toNat_ofNat', Nat.mod_mod_of_dvd _ (by norm_num), Nat.testBit_mod_two_pow,
+          Nat.mod_eq_of_lt h8]
         simp [h8]
       · rw [show i / 8 = 1 by omega]
         simp only [List.cons_append, List.getElem?_cons_succ, List.getElem?_cons_zero, Option.getD_some,
           List.getD_cons_zero]
-        rw [Nat.toUInt8, UInt8.toNat_ofNat', Nat.mod_mod_of_dvd _ (by norm_num), show (256 : ℕ) = 2 ^ 8 from rfl,
-          Nat.testBit_mod_two_pow, Nat.testBit_div_two_pow, show i % 8 + 8 = i by omega]
+        rw [Nat.toUInt8, UInt8.toNat_ofNat', Nat.mod_mod_of_dvd _ (by norm_num), Nat.testBit_mod_two_pow,
+          show (256 : ℕ) = 2 ^ 8 from rfl, Nat.testBit_div_two_pow, show i % 8 + 8 = i by omega]
         simp [show i % 8 < 8 by omega]
     · have ih := bitL_wordBytes ws (i - 16) (by simp at h; omega)
       rw [show (i / 16) = (i - 16) / 16 + 1 by omega, List.getD_cons_succ, show i % 16 = (i - 16) % 16 by omega, ← ih]
       rw [FlockSoundness.Discharge.Hm.bitL, FlockSoundness.Discharge.Hm.bitL, List.cons_append, List.cons_append,
         List.nil_append, show i / 8 = (i - 16) / 8 + 2 by omega, show i % 8 = (i - 16) % 8 by omega]
       simp [List.getD_eq_getElem?_getD]
+
+/-- **The row's bytes, past the prefix**: where port `q` has the row's word count, bytes that are the port's
+`sha512/row/v1` prefix then `fs`'s bytes, and the row's `rowInput`, give `fs`'s bytes as the row's words'. -/
+theorem readForms_of_rowInput {c : Circuit} {q : ℕ} {pt : Port} (hpt : c.ports[q]? = some pt) {row : Array ℕ}
+    (hw : pt.words = row.size) {w : Claims.Flock.Wit} {fs : List HmNets.Lin}
+    (h : rowPfx c q ++ readForms w fs = rowInput row) : readForms w fs = wordBytes row := by
+  rw [rowInput_eq, rowPfx, hpt, Option.map_some, Option.getD_some, hw] at h
+  exact List.append_cancel_left h
+
+theorem getD_padTo (ws : Array ℕ) (n i : ℕ) : (RecCoins.padTo ws n).getD i 0 = ws.getD i 0 := by
+  unfold RecCoins.padTo
+  simp only [Array.getD_eq_getD_getElem?, Array.getElem?_append]
+  split_ifs with h
+  · rfl
+  · rw [Array.getElem?_eq_none (Nat.le_of_not_lt h)]
+    simp only [Array.getElem?_replicate, Option.getD_none]
+    split_ifs <;> rfl
+
+theorem wordsElems_padTo (nv : ℕ) (ws : Array ℕ) (n : ℕ) :
+    wordsElems nv (RecCoins.padTo ws n) = wordsElems nv ws := by
+  funext e
+  unfold wordsElems
+  split_ifs
+  · exact FlockVBridge.OfVStar.ofBits_congr fun t _ => by rw [getD_padTo]
+  · rfl
 
 /-- **Check 5's tie at a copy, from its rows**: where the bytes the copy's `v` row forms `fv` read are the words of
 `row` (the verifier's, `8 nv` words at least) and those its `out` row forms `fo` read are zero words, and the copy's
@@ -319,8 +352,8 @@ theorem port_tie {Coin' : Type} {H : Msg → Msg} (hH : H = FlockDeploy.sha512) 
     List.mem_map.2 ⟨_, List.mem_append_left _ (List.mem_map.2 ⟨e, hmem e he, rfl⟩), rfl⟩
   have hver : ∀ u ∈ D.setup xO, u ∈ (L.calls x s w ++ vcallsAt FlockDeploy.sha512 D xO).map Prod.fst := fun u hu =>
     List.mem_map.2 ⟨(u, _), List.mem_append_right _ (List.mem_map.2 ⟨u, hu, rfl⟩), rfl⟩
-  refine commit_tie hT' hnc (hcall _ (List.mem_cons_of_mem _ List.mem_cons_self)) (hver _ hv)
-    (hcall _ List.mem_cons_self) ?_ ?_
+  refine commit_tie (y := readForms w (hmSalt c q n)) (σ := salt.data.toList) hT' hnc
+    (hcall _ (List.mem_cons_of_mem _ List.mem_cons_self)) (hver _ hv) (hcall _ List.mem_cons_self) ?_ ?_
   · rw [show FlockSoundness.Refine.K512.saltPrefix ++ salt.data.toList =
       (Hm96.Default512.saltPrefix ++ salt).data.toList by
         rw [ByteArray.data_append, Array.toList_append]; rfl]
@@ -393,14 +426,6 @@ theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
   exact hz
 
 /-! ## The statements -/
-
-/-- The instance copy `(o, g, 0)` of a part's table is: block `o`'s VU `g`, its first unit (`rowHidden`'s index). Check 5
-holds instances `0` and `1` (reps `0` and `1`), so only copies `(o, g, 0)` with `instOf c o g < 2` are tied. -/
-def instOf (c : Circuit) (o g : ℕ) : ℕ := o * c.g + g
-
-/-- The `nv` elements a row of words carries, 8 words an element (`RecCoins.words`), zero past `nv`. -/
-def wordsElems (nv : ℕ) (ws : Array ℕ) (e : ℕ) : _root_.Flock.F128 :=
-  if e < nv then FlockVBridge.ofBits fun t => (ws.getD (8 * e + t / 16) 0).testBit (t % 16) else 0
 
 /-- **The coin tie**: at a V\* statement `xO` part `s` stages at `x` and shows the coins `c` at, wherever check 5 loads
 a `rec-residuals` statement's inner session and computes its `v` rows (`resRows`), the verifier's values the coins give
