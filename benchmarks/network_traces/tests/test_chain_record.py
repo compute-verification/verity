@@ -280,11 +280,14 @@ def _chain_of(tmp_path, case: dict) -> SimpleNamespace:
 def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifiers_own_answer(tmp_path, period,
                                                                                              monkeypatch):
     """certifier/v0 cases from its Python mirror (`period_case`, held to `NetworkCheck.Period` by its difftest), which
-    also re-decides them here in the Lean executable's place."""
+    also re-decides them here in the Lean executable's place, one-stage v2 accepting each link-window's proof as on a
+    real session's (the mirror runs no prover, so no case of its own is accepted)."""
     import jsonschema
     monkeypatch.setattr(cr, "decide_period", period.reference)
-    case = period.case("accept", 1, "clock")
+    monkeypatch.setattr(period, "_proved", lambda *a: None)
+    case = period.build("honest", 1, small=True)
     answer = period.reference(case)
+    assert answer["verdict"] == "accept", answer["reason"]
     steps = _chain_of(tmp_path, case)
     honest = steps.period_answer = _period(tmp_path / "period", case, answer)
     got = cr.report(steps)
@@ -294,8 +297,10 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
     schema = json.loads(BLOCK_SCHEMA.read_text())
     jsonschema.Draft202012Validator({"$schema": schema["$schema"], "$defs": schema["$defs"],
                                      "$ref": "#/$defs/leg"}).validate(entry)
-    assert (f"K = {answer['public']['K']} bits over 1 link-windows, error {answer['public']['eps']} (quantity.eps); "
-            "at δ = 1/100: not established") in cr.markdown(got)
+    K = answer["public"]["K"]
+    assert answer["public"]["eps"] == "1/100" and (
+        f"K = {K} bits over 1 link-windows, error 1/100 (quantity.eps); at δ = 1/100: K = {K}; at δ = 1/1000000: "
+        "not established") in cr.markdown(got)
     out = tmp_path / "out"
     assert cr.main(["report", "--custody", steps.custody, "--certs", steps.certs, "--endpoint", steps.endpoint,
                     "--n2", steps.n2, "--scan", steps.scan, "--job", steps.job, "--warden-run", steps.warden_run,
@@ -310,12 +315,12 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
         assert block["written"] is False
         return block["why"]
 
-    foreign = period.case("accept", 0, "clock")
+    foreign = period.build("honest", 2, small=True)
     assert why(period_answer=_period(tmp_path / "foreign", foreign, period.reference(foreign))) == (
         "the case's link, session: not the chain's, so another certifier session's period")
     assert why(period_answer=_period(tmp_path / "mixed", foreign, answer)) == (
         "the case isn't the answer's: its commitment's digest is another")
-    rows = period.case("accept", 0, "rows")
+    rows = period.build("rows-honest", 0, small=True)
     assert why(period_answer=_period(tmp_path / "rows", rows, period.reference(rows))).startswith("a rows-form answer")
     assert why(period_answer=_period(tmp_path / "k", case, answer | {"public": answer["public"] | {"K": 1}})) == (
         f"network-period check on the case answers accept with K {answer['public']['K']}, not the given answer: it "
