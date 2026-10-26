@@ -52,6 +52,8 @@ KEY_COUNTS = {
     "verity/ml/circuits/ops/boolean/softmax_row.py::QkSoftmaxRowPad":
         "QkSoftmaxRowPad's key count n: attention padded to T = 32",
     "verity/ml/circuits/ops/gemm.py::KEY_COUNT": "PvRowPad's key count n: attention padded to T = 32",
+    "verity/ml/circuits/tests/test_population_ports.py::Counted":
+        "the population tests' stand-in key count: a position alone, whose population keeps it",
 }
 TESTS = {
     "verity/ml/circuits/tests/test_ports.py::SEED": "the port rules' seed vectors (E_COIN_REUSE, E_PORT_KIND, batched seeds)",
