@@ -3,7 +3,7 @@ import Definitions.Pouw.RelativeSecurity
 import Proofs.Pouw.RelativeSecurity
 
 /-!
-# Theorem K's count for the ring fragment (statement; the proof waits on its red team)
+# Theorem K's count for the ring fragment (statement, red-teamed; the proof in progress)
 
 BET-K-DISCHARGE (CMP-123, ACCEL): every program of the ring fragment pays at least Theorem K's count for Dither's
 transcript, with `theoremK` reused as it stands. This module states that count (`RingKCount`) and its cost form
@@ -65,8 +65,18 @@ product, and `c` when that is a delivery); `IADD3` at least `d` per input that i
 `d ≤ price(IADD3)/2`, or `/3` when no input is in place); a copy of an accumulator word, and a shared-memory round
 trip, at least `d` a word. The commitment's read of a word is outside the program and is no delivery.
 
-**The proof plan** (after the red team). Distinct certified cell-blocks have distinct word slots (`theoremK` at no
-products against `PrefixDiffRank`). For a certified `e`, walk back from its word slot along the in-place chain to the
+**Open conjuncts** (the coordinator's red team, 26 Oct). Two of `RingKCount`'s hypotheses are scope this module
+can't keep, since R-ACCEL-4 allows no premise about algorithms:
+
+* **K1, forks.** MODEL-SPEC models an out-of-place MMA as physical and free, so `Flow.WF`'s one-free-reader rule
+  must go. With forks the accumulators form a forest, and the count becomes a Steiner bound in the rank metric.
+  Strassen is no forest, since its output sets aren't suffix-closed along any tree, but the general bound is open.
+* **K2, degree.** `AffOps` is to be replaced by certifying at the live uniform coin. One word's cone needs `L`
+  products at any degree when it is right with probability above `3/4` (mod 2, fix one input of each product). The
+  count across words with products of products is open.
+
+**The proof plan.** Distinct certified cell-blocks have distinct word slots (`word_injOn`: `theoremK` at no products
+against `PrefixDiffRank`). For a certified `e`, walk back from its word slot along the in-place chain to the
 nearest certified word slot `s'` (scale `c`, the chain's coefficients' product; `c = 0` if the chain starts first). If
 no delivery lands on the walk, the word is `c` times `s'`'s plus the products attached to the walk plus a bit-affine
 word, so `theoremK` with target `dPrefix e − c · dPrefix e'` and `PrefixDiffRank` give the walk at least `L` products.
@@ -514,11 +524,26 @@ theorem word_injOn (hR : PrefixDiffRank) (φ : R →+* ZMod 2) (w : Fin np → R
     (fun _ => ⟨0, 0⟩) ⟨0, 0⟩
     (fun z => dPrefix pc vq w e.1 e.2.1 e.2.2.val z - 1 * dPrefix pc vq w e'.1 e'.2.1 e'.2.2.val z)
     fun U hU => by
-      beta_reduce
       rw [← hc U hU, ← hc' U hU, h]
       simp [BitAff.eval]
   rw [Finset.card_empty, mul_zero] at hle
   omega
+
+/-- **The split from its owners**: if the certified cell-blocks in `A` each own `L` products, pairwise disjoint, and
+the rest each own a delivery, injectively, then `RingKCount`'s split holds. -/
+theorem split_of_owners {E X D : Type} [DecidableEq E] [DecidableEq X] (L : ℕ) (cert A : Finset E) (hA : A ⊆ cert)
+    (prods : Finset X) (own : E → Finset X) (hown : ∀ e ∈ A, L ≤ (own e).card ∧ own e ⊆ prods)
+    (hdisj : (A : Set E).PairwiseDisjoint own) (dels : Finset D) (del : E → D)
+    (hdel : ∀ e ∈ cert \ A, del e ∈ dels) (hinj : Set.InjOn del (cert \ A : Finset E)) :
+    ∃ a b : ℕ, a + b = cert.card ∧ L * a ≤ prods.card ∧ b ≤ dels.card := by
+  refine ⟨A.card, (cert \ A).card, ?_, ?_, ?_⟩
+  · have h := Finset.card_sdiff_add_card_eq_card hA
+    omega
+  · calc L * A.card = ∑ _e ∈ A, L := by rw [Finset.sum_const, smul_eq_mul, mul_comm]
+      _ ≤ ∑ e ∈ A, (own e).card := Finset.sum_le_sum fun e he => (hown e he).1
+      _ = (A.biUnion own).card := (Finset.card_biUnion hdisj).symm
+      _ ≤ prods.card := Finset.card_le_card (Finset.biUnion_subset.mpr fun e he => (hown e he).2)
+  · exact Finset.card_le_card_of_injOn del (by intro e he; exact hdel e (by simpa using he)) hinj
 
 end Count
 
