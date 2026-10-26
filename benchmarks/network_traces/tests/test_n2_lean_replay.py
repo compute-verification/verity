@@ -112,6 +112,21 @@ def test_the_replay_finds_lean_and_python_agreeing_with_the_record(recorded, tmp
                                     "accepted": n - 1, "rejected": 1, "ok": None} and total["ok"]
 
 
+def test_a_runs_pin_names_a_size_class_the_tree_leaves_unpinned_and_never_replaces_one():
+    unpinned = rp.SV.gate(9, 7, 1, 2, 2, 1)
+    assert unpinned.id.endswith("@unpinned]_v2")
+    fid = unpinned.id[len("Gate["):-len("@unpinned]_v2")]
+    tree = next(iter(rp.HC._pins(rp.SV.PINS).items()))
+    added = rp.run_pins([f"Gate[{fid}@{'ab' * 64}]_v2", f"Gate[{tree[0]}@{'cd' * 64}]_v2"])
+    try:
+        assert added == [fid]
+        assert rp.SV.gate(9, 7, 1, 2, 2, 1).id == f"Gate[{fid}@{'ab' * 64}]_v2"
+        assert rp.HC._pins(rp.SV.PINS)[tree[0]] == tree[1]
+    finally:
+        rp._unpin(added)
+    assert rp.SV.gate(9, 7, 1, 2, 2, 1).id == unpinned.id
+
+
 def test_an_outcome_recorded_with_another_verdict_is_caught(recorded, tmp_path):
     vdir = recorded / "out" / "n2zk" / "honest" / "verifier"
     path = vdir / "w001-outcome.json"

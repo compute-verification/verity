@@ -13,7 +13,10 @@ salts and the output word, and the session files' SHA-512s. The findings of the 
 verifier (`proofs.verify`, already Lean) are the run's: the summary row's `proof` (refused, or each session accepted
 on the summary's registered Program and the drawn unit where `proved`), since the run keeps no circuit file to run it
 again; a member whose summary has no rows (a run that raised after proving it) takes each session as proved and is
-counted apart (``findings: "assumed"``).
+counted apart (``findings: "assumed"``). The run's structure is checked, not assumed: the link's registered Program,
+partition and gate ids as this tree derives them, against the summary's. A run made on a branch whose sidecar pinned a
+size class this tree pins none of keeps that pin (`run_pins`, each listed as ``pins_from_run``), since its gate ids
+name it; a pin the tree has is never replaced.
 
 Each window's two verdicts (accept bit, public outputs, digest) are compared with each other and with the outcome
 recorded (`outcome.json`'s ``network-audit`` verdict), whose digest binds the registration and the sessions. The
@@ -39,7 +42,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import n2_zk as n2  # noqa: E402
-from verity.core.protocols.certifier import service as SVC  # noqa: E402
+from verity.core.protocols.certifier import advised as AD, head_check as HC, served as SV, service as SVC  # noqa: E402
 from verity.core.protocols.certifier.certificate import Certificate, Direction  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
 from verity.core.protocols.sampled_proofs import service as S  # noqa: E402
@@ -134,13 +137,50 @@ class Window:
         return out
 
 
+def run_pins(gates: list[str]) -> list[str]:
+    """The run's own pins: each recorded gate's circuit digest for a size class this tree pins none of (a run on a branch
+    whose sidecar pinned it), added to this process's pins before any gate is built. A pin the tree has is never
+    replaced, so a recorded digest other than the tree's leaves the structure the run's not. The size classes added."""
+    sidecars = {"NetworkHeadCheck_": HC.PINS, "NetworkServedCounts_": SV.PINS, "NetworkAdvisedCounts_": AD.PINS}
+    added = []
+    for g in gates:
+        m = HC.GATE.fullmatch(g)
+        path = next((p for k, p in sidecars.items() if m and m["definition"].startswith(k)), None)
+        if path is None or m["digest"] == HC.UNPINNED or m["definition"] in HC._pins(path):
+            continue
+        HC._pins(path)[m["definition"]] = m["digest"]
+        added.append(m["definition"])
+    if added:
+        HC.gate.cache_clear()
+        SV.gate.cache_clear()
+        AD.gate.cache_clear()
+    return added
+
+
+def _unpin(added: list[str]) -> None:
+    for path in (HC.PINS, SV.PINS, AD.PINS):
+        for fid in added:
+            HC._pins(path).pop(fid, None)
+    HC.gate.cache_clear()
+    SV.gate.cache_clear()
+    AD.gate.cache_clear()
+
+
 def replay_run(run: Path, scratch: Path) -> dict:
-    """Every member and window of one recorded run, with its controls."""
+    """Every member and window of one recorded run, with its controls, under the run's pins (`run_pins`)."""
     base = run / "out" / "n2zk"
     summary = json.loads((base / "summary.json").read_text())
     link = summary["link"]
+    added = run_pins(link["gates"])
+    try:
+        return _replay(run, base, summary, link, added, scratch)
+    finally:
+        _unpin(added)
+
+
+def _replay(run: Path, base: Path, summary: dict, link: dict, added: list[str], scratch: Path) -> dict:
     out = {"run": run.name, "link": {k: link.get(k) for k in ("name", "unit", "program", "partition", "gates")},
-           "members": {}}
+           "pins_from_run": added, "members": {}}
     for name in sorted(p.parent.name for p in base.glob("*/verifier")):
         lw, _ = n2.link(run / "out" / "runs" / RUN_OF[name])
         structure = {"program": lw.partition["program"] == link["program"],
@@ -184,7 +224,8 @@ def main(argv=None) -> int:
     if a.jobs <= 1:
         results = [_task(r) for r in a.runs]
     else:
-        with ProcessPoolExecutor(max_workers=a.jobs) as pool:
+        # each run in a fresh process, so one run's pins (`run_pins`) never reach another's
+        with ProcessPoolExecutor(max_workers=a.jobs, max_tasks_per_child=1) as pool:
             results = list(pool.map(_task, a.runs))
     total = {"runs": len(results), "windows": 0, "agree": 0, "as_recorded": 0, "assumed": 0, "controls": 0,
              "controls_passed": 0, "accepted": 0, "rejected": 0}
@@ -206,7 +247,8 @@ def main(argv=None) -> int:
                   f"{len(ws)} windows, verdicts {''.join(map(str, m['accepted']))}, "
                   f"Lean = Python {sum(w['agree'] for w in ws)}/{len(ws)}, "
                   f"as recorded {sum(w['as_recorded'] for w in ws)}/{len(ws)}, "
-                  f"controls {sum(c['passed'] for c in cs)}/{len(cs)}, structure {m['structure']}; "
+                  f"controls {sum(c['passed'] for c in cs)}/{len(cs)}, structure {m['structure']}, "
+                  f"pins from the run {r['pins_from_run'] or 'none'}; "
                   f"{'ok' if m['ok'] else 'FAILED'}", flush=True)
     ok = (all("error" not in r and r["members"] and all(m["ok"] for m in r["members"].values()) for r in results))
     total["ok"] = ok
