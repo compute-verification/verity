@@ -9,7 +9,7 @@ data sheet (DS-90), and what any fold's term of ε is when the cheater's fold is
 - li (FOLD-LUCK §2, `segment.py` `_li_absorb`): `y ← ((y ⊕ w₀ ⊕ K)·A + w₁)`, A odd (½ ALU + ½ IMAD a word).
 - li-down (FOLD-LUCK §8's candidate): li, then `y ← y + (y >> 16)` (one `IMAD.HI`) before the checkpoint.
 - RA, rotate-add: `y ← rotl(y, 1) + w`, then two steps `y ← rotl(y, 1) + c` with constants (`ra_finish`) a chain
-  before the checkpoint, so the last word's top bits reach the low ones. ptxas 12.9 at `-arch=sm_90` emits each step
+  before the checkpoint (which still leaves RA short of NCP, below). ptxas 12.9 at `-arch=sm_90` emits each step
   as one `LEA.HI R, y, w, y, s` (rotl then add; the note has the SASS), an integer instruction off IMAD, so DS-90's
   ALU class (64 a clock): 1 ALU a word.
 - MW, multiply-wide: a two-register state (a, b) takes the pair (w_e, w_o) by `V = a·K + w_e` (64 bits) and
@@ -17,7 +17,8 @@ data sheet (DS-90), and what any fold's term of ε is when the cheater's fold is
   then one step with no words before the checkpoint. DS-90 has no IMAD.WIDE line (UNLISTED); `MW_SLOTS` prices it at
   2 IMAD slots, its two 32-bit results, and the table shows 1 beside it.
 - FE, the IMAD pipe alone: `r ← r·K + w` (IMAD), then the Feistel step `(l, r) ← (r, l + hi(r·K′))` (IMAD.HI),
-  2 IMAD a word; RA's design offers it as a second route, for the IMAD pipe RA leaves idle.
+  2 IMAD a word, and one step with no word before the checkpoint; RA's and FA's designs offer it as a second route.
+- FA: FE with the word added by IADD3 (`r ← r + w`) before the same Feistel step: 1 ALU + 1 IMAD a word.
 
 **Lemma T** (paper proof in the note; checked below). Call a step triangular (a T-step) if output bit j reads only input
 bits ≤ j, as LOP3, IADD3, IMAD by a constant and XOR all are. A T-step bijective in an input passes a flip of that
@@ -25,22 +26,24 @@ input's top bit to a flip of exactly the output's top bit. So (1) if a word reac
 alone, then C mod 2^(j+1) ignores the word's bits above j, and 2^(j+1)·e_w is in K₊(C_j); (2) if two words meet through
 T-steps before either passes a non-T step, their top-bit pair is in K_⊕ of every component. NCP therefore needs a
 non-T step, bijective in the state, after every word and between any two words of one chain. li, XC and li-down fail
-it; MW and FE pass it at every context checked, and RA at every start state but those with rotl(y0, 1) ≡ 0 mod 2^(W−2)
-(a 2^−30 fraction at 32 bits), exhaustively at small widths (`ncp`). `ncp` also counts NCP⁺'s failures (a component
-whose derivative is constant, 0 or 1, as cheap as an invariant one) and prints the largest probability that a nonzero
-change of the words leaves the checkpoint unchanged. NCP is necessary for FOLD-LUCK's slot, not sufficient.
+it. RA meets it at width 4 but fails it at every start state at widths 5 and 6 (rotl by 1 lifts a difference's lowest
+set bit one place a step, so a word's low bits miss the checkpoint's low bits until the difference wraps), and fails
+NCP⁺ (no component of constant derivative, 0 or 1: as cheap as an invariant one) at every start state and width. MW
+fails at some contexts at widths 5 and 6. FE and FA, which mix through IMAD.HI's high half, meet NCP and NCP⁺ at every
+context checked (16 seeded a case at widths 4, 5 and 6; `ncp`, exhaustive over the words). `ncp` also prints the
+largest probability that a nonzero change of the words leaves the checkpoint unchanged. NCP is necessary for
+FOLD-LUCK's slot, not sufficient.
 
-**The cost floor at L = 32.** RA costs 1 ALU a word, and the ALU retires 64 a clock against the tensor core's 128
-words, so RA alone gives γ ≥ 2 there. MW costs ½ ALU + `MW_SLOTS`/2 IMAD. Among the non-T forms on DS-90's classes
-(`NCP_FORMS`), the most words a clock an NCP fold can absorb is 96 at two IMAD slots for IMAD.WIDE (γ ≥ 4/3), and 127
-at one. So FOLD-LUCK's budget of 0.54 ALU + 0.54 IMAD a word at L = 32 is met only if IMAD.WIDE with a 64-bit addend
-costs one IMAD slot. At L = 64 RA fits on the ALU alone.
+**The cost floor at L = 32** (`ncp_floor`). FA costs 1 ALU + 1 IMAD and FE 2 IMAD a word, each 2 issue slots, so the
+NCP⁺ forms absorb at most 63.75 words a clock against the tensor core's 128 (γ ≥ 2), and no mix of them fits
+FOLD-LUCK's budget of 0.54 ALU + 0.54 IMAD a word (at most 0.54 of a word does). The forms that would fit, RA at 1 ALU
+and MW at ½ ALU + ½ IMAD if IMAD.WIDE with a 64-bit addend takes one IMAD slot, fail NCP. FA's γ at L = 64 is 1.11.
 
 **Theorem F, the kill** (`barrier`; the proof is in the note). Let T_F(ε) say that every program outputting the receipt
-R_F(A, B, σ) costs at least (1 − ε)·H, H honest's cost, and φ = 1 − 1/γ_plain honest's fold share. (a) Composing any
-program for the words with honest's fold gives one for R_F, so T_F(ε) proves, from θ alone, that every program for the
-words (the exact segment products) costs at least (1 − ε − φ)·H: SAK's content, which R-ACCEL-6 takes as the one
-premise because no proof of it is known. (b) A reduction from SAK that uses a program for R_F only through its outputs
+R_F(A, B, σ) frees at most ε·h MACs a clock of other work (h honest's credited MACs). (a) Any program for the words
+run beside honest's fold is a program for R_F, so T_F(ε) proves, from θ alone, that no program for the words (the
+exact segment products) beside the fold frees more than ε·h: SAK's content at c_mm = 1 − ε, which R-ACCEL-6 takes as
+the one premise because no proof of it is known. (b) A reduction from SAK that uses a program for R_F only through its outputs
 computes the words from q·32 bits a set of 4096 words and its own work, so it refutes SAK given that much advice. (c)
 Standard crypto binds a receipt only if the checkpoint is a cryptographic primitive, which makes the fold a hash
 (Consequence 2). With sparse checkpoints, T_F uniform in the shape is also a superlinear circuit lower bound for R_F.
@@ -650,7 +653,7 @@ RATES = {"tensor": F(4096), "issue": F(128), "alu": F(64), "imad": F(64), "shfl"
 B_SLICE = 3          # bit-sliced int8 MAC on LOP3s: lane-instructions a MAC (≈ 80 bit-ops a multiply, brief 4(e))
 MW_SLOTS = 2         # IMAD slots an IMAD.WIDE takes (UNLISTED on DS-90; its two 32-bit results)
 SETW = 4096          # words a warp a set (wgmma m64n256's accumulators: 4096 a warp), so 128 a lane
-WORLD = {"week": 1.8e29, "month": 9.4e30 / 12, "year": 9.4e30}   # FP8 FLOP, brief §0
+WORLD = {"week": 9.36e30 * 7 / 365.25, "month": 9.36e30 / 12, "year": 9.36e30}   # FP8 FLOP, R-ACCEL-7's figure of record
 SHA = {"mac_per_s": 9.9e14, "compressions_per_s": 4.79e9, "words_per_compression": 32}   # FOLD-LUCK §5
 
 
@@ -871,20 +874,14 @@ def gamma(out: dict) -> None:
 
 
 def barrier(out: dict, eps=F(1, 100)) -> None:
-    """Theorem F (a) in numbers: a proved floor (1 − ε)·H on every program for R_F, composed with honest's fold (φ·H,
-    φ = 1 − 1/γ_plain), is a floor (1 − ε − φ)·H on every program for the words, the exact segment products: SAK's
-    content at c_mm = 1 − ε − φ. And the circuit size a floor on R_F implies when its checkpoints are sparse."""
+    """Theorem F's numbers. (a) needs none: a program Q for the words beside honest's fold that frees resources worth s
+    MACs a clock of other work is a cheater for R_F at ε = s/h, so T_F(ε) caps every such s at ε·h, SAK's content at
+    c_mm = 1 − ε. Here: the circuit size a floor (1 − ε)·H on R_F's programs implies, dense and sparse checkpoints."""
     print()
-    print(f"Theorem F (a) at ε = {float(eps):.0%}: a proved fold minimum proves, from θ alone, a floor on every program for "
-          "the segment products (SAK's content):")
+    print(f"Theorem F at ε = {float(eps):.0%}: (a) a proved fold minimum proves, from θ alone, that no program for the "
+          f"segment products beside honest's fold frees more than ε·h of other work (SAK's content at c_mm = "
+          f"{float(1 - eps)}); the circuit a floor (1 − ε)·H on R_F implies:")
     pv, _, _ = plain()
-    res = {}
-    for design, L in DESIGNS:
-        hv, _, _ = honest(design, L)
-        phi = 1 - hv / pv
-        res[f"{design}/L{L}"] = {"phi": str(phi), "c_mm_implied": str(1 - eps - phi)}
-        print(f"  {design:4} L={L:3}: φ {float(phi):.4%}, so T_F(ε) would prove c_mm ≥ {float(1 - eps - phi):.4f} for "
-              "the words from θ alone")
     # Sparse checkpoints, uniform in n: one LOP3 a gate with its two operands and result in HBM (12 bytes, DS-90's 4.8
     # TB/s over 132 SMs at 1830 MHz) runs any circuit, so s ≥ ((1 − ε)·H − κ_io·(m + out))/κ_gate.
     hbm = F(48 * 10**11) / (132 * 1830 * 10**6)
@@ -900,7 +897,8 @@ def barrier(out: dict, eps=F(1, 100)) -> None:
     for r in rows:
         print(f"  n = {r['n']:7}, a checkpoint every {r['words_a_checkpoint']:>12} words (L = 32): the circuit it implies "
               f"for R_F has s/(m + out) ≥ {r['s_over_m_plus_out']:9.3f}  (best known explicit: 3.1)")
-    out["theorem_f"] = {"eps": str(eps), "designs": res, "circuit": rows, "kappa_gate_sm_clocks": float(k_gate)}
+    out["theorem_f"] = {"eps": str(eps), "c_mm_implied": str(1 - eps), "circuit": rows,
+                        "kappa_gate_sm_clocks": float(k_gate)}
     dense = [r for r in rows if r["words_a_checkpoint"] == SETW]
     sparse = [r for r in rows if r["words_a_checkpoint"] != SETW]
     check(all(r["s_over_m_plus_out"] < 3.1 for r in dense),
