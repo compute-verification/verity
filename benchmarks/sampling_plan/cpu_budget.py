@@ -6,7 +6,9 @@ each template's units the budget certifies.
 
 * **A statement** holds up to `UNITS` drawn units of one template, at no more cost than one, since C-Flock pads a
   statement to 8 instance slots. Its m is k_log + 3, with k_log = ceil(log2(proved ANDs)), the unit's ANDs with its
-  rows' openings (`h200.py`'s ``proved_ands``).
+  rows' openings (`h200.py`'s ``proved_ands``). C-Flock proves no instance past k_log `K_LOG_MAX`, so a unit with more
+  ANDs is drawn whole and proved as its least number of parts under it, each part a template of its own (a row cut
+  where a partial sum is committed).
 * **Its cost** comes from `CALIBRATION`: firewalled `--zk` cold sessions on Genoa proofs slots, every one accepted by
   the live verifier and by Lean. Prove wall time is scaled to a 42-core slot by thread count, with the peak summed
   over the prover, the live verifier and the firewall. Lean `verify --zk` (one core) and staging are counted apart.
@@ -35,6 +37,9 @@ CALIBRATION = {27: (42.4, 34, 14.0, 20.8, 2.3, "r20261025-233133-6b59"),
                29: (194.3, 30, 55.9, 138.5, 18.8, "r20261025-234257-5cf3"),
                30: (384.1, 42, 107.4, 276.8, 39.4, "r20261025-234304-229c")}
 SETUP_S = 6.5
+#: `Stmt.InRange`'s k_log bound (`live/src/circuit.rs`'s IN_RANGE_K_LOG, `verity_flock.circuit.K_MAX`): C-Flock refuses an
+#: instance past it, so a unit with more proved ANDs is cut into parts, each its own template.
+K_LOG_MAX = 27
 
 
 def k_log(proved_ands: int) -> int:
@@ -61,11 +66,13 @@ def statement(m: int) -> dict:
 def window(t: dict, k: int, windows: int) -> dict:
     n = t["units"]
     k = min(n, ceil(k / UNITS) * UNITS)
-    st = statement(k_log(t["proved_ands"]) + 3)
-    count = ceil(k / UNITS)
+    parts = ceil(t["proved_ands"] / 2 ** K_LOG_MAX)
+    st = statement(k_log(ceil(t["proved_ands"] / parts)) + 3)
+    count = parts * ceil(k / UNITS)
     K0 = {str(d): min(ceil(log(windows / d) * n / k), n - k + 1) for d in DELTAS}
     pooled = {str(d): min(log(windows / d) * n / k, n - k + 1) for d in DELTAS}
-    return {"template": t["template"], "units": n, "k": k, "statements": count, "m": st["m"], "measured": st["measured"],
+    return {"template": t["template"], "units": n, "k": k, "parts": parts, "statements": count, "m": st["m"],
+            "measured": st["measured"],
             "slot_s": count * st["wall_s"] * st["slots"], "slots_each": st["slots"], "wall_each_s": st["wall_s"],
             "peak_gib": st["peak_gib"], "core_s": count * (st["verify_s"] + st["stage_s"]), "K0": K0, "pooled": pooled,
             "share": {d: K0[d] / n for d in K0}}
@@ -124,10 +131,10 @@ def render(r: dict) -> str:
              (f"Share at 1%: **{s:.3g}** of each template's units ({r['drawn']:,} drawn in {r['statements']:,} statements, "
               f"{r['slot_s']:.4g} of {b['slot_s']:.4g} slot-s; Lean verify and staging {r['core_s']:.4g} core-s)."
               if s is not None else f"No plan fits: the floor (k = 9 a template) is {r['floor_slot_s']:.4g} slot-s."), "",
-             "| template | units a block | k | statements | m | slots each | wall each s | slot-s | K0 at 1% | share at 1% "
-             "| K0 at 1e-6 | share at 1e-6 |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+             "| template | units a block | k | parts | statements | m | slots each | wall each s | slot-s | K0 at 1% "
+             "| share at 1% | K0 at 1e-6 | share at 1e-6 |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for w in r["windows"]:
-        lines.append(f"| {w['template']} | {w['units']:,} | {w['k']:,} | {w['statements']} | {w['m']}"
+        lines.append(f"| {w['template']} | {w['units']:,} | {w['k']:,} | {w['parts']} | {w['statements']} | {w['m']}"
                      f"{'' if w['measured'] else '*'} | {w['slots_each']} | {w['wall_each_s']:.0f} | {w['slot_s']:.4g} | "
                      f"{w['K0']['0.01']:,} | {w['share']['0.01']:.3g} | {w['K0']['1e-06']:,} | {w['share']['1e-06']:.3g} |")
     lines += ["", "\\* m outside the calibration (27 to 30): extrapolated.", "",
