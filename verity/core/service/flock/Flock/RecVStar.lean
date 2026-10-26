@@ -815,17 +815,20 @@ def endReads (i : Inner) : VStar.Stmt → V (Option (Array (Option Nat) × Array
     pure (some (#[some (2 * n)], #[some (2 * n + opensBelow sr sr.levels.size)]))
   | _ => pure none
 
+/-- The rows port `nm` reads at its runs' ends (`endReads`' pair): `acc0`'s, else `acc1`'s. -/
+def endWant (w : Array (Option Nat) × Array (Option Nat)) (nm : String) : Array (Option Nat) :=
+  if nm == "acc0" then w.1 else w.2
+
 /-- **A part's `acc0` and `acc1` read `rec-acc` at its runs' ends** (`endReads`), which neither `checkAcc` (one
 registration, reads aside) nor `checkRows` (the verifier's shared rows, which the prover stages) fixes. -/
 def checkEndReads (i : Inner) (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit := do
   if (accPorts s).isEmpty then return
-  let some (w0, w1) ← endReads i s | return
+  let some w ← endReads i s | return
   for nm in accPorts s do
     let some p := registered.find? (·.name == nm)
       | throw s!"{s.name}: its port {nm} is not a port of the registered reads ({registered.toList.map (·.name)})"
-    let w := if nm == "acc0" then w0 else w1
-    if p.reads != w then
-      throw s!"{s.name}: its port {nm} reads {ACC_VALUE} at {showReads p.reads}, not at its runs' ends {showReads w}"
+    if p.reads != endWant w nm then
+      throw s!"{s.name}: its port {nm} reads {ACC_VALUE} at {showReads p.reads}, not at its runs' ends {showReads (endWant w nm)}"
 
 /-- **A level's `acc` and `acc_out` read `rec-acc` at its openings' rows of the chain** (`accReads`; `OpenKeysS`'
 positions, which `checkAcc`'s one registration leaves open): unit `u`'s `acc` reads its opening's row, its `acc_out` the
