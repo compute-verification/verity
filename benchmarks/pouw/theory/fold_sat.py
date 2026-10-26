@@ -433,13 +433,14 @@ def describe(slots, osel, model, target: Target, ops=OPS) -> list[str]:
     return lines
 
 
-def synth(target: Target, k: int, *, vectors: int = 4, seed: int = 1, timeout_s: int = 600, max_iter: int = 40,
+def synth(target: Target, k: int, *, vectors: int = 4, seed: int = 1, timeout_s: int | None = None, max_iter: int = 40,
           ops: tuple[str, ...] = OPS) -> dict:
     """CEGIS for a k-slot program computing ``target``. Returns the verdict: unsat (a proof over the modelled set), sat
     (a program verified for all inputs) or unknown (timeout)."""
     slots, osel, structure = build(target, k, ops)
     s = z3.Solver()
-    s.set("timeout", timeout_s * 1000)
+    if timeout_s:
+        s.set("timeout", timeout_s * 1000)
     s.add(structure)
     xs_list = _vectors(target, vectors, seed)
     for xs in xs_list:
@@ -463,11 +464,12 @@ def synth(target: Target, k: int, *, vectors: int = 4, seed: int = 1, timeout_s:
             "ops": list(ops)}
 
 
-def verify(target: Target, slots, osel, model, ops, timeout_s: int):
+def verify(target: Target, slots, osel, model, ops, timeout_s: int | None):
     """None if the model's concrete program computes ``target`` on every input, else a counterexample input."""
     xs = [z3.BitVec(f"x_{n}", W) for n in target.inputs]
     v = z3.Solver()
-    v.set("timeout", timeout_s * 1000)
+    if timeout_s:
+        v.set("timeout", timeout_s * 1000)
     v.add(_pin(slots, osel, model))
     v.add(z3.Not(z3.And(run_vector(target, slots, osel, xs))))
     r = v.check()

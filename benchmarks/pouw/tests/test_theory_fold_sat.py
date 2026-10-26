@@ -82,10 +82,10 @@ def test_instruction_models():
 
 
 def test_li_one_instruction_unsat_small_menu():
-    r = F.synth(F.TARGETS["li"], 1, ops=("LOP3", "IADD3", "IMAD"), timeout_s=60)
+    r = F.synth(F.TARGETS["li"], 1, ops=("LOP3", "IADD3", "IMAD"))
     assert r["verdict"] == "unsat"
 
 
 def test_li_honest_found():
-    r = F.synth(F.TARGETS["li"], 2, ops=("LOP3", "IMAD"), timeout_s=60)
+    r = F.synth(F.TARGETS["li"], 2, ops=("LOP3", "IMAD"))
     assert r["verdict"] == "sat", r
