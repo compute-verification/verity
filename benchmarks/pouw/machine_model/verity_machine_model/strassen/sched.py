@@ -15,6 +15,7 @@ schedules that apply no scheme; has[i, j] is the least cost of a schedule that a
 from __future__ import annotations
 
 import ctypes
+import functools
 import hashlib
 import os
 import subprocess
@@ -75,12 +76,19 @@ def grid(Vmax: int, extra=()) -> np.ndarray:
     return np.array(sorted(p for p in pts if p <= Vmax), dtype=np.int64)
 
 
+@functools.lru_cache(maxsize=None)
+def _costs(name: str) -> Costs:
+    return Costs(inst(name))
+
+
 class Tables:
-    def __init__(self, name: str, lmax: int, schemes):
-        self.C = Costs(inst(name))
+    def __init__(self, name: str, lmax: int, schemes, clamp: int | None = None):
+        """clamp: the product mod clamp (a CRT residue), every combination reduced, so ranges never exceed clamp."""
+        self.C = _costs(name)
         self.schemes = schemes
-        Vmax = 255 * 4 ** lmax + 1
-        self.g = g = grid(Vmax, extra=self.C.closure)
+        self.clamp = clamp
+        Vmax = clamp if clamp else 255 * 4 ** lmax + 1
+        self.g = g = grid(Vmax, extra=tuple(self.C.closure) + ((clamp,) if clamp else ()))
         G = len(g)
         self.down = lambda v: np.searchsorted(g, v, side="right") - 1
         self.upi = lambda v: np.minimum(np.searchsorted(g, v, side="left"), G - 1)
@@ -108,6 +116,8 @@ class Tables:
 
     def child(self, N: int, rnd):
         v = (self.g - 1) * N + 1
+        if self.clamp:
+            v = np.minimum(v, self.clamp)
         idx = rnd(v)
         return idx, self.over(v)
 
