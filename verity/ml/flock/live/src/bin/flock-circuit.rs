@@ -316,6 +316,9 @@ fn identity(c: &Composite) -> Value {
         let v2_run = c.out_rows().iter().enumerate().any(|(j, p)| p.segs.is_none() && c.out_group(j).1 > 1);
         id["outputs"] = json!(if v2_run { OUT_ROWS_V2_IDENTITY } else { OUT_ROWS_SEG_IDENTITY });
     }
+    if c.pinned > 0 {
+        id["outputs"] = json!(PINNED_IDENTITY);
+    }
     id
 }
 
