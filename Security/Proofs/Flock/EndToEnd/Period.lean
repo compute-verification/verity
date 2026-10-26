@@ -7,16 +7,16 @@ import Proofs.Flock.Soundness.Game.Union
 /-!
 # Proof of the integrity audit over a period, and over a horizon
 
-* `Flock.SecurityProofs.IntegrityPeriod`: `period_union` over the windows, each window's bound
-  `Flock.SecurityProofs.EndToEndHidden` at the strategy that plays it (`HiddenWindow.accepted_wrong_le`), with its
+* `Flock.SecurityProofs.IntegrityPeriod`: `period_union` over the sampling blocks, each sampling block's bound
+  `Flock.SecurityProofs.EndToEndHidden` at the strategy that plays it (`SamplingBlock.accepted_wrong_le`), with its
   knowledge term at the worst registration.
-* `Flock.SecurityProofs.IntegrityHorizon`: a run in which every window is accepted and the wrong units total at least
-  `M` either has a window accepted with a drawn unit wrong, at most `Σ_w (ε_ks,w + δ_link,w)` by `period_union` over
-  `Flock.SecurityProofs.EndToEndHiddenDrawn` (`HiddenWindow.accepted_drawnWrong_le`), or every window's draw misses its
-  wrong units with at least `M` of them in all, at most `(1 − q)^M` by `period_horizon`: window `w`'s draw misses its
-  `|W|` wrong units with probability at most `C(n − |W|, kd)/C(n, kd) ≤ (1 − kd/n)^{|W|}` under A3
-  (`HiddenWindow.drawMiss_le`; `Law.execOS_subset_escape_le`, `Law.choose_div_le_one_sub_pow`). At
-  `M = ⌈ln(1/δ)/q⌉`, `(1 − q)^M ≤ e^{−qM} ≤ δ`.
+* `Flock.SecurityProofs.IntegrityHorizon`: a run in which every sampling block is accepted and the wrong units total at
+  least `M` either has a sampling block accepted with a drawn unit wrong, at most `Σ_w (ε_ks,w + δ_link,w)` by
+  `period_union` over `Flock.SecurityProofs.EndToEndHiddenDrawn` (`SamplingBlock.accepted_drawnWrong_le`), or every
+  sampling block's draw misses its wrong units with at least `M` of them in all, at most `(1 − q)^M` by
+  `period_horizon`: sampling block `w`'s draw misses its `|W|` wrong units with probability at most
+  `C(n − |W|, kd)/C(n, kd) ≤ (1 − kd/n)^{|W|}` under A3 (`SamplingBlock.drawMiss_le`; `Law.execOS_subset_escape_le`,
+  `Law.choose_div_le_one_sub_pow`). At `M = ⌈ln(1/δ)/q⌉`, `(1 − q)^M ≤ e^{−qM} ≤ δ`.
 -/
 
 namespace Flock.SecurityProofs
@@ -37,17 +37,17 @@ theorem one_sub_pow_le_of_log {q δ : ℝ} (hq : 0 < q) (hδ : 0 < δ) {M : ℕ}
 
 end Flock.SecurityProofs
 
-namespace Flock.Guarantees.HiddenWindow
+namespace Flock.Guarantees.SamplingBlock
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
 open scoped ENNReal
 
-variable (w : HiddenWindow)
+variable (w : SamplingBlock)
 
 open Classical in
-/-- **One window's `EndToEndHidden`**, at the strategy `τ` that plays it. -/
+/-- **One sampling block's `EndToEndHidden`**, at the strategy `τ` that plays it. -/
 theorem accepted_wrong_le (hA3 : FlockSoundness.Assumptions.UniformRandomBytes w.Lb w.src) (τ : Strategy w.game)
     (hcr : w.CR τ) :
     prob (fun o => LiveAcceptsZK w.I o ∧ w.K₀ ≤ (w.wrongSet τ).card) w.game τ ≤ w.miss + w.ks + w.link := by
@@ -61,7 +61,8 @@ theorem accepted_wrong_le (hA3 : FlockSoundness.Assumptions.UniformRandomBytes w
         exact le_iSup (fun R => ksAvgStrictZ (planZHJ w.dj w.y₀) w.L w.k w.qF w.qS R) _
 
 open Classical in
-/-- **One window's `EndToEndHiddenDrawn`**, at the strategy `τ` that plays it: accepted with a drawn unit wrong. -/
+/-- **One sampling block's `EndToEndHiddenDrawn`**, at the strategy `τ` that plays it: accepted with a drawn unit
+wrong. -/
 theorem accepted_drawnWrong_le (τ : Strategy w.game) (hcr : w.CR τ) :
     prob (fun o => LiveAcceptsZK w.I o ∧ ∃ u ∈ o.2.1, u ∈ w.wrongSet τ) w.game τ ≤ w.ks + w.link := by
   have h := Flock.SecurityProofs.EndToEndHiddenDrawn w.n w.Reg w.I w.ht w.D w.hD w.hU w.pub w.hpub w.hpt w.hscope
@@ -82,7 +83,7 @@ private theorem prob_const {α : Type} (Q : Prop) [Decidable Q] (g : Game α) (s
     exact prob_false g s
 
 open Classical in
-/-- **A window's draw misses its wrong units** with the escape probability of its live draw. -/
+/-- **A sampling block's draw misses its wrong units** with the escape probability of its live draw. -/
 theorem prob_drawMiss (B : Finset (Fin w.n)) (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ = w.L.escape B := by
   show avg (fun ω => prob _ ((liveOfZJ w.dg (planZHJ w.dj w.y₀) w.N w.wr (w.L.draw ω) τ.1).map
@@ -97,7 +98,7 @@ theorem prob_drawMiss (B : Finset (Fin w.n)) (τ : Strategy w.game) :
   · rw [if_neg (mt hiff.1 hd), if_neg hd]
 
 open Classical in
-/-- **A window's draw misses its wrong units** with probability at most `(1 − kd/n)^{|W|}`, under A3. -/
+/-- **A sampling block's draw misses its wrong units** with probability at most `(1 − kd/n)^{|W|}`, under A3. -/
 theorem drawMiss_le (hA3 : FlockSoundness.Assumptions.UniformRandomBytes w.Lb w.src) (B : Finset (Fin w.n))
     (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ ≤ (1 - (w.kd : ℝ≥0∞) / w.n) ^ B.card := by
@@ -107,7 +108,7 @@ theorem drawMiss_le (hA3 : FlockSoundness.Assumptions.UniformRandomBytes w.Lb w.
   exact Law.choose_div_le_one_sub_pow w.hkd (by simpa using B.card_le_univ)
 
 
-/-- A draw covering a fraction `q` of the window's units: `1 − kd/n ≤ 1 − q`. -/
+/-- A draw covering a fraction `q` of the sampling block's units: `1 − kd/n ≤ 1 − q`. -/
 theorem one_sub_le {q : ℝ} (hq : 0 < q) (hqk : q ≤ (w.kd : ℝ) / w.n) :
     1 - (w.kd : ℝ≥0∞) / w.n ≤ ENNReal.ofReal (1 - q) := by
   have hn : (0 : ℝ) < w.n := by
@@ -126,7 +127,7 @@ theorem miss_le {q δ : ℝ} (hq : 0 < q) (hδ : 0 < δ) (hqk : q ≤ (w.kd : �
   (Law.choose_div_le_one_sub_pow w.hkd w.hK₀).trans
     ((pow_le_pow_left₀ zero_le (w.one_sub_le hq hqk) _).trans (Flock.SecurityProofs.one_sub_pow_le_of_log hq hδ hK))
 
-end Flock.Guarantees.HiddenWindow
+end Flock.Guarantees.SamplingBlock
 
 namespace Flock.SecurityProofs
 
@@ -135,7 +136,9 @@ open scoped ENNReal
 
 /-- **The integrity audit over a period.** -/
 theorem IntegrityPeriod : Flock.Guarantees.IntegrityPeriod := by
-  intro W T hA3 s hs
+  intro W T hA3 s hT hL
+  have hs : PeriodGood (fun t => (W t).game) (fun t => (W t).CR) 0 T s :=
+    periodGood_of_plays _ _ T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
   have h := period_union (fun t => (W t).game) (fun t => (W t).record t)
     (fun r => r.accepted ∧ (W r.idx).K₀ ≤ r.wrong) (fun t τ => t < T ∧ (W t).CR τ)
     (fun t => (W t).miss + (W t).ks + (W t).link)
@@ -145,23 +148,25 @@ theorem IntegrityPeriod : Flock.Guarantees.IntegrityPeriod := by
 
 /-- **The integrity audit over a period, at `δ`.** -/
 theorem IntegrityPeriodLog : Flock.Guarantees.IntegrityPeriodLog := by
-  intro W T q δ hq hδ hqt hK hA3 s hs
-  refine (IntegrityPeriod W T hA3 s hs).trans (Finset.sum_le_sum fun t ht => ?_)
+  intro W T q δ hq hδ hqt hK hA3 s hT hL
+  refine (IntegrityPeriod W T hA3 s hT hL).trans (Finset.sum_le_sum fun t ht => ?_)
   have ht' := Finset.mem_range.1 ht
   gcongr
   exact (W t).miss_le hq hδ (hqt t ht') (hK t ht')
 
 /-- **The integrity audit over a horizon.** -/
 theorem IntegrityHorizon : Flock.Guarantees.IntegrityHorizon := by
-  intro W T q δ hq hδ hqt hA3 s hs
+  intro W T q δ hq hδ hqt hA3 s hT hL
   classical
+  have hs : PeriodGood (fun t => (W t).game) (fun t => (W t).CR) 0 T s :=
+    periodGood_of_plays _ _ T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
   set M : ℕ := ⌈Real.log (1 / δ) / q⌉₊
   set x : ℝ≥0∞ := ENNReal.ofReal (1 - q)
   have hx : x ≤ 1 := ENNReal.ofReal_le_one.2 (by linarith)
   have hfac : ∀ t < T, ∀ m : ℕ, (1 - ((W t).kd : ℝ≥0∞) / (W t).n) ^ m ≤ x ^ m :=
     fun t ht m => pow_le_pow_left₀ zero_le ((W t).one_sub_le hq (hqt t ht)) m
   have hgood := periodGood_mono _ T 0 s (fun j τ _ hj hcr => (⟨by omega, hcr⟩ : j < T ∧ (W j).CR τ)) hs
-  -- every window accepted with a drawn unit wrong
+  -- every sampling block accepted with a drawn unit wrong
   have hA := period_union (fun t => (W t).game) (fun t => (W t).record t)
     (fun r => r.accepted ∧ r.drawnWrong) (fun t τ => t < T ∧ (W t).CR τ)
     (fun t => (W t).ks + (W t).link)

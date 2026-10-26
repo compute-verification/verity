@@ -723,8 +723,8 @@ class S3Remote:
                        expires_s, self.session_token)
 
     def delete(self, key: str) -> bool:
-        """Remove `key` (True) or find it absent already (False).  Not part of the `Remote` protocol -- the store never deletes a
-        replica; the bench (`bench/<ts>/...`) and an operator cleaning a throwaway prefix do."""
+        """Remove `key` (True) or find it absent already (False).  Not part of the `Remote` protocol: only the store's GC (README §7.4),
+        the bench (`bench/<ts>/...`) and an operator cleaning a throwaway prefix delete."""
         try:
             with self._request("DELETE", key):
                 pass
