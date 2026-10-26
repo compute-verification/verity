@@ -21,8 +21,9 @@ variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] {I : Type} {Ω : I
 
 /-- The parameters' circuit's evaluation on any inputs has no wrong unit of the parameters' partition. -/
 theorem wrong_eval (θ : ByteArray) (a : (V.circuitOf θ).Transcript) :
-    (V.partsOf θ).wrong ((V.circuitOf θ).eval a) = ∅ :=
-  Finset.filter_eq_empty_iff.2 fun u _ hn => hn (Pouw.PearlC.WholeCircuit.correct_eval _ a u)
+    (V.partsOf θ).wrong ((V.circuitOf θ).eval a) = ∅ := by
+  classical
+  exact Finset.filter_eq_empty_iff.2 fun u _ hn => hn (Pouw.PearlC.WholeCircuit.correct_eval _ a u)
 
 /-- **`IntegrityLeg` holds at every vocabulary with a nonnegative `ε` and error**, at the transcript the parameters'
 circuit evaluates to on zero inputs, whatever the strategy, the component's acceptance and the coins it reads. -/
