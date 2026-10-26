@@ -30,8 +30,9 @@ ptxas for sm_90a writes the range checks' and the seed's add of an immediate as 
 where sm_120a's writes IADD3 R, PT, PT, R, imm, RZ, and a constant numerator's move from a uniform register as IMAD.U32
 R, RZ, RZ, UR: each sequence takes every spelling of the same 32-bit integer operation, and nothing else.
 Each fast path's call passes the slow path exactly the fast path's operands (`_passes`): the registers the body may read
-before writing them and the constant-bank slots it loads hold, as `value` keys them, x (rcp, sqrt) or a and b (div), with
-the return address besides, so a call block may move them into place or reload them from their slot (ULDC, IMAD.U32).
+before writing them and the constant-bank slots it loads hold, as `value` keys them, x (rcp, sqrt) or a and b (div) each
+in its role (the div body's divisor is the one input its MUFU.RCP's operand may derive from, `_sources`), with the return
+address besides, so a call block may move them into place or reload them from their slot (ULDC, IMAD.U32).
 A BRX branches to its ``BRANCH_TARGETS`` (the cubin's EIATTR_INDIRECT_BRANCH_TARGETS, as nvdisasm prints them); any other
 indirect branch is a path the gate can't follow.
 rsqrt has no entry: at default flags ptxas builds __frsqrt_rn from bare MUFU.RSQ, so it's refused.
@@ -67,7 +68,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import itertools
 import json
 import os
 import re
@@ -843,9 +843,48 @@ def same(fn: Function, x: tuple, y: tuple) -> bool:
     return x == y
 
 
+def _sources(fn: Function, lo: int, hi: int, k: int, reg: str) -> frozenset | None:
+    """The inputs of the body [lo, hi) that `reg` may derive from when k reads it: ``("in", r)`` for a register the body
+    reads before writing, ``("const", slot)`` for a fixed slot of constant bank 0 it loads. Every operand and the guard of
+    each instruction on some path count, so this is a superset; None when a path leaves the body other than by RET."""
+    def get(s: dict, r: str) -> frozenset:
+        return s.get(r, frozenset({("in", r)}))
+
+    state: dict[int, dict] = {lo: {}}
+    work = [lo]
+    while work:
+        t = work.pop()
+        s, ins = state[t], fn.insns[t]
+        if ins.indirect or ins.op[0] in ("CALL", "EXIT"):
+            return None
+        src = frozenset().union(*(get(s, r) for r in ins.reads))
+        out = dict(s)
+        for r in ins.maydef:
+            new = frozenset({("const", sl)}) if (sl := _slot(ins, r)) is not None else src
+            out[r] = new if r in ins.kills else get(s, r) | new
+        nxt = fn.succ(t)
+        if nxt is None:
+            return None
+        if ins.op[0] == "RET" and ins.guard is None:
+            continue
+        for u in nxt:
+            if not lo <= u < hi:
+                return None
+            old = state.get(u)
+            merged = out if old is None else {r: get(old, r) | get(out, r) for r in old.keys() | out.keys()}
+            if merged != old:
+                state[u] = merged
+                work.append(u)
+    if k not in state:
+        return frozenset()
+    return get(state[k], reg)
+
+
 def _passes(fn: Function, c: int, want: list[tuple]) -> str | None:
-    """None when the slow path the CALL at c enters reads exactly the operands `want` (`value` keys): the registers its body
-    may read before writing them, the constant-bank slots it loads, and the return address (the instruction after c)."""
+    """None when the slow path the CALL at c enters reads exactly the operands `want` (`value` keys), each in its role: the
+    registers its body may read before writing them, the constant-bank slots it loads, and the return address (the
+    instruction after c). `want` is [x] (rcp, sqrt) or [a, b] (div): the div body's divisor is the one input its MUFU.RCP's
+    operand may derive from (`_sources`), and its numerator the other."""
     lo, hi = fn.subroutines[fn.insns[c].targets[0]][1:]
     inputs, slots = [], set()
     for t in range(lo, hi):
@@ -859,15 +898,24 @@ def _passes(fn: Function, c: int, want: list[tuple]) -> str | None:
         if eff is None:
             return "the slow path may leave other than by its return"
         if eff[0]:
-            inputs.append(value(fn, c, reg))
+            inputs.append((("in", reg), value(fn, c, reg)))
     back = ("imm", fn.insns[c + 1].addr) if c + 1 < len(fn.insns) else None
-    if back not in inputs:
+    if back not in [v for _, v in inputs]:
         return "the slow path isn't passed its return address"
-    inputs.remove(back)
-    inputs += [("const", s) for s in sorted(slots)]
-    if len(inputs) != len(want) or not any(all(same(fn, x, y) for x, y in zip(p, want))
-                                           for p in itertools.permutations(inputs)):
+    inputs.remove(next(p for p in inputs if p[1] == back))
+    inputs += [(("const", s), ("const", s)) for s in sorted(slots)]
+    if len(inputs) != len(want):
         return "the slow path isn't passed the fast path's operands"
+    if len(want) == 2:
+        rcp = [t for t in range(lo, hi) if fn.insns[t].name == "MUFU.RCP" and len(fn.insns[t].args) == 2]
+        d = _sources(fn, lo, hi, rcp[0], fn.insns[rcp[0]].args[1]) if len(rcp) == 1 else None
+        roles = [o for o, _ in inputs]
+        if d is None or len(d & set(roles)) != 1:
+            return "the slow path's MUFU.RCP doesn't take exactly one of its inputs as the divisor"
+        if roles[0] in d:
+            inputs.reverse()
+    if not all(same(fn, x, y) for (_, x), y in zip(inputs, want)):
+        return "the slow path isn't passed the fast path's operands" + (" in their roles" if len(want) == 2 else "")
     return None
 
 

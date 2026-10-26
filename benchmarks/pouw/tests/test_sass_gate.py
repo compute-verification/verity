@@ -613,6 +613,39 @@ def test_each_reload_and_copy_breaks_under_a_mutation(name, fn, addr, old, new, 
     assert offending(v) == {(fn, rcp)} and why in v["offending"][0]["why"]
 
 
+@pytest.mark.parametrize("name,fn,edits,rcp,why", [
+    ("units_sweep90", "units_sweep", [(0x430, "IMAD.MOV.U32 R3, RZ, RZ, R13", "IMAD.U32 R3, RZ, RZ, UR7"),
+                                      (0x450, "IMAD.U32 R4, RZ, RZ, UR7", "IMAD.MOV.U32 R4, RZ, RZ, R13")],
+     "MUFU.RCP R3, R10", "in their roles"),
+    ("units_rmsnorm90", "units_rmsnorm", [(0x61b0, "MOV R0, R15", "IMAD.U32 R0, RZ, RZ, UR4"),
+                                          (0x61c0, "IMAD.U32 R3, RZ, RZ, UR4", "MOV R3, R15")],
+     "MUFU.RCP R0, R8", "in their roles"),
+    ("units_sweep90", "units_sweep", [(0x3b0, "FCHK P0, R13, R10", "FCHK P0, R10, R13")], "MUFU.RCP R3, R10", "no FCHK"),
+    ("units_rmsnorm90", "units_rmsnorm", [(0x6130, "FCHK P0, R15, R8", "FCHK P0, R8, R15")], "MUFU.RCP R0, R8", "no FCHK"),
+])
+def test_a_div_call_or_fchk_with_its_operands_swapped_is_refused(name, fn, edits, rcp, why):
+    """The call passes the numerator and the divisor each in its role: the body's divisor is the input its MUFU.RCP takes
+    (`_sources`), so a call block that moves the fast path's a and b into each other's registers fails, as does an FCHK
+    that reads them swapped."""
+    text = listing(name)
+    for addr, old, new in edits:
+        pad = f"/*{addr:04x}*/" + " " * 19
+        assert text.count(pad + old + " ;") == 1, (addr, old)
+        text = text.replace(pad + old, pad + new)
+    v = units90(name, text)
+    assert offending(v) == {(fn, rcp)} and why in v["offending"][0]["why"]
+
+
+def test_the_div_bodies_take_their_divisor_from_one_input():
+    """`_sources` of each units.cu div body's MUFU.RCP operand is exactly the register or slot the call's divisor goes in."""
+    want = {"units_sweep90": {("in", "R4")}, "units_rmsnorm90": {("in", "R3")}, "units_softmax90": {("in", "R0")}}
+    for name, divisor in want.items():
+        fns = [SG.Function(d) for d in SG.parse_nvdisasm(listing(name))]
+        (fn, lo, hi), = [(f, lo, hi) for f in fns for n, lo, hi in f.subroutines.values() if "div_rn" in n]
+        rcp, = [t for t in range(lo, hi) if fn.insns[t].name == "MUFU.RCP"]
+        assert SG._sources(fn, lo, hi, rcp, fn.insns[rcp].args[1]) == divisor, name
+
+
 @pytest.mark.parametrize("old,new,why", [
     ("FFMA R3, -R4, R4, R13", "FFMA.RZ R3, -R4, R4, R13", "the fast block at 0x02a0 isn't sqrt.rn's"),
     (SWEEP_BRX, SWEEP_BRX.replace(".L_x_10", ".L_x_10,.L_x_8"), "another branch enters the fast block"),
