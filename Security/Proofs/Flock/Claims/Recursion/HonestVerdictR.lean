@@ -157,7 +157,7 @@ theorem honest_decR (h64 : Claims.Out64 H) (o : Run H rel) {cs : List Coin} (hcs
     unfold Run.recCaps
     simp only [fileCaps, JsonRT.range_map_getElem! _ (show k / 2 < o.sts.size by omega)]
     exact h4
-  have hfit0 : RowsFit (capRows o.recCaps) := by
+  have hfit0 : RowsFit ((capRows o.recCaps).map nodeRow) := by
     refine capRows_fit (by unfold Run.recCaps; rw [fileCaps_size]; exact h64t) fun a ha => ?_
     obtain ⟨i, hi, rfl⟩ := Array.mem_map.1 ha
     have hi' := Array.mem_range.1 hi
@@ -174,10 +174,17 @@ theorem honest_decR (h64 : Claims.Out64 H) (o : Run H rel) {cs : List Coin} (hcs
     have hok := htab (k / 2) hk2
     obtain ⟨hd, hkl, hn⟩ := repCtx_bounds (r₀ := capRows o.recCaps) (cs := cs.tail.dropLast) hk2 hok.1 hok.2
     exact repRows_fit (o.recTs k) hsc (hon (hfc k (by rw [hsz]; omega))) hd hkl hn rs hrs
-  have h := readsBack rd o.x last cs o.s o.spec o.sts o.recC₁ o.recCaps o.recPs o.recTs fl hx hcs.head
-    (fileCaps_size ..) hcaps (by unfold Run.recPs; rw [filePs_size, hsz]) hrep hfit0 hfit hrd hps
-  rw [hst] at h
-  exact h
+  have hsh : ShapedAt o.spec o.sts o.recC₁ o.recPs := fun k hk => by
+    have hk0 : k < (filePs o.spec o.sts o.recC₁ o.proofs).size := hk
+    have hk' : k < 2 * o.sts.size := by
+      have h := hk0
+      rw [filePs_size, hsz] at h
+      exact h
+    have h := (hall k hk').2.2.2.2.2.2
+    rw [getElem!_pos (filePs o.spec o.sts o.recC₁ o.proofs) k hk0] at h
+    exact h
+  exact readsBack rd o.x last cs o.s o.spec o.sts o.recC₁ o.recCaps o.recPs o.recTs fl hx hcs.head
+    (fileCaps_size ..) hcaps (by unfold Run.recPs; rw [filePs_size, hsz]) hrep hfit0 hfit hrd hps hst hsh
 
 /-! ## The checks at the honest decision -/
 
