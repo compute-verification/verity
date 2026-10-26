@@ -44,6 +44,12 @@ committed row longer than one SHA-512 block.
   composes into C-Flock's unit statement (slow); a tampering loop's outputs are not its Definition's; the loop loads no
   vLLM. The checkpoint role's files are the served weights bit for bit, its entry pins them and names the linears in order,
   and the gate's own code reads the loop's rows from them and digests them to the role's checkpoint digest.
+- `verity_torch_loop/frozen.py` and `serve_frozen.py`: one decode step of the frozen H200 shape (CMP-92 Phase 2: width
+  16,384, 256 query heads of 64 with one KV head, MLP 65,536), the first `--layers` of its 52, every matmul coordinate a unit
+  on the H200's bindings (`ScaledMmS8Coordinate_v1{K=16384}` and `{K=65536}` on `GEMM_SM90_S8`, `GemmCoordinate{K=64}` on
+  `GEMM_HOPPER` for QKᵀ and PV), one window per template. The row ops run in torch and are committed as inputs until
+  CIR-100's Definitions land. `frozen_w.py`: W per block (core's `Stratified`) and pooled per week, month and year
+  (`density_bound`), at δ = 1% and 1e-6. `run.sh` with `PP_TORCH_FROZEN=1` audits each window, honest and tampered (PRF-173).
 - End to end: `benchmarks/prove_path/run.sh` with `PP_TORCH_LOOP=1` audits the honest and the tampered window from their
   records alone, against the registered circuit (`records_audit.py audit --circuit SHA512`) and against the compiler's
   output (`--opening`, `--compilers`): live coins, C-Flock `--zk` behind the Lean firewall, the Lean verifier of record,

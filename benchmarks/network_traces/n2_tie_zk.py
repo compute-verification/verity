@@ -7,7 +7,7 @@ and the stream's registrations built from the stream's outcomes of record alone 
 `tie_service.Ties`, the advised link's tie source).
 
     python benchmarks/network_traces/n2_tie_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
-      [--class test|served|warden] [--warden-run RUN] [--windows K] [--gpu] [--jobs 2] [--debug-clear] [--dry]
+      [--class test|served|warden] [--warden-run RUN] [--windows K] [--gpu] [--jobs 1] [--debug-clear] [--dry]
 
 * **The link** (`PARAMS`, the pinned size class): REDTEAM phase 9's span, three id requests of 5, 40 and 5 prompt tokens
   served through the warden's own ingress (`io_request.serve`) in two windows of T = 4 buckets of two lanes of r = 2
@@ -39,7 +39,8 @@ and the stream's registrations built from the stream's outcomes of record alone 
   selects, proves live behind the firewall, delivers, and decides on the proof: the verifier's own Lean run with its
   own registered reads at the warden's root (`IngressTie.registered`), each ``pub`` row opened only to its own copy
   (its lanes from the advice and the release) and each ``o0`` row read. Per window: prove (the session's wall time,
-  the prover's ``prove_total_s``, proof bytes) and verify (the verifier of record's run, Lean included).
+  the prover's ``prove_total_s``, proof bytes) and verify (the verifier of record's run, Lean included). The members
+  run one after another, one firewalled session at a time (`n2_zk.ONE_SESSION`: ``--jobs`` is 1).
 * **What the verifier receives** is `RECEIVED` per window and the advice (``advice.json``), scanned for every piece of
   the windows' held cells and their salts but those the public circuit or an empty slot holds, and a member fails on a
   piece `leak_scan.scan` reads as ``leaked``, not on a find it reads as structured (across the format's fields, or
@@ -56,7 +57,6 @@ import os
 import re
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 from typing import NamedTuple
@@ -608,8 +608,7 @@ def prove(a) -> int:
         res["received"] = _member_scan(M, sg, rounds[name], out / name)
         return name, res
 
-    with ThreadPoolExecutor(max_workers=a.jobs) as pool:
-        done = dict(pool.map(lambda kv: go(*kv), enumerate(rounds)))
+    done = dict(go(k, name) for k, name in enumerate(rounds))
     ok = True
     for name, res in done.items():
         rec = res["received"]
@@ -650,12 +649,14 @@ def main(argv=None) -> int:
     p.add_argument("--windows", type=int, default=1, help="--class warden: its first link-windows proved")
     p.add_argument("--gpu", action="store_true", help="each session's prover on the GPU (`flock-circuit prove --gpu`)")
     p.add_argument("--port", type=int, default=7981)
-    p.add_argument("--jobs", type=int, default=2, help="members proved at once")
+    p.add_argument("--jobs", type=int, default=1, help="1: the members proved one after another (n2_zk.ONE_SESSION); "
+                                                       "more is refused")
     p.add_argument("--debug-clear", action="store_true",
                    help="each verdict also carries the in-the-clear check on the opening, which decides nothing")
     p.add_argument("--dry", action="store_true", help="the instances and their references only: nothing lowered or "
                                                       "proved")
     a = ap.parse_args(argv)
+    Z.one_session(a.jobs)
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
     use(a.cls, a.warden_run, a.windows)
