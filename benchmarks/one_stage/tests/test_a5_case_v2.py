@@ -68,3 +68,20 @@ def test_a_v2_refusal_is_written_beside_the_v1_case(tmp_path, monkeypatch):
     assert json.loads((tmp_path / "case.json").read_text())["commitment"] == "ab"
     assert not (tmp_path / "case-v2.json").exists()
     assert (tmp_path / "case-v2-error.txt").read_text().startswith("ValueError: v2 verifies --zk")
+
+
+def test_case_integrity_names_the_form_in_the_params_and_the_evidence():
+    evidence = {"draw": {"units": [1]}, "proofs": {"public": "aa"}}
+    case = {"blobs": ["/w/c.txt"], "commitment": "ab", "evidence": RP.DT.canonical(evidence).encode().hex(),
+            "params": {"delta": "1/100"}}
+    got = a5.case_integrity(case)
+    assert got["blobs"] == case["blobs"] and got["commitment"] == "ab"
+    assert got["params"] == {"delta": "1/100", "form": "one-stage"}
+    assert got["evidence"] == RP.DT.canonical(evidence | {"form": "one-stage"}).encode().hex()
+    assert json.loads(bytes.fromhex(a5.case_integrity(case, "recursive")["evidence"]))["form"] == "recursive"
+    for bad in ({**case, "params": {"form": "x"}}, {**case, "evidence": RP.DT.canonical([1]).encode().hex()}):
+        try:
+            a5.case_integrity(bad)
+        except ValueError:
+            continue
+        raise AssertionError(f"case_integrity accepted {bad}")
