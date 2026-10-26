@@ -13479,9 +13479,9 @@
    "guarantees": ["Accounting.SecurityProofs.CovertResidual", "Accounting.SecurityProofs.Joint"]
   },
   "Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted": {
-   "digest": "47d227a9d320be28dd83333726e48ffb833f1e1d1c392f6ff8b4fa61fbe9e1b2",
+   "digest": "6945bb9ecaa153c65e168d1533abaf4494ce6063665bbf185151c648ef43d871",
    "definitions": {
-    "Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted": "1f8c360ac969ae680c8a0111128604b91b49c7c42b543e69a36c5bae3fa12d9e"
+    "Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted": "a814d6d909d86a3dc22a1c847b7837cdfd9c225975a50d9f069cc4def0ff36e1"
    },
    "guarantees": ["Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted"]
   },
@@ -14424,13 +14424,14 @@
    ]
   },
   "Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted": {
-   "digest": "1fbe9a4a6977dfa10f769ce27467d1f9fdf7608423a03456fc7fb06298512494",
+   "digest": "603ad473301f0a8069f8685f0e8ff710252a536e50ba863e537324755f281e27",
    "definitions": {
-    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted": "00540422c6bbf79206b27d41350b58fcbbfc2f247c863826f7732a9cd6d2d57d",
+    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted": "99f116cc9c9128a098f46a74c85bf546ae7df85cf8b8a01399c0174e2d90eedc",
     "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.Tape": "03029516e24d80d57711c1303c7efe0b1bb73c7589c6d4dd19a15eb283b4d2ef",
     "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.prover": "b85eaa01c3acedd19f54e649c6b2b22ba8026b67d14c3748b955bc6efc7b2819",
     "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.stmt": "b60c9e38b436f38e92bf5938feb92288011d20db87604d9c7338df82800b214c",
-    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.tapeFintype": "ae10ea12426a0c7bafab0e98d566330bacf850d0f7df1678e0d56936dd958f64"
+    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.tapeFintype": "ae10ea12426a0c7bafab0e98d566330bacf850d0f7df1678e0d56936dd958f64",
+    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.tops": "b28da912cbe77629ccdd87300bcd791159523d4d76fafefe24c6e6453cb65f25"
    },
    "guarantees": ["Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted"]
   },
@@ -21224,7 +21225,10 @@
     "NetTiming.tapLog": "30f489572c14b138976b71ae3ea3edb0fbcce6abf73a6f251593790fcd02d233",
     "NetTiming.tapVal": "820beef45fb779042d495c23e9f9c0fc0d2cd98f2ef0a17beaed6f9e7c550aa8"
    },
-   "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodLeakAccepted"
+   ]
   },
   "Definitions.NetworkCertifier.Warden": {
    "digest": "44483d6d7b90ee894c8893c859b277c18696789fc671a62a68405cfb2d0a9a17",
