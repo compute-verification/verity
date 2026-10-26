@@ -187,6 +187,24 @@ When the in-the-clear check's audit is the Lean check's (`lean_audit.Audit`), `a
 reference: a link-window where the two differ rejects, and the verdict says `"by": "lean"` and carries the reference's
 accept bit (`reference`), never a violation's kind.
 
+**The verdict of record is the Lean's** on plain and served links: `NetworkCheck.LinkWindow.verdict`
+(`verity/core/protocols/network/lean`, `network-records verdicts`' ``link-window``, `lean_verdict`), switched by the one
+line `OF_RECORD` under the 8 Oct ruling. `verify` runs it and this module's `python_verdict` on every proof, records
+whose verdict it is (`by`) and the other's accept bit (`reference`), and rejects a link-window where they differ or the
+Lean refuses the case. The gap list, what `python_verdict` reads that the Lean takes as an input rather than checks:
+- an advised link's window view (`advised.view`, under the tie source's IoTieRequest verdict and the clock source's
+  syncs), which is why an advised link's verdict of record stays this module's;
+- a warden link (no sync declared, both heads at the warden's parameters digest), a form the Lean doesn't have
+  (`NO_LEAN_FORM`): the Lean isn't run on it, and its verdict of record is this module's;
+- what both take from the proof service and the lowering: the findings of the verifier's own run of C-Flock's Lean
+  verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the draw, and the registered
+  Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
+  findings and pins to but doesn't derive.
+The Lean reads an `LmsKey` only, and refuses (so `verify` rejects) any other key. `tie_service.IngressTie.verify`, the
+ingress tie's verifier, is not ported and stays Python. Every recorded proving run of N2 replays through both to the
+verdict it recorded (`benchmarks/network_traces/n2_lean_replay.py`), and the properties of the Lean's verdict are
+`Security/Properties/NetworkCertifier/LinkWindow.lean`.
+
 What that establishes, and what it doesn't: the outcome is accept exactly when the Lean verifier accepts a proof of the
 registered unit whose public row is the verifier's own and whose output word is 0b11, the certificates verify and the
 sync is declared; the outcome record binds the registered root, the draw and the delivered sessions. The verifier of
@@ -222,16 +240,26 @@ from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
-from verity.core.protocols.certifier import advised as AD, audit as host_audit, head_check as HC, served as SV
+from verity.core.protocols.certifier import advised as AD, audit as host_audit, head_check as HC, lean_audit as LA, \
+    served as SV
 from verity.core.protocols.certifier.lean_audit import Audit
-from verity.core.protocols.certifier.certificate import Certificate, CertifiedClock, CertifiedRecord, PublicKey, \
-    parameters_digest
+from verity.core.protocols.certifier.certificate import Certificate, CertifiedClock, CertifiedRecord, Direction, LmsKey, \
+    PublicKey, parameters_digest
 from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import audit as OA, partition as P, proofs as PF, registration as R
 from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding
 from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict
+
+#: Whose verdict on a link-window's proof is the record's, by kind of link (`LinkWindows.kind`): the Lean's
+#: (``"lean"``, `NetworkCheck.LinkWindow`) or this module's (``"python"``). Both run on every proof either way. Setting a
+#: kind to ``"python"`` is the one line that switches it back. An advised link stays Python's: the Lean takes its
+#: window view (`advised.view`) as an input.
+OF_RECORD = {"plain": "lean", "served": "lean", "advised": "python", "warden": "python"}
+#: The kinds of link the Lean has no form for, which `verify` doesn't run it on: a warden link (no sync declared, both
+#: heads at the warden's parameters digest).
+NO_LEAN_FORM = frozenset({"warden"})
 
 SPEC = "verity-network-certifier/service-spec/v0"
 SESSION = "verity-network-certifier/session/v0"
@@ -499,6 +527,10 @@ def _accepts(egress: Sequence[Any], ingress: Sequence[Any], window: int) -> bool
     return len(egress) > window and egress[window].accepted and ingress[window].accepted
 
 
+def _profile(rows: Sequence[Sequence[int]] | None) -> list[list[int]] | None:
+    return None if rows is None else [list(r) for r in rows]
+
+
 @dataclass(frozen=True)
 class Delivered:
     """A link-window's proof as the verifier receives it: the statement's proof files (`proofs.Proof`, its circuit file
@@ -676,6 +708,13 @@ class LinkWindows:
     @property
     def ingress_params(self) -> GridParams:
         return self.ingress or self.params
+
+    @property
+    def kind(self) -> str:
+        """``"served"``, ``"advised"``, ``"warden"``, or ``"plain"`` (none of them: its egress counts are its occupancy
+        profile's)."""
+        return ("served" if self.served is not None else "advised" if self.advised is not None
+                else "warden" if self.warden is not None else "plain")
 
     @cached_property
     def clock_source(self) -> AD.ClockSource | None:
@@ -1056,6 +1095,104 @@ class LinkWindows:
             return {}
         return {"advice": AD.digest(advice) if type(advice) is AD.LinkAdvice else None}
 
+    @staticmethod
+    def _decided(draw: S.Draw, sessions: Sequence[str], accepted: bool, public: dict[str, Any]) -> dict[str, Any]:
+        """A verdict's accept bit and public outputs, with the digest binding them to the registration and sessions."""
+        digest = _sha512({"format": VERDICT, "registration": draw.registration.digest, "sessions": list(sessions),
+                          "accepted": accepted, "public": public})
+        return {"accepted": accepted, "digest": digest, "public": public}
+
+    def python_verdict(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
+                       delivered: Delivered, findings: Sequence[Finding] | None, sessions: Sequence[str],
+                       advice: Any = None) -> dict[str, Any]:
+        """This module's verdict on the link-window (`verify`'s conditions), on the findings of the verifier's own run
+        of C-Flock's Lean verifier (None where `proofs.verify` refused): its accept bit, digest and public outputs."""
+        reg = draw.registration.record
+        w, root = reg["window"]["window"], bytes.fromhex(reg["roots"][0]["root"])
+        proved = findings is not None and self.proved(findings) \
+            and all(list(f.units) == list(draw.units) for f in findings)
+        args = self.public_arguments(w, root, certificates, syncs, advice)
+        opened = _opened(delivered, draw.units[0], self.row(args, "pub") if args is not None else None,
+                         self.bits("pub")) if proved else None
+        word = opened if opened is not None else 0
+        accepted = (proved and opened is not None and word == 0b11 and self.certified(w, certificates)
+                    and (self.warden is not None or (w < len(syncs) and syncs[w] in self.sync_set)))
+        return self._decided(draw, sessions, accepted,
+                             {"verdict": int(accepted), "deadline": word >> 1 & 1} | self._advice_output(advice))
+
+    def lean_case(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
+                  delivered: Delivered, findings: Sequence[Finding] | None, sessions: Sequence[str],
+                  advice: Any = None) -> dict[str, Any] | None:
+        """`verify`'s inputs as `NetworkCheck.LinkWindow.caseOf` reads them: the verifier's own structure (the Program's
+        and partition's digests, the gate ids), the registration, the draw, the findings of its own run of C-Flock's
+        Lean verifier (None where `proofs.verify` refused), the delivered public file, salts, output word and session
+        SHA-512s, the certificates (each null unless a `Certificate` of well-typed fields) and each one's signed digest
+        as `public_arguments` reads it, the declared syncs, Σ_sync,
+        the key and session, each end's grid and profile, and on an advised link the window's view (`advised.view`)
+        and the advice output. None for a key the Lean doesn't read (not an `LmsKey`)."""
+        if not isinstance(self.key, LmsKey):
+            return None
+        reg, p = draw.registration.record, self.key.params
+        w = reg["window"]["window"]
+
+        def cert(c: Any) -> dict[str, Any] | None:
+            if not (isinstance(c, Certificate) and all(type(x) is bytes for x in (c.key_id, c.digest, c.signature))
+                    and type(c.link) is str and isinstance(c.direction, Direction) and type(c.window) is int
+                    and c.window >= 0):
+                return None
+            return {"key_id": c.key_id.hex(), "link": c.link, "direction": c.direction.code, "window": c.window,
+                    "digest": c.digest.hex(), "signature": c.signature.hex()}
+
+        def hexed(b: Any) -> str | None:
+            return b.hex() if type(b) is bytes else None
+
+        def digest(c: Any) -> str:
+            d = getattr(c, "digest", b"")
+            return bytes(d).hex() if isinstance(d, (bytes, bytearray)) else ""
+
+        try:
+            public = Path(delivered.proof.public).read_bytes().hex()
+        except OSError:
+            public = None
+        word = delivered.output
+        case: dict[str, Any] = {
+            "kind": self.kind, "link": self.link, "run": self.run, "window": w, "root": reg["roots"][0]["root"],
+            "registration": draw.registration.digest, "units": list(draw.units), "program": self._partition["program"],
+            "partition": P.digest(self._partition), "gates": [g.id for g in self.gates()],
+            "findings": None if findings is None else [
+                {"accepted": f.accepted, "program": f.program, "units": list(f.units)} for f in findings],
+            "public": public, "salts": {k: hexed(delivered.salts.get(k)) for k in ("pub", "o0")},
+            "output": word if type(word) is int and word >= 0 else None, "sessions": list(sessions),
+            "certificates": [cert(c) for c in certificates], "digests": [digest(c) for c in certificates],
+            "syncs": [[s.delta, s.rho.numerator, s.rho.denominator] for s in syncs],
+            "sync_set": {"deltas": list(self.sync_set.deltas),
+                         "rhos": [[r.numerator, r.denominator] for r in self.sync_set.rhos]},
+            "lms": {"N": p.N, "W": p.W, "H": p.H, "toy": p.toy}, "key": self.key.public.hex(),
+            "session": bytes(self.certifier_session).hex(),
+            "egress": {"grid": LA._grid_json(self.params), "profile": _profile(self.occupancy[0])},
+            "ingress": {"grid": LA._grid_json(self.ingress_params), "profile": _profile(self.occupancy[1])}}
+        if self.advised is not None:
+            v = self._view(w, syncs, advice)
+            case["view"] = None if v is None else {"released": list(v.released), "floor": list(v.floor),
+                                                   "received": v.received}
+            case["advice"] = self._advice_output(advice)["advice"]
+        return case
+
+    def lean_verdict(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
+                     delivered: Delivered, findings: Sequence[Finding] | None, sessions: Sequence[str],
+                     advice: Any = None, server: LA.Server | None = None) -> dict[str, Any] | None:
+        """The Lean's verdict on the link-window (`NetworkCheck.LinkWindow.verdict`, `network-records verdicts`'
+        ``link-window``): its accept bit, digest and public outputs; None where `lean_case` has no case or the Lean
+        refuses it. The Lean not built or not running raises."""
+        case = self.lean_case(draw, certificates, syncs, delivered, findings, sessions, advice)
+        if case is None:
+            return None
+        try:
+            out = (server or LA.SERVER).call("link-window", case)
+        except ValueError:
+            return None
+        return {"accepted": out["accepted"], "digest": out["digest"], "public": out["public"]}
+
     def verify(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
                delivered: Delivered, *, circuit_sha512: str, opening: Opening | None = None,
                advice: Any = None) -> dict[str, Any]:
@@ -1073,25 +1210,27 @@ class LinkWindows:
         The verdict reports the public outputs, the proved deadline bit among them, on an advised link the advice it
         read (`advised.digest`), and never a violation's kind. `opening` (the witness) is for a debug comparison only,
         off by default: given, the verdict also carries the in-the-clear check's accept bit (`clear`), which decides
-        nothing. Raises `ValueError` on a link with no egress occupancy, served, advised or warden profile."""
+        nothing. Raises `ValueError` on a link with no egress occupancy, served, advised or warden profile.
+
+        The Lean (`NetworkCheck.LinkWindow`, `lean_verdict`) decides the same on every call beside this Python, and
+        `OF_RECORD` names whose verdict is the record's (`by`); the other's accept bit is `reference`'s. Where the two
+        differ in the accept bit, the public outputs or the digest, or the Lean refuses the case, the link-window is
+        rejected, with deadline 0. A warden link is a form the Lean doesn't have (`NO_LEAN_FORM`): the Lean isn't run
+        on it, and its verdict of record is this module's, with no reference."""
         self._profiled()
-        reg = draw.registration.record
-        w, root = reg["window"]["window"], bytes.fromhex(reg["roots"][0]["root"])
         findings, refused = PF.verify(delivered.proof, circuit_sha512=circuit_sha512, program=self.program,
                                       partition=self._partition)
-        proved = refused is None and self.proved(findings) and all(list(f.units) == list(draw.units) for f in findings)
-        args = self.public_arguments(w, root, certificates, syncs, advice)
-        opened = _opened(delivered, draw.units[0], self.row(args, "pub") if args is not None else None,
-                         self.bits("pub")) if proved else None
-        word = opened if opened is not None else 0
-        accepted = (proved and opened is not None and word == 0b11 and self.certified(w, certificates)
-                    and (self.warden is not None or (w < len(syncs) and syncs[w] in self.sync_set)))
-        public = {"verdict": int(accepted), "deadline": word >> 1 & 1} | self._advice_output(advice)
+        findings = None if refused is not None else findings
         sessions = delivered.sessions()
-        digest = _sha512({"format": VERDICT, "registration": draw.registration.digest, "sessions": sessions,
-                          "accepted": accepted, "public": public})
-        verdict = {"of_record": True, "decided_by": "proof", "accepted": accepted, "digest": digest, "sessions": sessions,
-                   "public": public}
+        python = self.python_verdict(draw, certificates, syncs, delivered, findings, sessions, advice)
+        ported = self.kind not in NO_LEAN_FORM
+        lean = self.lean_verdict(draw, certificates, syncs, delivered, findings, sessions, advice) if ported else None
+        by = OF_RECORD[self.kind]
+        mine, other = (lean, python) if by == "lean" else (python, lean)
+        if ported and (lean is None or any(lean[k] != python[k] for k in python)):
+            mine = self._decided(draw, sessions, False, {"verdict": 0, "deadline": 0} | self._advice_output(advice))
+        verdict = {"of_record": True, "decided_by": "proof", "by": by, **mine, "sessions": sessions,
+                   "reference": {"accepted": None if other is None else other["accepted"]}}
         if opening is not None:
             verdict["clear"] = {"accepted": self.clear(opening, draw, syncs, advice)["accepted"]}
         return verdict

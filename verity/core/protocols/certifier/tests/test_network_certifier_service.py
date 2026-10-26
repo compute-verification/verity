@@ -373,6 +373,7 @@ def test_the_verdict_of_record_is_the_proofs(tmp_path):
     honest = prove(opening, "honest")
     v = verdict(honest)
     assert v["accepted"] and v["public"] == {"verdict": 1, "deadline": 1} and v["decided_by"] == "proof"
+    assert v["by"] == SVC.OF_RECORD["plain"] == "lean" and v["reference"] == {"accepted": True}
     assert "clear" not in v and verdict(honest, opening=opening)["clear"] == {"accepted": True}
     assert set(honest.salts) == {"pub", "o0"} and honest.output == 0b11
     eg, ig = opening.records
@@ -390,8 +391,8 @@ def test_the_verdict_of_record_is_the_proofs(tmp_path):
     assert prove(off, 6).output == 0b10
     for k, (delivered, kw) in enumerate(cases):
         v = verdict(delivered, **kw)
-        assert v["accepted"] is False and v["public"]["verdict"] == 0, k
-        assert set(v) == {"of_record", "decided_by", "accepted", "digest", "sessions", "public"}, k
+        assert v["accepted"] is False and v["public"]["verdict"] == 0 and v["reference"] == {"accepted": False}, k
+        assert set(v) == {"of_record", "decided_by", "by", "accepted", "digest", "sessions", "public", "reference"}, k
 
 
 def _accepts_every_head(B, S_, *args):
@@ -691,6 +692,7 @@ def test_a_warden_link_holds_both_heads_to_the_wardens_digest_and_reads_no_sync(
     run.stream = lw.stream(budget=8, delta=DELTA, challenger="challenger-test", coins=lambda n: b"\x07" * n,
                            clock=run.clock)
     assert lw.spec.public == SVC.PUBLIC_WARDEN and lw.charge == 0.0 and lw.windows == 3
+    assert lw.kind == "warden" and SVC.OF_RECORD[lw.kind] == "python" and lw.kind in SVC.NO_LEAN_FORM
     items = {p.item for p in lw.spec.public}
     assert items >= {"warden", "parameters"} and not items & {"charge", "occupancy"}
     assert lw.spec.digest() != replace(lw, warden=SVC.WardenProfile(3, bytes(64))).spec.digest()

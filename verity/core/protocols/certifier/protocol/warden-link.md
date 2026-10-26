@@ -14,7 +14,8 @@ certificate, so a window declares no sync, the verifier reads none, and the char
 `PUBLIC_WARDEN`: the parameters digests and the schedule, and no charge or occupancy. The in-the-clear check is the
 opening's root and the head checks alone: the records' cells are the scan's (`ingress_scan`, over the warden's rows),
 and the certifier's host audit doesn't read a warden's records. A warden link takes no occupancy, served or advised
-profile, and its two ends are one grid (`ValueError` otherwise).
+profile, and its two ends are one grid (`ValueError` otherwise). Its verdict of record is `python_verdict`'s: the Lean
+(`NetworkCheck.LinkWindow`) has no warden form, so `verify` doesn't run it on a warden link (`NO_LEAN_FORM`).
 
 What this establishes: on every accepted link-window of a warden link, both heads are the warden's for that
 link-window under its schedule's digest, complete, and signed by the warden under its key and session. It doesn't

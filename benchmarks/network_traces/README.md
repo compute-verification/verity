@@ -3,7 +3,8 @@
 The network certifier's measured runs and their zero-knowledge proofs: the certifier in front of a served endpoint
 (`certifier_serve.py`), the network certifier functioning as an active warden (`warden_serve.py`), N2's units proved by C-Flock `--zk` (`n2_zk.py`,
 `n2_advised_zk.py`), the scan's chained units (`scan_zk.py`), and the chain's run of record (`chain_record.sh`). Each
-driver's docstring says what it runs and what its verifier receives.
+driver's docstring says what it runs and what its verifier receives. `n2_lean_replay.py` replays the recorded N2 proving
+runs' link-window verdicts through the Lean verdict of record beside the Python, against what each run recorded.
 
 ## The chain's run of record
 
