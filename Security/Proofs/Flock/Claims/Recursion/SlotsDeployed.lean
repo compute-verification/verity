@@ -1,20 +1,18 @@
-import Proofs.Flock.Claims.Recursion.SlotsOk
-import Proofs.Flock.Claims.Recursion.VStarNets
+import Proofs.Flock.Claims.Recursion.HpEarlyTrace
+import Proofs.Flock.Claims.Recursion.VStarTraceOk
 
 /-!
-# `TraceAt` at the staged parts (`traceAt_staged`)
+# `CircOkAt` at the staged parts (`circOkAt_staged`)
 
-`slotsOk_assign` takes three facts of a part's circuit beyond `TraceOk`. Each holds at every staged part
-(`StagedPart`), from the verifier's own checks of the staged table, which is part `s`'s circuit (`partCircuit_staged`):
+`HpEarly.CircOkAt x` is what `slotsOk_assign` reads of each part's circuit besides `TraceOk`. It holds at every staged
+part (`StagedPart`), from the verifier's own checks of the staged table, which is part `s`'s circuit
+(`partCircuit_staged`):
 
 * `HmNets.check c = .ok ()`, and every v1 port unsegmented with `2 · words = 128 · chunks`: `HmRow.parse` runs the
   first and refuses the others (`ParseFacts`: `rowNets`, `v1Segs`, `portWords`; `parseFacts_of_parse`);
 * `c.kLog ≤ 32`: the setup refuses `k_log > 27` (`table0`);
 * every port v1: V\*'s parse check refuses a `sha512/row/v2` port (`checkParsed_v1`). V\*'s META writes `row_schema` and
   never `row_schemas` (`VStar/Compose.lean`, `metaHead`), so every deployed V\* port is v1 and the honest table passes.
-
-With CAPLOWER's `traceOk_staged`, `TraceAt` holds once every part is staged and its port inputs' rows are the honest
-prover's (`RowsOk`).
 -/
 
 namespace RecDeploy.SlotsDeployed
@@ -22,7 +20,6 @@ namespace RecDeploy.SlotsDeployed
 open _root_.Flock
 open Claims (Msg)
 open RecDeploy.VStarBuild
-open RecDeploy.HpLast
 
 /-- **`slotsOk_assign`'s three premises at a staged part**: the verifier's hm96 nets, `kLog ≤ 27`, and every port a
 `sha512/row/v1` row of whole 128-byte chunks. -/
@@ -52,24 +49,12 @@ theorem slotFacts_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st
   have hv2 := hv _ hm
   exact ⟨hv2, P.v1Segs _ hm hv2, P.portWords _ hm hv2⟩
 
-/-- **`SlotsOk` at a staged part**, at any mask, from `TraceOk`. -/
-theorem slotsOk_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {sv : _root_.VStar.Stmt}
-    {c : Circuit} (hp : partAt x s = some (sv, c)) {pin : _root_.VStar.In.PartIn} (h : VStarTrace.TraceOk c pin)
-    (mask : ℕ → ℕ → Bool) : HpEarly.SlotsOk mask c pin :=
-  let ⟨hck, hk, hv1⟩ := slotFacts_staged hS hp
-  HpEarly.slotsOk_assign h hck hk hv1 mask
-
-/-- **`TraceAt` at the deployed statements**: when every part of `x` is staged and its port inputs' rows are the
-honest prover's (`RowsOk`), `TraceOk` (`traceOk_staged`) and `SlotsOk` (`slotsOk_staged`) hold at each. -/
-theorem traceAt_staged {mask : ℕ → ℕ → Bool} {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape}
-    {h : List (Msg × Msg)} {st : Stage}
-    (hS : ∀ s sv c, partAt x s = some (sv, c) → ∃ xO, StagedPart st s x xO)
-    (hR : ∀ s sv c src pin, partAt x s = some (sv, c) → srcOf I x w ρ h = some src →
-      _root_.VStar.In.partIn src (progOf c) sv = .ok pin → VStarTraceOk.RowsOk c pin) :
-    HpEarly.TraceAt mask I x w ρ h := by
-  intro s sv c src pin hp hsrc hi
+/-- **`CircOkAt` at the deployed V\***: when every part of `x` is staged, each part's circuit meets
+`slotFacts_staged`. -/
+theorem circOkAt_staged {st : Stage} {x : Msg}
+    (hS : ∀ s sv c, partAt x s = some (sv, c) → ∃ xO, StagedPart st s x xO) : HpEarly.CircOkAt x := by
+  intro s sv c hp
   obtain ⟨xO, hSt⟩ := hS s sv c hp
-  have hT := VStarNets.traceOk_staged hSt hp hi (hR s sv c src pin hp hsrc hi)
-  exact ⟨hT, slotsOk_staged hSt hp hT mask⟩
+  exact slotFacts_staged hSt hp
 
 end RecDeploy.SlotsDeployed
