@@ -80,7 +80,7 @@ Per session one `ReplayClose` and its two reads.
 On TRACE-CORPUS's 15 sync traces a step is 16,569 to 80,959 ANDs and a window 3.5e7 to 1.9e8 (PROTOCOL.md, before
 the carry). AS and EW widen the rows by the step's own fields, and the parts with them: at vLLM run 8eb1's engine class
 (R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4, `ReplayAdvance` is 1,761 ANDs sync, 1,814 at AS = 1 and 2,102 with 17-bit
-walk entries, and `ReplayLoad` 1,944, 2,000 and 2,144 (protocol/served-shape.md).
+walk entries, and `ReplayLoad` 1,944, 2,000 and 2,144 (verity/core/protocols/certifier/protocol/served-shape.md).
 """
 
 from __future__ import annotations
