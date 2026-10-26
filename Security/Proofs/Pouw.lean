@@ -74,6 +74,7 @@ import Proofs.Pouw.NCP.RelationWitness
 import Proofs.Pouw.NCP.RouteUProofs
 import Proofs.Pouw.NCP.RouteUWordProofs
 import Proofs.Pouw.NCP.WordProofs
+import Proofs.Pouw.NoFoldWitness
 import Proofs.Pouw.PearlC
 import Proofs.Pouw.PearlC.AccumProofs
 import Proofs.Pouw.PearlC.AtomErr
