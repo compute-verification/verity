@@ -909,7 +909,7 @@ def main(argv: list[str] | None = None) -> int:
     if cache:
         # the registries build their C++ twins on first use (g++, untraceable): once, in a process of its own, before tracing
         prebuild = ("from circuit_check import targets; targets.load_registries()\n"
-                    "try:\n    from verity_vllm.program.kernels import twins\nexcept ImportError:\n    twins = None\n"
+                    "try:\n    from verity.ml.definitions.numerics import twins\nexcept ImportError:\n    twins = None\n"
                     "if twins:\n    twins.preload()        # the three C++ models, which checks otherwise compile on first use\n")
         subprocess.run([sys.executable, "-c", prebuild], cwd=REPO, capture_output=True)
         CC.trace(REPO)

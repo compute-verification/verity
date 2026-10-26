@@ -14,11 +14,11 @@ from verity_vllm.acquire import served as SV
 from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.check.replay import served_check as SC
-from verity_vllm.program.kernels import rows as R
-from verity_vllm.program.kernels.act_rows import silu_mul_expf
-from verity_vllm.program.kernels.rows import token_select_first_max
-from verity_vllm.program.registry import act, b1
-from verity_vllm.program.registry import moe as M
+from verity.ml.definitions.numerics import rows as R
+from verity.ml.definitions.numerics.act_rows import silu_mul_expf
+from verity.ml.definitions.numerics.rows import token_select_first_max
+from verity.ml.definitions.registry import act, b1
+from verity.ml.definitions.registry import moe as M
 from verity_vllm.query.manifest.format import manifest_digest
 
 V, H, E, TOPK, VPT, I = 64, 32, 8, 2, 4, 16
