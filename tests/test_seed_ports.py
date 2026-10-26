@@ -8,9 +8,9 @@ through that pass, so a position port is declared only where `ALLOWED` names it:
 - `SEEDS`: the one place that mints a seed, PoUW's `seeds.py`;
 - `UNITS`: a PoUW unit's or the compiled root's position, beside a sink return (an `Out(sink=True)` in the same top-level
   name), so the Definition it types is a unit, never a seed;
-- `TESTS`: tests that build seeds, units or their negatives, by name, with a reason each;
-- `COINLESS`: a public position in a Definition with no coin port (no `kind="coin"` in the same top-level name), which
-    `_coin_role` never makes a seed.
+- `KEY_COUNTS`: a padded unit's key count, a position port with no coin port beside it (no `kind="coin"` in the same
+  top-level name), so the Definition it types is never a seed;
+- `TESTS`: tests that build seeds, units or their negatives, by name, with a reason each.
 
 An AST scan of every tracked Python file flags each place that could declare a position port: a `kind="position"` keyword
 in any call, an `In(...)` whose kind isn't a literal (or is passed positionally or through `**`), a `replace(...)` with a
@@ -45,6 +45,10 @@ UNITS = {
     "integrations/vllm/tests/protocols/test_pouw_h1_served.py::StandIn":
         "vllm's served-trees tests' stand-in tile, a position beside its receipt sink",
 }
+KEY_COUNTS = {
+    "verity/ml/circuits/ops/boolean/softmax_row.py::QkSoftmaxRowPad":
+        "QkSoftmaxRowPad's key count n: attention padded to T = 32",
+}
 TESTS = {
     "verity/ml/circuits/tests/test_ports.py::SEED": "the port rules' seed vectors (E_COIN_REUSE, E_PORT_KIND, batched seeds)",
     "verity/ml/circuits/tests/test_ports.py::UNIT_PORTS": "the port rules' unit vectors: a seeded unit whose receipt is its sink",
@@ -57,11 +61,7 @@ TESTS = {
         "the one-use check's random and negative Programs: a root's positions, read by seeds batched over them",
     "verity/ml/circuits/tests/test_ports_one_use.py::Seed": "the seed those Programs batch, to hold E_COIN_REUSE's position rule",
 }
-COINLESS = {
-    "verity/ml/circuits/ops/boolean/softmax_row.py::QkSoftmaxRowPad":
-        "the padded attention row's key count n: public, in a unit with no coin port",
-}
-ALLOWED = SEEDS | UNITS | TESTS | COINLESS
+ALLOWED = SEEDS | UNITS | KEY_COUNTS | TESTS
 
 
 def _name(f: ast.AST) -> str:
@@ -76,16 +76,25 @@ def _literal(node: ast.AST) -> bool:
     return isinstance(node, ast.Constant) and isinstance(node.value, str)
 
 
-def sites(source: str) -> list[tuple[str, int, str, bool, bool]]:
-    """(top-level name or "<module>", line, what, whether that top-level name holds an `Out(sink=True)`, whether it holds a
-    `kind="coin"`) for every place in `source` that declares, or could declare, a position port."""
+def _where(top: ast.stmt) -> str:
+    return (top.name if isinstance(top, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+            else top.targets[0].id if isinstance(top, ast.Assign) and isinstance(top.targets[0], ast.Name) else "<module>")
+
+
+def coin_holders(source: str) -> set[str]:
+    """The top-level names (or "<module>") of `source` that hold a `kind="coin"` keyword."""
+    return {_where(top) for top in ast.parse(source).body
+            if any(isinstance(n, ast.keyword) and n.arg == "kind" and _is(n.value, "coin") for n in ast.walk(top))}
+
+
+def sites(source: str) -> list[tuple[str, int, str, bool]]:
+    """(top-level name or "<module>", line, what, whether that top-level name holds an `Out(sink=True)`) for every place in
+    `source` that declares, or could declare, a position port."""
     tree = ast.parse(source)
     out = []
     for top in tree.body:
-        where = (top.name if isinstance(top, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
-                 else top.targets[0].id if isinstance(top, ast.Assign) and isinstance(top.targets[0], ast.Name) else "<module>")
+        where = _where(top)
         sink = any(isinstance(n, ast.keyword) and n.arg == "sink" and _is(n.value, True) for n in ast.walk(top))
-        coin = any(isinstance(n, ast.keyword) and n.arg == "kind" and _is(n.value, "coin") for n in ast.walk(top))
         for node in ast.walk(top):
             what = None
             if isinstance(node, ast.keyword) and node.arg == "kind" and _is(node.value, "position"):
@@ -100,28 +109,29 @@ def sites(source: str) -> list[tuple[str, int, str, bool, bool]]:
             elif isinstance(node, ast.Dict) and any(_is(k, "kind") and _is(v, "position") for k, v in zip(node.keys, node.values)):
                 what = '{"kind": "position"}'
             if what:
-                out.append((where, node.lineno if hasattr(node, "lineno") else top.lineno, what, sink, coin))
+                out.append((where, node.lineno if hasattr(node, "lineno") else top.lineno, what, sink))
     return sorted(out, key=lambda s: s[1])
 
 
 def test_only_pouw_mints_a_seed() -> None:
     offenders, used = [], set()
     for path in (p for p in _tracked() if p.endswith(".py")):
-        for where, line, what, sink, coin in sites((ROOT / path).read_text(encoding="utf-8")):
+        source = (ROOT / path).read_text(encoding="utf-8")
+        for where, line, what, sink in sites(source):
             key = f"{path}::{where}"
             if key not in ALLOWED:
                 offenders.append(f"{path}:{line} ({where}): {what}")
             elif key in UNITS and not sink:
                 offenders.append(f"{path}:{line} ({where}): {what}, with no Out(sink=True) beside it: a seed, not a unit")
-            elif key in COINLESS and coin:
-                offenders.append(f"{path}:{line} ({where}): {what}, with a kind=\"coin\" beside it: a seed or unit, not coinless")
+            elif key in KEY_COUNTS and where in coin_holders(source):
+                offenders.append(f"{path}:{line} ({where}): {what}, with a kind=\"coin\" port beside it: a seed, not a key count")
             else:
                 used.add(key)
     assert not offenders, (
         "a position port outside PoUW's seeds.py: a Definition with a coin port and a position port and no sink is a seed, "
         "whose noise no port rule follows, so only PoUW's compile pass may build one. Mint seeds in "
-        "verity/core/protocols/pouw/circuit/seeds.py, give a unit's position port a sink return (UNITS), or name a test "
-        "that builds one in TESTS with its reason, or name a position in a Definition with no coin port in COINLESS:\n"
+        "verity/core/protocols/pouw/circuit/seeds.py, give a unit's position port a sink return (UNITS), declare a key count "
+        "with no coin port beside it (KEY_COUNTS), or name a test that builds one in TESTS with its reason:\n"
         + "\n".join(offenders))
     assert not set(ALLOWED) - used, f"ALLOWED entries that match nothing any more: {sorted(set(ALLOWED) - used)}"
 
@@ -147,10 +157,10 @@ def g(port):
     In(kind="coin"), In(None, "static"), In((0, 255)), dataclasses.replace(port, bound=(0, 1))
     return {"kind": "coin"}, "position" in ("coin", "position")
 '''
-    assert [(w, what, sink, coin) for w, _, what, sink, coin in sites(src)] == [
-        ("SEED", 'kind="position"', False, True), ("UNIT", 'kind="position"', True, False),
-        ("f", "In() with a computed kind", False, False),
-        ("f", "In() with its kind passed positionally or through **", False, False),
-        ("f", "In() with its kind passed positionally or through **", False, False),
-        ("f", "In() with its kind passed positionally or through **", False, False), ("f", 'kind="position"', False, False),
-        ("f", "replace() with a computed kind", False, False), ("f", '{"kind": "position"}', False, False)]
+    assert [(w, what, sink) for w, _, what, sink in sites(src)] == [
+        ("SEED", 'kind="position"', False), ("UNIT", 'kind="position"', True), ("f", "In() with a computed kind", False),
+        ("f", "In() with its kind passed positionally or through **", False),
+        ("f", "In() with its kind passed positionally or through **", False),
+        ("f", "In() with its kind passed positionally or through **", False), ("f", 'kind="position"', False),
+        ("f", "replace() with a computed kind", False), ("f", '{"kind": "position"}', False)]
+    assert coin_holders(src) == {"SEED", "g"}
