@@ -15,8 +15,8 @@ open Flock FlockDeploy
 open Lean (Json JsonNumber)
 open FlockSoundness FlockSoundness.Refine
 
-/-- **In scope, at one table, the session's draw is the statement's**, under the JSON library's specification. -/
-theorem unitDraw_one (S : Claims.JsonSpec printJ Flock.canon) {rel : Readable.Parsed → Readable.Relation}
+/-- **In scope, at one table, the session's draw is the statement's.** -/
+theorem unitDraw_one {rel : Readable.Parsed → Readable.Relation}
     {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hsc : Claims.Flock.Scope (deployPlain rel) x) (hset : setupOf false x = some (s, spec, sts))
     (h1 : sts.size = 1) (hd : s.read.draw.isSome = true) :
@@ -36,12 +36,12 @@ theorem unitDraw_one (S : Claims.JsonSpec printJ Flock.canon) {rel : Readable.Pa
   rw [hpi] at hs
   obtain ⟨st, hone, hspec⟩ : ∃ st, Discharge.HiddenExec.setupOne s.read.tags s.read.I.circuitFile s.read.I.publicFile
       s.read.coins s.read.I.tables s.read.draw s.read.I.partition s.read.I.program = .ok st ∧ spec = st.spec := by
-    rcases Discharge.HiddenExec.setupTables_okAny hs with ⟨-, st, hst, hsp, -⟩ | ⟨-, hsz, -⟩
+    rcases Discharge.HiddenExec.setupTables_okAny hs with ⟨-, st, hst, hsp, -⟩ | ⟨hc, hsz, -⟩
     · exact ⟨st, by rw [← ht]; exact hst, hsp⟩
     · omega
   obtain ⟨⟨c', pop, hl, hdr⟩, hinst, -, -⟩ := setupOne_stmt hone
   obtain ⟨d, hdd⟩ := Option.isSome_iff_exists.1 hd
-  have hu := unitDraw_of S hl (hdr d hdd)
+  have hu := unitDraw_of hl (hdr d hdd)
   have hU : spec.unitDraw = some d := by
     rw [hspec]
     simp [Stmt.spec, hu, Except.toOption]
