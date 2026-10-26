@@ -389,14 +389,8 @@ SX_HD void leaf(const LeafArgs& A, const uint8_t* T, u32* y, u32 ys, u32 l, u32 
   } else {
     salt_key_words(A.key, A.nonce0 + s, r.salt_row, y, ys);
   }
-  u64 bc[16];
-  {
-    u32 m[16];
-    mask(T, y, ys, l, m);
-    for (int i = 0; i < 8; ++i) bc[i] = ld8(A.x + 8 * gs + i) ^ ((u64)sx::bswap32(m[2 * i]) << 32 | sx::bswap32(m[2 * i + 1]));
-  }
-  u64 w[16];
-  u64* c = bc + 8;
+  // c before b, so that b's 16 registers aren't live through c's compressions
+  u64 w[16], c[8];
   for (int i = 0; i < 8; ++i) c[i] = A.ms_salt[i];
   for (int i = 0; i < 16; ++i) w[i] = sx::be64(y[2 * i * ys], y[(2 * i + 1) * ys]);
   C::run(c, w);
@@ -405,9 +399,14 @@ SX_HD void leaf(const LeafArgs& A, const uint8_t* T, u32* y, u32 ys, u32 l, u32 
   for (int i = 9; i < 15; ++i) w[i] = 0;
   w[15] = (128 + 192) * 8;
   C::run(c, w);
+  {
+    u32 m[16];
+    mask(T, y, ys, l, m);
+    for (int i = 0; i < 8; ++i) w[i] = ld8(A.x + 8 * gs + i) ^ ((u64)sx::bswap32(m[2 * i]) << 32 | sx::bswap32(m[2 * i + 1]));
+  }
+  for (int i = 0; i < 8; ++i) w[8 + i] = c[i];
   u64 h[8];
   for (int i = 0; i < 8; ++i) h[i] = A.ms_leaf[i];
-  for (int i = 0; i < 16; ++i) w[i] = bc[i];
   C::run(h, w);
   C::kw(h, sx::kw_pad256());
   const LeafRow* unit = nullptr;
