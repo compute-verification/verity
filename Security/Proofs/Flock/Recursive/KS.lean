@@ -6,8 +6,9 @@ import Proofs.Flock.Claims.KS.PlainRConflict
 # `RecursiveKSAt` from its open premises
 
 `recursiveKSAt_of` is `ksLin2_deployedR_partAccepts` at the deployed join (`FlockDeploy.joinR`), with the plain record
-at the deployed reader's conflicts tied to collisions by `plainR_conflictTied`. What it takes: the table bound at the abort law at that record (`htab`), the reader's columns half and calls half of its last-message binding
-(`hC`, `hK`), `StepsLogFree` at its bound record (`hLog`), and `DecompB` at what each part's circuit accepts (`hD`).
+at the deployed reader's conflicts tied to collisions by `plainR_conflictTied`. What it takes: the table bound at the
+abort law at that record (`htab`), the reader's columns half and calls half of its last-message binding (`hC`,
+`hK`), `StepsLogFree` at its bound record (`hLog`), and `DecompB` at what each part's circuit accepts (`hD`).
 `recursiveKSAt_of_decomp` takes that last one as `RecKSDecompR`, which `recKSDecompR_of_targets` proves from the
 verdict's rows.
 -/

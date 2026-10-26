@@ -44,8 +44,9 @@ variable (rd : Msg → Option FinalP) (P : Msg → List Msg → List Coin → Pr
   (acc : Msg → List Msg → List Coin → ℕ → Array F128)
 
 /-- **Row R's target at the deployed reader**: the schedule's coin counts at the shape's round sizes (`hsched`), each
-rep's four accumulators, and `rec-residuals` pieces that hold, with one piece per (rep, group) at the copy `keyAt r p` (`hcoverR`), the copy's
-elements `w` at the group's row ports (`hE`) and its verifier values `verifierRows`' `v` at the group's `V` (`hvv`). -/
+rep's four accumulators, and `rec-residuals` pieces that hold, with one piece per (rep, group) at the copy `keyAt r p`
+(`hcoverR`), the copy's elements `w` at the group's row ports (`hE`) and its verifier values `verifierRows`' `v` at
+the group's `V` (`hvv`). -/
 def TargetRDep : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ),
     i < D.sts.size →
