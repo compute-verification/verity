@@ -7,8 +7,10 @@ their tops, both reps' running sums on one chain, the inner prover's message row
 (`rec_outer.stage` at the stager's `rec_vstage.coefficients` and `rec_outer.Chain.build`), a part of the algebra
 (`rec_vstage._stage_part`, reading what `rec_vstage.stage` hands it) and a cap (`rec_cap.stage`). The prover's fresh salts
 (a level's ``row`` and ``aux``) are the case's, handed to the stager through ``hm96``'s salt source. With
-``VERITY_VSTAR_IN_DEPLOYED=1``, `test_the_deployed_session_agrees` stages rec-algebra's fixture session (the deployed
-shape, m = 25) with `rec_vstage.stage` and holds every level, algebra part and cap to Lean's."""
+``VERITY_VSTAR_IN_DEPLOYED=1`` two recorded sessions are staged with `rec_vstage.stage` and each statement held to Lean's:
+`rec-coins`' (16,16,8) session, whose leaves are plain, at every level, cap and part of the algebra; and rec-algebra's
+fixture session (the deployed algebra shape, m = 25, k_log = 22) at every part of the algebra and every level's cap (its
+openings are hm96 leaves, whose levels the stager refuses to stage)."""
 
 from __future__ import annotations
 
@@ -296,27 +298,24 @@ def _salts_of(d: Path, port_: str) -> list[bytes]:
     raise AssertionError(port_)
 
 
-@pytest.mark.slow
-@pytest.mark.skipif(not os.environ.get("VERITY_VSTAR_IN_DEPLOYED"), reason="stages the deployed fixture session's every "
-                    "statement (the pod's): set VERITY_VSTAR_IN_DEPLOYED=1")
-@pytest.mark.skipif(not SET.is_dir(), reason=f"{SET} is not fetched: `uv run research data fetch-fixtures "
-                    "verity/ml/flock/tests/fixtures/hidden-outputs`")
-def test_the_deployed_session_agrees(server, tmp_path):
-    """rec-algebra's fixture session (m = 25, k_log = 22) staged with `rec_vstage.stage`: every level, part of the algebra and
-    cap's ``inst.bin`` is Lean's port inputs on the stager's inputs (the inner session's records, the salts file, the
-    levels' fresh salts read back from their ``inst.bin``)."""
-    INNER = json.loads((FLOCK_TESTS / "fixtures" / "inner_claims.json").read_text())
-    fold = {"m": INNER["m"], "k_log": INNER["k_log"], "extras": INNER["reps"][0]["extras"],
-            "reps": [{"comb": d["comb"]} for d in INNER["reps"]]}
-    inner = _inner(tmp_path / "inner")
-    out, salts = tmp_path / "out", tmp_path / "acc-salts.bin"
-    res = S.stage(inner, fold, out, salts=salts, evaluate=False, part_jobs=1)
+def _agrees(server, inner: Path, fold: dict, out: Path, salts: Path, levels: list[int] | None, pts: dict | None = None,
+            version: int = 1) -> list[str]:
+    """Stage ``inner`` (`rec_vstage.stage`, the given levels, the algebra) and hold every staged statement to Lean's port
+    inputs on the stager's inputs: the inner session's records, the salts file, the levels' fresh salts read back from their
+    ``inst.bin``. With ``levels=[]`` each level's cap is staged on its own (`rec_cap.stage`). Returns the statements held."""
+    res = S.stage(inner, fold, out, levels=levels, salts=salts, pts=pts, evaluate=False, part_jobs=1, version=version)
     public, private, proofs = V.load(inner)
-    vf = S.verifier(public, fold)
+    vf = S.verifier(public, fold, pts)
     qs = V.queries(public, private, proofs)
     ts = {rep: V.tops(public, private, f"circuit/rep{rep}", "circuit") for rep in sorted(proofs)}
     mrs = S.message_rounds(public, private, vf.sh)
     nlev = len(vf.reps[0].info["kappa"])
+    caps = {"cap": (0, res["cap"])} if "cap" in res else {}
+    caps |= {RC.dir_name(int(k[1:])): (int(k[1:]), c) for k, c in res.get("caps", {}).items()}
+    if levels == []:
+        for lv in range(nlev):
+            nm = "cap" if lv == 0 else RC.dir_name(lv)
+            caps[nm] = (lv, RC.stage(O.TopValue.build(res["program"], lv, {r: t_[lv] for r, t_ in ts.items()}), out / nm, False))
     src = {"msgs": [[[mr["rows"][r], mr["salts"][r].hex()] for r in range(2)] for mr in mrs],
            "openings": [{"rep": q.rep, "level": q.level, "j": q.j, "pos": q.pos, "row": [h128(x) for x in q.row],
                          "sibs": [x.hex() for x in q.sibs]} for q in qs],
@@ -339,7 +338,43 @@ def test_the_deployed_session_agrees(server, tmp_path):
                                           "n": lv["instances"]}, out / nm)
     for j, (p, s) in enumerate(zip(RR.parts(RR.spec(vf.sh)), res["algebra"], strict=True)):
         agrees(f"alg/p{j}", s["program_sha512"], {"kind": "inner", "ports": p.S["ports"], "v": p.v}, out / "alg" / f"p{j}")
-    caps = {"cap": (0, res["cap"])} | {RC.dir_name(int(k[1:])): (int(k[1:]), c) for k, c in res.get("caps", {}).items()}
     for nm, (level, c) in caps.items():
         agrees(nm, c.get("program_sha512", ""), {"kind": "cap", "level": level, "N": c["instances"]}, out / nm)
-    print(json.dumps({"checked": checked}))
+    print(json.dumps({"session": str(inner), "checked": checked}))
+    return checked
+
+
+DEPLOYED = pytest.mark.skipif(not os.environ.get("VERITY_VSTAR_IN_DEPLOYED"), reason="stages a recorded session's every "
+                              "statement (the pod's): set VERITY_VSTAR_IN_DEPLOYED=1")
+COINS = FLOCK_TESTS / "fixtures" / "rec-coins" / "16-16-8-n64"
+
+
+def _fetched(d: Path, fixture: str):
+    return pytest.mark.skipif(not d.is_dir(), reason=f"{d} is not fetched: `uv run research data fetch-fixtures "
+                              f"verity/ml/flock/tests/fixtures/{fixture}`")
+
+
+@pytest.mark.slow
+@DEPLOYED
+@_fetched(COINS, "rec-coins")
+def test_the_recorded_plain_leaf_session_agrees(server, tmp_path):
+    """`rec-coins`' recorded (16,16,8) session at 64 instances, whose inner leaves are plain: every level, every level's cap
+    and every part of the algebra staged with `rec_vstage.stage` (at the session's fold, points and running-sum salts) is
+    Lean's port inputs."""
+    checked = _agrees(server, COINS / "inner-honest", json.loads((COINS / "fold-honest.json").read_text()), tmp_path / "out",
+                      COINS / "acc-salts.bin", None, json.loads((COINS / "points-honest.json").read_text()), version=0)
+    assert any(c.startswith("L") for c in checked) and "cap" in checked and any(c.startswith("alg/") for c in checked)
+
+
+@pytest.mark.slow
+@DEPLOYED
+@_fetched(SET, "hidden-outputs")
+def test_the_deployed_algebra_shape_agrees(server, tmp_path):
+    """rec-algebra's fixture session (m = 25, k_log = 22, the deployed algebra shape) replayed through the firewall: every
+    part of the algebra and every level's cap is Lean's port inputs (its openings are hm96 leaves, so the stager stages no
+    level of it)."""
+    INNER = json.loads((FLOCK_TESTS / "fixtures" / "inner_claims.json").read_text())
+    fold = {"m": INNER["m"], "k_log": INNER["k_log"], "extras": INNER["reps"][0]["extras"],
+            "reps": [{"comb": d["comb"]} for d in INNER["reps"]]}
+    checked = _agrees(server, _inner(tmp_path / "inner"), fold, tmp_path / "out", tmp_path / "acc-salts.bin", [])
+    assert "cap" in checked and any(c.startswith("alg/") for c in checked)
