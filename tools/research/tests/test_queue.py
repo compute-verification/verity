@@ -1310,11 +1310,11 @@ FAKE_SYNC = (sys.executable, "-c", "import sys; from pathlib import Path; s = Pa
              "'error: The lockfile at `uv.lock` needs to be updated, but `--locked` was provided.', file=sys.stderr); sys.exit(2 * s)")
 
 
-def _preflight(world: World, free=lambda: 1.0, **kw):
+def _preflight(world: World, free=lambda: 1.0, fetch=None, store=None, **kw):
     from research.queue import Preflight
 
-    return Preflight(world.dev, str(world.origin), world.store, sync=FAKE_SYNC, python=sys.executable, root=world.tmp / "pre",
-                     log=world.logs.append, free=free, **kw)
+    return Preflight(world.dev, str(world.origin), store or world.store, sync=FAKE_SYNC, python=sys.executable,
+                     root=world.tmp / "pre", log=world.logs.append, free=free, fetch=fetch, **kw)
 
 
 def _preflight_main(world: World, extra: dict[str, str] | None = None) -> str:
@@ -1359,6 +1359,142 @@ def test_the_preflight_collects_no_suite_when_memory_is_short_and_still_marks(wo
     said = next(s for s in world.logs if "preflight" in s)
     assert "no suite collected: 10% of memory available, under 25%" in said and "collected 0 suite(s)" in said, said
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
+
+
+#: a fetched fixture's bytes, and the tree that reads it: pkg's test reads it at import, as benchmarks/numerical's
+#: tests/explore/test_authentication.py reads fixtures/typed-obligation-v0's K=1536 vector (`auth.read_openings()`), so the
+#: suite's collection fails without it; `other` registers one too, in a suite no change below touches
+BIG = b'{"openings": [1, 2, 3]}\n'
+BIG_PATH = "pkg/data/big.json"
+
+
+def _fixture_tree(world: World) -> tuple[dict[str, str], str]:
+    from research.store import fixtures as F
+
+    (src := world.tmp / "src").mkdir()
+    (src / "big.json").write_bytes(BIG)
+    (src / "other.json").write_bytes(b"{}\n")
+    art = F.fixture_id(src / "big.json")
+    files = {".gitignore": f"__pycache__/\n{BIG_PATH}\nother/data/other.json\n",
+             "fixtures/artifacts.json": json.dumps({art: BIG_PATH, F.fixture_id(src / "other.json"): "other/data/other.json"}),
+             "pyproject.toml": PREFLIGHT_FILES["pyproject.toml"].replace('["pkg"]', '["pkg", "other"]'),
+             "other/pyproject.toml": PREFLIGHT_FILES["pkg/pyproject.toml"].replace('"pkg"', '"other"'),
+             "other/tests/test_other.py": "def test_other():\n    pass\n",
+             "pkg/tests/test_big.py": ("import json\nfrom pathlib import Path\n\n"
+                                       "BIG = json.loads((Path(__file__).parents[1] / 'data' / 'big.json').read_text())\n\n\n"
+                                       "def test_big():\n    assert BIG['openings']\n")}
+    return files, art
+
+
+def _stub_fetch(calls: list, why: str = ""):
+    """The preflight's fetch, recording what it was asked; it places the bytes, or (``why``) fetches nothing and says why."""
+    def fetch(wt: Path, paths: list[str], deadline: float) -> tuple[set[str], str]:
+        calls.append(list(paths))
+        if why:
+            return set(paths), why
+        for p in paths:
+            (wt / p).parent.mkdir(parents=True, exist_ok=True)
+            (wt / p).write_bytes(BIG)
+        return set(), ""
+    return fetch
+
+
+#: a pkg test that fails to collect on the merged tree alone: #1, on `next`, refits away the row it reads
+ROWS_TEST = {"pkg/tests/test_rows.py": "import json\nfrom pathlib import Path\n"
+                                       "ROW = json.loads((Path(__file__).parents[1] / 'rows.json').read_text())['r7']\n"}
+
+
+def test_the_preflight_fetches_the_fixtures_of_the_suites_it_collects_and_only_those(world, capsys):
+    """TOP-90 row 47: marks noted `benchmarks/numerical` failing to collect on a fixture the merged tree's worktree never had
+    (#4317: tests/explore/test_authentication.py reads fixtures/typed-obligation-v0's K=1536 vector at import).  The preflight
+    fetches each collected suite's fetched fixtures into the worktree first, and none of a suite it doesn't collect; a suite
+    collected again at `next` has them fetched again there, since the worktree is cleaned in between."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    files, _ = _fixture_tree(world)
+    _preflight_main(world, files)
+    calls: list = []
+    world.gh.put(2, h2 := world.change({"pkg/tests/test_more.py": "def test_more():\n    pass\n"}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world, fetch=_stub_fetch(calls))) == 0
+    said = next(s for s in world.logs if "preflight" in s)
+    assert "nothing refused" in said and "collected 2 suite(s)" in said and "not judged" not in said, said
+    assert calls == [[BIG_PATH]]
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
+
+    calls.clear()
+    world.gh.put(3, world.change(ROWS_TEST), ready=False)
+    assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), preflight=_preflight(world, fetch=_stub_fetch(calls))) == 1
+    err = capsys.readouterr().err
+    found = [ln for ln in err.splitlines() if ln.startswith("  - ")]
+    assert found == ["  - `pytest --collect-only` in pkg fails on the merged tree: ERROR tests/test_rows.py - KeyError: 'r7': a "
+                     "test reads what another queued PR changes or what only an unlanded PR adds; make it read what `main` and "
+                     "`next` hold, or wait for that PR"], err
+    assert calls == [[BIG_PATH], [BIG_PATH]] and _no_worktree_left(world)
+
+
+def test_a_fixture_the_preflight_cannot_fetch_is_said_once_and_leaves_its_suite_unjudged(world, capsys):
+    """With no credentials (or no source holding it), the suite that reads it isn't collected, so it can't refuse on bytes it
+    never had; one note names the suite and the fixtures, and the head is marked: the train's check fetches them."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    files, _ = _fixture_tree(world)
+    _preflight_main(world, files)
+    calls: list = []
+    world.gh.put(2, h2 := world.change(ROWS_TEST), ready=False)
+    pre = _preflight(world, fetch=_stub_fetch(calls, why="no credentials for the store's remote"))
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=pre) == 0, capsys.readouterr().err
+    said = next(s for s in world.logs if "preflight" in s)
+    note = (f"pkg not judged: 1 of the 1 fixture(s) the suites read weren't fetched (no credentials for the store's remote: "
+            f"{BIG_PATH}); the train's check fetches them")
+    assert said.count(note) == 1 and "collected 1 suite(s) (.)" in said and "not judged" not in said.replace(note, ""), said
+    assert calls == [[BIG_PATH]]
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
+
+
+def test_the_preflights_fetch_keeps_what_it_fetched_in_this_machines_store_for_the_next_preflight(world, monkeypatch, capsys):
+    """The default fetch is `research data fetch-fixtures` through the caller's store: the first preflight takes the fixture
+    from the store's remote, and the next one on this machine from the store alone, with the remote gone; a store that never
+    fetched it then can't, and its preflight says so and still marks."""
+    from research.queue import MarkOnly, ready
+    from research.store import fixtures as F
+    from research.store.local import manifest_key, object_key
+    from research.store.remote import FsRemote
+
+    files, art = _fixture_tree(world)
+    _preflight_main(world, files)
+    seed = LocalStore(world.tmp / "seed")
+    assert seed.put_artifact(F.FIXTURE_KIND, {}, None, file=world.tmp / "src" / "big.json") == art
+    vault = FsRemote(world.tmp / "vault")
+    [(blob, _)] = seed.get_manifest(art).blobs()
+    vault.put(object_key(blob), seed.object_path(blob))
+    vault.put(manifest_key(art.split(":", 1)[1]), seed.manifest_path(art.split(":", 1)[1]))
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(world.tmp / "store.toml"))
+    monkeypatch.setenv("RESEARCH_PUBLIC_URL", "")
+
+    def recorded(store=None):
+        pre = _preflight(world, store=store)
+        real = pre.fetch
+        pre.fetch = lambda wt, paths, deadline: got.append((paths, real(wt, paths, deadline))) or got[-1][1]
+        return pre
+
+    got: list = []
+    world.gh.put(2, world.change({"pkg/tests/test_more.py": "def test_more():\n    pass\n"}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=recorded()) == 0, capsys.readouterr().err
+    assert got == [([BIG_PATH], (set(), ""))] and world.store.object_path(blob).is_file()
+    said = next(s for s in world.logs if "preflight: #2" in s)
+    assert "collected 2 suite(s)" in said and "not judged" not in said, said
+
+    shutil.rmtree(world.tmp / "vault")
+    world.gh.put(3, world.change({"pkg/tests/test_most.py": "def test_most():\n    pass\n"}), ready=False)
+    assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), preflight=recorded()) == 0, capsys.readouterr().err
+    said = next(s for s in world.logs if "preflight: #3" in s)
+    assert got[-1] == ([BIG_PATH], (set(), "")) and "collected 2 suite(s)" in said and "not judged" not in said, said
+
+    elsewhere = LocalStore(world.tmp / "elsewhere", config_path=world.tmp / "store.toml")
+    world.gh.put(4, world.change({"pkg/tests/test_else.py": "def test_else():\n    pass\n"}), ready=False)
+    assert ready(world.gh, elsewhere, 4, "lane-4", MarkOnly(), preflight=recorded(elsewhere)) == 0, capsys.readouterr().err
+    said = next(s for s in world.logs if "preflight: #4" in s)
+    assert got[-1][1][0] == {BIG_PATH} and "pkg not judged: 1 of the 1 fixture(s)" in said, said
 
 
 def test_the_preflight_refuses_a_head_that_conflicts_with_next_naming_the_paths_and_the_pr_that_touched_them(world, capsys):
