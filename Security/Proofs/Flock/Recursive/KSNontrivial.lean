@@ -349,7 +349,10 @@ theorem recursiveKSAt_nontrivial (rd : Msg → Option FinalP)
       RecDeploy.PartIn (RecDeploy.staged b.st x (RecDeploy.pick b.st x j) j) i spec' sts')
     (hn : RecDeploy.nS x ≤ 2 ^ 16) (hS : (RecDeploy.innerSetupIns (RecDeploy.xIOf x)).length ≤ 2 ^ 56) :
     ¬ RecursiveKSAtAll rd final rest wE w b aux nOf hd recRest :=
-  RecDeploy.not_ksLin2On_acceptAll _ _ _ _ _ _ _ _ _ _ _ _ _ x hD hR
+  RecDeploy.not_ksLin2On_acceptAll _root_.Flock.Readable.relation _root_.Flock.Readable.relation
+    { b with tr := RecDeploy.recTr aux nOf hd recRest } (RecDeploy.DeployedR.layR rest) (FlockDeploy.nextR rd)
+    (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR RecDeploy.rowInDeployed
+    final w FlockDeploy.KS.CpDep RecDeploy.DenseAt x hD hR
     (Claims.Recursion.κ_lt_half_of_lamLin2
       (RecDeploy.lamLin2_deployed_ge_dep _root_.Flock.Readable.relation { b with tr := RecDeploy.recTr aux nOf hd recRest }
         (RecDeploy.DeployedR.layR rest) (FlockDeploy.nextR rd)
@@ -398,6 +401,8 @@ def FalseInScope : Prop :=
 accepts everything wherever the deployment has a false statement in scope (`FalseInScope`). -/
 theorem recursiveKS_nontrivial (h : FalseInScope) : ¬ RecursiveKSAll := by
   obtain ⟨b, aux, nOf, hd, recRest, x, s, spec, sts, hD, hR, hin, hO, hn, hS⟩ := h
-  exact fun hK => recursiveKSAt_nontrivial _ _ _ _ _ _ aux nOf hd recRest hD hR hin hO hn hS (hK b aux nOf hd recRest)
+  exact fun hK => recursiveKSAt_nontrivial RecDeploy.DeployedR.rdR RecDeploy.DeployedR.finalR RecDeploy.OpenRows.elemR
+    RecDeploy.DeployedR.wER RecDeploy.DeployedR.wR (RecDeploy.deployedB b) aux nOf hd recRest hD hR hin hO hn hS
+    (hK b aux nOf hd recRest)
 
 end Flock.Guarantees
