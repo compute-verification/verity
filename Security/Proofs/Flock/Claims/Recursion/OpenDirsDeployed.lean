@@ -510,6 +510,16 @@ theorem copyDirsTieR_layVR {b : Brings} {elem : (r : XR) → List (Fin r.w.parts
   rw [hcp]
   exact htie hdr
 
+/-- **`CopyDirsR` at the deployed layout `layVR`**, from `DirsSideR` (`copyDirsR_of`: `HH ≤ 32` at a staged part). -/
+theorem copyDirsR_layVR {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
+    {IV : Claims.Verifier Coin} {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg}
+    {Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace}
+    (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
+    (hside : DirsSideR b elem IV shape untr cmt Bd pieces posAt) :
+    OpenLower.CopyDirsR FlockDeploy.sha512 (DR b elem IV) shape untr b cmt (layVR elem) Bd pieces posAt :=
+  OpenLower.copyDirsR_of FlockDeploy.sha512 (DR b elem IV) shape untr b cmt (layVR elem) Bd pieces posAt
+    (copyDirsTieR_layVR pieces posAt hside)
+
 end
 
 end RecDeploy.OpenDirs
