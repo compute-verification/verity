@@ -61,6 +61,7 @@ import hashlib
 import json
 import os
 import random
+import shutil
 import socket
 import subprocess
 import sys
@@ -346,6 +347,33 @@ def _code(fn: Any) -> str | None:
     return getattr(getattr(d, "body", None) or getattr(d, "evaluate", None), "__module__", None)
 
 
+def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> dict:
+    """At most ``most`` of `zk_mutants.py`'s one-bit edits of the first drawn session's proof (a prover that sent the edited
+    proof, the round messages that carried it rebuilt and the coins kept), each verified by Lean `verify --zk` on the honest
+    member's circuit and public file: what the verifier of record refuses, not the prover."""
+    import a0
+    sys.path.insert(0, str(HERE.parents[1] / "verity" / "ml" / "flock" / "verifier"))
+    import zk_mutants as ZM
+
+    k, honest = next(((k, s.parent) for k in range(len(members))
+                      for s in sorted((wdir / f"session-m{k}" / "sessions").glob("*/session.json"))), (None, None))
+    if honest is None:
+        return {"edits": 0, "refused": 0, "why": "no drawn session"}
+    st = {"dir": wdir / f"m{k}", "partition_file": wdir / "partition.json", "program_file": wdir / "program.json"}
+    ZM.main(honest, out / "mutants")
+    cases = {}
+    for c in [c for c in json.loads((out / "mutants" / "zk_mutants.json").read_text()) if c.get("rep") is not None][:most]:
+        sd = out / c["name"] / "sessions" / honest.name
+        shutil.copytree(honest, sd, copy_function=os.link, dirs_exist_ok=True)
+        for f in (out / "mutants" / c["name"]).iterdir():
+            (sd / f.name).unlink(missing_ok=True)
+            shutil.copyfile(f, sd / f.name)
+        v = a0.lean_verify(lean, st, members[k].n, out / c["name"], zk=True)
+        cases[c["name"]] = {"refused": a0.lean_refused(v), "why": v.get("why"), "expected": c["expect"]["why"]}
+    return {"member": k, "session": honest.name, "edits": len(cases), "refused": sum(v["refused"] for v in cases.values()),
+            "cases": cases}
+
+
 def audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
@@ -428,6 +456,9 @@ def audit(a: argparse.Namespace) -> int:
         row["ok"] = ok and ordered and (compiled is None or compiled["ok"])
     if a.challenger:
         row["ok"] = row["ok"] and not row["coins_session"]["error"]
+    if a.flip_proofs and not a.forged and (s.get("audit") or {}).get("accepted"):
+        pe = row["proof_edits"] = proof_edits(a.lean, out / "window", mine.members, out / "proof-edits", a.flip_proofs)
+        row["ok"] = row["ok"] and pe["edits"] > 0 and pe["refused"] == pe["edits"]
     (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True, default=str))
     print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "circuit", "population", "draw", "draw_counts", "seconds")}
                                   | {"compile": (compiled or {}).get("ok"), "fixed_before_draw": (row.get("fixed_before_draw") or {}).get("ok"),
@@ -435,7 +466,9 @@ def audit(a: argparse.Namespace) -> int:
                                      "negatives_refused": all((row.get("negatives") or {"none": False}).values()),
                                      "definitions": row["definitions"], "loaded": row["loaded"],
                                      "leak": {k: row["leak"][k] for k in ("other_inputs", "advice_bits", "bound")},
-                                     **({"forged": row["forged"]} if a.forged else {})}, sort_keys=True, default=str))
+                                     **({"forged": row["forged"]} if a.forged else {}),
+                                     **({"proof_edits": {x: row["proof_edits"].get(x) for x in ("edits", "refused", "member")}}
+                                        if "proof_edits" in row else {})}, sort_keys=True, default=str))
     return 0 if row["ok"] else 1
 
 
@@ -462,6 +495,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--port", type=int, default=None, help="the sessions' base port (default a base whose ports are free now)")
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")
+    p.add_argument("--flip-proofs", type=int, default=0, metavar="N",
+                   help="after an accepted audit, at most N one-bit edits of its first drawn session's proof, each of which "
+                   "Lean verify must refuse (`proof_edits`)")
     p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins), not the verifier's: local, or "
                    "gate:USER@HOST (vy-challenger-1 through infra's gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
