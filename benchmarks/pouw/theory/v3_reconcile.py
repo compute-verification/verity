@@ -457,9 +457,11 @@ BESIDE = (0.0, 0.08, 0.25, 0.5, 1.0, 2.0, 4.0)
 
 def served(co: Codes, out: dict) -> None:
     """The served-period column as a period of one shape with X plain s8 MACs beside each credited MAC (tensor and
-    its MMA's smem, rf and issue, no choice of route: `price_methods`' extra_fixed): 1 − the period's makespan with
-    every route over the honest menu's, at each X, and MAC-weighted per model. Picks: v3's rule under pub (on the
-    H200 v3's own picks; on the RTX PRO 6000 A27b's, within its 1% tolerance) and, on the H200, A27a's."""
+    its MMA's smem, rf and issue, no choice of route: `price_methods`' extra_fixed), at each X: the period's loss,
+    1 − makespan(every route) / makespan(honest menu), and the round's, the same over each makespan less the beside
+    work's own (D5 v2's `increment` convention); per shape and weighted per model (ratio of MAC-weighted sums). Picks:
+    v3's rule under pub (on the H200 v3's own picks; on the RTX PRO 6000 A27b's, within its 1% tolerance) and, on the
+    H200, A27a's."""
     nf, d5_ = co.nf["v3"], co.d5
     picks = {"v3 rule, pub": None, "A27a": {(65536, 16384): 448, (1536, 65536): 384}}
     for name in V3_CARDS:
@@ -468,28 +470,38 @@ def served(co: Codes, out: dict) -> None:
         for tag, rule in picks.items():
             if name == "RTX PRO 6000" and rule is not None:
                 continue
-            print(f"\n== {name}, {tag} picks: served-period leak with X plain MACs beside a credited MAC, X = "
+            print(f"\n== {name}, {tag} picks: loss with X plain MACs beside a credited MAC, period | round, X = "
                   + ", ".join(f"{x:g}" for x in BESIDE))
             for model, shapes in nf.SHAPES.items():
-                W, acc = 0.0, [0.0] * len(BESIDE)
+                sums = {k: [0.0] * len(BESIDE) for k in ("b", "h", "bi", "hi")}
                 for K, N, reps in shapes:
                     p = co.cap(name, K, N, "pub")
                     Lp = p["Lp"] if rule is None else rule.get((K, N), 512)
                     j = co.d5_job(name, K, N, p["t"], Lp)
-                    leaks = []
-                    for x in BESIDE:
+                    row = dict(card=name, picks=tag, model=model, K=K, N=N, t=p["t"], Lp=Lp, beside=BESIDE,
+                               leak=[], leak_round=[])
+                    for i, x in enumerate(BESIDE):
                         f = {r: x * v for r, v in mma.items()}
                         f["tensor"] = x / c.s8
+                        t0 = c.s8 * max(sum(a * f.get(r, 0.0) for r, a in wt.items()) / cp
+                                        for _, wt, cp in d5_._rows(c))
                         kw = dict(beside=True, items=(j["sha"],), extra_fixed=f)
-                        b = d5_.price_methods(c, j["methods"][:1], j["L"], N, d5_.TOKENS, **kw)
-                        h = d5_.price_methods(c, j["methods"], j["L"], N, d5_.TOKENS, **kw)
-                        leaks.append(1 - h.c / b.c)
-                    w = K * N * reps
-                    W, acc = W + w, [a + w * lk for a, lk in zip(acc, leaks)]
-                    out["served"].append(dict(card=name, picks=tag, model=model, K=K, N=N, t=p["t"], Lp=Lp,
-                                              beside=BESIDE, leak=leaks))
-                    print(f"  {model:16} {K:5}x{N:<6} L′ {Lp:4}: " + " ".join(f"{lk:6.2%}" for lk in leaks))
-                print(f"  {model:16} MAC-weighted:        " + " ".join(f"{a / W:6.2%}" for a in acc))
+                        b = d5_.price_methods(c, j["methods"][:1], j["L"], N, d5_.TOKENS, **kw).c
+                        h = d5_.price_methods(c, j["methods"], j["L"], N, d5_.TOKENS, **kw).c
+                        row["leak"].append(1 - h / b)
+                        row["leak_round"].append(1 - (h - t0) / (b - t0))
+                        w = K * N * reps
+                        for k, v in (("b", b), ("h", h), ("bi", b - t0), ("hi", h - t0)):
+                            sums[k][i] += w * v
+                    out["served"].append(row)
+                    print(f"  {model:16} {K:5}x{N:<6} L′ {Lp:4}: " + " ".join(f"{lk:6.2%}" for lk in row["leak"])
+                          + " | " + " ".join(f"{lk:6.2%}" for lk in row["leak_round"]))
+                per = [1 - h / b for b, h in zip(sums["b"], sums["h"])]
+                rnd = [1 - h / b for b, h in zip(sums["bi"], sums["hi"])]
+                out["served"].append(dict(card=name, picks=tag, model=model, weighted=True, beside=BESIDE, leak=per,
+                                          leak_round=rnd))
+                print(f"  {model:16} MAC-weighted:        " + " ".join(f"{lk:6.2%}" for lk in per) + " | "
+                      + " ".join(f"{lk:6.2%}" for lk in rnd))
 
 
 PARTS = dict(reconcile=reconcile, caps=caps, picks=picks, pv=pv, d5=d5, u13=u13, perlp=perlp, pvtable=pvtable,
