@@ -93,6 +93,17 @@ theorem checkInner_checkAtC3 {i : Option RecVStar.Inner} {src : Option RecCoins.
   | ok u => rfl
   | error e => simp [hc, bind, Except.bind] at h
 
+theorem checkInner_checkShape {i : Option RecVStar.Inner} {src : Option RecCoins.Source}
+    {bound : Flock.V (Option String × Option RecVStar.StackedShape)} (h : RecSetup.checkInner i src bound = .ok ()) :
+    RecSetup.checkShape i src = .ok () := by
+  unfold RecSetup.checkInner at h
+  cases hc : RecCoins.checkAtC3 i src with
+  | error e => simp [hc, bind, Except.bind] at h
+  | ok u =>
+    cases hs : RecSetup.checkShape i src with
+    | ok u' => rfl
+    | error e => simp [hc, hs, bind, Except.bind] at h
+
 /-- Part `s`'s staged statement, where it reads back, is `partRaw`'s. -/
 theorem staged_decode {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ}
     (hne : staged st x ms s ≠ []) :
@@ -107,13 +118,20 @@ theorem staged_decode {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Cl
     simp only [staged, hr, hp, hd, ↓reduceIte]
   · exact absurd (by simp [staged, hr, hp, hd]) hne
 
+/-- A staged statement says the inner statement is set up as `x`'s inner statement is (`innerFormOf`). -/
+theorem formOf_partRaw (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (s : ℕ)
+    (p : PartX) : formOf (partRaw r st x ms s p) = .ok (some (innerFormOf r.innerRaw)) := rfl
+
 /-- **A staged statement's inner shape and check 5 are `x`'s**: where it reads, the verifier's inner shape is the one
-`x` carries, and `RecCoins.checkAtC3` at its source is `checkAtC3` at the files `x` carries (`filesOf`), which reads no
-record. -/
+`x` carries, `RecCoins.checkAtC3` and `RecSetup.checkShape` at its source are the same checks at the files `x`
+carries (`filesOf`), neither of which reads the record, and `x` carries them: a staged statement carries the inner
+statement's circuit and public file, so `sourceOf` refuses one without its partition. -/
 theorem insO_staged {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {i : RecIns}
     (h : insO (staged st x ms s) = some i) :
     ∃ r, readX x = some r ∧ i.inner = some r.shape ∧
-      RecCoins.checkAtC3 i.inner i.src = RecCoins.checkAtC3 (some r.shape) (filesOf r) := by
+      RecCoins.checkAtC3 i.inner i.src = RecCoins.checkAtC3 (some r.shape) (filesOf r) ∧
+      RecSetup.checkShape i.inner i.src = RecSetup.checkShape (some r.shape) (filesOf r) ∧
+      (filesOf r).isSome = true := by
   have hne : staged st x ms s ≠ [] := fun he => by rw [he, insO_nil] at h; cases h
   obtain ⟨r, p, hr, -, hd⟩ := staged_decode hne
   obtain ⟨hsh, hpa, -⟩ := readX_spec hr
@@ -137,6 +155,7 @@ theorem insO_staged {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Clai
   refine ⟨r, hr, hinner, ?_⟩
   rw [hinner]
   unfold sourceOf at hsrc
+  rw [formOf_partRaw] at hsrc
   dsimp only [partRaw] at hsrc
   cases hq : r.innerRaw.partition with
   | none => rw [hq] at hsrc; simp at hsrc
@@ -164,7 +183,7 @@ theorem insO_staged {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Clai
         rw [ht] at hsrc
         simp only [pure, Except.pure, Except.ok.injEq] at hsrc
         rw [← hsrc, filesOf, hpj]
-        rfl
+        exact ⟨rfl, rfl, rfl⟩
 
 /-! ## The draw at a decision -/
 
@@ -195,8 +214,8 @@ variable {IV : Claims.Verifier Coin} {st : Stage} {x : Claims.Msg} {as : List Cl
 
 /-- **The compiled verifier refuses a session decision out of scope.** Where session `s`'s outer verifier decides on
 the final message `f`, the compiled verifier answers other than `.rej` only where the setup's checks accept the inner
-shape `x` carries (`RecScope.accepts` on `readOf`: `RecVStar.statements` in `readX`, `RecCoins.checkAtC3` in the staged
-statement's setup) and `f`'s record draws every unit of its population (`RecScope.fullDrawOk` under that shape:
+shape `x` carries (`RecScope.accepts` on `readOf`: `RecVStar.statements` in `readX`, `RecCoins.checkAtC3` and
+`RecSetup.checkShape` in the staged statement's setup, whose readers refuse it without the inner statement's files) and `f`'s record draws every unit of its population (`RecScope.fullDrawOk` under that shape:
 `ProvedScope.drawLaw` in the custody checks, then `RecSetup.fullDraw`). -/
 theorem decide_scope (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg}
     {cs' : List Coin} {i : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray}
@@ -213,16 +232,19 @@ theorem decide_scope (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Ms
   obtain ⟨i', hi', -⟩ := actO_decide ha
   obtain ⟨hins, hsu⟩ := setupO_some hi'
   rw [hxO] at hins
-  obtain ⟨r, hr, hinner, hc3⟩ := insO_staged hins
+  obtain ⟨r, hr, hinner, hc3, hcs, hheld⟩ := insO_staged hins
   refine ⟨r, hr, ?_, ?_⟩
   · unfold RecScope.accepts readOf
     rw [(readX_spec hr).2.2, Bool.true_and, ← hc3,
       checkInner_checkAtC3 (RecIns.setup_checkInner hsu)]
+    change ((Except.ok () : Except String Unit).isOk && (RecSetup.checkShape (some r.shape) (filesOf r)).isOk &&
+      (filesOf r).isSome) = true
+    rw [← hcs, checkInner_checkShape (RecIns.setup_checkInner hsu), hheld]
     rfl
   · have hio : innerOfO xO = some r.shape := by
       rw [innerOfO, hxO, hins]
       exact hinner
-    unfold fullDrawO at hf
+    replace hf := fullDrawO_fullDraw hf
     rw [hio, RecScope.fullDraw_some_rec] at hf
     unfold RecScope.fullDrawOk
     have hd := checks_recordDraw hc

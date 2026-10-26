@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Cursor's `preToolUse` hook for the Task tool (`.cursor/hooks.json`, matcher `Task`): a coordinator never waits on a local
-worker in the foreground.
+"""Cursor's `preToolUse` hook for the Task tool (`.cursor/hooks.json`, matchers `Task` and `CallDynamicTool`, the wrapper a
+session that offers Task as a dynamic tool calls it through): a coordinator never waits on a local worker in the foreground.
 
 Slack, Linear and timer events reach an agent only while its turn is free, and a foreground subagent holds its parent's turn
 until it ends; one in the background doesn't. Local workers also share the coordinator's VM, where one OOM kills them all
@@ -33,9 +33,18 @@ def holders() -> dict[str, str]:
     return {a: h.get("handle", "?") for h in reg.get("handles") or [] for a in AGENT_ID.findall(str(h.get("holder", "")))}
 
 
+def task_input(event: dict):
+    """The Task call's input; where Task is a dynamic tool it arrives as `CallDynamicTool` with toolName `Task`, and a
+    dynamic call of any other tool has none."""
+    args = event.get("tool_input")
+    if event.get("tool_name") == "CallDynamicTool":
+        return args.get("arguments") if isinstance(args, dict) and args.get("toolName") == "Task" else None
+    return args
+
+
 def reason(event: dict) -> str | None:
     handle = holders().get(str(event.get("conversation_id") or ""))
-    args = event.get("tool_input")
+    args = task_input(event)
     if handle is None or not isinstance(args, dict):
         return None
     if args.get("environment") == "cloud" or args.get("run_in_background") or args.get("subagent_type") in LOOKUPS:
@@ -53,11 +62,15 @@ def main() -> int:
     except ValueError:
         event = {}
     event = event if isinstance(event, dict) else {}
-    why = reason(event)
-    args = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
+    why, args = reason(event), task_input(event)
+    if event.get("tool_name") == "CallDynamicTool" and args is None:
+        print(json.dumps({"permission": "allow"}))
+        return 0
+    args = args if isinstance(args, dict) else {}
     try:
         with open(LOG, "a") as f:
-            f.write(json.dumps({"conversation_id": event.get("conversation_id"), "deny": bool(why), "input_keys": sorted(args),
+            f.write(json.dumps({"conversation_id": event.get("conversation_id"), "tool_name": event.get("tool_name"),
+                                "deny": bool(why), "input_keys": sorted(args),
                                 **{k: args.get(k) for k in ("environment", "subagent_type", "run_in_background")}}) + "\n")
     except OSError:
         pass

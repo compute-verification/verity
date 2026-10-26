@@ -23,6 +23,8 @@ Results and verdicts are in the hash lane's notes (`lanes/hash/*-draft-structure
   - `run.sh`: everything.
   - `diag.sh`: the fused arms taken apart.
   - `probe.sh`: the pipe probe and the GEMM kernels' SASS opcode mix.
+- `kernels.sh`: each kernel's grid, block, registers and shared memory in one `fuse diag` rep, from an nsys trace (no
+  checks; runs r20261018-073437-c8b6 on H200 and -3a76 on RTX PRO 6000: whether a hash CTA fits beside cuBLASLt's).
 - `summary.py OUT`: `run.sh`'s tables.
 - `rank.py OUT...`: the levers ranked by what each buys a Qwen3-8B prefill step.
 

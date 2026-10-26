@@ -1,6 +1,6 @@
 """Call boundaries (`call_boundaries`, Q_word: a Value two Calls of one module body exchange) as an acquisition source, evaluated on the
 host.  Per module body M and committed engine step, a forward pre-hook reads M's inputs and evaluates M's rows with the IR's evaluator
-(`verity.ml.circuits.evaluation.evaluate_batch`: a registered row kernel of `verity_vllm.program.kernels.rows` where one is, the reference for the rest
+(`verity.ml.circuits.evaluation.evaluate_batch`: a registered row kernel of `verity.ml.definitions.numerics.rows` where one is, the reference for the rest
 and for what a kernel declines -- exact, NaN payloads included); at the step's end every required interior Value is committed as
 `<M>/<fx node>/<member>`, [rows, width] words over the identity's element range.  Attached whenever the required manifest names
 `call_boundaries` identities; a manifest naming none refuses it (exit 3).  No kernel changes: the served kernels run unchanged, and the
@@ -28,14 +28,15 @@ from typing import Any, Callable, Collection, Mapping, Sequence
 import numpy as np
 
 from verity_vllm.acquire.sources import call_boundary_plan as CP
+from verity_vllm.acquire.sources import int8_source
 from verity_vllm.acquire.sources.call_boundary_plan import FAMILY, WORD_DTYPES, Body, Plan
 
 _SIGNED = {1: "uint8", 2: "int16", 4: "int32", 8: "int64"}
 WARMUP_ID = re.compile(r"warmup-(\d+)(?:-[0-9a-f]{8})?")
 
 #: other sources' claims on `call_boundaries` identities (identity -> the claiming source's `short_name`, or None): a claimed identity is
-#: that source's to acquire (a tap of a Value the runtime already holds, like a pre-bias GEMM output) and is never evaluated here
-CLAIMS: list[Callable[[Mapping[str, Any]], str | None]] = []
+#: that source's to acquire (a tap of a Value the runtime already holds, like the int8 quantizer's results) and is never evaluated here
+CLAIMS: list[Callable[[Mapping[str, Any]], str | None]] = [int8_source.claim]
 
 
 def claimed(r: Mapping[str, Any]) -> str | None:
@@ -93,6 +94,7 @@ def zeros(body: Body) -> dict[str, np.ndarray]:
 # -------------------------------------------------------------------------------------------------------------------------------- source
 class CallBoundarySource:
     short_name = "call_boundary"
+    step_rows_at_step_end = True                    # `on_step_end` reads the committer's `step_rows[step]`
 
     def __init__(self, committer: Any, model: Any, plan: Plan) -> None:
         import torch

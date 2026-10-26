@@ -4,9 +4,15 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 
 * `decode`: a case's three decoders run independently (`answer` stops at the first refusal);
 * `partition`: the partition's digest, population, strata and expanded law from the verifier's parameters;
+* `committed_bits`: per Definition `Q_call` cuts, its units' committed bits read off its layout and by the walk that
+  layout replaced (`Partition.committedBits`, `Partition.committedBitsRef`);
 * `registration`: R1–R7's failure codes for a record against the parameters;
 * `registered`: the verifier's own entries for the values its parameters expect registered;
-* `domain`: a registered value's commitment domain;
+* `domain`: a registered value's commitment domain, or a produced value's (`Produced.domain`);
+* `produced`: a produced values' record's codes against the verifier's own entries, and the roots the verifiers of record
+  opened them against, and the rows they opened against its openings and the verifier's own ports' (`Produced.check`,
+  `Produced.opened`, `Produced.shared`);
+* `known_port`: the root and opening of a port the verifier registers at known content (`Produced.known`);
 * `check_draw`, `check_proved`: the draw's checks, each `{"ok", "codes", "detail"}`;
 * `draw`: the verifier's draw from given bytes of its own randomness;
 * `select`: the challenger's draw from a Spec's selection rule on, over a program and query, from given bytes of its
@@ -14,6 +20,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `slots`: the claims' partition over the program and query, and that draw's checked proof units in its slots
   (`Slots.select`);
 * `bound`: the exact bounds on wrong units at δ;
+* `hidden_offsets`, `hidden_locate`, `hidden_witness`: the draw over hidden positions (`HiddenDraw`): the honest table's
+  offsets and total, the honest prover's witnesses, and the witness for a named call;
 * `verdict`: the verdicts' share of the outcome once the record's checks hold;
 * `matches_public`: the verifier's own public file against the record (`Record.matchesPublic`);
 * `session_registered`: the registered roots the verifiers of record report (`Record.sessionRegistered`), and with a
@@ -22,20 +30,46 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `check_public`: the proof service's public-items rule on a registration record (`Service.checkPublic`);
 * `check_verdicts`: the verdicts' share of a proof service outcome (`Service.checkVerdicts`);
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`);
-* `replay_units`, `proof_units`: the two-stage law's samplers on given bytes of the verifier's own coins
-  (`TwoStage.selectReplayUnits`, `TwoStage.selectProofUnits`);
+* `stream`: the proof service stream's own rules, one op's decision on what they hold of the stream (`Stream.run`);
+* `fleet`: the fleet's rules over its streams' operators, one op's decision on what they hold of the fleet (`Fleet.run`);
 * `hello`: the run's Hello on its record, its coin tree at run scope (`Hello.check`).
+* `challenger_commitment`, `challenger_opening`, `challenger_reason`, `challenger_order`: the challenger's live coins
+  (`Challenger`): a coin commitment and an opening as `from_json` reads them, `live_reason` and `order_reason`.
+* `challenger_key`, `challenger_record`, `challenger_trusted`: the challenger's signed record (`ChallengerRecord`): the
+  verifier's key and a record as `from_json` reads them, with `record_message`, and `trusted_reason`.
+* `challenger_close`, `challenger_released`, `challenger_ledger`, `challenger_head`, `challenger_session`,
+  `challenger_credited`, `challenger_pinned`: the challenger's session (`ChallengerSession`): its close as `from_json`
+  reads it, with `close_message`; `log_chain` and `released_roots_of`; `audited_session`, the auditor's ledger;
+  `ledger_head`, infra's published heads; `trusted_session_of` and `credited_session`, a window counted toward its
+  period's circuit, each over `pinned_session`: a session from a commit the host's pins log records and the auditor's
+  first-parent list of main holds.
+* `challenger_read`, `challenger_draw_coins`: a draw's coins from one challenger family (`ChallengerCoins`):
+  `read_reason`, the bytes a draw read against its segment, and `coins_reason`, against the segment and the session the
+  auditor's ledger opens for the verifier's window (`trusted_session_of`).
+* `wires`, `wires_unrolled`: a window circuit's wires checked at the size of their description (`Wires.check`) and by
+  the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and drawn rows' writers.
+* `wires_drawn`, `wires_drawn_unrolled`: the wire check on the drawn units alone (`Wires.Summary.drawnOk`, each drawn
+  wired row's public string its writer's) and on the reference's entries whose unit is drawn.
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
 `select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
-`check_proved`, `record`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its outcome to it) and `hello`.
+`check_proved`, `record`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its outcome to it), `hello`,
+`stream` (each of `service.Stream`'s ops) and `fleet` (each of `service.Fleet`'s).
 -/
 import SampledProofs.OneStage
 import SampledProofs.Slots
 import SampledProofs.Service
 import SampledProofs.Run
-import SampledProofs.TwoStage
+import SampledProofs.Stream
+import SampledProofs.Fleet
 import SampledProofs.Hello
+import SampledProofs.ChallengerRecord
+import SampledProofs.ChallengerSession
+import SampledProofs.ChallengerCoins
+import SampledProofs.Produced
+import SampledProofs.HiddenDraw
+import SampledProofs.PartitionRef
+import SampledProofs.WiresDrawn
 
 namespace SampledProofs.Pieces
 
@@ -77,23 +111,105 @@ def partition (j : Json) : V Json := do
       (Partition.strata v.program v.query)),
     ("law", orNull id (Draw.derive v.program v.query v.law v.workTable))]
 
+/-- `{"program", "X"}`, a program object and a natural number, to `[[definition, bits, bits by walk], …]`: per distinct
+Definition `Q_call` v1 at X cuts (`Flock.Qcall.evaluate`), its units' committed bits read off its layout
+(`Partition.committedBits`) and by the walk of its own that replaced (`Partition.committedBitsRef`); refused where
+`Q_call` is. -/
+def committedBits (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let some X := nat? (getD j "X") | throw "X is not a natural number"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  let mut seen : Array Nat := #[]
+  let mut out : Array Json := #[]
+  for c in ← Flock.Qcall.evaluate p.prog X do
+    if seen.contains c.d then continue
+    seen := seen.push c.d
+    let units := c.c.units.map fun u => (u.lo, u.hi)
+    out := out.push (Json.arr #[Json.str (p.prog.defs[c.d]!).key, Lean.toJson (Partition.committedBits c.c.gates units),
+      Lean.toJson (← Partition.committedBitsRef p.prog c.d units)])
+  return Json.arr out
+
 /-- `{"params", "record"}` to R1–R7's codes. -/
 def registration (j : Json) : V Json := do
   return codes (Registration.check (getD j "record") (← params (getD j "params")).verifier)
 
-/-- `{"params"}` to `registered_entries`: `{value: {"leaves", "words", "word_bits", "domain"}}`, null where it raises. -/
+/-- `{"params"}` to `registered_entries` under the verifier's window root and fixed values (`Registration.ownEntries`):
+`{value: {"leaves", "words", "word_bits", "domain"}}`, null where it raises. -/
 def registered (j : Json) : V Json := do
   let v := (← params (getD j "params")).verifier
-  return orNull (fun es => Json.mkObj (es.toList.map fun e => (e.value, e.toJson)))
-    (Registered.entries v.program.desc v.params v.registered)
+  return orNull (fun es => Json.mkObj (es.toList.map fun e => (e.value, e.toJson))) (Registration.ownEntries v)
 
-/-- `{"program", "value", "words", "leaves", "word_bits"}`, two strings and three natural numbers, to
-`registered.domain(...).domain_id` in hex; refused where it raises (a width but 16 or 32). -/
+/-- `{"program", "value", "words", "leaves", "word_bits"}`, two strings and three natural numbers, and an optional
+`"window"`, to `registered.domain(...).domain_id` in hex; refused where it raises (a width but 16 or 32, a window that is
+not lowercase hex of 64 bytes). -/
 def domain (j : Json) : V Json := do
   let (.str program, .str value) := (getD j "program", getD j "value") | throw "program or value is not a string"
   let (some words, some leaves, some b) := (nat? (getD j "words"), nat? (getD j "leaves"), nat? (getD j "word_bits"))
     | throw "words, leaves or word_bits is not a natural number"
-  return Json.str (Flock.hexOf (← Registered.domain program value words leaves b))
+  let hex? := fun (k : String) => match field? j k with
+    | none => pure none
+    | some (.str r) => if Produced.hex64 r then pure (some r) else throw s!"the {k} is not 64 bytes of hex"
+    | some _ => throw s!"the {k} is not 64 bytes of hex"
+  let window ← hex? "window"
+  match ← hex? "produced" with
+  | none => return Json.str (Flock.hexOf (← Registered.domainAt program value words leaves b window))
+  | some d =>
+    if window.isSome then throw "a produced value's domain binds its registration, which binds the window: not both"
+    return Json.str (Flock.hexOf (← Produced.domain program value words leaves b d))
+
+/-- `known` (`{value: [[position, b ‖ c] ...]}`, natural positions distinct within a value and string openings), null as
+none. -/
+def knownOpenings (j : Json) : V (Array (String × Array (Nat × String))) := do
+  match j with
+  | .null => pure #[]
+  | .obj _ => (entries j).mapM fun (v, rows) => do
+      let .arr rs := rows | throw s!"known: {v} is not a list of openings"
+      let ps ← rs.mapM fun r => match r with
+        | .arr #[p, .str bc] => match nat? p with
+          | some n => pure (n, bc)
+          | none => throw s!"known: {v}'s position is not a natural number"
+        | _ => throw s!"known: {v}'s opening is not [position, b ‖ c]"
+      if (ps.toList.map (·.1)).eraseDups.length != ps.size then throw s!"known: {v} opens a position twice"
+      pure (v, ps)
+  | _ => throw "known is not an object"
+
+/-- `{"record", "registration", "draw", "mine", "opened", "known", "verdicts"}` to `{"codes": produced.check's, "opened":
+produced.opened's codes, "shared": produced.shared's over produced.wanted's, both null unless the record holds}`: the
+registration and draw strings, `mine` the verifier's own entries (`{value: {"leaves", "words", "word_bits", "domain"}}`,
+three natural numbers and a string each), `opened` null or `{value: root}`, `known` null or the verifier's own ports'
+openings (`knownOpenings`) and `verdicts` null or an object; refused otherwise. -/
+def produced (j : Json) : V Json := do
+  let (.str registration, .str draw) := (getD j "registration", getD j "draw")
+    | throw "registration or draw is not a string"
+  let .obj _ := getD j "mine" | throw "mine is not an object"
+  let mine ← (entries (getD j "mine")).mapM fun (value, e) =>
+    match nat? (getD e "leaves"), nat? (getD e "words"), nat? (getD e "word_bits"), getD e "domain" with
+    | some leaves, some words, some wordBits, .str domain => pure ({ value, leaves, words, wordBits, domain } : Produced.Mine)
+    | _, _, _, _ => throw s!"mine: {value} is not leaves, words and word_bits and a string domain"
+  let opened ← match getD j "opened" with
+    | .null => pure none
+    | o@(.obj _) => pure (some (entries o))
+    | _ => throw "opened is not an object"
+  let known ← knownOpenings (getD j "known")
+  let verdicts := getD j "verdicts"
+  if !(verdicts matches .null | .obj _) then throw "verdicts is not an object"
+  let rec_ := getD j "record"
+  let cs := Produced.check rec_ registration draw (mine.qsort (·.value < ·.value))
+  let codes (xs : Array String) := if cs.isEmpty then Json.arr (xs.map Json.str) else Json.null
+  return Json.mkObj [("codes", Json.arr (cs.map Json.str)), ("opened", codes (Produced.opened rec_ opened)),
+    ("shared", codes (Produced.shared (Produced.wanted rec_ known) (entries verdicts)))]
+
+/-- `{"program", "value", "row", "salt", "registration", "word_bits"}` to `{"root", "bc"}` in hex, `produced.known_port`'s
+root and opening: four strings (the salt lowercase hex), a list of natural numbers and one; refused where it raises. -/
+def knownPort (j : Json) : V Json := do
+  let (.str program, .str value, .str salt, .str registration) :=
+      (getD j "program", getD j "value", getD j "salt", getD j "registration")
+    | throw "program, value, salt or registration is not a string"
+  let .arr row := getD j "row" | throw "row is not a list"
+  let some row := row.mapM nat? | throw "row is not natural numbers"
+  let some wb := nat? (getD j "word_bits") | throw "word_bits is not a natural number"
+  let (root, bc) ← Produced.known program value row (← Flock.unhex salt) registration wb
+  return Json.mkObj [("root", Json.str (Flock.hexOf root)), ("bc", Json.str (Flock.hexOf bc))]
 
 /-- `{"draw", "population", "law"}`, the population an integer and the law an object, to `check_draw`'s codes. -/
 def checkDraw (j : Json) : V Json := do
@@ -102,14 +218,15 @@ def checkDraw (j : Json) : V Json := do
   return (Draw.checkDrawFull (getD j "draw") (getD j "population") (getD j "law")).toJson
 
 /-- `{"law", "population", "source"}`, the law an object, the population a natural number and the source hex, to the draw
-`two_stage.draw_first` samples from the source's bytes; refused where it raises. -/
+`coins.draw_first` samples from the source's bytes; refused where it raises. -/
 def draw (j : Json) : V Json := do
   if !(getD j "law" matches .obj _) then throw "law is not an object"
   let some n := nat? (getD j "population") | throw "population is not a natural number"
   Draw.drawFirst (getD j "law") n (← Flock.unhex (← Flock.J.str j "source" "the draw"))
 
 /-- `{"rule", "program", "query", "work_table", "closure", "source"}` to `{"draw", "read"}`: the challenger's draw
-(`Select.select`) under a Spec's selection rule over the units of the program under the query, from the source's bytes,
+(`Select.select`) under a Spec's selection rule over the units of the program under the query (`Select.resolve`, a rate
+law's `subset:k`), from the source's bytes,
 and how many of them it read. The program and the query are objects, the work table and the closure map
 (`Select.closureMap?`) null when absent, the source hex; refused where the Python raises. -/
 def select (j : Json) : V Json := do
@@ -123,6 +240,7 @@ def select (j : Json) : V Json := do
   let cm ← match getD j "closure" with
     | .null => pure none
     | c => some <$> Select.closureMap? c
+  let rule ← Select.resolve rule p (getD j "query")
   let (draw, _, read) ← Select.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the select"))
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
 
@@ -140,6 +258,7 @@ def slots (j : Json) : V Json := do
   let cm ← match getD j "closure" with
     | .null => pure none
     | c => some <$> Select.closureMap? c
+  let rule ← Select.resolve rule p (getD j "query")
   let (l, checked) ← Slots.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the slots"))
   return Json.mkObj [("classes", l.toJson),
     ("checked", Json.arr (checked.map fun (v, i) => Json.arr #[Lean.toJson v, Lean.toJson i]))]
@@ -171,6 +290,84 @@ def bound (j : Json) : V Json := do
   if δ.num == 0 || δ.den ≤ δ.num then throw "delta is not in (0, 1)"
   return Json.mkObj [("bound", Lean.toJson (Bound.countBound strata δ)),
     ("per_stratum", Json.mkObj (strata.toList.map fun s => (s.name, Lean.toJson (Bound.stratumBound s δ))))]
+
+/-- `{"population", "p", "delta"}` to `{"bound"}` (`Bernoulli.count_bound`); refused where `Bernoulli` is: `p` not a
+ratio in [0, 1], δ not in (0, 1). -/
+def bernoulliBound (j : Json) : V Json := do
+  if keys? j != some #["delta", "p", "population"] then throw "exactly {population, p, delta}"
+  let some population := nat? (getD j "population") | throw "population is not a natural number"
+  let .str p := getD j "p" | throw "p is not a ratio"
+  let p ← Core.Ratio.ofString p "p"
+  if p.den < p.num then throw "p is not in [0, 1]"
+  let .str d := getD j "delta" | throw "delta is not a ratio"
+  let δ ← Core.Ratio.ofString d "delta"
+  if δ.num == 0 || δ.den ≤ δ.num then throw "delta is not in (0, 1)"
+  return Json.mkObj [("bound", Lean.toJson (Bound.bernoulliBound population p δ))]
+
+private def hiddenWidth (j : Json) : V Nat := do
+  match nat? (getD j "width") with
+  | some (w + 1) => pure (w + 1)
+  | _ => throw "width is not a positive integer"
+
+private def hiddenNats (j : Json) (what : String) : V (List Nat) := do
+  let .arr xs := j | throw s!"{what} is not a list of natural numbers"
+  xs.toList.mapM fun x => match nat? x with
+    | some n => pure n
+    | none => throw s!"{what} is not a list of natural numbers"
+
+private def hiddenCalls (j : Json) : V (List HiddenDraw.Call) := do
+  let .arr cs := j | throw "calls is not a list"
+  cs.toList.mapM fun c => match c with
+    | .arr #[o, m] => match nat? o, nat? m with
+      | some offset, some rows => pure { offset, rows }
+      | _, _ => throw "a call is not [offset, rows] of natural numbers"
+    | _ => throw "a call is not [offset, rows] of natural numbers"
+
+private def hiddenWitnessJson : Option (Nat × Nat × Nat) → Json
+  | some (c, j, t) => Json.arr #[Lean.toJson c, Lean.toJson j, Lean.toJson t]
+  | none => Json.null
+
+/-- `{"rows", "width"}` to `{"offsets", "total"}` (`HiddenDraw.offsets`, `total`); refused where a row count is not a
+natural number or the width not positive. -/
+def hiddenOffsets (j : Json) : V Json := do
+  if keys? j != some #["rows", "width"] then throw "exactly {rows, width}"
+  let width ← hiddenWidth j
+  let rows ← hiddenNats (getD j "rows") "rows"
+  return Json.mkObj [("offsets", Lean.toJson (HiddenDraw.offsets width rows)),
+    ("total", Lean.toJson (HiddenDraw.total width rows))]
+
+/-- `{"calls", "positions", "width"}` to `{"located": [[c, j, t] or null]}` (`HiddenDraw.locate`), calls a list of
+`[offset, rows]`. -/
+def hiddenLocate (j : Json) : V Json := do
+  if keys? j != some #["calls", "positions", "width"] then throw "exactly {calls, positions, width}"
+  let width ← hiddenWidth j
+  let calls ← hiddenCalls (getD j "calls")
+  let positions ← hiddenNats (getD j "positions") "positions"
+  return Json.mkObj [("located", Json.arr (positions.toArray.map (hiddenWitnessJson <| HiddenDraw.locate width calls ·)))]
+
+/-- `{"call", "calls", "position", "width"}` to `{"witness": [c, j, t] or null}` (`HiddenDraw.witness`). -/
+def hiddenWitness (j : Json) : V Json := do
+  if keys? j != some #["call", "calls", "position", "width"] then throw "exactly {call, calls, position, width}"
+  let width ← hiddenWidth j
+  let calls ← hiddenCalls (getD j "calls")
+  let (some c, some r) := (nat? (getD j "call"), nat? (getD j "position"))
+    | throw "call or position is not a natural number"
+  return Json.mkObj [("witness", hiddenWitnessJson (HiddenDraw.witness width calls c r))]
+
+/-- `{"params", "state", "op"}` to `{"decision", "state"}`: the op's decision on the state the stream's rules hold of it
+(`Stream.run`), and the state after it as the text Python's `canonical_json` writes. -/
+def stream (j : Json) : V Json := do
+  if keys? j != some #["op", "params", "state"] then throw "exactly {params, state, op}"
+  let p ← Stream.Params.ofJson (getD j "params")
+  let (d, s) ← Stream.run p (← Stream.State.ofJson (getD j "state")) (getD j "op")
+  return Json.mkObj [("decision", d.toJson), ("state", Json.str (← PyJson.canonical s.toJson))]
+
+/-- `{"state", "op"}` to `{"decision", "state"}`: the op's decision on the state the fleet's rules hold of it
+(`Fleet.run`), and the state after it as the text Python's `canonical_json` writes. -/
+def fleet (j : Json) : V Json := do
+  if keys? j != some #["op", "state"] then throw "exactly {state, op}"
+  let (d, s) ← Fleet.run (← Fleet.State.ofJson (getD j "state")) (getD j "op")
+  return Json.mkObj [("decision", d.toJson), ("state", Json.str (← PyJson.canonical s.toJson))]
 
 /-- `{"verdicts": {name: {...}}}` to `{"verdict"}`. -/
 def verdict (j : Json) : V Json := do
@@ -268,25 +465,19 @@ private def valuesOf (j : Json) (what : String) : V (Array Service.Value) := do
     | .str name, .bool registered => pure ({ name, registered } : Service.Value)
     | _, _ => throw "a value is not a string name with a boolean"
 
-/-- `{"params", "record", "rule", "values", "interior_values", "public", "challenger", "received", "source", "closure",
-"interior", "sessions", "verdicts", "outputs", "statement", "delta", "proved_units", "instances", "served",
-"session_roots"}` to the stream's run of one registration (`Run.run`): `registration`'s parameters, the record,
-`select`'s rule, closure map and hex source, `check_public`'s boundary and interior values and declared items, the
-challenger's name and the log's length at the receipt (strings), the interiors' registration (null, or `{"params",
-"record", "received"}`), `check_verdicts`' sessions, verdicts and outputs, and `record`'s statement, δ, served units and
-session roots, with the proved units and instances null for the draw's own. -/
+/-- `{"params", "record", "rule", "values", "public", "challenger", "received", "source", "closure", "sessions",
+"verdicts", "outputs", "statement", "delta", "proved_units", "instances", "served", "session_roots", "coin_source",
+"coins"}` to the
+stream's run of one registration (`Run.run`): `registration`'s parameters, the record, `select`'s rule, closure map and
+hex source, `check_public`'s values and declared items, the challenger's name and the log's length at the receipt
+(strings), `check_verdicts`' sessions, verdicts and outputs, and `record`'s statement, δ, served units and session roots,
+with the proved units and instances null for the draw's own, where the coins came from (`coin_source`: `verifier` or
+`challenger`, required) and the coins' evidence (`coins_reason`'s, which a draw from the challenger must carry and one
+from the verifier's own coins must not). -/
 def run (j : Json) : V Json := do
   let p ← params (getD j "params")
   let rule ← Select.Rule.ofJson (getD j "rule")
   let values ← valuesOf (getD j "values") "values"
-  let innerValues ← match getD j "interior_values" with
-    | .null => pure #[]
-    | vs => valuesOf vs "interior_values"
-  let interior ← match getD j "interior" with
-    | .null => pure none
-    | ir => do
-      let .str received := getD ir "received" | throw "the interior's received is not a string"
-      pure (some ({ params := ← params (getD ir "params"), record := getD ir "record", received } : Run.Interior))
   let .arr ps := getD j "public" | throw "public is not a list"
   let declared ← ps.mapM fun
     | .str s => pure s
@@ -308,44 +499,46 @@ def run (j : Json) : V Json := do
   let provedUnits ← match getD j "proved_units" with
     | .null => pure none
     | u => some <$> ints u "proved_units"
+  let fromChallenger ← match getD j "coin_source" with
+    | .str "challenger" => pure true
+    | .str "verifier" => pure false
+    | _ => throw "coin_source is \"verifier\" (the verifier's own coins) or \"challenger\" (the auditor's challenger's)"
   let instances ← match getD j "instances" with
     | .null => pure none
     | x => match int? x with
       | some n => pure (some n)
       | none => throw "instances is not an integer"
-  Run.run { params := p, record := getD j "record", rule, values, innerValues, declared, challenger, received,
-            source := ← Flock.unhex (← Flock.J.str j "source" "the run"), closure, interior, sessions, verdicts, outputs,
+  Run.run { params := p, record := getD j "record", rule, values, declared, challenger, received,
+            source := ← Flock.unhex (← Flock.J.str j "source" "the run"), closure, sessions, verdicts, outputs,
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
-            served := getD j "served", sessionRoots := getD j "session_roots" }
-
-/-- `{"law", "units", "source"}` (a `TwoStageLaw.to_json`, RUs as `[index, class, n_v]`, hex coins) to the first stage's
-`{"units": the drawn RUs' indices, "read"}`. -/
-def replayUnits (j : Json) : V Json := do
-  let law ← TwoStage.lawOfJson (getD j "law")
-  let units ← TwoStage.rusOfJson (getD j "units")
-  let (drawn, read) ← TwoStage.selectReplayUnits (← Flock.unhex (← Flock.J.str j "source" "the draw")) law units
-  return Json.mkObj [("units", intsJson drawn), ("read", Lean.toJson read)]
-
-/-- `{"law", "selected", "source"}` to the second stage's `{"units": [[index, positions]], "read"}`. -/
-def proofUnits (j : Json) : V Json := do
-  let law ← TwoStage.lawOfJson (getD j "law")
-  let selected ← TwoStage.rusOfJson (getD j "selected")
-  let (picks, read) ← TwoStage.selectProofUnits (← Flock.unhex (← Flock.J.str j "source" "the draw")) law selected
-  return Json.mkObj [("units", Json.arr (picks.map fun (i, ps) => Json.arr #[Lean.toJson i, natsJson ps])),
-    ("read", Lean.toJson read)]
+            served := getD j "served", sessionRoots := getD j "session_roots", fromChallenger,
+            coins := getD j "coins" }
 
 def table : List (String × (Json → V Json)) :=
-  [("decode", decode), ("partition", partition), ("registration", registration), ("registered", registered),
-   ("domain", domain), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
+  [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
+   ("registered", registered),
+   ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("check_proved", checkProved),
-   ("bound", bound),
-   ("verdict", verdict), ("matches_public", matchesPublic), ("session_registered", sessionRegistered), ("record", record),
-   ("check_public", checkPublic), ("check_verdicts", checkVerdicts), ("run", run), ("replay_units", replayUnits),
-   ("proof_units", proofUnits), ("hello", Hello.check)]
+   ("bound", bound), ("bernoulli_bound", bernoulliBound),
+   ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
+   ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
+   ("session_registered", sessionRegistered), ("record", record), ("check_public", checkPublic),
+   ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check),
+   ("challenger_commitment", Challenger.commitmentPiece),
+   ("challenger_opening", Challenger.openingPiece), ("challenger_reason", Challenger.reasonPiece),
+   ("challenger_order", Challenger.orderPiece), ("challenger_key", Challenger.keyPiece),
+   ("challenger_record", Challenger.recordPiece), ("challenger_trusted", Challenger.trustedPiece),
+   ("challenger_close", Challenger.closePiece), ("challenger_released", Challenger.releasedPiece),
+   ("challenger_ledger", Challenger.ledgerPiece), ("challenger_head", Challenger.headPiece),
+   ("challenger_session", Challenger.sessionPiece), ("challenger_credited", Challenger.creditedPiece),
+   ("challenger_pinned", Challenger.pinnedPiece), ("challenger_read", Challenger.readPiece),
+   ("challenger_draw_coins", Challenger.drawCoinsPiece),
+   ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
+   ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef)]
 
 def verifier : List (String × (Json → V Json)) :=
   [("registration", registration), ("matches_public", matchesPublic), ("select", select), ("check_draw", checkDraw),
    ("check_proved", checkProved), ("record", record), ("check_public", checkPublic),
-   ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check)]
+   ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check), ("stream", stream), ("fleet", fleet)]
 
 end SampledProofs.Pieces

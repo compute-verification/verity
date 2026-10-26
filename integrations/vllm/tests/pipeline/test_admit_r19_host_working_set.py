@@ -113,6 +113,7 @@ def test_a_worker_killed_mid_task_is_reported_by_name_not_waited_out(monkeypatch
     assert gc.get_freeze_count() == 0
 
 
+@pytest.mark.slow
 def test_replay_record_is_identical_serial_vs_forked_and_names_the_frozen_fork(world):
     bmap, committed = world.bmap_and_reader()
     kw = dict(per_stratum=2, seed=11, retention="host")
@@ -218,6 +219,12 @@ def test_the_workers_hold_the_largest_picks_side_by_side(cgroup, monkeypatch):
     assert SR.fit_pool(3, picked, GiB)[0] == 3
     monkeypatch.setattr(SR, "ROW_EVALUATORS", [])
     assert SR.fit_pool(300, picked, GiB)[0] == 234                      # no stated peaks: the baseline alone, idle workers included
+
+
+def test_a_tp_rank_forks_its_share_of_the_default_pool(monkeypatch):
+    """The world's ranks replay at once on one node (`rank_replay.in_process`), each forking the default pool over the world."""
+    monkeypatch.setattr(os, "cpu_count", lambda: 128)
+    assert (SR.default_workers(), SR.default_workers(8), SR.default_workers(128)) == (32, 8, 1)
 
 
 # ------------------------------------------------------------------------------------------ (a) the RETAIN-windowed pool by family

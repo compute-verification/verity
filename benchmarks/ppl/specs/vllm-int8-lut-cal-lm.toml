@@ -1,0 +1,13 @@
+description = "vllm-int8-lut-cal with lm_head on int8 too, as recipe verity-int8-channel127/v2 serves it (VLLM-49): the output head's activations one scale per token (amax / 127), its weights one per row (top 127), rounded, the integer product exact"
+
+[[linear]]
+step = "int8"
+
+[[linear]]
+step = "int8"
+linears = ["lm_head"]
+
+[[attention]]
+step = "int8"
+k_scale = "calib"
+softmax = "lut"

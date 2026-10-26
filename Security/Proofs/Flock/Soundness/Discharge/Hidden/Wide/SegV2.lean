@@ -453,7 +453,7 @@ theorem outputs_committed_seg' : OutputsCommittedSeg := by
     have h2 : 2 * (st.c.ports.getD (HmOut.nIn st.c + j) default).words + 17 ≤
         128 * ((st.c.ports.getD (HmOut.nIn st.c + j) default).chunks + 1) := by omega
     have := row_bc_tgt L0 F0 rfl hupv hz0 o hg hpl (by rw [getElem!_eq_getD']; exact hb)
-      (by rw [getElem!_eq_getD']; exact hw.ge) (by rw [getElem!_eq_getD']; exact h2)
+      (by rw [getElem!_eq_getD']; exact Nat.le_trans hw.ge (Nat.le_add_right _ _)) (by rw [getElem!_eq_getD']; exact h2)
       (by rw [getElem!_eq_getD']; exact hu j hj)
     rw [getElem!_eq_getD'] at this
     exact this

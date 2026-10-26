@@ -45,7 +45,7 @@ Implementation notes (L2)
   narrower write) is dropped and its bytes become unwritten.
 - `read` of a view whose byte extent lies inside one `Affine` interval (the common case: one producer, any
   view of it) is answered from the view geometry alone, in the same normal form the authored frontend uses for
-  views (`verity_vllm/program/frontend/torch_frontend.py:_strided_refs`): `Affine` for a contiguous view, `Strided` for
+  views (`verity_vllm/program/frontend/strided_views.py:_strided_refs`): `Affine` for a contiguous view, `Strided` for
   one strided axis or two collapsed axes (transposes, column slices, expands), a `Concat` over the leading axis
   beyond that.  Otherwise the read walks the element runs, collects the covering slices and compacts them
   (`compact_refs`): adjacent contiguous `Affine`s merge; equally spaced equal-length `Affine` rows of one
@@ -118,7 +118,7 @@ def flat_parts(r: Refs) -> list[Refs]:
 def geometry_refs(space: str, idx: int, base: int, shape: tuple[int, ...], strides: tuple[int, ...]) -> Refs:
     """Refs of a view with collapsed geometry `(shape, strides)` over one producer whose leaf for storage
     element `e` is `base + (e - e_0)` (`base` is the leaf of the view's first element).  Normal form as in
-    `torch_frontend._strided_refs`: `Affine` (one contiguous axis), `Strided` (one strided axis or two axes),
+    `strided_views._strided_refs`: `Affine` (one contiguous axis), `Strided` (one strided axis or two axes),
     `Concat` over the leading axis beyond that."""
     if not shape:
         return Affine(space, idx, base, 1)
@@ -366,6 +366,10 @@ class MemoryModel:
         a.live = True
         a.nbytes, a.device, a.origin = ev.nbytes, ev.device, ev.origin
 
+    def device(self, alloc_id: int) -> str:
+        a = self._allocs.get(alloc_id)
+        return a.device if a is not None else ""
+
     def free(self, alloc_id: int) -> None:
         a = self._allocs.get(alloc_id)
         if a is None:
@@ -491,7 +495,7 @@ class MemoryModel:
         if a is None or not a.live:
             self._n_unresolved += 1
             raise Unresolved(view, element_runs(view), "unknown" if a is None else "freed")
-        fast = self._fast_read(a, view) or (self._root_map_read(a, view) if a.root_maps else None)
+        fast = self._one_interval_read(a, view) or (self._root_map_read(a, view) if a.root_maps else None)
         if fast is not None:
             self._n_fast_reads += 1
             return fast
@@ -506,7 +510,7 @@ class MemoryModel:
             raise Unresolved(view, _merge_runs(missing), "+".join(sorted(reasons)))
         return compact_refs(parts)
 
-    def _fast_read(self, a: _Alloc, view: ViewDesc) -> Refs | None:
+    def _one_interval_read(self, a: _Alloc, view: ViewDesc) -> Refs | None:
         """The read when one `Affine` interval covers the whole byte extent of `view` (else None)."""
         lo_b, hi_b = byte_extent(view)
         i = bisect_right(a.starts, lo_b) - 1

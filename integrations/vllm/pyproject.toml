@@ -37,6 +37,7 @@ addopts = "-q -p no:cacheprovider"
 # tests/regression (R19 reference regression; skipped unless VERITY_REGRESSION=1) is run explicitly: `pytest tests/regression -m regression`.
 markers = [
     "slow: takes over about 5 s; deselect with -m 'not slow'",
+    "boolean_sweep: a random Boolean-vs-word sweep; skipped unless VERITY_VLLM_BOOLEAN_SWEEPS=1 (circuit-check's word_view checks the equality on every merge)",
     "regression: R19 reference regression checks (tests/regression); opt in with VERITY_REGRESSION=1",
     "pod: reads > 100 MB or rebuilds for minutes/hours -- run on a pod, never on the laptop",
     "weak: PASS-side only or a rule no reference row exercises (see the check module's docstring)",
@@ -51,16 +52,40 @@ markers = [
 # tests/regression/test_attempt_resolution.py resolves. Test-only: tests/pipeline checks the fixtures
 # this package registers; tests/program/test_fp8_moe.py replays the Hopper e4m3 k32 step's pinned vectors (under `verity`);
 # tests/program/test_lowering.py imports `verity_sp1.proofs`; tests/engine's int8 tests run benchmarks/ppl's int8 steps as their oracle;
-# tests/store/test_remote_session.py runs the remote session's prover and verifier (`store.remote`).
+# tests/store/test_remote_session.py runs the remote session's prover and verifier (`store.remote`), and the verifier
+# imports lean_verifier.py, challengers.py and store_layout.py; tests/protocol_options/test_pouw_h1_circuits.py parses a
+# period-open's --circuit-files with infra's gate (benchmarks/live_challenger/auditor.py), and the in-process gate
+# (tests/protocol_options/challenger_host.py) runs infra's model registry (benchmarks/live_challenger/models.py).
+# The tests build and run the Lake packages whose lakefiles they list: tests/pipeline/test_row_tables_stream.py
+# `sampled-proofs-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_remote_session.py
+# `remote-audit-verifier`.
 inputs_only = true
-inputs = ["verity", "verity/README.md", "tools/config/verity_config", "benchmarks/specs", "fixtures/artifacts.json", ".gitignore", "archive/sp1/python/verity_sp1",
+inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/artifacts.json", ".gitignore", "archive/sp1/python/verity_sp1",
+          "verity/core/service/sampled_proofs/lakefile.toml", "verity/core/protocols/pouw/lean/check/lakefile.toml",
+          "verity/core/protocols/remote_bandwidth/lean/lakefile.toml",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",
+          "benchmarks/ppl/windows.py", "benchmarks/ppl/datasets.json", "benchmarks/pouw/edited_gemm/fattn_ref.py",
           "benchmarks/remote_session/prover.py", "benchmarks/remote_session/verifier.py", "benchmarks/remote_session/wire.py",
-          "benchmarks/remote_session/checks.py",
+          "benchmarks/remote_session/checks.py", "benchmarks/remote_session/lean_verifier.py", "benchmarks/remote_session/challengers.py",
+          "benchmarks/remote_session/store_layout.py", "benchmarks/live_challenger/auditor.py",
+          "benchmarks/live_challenger/models.py", "benchmarks/pouw/harness/sass_gate.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/cli.py", "tools/research/src/research/clone.py",
           "tools/research/src/research/compare.py", "tools/research/src/research/env.py", "tools/research/src/research/pythonpath.py",
           "tools/research/src/research/record.py", "tools/research/src/research/remote.py", "tools/research/src/research/result.py",
-          "tools/research/src/research/runs.py", "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py",
+          "tools/research/src/research/runs.py", "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py", "tools/research/src/research/waitcap.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry", "tools/research/tests/fixtures/run_v0.2",
+          "tools/research/src/research/withdraw.py",
           "tools/research/src/research/__main__.py"]
 parallel = true
+# benchmarks/pouw/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
+# tests/engine/int8_attention_sass.py reads the int8 attention kernels' SASS with the PoUW SASS gate's nvdisasm parser
+# (benchmarks/pouw/harness/sass_gate.py)
+# a worker's peak grows with its share of the suite, since what its tests leave held isn't returned: 6.2 GB on 14 workers (19 Oct,
+# r20261019-050410-3339), 12 GB on 8 (25 Oct, r20261025-200148-c421: test_codec's alias test took 6.3 GB over the 5.6 GB held
+# before it), 15.5 GB on 5 (r20261025-164354-e533). `--mem-gb`, or a job's memory cgroup, divides by this, but suites.py's default
+# `--jobs` counts 9 GB a process, so a 16 GB job runs the suite in one process unless `--jobs` says more. tools/suite_parts.py
+# runs it as 8 parts at once, each on its job's CPUs (a sixth on 4 workers: 8.5, 6.2, 6.0 and 3.5 GB, r20261025-202541-5a90)
+worker_gb = 8
+# the full suite took 10,187 s on 5 workers (r20261018-214339-1952), past suites.py's SUITE_TIMEOUT_S; `--quick` leaves out the
+# tests over 5 s (their `slow` marks)
+timeout_s = 14400

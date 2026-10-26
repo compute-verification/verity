@@ -25,7 +25,9 @@
                                                    the durability gate: exit 0 iff the attempt manifest, every output artifact AND every local
                                                    assertion about them are verifiably on the remote; otherwise names the failing legs (preserved.py);
                                                    N targets (default 8) checked at once, each printed as it finishes
-  research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v]... [--json]
+  research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v]... [--json|--ids]
+                                                   stderr names the source (the index and its as-of time, or the catalog alone);
+                                                   exit 1 when there is neither an index nor an artifact in the catalog
   research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]   -> art id
   research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
                                                    first pulls TARGET's assertions the remote has and this store lacks (unreachable: a warning, the local ones);
@@ -164,7 +166,8 @@ def _select(st: LocalStore, ns: argparse.Namespace, idx=None) -> tuple[list[dict
     found = BI.select_artifacts(idx, kind=ns.kind, where=_kv(ns.where, "--where"), labels=labels, attempt=ns.attempt, tool=ns.tool,
                                 derivation=ns.derivation)
     out = [here.get(i) or {"id": i, "kind": d.get("kind"), "bytes": (d.get("payload") or {}).get("bytes", 0),
-                           "payload_type": (d.get("payload") or {}).get("type"), "local": False, "remote": True, "repo_path": None}
+                           "payload_type": (d.get("payload") or {}).get("type"), "manifest": d, "local": False, "remote": True,
+                           "repo_path": None}
            for i, d in found]
     pend = BI.not_indexed(idx, [i for i in here if i not in {r["id"] for r in out}])
     return sorted(out + [{**here[i], "pending": True} for i in pend], key=lambda r: r["id"]), query
@@ -415,15 +418,29 @@ def cmd_preserved(argv: list[str]) -> int:
 
 def cmd_select(argv: list[str]) -> int:
     """Artifacts by facet, from the index (`bucket_index.reader`: Neon with $STORE_PRIVATE_READER_URL, else this machine's
-    `research data index` build) plus this store's matches the index lacks; from the catalog where there is no index."""
+    `research data index` build) plus this store's matches the index lacks; from the catalog where there is no index.  Every form
+    (text, `--ids`, `--json`) ends with one stderr line naming the source and, for the index, the time it is complete as of: a
+    stale build answers only for what it had listed.  With no index that ever listed the bucket and a catalog holding no artifact,
+    an empty answer would mean nothing, so it exits 1 naming what is missing (a `research run` job's store, 19 Oct)."""
     from . import bucket_index as BI  # noqa: PLC0415
 
     ns = _select_parser().parse_args(argv)
     st = LocalStore(ns.store)
     idx = BI.reader(st.root)
     try:
+        as_of = BI.as_of(idx) if idx is not None else None
+        catalog = st.root / "catalog.sqlite"
+        no_index = (f"the index {idx.describe()} never listed the bucket" if idx is not None else
+                    f"${BI.READER_ENV} is unset and there is no `research data index` build at {BI.default_path(st.root)}")
+        if as_of is None and st.index.db.execute("SELECT 1 FROM artifacts LIMIT 1").fetchone() is None:
+            print(f"research data select: no index to select from ({no_index}), and this store's catalog ({catalog}) holds no "
+                  f"artifacts, so an empty answer would mean nothing. Set ${BI.READER_ENV} (store_private's read-only URL), or fill "
+                  "this store from the remote first (`research data refresh`, or `research data index`); a `research run` job's "
+                  "store reads the remote only when the run is launched with `--store-read`", file=sys.stderr)
+            return 1
         rows, _ = _select(st, ns, idx)
-        source = f"the index ({idx.describe()}, complete as of {BI.as_of(idx) or 'never listed'})" if idx else "the catalog"
+        source = (f"the index ({idx.describe()}, complete as of {as_of or 'never listed'})" if idx is not None else
+                  f"the catalog alone (this store's, {catalog}; no index: {no_index})")
     finally:
         if idx is not None:
             idx.close()
@@ -436,8 +453,8 @@ def cmd_select(argv: list[str]) -> int:
         for r in rows:
             print(f"{r['id']}  {r['kind']:<24} {r['bytes']:>12} {r['payload_type'] or 'none':<5} {'local' if r['local'] else '-':<5} "
                   f"{'remote' if r['remote'] else '-':<6} {r['repo_path'] or ''}{'  (pending: not in the index)' if r.get('pending') else ''}")
-        n = sum(1 for r in rows if r.get("pending"))
-        print(f"{len(rows)} artifact(s) from {source}" + (f", {n} of them only here" if n else ""), file=sys.stderr)
+    n = sum(1 for r in rows if r.get("pending"))
+    print(f"{len(rows)} artifact(s) from {source}" + (f", {n} of them only here" if n else ""), file=sys.stderr)
     return 0
 
 
@@ -537,7 +554,10 @@ def cmd_label(argv: list[str]) -> int:
     value = json.loads(ns.value) if ns.value_json else ns.value
     key = vocab.canonical_key(ns.key)                      # hygiene (§8.1): the canonical key and spelling go in the file, the form the vocabulary
     value = vocab.coerce(key, vocab.canonical_value(key, value))   # declares (a real bool for zk / model_agrees, an int for B), never the word
+    st = LocalStore(ns.store)
     why = vocab.check(key, value) or vocab.check_ref(key, ns.ref)
+    if not why and key == vocab.MEMORY_LINE_OF_RECORD:
+        why = vocab.check_line_of_record(value, _run_file(st, ns.ref, vocab.MEMORY_LINE_FILE))
     if why and not ns.off_vocab:
         print(f"research data label: refused: {why}.  Nothing written (--off-vocab writes it anyway)", file=sys.stderr)
         return 2
@@ -547,11 +567,19 @@ def cmd_label(argv: list[str]) -> int:
             print(f"research data label: {note}", file=sys.stderr)
     if why:
         print(f"research data label: warning: {why}; stored anyway (--off-vocab)", file=sys.stderr)
-    st = LocalStore(ns.store)
     print(st.add_label(ns.target, key, value, ns.by, ref=ns.ref))
     said, lost = _label_write_through(st, ns.target)
     print(f"research data label: {said}", file=sys.stderr)
     return 1 if lost else 0
+
+
+def _run_file(st: LocalStore, run_id: str, rel: str) -> object:
+    """The JSON file `rel` of run `run_id`'s run record (its Attempt's `outputs.run_record`), or None where the store has none."""
+    try:
+        art = ((st.get_attempt(run_id) or {}).get("outputs") or {}).get("run_record")
+        return json.loads((st.fetch(art, paths=[rel]) / rel).read_text()) if art else None
+    except (StoreError, OSError, ValueError):
+        return None
 
 
 def _label_write_through(st: LocalStore, target: str) -> tuple[str, bool]:

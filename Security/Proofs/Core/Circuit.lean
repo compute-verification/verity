@@ -1,4 +1,4 @@
-import Models.Core.Guarantees.Circuit
+import Definitions.Core.Guarantees.Circuit
 
 /-!
 # Lemmas about circuits and partitions
@@ -354,6 +354,6 @@ theorem RefineWrong : Guarantees.RefineWrong :=
   fun _ _ _ _ _ r _ _ hY => r.card_wrong_le hY
 
 theorem ContainsImplements : Guarantees.ContainsImplements :=
-  fun _ _ ⟨M, hM⟩ => ⟨M.implementation, hM⟩
+  fun _ _ M hM => ⟨M.implementation, hM⟩
 
 end Verity.SecurityProofs

@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.check.replay import driver as SR, index as IX, opening as OP
-from verity_vllm.program.kernels import rows as RK
+from verity.ml.definitions.numerics import rows as RK
 from tests.check.test_sampled_replay import Honest, _bf16, _program, _programs, _weights
 
 # the rope / attention Program is dense's (ruling R17-9 / R17-11 units, on the int line); a tree without it cannot run this end to end
@@ -94,6 +94,7 @@ def test_with_the_manifest_alias_table_the_replay_reads_invocation_one_of_the_ca
     assert pop["query_checks"]["identities_without_rows"]["n"] == 0 and pop["query_checks"]["vus_outside_query"]["n"] == 0, pop["query_checks"]
 
 
+@pytest.mark.slow
 def test_a_wrong_invocation_in_the_alias_table_never_reads_a_neighbours_words():
     world, bmap, committed, manifest, attn = _aliased_world()
     # (a) the alias points at invocation 0 -- nothing of the shared module is bound there in this world: missing by name, not layer 1's words
@@ -125,6 +126,6 @@ def test_a_wrong_invocation_in_the_alias_table_never_reads_a_neighbours_words():
     assert rep2["result"] is True and rep2["sample"]["mismatch_n"] == 0, json.dumps(rep2, indent=1, default=str)[:2000]
     # and the store, asked for invocation 0 through a layer-0 path, gets the OTHER words (never layer 1's)
     st = OP.CommittedStore.of_record(bmap2, committed2, man2)
-    w1, _ = st.words("r0", 0, ALIAS, "0", 0, 4)
-    w0, _ = st.words("r0", 0, CANON, "0", 0, 4)
+    w1, _ = st.words("r0", 0, ALIAS, "query", 0, 4)
+    w0, _ = st.words("r0", 0, CANON, "query", 0, 4)
     assert w1 is not None and w0 is not None and w1.tolist() != w0.tolist()

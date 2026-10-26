@@ -2,7 +2,7 @@
 A `--zk` proof file (live PROTOCOL.md, `flock-circuit --zk`): `bincode 1.3` of `(Commitment, R1csProofLigerito, InnerProof)`.
 The pair is §8's with three differences: `matrix_evals` is empty, every level-0 row carries four more lanes (the extra lanes,
 a pair per rep), and the Ligerito proof ends with level 0's hiding messages (`zk_level0`, an `Option`). The inner proof
-follows the pair. Bytes after it are ignored, as after §8's pair.
+follows the pair. A byte after it is refused, as after §8's pair (`Reader.runAll`).
 -/
 import Flock.Proof
 
@@ -127,11 +127,11 @@ def reader (sh : Shape) : M ZkProof := do
     ← vecExact lR.q (vecExact 16 f128 "row") "opened_rows", ← vecExact (lR.q * (lR.d - lR.cap)) hash "merkle_proof", ← salts lR.q⟩
   let _ ← vecExact 0 (do let _ ← f128; let _ ← f128; pure ()) "sumcheck_transcript"
   let msgs ← vecExact (s.k0 + 8 + 7 * (R - 1)) (do let a ← f256; let b ← f256; pure (a, b)) "sumcheck_transcript_f256"
-  let qn ← vecExact (R + 1) u64 "grinding_nonces"
+  let qn ← vecExact (R + 1) (nonce0 "grinding_nonce") "grinding_nonces"
   let ood ← vecExact (1 + 2 * R) f128 "ood_values"
   let _ ← vecExact 0 u64 "fold_grinding_nonces"
-  let cbn ← vecExact (3 * R + 2) u64 "claim_batch_grinding_nonces"
-  let con ← vecExact (R + 1) u64 "consistency_batch_grinding_nonces"
+  let cbn ← vecExact (3 * R + 2) (nonce0 "claim_batch_grinding_nonce") "claim_batch_grinding_nonces"
+  let con ← vecExact (R + 1) (nonce0 "consistency_batch_grinding_nonce") "consistency_batch_grinding_nonces"
   let level0 ← match ← u8 with
     | 1 => pure (⟨← f256, ← f256, ← f256, ← vecAny 32 f256 "ybar"⟩ : Level0Msgs)
     | 0 => throw "zk: level 0's hiding messages are missing"
@@ -141,8 +141,6 @@ def reader (sh : Shape) : M ZkProof := do
                       ligerito := ⟨icap, iproof, rcaps, rproofs, fproof, msgs, qn, ood, cbn, con⟩ },
            level0, inner }
 
-def decode (sh : Shape) (bytes : ByteArray) : V ZkProof := do
-  let (p, _) ← (reader sh).run ⟨bytes, 0⟩
-  return p
+def decode (sh : Shape) (bytes : ByteArray) : V ZkProof := runAll (reader sh) bytes "zk proof"
 
 end Flock.Zk

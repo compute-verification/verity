@@ -1,0 +1,12 @@
+{
+ "definitions": {
+  "CacheStep_v2{N=8,U=16,TW=17,RW=10,L=64,R=4,D=1,NB=9,SW=8}": {
+   "and": 19897,
+   "type": "ba243a84a8ef372c50b092b26445ef2f8739d95ad5b4ace12c7344c16bb3131a05b3758237b97cab682755ae6fce46b64bb2512223501c120f6a613f79325a34"
+  },
+  "CacheStep_v2{N=8,U=4,TW=3,RW=4,L=24,R=3,D=2,NB=7,SW=6}": {
+   "and": 4344,
+   "type": "554dcf5964ec00524587242ca9381b1b8f630a9fdf19af5cde965925e6b00e73d9ea3ad4b3168b129419d608af29cd0f41eca8659bdfb7adf1f35b43518296d0"
+  }
+ }
+}

@@ -74,7 +74,7 @@
   "mtp": "num_nextn_predict_layers 1 is not built: no speculative decoding in the serve command"
  },
  "routes": {
-  "dense-mha": "a prefill step whose longest sequence has at most TOPK keys (sparse_mla_attention: prefill_max_seq_len <= topk_tokens; the layer's prefill backend is FlashAttnPrefillBackend on FA3): kv_b_proj up-projects the step's normed latents, FA3 runs dense causal attention over q = [q_nope | roped q_pe], k = [k_nope | k_pe], v, and the indexer skips its scoring (dense_mha_metadata_layer_name), leaving topk_indices_buffer unwritten. The B1 row's 256-token prefill takes it",
+  "dense-mha": "a prefill step whose longest sequence has at most TOPK keys (sparse_mla_attention: prefill_max_seq_len <= topk_tokens; the layer's prefill backend is FlashAttnPrefillBackend on FA3): kv_b_proj up-projects the step's normed latents, FA3 runs dense causal attention over q = [q_nope | roped q_pe], k = [k_nope | k_pe], v, and the indexer skips its scoring (dense_mha_metadata_layer_name), leaving topk_indices_buffer unwritten. Only a sequence of more query rows than the decode threshold is a prefill (256 at 8 query heads a rank; split_decodes_and_prefills counts query_len <= 256 as a decode): the I2048 row's 2048-token prefill takes it, and the I256 row's 256-token prompt takes sparse-mqa",
   "sparse-mqa": "every decode step, and a prefill over more than TOPK keys: the indexer scores the cached keys and writes the top TOPK, forward_mqa attends over the MLA cache at those keys in the latent space, then the W_UV bmm. With fewer than TOPK keys cached every key is selected (the rest of the row is -1)"
  },
  "step_routes": {
@@ -170,7 +170,10 @@
    "definitions": [
     "SiluMul_v2"
    ],
-   "note": "torch.ops._C.silu_and_mul (CUDA act_and_mul_kernel): SiluMul_v2, the Build's silu_mul. SiluMul_v1 is not this kernel's function (NaN, gate -inf, gates past expf overflow, -0)"
+   "captures": [
+    "glm53_block_fp8_capture"
+   ],
+   "note": "torch.ops._C.silu_and_mul (CUDA act_and_mul_kernel): SiluMul_v2, the Build's silu_mul. SiluMul_v1 is not this kernel's function (NaN, gate -inf, gates past expf overflow, -0). The MoE's activation (moe.act) is this kernel between the w13 launch and the activation's ue8m0 quant; tests/properties/glm53_block_fp8_capture_gpu.py compares it inside the served chain on the H200: GO (v4, run r20261017-125608-3071, 2,792 rows, 0 mismatches)"
   },
   "silu-mul-block-quant": {
    "status": "port",
@@ -178,10 +181,7 @@
     "SiluMulFp8BlockQuant_v1",
     "SiluMulFp8BlockQuant_v2"
    ],
-   "captures": [
-    "glm53_block_fp8_capture"
-   ],
-   "note": "ops.silu_and_mul_per_block_quant(intermediate_cache1, group_size=128, e4m3) (csrc fused_silu_mul_block_quant.cu), which TritonExperts.apply launches in place of silu_and_mul + the w2 input's group quant for SiLU with 128x128 block FP8, no LoRA and no DeepGEMM e8m0: per element f32 silu(gate) * up kept in registers (never rounded to bf16), per 128-group max |y|, scale = max / 448 floored by the kernel's minimum, then e4m3 RN of y / scale. fp8_moe.SiluMulFp8BlockQuant_v1{I, G} (Boolean _v2); its two outputs are the w2 Program's xq and sx; tests/properties/glm53_block_fp8_capture_gpu.py compares the served w2 input against it on the H200. Not the served path: with DeepGEMM's ue8m0 quant on (vLLM's sm_90 default) TritonExperts.apply runs silu_and_mul (silu-mul) and the ue8m0 group quant (fp8-moe-triton) instead",
+   "note": "ops.silu_and_mul_per_block_quant(intermediate_cache1, group_size=128, e4m3) (csrc fused_silu_mul_block_quant.cu), which TritonExperts.apply launches in place of silu_and_mul + the w2 input's group quant for SiLU with 128x128 block FP8, no LoRA and no DeepGEMM e8m0: per element f32 silu(gate) * up kept in registers (never rounded to bf16), per 128-group max |y|, scale = max / 448 floored by the kernel's minimum, then e4m3 RN of y / scale. fp8_moe.SiluMulFp8BlockQuant_v1{I, G} (Boolean _v2); its two outputs are the w2 Program's xq and sx. Not the served path: with DeepGEMM's ue8m0 quant on (vLLM's sm_90 default) TritonExperts.apply runs silu_and_mul (silu-mul) and the ue8m0 group quant (fp8-moe-triton) instead, so no capture of record covers it (glm53_block_fp8_capture/v3's VLLM_USE_DEEP_GEMM=0 run r20261014-092222-e32d compared it; v4 runs only the served chain)",
    "alternative_to": "silu-mul"
   },
   "bf16-add": {
@@ -195,9 +195,12 @@
    "status": "exists",
    "definitions": [
     "MoeSum_v1",
-    "MoeSum_v2"
+    "MoeSum_v3"
    ],
-   "note": "ops.moe_sum over the TOPK down rows (already weighted by the router in the down launch)"
+   "captures": [
+    "glm53_block_fp8_capture"
+   ],
+   "note": "ops.moe_sum over the TOPK down rows (already weighted by the router in the down launch): MoeSum_v1{TOPK=8, H=6144}; tests/properties/glm53_block_fp8_capture_gpu.py compares it inside the served chain and on planted rows (overflow, NaN payloads, ties, subnormals, cancellations) that refute the competing orders and accumulators on the H200: GO (v4, run r20261017-125608-3071, 357 rows, 0 mismatches)"
   },
   "token-select": {
    "status": "exists",
@@ -228,7 +231,7 @@
    "captures": [
     "sigmoid_router_capture"
    ],
-   "note": "_C.grouped_topk(logits, n_group=1, topk_group=1, topk=8, renormalize=True, routed_scaling_factor=2.5, bias, scoring_func=1): sigmoid scores, + e_score_correction_bias for selection only, top-8 of 256, renormalise, x2.5. MoeRouterSigmoidBias_v1{E, TOPK, SCALE, KERNEL} per token row: inputs logits (Array(E, F32), the gate's f32 row) and bias (Array(E, F32), e_score_correction_bias); output (topk_weights Array(TOPK, F32), topk_ids Array(TOPK, I32)) as the kernel writes them; KERNEL block (single_group_topk_block_kernel, M <= 1024 at E = 256) or warp. Registered (moe.MoeRouterSigmoidBias_v1, Boolean _v2); its capture GO is on the H200 (sigmoid_router_capture, run r20261012-220523-6aa4) and on sm_120"
+   "note": "_C.grouped_topk(logits, n_group=1, topk_group=1, topk=8, renormalize=True, routed_scaling_factor=2.5, bias, scoring_func=1): sigmoid scores, + e_score_correction_bias for selection only, top-8 of 256, renormalise, x2.5. MoeRouterSigmoidBias_v1{E, TOPK, SCALE, KERNEL} per token row: inputs logits (Array(E, F32), the gate's f32 row) and bias (Array(E, F32), e_score_correction_bias); output (topk_weights Array(TOPK, F32), topk_ids Array(TOPK, I32)) as the kernel writes them; KERNEL block (single_group_topk_block_kernel, M <= 1024 at E = 256) or warp. Registered (moe.MoeRouterSigmoidBias_v1, Boolean _v2); its capture GO is on the H200 at vLLM's defaults (sigmoid_router_capture/v2, run r20261017-121712-18ba: not batch invariant, the fused grouped top-k on, read back) and on sm_120"
   },
   "fp8-moe-triton": {
    "status": "port",
@@ -245,7 +248,7 @@
    "captures": [
     "glm53_block_fp8_capture"
    ],
-   "note": "Triton fused_moe with 128x128 block FP8 (Fp8MoeBackend.TRITON): the cc 9.0 oracle moves Triton to the front for dynamic-128 activations, static 128-block weights and no expert parallelism even when DeepGEMM is enabled by default. The expert input quant is per_token_group_quant_fp8 with use_ue8m0 = is_deep_gemm_e8m0_used(): True at vLLM's sm_90 defaults (DeepGEMM on), binding deepgemm.Fp8GroupQuantUe8m0_v1; False binding fp8.Fp8GroupQuant_v1. Both quants (the input's before the w13 launch, the activation's before the w2 launch) are this group quant; the launches are fp8_moe_experts.MoeExpertFp8Gemm(W)_v1{E, K, N, G, KB, SWAP, DOT} per (token, slot) pair, Booleans _v2; tests/properties/glm53_block_fp8_capture_gpu.py pins the launches' statics and compares both quants on the H200"
+   "note": "Triton fused_moe with 128x128 block FP8 (Fp8MoeBackend.TRITON): the cc 9.0 oracle moves Triton to the front for dynamic-128 activations, static 128-block weights and no expert parallelism even when DeepGEMM is enabled by default. The expert input quant is per_token_group_quant_fp8 with use_ue8m0 = is_deep_gemm_e8m0_used(): True at vLLM's sm_90 defaults (DeepGEMM on), binding deepgemm.Fp8GroupQuantUe8m0_v1; False binding fp8.Fp8GroupQuant_v1. Both quants (the input's before the w13 launch, the activation's before the w2 launch) are this group quant; the launches are fp8_moe_experts.MoeExpertFp8Gemm(W)_v1{E, K, N, G, KB, SWAP, DOT} per (token, slot) pair, Booleans _v2; tests/properties/glm53_block_fp8_capture_gpu.py (v4) runs vLLM's own FusedMoEKernel at its defaults (the switches read back) and compares every link of the chain on the H200: the input's ue8m0 quant, the w13 launch at its served tile and DOT, silu_and_mul (silu-mul), the activation's ue8m0 quant, the w2 launch and moe_sum (moe-sum), with an operand probe that refutes the competing models of HopperE4m3MmaV2Dot32_v1 on the decode tiles: GO (run r20261017-125608-3071, 19,070,976 expert words, 0 mismatches)"
   },
   "fused-rmsnorm-triton": {
    "status": "port",
@@ -348,12 +351,16 @@
     "AttnBlock_v4",
     "Attention_v9",
     "AttentionHead_v9",
-    "AttnBlock_v9"
+    "AttnBlock_v9",
+    "AttentionSplit_v1",
+    "AttentionHeadSplit_v1",
+    "AttentionSplit_v2",
+    "AttentionHeadSplit_v2"
    ],
    "captures": [
     "glm53_fa3_prefill_capture"
    ],
-   "note": "FA3 dense causal prefill (FlashAttnPrefillBackend.run_prefill_new_tokens -> flash_attn_varlen_func, fa_version 3) at qk head 256 / v head 256: vllm-flash-attn 506341a1 runs TileShape 128x80x256 (tile_size_fwd_sm90, hdim > 192, not local), 16 QK and 5 P.V wgmma k16 steps a block. RescaleOBeforeGemm (true above head 128) moves O's rescale before the next P.V gemm, the same per-element recurrence, so a row is Attention_v4{T,NH=8,KVH=8,D=256,BN=80,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,MASKED_FROM} (targets.attention_spec; Attention_v9 on bits). vLLM passes num_splits=0: per rank (8 heads, 132 SMs) a launch whose longest sequence has 321..1664 tokens splits KV (fa3_model.num_splits) and runs FlashAttnFwdCombine, which no Program models. port until the H200 capture (tests/properties/glm53_fa3_prefill_capture_gpu.py) pins the tile and a Build rule binds the tap"
+   "note": "FA3 dense causal prefill (FlashAttnPrefillBackend.run_prefill_new_tokens -> flash_attn_varlen_func, fa_version 3) at qk head 256 / v head 256: vllm-flash-attn 506341a1 runs TileShape 128x80x256 (tile_size_fwd_sm90, hdim > 192, not local), 16 QK and 5 P.V wgmma k16 steps a block. RescaleOBeforeGemm (true above head 128) moves O's rescale before the next P.V gemm, the same per-element recurrence, so a row is Attention_v4{T,NH=8,KVH=8,D=256,BN=80,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,MASKED_FROM} (targets.attention_spec; Attention_v9 on bits). vLLM passes num_splits=0: per rank (8 heads, 132 SMs) a launch whose longest sequence has 321..1664 tokens splits KV (fa3_model.num_splits) and runs FlashAttnFwdCombine: a row of such a sequence is AttentionSplit_v1{...,PER} (registry/fa3_split.py: each split's Attention_v4 blocks, its SparseMlaSplitEnd_v1 and the row's SparseMlaCombine_v1, the combine instantiation at kLogMaxSplits 5; AttentionSplit_v2 on bits). The H200 capture (tests/properties/glm53_fa3_prefill_capture_gpu.py) pins the tile and the backend's words, and the Build binds the prefill by DsaDenseMha[vllm-dsa] (rules/vllm_dsa_dense.py) one head a call (Attention_v4{NH=1,KVH=1}: the row's head h, at the tile every head shares), AttentionSplit_v1{NH=1,KVH=1,PER} where FA3 splits it; port until a committed step's attn.mha is checked against that Program"
   },
   "mla-sparse-attention": {
    "status": "port",
@@ -373,7 +380,7 @@
     "glm53_dsa_capture",
     "glm53_fa3_split_capture"
    ],
-   "note": "FlashAttnMLASparseImpl.forward_mqa -> FA3 flash_attn_varlen_func (FLASH_ATTN_MLA_SPARSE: bf16 MLA cache, no DCP): per query token the NHL heads over the row's valid_counts selected rows [kv_c 512 | k_pe 64] in the top-k's order, scale 1/16: SparseMla_v1{T=valid count,NH=8,DR=64,DV=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,SCALE=0.0625}. FlashInfer's sparse path (FLASHINFER_MLA_SPARSE_SM90) runs only with an fp8 KV cache or a named --attention-backend and has no Definition. SparseMlaHead_v1 is FA3 at num_splits=1 (H200, run r20261012-224647-aacf: 20,480 of 20,480 words); forward_mqa passes no num_splits, so FA3's heuristic splits the keys and combines the partials, which the Definition does not state (3,835 of the same 20,480 words differ, run r20261012-222325-ce92). The target serves the heuristic (target.switches: sparse_mla_num_splits null), so this binds to a Program of the split and its combine, or to SparseMlaHead_v1 under VERITY_SPARSE_MLA_NUM_SPLITS=1 (target.env_reasons; run r20261013-001802-7e95: GLM53-DSA GO).. The Build binds the split: SparseMlaSplit_v1{T, NS, ...} over SparseMlaHeadSplit_v1 at the split count launch_num_splits derives (glm53_fa3_split_capture, H200 run r20261013-115914-f406)"
+   "note": "FlashAttnMLASparseImpl.forward_mqa -> FA3 flash_attn_varlen_func (FLASH_ATTN_MLA_SPARSE: bf16 MLA cache, no DCP): per query token the NHL heads over the row's valid_counts selected rows [kv_c 512 | k_pe 64] in the top-k's order, scale 1/16: SparseMla_v1{T=valid count,NH=8,DR=64,DV=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,SCALE=0.0625}. FlashInfer's sparse path (FLASHINFER_MLA_SPARSE_SM90) runs only with an fp8 KV cache or a named --attention-backend and has no Definition. SparseMlaHead_v1 is FA3 at num_splits=1 (H200, run r20261012-224647-aacf: 20,480 of 20,480 words); forward_mqa passes no num_splits, so FA3's heuristic splits the keys and combines the partials, which the Definition does not state (3,835 of the same 20,480 words differ, run r20261012-222325-ce92). The target serves the heuristic (target.switches: sparse_mla_num_splits null), so this binds to a Program of the split and its combine, or to SparseMlaHead_v1 under VERITY_SPARSE_MLA_NUM_SPLITS=1 (target.env_reasons; run r20261013-001802-7e95: GLM53-DSA GO).. The Build binds the split: SparseMlaSplit_v1{T, NS, ...} over SparseMlaHeadSplit_v1 at the split count launch_num_splits derives (glm53_fa3_split_capture/v2 GO, H200 run r20261017-154229-f783 at vLLM's defaults read back, art:4e04491a2ac8a3c1225957a230312d27e434a894c055dffc23e390d6b430efcf)"
   },
   "dsa-indexer-q": {
    "status": "port",

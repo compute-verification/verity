@@ -1,7 +1,7 @@
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Proofs.Flock.Soundness.Game.Expect
 import Randomness
-import Proofs.Flock.Soundness.Model.Basic
+import Definitions.Flock.Arith
 import Definitions.Claims.Hm96
 
 /-!
@@ -16,7 +16,8 @@ Soundness rests on three: SHA-512's collision resistance in two forms, each a hy
 verifier's randomness. `SHA512CRStrict` (`cr/sha-512`) bounds a finder by its worst-case number of evaluations: the
 compiled and knowledge terms' collision finders and `δ_tree`'s. `SHA512CRExpected` (`ecr/sha-512`, Assumption 2) bounds
 a finder by its expected number: the link term's. Assumption 3 is a hypothesis about the byte source the verifier draws its
-units from, the operating system's, which is also the source of the commitments' salts. The round coins' uniformity (A6,
+units from, the operating system's; its per-test form, `UniformRandomBytesTest`, is one about the same source's bytes for
+the commitments' salts and the ZK server's tape, up to a slack `η`. The round coins' uniformity (A6,
 `uniform/flock-coin-server`) is not a `Prop` here: the session game draws its coins itself, so the model embodies it
 (`ASSUMPTIONS.md`).
 
@@ -25,7 +26,7 @@ keyed streams, for the PoUW window draw, and Assumption 5 one about the window's
 cryptographic: it says the circuit's row-hashing slots compute SHA-512, a fact about the circuit that is still to prove
 (phase 2i), named here so that the value binding's theorems take it as a hypothesis. Zero knowledge's are hm96 leaf hiding
 (T1, the spec's `Claims.Hm96Hiding`, read here by `hm96Hiding_apply`) and `X_L + κ ≠ 0` on the level-0 domain
-(`PadNonvanishing`), with A3 for the salts' bytes. None of them is a computational property of SHA-512: hm96's hiding is
+(`PadNonvanishing`), with A3 per test for the salts' and the masks' bytes. None of them is a computational property of SHA-512: hm96's hiding is
 statistical (`CROnly.hm96Hiding_gap`), and the one premise left on it, `hash-derived-key`, is a fact about one fixed key
 and salt hash (the common-reference-string step), not a hardness property.
 
@@ -85,7 +86,8 @@ def SHA512CRExpected {D β : Type} (H : List UInt8 → D) (g : Game β) (s : Str
     expect cost g s / 2 ^ (256 : ℝ)
 
 /-- **Assumption 3 (`uniform/io-getrandombytes`): the operating system's randomness is independent uniform bytes**, for
-the verifier's unit draw and the salts of the prover's, the firewall's and a registrant's commitments.
+the verifier's unit draw and the proof service's epoch salt (`Stream.salt`). Its per-test form,
+`UniformRandomBytesTest`, is the one the zero-knowledge theorems take.
 
 The verifier draws the units it audits from `IO.getRandomBytes`: `Flock.Draw.drawOS` is `Flock.Draw.drawWith` with every
 stream's bytes from it. To Lean's logic an `IO` action is a function of the world, and `IO.getRandomBytes` an opaque
@@ -95,22 +97,56 @@ on Unix and calls `BCryptGenRandom` on Windows. A3 is stated instead of a byte s
 bytes `t ω i` that stream `i` returns, its first `L i`. The source is uniform when every event about those bytes has the
 probability it has for independent uniform bytes.
 
-What A3 assumes of the operating system is that the running verifier's calls to `IO.getRandomBytes` are such a source,
-every call's bytes independent of every earlier call's, for every `L`. The step from `IO` to the model rests on
-`drawWith` being generic in its monad, together with A3: the theorems read `drawWith` on a model byte source, and
-`drawOS` runs the same `drawWith` on `IO.getRandomBytes` (`drawOS_def`).
+What A3 assumes of the operating system is that the verifier's calls to `IO.getRandomBytes` while it draws its units or
+its epoch salt are such a source, every call's bytes independent of every earlier call's, for every `L`. The step from
+`IO` to the model rests on `drawWith` being generic in its monad, together with A3: the theorems read `drawWith` on a
+model byte source, and `drawOS` runs the same `drawWith` on `IO.getRandomBytes` (`drawOS_def`).
 
-A3 is also the salts' source (Daniel, 9 Oct, decisions 4(a) and 4(c)). C-Flock's prover reads every hm96 leaf salt, 192
-bytes a leaf, from the operating system (`getrandom`, the kernel's `getrandom(2)`, the source `/dev/urandom` reads), and so
-do the recursive audit's firewall and a registrant (`os.urandom`) for their commitments' salts. What A3 assumes there is
-that those reads, too, are independent uniform bytes; `Discharge.ZkView.OsSalts` reads 192 of them as one salt
-(`ZkView.saltEquiv`) and takes the hiding theorems, stated at uniform salts, to them (`hm96Hiding_os`,
-`ideal_leaves_swap_os`, `hides_os`, `Flock.SecurityProofs.recursiveZK_os_gap`). With it no premise on a stream generator is
-left on the salts. The prover's masks and Reed–Solomon padding are still a ChaCha20 expansion of an OS seed
-(`ProverRng`), which the zero-knowledge theorems draw uniformly: that step is not A3's. -/
+The CSPRNG is idealized as exactly uniform here, for every event. That is refutable at the deployed source: Linux's CRNG
+(5.18 and later, `drivers/char/random.c`) answers a read past 32 bytes with a ChaCha20 stream under one 256-bit key, so
+the event that the bytes are among the source's outputs has probability 1 there and at most `2^(256 - 8n)` at `n`
+uniform bytes. The true bound carries the CSPRNG's distinguishing advantage against the draw's test, which
+`UniformRandomBytesTest` states. A VM snapshot restored more than once must not repeat the kernel's CSPRNG state, which
+holds when the kernel reseeds on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support). A
+hardware RNG doesn't make it hold: from 5.18 the kernel mixes RDSEED in only when it reseeds, about once a minute, and
+not into each read. -/
 def UniformRandomBytes {Ω : Type} [Fintype Ω] {m : ℕ} (L : Fin m → ℕ) (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) :
     Prop :=
   ∀ E : ((i : Fin m) → Fin (L i) → Fin 256) → Prop, prCoin (fun ω => E (t ω)) = prCoin E
+
+/-- **Assumption 3 per test (`uniform/io-getrandombytes`): the operating system's bytes pass a test as independent uniform
+bytes do, up to `η`**, for the commitments' salts and the ZK server's tape.
+
+A source is a finite probability space `Ω` (`prCoin` weighs its outcomes evenly) and, on outcome `ω`, the bytes `t ω i`
+that stream `i` returns, its first `L i`. It passes the test `E` up to `η` when `E`'s probability at its bytes and at
+independent uniform bytes of those lengths differ by at most `η`, either way. `η` is the CSPRNG's distinguishing advantage
+against `E`, and it enters the theorems' bounds.
+
+It is a predicate on one test, as A4 (`KeyedStreamsUniform`) is. A statement for every test would be refutable: Linux's
+CRNG (5.18 and later, `drivers/char/random.c`) answers a read past 32 bytes with a ChaCha20 stream under one 256-bit key,
+so the event that the bytes are among the source's outputs has probability 1 there and at most `2^(256 - 8n)` at `n`
+uniform bytes. The theorems take it for the test they need.
+
+What it covers is every byte a zero-knowledge session reads from the operating system. Each rep of the ZK server's frame
+reads its draws in one call at its start (`flock-firewall frame`, `Frame.cmd`: `Frame.drawsWith` at `IO.getRandomBytes`):
+the pads `h`, the dot-product mask `μ`, the inner rows' padding, `τ`'s salt and the pads tree's salts. The tap
+(`flock-firewall tap`) serves the prover's every other read: the mask slot's words, level 0's hiding, the other trees'
+salts and the coin tree's nonce. C-Flock's prover reads every hm96 leaf salt, 192 bytes a leaf, from the operating system
+(the tap, or `getrandom(2)` unfirewalled), as the recursive audit's firewall and a registrant (`os.urandom`) do for their
+commitments' salts (Daniel, 9 Oct, decisions 4(a) and 4(c)). So the masks and the Reed–Solomon padding are inside A3's
+scope, as the salts are, and no premise on a stream generator is left on them. `Discharge.ZkView.OsSalts` reads 192
+bytes as one salt and takes the hiding theorems to them; `Claims.ZKServer.OsTape` reads the server's tape.
+
+What it leaves out: a VM snapshot restored more than once repeats the kernel's CSPRNG state unless the kernel reseeds on a
+VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support), and a repeated state is a pad reused,
+under which two sessions' masked values reveal their XOR. A hardware RNG doesn't close it: the kernel mixes RDSEED in
+only when it reseeds, about once a minute. A read before the kernel's CSPRNG is seeded is outside it too: Lean's runtime
+reads `/dev/urandom`, which, unlike `getrandom(2)`, doesn't wait for that. A test build (`seed-injection`, the
+selftest's) expands the prover's values from an injected `ProverSeed` with ChaCha20 instead: no record from such a build
+is evidence for a theorem that takes A3. Re-read this on any platform but Linux. -/
+def UniformRandomBytesTest {Ω ι : Type} [Fintype Ω] [Fintype ι] [DecidableEq ι] (L : ι → ℕ)
+    (t : Ω → (i : ι) → Fin (L i) → Fin 256) (E : ((i : ι) → Fin (L i) → Fin 256) → Prop) (η : ℝ≥0∞) : Prop :=
+  prCoin (fun ω => E (t ω)) ≤ prCoin E + η ∧ prCoin E ≤ prCoin (fun ω => E (t ω)) + η
 
 /-- **Assumption 4 (`prf/sha-512`): `verity.randomness`'s keyed streams at distinct indices pass a test as independent
 uniform bytes do, up to `η`**, for the PoUW window draw.
@@ -150,9 +186,9 @@ secret reused across windows is outside it, since later windows would be committ
 The verifier's platform is Linux, with CPython 3.12 or later. There `secrets.token_bytes` reads `os.urandom`, which is
 `getrandom(2)`, the kernel's CSPRNG, and blocks until that is initialized. It keeps no user-space state, so a forked
 process doesn't repeat its output. A VM snapshot restored more than once must not repeat the kernel's CSPRNG state, which
-holds when the kernel reseeds on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support) or mixes
-in a hardware RNG. The CSPRNG is idealized as exactly uniform; the true bound carries its negligible distinguishing
-advantage. Re-read this on any other platform. -/
+holds when the kernel reseeds on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support). A
+hardware RNG doesn't make it hold: the kernel mixes RDSEED in only when it reseeds, about once a minute. The CSPRNG is
+idealized as exactly uniform; the true bound carries its distinguishing advantage. Re-read this on any other platform. -/
 def UniformSecret {Ω : Type} [Fintype Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) : Prop :=
   ∀ E : (Fin S → Fin 256) → Prop, prCoin (fun ω => E (sec ω)) = prCoin E
 
@@ -190,7 +226,8 @@ theorem prENNReal_eq_prCoin {α : Type} [Fintype α] (p : α → Prop) : Claims.
 fresh uniform `U`. It is a statement about uniform salts, and it needs no computational property of SHA-512. At
 `δ₁ = hidingGap My c`, the statistical distance itself, it holds with no premise (`CROnly.hm96Hiding_gap`); hm96 §3's
 leftover hash lemma (`CROnly.sum_hidingGap_le`) reads of `c(y) = H(sp ‖ y)` only that it takes at most `2^512` values. The
-salts are the operating system's bytes, which A3 (`UniformRandomBytes`) makes uniform (`Discharge.ZkView.hm96Hiding_os`).
+salts are the operating system's bytes, which A3 per test (`UniformRandomBytesTest`) takes to uniform salts, up to its
+slack (`Discharge.ZkView.hm96Hiding_os`).
 
 It is a predicate on one pair of functions, `M(K*)·` and `H(sp ‖ ·)`. `Table.view` takes the leaves the final message
 doesn't open as ideal (world `W₁`); this assumption, through §4.1's T1, is what moves the real prover there, at `δ₁` per

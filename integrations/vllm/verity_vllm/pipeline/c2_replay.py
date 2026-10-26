@@ -7,7 +7,7 @@ checkpoint opened against the committed weights root), the weights check and the
 
 For a seeded stratified sample of Program instance rows (spec x request x phase), read
 the COMMITTED bytes of the row's inputs (the Program's dataflow -> the manifest's member rule -> the binding map), evaluate the registered
-relation (verity_vllm.program.kernels.derived_rows), compare with the COMMITTED output bytes bit-for-bit.  Plus the exhaustive ordered
+relation (verity.ml.definitions.numerics.derived_rows), compare with the COMMITTED output bytes bit-for-bit.  Plus the exhaustive ordered
 boundary linkage (declared prompt -> input ids; sampled id[s-1] -> input id[s]) over every (engine step, request).  Needs no Match record.
 """
 from __future__ import annotations
@@ -190,9 +190,12 @@ def reused(s: Site, _cached: dict[str, Any], _rc_key: str) -> tuple[dict[str, An
     return sr, lk
 
 
-def programs_of_record(s: Site, _rl: dict[str, str]) -> tuple[dict[str, dict], dict[str, str]]:
+def programs_of_record(s: Site, _rl: dict[str, str], *, definitions: bool = True) -> tuple[dict[str, dict], dict[str, str]]:
     """The population is derived from the Program OF RECORD: every loaded Program's digest must be the Build digest of
-    record (--program-digest, B=1) or one of the manifest's component digests (B>=2); else REFUSED by name."""
+    record (--program-digest, B=1) or one of the manifest's component digests (B>=2), and the Definitions this tree evaluates their
+    rows by must be the ones their Builds bound (`check.replay.definitions`); else REFUSED by name.  ``definitions=False`` for a
+    caller that evaluates no row (the replay's plan, the serving rows): the replay that grades the picks checks them."""
+    from verity_vllm.check.replay import definitions as DF
     from verity_vllm.query.manifest import format as MF
 
     args, required_manifest, reqs, sampling = s.args, s.manifest, s.reqs, s.sampling
@@ -206,7 +209,8 @@ def programs_of_record(s: Site, _rl: dict[str, str]) -> tuple[dict[str, dict], d
                 _of_record.add(str(_c["program_digest"]))
     if getattr(args, "programs_root", None):
         _fx = {"requests": [{"request_id": _rl[str(r.get("request_id"))], "prompt_len": len(r["prompt_token_ids"]),
-                             "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1)} for r in reqs]}
+                             "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1), "cached": int(r.get("cached") or 0)}
+                            for r in reqs]}
         _loaded = MF.programs_for(_fx, args.programs_root)
     else:
         _l1 = MF.load_program(args.program_dir)
@@ -218,6 +222,8 @@ def programs_of_record(s: Site, _rl: dict[str, str]) -> tuple[dict[str, dict], d
     if _bad:
         _named = ", ".join(f"{k}: {d[:16]} ({_loaded[k].get('dir')})" for k, d in _bad.items())
         raise RuntimeError(f"replay Program(s) are not the Program of record: {_named} vs of-record {sorted(x[:16] for x in _of_record)} -- refused")
+    if definitions:
+        DF.of_record({k: v["dir"] for k, v in _loaded.items()}, _digs, {k: v["instances"]["rows"] for k, v in _loaded.items()}, what="replay")
     return _loaded, _digs
 
 
@@ -281,7 +287,7 @@ def linkage_requests(s: Site, _rl: dict[str, str], _arr: dict[str, int], _pi_ste
 
     sampling = s.sampling
     return [{"request_id": _rl[str(r.get("request_id"))], "arrive_step": _arr[_rl[str(r.get("request_id"))]],
-             "prompt_token_ids": list(r["prompt_token_ids"]),
+             "prompt_token_ids": list(r["prompt_token_ids"]), "cached": int(r.get("cached") or 0),
              "seed": (int(r["seed"]) if r.get("seed") is not None else (int(sampling["seed"]) if sampling.get("seed") is not None else None)),
              "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1),
              "program_steps": _pi_steps.get(_rl[str(r.get("request_id"))]),
@@ -292,12 +298,19 @@ def linkage_requests(s: Site, _rl: dict[str, str], _arr: dict[str, int], _pi_ste
                                          executed=(None if _horizons is None else _horizons.get(_rl[str(r.get("request_id"))])))} for r in s.reqs]
 
 
+def cached_prefixes(reqs: list[dict[str, Any]], rl: dict[str, str]) -> dict[str, dict[str, Any]]:
+    """Each warm request's cached rows and the label of the request that computed each cached block (`load_workload`: `cached`,
+    `cached_from`): what the replay resolves its `prefix` reads to (`driver.populate`)."""
+    return {rl[str(r.get("request_id"))]: {"cached": int(r["cached"]), "producers": [rl[str(q)] for q in r.get("cached_from") or ()]}
+            for r in reqs if int(r.get("cached") or 0)}
+
+
 def executed_prefix_kw(s: Site, _epr_r: dict, lk: dict, _arr: dict, _rl: dict) -> tuple[dict[str, Any], Any]:
-    """ONE mechanism for the not-executed class (`check.executed_prefix`): sampled_replay's
+    """ONE mechanism for the not-executed class (`commit.executed_prefix`): sampled_replay's
     `population.not_executed_by_rule`, fed with named record facts (`EPX.executed_prefix_facts`) -- never literals.  On a tree without
     reqval's kwarg nothing bounds the replay population: an EOS-stopped request's rows past the stop are sampled and grade 'not
     evaluated' -> partial, never PASS.  An older signature receives only the arithmetic's facts."""
-    from verity_vllm.check import executed_prefix as EPX
+    from verity_vllm.commit import executed_prefix as EPX
     from verity_vllm.check.replay import driver as SR
 
     _sr_kw: dict[str, Any] = {}
@@ -341,14 +354,14 @@ def plan(s: Site, planner: Any = None) -> dict[str, Any]:
 def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any = None) -> tuple[dict[str, Any], dict[str, Any]]:
     """The replay + linkage records; the Programs and readers they read stay in `held` for `free_programs` to release and measure.
     ``plan``: the draw's reads only (`plan`), with the Programs and the draw the ``planner``'s when there is one."""
-    from verity_vllm.check import executed_prefix as EPX
+    from verity_vllm.commit import executed_prefix as EPX
     from verity_vllm.check.replay import driver as SR
 
     args, rc, reqs, sampling, row, pair = s.args, s.rc, s.reqs, s.sampling, s.row, s.pair
     held["bm"] = _bm = json.loads((s.out / f"binding_map_p{pair}.json").read_text())
     _rl = request_labels(reqs)
     facts = planner.ready() if planner is not None else None
-    held["loaded"], held["digs"] = _loaded, _digs = programs_of_record(s, _rl) if facts is None else ({}, {})
+    held["loaded"], held["digs"] = _loaded, _digs = programs_of_record(s, _rl, definitions=not plan) if facts is None else ({}, {})
     held["progs"] = _progs = {k: v["instances"] for k, v in _loaded.items()}
     _arr, _moved = arrivals(s, _rl)
     if _moved:
@@ -362,10 +375,11 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any 
     _wp, held["rd"] = SRW.readers(args.serving_rows, s.com, rc, s.weights_of(held["pi0"].prefix) if "pi0" in held else None, _progs, _bm, _arr,
                                   _loaded, s.manifest, args.label, _digs)
     if not plan and getattr(args, "memory_map", None):
+        from verity_vllm.acquire.sources.kv_slots_source import caches_of
         from verity_vllm.check.oracle_compare import OpenedReader
         from verity_vllm.pipeline import memory_map as MMP
         MMP.after_commit(args.memory_map, loaded=_loaded, bmap=_bm, committed=OpenedReader(s.com, rc), manifest=s.manifest, arrivals=_arr,
-                         caches=next((x.caches for x in getattr(s.com, "sources", ()) if getattr(x, "short_name", "") == "kv_slots"), None))
+                         caches=caches_of(s.com), session=s.out / MMP.SESSION, cached_prefixes=cached_prefixes(reqs, _rl))
     _rd = held["rd"]
     _wc = None if plan else s.weights_check()
     _seed, _seed_src, _seed_form, _seed_chal = seed_of(args, rc)
@@ -396,7 +410,7 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any 
                # [R17-3 / reqval] Q(P) of record: the replay's reach is reconciled against it identity by identity
                manifest=(s.manifest if isinstance(s.manifest, dict) else None),
                worker_peak=getattr(args, "replay_worker_peak", None),
-               program_dirs={_k: _v["dir"] for _k, _v in _loaded.items() if _v.get("dir")}, **_sr_kw)
+               program_dirs={_k: _v["dir"] for _k, _v in _loaded.items() if _v.get("dir")}, cached_prefixes=cached_prefixes(reqs, _rl), **_sr_kw)
     if planner is not None:
         t0 = time.perf_counter()
         got = planner.plan({"binding_map": str(s.out / f"binding_map_p{pair}.json"), "arrivals": _arr, "seed": _seed, "seed_source": _seed_src,
@@ -439,7 +453,7 @@ def reconcile(s: Site, sr: dict, _bm: dict, _rd: Any, _epr_r: dict, _sr_kw: dict
     """ONE mechanism, reconciled on the record: the Commit's classification of the manifest identities
     (binding coverage) and the population's third bucket must name the same identities -- n_exec per request, count per row family; a
     batch-level / named-input family is outside the population split's reach and is named, not equal."""
-    from verity_vllm.check import executed_prefix as EPX
+    from verity_vllm.commit import executed_prefix as EPX
 
     row, pair = s.row, s.pair
     if getattr(s.com, "_padding", None):
@@ -518,7 +532,7 @@ def record(s: Site, sr: dict, lk: dict, _art: Path) -> None:
                                     "strata_unevaluated": sr.get("strata_unevaluated"), "seed": _smp.get("seed"), "seed_source": _smp.get("seed_source"),
                                     "unreplayable": sr.get("unreplayable"), "weights": sr.get("weights"), "programs": sr.get("programs"),
                                     "evaluators": sr.get("evaluators"), "artifact": str(_art),
-                                    "reference": "registered relation evaluators (verity_vllm.program.kernels.derived_rows) on the COMMITTED input bytes (C2 of record, DECISIONS-2 §4)"}
+                                    "reference": "registered relation evaluators (verity.ml.definitions.numerics.derived_rows) on the COMMITTED input bytes (C2 of record, DECISIONS-2 §4)"}
     components["boundary_linkage"] = {"result": lk.get("result"), "method": lk.get("method"), "checked": lk.get("pairs"), "linked": lk.get("linked"),
                                       "unlinked_n": lk.get("unlinked_n"), "unlinked": lk.get("unlinked"), "why": lk.get("why"),
                                       "prescribed": lk.get("prescribed"),      # [R16 pin, ruling 36] seed / splits linkage record

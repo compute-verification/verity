@@ -2,7 +2,7 @@
 The draw (`one_stage/draw.py`): the verifier's law expanded over its own program and query (`derive`), a draw held to the
 registration and to that law (`checkDraw`), and the proved statement's units held to the draw (`checkProved`). The strata,
 their rules, the law object and the samplers are C-Flock's (`Flock.Draw`). The check samples nothing: the draw comes from
-the verifier's own randomness, raw bytes with no derivation, which `drawFirst` reads as `two_stage.draw_first` does.
+the verifier's own randomness, raw bytes with no derivation, which `drawFirst` reads as `coins.draw_first` does.
 -/
 import Flock.Draw
 import SampledProofs.Partition
@@ -241,8 +241,8 @@ def take (src : ByteArray) (need : Nat) : StateT Nat (Except String) ByteArray :
   return src.extract at_ (at_ + need)
 
 /-- The C-Flock law a one-stage law object (the verifier's law as `derive` expands it) names over `[0, population)`, as
-`two_stage.draw_first` reads it: `subset`, `bernoulli` at its `NUM/DEN` as written, `stratified` or `work`. An error when
-the law is not exactly a one-stage law's keys (`two_stage._law_problem`), a subset exceeds the population, or a stratified
+`coins.draw_first` reads it: `subset`, `bernoulli` at its `NUM/DEN` as written, `stratified` or `work`. An error when
+the law is not exactly a one-stage law's keys (`coins._law_problem`), a subset exceeds the population, or a stratified
 or work law isn't well formed over it (`strataProblem`). -/
 def flockLaw (law : Json) (population : Nat) : Except String Flock.Draw.Law := do
   let kind := match getD law "law" with | .str s => s | _ => ""
@@ -274,7 +274,7 @@ def drawUnits (law : Flock.Draw.Law) (population : Nat) (src : ByteArray) : Exce
     | throw "the draw did not end"
   return (d.units, read)
 
-/-- `two_stage.draw_first` without a closure map: the one-stage draw object of the verifier's law over `[0, population)`
+/-- `coins.draw_first` without a closure map: the one-stage draw object of the verifier's law over `[0, population)`
 (the law as `derive` expands it, with `population` and the drawn `units`), its units drawn from `src` (`drawUnits`) under
 the law's C-Flock law (`flockLaw`). An error where either is. With the draw, the number of bytes of `src` it read. -/
 def drawFirstRead (law : Json) (population : Nat) (src : ByteArray) : Except String (Json × Nat) := do

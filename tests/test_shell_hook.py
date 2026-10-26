@@ -193,6 +193,30 @@ def test_builds_and_tests_are_refused_on_an_agent_vm_and_light_ones_only_while_i
     assert verdict("uv run pytest -q tests/test_x.py", **gate) == "deny"
 
 
+@pytest.mark.parametrize("command", [
+    "sleep 1201", "sleep 30m", "sleep 2h", "sleep 1d", "sleep 1h 30m", "sleep 1500s", "sleep infinity",
+    "cd /w && sleep 3600 && research status r1", "while true; do sleep 1800; research status r1; done",
+    "timeout 3h sleep 2h", "bash -c 'sleep 3000; ls'", 'echo "$(sleep 3000)"', "ssh n1 sleep 3000",
+    "research run --on auto --wait --wait-max 3000 -- true", "research run --on auto --wait --wait-max=1201 -- true",
+])
+def test_a_command_that_plainly_blocks_past_twenty_minutes_is_refused(command):
+    """No tool call may block more than 20 minutes (Daniel, 19 Oct): agents that blocked in one long call looked silent and missed
+    their wake-ups."""
+    out = answer(command)
+    assert out["permission"] == "deny", command
+    assert ("no tool call may block more than 20 minutes (Daniel, 19 Oct); end your turn and let the run's completion or a timer "
+            "subscription wake you") in out["agent_message"]
+
+
+@pytest.mark.parametrize("command", [
+    "sleep 30", "sleep 20m", "sleep 1200", "sleep $DELAY", "timeout 60 sleep 5000", "sleep 5000 &", "nohup sleep 9000 &",
+    "tail --pid=4242 -f /dev/null", "while kill -0 4242; do sleep 30; done", "research run --on auto --wait -- sleep 5000",
+    "research run --on auto --wait --wait-max 600 -- true", "tmux send-keys -t s:0.0 'sleep 3000' C-m", "rg 'sleep 3000' tools/",
+])
+def test_a_wait_within_the_cap_or_off_this_shell_passes(command):
+    assert verdict(command) == "allow", command
+
+
 INBOX_TOOL = ROOT / "tools/agent-guard/inbox.py"
 
 
@@ -286,3 +310,44 @@ def test_one_agent_per_checkout_switching_another_agents_worktree_or_pushing_its
                    capture_output=True, env={**os.environ, **env})
     assert ask("git push origin coord", "bc-worker")["permission"] == "allow"
     assert ask("git checkout lane", "")["permission"] == "allow", "no conversation id: nothing to judge"
+
+
+def test_a_push_that_would_update_main_or_next_and_a_config_that_prints_tokens_are_refused_for_any_agent(tmp_path):
+    """INF-110: at 07:49Z 19 Oct a worker whose VM came back from a snapshot with /workspace on main pushed straight onto it,
+    and drive rebuilt every queued PR. INF-105: printing git config values showed part of a GitHub installation token."""
+    env = {"AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0", **GIT_ENV}
+    ws, origin = tmp_path / "ws", tmp_path / "origin.git"
+    for args in (["init", "-q", "--bare", "-b", "main", str(origin)], ["clone", "-q", str(origin), str(ws)]):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True, env={**os.environ, **GIT_ENV})
+    subprocess.run(["git", "commit", "-q", "--allow-empty", "-m", "a"], cwd=ws, check=True, capture_output=True,
+                   env={**os.environ, **GIT_ENV})
+
+    def ask(command, agent="bc-w"):
+        out = subprocess.run([sys.executable, HOOK], input=json.dumps({"hook_event_name": "beforeShellExecution", "command": command,
+                                                                         "conversation_id": agent, "cwd": str(ws)}),
+                             capture_output=True, text=True, env={**os.environ, **env}, check=True).stdout
+        return json.loads(out)
+
+    for command in ("git push", "git push origin", "git push origin main", "git push -u origin HEAD:main", "git push origin +main",
+                    "git push origin HEAD:refs/heads/main", "git push --all origin", "git push --mirror origin",
+                    "git push origin --delete main", "git push origin :main", f"git -C {ws} push origin main",
+                    "git push origin next", "git push origin HEAD:refs/heads/next", "git push --force origin +HEAD:next"):
+        out = ask(command)
+        assert out["permission"] == "deny" and "HEAD:refs/heads/<your-branch>" in out["agent_message"], command
+    assert ask("git push origin main", "")["permission"] == "deny", "whoever runs it"
+    for command in ("git push origin HEAD:refs/heads/cursor/mine", "git push -u origin cursor/mine", "git log -1"):
+        assert ask(command)["permission"] == "allow", command
+    repair = "AGENT_GUARD_PUSH_NEXT_OK='restore next to abc under the queue lock' git push --force-with-lease=next:bad origin abc:next"
+    assert ask(repair)["permission"] == "allow"
+    assert json.loads((tmp_path / "state" / "push-next-ok.jsonl").read_text())["reason"] == "restore next to abc under the queue lock"
+    for command in ("AGENT_GUARD_PUSH_NEXT_OK=x git push origin main", "AGENT_GUARD_PUSH_NEXT_OK=x git push origin next main",
+                    "AGENT_GUARD_PUSH_NEXT_OK=x git push --all origin", "AGENT_GUARD_PUSH_NEXT_OK= git push origin next",
+                    "AGENT_GUARD_PUSH_NEXT_OK=x true; git push origin next", "export AGENT_GUARD_PUSH_NEXT_OK=x; git push origin next"):
+        assert ask(command)["permission"] == "deny", command
+    for command in ("git config --list", "git config -l", "git config --get-regexp http", "git config --show-origin --list",
+                    "git config --get http.https://github.com/.extraheader", "git config http.https://github.com/.extraheader"):
+        out = ask(command)
+        assert out["permission"] == "deny" and "--name-only --list" in out["agent_message"], command
+    for command in ("git config --name-only --list", "git config user.name", "git config user.name t",
+                    "git config --get remote.origin.fetch"):
+        assert ask(command)["permission"] == "allow", command

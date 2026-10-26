@@ -76,9 +76,15 @@ class Rule:
         return []
 
     def registered_tables(self, ep, mode: str) -> tuple[str, ...]:
-        """The tables a program brings (`verity_vllm.program.registry.tables`) this rule reads by index from a registered
+        """The tables a program brings (`verity.ml.definitions.registry.tables`) this rule reads by index from a registered
         parameter under `registered_values`, for the exported graph `ep`: each a parameter after the `values`. Default: none."""
         return ()
+
+    def run_inputs(self, ep, mode: str) -> bool:
+        """Whether this rule reads values the served run decides (`Ctx.run_value`) for the exported graph `ep`: values no circuit
+        computes, which the Program takes as fields of its `run` parameter and checks in gates (`Ctx.check`), as the top-k order of
+        a DSA row past TOPK. Default: none."""
+        return False
 
     @property
     def rule_id(self) -> str:
@@ -138,16 +144,6 @@ class RuleSet:
             if ts is ANY or target in ts:
                 out.append(r)
         return out
-
-    def known_targets(self, mode: str) -> set:
-        s: set = set()
-        for r in self.rules:
-            if r.modes is not None and mode not in r.modes:
-                continue
-            ts = r.targets()
-            if ts is not ANY:
-                s.update(ts)
-        return s
 
     def extended(self, name: str, rules: Iterable[Rule] = (), families: Iterable[Any] = ()) -> "RuleSet":
         return RuleSet(name, list(self.rules) + list(rules), list(self.families) + list(families))

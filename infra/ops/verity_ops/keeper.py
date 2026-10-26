@@ -103,7 +103,7 @@ def cmd_set(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research keeper set", allow_abbrev=False,
                                  description="keep N chunks of CMD leased on MACHINE until UTC, a fresh {seed} each")
     ap.add_argument("name", help="the target's name: lower case, digits and -, at most 40")
-    ap.add_argument("--on", required=True, metavar="MACHINE", help="the Nebius node (vy-nebius-1 or vy-nebius-2)")
+    ap.add_argument("--on", required=True, metavar="MACHINE", help="the Nebius node (vy-nebius-2)")
     ap.add_argument("--project", required=True)
     ap.add_argument("--n", type=int, required=True, help="the chunks to keep live, running or waiting for their lease")
     ap.add_argument("--until", required=True, metavar="UTC", help=f"start none after this (e.g. 2026-10-05T12:00Z; at most {MAX_AHEAD_H} h ahead)")
@@ -170,10 +170,9 @@ def cmd_set(argv: list[str]) -> int:
         tool_dir = remote.ship_tool(ssh, m["root"], pkg)
         tree_sha, src_dir, ready = (None, None, {})
         if src is not None:
-            if hint := cli._source_identity_hint(src):
-                harness_args += ["--source-identity", json.dumps(hint, sort_keys=True)]
             tree_sha, src_dir, ready = remote.ship_source(ssh, m["root"], src)
             harness_args += ["--tree-sha", tree_sha]
+            harness_args = remote.set_flag(harness_args, "--source-identity", json.dumps(remote.shipped_identity(tree_sha, ready), sort_keys=True))
         request = {"schema": remote.REQUEST_SCHEMA, "runs_root": f"{m['root']}/runs", "tool": tool_dir, "python": m["python"], "cwd": src_dir,
                    "env": env, "harness_args": harness_args, "exclusive": False,
                    "cost": {"provider": m.get("provider", "runpod"), "pod_id": m.get("pod_id"), "machine": ns.on, "currency": "USD",

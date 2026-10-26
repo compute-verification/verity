@@ -17,8 +17,8 @@ One outer session's release decision, through `Core.Protocol`:
   It is never undecided.
 
 The record events the session appends (its `slot`, a dead holder's stop, a refusal or a stop) are not in the outcome: an
-`Outcome` carries a verdict and a reason, and nothing of the firewall's state after it. `Firewall.Release.outerSession`
-returns them.
+`Outcome` carries a verdict and a reason, and nothing of the firewall's state after it. `Firewall.Loop` records them on
+the firewall's state directory.
 -/
 import CoreProtocol.Cli
 import Flock.Firewall.Contract

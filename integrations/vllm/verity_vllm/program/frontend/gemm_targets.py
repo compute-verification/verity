@@ -19,12 +19,12 @@ What a record says
   (`verity_vllm.engine.engine_profile.gpu_info`).
 * `tuned_table` — the pinned copy of vLLM's tuned table for that family (identity = `table_sha256()`, an applicability
   condition), `{}` for a family without one.  `launch_config(M, N, K)` mirrors `_get_matmul_config` on that table.
-* `dot` — the k16 tensor-core step the registered Definition binds: `Gemm_v1{K,N}` (`verity_vllm.program.registry.b1.GemmV2` with
+* `dot` — the k16 tensor-core step the registered Definition binds: `Gemm_v1{K,N}` (`verity.ml.definitions.registry.b1.GemmV2` with
   `DOT = AmpereBF16TcDot16`, `mma.sync.m16n8k16` bf16 -> f32) — per output coordinate one f32 accumulator advanced over the
   K/16 k16 steps in ascending k order from zero, RNE to bf16.  The tile constants and the pipeline depth decide which output
   coordinates a CTA owns and how the k tiles are staged, NOT the per-coordinate arithmetic — but that is a claim per
   target, established by `evidence`, never assumed from the kernel source being the same.
-* `evidence` — the correspondence runs (`verity_vllm/program/kernels/gemm_target_correspondence.py`: the production
+* `evidence` — the correspondence runs (`verity_vllm/program/gemm_target_correspondence.py`: the production
   launch on the model's GEMM shapes incl. M tails, bit-exact against `cpu_model.gemm_model` under the single ascending
   chain of the target's own instruction model) that admitted the record.
 
@@ -34,7 +34,10 @@ family "hopper": the tuned sm_90 table; on sm_90 Triton lowers `tl.dot` to `wgmm
 so the Definition is `Gemm_v2{K,N,DOT}` — R13 lane hopper) and `blackwell_consumer` (cc 12.0, the RTX PRO 6000: vLLM family None, so a
 Triton launch takes the default tiling; vLLM's linear layers run that launch at every M (`linear_batch_invariant`), while other bf16
 matmuls stay on cuBLASLt with split-K disabled; the k16 step is `mma.sync.m16n8k16`, whose sm_120 model is Hopper's, so the Definition is `Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}`).
-Anything else (datacenter Blackwell cc 10.x; cc 8.6/8.7 and 12.1 with no run yet) is
+`blackwell` (cc 10.0, the B200) is registered for served Builds only (`batch_invariant_refusal`): its k16 steps, cuBLAS's
+`tcgen05.mma kind::f16` and FA2's `mma.sync.m16n8k16`, are Hopper's, but vLLM's tuned "blackwell" table of the batch-invariant
+kernel is not pinned, so `gemm_target_for` refuses it to every batch-invariant consumer and only `acquire.served_device` reads it.
+Anything else (cc 10.x other than 10.0; cc 8.6/8.7 and 12.1 with no run yet) is
 `UnregisteredGemmTarget`: construction refuses (`numerics_unregistered`), the resolver answers Unsupported, and the
 applicability check fails — a launch that happens to show a registered tiling on an unregistered target is still refused.
 """
@@ -136,6 +139,10 @@ class GemmTarget:
     #: the NVFP4 (W4A4) linear (`CutlassNvFp4LinearKernel`: `cvt_fp16_to_fp4` then the block-scaled GEMM), as measured (`evidence`):
     #: its k64 block-scaled step (`targets.FP4_DOTS`); None = not recorded on this target.
     fp4_dot: str | None = None
+    #: why the record vouches for no batch-invariant launch (vLLM's `matmul_kernel_persistent` at the family's tuned table, the bf16
+    #: matmuls cuBLASLt runs under VLLM_BATCH_INVARIANT=1), when it vouches for none: `gemm_target_for` refuses the target to every
+    #: batch-invariant consumer, and only a served Build (`acquire.served_device`: cuBLAS at vLLM's defaults) reads its `dot`.
+    batch_invariant_refusal: str | None = None
 
     def launch_config(self, M: int, N: int, K: int) -> tuple[dict[str, Any], int, int, str]:
         """vLLM `_get_matmul_config(M, N, K, bf16, default)` on this target: `(constexprs, num_warps, num_stages, source)`;
@@ -159,8 +166,10 @@ class GemmTarget:
         """Identity of the pinned tuned table this target consults (an applicability condition); None for a table-less target."""
         if not self.tuned_table:
             return None
-        from verity_vllm.program.frontend.target_profile import canonical_bytes, sha256_hex
-        return sha256_hex(canonical_bytes({f"{k[0]},{k[1]}": v for k, v in self.tuned_table.items()}))
+        import hashlib
+
+        from verity.ml.circuits.codec import canonical_json
+        return hashlib.sha256(canonical_json({f"{k[0]},{k[1]}": v for k, v in self.tuned_table.items()})).hexdigest()
 
     def describe(self) -> dict:
         return {"key": self.key, "compute_capabilities": [list(c) for c in self.compute_capabilities], "vllm_arch_family": self.vllm_arch_family,
@@ -175,14 +184,14 @@ REGISTERED: dict[str, GemmTarget] = {
                   "(default tiling and the (2048,2048) table buckets M<=1 / M<=32) bit-exact against Gemm_v1{K,N} — tests/observe/test_gen_llama.py, "
                   "the numerics lane (mma.AMPERE_BF16: Ada's bf16 mma.sync is parameter-identical to Ampere's, verity.ml.circuits.silicon.models.ADA_BF16_M16N8K16)",
                   # [R15 moe GEMM-ADA-TABLE] the four Qwen3-class rows of the table were registered without their own launches until R15
-                  "R15 lane moe: verity_vllm/program/kernels/gemm_target_correspondence.py --model ada-tuned-table on cp-moe3 (L40S, cc 8.9, 142 SMs, "
+                  "R15 lane moe: verity_vllm/program/gemm_target_correspondence.py --model ada-tuned-table on cp-moe3 (L40S, cc 8.9, 142 SMs, "
                   "vLLM d9105ea80 family 'ada'): ALL five tuned (N,K) rows x M in {1,2,4,5,8,9,16,17,32,33,64,65,256,257,512,513,1024,1033,2048,2049} "
                   "(+ stress families at M 1/17/257 on (2048,6144)/(4096,2048)) = 124 cases, 30 distinct launch configs (every tabled bm 16/32/64/128 "
                   "bucket incl. (151936,2048) M<=4 bm16 and the block_k-128 row (2048,6144)), 152,105,216 coordinates bit-exact against Gemm_v1{K,N}, "
                   "GPU re-run deterministic — out/gen/sweep/evidence/ada/gemm_target_l40s_ada_table.json",)),
     "ampere": GemmTarget(
         key="ampere", compute_capabilities=((8, 0),), vllm_arch_family=None, dot="AmpereBF16TcDot16", tuned_table={},
-        evidence=("R13 lane ampere: verity_vllm/program/kernels/gemm_target_correspondence.py on cp-a100 (A100-SXM4-80GB, cc 8.0, 108 SMs): "
+        evidence=("R13 lane ampere: verity_vllm/program/gemm_target_correspondence.py on cp-a100 (A100-SXM4-80GB, cc 8.0, 108 SMs): "
                   "all 5 Llama-3.2-1B GEMM shapes x M in {1,2,7,13,32,128,129,515,1024} (+ stress families at M 1/7/129) launched with the default "
                   "128/128/64 8w/3s tiling (vLLM family None), Triton PTX sm_80 mma.sync.m16n8k16 bf16 only, bit-exact against the single ascending "
                   "k16 chain of mma.AMPERE_BF16 — out/gen/sweep/evidence/ampere/gemm_target_a100.json",)),
@@ -193,7 +202,7 @@ REGISTERED: dict[str, GemmTarget] = {
         key="hopper", compute_capabilities=((9, 0),), vllm_arch_family="hopper", dot="HopperBF16WgmmaDot16", tuned_table=HOPPER_TUNED_GEMM,
         kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}", fp8_block_dot="HopperE4m3QgmmaDot32", fp8_moe_dot="HopperE4m3QgmmaDot32",
         evidence=("lane HP CONF-b1-hopper (Qwen2.5-1.5B on an H100: GemmHopper = Gemm with DOT=HopperBF16WgmmaDot16 exact on every GEMM leaf); "
-                  "R13 lane hopper: verity_vllm/program/kernels/gemm_target_correspondence.py on cp-h100a (cc 9.0, 132 SMs, family 'hopper': the "
+                  "R13 lane hopper: verity_vllm/program/gemm_target_correspondence.py on cp-h100a (cc 9.0, 132 SMs, family 'hopper': the "
                   "(2048,2048) tuned rows BLOCK_SIZE_M 16 / BLOCK_SIZE_K 128 at M<=16 and the default tiling elsewhere, Triton PTX sm_90 wgmma) — "
                   "out/gen/sweep/evidence/hopper/gemm_target_h100.json; row llama32-1b__bf16__h100__…__bi-eager-fa2 Match replay (o_proj M=1 tuned row + "
                   "the default-tiled GEMMs bit-exact against Gemm_v2{K,N,DOT=Hopper})",)),
@@ -210,7 +219,7 @@ REGISTERED: dict[str, GemmTarget] = {
         evidence=("core verity.ml.circuits.silicon.instructions: the cc 12.0 mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 entry is pinned to "
                   "HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; dossier art:b87e5a5b4dfaa5e4cfc501fa834df2c968e5ce3d53839660e37a42a2525218d2, "
                   "run r20260922-182911-1f10: 204,800/204,800 elements, the Ampere/Ada pipeline fails 48,569 of them)",
-                  "the cc 12.0 port's GEMM lane: verity_vllm/program/kernels/gemm_target_correspondence.py on an RTX PRO 6000 (188 SMs, driver "
+                  "the cc 12.0 port's GEMM lane: verity_vllm/program/gemm_target_correspondence.py on an RTX PRO 6000 (188 SMs, driver "
                   "595.91.07, torch 2.13.0+cu129, vLLM d9105ea80 under VLLM_BATCH_INVARIANT=1: cuBLASLt with split-K disabled), run "
                   "r20260930-031354-3b6d: every linear (K, N) of the 14 bf16 HF configs of engine/profiles/hf_configs at TP1 and TP2 x M in "
                   "{1..8,12,13,16,17,31,32,33,64,65,127,128,129,255,256,257,512,515,1024,1033,2048,2049,4096,8192} (+ four stress families at M "
@@ -245,6 +254,25 @@ REGISTERED: dict[str, GemmTarget] = {
                   "step misses 3,942 words, the swapped scale order 577, CUTLASS's 568, an unfused mul + add 575; the expert inputs' quant, "
                   "quant/K4096/G64 and quant/K192/G64 (300 rows each), exact against Fp8GroupQuant_v1{G=64}; the run's 21,952,000 words, "
                   "0 mismatched")),
+    # cc 10.0 (the B200): served Builds only.  cuBLAS's bf16 kernels there issue `tcgen05.mma.cta_group::1.kind::f16` (UTCHMMA), a k16
+    # step into a TMEM accumulator, and FA2 (the driver's JIT of vllm-flash-attn's compute_80 PTX) issues `mma.sync.m16n8k16`.  vLLM's
+    # family "blackwell" launches the batch-invariant Triton GEMM at a tuned table nothing here pins, so every batch-invariant
+    # consumer is refused (`batch_invariant_refusal`).
+    "blackwell": GemmTarget(
+        key="blackwell", compute_capabilities=((10, 0),), vllm_arch_family="blackwell", dot="HopperBF16WgmmaDot16", tuned_table={},
+        kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}",
+        batch_invariant_refusal="vLLM's tuned 'blackwell' table of matmul_kernel_persistent is not pinned and no batch-invariant launch "
+                                "on cc 10.0 has a correspondence run",
+        evidence=("core verity.ml.circuits.silicon.instructions: the cc 10.0 tcgen05.mma kind::f16 entry (SASS 1x UTCHMMA) is pinned to "
+                  "HOPPER_BF16_WGMMA_K16's total step (tc_probe r20261018-234914-864e: 42,418,176 swept + 5,688,320 chained elements and, "
+                  "with enable_input_d = 0, 17,842,176 + 3,703,808, every word; dossier "
+                  "art:8a14058ec2dc4f080af1523d55326e11484123feaf0726200473644de51f4765), and the cc 10.0 mma.sync.m16n8k16 entry "
+                  "(HMMA.16816.F32.BF16) to HOPPER_BF16_M16N8K16 (tc_probe r20261019-001149-cc3d: 25,833,472 asserted elements, its "
+                  "specials the total step's; dossier art:9f8188ab6585d976056623b31baa21dcfdbb3a9c7842aa28a5cd341bc0ba0626)",
+                  "the compiled served Builds at vLLM's defaults with FLASH_ATTN FA2 on cc 10.0 (148 SMs): r20261019-000009-d8e9 (the 1B "
+                  "dense row), served Match PASS (all 702 Gemm_v2, 208 CublasSplitKGemm_v1 and 224 attention launches of 14 steps exact) "
+                  "and Commit PASS (2562/2562 values exact in both pairs); r20261019-000518-c3cc (the 8B q/k-norm row), Match PASS (764 "
+                  "Gemm_v2, 1266 CublasSplitKGemm_v1, 504 attention) and Commit PASS (5642/5642 in both pairs)")),
 }
 
 
@@ -268,9 +296,10 @@ def vllm_tuned_gemm_arch_family(compute_capability: tuple[int, int]) -> str | No
     return None
 
 
-def gemm_target_for(compute_capability, arch_family: Any = ...) -> GemmTarget:
+def gemm_target_for(compute_capability, arch_family: Any = ..., *, batch_invariant: bool = True) -> GemmTarget:
     """The registered specialization for a target capability (and, when given, the arch family the host actually reported — it
-    must be the record's; a differing host answer is a refusal, not a re-selection).  Raises `UnregisteredGemmTarget`."""
+    must be the record's; a differing host answer is a refusal, not a re-selection).  `batch_invariant=False` is a served Build's
+    question (its cuBLAS GEMMs' k16 step), which a record with a `batch_invariant_refusal` answers.  Raises `UnregisteredGemmTarget`."""
     cc = (int(compute_capability[0]), int(compute_capability[1]))
     fam = vllm_tuned_gemm_arch_family(cc) if arch_family is ... else arch_family
     for t in REGISTERED.values():
@@ -278,6 +307,10 @@ def gemm_target_for(compute_capability, arch_family: Any = ...) -> GemmTarget:
             if fam != t.vllm_arch_family:
                 raise UnregisteredGemmTarget(f"numerics_unregistered: GEMM target cc {cc[0]}.{cc[1]} reports tuned_gemm_arch_family={fam!r}, the registered "
                                              f"'{t.key}' specialization requires {t.vllm_arch_family!r} (vLLM's table selection changed: not this Definition)")
+            if batch_invariant and t.batch_invariant_refusal:
+                raise UnregisteredGemmTarget(f"numerics_unregistered: no registered GEMM specialization for target cc {cc[0]}.{cc[1]} "
+                                             f"(tuned_gemm_arch_family={fam!r}) for a batch-invariant launch: '{t.key}' is registered for "
+                                             f"served Builds only ({t.batch_invariant_refusal})")
             return t
     known = ", ".join(f"{t.key} (cc {'/'.join(f'{a}.{b}' for a, b in t.compute_capabilities)}, family {t.vllm_arch_family!r})" for t in REGISTERED.values())
     raise UnregisteredGemmTarget(f"numerics_unregistered: no registered GEMM specialization for target cc {cc[0]}.{cc[1]} "

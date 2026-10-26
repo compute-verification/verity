@@ -26,7 +26,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm import protocol_options as PO
+from verity_vllm import protocols as PO
 from verity_vllm.config import row_world
 from verity_vllm.pipeline import commit_group as CG
 from verity_vllm.pipeline import gpu_lease as GL
@@ -128,7 +128,7 @@ def prepared(lead: Any, r: Any) -> tuple[int, list[str]] | str:
             if PO.at_row(None, json.load(f), world=1) is not None:
                 return "the row runs protocol options beside sampled proofs, which a grouped Commit does not install"
         stage = "Commit preparation"
-        to, cmd = r.commit_prepare()
+        to, cmd, _ = r.commit_prepare()
     except Stop as s:
         return f"its {stage} stopped (exit {s.rc}; {r.d}/stages.txt)"
     except PO.Refused as e:
@@ -227,7 +227,7 @@ def commit(lead: Any, cap: int) -> bool:
     if why is not None:
         lead.tl("stage.commit", "start")
         lead.commit_stop(CG.RC_REFUSED, f"rc={CG.RC_REFUSED} REFUSED: {why}")
-    to, cmd = lead.commit_prepare()
+    to, cmd, _ = lead.commit_prepare()
     ready: list[tuple[Any, int, list[str]]] = []
     refused: list[tuple[Any, str]] = []
     for m in members:

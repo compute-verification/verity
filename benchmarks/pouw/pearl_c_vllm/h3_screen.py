@@ -30,6 +30,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent / "clear"))
 
 SCHEME = "pearl-c-sm120-v1-h3"
 WEIGHTS = {0: (256, 1024), 1: (128, 2048)}
@@ -40,8 +41,9 @@ PASSES = {"eager": (False, ()), "graphs": (True, ()), "omit-seeds": (False, ("se
 def capture(args) -> int:
     import torch
     from verity.core.protocols.pouw.audit import weights_root
+    from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw.coins import Challenger
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     out, dev = Path(args.out), torch.device("cuda")
     gen = torch.Generator(device=dev).manual_seed(20261006)
@@ -52,7 +54,7 @@ def capture(args) -> int:
     kernel = PPD.Kernel.load(args.kernel, args.cubin)
     salt_key = PPD.new_salt_key(args.scheme)
     roots = PPD.weight_roots(kernel, weights, args.scheme, salt_key=salt_key)
-    challenger = Challenger(0)
+    challenger = Challenger(0, verifier.coins)
     opening = challenger.open("salt", weights_root(roots))
     xs = [torch.randn(m, weights[w].shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, m in CALLS]
     s, log = PPD.scheme_of(args.scheme), {}
@@ -86,7 +88,7 @@ def capture(args) -> int:
 
 
 def _scheme(man: dict):
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
     return PPD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
 
 
@@ -133,17 +135,17 @@ def _tiles(d: Path, jobs: int) -> dict:
     """Every tile of a pass under `Verifier.check_tile`: its openings, then its leaf recomputed by the reference."""
     import verify_run as VR
     from verity.ml.commitments import Commitment
-    from verity.core.protocols.pouw.audit import Transcript, Verifier
+    from clear_audit import Transcript, Verifier
     from verity.core.protocols.pouw.coins import CoinCommitment
-    from verity.core.protocols.pouw.schemes import pearl_c_work as PW
-    from verity_vllm.protocol_options import pouw_pearl_c_manifest as PM
+    import clear_work as CW
+    from verity_vllm.protocols.pouw.pearl_c import manifest as PM
 
     man = json.loads((d / "manifest.json").read_text())
     s = _scheme(man)
     epoch, _ = PM.manifest_epoch(man, CoinCommitment.from_json(man["coins"]))
     c = man["commitment"]
     transcript = Transcript(tuple(bytes.fromhex(u["root_a"]) for u in man["matmuls"]), Commitment(bytes.fromhex(c["root"]), c["count"]), ())
-    verifier = Verifier(PW._TileRuleView(s), epoch)
+    verifier = Verifier(CW._TileRuleView(s), epoch)
     _JOB.update(verifier=verifier, transcript=transcript, epoch=epoch, prover=VR.Opened(man, VR.Files(d), verifier.refs))
     ids = range(c["count"])
     if jobs > 1:

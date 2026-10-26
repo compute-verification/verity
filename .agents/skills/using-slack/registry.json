@@ -2,11 +2,16 @@
   "schema": "verity/slack-registry/v1",
   "workspace": "computeverification.slack.com",
   "bot_id": "B0C5VQ1KKFW",
+  "slack_app_id": "A0C5KPM2LN7",
   "humans": [
     {
       "name": "Daniel Reuter",
       "slack_user": "U0BEN96ES8Y"
     }
+  ],
+  "collaborators": [],
+  "external_posters": [
+    "Codex"
   ],
   "channels": {
     "agent-coordination": {
@@ -41,6 +46,24 @@
         "database": "https://app.notion.com/p/914ab9399fe44f79ae19ff05db87e1fa",
         "data_source": "9c204dab-e175-407f-b18d-bc3b3bddec61"
       }
+    },
+    "ask-the-team": {
+      "id": "C0CA1JZSYNR",
+      "purpose": "Daniel's questions to the team, typed by him or posted by his Claude app through Slack's connector; top routes each one and answers in its thread, and lanes top asks may reply there with --channel-id.",
+      "subscribers": [
+        "top"
+      ]
+    },
+    "resource-accounting": {
+      "id": "C0CABUKBT2S",
+      "purpose": "Collaborators' questions on compute, memory and network accounting and the GPU model they rest on.",
+      "subscribers": [
+        "compute-accounting",
+        "memory-accounting",
+        "network-accounting",
+        "proofs",
+        "kernels"
+      ]
     }
   },
   "handles": [
@@ -49,51 +72,82 @@
       "holder": "the infra coordinator (bc-5a69647d-04f7-5d94-9ff1-56593e2e1037)",
       "remit": "Machines and task infra: utilization, the scheduler, buying compute, alerts, and one API for agents' jobs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-infra",
-      "usergroup": "S0C5APDSYF9",
+      "usergroup": "S0CA15YVA0P",
+      "retired_usergroups": [
+        "S0C5APDSYF9"
+      ],
       "linear": "INF",
       "owns": [
         "infra/",
         "infra/cluster/",
         "tools/agent-guard/",
         "tools/research/",
-        "benchmarks/judge.py",
-        ".cursor/"
+        ".cursor/",
+        ".python-version"
       ],
       "branch_suffixes": [
         "558b",
         "9e59",
         "98f5"
+      ],
+      "examples": [
+        "Which machines do we have right now, and what is each one busy with?",
+        "I want to run a long job on a GPU tonight. Where can it go, and how do I start it?",
+        "My run failed or was killed. Why, and where are its logs?",
+        "How much are our machines costing per day, and when does each one shut down?",
+        "Can I get access to a node, or more disk or memory for my job?"
       ]
     },
     {
       "handle": "proofs",
-      "holder": "the proofs coordinator (bc-8f4b652b-17bc-5055-a120-b56940b7c7a9); the research coordinator (bc-8ece7cde) keeps running the merge trains",
+      "holder": "the proofs coordinator (bc-a26cefd0-716d-595d-bf02-8f8a47a711bd, generation 4, up 17:33Z on 19 Oct)",
+      "lineage": [
+        "bc-8f4b652b"
+      ],
       "remit": "Proofs: Lean, red team, C-Flock, backend sweeps, consolidation and the merge trains.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)",
-      "usergroup": "S0C5Q6KJZTQ",
+      "usergroup": "S0CAGBJTJF4",
+      "retired_usergroups": [
+        "S0C5Q6KJZTQ"
+      ],
       "linear": "PRF",
       "owns": [
+        "fixtures/typed-obligation-v0/",
+        "fixtures/proof-format-v3/",
+        "Security/Proofs/Flock/",
+        "Security/Proofs/Core/",
+        "Security/Definitions/Core/",
         "verity/",
         "verity/core/protocols/sampled_proofs/",
         "archive/",
         "benchmarks/one_stage/",
+        "benchmarks/live_challenger/",
         "benchmarks/commitments/",
         "benchmarks/multi_unit/",
         "archive/sp1/benchmarks/dot_product/",
         "archive/sp1/benchmarks/ir_call/",
         "benchmarks/latency_compare.py",
         "benchmarks/private_circuit/",
+        "benchmarks/verifier_cost/",
         "benchmarks/proof_throughput/",
         "benchmarks/sampling_plan/",
-        "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py",
+        "integrations/vllm/verity_vllm/protocols/sampled_proofs.py",
         "Security/Definitions/Hash/",
-        "Security/Models/Hash/",
-        "Security/Proofs/Hash/"
+        "Security/Proofs/Hash/",
+        "verity/core/protocols/interface/"
       ],
       "branch_suffixes": [
         "95d4",
         "9b2a",
-        "f39a"
+        "f39a",
+        "11bd"
+      ],
+      "examples": [
+        "What exactly have you proved about the proof system, and what do you still assume?",
+        "If a server cheats on only a small part of its work, how likely is a sampled check to catch it?",
+        "Does checking a proof reveal anything about the model's weights or the user's data?",
+        "Who checks the verifier? What if the verifier program itself has a bug?",
+        "Can one proof vouch for many others, so checking stays cheap at datacenter scale?"
       ]
     },
     {
@@ -101,16 +155,22 @@
       "holder": "the circuits coordinator (bc-21f3d3de-28db-5e5d-964b-d357187449aa)",
       "remit": "Circuits of real workloads: the vLLM integration, the epoch run, sm_120 GEMM, TP2.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (circuit)",
-      "usergroup": "S0C5U3LHMFT",
+      "usergroup": "S0CA15ZF6CX",
+      "retired_usergroups": [
+        "S0C5U3LHMFT"
+      ],
       "linear": "CIR",
       "owns": [
         "integrations/",
         "benchmarks/served_units/",
+        "benchmarks/served_commit/",
+        "benchmarks/g2/",
         "tools/verity/circuit_check/",
         "benchmarks/native_peak/",
         "benchmarks/tc_probe/",
         "benchmarks/tc_probe_fp4/",
         "benchmarks/load_time/",
+        "benchmarks/bool_build_cost/",
         "verity/ml/circuits/ops/",
         "integrations/vllm/verity_vllm/program/",
         "integrations/vllm/verity_vllm/query/",
@@ -127,78 +187,141 @@
         "integrations/vllm/manifests/",
         "integrations/vllm/tests/properties/",
         "integrations/vllm/tests/check/test_capture_map.py",
-        "integrations/vllm/tests/check/test_capture_map_versions.py"
+        "integrations/vllm/tests/check/test_capture_map_versions.py",
+        "integrations/vllm/verity_vllm/program/predict/",
+        "integrations/vllm/tests/program/predict/",
+        "integrations/vllm/tests/program/",
+        "integrations/vllm/tests/commit/",
+        "integrations/vllm/tests/acquire/",
+        "integrations/vllm/tests/query/"
       ],
       "branch_suffixes": [
         "8c79",
         "c491",
         "6f04"
+      ],
+      "examples": [
+        "How do you turn a model like GLM or DeepSeek into a circuit, and how big is that circuit?",
+        "How many gates does one decoding step of a large model take, and which parts of the model dominate?",
+        "How do you know the circuit computes exactly what the GPU kernel actually computed, bit for bit?",
+        "How much slower is serving a model when you record and commit everything it computes?",
+        "Which models and batch sizes have a finished, published circuit record so far?"
       ]
     },
     {
       "handle": "compute-accounting",
-      "holder": "the compute-accounting coordinator (bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef); its research lane (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac), which runs PoUW's relative-security work, posts as it too",
+      "holder": "the compute-accounting coordinator (bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef): the served path's interfaces with circuits, kernels and vllm, the stranded-branch landing, and anything else; the research work is @compute-research's",
       "remit": "Proof of useful work: verity/core/protocols/pouw, its schemes and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
-      "usergroup": "S0C5U3Q04JD",
+      "usergroup": "S0CAB8FRE6R",
+      "retired_usergroups": [
+        "S0C5U3Q04JD"
+      ],
       "linear": "CMP",
       "owns": [
         "verity/core/protocols/pouw/",
         "Security/Definitions/Pouw/",
-        "Security/Models/Pouw/",
         "Security/Proofs/Pouw/",
         "Security/Definitions/Nci.lean",
-        "Security/Models/Nci/",
+        "Security/Definitions/Nci/",
         "Security/Proofs/Nci/",
+        "benchmarks/all_protocols/",
         "benchmarks/pouw/",
         "benchmarks/pouw/machine_model/",
         "benchmarks/pouw/receipts/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
+        "benchmarks/nci/",
+        "benchmarks/e2e_h200/",
+        "benchmarks/e2e_demo/",
         ".agents/skills/kernel-engineering/",
-        "integrations/vllm/verity_vllm/protocol_options/pouw.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_circuit.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_cuda/",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_device.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_native.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_device.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_graphs.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_host.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_kernel.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_manifest.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_screen.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_triton.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_whole.py"
+        "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/circuit.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/pouw_cuda/",
+        "integrations/vllm/verity_vllm/protocols/pouw/device.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/native.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/passes.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/__init__.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/graphs.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/host.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/kernel.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/manifest.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
+        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
+        "integrations/torch_loop/",
+        "fixtures/bench-instances/",
+        "fixtures/redteam/",
+        "fixtures/redteam-3/",
+        "fixtures/redteam-zk/",
+        "benchmarks/census/",
+        "Security/Definitions/Accounting/CoinFlow.lean",
+        "Security/Definitions/Accounting/Filler.lean",
+        "Security/Definitions/Accounting/HMu.lean",
+        "Security/Definitions/Accounting/PouwWork.lean",
+        "Security/Definitions/Accounting/TS.lean",
+        "Security/Definitions/Accounting/TS/",
+        "Security/Definitions/Accounting/Assumptions/PouwFloor.lean",
+        "Security/Definitions/Accounting/Assumptions/PouwWork.lean",
+        "Security/Definitions/Accounting/Assumptions/Sheet.lean",
+        "Security/Definitions/Accounting/Assumptions/Stages.lean",
+        "Security/Definitions/Accounting/Assumptions/TS.lean",
+        "Security/Definitions/Accounting/Guarantees/CoinFlow.lean",
+        "Security/Definitions/Accounting/Guarantees/FillerLuck.lean",
+        "Security/Definitions/Accounting/Guarantees/HMu.lean",
+        "Security/Definitions/Accounting/Guarantees/PouwWork.lean",
+        "Security/Definitions/Accounting/Guarantees/Sheet.lean",
+        "Security/Definitions/Accounting/Guarantees/TS.lean",
+        "Security/Definitions/Accounting/Guarantees/TS/",
+        "Security/Proofs/Accounting/ChainWork.lean",
+        "Security/Proofs/Accounting/CoinFlow.lean",
+        "Security/Proofs/Accounting/CoinFlow/",
+        "Security/Proofs/Accounting/FillerLuck.lean",
+        "Security/Proofs/Accounting/HMu.lean",
+        "Security/Proofs/Accounting/HMu/",
+        "Security/Proofs/Accounting/PouwWork.lean",
+        "Security/Proofs/Accounting/TS.lean",
+        "Security/Proofs/Accounting/TS/"
       ],
       "branch_suffixes": [
         "e3fa",
         "e9ac",
         "ea24",
         "1de3"
+      ],
+      "examples": [
+        "How do you prove a GPU actually did the matrix multiplies it claims, rather than something cheaper?",
+        "What stops a datacenter from counting work done by its host CPU or a spare GPU as the audited GPU's work?",
+        "Where do the peak-throughput numbers for H200, B200 and RTX PRO 6000 come from, and how are they checked?",
+        "What exactly is credited as useful work when serving an LLM, and what isn't?",
+        "How much overhead does the proof of useful work add to inference, and how is it measured?"
       ]
+    },
+    {
+      "handle": "compute-research",
+      "holder": "compute-accounting's research lane (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac): the machine model (W1 and the device records), the Lean accounting statements (NCI, DeclaredCircuitRequirement) and their red and blue teams, and PoUW's protocol statements (period, salt, credit form)",
+      "remit": "The machine model, the Lean accounting statements (NCI and the rest) and their red and blue teams, and PoUW's protocol statements.",
+      "charter": "note:compute-accounting/20261019T2230Z-report-lane-split",
+      "usergroup": "S0CBZ2L8542"
     },
     {
       "handle": "memory-accounting",
       "holder": "the memory-accounting coordinator (bc-d7be0308-38ba-5176-93d1-9169ce7d6cd3)",
       "remit": "Proof of useful space: verity/core/protocols/pous, its Lean package and its runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
-      "usergroup": "S0C5VRGBZFE",
+      "usergroup": "S0CAJE0SREV",
+      "retired_usergroups": [
+        "S0C5VRGBZFE"
+      ],
       "linear": "MEM",
       "owns": [
         "Security/Definitions/Pous/",
-        "Security/Models/Pous/",
         "Security/Proofs/Pous/",
         "benchmarks/bandwidth/",
-        "benchmarks/codec_mix/",
         "benchmarks/codec_tensor/",
-        "benchmarks/ephemeral/",
-        "benchmarks/fill_compute/",
-        "benchmarks/host_tier/",
-        "benchmarks/host_tiles/",
         "benchmarks/kv_filler/",
         "benchmarks/kv_lifetime/",
-        "benchmarks/link_pricing/",
-        "benchmarks/overhead_frontier/",
+        "benchmarks/live_verifier/",
         "benchmarks/pous/",
         "benchmarks/property_redteam/",
         "benchmarks/rate_redteam/",
@@ -206,21 +329,88 @@
         "benchmarks/remote_session/",
         "benchmarks/resource_accounting/",
         "benchmarks/serve_bandwidth/",
-        "benchmarks/sketch_tag/",
         "benchmarks/stacked_share/",
-        "benchmarks/tag_fast/",
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
-        "integrations/vllm/verity_vllm/protocol_options/pous.py",
+        "integrations/vllm/verity_vllm/protocols/pous.py",
         "verity/core/devices/memory_challenger/",
         "verity/core/protocols/bandwidth/",
         "verity/core/protocols/pous/",
-        "verity/core/protocols/remote_bandwidth/"
+        "verity/core/protocols/remote_bandwidth/",
+        "verity/core/primitives/requirement/",
+        "Security/Definitions/Accounting/Bandwidth.lean",
+        "Security/Definitions/Accounting/Bandwidth/",
+        "Security/Definitions/Accounting/BandwidthAudit.lean",
+        "Security/Definitions/Accounting/BoundReceipt.lean",
+        "Security/Definitions/Accounting/BoundSketch.lean",
+        "Security/Definitions/Accounting/Capacity.lean",
+        "Security/Definitions/Accounting/Gates.lean",
+        "Security/Definitions/Accounting/Gates/",
+        "Security/Definitions/Accounting/Memory.lean",
+        "Security/Definitions/Accounting/RateAudit.lean",
+        "Security/Definitions/Accounting/RateAuditDeployed.lean",
+        "Security/Definitions/Accounting/RateAuditHorizon.lean",
+        "Security/Definitions/Accounting/RateAuditInteractive.lean",
+        "Security/Definitions/Accounting/RateAuditJoint.lean",
+        "Security/Definitions/Accounting/RateAuditPartial.lean",
+        "Security/Definitions/Accounting/RateAuditRemote.lean",
+        "Security/Definitions/Accounting/RateAuditSketch.lean",
+        "Security/Definitions/Accounting/RateAuditSketchDeployed.lean",
+        "Security/Definitions/Accounting/RateAuditSketchInteractive.lean",
+        "Security/Definitions/Accounting/RateAuditSketchLayout.lean",
+        "Security/Definitions/Accounting/Remote.lean",
+        "Security/Definitions/Accounting/Remote/",
+        "Security/Definitions/Accounting/Requirement.lean",
+        "Security/Definitions/Accounting/Responder.lean",
+        "Security/Definitions/Accounting/Window.lean",
+        "Security/Definitions/Accounting/Assumptions/EncodeChain.lean",
+        "Security/Definitions/Accounting/Assumptions/RateAudit.lean",
+        "Security/Definitions/Accounting/Assumptions/RateAuditDeployed.lean",
+        "Security/Definitions/Accounting/Assumptions/Remote.lean",
+        "Security/Definitions/Accounting/Guarantees/Bandwidth.lean",
+        "Security/Definitions/Accounting/Guarantees/Bandwidth/",
+        "Security/Definitions/Accounting/Guarantees/BandwidthAudit.lean",
+        "Security/Definitions/Accounting/Guarantees/BoundReceipt.lean",
+        "Security/Definitions/Accounting/Guarantees/BoundSketch.lean",
+        "Security/Definitions/Accounting/Guarantees/Capacity.lean",
+        "Security/Definitions/Accounting/Guarantees/Gates.lean",
+        "Security/Definitions/Accounting/Guarantees/Memory.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAudit.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAuditDeployed.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAuditHorizon.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAuditNamed.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAuditPartial.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAuditRemote.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAuditSketch.lean",
+        "Security/Definitions/Accounting/Guarantees/Requirement.lean",
+        "Security/Definitions/Accounting/Guarantees/Responder.lean",
+        "Security/Proofs/Accounting/Bandwidth.lean",
+        "Security/Proofs/Accounting/Bandwidth/",
+        "Security/Proofs/Accounting/BandwidthAudit.lean",
+        "Security/Proofs/Accounting/BoundReceipt.lean",
+        "Security/Proofs/Accounting/BoundReceipt/",
+        "Security/Proofs/Accounting/Capacity.lean",
+        "Security/Proofs/Accounting/Gates.lean",
+        "Security/Proofs/Accounting/Memory.lean",
+        "Security/Proofs/Accounting/Memory/",
+        "Security/Proofs/Accounting/RateAudit.lean",
+        "Security/Proofs/Accounting/RateAudit/",
+        "Security/Proofs/Accounting/Remote.lean",
+        "Security/Proofs/Accounting/Requirement.lean",
+        "Security/Proofs/Accounting/Responder.lean",
+        "Security/Proofs/Accounting/Responder/"
       ],
       "branch_suffixes": [
         "3cf5",
         "b0c1",
         "93c1"
+      ],
+      "examples": [
+        "How do you know the weights were actually held in GPU memory the whole time, and not reloaded from disk when you checked?",
+        "What stops a node from rebuilding the blocks you ask for on the fly instead of storing them?",
+        "How fast can the node pull data in from its disks or the network, and how does that change the memory number?",
+        "When a server is wiped, how do you prove nothing of the old contents survived?",
+        "What do the 19% memory and 75% bandwidth figures mean, and what are they assuming about the hardware?"
       ]
     },
     {
@@ -228,22 +418,33 @@
       "holder": "the network-accounting coordinator (bc-5c916421-64a5-5c38-94ba-2e28fe629237)",
       "remit": "Network accounting: the network certifier (verity/core/protocols/certifier) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
-      "usergroup": "S0C6LGGSY6L",
+      "usergroup": "S0CAGBGSPCJ",
+      "retired_usergroups": [
+        "S0C6LGGSY6L"
+      ],
       "linear": "NET",
       "owns": [
         "verity/core/protocols/certifier/",
         "verity/core/devices/certifier/",
         "Security/Definitions/NetworkCertifier/",
-        "Security/Models/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/",
+        "benchmarks/network_e2e/",
         "benchmarks/datacenter/",
-        "benchmarks/network_sim/"
+        "benchmarks/network_sim/",
+        "benchmarks/prove_path/"
       ],
       "branch_suffixes": [
         "728f",
         "a190",
         "061a"
+      ],
+      "examples": [
+        "How do you stop a GPU node from secretly sending data out over the network?",
+        "What does the network certifier record about each link, and who has to trust it?",
+        "How many bits could a cheating machine leak just through when it sends packets?",
+        "If two machines exchange model activations, how do you check the traffic is only what the model computes?",
+        "What happens to the audit if a certifier goes down or a node is under maintenance?"
       ]
     },
     {
@@ -251,7 +452,10 @@
       "holder": "Daniel's desktop agent (f7772a12-d61f-4bbb-8c4f-e79e8d6d30dc), on his laptop beside the console's dev server: it reads its Slack inbox whenever Daniel opens it, so asks queue there, and nothing wakes it (Daniel, 2026-10-16 2:37 PM PDT)",
       "remit": "The live console and docs site: panels, formats, frontends, and what agents publish to them.",
       "charter": "Daniel, 2026-10-11 (via top)",
-      "usergroup": "S0C5LSDENA1"
+      "usergroup": "S0CAAA80KGT",
+      "retired_usergroups": [
+        "S0C5LSDENA1"
+      ]
     },
     {
       "handle": "ci",
@@ -267,12 +471,22 @@
         "tools/move/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
-        "tools/research/src/research/merge.py"
+        "tools/research/src/research/merge.py",
+        "tools/research/src/research/drive.py",
+        "tools/research/src/research/mergequeue.py",
+        "tools/research/tests/test_queue_drive.py"
       ],
       "branch_suffixes": [
         "4292",
         "2a98",
         "1518"
+      ],
+      "examples": [
+        "When will my pull request land on main, and what is it waiting for?",
+        "Why did my PR get taken out of the merge queue?",
+        "A check failed on my change but I don't think I broke it. Can you look?",
+        "How do I run the same checks locally before I mark my PR ready?",
+        "Why is landing on main slow right now, and is it getting faster?"
       ]
     },
     {
@@ -292,6 +506,13 @@
         "741b",
         "6f1e",
         "fc8d"
+      ],
+      "examples": [
+        "How do I know the Lean proofs actually check, with no sorry or extra axioms?",
+        "What does a security guarantee in Lean assume, and where is that written down?",
+        "My Lean build or proof check runs out of memory or takes hours. What should I do?",
+        "I changed a Lean definition and the check says a record changed. What do I run?",
+        "Can I trust a proof that imports Mathlib or ArkLib, and how are those checked?"
       ]
     },
     {
@@ -305,12 +526,20 @@
         ".agents/skills/using-slack/",
         "tools/research/src/research/slack.py",
         "tools/research/tests/test_slack.py",
-        "tools/research/tests/slack_routing_vectors.json"
+        "tools/research/tests/slack_routing_vectors.json",
+        "tools/research/src/research/linear.py",
+        "tools/research/tests/test_linear.py",
+        "infra/slack-events/"
       ],
       "branch_suffixes": [
         "b252",
         "38e0",
         "e34f"
+      ],
+      "examples": [
+        "Who should I ask about something, and how do I reach them here?",
+        "My question got no answer. Who saw it, and what happens next?",
+        "How do I get my own chat channel, or add someone to it?"
       ]
     },
     {
@@ -329,11 +558,10 @@
       "owns": [
         "AGENTS.md",
         "README.md",
-        "DESIGN.md",
+        "ARCHITECTURE.md",
         ".agents/skills/",
         "tests/",
         "fixtures/",
-        "benchmarks/census/",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
@@ -342,7 +570,7 @@
     },
     {
       "handle": "vllm",
-      "holder": "the vLLM coordinator (bc-bfa78636-bb35-5c4a-ac9c-cf064e6428d0)",
+      "holder": "the vLLM coordinator (bc-eb1d6598-b608-5bc3-8420-9ed89a1d49ab, generation 4, up 17:38Z on 19 Oct)",
       "remit": "The vLLM integration: what the served model runs under verification, and its hookup to the protocols.",
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C954BELSW",
@@ -352,7 +580,16 @@
       "linear": "VLLM",
       "branch_suffixes": [
         "9411",
-        "8350"
+        "8350",
+        "718d",
+        "49ab"
+      ],
+      "examples": [
+        "How do you check that a model served with vLLM computed exactly what it claims to?",
+        "Does verification slow down serving, and by how much?",
+        "Which models and quantizations (like int8 Llama) can you serve under verification today?",
+        "How do you prove the GPUs actually held the model's weights in memory while serving?",
+        "What changes when a model runs across several GPUs (tensor parallel)?"
       ]
     },
     {
@@ -364,24 +601,80 @@
       "linear": "BENCH",
       "owns": [
         "benchmarks/harness/",
-        "benchmarks/specs/"
+        "benchmarks/recursion_e2e/",
+        "benchmarks/specs/",
+        "infra/cluster/kinds/benchmarks.toml",
+        "benchmarks/judge.py"
       ],
       "branch_suffixes": [
         "47e4",
         "6193"
+      ],
+      "examples": [
+        "How much slower does serving a model get when you add verification, and how did you measure that?",
+        "What's the overhead of the bandwidth audit (or PoUW, or the commitment) compared with plain vLLM?",
+        "Can I rerun one of your benchmark numbers myself, and how?",
+        "Why do two of your overhead numbers for the same thing disagree?",
+        "How do you make sure a benchmark comparison is fair, with the same model, settings and GPU, and warm-ups excluded?"
       ]
     },
     {
-      "handle": "hash",
-      "holder": "the hash coordinator (bc-0104b328-7489-5a12-a90e-2a15e14ff08a), a new slice launched from top's charter",
-      "remit": "A fast commitment hash for served inference: tensor-core friendly, binding proved in Lean, to cut vLLM commit time.",
-      "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top)",
+      "handle": "kernels",
+      "holder": "the kernels coordinator (bc-0104b328-7489-5a12-a90e-2a15e14ff08a), a new slice launched from top's charter",
+      "remit": "Fast commitment kernels: one GPU library for every served-path commitment, its vLLM integration, the commit-overhead benchmark.",
+      "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top); renamed from @hash by Daniel, 2026-10-18 9:40 AM PDT",
       "usergroup": "S0CAYGG5BDW",
       "owns": [
-        "benchmarks/hash/"
+        "benchmarks/hash/",
+        "benchmarks/torch_gpu/"
       ],
       "branch_suffixes": [
         "15ad"
+      ],
+      "examples": [
+        "How much slower is serving with the commitments on, compared with plain vLLM at full load?",
+        "Why is the proof-of-work matmul so much slower than a normal int8 matmul, and what would make it faster?",
+        "Is the exact int8 path supposed to be slower than ordinary int8 serving?",
+        "How much GPU time does SHA-512 hashing take next to the model's own work?",
+        "How do you measure the overhead fairly: against which baseline, at what batch size, on which GPUs?"
+      ]
+    },
+    {
+      "handle": "training",
+      "holder": "Daniel's training agent (bc-b43da88b-5d25-4463-9b8c-da4df6f84207), named 'training'",
+      "remit": "Training compute and scaling laws: Daniel's training agent, for scaling-law questions.",
+      "charter": "Daniel, 2026-10-18 (via top, COMM-44)",
+      "usergroup": "S0CA9EAFKED",
+      "owns": [
+        "benchmarks/rho/"
+      ],
+      "branch_suffixes": [
+        "4207"
+      ],
+      "examples": [
+        "How much more hardware would someone need to secretly train a frontier model under your verification scheme?",
+        "Could a lab hide training inside work it declares and proves as inference?",
+        "Which parts of the training-slowdown claim are proved, and which are still assumptions?",
+        "If a lab hides some of its GPUs from monitoring, how much protection is left?",
+        "What would have to improve for the slowdown to go from about 30x to over 1,000x?"
+      ]
+    },
+    {
+      "handle": "counters",
+      "holder": "the counters coordinator (bc-163d178a-a74a-59de-8ea7-6e320c7891ef), a new slice launched from top's charter",
+      "remit": "Trusted event counters: which few counted event streams (bits moved, core steps) make each security goal provable.",
+      "charter": "Daniel, 2026-10-25 8:14 PM PDT (a new slice, via top)",
+      "usergroup": "S0CCWGJBEJU",
+      "owns": [],
+      "branch_suffixes": [
+        "91ef"
+      ],
+      "examples": [
+        "If we could trust one hardware counter in a datacenter, which should it be, and what would it settle?",
+        "Does counting the bits a GPU sends to its host make the memory or network guarantee provable?",
+        "Which security goals would trusted tensor-core step counts settle, and which would still need proofs?",
+        "How do our guarantees change as a physical rate bound, such as CUDA-core to tensor-core bandwidth, gets looser?",
+        "Could a retrofit to today's GPUs give us any of these counters, or does it take new silicon?"
       ]
     }
   ]

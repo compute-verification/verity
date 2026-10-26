@@ -1,3 +1,4 @@
+import Proofs.Flock.Claims.DeploySetup
 import Proofs.Flock.Claims.Deploy
 import Proofs.Flock.Claims.ZkCols
 import Proofs.Flock.Claims.DecodeFlock
@@ -5,12 +6,17 @@ import Proofs.Flock.Claims.NumbersGamma
 import Proofs.Flock.Claims.NumbersNMin
 import Proofs.Flock.Claims.NumbersTable
 import Proofs.Flock.Claims.GS.RadiusDeploy
+import Proofs.Flock.Claims.Complete.Honest
+import Proofs.Flock.Claims.Complete.Zk.Honest
+import Proofs.Flock.Claims.Complete.Ready
+import Proofs.Flock.Claims.Complete.ZkTables.Faithful
 
 /-!
 # Flock's deployed instances of `Claims.Flock.Deploy`
 
 `FlockDeploy.deployPlain rel` and `FlockDeploy.deployZk rel` are the shipped verifier, plain and masked (`--zk`), as
-the record Flock's claims read, at the relation's fields `rel` (C's `Readable.Relation`):
+records, at the relation's fields `rel` (C's `Readable.Relation`); Flock's claims read them with their columns trimmed
+of trailing zeros (`FlockDeploy.deployPlainTrim`, `FlockDeploy.deployZkTrim`):
 
 * `V`, `parse`, `scopeCheck`, `table`: the verifier in public-coin form (`FlockDeploy.V`), the verifier's own parser and
   scope check on the statement's bytes (`FlockDeploy.parse`, `FlockDeploy.scopeCheck`), and each table's own statement,
@@ -28,7 +34,8 @@ the record Flock's claims read, at the relation's fields `rel` (C's `Readable.Re
   records read as before (`deployPlain_one`, `deployZk_one`, `Claims.Flock.assemble_of_tables_eq_one`).
 * `dec`: the counted radius decoder at that code (`GS.plainCountedRD`, `GS.zkCountedRD`: the counted Guruswami–Sudan
   decoder at each `m`, its count summed over the `m`s). It meets `ListWithin` at `len`, `enc` and `θ`
-  (`FlockDeploy.listWithin_plain`, `FlockDeploy.listWithin_zk`).
+  (`FlockDeploy.listWithin_plain`, `FlockDeploy.listWithin_zk`), and at the trimmed records'
+  (`FlockDeploy.listWithin_plainTrim`, `FlockDeploy.listWithin_zkTrim`).
 * `assemble`, table by table: what it returns is one decoded trace per table, each in its own statement's relation
   read alone (`Claims.Flock.assemble_eq_some`), and it returns where every table has one
   (`Claims.Flock.assemble_isSome`).
@@ -41,6 +48,14 @@ the record Flock's claims read, at the relation's fields `rel` (C's `Readable.Re
   reruns open every table (`tableLen`). `weight`: the tables' weights summed (`Numbers.weightOf`, at the pads' domain
   `Numbers.padDomain` under `--zk`). `waits`, `cap`: `Numbers.waits` (`210`) and `Numbers.cap` (`2^256`). A statement
   that does not set up has no tables: `εtable`, `N₀` and `weight` are `0` there, where the verifier refuses every run.
+* `Tape`, `P`: the reference prover, each verifier's honest prover on its tapes: `FlockComplete.honestP` on
+  `FlockComplete.Tape` (`Complete.Honest`), and `FlockComplete.ZkTables.honestPR` on `FlockComplete.TapeZk`
+  (`Complete.ZkTables.Faithful`), `flock-circuit --zk`'s: it runs each table on its share of the witness (the bits the
+  relation reads, `Readable.tableWit`) with the tape's words in the mask slot (`ZkTables.maskWOf`), as
+  `FlockComplete.ZkTables.honestP` does on that witness, and stops once a zerocheck outer coin is `1`.
+* `δc`: the reference prover's completeness error at each hash `H`, `ε` (`εZk`), the bad coins' count over `2^128`, on
+  the statements the verifier can accept against `H` (`FlockComplete.ready H`, `ZkTables.ready H`, at any number of
+  tables), and `1` elsewhere (`FlockComplete.δc`, `ZkTables.δc`, in `Complete.Ready`, which states that set).
 
 One run opens fewer level-0 columns than `nMin` of every trace (`cols_length_lt_nMin_plain`, `_zk`): ruling 2's count
 is reached only by `E^rep`'s columns, gathered over its accepted reruns.
@@ -344,12 +359,49 @@ def runOf (zk : Bool) (s : Claims.Seen) (j : ℕ) : Option Claims.Flock.ZkRun :=
          reps := [(lv.streams.getD (2 * j) #[], f.proofs.getD (2 * j) ByteArray.empty),
                   (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)] }
 
+
+namespace KS.Gen
+
+variable [S : ZkSetup]
+
+/-- **What the column reader takes of a run's table `j`**, with no hash: from the last message's statement, record and
+proof files, table `j`'s `m`, `kLog`, claim count and Merkle widths (its setup's, its claims at the session's link
+points), and its two reps' recorded rounds (the record's streams `<t>/rep0`, `<t>/rep1`, at `2j` and `2j + 1` in
+`spec.repStreams` order) and proof files (at the same two places, as `verify` reads them). -/
+def runOf (zk : Bool) (s : Claims.Seen) (j : ℕ) : Option Claims.Flock.ZkRun := do
+  let f ← lastFinal s
+  let (_, spec, sts) ← setupOf zk f.stmt
+  let st ← sts[j]?
+  let tab := Setup.ofCircuit st
+  let lv ← (liveOf spec f.record).toOption
+  let extras ← (tab.extra lv.points).toOption
+  pure { m := tab.m, kLog := tab.kLog, claims := 2 + extras.size, hashLen := tab.merkle.digestLen,
+         saltLen := saltLenOf zk tab,
+         reps := [(lv.streams.getD (2 * j) #[], f.proofs.getD (2 * j) ByteArray.empty),
+                  (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)] }
+
+end KS.Gen
+
 /-- **The opened level-0 columns of a run's table `j`**: its two reps' (`plainRunCols`, `zkRunCols`); none where the
 run's last message does not set up table `j`. -/
 def cols (zk : Bool) (s : Claims.Seen) (j : ℕ) : List (ℕ × List 𝔽) :=
   match runOf zk s j with
   | some r => if zk then Claims.Flock.zkRunCols r else Claims.Flock.plainRunCols r
   | none => []
+
+
+namespace KS.Gen
+
+variable [S : ZkSetup]
+
+/-- **The opened level-0 columns of a run's table `j`**: its two reps' (`plainRunCols`, `zkRunCols`); none where the
+run's last message does not set up table `j`. -/
+def cols (zk : Bool) (s : Claims.Seen) (j : ℕ) : List (ℕ × List 𝔽) :=
+  match runOf zk s j with
+  | some r => if zk then Claims.Flock.zkRunCols r else Claims.Flock.plainRunCols r
+  | none => []
+
+end KS.Gen
 
 /-- **The plain record's columns**: table `0`'s, none at another table. The plain verifier's scope admits one table. -/
 def plainTableCols (s : Claims.Seen) (j : ℕ) : List (ℕ × List 𝔽) := if j = 0 then cols false s 0 else []
@@ -383,6 +435,19 @@ def tables (zk : Bool) (x : Claims.Msg) : List (SessionSpec × Stmt) :=
   | some (_, spec, sts) => sts.toList.map fun st => (spec, st)
   | none => []
 
+
+namespace KS.Gen
+
+variable [S : ZkSetup]
+
+/-- The session's tables with its spec; none where the statement does not set up. -/
+def tables (zk : Bool) (x : Claims.Msg) : List (SessionSpec × Stmt) :=
+  match setupOf zk x with
+  | some (_, spec, sts) => sts.toList.map fun st => (spec, st)
+  | none => []
+
+end KS.Gen
+
 /-- A table's shape as the soundness analysis reads it: `k_log`, its public regions and the link points' coordinates. -/
 def acct (spec : SessionSpec) (st : Stmt) : Accounting.Stmt := ⟨st.c.kLog, st.regions.size, spec.mPts⟩
 
@@ -399,12 +464,32 @@ noncomputable def tableErr (zk : Bool) (spec : SessionSpec) (st : Stmt) : ℝ :=
 /-- **`ε_table`**: the session's tables' errors, summed. -/
 noncomputable def εtable (zk : Bool) (x : Claims.Msg) : ℝ := ((tables zk x).map fun p => tableErr zk p.1 p.2).sum
 
+
+namespace KS.Gen
+
+variable [S : ZkSetup]
+
+/-- **`ε_table`**: the session's tables' errors, summed. -/
+noncomputable def εtable (zk : Bool) (x : Claims.Msg) : ℝ := ((tables zk x).map fun p => tableErr zk p.1 p.2).sum
+
+end KS.Gen
+
 /-- A table's level-0 codeword length, `2^{d₀}`. -/
 noncomputable def tableLen (zk : Bool) (st : Stmt) : ℝ :=
   2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).d
 
 /-- **`N₀`**: the session's tables' level-0 codeword lengths, summed: table 0's `2^{d₀}` at one table. -/
 noncomputable def N₀ (zk : Bool) (x : Claims.Msg) : ℝ := ((tables zk x).map fun p => tableLen zk p.2).sum
+
+
+namespace KS.Gen
+
+variable [S : ZkSetup]
+
+/-- **`N₀`**: the session's tables' level-0 codeword lengths, summed: table 0's `2^{d₀}` at one table. -/
+noncomputable def N₀ (zk : Bool) (x : Claims.Msg) : ℝ := ((tables zk x).map fun p => tableLen zk p.2).sum
+
+end KS.Gen
 
 /-- A table's weight: `Numbers.weightOf` at its schedule, and under `--zk` at its pads' domain. -/
 noncomputable def tableWeight (zk : Bool) (st : Stmt) : ℝ :=
@@ -416,9 +501,19 @@ noncomputable def tableWeight (zk : Bool) (st : Stmt) : ℝ :=
 /-- **The weight `C` of `γ`**: the session's tables' weights, summed. -/
 noncomputable def weight (zk : Bool) (x : Claims.Msg) : ℝ := ((tables zk x).map fun p => tableWeight zk p.2).sum
 
+
+namespace KS.Gen
+
+variable [S : ZkSetup]
+
+/-- **The weight `C` of `γ`**: the session's tables' weights, summed. -/
+noncomputable def weight (zk : Bool) (x : Claims.Msg) : ℝ := ((tables zk x).map fun p => tableWeight zk p.2).sum
+
+end KS.Gen
+
 /-! ## The instances -/
 
-/-- **Flock's deployed plain verifier**, as the record Flock's claims read. -/
+/-- **Flock's deployed plain verifier**, as a record; Flock's claims read it trimmed (`deployPlainTrim`). -/
 noncomputable def deployPlain (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.Deploy Coin (List 𝔽) Claims.Flock.PlainTrace where
   zk := false
@@ -437,8 +532,11 @@ noncomputable def deployPlain (rel : Readable.Parsed → Readable.Relation) :
   weight := weight false
   waits _ := Claims.Flock.Numbers.waits
   cap _ := Claims.Flock.Numbers.cap
+  Tape := FlockComplete.Tape
+  P := FlockComplete.honestP
+  δc := FlockComplete.δc
 
-/-- **Flock's deployed masked (`--zk`) verifier**, as the record Flock's claims read. -/
+/-- **Flock's deployed masked (`--zk`) verifier**, as a record; Flock's claims read it trimmed (`deployZkTrim`). -/
 noncomputable def deployZk (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.Deploy Coin (List 𝔽) Claims.Flock.ZkTrace where
   zk := true
@@ -457,6 +555,114 @@ noncomputable def deployZk (rel : Readable.Parsed → Readable.Relation) :
   weight := weight true
   waits _ := Claims.Flock.Numbers.waits
   cap _ := Claims.Flock.Numbers.cap
+  Tape := FlockComplete.TapeZk
+  P := FlockComplete.ZkTables.honestPR
+  δc := FlockComplete.ZkTables.δc
+
+
+namespace KS.Gen
+
+variable [S : ZkSetup]
+
+/-- **Flock's deployed masked (`--zk`) verifier**, as a record; Flock's claims read it trimmed (`deployZkTrim`). -/
+noncomputable def deployZk (rel : Readable.Parsed → Readable.Relation) :
+    Claims.Flock.Deploy Coin (List 𝔽) Claims.Flock.ZkTrace where
+  zk := true
+  V := V true
+  parse := parse true rel
+  scopeCheck := scopeCheck true
+  table := table true rel
+  cols := cols true
+  enc := Claims.Flock.zkEncD
+  len := Claims.Flock.zkLenD
+  θ := Claims.Flock.zkThetaD
+  dec := Claims.GS.zkCountedRD
+  read := Claims.Flock.readTables Claims.Flock.zkReadD
+  εtable := εtable true
+  N₀ := N₀ true
+  weight := weight true
+  waits _ := Claims.Flock.Numbers.waits
+  cap _ := Claims.Flock.Numbers.cap
+  Tape := FlockComplete.TapeZk
+  P := FlockComplete.ZkTables.honestPR
+  δc := FlockComplete.ZkTables.δc
+
+end KS.Gen
+
+/-! ## The records Flock's claims read: columns trimmed of trailing zeros
+
+The verifier opens full-width columns, and `fill` reads a position no run opened as `[]` (`Flock.instZeroListCol`),
+which is no full-width column. Read through `trimCol`, the zero column of every width is `[]`, and a column is still
+its lanes (`trimCol_getD`), so the claims' records (`deployPlainTrim`, `deployZkTrim`) are the instances with their
+opened columns and their code trimmed (`Deploy.mapCols`), everything else the instances'. -/
+
+/-- **A column trimmed of its trailing zeros**: the zero column of every width is `[]`. -/
+def trimCol {F : Type} [Zero F] [DecidableEq F] : List F → List F
+  | [] => []
+  | a :: u => if a = 0 ∧ trimCol u = [] then [] else a :: trimCol u
+
+/-- **A trimmed column has the column's lanes**, `0` past both. -/
+theorem trimCol_getD {F : Type} [Zero F] [DecidableEq F] (u : List F) (ℓ : ℕ) :
+    (trimCol u).getD ℓ 0 = u.getD ℓ 0 := by
+  induction u generalizing ℓ with
+  | nil => rfl
+  | cons a u ih =>
+    rw [trimCol.eq_2]
+    split_ifs with h
+    · cases ℓ with
+      | zero => rw [List.getD_nil, List.getD_cons_zero, h.1]
+      | succ ℓ => rw [List.getD_nil, List.getD_cons_succ, ← ih, h.2, List.getD_nil]
+    · cases ℓ with
+      | zero => rfl
+      | succ ℓ => rw [List.getD_cons_succ, List.getD_cons_succ, ih]
+
+theorem eq_of_getD {F : Type} [Zero F] {u v : List F} (hl : u.length = v.length)
+    (h : ∀ ℓ, u.getD ℓ 0 = v.getD ℓ 0) : u = v := by
+  refine List.ext_getElem hl fun ℓ h1 h2 => ?_
+  have := h ℓ
+  rwa [List.getD_eq_getElem _ _ h1, List.getD_eq_getElem _ _ h2] at this
+
+/-- **Two columns of one width with one trim are one.** -/
+theorem trimCol_inj {F : Type} [Zero F] [DecidableEq F] {u v : List F} (hl : u.length = v.length)
+    (h : trimCol u = trimCol v) : u = v :=
+  eq_of_getD hl fun ℓ => by rw [← trimCol_getD u, h, trimCol_getD]
+
+/-- **The zero column of every width trims to `[]`.** -/
+theorem trimCol_replicate {F : Type} [Zero F] [DecidableEq F] (n : ℕ) :
+    trimCol (List.replicate n (0 : F)) = [] := by
+  induction n with
+  | zero => rfl
+  | succ n ih => rw [List.replicate_succ, trimCol.eq_2, ite_eq_left ⟨rfl, ih⟩]
+
+/-- **A record with its columns read through `f`**: its opened columns and its code's, everything else its own. -/
+def _root_.Claims.Flock.Deploy.mapCols {Coin Col T : Type} (D : Claims.Flock.Deploy Coin Col T) (f : Col → Col) :
+    Claims.Flock.Deploy Coin Col T :=
+  { D with cols := fun s j => (D.cols s j).map fun p => (p.1, f p.2), enc := fun M q => f (D.enc M q) }
+
+/-- **Flock's deployed plain verifier, as the record Flock's claims read**: `deployPlain rel` with its opened columns
+and its code trimmed of trailing zeros. -/
+noncomputable def deployPlainTrim (rel : Readable.Parsed → Readable.Relation) :
+    Claims.Flock.Deploy Coin (List 𝔽) Claims.Flock.PlainTrace :=
+  (deployPlain rel).mapCols trimCol
+
+/-- **Flock's deployed masked (`--zk`) verifier, as the record Flock's claims read**: `deployZk rel` with its opened
+columns and its code trimmed of trailing zeros. -/
+noncomputable def deployZkTrim (rel : Readable.Parsed → Readable.Relation) :
+    Claims.Flock.Deploy Coin (List 𝔽) Claims.Flock.ZkTrace :=
+  (deployZk rel).mapCols trimCol
+
+
+namespace KS.Gen
+
+variable [S : ZkSetup]
+
+/-- **Flock's deployed masked (`--zk`) verifier, as the record Flock's claims read**: `deployZk rel` with its opened
+columns and its code trimmed of trailing zeros. -/
+noncomputable def deployZkTrim (rel : Readable.Parsed → Readable.Relation) :
+    Claims.Flock.Deploy Coin (List 𝔽) Claims.Flock.ZkTrace :=
+  (deployZk rel).mapCols trimCol
+
+end KS.Gen
 
 /-! ## What the instances meet -/
 

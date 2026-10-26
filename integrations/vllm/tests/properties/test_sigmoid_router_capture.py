@@ -9,8 +9,8 @@ import numpy as np
 import pytest
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.defs import bind
-from verity_vllm.program.registry import moe
-from verity_vllm.program.kernels import moe_twins
+from verity.ml.definitions.registry import moe
+from verity.ml.definitions.numerics import moe_twins
 
 from tests.properties import sigmoid_router_capture_gpu as S
 
@@ -44,6 +44,7 @@ def test_sigmoid_words_is_the_sass_model():
     assert S.sigmoid_words(words).tolist() == [moe_twins.nv_sigmoid_bits(int(w)) for w in words]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("launch", S.LAUNCHES)
 def test_the_twin_is_the_program_at_16_experts(R, launch):
     """`twin` restates the Program at any width with 8 slots; at 16 experts the Program evaluates fast, on rows cut from every kind."""
@@ -104,7 +105,28 @@ def test_the_sweep_is_every_mufu_logit_and_its_expectation_is_the_twins():
             assert np.array_equal(w, ew) and np.array_equal(ids, eids)
 
 
-@pytest.mark.slow
+def test_the_run_is_at_vllms_defaults(monkeypatch):
+    """The run clears every switch the process inherited, and its verdict needs vLLM to read the served ones back: a batch-invariant
+    run, or one whose grouped top-k is not the fused kernel, is not a GO however its rows compare."""
+    from types import SimpleNamespace
+
+    from verity_vllm.engine.env import SERVED_DEFAULTS, served_defaults
+
+    monkeypatch.setenv("VLLM_BATCH_INVARIANT", "1")
+    monkeypatch.setenv("VLLM_USE_DEEP_GEMM", "0")
+    assert served_defaults() == {"VLLM_BATCH_INVARIANT": "1", "VLLM_USE_DEEP_GEMM": "0"}
+    assert not [k for k in SERVED_DEFAULTS if k in __import__("os").environ]
+    assert S.served(SimpleNamespace(VLLM_BATCH_INVARIANT=False, VLLM_USE_FUSED_MOE_GROUPED_TOPK=True))["ok"]
+    doc = {"gate": {"ok": True}, "served": S.served(SimpleNamespace(VLLM_BATCH_INVARIANT=False, VLLM_USE_FUSED_MOE_GROUPED_TOPK=True)),
+           "host_subnormals": True, "mufu": {"ok": True}, "kernels": {lnch: {"ok": True} for lnch in S.LAUNCHES},
+           "capture": {"deterministic": True, "tiles_equal": True, "logits_intact": True},
+           "rows": {lnch: {"mismatch": 0} for lnch in S.LAUNCHES}, "program": {"ok": True}, "sweep": {"ok": True}}
+    assert S._verdict(doc)
+    for bi, fused in ((True, True), (False, False)):
+        doc["served"] = S.served(SimpleNamespace(VLLM_BATCH_INVARIANT=bi, VLLM_USE_FUSED_MOE_GROUPED_TOPK=fused))
+        assert not S._verdict(doc)
+
+
 def test_check_finds_a_changed_output(tmp_path):
     """`--check` on a capture written from the twin: the Program agrees, except on the one output changed."""
     R = S.rows(7, S.GROUP)

@@ -1,8 +1,8 @@
-"""[R13 MOE-01] Bet A rules for vLLM's fused-MoE block under the batch-invariant profile — the leaf kernels `export_compat.moe_ops_traced`
-makes visible in place of the opaque `vllm.moe_forward` dispatcher (R12 F-moe-02 / B-MOE): generic in the block's shape parameters
+"""[MOE-01] Bet A rules for vLLM's fused-MoE block under the batch-invariant profile — the leaf kernels `export_compat.moe_ops_traced`
+makes visible in place of the opaque `vllm.moe_forward` dispatcher (F-moe-02 / B-MOE): generic in the block's shape parameters
 (E experts, TOPK, hidden H, intermediate I, tokens M), nothing about a model.
 
-The block, in launch order, and what each rule binds (numerics: `verity_vllm.program.registry.moe`, difftested bit-exact in
+The block, in launch order, and what each rule binds (numerics: `verity.ml.definitions.registry.moe`, difftested bit-exact in
 `verity_vllm/check/moe_kernel_xcheck.py` against the same kernels on cp-moe):
 
     _moe_C.topk_softmax(w!, ids!, tei!, logits, renormalize, bias=None, is_padding=None)
@@ -23,7 +23,7 @@ Both fused_moe_kernel schedules are accepted: the sorted one (`sorted_token_ids_
 Everything else the launch could be (SPLIT_K > 1, fused bias, fp8/int8 paths, SWAP_AB, group quant, another compute_type, another source
 body) refuses with the pinned field named, as `TritonGemm[vllm-bi]` does.
 
-[R17-42 / R17-45 (a) route A (3): `TargetProfile.moe_construction`] TWO rule families own the same six leaf kernels, exclusively, by the
+[route A (3): `TargetProfile.moe_construction`] TWO rule families own the same six leaf kernels, exclusively, by the
 DECLARED construction (`vllm_bindings.active_target_profile().effective_moe_construction()`; a Program static, never attested):
 
   * `indexed-read` (the default; MOE-01, the four rules above): the block as SIX kinds -- router, the pair-major expert GEMMs with the
@@ -134,9 +134,19 @@ def _not_owned(family: str) -> str | None:
     return None
 
 
+def _pinned_tile_refusal(sc, geom) -> str | None:
+    for k, v in MOE_GEMM_PINS["tiles"].items():
+        if sc.get(k) != v:
+            return f"numerics_unregistered: tiling {k}={sc.get(k)!r} is not the difftested launch geometry ({MOE_GEMM_PINS['tiles']})"
+    if geom.get("num_warps", sc.get("num_warps")) != MOE_GEMM_PINS["num_warps"] or geom.get("num_stages", sc.get("num_stages")) != MOE_GEMM_PINS["num_stages"]:
+        return f"numerics_unregistered: num_warps/num_stages {geom.get('num_warps')}/{geom.get('num_stages')} are not the difftested {MOE_GEMM_PINS['num_warps']}/{MOE_GEMM_PINS['num_stages']}"
+    return None
+
+
 def _launch_pins(node, meta, sc) -> str | None:
     """`fused_moe_kernel` launch pins shared by both families (`MOE_GEMM_PINS`: kernel, source body, numeric constexprs, no bias / scale
-    pointers, the difftested tiling and warps / stages): a refusal string or None.  Operand shapes / schedule are the family's own."""
+    pointers, the difftested tiling and warps / stages, or a tuned tile `frontend.targets.moe_tuned_tile_refusal` accepts): a refusal
+    string or None.  Operand shapes / schedule are the family's own."""
     if meta.get("kernel") != MOE_GEMM_PINS["kernel"]:
         return f"kernel {meta.get('kernel')} is not {MOE_GEMM_PINS['kernel']}"
     pin_sha = MOE_GEMM_PINS["src_sha256"]
@@ -148,12 +158,10 @@ def _launch_pins(node, meta, sc) -> str | None:
     for nm in MOE_GEMM_PINS["none_ptrs"]:
         if sc.get(nm) is not None or launch_tensor(node, meta, nm) is not None:
             return f"numerics_unregistered: {nm} is set (bias / scale epilogue is a different numeric)"
-    for k, v in MOE_GEMM_PINS["tiles"].items():
-        if sc.get(k) != v:
-            return f"numerics_unregistered: tiling {k}={sc.get(k)!r} is not the difftested launch geometry ({MOE_GEMM_PINS['tiles']})"
-    geom = meta.get("geometry") or {}
-    if geom.get("num_warps", sc.get("num_warps")) != MOE_GEMM_PINS["num_warps"] or geom.get("num_stages", sc.get("num_stages")) != MOE_GEMM_PINS["num_stages"]:
-        return f"numerics_unregistered: num_warps/num_stages {geom.get('num_warps')}/{geom.get('num_stages')} are not the difftested {MOE_GEMM_PINS['num_warps']}/{MOE_GEMM_PINS['num_stages']}"
+    if (r := _pinned_tile_refusal(sc, meta.get("geometry") or {})) is not None:
+        from verity_vllm.program.frontend import targets as T
+        if T.moe_tuned_tile_refusal(active_target_profile(), sc.get("BLOCK_SIZE_K")) is not None:
+            return r
     bk = sc.get("BLOCK_SIZE_K")
     if not isinstance(bk, int) or bk % 16:
         return f"BLOCK_SIZE_K={bk!r} (need a multiple of 16)"
@@ -391,7 +399,7 @@ class FusedMoeKernelRule(InPlaceRule):
             ids_node = launch_tensor(node, meta, "expert_ids_ptr")
         else:
             ids_node = ctx.val(launch_tensor(node, meta, "sorted_token_ids_ptr")).ids_node
-        from verity_vllm.program.registry.prims import F32, I32
+        from verity.ml.definitions.registry.prims import F32, I32
         ids = _flat_pairs(ctx.coll(ids_node), nv, I32)
         ws = _flat_pairs(ctx.coll(launch_tensor(node, meta, "topk_weights_ptr")), nv, F32) if mrw else None
         role, dot = moe_expert_role(mrw)
@@ -445,7 +453,7 @@ class MoeSumRule(InPlaceRule):
     def emit(self, node, ctx):
         y, out = node.args[:2]
         M, TOPK, H = shape(ctx, y)
-        from verity_vllm.program.registry.prims import BF16
+        from verity.ml.definitions.registry.prims import BF16
         yc = ctx.coll(y).reshape(Array(M, Array(TOPK, Array(H, BF16))))
         fn = ctx.kind("moe_sum", node, TOPK=TOPK, H=H)
         outs = [ctx.call(fn, yc[t], node=node, rule=self, name=f"{ctx.hint_name(node)}[{t}]") for t in range(M)]

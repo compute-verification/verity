@@ -7,18 +7,19 @@ A manifest (`verity-sweep/required-manifest/v1`) is one identity row per require
                         `components_fold_digest` (a B>=2 manifest's program digest before GP-01's), `request_label` (`r<k>`)
 * Program names      -- `split_name` / `spec_family` / `spec_statics` over an `instances.json.gz` row, `collector_path` / `wrapper_prefix_of`
                         (Program module path -> the implementation's `named_modules()` path), `segment_steps` at the sampling events
-* stream geometry    -- the FA2 / FA3 M1 launch geometry and word count, the fused-MoE block planes (`moe_geometry` / `moe_identities`)
+* stream geometry    -- the FA2 / FA3 M1 launch geometry and word count, what a batch-level row's committed stream must hold
+                        (`batch_launch_shortfall`), the fused-MoE block planes (`moe_geometry` / `moe_identities`)
 * manifest rows      -- the lifted dtypes of the padded construction, the promoted-row observation rule (`promoted_observation`: a pre-flip
-                        v1 manifest's `promoted: true` rows), the committed-name reader and the layout-level `coverage_check`
+                        v1 manifest's `promoted: true` rows); the binder and the layout-level `coverage_check` over these rows are
+                        `verity_vllm.query.manifest.bind`
 * Build inputs       -- `load_program`, `program_dirs_for` / `programs_for` (one request Program per declared (prompt_len, cap-1) shape),
                         `RegistryUnavailable` (the environment fault a manifest build refuses under)
 
 Which Values are required is the query's: `verity_vllm.query` (`required.QUERY_OF_RECORD`, Q_word v1 since the re-baseline; TP rank Programs
-too, with its TP-04 policy).  Dependency-free (json/gzip/hashlib).
+too, with its TP-04 policy).  Dependency-free (json/hashlib) but for `load_program`, which reads through `program.instances_file`.
 """
 from __future__ import annotations
 
-import gzip
 import hashlib
 import json
 import os
@@ -47,6 +48,17 @@ FAMILIES = ("input_token_ids", "instance_outputs", "sampled_token_ids", "weights
 TP_PARTIAL_MEMBER = "part_rank{rank}"
 
 TP_SHARD_MEMBER = "shard_rank{rank}"
+
+#: the rows of an fx node's output at a step that the Program computes narrower than its widest rows (`program.prune.narrowed`: the last
+#: layer's fused qkv on the prompt rows before the last, of which only the keys and values are read), `width` elements a row: their own
+#: member beside the widest rows' `member` (`query.required.Population.narrowed`), so neither stands for the other
+NARROWED_MEMBER = "{member}@{width}"
+
+#: A served Build's step boundary (`acquire.served`, `served_compiled_source`, `served_check`): piece 0's token inputs, the logits and the
+#: sampled ids; and the one family of its identities (every value of every engine step).
+SERVED_IDS, SERVED_POSITIONS = "c00.input/ids", "c00.input/positions"
+SERVED_LOGITS, SERVED_SAMPLED = "logits_processor", "runner.sampler/sampled_token_ids"
+SERVED_FAMILY = "served_kernel_values"
 
 _ROW_RE = re.compile(r"\[(\d+)\]$")
 
@@ -315,6 +327,13 @@ def moe_plane_kind(family: str, module: str) -> str | None:
     return None
 
 
+def moe_plane_modules(rows: Iterable[tuple[str, str]]) -> frozenset[str]:
+    """The MoE modules whose block rows are `moe_block_stream` planes, from each row's (family, module): those with router rows, which
+    give the planes their M tokens (`moe_geometry`).  Under any other module a `moe_plane_kind` row is a Call like the rest (DeepSeek-V4's
+    Marlin block, routed by a Definition no plane names)."""
+    return frozenset(m for f, m in rows if moe_plane_kind(f, m) == "router")
+
+
 def moe_identities(g: dict[str, Any]) -> list[tuple[str, int, str]]:
     """(plane, elements, dtype) of the block-stream tensors for one MoE layer in one step: `MOE_PLANES`, or under block-FP8 experts the
     `MOE_FP8_PLANES` the module's rows produce (a quant or SiluMul the Program has no rows for is no plane)."""
@@ -361,16 +380,111 @@ def mat_total_words(HB: int, M: int, NB: int, BN: int, D: int, ms: bool = False)
     return HB * M * N * 2 + HB * M * (N // 2) + HB * M * NB * 8 + HB * M * NB * D + HB * M * 4 + (HB * M * NB if ms else 0)
 
 
+#: the M1 stream's classes in buffer order (native_collect.cpp `widths`, `name_id_seq`); MS only under the guarded-max policy
+M1_STREAM_ORDER = ("S", "P", "RP", "ROW", "O", "FIN", "MS")
+_M1_GEOM_RE = re.compile(r"^g(\d+)x(\d+)x(\d+)(?:x(\d+)x(\d+))?$")
+
+
+def hidden_stream_widths(NB: int, BN: int, D: int, ms: bool = False) -> dict[str, int]:
+    """u32 words per (slab, query row) of each M1 stream class; `mat_total_words` is HB x M x their sum."""
+    N = NB * BN
+    w = dict(zip(M1_STREAM_ORDER, (N, N, N // 2, NB * 8, NB * D, 4, NB)))
+    if not ms:
+        del w["MS"]
+    return w
+
+
+def hidden_stream_geometry(name: str) -> tuple[int, int, int, int, int] | None:
+    """`g<slabs>x<rows>x<NB>[x<BN>x<D>]` -> (slabs, rows, NB, BN, D); a name without the tile is FA2's legacy tile (BN, D) = (128, 64)."""
+    m = _M1_GEOM_RE.match(name)
+    if not m:
+        return None
+    a, b, nb, bn, d = m.groups()
+    return int(a), int(b), int(nb), int(bn or 128), int(d or 64)
+
+
+def batch_launch_shortfall(geometry: Any, active_rows: list[int], members: Iterable[tuple[str, int]]) -> str | None:
+    """What the M1 stream committed for one batch-level hidden row (one attention layer's launch at one engine step) lacks, named; None
+    when it is whole.  `geometry`: the row's launch geometry (HB, M, NB, BN, D, n_seq[, ms]; `compose.compose_global`); `active_rows`: the
+    token rows of each sequence executing at the step (the declared composition over the executed prefix); `members`: (member, words) of
+    every tensor committed under the row's op at the step, a ⊥ padding plane (`.../bot`) aside.
+    The tap stages the launch whole, `g<n*h>x<M>x<NB>[x<BN>x<D>]`, or as one rectangle per executing sequence and class,
+    `s<i>/g<h>x<rows_i>x<NB>[x<BN>x<D>]/<class>` (h = HB / n_seq slabs a sequence); NB is the declared one while every declared sequence
+    executes, at most it once one has stopped.  A whole launch stages at least the declared M rows a slab: a manifest composed before
+    `compose_global` read FA3's packing declares an FA3 launch's M as its query rows, without the KV group's heads.  Every tensor holds at
+    least the words its name's geometry declares (`mat_total_words`, `hidden_stream_widths`)."""
+    if not isinstance(geometry, dict) or any(k not in geometry for k in ("HB", "M", "NB", "BN", "D", "n_seq")):
+        return "the batch-level row carries no launch geometry"
+    HB, M, NB, BN, D, n_decl = (int(geometry[k]) for k in ("HB", "M", "NB", "BN", "D", "n_seq"))
+    ms = bool(geometry.get("ms"))
+    n = len(active_rows)
+    if n_decl <= 0 or HB % n_decl:
+        return f"launch HB {HB} is not {n_decl} sequences of slabs"
+    if not 0 < n <= n_decl:
+        return f"{n} sequences executing, the launch is declared over {n_decl}"
+    h = HB // n_decl
+    nb_ok = (lambda nb: nb == NB) if n == n_decl else (lambda nb: 0 < nb <= NB)
+    whole: list[tuple[str, tuple, int]] = []
+    seqs: dict[int, dict[str, tuple[tuple, int]]] = {}
+    for member, words in members:
+        parts = member.split("/")
+        if parts[-1] == "bot":
+            continue
+        if len(parts) == 1 and (geo := hidden_stream_geometry(parts[0])):
+            whole.append((member, geo, int(words)))
+        elif len(parts) == 3 and parts[0][:1] == "s" and parts[0][1:].isdigit() and parts[2] in M1_STREAM_ORDER and (geo := hidden_stream_geometry(parts[1])):
+            planes = seqs.setdefault(int(parts[0][1:]), {})
+            if parts[2] in planes:
+                return f"{member} committed twice"
+            planes[parts[2]] = (geo, int(words))
+    if whole and seqs:
+        return f"{len(whole)} whole launch(es) beside the per-sequence planes of {len(seqs)} sequence(s)"
+    if whole:
+        if len(whole) > 1:
+            return f"{len(whole)} whole launches committed: {[w[0] for w in whole[:3]]}"
+        member, (a, b, nb, bn, d), words = whole[0]
+        if (a, bn, d) != (n * h, BN, D) or b < M or not nb_ok(nb):
+            return (f"whole launch {member} committed; {n} executing sequence(s) of this launch stage g{n * h}x{'>=' + str(M)}x"
+                    f"{NB if n == n_decl else '<=' + str(NB)} (BN {BN}, D {D})")
+        want = mat_total_words(a, b, nb, bn, d, ms)
+        return None if words >= want else f"whole launch {member}: {words} words committed, its geometry declares {want}"
+    if not seqs:
+        return "no M1 stream tensor committed"
+    if sorted(seqs) != list(range(n)):
+        return f"the planes of sequences {['s' + str(i) for i in sorted(seqs)]} committed, {n} sequence(s) executing"
+    classes = list(hidden_stream_widths(1, 1, 1, ms))
+    tiles: set[tuple[int, int, int, int]] = set()
+    rows: list[int] = []
+    for i in range(n):
+        planes = seqs[i]
+        if sorted(planes) != sorted(classes):
+            return f"s{i} carries {sorted(planes)}, every executing sequence carries {classes}"
+        geos = {geo for geo, _w in planes.values()}
+        if len(geos) != 1:
+            return f"s{i}: its planes name {len(geos)} geometries"
+        (hh, sl, nb, bn, d), = geos
+        tiles.add((hh, nb, bn, d))
+        rows.append(sl)
+        widths = hidden_stream_widths(nb, bn, d, ms)
+        for c, (_geo, words) in planes.items():
+            if words < hh * sl * widths[c]:
+                return f"s{i}/{c}: {words} words committed, g{hh}x{sl}x{nb} declares {hh * sl * widths[c]}"
+    if len(tiles) != 1:
+        return f"the sequences of one launch name {len(tiles)} different (slabs, NB, BN, D)"
+    (hh, nb, bn, d), = tiles
+    if (hh, bn, d) != (h, BN, D) or not nb_ok(nb):
+        return f"per-sequence planes of {hh} slabs, NB {nb}, BN {bn}, D {d}; the launch declares {h} slabs a sequence, NB {NB}, BN {BN}, D {D}"
+    if sorted(rows) != sorted(int(r) for r in active_rows):
+        return f"sequence rows {sorted(rows)} committed, {sorted(int(r) for r in active_rows)} scheduled"
+    return None
+
+
 def load_program(program_dir: str, *, expand: bool = True) -> dict[str, Any]:
     """The Program dir's instances, result and artifact.  `expand=False` keeps a v2 row's argument progressions as stored, for a reader
-    that expands what it reads (the sampled replay's `index.row_args` / `node_runs`)."""
-    from verity_vllm.program.compact import expanded_file_args
-    with gzip.open(os.path.join(program_dir, "instances.json.gz"), "rt") as f:
-        inst = json.load(f)
-    for r in (inst.get("rows") or ()) if expand else ():   # a v2 file's argument progressions -> the v1 per-leaf run lists
-        a = r.get("args")
-        if a:
-            r["args"] = expanded_file_args(a)
+    that expands what it reads (the sampled replay's `index.row_args` / `node_runs`).  Equal argument items are one list
+    (`instances_file.read_instances`): read them, never modify them in place."""
+    from verity_vllm.program.instances_file import read_instances
+    inst = read_instances(os.path.join(program_dir, "instances.json.gz"), expand=expand)
     res = json.load(open(os.path.join(program_dir, "result.json")))
     art = None
     p = os.path.join(program_dir, "artifact.json")
@@ -396,6 +510,13 @@ STOCHASTIC_SELECT_PREFIXES = ("Gumbel",)
 #: the committed logits only with the seed AND the S the mask used (F-stoch-01 is a wrong S).  Emitted iff the Program HAS the `splits`
 #: parameter (R15 static-form `{V,S}` Programs and greedy Programs have none: byte-for-byte unchanged).
 SPLITS_PARAM = "splits"
+
+#: [DSV4] a TP rank Program's WITNESS input (`vllm_meta.ScheduledWithPeers`): `schedule`, each Marlin align call's key per pair, read
+#: by `MoeAlignRanks_v1` only.  It is neither the prompt nor a committed word of its own: any key gives ranks the kernel can produce, so
+#: the Commit's replay binds a reader's slice to that Call's own committed rank (port 0; key := rank gives rank back exactly when the
+#: committed ranks rank each expert's pairs), and the manifest names no identity for it.
+SCHEDULE_PARAM = "schedule"
+SCHEDULE_READERS = frozenset({"MoeAlignRanks_v1"})
 
 
 def has_splits_param(params) -> bool:
@@ -562,150 +683,11 @@ def manifest_digest(identities: list[dict[str, Any]]) -> str:
     return h.hexdigest()
 
 
-def committed_identity(name: str) -> tuple[str, str] | None:
-    """Committed tensor name -> (op_path, output_member) in the manifest vocabulary; None for extra committed data that binds no required
-    identity (`/row4_f32` regenerate baselines)."""
-    if name.startswith(("fa2.m1/", "fa3.m1/")):
-        tap, rest = name.split("/", 1)
-        layer, geo = rest.split("/", 1)
-        return f"{tap}/{layer}", geo
-    if name.startswith("moe/"):
-        _m, layer, plane = name.split("/", 2)
-        return f"moe/{layer}", plane
-    if name.endswith("/row4_f32"):
-        return None
-    if "/" not in name:
-        return name, "out"
-    base, member = name.rsplit("/", 1)
-    return base, member
-
-
-def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[str, Any]]], *, request_id: str | int | None = None,
-                   rank: int = 0, max_report: int = 12) -> dict[str, Any]:
-    """Every manifest identity of (`request_id`, `rank`) must have a committed tensor of the same (step, op_path, output_member,
-    invocation) whose element range CONTAINS the manifest's; `layouts` = {step: [{"name", "numel"|"shape", ...} in layout order]}.
-    Reports missing identities (by family / step), and the committed extras (allowed).  Identity coverage only -- value correspondence
-    is bind's separate check."""
-    from collections import Counter
-
-    if manifest.get("complete") is False:                                        # [MAN-02] an incomplete manifest never yields coverage
-        um = manifest.get("unmodelled") or {}
-        n = len(manifest.get("identities") or [])
-        return {"ok": False, "error": "manifest incomplete: unmodelled Program families " + "; ".join(f"{k} x{v}" for k, v in sorted(um.items())),
-                "manifest_digest": manifest.get("manifest_digest"), "checked": n, "missing_n": n, "missing_by_family": {"(unmodelled)": n},
-                "checked_by_family": {}, "families_missing_entirely": sorted(um), "steps_with_missing": [], "missing": [],
-                "committed_unmatched_n": 0, "committed_unmatched": [], "committed_extras_n": 0, "duplicate_names_n": 0, "steps_committed": [], "unmodelled": um}
-    aliases = manifest.get("op_path_aliases") or {}
-    # [R19 int-20] a PROMOTED identity (producer module, `out`) is committed under its first consumer's input name (`<consumer>/in`,
-    # PROMOTED_OBSERVATION_RULE): that name binds the producer identity here; a committed tensor named for the producer module itself (its
-    # forward output -- by definition NOT the promoted value) binds nothing and is counted under `promoted_misbound`
-    promoted_keys = {(str(r["op_path"]), str(r["output_member"])) for r in manifest.get("identities") or [] if r.get("promoted")}
-    rebind: dict[str, tuple[str, str]] = {}
-    if promoted_keys:
-        rebind = {k: (v[0], v[1]) for k, v in promoted_observation(manifest)["names"].items()}
-    misbound: list[str] = []
-    have: dict[tuple, list[int]] = {}
-    extras = 0
-    for step, metas in layouts.items():
-        seen: Counter = Counter()
-        for m in metas:
-            ident = rebind.get(m["name"]) or committed_identity(m["name"])
-            if ident is None:
-                extras += 1
-                continue
-            if ident in promoted_keys and m["name"] not in rebind:
-                misbound.append(m["name"])
-                extras += 1
-                continue
-            op, member = ident
-            if op in aliases:                                  # a collector that names the shared module per layer -> canonical path + invocation
-                op, inv = aliases[op][0], int(aliases[op][1])
-            else:
-                inv = seen[(op, member)]
-                seen[(op, member)] += 1
-            numel = m.get("numel")
-            if numel is None:
-                numel = 1
-                for d in m.get("shape") or []:
-                    numel *= int(d)
-            have.setdefault((int(step), op, member, inv), []).append(int(numel))
-    missing: list[dict[str, Any]] = []
-    by_family_missing: Counter = Counter()
-    by_family_checked: Counter = Counter()
-    matched_keys: set[tuple] = set()
-    for r in manifest["identities"]:
-        if request_id is not None and str(r["request_id"]) not in (str(request_id), "*"):
-            continue
-        if int(r["rank"]) != int(rank):
-            continue
-        if r["family"] == "weights":
-            continue                                       # registered inputs: checked against the weights root registration, not the step layouts
-        by_family_checked[r["family"]] += 1
-        k = (int(r.get("engine_step", r["step"])), r["op_path"], r["output_member"], int(r["invocation"]))
-        lo, hi = r["element_range"]
-        got = have.get(k)
-        seq_short = None
-        if got is None and r.get("request_id") == "*" and isinstance(r.get("requests"), list) and r["requests"]:
-            # [R15 B8] a batch-level hidden row (B>1: one attention launch per layer per engine step over the co-scheduled sequences) names
-            # the padded whole-step geometry; the tap commits per-SEQUENCE planes (`s<i>/g<HB>x<M>x<NB>/<plane>`) at a segmented prefill, or
-            # one whole-launch plane set at decode.  The requirement is op-level per engine step: every co-scheduled sequence has its planes
-            # (>= n_seq distinct `s<i>` prefixes), or the launch is whole (unsegmented members present).  Same rule as binding.coverage_check.
-            seqs, whole, numels = set(), False, []
-            for (st, op, mem, inv), v in have.items():
-                if st == k[0] and op == k[1] and inv == k[3]:
-                    numels += v
-                    if mem.startswith("s") and "/" in mem and mem[1:mem.index("/")].isdigit():
-                        seqs.add(mem[:mem.index("/")])
-                    else:
-                        whole = True
-            if numels and (whole or len(seqs) >= len(r["requests"])):
-                got, hi = numels, None                                       # op-level: covered; matched below
-                for kk in list(have):
-                    if kk[0] == k[0] and kk[1] == k[1] and kk[3] == k[3]:
-                        matched_keys.add(kk)
-            elif numels:
-                got, seq_short = None, f"{len(seqs)} sequence plane sets committed, {len(r['requests'])} co-scheduled sequences declared ({sorted(seqs)})"
-        if not got or (hi is not None and max(got) < int(hi)):
-            missing.append({"family": r["family"], "step": r["step"], "engine_step": k[0], "request_id": r["request_id"], "op_path": r["op_path"],
-                            "output_member": r["output_member"], "invocation": r["invocation"], "want_range": [lo, hi], "committed_numel": got}
-                           | ({"why": seq_short} if seq_short else {}))
-            by_family_missing[r["family"]] += 1
-        else:
-            matched_keys.add(k)
-    unexpected = [k for k in have if k not in matched_keys]
-    dup = {k: len(v) for k, v in have.items() if len(v) > 1}
-    families_missing_whole = [f for f, n in by_family_checked.items() if by_family_missing.get(f, 0) == n]
-    steps_missing_whole = sorted({int(r["engine_step"]) for r in missing}) if missing else []
-    requests_missing = sorted({str(r["request_id"]) for r in missing}) if missing else []
-    # [R15 B8] global manifests address request-locally, so a layouts-only check cannot see WHICH request a block belongs to; it can and
-    # must see the declared composition's size per engine step: the packed ids member has exactly the declared rows and the sampled-ids
-    # member exactly one slot per co-scheduled sequence -- a request the server never ran shortens both (named per engine step).  The
-    # per-request partition itself is the binding map's `composition_check`.
-    composition: list[dict[str, Any]] = []
-    if manifest.get("global") and manifest.get("engine_steps") and request_id is None:
-        ref = manifest.get("composition_reference") or {}
-        for es in manifest["engine_steps"]:
-            e = int(es["engine_step"])
-            want_rows, want_seq = int(es.get("rows", sum(int(m["rows"]) for m in es["members"]))), int(es.get("n_seq", len(es["members"])))
-            for fam_name, want in (("input_token_ids", want_rows), ("sampled_token_ids", want_seq)):
-                rf = ref.get(fam_name)
-                if not rf:
-                    continue
-                got = have.get((e, rf["op_path"], rf["output_member"], 0))
-                if got is None:
-                    continue                                # the identities loop already reported the member as missing
-                if max(got) != want * int(rf.get("per_row", 1)):
-                    composition.append({"engine_step": e, "member": f"{rf['op_path']}/{rf['output_member']}", "declared": want, "committed": max(got),
-                                        "requests": [m["request_id"] for m in es["members"]]})
-    return {"ok": not missing and not composition, "manifest_digest": manifest["manifest_digest"], "checked": sum(by_family_checked.values()),
-            "missing_n": len(missing), "missing_by_family": dict(by_family_missing), "checked_by_family": dict(by_family_checked),
-            "families_missing_entirely": families_missing_whole, "steps_with_missing": sorted(set(steps_missing_whole) | {c["engine_step"] for c in composition})[:64],
-            "requests_with_missing": requests_missing[:64],
-            "missing": missing[:max_report], "committed_unmatched_n": len(unexpected), "committed_unmatched": [list(k) for k in unexpected[:max_report]],
-            "committed_extras_n": extras, "duplicate_names_n": len(dup), "steps_committed": sorted(int(s) for s in layouts),
-            "composition_mismatch_n": len(composition), "composition_mismatch": composition[:max_report],
-            **({"promoted_observed_as": dict(sorted((k, list(v)) for k, v in rebind.items())), "promoted_misbound_n": len(misbound),
-                "promoted_misbound": sorted(set(misbound))[:max_report]} if promoted_keys else {})}
+def unreturned_block(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """A manifest's UNRETURNED outputs (`required.Population.unreturned`: no Call reads them, the Program does not return them, no policy
+    requires them): identity rows outside `identities`, with their own digest, so what the word check skipped is auditable."""
+    rows = sorted(rows, key=row_key)
+    return {"unreturned": rows, "unreturned_digest": manifest_digest(rows)}
 
 
 def programs_for(fx: dict[str, Any], programs_root: str) -> dict[str, Any]:
@@ -714,14 +696,16 @@ def programs_for(fx: dict[str, Any], programs_root: str) -> dict[str, Any]:
 
 
 def program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
-    """The request Program DIR per declared request: `*LP<prompt_len>_T<max_tokens-1>` under programs_root, else any
-    build_request*/result.json declaring exactly (LP, T) (the row's default request Program); never a near shape.  [R16 reqval] the
-    traversal engine streams these (rows never all in memory: 57 MB vs 1 GB peak on the Llama B8 fold, same digest)."""
+    """The request Program DIR per declared request: `*LP<prompt_len>_T<max_tokens-1>[_C<cached>]` under programs_root, else any
+    build_request*/result.json declaring exactly (LP, T, C) (the row's default request Program); never a near shape, and never a cold
+    request's Program for a warm one (`prefix_plan.request_shape`).  [R16 reqval] the traversal engine streams these (rows never all in
+    memory: 57 MB vs 1 GB peak on the Llama B8 fold, same digest)."""
     import glob
+    from verity_vllm.program import prefix_plan as PP
     progs: dict[str, str] = {}
     for r in fx["requests"]:
-        lp, t = int(r["prompt_len"]), int(r["max_tokens"]) - 1
-        pat = os.path.join(programs_root, f"*LP{lp}_T{t}")
+        sh = PP.request_shape(r)
+        pat = os.path.join(programs_root, f"*{PP.shape_name(sh)}")
         hits = sorted(glob.glob(pat))
         if not hits:
             for cand in sorted(glob.glob(os.path.join(programs_root, "build_request*"))):
@@ -731,10 +715,10 @@ def program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
                         res = json.load(open(rj))
                     except Exception:  # noqa: BLE001
                         continue
-                    if res.get("ok") and int(res.get("LP", -1)) == lp and int(res.get("T", -1)) == t:
+                    if res.get("ok") and PP.declares(res, sh):
                         hits = [cand]
                         break
         if not hits:
-            raise SystemExit(f"no request Program for {r['request_id']} at {pat} (nor a build_request*/result.json declaring LP={lp} T={t})")
+            raise SystemExit(f"no request Program for {r['request_id']} at {pat} (nor a build_request*/result.json declaring {PP.shape_key(sh)})")
         progs[r["request_id"]] = hits[0]
     return progs

@@ -18,17 +18,21 @@ runs the same runner as its pytest step.
 
 ## Run tests
 
-Suites run remotely, never on an agent VM (AGENTS.md "Tests"): `research run --on auto` queues an `agent-test` job
-(4 CPUs, 16 GiB, 60 min) outside the check slots. Give it `--cwd source`, so the job runs in the shipped tree rather than
-its run directory, and `uv sync` that tree first: `suites.py` refuses another checkout's environment.
+Suites run remotely, never on an agent VM (AGENTS.md "Tests"): `research run --on auto` runs an `agent-test` job
+(4 CPUs, 16 GiB, 60 min) in a slot of vy-nebius-cpu-1's or vy-nebius-cpu-5's `research` pool, and queues it outside the check
+slots on vy-nebius-2, the GPU node, only when no pool slot fits it (`research/auto.py`; it says which). Give it `--cwd source`, so the job runs in the shipped tree rather than
+its run directory, and `uv sync` that tree first: `suites.py` refuses another checkout's environment. It returns
+once the job starts, and `research status RUN` checks back on it. `--wait` blocks until the job ends, so give it only
+to a run that ends within about 20 minutes (AGENTS.md "Lanes": no step waits long).
 
 ~~~sh
-R="research run --on auto --cwd source --wait -- bash -lc"
+R="research run --on auto --cwd source -- bash -lc"
 S="uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py"
 $R "$S"                         # every suite whose inputs changed since it last passed there
 $R "$S flock verity"            # these suites (a package name, a directory, or a unique part of one)
 $R "$S flock -- -k tanh -x"     # arguments after -- go to pytest
 $R "$S --quick"                 # without the tests marked slow
+$R "$S --changed $(git rev-parse origin/main) --quick"   # only the suites your change touches: the pre-mark run (AGENTS.md)
 $R "$S --fresh"                 # ignore the cache
 uv run tools/verity/check/suites.py --list                    # each suite's inputs, and whether a pass is cached (local: reads only)
 ~~~
@@ -77,8 +81,11 @@ keeps the cache sound: a pass is only reused while everything the tests read is 
 A Python a test starts is guarded like the test, and the failure names the test and the file the process read: declare the
 file, or give the test a stand-in for it. Other programs (bash, git, a Python run with `-I`, `-E` or `-S`, or with a PYTHONPATH
 that replaces the suite's) aren't traced, and nothing fails when they read outside the inputs, so list what they read; a Python
-they start on the suite's PYTHONPATH is traced again. The guard sees opens, not `exists()` or `stat()`, so list a path a test
-only checks the existence of too. Locate files from `__file__`
+they start on the suite's PYTHONPATH is traced again. A test that builds or runs a Lake package (`lake`, or what `lake build`
+makes) lists the package's lakefile, and its suite goes in `AFTER_LEAN` (`tools/verity/check/suites.py`), which `check` runs
+after its lean-build step: Lake builds a package's path requirements in their own `.lake`, so most builds write the verifier's
+(`tools/verity/check/tests/test_after_lean.py` holds the two together). The guard sees opens, not `exists()` or `stat()`, so
+list a path a test only checks the existence of too. Locate files from `__file__`
 (`Path(__file__).parent / "fixtures"`), never from the working directory. Never lean on another suite's side effects, such as
 a `sys.path` entry another test file added: every suite runs alone.
 
@@ -89,12 +96,26 @@ a `sys.path` entry another test file added: every suite runs alone.
 - **Minutes-long or machine-bound checks are opt-in:** they skip unless a variable asks for them, as `VERITY_POUS_SLOW`,
   `FLOCK_IR_SLOW`, `VERITY_BENCH_FULL` and `VERITY_REGRESSION` do. Name the variable `VERITY_{PACKAGE}_...` and say in the skip
   reason how long it takes.
+- **Checks outside `check`.** `check` has no tier that runs after landing yet (AGENTS.md, "Checking and merging": ci and infra
+  build it), so a check far past ten minutes cold runs as a recorded run on the change that needs it. integrations/vllm's heavy
+  circuit-neutrality tier is one: it rebuilds GLM-5.3's 8 ranks to GP-01 and fails when a Program digest that
+  `integrations/vllm/manifests/records.json` pins moved, in about 50 minutes on a 256-CPU pod. Run it on a change under
+  `integrations/vllm/verity_vllm/program/` or `integrations/vllm/verity_vllm/engine/`, or to its `pipeline/build.py`, that is
+  meant to leave the circuits alone: `verity-vllm neutrality --tier heavy` as a `research run --on` a CPU pod (vy-nebius-cpu-2),
+  set up as `integrations/vllm/verity_vllm/pipeline/neutrality.py`'s docstring says (the pinned vLLM from
+  `ops/pod_bootstrap.sh --cpu`). It is the post-landing tier's first job once that exists; the suite's fast stand-in is
+  `integrations/vllm/tests/program/test_derive_neutrality.py`.
 - **GPU, pod and vLLM tests skip themselves** when the hardware or the runtime is absent. Their real runs are recorded runs
   on a pod (`research run --on ...`), never a laptop.
+- **Skip on a third-party package, never on a module of this checkout.** `pytest.importorskip("torch")`, then import ours
+  plainly. The guard fails an `importorskip` whose missing module is ours, since that module moved and a skip would hide its
+  tests; one of ours that needs a missing third-party package still skips.
 - **A test that needs the evidence store** skips where it can't reach it with a reason containing `the evidence store is not
   reachable`. Under a recorded `check` (`VERITY_STORE_REQUIRED=1`) the guard fails that skip instead, so `check` never passes
   without it. Inside `check` the store is reachable only through the run's custody key (`$CHECK_STORE_CUSTODY`), so fetch
   through a helper that hands it to the store CLI: integrations/vllm's `store_io`, or C-Flock's `verifier/ci.py` `fetch`.
+  `suites.py` inside a `research run --on` does the same with that run's custody key (`store_custody`): the runner drops
+  `RESEARCH_*`, the machine's store among them, so a bare `pytest` there reaches the store where the runner otherwise wouldn't.
 - A suite's quick tier should finish in about a minute. When it doesn't, make the slow tests smaller before marking more.
 - **A suite over a few minutes declares `parallel = true`** under `[tool.verity.tests]`. The runner then spreads its tests over
   the `--jobs` slots with pytest-xdist (`--dist worksteal`), one parallel suite at a time, beside the other suites on the few
@@ -130,7 +151,8 @@ a `sys.path` entry another test file added: every suite runs alone.
 - **Small fixtures** sit beside the tests, in a `fixtures/` directory of the suite's own. Shared ones go under the root `fixtures/`, registered in
   `fixtures/artifacts.json`. `tests/test_repository.py` caps a tracked file at 256 KiB (source code aside). A larger
   fixture is registered there and gitignored instead: `research data put --kind fixture/v1 --file|--tree PATH --preserve`,
-  add the id and path to the registry and the path to `.gitignore`, then `research data export`. `suites.py` fetches it
+  add the id and path to the registry and the path to `.gitignore`, then ask infra on an INF issue, with the branch and
+  commit, to run `research data export` (only the control pod holds the export key; elsewhere it returns 401). `suites.py` fetches it
   before the suites that read it (`research data fetch-fixtures` by hand, e.g. before `cargo test`), checks every byte
   against its id, and keys the suite on the id. A verifier's fixtures are the prover's bytes, never regenerated in its test.
   When a test can recompute an expected output, pin its digest rather than the file.

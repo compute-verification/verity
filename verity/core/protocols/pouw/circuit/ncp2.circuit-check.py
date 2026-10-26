@@ -8,7 +8,10 @@ from typing import Any
 def _pouw_roots() -> list[Any]:
     """`ncp-v2`'s unit templates at k = 64, and the smallest whole call, its weight side and a window of two calls on it, for
     both P's (`ncp-v2`'s word P and `ncp-v2-shift24`); the package's own tests check their template partitions and the Z
-    separator."""
+    separator. Seven of these families take statics (`NcpDigest_v1`, `NcpFormX_v1`, `NcpFormY_v1`, `NcpTile_v1`,
+    `NcpWeight_v1`, `NcpLinear_v1`, `NcpWindow_v1`), so they are checked only at the ids bound here: a listing that binds a
+    registered family with no statics gets a TypeError for each, not an id. None lowers whole (each is far over the
+    whole-lowering budget, so it is lowered as its template's units), so this module has no pins file."""
     from verity.core.protocols.pouw.circuit import ncp2
 
     shape = ncp2.Shape(16, 64, 16)

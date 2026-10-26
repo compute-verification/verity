@@ -30,7 +30,7 @@ Layout::
   optional ``shard``/``expert``), ``weight`` (``param``, optional ``shard``), ``token``
   (``which``: ``input`` | ``sampled``, from the boundary tree), ``boundary`` (``field``), and
   ``const`` (``value``; part of the description's digest, not a committed leaf).
-- ``relation`` is a registry id (:mod:`verity_vllm.program.kernels.relations`); ``origin`` is ``captured`` or
+- ``relation`` is a registry id (:mod:`verity_vllm.program.relations`); ``origin`` is ``captured`` or
   ``derived``; ``decompositions`` are the candidates of Table 2.
 
 :class:`Description` validates the document, resolves symbolic shapes, enumerates the node
@@ -44,7 +44,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity_vllm.program import dtypes
+from verity.ml.definitions import dtypes
 from verity_vllm.commit import hashing, identity
 from verity_vllm.observe.capture_v1 import Boundary
 
@@ -212,7 +212,7 @@ class Node:
     output-linkage check unconditionally requires every authenticated output value of this node
     (and the boundary record leaf linked to it) to satisfy ``value >> declared_domain == 0`` —
     the high container bits are zero — on every audit, independent of both sampling draws
-    (:func:`verity_vllm.program.kernels.relations.check_output_linkage` / ``check_output_domains``)."""
+    (:func:`verity_vllm.program.relations.check_output_linkage` / ``check_output_domains``)."""
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_json(self) -> dict[str, Any]:
@@ -453,12 +453,6 @@ class Description:
 
     def __contains__(self, op: str) -> bool:
         return op in self._by_op
-
-    def nodes_of_type(self, op_type: str) -> list[Node]:
-        return [n for n in self.nodes if n.op_type == op_type]
-
-    def op_families(self) -> list[str]:
-        return sorted({n.op_type for n in self.nodes})
 
     def resolve_shape(self, shape: Sequence[int | str]) -> tuple[int, ...]:
         out = []

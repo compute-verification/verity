@@ -11,8 +11,8 @@ import pytest
 
 from tests.check.test_sampled_replay_fp8 import G, H, I, _program_fp8
 from tests.check.test_sampled_replay_v2_addresses import _v2_manifest
-from verity_vllm.program.registry import fp8
-from verity_vllm.program.kernels import fp8_twins
+from verity.ml.definitions.registry import fp8
+from verity.ml.definitions.numerics import fp8_twins
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query.manifest import format as fmt
 
@@ -61,7 +61,7 @@ def test_a_ragged_n_commits_its_partial_blocks_products_in_the_sources_order():
 
 
 def test_a_ragged_n_site_is_named_with_its_partial_block():
-    from verity_vllm.query import word as W_
+    from verity.ml.definitions import word as W_
 
     g = {"family": fp8.ScaledMmFp8BlockSharedScale.id, "statics": {"K": 256, "N": 320, "G": 128},
          "definition": f"{fp8.ScaledMmFp8BlockSharedScale.id}{{K=256,N=320,G=128}}", "calls": 3, "where": DN}
@@ -86,7 +86,7 @@ def test_the_policy_names_the_products_of_every_linear_module_and_step():
     assert all(x["output_member"] == SP.MEMBER and x["dtype"] == "f32" and x["element_range"] == [0, x["rows"] * x["width"]]
                and x["spec"] == fp8.ScaledMmFp8BlockSharedScale.id for x in rows)
     outs = {(x["op_path"], x["output_member"]) for x in on["identities"] if x["family"] == "instance_outputs" and x["op_path"] in (GU, DN)}
-    assert outs == {(GU, "0"), (DN, "0")}, "the products sit on the op path of the linear's output"
+    assert outs == {(GU, "out"), (DN, "out")}, "the products sit on the op path of the linear's output"
     strip = lambda m: sorted(json.dumps(x, sort_keys=True) for x in m["identities"] if x["family"] != SP.FAMILY)  # noqa: E731
     assert strip(on) == strip(off) and on["complete"]
     assert SP.policy_of(on) and not SP.policy_of(off)
@@ -113,7 +113,7 @@ def test_the_family_is_in_every_vocabulary():
     from verity_vllm.check import oracle_compare as OC
     from verity_vllm.check.replay import coverage
     from verity_vllm.pipeline import manifest as M
-    from verity_vllm.query import word as W_
+    from verity.ml.definitions import word as W_
 
     assert SP.FAMILY in fmt.FAMILIES and plan.ROUTE_OF_FAMILY[SP.FAMILY] == "scale_tap" and SP.FAMILY in coverage.QUERY_FAMILY_MECHANISM
     assert M.DEFAULT_TAPS == (SP.POLICY,)

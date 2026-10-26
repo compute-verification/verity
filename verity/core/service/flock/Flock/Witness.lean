@@ -1,4 +1,5 @@
 import Flock.Zk
+import Flock.Norm
 import Flock.ProvedScope
 import Flock.RecVStar
 import Flock.RecCoins
@@ -48,12 +49,12 @@ structure Inputs where
   partition : Option Json
   program : Option ByteArray
 
-/-- A record's `unit_draw`, when it is a draw (not absent, not null): `Main.recordDraw`. -/
+/-- A record's `unit_draw`, when it is a draw (not absent, not null), rebuilt (`norm`): `Main.recordDraw`. -/
 def recordDraw (record : String) : Option Json :=
   match Json.parse record with
   | .ok j => match j.getObjVal? "unit_draw" with
     | .ok Json.null => none
-    | .ok d => some d
+    | .ok d => some (Flock.norm d)
     | .error _ => none
   | .error _ => none
 
@@ -139,14 +140,15 @@ def acceptsStmt (cf pf : ByteArray) (partition : Option Json) (program : Option 
 def shapeOf (spec : SessionSpec) (st : Stmt) : RecVStar.Inner :=
   { m := st.m, kLog := st.c.kLog, claims := 2 + spec.points * st.regions.size, regions := st.regions.size }
 
-/-- The number of V*'s outer statements over an inner session of `m` variables, `k_log` and `claims` claims: the body of
+/-- The number of V*'s outer statements over an inner session of `m` variables, `k_log` and `claims` claims (its levels,
+its parts, and a RecCap a level): the body of
 `Proofs.Flock.Recursive.outerParts`, which is this by `rfl`. -/
 def outerPartsOf (m kLog claims : Nat) : Nat :=
   match RecResiduals.shape? m kLog claims with
   | none => 0
   | some sh =>
     match RecAlgebra.structureOf sh >>= fun S => RecResiduals.groups S (RecResiduals.portSizes sh) with
-    | .ok gs => sh.sched.levels.size + gs.size
+    | .ok gs => sh.sched.levels.size + gs.size + sh.sched.levels.size
     | .error _ => 0
 
 /-- **`verify --zk --registered F --rec-inner F --rec-part J --rec-bindings F --rec-rows F`'s V* check on a session set

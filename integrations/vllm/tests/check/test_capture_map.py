@@ -6,6 +6,8 @@ the shape the inventory gives a rank; each rank built for the target's profile a
 cites are pinned."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import copy
 import hashlib
 import json
@@ -20,7 +22,7 @@ from verity_vllm.check.capture_map import check, check_target
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.engine import meta_inventory as MI
 from verity_vllm.pipeline import cli
-from verity_vllm.program.registry import catalog
+from verity.ml.definitions.registry import catalog
 
 HERE = Path(__file__).parent
 FIX = HERE / "fixtures" / "glm_moe_dsa"

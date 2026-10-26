@@ -24,9 +24,9 @@ from verity_vllm.observe.fold.patterns.sampling import SCRATCH_TOPP_SELECT, Toke
 from verity_vllm.observe.fold.resolver import Profile
 from verity_vllm.program import sampling_event as SE
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
-from verity_vllm.program.registry import sampling as SM
-from verity_vllm.program.registry import sampling_vocab
-from verity_vllm.program.registry import topp_words
+from verity.ml.definitions.registry import sampling as SM
+from verity.ml.definitions.registry import sampling_vocab
+from verity.ml.definitions.registry import dead_free, topp_words
 
 VLLM_DIR = Path(__file__).resolve().parents[2]
 PLAIN, SHARED = "greedy-check-per-stage", "shared-greedy"
@@ -43,6 +43,16 @@ def test_the_construction_table_is_the_registrys():
         plain = next(d for d in (SM.GumbelTokenSelect, SM.GumbelTopPTokenSelect) if d.id == plain_id)
         assert sampling_vocab.select_for(plain, SE.CONSTRUCTION_OF[shared.id]) is shared and sampling_vocab.select_for(plain, SE.CONSTRUCTION_OF[plain_id]) is plain
     assert SE.CONSTRUCTION_OF[topp_words.GumbelTopPTokenSelectV2.id] == PLAIN, "the specialised select has no shared-greedy form"
+    assert SE.CONSTRUCTION_OF[dead_free.GumbelTopPTokenSelectV3.id] == PLAIN, "nor has the registered compiler's, v2 without dead gates"
+
+
+@pytest.mark.parametrize("version", [2, 3])
+def test_a_specialised_select_compares_as_the_folds(version):
+    """The Build's registered request states v3 where the Program at the registered S states v2 (`prune.dead_free_versions`); both
+    compare as the fold's `GumbelTopPTokenSelect_v1{V}`, held to their S."""
+    rows = [{"spec": f"s:GumbelTopPTokenSelect_v{version}{{V=128256,S=32}}", "k": 7}, {"spec": "TokenSelect_v4{V=64}", "k": 8}]
+    assert split_selects.as_fold_selects(rows) == {7: 32}
+    assert [r["spec"] for r in rows] == ["s:GumbelTopPTokenSelect_v1{V=128256}", "TokenSelect_v4{V=64}"]
 
 
 def test_a_programs_selects_declare_one_construction(tmp_path):
@@ -65,7 +75,7 @@ def _program_dir(tmp_path: Path, V: int, S: int | None) -> tuple[Path, str]:
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
     from verity_vllm.program.frontend.rules.base import RuleSet
     from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
     LP, STEPS = 3, 1
     C = dict(b1.B0_CONFIG, NL=1, V=V, MAX_POS=64)
     rules = RuleSet("default+stoch", list(DEFAULT_RULES.rules) + list(VLLM_SAMPLING_RULES), list(DEFAULT_RULES.families))
@@ -157,6 +167,7 @@ def _store():
     return store_io
 
 
+@pytest.mark.slow
 def test_101s_build_declares_the_plain_construction_and_its_select_folds_as_it_compares(tmp_path):
     """#101's fourth Build: its request Program's selects are `GumbelTopPTokenSelect_v2{V=128256,S=32}`, which declare the plain
     construction, and the fold's select under it is exactly what the compare reads them as."""
@@ -169,6 +180,7 @@ def test_101s_build_declares_the_plain_construction_and_its_select_folds_as_it_c
     assert {_as_compared(k) for k in selects} == {_fold_select(128256, pattern)} == {"GumbelTopPTokenSelect_v1{V=128256}"}
 
 
+@pytest.mark.slow
 def test_101s_records_fold_canonical_equal_under_the_programs_construction(tmp_path):
     """#101's fourth Match, replayed on CPU from its records: the preserved capture folded under the construction its Build declares, then
     the Match's own comparison (`program-compare`, as the row runs it) against the Build's request Program: every family's count equal

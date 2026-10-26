@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.TS
+import Definitions.Accounting.Guarantees.TS
 import Proofs.Pouw.RelativeSecurity
 
 /-!
@@ -19,7 +19,7 @@ open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity
 /-- Off binding failures and unsound proofs, an accepted path's committed values satisfy every proof's relation. -/
 theorem rel_committed {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) (x : Paths Ω S)
     (hp : ∀ w, pf.Proved x w) (hM : ∀ w, ¬ pf.Moved x w) (hU : ∀ w i, ¬ pf.Unsound x w i) (w : Fin S)
-    (i : Fin nπ) : pf.rel w i (pf.committed x w i) := by
+    (i : Fin nπ) : pf.rel x w i (pf.committed x w i) := by
   have heq : pf.opened x w i = pf.committed x w i := by
     by_contra hne
     exact hM w ⟨hp w, i, hne⟩
@@ -47,6 +47,6 @@ theorem ProofsSoundOfPinned : Accounting.Guarantees.TS.ProofsSoundOfPinned := by
     have hU : ∀ w i, ¬ pf.Unsound x w i := fun w i h =>
       hE ⟨w, Finset.mem_univ _, Or.inr ⟨i, Finset.mem_univ _, h⟩⟩
     have hrel := rel_committed pf x (hOf.1 x hx) hM hU
-    exact ⟨hOf.2 x hrel, hRF x hx (hPin _ hrel)⟩
+    exact ⟨hOf.2 x hrel, hRF x hx (hPin x _ hrel)⟩
 
 end Accounting.SecurityProofs.TS

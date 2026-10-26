@@ -94,15 +94,17 @@ noncomputable abbrev innerExec {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r �
 claims, as V*'s staging lays them out (`rec_vstage.stage`, `VStar.statements`) and the verifier of record groups the
 algebra's residuals (`Flock.RecResiduals.groups`, `rec_residuals.parts`): one `RecOpen` per Ligerito level of
 `fast100 m`, then one `InnerRepCheck` per part of the rep's algebra, each residual in S's order in the first part that
-stays within `Flock.RecResiduals.MAX_SLOTS` sha512x3 slots, `MAX_REGIONS` regions and 16 residuals. Zero at a shape the
-verifier refuses, where V* stages nothing. -/
+stays within `Flock.RecResiduals.MAX_SLOTS` sha512x3 slots, `MAX_REGIONS` regions and 16 residuals, then one `RecCap` a
+level: at each later level `l` over both reps' `2^cap_l` nodes of its tops (`VStar.levelCapStatements`,
+`RecVStar.checkTopsListed`), and last over the `2^cap₀` nodes of `root_B`'s level-0 cap (`VStar.capStatement`,
+`RecVStar.checkCapListed`). Zero at a shape the verifier refuses, where V* stages nothing. -/
 def outerParts (m kLog claims : ℕ) : ℕ :=
   match Flock.RecResiduals.shape? m kLog claims with
   | none => 0
   | some sh =>
     match Flock.RecAlgebra.structureOf sh >>= fun S =>
         Flock.RecResiduals.groups S (Flock.RecResiduals.portSizes sh) with
-    | .ok gs => sh.sched.levels.size + gs.size
+    | .ok gs => sh.sched.levels.size + gs.size + sh.sched.levels.size
     | .error _ => 0
 
 /-- **The number of V*'s outer statements over the class `cls` and its regions `regs`**: `outerParts` at the class's
@@ -201,7 +203,14 @@ context `pubS` reads), which reads only the class, `T` and the owed outputs, giv
 live: the auditor draws each after the commit strings before it, and each message `msgs … i` and the requests `reqs`
 read those strings (`firewallStrings`, `firewallCommits`). What it takes of the code is each an obligation: the requests run through the firewall to `T` with the messages' salted commit strings in
 it (`FirewallSends`), and V*'s staging (`SessionsPublic`, `SessionsCoined`, `SessionsHonest`, and `OuterZK.Sessions`'
-`hz`, `hR`, `hS`). -/
+`hz`, `hR`, `hS`).
+
+(i) is in fork form and states no bits. The recursion's knowledge form, `Claims.Recursion.KS`, is at its level
+`Claims.Recursion.lam`: about 65 bits per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128`
+target under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
+(`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
+`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
+candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
 def RecursiveAudit : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
     -- the registration's draws, a finite space with an element, and the units each draws

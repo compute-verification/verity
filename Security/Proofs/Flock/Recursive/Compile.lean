@@ -80,10 +80,8 @@ error.** On every hidden template of the class whose statement no witness satisf
 satisfy `G`, play the compiled table to outcomes that clash (a collision of `H`), or the compiled table accepts a
 transcript satisfying `G` with probability at most `tableError`, which `flock_inner_sound` bounds `flockInner` by.
 
-Its proof is open: the schedule's simulation (`sched_sound` for the compiled table, a mixture over the coin coordinates a
-round does not read and the rounds whose messages are ill-typed), and the plurality extraction of
-`table_sound_compiledL` restricted to the runs satisfying `G`, with every off-plurality opening a clash of two such runs
-at a commitment node, in place of its square-root collision terms. -/
+Its proof is `compiled_runs_sound` (`CompileRuns`): two runs satisfying `G` whose outcomes clash, read as a fork of the
+prover's own strategy (`Inner.fork_of_outcomes`), or the bound. -/
 theorem flock_inner_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl]
     (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass)
     (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Schedule) (hsch : fast100 cls.m = some sch)
@@ -173,12 +171,10 @@ def InnerForkRec (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : 
 message whole) and `InnerSoundForkOn` in place of `InnerSound`: a registrant fork (`regFinder`), a round fork, a session
 fork, an inner fork of `σ`'s own runs (`InnerForkRec`), or the same bound.
 
-Its proof is open: `commit_and_prove_upto` read at `G` := the inner transcripts some accepted outer proof decodes at a
-leaf of `σ` with their coins, so that its inner term is `prob (accepts ∧ G)` against `refStrat` (`leafAvg_relabel`) and
-a fork of `refStrat` on two such transcripts is one of `σ`'s (`InnerForkRec`), then the same through
-`recursive_sound_upto`, `zk_sessions_recursive_upto`, `zk_sessions_recursive_full` and `zk_sessions_recursive_fork`. -/
+Its proof is `zk_sessions_recursive_fork_on` with the inner term read at the leaves of `σ`
+(`innerAtLeavesV_of_forkOn`, `ForkInner`): a fork of the reference strategy on two decoded transcripts is one of
+`σ`'s (`InnerForkRec`). -/
 theorem zk_sessions_recursive_fork_inner
-    (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -202,7 +198,7 @@ theorem zk_sessions_recursive_fork_inner
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin := by
   by_cases hf : InnerForkRec zs dg N k Rw σ x wmsg H pick
   · exact Or.inr (Or.inr (Or.inr (Or.inl hf)))
-  rcases zk_sessions_recursive_fork_on hA3 zs dg N hk hRw hM hρ hr σ x wmsg hbr.1 (fun _ _ a b => a = b)
+  rcases zk_sessions_recursive_fork_on zs dg N hk hRw hM hρ hr σ x wmsg hbr.1 (fun _ _ a b => a = b)
       (fun ref ω t u => u = relabel (ref ω) t)
       (fun ref ω t l ht h => zip_eq_relabel (ref ω) t l fun k hk =>
         option_eq_of_rel (R := fun a b => a = b) (fun _ _ e => e) (h k (by omega))) Sk cmt msg hbr.2.1 hbr.2.2.1
@@ -237,7 +233,6 @@ theorem recursive_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D] 
     (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Accounting.Schedule)
     (hsch : Accounting.fast100 cls.m = some sch)
     (hlay : ∀ M : Hidden cls, (M.toStatement regs).LinkLayout cls.ptLocal cls.mPts)
-    (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × (flockInnerCL T CT A H E Lf cls regs sch).Coin) → Reg₂ → (j : Fin S) →
       (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -262,7 +257,7 @@ theorem recursive_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D] 
           ((flockInnerCL T CT A H E Lf cls regs sch).r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal (Accounting.tableError sch ⟨cls.kLog, regs.length, cls.mPts⟩) :=
-  zk_sessions_recursive_fork_inner hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr H
+  zk_sessions_recursive_fork_inner zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr H
     (clashPickCL T CT A H E Lf cls regs sch) (flock_inner_sound_compiled T CT A hA H E Lf cls regs sch hsch hlay)
 
 /-- **`recursive_sound_compiled` with the numbers**: the inner term at most `2^-205` for `22 ≤ m ≤ 33` and a shape in
@@ -273,7 +268,6 @@ theorem recursive_sound_compiled_fast100 (A : Arith F K) (hA : A.Correct) [Inhab
     (hsch : Accounting.fast100 cls.m = some sch) (hm1 : 22 ≤ cls.m) (hm2 : cls.m ≤ 33)
     (hshape : (⟨cls.kLog, regs.length, cls.mPts⟩ : Accounting.Stmt).InRange)
     (hlay : ∀ M : Hidden cls, (M.toStatement regs).LinkLayout cls.ptLocal cls.mPts)
-    (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × (flockInnerCL T CT A H E Lf cls regs sch).Coin) → Reg₂ → (j : Fin S) →
       (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -298,7 +292,7 @@ theorem recursive_sound_compiled_fast100 (A : Arith F K) (hA : A.Correct) [Inhab
           ((flockInnerCL T CT A H E Lf cls regs sch).r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
-  (recursive_sound_compiled T CT A hA H E Lf cls regs sch hsch hlay hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg
+  (recursive_sound_compiled T CT A hA H E Lf cls regs sch hsch hlay zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg
     hbr).imp id <| Or.imp id <| Or.imp id <| Or.imp id fun h =>
       h.trans (add_le_add le_rfl (ENNReal.ofReal_le_ofReal (Accounting.tableError_le_of_le_33 hm1 hm2 hsch _ hshape)))
 

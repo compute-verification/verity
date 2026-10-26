@@ -60,6 +60,8 @@ def test_leaf_spine_puts_each_node_behind_its_certifier():
     trunks = sorted((e.a, e.b) for e in wide.links if e.b.startswith("spine"))
     assert trunks == [(f"leaf{j}", f"spine{k}") for j in range(2) for k in range(3)]
     assert [next(e.b for e in wide.links if e.a == f"b{i}.cert") for i in range(4)] == ["leaf0", "leaf1", "leaf0", "leaf1"]
+    assert sorted((e.a, e.b) for e in wide.uncovered_links()) == sorted(trunks + [("ext0", "leaf0"), ("ext1", "leaf1")])
+    assert [(e.a, e.b) for e in dc.uncovered_links()] == [("ext0", "leaf0")]
     with pytest.raises(ValueError, match="spines to join"):
         leaf_spine(2, leaves=2)
 

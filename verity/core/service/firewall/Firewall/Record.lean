@@ -2,8 +2,8 @@
 # The firewall's record (`firewall/v0`, live PROTOCOL.md §10.5)
 
 `record.jsonl` in the firewall's state directory: its events in order, one line each, as Python's `json.dumps(ev,
-sort_keys=True)` writes it, each with its `seq`. Rust's `flock_live::release` and Python's `verity_flock.firewall` keep it
-byte for byte (`live/src/firewall_record_vectors.json`); this is the same record in Lean, and the same rules over it:
+sort_keys=True)` writes it, each with its `seq`. Python's `verity_flock.firewall` keeps it byte for byte
+(`live/src/firewall_record_vectors.json`); this is the same record in Lean, and the same rules over it:
 
 1. A recursive session's V* statements and their order are fixed when it opens (`parts`), and it ends at its first stop.
    `admit` serves only the next statement not yet released, once: a request for any other is a stop at that next
@@ -18,9 +18,9 @@ byte for byte (`live/src/firewall_record_vectors.json`); this is the same record
 The functions here are pure: each takes the events read so far and returns its result and the events after it, which only
 ever extend them. `Record.read` reads the record whole and fails closed: every line must be exactly a line the firewall
 writes, with its `seq` its position, so a torn line (a writer killed inside its append), and any line the firewall would
-not have written, refuses every call. Rust and Python read any JSON line and default what they can't find; Lean refuses it
-instead. Their other liberties Lean doesn't take either: a `\r` before a line's end, a budget or release time past 2^64
-(Rust's u64), a statement name that isn't a string.
+not have written, refuses every call. Python reads any JSON line and defaults what it can't find; Lean refuses it
+instead. Its other liberties Lean doesn't take either: a `\r` before a line's end, a budget or release time past 2^64, a
+statement name that isn't a string.
 -/
 import Lean.Data.Json
 import Flock.Canon
@@ -162,7 +162,7 @@ structure Record where
   deriving Inhabited
 
 /-- The record whole, or why the firewall serves nothing (a line it can't read, or one it didn't write). Blank lines are
-skipped, as Rust's and Python's readers skip them, and the last line needs no newline. -/
+skipped, as Python's reader skips them, and the last line needs no newline. -/
 def Record.read (text : String) : V Record := do
   let lines := (text.splitOn "\n").filter (!·.isEmpty)
   let mut evs : Events := #[]
@@ -183,8 +183,8 @@ def Record.read (text : String) : V Record := do
 def Record.extend (r : Record) (evs : Events) : Record := { text := r.text ++ linesFrom evs r.events.size, events := evs }
 
 /-- One op as the firewall runs it on its file: read the record whole, act on its events, append the events the op adds.
-Rust and Python read the file again at every op, under its lock, so a record one op left unreadable (its line appended to
-a last line without a newline) is the next op's error. -/
+Python reads the file again at every op, under its lock, so a record one op left unreadable (its line appended to a
+last line without a newline) is the next op's error. -/
 def Record.op {α : Type} (r : Record) (f : Events → α × Events) : V (α × Record) := do
   let r ← Record.read r.text
   let (a, evs) := f r.events

@@ -1,0 +1,12 @@
+{
+ "definitions": {
+  "Embedding_v2{V=1100,H=2}": {
+   "and": 36032,
+   "type": "94c21af42f3e7568bd64b68360212a0e3776484c785ddc51c48f8dae804104bf65ab36153338dfadf50fd2728c7e3b21bad63030204e36f32a113524040910e3"
+  },
+  "Embedding_v2{V=64,H=16}": {
+   "and": 22784,
+   "type": "89b83f7b58b81847ca014c5acd12ce78eeda9d228f5cbf0d41d1ab0476cc4608e893fbff1d7d009ec6e123cf4e0c8a31e14f21cacb2c8dba4c822c80afd78401"
+  }
+ }
+}

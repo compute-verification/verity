@@ -3,15 +3,16 @@
  "exempt": {
   "NetworkCheck.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkCheck.Difftest.main, audited under NetworkCheck, a test and not a proof",
   "NetworkCheck.Main": "the network-check executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Check.protocol, audited under NetworkCheck",
-  "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts, audited under NetworkCheck"
+  "NetworkCheck.PeriodMain": "the network-period executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Period.protocol, audited under NetworkCheck",
+  "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid), audited under NetworkCheck"
  },
  "runs": {
   "NetworkCheck.DifftestMain": {
-   "why": "2,000 random instances on which NetworkCheck.Certificate gives what verity/core/protocols/certifier/certificate.py gives, byte for byte: depth, E_0 … E_D, real_frames, frame_leaf, frames_root, open_frame, verify_frame on openings and tampered ones, parameters_digest and its canonical JSON, record_head and RecordHead's encoding and digest, certificate_message (with session ids of 32 bytes, and of 0, 31, 33 and 64, refused) and node, with each ValueError a refusal",
+   "why": "2,000 random instances on which NetworkCheck.Certificate gives what verity/core/protocols/certifier/certificate.py gives, byte for byte: depth, E_0 … E_D, real_frames, frame_leaf, frames_root, open_frame, verify_frame on openings and tampered ones, parameters_digest and its canonical JSON, record_head and RecordHead's encoding and digest, certificate_digest (the record's digest under a 64-byte salt, and other lengths), certificate_message over the signed digest (with session ids of 32 bytes, and of 0, 31, 33 and 64, refused) and node, with each ValueError a refusal",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "2000"],
    "data": {
-    "difftest/instances.jsonl": "480e4f4280a3a7cb6ff952e67370bff4c6eebb4ac7899df70cf4262f6b9d965f",
-    "difftest/python.jsonl": "b970b70d2d2e138ac906837400deee1d11b0235418a1ffe97265b1ed2a9fca31"
+    "difftest/instances.jsonl": "4842750ee211fc220e9b96bb8fb664bfdc4edbaa16d55b7da4a9c27d17ab1a34",
+    "difftest/python.jsonl": "40d5effc5ee16c70a096a1f477a1a62f546b5c7fc47144bf1a1be7d8998411a2"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   }
@@ -27,6 +28,11 @@
    "imports": ["NetworkCheck.Certificate", "NetworkCertifier.Schedule", "Lms.Verify", "CoreProtocol.Cli"],
    "except": [],
    "why": "the check is code: the record's encodings, the certifier program's Program grid and Σ_sync, the LMS verifier and the core protocol interface, no Mathlib and nothing of Security"
+  },
+  "NetworkCheck.Period": {
+   "imports": ["NetworkCheck.Check", "CoreProtocol.Profile", "Flock.Public"],
+   "except": [],
+   "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers) and C-Flock's frame-v3 hash (the rows' domain), no Mathlib and nothing of Security"
   },
   "NetworkCheck.Records": {
    "imports": ["NetworkCheck.Check", "Difftest"],
@@ -208,6 +214,6 @@
   }
  },
  "dependencies": {
-  "toolchain": "1efe7aefd37af8682255d67bc7aeb32378d6650322729009305da53183dab0a0"
+  "toolchain": "fec936bfc3065f35f26f422997e1681d36a48b4386cf9e31b18420381a0ad65c"
  }
 }

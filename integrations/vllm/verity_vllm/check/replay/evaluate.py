@@ -1,5 +1,5 @@
 """Evaluating one sampled VU: its operands from the committed store and the weights, the registered row kernel
-(`verity_vllm.program.kernels.rows`), and the comparison of every member it produces with the committed words.  A VU whose
+(`verity.ml.definitions.numerics.rows`), and the comparison of every member it produces with the committed words.  A VU whose
 inputs cannot be resolved is not evaluable by name (`_Unresolved`), never skipped."""
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ import numpy as np
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.check.replay.replay_dump import dump_row_words
 from verity_vllm.commit.opened import OpeningNotVerified, opened_check
-from verity_vllm.program.kernels.kernel_registry import Declined
-from verity_vllm.program.kernels.rows import EVALUATORS, ROWS
+from verity.ml.definitions.numerics.kernel_registry import Declined
+from verity.ml.definitions.numerics.rows import EVALUATORS, ROWS
 from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, SEED_PARAM, ProgramIndex, const_word, row_args
 from verity_vllm.check.replay.opening import _ITEMSIZE, CommittedStore
 from verity_vllm.check.replay.compare import _interior_slice, _tp_member_alias, lifted_compare, padded_slot_enable
@@ -53,7 +53,7 @@ ROW_EVALUATORS: list[Callable[..., dict[str, np.ndarray]]] = []
 
 def evaluate(family: str, statics: dict[str, Any], inputs: list[list[np.ndarray]], weights: list[np.ndarray | None], *,
              refs: list[dict[str, Any] | None] | None = None) -> dict[str, np.ndarray]:
-    """F_V for the supported families: the family's row kernel (`verity_vllm.program.kernels.rows`) on the row's operands (`_Operands`).
+    """F_V for the supported families: the family's row kernel (`verity.ml.definitions.numerics.rows`) on the row's operands (`_Operands`).
     Returns {member: words}."""
     k = ROWS.get(family)
     if k is None:
@@ -137,6 +137,40 @@ def _weight_gather(pi: ProgramIndex, weights: Callable[[str, int, int], np.ndarr
     return words[idx - mn], {"field": fname, "range": [flo, fhi], "gather": gather}
 
 
+def _cached_prefix_words(pi: ProgramIndex, store: CommittedStore, rid: str, pname: str, lo: int, hi: int, inputs_rec: list) -> list[np.ndarray]:
+    """A warm request's cached rows [lo, hi) of the kv-prefix input: what its producing requests of record committed."""
+    src = pi.cached_prefix.get(rid)
+    if src is None:
+        raise _Unresolved(f"{pname} slice [{lo}, {hi}): no producing requests of record for {rid}'s cached rows")
+    out = []
+    for q, qstep, qop, qmem, qlo, qhi in src.identities(lo, hi):
+        w, why = store.words(q, qstep, qop, qmem, qlo, qhi)
+        if w is None:
+            raise _Unresolved(why)
+        out.append(w)
+        inputs_rec.append({"kind": "cached", "identity": [q, qstep, qop, qmem, [qlo, qhi]]})
+    return out
+
+
+def _schedule_witness(pi: ProgramIndex, store: CommittedStore, r: dict, d: dict, rid: str, arrive: int, pname: str, lo: int, hi: int,
+                      inputs_rec: list) -> np.ndarray:
+    """The witness keys of a MoeAlignRanks_v1 row (`format.SCHEDULE_PARAM`): its OWN committed rank, so the row reproduces that rank
+    exactly when it ranks each expert's pairs."""
+    fam = d["family"]
+    own = pi.member_of_port(int(r["i"])).get("0") if fam in RM.SCHEDULE_READERS else None
+    width = next((int(m[1]) for m in d["members"] if m[0] == own), None)
+    if width is None or width != hi - lo:
+        raise _Unresolved(f"{pname} slice [{lo}, {hi}) read by {fam}: only a {sorted(RM.SCHEDULE_READERS)} row's own "
+                          f"committed rank (port 0, one key per pair) binds it")
+    at = d["row"] * width
+    w, why = store.words(rid, arrive + d["step"], d["op_path"], own, at, at + width)
+    if w is None:
+        raise _Unresolved(why)
+    inputs_rec.append({"kind": "witness", "param": pname, "range": [lo, hi],
+                       "identity": [rid, arrive + d["step"], d["op_path"], own, [at, at + width]]})
+    return w
+
+
 def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], r: dict, rid: str, arrive: int,
                   inputs_rec: list, *, depth: int, interior: dict[int, dict[str, np.ndarray]] | None = None,
                   row: int | None = None, plan: bool = False) -> dict[str, np.ndarray]:
@@ -204,15 +238,22 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
                         raise _Unresolved(why)
                     words.append(w)
                     inputs_rec.append({"kind": "committed", "identity": [rid, arrive + step, SAMPLER_OP, pname, [0, 1]]})
+                elif pi.kv_prefix and a == pi.kv_prefix["input"]:
+                    words.extend(_cached_prefix_words(pi, store, rid, pname, lo, hi, inputs_rec))
+                elif pname == RM.SCHEDULE_PARAM:
+                    words.append(_schedule_witness(pi, store, r, d, rid, arrive, pname, lo, hi, inputs_rec))
                 else:                                                             # the declared prompt: committed input_token_ids of the arrival step
                     eop = pi.embed_op_path()
                     if eop is None:
                         raise _Unresolved("Program has no Embedding row: prompt ids have no committed identity")
-                    w, why = store.words(rid, arrive + 0, eop, IDS_MEMBER, lo, hi)
+                    c = int(pi.kv_prefix["C"]) if pi.kv_prefix else 0          # a warm request's arrival step embeds prompt[C:]
+                    if lo < c:
+                        raise _Unresolved(f"prompt slice [{lo}, {hi}) reads a row the prefix cache served (C = {c}): no committed input id")
+                    w, why = store.words(rid, arrive + 0, eop, IDS_MEMBER, lo - c, hi - c)
                     if w is None:
                         raise _Unresolved(why)
                     words.append(w)
-                    inputs_rec.append({"kind": "prompt", "identity": [rid, arrive, eop, IDS_MEMBER, [lo, hi]]})
+                    inputs_rec.append({"kind": "prompt", "identity": [rid, arrive, eop, IDS_MEMBER, [lo - c, hi - c]]})
             elif kind == "n":
                 m = pi.member_at(a, lo, hi)
                 if m is None:
@@ -304,6 +345,12 @@ def by_member(got: dict[str, Any], ports: dict[str, str]) -> dict[str, Any]:
     return out | {p: v for p, v in got.items() if p not in ports and p not in out}
 
 
+def plane_ports(d: dict) -> dict[str, str]:
+    """A MoE plane row's output port j -> its j-th plane member (in_quant: 0 -> in_q, 1 -> in_scale): `_describe_plane` lists the
+    members in the relation's return order.  {} for any other row."""
+    return {str(j): m[0] for j, m in enumerate(d["members"])} if d.get("plane_kind") else {}
+
+
 def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], vu: dict, arrive: int,
                rec: dict[str, Any]) -> dict[str, Any]:
     r = pi.by_i[vu["i"]]
@@ -323,7 +370,7 @@ def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, 
         rec["why"] = f"evaluator error: {e!r}"[:300]
         return rec | {"result": None}
     if len(got) > 1:
-        got = by_member(got, pi.member_of_port(vu["i"]))
+        got = by_member(got, pi.member_of_port(vu["i"]) or plane_ports(d))
     if d.get("plane") and d["plane"] not in got and len(got) == 1:
         got = {d["plane"]: next(iter(got.values()))}                             # [MAN-06f v3] a dense relation's `out` IS this row's plane (act = SiluMul out)
         rec["plane"] = d["plane"]

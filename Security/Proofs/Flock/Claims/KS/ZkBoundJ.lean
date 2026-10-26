@@ -184,6 +184,10 @@ theorem bound_le_tableErr_zk {F : Type} [Field F] [Fintype F] [DecidableEq F] (h
         rw [← ENNReal.ofReal_add hr0 hi, ← ENNReal.ofReal_pow (by positivity),
           ← ENNReal.ofReal_add hl0 (by positivity)]
 
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **A table's error is at most `ε_table`**, the tables' errors summed. -/
 theorem tableErr_le_εtable {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} {j : ℕ}
     (h : (tables zk x)[j]? = some (spec, st)) : tableErr zk spec st ≤ εtable zk x := by
@@ -193,6 +197,13 @@ theorem tableErr_le_εtable {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {s
     obtain ⟨p, -, rfl⟩ := List.mem_map.1 ha
     exact tableErr_nonneg zk p.1 p.2
   exact List.single_le_sum hnn _ hm
+
+end Gen
+
+/-- **A table's error is at most `ε_table`**, the tables' errors summed. -/
+theorem tableErr_le_εtable {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} {j : ℕ}
+    (h : (tables zk x)[j]? = some (spec, st)) : tableErr zk spec st ≤ εtable zk x :=
+  Gen.tableErr_le_εtable (S := S₀) (zk := zk) (x := x) (spec := spec) (st := st) (j := j) (h := h)
 
 /-- **The masked session's `ε_c⁻`, averaged over a mixture of strategies, at table `j`**, is at most `ε_table` and
 the old masked escapes' term (`mean_epsSZ_le` at any table). -/
@@ -353,6 +364,10 @@ section Committed
 
 open Model Refine Claims.Flock
 
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **At table `j`'s index**, masked: table `j`'s word is `2^d` long and its columns have the `2^lanes` witness
 lanes. -/
 theorem zk_atJ {x : Claims.Msg} {j : ℕ} {spec : SessionSpec} {st : _root_.Flock.Stmt}
@@ -365,6 +380,19 @@ theorem zk_atJ {x : Claims.Msg} {j : ℕ} {spec : SessionSpec} {st : _root_.Floc
   · unfold wideJ
     rw [h]
     simp [zkLanes, hi]
+
+end Gen
+
+/-- **At table `j`'s index**, masked: table `j`'s word is `2^d` long and its columns have the `2^lanes` witness
+lanes. -/
+theorem zk_atJ {x : Claims.Msg} {j : ℕ} {spec : SessionSpec} {st : _root_.Flock.Stmt}
+    (h : (tables true x)[j]? = some (spec, st)) {i : ZkIdx} (hi : i.m = st.m) :
+    wordLenJ true x j = 2 ^ zkLen i ∧ ∀ u, wideJ true x j u ↔ u.length = 2 ^ zkLanes i :=
+  Gen.zk_atJ (S := S₀) (x := x) (j := j) (spec := spec) (st := st) (h := h) (i := i) (hi := hi)
+
+namespace Gen
+
+variable [S : ZkSetup]
 
 /-- **A close table extracts table `j`** (`good_of_close_zk` at table `j`). -/
 theorem good_of_close_zkJ (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) (j : ℕ)
@@ -398,6 +426,24 @@ theorem good_of_close_zkJ (rel : Readable.Parsed → Readable.Relation) (x : Cla
     push_cast
     exact this
 
+end Gen
+
+/-- **A close table extracts table `j`** (`good_of_close_zk` at table `j`). -/
+theorem good_of_close_zkJ (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) (j : ℕ)
+    (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x j = some s) (i : ZkIdx)
+    (hN : wordLenJ true x j = 2 ^ zkLen i) (C : Fin (wordLenJ true x j) → List 𝔽)
+    (hw : ∀ q, (C q).length = 2 ^ zkLanes i) (R : Fin (2 ^ zkLanes i) → Fin (2 ^ zkCols i + zkPad i) → 𝔽)
+    (hclose : CloseRows execArith (zkLen i) (2 ^ zkCols i + zkPad i) (zkThetaD ⟨i, zkOfRows padC R⟩)
+      (fun (ℓ : Fin (2 ^ zkLanes i)) (q : Fin (2 ^ zkLen i)) => oracleOf C ℓ q) R)
+    (hrel : Claims.Flock.RelS s (readTrace execArith i.m (zkLanes i) (zkCols i) (padWit (e := 0) padC R))) :
+    GoodTableAt (deployZk rel) (wordLenJ true) x j C :=
+  Gen.good_of_close_zkJ (S := S₀) (rel := rel) (x := x) (j := j) (s := s) (hs := hs) (i := i) (hN := hN) (C := C)
+    (hw := hw) (R := R) (hclose := hclose) (hrel := hrel)
+
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **A committed table extracts table `j`** (`good_of_committed_zk` at table `j`): a table of witness-lane columns
 whose oracle is `CommittedPad` for the old statement `S` at the deployed masked schedule and padding, when a satisfying
 old witness of `S` reads as a witness of table `j`'s statement. -/
@@ -426,6 +472,27 @@ theorem good_of_committed_zkJ (rel : Readable.Parsed → Readable.Relation) (x :
   obtain ⟨P, ⟨R, hR, rfl⟩, hsat⟩ := hc
   exact key _ _ (zkLevel_table i).2 (zkLevel_table i).1 R hR hsat
 
+end Gen
+
+/-- **A committed table extracts table `j`** (`good_of_committed_zk` at table `j`): a table of witness-lane columns
+whose oracle is `CommittedPad` for the old statement `S` at the deployed masked schedule and padding, when a satisfying
+old witness of `S` reads as a witness of table `j`'s statement. -/
+theorem good_of_committed_zkJ (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) (j : ℕ)
+    (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x j = some s) (i : ZkIdx)
+    (hN : wordLenJ true x j = 2 ^ zkLen i) (C : Fin (wordLenJ true x j) → List 𝔽)
+    (hw : ∀ q, (C q).length = 2 ^ zkLanes i) (S : Statement)
+    (hwit : ∀ P : Message 𝔽 (zkLanes i) (zkCols i),
+      S.Satisfies (witnessOf execArith S.m (zkLanes i) (zkCols i) P) →
+        Claims.Flock.RelS s (readTrace execArith i.m (zkLanes i) (zkCols i) P))
+    (hc : CommittedPad execArith S (schedOf (zkSched i.m).1) (zkPad i) padC (oracleOf C)) :
+    GoodTableAt (deployZk rel) (wordLenJ true) x j C :=
+  letI : ZkSetup := S₀
+  Gen.good_of_committed_zkJ rel x j s hs i hN C hw S hwit hc
+
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **An uncommitted old table at table `j`** (`not_committed_zk` at table `j`). -/
 theorem not_committed_zkJ (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) (j : ℕ)
     (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x j = some s) {spec : SessionSpec} {st : _root_.Flock.Stmt}
@@ -438,7 +505,26 @@ theorem not_committed_zkJ (rel : Readable.Parsed → Readable.Relation) (x : Cla
     ¬ CommittedPad execArith S (schedOf (zkSched i.m).1) (zkPad i) padC (oracleOf C) := fun hc =>
   hg (good_of_committed_zkJ rel x j s hs i (zk_atJ hst hi).1 C (fun q => ((zk_atJ hst hi).2 _).1 (hw q)) S hwit hc)
 
+end Gen
+
+/-- **An uncommitted old table at table `j`** (`not_committed_zk` at table `j`). -/
+theorem not_committed_zkJ (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) (j : ℕ)
+    (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x j = some s) {spec : SessionSpec} {st : _root_.Flock.Stmt}
+    (hst : (tables true x)[j]? = some (spec, st)) (i : ZkIdx) (hi : i.m = st.m)
+    (C : Fin (wordLenJ true x j) → List 𝔽) (hw : ∀ q, wideJ true x j (C q)) (S : Statement)
+    (hwit : ∀ P : Message 𝔽 (zkLanes i) (zkCols i),
+      S.Satisfies (witnessOf execArith S.m (zkLanes i) (zkCols i) P) →
+        Claims.Flock.RelS s (readTrace execArith i.m (zkLanes i) (zkCols i) P))
+    (hg : ¬ GoodTableAt (deployZk rel) (wordLenJ true) x j C) :
+    ¬ CommittedPad execArith S (schedOf (zkSched i.m).1) (zkPad i) padC (oracleOf C) :=
+  Gen.not_committed_zkJ (S := S₀) (rel := rel) (x := x) (j := j) (s := s) (hs := hs) (spec := spec) (st := st)
+    (hst := hst) (i := i) (hi := hi) (C := C) (hw := hw) S (hwit := hwit) (hg := hg)
+
 end Committed
+
+namespace Gen
+
+variable [S : ZkSetup]
 
 /-- **Table `j` of a masked statement in scope**: C-Flock ZK's `m` and `k_log` (every table has table 0's,
 `tables_fit`), its layout and its link layout at `PT_LOCAL` (`zk_table0` at table `j`). -/
@@ -472,6 +558,22 @@ theorem zk_scopeJ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Read
   have h1 := hr.mPts
   have h2 := hr.hm
   omega
+
+end Gen
+
+/-- **Table `j` of a masked statement in scope**: C-Flock ZK's `m` and `k_log` (every table has table 0's,
+`tables_fit`), its layout and its link layout at `PT_LOCAL` (`zk_table0` at table `j`). -/
+theorem zk_scopeJ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf true x = some (ins, spec, sts)) {j : ℕ} (hj : j < sts.size) :
+    25 ≤ sts[j].m ∧ sts[j].m ≤ 35 ∧ sts[j].c.kLog ≤ 27 ∧
+      ∃ L : Layout sts[j], (L.model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts :=
+  Gen.zk_scopeJ (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec) (sts := sts)
+    (hset := hset) (j := j) (hj := hj)
+
+namespace Gen
+
+variable [S : ZkSetup]
 
 /-- **At table `j`, a message satisfying its model statement reads as a witness of table `j`'s own statement**
 (`relS_of_table0` at table `j`): table `j`'s statement is the parsed one with table `j` alone (`Parsed.only`), whose
@@ -511,6 +613,27 @@ theorem relS_tableJ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Re
   rw [zOf_readTrace rfl]
   exact hsat
 
+end Gen
+
+/-- **At table `j`, a message satisfying its model statement reads as a witness of table `j`'s own statement**
+(`relS_of_table0` at table `j`): table `j`'s statement is the parsed one with table `j` alone (`Parsed.only`), whose
+relation is table `j`'s model statement at its one table's share (`relS_relation`). -/
+theorem relS_tableJ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf true x = some (ins, spec, sts)) {j : ℕ} (hj : j < sts.size) {t : Claims.Flock.Stmt}
+    (ht : table true Readable.relation x j = some t) (L : Layout sts[j]) {m lanes cols : ℕ} (hm : m = sts[j].m)
+    (M : Model.Message 𝔽 lanes cols)
+    (hsat : (L.model (Refine.regionsOf sts[j])).Satisfies
+      (Model.witnessOf execArith (L.model (Refine.regionsOf sts[j])).m lanes cols M)) :
+    Claims.Flock.RelS t (Claims.Flock.readTrace execArith m lanes cols M) :=
+  Gen.relS_tableJ (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec) (sts := sts)
+    (hset := hset) (j := j) (hj := hj) (t := t) (ht := ht) (L := L) (m := m) (lanes := lanes) (cols := cols) (hm := hm)
+    (M := M) (hsat := hsat)
+
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **At the masked record, a table that does not extract table `j` is not committed** to table `j`'s model
 statement, at the old padded theorems' schedule and padding (`zk_not_committed` at table `j`, at `relS_tableJ`): at a
 statement in scope that the deployed masked parser reads at the deployed relation and the verifier sets up, for every
@@ -536,6 +659,24 @@ theorem zk_not_committedJ {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (fun P hsat => relS_tableJ hs hin hset hj ht L hi P hsat) hg
   unfold Claims.Flock.zkPad at this
   rwa [hi] at this
+
+end Gen
+
+/-- **At the masked record, a table that does not extract table `j` is not committed** to table `j`'s model
+statement, at the old padded theorems' schedule and padding (`zk_not_committed` at table `j`, at `relS_tableJ`): at a
+statement in scope that the deployed masked parser reads at the deployed relation and the verifier sets up, for every
+table of witness-lane columns at table `j`. -/
+theorem zk_not_committedJ {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : (deployZk Readable.relation).parse x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) {j : ℕ}
+    (hj : j < sts.size) (L : Layout sts[j]) (C : Fin (wordLenJ true x j) → List 𝔽)
+    (hw : ∀ q, wideJ true x j (C q))
+    (hg : ¬ Claims.Flock.GoodTableAt (deployZk Readable.relation) (wordLenJ true) x j C) :
+    ¬ CommittedPad execArith (L.model (Refine.regionsOf sts[j]))
+      (Refine.schedOf (Claims.Flock.zkSched sts[j].m).1) (Claims.Flock.zkSched sts[j].m).2 padC
+      (Claims.Flock.oracleOf C) :=
+  Gen.zk_not_committedJ (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec) (sts := sts)
+    (hset := hset) (j := j) (hj := hj) (L := L) (C := C) (hw := hw) (hg := hg)
 
 end FlockDeploy.KS
 
@@ -593,7 +734,7 @@ prover at padded tables `T j`. Every prover has, at each table `j`, old masked f
 `rd j` and a one-run event, such that at each tape, each table `j` of the statement and each table `C` of its word
 that `Ok` allows, a mixture `σ` of masked sessions after a `Commit` of cap `cap₀`, table `j` at position
 `pre.length` of the batch, bounds the deployed runs accepting with no column of table `j` off `C` by its acceptance
-there with no level-0 opening off `C` unless it self-clashes, and table `j`'s events bound its `Adv`s and self-clash.
+there and at every table before it (`AccUpTo`) with no level-0 opening off `C` unless it self-clashes, and table `j`'s events bound its `Adv`s and self-clash.
 -/
 def ZkSessJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) (x : Claims.Msg) {mPts : ℕ}
@@ -617,7 +758,7 @@ def ZkSessJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] 
                 Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen j) p.val = some u ∧
                   u ≠ C p) ≤
             (∑ t, expect (ind fun outs : List (OutZC 𝔽 D Sl) =>
-                (outs.getD pre.length dfltOutZC).accepted = true ∧
+                AccUpTo pre.length outs ∧
                   ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
                     ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC)))
               (sessAtZ pre post (tabAfterZC A Hs (T j) cap₀)) (σ t)) / Fintype.card τ ∧
@@ -672,7 +813,7 @@ theorem zk_le_sessionsJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [I
           Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen j) p.val = some u ∧
             u ≠ C p) ≤
       (∑ t, expect (ind fun outs : List (OutZC 𝔽 D Sl) =>
-          (outs.getD pre.length dfltOutZC).accepted = true ∧
+          AccUpTo pre.length outs ∧
             ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
               ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC)))
         (sessAtZ pre post (tabAfterZC A Hs (T j) cap₀)) (σ t)) / Fintype.card τ)
@@ -698,27 +839,27 @@ theorem zk_le_sessionsJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [I
             u ≠ C p := by
   obtain ⟨h25, h35, hsch, ht, he, hS, hN, hq, hδ, -⟩ := hT j hj
   have hper : ∀ t, expect (ind fun outs : List (OutZC 𝔽 D Sl) =>
-        (outs.getD pre.length dfltOutZC).accepted = true ∧
+        AccUpTo pre.length outs ∧
           ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
             ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC)))
       (sessAtZ pre post (tabAfterZC A Hs (T j) cap₀)) (σ t) ≤ epsSZ A Hs (T j) pre post cap₀ (σ t) := by
     intro t
     have hs := session_sound_of_table_accZ_sc A hA Hs (T j) pre post cap₀
-      (fun outs => (outs.getD pre.length dfltOutZC).accepted = true ∧
+      (fun outs => AccUpTo pre.length outs ∧
         ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
           ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC)))
       (fun _ h => h.1) (Claims.Flock.oracleOf C) (σ t)
     have e : (ind fun outs : List (OutZC 𝔽 D Sl) =>
-        ((outs.getD pre.length dfltOutZC).accepted = true ∧
+        (AccUpTo pre.length outs ∧
           ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
             ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC))) ∧
           ¬ (T j).Committed A (Claims.Flock.oracleOf C)) = ind fun outs =>
-        (outs.getD pre.length dfltOutZC).accepted = true ∧
+        AccUpTo pre.length outs ∧
           ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
             ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC)) :=
       congrArg ind (funext fun _ => propext (and_iff_left hTc))
     have e₀ : (ind fun outs : List (OutZC 𝔽 D Sl) =>
-        ((outs.getD pre.length dfltOutZC).accepted = true ∧
+        (AccUpTo pre.length outs ∧
           ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
             ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC))) ∧
           ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC) ∧

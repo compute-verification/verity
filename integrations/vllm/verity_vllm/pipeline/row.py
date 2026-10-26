@@ -4,14 +4,18 @@
     verity-vllm row stage STAGE ROW ROLE REPO REV [stage flags]           one stage as one research Attempt
                                                                           (plan: the Commit's plan, on CPU, before the GPU;
                                                                           replay: a config run's deferred C2, on CPU)
-    verity-vllm row chain ROW ROLE REPO REV [--stages ...] [--campaign C] [--project P] [stage flags]
+    verity-vllm row chain ROW ROLE REPO REV [--stages ...] [--build-run RUN] [--match-run RUN] [--campaign C] [--project P]
+                          [--ref REF] [--by LANE] [--tier T] [--no-publish] [stage flags]
+                                                                          a row whose Build, Match and Commit pass publishes
+                                                                          its record (`pipeline.research.chain`)
     verity-vllm row shed  [--force]
 
 A row id with ``__tp<N>__``, N >= 2, runs the tensor-parallel stages (``row_tp``; world ``--world``, else the manifest's
 ``sweep.tp``), any other the single-GPU stages (``row_stages``).  The stage flags are the fields of ``BuildConfig``,
 ``MatchConfig``, ``CommitConfig`` and ``RunEnv``; each also reads the environment variable it names.  ``--protocols``
-(``PROTOCOLS``) runs the row with protocol options beside sampled proofs (`verity_vllm.protocol_options`): a set it cannot
-run is refused here, before any stage, for single-GPU and TP rows alike (exit 3).
+(``PROTOCOLS``) runs the row with protocol options beside sampled proofs (`verity_vllm.protocols`): a set it cannot
+run is refused here, before any stage, for single-GPU and TP rows alike (exit 3), and so is a row of record that is not done only at
+its public cap (``PRECHECK_FAIL_DONE_SOURCE``, ``config.done_source_refusal``).
 
 The row's config is its file (``config.RowConfig``); the flags and variables change how its stages run, never it.  Every run first
 writes what it used, ``<row dir>/effective_config.json`` (``effective_config``), which the row's config record carries.
@@ -26,17 +30,18 @@ from dataclasses import asdict, dataclass, fields
 from importlib import metadata
 from typing import Any
 
-from verity_vllm import protocol_options as PO
-from verity_vllm.config import (ROOT, WORKLOADS, BuildConfig, CommitConfig, MatchConfig, RowConfig, RunEnv, UsageError, group, option,
-                                row_world)
+from verity_vllm import protocols as PO
+from verity_vllm.config import (ROOT, WORKLOADS, BuildConfig, CommitConfig, MatchConfig, RowConfig, RunEnv, UsageError,
+                                done_source_refusal, group, option, row_world)
+from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import research
+from verity_vllm import settings
 
 STAGES = "build,match,commit"
 EFFECTIVE_SCHEMA = "verity-vllm/effective-config/v1"
 EFFECTIVE_NAME = "effective_config.json"
 #: The environment a row's engines inherit that can change their kernels, recorded beside the config (never a credential).
 ENGINE_ENV = ("VLLM_", "NCCL_", "CUBLAS", "TORCH_", "TORCHINDUCTOR_", "TRITON_", "FLASHINFER_", "CUDA_VISIBLE_DEVICES")
-_SECRET_WORDS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -52,7 +57,7 @@ class _Row:
     query: str = option("--query", env="VERITY_QUERY_ID", default="Q_word_v1{X=16,W=32,R=no-recompute}", help="verification query id (recorded)")
     protocols: str | None = option("--protocols", env="PROTOCOLS", default=None,
                                    help="the row's protocol set, sampled proofs included: 'pouw:<scheme>,pous:<scheme>,sampled-proofs:vllm-v1' "
-                                        "(verity_vllm.protocol_options); default: the workload target's, else sampled proofs alone")
+                                        "(verity_vllm.protocols); default: the workload target's, else sampled proofs alone")
     build: BuildConfig = group(BuildConfig)
     match: MatchConfig = group(MatchConfig)
     commit: CommitConfig = group(CommitConfig)
@@ -84,15 +89,27 @@ class Stage(_Row, _Research, _StageName):
 
 @dataclass(frozen=True, kw_only=True)
 class Chain(_Research):
-    """One research Attempt per stage, each citing the earlier stages' artifacts."""
+    """One research Attempt per stage, each citing the earlier stages' artifacts; a row whose Build, Match and Commit pass publishes
+    its record in the circuit database."""
 
     row: str = option("row")
     role: str = option("role")
     repo: str = option("repo")
     rev: str = option("rev")
     stages: str = option("--stages", default=STAGES)
+    build_run: str | None = option("--build-run", default=None,
+                                   help="a passing Build Attempt the chain cites in place of its build stage (--stages without build); "
+                                        "its row dir must be the chain's, whose Match precheck holds it to the cited Program digest")
+    match_run: str | None = option("--match-run", default=None,
+                                   help="a passing Match Attempt the chain cites in place of its match stage (--stages without match); "
+                                        "its row dir, with the Match's outputs, must be the chain's")
     campaign: str | None = option("--campaign", env="RESEARCH_CAMPAIGN", default=None)
     project: str = option("--project", env="RESEARCH_PROJECT", default="verity")
+    publish: bool = option("--publish", action="boolean_optional", default=True,
+                           help="publish the row's record once its Build, Match and Commit pass (`verity-vllm records publish`)")
+    ref: str | None = option("--ref", default=None, help="the branch of the record's tree REF@SHA (default the tree's EXPORT.json or git branch)")
+    by: str | None = option("--by", env="RESEARCH_LANE", default=None, help="the lane the record's row label is by")
+    tier: str | None = option("--tier", choices=CR.TIERS, default=None, help="the tier of the row's rebuild; a row new to records.json needs one")
     flags: list[str] = option("flags", nargs="...", default=[], help="stage flags, passed to every stage")
     env: RunEnv = group(RunEnv)
 
@@ -145,20 +162,23 @@ def effective_config(o: Run | Stage, stages: str, protocols: tuple[str, ...] | N
                           **{k: run[k] for k in ("world", "gpu_util", "protocols") if run[k] is not None}},
             "vllm_installed": vllm,
             "engine_env": {k: environ[k] for k in sorted(environ) if k.startswith(ENGINE_ENV)
-                           and not any(w in k.upper() for w in _SECRET_WORDS)}}
+                           and not settings.is_secret(k)}}
 
 
 def run_row(o: Run | Stage, stages: str) -> int:
     wl = WORKLOADS / f"{o.row}.json"
+    doc = json.loads(wl.read_text()) if wl.is_file() else {}
     try:
-        protocols = PO.at_row(o.protocols, json.loads(wl.read_text()) if wl.is_file() else {},
-                              world=o.world if o.world is not None and row_world(o.row) > 1 else row_world(o.row))
+        protocols = PO.at_row(o.protocols, doc, world=o.world if o.world is not None and row_world(o.row) > 1 else row_world(o.row))
     except PO.Refused as e:
         print(f"[row] REFUSE (fail-closed): {e}", flush=True)
         return 3
     if o.env.verity_tree and os.path.realpath(o.env.verity_tree) != os.path.realpath(ROOT):   # refuse before writing anything
         print(f"PRECHECK_FAIL_SOURCE_IDENTITY: row at {os.path.realpath(ROOT)} but $VERITY_TREE={o.env.verity_tree} names another tree",
               file=sys.stderr)
+        return 3
+    if why := done_source_refusal(doc):
+        print(f"PRECHECK_FAIL_DONE_SOURCE: {why}", file=sys.stderr)
         return 3
     d = os.path.join(o.env.sweep_dir, o.row)
     os.makedirs(d, exist_ok=True)
@@ -202,7 +222,8 @@ def main(o: Any) -> int:
     if isinstance(o, Run):
         return run_row(o, o.stages)
     if isinstance(o, Chain):
-        stray = [f for f in ("--stages", "--campaign", "--project") if f in o.flags]
+        stray = [f for f in ("--stages", "--build-run", "--match-run", "--campaign", "--project", "--publish", "--no-publish", "--ref", "--by", "--tier")
+                 if f in o.flags]
         if stray:
             raise UsageError(f"{', '.join(stray)} must come before ROW (the flags after the positionals go to every stage)")
         from verity_vllm.pipeline import cli

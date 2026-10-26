@@ -6,6 +6,8 @@ to the map's, the verdict, and `main` end to end (the GPU run is `tests/properti
 H200)."""
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import copy
 import hashlib
 import struct
@@ -15,7 +17,7 @@ import pytest
 import torch
 
 from tests.properties import dsv4_marlin_capture_gpu as X
-from verity_vllm.program.kernels import marlin_moe_rows as MR
+from verity.ml.definitions.numerics import marlin_moe_rows as MR
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 E, K, N, SMS = 8, 256, 128, 3

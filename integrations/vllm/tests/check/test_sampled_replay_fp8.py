@@ -129,7 +129,7 @@ class HonestFp8:
             if not d["members"]:
                 continue
             for m in d["members"]:
-                v = np.asarray(got[m[0]]).reshape(-1)
+                v = np.asarray(got[m[0]] if m[0] in got or len(got) != 1 else next(iter(got.values()))).reshape(-1)   # one output: the member
                 v = v.astype(np.uint16) if fam != "TokenSelect_v1" else v.astype(np.uint64)
                 key = (d["step"], rid, d["op_path"], m[0])
                 self.blocks[key] = np.concatenate([self.blocks[key], v]) if key in self.blocks else v
@@ -209,8 +209,8 @@ def test_honest_fp8_program_replays_bit_exactly_the_gemm_rows_are_vus_the_quant_
     gemm_strata = {k: v for k, v in rep["strata"].items() if k.startswith("ScaledMmFp8Block")}
     assert gemm_strata and all(v["evaluated"] >= 1 for v in gemm_strata.values())
     assert {k.split("|")[4].rsplit(".", 1)[-1] for k in gemm_strata} == {"gate_up_proj", "down_proj"}
-    assert rep["evaluators"]["ScaledMmFp8Block_v1"].startswith("verity_vllm.program.kernels.derived_rows.scaled_mm_fp8_block_row")
-    assert rep["evaluators"]["Fp8GroupQuant_v1"].startswith("verity_vllm.program.kernels.derived_rows.fp8_group_quant_row")
+    assert rep["evaluators"]["ScaledMmFp8Block_v1"].startswith("verity.ml.definitions.numerics.derived_rows.scaled_mm_fp8_block_row")
+    assert rep["evaluators"]["Fp8GroupQuant_v1"].startswith("verity.ml.definitions.numerics.derived_rows.fp8_group_quant_row")
     # [rev M-0100] the twins name what pinned them: fixture sha256 (the file in the tree), kernels, device, date, tests
     import hashlib
     from pathlib import Path
@@ -239,19 +239,19 @@ def test_gemm_vu_replay_record_composes_the_quant_and_reads_both_weight_widths(f
     assert ("weights", None, 8) in kinds and ("weights", None, 32) in kinds
     assert rec["inputs"][0]["range"] == [0, H] and rec["inputs"][1]["range"] == [H, H + H // G]          # the two ports of the quant
     assert rec["inputs"][0]["inputs"][0]["kind"] == "committed" and rec["inputs"][0]["inputs"][0]["identity"][2] == "model.layers.0.input_layernorm"
-    assert rec["outputs"] == [{"member": "0", "width": 2 * I, "equal": True, "differing_elements": 0, "first_diff": None}]
+    assert rec["outputs"] == [{"member": "out", "width": 2 * I, "equal": True, "differing_elements": 0, "first_diff": None}]
 
 
 def test_flipped_fp8_gemm_output_word_fails_named(fp8_world):
     def mutate(store, entries):
-        k = (1, "model.layers.0.mlp.down_proj/0")
+        k = (1, "model.layers.0.mlp.down_proj/out")
         b = bytearray(store[k])
         b[3] ^= 0x01
         store[k] = bytes(b)
     bmap, committed = fp8_world.bmap_and_reader(mutate=mutate)
     rep = SR.sampled_replay(_programs(fp8_world), bmap, committed, fp8_world.read, per_stratum=2, seed=5, workers=0)
     assert rep["result"] is False
-    assert any("ScaledMmFp8Block_v1 r0 step 1 model.layers.0.mlp.down_proj/0" in str(m.get("why")) for m in rep["mismatch"])
+    assert any("ScaledMmFp8Block_v1 r0 step 1 model.layers.0.mlp.down_proj/out" in str(m.get("why")) for m in rep["mismatch"])
 
 
 def test_perturbed_block_scale_fails_the_gemm_vu_a_load_bearing_registered_input(fp8_world):

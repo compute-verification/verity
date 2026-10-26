@@ -8,10 +8,13 @@ import Flock.RecSetup
 The compiled verifier (`flock-verify verify --rec-inner`) reads, of a recursion statement, the inner statement's bytes,
 the inner statement's files where it holds them (`RecCoins.Source`), its own inner shape (`RecVStar.Inner`,
 `--rec-inner`) and each V* session's record (`Read`). Its setup refuses an inner shape whose V* list
-`RecVStar.statements` refuses, and at candidate 3's sparse shape one whose inner statement `RecCoins.checkAtC3`
-refuses (`checkInnerRange`). Its verdict refuses a V* session whose record holds no draw (`ProvedScope.drawLaw`) or
-whose draw is not every unit of its population (`RecSetup.fullDraw`, #2219). There is no other recursion-level
-refusal.
+`RecVStar.statements` refuses, at candidate 3's sparse shape one whose inner statement `RecCoins.checkAtC3`
+refuses (`checkInnerRange`), and where it holds the inner statement's files one that is not the inner statement's, or an
+inner statement set up otherwise than its files set it up (`RecSetup.checkShape`, `RecSetup.checkForm`); every V*
+statement carries those files (`RecCoins.filesInput` refuses them in part). Its verdict refuses a V* session whose record holds no draw (`ProvedScope.drawLaw`) or
+whose draw is not every unit of its population (`RecSetup.fullDraw`, #2219), and a session over an inner session whose
+record holds no draw (`RecSetup.innerDrawn`); the compiled statement's reader refuses an inner statement without a draw
+(`RecDeploy.innerOk`). There is no other recursion-level refusal.
 
 * `parseOf`: the deployed parser, what the verifier reads where its setup accepts the inner shape, readable (`toStmt`);
 * `scopeCheckOf`: the parser accepts, the inner scope check takes the inner statement, and `RecSetup.fullDraw` takes
@@ -83,10 +86,14 @@ def toStmt (r : Read) : Claims.Recursion.Stmt where
         | _, _ => false }
   draws := r.records.map recordDrawOf
 
-/-- **The verifier's setup accepts the inner shape**: V*'s list at it (`RecVStar.statements`), and candidate 3's checks
-on the inner statement (`RecCoins.checkAtC3`). -/
+/-- **The verifier's setup accepts the inner shape**: V*'s list at it (`RecVStar.statements`), candidate 3's checks
+on the inner statement (`RecCoins.checkAtC3`), the inner shape the inner statement's and the inner statement set up as
+its files set it up where the verifier holds its files (`RecSetup.checkShape`, with `RecSetup.checkForm`), and the
+verifier holds them: `RecCoins.filesInput` refuses the inner statement's circuit and public file without its partition,
+and every V* statement carries those two (`RecDeploy.partRaw`). -/
 def accepts (r : Read) : Bool :=
-  (RecVStar.statements r.shape).isOk && (RecCoins.checkAtC3 (some r.shape) r.src).isOk
+  (RecVStar.statements r.shape).isOk && (RecCoins.checkAtC3 (some r.shape) r.src).isOk &&
+    (RecSetup.checkShape (some r.shape) r.src).isOk && r.src.isSome
 
 /-- What the verifier reads of a statement's bytes (`decode`), where its setup accepts the inner shape. -/
 def parseBytes (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Option Read := (decode x).filter accepts
@@ -262,7 +269,7 @@ theorem inScope_iff {r : Read} (hr : accepts r = true) :
     Claims.Recursion.InScope (toStmt r) ↔ r.records.all (fullDrawOk r.shape) = true := by
   unfold accepts at hr
   simp only [Bool.and_eq_true, isOk_iff] at hr
-  obtain ⟨⟨ss, hs⟩, ⟨u, hc⟩⟩ := hr
+  obtain ⟨⟨⟨⟨ss, hs⟩, ⟨u, hc⟩⟩, -⟩, -⟩ := hr
   obtain ⟨h1, h2, h3, h4, ss', hc3⟩ := statements_ok hs
   have hshape : (toStmt r).form.sparse = none ∧ (toStmt r).form.stacked = none ∨
       ∃ nu ell sLog, (toStmt r).form.sparse = some (nu, ell, sLog, 0) ∧ 1 ≤ nu ∧ 6 ≤ ell ∧

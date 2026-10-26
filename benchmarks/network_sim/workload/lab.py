@@ -11,38 +11,54 @@ so φ's messages are recast:
 - **Work.** Session j evaluates the block's gates of the ticks from its read tick up to the next session's (the gates before
   the first read go with session 0), then answers with the block's outbound messages whose last value is ready by then
   (`Message.ready_tick`); each is read at a later tick than the session's.
-- **Requests.** A request is the session's index and its payload's length (`>II`), then its messages' bytes
-  (`framing.encode`) in stream order.
-- **Events.** Each outbound message's bytes are cut into chunks of `chunk` bytes (the last may be shorter), each chunk one
-  event: `id: <position>`, `event: <message stream>`, `data: <the chunk in base64>`. The positions number a block's events
-  0 … n − 1 in session, message and chunk order, the canonical order the certifier's shaper hands in. An event and its
-  frame header fit one frame.
+- **Requests.** A request is the session's index and its payload's length (`>II`), then zero bytes that make every
+  request of the block the same number of frames, F_in, the least power of two that holds its longest, then its
+  messages' bytes (`framing.encode`) in stream order. On the link it is the certifier's canonical framing
+  (`active.request_frames`): its length and bytes in `DATA` frames on stream 0, the last zero-filled, so the k-th
+  request on a link is session k − 1's.
+- **Events.** Each outbound message's bytes are cut into chunks of `active.TOKEN_BYTES` (the last may be shorter), each
+  chunk one canonical event (`active.event`) after the line `id: <position>`, which the proxy reads and doesn't
+  record. A session's events are then padded with empty ones (`active.event(b"")`, of no message) to the block's most,
+  F, so every response of a block is F events (`fixlen`): with F_in, the served profile N2 derives a link's egress
+  counts from (`verity.core.protocols.certifier.served`). The positions number a block's events 0 … n − 1 in session,
+  message and chunk order, the padding last, the canonical order the certifier's shaper hands in, so the k-th event
+  released on a link is position k.
 
 A message from block X to block Y therefore crosses X's certifier in an event of X's response, and Y's in Y's request: the
 client relays it. Every byte on every link is a function of the placement and the committed values.
 
 **N3** (`check`), in the clear like `n3.check`, whose first two steps it shares: the placement registers and is causal, each
-unit's values register, and every crossing value opens at its source unit. Then, per block: every frame the certifier
-released on the block's egress is a `DATA` frame of its session's stream carrying the event the opened values declare at
-its position, each position once and none missing; and on its ingress each stream's frames, up to its `LAST`, are the
-request the opened values declare for that session. When a frame crossed is the certifier's audit's to check, not N3's.
-The codes are `n3.check`'s `program`, `placement`, `hardware` and `values`, and per link (`BLOCK:responses`,
-`BLOCK:requests`): `malformed` (not a whole frame of the link's kinds, or an event without a position), `fill` (a frame
-whose fill isn't zero), `unexplained` (a stream or position the Program doesn't have), `extra` (a position, or a request's
-frame after its `LAST`, seen again), `content` (an event or request that isn't the declared one) and `missing` (a declared
-event or request that wasn't recorded).
+unit's values register, and every crossing value opens at its source unit. Then, per block: the k-th frame the certifier
+released on the block's egress is the canonical event of the chunk the opened values declare at position k, and none
+is missing; and its ingress frames, cut into requests by their lengths, are the requests the opened values declare, in
+session order. When a frame crossed is the certifier's audit's to check, not N3's. The codes are `n3.check`'s
+`program`, `placement`, `hardware` and `values`, and per link (`BLOCK:responses`, `BLOCK:requests`): `malformed` (not
+a whole `DATA` frame on stream 0, or on egress not a canonical event), `fill` (a frame whose fill isn't zero),
+`unexplained` (an event or request past the Program's), `content` (an event or request that isn't the declared one)
+and `missing` (a declared event or request that wasn't recorded).
 """
 from __future__ import annotations
 
-import base64
-import binascii
 import bisect
 import struct
 from collections import defaultdict
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 
-from verity.core.protocols.certifier.active import DATA, HEADER, LAST, decode_frame, encode_frame, event_position
+from verity.core.protocols.certifier.active import (
+    CANONICAL_STREAM,
+    DATA,
+    HEADER,
+    LENGTH,
+    TOKEN_BYTES,
+    Requests,
+    decode_frame,
+    encode_frame,
+    event,
+    event_data,
+    event_placement,
+    request_frame_count,
+)
 from verity.core.protocols.certifier.grid import Record, row_count
 from verity.ml.circuits.codec import program_digest
 
@@ -53,7 +69,6 @@ from . import placement as P
 from .hardware import OUTSIDE, Hardware
 
 REQUEST = struct.Struct(">II")
-EVENT_ROOM = 41  # the event's fields without its data: "id: ", "\nevent: ", "\ndata: ", "\n\n" and two 10-digit numbers
 EGRESS, INGRESS = "responses", "requests"
 
 
@@ -76,26 +91,30 @@ class Session:
 
 
 class Lab:
-    """The lab's Program for a placed workload: each block's sessions, and its events in position order as (session index,
-    message, chunk index)."""
+    """The lab's Program for a placed workload: each block's sessions, its events in position order as (session index,
+    message, chunk index), message None for a padding event, and its (F, F_in) (`fixlen`)."""
 
     def __init__(self, model: M.Model, hw: Hardware, placement: P.Placement, messages: Sequence[F.Message],
                  frame_bytes: int) -> None:
         self.model, self.hw, self.frame_bytes = model, hw, frame_bytes
-        self.chunk = 3 * ((frame_bytes - HEADER.size - EVENT_ROOM) // 4)
-        if self.chunk < 3:
-            raise ValueError(f"a {frame_bytes}-byte frame has no room for an event")
+        self.chunk = TOKEN_BYTES
+        event_placement(frame_bytes)
         self.messages = {m.stream: m for m in messages}
         self.blocks = [u for u in hw.unit_names() if u != OUTSIDE]
         self.held = {u: placement.at(hw.leaves_of(u)) for u in hw.unit_names()}
         self.sessions = {b: self._sessions(b, placement.tick_of) for b in self.blocks}
-        self.events: dict[str, list[tuple[int, F.Message, int]]] = {}
+        self.events: dict[str, list[tuple[int, F.Message | None, int]]] = {}
         self._first: dict[str, list[int]] = {}
+        self.fixlen: dict[str, tuple[int, int]] = {}
         for b in self.blocks:
+            chunks = [[(s.index, m, j) for m in s.outbound for j in range(self.chunks(m))] for s in self.sessions[b]]
+            most = max([1, *map(len, chunks)])
+            longest = max([1] + [request_frame_count(self._length(s), frame_bytes) for s in self.sessions[b]])
+            self.fixlen[b] = (most, 1 << (longest - 1).bit_length())
             self.events[b], self._first[b] = [], []
-            for s in self.sessions[b]:
+            for s, own in zip(self.sessions[b], chunks):
                 self._first[b].append(len(self.events[b]))
-                self.events[b] += [(s.index, m, j) for m in s.outbound for j in range(self.chunks(m))]
+                self.events[b] += own + [(s.index, None, j) for j in range(len(own), most)]
             self._first[b].append(len(self.events[b]))
 
     @classmethod
@@ -135,29 +154,39 @@ class Lab:
 
     def request(self, s: Session, payloads: dict[int, bytes]) -> bytes:
         """Session s's request, from its messages' bytes by stream."""
-        body = b"".join(payloads[m.stream] for m in s.inbound)
+        body = bytes(self.request_pad(s)) + b"".join(payloads[m.stream] for m in s.inbound)
         return REQUEST.pack(s.index, len(body)) + body
 
-    def request_length(self, s: Session) -> int:
+    def _length(self, s: Session) -> int:
         return REQUEST.size + sum((m.bits + 7) // 8 for m in s.inbound)
 
-    def event(self, block: str, position: int, payload: bytes) -> bytes:
-        """The event at `position` on the block's link, from its message's bytes."""
+    def request_pad(self, s: Session) -> int:
+        """The zero bytes after session s's request head that make it its block's F_in frames."""
+        n, room = self.fixlen[s.block][1], self.frame_bytes - HEADER.size
+        return max(0, (n - 1) * room - LENGTH.size + 1 - self._length(s)) if n > 1 else 0
+
+    def request_length(self, s: Session) -> int:
+        return self._length(s) + self.request_pad(s)
+
+    def request_frames(self, s: Session) -> int:
+        """The link frames session s's request takes (`active.request_frames`): its block's F_in."""
+        return request_frame_count(self.request_length(s), self.frame_bytes)
+
+    def payload(self, block: str, position: int, payloads: dict[int, bytes]) -> bytes:
+        """The bytes of the message whose chunk the event at `position` carries, empty for a padding event."""
+        m = self.events[block][position][1]
+        return b"" if m is None else payloads[m.stream]
+
+    def token(self, block: str, position: int, payload: bytes) -> bytes:
+        """The chunk the event at `position` on the block's link carries, from its message's bytes: none for a padding
+        event."""
         _, m, j = self.events[block][position]
-        chunk = payload[j * self.chunk:(j + 1) * self.chunk]
-        return b"id: %d\nevent: %d\ndata: %s\n\n" % (position, m.stream, base64.b64encode(chunk))
+        return b"" if m is None else payload[j * self.chunk:(j + 1) * self.chunk]
 
-
-def parse(event: bytes) -> tuple[int, bytes] | None:
-    """(position, chunk) of an event, or None when it has no position or no data in base64."""
-    p = event_position(event)
-    data = [line[6:] for line in event.split(b"\n") if line.startswith(b"data: ")]
-    if p is None or len(data) != 1:
-        return None
-    try:
-        return p, base64.b64decode(data[0], validate=True)
-    except binascii.Error:
-        return None
+    def event(self, block: str, position: int, payload: bytes) -> bytes:
+        """The event at `position` as the block's server writes it: its `id:` line, then the canonical event of its
+        chunk, which is what the proxy frames."""
+        return b"id: %d\n" % position + event(self.token(block, position, payload))
 
 
 def released(records: Sequence[Record]) -> Iterator[bytes]:
@@ -167,14 +196,14 @@ def released(records: Sequence[Record]) -> Iterator[bytes]:
             yield from row[:row_count(row)]
 
 
-def _frame(f: bytes, B: int, kinds: tuple[int, ...]) -> tuple[str, tuple[int, int, bytes] | None]:
-    """A recorded frame's (kind, stream, payload), or why it isn't a whole frame of `kinds` with zero fill."""
-    if len(f) != B or HEADER.unpack_from(f)[0] not in kinds or HEADER.size + HEADER.unpack_from(f)[2] > B:
+def _frame(f: bytes, B: int) -> tuple[str, bytes | None]:
+    """A recorded frame's payload, or why it isn't a whole `DATA` frame on `CANONICAL_STREAM` with zero fill."""
+    if len(f) != B or HEADER.unpack_from(f)[:2] != (DATA, CANONICAL_STREAM) or HEADER.size + HEADER.unpack_from(f)[2] > B:
         return "malformed", None
-    kind, stream, payload = decode_frame(f)
-    if encode_frame(kind, stream, payload, B) != f:
+    _, _, payload = decode_frame(f)
+    if encode_frame(DATA, CANONICAL_STREAM, payload, B) != f:
         return "fill", None
-    return "", (kind, stream, payload)
+    return "", payload
 
 
 def check(public: dict, witness: dict, records: dict[str, Sequence[Record]]) -> n3.Report:
@@ -201,12 +230,12 @@ def check(public: dict, witness: dict, records: dict[str, Sequence[Record]]) -> 
 
 
 def _egress(lab: Lab, block: str, records: Sequence[Record], payloads: dict[int, bytes], report: n3.Report) -> None:
-    where, declared, seen = f"{block}:{EGRESS}", lab.events[block], set()
-    for f in released(records):
+    where, declared, n = f"{block}:{EGRESS}", lab.events[block], 0
+    for p, f in enumerate(released(records)):
         report.stats["frames"] += 1
-        why, parts = _frame(f, lab.frame_bytes, (DATA,))
-        p = None if parts is None else event_position(parts[2])
-        if parts is not None and p is None:
+        n += 1
+        why, payload = _frame(f, lab.frame_bytes)
+        if not why and event_data(payload) is None:
             why = "malformed"
         if why:
             report.add(why, where, f"frame {report.stats['frames'] - 1} recorded")
@@ -214,40 +243,37 @@ def _egress(lab: Lab, block: str, records: Sequence[Record], payloads: dict[int,
         if p >= len(declared):
             report.add("unexplained", where, f"an event at position {p}, past the Program's {len(declared)}")
             continue
-        if p in seen:
-            report.add("extra", where, f"position {p} again")
-            continue
-        seen.add(p)
-        j, m, _ = declared[p]
-        want = lab.event(block, p, payloads[m.stream]) if m.stream in payloads else None
-        if parts[1] != j + 1 or (want is not None and parts[2] != want):
-            report.add("content", where, f"the event at position {p} (message {m.stream}) isn't the declared one")
+        _, m, _ = declared[p]
+        if (m is None or m.stream in payloads) and payload != event(lab.token(block, p, lab.payload(block, p, payloads))):
+            report.add("content", where, f"the event at position {p} ({'padding' if m is None else f'message {m.stream}'}) "
+                                         "isn't the declared one")
             continue
         report.stats["explained"] += 1
-    if missing := [p for p in range(len(declared)) if p not in seen]:
-        report.add("missing", where, f"{len(missing)} declared events, the first at position {missing[0]}")
+    if n < len(declared):
+        report.add("missing", where, f"{len(declared) - n} declared events, the first at position {n}")
 
 
 def _ingress(lab: Lab, block: str, records: Sequence[Record], payloads: dict[int, bytes], report: n3.Report) -> None:
-    where = f"{block}:{INGRESS}"
+    where, room = f"{block}:{INGRESS}", lab.frame_bytes - HEADER.size
     sessions = {s.stream: s for s in lab.sessions[block]}
-    got: dict[int, bytes] = defaultdict(bytes)
-    ended: set[int] = set()
+    split, got, ended = Requests(), defaultdict(bytes), set()
     for f in released(records):
         report.stats["frames"] += 1
-        why, parts = _frame(f, lab.frame_bytes, (DATA, LAST))
+        why, payload = _frame(f, lab.frame_bytes)
+        if not why and len(payload) != room:
+            why = "malformed"
         if why:
             report.add(why, where, f"frame {report.stats['frames'] - 1} recorded")
             continue
-        kind, stream, payload = parts
-        if stream not in sessions:
-            report.add("unexplained", where, f"a frame of stream {stream}, which no session has")
-        elif stream in ended:
-            report.add("extra", where, f"a frame of stream {stream} after its LAST")
-        else:
-            got[stream] += payload
-            if kind == LAST:
-                ended.add(stream)
+        used = LENGTH.size * (not split.left)
+        stream, data, end = split.feed(payload)
+        if end and any(payload[used + len(data):]):
+            report.add("fill", where, f"the fill after the request on stream {stream} isn't zero")
+        got[stream] += data
+        if end:
+            ended.add(stream)
+    for stream in sorted(got.keys() - sessions.keys()):
+        report.add("unexplained", where, f"a request on stream {stream}, past the Program's {len(sessions)} sessions")
     for stream, s in sessions.items():
         if stream not in ended:
             report.add("missing", where, f"the request of session {s.name}")

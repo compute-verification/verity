@@ -1,5 +1,6 @@
 import Mathlib
 import Definitions.Claims.Hm96
+import Definitions.Claims.Json
 
 /-!
 # Claims: the shared definitions and Flock's claim statements (frozen before any proof work)
@@ -13,6 +14,8 @@ The definitions every protocol's claims read, and Flock's claims, in the condens
 * Flock's extractor is `E^rep` (`ERep`): `κ = 4·ε_table + 2^{−m′}`, plus its truncation's `2k/K + e^{−k/8}`.
 * `B` is extraction-free (`B`); its assumption is the strict birthday bound (`StrictBirthday`). Extraction-based finders
   have a separate linear expected-time assumption (`ExpectedCR`) and their own term (`KSLin`); Flock needs only `KS`.
+  `ExpectedCR` is the weaker of the two at a fixed cost, so a bound that reads one record for every break reads it
+  (`ecrBound`, at a cost budget the reader computes from the adversary: PoUW's service premises per prover).
 * `t` counts both parties' SHA-512 calls, so the hash side's constant is `255.5` (`lamOf`).
 * The scope is a hypothesis of completeness, in readable form (`Flock.InScope`), never part of `R`; `ScopeMatches`
   states that it is the verifier's own scope check. KS needs no scope: the verifier refuses what is out of scope.
@@ -54,15 +57,28 @@ The definitions every protocol's claims read, and Flock's claims, in the condens
   positions. The relation splits by table, each table's units their own statement, so `assemble` checks each table's
   list once, at most `J·L` checks where every combination would be `L^J`, and `Flock.Efficient` bounds each list by
   the decoder's polynomial, which counts them. At one table this is the text it replaces.
+* (16 Oct) Completeness is at a hash whose outputs are 64 bytes (`Out64`), as the deployed oracle's are, SHA-512 with
+  its whole output, and as the random-oracle model draws them. It fixes the length only: `H` stays a parameter.
+* (17 Oct) Completeness is at a nonempty tape type (`Complete`), and Flock's is of the deployed record's reference
+  prover (`Flock.Deploy.P`), not of a prover the claim takes. The form first frozen held at an empty tape type for every
+  verifier, and its prover was whatever its discharge chose, so an assembled claim's completeness premise was met for
+  free.
+* (17 Oct) Zero knowledge is of the masked record's own reference prover and simulator (`Flock.ZkDeploy`): its prover
+  is `Flock.Deploy.P`, the prover completeness reads, behind the `Hello` and the opening checks of the coins it
+  commits, on a finite nonce and rest (`Flock.ZkDeploy.prover`), and its simulator is the record's
+  (`Flock.ZkDeploy.S`). The form before took the prover and the simulator as arguments, so a prover that ignores its
+  witness, with the simulator that runs it, met it at every masked record at `ε_zk = 0`.
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and the hash:
 binding them to the compiled verifier (`Flock.verifyWith Sha512.hash`, `Flock.ProvedScope.check`) is the code side's.
 
-The named assumptions: `StrictBirthday`, `ExpectedCR`, and hm96's hiding, `Hm96Hiding` (`Definitions/Claims/Hm96.lean`,
-which the soundness proofs read). What the claims rest on and no Lean statement can say is `trustedBase`.
+The named assumptions: `StrictBirthday`, `ExpectedCR`, hm96's hiding, `Hm96Hiding` (`Definitions/Claims/Hm96.lean`,
+which the soundness proofs read), and the JSON library's specification, `JsonSpec` (`Definitions/Claims/Json.lean`,
+which only completeness reads). What the claims rest on and no Lean statement can say is `trustedBase`.
 
-Frozen by `Flock.Guarantees.ClaimsStated` (`Models/Flock/Guarantees/Claims.lean`), whose statement reads every claim
-here: the lock records each one's text under `reads`, so a changed claim is a changed record.
+Frozen by `Flock.Guarantees.ClaimsStated` (`Definitions/Flock/Guarantees/Claims.lean`), whose statement reads every claim
+here but `Flock.ZK`, and by `Flock.Guarantees.MaskedZK`, which states `Flock.ZK` at the deployed masked record: the lock
+records each one's text under `reads`, so a changed claim is a changed record.
 -/
 
 namespace Claims
@@ -75,6 +91,10 @@ abbrev Msg := List UInt8
 
 /-- A collision of `H`. -/
 def Collision (H : Msg → Msg) (u v : Msg) : Prop := u ≠ v ∧ H u = H v
+
+/-- **`H`'s outputs are 64 bytes**: the deployed oracle is SHA-512 with its whole output, and the random-oracle model
+draws 64-byte outputs. Completeness reads it (`Complete`); it fixes the length, not `H`. -/
+def Out64 (H : Msg → Msg) : Prop := ∀ m, (H m).length = 64
 
 /-! ## AND/XOR circuits -/
 
@@ -125,6 +145,11 @@ def OC.eval (H : Msg → Msg) {α : Type} : OC α → α × List (Msg × Msg)
   | .ret a => (a, [])
   | .query q k => ((OC.eval H (k (H q))).1, (q, H q) :: (OC.eval H (k (H q))).2)
 
+/-- `OC`'s bind: run `x`, then `f` on its result, every query in order. -/
+def OC.bind {α β : Type} : OC α → (α → OC β) → OC β
+  | .ret a, f => f a
+  | .query q k, f => .query q fun r => OC.bind (k r) f
+
 /-! ## Interaction -/
 
 /-- `b_j ∈ Msg ∪ {acc, rej}`. -/
@@ -137,6 +162,9 @@ inductive Out where
 /-- A prover with tape `Ω`: `a_j = P*^H(x, a_1, b_1, …, b_{j−1}; ω)`. -/
 structure Prover (Ω : Type) where
   next : Msg → List (Msg × Msg) → Ω → OC Msg
+
+/-- `P` on the tapes `Ω'`, each read as `P`'s tape `f ω`. -/
+def Prover.comap {Ω Ω' : Type} (P : Prover Ω) (f : Ω' → Ω) : Prover Ω' := ⟨fun x hist ω => P.next x hist (f ω)⟩
 
 /-- A verifier with coins `Coin`: `b_j = V^H(x, a_1, …, a_j; r_1, …, r_j)`; it decides within `k(x)` rounds. -/
 structure Verifier (Coin : Type) where
@@ -286,9 +314,29 @@ def StrictBirthday (H : Msg → Msg) (F : Finder) : Prop :=
   ∀ q : ℝ, (∀ s, (F.cost s : ℝ) ≤ q) → F.Pr H ≤ q ^ 2 / 2 ^ (513 : ℝ)
 
 /-- **`ExpectedCR` (`ecr/sha-512`): the linear expected-time bound**, at one finder: `F` finds a collision with
-probability at most its expected SHA-512 calls over `2^256`. Read for extraction-based finders only. -/
+probability at most its expected SHA-512 calls over `2^256`. Read for finders whose cost is an expectation
+(extraction-based and rewinding ones, which have no worst-case `q`: `KSLin`, C-Flock's link) and, where one record
+should serve every break, for the others too. It is the weaker claim there: at a fixed cost `q ≤ 2^257`,
+`StrictBirthday`'s `q²/2^513` is at most `q/2^256`. PoUW's service premises per prover read it at their binding and
+zero-knowledge finders through `ecrBound`, at a budget computed from the adversary's time. -/
 def ExpectedCR (H : Msg → Msg) (F : Finder) : Prop :=
   F.Pr H ≤ Ex (fun s => (F.cost s : ℝ)) / 2 ^ (256 : ℝ)
+
+open Classical in
+/-- **`ecr/sha-512` at one finder as a number, at a cost budget, or no bound**: `q / 2^256` where the finder meets
+`ExpectedCR` and its expected SHA-512 calls are at most the budget `q`, and `⊤` otherwise, as C-Flock's link bound reads
+its collision assumption (`⊤` at a prover whose link finders fail it, the number read at the session's calls `t'`).
+The assumption is a predicate on one finder, since some finder outputs a collision after no calls, so it is asked of
+this finder only.
+
+The reader computes `q` from the adversary the finder is built from, never from the finder: PoUW's bounds per prover
+read `c · time M + d` at stated `c`, `d`. So the number is the budget's, which no choice of finder lowers. A finder's
+cost is a declared field (`Finder.cost`): one that declares more calls than it makes, so as to meet `ExpectedCR` while
+it outputs a collision on some coins, has `Pr` about the break's own probability, exceeds the budget once that is
+above `q / 2^256`, and gets `⊤`. `ENNReal.ofReal (F.Pr H) ≤ ecrBound H F q` holds by definition, so a bound stated
+through `ecrBound` takes no hypothesis on `H`. The one break term the protocols' per-prover bounds share. -/
+noncomputable def ecrBound (H : Msg → Msg) (F : Finder) (q : ℝ) : ENNReal :=
+  if ExpectedCR H F ∧ Ex (fun s => (F.cost s : ℝ)) ≤ q then ENNReal.ofReal (q / 2 ^ (256 : ℝ)) else ⊤
 
 /-- The first collision among the `(input, output)` pairs `l`: two different inputs with one output. -/
 def findColl : List (Msg × Msg) → Option (Msg × Msg)
@@ -331,7 +379,8 @@ def trustedBase : List String :=
      "coin that the --zk verifier sends at Hello and opens round by round",
    "the decoder's count: the deployed decoder's step count (Flock.Deploy.dec) is the cost of running it, one step " ++
      "per field operation (arithmetic or a comparison), per position compared and per column entry read",
-   "trusted-nebius-host: the auditor's devices and their host provider"]
+   "trusted-host: the auditor's device runs its stated code, timing included, on a host the prover doesn't control, " ++
+     "with its CPU isolated from other tenants and a monotonic clock; the host never restores its earlier state"]
 
 /-! ## The claims -/
 
@@ -361,11 +410,14 @@ def KSLin (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (E : Extractor Coin 
   ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
     PrBad H V R E x P ≤ κ x + Real.sqrt (γ x * PrB H V P x) + β x * (Fe Ω P x).Pr H
 
-/-- `Complete(V, P, R, Scope, δ_c)`: on every statement in scope and witness in the relation, the honest prover
-`P(w; ω)` is accepted with probability at least `1 − δ_c(x)` over the verifier's coins, at every tape. -/
-def Complete {Ω : Type} (H : Msg → Msg) (V : Verifier Coin) (P : W → Prover Ω) (R : Rel W) (Scope : Msg → Prop)
-    (δc : Msg → ℝ) : Prop :=
-  ∀ x w, Scope x → R x w → ∀ ω : Ω, 1 - δc x ≤ Pr fun r : Fin (V.k x) → Coin => (run H (P w) V x ω r).out = .acc
+/-- `Complete(V, P, R, Scope, δ_c)`: at a hash whose outputs are 64 bytes (`Out64`), on every statement in scope and
+witness in the relation, the honest prover `P(w; ω)` is accepted with probability at least `1 − δ_c(x)` over the
+verifier's coins, at every tape. The tapes are a nonempty type: over an empty one, "at every tape" holds of every
+verifier. -/
+def Complete {Ω : Type} [Nonempty Ω] (H : Msg → Msg) (V : Verifier Coin) (P : W → Prover Ω) (R : Rel W)
+    (Scope : Msg → Prop) (δc : Msg → ℝ) : Prop :=
+  Out64 H →
+    ∀ x w, Scope x → R x w → ∀ ω : Ω, 1 - δc x ≤ Pr fun r : Fin (V.k x) → Coin => (run H (P w) V x ω r).out = .acc
 
 /-- The readable scope is the verifier's own scope check. -/
 def ScopeMatches (Scope : Msg → Prop) (check : Msg → Bool) : Prop := ∀ x, Scope x ↔ check x = true
@@ -562,8 +614,8 @@ def zkTableCap : ℕ := 65536
 /-- **Flock's scope, readable**: the deployed parameters (`22 ≤ m ≤ 35`, `25 ≤ m` under `--zk`, `6 ≤ kLog ≤ min(m, 27)`)
 and the forms the soundness proof covers: hm96-sha512 rows, untyped, retained rounds, `hm96-sha512/v1` leaves or, with
 hidden outputs and without `--zk`, plain SHA-512 leaves (`flock-leaf/sha512-unsalted`), at most
-one table without `--zk` and `zkTableCap` with it, no public input ports, shared rows only in a `--zk` session with
-hidden outputs and registered reads; a unit of at most `2^32` rows reading only port bits, which reads one input group and returns the outputs, or,
+one table without `--zk` and `zkTableCap` with it, no public input ports, shared rows only with hidden outputs,
+registered reads and `hm96-sha512/v1` leaves (with or without `--zk`); a unit of at most `2^32` rows reading only port bits, which reads one input group and returns the outputs, or,
 with hidden outputs, the general instance form: the unit repeated, reading any number of committed input groups, and
 any number of stages the verifier evaluates, reading wires from earlier outputs, with an order of the wires that
 computes every slot from the leaves (`wiresAcyclic`); every row a `sha512/row/v1` row, or, with hidden outputs, every
@@ -573,7 +625,7 @@ def InScope (zk : Bool) (s : Stmt) : Prop :=
     s.form.hm96Rows ∧ ¬ s.form.typed ∧ s.form.retainedRounds ∧
     (s.form.leaf = "hm96-sha512/v1" ∨ (¬ zk ∧ s.form.hiddenOutputs ∧ s.form.leaf = "flock-leaf/sha512-unsalted")) ∧
     s.form.tables ≤ (if zk then zkTableCap else 1) ∧ ¬ s.form.publicInputs ∧
-    (s.form.sharedRows → zk ∧ s.form.hiddenOutputs ∧ s.form.registeredReads) ∧
+    (s.form.sharedRows → s.form.hiddenOutputs ∧ s.form.registeredReads ∧ s.form.leaf = "hm96-sha512/v1") ∧
     ((s.form.unitInputGroups = 1 ∧ ¬ s.form.tail) ∨ (s.form.hiddenOutputs ∧ s.form.wiresAcyclic)) ∧
     s.form.unitLog ≤ 32 ∧ s.form.readsOnlyPortBits ∧
     (s.form.rowsV1 ∨ (s.form.hiddenOutputs ∧ s.form.rowsV2OrSeg))
@@ -629,7 +681,11 @@ code. A single-table statement is its own table `0`, and reads table `0`'s colum
 `dec` is a named, counted program: on opened columns it returns its list and the steps it took, counted along the same
 computation, one step per field operation (arithmetic or a comparison of field elements), per position compared and
 per column entry read, moving data free. `Flock.Efficient` reads that count; that it is the cost of running the
-decoder is `trustedBase`'s. -/
+decoder is `trustedBase`'s.
+
+`P` is the reference prover, the honest prover the deployment runs, on its tapes (`Tape`, a nonempty type):
+completeness is its (`Complete`), so the claim is about the deployed prover and no other. `δc` is its completeness
+error as the deployment states it, at each hash (`δc H x` at `H`): `Complete` is at that error and no other. -/
 structure Deploy (Coin Col T : Type) where
   zk : Bool
   V : Verifier Coin
@@ -647,9 +703,52 @@ structure Deploy (Coin Col T : Type) where
   weight : Msg → ℝ
   waits : Msg → ℕ
   cap : Msg → ℕ
+  Tape : Type
+  [tapeNonempty : Nonempty Tape]
+  P : Wit → Prover Tape
+  δc : (Msg → Msg) → Msg → ℝ
+
+instance Deploy.instNonemptyTape {Coin Col T : Type} (D : Deploy Coin Col T) : Nonempty D.Tape := D.tapeNonempty
 
 /-- The deployed decoder's list, without its count. -/
 def Deploy.decode {Coin Col T : Type} (D : Deploy Coin Col T) (os : List (ℕ × Col)) : List T := (D.dec os).1
+
+/-- **A masked record**: a record with what its masked interaction (`--zk`) adds, which commits every coin at `Hello`
+(`coin-tree/hm96-sha512/v2`) and opens them round by round. The reference prover's tape there is a nonce, which its
+`Hello` sends, and the rest (`Nonce`, `Rest`, finite types), read as its tape `tapeOf (ν, r)`; `hello` is its `Hello` at
+a nonce and `abort` its message once an opening fails; `chk x ν ρ j m` is its check of the verifier's opening `m` of coin
+`j` against the commitment `ρ`, an oracle program whose `H` calls are the prover's, and `coinOf m` the coin `m` opens, as
+the public-coin verifier `V` sends it. `S` is the simulator `ZK` is at. -/
+structure ZkDeploy (Coin Col T : Type) extends Deploy Coin Col T where
+  Nonce : Type
+  Rest : Type
+  [nonceFin : Fintype Nonce]
+  [nonceNe : Nonempty Nonce]
+  [restFin : Fintype Rest]
+  [restNe : Nonempty Rest]
+  tapeOf : Nonce × Rest → Tape
+  hello : Msg → Nonce → Msg
+  abort : Msg
+  chk : Msg → Nonce → Msg → ℕ → Msg → OC Bool
+  coinOf : Msg → Msg
+  S : Simulator
+
+attribute [instance] ZkDeploy.nonceFin ZkDeploy.nonceNe ZkDeploy.restFin ZkDeploy.restNe
+
+/-- Whether every opening from coin `j` on passes `chk`, checked in order up to the first that fails. -/
+def allPass (chk : ℕ → Msg → OC Bool) : ℕ → List Msg → OC Bool
+  | _, [] => .ret true
+  | j, m :: ms => (chk j m).bind fun b => if b then allPass chk (j + 1) ms else .ret false
+
+/-- **The masked record's reference prover** in its masked interaction, at the witness `w` and the tape `(ν, r)`:
+`Hello` at `ν` first; then, if every opening so far passes `chk` against the commitment `ρ` (the verifier's answer to
+`Hello`), the record's reference prover `D.P w` at the history with each opening read as its coin (`coinOf`), at the tape
+`tapeOf (ν, r)`; else `abort`. -/
+def ZkDeploy.prover {Coin Col T : Type} (D : ZkDeploy Coin Col T) (w : Wit) : Prover (D.Nonce × D.Rest) :=
+  ⟨fun x hist ω => match hist with
+    | [] => .ret (D.hello x ω.1)
+    | (_, ρ) :: ops => (allPass (D.chk x ω.1 ρ) 0 (ops.map Prod.snd)).bind fun ok =>
+        if ok then (D.P w).next x (ops.map fun p => (p.1, D.coinOf p.2)) (D.tapeOf ω) else .ret D.abort⟩
 
 section Claims
 
@@ -678,20 +777,21 @@ def Scope (D : Deploy Coin Col T) (x : Msg) : Prop := ∃ s, D.parse x = some s 
 def KS [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   ∀ decode, ListWithin D.len D.enc D.θ decode → Claims.KS H D.V (R D.parse) (E D decode) (κ D) (γ D)
 
-/-- **Flock: Complete**, on the statements in scope. -/
-def Complete {Ω : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (P : Wit → Prover Ω) (δc : Msg → ℝ) : Prop :=
-  Claims.Complete H D.V P (R D.parse) (Scope D) δc
+/-- **Flock: Complete**, on the statements in scope, of the deployed record's reference prover (`D.P`), at the
+deployed error (`D.δc H`). -/
+def Complete (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
+  Claims.Complete H D.V D.P (R D.parse) (Scope D) (D.δc H)
 
 /-- **Flock: the readable scope is the verifier's.** -/
 def ScopeMatches (D : Deploy Coin Col T) : Prop := Claims.ScopeMatches (Scope D) D.scopeCheck
 
-/-- **Flock: zero knowledge** of the masked verifier's honest prover, against every malicious verifier of the deployed
-interaction's `D.V.k + 1` rounds: the extra round is the `Hello`, at which the masked verifier sends its commitment to
-every coin, and then come `D.V`'s rounds, which open the coins. `D.V` models the coins in the clear; the commitment's
-hiding is the live-coins assumption of `trustedBase`. The prover's tape is the nonce its `Hello` sends and the rest. -/
-def ZK {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (D : Deploy Coin Col T)
-    (P : Wit → Prover (N × Ω)) (S : Simulator) (εzk γ : Msg → ℝ) : Prop :=
-  D.zk = true ∧ ZKmalR H (fun x => D.V.k x + 1) P (R D.parse) S εzk γ
+/-- **Flock: zero knowledge** of the masked record's reference prover (`D.prover`, the record's `D.P` in the masked
+interaction) at the record's simulator (`D.S`), against every malicious verifier of the deployed interaction's
+`D.V.k + 1` rounds: the extra round is the `Hello`, at which the masked verifier sends its commitment to every coin, and
+then come `D.V`'s rounds, which open the coins. `D.V` models the coins in the clear; the commitment's hiding is the
+live-coins assumption of `trustedBase`. The prover's tape is the nonce its `Hello` sends and the rest. -/
+def ZK (H : Msg → Msg) (D : ZkDeploy Coin Col T) (εzk γ : Msg → ℝ) : Prop :=
+  D.zk = true ∧ ZKmalR H (fun x => D.V.k x + 1) D.prover (R D.parse) D.S εzk γ
 
 /-- **Flock: bits**, `λ = min(log₂(1/κ), 255.5 − ½ log₂ γ) − 1`, at every decoder that meets the spec, the one decoder
 of every table. -/

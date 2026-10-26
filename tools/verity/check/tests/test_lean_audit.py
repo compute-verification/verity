@@ -37,6 +37,7 @@ root, out = Path.cwd(), Path(a[a.index("--out") + 1])
 named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts"))]
 out.mkdir(parents=True, exist_ok=True)
 (out / "repo.txt").write_text(a[a.index("--repo") + 1] if "--repo" in a else "")
+(out / "argv.json").write_text(json.dumps(a))
 reps, failed = [], []
 for pkg in named:
     pol = pkg / "lean-audit.json"
@@ -108,6 +109,21 @@ def test_verdicts_are_reused_only_while_every_input_is_unchanged(tmp_path, monke
     assert rc == 0 and sorted(ran) == ["pkg/a warm", "pkg/b cold"] and doc["cached"] == {}
     (root / "tools/verity/lean/check.py").write_text(FAKE_AUDIT + "\n# the auditor changed\n")
     assert sorted(_run(tmp_path, 5)[1]) == ["pkg/a warm", "pkg/b cold"]     # the auditor is an input of every package
+
+
+def test_the_audit_replays_the_import_closure_against_the_kept_cache_and_a_fresh_one_against_its_own(tmp_path, monkeypatch):
+    _tree(tmp_path, monkeypatch)
+    cache = tmp_path / "cache"
+    argv = lambda out: json.loads((out / "argv.json").read_text())
+    LA.run(tmp_path / "kept", cache / "lean-audit", cache / "lean-deps", log=lambda s: None)
+    a = argv(tmp_path / "kept")
+    assert "--closure" in a and Path(a[a.index("--replay-cache") + 1]).resolve() == (cache / "lean-replay").resolve()
+    LA.run(tmp_path / "fresh", cache / "lean-audit", cache / "lean-deps", fresh=True, log=lambda s: None)
+    a = argv(tmp_path / "fresh")
+    run_cache = Path(a[a.index("--replay-cache") + 1])
+    # the packages of one fresh run share a cache in its scratch tree, gone with it; the kept one isn't read
+    assert "--closure" in a and "--artifacts" not in a and run_cache.name == "lean-replay"
+    assert run_cache.parent.name.startswith(LA.SCRATCH) and not run_cache.parent.exists()
 
 
 #: a stand-in for check.py that knows `--regenerate`: a package whose policy says "stale" fails on a record difference, or with
@@ -259,7 +275,9 @@ def test_a_package_that_may_read_beyond_its_directory_is_keyed_by_its_path(tmp_p
 def test_the_controls_and_the_docs_are_no_input(tmp_path, monkeypatch):
     """b201 (r20261004-150518-b201) audited all 8 packages again, 69 min, partly on edits to `tools/verity/lean/README.md` and
     `tools/verity/lean/tests/`, which no audit reads, and so is the pin file `lean-deps.json` (preflight's, read before the
-    audit). They stay out of the scratch tree too, so an audit that read one would fail."""
+    audit). So are the directory's other files that `NOT_READ` lists: 4 of the 19 landings under it in the week to 18 Oct
+    changed only `merge.py` or `lean_changed.py`, and each audited all 29 packages again on every node. They stay out of the
+    scratch tree too, so an audit that read one would fail."""
     root = _tree(tmp_path, monkeypatch)
     (root / "pkg/b/lean-audit.json").write_text("{}")
     assert _run(tmp_path, 1)[0] == 0
@@ -271,6 +289,20 @@ def test_the_controls_and_the_docs_are_no_input(tmp_path, monkeypatch):
     (root / "pkg/b/lean-audit.json").write_text(json.dumps({"reads": ["tools/verity/lean/tests/fixtures/control.lean"]}))
     rc, _ran, doc = _run(tmp_path, 3)
     assert rc == 1 and doc["failed"] == ["pkg/b"]
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    assert _run(tmp_path, 4)[1] == []                  # the policy of run 2 again: its pass answers
+    files = LA.COMMON.tracked_files()
+    for i, name in enumerate(sorted(LA.NOT_READ), 5):
+        f = f"tools/verity/lean/{name}"
+        (root / f).write_text(f"{i}\n")
+        monkeypatch.setattr(LA.COMMON, "tracked_files", lambda r=None, files=sorted({*files, f}): files)
+        files = LA.COMMON.tracked_files()
+        rc, ran, doc = _run(tmp_path, i)
+        assert rc == 0 and ran == [] and sorted(doc["cached"]) == ["pkg/a", "pkg/b"], name
+    (root / "pkg/b/lean-audit.json").write_text(json.dumps({"reads": [f"tools/verity/lean/{n}" for n in sorted(LA.NOT_READ)]}))
+    rc, _ran, doc = _run(tmp_path, 99)
+    assert rc == 1 and doc["failed"] == ["pkg/b"]
+    assert doc["packages"][1]["failures"] == [f"reads tools/verity/lean/{n}" for n in sorted(LA.NOT_READ)]
 
 
 def test_a_passing_audit_keeps_its_build(tmp_path, monkeypatch):
@@ -654,6 +686,28 @@ def test_kept_builds_past_the_cap_go_least_recently_used_first_and_a_held_one_st
     assert builds.evict() == 1 and "k0" not in {p.name for p in store.iterdir()}
 
 
+def test_each_packages_newest_build_stays_past_the_cap(tmp_path):
+    """At 24 kept builds, fewer than the ~30 packages, every Lean check evicted some packages' only build and rebuilt them cold
+    (26 Oct: r20261026-040757-de32 built Flock cold for 1,094 s)."""
+    store = tmp_path / "lean-builds"
+    works = []
+    for i, pkg in enumerate(["pkg/a", "pkg/b", "pkg/c"]):
+        work = tmp_path / f"work{i}"
+        (work / pkg / ".lake" / "build").mkdir(parents=True)
+        (work / pkg / "lakefile.toml").write_text(f'name = "{i}"\n')
+        works.append((work, pkg))
+    builds = LA.WarmBuilds(store, kept=1)
+    for work, pkg in works:
+        builds.give_back(work, {work / pkg})
+    left = {p.name for p in store.iterdir() if p.is_dir()}
+    assert left == {LA.build_key(pkg, work) for work, pkg in works}
+    old = store / "stale"
+    old.mkdir()
+    (store / "stale.pkg").write_text("pkg/a")
+    os.utime(old, (1, 1))
+    assert builds.evict() == 1 and not old.exists() and not (store / "stale.pkg").exists()
+
+
 def test_inputs_are_the_package_its_path_dependencies_and_the_auditor(tmp_path, monkeypatch):
     _tree(tmp_path, monkeypatch)
     files = LA.COMMON.tracked_files()
@@ -684,6 +738,9 @@ def test_the_real_packages_and_their_inputs():
     assert "tools/verity/lean/check.py" in got and not [f for f in got if "/.lake/" in f]
     assert "tools/verity/lean/Replay.lean" in got and "tools/verity/lean/README.md" not in got
     assert not [f for f in got if f.startswith("tools/verity/lean/tests/")]
+    assert {"tools/verity/lean/upstream.py", "tools/verity/lean/setup.sh", "tools/verity/lean/cache.py"} <= set(got)
+    assert not {f"tools/verity/lean/{n}" for n in LA.NOT_READ} & set(got)
+    assert {f"tools/verity/lean/{n}" for n in LA.NOT_READ} <= set(files), "an entry of NOT_READ names no file: remove it"
 
 
 def test_a_failed_dependency_fetch_is_no_verdict_and_is_retried():
@@ -886,3 +943,50 @@ def test_an_audit_sweeps_before_it_makes_its_scratch_tree_named_by_its_pid(tmp_p
     LA._audit([], [], {}, {}, tmp_path / "out", tmp_path / "cache" / "lean-audit", deps, True, lambda m: None)
     assert seen == [deps.parent]
     assert made == [f"{LA.SCRATCH}{os.getpid()}-"]
+
+
+def test_kept_dependencies_and_replays_past_their_caps_go_oldest_first(tmp_path):
+    """LEAN-29: vy-nebius-2 held 24 kept dependency trees (806k inodes) and 180k replay entries, with nothing evicting
+    either. Kept dependencies keep the newest `kept` by use, a held one stays, and the replay cache its newest entries."""
+    deps = tmp_path / "lean-deps"
+    for i, k in enumerate(("a", "b", "c")):
+        (deps / k / "pkg").mkdir(parents=True)
+        os.utime(deps / k, (1000 + i, 1000 + i))
+    held = open(deps / "a.lock", "w")
+    import fcntl
+    fcntl.flock(held, fcntl.LOCK_EX)
+    assert LA.WarmDeps(deps, kept=1).evict() == 1 and sorted(p.name for p in deps.iterdir() if p.is_dir()) == ["a", "c"]
+    held.close()
+    assert LA.WarmDeps(deps, kept=1).evict() == 1 and [p.name for p in deps.iterdir() if p.is_dir()] == ["c"]
+    replay = tmp_path / "lean-replay"
+    replay.mkdir()
+    for i in range(5):
+        (replay / f"{i}.json").write_text("{}")
+        os.utime(replay / f"{i}.json", (2000 + i, 2000 + i))
+    assert LA.prune_replays(replay, kept=2) == 3 and sorted(p.name for p in replay.iterdir()) == ["3.json", "4.json"]
+    assert LA.prune_replays(tmp_path / "absent", kept=2) == 0
+
+
+def test_records_trees_beyond_the_cap_go_least_recently_used_first_unless_a_run_holds_one(tmp_path):
+    """vy-nebius-cpu-2 reached 95% of its inodes with nine idle `lean-records` trees (21 Oct), about 490k files each.
+    `prune_records` keeps the most recently used (by `.who`, `links.json`, `.lock`); an older one whose `.lock` a run holds
+    stays; a link to a tree elsewhere goes with its target."""
+    import fcntl
+    store, away = tmp_path / "lean-records", tmp_path / "moved"
+    store.mkdir()
+    away.mkdir()
+    for i, name in enumerate(["old", "held", "linked", "recent"]):
+        tree = (away if name == "linked" else store) / name
+        tree.mkdir()
+        (tree / "f").write_text("x")
+        (tree / ".who").write_text("r")
+        os.utime(tree / ".who", (1000 + i, 1000 + i))
+        if name == "linked":
+            (store / name).symlink_to(tree)
+    with open(store / "held" / ".lock", "w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        os.utime(store / "held" / ".lock", (1001, 1001))
+        assert LA.prune_records(store, kept=1) == 2
+    assert sorted(p.name for p in store.iterdir()) == ["held", "recent"] and not (away / "linked").exists()
+    assert LA.prune_records(store, kept=1) == 1 and [p.name for p in store.iterdir()] == ["recent"]
+    assert LA.prune_records(tmp_path / "absent") == 0

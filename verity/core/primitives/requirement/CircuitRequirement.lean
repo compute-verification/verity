@@ -6,10 +6,10 @@ import Std.Data.HashSet
 `Accounting.Requirement` (`Security/Definitions/Accounting/Requirement.lean`) on one instance: a declared circuit's
 wiring, one scheduled execution of it and a layout of its values (`Instance`), the audit's store (`Store`), and a
 placement of the execution on devices (`Placement`), whose regions, ingress and credits are PoUW's over the placed
-execution (`Models/Accounting/Guarantees/RequirementPouw.lean`). A step is always an engine step, never a device tick.
+execution (`Definitions/Accounting/Guarantees/RequirementPouw.lean`). A step is always an engine step, never a device tick.
 This is code, so it requires nothing of `Security/`: `Properties.Accounting.Requirement` states that each function here
 is the definition it computes, on the wiring, execution, layout, store and placement an instance denotes, and
-`Properties.Proofs.Accounting.Requirement` proves it. `requirement-difftest` serves these functions to the difftest, which
+`Proofs.Properties.Accounting.Requirement` proves it. `requirement-difftest` serves these functions to the difftest, which
 holds them to `verity.ml.circuits.requirement` (`tests/test_requirement_difftest.py`).
 
 An instance's values are `0 … n - 1`, `n` the length of `width`, and the operands a gate uses are those at this
@@ -50,6 +50,9 @@ structure Instance where
   block : Array Nat
   /-- each value's first bit in its block (`Layout.offset`) -/
   offset : Array Nat
+  /-- each block's first encoded read, by store index (`Layout.encoded`): 0, as past its end, for a block encoded once
+  complete -/
+  encoded : Array Nat := #[]
 
 /-- The audit's store (`Accounting.Requirement.Store`): the registered blocks, the fresh indices each step wrote and those
 it freed, and each block's payload. -/
@@ -100,6 +103,7 @@ def stepOf (v : Nat) : Nat := (i.step.getD v none).getD 0
 def valueOf (v : Nat) : Nat := i.value.getD v 0
 def blockOf (v : Nat) : Nat := i.block.getD v 0
 def offsetOf (v : Nat) : Nat := i.offset.getD v 0
+def encodedOf (j : Nat) : Nat := i.encoded.getD j 0
 
 /-- `Execution.ran`: the values the execution produces, the registered ones and those with a step. -/
 def ran : List Nat :=
@@ -170,12 +174,14 @@ def packs (b : Nat) (S : List Nat) : Bool :=
 def carries (s : Store) (S : List Nat) : Bool :=
   S.all fun v => decide (s.payloadOf (i.blockOf v) / 2 ^ i.offsetOf v % 2 ^ i.widthOf v = i.valueOf v)
 
-/-- `incomplete t`: the blocks of the values the execution produces at step `t` or later, but the registered ones. -/
+/-- `incomplete t`: the blocks of the values the execution produces, but the registered ones, at step `t` or later or
+with their block's first encoded read after `t`. -/
 def incomplete (t : Nat) : List Nat :=
   let reg := Std.HashSet.ofList i.registered
-  distinct ((i.ran.filter fun v => !reg.contains v && decide (t ≤ i.stepOf v)).map i.blockOf)
+  distinct ((i.ran.filter fun v =>
+    !reg.contains v && (decide (t ≤ i.stepOf v) || decide (t < i.encodedOf (i.blockOf v)))).map i.blockOf)
 
-/-- The values of `S` in blocks complete when step `t` begins. -/
+/-- The values of `S` in blocks complete and encoded when step `t` begins. -/
 def complete (S : List Nat) (t : Nat) : List Nat :=
   let inc := Std.HashSet.ofList (i.incomplete t)
   S.filter fun v => !inc.contains (i.blockOf v)

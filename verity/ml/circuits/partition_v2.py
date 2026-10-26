@@ -79,8 +79,8 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from . import partition_object as PO
 from .codec import canonical_json, program_digest
-from .cut import (RECOMPUTE, WIDE_FAN_IN, WIRING, CallGraph, QueryInapplicable, _wide_operands, boundary_widths, call_scope, check_cut,
-                  evaluate_definition, separable)
+from .cut import (RECOMPUTE, WIDE_FAN_IN, WIRING, CallGraph, QueryInapplicable, boundary_widths, call_scope, check_cut,
+                  evaluate_definition, separable, wide_operands)
 from .partition import RECOMPUTE_RULES, CutVerdict
 from .units import Activation, UnitCircuit
 
@@ -95,6 +95,10 @@ FLAT, PARTS = 1, 2
 OWNERS_PER_ROW, SHAPES_PER_ROW, PAIRS_PER_ROW = ROW_BYTES // 4, ROW_BYTES // 64, ROW_BYTES // 16
 GRID_BITS = 4
 WIDTH = 16
+#: the widest public size class of a unit's bits out, provisional: at 16, `UNIT_CLASSES` is the literal 16-bit limit alone
+UNIT_CLASS_MAX = 262_144
+#: the public size classes, the powers of two from 16 to `UNIT_CLASS_MAX`, ascending
+UNIT_CLASSES = tuple(16 << i for i in range((UNIT_CLASS_MAX // 16).bit_length()))
 PARAM_MAX = PO.PARAM_MAX
 
 _KEYS = {"format", "family", "predicates", "units", "advice"}
@@ -119,6 +123,25 @@ def grid(x: int, bits: int = GRID_BITS) -> int:
 def definition_digest(fn: Any) -> str:
     """The SHA-512 the advice names a Definition by: of its specialization id, `fn.id`."""
     return hashlib.sha512(b"verity/partition/v2/definition\0" + fn.id.encode()).hexdigest()
+
+
+def unit_class(bits: int) -> int | None:
+    """A unit's size class: the least of `UNIT_CLASSES` that holds its ``bits`` out (`cut.boundary_widths`), None past the widest."""
+    return next((w for w in UNIT_CLASSES if bits <= w), None)
+
+
+class MixedClasses(ValueError):
+    """`build`'s refusal of a partition whose units span more than one size class: the statement's one `width` bounds every
+    unit, so units of several classes need a width per class, which v2's predicates don't state.  ``spans`` maps each class
+    (None past the widest) to the first unit in it, as (Definition id, unit)."""
+
+    def __init__(self, spans: Mapping[int | None, tuple[str, int]]) -> None:
+        self.spans = dict(spans)
+        named = "; ".join(f"{'none' if w is None else w} bits: {d} unit {u}"
+                          for w, (d, u) in sorted(self.spans.items(), key=lambda s: (s[0] is None, s[0] or 0)))
+        super().__init__(f"a v2 private partition's units span {len(self.spans)} size classes ({named}): it holds one class until "
+                         f"its predicates state a width per class, so cut it so that every unit's bits out fall in one of "
+                         f"{UNIT_CLASSES[0]}..{UNIT_CLASSES[-1]}")
 
 
 # --- the advice ------------------------------------------------------------------------------------------------------------------
@@ -172,7 +195,24 @@ def _members(node: Any) -> int:
 def build(program: Any, q: Mapping[str, Any] | None = None, owners: Callable[[Any, CallGraph], Sequence[int]] | None = None) -> Advice:
     """The advice of `program`'s partition: the cuts of the query `q` (`Q_word` v1 or v2, `Q_call` excluded, or a template query:
     each instance one unit), or of `owners(fn, graph)` (a unit per computing gate of each root Call's Definition, cut flat, one cut
-    per Definition).  Default: `Q_word{16, 32}` v1."""
+    per Definition).  Default: `Q_word{16, 32}` v1.  It refuses a partition whose units span more than one size class
+    (`unit_class`, `MixedClasses`)."""
+    advice, spans = _advice(program, q, owners)
+    if len(spans) > 1:
+        raise MixedClasses(spans)
+    return advice
+
+
+def _build_unchecked(program: Any, q: Mapping[str, Any] | None = None,
+                     owners: Callable[[Any, CallGraph], Sequence[int]] | None = None) -> Advice:
+    """`build` without its refusal of units of several size classes: advice past the builder's scope, as a prover may send it to
+    `check`.  Tests alone call it (`TEST_ONLY` in the repository's `tests/test_boundaries.py`)."""
+    return _advice(program, q, owners)[0]
+
+
+def _advice(program: Any, q: Mapping[str, Any] | None,
+            owners: Callable[[Any, CallGraph], Sequence[int]] | None) -> tuple[Advice, dict[int | None, tuple[str, int]]]:
+    """`build`'s advice, and each size class of its units with the first unit in it (`MixedClasses.spans`)."""
     if q is not None and owners is not None:
         raise ValueError("a query or an owner function, not both")
     bad = PO.order_violation(program)
@@ -191,6 +231,7 @@ def build(program: Any, q: Mapping[str, Any] | None = None, owners: Callable[[An
     acts: dict[str, Activation] = {}
     index: dict[str, int] = {}
     entries: list[Entry | None] = []
+    spans: dict[int | None, tuple[str, int]] = {}
 
     def graph(fn: Any) -> CallGraph:
         g = graphs.get(fn.id)
@@ -204,7 +245,10 @@ def build(program: Any, q: Mapping[str, Any] | None = None, owners: Callable[[An
         if a is None:
             a = acts[fn.id] = Activation(fn)
         shape, classes = _classes(uc.shape for uc in a.circuits(owner))
-        return Entry(definition_digest(fn), FLAT, graph(fn).n, len(shape) if units is None else units, owner, shape, classes)
+        n = len(shape) if units is None else units
+        for u, bits in enumerate(boundary_widths(graph(fn), owner, n)[0]):
+            spans.setdefault(unit_class(bits), (fn.id, u))
+        return Entry(definition_digest(fn), FLAT, graph(fn).n, n, owner, shape, classes)
 
     def add(fn: Any) -> int:
         if fn.id in index:
@@ -235,7 +279,7 @@ def build(program: Any, q: Mapping[str, Any] | None = None, owners: Callable[[An
         m = _members(nodes[k])
         calls.append(Call(k, e, m, start))
         start += m * entries[e].units
-    return Advice(program_digest(program), tuple(calls), tuple(entries))
+    return Advice(program_digest(program), tuple(calls), tuple(entries)), spans
 
 
 # --- rows ------------------------------------------------------------------------------------------------------------------------
@@ -745,7 +789,7 @@ def _recomputed(fn: Any, wiring: frozenset[str] = WIRING) -> tuple[list[tuple[in
         key = array("q", [prims.setdefault(g.prim.id, len(prims))])
         operands = 0
         all_const = True
-        for o in (_wide_operands(g, call) if wide else g.operands):
+        for o in (wide_operands(g, call) if wide else g.operands):
             if 0 <= o - lo < n:
                 if o - lo >= j:
                     raise QueryInapplicable(f"{fn.id}: gate {j} reads gate {o - lo}, not before it (the layout is not topological)",
@@ -977,6 +1021,7 @@ def from_v1(obj: Mapping[str, Any]) -> dict[str, Any]:
     raise ValueError(f"no v2 predicates for {q['name']!r} v{q['version']!r}")
 
 
-__all__ = ["FORMAT", "ROW_BYTES", "ROW_BITS", "MAGIC", "BINDING", "NONE", "FLAT", "PARTS", "GRID_BITS", "WIDTH", "Call", "Entry",
-           "Advice", "Malformed", "Reader", "Unit", "grid", "definition_digest", "build", "rows", "pad", "decode", "predicates",
+__all__ = ["FORMAT", "ROW_BYTES", "ROW_BITS", "MAGIC", "BINDING", "NONE", "FLAT", "PARTS", "GRID_BITS", "WIDTH", "UNIT_CLASS_MAX",
+           "UNIT_CLASSES", "Call", "Entry", "Advice", "Malformed", "MixedClasses", "Reader", "Unit", "grid", "definition_digest",
+           "unit_class", "build", "rows", "pad", "decode", "predicates",
            "statement", "validate", "digest", "check", "locate", "unit", "check_unit", "openings", "from_v1"]

@@ -1,20 +1,29 @@
 import Difftest
 import PouwWindow.Json
+import PouwWindow.Length
 import PouwWindow.Statement
 import PouwWindow.Inputs
+import PouwWindow.Rounds
+import PouwWindow.Lanes
+import PouwWindow.KnownRows
+import PouwWindow.RegFile
+import PouwWindow.FullDraw
 
 /-!
 # The difftest's functions: the window's Lean behind `Difftest.serve`
 
 One function per ported function of `window.py`, each on a JSON object of its arguments, for the shared harness
 (`verity/core/difftest`): an output, or `.error` where Python raises `ValueError` (a reject). The port's
-suite (`tests/test_difftest.py`) draws the inputs and holds each to Python.
+suite (`tests/test_difftest.py`, and `tests/test_lanes.py` for a drawn leaf's statements) draws the inputs and holds each
+to Python.
 
 * `on_grid`, `floor_point`, `pad`, `level`, `bucket` (`bits`, `n`); `point`, `work_at` (`bits`, `ell`); `levels` (`bits`,
   `lo`, `hi`);
-* `k_prime` (`eps`, `delta` as `[num, den]`, `credited`, `n`, `w_max`); `sampling` (`eps`, `delta`, `work`, `tile_work`,
+* `k_prime` (`eps`, `delta` as `[num, den]`, `credited`, `n`, `w_max`); `eps_at` (`k`, `delta`, `credited`, `n`,
+  `w_max`: ε as `str(Fraction)`); `sampling` (`eps`, `delta`, `work`, `tile_work`,
   `bits`); `work_to_json` (`work`, `tile_work`);
-* `constants`: `PUBLIC`, `REGISTERED`, `KINDS` and `GRID_BITS`;
+* `constants`: `PUBLIC`, `REGISTERED`, `LEGACY_REGISTERED`, `KINDS`, `GRID_BITS` and `STOP_FIXED`;
+* the fixed length: `length_item` (`max_tokens`); `length_problem` (`item`, `max_tokens`);
 * the entry row: `entry_row`, `entry_words` (`entry`, as `Entry.to_json`); `entry_from_row` (`row` hex),
   `entry_from_words` (`words`); `layout_problem`, `pass_tiles`, `tiles`, `entry_digest` (`row`); `entry_bc` (`row`,
   `salt`); `entry_leaf` (`domain` `{binding, count}`, `e`, `bc`); `tile_in` (`row`, `t`); `tile_at` (`rows`, `t`);
@@ -25,6 +34,20 @@ suite (`tests/test_difftest.py`) draws the inputs and holds each to Python.
 * the window statement: `window_problem` (`rows`, `work`, `bound`, `root_h3`, `bits`, and `records`, `indices` or null);
 * the public inputs: `session_cap` (`k_log`, `per_block`); `sessions` (`k`, `cap`); `instance_ts` (`registration`,
   `drawn`, `sigma`, `cap`); `public_inputs` (those and `domain_h3`); `layout_constants`.
+* a live window: `live_epoch_reason` (`commitment`, the challenger's live coin commitment); `round_key` (`commitment`,
+  `coin`, `round`, `root`).
+* a drawn leaf's statements (`PouwWindow.Lanes`, held to `h1zy.statement_ports` and to the lowered circuits' port
+  records): `n_digits` (`ks`); `lane_ports` (`r`, `c`, `k`, `lane`); `combine_ports` (`r`, `c`, `k`); `field_of` (those,
+  `lane` null for the combine, and `path`); `wires` (those); `wire_of` (those and `wire`).
+* a drawn leaf's known rows (`PouwWindow.KnownRows`, held to `h1_lanes`' `known_rows` by `tests/test_known_rows.py`):
+  `known_rows` (`admit` 0/1 list, `salt` and the two `roots` 64-byte hex, `position` a u64, `lane` or null for the
+  combine): each known port's rows' words.
+* a drawn leaf's registered files (`PouwWindow.RegFile`, held to `leaf_lanes.registered_file` at
+  `leaf_lanes.verifier_entries` by `tests/test_reg_file.py`): `registered_file` (`registration` and `produced` records,
+  `r`, `c`, `k`, `lane` or null, `known` an object of ports, `complete`); `leaf_own` (those records, the tile and
+  statement, and the `file`): `true` where `pouw-leaf-own` accepts the file, a reject where it refuses; `full_draw`
+  (`record`, a session record's text): `true` where `PouwWindow.Lanes.checkFull` accepts its draw, a reject where it
+  refuses.
 
 A domain `{binding, count}` is `CommitmentDomain(binding, OWNER, RangeIndexedDomain(0, count), hash="sha512")`; bytes are
 hex, read as `bytes.fromhex` reads them.
@@ -92,6 +115,8 @@ def domain (j : Json) : Except String PouwCommit.Domain := do
   let d ← get j "domain"
   PouwCommit.Domain.mk? .sha512 (← hex d "binding") owner (← nat d "count")
 
+def natList (j : Json) (k : String) : Except String (List Nat) := do need k (nats? (← get j k))
+
 def ints (j : Json) (k : String) : Except String (List Int) := do
   (← arr j k).toList.mapM fun w => need k (intOf? w)
 
@@ -114,6 +139,71 @@ def levelsOf (j : Json) : Except String (PouwCommit.Domain × Array (Array ByteA
 def ofN {α : Type} [ToJson α] (f : Nat → Int → Except String α) : _root_.Difftest.Fn := fun j => do
   pure (toJson (← f (← nat j "bits") (← int j "n")))
 
+def leafTile (j : Json) : Except String Lanes.Tile := do pure ⟨← nat j "r", ← nat j "c", ← nat j "k"⟩
+
+/-- A lane's ports (`lane` its index), or the combine's (`lane` null). -/
+def leafPorts (j : Json) : Except String (List Lanes.Port) := do
+  match field? j "lane" with
+  | none | some .null => Lanes.combine? (← leafTile j)
+  | some _ => Lanes.lane? (← leafTile j) (← nat j "lane")
+
+def sourceJson : Lanes.Source → Json
+  | .read v r => Json.mkObj [("read", toJson v), ("row", toJson r)]
+  | .known v => Json.mkObj [("known", toJson v)]
+
+def leafFieldJson (f : Lanes.Field) : List (String × Json) :=
+  [("bit", toJson f.bit), ("bits", toJson f.bits), ("word", toJson f.word), ("words", toJson f.words)]
+
+def leafPortJson (p : Lanes.Port) : Json := Json.mkObj [("name", toJson p.name), ("source", sourceJson p.source),
+  ("output", toJson p.output), ("bits", toJson p.bits), ("words", toJson p.words),
+  ("fields", Json.arr (p.fields.map fun f => Json.mkObj (("path", toJson f.path) :: leafFieldJson f)).toArray)]
+
+/-- `known_rows`: the statement's known rows' words by port, from its public inputs' bytes as `seeds.leaves` reads them. -/
+def knownRowsJson (j : Json) : Except String Json := do
+  let pos ← nat j "position"
+  if 2 ^ 64 ≤ pos then throw s!"a position or a counter is a u64, not {pos}"
+  let salt ← hex j "salt"
+  let #[r0, r1] ← hexes j "roots" | throw "the input's roots are not two digests"
+  if salt.size != 64 || r0.size != 64 || r1.size != 64 then throw "a digest is 64 bytes"
+  let admit := (← natList j "admit").map (· != 0)
+  let lane ← match field? j "lane" with
+    | none | some .null => pure none
+    | some _ => some <$> nat j "lane"
+  let ks := Lanes.knownRows admit (Lanes.halvesNat salt) (Lanes.positionNat pos) (Lanes.rootsNat r0 r1)
+    (fun _ => .empty) lane
+  pure (Json.mkObj (ks.toList.map fun (port, rows) => (port, toJson (rows.map (·.1)))))
+
+/-- The statement: lane `lane`, or the combine where `lane` is null. -/
+def leafStmt (j : Json) : Except String (Option Nat) :=
+  match field? j "lane" with
+  | none | some .null => pure none
+  | some _ => some <$> nat j "lane"
+
+/-- The unit's placement: `place`'s `{value: [table, base]}`, each value it doesn't name its own table from row 0
+(`Lanes.selfPlace`), every value so where `place` is absent or null. -/
+def leafPlace (j : Json) : Except String (String → String × Nat) := do
+  match field? j "place" with
+  | none | some .null => pure Lanes.selfPlace
+  | some (.obj kvs) =>
+    let ps ← kvs.toArray.toList.mapM fun (v, e) => match e with
+      | .arr #[.str t, b] => do
+        let some b := (b.getNat?).toOption | throw s!"value {v}'s base row is not a natural number"
+        pure (v, t, b)
+      | _ => throw s!"value {v}'s placement is not [table, base]"
+    pure fun v => (ps.lookup v).getD (Lanes.selfPlace v)
+  | some _ => throw "the input's place is not an object"
+
+/-- `registered_file`: statement `lane`'s `--registered` file at the roots of `registration` and `produced` and the
+placement `place` (`leafPlace`), every value's rows `hm96-sha512/row/v2`, with the known ports `known` and
+`complete`. -/
+def registeredFileJson (j : Json) : Except String Json := do
+  let T ← leafTile j
+  let _ ← leafPorts j
+  let rs ← Lanes.roots? (← get j "registration") (← get j "produced") T.lanes (2 * T.nw) Flock.HmRow.ROW_SCHEMA_V2
+  let .obj known ← get j "known" | throw "the input's known is not an object"
+  let .bool complete ← get j "complete" | throw "the input's complete is not a boolean"
+  Lanes.fileOf? rs (← leafPlace j) T (← leafStmt j) known.toArray.toList complete
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("on_grid", fun j => do pure (toJson (onGridInt (← nat j "bits") (← int j "n")))),
   ("floor_point", ofN floorPoint?),
@@ -125,11 +215,17 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("levels", fun j => do pure (toJson (← levels? (← nat j "bits") (← int j "lo") (← int j "hi")))),
   ("k_prime", fun j => do
     pure (toJson (← kPrime (← rat j "eps") (← rat j "delta") (← int j "credited") (← int j "n") (← int j "w_max")))),
+  ("eps_at", fun j => do
+    pure (toJson (toString (← epsAt (← int j "k") (← rat j "delta") (← int j "credited") (← int j "n")
+      (← int j "w_max"))))),
   ("sampling", fun j => do
     pure (← sampling (← rat j "eps") (← rat j "delta") (← work j) (← int j "tile_work") (← nat j "bits")).toJson),
   ("work_to_json", fun j => do pure ((← work j).itemJson (← int j "tile_work"))),
   ("constants", fun _ => pure <| Json.mkObj [("PUBLIC", Json.arr (publicItems.map PublicItem.toJson).toArray),
-    ("REGISTERED", toJson registered), ("KINDS", toJson kinds), ("GRID_BITS", toJson gridBits)]),
+    ("REGISTERED", toJson registered), ("LEGACY_REGISTERED", toJson legacyRegistered), ("KINDS", toJson kinds),
+    ("GRID_BITS", toJson gridBits), ("STOP_FIXED", toJson stopFixed)]),
+  ("length_item", fun j => do pure (lengthItem (← natList j "max_tokens"))),
+  ("length_problem", fun j => do pure (toJson (lengthProblem (← get j "item") (← natList j "max_tokens")))),
   ("entry_row", fun j => do pure (hexJ (← entryOf (← get j "entry")).row)),
   ("entry_words", fun j => do pure (toJson (← entryOf (← get j "entry")).words)),
   ("entry_from_row", fun j => do pure (entryJson (← rowEntry j))),
@@ -173,12 +269,49 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("public_inputs", fun j => do
     pure (hexJ (← publicInputs? (← get j "registration") (← arr j "drawn").toList (← get j "sigma") (← int j "cap")
       (← hex j "domain_h3")))),
+  ("live_epoch_reason", fun j => do
+    pure (toJson (liveEpochReason (← SampledProofs.Challenger.LiveCommitment.ofJson (← get j "commitment"))))),
+  ("round_key", fun j => do
+    let c ← SampledProofs.Challenger.LiveCommitment.ofJson (← get j "commitment")
+    pure (hexJ (← roundKey c (← hex j "coin") (← nat j "round") (← hex j "root")))),
   ("layout_constants", fun _ => pure <| Json.mkObj [("T_BITS", toJson tBits),
     ("DEPTHS", Json.mkObj (sides.map fun s => (s.name, toJson s.depth))), ("PORT", toJson port),
     ("ENTRY_SCHEMA", toJson entrySchema), ("ENTRY_BYTES", toJson entryBytes), ("TILE", toJson tile),
     ("ROW_STEP", toJson rowStep), ("SIDE_DOMAIN", toJson SIDE_DOMAIN), ("OWNER", toJson owner),
     ("SIDE_INDEX_WORDS", toJson sideIndexWords), ("PUBLIC_INPUTS_FORMAT", toJson PUBLIC_INPUTS_FORMAT),
     ("M_MAX", toJson mMax), ("PUBLIC_PORTS", Json.arr (publicPorts.map fun (p, w, sd, d) => Json.mkObj
-      [("port", toJson p), ("words", toJson w), ("seed", toJson sd), ("derivation", toJson d)]).toArray)])]
+      [("port", toJson p), ("words", toJson w), ("seed", toJson sd), ("derivation", toJson d)]).toArray)]),
+  ("n_digits", fun j => do pure (toJson (Lanes.nDigits (← nat j "ks")))),
+  ("known_rows", knownRowsJson),
+  ("registered_file", registeredFileJson),
+  ("leaf_own", fun j => do
+    Lanes.leafOwn? (← get j "registration") (← get j "produced") (← get j "file") (← leafPlace j) (← leafTile j)
+      (← leafStmt j) Flock.HmRow.ROW_SCHEMA_V2
+    pure (Json.bool true)),
+  ("full_draw", fun j => do
+    Lanes.checkFull (← str j "record")
+    pure (Json.bool true)),
+  ("lane_ports", fun j => do
+    pure (Json.arr ((← Lanes.lane? (← leafTile j) (← nat j "lane")).map leafPortJson).toArray)),
+  ("combine_ports", fun j => do pure (Json.arr ((← Lanes.combine? (← leafTile j)).map leafPortJson).toArray)),
+  ("field_of", fun j => do
+    let path ← str j "path"
+    pure <| match Lanes.fieldOf? (← leafPorts j) path with
+      | none => Json.null
+      | some (p, f) => Json.mkObj ([("port", toJson p.name), ("source", sourceJson p.source)] ++ leafFieldJson f)),
+  ("wires", fun j => do
+    pure (Json.arr ((← Lanes.wires? (← leafPorts j)).map fun (pw : Lanes.Port × Nat) => Json.mkObj
+      [("port", toJson pw.1.name), ("source", sourceJson pw.1.source), ("wire", toJson pw.2),
+       ("wires", toJson pw.1.bits)]).toArray)),
+  ("wire_of", fun j => do
+    let ps ← leafPorts j
+    let _ ← Lanes.wires? ps
+    let w ← nat j "wire"
+    pure <| match Lanes.wireOf? ps w with
+      | none => Json.null
+      | some (p, b) => Json.mkObj ([("port", toJson p.name), ("source", sourceJson p.source), ("bit", toJson b)] ++
+          match p.fieldAt? b with
+          | none => []
+          | some f => [("field", toJson f.path), ("field_bit", toJson (b - f.bit))]))]
 
 end PouwWindow.Difftest

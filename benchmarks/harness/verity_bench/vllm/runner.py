@@ -6,23 +6,53 @@ import hashlib
 import json
 import math
 import multiprocessing as mp
+import os
 import statistics
 import subprocess
+import tempfile
 import time
 import traceback
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, replace
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Protocol
 
+from verity_vllm.engine.env import INDUCTOR_DIR_MARK
+
 from verity_bench.vllm import result as result_format
-from verity_bench.vllm.arms import Arm, Target, build_bound, plugin
-from verity_bench.vllm.presets import Preset, SweepPoint
+from verity_bench.vllm.arms import (H1, Arm, Target, build_bound, h1_config, is_h1, plugin, protocols_config,
+                                    window_steps)
+from verity_bench.vllm.presets import SAMPLING, Preset, SweepPoint
 
 METRICS = ("time_per_output_token_s", "time_to_first_token_s", "tokens_per_s", "peak_gpu_memory_bytes")
-# Recorded for an arm at a point only when its every rep and the baseline's have it (the engine exposes its scheduler).
-OPTIONAL_METRICS = ("decode_time_per_token_s",)
-T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228}
+# Recorded for an arm at a point only when its every rep and the baseline's have it (the engine exposes its scheduler;
+# the point's requests generate more than one token).
+OPTIONAL_METRICS = ("decode_time_per_token_s", "inter_token_latency_p50_s", "inter_token_latency_p99_s")
+ENGINE_IDENTITY = ("vllm_version", "torch_version", "gpu", "kv_cache_tokens", "kernel_digest", "engine_overrides")
+T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228,
+       11: 2.201, 12: 2.179, 13: 2.160, 14: 2.145, 15: 2.131, 16: 2.120, 17: 2.110, 18: 2.101, 19: 2.093, 20: 2.086,
+       25: 2.060, 30: 2.042, 40: 2.021, 60: 2.000, 120: 1.980}
+# A step's host time may carry device work its own forward didn't enqueue; past this share of the decode time the
+# run's trailing device work is too large to attribute, and the decode metric is dropped.
+DECODE_TAIL_SHARE = 0.01
+# Past a spec's `warmups`, an engine warms until two consecutive runs' wall times differ by at most this share. On a host
+# at load 600-900 (18 Oct) a bandwidth engine's stalled runs were 8% to 8x slower than the next; an extra warm-up costs
+# seconds against an engine's minutes of start-up, so the bar is strict and `max_warmups` bounds it.
+WARMUP_AGREEMENT = 0.05
+# `TargetProfile.int8_exact` "all" as vLLM takes it (`TargetProfile.engine_args`, `INT8_EXACT_SCOPES`)
+INT8_EXACT_SCOPE = "all"
+INT8_EXACT_PARTS = ("linears", "attention")
+INT8_EXACT_QUANTIZATION, INT8_EXACT_ATTENTION_BACKEND = "verity_int8", "CUSTOM"
+# S of the H1 window `verity_vllm.LLM` opens at the build, before the engine knows its points: the first run's
+# `reinstall` closes it unserved and opens that run's own
+H1_OPENING_STEPS = 1
+
+
+def t95(df: int) -> float:
+    """The two-sided 95% Student-t quantile, from the largest tabulated df at or below `df` (wider, never narrower)."""
+
+    return T95[max(k for k in T95 if k <= df)]
 
 
 class ResidentCapacityError(RuntimeError):
@@ -34,7 +64,7 @@ class BenchEngine(Protocol):
 
     def gate(self, point: SweepPoint) -> Mapping[str, tuple[int, ...]]: ...
     def custom_gate(self) -> Mapping[str, Any]: ...
-    def warmup(self, point: SweepPoint) -> None: ...
+    def warmup(self, point: SweepPoint) -> Mapping[str, Any] | None: ...
     def measure(self, point: SweepPoint) -> Mapping[str, Any]: ...
     def close(self) -> None: ...
 
@@ -49,7 +79,7 @@ def _summary(values: list[float]) -> dict[str, Any]:
     mean = statistics.fmean(values)
     out: dict[str, Any] = {"mean": mean, "n": len(values)}
     if len(values) >= 2:
-        half = T95.get(len(values) - 1, 1.96) * statistics.stdev(values) / math.sqrt(len(values))
+        half = t95(len(values) - 1) * statistics.stdev(values) / math.sqrt(len(values))
         out["ci95"] = [mean - half, mean + half]
     return out
 
@@ -93,7 +123,7 @@ def _gate_passed(value: Any) -> bool:
 def _first_divergence(
     got: Mapping[str, tuple[int, ...]], control: Mapping[str, tuple[int, ...]]
 ) -> dict[str, Any] | None:
-    """The earliest request (by id) whose greedy tokens differ from the control's, and where."""
+    """The earliest request (by id) whose tokens differ from the control's, and where."""
 
     for rid in sorted(set(got) | set(control)):
         g, c = tuple(got.get(rid, ())), tuple(control.get(rid, ()))
@@ -126,22 +156,23 @@ def _evaluate_gates(
             # split counts, chunked-prefill GEMM shapes). Equal pools and a deterministic scheduler give equal schedules.
             mine = versions.get(arm.id, {}).get("kv_cache_tokens")
             theirs = versions.get(arm.control, {}).get("kv_cache_tokens")
-            if mine is not None and theirs is not None:
-                gate = {
-                    "arm": arm.id,
-                    "control": arm.control,
-                    "kind": "kv-pool",
-                    "passed": mine == theirs,
-                    "tokens": mine,
-                    "control_tokens": theirs,
-                }
-                if mine != theirs:
-                    gate["detail"] = (
-                        f"KV cache pools differ ({mine} vs {theirs} tokens), so vLLM schedules the arms differently "
-                        "and their greedy tokens can diverge; pin block_kv_cache_memory_bytes in the preset's "
-                        "engine_settings so every arm gets the same pool"
-                    )
-                out.append(gate)
+            gate = {
+                "arm": arm.id,
+                "control": arm.control,
+                "kind": "kv-pool",
+                "passed": mine is not None and mine == theirs,
+                "tokens": mine,
+                "control_tokens": theirs,
+            }
+            if mine is None or theirs is None:
+                gate["detail"] = "an engine did not report its KV pool, so the pools' equality is unchecked"
+            elif mine != theirs:
+                gate["detail"] = (
+                    f"KV cache pools differ ({mine} vs {theirs} tokens), so vLLM schedules the arms differently "
+                    "and their tokens can diverge; pin resident_kv_cache_memory_bytes and "
+                    "block_kv_cache_memory_bytes in the preset's engine_settings so every arm gets the same pool"
+                )
+            out.append(gate)
         for point in points:
             got = tokens[(arm.id, point.id)]
             control = tokens.get((arm.control, point.id)) if arm.control else None
@@ -150,7 +181,7 @@ def _evaluate_gates(
                 "arm": arm.id,
                 "control": arm.control,
                 "point": point.id,
-                "kind": "greedy-tokens",
+                "kind": "tokens",
                 "passed": passed,
                 "tokens": sum(map(len, got.values())),
                 "digest": _token_digest(got),
@@ -170,6 +201,43 @@ def _evaluate_gates(
     return out
 
 
+def _timed_token_gates(
+    arms: tuple[Arm, ...], points: tuple[SweepPoint, ...], samples: Mapping[tuple[str, str], list[dict[str, Any]]],
+    tokens: Mapping[tuple[str, str], Mapping[str, tuple[int, ...]]], mode: str,
+) -> list[dict[str, Any]]:
+    """Every timed rep of an arm with a control must produce the control's tokens in that rep: the greedy gate runs
+    before timing, so an arm that computed something else only when timed would pass it. In resident mode an arm
+    without a control is gated and timed by one engine, whose timed reps must produce its own gated tokens; in blocks
+    mode they are other engines, whose tokens may differ from the gated one's (Pearl-C's carry each install's salt)."""
+
+    out = []
+    for arm in arms:
+        if not arm.control:
+            if mode != "resident":
+                continue
+            for point in points:
+                want = _token_digest(tokens[(arm.id, point.id)])
+                bad = sorted(r["rep"] for r in samples[(arm.id, point.id)] if r.get("token_digest") != want)
+                out.append({"arm": arm.id, "control": None, "against": "gate", "point": point.id,
+                            "kind": "timed-tokens", "passed": not bad, **({"reps": bad} if bad else {})})
+            continue
+        for point in points:
+            mine = {r["rep"]: r.get("token_digest") for r in samples[(arm.id, point.id)]}
+            theirs = {r["rep"]: r.get("token_digest") for r in samples[(arm.control, point.id)]}
+            bad = sorted(r for r in mine.keys() | theirs.keys() if mine.get(r) is None or mine.get(r) != theirs.get(r))
+            out.append({"arm": arm.id, "control": arm.control, "point": point.id, "kind": "timed-tokens",
+                        "passed": not bad, **({"reps": bad} if bad else {})})
+    return out
+
+
+def _engine_identity_gate(arm: Arm, cycle: int, gated: Mapping[str, Any], timed: Mapping[str, Any]) -> dict[str, Any]:
+    """A block-mode arm is gated and timed by different engines; the timed one must be the gated one's twin."""
+
+    differs = {k: [gated.get(k), timed.get(k)] for k in ENGINE_IDENTITY if gated.get(k) != timed.get(k)}
+    return {"arm": arm.id, "cycle": cycle, "kind": "engine-identity", "passed": not differs,
+            **({"differs": differs} if differs else {})}
+
+
 def _collect_gates(
     engines: Mapping[str, BenchEngine], arms: tuple[Arm, ...], points: tuple[SweepPoint, ...]
 ) -> tuple[dict[tuple[str, str], Mapping[str, tuple[int, ...]]], dict[str, Mapping[str, Any]]]:
@@ -181,6 +249,16 @@ def _collect_gates(
             tokens[(arm.id, point.id)] = engine.gate(point)
         custom[arm.id] = engine.custom_gate()
     return tokens, custom
+
+
+def _closing_gate(arm: Arm, engine: BenchEngine, **where: Any) -> list[dict[str, Any]]:
+    """The arm's own gate read again after its warm-up and timed runs, before its engine closes, so an arm that judges
+    every run it saw judges those too; nothing for an arm without a gate."""
+
+    c = engine.custom_gate()
+    if c.get("provided") is False:
+        return []
+    return [{"arm": arm.id, "kind": "arm-closing", **where, "passed": _gate_passed(c), "detail": dict(c)}]
 
 
 def _close_all(engines: Mapping[str, BenchEngine]) -> None:
@@ -216,15 +294,86 @@ def _record(
     schedule.append({"phase": "timed", "mode": mode, "arm": arm, "point": point.id, "rep": rep})
 
 
-def decode_time_per_token(steps: list[Mapping[str, Any]]) -> float | None:
-    """Host time of the engine steps that only decoded (a forward with decode tokens and no prefill tokens), over the
-    tokens they decoded: per-token decode cost with prefill left out, which time per output token mixes in under mixed
-    traffic. None when no step qualifies or the steps carry no token counts (`run_requests_arrivals` without a reachable
-    scheduler). A step's time includes device time where vLLM synchronizes in it, as it does to return sampled tokens."""
+def _warm(engine: BenchEngine, point: SweepPoint, warmups: int, max_warmups: int, schedule: list[dict[str, Any]],
+          entry: Mapping[str, Any]) -> None:
+    """`warmups` discarded runs, then more, up to `max_warmups` in all, until the last two runs' wall times agree within
+    WARMUP_AGREEMENT. An engine whose first runs stall (18 Oct: the bandwidth arms' first prefill step, by seconds,
+    for one to three runs after the engine starts) is timed only once it runs as it will keep running. An engine that
+    reaches `max_warmups` without settling says so in its last warm-up's schedule entry (`settled: false`)."""
 
-    decode = [s for s in steps if s.get("forward") and s.get("prefill_tokens") == 0 and s.get("decode_tokens")]
-    tokens = sum(int(s["decode_tokens"]) for s in decode)
-    return sum(float(s["s"]) for s in decode) / tokens if tokens else None
+    walls: list[float | None] = []
+    for index in range(max_warmups):
+        got = engine.warmup(point)
+        run = dict(got) if isinstance(got, Mapping) else {}
+        walls.append(run.get("wall_s"))
+        schedule.append({"phase": "warmup", **entry, "point": point.id, "warmup": index, **({"run": run} if run else {})})
+        if index + 1 >= warmups and (max_warmups == warmups or _agree(walls[-2:])):
+            return
+    schedule[-1]["settled"] = False
+
+
+def _agree(walls: list[float | None]) -> bool:
+    if len(walls) != 2 or None in walls:
+        return False
+    a, b = walls
+    return abs(a - b) <= WARMUP_AGREEMENT * min(a, b)
+
+
+def decode_time_per_token(
+    steps: list[Mapping[str, Any]], *, output_lag: int = 0, device_tail_s: float = 0.0, generated: int | None = None
+) -> float | None:
+    """Host time of the engine steps that returned a decode-only forward's tokens (a forward with decode tokens and no
+    prefill tokens), over the tokens it decoded: per-token decode cost with prefill left out, which time per output
+    token mixes in under mixed traffic. A step's host time holds the device time of the forward it waits on to return
+    sampled tokens, which is its own forward's when `output_lag` is 0 and the forward `output_lag` iterations back's
+    under async scheduling, so the time of iteration i + lag is charged to the forward of iteration i. None when no
+    step qualifies, the steps carry no token counts (`run_requests_arrivals` without a reachable scheduler), or the
+    device work left after the last step (`device_tail_s`) exceeds DECODE_TAIL_SHARE of the decode time, which shows
+    device work the host step times didn't see. Also None when the steps' decode tokens add up to more than the run
+    `generated`: a decode token is one generated token, so a larger total means the counts misclassify prompt tokens
+    as decode (18 Oct: `arrivals.scheduled_tokens` looked prompt lengths up by the submitted request id, which this vLLM
+    pin renames, so every prompt token counted as decode)."""
+
+    if generated is not None and sum(int(s.get("decode_tokens") or 0) for s in steps) > generated:
+        return None
+    lag = int(output_lag)
+    decode = [
+        (float(steps[i + lag]["s"]), int(s["decode_tokens"]))
+        for i, s in enumerate(steps[: len(steps) - lag])
+        if s.get("forward") and s.get("prefill_tokens") == 0 and s.get("decode_tokens")
+    ]
+    tokens = sum(n for _, n in decode)
+    seconds = sum(t for t, _ in decode)
+    if not tokens or device_tail_s > DECODE_TAIL_SHARE * seconds:
+        return None
+    return seconds / tokens
+
+
+def inter_token_latencies(returns: list[tuple[float, Mapping[str, int]]]) -> list[float]:
+    """One latency per generated token after each request's first: the time from the step that returned the request's
+    previous tokens to the step that returned this one, shared evenly by the tokens a step returned at once. ``returns``
+    holds, per engine step, the clock reading as it returned and each returned request's tokens generated so far. This
+    is the per-token latency a streaming client sees; the first token's is ``time_to_first_token_s``."""
+
+    last: dict[str, tuple[float, int]] = {}
+    out: list[float] = []
+    for t, counts in returns:
+        for rid, n in counts.items():
+            if rid in last:
+                t0, n0 = last[rid]
+                if n <= n0:
+                    continue
+                out.extend([(t - t0) / (n - n0)] * (n - n0))
+            last[rid] = (t, n)
+    return out
+
+
+def percentile(values: list[float], q: int) -> float | None:
+    """The q-th percentile (1..99), interpolated between the closest ranks; None without values."""
+
+    if len(values) < 2:
+        return values[0] if values else None
+    return statistics.quantiles(values, n=100, method="inclusive")[q - 1]
 
 
 def _aggregate(
@@ -239,16 +388,17 @@ def _aggregate(
         row: dict[str, Any] = {"point": {**point.to_json(), "headline": point.headline}, "arms": {}}
         for arm in arms:
             reps = sorted(samples[(arm.id, point.id)], key=lambda x: x["rep"])
+            if [r["rep"] for r in reps] != [b["rep"] for b in base]:
+                raise ValueError(f"{arm.id} at {point.id} has reps {[r['rep'] for r in reps]}, its baseline "
+                                 f"{[b['rep'] for b in base]}: paired ratios need the same reps")
             metrics = {}
             present = tuple(m for m in OPTIONAL_METRICS if all(r["metrics"].get(m) is not None for r in reps + base))
             for metric in METRICS + present:
                 absolute = _summary([float(r["metrics"][metric]) for r in reps])
-                ratios = [
-                    float(r["metrics"][metric]) / float(b["metrics"][metric])
-                    for r, b in zip(reps, base, strict=True)
-                    if float(b["metrics"][metric]) != 0
-                ]
-                metrics[metric] = {**absolute, "ratio_to_stock": _summary(ratios)}
+                pairs = [(float(r["metrics"][metric]), float(b["metrics"][metric])) for r, b in zip(reps, base)]
+                # A zero baseline rep is a broken measurement; dropping it would report a mean over the other reps.
+                ratios = _summary([x / y for x, y in pairs]) if all(y != 0 for _, y in pairs) else {"mean": None, "n": 0}
+                metrics[metric] = {**absolute, "ratio_to_stock": ratios}
             row["arms"][arm.id] = {
                 "metrics": metrics,
                 "span_totals": _numeric_summaries([r.get("spans", {}) for r in reps]),
@@ -257,6 +407,74 @@ def _aggregate(
             }
         out.append(row)
     return out
+
+
+def run_trace(timing: Mapping[str, Any], start: float, ready: float) -> dict[str, Any]:
+    """A timed rep's own record of where its time went, small enough to keep in every rep: each `step()` iteration's host
+    time and the prefill and decode tokens its schedule computed, each request's arrival and first output (seconds from
+    the run's start, in request order), and how long after the engine became ready the run started."""
+
+    def us(x: Any) -> float | None:
+        return None if x is None else round(float(x), 6)
+
+    steps = timing.get("steps") or []
+    requests = list(timing["requests"].values())
+    return {
+        "since_ready_s": us(start - ready),
+        "step_s": [us(s["s"]) for s in steps],
+        "step_prefill_tokens": [s.get("prefill_tokens") for s in steps],
+        "step_decode_tokens": [s.get("decode_tokens") for s in steps],
+        "arrival_s": [us(r.get("arrival_s")) for r in requests],
+        "first_output_s": [us(r.get("first_output_s")) for r in requests],
+    }
+
+
+class HostProbe:
+    """The process's CPU time, context switches, page faults and garbage collections over a window, and the host's load
+    when it opened: a slow rep with as much CPU time but more involuntary switches waited on a contended host, one with
+    more CPU time ran slower code (or a slower clock), and one with neither waited on the device. `counters`, when
+    given, is read at both ends and its deltas kept under `device`."""
+
+    def __init__(self, counters: Callable[[], Mapping[str, float]] | None = None) -> None:
+        import gc
+        import os
+        import resource
+
+        self._gc, self._resource = gc, resource
+        self._counters = counters
+        self.counted = dict(counters()) if counters is not None else None
+        self.load = os.getloadavg()[0]
+        self.gc_s, self._gc_at = 0.0, None
+        gc.callbacks.append(self._on_gc)
+        self.thread = time.thread_time()
+        self.usage = resource.getrusage(resource.RUSAGE_SELF)
+
+    def _on_gc(self, phase: str, _info: Mapping[str, Any]) -> None:
+        if phase == "start":
+            self._gc_at = time.perf_counter()
+        elif self._gc_at is not None:
+            self.gc_s += time.perf_counter() - self._gc_at
+            self._gc_at = None
+
+    def close(self) -> dict[str, Any]:
+        after = self._resource.getrusage(self._resource.RUSAGE_SELF)
+        thread = time.thread_time() - self.thread
+        if self._on_gc in self._gc.callbacks:
+            self._gc.callbacks.remove(self._on_gc)
+        b = self.usage
+        counted = ({"device": {k: v - self.counted.get(k, 0) for k, v in self._counters().items()}}
+                   if self._counters is not None else {})
+        return {
+            "loadavg_1m": round(self.load, 2),
+            "process_cpu_s": round(after.ru_utime + after.ru_stime - b.ru_utime - b.ru_stime, 6),
+            "thread_cpu_s": round(thread, 6),
+            "involuntary_switches": after.ru_nivcsw - b.ru_nivcsw,
+            "voluntary_switches": after.ru_nvcsw - b.ru_nvcsw,
+            "minor_faults": after.ru_minflt - b.ru_minflt,
+            "major_faults": after.ru_majflt - b.ru_majflt,
+            "gc_s": round(self.gc_s, 6),
+            **counted,
+        }
 
 
 def _git_head() -> str:
@@ -270,11 +488,19 @@ def _identity(
     git_commit: str,
     versions: Mapping[str, Mapping[str, Any]],
     config_identity: Mapping[str, Any] | None = None,
+    *,
+    reps: int,
+    warmups: int = 1,
+    max_warmups: int = 1,
+    interleave: str,
 ) -> dict[str, Any]:
-    vllm_versions = {v.get("vllm_version") for v in versions.values()}
-    if len(vllm_versions) != 1:
-        raise RuntimeError(f"benchmark arms loaded different vLLM versions: {sorted(map(str, vllm_versions))}")
-    vllm_version = str(next(iter(vllm_versions)))
+    shared = {}
+    for key in ("vllm_version", "torch_version", "gpu"):
+        seen = {v.get(key) for v in versions.values()}
+        if len(seen) != 1:
+            raise RuntimeError(f"benchmark arms loaded different {key}s: {sorted(map(str, seen))}")
+        shared[key] = next(iter(seen))
+    vllm_version = str(shared["vllm_version"])
     if preset.vllm_pin[:9] not in vllm_version:
         raise RuntimeError(f"benchmark preset pins vLLM {preset.vllm_pin}, but the runtime reports {vllm_version}")
     arm_docs = []
@@ -290,9 +516,15 @@ def _identity(
         "preset": preset.to_json(),
         "vllm_version": vllm_version,
         "vllm_pin": preset.vllm_pin,
+        "torch_version": shared["torch_version"],
+        "gpu": shared["gpu"],
         "arms": arm_docs,
         "git_commit": git_commit,
         "sweep": sweep,
+        "reps": reps,
+        "warmups": warmups,
+        "max_warmups": max_warmups,
+        "interleave": interleave,
         **({"config": dict(config_identity)} if config_identity is not None else {}),
     }
 
@@ -307,11 +539,21 @@ def run_benchmark(
     factory: EngineFactory,
     git_commit: str | None = None,
     config_identity: Mapping[str, Any] | None = None,
+    warmups: int = 1,
+    max_warmups: int | None = None,
 ) -> dict[str, Any]:
-    """Run every gate before any timing, then use resident interleaving or alternating blocks."""
+    """Run every gate before any timing, then use resident interleaving or alternating blocks, with at least `warmups`
+    discarded runs of a point before an engine's first timed one and, up to `max_warmups`, as many more as it takes two
+    consecutive runs to agree (`_warm`). An arm's own gate is read again after its timed runs (`arm-closing`), and a
+    failure there leaves the result without points."""
 
     if reps < 1 or not arms or not points:
         raise ValueError("benchmark needs at least one arm, point, and repetition")
+    max_warmups = warmups if max_warmups is None else max_warmups
+    if warmups < 1 or max_warmups < warmups:
+        raise ValueError("benchmark needs at least one warm-up a point, and max_warmups no fewer than warmups")
+    if any(a.control == a.id for a in arms):
+        raise ValueError("an arm cannot be its own control: its greedy gate would compare it with itself")
     baseline = "stock-fp8" if any(a.id == "stock-fp8" for a in arms) else "stock" if any(a.id == "stock" for a in arms) else arms[0].id
     schedule: list[dict[str, Any]] = []
     samples = {(a.id, p.id): [] for a in arms for p in points}
@@ -328,6 +570,10 @@ def run_benchmark(
         resident_failure = str(e)
         _close_all(engines)
         engines = {}
+    except BaseException:
+        # A live engine is a non-daemon process: left open, it keeps the point from exiting and holds its GPU lease.
+        _close_all(engines)
+        raise
 
     if resident_failure is None:
         try:
@@ -336,11 +582,11 @@ def run_benchmark(
             if all(g["passed"] for g in gates):
                 for point in points:
                     for arm in arms:
-                        engines[arm.id].warmup(point)
-                        schedule.append({"phase": "warmup", "mode": "resident", "arm": arm.id, "point": point.id})
+                        _warm(engines[arm.id], point, warmups, max_warmups, schedule, {"mode": "resident", "arm": arm.id})
                     for rep in range(reps):
                         for arm_id in interleave_order(arms, baseline, rep):
                             _record(samples, schedule, arm_id, point, rep, engines[arm_id], "resident")
+                gates += [g for arm in arms for g in _closing_gate(arm, engines[arm.id])]
         finally:
             _close_all(engines)
         mode = "resident"
@@ -358,32 +604,41 @@ def run_benchmark(
                 engine.close()
         gates = _evaluate_gates(arms, points, tokens, custom, versions)
         if all(g["passed"] for g in gates):
-            # Two alternating engine-lifetime cycles; each rep belongs to one cycle.
+            # Two engine-lifetime cycles, the second in reverse arm order so that drift over the run cancels; each rep
+            # belongs to one cycle.
             for cycle in range(min(2, reps)):
-                for arm in arms:
+                for arm in arms if cycle == 0 else tuple(reversed(arms)):
                     indices = [r for r in range(reps) if r % min(2, reps) == cycle]
-                    if not indices:
+                    if not indices or not all(g["passed"] for g in gates):
                         continue
                     engine = factory.create(arm, preset, resident=False)
+                    gates.append(_engine_identity_gate(arm, cycle, versions[arm.id], engine.identity))
+                    if not gates[-1]["passed"]:
+                        engine.close()
+                        continue
                     try:
                         for point in points:
-                            engine.warmup(point)
-                            schedule.append({"phase": "warmup", "mode": "blocks", "cycle": cycle,
-                                             "arm": arm.id, "point": point.id})
+                            _warm(engine, point, warmups, max_warmups, schedule, {"mode": "blocks", "cycle": cycle, "arm": arm.id})
                             for rep in indices:
                                 _record(samples, schedule, arm.id, point, rep, engine, "blocks")
+                        gates += _closing_gate(arm, engine, cycle=cycle)
                     finally:
                         engine.close()
         mode = "blocks"
 
-    identity = _identity(preset, arms, sweep, git_commit or _git_head(), versions, config_identity)
+    if all(g["passed"] for g in gates):
+        gates += _timed_token_gates(arms, points, samples, tokens, mode)
+    identity = _identity(preset, arms, sweep, git_commit or _git_head(), versions, config_identity,
+                         reps=reps, warmups=warmups, max_warmups=max_warmups, interleave=mode)
     doc = {
         "schema": result_format.SCHEMA,
         "identity": identity,
         "baseline": baseline,
         "sweep": [p.to_json() for p in points],
         "gates": gates,
-        "execution": {"interleave": mode, "resident_failure": resident_failure, "reps": reps, "schedule": schedule},
+        "execution": {"interleave": mode, "resident_failure": resident_failure, "reps": reps, "warmups": warmups,
+                      "max_warmups": max_warmups,
+                      "schedule": schedule},
         "points": _aggregate(arms, points, baseline, samples) if all(g["passed"] for g in gates) else [],
     }
     result_format.validate(doc)
@@ -393,6 +648,17 @@ def run_benchmark(
 def _callback(obj: Any, name: str, target: Target, default: Any) -> Any:
     fn = obj.get(name) if isinstance(obj, Mapping) else getattr(obj, name, None)
     return default if not callable(fn) else fn(target)
+
+
+def _allocator_counts() -> dict[str, float]:
+    """The caching allocator's device allocations and frees, its out-of-memory retries (each frees every cached block)
+    and its synchronizations of every stream: a run that needs any of them waits on the driver."""
+
+    import torch
+
+    stats = torch.cuda.memory_stats()
+    keys = ("num_device_alloc", "num_device_free", "num_alloc_retries", "num_sync_all_streams")
+    return {k: stats.get(k, 0) for k in keys}
 
 
 class _DirectLLM:
@@ -412,6 +678,81 @@ class _DirectLLM:
         pass
 
 
+PASS_COUNTS = ("units", "tiles", "screened_rows", "failing_rows", "unsure_rows")
+
+
+def _pearl_c_run(llm: Any) -> Any | None:
+    """The arm's Pearl-C device run, the owner of its option's ``end_pass``; None when the arm runs none. The adapter ends
+    a pass each time the model runner's ``execute_model`` returns (`pouw.install`), so the harness only reads the passes
+    (`_pass_totals`) and gates the run (`_pearl_c_gate`)."""
+
+    from verity_vllm.protocols.pouw import pearl_c as PPD
+
+    option = llm.protocols.get("pouw") if llm.protocols is not None else None
+    run = getattr(getattr(option, "end_pass", None), "__self__", None)
+    return run if isinstance(run, PPD.PearlCDeviceRun) else None
+
+
+def _pass_totals(run: Any) -> dict[str, int]:
+    """The running totals of the passes the run has ended (``details["passes"]``): `PASS_COUNTS` and ``passes``."""
+
+    passes = run.details["passes"]
+    return {"passes": len(passes), **{key: sum(int(p.get(key) or 0) for p in passes) for key in PASS_COUNTS}}
+
+
+def _pearl_c_gate(run: Any) -> dict[str, Any]:
+    """The experimental arm's own gate, `e2e.gate`'s call check, on the protocol arm's installed run: at every distinct
+    (n, k), served y against x·Wᵀ within `bench_arm.ERR`, the commitment twice, and the ``hash_leaf``-omitted negative
+    control. Pearl-C's y carries the epoch's live salt, so no stock arm is its token control. Its ``coins`` are the
+    installed run's: a live session's (``challenger``, its salt epoch ``pass_index`` and the root its salt coin follows,
+    `salt.epoch_open_root` of the weights' root and that epoch) when the option took its salt from one, else
+    ``in-process``."""
+
+    from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm
+    from verity.core.protocols.pouw.salt import epoch_open_root
+
+    check = PearlCArm()
+    check.run, check.schedule = run, run.schedule.name
+    c = run.commits
+    check.coins = ({"source": c["coin_source"], "session": c.get("session"), "pass_index": c["pass_index"],
+                    "salt_after": epoch_open_root(bytes.fromhex(c["weights_root"]), c["pass_index"]).hex()}
+                   if c.get("coin_source", "in-process") != "in-process" else {"source": "in-process"})
+    check.weights = {w: x.tensor for w, x in run.weights.items()}
+    got = check.gate(None)
+    # The check begins and ends its own passes; the next forward's calls need an open pass, as the adapter's hook leaves
+    # one between steps.
+    run.begin(stepped=True)
+    return {**got, "provided": True}
+
+
+def h1_summary(run: Any) -> dict[str, Any]:
+    """One closed H1 window (`pouw_h1.H1Run`): ``ok`` when every call fell inside its S steps and T rows at its public
+    position, in order (``static``), the credit gate passed every served call (its y the GEMM that wrote its z/y
+    records), every admitted request has its entry and the salt opened. Its coins are in-process, so it credits nothing."""
+
+    verdicts = list(run.verdicts.values())
+    passed = sum(bool(v.get("credit")) for v in verdicts)
+    gaps = run.request_gaps()
+    out = {"steps": run.steps, "steps_served": run.details.get("steps_served"), "rows": run.rows, "calls": len(run.calls),
+           "served_calls": len(verdicts), "refused_calls": len(run.refused), "order_ok": bool(run.order_ok),
+           "static": bool(run.details.get("static")), "credit_gate_passed": passed,
+           "credit_gate_refusals": sorted({str(v.get("reason")) for v in verdicts if not v.get("credit")})[:3],
+           "requests": len(run.requests), "refused_requests": len(run.refused_requests), "request_gaps": len(gaps),
+           "unopened": run.details.get("unopened"), "u": run.details.get("u"), "coin_source": run.coin_source}
+    out["ok"] = bool(verdicts and out["static"] and not run.refused and passed == len(verdicts) and not gaps
+                     and not run.refused_requests and out["unopened"] is None)
+    return out
+
+
+def h1_gate(windows: list[Mapping[str, Any]]) -> dict[str, Any]:
+    """An H1 arm's own gate: every window its engine has closed so far is `h1_summary`'s ``ok``."""
+
+    bad = [w for w in windows if not w.get("ok")]
+    return {"passed": bool(windows) and not bad, "provided": True, "windows": len(windows),
+            "failed": [dict(w) for w in bad[:2]],
+            "coins": "in-process: each window credits nothing (pouw_h1.IN_PROCESS); this arm measures cost only"}
+
+
 def _kv_cache_tokens(llm: Any) -> int | None:
     """The engine's actual KV pool in tokens (in-process V1 engine), None when the engine does not expose it."""
 
@@ -425,6 +766,56 @@ def _kv_cache_tokens(llm: Any) -> int | None:
     return int(blocks) * int(block_size)
 
 
+def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) -> dict[str, Any]:
+    """The engine options every arm of a preset shares, before an arm's own overrides.
+
+    With ``serving_defaults`` the engine compiles as vLLM serves (torch.compile, its CUDA-graph mode and capture sizes,
+    the execution label ``compiled``, or ``eager`` for an eager engine); otherwise a graph engine replays decode-only CUDA
+    graphs at the preset's ``capture_sizes``. Engines of one group
+    share one exact KV pool, ``resident_kv_cache_memory_bytes`` or ``block_kv_cache_memory_bytes``: vLLM schedules by
+    free KV blocks, and an arm whose install leaves a different amount of free memory would otherwise get a different
+    pool, a different schedule, and (through batch-composition-dependent kernels) different tokens than its control.
+    Without a pin the kv-pool gate catches unequal pools. ``attention_backend``, ``attention_config`` and
+    ``moe_backend`` pass to vLLM as set, for a preset whose Build's row declares them (its ``engine.args``)."""
+
+    settings = preset.engine_settings
+    engine: dict[str, Any] = {
+        "tensor_parallel_size": preset.gpu_count,
+        "max_num_seqs": int(settings.get("max_num_seqs", 128)),
+        "max_model_len": int(settings["max_model_len"]),
+        "gpu_memory_utilization": float(settings[
+            "resident_gpu_memory_utilization" if resident else "block_gpu_memory_utilization"
+        ]),
+        "enforce_eager": eager,
+    }
+    if settings.get("max_num_batched_tokens") is not None:
+        engine["max_num_batched_tokens"] = int(settings["max_num_batched_tokens"])
+    if precision == "fp8":
+        engine["quantization"] = "fp8"
+    elif precision == "int8_exact":
+        if not eager or settings.get("attention_backend") is not None:
+            raise ValueError("int8_exact runs eagerly only, on its own attention backend: an eager spec with no "
+                             "attention_backend")
+        engine["quantization"], engine["attention_backend"] = INT8_EXACT_QUANTIZATION, INT8_EXACT_ATTENTION_BACKEND
+    elif precision != "bfloat16":
+        engine["dtype"] = precision
+    if settings.get("serving_defaults"):
+        engine["execution"] = "eager" if eager else "compiled"
+    elif not eager:
+        engine["compilation_config"] = {
+            "mode": 0,
+            "cudagraph_mode": "FULL_DECODE_ONLY",
+            "cudagraph_capture_sizes": list(settings["capture_sizes"]),
+        }
+    kv_pin = settings.get("resident_kv_cache_memory_bytes" if resident else "block_kv_cache_memory_bytes")
+    if kv_pin is not None:
+        engine["kv_cache_memory_bytes"] = int(kv_pin)
+    for key in ("attention_backend", "attention_config", "moe_backend"):
+        if settings.get(key) is not None:
+            engine[key] = dict(settings[key]) if key == "attention_config" else str(settings[key])
+    return engine
+
+
 class _VllmEngine:
     """One worker process's live vLLM engine."""
 
@@ -435,14 +826,16 @@ class _VllmEngine:
             raise ValueError(f"preset {preset.id} has no pinned checkpoint revision")
         from verity_vllm.engine import env as engine_env
 
+        if preset.engine_settings.get("serving_defaults"):
+            engine_env.apply_compile_fresh()
         engine_env.apply_engine(None)
         import torch
         import vllm
 
         from verity_vllm.engine.hooks import Hooks, live
-        from verity_vllm.pipeline.llm import LLM
+        from verity_vllm.llm import LLM
 
-        self.arm, self.obj, self.installed = arm, plugin(arm), None
+        self.arm, self.obj, self.installed, self.pearl_c, self.h1 = arm, plugin(arm), None, None, None
         self.target = Target(arm, None, None, Hooks(tag=f"bench:{arm.id}"))
         if self.obj is not None:
             before = {id(e) for e in live()}
@@ -454,57 +847,56 @@ class _VllmEngine:
                 self.target.hooks.uninstall()
                 raise RuntimeError(f"experimental arm {arm.id!r} patched outside target.hooks")
 
-        settings = preset.engine_settings
+        kernel_digest = arm.kernel_digest
         precision = arm.precision or preset.precision
-        engine: dict[str, Any] = {
-            "tensor_parallel_size": preset.gpu_count,
-            "max_num_seqs": 128,
-            "max_model_len": int(settings["max_model_len"]),
-            "gpu_memory_utilization": float(settings[
-                "resident_gpu_memory_utilization" if resident else "block_gpu_memory_utilization"
-            ]),
-            "enforce_eager": eager,
-        }
-        if settings.get("max_num_batched_tokens") is not None:
-            engine["max_num_batched_tokens"] = int(settings["max_num_batched_tokens"])
-        if precision == "fp8":
-            engine["quantization"] = "fp8"
-        elif precision != "bfloat16":
-            engine["dtype"] = precision
-        if not eager:
-            engine["compilation_config"] = {
-                "mode": 0,
-                "cudagraph_mode": "FULL_DECODE_ONLY",
-                "cudagraph_capture_sizes": list(settings["capture_sizes"]),
-            }
+        engine = engine_args(preset, precision, resident=resident, eager=eager)
+        if precision == "int8_exact":
+            # `engine.build.register_int8_parts` registers a TargetProfile's parts, and verity_vllm.LLM builds with none
+            from verity_vllm.engine import int8_ranks
+            int8_ranks.register(INT8_EXACT_PARTS)
         overrides = _callback(self.obj, "engine_overrides", self.target, {}) if self.obj is not None else {}
         engine.update(overrides or {})
-        # Isolated (block-mode) engines of one group must share one exact KV pool: vLLM schedules by free KV blocks,
-        # and an arm whose install leaves a different amount of free memory would otherwise get a different pool, a
-        # different schedule, and (through batch-composition-dependent kernels) different greedy tokens than its
-        # control. The pin reaches vllm.LLM directly; verity_vllm.LLM does not take it, and the kv-pool gate catches
-        # unequal pools on that path.
-        kv_pin = None if resident else settings.get("block_kv_cache_memory_bytes")
         if preset.model_digest is not None:
             if arm.protocols:
                 raise ValueError("a local checkpoint override supports stock and experimental arms, not protocol-option arms")
-            if kv_pin is not None:
-                engine["kv_cache_memory_bytes"] = int(kv_pin)
             self.llm = _DirectLLM(
                 vllm.LLM(
                     model=preset.model,
                     enable_prefix_caching=False,
                     seed=0,
-                    **engine,
+                    **{k: v for k, v in engine.items() if k != "execution"},
                 ),
                 {k: engine[k] for k in ("dtype", "quantization", "compilation_config", "kv_cache_memory_bytes")
                  if engine.get(k) is not None},
             )
         else:
+            config: dict[str, Any] = {}
+            if arm.protocols:
+                config = protocols_config(arm, os.environ)
+            if is_h1(arm):
+                rows = config.get("pouw", {}).get("rows")
+                if rows != engine.get("max_num_batched_tokens"):
+                    raise ValueError(f"{arm.id}: the pouw setting 'rows' (T, {rows}) is the engine's "
+                                     f"max_num_batched_tokens ({engine.get('max_num_batched_tokens')})")
+                self.h1 = {"config": config, "rows": rows, "windows": []}
+                config = h1_config(config, H1_OPENING_STEPS)
             if arm.protocols:
                 engine["protocols"] = ",".join(arm.protocols)
+                if config:
+                    engine["protocols_config"] = config
             self.llm = LLM(preset.model, revision=preset.revision, **engine)
+            if arm.protocols and self.h1 is None:
+                self.pearl_c = _pearl_c_run(self.llm)
+                cubin = config.get("pouw", {}).get("cubin")
+                if cubin:
+                    kernel_digest = hashlib.sha256(Path(cubin).read_bytes()).hexdigest()
         self.target.engine, self.target.model = self.llm, self.llm.model
+        if precision == "int8_exact":
+            from verity_vllm.program.frontend.kernel_readback import int8_exact_of
+            got = int8_exact_of(self.llm.model)
+            if got != INT8_EXACT_SCOPE:
+                raise RuntimeError(f"{arm.id}: an int8_exact engine whose layers run int8 scope {got!r}, not "
+                                   f"{INT8_EXACT_SCOPE!r}")
         ready = getattr(self.installed, "ready", None)
         if callable(ready):
             ready(self.target)
@@ -516,11 +908,13 @@ class _VllmEngine:
                 if self.obj is not None and callable(
                     self.obj.get("kernel_digest") if isinstance(self.obj, Mapping) else getattr(self.obj, "kernel_digest", None)
                 )
-                else arm.kernel_digest
+                else kernel_digest
             ),
             "gpu": torch.cuda.get_device_name(0),
+            "torch_version": f"{torch.__version__} cuda {torch.version.cuda}",
             "engine_overrides": dict(self.llm.engine_record.get("engine_overrides") or {}),
         }
+        self.ready_at = time.perf_counter()
 
     def _requests(self, point: SweepPoint) -> list[Any]:
         vocab = int(self.llm.vllm.llm_engine.vllm_config.model_config.hf_config.vocab_size)
@@ -534,6 +928,7 @@ class _VllmEngine:
                 ],
                 max_tokens=shape.output_tokens,
                 arrive_step=shape.arrive_step,
+                seed=i,
             )
             for i, shape in enumerate(point.requests())
         ]
@@ -543,36 +938,80 @@ class _VllmEngine:
             got = _callback(self.obj, "spans", self.target, None)
             if got is not None:
                 return got
-        return {} if self.llm.protocols is None else self.llm.protocols.info()
+        info = {} if self.llm.protocols is None else self.llm.protocols.info()
+        return info if self.pearl_c is None else {**info, "pearl_c": _pass_totals(self.pearl_c)}
 
-    def _run(self, point: SweepPoint, measured: bool) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
+    def _run(self, point: SweepPoint, phase: str) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
+        """One run; an H1 arm's in its own window, opened before the clock starts (`verity_vllm.LLM.reinstall`, S the run's
+        step bound, `window_steps`) and closed after it stops."""
+
+        if self.h1 is None:
+            return self._serve(point, phase)
+        from verity_vllm.protocols import pouw
+
+        start = time.perf_counter()
+        self.llm.reinstall(h1_config(self.h1["config"], window_steps(point, self.h1["rows"])))
+        install_s = time.perf_counter() - start
+        run = pouw.h1_run(H1)
+        try:
+            tokens, out = self._serve(point, phase)
+        finally:
+            start = time.perf_counter()
+            self.llm.close()
+            window = {"point": point.id, "phase": phase, **h1_summary(run), "install_s": round(install_s, 3),
+                      "close_s": round(time.perf_counter() - start, 3)}
+            self.h1["windows"].append(window)
+        if phase == "measure":
+            out = {**out, "extras": {**out["extras"], "h1_window": window}}
+        return tokens, out
+
+    def _serve(self, point: SweepPoint, phase: str) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
         import torch
         from vllm import SamplingParams
 
         from verity_vllm.engine.arrivals import run_requests_arrivals
 
+        measured = phase == "measure"
         requests = self._requests(point)
-        params = lambda r: SamplingParams(temperature=0.0, max_tokens=r.max_tokens, ignore_eos=True,  # noqa: E731
-                                          detokenize=False, seed=0)
+        sampling = SAMPLING[point.sampling]
+        params = lambda r: SamplingParams(max_tokens=r.max_tokens, ignore_eos=True,  # noqa: E731
+                                          detokenize=False, seed=r.seed, **sampling)
+        returns: list[tuple[float, dict[str, int]]] = []
+
+        def on_step(outs: list[Any]) -> None:
+            returns.append((time.perf_counter(), {o.request_id: len(o.outputs[0].token_ids) for o in outs if o.outputs}))
+
         before = self._spans()
         if measured:
             torch.cuda.synchronize()
             torch.cuda.reset_peak_memory_stats()
+        self.target.phase, self.target.point = phase, point.id
+        self.target.tokens = sum(len(r.prompt_token_ids) + r.max_tokens for r in requests)
+        if self.obj is not None:
+            _callback(self.obj, "begin_run", self.target, None)
+        probe = HostProbe(_allocator_counts)
         start = time.perf_counter()
         finished, timing = run_requests_arrivals(
             self.llm.vllm,
             requests,
             params,
+            on_step=on_step,
             request_timing=True,
             step_timing=True,
         )
+        returned = time.perf_counter()
+        if self.obj is not None:
+            _callback(self.obj, "end_run", self.target, None)
         torch.cuda.synchronize()
-        wall = time.perf_counter() - start
+        end = time.perf_counter()
+        host = probe.close()
+        wall, device_tail = end - start, end - returned
         tokens = {rid: tuple(int(t) for t in out.outputs[0].token_ids) for rid, out in finished.items()}
-        if not measured:
-            return tokens, {}
-        generated = sum(map(len, tokens.values()))
         ttft = [float(r["time_to_first_token_s"]) for r in timing["requests"].values()]
+        if not measured:
+            return tokens, {"wall_s": round(wall, 6), "time_to_first_token_s": round(statistics.fmean(ttft), 6),
+                            "since_ready_s": round(start - self.ready_at, 6), "host": host}
+        generated = sum(map(len, tokens.values()))
         after = self._spans()
         extras = _callback(self.obj, "extras", self.target, {}) if self.obj is not None else {}
         metrics = {
@@ -581,11 +1020,21 @@ class _VllmEngine:
             "tokens_per_s": generated / wall,
             "peak_gpu_memory_bytes": float(torch.cuda.max_memory_allocated()),
         }
-        decode = decode_time_per_token(timing.get("steps") or [])
+        lag = int(timing.get("output_lag_steps") or 0)
+        decode = decode_time_per_token(timing.get("steps") or [], output_lag=lag, device_tail_s=device_tail,
+                                       generated=generated)
         if decode is not None:
             metrics["decode_time_per_token_s"] = decode
+        latencies = inter_token_latencies(returns)
+        if latencies:
+            metrics["inter_token_latency_p50_s"] = percentile(latencies, 50)
+            metrics["inter_token_latency_p99_s"] = percentile(latencies, 99)
         return tokens, {
             "metrics": metrics,
+            "token_digest": _token_digest(tokens),
+            "host_timing": {"output_lag_steps": lag, "device_tail_s": device_tail},
+            "host": host,
+            "trace": run_trace(timing, start, self.ready_at),
             "spans": _delta(after, before),
             "extras": extras or {},
             "generated_tokens": generated,
@@ -593,11 +1042,13 @@ class _VllmEngine:
         }
 
     def gate(self, point: SweepPoint) -> Mapping[str, tuple[int, ...]]:
-        return self._run(point, False)[0]
+        return self._run(point, "gate")[0]
 
     def custom_gate(self) -> Mapping[str, Any]:
+        if self.h1 is not None:
+            return h1_gate(self.h1["windows"])
         if self.obj is None:
-            return {"passed": True, "provided": False}
+            return {"passed": True, "provided": False} if self.pearl_c is None else _pearl_c_gate(self.pearl_c)
         got = _callback(self.obj, "gate", self.target, None)
         if got is None:
             return {"passed": True, "provided": False}
@@ -605,11 +1056,11 @@ class _VllmEngine:
             return {"passed": got, "provided": True}
         return dict(got)
 
-    def warmup(self, point: SweepPoint) -> None:
-        self._run(point, False)
+    def warmup(self, point: SweepPoint) -> Mapping[str, Any]:
+        return self._run(point, "warmup")[1]
 
     def measure(self, point: SweepPoint) -> Mapping[str, Any]:
-        return self._run(point, True)[1]
+        return self._run(point, "measure")[1]
 
     def close(self) -> None:
         try:
@@ -691,8 +1142,8 @@ class _ProcessEngine:
     def custom_gate(self) -> Mapping[str, Any]:
         return self._ask("custom_gate")
 
-    def warmup(self, point: SweepPoint) -> None:
-        self._ask("warmup", point)
+    def warmup(self, point: SweepPoint) -> Mapping[str, Any] | None:
+        return self._ask("warmup", point)
 
     def measure(self, point: SweepPoint) -> Mapping[str, Any]:
         return self._ask("measure", point)
@@ -703,10 +1154,32 @@ class _ProcessEngine:
         self.closed = True
         try:
             if self.process.is_alive():
-                self._ask("close")
+                try:
+                    self.conn.send(("close", None))
+                    self.conn.recv()
+                except (EOFError, ConnectionResetError, BrokenPipeError):
+                    # A worker that sent its error has left its loop and is closing its engine on its own; raising here
+                    # would replace that error, which the caller is propagating, with this one.
+                    pass
         finally:
             self.process.join()
             self.conn.close()
+        if self.process.exitcode:
+            raise RuntimeError(f"benchmark engine process exited with code {self.process.exitcode} while closing")
+
+
+def arm_execution(arm: Arm, preset: Preset, eager: bool) -> tuple[Preset, bool]:
+    """The preset and eagerness the arm's engine is built with: the spec's, or for a served variant
+    (`arms.served_variant`) vLLM's serving defaults in the variant's execution (`engine_args`), on its own checkpoint
+    when it names one."""
+
+    if arm.execution is None:
+        return preset, eager
+    eager = arm.execution == "eager"
+    settings = {**preset.engine_settings, "serving_defaults": True, "cuda_graphs": not eager, "enforce_eager": eager}
+    if arm.model is not None:
+        preset = replace(preset, model=arm.model, revision=arm.revision, case=None, model_digest=None)
+    return replace(preset, engine_settings=settings), eager
 
 
 class ProcessEngineFactory:
@@ -717,7 +1190,8 @@ class ProcessEngineFactory:
         self.context = mp.get_context("spawn")
 
     def create(self, arm: Arm, preset: Preset, *, resident: bool) -> BenchEngine:
-        if not self.eager:
+        preset, eager = arm_execution(arm, preset, self.eager)
+        if not eager:
             bound = build_bound(arm, preset.gpu_count)
             if bound:
                 raise ValueError(
@@ -726,8 +1200,13 @@ class ProcessEngineFactory:
                     "in the preset's engine settings)")
         if resident and not arm.resident:
             raise ResidentCapacityError(f"arm {arm.id!r} requires an isolated engine lifetime")
+        if preset.engine_settings.get("serving_defaults") and os.environ.get(INDUCTOR_DIR_MARK) != "1":
+            # Every arm's process compiles on its own, and the kernel configurations Inductor autotunes reach the numerics
+            # (a reduction's block size): one cache directory gives every arm the configurations the first one picked.
+            os.environ["TORCHINDUCTOR_CACHE_DIR"] = tempfile.mkdtemp(prefix="verity_bench_inductor_")
+            os.environ[INDUCTOR_DIR_MARK] = "1"
         parent, child = self.context.Pipe()
-        process = self.context.Process(target=_worker, args=(child, arm, preset, resident, self.eager))
+        process = self.context.Process(target=_worker, args=(child, arm, preset, resident, eager))
         process.start()
         child.close()
         try:

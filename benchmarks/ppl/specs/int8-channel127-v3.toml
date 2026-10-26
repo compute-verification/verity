@@ -1,0 +1,9 @@
+description = "the int8 W8A8 linears H1 serves (Dither's leg), recipe verity-int8-channel127/v3 on a block-FP8 checkpoint (GLM-5.3's): weights one scale per output row by v3's rule on the exact float64 weight (int8.exact), activations one per token, rounded, no rotation; lm_head int8 too; kv_b_proj bf16 as v3 stores it (vLLM absorbs it in BF16; the indexer's wk, bf16 in v3 too, is unused at T <= index_topk), attention bf16"
+
+[[linear]]
+step = "int8"
+exact = true
+linears = ["self_attn.q_a_proj", "self_attn.q_b_proj", "self_attn.kv_a_proj_with_mqa", "self_attn.o_proj",
+           "mlp.gate_proj", "mlp.up_proj", "mlp.down_proj",
+           "mlp.shared_experts.gate_proj", "mlp.shared_experts.up_proj", "mlp.shared_experts.down_proj",
+           "mlp.experts.E.gate_up_proj", "mlp.experts.E.down_proj", "lm_head"]

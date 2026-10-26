@@ -251,14 +251,14 @@ class GreedyServe(nn.Module):
 
 
 class StochasticServe(nn.Module):
-    """[R15 stoch] `GreedyServe` with the seeded temperature + top-p select of vLLM's sampler as the stand-in op
+    """`GreedyServe` with the seeded temperature + top-p select of vLLM's sampler as the stand-in op
     `vllm_iface.gumbel_topp_token_select(logits, seed, temperature, top_p, pos, splits)` — the shape of `cb_a.vllm_meta.StochasticRequest`
-    over the example CausalLM.  `seed` (int64 [1]) and [R16 stoch, coord M-0169] `splits` (int32 [steps+1]: the derived split count
+    over the example CausalLM.  `seed` (int64 [1]) and `splits` (int32 [steps+1]: the derived split count
     per sampling event, S_t = SplitsFor_v1(|live(t)|, num_SMs)) are forward INPUTS; temperature / top_p are constructor constants;
     `pos` is the logits row's position (LP-1+k for the k-th sample).  `literal_seed` (negative): the seed created inside forward —
     hidden state, refused.  `literal_splits` (negative): S as a tensor literal / a Python int inside forward — refused likewise (S is
     the workload's derived value, never the wrapper's).  `temperature=0` (negative): the rule refuses (greedy is TokenSelect_v1).
-    `constant_S`: the single-request workload's split count, passed to every select as `S` (no `splits` input)."""
+    `constant_S`: the registered split count, passed to every select as `S` (no `splits` input)."""
 
     def __init__(self, C: dict, steps: int, temperature: float = 0.8, top_p: float = 0.95, literal_seed: bool = False,
                  literal_splits: int | None = None, constant_S: int | None = None) -> None:
@@ -278,7 +278,7 @@ class StochasticServe(nn.Module):
             seed = torch.tensor([1234], dtype=torch.int64)
         if self.literal_splits is not None:
             splits = torch.full((self.steps + 1,), int(self.literal_splits), dtype=torch.int32)
-        entry = (lambda s: None) if self.constant_S is not None else (lambda s: splits[s:s + 1])   # noqa: E731
+        entry = (lambda s: None) if self.constant_S is not None else (lambda s: splits[s:s + 1])
         LP = prompt.shape[0]
         logits = self.lm(prompt, torch.arange(0, LP))
         tok = self._select(logits, seed, LP - 1, entry(0))

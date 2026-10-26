@@ -155,6 +155,38 @@ def test_a_declared_build_output_keys_the_suite(tmp_path, monkeypatch):
     assert len(set(keys)) == 3 and S.artifact_ids(suite)["pkg/.lake/cache"] == "directory"
 
 
+def test_what_the_lean_verifier_builds_keys_the_suite_by_its_sources(tmp_path, monkeypatch):
+    """verity-flock's tests run the verifier's binaries, which no plan builds (`check.py --plan` left the suite unkeyed): built by
+    check's lean-build, or this runner's `lean_build`, before the suite runs, they are keyed by the verifier's sources, so a
+    plan keys the suite as the check that ran it did, built or not.  A lakefile that requires another package keeps the bytes."""
+    import hashlib
+
+    lean = tmp_path / "verity" / "core" / "service" / "flock"
+    (lean / "Flock").mkdir(parents=True)
+    (lean / "lakefile.toml").write_text('name = "flock_verifier"\n')
+    (lean / "Flock" / "A.lean").write_text("def a := 1\n")
+    (lean / ".gitignore").write_text(".lake\n")
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n'
+                                                     '[tool.verity.tests]\nartifacts = ["verity/core/service/flock/.lake/build/bin/'
+                                                     'flock-verify", "pkg/.lake/build/bin/tool"]\n')
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    [suite] = S.discover()
+    absent = S.artifact_ids(suite)
+    assert absent["verity/core/service/flock/.lake/build/bin/flock-verify"].startswith("built from ")
+    assert absent["pkg/.lake/build/bin/tool"] == "absent"
+    (lean / ".lake" / "build" / "bin").mkdir(parents=True)
+    (lean / ".lake" / "build" / "bin" / "flock-verify").write_bytes(b"a build")
+    assert S.artifact_ids(suite) == absent, "built or not, the same sources"
+    (lean / "Flock" / "A.lean").write_text("def a := 2\n")
+    S._SOURCES.clear()
+    assert S.artifact_ids(suite) != absent, "other sources"
+    (lean / "lakefile.toml").write_text('name = "flock_verifier"\n[[require]]\nname = "mathlib"\n')
+    S._SOURCES.clear()
+    assert S.artifact_ids(suite)["verity/core/service/flock/.lake/build/bin/flock-verify"] == hashlib.sha256(b"a build").hexdigest()
+
+
 def test_jobs_default_to_the_cpus_this_process_may_use(tmp_path, monkeypatch):
     S = _suites(monkeypatch, tmp_path)
     assert 1 <= S.cpus() <= (len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count())
@@ -166,8 +198,32 @@ def test_jobs_default_to_no_more_test_processes_than_available_memory_holds(tmp_
     meminfo = tmp_path / "meminfo"
     for gb, want in ((13, 1), (20, 2), (64, 4), (1, 1)):
         meminfo.write_text(f"MemTotal:       99999999 kB\nMemAvailable:   {gb << 20} kB\n")
-        assert S.default_jobs(meminfo) == want
-    assert S.default_jobs(tmp_path / "absent") == 4
+        assert S.default_jobs(meminfo, 1e9) == want
+    assert S.default_jobs(tmp_path / "absent", 1e9) == 4
+
+
+def test_jobs_default_to_no_more_test_processes_than_the_runs_own_memory_limit_holds(tmp_path, monkeypatch):
+    """r20261019-045749-398f: an `--on auto` agent-test's 16 GiB scope on a node with 1.5 TB available started 32 processes."""
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "cpus", lambda: 32)
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text(f"MemAvailable:   {1500 << 20} kB\n")
+    assert S.default_jobs(meminfo, 16.0) == 1
+    assert S.default_jobs(meminfo, 100.0) == 11
+    assert S.default_jobs(tmp_path / "absent", 40.0) == 4
+    monkeypatch.setattr(S, "slot_mem_gb", lambda: 20.0)
+    assert S.default_jobs(meminfo) == 2
+
+
+def test_a_research_run_reservation_bounds_the_run_where_no_cgroup_caps_it(tmp_path, monkeypatch):
+    """INF-118: on cpu-2 a `research run --mem-gb 32` is a reservation, not a cgroup cap; the quick tier sized itself to the node."""
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "cgroup_mem_gb", lambda: None)
+    monkeypatch.delenv(S.SLOT_MEM_ENV, raising=False)
+    monkeypatch.setenv(S.RUN_MEM_ENV, "32")
+    assert S.slot_mem_gb() == 32.0
+    monkeypatch.setenv(S.SLOT_MEM_ENV, "200")
+    assert S.slot_mem_gb() == 200.0, "a check slot's memory, when it has one, comes first"
 
 
 def _workspace(root: Path) -> None:
@@ -328,6 +384,80 @@ def test_changed_selects_the_suites_a_change_touches_by_path_runner_or_lock(tmp_
     assert touched() == [] and _keys(S) == keys                     # check's own code decides no other suite's verdict
     (tmp_path / "tools" / "verity" / "check" / "suites.py").write_text("# the runner\n")
     assert touched() == ["a", "b"] and all(_keys(S)[n] != keys[n] for n in keys)
+
+
+def test_changed_from_a_main_the_branch_is_behind_is_the_branchs_own_change(tmp_path, monkeypatch):
+    """`--changed origin/main` on a branch behind main diffed main's own progress too (20 Oct: ~50 suites in a run): the change is
+    measured from the merge-base."""
+    _workspace(tmp_path)
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    fork = _git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "b" / "tests" / "test_b.py").write_text("def test_b():\n    assert True\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "main moves b")
+    main = _git(tmp_path, "rev-parse", "HEAD")
+    _git(tmp_path, "checkout", "-q", "-b", "topic", fork)
+    (tmp_path / "a" / "tests" / "test_a.py").write_text("def test_a():\n    pass\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "the branch moves a")
+    assert S.merge_base(main) == fork and S.merge_base(fork) == fork
+    pkgs = S.members()
+    assert [s.name for s in S.touched(S.discover(), pkgs, S.merge_base(main), S.worktree(), S.locked())] == ["a"]
+    assert [s.name for s in S.touched(S.discover(), pkgs, main, S.worktree(), S.locked())] == ["a", "b"], "the two-point diff"
+
+
+def _shipped(tmp_path: Path) -> tuple[Path, Path, str, str]:
+    """(machine repository, shipped tree, main, HEAD) as `research run` ships a commit (remote._git_ship_script): a `clone --shared`
+    of the machine's bare repository detached at the commit, here one whose repository had no `main` when it was shipped."""
+    work = tmp_path / "work"
+    work.mkdir()
+    _workspace(work)
+    _git(work, "add", "-A")
+    _git(work, "commit", "-q", "-m", "main")
+    main = _git(work, "rev-parse", "HEAD")
+    (work / "a" / "tests" / "test_a.py").write_text("def test_a():\n    assert 1\n")
+    _git(work, "add", "-A")
+    _git(work, "commit", "-q", "-m", "the branch moves a")
+    head = _git(work, "rev-parse", "HEAD")
+    bare = tmp_path / "verity.git"
+    _git(tmp_path, "init", "-q", "--bare", str(bare))
+    _git(work, "push", "-q", str(bare), f"{head}:refs/research/ship")
+    tree = tmp_path / "src" / head
+    _git(tmp_path, "clone", "-q", "--shared", "--no-checkout", str(bare), str(tree))
+    _git(tree, "-c", "advice.detachedHead=false", "checkout", "-q", "--detach", head)
+    return bare, tree, main, head
+
+
+def test_changed_origin_main_in_a_shipped_tree_without_it_fetches_it_or_names_the_fix(tmp_path, monkeypatch, capsys):
+    """proofs, 25 Oct (NCILIVE, WIRES): the pre-mark `--changed origin/main` in a shipped tree with no origin/main exited 128 in
+    `git diff` and ran no suite, ~50 min each. It fetches main from the tree's origin (the machine's repository, or for a `--cwd
+    clone` the shipped tree, whose origin/main is a remote-tracking ref), takes a SHA as given, and otherwise names the fix."""
+    bare, tree, main, head = _shipped(tmp_path)
+    S = _suites(monkeypatch, tree)
+    with pytest.raises(S.Unresolved, match=r"nor could it be fetched from origin .*--changed \$\(git rev-parse origin/main\)"):
+        S.changed_base("origin/main")
+    assert S.main(["--list", "--changed", "origin/main"]) == 2 and "Pass main's SHA" in capsys.readouterr().err
+    assert S.changed_base(main) == S.changed_base(main[:12]) == main
+    assert S.main(["--list", "--changed", main]) == 0
+    assert f"the change from {main[:12]} touches 1: a" in capsys.readouterr().out
+
+    _git(tmp_path / "work", "push", "-q", str(bare), f"{main}:refs/heads/main")     # a later launcher pushed its origin/main
+    assert S.changed_base("origin/main") == main and _git(tree, "rev-parse", "origin/main") == main
+    assert S.main(["--list", "--changed", "origin/main"]) == 0 and "touches 1: a" in capsys.readouterr().out
+
+    clone = tmp_path / "scratch" / "r1" / "tree"                                    # `research run --cwd clone`
+    _git(tmp_path, "clone", "-q", "--shared", "--no-checkout", str(tree), str(clone))
+    _git(clone, "-c", "advice.detachedHead=false", "checkout", "-q", "--detach", head)
+    S = _suites(monkeypatch, clone)
+    assert S.changed_base("origin/main") == main
+
+    _git(tree, "remote", "remove", "origin")                     # no remote (its tracking refs go with it): only the named fix
+    S = _suites(monkeypatch, tree)
+    with pytest.raises(S.Unresolved, match=r"has no commit origin/main \(a tree"):
+        S.changed_base("origin/main")
+    assert S.changed_base(main) == main
 
 
 def test_markdown_rekeys_and_selects_only_the_suites_that_list_markdown(tmp_path, monkeypatch):
@@ -702,6 +832,47 @@ def test_the_tests_get_neither_the_runners_research_variables_nor_its_pycache_pr
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
 
 
+def test_inside_a_research_run_the_tests_get_its_custody_key_and_require_the_store(tmp_path):
+    """The tests lose RESEARCH_*, the machine's store among them, so a fixture fetch skipped as "the evidence store is not
+    reachable" here and passed under a bare pytest (r20261024-030225-1ea6). With the run's custody key staged they get it as
+    check's steps do, and the store is required; with none, neither."""
+    root = tmp_path / "tree"
+    run = tmp_path / "research" / "runs" / "r1"
+    custody = tmp_path / "research" / "requests" / "r1" / "custody"
+    run.mkdir(parents=True)
+    custody.mkdir(parents=True)
+    test = ("import os\n\ndef test_env():\n"
+            "    assert (os.environ.get('CHECK_STORE_CUSTODY'), os.environ.get('VERITY_STORE_REQUIRED')) == (os.environ['WANT_C'] or None, "
+            "os.environ['WANT_R'] or None)\n")
+    _env_workspace(root, {"pkg": test})
+    extra = {"RESEARCH_RUN_ID": "r1", "RESEARCH_RUN_DIR": str(run), "WANT_C": "", "WANT_R": ""}
+    p = _run_suite(root, tmp_path, "--fresh", extra=extra)
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, "no key staged: nothing to pass, nothing required\n" + p.stdout + p.stderr
+    (custody / "store.toml").write_text("[remote]\n")
+    (custody / "cred.json").write_text("{}")
+    p = _run_suite(root, tmp_path, "--fresh", extra={**extra, "WANT_C": str(custody.resolve()), "WANT_R": "1"})
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+
+
+def test_each_test_process_gets_its_share_of_the_cpus_for_its_thread_pools(tmp_path, monkeypatch):
+    """Sized to the whole node, each xdist worker of ten lane runs ran 159-191 threads (24 Oct, load 522 on cpu-5's 192 cores):
+    each test process's OpenMP, MKL, OpenBLAS and numexpr pools get the CPUs divided by --jobs, and a size the caller set stays."""
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "cpus", lambda: 192)
+    assert [S.threads_per_process(j) for j in (1, 32, 192, 400, 0)] == [192, 6, 1, 1, 192]
+    root = tmp_path / "tree"
+    _env_workspace(root, {"pkg": "import os\n\ndef test_env():\n"
+                                 "    got = {os.environ.get(v) for v in ('OMP_NUM_THREADS', 'MKL_NUM_THREADS', 'OPENBLAS_NUM_THREADS', "
+                                 "'NUMEXPR_NUM_THREADS')}\n"
+                                 "    assert got == {os.environ['WANT']} if os.environ['WANT'] else len(got) == 1 and int(got.pop()) >= 1\n"})
+    for var in S.THREAD_VARS:
+        monkeypatch.delenv(var, raising=False)
+    p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": ""})
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+    p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": "3", **{v: "3" for v in S.THREAD_VARS}})
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+
+
 def test_a_pass_earned_on_one_machine_is_reused_on_another_and_names_its_run(tmp_path):
     """Daniel's CI update (7 Oct): a suite's pass is reused on any machine while its inputs, the base image and the check code
     are as they were.  Machine a's passes travel as a verdict pack; on machine b a change to one suite's inputs runs that suite
@@ -733,6 +904,7 @@ def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp
                           "other": "def test_other():\n    pass\n"})
     (root / "verity" / "core" / "service" / "flock").mkdir(parents=True)
     (root / "verity" / "core" / "service" / "flock" / "lakefile.toml").write_text('name = "flock"\n')
+    (root / "verity" / "core" / "service" / "flock" / ".gitignore").write_text(".lake/\n")       # as the verifier's own
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "verifier")
     # ELAN puts $HOME/.elan/bin first on the PATH, so on a machine with elan its real lake would shadow one only on the PATH
@@ -1011,10 +1183,10 @@ def _until_written_or_exited(fifo: Path, p: subprocess.Popen) -> tuple[bool, byt
         os.close(fd)
 
 
-@pytest.mark.parametrize("stop", ["SIGINT", "SIGTERM"])
+@pytest.mark.parametrize("stop", ["SIGINT", "SIGTERM", "SIGTERM SIGTERM"])
 def test_an_interrupted_run_keeps_what_finished(tmp_path, stop):
-    """A stop mid-suite (check.py's SIGINT to the step's processes, or `research cancel`'s SIGTERM to the run's group): the
-    tests that passed before it are kept, and the suite's `--basetemp` is gone."""
+    """A stop mid-suite (check.py's SIGINT to the step's processes, or `research cancel`'s SIGTERM to the run's group, which `uv
+    run` forwards to the runner a second time): the tests that passed before it are kept, and the suite's `--basetemp` is gone."""
     import signal
 
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
@@ -1033,7 +1205,8 @@ def test_an_interrupted_run_keeps_what_finished(tmp_path, stop):
     written, before = _until_written_or_exited(gate, p)    # test_heavy's two tests have passed; test_block is running
     assert written, f"the runner ended before test_block ran:\n{before.decode(errors='replace')}"
     assert len(list(tmp.glob("verity-suite-[0-9]*"))) == 1
-    os.killpg(p.pid, getattr(signal, stop))
+    for s in stop.split():
+        os.killpg(p.pid, getattr(signal, s))
     out = (before + p.communicate()[0]).decode(errors="replace")
     assert p.returncode != 0 and "2 per-test passes kept" in out, out
     assert list(tmp.glob("verity-suite-[0-9]*")) == [], out
@@ -1275,6 +1448,47 @@ def test_a_traced_pass_is_reused_until_a_file_its_run_read_changes(tmp_path):
     assert p.returncode == 0 and "4 passed in" in p.stdout, p.stdout
 
 
+def test_a_read_through_a_process_wide_cache_counts_for_every_module_that_uses_the_cache(tmp_path):
+    """Two test modules read `lib` through one `lru_cache`d helper, so only the first to call it opens the files: the second's
+    pass must still miss when a file only it checks changes (verity-vllm's lint and `tests/lint/_ratchet.py`). Each module's
+    traced pass is kept on its run's read set, every process's and every module's together, so the cache can't hide a read."""
+    import shutil
+
+    root, lib = tmp_path / "tree", tmp_path / "tree" / "lib"
+    (root / "tools" / "verity" / "check").mkdir(parents=True)
+    shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
+    (root / ".gitignore").write_text("__pycache__/\n")
+    (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg", "lib"]\n')
+    lib.mkdir()
+    (lib / "pyproject.toml").write_text('[project]\nname = "lib"\n')
+    for name, text in {"first.txt": "1\n", "second.txt": "2\n", "unread.py": "X = 1\n"}.items():
+        (lib / name).write_text(text)
+    (root / "pkg" / "tests").mkdir(parents=True)
+    (root / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\ndependencies = ["lib"]\n\n[tool.pytest.ini_options]\n'
+                                                 'testpaths = ["tests"]\n\n[tool.verity.tests]\nparallel = true\n')
+    for name, text in {"_scan.py": "import functools, pathlib\n\nLIB = pathlib.Path(__file__).resolve().parents[2] / 'lib'\n\n\n"
+                                   "@functools.lru_cache(maxsize=None)\ndef values():\n"
+                                   "    return {p.name: p.read_text() for p in sorted(LIB.glob('*.txt'))}\n",
+                       "test_first.py": "from _scan import values\n\ndef test_first():\n    assert values()['first.txt'] == '1\\n'\n",
+                       "test_second.py": "from _scan import values\n\ndef test_second():\n    assert values()['second.txt'] == '2\\n'\n"}.items():
+        (root / "pkg" / "tests" / name).write_text(text)
+    _git(root, "init", "-q")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "shipped")
+
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "2 per-test passes kept" in p.stdout, p.stdout
+    (lib / "unread.py").write_text("X = 2\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "cached  pkg" in p.stdout and "traced: every file its run read" in p.stdout, p.stdout
+
+    (lib / "second.txt").write_text("changed\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode != 0 and "tests/test_second.py::test_second" not in _reused(tmp_path), p.stdout
+    assert "FAILED tests/test_second.py::test_second" in (tmp_path / "logs" / "pkg.log").read_text()
+
+
 def test_a_suite_that_is_not_parallel_reuses_its_whole_traced_pass_until_a_file_its_run_read_changes(tmp_path):
     """Its tests may depend on their order, so it reuses no test's pass, but a run of all of them that the guard traced answers
     for the suite while every read holds; a run in which a test started a program no tracer sees into keeps no such pass."""
@@ -1475,6 +1689,31 @@ def test_a_parallel_suite_starts_the_test_its_kept_pass_says_is_longest(tmp_path
     assert "tests/test_z.py::test_zz" in first.values(), log.read_text()
 
 
+def test_a_run_of_some_files_starts_the_longest_test_it_collects(tmp_path):
+    """The guard got the suite's `workers` longest kept tests, and a run of some of its files collected none of them: a sixth of
+    verity-vllm's files (r20261025-202541-cb5f) ran its own longest two back to back on one worker while three sat idle."""
+    import json
+
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_z.py").write_text("".join(f"def test_{c}():\n    pass\n\n" for c in "abcd")
+                                     + "import os as _os, pytest as _pytest\n\n\n@_pytest.fixture(autouse=True)\n"
+                                     "def _order(request):\n    with open(_os.environ['ORDER_LOG'], 'a') as f:\n"
+                                     "        f.write(_os.environ.get('PYTEST_XDIST_WORKER', '-') + ' ' + request.node.nodeid + '\\n')\n")
+    kept = tmp_path / "cache" / "per-test" / "pkg"
+    kept.mkdir(parents=True)
+    (kept / "all--earlier.json").write_text(json.dumps({"when": "2026-10-25 00:00", "passed": {
+        "tests/test_heavy.py::test_heavy": 300.0, "tests/test_heavy.py::test_heavy_too": 200.0, "tests/test_z.py::test_d": 100.0}}))
+    log = tmp_path / "order.log"
+    p = _run_suite(root, tmp_path, "--jobs", "2", "--", "tests/test_z.py", extra={"ORDER_LOG": str(log)})
+    assert p.returncode == 0 and "on 2 workers" in p.stdout, p.stdout
+    first = {}
+    for line in log.read_text().splitlines():
+        worker, node = line.split(" ", 1)
+        first.setdefault(worker, node)
+    assert "tests/test_z.py::test_d" in first.values(), log.read_text()
+
+
 def test_a_change_under_a_name_git_quotes_selects_the_suite_that_owns_it(tmp_path, monkeypatch):
     """`git diff --name-only` quotes a name with bytes outside ASCII (`"a/\\303\\251.py"`), which is under no suite's inputs, so
     `--changed` (the quick tier `research queue ready` runs) skipped the suite owning such a file."""
@@ -1533,6 +1772,17 @@ def test_the_suites_in_one_process_get_the_fewest_slots_that_finish_them_with_th
     assert S.serial_slots([5.0], 0, 32) == 32 and S.serial_slots([], 3, 32) == 0
 
 
+def test_the_suites_in_one_process_get_no_more_slots_than_the_memory_holds(tmp_path, monkeypatch):
+    """18 Oct: a 16 GiB agent-test job on 48 CPUs started 44 test processes, which only the parallel suites' workers were sized
+    against memory for, and the OOM killer took the whole scope."""
+    S = _suites(monkeypatch, tmp_path)
+    assert S.serial_slots([5.0] * 48, 0, 48, 16) == 1, "16 GiB holds one process at TEST_PROCESS_GB"
+    assert S.serial_slots([5.0] * 48, 0, 48, 64) == 64 // S.TEST_PROCESS_GB
+    assert S.serial_slots([100.0] * 40, 1, 32, 1000) == 31 and S.serial_slots([100.0] * 40, 1, 32, None) == 31
+    assert S.serial_slots([100.0] * 40, 1, 32, 2) == 1, "even a job smaller than one process runs its suites, one at a time"
+    assert S.serial_slots([], 3, 32, 16) == 0
+
+
 def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_path):
     import json
 
@@ -1574,3 +1824,39 @@ def test_mem_gb_falls_back_to_the_jobs_cgroup_limit(tmp_path, monkeypatch):
     (root / "sys/fs/cgroup/research.slice/job.scope/memory.max").write_text("max\n")
     assert S.cgroup_mem_gb(root) == 700.0
     assert S.cgroup_mem_gb(tmp_path / "nowhere") is None
+
+
+def test_the_verifiers_lake_build_holds_the_trees_build_lock_so_two_runs_of_one_tree_build_in_turn(tmp_path, monkeypatch):
+    """CI-147: on a node every run of a commit shares its source tree, and a train's check and its touched-suites run built the
+    verifier's `.lake` there at once (21 Oct: 4430e936c3d8's link of flock-verify found its output gone).  `lake` runs under
+    `.lake/verity-build.lock`, so a second build of the tree waits for the first."""
+    mod = _suites(monkeypatch, tmp_path)
+    lean = tmp_path / "verity" / "core" / "service" / "flock"
+    lean.mkdir(parents=True)
+    (lean / "lakefile.toml").write_text('name = "f"\n')
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "lake").write_text('#!/bin/sh\nflock -n .lake/verity-build.lock true && echo unlocked || echo locked\n')
+    (bin_ / "lake").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("HOME", str(tmp_path))                       # ELAN puts $HOME/.elan/bin first
+    monkeypatch.setattr(mod, "flock_lean", lambda: lean)
+    log = tmp_path / "lean-build.log"
+    assert mod.lean_build(log) is None
+    assert log.read_text().strip() == "locked"
+
+
+def test_a_fetch_that_prints_no_report_names_its_error_and_keeps_its_own_log(tmp_path, monkeypatch, capsys):
+    """check's pytest and lean-suites steps fetch into one logs directory: each call's log stays its own, and a fetch that
+    crashed says why in the step's output."""
+    S = _suites(monkeypatch, tmp_path)
+    crash = subprocess.CompletedProcess([], 1, "", "research data fetch-fixtures: [Errno 2] No such file or directory: 'x/.tmp-a'\n")
+    monkeypatch.setattr(S.subprocess, "run", lambda *a, **k: crash)
+    first, second = tmp_path / "fetch-fixtures-1.log", tmp_path / "fetch-fixtures-2.log"
+    assert S.fetch_fixtures({"f/a.bin": "art:" + "0" * 64}, first) == {"f/a.bin"}
+    out = capsys.readouterr().out
+    assert f"fetch-fixtures failed (rc 1); log: {first}" in out and "[Errno 2] No such file or directory" in out
+    ok = subprocess.CompletedProcess([], 0, '{"entries": [], "fetch": {"blobs": {"fetched": 0, "bytes": 0}}}', "")
+    monkeypatch.setattr(S.subprocess, "run", lambda *a, **k: ok)
+    assert S.fetch_fixtures({"f/a.bin": "art:" + "0" * 64}, second) == set()
+    assert "Errno 2" in first.read_text() and "Errno 2" not in second.read_text()

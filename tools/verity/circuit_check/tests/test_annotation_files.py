@@ -13,7 +13,6 @@ from pathlib import Path
 
 import pytest
 
-from circuit_check import targets as T
 from verity.ml.circuits import annotations as A
 from verity.ml.circuits import codec
 from verity.ml.circuits import partition_object as PO
@@ -23,7 +22,7 @@ from verity.ml.circuits.program import Program
 ROOT = Path(__file__).resolve().parents[4]
 FILES = {
     "core": ROOT / "verity" / "ml" / "circuits" / "ops" / "annotations.json",
-    "vllm": ROOT / "integrations" / "vllm" / "verity_vllm" / "program" / "registry" / "annotations.json",
+    "vllm": ROOT / "verity" / "ml" / "definitions" / "registry" / "annotations.json",
 }
 _TARGET = re.compile(r"^(def|node|wire|port):([^/]+)")
 #: specializations of one Definition validated against, smallest first
@@ -36,11 +35,14 @@ def _stem(key: str) -> str | None:
 
 
 @pytest.fixture(scope="module")
-def families() -> dict[str, list]:
-    by: dict[str, list] = {}
-    for fn in T.reachable(T.catalog()).values():
-        by.setdefault(T.family(fn), []).append(fn)
-    return {k: sorted(v, key=lambda f: getattr(f, "gates", 0))[:PER_FAMILY] for k, v in by.items()}
+def families(catalog) -> dict[str, list[str]]:
+    """Each family the circuit-check catalog reaches, the ids of its `PER_FAMILY` smallest specializations (ties by id, so the
+    catalog's records and a whole build give the same ones), in the catalog's order.  A test makes only the ones it reads
+    (`Catalog.make`): one made from its record builds its body when it is encoded."""
+    by: dict[str, list[tuple[int, str]]] = {}
+    for fid, (fam, gates) in catalog.reached.items():
+        by.setdefault(fam, []).append((gates, fid))
+    return {k: [fid for _gates, fid in sorted(v)[:PER_FAMILY]] for k, v in by.items()}
 
 
 def _signature(fn):
@@ -68,8 +70,9 @@ def _files():
     return [pytest.param(owner, path, id=str(path.relative_to(ROOT))) for owner, path in FILES.items() if path.exists()]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("owner,path", _files())
-def test_annotation_file(owner, path, families):
+def test_annotation_file(owner, path, families, catalog):
     ann = json.loads(path.read_text())
     assert ann.get("format") == A.FORMAT, f"{path.name}: not {A.FORMAT}"
     entries = ann["entries"]
@@ -82,7 +85,7 @@ def test_annotation_file(owner, path, families):
             by_stem.setdefault(stem, []).append(e)
     problems = []
     for stem, mine in sorted(by_stem.items()):
-        fns = families.get(stem)
+        fns = [catalog.make(fid) for fid in families.get(stem, ())]
         if not fns:
             problems.append(f"{stem}: no Definition the circuit-check catalog reaches")
             continue
@@ -92,7 +95,7 @@ def test_annotation_file(owner, path, families):
             v = A.validate({"format": A.FORMAT, "entries": mine}, _calling(fn))
             problems += [f"{fn.id}: {x}" for x in v.errors] + [f"{fn.id}: stale {x}" for x in v.stale] + [f"{fn.id}: absent {x}" for x in v.absent]
     # The whole file once more, for what spans Definitions: each (key, field) set once, groups closed.
-    some = _calling(next(iter(families.values()))[0])
+    some = _calling(catalog.make(next(iter(families.values()))[0]))
     whole = A.validate(ann, some)
     problems += [str(x) for x in whole.errors if x["code"] not in ("unresolved",)]
     assert not problems, "\n".join(problems)

@@ -4,14 +4,14 @@ The unit of comparison is the harness's: the IDENTITY_KEY tuple `(program_digest
 element_range, rank)` (`tests/regression/checks/manifest_digest._identity_key`).  Differences are paired by their *address*
 `(request_id, step, invocation, op_path)` and classified::
 
-    member_rename     same address and range, different member name         -> a v1 spelling the structure does not give (a residual)
+    member_rename     same address and range, different member name         -> a v1 spelling the structure does not give
     range             same address and member, different element range      -> the two disagree on the rows / width of one member
     only_v1           an address v1 names and v2 does not                    -> a v1 vocabulary claim the dataflow does not support, or a v2 gap
     only_v2           an address v2 names and v1 does not                    -> a crossing v1's vocabulary called interior (F-r19-int-20), or a v2 excess
 
-`explain` adds the reason the bridge knows for each class (the v2 row's `boundary` annotation: crossing rows / returned rows /
-structural member; the v1 row's `spec`), so a report can say for every difference whether it is a named residual, a v1 by-name table
-the structure contradicts, or a v2 gap.  Nothing here changes either manifest.
+`explain` adds the reason the bridge knows for each class (the v2 row's structural member and its `boundary` annotation: crossing rows /
+returned rows; the v1 row's `spec`), so a report can say for every difference whether it is a v1 spelling, a v1 by-name table the
+structure contradicts, or a v2 gap.  Nothing here changes either manifest.
 """
 
 from __future__ import annotations
@@ -20,13 +20,15 @@ import json
 from collections import Counter, defaultdict
 from typing import Any, Iterable
 
+from verity.ml.circuits.codec import canonical_json
+
 __all__ = ["identity_key", "compare", "summarize"]
 
 IDENTITY_KEY = ("program_digest", "request_id", "step", "invocation", "op_path", "output_member", "element_range", "rank")
 
 
 def identity_key(r: dict[str, Any]) -> str:
-    return json.dumps([r[k] if k != "element_range" else list(r[k]) for k in IDENTITY_KEY], separators=(",", ":"), sort_keys=True)
+    return canonical_json([r[k] if k != "element_range" else list(r[k]) for k in IDENTITY_KEY]).decode()
 
 
 def _address(r: dict[str, Any]) -> tuple:
@@ -92,7 +94,7 @@ def _sig(r: dict[str, Any], side: str) -> tuple:
     op_fold = ".".join("<k>" if p.isdigit() else p for p in parts)
     if side == "v2":
         bd = r.get("boundary") or {}
-        return (op_fold, r["output_member"], r.get("spec"), bd.get("structural_member"), "returned" if bd.get("returned_rows") else "", "crossing" if bd.get("crossing_rows") else "")
+        return (op_fold, r["output_member"], r.get("spec"), r["output_member"], "returned" if bd.get("returned_rows") else "", "crossing" if bd.get("crossing_rows") else "")
     return (op_fold, r["output_member"], r.get("spec"))
 
 
@@ -104,7 +106,7 @@ def summarize(cmp: dict[str, Any]) -> dict[str, Any]:
     for d in cmp["member_rename"]:
         ren[(_sig(d["v1"], "v1")[:3], _sig(d["v2"], "v2"))] += 1
     out["member_rename"] = [{"v1": {"op_path": k[0][0], "member": k[0][1], "spec": k[0][2]}, "v2": {"op_path": k[1][0], "member": k[1][1], "spec": k[1][2], "structural": k[1][3]},
-                             "n": n, "reason": "v1 member name differs from the structural member: a spelling the structure does not give (named residual)"}
+                             "n": n, "reason": "v1 member name differs from the structural member: a spelling the structure does not give"}
                             for k, n in sorted(ren.items(), key=lambda kv: -kv[1])]
     rng: Counter = Counter()
     rng_ex: dict = {}

@@ -9,63 +9,16 @@ file the prover writes for the decoded proof `p`: each `Vec` as its `u64` length
 `le64(lo) ‖ le64(hi)`, the vectors the verifier requires empty (`matrix_evals`, the grinding nonces but the query, claim and
 consistency nonces, `sumcheck_transcript`) empty, each ring switch's grinding nonce `0`, and level 0's hiding messages
 `Some`. `Shaped sh p` is what the decoder checks of the lengths: every fixed-length vector at its length for the shape, every
-digest `hashLen` bytes, every opened salt `saltLen` bytes, the inner proof's salts 192 bytes and its path entries 64.
+digest `hashLen` bytes, every opened salt `saltLen` bytes, the inner proof's salts 192 bytes and its path entries 64; and
+every query, claim and consistency nonce `0` (`NoncesZero`, R4).
 -/
 
 namespace FlockSoundness.Discharge.ZkView
 
 open Flock Zk
 
-/-- A length or a `u64` field, little-endian. -/
-def wLen (n : Nat) : ByteArray := le64 n.toUInt64
-
-/-- A `Vec<T>`: its length, then its elements. -/
-def wVec {α : Type} (f : α → ByteArray) (xs : Array α) : ByteArray := xs.foldl (fun b x => b ++ f x) (wLen xs.size)
-
-/-- A `Vec<u8>`. -/
-def wBytes (b : ByteArray) : ByteArray := wLen b.size ++ b
-
-/-- An `(F128, F128)`. -/
-def wPair (p : F128 × F128) : ByteArray := p.1.toBytes ++ p.2.toBytes
-
-/-- An `F256`: `c0`, then `c1`. -/
-def wF256 (x : F256) : ByteArray := x.c0.toBytes ++ x.c1.toBytes
-
-/-- Each level's `opened_salts`, present when the scheme salts its leaves. -/
-def wSalts (sh : Shape) (xs : Array ByteArray) : ByteArray :=
-  match sh.saltLen with
-  | none => ByteArray.empty
-  | some _ => wVec id xs
-
-/-- A level's openings: its rows, its Merkle siblings, its salts. -/
-def wLevel (sh : Shape) (p : LevelProof) : ByteArray :=
-  wVec (wVec F128.toBytes) p.rows ++ wVec id p.siblings ++ wSalts sh p.salts
-
-/-- The commitment's parameters. -/
-def wParams (p : PcsParams) : ByteArray :=
-  le64 p.m ++ le64 p.logInvRate ++ le64 p.logBatchSize ++ le32 p.profile ++
-    (match p.numLanes with
-     | none => ByteArray.mk #[0]
-     | some x => ByteArray.mk #[1] ++ le64 x) ++
-    le32 p.merkleHash
-
-/-- `R1csProofLigerito`'s Ligerito proof, level 0's hiding messages excluded. -/
-def wLigerito (sh : Shape) (l : LigeritoProof) : ByteArray :=
-  wVec id l.initialCap ++ wLevel sh l.initialProof ++ wVec (wVec id) l.recursiveCaps ++
-    wVec (wLevel sh) l.recursiveProofs ++
-    (wVec F128.toBytes l.finalProof.yr ++ wVec (wVec F128.toBytes) l.finalProof.rows ++ wVec id l.finalProof.siblings ++
-      wSalts sh l.finalProof.salts) ++
-    wLen 0 ++ wVec (fun m : F256 × F256 => wF256 m.1 ++ wF256 m.2) l.messages ++ wVec le64 l.queryNonces ++
-    wVec F128.toBytes l.oodValues ++ wLen 0 ++ wVec le64 l.claimNonces ++ wVec le64 l.consistencyNonces
-
-/-- The commitment and `R1csProofLigerito` (§8's pair, with the `--zk` differences). -/
-def wProof (sh : Shape) (p : Proof) : ByteArray :=
-  wVec id p.cap ++ wParams p.params ++
-    (wVec F128.toBytes p.zerocheck.round1ab ++ wVec F128.toBytes p.zerocheck.round1c ++ wVec wPair p.zerocheck.rounds ++
-      p.zerocheck.finalA.toBytes ++ p.zerocheck.finalB.toBytes ++ p.zerocheck.finalC.toBytes ++ wLen 0) ++
-    (wVec wPair p.lincheck.rounds ++ wVec F128.toBytes p.lincheck.zPartial ++ wLen 0 ++ wLen 0) ++
-    wVec (fun v => wVec F128.toBytes v ++ wLen 0) p.ringSwitches ++ wLen 0 ++
-    wLigerito sh p.ligerito
+-- The pair's encoder is the verifier's own (`Flock.Wire`, Proof.lean), which `decodeProof` compares a file with.
+export Flock.Wire (wLen wVec wBytes wPair wF256 wSalts wLevel wParams wLigerito wProof)
 
 /-- Level 0's hiding messages, as `Some`. -/
 def wLevel0 (m : Level0Msgs) : ByteArray :=
@@ -95,7 +48,12 @@ def LevelOk (sh : Shape) (l : Level) (w : Nat) (p : LevelProof) : Prop :=
 /-- A cap of level `l`: `2^cap` digests of `hashLen` bytes. -/
 def CapOk (sh : Shape) (l : Level) (c : Array ByteArray) : Prop := c.size = 2 ^ l.cap ∧ ∀ s ∈ c, s.size = sh.hashLen
 
-/-- **The lengths `Zk.decode sh` checks**, and a file short enough for its lengths to fit a `u64`. -/
+/-- Every grinding nonce `decodeProof` and `Zk.decode` read is `0`, the only one they accept (R4). -/
+def NoncesZero (lg : LigeritoProof) : Prop :=
+  (∀ x ∈ lg.queryNonces, x = 0) ∧ (∀ x ∈ lg.claimNonces, x = 0) ∧ (∀ x ∈ lg.consistencyNonces, x = 0)
+
+/-- **The lengths `Zk.decode sh` checks**, its grinding nonces `0`, and a file short enough for its lengths to fit a
+`u64`. -/
 def Shaped (sh : Shape) (p : ZkProof) : Prop :=
   let s := sh.sched
   let R := s.levels.size - 1
@@ -114,6 +72,6 @@ def Shaped (sh : Shape) (p : ZkProof) : Prop :=
     LevelOk sh (lvl R) 16 ⟨lg.finalProof.rows, lg.finalProof.siblings, lg.finalProof.salts⟩ ∧
     lg.messages.size = s.k0 + 8 + 7 * (R - 1) ∧ lg.queryNonces.size = R + 1 ∧ lg.oodValues.size = 1 + 2 * R ∧
     lg.claimNonces.size = 3 * R + 2 ∧ lg.consistencyNonces.size = R + 1 ∧
-    (∀ x ∈ p.inner.salts, x.size = 192) ∧ (∀ q ∈ p.inner.paths, ∀ x ∈ q, x.size = 64)
+    (∀ x ∈ p.inner.salts, x.size = 192) ∧ (∀ q ∈ p.inner.paths, ∀ x ∈ q, x.size = 64) ∧ NoncesZero lg
 
 end FlockSoundness.Discharge.ZkView

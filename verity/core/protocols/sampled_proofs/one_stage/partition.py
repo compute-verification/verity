@@ -9,17 +9,23 @@ and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the temp
   record made before the canonical envelope names `{"program", "query"}`; `digest` gives it the envelope's rule,
   `SHA-512("verity/partition/v1\\0" || canon(object))`, which the roots registered with it bind.
 * **Units** are core's evaluation (`partition_object.evaluate`) of a query of valid form (`partition_object.validate`):
-  `QueryRefused` for a program that is not topological, or one the query does not apply to. The template queries,
-  `Q_word` v1 at `X = 16` (the served query) and `Q_call` v1 at `X <= 16` are the ones applied here, so that a `Q_word`
-  or `Q_call` unit commits at most `UNIT_BITS` bits, the literal limit: `Q_word`'s width rule lets a unit of one value
-  commit up to `W` bits and `Q_call`'s counts computing gates only, so a program with a wider unit (for `Q_call`, its
-  Definition's activation's committed bits, constants and Input gates counted) is refused, as is one with a template of
-  no gate. A template query has no width rule. `ranges`, `units` and `strata` read their units in canonical order (node order,
-  then member, for a template query; Call order, then the Call's own, for `Q_word` and `Q_call`), and `unit_gates` gives
+  `QueryRefused` for a program that is not topological, or one the query does not apply to. The template queries (the
+  served ones: a served window registers a population program under one), `Q_word` v1 at `X = 16` and `Q_call` v1 at
+  `X <= 16` are the ones applied here. A template query reads the root body only; `Q_word` and `Q_call` lay out one
+  activation of each distinct Call's Definition gate by gate, so they cost its unrolled size
+  (`benchmarks/verifier_cost/`'s `partition`). Every unit's committed bits fit a public size class (`UNIT_CLASSES`,
+  powers of two from 16 to `UNIT_CLASS_MAX` bits; ASK-61, Daniel 19 Oct 2:59 PM PDT, provisional), its class the least
+  that holds them (`unit_class`), a public property of its Definition: a program with a unit wider than the widest class
+  is refused (a template instance's bits are its distinct returned gates', `_template_bits`; a `Q_call` unit's count
+  the constants and Input gates of its Definition's activation, `_committed_bits`, which `Q_call`'s width rule leaves
+  out; a `Q_word` unit's are its cut's), as is one with a template of no gate. `ranges`, `units` and `strata` read their
+  units in canonical order (node order, then member, for a template query; Call order, then the Call's own, for
+  `Q_word` and `Q_call`), and `unit_gates` gives
   each unit's root gates.
 * **Programs**: `population_program` (instances of one template, `TemplateInstances_v1{template, N}`) and
   `mixed_population_program` (of several, `TemplatePopulations_v1{templates, counts}`), whose binding records name the
-  templates by descriptor id. v0 of each, which names only the counts, is kept for the records made with it
+  templates by descriptor id, are `verity.ml.circuits.population`'s, named here too: a serving stack builds its window's
+  program with the same builders. v0 of each, which names only the counts, is kept for the records made with it
   (`POPULATION_VERSIONS`).
 
 The verifier holds its own copy of the program and applies the query itself (`units`); it never takes a population or a
@@ -32,78 +38,29 @@ from typing import Any, Mapping, Sequence
 
 from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.cut import boundary_widths, call_scope
-from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.codec import descriptor_id, program_digest
 from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.partition_object import (FORMAT, QueryRefused, program_sha512, template_id,
                                         template_instance_query, template_instances_query)
+from verity.ml.circuits.population import POPULATION_VERSIONS, mixed_population_program, population_program
 from verity.ml.circuits.program import Program, is_input
-from verity.ml.circuits.refs import coll_concat
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.ml.circuits.types import Value
 
 _PRE_CANONICAL = {"program", "query"}
 Q_WORD = ("Q_word", 1)
-#: The literal limit: the bits a unit commits.
-UNIT_BITS = 16
+#: `Q_word` v1's `X`, and the most `Q_call` v1's `X` may be: the width rule of the queries applied here.
+QUERY_X = 16
+#: The widest public size class of a unit's committed bits (the claims' `Claims.Sampling.unitClassMax`). 16 sets the
+#: classes back to the former literal limit alone.
+UNIT_CLASS_MAX = 262_144
+#: The public size classes, ascending: the powers of two from 16 to `UNIT_CLASS_MAX` (the claims' `unitClasses`).
+UNIT_CLASSES = tuple(16 << i for i in range((UNIT_CLASS_MAX // 16).bit_length()))
 
 
-#: The population programs' versions, the builders' default first. v1 names its templates (each one's descriptor id) in its
-#: binding record beside the counts, so the Definition's identity determines its body. v0 names the counts alone, so two
-#: populations of equal counts over different templates share its id; it stays buildable for the records made with it.
-POPULATION_VERSIONS = (1, 0)
-
-
-def _population_version(version: int) -> int:
-    if version not in POPULATION_VERSIONS:
-        raise ValueError(f"no population program v{version}: the versions are {POPULATION_VERSIONS}")
-    return version
-
-
-def mixed_population_program(members: Sequence[tuple[SpecializedDefinition, int]], *, version: int = 1) -> Program:
-    """`TemplatePopulations_v1{templates, counts}`: one batch per member `(template, n)`, in order; member j's parameters are
-    `j.<name>`, arrays over its instances, and the result is the tuple of the batches' results. `templates` are the members'
-    descriptor ids, in order. `version=0` builds `TemplatePopulations_v0{counts}` (`POPULATION_VERSIONS`)."""
-    if not members or any(n < 1 for _, n in members):
-        raise ValueError("every member has at least one instance")
-    _population_version(version)
-    sigs = [t.signature() for t, _ in members]
-
-    def signature(S):
-        params = tuple((f"{j}.{name}", Array(n, t)) for j, ((ps, _), n) in enumerate(zip(sigs, S.counts)) for name, t in ps)
-        return params, Tuple(*(Array(n, ret) for (_, ret), n in zip(sigs, S.counts)))
-
-    def body(B, S, *args):
-        outs, at = [], 0
-        for (t, _), (ps, _) in zip(members, sigs):
-            outs.append(B.batch(t, *args[at:at + len(ps)], axes=(0,) * len(ps)))
-            at += len(ps)
-        return coll_concat(signature(S)[1], outs)
-
-    named = {} if version == 0 else {"templates": tuple(descriptor_id(t) for t, _ in members)}
-    defn = CompositeDefinition("TemplatePopulations", version, (*named, "counts"), signature, body,
-                               doc="independent instances of " + ", ".join(f"{n} x {t.id}" for t, n in members), register=False)
-    return Program(bind(defn, **named, counts=tuple(n for _, n in members)))
-
-
-def population_program(template: SpecializedDefinition, n: int, *, version: int = 1) -> Program:
-    """`TemplateInstances_v1{template, N=n}`: `n` independent instances of `template` as one batch, every parameter an array
-    over instances; `template` is its descriptor id. Instance i of the batch is instance i of the input set it is built for.
-    `version=0` builds `TemplateInstances_v0{N=n}` (`POPULATION_VERSIONS`)."""
-    if n < 1:
-        raise ValueError("a population has at least one instance")
-    _population_version(version)
-    params, ret = template.signature()
-
-    def signature(S):
-        return tuple((name, Array(S.N, t)) for name, t in params), Array(S.N, ret)
-
-    def body(B, S, *args):
-        return B.batch(template, *args, axes=(0,) * len(args))
-
-    named = {} if version == 0 else {"template": descriptor_id(template)}
-    defn = CompositeDefinition("TemplateInstances", version, (*named, "N"), signature, body,
-                               doc=f"{n} independent instances of {template.id}", register=False)
-    return Program(bind(defn, **named, N=n))
+def unit_class(bits: int) -> int | None:
+    """The size class of a unit that commits `bits` bits: the least of `UNIT_CLASSES` that holds them, None when none
+    does."""
+    return next((w for w in UNIT_CLASSES if bits <= w), None)
 
 
 def partition(program: Program, query: Mapping[str, Any]) -> dict[str, Any]:
@@ -118,7 +75,8 @@ def digest(obj: Mapping[str, Any]) -> str:
 
 
 def _check_word(part: PO.Partition) -> None:
-    """`Q_word`'s cut commits at most `UNIT_BITS` bits a unit: each Definition's cut, once, on its Call's graph."""
+    """Each `Q_word` unit's committed bits fit a public class (`unit_class`): each Definition's cut, once, on its Call's
+    graph."""
     seen: set[str] = set()
     for p, (_k, c) in enumerate(part.calls):
         fid = descriptor_id(c.fn)
@@ -129,10 +87,10 @@ def _check_word(part: PO.Partition) -> None:
         if len(owner) != g.n:
             raise QueryRefused(f"{fid}'s cut leaves a computing gate out", {"definition": fid})
         ob, _ = boundary_widths(g, owner)
-        wide = [u for u, b in enumerate(ob) if b > UNIT_BITS]
+        wide = [u for u, b in enumerate(ob) if unit_class(b) is None]
         if wide:
-            raise QueryRefused(f"unit {wide[0]} of {fid} commits {ob[wide[0]]} bits, more than {UNIT_BITS}",
-                               {"definition": fid, "unit": wide[0], "bits": ob[wide[0]]})
+            raise QueryRefused(f"unit {wide[0]} of {fid} commits {ob[wide[0]]} bits, more than the widest class, "
+                               f"{UNIT_CLASS_MAX}", {"definition": fid, "unit": wide[0], "bits": ob[wide[0]]})
 
 
 def _committed_bits(fn: Any, units: Sequence[tuple[int, int]]) -> list[int]:
@@ -155,29 +113,52 @@ def _committed_bits(fn: Any, units: Sequence[tuple[int, int]]) -> list[int]:
     return [sum(width[g] for g in range(a, b) if inp[g] or last[g] >= b) for a, b in units]
 
 
+def _template_bits(fn: Any) -> int:
+    """The bits one instance of template `fn` commits: the summed widths, as its return type gives them, of the distinct
+    gates of its activation that it returns. A template has no Input gate below the root, and nothing outside an instance
+    reads its gates but through its returns, so this is `_committed_bits` of the whole activation, read off the return's
+    references alone rather than the activation's gates."""
+    widths = fn.signature()[1].leaf_widths()
+    if not hasattr(fn, "body"):
+        return sum(widths)
+    _c, call = call_scope(fn)
+    lo, seen, bits = call.offset, set(), 0
+    for r, w in zip(fn.body.ret, widths):
+        g = resolve(call, r)
+        if lo <= g < lo + fn.gates and g not in seen:
+            seen.add(g)
+            bits += w
+    return bits
+
+
 def _check_units(program: Program, part: PO.TemplatePartition | PO.CallPartition) -> None:
-    """Refuses a template of no gate, and a `Q_call` unit that commits more than `UNIT_BITS` bits (`_committed_bits`,
-    constants counted, which `Q_call`'s width rule leaves out), each Definition once, as activations of one Definition
-    commit alike."""
+    """Refuses a template of no gate, and a template instance or `Q_call` unit whose committed bits fit no public class
+    (`unit_class`; `_template_bits`, and `_committed_bits` with constants counted, which `Q_call`'s width rule leaves
+    out), each Definition once, as activations of one Definition commit alike."""
     if isinstance(part, PO.TemplatePartition):
-        for k, t, _first, n in part.ranges:
-            if n and program.root.body.nodes[k].fn.gates == 0:
+        templates = {t: program.root.body.nodes[k].fn for k, t, _first, n in part.ranges if n}
+        for t, fn in templates.items():
+            if fn.gates == 0:
                 raise QueryRefused(f"template {t} has no gate", {"template": t})
+            bits = _template_bits(fn)
+            if unit_class(bits) is None:
+                raise QueryRefused(f"an instance of {t} commits {bits} bits, more than the widest class, {UNIT_CLASS_MAX}",
+                                   {"template": t, "bits": bits})
         return
     for cut in {cut.fn.id: cut for _k, cut in part.calls}.values():
         fn = cut.fn
         bits = _committed_bits(fn, [(lo, hi) for lo, hi, _path in cut.units])
-        wide = next((u for u, b in enumerate(bits) if b > UNIT_BITS), None)
+        wide = next((u for u, b in enumerate(bits) if unit_class(b) is None), None)
         if wide is not None:
-            raise QueryRefused(f"unit {wide} of {fn.id} commits {bits[wide]} bits, more than {UNIT_BITS}",
-                               {"definition": fn.id, "unit": wide, "bits": bits[wide]})
+            raise QueryRefused(f"unit {wide} of {fn.id} commits {bits[wide]} bits, more than the widest class, "
+                               f"{UNIT_CLASS_MAX}", {"definition": fn.id, "unit": wide, "bits": bits[wide]})
 
 
 def evaluate(program: Program, query: Mapping[str, Any]) -> PO.TemplatePartition | PO.Partition | PO.CallPartition:
     """`query` applied to `program` by core, once core accepts the query's form; `QueryRefused` when the query is malformed,
     is not one applied here (a template query, `Q_word` v1 at `X = 16` or `Q_call` v1 at `X <= 16`), does not apply to the
-    program (core's refusals, a program that is not topological among them), or has a unit of more than `UNIT_BITS` bits
-    (`_check_word`, `_check_units`) or a template of no gate."""
+    program (core's refusals, a program that is not topological among them), or has a unit wider than the widest public
+    class (`_check_word`, `_check_units`) or a template of no gate."""
     obj = PO.build(program, query)
     v, q = PO.validate(obj), obj["query"]
     if not v.ok:
@@ -187,16 +168,16 @@ def evaluate(program: Program, query: Mapping[str, Any]) -> PO.TemplatePartition
         part = PO.evaluate(program, q)
         _check_units(program, part)
         return part
-    if kind == Q_WORD and x == UNIT_BITS:
+    if kind == Q_WORD and x == QUERY_X:
         part = PO.evaluate(program, q)
         _check_word(part)
         return part
-    if kind == PO.Q_CALL and x <= UNIT_BITS:
+    if kind == PO.Q_CALL and x <= QUERY_X:
         part = PO.evaluate(program, q)
         _check_units(program, part)
         return part
-    raise QueryRefused(f"one-stage applies the template queries, Q_word v1 at X = {UNIT_BITS} and Q_call v1 at "
-                       f"X <= {UNIT_BITS}, not {q['name']} v{q['version']} at X = {x}", {"query": q})
+    raise QueryRefused(f"one-stage applies the template queries, Q_word v1 at X = {QUERY_X} and Q_call v1 at "
+                       f"X <= {QUERY_X}, not {q['name']} v{q['version']} at X = {x}", {"query": q})
 
 
 def ranges(program: Program, query: Mapping[str, Any]) -> list[tuple[str, int, int]]:
@@ -255,4 +236,5 @@ def unit_gates(program: Program, query: Mapping[str, Any]) -> list[tuple[int, in
 
 __all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "mixed_population_program", "partition",
            "POPULATION_VERSIONS", "population_program", "program_digest", "program_sha512", "ranges", "strata", "template_instance_query",
-           "template_instances_query", "unit_gates", "units", "UNIT_BITS"]
+           "template_instances_query", "unit_class", "UNIT_CLASS_MAX", "UNIT_CLASSES", "unit_gates", "units",
+           "QUERY_X"]

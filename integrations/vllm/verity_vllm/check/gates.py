@@ -29,7 +29,8 @@ A *run directory* is what `bench/run_config.py` produces for one configuration (
 
 Gates:
     G1 observation fidelity    non-interference PASS, tokens equal across a/b/c AND to the control run, every boundary
-                               hash equal, steps == max_tokens, layers == expected_layers; census residue 0, ambiguous 0
+                               hash equal, steps == max_tokens, layers == expected_layers; census residue 0, ambiguous 0,
+                               every declared kernel's launch count equal to its declaring events
     G2 semantic closure        0 Unsupported, 0 Unresolved, 0 ambiguous pattern matches
     G3 root closure            0 unknown roots, 0 opaque/prescribed fallbacks, root_policy pass with no new root class
     G4 primitive exactness     tier-a replay pass, k >= TIER_A_K per (specialization, regime) stratum, every captured
@@ -44,7 +45,7 @@ Gates:
     G6 canonicality+regression two independent folds -> one digest; golden.json pass
     G7 holdout generalization  holdouts.json present, >= 1 holdout, G1..G6 pass in every holdout
 
-    G8 VU partition            STRUCTURAL, outside the frozen set (window 2026-09-17, query track): `query_use.json`
+    G8 VU partition            STRUCTURAL, outside the frozen set (query track): `query_use.json`
                                (`verity-ir/query-use/v1`, the partition track's use configuration + verdict document);
                                `skipped` ("no query-use document") when absent, pass iff verdict.partition.status == "exact"
                                and verdict.width.status == "ok" (no violators, no unsupported) and verdict.status == "ok";
@@ -53,7 +54,7 @@ Gates:
                                could not decide -- neither pass nor fail, the run verdict INCOMPLETE, never REJECTED.
                                A run without the document keeps today's verdict: G8 `skipped` never makes it INCOMPLETE.
 
-    R1 reference integrity     FAIL-CLOSED (R9 ref lane, 2026-09-18, `REF_INTEGRITY_RULE`; explicitly authorised checker
+    R1 reference integrity     FAIL-CLOSED (R9 ref lane, `REF_INTEGRITY_RULE`; explicitly authorised checker
                                addition, outside the frozen set): `fold/construction errors > 0 ⇒ the Program is ineligible
                                as an accepted reference`.  Evidence = `fold_summary.json` (`errors`, `unresolved`,
                                `unsupported`; `error_classes` / `per_step` must agree with `errors`), `fold_summary_2.json`
@@ -98,7 +99,6 @@ from verity_vllm.check.verdict import match_verdict
 TIER_A_K = 3
 #: G5 — served tokens must be reproduced at step 0 and at least this many decode steps (KV transitions in between).
 MIN_DECODE_TOKEN_STEPS = 2
-MIN_DECODE_REPLAYS = MIN_DECODE_TOKEN_STEPS   # name kept for the diagnostic full-replay detail
 #: G5 — at least this many connected chained slices must pass.
 CHAIN_MIN_SLICES = 1
 #: G5 — the regimes every specialization present in both must be sampled in (tier a strata).
@@ -340,7 +340,8 @@ class RunArtifacts:
     @property
     def C(self) -> dict | None:
         """The profile configuration: `run.json["C"]` (values; a card-style `{field: {"value", "provenance"}}` is
-        accepted too), else the profile module named in the manifest.  A gate never reads the log itself."""
+        accepted too), else the profile module named in the manifest; `ArtifactError` when that profile can't be loaded.  A gate never
+        reads the log itself."""
         C = self.manifest.get("C")
         if isinstance(C, dict) and C:
             return {k: (v["value"] if isinstance(v, dict) and "value" in v else v) for k, v in C.items()}
@@ -350,8 +351,8 @@ class RunArtifacts:
         if "C_from_profile" not in self._cache:
             try:
                 self._cache["C_from_profile"] = dict(load_profile_config(name))
-            except Exception:  # noqa: BLE001 - the gate reports the absence
-                self._cache["C_from_profile"] = None
+            except Exception as e:
+                raise ArtifactError(f"profile {name!r} could not be loaded: {type(e).__name__}: {e}") from e
         return self._cache["C_from_profile"]
 
     def workload_requests(self) -> list[dict]:
@@ -497,7 +498,8 @@ def gate_G1(run: RunArtifacts) -> GateResult:
     """Observation fidelity: `noninterference.json` PASS; tokens equal across the (a) observer, (b) hooks and (c) bare
     variants AND equal to the clean control run's tokens (computed here from `generated_token_ids`, never from a
     workload-authored accepted list); every boundary hash equal; `steps == max_tokens`; `layers == expected_layers`
-    (from the file; null fails); AND the census reconciliation has residue 0 and 0 ambiguous claims."""
+    (from the file; null fails); AND the census reconciliation has residue 0, 0 ambiguous claims and 0 launch-count
+    mismatches."""
     ni = run.need("noninterference")
     cr = run.need("census_reconcile")
     ev = [run.rel("noninterference"), run.rel("census_reconcile")]
@@ -558,7 +560,11 @@ def gate_G1(run: RunArtifacts) -> GateResult:
         counts = sorted({(r.get("layers_a"), r.get("layers_b")) for r in rows})
         if rows and counts != [(exp_layers, exp_layers)]:
             problems.append(f"per-step layer counts {counts} != expected_layers={exp_layers} in both variants")
-        C = run.C
+        try:
+            C = run.C
+        except ArtifactError as e:
+            C = None
+            problems.append(f"expected_layers={exp_layers} not checked against the profile's NL: {e}")
         if C and C.get("NL") is not None and int(C["NL"]) != exp_layers:
             problems.append(f"expected_layers={exp_layers} disagrees with the profile's NL={C['NL']}")
     detail["noninterference"] = {"PASS": ni.get("PASS"), "hash_comparisons": n_cmp, "hash_equal": n_eq, "steps": len(steps),
@@ -578,9 +584,14 @@ def gate_G1(run: RunArtifacts) -> GateResult:
     step_errors = [s for s in (cr.get("steps") or []) if isinstance(s, dict) and "error" in s]
     if step_errors:
         problems.append(f"{len(step_errors)} census steps without a resolved log step")
+    counts = _int(_get(t, "count_mismatches", "census_reconcile.totals (a reconciliation without the launch-count gate: "
+                                              "rerun `verity-vllm census --reconcile`)"), "count_mismatches")
+    if counts:
+        problems.append(f"census: {counts} launch counts differ from their declaring events {t.get('count_mismatch_kernels')}")
     detail["census"] = {"census_kernels": t.get("census_kernels"), "distinct_kernel_names": t.get("distinct_kernel_names"),
                         "residue_kernels": residue, "residue_names": t.get("residue_names"), "ambiguous": ambiguous,
-                        "steps_aligned": cr.get("steps_aligned"), "residue_zero": cr.get("residue_zero")}
+                        "steps_aligned": cr.get("steps_aligned"), "residue_zero": cr.get("residue_zero"),
+                        "count_mismatches": counts, "count_exempt": t.get("count_exempt")}
     return _result(problems, ev, detail)
 
 
@@ -794,37 +805,6 @@ def gate_G4(run: RunArtifacts) -> GateResult:
 # G5 — composition exactness (tier b replay of step 0 and every decode snapshot step)
 # ---------------------------------------------------------------------------------------------------------
 
-_LINKAGE_KEYS = ("n_from_earlier_steps", "n_earlier_step_operands", "n_operands_from_earlier_steps", "from_earlier_steps",
-                 "n_cross_step_operands", "kv_linkage")
-
-
-def _kv_linkage(rep: dict) -> tuple[bool | None, str]:
-    """(consumed something produced in an earlier step?, how it was determined); (None, ...) when not exposed."""
-    for k in _LINKAGE_KEYS:
-        if k in rep:
-            v = rep[k]
-            if isinstance(v, bool):
-                return v, k
-            if isinstance(v, (int, float)):
-                return v > 0, k
-            if isinstance(v, str):
-                return v.lower() in ("pass", "true", "yes"), k
-            if isinstance(v, dict) and "status" in v:
-                return v["status"] == "pass", k
-    src = rep.get("sources")
-    if isinstance(src, dict):
-        for k in ("earlier_steps", "earlier_step", "cross_step", "kv"):
-            if k in src and isinstance(src[k], (int, float)):
-                return src[k] > 0, f"sources.{k}"
-    return None, "not exposed by replay report"
-
-
-def _control_step_tokens(control: dict[str, list[int]] | None, step: int) -> list[int] | None:
-    if not control:
-        return None
-    return sorted(seq[step] for seq in control.values() if step < len(seq))
-
-
 @_gate("G5")
 def gate_G5(run: RunArtifacts) -> GateResult:
     """Composition exactness (D82): exhaustive provenance/structure, sampled numerical semantics.
@@ -1003,8 +983,8 @@ def gate_G8(run: RunArtifacts) -> GateResult:
     """VU partition: `query_use.json` (`verity-ir/query-use/v1`, written by the partition track: use configuration + `VuVerdict`).
     Pass iff `verdict.partition.status == "exact"` and `verdict.width.status == "ok"` (no violators, no unsupported); fail with
     the partition codes / width violators otherwise.  Absent document -> `skipped` ("no query-use document"); a document that
-    is not this schema, or lacks the verdict fields, -> `error`.  Reads only fields of the frozen document shape (freeze doc,
-    2026-09-17); never touches G1..G7."""
+    is not this schema, or lacks the verdict fields, -> `error`.  Reads only fields of the frozen document shape (the freeze
+    doc); never touches G1..G7."""
     doc = run.json("query_use")
     ev = [run.rel("query_use")]
     if doc is None:
@@ -1198,7 +1178,7 @@ def evaluate_gates(run_dir: str | Path, *, manifest: dict | None = None) -> list
 def verdict(results: list[GateResult]) -> str:
     """ACCEPTED iff all seven frozen gates pass; REJECTED if any gate fails; INCOMPLETE otherwise (skipped / error / missing).  Gates outside the frozen set (G8, R1)
     contribute only `fail` -> REJECTED and `error` / `unsupported` / `unverified` -> INCOMPLETE: a run without a query-use document (G8 `skipped`) or a record that
-    predates G8 / R1 keeps the verdict of G1..G7.  [R9 ref 2026-09-18] R1 `unverified` (no fold error evidence) is INCOMPLETE, never ACCEPTED — the fail-closed rule."""
+    predates G8 / R1 keeps the verdict of G1..G7.  [R9 ref] R1 `unverified` (no fold error evidence) is INCOMPLETE, never ACCEPTED — the fail-closed rule."""
     return match_verdict([r.result() for r in results], GATES)
 
 
@@ -1382,10 +1362,6 @@ FOLD_SUMMARY_FIELDS: dict[str, str] = {
 }
 
 
-def fold_summary_doc() -> str:
-    return "\n".join(f"- `{k}`: {v}" for k, v in FOLD_SUMMARY_FIELDS.items())
-
-
 __all__ = [
     "TIER_A_K", "MIN_DECODE_TOKEN_STEPS", "CHAIN_MIN_SLICES", "REGIMES", "COS_SIN_MAX_ULP", "DIAG_MAX_LINEAR_RESIDUAL", "GATES", "GATE_NAMES", "HOLDOUT_GATES",
     "STRUCTURAL_GATES", "INTEGRITY_GATES", "REF_INTEGRITY_RULE", "ALL_GATES", "QUERY_USE_SCHEMA", "QUERY_USE_KIND",
@@ -1393,5 +1369,5 @@ __all__ = [
     "GateResult", "ArtifactError", "RunArtifacts", "load_profile_config",
     "gate_G1", "gate_G2", "gate_G3", "gate_G4", "gate_G5", "gate_G6", "gate_G7", "gate_G8", "gate_R1", "fold_integrity", "quarantine_specs",
     "evaluate_gates", "verdict", "gates_json", "write_gates", "gates_markdown",
-    "strip_T", "diag_structure", "diag_family_match", "diag_overhead", "diagnostics", "fold_summary_doc",
+    "strip_T", "diag_structure", "diag_family_match", "diag_overhead", "diagnostics",
 ]

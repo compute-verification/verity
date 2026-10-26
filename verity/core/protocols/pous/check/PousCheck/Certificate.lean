@@ -44,7 +44,7 @@ def CERT_BLOCKS : Nat := 2 ^ 19
 def CERT_K : Nat := 105
 def EXPANDER : String := "sha512-ctr-v4"
 def P2_CLAIMS : List String := ["m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "random-oracle",
-  "perfect-isolation", "cr/sha-512", "live-verifier", "designated-verifier", "trusted-nebius-host"]
+  "perfect-isolation", "cr/sha-512", "live-verifier", "designated-verifier", "trusted-host"]
 /-- Why P2 is experimental (`p2.EXPERIMENTAL`): every profile of it says so. -/
 def EXPERIMENTAL : String := "abstract-M1 result (pinned P2SlackFamilyUncond); the P2-M1 instantiation assumption is not " ++
   "accepted, and the XOR-then-reduce compression attack on it is open"

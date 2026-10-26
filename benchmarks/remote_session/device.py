@@ -9,8 +9,9 @@ segments   the store's N blocks as contiguous segments of whole chunks: first a 
            leaf and node index is the store's, so the tree is `receipts.tree` over the whole store in block order
            whatever the GPUs and tiers (one GPU and no host tier is the same code)
 payload    N blocks of seeded random bytes, each 128-byte word's top byte below 0x80 (so below p1024 and p512), or a
-           buffer a GPU as it is (`hbm`: a serving engine's weights, `node.py`), its
-           tree the driver's `audit.payload_tree` with salt_j = SHAKE256(D(store salt) ‖ key ‖ PAYLOAD_LABEL ‖ u64be j);
+           buffer a GPU as it is (`hbm`: a serving engine's weights, `node.py`) and then a host tier of zeros (the
+           store `remote_bandwidth.store` lays out), its tree the driver's `audit.payload_tree` with salt_j = SHAKE256(D(store
+           salt) ‖ key ‖ PAYLOAD_LABEL ‖ u64be j), key the verifier's (`set_payload_key`) or else the store's own;
            built a chunk at a time on the chunk's GPU and retained on the CPU, so it does not displace the store
 store      E = the codec over the payload in place, by kv.cu (`../word_codec/kv.cu`) on each segment's GPU at the
            registration's key and the store's positions
@@ -46,11 +47,10 @@ import bisect
 import contextlib
 import ctypes
 import gc
-import hashlib
 import queue
 import resource
+import secrets
 import shutil
-import struct
 import sys
 import tempfile
 import threading
@@ -68,15 +68,14 @@ sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.core.protocols.remote_bandwidth import audit, coins, receipts as rb  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
+from verity.core.protocols.remote_bandwidth.store import PAYLOAD_LABEL, SALT_DOMAIN, store_salt  # noqa: E402
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix  # noqa: E402
 from verity.ml import randomness  # noqa: E402
 
 import sketch_receipt as skr  # noqa: E402
 import reader as rdr  # noqa: E402
-from prover import PAYLOAD_LABEL  # noqa: E402
 
 BLOCK = rcodec.BLOCK_BYTES
-SALT_DOMAIN = b"verity/store/salt/v0\0"
 PER_LEAF = rb.PER_LEAF
 PACK16_WORDS = BLOCK // 64 * 32  # session.cu's SK16_PACK
 TOP_SEGS = 32  # session.cu's: rs_top's segments, real and padding
@@ -85,10 +84,6 @@ SLOTS = 8
 host to slot SLOTS. A slot is read at most three launches after its write."""
 OPEN_BATCH = 128
 """Passes whose kept levels are brought back to a GPU at once to open a window."""
-
-
-def store_salt(key: bytes, label: bytes, c: int) -> bytes:
-    return hashlib.shake_256(SALT_DOMAIN + key + label + struct.pack(">Q", c)).digest(rb.SALT_BYTES)
 
 
 def stream_head(seed: bytes) -> bytes:
@@ -409,6 +404,7 @@ class DeviceStore:
             raise ValueError("a host tier needs GPUs with streams of their own")
         total = blocks + host_blocks
         self.torch, self.lib, self.lib_open, self.kv, self.blocks, self.key = torch, lib, lib_open, kv, total, key
+        self.payload_key = key
         self.gpus, self.hbm_blocks = gpus, blocks
         self.host_ctas, self.host_consumers = host_ctas, host_consumers
         chunks, hchunks = blocks // chunk, host_blocks // chunk
@@ -440,8 +436,8 @@ class DeviceStore:
                 raise ValueError("a store on several GPUs or tiers takes an int seed")
             with self.on(gpu):
                 n = self.n[s]
-                if hbm is not None and not self.on_host[s]:
-                    self.data_g.append(hbm[g])
+                if hbm is not None:
+                    self.data_g.append(hbm[g] if not self.on_host[s] else host_tier(torch, n * BLOCK, gpu.numa).zero_())
                     continue
                 if self.on_host[s]:
                     d = host_tier(torch, n * BLOCK, gpu.numa)
@@ -630,7 +626,8 @@ class DeviceStore:
             gpu = self.gpus[g]
             with self.on(gpu):
                 dev = torch.device("cuda", gpu.index)
-                self.lib.set_tree(bytes(128), BLOCK, BLOCK, dom.domain_id, SALT_DOMAIN + self.key + PAYLOAD_LABEL, N)
+                self.lib.set_tree(bytes(128), BLOCK, BLOCK, dom.domain_id, SALT_DOMAIN + self.payload_key + PAYLOAD_LABEL,
+                                  N)
                 dig = torch.empty((chunk, 8), dtype=torch.int64, device=dev)
                 up = torch.empty((chunk, 8), dtype=torch.int64, device=dev)
                 for first in range(self.base[s], self.base[s] + self.n[s], chunk):
@@ -1090,7 +1087,7 @@ class DeviceStore:
             for r, p in enumerate(positions):
                 q = offs[k] + r
                 mine.append((blk[q].tobytes(), rec[q].tobytes(), store_salt(self.key, seed, p // PER_LEAF),
-                             tuple(path[q, h].tobytes() for h in range(H)), store_salt(self.key, PAYLOAD_LABEL, p),
+                             tuple(path[q, h].tobytes() for h in range(H)), store_salt(self.payload_key, PAYLOAD_LABEL, p),
                              tuple(praw[q, h].tobytes() for h in range(hp))))
             out.append(mine)
         self.open_stats.append({"at_ns": t0, "openings": total, "subtrees": subtrees, "subtrees_ns": t1 - t0,
@@ -1142,6 +1139,11 @@ class Device:
         self.gates: dict = {}
         self.store = DeviceStore(torch, self.lib, self.lib_open, self.kv, blocks, self.salt_key, seed, gpus=self.gpus,
                                  host_blocks=host_blocks, hbm=hbm, **self.host, **self.shape)
+        self.payload_key = self.salt_key
+
+    def set_payload_key(self, key: bytes) -> None:
+        """Salt the payload tree with the verifier's key (`prover.ProverSide.register`), before its root is taken."""
+        self.payload_key = self.store.payload_key = key
 
     def payload_root(self, node: bytes) -> bytes:
         self.node = node
@@ -1320,8 +1322,9 @@ class Device:
         out["segments"] = {"blocks": small.blocks, "hbm_blocks": small.hbm_blocks, "segment_blocks": small.n,
                            "h0": small.h0, "hc": small.hc, "pads": small.pads}
         payloads = small.blocks_at(0, small.blocks)
+        small.payload_key = self.payload_key
         root = small.payload_tree(self.node)
-        salts = [store_salt(self.salt_key, PAYLOAD_LABEL, j) for j in range(small.blocks)]
+        salts = [store_salt(self.payload_key, PAYLOAD_LABEL, j) for j in range(small.blocks)]
         out["payload_root"] = root == audit.payload_tree(self.node, payloads, salts).commitment.root
         small.encode(key)
         encoded = small.blocks_at(0, small.blocks)
@@ -1360,12 +1363,12 @@ class Device:
         now = [0]
         params = audit.Params(reg.blocks, 1000, 2, self.gate_samples, 2.0 ** -40, window_ns=1, codec=reg.codec,
                               receipt=reg.receipt, rows=reg.rows)
-        session = audit.Session(params, reg, None, coins.Challenger(reg.digest, 0, params.coins), clock=lambda: now[0],
-                                not_before_ns=0)
+        session = audit.Session(params, reg, None, coins.local(reg.digest, 0, params.windows, secrets.token_bytes, appends=1),
+                                clock=lambda: now[0], not_before_ns=0)
         small.arm(dropped)
         coin, prev, kept = session.start(), reg.digest, {}
         for t in range(2):
-            small.start_chain(coin.coin, prev if t == 0 else None)
+            small.start_chain(coins.coin(coin), prev if t == 0 else None)
             for i in range(2):
                 prev, kept[t, i] = small.run_chain(i)
                 now[0] += 1

@@ -1,4 +1,4 @@
-"""Direct Triton launches: the batch-invariant RMSNorm and GEMM."""
+"""Direct Triton launches: the batch-invariant RMSNorm and GEMM, and the fused q / kv RMSNorm."""
 
 from __future__ import annotations
 
@@ -8,15 +8,17 @@ import torch
 
 from verity.ml.circuits.refs import Coll
 from verity_vllm.program.frontend.derive import Alloc
-from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
+from verity_vllm.program.frontend.strided_views import _tensor_type
+from verity_vllm.program.frontend.value_types import shape_of
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, norm_kind, rows_of, shape
 from verity_vllm.program.frontend.rules.profile import BF16, _bias_shape
 from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_tensor, triton_launch
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value, _strides, _untransposed
-from verity_vllm.program.frontend.rules.vllm_bindings.pins import (GEMM_PINS, RMS_PINS, _pins_ok, _target_kinds, active_gemm_target, gemm_bias_role,
+from verity_vllm.program.frontend.rules.vllm_bindings.pins import (GEMM_PINS, QKV_RMS_PINS, RMS_PINS, _pins_ok, _target_kinds, active_gemm_target, gemm_bias_role,
                                                                    gemm_pins_for, lookup_key)
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
+from verity.ml.definitions.registry.dsa_norm import check_block
 
 
 # -- direct Triton launches -----------------------------------------------------------------------------------------------
@@ -88,6 +90,109 @@ class TritonRmsNormRule(InPlaceRule):
         ctx.rebind(out, from_rows(outs, lead), self, what="output")
         ctx.bind_weight_role(w, self, "rmsnorm.weight", N=N, EPS=eps)
         ctx.record(self, node, {"N": N, "EPS": eps, "rows": len(rows), "lookup_key": lookup_key(meta), "pins": RMS_PINS}, emitted=f"{fn.id} x{len(rows)}")
+
+
+#: Triton specializes an integer argument divisible by 16 and a pointer aligned to 16 bytes (`tt.divisibility`); the PTX of
+#: `_fused_q_kv_rmsnorm_kernel` that `registry.dsa_norm` reads is the specialization where every stride and pointer is
+TRITON_DIVISIBILITY = 16
+QKV_ARGS = (("q", "q_ptr", "q_out_ptr", "q_weight_ptr", "q_in_stride", "q_out_stride", "Q_SIZE"),
+            ("kv", "kv_ptr", "kv_out_ptr", "kv_weight_ptr", "kv_in_stride", "kv_out_stride", "KV_SIZE"))
+
+
+def _aligned(t) -> bool:
+    v = t.meta["val"]
+    return v.storage_offset() * v.element_size() % TRITON_DIVISIBILITY == 0
+
+
+def qkv_rms_launch(sizes: list[int]) -> tuple[int, int]:
+    """`fused_q_kv_rmsnorm`'s BLOCK_SIZE and num_warps at (Q_SIZE, KV_SIZE): the next power of two of the larger, 8 warps from 2048."""
+    block = 1 << (max(sizes) - 1).bit_length()
+    return block, 8 if block >= 2048 else 4
+
+
+class FusedQKvRmsNormRule(InPlaceRule):
+    """`_fused_q_kv_rmsnorm_kernel[(T, 2)](q, q_out, q_weight, q_in_stride, q_out_stride, kv, kv_out, kv_weight, kv_in_stride,
+    kv_out_stride, eps, Q_SIZE, KV_SIZE, BLOCK_SIZE, launch_pdl, num_warps)` launched by `fused_q_kv_rmsnorm` -> per token
+    `TritonBlockRMSNorm{N=Q_SIZE,BLOCK,WARPS,EPS}` of the q row and `{N=KV_SIZE}` of the kv row; q_out and kv_out (allocations) are
+    rebound.  `launch_pdl` is either value: it adds the PDL wait and launch and no arithmetic."""
+    modes = frozenset({"profile"})
+    info = RuleInfo("TritonQKvRmsNorm[vllm-default]", 1, "in-place-binding",
+                    applies_to="verity_cba::triton_launch of fused_qk_rmsnorm._fused_q_kv_rmsnorm_kernel (kernel name + source pinned)",
+                    preconditions=("kernel qualified name and source sha256 are the pinned ones (QKV_RMS_PINS)",
+                                   "BLOCK_SIZE = next_pow2(max(Q_SIZE, KV_SIZE)) and num_warps 8 from BLOCK_SIZE 2048, else 4 (the wrapper's)",
+                                   "q, kv bf16 [T, SIZE] with unit column stride and the launch's row stride; weights bf16 [SIZE]; outputs "
+                                   "two unwritten allocations [T, SIZE], packed, neither an input",
+                                   "every row stride divisible by 16 and every pointer 16-byte aligned (Triton's specialization the PTX is)",
+                                   "TritonBlockRMSNorm's statics (check_block); eps a static float; grid (T, 2)"),
+                    evidence_domain="structural; numerics: TritonBlockRMSNorm_v1 (registry.dsa_norm, the kernel's cc 9.0 PTX)")
+
+    def targets(self):
+        return {triton_launch.default}
+
+    def applies(self, node, ctx):
+        meta = launch_meta(node)
+        if meta.get("kernel") != QKV_RMS_PINS["kernel"]:
+            return f"kernel {meta.get('kernel')} is not {QKV_RMS_PINS['kernel']}"
+        if meta.get("src_sha256") != QKV_RMS_PINS["src_sha256"]:
+            return f"kernel source sha256 {meta.get('src_sha256')} differs from the pin {QKV_RMS_PINS['src_sha256']}"
+        if not ctx.vocab.has("triton_block_rmsnorm"):
+            return "numerics_unregistered: the vocabulary has no triton_block_rmsnorm"
+        sc, nw = meta.get("scalars", {}), (meta.get("geometry") or {}).get("num_warps")
+        sizes = [sc.get(k[-1]) for k in QKV_ARGS]
+        if not all(isinstance(n, int) and n > 0 for n in sizes) or not isinstance(sc.get("eps"), float):
+            return f"Q_SIZE, KV_SIZE {sizes} and eps {sc.get('eps')!r} are not static positive sizes and a float"
+        block, warps = qkv_rms_launch(sizes)
+        if sc.get("BLOCK_SIZE") != block or nw != warps:
+            return f"BLOCK_SIZE {sc.get('BLOCK_SIZE')}, num_warps {nw}: the wrapper launches {block}, {warps}"
+        try:
+            for N in sizes:
+                check_block(N, block, warps, sc["eps"])
+        except ValueError as e:
+            return f"numerics_unregistered: {e}"
+        tensors = [[launch_tensor(node, meta, n) for n in k[1:4]] for k in QKV_ARGS]
+        if any(t is None for ts in tensors for t in ts):
+            return f"tensor arguments {[k[1:4] for k in QKV_ARGS]} not all present"
+        outs = {ts[1] for ts in tensors}
+        if len(outs) != 2 or outs & {t for ts in tensors for t in (ts[0], ts[2])}:
+            return "q_out and kv_out are not two tensors apart from the inputs"
+        T = None
+        for (name, _, _, _, in_stride, out_stride, size_key), (x, out, w) in zip(QKV_ARGS, tensors):
+            r = _row_value(ctx, x, name) or _row_value(ctx, w, f"{name} weight")
+            if r:
+                return r
+            if not isinstance(ctx.val(out), Alloc) or not dtype_is(ctx, out, BF16):
+                return f"{name} output is not an unwritten bf16 allocation"
+            N, xs = sc[size_key], shape(ctx, x)
+            if len(xs) != 2 or xs[1] != N or shape(ctx, w) != (N,) or shape(ctx, out) != xs or (T is not None and xs[0] != T):
+                return f"{name} shapes {xs}, weight {shape(ctx, w)}, output {shape(ctx, out)} vs {size_key}={N}"
+            T = xs[0]
+            st, ost = _strides(x), _strides(out)
+            if st is None or st[1] != 1 or st[0] != sc.get(in_stride) or ost != (N, 1) or sc.get(out_stride) != N:
+                return f"{name} strides {st}, output {ost}: not ({in_stride}={sc.get(in_stride)}, 1) and packed ({out_stride}={sc.get(out_stride)})"
+            if st[0] % TRITON_DIVISIBILITY or N % TRITON_DIVISIBILITY or not all(_aligned(t) for t in (x, out, w)):
+                return (f"{name}: row strides {st[0]}, {N} or a pointer offset not divisible by {TRITON_DIVISIBILITY}, another Triton "
+                        f"specialization than the PTX")
+        if meta.get("grid") != [T, 2]:
+            return f"grid {meta.get('grid')} is not ({T}, 2)"
+        return True
+
+    def emit(self, node, ctx):
+        meta = launch_meta(node)
+        sc, eps = meta["scalars"], float(meta["scalars"]["eps"])
+        S = {"BLOCK": sc["BLOCK_SIZE"], "WARPS": meta["geometry"]["num_warps"], "EPS": eps}
+        emitted = []
+        for name, x_arg, out_arg, w_arg, _, _, size_key in QKV_ARGS:
+            x, out, w = (launch_tensor(node, meta, n) for n in (x_arg, out_arg, w_arg))
+            N = sc[size_key]
+            fn = ctx.kind("triton_block_rmsnorm", node, N=N, **S)
+            rows, lead = rows_of(ctx.coll(x))
+            wc = ctx.coll(w)
+            outs = [ctx.call(fn, r, wc, node=node, rule=self, name=f"{ctx.hint_name(node)}/{name}[{i}]") for i, r in enumerate(rows)]
+            ctx.rebind(out, from_rows(outs, lead), self, what=f"{name} output")
+            ctx.bind_weight_role(w, self, f"rmsnorm.{name}.weight", N=N, EPS=eps)
+            emitted.append(f"{fn.id} x{len(rows)}")
+        ctx.record(self, node, {"Q_SIZE": sc["Q_SIZE"], "KV_SIZE": sc["KV_SIZE"], **S, "rows": len(rows), "pins": QKV_RMS_PINS},
+                   emitted=" + ".join(emitted))
 
 
 class TritonGemmRule(InPlaceRule):

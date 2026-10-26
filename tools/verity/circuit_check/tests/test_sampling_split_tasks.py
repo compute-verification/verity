@@ -1,9 +1,9 @@
 """circuit-check's task list for the sampling family is the one found on the unsplit tree.
 
-`integrations/vllm/tools/migrate/split_sampling.py` splits the family's registry modules into Definitions, twins and vocabulary
-without changing a Definition, so every circuit-check target of the family keeps its kind, label, id, statics and pins.
-`data/sampling_split_tasks.json` holds them as `split_sampling.py snapshot` wrote them; a change to the family that adds, drops or
-rebinds a target, or repins one, rewrites it (`python tools/verity/circuit_check/tests/test_sampling_split_tasks.py --write`).
+The split of the family's registry modules into Definitions, twins and vocabulary changed no Definition, so every circuit-check
+target of the family keeps its kind, label, id, statics and pins. `data/sampling_split_tasks.json` holds them as they were
+before the split; a change to the family that adds, drops or rebinds a target, or repins one, rewrites it
+(`python tools/verity/circuit_check/tests/test_sampling_split_tasks.py --write`).
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 FIXTURE = Path(__file__).resolve().parent / "data" / "sampling_split_tasks.json"
-PKG = "verity_vllm.program.registry."
+PKG = "verity.ml.definitions.registry."
 #: every module of the family, before and after the split; a Definition belongs to the family when one of them constructs it
 FAMILY_MODULES = ("sampling", "sampling_boolean", "gumbel_boolean", "topp_word_gates", "topp_keep_builder", "topp_words", "topp_geometry",
                   "sampling_rows", "sampling_topp_difftest", "topp_split", "sampling_twins", "sampling_vocab")
@@ -84,22 +84,14 @@ def family_tasks(suite: dict | None = None) -> dict:
     return {"tasks": out, "pins": {sec: {k: v for k, v in sorted(pins[sec].items()) if k in ids} for sec in ("definitions", "pieces")}}
 
 
-def _suite() -> dict:
-    """The process's first `targets.suite()`, the one circuit-check builds: `test_circuit_check.py`'s, built at import, when it is
-    loaded. `targets.suite()` grows as tracing registers Definitions, so a later call in this process lists more targets."""
-    from circuit_check import targets as TG
-
-    other = sys.modules.get("test_circuit_check")
-    return other.SUITE if other is not None and hasattr(other, "SUITE") else TG.suite()
-
-
 @pytest.mark.slow
-def test_the_family_s_circuit_check_tasks_are_unchanged():
-    """Builds circuit-check's whole task list on the suite `test_circuit_check.py` built (about a minute alone, as
-    `test_split_prims_serve.py` does): only the list itself shows that the split left every target of the family where
+def test_the_family_s_circuit_check_tasks_are_unchanged(suite):
+    """Builds circuit-check's whole task list on the process's suite (conftest.py's, built before any test runs, as circuit-check
+    builds it: `targets.suite()` grows as tracing registers Definitions, so a later build would list more targets), about a
+    minute, as `test_split_prims_serve.py` does: only the list itself shows that the split left every target of the family where
     circuit-check finds it, at the same statics and pins."""
     want = json.loads(FIXTURE.read_text())
-    got = family_tasks(_suite())
+    got = family_tasks(suite)
     assert len(got["tasks"]) == len(want["tasks"]) and got["tasks"] == want["tasks"], (
         sorted({t["label"] for t in want["tasks"]} ^ {t["label"] for t in got["tasks"]}) or "same labels, other entries")
     assert got["pins"] == want["pins"]

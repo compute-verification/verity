@@ -396,8 +396,9 @@ class PearlCSm120:
         self.sets: dict = {}
 
     def challenger(self, shape, ops) -> Challenger:
-        """An operand set's epoch challenger: its coins live, from the operating system's generator."""
-        return Challenger(0)
+        """An operand set's epoch challenger: its coins live, from the Lean verifier of record (`pouw.verifier.coins`)."""
+        from verity.core.protocols.pouw import verifier
+        return Challenger(0, verifier.coins)
 
     def acquire(self, table: dict, key, sizes) -> tuple[_Shared, bool]:
         fresh = key not in table

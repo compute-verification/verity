@@ -1,5 +1,5 @@
-"""The MoE / FP8 registry split (`integrations/vllm/tools/migrate/split_moe_fp8.py`) keeps every Definition and every circuit-check
-target as it was.
+"""The MoE / FP8 registry split into Definitions, twins and vocabulary keeps every Definition and every circuit-check target as
+it was.
 
 `fixtures/moe_fp8_split.json` was written by ``python tests/test_moe_fp8_split.py --write`` on the tree before the split; only the
 SHA-512 re-baseline of the circuit identities has rewritten it since.  It holds
@@ -9,8 +9,8 @@ SHA-512 re-baseline of the circuit identities has rewritten it since.  It holds
   every other binding of those Definitions that a tracked pin, fixture, record or capture map names (``extra``);
 * ``tasks``: circuit-check's task list restricted to the family (kind, target id with its statics, and the pins of that id).
 
-Both tests trace the whole catalog (about a minute alone, nothing extra after `test_circuit_check.py` in one session): only the
-traced bodies carry the ids and digests, which is what the split must not move.
+Both tests read circuit-check's catalog (conftest.py's `catalog`, which the process builds before any test runs): only what its
+roots reach, each family Definition with its body, carries the ids and digests, which is what the split must not move.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ import pytest
 
 FIXTURE = Path(__file__).parent / "fixtures" / "moe_fp8_split.json"
 FAMILY = ("moe", "moe_pad", "moe_difftest", "boolean_moe", "fp8", "fp8_moe", "boolean_fp8", "boolean_fp8_moe", "nvfp4", "boolean_gather")
-MODULES = tuple(f"verity_vllm.program.registry.{m}" for m in FAMILY)
+MODULES = tuple(f"verity.ml.definitions.registry.{m}" for m in FAMILY)
 
 
 def _home(d) -> str | None:
@@ -54,12 +54,16 @@ def _digest(fn) -> str:
     return hashlib.sha512(canonical_json(definition_entry(fn))).hexdigest()
 
 
-@lru_cache(maxsize=1)
-def _found() -> dict:
-    """Every Definition circuit-check's catalog reaches, by descriptor id (scalar references have no descriptor)."""
-    from circuit_check import targets as TG
-    from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
-    return {fn_id(fn): fn for fn in TG.reachable(TG.catalog()).values() if isinstance(fn, (PrimitiveDefinition, SpecializedDefinition))}
+def _found(catalog) -> dict:
+    """Every Definition circuit-check's catalog reaches that the family could own (`_owned`), by descriptor id (scalar references
+    have no descriptor): each one whose family the family's modules name, or whose registered Definition they hold, or that no
+    module registers."""
+    from verity.ml.circuits.defs import REGISTRY, PrimitiveDefinition, SpecializedDefinition
+
+    families = {f for f, _gates in catalog.reached.values()}
+    could = {f for f in families if f in _named_bases() or f not in REGISTRY.defs or _home(REGISTRY.defs[f]) in MODULES}
+    made = (catalog.make(fid) for fid, (f, _gates) in catalog.reached.items() if f in could)
+    return {fn_id(fn): fn for fn in made if isinstance(fn, (PrimitiveDefinition, SpecializedDefinition))}
 
 
 def fn_id(fn) -> str:
@@ -67,13 +71,13 @@ def fn_id(fn) -> str:
     return descriptor_id(fn)
 
 
-def family_digests() -> dict[str, str]:
-    return {i: _digest(fn) for i, fn in sorted(_found().items()) if _owned(fn)}
+def family_digests(found: dict) -> dict[str, str]:
+    return {i: _digest(fn) for i, fn in sorted(found.items()) if _owned(fn)}
 
 
-def _resolve(i: str):
+def _resolve(i: str, found: dict):
     from circuit_check import targets as TG
-    return _found().get(i) or TG.definition(i)
+    return found.get(i) or TG.definition(i)
 
 
 def family_tasks() -> list[list]:
@@ -103,18 +107,20 @@ def _fixture() -> dict:
 
 
 @pytest.mark.slow
-def test_every_family_definition_keeps_its_id_and_digest():
+def test_every_family_definition_keeps_its_id_and_digest(catalog):
     fx = _fixture()
-    now = family_digests()
+    found = _found(catalog)
+    now = family_digests(found)
     lost = sorted(set(fx["digests"]) - set(now))
     assert not lost, f"family Definitions circuit-check no longer reaches at these ids: {lost[:20]}"
     changed = sorted(i for i, d in fx["digests"].items() if now[i] != d)
     assert not changed, f"descriptor digests that changed: {changed[:20]}"
-    extra = {i: _digest(_resolve(i)) for i in fx["extra"]}
+    extra = {i: _digest(_resolve(i, found)) for i in fx["extra"]}
     assert extra == fx["extra"], "a pinned or recorded binding resolves to another descriptor"
 
 
 @pytest.mark.slow
+@pytest.mark.usefixtures("suite")
 def test_the_family_keeps_its_circuit_check_tasks():
     want = [tuple(json.dumps(x, sort_keys=True) for x in t) for t in _fixture()["tasks"]]
     have = {tuple(json.dumps(x, sort_keys=True) for x in t) for t in family_tasks()}
@@ -122,7 +128,7 @@ def test_the_family_keeps_its_circuit_check_tasks():
     assert not missing, f"circuit-check tasks (kind, target, pins) of the family that are gone or changed: {missing[:10]}"
 
 
-def _extra(digests: dict[str, str]) -> dict[str, str]:
+def _extra(digests: dict[str, str], found: dict) -> dict[str, str]:
     """Bindings of the family's Definitions at concrete statics that tracked JSON/TOML names and the catalog does not reach."""
     import re
     import subprocess
@@ -149,7 +155,7 @@ def _extra(digests: dict[str, str]) -> dict[str, str]:
     out = {}
     for i in sorted(found - set(digests)):
         try:
-            fn = _resolve(i)
+            fn = _resolve(i, found)
             fid, d = fn_id(fn), _digest(fn)
         except Exception:  # noqa: BLE001  (symbolic or partial statics such as `{E, K}`, or an id that does not parse back)
             continue
@@ -159,8 +165,11 @@ def _extra(digests: dict[str, str]) -> dict[str, str]:
 
 
 def write() -> None:
-    digests = family_digests()
-    extra = _extra(digests)
+    import conftest
+
+    found = _found(conftest.build())
+    digests = family_digests(found)
+    extra = _extra(digests, found)
     FIXTURE.parent.mkdir(exist_ok=True)
     FIXTURE.write_text(json.dumps({"digests": digests, "extra": extra, "tasks": family_tasks()}, indent=1, sort_keys=True) + "\n")
     print(f"{FIXTURE}: {len(digests)} digests, {len(extra)} extra, tasks written")

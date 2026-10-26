@@ -1,5 +1,5 @@
 """The Boolean re-verification of a deferred Commit: the Commit's own C2 replay from its sealed bundle (`pipeline.cpu_replay`), with
-every picked row evaluated by the Boolean version of its Definition (`verity_vllm.program.boolean.boolean_version`, the switch's
+every picked row evaluated by the Boolean version of its Definition (`verity.ml.definitions.boolean.boolean_version`, the switch's
 one table) on the committed inputs, bit-sliced (`verity.ml.circuits.evaluation.bits.evaluate_bits`), and compared with the committed outputs.
 
     verity-vllm boolean-replay BUNDLE|KEEP --row-dir D --checkpoint-dir CK --out OUT [--checkpoints-manifest M --model REPO
@@ -23,7 +23,6 @@ evaluated, mismatched.  ``OUT/boolean/rows.jsonl`` is one line per row the Boole
 from __future__ import annotations
 
 import dataclasses
-import gzip
 import hashlib
 import json
 import os
@@ -41,7 +40,8 @@ from verity.ml.circuits.codec import descriptor_id
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.config import option
 from verity_vllm.pipeline import cpu_replay as CR
-from verity_vllm.program.kernels.kernel_registry import Declined
+from verity.ml.definitions.numerics.kernel_registry import Declined
+from verity_vllm.program.instances_file import read_instances
 from verity_vllm.query.program_view import ports_of_type
 
 SCHEMA = "verity-vllm/boolean-replay/v1"
@@ -115,7 +115,7 @@ class BooleanRows:
         """The Boolean version of the Call ``nd``'s Definition, checked to keep its boundary; Declined by name otherwise (``nd``
         None: a spec already looked up)."""
         if spec not in self.sigma:
-            from verity_vllm.program.boolean import NoBooleanVersion, boolean_version
+            from verity.ml.definitions.boolean import NoBooleanVersion, boolean_version
             if nd is None:
                 raise Declined(f"{spec} is no row of the Program")
             try:
@@ -251,7 +251,7 @@ def _replay(o: Options, link: Path) -> dict[str, Any]:
 
 
 def run(o: Options) -> dict[str, Any]:
-    from verity_vllm.program.boolean import load_program
+    from verity.ml.definitions.boolean import load_program
 
     bundle, out = Path(o.bundle), Path(o.out)
     ctx = json.loads((bundle / "context.json").read_text())
@@ -260,7 +260,7 @@ def run(o: Options) -> dict[str, Any]:
     dec, digest = load_program(Path(o.row_dir) / "build_request" / "descriptor.json.gz")
     if digest != ctx["args"].get("program_digest"):
         raise CR.Refused(f"the row dir's request Program {digest[:16]} is not the Commit's {str(ctx['args'].get('program_digest'))[:16]}")
-    rows = json.loads(gzip.open(Path(o.row_dir) / "build_request" / "instances.json.gz").read())["rows"]
+    rows = read_instances(str(Path(o.row_dir) / "build_request" / "instances.json.gz"), expand=False)["rows"]
     nodes = dec.root.body.nodes
     K = len(nodes) - len(rows)
     bad = [r["i"] for r in rows if descriptor_id(nodes[K + int(r["i"])].fn) != r["spec"]]

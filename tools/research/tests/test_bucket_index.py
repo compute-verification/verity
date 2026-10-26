@@ -133,6 +133,16 @@ def test_a_record_that_does_not_match_its_key_is_reported_and_left_out(tmp_path)
     assert BI.index(FsRemote(b), db, now=T0 + timedelta(minutes=5))["added"] == {"artifact": 0, "run": 0, "label": 0}
 
 
+def test_a_multipart_sidecar_beside_a_manifest_is_no_record(tmp_path):
+    """A manifest big enough for a multipart upload gets `<key>.parts.json` beside it (remote_s3.parts_sidecar); the index read it
+    as a manifest and failed every pass with 'manifest hashes to ...' (21 Oct)."""
+    b = tmp_path / "bucket"
+    good = artifact(b)
+    _put(b, f"manifests/{ids.hex_of(good)}.json.parts.json", {"key": f"manifests/{ids.hex_of(good)}.json", "parts": []})
+    rep = BI.index(FsRemote(b), tmp_path / "i.sqlite", now=T0)
+    assert rep["errors"] == [] and rep["added"]["artifact"] == 1
+
+
 def test_the_public_index_is_the_published_artifacts_their_runs_summarised_and_whitelisted_labels(tmp_path):
     b, pub = tmp_path / "bucket", tmp_path / "public"
     fixture = artifact(b, kind="fixture/v1")
@@ -375,6 +385,54 @@ def test_displays_read_the_index_with_what_this_store_holds_beside_it(tmp_path, 
     monkeypatch.setenv(BI.READER_ENV, "postgresql://store_private_reader:pw@db.example/store?sslmode=require")
     pg = BI.reader(st.root)
     assert isinstance(pg, BI.PostgresIndex) and pg.schema == "store_private" and pg.env["PGPASSWORD"] == "pw"
+
+
+def test_select_with_no_index_and_an_empty_catalog_exits_1_naming_what_is_missing(tmp_path, monkeypatch, capsys):
+    """A `research run` job's store (r20261019-154742-af14: no reader, no build, an empty catalog) answered `select --json` with []
+    for properties the bucket holds. With nothing to select from it now exits 1 and says what to set or build; an index build that
+    never listed the bucket counts as none for that refusal, and once the catalog holds an artifact select reads that build and
+    says it never listed."""
+    from research.store.cli import main
+    from research.store.local import LocalStore
+
+    monkeypatch.delenv(BI.READER_ENV, raising=False)
+    root = tmp_path / "job-store"
+    argv = ["select", "--store", str(root), "--kind", "property-record/v1", "--where", "meta.property=p"]
+    for form in ([], ["--json"], ["--ids"]):
+        capsys.readouterr()
+        assert main([*argv, *form]) == 1, form
+        out, err = capsys.readouterr()
+        assert out == "" and "no index to select from" in err and BI.READER_ENV in err and str(BI.default_path(root)) in err, form
+        assert str(root / "catalog.sqlite") in err and "`research data refresh`" in err and "--store-read" in err
+    BI.SqliteIndex(BI.default_path(root)).close()
+    assert main([*argv, "--json"]) == 1 and "never listed the bucket" in capsys.readouterr().err
+    (tmp_path / "f.txt").write_text("x\n")
+    mine = LocalStore(root).put_artifact("property-record/v1", {"property": "p"}, {}, file=tmp_path / "f.txt")
+    assert main([*argv, "--json"]) == 0
+    out, err = capsys.readouterr()
+    assert [r["id"] for r in json.loads(out)] == [mine]
+    assert "1 artifact(s) from the index" in err and "never listed" in err and "1 of them only here" in err
+
+
+def test_select_json_stays_a_list_with_the_index_s_source_and_as_of_on_stderr(tmp_path, monkeypatch, capsys):
+    """An agent VM's stale build missed the day's captures and `--json` said nothing of its age: every form now ends with the
+    source and its as-of time on stderr, and `--json` stays the list its callers parse (`verity-vllm records publish
+    --newest-captures`), each row with its manifest, the index's rows included."""
+    from research.store.cli import main
+
+    monkeypatch.delenv(BI.READER_ENV, raising=False)
+    b, st, a1, mine = _readers_world(tmp_path)
+    BI.index(FsRemote(b), BI.default_path(st.root), now=T0)
+    capsys.readouterr()
+    assert main(["select", "--store", str(st.root), "--where", "meta.x=1", "--json"]) == 0
+    out, err = capsys.readouterr()
+    rows = {r["id"]: r for r in json.loads(out)}
+    assert set(rows) == {a1, mine} and rows[a1]["manifest"]["meta"] == {"x": 1} and rows[mine]["manifest"]["meta"] == {"x": 1}
+    assert err.strip().splitlines()[-1] == (f"2 artifact(s) from the index ({BI.default_path(st.root)}, complete as of "
+                                            "2026-10-11T18:00:00Z), 1 of them only here")
+    assert main(["select", "--store", str(st.root), "--where", "meta.x=1", "--ids"]) == 0
+    out, err = capsys.readouterr()
+    assert out.split() == sorted([a1, mine]) and "complete as of 2026-10-11T18:00:00Z" in err
 
 
 def test_the_postgres_reader_reads_read_only_with_column_names_and_selects_what_sqlite_selects(tmp_path, postgres):

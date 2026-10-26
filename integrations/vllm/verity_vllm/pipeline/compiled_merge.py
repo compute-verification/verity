@@ -1,4 +1,4 @@
-"""[R15 compiled] Merge the control-only and treatment-only commit_delta outputs of an Execution=compiled row into ONE paired summary
+"""Merge the control-only and treatment-only commit_delta outputs of an Execution=compiled row into ONE paired summary
 (summary.json / summary.md / runs.jsonl / verdict.json in --out), in the shape row_pod.sh's Commit stage reads.
 
 The two arms are separate processes because the treatment's record ops live inside the compiled graphs for the whole process; pairing is
@@ -26,12 +26,12 @@ def _json(p: Path, name: str) -> dict:
     return json.loads(f.read_text()) if f.exists() else {}
 
 
-def _bootstrap_ci(xs: list[float], n: int = 4000, seed: int = 0) -> tuple[float, float]:
-    import random
+def _bootstrap_ci(xs: list[float], n: int = 4000, *, seed: int) -> tuple[float, float]:
+    from verity_vllm.commit import challenge as CH
 
     if len(xs) < 2:
         return (float("nan"), float("nan"))
-    rng = random.Random(seed)
+    rng = CH.stream(seed)
     means = sorted(statistics.fmean(rng.choices(xs, k=len(xs))) for _ in range(n))
     return means[int(0.025 * n)], means[int(0.975 * n) - 1]
 
@@ -80,8 +80,8 @@ def main(a: Options) -> None:
             problems.append(f"compilation setting differs: {k}: control {cc.get(k)!r} vs treatment {ct.get(k)!r}")
     if cc.get("enforce_eager") is not False:
         problems.append(f"control is not compiled (enforce_eager={cc.get('enforce_eager')!r})")
-    if ct.get("compiled_taps") not in ("on", "kernels"):      # kernels = the S3 path of record (P_compiled kernel buffers); on = withdrawn record ops
-        problems.append("treatment process did not run with --compiled-taps on|kernels")
+    if ct.get("compiled_taps") not in ("on", "kernels", "served"):  # kernels = the S3 path of record (P_compiled kernel buffers); on = withdrawn record ops
+        problems.append("treatment process did not run with --compiled-taps on|kernels|served")
     if cc.get("compiled_taps") not in (None, "off"):
         problems.append("control process ran with compiled taps")
     # [coord M-0178 (2a)] the generated-kernel identity of both processes: the Triton kernel SOURCES Inductor emitted (kernel_set_sha256 over
@@ -102,6 +102,13 @@ def main(a: Options) -> None:
     # (the seam the hooks ride), which is not a launch, so it is reported, not compared.
     program_digests = None
     loaded_identity = None
+    # served: the Build of record is derived from the treatment's own Inductor artifact and rebuilt after its runs (manifest_verify); the
+    # control must have run the same generated kernels, else the record is not the served implementation
+    if ct.get("compiled_taps") == "served":
+        if not kernels_identified:
+            problems.append("served path: generated kernels not identified in both arms (inductor_kernels.json)")
+        elif not kernel_set_equal:
+            problems.append(f"served path: the treatment's generated kernel set differs from the control's: {kernel_diff}")
     if ct.get("compiled_taps") == "kernels":
         mc = json.loads(Path(a.manifest_control).read_text()) if a.manifest_control and Path(a.manifest_control).is_file() else None
         mt = json.loads(Path(a.manifest_treatment).read_text()) if a.manifest_treatment and Path(a.manifest_treatment).is_file() else None
@@ -366,7 +373,7 @@ def main(a: Options) -> None:
                       "commit_pass": (t.get("commit") or {}).get("commit_pass"), "run_root": (t.get("commit") or {}).get("run_root")})
     deltas = [p["delta_wall_s"] for p in pairs]
     ratio = [p["treatment_wall_s"] / p["control_wall_s"] for p in pairs if p["control_wall_s"]]
-    lo, hi = _bootstrap_ci(deltas)
+    lo, hi = _bootstrap_ci(deltas, seed=0)
     commit_pass = bool(trt) and all(bool((r.get("commit") or {}).get("commit_pass")) for r in trt) and not problems
     fail_reasons = [(r.get("commit") or {}).get("commit_fail_reason") for r in trt if not (r.get("commit") or {}).get("commit_pass")]
     tv = _json(T, "verdict.json")

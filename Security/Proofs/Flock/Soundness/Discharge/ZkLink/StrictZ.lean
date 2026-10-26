@@ -8,8 +8,9 @@ import Proofs.Flock.Soundness.StrictCR
 `StrictCRL.lean` for the compiled `--zk` session. Every term of `ksBoundAccZ` is a finder's collision probability: the
 rewinding finders (`forkFinder` at each committed object the lock fixes: each rep's level caps, pads root and `τ`
 commitment; `twoRuns` at level 0) and the self-clash finder (`oneRun`) run the compiled prover, and every pair they
-count is a collision of `H` (`opRZ_conflict_collision`, `opPadsZ_conflict_collision`, `opTauZ_conflict_collision`,
-`op₀Z_conflict_collision`, `SelfClashZ.collision`). So:
+count is a collision of `H` (`opRZ_conflict_collision`, `opPadsAtZ_conflict_collision`, `opTauZ_conflict_collision`,
+`op₀Z_conflict_collision`, `SelfClashZ.collision`). A cap's finder counts every pair, accepting or not, so it bounds
+`advRSZ`, which counts only runs accepting every table up to the table's (`forkE_capAcc_le`). So:
 
 * `ksBoundAccZ_le_strict`: a `--zk` table's knowledge bound in a session is at most `ksStrictZ`, at finders that
   satisfy `SHA512CRStrict` at budgets `qF` (rewinding) and `qS` (self-clash);
@@ -54,8 +55,8 @@ they open to different pairs. -/
 noncomputable def advPadsSFinderZ (r : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) : Finder Pair :=
   forkFinder (plurSZ Hs T pre.length) r
     (fun d => conflictPick Hs.H
-      (fun outs : List (OutZC F D Sl) => opPadsZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC))
-      fun x _ h => opPadsZ_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h)
+      (fun outs : List (OutZC F D Sl) => opPadsAtZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC))
+      fun x _ h => opPadsAtZ_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h)
     none (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)
 
 /-- **`Adv^τ_r`'s finder in the session**: at the table's rep `r`'s `τ` commitment, two continuations that open it to
@@ -82,7 +83,14 @@ noncomputable def selfSFinderZ (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs
       fun _ h => h.collision)
 
 /-- **`SHA512CRStrict` for a `--zk` table's finders in a session**: the rewinding finders at budget `qF`, the self-clash
-finder at budget `qS`. -/
+finder at budget `qS`.
+
+Assumption record. Claim: `cr/sha-512` (`Claims.StrictBirthday`). It assumes that each knowledge finder of one table
+(the rewinding finders at each level, the pads', `τ`'s and level 0's, and the self-clash finder) finds a SHA-512
+collision with probability at most `q²/2^513` at its budget: the generic birthday bound for 512-bit outputs. A hash
+premise: each field is `StrictCR.Finder.CR`, which is `Assumptions.SHA512CRStrict`, so it reduces to `StrictBirthday`
+and asks nothing of the verifier. As `Finder.CR` says, Lean doesn't tie `qF` and `qS` to the finders' real evaluations:
+they must bound them (`qF ≥ 2t′ + 2v`, `qS ≥ t′ + v`, `ASSUMPTIONS.md`). -/
 structure SessCRZ (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) (qF qS : ℝ) : Prop where
   fork : ∀ r ∈ Finset.range 2, ∀ ℓ ∈ Finset.Icc 1 T.sch.levels.length,
     (advRSFinderZ A Hs T pre post cap₀ r ℓ σ).CR Hs.H qF
@@ -94,17 +102,19 @@ structure SessCRZ (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) 
 theorem advRSZ_le_strict (r ℓ : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) {q : ℝ}
     (h : (advRSFinderZ A Hs T pre post cap₀ r ℓ σ).CR Hs.H q) :
     advRSZ A Hs T pre post cap₀ r ℓ σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
+  ((forkE_capAcc_le Hs T (plurSZ Hs T pre.length) (slotOf r ℓ + 4) pre.length r ℓ
+    (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)).trans
   (forkE_conflict_le Hs.H (plurSZ Hs T pre.length) (slotOf r ℓ + 4)
     (fun d (outs : List (OutZC F D Sl)) => opRZ Hs.H Hs.E Hs.Lf T.sch r ℓ d (outs.getD pre.length dfltOutZC))
     (fun _ x _ h => opRZ_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h)
-    (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)).trans h.le
+    (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ))).trans h.le
 
 theorem advPadsSZ_le_strict (r : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) {q : ℝ}
     (h : (advPadsSFinderZ A Hs T pre post cap₀ r σ).CR Hs.H q) :
     advPadsSZ A Hs T pre post cap₀ r σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
   (forkE_conflict_le Hs.H (plurSZ Hs T pre.length) r
-    (fun d (outs : List (OutZC F D Sl)) => opPadsZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC))
-    (fun _ x _ h => opPadsZ_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h)
+    (fun d (outs : List (OutZC F D Sl)) => opPadsAtZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC))
+    (fun _ x _ h => opPadsAtZ_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h)
     (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)).trans h.le
 
 theorem advTauSZ_le_strict (r : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) {q : ℝ}

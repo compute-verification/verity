@@ -1,4 +1,4 @@
-"""Canonical operand forms shared by the comparator's record and progression mappings (`program_compare.Prog`)."""
+"""Canonical operand forms shared by the comparator's record and progression mappings (`instance_sequence.Prog`)."""
 
 from __future__ import annotations
 
@@ -17,21 +17,14 @@ def weight_field_name(name: str) -> str:
     return name
 
 
+#: how many trailing fields of a record-form canonical tuple are its base, by kind (the rest is its head); 3 for any other kind
+_BASE_FIELDS = {"N": 4, "N-PAD": 4, "W": 2, "SUPPLIED": 2, "WIT": 2, "PFX": 2, "TOK": 2, "SEED": 2, "SPLITS": 2, "XREQ": 3}
+
+
 def as_progression(t: tuple) -> tuple:
     """A record-form canonical tuple as a one-run progression `head + (base, zero delta, 1)`, with the head/base split the
-    uniform mappings use: N / N-PAD -> base (s, jj, lo, hi); XREQ -> head (XREQ, kind), base (idx, lo, hi); W / SUPPLIED -> head
-    (W | SUPPLIED, name), base (lo, hi); W? / MUX-UNFOLD-FAILED -> base (idx | j, lo, hi); TOK / SEED / SPLITS -> base (lo, hi); a raw
-    run -> base (idx, lo, hi)."""
-    k = t[0]
-    if k in ("N", "N-PAD"):
-        base = t[1:5]
-    elif k in ("W", "SUPPLIED"):
-        base = t[2:4]
-    elif k in ("TOK", "SEED", "SPLITS"):
-        base = t[1:3]
-    elif k == "XREQ":
-        base = t[2:5]
-    else:   # W?, MUX-UNFOLD-FAILED, raw (space, idx, lo, hi)
-        base = t[-3:]
-    head = t[:len(t) - len(base)]
-    return head + (base, (0,) * len(base), 1)
+    uniform mappings use: N / N-PAD -> base (s, jj, lo, hi); XREQ -> head (XREQ, kind), base (idx, lo, hi); W / SUPPLIED / WIT -> head
+    (W | SUPPLIED | WIT, name), base (lo, hi); W? / MUX-UNFOLD-FAILED -> base (idx | j, lo, hi); TOK / SEED / SPLITS -> base (lo, hi);
+    PFX -> head (PFX, layer, kv), base (lo, hi); a raw run -> base (idx, lo, hi)."""
+    n = _BASE_FIELDS.get(t[0], 3)
+    return t[:-n] + (t[-n:], (0,) * n, 1)

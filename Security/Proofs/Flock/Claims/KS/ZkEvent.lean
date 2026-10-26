@@ -26,6 +26,10 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **An accepted masked run's reader looks up table `j`'s columns at `ZkTxNoOff`'s shape**: where the run's last
 message `f` sets up at `(spec, sts)` with two link points, the masked verdict accepts its record and proof files at any
 hashes and `liveOf` reads the record, the reader's table-`j` columns are `zkRepColsOf` at `shapeZKn` with
@@ -68,6 +72,30 @@ theorem cols_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins : In
   rw [hrun]
   simp only [↓reduceIte, Claims.Flock.zkRunCols, Claims.Flock.ZkRun.shape, hsh, Claims.Flock.zkLevel0, hzs,
     List.flatMap_cons, List.flatMap_nil, List.append_nil]
+
+end Gen
+
+/-- **An accepted masked run's reader looks up table `j`'s columns at `ZkTxNoOff`'s shape**: where the run's last
+message `f` sets up at `(spec, sts)` with two link points, the masked verdict accepts its record and proof files at any
+hashes and `liveOf` reads the record, the reader's table-`j` columns are `zkRepColsOf` at `shapeZKn` with
+`2 · |regions|` extra claims, on the live session's rep streams `2j`, `2j + 1` and proof files, below level 0's `2^d`
+of table `j`'s `Zk.schedule`. -/
+theorem cols_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {lv : Live} {j : ℕ} {sch : Schedule} {tPad : ℕ} (hf : lastFinal seen = some f)
+    (hset : setupOf true f.stmt = some (ins, spec, sts)) (hlv : liveOf spec f.record = .ok lv)
+    (hv : Zk.verifyWithM hs spec (tabsOf sts) f.record f.proofs = .ok ()) (hj : j < sts.size)
+    (hsch : Zk.schedule sts[j].m = .ok (sch, tPad)) (hp2 : spec.points = 2) :
+    cols true seen j = Claims.Flock.distinctBelow (sch.levels.getD 0 default).d
+      (Claims.Flock.zkRepColsOf (ZkExec.shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size))
+          (lv.streams.getD (2 * j) #[]) (f.proofs.getD (2 * j) ByteArray.empty) ++
+        Claims.Flock.zkRepColsOf (ZkExec.shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size))
+          (lv.streams.getD (2 * j + 1) #[]) (f.proofs.getD (2 * j + 1) ByteArray.empty)) :=
+  Gen.cols_zk (S := S₀) (hs := hs) (seen := seen) (f := f) (ins := ins) (spec := spec) (sts := sts) (lv := lv) (j := j)
+    (sch := sch) (tPad := tPad) (hf := hf) (hset := hset) (hlv := hlv) (hv := hv) (hj := hj) (hsch := hsch) (hp2 := hp2)
+
+namespace Gen
+
+variable [S : ZkSetup]
 
 /-- **The deployed masked event gives `AccTxJ`**: an accepting run of `V true` at SHA-512 decides on its messages and
 coins, and on a statement of draw `d`, at any `J ≤` the statement's tables above `j`, if the run's reader looks up no
@@ -132,5 +160,26 @@ theorem accTxJ_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Claim
   rw [hpr', zkRepColsOf_congr _ _ (hco (2 * j) _ hr₀), zkRepColsOf_congr _ _ (hco (2 * j + 1) _ hr₁),
     ← getD_empty, ← getD_empty, ← hcols]
   exact hno
+
+end Gen
+
+/-- **The deployed masked event gives `AccTxJ`**: an accepting run of `V true` at SHA-512 decides on its messages and
+coins, and on a statement of draw `d`, at any `J ≤` the statement's tables above `j`, if the run's reader looks up no
+column of table `j` off `C`, `AccTxJ` holds at table `j` at the run's live outcome (`viewOf`, at any `mPts`) and its
+link's root: `verify --zk` accepts what `wrS` writes for it at the setup at `d` (`acceptsAt_wrS`), and that transcript
+records the run's streams and proof files (`recordsLiveAtS_wrS`), whose columns are the reader's (`cols_zk`). -/
+theorem accTxJ_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {r : Fin ((V true).k x) → Coin} {N : ℕ} (C : Fin N → List 𝔽) (j : ℕ)
+    (h : (Claims.run sha512 P (V true) x ω r).out = .acc) :
+    ∃ s spec sts link c₁ mids f,
+      act true x ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst)
+          ((List.range ((Claims.run sha512 P (V true) x ω r).msgs.map Prod.fst).length).map (Claims.coinSeq r)) =
+        .decide s spec sts link c₁ mids f ∧
+      ∀ d {J : ℕ}, s.read.draw = some d → J ≤ sts.size → j < J →
+        (¬ ∃ (p : Fin N) (u : List 𝔽),
+          Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen j) p.val = some u ∧ u ≠ C p) →
+        AccTxJ s.read.I d j link.1.toArray C (viewOf J mPts spec link c₁ f) :=
+  Gen.accTxJ_of_run (S := S₀) (mPts := mPts) (Ω := Ω) (P := P) (x := x) (ω := ω) (r := r) (N := N) (C := C) (j := j)
+    (h := h)
 
 end FlockDeploy.KS

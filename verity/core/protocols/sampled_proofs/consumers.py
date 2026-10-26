@@ -42,8 +42,7 @@ def exfiltration_bound(profile: IntegrityProfile,
 
 def compute_bound(profile: IntegrityProfile, work: float | Mapping[str, float | Sequence[tuple[float, int]]]) -> float:
     """Compute security: except with probability delta, at most this much work lies in wrong units, the work the prover
-    could have skipped.  `work` is a unit's work, given as `exfiltration_bound`'s `output_bits` is.  Under sampled
-    proofs' profile, over replay units, a wrong unit's work is at most its class's largest RU: `n_v` verification units."""
+    could have skipped.  `work` is a unit's work, given as `exfiltration_bound`'s `output_bits` is."""
     return profile.harm_bound(work)
 
 

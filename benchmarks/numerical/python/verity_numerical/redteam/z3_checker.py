@@ -36,8 +36,6 @@ from verity_numerical.checker.gadgets import (
     StateOut,
 )
 from verity_numerical.checker.search import (
-    GOLDILOCKS,
-    SPECS,
     ModZ3Ctx,
     Spec,
     _model_dict,
@@ -50,7 +48,7 @@ from verity_numerical.checker.tables import (
     pow_table,
 )
 
-__all__ = ["BVCtx", "bv_group_step", "bv_tables_agree", "containment", "gadget_split", "gadgets_over_field"]
+__all__ = ["BVCtx", "bv_group_step", "bv_tables_agree", "containment", "gadget_split"]
 
 BV = 128
 
@@ -118,12 +116,6 @@ def _drop(ctx, drop: set[str]) -> None:
     ctx.rng = lambda name, x, lo, hi: None if name.split(".")[-1] in drop else orig["rng"](name, x, lo, hi)
     ctx.eq = lambda name, a, b: None if name.split(".")[-1] in drop else orig["eq"](name, a, b)
     ctx.lt_pow = lambda name, x, ipow, bits: None if name.split(".")[-1] in drop else orig["lt_pow"](name, x, ipow, bits)
-
-
-def gadgets_over_field(modulus: int = GOLDILOCKS, p: Params = REAL, *, timeout_ms: int = 20_000,
-                       names: tuple[str, ...] | None = None) -> list[dict[str, Any]]:
-    """Every gadget as stated (product ``lt_pow``), read over F_p, Boolean hints split."""
-    return [gadget_split(SPECS[n], p, modulus=modulus, timeout_ms=timeout_ms) for n in (names or SPECS)]
 
 
 # ---------------------------------------------------------------------------------------------------------------------

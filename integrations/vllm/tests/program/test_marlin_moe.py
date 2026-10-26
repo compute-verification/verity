@@ -4,23 +4,30 @@
 * the schedule against the template's partition written out here (init_slice / init_part2_slice's segment starts);
 * a split-K coordinate against its fold written out from the primitives: each segment's warp tree, folded from the highest k down;
 * the numpy twin (`kernels.marlin_moe_rows`) the H200 capture compares the kernel with, against the Definitions: the group, the
-  schedule, the coordinates and a whole pair launch over three experts;
-* `auto_config` on the shapes DeepSeek-V4-Pro's TP8 rank launches, and the moe block `fused_marlin_moe` picks for its batches.
+  schedule, the coordinates and a whole pair launch over three experts, which the replay row (`expert_gemm`) reproduces;
+* `auto_config` on the shapes DeepSeek-V4-Pro's TP8 rank launches, `served_config` over the H200 sweep, and the moe block
+  `fused_marlin_moe` picks for its batches.
 """
 from __future__ import annotations
+
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 import itertools
 
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
+from verity.ml.circuits.codec import lookup_primitive
+from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.evaluation.reference import statics_of
 from verity.ml.circuits.ops.prims import F2fpBf16
-from verity_vllm.program.kernels import marlin_moe_rows as MR
-from verity_vllm.program.registry import flashmla as F
-from verity_vllm.program.registry import marlin_moe as MM
-from verity_vllm.program.registry.prims import Bf16MulBf16, F32Add
+from verity_vllm.program.frontend.rules.vllm_marlin_moe import MARLIN_SERVED
+from verity.ml.definitions.numerics import marlin_moe_rows as MR
+from verity.ml.definitions.numerics import rows as RK
+from verity.ml.definitions.registry import flashmla as F
+from verity.ml.definitions.registry import marlin_moe as MM
+from verity.ml.definitions.registry.prims import Bf16MulBf16, F32Add
 
 DOT = MM.DOT
 E2M1_VALUES = [v for v in MM.E2M1_VALUES] + [-v for v in MM.E2M1_VALUES]
@@ -105,6 +112,55 @@ def test_schedule_is_total_and_the_twin_on_any_word() -> None:
         assert (got == MR.schedule(4, 3, 7, blk, par)).all(), (hex(blk), hex(par))
 
 
+def _vllm_align(ids: list[int], E: int, BM: int, order) -> tuple[list[int], int]:
+    """`moe_align_block_size_kernel` then `count_and_sort_expert_tokens_kernel`, the pairs taking their atomicAdd slots in ``order``:
+    (each pair's position in sorted_token_ids, or -1 for an expert outside [0, E); num_tokens_post_padded)."""
+    counts = [ids.count(e) for e in range(E)]
+    offset = np.concatenate([[0], np.cumsum([-(-c // BM) * BM for c in counts])]).tolist()
+    pos, nxt = [-1] * len(ids), offset[:E]
+    for p in order:
+        if 0 <= ids[p] < E:
+            pos[p], nxt[ids[p]] = nxt[ids[p]], nxt[ids[p]] + 1
+    return pos, offset[E]
+
+
+def _align_words(E: int, P: int, BM: int, ids: list[int], keys: list[int]) -> list[int]:
+    """`MoeAlignRanks_v1` over the pair indices, then `MoeAlignBlocks_v1` over its ranks, as the align rule emits them: blk + [par]."""
+    ids = [i & MM.M32 for i in ids]
+    rs = evaluate(bind(MM.MoeAlignRanks, E=E, P=P, BM=BM), ids, [k & MM.M32 for k in keys], list(range(P)))
+    return evaluate(bind(MM.MoeAlignBlocks, P=P, BM=BM), ids, rs[:P], rs[P:])
+
+
+@pytest.mark.parametrize("E,P,BM", [(4, 1, 8), (5, 12, 8), (6, 23, 48), (3, 30, 4)])
+def test_align_blocks_are_the_kernel_s_in_every_atomic_order(E: int, P: int, BM: int) -> None:
+    """With the GPU's sorted positions as keys the blocks are the kernel's, whatever order atomicAdd took (hot experts over several
+    blocks, an expert with none, ids outside [0, E)); any other keys, ties and negatives included, give the kernel's blocks in
+    some order: the pairs sorted by (key, index)."""
+    rng = np.random.default_rng(P)
+    for trial in range(6):
+        ids = rng.choice([0, 0, 0, E - 1, E - 1, 1, -1, E, 7 - 2**31], P).tolist() if trial % 3 == 2 else rng.integers(0, E, P).tolist()
+        pos, npp = _vllm_align(ids, E, BM, rng.permutation(P))
+        keys = [p if p >= 0 else int(k) for p, k in zip(pos, rng.integers(-5, 5, P))]
+        got = _align_words(E, P, BM, ids, keys)
+        assert [g for g, p in zip(got[:P], pos) if p >= 0] == [p // BM for p in pos if p >= 0] and got[P] == npp // BM, ids
+        keys = rng.integers(-3, 3, P).tolist()
+        want, _ = _vllm_align(ids, E, BM, sorted(range(P), key=lambda p: (keys[p], p)))
+        got = _align_words(E, P, BM, ids, keys)
+        assert [g for g, p in zip(got[:P], want) if p >= 0] == [p // BM for p in want if p >= 0] and got[P] == npp // BM, (ids, keys)
+
+
+def test_align_bodies_are_cut_per_pair() -> None:
+    """Both align Definitions are separable with no value two pair members compute, so the word check cuts one member however many
+    pairs a batch routes (DeepSeek-V4-Pro's 256-token prefill: 1536 pairs, 42.5M gates in one body)."""
+    from verity.ml.circuits.cut import separable
+    from verity.ml.definitions import word as W
+    from verity.ml.definitions.cross_call import members_check
+    for fn in (bind(MM.MoeAlignRanks, E=384, P=64, BM=8), bind(MM.MoeAlignBlocks, P=64, BM=8)):
+        assert separable(fn) is not None, fn.id
+        assert not members_check(fn, {})["recomputes"], fn.id
+        assert not W.unit_rule(fn, 16, 32, 0, memo={})["violations"], fn.id
+
+
 def test_divrem_is_c_int() -> None:
     for a, b in itertools.product([0, 7, -7, 2**31 - 1, -2**31], [1, 3, -3, 2**31 - 1, -2**31, -1, 0]):
         q, r = MM.i32_divrem(a & MM.M32, b & MM.M32)
@@ -164,6 +220,30 @@ def test_split_k_coordinate_is_its_fold_and_the_twin(TK: int) -> None:
     assert len(sums) > 1, "every split of these operands gives one sum: the test reads no fold order"
 
 
+def test_an_expert_row_unpacks_the_checkpoint_s_bytes() -> None:
+    """Byte j of a packed row holds codes 2j (low nibble) and 2j + 1, as `prepare_moe_mxfp4_layer_for_marlin` reads the checkpoint;
+    an expert outside [0, E) reads two zero codes a byte."""
+    rng = np.random.default_rng(4)
+    E, K = 3, 64
+    q = rng.integers(0, 16, (E, K))
+    packed = MR.pack_e2m1(q)
+    assert packed.shape == (E, K // 2) and (packed == (q[:, 0::2] | q[:, 1::2] << 4)).all()
+    row = bind(MM.MoeExpertE2m1Row, E=E, K=K)
+    for e in range(E):
+        assert list(evaluate(row, [e], packed.ravel().tolist())) == q[e].tolist(), e
+    assert list(evaluate(row, [E], packed.ravel().tolist())) == [0] * K
+    assert [evaluate(bind(MM.E2m1x2Codes), [b]) for b in (0x00, 0x8F, 0x1E)] == [(0, 0), (0xF, 0x8), (0xE, 0x1)]
+    with pytest.raises(ValueError):
+        bind(MM.MoeExpertE2m1Row, E=E, K=63).body
+
+
+def test_a_cold_decode_resolves_the_expert_gathers_by_id() -> None:
+    """GP-01 and the Match decode the request descriptor in a process that never built its expert-row gathers (one per expert
+    count): their ids resolve to the gathers the derive builds.  385 experts: a count nothing here builds first."""
+    for fid, make in (("GatherE2m1Pairx385_v1", MM.gather_e2m1_pair), ("GatherE8m0x385_v1", MM.gather_e8m0)):
+        assert lookup_primitive(REGISTRY, fid) is make(385), fid
+
+
 def test_pair_launch_over_three_experts_is_the_twin() -> None:
     rng = np.random.default_rng(3)
     E, K, N, TK, TN, GRID = 3, 256, 16, 128, 8, 5
@@ -175,7 +255,10 @@ def test_pair_launch_over_three_experts_is_the_twin() -> None:
         x = _bf16_rows(rng, (1, K))
         g = np.array([0.3], dtype=np.float32).view(np.uint32)
         lead = [x[0].tolist(), [e]] + ([[int(g[0])]] if routed else []) + [[blk], [par]]
-        got = evaluate(gemm, *lead, wq.ravel().tolist(), ws.ravel().tolist())
+        ops = [*lead, MR.pack_e2m1(wq).ravel().tolist(), ws.ravel().tolist()]
+        got = evaluate(gemm, *ops)
+        row = RK.ROWS[f"{fam.name}_v{fam.version}"].fn(statics_of(gemm), [np.asarray(a) for a in ops])["out"]
+        assert row.tolist() == list(got), ("the replay row is the Definition", routed, e, blk, par)
         if e >= E:
             assert all(v == 0x7FFF for v in got), "an expert outside [0, E) reads NaN weights"
             continue
@@ -205,6 +288,16 @@ def test_auto_config_on_the_rank_shapes() -> None:
         MR.auto_config(1, 768, 6, 132, {}, block=8)
     with pytest.raises(ValueError):
         MR.auto_config(922, 768, 6, 132, {(128, 128): 2}, block=32)
+
+
+def test_the_h200_sweep_gives_the_config_at_every_batch_of_its_moe_blocks() -> None:
+    """The GO capture's sweep (`MARLIN_SERVED`): at a batch it holds, its config; at the prefill's 256 tokens, which it did not sweep,
+    the one every limit consistent with the sweep's block-8 batches gives; past its blocks, none."""
+    w13, w2 = (MARLIN_SERVED[(384, 6, K, N, k)] for K, N, k in ((7168, 768, 6), (384, 7168, 1)))
+    assert len(MR.allows(w13, 8, 768, 6, 6, 384, 132)) == 4 and len(MR.allows(w2, 8, 7168, 6, 1, 384, 132)) == 20
+    assert [MR.served_config(w13, M, 768, 6, 6, 384, 132) for M in (1, 3, 256, 900)] == [(128, 64, 2), (128, 64, 4), (64, 128, 4), (64, 128, 3)]
+    assert [MR.served_config(w2, M, 7168, 6, 1, 384, 132) for M in (1, 256, 923)] == [(64, 128, 4), (64, 128, 4), (64, 128, 2)]
+    assert MR.served_config(w13, 2000, 768, 6, 6, 384, 132) is None, "a moe block of 48 is not in the sweep"
 
 
 @pytest.mark.parametrize("M,block", [(1, 8), (460, 8), (461, 16), (921, 16), (922, 32), (1843, 32), (1844, 48), (2764, 48),

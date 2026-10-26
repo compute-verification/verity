@@ -9,12 +9,14 @@ import Proofs.Accounting.TS.Tensor
 import Proofs.Accounting.TS.Sheet
 import Proofs.Accounting.TS.ProofsSound
 import Proofs.Accounting.TS.Fork
+import Proofs.Accounting.TS.Drawn
+import Proofs.Accounting.TS.Keyed
 import Proofs.Pouw.RelativeSecurity
 
 /-!
 # The tensor–scalar model's proofs
 
-Each guarantee of `Models.Accounting.Guarantees.TS` as `Accounting.SecurityProofs.TS.G` (the gap list:
+Each guarantee of `Definitions.Accounting.Guarantees.TS` as `Accounting.SecurityProofs.TS.G` (the gap list:
 note:20261017T0801Z-draft-lean-stmt). One file per prover group: the price lemmas (`TS/Price.lean`), the round lemmas
 (`TS/Rounds.lean`), Lemma 1 with Corollaries D1 and D2 (`TS/Facets.lean`), T1 and Lemma 2 (`TS/Tensor.lean`), the
 fan-in count with FOLD-OPT and FILL-OPT from it (`TS/FanIn.lean`), the fan-in floor of a fold of binding steps and

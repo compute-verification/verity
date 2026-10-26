@@ -10,8 +10,8 @@ On vy-nebius-2 the agent (`cluster agent`) runs beside today's tools. In shadow 
 through a lock), mirrors what it did into the ledger, and records what the planner would have done (`shadow.py`). In live
 mode it holds `/run/gpu-lease/agent.lock` and carries the plan out: it evicts by signal and grants by writing
 `grant.<pid>`, which `gpu-lease`'s agent mode (on `infra/nebius`, 49238797 in fixtures/) takes; a free `agent.lock` puts
-`gpu-lease` back on its own rules. The live agent runs as `vy-cluster-agent.service` (the unit file here, pinned to one
-shipped tree) with `--roll`: a new ledger segment under `live/` for each start and each UTC day, the segments one hash
+`gpu-lease` back on its own rules. The live agent runs as `vy-cluster-agent.service` (the unit file here, run from the
+copy of this directory that `research deploy` installs at `/workspace/verity-guest/cluster-agent`) with `--roll`: a new ledger segment under `live/` for each start and each UTC day, the segments one hash
 chain, which `cluster ledger ... live/` reads whole. `cluster shadow replay` runs the shadow over a day's copied logs, and `cluster shadow
 evaluate` is the pass bar. On vy-nebius-1, `nebius1` reads Kueue's pods and Workloads and DCGM's GPU-to-pod labels as
 allocations and a queue, and `python -m cluster.nebius1 DESCRIPTION [--save|--from SNAPSHOT]` prints what the planner would
@@ -50,10 +50,13 @@ src/cluster/
 │               unreplayed bundles (release.py's rule), read over SSH; read-only
 ├── policy.py   the policy a description declares ([policy]: each key and its owner) and every key where a node's live
 │               value differs, read over SSH; read-only
+├── policy_apply.py  the change that converges each key that differs, as a plan, and with --apply written on the node over
+│               SSH, logged in its override log and read back
 └── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate | status | policy
 descriptions/nebius.toml   vy-nebius-1 and vy-nebius-2 as their owners describe them on 30 Sep 2026, and their policy
+descriptions/nebius-after-n1.toml   node 2 alone, staged for node 1's retirement (INF-57): it replaces nebius.toml then
 kinds/<owner>.toml         each owner lane's job kinds, read from the tree a submitter ships (kinds.py's docstring)
-vy-cluster-agent.service   node 2's live agent as a systemd unit: install, pin, stop and restart in its header
+vy-cluster-agent.service   node 2's live agent as a systemd unit: install, stop and restart in its header
 tests/          one scenario per rule (test_plan.py), random workloads checked against every rule (test_simulation.py),
                 and node 2's own logs and gpu-lease (fixtures/: 30 Sep 07:20-07:58Z, the live gpu-lease 0d172cf3 and
                 the agent-mode gpu-lease 49238797 held for deploy)
@@ -71,6 +74,12 @@ runs with everything else on its node evicted (GPU work) or frozen (CPU work); t
 node and lower jobs backfill only around it; no job admitted past its node's admission end or its share's end, and frozen
 time not counted against `max_s`; equal jobs take turns by submitter; idle GPU leases named and reclaimed from `requeue`
 holders.
+
+A node's stop is machine state: its live `/etc/research/deadline`, which infra rewrites on each renewal. Node 2's agent
+reads it every tick (`agent --deadline-file`), and `research run --queue` reads each candidate node's over ssh and passes it
+as `cluster submit --stop NODE=EPOCH`, so a renewal places and plans without a new description. A node's `stops_at` is the
+fallback for when the file can't be read, and a refusal at the admission end names which of the two it used. A share whose
+`until = "stops_at"` lasts until its node's stop.
 
 A lease taken by hand over SSH (a kernel inner loop, a debugger) is a `session` allocation, so the same rules see it. A
 session may have no hard limit but an expected length (`gpu-lease` without `--max-min`), which plans backfill and is never
@@ -95,6 +104,8 @@ python3 -m cluster kueue-shadow loop --out RECORD.jsonl --hours H   # on vy-nebi
 uv run cluster policy show [--on nebius-1|nebius-2|all] [--key K] [--json]   # the policy in force: key, owner, source
 uv run cluster policy diff [--on nebius-1|nebius-2|all] [--json]   # over SSH: exit 1 drift, 3 a value unread
 uv run cluster policy override KEY VALUE --until 2026-10-04T10:30:00Z --by WHO --reason R [--apply]   # on KEY's node
+uv run cluster policy apply [--on nebius-1|nebius-2|all] [--key K] [--json]   # the plan: each change that converges a key
+uv run cluster policy apply --on nebius-2 [--key K] --apply --as WHO --reason R   # write it over SSH, log it, read it back
 ~~~
 
 Policy is what node services read from outside git: node 1's lease pools (the `n1-lease` panes' environment), Kueue's
@@ -102,9 +113,24 @@ ClusterQueue quotas and stop policies, the check and Lean slot files, `gpu-lease
 and node 2's booked windows and CPU sets. `[policy]` in the description declares each, with the handle who decides a
 change; `cluster policy diff` names every key whose live value differs or that the description lacks, and calls a key it
 couldn't read unknown, never as declared (node 2's are all unknown while a timed window is on: it reads nothing else then).
+While node 2's fill runner is down (`status.txt` over 15 min old and no `fill_runner.py` process), node 2 is read as quiet
+from `gpu-lease`'s own lines instead, and `diff` and `apply` print `read as quiet: WHY`: still never while a lease is
+`--timed`, one pid holds every GPU, someone waits for every GPU, or a booked window is on or starts within 30 min.
 A change that should end on its own is an override: `cluster policy override`, run on the key's node, records the value, who,
 why and until when in that node's hash-chained log (`/workspace/research/policy/overrides.jsonl`; a dry run without
-`--apply`), and `show` and `diff` use it until then. Nothing applies an override yet but `n1_lease.py`, which takes its pool's
-`max`, `borrow` and `borrow-until` from `cluster policy show --key vy-nebius-1.lease-pool.<pool> --json` when
-`$VY_POOL_POLICY` names that command; it writes the three in force to `n1-lease.limits` in its lease directory, and `diff`
-reads them there for such a loop, not from its environment.
+`--apply`), and `show` and `diff` use it until then. `n1_lease.py` takes its pool's `max`, `borrow` and `borrow-until` from
+`cluster policy show --key vy-nebius-1.lease-pool.<pool> --json` when `$VY_POOL_POLICY` names that command; it writes the
+three in force to `n1-lease.limits` in its lease directory, and `diff` reads them there for such a loop, not from its
+environment.
+
+`cluster policy apply` (`policy_apply.py`) converges the rest where it can. For each key `diff` calls drift it plans the
+exact change, as a diff of each file, and with `--apply --as WHO --reason R` writes it over the same SSH path, appends one
+`apply` record per key (key, value, was, who, why, the file's sha256 before and after) to the node's log, and reads the node
+again to confirm each key reads as in force. Its appliers: the check and Lean slot files and `fill/cpu-sets` (the key's line,
+the old one kept as a comment), `gpu-lease`'s direct-run maps (written whole: `gpu-lease` reads them whole), and the cpuset
+drop-in's `Delegate=` line (then `daemon-reload`, never `systemctl revert`, and `user.slice` must keep its AllowedCPUs). On
+vy-nebius-2 the drop-in is planned only, since `vy-device-cores` owns its cpusets. Lease pools, Kueue's queues, a node's
+`pools` and booked windows have no applier and are skipped, saying so; an unknown key is never applied, nor an undeclared
+one. The write is one command: on node 2 it starts with node 2's gate, so nothing is written while a timed window is on or
+near, nor while the fill runner is down (a write needs its fresh quiet status), and under the log's lock it writes nothing unless every file and the log are byte for byte what it planned from. Exit
+0 nothing left to change, 1 a change planned or a key skipped, 3 a key unknown, 4 an apply that failed or didn't read back.

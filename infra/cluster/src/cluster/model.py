@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import datetime as dt
 import tomllib
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +24,9 @@ from . import cpuset
 KINDS = ("batch", "service", "session", "stage")
 PREEMPT = ("never", "freeze", "requeue")
 OWNER, GUEST = "owner", "guest"
+DEADLINE_FILE = Path("/etc/research/deadline")
+DESCRIBED, LIVE = "the description's stops_at", f"the node's live {DEADLINE_FILE}"
+UNTIL_STOP = "stops_at"   # a share's `until` that ends with its node: the node's admission end bounds every job there
 
 
 class ModelError(ValueError):
@@ -38,6 +41,34 @@ def instant(value: str | int | None) -> int | None:
     if t.tzinfo is None:
         raise ModelError(f"instant {value!r} has no time zone")
     return int(t.timestamp())
+
+
+def iso(t: int) -> str:
+    return dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def read_deadline(path: str | Path = DEADLINE_FILE) -> int | None:
+    """A node's live stop: the epoch in its deadline file (`EPOCH ISO BY`, root's, rewritten by infra on each renewal; the
+    vy-deadline timer stops the VM at it). None when there is no file; 0 when it doesn't parse, as vy-deadline-check reads it."""
+    try:
+        words = Path(path).read_text().split()
+    except FileNotFoundError:
+        return None
+    return int(words[0]) if words and words[0].isdigit() else 0
+
+
+def with_stop(cluster: "Cluster", node: str, stops_at: int, source: str = LIVE) -> "Cluster":
+    """`cluster` with `node`'s stop at `stops_at`, read from `source` (the node's live deadline, which outranks the description)."""
+    if node not in cluster.nodes:
+        raise ModelError(f"a stop for unknown node {node!r}")
+    n = replace(cluster.nodes[node], stops_at=stops_at, stops_at_source=source)
+    return replace(cluster, nodes={**cluster.nodes, node: n})
+
+
+def with_live_stop(cluster: "Cluster", node: str, path: str | Path = DEADLINE_FILE) -> "Cluster":
+    """`with_stop` from the deadline file at `path` on the node itself; the description's stop when there is no file."""
+    live = read_deadline(path)
+    return cluster if live is None else with_stop(cluster, node, live, f"the node's live {path}")
 
 
 @dataclass(frozen=True)
@@ -57,6 +88,7 @@ class Node:
     memory_gib: int
     stops_at: int | None = None
     drain_s: int = 0
+    stops_at_source: str = DESCRIBED
     smt_pairs: bool = True
     pools: dict[str, frozenset[int]] = field(default_factory=dict)
     gpu_model: str = ""
@@ -77,16 +109,14 @@ class Node:
         """No allocation may run past this instant: the stop less the drain (final backups, custody)."""
         return None if self.stops_at is None else self.stops_at - self.drain_s
 
-    def numa_of_cpu(self, cpu: int) -> int:
-        return next(n for n, cs in self.numa.items() if cpu in cs)
-
     def gpu(self, index: int) -> Gpu:
         return next(g for g in self.gpus if g.index == index)
 
 
 @dataclass(frozen=True)
 class Share:
-    """What a project may hold on a node it doesn't own. Every limit is a cap; `None` leaves it to the node's size."""
+    """What a project may hold on a node it doesn't own. Every limit is a cap; `None` leaves it to the node's size, and an
+    `until` of None to the node's stop (a description's `until = "stops_at"`, which follows the node's live deadline)."""
     project: str
     node: str
     cpus: frozenset[int] | None = None
@@ -257,7 +287,8 @@ def from_dict(d: dict[str, Any]) -> Cluster:
     shares = tuple(
         Share(project=s["project"], node=s["node"], cpus=cpuset.parse(s["cpus"]) if "cpus" in s else None,
               max_gpus=s.get("max_gpus"), max_cpus=s.get("max_cpus"), max_memory_gib=s.get("max_memory_gib"),
-              max_jobs=s.get("max_jobs"), max_job_memory_gib=s.get("max_job_memory_gib"), until=instant(s.get("until")))
+              max_jobs=s.get("max_jobs"), max_job_memory_gib=s.get("max_job_memory_gib"),
+              until=None if s.get("until") == UNTIL_STOP else instant(s.get("until")))
         for s in d.get("shares", []))
     workstreams = tuple(Workstream(name=w["name"], node=w["node"], gpus=int(w["gpus"]), borrow_gpus=w.get("borrow_gpus"))
                         for w in d.get("workstreams", []))

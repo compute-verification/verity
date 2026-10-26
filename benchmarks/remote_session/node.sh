@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 # run.sh's SERVE=node, inside its lease (cwd = the source tree): one vLLM engine (engine.py, in VPY's venv) on each
-# leased GPU, then the prover (node.py, in PY's) over their weights arenas, while session.cu and kv.cu build; with
+# leased GPU, refused before any starts unless CUDA_VISIBLE_DEVICES names exactly the GPUs the lease holds (lease.py),
+# then the prover (node.py, in PY's) over their weights arenas, while session.cu and kv.cu build; with
 # ROLE=both (a smoke test, not the audit: the verifier must be another machine) the verifier beside them. The
 # engines' handshake is in $B; their logs and step records, and node.py's, go to $O. Every engine is stopped by PID
 # when the prover ends.
 #
 # MODEL the checkpoint (default unsloth/Llama-3.1-8B, bf16), ENGINE_ARGS engine.py's (such as --step-hz 2
-# --concurrency 64), ENGINE_CPUS the engines' cores (default 0-47), NODE_ARGS node.py's (such as --decode-s 60).
+# --concurrency 64; Qwen/Qwen2.5-32B's 61 GiB of weights take --arena-gib 62 --util 0.8), ENGINE_CPUS the engines'
+# cores (default 0-47), NODE_ARGS node.py's (such as --decode-s 60).
 set -uxo pipefail
 : "${O:?}" "${B:?}" "${RS:?}" "${PY:?}" "${VPY:?}" "${PORT:?}" "${PLAN:?}"
 IFS=, read -ra DEVS <<< "${CUDA_VISIBLE_DEVICES:?}"
+"$PY" $RS/lease.py "${#DEVS[@]}" || exit 3
 nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
   --format=csv,noheader -i "${GPU_LEASE_UUID:-$CUDA_VISIBLE_DEVICES}" >> "$O/gpu.txt" 2>&1
 FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)

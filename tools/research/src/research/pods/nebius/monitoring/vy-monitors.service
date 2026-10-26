@@ -1,5 +1,5 @@
 [Unit]
-Description=node 1's monitors: one pass, each incident written once when it opens and once when it clears (research/monitors.py)
+Description=node 2's monitors: one pass, each incident written once when it opens and once when it clears (research/monitors.py)
 After=network-online.target
 
 [Service]
@@ -17,4 +17,4 @@ Environment=PYTHONDONTWRITEBYTECODE=1
 # VY_MONITORS_SLACK_WEBHOOK, when Slack's incoming webhook is chosen (root-only file; its value is never logged)
 EnvironmentFile=-/etc/vy/monitors.env
 ExecStartPre=+/usr/bin/install -d -o research -g research /workspace/monitoring/alerts /workspace/monitoring/monitors
-ExecStart=/usr/bin/python3 -m research.monitors run --by vy-monitors@vy-nebius-1 --where node --alerts /workspace/monitoring/alerts --state /workspace/monitoring/monitors/state.json
+ExecStart=/usr/bin/python3 -m research.monitors run --by vy-monitors@vy-nebius-2 --where node --alerts /workspace/monitoring/alerts --state /workspace/monitoring/monitors/state.json

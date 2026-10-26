@@ -11,7 +11,8 @@ back: the value correspondence before the C2's components, the weights pin, cros
 cross-rank pass of every pair.
 
 Per rank (`replay_rank`), the bundle is opened against its manifest and against the record: the manifest sha256 the record names, the
-rank's run root in `runs.jsonl` and its combination into the pair's TP run root, the dumped store's step roots folding to it, the
+rank's run root in `runs.jsonl` and its combination into the pair's TP run root (under the form the record's ``root_tag`` names,
+`tp.run_root.combine`: SHA-512 over rows-sha512's 64-byte roots, or an older record's SHA-256 v1), the dumped store's step roots folding to it, the
 binding map's digest, the required manifest and the rank's Programs of record.  The rank's weight SHARDS are composed from the
 checkpoint (`weights_of_record.compose` at the rank's (world, rank)) and opened against the committed weights root
 (`cpu_replay.open_weights`).  Then the same C2 as the rank's process runs in place (`rank_replay.evaluate`, the same seed), and its
@@ -76,10 +77,13 @@ def result_path(out: str | os.PathLike, pair: int, rank: int) -> Path:
 
 # ------------------------------------------------------------------------------------------------ one rank, on CPU
 
-def _of_record(out: Path, dd: dict[str, Any], b: dict[str, Any], pair: int, rank: int) -> tuple[dict, dict, Any, Any, dict]:
-    """(the run's row, the rank's commit block, store, run, binding map) once the bundle is shown to be the record's; else Refused."""
+def _of_record(out: Path, dd: dict[str, Any], b: dict[str, Any], pair: int, rank: int, *,
+               awaiting: bool = True) -> tuple[dict, dict, Any, Any, dict]:
+    """(the run's row, the rank's commit block, store, run, binding map) once the bundle is shown to be the record's; else Refused.
+    ``awaiting=False`` (a reader of the committed values, `tp.serving_rows.from_bundle`): the rank's replay was deferred to this
+    bundle and is pending or passed; a rank whose replay failed is refused."""
     from verity_vllm.commit import store_dump as SD
-    from verity_vllm.pipeline.tp.commit import tp_run_root
+    from verity_vllm.pipeline.tp import run_root as RT
 
     ctx, bdir = b["context"], Path(b["path"])
     ent = next((x for x in dd.get("bundles") or [] if (int(x["pair"]), int(x["rank"])) == (pair, rank)), None)
@@ -89,10 +93,15 @@ def _of_record(out: Path, dd: dict[str, Any], b: dict[str, Any], pair: int, rank
         raise Refused(f"{bdir}: its context is pair {ctx['pair']} tp {ctx['tp']}, not pair {pair} rank {rank} of world {dd['world']}")
     row = next((r for r in _rows(out) if r["pair"] == pair and r["arm"] != "control"), None)
     c = ((row or {}).get("commit") or {}).get("per_rank", {}).get(str(rank))
-    if c is None or c.get("commit_pass") is not None or "replay_deferred" not in c:
-        raise Refused(f"pair {pair} rank {rank}: no rank awaiting its deferred replay in {out / 'runs.jsonl'}")
+    if c is None or "replay_deferred" not in c or c.get("commit_pass") is not None and (awaiting or c["commit_pass"] is not True):
+        raise Refused(f"pair {pair} rank {rank}: no rank " + ("awaiting its deferred replay" if awaiting else "whose deferred replay is pending or passed")
+                      + f" in {out / 'runs.jsonl'}")
     vec = {int(v["rank"]): bytes.fromhex(v["run_root"]) for v in row["commit"].get("commitment_vector") or []}
-    if len(vec) != int(dd["world"]) or tp_run_root(int(dd["world"]), vec).hex() != row["commit"].get("tp_run_root") or ctx["tp_run_root"] != row["commit"]["tp_run_root"]:
+    try:
+        combined = RT.combine(json.loads((out / "versions.json").read_text()).get("root_tag"), int(dd["world"]), vec).hex()
+    except ValueError as e:
+        raise Refused(f"pair {pair}: the commitment vector does not combine into a TP run root: {e}") from e
+    if len(vec) != int(dd["world"]) or combined != row["commit"].get("tp_run_root") or ctx["tp_run_root"] != row["commit"]["tp_run_root"]:
         raise Refused(f"pair {pair}: the commitment vector does not combine into the TP run root of record {str(row['commit'].get('tp_run_root'))[:16]}")
     store, run = SD.load(bdir / "store")
     folded = store._run_root(run)
@@ -123,6 +132,13 @@ def checkpoint_index(o: Options) -> Any:
     from verity_vllm.check import weights_of_record as WR
 
     return WR.CheckpointIndex(o.checkpoint_dir, checkpoints_manifest=o.checkpoints_manifest, model=o.model, revision=o.revision)
+
+
+def registered_roles(p: Any) -> dict[str, dict[str, Any]]:
+    """The rank's Build `weight_roles` by registered name (`cpu_replay.registered_roles` of its request Programs' dirs, less its index's prefix)."""
+    from verity_vllm.pipeline import cpu_replay as CPU
+
+    return CPU.registered_roles((v.get("dir") for v in p.loaded.values()), getattr(p.index, "prefix", "") or "")
 
 
 def _peak_rss() -> int:
@@ -158,7 +174,7 @@ def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int,
         p = RR.load(cfg, rank, int(dd["world"]))
         index = ck() if ck else checkpoint_index(o)
         words, wc = CPU.open_weights(bdir, tree, (c.get("weight_registration") or {}).get("root"), index, threads=o.threads,
-                                     tp={"world": int(dd["world"]), "rank": rank})
+                                     tp={"world": int(dd["world"]), "rank": rank}, roles=registered_roles(p))
         # the bytes the relations consume are the checkpoint's, opened against the run's committed weights root: self-consistency
         # with the run as in the rank's process, from the checkpoint's bytes; the pin of record stays the Commit's weights pin
         wc.update(self_consistent=wc["equal"], pin_of_record=None, pinned=None)
@@ -219,7 +235,8 @@ def fold(out: Path) -> bool | None:
                 sr, lk = res["sampled_replay"], res["boundary_linkage"]
                 C2.annotate_unreplayable([sr], xr, pair, set(dd["xrank_families"]))
                 ok, why = c["replay_deferred"]["pre"]
-                ok, why = C2.replay_gates(c, sr, lk, ok, why, rank=int(rk), replay_on=True, required=required)
+                ok, why = C2.replay_gates(c, sr, lk, ok, why, rank=int(rk), replay_on=True, required=required,
+                                          xrank_families=set(dd["xrank_families"]) if xr.get("result") is not None else None)
                 c["commit_pass"], c["commit_fail_reason"] = ok, why
                 c["replay_deferred"]["replayed"] = {k: res.get(k) for k in ("where", "host", "manifest_sha256", "wall_s", "peak_rss_bytes", "utc", "weights_attest")}
                 f_ = next(x for x in fin if int(x["rank"]) == int(rk))
@@ -279,7 +296,7 @@ def fold(out: Path) -> bool | None:
 
 def main(o: Options) -> int:
     from verity_vllm.check.replay.driver import PoolDoesNotFit
-    from verity_vllm.program.kernels.compiled_relations import warm_vml
+    from verity_vllm.program.compiled_relations import warm_vml
 
     out = Path(o.commit_out)
     try:

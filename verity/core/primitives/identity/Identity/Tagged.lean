@@ -19,7 +19,7 @@ namespace Identity
 
 open Lean (Json)
 
-def TAGGED_SHA512 : ByteArray := "verity/tagged-sha512/v1\x00".toUTF8
+def TAGGED_SHA512 : ByteArray := "verity/tagged-sha512/v1".toUTF8.push 0
 
 /-- The tagged hash's header: everything before the payload's bytes. -/
 def taggedHeader (tag : String) (payloadLen : Nat) : Flock.V ByteArray := do

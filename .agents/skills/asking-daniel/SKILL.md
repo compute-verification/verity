@@ -21,7 +21,14 @@ database's URL and data source (`pages`). A coordinator asks directly, one quest
 
 Only keys and claims need him (8 Oct, narrowed 13 Oct): access and keys, and what a guarantee says or rests on. Anything else,
 spend included, is its owner's call, and his standing rulings stand until he reverses them. Check the recorded rulings first
-("Rulings so far" in `.agents/skills/friction/SKILL.md`, `AGENTS.md`, the skills): if one covers the case, follow it.
+(`AGENTS.md`, the skills, "Standing rulings" in `.agents/skills/friction/SKILL.md`): if one covers the case, follow it.
+
+Until he says otherwise (19 Oct, 2:59 PM PDT: "provisionally accept all of them"), an ask that isn't keys or access
+goes on its page already decided: Status *Decided by lane*, Choose set to your pick, and Decision "Provisionally accepted
+(Daniel, 19 Oct 21:59Z standing rule): <option>. Re-check: <why it holds>". Resolve its card with that option and
+`--provisional` (implied by a `--note` starting "Provisionally accepted"), so the card says your lane decided, not Daniel, and act
+on it; he reviews them as a batch in the database's "Provisional, to review" view and can reverse any. On a page that does
+wait on him, leave Choose empty: a Choose there reads as his pick.
 
 A decision that waits in a note or a thread waits forever: every ask gets a card, which mentions him (1 Oct).
 
@@ -29,13 +36,17 @@ A decision that waits in a note or a thread waits forever: every ask gets a card
 
 Write it to this template, in Notion-flavored Markdown: inline math as ``$`\gamma \le 0.01`$`` (the backticks inside the
 dollars are required), display math in `$$` blocks, tables in `<table header-row="true">`, no Slack mrkdwn. `research msg ask-daniel --page` refuses a
-page that lacks a section or reorders them.
+page that lacks a section or reorders them, and adds the yellow reply callout if the page has none. A page made with the
+Notion MCP needs it too.
 
 ~~~markdown
 <callout icon="❓" color="gray_bg">
 	**Question.** One or two sentences.
 	**Recommendation.** The option, and a one-line reason.
 	**If you don't answer.** "<the default option> applies at <time PDT, day>." or, blocking: "Nothing happens; <what waits>."
+</callout>
+<callout icon="✍️" color="yellow_bg">
+	**Your reply.** Write below this line: a decision, a question or a change. Top relays it to the lane, which answers under your text starting with its handle.
 </callout>
 ## The problem
 Two to four short paragraphs: what is being decided, why now, what goes wrong without a decision.
@@ -98,7 +109,7 @@ once you've read the page as Daniel will), Asked by (your agent's URL), Card ID,
 - **See what changed:** `research msg ask-daniel pages --as <you>` lists your asks' pages edited in the last day (`--hours H`)
   with Status, Decision and the newest comment. Run it on every wake, and keep a 30-minute timer while you have an open ask.
   Top relays decisions and comments to your inbox too, but don't wait on it.
-- **A comment** from Daniel: revise the page, reply to the comment, add a line under "Updates since the card", and set Status
+- **A comment** from Daniel, or his text in the yellow "Your reply" callout: revise the page, reply to the comment (under his callout text), add a line under "Updates since the card", and set Status
   back to Waiting on Daniel if he set Revising. Start a reply with your handle (`@memory-accounting:`): the Notion MCP writes as
   Daniel's own account.
 - **A decision** is the page's Status: **Approved** takes the recommendation; **Decided otherwise** takes what he wrote in
@@ -111,6 +122,7 @@ once you've read the page as Daniel will), Asked by (your agent's URL), Card ID,
 
 ~~~bash
 research msg ask-daniel status <id> [--wait]                  # the card: "status choice source decided_at"; exit 0 once decided
+                                                              # --wait polls 20 min at most: still pending, it exits 79; end your turn
 research msg ask-daniel pages [--as HANDLE] [--hours H] [--json]
 research msg ask-daniel resolve <id> --choice <value> --note '<page url or his reply>'
 ~~~

@@ -24,8 +24,8 @@ ALU = 2
 IMAD = 1
 
 [skip.served]
-eps = 0.0146
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 3.962 SMSP-cycles a 4096-MAC MMA on DC-100; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 8K prefill: the linears' co32c recombination 0.325%; lm_head's co32c recombination 1.92e-07%; QKᵀ's cohalf sums 0.110%; P·V's pv digits, epilogue and scaling 1.03%. With P·V's served output checked it is 1.46% (8B) / 0.710% (70B) there. Skip terms: the checked leaves' vector work only the served output needs at the TS model's gap (TS_EPS of TS_CHEAT, pv_ts), on sm_120's instruction counts for the same kernel source, on this device's Π (note:20261017T0320Z-draft-eps1-calc Round 9)"
+eps = 0.0148
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 3.922 SMSP-cycles a 4096-MAC MMA on DC-100; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 8K prefill: the linears' co32c recombination 0.329%; lm_head's co32c recombination 1.94e-07%; QKᵀ's cohalf sums 0.112%; P·V's pv digits, epilogue and scaling 1.04%. With P·V's served output checked it is 1.48% (8B) / 0.717% (70B) there. Skip terms: the checked leaves' vector work only the served output needs at the TS model's gap (TS_EPS of TS_CHEAT, pv_ts), on sm_120's instruction counts for the same kernel source, on this device's Π (note:20261017T0320Z-draft-eps1-calc Round 9)"
 
 [mand.fold]
 eps = 0.0

@@ -4,39 +4,56 @@ import Definitions.Accounting.Gates.Model
 # The registry's primitives, each in one class (trusted)
 
 Every primitive of the registry in exactly one class of the model (`Model.lean`), as the 19:15Z ruling closes the free
-set (note:20261017T1859Z-report-property-redteam), 210 ids: the 194 of `verity/ml/circuits/ops/prims.py` at
+set (note:20261017T1859Z-report-property-redteam), 262 ids: the 194 of `verity/ml/circuits/ops/prims.py` at
 `615eabc13a`; S8-PORT's (`ops/s8.py` and `ops/boolean/s8.py` at `45351115eb`): the s8 family's two steps
 `BlackwellS8ImmaDot32` and `BlackwellU8S8ImmaDot32` and LimbSplit's four limb steps (`S32LowByte`, `S32ByteCarry`,
-`S32ClampS8`, `S32ClampRest`), each as its word Definition (`_v1`) and on bits (`_v2`); and PIN's spot check
-(`benchmarks/pouw/hashed_gemm/segment_e2e.py`): `PouwSegDot_v1`, `PouwDuoAbsorb_v1`, `PouwSel32_v1`, `PouwWinOk_v1`.
+`S32ClampS8`, `S32ClampRest`), each as its word Definition (`_v1`) and on bits (`_v2`); PIN's spot check
+(`benchmarks/pouw/hashed_gemm/segment_e2e.py`): `PouwSegDot_v1`, `PouwDuoAbsorb_v1`, `PouwSel32_v1`, `PouwWinOk_v1`;
+and the H1 + fx1 tile's (`verity/core/protocols/pouw/circuit/`'s `segment.py`, `h1tile.py`, `seeds.py`, `words.py` and
+`boolean.py` at `b5516bef2f`), each as its word Definition (`_v1`) and on bits (`_v2`): its segment dots (`PouwSegDot`'s
+`_v2` and `PouwSegDot0`), its noise (`PouwU129`, `PouwI8AddBit`, `PouwI8Add`, `PouwI8Neg`, and the seeds' composites
+`PouwUnitSeeds` and `PouwNoiseBlock`), its digits (`PouwDigitLo`, `PouwDigitHi`, `PouwDigitZ`, `PouwLow8`, `PouwSx8`,
+`PouwResAdd`), its fold (`PouwFx1Absorb`, `PouwXinFinal`, and `PouwXor32`'s `_v2` across lanes) and its one stream
+(`PouwOneStream2`, `PouwOneStream3`, `PouwWrapBits`, `PouwWrapSeg`, `PouwXWrap`, `PouwPeelSeg`), with v4's dead-tile
+mask (`PouwOrBit`, `PouwMask32`, #2902's `PouwH1Tile_v4`) and J10-R's call-scope noise (`PouwCallSeeds`, seed_c and
+σ_R a call, and `PouwAdd64`, a block's counter, #3403's `PouwH1Tile_v5` and `_v6`). Its exact accumulator
+`GemmAccumulatorS8_v2{K}` is a body of `BlackwellS8ImmaDot32_v2` steps, not a primitive, and isn't listed.
 
-* **free:** the s8-family steps (`family`, with their operand formats, `k` and clamp or wrap), whose window
-  property/v1 proves from derived ranges: the two IMMA steps (s8·s8 clamped, u8·s8 wrapped, `k = 32`), PIN's
-  `PouwSegDot_v1` (s8·s8 wrapped, `k = 32`) and route U's `PouwDot16U8S8_v1` (u8·s8 wrapped, `k = 16`), each the exact
-  dot mod `2^32`, so in the window the exact sum; `I32Add_v1` and `I32Sub_v1` (`affine`), proven not to wrap;
+* **free:** the s8-family steps (`family`, with their operand formats, `k` and clamp or wrap), each the exact dot mod
+  `2^32` (or clamped), so in its window the exact sum, and free only in a circuit whose windows interval analysis
+  proves (`Proven`, which `Guarantees.Gates.ProvenWindow` turns into every step's window): the two IMMA steps (s8·s8
+  clamped, u8·s8 wrapped, `k = 32`), the segment dots `PouwSegDot` (PIN's and H1's, s8·s8 wrapped, `k = 32`) and
+  `PouwSegDot0` (H1's first prefix words: `PouwSegDot` from 0, a gate of it reading the constant 0 as its accumulator),
+  and route U's `PouwDot16U8S8_v1` (u8·s8 wrapped, `k = 16`). A step on bits (`_v2`) is a Boolean body that no theorem
+  here equates with its word step; `I32Add_v1` and `I32Sub_v1` (`affine`), proven not to wrap;
   `Bf16ToF32_v1` (`affine`, `bf16ToF32Op`: `×2^16` from the bf16 word's s16 reading to the f32 word's s32 reading,
   which never wraps, `Guarantees.Gates.Bf16ToF32Affine`); the constants (`const`). An exact integer multiply by a
   constant is an affine gate only where it is proven in window (`I32Mul_v1` by a constant, translated so); an FP
   multiply by a constant rounds, and is a rounding.
 * **gathers** (`gather`, an `Op.gather` and never any other function), counted in fresh index bits (`units`): the
-  kernel-level gathers by family (`Gather{Bf16,F32,I32,E4m3,E2m1,E8m0}x{V}`), at their index, `⌈log₂ (V + 1)⌉` bits,
+  kernel-level gathers by family (`Gather{Bf16,F32,I32,E4m3,E2m1,E8m0}x{V}_v1`), at their index, `⌈log₂ (V + 1)⌉` bits,
   each with its family's out-of-range constant, its evaluator's, read signed at its width (`0x7FFF`, `0x7FC00000`,
-  `−1`, `0x7F`, `0`, `0xFF` read as `−1`), for a token outside `[0, V)`; and the table reads (`TableRead{n}x{w}`,
+  `−1`, `0x7F`, `0`, `0xFF` read as `−1`), for a token outside `[0, V)`; and the table reads (`TableRead{n}x{w}_v1`,
   `tableReadBits`), at their index's low `n` bits, `n` bits, which never leave their `2^n` entries: property/v1's
   `range` and `low` kinds. Its `lifted` kind (`LGatherRow`) is not listed, so refused.
 * **budgeted**, in units: `compareSelect` (comparisons, selections, min, max and clamps, `F32Sat_v1` and `S32ClampS8`
-  among them, the 1-bit logic ops `And2`, `Xor2`, `BitAnd`, `BitOr`, `BitXor`, `BitNot`, `Not`, the salt-dead tests
-  and PIN's `PouwSel32_v1` and `PouwWinOk_v1`); `fold` (the receipt fold's step, `PouwDuoAbsorb_v1`); and `rounding`,
-  every other primitive: FP arithmetic and casts (`E4m3ToF32_v1` and `F32Neg_v1` among them), the exact widenings
-  and packings but `Bf16ToF32_v1`, the FP and FP8 dots, integer division, remainder and narrowing, integer products
-  reduced mod `2^w` (`I32Mul_v1`, `NcpDot16I7_v1`, `PouwSqAcc_v1`: a wrap drops a carry), bit operations on words,
-  field extractions (`PouwWindowWord_v1` and the family `BitAtx`: a field of one runtime word, not a column, so never
-  a gather, whose constant index would cost nothing), LimbSplit's limb steps (the carries `Gate.role` gives), and
-  PoUW's integer helpers.
-* **inputs**, by family: `Input` ids are run inputs and `RegisteredInput` ids registered. A coin input is an `Input` id
-  whose port is kind coin (`verity/ml/circuits/ports.py`), so its binding is its port's, not its id's.
-* **refused:** any id neither list names (`classOf id = none`), and any gate whose operation isn't in its primitive's
-  class (`Classed`).
+  among them, the 1-bit logic ops `And2`, `Xor2`, `BitAnd`, `BitOr`, `BitXor`, `BitNot`, `Not`, the salt-dead tests,
+  PIN's `PouwSel32_v1` and `PouwWinOk_v1`, H1's wrap and digit tests `PouwWrapBits`, `PouwXWrap` and `PouwDigitZ`, and
+  v4's live bit and receipt mask `PouwOrBit` and `PouwMask32`);
+  `fold` (the receipt folds' steps, `PouwDuoAbsorb_v1` and fx1's `PouwFx1Absorb`); and `rounding`, every other
+  primitive: FP arithmetic and casts (`E4m3ToF32_v1` and `F32Neg_v1` among them), the exact widenings and packings but
+  `Bf16ToF32_v1`, the FP and FP8 dots, integer division, remainder and narrowing, integer products and sums reduced mod
+  `2^w` (`I32Mul_v1`, `NcpDot16I7_v1`, `PouwSqAcc_v1`, H1's `PouwWrapSeg`, `PouwPeelSeg` and one streams: a wrap
+  drops a carry), bit operations on words, field extractions (`PouwWindowWord_v1` and the family `BitAtx`: a field of
+  one runtime word, not a column, so never a gather, whose constant index would cost nothing), LimbSplit's limb steps
+  (the carries `Gate.role` gives), and PoUW's integer helpers (H1's noise, digits and `PouwXinFinal` among them).
+* **inputs**, by family: `Input{n}_v1` ids are run inputs and `RegisteredInput{n}_v1` ids registered. A coin input is
+  an `Input` id whose port is kind coin (`verity/ml/circuits/ports.py`), so its binding is its port's, not its id's
+  (`Class.listed`).
+* **families** are full patterns, as property/v1's: a family's id is its prefix, a positive numeral with no leading `0`
+  and `_v1` (`numbered`), and a table read's `TableRead`, its `n`, `x`, its `w` and `_v1`.
+* **refused:** any id neither list names (`classOf id = none`: another version of a family, or a numeral it lacks,
+  among them), and any gate whose operation isn't in its primitive's class (`Classed`).
 
 `classOf` is what property/v1's closed table is to agree with, id for id. It agrees with the red team's closed table
 (art:d013436943c9bd70e44e92a229805087ac531a2f59023750030d78353e7bb784) on every id but `PouwDot16U8S8_v1`, free here
@@ -208,29 +225,66 @@ def registry : List (String × Class) := [
   ("NvLogf_v2", .budgeted .rounding),
   ("PouwAdd64Hi_v1", .budgeted .rounding),
   ("PouwAdd64Lo_v1", .budgeted .rounding),
+  ("PouwAdd64_v1", .budgeted .rounding),
+  ("PouwAdd64_v2", .budgeted .rounding),
   ("PouwAdd8_v1", .budgeted .rounding),
   ("PouwAddSub8_v1", .budgeted .rounding),
   ("PouwBf16Neg_v1", .budgeted .rounding),
   ("PouwBlackwellE4m3SaltDead_v1", .budgeted .compareSelect),
   ("PouwBlackwellE4m3Window_v1", .budgeted .rounding),
+  ("PouwCallSeeds_v1", .budgeted .rounding),
+  ("PouwCallSeeds_v2", .budgeted .rounding),
   ("PouwCh32_v1", .budgeted .rounding),
   ("PouwChi32_v1", .budgeted .rounding),
+  ("PouwDigitHi_v1", .budgeted .rounding),
+  ("PouwDigitHi_v2", .budgeted .rounding),
+  ("PouwDigitLo_v1", .budgeted .rounding),
+  ("PouwDigitLo_v2", .budgeted .rounding),
+  ("PouwDigitZ_v1", .budgeted .compareSelect),
+  ("PouwDigitZ_v2", .budgeted .compareSelect),
   ("PouwDot16U8S8_v1", .family .u8 .s8 16 false),
   ("PouwDuoAbsorb_v1", .budgeted .fold),
   ("PouwETilde_v1", .budgeted .rounding),
   ("PouwF32SqrtRn_v1", .budgeted .rounding),
   ("PouwFormX3_v1", .budgeted .rounding),
   ("PouwFormX_v1", .budgeted .rounding),
+  ("PouwFx1Absorb_v1", .budgeted .fold),
+  ("PouwFx1Absorb_v2", .budgeted .fold),
   ("PouwHopperE4m3SaltDead_v1", .budgeted .compareSelect),
   ("PouwHopperE4m3Window_v1", .budgeted .rounding),
   ("PouwI32ToF32Rn_v1", .budgeted .rounding),
+  ("PouwI8AddBit_v1", .budgeted .rounding),
+  ("PouwI8AddBit_v2", .budgeted .rounding),
+  ("PouwI8Add_v1", .budgeted .rounding),
+  ("PouwI8Add_v2", .budgeted .rounding),
+  ("PouwI8Neg_v1", .budgeted .rounding),
+  ("PouwI8Neg_v2", .budgeted .rounding),
+  ("PouwLow8_v1", .budgeted .rounding),
+  ("PouwLow8_v2", .budgeted .rounding),
   ("PouwMaj32_v1", .budgeted .rounding),
+  ("PouwMask32_v1", .budgeted .compareSelect),
+  ("PouwMask32_v2", .budgeted .compareSelect),
   ("PouwNegBetaSum16_v1", .budgeted .rounding),
+  ("PouwNoiseBlock_v1", .budgeted .rounding),
+  ("PouwNoiseBlock_v2", .budgeted .rounding),
   ("PouwNoiseByte_v1", .budgeted .rounding),
+  ("PouwOneStream2_v1", .budgeted .rounding),
+  ("PouwOneStream2_v2", .budgeted .rounding),
+  ("PouwOneStream3_v1", .budgeted .rounding),
+  ("PouwOneStream3_v2", .budgeted .rounding),
+  ("PouwOrBit_v1", .budgeted .compareSelect),
+  ("PouwOrBit_v2", .budgeted .compareSelect),
   ("PouwPackBE4_v1", .budgeted .rounding),
+  ("PouwPeelSeg_v1", .budgeted .rounding),
+  ("PouwPeelSeg_v2", .budgeted .rounding),
+  ("PouwResAdd_v1", .budgeted .rounding),
+  ("PouwResAdd_v2", .budgeted .rounding),
   ("PouwRotl64Hi_v1", .budgeted .rounding),
   ("PouwRotl64Lo_v1", .budgeted .rounding),
+  ("PouwSegDot0_v1", .family .s8 .s8 32 false),
+  ("PouwSegDot0_v2", .family .s8 .s8 32 false),
   ("PouwSegDot_v1", .family .s8 .s8 32 false),
+  ("PouwSegDot_v2", .family .s8 .s8 32 false),
   ("PouwSel32_v1", .budgeted .compareSelect),
   ("PouwSha512BigSigma0Hi_v1", .budgeted .rounding),
   ("PouwSha512BigSigma0Lo_v1", .budgeted .rounding),
@@ -244,9 +298,24 @@ def registry : List (String × Class) := [
   ("PouwSqCeil_v1", .budgeted .rounding),
   ("PouwSqGe_v1", .budgeted .compareSelect),
   ("PouwSub8_v1", .budgeted .rounding),
+  ("PouwSx8_v1", .budgeted .rounding),
+  ("PouwSx8_v2", .budgeted .rounding),
+  ("PouwU129_v1", .budgeted .rounding),
+  ("PouwU129_v2", .budgeted .rounding),
+  ("PouwUnitSeeds_v1", .budgeted .rounding),
+  ("PouwUnitSeeds_v2", .budgeted .rounding),
   ("PouwWinOk_v1", .budgeted .compareSelect),
   ("PouwWindowWord_v1", .budgeted .rounding),
+  ("PouwWrapBits_v1", .budgeted .compareSelect),
+  ("PouwWrapBits_v2", .budgeted .compareSelect),
+  ("PouwWrapSeg_v1", .budgeted .rounding),
+  ("PouwWrapSeg_v2", .budgeted .rounding),
+  ("PouwXWrap_v1", .budgeted .compareSelect),
+  ("PouwXWrap_v2", .budgeted .compareSelect),
+  ("PouwXinFinal_v1", .budgeted .rounding),
+  ("PouwXinFinal_v2", .budgeted .rounding),
   ("PouwXor32_v1", .budgeted .rounding),
+  ("PouwXor32_v2", .budgeted .rounding),
   ("RopeOutAdd_v1", .budgeted .rounding),
   ("RopeOut_v1", .budgeted .rounding),
   ("RsqrtApprox_v1", .budgeted .rounding),
@@ -273,9 +342,9 @@ def registry : List (String × Class) := [
   ("Ue8m0InvScale_v1", .budgeted .rounding),
   ("Xor2_v1", .budgeted .compareSelect)]
 
-/-- The kernel-level families, by their id's prefix, each gather with its out-of-range constant read signed at its
-width: bf16's NaN `0x7FFF` and f32's `0x7FC00000` (`Evaluate.Act.gather`), i32's `−1`, e4m3's NaN `0x7F`, e2m1's
-zero code and e8m0's NaN `0xFF` (`fp8_moe_experts._gather`). -/
+/-- The kernel-level families, by their id's prefix (`numbered`: the prefix, a numeral and `_v1`), each gather with its
+out-of-range constant read signed at its width: bf16's NaN `0x7FFF` and f32's `0x7FC00000` (`Evaluate.Act.gather`),
+i32's `−1`, e4m3's NaN `0x7F`, e2m1's zero code and e8m0's NaN `0xFF` (`fp8_moe_experts._gather`). -/
 def families : List (String × Class) := [
   ("Input", .input .run),
   ("RegisteredInput", .input .registered),
@@ -288,17 +357,31 @@ def families : List (String × Class) := [
   ("BitAtx", .budgeted .rounding),
   ("TopPMaskWordx", .budgeted .compareSelect)]
 
-/-- A table read's index bits, the `n ≥ 1` of `TableRead{n}x{w}_v1`: it reads its table at its index's low `n` bits. -/
-def tableReadBits (id : String) : Option ℕ :=
-  if id.startsWith "TableRead" then
-    (((id.drop 9).takeWhile Char.isDigit).toString.toNat?).filter (0 < ·)
+/-- The value of a positive decimal numeral with no leading `0`, else none. -/
+def numeral : List Char → Option ℕ
+  | [] => none
+  | c :: cs =>
+      if c != '0' && (c :: cs).all Char.isDigit then
+        some ((c :: cs).foldl (fun n d => 10 * n + (d.toNat - '0'.toNat)) 0)
+      else none
+
+/-- The numeral `n` of an id `{pre}{n}_v1` (`numeral`), else none. -/
+def numbered (pre id : List Char) : Option ℕ :=
+  if pre.isPrefixOf id && "_v1".toList.isSuffixOf id then
+    numeral ((id.drop pre.length).take (id.length - pre.length - 3))
   else none
+
+/-- A table read's index bits, the `n` of `TableRead{n}x{w}_v1` (`n` and `w` numerals): it reads its table at its
+index's low `n` bits. -/
+def tableReadBits (id : String) : Option ℕ :=
+  let n := (id.toList.drop 9).takeWhile Char.isDigit
+  (numbered ("TableRead".toList ++ n ++ ['x']) id.toList).bind fun _ => numeral n
 
 /-- A primitive id's class: the registry's entry, else a table read's (fill 0, never read: its table has `2^n`
 entries), else its family's, else none (refused). -/
 def classOf (id : String) : Option Class :=
   (registry.lookup id).orElse fun _ => ((tableReadBits id).map fun n => .gather (some n) 0).orElse fun _ =>
-    (families.find? fun e => id.startsWith e.1).map Prod.snd
+    (families.find? fun e => (numbered e.1.toList id.toList).isSome).map Prod.snd
 
 /-- `Bf16ToF32_v1`'s operation: `×2^16`, from the bf16 word's s16 reading to the f32 word's s32 reading. -/
 def bf16ToF32Op {ι : Type} : Op ι := .affine 0 [2 ^ 16]
@@ -312,10 +395,15 @@ def Op.cls {ι : Type} : Op ι → Class
   | .gather low d => .gather low d
   | .budgeted cls _ => .budgeted cls
 
+/-- A class as its primitive's id lists it: a coin input's is a run input's (`Input{n}_v1`), its binding its port's. -/
+def Class.listed : Class → Class
+  | .input .coin => .input .run
+  | c => c
+
 /-- **Every gate is its primitive's** (what the census checks, refusing the circuit otherwise): its primitive is
-listed, its operation is in the primitive's class, and a gate at a dot step (`Site.dot`) is an s8-family step. Its
-role is then its primitive's and its statics' (`Gate.role`). -/
+listed, its operation is in the primitive's class (`Class.listed`), and a gate at a dot step (`Site.dot`) is an
+s8-family step. Its role is then its primitive's and its statics' (`Gate.role`). -/
 def Classed {ι : Type} (C : Dag ι) : Prop :=
-  ∀ g ∈ C, classOf g.prim = some g.op.cls ∧ ∀ K L tail s, g.site = .dot K L tail s → g.op.IsMma
+  ∀ g ∈ C, classOf g.prim = some g.op.cls.listed ∧ ∀ K L tail s, g.site = .dot K L tail s → g.op.IsMma
 
 end Accounting.Gates

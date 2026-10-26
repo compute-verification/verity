@@ -199,7 +199,7 @@ class Collections:
 
 def request_body(model: str, q: dict) -> bytes:
     return json.dumps({"model": model, "prompt": q["prompt"], "max_tokens": q["max_tokens"], "temperature": 0.0,
-                       "ignore_eos": True, "stream": True, "return_token_ids": True}).encode()
+                       "top_p": 1.0, "ignore_eos": True, "stream": True, "return_token_ids": True}).encode()
 
 
 def request_record(q: dict, body: bytes) -> dict:
@@ -283,7 +283,7 @@ def offline_engine(args: argparse.Namespace, commit: bool, meta: dict, mix: Sequ
         return eng, None
     from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
 
-    com = NativeCollectCommitter(eng, run_id="network-traces", retain_values=False, arena_bytes=None)
+    com = NativeCollectCommitter(eng, run_id="network-traces", retain_values=False, arena_bytes=None, commit_scheme="vllm-v1")
     com._gpu_ext_load()  # the GPU tree's extension is built on first use: on a cold node, 86 s that would spill past t0
     t = clock()
     com.register_weights()

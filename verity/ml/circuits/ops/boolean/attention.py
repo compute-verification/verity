@@ -2,6 +2,8 @@
 
     F32AddFtz_v3, F32SubFtz_v3, F32MulFtz_v3   (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>       word view: their _v1
     F32FmaFtz_v3, F32FmaSubFtz_v3              (a, b, c: Array<32, Value<1>>) -> Array<32, Value<1>>    word view: their _v1
+    F32AddFtz_v4, F32SubFtz_v4, F32MulFtz_v4   (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>       word view: their _v2
+    F32FmaFtz_v4, F32FmaSubFtz_v4              (a, b, c: Array<32, Value<1>>) -> Array<32, Value<1>>    word view: their _v2
     F32Max_v2                                  (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>       word view: F32Max_v1
     GuardNegInfZero_v2                         (m: Array<32, Value<1>>) -> Array<32, Value<1>>          word view: GuardNegInfZero_v1
     Fa2InvSum_v2                               (sum: Array<32, Value<1>>) -> Array<32, Value<1>>        word view: Fa2InvSum_v1
@@ -23,7 +25,8 @@ from . import softmax as SM
 from verity.ml.circuits.boolean.forms import NOT, OR, const_bits, mux, or_reduce
 from verity.ml.circuits.boolean.trace import definition
 
-__all__ = ["Fa2InvSum", "F32AddFtz", "F32FmaFtz", "F32FmaSubFtz", "F32Max", "F32MulFtz", "F32SubFtz", "GuardNegInfZero"]
+__all__ = ["Fa2InvSum", "F32AddFtz", "F32AddFtzV4", "F32FmaFtz", "F32FmaFtzV4", "F32FmaSubFtz", "F32FmaSubFtzV4", "F32Max",
+           "F32MulFtz", "F32MulFtzV4", "F32SubFtz", "F32SubFtzV4", "GuardNegInfZero"]
 
 F32 = Array(32, BL.BIT)
 _AB = (("a", F32), ("b", F32))
@@ -39,6 +42,16 @@ F32FmaFtz = definition("F32FmaFtz", 3, SM.f32_fma_ftz, _ABC, F32, word=W.F32FmaF
                        doc="FFMA.FTZ on bits: F32FmaFtz_v1, ftz(RN(ftz(a) * ftz(b) + ftz(c)))")
 F32FmaSubFtz = definition("F32FmaSubFtz", 3, SM.f32_fma_sub_ftz, _ABC, F32, word=W.F32FmaSubFtz,
                           doc="FFMA.FTZ with negated addend on bits: F32FmaSubFtz_v1, ftz(RN(ftz(a) * ftz(b) - ftz(c)))")
+F32AddFtzV4 = definition("F32AddFtz", 4, SM.f32_add_ftz_gpu, _AB, F32, word=W.F32AddFtzV2,
+                         doc="FADD.FTZ on bits: F32AddFtz_v2, ftz(RN(ftz(a) + ftz(b))), every NaN 0x7FFFFFFF")
+F32SubFtzV4 = definition("F32SubFtz", 4, SM.f32_sub_ftz_gpu, _AB, F32, word=W.F32SubFtzV2,
+                         doc="FADD.FTZ with negated second operand on bits: F32SubFtz_v2, every NaN 0x7FFFFFFF")
+F32MulFtzV4 = definition("F32MulFtz", 4, SM.f32_mul_ftz_gpu, _AB, F32, word=W.F32MulFtzV2,
+                         doc="FMUL.FTZ on bits: F32MulFtz_v2, ftz(RN(ftz(a) * ftz(b))), every NaN 0x7FFFFFFF")
+F32FmaFtzV4 = definition("F32FmaFtz", 4, SM.f32_fma_ftz_gpu, _ABC, F32, word=W.F32FmaFtzV2,
+                         doc="FFMA.FTZ on bits: F32FmaFtz_v2, ftz(RN(ftz(a) * ftz(b) + ftz(c))), every NaN 0x7FFFFFFF")
+F32FmaSubFtzV4 = definition("F32FmaSubFtz", 4, SM.f32_fma_sub_ftz_gpu, _ABC, F32, word=W.F32FmaSubFtzV2,
+                            doc="FFMA.FTZ with negated addend on bits: F32FmaSubFtz_v2, every NaN 0x7FFFFFFF")
 F32Max = definition("F32Max", 2, SM.f32_max, _AB, F32, word=W.F32Max,
                     doc="FA2 MaxOp on bits: F32Max_v1, x > y ? x : y on the flushed operands")
 GuardNegInfZero = definition("GuardNegInfZero", 2, SM.guard_neg_inf_zero, (("m", F32),), F32, word=W.GuardNegInfZero,

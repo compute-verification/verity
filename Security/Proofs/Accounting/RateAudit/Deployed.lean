@@ -1,5 +1,5 @@
 import Mathlib
-import Models.Accounting.Guarantees.RateAuditDeployed
+import Definitions.Accounting.Guarantees.RateAuditDeployed
 import Proofs.Accounting.RateAudit.Session
 
 /-!
@@ -453,8 +453,10 @@ theorem pr_window_le (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n
   simpa [e, hω, hc] using hy
 
 /-- A session's draws over one store as a causal family of the horizon (`Horizon.Causal`): any event of the openings
-and correct receipts that the family's own bound covers has at most that bound. -/
-theorem pr_draws_of_causal (A : DeployedSession n P N b h ρ S L q r s d G) (Ev : Store N b →
+and correct receipts that the family's own bound covers has at most that bound, on any store `store ω` drawn before
+the session's coins. -/
+theorem pr_draws_map_of_causal {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
+    (A : DeployedSession n P N b h ρ S L q r s d G) (Ev : Store N b →
       (Fin n → WindowCoins P N b h ρ r s d) → Prop) (B : ℝ≥0∞)
     (hB : ∀ (X : Fin n → Type) [∀ w, Fintype (X w)]
       (Gs : (w : Fin n) → ((v : Fin n) → X v × (Fin d → Fin (P * N))) → Finset (Fin (P * N))),
@@ -463,10 +465,12 @@ theorem pr_draws_of_causal (A : DeployedSession n P N b h ρ S L q r s d G) (Ev 
         (∀ ω w t, (f ω w).2 t ∈ (A.win w (f ω)).correctAll E (f ω w).1 → (ω w).2 t ∈ Gs w ω) →
         (∀ ω w, (Gs w ω).card = ((A.win w (f ω)).correctAll E (f ω w).1).card) →
         pr (fun ω => Ev E (f ω)) ≤ B) :
-    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) => Ev x.1 x.2) ≤ B := by
+    pr (fun x : Ω × (Fin n → WindowCoins P N b h ρ r s d) => Ev (store x.1) x.2) ≤ B := by
   classical
   rw [pr_equiv (Equiv.prodComm _ _)]
-  refine pr_le_of_fiber _ _ (fun E => ?_)
+  refine pr_le_of_fiber _ _ (fun ω => ?_)
+  show pr (fun y => Ev (store ω) y) ≤ B
+  generalize store ω = E
   let X : Fin n → Type := fun _ => Fin P → PassCoins N b h ρ r s
   let e : (Fin n → WindowCoins P N b h ρ r s d) ≃ ((w : Fin n) → X w × (Fin d → Fin (P * N))) :=
     Equiv.piCongrRight (fun _ => (Equiv.refl _).prodCongr (Equiv.arrowCongr (Equiv.refl _) finProdFinEquiv))
@@ -489,14 +493,28 @@ theorem pr_draws_of_causal (A : DeployedSession n P N b h ρ S L q r s d G) (Ev 
     fun ω w => Finset.card_map _
   exact hB X Gs hG e.symm E hmem hcard
 
+/-- `pr_draws_map_of_causal` on a uniform store. -/
+theorem pr_draws_of_causal (A : DeployedSession n P N b h ρ S L q r s d G) (Ev : Store N b →
+      (Fin n → WindowCoins P N b h ρ r s d) → Prop) (B : ℝ≥0∞)
+    (hB : ∀ (X : Fin n → Type) [∀ w, Fintype (X w)]
+      (Gs : (w : Fin n) → ((v : Fin n) → X v × (Fin d → Fin (P * N))) → Finset (Fin (P * N))),
+      Causal (s := fun _ => d) Gs → ∀ (f : ((v : Fin n) → X v × (Fin d → Fin (P * N))) → Fin n →
+        WindowCoins P N b h ρ r s d) (E : Store N b),
+        (∀ ω w t, (f ω w).2 t ∈ (A.win w (f ω)).correctAll E (f ω w).1 → (ω w).2 t ∈ Gs w ω) →
+        (∀ ω w, (Gs w ω).card = ((A.win w (f ω)).correctAll E (f ω w).1).card) →
+        pr (fun ω => Ev E (f ω)) ≤ B) :
+    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) => Ev x.1 x.2) ≤ B :=
+  pr_draws_map_of_causal id A Ev B hB
+
 /-- **A session's pooled draws over the horizon**: every window's openings land on correct receipts while the session
 holds at most `K`. -/
-theorem pr_draws_horizon_le (A : DeployedSession n P N b h ρ S L q r s d G) (K : ℕ) :
-    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
-        (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1) ∧
-          ∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ K)
+theorem pr_draws_horizon_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
+    (A : DeployedSession n P N b h ρ S L q r s d G) (K : ℕ) :
+    pr (fun x : Ω × (Fin n → WindowCoins P N b h ρ r s d) =>
+        (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1) ∧
+          ∑ w, ((A.win w x.2).correctAll (store x.1) (x.2 w).1).card ≤ K)
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) := by
-  refine pr_draws_of_causal A (fun E y => (∀ w t, (y w).2 t ∈ (A.win w y).correctAll E (y w).1) ∧
+  refine pr_draws_map_of_causal store A (fun E y => (∀ w t, (y w).2 t ∈ (A.win w y).correctAll E (y w).1) ∧
     ∑ w, ((A.win w y).correctAll E (y w).1).card ≤ K) _ (fun X _ Gs hG f E hmem hcard => ?_)
   refine (pr_mono (fun ω hω => ?_)).trans
     ((Horizon.pr_causal_le' n (P * N) (d * K) X (fun _ => d) Gs hG).trans (le_of_eq ?_))
@@ -516,19 +534,49 @@ theorem pr_draws_horizon_le (A : DeployedSession n P N b h ρ S L q r s d G) (K 
     rw [show (P : ℝ≥0∞) * N * (d * n) = d * (n * P * N) by ring]
     exact ENNReal.mul_div_mul_left _ _ hd' (ENNReal.natCast_ne_top d)
 
-/-- **A session's pooled draws in every window**: every window's openings land on correct receipts while some window
-holds at most `K_w`. -/
-theorem pr_draws_window_le (A : DeployedSession n P N b h ρ S L q r s d G) (Kw : ℕ) :
+/-- `pr_draws_horizon_le_map` on a uniform store. -/
+theorem pr_draws_horizon_le (A : DeployedSession n P N b h ρ S L q r s d G) (K : ℕ) :
     pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1) ∧
-          ∃ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ Kw)
+          ∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ K)
+      ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
+  pr_draws_horizon_le_map id A K
+
+/-- **A session's pooled draws in every window**: every window's openings land on correct receipts while some window
+holds at most `K_w`. -/
+theorem pr_draws_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
+    (A : DeployedSession n P N b h ρ S L q r s d G) (Kw : ℕ) :
+    pr (fun x : Ω × (Fin n → WindowCoins P N b h ρ r s d) =>
+        (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1) ∧
+          ∃ w, ((A.win w x.2).correctAll (store x.1) (x.2 w).1).card ≤ Kw)
       ≤ ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) := by
-  refine pr_draws_of_causal A (fun E y => (∀ w t, (y w).2 t ∈ (A.win w y).correctAll E (y w).1) ∧
+  refine pr_draws_map_of_causal store A (fun E y => (∀ w t, (y w).2 t ∈ (A.win w y).correctAll E (y w).1) ∧
     ∃ w, ((A.win w y).correctAll E (y w).1).card ≤ Kw) _ (fun X _ Gs hG f E hmem hcard => ?_)
   refine (pr_mono (fun ω hω => ?_)).trans ((Horizon.pr_floor_le n (P * N) Kw d X Gs hG).trans (le_of_eq ?_))
   · obtain ⟨hall, w, hw⟩ := hω
     exact ⟨fun w t => hmem ω w t (hall w t), w, (hcard ω w).trans_le hw⟩
   · simp only [Nat.cast_mul, mul_assoc]
+
+/-- `pr_draws_window_le_map` on a uniform store. -/
+theorem pr_draws_window_le (A : DeployedSession n P N b h ρ S L q r s d G) (Kw : ℕ) :
+    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+        (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1) ∧
+          ∃ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ Kw)
+      ≤ ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
+  pr_draws_window_le_map id A Kw
+
+/-- **A session's pooled draws**, on any store `store ω` drawn before the session's coins: every window's openings
+land on correct receipts while the session holds at most `K` in all or some window at most `K_w`. -/
+theorem pr_draws_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
+    (A : DeployedSession n P N b h ρ S L q r s d G) (K Kw : ℕ) :
+    pr (fun x : Ω × (Fin n → WindowCoins P N b h ρ r s d) =>
+        (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1) ∧
+          (∑ w, ((A.win w x.2).correctAll (store x.1) (x.2 w).1).card ≤ K ∨
+            ∃ w, ((A.win w x.2).correctAll (store x.1) (x.2 w).1).card ≤ Kw))
+      ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
+        ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
+  (pr_mono (fun _ ⟨hall, h⟩ => h.imp (fun hK => ⟨hall, hK⟩) (fun hw => ⟨hall, hw⟩))).trans
+    ((pr_or_le _ _).trans (add_le_add (pr_draws_horizon_le_map store A K) (pr_draws_window_le_map store A Kw)))
 
 /-- **A session's pooled draws**: every window's openings land on correct receipts while the session holds at most
 `K` in all or some window at most `K_w`. -/
@@ -539,8 +587,7 @@ theorem pr_draws_le (A : DeployedSession n P N b h ρ S L q r s d G) (K Kw : ℕ
             ∃ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ Kw))
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
         ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
-  (pr_mono (fun _ ⟨hall, h⟩ => h.imp (fun hK => ⟨hall, hK⟩) (fun hw => ⟨hall, hw⟩))).trans
-    ((pr_or_le _ _).trans (add_le_add (pr_draws_horizon_le A K) (pr_draws_window_le A Kw)))
+  pr_draws_le_map id A K Kw
 
 /-- A session's unpaid words from a per-window bound: the probability that some window's reads and `P` slacks fall
 short of its correct receipts' words is at most `n·ε`. -/
@@ -559,6 +606,41 @@ theorem pr_unpaid_le {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G)
           (fun C y => C.reads tier y.1 y.2.1 + P * slack < (C.correctAll y.1 y.2.1).card * b) _ (hε w))
     _ = (n : ℝ≥0∞) * ε := by rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
+/-- **The session's words, in counts, from an unpaid bound**, on any store `store ω` drawn before the session's coins:
+every opening passes while the session's reads and `n·P` slacks fall short of `K + 1` words, or some window's reads
+and `P` slacks of `K_w + 1`, at most the draws' bound and `ε_u`, a bound on some window's unpaid words. -/
+theorem pr_paid_of_unpaid_map {τ : ℕ} {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
+    (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (slack K Kw : ℕ) (εu : ℝ≥0∞)
+    (hu : pr (fun x : Ω × (Fin n → WindowCoins P N b h ρ r s d) =>
+        ∃ w, (A.win w x.2).reads tier (store x.1) (x.2 w).1 + P * slack <
+          ((A.win w x.2).correctAll (store x.1) (x.2 w).1).card * b) ≤ εu) :
+    pr (fun x : Ω × (Fin n → WindowCoins P N b h ρ r s d) =>
+        (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1) ∧
+          (∑ w, (A.win w x.2).reads tier (store x.1) (x.2 w).1 + n * (P * slack) < (K + 1) * b ∨
+            ∃ w, (A.win w x.2).reads tier (store x.1) (x.2 w).1 + P * slack < (Kw + 1) * b))
+      ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
+        ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) + εu := by
+  have h₁ := pr_draws_le_map store A K Kw
+  refine (pr_mono (fun x hx => ?_)).trans ((pr_or_le _ _).trans (add_le_add h₁ hu))
+  obtain ⟨hall, hT | ⟨w, hw⟩⟩ := hx
+  · by_cases hD : ∑ w, ((A.win w x.2).correctAll (store x.1) (x.2 w).1).card ≤ K ∨
+        ∃ w, ((A.win w x.2).correctAll (store x.1) (x.2 w).1).card ≤ Kw
+    · exact Or.inl ⟨hall, hD⟩
+    refine Or.inr ?_
+    by_contra hno
+    push Not at hno hD
+    have hle := Finset.sum_le_sum (fun w (_ : w ∈ Finset.univ) => hno w)
+    rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul,
+      ← Finset.sum_mul] at hle
+    have hK : (K + 1) * b ≤ (∑ w, ((A.win w x.2).correctAll (store x.1) (x.2 w).1).card) * b :=
+      Nat.mul_le_mul_right _ hD.1
+    omega
+  · by_cases hD : ∑ w, ((A.win w x.2).correctAll (store x.1) (x.2 w).1).card ≤ K ∨
+        ∃ w, ((A.win w x.2).correctAll (store x.1) (x.2 w).1).card ≤ Kw
+    · exact Or.inl ⟨hall, hD⟩
+    push Not at hD
+    exact Or.inr ⟨w, hw.trans_le (Nat.mul_le_mul_right _ (hD.2 w))⟩
+
 /-- **The session's words, in counts, from a per-window bound**: every opening passes while the session's reads and
 `n·P` slacks fall short of `K + 1` words, or some window's reads and `P` slacks of `K_w + 1`, at most the draws' bound
 and `n·ε`. -/
@@ -570,28 +652,8 @@ theorem pr_paid_of_window {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s
           (∑ w, (A.win w x.2).reads tier x.1 (x.2 w).1 + n * (P * slack) < (K + 1) * b ∨
             ∃ w, (A.win w x.2).reads tier x.1 (x.2 w).1 + P * slack < (Kw + 1) * b))
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
-        ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) + (n : ℝ≥0∞) * ε := by
-  have h₁ := pr_draws_le A K Kw
-  have h₂ := pr_unpaid_le A tier slack _ hε
-  refine (pr_mono (fun x hx => ?_)).trans ((pr_or_le _ _).trans (add_le_add h₁ h₂))
-  obtain ⟨hall, hT | ⟨w, hw⟩⟩ := hx
-  · by_cases hD : ∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ K ∨
-        ∃ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ Kw
-    · exact Or.inl ⟨hall, hD⟩
-    refine Or.inr ?_
-    by_contra hno
-    push Not at hno hD
-    have hle := Finset.sum_le_sum (fun w (_ : w ∈ Finset.univ) => hno w)
-    rw [Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul,
-      ← Finset.sum_mul] at hle
-    have hK : (K + 1) * b ≤ (∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card) * b :=
-      Nat.mul_le_mul_right _ hD.1
-    omega
-  · by_cases hD : ∑ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ K ∨
-        ∃ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ Kw
-    · exact Or.inl ⟨hall, hD⟩
-    push Not at hD
-    exact Or.inr ⟨w, hw.trans_le (Nat.mul_le_mul_right _ (hD.2 w))⟩
+        ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) + (n : ℝ≥0∞) * ε :=
+  pr_paid_of_unpaid_map id A tier slack K Kw _ (pr_unpaid_le A tier slack _ hε)
 
 /-- **The session's words, in counts**: `pr_paid_of_window` at `pr_unpaid_draw_le`'s `P·G·ε` a window. -/
 theorem pr_paid_le {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X slack K Kw : ℕ)

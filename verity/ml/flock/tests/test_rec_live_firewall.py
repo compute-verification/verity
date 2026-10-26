@@ -6,6 +6,7 @@ schedule is required, derived from the statement's public shape (`schedule_for`)
 from __future__ import annotations
 
 import json
+import re
 import socket
 import threading
 from pathlib import Path
@@ -58,6 +59,37 @@ def test_an_honest_session_is_held_to_its_schedule():
     sched = _schedule()
     proxy = _proxy(sched)
     assert _held(_run(proxy)) and RL.schedule_of(proxy.coins.record()) == sched
+
+
+def _extra(rec):
+    rec["rounds"].append({**rec["rounds"][-1], "k": 2})
+    rec["streams"]["circuit/rep0"]["rounds"] = 3
+
+
+def _coins(rec):
+    rec["rounds"][1]["n"], rec["rounds"][1]["coins"] = 2, rec["rounds"][1]["coins"] * 2
+
+
+@pytest.mark.parametrize("change,why", [
+    (_extra, 'the record declares the streams {"circuit/rep0":{"at":0,"parent":"","rounds":3}}'),
+    (lambda rec: rec["rounds"].pop(), "1 rounds, and the schedule's 2"),
+    (_coins, 'round 1 is {"commits":1,"k":1,"level0":0,"n":2,"stream":"circuit/rep0","tops":[]} of 2 coins'),
+    (lambda rec: rec["rounds"][1]["coins"].append(rec["rounds"][1]["coins"][0]), "round 1 is "),
+    (lambda rec: rec["rounds"][0].__setitem__("level0", 0), 'round 0 is {"commits":0,"k":0,"level0":0,'),
+], ids=["extra-round", "missing-round", "coin-count", "coins-not-n", "level0"])
+def test_a_finished_record_off_its_schedule_is_refused(change, why):
+    """`on_schedule`, the verifier's `RecVStar.checkSchedule`: an honest session's record is on its schedule. A record
+    that ends ``finish`` and is off it, as a session that bypassed the proxy leaves it (an extra round, a missing round,
+    a round of another coin count, coins other than its ``n``, a round of another ``level0``), is refused."""
+    sched = _schedule()
+    proxy = _proxy(sched)
+    assert _held(_run(proxy))
+    rec = proxy.coins.record()
+    assert rec["end"] == "finish"
+    RL.on_schedule(rec, sched)
+    change(rec)
+    with pytest.raises(ValueError, match=re.escape(why)):
+        RL.on_schedule(rec, sched)
 
 
 @pytest.mark.parametrize("n", [0, 16, 31, 33, 48, 16000])

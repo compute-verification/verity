@@ -1,6 +1,6 @@
-"""The tables a program brings as registered inputs (`registry.tables`): the read takes the table as an operand, the Definitions
-that read it compute what their twins, whose primitive evaluator holds the table, compute, and a `registered_values` derivation
-registers the table instead."""
+"""The tables a program brings as registered inputs (`registry.tables`): the read takes the table as an operand, and the Definitions
+that read it compute what their twins, whose primitive evaluator holds the table, compute. A `registered_values` derivation of
+Gemma-2's GeGLU registers no table: its Boolean version computes the activation (`registry.boolean_tanh`)."""
 
 from __future__ import annotations
 
@@ -9,12 +9,12 @@ import pytest
 
 from verity.ml.circuits.evaluation import RegisteredTable, evaluate
 from verity.ml.circuits.codec import encode_program, program_digest
-from verity.ml.circuits.constants import REGISTRATION, inputs, program_data
+from verity.ml.circuits.constants import REGISTRATION, inputs
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value
-from verity_vllm.program.registry import dense as D
-from verity_vllm.program.registry import tables as T
+from verity.ml.definitions.registry import dense as D
+from verity.ml.definitions.registry import tables as T
 
 
 def test_the_read_takes_the_entry_at_the_index_low_bits_its_words_low_first():
@@ -36,6 +36,19 @@ def test_the_read_takes_the_entry_at_the_index_low_bits_its_words_low_first():
         T.table_read(4, 1)
 
 
+def test_a_read_has_its_boolean_form_up_to_max_words():
+    """`table_read` makes `TableRead{IB}x{EW}_v2` with the read (`verity.ml.circuits.boolean.table`, by which C-Flock lowers it) up
+    to `BT.MAX_WORDS` table words, and `gelu_tanh_bf16`'s and `tanh_rn`'s reads, past it, have none."""
+    from verity.ml.circuits.boolean import table as BT
+    from verity.ml.circuits.defs import REGISTRY
+
+    r = T.table_read(6, 1)
+    assert REGISTRY.defs["TableRead6x1_v2"] is BT.table_read(r, 6) and REGISTRY.defs["TableRead6x1_v2"].word is r
+    for name in ("gelu_tanh_bf16", "tanh_rn"):
+        p = T.table_read(*T.TABLES[name])
+        assert f"{p.name}_v2" not in REGISTRY.defs
+
+
 def test_a_program_reading_a_table_decodes_where_it_was_not_built(tmp_path):
     """`TableRead16x1_v1` comes from its lazy family in a process that never built a Definition reading it."""
     import json
@@ -46,7 +59,7 @@ def test_a_program_reading_a_table_decodes_where_it_was_not_built(tmp_path):
     d = tmp_path / "p.json"
     d.write_text(json.dumps(encode_program(prog)))
     code = ("import json, sys; from verity.ml.circuits.codec import decode_program, program_digest; from verity.ml.circuits.defs import REGISTRY; "
-            "import verity_vllm.program.registry.tables; assert 'TableRead16x1_v1' not in REGISTRY; "
+            "import verity.ml.definitions.registry.tables; assert 'TableRead16x1_v1' not in REGISTRY; "
             "print(program_digest(decode_program(json.load(open(sys.argv[1])), REGISTRY)))")
     out = subprocess.run([sys.executable, "-c", code, str(d)], capture_output=True, text=True, check=True).stdout.split()
     assert out == [program_digest(prog)]
@@ -90,8 +103,8 @@ def test_the_strict_lift_of_a_table_read_holds_its_widths_as_runs():
     of 2^28, and a list for a narrow primitive; the lift of `TableRead16x1_v1` (past the layout's wide fan-in too) still maps an
     active, a ⊥ and an invalid table word as the flat widths do."""
     from verity.ml.circuits.ops import scalar as SC
-    from verity_vllm.program.registry import lifted as L
-    from verity_vllm.program.registry import operand_widths as OW
+    from verity.ml.definitions.registry import lifted as L
+    from verity.ml.definitions.registry import operand_widths as OW
 
     assert OW.leaf_widths(T.table_read(27, 2).params).runs == ((1, 32), (1 << 28, 16))
     assert OW.leaf_widths(SC.SelectF32.params) == [1, 32, 32]
@@ -103,6 +116,7 @@ def test_the_strict_lift_of_a_table_read_holds_its_widths_as_runs():
     assert lp.evaluate(L.enc_bot(16), *words) == L.enc_bot(16)
 
 
+@pytest.mark.slow
 def test_gelu_tanh_mul_v3_is_v1_on_every_gate_word():
     """One batch over all 65,536 bf16 gate words (random up words), plus the special up words, against `GeluTanhMulBf16_v1`."""
     rng = np.random.default_rng(13)
@@ -117,14 +131,15 @@ def test_gelu_tanh_mul_v3_is_v1_on_every_gate_word():
         assert evaluate(T.GeluTanhMulBf16V3, g, u, table) == (D.GeluTanhMulBf16.evaluate(g, u),)
 
 
-def test_a_registered_values_derivation_registers_the_gelu_table():
-    """`_C.gelu_tanh_and_mul` under `registered_values`: `GeluTanhMul_v3` reads the registered `gelu_tanh_bf16` (a parameter after
-    the `values`), no Call reads a table its evaluator holds, and the Program computes what the constants derivation computes."""
+def test_a_registered_values_derivation_registers_no_gelu_table():
+    """`_C.gelu_tanh_and_mul` under `registered_values`: `GeluTanhMul_v1`, as the constants derivation binds it, with no table
+    parameter (its Boolean version, `boolean_tanh.GeluTanhMul_v4`, computes the activation), and the Program computes what the
+    constants derivation computes."""
     import torch
 
     from verity_vllm.program.frontend.derive import derive_report
     from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
-    from verity_vllm.program.kernels.serve3_reference import materialize
+    from verity.ml.definitions.numerics.serve3_reference import materialize
 
     class GeGLU(torch.nn.Module):
         def __init__(self, I: int) -> None:
@@ -145,19 +160,18 @@ def test_a_registered_values_derivation_registers_the_gelu_table():
     const, reg = derive_report(m, x, **kw), derive_report(m, x, registered_values=True, **kw)
     assert const.ok and reg.ok, reg.unsupported
     prog, twin = reg.program, Program(const.flat_definition)
-    assert [n for n, _ in prog.fn.body.params] == ["x", "values", "gelu_tanh_bf16", "weights"]
-    assert prog.bindings == ("run", "registration", "registration", "run")
-    assert reg.provenance["supplied"]["tables"] == [{"param": 2, "name": "gelu_tanh_bf16"}]
+    assert [n for n, _ in prog.fn.body.params] == ["x", "values", "weights"]
+    assert prog.bindings == ("run", "registration", "run")
+    assert not reg.provenance["supplied"].get("tables")
     calls = {n.fn.id for n in reg.flat_definition.body.nodes}
-    assert calls == {"GeluTanhMul_v3{I=8}", "RMSNormTriton_v3{N=16}"}
+    assert calls == {"GeluTanhMul_v1{I=8}", "RMSNormTriton_v3{N=16}"}
     assert {n.fn.id for n in const.flat_definition.body.nodes} >= {"GeluTanhMul_v1{I=8}"}
-    assert len(inputs(prog.circuit)[REGISTRATION]) == 1 + (1 << 16)
-    assert {cid for _g, cid in program_data(prog.root).get("GeluTanhMulBf16_v3", [])} <= {"Const32[0x00000000]_v1"}
+    assert len(inputs(prog.circuit)[REGISTRATION]) == 1
     rng = np.random.default_rng(14)
     xs = [int(v) >> 16 for v in (rng.standard_normal(32).astype(np.float32) * 2).view(np.uint32)]
     w = [int(v) >> 16 for v in (rng.standard_normal(16).astype(np.float32)).view(np.uint32)]
     eps = int(np.float32(1e-6).view(np.uint32))
     a = materialize(twin, [xs, w])
-    b = materialize(prog, [xs, [eps], T.table_words("gelu_tanh_bf16"), w])
+    b = materialize(prog, [xs, [eps], w])
     assert [b[g] for g in prog.circuit.root_outputs()] == [a[g] for g in twin.circuit.root_outputs()]
 

@@ -4,7 +4,13 @@ For the expert reviewer and for Table 1. This file states every named assumption
 soundness theorems take, each in full; the detail behind them is in `assumptions/`. What is proved is in `README.md`
 and, for the audit layer, `Audit/README.md`. `DESIGN.md` holds the derivations.
 
-**The end-to-end theorem** is a skeleton: `flock_e2e_count` and `flock_e2e_drawn`, in `E2E.lean`, and
+**The guarantee of record** for the one-stage `--zk` audit is `Flock.Guarantees.EndToEnd`
+(`../EndToEnd/Statement.lean`, proved as `Flock.SecurityProofs.EndToEnd`). It bounds the executable verifier's
+acceptance, `flock-verify verify --zk`, with no model between them, under A3, `live-verifier` (with A6), `cr/sha-512`
+and `ecr/sha-512`, each a hypothesis (below). The rest of this section and The headline describe the older, model-level
+forms.
+
+**The end-to-end skeleton**: `flock_e2e_count` and `flock_e2e_drawn`, in `E2E.lean`, and
 `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn` on the circuit of the statement's rows (`Prog.circuit`). They state the
 chain from the audit's acceptance to the integrity profile on the committed circuit. Each unfinished piece is a named
 hypothesis, and `assumption-notes/e2e-checklist.md` lists them with their owners. The circuit is the one the statement's rows
@@ -30,9 +36,10 @@ knowledge's, not soundness's: a model claim about the honest prover. The develop
 |---|---|---|---|
 | `Assumptions.SHA512CRStrict` | `cr/sha-512` | `q²/2^513`, for at most `q` evaluations on every outcome | the compiled and knowledge terms' collision finders, `δ_tree`, and the registered reads' `δ_reg`, and, in `CROnly`, the link finders stopped at `q` |
 | `Assumptions.SHA512CRExpected` (A2) | `ecr/sha-512` | `T/2^256`, for `T` evaluations in expectation | the link finders (`LinkCR`, `hCR`) |
-| `Assumptions.UniformRandomBytes` (A3) | `uniform/io-getrandombytes` | every event has its probability for uniform bytes | the unit draw (`ht`; `hA3` in the headline); for zero knowledge, the commitments' salts (`Discharge.ZkView.OsSalts`, `recursiveZK_os_gap`) |
+| `Assumptions.UniformRandomBytes` (A3); per test, `UniformRandomBytesTest` | `uniform/io-getrandombytes` | every event has its probability for uniform bytes, the CSPRNG idealized; per test, one event, within `η` | the unit draw (`ht`; `hA3` in the headline); per test, zero knowledge's salts (`Discharge.ZkView.OsSalts`, `recursiveZK_os_gap`) and the ZK server's tape (`Claims.ZKServer.OsTape`) |
 | none: the model's coins (A6) | `uniform/flock-coin-server` | each round's coins uniform, drawn after the prover's message; under `--zk`, committed at `Hello` and opened after it, at a cost of `N·2^-256` (A6, tree coins) | the round coins |
 | `Assumptions.Zk.RecordCustodyZK` | `live-verifier` | none: the record `verify --zk` reads is the one the verifier's coin server wrote for the live session (`RecordsLiveZK`), and its draw file the one `flock-verify draw` printed for the verifier's own draw (`DrawFileZK`) | `--zk`'s `hRec` and `hDraw` (`zk_session_sound_custody`, `hCust`; `hDraw` at each draw of `Law.execOS` is `drawOkZK_of_exec`); at `J` tables `Assumptions.Zk.RecordCustodyZKJ`, the same at `RecordsLiveZKJ` and the subset sampling design (`zk_session_soundJ_custody`; `hDraw` is `drawOkZKJ_of_file`), and under hidden outputs (`zk_session_soundHJ_custody`; `hDraw` is `drawOkZKHJ_of_file`) |
+| `Assumptions.RecordCustodyExec` (`…ExecH`); `Zk.RecordCustodyZKLaw` (`…ZKHLaw`, `…ZKJLaw`, `…ZKHJLaw`) | `live-verifier` | none: as `RecordCustodyZK`, with `DrawOk` (`DrawOkZK`, and forms) at each draw of the law | `SoundExec*`'s and `SoundZ*`'s `hCust` |
 | none: the model's Ligerito prover (`LigProver`) | none: a model claim, as A6's | the honest Ligerito prover's level-≥ 1 bytes are a function of the table, the statement, the public coins, the restart and fresh salts; nothing proves it (`LigProver`'s docstring, `Discharge/Composed/Inner.lean`) | zero knowledge's view, not soundness: `Composed.zk_session_view`, `zk_session_composed` and `ZkEveryCoin.zk_session_view_all` hold for every such prover `P`, as do `ZkHidden.zk_session_viewH`, `zk_session_viewHJ` and `zk_session_composedHJ` |
 
 Both collision-resistance `Prop`s are **per finder, and per prover**. Some finder outputs a collision after no
@@ -93,18 +100,21 @@ sense, ePrint 2024/1434), for the audit's value layer (Daniel, Sep 27; constant 
 - **Upstream:** watch entries `collision-resistance`, `keyed-cr` and `rom-cr` (see Upstream status).
 
 **A3. The operating system's randomness is independent uniform bytes** (`uniform/io-getrandombytes`), for the
-verifier's unit draw and, for zero knowledge, the commitments' salts.
+verifier's unit draw and the proof service's epoch salt, and, per test, for zero knowledge: the commitments' salts and
+the ZK server's tape.
 
 - **Statement.** A byte source is a finite probability space and, on each outcome, the first `L i` bytes of each stream
   `i`. `UniformRandomBytes L t` says every event about those bytes has the probability it has for independent uniform
-  bytes. What A3 assumes of the operating system is that the running verifier's calls to `IO.getRandomBytes` are such a
-  source, each call's bytes independent of every earlier call's.
-- **Why it is not stated about `IO.getRandomBytes`.** To Lean's logic an `IO` action is a function of the world and
-  `IO.getRandomBytes` an opaque constant, so a `Prop` saying its bytes are random would be refutable, and every theorem
-  taking it vacuous. At run time, Lean v4.34.0's runtime implements it as `lean_io_get_random_bytes`
-  (`src/runtime/io.cpp`), which reads `/dev/urandom` on Unix and calls `BCryptGenRandom` on Windows. Re-read it at every
-  toolchain bump. What ties the statement to the verifier: `assumption-notes/a3-uniform-bytes.md`.
-- **Where it is used, and the salts** (Daniel, 9 Oct, decisions 4(a) and 4(c)): `assumption-notes/a3-uniform-bytes.md`.
+  bytes; the unit draw takes it. `UniformRandomBytesTest L t E η` (as A4 is) says one event `E` has it within
+  `η`; zero knowledge takes it at the event each theorem bounds, and `η` enters the bound. A3 assumes the operating
+  system's reads are such a source, each call independent of the others: the verifier's `IO.getRandomBytes`
+  (Lean v4.34.0's runtime reads `/dev/urandom`), the firewall's frame and tap, and the prover's and a registrant's
+  salts.
+- **Why per test, and the rest.** Any source with fewer outcomes than byte strings refutes the every-event form, as
+  Linux's CRNG does past 32 bytes: its zero idealizes the CSPRNG, and `η` is the CSPRNG's advantage against the
+  theorem's test. `assumption-notes/a3-uniform-bytes.md` has the argument, why A3 isn't about `IO.getRandomBytes`, its
+  tie to the verifier, its scope (the masks included), what is outside it, why no test runs, and where it is used,
+  salts included (Daniel, 9 Oct, decisions 4(a) and 4(c)).
 - **Upstream:** watch entry `A3-uniform-bytes`.
 
 **A6. The coin server's round coins are independent uniform** (`uniform/flock-coin-server`), for the session's
@@ -117,8 +127,8 @@ coins.
   hypothesis about, as A3 is about the unit draw's byte source. Stating it as a `Prop` would need the session played on
   a byte source, which the model doesn't have.
 - **What it assumes of the coin server.** The Rust coin server (`live/src/lib.rs`, `Server::coins`) reads each round's
-  coins from `/dev/urandom` when it has no seed. A3 is about the byte sources the theorems read (the unit draw's and the
-  salts'), so it doesn't cover these bytes, which the model's coin nodes draw.
+  coins from `/dev/urandom` when it has no seed. A3 is about the byte sources the theorems read (the unit draw's, the
+  salts' and the ZK server's tape), so it doesn't cover these bytes, which the model's coin nodes draw.
 - **Seed coins are outside it.** By default M0's non-ZK session derives every coin from one OS seed (`cfg.coin_seed`;
   `live/src/coin_seed.rs`, through `verity.ml.randomness.derive`). Those sessions also rest on `prf/sha-512` (A4's claim)
   and on the seed commitment's hiding, and no headline covers them. Under `FC_COINS=os` the server draws every round's
@@ -142,7 +152,7 @@ coins.
     the key is fresh for each session.
   - *N* counts every leaf committed under the session's key, opened or not: `|streams| · 2^rounds_log`
     (`CoinTree::build`; the `SHA-512(PAD)` padding is no leaf). flock-circuit's schedule (`coin_spec_of`) has the
-    session's stream plus two reps per table at `rounds_log = 8`: `N = (1 + 2J)·256`, so `N·2^-256 < 2^-246` at J = 1.
+    session's stream plus two reps per table at `rounds_log = 9`: `N = (1 + 2J)·512`, so `N·2^-256 < 2^-245` at J = 1.
   - *What the bound needs.* The salts are uniform and independent, one per leaf, never reused. The key is independent
     of the salts, drawn after the prover's nonce, and never reused across sessions. Both come from `/dev/urandom`, which
     is A6's source, not A3's. A5's snapshot caveat (The platform, under A5) applies to the draw at `Hello`. The
@@ -246,13 +256,20 @@ That rests on `prf/sha-512` and the seed commitment's hiding, and the headline t
 only for runs on per-round OS coins: a session whose identity names `live-os`, or a bench point with `coins: live-os`.
 The identity and a bench point's `coins` say which mode ran. flock-verify replays the recorded coins, so that they were
 the verifier's own OS draws, each drawn after the prover's message, is the record's custody (`PROTOCOL.md` §17.2) and
-A6, which no check of the record establishes. At `--zk` the custody is a named `Prop`, `Assumptions.Zk.RecordCustodyZK`
-(`live-verifier`), which `zk_session_sound_custody` takes as `hCust`.
+A6, which no check of the record establishes. The custody is `live-verifier`, named in every mode (the table above).
+
+## Premises the lock lists by name
+
+The Lean check lists by name the premises that guarantees take inside their statements, and each has its record
+in `Security/lean-audit.json`. `assumption-notes/lock-listed-premises.md` gives each one's claim id, what it reduces to and
+which guarantees take it.
 
 ## Other named assumptions
 
 Not soundness's: the PoUW window's keyed draw takes A4 and A5, and `HmRowComputes` is a fact about the circuit, still to
-prove. Zero knowledge's two are `Hm96Hiding`, stated in the spec (`Claims.Hm96Hiding`, `Definitions/Claims/Hm96.lean`,
+prove. Completeness's is `JsonSpec` (`Claims.JsonSpec`, `Definitions/Claims/Json.lean`): `Json.parse` reads back what
+the honest prover's printer (`printJ`, the bytes `Json.compress` prints) and `canon` print, which no proof can show, as
+`parse` and `canon` are `partial`; only the completeness proofs read it (`Proofs/Flock/Claims/Complete/Json/`). Zero knowledge's two are `Hm96Hiding`, stated in the spec (`Claims.Hm96Hiding`, `Definitions/Claims/Hm96.lean`,
 where the claims list it as a named assumption) and read in `Assumptions.lean` (`hm96Hiding_apply`), and
 `PadNonvanishing`, in `Assumptions.lean`; both are in `docs/zk-proof-public.md`. `Hm96Hiding` is now proved for hm96 at a bound on its gap (`CROnly.hm96Hiding_gap`; for
 hm96-sha512 over a uniform key, `CROnly.hm96_sha512_bad_keys`, What is pinned, below), and `PadNonvanishing` is proved at
@@ -264,7 +281,7 @@ Zero knowledge's coverage (closed by the refusal): `Composed.zk_session_view` ho
 prover doesn't refuse (`refused_coins` in `flock-circuit.rs`; `CoinedSetup.Admits`: `β ≠ 0`, the mask slot's rank
 `128·k`, `ρ₀, ρ₁` independent over F128, and no zerocheck outer coin `1`; the verifier also checks `β` and `ρ`), and
 there is no other kind of coin vector. At an outer coin `r_j = 1` (`inv 0 = 0` in the residual round) the honest pads
-miss the inner proof's constraint by a witness-dependent amount that the view would show (`ZK/Table.lean`'s inner
+miss the inner proof's constraint by a witness-dependent amount that the view would show (`Definitions/Flock/ZK/Table.lean`'s inner
 proof), so the prover refuses it: `zk_veil::Masking` stops as the coin opens, before anything that depends on it is
 sent, reading only the coin. That costs completeness at most `(m − 13)·2^-128` per rep under uniform coins
 (`ZkEveryCoin.outer_one_le`), and no statement charges it. `ZkEveryCoin.zk_session_view_all` holds at every coin vector,
@@ -328,8 +345,8 @@ malicious-verifier claim rests on beyond the theorems.
     initialized.
   - It keeps no user-space state, so a forked process doesn't repeat its output.
   - A VM snapshot restored more than once must not repeat the kernel's CSPRNG state. That holds when the kernel reseeds
-    on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support) or mixes in a hardware RNG.
-  - The CSPRNG is idealized as exactly uniform. The true bound carries its negligible distinguishing advantage.
+    on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support); RDSEED, mixed in at reseeds, doesn't.
+  - The CSPRNG is idealized as exactly uniform. The true bound carries its distinguishing advantage.
 - **Split out of A4** at the red team's request: it is a property of what produces the secret, not of the hash.
 - **Upstream:** watch entry `A5-uniform-secret`.
 
@@ -475,20 +492,7 @@ would not fail the audit.
 
 ## Upstream status
 
-Whether a dependency proves what these theorems assume, or what they prove by hand, is computed, not written here. The
-watch list is the `upstream` section of `lean-audit.json`, one entry per statement:
-
-- `A1-johnson-mca` and `udr-mca`: A1 (proved here from DKT26) and its unique-decoding fallback;
-- `collision-resistance`, `keyed-cr` and `rom-cr`: `SHA512CRStrict` and `SHA512CRExpected`, against upstream's generic,
-  keyed and random-oracle statements of collision resistance;
-- `list-size` and `list-size-code`: the Johnson list bound (`ListSize.closeMsgs_card_le`);
-- `tensor-fold`: the fold union in `LigeritoLevels`;
-- `novel-basis`: the novel basis (`Arith.Correct.xhat_poly`, `L ≤ 40`).
-
-`python tools/verity/lean/upstream.py Security/Proofs` prints each entry's status at the pinned
-revisions: the upstream theorems about it, which are proved, and which nobody has acknowledged. The audit runs that pass
-over ArkLib, with ArkLib's own `sorry` baseline, and fails on a proved theorem no entry acknowledges. `--lean`, the
-exact pass over everything imported (VCVio and CompPoly too), is run at a dependency bump.
+Whether a dependency proves what these theorems assume is computed from `lean-audit.json`'s `upstream` watch list: `assumption-notes/upstream.md`.
 
 ## Trusted components
 

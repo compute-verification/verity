@@ -34,18 +34,19 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from verity_vllm.config import option
+from verity_vllm.program import prefix_plan as PP
 from verity_vllm.query.compare import compare, summarize
 from verity_vllm.correspondence.reader_for_query import Correspondence
-from verity_vllm.query.program_view import from_instances
+from verity_vllm.query.program_view import from_instances, iter_instance_rows
 from verity_vllm.query.compose import compose_global, merge_ranks
 from verity_vllm.query.required import QUERIES, QUERY_OF_RECORD, Q_WORD_ID, request_manifest
-from verity_vllm.query import cross_call
+from verity.ml.definitions import cross_call
 from verity_vllm.query import guarded_max as GM
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query import vocab_range as VR
-from verity_vllm.query import word as word_query
+from verity.ml.definitions import word as word_query
 
 __all__ = ["TAPS", "DEFAULT_TAPS", "taps_of", "word_record", "cpus", "prefetch_word_rules", "build_components", "build", "build_global",
            "build_global_ranks", "cross_call_check", "main"]
@@ -81,24 +82,27 @@ def word_check(P: Any, corr: Correspondence, required: Any, word: str, *, strict
                max_gates: str | None = None, unreturned: frozenset[int] = frozenset(), log=None) -> dict[str, Any]:
     """`Q_word_v1{X,W}` (`word`: "16/32[+extras]") over `P`, committed = the manifest's required values and the interior words a tap
     acquires (`acquired`, `word.check_calls`; `max_gates`, the run's gate limits: `word.gate_limits`); `strict` raises
-    `word.QueryRuleViolation` naming every violation.  The `unreturned` Calls (`Population.unreturned`: no Call reads their Values and
-    the Program does not return them, e.g. GLM-5.3's indexer logits and top-k while every key is selected) are skipped like literals:
-    nothing depends on them, so no unit has to end at their outputs.  The manifest is not touched."""
+    `word.QueryRuleViolation` naming every violation.  The `unreturned` Calls (`Population.unreturned`: no Call reads their Values, the
+    Program does not return them and no policy requires them, e.g. GLM-5.3's indexer logits and top-k while every key is selected) are
+    skipped like literals: nothing depends on them, so no unit has to end at their outputs; the manifest lists them under `unreturned`.
+    The manifest is not touched."""
     from verity_vllm.query.module_body import literal_calls
     X, W, extras = word_query.parse(word)
     r = word_query.check_query(P, _Committed(required, literal_calls(P) | unreturned, corr.module_of), X, W, extras, strict=strict,
                                 acquired=acquired, max_gates=max_gates)
     if log:
         log(f"  {r['query']}: {r['calls']} calls -> {r['units']} units over {r['gates']} gates, {r['committed_interior_words']} committed interior words"
-            + (f" ({r['acquired_interior_words']} acquired by a tap)" if acquired is not None else ""))
+            + (f" ({r['acquired_interior_words']} acquired by a tap)" if acquired is not None else "")
+            + (f"; the Boolean Program: {r['boolean_gates']} Boolean gates" if "boolean_gates" in r else ""))
     return r
 
 
 def word_record(r: dict[str, Any], *, strict: bool, max_gates: str | None = None) -> dict[str, Any]:
-    """The header's record of a word check (`query.word_check`): its query, whether it was strict and passed, its totals and the gate
-    limits it ran under; the per-Definition groups stay in the Build's manifest.log."""
+    """The header's record of a word check (`query.word_check`): its query, whether it was strict and passed, its totals (a Boolean
+    Program's in Boolean gates too, `boolean_gates`) and the gate limits it ran under; the per-Definition groups stay in the Build's
+    manifest.log."""
     return {"query": r["query"], "strict": bool(strict), "ok": bool(r["ok"]), "violations": len(r["violations"]),
-            **{k: r[k] for k in ("calls", "units", "gates", "committed_interior_words", "acquired_interior_words") if k in r},
+            **{k: r[k] for k in ("calls", "units", "gates", "committed_interior_words", "acquired_interior_words", "boolean_gates") if k in r},
             "max_gates": word_query.gate_limits(max_gates)}
 
 
@@ -122,7 +126,8 @@ def recorded_program_digest(program_dir: str, res: dict[str, Any]) -> str | None
 def cross_call_check(program_dir: str, *, strict: bool = True, log=None) -> dict[str, Any]:
     """Cross-Call recomputes (`cross_call.check_program`) over the Build's instance sequence; `strict` raises
     `cross_call.RecomputeViolation` naming every one.  The manifest is not touched."""
-    return cross_call.check_program(os.path.join(program_dir, "instances.json.gz"), strict=strict, log=log)
+    path = os.path.join(program_dir, "instances.json.gz")
+    return cross_call.check_program(lambda: iter_instance_rows(path), strict=strict, log=log)
 
 
 def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_id: str | None = None, rank: int = 0, ranks: int = 1,
@@ -205,18 +210,25 @@ def _peak(program_dir: str) -> int | None:
     return PEAK_BASE + PEAK_PER_CALL * sum(int(v) for v in h.values()) if h else None
 
 
-def prefetch_word_rules(program_dirs: list[str], word: str | None, *, word_max_gates: str | None = None, jobs: int = 1, log=None) -> None:
+def prefetch_word_rules(program_dirs: list[str], word: str | None, *, word_max_gates: str | None = None, jobs: int = 1,
+                        budget_gb: float | None = None, log=None) -> None:
     """The word check's unit rules for every Definition the Builds under `program_dirs` call (`spec_histogram`), `jobs` processes at a
-    time, before their manifests are built (`word.prefetch`); nothing for a Build without the histogram, which checks as it did."""
+    time while their estimated peaks fit `HEADROOM_SHARE` of the memory the component builds would budget (`_pool_headroom`), before
+    their manifests are built (`word.prefetch`); nothing for a Build without the histogram, which checks as it did."""
     if not word or word == "off" or jobs <= 1:
         return
     from verity_vllm.pipeline.global_program import component_spec_histogram
     X, W, extras = word_query.parse(word)
     t0 = time.time()
     specs = [s for d in program_dirs for s in (component_spec_histogram(d) or {})]
-    n = word_query.prefetch(specs, X, W, extras, max_gates=word_max_gates, jobs=jobs)
+    if not specs:
+        return
+    with _pool_headroom(budget_gb, "word check", log) as head:
+        budget = None if head is None else int(head * HEADROOM_SHARE)
+        n = word_query.prefetch(specs, X, W, extras, max_gates=word_max_gates, jobs=jobs, budget=budget)
     if log:
-        log(f"  word check: {n} unit rules of {len(set(specs))} Definitions cut by {jobs} processes in {time.time() - t0:.1f}s")
+        within = "with no memory budget" if budget is None else f"within {budget / 2**30:.1f} GiB"
+        log(f"  word check: {n} unit rules of {len(set(specs))} Definitions cut by {jobs} processes {within} in {time.time() - t0:.1f}s")
 
 
 def _send(conn: Any, program_dir: str, kw: dict[str, Any]) -> None:
@@ -241,18 +253,30 @@ def build_components(tasks: list[tuple[str, dict[str, Any]]], *, jobs: int = 1, 
     import multiprocessing
     after = after or (lambda _i, _m: None)
     if jobs <= 1 or len(tasks) < 2 or "fork" not in multiprocessing.get_all_start_methods():
-        return _build_in_turn(tasks, after)
+        return _build_in_turn(tasks, after, log)
+    with _pool_headroom(budget_gb, "components", log) as head:
+        return _build_in_turn(tasks, after, log) if head is None else _build_forked(tasks, jobs, after, head, log)
+
+
+def _progress(log, done: int, total: int, t0: float, running: int = 0) -> None:
+    """The line each component's end adds to the manifest's log: a limit of none (`row_tp --manifest-timeout 0`) leaves only these."""
+    if log:
+        log(f"  components: {done}/{total} built in {time.time() - t0:.0f}s" + (f", {running} running" if running else ""))
+
+
+@contextmanager
+def _pool_headroom(budget_gb: float | None, what: str, log=None):
+    """The memory a pool of this process's forks may budget: its own (`_own_budget`), else the host's headroom (None when unreadable)
+    under the machine's pool lock, held while the pool runs."""
     own = _own_budget(budget_gb)
     if own is not None:
-        return _build_forked(tasks, jobs, after, own, log)
+        yield own
+        return
     t0 = time.time()
     with _pool_lock():
         if log and time.time() - t0 >= 1:
-            log(f"  components: waited {time.time() - t0:.1f}s for the machine's component pool lock")
-        head = _headroom()
-        if head is None:
-            return _build_in_turn(tasks, after)
-        return _build_forked(tasks, jobs, after, head, log)
+            log(f"  {what}: waited {time.time() - t0:.1f}s for the machine's component pool lock")
+        yield _headroom()
 
 
 CGROUP_MEMORY_MAX = "/sys/fs/cgroup/memory.max"
@@ -276,11 +300,12 @@ def _own_budget(budget_gb: float | None = None) -> int | None:
     return head if lim.isdigit() and int(lim) < total else None
 
 
-def _build_in_turn(tasks: list[tuple[str, dict[str, Any]]], after: Callable[[int, dict[str, Any]], None]) -> list[dict[str, Any]]:
-    out = []
+def _build_in_turn(tasks: list[tuple[str, dict[str, Any]]], after: Callable[[int, dict[str, Any]], None], log=None) -> list[dict[str, Any]]:
+    out, t0 = [], time.time()
     for i, (d, kw) in enumerate(tasks):
         out.append(build(d, **kw))
         after(i, out[-1])
+        _progress(log, i + 1, len(tasks), t0)
     return out
 
 
@@ -353,7 +378,7 @@ def _build_forked(tasks: list[tuple[str, dict[str, Any]]], jobs: int, after: Cal
     pending = sorted(range(len(tasks)), key=lambda i: (-need[i], i))
     results: dict[int, tuple[str, Any]] = {}
     running: dict[Any, tuple[int, Any]] = {}
-    used, first_bad = 0, len(tasks)
+    used, first_bad, t0 = 0, len(tasks), time.time()
     if log:
         log(f"  components: {len(tasks)} builds, {jobs} processes, memory budget {budget / 2**30:.1f} GiB")
     while pending or running:
@@ -379,6 +404,7 @@ def _build_forked(tasks: list[tuple[str, dict[str, Any]]], jobs: int, after: Cal
             if p.exitcode not in (0, None) and results[i][0] == "ok":
                 results[i] = ("error", RuntimeError(f"{os.path.basename(tasks[i][0])}: the build process exited {p.exitcode}"))
             used -= need[i]
+            _progress(log, len(results), len(tasks), t0, len(running))
             if results[i][0] == "error" and i < first_bad:
                 first_bad = i
                 pending = [j for j in pending if j < i]
@@ -391,12 +417,12 @@ def _build_forked(tasks: list[tuple[str, dict[str, Any]]], jobs: int, after: Cal
 
 
 def _program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
-    """v1's lookup (`required_manifest._program_dirs_for`): `*LP<prompt_len>_T<max_tokens-1>` under the root, else a `build_request*`
-    whose result.json declares exactly (LP, T)."""
+    """v1's lookup (`required_manifest._program_dirs_for`): `*LP<prompt_len>_T<max_tokens-1>[_C<cached>]` under the root, else a
+    `build_request*` whose result.json declares exactly (LP, T, C) (`prefix_plan.request_shape`)."""
     progs: dict[str, str] = {}
     for r in fx["requests"]:
-        lp, t = int(r["prompt_len"]), int(r["max_tokens"]) - 1
-        hits = sorted(glob.glob(os.path.join(programs_root, f"*LP{lp}_T{t}")))
+        sh = PP.request_shape(r)
+        hits = sorted(glob.glob(os.path.join(programs_root, f"*{PP.shape_name(sh)}")))
         if not hits:
             for cand in sorted(glob.glob(os.path.join(programs_root, "build_request*"))):
                 rj = os.path.join(cand, "result.json")
@@ -405,11 +431,11 @@ def _program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
                         res = _load_json(rj)
                     except Exception:  # noqa: BLE001
                         continue
-                    if res.get("ok") and int(res.get("LP", -1)) == lp and int(res.get("T", -1)) == t:
+                    if res.get("ok") and PP.declares(res, sh):
                         hits = [cand]
                         break
         if not hits:
-            raise SystemExit(f"no request Program for {r['request_id']} (LP={lp} T={t}) under {programs_root}")
+            raise SystemExit(f"no request Program for {r['request_id']} ({PP.shape_key(sh)}) under {programs_root}")
         progs[str(r["request_id"])] = hits[0]
     return progs
 
@@ -439,10 +465,11 @@ def _global(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: 
     wl = [{"sweep": {"arrive_steps": [int(r.get("arrive_step", 0))], "row_id": fixture.get("fixture"), "batch": len(reqs)}} for r in reqs]
     tasks = []
     for root, rank in zip(roots, ranks):
-        dirs = _program_dirs_for(fixture, root)
+        dirs = _program_dirs_for(dict(fixture, requests=PP.with_cached(fixture)), root)
         tasks += [(dirs[str(r["workload_request_id"])], dict(kw, workload=w, request_id=r["request_id"], rank=rank, ranks=world,
                                                              guarded_max=guarded_max, log=log)) for r, w in zip(reqs, wl)]
-    prefetch_word_rules([d for d, _kw in tasks], kw.get("word"), word_max_gates=kw.get("word_max_gates"), jobs=jobs, log=log)
+    prefetch_word_rules([d for d, _kw in tasks], kw.get("word"), word_max_gates=kw.get("word_max_gates"), jobs=jobs, budget_gb=budget_gb,
+                        log=log)
     parts: dict[str, dict[str, Any]] = {}
     out: list[dict[str, Any]] = []
 
@@ -555,17 +582,17 @@ NORM_SCALES_HELP = ("on by default, --no-norm-scales for A/B only: the norm-scal
 WORD_CHECK_HELP = ("the partition of record's check: Q_word_v1{X,W} (\"16/32[+extras]\", the default) over the Program -- widths, recomputes, "
                    "every Call boundary committed; fails the Build naming every violation.  \"off\" skips it (A/B only)")
 QUERY_HELP = f"the query the manifest is built under: {QUERY_OF_RECORD} (the record) or Q_module_body_v1 (A/B only; pair it with --word-check off)"
-CROSS_CALL_HELP = "check that no value is computed in two Calls (verity_vllm.query.cross_call); fail the Build naming every recompute"
-WORD_MAX_GATES_HELP = ("--word-check's gate limits (verity_vllm.query.word.gate_limits): a Definition over its limit is a too-large violation, "
-                       "not cut.  N for every Definition or FAMILY=N for one, comma-separated (default 24000000; about 0.6 KB of host memory "
-                       "per gate cut); the query id is the same under any")
+CROSS_CALL_HELP = "check that no value is computed in two Calls (verity.ml.definitions.cross_call); fail the Build naming every recompute"
+WORD_MAX_GATES_HELP = ("--word-check's gate limits (verity.ml.definitions.word.gate_limits): a Definition over its limit is a too-large violation, "
+                       "not cut.  N for every Definition or FAMILY=N for one, comma-separated (default 24000000; about 0.5 KB of host memory "
+                       "per gate cut and 20 bytes per operand it reads); the query id is the same under any")
 GUARDED_MAX_HELP = ("on by default, --no-guarded-max for A/B only: the guarded-max policy (verity_vllm.query.guarded_max) -- the attention "
                     "stream's ROW word 3 carries GuardNegInfZero(m) after a row's first key block and its MS class every block's max * "
                     "scale; the Commit then needs the guarded-max tap build")
 UNIT_RULE_CACHE_HELP = ("a directory the word check's unit rules are shared through, across processes and runs (word.use_rule_cache); "
                         "a rule read there is the one the check computes")
-JOBS_HELP = ("processes for the word check's cuts (word.prefetch) and, in build-global, the component builds (build_components, within "
-             "the memory headroom); the manifest is the same under any.  0 (the default): the CPUs this process may use; 1: one process")
+JOBS_HELP = ("processes for the word check's cuts (word.prefetch) and, in build-global, the component builds (build_components), each "
+             "within the memory headroom; the manifest is the same under any.  0 (the default): the CPUs this process may use; 1: one process")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -615,8 +642,8 @@ class BuildGlobalOptions:
     cross_call_check: bool = option("--cross-call-check", default=False, action="store_true", help=CROSS_CALL_HELP)
     jobs: int = option("--jobs", type=int, env=JOBS_ENV, default=0, help=JOBS_HELP)
     build_ram_budget_gb: float | None = option("--build-ram-budget-gb", env="BUILD_RAM_BUDGET_GB", type=float, default=None,
-                                               help="the component builds' own memory budget (capped by the headroom): set, they size "
-                                                    "their pool from it without the machine's component pool lock")
+                                               help="the word check's cuts' and the component builds' own memory budget (capped by the "
+                                                    "headroom): set, they size their pools from it without the machine's component pool lock")
     out: str = option("--out")
     cmd: str = field(default="build-global", init=False)
 

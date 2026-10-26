@@ -284,6 +284,23 @@ def test_live_mode_grants_a_pinned_request_only_from_its_on_list(c, tmp_path):
     assert int((node.gl / "grant.40").read_text()) in (2, 3, 4, 5, 6, 7)
 
 
+def test_live_mode_plans_with_the_nodes_live_deadline_so_a_renewal_grants_without_a_new_description(c, tmp_path):
+    """INF-113: the description's stop puts T0 inside the node's drain, so a request waits; once infra renews the node (rewrites
+    its deadline file) the next reading plans with the new stop and grants it, with the description and the agent unchanged."""
+    node = Node(tmp_path)
+    node.waiter(20, 1, "2026-09-30T20:00:00Z")
+    draining = model.with_stop(c, "vy-nebius-2", T0 + 3600, model.DESCRIBED)
+    deadline = tmp_path / "deadline"
+
+    def renew():
+        assert not (node.gl / "grant.20").exists(), "past the described admission end nothing is granted"
+        deadline.write_text(f"{T0 + 3 * 86400} 2026-10-03T20:00:00Z renewal\n")
+    clock = Clock(T0, {T0 + 2: renew})
+    run(draining, node, tmp_path / "out", clock, mode="live", until=T0 + 4, deadline_file=deadline,
+        executor=agent.Executor(node.gl, kill=lambda pid, sig: pytest.fail("the node is free")))
+    assert (node.gl / "grant.20").read_text() == "0\n"
+
+
 def test_live_mode_kills_a_lease_still_there_thirty_seconds_after_its_sigterm(c, tmp_path):
     ex = agent.Executor(tmp_path, kill=lambda pid, sig: sent.append((pid, sig)))
     sent: list = []

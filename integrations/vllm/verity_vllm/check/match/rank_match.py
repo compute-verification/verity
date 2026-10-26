@@ -1,4 +1,4 @@
-"""[R17 D90, COORD R17-4] The CROSS-RANK leg of the per-rank Match: the two ranks' folds (and, when given, the collective recorder's rows
+"""[D90] The CROSS-RANK leg of the per-rank Match: the two ranks' folds (and, when given, the collective recorder's rows
 and the rank Programs' `tp_links.json`) must state the SAME collectives -- so that rank r's `peers_<request>` root field (step, k) IS the other
 rank's own partial of collective (step, k), produced in the other rank's log by its own EmbeddingShard / Gemm instance, and never a value
 either rank invented.  Everything here is structural (kind, N, rows per request, site, order, count, producer class, link binding); the
@@ -30,14 +30,18 @@ from pathlib import Path
 from typing import Any
 
 PARTIAL_PRODUCERS = ("EmbeddingShard_v1", "Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "FlashInferFp8Linear", "MoeSum", "MoeExpertSum", "batch:Gemm")   # own-partial producer classes
+LINEAR_PRODUCERS = ("Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "FlashInferFp8Linear", "batch:Gemm")
+MOE_SITES = ("FusedMoE", "SharedFusedMoE", "MoERunner")
 #: the producer class the ISSUING MODULE's class admits (the link table names the class: `... (RowParallelLinear)`): an all-reduce issued
 #: by a RowParallelLinear reduces a K-sharded Gemm output, never an embedding row (equal-result-but-wrong-producer fails here by name)
-PRODUCER_BY_SITE_CLASS = {"VocabParallelEmbedding": ("EmbeddingShard_v1",),
-                          "RowParallelLinear": ("Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "FlashInferFp8Linear", "batch:Gemm"),
+PRODUCER_BY_SITE_CLASS = {"VocabParallelEmbedding": ("EmbeddingShard_v1",), "RowParallelLinear": LINEAR_PRODUCERS,
                           "LogitsProcessor": ("Gemm_v1", "Gemm_v2", "batch:Gemm"), "ParallelLMHead": ("Gemm_v1", "Gemm_v2", "batch:Gemm"),
-                          "FusedMoE": ("MoeSum", "MoeExpertSum"), "SharedFusedMoE": ("MoeSum", "MoeExpertSum"), "MoERunner": ("MoeSum", "MoeExpertSum")}
-#: a row adding two partials of its rank and step is a partial too (GLM-5.3's MoE block: the routed `MoeSum` plus the shared expert's
-#: down-proj), named `<spec><-<producer>|<producer>` (`_named`) and admitted only when every operand's producer is (`_admitted`)
+                          **{c: ("MoeSum", "MoeExpertSum") for c in MOE_SITES}}
+#: what a summed partial may add to a partial of its site's class: at a MoE site, the shared expert's down-proj, which the MoE runner
+#: reduces with the routed sum (GLM-5.3's and DeepSeek-V4's MoE blocks)
+ADDENDS_BY_SITE_CLASS = {c: LINEAR_PRODUCERS for c in MOE_SITES}
+#: a row adding two partials of its rank and step is a partial too (the MoE block's routed `MoeSum` plus the shared expert's down-proj),
+#: named `<spec><-<producer>|<producer>` (`_named`) and admitted only when every operand's producer is (`_admitted`)
 SUMMED_PARTIALS = ("ResidualAdd_v1",)
 
 
@@ -52,11 +56,15 @@ def _named(k: int, spec_of: Any, args_of: Any, step_of: Any) -> str:
     return f"{sp}<-" + "|".join(sorted(ops))
 
 
-def _admitted(sp: Any, classes: tuple[str, ...] = PARTIAL_PRODUCERS) -> bool:
-    """Every producer named in `sp` (`_own_rows`' ``+``-joined names) is of `classes`; a summed partial's, each of its operands'."""
+def _admitted(sp: Any, classes: tuple[str, ...] = PARTIAL_PRODUCERS, addends: tuple[str, ...] = ()) -> bool:
+    """Every producer named in `sp` (`_own_rows`' ``+``-joined names) is of `classes`; a summed partial's, each of its operands', of
+    which all but one may be of `addends` instead."""
     def one(x: str) -> bool:
         head, _, ops = x.partition("<-")
-        return all(o.startswith(classes) for o in ops.split("|")) if ops and head.startswith(SUMMED_PARTIALS) else x.startswith(classes)
+        if not (ops and head.startswith(SUMMED_PARTIALS)):
+            return x.startswith(classes)
+        operands = ops.split("|")
+        return any(o.startswith(classes) for o in operands) and all(o.startswith(classes + addends) for o in operands)
     return all(one(x) for x in str(sp).split("+"))
 
 
@@ -73,15 +81,11 @@ def _norm_site(s: str | None) -> str:
 
 
 def _same_site(a: str | None, b: str | None) -> bool:
-    """[lane vllm-tp-n] The derive's link module (`link.module`: module_path minus the derive's RECORDED model root -- data the derive wrote
+    """The derive's link module (`link.module`: module_path minus the derive's RECORDED model root -- data the derive wrote
     by object identity) vs the fold's / recorder's site: equal, or a dotted suffix of one another (a v1 tp_links without a recorded root
     spells the traced wrapper's path).  No vocabulary prefix is spelled here (`derive_step.same_module_path`)."""
     from verity_vllm.pipeline.build import same_module_path
     return same_module_path(a, b)
-
-
-def collectives_from_summary(summary: dict) -> list[dict]:
-    return list(summary.get("collectives") or [])
 
 
 def _own_rows(rs: list, c: dict, spec_of: Any) -> list[str]:
@@ -153,7 +157,7 @@ def _recorded_as_folded(x: dict) -> tuple[str, list[int]]:
     """A recorder row's (kind, partial shape) as the fold states that collective.  A `fused_norm.KIND` row's partial is
     ``stack([partial, residual])``: on its fused path the fold's `fused_allreduce_rms_norm` collective, on its unfused path the
     communicator `all_reduce` the call made, each over the [M, N] partial."""
-    from verity_vllm.collectives import fused_norm as FN
+    from verity_vllm.engine.collectives import fused_norm as FN
 
     shape = [int(v) for v in x.get("shape") or []]
     if x.get("kind") != FN.KIND:
@@ -431,7 +435,7 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
                     if want and producers is not None:
                         key = (int(col["step"]), int(col["k"]))
                         specs = producers.get(r, {}).get(key) or []
-                        bad = sorted({str(sp) for sp in specs if not _admitted(sp, want)})
+                        bad = sorted({str(sp) for sp in specs if not _admitted(sp, want, ADDENDS_BY_SITE_CLASS.get(cls or "", ()))})
                         if bad:
                             c.fail(f"{tag} link {k} ({cls}): own partial produced by {bad[:3]}, the site class admits {want} (wrong producer)")
         c.close()
@@ -450,11 +454,12 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
 
 
 def commit_binding(match_dir: str | Path, *, world: int = 2, match_oracle: dict[str, dict] | None = None, require: bool = False) -> dict:
-    """[R17 tp D90, rev M-0026 R1 at Commit] The COMMIT-STAGE binder of the peer inputs: the fold Match published, per (rank r, step, k), the
+    """[D90, R1 at Commit] The COMMIT-STAGE binder of the peer inputs: the fold Match published, per (rank r, step, k), the
     digest its `peers_r[s,k]` leaf is bound to (`peer_binding` of tp2_rank_match.json = the recorder's digest of rank 1-r's partial at (s,k));
     the Commit compared every committed rank-local partial against the SAME recorder's stored tensors bit-exact (`match_oracle`, per rank,
     exhaustive over (step, k)).  This closes the chain BY VALUE: fold peer leaf (r, s, k) == recorder part digest (1-r, s, k) == the bytes
-    rank 1-r COMMITTED at (s, k).  Checks, each named: the fold Match record exists and PASSed; every binding's peer digest equals the
+    rank 1-r COMMITTED at (s, k), at every (s, k) the oracle compared; one it exempts (a differing MoE align witness in its cone,
+    `oracle_witness.WITNESS_RULE`) is bound in the Commit by its cross-rank collectives check and boundary linkage.  Checks, each named: the fold Match record exists and PASSed; every binding's peer digest equals the
     recorder row of the OTHER rank at the same (s, k) and its own digest the recorder row of its own rank; the binding covers every recorder
     (s, k) of every rank (2 x n); the Commit's match oracle PASSed on every rank.  Absent fold Match: result None (the row's Match is
     collective-level only, ◐) unless `require`, then a named FAIL.  CPU only, digests only (no tensors re-read)."""
@@ -536,6 +541,7 @@ def commit_binding(match_dir: str | Path, *, world: int = 2, match_oracle: dict[
         fails.append("Commit match oracle not run (--no-match-oracle): the binding digests have no committed value to bind to")
     res["result"] = not fails
     res["why"] = None if not fails else "; ".join(fails[:3])
-    res["rule"] = ("fold peers_r[s,k,p] leaf digest == recorder partial digest of rank p at (s,k) == bytes rank p committed at (s,k) (match oracle bit-exact), "
-                   "every (s,k) of every rank, every other rank p; fold Match + rank Match PASS")
+    res["rule"] = ("fold peers_r[s,k,p] leaf digest == recorder partial digest of rank p at (s,k) == bytes rank p committed at (s,k) (match oracle bit-exact "
+                   "where it compares; an exempt (s,k) is bound by the Commit's cross-rank collectives), every (s,k) of every rank, every other rank p; "
+                   "fold Match + rank Match PASS")
     return res

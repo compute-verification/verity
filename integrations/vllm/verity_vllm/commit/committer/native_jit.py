@@ -1,4 +1,4 @@
-"""The native collector's JIT build is keyed by WHAT IT COMPILES, never by mtimes (COORD R17-41 (1), stoch M-0756 / rel M-0803).
+"""The native collector's JIT build is keyed by WHAT IT COMPILES, never by mtimes.
 
 torch.utils.cpp_extension.load() decides "up to date" by comparing the .so's mtime with the sources'.  record_v5/ship.sh PRESERVES source
 mtimes, and /workspace/cp/nc_build is one pod-wide directory: on cp-big an .so built 22:15:25Z from the previous tree's sources was adopted
@@ -29,7 +29,7 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SOURCES = ("native_collect.cpp", "native_gather.cu", "native_tree.cu")
+SOURCES = ("native_collect.cpp", "native_gather.cu", "native_tree.cu", "native_rows.cu")
 CFLAGS = ("-O3",)
 CUDA_CFLAGS = ("-O3", "--use_fast_math")
 

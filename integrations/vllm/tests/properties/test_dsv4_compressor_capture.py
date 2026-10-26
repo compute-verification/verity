@@ -3,6 +3,8 @@ the state rows and cache rows it reads back, its launch checks and comparison jo
 edge words, its verdicts and its main loop with the GPU stood in for."""
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import contextlib
 import copy
 import hashlib
@@ -16,8 +18,8 @@ import pytest
 
 from tests.properties import dsv4_compressor_capture_gpu as X
 from tests.properties import dsv4_flashmla_capture_gpu as FX
-from verity_vllm.program.kernels import dsv4_compressor_twin as T
-from verity_vllm.program.kernels import flashmla_twin as FT
+from verity.ml.definitions.numerics import dsv4_compressor_twin as T
+from verity.ml.definitions.numerics import flashmla_twin as FT
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 LAYERS = list(X.LAYERS)

@@ -1,6 +1,7 @@
 /-
 The circuit table's tops and the link points as the coin server recorded them, at every shape: `RecVStar.innerLink`,
-`topRow`, `checkTopRowsAt` and `checkLinkRounds`, and `RecCoins.checkLevelTopReads`. A transcript of two reps whose
+`topRow`, `checkTopRowsAt` and `checkLinkRounds`, `RecCoins.checkLevelTopReads`, and the record on the verifier's
+schedule (`checkSchedule`). A transcript of two reps whose
 `root_B` has two nodes and whose reps commit one later top each, at round 1 (rep 0's of two nodes, rep 1's of one), and
 two link points of two coins: `rec-top-L0`'s row `x` is node `x` of `root_B`, `rec-top-L1`'s rep 0's nodes then rep 1's.
 A row other than the coin server's `b ‖ c` at `root_B` or at a later top is refused, and so is an inner session record
@@ -28,7 +29,7 @@ def transcript (root : List Nat := [1, 2]) (top0 : List Nat := [3, 4]) (top1 : L
     ("link", Json.mkObj [("roots", Json.mkObj [("circuit", nodes root)]), ("points", Json.arr (points.map coin).toArray),
       ("y", Json.null)]),
     ("rounds", Json.arr #[round "circuit/rep1" 1 [top1], round "circuit/rep0" 0 [], round "circuit/rep0" 1 [top0],
-      round "circuit/rep1" 0 []])]
+      round "circuit/rep1" 0 []]), ("end", Json.str "finish")]
 
 def record (points : List (List Nat) := [[10, 11], [12, 13]]) : String :=
   (Json.mkObj [("link", Json.mkObj [("points", Json.arr (points.map fun p => Json.arr (p.map coin).toArray).toArray)])]).compress
@@ -45,6 +46,16 @@ def link : InnerLink := linkOf (transcript)
 #guard link.table == "circuit" && link.root.toList.map (·.data.toList) == [(b 1).data.toList, (b 2).data.toList]
 #guard link.tops.map (·.map fun (k, t) => (k, t.size)) == #[#[(1, 2)], #[(1, 1)]]
 #guard link.points.map (·.size) == #[2, 2] && link.points[1]![0]! == ((f128OfHex (hexOf (ByteArray.mk (Array.replicate 16 12)))).toOption.getD default)
+
+-- only a finished session's record is read (`checkFinished`): one the coin server marked stopped, or naming no end, is not
+def stopWhy : String :=
+  "rec inner transcript: the inner session ended stop, not finish: a stopped session is no inner proof"
+#guard why (innerLink ((transcript).setObjVal! "end" (Json.str "stop")) (record)) == some stopWhy
+#guard why (checkFinished ((transcript).setObjVal! "end" (Json.str "stop"))) == some stopWhy
+#guard why (checkFinished (transcript)) == none
+#guard why (checkFinished (Json.mkObj [("kind", Json.str TRANSCRIPT_FORMAT)])) ==
+  some "rec inner transcript: the coin server's record names no end; only a finished session is read"
+#guard why (innerCommits ((transcript).setObjVal! "end" (Json.str "stop")) (record)) == some stopWhy
 
 -- the link points: the inner session's record (the prover's, which check 5 reads) holds the coin server's
 def pointsWhy : String :=
@@ -63,6 +74,16 @@ def pointsWhy : String :=
 #guard why (innerLink (transcript (root := [])) (record)) == some "rec inner transcript: circuit's root_B has no nodes"
 #guard why (innerLink (transcript (top0 := [])) (record)) ==
   some "rec inner transcript: circuit/rep0 round 1's top 0 has no nodes"
+
+-- Every node kept is a `b ‖ c` of 128 bytes, which a top's piece length rests on; a shorter node is refused
+#guard link.root.all (·.size == 128) && link.tops.all (·.all fun (_, t) => t.all (·.size == 128))
+def shortTop : Json :=
+  (transcript).setObjVal! "rounds" (Json.arr #[round "circuit/rep1" 1 [[5]], round "circuit/rep0" 0 [],
+    (round "circuit/rep0" 1 []).setObjVal! "tops"
+      (Json.arr #[Json.arr #[hx 3, Json.str (hexOf (ByteArray.mk (Array.replicate 64 4)))]]),
+    round "circuit/rep1" 0 []])
+#guard why (innerLink (transcript) (record)) == none && why (innerLink shortTop (record)) ==
+  some "rec inner transcript: circuit/rep0 round 1's top 0: a b ‖ c of 64 bytes, not 128"
 
 -- `rec-top-L<l>`'s rows: root_B at level 0, both reps'; above it rep 0's top, then rep 1's
 def row (lk : InnerLink) (l x : Nat) : Option (List UInt8) := (topRow lk l x).toOption.map (·.2.data.toList)
@@ -122,7 +143,7 @@ and 7; at level 0 both reps read `root_B` from row 0. -/
 
 def port (name value : String) (reads : List Nat) : Registered.Port :=
   { name, value, root := .empty, leaves := 8, words := some 64, wordBits := 16, domain := .empty,
-    reads := (reads.map some).toArray }
+    readsRel := (reads.map some).toArray }
 def pos0 : Array Nat := #[5, 13, 6]
 def pos1 : Array Nat := #[1, 2, 15]
 def reads (own : Array Registered.Port) (l : Nat) : Option String :=
@@ -145,5 +166,59 @@ def readsWhy : String :=
   some "rec-coins: rec-open/l8-h2: port out reads rec-top-stacked-L1, not level 1's tops rec-top-L1"
 #guard reads #[port "acc" "rec-acc" [0, 1]] 1 ==
   some "rec-coins: rec-open/l8-h2: the verifier's registered reads hold no port out: level 1's tops would be the prover's"
+
+/-! The coin server's record on the verifier's schedule (`checkSchedule`): a record of `scheduleOf`'s streams and rounds
+passes at its inner shape, plain and candidate 3's. A record that ends `finish` and is off it is refused: an extra
+round, a missing round, a round of another coin count, `n` or `level0`, rounds out of order, a stream declared with
+another round count (a holo record under a public shape), streams beside the schedule's, Hello of two tables, and a
+shape with no schedule. -/
+
+def onSched (i : Inner) : Json :=
+  let want := (scheduleOf i "circuit").getD #[]
+  let rnd := fun (s : String) (k : Nat) (w : SchedRound) => Json.mkObj [("stream", Json.str s), ("k", toJson k),
+    ("tops", Json.arr (w.2.1.map fun n => Json.arr (Array.replicate n (hx 0)))), ("level0", toJson w.2.2.1),
+    ("commits", Json.arr (if w.2.2.2 then #[hx 0] else #[])), ("n", toJson w.1),
+    ("coins", Json.arr (Array.replicate w.1 (coin 0)))]
+  Json.mkObj [("kind", Json.str TRANSCRIPT_FORMAT), ("hello", Json.mkObj [("tables", toJson ["circuit"])]),
+    ("streams", Json.mkObj (want.toList.map fun (s, p, pos, rs) =>
+      (s, Json.mkObj [("parent", Json.str p), ("at", toJson pos), ("rounds", toJson rs.size)]))),
+    ("rounds", Json.arr (want.flatMap fun (s, _, _, rs) => rs.mapIdx fun k w => rnd s k w)), ("end", Json.str "finish")]
+
+def roundsOf (j : Json) : Array Json := (j.getObjValAs? (Array Json) "rounds").toOption.getD #[]
+def withRounds (f : Array Json → Array Json) (j : Json := onSched i25) : Json :=
+  j.setObjVal! "rounds" (Json.arr (f (roundsOf j)))
+def offWhy (i : Inner) (why : String) : Option String :=
+  some (s!"rec inner transcript: the coin server's record is off the schedule of the verifier's inner shape " ++
+    s!"(m {i.m}, k_log {i.kLog}, claims {i.claims}): {why}")
+def c3i : Inner :=
+  { i25 with holo := true, sparse := some { nu := 18, ell := 13, sLog := 6, tLog := 0 }, stacked := some ⟨23, 2⟩ }
+
+#guard (roundsOf (onSched i25)).size == 188
+#guard why (checkSchedule i25 (onSched i25)) == none
+#guard why (checkSchedule c3i (onSched c3i)) == none
+#guard why (checkSchedule i25 (withRounds fun rs => rs.push rs.back!)) ==
+  offWhy i25 "189 rounds, and the schedule's 188"
+#guard why (checkSchedule i25 (withRounds (·.pop))) == offWhy i25 "187 rounds, and the schedule's 188"
+#guard why (checkSchedule i25 (withRounds (·.modify 3 fun r =>
+    (r.setObjVal! "n" (toJson 2)).setObjVal! "coins" (Json.arr #[coin 0, coin 0])))) ==
+  offWhy i25 ("round 3 is circuit/rep0 round 3 (n 2) (coins 2, tops [], level0 0, commits true), and the schedule's " ++
+    "circuit/rep0 round 3 (n 1) (coins 1, tops [], level0 0, commits true)")
+#guard why (checkSchedule i25 (withRounds (·.modify 3 fun r => r.setObjVal! "n" (toJson 2)))) ==
+  offWhy i25 ("round 3 is circuit/rep0 round 3 (n 2) (coins 1, tops [], level0 0, commits true), and the schedule's " ++
+    "circuit/rep0 round 3 (n 1) (coins 1, tops [], level0 0, commits true)")
+#guard why (checkSchedule i25 (withRounds (·.modify 0 fun r => r.setObjVal! "level0" (toJson 0)))) ==
+  offWhy i25 ("round 0 is circuit/rep0 round 0 (n 6) (coins 6, tops [], level0 0, commits false), " ++
+    "and the schedule's circuit/rep0 round 0 (n 6) (coins 6, tops [], level0 1, commits false)")
+#guard why (checkSchedule i25 (withRounds (·.reverse))) ==
+  offWhy i25 ("round 0 is circuit/rep1 round 93 (n 1) (coins 1, tops [], level0 0, commits false), " ++
+    "and the schedule's circuit/rep0 round 0 (n 6) (coins 6, tops [], level0 1, commits false)")
+#guard why (checkSchedule i25 (onSched { i25 with holo := true })) ==
+  offWhy i25 "circuit/rep0 is not declared at no parent with 94 rounds"
+#guard why (checkSchedule i25 (onSched c3i)) ==
+  offWhy i25 ("it declares the streams [circuit/rep0, circuit/rep1, sparse/rep0, sparse/rep1, stacked/rep0], " ++
+    "and the schedule [circuit/rep0, circuit/rep1]")
+#guard why (checkSchedule i25 ((onSched i25).setObjVal! "hello" (Json.mkObj [("tables", toJson ["circuit", "x"])]))) ==
+  offWhy i25 "Hello names no one table"
+#guard why (checkSchedule { i25 with m := 6 } (onSched i25)) == offWhy { i25 with m := 6 } "the shape has no schedule"
 
 end Flock.Test.InnerLink

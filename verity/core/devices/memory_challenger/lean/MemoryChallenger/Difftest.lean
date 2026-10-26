@@ -1,14 +1,16 @@
 import Difftest
 import Lms.Sign
 import MemoryChallenger.Protocol
+import MemoryChallenger.WipeJudge
 
 /-!
 # The difftest's Lean half
 
-The functions `tests/` holds to `memory_challenger.py` through `verity_difftest.Port`, each over JSON in the formats of
-`MemoryChallenger.Protocol` (byte strings lowercase hex, integers naturals): the crypto and record formats, and LMS
-signing at a leaf and verification. `memory-challenger-difftest` serves them (`Difftest.serve`). The verdict's own
-difftest drives `memory-challenger-verdict`, the executable its callers run.
+The functions `tests/` holds to `memory_challenger.py` and `streamed_wipe.py` through `verity_difftest.Port`, each over JSON
+in the formats of `MemoryChallenger.Protocol` (byte strings lowercase hex, integers naturals) and
+`MemoryChallenger.WipeJudge`: the crypto and record formats, LMS signing at a leaf and verification, and the streamed
+wipe's signed message and egress count. `memory-challenger-difftest` serves them (`Difftest.serve`). Each verdict's own
+difftest drives the executable its callers run, `memory-challenger-verdict` and `streamed-wipe-verdict`.
 -/
 
 namespace MemoryChallenger.Difftest
@@ -78,9 +80,22 @@ def lmsVerifyFn (j : Json) : V Json := do
   let some p := (SCHEMES ++ TEST_SCHEMES).lookup scheme | throw s!"no scheme {scheme}"
   pure (.bool (← lmsVerify p (← hex j "public_key") (← hex j "session") (← hex j "record") (← hex j "signature")))
 
+/-- `streamed_wipe.message(commitment, ended, fill_start_ns, fill_end_ns, batches, egress_bits)`. -/
+def wipeMessageFn (j : Json) : V Json := do
+  let c ← StreamedWipe.Commitment.ofJson (← J.get j "commitment" "input")
+  let batches ← (← J.arr j "batches" "input").mapM StreamedWipe.Batch.ofJson
+  let intAt := fun (k : String) => do J.asInt (← J.get j k "input") k
+  pure (hexJ (← StreamedWipe.message c (← J.str j "ended" "input") (← intAt "fill_start_ns") (← intAt "fill_end_ns")
+    batches (← intAt "egress_bits")))
+
+/-- `streamed_wipe.egress_units(egress_bits)`. -/
+def wipeEgressUnitsFn (j : Json) : V Json := do
+  pure (Lean.toJson (StreamedWipe.egressUnits (← J.asInt (← J.get j "egress_bits" "input") "egress_bits")))
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("coin_digest", coinDigestFn), ("coin_tree", coinTreeFn), ("verify_coin", verifyCoinFn),
   ("records_root", recordsRootFn), ("header", headerFn), ("message", messageFn), ("block_digest", blockDigestFn),
-  ("mc_message", mcMessageFn), ("sign_at", signAtFn), ("lms_verify", lmsVerifyFn)]
+  ("mc_message", mcMessageFn), ("sign_at", signAtFn), ("lms_verify", lmsVerifyFn), ("wipe_message", wipeMessageFn),
+  ("wipe_egress_units", wipeEgressUnitsFn)]
 
 end MemoryChallenger.Difftest

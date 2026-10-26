@@ -22,7 +22,7 @@ import re
 from typing import Any, Callable
 
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.patterns import (AttentionScope, BiasAdd, Embedding, FusedAddRMSNorm, GemmLaunch, KVCacheUpdate, LogitsGather,
@@ -68,7 +68,7 @@ GEMM_NUM_STAGES = 3
 #: this value is only the profile's own default (the RTX 4090's 128 SMs) for headers that carry no device — one source.
 GEMM_NUM_SMS = DEFAULT_TARGET.num_sms
 
-#: `batch_invariant.py::_rms_norm_kernel` as `rms_norm_batch_invariant` launches it (W11's model, `verity_vllm/program/kernels/
+#: `batch_invariant.py::_rms_norm_kernel` as `rms_norm_batch_invariant` launches it (W11's model, `verity/ml/definitions/numerics/
 #: rms_triton_model.py`): one CTA of 4 warps per row, 8 columns per thread per 1024-column chunk, warp butterfly
 #: xor 16,8,4,2,1, CTA `(w0 + w2) + (w1 + w3)` — the reduction tree `RMSNormTriton_v1` writes out.
 RMS_CONSTEXPRS: dict[str, Any] = {"BLOCK_SIZE": 1024, "HAS_WEIGHT": True}
@@ -76,8 +76,7 @@ RMS_NUM_WARPS = 4
 
 #: FA2 (`vllm-project/flash-attention 506341a`, `_vllm_fa2_C.varlen_fwd`): under `VLLM_BATCH_INVARIANT=1`
 #: `num_splits = 1` selects `run_mha_fwd_splitkv_align` → `Flash_fwd_kernel_traits<64, 64, 128, 4>`: kBlockM 64,
-#: kBlockN 128 (measured on the 4090, `out/curve/e10/KERNEL-GEOMETRY.md` §A).  The `Attention_v3` static `BN`.
-ATTN_BN = C["BN"]
+#: kBlockN 128 (measured on the 4090, `out/curve/e10/KERNEL-GEOMETRY.md` §A).  `C["BN"]` is the `Attention_v3` static `BN`.
 ATTN_NUM_SPLITS = 1
 
 #: KV cache of the FlashAttention backend in κ (M1 log): the per-layer cache is one bf16 buffer
@@ -135,6 +134,10 @@ def make_weight_field(C: dict[str, Any]) -> Callable[[str], tuple[str | int, ...
     if C.get("FP8_BLOCK"):
         layer_fields.update({"self_attn.qkv_proj.weight_scale_inv": "qkv_ws", "self_attn.o_proj.weight_scale_inv": "o_ws",
                              "mlp.gate_up_proj.weight_scale_inv": "gate_up_ws", "mlp.down_proj.weight_scale_inv": "down_ws"})
+    if C.get("INT8_EXACT"):
+        # the exact-int8 linears' f32 per-row scales (`program.model._int8_fields`)
+        layer_fields.update({"self_attn.qkv_proj.weight_scale": "qkv_ws", "self_attn.o_proj.weight_scale": "o_ws",
+                             "mlp.gate_up_proj.weight_scale": "gate_up_ws", "mlp.down_proj.weight_scale": "down_ws"})
 
     def weight_field(name: str) -> tuple[str | int, ...] | None:
         if name == "model.embed_tokens.weight":
@@ -143,6 +146,8 @@ def make_weight_field(C: dict[str, Any]) -> Callable[[str], tuple[str | int, ...
             # tied checkpoints (SmolLM2, Qwen2.5 ≤ 3B): lm_head.weight aliases embed (a fact, DESIGN §3);
             # untied ones (TinyLlama, Qwen2.5-7B, Llama-3.1-8B): a field of its own (`analytic.weights_type`)
             return ("embed",) if tied else ("lm_head",)
+        if name == "lm_head.weight_scale" and C.get("INT8_LM_HEAD") and not tied:
+            return ("lm_head_ws",)
         if name == "model.norm.weight":
             return ("norm",)
         m = _LAYER_RE.match(name)
@@ -227,6 +232,11 @@ def make_patterns(C: dict[str, Any]) -> list:
         # dynamic per-token-group activation quant and the blockwise CUTLASS scaled GEMM, each ONE registered family (registry.fp8)
         from verity_vllm.observe.fold.patterns.fp8 import CutlassScaledMmFp8Block, PerTokenGroupFp8Quant
         fp8 = [PerTokenGroupFp8Quant(group=int(C["FP8_BLOCK"])), CutlassScaledMmFp8Block(group=int(C["FP8_BLOCK"]))]
+    if C.get("INT8_EXACT"):
+        # the exact-int8 profile's named ops (engine.int8_ops), each one registered Definition (registry.int8_exact); the attention
+        # scope first, so a layer on the int8 backend never reaches the FA2 scope
+        from verity_vllm.observe.fold.patterns.int8 import Int8AttentionScope, Int8RowQuant, Int8ScaledMm
+        fp8 = [Int8RowQuant(), Int8ScaledMm(), Int8AttentionScope()]
     return [
         *fp8,
         GemmLaunch(GEMM_CONSTEXPRS, num_warps=GEMM_NUM_WARPS, num_stages=GEMM_NUM_STAGES, num_sms=GEMM_NUM_SMS),

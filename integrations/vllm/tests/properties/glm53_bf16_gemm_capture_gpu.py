@@ -14,8 +14,12 @@ The split-K-off variant (`SWITCH_ENV` and `switch()`) is vLLM's batch-invariant 
 (determinism/batch_invariant.py:1076-1080 and 1127-1138): CUBLAS_WORKSPACE_CONFIG=:16:8 and CUBLASLT_WORKSPACE_SIZE=1 before torch
 creates a cuBLAS handle, fp16 and bf16 reduced-precision reductions off with split-K off (``(False, False)``, torch >= 2.10), and
 cuBLASLt preferred.  vLLM's Triton bmm override is not part of it: `torch.bmm` stays on cuBLAS.  `--served-default` runs without
-the variant. By default the run checks the variant first and vLLM's served default in a second process; the outer verdict needs
-both, so `served_default` is first-class rather than timing-only.
+the variant, at vLLM's served cuBLAS configuration: `environment` clears every switch the process inherited
+(`engine.env.served_defaults`, and the variant's workspace variables) before torch is imported, nothing it imports sets one back
+(vLLM's process groups come from `distributed`), and `configuration` reads it back before the first GEMM (`switch`) and after the
+last (`switch_after`): not batch invariant, no workspace variable, torch's reduced-precision reductions at their default (True)
+and cuBLAS the preferred BLAS.  By default the run checks the variant first and vLLM's served default in a second process; the
+outer verdict needs both, the served default's read-backs among it, so `served_default` is first-class rather than timing-only.
 
   gate       `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs (an H200).
   scan       in its own process (`scan_run`, `--scan-run`; the parent reads back its scan.json): profiler sessions this large
@@ -35,7 +39,8 @@ both, so `served_default` is first-class rather than timing-only.
              model class (`scan_classes`) at the first M past 256 the box serves it at, plus ENVELOPE, so every distinct
              model cuBLAS serves across decode batches to ENVELOPE is word-checked without launching every M twice.
   selection  each model's `GateLinear(K, N)` with a bf16 weight and f32 out allows tier 1 (ll_bf16_gemm) and tier 4 (cuBLAS) and
-             neither fp32 tier; `dispatch_unquantized_gemm()` is `default_unquantized_gemm` (F.linear); the switch's flags read back.
+             neither fp32 tier; `dispatch_unquantized_gemm()` is `default_unquantized_gemm` (F.linear); the configuration read
+             back (`switch`) is the run's: the variant's, or vLLM's served defaults.
   router     `GateLinear.forward` at M in the model's `router_m`, twice: every `LLBf16Gemm.dispatch` it makes is tapped and must be
              `bf16_gemm_check.dispatch_sm90`'s kernel at the gate's (K, N) (GLM-5.3, (6144, 256): M <= 4 dotprod at BS 128, 5..16
              split-K at 6, or 8 at M 9 and 11; DeepSeek-V4-Pro, (7168, 384): M 1, 2 dotprod at BS 256, whose K loop ends in a tail
@@ -59,20 +64,23 @@ both, so `served_default` is first-class rather than timing-only.
   bind       every Definition binds at each model's statics.
   timing     each case's kernel time, the median of `REPS` CUDA-event-timed launches.
   profile    every CUDA kernel name and launch grid, the separate cuBLASLt reduction kernel, the `SPLIT_K` pinned by shape and M
-             (`BC.default_cublas_split_k`, M <= 256, default route only) or read from the scan's fit past the pins (Kineto
+             (`BC.default_cublas_split_k`, the route table, default route only) or read from the scan's fit past it (Kineto
              reports grid.z = 1 for these launches), and the runtime cuBLAS version.  A trace with no kernels fails the launch
              (`_profile_record`).  Each default split-K case includes a crafted cancellation row fit against the stated
              contiguous/f32/forward hypothesis and strided, reverse, tree and bf16-partial alternatives.
 
 GO needs, for every model and both variants, every case run (the scan's swept boundaries included), 0 mismatches on every word,
 `fma` decided, every launch deterministic and on its expected kernel, every profiled split-K launch's split pinned or fitted and
-its unique hypothesis fit, the scan ok, and the references equal.
+its unique hypothesis fit, the scan ok, the references equal, and each process's configuration read back as its variant's (the
+served default's before the first GEMM and after the last).
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/glm53_bf16_gemm_capture_gpu.py --out DIR [--scratch DIR] [--workers N] [--quick] [--no-default]
         [--no-scan] [--models glm53,dsv4-pro] [--only router,linear,f32out,bmm]
 """
 from __future__ import annotations
+
+__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
 
 import argparse
 import ctypes
@@ -93,9 +101,10 @@ import numpy as np
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
+from verity_vllm.engine.env import served_defaults
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/glm53-bf16-gemm-capture/v5"
+SCHEMA = "verity-vllm/glm53-bf16-gemm-capture/v6"
 RECORD = "glm53_bf16_gemm_capture.json"
 #: GLM-5.3's MLA at one TP8 rank: heads, the nope and rope query widths, the latent rank and the value width
 NHL, QK_NOPE, QK_ROPE, KV_LORA, V_HEAD = 8, 192, 64, 512, 256
@@ -132,7 +141,7 @@ LINEAR_M, QUICK_M = (1, 4, 16, 128, 256), (1, 16)
 #: vLLM's default max_num_seqs for the LLM entrypoint on a GPU of 70 GiB or more that is no A100 (engine/arg_utils.py
 #: `get_batch_defaults`): a decode step reaches ENVELOPE tokens
 ENVELOPE = 1024
-#: the scan's decode batches: every M from the last pinned sweep point to the envelope
+#: the scan's decode batches: every M from the last pinned sweep point to the envelope (`--scan-m LO:HI` sets another range)
 SCAN_M = range(256, ENVELOPE + 1)
 #: the output rows and columns the scan keeps per M, enough to see any schedule change and to fit the split count
 SCAN_FIT_ROWS, SCAN_FIT_COLS = 4, 256
@@ -156,35 +165,51 @@ def _error(e: BaseException) -> str:
 
 
 # ------------------------------------------------------------------------------------------------------------------------- env
-def environment(served_default: bool, triton_cache: Path) -> dict[str, str]:
-    """The env, set before torch is imported: the switch's cuBLAS variables, or (`served_default`) none of them."""
-    env = {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "VLLM_BATCH_INVARIANT": "0", "TRITON_CACHE_DIR": str(triton_cache)}
-    if served_default:
-        for k in SWITCH_ENV:
-            os.environ.pop(k, None)
-    else:
-        env.update(SWITCH_ENV)
+def environment(served_default: bool, triton_cache: Path) -> tuple[dict[str, str], dict[str, str]]:
+    """vLLM's defaults (`served_defaults`, and no cuBLAS workspace variable), plus the switch's cuBLAS variables unless
+    `served_default`, and the Triton cache in scratch, set before torch is imported: (the env set, the switches cleared)."""
+    cleared = served_defaults()
+    cleared |= {k: os.environ.pop(k) for k in SWITCH_ENV if k in os.environ}
+    env = {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "TRITON_CACHE_DIR": str(triton_cache), **({} if served_default else SWITCH_ENV)}
     os.environ.update(env)
-    return env
+    return env, cleared
+
+
+REDUCED = ("allow_fp16_reduced_precision_reduction", "allow_bf16_reduced_precision_reduction")
+
+
+def configuration(served_default: bool) -> dict[str, Any]:
+    """The cuBLAS configuration as this process reads it (torch's reduced-precision flags and preferred BLAS, the workspace
+    variables, vLLM's batch invariance, the runtime cuBLAS version), `ok` if it is the one the process runs: the switch's, or
+    (`served_default`) vLLM's served defaults (not batch invariant, no workspace variable, both reductions at torch's default
+    True, cuBLAS the BLAS)."""
+    import torch
+    import vllm.envs as envs
+
+    m = torch.backends.cuda.matmul
+    rec: dict[str, Any] = {"torch": torch.__version__, **{k: repr(getattr(m, k)) for k in REDUCED},
+                           "preferred_blas_library": str(torch.backends.cuda.preferred_blas_library()),
+                           "env": {k: os.environ.get(k) for k in SWITCH_ENV}, "VLLM_BATCH_INVARIANT": bool(envs.VLLM_BATCH_INVARIANT),
+                           "cublas_version": cublas_version()}
+    blas = rec["preferred_blas_library"].rsplit(".", 1)[-1].lower()
+    if served_default:
+        rec["ok"] = not any(rec["env"].values()) and blas == "cublas" and all(rec[k] == "True" for k in REDUCED)
+    else:
+        rec["ok"] = rec["env"] == SWITCH_ENV and blas == "cublaslt" and all(rec[k] in ("(False, False)", "False") for k in REDUCED)
+    rec["ok"] = rec["ok"] and not rec["VLLM_BATCH_INVARIANT"]
+    return rec
 
 
 def switch(served_default: bool) -> dict[str, Any]:
-    """The switch's torch flags (unless `served_default`), set before the first GEMM, read back."""
+    """The switch's torch flags (unless `served_default`), set before the first GEMM, and the configuration read back."""
     import torch
 
-    m = torch.backends.cuda.matmul
     if not served_default:
+        m = torch.backends.cuda.matmul
         m.allow_fp16_reduced_precision_reduction = (False, False)
         m.allow_bf16_reduced_precision_reduction = (False, False)
         torch.backends.cuda.preferred_blas_library(backend="cublaslt")
-    rec = {"torch": torch.__version__, "allow_fp16_reduced_precision_reduction": repr(m.allow_fp16_reduced_precision_reduction),
-           "allow_bf16_reduced_precision_reduction": repr(m.allow_bf16_reduced_precision_reduction),
-           "preferred_blas_library": str(torch.backends.cuda.preferred_blas_library()),
-           "env": {k: os.environ.get(k) for k in SWITCH_ENV}, "cublas_version": cublas_version()}
-    rec["ok"] = served_default or (rec["env"] == SWITCH_ENV and "cublaslt" in rec["preferred_blas_library"].lower()
-                                   and all(v in ("(False, False)", "False") for v in (rec["allow_fp16_reduced_precision_reduction"],
-                                                                                     rec["allow_bf16_reduced_precision_reduction"])))
-    return rec
+    return configuration(served_default)
 
 
 # ------------------------------------------------------------------------------------------------------------------ operands
@@ -217,7 +242,7 @@ def splitk_probe_words(K: int, splits: int, output: str, N: int = 32, seed: int 
     forward reduction leaves +1 while reverse (and, from four splits, tree) loses it.  Row 1 makes the first partial 2^16 + 1
     and the second -2^16, so rounding partials to bf16 loses the final +1 under either output type.
     """
-    from verity_vllm.program.registry import bf16_gemm_check as BC
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
 
     if N < 3:
         raise ValueError(f"split-K probe needs at least three output rows, got {N}")
@@ -407,12 +432,21 @@ def _load_library(path: str):
 
 
 # ------------------------------------------------------------------------------------------------------------------- selection
-def make_gate(vllm_config, model: str):
+def distributed(work: Path) -> None:
+    """vLLM's TP and PP groups at world size 1 (`ReplicatedLinear` reads the TP group's rank), under the current vLLM config.  Not
+    `vllm_meta.ensure_distributed`: importing that module pins `engine.env.EXPORT` (test_env holds every capture that clears
+    `SERVED_DEFAULTS` to importing no pinning module)."""
+    from vllm.distributed import ensure_model_parallel_initialized, init_distributed_environment
+
+    init_distributed_environment(world_size=1, rank=0, distributed_init_method=f"file://{work / 'dist_store'}", local_rank=0,
+                                 backend="gloo")
+    ensure_model_parallel_initialized(1, 1)
+
+
+def make_gate(model: str):
     import torch
     from vllm.model_executor.layers.fused_moe.router.gate_linear import GateLinear
-    from verity_vllm.program.frontend.vllm_meta import ensure_distributed
 
-    ensure_distributed(vllm_config)                                                # ReplicatedLinear reads the TP group's rank
     m = MODELS[model]
     return GateLinear(m.hidden, m.experts, bias=False, out_dtype=torch.float32, params_dtype=torch.bfloat16,
                       prefix="model.layers.3.mlp.gate").cuda()
@@ -450,7 +484,7 @@ def case_key(model: str, phase: str, case: str, M: int) -> str:
 
 def expected_kernel(M: int, model: str = "glm53") -> dict[str, Any]:
     """The model's gate's kernel at M as `dispatch_sm90` names it, in the record's form."""
-    from verity_vllm.program.registry import bf16_gemm_check as BC
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
 
     m = MODELS[model]
     kind, st = BC.dispatch_sm90(M, m.hidden, m.experts)
@@ -534,8 +568,8 @@ def _cublas_split_k(job: dict[str, Any]) -> int | None:
 
 
 def served_split(phase: str, M: int, K: int, N: int, scan_split: int | None = None) -> int | None:
-    """The default reduce route's split count at these statics: the pinned table (M <= 256), else the scan's fit at this M."""
-    from verity_vllm.program.registry import bf16_gemm_check as BC
+    """The default reduce route's split count at these statics: the route table, else the scan's fit at this M."""
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
 
     pinned = BC.default_cublas_split_k(phase, M, K, N)
     return pinned if pinned is not None else scan_split
@@ -590,7 +624,18 @@ def scan_classes(regimes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return list(classes.values())
 
 
-def scan_sweep(regimes: list[dict[str, Any]], covered: int = SCAN_M[0]) -> list[int]:
+def scan_routes(regimes: list[dict[str, Any]]) -> list[list[int | None]]:
+    """The regimes as `bf16_gemm_check`'s route table rows: maximal [m0, m1, split] runs (split None: the serial chain)."""
+    runs: list[list[int | None]] = []
+    for r in regimes:
+        if runs and runs[-1][2] == r["split"] and runs[-1][1] + 1 == r["m0"]:
+            runs[-1][1] = r["m1"]
+        else:
+            runs.append([r["m0"], r["m1"], r["split"]])
+    return runs
+
+
+def scan_sweep(regimes: list[dict[str, Any]], covered: int = LINEAR_M[-1]) -> list[int]:
     """The decode batches the scan adds as full cases: for each model class the first M past the already-swept `covered` the
     box serves it at, plus the ENVELOPE endpoint."""
     first: dict[int | None, int] = {}
@@ -620,19 +665,19 @@ def scan_targets(only: set[str], models: list[str]) -> list[tuple[str, str, str]
 
 
 def scan_ops(weights: Weights, gates: dict[str, Any], model: str, phase: str, name: str, idx: int) -> dict[str, Any]:
-    """One scan target's operands at ENVELOPE rows and its launch, keep and model pieces (module docstring, `scan`): the
+    """One scan target's operands at the scan's top M rows and its launch, keep and model pieces (module docstring, `scan`): the
     crafted count probe atop a clone of W with an all-ones x row 0 (never for bmm), the fit's operand words, and the serial
     chain's words on the kept window."""
     import torch
-    from verity_vllm.program.registry import bf16_gemm_check as BC
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
 
-    m = MODELS[model]
+    m, top = MODELS[model], SCAN_M[-1]
     gen = torch.Generator(device="cuda").manual_seed(13000 + idx)
     if phase == "router":
         w0, _ = weights.get(model, "mlp.gate")
         gate = gates[model]
         gate.weight.data.copy_(w0)
-        x, w = _activation(gen, ENVELOPE, m.hidden), gate.weight.data
+        x, w = _activation(gen, top, m.hidden), gate.weight.data
         run = lambda M: _primary_output(gate(x[:M]))                               # noqa: E731
         output = "f32"
     elif phase in ("linear", "f32out"):
@@ -640,7 +685,7 @@ def scan_ops(weights: Weights, gates: dict[str, Any], model: str, phase: str, na
 
         w0, _ = weights.get(model, name)
         w = w0.clone()                                                             # the probe rows never touch the cached weights
-        x = _activation(gen, ENVELOPE, w.shape[1])
+        x = _activation(gen, top, w.shape[1])
         if phase == "linear":
             gemm, layer, output = dispatch_unquantized_gemm(), torch.nn.Module(), "bf16"
             run = lambda M: gemm(layer, x[:M], w, None)                            # noqa: E731
@@ -651,13 +696,13 @@ def scan_ops(weights: Weights, gates: dict[str, Any], model: str, phase: str, na
         b, _ = weights.get(model, name)
         output = "bf16"
         if name == "q_nope_absorb":
-            q = _activation(gen, ENVELOPE, NHL * (QK_NOPE + QK_ROPE)).view(ENVELOPE, NHL, QK_NOPE + QK_ROPE)
+            q = _activation(gen, top, NHL * (QK_NOPE + QK_ROPE)).view(top, NHL, QK_NOPE + QK_ROPE)
             a = q.split([QK_NOPE, QK_ROPE], dim=-1)[0].transpose(0, 1)
             run = lambda M: torch.bmm(a[:, :M], b)                                 # noqa: E731
         else:
-            a = _activation(gen, ENVELOPE, NHL * KV_LORA).view(ENVELOPE, NHL, KV_LORA).transpose(0, 1)
-            buf = torch.empty(ENVELOPE, NHL * V_HEAD, device="cuda", dtype=torch.bfloat16)
-            out_full = buf.view(ENVELOPE, NHL, V_HEAD).transpose(0, 1)
+            a = _activation(gen, top, NHL * KV_LORA).view(top, NHL, KV_LORA).transpose(0, 1)
+            buf = torch.empty(top, NHL * V_HEAD, device="cuda", dtype=torch.bfloat16)
+            out_full = buf.view(top, NHL, V_HEAD).transpose(0, 1)
             run = lambda M: torch.bmm(a[:, :M], b, out=out_full[:, :M])            # noqa: E731
     if phase != "bmm":
         # x row 0 all ones and crafted boundary rows atop W: the split count reads out of the words at either output rounding
@@ -677,24 +722,24 @@ def scan_ops(weights: Weights, gates: dict[str, Any], model: str, phase: str, na
 def scan_analyze(op: dict[str, Any], segments: list[list[dict[str, Any]]], rows: list[np.ndarray]) -> dict[str, Any]:
     """One scanned target's schedule map (module docstring, `scan`): the regimes, each regime's model read out of its kept
     words (the split count fitted behind its reduce, the serial chain without one), the model classes and the sweep."""
-    from verity_vllm.program.registry import bf16_gemm_check as BC
-    from verity_vllm.program.registry import mla_check as MK
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
+    from verity.ml.definitions.registry import mla_check as MK
 
     regimes = scan_regimes(list(SCAN_M), [scan_signature(s) for s in segments], rows)
     cache: dict[bytes, tuple[list[int], bool]] = {}                                # same kept words, same model: fit each once
     for r in regimes:
         pat = rows[list(SCAN_M).index(r["m0"])]
-        key = pat.tobytes()
+        key, n = pat.tobytes(), pat.shape[-2]                                      # n < SCAN_FIT_ROWS below M = SCAN_FIT_ROWS
         if key not in cache:
-            fits = BC.fit_cublas_split_k(op["xw"], op["ww"], pat, out=op["output"]) if op["xw"] is not None else []
-            cache[key] = (fits, not (~MK._words_equal(pat, op["serial"], f32_words=op["output"] == "f32")).any())
+            fits = BC.fit_cublas_split_k(op["xw"][:n], op["ww"], pat, out=op["output"]) if op["xw"] is not None else []
+            cache[key] = (fits, not (~MK._words_equal(pat, op["serial"][..., :n, :], f32_words=op["output"] == "f32")).any())
         fits, serial = cache[key]
         r["split_fits"], r["serial_fit"] = fits, serial
         r["split"] = fits[0] if r["reduce"] and fits else None
         r["modeled"] = bool(fits) if r["reduce"] else (serial and not fits)
     classes = scan_classes(regimes)
     return {"m": [SCAN_M[0], SCAN_M[-1]], "output": op["output"], "regimes": regimes, "classes": classes,
-            "sweep": scan_sweep(regimes) if len(classes) <= MAX_CLASSES else [ENVELOPE],
+            "routes": scan_routes(regimes), "sweep": scan_sweep(regimes) if len(classes) <= MAX_CLASSES else [ENVELOPE],
             "ok": all(r["modeled"] for r in regimes) and len(classes) <= MAX_CLASSES}
 
 
@@ -706,11 +751,11 @@ def scan_run(a: argparse.Namespace) -> int:
     outdir.mkdir(parents=True, exist_ok=True)
     tmp = tempfile.TemporaryDirectory(dir=a.scratch)
     work = Path(tmp.name)
-    environment(a.served_default, work / "triton_cache")
+    _, cleared = environment(a.served_default, work / "triton_cache")
     import torch
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
 
-    doc: dict[str, Any] = {"cases": {}, "errors": {}}
+    doc: dict[str, Any] = {"cases": {}, "errors": {}, "env_cleared": cleared}
     try:
         doc["switch"] = switch(a.served_default)
     except Exception as e:  # noqa: BLE001
@@ -719,9 +764,13 @@ def scan_run(a: argparse.Namespace) -> int:
     vllm_config = VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))
     with set_current_vllm_config(vllm_config):
         gates: dict[str, Any] = {}
+        try:
+            distributed(work)
+        except Exception as e:  # noqa: BLE001
+            doc["errors"]["distributed"] = _error(e)
         for model in models:
             try:
-                gates[model] = make_gate(vllm_config, model)
+                gates[model] = make_gate(model)
             except Exception as e:  # noqa: BLE001
                 doc["errors"][f"gate/{model}"] = _error(e)
         weights = Weights(work, 4000)
@@ -754,7 +803,12 @@ def scan_run(a: argparse.Namespace) -> int:
                 doc["cases"][skey] = scan_analyze(op, segments[i * len(SCAN_M):(i + 1) * len(SCAN_M)], rows)
             except Exception as e:  # noqa: BLE001
                 doc["errors"][skey] = _error(e)
-    doc["ok"] = (not doc["errors"] and doc["switch"].get("ok") is True and bool(doc["cases"])
+        try:
+            doc["switch_after"] = configuration(a.served_default)
+        except Exception as e:  # noqa: BLE001
+            doc["errors"]["switch_after"] = _error(e)
+            doc["switch_after"] = {"ok": False}
+    doc["ok"] = (not doc["errors"] and all(doc[k].get("ok") is True for k in ("switch", "switch_after")) and bool(doc["cases"])
                  and all(rec["ok"] for rec in doc["cases"].values()))
     (outdir / "scan.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
     tmp.cleanup()
@@ -769,7 +823,7 @@ def scan_subprocess(a: argparse.Namespace, outdir: Path) -> dict[str, Any]:
     sub.mkdir(parents=True, exist_ok=True)
     (sub / "scan.json").unlink(missing_ok=True)                                 # a dead process never reuses a stale record
     argv = [sys.executable, str(Path(__file__).resolve()), "--scan-run", "--out", str(sub),
-            "--models", a.models, "--only", a.only]
+            "--models", a.models, "--only", a.only, "--scan-m", f"{SCAN_M[0]}:{SCAN_M[-1]}"]
     argv += (["--scratch", a.scratch] if a.scratch else []) + (["--served-default"] if a.served_default else [])
     proc = subprocess.run(argv, capture_output=True, text=True, cwd=Path(__file__).resolve().parents[2])
     (outdir / "scan.log").write_text(proc.stdout + proc.stderr)
@@ -922,8 +976,8 @@ def _reference(job: dict[str, Any], a: dict[str, np.ndarray], r: int, n: int, fm
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.ops import gemm as CG
     from verity.ml.circuits.ops.boolean import gemm as BG
-    from verity_vllm.program.registry import cublas_bf16 as CB
-    from verity_vllm.program.registry import ll_bf16 as LL
+    from verity.ml.definitions.registry import cublas_bf16 as CB
+    from verity.ml.definitions.registry import ll_bf16 as LL
 
     hop = word_of(BG.HopperBF16WgmmaDot16)
     K, N = job["K"], job["N"]
@@ -956,8 +1010,8 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 
 
 def _compare(job: dict[str, Any]) -> dict[str, Any]:
-    from verity_vllm.program.registry import bf16_gemm_check as BC
-    from verity_vllm.program.registry import mla_check as MK
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
+    from verity.ml.definitions.registry import mla_check as MK
 
     a = _load(job["paths"])
     r0, r1 = job["rows"]
@@ -1024,9 +1078,9 @@ def bind_check(models: list[str] = list(MODELS), launches: list[dict[str, Any]] 
     from verity.ml.circuits.evaluation.batch import type_shape
     from verity.ml.circuits.ops import gemm as CG
     from verity.ml.circuits.ops.boolean import gemm as BG
-    from verity_vllm.program.registry import bf16_gemm_check as BC
-    from verity_vllm.program.registry import cublas_bf16 as CB
-    from verity_vllm.program.registry import ll_bf16 as LL
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
+    from verity.ml.definitions.registry import cublas_bf16 as CB
+    from verity.ml.definitions.registry import ll_bf16 as LL
 
     hop = word_of(BG.HopperBF16WgmmaDot16)
     targets = []
@@ -1110,7 +1164,7 @@ def model_verdicts(doc: dict[str, Any]) -> dict[str, bool]:
 
 
 def _verdict(doc: dict[str, Any]) -> bool:
-    return (doc["gate"]["ok"] and not doc["errors"] and doc["switch"].get("ok") is True
+    return (doc["gate"]["ok"] and not doc["errors"] and all(doc.get(k, {}).get("ok") is True for k in ("switch", "switch_after"))
             and isinstance(doc["switch"].get("cublas_version"), int)
             and all(s.get("ok") is True for s in doc["selection"].values()) and bool(doc["selection"])
             and doc["bind"].get("ok") is True and {_case(x) for x in doc["launches"]} == set(doc["expected"])
@@ -1134,6 +1188,7 @@ def default_run(a: argparse.Namespace, outdir: Path) -> dict[str, Any]:
     doc = json.loads((sub / RECORD).read_text())
     return {"returncode": proc.returncode, "ok": doc["ok"], "digest": doc["digest"], "errors": sorted(doc["errors"]),
             "model_verdicts": doc.get("model_verdicts"), "cublas_version": doc.get("switch", {}).get("cublas_version"),
+            "env_cleared": doc.get("env_cleared"), "switch": doc.get("switch"), "switch_after": doc.get("switch_after"),
             "profiles": {_case(x): x.get("profile") for x in doc["launches"]},
             "splitk_hypotheses": doc.get("splitk_hypotheses"),
             "changed": sorted(k for k, c in doc["cases"].items() if not c["ok"]), "us": {k: c.get("us") for k, c in doc["cases"].items()}}
@@ -1155,21 +1210,22 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     outdir.mkdir(parents=True, exist_ok=True)
     tmp = tempfile.TemporaryDirectory(dir=a.scratch)
     work = Path(tmp.name)
-    env = environment(a.served_default, work / "triton_cache")
+    env, cleared = environment(a.served_default, work / "triton_cache")
     import torch
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
-    from verity_vllm.program.registry import bf16_gemm_check as BC
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
 
     tag = "GLM53-BF16-GEMM" + (" (served default)" if a.served_default else "")
     todo = cases(a.quick, only, models)
     run_scan = not a.quick and not a.no_scan
-    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "quick": a.quick, "served_default": a.served_default,
+    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "env_cleared": cleared, "quick": a.quick,
+                           "served_default": a.served_default,
                            "variant": "served_default" if a.served_default else "split_k_off",
                            "require_served_default": not a.served_default and not a.no_default,
                            "models": models, "expected": [case_key(*c) for c in todo], "environment": G._environment(),
                            "scan": {"enabled": run_scan, "cases": {}, "ok": True},
                            "gate": C.gate(a.min_driver, a.want_cc, a.want_sms), "errors": {}}
-    print(f"[glm53-bf16-gemm] gate {json.dumps(doc['gate'])}", flush=True)
+    print(f"[glm53-bf16-gemm] gate {json.dumps(doc['gate'])} cleared {sorted(cleared)}", flush=True)
     if not doc["gate"]["ok"]:
         (outdir / RECORD).write_text(json.dumps(seal_record(doc, False), indent=1) + "\n")
         print(f"{tag} GATE-FAIL", flush=True)
@@ -1184,9 +1240,13 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     vllm_config = VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))
     with set_current_vllm_config(vllm_config):
         gates: dict[str, Any] = {}
+        try:
+            distributed(work)
+        except Exception as e:  # noqa: BLE001
+            doc["errors"]["distributed"] = _error(e)
         for model in models:
             try:
-                gates[model] = make_gate(vllm_config, model)
+                gates[model] = make_gate(model)
                 doc["selection"][model] = selection(gates[model])
             except Exception as e:  # noqa: BLE001
                 doc["errors"][f"selection/{model}"] = _error(e)
@@ -1197,7 +1257,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         if run_scan:
             scan_doc = scan_subprocess(a, outdir)
             doc["scan"].update(cases=scan_doc.get("cases") or {}, ok=scan_doc.get("ok") is True,
-                               switch=scan_doc.get("switch"), returncode=scan_doc.get("returncode"))
+                               switch=scan_doc.get("switch"), switch_after=scan_doc.get("switch_after"),
+                               env_cleared=scan_doc.get("env_cleared"), returncode=scan_doc.get("returncode"))
             for skey, msg in (scan_doc.get("errors") or {}).items():
                 doc["errors"][f"scan/{skey}"] = msg
                 print(f"[glm53-bf16-gemm] scan {skey} ERROR {msg[:400]}", flush=True)
@@ -1223,6 +1284,12 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
             except Exception as e:  # noqa: BLE001
                 doc["errors"][key] = _error(e)
                 print(f"[glm53-bf16-gemm] {key} ERROR {doc['errors'][key][:400]}", flush=True)
+        try:
+            doc["switch_after"] = configuration(a.served_default)
+        except Exception as e:  # noqa: BLE001
+            doc["errors"]["switch_after"] = _error(e)
+            doc["switch_after"] = {"ok": False}
+        print(f"[glm53-bf16-gemm] switch_after {json.dumps(doc['switch_after'])}", flush=True)
         del weights
         torch.cuda.empty_cache()
     try:
@@ -1286,6 +1353,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    global SCAN_M
     ap = argparse.ArgumentParser(description="GLM-5.3's and DeepSeek-V4-Pro's bf16 GEMMs on this Hopper GPU against their Programs")
     ap.add_argument("--out", required=True, help=f"directory for {RECORD}")
     ap.add_argument("--scratch", default=None, help="parent of the scratch directory (operands, Triton cache); default the system temp")
@@ -1303,9 +1371,13 @@ def main(argv: list[str] | None = None) -> int:
                     help=f"skip the decode-batch schedule scan over M in {SCAN_M.start}..{SCAN_M[-1]} (--quick always skips it)")
     ap.add_argument("--scan-run", action="store_true",
                     help="run only the scan and write <out>/scan.json (internal: the scan profiles in its own process)")
+    ap.add_argument("--scan-m", default=f"{SCAN_M[0]}:{SCAN_M[-1]}",
+                    help="LO:HI, the scan's decode batches (the router's cuBLAS tier starts past 16 tokens: scan it from 17)")
     ap.add_argument("--models", default=",".join(MODELS), help=f"comma list of models: {', '.join(MODELS)}")
     ap.add_argument("--only", default=",".join(PHASES), help=f"comma list of phases: {', '.join(PHASES)}")
     a = ap.parse_args(argv)
+    lo, hi = (int(v) for v in a.scan_m.split(":"))
+    SCAN_M = range(lo, hi + 1)
     if a.scan_run:
         return scan_run(a)
     return 0 if run(a)["ok"] else 1

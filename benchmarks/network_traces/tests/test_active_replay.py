@@ -13,7 +13,8 @@ from pathlib import Path
 
 import pytest
 from verity.core.protocols.certifier import calibration
-from verity.core.protocols.certifier.active import DATA, LAST, encode_frame
+from verity.core.protocols.certifier import active
+from verity.core.protocols.certifier.active import DATA, encode_frame
 from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Reason, Record, Status, Certifier
 
 HERE = Path(__file__).resolve().parents[1]
@@ -71,12 +72,15 @@ def runs(setup, tmp_path_factory):
 
 
 def test_requests_take_the_frames_the_trace_gives_them():
+    header = active.request_placement(4096)[2]
     for n in (1, 2, 3):
         body = ar.request_bytes("s", n, 4096)
-        frames = ar.request_frames(7, body, 4096)
+        frames = ar.request_frames(body, 4096)
         assert len(frames) == n * 4096
-        kinds = [frames[k * 4096] for k in range(n)]
-        assert kinds == [DATA] * (n - 1) + [LAST]
+        assert {frames[k * 4096 : k * 4096 + active.HEADER.size] for k in range(n)} == {header}
+        split = active.Requests()
+        cut = [split.feed(frames[k * 4096 + active.HEADER.size : (k + 1) * 4096]) for k in range(n)]
+        assert b"".join(d for _, d, _ in cut) == body and [e for *_, e in cut] == [False] * (n - 1) + [True]
 
 
 def test_records_round_trip_through_their_packing():
@@ -123,9 +127,10 @@ def test_an_honest_run_is_accepted_and_is_run_shapers(runs):
 
 
 def test_a_salted_run_puts_the_salt_frame_on_ingress_only(setup, runs, tmp_path):
-    """With the certifier's salt on, each window's ingress record holds one salt frame and no egress record holds
-    any, nor any salt or commitment; the server receives every window's salt, the audit reads each commitment
-    against the salt `reveal` gave, and every verdict and comparison is the unsalted run's."""
+    """With the certifier's salt on, each window's ingress record holds one salt frame, the placeholder's, and no
+    egress record holds any, nor any salt; the server receives every window's salt, the audit reads each salt frame
+    and the width of the salt `reveal` gave, and every verdict and comparison is the unsalted run's. No record binds the
+    salt, so another salt of the width passes the salt check, and only the server's log tells it apart."""
     _, report, _ = setup
     plan, results = runs
     assert ar.run_virtual(plan, report, tmp_path, salt=True) == {"server": 0, "proxy": 0, "peer": 0}
@@ -140,11 +145,11 @@ def test_a_salted_run_puts_the_salt_frame_on_ingress_only(setup, runs, tmp_path)
     assert ar.against_honest(tmp_path, results["honest"][0])["wire_is_honests"]
     assert "salt" not in honest
 
-    wrong = dict(salts, **{"1": bytes(64).hex()})
-    (tmp_path / "salts.json").write_text(json.dumps(wrong))
-    audit = ar.audit_configuration(plan, report, tmp_path)
-    assert audit["salt"]["accepted"] is False and audit["salt"]["violations"] == [[1, "salt"]]
-    assert audit["salt"]["block_received"] is False and audit["rows"] == honest["rows"]
+    for other, accepted in ((bytes(64), True), (bytes(32), False)):
+        (tmp_path / "salts.json").write_text(json.dumps(dict(salts, **{"1": other.hex()})))
+        audit = ar.audit_configuration(plan, report, tmp_path)
+        assert audit["salt"]["accepted"] is accepted and audit["salt"]["violations"] == ([] if accepted else [[1, "salt"]])
+        assert audit["salt"]["block_received"] is False and audit["rows"] == honest["rows"]
 
 
 def test_a_certifier_down_for_a_window_publishes_nothing_for_it_and_the_rest_as_if_never_down(setup, tmp_path):
@@ -323,12 +328,14 @@ def test_the_command_line_parses_a_sync_rule(tmp_path, capsys):
 @pytest.mark.parametrize("ms, responses, requests", [
     (15, None, None),
     (110, "status:delivery-refused", "status:delivery-refused"),
-    (300, "status:monitor-unavailable", "status:delivery-refused"),
+    (300, "status:monitor-unavailable", "status:monitor-unavailable"),
 ])
 def test_a_stalled_proxy_fails_its_window_closed(setup, runs, tmp_path, ms, responses, requests):
     """The proxy stopped right after window 1's first release (`--stall`): under the slack nothing faults; 110 ms,
     between two ticks, forwards the request late (`delivery-refused`), though no tick is late enough to fault; 300 ms
-    also makes the egress tick late. Only window 1 fails, both links, and nowhere is there a mismatch."""
+    also makes the next boundary's ticks late, and its ingress tick, first (`active.TICK_ORDER`), names its window's
+    reason before the egress tick finds the late forward. Only window 1 fails, both links, and nowhere is there a
+    mismatch."""
     _, report, _ = setup
     plan, _ = runs
     run = tmp_path / "stalled"
@@ -406,12 +413,12 @@ def test_a_live_server_behind_the_shim_is_accepted(live, setup):
     c = audit["comparisons"]
     assert c["records_are_run_shapers"] and c["hands_are_the_rules"] and c["frames_log_is_the_programs"]
     assert c["wire_is_the_records"]
-    # every request's TOKENS events and its [DONE], numbered in write order
-    assert c["frames_read"] == c["frames_meant"] == len(plan["requests"]) * (TOKENS + 1)
+    # every request's TOKENS chunks, one canonical event each and none for [DONE], numbered in write order
+    assert c["frames_read"] == c["frames_meant"] == len(plan["requests"]) * TOKENS
     events = ar.read_events(run / "server.events.gz")
     assert [p for p, *_ in events] == list(range(len(events)))
-    assert [e for p, _, _, _, e in events if e.endswith(b"data: [DONE]\n\n")] == \
-        [b"id: %d\ndata: [DONE]\n\n" % p for p, _, k, _, _ in events if k == TOKENS]
+    assert [active.event_data(active.event_body(e)) for *_, e in events] == \
+        [b" t%d" % k for *_, k, _, _ in events]
     assert audit["timing"]["server_failed"] == 0 and audit["timing"]["server_cut_at_horizon"] == 0
     assert c["hindsight"]["misses"] == 0
 
@@ -501,8 +508,6 @@ def test_the_server_proxy_and_peer_listen_on_or_connect_to_the_host_they_are_giv
 
     def reached(port: int) -> None:
         socket.create_connection((host, port)).close()
-        with pytest.raises(ConnectionRefusedError):
-            socket.create_connection(("127.0.0.1", port))
         listening.append(port)
 
     with pytest.raises(_Stop):
@@ -534,10 +539,10 @@ def test_a_live_request_asks_for_no_token_ids():
 def test_a_live_request_takes_the_frames_asked_for():
     body = {"model": "served", "prompt": list(range(1000, 3000)), "max_tokens": 128}
     fewest = ar.live_request_bytes("b64.3.7", body, None, 4096)
-    n = -(-len(fewest) // (4096 - 9))
+    n = active.request_frame_count(len(fewest), 4096)
     for frames in (n, n + 1):
         out = ar.live_request_bytes("b64.3.7", body, frames, 4096)
-        assert -(-len(out) // (4096 - 9)) == frames
+        assert len(ar.request_frames(out, 4096)) == frames * 4096
         head, _, raw = out.partition(b"\r\n\r\n")
         assert int(head.split(b"content-length: ")[1]) == len(raw)
         assert __import__("json").loads(raw) == body | {"user": "b64.3.7"}

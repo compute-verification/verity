@@ -11,9 +11,9 @@ input to the receipt fold (which is itself such a word). The MODEL's menu for it
   - priced side units, each at the pi32 floor (>= 32 MACs a word; floors.csv).
 
 NOSUM (`nosum.py`) covered the fixed-function units DATASHEET measured. This script attacks the menu from the ISA: for
-every instruction class a red team would reach for -- warp and L2 reductions, atomics, bulk reduce, the low-precision and
-1-bit MMA forms, the dot-product instructions, DPX, the video/SIMD ALU, texture filtering, the copies and transposes, the
-packing tricks, the wide multiply, and the uniform datapath beside an asynchronous tensor op -- it records the ISA fact,
+every instruction class a red team would reach for -- warp and L2 reductions, atomics, bulk reduce, the low-precision,
+1-bit and FP64 MMA forms, the dot-product instructions, DPX, the video/SIMD ALU, texture filtering, the copies and transposes, the
+packing tricks, the wide multiply, the two-word add, min/max and select, and the uniform datapath beside an asynchronous tensor op -- it records the ISA fact,
 whether the instruction can even form an exact int8 product, the factor by which an int8 committed word decomposes onto
 it, and the verdict. A committed word that is a sum of 32 int8 products needs a MULTIPLY; an instruction with no multiply
 can at most sum or move words that already exist (not fresh), and an instruction whose multiply is lower precision pays a
@@ -34,6 +34,17 @@ asynchronous wgmma (sm_90) or tcgen05.mma (sm_100), which the census priced besi
 (decision 88) -- is recorded as a WATCH, with the issue-ceiling argument (decision 84) that bounds it and the `eps`
 reading (the uniform route is already ~0% of the headline eps on the H200/B200) that shows it cannot move a headline.
 
+The B200 (sm_100, 5th-gen tensor core) adds a distinctive word ISA this script also closes (RT-BLACKWELL,
+note:20261019T0501Z): tcgen05.mma writes its 32768-word accumulator into TENSOR MEMORY (not registers) and a CTA pair
+(cta_group::2) can share one MMA, but that writer is the honest, priced tensor route; the TMEM movers it comes with
+(tcgen05.cp/shift/ld/st) only copy or shift words that already exist (MOVER); the block-scaled low-precision forms
+(mxf8f6f4 for FP6 E2M3/E3M2, mxf4/mxf4nvf4 for FP4) carry one shared exponent a block, not a per-element mantissa, so
+they decompose an int8 word no more cheaply than the honest route (DECOMPOSE: counting the values one MAC can take
+against the 5965 distinct int8 x weight products, FP8 and FP6 need >= 2 MACs a product and FP4 >= 3; two E2M3 limbs a
+side attain D=4); and the weight decompression engine only reconstructs stored words off the SMSP (MOVER). Every sm_100
+tensor form's int8-equivalent rate is re-checked at the B200 data-sheet peaks (DS_tensor: s8/e4m3 8192, f16/bf16 4096,
+tf32 2048 MACs/SM/clk), each FP form at its counted lower bound on D, and each is <= UTCIMMA s8.
+
 Run: `python isa_escape.py [--mutations] [--verdict PATH]`. Stdlib + exact_kit only; reads machine_model/data/floors.csv.
 """
 from __future__ import annotations
@@ -42,6 +53,7 @@ import csv
 import random
 import sys
 import tomllib
+from fractions import Fraction
 from pathlib import Path
 
 from exact_kit.checks import Checks
@@ -63,7 +75,11 @@ WEIGHT = range(-63, 64)
 
 # Mantissa bits (after the implicit 1) and the max normal exponent of each MMA input format.
 # E4M3: max 448 = 1.75*2^8. E5M2: emax 15. E2M1 (FP4) grid {0,.5,1,1.5,2,3,4,6}, max 6 = 1.5*2^2. f16: emax 15. bf16: emax 127.
-FLOAT_FORMATS = {"e4m3": (3, 8), "e5m2": (2, 15), "e2m1": (1, 2), "f16": (10, 15), "bf16": (7, 127)}
+# f64: 52 bits, emax 1023.
+# FP6 (OCP MX; sm_120 kind::f8f6f4, B200 mxf8f6f4): E2M3 is 1s/2e/3m, bias 1 -> emax 2 (max 7.5 = 1.875*2^2); E3M2 is
+# 1s/3e/2m, bias 3 -> emax 4 (max 28 = 1.75*2^4).
+FLOAT_FORMATS = {"e4m3": (3, 8), "e5m2": (2, 15), "e2m1": (1, 2), "f16": (10, 15), "bf16": (7, 127),
+                 "e2m3": (3, 2), "e3m2": (2, 4), "f64": (52, 1023)}
 
 
 def exact_in_float(n: int, mant_bits: int, emax: int) -> bool:
@@ -77,6 +93,35 @@ def exact_in_float(n: int, mant_bits: int, emax: int) -> bool:
         return False
     low = bl - (mant_bits + 1)
     return low <= 0 or (a & ((1 << low) - 1)) == 0
+
+
+def float_values(exp_bits: int, mant_bits: int, bias: int, nan_codes: int = 0) -> set[Fraction]:
+    """Every finite value of a small binary float, subnormals and both signs included; the top `nan_codes` codes a sign
+    are NaN or infinity (E4M3: S.1111.111)."""
+    codes = [(e, m) for e in range(1 << exp_bits) for m in range(1 << mant_bits)]
+    out = set()
+    for e, m in codes[: len(codes) - nan_codes]:
+        frac = Fraction(m, 1 << mant_bits)
+        v = (frac if e == 0 else 1 + frac) * Fraction(2) ** ((1 if e == 0 else e) - bias)
+        out |= {v, -v}
+    return out
+
+
+# The MMA input formats of the block-scaled and FP8 forms, as value sets.
+LOWP = {"e4m3": float_values(4, 3, 7, nan_codes=1), "e2m3": float_values(2, 3, 1), "e3m2": float_values(3, 2, 3),
+        "e2m1": float_values(2, 1, 1)}
+PRODUCTS = {a * w for a in INT8 for w in WEIGHT}
+
+
+def macs_lower_bound(values: set[Fraction]) -> int:
+    """Fewest MACs of a format that head one int8 x weight product, for an elementwise scheme: each MAC multiplies a
+    per-element limb of a by one of w and the MACs are summed with fixed constants (a block scale, shared by 16 or 32
+    products, is such a constant for a dense block). D MACs then take at most |V*V|^D values, against len(PRODUCTS)."""
+    vv = len({x * y for x in values for y in values})
+    d = 1
+    while vv ** d < len(PRODUCTS):
+        d += 1
+    return d
 
 
 def nibbles_u8(x: int) -> tuple[int, int]:
@@ -163,6 +208,24 @@ CANDIDATES = [
                   "so 4 passes = 0.25x int8; the FP8 DESIGNS (parked, decision 64) are the only ones it fits",
     },
     {
+        "name": "FP6 MMA (QMMA E3M2/E2M3, kind::f8f6f4)", "device": "sm_120", "cls": "DECOMPOSE", "D": 4,
+        "escape": False,
+        "isa": "mma.sync.kind::f8f6f4 m16n8k32 at e3m2 or e2m3 assembles to the same QMMA.16832 as E4M3 on sm_120a "
+               "(r20261019-050044-6f93) and runs at E4M3's rate, 0.2461 a SM-cycle (r20261019-052144-b4a4)",
+        "reason": "E3M2 holds integers exactly only to 8 and E2M3 only to 7, so an int8 operand needs >= 2 pieces and a "
+                  "product >= 4 QMMA passes; at QMMA's measured 0.992x IMMA that is <= 0.25x int8",
+    },
+    {
+        "name": "FP64 MMA (DMMA.8x8x4)", "device": "sm_120 (also sm_80..sm_100)", "cls": "DECOMPOSE", "D": 1,
+        "escape": False,
+        "isa": "mma.sync.m8n8k4.f64 assembles to one DMMA.8x8x4 on sm_120a (r20261019-050044-6f93): 64 f64 dot products "
+               "of depth 4, exact for int8 (a 32-MAC word is <= 2^19, f64 exact to 2^53)",
+        "reason": "exact at D = 1, but measured at 0.0068 DMMA a SM-cycle (r20261019-052144-b4a4), 1.74 MACs a SM-cycle "
+                  "against IMMA s8's 1016, 1/584 of int8's rate; packing two products a MAC in the 53-bit mantissa "
+                  "leaves 1/292. On issue a 32-MAC word takes 8 DMMA for 64 words (8 a slot against IMMA's 128) plus "
+                  "an F2I each, so it loses on both rows",
+    },
+    {
         "name": "FP4 MMA (OMMA/QMMA E2M1, dense and 2:4)", "device": "all", "cls": "DECOMPOSE", "D": 8, "escape": False,
         "isa": "mma.sync...e2m1.e2m1 m16n8k64 (OMMA 1.951x IMMA, 2:4 3.761x; decision 60): E2M1 holds only {0,.5,1,1.5,"
                "2,3,4,6}, so an int8 operand needs many pieces",
@@ -216,14 +279,77 @@ CANDIDATES = [
                   "word); priced IMADW at the pi32 floor; ISA-CAP caps its packing at 4 fields a word = IMAD's density",
     },
     {
+        "name": "IADD.64 / IMNMX.64 / SEL.64 (two destination words, no multiply)", "device": "sm_120",
+        "cls": "NO-MULTIPLY", "D": None, "escape": False,
+        "isa": "a register pair a lane: add.u64 assembles to one IADD.64 on sm_120a (r20261019-070108-91a5; either "
+               "operand negated, the sass_gate fixtures), IMNMX.U64 is in FOLD-FANIN's table (TS.lean) and SEL.64 in "
+               "harness/sass_pins.json",
+        "reason": "no multiply, so they sum, compare or select existing words (not fresh); as a fold step, fold_wide3.c "
+                  "finds no program whose last instruction writes fx1's two outputs as one IADD.64, IMNMX.64 or SEL.64 "
+                  "(fold_opt_fx.py --wide3)",
+    },
+    {
         "name": "uniform datapath beside saturated async wgmma / tcgen05.mma", "device": "sm_90, sm_100",
         "cls": "WATCH", "D": 1, "escape": False,
         "isa": "UIMAD is an exact s32 MAC, one warp-uniform word an instruction; the census priced it on issue beside "
                "mma.sync (decisions 73, 84, 88), NOT beside a saturated asynchronous wgmma/tcgen05.mma",
         "reason": "bounded by the issue ceiling (decision 84: one instruction a cycle whatever the pipe, uniform "
-                  "included), and the uniform route is already ~0% of the H200/B200 headline eps; UNMEASURED beside "
-                  "async tensor (ptxas moves uniform chains to lanes there) -- a round-2 DC probe should confirm no "
-                  "dual-issue",
+                  "included), and the uniform route is already ~0% of the H200/B200 headline eps; sm_100 MEASURED at "
+                  "saturation, no dual-issue (dc/probes/sm100_a2u.cu, r20261019-055605-6cc2: the chain stays on the "
+                  "uniform datapath beside tcgen05.mma, total issue <= 0.9996 an SMSP-cycle at K 32-135, each uniform "
+                  "instruction 0.95-1.10 of a lane slot); sm_90 MEASURED near saturation, no dual-issue "
+                  "(dc/probes/sm90_emp.cu emp_pack3, r20261019-064443-0ae6: the chain uniform beside 4 wgmma s8 n128 a "
+                  "group, issue 0.87, each uniform instruction 1.08-1.19 SMSP-cycles)",
+    },
+    # -- sm_100 (B200) only: the 5th-gen tensor core's TMEM movers, block-scaled low-precision forms, and the
+    # decompression engine (RT-BLACKWELL, note:20261019T0501Z). The writer tcgen05.mma IS the honest priced route; the
+    # instructions below are the Blackwell-distinctive ones a cheater would reach for beyond it.
+    {
+        "name": "tcgen05.cp (shared -> tensor-memory copy)", "device": "sm_100", "cls": "MOVER", "D": None,
+        "escape": False,
+        "isa": "tcgen05.cp copies a tile from shared memory into tensor memory (TMEM); no arithmetic",
+        "reason": "a copied TMEM word equals an existing word (data movement, not fresh); heads no product",
+    },
+    {
+        "name": "tcgen05.shift (tensor-memory row shift)", "device": "sm_100", "cls": "MOVER", "D": None,
+        "escape": False,
+        "isa": "tcgen05.shift moves the rows of a TMEM region down (a convolution helper); no arithmetic",
+        "reason": "a shifted word equals an existing word (data movement); heads no product",
+    },
+    {
+        "name": "tcgen05.ld / tcgen05.st (tensor-memory <-> registers)", "device": "sm_100", "cls": "MOVER",
+        "D": None, "escape": False,
+        "isa": "LDTM/STTM move words between TMEM and registers (LDTM_32X32B_X128 reads 128 words/thread = 4096 bits); "
+               "no arithmetic",
+        "reason": "a loaded/stored word equals an existing word (a copy); the TMEM read port is the TL facet (a load "
+                  "hides beside a saturated issue, decision 89), and it heads no fresh product",
+    },
+    {
+        "name": "block-scaled FP6 MMA (mxf8f6f4, E2M3 / E3M2)", "device": "sm_100", "cls": "DECOMPOSE", "D": 4,
+        "escape": False,
+        "isa": "tcgen05.mma.mxf8f6f4 with a per-block E8M0 scale; E2M3 and E3M2 each take 63 values (integers only to 7 "
+               "or 8 at unit scale), so one limb holds no int8 operand, but two limbs at power-of-two weights hold "
+               "both alphabets (a = 16 x1 + 2 x2, w = 8 y1 + y2/2 in E2M3)",
+        "reason": "an int8 x weight product is 4 E2M3 limb products (D=4, exact on INT8 x WEIGHT), and no elementwise "
+                  "scheme does it in 1 MAC (|V*V| = 443 < 5965 products); FP6 rides the mxf8f6f4 datapath at s8's "
+                  "rate, so <= 1/2 int8 (0.25x for the limb scheme), like E4M3",
+    },
+    {
+        "name": "block-scaled FP4 MMA (mxf4, mxf4nvf4; E2M1 + E8M0/E4M3 scale)", "device": "sm_100",
+        "cls": "DECOMPOSE", "D": 3, "escape": False,
+        "isa": "tcgen05.mma.mxf4/mxf4nvf4: E2M1 holds only {0,.5,1,1.5,2,3,4,6}; the microscaling factor is one shared "
+               "exponent a 16/32-lane block (E8M0, or a per-16 E4M3 for NVFP4), not a per-element value",
+        "reason": "one E2M1 MAC takes 37 values, and 37^2 < 5965 int8 x weight products, so an elementwise scheme needs "
+                  ">= 3 MACs a product (D >= 3; power-of-two limbs need 3 a side, D=9); at 2x int8 dense, or 4x for "
+                  "2:4 with 2 passes a dense word, that is <= 2/3 int8",
+    },
+    {
+        "name": "weight decompression engine (sparse / compressed-weight expand)", "device": "sm_100", "cls": "MOVER",
+        "D": None, "escape": False,
+        "isa": "the Blackwell decompression engine expands compressed weights on the DMA path before the tensor core "
+               "reads them; it reconstructs stored values, it does not multiply",
+        "reason": "a decompressed word equals the stored (existing) word it reconstructs (NO-MULTIPLY/MOVER); it is off "
+                  "the SMSP issue path and heads no fresh product",
     },
 ]
 
@@ -233,13 +359,20 @@ def main() -> int:
 
     # -- coverage: every candidate the brief names is enumerated, with a class and a verdict --------------------------
     brief = ["redux", "L2 reduction", "TMA bulk reduce", "IDP4A", "IDP2A", "sparse IMMA", "BMMA", "s4 IMMA", "FP16",
-             "FP8", "FP4", "DPX", "VABSDIFF4", "texture", "async copy", "ldmatrix", "PRMT", "IMAD.WIDE", "uniform"]
+             "FP8", "FP6", "FP4", "FP64", "DPX", "VABSDIFF4", "texture", "async copy", "ldmatrix", "PRMT", "IMAD.WIDE",
+             "IADD.64", "uniform",
+             # sm_100 (B200) word ISA (RT-BLACKWELL)
+             "tcgen05.cp", "tcgen05.shift", "tcgen05.ld", "mxf4", "decompression"]
     joined = " | ".join(c["name"] for c in CANDIDATES)
     for b in brief:
         checks.check(f"enumerated: {b}", b in joined)
     classes = {"NO-MULTIPLY", "DECOMPOSE", "LOW-PRECISION", "MOVER", "PRICED", "WATCH"}
     checks.check("every candidate has a known class", all(c["cls"] in classes for c in CANDIDATES))
     checks.check("no candidate on sm_120 is a live escape", not any(c["escape"] for c in CANDIDATES))
+    sm100 = [c for c in CANDIDATES if "sm_100" in c["device"]]
+    checks.check("the B200 (sm_100) word ISA is enumerated (tcgen05 movers, block-scaled FP6/FP4, decompression)",
+                 len(sm100) >= 6, f"{len(sm100)} sm_100 candidates")
+    checks.check("no sm_100 candidate is a live escape", not any(c["escape"] for c in sm100))
 
     # -- NO-MULTIPLY units cannot form a product ---------------------------------------------------------------------
     rng = random.Random(0x5EED)
@@ -320,6 +453,18 @@ def main() -> int:
     not_exact_e4m3 = [n for n in INT8 if not exact_in_float(n, m, e)]
     checks.check("E4M3 does NOT represent every int8 operand (e.g. 17, 127): so FP8 pays a piece split",
                  17 in not_exact_e4m3, f"{len(not_exact_e4m3)} of 256 int8 values not E4M3-exact")
+    for fp6 in ("e3m2", "e2m3"):
+        m, e = FLOAT_FORMATS[fp6]
+        not_exact = [n for n in INT8 if not exact_in_float(n, m, e)]
+        checks.check(f"{fp6.upper()} (FP6) does NOT represent every int8 operand (e.g. 9): so FP6 pays a piece split",
+                     9 in not_exact, f"{len(not_exact)} of 256 int8 values not {fp6.upper()}-exact")
+    m, e = FLOAT_FORMATS["f64"]
+    word_max = LANES * 128 * 128
+    checks.check("f64 holds an int8 product and a 32-MAC word exactly (<= 2^19 << 2^53), so DMMA is an exact D = 1 form",
+                 all(exact_in_float(n, m, e) for n in (word_max, -word_max, word_max - 1, 127 * -128)))
+    field = (2 * word_max).bit_length()  # a signed 32-MAC word's field, its range [-word_max, word_max] in bits
+    checks.check("f64's 53-bit mantissa packs at most two 32-MAC words' fields, so DMMA's packing gain is <= 2",
+                 2 * field <= m + 1 < 3 * field, f"{field}-bit fields, {m + 1}-bit mantissa")
     m, e = FLOAT_FORMATS["e2m1"]
     not_exact_e2m1 = [n for n in INT8 if not exact_in_float(n, m, e)]
     checks.check("E2M1 (FP4) represents almost no int8 operand (grid {0,.5,1,1.5,2,3,4,6})", len(not_exact_e2m1) > 240,
@@ -328,6 +473,38 @@ def main() -> int:
                  all(exact_in_float(a * b, 23, 127) for a in WEIGHT for b in (-128, -63, 63, 127)))
     checks.check("an f16 ACCUMULATOR rounds a growing word (2049 not f16-exact): f16-accumulate forms are not exact s32",
                  not exact_in_float(2049, *FLOAT_FORMATS["f16"]))
+
+    # -- B200 block-scaled FP6/FP4 (mxf8f6f4, mxf4): how many MACs an int8 x weight product needs ----------------------
+    m, e = FLOAT_FORMATS["e2m3"]
+    e2m3_ints = [n for n in range(256) if exact_in_float(n, m, e)]
+    checks.check("E2M3 (FP6) holds integers only 0..7 at unit scale: one limb holds no int8 operand",
+                 e2m3_ints == list(range(8)), f"E2M3 exact ints 0..255: {e2m3_ints}")
+    checks.check("the value sets: E4M3 253, E2M3 63, E3M2 63, E2M1 15 finite values",
+                 [len(LOWP[f]) for f in ("e4m3", "e2m3", "e3m2", "e2m1")] == [253, 63, 63, 15],
+                 str({f: len(v) for f, v in LOWP.items()}))
+    d_lb = {f: macs_lower_bound(v) for f, v in LOWP.items()}
+    checks.check("counted: one MAC of E4M3/E2M3/E3M2 heads no int8 x weight product (D >= 2), one of E2M1 needs D >= 3",
+                 d_lb == {"e4m3": 2, "e2m3": 2, "e3m2": 2, "e2m1": 3}, f"{d_lb} against {len(PRODUCTS)} products")
+    # The lower bound is attained to within a factor 2: two E2M3 limbs a side at power-of-two weights (block scales)
+    # hold both alphabets, so an int8 x weight product is 4 E2M3 limb products.
+    v = LOWP["e2m3"]
+
+    def limbs(n: int, w1: Fraction, w2: Fraction) -> tuple[Fraction, Fraction] | None:
+        return next(((x, (n - w1 * x) / w2) for x in sorted(v) if (n - w1 * x) / w2 in v), None)
+
+    a_limbs = {a: limbs(a, Fraction(16), Fraction(2)) for a in INT8}
+    w_limbs = {w: limbs(w, Fraction(8), Fraction(1, 2)) for w in WEIGHT}
+    fp6_ok = all(x is not None for x in (*a_limbs.values(), *w_limbs.values())) and all(
+        sum(wa * xa * ww * xw for wa, xa in zip((16, 2), a_limbs[a]) for ww, xw in zip((8, Fraction(1, 2)), w_limbs[w]))
+        == a * w for a in INT8 for w in WEIGHT)
+    checks.check("FP6: an int8 x weight product is 4 E2M3 limb products (a = 16 x1 + 2 x2, w = 8 y1 + y2/2), "
+                 "exhaustive on INT8 x WEIGHT", fp6_ok, "D = 4 attained")
+
+    # -- MOVERS on sm_100 (tcgen05.cp/shift/ld/st, decompression) copy existing words, head no product ----------------
+    mover_names = ("tcgen05.cp", "tcgen05.shift", "tcgen05.ld", "decompression")
+    checks.check("tcgen05 TMEM movers (cp/shift/ld/st) and the decompression engine carry no multiply (MOVER)",
+                 all(c["D"] is None and c["cls"] == "MOVER"
+                     for c in sm100 if any(n in c["name"] for n in mover_names)))
 
     # -- the int8-equivalent throughput of every non-IMMA tensor form is <= IMMA s8's (decision 81's best form holds) --
     # The tensor core's peak bit-operation throughput is conserved: a lower-precision form's int8 rate is its peak TOPS
@@ -341,12 +518,38 @@ def main() -> int:
         ("IMMA.SP.16864 (2:4 s8, dense = 2 passes)", 2.0, 2),
         ("IMMA.S4.16864", 2.0, 4),
         ("QMMA.E4M3.16832 (FP8)", 1.0, 4),
+        ("QMMA.E3M2/E2M3.16832 (FP6, E4M3's opcode and rate)", 1.0, 4),
+        ("DMMA.8x8x4 (f64, measured 1/584 of IMMA a MAC, two fields a mantissa)", 2 / 584, 1),
         ("OMMA.NVF4.16864 (FP4, 2:4 logical)", 4.0, 8),
         ("BMMA.B1.16n256", 8.0, 64),
     ]
     for name, tops, d in tensor:
         eff = tops / d
         checks.check(f"tensor form int8 TOPS <= IMMA s8 (tie or worse, no saving): {name} at {eff:.3f}x (D={d})",
+                     eff <= 1.0 + 1e-9, f"{eff:.3f}x")
+    checks.check("the FP8 and FP4 rows close at the counted D lower bound too, not only at their typed D (QMMA E4M3 at "
+                 "1x, OMMA FP4 2:4 at 4x with 2 passes a dense word)",
+                 1.0 / d_lb["e4m3"] <= 1.0 and 4.0 / (2 * d_lb["e2m1"]) <= 1.0,
+                 f"{1.0 / d_lb['e4m3']:.3f}x, {4.0 / (2 * d_lb['e2m1']):.3f}x")
+
+    # -- the same closure re-checked at the B200's data-sheet peaks (DS_tensor, sm_100 census), not sm_120's rates -----
+    # Peaks are dense MACs/SM/clk: the sheet gives s8/e4m3 8192, f16/bf16 4096, tf32 2048 (sm_100 rows.csv DS_tensor);
+    # for the forms the sheet omits, FP6 rides the FP8 (mxf8f6f4) datapath (<= s8's 8192) and FP4 is bounded generously
+    # at 2x s8 dense / 4x s8 for 2:4 (a dense word then needs 2 passes, so D doubles). eff = (peak/s8_peak)/D, with each
+    # FP form's D its counted lower bound, so eff is an upper bound whatever the limb scheme.
+    S8_PEAK = 8192
+    tensor_sm100 = [  # (name, dense MACs/SM/clk at the B200 peak, D: a lower bound on the MACs a committed product)
+        ("UTCIMMA s8 (k32)", 8192, 1),
+        ("QMMA e4m3 FP8 (k32)", 8192, d_lb["e4m3"]),
+        ("HMMA f16/bf16 (k16)", 4096, 1),
+        ("tf32 MMA (k8)", 2048, 1),
+        ("mxf8f6f4 FP6 E2M3/E3M2", 8192, min(d_lb["e2m3"], d_lb["e3m2"])),
+        ("mxf4 FP4 E2M1 dense", 16384, d_lb["e2m1"]),
+        ("mxf4nvf4 FP4 2:4 (dense = 2 passes)", 32768, 2 * d_lb["e2m1"]),
+    ]
+    for name, peak, d in tensor_sm100:
+        eff = (peak / S8_PEAK) / d
+        checks.check(f"sm_100 tensor form int8 TOPS <= UTCIMMA s8 at the B200 DS peaks: {name} at {eff:.3f}x (D={d})",
                      eff <= 1.0 + 1e-9, f"{eff:.3f}x")
 
     # -- the floors price every reachable side unit at or above honest's per-word cost --------------------------------
@@ -367,6 +570,10 @@ def main() -> int:
                         (256 / 32) * 64.0 / 64 >= 1.0)
         checks.mutation("a per-lane fold at 1 lane-instruction/word WOULD beat duo (so the 32 is the cross-lane cost, "
                         "not an arbitrary bound): redux's cost is 32 only because it collapses the warp", LANES > 1)
+        checks.mutation("a format holding int8 itself would head a product in one MAC (so the D lower bound is counted, "
+                        "not assumed)", macs_lower_bound({Fraction(n) for n in INT8}) == 1)
+        checks.mutation("E2M1 at 4x int8 dense would beat s8 at its D lower bound (so FP4's closure binds on the count)",
+                        4.0 / d_lb["e2m1"] > 1.0)
 
     return checks.finish()
 

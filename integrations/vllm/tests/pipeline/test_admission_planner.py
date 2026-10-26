@@ -1,5 +1,5 @@
 """admission_planner (COORD R17-29): the five terms, the named dominant contributor, the calibrated decision, per-record calibration.
-Torch-free; fixtures = the admission fixtures (stoch) + the fp8 B1 sizing / B8 workload of record + the planner calibration table."""
+Torch-free; fixtures = the fp8 B1 sizing / B8 workload of record + the planner calibration table."""
 
 from __future__ import annotations
 

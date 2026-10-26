@@ -5,8 +5,12 @@ each step closed by an `o_proj` reading the W_UV product and a sampling event:
 * UNRETURNED: the indexer's MQA logits and top-k, which the correspondence lowers to no runtime tensor and no Call reads, are not
   required, so the prefill's logits rows of N = 1 and N = 2 keys never meet in one manifest group and the manifest is complete;
   q_c, which no Call of this Program reads either, keeps its rows (its fx node returns it);
-* every required attention Value is spelt under the layer's module as the capture map's attention binder commits it."""
+* every required attention Value binds from what the capture map's attention binder commits (`verity_vllm.query.manifest.bind`): the
+  module's own outputs by their label, the indexer's ports and the two call boundaries (the W_UK_T absorb and the sparse MLA) by the
+  ports the source declares."""
 from __future__ import annotations
+
+__models__ = ("zai-org/GLM-5.3",)
 
 import copy
 import json
@@ -16,14 +20,15 @@ import pytest
 
 from tests.acquire.glm53_model import CMAP, ENV
 from tests.program import test_dsa_derive as T
+from verity_vllm.acquire.sources import attention_source as AS
 from verity_vllm.commit import capture_map as CM
+from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.program.frontend.emit import NAMESPACE
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsa
 from verity_vllm.program.frontend.rules.vocab import PROFILES
-from verity_vllm.program.registry import hopper
-from verity_vllm.query.manifest.format import committed_identity
+from verity.ml.definitions.registry import hopper
 from verity_vllm.query.program_view import CallView, Port, ProgramView, from_instances
 from verity_vllm.query.required import Population, request_manifest
 from verity_vllm.query.units import ValueRef
@@ -31,8 +36,11 @@ from verity_vllm.query.units import ValueRef
 INDEXER_LAYER = min(CM.layer_set(CMAP, "indexer", ENV))
 SHARED_LAYER = min(i for i in CM.layer_set(CMAP, "shared_topk", ENV) if i > INDEXER_LAYER)
 MODULE = {"layers.0": f"model.layers.{INDEXER_LAYER}.self_attn", "layers.1": f"model.layers.{SHARED_LAYER}.self_attn"}
-ATTENTION = {"q_c", "kv_c", "k_pe", "ql_nope", "q_pe", "attn_mqa", "out"}
-INDEX = {"index_q", "index_weights", "index_k", "index_k_scale"}
+ATTENTION = {"q_c", "kv_c", "k_pe", "q_pe", "out"}
+#: the indexer's DsaIndexerKRow_v1 / DsaIndexerQ_v1, both two ports, under the Build's hints
+INDEX = {"index_k.0", "index_k.1", "index_q.0", "index_q.1"}
+#: the Calls of the attention body whose outputs only another Call of it reads: the W_UK_T absorb and the sparse MLA
+CALL_BOUNDARIES = {"BatchedGemm_v1", "SparseMla_v1"}
 RES = {"program": {"digest": "d0", "function": "f"}, "target": {"declared": {"compute_capability": [9, 0]}},
        "attention_impls_observed": {f"{m}.attn": {"kind": "mla", "impl": T.IMPL} for m in MODULE.values()}}
 
@@ -104,17 +112,26 @@ def glm():
     return P, corr, request_manifest(P, corr, RES, request_id="r0").manifest
 
 
+def _unread_stand_ins(P: ProgramView) -> set[int]:
+    """The first layer's stand-in o_proj rows: each step's argmax reads the last layer's (TENSOR-RETURN keeps every row of that node),
+    so no Call reads these and no policy requires them, and they are unreturned too."""
+    return {c.id for c in P.calls if c.name.startswith(f"{MODULE['layers.0']}.o_proj/")}
+
+
 def test_the_indexers_logits_and_top_k_are_unreturned_and_not_required(glm):
     P, corr, man = glm
     pop = Population(P, corr)
     dead = {c.id for c in P.calls if c.family in ("DsaMqaLogits_v3", "DsaTopKShortRow_v1")}
-    assert len(dead) == 2 * 3 and pop.unreturned == dead
+    assert len(dead) == 2 * 3 and pop.unreturned == dead | _unread_stand_ins(P)
     assert not {v.call for v in pop.required.values} & dead
+    listed = {(r["spec"], r["step"]) for r in man["unreturned"]}
+    assert {(P.call(c).family, pop.step_of(c)) for c in dead} <= listed and man["unreturned_digest"]
     q_c = {c.id for c in P.calls if corr.name(c.id).hint == "q_c"}
     assert q_c and q_c <= {v.call for v in pop.required.values} and not q_c & corr.tensorless, "q_c's fx node returns it"
     assert man["complete"] is True and man["unmodelled"] == {}
     assert not {"logits", "topk"} & {r["output_member"] for r in man["identities"]}
-    assert not [r for r in man["identities"] if r["family"] == "call_boundaries"]
+    boundaries = [r for r in man["identities"] if r["family"] == "call_boundaries"]
+    assert {r["spec"].split("{")[0] for r in boundaries} == CALL_BOUNDARIES and all(AS.claims(r) == AS.BINDER for r in boundaries)
 
 
 def test_the_word_check_skips_the_unreturned_indexer_calls(glm):
@@ -147,28 +164,38 @@ def test_the_manifest_build_word_check_flags_no_indexer_call(glm, tmp_path, monk
 
 
 def test_without_the_runtime_record_the_logits_stay_required():
-    """The fallback correspondence records no return slots: nothing is unreturned, and the hinted logits stay return slots."""
+    """The fallback correspondence records no return slots: only the unread stand-ins are unreturned, and the hinted logits stay
+    return slots."""
     P, _doc = _served(*_derived())
     pop = Population(P, Correspondence(P))
-    assert pop.unreturned == frozenset()
+    assert pop.unreturned == _unread_stand_ins(P)
     assert {c.id for c in P.calls if c.family == "DsaMqaLogits_v3"} <= {v.call for v in pop.required.values}
 
 
-def test_each_attention_value_is_spelt_as_the_capture_map_commits_it(glm):
+def _bound(man: dict, step: int, routes: tuple[str, ...]) -> list[tuple[str, str]]:
+    """The identities the attention binder's names of `routes` bind at `step`, with the ports the source declares for them."""
+    taps = {n: tap["id"] for n, (tap, _i) in CM.committer_names(CMAP, ENV, routes=routes, rank=0).items() if tap["commit"]["binder"] == AS.BINDER}
+    ports = {n.rsplit("/", 1)[1]: AS.TAP_PORTS[t] for n, t in taps.items() if t in AS.TAP_PORTS}
+    return [(op, m) for op, m, _k, how in Binder(man["identities"], ports=ports).bind(step, list(taps)) if how != "unbound"]
+
+
+def test_each_attention_value_binds_from_what_the_capture_map_commits(glm):
     _P, _corr, man = glm
     rows = defaultdict(set)
     for r in man["identities"]:
-        if r["op_path"] in MODULE.values() and r["family"] != "input_token_ids":     # the stand-in's activations are Program inputs
-            assert r["family"] == "instance_outputs", r
-            rows[r.get("engine_step", r["step"])].add((r["op_path"], r["output_member"]))
+        if r["op_path"].split("/")[0] in MODULE.values() and r["family"] != "input_token_ids":     # the stand-in's activations are Program inputs
+            assert r["family"] == ("call_boundaries" if "/" in r["op_path"] else "instance_outputs"), r
+            rows[r.get("engine_step", r["step"])].add((r["op_path"], r["output_member"] if "/" not in r["op_path"] else r["spec"].split("{")[0]))
     indexer, shared = MODULE["layers.0"], MODULE["layers.1"]
-    want = {(indexer, m) for m in ATTENTION | INDEX} | {(shared, m) for m in ATTENTION}
-    assert dict(rows) == {0: want, 1: want}
-    committed = set()
-    for routes in (("sparse-mqa",), ("dense-mha",)):
-        names = CM.committer_names(CMAP, ENV, routes=routes, rank=0)
-        committed |= {committed_identity(n) for n, (tap, _i) in names.items() if tap["commit"]["binder"] == "attention"}
-    assert want <= committed, sorted(want - committed)
+    for step, got in rows.items():
+        assert {m for op, m in got if op == indexer} == ATTENTION | INDEX and {m for op, m in got if op == shared} == ATTENTION
+        assert sorted(m for op, m in got if "/" in op) == sorted([*CALL_BOUNDARIES] * 2)
+    for step in rows:
+        want = {(r["op_path"], r["output_member"]) for r in man["identities"] if r.get("engine_step", r["step"]) == step
+                and r["op_path"].split("/")[0] in MODULE.values() and r["family"] != "input_token_ids"}
+        bound = [b for routes in (("sparse-mqa",), ("dense-mha",)) for b in _bound(man, step, routes)]
+        assert want <= set(bound), sorted(want - set(bound))
+        assert all(bound.count(b) <= 2 for b in bound), "no identity bound twice on one route"
 
 
 def test_the_wrapper_prefix_of_glm53_rows_is_determined_from_the_attention_paths_parent():

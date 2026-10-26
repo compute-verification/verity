@@ -11,8 +11,8 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 
 * **the registration** keeps R1–R7 against the verifier's own copies (`Registered`): the record's format, protocol, law
   and window (`R1`); its program, query, partition and population (`R2`); its scheme, ports, roots, leaves and domains
-  (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record and window (`R6`); and for a v2 record its registered
-  values (`R7`);
+  (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window and the window's stream and prover (`R6`); and
+  for a v2 record its registered values (`R7`);
 * **the draw** is a draw of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work law, its strata and closure;
 * **the units** were proved and served as drawn, under the registered roots, and the verifiers of record opened the
@@ -28,7 +28,8 @@ evidence is completeness, `Properties.SampledProofs.acceptMeans_complete`.
 
 The digest the receipt is held to is the commitment's own (`Commitment.digest`), which `OneStage.commitmentOf` computes
 as `Registration.digest` of the record it decodes (`DigestIsRecord's`). A Bernoulli law is accepted as the code accepts
-it: its draw is checked as any other, its profile's draw is `bernoulli p`, and it publishes no bound (`BernoulliBoundsNothing`).
+it: its draw is checked as any other, its profile's draw is `bernoulli p`, and it publishes the largest `M` of the
+profile's units with `(1 − p)^M ≥ δ` (`BernoulliBounds`, `Bound.bernoulliBound`).
 -/
 
 open Lean (Json)
@@ -105,12 +106,15 @@ def R4 (rec : Json) (v : Registration.Verifier) : Prop :=
 def R5 (rec : Json) (v : Registration.Verifier) : Prop := jeq (getD rec "anchors") (.arr v.anchors)
 
 /-- R6: the record names the digest of the prover's last earlier record (null when the log is empty, or when that record
-has no digest), and no earlier record has its window. -/
+has no digest), no earlier record has its window, and a verifier bound to a stream and a prover (`binding`) sees its
+window name both. -/
 def R6 (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD rec "previous") (match v.log.back? with
     | some e => ((Registration.digestHex e).toOption.map Json.str).getD .null
     | none => .null) ∧
-  ∀ e ∈ v.log, jeq (getD e "window") (getD rec "window") = false
+  (∀ e ∈ v.log, jeq (getD e "window") (getD rec "window") = false) ∧
+  ∀ sp, v.binding = some sp → jeq (getD (getD rec "window") "stream") (.str sp.1) = true ∧
+    jeq (getD (getD rec "window") "prover") (.str sp.2) = true
 
 /-- A v2 record's registered values: the string values, each once (`names`), as many as the list's entries and as the
 verifier's own entries, and each one of the verifier's. -/
@@ -123,9 +127,9 @@ def ValuesAre (es : Array Json) (mine : Array Registered.Entry) : Prop :=
   (namesOf es).size = es.size ∧ (namesOf es).toList.eraseDups.length = es.size ∧
   (namesOf es).toList.eraseDups.length = mine.size ∧ ∀ s ∈ (namesOf es).toList.eraseDups, ∃ m ∈ mine, m.value = s
 
-/-- One registered value's entry against the verifier's own (`want`) and the roots the log holds: a 128-digit hex root,
-the verifier's `leaves`, `words` and domain, its width (`word_bits` left out for 16 bits, else written and not 16), and
-the root that value was first registered under in the log, when the log registered it. -/
+/-- One registered value's entry against the verifier's own (`want`) and the roots it is held to (`held`): a 128-digit hex
+root, the verifier's `leaves`, `words` and domain, its width (`word_bits` left out for 16 bits, else written and not 16),
+and the first root `held` names for that value, when it names one. -/
 def EntryIs (e : Json) (want : Registered.Entry) (held : Array (String × String)) : Prop :=
   (∃ s, getD e "root" = .str s ∧ s.length = 128 ∧ isHex s = true) ∧
   int? (getD e "leaves") = some (want.leaves : Int) ∧ int? (getD e "words") = some (want.words : Int) ∧
@@ -135,17 +139,67 @@ def EntryIs (e : Json) (want : Registered.Entry) (held : Array (String × String
     | some j => int? j = some (want.wordBits : Int) ∧ (want.wordBits : Int) ≠ Registered.WORD_BITS) ∧
   ∀ x ∈ held.find? (·.1 == want.value), jeq (getD e "root") (.str x.2)
 
-/-- R7, for a v2 record (`Registration.checkRegistered`): the verifier derives its own entries for the values it expects
-registered (`Registered.entries`); the record's `registered` is a list of entries, each exactly `{value, root, leaves,
-words, domain}` with `word_bits` beside them or not; its values are exactly the verifier's (`ValuesAre`); and each of the
-verifier's values has its entry (the last naming it, as Python's dict reads it) as derived and held (`EntryIs`). -/
+/-- The roots a registered value's entry is held to: none for a value the verifier fills itself (`supplied`), whose root
+is the one it recomputes (`SuppliedIs`), and `held` for every other. -/
+def heldFor (supplied : Array (String × Supplied.Rows)) (held : Array (String × String)) (value : String) :
+    Array (String × String) :=
+  if supplied.any (·.1 == value) then #[] else held
+
+/-- R7-supplied: each value the verifier fills itself is one of its own entries (`mine`), and the record's entry for it
+(the last naming it) has the root `rootOf` recomputes for it from its rows, which must compute. -/
+def SuppliedIs (es : Array Json) (mine : Array Registered.Entry) (supplied : Array (String × Supplied.Rows))
+    (rootOf : String → Supplied.Rows → Registered.Entry → Flock.V String) : Prop :=
+  ∀ x ∈ supplied, ∃ want, mine.find? (·.value == x.1) = some want ∧
+    ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str x.1)) = some e →
+      ∃ r, rootOf x.1 x.2 want = .ok r ∧ jeq (getD e "root") (.str r)
+
+/-- An output value's earlier port: the log's record with digest `record` has a `roots` entry for `port`
+(`Registration.outputPort`) with `leaves` leaves, and a string domain and root. -/
+def OutputPortIs (log : Array Json) (leaves : Nat) (record port : String) : Prop :=
+  ∃ r, Registration.outputPort log record port = some r ∧ int? (getD r "leaves") = some (leaves : Int) ∧
+    (∃ dom, getD r "domain" = .str dom) ∧ ∃ root, getD r "root" = .str root
+
+/-- An output value's earlier registered value: the log's record with digest `record` has a `registered` entry for
+`value` (`Registration.outputValue`) with `leaves` leaves, `words` words and `bits` word bits (`Registration.widthOf`:
+16 when it leaves them out), and a string domain and root. -/
+def OutputValueIs (log : Array Json) (leaves words bits : Nat) (record value : String) : Prop :=
+  ∃ r, Registration.outputValue log record value = some r ∧
+    (int? (getD r "leaves") = some (leaves : Int) ∧ int? (getD r "words") = some (words : Int) ∧
+      Registration.widthOf r = some (bits : Int)) ∧
+    (∃ dom, getD r "domain" = .str dom) ∧ ∃ root, getD r "root" = .str root
+
+/-- What an output value takes from its earlier record, for a value of `leaves` leaves, `words` words and `bits` word
+bits: its port (`OutputPortIs`) or its registered value (`OutputValueIs`). -/
+def EarlierIs (log : Array Json) (leaves words bits : Nat) (record : String) : Registration.Earlier → Prop
+  | .port p => OutputPortIs log leaves record p
+  | .value u => OutputValueIs log leaves words bits record u
+
+/-- R7, for a v2 record (`Registration.checkOutputs`): the verifier derives its own entries for the values it expects
+registered (`Registration.ownEntries`: `Registered.entries`, counting each value's rows in the row format it holds for
+it, `v.schemas`, with each value's domain under its window's open root but the values it holds across windows); each
+output value it has an entry for has its earlier port, with the value's leaf count, or its earlier registered value,
+with the value's leaves, words and word bits (`EarlierIs`), and takes that port's or entry's domain and root
+(`Registration.applyOutputs`: `mine'` and `held'`); the
+record's `registered` is a list of entries, each exactly `{value, root, leaves, words, domain}` with `word_bits` beside
+them or not; its values are exactly the verifier's (`ValuesAre`); each of the verifier's values has its entry (the last
+naming it, as Python's dict reads it) as derived and held (`EntryIs`), a value it doesn't fill held to its output's root,
+else to the root it pinned before the record, else to the root the log first registered it under with the domain it
+takes now (`Registration.heldRoots`), and one it fills to none (`heldFor`); and each value it fills has the root it
+recomputes from the record, the log and its binding (`SuppliedIs`, `Supplied.root`). -/
 def R7 (rec : Json) (v : Registration.Verifier) : Prop :=
-  ∃ mine es, Registered.entries v.program.desc v.params v.registered = .ok mine ∧ getD rec "registered" = .arr es ∧
+  ∃ mine es mine' held', Registration.ownEntries v = .ok mine ∧
+    getD rec "registered" = .arr es ∧
+    (∀ o ∈ v.outputs, ∀ want, mine.find? (·.value == o.1) = some want →
+      EarlierIs v.log want.leaves want.words want.wordBits o.2.1 o.2.2) ∧
+    (Registration.applyOutputs #[] mine (v.pinned ++ Registration.heldRoots v.log (Registration.ownEntries v))
+      v.outputs v.log).2 = (mine', held') ∧
     (∀ e ∈ es, keys? e = some Registered.ENTRY_KEYS ∨
       keys? e = some (sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY))) ∧
-    ValuesAre es mine ∧
-    ∀ want ∈ mine, ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
-      EntryIs e want (Registration.heldRoots v.log)
+    ValuesAre es mine' ∧
+    (∀ want ∈ mine', ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
+      EntryIs e want (heldFor v.supplied held' want.value)) ∧
+    SuppliedIs es mine' v.supplied
+      (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
 
 /-- The registration keeps R1–R7 against the verifier's own copies, with `law` the agreed law as derived; R7 when the
 verifier expects values registered. -/
@@ -258,12 +312,12 @@ def drawnNats (draw : Json) : Array Nat :=
   | _ => #[]
 
 /-- The public outputs at δ, for the law `law` with its profile's draw `d` over `n` units: the drawn units, the proved
-ones, the exact bound on wrong units (`Bound.countBound` over the draw's strata; none for a Bernoulli draw), and for a
-stratified or work law each template's own (`Bound.stratumBound`). -/
+ones, the exact bound on wrong units (`Bound.boundOf`: `Bound.countBound` over the draw's strata, `Bound.bernoulliBound`
+for a Bernoulli draw), and for a stratified or work law each template's own (`Bound.stratumBound`). -/
 def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat) : Public :=
   { drawn := drawnNats e.draw,
     proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
-    bound := (Bound.strataOf n d).map (Bound.countBound · p.delta),
+    bound := Bound.boundOf n d p.delta,
     perTemplate := if jeq (getD law "law") "stratified" || jeq (getD law "law") "work" then
       (Bound.strataOf n d).map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none }
 
@@ -293,10 +347,12 @@ def AcceptMeans : Prop :=
 def DigestIsRecord's : Prop :=
   ∀ (b : ByteArray) (c : Commitment), OneStage.commitmentOf b = .ok c → Registration.digest c.record = .ok c.digest
 
-/-- An acceptance whose profile draws by a Bernoulli law publishes no bound on wrong units. -/
-def BernoulliBoundsNothing : Prop :=
+/-- An acceptance whose profile draws a level by a Bernoulli law at `r` bounds wrong units by `Bound.bernoulliBound` over
+the level's units at δ: the largest `M` of them with `(1 − r)^M ≥ δ`. -/
+def BernoulliBounds : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     OneStage.check p c e = .accept pub prof →
-      ∀ r : Core.Ratio, (∃ l ∈ prof.levels, l.draw = some (.bernoulli r)) → pub.bound = none
+      ∀ (r : Core.Ratio) (l : Core.Level), l ∈ prof.levels → l.draw = some (.bernoulli r) →
+        pub.bound = Bound.bernoulliBound l.size r p.delta
 
 end Properties.SampledProofs

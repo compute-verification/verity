@@ -1,12 +1,16 @@
 import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
+import Flock.Desc
 
 /-!
 # C-Flock's one-stage audit, end to end, under hidden outputs (trusted)
 
 `EndToEndHidden` is `EndToEnd`'s statement under hidden outputs, the configuration production `--zk` runs (the default
 `--statement`, whose tables `Stmt.setupHidden` sets up), and `EndToEndHiddenDrawn` is `EndToEndDrawn`'s, the same
-statement at the drawn units. Their proofs are `Flock.SecurityProofs.EndToEndHidden : Flock.Guarantees.EndToEndHidden`
-and `Flock.SecurityProofs.EndToEndHiddenDrawn : Flock.Guarantees.EndToEndHiddenDrawn`.
+statement at the drawn units. Both read the circuit through its descriptor (`Flock.Desc`): the circuit file is read as
+a descriptor `D` and the units are `D.unroll`'s. `EndToEndHiddenFlat` and `EndToEndHiddenDrawnFlat` are the two at a
+flat circuit file, `D = Desc.single c`, stated over the circuit `c` that `HmOut.parse` reads. Their proofs are
+`Flock.SecurityProofs.EndToEndHidden : Flock.Guarantees.EndToEndHidden`,
+`Flock.SecurityProofs.EndToEndHiddenDrawn : Flock.Guarantees.EndToEndHiddenDrawn` and the two `Flat` corollaries.
 
 C-Flock's definitions are still in its proofs package, so this module imports
 `Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ`, and `Models.lean`, which the `security` package builds without
@@ -23,10 +27,11 @@ open scoped ENNReal
 
 open Classical in
 /-- **C-Flock's one-stage audit, end to end, under hidden outputs.** As in `EndToEnd`, over a statement whose outputs
-are hidden: the circuit and public file are `HmOut`'s, each table is `Stmt.setupHidden`'s, and every row, input or
-output, is registered under the public file's `b ‖ c`, an `hm96` commitment to the row's bytes under a 192-byte salt
-(`rsZHJ_wrongRegZ`). The prover registers `R`; the verifier draws a uniform `kd`-subset of the `n` proof units from its
-operating system's bytes (`Law.execOS` on the byte source `src`); one `--zk` session of `J = nTab I` tables proves the
+are hidden: the circuit is the one its descriptor unrolls to (`D.unroll`, for the `D` that `Desc.parse` reads from the
+circuit file, so the circuit's pin is SHA-512 of `D`), the public file is `HmOut`'s, each table is
+`Stmt.setupHidden`'s, and every row, input or output, is registered under the public file's `b ‖ c`, an `hm96`
+commitment to the row's bytes under a 192-byte salt (`rsZHJ_wrongRegZ`). The prover registers `R`; the verifier draws
+a uniform `kd`-subset of the `n` proof units from its operating system's bytes (`Law.execOS` on the byte source `src`); one `--zk` session of `J = nTab I` tables proves the
 drawn units, `kd / J` in each; and `flock-verify verify --zk --session-tables J` reads the session's record. Then for
 every live prover `τ`,
 $$\Pr[\text{flock-verify accepts} \wedge \text{at least } K_0 \text{ units wrong}] \le
@@ -38,8 +43,8 @@ $$\Pr[\text{flock-verify accepts} \wedge \text{at least } K_0 \text{ units wrong
   an opening to any fixed row value except with probability `2^-192` over its salt), so at every row, input or hidden
   output, the opening conjunct adds essentially nothing to correctness in `XplurZC`. That the committed inputs and the
   program's outputs on them are the rows the public file commits is not stated here. The units are those of the key
-  program of the circuit the verifier parses (`keyProg c hU n`, partitioned at `Layout.outsOf`), each read at its
-  `--zk` site in the hidden-output table it is drawn into (`placeZHJ`);
+  program of the circuit the verifier's descriptor unrolls to (`keyProg D.unroll hU n`, partitioned at
+  `Layout.outsOf`), each read at its `--zk` site in the hidden-output table it is drawn into (`placeZHJ`);
 * `ε_ks = ksAvgStrictZ` and `δ_link = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`, as in `EndToEnd`.
 
 Its named assumptions, each a hypothesis, are `EndToEnd`'s:
@@ -54,8 +59,189 @@ Its named assumptions, each a hypothesis, are `EndToEnd`'s:
 The rest are the verify command's tags under hidden outputs (`TagsOkZHJ`), an untyped statement with no shared-row
 tables (`pub.tables = none`), the count curve's numeric conditions, and a reference setup `y₀`: table 0's, at the
 session's link points, at some draw `d₀`, which the session's plan puts in place of a table that a draw doesn't set up.
-Every draw flock-verify accepts gives one (`Flock.SecurityProofs.EndToEndHidden_refSetup`), at any number of tables. -/
+Every draw flock-verify accepts gives one (`Flock.SecurityProofs.EndToEndHidden_refSetup`), at any number of tables.
+
+A flat circuit file is the descriptor `Desc.single c`, which unrolls to `c` (`Desc.parse_flat`, `Desc.parse_single`):
+`EndToEndHiddenFlat` is this statement there, over `c`. -/
 def EndToEndHidden : Prop :=
+  ∀ (n : ℕ) (Reg : Type)
+    -- the session's statement: its circuit's descriptor, which the verifier parses, and its public file
+    (I : Inputs) (ht : I.tags.typed = false)
+    (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
+    (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
+    (hscope : Discharge.Layout.scopeOkH D.unroll = true)
+    -- the law: a uniform `kd`-subset of the `n` units, split evenly over the session's tables
+    (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
+    -- the record: the draw file at each draw, and the session at each draw and registration
+    (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
+    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
+    (wr : (S : Finset (Fin n)) → (R : Reg) →
+      LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
+    (dg : ByteArray → ByteArray) (N : ℕ)
+    -- the verifier's operating-system bytes, and A3
+    (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
+    (_hA3 : Assumptions.UniformRandomBytes Lb src)
+    -- the verify command's tags, and live-verifier
+    (hTags : TagsOkZHJ I)
+    (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
+    -- the count curve's parameters
+    (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
+    (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
+    -- the live prover
+    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (qF qS : ℝ),
+    let L := Law.execOS (n := n) src (.subset kd) n
+    let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
+    let vb := (rsZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
+      (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)
+    let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
+      (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
+      (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
+        (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
+          hCust.1
+          fun _ => drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+    -- cr/sha-512 for the knowledge finders of each table the prover's session runs
+    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
+      (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
+    -- ecr/sha-512 for the prover's link finders
+    LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
+    prob (fun o => LiveAcceptsZK I o ∧
+        K₀ ≤ (wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
+          (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw)).card)
+        (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
+      ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
+        ksAvgStrictZ (planZHJ dj y₀) L k qF qS (reg σ) +
+        ENNReal.ofReal ((∑ p : vb.Pos,
+            (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
+          (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
+
+open Classical in
+/-- **`EndToEndHidden` at A3 per test**: `EndToEndHidden` with the verifier's bytes passing the draw's escape test
+(`Law.escapeTest`: the live draw runs and misses every unit of `B`) at every `B` up to `η`
+(`Assumptions.UniformRandomBytesTest`), in place of every event exactly, and `η` added to the miss term. -/
+def EndToEndHiddenPerTest : Prop :=
+  ∀ (n : ℕ) (Reg : Type)
+    -- the session's statement: its circuit's descriptor, which the verifier parses, and its public file
+    (I : Inputs) (ht : I.tags.typed = false)
+    (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
+    (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
+    (hscope : Discharge.Layout.scopeOkH D.unroll = true)
+    -- the law: a uniform `kd`-subset of the `n` units, split evenly over the session's tables
+    (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
+    -- the record: the draw file at each draw, and the session at each draw and registration
+    (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
+    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
+    (wr : (S : Finset (Fin n)) → (R : Reg) →
+      LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
+    (dg : ByteArray → ByteArray) (N : ℕ)
+    -- the verifier's operating-system bytes, and A3
+    (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
+    {η : ENNReal} (_hA3 : ∀ B : Finset (Fin n),
+      Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.subset kd) n B) η)
+    -- the verify command's tags, and live-verifier
+    (hTags : TagsOkZHJ I)
+    (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
+    -- the count curve's parameters
+    (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
+    (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
+    -- the live prover
+    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (qF qS : ℝ),
+    let L := Law.execOS (n := n) src (.subset kd) n
+    let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
+    let vb := (rsZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
+      (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)
+    let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
+      (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
+      (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
+        (runsZCJH_live I ht (Flock.Desc.parse_flat hD)
+          (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
+          fun _ => drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+    -- cr/sha-512 for the knowledge finders of each table the prover's session runs
+    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
+      (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
+    -- ecr/sha-512 for the prover's link finders
+    LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
+    prob (fun o => LiveAcceptsZK I o ∧
+        K₀ ≤ (wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
+          (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw)).card)
+        (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
+      ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) + η +
+        ksAvgStrictZ (planZHJ dj y₀) L k qF qS (reg σ) +
+        ENNReal.ofReal ((∑ p : vb.Pos,
+            (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
+          (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
+
+open Classical in
+/-- **C-Flock's one-stage audit, end to end, under hidden outputs, at the drawn units.** `EndToEndHidden`'s setting
+with `EndToEndDrawn`'s event: for every live prover `τ`,
+$$\Pr[\text{flock-verify accepts} \wedge \text{some drawn unit is wrong}] \le \varepsilon_{ks} + \delta_{link},$$
+with "wrong" `EndToEndHidden`'s (`wrongRegZ`, against the public file's `b ‖ c` at every row, in the committed transcript
+fixed at registration), and `ε_ks`, `δ_link` `EndToEnd`'s terms, averaged over the verifier's draw. The bound has no miss
+term, so it holds whatever the verifier's bytes: it needs no A3, and the draw need not be uniform.
+
+Its named assumptions, each a hypothesis, are `EndToEndDrawn`'s: `live-verifier` (`Assumptions.Zk.RecordCustodyZKJ`,
+with A6 `uniform/flock-coin-server` for its coins), `cr/sha-512` (`Assumptions.SHA512CRStrict`, through `TableCRZ`) for
+each table's knowledge finders at budgets `qF` and `qS`, and `ecr/sha-512` (A2, `Assumptions.SHA512CRExpected`, through
+`LinkCRZC`) for the prover's link finders. The rest are the verify command's tags under hidden outputs (`TagsOkZHJ`), an
+untyped statement with no shared-row tables (`pub.tables = none`), the bound's numeric conditions, and
+`EndToEndHidden`'s reference setup `y₀`: table 0's, at the session's link points, at some draw `d₀`, which every draw
+flock-verify accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup`), at any number of tables. As in
+`EndToEndHidden`, the circuit is the one the verifier's descriptor unrolls to, and `EndToEndHiddenDrawnFlat` is this
+statement at a flat circuit file. -/
+def EndToEndHiddenDrawn : Prop :=
+  ∀ (n : ℕ) (Reg : Type)
+    -- the session's statement: its circuit's descriptor, which the verifier parses, and its public file
+    (I : Inputs) (ht : I.tags.typed = false)
+    (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
+    (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
+    (hscope : Discharge.Layout.scopeOkH D.unroll = true)
+    -- the law: a `kd`-subset of the `n` units, split evenly over the session's tables
+    (kd : ℕ) (hdiv : kd % nTab I = 0)
+    -- the record: the draw file at each draw, and the session at each draw and registration
+    (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
+    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
+    (wr : (S : Finset (Fin n)) → (R : Reg) →
+      LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
+    (dg : ByteArray → ByteArray) (N : ℕ)
+    -- the verifier's operating-system bytes
+    (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
+    -- the verify command's tags, and live-verifier
+    (hTags : TagsOkZHJ I)
+    (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
+    -- the bound's parameters
+    (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
+    (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t')
+    -- the live prover
+    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (qF qS : ℝ),
+    let L := Law.execOS (n := n) src (.subset kd) n
+    let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
+    let vb := (rsZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
+      (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)
+    let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
+      (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
+      (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
+        (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
+          hCust.1
+          fun _ => drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+    -- cr/sha-512 for the knowledge finders of each table the prover's session runs
+    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
+      (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
+    -- ecr/sha-512 for the prover's link finders
+    LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
+    prob (fun o => LiveAcceptsZK I o ∧ ∃ u ∈ o.2.1, u ∈ wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
+          (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw))
+        (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
+      ksAvgStrictZ (planZHJ dj y₀) L k qF qS (reg σ) +
+        ENNReal.ofReal ((∑ p : vb.Pos,
+            (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
+          (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
+
+open Classical in
+/-- **`EndToEndHidden` at a flat circuit file**: `EndToEndHidden` at the descriptor `Desc.single c`, stated over the
+circuit `c` that `HmOut.parse` reads from the circuit file. -/
+def EndToEndHiddenFlat : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     -- the session's statement: its circuit, which the verifier parses, and its public file
     (I : Inputs) (ht : I.tags.typed = false)
@@ -106,21 +292,9 @@ def EndToEndHidden : Prop :=
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
 open Classical in
-/-- **C-Flock's one-stage audit, end to end, under hidden outputs, at the drawn units.** `EndToEndHidden`'s setting
-with `EndToEndDrawn`'s event: for every live prover `τ`,
-$$\Pr[\text{flock-verify accepts} \wedge \text{some drawn unit is wrong}] \le \varepsilon_{ks} + \delta_{link},$$
-with "wrong" `EndToEndHidden`'s (`wrongRegZ`, against the public file's `b ‖ c` at every row, in the committed transcript
-fixed at registration), and `ε_ks`, `δ_link` `EndToEnd`'s terms, averaged over the verifier's draw. The bound has no miss
-term, so it holds whatever the verifier's bytes: it needs no A3, and the draw need not be uniform.
-
-Its named assumptions, each a hypothesis, are `EndToEndDrawn`'s: `live-verifier` (`Assumptions.Zk.RecordCustodyZKJ`,
-with A6 `uniform/flock-coin-server` for its coins), `cr/sha-512` (`Assumptions.SHA512CRStrict`, through `TableCRZ`) for
-each table's knowledge finders at budgets `qF` and `qS`, and `ecr/sha-512` (A2, `Assumptions.SHA512CRExpected`, through
-`LinkCRZC`) for the prover's link finders. The rest are the verify command's tags under hidden outputs (`TagsOkZHJ`), an
-untyped statement with no shared-row tables (`pub.tables = none`), the bound's numeric conditions, and
-`EndToEndHidden`'s reference setup `y₀`: table 0's, at the session's link points, at some draw `d₀`, which every draw
-flock-verify accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup`), at any number of tables. -/
-def EndToEndHiddenDrawn : Prop :=
+/-- **`EndToEndHiddenDrawn` at a flat circuit file**: `EndToEndHiddenDrawn` at the descriptor `Desc.single c`, stated
+over the circuit `c` that `HmOut.parse` reads from the circuit file. -/
+def EndToEndHiddenDrawnFlat : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     -- the session's statement: its circuit, which the verifier parses, and its public file
     (I : Inputs) (ht : I.tags.typed = false)
@@ -163,6 +337,60 @@ def EndToEndHiddenDrawn : Prop :=
           (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw))
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ksAvgStrictZ (planZHJ dj y₀) L k qF qS (reg σ) +
+        ENNReal.ofReal ((∑ p : vb.Pos,
+            (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
+          (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
+
+open Classical in
+/-- **`EndToEndHiddenPerTest` at a flat circuit file**: `EndToEndHiddenPerTest` at the descriptor `Desc.single c`,
+stated over the circuit `c` that `HmOut.parse` reads from the circuit file. -/
+def EndToEndHiddenPerTestFlat : Prop :=
+  ∀ (n : ℕ) (Reg : Type)
+    -- the session's statement: its circuit, which the verifier parses, and its public file
+    (I : Inputs) (ht : I.tags.typed = false)
+    (c : Flock.Circuit) (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
+    (pub : Public) (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
+    (hscope : Discharge.Layout.scopeOkH c = true)
+    -- the law: a uniform `kd`-subset of the `n` units, split evenly over the session's tables
+    (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
+    -- the record: the draw file at each draw, and the session at each draw and registration
+    (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
+    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
+    (wr : (S : Finset (Fin n)) → (R : Reg) →
+      LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Discharge.Exec.Transcript)
+    (dg : ByteArray → ByteArray) (N : ℕ)
+    -- the verifier's operating-system bytes, and A3
+    (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
+    {η : ENNReal} (_hA3 : ∀ B : Finset (Fin n),
+      Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.subset kd) n B) η)
+    -- the verify command's tags, and live-verifier
+    (hTags : TagsOkZHJ I)
+    (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
+    -- the count curve's parameters
+    (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
+    (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
+    -- the live prover
+    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (qF qS : ℝ),
+    let L := Law.execOS (n := n) src (.subset kd) n
+    let P := (keyProg c hU n).partition (Discharge.Layout.outsOf c hU n)
+    let vb := (rsZHJ dj y₀ ht hc hscope hU hpub hpt).bindingZ (rsZHJ_computes dj y₀ ht hc hscope hU hpub hpt)
+    let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
+      (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
+      (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
+        (runsZCJH_live I ht hc (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
+          fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
+    -- cr/sha-512 for the knowledge finders of each table the prover's session runs
+    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
+      (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
+    -- ecr/sha-512 for the prover's link finders
+    LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
+    prob (fun o => LiveAcceptsZK I o ∧
+        K₀ ≤ (wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
+          (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw)).card)
+        (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
+      ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) + η +
+        ksAvgStrictZ (planZHJ dj y₀) L k qF qS (reg σ) +
         ENNReal.ofReal ((∑ p : vb.Pos,
             (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))

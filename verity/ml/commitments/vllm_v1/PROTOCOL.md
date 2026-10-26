@@ -1,6 +1,7 @@
 # `vllm-v1`: vLLM's serving commitment framing
 
-This is the commitment framing vLLM's serving Commit path emits, as a named scheme. It is permanent and sits
+This is the commitment framing vLLM's serving Commit path emits by name, as a named scheme; its default is `rows-sha512`
+(`integrations/vllm/verity_vllm/commit/step_rows.py`). It is permanent and sits
 beside frame-v3 (`verity.ml.commitments.frame_v3`). Backends select one or the other, and both are
 benchmarked (`benchmarks/commitments/commit_cost.py`). This spec describes existing bytes: it changes none
 of the roots serving emits.

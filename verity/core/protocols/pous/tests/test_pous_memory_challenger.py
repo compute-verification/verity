@@ -6,6 +6,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import os
+import tempfile
 
 import pytest
 
@@ -301,6 +302,28 @@ def test_a_session_log_that_is_missing_unreadable_or_made_twice_is_refused(tmp_p
     assert not path.exists()
 
 
+def test_the_test_signer_leaves_nothing_outside_basetemp(tmp_path_factory, monkeypatch):
+    """`pous_test_signer`'s leaf states and session logs are made under the suite's basetemp (`DIR`, the conftest's), which
+    the check removes when the suite ends, or in a directory the caller passes, and never in `$TMPDIR`, where nothing
+    removes them (`pous-session-log-*` and `pous-test-signer-*` held 82% of vy-nebius-2's /workspace inodes, 19 Oct);
+    with neither, they refuse."""
+    tmp = tmp_path_factory.mktemp("tmpdir")
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp))
+    basetemp = tmp_path_factory.getbasetemp().resolve()
+    signer, log = ts.TestSigner(b"k", height=1), ts.session_log()
+    signer.sign(SESSION, b"a")
+    log.claim(SESSION)
+    assert list(tmp.iterdir()) == []
+    assert all(p.resolve().is_relative_to(basetemp) for p in (signer.state, log.path))
+    own = tmp_path_factory.mktemp("own")
+    assert ts.session_log(own).path.parent.parent == ts.TestSigner(b"k", 1, own).state.parent.parent == own
+    monkeypatch.setattr(ts, "DIR", None)
+    for make in (lambda: ts.TestSigner(b"k", height=1), ts.session_log):
+        with pytest.raises(RuntimeError, match="in a directory the caller owns"):
+            make()
+    assert list(tmp.iterdir()) == []
+
+
 def test_the_certificate_covers_p2_v4_at_the_cap():
     from verity.core.protocols.pous.schemes import p2
 
@@ -332,7 +355,7 @@ def deployed_signer(tmp_path) -> mc.LmsSigner:
     I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:lms.DEPLOYED.N]
     key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))  # type: ignore[arg-type]
     lms.LeafState.create(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H)
-    return mc.LmsSigner(key, lms.LeafState(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H))
+    return mc.LmsSigner(key, tmp_path / "state")
 
 
 def test_an_lms_signed_session_is_accepted_under_the_deployed_scheme(tmp_path):

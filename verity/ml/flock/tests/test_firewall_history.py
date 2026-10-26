@@ -49,7 +49,7 @@ def _lines(state: Path) -> int:
 
 
 def _appended(state: Path, ev: dict) -> None:
-    """An event appended as another process writes it (the Rust firewall's release side, say), outside this module's
+    """An event appended as another process writes it (the Lean firewall's release side, say), outside this module's
     calls: its line, with its seq."""
     with open(state / "record.jsonl", "ab") as f:
         f.write((json.dumps({"seq": _lines(state), **ev}, sort_keys=True) + "\n").encode())
@@ -88,7 +88,7 @@ class _Work:
 def test_a_call_reads_only_what_was_appended_since_the_index_last_read(tmp_path, monkeypatch):
     """300 recursive sessions. Each one's inner side (open, finish) and its first statement's outer session (slot, admit,
     release) are this module's calls, each by a new `Firewall` (a process of its own); its other statements' outer
-    sessions are appended as the Rust firewall writes them, and every fifth stops at its second statement, so its third
+    sessions are appended as the Lean firewall writes them, and every fifth stops at its second statement, so its third
     is refused. Each call parses only the lines appended outside since the index last read the record, never the whole
     record, and the index answers it; a round's work (lines parsed, files of the index read, calls) is the same in the
     last round as in the first of its kind. The record read whole parses all of it."""

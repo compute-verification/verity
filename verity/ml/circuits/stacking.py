@@ -9,8 +9,10 @@ The free set is closed. A gate is free only when it is
 
 - a constant (``const``: `CONST_ID`);
 - an s8-family core step (``family``, `FAMILY`: `BlackwellS8ImmaDot32_v1`, its u8 x s8 sibling `BlackwellU8S8ImmaDot32_v1`,
-  and PoUW's wrapping dots `PouwSegDot_v1` and `PouwDot16U8S8_v1`, ``D = C + sum_k a_k * b_k``) whose window the interval pass
-  proves: D's bound lies in s32, from its operands' ranges as their producers give them, so it never clamps or wraps; or
+  and PoUW's wrapping dots `PouwSegDot_v1`, `PouwSegDot0_v1` (C = 0) and `PouwDot16U8S8_v1`, ``D = C + sum_k a_k * b_k``)
+  whose window the interval pass proves: D's bound lies in s32, from its operands' ranges as their producers give them, so
+  it never clamps or wraps. Their Definitions on bits (`_v2`) are listed in the family for the census, as Lean's `classOf`
+  lists them; the pass reads their bodies down to the 1-bit gates, never as a step whose window it proves; or
 - an integer affine map with constant coefficients (``affine``: `I32Add_v1`, `I32Sub_v1`, `I32Mul_v1` with a constant
   operand, and the BF16-to-FP32 widening `Bf16ToF32_v1`, its operand's encoding times 2^16 read as signed) that the interval
   pass proves never wraps (the widening never does) over operand ranges within their width's signed reading: an operand's
@@ -21,9 +23,9 @@ classes: ``roundings`` (FP arithmetic, casts and dots, special functions, intege
 reduced mod 2^w (`I32Mul_v1` of two runtime values, the integer dots outside the family), bit operations on words and field
 extractions, limb steps, and an add or subtract that may wrap), ``compare_select`` (comparisons, selections, min, max and clamps,
 `F32Sat_v1` and `S32ClampS8` among them, the 1-bit logic ops, the top-p keep mask, the lifting's tag tests), ``gathers`` (a
-data-dependent read of one of V words, counted in fresh index bits) and ``folds`` (the receipt fold's step,
-`PouwDuoAbsorb_v1`). Only gates with an operand that depends on a run input are budgeted: a gate of constants and registered
-words computes the same function before the seed. A primitive the table doesn't list is refused. The table (`CLASSES`, and
+data-dependent read of one of V words, counted in fresh index bits) and ``folds`` (the receipt folds' steps, `PouwDuoAbsorb_v1`
+and fx1's `PouwFx1Absorb`). Only gates with an operand that depends on a run input are budgeted: a gate of constants and
+registered words computes the same function before the seed. A primitive the table doesn't list is refused. The table (`CLASSES`, and
 the families `class_of` reads) is Lean's `Accounting.Gates.classOf` id for id where Lean lists the id (`Bf16ToF32_v1` affine
 there too, by the 18 Oct ruling), and the red team's closed table (round 2) for the families built on demand that Lean
 doesn't list yet. The exact-int8 profile's
@@ -81,10 +83,10 @@ audit certified as read in it and its duration):
    reports the longest.
 
 The sink, coin and limb-split types of the s8 family's companions (the receipt fold, the noise derivation, `LimbSplit`) are
-circuits' Build types; until the table lists those Definitions they are refused or budgeted gate by gate (`LimbSplit`'s byte,
-carry and clamp primitives are listed), never free. Bits become bytes exactly (bits / 8), and every comparison is exact
-(`fractions.Fraction`): c, R_in and a window's duration are given as an int, a Fraction or a str, and a float, which would be
-read at its binary value, is refused.
+circuits' Build types; their primitives are budgeted gate by gate, never free (`LimbSplit`'s byte, carry and clamp, and the
+H1 + fx1 tile's noise, digit, one-stream and fold primitives, v4's dead-tile mask and J10-R's call seeds and block counter,
+each with its Definition on bits, are listed). Bits become bytes exactly (bits / 8), and every comparison is exact (`fractions.Fraction`): c, R_in and a window's
+duration are given as an int, a Fraction or a str, and a float, which would be read at its binary value, is refused.
 """
 from __future__ import annotations
 
@@ -156,15 +158,19 @@ _LIFTED = {"const": "compare_select", "affine": "roundings", "family": "rounding
 
 @dataclass(frozen=True)
 class Step:
-    """An s8-family core step's shape: k products a step, parameters (acc, a, b), a and b in ``a`` and ``b``, D in s32."""
+    """An s8-family core step's shape: k products a step, parameters (acc, a, b), a and b in ``a`` and ``b``, D in s32; with
+    no ``acc`` parameter (``acc`` False) it is the step from 0."""
 
     k: int
     a: tuple[int, int]
     b: tuple[int, int]
+    acc: bool = True
 
 
 FAMILY: dict[str, Step] = {
-    **dict.fromkeys(("BlackwellS8ImmaDot32_v1", "BlackwellS8ImmaDot32_v2", "PouwSegDot_v1"), Step(32, S8, S8)),
+    **dict.fromkeys(("BlackwellS8ImmaDot32_v1", "BlackwellS8ImmaDot32_v2", "PouwSegDot_v1", "PouwSegDot_v2"),
+                    Step(32, S8, S8)),
+    **dict.fromkeys(("PouwSegDot0_v1", "PouwSegDot0_v2"), Step(32, S8, S8, acc=False)),
     **dict.fromkeys(("BlackwellU8S8ImmaDot32_v1", "BlackwellU8S8ImmaDot32_v2"), Step(32, U8, S8)),
     "PouwDot16U8S8_v1": Step(16, U8, S8),
 }
@@ -203,14 +209,22 @@ CLASSES: dict[str, str] = {
         "RopeOut_v1 RsqrtApprox_v1 S32ByteCarry_v1 S32ByteCarry_v2 S32ClampRest_v1 S32ClampRest_v2 "
         "S32LowByte_v1 S32LowByte_v2 S32ToF32Rn_v1 S8ToF32_v1 SiluMulBf16_v1 SiluMulBf16_v2 TanhF32Rn_v1 "
         "TopPNumkeep_v1 U32And_v1 U32Xor_v1 Ue8m0CeilByte_v1 Ue8m0InvScale_v1 "
+        "PouwDigitHi_v1 PouwDigitHi_v2 PouwDigitLo_v1 PouwDigitLo_v2 PouwI8AddBit_v1 PouwI8AddBit_v2 PouwI8Add_v1 "
+        "PouwI8Add_v2 PouwI8Neg_v1 PouwI8Neg_v2 PouwLow8_v1 PouwLow8_v2 PouwNoiseBlock_v1 PouwNoiseBlock_v2 "
+        "PouwOneStream2_v1 PouwOneStream2_v2 PouwOneStream3_v1 PouwOneStream3_v2 PouwPeelSeg_v1 PouwPeelSeg_v2 "
+        "PouwResAdd_v1 PouwResAdd_v2 PouwSx8_v1 PouwSx8_v2 PouwU129_v1 PouwU129_v2 PouwUnitSeeds_v1 PouwUnitSeeds_v2 "
+        "PouwWrapSeg_v1 PouwWrapSeg_v2 PouwXinFinal_v1 PouwXinFinal_v2 PouwXor32_v2 "
+        "PouwCallSeeds_v1 PouwCallSeeds_v2 PouwAdd64_v1 PouwAdd64_v2"
     ), "roundings"),
     **dict.fromkeys(_ids(
         "Bf16GtStrict_v1 F32Eq_v1 F32Fmaxf_v1 F32Fminf_v1 F32Geu_v1 F32GtStrict_v1 F32IsFinite_v1 F32MaxRef_v1 F32Max_v1 "
         "GuardNegInfZero_v1 I32Eq_v1 I32Le_v1 NcpAbsMax_v1 PouwBlackwellE4m3SaltDead_v1 PouwHopperE4m3SaltDead_v1 "
         "PouwSel32_v1 PouwSqGe_v1 PouwWinOk_v1 SelectBf16_v1 SelectBit_v1 SelectF32_v1 SelectI32_v1 U32Ge_v1 "
-        "F32Sat_v1 S32ClampS8_v1 S32ClampS8_v2 And2_v1 Xor2_v1 BitAnd_v1 BitOr_v1 BitXor_v1 BitNot_v1 Not_v1"
+        "F32Sat_v1 S32ClampS8_v1 S32ClampS8_v2 And2_v1 Xor2_v1 BitAnd_v1 BitOr_v1 BitXor_v1 BitNot_v1 Not_v1 "
+        "PouwDigitZ_v1 PouwDigitZ_v2 PouwWrapBits_v1 PouwWrapBits_v2 PouwXWrap_v1 PouwXWrap_v2 "
+        "PouwOrBit_v1 PouwOrBit_v2 PouwMask32_v1 PouwMask32_v2"
     ), "compare_select"),
-    "PouwDuoAbsorb_v1": "folds",
+    **dict.fromkeys(("PouwDuoAbsorb_v1", "PouwFx1Absorb_v1", "PouwFx1Absorb_v2"), "folds"),
 }
 
 def _unlift(fid: str) -> tuple[str, bool]:
@@ -263,7 +277,8 @@ def spec() -> dict:
             "classes": dict(sorted(CLASSES.items())), "const": CONST_ID.pattern, "affine": list(AFFINE),
             "gathers": [list(g) for g in GATHERS], "families": [list(f) for f in FAMILIES], "lifts": list(LIFTS),
             "lifted": dict(sorted(_LIFTED.items())), "ranges": sorted(RANGES),
-            "family": {f: {"k": s.k, "a": list(s.a), "b": list(s.b), "acc": list(S32)} for f, s in sorted(FAMILY.items())}}
+            "family": {f: {"k": s.k, "a": list(s.a), "b": list(s.b), "acc": list(S32) if s.acc else [0, 0]}
+                       for f, s in sorted(FAMILY.items())}}
 
 
 def digest() -> str:
@@ -641,7 +656,8 @@ class _Pass:
             return ((v, v) if v is not None else None), t
         if cls == "family":
             st = FAMILY[fn.id]
-            c, a, b = _clip(rng[0], S32), _operand(rng[1], st.a), _operand(rng[2], st.b)
+            ab = rng[1:] if st.acc else rng
+            c, a, b = _clip(rng[0], S32) if st.acc else (0, 0), _operand(ab[0], st.a), _operand(ab[1], st.b)
             corners = (a[0] * b[0], a[0] * b[1], a[1] * b[0], a[1] * b[1])
             s = (c[0] + st.k * min(corners), c[1] + st.k * max(corners))
             if _within(s, S32):

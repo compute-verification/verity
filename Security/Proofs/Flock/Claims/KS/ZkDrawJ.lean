@@ -583,6 +583,97 @@ theorem acceptsAt_wrS {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {
 
 end Claims.Bridge.Custody
 
+namespace FlockDeploy.KS.Gen
+
+open _root_.Flock FlockDeploy FlockSoundness FlockSoundness.Discharge _root_.Claims.Bridge.Custody
+open Lean (Json)
+
+attribute [local instance] _root_.Claims.Bridge.Custody.lawfulBEqByteArrayDraw
+
+variable [S : ZkSetup]
+
+/-- **`Deploy.V`'s setup is `verify --zk`'s at the statement's draw** (`setupOf_zkInputs` with no record), where the
+statement carries no `--public-inputs`. -/
+theorem Claims.Bridge.Custody.setupAt_of_setup {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (hs : S.Ok zk s spec sts)
+    (hzk : s.read.zk = true) (hpi : s.read.publicInputs = none) :
+    KS.setupAt (ZkExec.zkInputs s.read.I) s.read.draw = .ok (spec, sts) := by
+  rw [← Ins.setup_read hs]
+  simp only [KS.setupAt, Readable.Read.setup, Readable.Read.tags, Readable.Read.coins, ZkExec.zkInputs, hzk, hpi,
+    ite_true]
+
+/-- **Custody gives `RecordsLiveAtS`** (`recordsLiveAt_of_checks` at the statement's draw `d`, so with no premise on
+the record's draw): where `Deploy.V --zk`'s checks pass, the last message's record and proof files are a record of the
+run's live outcome (`viewOf`) at the setup at `d`, at any `J` of the session's tables. -/
+theorem Claims.Bridge.Custody.recordsLiveAtS_of_checks {zk : Bool} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    {J mPts : ℕ} {d : Json} (hs : S.Ok zk s spec sts) (hzk : s.read.zk = true) (hd : s.read.draw = some d)
+    (hJ : J ≤ spec.tables.size) (hc : checks zk s spec x link c₁ mids f = .ok ()) :
+    Composed.RecordsLiveAtS s.read.I d (viewOf J mPts spec link c₁ f) ⟨f.record, f.proofs⟩ := by
+  intro _
+  refine ⟨rfl, fun spec' sts' sess hset hdec => ?_⟩
+  rw [← hd, setupAt_of_setup hs hzk (publicInputs_none_of_checks hc)] at hset
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj hset)
+  obtain ⟨-, lv, hlv, hcus⟩ := checks_ok hc
+  obtain ⟨hroot, -, hpts, hrounds⟩ := custody_ok hcus
+  obtain ⟨eroot, epts, esize, estr⟩ := decode_live hdec hlv
+  have hD : liveD spec f.record = lv := by simp [liveD, hlv]
+  refine ⟨by simp only [viewOf]; rw [epts, hpts], fun j => ⟨?_, fun r => ?_⟩⟩
+  · show sess.rootB[j.val]! = link.1.toArray[j.val]!
+    rw [eroot, ← hroot]
+  · obtain ⟨hq, hw⟩ := _root_.Claims.Bridge.Custody.repStreams_getElem spec (i := j.val) (r := r.val) (by omega) r.isLt
+    obtain ⟨y, hy, hyr⟩ := estr _ hq
+    rw [hw] at hy
+    refine ⟨y, hy, ?_⟩
+    show y.rounds.toList = ((liveD spec f.record).streams[2 * j.val + r.val]!).toList.map (withSha spec)
+    rw [hD]
+    have hq' : 2 * j.val + r.val < lv.streams.size := esize ▸ hq
+    refine forall₂_map_eq hyr fun rd rd' hmem ⟨hn, hcn, hb, hsha⟩ => ?_
+    obtain ⟨am, -, hbytes, -⟩ := forall₂_mem_left hrounds rd' (List.mem_flatMap.2
+      ⟨lv.streams[2 * j.val + r.val]!, by rw [getElem!_pos lv.streams _ hq']; exact Array.getElem_mem_toList hq',
+        hmem⟩)
+    rcases rd with ⟨n, sha, coins, bytes⟩
+    rcases rd' with ⟨n', sha', coins', bytes'⟩
+    simp only at hn hcn hb hsha hbytes
+    subst hn hcn hb hbytes
+    simp [withSha, hsha _ rfl]
+
+/-- **An accepting decision of `Deploy.V --zk` at SHA-512 is an accepting `verify --zk` at the statement's draw**
+(`accepts_of_decide` with no premise on the record's draw): on a statement of draw `d`, the last message's record and
+proof files are accepted at the setup at `d` (`AcceptsAt`), and record the run's live outcome `viewOf` there. -/
+theorem Claims.Bridge.Custody.acceptsAt_of_decide {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
+    {f : Final} {J mPts : ℕ} {d : Json} (ha : act true x as cs = .decide s spec sts link c₁ mids f)
+    (hacc : ((next true x as cs).eval sha512).1 = .acc) (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size) :
+    Composed.AcceptsAt s.read.I d ⟨f.record, f.proofs⟩ ∧
+      Composed.RecordsLiveAtS s.read.I d (viewOf J mPts spec link c₁ f) ⟨f.record, f.proofs⟩ := by
+  obtain ⟨hv, hc⟩ := (next_decide_sha512 ha).1 hacc
+  simp only [ite_true] at hv
+  obtain ⟨hins, hs⟩ := setupOf_some (act_decide ha)
+  have hzk : s.read.zk = true := readOf_zk (x := x) (by simp [readOf, hins])
+  have hsA := setupAt_of_setup hs hzk (publicInputs_none_of_checks hc)
+  rw [hd] at hsA
+  exact ⟨⟨spec, sts, hsA, setup_shapeOk hs hzk, hv⟩, recordsLiveAtS_of_checks hs hzk hd hJ hc⟩
+
+/-- **`Deploy.V --zk`'s accepting runs are accepted at `wrS`**: where its decision accepts at SHA-512 on a statement of
+draw `d`, `verify --zk` accepts at the setup at `d` what `wrS` writes for the run's live outcome at `J ≤` the session's
+tables. -/
+theorem Claims.Bridge.Custody.acceptsAt_wrS {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
+    {f : Final} {J mPts : ℕ} {d : Json} (ha : act true x as cs = .decide s spec sts link c₁ mids f)
+    (hacc : ((next true x as cs).eval sha512).1 = .acc) (hd : s.read.draw = some d) (hJ : J ≤ spec.tables.size) :
+    Composed.AcceptsAt s.read.I d (wrS s.read.I d (viewOf J mPts spec link c₁ f)) := by
+  have hex : ∃ t, Composed.AcceptsAt s.read.I d t ∧
+      Composed.RecordsLiveAtS s.read.I d (viewOf J mPts spec link c₁ f) t :=
+    ⟨_, acceptsAt_of_decide ha hacc hd hJ⟩
+  unfold wrS
+  rw [dite_eq_left_of_eq_true (eq_true hex)]
+  exact (Classical.choose_spec hex).1
+
+export Claims.Bridge.Custody (setupAt_of_setup recordsLiveAtS_of_checks acceptsAt_of_decide acceptsAt_wrS)
+
+end FlockDeploy.KS.Gen
+
+
 namespace FlockDeploy.KS
 
 open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkSession

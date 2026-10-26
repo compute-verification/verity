@@ -9,7 +9,7 @@ t: exact for `subset` and `stratified`, the linear relaxation for `bernoulli`. A
 
 The record states the profile three ways, in the forms its recorded runs hold: `profile`, the profile's JSON (a stratified
 law's in its v0 form: the law's JSON with delta and the count drawn per template); `wrong_units`, its bounds; and
-`integrity_profile`, `verity/integrity-profile/v1` (`docs/audit-protocols.md` §0.2): the partition, the registration it
+`integrity_profile`, `verity/integrity-profile/v1` (README "The audit record and the profile"): the partition, the registration it
 counts against, the law and which units were drawn and proved, and the evidence by digest. The v1 form's non-sampling
 terms (ε) come from the soundness analysis, not from the run, so the run leaves them null.
 
@@ -103,8 +103,7 @@ def session_registered(verdicts: Mapping[str, Mapping[str, Any]],
     """`audit_record`'s `session_registered` from the verdicts alone: the `{value: root}` that the verifiers of record report
     (the Lean verdict's `registered`, `{port: {"value", "root"}}`) on the sessions they accepted, a value two of them
     report under different roots mapped to None. None when no accepted verdict of record reports registered reads. With
-    `registration`, only its own values (its roots' ports and its registered values), as the service splits the sessions'
-    roots between a boundary registration and its interiors."""
+    `registration`, only its own values (its roots' ports and its registered values)."""
     out: dict[str, str | None] | None = None
     for v in verdicts.values():
         if v.get("of_record") and v.get("accepted") is True and isinstance(v.get("registered"), Mapping):

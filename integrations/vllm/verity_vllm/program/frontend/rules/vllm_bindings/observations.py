@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 
 
@@ -48,7 +50,7 @@ def attn_kind_for(obs: dict) -> tuple[str, dict, int | None]:
 FUSED_NORM_DISPATCH_PIN = "batch_invariant"
 
 _OBSERVED: dict = {"attention_impls": None, "export_facts": None, "target_profile": None, "launch_context": None,
-                   "allreduce_settings": None}
+                   "allreduce_settings": None, "launch_region": None}
 
 
 def clear_observations() -> None:
@@ -57,6 +59,7 @@ def clear_observations() -> None:
     _OBSERVED["target_profile"] = None
     _OBSERVED["launch_context"] = None
     _OBSERVED["allreduce_settings"] = None
+    _OBSERVED["launch_region"] = None
 
 
 def observe_allreduce_settings(settings: dict | None) -> None:
@@ -69,7 +72,7 @@ def active_allreduce_settings() -> dict | None:
 
 
 def observe_launch_context(launch: dict | None) -> None:
-    """[R15 hopper HOP-03] The LAUNCH CONTEXT the request Program is built under (`frontend.targets.parse_launch_context`: per request step
+    """[HOP-03] The LAUNCH CONTEXT the request Program is built under (`frontend.targets.parse_launch_context`: per request step
     the varlen launch's max_seqlen_q over ALL co-scheduled sequences).  The attention rule's FA3 tile selection reads it: a request's
     own rows are the launch's value only for a batch of one.  None = no declared context (own rows; B1 semantics, digests unchanged)."""
     _OBSERVED["launch_context"] = dict(launch) if launch else None
@@ -77,6 +80,88 @@ def observe_launch_context(launch: dict | None) -> None:
 
 def active_launch_context() -> dict | None:
     return _OBSERVED.get("launch_context")
+
+
+def launch_batch_declared() -> bool:
+    """Whether the request Program is built under a declared launch batch (`targets.parse_launch_context`'s batch form)."""
+    return bool((active_launch_context() or {}).get("batch_by_step"))
+
+
+@contextmanager
+def launch_region(step: int, rows: str):
+    """Trace one request step's nodes under the declared launch batch: `rows` "tokens" (the model's rows) or "sampled" (the rows
+    after the logits selection, one per scheduled sequence).  Each node traced here carries {"launch_step", "launch_rows"} in
+    meta["custom"] (`launch_tokens_of`), and trace-time dispatch reads `traced_launch_tokens`.  Without a declared batch nothing is
+    tagged, so a batch of one traces as before."""
+    if not launch_batch_declared():
+        yield
+        return
+    import torch.fx.traceback as fxt
+    prev, _OBSERVED["launch_region"] = _OBSERVED["launch_region"], (int(step), rows)
+    try:
+        with fxt.annotate({"launch_step": int(step), "launch_rows": rows}):
+            yield
+    finally:
+        _OBSERVED["launch_region"] = prev
+
+
+def traced_launch_tokens(own: int) -> int:
+    """The rows of the launch the rows being traced (`own` of them) run in, for a dispatch vLLM decides at trace time; `own` outside
+    a `launch_region`."""
+    region = _OBSERVED["launch_region"]
+    if region is None:
+        return int(own)
+    from verity_vllm.program.frontend import targets as T
+    step, rows = region
+    return T.launch_tokens(own, step, active_launch_context(), sampled=rows == "sampled")
+
+
+def _launch_of(node, read):
+    """`read(step, sampled)` at the node's `launch_region` tag.  A node without a tag, or a declaration that does not hold this
+    request, is refused: the launch its kernel choice reads is unknown."""
+    from verity_vllm.program.frontend import targets as T
+    from verity_vllm.program.frontend.outcomes import refuse
+    tag = node.meta.get("custom") or {}
+    if "launch_step" not in tag:
+        refuse("numerics_unregistered", node, None, "the request is built under a declared launch batch but this node was traced "
+               "outside any request step (`launch_region`): the launch its kernel choice reads is unknown")
+    try:
+        return read(tag["launch_step"], tag["launch_rows"] == "sampled")
+    except (T.LaunchContextConflict, T.LaunchContextInvalid) as e:
+        refuse("numerics_unregistered", node, None, f"request step {tag['launch_step']}: {e}", launch_context="invalid")
+
+
+def launch_tokens_of(node, own: int) -> int:
+    """The rows of the launch a node's `own` rows run in (`targets.launch_tokens` at the node's `launch_region` tag), for a kernel
+    choice that reads the launch's token count; `own` without a declared batch."""
+    if not launch_batch_declared():
+        return int(own)
+    from verity_vllm.program.frontend import targets as T
+    return _launch_of(node, lambda step, sampled: T.launch_tokens(own, step, active_launch_context(), sampled=sampled))
+
+
+def launch_sequences_of(node) -> list[tuple[int, int]] | None:
+    """The sequences of the launch a node runs in, (rows, start) in the declared batch's order (`targets.launch_sequences` at the
+    node's `launch_region` tag), for a kernel choice that reads each sequence; None without a declared batch."""
+    if not launch_batch_declared():
+        return None
+    from verity_vllm.program.frontend import targets as T
+    return _launch_of(node, lambda step, _sampled: T.launch_sequences(step, active_launch_context()))
+
+
+def launch_keys_of(node, own: list[int]) -> list[int]:
+    """Every query row's key count in the launch whose rows of key counts `own` a node computes (`targets.launch_keys`); `own`
+    without a declared batch.  A batch that does not hold `own` is refused."""
+    if not launch_batch_declared():
+        return list(own)
+    from collections import Counter
+    from verity_vllm.program.frontend import targets as T
+    from verity_vllm.program.frontend.outcomes import refuse
+    keys = _launch_of(node, lambda step, _sampled: T.launch_keys(step, active_launch_context()))
+    if Counter(own) - Counter(keys):
+        refuse("numerics_unregistered", node, None, f"the declared launch batch's key counts {keys} do not hold this request's {list(own)}",
+               launch_context="invalid")
+    return keys
 
 
 def observe_target_profile(profile: TargetProfile | None) -> None:

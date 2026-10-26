@@ -54,7 +54,7 @@ def node2(tmp_path, monkeypatch):
     (fill / "timing-owners").write_text("net  # network accounting's chunks\n")
     gl.mkdir()
     for k, v in {"FILL_DIR": fill, "GPU_LEASE_DIR": gl, "FILL_CGROUP_ROOT": cg, "FILL_CPU_ROOT": tmp_path / "cpu",
-                 "FILL_YIELD_LOCK": tmp_path / "check-d.lock"}.items():
+                 "FILL_YIELD_LOCK": tmp_path / "check-d.lock", "FILL_CPU_CLAIMS_DIR": tmp_path / "claims"}.items():
         monkeypatch.setenv(k, str(v))
 
     def load():
@@ -607,3 +607,137 @@ def test_node_ops_quiet_never_pauses_a_timing_job_for_a_timed_window(tmp_path, m
             os.killpg(p.pid, signal.SIGCONT)
             os.killpg(p.pid, signal.SIGTERM)
             p.wait()
+
+
+def test_node_ops_quiet_spares_a_gpu_leases_jobs_and_their_own_groups(tmp_path, monkeypatch):
+    """A GPU lease's JIT build (ninja gives each compile a group of its own) paused by a timed window held flashinfer's lock, and
+    the timed lease's own job then waited on it until its lease ran out (n2, 24 Oct 07:0xZ). Quiet now leaves a lease's processes
+    and every group they start running, and still pauses an ordinary CPU-heavy group."""
+    token = f"quiet-lease-test-{os.getpid()}"
+    busy = f"import signal; print('ready', flush=True); signal.pause()  # -m research.telemetry sample {token}"
+    child = ("import os, subprocess, sys; p = subprocess.Popen([sys.executable, '-c', sys.argv[1]], start_new_session=True); "
+             "print(p.pid, flush=True); p.wait()")
+    lease = subprocess.Popen([sys.executable, "-c", child, busy], stdout=subprocess.PIPE, text=True, start_new_session=True)
+    other = subprocess.Popen([sys.executable, "-c", busy], stdout=subprocess.PIPE, text=True, start_new_session=True)
+    try:
+        grandchild = int(lease.stdout.readline())
+        assert lease.stdout.readline().strip() == "ready" and other.stdout.readline().strip() == "ready"
+        ops = node_ops(tmp_path, monkeypatch, {lease.pid: "0::/user.slice/user-1001.slice/user@1001.service/app.slice/gpu-lease-7.scope\n"})
+        monkeypatch.setattr(ops, "QUIET_MATCH", re.compile(re.escape(token)))
+        monkeypatch.setattr(ops.Quiet, "window", lambda self: 1 << 22)
+        q = ops.Quiet()
+        q.tick()
+        assert set(q.paused) == {other.pid}
+        assert grandchild not in q.paused and os.getpgid(grandchild) == grandchild
+    finally:
+        for p in (lease, other):
+            os.killpg(p.pid, signal.SIGCONT)
+        for pg in (grandchild, lease.pid, other.pid):
+            try:
+                os.killpg(pg, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        lease.wait()
+        other.wait()
+
+
+def pool(node2, monkeypatch, slots: int = 6):
+    """The Verity pool open, its disk empty, and a start that records (job, its cores, the claim's descriptor) and keeps the
+    descriptor open, as the job it stands for does."""
+    load, fill, _ = node2
+    for k, v in {"FILL_VERITY_UNTIL": "9999-01-01T00:00:00+00:00", "FILL_VERITY_STOP": "9999-01-01T01:00:00+00:00",
+                 "FILL_VERITY_CPU_SLOTS": str(slots), "FILL_VERITY_LEND": "1"}.items():
+        monkeypatch.setenv(k, v)
+    fr = load()
+    monkeypatch.setattr(fr, "disk_pct", lambda path: 0.0)
+    started, stopped = [], []
+
+    def start(p, h, backfill=False, claim_fd=None):
+        started.append((p.name, h["pool_cpus"], claim_fd))
+        fr.running[p.name] = {"h": h, "t0": len(fr.running), "pid": 0}
+        p.unlink()
+
+    monkeypatch.setattr(fr, "start", start)
+    monkeypatch.setattr(fr, "stop", lambda name, why, requeue=True: stopped.append((name, why)))
+
+    def queued():
+        return [(p, fr.header(p), 0.0) for p in sorted((fill / "queue").glob("*.sh"))]
+
+    return fr, fill, started, stopped, queued
+
+
+def test_the_verity_pool_gives_each_job_whole_cores_of_its_own_beside_the_queued_runs_and_a_job_that_doesnt_fit_waits(
+        node2, monkeypatch, tmp_path):
+    """Each job of the pool claims `cpus` CPUs of 48-95 in whole cores in the registry node 2's queued runs claim theirs in
+    (research's cores.py), off the fences and every live claim; one that doesn't fit stays queued until a job's claim ends."""
+    from research import cores
+
+    fr, fill, started, stopped, queued = pool(node2, monkeypatch)
+    claims = tmp_path / "claims"
+    claims.mkdir()
+    run, run_fd = cores.take(8, set(range(48, 96)), "r20261019-061310-4377", claims, tmp_path / "cpu")      # a queued run's 48-55
+    (fill / "fences").write_text("ma 1 64-71 2099-01-01T00:00Z  # a fence on GPU 1's cores\n")
+    queue(fill, "v-a.sh", "owner=a gpus=0 project=verity cpus=8 mem_gb=16")
+    queue(fill, "v-b.sh", "owner=b gpus=0 project=verity cpus=3 mem_gb=16")
+    queue(fill, "v-c.sh", "owner=c gpus=0 project=verity cpus=24 mem_gb=16")
+    fr.verity_pool(queued())
+    assert [(n, c) for n, c, _ in started] == [("v-a.sh", "56-63"), ("v-b.sh", "72-75")]      # 64-71 fenced; 3 CPUs: 2 cores
+    assert (fill / "queue" / "v-c.sh").exists() and stopped == [], "76-95 hold 20 CPUs, not 24: it waits"
+    assert sorted(cores.claimed(claims).values(), key=min) == [run, set(range(56, 64)), set(range(72, 76))]
+    assert all(os.get_inheritable(fd) is False for _, _, fd in started), "the runner passes it to the job alone (pass_fds)"
+    os.close(run_fd)                                                    # the queued run ended
+    fr.verity_pool(queued())
+    assert started[-1][:2] == ("v-c.sh", "48-55,76-91")
+    for _, _, fd in started:
+        os.close(fd)
+
+
+def test_the_pool_starts_and_lends_nothing_while_a_queued_run_waits_for_cores(node2, monkeypatch, tmp_path):
+    from research import cores
+
+    fr, fill, started, stopped, queued = pool(node2, monkeypatch)
+    claims = tmp_path / "claims"
+    claims.mkdir()
+    ticket = cores.locked(claims / "wait.00000000000000000001.r1", "48\n")
+    queue(fill, "v-a.sh", "owner=a gpus=0 project=verity cpus=8")
+    queue(fill, "p-a.sh", "owner=p gpus=0 cpus=4")
+    fr.verity_pool(queued())
+    assert started == [] and stopped == []
+    os.close(ticket)                                                     # the run took its cores, or gave up
+    fr.verity_pool(queued())
+    assert [(n, c) for n, c, _ in started] == [("v-a.sh", "48-55"), ("p-a.sh", "56-59")]
+    assert fr.running["p-a.sh"]["h"]["lent"] and fr.running["p-a.sh"]["h"]["pool_cpus"] == "56-59"
+    queue(fill, "v-b.sh", "owner=b gpus=0 project=verity cpus=40")
+    fr.verity_pool(queued())
+    assert stopped == [("p-a.sh", "the Verity pool takes its slot back")], "a Verity job that finds no cores requeues a lent one"
+    for _, _, fd in started:
+        os.close(fd)
+
+
+def test_a_pool_job_starts_at_nice_0_in_a_scope_holding_its_cores_and_inherits_its_claim(node2, monkeypatch, tmp_path):
+    """No `nice -n 19` and the scope's AllowedCPUs are the claimed cores; the job gets the claim's descriptor and the runner keeps
+    none, so the claim ends with the job. A Verity job's cpus is a whole number, at most the pool's 48 CPUs."""
+    load, fill, _ = node2
+    fr = load()
+    cmds = []
+    monkeypatch.setattr(fr.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(fr.subprocess, "Popen", lambda cmd, **kw: cmds.append((cmd, kw)) or type("P", (), {"pid": 4242})())
+    monkeypatch.setattr(fr, "event", lambda *a, **kw: None)
+    queue(fill, "v-a.sh", "owner=a gpus=0 project=verity cpus=8 mem_gb=16")
+    p = fill / "queue" / "v-a.sh"
+    cpus, fd = fr.claim("v-a.sh", 8)
+    fr.start(p, {**fr.header(p), "pool_cpus": cpus}, claim_fd=fd)
+    (cmd, kw), = cmds
+    assert cpus == "48-55" and kw["pass_fds"] == (fd,) and kw["env"]["OMP_NUM_THREADS"] == "8"
+    assert "nice" not in cmd and "AllowedCPUs=48-55" in cmd and cmd[cmd.index("taskset"):][:3] == ["taskset", "-c", "48-55"]
+    with pytest.raises(OSError):
+        os.fstat(fd)                                                     # closed here once the job has it
+    fr.running["v-a.sh"]["started"] = "-"
+    fake_node(fr, monkeypatch, fill)
+    fr.tick(8)
+    assert "running v-a.sh owner=a gpus=0 since=- cpus=48-55" in (fill / "status.txt").read_text()
+    for head, want in (("cpus=999", 48), ("cpus=0", 1)):
+        queue(fill, "v-b.sh", f"owner=a gpus=0 project=verity {head}")
+        assert fr.header(fill / "queue" / "v-b.sh")["cpus"] == want
+    queue(fill, "v-b.sh", "owner=a gpus=0 project=verity cpus=eight")
+    assert fr.header(fill / "queue" / "v-b.sh")["bad"] == "cpus=eight"

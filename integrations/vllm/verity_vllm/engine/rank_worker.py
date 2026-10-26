@@ -35,13 +35,15 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from verity_vllm.collectives.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
-from verity_vllm.collectives import fused_norm as FN
-from verity_vllm.engine import hooks, sparse_mla  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
+from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
+from verity_vllm.engine.collectives import fused_norm as FN
+from verity_vllm.engine import hooks, sparse_mla, topp_pin  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
+from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
+from verity_vllm import settings
 
 
 def repo_modules_loaded() -> dict[str, Any]:
-    """[R16 tp TP-11, rev F-r16-19] the repo-local files THIS process has imported (sys.modules, filtered to the repo root and vllm-poc) plus
+    """The repo-local files THIS process has imported (sys.modules, filtered to the repo root and vllm-poc) plus
     the collector's JIT C++/CUDA sources when native_collect was loaded -- what RAN, written from the running process (not a static closure).
     Paths relative to the repo root; a module outside the repo (site-packages, vllm) is not listed."""
     import sys as _sys
@@ -67,7 +69,8 @@ def repo_modules_loaded() -> dict[str, Any]:
     jit = []
     if nc is not None and getattr(nc, "_EXT", None) is not None:
         here = Path(getattr(nc, "HERE", str(root / "verity_vllm" / "commit" / "committer")))
-        jit = [str(Path(here, n).resolve().relative_to(root)) for n in ("native_collect.cpp", "native_gather.cu", "native_tree.cu", "native_plans.h") if Path(here, n).exists()]
+        jit = [str(Path(here, n).resolve().relative_to(root))
+               for n in ("native_collect.cpp", "native_gather.cu", "native_tree.cu", "native_rows.cu", "native_plans.h", "sha512.cuh") if Path(here, n).exists()]
         files.update(jit)
     return {"method": "runtime: sys.modules of this process filtered to the repo root + vllm-poc, plus native_collect's cpp_extension sources when loaded (TP-11)",
             "pid": os.getpid(), "n": len(files), "files": sorted(files), "native_collect_jit_sources": jit}
@@ -91,6 +94,20 @@ def _moe_collective_modules() -> list[Any]:
 
 def _jsonable(x: Any) -> Any:
     return json.loads(json.dumps(x, default=str))
+
+
+def _commit_timing(com: Any, rc: Any) -> dict[str, Any]:
+    """Where a rank's Commit spent its time in the run that ended: per step, the root's lag behind the step's end, the worker's
+    hashing and the queue behind it; the span accounting (per step too); the staging ring's waits; the Python collections that paused
+    the process (on the steps' clock, `t_end`); and each source's own counters."""
+    sources = {}
+    for s in getattr(com, "sources", ()):
+        st = getattr(s, "stats", None)
+        sources[getattr(s, "short_name", type(s).__name__)] = st() if callable(st) else st
+    return {"steps": [{"step": s.step, "t_end": s.t_step_end, "lag_s": s.t_root_ready - s.t_step_end, "hashing_s": s.hashing_s,
+                       "backlog": s.backlog_at_step_end, "bytes": s.n_bytes, "tensors": s.n_tensors} for s in rc.steps],
+            "spans": rc.spans, "windows": rc.extra.get("windows"), "gc": rc.extra.get("gc"),
+            "collector": {k: v for k, v in (rc.extra.get("native_collect") or {}).items() if k != "fa2_wrap"}, "sources": sources}
 
 
 class _LLMShim:
@@ -131,7 +148,7 @@ def _tp_facts(worker: Any) -> dict[str, Any]:
         out["tp"]["pp_world_size"] = int(ps.get_pp_group().world_size)
     except Exception as e:  # noqa: BLE001
         out["tp_error"] = repr(e)
-    out["nccl_env"] = {k: v for k, v in os.environ.items() if k.startswith("NCCL_")}
+    out["nccl_env"] = settings.redact({k: v for k, v in os.environ.items() if k.startswith("NCCL_")})
     pc = worker.vllm_config.parallel_config
     out["parallel_config"] = {k: getattr(pc, k, None) for k in ("tensor_parallel_size", "pipeline_parallel_size", "world_size",
                                                                  "distributed_executor_backend", "disable_custom_all_reduce",
@@ -141,7 +158,7 @@ def _tp_facts(worker: Any) -> dict[str, Any]:
 
 
 def parse_swap_spec(spec: list | None) -> dict | None:
-    """`[ra, rb]` = swap at EVERY step (rev-cb M-0359 T6-3); `[ra, rb, lo, hi]` = swap ONLY on engine steps lo..hi inclusive (rev M-0460: the
+    """`[ra, rb]` = swap at EVERY step; `[ra, rb, lo, hi]` = swap ONLY on engine steps lo..hi inclusive (the
     decode-only swap -- prefill rows untouched, every swapped row one token, coverage/composition blind; attribution alone must catch it)."""
     if not spec or len(spec) < 2:
         return None
@@ -166,14 +183,36 @@ def swap_label(label: str, sw: dict | None, step: int | None) -> str:
     return label
 
 
+def register_post_load_tensors(model: Any, names: list[str]) -> list[str]:
+    """The tensors the loader's post-load hook keeps as plain attributes (DeepSeek-V4's `hc_attn_fn_broadcast`), registered as Parameters
+    under the same names, as the rank's Build registers them (`loader_parity.post_load_tensors_as_the_loader_does`): the weights the rank
+    registers, pins and replays, and the Match capture's roots, are its `named_parameters`.  The forward reads the same tensor."""
+    import torch
+    mods = dict(model.named_modules()) if names else {}
+    for n in names:
+        mname, _, attr = n.rpartition(".")
+        parent = mods.get(mname)
+        v = getattr(parent, attr, None)
+        if isinstance(v, torch.nn.Parameter):
+            continue
+        if not isinstance(v, torch.Tensor):
+            raise TypeError(f"the Build registers the post-load tensor {n!r} as a Parameter; the served model holds no tensor there")
+        delattr(parent, attr)
+        parent.register_parameter(attr, torch.nn.Parameter(v, requires_grad=False))
+    return names
+
+
 class TP2CaptureWorkerExtension:
     """Mixed into vLLM's Worker (`worker_extension_cls`); `self` is the Worker of one rank."""
 
     # ------------------------------------------------------------------ topology
 
     def tp2_probe(self) -> dict[str, Any]:
-        """Per-rank facts: process, device, TP group, communicator choice, model/runner classes, sharded shapes."""
-        out = _tp_facts(self)
+        """Per-rank facts: process, device, TP group, communicator choice, model/runner classes, sharded shapes, and the execution
+        this rank's engine runs, read back from its own `vllm_config` (`effective_execution`)."""
+        from verity_vllm.engine import vllm_adapter as va
+
+        out, model = _tp_facts(self), None
         try:
             model = self.model_runner.get_model()
             shapes = {}
@@ -191,6 +230,7 @@ class TP2CaptureWorkerExtension:
                 out["logits_processor"] = {k: getattr(lp, k, None) for k in ("use_all_gather", "org_vocab_size", "vocab_size")}
         except Exception as e:  # noqa: BLE001
             out["model_error"] = repr(e)
+        out["effective_execution"] = va.effective_execution_doc(_LLMShim(self), model)
         return _jsonable(out)
 
     # ------------------------------------------------------------------ observer
@@ -198,7 +238,8 @@ class TP2CaptureWorkerExtension:
     def tp2_install(self, *, out_dir: str, workload: dict, case: str, cp: dict, engine_kwargs: dict, env_flags: dict,
                     snapshot_steps: list[int], snapshot_max_bytes: int, adapter_revision: str, wheel_sha256: str | None,
                     vllm_commit: str | None, reenter: bool = True, triton: bool = True, module_hooks: bool = True,
-                    weights_verified: bool = False, argv: list[str] | None = None, target: Any = None) -> dict[str, Any]:
+                    weights_verified: bool = False, argv: list[str] | None = None, target: Any = None,
+                    post_load_tensors: dict[str, list[str]] | None = None) -> dict[str, Any]:
         import torch
 
         from verity_vllm.engine import vllm_adapter as va
@@ -211,6 +252,7 @@ class TP2CaptureWorkerExtension:
         rank_dir.mkdir(parents=True, exist_ok=True)
         runner = self.model_runner
         model = runner.get_model()
+        post_load = register_post_load_tensors(model, list((post_load_tensors or {}).get(str(rank)) or []))
         engine = va.Engine(llm=_LLMShim(self), runner=runner, model=model, cp=dict(cp), kwargs=dict(engine_kwargs),
                            env_flags=dict(env_flags), build_s=0.0, case=case, target=target)
         header = va.make_header(engine, workload, adapter_revision=adapter_revision, wheel_sha256=wheel_sha256, vllm_commit=vllm_commit,
@@ -250,7 +292,7 @@ class TP2CaptureWorkerExtension:
         log(f"observer installed: {len(cap.roots)} roots, profile_id={header.profile_id} (adapter {pid_adapter}), log={log_path}, "
             f"snapshots={sorted(snapshot_steps)[:4]}{'...' if len(snapshot_steps) > 4 else ''}, cos_sin={cs}")
         return _jsonable({"rank": rank, "world_size": world, "pid": os.getpid(), "roots": len(cap.roots), "profile_id": header.profile_id,
-                          "profile_id_adapter": pid_adapter, "log": str(log_path), "rank_dir": str(rank_dir),
+                          "profile_id_adapter": pid_adapter, "log": str(log_path), "rank_dir": str(rank_dir), "post_load_tensors": post_load,
                           "reenter_impls": header.notes.get("reenter_impls"), "cos_sin": str(cs) if cs else None,
                           "root_names_head": [r.name for r in cap.roots[:6]], "root_shapes_head": [list(r.view.shape) for r in cap.roots[:6]]})
 
@@ -320,124 +362,6 @@ class TP2CaptureWorkerExtension:
         return {"rank": rank, "n_params": doc["n_params"], "n_buffers": doc["n_buffers"], "total_bytes": doc["total_bytes"],
                 "modules": len(mods)}
 
-    # ------------------------------------------------------------------ R13 P4: TP2 numerical-semantics probe
-
-    def tp2_sem_install(self, *, out_dir: str, layers: list[int], max_calls: int = 3) -> dict[str, Any]:
-        """Record, for the first `max_calls` forward calls of the parallel layers of `layers` (+ embed_tokens, logits_processor),
-        the rank-local INPUT, the rank-local partial GEMM output (the argument of the all-reduce / all-gather), the collective
-        OUTPUT, and the module output, plus this rank's weight shards.  `tp2_semantics_analyze.py` recomputes the TP1 and TP2
-        semantics offline and compares bit-exactly.  Collectives are seen by wrapping the module-global names
-        `tensor_model_parallel_all_reduce` / `_all_gather` in vLLM's linear / vocab_parallel_embedding / logits_processor modules
-        while a hooked module is executing (the wrapper is pass-through otherwise; the run is unchanged)."""
-        import torch
-        import vllm.model_executor.layers.linear as L
-        import vllm.model_executor.layers.logits_processor as LP
-        import vllm.model_executor.layers.vocab_parallel_embedding as VE
-
-        facts = _tp_facts(self)
-        rank, world = int(facts["tp"]["rank"]), int(facts["tp"]["world_size"])
-        out = Path(out_dir) / f"rank{rank}"
-        out.mkdir(parents=True, exist_ok=True)
-        model = self.model_runner.get_model()
-        names = ["model.embed_tokens", "logits_processor"]
-        for li in layers:
-            names += [f"model.layers.{li}.self_attn.qkv_proj", f"model.layers.{li}.self_attn.o_proj",
-                      f"model.layers.{li}.mlp.gate_up_proj", f"model.layers.{li}.mlp.down_proj"]
-        mods = dict(model.named_modules())
-        st: dict[str, Any] = {"active": None, "calls": {n: 0 for n in names}, "handles": [], "hooks": hooks.Hooks(), "rank": rank, "out": out,
-                              "max_calls": int(max_calls), "records": []}
-        self._tp2_sem = st
-
-        def cpu(t: Any) -> Any:
-            if isinstance(t, torch.Tensor):
-                return t.detach().to("cpu", copy=True)
-            if t is None or isinstance(t, (int, float, str, bool)):
-                return t
-            return f"<{type(t).__module__}.{type(t).__name__}>"   # e.g. the lm_head module passed to LogitsProcessor.forward
-
-        def coll_wrap(orig: Any, kind: str) -> Any:
-            def w(x: Any, *a: Any, **k: Any) -> Any:
-                y = orig(x, *a, **k)
-                act = st["active"]
-                if act is not None:
-                    torch.cuda.synchronize()
-                    act["coll"].append({"kind": kind, "in": cpu(x), "out": cpu(y), "args": [str(v) for v in a], "kwargs": {kk: str(v) for kk, v in k.items()}})
-                return y
-            return w
-
-        for mod, attr, kind in ((L, "tensor_model_parallel_all_reduce", "all_reduce"), (VE, "tensor_model_parallel_all_reduce", "all_reduce"),
-                                (LP, "tensor_model_parallel_all_gather", "all_gather"), (LP, "tensor_model_parallel_gather", "gather")):
-            if hasattr(mod, attr):
-                st["hooks"].wrap(mod, attr, lambda orig, kind=kind: coll_wrap(orig, kind))
-
-        def pre(name: str) -> Any:
-            def h(m: Any, args: tuple, kwargs: dict) -> None:
-                c = st["calls"][name]
-                if c >= st["max_calls"] or st["active"] is not None:
-                    return
-                torch.cuda.synchronize()
-                st["active"] = {"name": name, "call": c, "in": [cpu(a) for a in args], "in_kw": {k: cpu(v) for k, v in kwargs.items()}, "coll": []}
-            return h
-
-        def post(name: str) -> Any:
-            def h(m: Any, args: tuple, kwargs: dict, output: Any) -> None:
-                act = st["active"]
-                if act is None or act["name"] != name:
-                    return
-                torch.cuda.synchronize()
-                o = output[0] if isinstance(output, tuple) else output
-                act["out"] = cpu(o)
-                act["out_extra"] = [cpu(x) for x in output[1:]] if isinstance(output, tuple) else []
-                act["module_class"] = type(m).__name__
-                act["module_attrs"] = _jsonable({k: getattr(m, k, None) for k in ("tp_size", "tp_rank", "input_size", "output_size",
-                                                 "input_size_per_partition", "output_size_per_partition", "output_sizes", "reduce_results",
-                                                 "gather_output", "skip_bias_add", "num_embeddings", "num_embeddings_per_partition",
-                                                 "org_vocab_size", "embedding_dim", "use_all_gather", "input_is_parallel") if hasattr(m, k)})
-                torch.save(act, out / f"{name}.call{act['call']}.pt")
-                st["records"].append({"name": name, "call": act["call"], "n_coll": len(act["coll"]),
-                                      "in_shape": [list(a.shape) for a in act["in"] if isinstance(a, torch.Tensor)],
-                                      "out_shape": list(act["out"].shape) if isinstance(act["out"], torch.Tensor) else None})
-                st["calls"][name] = act["call"] + 1
-                st["active"] = None
-            return h
-
-        for n in names:
-            m = mods.get(n)
-            if m is None:
-                st["records"].append({"name": n, "missing": True})
-                continue
-            st["handles"].append(m.register_forward_pre_hook(pre(n), with_kwargs=True))
-            st["handles"].append(m.register_forward_hook(post(n), with_kwargs=True))
-        # weight shards of the hooked modules (+ lm_head, which logits_processor uses without a module call)
-        W: dict[str, Any] = {}
-        for n in names + ["lm_head"]:
-            m = mods.get(n)
-            if m is None:
-                continue
-            for pn, p in m.named_parameters(recurse=False):
-                W[f"{n}.{pn}"] = cpu(p)
-            for bn, b in m.named_buffers(recurse=False):
-                W[f"{n}.{bn}"] = cpu(b)
-        lm = mods.get("lm_head")
-        meta = {"rank": rank, "world_size": world, "facts": facts, "layers": list(layers), "names": names,
-                "lm_head_is_embed": bool(lm is not None and getattr(lm, "weight", None) is not None and
-                                        lm.weight.data_ptr() == mods["model.embed_tokens"].weight.data_ptr()),
-                "weights": {k: {"shape": list(v.shape), "dtype": str(v.dtype)} for k, v in W.items()}}
-        torch.save(W, out / "weights.pt")
-        (out / "meta.json").write_text(json.dumps(meta, indent=1, default=str) + "\n")
-        return _jsonable({"rank": rank, "world_size": world, "hooked": [n for n in names if n in mods], "weights": list(W)})
-
-    def tp2_sem_close(self) -> dict[str, Any]:
-        import torch
-
-        st = self._tp2_sem
-        torch.cuda.synchronize()
-        for h in st["handles"]:
-            h.remove()
-        st["hooks"].uninstall()
-        (st["out"] / "records.json").write_text(json.dumps(st["records"], indent=1, default=str) + "\n")
-        return _jsonable({"rank": st["rank"], "records": st["records"]})
-
     # ------------------------------------------------------------------ R13 P4 step 3: every collective of the run, per rank, in order
 
     def tp2_coll_install(self, *, out_dir: str, store_steps: int = 1 << 30) -> dict[str, Any]:
@@ -445,8 +369,8 @@ class TP2CaptureWorkerExtension:
         belongs to — the logits all-gather runs after the forward, before the next), `k` (index within the step), kind, the calling
         module (path + class), the partial's shape/dtype and sha256, the received output's sha256; the partial and the output
         tensors of steps < `store_steps` are saved (`coll.rank<r>.step<S>.pt`) for the offline cross-rank provenance check
-        (`pipeline/tp/match.py`: received == AllReduce2(part_rank0, part_rank1) / AllGather2, bit-exact).  Same wrapping seam as
-        `tp2_sem_install` (module-global collective names); the run's computation is unchanged."""
+        (`pipeline/tp/match.py`: received == AllReduce2(part_rank0, part_rank1) / AllGather2, bit-exact).  The collectives are
+        seen by wrapping their module-global names; the run's computation is unchanged."""
         import hashlib
 
         import torch
@@ -478,9 +402,11 @@ class TP2CaptureWorkerExtension:
             flush_step()
             st["step"] += 1
             st["k"] = 0
+            if st["witness"] is not None:
+                st["witness"].step(st["step"])
 
         def observer_rec() -> Any:
-            """[R17 tp D90] the aten observer of `tp2_install`, when this rank runs BOTH (one engine run = one fold + one recorder): the
+            """The aten observer of `tp2_install`, when this rank runs BOTH (one engine run = one fold + one recorder): the
             recorder's own bookkeeping (device->host copies, digests) is hidden from it, the collective launch itself stays observed."""
             cap = (getattr(self, "_tp2", None) or {}).get("cap")
             return getattr(cap, "rec", None) if cap is not None else None
@@ -515,7 +441,7 @@ class TP2CaptureWorkerExtension:
         # from inside its forward (OlmoeAttention._apply_qk_norm: q and k all-gathered, twice per layer) is invisible to the wrappers
         # above -- R17 row #70 recorded 34 collectives per step against the Build's 66 links (structure FAIL).  The one census shared
         # with the committer's TPPartialSource names the modules (hooked below) and the python modules to patch, a ruled-out call's too.
-        from verity_vllm.collectives.collective_sites import mid_module_site_census, patch_targets
+        from verity_vllm.engine.collectives.collective_sites import mid_module_site_census, patch_targets
         census = mid_module_site_census(model, world)
         st["mid_sites"] = {s["name"]: s for s in census["sites"]}
         sites += patch_targets(census["sites"] + census["ruled_out"])
@@ -526,6 +452,10 @@ class TP2CaptureWorkerExtension:
                 st["hooks"].wrap(mod, attr, lambda orig, kind=kind: coll_wrap(orig, kind))
         for mod, attr in FN.targets(model):      # [VLLM-12] DeepSeek-V3.2's layers reduce in the norm after them (collectives.fused_norm)
             st["hooks"].wrap(mod, attr, lambda orig: FN.recording(orig, model, st, coll_wrap, lambda: FN.silenced(observer_rec())))
+        # each MoE layer's align members, which the match oracle pairs with the committed ones (`moe_align_source.CaptureWitness`): each
+        # Marlin MoE align call's schedule witness, at its position among the step's collectives, goes to `align.rank<r>.jsonl`
+        from verity_vllm.acquire.sources.moe_align_source import capture_witness
+        st["witness"] = capture_witness(model, rank, lambda: st["k"], lambda: FN.silenced(observer_rec()))
 
         # [R15 rev-cb T6-1, mirrored on the Match side] `cur` is a stack: a collective issued by an outer module after a nested hooked module
         # returned is attributed to the OUTER module; a fused-MoE runner nested under a hooked fused-MoE wrapper is NOT hooked, so the
@@ -575,13 +505,15 @@ class TP2CaptureWorkerExtension:
         for h in st["handles"]:
             h.remove()
         st["hooks"].uninstall()
+        witness = st["witness"].close(st["out"]) if st["witness"] is not None else None
         with (st["out"] / f"coll.rank{st['rank']}.jsonl").open("w") as f:
             for r in st["records"]:
                 f.write(json.dumps(r) + "\n")
         by_kind: dict[str, int] = {}
         for r in st["records"]:
             by_kind[r["kind"]] = by_kind.get(r["kind"], 0) + 1
-        return _jsonable({"rank": st["rank"], "n_steps": st["step"] + 1, "n_collectives": len(st["records"]), "by_kind": by_kind, "n_stored_steps": st["n_stored"]})
+        return _jsonable({"rank": st["rank"], "n_steps": st["step"] + 1, "n_collectives": len(st["records"]), "by_kind": by_kind, "n_stored_steps": st["n_stored"],
+                          "witness": witness})
 
     # ------------------------------------------------------------------ R13 P4 step 4: rank-aware commitment (the collector in every rank)
 
@@ -590,14 +522,18 @@ class TP2CaptureWorkerExtension:
                         n_requests: int = 1, required_manifest: str | None = None, request_order: list[str] | None = None,
                         arrivals: dict[str, int] | None = None, caps: dict[str, int] | None = None, tp_relabel: dict | None = None,
                         tp_partials_omit_rank: int | None = None, tp_partials_omit_site: dict | None = None,
+                        post_load_tensors: dict[str, list[str]] | None = None,
                         request_ids: dict[str, str] | None = None, match_tokens: dict[str, list[int]] | None = None,
                         tp_swap_requests: dict | None = None, match_capture_dir: str | None = None, replay: dict | None = None,
                         weights_pin: dict | None = None, flip_weight: dict | None = None, tp_partials_flip_site: dict | None = None,
-                        serve_shard_from: dict | None = None, tap_sources: Any = None) -> dict[str, Any]:
+                        serve_shard_from: dict | None = None, tap_sources: Any = None, weights_as_loaded: Any = None,
+                        commit_scheme: str | None = None) -> dict[str, Any]:
         """Construct THIS rank's committer (`commit_delta.make_committer` on a per-rank engine shim: this worker's model runner + model,
         the rank's loaded weight SHARDS), attach the FA hidden source (none for MLA), size the arena from the workload envelope, register the rank's
         weights.  The rank's root binds its own values (its shards' roots, its partial GEMMs, its FA2 hidden stream for its heads); the
-        driver (`pipeline/tp/commit.py`) combines the ranks' roots deterministically and fails closed on a missing rank."""
+        driver (`pipeline/tp/commit.py`) combines the ranks' roots deterministically and fails closed on a missing rank.  ``commit_scheme``
+        (unset = rows-sha512) is the committer's (`NativeCollectCommitter`): tp-commit passes its ``--commit-scheme`` (rows-sha512 by default,
+        whose 64-byte roots the SHA-512 TP run root combines, `tp.run_root`)."""
         from types import SimpleNamespace
         from verity_vllm.pipeline.commit import baseline_state, make_committer
 
@@ -605,10 +541,12 @@ class TP2CaptureWorkerExtension:
         rank = int(facts["tp"]["rank"])
         runner = self.model_runner
         model = runner.get_model()
+        post_load = register_post_load_tensors(model, list((post_load_tensors or {}).get(str(rank)) or []))
         eng = SimpleNamespace(llm=_LLMShim(self), runner=runner, model=model, cp=cp, kwargs=engine_kwargs, env_flags={}, build_s=0.0, case=case)
-        args = SimpleNamespace(arena_mb=arena_mb, chunk=None, hash_threads=None, profile_hooks=False, fast_copy=True, gpu_tree=True)
+        args = SimpleNamespace(arena_mb=arena_mb, chunk=None, hash_threads=None, profile_hooks=False, fast_copy=True, gpu_tree=True,
+                               commit_scheme=commit_scheme)
         com = make_committer(kind, eng, args, f"{run_id}/rank{rank}")
-        res: dict[str, Any] = {"rank": rank, "committer": com.name}
+        res: dict[str, Any] = {"rank": rank, "committer": com.name, "post_load_tensors": post_load}
         from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, attention_hidden, make_hidden_source
         man = json.loads(Path(required_manifest).read_text()) if required_manifest else None      # its ROW word 3 / MS class must be the build's
         if (res.setdefault("attention_hidden", attention_hidden(man, model))["family"] and hidden_so):   # MLA / DSA: no hidden class, no FA2 source
@@ -619,10 +557,11 @@ class TP2CaptureWorkerExtension:
         # moe_block_stream), attached exactly as commit_delta's `--moe-source auto` does: when the rank's model has MoE-runner modules.
         # Without it a TP MoE row's Commit binds no `moe/L<n>` plane (Qwen3-30B-A3B TP2 B2: 37 440 of 132 708 required identities per
         # rank unbound, coverage FAIL) -- the manifest requires the six planes per rank at shard widths, and this rank's kernel sees them.
+        # A manifest that names no plane is bound at the block's Calls (`moe_source`: `at_calls`).
         try:
             from verity_vllm.acquire.sources.moe_source import MoeBlockSource
 
-            msrc = MoeBlockSource(com, model, world=int((facts.get("tp") or {}).get("world_size") or 1))
+            msrc = MoeBlockSource(com, model, world=int((facts.get("tp") or {}).get("world_size") or 1), manifest=man)
             if msrc.layers:
                 com.attach_source(msrc)
                 res["moe_source"] = {"layers": len(msrc.layers), "tensors_per_layer": msrc.stats.get("tensors_per_layer"),
@@ -717,7 +656,12 @@ class TP2CaptureWorkerExtension:
                                 "served_before_sha256": before, "served_after_sha256": after, "own_shard_of_record_sha256": own_sha,
                                 "own_equals_before": own_sha == before, "after_equals_before": after == before})
             res["serve_shard_from"] = applied
-        res["weight_registration"] = _jsonable(com.register_weights())
+        # the weights the rank registers, pins and replays: its MXFP4 Marlin experts' fields as loaded (`acquire.as_loaded`, bound by the TP
+        # driver with the checkpoint of record), every other tensor as served
+        weights, res["weights_as_loaded"] = (weights_as_loaded(model, world=int(facts["tp"]["world_size"]), rank=rank) if weights_as_loaded
+                                             else (model, None))
+        with hooks.patched(com, "model", weights):
+            res["weight_registration"] = _jsonable(com.register_weights())
         # [manbind MAN-09, COORD M-0614 (1)] WEIGHTS OF RECORD per rank: sha256 of every live parameter of THIS rank (the shards the root
         # covers) == the digest composed from the PINNED checkpoint shards by the rank Program's shard map (weights_of_record.build_record,
         # engine-free, from result.json tp {world, rank}); self-consistency with the run's own root is not this check.  Absent -> unpinned
@@ -742,7 +686,7 @@ class TP2CaptureWorkerExtension:
                 world_ = int(facts["tp"]["world_size"])
                 if int(rtp.get("world") or 1) != world_ or int(rtp.get("rank") or 0) != int(rank):
                     raise RuntimeError(f"rank {rank}: weights of record built from a Program of tp={rtp}, not this rank's (world {world_}, rank {rank})")
-                live = WR.live_param_digests(model)
+                live = WR.live_param_digests(weights)
                 chk = WR.check(rec, live)
                 chk["rank"] = rank
                 chk["program_dir"] = str(pdir)
@@ -810,7 +754,7 @@ class TP2CaptureWorkerExtension:
             except Exception as e:  # noqa: BLE001
                 res["attention_plane_classes"]["error"] = repr(e)[:300]
         self._tp2_commit = {"com": com, "eng": eng, "base": baseline_state(eng), "rank": rank, "rc": None, "program_digest": program_digest,
-                            "tps": (tps if tp_partials else None), "world": int(facts["tp"]["world_size"]), "n_requests": int(n_requests),
+                            "weights": weights, "tps": (tps if tp_partials else None), "world": int(facts["tp"]["world_size"]), "n_requests": int(n_requests),
                             "required_manifest": required_manifest, "request_order": list(request_order or []), "arrivals": dict(arrivals or {}),
                             "caps": dict(caps or {}), "match_tokens": dict(match_tokens) if match_tokens else None, "swap_requests": swapped, "swap_rule": swap_rule,
                             "match_capture_dir": (str(match_capture_dir) if match_capture_dir else None), "weights_pin": st_pin,
@@ -841,9 +785,13 @@ class TP2CaptureWorkerExtension:
     def tp2_commit_install(self) -> dict[str, Any]:
         st = self._tp2_commit
         st["com"].reset()
+        if st.get("match_capture_dir") and "schedule_replay" not in st:   # once: the match oracle's capture's MoE align schedule, replayed
+            from verity_vllm.acquire.sources.moe_align_source import arm_replay
+
+            st["schedule_replay"] = arm_replay(getattr(st["com"], "sources", ()), st["match_capture_dir"], st["rank"])
         st["com"].install()
         st["rc"] = None
-        return {"rank": st["rank"], "installed": True}
+        return {"rank": st["rank"], "installed": True, "schedule_replay": st.get("schedule_replay")}
 
     def tp2_commit_finalize(self, checks: bool = True, defer: dict[str, Any] | None = None) -> dict[str, Any]:
         """After the run: the rank's run root (fixed BEFORE any challenge), leaf counts, coverage declaration; a warm-up (`pipeline.tp.warmup`)
@@ -874,10 +822,19 @@ class TP2CaptureWorkerExtension:
                 match_oracle = {"rank": st["rank"], "verdict": "FAIL", "error": repr(e)[:300]}
         elif match_dir:
             match_oracle = {"rank": st["rank"], "verdict": "FAIL", "why": "no tp partial source on this rank (partials not bound)"}
+        if match_oracle is not None:
+            from verity_vllm.acquire.sources.moe_align_source import replay_stats
+
+            match_oracle["schedule_replay"] = replay_stats(getattr(com, "sources", ())) or st.get("schedule_replay")
         # [manbind MAN-06 / coord M-0451 form (A), per rank -- tp TP-08] the C2 OF RECORD on THIS rank's map, Programs and shards
         sampled_replay = None
         if record and st.get("replay"):
-            sampled_replay = self._deferred_replay(rc, defer) if defer else self._tp2_sampled_replay(rc)
+            from verity_vllm.pipeline.tp.rank_replay import host_slot
+
+            with host_slot(st["replay"], int(st["rank"])) as slot:
+                sampled_replay = self._deferred_replay(rc, defer) if defer else self._tp2_sampled_replay(rc)
+            if slot:
+                sampled_replay["host_slot"] = slot
         return _jsonable({"rank": st["rank"], "run_root": rc.run_root.hex(), "binding": binding, "attribution": attribution, "match_oracle": match_oracle,
                           "sampled_replay": sampled_replay, "weights_pin": st.get("weights_pin"),
                           "steps": len(rc.steps), "leaves_per_step": [s.n_leaves for s in rc.steps],
@@ -885,10 +842,11 @@ class TP2CaptureWorkerExtension:
                           "root_ready_delay_s": rc.root_ready_delay_s, "finalize_s": rc.t_finalize_s, "spans_total_s": rc.spans["total_s"],
                           "expected_tensors": rc.extra.get("expected_tensors"), "committed_tensors": rc.extra.get("committed_tensors"),
                           "errors_n": rc.extra.get("errors_n", len(rc.extra.get("errors") or [])), "errors": (rc.extra.get("errors") or [])[:10],
-                          "identity_check": rc.extra.get("identity_check"), "expected_manifest": com.expected_manifest() if hasattr(com, "expected_manifest") else None,
+                          "collector_failure": rc.extra.get("collector_failure"), "identity_check": rc.extra.get("identity_check"), "expected_manifest": com.expected_manifest() if hasattr(com, "expected_manifest") else None,
                           "classes": class_coverage(d), "declaration": d, "weight_registration": rc.weight_registration,
                           "persistent_bytes": rc.persistent_bytes, "temporary_bytes_peak": rc.temporary_bytes_peak, "bounded_staging": rc.extra.get("bounded_staging"),
-                          "plans_cached": (rc.extra.get("native_collect") or {}).get("plans_cached"), "pinned_pool_bytes": rc.extra.get("pinned_pool_bytes")})
+                          "plans_cached": (rc.extra.get("native_collect") or {}).get("plans_cached"), "pinned_pool_bytes": rc.extra.get("pinned_pool_bytes"),
+                          "timing": _commit_timing(com, rc)})
 
     def _tp2_logical_request(self, rid: str, step: int | None = None) -> str:
         """Engine row id -> workload `r<i>` (commit_delta's rule, mirrored per rank): vLLM v1 suffixes the external request id with
@@ -910,7 +868,7 @@ class TP2CaptureWorkerExtension:
         return swap_label(lg, st.get("swap_rule"), step)     # the swap NEGATIVE (all steps, or steps lo..hi only) -- identity on the honest path
 
     def _tp2_attribution(self, rc: Any) -> dict[str, Any] | None:
-        """[R15 rev-cb M-0359 T6-3] per-(request, engine step) attribution of THIS rank's committed values against the MATCH RECORD: the
+        """Per-(request, engine step) attribution of THIS rank's committed values against the MATCH RECORD: the
         committed `runner.sampler/sampled_token_ids` row j of step s belongs (by the rank's request->rows map) to request r; its value must
         be the Match record's k-th generated token of r (k = how many steps r has been sampled in so far).  The Match record is
         tp2_match's capture arm tokens.json (per request generated ids), the same greedy workload -- an independent run, not this one.
@@ -996,10 +954,9 @@ class TP2CaptureWorkerExtension:
                 "missing_steps": missing[:8], "swap_requests_negative": st.get("swap_requests"), "value_source": rd.record(), "why": why}
 
     def _tp2_binding(self, rc: Any) -> dict[str, Any] | None:
-        """[R14 TP-03 x BIND-01] THIS rank's binding map (bind's `verity_vllm.commit.binding`: identity -> commitment location, fixed at
-        finalize before any challenge) and its coverage against the rank's EXPECTED population = model structure x workload steps x this
-        rank, where every collective-issuing module additionally requires its rank-local member `part_rank<r>` / `shard_rank<r>` (the TP
-        partial source's sites).  The population is structural (install-time module set + site set), never read from what was emitted."""
+        """THIS rank's binding map (`verity_vllm.commit.binding`: identity -> commitment location, fixed at finalize
+        before any challenge) and its coverage against the rank's required manifest, whose rows the committed tensors bind (`query.manifest.bind`);
+        without one, against model structure x workload steps x this rank plus each collective site's `part_rank<r>` / `shard_rank<r>`."""
         st = self._tp2_commit
         pd = st.get("program_digest")
         if not pd:
@@ -1007,6 +964,7 @@ class TP2CaptureWorkerExtension:
         n_req = int(st.get("n_requests") or 1)
         try:
             from verity_vllm.commit import binding as bd
+            from verity_vllm.query.manifest.bind import Binder, source_ports
         except Exception as e:  # noqa: BLE001
             return {"skipped": f"binding module unavailable: {e!r}"}
         com, rank = st["com"], int(st["rank"])
@@ -1018,7 +976,11 @@ class TP2CaptureWorkerExtension:
         if n_req > 1 and not step_rows:
             return {"skipped": f"B={n_req} > 1 but the rank's collector recorded no step_rows ({getattr(com, 'step_rows_why', None)}) -- no coverage verdict"}
         try:
-            bmap = bd.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, rank=rank, weight_registration=rc.weight_registration, request_rows=request_rows, name_bindings=bd.source_name_bindings(com.sources),
+            requests = [f"r{i}" for i in range(n_req)]
+            arrivals = {f"r{i}": int((st.get("arrivals") or {}).get(f"r{i}", 0)) for i in range(n_req)}
+            man_doc = st.get("manifest_doc") if st.get("required_manifest") else None
+            binder = Binder.of_manifest(man_doc, rank=rank, ports=source_ports(com.sources), arrivals=arrivals) if man_doc else None
+            bmap = bd.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, rank=rank, weight_registration=rc.weight_registration, request_rows=request_rows, binder=binder,
                                         collector={"committer": com.name, "layout": "chunk-leaf-v1", "retain": getattr(com, "retain", None), "windowed": bool(getattr(com, "windowed", False))})
             struct = bd.structure_of(com)
             tps = st.get("tps")
@@ -1038,8 +1000,6 @@ class TP2CaptureWorkerExtension:
                         struct["modules"].append({"op_path": site, "class": cls, "invocations": 1, "members": [mem]})
                     tp_members += 1
                 struct["tp_partial_sites"] = len(tps.sites)
-            requests = [f"r{i}" for i in range(n_req)]
-            arrivals = {f"r{i}": int((st.get("arrivals") or {}).get(f"r{i}", 0)) for i in range(n_req)}
             caps = {f"r{i}": int((st.get("caps") or {}).get(f"r{i}", 0)) for i in range(n_req)}
             horizon = max(arrivals[k] + caps[k] for k in caps) if any(caps.values()) else len(rc.steps)
             wl = {"program_digest": pd, "requests": requests, "steps": horizon, "ranks": [rank],
@@ -1051,12 +1011,10 @@ class TP2CaptureWorkerExtension:
             source = "structure(model modules x MEMBER_RULES + TP partial sites) x workload(requests, steps, rank)"
             if st.get("required_manifest"):
                 # [R15 TP-04] population of record = manbind's Program x canonical query manifest for THIS rank (rows with rank=r; the
-                # manifest's per-rank Program digest already checked at make); the structural population is recorded beside it
+                # manifest's per-rank Program digest already checked at make)
                 pop_all, man_hdr = bd.load_required_manifest(st["required_manifest"], pd, requests=requests, steps=horizon, ranks=[rank], arrivals=arrivals)
                 pop = [i for i in pop_all if int(i[7]) == rank]          # identity = (pd, rid, step, inv, op, member, (lo, hi), rank)
                 man_hdr["rows_for_rank"], man_hdr["rows_all_ranks"] = len(pop), len(pop_all)
-                man_hdr["structural_population_digest"], man_hdr["structural_population_n"] = bd.population_digest(pop_struct)
-                man_hdr["structural_coverage_ok"] = bd.coverage_check(pop_struct, bmap)["ok"]
                 man_hdr["program_digest_for_rank"] = ((st.get("manifest_doc") or {}).get("program_digest_per_rank") or {}).get(str(rank))
                 source = "required-manifest (manbind: Program(rank) x canonical query, rows with rank=r)"
                 if not pop:
@@ -1092,7 +1050,7 @@ class TP2CaptureWorkerExtension:
             return {"error": repr(e)[:400], "trace": traceback.format_exc()[-1200:]}
 
     def _tp2_sampled_replay(self, rc: Any) -> dict[str, Any]:
-        """[TP-08; manbind MAN-06 (`verity_vllm.check.replay.sampled_replay`, taken verbatim), coord M-0451 form (A), interface note M-0523]
+        """[TP-08; manbind MAN-06 (`verity_vllm.check.replay.sampled_replay`, taken verbatim)]
         The C2 OF RECORD on THIS rank (`pipeline.tp.rank_replay`): a seeded stratified sample of the rank Program's rows is re-evaluated
         from the rank's COMMITTED input members + the rank's registered weight SHARDS (the rank Program's weights params ARE the shards
         this worker holds) and compared bit-for-bit with the rank's committed output members; plus the exhaustive boundary linkage
@@ -1101,7 +1059,7 @@ class TP2CaptureWorkerExtension:
         root), REFUSED by name unless every loaded digest is a digest of record for this rank (the GP-01 workload_program's component
         list / the manifest's per-rank Program, both already checked against the Build by the driver).  Rows that read a peer rank's
         partial (`peers_*` inputs of AllReduce2 / AllGather2) have no evaluator and are counted by name -- never PASS by omission.  The
-        stratum key's rank label comes from manbind's population(rank=0) at v1 (M-0523 (1) pending); this record carries the true rank
+        stratum key's rank label comes from manbind's population(rank=0) at v1; this record carries the true rank
         beside it."""
         from verity_vllm.pipeline.tp import rank_replay as RR
 
@@ -1119,16 +1077,20 @@ class TP2CaptureWorkerExtension:
 
     def tp2_commit_xrank_dump(self, *, out_dir: str, seed_hex: str, pair: int, per_stratum: int = 2, max_rows: int = 16) -> dict[str, Any]:
         """[TP-12] THIS rank's picks for the cross-rank collective-output pass, from the COMMITTED bytes (`pipeline.tp.xrank_dump`),
-        each world-8 all-reduce under the route the engine's all-reduce switches take."""
+        each all-reduce on a captured route under the route the engine's all-reduce switches take on this GPU."""
+        import torch
+
         from verity_vllm.engine import env as engine_env
         from verity_vllm.pipeline.tp import xrank_dump as XD
-        from verity_vllm.program.registry.tp_allreduce import settings_of
+        from verity.ml.definitions.registry.tp_allreduce import device_of, settings_of
 
         settings = settings_of(self.vllm_config.parallel_config.disable_custom_all_reduce, engine_env.snapshot())
-        return XD.dump(self._tp2_commit, settings=settings, out_dir=out_dir, seed_hex=seed_hex, pair=pair, per_stratum=per_stratum, max_rows=max_rows)
+        p = torch.cuda.get_device_properties(torch.cuda.current_device())
+        return XD.dump(self._tp2_commit, settings=settings, out_dir=out_dir, seed_hex=seed_hex, pair=pair, per_stratum=per_stratum, max_rows=max_rows,
+                       device=device_of((p.major, p.minor), p.multi_processor_count))
 
     def tp2_commit_binding_map_dump(self, *, out_dir: str) -> dict[str, Any]:
-        """[R15 TP-04] write THIS rank's binding map of the last finalized run (identity -> commitment location, fixed at finalize before any
+        """Write THIS rank's binding map of the last finalized run (identity -> commitment location, fixed at finalize before any
         challenge) beside the driver's evidence (`binding_map_rank<r>.json`), so a reviewer can attack the map itself and not only its digest."""
         st = self._tp2_commit
         bmap = st.get("bmap")
@@ -1147,15 +1109,17 @@ class TP2CaptureWorkerExtension:
         import dataclasses
         try:
             return dataclasses.replace(rc, run_root=bytes.fromhex(claimed_root_hex))
-        except Exception:  # noqa: BLE001
+        except (TypeError, ValueError):
             import copy
             rc2 = copy.copy(rc)
             rc2.run_root = bytes.fromhex(claimed_root_hex)
             return rc2
 
-    def tp2_commit_open_population(self, *, k: int, salt: str, combined_root_hex: str, claimed_root_hex: str | None = None) -> dict[str, Any]:
-        """[BIND-01 x TP] openings drawn from THIS rank's EXPECTED population (bind's `challenge_identities`: Fiat-Shamir from the combined
-        run root + this rank's map digest + salt; forced late step + one per family), opened against the rank's retained tree and verified
+    def tp2_commit_open_population(self, *, k: int, salt: str, combined_root_hex: str, source_hex: str,
+                                   claimed_root_hex: str | None = None) -> dict[str, Any]:
+        """[BIND-01 x TP] openings drawn from THIS rank's EXPECTED population (bind's `challenge_identities` over the combined run root +
+        this rank's map digest + salt, from the pair's identities coin `source_hex`, drawn after that root: `pipeline.commit_coins`;
+        forced late step + one per family), opened against the rank's retained tree and verified
         with the production core against the CLAIMED root (the driver's commitment-vector entry for this rank).  An identity without a
         binding counts as a failed opening (fail-closed)."""
         import time as _t
@@ -1168,7 +1132,8 @@ class TP2CaptureWorkerExtension:
         if rc is None or not pop or not bmap:
             return {"rank": st["rank"], "n": 0, "verified": 0, "error": "no population / binding map on this rank"}
         rcv = self._claimed(rc, claimed_root_hex)
-        draws = bd.challenge_identities(pop, bmap, bytes.fromhex(combined_root_hex), int(k), salt=salt.encode())
+        draws = bd.challenge_identities(pop, bmap, bytes.fromhex(combined_root_hex), int(k), salt=salt.encode(), legacy=False,
+                                        source=bytes.fromhex(source_hex))
         unbound = [bd.identity_dict(i) for i, e, _l in draws if e is None]
         positions = [(int(i[2]), int(leaf)) for i, e, leaf in draws if e is not None]
         t0 = _t.perf_counter()
@@ -1206,7 +1171,7 @@ class TP2CaptureWorkerExtension:
         t_ver = _t.perf_counter() - t1
         return _jsonable({"rank": st["rank"], "n": len(ops), "verified": sum(ok), "generate_s": t_open, "verify_s": t_ver,
                           "claimed_root": rcv.run_root.hex(), "claimed_root_is_own": rcv is rc,
-                          "bytes_mean": statistics.fmean(len(o.value) + 32 * sum(1 for p in o.path if p is not None) for o in ops) if ops else None})
+                          "bytes_mean": statistics.fmean(len(o.value) + len(o.salt) + sum(len(p) for p in o.path if p is not None) for o in ops) if ops else None})
 
     # ------------------------------------------------------------------ [R15 TP-04 C2] value correspondence, per rank
 
@@ -1304,7 +1269,8 @@ class TP2CaptureWorkerExtension:
         self._tp2_prof = p
         return {"rank": int(_tp_facts(self)["tp"]["rank"]), "started": True, "pid": os.getpid()}
 
-    def tp2_profiler_stop(self, *, out_dir: str, keep_trace: bool = False) -> dict[str, Any]:
+    def tp2_profiler_stop(self, *, out_dir: str, keep_trace: bool = False, keep_ranks: list[int] | None = None) -> dict[str, Any]:
+        """The census of the profiled stretch; ``keep_trace``: the Kineto trace too, gzipped (only on ``keep_ranks`` when given)."""
         import torch
 
         from verity_vllm.properties import census
@@ -1324,7 +1290,7 @@ class TP2CaptureWorkerExtension:
         for e in evs:
             if e.get("ph") == "X" and e.get("cat") == "cpu_op":
                 cpu_ops[e.get("name", "")] = cpu_ops.get(e.get("name", ""), 0) + 1
-        if keep_trace:
+        if keep_trace and (keep_ranks is None or rank in keep_ranks):
             with open(tr, "rb") as fi, gzip.open(str(tr) + ".gz", "wb") as fo:
                 shutil.copyfileobj(fi, fo)
         tr.unlink()

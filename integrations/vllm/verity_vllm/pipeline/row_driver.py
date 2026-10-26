@@ -20,6 +20,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from collections.abc import Callable
@@ -27,7 +28,9 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import ROOT, TARGETS, RowConfig, RunEnv, row_execution, row_target
+from verity_vllm.engine import served
 from verity_vllm.pipeline import gpu_lease as GL
+from verity_vllm.program import prefix_plan as PP
 
 CLI = ("-m", "verity_vllm.pipeline.cli")
 SIGNUM = {"TERM": 15, "INT": 2, "HUP": 1}
@@ -112,6 +115,45 @@ def jit_cache(env: dict[str, str], tree: str | None = None, key: Callable[[], st
     env.update({"CUDA_CACHE_PATH": path, "CUDA_CACHE_MAXSIZE": str(4 << 30)})
 
 
+def _links(d: str, targets: dict[str, str]) -> bool:
+    try:
+        return sorted(os.listdir(d)) == sorted(targets) and all(os.readlink(os.path.join(d, n)) == t for n, t in targets.items())
+    except OSError:
+        return False
+
+
+def cublas_names(env: dict[str, str], py: str, root: str | None = None) -> str | None:
+    """Put first on ``env``'s ``LD_LIBRARY_PATH`` a directory whose ``libcublas.so`` and ``libcublasLt.so`` are links to the cuBLAS of
+    ``py``'s venv (``site-packages/nvidia/*/lib/<name>.so.N``, the library torch loads), and return it.  vLLM's flashinfer autotune
+    (its cache's metadata, `flashinfer.autotuner._get_cublas_version`) loads cuBLAS by the unversioned name, which a wheel doesn't
+    ship, so without it ld.so.cache gives a node's system CUDA's and the stage maps two cuBLAS: the route pin
+    (`check.replay.driver.cublas_versions`) reads exactly one.  The loader reads ``LD_LIBRARY_PATH`` once, when a process starts, so
+    this is the stages' environment, which every rank worker vLLM spawns inherits.  The directory is ``root`` (default: the temp dir)
+    named for the links' targets, so every stage on one venv has the same environment.  None, and ``env`` as it was, when the venv
+    has no cuBLAS wheel; ValueError when it has more than one library of a name."""
+    site = os.path.join(glob.escape(os.path.dirname(os.path.dirname(py))), "lib", "python*", "site-packages", "nvidia", "*", "lib")
+    found = {f"{n}.so": sorted({os.path.realpath(p) for p in glob.glob(os.path.join(site, f"{n}.so.*"))}) for n in ("libcublas", "libcublasLt")}
+    if not any(found.values()):
+        return None
+    if any(len(f) != 1 for f in found.values()):
+        raise ValueError(f"not one cuBLAS of each name in {py}'s venv: {found}")
+    targets = {n: f[0] for n, f in found.items()}
+    d = os.path.join(root or tempfile.gettempdir(), "verity-cublas-names-" + hashlib.sha256(json.dumps(targets).encode()).hexdigest()[:16])
+    if not _links(d, targets):
+        tmp = tempfile.mkdtemp(prefix=".verity-cublas-names-", dir=os.path.dirname(d))
+        for n, t in targets.items():
+            os.symlink(t, os.path.join(tmp, n))
+        try:
+            os.rename(tmp, d)
+        except OSError:
+            shutil.rmtree(tmp)
+        if not _links(d, targets):
+            raise ValueError(f"{d} holds other than the links {targets}")
+    rest = [p for p in env.get("LD_LIBRARY_PATH", "").split(":") if p and p != d]
+    env["LD_LIBRARY_PATH"] = ":".join([d, *rest])
+    return d
+
+
 class Row:
     """One row's run: ``row`` id, checkpoint ``role``, HF ``repo`` and ``rev``, the requested ``stages``.
 
@@ -148,11 +190,16 @@ class Row:
         env = dict(self.env.environ)
         env.update({"VERITY_TREE": self.tree, "VERITY_CORE": core_s, "VERITY_RESEARCH": research_s,
                     "PYTHONPATH": f".:{core_s}:{research_s}", "HF_HOME": self.env.hf_home, "HF_HUB_OFFLINE": "1",
-                    "VLLM_BATCH_INVARIANT": "1", "TOKENIZERS_PARALLELISM": "false", "CUDA_HOME": self.env.cuda_home})
+                    **served.execution_env(self.execution()), "TOKENIZERS_PARALLELISM": "false", "CUDA_HOME": self.env.cuda_home})
         env.update(pins)
         jit_cache(env, self.tree, lambda: jit_key(self.py, env["CUDA_HOME"], self.row, self.tree) if self.bi_eager() else None)
         if GL.leased(env):
             GL.hide_devices(env)
+        try:
+            cublas_names(env, self.py)
+        except (OSError, ValueError) as e:
+            print(f"PRECHECK_FAIL_CUBLAS_NAMES: {e}", file=sys.stderr)
+            raise Stop(3)
         self.child_env = env
         if not os.access(self.py, os.X_OK):
             print(f"no python at {self.py} (run verity_vllm/ops/pod_bootstrap.sh first)", file=sys.stderr)
@@ -168,15 +215,28 @@ class Row:
         """The row's config, its file in the tree that runs."""
         return RowConfig.load(self.path(self.wl))
 
-    def bi_eager(self) -> bool:
-        """The row's execution is ``bi-eager``, the only one the template gives JIT caches: its workload's ``execution`` (or
-        ``sweep.execution``), else its id's last token.  A compiled row records cubins its Triton cache holds
-        (`code_identity.loaded_code_objects`), so it never shares one."""
+    def refuse_unserved_engine(self) -> None:
+        """Refuse a tensor-parallel row whose file declares prefix caching: its capture, Match and Commit engines run with it off and a
+        rank Program (`vllm_meta.with_peers`) takes no cached prefix, so the row's record would name a serve it never ran.  A
+        single-GPU row serves it: a warm request's Program reads its cached rows as its `prefix` input (`program.prefix_plan`)."""
+        if self.config().engine.args.get("enable_prefix_caching") is True:
+            self.verdict("precheck", "FAIL", "engine.args.enable_prefix_caching is true on a tensor-parallel row: its stages serve with prefix "
+                                             "caching off and a rank Program takes no cached prefix, so the record would name a serve it never ran")
+            raise Stop(3)
+
+    def execution(self) -> str | None:
+        """The row's execution label: its workload's ``execution`` (or ``sweep.execution``), else its id's last token; None without
+        a workload file."""
         doc = _read_json(self.path(self.wl))
         if not isinstance(doc, dict):
-            return False
+            return None
         sw = doc.get("sweep") if isinstance(doc.get("sweep"), dict) else {}
-        return (doc.get("execution") or sw.get("execution") or row_execution(self.row)) == "bi-eager"
+        return doc.get("execution") or sw.get("execution") or row_execution(self.row)
+
+    def bi_eager(self) -> bool:
+        """The row's execution is ``bi-eager``, the only one the template gives JIT caches.  A compiled row records cubins its Triton
+        cache holds (`code_identity.loaded_code_objects`), so it never shares one."""
+        return self.execution() == "bi-eager"
 
     def export_commit(self) -> str:
         """The shipped tree's commit (``EXPORT.json``), "" when absent."""
@@ -353,11 +413,28 @@ class Row:
     def target_family(self, *extra: str, out: str) -> tuple[int, str]:
         """The target-family preflight (``target-family``): the row id's device class, the declared target and the device
         (or the Build that came out) are one family.  Its line goes to row.log."""
-        rc, line = self.output(self.cli("target-family", "--row", self.row, "--workload", self.wl, "--stages", self.stages, *extra,
-                                        "--out", out))
+        rc, line = self.output(self.cli("target-family", "--row", self.row, "--workload", self.wl, "--stages", self.stages,
+                                        "--match-phase", self.cm.match_phase, *extra, "--out", out))
         with open(f"{self.d}/row.log", "a") as f:
             f.write(line + "\n")
         return rc, line
+
+    def launch_args(self, lp: int, t: int, C: int = 0) -> list[str] | None:
+        """A B >= 2 request Program is built under its launch context (``launch-context``; `C` a warm request's cached rows); None =
+        the context did not read, which FAILS that shape's Build (it is not "no context")."""
+        if self.B <= 1:
+            return []
+        name = PP.shape_name(PP.shape(lp, t, C))
+        err = f"{self.d}/launch_context_{name}.err"
+        with open(err, "w") as f:
+            r = subprocess.run(self.cli("launch-context", self.wl, str(lp), str(t), *([str(C)] if C else [])), stdout=subprocess.PIPE,
+                               stderr=f, text=True, cwd=self.tree, env=self.child_env)
+        if r.returncode != 0:
+            self.log(f"Build FAIL shape {name}: launch_context rc={r.returncode} -- {open(err, errors='replace').read().replace(chr(10), ' ')[-300:]}")
+            return None
+        os.remove(err)
+        lc = r.stdout.rstrip("\n")
+        return ["--launch-context", *lc.split("\n")] if lc else []
 
     def call_boundaries(self, to: int | str, cmd: list[str] | None = None) -> None:
         """After a PASS Build: the row stops (exit 21, no Match, no Commit) unless every `call_boundaries` identity of its manifest has

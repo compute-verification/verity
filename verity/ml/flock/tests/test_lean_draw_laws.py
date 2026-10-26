@@ -1,14 +1,16 @@
 """Draw laws (PROTOCOL.md §16.15, D12): `verify` refuses a session drawn by a law no soundness claim draws by (a bernoulli
-draw, a work draw with or without a closure, a subset draw without `--zk`) at setup, whatever flags it holds, and passes a
-stratified draw, and under `--zk` a subset draw, on to the session's checks. The statement's form is checked last, once every
-check has passed, and a session without a draw is refused after that. The sessions are the registered-reads set's honest
+draw, a work draw with or without a closure, a subset draw without `--zk` at public outputs) at setup, whatever flags it
+holds, and passes a stratified draw, and under `--zk` a subset draw, on to the session's checks. The statement's form is
+checked last, once every check has passed, and a session without a draw is refused after that. The sessions are the registered-reads set's honest
 session (`FIXTURE`, vectors.json's set 16) with its record's draw replaced: its statement is the corpus's one whose program
 and partition a work draw's law derives from, so a work draw sets up there, where any other statement refuses it at setup
 before its law is read. A draw that passes the law check sets up and meets the session's checks, which the edited record
 fails at S2: its Hello is the undrawn session's, and under `--zk` not a `--zk` session's. Its public file has shared rows,
 which the form check refuses, so the session as recorded, without a draw and without `--zk`, passes every check and meets
-that refusal. Each draw is its own setup (about 10 s), so the module is slow; it is the only test that reaches the law check
-with a work draw."""
+that refusal. Upstream's seed-injection build proved it, with no zk patch, so its plain files are upstream's form, without
+the `zk_level0 = None` tag the deployed prover writes, and the run without `--zk` reads them under `--upstream-plain`
+(PROTOCOL.md §8.1). Each draw is its own setup (about 10 s), so the module is slow; it is the only test that reaches the law
+check with a work draw."""
 from __future__ import annotations
 
 import json
@@ -19,6 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
+from verity_flock.record_text import session_text
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
@@ -42,7 +45,7 @@ def verdicts(tmp_path_factory):
     import ci
 
     try:
-        root = ci.fetch(FIXTURE, tmp_path_factory.mktemp("store"))
+        root = ci.fetch_sessions(FIXTURE, tmp_path_factory.mktemp("store"))
     except (subprocess.CalledProcessError, OSError) as e:
         pytest.skip(f"the evidence store is not reachable: {e}")
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
@@ -67,14 +70,14 @@ def verdicts(tmp_path_factory):
     for name, law in draws.items():
         s = shutil.copytree(root / "vectors" / "honest", d / name)
         rec = json.loads((s / "session.json").read_text())
-        (s / "session.json").write_text(json.dumps({**rec, "unit_draw": law}))
+        (s / "session.json").write_text(session_text({**rec, "unit_draw": law}))
         sessions[name] = s
     flags = [*bound, "--registered", str(root / "registered" / "own.json"), *work, "--stratified", "2",
              "--closure", str(d / "closure.json")]
 
     def verify(zk: bool, names: list[str]) -> dict:
         p = subprocess.run([str(BIN), "verify", "--statement", STATEMENT, "--circuit", str(root / "stage" / "circuit.txt"),
-                            "--public", str(root / "registered" / "pub-8.bin"), *flags, *(["--zk"] if zk else []),
+                            "--public", str(root / "registered" / "pub-8.bin"), *flags, "--zk" if zk else "--upstream-plain",
                             "--session", *(str(sessions[n]) for n in names)], capture_output=True, text=True, check=False)
         lines = [json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
         assert len(lines) == len(names) and p.returncode == 1, p.stderr

@@ -17,6 +17,15 @@ GEMM_PINS = {"kernel": "vllm.model_executor.determinism.batch_invariant.matmul_k
              "constexprs": {"BLOCK_SIZE_M": 128, "BLOCK_SIZE_N": 128, "BLOCK_SIZE_K": 64, "GROUP_SIZE_M": 8,
                             "A_LARGE": False, "B_LARGE": False, "C_LARGE": False, "HAS_BIAS": False},
              "num_warps": 8, "num_stages": 3, "NUM_SMS": DEFAULT_TARGET.num_sms, "dtype": "torch.bfloat16"}
+#: vLLM d9105ea80's fused q / kv RMSNorm (DeepSeek-V4's attention), served by default; its BLOCK_SIZE and num_warps are the wrapper's
+#: functions of the sizes (`fused_qk_rmsnorm.fused_q_kv_rmsnorm`), checked by the rule
+QKV_RMS_PINS = {"kernel": "vllm.models.common.ops.fused_qk_rmsnorm._fused_q_kv_rmsnorm_kernel",
+                "src_sha256": "8e806c228155459227ef938d093f41d04022ad494cdf1adb61835faa6869547b"}
+#: vLLM d9105ea80's sqrtsoftplus router (DeepSeek-V4's scored MoE layers), served by default; `registry.dsv4_moe` reads its PTX at
+#: E = 384 without the vision bias, the launch `dsv4_topk` makes (BLOCK_N the next power of two, one warp)
+DSV4_TOPK_PINS = {"kernel": "vllm.model_executor.layers.fused_moe.router.dsv4_topk._dsv4_topk_kernel",
+                  "src_sha256": "d9e62eef57222b9019903967f6e9d25f94ce0224714808ec5db439aad9c68d38",
+                  "constexprs": {"NUM_EXPERTS": 384, "BLOCK_N": 512, "HAS_VL": False}, "num_warps": 1}
 RMS_PINS = {"kernel": "vllm.model_executor.determinism.batch_invariant._rms_norm_kernel",
             "src_sha256": "aa15c9b0f34d3f78b63bc21b5373d1edca7a063b17ecc45ee1468e7b803f2524",
             "constexprs": {"BLOCK_SIZE": 1024, "HAS_WEIGHT": True}, "num_warps": 4, "dtype": "torch.bfloat16"}
@@ -37,7 +46,7 @@ MEAN_PINS = {"kernel": "vllm.model_executor.determinism.batch_invariant.mean_ker
 
 
 def active_gemm_target():
-    """[R13 ampere] The registered GEMM specialization of the ACTIVE target (`TargetProfile.gemm_target()` of the profile the construction
+    """The registered GEMM specialization of the ACTIVE target (`TargetProfile.gemm_target()` of the profile the construction
     applied, else the default profile's): the one source of the launch geometry a GEMM node must show (`GemmTarget.launch_config`), of the
     Definition's k16 step and of the tuned-table identity the manifest records. Raises `gemm_targets.UnregisteredGemmTarget` for a target
     without one (Hopper/Blackwell/untested capabilities): the GEMM rule then refuses every launch (`numerics_unregistered`)."""

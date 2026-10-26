@@ -144,7 +144,7 @@ def test_the_triton_mmav2_step_is_two_chained_hopper_hmma_k16_steps() -> None:
     from verity.ml.circuits.silicon.total_fp8 import MMAV2_E4M3_K_ORDER
 
     step = P.HopperE4m3MmaV2Dot32
-    assert step.id == "HopperE4m3MmaV2Dot32_v1" and REGISTRY[step.id] is step and step.conformance.startswith("model-untested")
+    assert step.id == "HopperE4m3MmaV2Dot32_v1" and REGISTRY[step.id] is step and step.conformance.startswith("exact-model-tested")
     assert step.signature() == P.HopperE4m3QgmmaDot32.signature()
     assert sorted(MMAV2_E4M3_K_ORDER) == list(range(32)) and MMAV2_E4M3_K_ORDER[:4] == (0, 1, 4, 5)
     S0, S1 = [k for k in range(32) if k % 4 < 2], [k for k in range(32) if k % 4 >= 2]

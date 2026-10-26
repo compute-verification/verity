@@ -47,8 +47,8 @@ theorem sessionP_reps (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg
           (.ok (p₁, t₁), bodies) ∧
         r.2 = #[FlockVBridge.Family.encodeProof (shapeOf st sch e.size) p₀,
           FlockVBridge.Family.encodeProof (shapeOf st sch e.size) p₁] ∧
-        r.1 = (recordObj spec (Claims.hOf H) #[flat cm.cap] (ptsOf spec (coinOf (resp 0))) #[t₀.rounds, t₁.rounds]
-          r.2).compress := by
+        r.1 = printJ (recordObj spec (Claims.hOf H) #[flat cm.cap] (ptsOf spec (coinOf (resp 0)))
+          #[t₀.rounds, t₁.rounds] r.2) := by
   unfold sessionP at hrun
   obtain ⟨schs, l1, hA, hrun⟩ := go_bind_ok hrun
   have hschs := Ret.go (Ret.mapM_array _ (fun st' sch => fast100 st'.m = some sch) _ fun a _ => by
@@ -230,8 +230,8 @@ theorem Rs.prefix_tEnd {tr : Trace} {claims : Array Claim} {cs : Rs.Coins} (t : 
 transcript's start, returns the decoded proof; the recorded stream is its rounds as the decoder reads them back, each
 of its rounds retains its bytes, and the rep's level-0 commitment is a `commitP` of the schedule's level `0`. -/
 theorem _root_.FlockComplete.Run.walk {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
-    (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOk H rel) (hP : JsonRT.ProverOk H rel)
-    (hR : JsonRT.RepShaped H rel) (o : Run H rel) {r : ℕ} (hr : r < 2) :
+    (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
+    {r : ℕ} (hr : r < 2) :
     ∃ (tbl : Array F128) (cm0 : Commit) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
       (l : Array Claims.Msg) (t' : Transcript) (l' : Array Claims.Msg),
       l.size = repStart o.spec o.sts (2 * 0 + r) ∧
@@ -243,7 +243,7 @@ theorem _root_.FlockComplete.Run.walk {H : Claims.Msg → Claims.Msg} {rel : Rea
       ∃ s0, commitP o.hs o.tabs[0]!.merkle ((o.sch 0).levels.getD 0 default) tbl s0 = .ok cm0 := by
   obtain ⟨st, hst, hsp, -, -⟩ := o.table
   have ht : o.spec.tables = #[st.tags.table] := by rw [hsp]; rfl
-  obtain ⟨hct, hsig, hdraw, -⟩ := hS o.toCase
+  obtain ⟨hct, hsig, hdraw, -⟩ := JsonRT.stmtOk S o.toCase
   obtain ⟨hC, hRk⟩ := hP o.toCase st (by rw [hst]; simp)
   have htabs : o.tabs = #[Setup.ofCircuit st] := by simp [Run.tabs, tabsOf, hst]
   have htab0 : o.tabs[0]! = Setup.ofCircuit st := by rw [htabs]; rfl
@@ -290,7 +290,7 @@ theorem _root_.FlockComplete.Run.walk {H : Claims.Msg → Claims.Msg} {rel : Rea
       decodeProof (shapeOf o.tabs[0]! (o.sch 0) (o.extras 0).size)
         (FlockVBridge.Family.encodeProof (shapeOf (Setup.ofCircuit st) sch e.size) p) = .ok p := by
     intro p salt nonce d l t' l' h
-    have hR' := hR o.toCase st sch cm e hst hsch _ hcm he salt nonce d
+    have hR' := JsonRT.repShaped h64 o.toCase st sch cm e hst hsch _ hcm he salt nonce d
     have h1 := JsonRT.Ret.go hR' h
     rw [hsch0, hext0, htab0]
     exact FlockVBridge.Family.decodeProof_encodeProof _ _ h1
@@ -349,11 +349,11 @@ theorem _root_.FlockComplete.Run.tabs_size_one {H : Claims.Msg → Claims.Msg}
 rep's first send on and its own transcript's start, returns the decoded proof, and the recorded stream carries its
 rounds and holds as many. -/
 theorem _root_.FlockComplete.Run.repWalk {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
-    (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOk H rel) (hP : JsonRT.ProverOk H rel)
-    (hR : JsonRT.RepShaped H rel) (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) {r : ℕ} (hr : r < 2) :
+    (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
+    {i : ℕ} (hi : i < o.tabs.size) {r : ℕ} (hr : r < 2) :
     RepWalk o i r := by
   obtain rfl : i = 0 := by have := o.tabs_size_one; omega
-  obtain ⟨tbl, cm0, salt, nonce, l, t', l', hl, hrun, hst, hby, s0, h0⟩ := o.walk S h64 hS hP hR hr
+  obtain ⟨tbl, cm0, salt, nonce, l, t', l', hl, hrun, hst, hby, s0, h0⟩ := o.walk S h64 hP hr
   refine ⟨tbl, cm0, s0, salt, nonce, l, t', l', h0, hl, hrun, ?_, by rw [hst, Array.size_map]⟩
   rw [hst]
   intro j hj _
@@ -366,10 +366,10 @@ theorem _root_.FlockComplete.Run.repWalk {H : Claims.Msg → Claims.Msg} {rel : 
 the prover's, the statement's circuit fold returns, and the recorded stream carries the prover's rounds through each
 phase (`ZcAt`, `LcAt`, `RsAt`), and the model's Ligerito rounds, as many as it records (`LgAt`, `LgCount`). -/
 theorem _root_.FlockComplete.Run.walkAt {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
-    (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOk H rel) (hP : JsonRT.ProverOk H rel)
-    (hR : JsonRT.RepShaped H rel) (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) {r : ℕ} (hr : r < 2) :
+    (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
+    {i : ℕ} (hi : i < o.tabs.size) {r : ℕ} (hr : r < 2) :
     ZcAt o i r ∧ LcAt o i r ∧ RsAt o i r ∧ LgAt o i r ∧ LgCount o i r := by
-  obtain ⟨tbl, cm0, -, salt, nonce, l, t', l', -, hl, hrun, hag, hsz⟩ := o.repWalk S h64 hS hP hR hi hr
+  obtain ⟨tbl, cm0, -, salt, nonce, l, t', l', -, hl, hrun, hag, hsz⟩ := o.repWalk S h64 hP hi hr
   obtain rfl : i = 0 := by have := o.tabs_size_one; omega
   have hm : 14 ≤ o.tabs[0]!.m := by have := (o.tab_m hi).2.1; omega
   obtain ⟨full, hfold⟩ := repP_fold o.resp _ _ _ _ _ _ _ _ _ hm _ l hrun
@@ -393,57 +393,55 @@ theorem _root_.FlockComplete.Run.walkAt {H : Claims.Msg → Claims.Msg} {rel : R
   · rw [hrs]
     rfl
 
-/-- **Flock's completeness at the deployed plain verifier**, at the deployed relation (`Readable.relation`), from the
-named premises: the record's JSON (`JsonSpec`), the oracle's 64-byte outputs (`Out64`), what the record needs of the
-statement (`StmtOk`), the honest reps returning (`ProverRuns`) on proofs of the verifier's shape (`RepShaped`), the
-printed record's length (`RecordFits`), and Ligerito's final identity at every rep (`LgFinal`). The prover's pieces
-(`ProverOk`, `proverOk`) and the Merkle schemes' digest widths (`SchemeWidths`, `schemeWidths`) follow from `Out64`, and
-the session walk (`Run.walkAt`, `Run.repWalk`) aligns every rep. -/
-theorem complete_plain (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H)
-    (hS : JsonRT.StmtOk H Readable.relation) (hPR : JsonRT.ProverRuns H Readable.relation)
-    (hR : JsonRT.RepShaped H Readable.relation) (hF : JsonRT.RecordFits H Readable.relation)
+/-- **Flock's completeness at the deployed plain verifier**, at the deployed relation (`Readable.relation`) and the
+record's error (`δc H`, `Complete.Ready`), from the named premises: the record's JSON (`JsonSpec`), the oracle's
+64-byte outputs (`Out64`), and Ligerito's final identity at every rep (`LgFinal`). What the record needs of the
+prover's pieces (`ProverOk`, `proverOk`) and the Merkle schemes' digest widths (`SchemeWidths`, `schemeWidths`) follow
+from `Out64`, and the session walk (`Run.walkAt`, `Run.repWalk`) aligns every rep. -/
+theorem complete_plain (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H)
     (hfin : LgFinal H Readable.relation) :
-    Claims.Flock.Complete H (deployPlain Readable.relation) honestP (δc H) := by
+    Claims.Flock.Complete H (deployPlain Readable.relation) := by
   have hP : JsonRT.ProverOk H Readable.relation := proverOk h64
   have hW : SchemeWidths H Readable.relation := schemeWidths h64
   have w : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2,
       ZcAt o i r ∧ LcAt o i r ∧ RsAt o i r ∧ LgAt o i r ∧ LgCount o i r :=
-    fun o _ hi _ hr => o.walkAt S h64 hS hP hR hi hr
+    fun o _ hi _ hr => o.walkAt S h64 hP hi hr
   have hzc := fun o i hi r hr => (w o i hi r hr).1
   have hlc := fun o i hi r hr => (w o i hi r hr).2.1
   have hrs := fun o i hi r hr => (w o i hi r hr).2.2.1
   have hw : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, RepWalk o i r :=
-    fun o _ hi _ hr => o.repWalk S h64 hS hP hR hi hr
-  have hD := JsonRT.repDecodes_goal S h64 hS hP hR
+    fun o _ hi _ hr => o.repWalk S h64 hP hi hr
+  have hD := JsonRT.repDecodes_goal S h64 hP
   exact complete_of_goals H Readable.relation
-    { session := JsonRT.sessionRuns_goal hS hPR
+    { session := JsonRT.sessionRuns_goal S
       sends := sendCount_goal H _
       linkFirst := linkFirst_goal H h64 _
-      finalFits := JsonRT.finalFits_goal S h64 hS hP hR hF
-      draw := JsonRT.drawMatches_goal S h64 hS hP
-      liveReads := JsonRT.liveReads_goal S h64 hS hP
-      rootB := JsonRT.custodyRootB_goal S h64 hS hP
-      publicsLink := JsonRT.custodyPublics_goal S h64 hS hP
-      points := JsonRT.custodyPoints_goal S h64 hS hP
-      count := JsonRT.custodyCount_goal S h64 hS hP
-      rounds := JsonRT.custodyRounds_goal S h64 hS hP
+      finalFits := JsonRT.finalFits_goal S h64 hP
+      draw := JsonRT.drawMatches_goal S h64 hP
+      liveReads := JsonRT.liveReads_goal S h64 hP
+      canonical := JsonRT.canonical_goal S h64 hP
+      rootB := JsonRT.custodyRootB_goal S h64 hP
+      publicsLink := JsonRT.custodyPublics_goal S h64 hP
+      points := JsonRT.custodyPoints_goal S h64 hP
+      count := JsonRT.custodyCount_goal S h64 hP
+      rounds := JsonRT.custodyRounds_goal S h64 hP
       tables := tables_goal H _
-      decodes := JsonRT.decodes_goal S h64 hS hP
-      publics := JsonRT.publics_goal S h64 hS hP
+      decodes := JsonRT.decodes_goal S h64 hP
+      publics := JsonRT.publics_goal S h64 hP
       schedules := schedules_goal H _
       proofCount := proofCount_goal H _
-      proofList := JsonRT.proofList_goal S h64 hS hP
-      proofDigests := JsonRT.proofDigests_goal S h64 hS hP
-      repStream := JsonRT.repStream_goal S h64 hS hP
-      repExtras := JsonRT.repExtras_goal S h64 hS hP
+      proofList := JsonRT.proofList_goal S h64 hP
+      proofDigests := JsonRT.proofDigests_goal S h64 hP
+      repStream := JsonRT.repStream_goal S h64 hP
+      repExtras := JsonRT.repExtras_goal S h64 hP
       repDecodes := hD
-      repParams := JsonRT.repParams_goal S h64 hS hP hR
+      repParams := JsonRT.repParams_goal S h64 hP
       zerocheck := zerocheck_goal' H hzc
       lincheck := lincheck_goal' H hzc hlc (lcAlgebra H)
       ringSwitch := ringSwitch_goal' H hzc hlc (lcAlgebra H) hrs (rsAlgebra H)
       ligerito := ligerito_goal_walk H _ (traceR1CS H) hzc hlc (lcAlgebra H) hrs (rsAlgebra H) hD hw hW hfin
       consumed := consumed_goal_walk H _ (traceR1CS H) hzc hlc (lcAlgebra H) hrs (rsAlgebra H) hD hw hW hfin
-      capCommitted := JsonRT.capCommitted_goal S h64 hS hP hR }
+      capCommitted := JsonRT.capCommitted_goal S h64 hP }
 
 end FlockComplete.Replay
 

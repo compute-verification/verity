@@ -1,10 +1,12 @@
 """The GLM-5.3 and DeepSeek-V4-Pro bf16 GEMM capture without a GPU: its comparison jobs over operands and words made here (the
 kernels' words stood in for by the models), a dotprod whose K loop ends in a tail tile and a ragged round, a flipped word found and
 located, the dotprod's contraction decided by the stress rows, the gate's kernel record at each model's gate, each model's cases,
-the absorb weights' served layout, the switch's environment, the bindings, the verdict per case and per model, the second process
+the absorb weights' served layout, the environment and the configuration read back, vLLM's own process groups, the bindings, the verdict per case and per model, the second process
 under the default configuration, and `main` end to end (the GPU run is `tests/properties/glm53_bf16_gemm_capture_gpu.py --out ...`
 on an H200)."""
 from __future__ import annotations
+
+__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
 
 import copy
 import json
@@ -15,8 +17,9 @@ import pytest
 import torch
 
 from tests.properties import glm53_bf16_gemm_capture_gpu as X
-from verity_vllm.program.registry import bf16_gemm_check as BC
-from verity_vllm.program.registry import mla_check as MK
+from verity_vllm.engine.env import SERVED_DEFAULTS
+from verity.ml.definitions.registry import bf16_gemm_check as BC
+from verity.ml.definitions.registry import mla_check as MK
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 DOTPROD = {"kind": "dotprod", "BS": 32, "VEC": 8}
@@ -179,14 +182,36 @@ def test_the_default_cublas_split_counts_are_pinned_by_shape_and_m() -> None:
     assert [BC.default_cublas_split_k("linear", M, 6144, 160) for M in X.LINEAR_M] == [4] * len(X.LINEAR_M)
     assert [BC.default_cublas_split_k("linear", M, 7168, 64) for M in X.LINEAR_M] == [5] * len(X.LINEAR_M)
     assert BC.default_cublas_split_k("f32out", 256, 7168, 2048) is None       # c4 M256 is the non-split kernel
+    assert [BC.default_cublas_split_k("f32out", M, 7168, 2048) for M in (1, 4, 16, 128)] == [3, 3, 3, 2]
+    assert [BC.default_cublas_split_k("f32out", M, 7168, 1024) for M in X.LINEAR_M] == [5, 5, 5, 3, 2]
+    assert [BC.default_cublas_split_k("f32out", M, 7168, 512) for M in X.LINEAR_M] == [5, 5, 5, 3, 3]
+
+
+def test_the_route_table_covers_every_decode_batch_once() -> None:
+    """Each shape's runs tile its scanned M range (the router's from 17, past the ll_bf16 tier) with no gap or overlap."""
+    top = BC.CUBLAS_ROUTES["m_max"]
+    for key, runs in BC.CUBLAS_ROUTES["routes"].items():
+        lo = 17 if key.startswith("router") else 1
+        assert [r[0] for r in runs] == [lo] + [r[1] + 1 for r in runs[:-1]] and runs[-1][1] == top, key
+        assert all(r[0] <= r[1] and (r[2] is None or 1 < r[2] <= int(key.split()[1]) // 16) for r in runs), key
 
 
 def test_the_default_cublas_route_does_not_confuse_unrecorded_with_non_split() -> None:
     for M in X.LINEAR_M:
         assert BC.default_cublas_route("linear", M, 6144, 160) == ("splitk", {"SPLIT_K": 4})
-        assert BC.default_cublas_route("linear", M, 6144, 19360) == ("non_split", {})
-    assert BC.default_cublas_route("linear", 5, 6144, 19360) is None
+        assert BC.default_cublas_route("linear", M, 6144, 19360) == BC.default_cublas_route("linear", M, 7168, 16160) == ("non_split", {})
+    assert BC.default_cublas_route("linear", 393, 6144, 160) == ("splitk", {"SPLIT_K": 3})
+    assert BC.default_cublas_route("linear", BC.CUBLAS_ROUTES["m_max"] + 1, 6144, 19360) is None
+    assert BC.default_cublas_route("router", 16, 6144, 256) is None
     assert BC.default_cublas_route("linear", 1, 6144, 161) is None
+    assert BC.default_cublas_route("f32out", 256, 7168, 2048) == ("non_split", {})
+    assert BC.default_cublas_route("f32out", 128, 7168, 2048) == ("splitk", {"SPLIT_K": 2})
+
+
+def test_scan_routes_merges_adjacent_regimes_of_one_model() -> None:
+    regimes = [{"m0": 1, "m1": 3, "split": 4}, {"m0": 4, "m1": 9, "split": 4}, {"m0": 10, "m1": 10, "split": None},
+               {"m0": 11, "m1": 12, "split": 4}]
+    assert X.scan_routes(regimes) == [[1, 9, 4], [10, 10, None], [11, 12, 4]]
 
 
 def test_the_fit_reads_the_split_count_out_of_the_words() -> None:
@@ -289,12 +314,16 @@ def test_scan_analyze_reads_each_regimes_model_out_of_the_kept_words(monkeypatch
     churn = X.scan_analyze(op, [k("a", True)] * 9, [BC.cublas_splitk_rows(xw, ww, s, out="bf16") for s in range(2, 11)])
     assert len(churn["classes"]) == 9 > X.MAX_CLASSES                           # more models than the family should ever serve
     assert not churn["ok"] and churn["sweep"] == [X.ENVELOPE]
+    monkeypatch.setattr(X, "SCAN_M", range(1, 4))                               # below SCAN_FIT_ROWS a launch keeps only its M rows
+    small = X.scan_analyze(op, [k("a", True), k("a", True), k("c", False)], [split2[:1], split2[:2], op["serial"][:3]])
+    assert small["ok"] and [(r["m0"], r["m1"], r["split"]) for r in small["regimes"]] == [(1, 1, 2), (2, 2, 2), (3, 3, None)]
 
 
 def test_the_served_split_prefers_the_pin_and_falls_back_to_the_scan() -> None:
+    top = BC.CUBLAS_ROUTES["m_max"]
     assert X.served_split("router", 256, 6144, 256, scan_split=9) == 3         # pinned M: the pin wins
-    assert X.served_split("router", 300, 6144, 256, scan_split=2) == 2         # past the pins: the scan's fit
-    assert X.served_split("router", 300, 6144, 256) is None                    # neither: the launch fails visibly
+    assert X.served_split("router", top + 1, 6144, 256, scan_split=2) == 2     # past the pins: the scan's fit
+    assert X.served_split("router", top + 1, 6144, 256) is None                # neither: the launch fails visibly
 
 
 def test_the_default_operand_dump_keeps_reduction_routes_and_deduplicates_weights(tmp_path) -> None:
@@ -383,13 +412,82 @@ def test_the_absorb_weights_are_the_served_views() -> None:
     assert uk_t[h, p, ll] == kv_b[h * (P + V) + p, ll] and uv[h, ll, v] == kv_b[h * (P + V) + P + v, ll]
 
 
-def test_the_switch_environment_is_set_or_cleared(tmp_path, monkeypatch) -> None:
-    for k in (*X.SWITCH_ENV, "VLLM_BATCH_INVARIANT", "TRITON_CACHE_DIR", "VLLM_ENABLE_V1_MULTIPROCESSING"):
-        monkeypatch.setenv(k, "x")
-    env = X.environment(False, tmp_path)
-    assert {k: env[k] for k in X.SWITCH_ENV} == X.SWITCH_ENV and env["VLLM_BATCH_INVARIANT"] == "0"
-    env = X.environment(True, tmp_path)
-    assert not set(X.SWITCH_ENV) & set(env) and all(k not in os.environ for k in X.SWITCH_ENV)
+def _stub_envs(monkeypatch, batch_invariant: bool = False) -> None:
+    import sys
+    import types
+
+    envs = types.ModuleType("vllm.envs")
+    envs.VLLM_BATCH_INVARIANT = batch_invariant
+    monkeypatch.setitem(sys.modules, "vllm", sys.modules.get("vllm") or types.ModuleType("vllm"))
+    monkeypatch.setitem(sys.modules, "vllm.envs", envs)
+
+
+def _inherit(monkeypatch) -> dict[str, str]:
+    """Every served-default switch and the variant's workspace variables inherited set, the run's own variables touched first so
+    the test undoes what `environment` sets."""
+    inherited = {**{k: "0" for k in SERVED_DEFAULTS}, **{k: "x" for k in X.SWITCH_ENV}}
+    for k, v in inherited.items():
+        monkeypatch.setenv(k, v)
+    for k in ("TRITON_CACHE_DIR", "VLLM_ENABLE_V1_MULTIPROCESSING"):
+        monkeypatch.delenv(k, raising=False)
+    return inherited
+
+
+def test_the_environment_clears_every_switch_and_sets_the_variants(tmp_path, monkeypatch) -> None:
+    inherited = _inherit(monkeypatch)
+    env, cleared = X.environment(True, tmp_path)
+    assert cleared == inherited and not set(X.SWITCH_ENV) & set(env)
+    assert not any(k in os.environ for k in inherited) and os.environ["TRITON_CACHE_DIR"] == str(tmp_path)
+    inherited = _inherit(monkeypatch)
+    env, cleared = X.environment(False, tmp_path)
+    assert cleared == inherited and {k: env[k] for k in X.SWITCH_ENV} == {k: os.environ[k] for k in X.SWITCH_ENV} == X.SWITCH_ENV
+    assert not any(k in os.environ for k in SERVED_DEFAULTS)
+
+
+def test_the_configuration_read_back_is_the_served_default_or_the_variant(monkeypatch) -> None:
+    """torch's defaults (CPU torch's flags are the same globals), no workspace variable and vLLM not batch invariant: the served
+    configuration and not the variant's; any one switch away from it fails the served read-back, and the variant's variables and
+    flags together pass the variant's, batch invariance failing both."""
+    m = torch.backends.cuda.matmul
+    _stub_envs(monkeypatch)
+    monkeypatch.setattr(X, "cublas_version", lambda: 130101)
+    for k in X.SWITCH_ENV:
+        monkeypatch.delenv(k, raising=False)
+    rec = X.configuration(True)
+    assert rec["ok"] and rec["cublas_version"] == 130101 and rec["env"] == dict.fromkeys(X.SWITCH_ENV)
+    assert {k: rec[k] for k in X.REDUCED} == dict.fromkeys(X.REDUCED, "True") and not X.configuration(False)["ok"]
+    lt = lambda: "_BlasBackend.Cublaslt"                                                  # noqa: E731
+    away = (lambda mp: mp.setenv("CUBLASLT_WORKSPACE_SIZE", "1"), lambda mp: mp.setattr(m, X.REDUCED[0], False),
+            lambda mp: mp.setattr(m, X.REDUCED[1], False), lambda mp: mp.setattr(torch.backends.cuda, "preferred_blas_library", lt),
+            lambda mp: _stub_envs(mp, batch_invariant=True))
+    for i, change in enumerate(away):
+        with monkeypatch.context() as mp:
+            change(mp)
+            assert not X.configuration(True)["ok"], i
+    with monkeypatch.context() as mp:
+        for k, v in X.SWITCH_ENV.items():
+            mp.setenv(k, v)
+        for k in X.REDUCED:
+            mp.setattr(m, k, False)
+        mp.setattr(torch.backends.cuda, "preferred_blas_library", lt)
+        assert X.configuration(False)["ok"] and not X.configuration(True)["ok"]
+        _stub_envs(mp, batch_invariant=True)
+        assert not X.configuration(False)["ok"]
+
+
+def test_the_process_groups_are_vllms_own_at_world_size_one(tmp_path, monkeypatch) -> None:
+    import sys
+    import types
+
+    seen = []
+    vd = types.ModuleType("vllm.distributed")
+    vd.init_distributed_environment = lambda **kw: seen.append(kw)
+    vd.ensure_model_parallel_initialized = lambda tp, pp: seen.append((tp, pp))
+    monkeypatch.setitem(sys.modules, "vllm", sys.modules.get("vllm") or types.ModuleType("vllm"))
+    monkeypatch.setitem(sys.modules, "vllm.distributed", vd)
+    X.distributed(tmp_path)
+    assert seen == [{"world_size": 1, "rank": 0, "distributed_init_method": f"file://{tmp_path / 'dist_store'}", "local_rank": 0,
+                     "backend": "gloo"}, (1, 1)]
 
 
 def test_the_cublas_version_is_read_from_the_library_torch_mapped(tmp_path, monkeypatch) -> None:
@@ -441,8 +539,8 @@ def _doc() -> dict:
              {**g, "phase": "bmm", "case": "v_absorb", "M": 1, **NONE, "words": 4, "reference_coords": 1},
              {**d, "phase": "f32out", "case": "compressor.kv_score.c4", "M": 1, **NONE, "words": 4, "reference_coords": 1}]
     doc = {"schema": X.SCHEMA, "models": list(X.MODELS), "expected": [X._case(x) for x in launches], "gate": {"ok": True}, "errors": {},
-           "switch": {"ok": True, "cublas_version": 120900}, "selection": {m: {"ok": True} for m in X.MODELS}, "bind": {"ok": True},
-           "scan": {"enabled": False, "cases": {}, "ok": True},
+           "switch": {"ok": True, "cublas_version": 120900}, "switch_after": {"ok": True},
+           "selection": {m: {"ok": True} for m in X.MODELS}, "bind": {"ok": True}, "scan": {"enabled": False, "cases": {}, "ok": True},
            "launches": launches,
            "comparisons": comps, "totals": dict(TOTALS)}
     doc["fma"] = X.fma_of(doc["totals"])
@@ -451,7 +549,7 @@ def _doc() -> dict:
 
 
 @pytest.mark.parametrize("path,value", [(("gate", "ok"), False), (("errors", "glm53/router/x"), "boom"), (("switch", "ok"), False),
-                                        (("selection", "dsv4-pro", "ok"), False), (("selection",), {}), (("bind", "ok"), False),
+                                        (("switch_after", "ok"), False), (("selection", "dsv4-pro", "ok"), False), (("selection",), {}), (("bind", "ok"), False),
                                         (("totals", "mismatch"), 1), (("totals", "reference_coords"), 0),
                                         (("totals", "twin_mismatch"), 1), (("fma",), None), (("launches", 0, "dispatch_ok"), False),
                                         (("launches", 1, "deterministic"), False), (("launches", 3, "operands_ok"), False),
@@ -494,9 +592,11 @@ def test_each_model_has_its_own_verdict() -> None:
 
 def test_the_default_run_is_a_second_process(tmp_path, monkeypatch) -> None:
     """The second process gets `--served-default --no-default`, the same models and its own out directory; its cases that are not
-    GO are the cases the default configuration changes, and the switch's cost is each case's time over the default's."""
+    GO are the cases the default configuration changes, its configuration read back before and after its launches and the
+    switches it cleared come back into the outer record, and the switch's cost is each case's time over the default's."""
     seen = {}
     lm, va = "glm53/linear/lm_head.shard/M1", "glm53/bmm/v_absorb/M1"
+    served, after = {"cublas_version": 120900, "ok": True}, {"cublas_version": 120900, "ok": False}
 
     def fake_run(argv, capture_output, text, cwd):
         seen["argv"] = argv
@@ -504,7 +604,8 @@ def test_the_default_run_is_a_second_process(tmp_path, monkeypatch) -> None:
         sub.mkdir()
         cases = {lm: {"ok": False, "us": 6.0}, va: {"ok": True, "us": 3.0}}
         (sub / X.RECORD).write_text(json.dumps({"ok": False, "digest": "d", "errors": {}, "cases": cases, "launches": [],
-                                                "switch": {"cublas_version": 120900}, "model_verdicts": {"glm53": False},
+                                                "switch": served, "switch_after": after,
+                                                "env_cleared": {"VLLM_BATCH_INVARIANT": "1"}, "model_verdicts": {"glm53": False},
                                                 "splitk_hypotheses": {}}))
         return type("P", (), {"returncode": 1, "stdout": "out", "stderr": ""})()
 
@@ -516,6 +617,7 @@ def test_the_default_run_is_a_second_process(tmp_path, monkeypatch) -> None:
     assert {"--served-default", "--no-default", "--quick", "--dump-operands", "--no-scan"} <= set(argv)
     assert argv[argv.index("--out") + 1] == str(tmp_path / "served_default") and argv[argv.index("--models") + 1] == "glm53"
     assert got["changed"] == [lm] and got["us"][va] == 3.0
+    assert (got["switch"], got["switch_after"], got["env_cleared"]) == (served, after, {"VLLM_BATCH_INVARIANT": "1"})
     doc = {"served_default": got, "cases": {lm: {"us": 9.0}, va: {"us": 3.0}}}
     assert X._cost(doc) == {lm: 1.5, va: 1.0}
 
@@ -534,12 +636,19 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
     monkeypatch.setitem(sys.modules, "vllm.config", vc)
-    for k in (*X.SWITCH_ENV, "VLLM_BATCH_INVARIANT", "TRITON_CACHE_DIR", "VLLM_ENABLE_V1_MULTIPROCESSING"):
-        monkeypatch.setenv(k, "")
+    inherited = _inherit(monkeypatch)
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "switch", lambda served_default: {"ok": True, "cublas_version": 120900})
-    monkeypatch.setattr(X, "make_gate", lambda cfg, model: object())
+    after = {"ok": True}
+
+    def configuration(served_default):
+        assert not served_default and not any(k in os.environ for k in SERVED_DEFAULTS)
+        return after
+
+    monkeypatch.setattr(X, "configuration", configuration)
+    monkeypatch.setattr(X, "distributed", lambda work: None)
+    monkeypatch.setattr(X, "make_gate", lambda model: object())
     monkeypatch.setattr(X, "selection", lambda gate: {"ok": True})
     todo = [("glm53", "router", "mlp.gate", 5), ("glm53", "router", "mlp.gate", 6), ("glm53", "linear", "lm_head.shard", 5),
             ("glm53", "bmm", "v_absorb", 5), ("dsv4-pro", "router", "mlp.gate", 5), ("dsv4-pro", "f32out", "compressor.kv_score.c4", 5)]
@@ -569,7 +678,8 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
                                                              "dsv4-pro/f32out/compressor.kv_score.c4/M5": True}
     assert doc["model_verdicts"] == {"glm53": False, "dsv4-pro": True} and doc["expected"] == [X.case_key(*c) for c in todo]
     assert doc["totals"]["mismatch"] == 1 and doc["switch_cost"] == {"glm53/router/mlp.gate/M5": 2.0}
-    assert doc["env"]["CUBLAS_WORKSPACE_CONFIG"] == ":16:8" and doc["env"]["VLLM_BATCH_INVARIANT"] == "0"
+    assert doc["env"]["CUBLAS_WORKSPACE_CONFIG"] == ":16:8" and "VLLM_BATCH_INVARIANT" not in doc["env"]
+    assert doc["env_cleared"] == inherited and doc["switch_after"] == after
     printed = capsys.readouterr().out
     assert "case glm53/linear/lm_head.shard/M5" in printed and "GLM53-BF16-GEMM NO-GO" in printed and "fma=0" in printed
     assert "glm53=NO-GO dsv4-pro=GO" in printed
@@ -583,6 +693,10 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
                                                              "us": {"glm53/router/mlp.gate/M5": 1.0}})
     assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--no-default", "--no-scan"]) == 0
     assert "GLM53-BF16-GEMM GO" in (printed := capsys.readouterr().out) and "glm53=GO dsv4-pro=GO" in printed
+    after["ok"] = False                                     # something the launches imported set a switch back
+    assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--no-default", "--no-scan"]) == 1
+    doc = json.loads((out / X.RECORD).read_text())
+    assert doc["switch_after"] == {"ok": False} and all(c["ok"] for c in doc["cases"].values()) and doc["ok"] is False
 
 
 def test_the_scan_extends_the_sweep_through_main(tmp_path, monkeypatch) -> None:
@@ -597,19 +711,20 @@ def test_the_scan_extends_the_sweep_through_main(tmp_path, monkeypatch) -> None:
     vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
     monkeypatch.setitem(sys.modules, "vllm.config", vc)
-    for k in (*X.SWITCH_ENV, "VLLM_BATCH_INVARIANT", "TRITON_CACHE_DIR", "VLLM_ENABLE_V1_MULTIPROCESSING"):
-        monkeypatch.setenv(k, "")
+    _inherit(monkeypatch)
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "switch", lambda served_default: {"ok": True, "cublas_version": 120900})
-    monkeypatch.setattr(X, "make_gate", lambda cfg, model: object())
+    monkeypatch.setattr(X, "configuration", lambda served_default: {"ok": True})
+    monkeypatch.setattr(X, "distributed", lambda work: None)
+    monkeypatch.setattr(X, "make_gate", lambda model: object())
     monkeypatch.setattr(X, "selection", lambda gate: {"ok": True})
     monkeypatch.setattr(X, "cases", lambda quick, only, models: [("glm53", "linear", "lm_head.shard", 5)])
     rec = {"m": [256, 1024], "output": "bf16", "ok": True, "sweep": [613, 614, 1024],
            "classes": [{"split": 4, "m0": 256, "regimes": 1, "ms": 358}, {"split": None, "m0": 614, "regimes": 1, "ms": 411}],
            "regimes": [{"m0": 256, "m1": 613, "reduce": True, "kernels": [], "split_fits": [4], "split": 4},
                        {"m0": 614, "m1": 1024, "reduce": False, "kernels": [], "split_fits": [], "split": None}]}
-    scan_doc = {"ok": True, "returncode": 0, "switch": {"ok": True}, "errors": {},
+    scan_doc = {"ok": True, "returncode": 0, "switch": {"ok": True}, "switch_after": {"ok": True}, "env_cleared": {}, "errors": {},
                 "cases": {"glm53/linear/lm_head.shard": rec}}
     monkeypatch.setattr(X, "scan_subprocess", lambda a, outdir: scan_doc)
     seen = {}
@@ -628,7 +743,7 @@ def test_the_scan_extends_the_sweep_through_main(tmp_path, monkeypatch) -> None:
     assert doc["expected"] == keys and sorted(doc["cases"]) == sorted(keys)
     assert seen == {5: None, 613: 4, 614: None, 1024: None}
     assert doc["scan"] == {"enabled": True, "cases": {"glm53/linear/lm_head.shard": rec}, "ok": True,
-                           "switch": {"ok": True}, "returncode": 0}
+                           "switch": {"ok": True}, "switch_after": {"ok": True}, "env_cleared": {}, "returncode": 0}
     assert all(c["ok"] for c in doc["cases"].values()) and not doc["errors"]
     assert doc["digest"] == digest_of(doc)
     scan_doc["ok"] = False

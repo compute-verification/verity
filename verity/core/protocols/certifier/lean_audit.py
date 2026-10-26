@@ -1,4 +1,4 @@
-"""`audit.Audit` with every verdict computed by the Lean check, `verity/network-records/v2` (`NetworkCheck.Records`, the
+"""`audit.Audit` with every verdict computed by the Lean check, `verity/network-records/v3` (`NetworkCheck.Records`, the
 `network-records` executable of `verity/core/protocols/network/lean`), which `audit.py` is the reference for.
 
 `Audit` here has `audit.Audit`'s interface and returns its `Verdict`s, so a caller switches by its import line alone.
@@ -10,7 +10,9 @@ and a call that one answers and the other raises on raises. Each call is one uni
 - `check_link`: egress links `["", link]` (`"clock"` when `link` is empty) over windows 0 … len(syncs) − 1, the first
   link carrying no frames and the spatial unit's clock as its syncs (`Audit.syncs`, each window's set by the first call
   that checked it, as `audit.Audit` sets it), since the Lean check reads the unit's sync from the first egress link; the
-  commitment holds this call's records of `link`, a certified one only if it is egress;
+  commitment holds this call's records of `link`, a certified one only if it is egress. With `grid` True it is the
+  Lean's `verdicts`; with `grid` False (N2's head check holds the grid) `verdicts-no-grid`, every test of `verdicts`
+  but the egress grid comparison (`Records.evaluateNoGrid`);
 - `check_ingress_link`: the ingress link `[link]` alone, with this call's records of `link`, a certified one only if it is
   ingress.
 
@@ -96,7 +98,8 @@ def encode(record: Published) -> bytes:
     if isinstance(record, CertifiedRecord):
         c = record.certificate
         kind, body = CERTIFIED, b"".join([
-            record.head.encode(), _u(len(c.key_id), 2, "len(I)"), c.key_id, _text(c.link, "a certificate's link"),
+            record.head.encode(), record.salt, _u(len(c.key_id), 2, "len(I)"), c.key_id,
+            _text(c.link, "a certificate's link"),
             _u(c.direction.code, 1, "direction"), _u(c.window, 8, "window"), c.digest,
             _u(len(c.signature), 4, "len(signature)"), c.signature])
     elif isinstance(record, CommittedRecord):
@@ -122,7 +125,7 @@ def _sync_json(s: ClockSync) -> list[int]:
 def case(egress: Sequence[tuple[str, Sequence[LogicalFrame], Sequence[ClockSync]]], ingress: Sequence[str], windows: int,
          grid: GridParams, ingress_grid: GridParams, sync_set: SyncSet, key: LmsKey, session: bytes,
          records: Sequence[Published]) -> dict:
-    """A `serve` case of `verity/network-records/v2`: the unit's egress links with their frames and syncs, its ingress
+    """A `serve` case of `verity/network-records/v3`: the unit's egress links with their frames and syncs, its ingress
     links, the certifier's key and session, and the records."""
     p = key.params
     params = {"egress": {"grid": _grid_json(grid), "links": [l for l, _, _ in egress]},
@@ -172,9 +175,9 @@ class Server:
                 self._proc.stdout.close()
             self._pid, self._proc, self._lock = os.getpid(), None, threading.Lock()
 
-    def verdicts(self, case: dict) -> list[dict]:
-        """Every link-window's verdict on `case` (`{"direction", "link", "verdict", "window"}`, in the audit's order);
-        `ValueError` when the Lean check refuses the case."""
+    def verdicts(self, case: dict, fn: str = "verdicts") -> list[dict]:
+        """Every link-window's verdict on `case` (`{"direction", "link", "verdict", "window"}`, in the audit's order) by
+        `fn`, `verdicts` or `verdicts-no-grid`; `ValueError` when the Lean check refuses the case."""
         self._own()
         with self._lock:
             if self._proc is None or self._proc.poll() is not None:
@@ -187,7 +190,7 @@ class Server:
                                               stdout=subprocess.PIPE, text=True, encoding="utf-8")
             proc = self._proc
             try:
-                proc.stdin.write(json.dumps({"fn": "verdicts", "input": case}, separators=(",", ":")) + "\n")
+                proc.stdin.write(json.dumps({"fn": fn, "input": case}, separators=(",", ":")) + "\n")
                 proc.stdin.flush()
                 line = proc.stdout.readline()
             except BrokenPipeError:
@@ -270,19 +273,25 @@ class Audit:
 
     def check_link(self, link: str, records: Sequence[Published], frames: Sequence[LogicalFrame],
                    syncs: Sequence[ClockSync], sync_set: SyncSet, params: GridParams,
-                   key: PublicKey | None = None, session: bytes | None = None) -> list[Verdict]:
+                   key: PublicKey | None = None, session: bytes | None = None, grid: bool = True) -> list[Verdict]:
+        """`audit.Audit.check_link`. With `grid` False it is the Lean's `verdicts-no-grid`, which computes no Program
+        grid (N2 gives no `frames`); a raw or committed record of `link` then raises `ValueError` here, with or without
+        windows, as `audit.Audit` raises and `verdicts-no-grid` refuses."""
         _need_key(records, key, session)
         frames, syncs = list(frames), list(syncs)
+        mine = _mine(link, records, Direction.EGRESS)
+        if not grid and any(not isinstance(r, CertifiedRecord) for r in mine):
+            raise ValueError("only a certified record's grid is held by its head check: compare the others' (grid=True)")
         lean = []
         if syncs:
-            mine = _mine(link, records, Direction.EGRESS)
             clock = [self.syncs.get(w, s) for w, s in enumerate(syncs)]
             unit = "clock" if link == "" else ""
             out = self.server.verdicts(case([(unit, [], clock), (link, frames, syncs)], [], len(syncs), params, params,
-                                            sync_set, *_lean_key(mine, key, session), mine))
+                                            sync_set, *_lean_key(mine, key, session), mine),
+                                       "verdicts" if grid else "verdicts-no-grid")
             lean = _verdicts(out, Direction.EGRESS, link, len(syncs))
         vs = self._beside(lean, lambda: self.python.check_link(link, records, frames, syncs, sync_set, params, key,
-                                                               session))
+                                                               session, grid))
         for w, s in enumerate(syncs):
             self.syncs.setdefault(w, s)
         return vs

@@ -52,6 +52,7 @@ SOURCE_SHA256 = {0: "bea53d712ea6577e477cfeed29ad04709e1d8327cf98cdcdcf79dd3ad42
 #: engine step -> (rows M, whether the scope aligns: the naive block assignment skips moe_align_block_size for M <= 2)
 STEPS = {0: (256, True), 1: (1, False)}
 DOT = "HopperBF16WgmmaDot16_v1"
+CHAIN = tuple(range(WORLD))
 
 
 def fixture(rank: int) -> Path:
@@ -325,12 +326,12 @@ def _merged(rs: list[tuple]) -> list[tuple]:
 
 @functools.lru_cache(maxsize=None)
 def _folded_routed(rank: int):
-    """`_folded` with a captured route for this model's [M, 4096] all-reduces at the capture's settings (custom all-reduce off), so the
-    fold takes the Build's one call per all-reduce."""
-    from verity_vllm.program.registry import tp_allreduce as T
+    """`_folded` with a stand-in captured route for this model's [M, 4096] all-reduces at the capture's settings (batch-invariant
+    pynccl over SHM on 8 RTX PRO 6000; no world-8 chain is recorded), so the fold takes the Build's one call per all-reduce."""
+    from verity.ml.definitions.registry import tp_allreduce as T
 
-    extra = (T.Captured("custom-off", H, "fi_ar_comm", 1, 42, "AllReduceMnnvl_v1", {}, ()),
-             T.Captured("custom-off", H, "symm_mem_comm", 43, 2048, "AllReduceMultimem_v1", {"TREES": (T.GLM53_H200_TREE,) * WORLD, "FTZ": False}, ()))
+    extra = (T.Captured(T.BATCH_INVARIANT, H, "pynccl_comm", 1, 2048, "AllReduceNcclTree_v1", {"CHAIN": CHAIN}, (), world=WORLD,
+                        device=T.RTX_PRO_6000, transport="shm"),)
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(T, "CAPTURED", T.CAPTURED + extra)
         f = _CutFold(profile(), False)
@@ -352,13 +353,12 @@ def test_a_routed_all_reduce_is_one_flat_call_reading_every_rank_s_partial_whole
     from verity_vllm.check.match import rank_match as RMx
     assert RMx.own_producers(res) == RMx.own_producers(per_row) and len(RMx.own_producers(res)[(0, 0)]) == STEPS[0][0]
     (layout,) = res.peers_layout
-    tree = ",".join(["((((((0,(1,2)),3),5),6),4),7)"] * WORLD)
+    chain = ",".join(map(str, CHAIN))
     for step, (M, _aligned) in STEPS.items():
         flat = [m for m in res.instances if m.get("collective") and m["step"] == step and m["collective"]["k"] == 0]
         rows = [m for m in per_row.instances if m.get("collective") and m["step"] == step and m["collective"]["k"] == 0]
         assert len(flat) == 1 and len(rows) == M and flat[0]["rows"] == 1
-        assert flat[0]["spec"] == (f"AllReduceMnnvl_v1{{WORLD={WORLD},N={H},SHOT=1}}" if M == 1 else
-                                   f"AllReduceMultimem_v1{{WORLD={WORLD},SIZE={M * H},TREES=({tree}),FTZ=False}}"), flat[0]["spec"]
+        assert flat[0]["spec"] == f"AllReduceNcclTree_v1{{WORLD={WORLD},SIZE={M * H},CHAIN=({chain})}}", flat[0]["spec"]
         (arg,) = res.body.nodes[flat[0]["node"]].args
         got = runs(arg.refs)
         cut = [_parts(runs(per_row.body.nodes[m["node"]].args[0].refs), H) for m in sorted(rows, key=lambda m: m["row"])]

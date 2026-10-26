@@ -4,7 +4,6 @@ import copy
 
 import pytest
 
-from verity.core.protocols.certifier.active import decode_frame
 from workload import model as M
 from workload import n3
 from workload.block import Context, MemoryNet
@@ -39,8 +38,10 @@ def edited(records, key, edit):
     return out
 
 
-def first_data(log):
-    return next(i for i, (_, f) in enumerate(log) if decode_frame(f)[1] != 0)
+def first_data(ctx, key=INGRESS):
+    """The position of the direction's first frame that isn't a HELLO, in grid order: no frame names its message."""
+    slots = sorted(ctx.phi.slots()[key], key=lambda s: s.bucket)
+    return next(i for i, s in enumerate(slots) if s.kind == "data")
 
 
 def test_an_honest_run_holds_and_serves_the_reference(honest):
@@ -55,44 +56,49 @@ def test_an_honest_run_holds_and_serves_the_reference(honest):
     assert results[OUTSIDE]["answers"] == M.reference(spec, M.requests(spec, 1), M.weights(spec, 1))
 
 
-@pytest.mark.parametrize("mode, refused", [("extra-frame", {"unexplained", "schedule"}), ("flip-bit", {"content", "value"}),
-                                           ("fill", {"fill"})])
+@pytest.mark.parametrize("mode, refused", [("extra-frame", {"extra", "content", "value", "schedule"}),
+                                           ("flip-bit", {"content", "value"}), ("fill", {"fill"})])
 def test_a_tampering_block_is_refused_by_name(mode, refused):
+    """A frame is matched to φ by its position, so an extra canonical frame takes the next one's place: that one is
+    content, and the last one past φ's is extra."""
     _, _, public, witness, records = serve(dict(CONFIG, tamper={"unit": "b0", "mode": mode}))
     report = n3.check(public, witness, records)
     assert set(report.codes()) == refused
     assert {v.where for v in report.violations} == {"b0.uplink>b0.cert", INGRESS}
 
 
-def test_a_dropped_frame_is_missing(honest):
-    *_, public, witness, records = honest
-    assert codes(public, witness, edited(records, INGRESS, lambda log: log[:first_data(log)] + log[first_data(log) + 1:])) \
-        == {"missing", "schedule"}
+def test_a_dropped_frame_is_missing_and_shifts_the_next(honest):
+    ctx, _, public, witness, records = honest
+    i = first_data(ctx)
+    assert codes(public, witness, edited(records, INGRESS, lambda log: log[:i] + log[i + 1:])) \
+        == {"missing", "content", "value", "schedule"}
 
 
 def test_a_frame_in_another_bucket_is_refused(honest):
-    *_, public, witness, records = honest
+    ctx, _, public, witness, records = honest
+    i = first_data(ctx)
 
     def later(log):
-        i = first_data(log)
         return log[:i] + [(log[i][0] + 1, log[i][1])] + log[i + 1:]
 
     assert codes(public, witness, edited(records, INGRESS, later)) == {"bucket", "schedule"}
 
 
-def test_a_malformed_frame_is_refused_and_its_frame_is_missing(honest):
-    *_, public, witness, records = honest
+def test_a_malformed_frame_is_refused_and_its_values_are_missing(honest):
+    ctx, _, public, witness, records = honest
+    i = first_data(ctx)
 
     def truncate(log):
-        i = first_data(log)
         return log[:i] + [(log[i][0], log[i][1][:-1])] + log[i + 1:]
 
     assert codes(public, witness, edited(records, INGRESS, truncate)) == {"malformed", "missing"}
 
 
-def test_a_replayed_hello_is_unexplained(honest):
+def test_a_replayed_hello_is_refused(honest):
+    """The replay goes after its bucket's frames, so the next bucket's frame is out of place and the last is extra."""
     *_, public, witness, records = honest
-    assert codes(public, witness, edited(records, INGRESS, lambda log: log + [log[0]])) == {"unexplained", "schedule"}
+    assert codes(public, witness, edited(records, INGRESS, lambda log: log + [log[0]])) == \
+        {"extra", "content", "value", "schedule"}
 
 
 def test_another_placement_is_refused(honest):

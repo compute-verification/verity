@@ -55,17 +55,14 @@ def sha256_file(p: Path) -> str:
     return h.hexdigest()
 
 
-def inductor_cache_dir() -> str | None:
-    """Where this process's Inductor wrappers live (env override or torch's default)."""
+def inductor_cache_dir() -> str:
+    """Where this process's Inductor wrappers live (env override or torch's default); raises when torch can't say."""
     d = os.environ.get("TORCHINDUCTOR_CACHE_DIR")
     if d:
         return d
-    try:
-        from torch._inductor.runtime.runtime_utils import cache_dir
+    from torch._inductor.runtime.runtime_utils import cache_dir
 
-        return cache_dir()
-    except Exception:  # noqa: BLE001
-        return None
+    return cache_dir()
 
 
 def triton_cache_dir() -> str | None:
@@ -78,20 +75,6 @@ _WRAPPER_PATH_LINE = re.compile(r"^# (kernel path|AOT ID|Original path): .*$", r
 def normalize_wrapper(src: str) -> str:
     """Wrapper text minus the lines that name the cache root / this compilation (comments only)."""
     return _WRAPPER_PATH_LINE.sub("", src)
-
-
-_KNAME = re.compile(r"\btriton_(?:red|per|poi|tem|for|unk|foreach)_[A-Za-z0-9_]+")
-_META_NAME = re.compile(r"'kernel_name':\s*'[^']*'")
-_BACKEND_HASH = re.compile(r"'backend_hash':\s*'[^']*'")
-
-
-def normalise_kernel(src: str) -> str:
-    """A Triton kernel source with its name (the trailing index depends on the order within a wrapper), its ``kernel_name``
-    inductor_meta and its ``backend_hash`` replaced by placeholders; everything else is kept byte for byte."""
-    s = _KNAME.sub("KERNEL", src)
-    s = _META_NAME.sub("'kernel_name': 'KERNEL'", s)
-    s = _BACKEND_HASH.sub("'backend_hash': 'BACKEND'", s)
-    return s.strip()
 
 
 def ptx_code(ptx: str) -> str:
@@ -126,18 +109,30 @@ def _call_body(src: str) -> str:
     return body if cut < 0 else body[:cut]
 
 
+def _read_text(p: Path, root: Path, unreadable: dict[str, str]) -> str | None:
+    """``p``'s text, or None with the failure recorded under its path relative to ``root``."""
+    try:
+        return p.read_text()
+    except Exception as e:  # noqa: BLE001
+        unreadable[str(p.relative_to(root))] = repr(e)[:200]
+        return None
+
+
 def collect(inductor_dir: str | None, triton_dir: str | None = None, *, vllm_cache_dir: str | None = None) -> dict[str, Any]:
-    """Scan the Inductor cache directory: wrapper modules (graph pieces) and kernel modules."""
+    """Scan the Inductor cache directory: wrapper modules (graph pieces) and kernel modules.
+
+    A file that can't be read is named in ``unreadable`` and in ``summary.error``, both present only then: the sets and digests
+    leave it out, so they are partial, and ``compare`` claims no identity over them."""
     wrappers: list[dict[str, Any]] = []
     kernel_files: list[dict[str, Any]] = []
     kernels: dict[str, str] = {}  # kernel name -> source sha256 (collisions listed separately)
     collisions: list[dict[str, Any]] = []
+    unreadable: dict[str, str] = {}
     root = Path(inductor_dir) if inductor_dir else None
     if root is not None and root.is_dir():
         for p in sorted(root.rglob("*.py")):
-            try:
-                src = p.read_text()
-            except Exception:  # noqa: BLE001
+            src = _read_text(p, root, unreadable)
+            if src is None:
                 continue
             rel = str(p.relative_to(root))
             if "async_compile.triton(" in src or "\ndef call(" in src:
@@ -161,7 +156,7 @@ def collect(inductor_dir: str | None, triton_dir: str | None = None, *, vllm_cac
                 })
             elif _KERNEL_HEADER.search(src):
                 kernel_files.append({"path": rel, "sha256": sha256_bytes(src.encode()), "bytes": len(src)})
-    autotune = autotune_configs(root) if root is not None and root.is_dir() else []
+    autotune = autotune_configs(root, unreadable) if root is not None and root.is_dir() else []
     cubins: list[dict[str, Any]] = []
     troot = Path(triton_dir) if triton_dir else None
     if troot is not None and troot.is_dir():
@@ -169,10 +164,9 @@ def collect(inductor_dir: str | None, triton_dir: str | None = None, *, vllm_cac
             entry = {"path": str(p.relative_to(troot)), "name": p.stem, "sha256": sha256_file(p), "bytes": p.stat().st_size, "ptx_code_sha256": None}
             ptx = p.with_suffix(".ptx")
             if ptx.exists():
-                try:
-                    entry["ptx_code_sha256"] = sha256_bytes(ptx_code(ptx.read_text()).encode())
-                except Exception:  # noqa: BLE001
-                    pass
+                ptx_src = _read_text(ptx, troot, unreadable)
+                if ptx_src is not None:
+                    entry["ptx_code_sha256"] = sha256_bytes(ptx_code(ptx_src).encode())
             cubins.append(entry)
     kernel_pairs = sorted({(k["name"], k["source_sha256"]) for w in wrappers for k in w["kernels"]})
     doc = {
@@ -199,30 +193,43 @@ def collect(inductor_dir: str | None, triton_dir: str | None = None, *, vllm_cac
             "ptx_code_set_sha256": sha256_bytes(json.dumps(sorted(c["ptx_code_sha256"] or "" for c in cubins)).encode()) if cubins else None,
         },
     }
+    if unreadable:
+        doc["unreadable"] = [{"path": k, "error": v} for k, v in sorted(unreadable.items())]
+        doc["summary"]["error"] = (f"{len(unreadable)} file(s) unreadable, so these sets are partial: "
+                                   + "; ".join(f"{k}: {v}" for k, v in sorted(unreadable.items())[:4]))
     return doc
+
+
+def _whole(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """Neither collection left a file out (``collect``'s ``unreadable``)."""
+    return not (a.get("unreadable") or b.get("unreadable"))
 
 
 _CONFIG_KEYS = ("XBLOCK", "YBLOCK", "R0_BLOCK", "RBLOCK", "num_warps", "num_stages")
 
 
-def autotune_configs(root: Path) -> list[dict[str, Any]]:
+def autotune_configs(root: Path, unreadable: dict[str, str]) -> list[dict[str, Any]]:
     """Inductor's runtime autotuner writes ``<kernel hash>.best_config`` next to a kernel module when it
     benchmarked more than one launch configuration (``autotune_pointwise``, pointwise kernels) — the chosen
     ``XBLOCK`` / ``num_warps`` / ``num_stages``. Those are *launch parameters* selected by timing in each
     process, not part of the generated source; a pointwise kernel's per-element arithmetic does not depend on
     them, but they are the one thing production and replay may legitimately differ in, so they are recorded
-    and compared. Each entry: kernel name (from the sibling ``.py``), the kernel module's sha256, the config."""
+    and compared. Each entry: kernel name (from the sibling ``.py``), the kernel module's sha256, the config.
+    A file that can't be read or parsed is recorded in ``unreadable`` (path relative to ``root``)."""
     out: list[dict[str, Any]] = []
     for bc in sorted(root.rglob("*.best_config")):
+        text = _read_text(bc, root, unreadable)
+        if text is None:
+            continue
         try:
-            cfg = json.loads(bc.read_text())
-        except Exception:  # noqa: BLE001
+            cfg = json.loads(text)
+        except ValueError as e:
+            unreadable[str(bc.relative_to(root))] = repr(e)[:200]
             continue
         name, ksha = None, None
         for py in sorted(bc.parent.glob("*.py")):
-            try:
-                src = py.read_text()
-            except Exception:  # noqa: BLE001
+            src = _read_text(py, root, unreadable)
+            if src is None:
                 continue
             m = re.search(r"^def (\w+)\(", src, re.M)
             if m:
@@ -236,82 +243,12 @@ def autotune_configs(root: Path) -> list[dict[str, Any]]:
     return out
 
 
-_PTX_TARGET = re.compile(r"^\.target\s+(\S+)", re.M)
-
-
-def export_ptx(triton_dir: str | Path | None, dest: Path, *, gpu: dict[str, Any] | None = None) -> dict[str, Any]:
-    """W1cF F10: write the *normalised* PTX (:func:`ptx_code`) of every compiled kernel variant in a Triton
-    cache dir to ``dest/<ptx_code_sha256>.ptx`` plus ``dest/index.json`` (per variant: kernel function
-    name, normalised-code sha256, raw cubin sha256, ``.target``, Triton cache key, compile metadata when
-    the sibling ``<name>.json`` has it). ``ptx_code_set_sha256`` = sha256 of the JSON of the sorted set of
-    ``(name, ptx_code_sha256)`` pairs binds the shipped set into the manifest. Returns the index."""
-    dest = Path(dest)
-    dest.mkdir(parents=True, exist_ok=True)
-    entries: list[dict[str, Any]] = []
-    root = Path(triton_dir) if triton_dir else None
-    if root is not None and root.is_dir():
-        for p in sorted(root.rglob("*.ptx")):
-            try:
-                text = p.read_text()
-            except Exception:  # noqa: BLE001
-                continue
-            code = ptx_code(text)
-            sha = sha256_bytes(code.encode())
-            (dest / f"{sha}.ptx").write_text(code)
-            m = _PTX_TARGET.search(text)
-            entry: dict[str, Any] = {"name": p.stem, "ptx_code_sha256": sha, "target": m.group(1) if m else None,
-                                     "cache_key": p.parent.name, "cubin_sha256": None, "meta": None}
-            cubin = p.with_suffix(".cubin")
-            if cubin.exists():
-                entry["cubin_sha256"] = sha256_file(cubin)
-            meta = p.with_suffix(".json")
-            if meta.exists():
-                try:
-                    md = json.loads(meta.read_text())
-                    entry["meta"] = {k: md[k] for k in ("num_warps", "num_stages", "num_ctas", "shared", "hash") if k in md}
-                except Exception:  # noqa: BLE001
-                    pass
-            entries.append(entry)
-    pairs = sorted({(e["name"], e["ptx_code_sha256"]) for e in entries})
-    index = {
-        "schema": "verity-vllm/ptx/v1",
-        "normalisation": "kernel_identity.ptx_code: .file/.loc directives, .debug_* sections and assertFile_* globals removed",
-        "triton_cache_dir": str(root) if root else None,
-        "gpu": gpu,
-        "entries": entries,
-        "ptx_code_set_sha256": sha256_bytes(json.dumps(pairs).encode()) if pairs else None,
-        "variants": len(entries),
-        "kernels": len({e["name"] for e in entries}),
-    }
-    (dest / "index.json").write_text(json.dumps(index, indent=1) + "\n")
-    return index
-
-
-def ship_ptx(production_ptx_dir: Path, kernels_dir: Path) -> dict[str, Any]:
-    """W1cF F10: copy production's exported PTX (``production/ptx/``) into a bundle's ``verity/ml/kernels/`` as
-    ``verity/ml/kernels/<ptx_code_sha256>.ptx`` + ``kernels/ptx-index.json`` so identity is checkable from the archive."""
-    src = Path(production_ptx_dir)
-    idx_path = src / "index.json"
-    if not idx_path.is_file():
-        return {"shipped": 0, "reason": f"production exported no PTX ({idx_path} absent; recorder before W1cF)"}
-    index = json.loads(idx_path.read_text())
-    kernels_dir = Path(kernels_dir)
-    kernels_dir.mkdir(parents=True, exist_ok=True)
-    n = 0
-    for e in index.get("entries", []):
-        f = src / f"{e['ptx_code_sha256']}.ptx"
-        if f.is_file():
-            (kernels_dir / f.name).write_bytes(f.read_bytes())
-            n += 1
-    (kernels_dir / "ptx-index.json").write_text(json.dumps(index, indent=1) + "\n")
-    return {"shipped": n, "variants": index.get("variants"), "kernels": index.get("kernels"), "ptx_code_set_sha256": index.get("ptx_code_set_sha256")}
-
-
 def compare_autotune(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     """Per kernel module (keyed by the module's content sha256 — Inductor names standalone kernel modules
     ``triton_`` generically, so the name alone is ambiguous): the autotuner's chosen launch config in a vs b
     (``differing`` lists the kernels whose chosen config is not the same; ``candidates_identical`` says whether
-    both saw the same candidate set)."""
+    both saw the same candidate set). Neither is True when either collection left a file out."""
+    whole = _whole(a, b)
     ca = {e["kernel_module_sha256"]: e for e in a.get("autotune_configs", []) if e.get("kernel_module_sha256")}
     cb = {e["kernel_module_sha256"]: e for e in b.get("autotune_configs", []) if e.get("kernel_module_sha256")}
     differing = []
@@ -322,30 +259,19 @@ def compare_autotune(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
                               "a": ea["config"] if ea else None, "b": eb["config"] if eb else None})
     return {
         "a": len(ca), "b": len(cb),
-        "chosen_configs_identical": (not differing) if (ca or cb) else None,
-        "candidates_identical": all(ca[k]["configs_hash"] == cb[k]["configs_hash"] for k in set(ca) & set(cb)) if (set(ca) & set(cb)) else None,
+        "chosen_configs_identical": (not differing and whole) if (ca or cb) else None,
+        "candidates_identical": (whole and all(ca[k]["configs_hash"] == cb[k]["configs_hash"] for k in set(ca) & set(cb)))
+                                if (set(ca) & set(cb)) else None,
         "differing": differing,
     }
 
 
-def kernel_sources(inductor_dir: str | None) -> dict[str, str]:
-    """kernel source sha256 -> source text (for the fused-region relation / standalone launch)."""
-    out: dict[str, str] = {}
-    root = Path(inductor_dir) if inductor_dir else None
-    if root is None or not root.is_dir():
-        return out
-    for p in root.rglob("*.py"):
-        try:
-            src = p.read_text()
-        except Exception:  # noqa: BLE001
-            continue
-        for m in _TRITON_SRC.finditer(src):
-            out.setdefault(sha256_bytes(m.group(2).encode()), m.group(2))
-    return out
-
-
 def compare(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
-    """Set comparison of generated kernel sources (by content), wrappers and call programs."""
+    """Set comparison of generated kernel sources (by content), wrappers and call programs.
+
+    When either collection left a file out (``collect``'s ``unreadable``), every identity below is False and ``unreadable`` names
+    the files by side: sets that are equal without them show nothing."""
+    whole = _whole(a, b)
     ka = {(k["name"], k["source_sha256"]) for w in a["wrappers"] for k in w["kernels"]}
     kb = {(k["name"], k["source_sha256"]) for w in b["wrappers"] for k in w["kernels"]}
     ha = {h for _, h in ka}
@@ -360,23 +286,26 @@ def compare(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     nb = {w.get("norm_sha256") for w in b["wrappers"] if w.get("norm_sha256")}
     pa = {c["ptx_code_sha256"]: c["name"] for c in a.get("cubins", []) if c.get("ptx_code_sha256")}
     pb = {c["ptx_code_sha256"]: c["name"] for c in b.get("cubins", []) if c.get("ptx_code_sha256")}
-    return {
-        "kernel_sources_identical": ha == hb and bool(ha),
+    out = {
+        "kernel_sources_identical": ha == hb and bool(ha) and whole,
         "kernel_sources": {"a": len(ha), "b": len(hb), "common": len(ha & hb), "only_a": sorted(n for n, h in ka if h not in hb), "only_b": sorted(n for n, h in kb if h not in ha)},
-        "wrappers_identical": set(wa) == set(wb) and bool(wa),
-        "wrappers_identical_modulo_cache_path": na == nb and bool(na),
+        "wrappers_identical": set(wa) == set(wb) and bool(wa) and whole,
+        "wrappers_identical_modulo_cache_path": na == nb and bool(na) and whole,
         "wrappers_norm": {"a": len(na), "b": len(nb), "common": len(na & nb)},
         "wrappers": {"a": len(wa), "b": len(wb), "common": len(set(wa) & set(wb)), "only_a": sorted(w["path"] for h, w in wa.items() if h not in wb), "only_b": sorted(w["path"] for h, w in wb.items() if h not in wa)},
-        "call_programs_identical": ca == cb and bool(ca),
+        "call_programs_identical": ca == cb and bool(ca) and whole,
         "call_programs": {"a": len(ca), "b": len(cb), "common": len(ca & cb)},
-        "cubins_identical": (cub_a == cub_b and bool(cub_a)) if (cub_a or cub_b) else None,
+        "cubins_identical": (cub_a == cub_b and bool(cub_a) and whole) if (cub_a or cub_b) else None,
         "cubins": {"a": len(cub_a), "b": len(cub_b), "common": len(cub_a & cub_b)},
-        "ptx_code_identical": (set(pa) == set(pb) and bool(pa)) if (pa or pb) else None,
+        "ptx_code_identical": (set(pa) == set(pb) and bool(pa) and whole) if (pa or pb) else None,
         "ptx_code": {"a": len(pa), "b": len(pb), "common": len(set(pa) & set(pb)),
                      "only_a": sorted(n for h, n in pa.items() if h not in pb), "only_b": sorted(n for h, n in pb.items() if h not in pa)},
-        "b_kernel_sources_subset_of_a": hb <= ha and bool(hb),
+        "b_kernel_sources_subset_of_a": hb <= ha and bool(hb) and whole,
         "autotune": compare_autotune(a, b),
     }
+    if not whole:
+        out["unreadable"] = {side: d["unreadable"] for side, d in (("a", a), ("b", b)) if d.get("unreadable")}
+    return out
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -23,9 +23,11 @@ import Definitions.Pouw.Fp8Atom.Vectors.Ada
 import Definitions.Pouw.Fp8Atom.Vectors.Add
 import Definitions.Pouw.Fp8Atom.Vectors.C00
 import Definitions.Pouw.Fp8Atom.Vectors.C01
+import Definitions.Pouw.FpG1
 import Definitions.Pouw.Game.Deadline
 import Definitions.Pouw.Game.Defs
 import Definitions.Pouw.Game.Params
+import Definitions.Pouw.H1Zy
 import Definitions.Pouw.M1
 import Definitions.Pouw.NCP.Defs
 import Definitions.Pouw.NCP.ExtraIdentity
@@ -89,16 +91,18 @@ import Definitions.Pouw.Receipt.Duo
 import Definitions.Pouw.Receipt.Li
 import Definitions.Pouw.Receipt.Fx1
 import Definitions.Pouw.RelativeSecurity
+import Definitions.Pouw.RelativeSecurityJ10R
 import Definitions.Pouw.TileBound.AlignedExactDefs
 import Definitions.Pouw.TileBound.Defs
 import Definitions.Pouw.TileBound.Fp8Defs
+import Definitions.Pouw.Window
 import Definitions.Pouw.Witness.Copy
 import Definitions.Pouw.Witness.Model
 
 /-!
 # PoUW's protocol: the definitions the statements read
 
-This layer, `Models.Pouw.Assumptions` and `Models.Pouw.Guarantees` are the trusted text: they import only each other,
+This layer, `Definitions.Pouw.Assumptions` and `Definitions.Pouw.Guarantees` are the trusted text: they import only each other,
 Mathlib and core's `Definitions.Core` (`Definitions.Pouw.PearlC.Defs` also Batteries), so their diff, with core's, is everything a
 statement reviewer reads.
 `Proofs.Pouw` holds the proofs and every lemma, which nobody reviews for meaning. A topic's modules keep their
@@ -135,6 +139,27 @@ them by the rounding margin outright, unpinned.
 H-1T's per-tile count statement: the tiles, their domain `Tiling.AtLeast` and the output slots (`H1TTile`), the named
 assumption `TTH1T` (`H1TTileAssumptions`), and its two form checks (`H1TTileProofs`).
 
+## `FpG1`: FP8-g1 and W4A8-g1's operands (FPX-DESIGN, PR #2710)
+
+The encodings (`Encoding`): E4M3's integer grid to a bound, the doubled E2M1 grid, round to nearest onto a grid, the
+coin, an operand entry and a device's g1 grids. The int8 GEMM, the coin's rank-one terms and the epilogue (`Gemm`).
+g1 on sm_120's record H1: its grids and a round's operand leaves (`H1`). `Proofs.Pouw.FpG1` proves the arithmetic.
+`Definitions.Accounting.Guarantees.FpG1`'s headlines read H1's leaves; they are the record's bound at g1's windows, which
+the record's headlines already cover by their own quantifier over committed values.
+
+## `H1Zy`: H1's drawn-leaf statements on words
+
+`Combine`: `PouwH1Combine_v1{TILE}`'s body (`h1zy._combine_body`) on its primitives' word views, the XOR and AND trees
+as `h1tile._xor` and `h1zy._and_all` build them. `Proofs.Pouw.H1Zy` proves it the receipt check `LeafChecks` reads.
+
+`Lane`: `PouwH1LaneZy_v1{TILE}`'s body (`h1zy._lane_body`) at a 32 × 32 leaf over `PouwH1Tile_v1` on its primitives'
+word views: the index's mux trees, the EXACT z (`GemmAccumulatorS8_v2`), the cell check and the masked partials, with the
+dequant's and the chain's words as parameters. `Proofs.Pouw.H1Zy` proves it the lane check `LeafChecks` reads.
+
+`Tile`: `PouwH1TileZy_v1{TILE}`'s `ok` (`h1zy._body`) over `PouwH1Tile_v1` or `PouwH1Tile_v3` on its primitives' word
+views: TILE's z (EXACT, or the one-stream's recombination, wrap correction and dither peel at its noise) and the
+record's cell check. `Proofs.Pouw.H1Zy` proves it the check `TileChecks` reads.
+
 ## `PearlC`: Pearl-C's Π and the statements about it
 
 Π's shared definitions (`Defs`): the parameters, the E4M3 encoder, the BF16 conversion and the FP32 encoder, the row
@@ -156,10 +181,26 @@ two (`Completeness`).
 `Duo`: duo's step, runs of one to four words and of any length (`benchmarks/pouw/receipts/receipt_folds.py`,
 `duo_word`). `Fx1`: sm_120's fold, one keyed IMAD by an odd multiplier in front of duo's step (decision 83). `Li`: li's
 half step, a chain of them and a checkpoint, the XOR of several chains' states (`li_step`). Their binding statements
-are `Models.Pouw.Guarantees.Receipt`, proved in `Proofs.Pouw.Receipt`.
+are `Definitions.Pouw.Guarantees.Receipt`, proved in `Proofs.Pouw.Receipt`.
 
 ## `TileBound`: the FP4-tile model (`docs/pouw/fp4-tile-model.md`, bc-d9842080)
 
 `Defs`: the model over `BLACKWELL_SM120_NVF4`'s tile gate, with per-slot pricing and the rewrite class (trusted
 definitions). `Proofs`: the block-support count and the cost bounds it gives.
+
+## `Window`: a window of calls
+
+One draw that depends on the registration (C1), then the calls' sessions in order, in the form of C-Flock's one-stage
+audit: the game, the laws and their product (M1), the units' statements (self-contained tiles whose seed's position and
+roots are read at their place in the committed transcript, decision 106) and PoUW's harm family (`harmSets`), each
+call's analysis, the premises of the window's composition in the compiled tables' shape (a constant plus a term of the
+prover's state) and the window's collision term (`coll`, bounded at the sessions' counted queries by `CollCounted`),
+what the served pass committed (`ServedPass`) and the transcripts that are its (`Anchored`, `Served`), the tie to what's
+served (`ServedTie`, open on main), and the deployed draw, sampled proofs' service's uniform subset in rank-ordered
+sessions (`serviceLaw`, `sessionLaw`, `CopyClosed`) with its units' statements, the tiles' read in every session
+(`UnitStmts.copies`, `WrongCopyClosed`).
+The window's ε from its calls' (M2) and the service's draw at `η = 0` are `Definitions.Pouw.Guarantees.Window`, stated and
+not yet proved. `Proofs.Pouw.Window`: the deployed wrong sets are copy-closed, PoUW's reading with the served tie, the
+collision term on average over the oracle, and the bridge from the window's game to C-Flock's, with C-Flock's knowledge
+bound at main's `--zk` sessions.
 -/

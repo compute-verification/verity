@@ -3,26 +3,28 @@
 what lets them move to the catalog, which imports only `verity`, once the other families' modules are Definitions only too.
 
 An import is any import statement in the module, a function-level one included, with a relative one resolved against the registry
-package; `from verity_vllm.program.registry import m` imports the module `m`.
+package; `from verity.ml.definitions.registry import m` imports the module `m`.
 """
 from __future__ import annotations
 
 import ast
+import importlib.util
 import sys
 from pathlib import Path
 
 import pytest
 
-REGISTRY = "verity_vllm.program.registry"
-DIR = Path(__file__).resolve().parents[2] / "verity_vllm" / "program" / "registry"
+REGISTRY = "verity.ml.definitions.registry"
+DIR = Path(importlib.util.find_spec(REGISTRY).origin).parent
 FAMILY = ("moe", "moe_pad", "boolean_moe", "fp8", "fp8_moe", "fp8_moe_experts", "boolean_fp8", "boolean_fp8_moe", "nvfp4",
           "boolean_gather", "dsv4_moe", "boolean_dsv4_moe")
 #: other families' modules the family's Definitions call: the scalar and bit primitives (`prims`, `ref_prims`, `pad_prims`), the B1
 #: composites (`b1`), Hopper's tensor-core step (`hopper`), the lifted-Definition makers (`lifted`), the Boolean bit views
-#: (`boolean_attention._Bits`), and the SwiGLU and logf that DeepSeek-V4's routers and activation call (`act`, `boolean_silu`,
-#: `topp_word_gates`, `gumbel_boolean`)
+#: (`boolean_attention._Bits`), the SwiGLU and logf that DeepSeek-V4's routers and activation call (`act`, `boolean_silu`,
+#: `topp_word_gates`, `gumbel_boolean`), and the i32 gather `GatherI32x{V}_v1` that `boolean_gather.gather_i32` lowers
+#: (`dsv4_decode_indices`, which also registers its row's numpy twin, so it is no Definitions-only module yet)
 OTHER_DEFINITION_MODULES = ("b1", "prims", "ref_prims", "pad_prims", "hopper", "lifted", "boolean_attention", "act", "boolean_silu",
-                            "topp_word_gates", "gumbel_boolean")
+                            "topp_word_gates", "gumbel_boolean", "dsv4_decode_indices")
 ALLOWED = {f"{REGISTRY}.{m}" for m in FAMILY + OTHER_DEFINITION_MODULES}
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.ml.circuits"
@@ -52,7 +54,8 @@ def _core(name: str) -> bool:
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
     moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.ml.private_circuits", "verity.ml.circuits.ops",
-                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock")
+                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock",
+                "verity.ml.definitions")
     return under("verity") and (not any(map(under, moved_in))
                                 or any(map(under, ("verity.core.protocols", "verity.core.claims"))))
 
@@ -70,8 +73,8 @@ def test_a_definition_module_imports_only_verity_and_definition_modules(name):
 
 
 def test_the_rule_sees_what_it_forbids(tmp_path, monkeypatch):
-    (tmp_path / "x.py").write_text("import numpy as np\n\n\ndef f():\n    from ..kernels import fp8_twins\n"
+    (tmp_path / "x.py").write_text("import numpy as np\n\n\ndef f():\n    from verity.ml.definitions.numerics import fp8_twins\n"
                                    "    from . import fp8, targets\n")
     monkeypatch.setattr(sys.modules[__name__], "DIR", tmp_path)
     assert [(m, _allowed(m)) for m, _ in _imports("x")] == [
-        ("numpy", False), ("verity_vllm.program.kernels", False), (f"{REGISTRY}.fp8", True), (f"{REGISTRY}.targets", False)]
+        ("numpy", False), ("verity.ml.definitions.numerics", False), (f"{REGISTRY}.fp8", True), (f"{REGISTRY}.targets", False)]

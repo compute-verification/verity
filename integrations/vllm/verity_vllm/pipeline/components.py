@@ -1,5 +1,7 @@
 """The request components GP-01 composes (`global_program`): a derived dir's descriptor, its wrapper parameters and its provenance, and
-the component decoded from them -- one at a time, or each as its derive finishes while the others still run (`follow_components`)."""
+the component decoded from them -- one at a time, or each as its derive finishes while the others still run (`follow_components`).
+A Boolean derive's component is its word Program (`program.boolean.word_descriptor`), the one its instance sequence and wrapper
+parameters are written in, held to the word digest its derive recorded."""
 from __future__ import annotations
 
 import gzip
@@ -10,12 +12,13 @@ import time
 
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import REGISTRY
-from verity_vllm.check.match.batch_decomp import derived_shape
+from verity_vllm.check.match.derived_index import derived_shape
 from verity_vllm.program import workload as W
+from verity.ml.definitions.boolean import word_descriptor
 
 
 def load_desc(d: str) -> dict:
-    with gzip.open(os.path.join(d, "descriptor.json.gz"), "rb") as f:
+    with gzip.open(word_descriptor(d), "rb") as f:
         return json.loads(f.read())
 
 
@@ -67,6 +70,16 @@ def recorded_component_digest(d: str) -> str | None:
     return None
 
 
+def recorded_word_digest(d: str) -> str | None:
+    """A Boolean derive's word Program digest (result.json `program.word_digest`), when its word descriptor is beside it."""
+    if word_descriptor(d).name == "descriptor.json.gz":
+        return None
+    try:
+        return str((json.load(open(os.path.join(d, "result.json"))).get("program") or {})["word_digest"])
+    except (OSError, ValueError, KeyError) as e:
+        raise ValueError(f"{d}: a word descriptor without its recorded word digest (result.json program.word_digest): {e!r}") from None
+
+
 def recorded_registration(d: str) -> dict | None:
     """What a component registers (result.json `program.supplied`, a registered_values derive's): its `values` fields with their bits
     and its tables' names; None for a component that holds its values as constants. Parameter positions are left out: they shift with
@@ -92,19 +105,19 @@ def registration_refusal(dirs: list[str]) -> str | None:
 
 
 def component_provenance(d: str, desc: dict) -> dict:
-    """[rev-pm M-0123 E] the component descriptor GP-01 composes must be the Program the derive recorded: its recomputed digest must equal
+    """The component descriptor GP-01 composes must be the Program the derive recorded: its recomputed digest must equal
     result.json/artifact.json's program_digest.  `refusal` names the mismatch (fail closed); a component dir with no recorded digest is
     refused too (a descriptor without provenance is not a Build artifact)."""
     from verity.ml.circuits.codec import program_digest
     recomputed = program_digest(desc)
-    recorded = recorded_component_digest(d)
+    recorded, word = recorded_component_digest(d), recorded_word_digest(d)
     refusal = None
     if recorded is None:
         refusal = f"{d}: no recorded program digest (result.json program.digest / artifact.json program_digest): the component has no provenance"
-    elif recorded != recomputed:
-        refusal = (f"{d}: descriptor digest {recomputed[:16]} != the digest the derive recorded {recorded[:16]}: the component descriptor is not "
-                   f"the Program derive_step built")
-    return {"dir": d, "descriptor_digest": recomputed, "recorded_digest": recorded,
+    elif (word or recorded) != recomputed:
+        refusal = (f"{d}: descriptor digest {recomputed[:16]} != the {'word ' if word else ''}digest the derive recorded {(word or recorded)[:16]}: "
+                   f"the component descriptor is not the Program derive_step built")
+    return {"dir": d, "descriptor_digest": recomputed, "recorded_digest": recorded, **({"word_digest": word} if word else {}),
             "descriptor_sha256": hashlib.sha256(canonical_json(desc)).hexdigest(), "refusal": refusal}
 
 

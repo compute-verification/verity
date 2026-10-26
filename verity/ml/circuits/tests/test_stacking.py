@@ -17,7 +17,7 @@ import pytest
 from verity.ml.circuits import stacking as P
 from verity.ml.circuits.census import census
 from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, _Widths
 from verity.ml.circuits.ops import fp32, prims, scalar
 from verity.ml.circuits.ops.s8 import S32LowByte
 from verity.ml.circuits.ports import In, Leaves, Out, Ports
@@ -193,12 +193,14 @@ def test_an_accumulator_from_a_run_input_is_refused():
 BOUND = (-(1 << 20), 1 << 20)
 
 
-def test_a_run_inputs_declared_bound_is_not_taken():
-    """No declared `In(bound)` is taken on trust (18 Oct): evaluation doesn't enforce a run input's bound, so the accumulator
-    from a run input whose port bounds it far from the s32 edge is no more proven than one without."""
-    program, ends = int8_program(acc0="input", ports=Ports(params={"c": In(bound=BOUND)}))
-    v = judge(program, ends)
-    assert codes(v) == ["s8-window"] and v.reasons[0]["sites"][0]["acc"] == list(P.S32)
+def test_a_run_inputs_declared_bound_is_refused():
+    """No declared `In(bound)` is taken on trust (18 Oct): evaluation doesn't enforce a run input's bound, so a run input whose
+    port bounds it far from the s32 edge, whole or on some of its leaves, is refused when its Program is built (`E_PORT_BOUND`),
+    and never judged as bounded."""
+    with pytest.raises(ValueError, match=r"E_PORT_BOUND: program function TestInt8Program_v1: parameter 'c' leaves \[0, 1\)"):
+        int8_program(acc0="input", ports=Ports(params={"c": In(bound=BOUND)}))
+    with pytest.raises(ValueError, match=r"E_PORT_BOUND: program function TestFromInputLeaf_v1: parameter 'c' leaves \[0, 1\)"):
+        _from("TestFromInputLeaf", lambda B, c: c[0], C0)
 
 
 def _rem(a, b):
@@ -214,6 +216,7 @@ REM = stand_in("I32Rem", (("a", S32), ("b", S32)), ports=Ports(transfer=_rem))
 FIRST = comp("TestFirst", (("c", Array(2, S32)),), S32, lambda B, _S, c: c[0], ports=Ports(ret=Out(interval=BOUND)))
 SILENT = comp("TestFirstSilent", (("c", Array(2, S32)),), S32, lambda B, _S, c: c[0])
 C0 = Ports(params={"c": Leaves(((0, 1, In(bound=BOUND)),))})
+RANGE = stand_in("TestRangeS32", (("a", S32),), ports=Ports(ret=Out(interval=BOUND)))
 
 
 def _from(name: str, start, ports=None) -> P.Analysis:
@@ -224,19 +227,27 @@ def _from(name: str, start, ports=None) -> P.Analysis:
     return P.analyze(program, census(program, [len(program.root.body.nodes)]))
 
 
-@pytest.mark.parametrize("label,start,ports,proven", [
-    ("declared", lambda B, c: B.call(DIV, c[0], c[1]), None, True),
-    ("undeclared", lambda B, c: B.call(I32DIV, c[0], c[1]), None, False),
-    ("transfer", lambda B, c: B.call(REM, c[0], B.call(prims.const(32, 1000))), None, True),
-    ("transfer-of-any-word", lambda B, c: B.call(REM, c[0], c[1]), None, False),
-    ("input-leaf", lambda B, c: c[0], C0, False),
-    ("composite", lambda B, c: B.call(FIRST, c), C0, True),
-    ("silent-composite", lambda B, c: B.call(SILENT, c), C0, False)])
-def test_a_producers_declared_interval_narrows_its_value(label, start, ports, proven):
-    """A primitive's declared interval, its transfer on its operands' ranges, and a Definition's declared return narrow its
-    value; an input leaf's declared bound doesn't, and a composite that declares nothing gives any word."""
-    a = _from(f"TestFrom{label.title().replace('-', '')}", start, ports)
+@pytest.mark.parametrize("label,start,proven", [
+    ("declared", lambda B, c: B.call(DIV, c[0], c[1]), True),
+    ("undeclared", lambda B, c: B.call(I32DIV, c[0], c[1]), False),
+    ("transfer", lambda B, c: B.call(REM, c[0], B.call(prims.const(32, 1000))), True),
+    ("transfer-of-any-word", lambda B, c: B.call(REM, c[0], c[1]), False),
+    ("input-leaf", lambda B, c: c[0], False),
+    ("composite", lambda B, c: B.call(FIRST, B.batch(RANGE, c, axes=(0,))), True),
+    ("silent-composite", lambda B, c: B.call(SILENT, c), False)])
+def test_a_producers_declared_interval_narrows_its_value(label, start, proven):
+    """A primitive's declared interval, its transfer on its operands' ranges, and a Definition's declared return (held to its
+    body, here a range check's) narrow its value; a run input's leaf spans its width, and so does a composite that declares
+    nothing over it."""
+    a = _from(f"TestFrom{label.title().replace('-', '')}", start)
     assert a.unproven == ({} if proven else {IMMA.id: 2}), label
+
+
+def test_a_declared_return_over_a_run_input_is_refused():
+    """A Definition's declared return holds by its body: over a run input's leaf, which spans its width, it is refused when
+    the Program is built, so a composite's declaration never stands in for a bound on the run input it reads."""
+    with pytest.raises(ValueError, match="E_PORT_INTERVAL: TestFirst_v1 declares Out"):
+        _from("TestFromCompositeUnchecked", lambda B, c: B.call(FIRST, c))
 
 
 def test_port_intervals_read_as_signed_ranges():
@@ -289,14 +300,24 @@ def _reinterpreting_program(how: str) -> tuple[Program, list[int]]:
     return program, [len(program.root.body.nodes)]
 
 
-@pytest.mark.parametrize("how,where", [("broadcast", "Root[TestReinterpretBroadcast_v1]_v1"),
-                                       ("affine", "Root[TestReinterpretAffine_v1]_v1"), ("ret", "TestNarrow_v1"), ("mixed", None)])
-def test_a_word_read_at_another_width_is_refused(how, where):
-    program, ends = _reinterpreting_program(how)
-    v = judge(program, ends)
+_IMMA_A = r"node \d+ \(primitive BlackwellS8ImmaDot32_v1\) argument 'a': leaf 0 is typed Value<8> but names leaf 0 of node \d+"
+
+
+@pytest.mark.parametrize("how,where,built", [
+    ("broadcast", "Root[TestReinterpretBroadcast_v1]_v1", _IMMA_A), ("affine", "Root[TestReinterpretAffine_v1]_v1", _IMMA_A),
+    ("ret", "TestNarrow_v1", r"the body's return: leaf 0 is typed Value<8> but names leaf 0 of parameter 'd'"),
+    ("mixed", None, None)])
+def test_a_word_read_at_another_width_is_refused(how, where, built, monkeypatch):
+    """A word read back at another width is refused when its Program is built (`E_REINTERPRET`, as when decoded); past that
+    check (patched out here), the property refuses it too. The s8 field of a mixed tuple, read at its own width, passes both."""
     if where is None:
+        v = judge(*_reinterpreting_program(how))
         assert v.ok and v.numbers["family_steps"] == 2, v.reasons
         return
+    with pytest.raises(TypeError, match=f"E_REINTERPRET: {built}"):
+        _reinterpreting_program(how)
+    monkeypatch.setattr(_Widths, "first", lambda self, c: None)
+    v = judge(*_reinterpreting_program(how))
     assert codes(v) == ["reinterpretation"] and v.reasons[0]["definitions"] == {where: 1}, v.reasons
 
 
@@ -412,7 +433,8 @@ def test_the_table_is_leans_class_of():
     the family's (run and registered inputs are read by their node, not the table); and each id the table lists that Lean
     doesn't is in `NOT_IN_LEAN`. Then the FP dots are roundings (refused for their operand bits, not their class),
     and so are the integer products reduced mod 2^w and the field extractions; the clamps and the 1-bit logic ops are
-    compare_selects; PoUW's wrapping dots are family steps, and the receipt fold a fold."""
+    compare_selects; PoUW's wrapping dots are family steps (H1's segment dots among them), and the receipt folds' steps
+    folds."""
     ids, families = lean_class_of()
     assert len(ids) > 200 and {i: (P.class_of(i), c) for i, c in ids.items() if P.class_of(i) != c} == {}
     assert set(P.CLASSES) - set(ids) <= NOT_IN_LEAN, set(P.CLASSES) - set(ids) - NOT_IN_LEAN
@@ -428,8 +450,9 @@ def test_the_table_is_leans_class_of():
     assert {P.class_of(f) for f in ("F32Sat_v1", "S32ClampS8_v1", "S32ClampS8_v2", "And2_v1", "Xor2_v1", "BitNot_v1", "Not_v1",
                                     "PouwSel32_v1")} == {"compare_select"}
     assert P.class_of("Bf16ToF32_v1") == "affine" and P.class_of("Lifted[Bf16ToF32_v1]_v2") == "roundings"
-    assert {P.class_of(f) for f in ("PouwSegDot_v1", "PouwDot16U8S8_v1", "BlackwellS8ImmaDot32_v2")} == {"family"}
-    assert P.class_of("PouwDuoAbsorb_v1") == "folds"
+    assert {P.class_of(f) for f in ("PouwSegDot_v1", "PouwSegDot_v2", "PouwSegDot0_v1", "PouwSegDot0_v2", "PouwDot16U8S8_v1",
+                                    "BlackwellS8ImmaDot32_v2")} == {"family"}
+    assert {P.class_of(f) for f in ("PouwDuoAbsorb_v1", "PouwFx1Absorb_v1", "PouwFx1Absorb_v2")} == {"folds"}
     family = ("GatherBf16x128256_v1", "TableRead16x4_v1", "TopPMaskWordx151936_v1", "Const8[0x7f]_v1",
               "BlackwellU8S8ImmaDot32_v1", "Zero_v1", "GatherBf16x16_v2")
     assert [P.class_of(f) for f in family] == ["gathers"] * 2 + ["compare_select", "const", "family", None, None]
@@ -804,5 +827,5 @@ def test_the_table_is_pinned():
     assert P.digest() == PINNED, P.digest()
 
 
-PINNED = ("fc77df15d3eed2a2674fc349bd90e05ff6780b1fd202abd04a10b81fabbc0e1b"
-          "632cff84629a15e07091630bdb5df2fad578398859c00e9e515de3570c6e4c3b")
+PINNED = ("9d2ce91d019e29a91a9f180cdfa204a9bfeda9c71a755d60c795564330c4963d"
+          "a872af5a8c69326f1e319fcc9b8d7cc2b4fea1c7f60c714f23ec1571e1173f8f")

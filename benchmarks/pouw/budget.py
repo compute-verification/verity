@@ -147,12 +147,14 @@ FAMILIES = (
            "RTX PRO 6000", 1.80, "vy-nebius-1/2: $14.40/h for 8 GPUs with their host (measured price)",
            served=0.1737, route=0.0012505, skip_no_pv=0.001321, pv_share=0.0184, pre_fill=((1.0, (("IMAD", 1.0),)),),
            pv_noise=(0.341 / 0.417, -0.010)),
-    Family("H200", "sm_90", "LI-CP-W redux L32 (DC-90-ri, decision 98)", "dither-2s-licpw-redux-l32", "DC-90-ri",
+    Family("H200", "sm_90", "LI-CP-W redux L32, ffill at p = 1 (DC-90-ri, decisions 98 and 99)",
+           "dither-2s-licpw-redux-p1-l32", "DC-90-ri",
            "H200", 5.40, "vy-dc-h200: $5.40/h, one GPU with its host (measured price)",
-           served=0.1045, route=0.0, skip_no_pv=0.0, pv_share=0.0185),
-    Family("B200", "sm_100", "LI-CP-W redux heavy L32 (DC-100-ri)", "dither-2s-licpw-redux-heavy-l32", "DC-100-ri",
+           served=0.0979, route=0.0, skip_no_pv=0.0, pv_share=0.0185),
+    Family("B200", "sm_100", "LI-CP-W redux L32, ♭ without LDTM, the fold the checks read (DC-100-ri)",
+           "dither-2s-licpw-redux-ldtm0-l32", "DC-100-ri",
            "B200", 7.00, "vy-dc-b200: $7.00/h, one GPU with its host (measured price)",
-           served=0.2065, route=0.004308, skip_no_pv=0.0, pv_share=0.0185),
+           served=0.2061, route=0.0, skip_no_pv=0.0, pv_share=0.0185),
     Family("L40S", "sm_89", "dither-2s L16 (ADA-89)", "dither-2s-l16", "", "L40S", 1.90,
            "vy-dc-l40s: $1.90/h, one GPU with its host (measured price)",
            served=0.2186, route=0.000226, skip_no_pv=0.0, pv_share=0.0185, larger_l=(16, 32, 0.126726, 1.5446)),
@@ -208,10 +210,11 @@ def _cut_label(cut: dict) -> str:
 
 def sampling_sweep(tree: Path, out: Path = SAMPLING_DATA) -> dict:
     """Regenerate `budget_sampling.json` from OPT2's planner on `tree`, a checkout with
-    `benchmarks/sampling_plan/int8_llama.py` (cursor/sampling-optimizer-c7a9 at 470cea0c79 or later, whose `for_budget`
-    bisects). Per regime its frontier at δ_s, and at each spend of SPEND_GRID the least-ε plan within it (`at_budget`,
-    the zero-work templates included): ε_sample, the draws a week, the share of the plan's cost that grows with a unit's
-    ANDs (all but the sessions' fixed cost) and the linears' cut. ≈ 2 s a regime."""
+    `benchmarks/sampling_plan/int8_llama.py` whose B is the serve-time total (ASK-25), run with `scheme=None` so a spend
+    is sampling's alone, the serve-time commitments being `budget.py`'s own terms. Per regime its frontier at δ_s, and at
+    each spend of SPEND_GRID the least-ε plan within it (`at_budget`, the zero-work templates included): ε_sample, the
+    draws a week, the share of the plan's cost that grows with a unit's ANDs (all but the sessions' fixed cost) and the
+    linears' cut. ≈ 2 s a regime."""
     tree = Path(tree).resolve()
     sys.path[:0] = [str(tree), str(tree / "benchmarks" / "sampling_plan")]
     import int8_llama as P
@@ -221,14 +224,14 @@ def sampling_sweep(tree: Path, out: Path = SAMPLING_DATA) -> dict:
     v = {k: i.value for k, i in I.items()}
     regimes = {}
     for name, (commit, statement) in REGIMES.items():
-        _, w, costs, objective, cands, alts, _, plans = P.run(v, commit=commit, statement=statement)
+        _, w, costs, objective, cands, alts, _, plans = P.run(v, commit=commit, statement=statement, scheme=None)
         extra = P.zero_work_cost(costs, v)
         pts = []
         for bs in SPEND_GRID:
-            p = P.at_budget(v["commit_floor"] + bs, plans, cands, costs, objective, w, v, extra)
+            p = P.at_budget(bs, plans, cands, costs, objective, w, extra)
             if p is None:
                 continue
-            s = P.summarize(p, w, v, extra, alts)
+            s = P.summarize(p, w, extra, alts)
             sessions = sum(math.ceil(n / s["statement"][t]) for t, n in s["draws"].items())
             total = p.cost["total"] + extra
             pts.append([bs, float(f"{s['eps']:.7g}"), sum(s["draws"].values()),

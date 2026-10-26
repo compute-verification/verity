@@ -1,9 +1,20 @@
 {
  "roots": ["NetworkCertifier"],
  "exempt": {
-  "NetworkCertifier.DifftestMain": "the difftest against the Python audit, under `runs`: compiled evaluation of NetworkCertifier.Difftest.main, audited under NetworkCertifier, a test and not a proof"
+  "NetworkCertifier.ChargeDifftestMain": "the charge difftest against arith_encode.reference_charge, under `runs`: compiled evaluation of NetworkCertifier.AdviceV1.ChargeDifftest.main, audited under NetworkCertifier, a test and not a proof",
+  "NetworkCertifier.DifftestMain": "the difftest against the Python audit, under `runs`: compiled evaluation of NetworkCertifier.Difftest.main, audited under NetworkCertifier, a test and not a proof",
+  "NetworkCertifier.WindowDifftestMain": "the window charge's difftest against window_charge.reference_window, under `runs`: compiled evaluation of NetworkCertifier.WindowCharge.WindowDifftest.main, audited under NetworkCertifier, a test and not a proof"
  },
  "runs": {
+  "NetworkCertifier.ChargeDifftestMain": {
+   "why": "4,000 random instances on which advice v1's charge (AdviceV1.window from a carry, and AdviceV1.charges from the book's priors) gives what arith_encode.reference_charge gives, window by window and chained",
+   "args": ["{charge/instances.jsonl}", "{charge/python.jsonl}", "4000"],
+   "data": {
+    "charge/instances.jsonl": "c9414a0972a9234ac8947d5b16d2d4e535b9c5326cb88c1b48d20a2d88945b10",
+    "charge/python.jsonl": "feb58acfa1ca6780f2cdc1fba0b21a6a72f4d74ffd3dea571f1d9c28a562cac8"
+   },
+   "generate": ["python3", "scripts/charge_vectors.py", "{repo}", "--out", "{out}"]
+  },
   "NetworkCertifier.DifftestMain": {
    "why": "10,000 random instances on which NetTiming's definitions (expectedRow, and Accepted of constantRate and StatusComplete by decide) give what the Python audit gives: schedule.expected_grids, Audit.check_link with the first differing bucket, Audit.check_ingress_link, and each prefix's acceptance",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "10000"],
@@ -12,9 +23,23 @@
     "difftest/python.jsonl": "355d87108c136dd003c12c07f4026ec776d07922de7c1dbbe47381f48b74796f"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
+  },
+  "NetworkCertifier.WindowDifftestMain": {
+   "why": "4,000 random instances on which advice v1's whole window charged (WindowCharge.window from a carry, and WindowCharge.charges from the book's first carry) gives what window_charge.reference_window gives, window by window and chained",
+   "args": ["{window/instances.jsonl}", "{window/python.jsonl}", "4000"],
+   "data": {
+    "window/instances.jsonl": "30e1bb0c246b19cb532f2016797fb017599ea706dc27de7575af55859201e6a3",
+    "window/python.jsonl": "a1adfd8cec5e431d1ca2f3ec1f33581128ce761a187650ffaf6ebdb02fd4e74a"
+   },
+   "generate": ["python3", "scripts/window_vectors.py", "{repo}", "--out", "{out}"]
   }
  },
  "layers": {
+  "NetworkCertifier.AdviceV1": {
+   "imports": [],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
   "NetworkCertifier.Grid": {
    "imports": [],
    "except": [],
@@ -32,6 +57,11 @@
   },
   "NetworkCertifier.Schedule": {
    "imports": ["NetworkCertifier.Run"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "NetworkCertifier.WindowCharge": {
+   "imports": ["NetworkCertifier.AdviceV1"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   }

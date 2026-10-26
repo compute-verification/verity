@@ -10,7 +10,9 @@ How it works
    stay in place (no functionalisation), lifted parameters/buffers/constants are placeholders.
 2. Parameters and buffers become ONE prescribed `weights` record input (one field per *distinct tensor*: tied
    parameters are one field referenced from every placeholder that shares the tensor — boundary 3). Lifted
-   tensor constants are refused (`hidden_state`) unless a rule accounts for them.
+   tensor constants are refused (`hidden_state`) unless a rule accounts for them. A value the served run decides and no
+   circuit computes (the top-k order of a DSA row past TOPK) is a field of a `run` input a rule declares (`Rule.run_inputs`),
+   checked in gates: each check's bit is an output after the source's (`Ctx.check`), which the verifier requires to be 1.
 3. Every graph node is translated by exactly one applicable rule (`rules/`): views are reference rearrangements;
    ops/in-place ops/state patterns emit calls of REGISTERED definitions bound to the mode's kind vocabulary
    (profile mode: the profile's kernels; reference mode: exact CPU-f32 kinds). Rules decide structurally
@@ -47,9 +49,10 @@ from verity.ml.circuits.liveness import DeadGateReport, dead_gates as _dead_gate
 from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Type, Value
 from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, REASONS, Refuse, Unsupported, _jsonable, refuse
 from verity_vllm.program.frontend.provenance import registry_version
-from verity_vllm.program.frontend.registration import Registration
+from verity_vllm.program.frontend.registration import Registration, RunInputs
 from verity_vllm.program.frontend.report import DeriveReport, DeriveSession
-from verity_vllm.program.replay import replayer
+from verity_vllm.program.prune import kept_records
+from verity.ml.definitions.replay import replayer
 from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
 from verity_vllm.program.frontend.rules.base import ANY, InPlaceRule, Rule, RuleSet, StateRule, ViewRule
 
@@ -134,7 +137,7 @@ def _runs_intersect(a: list[tuple[str, int, int, int]], b: list[tuple[str, int, 
 
 
 def module_registrations(module) -> tuple[set[str], dict[str, str]]:
-    """[R15 moe GATE-PATH] (every registered path of every submodule, duplicate path -> first registration).  `named_modules()` (the
+    """[GATE-PATH] (every registered path of every submodule, duplicate path -> first registration).  `named_modules()` (the
     implementation's vocabulary, what a hook-based collector names its tensors by) yields each module ONCE under its first path;
     `remove_duplicate=False` yields the other registrations of the same object (vLLM's MoERunner re-registers the block's router as
     its own `gate`; `get_rope` shares one RotaryEmbedding across layers).  Not a torch module: nothing known."""
@@ -183,16 +186,19 @@ class Ctx:
     def __init__(self, *, mode: str, profile: str | None, config: dict | None, allowed_dims: dict, name: str, ruleset: RuleSet,
                  vocab, module, ep, B: Builder, user_inputs: dict[str, Coll], weights_coll: Coll | None, weights: list[WeightLeaf],
                  placeholder_to_weight: dict[str, int], lifted_constants: dict[str, str], registration: Registration | None = None,
-                 weights_param: int | None = None) -> None:
+                 weights_param: int | None = None, run_inputs: RunInputs | None = None) -> None:
         self.mode, self.profile, self.config, self.allowed_dims, self.name = mode, profile, dict(config or {}), dict(allowed_dims or {}), name
         self.ruleset, self.vocab, self.module, self.ep, self.B = ruleset, vocab, module, ep, B
         self.user_inputs, self.weights_coll, self.weights = user_inputs, weights_coll, weights
         self.placeholder_to_weight, self.lifted_constants = placeholder_to_weight, lifted_constants
         self.registration, self.weights_param = registration, weights_param   # the registered inputs (`registered_values`)
+        self.run_inputs = run_inputs   # the `run` parameter a rule declares (`Rule.run_inputs`)
+        self.checks: list[tuple[Coll, str]] = []   # (one bit, what it checks): outputs after the source's, required 1 (`check`)
+        self.checks_output: int | None = None
         self.env: dict[Any, Any] = {}
         self.storage: _Storage = _Storage()  # node -> storage base node (alias groups); absent: own storage
         self.stale: dict[Any, str] = {}  # node -> why its value may no longer be read (alias of a mutated tensor)
-        self.written_allocs: set = set()
+        self.written_allocs: dict = {}  # node an in-place rule wrote -> the storage base it was written through
         self.mutation_effects: list[dict] = []
         self.returned_inputs: list[dict] = []
         self.applications: list[dict] = []
@@ -282,14 +288,14 @@ class Ctx:
 
     def stack_path(self, node) -> str:
         """The producing module's path in the source module's OWN vocabulary (`named_modules()`), from the node's `nn_module_stack`.
-        [R15 moe GATE-PATH] the export names a module by the attribute path the trace took; a module reached through a holder that is
+        [GATE-PATH] the export names a module by the attribute path the trace took; a module reached through a holder that is
         not its registering parent comes out UNROOTED (vLLM 0.28's MoERunner keeps the router as `self.gate` and calls it inside its own
         forward: the router Gemm's stack ends in a bare `gate`, one name for 48 layers) or under a DUPLICATE registration
         (`...mlp.experts.gate` where `named_modules()` yields `...mlp.gate`).  Rooted entries are kept verbatim (a shared RoPE instance
         stays under each layer's path, as the manifest's alias rule expects); an unrooted entry is resolved relative to its parent's
         registered path or, extending the previous unrooted entry, to that entry's holder (GLM-5.3's `_shared_experts._layer.act_fn`,
         from `...mlp.experts`), a duplicate registration replaced by the first (`...mlp.shared_experts.act_fn`, the collector's name).
-        M-0595: a ROOTED duplicate stays under the duplicate name (C1 coverage FAILS it as missing, never a silent merge); an unrooted
+        A ROOTED duplicate stays under the duplicate name (C1 coverage FAILS it as missing, never a silent merge); an unrooted
         entry under NO registered path keeps its bare name and is COUNTED in `unresolved_module_paths` (provenance)."""
         stack = node.meta.get("nn_module_stack") or {}
         if not stack:
@@ -356,7 +362,7 @@ class Ctx:
         return self._registered(node, f"value {name!r}", lambda r: r.value(name, int(width), int(bits), distinct))
 
     def table(self, name: str, node=None) -> Coll:
-        """The registered table `name` (`verity_vllm.program.registry.tables`), declared by a rule (`Rule.registered_tables`)."""
+        """The registered table `name` (`verity.ml.definitions.registry.tables`), declared by a rule (`Rule.registered_tables`)."""
         return self._registered(node, f"table {name!r}", lambda r: r.table(name))
 
     def _registered(self, node, what: str, read) -> Coll:
@@ -367,6 +373,24 @@ class Ctx:
             return read(self.registration)
         except ValueError as e:
             refuse("numerics_unregistered", node, self.module_path(node), str(e))
+
+    def run_value(self, name: str, t: Type, node=None) -> Coll:
+        """The field `name` of the `run` parameter (`RunInputs.value`): a value the served run decides and the Program checks in
+        gates rather than computes, declared by the rule's `Rule.run_inputs`."""
+        node = node or self.current
+        try:
+            if self.run_inputs is None:
+                raise ValueError(f"run value {name!r} read but no rule declared run inputs for this graph (`Rule.run_inputs`)")
+            return self.run_inputs.value(name, t)
+        except ValueError as e:
+            refuse("side_input", node, self.module_path(node), str(e))
+
+    def check(self, ok: Coll, what: str) -> None:
+        """Make the bit ``ok`` one of the Program's checks: an output after the source's, which the verifier requires to be 1
+        (the provenance's `checks` names each)."""
+        if ok.type != Value(1):
+            raise TypeError(f"a check is one bit, not {ok.type!r} ({what})")
+        self.checks.append((ok, what))
 
     def call(self, fn, *args: Coll, node=None, rule: Rule | None = None, name: str | None = None) -> Coll:
         node = node or self.current
@@ -434,7 +458,7 @@ class Ctx:
             if inp is not None:
                 self.mutation_effects.append({"input": inp, "node": self.current.name, "rule": rule.rule_id, "what": what,
                                               "representation": "the mutated value is the pure result; the Input gates keep the pre-mutation value"})
-            self.written_allocs.add(node)
+            self.written_allocs[node] = self.storage_base(node)
         self.env[node] = new_value
         self.storage.pop(node, None)  # fresh storage
 
@@ -472,13 +496,15 @@ def derive(source, example_inputs: Sequence[Any], *, mode: str, profile: str | N
 def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
                   rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
                   check_registry: bool = True, rank: tuple[int, int] | None = None, exported=None,
-                  registered_values: bool = False, session: list | None = None) -> DeriveReport:
+                  registered_values: bool = False, session: list | None = None, dead_free: bool = False) -> DeriveReport:
     """`registered_values`: the program's values (the norms' eps, the attention scale) are fields of a registered `values` parameter
     (before `weights`), read by the Definitions that take them as inputs (`TargetProfile.registered_values`); the provenance's
     `supplied` states every field's bits.  `rank=(world, rank)`: the rank coordinate of a tensor-parallel rank Program.  It is written into the runtime correspondence
     (`annotations["correspondence"].rank`, explicit integers) and NOWHERE else: not a static, not a config -- the Program's identity
     (`program_digest`) does not depend on it.  `exported`: the caller's export of `source` (same inputs and shims), derived from.
-    `session`: a list that receives the derivation's `DeriveSession` when it succeeds (`relabel.rank_report` reads it)."""
+    `session`: a list that receives the derivation's `DeriveSession` when it succeeds (`relabel.rank_report` reads it).
+    `dead_free`: the flat body in the registered compiler's form (`program.prune.dead_free`: without the units no output reads, each
+    Definition with dead gates swapped for its version without them), and the correspondence's Calls with it."""
     if mode not in ("profile", "reference"):
         raise ValueError("mode must be 'profile' or 'reference'")
     if rank is not None and not (len(rank) == 2 and 0 <= int(rank[1]) < int(rank[0])):
@@ -500,9 +526,9 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
                                     name=name, ruleset=ruleset, vocab=vocab, _ctx_holder=holder, exported=exported,
                                     registered_values=registered_values)
         head = (dict(prov), dict(ctx.unresolved_module_paths)) if session is not None else None
-        rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry)
+        rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry, dead_free=dead_free)
         if session is not None:
-            session.append(DeriveSession(flat_sd, ctx, *head, name, mode, ruleset, check_registry, rank, rep.family))
+            session.append(DeriveSession(flat_sd, ctx, *head, name, mode, ruleset, check_registry, rank, rep.family, dead_free))
         return rep
     except Refuse as e:
         prov["unsupported"] = e.u.to_json()
@@ -516,7 +542,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
 
 
 def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode: str, ruleset: RuleSet, rank: tuple[int, int] | None,
-                   check_registry: bool) -> DeriveReport:
+                   check_registry: bool, dead_free: bool = False) -> DeriveReport:
     """The derivation's tail over the finished flat body: provenance, runtime correspondence, the flat Program and its digest, the
     family claims, `prov["result"]`.  Raises `Refuse` / `FrontendError` (the caller reports them)."""
     prov["weights"] = [w.to_json() for w in ctx.weights]
@@ -528,21 +554,30 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
     prov["rules_applied"] = sorted({a["rule"] for a in ctx.applications})
     if ctx.registered_values:
         prov["supplied"] = ctx.registration.layout()
+    if ctx.run_inputs is not None:
+        prov["run_inputs"] = ctx.run_inputs.layout()
+    if ctx.checks:
+        prov["checks"] = {"output": ctx.checks_output, "accept": 1, "of": [w for _, w in ctx.checks]}
     # runtime correspondence (`runtime-correspondence/v1`): per Call the owning module, the source occurrence and the return /
     # argument slots -- data beside the Program, under ONE annotation namespace, digested apart (annotations never enter program_digest)
     from verity_vllm.program.frontend.emit import NAMESPACE as _CORR, emit_correspondence
     from verity_vllm.correspondence.runtime import correspondence_digest
     corr_doc = emit_correspondence(ctx, flat_sd.body, rank=rank)
+    body, corr_doc["calls"], hints = kept_records(flat_sd.body, corr_doc["calls"], ctx.node_hints, registered=dead_free)
+    flat_sd = flat_sd if body is flat_sd.body else _flat_definition(flat_sd.defn.name[len("Derived["):-1], body, flat_sd.bindings["SRC"], mode)
     corr_digest = correspondence_digest(corr_doc)
-    flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in ctx.node_hints.items()}, _CORR: corr_doc},
-                           registered=ctx.registration.names if ctx.registered_values else ())
+    flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in hints.items()}, _CORR: corr_doc},
+                           registered=ctx.registration.names if ctx.registered_values else (),
+                           theta=() if ctx.weights_param is None else (flat_sd.signature()[0][ctx.weights_param][0],))
     check_identity(flat_program, check_registry=check_registry)
     flat_digest = program_digest(flat_desc := encode_program(flat_program))
     program, family_report = flat_program, None
     for fam in ruleset.families:
         if fam.modes is not None and mode not in fam.modes:
             continue
-        a = "a family claim keeps no registered parameter" if ctx.registered_values else fam.applies_program(flat_sd, ctx)
+        a = ("a family claim keeps no registered parameter" if ctx.registered_values else
+             "a family claim keeps no run parameter or checks" if ctx.run_inputs is not None or ctx.checks else
+             fam.applies_program(flat_sd, ctx))
         if a is not True:
             prov.setdefault("families_not_applied", []).append({"rule": fam.rule_id, "why": a})
             continue
@@ -675,8 +710,9 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
             leaves.append(WeightLeaf(fname, (), "derived_table", ftype, tuple(shp), derivation.get("dtype", f"{w}-bit"), len(leaves),
                                      {"rule": r.rule_id, **derivation}))
 
-    # parameters of the flat function: the user inputs (by placeholder name), the registered `values` (finalised after the
-    # translation: its fields are the values the Definitions read), the registered tables the rules declare, and the weights record
+    # parameters of the flat function: the user inputs (by placeholder name), the `run` values a rule declares (`Rule.run_inputs`,
+    # finalised after the translation), the registered `values` (finalised likewise: its fields are the values the Definitions
+    # read), the registered tables the rules declare, and the weights record
     user_names = list(sig.user_inputs)
     if len(user_names) != len(example_inputs):
         refuse("shape", None, None, f"{len(example_inputs)} example inputs vs {len(user_names)} graph inputs")
@@ -687,6 +723,8 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
         if not isinstance(v, torch.Tensor):
             refuse("dynamic_control_flow", ph_nodes[un], None, f"input {un} is not a tensor (symbolic scalar inputs are not static structure)")
         params.append((un, type_of_tensor(v)))
+    run_inputs = (RunInputs.declare(params) if any(r.run_inputs(ep, mode) for r in ruleset.rules if r.modes is None or mode in r.modes)
+                  else None)
     registration = Registration.declare(params, ruleset, ep, mode) if registered_values else None
     wrec_t = Record(*[(w.name, w.type) for w in leaves]) if leaves else None
     if wrec_t is not None:
@@ -698,15 +736,22 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
     weights_coll = pcolls[-1] if wrec_t is not None else None
     ctx = Ctx(mode=mode, profile=profile, config=config, allowed_dims=allowed_dims, name=name, ruleset=ruleset, vocab=vocab, module=module,
               ep=ep, B=B, user_inputs=user_inputs, weights_coll=weights_coll, weights=leaves, placeholder_to_weight=placeholder_to_weight,
-              lifted_constants=lifted, registration=registration, weights_param=len(params) - 1 if wrec_t is not None else None)
+              lifted_constants=lifted, registration=registration, weights_param=len(params) - 1 if wrec_t is not None else None,
+              run_inputs=run_inputs)
     if _ctx_holder is not None:
         _ctx_holder.append(ctx)
     out = _translate(ctx)
+    if run_inputs is not None:
+        try:
+            run_inputs.finish(params)
+        except ValueError as e:
+            refuse("side_input", None, None, str(e))
     if registration is not None:
         try:
             registration.finish(params)
         except ValueError as e:
             refuse("numerics_unregistered", None, None, str(e))
+    if run_inputs is not None or registration is not None:
         B.params = tuple(params)
     B.ret_type = out.type
     body = B.finish(out)
@@ -783,6 +828,9 @@ def _translate(ctx: Ctx) -> Coll:
             if space == "p":
                 ctx.returned_inputs.append({"output": i, "param": idx, "leaves": [lo, hi],
                                             "weights": idx == ctx.weights_param})
+    if ctx.checks:
+        ctx.checks_output = len(outs)
+        outs.append(Coll(Array(len(ctx.checks), Value(1)), _concat_refs([c.refs for c, _ in ctx.checks])))
     ret = outs[0] if len(outs) == 1 else Coll(TupleT(*[o.type for o in outs]), _concat_refs([o.refs for o in outs]))
     return ret
 

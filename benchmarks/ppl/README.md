@@ -164,6 +164,8 @@ times 2^b), with s_q = f32(2^b)/f32(L) and P = e as before, so keys whose e roun
 The arms:
 - `vllm-int8` is vLLM's plain step as VLLM-18 serves it: int8 everywhere, rounded, unrotated, lm_head bf16, float
   softmax.
+- `vllm-int8-lm` and `vllm-int8-lut-cal-lm` are `vllm-int8` and `vllm-int8-lut-cal` with lm_head on the same int8 grid,
+  as recipe `verity-int8-channel127/v2` serves it (VLLM-49).
 - `vllm-int8-khead` changes only the K scale, to one per (layer, KV head).
 - `-khead-sink` is `-lut-sink`'s float twin: the same K scales, float softmax, and key 0 in a P block of its own
   (`p_sink`).
@@ -256,6 +258,17 @@ exits 1.
 
 `models.py` pins each snapshot by revision under the node's HF cache (`run.py tables models` lists them).
 
+GLM-5.3 (`glm.py`) is read from its block-FP8 checkpoint, streamed: `pins/glm-5.3.json` pins every file's sha256, and
+each safetensors shard is pulled from the hub when a layer needs it, checked and deleted once read (`stream.py`), so
+its 705 GB need no copy on the node. Its bf16 reference is the FP8 weights dequantized (codes times their 128 × 128
+scales, in FP32, rounded to bf16) with HF's `GlmMoeDsaDecoderLayer` op for op (MLA, the sigmoid router in FP32, eager
+experts), checked by `hf_reference`. It runs at 2048 only: DSA's indexer keeps index_topk = 2048 keys per query, so at
+T ≤ 2048 attention is dense causal, and longer windows are refused. Arms reach its linears, every routed expert's
+included, on the rows routed to it; attention stays bf16. `fp8-block` is the checkpoint as vLLM serves it (its own
+E4M3 weights, activations per token and group of 128), and `int8-channel127-v3` the int8 W8A8 linears H1 serves, as
+recipe `verity-int8-channel127/v3` makes them: each weight's row codes from its exact float64 dequant (`int8.exact`),
+the LM head int8 too, and kv_b_proj bf16.
+
 The engine (`engine.py`, tonight's layer-wise evaluation) reads one layer's weights at a time from the safetensors with
 its own reader. Every stream of every window, the reference, calibration and each (arm, seed), goes through that layer
 before the next is read. So a model of any size fits one GPU, every arm shares one pass over the weights, and
@@ -296,7 +309,7 @@ point's runs. The floor covers what moves a deterministic arm between harnesses:
 
 ## Tests
 
-`uv run tools/verity/check/suites.py benchmarks/ppl` runs the CPU tests on tiny random Llama and Qwen2 models: spec
+`uv run tools/verity/check/suites.py benchmarks/ppl` runs the CPU tests on tiny random Llama, Qwen2 and block-FP8 GLM models: spec
 parsing, the window recipe and lock, the significance rule, the engine's bf16 stream against an independent float64
 forward, every gate on the adopted arms, gates that fail on sabotage reporting nothing, sharding, seeds, and HF parity
 where transformers is importable.

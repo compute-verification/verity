@@ -164,13 +164,59 @@ def test_conditions_source_from_git_tree_clean_dirty_and_lockfile(tmp_path):
                    "lockfiles": {"uv.lock": c["source.lockfiles.uv.lock"]}}
 
 
-def test_conditions_source_hint_fills_only_unknowns(tmp_path):
+def test_the_source_hint_is_the_whole_identity_without_git_and_unread_with_it(tmp_path):
     hint = {"commit": "c" * 40, "tree": "t" * 40, "dirty": False}
     c = E.conditions(source_root=tmp_path, source_hint=hint)          # a shipped git archive: no .git
     assert (c["source.commit"], c["source.tree"], c["source.dirty"]) == ("c" * 40, "t" * 40, False)
     root = _repo(tmp_path)
-    g = E.conditions(source_root=root, source_hint=hint)
-    assert g["source.commit"] != "c" * 40, "git wins over the hint when it is available"
+    stale = {"commit": "c" * 40, "tree": "t" * 40, "dirty": True, "dirty_digest": E.EMPTY_DIGEST}
+    g = E.conditions(source_root=root, source_hint=stale)
+    assert (g["source.commit"], g["source.dirty"], g["source.dirty_digest"]) == (_git(root, "rev-parse", "HEAD"), False, None), \
+        "with git, no field of the hint fills in (r20261019-180708-c2a5: a clean checkout took the launcher's digest)"
+
+
+def test_launch_names_the_commit_it_shipped_not_the_checkout_it_read(tmp_path, monkeypatch):
+    """r20261019-180708-c2a5: the launcher read its checkout (HEAD 92867710, dirty), a commit landed, and `ship_source` shipped the
+    new HEAD (0040ca11, clean); the run went out with the read's identity.  The identity sent is now the shipped commit's, and it
+    replaces any the caller passed (the keeper refuses the flag twice)."""
+    from research import remote
+
+    shipped, tree = "b" * 40, "e" * 40
+    monkeypatch.setattr(remote, "resolve_machine", lambda name, project: {"root": "/r", "python": "python3"})
+    monkeypatch.setattr(remote, "pod_target", lambda m: {"host": "h", "port": 22, "user": "u", "pod_name": "n", "cost_per_hr": 0,
+                                                         "rate_observed_utc": "t"})
+    monkeypatch.setattr(remote, "wake", lambda m, ssh: None)
+    monkeypatch.setattr(remote, "ship_tool", lambda *a: "/r/tool/x")
+    monkeypatch.setattr(remote, "ship_source", lambda ssh, root, src: (shipped, f"/r/src/{shipped}", {"tree": tree, "transport": "stream"}))
+    staged = []
+
+    def stage(ssh, root, run_id, request, sends, private=None):
+        staged.append(request)
+        raise remote.Refused("staged")
+
+    monkeypatch.setattr(remote, "stage_request", stage)
+    stale = json.dumps({"commit": "a" * 40, "dirty": True, "dirty_digest": E.EMPTY_DIGEST})
+    with pytest.raises(remote.Refused, match="staged"):
+        remote.launch(run_id="r1", local_dir=tmp_path / "runs" / "r1", machine_name="n", project="verity", command=["true"],
+                      harness_args=["--stage", "t", "--source-identity", stale], source=_repo(tmp_path), sends=[], cwd=None, env={},
+                      exclusive=False)
+    args = staged[0]["harness_args"]
+    assert args.count("--source-identity") == 1 and remote.flag_value(args, "--tree-sha") == shipped
+    assert json.loads(remote.flag_value(args, "--source-identity")) == {"commit": shipped, "tree": tree, "dirty": False, "dirty_digest": None}
+
+
+def test_a_runner_given_a_hint_for_another_commit_than_it_ran_keeps_only_the_shipped_sha(tmp_path, monkeypatch):
+    """A launcher older than `shipped_identity` still sends what it read before shipping: the machine's runner keeps the sha it was
+    shipped as (--tree-sha) and drops the rest of a hint that names another commit."""
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "store"))
+    monkeypatch.chdir(tmp_path)
+    stale = json.dumps({"commit": "a" * 40, "tree": "t" * 40, "dirty": True, "dirty_digest": E.EMPTY_DIGEST})
+    rc = research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", "--tree-sha", "b" * 40,
+                        "--source-identity", stale, "--", "true"])
+    assert rc == 0
+    run_dir = next(p for p in (tmp_path / "runs").iterdir() if p.is_dir())
+    c = json.loads((run_dir / "job.json").read_text())["store"]["conditions"]
+    assert (c["source.commit"], c["source.tree"], c["source.dirty"], c["source.dirty_digest"]) == ("b" * 40, None, None, None)
 
 
 def test_conditions_from_old_job_record_copies_only_recorded_facts():

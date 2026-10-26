@@ -21,6 +21,11 @@ use when that is less) it also refuses the lighter ones: a pytest of named files
 check`. The same command through `research run`, or over ssh, runs elsewhere and passes; `AGENT_GUARD_LOCAL_OK=1` anywhere in
 the command passes it too.
 
+No tool call may block more than 20 minutes (Daniel, 19 Oct: an agent blocked in one long call looks silent and misses its
+wake-ups). So it refuses a command that plainly would: a `sleep` past BLOCK_CAP_S (`sleep 3000`, `sleep 30m`, `sleep 2h`,
+`sleep infinity`), there or in `bash -c`, `$(...)` or over ssh, unless a `timeout` around it ends it sooner or it runs in the
+background (`&`), and `research run --wait-max S` past the cap. A polling loop is judged only by the sleeps it names.
+
 One agent per checkout (worktree_guard.py): it refuses an agent's branch switch in a worktree another agent owns, and its push of
 a branch registered to another agent.
 
@@ -31,6 +36,7 @@ on an allowed command reaches no one). The agent then re-runs the command. A ref
 message queued, and the delivered text is appended to `<conversation_id>.delivered`.
 """
 import json
+import math
 import os
 import re
 import shlex
@@ -112,8 +118,9 @@ def env_command(args: list[str]) -> list[str]:
     return []
 
 
-def unwrap(words: list[str]) -> list[str]:
-    """`words` without leading assignments and wrappers (`sudo -u USER`, `timeout 30`, `nice -n 5`, `command`, ...)."""
+def unwrap(words: list[str], timeouts: list[str] | None = None) -> list[str]:
+    """`words` without leading assignments and wrappers (`sudo -u USER`, `timeout 30`, `nice -n 5`, `command`, ...); each
+    `timeout`'s duration goes to `timeouts`."""
     while words:
         if words[0] in KEYWORDS or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", words[0], re.S):
             words = words[1:]
@@ -122,10 +129,20 @@ def unwrap(words: list[str]) -> list[str]:
             while words and words[0].startswith("-"):
                 words = words[2:] if words[0] in WRAPPER_ARG_OPTIONS.get(wrapper, ()) else words[1:]
             if wrapper == "timeout":
+                if timeouts is not None:
+                    timeouts.extend(words[:1])
                 words = words[1:]
         else:
             return words
     return words
+
+
+def assigned(words: list[str], name: str) -> str:
+    """The value `words` assigns to `name` ahead of the command they run (`NAME=VALUE cmd ...`), or ""."""
+    for w in words[:len(words) - len(unwrap(words))]:
+        if w.startswith(name + "="):
+            return w[len(name) + 1:]
+    return ""
 
 
 def one_pid(args: list[str]) -> bool:
@@ -151,6 +168,14 @@ def every_argv(args: list[str]) -> bool:
     if one_pid(args):
         return False
     return bool(set(short) & set("fF")) if fmt is None else shown
+
+
+def ssh_command(args: list[str]) -> str:
+    """What `ssh ARGS` runs on the far side ("" for a login shell)."""
+    i = 0
+    while i < len(args) and args[i].startswith("-"):
+        i += 2 if args[i][-1] in SSH_ARG_OPTIONS and len(args[i]) == 2 else 1
+    return " ".join(args[i + 1:])
 
 
 def refused(words: list[str], filtered: bool = False) -> bool:
@@ -180,10 +205,7 @@ def refused(words: list[str], filtered: bool = False) -> bool:
     if name in SHELLS and "-c" in args[:-1]:
         return refused_text(args[args.index("-c") + 1])
     if name == "ssh":
-        i = 0
-        while i < len(args) and args[i].startswith("-"):
-            i += 2 if args[i][-1] in SSH_ARG_OPTIONS and len(args[i]) == 2 else 1
-        return refused_text(" ".join(args[i + 1:])) if i + 1 < len(args) else False
+        return refused_text(ssh_command(args))
     if name == "research" and "ssh" in args and "--" in args:
         return refused_text(" ".join(args[args.index("--") + 1:]))
     if name == "ps":
@@ -293,7 +315,8 @@ def local_work_reason(command: str) -> str | None:
     """Why this command may not run on this VM, or None."""
     w = 0 if LOCAL_OK in command else weight(command)
     remote = (f"Run it on a node: `research run --on auto -- CMD` (queued onto vy-nebius-2 from this checkout: 4 CPUs, 16 GB "
-              f"and 60 min unless --cpus, --mem-gb or --timeout say otherwise; add --wait to block until it ends). For a small local run "
+              f"and 60 min unless --cpus, --mem-gb or --timeout say otherwise; add --wait to block until it ends, for at most 20 "
+              f"minutes). For a small local run "
               f"you know fits, put {LOCAL_OK} in the command.")
     if w == ALWAYS:
         return ("builds and tests run on our nodes, not on an agent VM (every handle, at Daniel's request, 18 Oct: OOM kills on "
@@ -309,6 +332,66 @@ def local_work_reason(command: str) -> str | None:
             f"tests or a build here: on a VM other agents share, the kernel would OOM-kill some agent's processes. " + remote)
 
 
+#: no tool call may block longer (Daniel, 19 Oct): an agent blocked in one long call looks silent and misses its wake-ups
+BLOCK_CAP_S = 1200
+DURATION = re.compile(r"(\d+(?:\.\d*)?|\.\d+)([smhd]?)")
+UNIT_S = {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}
+
+
+def duration(args: list[str]) -> float | None:
+    """Seconds `sleep ARGS` lasts (GNU sleep sums its arguments; `timeout`'s DURATION reads the same), or None when an argument
+    isn't a literal one (`$N`)."""
+    total = 0.0
+    for a in args:
+        if a in ("inf", "infinity"):
+            return math.inf
+        if not (m := DURATION.fullmatch(a)):
+            return None
+        total += float(m[1]) * UNIT_S[m[2]]
+    return total if args else None
+
+
+def blocks_words(words: list[str]) -> float:
+    """Seconds one simple command plainly blocks the shell for: a `sleep`, `research run --wait-max S`, or what `bash -c` or ssh
+    runs, each bounded by a `timeout` around it; 0 when it states no literal time."""
+    s = max((blocks_text(w.split("$(", 1)[1]) for w in words if "$(" in w), default=0.0)
+    timeouts: list[str] = []
+    words = unwrap(strip_redirections(words), timeouts)
+    bound = min((d for t in timeouts if (d := duration([t])) is not None), default=math.inf)
+    name, args = (os.path.basename(words[0]), words[1:]) if words else ("", [])
+    if name == "sleep":
+        s = max(s, duration(args) or 0.0)
+    elif name in SHELLS and "-c" in args[:-1]:
+        s = max(s, blocks_text(args[args.index("-c") + 1]))
+    elif name == "ssh":
+        s = max(s, blocks_text(ssh_command(args)))
+    elif name == "research" and args[:1] == ["run"]:
+        opts = args[:args.index("--")] if "--" in args else args
+        given = [opts[i + 1] for i, a in enumerate(opts[:-1]) if a == "--wait-max"]
+        given += [a.split("=", 1)[1] for a in opts if a.startswith("--wait-max=")]
+        s = max([s, *(float(g) for g in given if DURATION.fullmatch(g) and not g[-1].isalpha())])
+    return min(s, bound)
+
+
+def blocks_text(text: str) -> float:
+    """The longest any simple command of `text` plainly blocks for; one sent to the background (`&`) blocks nothing."""
+    try:
+        commands = words_of(text)
+    except ValueError:
+        return 0.0
+    return max((blocks_words(words) for words, op in commands if op != "&"), default=0.0)
+
+
+def block_reason(command: str) -> str | None:
+    """Why this command may not run as one tool call (it would block past BLOCK_CAP_S), or None."""
+    s = blocks_text(command)
+    if s <= BLOCK_CAP_S:
+        return None
+    return (f"this command would block for {'ever' if s == math.inf else f'{s:g} s'}, past {BLOCK_CAP_S} s: no tool call may block "
+            "more than 20 minutes (Daniel, 19 Oct); end your turn and let the run's completion or a timer subscription wake you. "
+            f"`research run --wait` stops after {BLOCK_CAP_S} s on its own and names the command to check back with.")
+
+
 def checkout_reason(command: str, conversation: str, cwd: str) -> str | None:
     """One agent per checkout (worktree_guard.py): why this command's git may not run here, or None."""
     sys.dont_write_bytecode = True                      # no __pycache__ beside the hook: boot.sh copies its directory file by file
@@ -316,10 +399,11 @@ def checkout_reason(command: str, conversation: str, cwd: str) -> str | None:
     import worktree_guard
 
     try:
-        commands = [unwrap(strip_redirections(words)) for words, _ in words_of(command)]
+        raw = [strip_redirections(words) for words, _ in words_of(command)]
     except ValueError:
         return None
-    return worktree_guard.reason(commands, conversation, cwd)
+    next_ok = [assigned(w, "AGENT_GUARD_PUSH_NEXT_OK") for w in raw]
+    return worktree_guard.reason([unwrap(w) for w in raw], conversation, cwd, next_ok)
 
 
 def delivery(conversation: str) -> str | None:
@@ -356,7 +440,11 @@ def main() -> int:
     except Exception:                                   # a bug here must not allow what the fallback would refuse
         deny = bool(FALLBACK.search(command) or ENVIRON.search(command))
     try:
-        low = None if deny else local_work_reason(command)
+        low = None if deny else block_reason(command)
+    except Exception:                                   # a bug in the block gate must not stop every command
+        low = None
+    try:
+        low = low or (None if deny else local_work_reason(command))
     except Exception:                                   # a bug in the local-work gate must not stop every command
         low = None
     try:

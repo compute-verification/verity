@@ -23,7 +23,8 @@ Each root keeps a hidden index, `.verdicts-index.json`, memoizing its entries' s
 check's closing `export` stat the cache instead of re-reading it (hundreds of GB once grown); only new or changed entries are
 read.  Hidden files are never listed and never packed, and a missing or garbled index only costs the re-read.
 
-A pack is a gzipped tar of regular files under `check/` and `tests/`. `import` refuses a pack holding anything else (a link, an
+A pack is a tar of regular files under `check/` and `tests/`, gzipped, or xz-compressed when `export_paths` writes a recorded
+check's reused passes (`check.Reused`), whose circuit-check entries share most of their bytes. `import` refuses a pack holding anything else (a link, an
 absolute or `..` path, a device, another prefix, a hidden file), and it never overwrites an entry that exists here. A member in a
 part of the caches that is never packed is left out, not refused, so a pack written before that part was is still taken.
 """
@@ -34,6 +35,7 @@ import gzip
 import hashlib
 import io
 import json
+import lzma
 import os
 import sys
 import tarfile
@@ -138,20 +140,34 @@ def snapshot() -> dict[str, str]:
     return _digests()
 
 
-def _write(out: Path, items) -> int:
-    """Write ``items`` ((pack path, bytes), in order) as a pack at `out`; the number written."""
+#: an xz pack's filter: a dictionary spanning many entries, since one tree's circuit-check entries share most of what they record
+#: (300 of them, 68 MB: 11 MB gzipped, 0.35 MB this way, in less time; vy-nebius-cpu-1, 19 Oct)
+XZ_FILTERS = [{"id": lzma.FILTER_LZMA2, "preset": 1, "dict_size": 64 << 20}]
+
+
+def _compressed(raw, xz: bool):
+    # the same entries always make the same pack: no file name or mtime in the gzip header (xz has neither)
+    return lzma.LZMAFile(raw, "wb", format=lzma.FORMAT_XZ, filters=XZ_FILTERS) if xz else \
+        gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0)
+
+
+def _write(out: Path, items, xz: bool = False) -> int:
+    """Write ``items`` ((pack path, bytes or a file), in order) as a pack at `out`, gzipped, or xz-compressed (``xz``); the number
+    written."""
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_name(out.name + ".tmp")
     n = 0
-    # the same entries always make the same pack: no mtimes in the tar, and no file name or mtime in the gzip header
-    with open(tmp, "wb") as raw, gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as gz, \
-            tarfile.open(fileobj=gz, mode="w", format=tarfile.PAX_FORMAT) as tar:
+    with open(tmp, "wb") as raw, _compressed(raw, xz) as z, tarfile.open(fileobj=z, mode="w", format=tarfile.PAX_FORMAT) as tar:
         for k, data in items:
             info = tarfile.TarInfo(k)
             info.mode, info.mtime = 0o644, 0
             if isinstance(data, Path):
-                info.size = data.stat().st_size
-                with open(data, "rb") as f:
+                try:
+                    f = open(data, "rb")
+                except FileNotFoundError:
+                    continue
+                with f:
+                    info.size = os.fstat(f.fileno()).st_size
                     tar.addfile(info, f)
             else:
                 info.size = len(data)
@@ -161,27 +177,47 @@ def _write(out: Path, items) -> int:
     return n
 
 
-def export(out: Path, since: dict[str, str] | None = None) -> int:
-    """Write the entries new or changed since `since` (all when None) as a pack at `out`; the number written.  With `since`,
-    only the new or changed entries are read (`_digests`), so a check's closing export costs what the run stored, not the
-    whole cache."""
+def changed(since: dict[str, str]) -> dict[str, tuple[str, Path]]:
+    """`{pack path: (sha256, file)}` of the entries new or changed since `since` (a `snapshot`)."""
     found = entries()
-    if since is None:
+    return {k: (d, found[k]) for k, d in _digests(found).items() if since.get(k) != d}
+
+
+def export(out: Path, since: dict[str, str] | None = None, new: dict[str, tuple[str, Path]] | None = None) -> int:
+    """Write the entries new or changed since `since` (all when None; ``new``, `changed(since)`, when given) as a pack at `out`;
+    the number written.  With `since`, only the new or changed entries are read (`_digests`), so a check's closing export costs
+    what the run stored, not the whole cache."""
+    if since is None and new is None:
+        found = entries()
+
         def items():
             for k, p in sorted(found.items()):
                 data = _read(p)
                 if data is not None:
                     yield k, data
     else:
-        digests = _digests(found)
+        new = changed(since) if new is None else new
 
         def items():
-            for k in sorted(digests):
-                if since.get(k) != digests[k]:
-                    data = _read(found[k])
-                    if data is not None:
-                        yield k, data
+            for k in sorted(new):
+                data = _read(new[k][1])
+                if data is not None:
+                    yield k, data
     return _write(out, items())
+
+
+def export_paths(out: Path, paths, xz: bool = False) -> int:
+    """Write the entries here that ``paths`` (pack paths) name as a pack at `out`, in path order, each once; one that isn't here
+    (or is no verdict entry) is left out.  The number written."""
+    base = roots()
+    files = {}
+    for k in paths:
+        prefix, _, rel = k.partition("/")
+        parts = Path(rel).parts
+        if prefix in base and k.endswith(".json") and parts and ".." not in parts and not any(x.startswith(".") for x in parts) \
+                and not _skipped(prefix, parts[0]) and (base[prefix] / rel).is_file():
+            files[k] = base[prefix] / rel
+    return _write(out, sorted(files.items()), xz)
 
 
 class BadPack(Exception):
@@ -202,10 +238,10 @@ def _members(tar: tarfile.TarFile) -> list[tarfile.TarInfo]:
 
 
 def refusal(pack: Path) -> str | None:
-    """Why `import` and `combine` would refuse the pack (not a gzipped tar, or a member that isn't a verdict entry); None when
+    """Why `import` and `combine` would refuse the pack (not a gzipped or xz-compressed tar, or a member that isn't a verdict entry); None when
     they take it."""
     try:
-        with tarfile.open(pack, "r:gz") as tar:
+        with tarfile.open(pack, "r:*") as tar:
             _members(tar)
     except (BadPack, tarfile.TarError, OSError, EOFError) as e:
         return f"{type(e).__name__}: {e}"
@@ -216,7 +252,7 @@ def import_(pack: Path) -> tuple[int, int]:
     """Add the pack's entries that don't exist here; (added, already here).  Nothing is written when the pack is refused."""
     base = roots()
     added = kept = 0
-    with tarfile.open(pack, "r:gz") as tar:
+    with tarfile.open(pack, "r:*") as tar:
         members = _members(tar)
         for m in members:
             prefix, rel = m.name.split("/", 1)
@@ -225,7 +261,8 @@ def import_(pack: Path) -> tuple[int, int]:
                 kept += 1
                 continue
             dst.parent.mkdir(parents=True, exist_ok=True)
-            tmp = dst.with_name(f".{dst.name}.import")
+            # this process's own name: two checks on one machine can import the same entry at once
+            tmp = dst.with_name(f".{dst.name}.{os.getpid()}.import")
             tmp.write_bytes(tar.extractfile(m).read())
             os.replace(tmp, dst)
             added += 1
@@ -245,7 +282,7 @@ def combine(packs: list[Path], out: Path) -> int:
     try:
         found: dict[str, Path] = {}
         for pack in packs:
-            with tarfile.open(pack, "r:gz") as tar:
+            with tarfile.open(pack, "r:*") as tar:
                 for m in _members(tar):
                     if m.name not in found:
                         p = found[m.name] = spill / str(len(found))

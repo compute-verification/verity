@@ -20,6 +20,8 @@ from verity_vllm.check.match import global_match_fast as GMF
 from verity_vllm.pipeline import cli
 from verity_vllm.check.match import declaration as GD
 from verity_vllm.check.match import sampler_geometry as SG
+from verity_vllm.records.global_match import GlobalMatch
+from verity_vllm.records import workload as WL
 from tests.check import test_batch_decomp_e2e as e2e
 from tests.check.test_batch_decomp_e2e import (A_DOWN_W, A_EMBED, A_GU_W, A_IDS, A_LN1, A_LN2, A_NORM, A_O_W, A_POS, A_QKV_W, BF,
                                                                             BS, I32D, I64D, W_COS, W_DOWN, W_EMBED, W_GU, W_LN1, W_LN2, W_NORM,
@@ -197,11 +199,11 @@ def persist(result, events, d, reqs):
     return str(d)
 
 
-def component(req, d):
+def component(req, d, witness=None):
     """The request served alone to its CAP (the bounded request-wrapper component): a B=1 fold record stands in for derive_step."""
     full = dict(req, arrive=0, sampled=list(req["sampled"]) + [1] * (_cap(req) - len(req["sampled"])))
     evs = batched_log([full])
-    r = fold(evs, profile(), strict=True)
+    r = fold(evs, profile(witness=witness), strict=True)
     p = persist(r, evs, d, [full])
     json.dump({"structural_inputs": {"LP": len(req["prompt"]), "T": _cap(req) - 1}}, open(f"{p}/construction_manifest.json", "w"))
     return p
@@ -215,7 +217,7 @@ def p_attention_tgrouped(node, ctx):
     from tests.observe.test_fold_synthetic import _kv_flat, _slot
     from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
     BN = e2e.BN
     if node.op != "vllm.unified_attention_with_output.default" or len(node.children) != 1:
         return None
@@ -241,9 +243,9 @@ def profile_tgrouped(leak=False):
     return Profile("toy", pats, dict(C), toy.weight_field, False)
 
 
-def batched(reqs, d, leak=False, tgrouped=False, wl_sha=None):
+def batched(reqs, d, leak=False, tgrouped=False, wl_sha=None, witness=None):
     evs = batched_log(reqs, wl_sha)
-    r = fold(evs, profile_tgrouped(leak) if tgrouped else profile(leak), strict=True)
+    r = fold(evs, profile_tgrouped(leak) if tgrouped else profile(leak, witness), strict=True)
     assert r.report.unsupported == 0 and not r.errors
     return persist(r, evs, d, reqs)
 
@@ -346,9 +348,16 @@ def move_consumer_before_producer(oracle_dir, rid="r1", sampler_to_head=False):
     return new_of[c_old] - n_in, new_of[p_old] - n_in
 
 
+def workload_doc(**fields):
+    """A workload (`records.workload`) with the fields every writer writes, and `fields`."""
+    return {"schema": WL.SCHEMA, "model": "toy", "engine": {}, "variants": {"greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0}},
+            "requests": [], **fields}
+
+
 def workload(reqs, path):
-    json.dump({"requests": [{"request_id": r["id"], "prompt_token_ids": list(r["prompt"]), "max_tokens": _cap(r), "arrive_step": _arr(r), "seed": r.get("seed")} for r in reqs],
-               "sampling": {"temperature": 0.0, "variant": "greedy"}, "sweep": {"arrive_steps": [_arr(r) for r in reqs]}}, open(path, "w"))
+    json.dump(workload_doc(requests=[{"request_id": r["id"], "prompt_token_ids": list(r["prompt"]), "max_tokens": _cap(r), "arrive_step": _arr(r),
+                                      **({"seed": r["seed"]} if r.get("seed") is not None else {})} for r in reqs],
+                           sampling={"temperature": 0.0, "variant": "greedy"}, sweep={"arrive_steps": [_arr(r) for r in reqs]}), open(path, "w"))
     return str(path)
 
 
@@ -360,19 +369,20 @@ def _sha(path):
 EOS = 11   # the fixture model's EOS id (R1_EOS stops on it); the Program declares it as its stop rule (F-pm-24)
 
 
-def assemble(reqs, tmp_path, leak=False, tgrouped=False, eos_token_ids=(EOS,), lag=0):
+def assemble(reqs, tmp_path, leak=False, tgrouped=False, eos_token_ids=(EOS,), lag=0, witness=None):
     """workload manifest + one bounded component per distinct shape + the batched record -> (global Program, oracle dir).  The record's
     RunHeader.workload.sha256 is the manifest's (the driver records the manifest it ran) [M-0570].  [R17-1] `lag` = the LAG the mock
     Program DECLARES (default 0: the toy engine schedules synchronously and its preamble attests async_scheduling False); None = a
-    pre-R17-1 Program that declares no lag."""
+    pre-R17-1 Program that declares no lag.  `witness`: the record's norms read the `schedule` witness (e2e.profile), the components'
+    their own."""
     tmp_path.mkdir(parents=True, exist_ok=True)
     wl = workload(reqs, tmp_path / "workload.json")
-    oracle = batched(reqs, tmp_path / "batched", leak, tgrouped, wl_sha=_sha(wl))
+    oracle = batched(reqs, tmp_path / "batched", leak, tgrouped, wl_sha=_sha(wl), witness=witness)
     comps = {}
     for r in reqs:
         sh = (len(r["prompt"]), _cap(r) - 1)
         if sh not in comps:
-            comps[sh] = component(r, tmp_path / f"comp_LP{sh[0]}_T{sh[1]}")
+            comps[sh] = component(r, tmp_path / f"comp_LP{sh[0]}_T{sh[1]}", witness=witness and "own")
     return gm.mock_global_program(wl, list(comps.values()), eos_token_ids=list(eos_token_ids) if eos_token_ids else None, lag=lag), oracle
 
 
@@ -401,8 +411,12 @@ def test_b2_unequal_requests_pass_globally(memory, tmp_path):
     assert g7["boundary_probes"] > 0 and g7["boundary_probe_failures"] == 0
     assert res["x09"]["verdict"] == "PASS"
     assert not res["eos_truncated_requests"]
+    written = json.loads(json.dumps(res, default=str))                     # as the CLI writes it
+    rec = GlobalMatch.of(written, "global_match.json")                     # the record the account link reads
+    assert rec.dump() == written and rec.verdict == "PASS" and rec.check("G6").lengths_by_request is not None
 
 
+@pytest.mark.slow
 def test_fast_path_releases_its_caches_when_the_outermost_check_returns(memory, tmp_path, monkeypatch):
     """[R17 mprof unit 4, rev F-r17-06] MATCH_IMPL=fast memoises per Prog / Projection for the duration of ONE check() -- including its
     nested alternate-criterion run -- and holds nothing afterwards, so a process that checks several records does not grow by one
@@ -443,6 +457,7 @@ def test_fast_path_releases_its_caches_when_the_outermost_check_returns(memory, 
     assert json.dumps(strip(res), sort_keys=True, default=str) == json.dumps(strip(ref), sort_keys=True, default=str)
 
 
+@pytest.mark.slow
 def test_fast_path_passes_its_operations_and_rebinds_nothing(memory, tmp_path, monkeypatch):
     """MATCH_IMPL=fast hands GM-01 and its X-09 run `global_match_fast.ops()` explicitly: after a fast check() every Verity core and
     checker-of-record function is the object it was before, the fast run's Programs are its own (MemoProg, progressions), and a record
@@ -479,6 +494,20 @@ def test_fast_path_passes_its_operations_and_rebinds_nothing(memory, tmp_path, m
         == json.dumps(strip(again), sort_keys=True, default=str)
 
 
+def test_witness_parameters_are_request_owned_globally(memory, tmp_path):
+    """A profile witness (the Marlin align's `schedule`, one parameter per request after the peers) is its request's input: G2 attributes
+    every instance, G5 finds the weights after the witnesses, and each request reads its own witness as its component's input of that
+    name; a request reading another's witness is a cross-request read."""
+    gp, oracle = assemble([R0, R1_LATE], tmp_path / "own", witness="own")
+    res = gm.check(gp, oracle)
+    assert res["verdict"] == "PASS", res["reasons"]
+    assert res["x09"]["verdict"] == "PASS" and _check(res, "G2")["unattributed"] == 0
+    gp, oracle = assemble([R0, R1_LATE], tmp_path / "borrow", witness="borrow")
+    res = gm.check(gp, oracle)
+    assert res["verdict"] == "FAIL" and _check(res, "G5")["status"] == "FAIL"
+    assert any("witness-param" in p for p in _check(res, "G5")["problems"]), _check(res, "G5")["problems"]
+
+
 def test_staggered_arrivals_pass_with_mixed_step_and_declared_chronology(memory, tmp_path):
     gp, oracle = assemble([R0, R1_LATE, R2_LATE], tmp_path)
     res = gm.check(gp, oracle)
@@ -502,6 +531,7 @@ def test_eos_truncated_request_is_compared_over_its_executed_prefix_and_labelled
     assert r1["eos_verified"] is True and r1["eos_token"] == EOS and _check(res, "G6")["stop_rule"]["eos_token_ids"] == [EOS]
 
 
+@pytest.mark.slow
 def test_early_stop_without_an_eos_token_fails_g6_whatever_the_driver_says(memory, tmp_path):
     """rev-pm ALERT M-0537 (F-pm-24): a request that stopped before its cap on a NON-EOS token -- an engine that dropped or aborted it, a
     stop string, or a prover that skipped the tail -- was accepted as 'eos-truncated' on the strength of finish_reason alone. The EOS is
@@ -741,6 +771,7 @@ def test_coscheduled_prefill_tgrouped_emission_passes_the_dag_criterion_with_the
     assert r0["within_step"]["permuted_instances"] == 0 and r0["within_step"]["sequence_also_equal"]
 
 
+@pytest.mark.slow
 def test_dag_criterion_negatives_wrong_arrival_swapped_outputs_wiring(memory, tmp_path):
     # wrong declared arrival (the Program says 0, the record ran it at 1) -> G6, whatever the within-step criterion
     gp, oracle = assemble([R0, RX_LATE], tmp_path / "a", tgrouped=True)
@@ -1319,22 +1350,22 @@ def test_gp01_binds_a_per_request_sampler_schedule_component_only_to_its_declare
     assert "derived against another workload" in G.sampler_schedule_binding(reqs[:1], {(8, 3): other})["refusal"]
 
 
-def test_a_single_request_constant_s_component_binds_only_in_a_single_request_workload(tmp_path):
-    """[single-request workloads] A component built for a single-request workload takes S = SplitsFor_v1(1, num_SMs) as a constant: it
-    binds in a workload of one request, and a workload of several requests (whose S_t follows the live set) refuses it by name."""
+def test_a_registered_s_component_binds_by_shape_in_any_workload(tmp_path):
+    """[CIR-87 (1)] A component at the registered S = SplitsFor_v1(1, num_SMs), which the served engine pins whatever the batch,
+    binds by shape alone: in a workload of one request and in one of several, whatever their arrivals."""
     from verity_vllm.pipeline import global_program as G
-    d = tmp_path / "c_one"
+    d = tmp_path / "c_reg"
     d.mkdir()
     (d / "result.json").write_text(json.dumps({"ok": True, "sampling": {"kind": "stochastic", "splits": 32,
-                                                                         "geometry": {"sampler_batch": 1, "num_sms": 142, "splits": 32}}}))
+                                                                         "geometry": {"num_sms": 142, "relation": "registered", "splits": 32}}}))
     one = [{"request_id": "r0", "index": 0, "prompt_len": 8, "cap": 4, "arrive_step": 0}]
     assert G.sampler_schedule_binding(one, {(8, 3): str(d)})["refusal"] is None
     three = one + [{"request_id": "r1", "index": 1, "prompt_len": 8, "cap": 4, "arrive_step": 2},
                    {"request_id": "r2", "index": 2, "prompt_len": 5, "cap": 2, "arrive_step": 1}]
-    bad = G.sampler_schedule_binding(three, {(8, 3): str(d)})
-    assert bad["refusal"] and "S = 32 is the single-request constant" in bad["refusal"] and "3 requests" in bad["refusal"]
+    assert G.sampler_schedule_binding(three, {(8, 3): str(d), (5, 1): str(d)})["refusal"] is None
 
 
+@pytest.mark.slow
 def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_fields(memory, tmp_path):
     """rev-pm M-0570 (2): GM-01 was blind to the manifest's sampling fields -- seeds swapped or a seed deleted in the manifest (GP-01
     recomposed: digest unchanged, seeds are Inputs) passed G1 by ids/prompts/caps/arrivals. G1 now requires RunHeader.workload.sha256 ==
@@ -1365,7 +1396,7 @@ def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_field
     assert res["verdict"] == "PASS", res["reasons"]
 
     def delete(wl):
-        wl["requests"][1]["seed"] = None
+        del wl["requests"][1]["seed"]
     res = gm.check(recomposed(delete), oracle)
     pr = _check(res, "G1")["problems"]
     assert res["verdict"] == "FAIL" and any("no declared seed for r1 but the run header records seed=2097394646" in p for p in pr), pr
@@ -1378,18 +1409,18 @@ def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_field
     assert res["verdict"] == "FAIL"
     assert any("sampling variant='stoch-t0.8-p0.95' but the run header records variant='greedy'" in p for p in pr), pr
     assert any("sampling temperature=0.8 but the run header records temperature=0.0" in p for p in pr), pr
-    lab = GD.manifest_sampling({"sampling": {"variant": "stoch-t0.8-p0.95-k20"}})
+    lab = GD.manifest_sampling(workload_doc(sampling={"variant": "stoch-t0.8-p0.95-k20"}, variants={"stoch-t0.8-p0.95-k20": {}}))
     assert {k: lab[k] for k in ("variant", "temperature", "top_p", "top_k")} == {"variant": "stoch-t0.8-p0.95-k20", "temperature": 0.8, "top_p": 0.95, "top_k": 20}
-    assert "conflict" not in lab
+    assert "conflict" not in lab and lab["sources"] == {"temperature": ["label"], "top_p": ["label"], "top_k": ["label"]}
     # [rev-pm M-0667 TIP N5] the driver consumes variants[variant] (vllm_adapter.load_workload), not the label: the table is the value of
     # record, and label / table / explicit fields / sweep params must agree -- a laundered header (sha recomputed over the edited doc) with
     # variants[v].top_p edited 0.95 -> 0.9 under the label p0.95 is caught by the manifest's OWN disagreement, fail closed, named
-    tab = GD.manifest_sampling({"sampling": {"variant": "stoch-t0.8-p0.95"}, "variants": {"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.9, "top_k": 0}}})
+    tab = GD.manifest_sampling(workload_doc(sampling={"variant": "stoch-t0.8-p0.95"}, variants={"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.9, "top_k": 0}}))
     assert tab["top_p"] == 0.9 and tab["conflict"] == ["top_p: label=0.95, variants_table=0.9"]
-    agree = GD.manifest_sampling({"sampling": {"variant": "stoch-t0.8-p0.95"}, "variants": {"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}},
-                                  "sweep": {"sampling_params": {"top_p": 0.95}}})
+    agree = GD.manifest_sampling(workload_doc(sampling={"variant": "stoch-t0.8-p0.95"}, variants={"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}},
+                                              sweep={"sampling_params": {"top_p": 0.95}}))
     assert "conflict" not in agree and agree["sources"]["top_p"] == ["label", "sweep.sampling_params", "variants_table"]
-    assert "not in the manifest's `variants` table" in GD.manifest_sampling({"sampling": {"variant": "stoch-t0.8-p0.95"}, "variants": {"greedy": {}}})["conflict"][0]
+    assert "not in the manifest's `variants` table" in GD.manifest_sampling(workload_doc(sampling={"variant": "stoch-t0.8-p0.95"}, variants={"greedy": {}}))["conflict"][0]
 
     # [rev-pm BLOCKER M-0717 (i)] a per-request variant pin added AFTER the run: the header has no per-request sampling record -> FAIL named
     def pin_r1_greedy(wl):
@@ -1513,11 +1544,12 @@ def test_served_past_the_first_eos_fails_g6_by_name_f_r17_14(memory, tmp_path):
     assert r1["answer_events"] == 1 and r1["lag_rows"] == 2 and r1["eos_step"] == 0 and r1["eos_verified"] is False and r1["eos_passed_at_event"] == 0
     assert "eos_lag_rows_accepted" not in r1
     # the Commit's executed_prefix_of_record on the same served list: the same refusal, by name, from the same rule
-    from verity_vllm.check import executed_prefix as EP
+    from verity_vllm.commit import executed_prefix as EP
     e = EP.executed_prefix_of_record(["r1"], {"r1": [EOS, 5, EOS]}, caps={"r1": 5}, eos_of_record=[EOS], lag=1)
     assert not e["ok"] and "served past an EOS at index 0" in e["problems"][0] and "F-r17-14" in e["problems"][0]
 
 
+@pytest.mark.slow
 def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_same_scheduler(memory, tmp_path):
     """R17-1 / DP-pad-02 (b) (Daniel, BRIEF s4; supersedes the ruling-21 reader): LAG is the workload Program's DECLARED specialization
     parameter (mock: `lag=`; GP-01: the Workload_v1 `lag` static from TargetProfile.lag()).  vLLM's async scheduling computes ONE more row
@@ -1639,9 +1671,9 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
 
     # (8) a pre-R17-1 Program (no lag declared): an EOS stop FAILS by name -- the record's attestation is NOT read as the rule (True attested,
     # the lag row present: a ruling-21 reader would have passed it); with every request at its cap the record passes, labelled exercised=false
-    from verity_vllm.pipeline import global_program as G
-    assert G.eos_lag_rows_declared({"async_scheduling": True}) == 1 and G.eos_lag_rows_declared({"async_scheduling": False}) == 0
-    assert G.eos_lag_rows_declared({}) is None and G.eos_lag_rows_declared(None) is None and G.eos_lag_rows_declared({"async_scheduling": "maybe"}) is None
+    from verity_vllm.program.workload import eos_lag_rows_declared
+    assert eos_lag_rows_declared({"async_scheduling": True}) == 1 and eos_lag_rows_declared({"async_scheduling": False}) == 0
+    assert eos_lag_rows_declared({}) is None and eos_lag_rows_declared(None) is None and eos_lag_rows_declared({"async_scheduling": "maybe"}) is None
     gp8, oracle8 = assemble([R0, R1_LAG], tmp_path / "undeclared", lag=None)
     assert gp8["lag"] is None and "lag" not in gp8["stop_rule"] and "async_scheduling" not in gp8["applicability"]["engine"]
     _set_async_scheduling(oracle8, True)
@@ -1785,39 +1817,43 @@ def _topp(V, S):
     return f"GumbelTopPTokenSelect_v1{{V={V},S={S}}}"
 
 
-def test_sampler_geometry_check_evaluates_s_per_engine_step_against_the_realized_live_count():
-    """M-0169: vLLM picks the top-p split count S = splits_for(sampler batch, num_SMs) on the host per launch; the fold carries it on every
-    GumbelTopPTokenSelect of the step. GM-01 evaluates S_t = SplitsFor_v1(|live(t)|, num_SMs) from the RECORD's live count (the requests with
-    a logits row at t) and the Program's declared num_SMs -- L40S 142 SMs: 8 live -> 16, 4 live -> 32 (registry/topp_split)."""
-    from verity_vllm.program.registry.topp_geometry import splits_for
-    assert (splits_for(8, 142), splits_for(4, 142), splits_for(1, 142)) == (16, 32, 32)
+def test_sampler_geometry_check_holds_every_launch_to_the_registered_s_whatever_the_live_count():
+    """[CIR-87 (1)] The served engine runs every top-p split launch at S = registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs)
+    (`engine.topp_pin`); the fold carries the launch's S on every GumbelTopPTokenSelect of the step. GM-01 holds each to the registered
+    S of the Program's declared num_SMs, at 8 live rows as at 4 -- and refuses vLLM's own batch-derived S (16 at 8 live on 142 SMs)."""
+    from verity.ml.definitions.registry.topp_geometry import registered_splits, splits_for
+    assert (registered_splits(142), splits_for(8, 142)) == (32, 16)
     gp = {"applicability": {"components": {"num_sms": 142}}}
-    # engine step 0: 8 live requests (S must be 16); step 1: 4 live (S must be 32) -- a verified EOS halved the batch
+    # engine step 0: 8 live requests; step 1: 4 live -- a verified EOS halved the batch; S is 32 at both
     steps = {0: {"logits_rows": [(f"r{i}", 9) for i in range(8)]}, 1: {"logits_rows": [(f"r{i}", 10) for i in range(4)]}}
-    specs = [_topp(64, 16)] * 8 + ["TokenSelect_v1{V=64}"] + [_topp(64, 32)] * 4
+    specs = [_topp(64, 32)] * 8 + ["TokenSelect_v1{V=64}"] + [_topp(64, 32)] * 4
     es = {i: 0 for i in range(8)} | {8: 1} | {i: 1 for i in range(9, 13)}
     ok = SG.sampler_geometry_check(gp, _StubFold(specs), es, steps, {0: 8, 1: 4})
     assert ok["problems"] == [] and ok["info"]["checked_steps"] == 2 and ok["info"]["top_p_token_selects"] == 12
-    assert ok["info"]["live_to_S"] == {"live=4:S=32": 1, "live=8:S=16": 1} and ok["info"]["num_sms"] == 142
+    assert ok["info"]["live_to_S"] == {"live=4:S=32": 1, "live=8:S=32": 1} and ok["info"]["num_sms"] == 142
+    assert ok["info"]["registered_splits"] == 32
     assert ok["info"]["declared_by"] == "applicability.components.num_sms" and ok["info"]["sampler_batch_recorded_steps"] == 2
-    # (-) the launch at step 1 kept S = 16 for 4 live rows (the geometry of the declared chronology, not of the realized batch): FAIL by name
-    bad = SG.sampler_geometry_check(gp, _StubFold([_topp(64, 16)] * 8 + [_topp(64, 16)] * 4), {i: (0 if i < 8 else 1) for i in range(12)}, steps)
-    assert len(bad["problems"]) == 1 and "step" in bad["problems"][0] and "'expected_S': 32" in bad["problems"][0] and "'fold_S': [16]" in bad["problems"][0]
-    assert bad["info"]["steps_with_mismatch"] == 1 and "M-0571 (3)" in bad["problems"][0]
-    # (-) the Program declares no num_SMs at all: the relation cannot be evaluated -> fail closed, named
-    nod = SG.sampler_geometry_check({"applicability": {"components": {}}}, _StubFold([_topp(64, 16)]), {0: 0}, steps)
+    # (-) the launch at step 0 ran at vLLM's batch-derived S = 16 for its 8 live rows (an unpinned engine): FAIL by name
+    bad = SG.sampler_geometry_check(gp, _StubFold([_topp(64, 16)] * 8 + [_topp(64, 32)] * 4), {i: (0 if i < 8 else 1) for i in range(12)}, steps)
+    assert len(bad["problems"]) == 1 and "'registered_S': 32" in bad["problems"][0] and "'fold_S': [16]" in bad["problems"][0]
+    assert bad["info"]["steps_with_mismatch"] == 1 and "'live': 8" in bad["problems"][0]
+    # (-) a Program whose geometry declares another S than the registered one is named
+    dec = SG.sampler_geometry_check({"sampler_geometry": {"num_sms": 142, "splits": 16}}, _StubFold([_topp(64, 32)] * 8), {i: 0 for i in range(8)}, steps)
+    assert len(dec["problems"]) == 1 and "sampler_geometry.splits = 16" in dec["problems"][0]
+    # (-) the Program declares no num_SMs at all: the registered S cannot be evaluated -> fail closed, named
+    nod = SG.sampler_geometry_check({"applicability": {"components": {}}}, _StubFold([_topp(64, 32)]), {0: 0}, steps)
     assert len(nod["problems"]) == 1 and "declares no num_SMs" in nod["problems"][0] and "fail closed" in nod["problems"][0]
-    # (+) the Program's own sampler_geometry declaration (GP-01) is the source of record when present
-    sg = SG.sampler_geometry_check({"sampler_geometry": {"num_sms": 132}, "applicability": {"components": {"num_sms": 142}}},
-                                   _StubFold([_topp(64, 16)] * 8), {i: 0 for i in range(8)}, steps)
-    assert sg["problems"] == [] and sg["info"]["declared_by"] == "sampler_geometry" and sg["info"]["num_sms"] == 132
+    # (+) the Program's own sampler_geometry declaration (GP-01) is the source of record when present: 6 SMs register S = 4
+    sg = SG.sampler_geometry_check({"sampler_geometry": {"num_sms": 6}, "applicability": {"components": {"num_sms": 142}}},
+                                   _StubFold([_topp(64, 4)] * 8), {i: 0 for i in range(8)}, steps)
+    assert sg["problems"] == [] and sg["info"]["declared_by"] == "sampler_geometry" and sg["info"]["num_sms"] == 6
     # (-) the SampleEnd's own logits_view batch disagrees with the chronology's logits rows: named, never averaged away
-    sb = SG.sampler_geometry_check(gp, _StubFold([_topp(64, 16)] * 8), {i: 0 for i in range(8)}, steps, {0: 7})
+    sb = SG.sampler_geometry_check(gp, _StubFold([_topp(64, 32)] * 8), {i: 0 for i in range(8)}, steps, {0: 7})
     assert len(sb["problems"]) == 1 and "logits_view batch != the record's logits rows" in sb["problems"][0]
     # (-) a top-p TokenSelect without a readable S / on an engine step the record does not list: named
     nos = SG.sampler_geometry_check(gp, _StubFold(["GumbelTopPTokenSelect_v1{V=64}"]), {0: 0}, steps)
     assert any("no readable split count" in p for p in nos["problems"])
-    unk = SG.sampler_geometry_check(gp, _StubFold([_topp(64, 16)]), {}, steps)
+    unk = SG.sampler_geometry_check(gp, _StubFold([_topp(64, 32)]), {}, steps)
     assert any("the record does not list" in p for p in unk["problems"])
     # (0) a greedy fold has nothing to check -- no problem, checked 0, no num_SMs needed
     g = SG.sampler_geometry_check({}, _StubFold(["TokenSelect_v1{V=64}"] * 3), {0: 0, 1: 0, 2: 1}, steps)
@@ -1850,20 +1886,20 @@ def test_sampler_geometry_check_reads_s_from_the_const32_splits_operand():
     when the operand is anything else."""
     gp = {"applicability": {"components": {"num_sms": 142}}}
     steps = {0: {"logits_rows": [(f"r{i}", 9) for i in range(8)]}, 1: {"logits_rows": [(f"r{i}", 10) for i in range(4)]}}
-    fold = _OperandFold([(16, None)] * 8 + [(32, None)] * 4)
+    fold = _OperandFold([(32, None)] * 12)
     sel = [i for i, x in enumerate(fold.inst) if x["spec"].startswith("GumbelTopP")]
-    assert len(sel) == 12 and all(SG.top_p_split_count(fold.inst[i]["spec"], fold, fold.inst[i]) == (16 if n < 8 else 32) for n, i in enumerate(sel))
+    assert len(sel) == 12 and all(SG.top_p_split_count(fold.inst[i]["spec"], fold, fold.inst[i]) == 32 for i in sel)
     es = {sel[n]: (0 if n < 8 else 1) for n in range(12)}
     ok = SG.sampler_geometry_check(gp, fold, es, steps, {0: 8, 1: 4})
-    assert ok["problems"] == [] and ok["info"]["live_to_S"] == {"live=4:S=32": 1, "live=8:S=16": 1} and ok["info"]["top_p_token_selects"] == 12
+    assert ok["problems"] == [] and ok["info"]["live_to_S"] == {"live=4:S=32": 1, "live=8:S=32": 1} and ok["info"]["top_p_token_selects"] == 12
     # the bound path wins when compare has bound the operand (splits_values keyed by the select's k), whatever the operand says
     fold.splits_values = {fold.inst[sel[8]]["k"]: 16}
     kept = SG.sampler_geometry_check(gp, fold, es, steps)
-    assert len(kept["problems"]) == 1 and "'expected_S': 32" in kept["problems"][0] and "'fold_S': [16]" in kept["problems"][0]
-    # (-) S kept at 16 for the 4 live rows of step 1: FAIL by name, exactly as with the static form
-    bad = _OperandFold([(16, None)] * 12)
+    assert len(kept["problems"]) == 1 and "'registered_S': 32" in kept["problems"][0] and "'fold_S': [16]" in kept["problems"][0]
+    # (-) vLLM's batch-derived S = 16 for the 8 live rows of step 0: FAIL by name, exactly as with the static form
+    bad = _OperandFold([(16, None)] * 8 + [(32, None)] * 4)
     b = SG.sampler_geometry_check(gp, bad, {sel[n]: (0 if n < 8 else 1) for n in range(12)}, steps)
-    assert len(b["problems"]) == 1 and "'expected_S': 32" in b["problems"][0] and "'fold_S': [16]" in b["problems"][0]
+    assert len(b["problems"]) == 1 and "'registered_S': 32" in b["problems"][0] and "'fold_S': [16]" in b["problems"][0]
     # (-) a 6th operand that is not ONE run onto a Const32 -- a 2-wide run, a non-Const instance, an unknown k -- carries no readable S
     for override in ([("n", 1, 0, 2)], [("n", 900, 0, 1)], [("n", 555, 0, 1)], [("n", 1, 0, 1), ("n", 1, 0, 1)], []):
         f = _OperandFold([(16, override)])
@@ -1900,21 +1936,19 @@ def test_greedy_rows_report_no_sampler_geometry_to_check(memory, tmp_path):
 
 
 def test_gp01_declares_the_sampler_geometry_for_a_stochastic_row_only():
-    """GP-01 (M-0169 (2b)): a stochastic row's workload Program declares S_t = SplitsFor_v1(|live(t)|, num_SMs) with the components' agreed
-    num_SMs and the declared schedule (every request to its cap); greedy rows declare nothing; a stochastic sampler without num_SMs is a
-    named refusal (the relation cannot be evaluated)."""
+    """GP-01 (M-0169 (2b), CIR-87 (1)): a stochastic row's workload Program declares the registered S = SplitsFor_v1(1, num_SMs) of the
+    components' agreed num_SMs, the same for 2 requests as for 8; greedy rows declare nothing; a stochastic sampler without num_SMs, or
+    whose components carry another S (a derived-S build), is a named refusal."""
     from verity_vllm.pipeline import global_program as G
     reqs = [{"request_id": "r0", "prompt_len": 8, "cap": 4, "arrive_step": 0}, {"request_id": "r1", "prompt_len": 5, "cap": 2, "arrive_step": 1}]
     assert G.sampler_geometry({"components": {"sampler": {"kind": "greedy"}, "num_sms": 142}}, reqs) is None
-    st = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived"}
+    st = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": 32}
     d = G.sampler_geometry({"components": {"sampler": st, "num_sms": 142}}, reqs)
-    assert d["relation"] == "SplitsFor_v1" and d["num_sms"] == 142 and "refusal" not in d and d["component_splits"] == "derived"
-    # live counts: step 0 -> r0 only (1), steps 1..2 -> r0 + r1 (2), step 3 -> r0 (1); 142 SMs -> S = 32 at every one of them
-    assert d["declared_live_counts"] == [1, 2, 2, 1] and d["declared_schedule"] == [32, 32, 32, 32]
-    # 8 requests arriving at 0 with cap 2 then 4 of them continuing: 8 live -> 16, 4 live -> 32 (the S flip the B8 rows show)
+    assert d["relation"] == "registered" and d["num_sms"] == 142 and d["splits"] == 32 and "refusal" not in d and d["component_splits"] == 32
     reqs8 = [{"request_id": f"r{i}", "prompt_len": 8, "cap": 2 if i < 4 else 4, "arrive_step": 0} for i in range(8)]
-    d8 = G.sampler_geometry({"components": {"sampler": st, "num_sms": 142}}, reqs8)
-    assert d8["declared_live_counts"] == [8, 8, 4, 4] and d8["declared_schedule"] == [16, 16, 32, 32]
+    assert G.sampler_geometry({"components": {"sampler": st, "num_sms": 142}}, reqs8) == d
+    derived = G.sampler_geometry({"components": {"sampler": dict(st, splits="derived"), "num_sms": 142}}, reqs)
+    assert "declare splits 'derived', not the registered split count 32" in derived["refusal"]
     nod = G.sampler_geometry({"components": {"sampler": st}}, reqs)
     assert "declare no num_SMs" in nod["refusal"] and nod["num_sms"] is None
 
@@ -1968,37 +2002,37 @@ def test_scheduled_live_counts_builds_the_workload_state_from_g6_facts_and_names
     assert sp["requests"]["r0"]["note"] == "scheduled sampler steps != observed rows" and sp["unestablished"] == {s: ["r0"] for s in range(4)}
 
 
-def test_sampler_geometry_check_reads_live_from_the_scheduled_state_and_refuses_an_s_that_follows_an_unscheduled_row():
-    """R17 stoch: with the scheduled state, the record's logits rows and the SampleEnd batch must EQUAL the scheduled live count and S is
-    evaluated at that count. A sampler row the workload does not schedule (an undeclared request, a row past a stop) inflates the observed
-    batch and vLLM's S follows it -- the R16 form (observed rows) accepted that; the scheduled form names both disagreements."""
-    from verity_vllm.program.registry.topp_geometry import splits_for
+def test_sampler_geometry_check_reads_live_from_the_scheduled_state_and_names_an_unscheduled_row():
+    """R17 stoch: with the scheduled state, the record's logits rows and the SampleEnd batch must EQUAL the scheduled live count. A
+    sampler row the workload does not schedule (an undeclared request, a row past a stop) inflates the observed batch -- the R16 form
+    (observed rows) accepted that; the scheduled form names both disagreements. S is the registered one at every step (CIR-87 (1))."""
     gp = {"applicability": {"components": {"num_sms": 142}}}
-    reqs = [_req(f"r{i}", 0, 2) for i in range(4)] + [_req("r4", 0, 1)]      # 5 live at step 0 (S 16), 4 at step 1 (S 32)
+    reqs = [_req(f"r{i}", 0, 2) for i in range(4)] + [_req("r4", 0, 1)]      # 5 live at step 0, 4 at step 1
     sc = SG.scheduled_live_counts(reqs, _present(reqs))
     assert sc["live"] == {0: 5, 1: 4}
     steps = {0: {"logits_rows": [(f"r{i}", 9) for i in range(5)]}, 1: {"logits_rows": [(f"r{i}", 10) for i in range(4)]}}
-    specs = [_topp(64, 16)] * 5 + [_topp(64, 32)] * 4
+    specs = [_topp(64, 32)] * 5 + [_topp(64, 32)] * 4
     es = {i: 0 for i in range(5)} | {i: 1 for i in range(5, 9)}
     ok = SG.sampler_geometry_check(gp, _StubFold(specs), es, steps, {0: 5, 1: 4}, sc)
     assert ok["problems"] == [], ok["problems"]
     assert ok["info"]["live_source"].startswith("scheduled workload state") and ok["info"]["checked_steps"] == 2
-    assert ok["info"]["S_transitions"] == [{"step": 0, "live": 5, "S": 16}, {"step": 1, "live": 4, "S": 32}]
-    assert ok["info"]["transitions"][1] == {"step": 1, "live_from": 5, "live_to": 4, "arrivals": [], "S_from": 16, "S_to": 32,
+    assert ok["info"]["live_to_S"] == {"live=4:S=32": 1, "live=5:S=32": 1}
+    assert ok["info"]["transitions"][1] == {"step": 1, "live_from": 5, "live_to": 4, "arrivals": [],
                                             "departures": [{"request": "r4", "finish": "length", "lag_rows": 0, "answer_events": 1, "prefill_chunks": 1}]}
-    # (-) step 1 carries a FIFTH logits row (a request the workload does not schedule there) and the launch's S = 16 follows that batch:
-    # the R16 form (no scheduled state) reads live = 5 and PASSES; the scheduled form names the row AND the S
+    # (-) step 1 carries a FIFTH logits row (a request the workload does not schedule there): the R16 form (no scheduled state) reads
+    # live = 5 and PASSES; the scheduled form names the row and the SampleEnd batch
     steps_x = {0: steps[0], 1: {"logits_rows": [(f"r{i}", 10) for i in range(4)] + [("rX", 3)]}}
-    specs_x = [_topp(64, 16)] * 5 + [_topp(64, 16)] * 5
+    specs_x = [_topp(64, 32)] * 10
     es_x = {i: 0 for i in range(5)} | {i: 1 for i in range(5, 10)}
-    assert splits_for(5, 142) == 16
     r16 = SG.sampler_geometry_check(gp, _StubFold(specs_x), es_x, steps_x, {0: 5, 1: 5})
     assert r16["problems"] == [] and r16["info"]["live_source"].startswith("observed logits rows")
     r17 = SG.sampler_geometry_check(gp, _StubFold(specs_x), es_x, steps_x, {0: 5, 1: 5}, sc)
-    assert len(r17["problems"]) == 3, r17["problems"]
-    assert any("logits rows != the scheduled live count [{'step': 1, 'scheduled_live': 4, 'logits_rows': 5}]" in p and "never the observed batch" in p for p in r17["problems"])
+    assert len(r17["problems"]) == 2, r17["problems"]
+    assert any("logits rows != the scheduled live count [{'step': 1, 'scheduled_live': 4, 'logits_rows': 5}]" in p for p in r17["problems"])
     assert any("SampleEnd logits_view batch != the scheduled live count" in p for p in r17["problems"])
-    assert any("'expected_S': 32" in p and "'fold_S': [16]" in p and "'live': 4" in p for p in r17["problems"])
+    # (-) and a launch whose S followed that batch (vLLM's own S, unpinned) is named at the scheduled live count
+    r17s = SG.sampler_geometry_check(gp, _StubFold(specs[:5] + [_topp(64, 16)] * 5), es_x, steps_x, {0: 5, 1: 5}, sc)
+    assert any("'registered_S': 32" in p and "'fold_S': [16]" in p and "'live': 4" in p for p in r17s["problems"])
     # (-) a top-p select on a step the state schedules nobody at; (-) a scheduled sampling step without a select; (-) an unestablished step
     steps_2 = dict(steps) | {2: {"logits_rows": [("rX", 11)]}}
     extra = SG.sampler_geometry_check(gp, _StubFold(specs + [_topp(64, 32)]), es | {9: 2}, steps_2, None, sc)
@@ -2017,7 +2051,7 @@ def test_scheduled_state_on_the_r15_b8_record_reproduces_the_kernel_s_flips():
     """The R15 B8 staggered stoch record (157 engine steps, 8 requests arriving 0..44 with caps 2..128, every request served to its cap):
     the scheduled state from (arrival, cap, length stop) alone equals the recorded live count at every step and its S transitions are the
     kernel's flips (0,1,32) -> (32,5,16) -> (101,4,32)."""
-    from verity_vllm.program.registry.topp_geometry import splits_for
+    from verity.ml.definitions.registry.topp_geometry import splits_for
     p = os.path.join(os.path.dirname(gm.__file__), "..", "..", "..", "tests", "program", "data", "topp_split_fixture", "b8_s_schedule_r15_attempt2.json")
     d = json.load(open(p))
     reqs = [_req(rid, v["arrive"], v["served"], cap=v["cap"]) for rid, v in d["served_vs_cap"].items()]
@@ -2058,6 +2092,7 @@ def test_g6_puts_the_scheduled_state_and_the_lag_row_on_the_record(memory, tmp_p
     assert res["verdict"] == "FAIL" and res["scheduled_live"]["requests"]["r1"]["established"] is False and res["scheduled_live"]["unestablished_steps"] == 3
 
 
+@pytest.mark.slow
 def test_a_record_without_tokens_json_fails_g6_by_name_unless_tokens_optional_is_asked_for_and_labelled(memory, tmp_path):
     """[F-r17-01, rev M-0035] capture/tokens.json is part of the record: absent -> G6 FAILS by name (the output-association legs cannot run);
     tokens_optional=True (CLI --tokens-optional) accepts it LABELLED checks[G6].tokens_json=false -- mechanism/fixture runs only."""
@@ -2274,8 +2309,7 @@ def test_fast_dag_hash_progression_memo_does_not_carry_a_forward_ref_marker_to_a
 # ------------------------------------------------------------------------------------------- COORD R17-28 P1: one X-09 per row
 
 
-@pytest.mark.parametrize("impl,workers", [("record", "1"), ("fast", "1"), ("fast", "3")])
-@pytest.mark.slow
+@pytest.mark.parametrize("impl,workers", [("record", "1"), ("fast", "1"), pytest.param("fast", "3", marks=pytest.mark.slow)])
 def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path, monkeypatch, impl, workers):
     """[COORD R17-28, mprof P1] row_pod runs cb_a.batch_decomp in its own process (match.compare) and GM-01 runs the same decompose()
     again inside check() (the x09 block) -- 365 s twice at B8 1024/128.  `--decomp-out` writes the document GM-01's own X-09 run

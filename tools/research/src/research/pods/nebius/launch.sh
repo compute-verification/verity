@@ -20,7 +20,8 @@
 #   VM                 platform gpu-rtx6000* with preset 8gpu-192vcpu-1744gb; the service account NEBIUS_VM_SA_ID (default the
 #                      launching one; `none` for no lease) is attached so the VM's lease can stop the VM itself
 # Other shapes and regions come from the environment: NEBIUS_VM_NAME, NEBIUS_REGION, NEBIUS_PROJECT_ID, NEBIUS_PLATFORM_PREFIX (cpu-d3,
-# gpu-h200-sxm), NEBIUS_PRESET, NEBIUS_IMAGE_FAMILY, NEBIUS_DATA_GIB and NEBIUS_RATE_USD_PER_HOUR; NEBIUS_FILESYSTEM_ID attaches an
+# gpu-h200-sxm), NEBIUS_PRESET, NEBIUS_IMAGE_FAMILY, NEBIUS_DATA_GIB and NEBIUS_RATE_USD_PER_HOUR; NEBIUS_DATA_DISK names the data disk
+# (default <vm>-data), so a VM can boot on another one's kept data disk, its filesystem untouched; NEBIUS_FILESYSTEM_ID attaches an
 # existing shared filesystem at /workspace/fs, and NEBIUS_PREEMPTIBLE=1 makes the VM preemptible, at most at the per-GPU-hour cap of
 # the pricing policy NEBIUS_SPOT_POLICY_ID (else whatever the spot price is).  GPU clocks are locked only on gpu-rtx6000.
 # Billing starts when the VM is Running and is per second; --yes is required for anything that starts it.
@@ -117,6 +118,7 @@ if [ "$dry" = 1 ]; then
   ud=$(render_user_data "$pub" "$(( $(date +%s) + 3600 ))")
   echo "# cloud-init ($(printf '%s' "$ud" | wc -c) bytes)"
   printf '%s\n' "$ud"
+  echo "# data disk $DATA_NAME: attached as it is if it exists, else created ($DATA_GIB GiB $DATA_TYPE)"
   echo "# instance create request (ids are placeholders)"
   vm_body project-DRYRUN "${NEBIUS_PLATFORM:-$PLATFORM_PREFIX-a}" computedisk-BOOT computedisk-DATA vpcsubnet-DRYRUN vpcsecuritygroup-DRYRUN \
     "${NEBIUS_VM_SA_ID:-serviceaccount-LAUNCHER}" "<cloud-init above>" | python3 -m json.tool
@@ -178,12 +180,12 @@ if [ -z "$BOOT_ID" ]; then
   BOOT_ID=$(nb compute disk create --parent-id "$PROJECT_ID" --name "$VM_NAME-boot" --type "$BOOT_TYPE" --size-gibibytes "$BOOT_GIB" \
     --block-size-bytes 4096 --source-image-family-image-family "$IMAGE_FAMILY" | jf metadata.id)
 fi
-DATA_ID=$(disk_id "$VM_NAME-data")
+DATA_ID=$(disk_id "$DATA_NAME")
 if [ -z "$DATA_ID" ]; then
-  DATA_ID=$(nb compute disk create --parent-id "$PROJECT_ID" --name "$VM_NAME-data" --type "$DATA_TYPE" --size-gibibytes "$DATA_GIB" \
+  DATA_ID=$(nb compute disk create --parent-id "$PROJECT_ID" --name "$DATA_NAME" --type "$DATA_TYPE" --size-gibibytes "$DATA_GIB" \
     --block-size-bytes 4096 | jf metadata.id)
 fi
-say "disks: boot $BOOT_ID ($BOOT_GIB GiB $IMAGE_FAMILY), data $DATA_ID ($DATA_GIB GiB $DATA_TYPE)"
+say "disks: boot $BOOT_ID ($BOOT_GIB GiB $IMAGE_FAMILY), data $DATA_NAME $DATA_ID ($DATA_GIB GiB $DATA_TYPE if new)"
 
 VM_ID=$(vm_id)
 if [ -z "$VM_ID" ]; then

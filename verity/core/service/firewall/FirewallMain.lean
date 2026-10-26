@@ -1,3 +1,6 @@
 import Firewall.Protocol
+import Firewall.Loop
 
-def main (args : List String) : IO UInt32 := Core.Firewall.protocol.main args
+def main : List String → IO UInt32
+  | "session" :: args => Core.Firewall.Loop.main args
+  | args => Core.Firewall.protocol.main args

@@ -25,16 +25,23 @@ concludes:
 For the whole datacenter it gives where each held store could have been (`located`: the devices that could have
 answered its sample by the deadline, and none when the prover could rebuild the sample in time), the covert budget (the profile's
 advice, timing advice, inputs, every refused port-window charged at its link's full capacity, so it fails closed, and
-everything a block out for maintenance held), and the failure probability (the sum of the claims' deltas).
+everything a block out for maintenance held), and the failure probability (the sum of the claims' deltas). Beside the
+covert budget, which is only what goes beyond the committed computation, it reports the export (λ_out, `export_bits`):
+the committed bits that crossed a certified boundary out of a block, by port. They count as novel information read by
+their receivers once the declaration's certifiers cover every link (Daniel, 19 Oct); until then the export is reported
+as not applicable, with the uncovered links named.
 
-Every claim's credit is also a `Credit` on a unit: compute in block-ticks, PoUW's proved bound (`Profile.ticks`, the
-least time over every route) as `compute` on the whole block where the scheme gives one, else the honest routing's
+Every claim's credit is also a `Credit` on a unit: compute in block-ticks, PoUW's proved bound (`Profile.ticks`, (1 − ε)
+of the floor program's block-ticks, which no accepted window undercuts over any route) as `compute` on the whole block
+where the scheme gives one, else the honest routing's
 time on each facet (kinds on one facet add up, kinds on different facets run at once) as `compute:<facet>`, on the block as far as attribution places it there and graded by its anchor,
 the rest on the whole datacenter, since PoUW credits the prover system (decision 111); a store's device the bits read from it and the
 bit-ticks it held over the interval the claim proves (a snapshot proves an instant, and carries none). `capacity` gives each unit's resources a tick by the
 declaration, and an account whose credits exceed them anywhere (`overcredited`, by `double_credit`, Horn's interval
 test) is unsound. A `Ledger` joins accounts of successive epochs or of overlapping audits, and applies the same rule
-across them (`joint`): one device's time, bandwidth and memory are credited once.
+across them (`joint`): one device's time, bandwidth and memory are credited once. Its `custody` is the cumulative check
+on the registered weights (NET-37): the share of them that the epochs' covert budgets, charged exports and a side
+channel of σ a server (`DEDICATED_RACKS`) could have carried out.
 """
 from __future__ import annotations
 
@@ -44,7 +51,7 @@ from dataclasses import dataclass, field
 from .binding import Profile
 from .claims import Carried, Claim, Computed, Entered, Held, Read, Refused, Scheduled
 from .memory import answer_time, regen_time
-from .physical import Assumption, Datacenter
+from .physical import Assumption, Datacenter, Port
 from .time import Interval
 
 #: the premise that no undeclared compute is reachable from a block (compute accounting's option (a))
@@ -53,6 +60,12 @@ FLEET_CLOSED = Assumption("fleet-closed", 1, "premise", "declared")
 #: certifier releases only into it pins the work that depends on it, while k, the bits that could carry it out before
 #: registration, stays at most this many
 SALT_CUSTODY = Assumption("salt-custody", 384, "bits", "declared")
+#: a block's proof units counted under the served query (Q_word v1 at X = 16) because no one-stage registration named the
+#: Program's partition (proofs, review 4)
+SERVED_PARTITION = Assumption("served-partition", 1, "premise", "declared")
+#: σ, the side channel from each server to machines off its block, under Daniel's premise (19 Oct 04:30Z) that no
+#: untrusted machine shares a block's rack
+DEDICATED_RACKS = Assumption("dedicated-racks", 1e3, "bit/s per server", "declared")
 
 
 def facet(kind: str) -> str:
@@ -108,6 +121,26 @@ class Account:
     #: what the claims credit each unit, by resource and interval, and what each unit can give a tick (`capacity`)
     credits: list[Credit] = field(default_factory=list)
     capacity: dict[tuple[str, str], float] = field(default_factory=dict)
+    #: the committed bits each egress port carried out of its block (`Profile.exported`)
+    exported: dict[Port, float] = field(default_factory=dict)
+    #: the links the declaration leaves uncovered (`Datacenter.uncovered_links`), by their ends
+    uncovered: list[str] = field(default_factory=list)
+    #: the epoch's real duration, in seconds, and its servers, counted as the blocks' GPU devices: what the side-channel
+    #: premise multiplies (`Ledger.custody`)
+    seconds: float = 0.0
+    servers: int = 0
+
+    @property
+    def export_bits(self) -> float:
+        """The export, λ_out: the committed bits that crossed a certified boundary out of a block, novel information
+        read by their receivers. Charged only when the declaration's certifiers cover every link (`export_charged`)."""
+        return sum(self.exported.values())
+
+    @property
+    def export_charged(self) -> bool:
+        """Whether the export is charged: only once network certifiers cover every link (Daniel, 19 Oct), and not
+        applicable while `uncovered` names any."""
+        return not self.uncovered
 
     @property
     def overcredited(self) -> list[tuple[str, str, Interval, float, float]]:
@@ -116,6 +149,10 @@ class Account:
 
     @property
     def sound(self) -> bool:
+        """No refused port-window and nothing overcredited: the AND over this model's own record check
+        (`claims.check_records`), with no ε or share credit. The network verdict of record is the certifier's
+        `LinkWindows.network_verdict` (`verity/core/protocols/certifier/service.py`), the same AND over a link's outcomes
+        of record; this model builds no proof-service streams, so it doesn't read it."""
         return not self.refused and not self.overcredited
 
     @property
@@ -136,6 +173,11 @@ class Account:
                      f"{self.timing_bits:g} timing advice + {sum(self.input_bits.values())} inputs ({inputs or 'none'})"
                      + (f" + {self.refused_bits:.3g} on refused windows" if self.refused_bits else "")
                      + "".join(f" + {v:.3g} held by {b} in maintenance" for b, v in self.serviced.items()))
+        if self.exported:
+            ports = ", ".join(f"{p!r}: {v:g}" for p, v in sorted(self.exported.items(), key=lambda kv: repr(kv[0])))
+            lines.append(f"export: {self.export_bits:g} committed bits out of blocks ({ports}), " + (
+                "charged as novel information read by their receivers" if self.export_charged else
+                f"not applicable while no certifier covers {', '.join(self.uncovered)}"))
         for s, where in self.located.items():
             lines.append(f"store {s}: held on {where[0]}" if len(where) == 1 else
                          f"store {s}: held on one of {', '.join(where)}" if where else
@@ -221,6 +263,8 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
                       for d in b.devices if d.memory is not None)
         names = [a.name for d in b.devices for a in [*(d.rate.get(k) for k in work), d.memory, d.residual, d.bandwidth,
                                                      d.on_chip] if a is not None]
+        if profile.partition == "assumed" and profile.units.get(b.name):
+            names.append(SERVED_PARTITION.name)
         bounds: dict[str | None, float] = {None: float("inf")}
         if FLEET_CLOSED.name in premises:
             bounds[FLEET_CLOSED.name] = 0.0
@@ -251,7 +295,9 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
                    refused_bits,
                    sum(c.delta for c in claims if isinstance(c, (Computed, Held, Read))),
                    {b: sum(float(d.memory) for d in dc.block(b).devices if d.memory is not None) for b in back},
-                   _credits(claims, profile, blocks, inside, refused_stores), capacity(dc))
+                   _credits(claims, profile, blocks, inside, refused_stores), capacity(dc),
+                   dict(profile.exported), [f"{l.a}-{l.b}" for l in dc.uncovered_links()], seconds,
+                   sum(d.kind == "gpu" for b in dc.blocks for d in b.devices))
 
 
 def _credits(claims: list[Claim], profile: Profile, blocks: list[BlockAccount], inside, refused_stores) -> list[Credit]:
@@ -283,9 +329,10 @@ def _credits(claims: list[Claim], profile: Profile, blocks: list[BlockAccount], 
 @dataclass
 class Ledger:
     """The joint ledger: accounts of successive epochs (nights, say) or of audits that overlap, joined. Covert bits and
-    failure probabilities add up, since an adversary with a long horizon can save them up and break out at the end; what
-    each epoch could carry in is per epoch, and nightly wipes keep it down to the devices' residuals; and each unit's
-    time, bandwidth and memory are credited once across all of them (`joint`)."""
+    failure probabilities add up, since an adversary with a long horizon can save them up and break out at the end, and
+    so does what could have carried the registered weights out (`custody`); what each epoch could carry in is per epoch,
+    and nightly wipes keep it down to the devices' residuals; and each unit's time, bandwidth and memory are credited
+    once across all of them (`joint`)."""
 
     epochs: list[Account] = field(default_factory=list)
 
@@ -325,10 +372,51 @@ class Ledger:
     def carried(self) -> list[float]:
         return [sum(b.carried for b in a.blocks) for a in self.epochs]
 
+    def custody(self, registered_bits: float, sigma: Assumption = DEDICATED_RACKS) -> Custody:
+        """The share of the registered weights, `registered_bits`, that could have left over the ledger's epochs: each
+        epoch's covert budget, its export where it is charged, and σ (`sigma`) from each of its servers over its real
+        duration. Weight custody over a horizon needs this share well below 1. The covert budget's inbound channels
+        (inputs, ingress timing) count too, and the certifier protocol's free fields don't, since no record here has
+        any."""
+        return Custody(registered_bits, self.covert_bits, sum(a.export_bits for a in self.epochs if a.export_charged),
+                       float(sigma) * sum(a.seconds * a.servers for a in self.epochs), sigma,
+                       sum(a.export_bits for a in self.epochs if not a.export_charged))
+
     def __repr__(self) -> str:
         return (f"{len(self.epochs)} epochs, {'sound' if self.sound else 'NOT sound'}: {self.covert_bits:g} covert bits in "
                 f"all, at most {max(self.carried, default=0):.3g} bits carried into any epoch, failure probability at "
                 f"most {self.delta:.3g}")
+
+
+@dataclass(frozen=True)
+class Custody:
+    """What of the registered weights could have left over a ledger's epochs (`Ledger.custody`): the covert budgets,
+    the export where it is charged and the side channel, against the `registered` bits."""
+
+    registered: float
+    covert: float
+    export: float
+    side: float
+    #: σ, the side channel's rate from each server
+    sigma: Assumption
+    #: the export of epochs whose declaration leaves a link uncovered: reported, not charged
+    uncharged: float = 0.0
+
+    @property
+    def bits(self) -> float:
+        """The bits that could have left."""
+        return self.covert + self.export + self.side
+
+    @property
+    def share(self) -> float:
+        """The share of the registered weights that could have left."""
+        return self.bits / self.registered
+
+    def __repr__(self) -> str:
+        return (f"custody: {self.bits:g} bits could have left = {self.covert:g} covert + {self.export:g} export + "
+                f"{self.side:.3g} side channel at {self.sigma!r}, {self.share:.3g} of the {self.registered:g} registered "
+                f"bits" + (f"; {self.uncharged:g} exported bits not charged while a link is uncovered"
+                           if self.uncharged else ""))
 
 
 @dataclass(frozen=True)
@@ -344,8 +432,8 @@ class Credit:
     work: float
     #: what places it on the unit, for a block's compute (its attribution anchor)
     grade: str | None = None
-    #: for compute, what the time rests on: "proved" (PoUW's bound over every route) or "honest-routing" (each kind on
-    #: its named facet at the declared rates, which no audit proves)
+    #: for compute, what the time rests on: "proved" (PoUW's bound, (1 − ε) of the floor program's time, over every
+    #: route) or "honest-routing" (each kind on its named facet at the declared rates, which no audit proves)
     basis: str | None = None
 
 

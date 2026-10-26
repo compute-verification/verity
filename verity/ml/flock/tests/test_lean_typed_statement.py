@@ -15,7 +15,7 @@ import pytest
 from verity.ml.circuits.codec import canonical_json
 
 pytest.importorskip("verity_numerical")
-pytest.importorskip("verity_vllm.program.registry.prims")
+pytest.importorskip("verity.ml.definitions.registry.prims")
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import typed_statement as TS  # noqa: E402
 from verity_numerical.bench import lowerings  # noqa: E402
@@ -130,7 +130,9 @@ RUST_SESSIONS = "art:48f286b4"
 def test_it_refuses_the_rust_provers_sessions(tmp_path):
     """A typed statement is a form the soundness proof does not cover (§16.15): on `flock-circuit`'s own recorded sessions
     for a flat class, the statement sets up and the verifier refuses every case, the 3 honest ones for that reason, once
-    every check has passed, and every other case for the check that catches it."""
+    every check has passed, and every other case for the check that catches it. That build has no zk patch, so its plain
+    files are upstream's form, without the `zk_level0 = None` tag the deployed prover writes, and are read under
+    `--upstream-plain` (PROTOCOL.md §8.1)."""
     import sys  # noqa: PLC0415
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "verifier"))
@@ -147,7 +149,7 @@ def test_it_refuses_the_rust_provers_sessions(tmp_path):
     statement = "verity/flock-circuit/types@210d32e1+seed-injection"
     p = subprocess.run([str(BIN), "verify", "--statement", statement,
                         "--circuit", str(root / "stage" / "circuit.txt"), "--public", str(root / "stage" / "pub-4.bin"),
-                        "--session", *map(str, sessions)], capture_output=True, text=True)
+                        "--upstream-plain", "--session", *map(str, sessions)], capture_output=True, text=True)
     got = {Path(v["session"]).name: v for v in (json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT "))}
     want = {s.name: json.loads((s / "case.json").read_text())["expect"] == "accept" for s in sessions}
     refused = f"refused: {statement}, a typed statement: a statement form the soundness proof does not cover"

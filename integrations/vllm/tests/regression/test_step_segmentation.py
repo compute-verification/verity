@@ -63,9 +63,9 @@ def _flat_request(family: str):
     from verity.ml.circuits.program import Program
     from verity.ml.circuits.refs import tuple_of
     from verity.ml.circuits.types import Array, Tuple, Value
-    from verity_vllm.program.registry import b1, sampling
-    from verity_vllm.program.registry import prims as P
-    from verity_vllm.program.registry.prims import BF16, F32, I32
+    from verity.ml.definitions.registry import b1, sampling
+    from verity.ml.definitions.registry import prims as P
+    from verity.ml.definitions.registry.prims import BF16, F32, I32
     V, I64 = 8, Value(64)
     greedy = family == "TokenSelect_v1"
 
@@ -106,6 +106,7 @@ def test_rows_the_index_does_not_name_are_carried_over(tmp_path):
     assert LE.build_fixtures(index, tmp_path, {"record"}, carried={"new": dict(carried["old"], row=101)})[1]["new"]["oracle"] == "/o/new"
 
 
+@pytest.mark.slow
 def test_append_keeps_the_existing_text_and_refuses_a_known_key(tmp_path, monkeypatch):
     import json
     fx = tmp_path / "fixtures.toml"

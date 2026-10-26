@@ -138,6 +138,7 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     assert lean_audit[1].endswith("tools/verity/check/check.py") and lean_audit[2] == "--lean-slot"
     assert lean_audit[4].endswith("tools/verity/lean/lean_audit.py") and {"--cache", "--deps"} <= set(lean_audit) and "--fresh" not in lean_audit
     assert "--fresh" in CHECK.lean_steps(out, cache=False)[2][1]
+    assert "--regenerate" in lean_audit and "--regenerate" not in CHECK.lean_steps(out, regenerate=False)[2][1]
     assert argv[2:4] == ["--lean-agreement", str(out)] and {Path(x).name for x in argv[4:]} == {"a.tar.gz", "b.tar.gz"}
     (sent / "b.tar.gz").unlink()
     assert CHECK.lean_steps(out)[3][1] == "only upstream of the pinned upstream build and inputs was sent"
@@ -402,6 +403,9 @@ def test_record_sends_the_verdicts_it_gathers_with_a_pack_given_added_unless_no_
     launched.clear()
     assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(given_to) == 2
     assert not any(x.endswith("verdicts-gathered.tar.gz") for x in launched[0])
+    head = launched[0][:launched[0].index("--")]
+    assert [head[i + 1] for i, x in enumerate(head) if x == "--declared-output"] == list(CHECK.PACK_FILES), \
+        "custody uploads the packs however the run ends, never trimming them as undeclared"
 
 
 def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path, monkeypatch, capsys):
@@ -482,9 +486,68 @@ def test_circuit_check_has_the_whole_slot_only_when_neither_pytest_nor_lean_runs
         [cc] = [s for g in CHECK.groups(tmp_path, 16, only=only) for s in g if s[0] == "circuit-check"]
         return cc[1][cc[1].index("--mem-gb") + 1]
 
-    assert mem(None) == mem(["circuit-check", "pytest"]) == mem(["circuit-check", "lean-build"]) == "210"
+    assert mem(None) == mem(["circuit-check", "lean-build"]) == mem(["circuit-check", "pytest", "lean-build"]) == "210"
     assert mem(["flock-circuit-build", "circuit-check", "flock-rust-tests"]) == "560"
     assert CHECK.cc_mem_gb(400, True) == 100 and CHECK.cc_mem_gb(100, True) == 25
+
+
+def test_a_cached_circuit_check_keeps_the_catalog_bindings_records_and_an_uncached_one_does_not(tmp_path):
+    """With the cache, a run whose task list misses builds only the catalog bindings whose record misses
+    (`circuit_check.units`); the uncached run builds the whole catalog, as the nightly check that must agree with it does."""
+    def cc(cache):
+        [s] = [s for g in CHECK.groups(tmp_path, 16, cache=cache) for s in g if s[0] == "circuit-check"]
+        return s[1]
+
+    assert "--catalog-units" in cc(True) and "--cache" in cc(True)
+    assert "--catalog-units" not in cc(False) and "--cache" not in cc(False)
+
+
+def test_beside_pytest_alone_circuit_check_takes_the_share_lean_suites_would_have(tmp_path, monkeypatch):
+    """A post-landing run (`--deferred circuit-check,pytest`) runs no Lean step, yet circuit-check got 210 GiB of a 560 GiB slot
+    while pytest kept to its half of the rest, 175: lean-suites' 175 went unused, and the 147-167 GiB SHA-512 targets ran one at
+    a time (b103, r20261019-015150-b103: 4 of them, 5,318 s end to end).  Pytest's share is unchanged."""
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
+    monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
+
+    def mem(only, step):
+        [s] = [s for g in CHECK.groups(tmp_path, 16, only=only) for s in g if s[0] == step]
+        return s[1][s[1].index("--mem-gb") + 1]
+
+    assert mem(["circuit-check", "pytest"], "circuit-check") == "385"
+    assert mem(["circuit-check", "pytest"], "pytest") == mem(None, "pytest") == "175"
+    assert CHECK.cc_mem_gb(400, True, lean=False) == 250 and CHECK.cc_mem_gb(100, True, lean=False) == 63
+
+
+def test_circuit_check_is_granted_the_slot_once_every_step_beside_it_has_ended(tmp_path, monkeypatch):
+    """b103 (r20261019-015150-b103): pytest ended 83 minutes into circuit-check's 125, and circuit-check kept to the share it
+    had beside pytest to the end.  Beside other steps it gets ``--mem-gb-file``, which `run` writes the slot's mem= to once those
+    steps have ended (`grant_when_alone`), a stale grant removed first; alone in the slot it has all of it already."""
+    import threading
+
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
+    monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
+
+    def argv(only):
+        [cc] = [s for g in CHECK.groups(tmp_path, 16, only=only) for s in g if s[0] == "circuit-check"]
+        return cc[1]
+
+    assert argv(["circuit-check", "pytest"])[-2:] == ["--mem-gb-file", str(tmp_path / CHECK.CC_GRANT)]
+    assert "--mem-gb-file" not in argv(["flock-circuit-build", "circuit-check", "flock-rust-tests"])
+    done = [threading.Event(), threading.Event()]
+    for e in done:
+        e.set()
+    CHECK.grant_when_alone(tmp_path / CHECK.CC_GRANT, done, 560)
+    assert (tmp_path / CHECK.CC_GRANT).read_text() == "560\n"
+
+    grant, ok = tmp_path / CHECK.CC_GRANT, _py("pass")
+    grant.unlink()
+    _fake_run(monkeypatch, [[("pytest", ok, tmp_path)], [("circuit-check", ok, tmp_path)]])
+    assert CHECK.run(tmp_path, 2)[0] and grant.read_text() == "560\n"
+    grant.write_text("9999\n")
+    _fake_run(monkeypatch, [[("circuit-check", ok, tmp_path)]])
+    assert CHECK.run(tmp_path, 1)[0] and not grant.exists()
 
 
 def test_the_tests_get_what_circuit_check_leaves_of_the_slot(tmp_path, monkeypatch):
@@ -564,6 +627,8 @@ def test_the_suites_that_use_lean_run_after_the_verifier_is_built_and_beside_the
     argv = gs[5][0][1]
     assert argv[:2] == ["bash", "-c"] and argv[2].startswith(CHECK.ELAN), "with elan's lake on the PATH, as lean-build has it"
     assert all(f" {s} " in argv[2] for s in CHECK.AFTER_LEAN) and "suites-lean.json" in argv[2] and "--jobs 4" in argv[2]
+    assert "--timeouts" in pytest and " --timeouts " in argv[2], \
+        "each suite bounded by its timeout_s: without it a hung test held a train slot 24 h (CI-184)"
 
 
 def test_a_checkouts_files_are_gits_and_the_key_environment_drops_the_tree_path(tmp_path):
@@ -669,10 +734,12 @@ def test_the_agreement_refuses_a_machine_it_cannot_run_on_in_seconds(tmp_path, m
 
 
 def _fake_run(monkeypatch, groups, pre=()):
-    """`run` over the given groups and preflight, with nothing built first and no Lean URLs."""
+    """`run` over the given groups and preflight, with nothing built first, no Lean URLs, and no plan of the real tree for
+    the reused pack (`Reused.plan` reads every file, outside the suite's inputs)."""
     monkeypatch.setattr(CHECK, "PREBUILD", "pass")
+    monkeypatch.setattr(CHECK.Reused, "plan", lambda self: {"parts": []})
     monkeypatch.setattr(CHECK, "preflight", lambda: list(pre))
-    monkeypatch.setattr(CHECK, "groups", lambda out, n, cache=True, urls=None: groups)
+    monkeypatch.setattr(CHECK, "groups", lambda out, n, cache=True, urls=None, **kw: groups)
     monkeypatch.delenv(CHECK.LEAN_DEPS_URLS_ENV, raising=False)
 
 
@@ -726,6 +793,89 @@ def test_keep_going_runs_every_other_group_to_its_end(tmp_path, monkeypatch):
                             [("a", ok, tmp_path), ("b", ok, tmp_path)]])
     passed, done = CHECK.run(tmp_path, 2, keep_going=True)
     assert not passed and {s["step"]: s["status"] for s in done} == {"fails": "failed", "a": "passed", "b": "passed"}
+
+
+def _gone(pid: int) -> None:
+    """Return once ``pid`` has exited (its pidfd is readable), or at once when it is gone already."""
+    import os
+    import select
+
+    try:
+        fd = os.pidfd_open(pid)
+    except ProcessLookupError:
+        return
+    select.select([fd], [], [])
+    os.close(fd)
+
+
+def test_a_step_that_hangs_writing_nothing_is_stopped_and_fails_as_hung(tmp_path, monkeypatch):
+    """r20261025-021824-ba9f and r20261025-023312-fa65 (CI-184): under --keep-going lean-suites failed, and pytest's suites.py
+    sat 23-24 h on a test that never returned, writing nothing, while circuit-check waited on the grant pytest's end writes and
+    the run held its slot.  Here pytest's process waits on a child that never exits; once the watch's clock (injected) has passed
+    `IDLE_S` with pytest's outputs unchanged, the child and pytest are stopped, pytest fails as hung, the grant is written and the
+    run ends."""
+    import json
+    import os
+
+    gate = tmp_path / "child.pid"
+    os.mkfifo(gate)
+    hang = _py("import subprocess, sys\nsubprocess.Popen([sys.executable, '-c', 'import os, signal, sys\\n"
+               "with open(sys.argv[1], \"w\") as f:\\n    f.write(str(os.getpid()))\\nsignal.pause()', sys.argv[1]]).wait()", gate)
+    clock, child = [0.0], []
+
+    def wait(p, seconds):
+        if p.args is not hang:
+            return p.wait()
+        if not child:
+            child.append(int(gate.read_text()))
+        clock[0] += seconds
+        return p.poll()
+
+    monkeypatch.setattr(CHECK, "CLOCK", lambda: clock[0])
+    monkeypatch.setattr(CHECK, "WAIT", wait)
+    monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
+    _fake_run(monkeypatch, [[("pytest", hang, tmp_path)], [("circuit-check", _py("pass"), tmp_path)],
+                            [("lean-suites", _py("raise SystemExit(1)"), tmp_path)]])
+    passed, done = CHECK.run(tmp_path, 3, keep_going=True)
+    _gone(child[0])
+    by = {s["step"]: s for s in done}
+    assert not passed and by["lean-suites"]["status"] == "failed" and by["circuit-check"]["status"] == "passed"
+    assert by["pytest"]["status"] == "failed" and by["pytest"]["detail"] == f"hung: no output for {CHECK.IDLE_S // 60} min"
+    assert by["pytest"]["rc"] == -15 and clock[0] == CHECK.IDLE_S
+    assert (tmp_path / CHECK.CC_GRANT).read_text() == "560\n"
+    lines = {r["step"]: r for r in map(json.loads, (tmp_path / CHECK.STEPS_LOG).read_text().splitlines())}
+    assert lines["pytest"]["detail"].startswith("hung: ")
+
+
+def test_a_step_is_hung_only_once_its_outputs_have_been_quiet_for_idle_s_and_over_budget_at_step_budget_s(tmp_path, monkeypatch):
+    """pytest writes its suites' logs (`WATCH`), circuit-check its progress (a file named after it): a step whose outputs grew at
+    each of its first 100 looks is hung `IDLE_S` after the last of them, and one that writes at every look is stopped at
+    `STEP_BUDGET_S`, whatever it writes."""
+    import subprocess
+
+    def stopped(name: str, wrote: str, writes: int) -> tuple[str | None, float]:
+        clock, f = [0.0], tmp_path / wrote
+
+        def wait(p, seconds):
+            clock[0] += seconds
+            if clock[0] <= writes * seconds:
+                with f.open("a") as w:
+                    w.write("x")
+            return p.poll()
+
+        monkeypatch.setattr(CHECK, "CLOCK", lambda: clock[0])
+        monkeypatch.setattr(CHECK, "WAIT", wait)
+        f.parent.mkdir(exist_ok=True)
+        p = subprocess.Popen(_py("import signal\nsignal.pause()"))
+        rc, why = CHECK.watch(name, p, tmp_path)
+        assert rc == -15
+        return why, clock[0]
+
+    every = CHECK.WATCH_EVERY_S
+    assert stopped("pytest", "suites/a_suite.log", 100) == (f"hung: no output for {CHECK.IDLE_S // 60} min", 100 * every + CHECK.IDLE_S)
+    assert stopped("circuit-check", "circuit-check.json.progress.jsonl", 100)[1] == 100 * every + CHECK.IDLE_S
+    assert stopped("pytest", "suites/a_suite.log", 10**6) == (f"over budget: still running after {CHECK.STEP_BUDGET_S / 3600:.1f} h",
+                                                            CHECK.STEP_BUDGET_S)
 
 
 def test_a_lean_module_that_does_not_compile_stops_the_run_even_under_keep_going(tmp_path, monkeypatch):
@@ -801,6 +951,84 @@ def test_a_cancelled_recorded_check_still_publishes_the_passes_its_steps_stored(
         assert tar.getnames() == ["tests/pkg/k1.json"]
 
 
+def test_a_runs_pack_is_written_as_each_step_ends_and_on_sigterm_before_any_step_stops(tmp_path, monkeypatch):
+    """A cancel SIGKILLs the run 20 s after its SIGTERM, before a stopped step's grace is out and `main` writes its last pack:
+    drive's cancels after landing (rc 137) left packs without the passes the run had stored.  So the pack holds a step's
+    passes once it ends, and `_terminated` writes what the steps stored since at once, from the pack's own thread."""
+    import queue
+    import signal
+    import tarfile
+    import weakref
+
+    cache = tmp_path / "tests-cache"
+    monkeypatch.setenv("VERITY_TEST_CACHE", str(cache))
+    monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "check-cache"))
+    monkeypatch.setattr(CHECK, "TERMINATED", [])
+    monkeypatch.setattr(CHECK, "_LIVE", weakref.WeakSet())
+    monkeypatch.setattr(CHECK, "_PACKS", weakref.WeakSet())
+    (cache / "pkg").mkdir(parents=True)
+    (cache / "pkg" / "old.json").write_text("{}")
+    wrote: queue.Queue = queue.Queue()
+
+    class Seen(CHECK.Packs):
+        def write(self):
+            wrote.put(n := super().write())
+            return n
+
+    pack = tmp_path / "run" / "verdicts.tar.gz"
+    packs = Seen(pack, CHECK.VERDICTS.snapshot())
+    steps = CHECK.Steps(tmp_path, packs=packs)
+    (cache / "pkg" / "k1.json").write_text("{}")
+    steps.end({"step": "passes", "status": "passed"})
+    assert wrote.get() == 1
+    with tarfile.open(pack) as tar:
+        assert tar.getnames() == ["tests/pkg/k1.json"], "only what the run stored"
+    (cache / "pkg" / "k2.json").write_text("{}")
+    CHECK._terminated(signal.SIGTERM, None)
+    assert wrote.get() == 2
+    with tarfile.open(pack) as tar:
+        assert tar.getnames() == ["tests/pkg/k1.json", "tests/pkg/k2.json"]
+    stamp = pack.stat().st_mtime_ns
+    assert packs.close() == 2 and pack.stat().st_mtime_ns == stamp, "a pack holding what is new already isn't written again"
+    assert not packs.thread.is_alive()
+
+
+def test_a_runs_reused_pack_holds_what_its_own_plan_found_here_before_its_steps_ran(tmp_path, monkeypatch):
+    """A check's `verdicts.tar.gz` holds only what its steps stored, so a check reusing a pass no recent pack holds answered for
+    nothing a later plan could cite (19 Oct: the newest packs held no circuit-check target and no keyed step).  `Reused` packs
+    the passes its plan of its own tree found in its own caches, of those here before its steps ran; with circuit-check's
+    targets unkeyed (no task list yet) it plans again once that step ends."""
+    import tarfile
+
+    cache = tmp_path / "check-cache"
+    monkeypatch.setenv("CHECK_CACHE", str(cache))
+    monkeypatch.setenv("VERITY_TEST_CACHE", str(tmp_path / "tests-cache"))
+    for rel in ("lean-audit/k1.json", "circuit-check/v1/aa/e1.json", "circuit-check/v1/bb/l1.json"):
+        (cache / rel).parent.mkdir(parents=True, exist_ok=True)
+        (cache / rel).write_text("{}")
+    before = CHECK.VERDICTS.snapshot()
+    (cache / "lean-audit" / "k9.json").write_text("{}")                  # stored by this run: verdicts.tar.gz's
+    plans = [
+        {"parts": [{"part": "lean-audit:p", "state": "passed", "found": [{"source": "own", "paths": ["check/lean-audit/k1.json"]},
+                                                                         {"source": "pack:r1", "paths": ["check/lean-audit/k1.json"]}]},
+                   {"part": "lean-audit:q", "state": "passed", "found": [{"source": "own", "paths": ["check/lean-audit/k9.json"]}]},
+                   {"part": "circuit-check", "state": "unkeyed"}]},
+        {"parts": [{"part": "circuit-check:t", "state": "passed", "found": [
+            {"source": "own", "paths": ["check/circuit-check/v1/aa/e1.json", "check/circuit-check/v1/bb/l1.json"]}]}]}]
+    monkeypatch.setattr(CHECK.Reused, "plan", lambda self: plans.pop(0))
+    run_dir = tmp_path / "run"
+    reused = CHECK.Reused(run_dir, before)
+    reused.start()
+    reused.close()
+    assert reused.circuit_unkeyed
+    with tarfile.open(run_dir / CHECK.REUSED_PACK) as tar:
+        assert tar.getnames() == ["check/lean-audit/k1.json"]
+    reused.ended({"step": "circuit-check", "status": "passed"})
+    assert reused.close() == 2 and not plans
+    with tarfile.open(run_dir / CHECK.REUSED_PACK) as tar:
+        assert tar.getnames() == ["check/circuit-check/v1/aa/e1.json", "check/circuit-check/v1/bb/l1.json"]
+
+
 def test_under_keep_going_only_a_halting_step_stops_the_run_and_it_is_named(tmp_path):
     steps = CHECK.Steps(tmp_path, keep_going=True)
     steps.end({"step": "pytest", "status": "failed"})
@@ -874,6 +1102,7 @@ def test_a_failed_preflight_starts_nothing_else_even_under_keep_going(tmp_path, 
     marker = tmp_path / "ran"
     touch = _py("open(__import__('sys').argv[1], 'w')", marker)
     for failing in ("preflight-lock", "preflight-lints"):
+        monkeypatch.setenv("CHECK_CACHE", str(tmp_path / f"cache-{failing}"))     # else the first's lints pass is reused
         pre = [(n, _py("raise SystemExit(1)") if n == failing else _py("pass"), tmp_path) for n in ("preflight-lock", "preflight-lints")]
         _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=pre)
         ok, done = CHECK.run(tmp_path, 2, keep_going=True)
@@ -1139,10 +1368,19 @@ def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
     a stale `--verdicts-in`) would change what is reused or checked, so it is refused before anything is read."""
     import subprocess
 
-    for flag in ("--no-cache", "--verdicts-in", "--cores"):
-        p = subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "abc", "vy-x", "--agreement", flag],
-                           capture_output=True, text=True, cwd=tmp_path, env={"PATH": "/usr/bin:/bin"})
+    def train(*flags: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "abc", "vy-x", *flags],
+                              capture_output=True, text=True, cwd=tmp_path, env={"PATH": "/usr/bin:/bin"})
+
+    for flag in ("--no-cache", "--no-regenerate", "--verdicts-in", "--cores"):
+        p = train("--agreement", flag)
         assert p.returncode == 2 and f"train: {flag} refused" in p.stderr, p.stderr
+    # drive's after-landing run of a review landing: every job, the upstream build, no reuse, no regenerated lock records; past
+    # the flags, the store key
+    p = train("--deferred", "pytest,lean-audit", "--agreement", "--no-cache", "--no-regenerate")
+    assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
+    p = train("--deferred", "pytest", "--against", "main")
+    assert p.returncode == 2 and "--deferred takes no --against" in p.stderr, p.stderr
 
 
 @pytest.mark.parametrize("twins", [False, True])
@@ -1217,9 +1455,9 @@ def _train_repo(tmp_path):
     for k in ("VERITY_SKIP_STORE", "AWS_SESSION_TOKEN"):
         env.pop(k, None)
 
-    def train(*a):
+    def train(*a, **extra):
         return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), *a], capture_output=True, text=True,
-                              cwd=tmp_path / "repo", env=env)
+                              cwd=tmp_path / "repo", env={**env, **extra})
 
     return git, train, argv
 
@@ -1258,31 +1496,46 @@ def test_train_sh_refuses_an_empty_commit_one_origin_lacks_and_a_base_that_is_no
     assert not argv.exists() and not posted.exists()
 
 
-def test_train_sh_posts_a_launch_that_registered_nothing_and_stays_quiet_on_one_that_did(tmp_path):
-    """Two launches registered no run and told nobody: two racing on the fetch (22:51Z, 9 Oct), and d7e946defc3f, refused by the
-    read guard and found two hours later (10:42Z, 10 Oct). A failed fetch is posted to the merge thread with git's reason, as the
-    `refused` in a launch's log is with the log's last lines; a launch that registers its run posts nothing."""
+def test_train_sh_runs_drives_shadow_as_an_ordinary_quiet_job_and_a_train_with_priority_and_its_post(tmp_path):
+    """drive's per-PR shadow (`TRAIN_ORDINARY=1 TRAIN_QUIET=1`) must never take a check slot ahead of a lane's or a train's, nor
+    ring anyone when its launch registers nothing (ci, 21 Oct); a train keeps `--priority` and its post."""
     git, train, argv = _train_repo(tmp_path)
     (tmp_path / "repo" / "a").write_text("b\n")
     git("commit", "-q", "-am", "change")
     git("push", "-q", "origin", "HEAD:main")
-    p = train("HEAD", "vy-x")
-    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
-    assert not (tmp_path / "posted").exists()
+    assert train("HEAD", "vy-x").returncode == 0 and "--priority" in argv.read_text().split()
+    p = train("HEAD", "vy-x", "--agreement", TRAIN_ORDINARY="1", TRAIN_QUIET="1")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and "--priority" not in args and {"--record", "--keep-going", "--agreement"} <= set(args), args
 
     (tmp_path / "origin.git").rename(tmp_path / "gone.git")
+    (tmp_path / "bin" / "sleep").write_text("#!/bin/sh\n")                # the fetch's backoffs: nothing launches to wait for
+    p = train("HEAD", "vy-x", TRAIN_ORDINARY="1", TRAIN_QUIET="1")
+    assert p.returncode == 1 and "git fetch origin failed" in p.stderr and not (tmp_path / "posted").exists(), p.stderr
     p = train("HEAD", "vy-x")
-    posted = (tmp_path / "posted").read_text()
-    assert p.returncode == 1 and "git fetch origin failed" in p.stderr, p.stderr
-    assert "registered no run (exit 1)" in posted and "git fetch origin failed" in posted, posted
-    assert posted.startswith("@ci ") and "--quiet" in (tmp_path / "posted.args").read_text().split(), "it rings only @ci"
-    (tmp_path / "gone.git").rename(tmp_path / "origin.git")
+    assert p.returncode == 1 and "git fetch origin failed" in (tmp_path / "posted").read_text()
 
-    (tmp_path / "bin" / "uv").write_text(f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}"
-                                         "echo 'check: read guard: refused: b0f68e798 reads outside its inputs'\n")
+
+def test_train_sh_retries_a_failed_first_fetch_twice_with_a_backoff(tmp_path):
+    """infra, 26 Oct 09:54Z (#4657): drive launches train.sh detached, so its fetch in the queue's clone can meet a tick's, which
+    fails one of them with `cannot lock ref`.  It tries twice more, 5 s and then 15 s later, and only then registers no run."""
+    git, train, argv = _train_repo(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "change")
+    git("push", "-q", "origin", "HEAD:main")
+    origin, gone, sleeps = tmp_path / "origin.git", tmp_path / "gone.git", tmp_path / "sleeps"
+    origin.rename(gone)
+    # the first backoff gives origin back; a poll for the launch waits on it, not on a clock
+    (tmp_path / "bin" / "sleep").write_text(f'#!/bin/sh\necho "$1" >> {sleeps}\nif [ -e {gone} ]; then mv {gone} {origin}; '
+                                            f'else while [ ! -e {tmp_path / "launched"} ]; do :; done; fi\n')
     p = train("HEAD", "vy-x")
-    posted = (tmp_path / "posted").read_text()
-    assert p.returncode == 1 and "read guard: refused" in posted and "exited 0 before launching a run" in posted, posted
+    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
+    assert sleeps.read_text().split()[0] == "5"
+    sleeps.unlink()
+    origin.rename(gone)
+    (tmp_path / "bin" / "sleep").write_text(f'#!/bin/sh\necho "$1" >> {sleeps}\n')
+    p = train("HEAD", "vy-x", TRAIN_QUIET="1")
+    assert p.returncode == 1 and "git fetch origin failed" in p.stderr and sleeps.read_text().split() == ["5", "15"], p.stderr
 
 
 def test_train_sh_takes_a_restack_by_merge_head_and_refuses_one_with_mains_tree(tmp_path):
@@ -1347,6 +1600,23 @@ def test_train_sh_against_keeps_the_quick_tiers_bounds_and_lean_build():
     assert "uv run --locked --all-packages --extra torch-cpu python tools/verity/check/suites.py" == " ".join(queue.QUICK_TIER[:-1])
 
 
+def test_train_sh_stops_a_launcher_that_launched_nothing_in_the_wait(tmp_path):
+    """18 Oct: train.sh gave up on a check.py still gathering verdicts after its wait, and check.py launched its runs later. Drive
+    had no ids for them, so nothing cancelled them, and one held a check slot 3 h on a tree no longer on `next`."""
+    import os
+
+    git, train, _ = _train_repo(tmp_path)
+    bin_, pidf, stopped = tmp_path / "bin", tmp_path / "pid", tmp_path / "stopped"
+    (bin_ / "uv").write_text(f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}echo $$ > {pidf}.tmp\nmv {pidf}.tmp {pidf}\n"
+                             f"trap 'touch {stopped}; exit 143' TERM\nwhile :; do :; done\n")
+    (bin_ / "sleep").write_text(f"#!/bin/sh\nuntil [ -e {pidf} ]; do :; done\n")       # each poll waits on the launch, not on a clock
+    p = train("HEAD", "vy-x")
+    assert p.returncode != 0 and "stopped its launcher" in p.stderr, (p.stdout, p.stderr)
+    assert stopped.exists()
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(pidf.read_text()), 0)
+
+
 def test_train_sh_returns_the_exit_of_a_check_that_died_before_launching(tmp_path):
     """check.py killed before it launches a run (the OOM killer, while it gathers verdicts) prints no traceback: train.sh says
     how it exited and returns that, at once, rather than polling the log for ten minutes and saying only that nothing launched."""
@@ -1392,3 +1662,27 @@ def test_the_lean_audit_step_regenerates_records_only_where_the_lean_job_takes_i
     assert not CHECK.lean_regenerates()
     (tmp_path / "lean_audit.py").write_text('ap.add_argument("--regenerate", action="store_true")\n')
     assert CHECK.lean_regenerates()
+
+
+def test_the_lints_are_keyed_by_the_committed_tree_and_unkeyed_on_any_change(tmp_path, monkeypatch):
+    """preflight-lints read every file (`LINTS`), so their pass is kept under the commit's tree, and a tree with a change git
+    hasn't committed, an untracked file too, has no key: the lints run."""
+    import subprocess
+
+    def git(*a):
+        subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *a], cwd=tmp_path,
+                       check=True, capture_output=True)
+
+    (tmp_path / "a.md").write_text("a\n")
+    git("init", "-q")
+    git("add", "-A")
+    git("commit", "-q", "-m", "a")
+    monkeypatch.setattr(CHECK, "ROOT", tmp_path)
+    e = {"PATH": "/usr/bin"}
+    one = CHECK.lints_key(e)
+    assert one and CHECK.lints_key(e) == one and CHECK.lints_key({"PATH": "/bin"}) != one
+    (tmp_path / "b.md").write_text("b\n")
+    assert CHECK.lints_key(e) is None
+    git("add", "-A")
+    git("commit", "-q", "-m", "b")
+    assert CHECK.lints_key(e) not in (None, one)

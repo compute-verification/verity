@@ -12,12 +12,14 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c4"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "core" / "protocols" / "pouw" / "tests"))
 import f1_fast as Q  # noqa: E402
 import pearl_c4_vectors as V  # noqa: E402
 import test_pouw_pearl_c4 as T  # noqa: E402
 from verity.core.protocols.pouw.schemes import pearl_c4 as F  # noqa: E402
 from verity.core.protocols.pouw.schemes import pearl_c_work as W  # noqa: E402
+import clear_work as CW  # noqa: E402
 
 
 def test_row_law_is_the_reference_law():
@@ -56,7 +58,7 @@ def test_fast_path_keeps_r1_and_the_tile_on_r1s_tile():
     rec = W.UnitRecord(ctx.matmul, 4, k)
     assert [fast.row_over_debit(rec, ops, "A", p) for p in range(4)] == [s.row_over_debit(rec, ops, "A", p) for p in range(4)]
     assert not any(fast.row_over_debit(rec, ops, "B", p) for p in range(4))
-    assert W.check_opened(fast, W.UnitRecord(ctx.matmul, 4, k, (0,)), tile, a_rows, b_rows, ops) is None
+    assert CW.check_opened(fast, W.UnitRecord(ctx.matmul, 4, k, (0,)), tile, a_rows, b_rows, ops) is None
     d_fast = fast.tile_cap(rec, ops, range(4), range(4))[0]
     d_rule = s.tile_cap(rec, ops, range(4), range(4))[0]
     assert abs(d_fast - d_rule) <= Fraction(1, 10 ** 9) * max(1, d_rule)

@@ -243,14 +243,114 @@ def test_the_s8_coordinate_scales_as_steps_int8_linear_and_the_row_is_its_coordi
     assert np.array_equal(accw.astype(np.uint32).view(np.int32), acc[:, 0])
 
 
+def test_the_row_split_s8_coordinate_is_the_coordinate_on_its_parts_concatenated() -> None:
+    """`ScaledMmS8CoordinateRows_v1{K, R}` is `ScaledMmS8Coordinate_v1{K}` on x's and W's row's R parts, for R = 1, 2 and 4.
+    At K = 65,536 (the demo's MLP down projection) R = 2 makes each s8 operand one `UNIT_CLASS_MAX` row, where the unsplit
+    coordinate's are twice it."""
+    import numpy as np
+
+    from verity.ml.circuits import evaluation as E
+    from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
+
+    rng = np.random.default_rng(33)
+    n, K = 400, 128
+    x, w = (rng.integers(0, 256, (n, K), dtype=np.uint8) for _ in range(2))
+    sx = (np.abs(rng.standard_normal(n)) / 127).astype(np.float32).view(np.uint32)
+    sw = rng.integers(0, 1 << 32, n, dtype=np.uint64).astype(np.uint32)
+    want = E.evaluate_batch(bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM90_S8), x, sx, w, sw, kernel="reference")
+    for R in (1, 2, 4):
+        rows = bind(G.ScaledMmS8CoordinateRows, K=K, R=R, **G.GEMM_SM90_S8)
+        assert [p for p, _ in rows.signature()[0]] == [*(f"x{r}" for r in range(R)), "sx", *(f"wrow{r}" for r in range(R)), "sw"]
+        got = E.evaluate_batch(rows, *np.split(x, R, axis=1), sx, *np.split(w, R, axis=1), sw, kernel="reference")
+        assert np.array_equal(got, want), R
+    bits = lambda fn: [sum(t.leaf_widths()) for _, t in fn.signature()[0]]
+    assert bits(bind(G.ScaledMmS8CoordinateRows, K=65536, R=2, **G.GEMM_SM90_S8)) == [UNIT_CLASS_MAX] * 2 + [32] + [UNIT_CLASS_MAX] * 2 + [32]
+    assert bits(bind(G.ScaledMmS8Coordinate, K=65536, **G.GEMM_SM90_S8)) == [2 * UNIT_CLASS_MAX, 32, 2 * UNIT_CLASS_MAX, 32]
+
+
+def test_the_padded_coordinate_is_the_coordinate_on_zero_padded_operands_at_every_padded_k() -> None:
+    """`GemmCoordinatePad_v1{T, K}` is `GemmCoordinate_v2{K}` on x and W's row with words T to K - 1 bf16 +0, and the same word at
+    every K >= T: a k16 step on +0 products changes only a -0 accumulator (to +0) and a NaN's payload (`F2fpBf16` returns one
+    NaN for all), and no step returns -0, so a chain from +0 never holds it. So attention's PV at T <= 32 keys is exact at
+    K = 32 whatever k extent the kernel pads its masked keys to."""
+    import numpy as np
+
+    from verity.ml.circuits import evaluation as E
+    from verity.ml.kernels import tc as KT
+
+    coord = bind(G.GemmCoordinate, K=32, **G.GEMM_HOPPER)
+    xs, ws = KT.sample_tc(np.random.default_rng(34), 3000, E.batch.signature_of(coord)[0])
+    for T in (1, 5, 16, 17, 31, 32):
+        pad = lambda a: np.concatenate([a[:, :T], np.zeros((len(a), 32 - T), a.dtype)], axis=1)
+        want = E.evaluate_batch(coord, pad(xs), pad(ws))
+        for k in (32, 48, 64):
+            pad_k = bind(G.GemmCoordinatePad, T=T, K=k, **G.GEMM_HOPPER)
+            assert np.array_equal(E.evaluate_batch(pad_k, xs[:, :T], ws[:, :T]), want), (T, k)
+            ref = E.evaluate_batch(pad_k, xs[:200, :T], ws[:200, :T], kernel="reference")
+            assert np.array_equal(ref, want[:200]), (T, k)
+    step = G.GEMM_HOPPER["DOT"]
+    acc, a, b = KT.sample_tc(np.random.default_rng(35), 50_000, E.batch.signature_of(step)[0])
+    edge = np.array([0x80000000, 0, 1, 0x80000001, 0x7F800000, 0xFF800000, 0x7FC00001, 0xFFFFFFFF], np.uint32)
+    acc = np.concatenate([np.asarray(acc, np.uint32), edge])
+    z = np.zeros((len(acc), 16), np.uint16)
+    out = E.evaluate_batch(step, acc, z, z).astype(np.uint32)
+    nan = (acc & 0x7FFFFFFF) > 0x7F800000
+    assert np.array_equal(out[~nan], np.where(acc == 0x80000000, 0, acc)[~nan]) and (out[nan] == 0x7FFFFFFF).all()
+    assert (acc == 0x80000000).sum() > 1000
+    assert not (E.evaluate_batch(step, acc[:50_000], a, b).astype(np.uint32) == 0x80000000).any()
+
+
+def test_the_pv_row_is_the_padded_coordinate_on_each_of_v_s_columns() -> None:
+    """`PvRow_v1{T, K=32, D=64}`'s dim d is `GemmCoordinatePad_v1{T, K=32}` of p and (v0[d], ..., v{T-1}[d]), at T = 1, 8 and
+    32, on the reference; the registered kernel gives the same words. Each key row is one 1,024-bit (128-byte) port, over the
+    111 bytes C-Flock needs of some row of a unit, and the output is one 1,024-bit row."""
+    import numpy as np
+
+    from verity.ml.circuits import evaluation as E
+    from verity.ml.kernels import tc as KT
+
+    n, D = 6, 64
+    coord = bind(G.GemmCoordinate, K=32, **G.GEMM_HOPPER)
+    xs, ws = KT.sample_tc(np.random.default_rng(36), n * D, E.batch.signature_of(coord)[0])
+    for T in (1, 8, 32):
+        p, v = xs[:n, :T], ws.reshape(n, D, 32)[:, :, :T].transpose(0, 2, 1)
+        vs = [np.ascontiguousarray(v[:, t]) for t in range(T)]
+        row = bind(G.PvRow, T=T, K=32, D=D, **G.GEMM_HOPPER)
+        got = E.evaluate_batch(row, p, *vs, kernel="reference").reshape(n, D)
+        pad = bind(G.GemmCoordinatePad, T=T, K=32, **G.GEMM_HOPPER)
+        cols = [E.evaluate_batch(pad, p, np.ascontiguousarray(v[:, :, d]), kernel="reference").reshape(n) for d in range(D)]
+        assert np.array_equal(got, np.stack(cols, axis=1)), T
+        assert np.array_equal(E.evaluate_batch(row, p, *vs).reshape(n, D), got), T
+        params, ret = row.signature()
+        assert [(name, sum(t.leaf_widths())) for name, t in params] == [("p", 16 * T), *((f"v{t}", 1024) for t in range(T))]
+        assert sum(ret.leaf_widths()) == 1024
+
+
+def test_the_padded_row_split_and_pv_forms_refuse_t_r_and_d_outside_their_range() -> None:
+    for T in (0, -1, 33):
+        with pytest.raises(ValueError, match=re.escape(f"T={T} is not in 1..K=32")):
+            bind(G.GemmCoordinatePad, T=T, K=32, **G.GEMM_HOPPER)
+        with pytest.raises(ValueError, match=re.escape(f"T={T} is not in 1..K=32")):
+            bind(G.PvRow, T=T, K=32, D=64, **G.GEMM_HOPPER)
+    for R in (0, 3, 256):
+        with pytest.raises(ValueError, match=re.escape(f"R={R} does not divide K=128")):
+            bind(G.ScaledMmS8CoordinateRows, K=128, R=R, **G.GEMM_SM90_S8)
+    for D in (0, -64):
+        with pytest.raises(ValueError, match=re.escape(f"D={D} is not a head width")):
+            bind(G.PvRow, T=8, K=32, D=D, **G.GEMM_HOPPER)
+
+
 # ---- the K a Definition binds ---------------------------------------------------------------------------------------------
 
 #: each GEMM Definition, its step width k and the rest of a binding
-FAMILIES = [(G.DotBf16, 16, G.GEMM_HOPPER), (G.GemmCoordinate, 16, G.GEMM_AMPERE), (G.Gemm, 16, {"N": 3, **G.GEMM_AMPERE}),
+FAMILIES = [(G.DotBf16, 16, G.GEMM_HOPPER), (G.GemmCoordinate, 16, G.GEMM_AMPERE),
+            (G.GemmCoordinatePad, 16, {"T": 1, **G.GEMM_HOPPER}), (G.PvRow, 16, {"T": 1, "D": 2, **G.GEMM_HOPPER}),
+            (G.Gemm, 16, {"N": 3, **G.GEMM_AMPERE}),
             (G.GemmCoordinateE4m3, 32, G.GEMM_SM120_E4M3), (G.GemmCoordinateNvf4, 64, G.GEMM_SM120_NVF4),
             (G.GemmCoordinateMxf4, 64, G.GEMM_SM120_MXF4), (G.GemmAccumulatorS8, 32, G.GEMM_SM120_S8),
-            (G.ScaledMmS8Coordinate, 32, G.GEMM_SM120_S8), (G.ScaledMmS8, 32, {"N": 2, **G.GEMM_SM120_S8})]
-S8_FAMILIES = FAMILIES[6:]
+            (G.ScaledMmS8Coordinate, 32, G.GEMM_SM120_S8), (G.ScaledMmS8, 32, {"N": 2, **G.GEMM_SM120_S8}),
+            (G.ScaledMmS8CoordinateRows, 32, {"R": 1, **G.GEMM_SM90_S8})]
+S8_FAMILIES = FAMILIES[8:]
 
 
 @pytest.mark.parametrize("defn,k,rest", FAMILIES, ids=[d.name for d, *_ in FAMILIES])
@@ -299,3 +399,79 @@ VALID = {
 def test_a_valid_k_binds_to_its_recorded_digest(spec) -> None:
     prog, _ = standalone_call(spec)
     assert (spec.gates, codec.program_digest(codec.encode_program(prog))) == VALID[spec]
+
+
+# ---- the s8 binding of each card ------------------------------------------------------------------------------------------
+
+def _chain(model, a, b) -> int:
+    """``model``'s step chained over one row from a zero accumulator, as a word."""
+    c = 0
+    for i in range(0, len(a), model.k):
+        c = model.step(c, a[i:i + model.k], b[i:i + model.k])
+    return c
+
+
+def test_s8_gemm_binds_the_registered_step_for_every_card_that_computes_it_and_refuses_any_other() -> None:
+    """sm_90's and sm_100's s8 steps are `BLACKWELL_SM120_S8_M16N8K32`'s function, so each binds `BlackwellS8ImmaDot32_v1`, and
+    a GEMM bound on sm_90 is sm_120's, id for id. A wrapping, u8 or k = 16 step is another function and is refused."""
+    from dataclasses import replace
+
+    from verity.ml.circuits.silicon.integer import (BLACKWELL_SM100_S8_K32, BLACKWELL_SM120_S8_M16N8K32,
+                                                    BLACKWELL_SM120_S8_M16N8K32_WRAP, BLACKWELL_SM120_U8S8_M16N8K32,
+                                                    HOPPER_SM90_S8_K32)
+    for model in (HOPPER_SM90_S8_K32, BLACKWELL_SM100_S8_K32, BLACKWELL_SM120_S8_M16N8K32):
+        assert G.s8_gemm(model) == G.GEMM_SM120_S8 == {"DOT": P.BlackwellS8ImmaDot32}
+    assert G.GEMM_SM90_S8 == G.GEMM_SM120_S8
+    for defn, rest in ((G.GemmAccumulatorS8, {}), (G.ScaledMmS8Coordinate, {}), (G.ScaledMmS8, {"N": 2})):
+        assert bind(defn, K=512, **rest, **G.GEMM_SM90_S8).id == bind(defn, K=512, **rest, **G.GEMM_SM120_S8).id
+    for model in (BLACKWELL_SM120_S8_M16N8K32_WRAP, replace(HOPPER_SM90_S8_K32, satfinite=False),
+                  BLACKWELL_SM120_U8S8_M16N8K32, replace(HOPPER_SM90_S8_K32, k_per_instruction=16)):
+        with pytest.raises(ValueError, match="BlackwellS8ImmaDot32_v1 is not its step"):
+            G.s8_gemm(model)
+
+
+@pytest.mark.parametrize("K", [512, 1536, 2048, 6144])
+def test_the_sm90_accumulator_is_hoppers_step_chain_bit_for_bit(K) -> None:
+    """`GemmAccumulatorS8` bound with `GEMM_SM90_S8`, at Ks H1 serves on sm_90, on random int8 rows and on the rows of largest
+    products (-128 x -128, -128 x 127, 127 x 127, mixed), is `HOPPER_SM90_S8_K32`'s step chained over K/32 instructions, the
+    exact sum, and the chain without ``.satfinite`` (h1u's ``mma.sync``): below 2^17 no partial sum leaves s32."""
+    from dataclasses import replace
+
+    import numpy as np
+
+    from verity.ml.circuits import evaluation as E
+    from verity.ml.circuits.silicon.integer import HOPPER_SM90_S8_K32, s32_value
+
+    rng = np.random.default_rng(K)
+    x = rng.integers(-128, 128, (24, K)).astype(np.int8)
+    w = rng.integers(-128, 128, (24, K)).astype(np.int8)
+    x[0], w[0] = -128, -128
+    x[1], w[1] = -128, 127
+    x[2], w[2] = 127, 127
+    x[3], w[3] = rng.choice([-128, 127], K), rng.choice([-128, 127], K)
+    got = E.evaluate_batch(bind(G.GemmAccumulatorS8, K=K, **G.GEMM_SM90_S8), x.view(np.uint8), w.view(np.uint8),
+                           kernel="reference").astype(np.uint32)
+    wrap = replace(HOPPER_SM90_S8_K32, satfinite=False)
+    for r in range(len(x)):
+        a, b = x[r].view(np.uint8).tolist(), w[r].view(np.uint8).tolist()
+        exact = int((x[r].astype(np.int64) * w[r]).sum())
+        assert s32_value(int(got[r])) == s32_value(_chain(HOPPER_SM90_S8_K32, a, b)) == s32_value(_chain(wrap, a, b)) == exact
+    assert s32_value(int(got[0])) == 16384 * K and s32_value(int(got[1])) == -16256 * K
+
+
+def test_the_sm90_steps_agree_up_to_the_largest_k_and_part_at_2_17() -> None:
+    """At K = 2^17 - 512, the largest K a multiple of 512 below `S8_K_LIMIT`, all -128 rows sum to 2,139,095,040 under the
+    clamped and the wrapping chain alike. At K = 2^17 the sum 2^31 leaves s32: the clamped chain gives 2^31 - 1, the wrapping
+    one -2^31, and the s8 Definitions refuse that K, so no bound GEMM tells the two sm_90 forms apart."""
+    from dataclasses import replace
+
+    from verity.ml.circuits.silicon.integer import HOPPER_SM90_S8_K32, s32_value
+
+    wrap = replace(HOPPER_SM90_S8_K32, satfinite=False)
+    K = (1 << 17) - 512
+    row = [0x80] * K
+    assert s32_value(_chain(HOPPER_SM90_S8_K32, row, row)) == s32_value(_chain(wrap, row, row)) == 16384 * K == 2_139_095_040
+    row = [0x80] * (1 << 17)
+    assert (s32_value(_chain(HOPPER_SM90_S8_K32, row, row)), s32_value(_chain(wrap, row, row))) == ((1 << 31) - 1, -(1 << 31))
+    with pytest.raises(ValueError, match="at or past 131072"):
+        bind(G.GemmAccumulatorS8, K=1 << 17, **G.GEMM_SM90_S8)

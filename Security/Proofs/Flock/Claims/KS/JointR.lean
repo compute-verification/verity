@@ -121,109 +121,17 @@ theorem oneWait_of_tableBoundJR (H : Msg → Msg) (D : Deploy Coin Col T) (N : M
     (hp : ∀ x, (∃ s, D.parse x = some s) ∨ NoAcc H D.V x) (Ok : Msg → ℕ → Col → Prop) (hz : ∀ x j, Ok x j 0)
     (hok : ColsOkJ H D N Ok) (hconf : ConflictTiedJ H D N) (htab : TableBoundJR H D N Ok) :
     OneWait H D := by
-  classical
   intro x Ω _ _ P
   obtain ⟨e₀, hfit, hb⟩ := htab x Ω P
-  set j₀ : Fin (D.V.k x) := ⟨0, hVk x⟩
-  set ev : Ω → (Fin (D.V.k x) → Coin) → (Fin (D.V.k x) → Coin) → Prop :=
-    fun ω r r' => ∃ p, ConflictAt (opJ H D N P x ω) (r, r') p with hev
-  have tied : ∀ ω r r', ev ω r r' →
-      TiedColl H ((run H P D.V x ω r).vLog ++ (run H P D.V x ω (forkCoins j₀ r r')).vLog) := by
-    intro ω r r' ⟨p, h1, h2, h3⟩
-    rw [Claims.Bridge.forkCoins_zero j₀ rfl]
-    simp only [opJ] at h1 h2 h3
-    split_ifs at h1 h2 h3 with ha ha'
-    · obtain ⟨u, hu⟩ := Option.isSome_iff_exists.1 h1
-      obtain ⟨v, hv⟩ := Option.isSome_iff_exists.1 h2
-      exact hconf x Ω P ω r r' p.1.val p.2.val u v ha ha' p.1.isLt p.2.isLt hu hv
-        fun huv => h3 (by rw [hu, hv, huv])
-    all_goals simp at h1 h2
-  refine ⟨(e₀.addFork (D.k x) (Nat.cast_nonneg _) j₀ ev tied).mergeR,
-    (e₀.fitsR_addFork (D.weight x) (D.k x) (Nat.cast_nonneg _) j₀ rfl ev tied hfit).fits_mergeR,
-    fun ω hε => ?_⟩
-  have hacc : ¬ NoAcc H D.V x := fun hno => by
-    have : accPr H D.V P x ω = 0 := by
-      unfold accPr
-      rw [Pr_congr (q := fun _ => False) fun r => ⟨fun h => hno Ω P ω r h, False.elim⟩, Pr_false]
-    linarith
-  have hk1 : 1 ≤ D.k x := (hk x).resolve_right hacc
-  obtain ⟨s, hs⟩ := (hp x).resolve_right hacc
-  set Xt : List (Fin (D.V.k x) → Coin) → Prop := fun bs =>
-    (∀ b ∈ bs, Acc H D.V P x ω b) → Extracts D x (seenOf H D.V P x ω bs) with hXt
-  have hXb : ∀ bs, ¬ Xt bs → expect (ind (Acc H D.V P x ω)) (runGame (D.V.k x)) (runS _) ≤
-      (D.εtable x + e₀.term ω) + expect (ind fun r => Acc H D.V P x ω r ∧
-        ∃ p, Off (opJ H D N P x ω) (firstTable (opJ H D N P x ω) (fun _ => 0) bs) r p)
-        (runGame (D.V.k x)) (runS _) := by
-    intro bs hnX
-    simp only [hXt, Classical.not_imp] at hnX
-    obtain ⟨hall, hnot⟩ := hnX
-    obtain ⟨j, hj, hnj⟩ : ∃ j < s.tables, ¬ ExtractsAt D x (seenOf H D.V P x ω bs) j := by
-      by_contra hc
-      push Not at hc
-      exact hnot ⟨s, hs, hc⟩
-    have hjn : j < nTab D x := (nTab_of_parse hs).symm ▸ hj
-    have hCe : (fun p : Fin (N x j) => firstTable (opJ H D N P x ω) (fun _ => 0) bs ⟨⟨j, hjn⟩, p⟩) =
-        fun p => (lookCol ((seenOf H D.V P x ω bs).flatMap fun v => D.cols v j) p.val).getD 0 :=
-      funext fun p => firstTable_opJ H D N P x ω bs hall ⟨⟨j, hjn⟩, p⟩
-    have hgood : ¬ GoodTableAt D N x j
-        fun p => firstTable (opJ H D N P x ω) (fun _ => 0) bs ⟨⟨j, hjn⟩, p⟩ := fun hg =>
-      hnj (extractsAt_of_goodAt D N x j _ (hCe ▸ hg))
-    have hOk : ∀ p, Ok x j (firstTable (opJ H D N P x ω) (fun _ => 0) bs ⟨⟨j, hjn⟩, p⟩) := by
-      intro p
-      rw [congrFun hCe p]
-      cases hl : lookCol ((seenOf H D.V P x ω bs).flatMap fun v => D.cols v j) p.val with
-      | none => exact hz x j
-      | some u =>
-        rw [seenOf, List.flatMap_map] at hl
-        obtain ⟨b, hb', hu⟩ := lookCol_flatMap_some (fun r => D.cols (run H P D.V x ω r).seen j) p.val u bs hl
-        exact hok x Ω P ω b j p.val u (hall b hb') hjn p.isLt hu
-    rw [← accPr_eq, expect_runGame, ← Claims.Bridge.Pr_eq_Ex]
-    refine (hb ω j hjn _ hOk hgood).trans (add_le_add le_rfl (Pr_mono fun r ⟨ha, p, u, hu, hne⟩ => ?_))
-    have e : opJ H D N P x ω r ⟨⟨j, hjn⟩, p⟩ = some u := by
-      unfold opJ
-      rw [ite_eq_left ha]
-      exact hu
-    refine ⟨ha, ⟨⟨j, hjn⟩, p⟩, ?_⟩
-    show (opJ H D N P x ω r ⟨⟨j, hjn⟩, p⟩).isSome ∧ opJ H D N P x ω r ⟨⟨j, hjn⟩, p⟩ ≠ some _
-    rw [e]
-    exact ⟨rfl, fun h => hne (Option.some_injective _ h)⟩
-  have hεc : 0 ≤ D.εtable x + e₀.term ω := add_nonneg (hεt x) (e₀.term_nonneg ω)
-  have hj := joint_acc_le (opJ H D N P x ω) (fun _ => 0) (runGame (D.V.k x)) (runS _)
-    (Acc H D.V P x ω) Xt _ hεc hXb (D.k x) hk1
-  have hlhs : accPr H D.V P x ω * (accFail H D.V P x ω (D.k x) (Extracts D x) /
-        accPr H D.V P x ω ^ D.k x) =
-      expect (ind (Acc H D.V P x ω)) (runGame (D.V.k x)) (runS _) *
-        expectAcc (runGame (D.V.k x)) (runS _) (Acc H D.V P x ω) (D.k x) (ind fun bs => ¬ Xt bs) := by
-    rw [oneWait_lhs_eq]
-    congr 1
-    unfold expectAcc
-    congr 1
-    refine congrArg (expectN _ _ _) (funext fun bs => ?_)
-    rw [prod_map_ind]
-    by_cases hall : ∀ b ∈ bs, Acc H D.V P x ω b
-    · congr 1
-      unfold ind
-      have : (¬ Xt bs) ↔ ¬ Extracts D x (seenOf H D.V P x ω bs) := by
-        rw [hXt]
-        exact not_congr ⟨fun h => h hall, fun h _ => h⟩
-      beta_reduce
-      split_ifs with h1 h2 h2 <;> first | rfl | (exfalso; tauto)
-    · rw [ite_eq_right hall, zero_mul, zero_mul]
-  have hE₂ : expect₂ (fun a a' => ind (fun y : (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) =>
-        ∃ p, ConflictAt (opJ H D N P x ω) y p) (a, a')) (runGame (D.V.k x)) (runS _) =
-      Pr fun s : (Fin (D.V.k x) → Coin) × (Fin (D.V.k x) → Coin) => ev ω s.1 s.2 := by
-    unfold expect₂
-    simp only [expect_runGame]
-    rw [Claims.Bridge.Pr_eq_Ex, Claims.Bridge.Ex_prod]
-  rw [hE₂, ← accPr_eq] at hj
-  have hm := (e₀.addFork (D.k x) (Nat.cast_nonneg _) j₀ ev tied).term_le_mergeR ω
-  rw [Escapes.term_addFork] at hm
-  rw [hlhs, ← accPr_eq]
-  have hrate : (Fintype.card (PosJ D N x) : ℝ) * accPr H D.V P x ω / (Real.exp 1 * D.k x) ≤
-      D.N₀ x / (Real.exp 1 * D.k x) * accPr H D.V P x ω := by
-    rw [Fintype.card_sigma, div_mul_eq_mul_div]
-    simp only [Fintype.card_fin]
-    exact div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_right (hN x) hε.le) (by positivity)
+  refine ⟨(e₀.addFork (D.k x) (Nat.cast_nonneg _) ⟨0, hVk x⟩
+      (fun ω r r' => ∃ p, ConflictAt (opJ H D N P x ω) (r, r') p) (opJ_tied H D N hconf P x ⟨0, hVk x⟩ rfl)).mergeR,
+    (e₀.fitsR_addFork (D.weight x) (D.k x) (Nat.cast_nonneg _) ⟨0, hVk x⟩ rfl
+      (fun ω r r' => ∃ p, ConflictAt (opJ H D N P x ω) (r, r') p) (opJ_tied H D N hconf P x ⟨0, hVk x⟩ rfl)
+      hfit).fits_mergeR, fun ω hε => ?_⟩
+  have hm := (e₀.addFork (D.k x) (Nat.cast_nonneg _) ⟨0, hVk x⟩
+    (fun ω r r' => ∃ p, ConflictAt (opJ H D N P x ω) (r, r') p)
+    (opJ_tied H D N hconf P x ⟨0, hVk x⟩ rfl)).term_le_mergeR ω
+  have := oneWait_le_of_tableBoundJ H D N hN hεt hVk hk hp Ok hz hok hconf x P e₀ hb ω hε
   linarith
 
 omit [Nonempty Coin] in
@@ -250,6 +158,10 @@ namespace FlockDeploy.KS
 
 open Flock
 
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **The deployed masked (`--zk`) verifier: KS**, at SHA-512, from every table's bound counted per round:
 `zk_KS_of_tableBoundJ` at `oneWait_of_tableBoundJR`. -/
 theorem zk_KS_of_tableBoundJR
@@ -262,6 +174,20 @@ theorem zk_KS_of_tableBoundJR
       (zk_parses _) _ (fun _ _ => .inl rfl) (Claims.Flock.colsOkJ_orZero _ _ _ _ (zk_colsOkJ sha512 _))
       (zk_conflictTiedJ _) htab)
 
+end Gen
+
+/-- **The deployed masked (`--zk`) verifier: KS**, at SHA-512, from every table's bound counted per round:
+`zk_KS_of_tableBoundJ` at `oneWait_of_tableBoundJR`. -/
+theorem zk_KS_of_tableBoundJR
+    (htab : Claims.Flock.TableBoundJR sha512 (deployZk Readable.relation) (wordLenJ true)
+      (Claims.Flock.orZeroJ (wideJ true))) :
+    Claims.Flock.KS sha512 (deployZk Readable.relation) :=
+  Gen.zk_KS_of_tableBoundJR (S := S₀) (htab := htab)
+
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **Every masked table's bound counted per round at tables with unopened positions**, from the bound at full-width
 tables and `ExtendJ`. -/
 theorem zk_tableBoundJR_of_extend (rel : Readable.Parsed → Readable.Relation)
@@ -269,6 +195,16 @@ theorem zk_tableBoundJR_of_extend (rel : Readable.Parsed → Readable.Relation)
     (htab : Claims.Flock.TableBoundJR sha512 (deployZk rel) (wordLenJ true) (wideJ true)) :
     Claims.Flock.TableBoundJR sha512 (deployZk rel) (wordLenJ true) (Claims.Flock.orZeroJ (wideJ true)) :=
   Claims.Flock.tableBoundJR_of_extend _ _ _ _ (wideJ_ne_zero true) (zk_colsOkJ sha512 rel) hext htab
+
+end Gen
+
+/-- **Every masked table's bound counted per round at tables with unopened positions**, from the bound at full-width
+tables and `ExtendJ`. -/
+theorem zk_tableBoundJR_of_extend (rel : Readable.Parsed → Readable.Relation)
+    (hext : Claims.Flock.ExtendJ (deployZk rel) (wordLenJ true) (wideJ true))
+    (htab : Claims.Flock.TableBoundJR sha512 (deployZk rel) (wordLenJ true) (wideJ true)) :
+    Claims.Flock.TableBoundJR sha512 (deployZk rel) (wordLenJ true) (Claims.Flock.orZeroJ (wideJ true)) :=
+  Gen.zk_tableBoundJR_of_extend (S := S₀) (rel := rel) (hext := hext) (htab := htab)
 
 /-- **The deployed masked verifier: KS**, at SHA-512 at the deployed relation, at every number of tables, from the live
 sessions' bound off the table on a witness lane at the statements some run accepts (`ZkLiveAccWJ`) and `ExtendJ` at
@@ -278,5 +214,21 @@ theorem zk_KS_of_liveAccWJ (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x 
     Claims.Flock.KS sha512 (deployZk Readable.relation) :=
   zk_KS_of_tableBoundJR (zk_tableBoundJR_of_extend Readable.relation hext
     (Claims.Flock.tableBoundJR_of_accAtR fun x => zk_tableBoundJAccAtR hl x))
+
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **The deployed masked verifier: KS**, at SHA-512 at the deployed relation, at every number of tables, from the live
+sessions' bound off the table on a witness lane at the statements some run accepts (`ZkLiveAccWJ`) and `ExtendJ` at
+full-width columns. -/
+theorem zk_KS_of_liveAccWJ (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccWJ x)
+    (hext : Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true)) :
+    Claims.Flock.KS sha512 (deployZk Readable.relation) :=
+  zk_KS_of_tableBoundJR (zk_tableBoundJR_of_extend Readable.relation hext
+    (Claims.Flock.tableBoundJR_of_accAtR fun x => zk_tableBoundJAccAtR hl x))
+
+end Gen
 
 end FlockDeploy.KS

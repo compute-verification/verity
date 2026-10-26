@@ -10,9 +10,10 @@ from verity_vllm.program.frontend.derive import StaticIndex
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import from_rows, rows_of, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_allreduce_settings
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (active_allreduce_settings, active_target_profile,
+                                                                           launch_tokens_of)
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value
-from verity_vllm.program.registry import tp_allreduce
+from verity.ml.definitions.registry import tp_allreduce
 
 
 # -- [R13 lane tp, P4] tensor-parallel collectives: `verity_tp::*` ops emitted by the construction's CollectiveBus (cb_a/tp_ops.py) ----------
@@ -34,7 +35,7 @@ def _hint_module(hint: str) -> str:
 
 
 def _collective_hint(node, ctx) -> str:
-    """[R19 moe F-r19-moe-1, row #70] the naming hint of a TP collective row.  A collective whose rank-local operand is produced UNDER the
+    """[row #70] the naming hint of a TP collective row.  A collective whose rank-local operand is produced UNDER the
     collective's own module (a row-parallel linear's all-reduce of its Gemm, the MoE runner's all-reduce of its MoeSum, the logits
     processor's all-gather of its Gemm shard) is named under that module (`<module>/<node>`) as before: the Gemm / MoeSum row under the
     module IS the rank's partial (required_manifest TP-04 `members_for`).  A collective issued MID-module -- every rank-local operand row
@@ -69,7 +70,7 @@ class AllReduce2Rule(OpRule):
     """`verity_tp::all_reduce2(part_rank0 [.., N] bf16, part_rank1 [.., N] bf16)` -> `all_reduce2{N}` (`AllReduce2_v1{N}`: one bf16 add per
     element = `ncclSum` bf16 of two terms) per row.  Operands are in RANK ORDER; one of them is this rank's partial (a value the rank
     computes: a K-sharded `Gemm_v1` output or an `EmbeddingShard` row), the other the PEER INPUT bound by `tp_links.json` to the other
-    rank's committed partial — the received collective output is never a fresh trusted input.  Established on the pod (R13 tp step 1):
+    rank's committed partial — the received collective output is never a fresh trusted input.  Established on the pod (tp step 1):
     the pynccl all-reduce result equals `bf16(f32(P_0) + f32(P_1))` bit-exactly on every recorded element."""
     modes = frozenset({"profile"})
     info = RuleInfo("AllReduce2[tp]", 1, "op-binding", applies_to="verity_tp::all_reduce2(a [.., N] bf16, b [.., N] bf16) (rank order)",
@@ -139,41 +140,51 @@ def _tp_parts(node) -> list:
 
 
 def _coverage(parts, node, ctx, *, fused: bool = False):
+    """The covered route of the call's launch, the `CAPTURED` entry at its world, the declared target's device and the workload's
+    NCCL transport: M is the launch's tokens (`launch_tokens_of`), of which the call reduces its own `rows_n`."""
     settings = active_allreduce_settings()
     if settings is None:
         return None, "all-reduce settings were not observed from the workload"
-    if len(parts) != 8:
-        return None, f"world {len(parts)}: tp_allreduce.CAPTURED covers world 8 only"
     rows = [rows_of(ctx.coll(a))[0] for a in parts]
-    M, N = len(rows[0]), rows[0][0].type.n
+    n, N, W = len(rows[0]), rows[0][0].type.n, len(parts)
+    M = launch_tokens_of(node, n)
     setting, route = tp_allreduce.served_route(settings, M, N)
     if fused:
-        route = "fused" if bool(settings.get("flashinfer")) and M <= tp_allreduce.fused_max_tokens(N, len(parts)) else "unfused"
+        route = "fused" if bool(settings.get("flashinfer")) and M <= tp_allreduce.fused_max_tokens(N, W) else "unfused"
     if setting is None:
         return None, f"tp_allreduce.covered(): switches {settings!r} do not name a captured setting"
-    captured = tp_allreduce.covered(setting, N, route, M)
+    target = active_target_profile()
+    device, transport = tp_allreduce.device_of(target.compute_capability, target.num_sms), settings.get("nccl_transport")
+    captured = tp_allreduce.covered(setting, N, route, M, world=W, device=device, transport=transport)
     if captured is None:
-        return None, (f"tp_allreduce.covered() has no entry for setting={setting!r}, N={N}, route={route!r}, M={M}; "
-                      "the route is refused until a capture records it")
-    return {"captured": captured, "rows": rows, "M": M, "N": N, "setting": setting, "route": route}, None
+        return None, (f"tp_allreduce.covered() has no entry for setting={setting!r}, N={N}, route={route!r}, M={M}, world={W}, "
+                      f"device={device!r}, transport={transport!r}; the route is refused until a capture records it")
+    if not fused:
+        try:
+            tp_allreduce.route_binding(captured, W, M, N, n)
+        except ValueError as e:
+            return None, str(e)
+    return {"captured": captured, "rows": rows, "M": M, "rows_n": n, "N": N, "setting": setting, "route": route}, None
 
 
-_ROUTE_KINDS = {"AllReduceMnnvl_v1": "all_reduce_mnnvl", "AllReduceMultimem_v1": "all_reduce_multimem", "AllReduceCustom_v1": "all_reduce_custom"}
+_ROUTE_KINDS = {"AllReduceMnnvl_v1": "all_reduce_mnnvl", "AllReduceMultimem_v1": "all_reduce_multimem", "AllReduceCustom_v1": "all_reduce_custom",
+                "AllReduceNcclTree_v1": "all_reduce_nccl_tree"}
 
 
 def _allreduce_kind(ctx, node, plan, world: int):
-    _defn, statics = tp_allreduce.route_binding(plan["captured"], world, plan["M"], plan["N"])
+    _defn, statics = tp_allreduce.route_binding(plan["captured"], world, plan["M"], plan["N"], plan["rows_n"])
     return ctx.kind(_ROUTE_KINDS[plan["captured"].definition], node, **statics)
 
 
 class AllReduceRule(OpRule):
-    """[lane vllm-tp-n] `verity_tp::all_reduce([part_rank0, .., part_rank{W-1}] each [.., N] bf16)` -> `all_reduce{WORLD=W, N}` (`AllReduce_v2{WORLD,N}`:
-    the captured world-8 route selected by the call's M and the workload's custom-all-reduce, symmetric-memory and FlashInfer settings.
-    A route absent from `tp_allreduce.covered()` refuses by name."""
+    """`verity_tp::all_reduce([part_rank0, .., part_rank{W-1}] each [.., N] bf16)` -> the captured route
+    (`tp_allreduce.CAPTURED`) selected by the call's M, the workload's custom-all-reduce, symmetric-memory, FlashInfer and
+    batch-invariance settings, its world, the declared target's device and NCCL's transport: the H200 routes at world 8, NCCL's tree
+    (`AllReduceNcclTree_v1`) at world 4 on the RTX PRO 6000 over SHM. A route absent from `tp_allreduce.covered()` refuses by name."""
     modes = frozenset({"profile"})
     info = RuleInfo("AllReduce[tp]", 1, "op-binding", applies_to="verity_tp::all_reduce([a_0 .. a_{W-1}] each [.., N] bf16) (rank order), W > 2",
-                    preconditions=("every operand is a bf16 value collection of identical shape", "world size 8",
-                                   "tp_allreduce.covered(setting,N,route,M) returns a captured entry"),
+                    preconditions=("every operand is a bf16 value collection of identical shape",
+                                   "tp_allreduce.covered(setting,N,route,M,world,device,transport) returns a captured entry"),
                     evidence_domain="structural; numerics: registry.tp_allreduce.CAPTURED")
 
     def targets(self):
@@ -203,13 +214,13 @@ class AllReduceRule(OpRule):
         rows = list(rows)
         plan, why = _coverage(parts, node, ctx)
         assert plan is not None and why is None
-        M, N = plan["M"], plan["N"]
+        n, N = plan["rows_n"], plan["N"]
         fn = _allreduce_kind(ctx, node, plan, W)
-        flat_parts = array_of([array_of(list(rs)).reshape(Array(M * N, Value(16))) for rs in rows])
+        flat_parts = array_of([array_of(list(rs)).reshape(Array(n * N, Value(16))) for rs in rows])
         hint = _collective_hint(node, ctx)
         out = ctx.call(fn, flat_parts, node=node, rule=self, name=f"{hint}/all_reduce")
-        ctx.define(node, from_rows([out[i * N:(i + 1) * N] for i in range(M)], lead[0]))
-        ctx.record(self, node, {"N": N, "rows": M, "world": W, "setting": plan["setting"], "route": plan["route"],
+        ctx.define(node, from_rows([out[i * N:(i + 1) * N] for i in range(n)], lead[0]))
+        ctx.record(self, node, {"N": N, "rows": n, "launch_M": plan["M"], "world": W, "setting": plan["setting"], "route": plan["route"],
                                "coverage": plan["captured"]._asdict()}, emitted=fn.id, collective="all_reduce")
 
 
@@ -251,21 +262,21 @@ class FusedAllReduceRmsNormRule(OpRule):
         weight, eps = ctx.coll(node.args[2], "weight"), float(node.args[3])
         plan, why = _coverage(parts, node, ctx, fused=True)
         assert plan is not None and why is None
-        M, N, W = plan["M"], plan["N"], len(parts)
+        M, n, N, W = plan["M"], plan["rows_n"], plan["N"], len(parts)
         shot = tp_allreduce.mnnvl_shot(M, N, W)
         _block, cluster = tp_allreduce.mnnvl_grid(M, N)
         fn = ctx.kind("all_reduce_rmsnorm_mnnvl", node, WORLD=W, N=N, SHOT=shot, CLUSTER=cluster, EPS=eps,
                       FMA=bool(plan["captured"].statics["FMA"]))
         hint = _collective_hint(node, ctx)
         outs = [ctx.call(fn, array_of([rows[r][i] for r in range(W)]), residual_rows[i], weight,
-                         node=node, rule=self, name=f"{hint}[{i}]/fused_all_reduce_rmsnorm") for i in range(M)]
+                         node=node, rule=self, name=f"{hint}[{i}]/fused_all_reduce_rmsnorm") for i in range(n)]
         ctx.define(node, [from_rows([o[0] for o in outs], lead), from_rows([o[1] for o in outs], lead)])
-        ctx.record(self, node, {"N": N, "rows": M, "world": W, "setting": plan["setting"], "route": "fused",
-                               "coverage": plan["captured"]._asdict()}, emitted=f"{fn.id} x{M}", collective="all_reduce")
+        ctx.record(self, node, {"N": N, "rows": n, "launch_M": M, "world": W, "setting": plan["setting"], "route": "fused",
+                               "coverage": plan["captured"]._asdict()}, emitted=f"{fn.id} x{n}", collective="all_reduce")
 
 
 class AllGatherRule(OpRule):
-    """[lane vllm-tp-n] `verity_tp::all_gather([part_rank0, .., part_rank{W-1}] each [.., N] bf16)` -> `all_gather{WORLD=W, N}` (`AllGather_v1{WORLD,N}`:
+    """`verity_tp::all_gather([part_rank0, .., part_rank{W-1}] each [.., N] bf16)` -> `all_gather{WORLD=W, N}` (`AllGather_v1{WORLD,N}`:
     the [W*N] row IS the W shards side by side, a copy) per row, W > 2 (world 2 is `AllGather2Rule`)."""
     modes = frozenset({"profile"})
     info = RuleInfo("AllGather[tp]", 1, "op-binding", applies_to="verity_tp::all_gather([a_0 .. a_{W-1}] each [.., N] bf16) (rank order, trailing axis), W > 2",

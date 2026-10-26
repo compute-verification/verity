@@ -40,7 +40,9 @@ environment extension loaded, so none of the package's code runs), and replays t
     dependencies the `.olean` files of the imported modules that a fetched package (Mathlib's cache, ArkLib's build) or the
                  toolchain provides differ from the record, which changes only with the package's imports or at a bump
     layers       a module under a `layers` prefix (other than its `except` modules) imports a module outside the layer's
-                 `imports` prefixes
+                 `imports` prefixes; a `sealed` layer's modules are ruled only by the layers at or under it, and an
+                 `imports` prefix that holds a sealed layer below it doesn't admit that layer's modules (a vocabulary
+                 `Definitions.Pouw` imports no `Definitions.Pouw.Guarantees`, which sits under it)
     assumptions  a named assumption (listed by name under `assumptions`: a definition of the spec stated as a `Prop`, taken
                  as a hypothesis or read in a guarantee's statement) has no `owner`, no guarantee reads it, or its
                  definition no longer has the digest its record holds; or the policy still lists assumption modules,
@@ -56,7 +58,12 @@ environment extension loaded, so none of the package's code runs), and replays t
     reads        a definition a guarantee's statement reads lies outside the spec (the `layers` prefixes) of its package
                  and of the packages it requires by path, and outside a pinned dependency, unless a `reads_exempt`
                  prefix lists its module with a reason (an entry that exempts nothing fails too); or it lies in a spec
-                 module outside `meaning`, which the record therefore does not hold
+                 module outside `meaning`, which the record therefore does not hold; a module of the proofs tree is
+                 the trees check's
+    trees        (`trees`: which module prefixes are the definitions, properties and proofs trees, its own and those of
+                 the packages it requires by path) a guarantee's statement reads a definition of a module of the proofs
+                 tree, or an audited module of the definitions or properties tree imports one, unless a prefix of `trees`'
+                 `except` lists the read module or the importing one with a reason (an entry that excepts nothing fails)
     proved_in    (a spec package whose guarantees another package proves) a package `proved_in` names does not require this
                  one by path, holds guarantees in its own policy, shares a module root with a package it requires, or
                  imports modules of its own outside its roots; or a guarantee is proved by none of this package and those, or
@@ -68,7 +75,9 @@ environment extension loaded, so none of the package's code runs), and replays t
                  environment differ from those the `.olean` files recorded; a replay killed by a signal is reported as a
                  kill. With `--replay-cache DIR`, a module that passed the replay with the same `.olean` files, every
                  module it imports transitively included, on the same toolchain and `Replay.lean` (`replay_keys`) joins it
-                 unchecked, and its constants are still walked for axioms
+                 unchecked, and its constants are still walked for axioms. With `--closure`, the kernel also rejects a
+                 declaration of a module of the import closure (the toolchain's, Mathlib's, ArkLib's) that has not passed
+                 the replay under its key, each checked with its imports present (`replay_step`, `closure_plan`)
     upstream     a dependency that the policy's `upstream` section scans proves, at the revision `lake-manifest.json` pins,
                  a theorem about a watched assumption or hand proof that the entry's `ack` does not hold (`upstream.py`):
                  a bump that brings such a proof fails until someone has looked at it
@@ -102,11 +111,12 @@ whole `lean-audit.json`, changed or not, beside the package's reports too (`audi
 publishes), and prints what changed: each changed guarantee's signature before and after, and each changed definition a
 guarantee reads with its source now.  A weakened definition passes every axiom check and the replay, so a person has to see
 those changes: Daniel gets a DM with them when they land on `main` (`research merge`'s `spec_alert`).  An audit without
-`--update` whose every failure is a record difference (`RECORD_DIFFERENCE`: two records each right on its side of a merge
-whose definitions changed, an owned entry with no record yet, a premise the lock doesn't list) writes the same
-`lean-audit.json` and `review.txt` there, and its report's `regenerated` names the file, so a failed check of a train's
-merge carries its record.  With `--regenerate` (a train's lean-audit step) such a package passes instead, and `audit.json`'s
-`regenerated` maps each to its record for the train to commit before it lands; the package's own lock is never written,
+`--update` whose every failure is a record difference (its code is in `RECORD_DIFFERENCE`: two records each right on its
+side of a merge whose definitions changed, an owned entry with no record yet, a premise the lock doesn't list) writes the
+same `lean-audit.json` and `review.txt` there, and its report's `regenerated` names the file, so a failed check of a train's
+merge carries its record.  Every failure carries a code (`Failure`: `guarantees.signature`, `orphan.file`), which the report
+lists beside its text (`failure_codes`, `settled_codes`); what settles is decided by code, never by the text.  With
+`--regenerate` (a train's lean-audit step) such a package passes instead, and `audit.json`'s `regenerated` maps each to its record for the train to commit before it lands; the package's own lock is never written,
 and every other failure fails as before.  A guarantee whose
 statement is the same but prints differently (same type hash and named assumptions: a toolchain's printer, notation) gets
 one line, and so does a definition read in another module with the same content.  `--update` keeps each entry's `owner`
@@ -134,6 +144,8 @@ repository can copy it and use it with policies of its own (`README.md`).
 from __future__ import annotations
 
 import argparse
+import atexit
+import bisect
 import contextlib
 import difflib
 import gzip
@@ -149,6 +161,7 @@ import textwrap
 import threading
 import time
 import tomllib
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -187,9 +200,31 @@ FIXTURES = HERE / "tests" / "fixtures"
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
 ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "verifier", "claims", "compile_time",
-         "dependency_unchecked", "layers", "reads_exempt", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
+         "dependency_unchecked", "layers", "reads_exempt", "trees", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
 #: a guarantee's `owner`: the handle of the lane that answers for it (`@proofs`)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
+
+
+class Failure(str):
+    """A failure: its text as the audit prints and reports it, with a stable ``code`` (`check.kind`, its check the text's
+    leading word, spaces as `-`) and the ``entry`` it is about (a guarantee, a module, a file; None when it is about several
+    or the package).  What follows from a failure (`RECORD_DIFFERENCE`, `regenerated`) reads its code, never its text, so a
+    reworded message changes nothing a train settles.  The report's `failure_codes` lists the codes beside `failures`."""
+    code: str
+    entry: str | None
+
+    def __new__(cls, code: str, entry: str | None, text: str) -> Failure:
+        self = super().__new__(cls, text)
+        self.code, self.entry = code, entry
+        return self
+
+    def __reduce__(self):
+        return Failure, (self.code, self.entry, str(self))
+
+
+def code_of(failure: str) -> str | None:
+    """``failure``'s code, or None for a bare string (which settles nothing)."""
+    return getattr(failure, "code", None)
 
 
 def sibling(name: str):
@@ -243,12 +278,16 @@ def cores() -> int:
 #: what auditing a package that pins ArkLib (Security/Proofs, and Security, which audits it beside itself) needs: its build
 #: of C-Flock's soundness peaks at 15–24 GB (the lean-proofs skill); `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor, 0 none
 MEM_FLOOR_GIB = 24
-#: an audit of a spec whose guarantees an ArkLib package proves (Security): its facts of that package held 30–50 GiB between
-#: replays in r20261018-175656-1c85, so with replay threads bounded (`replay_threads`) about this fits
-SPEC_FLOOR_GIB = 64
+#: an audit of a spec whose guarantees an ArkLib package proves (Security): its whole replay peaked at 145 GiB at 48 threads
+#: (r20261018-175656-1c85) and was killed at a 128 GiB cap at 16 (r20261019-084601-01a0), so the replay's resident base is
+#: about 120 GiB and a thread adds under 1: fewer threads don't make it fit, only the floor does
+SPEC_FLOOR_GIB = 160
 #: where a machine below the floor runs it instead
 ON_NODE = ("research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- "
            "python3 tools/verity/lean/lean_changed.py --records {pkg}")
+#: the same for a spec beside its ArkLib package, on a cluster shape above SPEC_FLOOR_GIB (`cpu-xl`, 280 GiB)
+ON_NODE_SPEC = ("research run --on auto --kind lean-audit --project verity --source . --cwd source "
+                "--declared-output 'lean-audit/*' -- python3 tools/verity/lean/check.py --build {pkg}")
 
 
 def memory_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) -> float:
@@ -301,9 +340,9 @@ def build_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> i
     return max(1, min(cores(), int(gib // BUILD_GIB_PER_JOB)))
 
 
-#: about what one replay thread of a Mathlib or ArkLib package peaks at: the whole-Security `--build --update` of 18 Oct
-#: (r20261018-175656-1c85, 48 threads) peaked at 145 GiB in one replay, about 3 GiB a thread, and was OOM-killed at 64 and
-#: 96 GiB; a heavy replay runs alone (`_HEAVY_REPLAY`), since two side by side took that run to 183 GiB
+#: memory per replay thread of a Mathlib or ArkLib package, a cap on its threads: the whole-Security replay's peak is mostly
+#: its resident base (`SPEC_FLOOR_GIB`), with 145 GiB at 48 threads and over 128 at 16; a heavy replay runs alone
+#: (`_HEAVY_REPLAY`), since two side by side took that run to 183 GiB
 REPLAY_GIB_PER_THREAD = 4
 _HEAVY_REPLAY = threading.Semaphore(1)
 
@@ -334,12 +373,17 @@ def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | N
     what = (f"{rel(spec[0])}'s audit reads {rel(heavy[0])}'s facts for every guarantee it proves, about 40 GiB beside the "
             f"replay" if heavy and spec else f"{rel(heavy[0])} pins ArkLib, whose build peaks near {MEM_FLOOR_GIB} GiB")
     return (f"{what}, and this machine has {have_gib:.0f} GiB (memory and swap, within its cgroup), under the {floor:.0f} "
-            f"GiB floor: run it on a node, `{ON_NODE.format(pkg=rel(pkgs[0]))}` (add --update for the record), or set "
+            f"GiB floor: run it on a node, `{(ON_NODE_SPEC if heavy and spec else ON_NODE).format(pkg=rel(pkgs[0]))}` "
+            f"(add --update for the record), or set "
             f"VERITY_LEAN_MEM_FLOOR_GIB=0 to try here anyway")
 
 
 #: `--artifacts`: the node's Lake artifact cache, which only a passing audit writes (`lean_audit.LakeArtifacts`)
 ARTIFACTS: Path | None = None
+#: `--dev-cache`: the dependencies come from the verified build cache, so the result is not a Lean verdict
+DEV_CACHE = False
+#: the kind a `--dev-cache` run's reports carry: `lean_changed.FAST_KIND`, which `check` and `research merge` refuse
+DEV_KIND = "lean-fast/v1"
 
 
 def plugin_targets(pkg: Path) -> list[str]:
@@ -364,16 +408,24 @@ def plugin_targets(pkg: Path) -> list[str]:
 def lake_env() -> dict[str, str]:
     """The environment of every `lake` and `setup.sh` the audit runs. `setup.sh` restores nothing from the build cache
     (`cache.py`). Lake builds from source, or with `--artifacts` restores a module whose input hash it finds there: with
-    `LAKE_ARTIFACT_CACHE` unset, a package that configures no cache reads it and never writes it."""
+    `LAKE_ARTIFACT_CACHE` unset, a package that configures no cache reads it and never writes it. With `--dev-cache`,
+    `setup.sh` restores Mathlib's cache and main's verified build (`cache.py get`) and Lake reads its local cache: the
+    replay still checks our packages' declarations, but a dependency's are taken as their `.olean` states them, which only
+    the gate's from-source build (the cache's root) and the nightly `--fresh` vouch for, so such a run is never a verdict."""
     env = dict(os.environ)
     env["PATH"] = f"{Path.home() / '.elan' / 'bin'}{os.pathsep}{env.get('PATH', '')}"
     env.setdefault("LEAN_NUM_THREADS", str(cores()))
     if ARTIFACTS:
         env.pop("LAKE_ARTIFACT_CACHE", None)
         env["LAKE_CACHE_DIR"] = str(ARTIFACTS)
+    elif DEV_CACHE:
+        env.pop("LAKE_ARTIFACT_CACHE", None)
     else:
         env["LAKE_ARTIFACT_CACHE"] = "false"
-    env["LEAN_CACHE"] = "off"
+    if DEV_CACHE:
+        env.pop("LEAN_CACHE", None)
+    else:
+        env["LEAN_CACHE"] = "off"
     return env
 
 
@@ -497,11 +549,24 @@ def lean_modules(pkg: Path) -> dict[str, str]:
     return out
 
 
+_LEAN_SPECIAL, _TOML_SPECIAL = re.compile(r"/-|--|[\"']"), re.compile(r"[#\"]")
+_NESTING, _BLANK, _CHAR = re.compile(r"/-|-/"), re.compile(r"[^\n]"), re.compile(r"'(\\.[^']*|[^'\\])'")
+
+
 def strip_comments(src: str, toml: bool = False) -> str:
     """``src`` with its comments (Lean's `--` and nested `/- -/`, docstrings included; TOML's `#`) blanked out, string
     literals and line numbers kept."""
     out, i, n, depth = [], 0, len(src), 0
+    special = _TOML_SPECIAL if toml else _LEAN_SPECIAL
     while i < n:
+        # the characters up to the next one that can open or close a comment, a string or a character literal are kept
+        # (blanked, inside a comment) as they are
+        m = (_NESTING if depth else special).search(src, i)
+        j = n if m is None else m.start()
+        if j > i:
+            out.append(_BLANK.sub(" ", src[i:j]) if depth else src[i:j])
+            i = j
+            continue
         c = src[i]
         if depth:
             if src.startswith("/-", i):
@@ -528,7 +593,7 @@ def strip_comments(src: str, toml: bool = False) -> str:
             out.append(src[i:j + 1])
             i = j + 1
         elif not toml and c == "'" and (i == 0 or not (src[i - 1].isalnum() or src[i - 1] in "_'!?.")) and \
-                (m := re.match(r"'(\\.[^']*|[^'\\])'", src[i:])):
+                (m := _CHAR.match(src, i)):
             out.append(m.group(0))
             i += len(m.group(0))
         else:
@@ -545,18 +610,19 @@ def scans(pkg: Path, files: dict[str, str], policy: dict) -> list[str]:
     allowed = policy.get("compile_time", {})
     lakefiles = [f for f in ("lakefile.toml", "lakefile.lean") if (pkg / f).exists()]
     if "lakefile.lean" in lakefiles:
-        hits.append("compile-time: lakefile.lean runs code whenever lake loads the package; write lakefile.toml instead")
+        hits.append(Failure("compile-time.lakefile", "lakefile.lean", "compile-time: lakefile.lean runs code whenever lake "
+                            "loads the package; write lakefile.toml instead"))
     for m, rel in [*sorted(files.items()), *((None, f) for f in lakefiles)]:
         text = strip_comments((pkg / rel).read_text(errors="replace"), toml=rel.endswith(".toml"))
         for i, line in enumerate(text.splitlines(), 1):
             if hit := UNCHECKED.search(line):
-                hits.append(f"unchecked: {rel}:{i} names {hit.group(1)}, which lets a declaration skip the kernel or a proof "
-                            f"become sorry")
+                hits.append(Failure("unchecked.source", rel, f"unchecked: {rel}:{i} names {hit.group(1)}, which lets a "
+                                    f"declaration skip the kernel or a proof become sorry"))
         if m is not None and m not in allowed:
             for hit in COMPILE_TIME.finditer(text):
-                hits.append(f"compile-time: {rel}:{text.count(chr(10), 0, hit.start()) + 1} runs code while it compiles "
-                            f"({hit.group(1) or hit.group(2)}), which can write anywhere the build can; list {m} under "
-                            f"`compile_time` with the reason if it must")
+                hits.append(Failure("compile-time.source", m, f"compile-time: {rel}:{text.count(chr(10), 0, hit.start()) + 1} "
+                                    f"runs code while it compiles ({hit.group(1) or hit.group(2)}), which can write anywhere "
+                                    f"the build can; list {m} under `compile_time` with the reason if it must"))
     return hits
 
 
@@ -821,23 +887,24 @@ def listings(pkg: Path, files: dict[str, str], policy: dict, facts: dict, update
     for m, entry in sorted(policy.get("compile_time", {}).items()):
         why, recorded = (entry, None) if isinstance(entry, str) else (entry.get("why", ""), entry.get("digest"))
         if m not in files:
-            fails.append(f"compile-time: `compile_time` lists {m}, which is not a module of the package; list modules one "
-                         f"by one")
+            fails.append(Failure("compile-time.not-a-module", m, f"compile-time: `compile_time` lists {m}, which is not a "
+                                 f"module of the package; list modules one by one"))
             continue
         digest = sha256(pkg / files[m])
         now[m] = {"why": why, "digest": digest}
         if m in cited:
-            fails.append(f"compile-time: {m} is listed under `compile_time`, and guarantees are declared or read there "
-                         f"({', '.join(sorted(cited[m]))}): code that runs while it compiles (a term elaborator, a "
-                         f"notation, a macro) could change what a statement means; move the compile-time code or the "
-                         f"definitions to another module")
+            fails.append(Failure("compile-time.cited", m, f"compile-time: {m} is listed under `compile_time`, and guarantees "
+                                 f"are declared or read there ({', '.join(sorted(cited[m]))}): code that runs while it "
+                                 f"compiles (a term elaborator, a notation, a macro) could change what a statement means; "
+                                 f"move the compile-time code or the definitions to another module"))
         if recorded != digest:
             change = "listed" if recorded is None else "the file changed since its listing was reviewed"
             notes.append(f"compile_time {m} ({files[m]}): {change}; a reviewer reads its compile-time code ({why})")
             if not update:
                 state = "records no digest of" if recorded is None else "was reviewed against another version of"
-                fails.append(f"compile-time: the listing of {m} {state} {files[m]}: have its compile-time code reviewed, "
-                             f"then run `check.py --update` to record the file's digest")
+                fails.append(Failure("compile-time.digest", m, f"compile-time: the listing of {m} {state} {files[m]}: have "
+                                     f"its compile-time code reviewed, then run `check.py --update` to record the file's "
+                                     f"digest"))
     return fails, now, notes
 
 
@@ -859,8 +926,8 @@ def dependency_scans(pkg: Path, oleans: list[str], policy: dict) -> tuple[list[s
         for key, src in [*((".".join(r.with_suffix("").parts), d / r) for r in rels),
                          *((f"{d.name}/{f}", d / f) for f in ("lakefile.toml", "lakefile.lean") if (d / f).exists())]:
             if not src.is_file():
-                fails.append(f"unchecked: the package imports {key} from {d.name}, whose source {src.relative_to(pkg)} is "
-                             f"missing, so nothing scanned it")
+                fails.append(Failure("unchecked.dependency-missing", key, f"unchecked: the package imports {key} from "
+                                     f"{d.name}, whose source {src.relative_to(pkg)} is missing, so nothing scanned it"))
                 continue
             read += 1
             raw = src.read_text(errors="replace")
@@ -872,13 +939,50 @@ def dependency_scans(pkg: Path, oleans: list[str], policy: dict) -> tuple[list[s
                     continue
                 seen.add(key)
                 if key not in allowed:
-                    fails.append(f"unchecked: {src.relative_to(pkg)}:{i} ({key}, which the package's build takes from "
-                                 f"{d.name}) names {hit.group(1)}, which lets a declaration skip the kernel or a proof become "
-                                 f"sorry; list {key} under `dependency_unchecked` with the reason if the package must import it")
+                    fails.append(Failure("unchecked.dependency", key, f"unchecked: {src.relative_to(pkg)}:{i} ({key}, which "
+                                         f"the package's build takes from {d.name}) names {hit.group(1)}, which lets a "
+                                         f"declaration skip the kernel or a proof become sorry; list {key} under "
+                                         f"`dependency_unchecked` with the reason if the package must import it"))
     for key in sorted(set(allowed) - seen):
-        fails.append(f"unchecked: `dependency_unchecked` lists {key}, which the package does not import or which names no "
-                     f"such option; remove the entry")
+        fails.append(Failure("unchecked.unused-entry", key, f"unchecked: `dependency_unchecked` lists {key}, which the "
+                             f"package does not import or which names no such option; remove the entry"))
     return fails, read
+
+
+#: where `facts_program` compiles (None: a temporary directory), one that `run` writes in and every package's `run` reads
+PROGRAMS: Path | None = None
+#: {(directory, toolchain, `Facts.lean`'s SHA-256): (the compiled program, its SHA-256)}
+_programs: dict[tuple[str, str, str], tuple[Path, str]] = {}
+_programs_lock = threading.Lock()
+
+
+def facts_program(pkg: Path) -> str:
+    """`Facts.lean` compiled (`lean -c`, then `leanc`) with ``pkg``'s toolchain, once per toolchain and source in a process:
+    interpreted (`lean --run`), its own walks were most of a large package's facts run. It exports its symbols
+    (`-rdynamic`, Lake's `supportInterpreter`): elaborating a pin's statement runs the interpreter, which calls the library's
+    native code by symbol, as in `lean`. The program is checked against the digest it had when compiled before each use.
+    Raises RuntimeError when it does not compile or has changed."""
+    src = TOOL / "Facts.lean"
+    toolchain = (pkg / "lean-toolchain").read_text().strip() if (pkg / "lean-toolchain").is_file() else ""
+    key = (str(PROGRAMS), toolchain, sha256(src))
+    with _programs_lock:
+        if key not in _programs or not _programs[key][0].exists():
+            if PROGRAMS is None:
+                d = Path(tempfile.mkdtemp(prefix="lean-facts-"))
+                atexit.register(shutil.rmtree, d, True)
+            else:
+                d = PROGRAMS / hashlib.sha256("\0".join(key[1:]).encode()).hexdigest()[:16]
+                d.mkdir(parents=True, exist_ok=True)
+            for argv in (["lake", "env", "lean", "-R", str(src.parent), "-c", str(d / "Facts.c"), str(src)],
+                         ["lake", "env", "leanc", "-O3", "-DNDEBUG", "-rdynamic", str(d / "Facts.c"), "-o", str(d / "facts")]):
+                rc, text = run(argv, pkg, d / "compile.log")
+                if rc:
+                    raise RuntimeError(f"`{' '.join(argv)}` failed (exit {rc}):\n{text[-3000:]}")
+            _programs[key] = (d / "facts", sha256(d / "facts"))
+        program, digest = _programs[key]
+    if sha256(program) != digest:
+        raise RuntimeError(f"tamper: the compiled `Facts.lean` ({program}) changed after it was compiled")
+    return str(program)
 
 
 def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None = None) -> dict:
@@ -892,13 +996,16 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     out.unlink(missing_ok=True)
     canon.unlink(missing_ok=True)
     config = work / "facts-config.json"
+    premises = (policy.get("shape") or {}).get("premises")
     config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
                                   "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
                                   "spec": spec_of(policy),
+                                  "premises": [p for p in premises if isinstance(p, str)] if isinstance(premises, list) else [],
+                                  "assumptions": sorted(a for a in policy.get("assumptions", {}) if isinstance(a, str)),
                                   "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
                                   "moved": sorted([new, old] for old, new in (moved or {}).items()),
                                   "out": str(out), "canon": str(canon)}))
-    rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Facts.lean"), str(config)], pkg, work / "facts.log")
+    rc, text = run(["lake", "env", facts_program(pkg), str(config)], pkg, work / "facts.log")
     if rc or not out.exists():
         raise RuntimeError(f"`Facts.lean` failed (exit {rc}; a root that was not built?):\n{text[-3000:]}")
     facts = json.loads(out.read_text())
@@ -1039,9 +1146,10 @@ def unreported(facts: dict, where: str = "") -> list[str]:
     if not names:
         return []
     more = f" and {len(names) - 8} more" if len(names) > 8 else ""
-    return [f"unreported: {where}{', '.join(names[:8])}{more} hold a `sorry` Lean made for an elaboration error it did not "
-            f"report (`sorryAx _ true`), so the build passed on proofs that never ran (a `variable` whose binders use a local "
-            f"notation or macro over section variables is one way; Lean warns only `declaration uses 'sorry'`)"]
+    return [Failure("unreported", None, f"unreported: {where}{', '.join(names[:8])}{more} hold a `sorry` Lean made for an "
+                    f"elaboration error it did not report (`sorryAx _ true`), so the build passed on proofs that never ran (a "
+                    f"`variable` whose binders use a local notation or macro over section variables is one way; Lean warns "
+                    f"only `declaration uses 'sorry'`)")]
 
 
 DECLARES = re.compile(r"(?:(?:@\[[^\]]*\]|private|protected|public|noncomputable|nonrec|partial|unsafe|meta)\s+)*"
@@ -1056,15 +1164,31 @@ def dropped(pkg: Path, files: dict[str, str], facts: dict, where: str = "") -> l
     for m, rel in sorted(files.items()):
         if (held := spans.get(m)) is None or not (pkg / rel).is_file():
             continue
+        starts, ends = [], []                           # the union of the ranges, as disjoint sorted intervals
+        for s, e in sorted((s, e) for s, e in held if s <= e):
+            if ends and s <= ends[-1] + 1:
+                ends[-1] = max(ends[-1], e)
+            else:
+                starts.append(s)
+                ends.append(e)
         for i, line in enumerate(strip_comments((pkg / rel).read_text(errors="replace")).split("\n"), 1):
-            if (k := DECLARES.match(line)) and not any(s <= i <= e for s, e in held):
+            if (k := DECLARES.match(line)) and not ((x := bisect.bisect_right(starts, i) - 1) >= 0 and i <= ends[x]):
                 found.append(f"{rel}:{i} ({k.group(1)})")
     if not found:
         return []
     more = f" and {len(found) - 8} more" if len(found) > 8 else ""
-    return [f"dropped: {where}{', '.join(found[:8])}{more} start a declaration its module's `.olean` does not hold: Lean "
-            f"elaborated nothing there and reported nothing, so the build passed without it (a `variable` whose binders use "
-            f"a local notation over section variables can make Lean drop every declaration after it; so does `#exit`)"]
+    return [Failure("dropped", None, f"dropped: {where}{', '.join(found[:8])}{more} start a declaration its module's `.olean` "
+                    f"does not hold: Lean elaborated nothing there and reported nothing, so the build passed without it (a "
+                    f"`variable` whose binders use a local notation over section variables can make Lean drop every "
+                    f"declaration after it; so does `#exit`)")]
+
+
+def own_modules(facts: dict) -> set[str]:
+    """The modules of ``facts``' import graph that a package of this repository builds (an `.olean` in its own
+    `.lake/build`), not the toolchain's or a fetched dependency's (under `.lake/packages`): a premise headed by one of
+    their constants is one the lock lists, whatever its module (`assumption_records`)."""
+    return {m for m, g in (facts.get("graph") or {}).items()
+            if "/.lake/build/" in (o := str(g.get("olean", ""))) and "/.lake/packages/" not in o}
 
 
 def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False, owner: str | None = None
@@ -1074,6 +1198,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     record for a guarantee that has none."""
     fails = []
     allowed = set(policy.get("axioms", STANDARD))
+    own = set(facts["own_modules"]) if "own_modules" in facts else own_modules(facts)
     by_axiom: dict[str, list[str]] = {}
     for o in facts["offenders"]:
         for a in o["axioms"]:
@@ -1082,101 +1207,127 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         what = "sorry" if a == "sorryAx" else "native_decide" if native(a) else "axiom"
         names = sorted(n for n in names if n != a)
         more = f" and {len(names) - 8} more" if len(names) > 8 else ""
-        fails.append(f"{what}: {a} is used by {', '.join(names[:8])}{more}")
+        fails.append(Failure(what, a, f"{what}: {a} is used by {', '.join(names[:8])}{more}"))
     fails += unreported(facts)
     for d in facts["declared_axioms"]:
         if not native(d["name"]):
-            fails.append(f"declared: `axiom {d['name']}` in {d['module']}; state an assumption as a named Prop, taken as a "
-                         f"hypothesis")
+            fails.append(Failure("declared", d["name"], f"declared: `axiom {d['name']}` in {d['module']}; state an assumption "
+                                 f"as a named Prop, taken as a hypothesis"))
     listed_escapes = policy.get("escapes", {})
     found = {e["name"]: e for e in facts["escapes"]}
     for n, e in sorted(found.items()):
         if n not in listed_escapes:
-            fails.append(f"escape: {n} ({', '.join(e['why'])}, in {e['module']}) is compiled code no proof sees; list it under "
-                         f"`escapes` with the reason, or remove it")
+            fails.append(Failure("escape.unlisted", n, f"escape: {n} ({', '.join(e['why'])}, in {e['module']}) is compiled "
+                                 f"code no proof sees; list it under `escapes` with the reason, or remove it"))
     for n in sorted(set(listed_escapes) - set(found)):
-        fails.append(f"escape: {n} is listed under `escapes` but is not one; remove the entry")
-    fails += verifier_failures(policy.get("verifier"), facts.get("verifier"))
+        fails.append(Failure("escape.stale", n, f"escape: {n} is listed under `escapes` but is not one; remove the entry"))
+    fails += verifier_failures(policy.get("verifier"), facts.get("verifier"), update)
     fails += claim_failures(policy, facts)
     modules = set(facts["modules"])
     exempt = policy.get("exempt", {})
     for m, rel in sorted(files.items()):
         if m not in modules and not under(exempt, m):
-            fails.append(f"orphan: {rel} is not imported by the roots ({', '.join(policy['roots'])}) nor under `exempt`: "
-                         f"nothing builds or audits it")
+            fails.append(Failure("orphan.file", rel, f"orphan: {rel} is not imported by the roots "
+                                 f"({', '.join(policy['roots'])}) nor under `exempt`: nothing builds or audits it"))
     for p in sorted(exempt):
         if not any(under([p], m) for m in files):
-            fails.append(f"orphan: `exempt` lists {p}, which matches no file; remove the entry")
-    for layer, rule in sorted(policy.get("layers", {}).items()):
-        inside = [m for m in sorted(modules) if under([layer], m)]
+            fails.append(Failure("orphan.stale-exempt", p, f"orphan: `exempt` lists {p}, which matches no file; remove the entry"))
+    layers = policy.get("layers", {})
+    sealed = sorted(k for k, r in layers.items() if r.get("sealed"))
+
+    def admits(prefixes: list[str], i: str) -> bool:
+        return any(under([p], i) and not any(s != p and under([p], s) and under([s], i) for s in sealed) for p in prefixes)
+    for layer, rule in sorted(layers.items()):
+        inside = [m for m in sorted(modules) if under([layer], m)
+                  and not any(under([s], m) and not under([s], layer) for s in sealed)]
         if not inside:
-            fails.append(f"layers: {layer} matches no audited module; remove the entry")
+            fails.append(Failure("layers.empty", layer, f"layers: {layer} matches no audited module; remove the entry"))
         for m in rule.get("except", []):
             if m not in inside:
-                fails.append(f"layers: {layer}'s `except` lists {m}, which is not one of its modules")
+                fails.append(Failure("layers.stale-except", layer, f"layers: {layer}'s `except` lists {m}, which is not one "
+                                     f"of its modules"))
         for m in inside:
             if m in rule.get("except", []):
                 continue
             for i in facts["imports"].get(m, []):
-                if not under(rule["imports"], i) and i != "Init":
-                    fails.append(f"layers: {m} imports {i}, outside {layer}'s layer ({', '.join(rule['imports'])})")
+                if not admits(rule["imports"], i) and i != "Init":
+                    fails.append(Failure("layers.import", m, f"layers: {m} imports {i}, outside {layer}'s layer "
+                                         f"({', '.join(rule['imports'])})"))
     if conflicts := facts.get("moved_conflicts"):
         more = f" and {len(conflicts) - 8} more" if len(conflicts) > 8 else ""
         clash = "; ".join(f"{c['name']} would be {c['as']}, and so would {c['with']}" for c in conflicts[:8])
-        fails.append(f"moved: under the old names, {clash}{more}: the map cannot tell them apart, so the review compares "
-                     f"nothing under the old names; map only the declarations that moved")
+        fails.append(Failure("moved.conflict", None, f"moved: under the old names, {clash}{more}: the map cannot tell them "
+                             f"apart, so the review compares nothing under the old names; map only the declarations that moved"))
     assumed = policy.get("assumptions", {})
     prefixes = assumed if isinstance(assumed, list) else []
     if prefixes and not update:
-        fails.append(f"assumptions: the policy lists assumption modules ({', '.join(prefixes)}); list the assumptions by "
-                     f"name instead, each with its record: `check.py --update` converts the list")
-    kept, premised = {}, {}
+        fails.append(Failure("assumptions.modules", None, f"assumptions: the policy lists assumption modules "
+                             f"({', '.join(prefixes)}); list the assumptions by name instead, each with its record: "
+                             f"`check.py --update` converts the list"))
+    kept, premised, unfolds = {}, {}, {}
     for name, rec in sorted(policy.get("guarantees", {}).items()):
         who = (rec or {}).get("owner") or owner
         if not who:
-            fails.append(f"guarantees: {name} has no owner: write \"owner\": \"@lane\" in its entry, the handle of the lane "
-                         f"that answers for it, or run `check.py --update --owner @lane`")
+            fails.append(Failure("guarantees.no-owner", name, f"guarantees: {name} has no owner: write \"owner\": \"@lane\" "
+                                 f"in its entry, the handle of the lane that answers for it, or run `check.py --update "
+                                 f"--owner @lane`"))
             if update:
                 kept[name] = rec
                 continue
         elif not OWNER.fullmatch(who):
-            fails.append(f"guarantees: {name}'s owner {who!r} is not a handle such as @proofs")
+            fails.append(Failure("guarantees.bad-owner", name, f"guarantees: {name}'s owner {who!r} is not a handle such as "
+                                 f"@proofs"))
         f = facts["pins"].get(name, {"kind": "missing"})
         if f["kind"] != "theorem":
-            fails.append(f"guarantees: {name} is {'missing' if f['kind'] == 'missing' else 'a ' + f['kind'] + ', not a theorem'}")
+            fails.append(Failure("guarantees.missing" if f["kind"] == "missing" else "guarantees.not-a-theorem", name,
+                                 f"guarantees: {name} is "
+                                 f"{'missing' if f['kind'] == 'missing' else 'a ' + f['kind'] + ', not a theorem'}"))
             kept[name] = rec
             continue
         if not set(f["axioms"]) <= allowed:
-            fails.append(f"guarantees: {name} uses {', '.join(sorted(set(f['axioms']) - allowed))}")
+            fails.append(Failure("guarantees.axioms", name, f"guarantees: {name} uses "
+                                 f"{', '.join(sorted(set(f['axioms']) - allowed))}"))
+        if "premises" in f and f["premises"] is None:
+            fails.append(Failure("guarantees.premises", name, f"guarantees: {name}'s premises could not be read "
+                                 f"(`Facts.lean`'s `premisesOf` failed on its statement), so the lock can't be held to "
+                                 f"them: make `premisesOf` read this statement's form"))
+        mine = {}
         for pr in f.get("premises") or []:
-            if "Assumptions" in (pr.get("module") or "").split("."):
+            mine |= pr.get("unfolds") or {}
+            if "Assumptions" in (m := pr.get("module") or "").split(".") or m in own:
                 premised.setdefault(pr["head"], set()).add(name)
+        unfolds |= mine
         named = []
         for h in f["hypotheses"]:
             if not h["closed"]:
                 continue
             if h["named"] and (h["named"] in assumed if not prefixes else under(prefixes, h["module"] or "")):
                 named.append(h["named"])
+            elif not prefixes and h["named"] and (u := unfolding(h["named"], mine, assumed)) and not u[1]:
+                named += u[0]
             else:
-                fails.append(f"guarantees: {name} assumes ({h['binder']} : {h['type']}), a closed Prop that is not a named "
-                             f"assumption: a Prop constant listed under `assumptions`")
+                fails.append(Failure("guarantees.unnamed-hypothesis", name, f"guarantees: {name} assumes ({h['binder']} : "
+                                     f"{h['type']}), a closed Prop that is not a named assumption: a Prop constant listed "
+                                     f"under `assumptions`"))
         if name.split(".")[0] in policy.get("four_names", []) and not four_named(name, f):
-            fails.append(f"four names: {name} is a guarantee of {name.split('.')[0]}, which `four_names` lists, so it is "
-                         f"stated as `X.SecurityProofs.G : X.Guarantees.G` with `G` a definition of a `Guarantees` module "
-                         f"(`check.py --lift` writes it), or is not a guarantee")
+            fails.append(Failure("four-names", name, f"four names: {name} is a guarantee of {name.split('.')[0]}, which "
+                                 f"`four_names` lists, so it is stated as `X.SecurityProofs.G : X.Guarantees.G` with `G` a "
+                                 f"definition of a `Guarantees` module (`check.py --lift` writes it), or is not a guarantee"))
         now = {"signature": f["signature"].splitlines(), "assumptions": sorted(set(named)), "type_hash": f["type_sha256"]}
         kept[name] = ({"owner": who} if who else {}) | now
         if update:
             continue
         if not unowned(rec):
-            fails.append(f"guarantees: {name} has no record; run `check.py --update` and commit the record")
+            fails.append(Failure("guarantees.unrecorded", name, f"guarantees: {name} has no record; run `check.py --update` "
+                                 f"and commit the record"))
             continue
         for k in ("signature", "assumptions", "type_hash"):
             built = f["type_hash"] if k == "type_hash" and len(rec.get(k, "")) == OLD else now[k]
             if rec.get(k) != built:
                 diff = "\n".join(difflib.unified_diff(rec.get("signature", []), now["signature"], "recorded", "built", lineterm="",
                                                       n=1)) if k == "signature" else f"{rec.get(k)} -> {built}"
-                fails.append(f"guarantees: {name}'s {k.replace('_', ' ')} changed:\n{diff}")
+                fails.append(Failure(f"guarantees.{k.replace('_', '-')}", name,
+                                     f"guarantees: {name}'s {k.replace('_', ' ')} changed:\n{diff}"))
                 break
     reads = guarantee_reads(facts)
     now_reads, old_reads = read_groups(reads), read_groups(reads, old=True)
@@ -1186,60 +1337,91 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             a = old.get(m)
             b = (old_reads if a is not None and old_group(a) else now_reads).get(m)
             if a is None:
-                fails.append(f"guarantees: they now read definitions in {m} ({', '.join(b['guarantees'])})")
+                fails.append(Failure("guarantees.reads-new", m, f"guarantees: they now read definitions in {m} "
+                                     f"({', '.join(b['guarantees'])})"))
             elif b is None:
-                fails.append(f"guarantees: they no longer read {m}")
+                fails.append(Failure("guarantees.reads-gone", m, f"guarantees: they no longer read {m}"))
             elif (x := definitions(a)) != (y := b["definitions"]):
                 change = "; ".join(s for s in (
                     f"changed: {', '.join(d for d in sorted(set(x) & set(y)) if x[d] is not None and x[d] != y[d])}",
                     f"new: {', '.join(sorted(set(y) - set(x)))}", f"gone: {', '.join(sorted(set(x) - set(y)))}")
                     if not s.endswith(": ")) or "a definition's content"
-                fails.append(f"guarantees: definitions in {m} that {', '.join(b['guarantees'])} read changed ({change})")
+                fails.append(Failure("guarantees.reads-changed", m, f"guarantees: definitions in {m} that "
+                                     f"{', '.join(b['guarantees'])} read changed ({change})"))
             elif a.get("guarantees") != b["guarantees"]:
-                fails.append(f"guarantees: those that read {m} are {', '.join(b['guarantees'])}; the record lists "
-                             f"{', '.join(a.get('guarantees', [])) or 'none'}; run `check.py --update`")
+                fails.append(Failure("guarantees.readers", m, f"guarantees: those that read {m} are "
+                                     f"{', '.join(b['guarantees'])}; the record lists "
+                                     f"{', '.join(a.get('guarantees', [])) or 'none'}; run `check.py --update`"))
             elif a.get("digest") != b["digest"]:
-                fails.append(f"guarantees: the digest recorded for {m} is not the SHA-256 of its definitions; "
-                             f"`python tools/verity/lean/merge.py --normalize` recomputes it")
-    records, why = assumption_records(policy, now_reads, update, owner, premised)
+                fails.append(Failure("guarantees.reads-digest", m, f"guarantees: the digest recorded for {m} is not the "
+                                     f"SHA-256 of its definitions; `python tools/verity/lean/merge.py --normalize` "
+                                     f"recomputes it"))
+    records, why = assumption_records(policy, now_reads, update, owner, premised, unfolds)
     fails += why
     out = dict(policy)
     if kept:
         out["guarantees"], out["reads"] = kept, now_reads
     if update and (records or "assumptions" in policy):
         out["assumptions"] = records
+    if update and policy.get("verifier") and facts.get("verifier") is not None:
+        out["verifier"] = policy["verifier"] | {"allow": verifier_allow(policy["verifier"], facts["verifier"])}
     return fails, out
 
 
-def verifier_failures(rule: dict | None, found: dict | None) -> list[str]:
+def compiled(found: dict) -> list[tuple[str, dict]]:
+    """(kind, constant) for each `@[implemented_by]` and `@[extern]` constant on the verifier's path (`Facts.lean`)."""
+    return [(kind, e) for kind in ("implemented_by", "extern") for e in found.get(kind, [])]
+
+
+def allowed_by(allow: list[str], e: dict) -> str | None:
+    """The `verifier.allow` entry that admits the constant ``e``: its name, a name prefix, or `module:M` for every constant
+    of a module under `M`."""
+    n = e["name"]
+    return next((a for a in allow if (under([a[len("module:"):]], e.get("module") or "") if a.startswith("module:")
+                                      else n == a or n.startswith(a + "."))), None)
+
+
+def verifier_allow(rule: dict, found: dict) -> list[str]:
+    """The `verifier.allow` that `--update` writes: the `module:` entries as they are, and by name each compiled constant on
+    the path that none of them admits, so the record lists it and the landing DM shows one added."""
+    modules = [a for a in rule.get("allow", []) if a.startswith("module:")]
+    return modules + sorted({e["name"] for _, e in compiled(found) if not allowed_by(modules, e)})
+
+
+def verifier_failures(rule: dict | None, found: dict | None, update: bool = False) -> list[str]:
     """The verifier's path (`verifier` in the policy: its `entries`, the constants it may reach without being expanded,
     `stop`, and the `hash` namespace): every `@[implemented_by]` or `@[extern]` constant the entries reach is compiled code
-    no proof sees, so one fails unless `allow` names it (a name, or a name prefix; `module:M` for every constant of a module
-    under `M`), and the entries reach the `hash` namespace only through `stop`, so the verifier hashes through its
-    parameter (Daniel's checks (a) and (b), LEAN-18). The walk follows `@[csimp]` replacements, so the code compiled in
-    place of a constant is on the path; the rewrite itself is a theorem the replay checks, listed and never refused."""
+    no proof sees, so one fails unless `allow` admits it (`allowed_by`), and the entries reach the `hash` namespace only
+    through `stop`, so the verifier hashes through its parameter (Daniel's checks (a) and (b), LEAN-18). `allow` is a
+    record: `--update` writes each such constant into it by name (`verifier_allow`), a `module:` entry aside, and a name
+    that admits nothing on the path fails. The walk follows `@[csimp]` replacements, so the code compiled in place of a
+    constant is on the path; the rewrite itself is a theorem the replay checks, listed and never refused."""
     if not rule:
         return []
     if found is None:
-        return ["verifier: `Facts.lean` reported no verifier path; is the audit tool older than the policy?"]
+        return [Failure("verifier.no-facts", None, "verifier: `Facts.lean` reported no verifier path; is the audit tool older "
+                        "than the policy?")]
     allow = rule.get("allow", [])
-    names = [a for a in allow if not a.startswith("module:")]
-    modules = [a[len("module:"):] for a in allow if a.startswith("module:")]
-
-    def allowed(e: dict) -> bool:
-        n = e["name"]
-        return any(n == a or n.startswith(a + ".") for a in names) or under(modules, e.get("module") or "")
-
     entries = ", ".join(rule.get("entries", []))
-    fails = [f"verifier: entry {m} is not a constant of the build; fix `verifier.entries`" for m in found.get("missing", [])]
-    for kind in ("implemented_by", "extern"):
-        for e in found.get(kind, []):
-            if not allowed(e):
-                fails.append(f"verifier: {e['name']} (@[{kind}], in {e.get('module')}) is on the path from {entries}: compiled "
-                             f"code no proof sees; add it to `verifier.allow` only if it is a core primitive")
+    fails = [Failure("verifier.missing-entry", m, f"verifier: entry {m} is not a constant of the build; fix "
+                     f"`verifier.entries`") for m in found.get("missing", [])]
+    if not update:
+        used = set()
+        for kind, e in compiled(found):
+            if a := allowed_by(allow, e):
+                used.add(a)
+            else:
+                fails.append(Failure(f"verifier.{kind.replace('_', '-')}", e["name"], f"verifier: {e['name']} (@[{kind}], in "
+                                     f"{e.get('module')}) is on the path from {entries}: compiled code no proof sees; if it "
+                                     f"is a core primitive, run `check.py --update`, which lists it under `verifier.allow` "
+                                     f"(the landing DM shows it), else take it off the path"))
+        fails += [Failure("verifier.allow-unused", a, f"verifier: `verifier.allow` lists {a}, which admits nothing on the "
+                          f"path from {entries}; run `check.py --update`") for a in allow
+                  if not a.startswith("module:") and a not in used]
     for h in found.get("hash", []):
-        fails.append(f"verifier: {entries} reach {h['name']} outside the hash parameter, by {' -> '.join(h['path'])}; route "
-                     f"it through the parameter, or add the public constant it serves to `verifier.stop`")
+        fails.append(Failure("verifier.hash", h["name"], f"verifier: {entries} reach {h['name']} outside the hash parameter, "
+                             f"by {' -> '.join(h['path'])}; route it through the parameter, or add the public constant it "
+                             f"serves to `verifier.stop`"))
     return fails
 
 
@@ -1256,68 +1438,140 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
     under `claims.witnesses` a theorem `fails`, whose statement past its `∀` and `∃` binders is `¬ C …` with the claim `C`
     itself at the head (the claim is not true of everything), and theorems `meets`, one per deployed record, that state
     the claim's checkable antecedents there and not `C` itself (it is not true at the deployment only because nothing
-    meets its antecedents). Each witness is a guarantee, so its record, and a change to it, shows in the landing DM."""
+    meets its antecedents). Each witness is a guarantee, so its record, and a change to it, shows in the landing DM.
+    An entry is stale only when it names no predicate under `claims.modules`, so a named assumption (a claim a guarantee
+    takes as a premise) may keep its entry, which is then checked like any other. A `meets` witness must say something about the deployment (LEAN-32, `vacuous_meets`): its conclusion, past its `∀`,
+    `→` and `∃` binders and split at `∧` (each conjunct again past its own binders), is conjuncts that are each headed by
+    a constant other than `C`, apply a definition under `meaning` themselves (the deployed record, a predicate or a field
+    of it; `True`, or a fact of Init or Mathlib alone, applies none), and are neither a reflexivity (`a = a`, `a ↔ a`,
+    `HEq a a`) nor one of its hypotheses (split at `∧`), and no hypothesis is `False`. Read as written, nothing unfolded."""
     rule = policy.get("claims")
     if not rule:
         return []
     if not isinstance(rule, dict) or not isinstance(rule.get("modules"), list):
-        return ["claims: `claims` is {modules: [module prefix], witnesses: {claim: {fails, meets: [...]}}, not: {claim: why}}"]
+        return [Failure("claims.form", None, "claims: `claims` is {modules: [module prefix], witnesses: {claim: {fails, meets: "
+                        "[...]}}, not: {claim: why}}")]
     fails, ws, nots = [], rule.get("witnesses", {}), rule.get("not", {})
     assumptions, guarantees = policy.get("assumptions", {}), policy.get("guarantees", {})
-    found = {d["name"]: d["module"] for d in facts.get("spec_definitions", [])
-             if (d.get("predicate") or d.get("statement")) and under(rule["modules"], d["module"]) and d["name"] not in assumptions}
+    preds = {d["name"]: d["module"] for d in facts.get("spec_definitions", [])
+             if (d.get("predicate") or d.get("statement")) and under(rule["modules"], d["module"])}
+    found = {c: m for c, m in preds.items() if c not in assumptions}
     for c, m in sorted(found.items()):
         if c not in ws and c not in nots:
-            fails.append(f"claims: {c} ({m}) is a claim definition with no witnesses: name its `{c}_fails` (a theorem that it is "
-                         f"false at a toy instance) and `{c}_meets` (its checkable antecedents hold at each deployed record) "
-                         f"under `claims.witnesses`, or list it under `claims.not` with the reason it is no claim")
-    for c in sorted((set(ws) | set(nots)) - set(found)):
-        fails.append(f"claims: {c} is listed under `claims` but is no predicate of the spec under {', '.join(rule['modules'])}; "
-                     f"remove the entry")
+            fails.append(Failure("claims.no-witnesses", c, f"claims: {c} ({m}) is a claim definition with no witnesses: name "
+                                 f"its `{c}_fails` (a theorem that it is false at a toy instance) and `{c}_meets` (its "
+                                 f"checkable antecedents hold at each deployed record) under `claims.witnesses`, or list it "
+                                 f"under `claims.not` with the reason it is no claim"))
+    for c in sorted((set(ws) | set(nots)) - set(preds)):
+        fails.append(Failure("claims.stale", c, f"claims: {c} is listed under `claims` but is no predicate of the spec under "
+                             f"{', '.join(rule['modules'])}; remove the entry"))
     for c, why in sorted(nots.items()):
         if c in ws:
-            fails.append(f"claims: {c} is under both `claims.witnesses` and `claims.not`; keep one")
+            fails.append(Failure("claims.both", c, f"claims: {c} is under both `claims.witnesses` and `claims.not`; keep one"))
         elif not str(why).strip():
-            fails.append(f"claims: claims.not[{c}] gives no reason")
+            fails.append(Failure("claims.no-reason", c, f"claims: claims.not[{c}] gives no reason"))
     for c, w in sorted(ws.items()):
         if not (isinstance(w, dict) and isinstance(w.get("fails"), str) and isinstance(w.get("meets"), list) and w["meets"]
                 and all(isinstance(n, str) for n in w["meets"])):
-            fails.append(f"claims: claims.witnesses[{c}] is {{fails: theorem, meets: [theorem, one per deployed record]}}")
+            fails.append(Failure("claims.witness-form", c, f"claims: claims.witnesses[{c}] is {{fails: theorem, meets: "
+                                 f"[theorem, one per deployed record]}}"))
             continue
         for role, n in [("fails", w["fails"]), *(("meets", n) for n in w["meets"])]:
             if n not in guarantees:
-                fails.append(f"claims: {n}, {c}'s `{role}` witness, is not under `guarantees`: list it there, so its record "
-                             f"shows in the landing DM")
+                fails.append(Failure("claims.unlisted-witness", n, f"claims: {n}, {c}'s `{role}` witness, is not under "
+                                     f"`guarantees`: list it there, so its record shows in the landing DM"))
                 continue
             pin = facts["pins"].get(n, {"kind": "missing"})
             if (k := pin.get("kind")) != "theorem":
                 what = "not in the build" if k == "missing" else f"a {k}"
-                fails.append(f"claims: {n}, {c}'s `{role}` witness, is {what}: a witness is a theorem")
+                fails.append(Failure("claims.witness-not-a-theorem", n, f"claims: {n}, {c}'s `{role}` witness, is {what}: a "
+                                     f"witness is a theorem"))
                 continue
             body = pin.get("body")
             if not isinstance(body, dict):
-                fails.append(f"claims: `Facts.lean` reported no body for {n}; is the audit tool older than the policy?")
+                fails.append(Failure("claims.no-body", n, f"claims: `Facts.lean` reported no body for {n}; is the audit tool "
+                                     f"older than the policy?"))
             elif role == "fails" and not (body.get("negated") and body.get("head") == c):
-                fails.append(f"claims: {n} does not state that {c} fails: past its ∀ and ∃ binders its statement must be "
-                             f"`¬ {c} …`, and it is {'¬ ' if body.get('negated') else ''}{body.get('head') or 'no application'} …")
+                fails.append(Failure("claims.fails-form", n, f"claims: {n} does not state that {c} fails: past its ∀ and ∃ "
+                                     f"binders its statement must be `¬ {c} …`, and it is "
+                                     f"{'¬ ' if body.get('negated') else ''}{body.get('head') or 'no application'} …"))
             elif role == "meets" and body.get("head") == c:
-                fails.append(f"claims: {n} states {'¬ ' if body.get('negated') else ''}{c} itself: a `meets` witness states the "
-                             f"claim's checkable antecedents at a deployed record (a decoder meeting its bound, a non-empty "
-                             f"scope), not the claim")
+                fails.append(Failure("claims.meets-form", n, f"claims: {n} states {'¬ ' if body.get('negated') else ''}{c} "
+                                     f"itself: a `meets` witness states the claim's checkable antecedents at a deployed record "
+                                     f"(a decoder meeting its bound, a non-empty scope), not the claim"))
+            elif role == "meets" and (why := vacuous_meets(body, c)):
+                fails.append(Failure("claims.meets-vacuous", n, f"claims: {n}, {c}'s `meets` witness, {why}: each conjunct of "
+                                     f"a `meets` witness's conclusion applies a definition of the spec (the deployed record, "
+                                     f"a predicate or a field of it)"))
     return fails
 
 
+def vacuous_meets(body: dict, claim: str) -> str | None:
+    """Why a `meets` witness's statement (``body``, `Facts.lean`'s `conclusionOf`) says nothing about the deployment, or None."""
+    if not isinstance(body.get("conclusion"), list) or not body["conclusion"]:
+        return "has no conclusion `Facts.lean` reported; is the audit tool older than the policy?"
+    if body.get("absurd"):
+        return "takes `False` as a hypothesis, so it proves anything"
+    for k in body["conclusion"]:
+        head = k.get("head")
+        if head is None:
+            return "has a conjunct that applies a bound variable, not a constant"
+        if head == claim:
+            return f"has a conjunct that states {claim} itself"
+        if k.get("refl"):
+            return f"has a conjunct that is a reflexivity ({head} of two equal sides)"
+        if k.get("assumed"):
+            return f"has a conjunct ({head} …) that is one of its own hypotheses"
+        if not k.get("defs"):
+            return f"has a conjunct ({head} …) that applies no definition under `meaning` (`True`, or a fact of Init or Mathlib alone)"
+    return None
+
+
+def unfolding(d: str, unfolds: dict, listed) -> tuple[list[str], list[str]] | None:
+    """What the premise ``d`` asserts, by `Facts.lean`'s `unfolds` (the parts its definition asserts through `∧`, the bodies
+    of `∀` and `→`, and reducible unfolding, beside the assumptions what it takes mentions): (the ``listed`` assumptions it
+    comes to, the parts that are none), or None when it doesn't unfold.  A part the lock doesn't list comes to what it
+    unfolds to when that is listed assumptions alone; a bound predicate, a constant applied to a proposition or a predicate
+    (a combinator, a recursive definition) and anything else that is no listed assumption keep ``d`` from being an alias of
+    listed assumptions, which it is when the second list is empty."""
+    def walk(c: str, path: frozenset) -> tuple[list[str], list[str]] | None:
+        parts = unfolds.get(c)
+        if not isinstance(parts, list) or c in path:
+            return None
+        yes, no = set(), set()
+        for p in parts:
+            h = p.get("head")
+            if h is None:
+                no.add("a bound predicate")
+            elif p.get("props"):
+                no.add(f"{h} applied to a proposition or predicate")
+            elif h in listed:
+                yes.add(h)
+            elif (u := walk(h, path | {c})) and not u[1]:
+                yes |= set(u[0])
+            else:
+                no.add(h)
+        return sorted(yes), sorted(no)
+    return walk(d, frozenset())
+
+
 def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str | None,
-                       premised: dict | None = None) -> tuple[dict, list[str]]:
+                       premised: dict | None = None, unfolds: dict | None = None) -> tuple[dict, list[str]]:
     """The `assumptions` records as the build has them, and the failures: each named assumption (a definition of the spec,
     stated as a `Prop` and taken as a hypothesis or read inside a guarantee's statement) has an `owner` and the digest its
     `reads` record holds, so a changed assumption shows as its own record, and an entry no guarantee reads fails.  An
     update writes the digests, drops an entry no guarantee reads, and converts a list of assumption modules into the
     definitions the guarantees read there, each owned by the one owner of the guarantees that read it (or ``owner``).
     ``premised`` ({definition: the guarantees whose statements take it}, from `Facts.lean`'s `premises`) names the premises
-    a statement takes in an assumptions module, its `Guarantees` definitions unfolded and a `Premises` abbrev seen through:
-    one the lock doesn't list fails, and an update adds it the same way, so an entry lost in a merge is never silent."""
+    a statement takes, headed by a constant of an assumptions module or of any module this repository builds
+    (`own_modules`: a premise defined in `Definitions` carries what it assumes as much as one in `Models`), its `Guarantees`
+    definitions unfolded and a `Premises` abbrev seen through, and under its other definitions and in its conclusion each
+    constant of an assumptions module or a `shape.premises` module that a hypothesis mentions:
+    one the lock doesn't list fails, and an update adds it the same way, so an entry lost in a merge is never silent.
+    A premise that is an alias of listed assumptions (`unfolding`, by ``unfolds``) is not one: what it unfolds to is
+    premised in its place.  Under an update, a premise that doesn't unfold counts as listed, since the update adds it."""
     assumed, fails, out = policy.get("assumptions", {}), [], {}
+    premised, unfolds = {d: set(by) for d, by in (premised or {}).items()}, unfolds or {}
     read = {d: (m, h, g["guarantees"]) for m, g in now_reads.items() for d, h in g["definitions"].items()}
     owners = {n: (r or {}).get("owner") for n, r in policy.get("guarantees", {}).items()}
     if isinstance(assumed, list):
@@ -1328,54 +1582,82 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
             if under(policy["assumptions"], m):
                 who = {owners.get(g) for g in by} - {None}
                 assumed[d] = {"owner": who.pop()} if len(who) == 1 else {}
+    listed = set(assumed) | ({d for d in premised if not isinstance(unfolds.get(d), list)} if update else set())
+    for d in sorted(premised):
+        if d not in assumed and (u := unfolding(d, unfolds, listed)) and not u[1]:
+            by = premised.pop(d)
+            for a in u[0]:
+                premised.setdefault(a, set()).update(by)
     for a, rec in sorted(assumed.items()):
         who = (rec or {}).get("owner") or owner
+        if a not in read and a in (premised or {}):
+            # a premise only unfolding reaches (a reducible definition the statement reads stands for it): no read record
+            out[a] = {"owner": who} if who else {}
+            continue
         if a not in read:
             if not update:
-                fails.append(f"assumptions: {a} is listed, but no guarantee reads it; remove the entry")
+                fails.append(Failure("assumptions.unread", a, f"assumptions: {a} is listed, but no guarantee reads it; remove "
+                                     f"the entry"))
             continue
         m, h, _ = read[a]
         if not who:
-            fails.append(f"assumptions: {a} has no owner: write \"owner\": \"@lane\" in its entry, or run "
-                         f"`check.py --update --owner @lane`")
+            fails.append(Failure("assumptions.no-owner", a, f"assumptions: {a} has no owner: write \"owner\": \"@lane\" in its "
+                                 f"entry, or run `check.py --update --owner @lane`"))
         elif not OWNER.fullmatch(who):
-            fails.append(f"assumptions: {a}'s owner {who!r} is not a handle such as @proofs")
+            fails.append(Failure("assumptions.bad-owner", a, f"assumptions: {a}'s owner {who!r} is not a handle such as "
+                                 f"@proofs"))
         out[a] = ({"owner": who} if who else {}) | {"digest": h}
         if update:
             continue
         if "digest" not in (rec or {}):
-            fails.append(f"assumptions: {a} has no record; run `check.py --update` and commit the record")
+            fails.append(Failure("assumptions.unrecorded", a, f"assumptions: {a} has no record; run `check.py --update` and "
+                                 f"commit the record"))
         elif rec["digest"] != h:
-            fails.append(f"assumptions: {a}'s definition in {m} changed; run `check.py --update` and commit the record "
-                         f"(Daniel's DM shows the change when it lands)")
-    for d, by in sorted((premised or {}).items()):
+            fails.append(Failure("assumptions.digest", a, f"assumptions: {a}'s definition in {m} changed; run `check.py "
+                                 f"--update` and commit the record (Daniel's DM shows the change when it lands)"))
+    for d, by in sorted(premised.items()):
         if d in assumed:
             continue
+        who = {owners.get(g) for g in by} - {None}
+        mine = who.pop() if len(who) == 1 else owner
+        entry = ({"owner": mine} if mine else {}) | ({"digest": read[d][1]} if d in read else {})
         if update:
-            who = {owners.get(g) for g in by} - {None}
-            mine = who.pop() if len(who) == 1 else owner
-            out[d] = ({"owner": mine} if mine else {}) | ({"digest": read[d][1]} if d in read else {})
-        else:
-            fails.append(f"assumptions: {d} is a premise of {', '.join(sorted(by))}, an assumption the lock doesn't list; "
-                         f"run `check.py --update` to add it with its guarantees' owner and commit the record (Daniel's DM "
-                         f"shows it when it lands)")
+            out[d] = entry
+            continue
+        u = unfolding(d, unfolds, assumed)
+        parts = "" if not u else (f" It unfolds to {', '.join(u[1])}" + (f" beside the listed {', '.join(u[0])}" if u[0]
+                                  else "") + ", so it is no alias of listed assumptions, which the lock would not count.")
+        fails.append(Failure("assumptions.unlisted-premise", d, f"assumptions: {d} is a premise of "
+                             f"{', '.join(sorted(by))}, an assumption the lock doesn't list; run `check.py --update` to "
+                             f"add it with its guarantees' owner and commit the record (Daniel's DM shows it when it "
+                             f"lands), or write {json.dumps(d)}: {json.dumps({'owner': '@lane'} | entry)} under "
+                             f"`assumptions`{'' if mine else ' with the lane that answers for it'}.{parts}"))
     return out, fails
 
 
-#: the failures `--update` settles from the build alone: a guarantee, a `reads` group or an assumption whose record differs
-#: from the build (two records, each right on its own side of a merge), an owned guarantee or assumption with no record yet,
-#: and a premise the lock doesn't list (the premise rule adds it with its guarantees' owner).  A missing name, an owner, and
-#: every other failure take a person
-RECORD_DIFFERENCE = re.compile(
-    r"guarantees: (\S+'s (signature|assumptions|type hash) changed:|they now read definitions in |they no longer read |"
-    r"definitions in \S+ that .+? read changed \(|those that read \S+ are |the digest recorded for |\S+ has no record;)|"
-    r"assumptions: (\S+'s definition in \S+ changed;|\S+ has no record;|\S+ is a premise of .+, an assumption the lock "
-    r"doesn't list;)")
+class Codes(frozenset):
+    """A set of failure codes; ``match(f)`` says whether failure ``f``'s code is one of them (a bare string's never is)."""
+
+    def match(self, failure: str) -> bool:
+        return code_of(failure) in self
+
+
+#: the failures `--update` settles from the build alone, by code: a guarantee, a `reads` group or an assumption whose record
+#: differs from the build (two records, each right on its own side of a merge), an owned guarantee or assumption with no
+#: record yet, and a premise the lock doesn't list (the premise rule adds it with its guarantees' owner).  A missing name, an
+#: owner, and every other failure take a person
+RECORD_DIFFERENCE = Codes({
+    "guarantees.signature", "guarantees.assumptions", "guarantees.type-hash",       # its record's statement differs
+    "guarantees.reads-new", "guarantees.reads-gone", "guarantees.reads-changed",    # a `reads` group differs
+    "guarantees.readers", "guarantees.reads-digest",
+    "guarantees.unrecorded",                                                        # owned, with no record yet
+    "assumptions.digest", "assumptions.unrecorded", "assumptions.unlisted-premise",
+})
 
 
 def regenerated(policy: dict, facts: dict, files: dict[str, str], fails: list[str]) -> dict | None:
-    """The `lean-audit.json` that `--update` writes, when ``fails`` are all record differences (`RECORD_DIFFERENCE`), else
-    None: the policy with its guarantees, reads and assumptions as the build has them."""
+    """The `lean-audit.json` that `--update` writes, when ``fails`` are all record differences (their codes are in
+    `RECORD_DIFFERENCE`), else None: the policy with its guarantees, reads and assumptions as the build has them."""
     if not fails or not all(RECORD_DIFFERENCE.match(f) for f in fails):
         return None
     new = judge(policy, facts, files, update=True)[1]
@@ -1411,7 +1693,8 @@ def shape(policy: dict, facts: dict) -> list[str]:
     hypotheses whose head is a constant of a module under `shape.premises`. Several acceptances of the function are
     one, of the tuple of their inputs (a binding property). A hypothesis is read by its body under its leading binders
     (`Facts.lean`'s `head` and `applies`): an acceptance applies the function there and holds under no hypothesis of
-    its own (`guarded`). A `Prop` field of a structure an input ranges over or returns (a family) is a hypothesis too
+    its own (`guarded`); binder order and an equation of one field of two inputs don't matter (`part_refusals`). A
+    `Prop` field of a structure an input ranges over or returns (a family) is a hypothesis too
     (`Nonempty` among them), and a conjunction counts as its conjuncts, each a property of the entry's function or, when the
     entry lists `conjuncts` (one `{function, outcome}` per conjunct), of its own. A probability statement has its
     acceptance in its event: under `shape.events` (constants, such as `FlockSoundness.Game.prob`), a conjunct whose
@@ -1433,22 +1716,27 @@ def shape(policy: dict, facts: dict) -> list[str]:
     frozen, where = spec.get("frozen", {}), "shape.frozen"
     conjectures, events = spec.get("conjectures", {}), spec.get("events", [])
     if not isinstance(events, list) or not all(isinstance(e, str) and e for e in events):
-        fails.append(f"shape: shape.events is {json.dumps(events)}; it lists constants, each a probability whose event "
-                     f"argument holds a property's acceptance")
+        fails.append(Failure("shape.events", None, f"shape: shape.events is {json.dumps(events)}; it lists constants, each a "
+                             f"probability whose event argument holds a property's acceptance"))
         events = []
     for name, c in sorted(conjectures.items()):
         c = c if isinstance(c, dict) else {}
         if name not in policy.get("assumptions", {}):
-            fails.append(f"shape: shape.conjectures lists {name}, which is not a named assumption of this package")
+            fails.append(Failure("shape.conjecture-unnamed", name, f"shape: shape.conjectures lists {name}, which is not a "
+                                 f"named assumption of this package"))
         if c.get("status") not in CONJECTURE:
-            fails.append(f"shape: shape.conjectures[{name}] has no status ({', '.join(CONJECTURE)})")
+            fails.append(Failure("shape.conjecture-status", name, f"shape: shape.conjectures[{name}] has no status "
+                                 f"({', '.join(CONJECTURE)})"))
         if not str(c.get("why", "")).strip():
-            fails.append(f"shape: shape.conjectures[{name}] gives no reason: one sentence on what it says and its status")
+            fails.append(Failure("shape.conjecture-reason", name, f"shape: shape.conjectures[{name}] gives no reason: one "
+                                 f"sentence on what it says and its status"))
         if c.get("status") == "open" and not str(c.get("test", "")).strip():
-            fails.append(f"shape: shape.conjectures[{name}] is open and names no falsification test that runs")
+            fails.append(Failure("shape.conjecture-test", name, f"shape: shape.conjectures[{name}] is open and names no "
+                                 f"falsification test that runs"))
     for name, why in sorted(frozen.items()):
         if why.strip() and category(why) is None:
-            fails.append(f"shape: {where}[{name}] starts with no category: `<category>: why`, one of {', '.join(CATEGORIES)}")
+            fails.append(Failure("shape.frozen-category", name, f"shape: {where}[{name}] starts with no category: "
+                                 f"`<category>: why`, one of {', '.join(CATEGORIES)}"))
     guarantees = set(policy.get("guarantees", {}))
     lifted = {(p.get("lift") or {}).get("head") for p in facts["pins"].values()}
     homes = spec.get("statements")
@@ -1456,21 +1744,26 @@ def shape(policy: dict, facts: dict) -> list[str]:
     unstated = {d["name"]: d["module"] for d in facts.get("spec_definitions", []) if d.get("statement") and held(d["module"])
                 and d["name"] not in lifted and d["name"] not in policy.get("assumptions", {})}
     for name in sorted(set(frozen) - guarantees - set(unstated)):
-        fails.append(f"shape: {where} lists {name}, which is neither a guarantee of this package nor a statement of its "
-                     f"spec that none states: remove the entry")
+        fails.append(Failure("shape.frozen-stale", name, f"shape: {where} lists {name}, which is neither a guarantee of this "
+                             f"package nor a statement of its spec that none states: remove the entry"))
     for name, module in sorted(unstated.items()):
         if name in frozen and not frozen[name].strip():
-            fails.append(f"shape: {where}[{name}] gives no reason: one sentence on why no guarantee states {name} yet")
+            fails.append(Failure("shape.frozen-reason", name, f"shape: {where}[{name}] gives no reason: one sentence on why "
+                                 f"no guarantee states {name} yet"))
         elif category(frozen.get(name, "")) not in (None, "unstated"):
-            fails.append(f"shape: {where}[{name}] is a statement no guarantee states: its reason's category is `unstated`")
+            fails.append(Failure("shape.unstated-category", name, f"shape: {where}[{name}] is a statement no guarantee "
+                                 f"states: its reason's category is `unstated`"))
         elif name not in frozen:
-            fails.append(f"shape: {name} ({module}) is a statement that no guarantee of this package states: list the "
-                         f"theorem that proves it under `guarantees`, or move it out of the spec")
+            fails.append(Failure("shape.unstated", name, f"shape: {name} ({module}) is a statement that no guarantee of this "
+                                 f"package states: list the theorem that proves it under `guarantees`, or move it out of "
+                                 f"the spec"))
     for name in sorted(set(entries) - guarantees):
-        fails.append(f"shape: shape.properties lists {name}, which is not a guarantee of this package: remove the entry")
+        fails.append(Failure("shape.properties-stale", name, f"shape: shape.properties lists {name}, which is not a "
+                             f"guarantee of this package: remove the entry"))
     for name in sorted(guarantees - claim_witnesses(policy)):
         if name in frozen and not frozen[name].strip():
-            fails.append(f"shape: {where}[{name}] gives no reason: one sentence on why {name} doesn't have the shape yet")
+            fails.append(Failure("shape.frozen-reason", name, f"shape: {where}[{name}] gives no reason: one sentence on why "
+                                 f"{name} doesn't have the shape yet"))
         got = facts["pins"].get(name, {}).get("shape")
         why = refusals(entries.get(name), got, premises, set(conjectures), events) if isinstance(got, list) else \
             [f"has no shape in the facts ({(got or {}).get('error', 'not computed')})"]
@@ -1483,16 +1776,18 @@ def shape(policy: dict, facts: dict) -> list[str]:
                        f"{', '.join(sorted(entries[name].get('rests_on', []))) or 'none'}: a conditional property lists "
                        f"each conjecture it rests on")
         if name in frozen and why and category(frozen[name]) == "unstated":
-            fails.append(f"shape: {where}[{name}] is a guarantee: its reason's category is not `unstated`")
+            fails.append(Failure("shape.frozen-unstated", name, f"shape: {where}[{name}] is a guarantee: its reason's "
+                                 f"category is not `unstated`"))
         dead = [c for c in rests if conjectures[c].get("status") == "falsified"]
         if name in frozen and dead and category(frozen[name]) != "falsified":
-            fails.append(f"shape: {where}[{name}] rests on {', '.join(dead)}, which is falsified: its reason's category "
-                         f"is `falsified`")
+            fails.append(Failure("shape.frozen-falsified", name, f"shape: {where}[{name}] rests on {', '.join(dead)}, which "
+                                 f"is falsified: its reason's category is `falsified`"))
         if name in frozen:
             if not why:
-                fails.append(f"shape: {name} has the shape now: remove it from {where}, which only shrinks")
+                fails.append(Failure("shape.fits", name, f"shape: {name} has the shape now: remove it from {where}, which "
+                                     f"only shrinks"))
         elif why:
-            fails += [f"shape: {name} {w}" for w in why]
+            fails += [Failure("shape.refused", name, f"shape: {name} {w}") for w in why]
     return fails
 
 
@@ -1524,7 +1819,11 @@ def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[
                   events: list[str] = ()) -> list[str]:
     """`refusals` for one conjunct.  Its hypotheses run from its first binder to the first input bound after its acceptance (the
     first hypothesis about the function), or, for an outcome of `none`, after its first hypothesis; what follows is its
-    conclusion, so `accepts → ∀ w < n, P w` concludes `∀ w < n, P w` while `accepts → Q → P` takes `Q`.  A probability
+    conclusion, so `accepts → ∀ w < n, P w` concludes `∀ w < n, P w` while `accepts → Q → P` takes `Q`.  A statement that
+    is one of these written in another order fits too: its binders reordered with its acceptances and premises first
+    (`reordered`), so `∀ x w, Q w → accepts x → P` is `∀ x, accepts x → ∀ w, Q w → P`; and a hypothesis equating one
+    field of two inputs is allowed (`shares`), since `∀ c c', c.root = c'.root → …` is `∀ … r, …` over `⟨…, r⟩` and
+    `⟨…, r⟩` with the root bound once.  A probability
     statement has its acceptance in the event (`shape.events`): when its conclusion has an event of one of those constants
     (`prob (fun o => A₁ o ∧ … ∧ Aₙ o ∧ B o) g σ ≤ …`, `Facts.lean`'s `eventsOf`) and in every one each conjunct before
     the last is about the function, every hypothesis is taken, and each that isn't a premise is refused, an acceptance
@@ -1545,10 +1844,31 @@ def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[
     probs = [e for e in got.get("events", []) if e["head"] in events]
     inevent = outcome != "none" and bool(probs) and all(
         len(e["conjuncts"]) > 1 and all(map(about, e["conjuncts"][:-1])) for e in probs)
-    start = next((h for h in hyps if outcome != "none" and not premise(h) and about(h)), None) if outcome != "none" else \
-        next(iter(hyps), None)
-    ends = min((i["at"] for i in got["inputs"] if start is not None and i["at"] > start["at"]), default=None)
-    taken = hyps if inevent else [h for h in hyps if ends is None or h["at"] < ends]
+
+    def split(rank: Callable[[int], int]) -> tuple[dict | None, list[dict]]:
+        """The acceptance (or first hypothesis) and the hypotheses taken, with the binders in the order ``rank`` gives."""
+        order = sorted(hyps, key=lambda h: rank(h["at"]))
+        start = next((h for h in order if not premise(h) and about(h)), None) if outcome != "none" else next(iter(order), None)
+        ends = min((rank(i["at"]) for i in got["inputs"] if start is not None and rank(i["at"]) > rank(start["at"])),
+                   default=None)
+        return start, order if inevent else [h for h in order if ends is None or rank(h["at"]) < ends]
+
+    read = {j for h in hyps if h["source"] == "binder" and about(h) for j in h.get("uses", ())}
+
+    def allowed(h: dict) -> bool:
+        return (outcome != "none" and about(h) and not inevent) or premise(h) or (
+            outcome != "none" and not inevent and shares(got, h, read))
+
+    start, taken = split(lambda a: a)
+    if not inevent and not all(map(allowed, taken)):
+        moved = reordered(got, lambda h: (outcome != "none" and about(h)) or premise(h) or h["source"] == "field")
+        if moved is not None:
+            order, first = moved
+            rank = {a: r for r, a in enumerate(order)}
+            concluded = set(order[first:]) & {i["at"] for i in got["inputs"]} & set(got["uses"])
+            if all(map(allowed, split(rank.__getitem__)[1])) and all(
+                    allowed(h) or concluded & set(h.get("uses", ())) for h in taken):
+                taken = []
     out = []
     if outcome != "none" and probs and not inevent:
         out.append(f"bounds an event of {', '.join(sorted({e['head'] for e in probs}))} whose conjuncts before its last "
@@ -1558,7 +1878,7 @@ def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[
         out.append(f"takes no hypothesis that its function returned {outcome} ({said}): a property says what holds when "
                    f"it does (an iff's converse, or an honest case, is a completeness theorem, in Proofs/)")
     for h in taken:
-        if (outcome != "none" and about(h) and not inevent) or premise(h):
+        if allowed(h):
             continue
         what = "a field of an input it ranges over" if h["source"] == "field" else "a hypothesis"
         its = f"its event's first conjunct, {outcome} by {said}" if inevent else f"{outcome} by {said}"
@@ -1570,6 +1890,50 @@ def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[
     if outcome == "none" and not any(reaches(f, set(got["conclusion"]) | {c for h in hyps for c in h["reaches"]}) for f in fns):
         out.append(f"says nothing about {said}, the function its entry names")
     return out
+
+
+def binders_of(got: dict) -> list[dict] | None:
+    """A statement part's binders, its inputs and its `Prop` binders, each with the positions of the binders it mentions
+    (`Facts.lean`'s `uses`), or None when `Facts.lean` didn't report them (facts older than `uses`)."""
+    binders = [*got["inputs"], *(h for h in got["hypotheses"] if h["source"] == "binder")]
+    return binders if "uses" in got and all("uses" in b for b in binders) else None
+
+
+def reordered(got: dict, seed: Callable[[dict], bool]) -> tuple[list[int], int] | None:
+    """The positions of the statement part ``got``'s binders reordered, and how many come first: the binders of the
+    hypotheses ``seed`` picks (its acceptances and premises), with every binder they mention, transitively, then the
+    rest, each group in its written order. A binder mentions only binders before it, and none of the first group mentions
+    one of the rest, so the order is a statement too, and the same one: `∀ w, Q w → A → C` is `A → ∀ w, Q w → C` when `A`
+    mentions neither `w` nor `Q`'s proof, and two binders that don't mention each other commute. A `Prop` field of a
+    structure an input ranges over moves with the input. None when `Facts.lean` didn't report what each binder mentions."""
+    binders = binders_of(got)
+    if binders is None:
+        return None
+    uses: dict[int, set[int]] = {}
+    for b in binders:
+        uses.setdefault(b["at"], set()).update(b["uses"])
+    kept = {h["at"] for h in got["hypotheses"] if seed(h)}
+    stack = list(kept)
+    while stack:
+        for j in uses.get(stack.pop(), ()):
+            if j not in kept:
+                kept.add(j)
+                stack.append(j)
+    return sorted(uses.keys() | kept, key=lambda a: (a not in kept, a)), len(kept)
+
+
+def shares(got: dict, h: dict, read: set[int]) -> bool:
+    """Whether the hypothesis ``h`` of the statement part ``got`` equates one field of two of its inputs (`x.f = y.f`,
+    `Facts.lean`'s `shares`: the same path of structure projections, not empty, of two different inputs bound before it),
+    both of them inputs its acceptance reads (``read``), and nothing mentions its proof. By structure eta,
+    `∀ x y, x.f = y.f → P x y` is `P` of two structures whose `f` is one value bound once (`⟨a, r⟩` and `⟨a', r⟩`), a
+    statement without the hypothesis."""
+    s, binders = h.get("shares"), binders_of(got)
+    if not s or h["source"] != "binder" or binders is None:
+        return False
+    j, k = s["inputs"]
+    return j != k and {j, k} <= read & {i["at"] for i in got["inputs"]} and max(j, k) < h["at"] and bool(s["path"]) and \
+        all(h["at"] not in b["uses"] for b in binders) and h["at"] not in got["uses"]
 
 
 def reaches(function: str, reached: set[str]) -> bool:
@@ -1620,28 +1984,40 @@ def reads_home(pkg: Path, policy: dict) -> dict[str, list[str]]:
     return home
 
 
-def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]]) -> list[str]:
+def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]], roles: dict[str, str] | None = None) -> list[str]:
     """The reads check: every definition a guarantee's statement reads (`reads` under `meaning`, and `outside` it where the
     walk stops) lies in a spec module of its package or of a package it requires by path (``home``, `homes`), and the record
     holds it (its module is under `meaning`), or it is a pinned dependency's.  Theorems are not read: a statement means
     what it means whatever proves the propositions inside it.  A module outside the spec under a `reads_exempt` prefix
     ({prefix: the reason}) is exempt; an entry that exempts no such read fails, and an exemption never covers a spec module
-    outside `meaning` (the record would hold nothing of it)."""
+    outside `meaning` (the record would hold nothing of it).  A read outside the spec of a module of the proofs tree
+    (``roles``, `tree_roles`) is the trees check's (`tree_failures`), and `reads_exempt` covers none."""
+    roles = roles or {}
     exempt, meaning = policy.get("reads_exempt", {}), policy.get("meaning", policy["roots"])
     if not isinstance(exempt, dict):
-        return [f"reads: `reads_exempt` is {json.dumps(exempt)}; it is an object {{module prefix: the reason}}"]
+        return [Failure("reads.exempt-form", None, f"reads: `reads_exempt` is {json.dumps(exempt)}; it is an object "
+                        f"{{module prefix: the reason}}")]
     if unreasoned := sorted(p for p, why in exempt.items() if not p or not isinstance(why, str) or not why.strip()):
-        return [f"reads: `reads_exempt` lists {', '.join(map(json.dumps, unreasoned))} without a module prefix and a reason"]
+        return [Failure("reads.exempt-reason", None, f"reads: `reads_exempt` lists {', '.join(map(json.dumps, unreasoned))} "
+                        f"without a module prefix and a reason")]
     bad: dict[tuple[str, str], tuple[set[str], set[str]]] = {}
     used: set[str] = set()
+    verdicts: dict[str, tuple[str | None, set[str]]] = {}
     for g, f in sorted(facts["pins"].items()):
         if f.get("kind") != "theorem":
             continue
         for name, m in [*((r["name"], r["module"]) for r in f.get("reads", [])), *map(tuple, f.get("outside", []))]:
             if m not in home:
                 continue
-            why = "spec" if not under(home[m], m) else "meaning" if not under(meaning, m) else None
-            if why == "spec" and (hit := {p for p in exempt if under([p], m)}):
+            if m not in verdicts:
+                why = "spec" if not under(home[m], m) else "meaning" if not under(meaning, m) else None
+                if why == "spec" and tree_of(roles, m) == "proofs":
+                    why = "proofs"
+                verdicts[m] = why, {p for p in exempt if under([p], m)} if why == "spec" else set()
+            why, hit = verdicts[m]
+            if why == "proofs":
+                continue
+            if why == "spec" and hit:
                 used |= hit
                 continue
             if why:
@@ -1657,14 +2033,110 @@ def spec_reads(policy: dict, facts: dict, home: dict[str, list[str]]) -> list[st
     for (m, why), (defs, by) in sorted(bad.items()):
         if why == "spec":
             spec = ", ".join(home[m]) or "none: no `layers`"
-            fails.append(f"reads: {few(by)} read {few(defs)} in {m}, outside the spec ({spec}): a guarantee's statement reads "
-                         f"only the spec of its package and of the packages it requires by path, and pinned dependencies; "
-                         f"move the definitions into the spec, or list {m} under `reads_exempt` with the reason")
+            fails.append(Failure("reads.outside-spec", m, f"reads: {few(by)} read {few(defs)} in {m}, outside the spec "
+                                 f"({spec}): a guarantee's statement reads only the spec of its package and of the packages it "
+                                 f"requires by path, and pinned dependencies; move the definitions into the spec, or list {m} "
+                                 f"under `reads_exempt` with the reason"))
         else:
-            fails.append(f"reads: {few(by)} read {few(defs)} in {m}, a spec module outside `meaning`, so the record holds "
-                         f"nothing of them: add {m} to `meaning` and run `check.py --update`")
+            fails.append(Failure("reads.outside-meaning", m, f"reads: {few(by)} read {few(defs)} in {m}, a spec module "
+                                 f"outside `meaning`, so the record holds nothing of them: add {m} to `meaning` and run "
+                                 f"`check.py --update`"))
     for p in sorted(set(exempt) - used):
-        fails.append(f"reads: `reads_exempt` lists {p}, under which no guarantee reads outside the spec; remove the entry")
+        fails.append(Failure("reads.exempt-stale", p, f"reads: `reads_exempt` lists {p}, under which no guarantee reads "
+                             f"outside the spec; remove the entry" if tree_of(roles, p) != "proofs" else
+                             f"reads: `reads_exempt` lists {p}, in the proofs tree, whose reads the trees check judges: "
+                             f"remove the entry (an exception to the trees rule is listed under `trees`' `except`)"))
+    return fails
+
+
+#: the trees a `trees` entry names, each a list of module prefixes; `except` lists the exceptions, each with its reason
+TREES = ("definitions", "properties", "proofs")
+
+
+def tree_roles(pkg: Path, policy: dict) -> dict[str, str]:
+    """{module prefix: its tree} that ``policy``'s `trees` and those of the packages ``pkg`` requires by path name, so a
+    package's trees reach those that require it (a dependency's `except` stays its own)."""
+    out: dict[str, str] = {}
+    rules = []
+    for d in path_deps(pkg):
+        try:
+            rules.append(load(d).get("trees") if (d / POLICY).is_file() else None)
+        except ValueError:
+            continue
+    for rule in [*rules, policy.get("trees")]:
+        for tree in TREES:
+            for p in (rule or {}).get(tree, []) if isinstance(rule, dict) else []:
+                if isinstance(p, str):
+                    out[p] = tree
+    return out
+
+
+def tree_of(roles: dict[str, str], module: str) -> str | None:
+    """The tree of ``module``: that of the longest prefix ``roles`` names it under (`Proofs.Properties` before
+    `Properties`), or None."""
+    hits = [p for p in roles if under([p], module)]
+    return roles[max(hits, key=len)] if hits else None
+
+
+def tree_failures(policy: dict, facts: dict, roles: dict[str, str]) -> list[str]:
+    """The trees check: the definitions tree is what a reader reads (vocabulary, named assumptions, guarantee statements),
+    the properties tree states what the code does, and the proofs tree is every proof, lemma and proof-only definition.  So
+    no guarantee's or property's statement reads a definition (`reads` and `outside`, as `spec_reads` walks them) of a
+    module of the proofs tree, and no audited module of the definitions or properties tree imports one.  The trees are
+    ``roles`` (`tree_roles`); a module under a prefix of `trees`' `except` ({prefix: the reason}) is excepted (the read
+    module, or the importing one), and an entry that excepts nothing fails."""
+    rule = policy.get("trees", {})
+    if not isinstance(rule, dict) or set(rule) - {*TREES, "except"} or not all(
+            isinstance(rule.get(t, []), list) and all(isinstance(p, str) and p for p in rule.get(t, [])) for t in TREES):
+        return [Failure("trees.form", None, f"trees: `trees` is {json.dumps(rule)}; it is an object whose "
+                        f"{', '.join(TREES)} are lists of module prefixes and whose `except` is {{module prefix: the reason}}")]
+    excepted = rule.get("except", {})
+    if not isinstance(excepted, dict) or any(not p or not isinstance(why, str) or not why.strip()
+                                             for p, why in excepted.items()):
+        return [Failure("trees.except-form", None, f"trees: `except` is {json.dumps(excepted)}; each entry is a module "
+                        f"prefix with the reason it is excepted")]
+    if not roles:
+        return [Failure("trees.stale-except", p, f"trees: `except` lists {p}, but no tree is named; remove the entry")
+                for p in sorted(excepted)]
+    named = {t: ", ".join(sorted(p for p, r in roles.items() if r == t)) or "none" for t in TREES}
+    used: set[str] = set()
+
+    def exception(m: str) -> bool:
+        hit = {p for p in excepted if under([p], m)}
+        used.update(hit)
+        return bool(hit)
+
+    def few(xs: set[str]) -> str:
+        xs = sorted(xs)
+        return ", ".join(xs[:4]) + (f" and {len(xs) - 4} more" if len(xs) > 4 else "")
+
+    bad: dict[str, tuple[set[str], set[str]]] = {}
+    for g, f in sorted(facts["pins"].items()):
+        if f.get("kind") != "theorem":
+            continue
+        for name, m in [*((r["name"], r["module"]) for r in f.get("reads", [])), *map(tuple, f.get("outside", []))]:
+            if tree_of(roles, m) == "proofs" and not exception(m):
+                defs, by = bad.setdefault(m, (set(), set()))
+                defs.add(parent(name))
+                by.add(g)
+    fails = [Failure("trees.reads", m, f"trees: {few(by)} read {few(defs)} in {m}, a module of the proofs tree "
+                     f"({named['proofs']}): a guarantee's or property's statement reads only the definitions tree "
+                     f"({named['definitions']}), the code it is about and pinned dependencies. Move the definitions into "
+                     f"the definitions tree (Definitions/<Area>/), or take the statement off the lock's guarantees: one "
+                     f"over proof-only definitions is a lemma of the proofs tree")
+             for m, (defs, by) in sorted(bad.items())]
+    for m in sorted(facts["modules"]):
+        if (tree := tree_of(roles, m)) not in ("definitions", "properties"):
+            continue
+        for i in facts["imports"].get(m, []):
+            if tree_of(roles, i) == "proofs" and not exception(m):
+                fails.append(Failure("trees.imports", m, f"trees: {m}, of the {tree} tree, imports {i}, of the proofs tree "
+                                     f"({named['proofs']}): what the definitions and the properties say never rests on a "
+                                     f"proof. Move what {m} uses from {i} into the definitions tree (Definitions/<Area>/), "
+                                     f"or move {m} into the proofs tree"))
+    for p in sorted(set(excepted) - used):
+        fails.append(Failure("trees.stale-except", p, f"trees: `except` lists {p}, under which no statement reads the "
+                             f"proofs tree and no module of the definitions or properties tree imports it; remove the entry"))
     return fails
 
 
@@ -1722,11 +2194,13 @@ def assign(names, sources: list[tuple[str, dict, dict]]) -> tuple[dict, list[str
         hits = [(label, p) for label, p, f, files in found if p.get("module") in files and p.get("module") in f["modules"]]
         if len(hits) > 1:
             where = " and in ".join(f"{p['module']} ({label})" for label, p in hits)
-            fails.append(f"guarantees: {n} is proved in {where}: one package proves a guarantee; remove the others")
+            fails.append(Failure("guarantees.proved-twice", n, f"guarantees: {n} is proved in {where}: one package proves a "
+                                 f"guarantee; remove the others"))
         elif not hits and found:
-            fails.append(f"guarantees: {n} is declared in {found[0][1].get('module')}, which no package of "
-                         f"{', '.join(label for label, _, _ in sources)} audits: a guarantee is proved in a module under the "
-                         f"roots of the spec package or of a package its `proved_in` names")
+            fails.append(Failure("guarantees.unaudited", n, f"guarantees: {n} is declared in {found[0][1].get('module')}, "
+                                 f"which no package of {', '.join(label for label, _, _ in sources)} audits: a guarantee is "
+                                 f"proved in a module under the roots of the spec package or of a package its `proved_in` "
+                                 f"names"))
         pins[n] = (hits or [x[:2] for x in found] or [(None, {"kind": "missing"})])[0][1]
         if hits:
             by[hits[0][0]].append(n)
@@ -1737,60 +2211,69 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
            ready=lambda q: None) -> tuple[list[str], dict, dict[str, list[str]]]:
     """(failures, ``facts`` with each guarantee's facts taken from the package that proves it, {package: the guarantees it
     proves}) for a policy whose `proved_in` names the packages that prove its guarantees. Each must require ``pkg`` by path
-    and hold a policy of its own without guarantees; ``ready`` (one) returns once its build has ended. `Facts.lean` reads its
-    roots with this policy's `meaning`, `axioms` and guarantees, so the judgment is the one of guarantees proved in ``pkg``.
-    Raises RuntimeError when a package's facts cannot be read."""
+    and hold a policy of its own without guarantees; ``ready`` (one) returns once its build has ended, False when it did not
+    pass. `Facts.lean` reads its roots with this policy's `meaning`, `axioms` and guarantees, so the judgment is the one of
+    guarantees proved in ``pkg``. Raises RuntimeError when a package's build did not pass or its facts cannot be read."""
     fails, sources, conflicts = [], [("this package", facts, lean_modules(pkg))], list(facts.get("moved_conflicts", []))
     if not isinstance(named := policy["proved_in"], list) or not all(isinstance(p, str) for p in named):
-        fails.append("proved_in: a list of paths, each relative to this package")
+        fails.append(Failure("proved_in.form", None, "proved_in: a list of paths, each relative to this package"))
     for entry, q in provers(pkg, policy) if isinstance(named, list) else []:
         if q == pkg.resolve() or not (q / POLICY).is_file():
-            fails.append(f"proved_in: {entry} is {'this package' if q == pkg.resolve() else f'no package with a {POLICY}'}")
+            fails.append(Failure("proved_in.no-package", entry, f"proved_in: {entry} is "
+                                 f"{'this package' if q == pkg.resolve() else f'no package with a {POLICY}'}"))
             continue
         if pkg.resolve() not in path_deps(q):
-            fails.append(f"proved_in: {entry} does not require this package by path, so its theorems are not about this "
-                         f"package's statements")
+            fails.append(Failure("proved_in.no-require", entry, f"proved_in: {entry} does not require this package by path, "
+                                 f"so its theorems are not about this package's statements"))
             continue
         try:
             qpol = load(q)
         except ValueError as e:
-            fails.append(f"proved_in: {entry}/{POLICY}: {e}")
+            fails.append(Failure("proved_in.policy", entry, f"proved_in: {entry}/{POLICY}: {e}"))
             continue
         if not qpol.get("roots"):
-            fails.append(f"proved_in: {entry}'s {POLICY} names no `roots`")
+            fails.append(Failure("proved_in.no-roots", entry, f"proved_in: {entry}'s {POLICY} names no `roots`"))
             continue
         if qpol.get("guarantees"):
-            fails.append(f"proved_in: {entry}'s {POLICY} lists guarantees; the guarantees it proves are recorded here, in "
-                         f"the spec's lock, and it records none")
+            fails.append(Failure("proved_in.guarantees", entry, f"proved_in: {entry}'s {POLICY} lists guarantees; the "
+                                 f"guarantees it proves are recorded here, in the spec's lock, and it records none"))
         files = lean_modules(q)
         shared = {m.split(".")[0] for m in files} & {m.split(".")[0] for d in path_deps(q) for m in lean_modules(d)}
         if shared:
-            fails.append(f"proved_in: {entry}'s modules share the root {', '.join(sorted(shared))} with a package it requires: "
-                         f"Lean looks a module up in the first package on its path holding its root, so `lake env lean` "
-                         f"cannot load both; put its modules under a root of their own (declarations keep their names)")
+            fails.append(Failure("proved_in.shared-root", entry, f"proved_in: {entry}'s modules share the root "
+                                 f"{', '.join(sorted(shared))} with a package it requires: Lean looks a module up in the "
+                                 f"first package on its path holding its root, so `lake env lean` cannot load both; put its "
+                                 f"modules under a root of their own (declarations keep their names)"))
             continue
-        ready(q)
+        if ready(q) is False:
+            raise RuntimeError(f"proved_in: {entry}'s build did not pass (its report says why), so its facts are not read: "
+                               f"its .lake holds whatever an earlier or interrupted build left, and a module it lacks would "
+                               f"read as a missing import here")
         qwork = work / f"proved-in-{re.sub(r'[^A-Za-z0-9]+', '_', entry)}"
         qwork.mkdir(parents=True, exist_ok=True)
         qf = facts_of(q, {"roots": qpol["roots"], "meaning": policy.get("meaning", policy["roots"]),
-                          "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {})}, qwork, moved)
+                          "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {}),
+                          "shape": policy.get("shape", {})}, qwork, moved)
         lib = (q / ".lake" / "build" / "lib" / "lean").resolve()
-        loaded = {".".join(Path(o).resolve().relative_to(lib).with_suffix("").parts) for o in qf["oleans"]
-                  if Path(o).resolve().is_relative_to(lib)}
+        loaded = {".".join(r.relative_to(lib).with_suffix("").parts) for r in (Path(o).resolve() for o in qf["oleans"])
+                  if r.parts[:len(lib.parts)] == lib.parts}
         if unaudited := sorted(loaded - set(qf["modules"])):
-            fails.append(f"proved_in: {entry}'s roots ({', '.join(qpol['roots'])}) import its {', '.join(unaudited)}, which are "
-                         f"not under them, so its replay does not check them")
+            fails.append(Failure("proved_in.unaudited", entry, f"proved_in: {entry}'s roots ({', '.join(qpol['roots'])}) "
+                                 f"import its {', '.join(unaudited)}, which are not under them, so its replay does not check "
+                                 f"them"))
         listed = qpol.get("compile_time", {})
         for n, p in qf["pins"].items():
             if p.get("kind", "missing") != "missing" and p.get("module") in files and (
                     hit := sorted({p["module"], *(r["module"] for r in p.get("reads", []))} & set(listed))):
-                fails.append(f"compile-time: {entry} lists {', '.join(hit)} under `compile_time`, where {n} is declared or "
-                             f"read; move the compile-time code or the declarations to another module")
+                fails.append(Failure("compile-time.cited", n, f"compile-time: {entry} lists {', '.join(hit)} under "
+                                     f"`compile_time`, where {n} is declared or read; move the compile-time code or the "
+                                     f"declarations to another module"))
         fails += unreported(qf, f"{entry}'s ") + dropped(q, files, qf, f"{entry}'s ")
         sources.append((entry, qf, files))
         conflicts += qf.get("moved_conflicts", [])
     pins, more, by = assign(policy.get("guarantees", {}), sources)
-    return fails + more, facts | {"pins": pins, "moved_conflicts": conflicts}, by
+    own = sorted(set().union(*(own_modules(f) for _, f, _ in sources)))
+    return fails + more, facts | {"pins": pins, "moved_conflicts": conflicts, "own_modules": own}, by
 
 
 REPRINTED = "printed differently: the same statement (type hash and named assumptions unchanged)"
@@ -1848,7 +2331,8 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     reading of its own.  After `--moved` (``renames``, `facts_of`), a guarantee and a definition are compared with the
     record of their old names, by their texts under the old names: a guarantee that says what its record says gets one line
     (moved from its old name, lifted), and the definitions that are the same are counted on one line.  One the base already
-    records under its new name (a lock re-recorded after the move) is compared with that record."""
+    records under its new name (a lock re-recorded after the move) is compared with that record.  Each entry added to
+    or dropped from `verifier.allow` gets a line."""
     out = []
     op, np = old.get("guarantees", {}), new.get("guarantees", {})
     moves = not facts.get("moved_conflicts")
@@ -1940,6 +2424,11 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
         out.append(f"reads: {regrouped} {REGROUPED}")
     if regrouped_own:
         out.append(f"reads: {regrouped_own} {REGROUPED_OWN}")
+    before, after = ((d.get("verifier") or {}).get("allow", []) for d in (old, new))
+    where = {e["name"]: f" (@[{kind}], in {e.get('module')})" for kind, e in compiled(facts.get("verifier") or {})}
+    out += [f"verifier: allowed {a}{where.get(a, '')}: compiled code no proof sees, now on the verifier's path"
+            for a in after if a not in before]
+    out += [f"verifier: no longer allowed {a}: off the verifier's path" for a in before if a not in after]
     return out
 
 
@@ -1960,8 +2449,32 @@ def setup(pkg: Path, toolchain: str, log: Path) -> tuple[int, str]:
             rc, text = run(argv, pkg, log)
             if rc == 0:
                 _INSTALLED.add(toolchain)
-            return rc, text
-    return run(argv, pkg, log)
+            return dev_restore(pkg, rc, text, log)
+    return dev_restore(pkg, *run(argv, pkg, log), log)
+
+
+def dev_restore(pkg: Path, rc: int, text: str, log: Path) -> tuple[int, str]:
+    """With `--dev-cache`, main's verified build of each package ``pkg`` requires by path too (`setup.sh` restores only
+    ``pkg``'s): a rebuild of one isn't byte-identical to the published build, so every module above it would compile again
+    (Security/Proofs at the published commit, 21 Oct: 1,607 of its modules). A failed restore leaves those to `lake build`."""
+    if not DEV_CACHE or rc != 0 or not (deps := path_deps(pkg)):
+        return rc, text
+    # `cache.py get` unstages from inside each package, so Lake needs that package's dependencies where it looks: a path
+    # dependency has none of its own (the workspace's are ``pkg``'s, at one Mathlib revision for all), so it borrows them
+    linked = []
+    try:
+        for d in deps:
+            own = d / ".lake" / "packages"
+            if not own.exists() and (pkg / ".lake" / "packages").is_dir():
+                own.parent.mkdir(parents=True, exist_ok=True)
+                own.symlink_to((pkg / ".lake" / "packages").resolve())
+                linked.append(own)
+        _, more = run([sys.executable, str(TOOL / "cache.py"), "get", *map(str, deps)], pkg,
+                      log.with_name(f"{log.stem}-deps.log"))
+    finally:
+        for own in linked:
+            own.unlink(missing_ok=True)
+    return rc, text + more
 
 
 def killed(rc: int) -> bool:
@@ -2047,65 +2560,122 @@ def olean_digest(lib: Path, files: list[Path]) -> str:
     return h.hexdigest()
 
 
-REPLAY_SCHEMA = "lean-replay/v1"
+REPLAY_SCHEMA = "lean-replay/v2"
+#: how long a replay may run before it is killed; the import closure's, cold, checks all of Mathlib and core
+REPLAY_TIMEOUT = 4 * 3600
+CLOSURE_TIMEOUT = 24 * 3600
 
 
 def replay_keys(facts: dict, toolchain: str) -> dict[str, str]:
-    """{module: key} for each audited module: what its kernel replay's verdict is a function of. The key hashes the
-    toolchain, `Replay.lean`, and the `.olean` files (every part) of the module and of each module it imports, transitively,
-    each under its module's name (``facts``' `graph`), never a path: a module whose bytes and imports' bytes are unchanged
-    keeps its key wherever the package is built."""
+    """{module: key} for every module of the import closure (``facts``' `graph`): what its kernel replay's verdict is a
+    function of. A module's key hashes the toolchain, `Replay.lean`, its `.olean` files (every part), and the name and key of
+    each module it imports, so it covers the `.olean` files of everything it imports, transitively, each under its module's
+    name, never a path: a module whose bytes and imports' bytes are unchanged keeps its key wherever the package is built."""
     graph = facts["graph"]
     files = {m: [p for p in (Path(g["olean"]), Path(g["olean"] + ".server"), Path(g["olean"] + ".private")) if p.is_file()]
              for m, g in graph.items()}
     with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
         digests = dict(zip(files, ex.map(lambda ps: ",".join(sha256(p) for p in ps), files.values())))
     head = f"{REPLAY_SCHEMA}\0{toolchain}\0{sha256(TOOL / 'Replay.lean')}\0"
-    keys = {}
-    for m in facts["modules"]:
-        seen, stack = {m}, [m]
+    keys: dict[str, str] = {}
+    for root in graph:
+        stack = [(root, False)]
         while stack:
-            for i in graph[stack.pop()]["imports"]:
-                if i not in seen:
-                    seen.add(i)
-                    stack.append(i)
-        h = hashlib.sha256(f"{head}{m}\0".encode())
-        for n in sorted(seen):
-            h.update(f"{n}\0{digests[n]}\n".encode())
-        keys[m] = h.hexdigest()
+            m, expanded = stack.pop()
+            if m in keys:
+                continue
+            imports = sorted(graph[m]["imports"])
+            if not expanded:
+                stack.append((m, True))
+                stack.extend((i, False) for i in imports if i not in keys)
+                continue
+            h = hashlib.sha256(f"{head}{m}\0{digests[m]}\n".encode())
+            for i in imports:
+                h.update(f"{i}\0{keys[i]}\n".encode())
+            keys[m] = h.hexdigest()
     return keys
 
 
-def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path, replay_cache: Path | None) -> tuple[list[str], dict]:
+def closure_plan(facts: dict, passed) -> tuple[list[str], list[str]]:
+    """(the dependency modules to check, those to add unchecked) for the replay of the import closure: each module of the
+    closure outside the package's own (``facts``' `graph` less its `modules`) that has not ``passed``, and every one that
+    imports one of those, transitively, which must join the replay because an import of it would bring the modules it
+    imports unchecked. The rest are imported, as each passed with the same `.olean` files and imports."""
+    graph, own = facts["graph"], set(facts["modules"])
+    deps = [m for m in graph if m not in own]
+    missing = {m for m in deps if not passed(m)}
+    importers: dict[str, list[str]] = {}
+    for m in deps:
+        for i in graph[m]["imports"]:
+            importers.setdefault(i, []).append(m)
+    above, stack = set(missing), list(missing)
+    while stack:
+        for j in importers.get(stack.pop(), []):
+            if j not in above:
+                above.add(j)
+                stack.append(j)
+    return sorted(missing), sorted(above - missing)
+
+
+def store_replay(replay_cache: Path, key: str, module: str) -> None:
+    """Record that ``module`` passed the replay under ``key``. The packages of one audit replay in threads of one process, and
+    two whose closures share a module store its key at once, so the temporary name is the thread's."""
+    tmp = replay_cache / f".{key}.{os.getpid()}.{threading.get_ident()}.tmp"
+    tmp.write_text(json.dumps({"schema": REPLAY_SCHEMA, "module": module, "key": key}))
+    os.replace(tmp, replay_cache / f"{key}.json")
+
+
+def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path, replay_cache: Path | None,
+                closure: bool = False) -> tuple[list[str], dict]:
     """(failures, how many modules were checked and reused): the kernel replay of the package's audited modules
     (`Replay.lean`), each module whose `replay_keys` key ``replay_cache`` holds joining it unchecked, and each module checked
-    stored there when the replay passes."""
+    stored there when the replay passes. With ``closure``, the replay also checks every module of the import closure, the
+    toolchain's, Mathlib's and ArkLib's included, that has not passed it with its key (`closure_plan`), so each
+    declaration the package rests on goes through the kernel once and a warm cache checks none of them again."""
     found = work / "replay.json"
     found.unlink(missing_ok=True)
     keys = replay_keys(facts, toolchain) if replay_cache else {}
-    reused = [m for m in facts["modules"] if m in keys and (replay_cache / f"{keys[m]}.json").is_file()]
-    checked = [m for m in facts["modules"] if m not in reused]
+    passed = lambda m: m in keys and (replay_cache / f"{keys[m]}.json").is_file()
     n = replay_threads(pkg)
+    _peak.bytes = 0
+    # what passed is read once the replay may start, so a package audited beside one that shares its closure reuses it
     with _HEAVY_REPLAY if n is not None else contextlib.nullcontext():
+        reused = [m for m in facts["modules"] if passed(m)]
+        checked = [m for m in facts["modules"] if m not in reused]
+        deps_checked, deps_reused = closure_plan(facts, passed) if closure else ([], [])
         rc, text = run([*([] if n is None else ["env", f"LEAN_NUM_THREADS={n}"]), "lake", "env", "lean", "--run",
-                        str(TOOL / "Replay.lean"), str(found), *checked, *(["--reused", *reused] if reused else [])],
-                       pkg, work / "replay.log")
+                        str(TOOL / "Replay.lean"), str(found), *checked, *(["--reused", *reused] if reused else []),
+                        *(["--closure", *deps_checked] if deps_checked else []),
+                        *(["--closure-reused", *deps_reused] if deps_reused else [])],
+                       pkg, work / "replay.log", timeout=CLOSURE_TIMEOUT if closure else REPLAY_TIMEOUT)
+        doc = json.loads(found.read_text()) if found.exists() and not killed(rc) else {}
+        # a module's entry says its declarations passed with its imports present: one rejected elsewhere takes nothing from it
+        accepted = [m for m in checked + deps_checked if m not in set(doc.get("rejected", []))] \
+            if keys and (rc == 0 or (rc == 1 and "rejected" in doc)) else []
+        if accepted:
+            replay_cache.mkdir(parents=True, exist_ok=True)
+            for m in accepted:
+                store_replay(replay_cache, keys[m], m)
+    stats = {"checked": len(checked), "reused": len(reused), "peak_gib": round(_peak.bytes / 2**30, 1),
+             "phases": doc.get("seconds", {})}
+    if closure:
+        stats["closure"] = {"modules": len(facts["graph"]) - len(facts["modules"]), "checked": len(deps_checked),
+                            "reused": len(facts["graph"]) - len(facts["modules"]) - len(deps_checked),
+                            "loaded_unchecked": len(deps_reused)}
     fails = []
+    where = f"in the import closure of {', '.join(policy['roots'])}" if closure else f"under {', '.join(policy['roots'])}"
     if killed(rc):
-        fails.append(f"replay: killed (exit {rc}; out of memory?), which is not a kernel verdict: rerun it alone\n{text[-1000:]}")
-    elif rc or not found.exists():
-        fails.append(f"replay: the kernel rejected a declaration under {', '.join(policy['roots'])} (exit {rc}):\n"
-                     f"{text[-2000:]}")
-    elif (walked := sorted(json.loads(found.read_text())["axioms"])) != sorted(facts["axioms"]):
-        fails.append(f"replay: the replayed environment uses the axioms {', '.join(walked) or 'none'}, the .olean files "
-                     f"record {', '.join(sorted(facts['axioms'])) or 'none'}")
-    elif keys:
-        replay_cache.mkdir(parents=True, exist_ok=True)
-        for m in checked:
-            tmp = replay_cache / f".{keys[m]}.{os.getpid()}.tmp"
-            tmp.write_text(json.dumps({"schema": REPLAY_SCHEMA, "module": m, "key": keys[m]}))
-            os.replace(tmp, replay_cache / f"{keys[m]}.json")
-    return fails, {"checked": len(checked), "reused": len(reused)}
+        fails.append(Failure("replay.killed", None, f"replay: killed (exit {rc}; out of memory?), which is not a kernel "
+                             f"verdict: rerun it alone\n{text[-1000:]}"))
+    elif rc or "axioms" not in doc:
+        fails.append(Failure("replay.rejected", None, f"replay: the kernel rejected a declaration {where}"
+                             f"{', in ' + ', '.join(doc['rejected']) if doc.get('rejected') else ''} (exit {rc}):\n"
+                             f"{text[-2000:]}"))
+    elif (walked := sorted(doc["axioms"])) != sorted(facts["axioms"]):
+        fails.append(Failure("replay.axioms", None, f"replay: the replayed environment uses the axioms "
+                             f"{', '.join(walked) or 'none'}, the .olean files record "
+                             f"{', '.join(sorted(facts['axioms'])) or 'none'}"))
+    return fails, stats
 
 
 def timed(f, *args):
@@ -2154,10 +2724,11 @@ def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path
     for mod, entry in sorted(policy.get("runs", {}).items()):
         now[mod] = entry
         if mod not in files:
-            fails.append(f"runs: {mod} is not a module of the package")
+            fails.append(Failure("runs.not-a-module", mod, f"runs: {mod} is not a module of the package"))
             continue
         if not under(policy.get("exempt", {}), mod):
-            fails.append(f"runs: {mod} is not under `exempt`: a run is a test, not a proof the audit reads")
+            fails.append(Failure("runs.not-exempt", mod, f"runs: {mod} is not under `exempt`: a run is a test, not a proof "
+                                 f"the audit reads"))
             continue
         home = pkg / ".lake" / "runs" / mod             # writable in the sandbox, which hides a /tmp outside it
         shutil.rmtree(home, ignore_errors=True)
@@ -2169,19 +2740,19 @@ def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path
                     for i, a in enumerate(gen)]
             rc, text = run(argv, pkg, work / f"generate-{mod}.log")
             if rc:
-                fails.append(f"runs: {mod}'s `generate` exited {rc}:\n{text[-2000:]}")
+                fails.append(Failure("runs.generate", mod, f"runs: {mod}'s `generate` exited {rc}:\n{text[-2000:]}"))
                 continue
         paths, data, bad = {}, {}, []
         for name, want in sorted(entry.get("data", {}).items()):
             src = next((p for p in (base / name, base / f"{name}.gz") if p.is_file()), None)
             if src is None:
-                bad.append(f"runs: {mod}'s data {name} is missing from {base}")
+                bad.append(Failure("runs.data-missing", mod, f"runs: {mod}'s data {name} is missing from {base}"))
                 continue
             paths[name] = unpacked(src, home / "data" / name)
             data[name] = sha256(paths[name])
             if data[name] != want and not update:
-                bad.append(f"runs: {mod}'s data {name} has SHA-256 {data[name]}, not the record's {want or '(none)'}: run "
-                           f"`check.py --update` when the data changed on purpose")
+                bad.append(Failure("runs.data-digest", mod, f"runs: {mod}'s data {name} has SHA-256 {data[name]}, not the "
+                                   f"record's {want or '(none)'}: run `check.py --update` when the data changed on purpose"))
         now[mod] = entry | {"data": data} if update else entry
         if bad:
             fails += bad
@@ -2190,9 +2761,10 @@ def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path
                 for a in entry.get("args", [])]
         rc, text = run(in_sandbox(pkg, ["lake", "env", "lean", "--run", files[mod], *args]), pkg, work / f"run-{mod}.log")
         if killed(rc):
-            fails.append(f"runs: {mod} was killed (exit {rc}; out of memory?): rerun it\n{text[-1000:]}")
+            fails.append(Failure("runs.killed", mod, f"runs: {mod} was killed (exit {rc}; out of memory?): rerun it\n"
+                                 f"{text[-1000:]}"))
         elif rc:
-            fails.append(f"runs: {mod} exited {rc}:\n{text[-2000:]}")
+            fails.append(Failure("runs.failed", mod, f"runs: {mod} exited {rc}:\n{text[-2000:]}"))
     return fails, now
 
 
@@ -2210,8 +2782,9 @@ def run_paths(pkg: Path, policy: dict, repo: Path) -> list[str]:
                 if os.path.isabs(a) or os.path.commonpath([top, path]) != top:
                     inside = os.path.commonpath([str(repo.resolve()), path]) == str(repo.resolve())
                     fix = f"{{repo}}/{os.path.relpath(path, repo.resolve())}" if inside else "a path under `{repo}`"
-                    fails.append(f"runs: {mod}'s `{key}` names {a}, outside the package: check's audit runs on a scratch "
-                                 f"tree, where it finds nothing or another file; write {fix}")
+                    fails.append(Failure("runs.outside-path", mod, f"runs: {mod}'s `{key}` names {a}, outside the package: "
+                                         f"check's audit runs on a scratch tree, where it finds nothing or another file; "
+                                         f"write {fix}"))
     return fails
 
 
@@ -2227,10 +2800,12 @@ def template(pkg: Path) -> dict:
 def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, replay: bool = True, fresh: bool = False,
           log=print, built=lambda: None, runs: bool = True, repo: Path = ROOT, moved: dict[str, str] | None = None,
           ready=lambda q: None, owner: str | None = None, name: bool = False, lifts: dict | None = None,
-          replay_cache: Path | None = None) -> dict:
+          replay_cache: Path | None = None, closure: bool = False) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
     passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
-    ended (`proved`). ``runs`` runs the package's tests (`tests`), ``repo`` the checkout their data's
+    ended, False when it did not pass (`proved`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
+    `audit`, and within `audit` the package's facts (`facts`) and the provers' (`proved-in`). ``runs`` runs the package's
+    tests (`tests`), ``repo`` the checkout their data's
     `generate` reads. ``moved`` ({old name: new name}, with ``update``) renames the record's guarantees, and the review compares
     the build with the records under the old names (`review`). An update's report holds the review, whether it changes what a
     guarantee says (`statement_changes`), and the guarantees and reads it compared with (`before`) beside those it wrote.
@@ -2239,18 +2814,18 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     instead of auditing, and the report's `moved` holds their moves.  The report lists the spec's definitions
     that no guarantee reads (`unread_spec`).  ``replay_cache`` (a directory) holds each module whose replay passed, under
     its `replay_keys` key: such a module's constants join the replay unchecked, and each module checked is stored there
-    when the replay passes."""
+    when the replay passes.  ``closure`` replays the import closure too (`replay_step`)."""
     rep = {"package": str(pkg), "seconds": {}, "failures": []}
     if not (pkg / POLICY).exists():
-        rep["failures"].append(f"policy: {pkg} has no {POLICY}. Start from this one, list the theorems your documents cite "
-                               f"(\"name\": {{\"owner\": \"@lane\"}} under \"guarantees\"), and run `check.py --update {pkg}`:\n"
-                               f"{json.dumps(template(pkg))}")
-        return rep
+        rep["failures"].append(Failure("policy.missing", None, f"policy: {pkg} has no {POLICY}. Start from this one, list the "
+                                       f"theorems your documents cite (\"name\": {{\"owner\": \"@lane\"}} under "
+                                       f"\"guarantees\"), and run `check.py --update {pkg}`:\n{json.dumps(template(pkg))}"))
+        return reported(rep)
     try:
         policy = load(pkg)
     except ValueError as e:
-        rep["failures"].append(f"policy: {pkg}/{POLICY}: {e}")
-        return rep
+        rep["failures"].append(Failure("policy.invalid", None, f"policy: {pkg}/{POLICY}: {e}"))
+        return reported(rep)
     tag = re.sub(r"[^A-Za-z0-9]+", "_", str(pkg.resolve().relative_to(ROOT)) if pkg.resolve().is_relative_to(ROOT) else pkg.name)
     work = out / f"audit-{tag}"
     if work.resolve().is_relative_to(pkg.resolve()):
@@ -2277,12 +2852,18 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                 rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else run(argv, pkg, work / f"{step}.log")
                 rep["seconds"][step] = round(time.monotonic() - s, 1)
             if rc:
-                rep["failures"].append(f"{step}: exit {rc}\n{text[-3000:]}")
-                return rep
+                rep["failures"].append(Failure(step, None, f"{step}: exit {rc}\n{text[-3000:]}"))
+                return reported(rep)
     built()
     files = lean_modules(pkg)
-    background = ThreadPoolExecutor(max_workers=2)
+    background = ThreadPoolExecutor(max_workers=5)
     ran = background.submit(timed, tests, pkg, policy, files, work, repo, update) if runs and policy.get("runs") and not lifts else None
+    # a spec's `proved` waits for its provers' builds; the replay, the dependency scans and digests and the upstream scan
+    # read only the package's own facts, which `proved` leaves as they are, so they fill that wait. Elsewhere they keep
+    # their place: started together, their Python contends for the GIL with the audits on the critical path.
+    early = "proved_in" in policy and not lifts
+    upstream = background.submit(timed, sibling("upstream").pinned, pkg, policy["upstream"]) \
+        if early and "upstream" in policy else None
     current = policy
     if moved:
         renames = {}
@@ -2290,65 +2871,82 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             if r or renamed(n, moved) not in renames:
                 renames[renamed(n, moved)] = r
         current = policy | {"guarantees": renames}
-    s = time.monotonic()
+    s, waited = time.monotonic(), []
+
+    def built_prover(q: Path):
+        w = time.monotonic()
+        passed = ready(q)
+        waited.append(time.monotonic() - w)
+        return passed
+
+    replayed = scanned = digested = None
     try:
         facts = facts_of(pkg, current, work, moved)
+        rep["seconds"]["facts"] = round(time.monotonic() - s, 1)
+        if early:
+            replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache,
+                                         closure) if replay else None
+            scanned = background.submit(timed, dependency_scans, pkg, facts["oleans"], policy)
+            digested = background.submit(timed, dependency_digests, pkg, rep["toolchain"], facts["oleans"])
         cross: list[str] = []
         if "proved_in" in policy:
-            cross, facts, rep["proved_in"] = proved(pkg, current, facts, work, moved, ready)
+            p = time.monotonic()
+            cross, facts, rep["proved_in"] = proved(pkg, current, facts, work, moved, built_prover)
+            rep["seconds"]["proved-in"] = round(time.monotonic() - p - sum(waited), 1)
     except RuntimeError as e:
-        rep["failures"].append(f"lean: {e}")
-        background.shutdown()
-        return rep
-    rep["seconds"]["audit"] = round(time.monotonic() - s, 1)
-    replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache) \
-        if replay and not lifts else None
+        rep["failures"].append(Failure("lean", None, f"lean: {e}"))
+        background.shutdown(cancel_futures=True)
+        return reported(rep)
+    if waited:
+        rep["seconds"]["proved-in-wait"] = round(sum(waited), 1)
+    rep["seconds"]["audit"] = round(time.monotonic() - s - sum(waited), 1)
+    if replay and not lifts and not early:
+        replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache, closure)
     if lifts:
         try:
             rep["moved"] = lift(pkg, current, facts, lifts)
         except ValueError as e:
-            rep["failures"].append(f"lift: {e}")
-        return rep
+            rep["failures"].append(Failure("lift", None, f"lift: {e}"))
+        return reported(rep)
     fails, new = judge(current, facts, files, update, owner)
-    fails = cross + fails + dropped(pkg, files, facts) + spec_reads(current, facts, reads_home(pkg, current)) + \
-        shape(current, facts)
+    roles = tree_roles(pkg, current)
+    fails = cross + fails + dropped(pkg, files, facts) + spec_reads(current, facts, reads_home(pkg, current), roles) + \
+        tree_failures(current, facts, roles) + shape(current, facts)
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
-    s = time.monotonic()
-    missed, rep["dependency_sources"] = dependency_scans(pkg, facts["oleans"], policy)
-    rep["seconds"]["dependency-sources"] = round(time.monotonic() - s, 1)
+    (missed, rep["dependency_sources"]), rep["seconds"]["dependency-sources"] = \
+        scanned.result() if scanned else timed(dependency_scans, pkg, facts["oleans"], policy)
     fails = scans(pkg, files, policy) + missed + fails
     rep["heartbeats"] = heartbeats(pkg, files, build_seconds([work / "build.log", work / "build-roots.log"] if build else []))
     anonymous = anonymous_instances(pkg, files, facts)
     if name and anonymous:
         name_instances(pkg, anonymous)
         rep["named_instances"] = [f"{i['file']}:{i['at'][0]} {i['name']}" for i in anonymous]
-        fails.append(f"instance: named {len(anonymous)} anonymous instances in "
-                     f"{', '.join(sorted({i['file'] for i in anonymous}))}, so this audit is of sources it has since rewritten: "
-                     f"build and audit again to see that no record changed")
+        fails.append(Failure("instance.named", None, f"instance: named {len(anonymous)} anonymous instances in "
+                             f"{', '.join(sorted({i['file'] for i in anonymous}))}, so this audit is of sources it has since "
+                             f"rewritten: build and audit again to see that no record changed"))
         anonymous = []
-    fails += [f"instance: {i['file']}:{i['at'][0]} declares an instance without a name, which Lean names {i['name']} from its "
-              f"type (and, when nothing in the type is the project's own, its project's root): a move or a split renames it, and "
-              f"with it every record whose definitions use it. Write `instance {i['id']}` there (`check.py --name-instances` "
-              f"writes each one)" for i in anonymous]
+    fails += [Failure("instance.anonymous", i["file"], f"instance: {i['file']}:{i['at'][0]} declares an instance without a "
+                      f"name, which Lean names {i['name']} from its type (and, when nothing in the type is the project's own, "
+                      f"its project's root): a move or a split renames it, and with it every record whose definitions use it. "
+                      f"Write `instance {i['id']}` there (`check.py --name-instances` writes each one)") for i in anonymous]
     if "upstream" in policy:
-        s = time.monotonic()
-        rep["upstream"], missed = sibling("upstream").pinned(pkg, policy["upstream"])
-        fails += missed
-        rep["seconds"]["upstream"] = round(time.monotonic() - s, 1)
-    s = time.monotonic()
-    deps = dependency_digests(pkg, rep["toolchain"], facts["oleans"])
-    rep["seconds"]["dependencies"] = round(time.monotonic() - s, 1)
+        (rep["upstream"], missed), rep["seconds"]["upstream"] = \
+            upstream.result() if upstream else timed(sibling("upstream").pinned, pkg, policy["upstream"])
+        fails += [Failure("upstream", None, f) for f in missed]
+    deps, rep["seconds"]["dependencies"] = \
+        digested.result() if digested else timed(dependency_digests, pkg, rep["toolchain"], facts["oleans"])
     if update:
         new["dependencies"] = deps
     elif "dependencies" not in policy:
-        fails.append("dependencies: no record of the dependencies' .olean files; run `check.py --update` and commit it")
+        fails.append(Failure("dependencies.unrecorded", None, "dependencies: no record of the dependencies' .olean files; run "
+                             "`check.py --update` and commit it"))
     else:
         for d in sorted(set(policy["dependencies"]) | set(deps)):
             if policy["dependencies"].get(d) != deps.get(d):
-                fails.append(f"dependencies: the .olean files of the modules the package imports from {d} differ from the "
-                             f"record. After a change to the package's imports, or at a bump, run `check.py --update` (and "
-                             f"review it at a bump); otherwise it is a different cache or toolchain, a build that is not "
-                             f"reproducible, or tampering")
+                fails.append(Failure("dependencies.changed", d, f"dependencies: the .olean files of the modules the package "
+                                     f"imports from {d} differ from the record. After a change to the package's imports, or "
+                                     f"at a bump, run `check.py --update` (and review it at a bump); otherwise it is a "
+                                     f"different cache or toolchain, a build that is not reproducible, or tampering"))
     if replayed:
         (rfails, rep["replay"]), rep["seconds"]["replay"] = replayed.result()
         fails += rfails
@@ -2357,9 +2955,11 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         for r in policy["roots"]:
             rc, text = run(["lake", "env", "leanchecker", "--fresh", r], pkg, work / f"fresh-{r}.log")
             if killed(rc):
-                fails.append(f"fresh: `leanchecker --fresh {r}` was killed (exit {rc}; out of memory?), not a kernel verdict")
+                fails.append(Failure("fresh.killed", r, f"fresh: `leanchecker --fresh {r}` was killed (exit {rc}; out of "
+                                     f"memory?), not a kernel verdict"))
             elif rc:
-                fails.append(f"fresh: the kernel rejected a declaration in the closure of {r} (exit {rc}):\n{text[-2000:]}")
+                fails.append(Failure("fresh.rejected", r, f"fresh: the kernel rejected a declaration in the closure of {r} "
+                                     f"(exit {rc}):\n{text[-2000:]}"))
         rep["seconds"]["fresh"] = round(time.monotonic() - s, 1)
     fails += run_paths(pkg, policy, repo)
     if ran:
@@ -2413,7 +3013,16 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             "axioms": facts["axioms"], "escapes": facts["escapes"], "guarantees": new.get("guarantees", {}), "reads": new.get("reads", {}),
             "failures": fails}
     rep["seconds"]["total"] = round(time.monotonic() - t, 1)
-    (work / "report.json").write_text(json.dumps(rep, indent=1, ensure_ascii=False) + "\n")
+    (work / "report.json").write_text(json.dumps(reported(rep), indent=1, ensure_ascii=False) + "\n")
+    return rep
+
+
+def reported(rep: dict) -> dict:
+    """``rep`` with `failure_codes` (and `settled_codes` beside `settled`): each failure's code (`Failure`), in its order,
+    null for a bare string."""
+    for key, codes in (("failures", "failure_codes"), ("settled", "settled_codes")):
+        if key in rep:
+            rep[codes] = [code_of(f) for f in rep[key]]
     return rep
 
 
@@ -2430,8 +3039,9 @@ def packages(root: Path) -> list[Path]:
 
 
 def controls(toolchain: str, out: Path, install: bool = False, log=print) -> list[str]:
-    """Build the fixture package with ``toolchain``: it must pass clean, and fail each check once a violation is added.
-    ``install`` (`--build`) first installs elan and the toolchain with `setup.sh`."""
+    """Build the fixture package with ``toolchain``: it must pass clean, and fail each check once a violation is added
+    (and with none of the failures its `not` lists, by prefix).  ``install`` (`--build`) first installs elan and the
+    toolchain with `setup.sh`."""
     fails = []
     work = out / f"controls-{re.sub(r'[^A-Za-z0-9]+', '_', toolchain)}"
     shutil.rmtree(work, ignore_errors=True)
@@ -2484,7 +3094,12 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
         if v.get("replay_only"):
             if missed := beside(audit(bad, reports, replay=False)["failures"]):
                 fails.append(f"controls: `{name}` should pass every check but the replay; it failed:\n" + "\n".join(missed))
-        got = audit(bad, reports, replay=v.get("replay", False) or v.get("replay_only", False))["failures"]
+        if v.get("closure_only"):
+            if missed := beside(audit(bad, reports)["failures"]):
+                fails.append(f"controls: `{name}` should pass every check but the import closure's replay; it failed:\n" +
+                             "\n".join(missed))
+        got = audit(bad, reports, replay=v.get("replay", False) or v.get("replay_only", False) or v.get("closure_only", False),
+                    closure=v.get("closure_only", False))["failures"]
         for rel in v.get("not_written", []):
             if (bad / rel).exists():
                 fails.append(f"controls: `{name}` wrote {rel} while the audit read the package: its code ran there")
@@ -2493,6 +3108,8 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
                 fails.append(f"controls: `{name}` should pass; the audit said:\n" + "\n".join(got))
         elif not any(f.startswith(v["fails"]) for f in got):
             fails.append(f"controls: `{name}` should fail `{v['fails']}`; the audit said:\n" + ("\n".join(got) or "PASS"))
+        if wrong := [f for f in got if any(f.startswith(n) for n in v.get("not", []))]:
+            fails.append(f"controls: `{name}` should not fail these:\n" + "\n".join(wrong))
     log(f"audit: controls with {toolchain}: {'PASS' if not fails else 'FAIL'} (clean, {', '.join(expect)}; builds "
         f"{'in the sandbox' if sandboxed() else 'without a sandbox'})")
     return fails
@@ -2517,7 +3134,7 @@ def tampered(seals: dict[str, str], watch: list[Path]) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    global TOOL, ARTIFACTS
+    global TOOL, ARTIFACTS, DEV_CACHE
     ap = argparse.ArgumentParser(prog="check.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("package", nargs="*", type=Path, help="a Lake package directory with a lean-audit.json")
     ap.add_argument("--all", action="store_true", help="the controls, then every package under --root")
@@ -2535,14 +3152,20 @@ def main(argv: list[str]) -> int:
                     "`theorem X.SecurityProofs.G : X.Guarantees.G` beside its proof, or in `beside` (`lift`), instead of "
                     "auditing, and FILE.moved.json for `--update --moved`")
     ap.add_argument("--regenerate", action="store_true", help="a train's audit: a package whose every failure is a record "
-                    "difference (`RECORD_DIFFERENCE`) passes, and audit.json's `regenerated` names the record `--update` writes "
+                    "difference (a code in `RECORD_DIFFERENCE`) passes, and audit.json's `regenerated` names the record `--update` writes "
                     "for it under --out, which the train commits; the package's own lock is never written")
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
+    ap.add_argument("--dev-cache", action="store_true", help="restore the dependencies from the verified build cache "
+                    "(`cache.py get`, Mathlib's `cache get`) for a development check: our packages are still built and "
+                    "replayed, but the reports are a lean-fast/v1 result, which no gate accepts")
     ap.add_argument("--replay-cache", type=Path, metavar="DIR", help="reuse the replay of each module that passed it with the "
                     "same .olean files, its imports' included, on the same toolchain (`replay_keys`), and store each one "
                     "checked here")
     ap.add_argument("--artifacts", type=Path, metavar="DIR", help="Lake's artifact cache, which the builds read and never write "
                     "(`lake_env`)")
+    ap.add_argument("--closure", action="store_true", help="the replay also checks every module of the import closure, the "
+                    "toolchain's, Mathlib's and ArkLib's included, that has not passed it under its key (with --replay-cache, "
+                    "a warm run checks only what changed; `replay_step`)")
     ap.add_argument("--fresh", action="store_true", help="also `leanchecker --fresh` each root: its whole closure, Mathlib and core "
                     "included, through the kernel (slow: see README)")
     ap.add_argument("--no-runs", action="store_true", help="skip the packages' tests (`runs`)")
@@ -2568,6 +3191,7 @@ def main(argv: list[str]) -> int:
         if errs := move_errors(moved):
             ap.error(f"{a.moved}: " + "; ".join(errs))
     ARTIFACTS = a.artifacts.resolve() if a.artifacts else None
+    DEV_CACHE = a.dev_cache
     lifts = None
     if a.lift:
         if a.update or a.all or a.name_instances or len(pkgs) != 1:
@@ -2609,6 +3233,7 @@ def main(argv: list[str]) -> int:
     if a.build or a.all:
         sandboxed()                                     # probed once, before anything runs beside the probe
     built = {p: threading.Event() for p in pkgs}
+    passed: set[Path] = set()
     needs = {p: [d for d in path_deps(p) if d in built and d != p] for p in pkgs}
     by_controls: list[str] = []
     reports: dict[Path, dict] = {}
@@ -2637,21 +3262,24 @@ def main(argv: list[str]) -> int:
             built[d].wait()
         try:
             mine = pkg in named
-            rep = audit(pkg, out, a.build, a.update and mine, not a.no_replay, a.fresh, built=lambda: seal(pkg),
-                        runs=not a.no_runs, repo=a.repo.resolve(), moved=moved if mine else None,
-                        ready=lambda q: built[q].wait() if q in built else None, owner=a.owner,
-                        name=a.name_instances and mine, lifts=lifts if mine else None, replay_cache=a.replay_cache)
+            rep = audit(pkg, out, a.build, a.update and mine, not a.no_replay, a.fresh,
+                        built=lambda: (passed.add(pkg), seal(pkg)), runs=not a.no_runs, repo=a.repo.resolve(),
+                        moved=moved if mine else None,
+                        ready=lambda q: (built[q].wait(), q in passed)[1] if q in built else None, owner=a.owner,
+                        name=a.name_instances and mine, lifts=lifts if mine else None, replay_cache=a.replay_cache,
+                        closure=a.closure)
         finally:
             if not built[pkg].is_set():
                 seal(pkg)
         with lock:
-            if tamper := [f"tamper: {p} changed while {pkg} was built and audited" for p in tampered(seals, bins)]:
+            if tamper := [Failure("tamper", p, f"tamper: {p} changed while {pkg} was built and audited")
+                          for p in tampered(seals, bins)]:
                 rep["failures"] += tamper
                 if regen := rep.pop("regenerated", None):
                     Path(regen).unlink(missing_ok=True)
             if a.regenerate and rep.get("regenerated") and rep["failures"]:
                 rep["settled"], rep["failures"] = rep["failures"], []
-            reports[pkg] = rep
+            reports[pkg] = reported(rep)
             n = sum(rep.get("declarations", {}).values())
             head = f"AUDIT {pkg}: {'PASS' if not rep['failures'] else 'FAIL'}"
             if "modules" in rep:
@@ -2661,6 +3289,12 @@ def main(argv: list[str]) -> int:
             if "sandbox" in rep:
                 head += "; built in the sandbox" if rep["sandbox"] else "; built WITHOUT a sandbox (unshare unavailable here)"
             print(head, flush=True)
+            if c := rep.get("replay", {}).get("closure"):
+                print(f"  closure: {c['checked']} modules checked, {c['reused']} reused, of the {c['modules']} the package "
+                      f"imports ({c['loaded_unchecked']} of those reused loaded beside them, the rest imported); its own: "
+                      f"{rep['replay']['checked']} checked, {rep['replay']['reused']} reused; replay "
+                      f"{rep['seconds'].get('replay')} s ({rep['replay']['phases']}), peak {rep['replay']['peak_gib']} GiB",
+                      flush=True)
             for f in rep["failures"]:
                 print("  " + f.replace("\n", "\n    "), flush=True)
             for n in rep.get("notes", []):
@@ -2692,9 +3326,17 @@ def main(argv: list[str]) -> int:
     for p, f in regen.items():
         print(f"audit: {p}: every failure is a record difference, settled by {f}, which the train commits over "
               f"{p}/{POLICY}", flush=True)
-    (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reports,
-                                                "regenerated": regen}, indent=1, ensure_ascii=False) + "\n")
-    print(f"AUDIT: {'PASS' if not failed else 'FAIL (' + ', '.join(failed) + ')'}; reports in {out}", flush=True)
+    doc = {"passed": not failed, "failed": failed, "packages": reports, "regenerated": regen}
+    if DEV_CACHE:
+        doc["kind"] = DEV_KIND
+        for rep in reports:
+            rep["kind"] = DEV_KIND
+        for p in sorted(out.glob("audit-*/report.json")):
+            r = json.loads(p.read_text())
+            p.write_text(json.dumps(r | {"kind": DEV_KIND}, indent=1, ensure_ascii=False) + "\n")
+    (out / "audit.json").write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
+    print(f"AUDIT: {'PASS' if not failed else 'FAIL (' + ', '.join(failed) + ')'}; reports in {out}"
+          + (f" (--dev-cache: a {DEV_KIND} result, which no gate accepts)" if DEV_CACHE else ""), flush=True)
     return 1 if failed else 0
 
 

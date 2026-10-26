@@ -46,14 +46,36 @@ $(1-p)^{|B|}$; `subset_escape`, the uniform $k$-subset's acceptance probability 
 $e(B) \le \prod_{u \in B}(1 - \pi_u) = (1 - k/n)^{|B|}$, so inclusion probabilities alone give a consumer a valid bound;
 `subset_minimax`, **uniform is optimal**: no sampling design that proves $k$ units on average has a smaller count curve,
 at any $K$; `demo_count_590`, the demo's point (1,024 heads, 16 drawn): 590 or more faulty heads have acceptance
-probability at most $2^{-20}$, by exact arithmetic. `subset_exec_escape_le` (`ExecDraw.lean`, beside the executable's
+probability at most $2^{-20}$, by exact arithmetic. **A block's share** (`Audit/Share.lean`): for a uniform $kd$-subset
+$S$ of $N$ units and a block $B$, conditioned on $|S \cap B| = j$ the share $S \cap B$ is a uniform $j$-subset of $B$
+(`share_uniform`, `share_cond`), the share size is hypergeometric (`share_card`), and $W \subseteq B$ escapes at share
+size $j$ with that size's probability times the member's own $\binom{|B|-|W|}{j}/\binom{|B|}{j}$ (`share_escape`,
+`share_escape_total`). **The horizon escape** (`Audit/Horizon.lean`): over $T$ periods, each a fresh uniform
+$kd$-subset of the same $N$ units, an adaptive adversary that fixes period $t$'s wrong set $W_t$ from the earlier draws
+escapes every draw with $\sum_t |W_t| \ge M$ with probability at most $(1 - kd/N)^M$ (`horizon_escape`), at most
+$\prod_t \binom{N-w_t}{kd}/\binom{N}{kd}$ when $|W_t| \ge w_t$ (`horizon_escape_prod`); at $\delta$, the escaped total
+reaches $\ln(1/\delta)/q$, $q = kd/N$, with probability at most $\delta$ (`horizon_escape_log`, in `Claims.Pr`, which is outside the audit layer:
+`Claims/Sampling/HorizonPr.lean`).
+These are instances of **the monitoring-period step** (`Audit/Periods.lean`, `FlockSoundness.Audit.Periods`): $T$
+periods of independent uniform coins, any coin space per period, and an event of period $t$ that may read the periods
+up to $t$ with probability at most $p_t$ given any history (`avg_prod_le`, the one induction). It holds in at least
+$M$ periods with probability at most $\sum_{|S|=M}\prod_{t\in S} p_t$ (`prCoin_count_le`), $\binom{T}{M}p^M$ at one $p$
+(`prCoin_count_le_choose`), $(1+(z-1)p)^T/z^M$ for $z \ge 1$ (`prCoin_count_mul_pow_le`, and at $\delta$
+`prCoin_count_le_of_log`). When $p$ bounds "accepted and short" and shortness is fixed before the period's coins, every
+period is accepted with at least $M$ short with probability at most $p^M$ (`prCoin_forall_count_le_pow`); shortness the
+period's own coins decide gets only the count bounds.
+`subset_exec_escape_le` (`ExecDraw.lean`, beside the executable's
 other checks, since it imports `Flock.Draw`), **the running sampler**: over a uniform byte stream, the verifier's
 executable `Flock.Draw.subset k n` returns a draw missing $B$ with probability at most `subset_escape`'s
 $\binom{n-|B|}{k}/\binom{n}{k}$, through its rejection sampler, its `HashMap` Fisher–Yates and its `Array.qsort`.
 `stratified_exec_escape_le` (`ExecStratified.lean`): the executable `Flock.Draw.stratified`, on strata that describe
 $\sigma$'s (`ExecStrata`), misses $B$ with probability at most `Law.stratified`'s acceptance probability, the product
 over strata; `flock_e2e_drawn_exec` and `flock_e2e_count_exec` are the e2e theorems at the executable's sampling design
-(`execStratified`), the count curve bounded by `Law.stratified`'s `miss`. `drawOS_subset_escape_le`,
+(`execStratified`), the count curve bounded by `Law.stratified`'s `miss`. `execStrata_of_ofJson`
+(`ExecStrataOf.lean`): the strata of a draw file `UnitDraw.ofJson` accepts describe some assignment's (`ExecStrata`), each
+stratum's `k` at most its size, so those two hypotheses follow from the verifier accepting. The `FailClosed` claims take
+neither: their law is the verifier's own (`liveLaw`) and their bound the infimum over such assignments
+(`liveStrata_of_ofJson`: non-empty at an accepted draw file's law). `drawOS_subset_escape_le`,
 `drawOS_stratified_escape_le` and `drawOS_work_escape_le` (`ExecDrawOS.lean`), **the live draw**: `Flock.Draw.drawOS`,
 which is `drawWith` on `IO.getRandomBytes` (`drawOS_def`), extending a stream that runs out and rerunning, misses $B$
 with probability at most the same acceptance probabilities, on a byte source that A3 makes uniform
@@ -119,6 +141,24 @@ credited work; `stratified_isHarmBound_bits` and `Partition.audit_exfiltration_s
 the floor of the fill's value over output bits as `audit_exfiltration`'s $H$. `stratified_isHarmBound_exact` is the same
 duality over the exact risk $\ln(\binom{n_s}{k_s}/\binom{n_s - c}{k_s})$ (`stratumRisk`, at least $k_s c / n_s$ by
 `le_stratumRisk`), the knapsack whose value core's `Stratified.harm_bound` computes.
+
+**Theorems, the cumulative harm budget** (`Audit/HarmBudget.lean`, `Audit/HarmBudgetLife.lean`), over a run of adaptive
+rounds (`Adaptive.Play`): each round's faulty units $B_t$ and sampling design are fixed by the history before that
+round's own coins, and the prover may stop after any round. A sampling design meets the **design condition**
+(`Law.Design L π`) when every $B$ fixed before the coins has acceptance probability at most $\exp(-\sum_{u \in B}
+\pi_u)$: `bernoulli_design` ($\pi_u = q$), `subset_design` ($k/n$), `stratified_design` ($k_s/n_s$, the closed form of
+`stratified_escape_le_exp`) and `work_design` ($K w_u / W$). `harm_budget`: for harms $h \ge 0$ and any $\lambda \ge 0$
+with $\lambda h_u \le \pi_u$, $\Pr[\text{accept} \wedge \sum_t h(B_t) \ge H] \le e^{-\lambda H} + \sum_t
+\mathrm{err}_t$, where $\mathrm{err}_t$ bounds the probability that round $t$'s draw hits $B_t$ and the round still
+passes (`Play.Drawn`, indexed by the rounds left after it); `harm_budget_rate` takes $\lambda = \min_{h_u > 0} \pi_u /
+h_u$. `harm_count`: under Bernoulli($q$) draws, an accepted run with $K$ or more faulty units summed over its rounds has
+probability at most $(1-q)^K + \sum_t \mathrm{err}_t$, tight for one round (`harm_count_tight`); `harm_count_kstar`
+gives $1 - p + \sum_t \mathrm{err}_t$ at $k^*(p) = \ln(1/(1-p)) / (-\ln(1-q))$. `life_harm_budget` is the instance over
+a lifetime of $N$ one-stage audits (`life`): after each accepted audit the prover chooses whether to go on, and a
+rejection ends the lifetime with no redraw, so $\mathrm{err}_m = \varepsilon_{ks,m} + \delta_{link,m}$ by `audit_drawn`.
+It fixes each audit's sampling design in advance by its index, over one $n$; `harm_budget` itself lets the history
+choose the design. For cumulative harm this replaces the union bound of `audits_seq`: $e^{-\lambda H}$ is paid once for
+the whole run.
 
 **Theorems, closure draws** (`Audit/Closure.lean`; `../../PROTOCOL.md` §7.3): `Law.closure L cl` is `L` widened on its coins
 by the verifier's closure map, each drawn unit proved with its closure. `closure_escape`: its acceptance probability is
@@ -216,7 +256,7 @@ fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in 
   $q = \binom{n_v - 1}{k_2}/\binom{n_v}{k_2} = 1 - k_2/n_v$;
 - `naive_two_level_unsound`: if the second stage leaves a gate undrawn and the first draws anything, that exceeds
   $\mathrm{miss}_{L_1}(K)$, the bound that one-stage over the coarse partition (and the `m`-dependent reading of
-  `TwoStageLaw.profile` at $m = n_v$) would give. Nested sampling dilutes;
+  the retired Python `TwoStageLaw.profile`, ASK-25, at $m = n_v$) would give. Nested sampling dilutes;
 - `late_interior_insecure`: with the interior committed after the fine draw (`twoStageLate`), a faulty chain is accepted
   with probability 1.
 

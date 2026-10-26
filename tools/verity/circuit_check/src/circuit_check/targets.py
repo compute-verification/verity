@@ -5,8 +5,10 @@ the suite runs over, every registered Definition and template at small bindings.
                 registered Definition bound to the statics its id writes (a function-valued static by its id, a record by the
                 digest its id prints, ``StepBody_v1{C={d0dc81b7fa41},T=4,...}``, one of the records the suite binds)
     template    ``rope-head`` (its example parameters), ``rope-head:D=128`` (parameters given), or a subcircuit id
-                (``gemm-coordinate/k2048/sm80-mma-bf16``); ``attention-head`` is checked at the ends of its key-count range
+                (``gemm-coordinate/k2048/sm80-mma-bf16``); an attention head is checked at the ends of its key-count range
     row         a Build's request Program: its directory or its ``instances.json.gz``
+    sidecar     ``path/to/<module>.circuit-check.py``: the module's own Definitions its bindings reach, and its templates
+                (`sidecar_targets`)
 
 The catalog (`catalog`) is roots at small statics: every primitive, every static-free composite, core's GEMM Definitions and
 silicon references, every vLLM kernel's self-check specialisations, each template, and tiny whole-model configurations; the
@@ -25,7 +27,7 @@ import re
 import sys
 import zlib
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Iterator
 
 import numpy as np
 
@@ -71,11 +73,11 @@ def load_registries() -> None:
 
     for mod in SC.discover():
         importlib.import_module(mod)
-    import verity_vllm.program.registry as R
+    import verity.ml.definitions.registry as R
     for m in pkgutil.iter_modules(R.__path__):
         if m.name != "quarantine":
             importlib.import_module(f"{R.__name__}.{m.name}")
-    from verity_vllm.program.kernels import rows, twins  # noqa: F401  (their kernels register with core)
+    from verity.ml.definitions.numerics import rows, twins  # noqa: F401  (their kernels register with core)
     CC.registries(SC.discover())
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
@@ -103,6 +105,19 @@ def _split(body: str) -> dict[str, str]:
     return out
 
 
+def _items(body: str) -> list[str]:
+    """A tuple's elements as an id prints them, split at its top-level commas."""
+    out, depth, cur = [], 0, ""
+    for ch in body:
+        depth += (ch in "{[(") - (ch in "}])")
+        if ch == "," and depth == 0:
+            out.append(cur.strip())
+            cur = ""
+            continue
+        cur += ch
+    return [*out, cur.strip()] if cur.strip() or out else out
+
+
 def _value(s: str) -> Any:
     try:
         v = ast.literal_eval(s)
@@ -111,37 +126,103 @@ def _value(s: str) -> Any:
     return (v,) if s.startswith("(") and not isinstance(v, tuple) else v    # an id prints a tuple of one as `(7)`
 
 
+#: a Definition-valued static with statics of its own, as an id prints it (`verity.ml.circuits.defs._fmt_static`): its own id
+_DEFINITION = re.compile(r"[A-Za-z_][^{}()\[\],=\s]*(?:\[[^{}()=\s]*\][^{}()\[\],=\s]*)?\{.*\}", re.S)
+#: a bare Definition id (no statics), as it stands in a tuple
+_BARE = re.compile(r"[A-Za-z_][\w.]*(?:\[[^{}()=\s]*\][\w.]*)?")
+
+
+def _static(text: str) -> Any:
+    """A static as a Definition's id writes it: a record by its digest (`_record`), a literal, a Definition by its own id with
+    its statics (`definition`, so a Definition among those parses the same way), a tuple element by element.  A bare function
+    id stays its text at the top level, which `call_scope.specialization` resolves; in a tuple it is resolved here, as there."""
+    if _RECORD.fullmatch(text):
+        return _record(text)
+    v = _value(text)
+    if v is not text:
+        return v
+    if _DEFINITION.fullmatch(text):
+        return definition(text)
+    if text.startswith("(") and text.endswith(")"):
+        return tuple(_element(x) for x in _items(text[1:-1]))
+    return text
+
+
+def _element(text: str) -> Any:
+    """A tuple element (`_static`), a bare id among them the registered Definition it names, as `call_scope.specialization`
+    resolves a function-valued static, else its text."""
+    from verity.ml.definitions import word as W
+
+    v = _static(text)
+    if v is not text or not _BARE.fullmatch(text):
+        return v
+    try:
+        return W.specialization(text, {})
+    except KeyError:
+        return text
+
+
 #: a record (dict-valued) static as a Definition id prints it, a prefix of its digest (`verity.ml.circuits.defs`): the record itself is
-#: not in the id, so it is looked up among the records the suite's Definitions are bound to
+#: not in the id, so it is looked up among the records the catalog's Definitions are bound to
 _RECORD = re.compile(r"\{[0-9a-f]{12}\}")
 _RECORDS: dict[str, Any] = {}
+#: where `_record` has looked: ``roots`` (`binding_roots`), ``suite``
+_LOOKED: set[str] = set()
+
+
+def _note_records(fns: Iterable[Any]) -> None:
+    """Each record a Definition among ``fns`` is bound to, or one bound among their statics (recursively), by the digest its id
+    prints: the first of a digest stays."""
+    stack, seen = list(fns)[::-1], set()
+    while stack:
+        fn = stack.pop()
+        b = getattr(fn, "bindings", None)
+        if id(fn) in seen or not isinstance(b, dict):
+            continue
+        seen.add(id(fn))
+        m = re.fullmatch(r"[^{]+\{(.*)\}", fn.id)
+        for k, v in (_split(m[1]).items() if m else ()):
+            if _RECORD.fullmatch(v) and k in b:
+                _RECORDS.setdefault(v, b[k])
+        nested, more = list(b.values()), []
+        while nested:
+            v = nested.pop()
+            if isinstance(v, (list, tuple)):
+                nested += v
+            elif isinstance(v, dict):
+                nested += v.values()
+            elif isinstance(getattr(v, "bindings", None), dict):
+                more.append(v)
+        stack += more[::-1]
 
 
 def _record(text: str) -> Any:
-    """The record that a suite Definition's id prints as ``text``."""
-    if not _RECORDS:
-        for fn in suite().values():
-            m = re.fullmatch(r"[^{]+\{(.*)\}", fn.id)
-            for k, v in (_split(m[1]).items() if m else ()):
-                if _RECORD.fullmatch(v) and k in getattr(fn, "bindings", {}):
-                    _RECORDS.setdefault(v, fn.bindings[k])
+    """The record that a catalog Definition's id prints as ``text``: looked up among the binding roots and the Definitions bound
+    among their statics (`binding_roots`), and only where none is bound to it among the suite's Definitions (the catalog)."""
+    for where, fns in (("roots", binding_roots), ("suite", lambda: suite().values())):
+        if text in _RECORDS:
+            break
+        if where not in _LOOKED:
+            _note_records(fns())
+            _LOOKED.add(where)
     if text not in _RECORDS:
         raise KeyError(f"record static {text}: no Definition the suite checks is bound to a record of that digest")
     return _RECORDS[text]
 
 
 def definition(spec: str) -> Any:
-    """The registered Definition ``spec`` names, bound to the statics its id writes, or else the suite's target of that id: a
-    Definition that only tracing the catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers, or one
-    whose id writes a dict static as its digest, such as `gf2k.GfResiduals`'s schema."""
-    from verity_vllm.query import word as W
+    """The registered Definition ``spec`` names, bound to the statics its id writes (`_static`: a Definition-valued one by its
+    own id, ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=BlackwellS8ImmaDot32_v2}``, bound the same way), or else the suite's target of
+    that id: a Definition that only tracing the catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers,
+    or one whose id writes a dict static as its digest, such as `gf2k.GfResiduals`'s schema."""
+    from verity.ml.definitions import word as W
 
     load_registries()
     m = re.fullmatch(r"([^{]+)(?:\{(.*)\})?", spec.strip())
     if m is None:
         raise ValueError(f"not a Definition id: {spec!r}")
     fam, body = m[1], m[2]
-    statics = {k: _record(v) if _RECORD.fullmatch(v) else _value(v) for k, v in _split(body).items()} if body else {}
+    statics = {k: _static(v) for k, v in _split(body).items()} if body else {}
     try:
         if any(isinstance(v, str) and re.fullmatch(r"\{[0-9a-f]{12}\}", v) for v in statics.values()):
             raise KeyError(spec)
@@ -172,9 +253,9 @@ def subcircuit(spec: str) -> tuple[Any, list[dict]]:
 
 
 def instance_statics(sub: Any, params: dict | None = None) -> list[dict]:
-    """``attention-head``: the key counts at the ends of its range (``T = lo:hi`` of ``params``, else the template's example);
-    every other template: none."""
-    if sub.template.id != "attention-head":
+    """An attention head (``attention-head``, ``attention-head-v18``): the key counts at the ends of its range (``T = lo:hi`` of
+    ``params``, else the template's example); every other template: none."""
+    if sub.template.id not in ("attention-head", "attention-head-v18"):
         return [{}]
     lo, _, hi = str((params or {}).get("T") or sub.template.example["T"]).partition(":")
     return [{"T": t} for t in sorted({int(lo), int(hi or lo)})]
@@ -187,7 +268,7 @@ def kind_of(spec: str) -> str:
 
     try:
         if Path(spec).exists():
-            return "row"
+            return "sidecar" if spec.endswith(f"{CC.SUFFIX}.py") else "row"
     except OSError:            # an id longer than a file name may be (AllReduceMultimem_v1's TREES), so no path
         pass
     head = spec.partition(":")[0].partition("/")[0]
@@ -292,7 +373,7 @@ def templates() -> list[tuple[str, Any, list[dict]]]:
 
 
 def _kernel_roots() -> list[Any]:
-    from verity_vllm.program.kernels import kernel_registry as KR
+    from verity.ml.definitions.numerics import kernel_registry as KR
 
     out = []
     for r in KR.registered():
@@ -302,7 +383,7 @@ def _kernel_roots() -> list[Any]:
 
 def _tanh_rn_probe(reads: Callable[[int], Any]) -> Any:
     """`tanh_rn` (2^27 entries of two words) as parameter 1, probed at its ends and its regions' edges (`TANH_RN_REGIONS`)."""
-    from verity_vllm.program.registry import tables
+    from verity.ml.definitions.registry import tables
 
     from .vectors import TableProbe
 
@@ -311,7 +392,7 @@ def _tanh_rn_probe(reads: Callable[[int], Any]) -> Any:
 
 def _tanh_rn_word(i: int) -> int:
     """The word of `tanh_rn`'s region whose low 27 bits are entry ``i`` (past HI where no region word has them)."""
-    from verity_vllm.program.registry import tables
+    from verity.ml.definitions.registry import tables
 
     return 0x38000000 | i if (0x38000000 | i) >= tables.TANH_RN_LO else 0x40000000 | i
 
@@ -335,21 +416,41 @@ ROOT_ERRORS: list[tuple[str, str]] = []
 
 
 def _served_kind_statics() -> dict[str, dict[str, Any]]:
-    """The kinds no small table binds (launch blocks, collective routes, split counts, the DSA and sparse-MLA shapes), each at a
+    """The kinds no small table binds (launch blocks, collective routes, split counts, the DSA and sparse-MLA shapes; DeepSeek-V4's
+    mHC, FlashMLA, compressors, routers and Marlin MoE; the int8 attention row, whose head dim is a multiple of 32), each at a
     binding its Definition module's sidecar already checks, so they add no task."""
     from verity.ml.circuits.boolean.trace import word_of
     from verity.ml.circuits.ops.boolean import gemm as BG
-    from verity_vllm.program.registry import sparse_mla as SM
-    from verity_vllm.program.registry import tp_allreduce as TA
+    from verity.ml.definitions.registry import dsv4_compressor as DC, dsv4_qnorm_insert as DQ
+    from verity.ml.definitions.registry import flashmla as FM, flashmla_prefill as FP
+    from verity.ml.definitions.registry import marlin_moe as MM
+    from verity.ml.definitions.registry import sparse_mla as SM
+    from verity.ml.definitions.registry import tp_allreduce as TA
 
     hop = word_of(BG.HopperBF16WgmmaDot16)
     mla = {k: SM.SPARSE_MLA_GLM53[k] for k in ("NH", "DR", "DV", "BN", "DOT", "INV")} | {"SM_SCALE": SM.SPARSE_MLA_GLM53["SCALE"]}
     trees = (TA.chain(8),) * 4 + ((((0, 1), (2, 3)), ((4, 5), (6, 7))),) * 4
+    mhc = {"HC": 4, "REPEAT": 20, "EPS": 1e-6, "HC_EPS": 1e-6, "TN": 64}
+    router = {"E": 8, "SCALE": 2.5}
+    marlin = {"E": 3, "K": 256, "N": 16, "TK": 128, "TN": 8, "GRID": 5, "DOT": MM.DOT}
+    int8_row = {"D": 32, "S": 33, "SCALE": 32 ** -0.5}   # Q' K'^T steps 32 channels, so D >= 32; int8_exact's sidecar's row
+    dsv4 = {"triton_block_rmsnorm": {"N": 512, "BLOCK": 2048, "WARPS": 8, "EPS": 1e-6},
+            "mhc_pre_broadcast": {**mhc, "H": 7168, "NS": 28}, "mhc_residual_broadcast": {"HC": 2, "H": 8},
+            "mhc_fused_post_pre": {**mhc, "H": 1024, "NS": 4, "TH": 256}, "mhc_post_pre_tf32": {**mhc, "H": 1024, "NS": 4},
+            "mhc_post": {"HC": 4, "N": 7168}, "hc_head": {**mhc, "H": 7168, "TH": 128},
+            "dsv4_qnorm_rope_kv_insert": DQ.DSV4_INSERT, "dsv4_compress_c4": DC.DSV4_COMPRESSOR,
+            "dsv4_compress_c128": DC.DSV4_COMPRESSOR, "dsv4_inv_rope_quant_head": {"CHUNKS": 4, "QG": 128, "ROPE": 64},
+            "flashmla_decode": {**FM.FLASHMLA_DSV4, "NH": 1, "SPLITS": (0, 1), "NW": 64},
+            "flashmla_gather_row": FP.FLASHMLA_GATHER_DSV4, "flashmla_prefill": {**FP.FLASHMLA_PREFILL_DSV4, "NH": 1, "NP": 1},
+            "silu_mul_clamp": {"I": 4, "LIMIT": 10.0}, "moe_router_hash": router, "moe_router_sqrtsoftplus": router,
+            "marlin_moe_rank": {"E": 3, "P": 30, "BM": 4}, "marlin_moe_align": {"P": 30, "BM": 4}, "marlin_moe_gemm": marlin,
+            "marlin_moe_gemm_w": marlin}
     return {"rmsnorm_cuda": {"N": 6144, "EPS": 1e-5, "BLOCK": 256}, "rmsnorm_fused_cuda": {"N": 6144, "EPS": 1e-5, "BLOCK": 256},
             "all_reduce_mnnvl": {"WORLD": 8, "N": 8, "SHOT": 2},
             "all_reduce_rmsnorm_mnnvl": {"WORLD": 8, "N": 512, "SHOT": 1, "CLUSTER": 2, "EPS": 1e-5, "FMA": False},
             "all_reduce_custom": {"WORLD": 8, "SIZE": 64, "STAGE": 2},
             "all_reduce_multimem": {"WORLD": 8, "SIZE": 128, "TREES": trees, "FTZ": False},
+            "all_reduce_nccl_tree": {"WORLD": 4, "SIZE": 8, "CHAIN": (0, 1, 2, 3)},
             "dsa_indexer_k_row": {"D": 128, "ROPE": 64, "EPS": 1e-6}, "dsa_indexer_q": {"H": 32, "D": 128, "ROPE": 64},
             "dsa_mqa_logits": {"N": 4, "H": 32, "D": 128},
             "cublas_splitk_gemm": {"K": 64, "N": 3, "SPLIT_K": 4, "DOT": hop},
@@ -357,7 +458,8 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
             "batched_gemm": {"B": 2, "K": 32, "N": 3, "DOT": hop},
             "ll_bf16_dotprod": {"N": 2, "K": 256, "BS": 64, "VEC": 2, "FMA": 1},
             "ll_bf16_splitk": {"N": 2, "K": 128, "SPLIT_K": 2, "TILE_K": 32, "WARPS": 2, "DOT": hop},
-            "sparse_mla": {"T": 65, **mla}, "sparse_mla_split": {"T": 130, "NS": 2, **mla}}
+            "sparse_mla": {"T": 65, **mla}, "sparse_mla_split": {"T": 130, "NS": 2, **mla},
+            "int8_attention_row": int8_row, "int8_attention_row_table": int8_row, **dsv4}
 
 
 def _vocabulary_bindings() -> list[tuple[str, Any]]:
@@ -366,7 +468,7 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
     from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32
     from verity_vllm.program.frontend.rules import vocab as V
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,
              "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,
@@ -413,72 +515,262 @@ def _vocabulary_roots() -> list[Any]:
 
 
 _CALLS: set[str] = set()
+#: what `is_call` decides by without the catalog: ``words`` (`word_call_families`) and ``candidates`` (`boolean_call_candidates`
+#: of them), each built once, and the candidates it was asked about that `certified_boolean_calls` names (``certified``) and
+#: doesn't (``uncertified``)
+_SHORT: dict[str, set[str]] = {}
+#: the catalog's roots, made without building a body (`binding_roots`), each part once: ``bindings`` (`_kinds_and_templates`) and
+#: ``roots`` (the registered ones, every other root function's and each model's); ``unbound``, the vocabulary kinds that made none
+_BOUND: dict[str, list[Any]] = {}
 
 
-def call_families() -> set[str]:
-    """The Definition families a served Program calls, where the partition invariant applies: the replay's row families
-    (`verity_vllm.program.kernels.rows.ROWS`), every frontend vocabulary kind, every template's Definition, and the Boolean
-    version of each of those (`boolean_call_families`: the Program on bits calls them in their place).  Any other Definition's
-    gates are partitioned inside the Call that contains them."""
-    if not _CALLS:
+def binding_roots() -> list[Any]:
+    """The catalog's roots, unbuilt: the vocabulary kinds' and templates' Definitions (`_kinds_and_templates`), the registered
+    primitives and static-free composites, every other root function's roots and each `_model_roots` entry's root (made, not
+    built: a whole model's body is most of the catalog's build).  Each made as the catalog makes it (`_produce`, so its binding
+    units hold it); a binding that raises makes none here (the catalog fails on it by name).  No helper here is named as a
+    binding (``_X_roots``, ``_X_bindings``): the cache would key it as one rather than as this file's common code."""
+    load_registries()
+    if "roots" not in _BOUND:
+        roots = _registered()
+        for name in root_functions():
+            for units, make in _root_bindings(name) if name != "_vocabulary_roots" else ():
+                try:
+                    roots += _produce(units, make)
+                except Exception:  # noqa: BLE001  (see the docstring)
+                    continue
+        for prefix, ns in binding_files():
+            for label, make in ns["_model_roots"]() if "_model_roots" in ns else []:
+                try:
+                    roots += _produce((f"{prefix}_model_roots:{label}",), lambda make=make: [make()])
+                except Exception:  # noqa: BLE001  (see the docstring)
+                    continue
+        _BOUND["roots"] = roots
+    return [*_kinds_and_templates(), *_BOUND["roots"]]
+
+
+def _kinds_and_templates() -> list[Any]:
+    """The vocabulary kinds' Definitions (`_vocabulary_bindings`) and each template's at its instance statics, built once, each
+    under the binding units the catalog makes it under (`_produce`): whichever makes a Definition first gives it its `made_by`."""
+    if "bindings" not in _BOUND:
         load_registries()
-        from verity_vllm.program.kernels import rows
+        units = _root_bindings("_vocabulary_roots")[0][0]
+        unbound: list[str] = []
 
-        _CALLS.update(rows.ROWS)
-        _CALLS.update(family(fn) for _label, fn in _vocabulary_bindings() if not isinstance(fn, str))
+        def kinds() -> list[Any]:
+            bound = _vocabulary_bindings()
+            unbound.extend(f"{label}: {fn}" for label, fn in bound if isinstance(fn, str))
+            return [fn for _label, fn in bound if not isinstance(fn, str)]
+
+        out = _produce(units, kinds)
         for _label, sub, sts in templates():
-            _CALLS.update(family(sub.definition(**st)) for st in sts)
-        _CALLS.update(boolean_call_families(set(_CALLS)))
+            out += _produce((_template_unit(sub.template.id),), lambda sub=sub, sts=sts: [sub.definition(**st) for st in sts])
+        _BOUND["bindings"], _BOUND["unbound"] = out, unbound
+    return _BOUND["bindings"]
+
+
+def word_call_families() -> set[str]:
+    """The word Call families of a served Program: the replay's row families (`verity.ml.definitions.numerics.rows.ROWS`), every
+    frontend vocabulary kind's Definition and every template's.  Their bindings build in seconds, without the catalog.  A kind that
+    doesn't bind is refused by name: left out, its family's partition would be judged as no Call's."""
+    if "words" not in _SHORT:
+        load_registries()
+        from verity.ml.definitions.numerics import rows
+
+        made = _kinds_and_templates()
+        if _BOUND["unbound"]:
+            raise RuntimeError(f"the Call families are unknown while a vocabulary kind doesn't bind: {_BOUND['unbound']}")
+        _SHORT["words"] = set(rows.ROWS) | {family(fn) for fn in made}
+    return _SHORT["words"]
+
+
+def call_families(found: dict[str, Any] | None = None) -> set[str]:
+    """The Definition families a served Program calls, where the partition invariant applies: the word Call families
+    (`word_call_families`: the replay's row families, every frontend vocabulary kind, every template's Definition), and the
+    Boolean version of each of those (`boolean_call_families`: the Program on bits calls them in their place).  Any other
+    Definition's gates are partitioned inside the Call that contains them.  It builds the whole catalog, or takes ``found``, a
+    `suite` built already (`cli._tasks`'s: a later one would also hold what building its bodies registered); `is_call` asks
+    whether one family is among them, mostly without."""
+    if not _CALLS:
+        words = word_call_families()
+        _CALLS.update(words | boolean_call_families(set(words), found))
     return _CALLS
 
 
-def boolean_call_families(word_calls: set[str]) -> set[str]:
-    """Sigma's image of the word Call families ``word_calls``: the family of `verity_vllm.program.boolean.boolean_version` (the
-    switch's table of `word=` links) of each catalog specialization of a word Call family that has one."""
-    from verity.ml.circuits.evaluation import ScalarReference
-    from verity.ml.circuits import boolean as BL
-    from verity_vllm.program.boolean import NoBooleanVersion, boolean_version
+def is_call(fam: str) -> bool:
+    """Whether family ``fam`` is in `call_families`, decided without the catalog where its answer doesn't need it: a word Call
+    family is; a family outside `boolean_call_candidates` is not; one `certified_boolean_calls` names is; any other (a Boolean
+    version of a word Call family that only Definitions the catalog reaches inside its roots show) is looked up in
+    `call_families`."""
+    if _CALLS:
+        return fam in _CALLS
+    words = word_call_families()
+    if fam in words:
+        return True
+    if "candidates" not in _SHORT:
+        _SHORT["candidates"] = boolean_call_candidates(words)
+    if fam not in _SHORT["candidates"]:
+        return False
+    certified, refused = _SHORT.setdefault("certified", set()), _SHORT.setdefault("uncertified", set())
+    if fam not in certified | refused:
+        (certified if certified_boolean_calls(words, {fam}) else refused).add(fam)
+    return fam in certified or fam in call_families()
 
-    out: set[str] = set()
-    for fn in suite().values():
-        if family(fn) not in word_calls or isinstance(fn, ScalarReference) or BL.is_boolean(fn):
-            continue
-        try:
-            out.add(family(boolean_version(fn)))
-        except NoBooleanVersion:
-            continue
-    return out
+
+def boolean_call_candidates(word_calls: set[str]) -> set[str]:
+    """A superset of `boolean_call_families` of ``word_calls``, from the Boolean table's links alone (no catalog): each family
+    `boolean_version` could return for a Definition of a family in ``word_calls``, by its two lookups, a registered Boolean
+    Definition whose ``word`` is a Definition of such a family, or whose ``word`` is a function of its bindings and whose name is
+    such a family's name.  Each candidate it returns is one of those Definitions, bound."""
+    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.ml.definitions.boolean import _load
+
+    exact, by_name, _errors = _load()
+    names = {m[1] for f in word_calls if (m := re.fullmatch(r"(.+)_v(\d+)", f))}
+    out = {f"{d.name}_v{d.version}" for ds in exact.values() for d in ds
+           if family(bind(d.word) if isinstance(d.word, CompositeDefinition) else d.word) in word_calls}
+    out.update(f"{d.name}_v{d.version}" for name, ds in by_name.items() if name in names for d in ds)
+    return out | on_demand_boolean_families(word_calls)
 
 
-def catalog(by_unit: list | None = None) -> list[Any]:
-    """The roots: every primitive, every static-free composite, and the bindings above; with ``by_unit``, each binding's
-    (units, roots) appended to it."""
+def on_demand_boolean_families(word_calls: set[str]) -> set[str]:
+    """The Boolean version's family of each word Call family made on demand, by its id (`verity.ml.definitions.boolean.
+    made_on_demand`: `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`).  No module registers such a family's members ahead,
+    so these come from the families' own patterns, not from the catalog."""
+    from verity.ml.definitions.boolean import made_on_demand
+
+    return {family(d) for f in word_calls if (d := made_on_demand(f)) is not None}
+
+
+def _registered() -> list[Any]:
+    """The catalog's first roots: every registered primitive and static-free composite (bound)."""
     from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 
-    load_registries()
     roots: list[Any] = []
     for d in list(REGISTRY.defs.values()):
         if isinstance(d, PrimitiveDefinition):
             roots.append(d)
         elif isinstance(d, CompositeDefinition) and not d.statics:
             roots.append(bind(d))
-    ROOT_ERRORS.clear()
+    return roots
+
+
+def certified_boolean_calls(word_calls: set[str], only: set[str] | None = None) -> set[str]:
+    """Families of `boolean_call_families` of ``word_calls`` (those in ``only``, given) that the catalog's roots show without the
+    catalog: the Boolean version's family of each root (`binding_roots`) of a word Call family that is not Boolean and has at
+    most `MAX_GATES` gates, each a catalog root `select` keeps, so the suite holds it whatever else the catalog reaches.  A root's
+    gates are counted (its body built) only when its Boolean version is of a family asked for; a whole model's root is of no word
+    Call family, so its body (most of the catalog's build) never is.  With them, `on_demand_boolean_families` (in ``only``)."""
+    from verity.ml.circuits import boolean as BL
+    from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
+    from verity.ml.definitions.boolean import boolean_version
+
+    linked: dict[str, list[Any]] = {}
+    for fn in binding_roots():
+        if not isinstance(fn, (PrimitiveDefinition, SpecializedDefinition)) or family(fn) not in word_calls:
+            continue
+        try:
+            fam = family(boolean_version(fn))
+        except Exception:  # noqa: BLE001  (NoBooleanVersion, or a root that doesn't bind: it certifies nothing)
+            continue
+        if only is None or fam in only:
+            linked.setdefault(fam, []).append(fn)
+    out = {f for f in on_demand_boolean_families(word_calls) if only is None or f in only}
+    for fam, fns in linked.items():
+        for fn in fns:
+            try:
+                if fn.gates <= MAX_GATES and not BL.is_boolean(fn):
+                    out.add(fam)
+                    break
+            except Exception:  # noqa: BLE001  (a root that doesn't build certifies nothing; the catalog fails on it by name)
+                continue
+    return out
+
+
+def boolean_call_families(word_calls: set[str], found: dict[str, Any] | None = None) -> set[str]:
+    """Sigma's image of the word Call families ``word_calls``: the family of `verity.ml.definitions.boolean.boolean_version` (the
+    switch's table of `word=` links) of each catalog specialization of a word Call family that has one, and of each word Call
+    family made on demand (`on_demand_boolean_families`)."""
+    from verity.ml.circuits.evaluation import ScalarReference
+    from verity.ml.circuits import boolean as BL
+    out: set[str] = on_demand_boolean_families(word_calls)
+    for fn in (suite() if found is None else found).values():
+        if family(fn) not in word_calls or isinstance(fn, ScalarReference) or BL.is_boolean(fn):
+            continue
+        if (f := boolean_family(fn)) is not None:
+            out.add(f)
+    return out
+
+
+def boolean_family(fn: Any) -> str | None:
+    """The family of ``fn``'s Boolean version (`verity.ml.definitions.boolean.boolean_version`), or None when it has none."""
+    from verity.ml.definitions.boolean import NoBooleanVersion, boolean_version
+
+    try:
+        return family(boolean_version(fn))
+    except NoBooleanVersion:
+        return None
+
+
+def boolean_links() -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+    """The Boolean table's two lookups (`verity.ml.definitions.boolean._load`) as families: each word Definition's descriptor id
+    with the Boolean families linked to it exactly, and each name with the Boolean families whose word is a function of their
+    bindings.  `boolean_family` of a Definition is among those of its descriptor id and of its name, or None."""
+    from verity.ml.definitions.boolean import _load
+
+    exact, by_name, _errors = _load()
+    return ({k: {f"{d.name}_v{d.version}" for d in ds} for k, ds in exact.items()},
+            {k: {f"{d.name}_v{d.version}" for d in ds} for k, ds in by_name.items()})
+
+
+def catalog_units() -> Iterator[tuple[tuple[str, ...], Callable[[], list[Any]], str, str]]:
+    """``(units, make, kind, label)`` of each binding, in catalog order: each root function's (``kind`` its name), each
+    `_model_roots` entry's (``model``: ``make`` makes the model's root, unbuilt) and each template's (``template``: its
+    Definition and target at each of its instance statics).  A generator, so each binding runs before the next is made."""
     for name in root_functions():
         for units, make in _root_bindings(name):
-            roots += _produce(units, make, by_unit)
+            yield units, make, name, name
     for prefix, ns in binding_files():
         for label, make in ns["_model_roots"]() if "_model_roots" in ns else []:
+            yield (f"{prefix}_model_roots:{label}",), lambda make=make: [make()], "model", label
+    for label, sub, sts in templates():
+        yield ((_template_unit(sub.template.id),),
+               lambda sub=sub, sts=sts: [x for st in sts for x in (sub.definition(**st), sub.target(**st))], "template", label)
+
+
+def pouw_bindings() -> list[tuple[tuple[str, ...], Callable[[], list[Any]]]]:
+    """The PoUW root functions `suite` keeps whatever their size."""
+    return _root_bindings("_pouw_roots")
+
+
+#: each `catalog` call, in turn: its registered roots (`_registered`: a binding or a body build can register more) and each
+#: binding's (units, kind, label, roots) (`circuit_check.units`)
+CATALOGS: list[tuple[list[Any], list[tuple[tuple[str, ...], str, str, list[Any]]]]] = []
+
+
+def catalog(by_unit: list | None = None) -> list[Any]:
+    """The roots: every primitive, every static-free composite, and the bindings above; with ``by_unit``, each binding's
+    (units, roots) appended to it."""
+    load_registries()
+    roots = _registered()
+    made: list[tuple[tuple[str, ...], str, str, list[Any]]] = []
+    CATALOGS.append((list(roots), made))
+    ROOT_ERRORS.clear()
+    for units, make, kind, label in catalog_units():
+        if kind != "model":
+            got = _produce(units, make, by_unit)
+        else:
             def built(make=make):
-                fn = make()
+                fn, = make()
                 _ = fn.body
                 return [fn]
             try:
-                roots += _produce((f"{prefix}_model_roots:{label}",), built, by_unit)
+                got = _produce(units, built, by_unit)
             except Exception as e:  # noqa: BLE001  (named, and the suite fails on it)
                 ROOT_ERRORS.append((label, f"{type(e).__name__}: {str(e)[:200]}"))
-    for _label, sub, sts in templates():
-        roots += _produce((_template_unit(sub.template.id),),
-                          lambda sub=sub, sts=sts: [x for st in sts for x in (sub.definition(**st), sub.target(**st))], by_unit)
+                continue
+        made.append((units, kind, label, got))
+        roots += got
     return roots
 
 
@@ -541,7 +833,7 @@ def suite() -> dict[str, Any]:
     REACHED.clear()
     REACHED.update(reachable(catalog(by_unit)))
     out = select(REACHED)
-    for units, make in _root_bindings("_pouw_roots"):
+    for units, make in pouw_bindings():
         out.update({fn.id: fn for fn in _produce(units, make, by_unit)})
     for units, roots in by_unit:
         for fid in reachable(roots):
@@ -550,7 +842,57 @@ def suite() -> dict[str, Any]:
     return dict(sorted(out.items()))
 
 
-__all__ = ["MAX_GATES", "REACHED", "REGISTERED", "ROOT_ERRORS", "ROOT_FUNCTIONS", "TABLE_PROBES", "TINY",
-           "binding_files", "boolean_call_families", "call_families", "catalog", "definition", "family", "instance_statics",
-           "kind_of", "load_registries", "reachable", "root_functions", "select", "subcircuit", "suite", "table_probe",
-           "template_params", "templates"]
+_SIDECARS: dict[Path, tuple[dict[str, Any], list[tuple[str, Any, list[dict]]]]] = {}
+
+
+def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, list[dict]]]]:
+    """``circuit-check path/to/<module>.circuit-check.py``'s targets, without the catalog: the Definitions the sidecar's root
+    functions (and ``_model_roots``) reach that its module defines (`sidecars.owner`), selected among themselves as `suite`
+    selects (`select`), with its ``_pouw_roots``' whatever their size, each with its `BINDINGS`; and (label, subcircuit, instance
+    statics) of each template its ``TEMPLATE_PARAMS`` binds, as `templates` makes them.  A family whose members here are all
+    over `MAX_GATES` keeps its smallest here, which ``--all`` may not check when another binding reaches a smaller one."""
+    from verity_numerical.bench import templates as TM
+
+    from . import sidecars as SC
+
+    p = Path(path).resolve()
+    if p in _SIDECARS:
+        return _SIDECARS[p]
+    load_registries()
+    mod = next((m for m, files in SC.discover().items() if files.get("py") == p), None)
+    if mod is None:
+        raise ValueError(f"{path}: no sidecar of a module under `sidecars.PACKAGES` (`sidecars.discover`)")
+    ns = vars(dict(SC.binding_modules())[mod])
+    prefix = f"{ns['__name__']}#"
+    names = sorted(_root_names(ns), key=lambda n: (n not in ROOT_FUNCTIONS, ROOT_FUNCTIONS.index(n) if n in ROOT_FUNCTIONS else 0, n))
+    by_unit: list = []
+    for name in names:
+        _produce(tuple(prefix + n for n in (name, name.replace("_roots", "_bindings")) if n in ns), ns[name], by_unit)
+    for label, make in ns["_model_roots"]() if "_model_roots" in ns else []:
+        _produce((f"{prefix}_model_roots:{label}",), lambda make=make: [(lambda fn: (fn.body, fn)[1])(make())], by_unit)
+    reached = reachable(r for _units, roots in by_unit for r in roots)
+    out = select({fid: fn for fid, fn in reached.items() if SC.owner(fn) == mod})
+    for units, roots in by_unit:
+        if units[0] == f"{prefix}_pouw_roots":
+            out.update({fn.id: fn for fn in roots})
+    for units, roots in by_unit:
+        for fid in reachable(roots):
+            if fid in out:
+                BINDINGS.setdefault(fid, set()).update(units)
+    tpls = []
+    for tid, params_list in sorted(ns.get("TEMPLATE_PARAMS", {}).items()):
+        unit = (f"{prefix}TEMPLATE_PARAMS:{tid}",)
+        for params in params_list:
+            sub, sts = _produce(unit, lambda t=TM.TEMPLATES[tid], params=params: (lambda s: [s, instance_statics(s, params)])(t.bind(**params)))
+            BINDINGS.setdefault(sub.id, set()).update(unit)
+            tpls.append((sub.id, sub, sts))
+    hit = _SIDECARS[p] = (dict(sorted(out.items())), tpls)
+    return hit
+
+
+__all__ = ["CATALOGS", "MAX_GATES", "REACHED", "REGISTERED", "ROOT_ERRORS", "ROOT_FUNCTIONS", "TABLE_PROBES", "TINY",
+           "binding_files", "binding_roots", "boolean_call_candidates", "boolean_call_families", "boolean_family",
+           "boolean_links", "call_families", "catalog", "catalog_units", "certified_boolean_calls", "definition", "family",
+           "instance_statics", "is_call", "kind_of", "load_registries", "pouw_bindings", "reachable", "root_functions",
+           "select", "sidecar_targets", "subcircuit", "suite", "table_probe", "template_params", "templates",
+           "word_call_families"]

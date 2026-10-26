@@ -60,8 +60,10 @@ from typing import Any
 
 from verity_vllm.check import gates as G
 from verity_vllm.config import RowEngine, UsageError, option
+from verity_vllm.engine.served import ENFORCE_EAGER
 from verity_vllm.observe.fold.supplied import program_registered_values
 from verity_vllm.pipeline import experiment as EXP
+from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.program.sampling_event import program_sampler_construction
 
 DEFAULT_SNAPSHOT_STEPS = "all"        # evidence for every specialization (h1: attention T at non-snapshot steps was uncovered)
@@ -216,10 +218,7 @@ class Plan:
             if g:
                 c += ["--safetensors", g]
             return c
-        # [R17-42 route A (4)] the fold folds the MoE scope under the workload's DECLARED construction (manifest target.moe_construction) and the top-p
-        # select under the one the Build's Programs declare (--program-dir: a single-request select has no shared-greedy form); never off the trace
-        mc, sc, rv = _workload_moe_construction(a.workload), program_sampler_construction(a.program_dir or ()), program_registered_values(a.program_dir or ())
-        MC = (["--moe-construction", mc] if mc else []) + (["--sampler-construction", sc] if sc else []) + (["--registered-values"] if rv else [])
+        MC = fold_construction_args(a.workload, a.program_dir or ())
         if stage in ("fold", "fold_2"):   # D85: --persist-dir writes program.json / instances.jsonl / accesses.jsonl.gz
             return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", str(self.log), "--profile", a.profile,
                     "--out", str(self.p("fold_summary" if stage == "fold" else "fold_summary_2"))] + MC + (["--persist-dir", str(run)] if stage == "fold" else [])
@@ -683,6 +682,8 @@ def main(a: Options) -> int:
     spec_note = write_spec_for(plan, a, man)          # D88: spec.json (known before execution) -- written once, before any GPU stage
     recs = load_stages(plan.run)
     logs = plan.run / "logs"
+    if a.phase in ("gpu", "all"):
+        GL.acquire()                 # a leased row's GPU phase: its GPU from here to the exit (`row_stages.SingleRow.match`); nothing reads the device before
     t_phase = time.time()
     stages = _batch_replays(stages, plan.parallel)
     if a.phase == "cpu":
@@ -842,14 +843,14 @@ def _workload_engine_args(path: str | None) -> dict:
 
 
 def snapshot_cap_bytes(doc: dict | None, hf: dict | None, engine_args: dict | None = None) -> tuple[int, dict]:
-    """[R16 global, F-global-SNAP (D87 made automatic)] The per-tensor snapshot cap a Match capture needs so that EVERY per-token
+    """[F-global-SNAP (D87 made automatic)] The per-tensor snapshot cap a Match capture needs so that EVERY per-token
     activation of the largest forward the workload can schedule has snapshot evidence: rows x widest row x 2 bytes, never below the
     32 MiB cap of record.  Rows = the engine's `max_num_batched_tokens` (the workload's `engine.args`, then the CLI's engine
     args), else the longest prompt plus one decode row per request; the widest row = max(gate_up 2I, qkv (NH+2KVH)D, hidden H) from
     the checkpoint's config (analytic.config_of keys GU/QKV/H), else 64 KiB.  Why: at 1024/128 the prefill's gate_up output is
     [1024+B, 2I] bf16 = 33.7 MB for Llama-3.2-1B (I 8192) and 36.7 MB for Qwen2.5-1.5B (I 8960) -- over the 32 MiB cap, listed in
     snapshots.json as skipped -- so the Commit's form (B) oracle-compare had 'no snapshot of alloc ... (0 entries of that alloc)' for the
-    prefill-step MLP rows of every 1024-class row (exec M-0545 llama B4, M-0655 qwen H100 B1 -- FAIL by name where Gemm_v2 has no
+    prefill-step MLP rows of every 1024-class row (llama B4, qwen H100 B1 -- FAIL by name where Gemm_v2 has no
     evaluator; global int-2 B16 mixed-arrivals: 16 layers x 5 rows at engine step 36, the [1028, 16384] gate_up of a 1024-token
     arrival); 256/32 rows ([256+B, 2I] = 8.6 MB) never hit it.  MoE routed intermediates are not in the width (cov-moe's
     --snapshot-max-bytes-op contract is unchanged; OLMoE stays at the 32 MiB floor).  Returns (cap, derivation) -- the derivation
@@ -884,14 +885,14 @@ def snapshot_cap_bytes(doc: dict | None, hf: dict | None, engine_args: dict | No
                  "floor_bytes": SNAPSHOT_CAP_FLOOR, "cap_bytes": cap, "raised": cap > SNAPSHOT_CAP_FLOOR}
 
 
-# [R15 EXEC-02 / COORD M-0063 (2)] torch-free mirror of vllm_adapter.execution_of_workload / EXECUTION_ENFORCE_EAGER (this driver runs on
-# the laptop): the row's declared execution label (explicit `execution` / `sweep.execution`, else the row-id suffix) and the enforce_eager
-# it implies.  The GPU stages derive the same from the workload themselves and refuse a contradicting engine arg (build_engine).
-_EXECUTION_ENFORCE_EAGER = {"bi-eager": True, "bi-eager-fa2": True, "eager": True, "bi-compiled": False, "compiled": False}
+# [R15 EXEC-02 / COORD M-0063 (2)] torch-free mirror of vllm_adapter.execution_of_workload (this driver runs on the laptop): the row's
+# declared execution label (explicit `execution` / `sweep.execution`, else the row-id suffix) and the enforce_eager it implies
+# (`engine.served.ENFORCE_EAGER`).  The GPU stages derive the same from the workload themselves and refuse a contradicting engine arg
+# (build_engine).
 
 
 def _workload_moe_construction(path: str | None) -> str | None:
-    """[R17-42 route A (4)] The workload's DECLARED MoE construction (`engine.target.moe_construction`; None = undeclared = the default),
+    """The workload's DECLARED MoE construction (`engine.target.moe_construction`; None = undeclared = the default),
     validated by the frontend's own table so a misspelling fails here by name and is never folded as MOE-01 silently."""
     mc = (RowEngine.of(_workload_doc(path) or {}).target or {}).get("moe_construction")
     if mc is None:
@@ -900,6 +901,15 @@ def _workload_moe_construction(path: str | None) -> str | None:
     if mc not in TargetProfile.MOE_CONSTRUCTIONS:
         raise SystemExit(f"workload engine.target.moe_construction {mc!r} is not one of {sorted(TargetProfile.MOE_CONSTRUCTIONS)}")
     return str(mc)
+
+
+def fold_construction_args(workload: str | None, program_dirs) -> list[str]:
+    """The fold worker's construction flags: the MoE scope under the workload's DECLARED construction (manifest
+    target.moe_construction), the top-p select under the one the Build's Programs declare (a single-request select has no shared-greedy
+    form) and the values they register; never off the trace.  The single-rank driver passes them from --program-dir, the TP fold Match
+    (`tp.fold_match`) from each rank's Build dirs; a fold without them binds the profile's default select."""
+    mc, sc, rv = _workload_moe_construction(workload), program_sampler_construction(program_dirs), program_registered_values(program_dirs)
+    return (["--moe-construction", mc] if mc else []) + (["--sampler-construction", sc] if sc else []) + (["--registered-values"] if rv else [])
 
 
 def _workload_execution(path: str | None) -> str | None:
@@ -916,9 +926,9 @@ def _workload_enforce_eager(path: str | None) -> bool:
     ex = _workload_execution(path)
     if ex is None:
         return True                                   # undeclared execution: the historical eager default (recorded as declared null)
-    if ex not in _EXECUTION_ENFORCE_EAGER:
-        raise SystemExit(f"workload {path}: execution label {ex!r} is not modelled by the harness (known: {sorted(_EXECUTION_ENFORCE_EAGER)})")
-    return _EXECUTION_ENFORCE_EAGER[ex]
+    if ex not in ENFORCE_EAGER:
+        raise SystemExit(f"workload {path}: execution label {ex!r} is not modelled by the harness (known: {sorted(ENFORCE_EAGER)})")
+    return ENFORCE_EAGER[ex]
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -933,7 +943,7 @@ def _max_rss_gb() -> float:
 
 
 def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program: bool = True, moe_construction: str | None = None, sampler_construction: str | None = None, registered_values: bool = False) -> tuple[dict, Any]:
-    """Fold one log: the `gates.FOLD_SUMMARY_SCHEMA` document and the live `FoldResult` (for `persist_program`).  `moe_construction` [R17-42 route A (4)]: the workload's
+    """Fold one log: the `gates.FOLD_SUMMARY_SCHEMA` document and the live `FoldResult` (for `persist_program`).  `moe_construction`: the workload's
     DECLARED construction, which a profile without a `with_moe_construction` hook cannot fold (FAILS by name); `sampler_construction` and `registered_values`: the Programs' (`--program-dir`)."""
     from verity_vllm.check.fold_compare import load_profile, summarize
     from verity_vllm.observe.events import Root, RunHeader
@@ -1018,12 +1028,12 @@ INSTANCES_FORM_ENV = "VERITY_INSTANCES_FORM"      # runs (default, v1) | progres
 
 
 def instances_form() -> str:
-    """[R17 mfast F2, COORD R17-34 (2) / M-0496] The STORED form of `instances.jsonl` operand references.  `runs` = the record form
+    """The STORED form of `instances.jsonl` operand references.  `runs` = the record form
     (every maximal run one item, the node-space K/V gathers listed run by run: 54 M items / 1.63 GB on a B8 1024/128 row); `progressions`
     = the same references with the node space as compact progressions built from the fold's own Refs objects in O(1) per part (no
     `runs()` expansion at write; ~3 % of the text), parameter-space runs unchanged.  Lossless either way.  The LIBRARY default stays `runs`
-    (tests and ad-hoc folds unchanged); the rows of record set VERITY_INSTANCES_FORM=progressions in row_pod.sh's Match stage (COORD R17-34 (2)
-    "compact refs stay compact end to end", M-0496, rev M-0500 conditions met at S-r17-33: readers accept both forms)."""
+    (tests and ad-hoc folds unchanged); the rows of record set VERITY_INSTANCES_FORM=progressions in row_pod.sh's Match stage ("compact
+    refs stay compact end to end": readers accept both forms)."""
     v = (os.environ.get(INSTANCES_FORM_ENV) or "runs").strip().lower()
     if v not in ("runs", "progressions"):
         raise SystemExit(f"{INSTANCES_FORM_ENV}={v!r}: expected runs | progressions")
@@ -1077,6 +1087,7 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
                # (step, k, kind, site, rows, N, leaf offset) -- cb_a.compare locates every peer leaf range from these, never by guessing
                "params": [[n, repr(t)] for n, t in (getattr(result, "params", None) or ())],
                "tp": getattr(result, "tp", None), "peers_layout": _jsonable(getattr(result, "peers_layout", None) or []),
+               "witness_layout": _jsonable(getattr(result, "witness_layout", None) or []),   # the witness parameters by name
                "supplied": _jsonable(getattr(result, "supplied", None) or {})}   # a `registered_values` fold's, with `input_nodes`
         p = run_dir / "program.json"
         _ptext = json.dumps(doc, separators=(",", ":"), sort_keys=True) + "\n"

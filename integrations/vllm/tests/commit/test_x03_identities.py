@@ -10,8 +10,9 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity_vllm.acquire.sources.call_boundary_source import CallBoundarySource  # noqa: E402
-from verity_vllm.check.verdict import commit_verdict  # noqa: E402
+from verity_vllm.check.commit_pass import commit_verdict  # noqa: E402
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta  # noqa: E402
+from verity_vllm.commit.committer.plan_cache import PlanMetas  # noqa: E402
 
 
 class Attention:  # class names are what `_mro_names` sees
@@ -49,6 +50,11 @@ def _layout(names: list[str]) -> list[TensorMeta]:
         off += 64
         out.append(m)
     return out
+
+
+def _plan(names: list[str]) -> PlanMetas:
+    n = len(names)
+    return PlanMetas(names, ["bfloat16"] * n, [64] * n, [64 * i for i in range(n)], [(4, 8)] * n, GPU_CHUNK_BYTES)
 
 
 def _good_step(layers: int = 2) -> list[str]:
@@ -138,6 +144,26 @@ def test_shared_module_called_once_per_layer_is_structural_not_a_duplicate():
     assert Counter(good)["model.layers.0.self_attn.rotary_emb"] == 2
 
 
+def test_plan_layouts_repeating_names_get_the_record_their_tensor_metas_get():
+    """Steps whose plans carry one name tuple share one verdict (checked once per distinct tuple): a run of plan layouts that repeats a
+    good step, a dropped-and-doubled step, a doubled sampler and a doubled FA2 row has the record of the same steps as TensorMeta lists."""
+    good = _good_step()
+    bad = list(good)
+    bad.remove("model.layers.1.mlp.down_proj")
+    bad.insert(3, "model.layers.0.self_attn.qkv_proj")
+    fa2 = [n for n in good if n != "fa2.m1/L1/g1x64x1"] + ["fa2.m1/L0/g1x64x1"]
+    steps = [good, good, bad, good, bad, good + ["runner.sampler/sampled_token_ids"], fa2, bad, good]
+    recs = []
+    for layout in (_layout, _plan):
+        com = _com()
+        for s, names in enumerate(steps):
+            com._layouts[s] = layout(names)
+        recs.append(com.identity_check())
+    assert recs[1] == recs[0]
+    assert recs[1]["violations_n"] == 5 and [v["step"] for v in recs[1]["violations"]] == [2, 4, 5, 6, 7]
+    assert recs[1]["fa2_rule"]["steps"] == {"uniform": len(steps)}
+
+
 def test_offline_core_without_module_set_is_skipped_not_passed():
     com = NativeHostCommitter(None, run_id="x03-ids", gpu_tree=True)
     com._layouts[0] = _layout(_good_step())
@@ -195,3 +221,15 @@ def test_a_dropped_doubled_or_foreign_call_boundary_tensor_still_fails():
     rec = {"extra": {"expected_tensors": 18, "committed_tensors": 18, "errors": [], "errors_n": 0, "identity_check": r}, "openings": {"n": 64, "verified": 64}}
     ok, why = commit_verdict(rec, True)
     assert not ok and "call_boundaries_bad" in why
+
+
+def test_a_plan_repeating_step_0s_names_is_held_to_its_own_call_boundaries():
+    """A step-reading source judges each step on its own: a plan layout that repeats step 0's names at step 1 commits step 0's call-boundary
+    tensors, not step 1's, and fails, though its name tuple is step 0's."""
+    com, cb = _cb_com(2)
+    com._layouts[0] = _plan(_good_step() + ["logits_processor"] + cb.at[0])
+    com._layouts[1] = _plan(_good_step() + ["logits_processor"] + cb.at[0])
+    r = com.identity_check()
+    assert r["ok"] is False and [v["step"] for v in r["violations"]] == [1]
+    assert r["violations"][0]["call_boundaries_bad"] == {"logits_processor/div/out": (1, 0), "logits_processor/div_1/out": (0, 1),
+                                                         "logits_processor/tanh/out": (1, 0), "logits_processor/tanh_1/out": (0, 1)}

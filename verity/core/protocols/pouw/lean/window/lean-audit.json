@@ -1,5 +1,8 @@
 {
  "roots": ["PouwWindow", "PouwWindow.DifftestMain"],
+ "exempt": {
+  "PouwWindow.LeafOwnMain": "the pouw-leaf-own executable's entry point, one line; its command is PouwWindow.Lanes.leafOwnCmd, audited under PouwWindow"
+ },
  "layers": {
   "PouwWindow.Grid": {
    "imports": [],
@@ -18,6 +21,11 @@
   },
   "PouwWindow.Json": {
    "imports": ["PouwWindow.Draw", "PouwWindow.Public", "Lean.Data.Json"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "PouwWindow.Length": {
+   "imports": ["PouwWindow.Json", "Lean.Data.Json"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
@@ -45,6 +53,26 @@
    "imports": ["PouwWindow.Side", "PouwWindow.Record"],
    "except": [],
    "why": "the program is code: Lean core, PoUW's commitments (`pouw_commit`) and what they read (C-Flock's verifier, core's tagged identity), no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "PouwWindow.Lanes": {
+   "imports": [],
+   "except": [],
+   "why": "the layout is code: Lean core only, no Mathlib and nothing of Security, so proofs' decoders import it (Daniel's layout ruling, 5 Oct)"
+  },
+  "PouwWindow.KnownRows": {
+   "imports": ["PouwWindow.Lanes"],
+   "except": [],
+   "why": "the leaf's known rows are code over the layout: Lean core only, no Mathlib and nothing of Security, so LeafLanesSound's statement reads them (Daniel's layout ruling, 5 Oct)"
+  },
+  "PouwWindow.OwnPorts": {
+   "imports": ["PouwWindow.Lanes", "Flock.Registered"],
+   "except": [],
+   "why": "the leaf's registered data ports are code over the layout and C-Flock's registered-file format: Lean core only, no Mathlib and nothing of Security, so LeafLanesSound's statement reads them (Daniel's layout ruling, 5 Oct)"
+  },
+  "PouwWindow.FullDraw": {
+   "imports": ["Flock.Draw", "Flock.Norm"],
+   "except": [],
+   "why": "the leaf's draw policy is code over C-Flock's draw format: Lean core only, no Mathlib and nothing of Security, so LeafLanesSound's statement reads it (Daniel's layout ruling, 5 Oct)"
   }
  },
  "dependencies": {

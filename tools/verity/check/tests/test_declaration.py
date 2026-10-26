@@ -115,7 +115,7 @@ def _run_two_groups(tmp_path, monkeypatch, first_status: str):
     monkeypatch.setattr(CHECK, "preflight", lambda: [])
     monkeypatch.setattr(CHECK, "take_lean_deps_urls", lambda out: None)
     monkeypatch.setattr(CHECK.subprocess, "run", lambda *a, **k: None)
-    monkeypatch.setattr(CHECK, "groups", lambda out, n, cache, urls: [[("a", ["true"], tmp_path)], [("b", ["true"], tmp_path)]])
+    monkeypatch.setattr(CHECK, "groups", lambda out, n, cache, urls, **kw: [[("a", ["true"], tmp_path)], [("b", ["true"], tmp_path)]])
     monkeypatch.setattr(CHECK, "_step", step)
     ok, results = CHECK.run(tmp_path, 2)
     return started, {r["step"]: r for r in results}
@@ -155,7 +155,7 @@ def _main_parts(monkeypatch, argv):
     monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     monkeypatch.setattr(CHECK.SUITES, "foreign", lambda members, env: None)
-    monkeypatch.setattr(CHECK, "run", lambda out, n, cache, keep_going, only: got.append(only) or (True, []))
+    monkeypatch.setattr(CHECK, "run", lambda out, n, cache, keep_going, only, *packs: got.append(only) or (True, []))
     rc = CHECK.main(argv)
     return rc, got[0] if got else None
 

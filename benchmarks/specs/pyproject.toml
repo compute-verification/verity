@@ -1,0 +1,28 @@
+[project]
+name = "verity-bench-specs"
+version = "0.0.0"
+description = "The benchmark specs' cross-check against verity-vllm: every pinned preset resolves as an engine spec to its checkpoint pin."
+requires-python = ">=3.12"
+dependencies = ["verity-vllm"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment, as a suite of its own so
+# that an edit to a spec reruns these tests and not verity-vllm's whole suite.
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+verity-vllm = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# In place of verity-vllm's whole tree (`inputs_only`), what resolving a preset reads: the engine spec, the checkpoint pins
+# (`config.EnginePin`, with the manifests it reads) and the config loader they stand on.
+inputs_only = true
+inputs = ["integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",
+          "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/engine/spec.py",
+          "integrations/vllm/verity_vllm/engine/__init__.py",
+          "integrations/vllm/manifests/checkpoints.json", "integrations/vllm/manifests/checkpoints-int8.json",
+          "tools/config/verity_config"]

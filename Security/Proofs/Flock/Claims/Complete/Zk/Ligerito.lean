@@ -17,7 +17,8 @@ reads it.
   `e_i = ⟨W, R_{2r+i}⟩` masked (`lgE`), draws `ρ_0, ρ_1`, refuses dependent ones (as upstream does), and after
   `LABEL_CLOSE` sends the blinded claim `T' = ⟨W, y₁'⟩` for `y₁' = f + ρ_0 R_{2r} + ρ_1 R_{2r+1}` and the padding's
   combination `ybar = Σ_l eq(r̄)_l μ_l + ρ_0 μ_{L+2r} + ρ_1 μ_{L+2r+1}`; the opening goes on from `y₁'` as
-  `ligeritoP` from the split table. The row check then cancels the padding: the verifier adds `padAt(ybar)`.
+  `ligeritoP` from the split table, the last level's last message upstream's plain fold message (the folded, unsplit
+  table's round polynomial). The row check then cancels the padding: the verifier adds `padAt(ybar)`.
 * It returns the proof, level 0's hiding messages, and the lane phase's record (`L0Rec`, the verifier's), from which
   the prover builds the lane phase's constraints (`Zk.ligeritoConstraints`).
 -/
@@ -153,10 +154,12 @@ def ligeritoPZk (io : Asks M) (hs : Hashes M) (ms : MerkleScheme) (sch : Schedul
         if j + 1 == 4 then
           let r ← liftT (sampleKP io)
           modify fun st => { st with tab := foldK r st.tab, w := foldK r st.w }
-          f := (← get).tab
+          let d ← get
+          f := d.tab
           modify fun st => { st with tab := embedF (splitK st.tab), w := liftU st.w }
           let st ← get
-          sendMsg (roundPoly st.tab st.w)
+          -- nothing reads the last level's split: it sends upstream's plain fold message, of the unsplit table
+          sendMsg (if last then roundPoly d.tab d.w else roundPoly st.tab st.w)
         else
           let _ ← challengeP io false
       let ext := splitDim - 4

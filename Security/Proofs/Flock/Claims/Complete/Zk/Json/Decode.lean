@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Complete.Json.Live
 import Proofs.Flock.Claims.Complete.Zk.Json.Record
+import Proofs.Flock.Claims.JsonNorm
 
 /-!
 # The honest masked record decodes, reads live and carries the draw
@@ -17,7 +18,8 @@ open Flock Transcript FlockComplete FlockDeploy
 open Lean (Json JsonNumber)
 
 /-- **A printable object with the honest record's fields decodes** (S1–S14) as `sessOf`, as `decode_recordObj`. -/
-theorem decodeZk_ofFields (S : JsonSpec) {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64)
+theorem decodeZk_ofFields (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray → ByteArray}
+    (h64 : ∀ b, (h b).size = 64)
     {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) (hct : spec.coinTree = none)
     (hdraw : DrawOk spec) (hsig : 0 < spec.sigma.size)
     {rb : ByteArray} (hrb : 0 < rb.size)
@@ -26,9 +28,9 @@ theorem decodeZk_ofFields (S : JsonSpec) {h : ByteArray → ByteArray} (h64 : �
     (hrs : ∀ rs ∈ streams, 0 < rs.size ∧ ∀ r ∈ rs, 1 ≤ r.n ∧ r.n ≤ 65536 ∧ r.coins.size = r.n)
     (proofs : Array ByteArray) {R : Json} (hgood : Good R)
     (gR : ∀ {k v}, (k, v) ∈ recordList spec h #[rb] points streams proofs → R.getObjVal? k = .ok v) :
-    Record.decodeWith (Hashes.ofSha512 h : Hashes V) spec R.compress =
+    Record.decodeWith (Hashes.ofSha512 h : Hashes V) spec (printJ R) =
       .ok (sessOf spec h #[rb] points streams proofs) := by
-  obtain ⟨j, hp, hs⟩ := S.parse_compress _ hgood
+  obtain ⟨j, hp, hs⟩ := S.parse_print _ hgood
   have hkind : Record.str j "kind" = .ok "flock-live-session/v1" := str_same hs (gR (by simp [recordList]))
   have habort : Record.isNull j "aborted" = true := isNull_null hs (gR (by simp [recordList]))
   have hhello : Record.str j "hello" = .ok spec.hello := str_same hs (gR (by simp [recordList]))
@@ -38,9 +40,9 @@ theorem decodeZk_ofFields (S : JsonSpec) {h : ByteArray → ByteArray} (h64 : �
     fld_plain hcfgs (getObjVal?_mkObj (by simp) (by simp)) (.bool true)
   have hmode : Record.str j "link_mode" = .ok "exchange" := str_same hs (gR (by simp [recordList]))
   obtain ⟨l, hl, hls⟩ := fld_same hs (gR (k := "link") (v := linkObj spec h #[rb] points) (by simp [recordList]))
-  unfold Record.decodeWith
+  unfold Record.decodeWith Record.decodeJWith
   simp only [hp, hct, pure_bind, liftM, monadLift_self, hkind, hhello, habort, hcfg, hreq, hmode, hl, ok_bind,
-    beq_self_eq_true, check_true, S.beq_same _ _ (.bool true)]
+    beq_self_eq_true, check_true]
   have gL : ∀ {k v}, (k, v) ∈ linkList spec h #[rb] points → (linkObj spec h #[rb] points).getObjVal? k = .ok v :=
     fun hm => getObjVal?_mkObj (linkList_distinct ..) hm
   have hlm : Record.str l "mode" = .ok "exchange" := str_same hls (gL (by simp [linkList]))
@@ -231,13 +233,14 @@ theorem decodeZk_ofFields (S : JsonSpec) {h : ByteArray → ByteArray} (h64 : �
   rfl
 
 /-- **`liveOf` reads a printable object with the honest record's fields**, as `live_recordObj`. -/
-theorem liveZk_ofFields (S : JsonSpec) {h : ByteArray → ByteArray} {spec : SessionSpec} {t : String}
+theorem liveZk_ofFields (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray → ByteArray} {spec : SessionSpec}
+    {t : String}
     (ht : spec.tables = #[t]) {rb : ByteArray} {points : Array (Array F128)} {streams : Array (Array Round)}
     (hss : streams.size = spec.repStreams.size) (proofs : Array ByteArray) {R : Json} (hgood : Good R)
     (gR : ∀ {k v}, (k, v) ∈ recordList spec h #[rb] points streams proofs → R.getObjVal? k = .ok v) :
-    liveOf spec R.compress =
+    liveOf spec (printJ R) =
       .ok ⟨#[rb], spec.tables.map fun _ => ByteArray.empty, points, streams.map (·.map liveRound)⟩ := by
-  obtain ⟨j, hp, hs⟩ := S.parse_compress _ hgood
+  obtain ⟨j, hp, hs⟩ := S.parse_print _ hgood
   obtain ⟨l, hl, hls⟩ := fld_same hs (gR (k := "link") (v := linkObj spec h #[rb] points) (by simp [recordList]))
   have gL : ∀ {k v}, (k, v) ∈ linkList spec h #[rb] points → (linkObj spec h #[rb] points).getObjVal? k = .ok v :=
     fun hm => getObjVal?_mkObj (linkList_distinct ..) hm
@@ -312,16 +315,17 @@ theorem liveZk_ofFields (S : JsonSpec) {h : ByteArray → ByteArray} {spec : Ses
   simp only [ok_bind, List.map_toArray, List.map_cons, List.map_nil]
   rfl
 
-/-- **A printable object with the honest record's fields carries the statement's draw**, up to `Same`, as
+/-- **A printable object with the honest record's fields carries the statement's draw**, up to key order, as
 `recordDraw_recordObj`. -/
-theorem recordDrawZk_ofFields (S : JsonSpec) {h : ByteArray → ByteArray} {spec : SessionSpec}
+theorem recordDrawZk_ofFields (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray → ByteArray} {spec : SessionSpec}
     (hdraw : DrawOk spec) (rb : ByteArray) (points : Array (Array F128)) (streams : Array (Array Round))
     (proofs : Array ByteArray) {R : Json} (hgood : Good R)
     (gR : ∀ {k v}, (k, v) ∈ recordList spec h #[rb] points streams proofs → R.getObjVal? k = .ok v) :
     match spec.unitDraw with
-    | none => FlockSoundness.Discharge.Exec.recordDraw R.compress = none
-    | some d => ∃ d', FlockSoundness.Discharge.Exec.recordDraw R.compress = some d' ∧ Same d d' := by
-  obtain ⟨j, hp, hs⟩ := S.parse_compress _ hgood
+    | none => FlockSoundness.Discharge.Exec.recordDraw (printJ R) = none
+    | some d => ∃ d', FlockSoundness.Discharge.Exec.recordDraw (printJ R) = some d' ∧
+        FlockDeploy.JsonEquiv d' d := by
+  obtain ⟨j, hp, hs⟩ := S.parse_print _ hgood
   obtain ⟨dv, hdv, hdvs⟩ := hs.getObjVal (gR (k := "unit_draw") (v := spec.unitDraw.getD Json.null)
     (by simp [recordList]))
   unfold FlockSoundness.Discharge.Exec.recordDraw
@@ -339,7 +343,8 @@ theorem recordDrawZk_ofFields (S : JsonSpec) {h : ByteArray → ByteArray} {spec
     rintro ⟨hn, -, -⟩ hdvs
     simp only [Option.getD_some] at hdvs
     have hn' : dv ≠ Json.null := fun e => hn (same_null (e ▸ hdvs.symm))
-    refine ⟨dv, ?_, hdvs⟩
+    refine ⟨Flock.norm dv, ?_,
+      (FlockDeploy.jsonEquiv_norm dv (FlockDeploy.same_wf_right hdvs)).trans hdvs.jsonEquiv.symm⟩
     cases dv <;> first | rfl | exact absurd rfl hn'
 
 /-! ## The masked record -/
@@ -371,7 +376,8 @@ structure HelloOk (spec : SessionSpec) (hz : String) : Prop where
 
 /-- **The honest masked record decodes** (S1–S14) as `sessOf`: S2 passes on the prover's `Hello` and `coin_tree`, and
 the rest is the plain record's at `specZ`. -/
-theorem decode_recordObjZk (S : JsonSpec) {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64)
+theorem decode_recordObjZk (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray → ByteArray}
+    (h64 : ∀ b, (h b).size = 64)
     {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) {ct : CoinTree.Spec} (hct : spec.coinTree = some ct)
     {hz : String} (hH : HelloOk spec hz) (hdraw : DrawOk spec) (hsig : 0 < spec.sigma.size)
     {rb : ByteArray} (hrb : 0 < rb.size)
@@ -380,11 +386,11 @@ theorem decode_recordObjZk (S : JsonSpec) {h : ByteArray → ByteArray} (h64 : �
     (hrs : ∀ rs ∈ streams, 0 < rs.size ∧ ∀ r ∈ rs, 1 ≤ r.n ∧ r.n ≤ 65536 ∧ r.coins.size = r.n)
     (proofs : Array ByteArray) :
     Record.decodeWith (Hashes.ofSha512 h : Hashes V) spec
-      (recordObjZk spec h hz ct #[rb] points streams proofs).compress =
+      (printJ (recordObjZk spec h hz ct #[rb] points streams proofs)) =
       .ok (sessOf spec h #[rb] points streams proofs) := by
   obtain ⟨m, kvs, hown, hm, hkv, hco, hg, hc⟩ := hH.obj
   have hgood := good_recordObjZk ht h hz ct rb points streams proofs (good_draw hdraw)
-  obtain ⟨j, hp, hs⟩ := S.parse_compress _ hgood
+  obtain ⟨j, hp, hs⟩ := S.parse_print _ hgood
   have hh : Record.str j "hello" = .ok hz :=
     str_same hs (recordObjZk_fields spec h hz ct _ points streams proofs (v := Json.str hz)
       (by simp [recordList, specZ]))
@@ -395,24 +401,25 @@ theorem decode_recordObjZk (S : JsonSpec) {h : ByteArray → ByteArray} (h64 : �
     fun hm => recordObjZk_fields _ _ _ _ _ _ _ _ hm
 
 /-- **`liveOf` reads the printed honest masked record**, as the plain one's. -/
-theorem live_recordObjZk (S : JsonSpec) {h : ByteArray → ByteArray} {spec : SessionSpec} {t : String}
-    (ht : spec.tables = #[t]) (hd : Good (spec.unitDraw.getD Json.null)) (hz : String) (ct : CoinTree.Spec)
+theorem live_recordObjZk (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray → ByteArray} {spec : SessionSpec}
+    {t : String} (ht : spec.tables = #[t]) (hd : Good (spec.unitDraw.getD Json.null)) (hz : String) (ct : CoinTree.Spec)
     {rb : ByteArray} {points : Array (Array F128)} {streams : Array (Array Round)}
     (hss : streams.size = spec.repStreams.size) (proofs : Array ByteArray) :
-    liveOf spec (recordObjZk spec h hz ct #[rb] points streams proofs).compress =
+    liveOf spec (printJ (recordObjZk spec h hz ct #[rb] points streams proofs)) =
       .ok ⟨#[rb], spec.tables.map fun _ => ByteArray.empty, points, streams.map (·.map liveRound)⟩ :=
   liveZk_ofFields S (h := h) (spec := specZ spec hz) ht hss proofs
     (good_recordObjZk ht h hz ct rb points streams proofs hd) fun hm => recordObjZk_fields _ _ _ _ _ _ _ _ hm
 
-/-- **The honest masked record's draw is the statement's**, up to `Same`. -/
-theorem recordDraw_recordObjZk (S : JsonSpec) {h : ByteArray → ByteArray} {spec : SessionSpec} {t : String}
+/-- **The honest masked record's draw is the statement's**, up to key order (`JsonEquiv`). -/
+theorem recordDraw_recordObjZk (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray → ByteArray}
+    {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) (hdraw : DrawOk spec) (hz : String) (ct : CoinTree.Spec) (rb : ByteArray)
     (points : Array (Array F128)) (streams : Array (Array Round)) (proofs : Array ByteArray) :
     match spec.unitDraw with
-    | none => FlockSoundness.Discharge.Exec.recordDraw (recordObjZk spec h hz ct #[rb] points streams proofs).compress =
+    | none => FlockSoundness.Discharge.Exec.recordDraw (printJ (recordObjZk spec h hz ct #[rb] points streams proofs)) =
         none
     | some d => ∃ d', FlockSoundness.Discharge.Exec.recordDraw
-        (recordObjZk spec h hz ct #[rb] points streams proofs).compress = some d' ∧ Same d d' :=
+        (printJ (recordObjZk spec h hz ct #[rb] points streams proofs)) = some d' ∧ FlockDeploy.JsonEquiv d' d :=
   recordDrawZk_ofFields S (h := h) (spec := specZ spec hz) hdraw rb points streams proofs
     (good_recordObjZk ht h hz ct rb points streams proofs (good_draw hdraw))
     fun hm => recordObjZk_fields _ _ _ _ _ _ _ _ hm

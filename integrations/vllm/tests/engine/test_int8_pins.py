@@ -1,9 +1,10 @@
 """The int8 pins in `manifests/checkpoints-int8.json` (every entry with `int8_of`), checked offline.
 
-An int8 pin is a recipe pin (`engine.int8_checkpoint`, `verity-int8-channel127/v1`): it names its BF16 base pin and keeps its
-shard names; its revision is the recipe's digest of the made files, its made config is the recipe's transform of the base
-config wherever that is shipped (`profiles/hf_configs/<BASE ROLE>.config.json`), and it resolves under the pins' HF cache like
-a hub snapshot.  Int8 pins live only in the sibling manifest, which `config.checkpoint_entries` reads after `checkpoints.json`.
+An int8 pin is a recipe pin (`engine.int8_checkpoint`, `verity-int8-channel127/v1`, `/v2` or `/v3`, its `recipe.id`): it names its base
+pin (BF16, or FP8-block for v3) and keeps its shard names; its revision is the recipe's digest of the made files, its made config
+is the recipe's transform of the base config wherever that is shipped (`profiles/hf_configs/<BASE ROLE>.config.json`; v3's
+reads the made tensors too, so offline only its base is checked to be one v3 reads), and it resolves under the pins' HF cache
+like a hub snapshot.  Int8 pins live only in the sibling manifest, which `config.checkpoint_entries` reads after `checkpoints.json`.
 The shard bytes themselves are checked where they are made: `verity-vllm int8-checkpoint make --role ROLE`."""
 from __future__ import annotations
 
@@ -44,20 +45,23 @@ def test_sibling_manifests_are_read_with_their_manifest(tmp_path):
 
 @pytest.mark.parametrize("entry", INT8_PINS, ids=[e["role"] for e in INT8_PINS])
 def test_int8_pin_is_the_recipes_output_of_its_base_pin(entry):
-    base = F.base_entry(entry, ENTRIES, I.INT8)
-    assert entry["recipe"]["id"] == I.RECIPE and entry["int8_of"] == base["repo"] == entry["recipe"]["base_repo"]
+    recipe = I.recipe_of(entry)
+    base = F.base_entry(entry, ENTRIES, recipe)
+    assert entry["recipe"]["id"] == recipe.id and entry["int8_of"] == base["repo"] == entry["recipe"]["base_repo"]
     assert sorted(entry["safetensors_sha256"]) == sorted(base["safetensors_sha256"])
     assert all(entry["files"][fn]["sha256"] == sha and len(sha) == 64 for fn, sha in entry["safetensors_sha256"].items())
     made = {fn: d["sha256"] for fn, d in entry["files"].items() if d["digest_source"] == "recipe"}
     assert {"config.json", *entry["safetensors_sha256"]} <= set(made) <= {"config.json", F.INDEX, *entry["safetensors_sha256"]}
     assert (F.INDEX in made) or len(entry["safetensors_sha256"]) == 1
     assert entry["config_sha256"] == made["config.json"] and len(entry["revision"]) == 40 and not entry.get("gated")
-    assert entry["revision"] == F.pin_revision(base["repo"], base["revision"], made, I.INT8)
+    assert entry["revision"] == F.pin_revision(base["repo"], base["revision"], made, recipe)
     assert entry["local_path"] == str(F.snapshot_dir(checkpoints_hf_home(), entry["repo"], entry["revision"]))
     assert entry["repo"].split("/")[0] != base["repo"].split("/")[0]
     shipped_base = next((p for p in sorted(dg.HF_CONFIG_DIR.glob("*.config.json"))
                          if hashlib.sha256(p.read_bytes()).hexdigest() == base.get("config_sha256")), None)
-    if shipped_base is not None:
-        cfg = F.fp8_config(shipped_base.read_bytes(), I.INT8)
+    if shipped_base is not None and recipe.config is not None:
+        assert I.fp8_base(json.loads(shipped_base.read_bytes()), recipe).vocab and entry["config_sha256"] != base["config_sha256"]
+    elif shipped_base is not None:
+        cfg = F.fp8_config(shipped_base.read_bytes(), recipe)
         assert hashlib.sha256(cfg).hexdigest() == entry["config_sha256"]
-        assert json.loads(cfg)["quantization_config"] == {**I.QUANTIZATION, "modules_to_not_convert": ["lm_head"]}
+        assert json.loads(cfg)["quantization_config"] == {**I.QUANTIZATION, "modules_to_not_convert": [] if recipe.lm_head else ["lm_head"]}

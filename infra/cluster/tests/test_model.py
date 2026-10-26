@@ -25,12 +25,13 @@ def test_the_nebius_description_loads():
     n1, n2 = c.nodes["vy-nebius-1"], c.nodes["vy-nebius-2"]
     assert (n1.owner, n2.owner) == ("verity", "pous")
     assert len(n1.cpus) == 184 and len(n2.cpus) == 192 and len(n1.gpus) == len(n2.gpus) == 8
-    assert n2.admission_ends == model.instant("2026-10-19T13:00:00Z")
+    assert n2.admission_ends == model.instant("2026-10-24T13:00:00Z")
     assert c.standing("verity", "vy-nebius-2") == c.standing("pous", "vy-nebius-1") == model.GUEST
     share = c.share("verity", "vy-nebius-2")
     # Daniel's defaults (decision 1): Verity's node-2 share gets GPUs; PoUW overflows onto node 1 off its reserved CPUs
     assert cpuset.format(share.cpus) == "48-95" and share.max_job_memory_gib == 256 and share.max_gpus is None
-    assert share.until == model.instant("2026-10-19T15:00:00Z")
+    assert share.until is None and c.share("pous", "vy-nebius-1").until is None, "each share lasts until its node's stop"
+    assert n2.stops_at_source == model.DESCRIBED
     assert cpuset.format(c.share("pous", "vy-nebius-1").cpus) == "96-191"
     assert cpuset.format(n1.pools["checks"]) == "8-95,128-159" and cpuset.format(n1.pools["provers"]) == "160-191"
     assert n2.pools == {}
@@ -38,6 +39,22 @@ def test_the_nebius_description_loads():
     order = sorted(c.priorities, key=c.priorities.get, reverse=True)
     # kueue.yaml's order is policy (the steward, 30 Sep 19:40Z)
     assert order.index("capture") < order.index("work") < order.index("bench") < order.index("dev") < order.index("fill")
+
+
+def test_a_nodes_live_deadline_file_replaces_the_described_stop_and_says_so(tmp_path):
+    """The deadline file is `EPOCH ISO BY`; none leaves the description's stop, and one that doesn't parse is a stop of 0, as
+    the VM's vy-deadline-check reads it (it stops the VM then)."""
+    c = one(stops_at=T0 + 3600, drain_s=600)
+    f = tmp_path / "deadline"
+    assert model.read_deadline(f) is None and model.with_live_stop(c, "n1", f) is c
+    f.write_text(f"{T0 + 86400} 2026-09-22T00:00:00Z renewal\n")
+    n = model.with_live_stop(c, "n1", f).nodes["n1"]
+    assert (n.stops_at, n.admission_ends, n.stops_at_source) == (T0 + 86400, T0 + 86400 - 600, f"the node's live {f}")
+    f.write_text("garbled\n")
+    assert model.read_deadline(f) == 0 and model.with_live_stop(c, "n1", f).nodes["n1"].stops_at == 0
+    with pytest.raises(model.ModelError, match="unknown node 'n9'"):
+        model.with_stop(c, "n9", T0)
+    assert model.iso(model.instant("2026-10-22T15:00:00Z")) == "2026-10-22T15:00:00Z"
 
 
 def test_validation_names_each_problem():

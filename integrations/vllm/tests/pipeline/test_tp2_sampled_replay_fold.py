@@ -13,7 +13,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
-from verity_vllm.pipeline.tp.c2 import sampled_replay_components  # noqa: E402
+from verity_vllm.pipeline.tp.c2 import sampled_replay_components
 
 
 def _sr(result, grade, vus=10, evaluated=4, why=None, unrep=None):
@@ -106,7 +106,7 @@ def _worker(cfg, bmap, rc=None, model=None):
 
     s = Stub()
     s._tp2_commit = {"rank": 1, "replay": cfg, "bmap": bmap, "com": types.SimpleNamespace(_layouts={}, weights=None, register_weights=lambda: {"root": "x"}),
-                     "eng": types.SimpleNamespace(model=model)}
+                     "eng": types.SimpleNamespace(model=model), "weights": model}
     return s
 
 

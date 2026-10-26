@@ -1,7 +1,10 @@
 """The GLM-5.3 FA3 split capture without a GPU: the launches split as the kernel derives it, the operands, each comparison job
 takes the kernel's words and finds a flipped one (the attention job names the split count the words are), the reference sample,
-the verdict and `main` end to end (the GPU run is `tests/properties/glm53_fa3_split_capture_gpu.py --out ...` on an H200)."""
+the switches read back, the verdict and `main` end to end (the GPU run is `tests/properties/glm53_fa3_split_capture_gpu.py
+--out ...` on an H200)."""
 from __future__ import annotations
+
+__models__ = ("zai-org/GLM-5.3",)
 
 import copy
 import json
@@ -10,10 +13,11 @@ import numpy as np
 import pytest
 
 from tests.properties import glm53_fa3_split_capture_gpu as X
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.kernels import sparse_mla_split_twins as TW
-from verity_vllm.program.registry import sparse_mla as M
-from verity_vllm.program.registry import sparse_mla_split as W
+from verity_vllm.engine.env import SERVED_DEFAULTS
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.numerics import sparse_mla_split_twins as TW
+from verity.ml.definitions.registry import sparse_mla as M
+from verity.ml.definitions.registry import sparse_mla_split as W
 from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 U32 = np.uint32
@@ -162,8 +166,8 @@ def _doc(quick: bool = False) -> dict:
     launches += [{"phase": "attn", "case": n, "checks": {"deterministic": True, "shape": True}} for n in names]
     comps = [{"phase": x["phase"], "case": x["case"], "words": 10, "mismatch": 0, "unresolved": 0, "reference": 1, "twin_mismatch": 0,
               "first_mismatch": None, "differing": []} for x in launches]
-    doc = {"schema": X.SCHEMA, "quick": quick, "gate": {"ok": True}, "errors": {}, "bind": {"ok": True}, "launches": launches,
-           "comparisons": comps}
+    doc = {"schema": X.SCHEMA, "quick": quick, "gate": {"ok": True}, "served": {"ok": True}, "errors": {}, "bind": {"ok": True},
+           "launches": launches, "comparisons": comps}
     doc["totals"] = {k: sum(c[k] for c in comps) for k in X.TOTALS}
     return doc
 
@@ -184,7 +188,8 @@ def test_the_verdict_holds_on_a_passing_doc() -> None:
     assert all(c["ok"] for c in X.cases(_doc()).values())
 
 
-@pytest.mark.parametrize("path,value", [(("gate", "ok"), False), (("bind", "ok"), False), (("errors", "attn"), "boom"),
+@pytest.mark.parametrize("path,value", [(("gate", "ok"), False), (("served", "ok"), False), (("served",), {}),
+                                        (("bind", "ok"), False), (("errors", "attn"), "boom"),
                                         (("errors", "compare/attn/dsa14"), "boom"), (("launches", 0, "checks", "ok"), False),
                                         (("launches", 5, "checks", "deterministic"), False), (("launches", 4, "checks"), {}),
                                         (("comparisons", 3, "mismatch"), 1), (("comparisons", 0, "unresolved"), 2),
@@ -209,9 +214,34 @@ def test_each_launch_has_its_own_verdict() -> None:
     assert {k for k, c in X.cases(doc).items() if not c["ok"]} == {"mufu/ex2", f"attn/{doc['launches'][4]['case']}"}
 
 
+def _stub_envs(monkeypatch, batch_invariant: bool = False) -> None:
+    import sys
+    import types
+
+    envs = types.ModuleType("vllm.envs")
+    envs.VLLM_BATCH_INVARIANT = batch_invariant
+    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
+    monkeypatch.setitem(sys.modules, "vllm.envs", envs)
+
+
+def test_served_reads_batch_invariance_back_from_vllm(monkeypatch) -> None:
+    _stub_envs(monkeypatch)
+    assert X.served() == {"VLLM_BATCH_INVARIANT": False, "ok": True}
+    _stub_envs(monkeypatch, batch_invariant=True)
+    assert X.served() == {"VLLM_BATCH_INVARIANT": True, "ok": False}
+
+
 def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> None:
     """`main --quick` with the GPU's phases stood in for (the jobs of the tests above, the attention words the twin's with one
-    flipped): the jobs through the spawned worker pool, the per-launch verdicts, the sealed record and the exit status."""
+    flipped), every served-default switch inherited set: the switches cleared before vLLM reads them and read back, the jobs
+    through the spawned worker pool, the per-launch verdicts, the sealed record and the exit status."""
+    import os
+
+    for k in SERVED_DEFAULTS:
+        monkeypatch.setenv(k, "0")
+    for k in ("VLLM_ENABLE_V1_MULTIPROCESSING", "TRITON_CACHE_DIR"):
+        monkeypatch.delenv(k, raising=False)
+    _stub_envs(monkeypatch)
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True, "sms": 132})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "QUICK_LAUNCHES", ("dsa14",))
@@ -226,7 +256,7 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
         return words
 
     def gpu(work, quick, doc):
-        assert quick
+        assert quick and not any(k in os.environ for k in SERVED_DEFAULTS)
         rec, jobs = _attn(work, "dsa14", flip)
         doc["launches"] += [{"phase": "mufu", "case": "lg2", "checks": {"sweep_input": True}}, rec]
         jobs += X.lg2_jobs(work, "sweep", TW.mufu_lg2_words(sweep), x=sweep)
@@ -240,12 +270,13 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     assert X.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--quick"]) == 1
     doc = json.loads((out / X.RECORD).read_text())
     assert doc["digest"] == digest_of(doc) and doc["ok"] is False and not doc["errors"] and doc["bind"]["ok"]
+    assert doc["env_cleared"] == {k: "0" for k in SERVED_DEFAULTS} and doc["served"] == {"VLLM_BATCH_INVARIANT": False, "ok": True}
     assert {c: v["ok"] for c, v in doc["cases"].items()} == {"mufu/lg2": True, "attn/dsa14": False, "mufu/ex2": True, "mufu/rcp": True}
     assert doc["totals"]["mismatch"] == 1 and doc["totals"]["reference"] == 1 + 2 and doc["totals"]["twin_mismatch"] == 0
     att = next(c for c in doc["comparisons"] if c["case"] == "dsa14")
     assert att["words"] == 2 * X.NH * X.DV and att["first_mismatch"]["token"] == 8 and att["first_mismatch"]["NS"] == 2
     printed = capsys.readouterr().out
-    assert "GLM53-FA3-SPLIT NO-GO" in printed and "no-go cases=['attn/dsa14']" in printed
+    assert "GLM53-FA3-SPLIT NO-GO" in printed and " served=True " in printed and "no-go cases=['attn/dsa14']" in printed
 
 
 def test_the_record_is_a_registered_property() -> None:

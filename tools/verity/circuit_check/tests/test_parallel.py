@@ -1,5 +1,4 @@
-"""`cli.parallel`, the per-target processes behind `circuit-check --jobs`, on its own: `test_circuit_check` builds every target at
-collection, which this needs none of."""
+"""`cli.parallel`, the per-target processes behind `circuit-check --jobs`, on its own, without circuit-check's catalog."""
 from __future__ import annotations
 
 import os
@@ -76,7 +75,34 @@ def _pid(_: int) -> int:
     return os.getpid()
 
 
-def test_jobs_0_takes_one_worker_per_160_gb_the_tightest_cgroup_leaves(tmp_path):
+def test_a_budget_granted_mid_run_admits_what_now_fits(monkeypatch, tmp_path):
+    """b103 (r20261019-015150-b103): pytest ended 83 minutes into circuit-check's 125, and the four SHA-512 targets still ran
+    one at a time under the share it left beside pytest.  `parallel` asks a callable budget again at each admission, so once
+    check.py grants the slot (`granted_gb`, ``--mem-gb-file``) the targets still queued start together."""
+    asked, picked, admit = [], [], cli.admit
+
+    def budget() -> float:
+        asked.append(len(asked))
+        return 4 if cli.granted_gb(grant) is None else 9
+
+    def recorded(queued, running, jobs, budget):
+        picked.append((budget, len(admit(queued, running, jobs, budget))))
+        if len(picked) == 1:
+            grant.write_text("9\n")
+        return admit(queued, running, jobs, budget)
+
+    grant = tmp_path / "circuit-check.mem-gb"
+    assert cli.granted_gb(grant) is None and cli.granted_gb(None) is None
+    monkeypatch.setattr(cli, "admit", recorded)
+    got = list(cli.parallel(_pid, [1, 2, 3], jobs=3, weight=lambda _: 3, budget=budget))
+    assert sorted(x for x, *_ in got) == [1, 2, 3]
+    assert picked[:2] == [(4, 1), (9, 2)] and len(asked) == len(picked)
+    grant.write_text("not yet")
+    assert cli.granted_gb(grant) is None
+
+
+def test_jobs_0_takes_one_worker_per_160_gb_the_tightest_cgroup_leaves(tmp_path, monkeypatch):
+    monkeypatch.delenv(cli.SLOT_MEM_ENV, raising=False)
     (tmp_path / "proc").mkdir()
     (tmp_path / "proc/meminfo").write_text("MemTotal: 2000000000 kB\nMemAvailable: 1600000000 kB\n")
     (tmp_path / "proc/self").mkdir()
@@ -92,10 +118,35 @@ def test_jobs_0_takes_one_worker_per_160_gb_the_tightest_cgroup_leaves(tmp_path)
     assert cli.auto_jobs(tmp_path) == 1
 
 
+def test_a_cgroups_inactive_page_cache_counts_as_left(tmp_path):
+    """r20261021-101535-85fb on vy-nebius-cpu-3: a user slice at 462 of its 463 GiB, 278 GiB of it page cache, left a budget of
+    ~0, and the targets ran one at a time at 0.06 a second. The kernel reclaims inactive_file at the limit; active_file it may
+    still need, and without a memory.stat nothing is taken off."""
+    (tmp_path / "proc").mkdir()
+    (tmp_path / "proc/meminfo").write_text(f"MemAvailable: {380 << 20} kB\n")
+    (tmp_path / "proc/self").mkdir()
+    (tmp_path / "proc/self/cgroup").write_text("0::/user.slice\n")
+    cg = tmp_path / "sys/fs/cgroup/user.slice"
+    cg.mkdir(parents=True)
+    (cg / "memory.max").write_text(f"{463 << 30}\n")
+    (cg / "memory.current").write_text(f"{462 << 30}\n")
+    assert cli.memory_gb(tmp_path) == 1
+    (cg / "memory.stat").write_text(f"anon {184 << 30}\nfile {278 << 30}\nactive_file {20 << 30}\ninactive_file {258 << 30}\n")
+    assert cli.memory_gb(tmp_path) == 259, "the limit less the anonymous memory and the active cache"
+    (cg / "memory.stat").write_text(f"inactive_file {500 << 30}\n")
+    assert cli.memory_gb(tmp_path) == 380, "never more than the limit (nor MemAvailable)"
+    (tmp_path / "proc/meminfo").write_text("")
+    assert cli.memory_gb(tmp_path) == 463
+    (cg / "memory.current").write_text(f"{600 << 30}\n")
+    (cg / "memory.stat").write_text("inactive_file 0\n")
+    assert cli.memory_gb(tmp_path) == 0
+
+
 def test_the_budget_reserves_this_process_s_own_task_list(monkeypatch):
     """`--mem-gb 149` (a 160 GB worker) with the parent holding its 9.6 GiB task list leaves 139.4 GiB for the targets, so a
     151 GiB target is over it (run alone, and warned about) and a 137.8 GiB one fits.  `--mem-gb` is a cap, never more than the
     machine has free: a check slot's mem= on a node whose other check already took most of it leaves only what is free."""
+    monkeypatch.delenv(cli.SLOT_MEM_ENV, raising=False)
     monkeypatch.setattr(cli, "_rss_gb", lambda: 9.6)
     monkeypatch.setattr(cli, "memory_gb", lambda: 1500)
     budget = cli.budget_gb(149)
@@ -116,3 +167,39 @@ def test_without_mem_gb_a_run_in_a_check_slot_keeps_to_the_slot(monkeypatch):
     assert cli.auto_jobs() == min(2, len(os.sched_getaffinity(0)))
     monkeypatch.delenv(cli.SLOT_MEM_ENV)
     assert cli.budget_gb(None) == 1500
+
+
+def test_a_circuit_check_in_an_xdist_worker_keeps_to_the_worker_s_share(monkeypatch):
+    """r20261018-024149-8607: suites.py sizes the suite's xdist workers at `worker_gb` each from a memory every worker shares, so a
+    circuit-check a test starts budgets that worker's share (conftest.py's `worker_slot_gb`), or the slot's when smaller, never
+    the slot or the cgroup the others share; outside xdist nothing is set.  A worker holding 25 GiB leaves its targets the rest
+    of its share, one job."""
+    from conftest import WORKER_GB, worker_slot_gb
+
+    worker = {"PYTEST_XDIST_WORKER": "gw3"}
+    assert worker_slot_gb(worker, 32) == 32 and worker_slot_gb({**worker, cli.SLOT_MEM_ENV: "480"}, 32) == 32
+    assert worker_slot_gb({**worker, cli.SLOT_MEM_ENV: "20"}, 32) == 20
+    assert worker_slot_gb({cli.SLOT_MEM_ENV: "480"}, 32) is None and worker_slot_gb({}, 32) is None
+    if os.environ.get("PYTEST_XDIST_WORKER"):
+        assert int(os.environ[cli.SLOT_MEM_ENV]) <= WORKER_GB
+    monkeypatch.setattr(cli, "_rss_gb", lambda: 25.0)
+    monkeypatch.setattr(cli, "memory_gb", lambda root=None: 900)
+    monkeypatch.setenv(cli.SLOT_MEM_ENV, str(worker_slot_gb(worker, 32)))
+    assert cli.budget_gb(None) == 7.0 and cli.auto_jobs() == 1
+
+
+def test_the_catalog_s_build_keeps_to_what_the_session_s_workers_were_given(monkeypatch):
+    """The xdist worker that builds the catalog (conftest.py's `_budget`) budgets its bindings' processes the workers' shares,
+    `worker_gb` each, less what each holds as it waits: not the slot's mem=, which `check`'s suites running beside this one
+    share, and never more than the slot or the memory leaves; outside xdist, `cli.budget_gb`."""
+    from conftest import _budget
+
+    monkeypatch.setattr(cli, "_rss_gb", lambda: 0.5)
+    monkeypatch.setattr(cli, "memory_gb", lambda root=None: 900)
+    four = {"PYTEST_XDIST_WORKER": "gw0", "PYTEST_XDIST_WORKER_COUNT": "4"}
+    assert _budget({**four, cli.SLOT_MEM_ENV: "480"}, 8) == 30.0 and _budget(four, 8) == 30.0
+    assert _budget({**four, cli.SLOT_MEM_ENV: "20"}, 8) == 18.0
+    monkeypatch.setattr(cli, "memory_gb", lambda root=None: 10)
+    assert _budget(four, 8) == 10.0
+    monkeypatch.setenv(cli.SLOT_MEM_ENV, "320")
+    assert _budget({cli.SLOT_MEM_ENV: "320"}, 8) == cli.budget_gb(None) == 10

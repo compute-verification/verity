@@ -20,13 +20,13 @@ against C's leaf).
 - **The session log** (`--session-log FILE`, with `--signer lms`) is the memory challenger's `memory_challenger.SessionLog`:
   every session's id goes into it, fsynced, when the session commits, and a used id is refused.  It is a file of its own,
   refused inside `--lms-key`; it is made with a new key, and for a key that exists a missing log is refused (one made
-  before the log existed takes `memory_challenger.SessionLog.create(FILE)` once).  Under `--signer test` it is in
-  `$TMPDIR`.
+  before the log existed takes `memory_challenger.SessionLog.create(FILE)` once).  Under `--signer test` it is in a
+  temporary directory the audit removes once its sessions are signed.
 - **The signer.** `--signer lms` signs with S1's LMS at `lms.DEPLOYED` (`memory_challenger.LMS`), the key in `--lms-key DIR`:
   `seed` (secret, 0600), `public` (`I || T[1]`), `tree.bin` (the key's tree, a cache checked against `public` and
   `tree.sha512`) and `state.json` (`lms.LeafState`, which refuses a used leaf across runs).  A missing key is made there
   first (`--keygen-workers`; about 1.1G SHA-512 hashes).  `--signer test` signs with the PoUS tests' test signer (`pous_test_signer.py`: LMS at a small height under a
-  `test/` id), its leaf state in `$TMPDIR`.
+  `test/` id), its leaf state in that temporary directory.
 - **The verdict** is `memory_challenger.verdict` under `memory_challenger.SCHEMES`, which accepts S1's scheme alone, so a
   test-signed session is rejected: it fails closed.  `judge` computes it twice on every session, with the Lean port's
   (`lean_verdict`, built with `lake` on first use) and with the Python, which stays the reference, and keeps both in the
@@ -171,16 +171,13 @@ def lms_signer(directory: str | os.PathLike, workers: int = 1, params: Any = Non
     if not state_p.exists():
         lms.LeafState.create(state_p, lms.public_key(key), p.H)
     scheme = mc.LMS if p == lms.DEPLOYED else mc.TEST_PREFIX + f"lms-sha512/n{p.N}-w{p.W}-h{p.H}/v0"
-    return mc.LmsSigner(key, lms.LeafState(state_p, lms.public_key(key), p.H), scheme=scheme)
+    return mc.LmsSigner(key, state_p, scheme=scheme)
 
 
-def session_log(path: str | os.PathLike | None, new_key: bool) -> Any:
-    """The memory challenger's used-session log at `path` (`memory_challenger.SessionLog`), made there when the key is new;
-    without a `path` (the test signer), a new one in `$TMPDIR`."""
+def session_log(path: str | os.PathLike, new_key: bool) -> Any:
+    """The memory challenger's used-session log at `path` (`memory_challenger.SessionLog`), made there when the key is new."""
     from verity.core.protocols.pous import memory_challenger as mc
 
-    if path is None:
-        path, new_key = Path(tempfile.mkdtemp(prefix="pous-session-log-")) / "sessions", True
     if new_key and not Path(path).exists():
         mc.SessionLog.create(path)
     return mc.SessionLog(path)
@@ -289,7 +286,8 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     """`audits` sessions of the memory challenger against `limit_ns` (else `Δ` plus the cap), each judged after all of them
     ran, off the timed path.  The Lean verdict is made ready before any session signs (`lean_ready`), and the signed
     sessions are written to `sessions_out` (`write_sessions`) when the session loop ends, however it ends, before any
-    verdict runs.  Every session's id is in `session_log_path` (`session_log`) before its first round."""
+    verdict runs.  Every session's id is in `session_log_path` (`session_log`) before its first round; without one (the
+    test signer), in a temporary directory with the test signer's leaf state, removed once the sessions are signed."""
     from verity.core.protocols.pous import audit as pous_audit
     from verity.core.protocols.pous import memory_challenger as mc
     from verity.core.protocols.pous.protocol import StorageProfile
@@ -327,47 +325,48 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
         cert, gaps = None, (str(e),)
     lean_ready()
     new_key = signer == "lms" and not (Path(lms_key) / "seed").exists()
-    t0 = time.perf_counter_ns()
-    sig = (lms_signer(lms_key, keygen_workers) if signer == "lms"
-           else test_signer().TestSigner(os.urandom(32), height=max(1, (max(1, audits) - 1).bit_length())))
-    key_load_s = (time.perf_counter_ns() - t0) / 1e9
-    log = session_log(session_log_path, new_key)
-    resolution = None if clock is time.perf_counter_ns else 1
-    if cpu is not None:
-        os.sched_setaffinity(0, {cpu})
-    gc.collect()
-    gc.freeze()
-    gc.disable()
-    r = LiveResponder(host, port, nb, clock)
-    cpu_before = cgroup_cpu()
-    sessions = []
-    challengers = [mc.MemoryChallenger(mc.CoinTree.draw(os.urandom(32), os.urandom(32), blocks, k), sig, log=log,
-                                       limit_ns=limit, block_bytes=nb, binding=binding, clock=clock,
-                                       resolution_ns=resolution)
-                   for _ in range(audits)]
-    try:
-        before = calibrate(r, pings)
-        for c in challengers:
-            for _ in range(WARMUP_PINGS):
-                r.roundtrip(OP_PING, 0)
-            reports = []
-            while not c.done:
-                i = c.challenge()
-                r.roundtrip(OP_CHALLENGE, i)
-                c.receive(r.view[HEADER:])
-                reports.append((r.device_ns, r.server_ns))
-            t0 = time.perf_counter_ns()
-            signed = c.close()
-            sessions.append({"commitment": c.commitment, "signed": signed, "openings": c.openings(), "reports": reports,
-                             "sign_ns": time.perf_counter_ns() - t0})
-        after = calibrate(r, pings)
-    finally:
-        r.close()
-        gc.enable()
-        if sessions_out is not None:
-            write_sessions(sessions_out, sig, sessions)
+    with tempfile.TemporaryDirectory(prefix="pous-live-") as scratch:
+        t0 = time.perf_counter_ns()
+        sig = (lms_signer(lms_key, keygen_workers) if signer == "lms"
+               else test_signer().TestSigner(os.urandom(32), height=max(1, (max(1, audits) - 1).bit_length()),
+                                             directory=scratch))
+        key_load_s = (time.perf_counter_ns() - t0) / 1e9
+        log = session_log(session_log_path or Path(scratch) / "sessions", new_key or session_log_path is None)
+        resolution = None if clock is time.perf_counter_ns else 1
+        if cpu is not None:
+            os.sched_setaffinity(0, {cpu})
+        gc.collect()
+        gc.freeze()
+        gc.disable()
+        r = LiveResponder(host, port, nb, clock)
+        cpu_before = cgroup_cpu()
+        sessions = []
+        challengers = [mc.MemoryChallenger(mc.CoinTree.draw(os.urandom(32), os.urandom(32), blocks, k), sig, log=log,
+                                           limit_ns=limit, block_bytes=nb, binding=binding, clock=clock,
+                                           resolution_ns=resolution)
+                       for _ in range(audits)]
+        try:
+            before = calibrate(r, pings)
+            for c in challengers:
+                for _ in range(WARMUP_PINGS):
+                    r.roundtrip(OP_PING, 0)
+                reports = []
+                while not c.done:
+                    i = c.challenge()
+                    r.roundtrip(OP_CHALLENGE, i)
+                    c.receive(r.view[HEADER:])
+                    reports.append((r.device_ns, r.server_ns))
+                t0 = time.perf_counter_ns()
+                signed = c.close()
+                sessions.append({"commitment": c.commitment, "signed": signed, "openings": c.openings(),
+                                 "reports": reports, "sign_ns": time.perf_counter_ns() - t0})
+            after = calibrate(r, pings)
+        finally:
+            r.close()
+            gc.enable()
+            if sessions_out is not None:
+                write_sessions(sessions_out, sig, sessions)
     expected = lambda i: digests[64 * i:64 * (i + 1)]  # noqa: E731
-    sig.state.close()
     records = judge(sessions, expected, {sig.public_key}, signer_schemes(sig.scheme))
     answers = [a for rec in records for a in rec["answers"]]
     sha = [0] * 2000

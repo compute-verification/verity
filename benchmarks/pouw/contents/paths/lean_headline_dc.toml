@@ -1,0 +1,4 @@
+order = 295
+path = "`lean_headline_dc.py`"
+runs_on = "CPU"
+what = "The H200's and B200's headline instances in `lean_headline.py`'s Lean form, exact, written as `Security/Definitions/Accounting/HeadlineDc/Sm*.lean`: each family's design on its data sheet (DS-90, DS-100) and its measured vector (DC-90-ri, DC-100-ri) at A6's ½ floors, and DC-90-ri's twin under (I3) `ScalarRoute` at q = q_T = 3/5 (`Sm90MeasuredI3.lean`, an assumed premise beside the ½ floor), the bound the larger of its folded and unfolded branches, with χ* = 0 (no design credits a filler), ♭ folding by the built routes and the cheater by every route, counted ones included, π* the certificate an LP over the Lean menu picks, made exact, and each statement's ε and B_♭ emitted as one pair"

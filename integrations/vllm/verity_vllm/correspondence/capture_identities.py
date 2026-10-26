@@ -37,7 +37,7 @@ from verity.ml.circuits.evaluate import MissingValue, evaluate_region
 from verity.ml.circuits.layout import Circuit, FunctionCall, resolve
 from verity.ml.circuits.program import Program
 from verity_vllm.config import UsageError, option
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 _ID_RE = re.compile(r"^p=(?P<p>[^/]+)/r=(?P<r>[^/]+)/t=(?P<t>\d+)/ph=(?P<ph>[^/]+)/l=(?P<l>[^/]+)/op=(?P<op>[^/]+)/port=(?P<output>\d+)$")
 
@@ -622,13 +622,6 @@ def value_identity(call: FunctionCall, gates: tuple[int, ...]) -> dict:
 # ---------------------------------------------------------------------------------------------------------
 
 
-GEMM_NAMES = frozenset({"Gemm"})  # Gemm-shaped calls: coordinate-sampled unless listed in `full`
-
-
-def _is_gemm_like(call: FunctionCall) -> bool:
-    return call.name in GEMM_NAMES or call.name == "TokenSelect"
-
-
 @dataclass
 class Port:
     """A profile port's static configuration (coverage-wave contract, `vllm-poc/profiles/<port>/static_config.py`):
@@ -682,8 +675,7 @@ def run(store: CommitStore, checkpoint: list[Path], request: str, positions: lis
     """Two ways a profile port supplies its static configuration: `port` (a `Port`: the `Serve` definition, its config
     record, TA1-name -> port-name table and Gemm-shaped call names; `--port <dir>` on the command line), or CH's
     seams `program_factory(LP=, STEPS=) -> Program`, `circuit_map(program) -> CircuitMap-like` and `static_config`
-    (the C dict) used by `verity_vllm.check.poc_conformance`.  Without either the registered B1/B0 configurations
-    are used."""
+    (the C dict).  Without either the registered B1/B0 configurations are used."""
     if port is None:
         C0 = dict(static_config) if static_config is not None else {"B1": b1.B1_CONFIG, "B0": b1.B0_CONFIG}[config]
         port = Port(serve=b1.Serve, config=C0, id=config)

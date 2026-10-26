@@ -2,30 +2,69 @@
 
 ~~~text
 frame     u32be len(head) ‖ u32be len(body) ‖ head ‖ body: head a JSON object with its "type", body raw bytes
-opening   u32be pass ‖ u64be position ‖ block (4096) ‖ u16be len(leaf) ‖ leaf ‖ leaf salt (192) ‖ payload salt (192)
-          ‖ u8 receipt path's length ‖ its digests (64 each) ‖ u8 payload path's ‖ its digests ‖ u8 1 ‖ d_j (64) for a
-          block appended after the codec seed, u8 0 for a registered one: no tile (bind off)
 ~~~
 
-Every byte each side sends and receives is counted (`Conn.sent`, `Conn.received`, by message type). Decoding an
-opening the prover sent never raises past `decode_openings`, which returns None for a body it cannot read, so a
-malformed body reaches `Session.verify` as no openings and rejects as `malformed`.
+An `openings` frame's body is the remote audit's openings frame (`verity/core/protocols/remote_bandwidth/wire.py`),
+which decoding never raises past: a body it cannot read leaves its window no openings, which rejects as `malformed`.
+Every byte each side sends and receives is counted (`Conn.sent`, `Conn.received`, by message type).
+
+The prover's side (`connect`) reads in a process of its own (`Conn.read_apart`, `READER`): it takes each frame off the
+stream and stamps it as its last byte arrives, on the host's monotonic clock, then hands it to `recv` through a pipe.
+A boundary's stamp, which the prover's boundary rule compares with a pass's start, is then the frame's arrival
+whatever holds the prover's GIL; only how soon the session acts on it still waits on that.
 """
 from __future__ import annotations
 
 import json
+import os
 import socket
 import struct
+import subprocess
+import sys
 import threading
 import time
 from collections import Counter
 
-from verity.core.protocols.remote_bandwidth import audit, coins, receipts
+from verity.core.protocols.remote_bandwidth import audit, coins
 from verity.core.protocols.remote_bandwidth import codec as rcodec
 
 HEADER = struct.Struct(">II")
 MAX_HEAD = 1 << 20
 MAX_BODY = 1 << 31
+STAMP = struct.Struct(">Q")
+
+READER = f"""
+import os, select, struct, sys, time
+sock, out = int(sys.argv[1]), int(sys.argv[2])
+watch = select.poll()
+watch.register(sock, select.POLLIN)
+watch.register(out, 0)
+def exact(n):
+    got = bytearray()
+    while len(got) < n:
+        if any(fd == out for fd, _ in watch.poll()):
+            sys.exit(0)
+        chunk = os.read(sock, min(n - len(got), 1 << 22))
+        if not chunk:
+            sys.exit(0)
+        got += chunk
+    return got
+def put(rec):
+    rec = memoryview(rec)
+    while rec:
+        rec = rec[os.write(out, rec):]
+while True:
+    head = exact(8)
+    nh, nb = struct.unpack(">II", head)
+    if nh > {MAX_HEAD} or nb > {MAX_BODY}:
+        put(struct.pack(">Q", time.monotonic_ns()) + head)
+        sys.exit(0)
+    frame = head + exact(nh) + (exact(nb) if nb else b"")
+    put(struct.pack(">Q", time.monotonic_ns()) + frame)
+"""
+"""`Conn.read_apart`'s reader: argv the stream's descriptor and the pipe's write end. Each record is the frame's arrival
+(u64be monotonic ns) and the frame as it came; a frame over the limits goes on as its stamp and header alone, which
+`recv` refuses. It exits when the stream closes or the pipe's read end does (the prover's process gone)."""
 
 
 class Closed(ConnectionError):
@@ -43,6 +82,20 @@ class Conn:
         self.sent: Counter = Counter()
         self.received: Counter = Counter()
         self._lock = threading.Lock()
+        self.reader: subprocess.Popen | None = None
+        self._pipe: int | None = None
+
+    def read_apart(self) -> None:
+        """Read in a process of the reader's own (`READER`), whose stamps are on the host's monotonic clock: `recv`
+        then reads its records from a pipe, and nothing in this process reads the stream again."""
+        if self.clock is not time.monotonic_ns:
+            raise ValueError("a reader apart stamps on time.monotonic_ns, not this side's clock")
+        r, w = os.pipe()
+        fd = self.sock.fileno()
+        self.reader = subprocess.Popen([sys.executable, "-I", "-c", READER, str(fd), str(w)], pass_fds=(fd, w),
+                                       stdin=subprocess.DEVNULL)
+        os.close(w)
+        self._pipe = r
 
     def send(self, head: dict, body: bytes = b"") -> None:
         h = json.dumps(head, separators=(",", ":")).encode()
@@ -54,19 +107,22 @@ class Conn:
     def _exact(self, n: int) -> bytes:
         out = bytearray()
         while len(out) < n:
-            chunk = self.sock.recv(min(n - len(out), 1 << 22))
+            k = min(n - len(out), 1 << 22)
+            chunk = self.sock.recv(k) if self._pipe is None else os.read(self._pipe, k)
             if not chunk:
                 raise Closed("the stream closed")
             out += chunk
         return bytes(out)
 
     def recv(self) -> tuple[dict, bytes, int]:
+        stamp = None if self._pipe is None else STAMP.unpack(self._exact(STAMP.size))[0]
         nh, nb = HEADER.unpack(self._exact(HEADER.size))
         if nh > MAX_HEAD or nb > MAX_BODY:
             raise ValueError(f"a frame of {nh} + {nb} bytes is over the limit")
         head = json.loads(self._exact(nh))
         body = self._exact(nb) if nb else b""
-        stamp = self.clock()
+        if stamp is None:
+            stamp = self.clock()
         if type(head) is not dict or type(head.get("type")) is not str:
             raise ValueError("a frame's head is an object with a type")
         self.received[head["type"]] += HEADER.size + nh + nb
@@ -85,13 +141,17 @@ def listen(host: str, port: int) -> socket.socket:
     return s
 
 
-def connect(host: str, port: int, attempts: int = 600) -> Conn:
-    """Connect, retrying while the verifier is not yet listening (each retry waits on the refused connect itself)."""
+def connect(host: str, port: int, attempts: int = 600, apart: bool = True) -> Conn:
+    """Connect, retrying while the verifier is not yet listening (each retry waits on the refused connect itself); the
+    prover's side, reading in a process of its own unless not `apart`."""
     for k in range(attempts):
         try:
             sock = socket.create_connection((host, port), timeout=10)
             sock.settimeout(None)
-            return Conn(sock)
+            conn = Conn(sock)
+            if apart:
+                conn.read_apart()
+            return conn
         except (ConnectionRefusedError, TimeoutError):
             if k + 1 == attempts:
                 raise
@@ -122,67 +182,13 @@ def registration_of(d: dict) -> audit.Registration:
     return r
 
 
-def commitment_of(d: dict) -> coins.CoinCommitment:
-    return coins.CoinCommitment(bytes.fromhex(d["registration"]), d["session"], d["count"], bytes.fromhex(d["root"]))
+def commitment_of(d: dict) -> coins.LiveCommitment:
+    return coins.LiveCommitment.from_json(d)
 
 
-def coin_json(c: coins.CoinOpening) -> dict:
-    return {"index": c.index, "coin": c.coin.hex(), "salt": c.salt.hex(), "path": [x.hex() for x in c.path]}
+def coin_json(c: coins.LiveOpening) -> dict:
+    return c.to_json()
 
 
-def coin_of(d: dict) -> coins.CoinOpening:
-    return coins.CoinOpening(d["index"], bytes.fromhex(d["coin"]), bytes.fromhex(d["salt"]),
-                             tuple(bytes.fromhex(x) for x in d["path"]))
-
-
-_OPEN_HEAD = struct.Struct(">IQ")
-DIGEST = receipts.DIGEST_BYTES
-SALT = receipts.SALT_BYTES
-BLOCK = rcodec.BLOCK_BYTES
-
-
-def encode_opening(o: audit.Opening) -> bytes:
-    if o.tile:
-        raise ValueError("the wire carries no tile evidence: the registration does not bind z")
-    if len(o.digest) not in (0, DIGEST):
-        raise ValueError(f"an opening's d_j is {DIGEST} bytes, or none for a registered block")
-    return b"".join((_OPEN_HEAD.pack(o.pass_index, o.position), o.block, struct.pack(">H", len(o.leaf)), o.leaf,
-                     o.leaf_salt, o.payload_salt, bytes((len(o.receipt_path),)), *o.receipt_path,
-                     bytes((len(o.payload_path),)), *o.payload_path, bytes((len(o.digest) // DIGEST,)), o.digest))
-
-
-def encode_openings(openings) -> bytes:
-    return struct.pack(">I", len(openings)) + b"".join(encode_opening(o) for o in openings)
-
-
-def decode_openings(body: bytes) -> list[audit.Opening] | None:
-    try:
-        (n,), at, out = struct.unpack_from(">I", body), 4, []
-        for _ in range(n):
-            i, p = _OPEN_HEAD.unpack_from(body, at)
-            at += _OPEN_HEAD.size
-            block = body[at:at + BLOCK]
-            at += BLOCK
-            (nl,) = struct.unpack_from(">H", body, at)
-            at += 2
-            leaf = body[at:at + nl]
-            at += nl
-            leaf_salt, payload_salt = body[at:at + SALT], body[at + SALT:at + 2 * SALT]
-            at += 2 * SALT
-            paths = []
-            for _ in range(2):
-                d = body[at]
-                at += 1
-                paths.append(tuple(body[at + DIGEST * k:at + DIGEST * (k + 1)] for k in range(d)))
-                at += DIGEST * d
-            bound = body[at]
-            if bound > 1:
-                return None
-            digest = body[at + 1:at + 1 + DIGEST * bound]
-            at += 1 + DIGEST * bound
-            if at > len(body):
-                return None
-            out.append(audit.Opening(i, p, block, leaf, leaf_salt, paths[0], payload_salt, paths[1], b"", digest))
-        return out if at == len(body) else None
-    except (struct.error, IndexError):
-        return None
+def coin_of(d: dict) -> coins.LiveOpening:
+    return coins.LiveOpening.from_json(d)

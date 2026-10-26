@@ -12,7 +12,9 @@
 # copies origin/main's `tools/agent-guard` to DEST (default /opt/agent-guard), or keeps an earlier copy when origin/main can't
 # be read, checks that the hook refuses `env`, and runs DEST's `install.sh` (the redacting `env` and the git guard ahead of
 # /usr/bin); the hook stays in place if that refuses. Then it starts the VM's OOM recorder (oom_watch.py). It also puts research
-# and the GitHub helper on PATH in ~/.bashrc ($AGENT_GUARD_BASHRC), once.
+# and the GitHub helper on PATH in ~/.bashrc ($AGENT_GUARD_BASHRC), once, and sets WORKSPACE's merge drivers (`.gitattributes`
+# names them; git keeps them only in a clone's config) from origin/main's `research.clone.RECORD_DRIVER`, as every run clone
+# has them: without them `git merge-tree` here merges a lean-audit.json line by line and calls clean what the queue refuses.
 set -euo pipefail
 ws=${1:-/workspace}
 dest=${AGENT_GUARD_DEST:-/opt/agent-guard}
@@ -30,7 +32,8 @@ else
       {"command": "python3 $dest/shell_hook.py", "timeout": 10, "failClosed": true}
     ],
     "preToolUse": [
-      {"command": "python3 $dest/task_hook.py", "matcher": "Task", "timeout": 10}
+      {"command": "python3 $dest/task_hook.py", "matcher": "Task", "timeout": 10},
+      {"command": "python3 $dest/task_hook.py", "matcher": "CallDynamicTool", "timeout": 10}
     ]
   }
 }
@@ -62,6 +65,17 @@ esac
 line='export PATH=/workspace/.git/verity-auth/bin:/workspace/.venv/bin:$PATH'
 rc=${AGENT_GUARD_BASHRC:-$HOME/.bashrc}
 grep -qxF "$line" "$rc" 2>/dev/null || echo "$line" >> "$rc"
+if git -C "$ws" show origin/main:tools/research/src/research/clone.py > "$tmp/clone.py" 2>/dev/null; then
+  python3 - "$ws" "$tmp/clone.py" <<'PY' || echo "agent-guard: merge drivers not set in $ws (above)" >&2
+import importlib.util, subprocess, sys
+spec = importlib.util.spec_from_file_location("clone", sys.argv[2])
+clone = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(clone)
+for k, v in clone.RECORD_DRIVER.items():
+    subprocess.run(["git", "-C", sys.argv[1], "config", k, v], check=True)
+print(f"agent-guard: {len(clone.RECORD_DRIVER)} merge driver settings in {sys.argv[1]}'s git config")
+PY
+fi
 if [ -z "${AGENT_GUARD_SKIP_INSTALL:-}" ]; then
   bash "$dest/install.sh" || echo "agent-guard: install.sh failed or refused (above); the shell hook is in place" >&2
   # the VM's OOM recorder: one per VM (it holds its lock; a second exits), so a reboot or a second boot.sh is harmless

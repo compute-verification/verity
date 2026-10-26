@@ -20,7 +20,11 @@ command -v rsync > /dev/null && command -v sqlite3 > /dev/null && command -v psq
   >> /root/.research/pods/guard-budgets.log 2>&1 < /dev/null)
 setsid -f /data/steward/run.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/infra/tmp_sweep.sh > /dev/null 2>&1 < /dev/null
+setsid -f /data/infra/drive.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/console/console-loop.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/infra/store_index.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/infra/fixtures_export.sh > /dev/null 2>&1 < /dev/null
 setsid -f /data/infra/agent_watch.sh > /dev/null 2>&1 < /dev/null
+setsid -f /data/infra/cloud_watch.sh > /dev/null 2>&1 < /dev/null
+setsid -f /data/infra/control-disk/run.sh > /dev/null 2>&1 < /dev/null
+setsid -f /data/watchers/run.sh > /dev/null 2>&1 < /dev/null

@@ -25,6 +25,7 @@ from __future__ import annotations
 import gzip
 import itertools
 import json
+import threading
 from dataclasses import dataclass
 
 import pytest
@@ -38,7 +39,7 @@ from verity_vllm.observe.fold.patterns.collectives import TpCollective
 from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, array_of, concat, runs
-from verity_vllm.program.registry import b1, b1_tp2
+from verity.ml.definitions.registry import b1, b1_tp2
 from verity_vllm.pipeline import cli
 from verity.ml.circuits.types import Array, Record, Value
 
@@ -356,13 +357,16 @@ def rank_program(rank: int, *, swap_parts: bool = False, peer_of: dict[int, int]
     return bind(defn)
 
 
-def write_derived(d, spec: SpecializedDefinition, rank: int, *, links_mut: dict | None = None):
-    """descriptor.json.gz + derive-report.json + tp_links.json as derive_step writes them (the fields cb_a.compare reads)."""
+def write_derived(d, spec: SpecializedDefinition, rank: int, *, links_mut: dict | None = None, spec_histogram: dict | None = None):
+    """descriptor.json.gz + derive-report.json + tp_links.json + result.json as derive_step writes them (the fields cb_a.compare and the
+    fold's construction read)."""
     from verity.ml.circuits import codec
+    from verity_vllm.pipeline.build import _spec_histogram
     prog = Program(spec)
     desc = codec.encode_program(prog)
     with gzip.open(d / "descriptor.json.gz", "wt") as f:
         json.dump(desc, f)
+    (d / "result.json").write_text(json.dumps({"spec_histogram": _spec_histogram(prog) if spec_histogram is None else spec_histogram}))
     weights = ["model.embed_tokens.weight", "model.layers.0.input_layernorm.weight", "model.layers.0.self_attn.o_proj.weight", "model.norm.weight"]
     user_inputs = ["prompt"] + [f"peers_{k}" for k in range(len(PEER_SHAPES))]
     (d / "derive-report.json").write_text(json.dumps({"provenance": {"source": {"example_inputs": [[0]] * len(user_inputs)},
@@ -671,7 +675,8 @@ def test_swapped_rank_header_fails_the_compare(tmp_path):
 # ----------------------------------------------------------------------------------------------------------------------------------
 
 def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provenance=True, links_mut=None, recorder_mut=None, gprog=True,
-         provenance_of_other_run=False, provenance_digest_mismatch=False, rank_workers=0):
+         provenance_of_other_run=False, provenance_digest_mismatch=False, rank_workers=0, fold_workers=0, wrap=None, spec_histogram=None,
+         folded_under=None):
     import hashlib
     from verity_vllm.pipeline.tp import fold_match as FM
     from verity_vllm.check.fold_compare import summarize
@@ -695,7 +700,7 @@ def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provena
     for r in (0, 1):
         d = tmp_path / f"build_r{r}"
         d.mkdir()
-        write_derived(d, rank_program(r), r, links_mut=(links_mut if r == 1 else None))
+        write_derived(d, rank_program(r), r, links_mut=(links_mut if r == 1 else None), spec_histogram=spec_histogram)
         builds[r] = d
     tm = tmp_path / "tp2_match.json"
     rec_sha = {str(r): hashlib.sha256((cap / f"coll.rank{r}.jsonl").read_bytes()).hexdigest() for r in (0, 1) if (cap / f"coll.rank{r}.jsonl").exists()}
@@ -709,7 +714,7 @@ def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provena
     for r in (0, 1):
         gp[r].write_text(json.dumps({"toy": True, "rank": r}))
 
-    def gm_inproc(py, rank_dir, gprog_path, workload, within, timeout, reuse=False):
+    def gm_inproc(py, rank_dir, gprog_path, workload, within, timeout, reuse=False, x09=None):
         # the GM-01 leg's plumbing only (the checker of record runs on the real row); the toy has no GP-01 workload Program
         ok = gprog_path.exists() and workload.exists()
         return {"rc": 0 if ok else 2, "seconds": 0.0, "verdict": "PASS" if ok else "FAIL", "ok": ok, "failed_checks": [], "checks": {},
@@ -717,8 +722,10 @@ def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provena
 
     monkeypatch.setattr(FM, "global_match_rank", gm_inproc)
 
-    def fold_inproc(py, log, profile, out, timeout, reuse=False):
+    def fold_inproc(py, log, profile, out, timeout, reuse=False, construction=()):
         rank = int(str(log.name).split("rank")[1].split(".")[0])
+        if folded_under is not None:
+            folded_under[rank] = list(construction)
         result = fold_rank(rank, mut=(rank1_mut if rank == 1 else None))
         out.mkdir(parents=True, exist_ok=True)
         persist_fold(result, out, rank)
@@ -740,6 +747,10 @@ def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provena
         argv += ["--gprog-rank0", str(gp[0]), "--gprog-rank1", str(gp[1]), "--workload", str(wl)]
     if rank_workers:
         argv += ["--rank-workers", str(rank_workers)]
+    if fold_workers:
+        argv += ["--fold-workers", str(fold_workers)]
+    for name in ("fold_rank", "global_match_rank") if wrap else ():
+        monkeypatch.setattr(FM, name, wrap(name, getattr(FM, name)))
     rc = cli.main(["tp-fold-match", *argv])
     return rc, json.loads((out / "tp2_fold_match.json").read_text()), out
 
@@ -747,7 +758,7 @@ def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provena
 def _stable(doc):
     """The verdict document without its timings / paths (what must not depend on how the ranks were scheduled)."""
     if isinstance(doc, dict):
-        return {k: _stable(v) for k, v in doc.items() if k not in ("seconds", "wall_seconds", "utc", "capture", "log", "path", "out", "artifact", "rank_workers")}
+        return {k: _stable(v) for k, v in doc.items() if k not in ("seconds", "wall_seconds", "utc", "capture", "log", "path", "out", "artifact", "rank_workers", "fold_workers")}
     if isinstance(doc, list):
         return [_stable(v) for v in doc]
     return doc
@@ -764,6 +775,33 @@ def test_rank_legs_run_concurrently_and_the_document_does_not_depend_on_the_sche
     rc_p, par, _ = _e2e(tmp_path, monkeypatch, links_mut={3: {"peer_collective_k": 4}})
     rc_s, ser, _ = _e2e(tmp_path, monkeypatch, links_mut={3: {"peer_collective_k": 4}}, rank_workers=1)
     assert rc_p == rc_s == 1 and par["pass"] is False and _stable(par) == _stable(ser)
+
+
+def test_the_folds_run_wider_than_the_legs_after_them(tmp_path, monkeypatch):
+    """`--fold-workers` ranks fold at once while `--rank-workers` bounds the compare and GM-01 legs after the fold (a GLM-5.3 B8 rank's
+    fold peaks at 40 GB, its GM-01 near 400 GB): both ranks are inside their fold together, at a barrier neither passes alone, yet never
+    inside GM-01 together, and the document is the serial run's."""
+    barrier, lock, inside, most = threading.Barrier(2), threading.Lock(), [0], [0]
+
+    def wrap(name, fn):
+        def leg(*a, **k):
+            if name == "fold_rank":
+                barrier.wait()
+                return fn(*a, **k)
+            with lock:
+                inside[0] += 1
+                most[0] = max(most[0], inside[0])
+            try:
+                return fn(*a, **k)
+            finally:
+                with lock:
+                    inside[0] -= 1
+        return leg
+
+    rc, wide, _ = _e2e(tmp_path, monkeypatch, rank_workers=1, fold_workers=2, wrap=wrap)
+    rc_s, ser, _ = _e2e(tmp_path, monkeypatch, rank_workers=1)
+    assert rc == rc_s == 0 and (wide["fold_workers"], wide["rank_workers"]) == (2, 1) and ser["fold_workers"] == 1 and most == [1]
+    assert _stable(wide) == _stable(ser)
 
 
 def test_fold_match_entry_point_passes_on_the_fixture(tmp_path, monkeypatch):
@@ -786,6 +824,40 @@ def test_fold_match_entry_point_passes_on_the_fixture(tmp_path, monkeypatch):
         assert (out / f"rank{r}" / "capture" / "log.jsonl.gz").exists() and (out / f"rank{r}" / "program.json").exists() and (out / f"rank{r}" / "instances.jsonl").exists()
 
 
+def test_a_tp_fold_of_a_v2_sampler_build_carries_the_builds_construction(tmp_path, monkeypatch):
+    """Each rank folds under the construction its Build's Programs declare (`match.fold_construction_args`, which the single-rank driver
+    passes too): a v2 top-p Build folds under greedy-check-per-stage, never the profile's shared-greedy default, which its Programs never
+    match.  --reuse-fold refolds a persisted fold made under another construction (and --reuse-legs then keeps none of its legs) and keeps
+    one made under the same."""
+    from verity_vllm.pipeline.tp import fold_match as FM
+    fold_worker = FM.fold_rank      # `_e2e` replaces it with the in-process fold
+    per_stage = ["--sampler-construction", "greedy-check-per-stage"]
+    got: dict[int, list[str]] = {}
+    rc, res, _ = _e2e(tmp_path, monkeypatch, spec_histogram={"GumbelTopPTokenSelect_v2{V=154880,S=32}": 2}, folded_under=got)
+    assert rc == 0 and got == {0: per_stage, 1: per_stage}, res["problems"]
+    got.clear()
+    _e2e(tmp_path, monkeypatch, folded_under=got)
+    assert got == {0: [], 1: []}
+
+    out, log, runs = tmp_path / "persisted", tmp_path / "log.rank0.jsonl.gz", []
+
+    def run(cmd, _log, timeout=None):
+        runs.append(cmd)
+        sc = cmd[cmd.index("--sampler-construction") + 1] if "--sampler-construction" in cmd else None
+        (out / "fold_summary.json").write_text(json.dumps({"errors": 0, "unresolved": 0, "sampler_construction": sc}))
+        (out / "program.json").write_text("{}")
+        (out / "instances.jsonl").write_text("")
+        return 0
+
+    monkeypatch.setattr(FM, "_run", run)
+    fold_worker("py", log, "p", out, None)
+    rec = fold_worker("py", log, "p", out, None, reuse=True, construction=per_stage)
+    assert len(runs) == 2 and "--sampler-construction" not in runs[0] and runs[1][-2:] == per_stage
+    assert rec["ok"] and not rec["kept"] and rec["construction"]["sampler_construction"] == "greedy-check-per-stage"
+    assert fold_worker("py", log, "p", out, None, reuse=True, construction=per_stage)["kept"] and len(runs) == 2
+
+
+@pytest.mark.slow
 def test_fold_match_entry_point_fails_by_name(tmp_path, monkeypatch):
     # partner rank missing: rank 1 never logged -> the cross-rank leg names it, the row is not a PASS on rank 0's fold alone (rev R2)
     rc, res, _ = _e2e(tmp_path, monkeypatch, drop_rank1_log=True)

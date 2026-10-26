@@ -6,6 +6,10 @@ cause; a test whose only failures are known is an expected failure, and `test_kn
 is fixed, so the entry is dropped.  Redundant and dead gates are warnings: counted in the report, never a test failure here.
 The per-target tests are marked `circuit_suite` and collected only under `-m circuit_suite` (see conftest.py): `check` runs the
 same checks as `circuit-check --all`.
+
+The tests that read the suite (the `suite` fixture) or the Calls it gives (`targets.call_families`) are marked slow: the process
+that runs one builds circuit-check's catalog first (conftest.py), in about 8 minutes from `check`'s records and in about an
+hour without them, and only the whole suite shows what they hold (every registered family checked, every Call partitioned).
 """
 from __future__ import annotations
 
@@ -28,7 +32,6 @@ REPO = Path(__file__).resolve().parents[4]
 OPTS = CK.Options()
 MEMO: dict = {}
 PINS = CK.load_pins()
-SUITE = TG.suite()
 TEMPLATES = {label: (sub, sts) for label, sub, sts in TG.templates()}
 
 _known = KN.known
@@ -44,12 +47,13 @@ def _clean(entry: dict) -> None:
 
 # --- coverage -----------------------------------------------------------------------------------------------------------------
 
-def test_every_registered_definition_is_checked():
+@pytest.mark.slow
+def test_every_registered_definition_is_checked(suite):
     """Every registered Definition family is checked at a binding the catalog reaches, and every catalog root builds: a new
     Definition without one fails here by name (add its binding to its module's sidecar, `circuit_check.sidecars`)."""
     assert not TG.ROOT_ERRORS, TG.ROOT_ERRORS
     assert len(TG.REGISTERED) > 200
-    checked = {TG.family(fn) for fn in SUITE.values()}
+    checked = {TG.family(fn) for fn in suite.values()}
     missing = sorted(set(TG.REGISTERED) - checked)
     assert not missing, f"registered Definitions no circuit-check binding reaches: {missing}"
 
@@ -68,13 +72,14 @@ def test_the_registries_import_every_module_with_a_sidecar_and_key_every_target_
     assert CC.key({})["registries"] == want
 
 
-def test_every_operation_is_checked_and_reaches_no_table_outside_the_library():
+@pytest.mark.slow
+def test_every_operation_is_checked_and_reaches_no_table_outside_the_library(suite):
     """The guard does not visit an operation (`verity.ml.circuits.operations`), so a table an operation reached would be hidden: every
     listed operation has a specialization here, and none reaches a primitive that holds a table the library does not list."""
     from verity.ml.circuits import constants as K
     from verity.ml.circuits import operations as O
 
-    ops = [fn for fn in SUITE.values() if O.is_operation(fn)]
+    ops = [fn for fn in suite.values() if O.is_operation(fn)]
     assert {fn.base_id for fn in ops} == O.OPERATIONS
     for fn in ops:
         held = sorted(p.id for p in TG.reachable([fn]).values() if K.held_tables(p, O.is_library_table))
@@ -100,7 +105,7 @@ def _descriptor_digest(fn) -> str:
 
 
 SPLIT = Path(__file__).parent / "fixtures" / "split"
-#: split fixtures another test reads, in that split script's own format
+#: split fixtures another test reads, in that test's own format
 SPLIT_READERS = {"prims_serve": "test_split_prims_serve.py"}
 
 
@@ -110,30 +115,115 @@ def test_every_split_fixture_another_test_reads_is_read():
         assert f"{stem}.json" in (Path(__file__).parent / reader).read_text(), (stem, reader)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("pinned", sorted(p for p in SPLIT.glob("*.json") if p.stem not in SPLIT_READERS), ids=lambda p: p.stem)
-def test_a_split_family_keeps_its_targets_and_digests(pinned):
+def test_a_split_family_keeps_its_targets_and_digests(pinned, suite):
     """`fixtures/split/<family>.json` was written before that family's registry modules were split into Definitions, twins and
-    vocabulary (`integrations/vllm/tools/migrate/split_<family>.py pin`). Every target it lists is still checked, at the same
-    canonical descriptor digest, and every Definition family it lists is still registered. A new binding may add targets."""
+    vocabulary. Every target it lists is still checked, at the same canonical descriptor digest, and every Definition family it
+    lists is still registered. A new binding may add targets."""
     pin = json.loads(pinned.read_text())
-    missing = sorted(set(pin["definitions"]) - set(SUITE))
+    missing = sorted(set(pin["definitions"]) - set(suite))
     assert not missing, f"{pin['family']}: targets no longer checked: {missing}"
-    moved = {fid: (want, got) for fid, want in pin["definitions"].items() if (got := _descriptor_digest(SUITE[fid])) != want}
+    moved = {fid: (want, got) for fid, want in pin["definitions"].items() if (got := _descriptor_digest(suite[fid])) != want}
     assert not moved, f"{pin['family']}: descriptor digests changed: {moved}"
     assert not sorted(set(pin["registered"]) - set(TG.REGISTERED)), pin["family"]
 
 
+@pytest.mark.slow
+@pytest.mark.usefixtures("suite")
 def test_the_partition_applies_to_the_calls_of_served_programs():
     calls = TG.call_families()
     assert {"Gemm_v1", "RMSNormTriton_v1", "Attention_v3", "TokenSelect_v1", "GumbelTopPTokenSelect_v1", "RoPEHead_v1"} <= calls
     assert not {"AttnBlock_v3", "DotBf16_v1", "Serve_v1", "TopPMask_v1"} & calls
 
 
-def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch):
+def _without_the_catalog(monkeypatch, fallback=None) -> None:
+    """`is_call` from scratch, failing a test that builds the catalog; with ``fallback``, `call_families` answers from it."""
+    monkeypatch.setattr(TG, "_CALLS", set())
+    monkeypatch.setattr(TG, "_SHORT", {})
+    monkeypatch.setattr(TG, "suite", lambda: pytest.fail("the catalog was built"))
+    monkeypatch.setattr(TG, "call_families", (lambda: pytest.fail("call_families was asked")) if fallback is None else fallback)
+
+
+@pytest.mark.slow
+def test_is_call_holds_a_family_exactly_when_call_families_does(monkeypatch, suite):
+    """`is_call` decides without the catalog by a superset of the Boolean Calls (`boolean_call_candidates`, the Boolean table's
+    links) and a subset of them (`certified_boolean_calls`, the catalog's roots), and asks `call_families` for the rest: on every
+    family the suite checks, every registered one and every Call it answers as `call_families` does."""
+    calls = TG.call_families()
+    words = TG.word_call_families()
+    assert calls - words <= TG.boolean_call_candidates(words)
+    assert TG.certified_boolean_calls(words) <= calls
+    asked: list[int] = []
+    _without_the_catalog(monkeypatch, lambda: asked.append(1) or calls)
+    fams = set(TG.REGISTERED) | {TG.family(fn) for fn in suite.values()} | calls
+    assert {f for f in fams if TG.is_call(f)} == fams & calls
+    assert len(asked) < len(fams) // 10, "most families need no catalog"
+
+
+@pytest.mark.slow
+@pytest.mark.usefixtures("suite")
+def test_a_boolean_version_made_on_demand_is_a_call_by_its_id(monkeypatch):
+    """A word Call family made on demand (a `Const<w>[0x..]` or a gather) has its Boolean version, made on demand too, among the
+    Calls by its id: no module registers one ahead, so the catalog can't name it, and `is_call` decides it without the catalog."""
+    words = {"Const32[0x00000000]_v1", "GatherI32x16_v1", "GatherBf16x64_v1", "F32Add_v1"}
+    made = {"Const32[0x00000000]_v2", "GatherI32x16_v2", "GatherBf16x64_v2"}
+    assert TG.on_demand_boolean_families(words) == made
+    assert made <= TG.boolean_call_candidates(words) and made <= TG.certified_boolean_calls(words)
+    assert {"Const32[0x00000000]_v2", "GatherI32x16_v2"} <= TG.call_families()
+    _without_the_catalog(monkeypatch)
+    assert TG.is_call("Const32[0x00000000]_v2") and TG.is_call("GatherI32x16_v2")
+
+
+#: one Definition target for each way `is_call` decides: a vocabulary kind's family, a template's, a Boolean version one of their
+#: bindings certifies, a word composite and a Boolean one outside the Boolean table's bound, and a primitive
+DECIDED = {"TokenSelect_v1{V=16}": "words", "RoPEHead_v1{D=8}": "words", "RoPEHead_v2{D=8}": "certified",
+           "DotBf16_v1{K=16}": "not a candidate", "DotBf16_v3{K=16,DOT=AmpereBF16TcDot16_v3}": "not a candidate",
+           "F32Add_v1": "not a candidate"}
+
+
+@pytest.mark.slow
+@pytest.mark.usefixtures("suite")
+def test_a_targeted_run_without_the_catalog_reports_what_one_with_it_does(monkeypatch):
+    """CIR-30: a targeted run built the whole catalog (`call_families`) before checking a target, 75 minutes at #2397.  The same
+    targets checked with each `as_call` read off `call_families` and with it decided by `is_call` without the catalog get the
+    same report."""
+    from circuit_check import cli
+
+    TG.call_families()
+    full = cli.run(list(DECIDED), OPTS, log=None, isolate=False)
+    _without_the_catalog(monkeypatch)
+    fast = cli.run(list(DECIDED), OPTS, log=None, isolate=False)
+    short = TG._SHORT
+    assert {t: "words" if TG.family(TG.definition(t)) in short["words"] else
+            "certified" if TG.family(TG.definition(t)) in short["certified"] else
+            "not a candidate" if TG.family(TG.definition(t)) not in short["candidates"] else "?" for t in DECIDED} == DECIDED
+
+    def strip(rep):
+        return {**rep, "targets": [{k: v for k, v in t.items() if k not in ("seconds", "seconds_by_check")} for t in rep["targets"]]}
+
+    assert strip(fast) == strip(full)
+    assert [t["partition"]["applies"] for t in full["targets"]] == [v != "not a candidate" for v in DECIDED.values()]
+
+
+def test_the_cli_resolves_each_targets_call_without_the_catalog(monkeypatch):
+    """The process the targets' processes fork from resolves each Definition target's `is_call` (`cli._calls`), without the
+    catalog for any target `is_call` decides alone; one that doesn't resolve is left to its check."""
+    from circuit_check import cli
+
+    _without_the_catalog(monkeypatch)
+    attention = "Attention_v8{T=40,NH=2,KVH=1,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=2}"
+    cli._calls(["TokenSelect_v1{V=16}", "RoPEHead_v2{D=8}", attention, "F32Add_v1", "rope-head", "RoPEHead_v1{Q=8}"])
+    assert {"TokenSelect_v1", "RoPEHead_v1"} <= TG._SHORT["words"]
+    assert {"RoPEHead_v2", "Attention_v8"} <= TG._SHORT["certified"], "a template's binding, and a root function's (CIR-42)"
+
+
+@pytest.mark.slow
+def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch, suite):
     """`circuit-check <id>` finds a suite target that the registries hold only once the catalog's roots are traced (the gathers
     `boolean_gather.gather_bf16(n)` builds) or whose id writes a dict static as its digest (`gf2k.GfResiduals`'s schema), and
     an id neither knows still raises."""
-    from verity_vllm.query import word as W
+    from verity.ml.definitions import word as W
 
     real = W.specialization
 
@@ -143,28 +233,27 @@ def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch
         return real(fam, statics)
 
     monkeypatch.setattr(W, "specialization", unregistered)
-    monkeypatch.setattr(TG, "suite", lambda: SUITE)
     for fid in ("GatherBf16x64_v2", "GatherBf16x1100_v2", "GatherBf16x1024u10_v1"):
-        assert TG.definition(fid) is SUITE[fid]
-    res = [fid for fid in SUITE if fid.startswith("GfResiduals_v1{S={")]
-    assert res and all(TG.definition(fid) is SUITE[fid] for fid in res)
+        assert TG.definition(fid) is suite[fid]
+    res = [fid for fid in suite if fid.startswith("GfResiduals_v1{S={")]
+    assert res and all(TG.definition(fid) is suite[fid] for fid in res)
     with pytest.raises(KeyError):
         TG.definition("NoSuchDefinition_v9")
 
 
-def test_a_target_with_a_record_static_parses_as_its_id_prints_it(monkeypatch):
+@pytest.mark.slow
+def test_a_target_with_a_record_static_parses_as_its_id_prints_it(suite):
     """Every suite target whose statics hold a record (printed as a digest, ``C={d0dc81b7fa41}``) parses back from its id to
     itself, the record also at statics the suite does not bind, and a digest of no record the suite binds raises."""
     import re
 
-    monkeypatch.setattr(TG, "suite", lambda: SUITE)
-    records = [fid for fid in SUITE if re.search(r"=\{[0-9a-f]{12}\}", fid)]
+    records = [fid for fid in suite if re.search(r"=\{[0-9a-f]{12}\}", fid)]
     assert "StepBody_v1{C={e2f2f43eb046},T=4,GEMM={4130e3ca726d},ATTENTION={35db6738c571},NORM={4d524c30089f}}" in records
     for fid in records:
         assert TG.definition(fid).id == fid
     step = next(fid for fid in records if fid.startswith("StepBody_v1{"))
     other = TG.definition(step.replace(",T=4,", ",T=6,"))
-    assert other.id == step.replace(",T=4,", ",T=6,") and other.bindings["C"] is SUITE[step].bindings["C"]
+    assert other.id == step.replace(",T=4,", ",T=6,") and other.bindings["C"] is suite[step].bindings["C"]
     with pytest.raises(KeyError, match="no Definition the suite checks"):
         TG.definition("StepBody_v1{C={000000000000},T=4}")
 
@@ -172,9 +261,8 @@ def test_a_target_with_a_record_static_parses_as_its_id_prints_it(monkeypatch):
 # --- the suite ----------------------------------------------------------------------------------------------------------------
 
 @pytest.mark.circuit_suite
-@pytest.mark.parametrize("fid", sorted(SUITE))
-def test_definition(fid, results):
-    e = CK.check_definition(SUITE[fid], OPTS, memo=MEMO, pins=PINS)
+def test_definition(fid, suite, results):
+    e = CK.check_definition(suite[fid], OPTS, memo=MEMO, pins=PINS)
     results.append({**e, "kind": "definition", "target": fid})
     _clean(e)
 
@@ -220,9 +308,9 @@ def test_a_call_output_no_commitment_holds_is_named(tmp_path):
 
 
 @pytest.mark.circuit_suite
-def test_known_failures_are_current():
+def test_known_failures_are_current(suite):
     """Each known entry still fails somewhere: a fixed one is dropped from `circuit_check.known`."""
-    fails = [f for fid in sorted(SUITE) for f in CK.check_definition(SUITE[fid], OPTS, memo=MEMO, pins=PINS)["failures"]]
+    fails = [f for fid in sorted(suite) for f in CK.check_definition(suite[fid], OPTS, memo=MEMO, pins=PINS)["failures"]]
     assert not KN.stale(fails), KN.stale(fails)
 
 
@@ -369,7 +457,7 @@ def _f32x2():
 
 def test_a_value_computed_twice_in_one_unit_is_a_redundant_gate():
     from verity.ml.circuits.types import Value
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     fn = _composite("CircuitCheckRedundant", (_f32x2(), Value(32)),
                     lambda B, S, x: B.call(P.F32Mul, B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])))
@@ -384,7 +472,7 @@ def test_a_value_computed_in_two_units_is_a_recompute_failure():
     node by node; the whole Definition's cut compares them)."""
     from verity.ml.circuits.refs import array_of
     from verity.ml.circuits.types import Array, Value
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     fn = _composite("CircuitCheckRecompute", (_f32x2(), Array(2, Value(32))),
                     lambda B, S, x: array_of([B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])]))
@@ -408,6 +496,8 @@ def _partition(fn, q_word, opts=OPTS):
     return rec, [f["name"] for f in F.failures if f["check"] == "partition"]
 
 
+@pytest.mark.slow
+@pytest.mark.usefixtures("suite")
 def test_a_boolean_call_that_recomputes_across_units_passes_with_the_count():
     """A Boolean Call is judged by `Q_word` v2: the values two units compute are recorded, in the entry and the summary, not
     failed; under v1 the same cut fails by name."""
@@ -427,7 +517,7 @@ def test_a_boolean_call_that_recomputes_across_units_passes_with_the_count():
 def test_a_boolean_call_with_another_partition_code_still_fails(monkeypatch):
     """Under v2 only `gate-recomputed` is reported instead of refused: a Boolean Call whose cut has any other code fails by name."""
     from verity.ml.circuits.partition import CutVerdict
-    from verity_vllm.query import word as W
+    from verity.ml.definitions import word as W
 
     real = W.units
 
@@ -469,6 +559,8 @@ QCALL_ROPE = {"X": 32, "checked": True, "units": 8, "committed": 128, "committed
               "codes": []}
 
 
+@pytest.mark.slow
+@pytest.mark.usefixtures("suite")
 def test_the_boolean_versions_of_the_served_calls_are_calls():
     """Sigma's image of the word Call families (`boolean_version`, the switch's `word=` table) is held as Calls."""
     calls = TG.call_families()
@@ -478,33 +570,50 @@ def test_the_boolean_versions_of_the_served_calls_are_calls():
     assert not {"DotBf16_v3", "AttnBlock_v6"} & calls
 
 
-def test_every_call_the_suite_checks_is_partitioned():
+#: Calls the suite checks over `Options.partition_max_gates`, each with why it is allowed: both are σ Definitions at their
+#: smallest bindings (`boolean_sigma.circuit-check.py`), and splitting them moves GLM-5.3's and DeepSeek-V4's word digests
+OVER_PARTITION_BUDGET = {
+    "AllReduceRmsNormMnnvl_v2{WORLD=2,N=256,SHOT=1,CLUSTER=1,EPS=1e-05,FMA=False}": "split pending, CIR-44",
+    "MhcFusedPostPre_v2{HC=2,H=64,NS=2,TH=8,TN=4,REPEAT=2,EPS=1e-06,HC_EPS=1e-06}": "split pending, CIR-44",
+}
+
+
+@pytest.mark.slow
+def test_every_call_the_suite_checks_is_partitioned(catalog):
     """No Call passes with its partition unchecked: each is within `Options.partition_max_gates` (the Boolean attention Calls
-    at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap) and `Options.partition_max_leaves`."""
+    at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap; DeepSeek-V4's Boolean FlashMLA prefill and mHC Calls at their
+    smallest whole blocks 4.1M to 4.6M) and `Options.partition_max_leaves`, apart from `OVER_PARTITION_BUDGET`, which holds
+    only Calls that are still over it.  Gate counts are the catalog's (`Catalog.reached`): a target made from its record has
+    no body built, and building every Call's took 1,653 s (r20261022-011739-f87f)."""
     from verity.ml.circuits.evaluation.reference import signature_of
 
+    suite = catalog.suite
+    gates = {k: catalog.reached[k][1] if k in catalog.reached else getattr(fn, "gates", 0) for k, fn in suite.items()}
     calls = TG.call_families()
-    over = {k: fn.gates for k, fn in SUITE.items() if TG.family(fn) in calls and getattr(fn, "gates", 0) > OPTS.partition_max_gates}
-    assert not over
-    wide = {k: n for k, fn in SUITE.items() if TG.family(fn) in calls
+    over = {k: gates[k] for k, fn in suite.items() if TG.family(fn) in calls and gates[k] > OPTS.partition_max_gates}
+    assert {k: n for k, n in over.items() if k not in OVER_PARTITION_BUDGET} == {}
+    assert sorted(set(OVER_PARTITION_BUDGET) - set(over)) == [], \
+        "no longer an over-budget Call the suite checks: remove it from OVER_PARTITION_BUDGET"
+    wide = {k: n for k, fn in suite.items() if TG.family(fn) in calls
             and (n := sum(pt.leaves for pt in signature_of(fn)[0])) > OPTS.partition_max_leaves}
     assert not wide
 
 
-def test_a_boolean_family_over_the_budget_keeps_its_boolean_binding():
+@pytest.mark.slow
+def test_a_boolean_family_over_the_budget_keeps_its_boolean_binding(suite):
     """The suite keeps a family's smallest specialization over `MAX_GATES`; a Boolean norm's smallest binds the word MUFU, so its
     smallest Boolean binding (the one the Program on bits calls) is checked too."""
     from verity.ml.circuits import boolean as BL
     for word, bits in [("RMSNormFusedCuda_v3{N=16,EPS=1e-05,RSQRT=RsqrtApprox_v1}", "RMSNormFusedCuda_v3{N=16,EPS=1e-05,RSQRT=RsqrtApprox_v2}"),
                        ("RMSNormTriton_v2{N=16,EPS=1e-05,SQRT=MufuSqrtFtz_v1,SCALEA=DivFullScaleA_v1,RCP=DivFullRcp_v1}",
                         "RMSNormTriton_v2{N=16,EPS=1e-05,SQRT=MufuSqrtFtz_v2,SCALEA=DivFullScaleA_v3,RCP=DivFullRcp_v2}")]:
-        assert {word, bits} <= set(SUITE) and SUITE[bits].gates > TG.MAX_GATES
-        assert BL.is_boolean(SUITE[bits]) and not BL.is_boolean(SUITE[word])
+        assert {word, bits} <= set(suite) and suite[bits].gates > TG.MAX_GATES
+        assert BL.is_boolean(suite[bits]) and not BL.is_boolean(suite[word])
 
 
 def test_a_gate_no_output_reads_is_a_dead_gate():
     from verity.ml.circuits.types import Value
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     def body(B, S, x):
         B.call(P.F32Mul, x[0], x[1])
@@ -609,9 +718,54 @@ def test_a_kernel_wrong_only_on_edge_words_is_caught():
     assert f["name"].startswith("correspondence/kernel-mismatch CircuitCheckKernel_v1 [numpy]")
 
 
+def test_a_word_definition_that_differs_from_its_boolean_definition_is_caught():
+    """The Boolean Definition is the definition: the word Definition it names must equal its gates through the word view."""
+    from verity.ml.circuits import boolean as BL
+    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+    from verity.ml.circuits.refs import Coll, concat
+    from verity.ml.circuits.types import Array, Value
+
+    nib = Array(4, BL.BIT)
+
+    def xor_bits(B, S, x, y):
+        return B.batch(BL.XOR, Coll(Array(4, Array(2, BL.BIT)), concat([c.refs for i in range(4) for c in (x[i], y[i])])), axes=(0,))
+
+    for name, word in (("CircuitCheckXorBits", lambda x, y: x ^ y), ("CircuitCheckOrBits", lambda x, y: x | y)):
+        d = CompositeDefinition(name, 1, (), lambda S: ((("x", nib), ("y", nib)), nib), xor_bits, register=False)
+        d.word = PrimitiveDefinition(f"{name}Word", 1, (("x", Value(4)), ("y", Value(4))), Value(4), word, register=False)
+        F = CK.Findings()
+        rec = CK.word_view(bind(d), OPTS, F)
+        assert rec["via"] == f"word:{name}Word_v1" and rec["compared"] > 0
+        if name == "CircuitCheckXorBits":
+            assert rec["mismatches"] == 0 and not F.failures
+        else:
+            (f,) = F.failures
+            assert rec["mismatches"] > 0 and f["name"].startswith(f"correspondence/word-mismatch {name}_v1 [{name}Word_v1]: ")
+
+
+def test_a_boolean_constant_is_checked_on_its_one_instance():
+    """A Boolean constant (`Const<w>[0x..]_v2`, `verity.ml.circuits.ops.boolean.scalar.const_word`) takes no operands: its lowering
+    and its word view each compare its one instance, every bit, so a constant one bit off its word constant is named."""
+    from verity.ml.circuits import boolean as BL
+    from verity.ml.circuits.boolean.forms import const_bits
+    from verity.ml.circuits.boolean.trace import definition
+    from verity.ml.circuits.ops import prims as MP
+    from verity.ml.circuits.ops.boolean import scalar as BS
+    from verity.ml.circuits.types import Array
+
+    e = CK.check_definition(BS.const_word(32, 0x3727C5AC), OPTS, pins=PINS)
+    via = {r["via"]: r for r in e["correspondence"]["realizations"]}
+    assert not e["failures"] and via["c-flock:ir_lower"]["ands"] == 0
+    assert [(r["compared"], r["mismatches"]) for r in via.values()] == [(1, 0), (1, 0)]
+    off = definition("CircuitCheckConst", 2, lambda C: const_bits(0x3727C5AD, 32), (), Array(32, BL.BIT),
+                     word=MP.const(32, 0x3727C5AC), register=False)
+    names = [f["name"] for f in CK.check_definition(off, OPTS, pins=PINS)["failures"]]
+    assert names == ["correspondence/word-mismatch CircuitCheckConst_v2 [Const32[0x3727c5ac]_v1]: 1 of 1 vectors"], names
+
+
 def test_a_lowering_that_differs_from_the_ir_is_caught(monkeypatch):
     from verity_flock import ir_lower as IL
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     add = IL.PIECES["F32Add_v1"]
     monkeypatch.setitem(IL.PIECES, "F32Mul_v1", lambda C, a, b: add(C, a, b))
@@ -620,11 +774,96 @@ def test_a_lowering_that_differs_from_the_ir_is_caught(monkeypatch):
 
 
 def test_a_lowering_count_off_its_pin_is_named():
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     pins = {"pieces": {"F32Mul_v1": {"and": 1}}, "units": {}}
     e = CK.check_definition(P.F32Mul, OPTS, pins=pins)
     assert any(f["name"].startswith("lowering/pin-mismatch F32Mul_v1 [F32Mul_v1]: and 1 -> ") for f in e["failures"])
+
+
+def _lowering_pin(e: dict) -> dict:
+    (r,) = [r for r in e["correspondence"]["realizations"] if r["via"] == "c-flock:ir_lower"]
+    return r["pin"]
+
+
+def test_a_lowering_type_is_its_flat_circuit_type():
+    """A pin's ``type`` (`checks.lowering_type`) is `circuit_types.from_gf2`'s digest of the lowering: its named inputs and
+    outputs as ports, its assertions as one more port, its tables by their SHA-512; an assertion and a table read each enter it."""
+    from verity_flock import circuit_types as CT
+    from verity_flock import gf2
+    from verity_flock import tail_pieces as TP
+    from verity_flock import type_trace as TT
+
+    def build(asserted: bool):
+        C = gf2.Circuit()
+        a, b = C.input("a", 2), C.input("b", TP.TABLE_BITS["ex2"])
+        x = C.AND(a[0], a[1])
+        v = C.lookup("ex2", [x ^ b[0], *b[1:]], TP.VALUE_BITS)
+        C.output("o", [x, v[0] ^ a[0]])
+        if asserted:
+            C.assert_zero("z", v[1] ^ b[2])
+        return C
+
+    C = build(True)
+    ins, outs = [*C.inputs["a"], *C.inputs["b"]], [*C.outputs["o"], C.asserts[0][1]]
+    t = CT.from_gf2(C, ins, outs, [(1, 2), (1, len(C.inputs["b"]))], [(1, 2), (1, 1)], "program",
+                    {"ex2": (TT.table_sha512("ex2"), TP.TABLE_BITS["ex2"], TP.VALUE_BITS)})
+    assert [it[0] for it in t.items] == [CT.AND, CT.READ] and CK.lowering_type(C) == t.digest()
+    assert CK.lowering_type(build(False)) != t.digest()
+
+
+def test_a_lowering_with_its_pinned_and_count_but_another_circuit_is_refused_on_its_type(monkeypatch):
+    """The same ANDs computing the same function, but built another way (every AND's operands swapped), match the pin's AND count
+    and every correspondence check: only the pin's ``type`` refuses it."""
+    from verity.ml.circuits.boolean import forms
+    from verity.ml.definitions.registry import prims as P
+
+    pin = _lowering_pin(CK.check_definition(P.F32Mul, OPTS, pins={"pieces": {}, "units": {}}))
+    pins = {"pieces": {"F32Mul_v1": pin["counts"]}, "units": {}}
+    assert not CK.check_definition(P.F32Mul, OPTS, pins=pins)["failures"]
+    AND = forms.Circuit.AND
+    monkeypatch.setattr(forms.Circuit, "AND", lambda self, a, b: AND(self, b, a))
+    e = CK.check_definition(P.F32Mul, OPTS, pins=pins)
+    assert _lowering_pin(e)["counts"]["and"] == pin["counts"]["and"]
+    assert [f["name"].split(" (")[0] for f in e["failures"]] == [
+        f"lowering/pin-mismatch F32Mul_v1 [F32Mul_v1]: type {pin['counts']['type'][:16]}... -> {_lowering_pin(e)['counts']['type'][:16]}..."]
+
+
+def test_a_pin_without_a_type_is_named_as_untyped_and_update_pins_types_it(monkeypatch):
+    """A pin with the lowering's AND count and no ``type`` (a branch written before ``type``) passes with an ``untyped``
+    warning, and `--update-pins` writes the lowering's ``type`` into it."""
+    from circuit_check import cli
+    from circuit_check import sidecars as SC
+    from verity.ml.definitions.registry import prims as P
+
+    pin = _lowering_pin(CK.check_definition(P.F32Mul, OPTS, pins={"pieces": {}, "units": {}}))
+    e = CK.check_definition(P.F32Mul, OPTS, pins={"pieces": {"F32Mul_v1": {"and": pin["counts"]["and"]}}, "units": {}})
+    assert not e["failures"] and _lowering_pin(e)["status"] == "untyped"
+    assert [w["name"].split(" (")[0] for w in e["warnings"] if w["code"] == "untyped"] == [
+        "lowering/untyped F32Mul_v1: 1 [F32Mul_v1]: no type"]
+    written = {}
+    monkeypatch.setattr(SC, "write_pins", written.update)
+    cli.update_pins({"targets": [e]})
+    assert written == {("pieces", "F32Mul_v1"): pin["counts"]}
+
+
+def test_a_gated_definitions_circuit_digest_is_held_to_its_pin():
+    """A Definition a Program holds as one gate naming its circuit digest (``gated``: N2's served counts here) has that
+    digest, core's `program_digest` of its Program, checked against its ``digests`` pin, which a verifier reads in its
+    place: its own digest passes, another fails by name, and none warns."""
+    from verity.ml.circuits.codec import program_digest
+    from verity.ml.circuits.program import Program
+    from verity.core.protocols.certifier import served as SV
+
+    d = SV.unit(8, 3, 1, 2, 2, 0)
+    digest = program_digest(Program(d))
+    assert SV.NetworkServedCounts.gated and PINS["digests"][d.id] == {"sha512": digest}
+    for pinned, status in ((digest, "ok"), ("0" * 128, "mismatch"), (None, "unpinned")):
+        F = CK.Findings()
+        rec = CK.circuit_digest_pin(d, {"digests": {} if pinned is None else {d.id: {"sha512": pinned}}}, F)
+        assert rec["status"] == status and rec["counts"] == {"sha512": digest}
+        assert [f["name"].split(" [")[0] for f in F.failures] == ([f"lowering/pin-mismatch {d.id}"] if status == "mismatch" else [])
+        assert [w["code"] for w in F.warnings] == (["unpinned"] if status == "unpinned" else [])
 
 
 def test_redundant_ands_are_counted():
@@ -643,9 +882,9 @@ def test_redundant_ands_are_counted():
 def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     from circuit_check import cli
 
-    # Every target here is a Call of a served Program (`targets.call_families`), so `--as-call` is the default it would resolve;
-    # passing it skips building the whole catalog in each run's worker (~10 min each).
-    call = ["--as-call", "-q"]
+    # Every target here is a Call of a served Program, which `targets.is_call` decides without the catalog.  Uncached: a cache
+    # would trace this test process for good (`cache.trace`).
+    call = ["-q", "--no-cache"]
     out = tmp_path / "r.json"
     assert cli.main(["RoPEHead_v1{D=8}", BOOL_RECOMPUTE, "--out", str(out), *call]) == 0
     r = json.loads(out.read_text())
@@ -780,14 +1019,16 @@ def test_two_writers_of_one_entry_at_once_both_store_it(tmp_path, monkeypatch):
 
 @pytest.mark.slow
 @pytest.mark.skipif(not os.environ.get("VERITY_CIRCUIT_CHECK_SLOW"),
-                    reason="8 min on a node, nearly all of it each worker's cold start: VERITY_CIRCUIT_CHECK_SLOW=1")
+                    reason="~2.5 h on a node: VERITY_CIRCUIT_CHECK_SLOW=1")
 def test_parallel_jobs_give_the_serial_report(tmp_path):
     """It checks four real targets serially and in worker processes, so it catches a `--jobs` worker whose report differs from
-    the serial one. Opt-in: run it after a change to `cli.run`, `cli.parallel` or the task list's order."""
+    the serial one. Opt-in: run it after a change to `cli.run`, `cli.parallel` or the task list's order. Only an isolated
+    result has ``peak_gb`` and ``rss_start_gb`` (`cli.run`), so they are stripped with ``seconds`` and ``seconds_by_check``."""
     from circuit_check import cli
 
     specs = ["F32Mul_v1", "RMSNormTriton_v1{N=64,EPS=1e-05}", "TokenSelect_v1{V=64}", "rope-head"]
-    strip = lambda rep: [{k: v for k, v in t.items() if k != "seconds"} for t in rep["targets"]]  # noqa: E731
+    measured = {"seconds", "seconds_by_check", "peak_gb", "rss_start_gb"}
+    strip = lambda rep: [{k: v for k, v in t.items() if k not in measured} for t in rep["targets"]]  # noqa: E731
     assert strip(cli.run(specs, OPTS, log=None, jobs=3)) == strip(cli.run(specs, OPTS, log=None, jobs=1))
 
 

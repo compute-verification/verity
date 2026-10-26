@@ -1,15 +1,15 @@
 ---
 name: lean-proofs
 description: >
-  How to work on Lean in Verity: where a new Lean file or package goes, the inner loop (lake env lean on one file,
-  scratch probes with #print axioms, exact? and trace_state, profiling a slow proof), building and auditing with
-  tools/verity/lean/check.py, stating assumptions as named Props, freezing and listing the guarantees a ledger or PR cites in
-  lean-audit.json, moving them without a DM to Daniel (--moved), watching ArkLib and other dependencies for proofs
-  of what we assume (tools/verity/lean/upstream.py), keeping parallel Lean lanes out of each other's files and build
-  directories, and Daniel's Lean rulings (guarantees proved under their assumptions, Lean as the source of truth for
-  them). Use when adding or changing Lean proofs, definitions or packages (verity/core/service/flock, Security
-  and its Proofs, the PoUS grader in verity/core/protocols/pous/lean), when a Lean build or proof is slow,
-  editing a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
+  How to work on Lean in Verity: where a new Lean file or package goes, the edit loop (verity lean try FILE on a node's
+  warm tree; scratch probes with #print axioms, exact? and trace_state; profiling a slow proof), building and auditing with
+  tools/verity/lean/check.py and its fast path, stating assumptions as named Props, freezing and listing guarantees in
+  lean-audit.json, moving them without a DM to Daniel (--moved), the shape of a property, watching dependencies for
+  proofs of what we assume (tools/verity/lean/upstream.py), keeping parallel Lean lanes out of each other's files and
+  build directories, and Daniel's standing Lean rulings. Use when adding or changing Lean proofs, definitions or
+  packages (verity/core/service/flock, Security and its Proofs and Properties, a protocol's lean/), when a Lean build
+  or proof is slow or runs out of memory, editing a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean
+  dependency, or preparing a Lean PR.
 ---
 
 # Lean proofs
@@ -18,273 +18,167 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
 
 ## Where the work goes
 
-- **Code or analysis** (`AGENTS.md` "Lean"). Code the verifier runs, and anything the V[B] generator or a reference
-  prover runs: `verity/core/service/flock/` (no dependencies); the PoUS grader and the certifier program stay with their
-  protocols, each in its `lean/`. Everything else is
-  security analysis, under `Security/`: a definition or statement in `Definitions/<Area>/` or
-  `Models/<Area>/{Assumptions,Guarantees}` (package `security`, Mathlib only), a proof in `Proofs/<Area>/` (package
-  `security_proofs` in `Security/Proofs/`, which may use ArkLib). C-Flock's level3 and soundness are
-  `Proofs/Flock/Level3/` and `Proofs/Flock/Soundness/`. A property of code, stated against its Lean functions, is
-  `Properties.<Protocol>`, proved in `Properties.Proofs.<Protocol>` (package `security_properties`, which may require
-  `security` and the code, never `security_proofs`). No new package: an area is a directory in each tree.
-- **Lean is the definition and the verifier of record** (Daniel, 18 Oct; `AGENTS.md` "Design rules"). A verifier is
-  Lean code and imports nothing from `verity.ml`; the Python that mirrors it, for the prover's speed, is held to it by
-  difftest (`verity/core/difftest/`). A protocol whose Python verifier is still of record switches by the 8 Oct
-  procedure (`.agents/skills/friction/SKILL.md`), which moves its properties from `Models/` to `Properties/`.
-- **Own a subdirectory and namespace** (`Proofs/Flock/Soundness/Knowledge/`, namespace `FlockSoundness.Knowledge`), with
-  one aggregator module that imports its files. The area's root imports the aggregator once, when the area is created,
-  so parallel lanes don't edit the same root file.
-- **Parallel proof work runs against fixed statements** (Daniel, 8 Oct). Before any worker starts, the final theorem's
-  statement and each open piece's statement are on the branch; each worker proves its piece against that statement, and
-  integration builds the final theorem against them continuously. What isn't closed by the deadline is a gap list on the
-  branch: exact lemma names with no `sorry` outside them, each with a size and an owner.
-- **Definitions a guarantee reads go in `Definitions/` or `Models/`**, not in a proof file. The Lean check lists where they are
-  (`reads` in `Security/lean-audit.json`); keep that list short.
-- **Build in your own checkout.** Two agents never share a writable `.lake`: concurrent builds overwrite each other's
-  `.olean` files, and a Lean check then reads what another agent's build left. A second Lean task on the same machine gets
-  its own worktree. Seed its dependencies from a checkout with the same `lake-manifest.json` and `lean-toolchain`:
-  `mkdir -p WT/PKG/.lake && cp -a --reflink=auto PKG/.lake/packages WT/PKG/.lake/`. Copy, never symlink, because Lake
-  rewrites `.olean` files in place. After the copy, `lake build` compiles only the package's own modules.
-- **A reviewer or red-team subagent works in its own worktree**, under AGENTS.md's checkout rule (Lanes): a checkout in
-  another agent's tree switches that agent's files under it.
+- **Code or analysis** (AGENTS.md "Lean" says which tree and package). Code the verifier, the V[B] generator or a
+  reference prover runs stays with its component; everything else is under `Security/`. No new package: an area is a
+  directory in each tree.
+- **Lean is the definition and the verifier of record.** A verifier is Lean code and imports nothing from `verity.ml`;
+  the Python that mirrors it is held to it by difftest (`verity/core/difftest/`).
+- **Own a subdirectory and namespace** with one aggregator module; the area's root imports the aggregator once, so
+  parallel lanes don't edit the same root file.
+- **Code the verifier runs costs O(description)**: summarize per Definition and multiply through batch members and scan
+  iterations, never walk the unrolled circuit (`tests/test_verifier_cost.py` refuses the walk). A gate-by-gate version
+  may stay as the reference the description-sized one is difftested against.
+- **Parallel proof work runs against fixed statements**: the final theorem's statement and each open piece's statement
+  are on the branch before any worker starts. What isn't closed by the deadline is a gap list of exact lemma names, each
+  with a size and an owner, with no `sorry` outside them.
+- **Definitions a guarantee or property reads go in `Definitions/` or `Models/`**, not in a proof file (`reads` in the
+  lock lists where they are; keep it short). The Lean check refuses a statement that reads the proofs tree, and a
+  definitions or properties module that imports it (`trees` in `Security/lean-audit.json`); a lemma's statement over
+  proof-only definitions is not a guarantee.
+- **Build in your own checkout.** Two agents never share a writable `.lake`. A second Lean task on one machine gets its
+  own worktree, its dependencies copied (never symlinked) from a checkout with the same manifest and toolchain:
+  `mkdir -p WT/PKG/.lake && cp -a --reflink=auto PKG/.lake/packages WT/PKG/.lake/`. A reviewer or red-team subagent is
+  a cloud worker in its own checkout.
 
 ## Build, iterate, check
 
 ~~~text
-bash tools/verity/lean/setup.sh PKG    once per machine: elan, the toolchain, Mathlib's cache
-cd PKG && lake build                   once per checkout; incremental from then on
-lake env lean Pkg/Area/File.lean       each edit: elaborate one file against the built imports
-lake build Pkg.Area.File               after editing a file others import, so they see the change
-python tools/verity/lean/check.py PKG  once, before pushing (the kernel replay of Security/Proofs is the slow part)
+verity lean try PKG/Area/File.lean     each edit: File's imports built, then `lake env lean` on it, on a node's warm tree
+lean_changed.py --records PKG --update the fast path (below), once the proofs elaborate: the lock and the mark
+python tools/verity/lean/check.py PKG  the full check, which the train's check runs; by hand only on a machine of your own
 ~~~
 
-Build on a CPU machine; `Security/Proofs` (package `security_proofs`, on ArkLib) is the long one. Never `lake
-update`, and never change a `require`, a revision or `lean-toolchain` in a feature PR. Its build of C-Flock's soundness
-proofs peaks at 15–24 GB of memory, so `check.py` and the fast path refuse a package that pins ArkLib on a machine with
-less than 24 GiB (memory and swap, within its cgroup) and print the fast path's line on a node; a 16 GB agent VM runs
-it there. `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor (0: none, say after adding a swapfile). A whole-Security audit
-(`Security`, which audits Security/Proofs beside it) needs more: with 48 replay threads it peaked at 189 GiB, in its kernel
-replays, and died at 64 and 96 GiB (r20261018-175656-1c85). `check.py` now gives a heavy replay one thread per 4 GiB and
-runs heavy replays one at a time, and refuses that audit below 64 GiB. For a record, use the fast path, which skips the
-replay; a queued `check.py --build` of Security takes `--kind lean-audit`, which brings its memory.
+- **The edit loop is `verity lean try FILE`** (FILE from the repository's root). It ships your checkout, uncommitted
+  edits and new files included, through `research run` (default vy-nebius-cpu-1's `research` pool; `--on NODE [--pool P]`
+  for another node with `build` Lean slots, e.g. `--on vy-nebius-cpu-5 --pool proofs`), takes a `build` slot's tree there, the one `--records` keeps warm, builds
+  only what changed among FILE's imports, runs `lake env lean FILE`, and prints Lean's output and the wall time, exiting
+  with lean's status. It never writes a record. After editing a file others import, try the importer: its imports'
+  build rebuilds the edited file.
 
-To check your records, or get the `--update` printout of what changed (what Daniel's DM carries), without a build of
-your own, use the fast path on a shared machine. Don't run `check.py --build --update` from a fresh tree there: that took
-about 22 minutes unpinned on the check cores.
+- **Where it runs.** Build on a CPU machine. Never `lake update`, and never change a `require`, a revision or
+  `lean-toolchain` in a feature PR. `check.py` refuses an ArkLib package below 24 GiB (memory and swap, within its
+  cgroup; `VERITY_LEAN_MEM_FLOOR_GIB` overrides, 0 for none) and a whole-Security audit (`Security` with Security/Proofs
+  beside it) below 160 GiB, whose replay's resident base is about 120 GiB whatever its threads. The refusal prints where
+  to run it instead; a queued Security audit takes `--kind lean-audit`.
+- **The fast path is for the lock and the mark, not the edit loop**: it gives your records, and the `--update` printout
+  Daniel's DM carries, without a build of your own, once `verity lean try` passes on your files:
 
-~~~text
-research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- \
-  python3 tools/verity/lean/lean_changed.py --records PKG --update
-~~~
-
-It waits for one of the node's Lean slots of pool `build` (`lean_slot.py`; a node whose slot file lists no `build` pool
-refuses it, exit 2, even with an `any` pool), never behind merge checks or hour-long audits, rebuilds only what changed since
-that slot's last run, and audits without the kernel replay: on C-Flock's soundness with nothing to rebuild that was 6.5 minutes, and a
-slot's first run, a cold build, 31. The record is in the run's `lean-audit/audit-*/`, with `review.txt` when it changed; commit
-the record. It then checks, without `--update`, every package whose guarantees read PKG's build (`Security/Properties` for
-`Security`), each in `lean-audit/requirer-<path>/`. When one fails, your change moved what its guarantees read: if you meant
-it, run `--records` on that package with `--update` and commit its record too, since check audits every package whose inputs
-changed. It vouches for nothing: its result is of kind `lean-fast/v1`, which `check`'s lean-audit step and `research merge`
-refuse.
-
-To regenerate a record on a pod, run `research run --on POD --project verity --source . --cwd clone -- python3
-tools/verity/lean/check.py --build --update PKG` with no wrapper around it (vy-nebius-1 has no `python`, exit 127). It exits 0 when the Lean check passes, whether or not the
-record changed, and the record is among the run's outputs, at `lean-audit/audit-TAG/lean-audit.json`. `--cwd clone` builds
-in the run's own clone of the shipped tree, removed when the run ends; with `--cwd source` every run of the commit builds in
-the one shared tree, and a cancelled duplicate there deleted `PKG/.lake/packages` under a live Lean check.
-
-While proving, check one file at a time, and leave the whole package and the Lean check for the end:
-
-- **`lake env lean FILE`** prints that file's errors and warnings, and writes nothing. The `Core` area's slowest file takes about 10 s
-  this way. A file that imports what you changed sees the change only after `lake build` of the changed module.
-- **Ask Lean in a scratch file** outside the repository, run from the package directory with `lake env lean
-  /tmp/scratch/Probe.lean`. It takes well under a second against built imports:
-
-  ~~~lean
-  import Proofs.Core.TC.AmpereSound
-  #print axioms Verity.TC.ampere_step_hw     -- a sorry shows as sorryAx, long before the Lean check runs
-  example (a b : Nat) : a + b = b + a := by exact?
+  ~~~text
+  research run --on vy-nebius-cpu-1 --pool research --project verity --source . --cwd clone --declared-output 'lean-audit/*' -- \
+    python3 tools/verity/lean/lean_changed.py --records PKG --update
   ~~~
 
-  Probe what you build on, not only what you wrote: a section-level `variable` whose type goes through a local
-  notation can elaborate to `sorry` with no error or warning, and the silent `sorryAx` then shows up as opaque
-  timeouts in proofs that use the binder (proofs' worker, 14 Oct: five failed pod runs before a `#print axioms`
-  probe caught it). A theorem reading such variables can also be dropped silently — no error, no `sorry`, the
-  declaration simply absent from the built module, so a probe failing with "unknown constant" on a theorem you
-  wrote is this, not a typo (same night: a theorem vanished through two runs before a bisect found it; #1923's
-  audit hardening fails the package on both). Put such binders on the theorem itself, not in a section `variable`.
-- **See a goal** by putting `trace_state` before a `sorry`: the goal prints with the file's output. The editor's language
-  server shows it too.
-- **Search before you prove:** `exact?` or `apply?` on a scratch `example` (both work without Mathlib), then `rg` for the
-  name or shape across every package's `.lean` files, then [Loogle](https://loogle.lean-lang.org) for Mathlib by type.
-  A lemma another package already proves is imported or moved to a shared place, not proved again.
-- **When a declaration is slow,** find out where the time goes before raising `maxHeartbeats`:
-  - `set_option profiler true in` before the declaration prints its elaboration times;
-  - in a Mathlib package, `#count_heartbeats in` (from `import Mathlib.Util.CountHeartbeats`) prints the heartbeats it
-    used.
-
-  Then fix the proof: use `simp only [...]` outside terminal calls, split out a lemma, or shrink a `decide`. If an override
-  stays, give its reason in a `--` comment ending its line or just above it; the audit lists every override with its
-  reason and its module's build time (`heartbeats` in its report) and refuses none. Keep files to a few hundred declarations, so that Lake builds them in parallel and an
-  edit re-elaborates little.
-- **Push after every commit.** Work that lives only in a VM's worktree is lost when the VM is suspended.
-
-The replay refuses `X.congr_simp is declared by a replayed module and by one it imports`. `simp` realizes a structure
-constructor's congruence lemma (`ZeroHom.mk.congr_simp`) in your module when it rewrites under an unfolded bundled map,
-and Mathlib has realized it already. Don't unfold a `→+` or `→*` inside `simp`: prove its `_apply` lemma by `rfl` and
-simp with that.
+  On a node whose slot file has a `build` pool it takes one of its slots, rebuilds only what changed in that slot's tree,
+  waits for another run's hold on a shared tree, and audits without the kernel replay. Where the slot file lists no `build`
+  pool, or with `--dev-cache` (a slot tree whose dependencies are fetched cold), it takes the `--dev-cache` path instead:
+  `check.py --dev-cache --build --no-replay` on the run's clone, its build restored from the published cache (Security:
+  about 40 minutes); it prints which path it took. In cpu-1's research pool the pool's runner takes the check slot, so don't wrap it in
+  `slot.py` there. On vy-nebius-1 a bare run is refused: wrap it in n1's Lean-record pool, `env
+  CHECK_SLOTS=/workspace/research/locks/leanrec/slots python3 tools/verity/check/slot.py --by LANE -- python3
+  tools/verity/lean/lean_changed.py --records PKG --update` (4 slots; the rest wait in slot.py's line). The
+  record is in `lean-audit/audit-*/` and, when it changed, `lean-audit/record/` (with `review.txt`); commit it. It then checks every package whose
+  guarantees read PKG's build (`lean-audit/requirer-<path>/`); when one fails, run `--records --update` on it too. Its
+  result is `lean-fast/v1`, which no merge check accepts. A slot tree another run left mid-way (cancelled, timed out,
+  killed for memory) is repaired before the build, with the reason printed, so don't delete or copy a slot tree by hand.
+  A spec's failure `proved_in: P's build did not pass` points at P's own report, where its build failed.
+  A package whose records passed on the same Lean inputs on that node (or whose Lean check passed there) is skipped, and
+  so is one where HEAD only merged `main`, taking every Lean input of it whole from main's side and its lock from
+  `merge.py`: that lock is a candidate the train's Lean check rebuilds. With nothing left the run builds nothing and
+  takes no slot (`path: reused`); `--rebuild` runs it anyway.
+- **A full record on a pod**: `research run --on POD --project verity --source . --cwd clone -- python3
+  tools/verity/lean/check.py --build --update PKG`, with no wrapper (vy-nebius-1 has no `python`). It exits 0 when the
+  check passes; the record is at `lean-audit/audit-TAG/lean-audit.json`. Use `--cwd clone`: runs of one commit share
+  `--cwd source`'s tree, and two Lake builds there break each other.
+- **Ask Lean in a scratch file** outside the repository, from the package directory: `lake env lean
+  /tmp/scratch/Probe.lean` with `#print axioms X` (a `sorry` shows as `sorryAx`), or `example … := by exact?`. Probe what
+  you build on too: a section `variable` whose type goes through a local notation can elaborate to `sorry` silently, or
+  drop a theorem from the module with no error ("unknown constant" on a theorem you wrote is this). Put such binders on
+  the theorem itself.
+- **See a goal** with `trace_state` before a `sorry`.
+- **Search before you prove**: `exact?` or `apply?`, then `rg` across every package's `.lean` files, then
+  [Loogle](https://loogle.lean-lang.org). A lemma another package proves is imported or moved, not proved again.
+- **When a declaration is slow**, measure first (`set_option profiler true in`; `#count_heartbeats in` in a Mathlib
+  package), then fix the proof: `simp only [...]` outside terminal calls, a split-out lemma, a smaller `decide`. An
+  override that stays has its reason in a `--` comment on or above its line (the audit lists every override). Keep
+  files to a few hundred declarations.
+- **`X.congr_simp is declared by a replayed module and by one it imports`**: `simp` realized a structure constructor's
+  congruence lemma that Mathlib realized already. Don't unfold a `→+` or `→*` inside `simp`; prove its `_apply` lemma by
+  `rfl` and simp with that.
 
 ## Assumptions and guarantees
 
 - **An assumption is a named `Prop`** in its area's `Models/<Area>/Assumptions` (C-Flock's in
-  `Proofs/Flock/Soundness/Assumptions`, `FlockSoundness.Assumptions`, until its spec is extracted), taken as a
-  hypothesis by each theorem that needs it (`(hCR : Assumptions.SHA512CRExpected …)`), and listed by name in the lock's
-  `assumptions` with its owner (`check.py --update` writes its record). Its docstring opens with its
-  claim id (`uniform/io-getrandombytes`, from `verity.core.claims`) and gives its rationale. Lean is the source of truth for
-  what we assume, so a ledger points to the docstring rather than restating it. Never an `axiom`, never a `sorry` on
-  `main`, never `native_decide`, never an option that skips the kernel. A statement you can't prove yet is an
-  assumption, or a theorem in a lane branch, not on `main`.
-- **Freeze the statement, then prove it.** In your lane branch, state the guarantee on a `sorry` stub, check it against
-  the paper or the spec, list it in `lean-audit.json` and run `--update`. The record holds the statement, so it passes once
-  the proof lands, and the record shows if the statement moved on the way. Never make a
-  guarantee easier: don't strengthen an input relation, weaken an output relation, shrink the challenge space, add an
-  unmotivated hypothesis, or move a verifier check into an assumption. That list is also what Daniel looks for when a change reaches him.
-- **List what you cite.** When a ledger row, a table or a PR description cites a guarantee as proved, add its theorem
-  (`SecurityProofs.G` under the four names) to `guarantees` and run `python tools/verity/lean/check.py --update PKG`. Commit the
-  record with the proof.
-- **Watch upstream for what you assume.** A new named assumption or a lemma you prove by hand that a pinned dependency
-  (Mathlib, ArkLib, VCVio, CompPoly) could prove gets an entry under `upstream.watch` in the package's `lean-audit.json`.
-  The entry lists the dependency's constants that the statement is about. An assumption stated over the package's own
-  definitions gets none: no upstream theorem can mention them, so the entry could never fire. Nor does one about a single
-  number (PoUS's `PrimeP16448`): its entry would fire on every theorem about primes. The Lean check fails when the
-  pinned dependency proves an unacknowledged theorem about them. Read the theorem, say in the PR whether it discharges the assumption or replaces the proof, then run
-  `python tools/verity/lean/upstream.py PKG --ack`. At a dependency bump, also run `upstream.py PKG --lean` (the exact pass).
-  At a toolchain bump, also re-read `lean_io_get_random_bytes` in the new toolchain's `src/runtime/io.cpp`. A3
-  (`Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`) cites what it reads, and `tests/test_lean_packages.py` fails until the citation names the
-  new version.
-  Cite the output in `ASSUMPTIONS.md`'s upstream status rather than writing one.
-- **A changed record is a changed claim.** If `--update` changes a record or `reads` for a guarantee you didn't mean to
-  change, your edit changed what that guarantee says: undo it, or say so in the PR and update the ledger.
-- **A changed record reaches Daniel.** The axiom checks and the replay pass a weakened definition (a vacuous theorem is
-  still a theorem), so paste what `--update` printed into the PR. When it lands on `main`, Daniel gets a DM showing the
-  change, and that DM is the check: nobody signs off and nothing waits on it. A statement reviewer is optional: ask one
-  when you want a second reading of the printout, but don't hold the merge for it.
-- **A move is not a change.** When you rename guarantees or move what they read (a package moving to the four names), write
-  the moves as a JSON object of old names to new ones, a declaration or a namespace each, and run
-  `check.py --update --moved MOVES.json PKG` on the record as it was before the move. A guarantee that says what its
-  record says, renamed or lifted, and the definitions the same under their old names, each get one line; the rest prints
-  in full. Moving a definition to another module needs no map.
-- **A lift needs no map.** `theorem X (xs) : e` becoming `theorem X (xs) : G as`, with `def G (ys) : Prop := e` in a
-  `Guarantees` module, prints as "lifted into G" on a plain `--update` when `G` unfolded once is `e` (the same type hash)
-  and the theorem keeps its named assumptions as binders (tools/verity/lean/README.md, "A lift is not a change"). Daniel's DM
-  still lists the changed record.
-- **One shape.** A property takes its inputs, one hypothesis that its function returned an outcome, and premises; the
-  rest is its conclusion. Each guarantee's entry under `shape.properties` in `lean-audit.json` names its `function` (a
-  constant or several) and that `outcome`: `accept` by default, `undecided` or `reject` where the property is about that
-  outcome, `none` for a function that always returns (a device's `step`, a constant), which takes only the input; two
-  acceptances of one function (a binding property) are one, of the pair. A premise is a hypothesis whose head is a
-  constant of a module under `shape.premises` (under its leading `∀`s); the acceptance applies the function in its own
-  body, under no hypothesis of its own; a `Prop` field of a structure an input ranges over, or a family of them
-  (`Vs : Fin S → VStmt`) holds, counts as a hypothesis (`Nonempty` too),
-  and a conjunction as its conjuncts; when they are about different functions, the entry lists `conjuncts`, one
-  `{function, outcome}` each. A probability statement has its acceptance in the event instead: with its constant under
-  `shape.events` (`FlockSoundness.Game.prob`), a conjunct whose events are each the acceptance and then what fails
-  (`prob (fun o => A o ∧ B o) g σ ≤ …`, every conjunct before the last an acceptance) takes premises only, and every
-  other hypothesis is refused; a compound failure goes under one `¬` or definition. Every package is checked. A guarantee that doesn't fit yet is under `shape.frozen`
-  with one sentence on why, starting with its category (`restatable: …`, `frozen (hash): …`, `lemma`, `completeness`,
-  `falsified`); the check fails once it fits, until the entry goes. A named conjecture is a premise under
-  `shape.conjectures` (open with a falsification test that runs, its `test` a pytest node id `PATH::NAME`, or
-  falsified, with why); a property resting on one
-  lists it under `rests_on`, and a falsified one takes every property resting on it off the list. Every `def G : Prop` of a `Guarantees` module (or a module
-  under `shape.statements`) is the statement of a guarantee the lock lists, or is under `shape.frozen` until it is. Adding an entry is a claims change the
-  landing DM shows Daniel: rather restate the guarantee, or move what isn't a property (an iff's converse, an honest
-  case) to `Proofs/` as completeness.
+  `Proofs/Flock/Soundness/Assumptions` until its spec is extracted), taken as a hypothesis by each theorem that needs it
+  and listed by name in the lock's `assumptions` with its owner. Its docstring opens with its claim id
+  (`verity.core.claims`) and gives its rationale; a ledger points to the docstring. Never an `axiom`, a `sorry` on
+  `main`, `native_decide` or a kernel bypass. Every premise a guarantee takes whose head is defined in a package of this
+  repository is listed, wherever it is defined, and so is every assumption a premise mentions (`A ∧ B`, `¬ A`, `∃ x, A x`,
+  a field of a structure a binder ranges over); `--update` adds it with its guarantees' owner.
+- **Statement first, then red team, then a card to Daniel for each new premise, then the proof.** State the guarantee
+  on a `sorry` stub in your lane branch, list it, and run `--update`, so the record holds the statement and shows if it
+  moves. Never make a guarantee easier: no stronger input relation, weaker output relation, smaller challenge space,
+  unmotivated hypothesis, or verifier check moved into an assumption.
+- **List what you cite.** A guarantee a ledger, table or PR cites as proved is in `guarantees`; commit its record with
+  the proof.
+- **Watch upstream for what you assume.** A named assumption or hand proof that a pinned dependency (Mathlib, ArkLib,
+  VCVio, CompPoly) could prove gets an `upstream.watch` entry listing the dependency's constants it is about (none for
+  one over our own definitions, or about a single number). When the check fails on a new upstream theorem, read it, say
+  in the PR whether it discharges the assumption, and run `tools/verity/lean/upstream.py PKG --ack`. At a dependency
+  bump also run `upstream.py PKG --lean`; at a toolchain bump re-read `lean_io_get_random_bytes` in its
+  `src/runtime/io.cpp` (A3 in `Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`; `tests/test_lean_packages.py` checks
+  the version it names).
+- **A changed record is a changed claim.** If `--update` changes a record you didn't mean to, your edit changed what that
+  guarantee says: undo it, or say so in the PR. Paste the printout into the PR; when it lands, Daniel's DM shows it, and
+  that DM is the check. Nothing waits on a reviewer.
+- **A move is not a change.** Renames and moves go in a JSON map of old names to new (declarations or namespaces):
+  `check.py --update --moved MOVES.json PKG` on the record as it was. A lift (`theorem X : e` to `theorem X : G` with
+  `G` unfolding to `e`) needs no map.
+- **One shape** (`shape` in `tools/verity/lean/README.md`). A property takes its inputs, one hypothesis that its function returned an outcome
+  (`shape.properties`: `function` and `outcome`, `accept` by default), and premises (heads under `shape.premises`, or a
+  conjecture); the rest is its conclusion. Binder order and a hypothesis `x.f = y.f` between two inputs it accepts don't
+  matter: the check reads the statement reordered and with that field bound once, so don't restate for either. A
+  probability statement has its acceptance in the event (`shape.events`).
+  What doesn't fit yet is under `shape.frozen` with a reason starting with its category (`restatable`, `frozen (hash)`,
+  `lemma`, `completeness`, `falsified`); the check fails once it fits. A named conjecture is under `shape.conjectures`,
+  open with a falsification test that runs (a pytest node id) or falsified with why; a falsified one takes every
+  property resting on it off the list. Every `def G : Prop` of a `Guarantees` module is a listed guarantee or frozen.
+  Adding a frozen entry is a claims change: rather restate the guarantee, or move what isn't a property to `Proofs/`.
 
 ## Before the PR
 
-- `python tools/verity/lean/check.py PKG` passes for every package you touched, and `pytest verity/ml/flock/tests
-  tools/verity/lean/tests tools/verity/check/tests/test_lean_*.py tests/test_lean_packages.py` passes.
-- The PR says which guarantees changed, if any, and why; the ledger's status rows match `lean-audit.json`.
-- Merge `main` into your branch rather than rebasing someone else's work; conflicts in a ledger are resolved by keeping
-  both sides' rows. Run `python tools/verity/lean/merge.py --install` once per clone: `lean-audit.json` then merges without a
-  rebuild, and only a conflict it refuses needs `check.py --update` on the merged tree.
-- Record your lock at your own head, for what your change says, and then mark the PR ready. Don't merge a moving `main`
-  in again just to re-record. When the train's check fails only because a record's `guarantees`, `reads` or
-  `assumptions` differ (another PR changed a definition yours reads), the lander's `tools/verity/check/retip.py`
-  regenerates them at the train tip. Re-record yourself only what it can't regenerate: a conflict `merge.py` refuses, any
-  other key (`shape`, a move's map), or a failure in another step.
+- `check.py PKG` passes for every package you touched, and `pytest tools/verity/lean/tests
+  tools/verity/check/tests/test_lean_*.py tests/test_lean_packages.py` passes.
+- The PR says which guarantees changed and why; the ledger's status rows match `lean-audit.json`.
+- Merge `main` into your branch rather than rebasing. Run `python tools/verity/lean/merge.py --install` once per clone, so
+  `lean-audit.json` merges without a rebuild; only a conflict it refuses needs `check.py --update` on the merged tree.
+- Record your lock at your own head, then mark the PR ready. A train regenerates records that differ only because
+  another PR moved what yours reads; re-record yourself only what it can't (a refused conflict, `shape`, a move's map).
+  A clean merge of `main` after your records run needs no new one: the fast path says so and builds nothing.
 
-## Rulings so far
+## Standing rulings (Daniel)
 
-These are Daniel's rulings, newest first.
+The dated text is note:lean/20261020T1000Z-report-lean-proofs-rulings-archive.
 
-- 2026-10-17 (6:28 PM PDT): a guarantee goes statement first, then red team, then a card to Daniel for each new premise,
-  then the proof, in that order. Memory accounting's stacking guarantee was restated four times, and its cards updated
-  three times, because the red team read it after its proofs. Freeze the statement (above), have a red team attack it
-  and its premises, card what it rests on, and only then prove it, so a finding costs a restatement and not a reproof.
-- 2026-10-08 (5:59 PM PDT): a named conjecture can be a premise, in a section of the list of its own, and a claim that
-  rests on one is listed as conditional, apart from the rest. Sort first: a statement that models how a specific device
-  computes, such as `TTOutPearlC` (falsified by what the hardware does, and dependent on G), is an assumption about the
-  world, scoped by device and checked by measurement. Only genuine math goes in the conjectures section, and a statement
-  that mixes the two is split into the device model and the math that remains. Each conjecture carries a falsification
-  test that runs, not only a status, and one about finite objects is decided by computation instead. Incompressibility
-  of fixed data is false in Lean, since a decompressor can hard-code the data (the trap collision resistance has), so it
-  is stated over random inputs or as a reduction. A claim resting on a falsified premise says nothing: `Gamma16384` and
-  `Gamma8192` come off the guarantee list, and `TTOutPearlCDevRev1OfGranted` is stated for G=0 only, each device setting
-  getting its own claim. Until the shape check unfolds `def G : Prop` bodies, no past "no assumptions" result of the
-  audit counts as checked.
-- 2026-10-08 (5:11 PM PDT): every property in `Properties/` has one shape: for every input, if the function it's about
-  accepts, the conclusion holds, given premises from the list. Its only arguments are the input, the acceptance and
-  those premises, so the check enforces the premises rule with no judgment call. A premise is an assumption about the
-  world that the function can't see, such as `DeviceIntact`. Where the code can see something, it checks it instead: a
-  device that sees a late frame refuses to mark the record complete, and `HonestTiming` is no premise. A condition that
-  picks out what the conclusion talks about, such as "this event is an egress tick", goes inside the conclusion; a name,
-  such as a parameters digest, becomes a definition; any other condition on the input is a scope condition, which the
-  function refuses, so it follows from acceptance. Completeness theorems aren't claims: they live in `Proofs/`, their
-  honest-case hypotheses as written, each with one concrete instance where that case holds, which shows the soundness
-  property it pairs with isn't vacuous. Properties that don't fit yet are on a frozen list, one file per property with
-  its reason. The list only shrinks, and adding to it is a claims change.
-- 2026-10-08 (4:30 PM PDT): for a commit-then-coin step, the break tied to the run is the fork form: two runs of the
-  prover's own strategy that share a commitment and hash `x ≠ y` to one SHA-512 digest along their paths to it. A single
-  run never holds the collision, since a cheater opens one table per run. The `∃` ranges over the strategy's
-  continuations, visibly in the statement, never over arbitrary strings. `RecursiveSound` takes this form. Its bound is
-  exact for a strategy that never collides on a fork and says nothing about one that collides on a single pair, so it
-  is never called tighter than a bound under `cr/sha-512`. The quantitative forking version comes next: a strategy that
-  beats the bound by δ yields, from two runs off one commitment, a collision with probability about δ².
-  (16 Oct, vacuity sweep, LEAN-19: `RecursiveSound`'s event is nearly empty, because the inner statement pins rows only
-  by their hm96 commit strings with the salt free. Follow the knowledge form instead: `EndToEndHidden`, `Claims.KS`.)
-- 2026-10-08 (4:30 PM PDT): a property's hypotheses come only from the named premises in `Security/Definitions/`
-  (physical premises, and VBridge until it's proved). The Lean check refuses any other, and adding a premise messages
-  Daniel like any `Definitions/` change. A theorem whose hypotheses can't all hold for the real system says nothing.
-- 2026-10-08 (8:25 AM PDT): a guarantee never assumes a hash or a signature. Its conclusion is the property or a break
-  tied to the run: for SHA-512, `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`, over the
-  inputs the run itself hashed; for LMS, a signature in the run that verifies on a message missing from the device's
-  signing log; for Merkle binding, a collision among the inputs hashed along the two openings' paths. Every `∃` in the
-  break is bounded by something the run carries. "Some collision exists", or an extractor free to ignore the run, is
-  vacuous: collisions exist by pigeonhole, and `Classical.choice` is an allowed axiom, so the axiom check can't catch it.
-  No advantage bounds, which would need a probability model. An input condition becomes a refusal in the verifier, not a
-  hypothesis (the Lean check refuses NaN-coded noise, as Python's verifier does); that the honest draw never produces
-  such an input is a completeness fact, measured rather than proved.
-- 2026-10-03 (6:46 PM PDT): a change to what a guarantee says needs no reviewer and no approval: when it lands on `main`,
-  Daniel gets a DM showing it. "Pin" is retired: say guarantee. (Since 8 Oct no change waits on a per-head grant at all.)
-- 2026-10-01: a pinned theorem is called a **guarantee** (security guarantee): a proved `Prop`, assumptions implying a
-  conclusion, where an assumption is a named `Prop` (DESIGN.md "Glossary").
-- 2026-10-01: a guarantee that only moved, renamed or restated as a `Guarantees` definition, needs no statement reviewer
-  when `--update --moved` prints it as the same statement under its old names, with every definition it reads the same.
-  Since 2026-10-03 no change needs one; `--moved` now decides only whether Daniel's DM lists it.
-- 2026-10-01: a Lean protocol package may require another protocol's package (NCI's requiring sampled proofs', say),
-  because composing their guarantees needs it. The requires stay acyclic, and a protocol never requires a backend. Such a
-  `path` require changes no revision, so a feature PR may add it. Python's protocols import only `verity`, themselves
-  and the protocols `ALLOWED` in `tests/test_boundaries.py` lists (PoUW → sampled proofs, the ruling of
-  2026-10-03 in `.agents/skills/friction/SKILL.md`). Its Lean half is superseded by the Lean layout move (2026-10-06):
-  there are no protocol packages, only areas of `Security` and its Proofs.
-- 2026-10-01: there are guarantees and assumptions, and a guarantee is **proved under its assumptions**; there is no
-  third status. Some assumptions are better than others: SHA-512's collision resistance (`cr/sha-512`) is a better one
-  than a fact about our own circuit that we mean to prove (`HmRowComputes`). So what a guarantee assumes is explicit and
-  hard to break, a table, a ledger or a PR cites a guarantee with its assumptions, and proving an assumption removes it
-  from every guarantee that took it. Since 2026-10-08 a hash or a signature is not an assumption at all: the guarantee
-  ends in a break tied to the run (above).
-- 2026-09-30: Lean is the one source of truth for the assumptions we make. Views of them (the console, the tables) are
-  derived from Lean and the Lean check's output, and no hand-kept ledger is generated alongside.
-- 2026-09-30: probability and games shared across packages are our own minimal definitions over Mathlib's `PMF`, not
-  VCVio's `OracleComp`; soundness bridges to VCVio where it needs it.
+- A guarantee is a proved `Prop` under named assumptions; there is no third status, and proving an assumption removes it
+  from every guarantee that took it. Lean is the one source of truth for what we assume.
+- A guarantee never assumes a hash or a signature. It ends in a break tied to the run: for SHA-512,
+  `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`; for LMS, a verifying signature on a
+  message missing from the device's log; for Merkle binding, a collision along the two openings' paths. Every `∃` is
+  bounded by what the run carries. No advantage bounds, except PoUW's named random-oracle premises for SHA-512
+  (`StraightLineExtraction`, `SeedExtractedAt`; ASK-16), each a named `Prop` the lock lists. An input
+  condition is a verifier refusal, not a hypothesis.
+- For a commit-then-coin step the break is the fork form (two runs of the prover's strategy sharing a commitment), and
+  the knowledge form (`EndToEndHidden`, `Claims.KS`) is preferred.
+- A property's premises are assumptions about the world the function can't see; what the code can see, it checks. A
+  condition picking out what the conclusion talks about goes inside the conclusion. Completeness theorems are not claims:
+  they live in `Proofs/` with one concrete instance where the honest case holds.
+- A device model (falsifiable by measurement, scoped by device) is an assumption, not a conjecture; a statement mixing
+  the two is split. A conjecture about finite objects is decided by computation. Incompressibility of fixed data is
+  false in Lean, so it is stated over random inputs or as a reduction. A claim resting on a falsified premise says
+  nothing.
+- A changed guarantee needs no reviewer and no approval: the landing DM is the check. A guarantee that only moved
+  (`--moved`) isn't listed in it.
+- Probability and games are our own minimal definitions over Mathlib's `PMF`; soundness bridges to VCVio where needed.
+- What a physical region reads is not a premise: it follows from the actual circuit's regions and causality
+  (`width_into_region_le`; `Links`, `Covered` in `Security/Definitions/Accounting/Physical.lean`). A bound per
+  server-window is stated on `Accounting.Placed` with `WindowsAt` (ASK-141).

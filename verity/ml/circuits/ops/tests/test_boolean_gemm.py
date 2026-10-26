@@ -38,6 +38,9 @@ FP4 = [(bind(BG.BlackwellNvf4OmmaDot64), K.BLACKWELL_SM120_NVF4), (bind(BG.Black
        (bind(BG.GemmCoordinateMxf4, K=128, **BG.GEMM_SM120_MXF4), K.BLACKWELL_SM120_MXF4)]
 S8 = [bind(BG.BlackwellS8ImmaDot32), bind(BG.S32ToF32Rn), bind(BG.GemmAccumulatorS8, K=64, **BG.GEMM_SM120_S8),
       bind(BG.ScaledMmS8Coordinate, K=64, **BG.GEMM_SM120_S8)]
+PADS = [bind(BG.GemmCoordinatePad, T=1, K=32, **BG.GEMM_HOPPER), bind(BG.GemmCoordinatePad, T=17, K=32, **BG.GEMM_HOPPER)]
+ROWS = bind(BG.ScaledMmS8CoordinateRows, K=64, R=2, **BG.GEMM_SM90_S8)
+PVROWS = [bind(BG.PvRow, T=T, K=32, D=64, **BG.GEMM_HOPPER) for T in (1, 8, 32)]
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -65,9 +68,15 @@ PINS = {
     "S32ToF32Rn_v2": (368, 532, 43, "94fffccc7430d2311246e7ebe1a58f94679ad5873ca1c79a3df13092b990618c8b5984c9f497a18615302242f009b1f9f89ca91fa2cc4b6c7bfacffa7e89f848"),
     S8[2].id: (8316, 20746, 948, "cea9d903df4c752fd2eed0cad1182358692211e0b91b66ff1aa0786cfe29701a5b74c864b205ee329d67a5b7964d458ebc958f55c2112314fd552070ccd18139"),
     S8[3].id: (13546, 30500, 1286, "dcfc7b4b1c49380afa07a808563fbed0708769e10392614c43ee53429d8886c8dd9f4e263b2174784219a6f39c8e1d038aab290659b95a2ec1ec151d379f7fa2"),
+    PADS[0].id: (15810, 30196, 1537, "5b7d01d00c96f657cc50610f32444b115d4eeef67f3bbc35b8b7d4797f92b9d42c8d5df9d4af5a7a29b9ad8e1189258001ede667860a887e60553279b54c5fa0"),
+    PADS[1].id: (15810, 30196, 1537, "881b9ed3708fd486d94a3f476c27a71d34f4ff7c8b5dfc6a376f33e5e47ae0dc551a1ab1ca4a217265638dd9bc3ab998c678eb166fec4f648fd95c5a72860726"),
+    ROWS.id: (13546, 30500, 1286, "a41ad1ee8f4e69ac0d97cd1ffaaaffdab0d665388f3447e517a8e611b898cfe206b1bd0259094bda0683d588c903f851529707467bbc0abacc85e717d2a77771"),
+    PVROWS[0].id: (1011840, 1932544, 98368, "d1073d6d6cce761273e1431921924db345f441efd139b081eca21994371562c0fa2910abf53780ced933673655347a5cee79b6adceacecf15e3563e1d8498a67"),
+    PVROWS[1].id: (1011840, 1932544, 98368, "404904a5f6b17d5010aa17c68f93cb69ce514c3719a0e5746431bda079e5cccc990d4172ea25769a06ceb9bc9c9d1f1c187c38dc46959737a11673f55a4a1568"),
+    PVROWS[2].id: (1011840, 1932544, 98368, "52c7bce9fe1c63421d9a49037aa7585fb5e4a2c5fe93e1744ebdcfb28250da30ce33367174aa2489d4a4a660213c9466185d2a32d5c1998302a6f8aba3f3b55a"),
 }
 TARGETS = [bind(BG.F2fpBf16), *STEPS, AMPERE_K64, HOPPER_K64, *DOTS, *GEMMS, *FP8_STEPS, *FP8_COORDS, bind(BG.BlackwellE5m2QmmaDot32),
-           *(t for t, _ in FP4), *S8]
+           *(t for t, _ in FP4), *S8, *PADS, ROWS, *PVROWS]
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=[t.id for t in TARGETS])
@@ -84,9 +93,10 @@ def test_pinned_counts_and_digests(target) -> None:
 
 #: each Boolean GEMM composite, its step width k and the rest of a binding
 FAMILIES = [(BG.DotBf16, 16, BG.GEMM_AMPERE), (BG.GemmCoordinate, 16, BG.GEMM_HOPPER), (BG.Gemm, 16, {"N": 3, **BG.GEMM_AMPERE}),
+            (BG.GemmCoordinatePad, 16, {"T": 1, **BG.GEMM_HOPPER}), (BG.PvRow, 16, {"T": 1, "D": 2, **BG.GEMM_HOPPER}),
             (BG.GemmCoordinateE4m3, 32, BG.GEMM_HOPPER_E4M3_MMAV2), (BG.GemmCoordinateNvf4, 64, BG.GEMM_SM120_NVF4),
             (BG.GemmCoordinateMxf4, 64, BG.GEMM_SM120_MXF4), (BG.GemmAccumulatorS8, 32, BG.GEMM_SM120_S8),
-            (BG.ScaledMmS8Coordinate, 32, BG.GEMM_SM120_S8)]
+            (BG.ScaledMmS8Coordinate, 32, BG.GEMM_SM120_S8), (BG.ScaledMmS8CoordinateRows, 32, {"R": 1, **BG.GEMM_SM90_S8})]
 
 
 @pytest.mark.parametrize("defn,k,rest", FAMILIES, ids=[d.name for d, *_ in FAMILIES])
@@ -96,7 +106,7 @@ def test_each_composite_refuses_the_k_its_word_definition_refuses(defn, k, rest)
         with pytest.raises(ValueError, match=re.escape(f"{defn.id} refuses this binding: K={K} is not a multiple of the "
                                                        f"{k}-wide step")):
             bind(defn, K=K, **rest)
-    if defn in (BG.GemmAccumulatorS8, BG.ScaledMmS8Coordinate):
+    if defn in (BG.GemmAccumulatorS8, BG.ScaledMmS8Coordinate, BG.ScaledMmS8CoordinateRows):
         with pytest.raises(ValueError, match=re.escape(f"{defn.id} refuses this binding: K=131072 is at or past 131072")):
             bind(defn, K=1 << 17, **rest)
 
@@ -244,6 +254,65 @@ def test_the_s8_accumulator_and_coordinate_agree_with_their_word_definitions() -
     _agree(S8[3], [x, u[0], w, u[1]])
 
 
+def test_the_row_split_s8_coordinate_agrees_with_its_word_definition_and_is_the_unsplit_coordinate() -> None:
+    """`ScaledMmS8CoordinateRows_v2{K=64, R=2}` on x's and W's row's halves is `ScaledMmS8Coordinate_v2{K=64}` on the whole rows."""
+    assert TR.word_of(ROWS).id == "ScaledMmS8CoordinateRows_v1{K=64,R=2,DOT=BlackwellS8ImmaDot32_v1}"
+    rng = np.random.default_rng(26)
+    n = 1000
+    x, w = _s8_operands(rng, n, 64)
+    sx = (np.abs(rng.standard_normal(n)) / 127).astype(np.float32).view(np.uint32)
+    sw = rng.integers(0, 1 << 32, n, dtype=np.uint64).astype(np.uint32)
+    parts = [x[:, :32], x[:, 32:], sx, w[:, :32], w[:, 32:], sw]
+    _agree(ROWS, parts)
+    assert np.array_equal(BS.evaluate_words(ROWS, *parts), BS.evaluate_words(S8[3], x, sx, w, sw))
+
+
+def test_the_padded_coordinate_agrees_with_its_word_definition_and_is_the_coordinate_on_zero_padded_rows() -> None:
+    """`GemmCoordinatePad_v2{T, K=32}` on T words is `GemmCoordinate_v3{K=32}` on them followed by K - T words of +0 bits."""
+    coord = bind(BG.GemmCoordinate, K=32, **BG.GEMM_HOPPER)
+    params, _ = E.batch.signature_of(TR.word_of(coord))
+    xs, ws = K.sample_tc(np.random.default_rng(17), 2000, params)
+    for T in (1, 5, 16, 17, 31, 32):
+        target = bind(BG.GemmCoordinatePad, T=T, K=32, **BG.GEMM_HOPPER)
+        assert TR.word_of(target).id == f"GemmCoordinatePad_v1{{T={T},K=32,DOT=HopperBF16WgmmaDot16_v1}}"
+        _agree(target, [xs[:, :T], ws[:, :T]])
+        pad = lambda a: np.concatenate([a[:, :T], np.zeros((len(a), 32 - T), a.dtype)], axis=1)
+        assert np.array_equal(BS.evaluate_words(target, xs[:, :T], ws[:, :T]), BS.evaluate_words(coord, pad(xs), pad(ws)))
+
+
+def test_the_pv_row_agrees_with_its_word_definition_and_is_the_padded_coordinate_on_each_column() -> None:
+    """`PvRow_v2{T, K=32, D=64}` at T = 1, 8 and 32 agrees with `PvRow_v1`, and its dim d is `GemmCoordinatePad_v2{T, K=32}` of
+    p and (v0[d], ..., v{T-1}[d])."""
+    params, _ = E.batch.signature_of(TR.word_of(bind(BG.GemmCoordinate, K=32, **BG.GEMM_HOPPER)))
+    n, D = 300, 64
+    xs, ws = K.sample_tc(np.random.default_rng(27), n * D, params)
+    for target in PVROWS:
+        T = target.bindings["T"]
+        assert TR.word_of(target).id == f"PvRow_v1{{T={T},K=32,D=64,DOT=HopperBF16WgmmaDot16_v1}}"
+        p, v = xs[:n, :T], ws.reshape(n, D, 32)[:, :, :T].transpose(0, 2, 1)
+        vs = [np.ascontiguousarray(v[:, t]) for t in range(T)]
+        _agree(target, [p, *vs])
+        pad = bind(BG.GemmCoordinatePad, T=T, K=32, **BG.GEMM_HOPPER)
+        cols = np.stack([BS.evaluate_words(pad, p, np.ascontiguousarray(v[:, :, d])).reshape(n) for d in range(D)], axis=1)
+        assert np.array_equal(BS.evaluate_words(target, p, *vs).reshape(n, D), cols)
+
+
+def test_the_scaled_s8_matmul_agrees_with_scaled_mm_s8_v1() -> None:
+    """`ScaledMmS8_v2` at K = 64, N = 3 on s8 rows under an int8 linear's scales, and under uniform and special f32 scale words
+    (±0, the least subnormal, the largest finite, ±inf, a quiet and a signalling NaN)."""
+    target = bind(BG.ScaledMmS8, K=64, N=3, **BG.GEMM_SM120_S8)
+    assert TR.word_of(target).id == "ScaledMmS8_v1{K=64,N=3,DOT=BlackwellS8ImmaDot32_v1}"
+    rng = np.random.default_rng(24)
+    n = 600
+    x, w = _s8_operands(rng, n, 64)
+    w = np.stack([w, np.roll(w, 1, axis=0), np.roll(w, 2, axis=0)], axis=1)
+    sx = (np.abs(rng.standard_normal(n)) / 127).astype(np.float32).view(np.uint32)
+    sw = (np.abs(rng.standard_normal((n, 3))) * 0.02 / 127).astype(np.float32).view(np.uint32)
+    _agree(target, [x, sx, w, sw])
+    special = np.array([0, 0x80000000, 1, 0x7F7FFFFF, 0x7F800000, 0xFF800000, 0x7FC00000, 0x7F800001], np.uint32)
+    _agree(target, [x, rng.choice(special, n), w, rng.choice(special, (n, 3))])
+
+
 @pytest.mark.parametrize("target", DOTS, ids=lambda t: t.id)
 def test_the_dot_agrees_with_dot_bf16_v2(target) -> None:
     word = TR.word_of(target)
@@ -331,3 +400,32 @@ def test_the_coordinate_replays_the_rtx4090_gemm_captures() -> None:
         x, w = np.stack([r[0] for r in rows]), np.stack([r[1] for r in rows])
         got = BS.evaluate_words(bind(BG.GemmCoordinate, K=k, **BG.GEMM_AMPERE), x, w)
         assert got.tolist() == [r[2] for r in rows]
+
+
+def test_the_sm90_binding_on_bits_is_hoppers_step() -> None:
+    """`BG.GEMM_SM90_S8` binds the Boolean step whose word step is `G.GEMM_SM90_S8`'s, and that step on bits is
+    `HOPPER_SM90_S8_K32.step` on uniform accumulators and on accumulators within 2^16 of either s32 edge (clamps included);
+    the accumulator on bits at K = 512, the least K H1 serves on sm_90, is that step chained."""
+    from verity.ml.circuits.ops import gemm as G
+    from verity.ml.circuits.silicon.integer import HOPPER_SM90_S8_K32
+
+    assert BG.GEMM_SM90_S8 == BG.GEMM_SM120_S8 == BG.s8_gemm(HOPPER_SM90_S8_K32)
+    assert TR.word_of(bind(BG.GEMM_SM90_S8["DOT"])).id == G.GEMM_SM90_S8["DOT"].id
+    rng = np.random.default_rng(24)
+    n = 4000
+    acc = rng.integers(0, 1 << 32, n, dtype=np.uint64).astype(np.uint32)
+    edge = rng.integers(0, 1 << 16, n // 2, dtype=np.uint64).astype(np.uint32)
+    acc[: n // 4] = 0x7FFFFFFF - edge[: n // 4]
+    acc[n // 4: n // 2] = 0x80000000 + edge[n // 4:]
+    a, b = _s8_operands(rng, n, 32)
+    got = BS.evaluate_words(bind(BG.GEMM_SM90_S8["DOT"]), acc, a, b).astype(np.uint32)
+    want = [HOPPER_SM90_S8_K32.step(int(c), x.tolist(), y.tolist()) for c, x, y in zip(acc, a, b)]
+    assert got.tolist() == want
+    assert sum(w in (0x7FFFFFFF, 0x80000000) for w in want) > 200
+    x, w = _s8_operands(rng, 200, 512)
+    got = BS.evaluate_words(bind(BG.GemmAccumulatorS8, K=512, **BG.GEMM_SM90_S8), x, w).astype(np.uint32)
+    for r in range(len(x)):
+        c = 0
+        for i in range(0, 512, 32):
+            c = HOPPER_SM90_S8_K32.step(c, x[r, i:i + 32].tolist(), w[r, i:i + 32].tolist())
+        assert int(got[r]) == c

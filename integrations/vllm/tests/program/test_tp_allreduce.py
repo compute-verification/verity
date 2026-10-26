@@ -1,9 +1,12 @@
-"""`registry.tp_allreduce` and `registry.boolean_tp_allreduce`, GLM-5.3's TP8 all-reduces on 8x H200: the word Definitions agree with
-`tp_allreduce_check`'s numpy models of the kernels (FlashInfer's MNNVL all-reduce and its fused residual add + RMSNorm, vLLM's
-custom all-reduce), which are written from the kernels, on random, special and cancelling words; the dispatch helpers name the
-kernels vLLM d9105ea80 and FlashInfer 0.6.18 launch at GLM-5.3's H; the Boolean versions agree with their word Definitions, are
-pinned by gate count and program digest, and pass `Q_word_v1{X=16, W=32}`'s cut check."""
+"""`registry.tp_allreduce` and `registry.boolean_tp_allreduce`, GLM-5.3's TP8 all-reduces on 8x H200 and NCCL's tree all-reduce at
+TP4 on the RTX PRO 6000: the word Definitions agree with `tp_allreduce_check`'s numpy models of the kernels (FlashInfer's MNNVL
+all-reduce and its fused residual add + RMSNorm, vLLM's custom all-reduce, NCCL's chain of ``__hadd2``), which are written from the
+kernels, on random, special and cancelling words; the dispatch helpers name the kernels vLLM d9105ea80 and FlashInfer 0.6.18 launch
+at GLM-5.3's H and the route batch invariance pins at TP4, keyed on the device and NCCL's transport; the Boolean versions agree with
+their word Definitions, are pinned by gate count and program digest, and pass `Q_word_v1{X=16, W=32}`'s cut check."""
 from __future__ import annotations
+
+__models__ = ("zai-org/GLM-5.3",)
 
 import itertools
 import json
@@ -19,10 +22,10 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import standalone_call
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.registry import boolean_tp_allreduce as BA
-from verity_vllm.program.registry import tp_allreduce as TA
-from verity_vllm.program.registry import tp_allreduce_check as K
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.registry import boolean_tp_allreduce as BA
+from verity.ml.definitions.registry import tp_allreduce as TA
+from verity.ml.definitions.registry import tp_allreduce_check as K
 
 H = 6144
 #: signed zeros, the smallest and largest subnormals, the smallest normals, +-1, the finite maxima, infinities, NaNs
@@ -162,6 +165,92 @@ def test_the_fma_static_is_not_vacuous() -> None:
     assert differ == 9
 
 
+# --- NCCL's tree at TP4 -------------------------------------------------------------------------------------------------------
+
+TP4 = (0, 1, 2, 3)
+#: the switches of the TP4 capture's ranks: vLLM's batch invariance and NCCL's SHM transport
+BI_ENV = {"VLLM_BATCH_INVARIANT": "1", "NCCL_P2P_DISABLE": "1"}
+
+
+def test_batch_invariance_routes_every_call_to_pynccl_and_the_tp4_entry_is_keyed_on_device_and_transport() -> None:
+    s = TA.settings_of(True, BI_ENV)
+    assert s == {"custom_all_reduce": False, "symmetric_memory": True, "flashinfer": True, "batch_invariant": True, "nccl_transport": "shm"}
+    assert TA.settings_of(True, {**BI_ENV, "NCCL_SHM_DISABLE": "1"})["nccl_transport"] is None
+    assert TA.settings_of(False, {"VLLM_BATCH_INVARIANT": "0", "NCCL_P2P_DISABLE": "x"}) == {
+        "custom_all_reduce": True, "symmetric_memory": True, "flashinfer": True, "batch_invariant": False, "nccl_transport": None}
+    assert {TA.served_route(s, M, 8192) for M in (1, 256, 4096)} == {(TA.BATCH_INVARIANT, "pynccl_comm")}
+    assert TA.served_route(TA.settings_of(True, {}), 1, H) == ("custom-off", "fi_ar_comm")
+    assert TA.device_of((12, 0), 188) == TA.device_of("12.0", 188) == TA.RTX_PRO_6000
+    on = dict(world=4, device=TA.RTX_PRO_6000, transport="shm")
+    c = TA.covered(TA.BATCH_INVARIANT, 8192, "pynccl_comm", 1, **on)
+    assert c is not None and c is TA.covered(TA.BATCH_INVARIANT, 8192, "pynccl_comm", 256, world=4, device=((12, 0), 188), transport="shm")
+    assert c.definition == "AllReduceNcclTree_v1" and c.statics == {"CHAIN": TP4} and c.runs == TA.NCCL_TREE_RUNS
+    for miss in ({"M": 257}, {"M": 0}, {"N": 4096}, {"world": 8}, {"world": 2}, {"device": ("9.0", 132)}, {"device": None},
+                 {"transport": None}, {"route": "ca_comm"}):
+        kw = {"N": 8192, "route": "pynccl_comm", "M": 1, **on, **miss}
+        assert TA.covered(TA.BATCH_INVARIANT, kw.pop("N"), kw.pop("route"), kw.pop("M"), **kw) is None, miss
+    defn, statics = TA.route_binding(c, 4, 256, 8192)
+    assert defn is TA.AllReduceNcclTree and statics == {"WORLD": 4, "SIZE": 256 * 8192, "CHAIN": TP4}
+    with pytest.raises(ValueError, match="setting"):
+        TA.covered("bi", 8192, "pynccl_comm", 1, **on)
+
+
+def test_the_h200_routes_are_not_keyed_on_a_device_or_transport() -> None:
+    """Every H200 entry covers its calls whatever the caller's GPU and transport, and only at world 8."""
+    for c in (c for c in TA.CAPTURED if c.setting in TA.SETTINGS):
+        assert (c.world, c.device, c.transport) == (8, None, None)
+        for device, transport in ((None, None), (("9.0", 132), None), (TA.RTX_PRO_6000, "shm")):
+            assert TA.covered(c.setting, c.N, c.route, c.lo, device=device, transport=transport) is c
+        assert TA.covered(c.setting, c.N, c.route, c.lo, world=4) is None
+
+
+def test_the_chain_is_checked() -> None:
+    assert TA.nccl_chain([2, 0, 3, 1], 4) == (2, 0, 3, 1)
+    for bad in ((0, 1, 2), (0, 1, 2, 2), (0, 1, 2, 4), (True, 0, 2, 3), (0.0, 1, 2, 3)):
+        with pytest.raises(ValueError, match="CHAIN"):
+            TA.nccl_chain(bad, 4)
+    with pytest.raises(ValueError, match="CHAIN"):
+        E.evaluate(bind(TA.AllReduceNcclTreeCoordinate, WORLD=4, CHAIN=(0, 1, 2)), [0] * 4)
+    with pytest.raises(ValueError):
+        E.evaluate(bind(TA.AllReduceNcclTreeCoordinate, WORLD=1, CHAIN=(0,)), [0])
+
+
+def test_hadd2_is_one_bf16_rounding_of_the_sum() -> None:
+    """`hadd_bf16` is torch's bf16 add (the f32 sum rounded once to bf16) on every special pair and on random and cancelling words,
+    but for the NaN word: 0x7FFF for ``__hadd2``, torch's 0x7FC0."""
+    torch = pytest.importorskip("torch")
+    rng = np.random.default_rng(31)
+    ab = np.concatenate([np.array(list(itertools.product(SPECIALS, repeat=2)), np.uint16), _rows(rng, 20000, 2)])
+    t = lambda w: torch.from_numpy(w.astype(np.int16)).view(torch.bfloat16)  # noqa: E731
+    want = (t(ab[:, 0]) + t(ab[:, 1])).view(torch.int16).numpy().view(np.uint16)
+    got = K.hadd_bf16(ab[:, 0], ab[:, 1])
+    nan = (want & 0x7FFF) > 0x7F80
+    assert (got[~nan] == want[~nan]).all() and (got[nan] == 0x7FFF).all() and nan.sum() > 0
+
+
+@pytest.mark.parametrize("chain", [(0, 1), (1, 0), TP4, (2, 0, 3, 1), (3, 2, 1, 0), (0, 1, 2, 3, 4, 5, 6, 7)])
+def test_nccl_tree_coordinate_is_the_chain_of_hadd2(chain) -> None:
+    W = len(chain)
+    x = _rows(np.random.default_rng(40 + W + chain[0]), 1500, W)
+    got = _out(E.evaluate_batch(bind(TA.AllReduceNcclTreeCoordinate, WORLD=W, CHAIN=chain), x), len(x)).reshape(-1)
+    assert (got == K.nccl_tree_rows(x.T, chain)).all()
+
+
+def test_nccl_tree_rows_are_the_kernels_sums_and_the_chain_is_observable() -> None:
+    """Each element is the chain's sum, wherever it sits; the TP4 chain differs from the reversed one and from one rounding of the
+    exact sum on random words, so CHAIN is not vacuous."""
+    rng = np.random.default_rng(41)
+    parts = np.concatenate([rng.integers(0, 1 << 16, (40, 4, 24)), SPECIALS[rng.integers(0, len(SPECIALS), (10, 4, 24))]])
+    parts = parts.astype(np.uint16)
+    got = _out(E.evaluate_batch(bind(TA.AllReduceNcclTree, WORLD=4, SIZE=24, CHAIN=TP4), parts), len(parts))
+    assert (got == np.stack([K.nccl_tree_rows(p, TP4) for p in parts])).all()
+    x = _bf16(rng, (4, 20000))
+    down, up = K.nccl_tree_rows(x, TP4), K.nccl_tree_rows(x, TP4[::-1])
+    f32 = K._bf16_value(x).sum(axis=0).astype(np.float32).view(np.uint32).astype(np.uint64)
+    once = ((f32 + 0x7FFF + ((f32 >> 16) & 1)) >> 16).astype(np.uint16)
+    assert (down != up).sum() > 100 and (down != once).sum() > 100
+
+
 # --- on bits ---------------------------------------------------------------------------------------------------------------
 
 def _agree(target, x) -> None:
@@ -177,6 +266,10 @@ def test_the_word_views() -> None:
     assert TR.word_of(bind(BA.AllReduceCustom, WORLD=8, SIZE=64, STAGE=2)).id == "AllReduceCustom_v1{WORLD=8,SIZE=64,STAGE=2}"
     assert SW.boolean_version(bind(TA.AllReduceMnnvl, WORLD=8, N=8, SHOT=1)).id == "AllReduceMnnvl_v2{WORLD=8,N=8,SHOT=1}"
     assert SW.boolean_version(bind(TA.AllReduceCustom, WORLD=8, SIZE=64, STAGE=1)).id == "AllReduceCustom_v2{WORLD=8,SIZE=64,STAGE=1}"
+    assert TR.word_of(bind(BA.AllReduceNcclTree, WORLD=4, SIZE=8, CHAIN=TP4)).id == "AllReduceNcclTree_v1{WORLD=4,SIZE=8,CHAIN=(0,1,2,3)}"
+    assert TR.word_of(bind(BA.AllReduceNcclTreeCoordinate, WORLD=4, CHAIN=(2, 0, 3, 1))).id == \
+        "AllReduceNcclTreeCoordinate_v1{WORLD=4,CHAIN=(2,0,3,1)}"
+    assert SW.boolean_version(bind(TA.AllReduceNcclTree, WORLD=4, SIZE=8, CHAIN=TP4)).id == "AllReduceNcclTree_v2{WORLD=4,SIZE=8,CHAIN=(0,1,2,3)}"
 
 
 def test_coordinates_on_every_special_pair() -> None:
@@ -185,8 +278,22 @@ def test_coordinates_on_every_special_pair() -> None:
         _agree(bind(BA.AllReduceMnnvlCoordinate, WORLD=2, SHOT=shot), grid)
     for start in (0, 1):
         _agree(bind(BA.AllReduceCustomCoordinate, WORLD=2, START=start), grid)
+    for chain in ((0, 1), (1, 0)):
+        _agree(bind(BA.AllReduceNcclTreeCoordinate, WORLD=2, CHAIN=chain), grid)
 
 
+def test_the_nccl_tree_coordinate_on_every_special_quadruple() -> None:
+    """All 17^4 tuples of special words through the TP4 chain on bits, against the numpy model; random and cancelling rows against
+    the word Definition."""
+    grid = np.array(list(itertools.product(SPECIALS, repeat=4)), np.uint16)
+    target = bind(BA.AllReduceNcclTreeCoordinate, WORLD=4, CHAIN=TP4)
+    got = _out(BS.evaluate_words(target, grid), len(grid)).reshape(-1)
+    assert (got == K.nccl_tree_rows(grid.T, TP4)).all()
+    for chain in (TP4, (2, 0, 3, 1)):
+        _agree(bind(BA.AllReduceNcclTreeCoordinate, WORLD=4, CHAIN=chain), _rows(np.random.default_rng(50 + chain[0]), 3000, 4))
+
+
+@pytest.mark.slow
 @pytest.mark.parametrize("shot", [1, 2])
 def test_mnnvl_coordinate_on_rows(shot: int) -> None:
     _agree(bind(BA.AllReduceMnnvlCoordinate, WORLD=8, SHOT=shot), _rows(np.random.default_rng(80 + shot), 5000, 8))
@@ -197,11 +304,13 @@ def test_custom_coordinate_on_rows(start: int) -> None:
     _agree(bind(BA.AllReduceCustomCoordinate, WORLD=8, START=start), _rows(np.random.default_rng(90 + start), 5000, 8))
 
 
+@pytest.mark.slow
 def test_rows_on_bits() -> None:
     rng = np.random.default_rng(5)
     _agree(bind(BA.AllReduceMnnvl, WORLD=8, N=8, SHOT=2), rng.integers(0, 1 << 16, (300, 8, 8)).astype(np.uint16))
     for stage in (1, 2):
         _agree(bind(BA.AllReduceCustom, WORLD=8, SIZE=64, STAGE=stage), rng.integers(0, 1 << 16, (40, 8, 64)).astype(np.uint16))
+    _agree(bind(BA.AllReduceNcclTree, WORLD=4, SIZE=8, CHAIN=TP4), rng.integers(0, 1 << 16, (300, 4, 8)).astype(np.uint16))
 
 
 #: id -> (And, Xor, Not gates, standalone program digest)
@@ -211,13 +320,17 @@ PINS = {
     "AllReduceCustomCoordinate_v2{WORLD=8,START=0}": (5211, 8375, 918, "6bb2a9e0be5d2b4c9100730a59ce1ae279d99e06f7e1ada3341124d45c6ba2fa1da571ba925a7b25a18d6fd90fda6f2233864a160d49f3a01052f02e2ba877c2"),
     "AllReduceMnnvl_v2{WORLD=8,N=8,SHOT=1}": (43904, 67896, 7344, "d3a4da706818ece26c1a0e7ceb9def6235a3e5f5ca357866fa277781815a38100e1caad4b7067dd02ca07a86f02a65cedb75e762c178843267fd3677fd2a0f01"),
     "AllReduceCustom_v2{WORLD=8,SIZE=64,STAGE=2}": (333504, 536000, 58752, "6ecebe5d025bab0ae5e50fec1a0f69b090b6ce968a6e79b4cfc3cb4ee4a711c3e54f77b9ebac19de8e7efd1b61d458baf659d76c82f6c00b6465287cd74ea717"),
+    "AllReduceNcclTreeCoordinate_v2{WORLD=4,CHAIN=(0,1,2,3)}": (2151, 3183, 366, "1ad3434ef7631b83722542486f047131419693d3fa91035480e4622535a1d15e5b60db1e354105d7fa913e350b1bee9bee18e32c958bdc2c203e19be95e5840e"),
+    "AllReduceNcclTree_v2{WORLD=4,SIZE=8,CHAIN=(0,1,2,3)}": (17208, 25464, 2928, "8952469d17216c0b0e05a2a310df9763c1ccdaeef158f3f93577c9f2c64d40c6bf0eab1ce8956f3c3596e9eafdbc2aa4cb88624def65d6e186b37959a474aeb1"),
 }
 TARGETS = [bind(BA.AllReduceMnnvlCoordinate, WORLD=8, SHOT=1), bind(BA.AllReduceMnnvlCoordinate, WORLD=8, SHOT=2),
            bind(BA.AllReduceCustomCoordinate, WORLD=8, START=0), bind(BA.AllReduceMnnvl, WORLD=8, N=8, SHOT=1),
-           bind(BA.AllReduceCustom, WORLD=8, SIZE=64, STAGE=2)]
+           bind(BA.AllReduceCustom, WORLD=8, SIZE=64, STAGE=2), bind(BA.AllReduceNcclTreeCoordinate, WORLD=4, CHAIN=TP4),
+           bind(BA.AllReduceNcclTree, WORLD=4, SIZE=8, CHAIN=TP4)]
 
 
-@pytest.mark.parametrize("target", TARGETS, ids=lambda t: t.id)
+@pytest.mark.parametrize("target", [pytest.param(t, marks=pytest.mark.slow) if t.id == "AllReduceCustom_v2{WORLD=8,SIZE=64,STAGE=2}" else t for t in TARGETS],
+                         ids=lambda t: t.id)
 def test_pinned_counts_and_digests(target) -> None:
     ands, xors, nots, digest = PINS[target.id]
     assert BL.is_boolean(target)
@@ -229,8 +342,9 @@ def test_pinned_counts_and_digests(target) -> None:
     assert back.gates == prog.gates and codec.program_digest(codec.encode_program(back)) == digest
 
 
-@pytest.mark.parametrize("target", [bind(BA.AllReduceMnnvl, WORLD=8, N=3, SHOT=1), bind(BA.AllReduceCustom, WORLD=4, SIZE=32, STAGE=2)],
-                         ids=lambda t: t.id)
+@pytest.mark.slow
+@pytest.mark.parametrize("target", [bind(BA.AllReduceMnnvl, WORLD=8, N=3, SHOT=1), bind(BA.AllReduceCustom, WORLD=4, SIZE=32, STAGE=2),
+                                    bind(BA.AllReduceNcclTree, WORLD=4, SIZE=3, CHAIN=(2, 0, 3, 1))], ids=lambda t: t.id)
 def test_rows_pass_the_word_querys_cut_check(target) -> None:
     prog, _ = standalone_call(target)
     assert PO.verify(PO.build(prog, PO.query(16, 32)), prog).ok

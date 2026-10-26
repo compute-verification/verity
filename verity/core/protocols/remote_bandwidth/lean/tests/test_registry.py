@@ -22,7 +22,7 @@ from verity.core.protocols.remote_bandwidth import audit, codec, receipts
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-PORT = D.Port(M.EXE, "registry", M.registry, st.nothing(), package=M.PACKAGE, rejects=M.REFUSALS)
+PORT = D.Port(M.EXE, "registry", M.registry, st.nothing(), package=M.PACKAGE, of_record=M.OF_RECORD, rejects=M.REFUSALS)
 server = D.server_fixture(PORT)
 
 NODES = (M.NODE, b"node-b", b"\x07")
@@ -71,12 +71,15 @@ def event_op(draw, n: str) -> dict:
 
 
 def session_op(draw, index: int | None) -> dict:
-    """A session over the registration drawn `index`-th in the case, or over one given in full that no registry drew."""
+    """A session over the registration drawn `index`-th in the case, or over one given in full that no registry drew;
+    now and then its two windows drawn on one openings coin (`groups_per_coin` 2)."""
     windows = draw(st.integers(1, 2))
+    pace = {"k": draw(st.integers(1, 2)), "window_ns": 5} if windows == 2 and rare(draw, 4) else None
+    g = 2 if windows == 2 and rare(draw, 3) else 1
     v = {"op": "session", "registration": index,
-         "params": {"deadline_ns": 100, "deferred": False, "lifetime": 4, "min_passes": 1, "samples": 4,
-                    "window_ns": 1, "windows": windows},
-         "coins": [expand(b"coin %d" % u, 32) for u in range(2 * windows)], "append_coins": [],
+         "params": {"deadline_ns": 100, "deferred": False, "lifetime": 4, "min_passes": 1, "pace": pace,
+                    "samples": 4, "window_ns": 1, "windows": windows} | ({"groups_per_coin": g} if g != 1 else {}),
+         "coins": [expand(b"coin %d" % u, 32) for u in range(windows + -(-windows // g))], "append_coins": [],
          "not_before_ns": draw(st.integers(0, 2)), "index": draw(st.sampled_from([None, None, 0, 1, -1]))}
     if index is None or rare(draw, 10):
         v["registration"] = M.registration_json(audit.Registration(
@@ -188,7 +191,9 @@ def recorded(name: str, cut: int | None = None) -> dict:
 
 
 @pytest.mark.parametrize("name", ["honest", "honest-appends", "honest-block-sha512", "few", "late", "receipt-path-leaf",
-                                  "codec-block", "refusals"])
+                                  "codec-block", "refusals", "honest-paced-one-flight", "after-boundary-one-flight",
+                                  "honest-shared-4", "skipper-shared-4", "few-shared",
+                                  "honest-shared-paced-one-flight"])
 def test_a_recorded_session_is_counted_at_close_as_the_lean_ends_it(server, name) -> None:
     case, _ = M.recorded(name)
     reg = M.registration_of(case["registration"])
@@ -199,6 +204,19 @@ def test_a_recorded_session_is_counted_at_close_as_the_lean_ends_it(server, name
                                           "sessions": [M.SCENARIOS[name][3]]}]
     assert out["registry"]["refused"] == {M.NODE.hex(): 1}
     assert [out["results"][k] for k in (-4, -1)] == [1, 2]
+
+
+def test_a_registration_that_binds_tiles_is_refused_as_the_lean_refuses_it(server) -> None:
+    """A registration that would bind PoUW's tile outputs: for a node with one live, refused and counted, as any second
+    registration is; for one with none, refused by both registries outright (the Lean covers receipts of blocks
+    alone), drawing nothing."""
+    v = recorded("honest")
+    bound = v["ops"][0] | {"bind": True}
+    assert D.replay(PORT, {"source": M.SOURCE.hex(), "registry": None, "ops": [bound]}, server)[0] == "reject"
+    out = json.loads(D.replay(PORT, {"source": M.SOURCE.hex(), "registry": None,
+                                     "ops": [v["ops"][0], bound, {"op": "drawn", "node": M.NODE.hex()}]}, server)[1])
+    assert out["results"][1:] == [{"refused": True}, 1]
+    assert out["registry"]["refused"] == {M.NODE.hex(): 1}
 
 
 def test_a_session_that_has_not_ended_is_counted_unended(server) -> None:

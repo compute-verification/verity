@@ -27,7 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from .integer import BLACKWELL_SM120_S8_M16N8K32
+from .integer import BLACKWELL_SM100_S8_K32, BLACKWELL_SM120_S8_M16N8K32, HOPPER_SM90_S8_K32
 from .models import (
     ADA_BF16_M16N8K16,
     ADA_E4M3_M16N8K32,
@@ -184,6 +184,28 @@ _B200_STAGE0 = (
     "instruction does not exist on the B200; CUTLASS 3.9.2 example 72a (nvfp4 GEMM, sm_100a) lowers to UTCOMMA.2CTA.4X "
     "(cta_group::2) with UTMALDG/UTCCP/UTCBAR -- the probe's cta_group::1 UTCOMMA is the single-CTA form of the same opcode; "
     "cta_group::2 itself is not probed"
+)
+
+_B200_BF16 = (
+    "lane circuits 2026-10-18, benchmarks/tc_probe run r20261018-234914-864e on vy-dc-b200 (NVIDIA B200, cc 10.0, "
+    "GPU-2e39ef52-bf0d-0527-f3f1-5a27025bb6ff, driver 580.173.02, nvcc 13.0 V13.0.88, -gencode arch=compute_100a,code=sm_100a)"
+)
+_B200_TCGEN05_BF16 = (
+    _B200_BF16 + ": one tcgen05.mma.cta_group::1.kind::f16 per tile from one thread (A and B through K-major no-swizzle descriptors, "
+    "LBO 128 / SBO 256, the layout check passed; the accumulator in tensor memory, columns 8..15 a replica of 0..7), SASS 1x UTCHMMA. "
+    "42,418,176 swept elements in 14 families (specials asserted under the total semantics) and 5,688,320 of four back-to-back MMAs "
+    "on one accumulator (K = 64), 0 mismatches against HOPPER_BF16_WGMMA_K16 (tc-evidence art:c0ce3a0abdc5866d9cc77ab8c5470ab19217946412f9b3029c286a954707f8f2); "
+    "with enable_input_d = 0 on the first MMA (a mainloop's first k step, the accumulator not read) 17,842,176 + 3,703,808, 0 mismatches "
+    "(art:f5719a55353078221c982e34d08906e3a3eb5595a72dd0613490cef5da7781e4); Ampere's pipeline misses 5,045,809 / 986,377 / "
+    "1,365,596 / 512,378 of them"
+)
+_B200_MMA_BF16 = (
+    "lane circuits 2026-10-19, benchmarks/tc_probe run r20261019-001149-cc3d on vy-dc-b200 (the same B200, driver and nvcc as "
+    "r20261018-234914-864e; seed 20261019): one mma.sync.m16n8k16 per tile, SASS 1x HMMA.16816.F32.BF16. The full canonical family "
+    "set, 25,833,472 asserted elements, 0 mismatches against HOPPER_BF16_M16N8K16 (tc-evidence art:a064d5875a659edd6fae154a3a379e8bb6ecbda29914d71bbb58f7eacc6ccbe3); "
+    "the 6,144 specials, outside that model's domain, are 0 mismatches under HOPPER_BF16_WGMMA_K16's total semantics; Ampere's "
+    "pipeline misses 3,152,004. This is the k16 step of vllm-flash-attn's FA2 on the B200, which the driver JITs from the wheel's "
+    "compute_80 PTX"
 )
 
 _PIN_FP4 = (
@@ -456,7 +478,124 @@ INSTRUCTIONS: dict[str, Instruction] = {
                       "census r20261015-062626-f65b: IMMA.16832 at 1,023.6 MACs/SM/clk (QMMA.16832: 1,023.8), 16 SMSP cycles "
                       "per warp MMA, dependent latency 27.2 cycles"),
         ),
-        # --- Blackwell datacenter (sm_100, tcgen05) ---------------------------------------------------------------
+        # --- the int8 grid's instruction on the datacenter cards (lane compute-accounting, 2026-10-19) -------------
+        # One function on every card: these entries' models are sm120.mma.m16n8k32.s8's step under each arch's name.
+        # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store on 2026-10-19 before these entries said so;
+        # each measured on one card, which is its anchor.
+        _i(
+            id="sm90.wgmma.m64n8k32.s8",
+            sm="sm_90",
+            ptx="wgmma.mma_async.sync.aligned.m64n8k32.s32.s8.s8.satfinite",
+            shape=(64, 8, 32),
+            a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
+            model=HOPPER_SM90_S8_K32,
+            status="pinned",
+            dossier="art:c222e6aa27484eb4a5b5aab7131c7e0a2f843e1bbb441c072705c7df1a17deb6",
+            anchor_device="NVIDIA H200",
+            evidence=(HOPPER_SM90_S8_K32.validated,
+                      "SASS IGMMA.64x8x32.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,254,336 elements: "
+                      "r20261019-043020-f267 (tc-evidence art:240115d34164094f3254ce6c2c68aff72eda20cc62195b7150d990fa226ba14c)"),
+        ),
+        # The N an s8 GEMM's warpgroup tile issues (KP2-S8's sm_90a GEMM: m64n{64,128,256}k32; lane kernels, 2026-10-26).
+        # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store on 2026-10-26 before these entries said so;
+        # all eight forms of each (s8/u8 operands, .satfinite or not) agreed, from one run on one H200.
+        _i(
+            id="sm90.wgmma.m64n64k32.s8",
+            sm="sm_90",
+            ptx="wgmma.mma_async.sync.aligned.m64n64k32.s32.s8.s8.satfinite",
+            shape=(64, 64, 32),
+            a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
+            model=HOPPER_SM90_S8_K32,
+            status="pinned",
+            dossier="art:cefe56718712a2f5aab9f11bcc93f88d1397f65de22214cdc9e9ea4a6a9b25ae",
+            anchor_device="NVIDIA H200",
+            evidence=(HOPPER_SM90_S8_K32.validated,
+                      "SASS IGMMA.64x64x32.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,330,112 elements: "
+                      "r20261026-010336-7755 (tc-evidence art:383858621ad3a9bbcc29e1f84c17abd2bb57c6ba755fcc818b00bb3327b64686)"),
+        ),
+        _i(
+            id="sm90.wgmma.m64n128k32.s8",
+            sm="sm_90",
+            ptx="wgmma.mma_async.sync.aligned.m64n128k32.s32.s8.s8.satfinite",
+            shape=(64, 128, 32),
+            a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
+            model=HOPPER_SM90_S8_K32,
+            status="pinned",
+            dossier="art:0591e812e5d097de162d8fd7123b587205b41ea1cb8aa762e6f7c77b0d29ecec",
+            anchor_device="NVIDIA H200",
+            evidence=(HOPPER_SM90_S8_K32.validated,
+                      "SASS IGMMA.64x128x32.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,428,416 elements: "
+                      "r20261026-010336-7755 (tc-evidence art:0a2c4a3b704b37a5a34389cf47cabd6210a948a54f62606c58a67f70916773ef)"),
+        ),
+        _i(
+            id="sm90.wgmma.m64n256k32.s8",
+            sm="sm_90",
+            ptx="wgmma.mma_async.sync.aligned.m64n256k32.s32.s8.s8.satfinite",
+            shape=(64, 256, 32),
+            a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
+            model=HOPPER_SM90_S8_K32,
+            status="pinned",
+            dossier="art:a8edefe33c92be56eec3de9fc36e3c313cad3ba7657fc3b924367d834547665a",
+            anchor_device="NVIDIA H200",
+            evidence=(HOPPER_SM90_S8_K32.validated,
+                      "SASS IGMMA.64x256x32.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,616,832 elements: "
+                      "r20261026-010336-7755 (tc-evidence art:99307205fd01b708f117203d2a483f74e3d2660c723288031d830f66df0b8ecf)"),
+        ),
+        _i(
+            id="sm90.mma.m16n8k32.s8",
+            sm="sm_90",
+            ptx="mma.sync.aligned.m16n8k32.row.col.satfinite.s32.s8.s8.s32",
+            shape=(16, 8, 32),
+            a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
+            model=HOPPER_SM90_S8_K32,
+            status="pinned",
+            dossier="art:c096491133b0b29c7de13f61da53b485181c2e787d75a531921445b4e759c1c8",
+            anchor_device="NVIDIA H200",
+            evidence=(HOPPER_SM90_S8_K32.validated,
+                      "SASS IMMA.16832.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,243,968 elements: "
+                      "r20261019-043020-f267 (tc-evidence art:685ea38bbfba1f93c37a73587b3d8ae365d452e70427afcfaa60d5bdd4e746ac)"),
+        ),
+        _i(
+            id="sm100.tcgen05.mma.s8",
+            sm="sm_100",
+            ptx="tcgen05.mma.cta_group::1.kind::i8 [d_tmem], a_desc, b_desc, idesc(s8 x s8 -> s32, saturate, M128 N32 K32, "
+                "K-major), enable_input_d",
+            shape=(128, 32, 32),
+            a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
+            model=BLACKWELL_SM100_S8_K32,
+            status="pinned",
+            dossier="art:919827b671e809b6410ba2f17d587b3cf516705aecd2815d84f7e914abf2cb8c",
+            evidence=(BLACKWELL_SM100_S8_K32.validated,
+                      "SASS UTCIMMA, one per tile kernel; 0 mismatches over 10,334,208 elements: "
+                      "r20261019-042817-8fd3 (tc-evidence art:643f9653b0c66bd3668e204c6cda6681ced32f2003138061a365a1ee3f401939)"),
+        ),
+        _i(
+            id="sm100.mma.m16n8k32.s8",
+            sm="sm_100",
+            ptx="mma.sync.aligned.m16n8k32.row.col.satfinite.s32.s8.s8.s32",
+            shape=(16, 8, 32),
+            a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
+            model=BLACKWELL_SM100_S8_K32,
+            status="pinned",
+            dossier="art:e643f46610121a534fc3c78045df77681bae7670e1f50abfa9c5dbb2f90411a1",
+            evidence=(BLACKWELL_SM100_S8_K32.validated,
+                      "SASS IMMA.16832.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,243,968 elements: "
+                      "r20261019-042817-8fd3 (tc-evidence art:dbe41cd4d04534db4a7ac27d01950e172d4a12e9714e59abd04c6f88143a613a)"),
+        ),
+        # --- Blackwell datacenter (sm_100) ------------------------------------------------------------------------
+        _i(
+            # The datacenter Blackwell keeps Hopper's BF16 datapath for legacy mma.sync, as the consumer one does.
+            # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store on 2026-10-19 before this flip.
+            id="sm100.mma.m16n8k16.bf16",
+            sm="sm_100",
+            ptx="mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32",
+            shape=(16, 8, 16),
+            a_dtype="bf16", b_dtype="bf16", acc_dtype="f32", scale=None,
+            model=HOPPER_BF16_M16N8K16,
+            status="pinned",
+            dossier="art:9f8188ab6585d976056623b31baa21dcfdbb3a9c7842aa28a5cd341bc0ba0626",
+            evidence=(_B200_MMA_BF16,),
+        ),
         _i(
             id="sm100.tcgen05.mma.e2m1.nvf4",
             sm="sm_100",
@@ -489,12 +628,18 @@ INSTRUCTIONS: dict[str, Instruction] = {
                       "14,734 / 5,535 (D13 holds on sm_100)"),
         ),
         _i(
+            # The k16 step of cuBLAS's BF16 GEMMs on the B200 (vLLM's served routes there).  Hopper's wgmma pipeline: one group of
+            # 16, a 26-bit adder, floor -133, and the total semantics' special values.  benchmarks/tc_probe/trust.py computed
+            # PINNED (P1-P5) from the store on 2026-10-19 before this flip.
             id="sm100.tcgen05.mma.bf16",
             sm="sm_100",
-            ptx=None, shape=None,
+            ptx="tcgen05.mma.cta_group::1.kind::f16 [d_tmem], a_desc, b_desc, idesc(bf16 x bf16 -> f32, M128 N16 K16, K-major), enable_input_d",
+            shape=(128, 16, 16),
             a_dtype="bf16", b_dtype="bf16", acc_dtype="f32", scale=None,
-            model=None, status="unprobed",
-            evidence=("tcgen05.mma kind::f16 with bf16 operands on B200 -- no measurement",),
+            model=HOPPER_BF16_WGMMA_K16,
+            status="pinned",
+            dossier="art:8a14058ec2dc4f080af1523d55326e11484123feaf0726200473644de51f4765",
+            evidence=(_B200_TCGEN05_BF16,),
         ),
         _i(
             id="sm100.tcgen05.mma.e4m3",

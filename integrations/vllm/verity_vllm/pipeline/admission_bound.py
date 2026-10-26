@@ -1,12 +1,12 @@
-"""F-dA-15 admission (R17 stoch, COORD R17-7.3): the HOST-retention bound of a `--retain host` Commit from the workload's DECLARED
-schedule, not from its envelope.
+"""F-dA-15 admission: the HOST-retention bound of a `--retain host` Commit from the workload's DECLARED schedule, not from its
+envelope.
 
 `step_bound_bytes` (native_host) bounds ONE step by the envelope -- every request at the longest prompt, B rows at every decode step,
 the FA2/FA3 M1 stream of a max-length prefill packed B-wide -- and `retained_bytes_bound` multiplies that envelope over the horizon.
-That is the right bound for the DEVICE staging block (one step at a time) and 10-13x loose for the whole run's HOST retention: the R16
+That is the right bound for the DEVICE staging block (one step at a time) and 10-13x loose for the whole run's HOST retention: a
 llama B16 1024/128 mixed-arrivals Commit on cp-big was told 559,384 MiB against a 359,535 MiB cgroup and committed 42.5 GiB (rc pinned at
-~99 GB RSS); the phi3 B8 1024/128 Commit beside it (582,111 MiB) died of the host SUM, not of its own bytes (global M-0743).  A bound
-that loose cannot gate a launch, and R17-7.3 says a launch predicted to exceed the cgroup is not made.
+~99 GB RSS); the phi3 B8 1024/128 Commit beside it (582,111 MiB) died of the host SUM, not of its own bytes.  A bound
+that loose cannot gate a launch, and a launch predicted to exceed the cgroup is not made.
 
 This module sums the bytes the collector binds per ENGINE STEP under the declared schedule (verity-sweep/workload/v1 `requests[]`:
 `prompt_len`, `max_tokens`, `arrive_step`), from the same per-module widths `step_bound_bytes` measured on the model:
@@ -17,11 +17,11 @@ This module sums the bytes the collector binds per ENGINE STEP under the declare
 where NB_s = ceil(K_s / kBlockN) and K_s = the longest context any request live at s can reach (prompt + cap + lag) -- the geometry the
 record shows: one `fa2.m1/L<k>/s<i>/g<heads>x<prompt_i>x<NB>` stream per arriving prompt, one `g<live x kv_heads>x<g>x<NB>` (GQA swapped
 kernel) or `g<live x heads>x1x<NB>` stream for the decode rows, NB shared step-wide (vLLM passes the batch's max_seqlen_k to every
-launch of the step).  Validated against the per-step `n_bytes` of three R16 records (llama B16 1024/128 mixed-arrivals: 181/181 steps
+launch of the step).  Validated against the per-step `n_bytes` of three Commit records (llama B16 1024/128 mixed-arrivals: 181/181 steps
 >= observed, total +5.8 %; llama B4 1024/128: 4 concurrent prefills; phi3 B8 256/32: hd 96, no GQA) in tests/test_admission.py.
 
 Soundness assumptions (named on the record): every request runs to its cap plus `lag` post-EOS rows (an EOS stop before the cap only
-removes bytes; R17-1 LAG is declared -- pass the Program's lag); a prompt longer than the step's token budget is chunked by the engine
+removes bytes; the LAG is declared -- pass the Program's lag); a prompt longer than the step's token budget is chunked by the engine
 (the sum over chunks of rows x NB is <= the unchunked launch; one `per_step` of chunk padding is added per extra chunk); the module
 widths are those `step_bound_bytes` measured (a sizing record that predates the per-layer RoPE count is corrected here by name).
 The multiplier for the merkle levels (x1.25) is the one the F-dA-15 warning always used.
@@ -51,7 +51,7 @@ def _hidden_words(HB: int, M: int, NB: int, BN: int, D: int) -> int:
     return -(-mat_total_words(HB, M, NB, BN, D) // CHUNK_WORDS) * CHUNK_WORDS
 
 
-def _m1_words(model: dict[str, Any], *, n_seq: int, seqlen_q: int, seqlen_k: int, per_sequence: bool) -> int:
+def _launch_hidden_words(model: dict[str, Any], *, n_seq: int, seqlen_q: int, seqlen_k: int, per_sequence: bool) -> int:
     """Words of the M1 hidden stream(s) one attention launch binds, in the geometry the record shows (see module doc)."""
     heads, kvh, hd = int(model["heads"]), int(model["kv_heads"]), int(model["head_dim"])
     g = max(1, heads // kvh)
@@ -119,9 +119,9 @@ def scheduled_step_bytes(sizing: dict[str, Any], requests: list[dict[str, Any]],
         hid = 0
         if hidden_m1:
             for r in pref:
-                hid += _m1_words(model, n_seq=1, seqlen_q=r["prompt"], seqlen_k=K, per_sequence=True)
+                hid += _launch_hidden_words(model, n_seq=1, seqlen_q=r["prompt"], seqlen_k=K, per_sequence=True)
             if dec:
-                hid += _m1_words(model, n_seq=len(dec), seqlen_q=1, seqlen_k=K, per_sequence=False)
+                hid += _launch_hidden_words(model, n_seq=len(dec), seqlen_q=1, seqlen_k=K, per_sequence=False)
         hb = layers * 4 * hid
         tb, sb, pb = tokens * per_token, len(live) * per_seq, per_step * chunks
         b = tb + sb + pb + hb
@@ -150,7 +150,7 @@ HIDDEN_FAMILIES = ("fa2_hidden_m1", "fa3_hidden_m1")
 def predicted_pool_bytes(raw: int, hidden: int, *, retain: str, levels_factor: float, windowed: bool, bounded: bool,
                          retain_exclude: set[str] | frozenset[str] | None) -> tuple[int, str]:
     """The pinned host pool one Commit run allocates, by path, with the rule that produced it (named on the record):
-      unbounded windowed   raw x levels_factor under EVERY retention (hedge copies of every window; F-dA-15 correction, R19 admit)
+      unbounded windowed   raw x levels_factor under EVERY retention (hedge copies of every window; F-dA-15 correction)
       bounded, retain host (raw - excluded hidden) + raw x (levels_factor - 1): `--retain-exclude hidden_m1` keeps the C2 byte source
                            (the module outputs) and drops the M1 stream's chunk-aligned interior, which no C2 consumer reads (opens by
                            replay); the Merkle levels still span every leaf, the excluded ones too
@@ -191,9 +191,9 @@ def admission(sizing: dict[str, Any], requests: list[dict[str, Any]], host_cap_b
               envelope_bound_bytes: int | None = None, windowed: bool = True, bounded: bool = False,
               retain_exclude: set[str] | frozenset[str] | None = None, resident: dict[str, Any] | None = None) -> dict[str, Any]:
     """The F-dA-15 verdict for one Commit launch: predicted = the pinned pool the run allocates (`predicted_pool_bytes`, by staging path
-    and retention) + what the Commit holds beside it at its peak (`resident`, from `committer_resident`) against the container limit.  The REFUSAL domain is unchanged (R17-7.3 / coord M-0157 (2): `--retain host`, unbounded);
-    under another retention the pool is now PREDICTED and named (a non-host retention on the windowed path allocates it anyway -- the R18
-    #60 `--retain none` 112 GiB datum), recorded as `would_exceed_by_bytes`, never refused here.  `admitted` False names the excess; the
+    and retention) + what the Commit holds beside it at its peak (`resident`, from `committer_resident`) against the container limit.  The REFUSAL domain is unchanged (`--retain host`, unbounded);
+    under another retention the pool is now PREDICTED and named (a non-host retention on the windowed path allocates it anyway: a
+    `--retain none` run still allocated the 112 GiB pool), recorded as `would_exceed_by_bytes`, never refused here.  `admitted` False names the excess; the
     envelope bound is carried beside it for the record."""
     sched = scheduled_step_bytes(sizing, requests, max_num_batched_tokens=max_num_batched_tokens, lag=lag)
     raw = int(sched["total_bytes"])
@@ -271,10 +271,6 @@ def host_cap() -> tuple[int | None, str | None]:
     except OSError:
         pass
     return None, None
-
-
-def _cgroup_cap() -> int | None:
-    return host_cap()[0]
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -1,4 +1,4 @@
-import Models.Pouw.Assumptions.Pinned
+import Definitions.Pouw.Assumptions.Pinned
 import Proofs.Pouw.Prob
 
 /-!
@@ -17,21 +17,6 @@ theorem pr_or_disjoint (P P' : α → Prop) (h : ∀ x, ¬ (P x ∧ P' x)) :
   rw [pr_eq_card (fun x => P x ∨ P' x) (univ.filter P ∪ univ.filter P') (fun x => by simp),
     pr_eq_card P (univ.filter P) (fun x => by simp), pr_eq_card P' (univ.filter P') (fun x => by simp),
     Finset.card_union_of_disjoint (Finset.disjoint_filter.2 fun x _ hx hx' => h x ⟨hx, hx'⟩), Nat.cast_add, add_div]
-
-/-- The union bound over a finite index set. -/
-theorem pr_exists_le_sum {ι : Type} (s : Finset ι) (P : ι → α → Prop) :
-    pr (fun x => ∃ i ∈ s, P i x) ≤ ∑ i ∈ s, pr (P i) := by
-  classical
-  refine Finset.induction_on s ?_ ?_
-  · simp only [Finset.notMem_empty, false_and, exists_false, Finset.sum_empty]
-    exact le_of_eq (pr_eq_zero fun _ h => h)
-  · intro i s hi ih
-    rw [Finset.sum_insert hi]
-    calc pr (fun x => ∃ j ∈ insert i s, P j x) ≤ pr (fun x => P i x ∨ ∃ j ∈ s, P j x) := pr_mono fun x ⟨j, hj, h⟩ => by
-          rcases Finset.mem_insert.1 hj with rfl | hj
-          · exact Or.inl h
-          · exact Or.inr ⟨j, hj, h⟩
-      _ ≤ _ := (pr_or_le _ _).trans (add_le_add le_rfl ih)
 
 namespace RCopy
 

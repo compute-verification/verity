@@ -220,7 +220,7 @@ class Loop:
 
 #: Each node's loops in switch order: observers first, then the workers, the GPU leases, and the dispatcher last, which drives
 #: the rest. Stop order for --back is the reverse. Node 1's other tmux sessions (fp-feed, gm-*, kueue-shadow, q30b-backstop) are
-#: lanes' and stay research's; node 2's pouw-infra-* units are held in deploy.toml (compute accounting's freeze list).
+#: lanes' and stay research's; node 2's pouw-infra-* are compute accounting's user units (deploy.toml), not switched here.
 SWITCH = {
     "vy-nebius-1": (
         Loop("vy-write-probe@vy-nebius-1.service", "write-probe"),
@@ -246,10 +246,10 @@ SWITCH = {
              writes=("/workspace/jobs/dispatch", "/workspace/verity-guest", "/workspace/monitoring/alerts/outbox")),
         Loop("vy-custody.timer", None, root=True, code=("/usr/local/bin/vy-custody", "/workspace/custody"),
              writes=("/workspace/research/custody-n1",)),
-        Loop("vy-monitors.timer", None),
     ),
     "vy-nebius-2": (
         Loop("vy-write-probe@vy-nebius-2.service", "write-probe"),
+        Loop("vy-monitors.timer", None),
     ),
 }
 COMMON_CODE = ("/etc/vy/env", K3S_CONFIG)

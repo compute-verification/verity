@@ -23,8 +23,18 @@ Two halves, one CLI:
         (census kernels no declaration matches), the reverse (declared names never seen in the step), claim multiplicity
         (a kernel matched by declarations of more than one specialization is flagged) and the count comparison
         (kernels in the census vs raw events whose resolution declares the kernel).  Writes <report>.json and <report>.md.
-        Exit status 1 when the residue is non-empty.  `--propose-allowlist a,b` treats extra declared names as allowlisted
-        (what-if for profile proposals; recorded separately in the report, the pinned profile is not touched).
+        Exit status 1 when the residue is non-empty or a launch count differs.  `--propose-allowlist a,b` treats extra declared
+        names as allowlisted (what-if for profile proposals; recorded separately in the report, the pinned profile is not touched).
+
+Launch counts: per step, every declared kernel must launch on the device exactly as many times as the step has root events
+whose resolution declares it.  Claiming by name alone lets an untraced launch of a declared kernel (a JIT or cuteDSL kernel
+that leaves no dispatcher event) overwrite a Call's output in place: the fold sees no read-before-write and the residue stays
+zero (note:20261019T0602Z-report-a9-glm-moe-final).  A mismatch is refused by name: the kernel, its device count against its
+declaring events, and the buffers (allocations) those events write.  `kernel_allowlist.LAUNCH_COUNT_ALLOWLIST` exempts a
+declared name with its reason, which the report records.  Two cases are not counted: launches the frozen `KERNEL_ALLOWLIST`
+claims (copies, fills, the runner's metadata kernels), which the residue accepts at any count with or without a declaration,
+and a declared name with no launch in the step, an alternative the step did not take (`fp8_mqa_logits` or
+`fp8_paged_mqa_logits`), which stays in `declared_never_seen`.
 
 Kernel names: Kineto reports demangled CUDA names (`void vllm::fused_add_rms_norm_kernel<c10::BFloat16, 8>(...)`,
 `flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<64, 64, 128, 4, ...>, ...>`, `Memcpy DtoH (Device -> Pinned)`, `Memset
@@ -37,7 +47,6 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
-import os
 import re
 import time
 from collections import Counter, OrderedDict
@@ -45,6 +54,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.config import UsageError, option
 from verity_vllm.properties.record import seal
 
@@ -199,10 +209,10 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
     (out / "traces").mkdir(parents=True, exist_ok=True)
     wl = va.load_workload(workload_path, max_tokens)
     case = va.case_of(wl, case)
-    if os.environ.get("VERITY_CENSUS_GPU_UTIL"):
+    if (gpu_util := settings.VERITY_CENSUS_GPU_UTIL) is not None:
         # [coverage] a census re-run that shares the GPU with another engine: the KV-cache size does not enter the kernel counts
         # (no preemption at these workload sizes); the resolved value is on record in this document's engine_kwargs
-        engine_args = {**(engine_args or {}), "gpu_memory_utilization": float(os.environ["VERITY_CENSUS_GPU_UTIL"])}
+        engine_args = {**(engine_args or {}), "gpu_memory_utilization": gpu_util}
     eng = va.build_engine(checkpoints, max_num_seqs=max_num_seqs, case=case, engine_args=engine_args, target=va.target_of_workload(wl))
     print(f"[census] engine built in {eng.build_s:.1f}s (case {case}, {eng.cp['repo']})", flush=True)
     versions = va.versions_doc(eng)
@@ -210,10 +220,10 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
     engine = eng.llm.llm_engine
 
     def profiled_run(requests: list[dict], tag: str) -> tuple[list[dict], dict[str, list[int]]]:
-        """`driver.run_requests` with one profiler session per engine step (the bare engine: no wrappers at all).
+        """The bare engine's request loop with one profiler session per engine step (no wrappers at all).
 
         [coverage D87, adapter-level] the same step-indexed arrival rule as `verity_vllm.engine.arrivals.run_requests_arrivals`: request
-        r is admitted right before iteration r["arrive_step"] (all 0 = the historical loop); an idle engine admits the next arrival at
+        r is admitted right before forward r["arrive_step"] (all 0 = the historical loop); an idle engine admits the next arrival at
         once.  The census must profile the batch composition the capture saw, or its per-step kernel counts cannot align with the
         log (G1: "census steps not aligned with log steps" on every B8-mixed cell).  Iterations that launched no device kernel
         (vLLM V1 returns the previous forward's sample, so the loop ends with one drain iteration) carry no census information and
@@ -221,8 +231,8 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
         arrivals = sorted(requests, key=lambda r: int(r.get("arrive_step") or 0))
         steps: list[dict] = []
         tokens: dict[str, list[int]] = {}
-        k = 0            # forward index (steps with device kernels)
-        it = 0           # engine.step() iterations (admission clock, as in arrivals.py)
+        k = 0            # forward index (steps with device kernels; the admission clock, as in arrivals.py)
+        it = 0           # engine.step() iterations
         n_empty = 0
         t_run0 = time.perf_counter()
         realized: dict[str, dict] = {}   # per request: planned arrive_step, admit iteration, first forward, finish forward, n_generated
@@ -234,7 +244,7 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
                                          "first_step": k, "finish_step": None, "finish_reason": None, "n_generated": None}
 
         while arrivals or engine.has_unfinished_requests():
-            while arrivals and int(arrivals[0].get("arrive_step") or 0) <= it:
+            while arrivals and int(arrivals[0].get("arrive_step") or 0) <= k:
                 _admit(arrivals.pop(0))
             if not engine.has_unfinished_requests():
                 _admit(arrivals.pop(0))
@@ -277,7 +287,7 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
         return steps, tokens
 
     if warmup:
-        warm = va.throwaway_requests(eng, wl["requests"])
+        warm = va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED)
         profiled_run(warm, "warmup")      # profiler + CUPTI warm-up too; discarded
         torch.cuda.synchronize()
     steps, tokens = profiled_run(wl["requests"], "census")
@@ -353,13 +363,39 @@ def declared_kernels_of_step(resolutions: list, roots: list) -> tuple[dict[str, 
     return pats, events, dict(parts_n)
 
 
+def declaring_events(resolutions: list, roots: list, kernel: str) -> list[dict]:
+    """The step's root events whose resolution declares `kernel`: id, op, module and the allocations its declaring parts write."""
+    from verity_vllm.observe.fold.resolver import Compute, Transparent, parts_of
+
+    out = []
+    for root, r in zip(roots, resolutions):
+        parts = [p for p in parts_of(r) if isinstance(p, (Compute, Transparent)) and kernel in p.kernels]
+        if not parts:
+            continue
+        written = [o for p in parts for o in (p.outputs if isinstance(p, Compute) else (p.dst,))]
+        allocs = sorted({v.alloc for o in written if (v := getattr(o, "view", None) or getattr(o, "own", None)) is not None})
+        out.append({"event": root.id, "op": root.op, "module": getattr(root.enter, "module", None), "writes": allocs})
+    return out
+
+
+def count_line(m: dict) -> str:
+    """One launch-count refusal (or exemption) as a line: kernel, device count vs declaring events, the buffers they write."""
+    evs = m.get("events") or []
+    where = "; ".join(f"event {e['event']} {e['op']} {e['module'] or '-'} writes allocs {e['writes']}" for e in evs[:4])
+    more = f"; +{len(evs) - 4} more" if len(evs) > 4 else ""
+    return (f"step {m['step']}: {m['kernel']} launched {m['device_count']} times on the device against {m['declaring_events']} "
+            f"declaring events (buffers {m.get('buffers')}{': ' + where + more if where else ''})")
+
+
 def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist: tuple[str, ...] = ()) -> dict:
     """`proposed_allowlist`: extra declared names treated as allowlisted (what-if; L5 may not edit the profile).  The
     report records them separately (`proposed_allowlist`) so the measured residue against the pinned profile stays visible."""
     from verity_vllm.observe.fold.resolve_log import load_profile, resolve_log
 
     profile, prof_mod = load_profile(profile_name)
-    from verity_vllm.properties.kernel_allowlist import KERNEL_ALLOWLIST as FROZEN_ALLOWLIST  # protected: a profile cannot allowlist kernels by itself
+    # protected: a profile cannot allowlist kernels by itself
+    from verity_vllm.properties.kernel_allowlist import KERNEL_ALLOWLIST as FROZEN_ALLOWLIST
+    from verity_vllm.properties.kernel_allowlist import LAUNCH_COUNT_ALLOWLIST
     allow = set(FROZEN_ALLOWLIST) | set(proposed_allowlist)
     profile_extra_allowlist = sorted(set(profile.kernel_allowlist) - set(FROZEN_ALLOWLIST))
     per_step_roots: dict[int, list] = {}
@@ -374,6 +410,8 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
     residue_total: Counter = Counter()
     kernel_rows: "OrderedDict[str, dict]" = OrderedDict()   # kernel name -> {counts per step, claims}
     ambiguous: list[dict] = []
+    count_mismatches: list[dict] = []
+    count_exempt: Counter = Counter()                        # allowlisted declared name -> steps whose count differed
     for cs in census_steps:
         i = cs["step"]
         sr = by_step.get(i)
@@ -404,16 +442,32 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
                 ambiguous.append({"step": i, "kernel": name, "compute_claims": sorted(comp)})
         never_seen = sorted(set(pats) - seen_declared)
         allow_never_seen = sorted(allow - seen_declared)
+        infrastructure = {n for n in cs["kernels"] if claims_for(n, allow)}
         counts = {}
+        step_mismatches = []
         for k in sorted(pats):
             census_count = sum(d["count"] for n, d in cs["kernels"].items() if matches(k, n))
             counts[k] = {"census_kernels": census_count, "declaring_events": len(events[k]), "declaring_parts": parts_n[k],
                          "patterns": sorted(pats[k])}
+            launched = {n: d["count"] for n, d in cs["kernels"].items() if matches(k, n) and n not in infrastructure}
+            if sum(launched.values()) != census_count:
+                counts[k]["infrastructure"] = census_count - sum(launched.values())
+            if not launched or sum(launched.values()) == len(events[k]):
+                continue
+            if k in LAUNCH_COUNT_ALLOWLIST:
+                counts[k]["exempt"] = LAUNCH_COUNT_ALLOWLIST[k]
+                count_exempt[k] += 1
+                continue
+            evs = declaring_events(sr.resolutions, per_step_roots[i], k)
+            step_mismatches.append({"step": i, "kernel": k, "device_kernels": launched, "device_count": sum(launched.values()),
+                                    "declaring_events": len(events[k]), "patterns": sorted(pats[k]),
+                                    "buffers": sorted({a for e in evs for a in e["writes"]}), "events": evs})
+        count_mismatches.extend(step_mismatches)
         steps_out.append({"step": i, "phase": sr.phase_hint, "rows": sr.rows, "log_events": sr.events, "log_roots": sr.roots,
                           "census_kernels": cs["n_kernels"], "census_distinct": len(cs["kernels"]), "device_us": cs.get("device_us"),
                           "declared_by_patterns": sorted(pats), "residue": residue,
                           "declared_never_seen": never_seen, "allowlist_never_seen": allow_never_seen,
-                          "counts": counts})
+                          "counts": counts, "count_mismatches": [m["kernel"] for m in step_mismatches]})
     rows_out = []
     for name, row in kernel_rows.items():
         rows_out.append({"kernel": name, "cat": row["cat"], "grid": row["grid"], "block": row["block"],
@@ -424,7 +478,7 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
                          "patterns": sorted(row["patterns"]), "residue": not row["claims"]})
     total_kernels = sum(cs["n_kernels"] for cs in census_steps)
     rep = {
-        "schema": "verity-capture/census-reconciliation/v1",
+        "schema": "verity-capture/census-reconciliation/v2",
         "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "census": {"utc": census.get("utc"), "workload_sha256": (census.get("workload") or {}).get("sha256"),
                    "engine_steps": census.get("engine_steps"), "steps_with_device_work": len(census_steps),
@@ -435,17 +489,23 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
         "steps_aligned": len(results) == len(census_steps),
         "totals": {"census_kernels": total_kernels, "distinct_kernel_names": len(kernel_rows),
                    "residue_kernels": sum(residue_total.values()), "residue_names": sorted(residue_total),
-                   "ambiguous": len(ambiguous), "log_unsupported": sum(len(sr.unsupported) for sr in results)},
+                   "ambiguous": len(ambiguous), "log_unsupported": sum(len(sr.unsupported) for sr in results),
+                   "count_mismatches": len(count_mismatches),
+                   "count_mismatch_kernels": sorted({m["kernel"] for m in count_mismatches}),
+                   "count_exempt": dict(sorted(count_exempt.items()))},
         "kernels": rows_out,
         "steps": steps_out,
         "ambiguous": ambiguous[:64],
+        "count_mismatches": count_mismatches,
+        "count_allowlist": {k: LAUNCH_COUNT_ALLOWLIST[k] for k in sorted(count_exempt)},
         "match_table": {k: list(v) for k, v in KERNEL_MATCH.items()},
         "compute_kernels": sorted(COMPUTE_KERNELS),
         "allowlist": sorted(allow), "profile_extra_allowlist": profile_extra_allowlist,
         "proposed_allowlist": sorted(proposed_allowlist),
     }
     rep["residue_zero"] = rep["totals"]["residue_kernels"] == 0 and rep["steps_aligned"] and all("error" not in s for s in steps_out)
-    return seal(rep, rep["residue_zero"])
+    rep["counts_equal"] = not count_mismatches
+    return seal(rep, rep["residue_zero"] and rep["counts_equal"])
 
 
 def reconciliation_markdown(rep: dict) -> str:
@@ -463,7 +523,22 @@ def reconciliation_markdown(rep: dict) -> str:
     L.append(f"- log: {rep['log_steps']} steps (profile_id `{rep['log_profile_id']}`), Unsupported {t['log_unsupported']}; steps aligned: {rep['steps_aligned']}")
     L.append(f"- **residue: {t['residue_kernels']} kernels** ({', '.join(f'`{n}`' for n in t['residue_names']) or 'none'}); "
              f"ambiguous compute claims: {t['ambiguous']}  →  **residue_zero = {rep['residue_zero']}**")
+    L.append(f"- **launch counts: {t['count_mismatches']} refused** ({', '.join(f'`{n}`' for n in t['count_mismatch_kernels']) or 'none'}); "
+             f"exempt by the launch-count allowlist: {', '.join(f'`{k}` ({n} steps)' for k, n in t['count_exempt'].items()) or 'none'}"
+             f"  →  **counts_equal = {rep['counts_equal']}**")
     L.append("")
+    if rep["count_mismatches"]:
+        L.append("## Launch counts refused")
+        L.append("")
+        for m in rep["count_mismatches"][:64]:
+            L.append(f"- {count_line(m)}")
+        L.append("")
+    if rep["count_allowlist"]:
+        L.append("## Launch counts exempt (`kernel_allowlist.LAUNCH_COUNT_ALLOWLIST`)")
+        L.append("")
+        for k, why in rep["count_allowlist"].items():
+            L.append(f"- `{k}`: {why}")
+        L.append("")
     L.append("## Kernels (all steps)")
     L.append("")
     L.append("| kernel (Kineto name, truncated) | cat | step 0 | decode steps | total | device µs | claimed by (declared name → pattern) |")
@@ -568,14 +643,17 @@ def main(args: Options) -> int:
         Path(str(base) + ".md").write_text(reconciliation_markdown(rep))
         t = rep["totals"]
         print(f"[census] steps {rep['census_steps']} (log {rep['log_steps']}), kernels {t['census_kernels']}, distinct {t['distinct_kernel_names']}, "
-              f"residue {t['residue_kernels']} {t['residue_names']}, ambiguous {t['ambiguous']} -> residue_zero={rep['residue_zero']}")
+              f"residue {t['residue_kernels']} {t['residue_names']}, ambiguous {t['ambiguous']} -> residue_zero={rep['residue_zero']}; "
+              f"launch counts refused {t['count_mismatches']} {t['count_mismatch_kernels']} -> counts_equal={rep['counts_equal']}")
         for s in rep["steps"]:
             if "error" in s:
                 print(f"  step {s['step']}: {s['error']}")
             elif s["residue"]:
                 print(f"  step {s['step']}: residue " + "; ".join(f"{r['kernel'][:80]} x{r['count']}" for r in s["residue"]))
+        for m in rep["count_mismatches"]:
+            print(f"  {count_line(m)}")
         print(f"wrote {base}.json and {base}.md")
-        return 0 if rep["residue_zero"] else 1
+        return 0 if rep["ok"] else 1
     if not args.workload or not args.out:
         raise UsageError("either --reconcile CENSUS.json or --workload W --out DIR")
     run_census(args.workload, args.out, args.checkpoints, max_tokens=args.max_tokens, warmup=not args.no_warmup,

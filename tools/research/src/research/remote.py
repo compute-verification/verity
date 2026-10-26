@@ -14,7 +14,8 @@
                         rate_usd_per_hour = 14.40      # the attempt's cost rate (a runpod pod reports its own)
                     A machine not in the file, or bound to another project, is refused before anything is touched.
     tool snapshot   the research package source is shipped to <root>/tool/<content-sha>/ and run via PYTHONPATH; the run records
-                    which snapshot ran.  No pip, no editable install, no credentials on the machine.
+                    which snapshot ran.  No pip, no editable install, no credentials on the machine.  The workload's PATH starts
+                    with <root>/cache/bin/<content-sha>/, whose `research` runs that snapshot, and ends with ~/.elan/bin.
     version check   PYTHONPATH does not guarantee which `research` answers (a wrapper python, a `research/` earlier on sys.path, an
                     altered snapshot).  The launcher sends tool_identity() of the package it shipped: `launch-request --expect-tool ID`
                     refuses before the claim, and the runner again before the workload, with ResearchVersionMismatch naming the
@@ -59,15 +60,16 @@
                     the FIFO <root>/requests/<run-id>/.launch-ack (`ack_launch`), found from the request path its --remote-json carries,
                     so no wrapper has to pass an fd or the environment through.  A runner (or a wrapper ahead of it) that exits first is
                     refused (RunnerFailed, refused.json with its rc and launcher.log's tail), so `research run --on` exits 3, never
-                    `launched`.  `disk-hold` ahead of the runner acknowledges when it starts holding: the launch stays detached.  When
+                    `launched`.  `disk-hold` or `cpu-hold` ahead of the runner acknowledges when it starts holding: the launch stays detached.  When
                     launch-request can't tell (job.json is there without an ack, the wrapper exited but its process group lives on, or the
                     wait itself failed), it answers started with `unconfirmed` and releases nothing: a live run is never called refused.
     exclusive       --exclusive takes <root>/runs/.exclusive.lock (O_EXCL) naming the run; a live holder refuses the launch with the reason.
                     A dead holder (terminal status or vanished pid) is reclaimed.  The runner releases its own lock at exit.
     memory          --mem-gb N: the machine side admits the run only if its memory cgroup's limit - in use - live reservations
-                    (the fleet's /workspace/ramlock/*.json, machines.toml `ramlock`) >= N, and writes the run's reservation there;
-                    else MemoryNotAvailable (refused.json).  --mem-wait S polls up to S seconds instead.  The runner removes the
-                    reservation at exit; job.json run.remote.mem records the reading it was admitted on (research.mem).
+                    (the fleet's /workspace/ramlock/*.json, machines.toml `ramlock`) >= N and no older --mem-wait run is waiting in
+                    line, and writes the run's reservation there; else MemoryNotAvailable (refused.json).  --mem-wait S waits in line
+                    up to S seconds instead, first come first served.  The runner removes the reservation at exit; job.json
+                    run.remote.mem records the reading it was admitted on (research.mem).
     GPUs            on a machine whose GPUs gpu-lease hands out (GPU_LEASE_HOST_FILE), a run sees no GPU (CUDA_VISIBLE_DEVICES='')
                     unless it declares `--gpus N`: its workload then runs under `gpu-lease N --wait`, which queues it first come first
                     served for N of them (the wait counts against --timeout) and names them in CUDA_VISIBLE_DEVICES.  A workload that
@@ -81,6 +83,9 @@
                     with custody, RESEARCH_PREFLIGHT_CUSTODY (the staged key's dir).  A declaration that cannot be read refuses the run.
                     `--preflight TOOL` runs TOOL's preflight before a run of anything else (a Lean record regeneration on a check
                     pod), and refuses when the tree declares none.  job.json run.remote.preflight and the launch's answer carry its report.
+    auditor         a machine with /etc/vy/auditor (deploy.toml installs it on an auditor host, vy-challenger-1) runs only the commands
+                    that file lists, one a line, exactly: launch-request refuses any other before anything starts, and the host's
+                    vy-auditor-only.timer (slot_only.py --auditor) stops one launched from a tree that predates the refusal.
     observe/fetch   `research fetch <id>` copies the small records (or --all files) into the local run dir over one ssh+tar, extracted
                     member by member off the pipe (a big run is never in the launcher's memory); remote.json keeps observed_utc.
                     Unreachable means "last observed at T; current status unknown", never "failed".
@@ -137,6 +142,7 @@ REQUEST_SCHEMA = "research/request/v0.1"
 PRESERVED_SCHEMA = "research/preserved/v0.1"
 READY_SCHEMA = "research/source-ready/v0.1"
 READY_FILE = "READY.json"                     # the only marker that makes <root>/src/<identity>/ executable
+_DIRT_MARK = "RESEARCH-TRACKED-DIRT"              # _probe_source: what follows it is `git status` of a READY checkout
 LEGACY_COMPLETE = ".complete"                 # the pre-verification marker: never sufficient on its own
 SHIP_SOURCE_TIMEOUT_S = 600                   # the floor; a big archive gets size / SHIP_MIN_BYTES_PER_S
 SHIP_MIN_BYTES_PER_S = 64 * 1024              # the slowest link a ship is allowed to be (laptop -> pod measured 130-220 KB/s, 2026-09-24)
@@ -154,6 +160,7 @@ LAUNCH_ACK = ".launch-ack"                    # <root>/requests/<run-id>/.launch
 LAUNCH_LOCK = ".launch.lock"                  # <root>/requests/<run-id>/.launch.lock: held by a delivery of the request until it answers
 FIRST_RECORD = "job.json"
 RUNNER_FAILED_LINES = 5                       # launcher.log lines in a RunnerFailed reason (refused.json keeps PREFLIGHT_TAIL)
+CANCEL_GRACE_S = 20                           # research cancel: SIGTERM, then the runner SIGKILLs what of the run is left this long after
 GUARD_IDLE_MIN_DEFAULT = 90
 GUARD_ENVIRON = "/proc/1/environ"             # RunPod injects RUNPOD_POD_ID and the pod-scoped RUNPOD_API_KEY into the container's first process
 DIRECT_GPUS_FILE = "/etc/vy/direct-gpus"      # the Nebius cluster's split (pods/nebius/sky/cluster_up.sh): `none` once Kueue owns every GPU
@@ -164,6 +171,7 @@ RUNS_VIA_SLOT_FILE = "/etc/vy/runs-via-slot"  # present: a run starts only throu
 #: the machine's own slot_only.py (deploy.toml installs it beside the marker, and vy-slot-only.timer runs it): when present it, not
 #: the shipped tree's package, says which commands pass, so a lane's branch older than a rule change is judged by the deployed rule
 NODE_SLOT_ONLY_FILE = "/usr/local/lib/vy-monitoring/slot_only.py"
+AUDITOR_FILE = "/etc/vy/auditor"              # present: an auditor host, which runs only the commands it lists (slot_only.auditor_allows)
 GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
 POD_TARGET_RETRY_S = 2.0
@@ -325,26 +333,61 @@ def sender(environ: dict[str, str] | None = None) -> str | None:
 
 
 WAKE_WAIT_S, WAKE_POLL_S = 900.0, 15.0
+NEBIUS_KEY_ENV = ("NEBIUS_SA_ID", "NEBIUS_SA_PUBLIC_KEY_ID", "NEBIUS_SA_PRIVATE_KEY_B64")
+CONTROL_WAKE = "PYTHONPATH=/data/infra/store-index-src/src python3.12 -m research.pods.nebius.wake start"   # pods/nebius/wake.py
 
 
-def wake(machine: dict[str, Any], ssh: list[str], *, nebius=None, sleep=time.sleep, clock=time.monotonic) -> str | None:
+def wake_on_control(iid: str, *, run=None) -> str | None:
+    """Ask the control pod to start instance `iid` (pods/nebius/wake.py there, which starts only an instance the registry names,
+    before its deadline, under a live budget line) over the ssh path `pods create` reads the budgets guard through; -> the state
+    it was in. Refused with the pod's reason."""
+    from .pods import budgets
+    from .pods.connect import ssh_base
+
+    host = os.environ.get("RESEARCH_GUARD_HOST") or budgets.GUARD_HOST
+    try:
+        r = (run or subprocess.run)([*ssh_base(host), f"{CONTROL_WAKE} {shlex.quote(iid)}"], capture_output=True, text=True, timeout=180)
+    except Exception as e:  # noqa: BLE001  (no RunPod key or API, a timeout: the pod can't be asked)
+        raise Refused(f"the control pod {host} can't be reached ({type(e).__name__}: {str(e)[:200]})") from None
+    if r.returncode != 0:
+        why = (r.stderr or r.stdout).strip().splitlines()
+        raise Refused(f"the control pod {host} refused: {why[-1][:400] if why else f'rc {r.returncode}'}")
+    return json.loads(r.stdout.strip().splitlines()[-1]).get("was")
+
+
+def wake(machine: dict[str, Any], ssh: list[str], *, nebius=None, control=None, sleep=time.sleep, clock=time.monotonic) -> str | None:
     """Start a stopped Nebius VM before a run and wait for its ssh (INF-58: the H200s stop after 2 h idle, disks kept): a machine
     whose registry entry names its `nebius_instance_id` and whose ssh doesn't answer is started through the Nebius API, then waited
-    for up to WAKE_WAIT_S. Returns what it did, None when the machine answered at once or names no instance."""
+    for up to WAKE_WAIT_S. With no Nebius key here (a lane's VM), the control pod starts it (`wake_on_control`, or `control`).
+    Returns what it did, None when the machine answered at once or names no instance."""
     iid = machine.get("nebius_instance_id")
     if not iid or ssh_run(ssh, ["true"], timeout=30).returncode == 0:
         return None
-    if nebius is None:
-        from .pods.nebius.fleet import nb as nebius
-    try:
-        state = (nebius("compute", "instance", "get", "--id", iid).get("status") or {}).get("state")
-        if state in ("STOPPED", "STOPPING"):
-            nebius("compute", "instance", "start", "--id", iid, "--async")
-    except (RuntimeError, OSError, ValueError) as e:
-        raise Refused(f"{machine['name']} doesn't answer on ssh and couldn't be started through the Nebius API ({e}); with no Nebius "
-                      f"credentials here, ask @infra to start {iid}") from None
-    print(f"research: {machine['name']} was {state}; started it through the Nebius API, waiting up to {WAKE_WAIT_S / 60:g} min "
-          f"for its ssh (disks kept)", file=sys.stderr)
+    if nebius is None and control is None and not all(os.environ.get(k) for k in NEBIUS_KEY_ENV):
+        control = wake_on_control
+    if control is not None:
+        try:
+            state = control(iid)
+        except Refused as e:
+            raise Refused(f"{machine['name']} doesn't answer on ssh, and with no Nebius key here it was to be started by the control "
+                          f"pod: {e}") from None
+        how = "the control pod started it"
+    else:
+        if nebius is None:
+            from .pods.nebius.fleet import nb as nebius
+        try:
+            state = (nebius("compute", "instance", "get", "--id", iid).get("status") or {}).get("state")
+            if state in ("STOPPED", "STOPPING"):
+                try:
+                    nebius("compute", "instance", "start", "--id", iid, "--async")
+                except ValueError:   # `--async` prints the operation's id, not JSON: the CLI exited 0, so the start was accepted
+                    pass
+        except (RuntimeError, OSError, ValueError) as e:
+            raise Refused(f"{machine['name']} doesn't answer on ssh and couldn't be started through the Nebius API ({e}); with no "
+                          f"Nebius credentials here, ask @infra to start {iid}") from None
+        how = "started it through the Nebius API"
+    print(f"research: {machine['name']} was {state}; {how}, waiting up to {WAKE_WAIT_S / 60:g} min for its ssh (disks kept)",
+          file=sys.stderr)
     end = clock() + WAKE_WAIT_S
     while clock() < end:
         sleep(WAKE_POLL_S)
@@ -515,9 +558,30 @@ QUEUE_WRAP = "wrap"                       # the runner's, custody included: the 
 QUEUE_WORKLOAD_WRAP = "workload_wrap"     # the workload's alone: a GPU phase's lease
 
 
-def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any]) -> dict[str, Any]:
+NODE_DEADLINE = "/etc/research/deadline"
+
+
+def live_stop(machine: str, project: str) -> tuple[int | None, str]:
+    """A node's stop as the node itself has it: the epoch in its NODE_DEADLINE (`EPOCH ISO BY`, which infra rewrites on each
+    renewal), read over ssh, and 0 when the file doesn't parse (as the VM's own deadline check reads it). (None, why) when it
+    can't be read, so the description's stops_at stands."""
+    try:
+        m = resolve_machine(machine, project)
+        tgt = pod_target(m)
+        r = ssh_run(ssh_argv(tgt["host"], tgt["port"], user=tgt.get("user", "root"), connect_timeout=10), ["cat", NODE_DEADLINE],
+                    timeout=30)
+    except (Refused, OSError, subprocess.TimeoutExpired) as e:
+        return None, f"{type(e).__name__}: {e}"
+    if r.returncode:
+        return None, f"`cat {NODE_DEADLINE}` exited {r.returncode}: {r.stderr.decode(errors='replace').strip()[-200:]}"
+    words = r.stdout.decode(errors="replace").split()
+    return (int(words[0]) if words and words[0].isdigit() else 0), NODE_DEADLINE
+
+
+def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any], *, now: float | None = None) -> dict[str, Any]:
     """`research run --queue`: the queue's placement for this job, `{node, machine, why, job, wrap}`, from `cluster submit` and the
-    description in the --source tree (infra/cluster). Refused when the queue refuses the job."""
+    description in the --source tree (infra/cluster), with each candidate node's stop as the node reports it (`live_stop`, passed
+    as `--stop`), so a renewal places without a new description. Refused when the queue refuses the job."""
     from .store import tools_registry
 
     src = (Path(source) / (tools_registry.resolve("infra/cluster", lambda p: (Path(source) / p).is_dir()) or "infra/cluster")
@@ -526,8 +590,19 @@ def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any]) -> d
         raise Refused("--queue: the --source tree has no infra/cluster with `cluster submit` (the queue's description and client)")
     env = dict(os.environ)
     env["PYTHONPATH"] = str(src / "src") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
-    argv = [sys.executable, "-m", "cluster", "submit", str(src / "descriptions" / "nebius.toml"), "--run-id", run_id,
-            "--now", str(int(time.time()))]
+    description = src / "descriptions" / "nebius.toml"
+    argv = [sys.executable, "-m", "cluster", "submit", str(description), "--run-id", run_id,
+            "--now", str(int(time.time() if now is None else now))]
+    model = src / "src" / "cluster" / "model.py"
+    if model.is_file() and "def with_stop" in model.read_text():
+        nodes = [spec["node"]] if spec.get("node") else sorted(tomllib.loads(description.read_text()).get("nodes", {}))
+        for name in nodes:
+            stop, why = live_stop(name, spec.get("project") or "")
+            if stop is None:
+                print(f"research run --queue: {name}'s live deadline is unread ({why}): placing there with the description's "
+                      f"stops_at", file=sys.stderr)
+            else:
+                argv += ["--stop", f"{name}={stop}"]
     for k, v in spec.items():
         if v is True:
             argv.append(f"--{k}")
@@ -792,7 +867,20 @@ def require_ready_source(path: Path | str, identity: str) -> dict[str, Any]:
     doc = read_ready(Path(path))
     if doc["identity"] != identity:
         raise SourceNotReady(f"{path}/{READY_FILE} names identity {doc['identity']}, the run asked for {identity}; refusing to execute")
+    if dirt := tracked_dirt(Path(path)):
+        raise SourceNotReady(f"{path} is shared by every run of {identity}, and an earlier run edited its tracked files ({', '.join(dirt[:3])}); "
+                             f"refusing to execute from it: relaunch (the launcher sets it aside and ships the commit afresh), or use --cwd clone")
     return doc
+
+
+def tracked_dirt(path: Path) -> list[str]:
+    """The tracked paths of a shipped checkout that differ from its commit (INF-225: one run's edit to the shared per-commit tree would
+    otherwise reach every later run of that commit).  Untracked and ignored build output is not dirt; a tree shipped as an archive, with
+    no .git, has nothing to compare and gives none."""
+    if not (Path(path) / ".git").exists():
+        return []
+    r = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=path, capture_output=True, text=True)
+    return [line[3:] for line in r.stdout.splitlines() if line.strip()] if r.returncode == 0 else []
 
 
 def _ready_doc(identity: str, tree: str | None, man: dict[str, Any], verified: str) -> dict[str, Any]:
@@ -801,10 +889,14 @@ def _ready_doc(identity: str, tree: str | None, man: dict[str, Any], verified: s
 
 
 def _probe_source(ssh: list[str], dest: str) -> tuple[str, dict[str, Any] | None]:
-    """(`ready` | `legacy` | `absent`, READY.json doc when ready)."""
+    """(`ready` | `dirty` | `legacy` | `absent`, READY.json doc when ready or dirty).  `dirty`: READY, but a checkout whose tracked files
+    no longer match its commit (INF-225); the doc then carries the first such paths under `dirt`."""
     q = shlex.quote(dest)
-    r = ssh_run(ssh, ["sh", "-c", f"if [ -f {q}/{READY_FILE} ]; then cat {q}/{READY_FILE}; elif [ -e {q} ]; then echo LEGACY; else echo ABSENT; fi"])
-    out = r.stdout.decode(errors="replace").strip()
+    r = ssh_run(ssh, ["sh", "-c", f"if [ -f {q}/{READY_FILE} ]; then cat {q}/{READY_FILE}; echo; echo {_DIRT_MARK}; "
+                                  f"if [ -e {q}/.git ]; then git -C {q} status --porcelain --untracked-files=no 2>/dev/null | head -5; fi; "
+                                  f"elif [ -e {q} ]; then echo LEGACY; else echo ABSENT; fi"])
+    out, _, dirt = r.stdout.decode(errors="replace").partition(_DIRT_MARK)
+    out = out.strip()
     if r.returncode != 0:
         raise Refused(f"probing {dest} failed: {r.stderr.decode(errors='replace')[-400:]}")
     if out == "ABSENT":
@@ -815,6 +907,8 @@ def _probe_source(ssh: list[str], dest: str) -> tuple[str, dict[str, Any] | None
         doc = json.loads(out)
     except ValueError:
         raise SourceNotReady(f"{dest}/{READY_FILE} is not JSON; inspect the machine") from None
+    if paths := [line[3:] for line in dirt.splitlines() if line.strip()]:
+        return "dirty", {**doc, "dirt": paths}
     return "ready", doc
 
 
@@ -874,6 +968,22 @@ def _git_ship_script(root: str, repo: str, partial: str, sha: str) -> str:
             f"cd {q} && find . -path ./.git -prune -o -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum")
 
 
+def _push_main(ssh: list[str], repo: str, git_dir: Path, man: dict[str, Any]) -> None:
+    """The launcher's `origin/main` onto the bare repository's `main`, fast-forward only and best effort, so a shipped checkout's
+    `origin/main` (its clone's view of that `main`) is no older than its newest launcher's, and `suites.py --changed origin/main` in a
+    run diffs against a current `main`, not the one the repository was created with.  A launcher whose `origin/main` is older is
+    refused by git and changes nothing; no failure here stops the ship."""
+    main = subprocess.run(["git", "rev-parse", "--verify", "-q", "refs/remotes/origin/main^{commit}"], cwd=git_dir,
+                          capture_output=True, text=True).stdout.strip()
+    if not main:
+        return
+    try:
+        subprocess.run(["git", "-c", "protocol.ext.allow=always", "push", "-q", git_push_url(ssh, repo), f"{main}:refs/heads/main"],
+                       cwd=git_dir, capture_output=True, text=True, timeout=ship_timeout(man["size"]))
+    except subprocess.TimeoutExpired:
+        pass
+
+
 def _ship_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | None, man: dict[str, Any], dest: str) -> tuple[str | None, str | None]:
     """Ship commit `sha` as git objects: `git push` into <root>/git/verity.git over `ssh` (only the objects the machine lacks travel),
     then check it out and verify it on the machine (tree hash, per-file sha256 against the launcher's archive manifest).  Returns
@@ -895,6 +1005,7 @@ def _ship_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | No
         return None, "git push timed out"
     if push.returncode != 0:
         return None, f"git push failed: {push.stderr.strip()[-200:]}"
+    _push_main(ssh, repo, git_dir, man)
     partial = f"{dest}.partial-{secrets.token_hex(4)}"
     try:
         r = ssh_run(ssh, ["sh", "-c", _git_ship_script(root, repo, partial, sha), "sh", tree], timeout=ship_timeout(man["size"]))
@@ -934,11 +1045,21 @@ def _mark_ready(ssh: list[str], partial: str, dest: str, sha: str, doc: dict[str
     return have
 
 
+def _quarantine(ssh: list[str], root: str, dest: str, sha: str, why: str) -> None:
+    """Move a tree that is not the commit to <root>/src/.quarantine/ (kept for inspection, never executable by name), so it is shipped afresh."""
+    quarantine = f"{root}/src/.quarantine/{sha}-{secrets.token_hex(4)}"
+    r = ssh_run(ssh, ["sh", "-c", f"mkdir -p {shlex.quote(root)}/src/.quarantine && mv {shlex.quote(dest)} {shlex.quote(quarantine)}"])
+    if r.returncode != 0:
+        raise SourceNotReady(f"{dest} is {why} and could not be moved aside: {r.stderr.decode(errors='replace')[-300:]}")
+    print(f"research: {dest} is {why}; moved to {quarantine}, shipping afresh", file=sys.stderr)
+
+
 def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dict[str, Any]]:
     """`git archive HEAD` of a clean checkout -> a VERIFIED <root>/src/<identity>/.  Returns (identity, remote dir, READY.json doc).
 
     Identity: the commit sha (a dirty tree is refused; there is no patch digest to name).  Protocol:
-      1. probe <root>/src/<identity>/: READY.json naming this identity -> done; a foreign READY.json -> SourceNotReady (never touched);
+      1. probe <root>/src/<identity>/: READY.json naming this identity -> done, unless it is a checkout whose tracked files an earlier
+         run edited (INF-225), which is moved to <root>/src/.quarantine/ and shipped afresh; a foreign READY.json -> SourceNotReady (never touched);
          a directory without READY.json (legacy `.complete`, or an interrupted ship) -> per-file sha256 against the archive: identical
          -> adopted (READY.json written, `verified: legacy-sha256-per-file`); otherwise moved to <root>/src/.quarantine/<identity>-<nonce>/
          (kept for inspection, never executable by name) and shipped afresh;
@@ -971,18 +1092,17 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
             raise SourceNotReady(f"{dest}/{READY_FILE} names identity {doc.get('identity')!r}, not {sha}; inspect the machine before shipping over it")
         return sha, dest, doc
     man = archive_manifest_git(git_dir)
+    if state == "dirty":
+        if doc.get("identity") != sha or doc.get("schema") != READY_SCHEMA:
+            raise SourceNotReady(f"{dest}/{READY_FILE} names identity {doc.get('identity')!r}, not {sha}; inspect the machine before shipping over it")
+        _quarantine(ssh, root, dest, sha, f"a READY checkout whose tracked files an earlier run edited ({', '.join(doc['dirt'][:3])})")
     if state == "legacy":
         bad = _verify_legacy(ssh, dest, man)
         if not bad:
             doc = _ready_doc(sha, tree, man, "legacy-sha256-per-file")
             _write_ready(ssh, dest, doc)
             return sha, dest, doc
-        quarantine = f"{root}/src/.quarantine/{sha}-{secrets.token_hex(4)}"
-        r = ssh_run(ssh, ["sh", "-c", f"mkdir -p {shlex.quote(root)}/src/.quarantine && mv {shlex.quote(dest)} {shlex.quote(quarantine)}"])
-        if r.returncode != 0:
-            raise SourceNotReady(f"{dest} is an unverified tree that does not match HEAD ({len(bad)} file(s): {'; '.join(bad[:3])}) and could not be moved aside: "
-                                 f"{r.stderr.decode(errors='replace')[-300:]}")
-        print(f"research: {dest} did not match the archive ({len(bad)} file(s): {'; '.join(bad[:3])}); moved to {quarantine}, shipping afresh", file=sys.stderr)
+        _quarantine(ssh, root, dest, sha, f"an unverified tree that did not match the archive ({len(bad)} file(s): {'; '.join(bad[:3])})")
     if os.environ.get(SHIP_ENV, "").strip().lower() != "stream":
         gpartial, why = _ship_git(ssh, root, git_dir, sha, tree, man, dest)
         if gpartial is not None:
@@ -1339,6 +1459,12 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
             slot_only = node_slot_only()
             if not slot_only.through_slot(req["command"]):
                 raise Refused(slot_only.refusal(marker))
+        if (marker := Path(os.environ.get("AUDITOR_FILE") or AUDITOR_FILE)).exists():
+            rule = node_slot_only()
+            if not hasattr(rule, "auditor_allows"):
+                from .pods.nebius import slot_only as rule
+            if not rule.auditor_allows(req["command"], marker):
+                raise Refused(rule.auditor_refusal(marker))
         if remote.get("source_sha"):              # a shipped tree executes only from a directory verified READY for the requested identity
             src_dir = remote.get("source_dir") or str(runs_root.parent / "src" / str(remote["source_sha"]))
             require_ready_source(src_dir, str(remote["source_sha"]))
@@ -1401,6 +1527,7 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
     if mem_rec:
         remote["mem"] = mem_rec
         env["RESEARCH_MEM_RESERVATION"] = mem_rec["reservation"]      # the runner removes it at exit and does not pass it on
+        env["RESEARCH_RUN_MEM_GB"] = f"{float(req['mem_gb']):g}"       # the workload's: a reservation is no cgroup cap (CI-99)
     cpus = direct_cpus()
     if cpus:
         remote["cpus"] = f"{format_cpus(cpus)}: {os.environ.get('DIRECT_CPUS_FILE') or DIRECT_CPUS_FILE} (a command may pin itself elsewhere)"
@@ -1417,6 +1544,11 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
     argv += [*(req.get("harness_args") or []), "--", *(req.get(QUEUE_WORKLOAD_WRAP) or []), *gpu_lease_wrap(req), *req["command"]]
     if req.get(QUEUE_WRAP):                        # --queue: the runner, custody included, runs inside the job's CPU allocation
         argv = [*req[QUEUE_WRAP], *argv]
+        if cores := (req.get("queue") or {}).get("cores"):   # held here until whole cores of the share are its own (research.cores)
+            argv = [req.get("python") or sys.executable, "-m", "research", "cpu-hold", "--cpus", str(cores["n"]), "--from",
+                    cores["cpus"], "--wrap", str(len(req[QUEUE_WRAP])), "--who", run_id,
+                    *(["--rank", str(cores["rank"])] if cores.get("rank") else []), "--ack",
+                    str(request_path.parent / LAUNCH_ACK), "--", *argv]
     if (req.get("queue") or {}).get("disk_gb"):    # held here, ahead of the allocation, while the disk would pass 80% (research.disk)
         argv = [req.get("python") or sys.executable, "-m", "research", "disk-hold", "--gb", str(req["queue"]["disk_gb"]),
                 "--path", str(runs_root), "--ack", str(request_path.parent / LAUNCH_ACK), "--", *argv]
@@ -1450,7 +1582,7 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
 
 
 def ack_launch(path: Path | str, what: str) -> None:
-    """Tell the launch-request waiting on the FIFO `path` that `what` (the run's first record, or `disk-hold`) is in place.  Never
+    """Tell the launch-request waiting on the FIFO `path` that `what` (the run's first record, `disk-hold` or `cpu-hold`) is in place.  Never
     blocks: no FIFO there, or nobody reading it any more (ENXIO), means nobody waits on this launch."""
     try:
         fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK)
@@ -1552,6 +1684,25 @@ def _runner_failed(req: dict[str, Any], request_path: Path, run_dir: Path, proc:
             "runner_pid": proc.pid, "rc": proc.returncode}
 
 
+def _research_bin(tool: str, runs_root: Path) -> Path:
+    """<root>/cache/bin/<snapshot>/, holding a `research` that runs the run's shipped tool (`python -m research` with it on
+    PYTHONPATH), so a workload's `research data put` is the launcher's research and not whatever the machine's PATH has (INF-102)."""
+    d = runs_root.parent / "cache" / "bin" / Path(tool).name
+    text = f'#!/bin/sh\nPYTHONPATH={shlex.quote(tool)}${{PYTHONPATH:+:$PYTHONPATH}} exec {shlex.quote(sys.executable)} -m research "$@"\n'
+    shim = d / "research"
+    try:
+        if shim.read_text() == text:
+            return d
+    except OSError:
+        pass
+    d.mkdir(parents=True, exist_ok=True)
+    tmp = d / f".research.{os.getpid()}"
+    tmp.write_text(text)
+    tmp.chmod(0o755)
+    os.replace(tmp, shim)
+    return d
+
+
 def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remote: dict[str, Any]) -> dict[str, str]:
     """The runner's environment, which a preflight also runs in: the workload's --env, and with a shipped tree its PYTHONPATH behind
     the tool snapshot (recorded in `remote`)."""
@@ -1569,9 +1720,14 @@ def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remot
         remote["pythonpath"] = [p for p in env["PYTHONPATH"].split(":") if p]
         remote["pythonpath_derived"] = {"roots": derived["roots"], "missing": derived["missing"], "source": derived["source"],
                                         **({"shim": derived["shim"]} if derived["shim"] else {})}
+    path = [p for p in (env.get("PATH") or os.defpath).split(os.pathsep) if p]
     if req.get("tool"):
         env["PYTHONPATH"] = req["tool"] + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         env["RESEARCH_TOOL_SNAPSHOT"] = Path(req["tool"]).name
+        path.insert(0, str(_research_bin(req["tool"], runs_root)))
+    if (elan := Path.home() / ".elan" / "bin").is_dir() and str(elan) not in path:
+        path.append(str(elan))                    # `lake` for a Lean job: vy-nebius-2 has it only there (rc 127, r20261019-072345-9757)
+    env["PATH"] = os.pathsep.join(path)
     gpus = req.get("gpus")
     if _kueue_owns_every_gpu():
         # a direct run must not open CUDA beside the queue's pods, whatever its --env says: GPU work goes through Kueue
@@ -1651,6 +1807,25 @@ def flag_value(args: list[str], flag: str) -> str | None:
     return val
 
 
+def set_flag(args: list[str], flag: str, value: str) -> list[str]:
+    """`args` with every `flag X` / `flag=X` replaced by one `flag value` at the end (the keeper refuses a SET_ONCE flag given twice)."""
+    out, skip = [], False
+    for a in args:
+        if skip:
+            skip = False
+        elif a == flag:
+            skip = True
+        elif not a.startswith(flag + "="):
+            out.append(a)
+    return [*out, flag, value]
+
+
+def shipped_identity(sha: str, ready: dict[str, Any]) -> dict[str, Any]:
+    """The source identity of a shipped tree: `ship_source` ships `git archive` of a clean commit, so it is that commit, clean, whatever
+    the checkout it came from held before or since (a read of the checkout before shipping can name a parent a commit then replaced)."""
+    return {"commit": sha, "tree": ready.get("tree"), "dirty": False, "dirty_digest": None}
+
+
 def lease_extend_s(harness_args: list[str]) -> float | None:
     """How far the machine's lease must reach for this run: its --timeout plus the runner's publish and custody push
     (research.pods.lease.RUN_MARGIN_S); None without a --timeout."""
@@ -1722,6 +1897,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
     write_json_atomic(local_dir / "remote.json", rec)
     try:
         m = resolve_machine(machine_name, project)
+        if m.get("auditor"):
+            raise Refused(f"machine {machine_name!r} is an auditor host: it takes no research run, from anyone. Its service is "
+                          f"reached only through its gate: {m['auditor']}")
         guard_min = guard_idle_min(m)
         custody_pub: dict[str, Any] | None = None
         custody_files: list[tuple[str, bytes]] = []
@@ -1803,6 +1981,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
             remote_cwd = src_dir if cwd is None else str(Path(src_dir) / cwd)
             if "--tree-sha" not in harness_args:
                 harness_args = [*harness_args, "--tree-sha", tree_sha]
+            harness_args = set_flag(harness_args, "--source-identity", json.dumps(shipped_identity(tree_sha, ready), sort_keys=True))
         request = {"schema": REQUEST_SCHEMA, "run_id": run_id, "runs_root": f"{m['root']}/runs", "tool": tool_dir, "python": m["python"],
                    "cwd": remote_cwd, "env": env, "harness_args": harness_args, "command": command, "exclusive": exclusive,
                    "mem_gb": mem_gb, "mem_wait_s": mem_wait_s, "ramlock_dir": m.get("ramlock"),
@@ -1932,15 +2111,18 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
     raise Refused(f"no machine holds run {run_id}" + (f" ({'; '.join(answers)})" if answers else " (no ssh machine is registered)"))
 
 
-def _runner_gone(ssh: list[str], local_dir: Path, pid: int) -> str | None:
+def _runner_gone(ssh: list[str], local_dir: Path, pid: int, *, timeout: float = 120) -> str | None:
     """Why a run whose status isn't terminal has no runner on its machine, or None while it may have one: the machine rebooted
     since the runner started (job.json's boot id), or the pid is gone where the runner ran in the machine's own pid namespace
     (job.json's hostname is the machine's; a Kubernetes pod's runner isn't visible from the host). Unreadable is None."""
     env = (_read_json(local_dir / "job.json") or {}).get("environment") or {}
     if not env.get("boot_id"):
         return None
-    probe = ssh_run(ssh, ["sh", "-c", f"cat /proc/sys/kernel/random/boot_id; hostname; kill -0 {pid} 2>/dev/null && echo alive "
-                                      "|| echo gone"], timeout=120)
+    try:
+        probe = ssh_run(ssh, ["sh", "-c", f"cat /proc/sys/kernel/random/boot_id; hostname; kill -0 {pid} 2>/dev/null && echo alive "
+                                          "|| echo gone"], timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return None
     lines = probe.stdout.decode(errors="replace").split() if probe.returncode == 0 else []
     if len(lines) != 3:
         return None
@@ -1952,10 +2134,15 @@ def _runner_gone(ssh: list[str], local_dir: Path, pid: int) -> str | None:
     return None
 
 
-def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = ()) -> dict[str, Any]:
+def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = (), timeout: float | None = None) -> dict[str, Any]:
     """Copy records (or everything) from the machine into the local run dir, with the run dir's files ``also`` names beside the
     records (paths under the run dir: the workload's own small progress files and logs).  Unreachable -> observed_utc
-    unchanged, reason recorded."""
+    unchanged, reason recorded.  ``timeout`` lowers each ssh call's own (900 s for the records, 120 s for a probe): a waiter's
+    time left under its cap (research.waitcap)."""
+
+    def within(s: float) -> float:
+        return s if timeout is None else max(1.0, min(s, timeout))
+
     if bad := [n for n in also if not n or n.startswith("/") or any(p in ("", "..") or p.startswith(".") for p in n.split("/"))]:
         raise Refused(f"--also takes paths of files under the run dir, not {', '.join(map(repr, bad))}")
     rec = _read_json(local_dir / "remote.json")
@@ -1978,7 +2165,7 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
                 tf.extract(m, local_dir, **({"filter": "data"} if hasattr(tarfile, "data_filter") else {}))
 
     try:
-        r = ssh_read(ssh, remote_cmd, extract, timeout=900)
+        r = ssh_read(ssh, remote_cmd, extract, timeout=within(900))
     except (tarfile.TarError, OSError) as e:
         r = subprocess.CompletedProcess(remote_cmd, -1, b"", f"reading the run's tar stream: {type(e).__name__}: {e}".encode())
     if r.returncode != 0:
@@ -1993,14 +2180,17 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
     rec.pop("launcher_exited", None)
     rec.pop("runner_gone", None)
     if st.get("state") not in TERMINAL and isinstance(st.get("pid"), int):
-        if why := _runner_gone(ssh, local_dir, st["pid"]):
+        if why := _runner_gone(ssh, local_dir, st["pid"], timeout=within(120)):
             rec["runner_gone"] = {"at_utc": rec["observed_utc"], "runner_pid": st["pid"], "why": why}
     pid = (_read_json(local_dir / "launch.json") or {}).get("runner_pid")
     if not st and isinstance(pid, int):
         # launched, no status.json: the runner either has not written it yet or exited before it could (an argv it rejected)
-        probe = ssh_run(ssh, ["sh", "-c", f"cd {shlex.quote(rd)} && if kill -0 {pid} 2>/dev/null; then echo alive; "
-                                          f"else echo exited; tail -n 1 launcher.log 2>/dev/null; fi"], timeout=120)
-        lines = probe.stdout.decode(errors="replace").splitlines() if probe.returncode == 0 else []
+        try:
+            probe = ssh_run(ssh, ["sh", "-c", f"cd {shlex.quote(rd)} && if kill -0 {pid} 2>/dev/null; then echo alive; "
+                                              f"else echo exited; tail -n 1 launcher.log 2>/dev/null; fi"], timeout=within(120))
+        except subprocess.TimeoutExpired:
+            probe = None
+        lines = probe.stdout.decode(errors="replace").splitlines() if probe and probe.returncode == 0 else []
         if lines and lines[0] == "exited":
             rec["launcher_exited"] = {"at_utc": rec["observed_utc"], "runner_pid": pid, "last_line": (lines[1] if len(lines) > 1 else "")[-300:]}
     if everything:
@@ -2108,36 +2298,55 @@ def py_spy(local_dir: Path) -> str:
 
 def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     """`research cancel`: SIGTERM to the workload's process group on the machine (status.json `pgid`), its intent recorded first in the
-    run's events.jsonl (`tele cancel-intent --actor manual`), so the run classifies CANCELLED_MANUAL.  Never the runner and never SIGKILL:
-    the runner records the workload's exit and then publishes custody, and one killed in its upload leaves the run without custody.
+    run's events.jsonl (`tele cancel-intent --actor manual`), so the run classifies CANCELLED_MANUAL.  The SIGTERM reaches every process
+    of the run's own cgroup scopes and the run's processes outside its group too, and CANCEL_GRACE_S later the runner SIGKILLs what is
+    left of them, confirms they are gone and records it (status.json `scope_end`; telemetry.scope, INF-93); when the runner had
+    recorded the workload's exit already or is gone, the cancel on the machine does, and this call waits the grace.  Never the runner: it
+    records the workload's exit and then publishes custody, and one killed in its upload leaves the run without custody.  A run whose
+    shipped tool predates the scope end gets the SIGTERM to its group and run-dir processes alone, and the result says so (`scope`).
     A run another VM launched (`adopt`) has no shipped tool in its remote.json; the machine's job.json names it (`run.remote.tool`), and
     it must be a snapshot under the machine's <root>/tool/.  The group is signalled only if one of its members is this run's workload
     (`--expect-run-dir`: RESEARCH_RUN_DIR in its environment), since a runner that died leaves status.json `running` and pids wrap; a
-    run whose shipped tool predates that check is refused, not signalled unchecked."""
+    run whose shipped tool predates that check is refused, not signalled unchecked.
+    A run with no status.json yet is withdrawn instead (`withdraw`): its machine's hold ends and refused.json records it Withdrawn,
+    with the same manual-cancel record; one that its hold released as the cancel reached it is cancelled as a running run."""
     rec = fetch(local_dir)
     if err := rec.get("last_fetch_error"):
         raise Refused(f"the machine is unreachable ({err['stderr'].strip() or 'rc ' + str(err['rc'])}); nothing was signalled")
     st = _read_json(local_dir / "status.json") or {}
+    if not st:
+        if refused := _read_json(local_dir / "refused.json"):
+            raise Refused(f"{local_dir.name} was refused on its machine ({refused.get('fault') or 'Refused'}: {refused.get('reason')}), "
+                          f"so there is nothing to cancel")
+        if (w := withdraw(local_dir, rec, reason=reason, by=by)) is not None:
+            return w
+        rec = fetch(local_dir)
+        st = _read_json(local_dir / "status.json") or {}
+        if not st:
+            raise Refused(f"{local_dir.name} left its hold as the cancel reached it and its runner hasn't written status.json yet; "
+                          f"nothing was signalled: run `research cancel` again")
     if st.get("state") != "running":
-        raise Refused(f"{local_dir.name} is {st.get('state') or 'not running yet'}, so there is nothing to cancel")
+        raise Refused(f"{local_dir.name} is {st.get('state')}, so there is nothing to cancel")
     pgid = st.get("pgid")
     if not isinstance(pgid, int) or pgid <= 1:
         raise Refused(f"{local_dir.name}'s status.json names no workload process group (pgid {pgid!r})")
-    tool = rec.get("tool") or ((((_read_json(local_dir / "job.json") or {}).get("run") or {}).get("remote") or {}).get("tool"))
-    if not tool:
-        raise Refused(f"neither {local_dir.name}'s remote.json nor its job.json names a shipped tool to record the cancel with")
-    snap, root = PurePosixPath(tool), rec.get("root")
-    if not root or snap.parent != PurePosixPath(root) / "tool" or ":" in tool or snap.name in ("", ".", ".."):
-        raise Refused(f"{local_dir.name}'s tool {tool!r} is not a snapshot under {root}/tool/; nothing was signalled")
+    tool = _shipped_tool(local_dir, rec)
     rd = rec["remote_run_dir"]
     tele = ["env", f"PYTHONPATH={tool}", "python3", "-m", "research.telemetry", "cancel-intent", "--actor", "manual",
             "--reason", f"{reason} (research cancel by {by})", "--target-pgid", str(pgid), "--expect-run-dir", rd, "--attempt-dir", rd,
             "--deliver"]
-    # every line appended since the cancel began: the runner records the workload's exit there as soon as the signal lands
-    script = (f"f={shlex.quote(rd)}/events.jsonl; n=$(wc -l < \"$f\" 2>/dev/null || echo 0); {shlex.join(tele)}; rc=$?; "
-              f"tail -n +$((n + 1)) \"$f\"; exit $rc")
-    r = ssh_run(ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"), ["sh", "-c", script], timeout=120)
+
+    def deliver(argv: list[str]) -> subprocess.CompletedProcess:
+        # every line appended since the cancel began: the runner records the workload's exit there as soon as the signal lands
+        script = (f"f={shlex.quote(rd)}/events.jsonl; n=$(wc -l < \"$f\" 2>/dev/null || echo 0); {shlex.join(argv)}; rc=$?; "
+                  f"tail -n +$((n + 1)) \"$f\"; exit $rc")
+        return ssh_run(ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"), ["sh", "-c", script], timeout=120)
+
+    r, old_tool = deliver([*tele, "--grace-s", f"{CANCEL_GRACE_S:g}"]), False
     stderr = r.stderr.decode(errors="replace").strip()
+    if r.returncode == 2 and "--grace-s" in stderr:
+        r, old_tool = deliver(tele), True
+        stderr = r.stderr.decode(errors="replace").strip()
     if r.returncode == 2 and "--expect-run-dir" in stderr:
         raise Refused(f"{local_dir.name}'s research package ({tool}) predates the workload check, so nothing was signalled; on the machine, "
                       f"`kill -TERM -{pgid}` once /proc/<pid>/environ of a group member names RESEARCH_RUN_DIR={rd}")
@@ -2146,8 +2355,62 @@ def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     if res is None:
         raise Refused(f"the cancel recorded no result on the machine (rc {r.returncode}): {stderr[-300:]}")
     tgt = res.get("target") or {}
+    scope = res.get("scope")
+    if old_tool:
+        scope = {"fallback": f"the run's research package ({tool}) predates the scope end: SIGTERM to its group and to the processes "
+                             f"naming its run dir only, and nothing SIGKILLs what ignores it", "runner_kills_after_s": None}
     return {"pgid": pgid, "processes": tgt.get("members_total", len(tgt.get("members") or [])), "delivered": bool(res.get("delivered")),
-            "why": res.get("reason")}
+            "why": res.get("reason"), "scope": scope}
+
+
+def _shipped_tool(local_dir: Path, rec: dict[str, Any]) -> str:
+    """The run's shipped tool, a snapshot under the machine's <root>/tool/ (it becomes PYTHONPATH there)."""
+    tool = rec.get("tool") or ((((_read_json(local_dir / "job.json") or {}).get("run") or {}).get("remote") or {}).get("tool"))
+    if not tool:
+        raise Refused(f"neither {local_dir.name}'s remote.json nor its job.json names a shipped tool to record the cancel with")
+    snap, root = PurePosixPath(tool), rec.get("root")
+    if not root or snap.parent != PurePosixPath(root) / "tool" or ":" in tool or snap.name in ("", ".", ".."):
+        raise Refused(f"{local_dir.name}'s tool {tool!r} is not a snapshot under {root}/tool/; nothing was signalled")
+    return tool
+
+
+def withdraw(local_dir: Path, rec: dict[str, Any], *, reason: str, by: str) -> dict[str, Any] | None:
+    """`research cancel` of a run that hasn't started: research.withdraw, sent to its machine as `python3 - ARGS` over fetch's ssh,
+    ends the hold the run waits in and records it Withdrawn.  The cancel's answer `{"withdrawn": True, "holds", "refused",
+    "released"}`, after a fetch of the records it wrote; None when the run left its hold first (the caller cancels it running);
+    Refused when there is nothing to withdraw."""
+    from . import withdraw as W
+    from .store import custody as CU
+
+    args = {"run_dir": rec["remote_run_dir"], "reason": reason, "by": by, "cred_file": CU.CRED_FILE,
+            "cred_dirs": [CUSTODY_DIR, STORE_READ_DIR], "credentials": list(CU.CREDENTIALS)}
+    try:
+        r = ssh_run(ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"), ["python3", "-", json.dumps(args)],
+                    stdin=Path(W.__file__).read_bytes(), timeout=W.EXIT_WAIT_S + 90)
+    except subprocess.TimeoutExpired:
+        raise Refused(f"the withdrawal on {rec.get('machine')} gave no answer in {W.EXIT_WAIT_S + 90:g} s; `research fetch "
+                      f"{local_dir.name}` says what it did") from None
+    out = _json_line((r.stdout.decode(errors="replace").strip().splitlines() or [""])[-1]) if r.returncode == 0 else {}
+    name, what = local_dir.name, out.get("outcome")
+    if what == "withdrawn":
+        fetch(local_dir)
+        return {"withdrawn": True, "delivered": True, "holds": out.get("holds") or [], "refused": out.get("refused"),
+                "released": out.get("released") or []}
+    if what == "started":
+        return None
+    why = {"refused": f"was refused on its machine ({out.get('fault')}: {out.get('reason')}), so there is nothing to cancel",
+           "busy": f"is still being launched ({out.get('why')}); nothing was signalled: run `research cancel` again",
+           "absent": f"is not on its machine ({out.get('why')}); nothing was signalled",
+           "unstoppable": f"is held, but {out.get('why')}",
+           "survived": f"is held, and its hold process(es) {out.get('pids')} outlived SIGTERM for {W.EXIT_WAIT_S:g} s; no refused.json "
+                       f"was written",
+           "no-hold": f"has no status.json and no hold process names its request, so nothing was signalled; its runner (pid "
+                      f"{out.get('runner_pid')}) is " + ("alive and starting: run `research cancel` again" if out.get("runner_alive")
+                                                         else "gone (`research fetch` and its launcher.log say why)")}.get(what)
+    if why is None:
+        raise Refused(f"the withdrawal of {name} failed on {rec.get('machine')} (rc {r.returncode}): "
+                      f"{r.stderr.decode(errors='replace').strip()[-300:]}")
+    raise Refused(f"{name} {why}")
 
 
 def _file_sha256(p: Path) -> str:

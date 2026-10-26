@@ -1,4 +1,4 @@
-"""Verity source identity + precheck (F-r17-tp-06 fixed by construction; BRIEF R18 Phase 0, adapted to the Verity tree in R19).
+"""Verity source identity + precheck: the job runs the tree it names, and a mixed tree is refused by construction.
 
     verity-vllm source-identity [--tree ROOT] [--sha SHA] [--out FILE] [--stage NAME]
         exit 0  every important package (verity, verity_vllm, hidden_gpu, research) resolves from ROOT
@@ -51,6 +51,7 @@ ROOT_MARKERS = ("pyproject.toml", "uv.lock", "integrations/vllm/verity_vllm/__in
 
 FAIL_CLASS = _sid.FAIL_CLASS
 SourceIdentityError = _sid.SourceIdentityError
+tree_identity = _sid.tree_identity
 
 # hidden_gpu is imported by native_host._gpu_ext_load from <integration>/out/gen/r9/cmt-hidden/src (materialised by pod_hidden_gpu.sh from
 # the shipped copy verity_vllm/commit/committer/hidden_gpu_src); both are candidates, the r9 path first because that is what native_host inserts
@@ -96,7 +97,7 @@ def code_identity(root: str | os.PathLike[str]) -> dict[str, Any]:
 
 def requested_tree(tree: str | os.PathLike[str] | None = None) -> str:
     """The tree this job must run from: the explicit argument, else THIS file's tree.  $VERITY_TREE is checked against it, never used
-    as the default -- a differing value is the mixed-tree case (F-r17-tp-06) and fails by name."""
+    as the default -- a differing value is the mixed-tree case and fails by name."""
     root = normalise_tree(tree)
     env = os.environ.get("VERITY_TREE")
     if env and normalise_tree(env) != root:

@@ -11,13 +11,11 @@ from typing import Any
 
 __version__ = "0.1.0"
 
-CAPTURE_FORMAT_VERSION = 1
-
 __all__ = ["LLM"]
 
 
 def __getattr__(name: str) -> Any:
     if name == "LLM":
-        from verity_vllm.pipeline.llm import LLM
+        from verity_vllm.llm import LLM
         return LLM
     raise AttributeError(f"module 'verity_vllm' has no attribute {name!r}")

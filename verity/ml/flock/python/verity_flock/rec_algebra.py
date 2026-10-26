@@ -168,6 +168,15 @@ class _Reader:
     def u64(self) -> int:
         return struct.unpack("<Q", self.take(8))[0]
 
+    def nonce0(self, what: str) -> Callable[[], int]:
+        """A grinding nonce: `0`, the only one the verifier accepts (R4, `Reader.nonce0`)."""
+        def read() -> int:
+            n = self.u64()
+            if n:
+                raise ValueError(f"{what} ≠ 0 (R4)")
+            return n
+        return read
+
     def f(self) -> int:
         return G.from_bytes(self.take(16))
 
@@ -179,8 +188,8 @@ class _Reader:
 
 
 def decode(sh: Shape, data: bytes) -> Proof:
-    """The proof container (`decodeProof`); bytes after it are ignored (§8.1). An opening-only shape's is a rep's with an empty
-    zerocheck and lincheck (``flock-circuit stacked``)."""
+    """The proof container (`decodeProof`'s reader, `decodeRead`), on the prover's side: bytes after it (the zk patch's
+    `zk_level0` tag, §8.1) aren't read here. An opening-only shape's is a rep's with an empty zerocheck and lincheck (``flock-circuit stacked``)."""
     s = sh.sched
     R = len(s.levels) - 1
     r = _Reader(data)
@@ -235,11 +244,11 @@ def decode(sh: Shape, data: bytes) -> Proof:
     level(s.levels[R], 16)
     r.vec(0, pair, "sumcheck_transcript")
     msgs = r.vec(s.k0 + 8 + 7 * (R - 1), lambda: ((r.f(), r.f()), (r.f(), r.f())), "sumcheck_transcript_f256")
-    r.vec(R + 1, r.u64, "grinding_nonces")
+    r.vec(R + 1, r.nonce0("grinding_nonce"), "grinding_nonces")
     ood = r.vec(1 + 2 * R, r.f, "ood_values")
     r.vec(0, r.u64, "fold_grinding_nonces")
-    r.vec(3 * R + 2, r.u64, "claim_batch_grinding_nonces")
-    r.vec(R + 1, r.u64, "consistency_batch_grinding_nonces")
+    r.vec(3 * R + 2, r.nonce0("claim_batch_grinding_nonce"), "claim_batch_grinding_nonces")
+    r.vec(R + 1, r.nonce0("consistency_batch_grinding_nonce"), "consistency_batch_grinding_nonces")
     return Proof(ab, c, zc, fa, fb, fc, lc, zp, rs, rows, yr, msgs, ood)
 
 

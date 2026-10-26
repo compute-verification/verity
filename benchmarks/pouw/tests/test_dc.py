@@ -162,6 +162,23 @@ def test_analyze_sm100_tmem_model(tmp_path):
     assert m4["L_saturated"] == 32 * 41   # 0.024 loaded at tensor 0.98: one slot in 41
 
 
+def test_analyze_sm100_li_joint(tmp_path):
+    """tcliU: the MMA at 0.98 beside lanes folding 1/16 x128 load a SM a clock (256 words) keeps up with L = 64's half of
+    0.98 x 256 slots; tclaneU_li is a lane joint against the LOP3 + IMAD pair alone; neither enters the TMEM region."""
+    an = _load("analyze")
+    t5 = {"0:UTCIMMA*": 1 / 128}
+    _rows(tmp_path, {"tc_i8_m128_n256": t5, "ld_32x32b_x32": {"0:LDTM.x32": 0.25}, "s_duo": {"0:LOP3.LUT": 2.0},
+                     "p_imad_lop3": {"0:IMAD": 2.0, "0:LOP3.LUT": 2.0},
+                     "tcliU_x128": {"0:UTCIMMA*": 0.98 / 128, "1:LDTM.x128": 1 / 16, "1:LOP3.LUT": 4.0, "1:IMAD": 4.0},
+                     "tclaneU_li": {"0:UTCIMMA*": 1 / 128, "1:LOP3.LUT": 1.5, "1:IMAD": 1.5}})
+    out = an.analyze("sm100", tmp_path)
+    li = out["joints"]["tcliU_x128"]
+    assert li["li_words"] == 256 and abs(li["tensor_fraction"] - 0.98) < 1e-12
+    assert abs(li["keeps_up_l64"] - 256 / (0.98 * 128)) < 1e-12 and "ld_words" not in li
+    assert out["joints"]["tclaneU_li"]["lane_fraction"] == 0.75
+    assert all(p[0] != 0.98 for p in out["tmem_model"]["tmem_points"])
+
+
 def _gate(d: Path, loops: dict[str, list[tuple[int, dict[str, int]]]]):
     """gate.json beside rows.jsonl: each probe's timed loops in SASS order, as (instructions, {pattern: count})."""
     vs = []
@@ -413,22 +430,200 @@ def test_ldtm_loop_counts_takes_the_larger_loop(tmp_path):
     assert ld.loop_counts(out)["mw_2"] == {"FFMA": 1, "LDTM.x128": 1, "BRA": 1}
 
 
+def test_emp_prices_every_loop_on_ds90_facets(tmp_path):
+    """emp.py charges every opcode between the gated loop's head and tail at the trip rate: a wgmma s8 n256 loop at
+    1/32 a SM-clock fills the tensor facet exactly, a 2:4 sparse form at its dense equivalent, BGMMA only issue, and a
+    loop 1% faster is reported above the sheet. The event clock is the longest block's cycles over the time a call."""
+    emp = _load("emp")
+    run, sass = tmp_path / "run" / "sm90_emp", tmp_path / "sass"
+    run.mkdir(parents=True)
+    sass.mkdir()
+    bodies = {"wg": ["IGMMA.64x256x32.S8.S8 R24, gdesc[UR4], R24"] * 4 + ["FFMA R1, R1, 1, R1"] * 8 +
+                    ["WARPGROUP.ARRIVE", "UIADD3 UR4, UR4, 1, URZ", "ISETP.LE.AND P0, PT, R2, 8, PT", "@P0 BRA 0x10"],
+              "sp": ["IGMMA.SP.64x256x64.S8.S8 R24, gdesc[UR4], R24, R2, 0x0"] * 4 + ["@P0 BRA 0x10"],
+              "b1": ["BGMMA.64x256x256.AND.POPC R24, gdesc[UR4], R24"] * 4 + ["@P0 BRA 0x10"]}
+    rates = {"wg": 1 / 32, "sp": 1 / 32, "b1": 1 / 32, "fast": 1.01 / 32}
+    text, verdicts, rows = [], [], []
+    for probe, rate in rates.items():
+        kern = "wg" if probe == "fast" else probe
+        if probe != "fast":
+            body = bodies[kern]
+            text.append(f"\t\tFunction : {kern}\n" + "\n".join(f"        /*{16 * (i + 1):04x}*/   {op} ;   /* 0x0 */"
+                                                              for i, op in enumerate(body)))
+        op = bodies[kern][0].split()[0]
+        verdicts.append({"probe": probe, "verdict": {"kernel": kern, "loops": [
+            {"head": "0x0010", "tail": hex(16 * len(bodies[kern])), "counts": {op: 4}}]}})
+        rows.append(json.dumps({"binary": "sm90_emp", "probe": probe, "run": "r1", "sm_mhz": 1965, "spread": 0.0,
+                                "tags": [], "counted": op, "rate": rate, "rates": {f"0:{op}": rate}}))
+    (sass / "sm90_emp.sass").write_text("\n".join(text) + "\n")
+    (run / "gate.json").write_text(json.dumps({"verdicts": verdicts}))
+    (run / "rows.jsonl").write_text("\n".join(rows) + "\n")
+    (run / "times.jsonl").write_text(json.dumps({"op": "time", "probe": "wg", "calls": 10, "ms": 20.0,
+                                                 "cyc": [3_900_000, 3_960_000]}) + "\n")
+    res = {r["probe"]: r for r in emp.analyze(tmp_path / "run", emp.read_sass(sass))}
+    wg = res["wg"]
+    assert abs(wg["occupancy"]["tensor"] - 1.0) < 1e-12 and abs(wg["macs_sm_clk"] - 4096) < 1e-9
+    assert abs(wg["occupancy"]["issue"] - 16 / 128 / 4) < 1e-12 and abs(wg["uniform_issue"] - 1 / 512) < 1e-12
+    assert abs(wg["occupancy"]["alu"] - 2 / 512) < 1e-12 and wg["event_mhz"] == 1980.0
+    assert abs(res["sp"]["occupancy"]["tensor"] - 1.0) < 1e-12 and abs(res["sp"]["macs_sm_clk"] - 4096) < 1e-9
+    assert "tensor" not in res["b1"]["occupancy"] and res["b1"]["worst"] == "issue" and res["b1"]["event_mhz"] is None
+    assert res["fast"]["worst"] == "tensor" and abs(res["fast"]["worst_occ"] - 1.01) < 1e-12
+    assert emp.main([str(tmp_path / "run"), str(sass), "--json", str(tmp_path / "out.json")]) == 1
+    assert json.loads((tmp_path / "out.json").read_text())["over"] == ["fast"]
+
+
 def test_uniform_write_census_is_idempotent(tmp_path):
-    """--write replaces UNI's lines and the UP row, puts UP in the current vector's rows once, and census.py --write
-    keeps both."""
+    """--write replaces UNI's measured lines in place and the UP row, puts UP in the current vector's rows once, and
+    census.py --write keeps both. The data sheet's UNI,DS_issue (A2u), in census.csv or in its own census/DS-90.csv, and
+    DC-90-ri's refit of JI90_0 aren't uniform.py's and stay; JI90_0's new line keeps its `until`, so the refit still
+    replaces it on DC-90-ri."""
     import shutil
     un, census = _load("uniform"), _load("census")
     dev = tmp_path / "sm_90"
     shutil.copytree(DC.parent / "machine_model" / "data" / "devices" / "sm_90", dev)
     res = {"up": {"rate": 0.5, "by": "uz_64i", "cycles": 1.96}, "uniform_alone": {"uz_64i": 0.5}, "violations": [],
            "rows": {"UP": {"c": 1.96}, "issue": {"c": 1.0, "limit": 1.2, "set_by": "uh_64i"},
-                    "A": {"c": 0.0, "limit": 0.9, "set_by": "uh_64i"}}}
+                    "JI90_0": {"c": 0.5}, "A": {"c": 0.0, "limit": 0.9, "set_by": "uh_64i"}}}
+    before = (dev / "census.csv").read_text().splitlines()
+    old = [ln.split(",") for ln in before if ln.startswith("UNI,")]
+    until = next(f[7] for f in old if f[1] == "JI90_0" and not f[6])
+    others = [",".join(f) for f in old if f[6] or f[1].startswith("DS_")]
+    assert until and "UNI,JI90_0,,,0.0001862,,DC-90-ri,,r20261017-204843-4803" in others
     for _ in range(2):
         un.write_census(dev, res, "r20261017-000000-abcd")
     cen = (dev / "census.csv").read_text().splitlines()
-    assert [ln for ln in cen if ln.startswith("UNI,")] == ["UNI,UP,,,1.96,,,,r20261017-000000-abcd",
-                                                         "UNI,issue,,,1,,,,r20261017-000000-abcd"]
+    uni = [ln for ln in cen if ln.startswith("UNI,")]
+    assert uni == ["UNI,UP,,,1.96,,,,r20261017-000000-abcd", "UNI,issue,,,1,,,,r20261017-000000-abcd",
+                   f"UNI,JI90_0,,,0.5,,,{until},r20261017-000000-abcd", *others]
+    sheet = [dev / "census.csv", dev / "census" / "DS-90.csv"]
+    assert any(ln.startswith("UNI,DS_issue,") for p in sheet if p.exists() for ln in p.read_text().splitlines())
+    first = next(i for i, ln in enumerate(before) if ln.startswith("UNI,"))
+    assert cen[:first] == before[:first] and cen[first].startswith("UNI,UP,")
     assert sum(ln.startswith("UP,") for ln in (dev / "rows.csv").read_text().splitlines()) == 1
     import tomllib
     assert tomllib.loads((dev / "vectors" / "DC-90.toml").read_text())["rows"].count("UP") == 1
-    assert len(census.uniform_kept(dev, "census.csv", "kind")) == 2 and len(census.uniform_kept(dev, "rows.csv", "row")) == 1
+    assert sum(ln["kind"] == "UNI" for ln in census.kept(dev, "census.csv")) == len(uni)
+    assert sum(r["row"] == "UP" for r in census.kept(dev, "rows.csv")) == 1
+
+
+def test_census_write_keeps_what_it_does_not_write(tmp_path, capsys):
+    """census.py --write replaces its own rows and drops a joint row its hull no longer has (JPA90_7 here), and keeps
+    every other line and row in the directory: a data-sheet line in census.csv (written here where the data sheet has
+    its own census/DS-90.csv), TMAB, and uniform.py's UNI and UP. A row whose old description extends the generated one
+    keeps its note."""
+    import shutil
+    census = _load("census")
+    dev = tmp_path / "sm_90"
+    shutil.copytree(DC.parent / "machine_model" / "data" / "devices" / "sm_90", dev)
+    run = _sm90_run(tmp_path / "r20261017-000000-abcd" / "out", 0.05)
+    with open(dev / "census.csv", newline="") as f:
+        before = list(csv.DictReader(f))
+    sheet = {**before[0], "kind": "ALU", "row": "DS_alu", "rate": "", "noise": "", "cycles": "2", "u": "", "since": "",
+             "until": "", "runs": "note:20261017T1818Z-draft-axioms"}
+    if sheet not in before:
+        with open(dev / "census.csv", "a", newline="") as f:
+            csv.DictWriter(f, fieldnames=list(before[0]), lineterminator="\n").writerow(sheet)
+        before.append(sheet)
+    with open(dev / "rows.csv", newline="") as f:
+        rows_before = list(csv.DictReader(f))
+    foreign = [ln for ln in before if ln["kind"] == "UNI" or not census.OWN_ROW.fullmatch(ln["row"])]
+    assert sheet in foreign and any(ln["kind"] == "UNI" for ln in foreign)
+    gen_rows = census.census(census.Device("sm90", [run]))[1]
+    gen_m = next(r for r in gen_rows if r["row"] == "M")["description"]
+    stale = {**before[0], "row": "JPA90_7", "cycles": "1", "rate": "", "noise": "", "u": ""}
+    with open(dev / "census.csv", "a", newline="") as f:
+        csv.DictWriter(f, fieldnames=list(before[0]), lineterminator="\n").writerow(stale)
+    for r in rows_before:
+        if r["row"] == "M":
+            r["description"] = gen_m + ". A note added by hand"
+    (dev / "rows.csv").write_text(census.rows_csv(rows_before + [{"row": "JPA90_7", "status": "joint", "runs":
+                                                                   "r20261017-000000-abcd", "description": "stale"}]))
+    assert census.main(["sm90", str(run), "--write", str(dev)]) == 0
+    with open(dev / "census.csv", newline="") as f:
+        after = list(csv.DictReader(f))
+    with open(dev / "rows.csv", newline="") as f:
+        rows_after = {r["row"]: r for r in csv.DictReader(f)}
+    assert all(ln in after for ln in foreign)
+    assert "JPA90_7" not in {ln["row"] for ln in after} and "JPA90_7" not in rows_after
+    assert {r["row"] for r in rows_before if not census.OWN_ROW.fullmatch(r["row"])} <= set(rows_after)
+    assert {"DS_issue", "TMAB", "UP"} <= set(rows_after)
+    assert rows_after["M"]["description"] == gen_m + ". A note added by hand"
+    assert "M's description is regenerated" not in capsys.readouterr().err
+
+
+def test_census_prices_a_memory_lane_and_moves_every_scalar_coefficient_class(tmp_path):
+    """A memory lane timed alone and beside the tensor puts its class on the issue row and every joint issue row at the
+    scalar coefficient (LD.E's is UNLISTED, the measured readings' catch-all); --write gives the classes that carry the
+    scalar coefficient without a lane in this run (NOROW, ATOMS32 from r20261021-070616-d06c, and STS32 and STG32 from
+    r20261021-161119-62ac) the new hull's joint issue lines, and keeps their issue lines."""
+    import shutil
+    census = _load("census")
+    dev = tmp_path / "sm_90"
+    shutil.copytree(DC.parent / "machine_model" / "data" / "devices" / "sm_90", dev)
+
+    def lines():
+        with open(dev / "census.csv", newline="") as f:
+            return {(ln["kind"], ln["row"]): ln["cycles"] for ln in csv.DictReader(f) if ln["kind"] != "UNI"}
+
+    before = lines()
+    run = _sm90_run(tmp_path / "r20261017-000000-abcd" / "out", 0.05)
+    _rows(run / "mem", {"s_lde": {"0:LD.E*": 0.5}, "wgU_lde": {f"0:{WGI}": 128 / 4096, "1:LD.E*": 0.25}})
+    _gate(run / "mem", {"wgU_lde": [(8, {WGI: 4}), (20, {"LD.E*": 16})]})
+    assert census.main(["sm90", str(run), "--write", str(dev)]) == 0
+    after = lines()
+    ji = [r for k, r in after if k == "FFMA" and census.JI_ROW.fullmatch(r)]
+    assert ji and all(after["UNLISTED", r] == after["FFMA", r] == after["NOROW", r] == after["ATOMS32", r]
+                      == after["STS32", r] == after["STG32", r] for r in ji)
+    assert all(after[k, "issue"] == before[k, "issue"] for k in ("UNLISTED", "ATOMS32", "STS32", "STG32", "NOROW"))
+    assert census.analyze.lane_of("wgU_lds128_r32") == "lds128" and census.analyze.lane_of("wgmix_atome_r16") == "atome"
+
+
+def _a2u_out(root: Path, i64_trips: int) -> Path:
+    """sm100_a2u's output for a2_tc_i0 and a2_tc_i64: each a fixed loop (4 UTCIMMA and its uniform chain) and an until loop
+    (the lanes and the stop poll, an LDS), with an instruction outside either, at a 2^20-cycle stop that holds the tensor
+    pipe exactly (2048 trips of 4 MMAs at 128 clocks). a2_tc_i64's lanes run `i64_trips` trips summed over the 31 until
+    warps; a2_tc_i0's run 32703, so its block issues 4 a cycle with one trip a warp dropped."""
+    until = {"IADD3": 64, "FFMA": 63, "LDS": 1, "NOP": 1}
+    fixed = {"a2_tc_i0": {"UTCIMMA": 4, "UIADD3": 1, "UISETP.NE.AND": 1, "NOP": 2},
+             "a2_tc_i64": {"UTCIMMA": 4, "UIMAD": 32, "ULOP3.LUT": 32, "UIADD3": 1, "UISETP.NE.AND": 1}}
+    trips = {"a2_tc_i0": 32703, "a2_tc_i64": i64_trips}
+    out = root / "out"
+    (out / "sass").mkdir(parents=True)
+    (out / "probes").mkdir()
+    sass, verdicts, times = [], [], []
+    for name, fx in fixed.items():
+        order = [until, fx] if name == "a2_tc_i64" else [fx, until]
+        ops, loops = ["S2R R0, SR_TID.X"], []
+        for counts in order:
+            head = 16 * (len(ops) + 1)
+            ops += [f"{op} R1" for op, n in counts.items() for _ in range(n)]
+            loops.append({"head": hex(head), "tail": hex(16 * len(ops))})
+        ops.append("EXIT")
+        sass.append(f"\t\tFunction : {name}\n" + "\n".join(f"        /*{16 * (i + 1):04x}*/   {op} ;   /* 0x0 */"
+                                                           for i, op in enumerate(ops)))
+        verdicts.append({"binary": "sm100_a2u", "probe": name, "verdict": {"loops": loops}})
+        times += [json.dumps({"op": "time", "probe": name, "iters": 2048, "trips": [trips[name]] * 2,
+                              "stop": [2 ** 20] * 2, "sm_mhz": {"during": 1965, "after": 1965}, "throttle": "0x0"})] * 3
+    (out / "sass" / "sm100_a2u.sass").write_text("\n".join(sass) + "\n")
+    (out / "gate-build.json").write_text(json.dumps({"verdicts": verdicts}))
+    (out / "probes" / "times.jsonl").write_text("\n".join(times) + "\n")
+    return out
+
+
+def test_a2u_issue_bound_and_uniform_price(tmp_path):
+    """A2u's test on synthetic timings. Where each added uniform instruction takes an issue slot from the saturated lanes,
+    the block issues one warp instruction an SMSP-cycle and the uniform price is 1; where the uniform datapath issues
+    beside the lanes for free, the block issues 1 + 1/32 and A2u fails at price 0. One trip over 1 at the stop's boundary
+    still holds. NOP is left out of `issue_low` and the instruction outside the loops out of every count; the until loop
+    is told by its stop poll in either order."""
+    a2 = _load("a2u")
+    tight = a2.analyze(_a2u_out(tmp_path / "tight", 31679))
+    base, i64 = tight["probes"]["a2_tc_i0"], tight["probes"]["a2_tc_i64"]
+    assert base["until"] == {"IADD3": 64, "FFMA": 63, "LDS": 1, "NOP": 1} and i64["fixed_uniform_a_trip"] == 66
+    assert tight["a2u_holds"] and abs(tight["max_issue_low"] - 1) < 1e-12 and abs(base["tensor"] - 1) < 1e-12
+    assert abs(i64["uniform_price"] - 1) < 1e-12 and base["issue"] > base["issue_nonop"]
+    free = a2.analyze(_a2u_out(tmp_path / "free", 32703))
+    assert not free["a2u_holds"] and abs(free["max_issue_low"] - 1.03125) < 1e-12
+    assert abs(free["probes"]["a2_tc_i64"]["uniform_price"]) < 1e-12
+    edge = a2.analyze(_a2u_out(tmp_path / "edge", 31680))
+    assert edge["a2u_holds"] and 1 < edge["max_issue_low"] < 1 + a2.TOL

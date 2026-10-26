@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Model.Statement
+import Definitions.Flock.Statement
 import Proofs.Flock.Soundness.Refine.Tapes
 import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckReplay
 

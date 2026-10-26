@@ -1,6 +1,8 @@
 # A suite of `verity`'s tests: they run in the workspace's environment, against the editable `verity`.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-inputs = ["verity"]
+# the difftest's draws are the clear audit's, a reference tool's
+inputs = ["verity", "benchmarks/pouw/clear"]

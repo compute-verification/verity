@@ -13,6 +13,8 @@ attests the cuteDSL gate tier only when a gate is eligible for it.
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import dataclasses
 import importlib
 import math
@@ -28,8 +30,8 @@ from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHea
 from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Shared, StepContext, Transparent, Unsupported, resolve_step
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.registry import moe as MOE
-from verity_vllm.program.registry.prims import BF16, F32
+from verity.ml.definitions.registry import moe as MOE
+from verity.ml.definitions.registry.prims import BF16, F32
 
 Q3 = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN3_30B_A3B_tp2")
 H, I, SI, E, TOPK, G, RSF = 6144, 256, 256, 256, 8, 128, 2.5
@@ -292,7 +294,8 @@ def test_the_cutedsl_gate_binds_the_gate_weight_root_by_the_empty_it_fills():
 @pytest.mark.parametrize("M,tier,want", [
     (1, GATE_CUTEDSL, "LlBf16DotprodGemm_v1{N=256,K=6144,BS=128,VEC=8,FMA=1}"),
     (256, GATE_CUBLAS, "CublasSplitKGemmF32Out_v1{K=6144,N=256,SPLIT_K=3,DOT=HopperBF16WgmmaDot16_v1}"),
-    (4, GATE_CUBLAS, None), (32, GATE_CUTEDSL, None), (64, GATE_CUBLAS, None)])
+    (64, GATE_CUBLAS, "CublasSplitKGemmF32Out_v1{K=6144,N=256,SPLIT_K=4,DOT=HopperBF16WgmmaDot16_v1}"),
+    (4, GATE_CUBLAS, None), (32, GATE_CUTEDSL, None), (2049, GATE_CUBLAS, None)])
 def test_without_a_gate_spec_the_gate_is_the_builds_on_the_tier_vllm_dispatches(M, tier, want):
     got = served_gate_spec(H200, H, E, M, tier)
     assert (got[0].id if got else None) == want

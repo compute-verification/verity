@@ -20,7 +20,10 @@ of the proof unit and its selection rule, 0 at 100% sampling. Each term is a fra
   and 8 B of L2 a word against an L2 facet at the card's bandwidth, honest's L2 uncharged). Honest runs each filler on
   lanes (its class mix); the cheater may run it on the uniform datapath (one uniform instruction a lane instruction)
   when every class of its mix has a uniform form there (the device's `uniform_forms`; sm_90's datapath has no FFMA).
-  The cheater minimizes
+  A design's `[fold_routes]` are its fold's other bit-exact programs (the check reads the fold's result, not its
+  program): the cheater folds on lanes by any mix of them and the design's fold, ♭ by the built ones alone (its
+  `counted` routes, which no run has built, are the cheater's only), honest by the design's fold (its kernel's). The
+  cheater minimizes
   T at q = q* over every route. Honest is the same LP with its own routes: the tensor route at its own operand cost, the
   baseline program (whose words belong to the baseline, not to ε: the brief §2) and its filler where it runs it.
   ε_machine = 1 − T_cheat/T_honest, and against honest as built (the tensor route alone) beside it. The cheater's
@@ -254,15 +257,26 @@ class Design:
     unit: str = ""               # the proof unit, a table of data/adapt.toml
     coin_bits: int = 1           # a noised entry's coin on {0, …, 2^coin_bits − 1}
     coins_source: str = ""
+    fold_routes: dict[str, dict[str, float]] = field(default_factory=dict)   # the fold's other bit-exact programs,
+                                                                             # lane instructions a word (the cheater's
+                                                                             # and, the built ones, ♭'s; not honest's)
+    fold_routes_source: str = ""
+    counted_routes: tuple[str, ...] = ()     # the fold routes no run has built: the cheater's alone, never ♭'s
 
     def fold_cost(self) -> float:
         return sum(self.fold.values())
 
+    def built_routes(self) -> dict[str, dict[str, float]]:
+        """The fold routes ♭ may fold by: every one a run has built, at its built (or measured) cost."""
+        return {n: r for n, r in self.fold_routes.items() if n not in self.counted_routes}
+
     def with_fold_cost(self, r: float) -> Design:
-        """The design with its fold scaled to r lane instructions a word, in the same mix of classes."""
+        """The design with its fold scaled to r lane instructions a word, in the same mix of classes, and each of its
+        fold routes by the same factor."""
         s = r / self.fold_cost()
         return replace(self, name=f"{self.name}@r{r:g}", fold={k: v * s for k, v in self.fold.items()},
-                       fold_name=f"{self.fold_name}×{s:.3g}")
+                       fold_name=f"{self.fold_name}×{s:.3g}",
+                       fold_routes={n: {k: v * s for k, v in f.items()} for n, f in self.fold_routes.items()})
 
     def with_fill(self, x: float, mix: dict[str, float] | None = None) -> Design:
         """The design with x lane instructions a word of verified filler on lanes (`lane_fill`)."""
@@ -359,6 +373,15 @@ def design(name: str, data: Path = DATA) -> Design:
     if index_bits < coins["bits"]:
         raise SystemExit(f"{name}: [table] bits {index_bits} is below the design's {coins['bits']}-bit coins: an entry "
                          "on the indexed operand has at least the coins' bits")
+    fr = dict(t.get("fold_routes", {}))
+    fr_source = fr.pop("source", "")
+    counted = tuple(fr.pop("counted", ()))
+    if (fr and not fr_source) or not all(isinstance(v, dict) and v for v in fr.values()):
+        raise SystemExit(f"{name}: [fold_routes] names each other bit-exact program of the fold as a table of lane "
+                         "instructions a word by class, with one `source`")
+    if set(counted) - set(fr) or len(set(counted)) != len(counted):
+        raise SystemExit(f"{name}: [fold_routes] `counted` lists the routes no run has built, each once, by their names "
+                         f"in the table ({sorted(set(counted) - set(fr))} aren't)")
     return Design(name=t["name"], summary=t["summary"], honest=t["honest"], L=t["L"], work=t.get("work", 1.0),
                   fold_name=fold.pop("name"), fold=fold, filler=(filler,) if filler.per_word else (),
                   skip=_parts(t.get("skip", {})),
@@ -370,7 +393,9 @@ def design(name: str, data: Path = DATA) -> Design:
                   uniform=routes.get("uniform", True), q_uniform=routes.get("q_uniform"),
                   index_bits=index_bits, title=t["title"],
                   aliases=tuple(t.get("aliases", ())), base=t.get("base", ""), ppl=t.get("ppl", ""), noise=noise,
-                  sums=t.get("sums", "vsum"), unit=t["unit"], coin_bits=coins["bits"], coins_source=coins["source"])
+                  sums=t.get("sums", "vsum"), unit=t["unit"], coin_bits=coins["bits"], coins_source=coins["source"],
+                  fold_routes={k: {c: float(x) for c, x in v.items()} for k, v in fr.items()},
+                  fold_routes_source=fr_source, counted_routes=counted)
 
 
 def profiles(data: Path = DATA) -> list[str]:
@@ -477,8 +502,9 @@ def machine(name: str = "", data: Path = DATA) -> Machine:
 
 
 def uniform_issue_charged(pi: Machine) -> bool:
-    """Whether Π's census already charges a uniform instruction on an issue row (VF3p-16 on, decision 73)."""
-    return any(v > 0 and (r == "issue" or r.startswith("JI")) for r, v in pi.c.get("UNI", {}).items())
+    """Whether Π's census already charges a uniform instruction on an issue row (VF3p-16 on, decision 73; a DS vector's
+    `DS_issue`, A2u)."""
+    return any(v > 0 and (r == "issue" or r.endswith("_issue") or r.startswith("JI")) for r, v in pi.c.get("UNI", {}).items())
 
 
 def uniform_on_issue(pi: Machine, cycles: float) -> Machine:
@@ -488,7 +514,7 @@ def uniform_on_issue(pi: Machine, cycles: float) -> Machine:
     if uniform_issue_charged(pi):
         return pi
     c = {k: dict(v) for k, v in pi.c.items()}
-    rows = [r for r in pi.rows if r == "issue" or (r.startswith("JI") and r.endswith("_0"))]
+    rows = [r for r in pi.rows if r == "issue" or r.endswith("_issue") or (r.startswith("JI") and r.endswith("_0"))]
     for k in ("UNI", "UNI64"):
         for r in rows:
             if k in c and r in c["ALU"]:
@@ -515,6 +541,7 @@ class Mix:
     pi: dict[str, float]              # the certificate: each row's dual weight, summing to 1
     short: dict[str, float]           # the share of words, and of each filler, left undone (Theorem S's deficit)
     forms: dict[str, float]           # the share of words on each MMA form's tensor route
+    folds: dict[str, float] = field(default_factory=dict)   # the share of words folded by each of the fold's routes
 
     def price(self, pi: Machine, n: dict[str, float]) -> float:
         """π·n: the certificate's price of n, in SMSP-cycles (n's L2 bytes are not counted: honest's aren't charged)."""
@@ -525,7 +552,7 @@ class Mix:
 def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: float | None, baseline: bool,
             fillers: tuple[tuple[Filler, float], ...] = (), cheat: bool = False,
             tensor_mma: dict[str, float] | None = None, budget: float = 0.0, table: Table | None = None,
-            forms: tuple[Form, ...] = ()) -> Mix:
+            forms: tuple[Form, ...] = (), fold_menu: bool = False) -> Mix:
     """The fastest mix over Π: min T over [T, w_tensor on forms[0], w_lanes, w_baseline, w_uniform, s_k (k in
     pi.cuda), a fold alone on lanes, a fold alone on the uniform datapath, each filler on lanes and on the uniform
     datapath, the words' shortfall, each filler's shortfall, w_table, w_tensor on each later form]. The routes write
@@ -535,7 +562,10 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
     MMA (default honest's), its MMA on any of `forms` (default honest's own) at that form's instructions a word. q None
     closes the lane route, q_uniform None the uniform route (and the fold alone there), `baseline` opens the design's
     baseline program, and `table` the table route: table.q lane instructions from the lanes' class pool and table.bytes
-    on an L2 facet a word, folded on lanes. A census with no uniform line closes the uniform route."""
+    on an L2 facet a word, folded on lanes. A census with no uniform line closes the uniform route. The cheater folds a
+    word on lanes by the design's fold or any of its `fold_routes`, in any mix (the words folded by each route, after
+    the rest: [z_j]), and alone on the uniform datapath at the least of their instruction counts; ♭ (`fold_menu`) folds
+    the same way by the built ones alone (`Design.built_routes`), and honest by the design's fold."""
     uni = UNI in pi.c
     if not uni:
         q_uniform = None
@@ -558,14 +588,18 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
     fl = [{k: pw * v / sum(f.mix.values()) / LANES for k, v in f.mix.items()} for f, pw in fillers]
     S = list(pi.cuda)
     nf = len(fillers)
-    nv = 8 + len(S) + 3 * nf + len(forms)
+    menu = d.fold_routes if cheat else d.built_routes() if fold_menu else {}
+    fold_u = min((d.fold_cost(), *(sum(r.values()) for r in menu.values())))
+    nv0 = 8 + len(S) + 3 * nf + len(forms)
+    nv = nv0 + len(menu)
     iT, it, il, ib, iu, i_xv, i_xu = 0, 1, 2, 3, 4, 5 + len(S), 6 + len(S)
     fv = [7 + len(S) + 2 * j for j in range(nf)]
     fu = [8 + len(S) + 2 * j for j in range(nf)]
     i_dw = 7 + len(S) + 2 * nf
     df = [i_dw + 1 + j for j in range(nf)]
     i_tb = i_dw + 1 + nf
-    i_f = [it, *range(i_tb + 1, nv)]
+    i_f = [it, *range(i_tb + 1, nv0)]
+    iz = list(range(nv0, nv))
 
     def col(k: str) -> list[float]:
         a = [0.0] * nv
@@ -580,12 +614,17 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
             if k == UNI:
                 a[fu[j]] = pw
         if k == UNI:
-            a[iu] = (q_uniform or 0.0) + d.fold_cost()
-            a[i_xu] = d.fold_cost()
+            a[iu] = (q_uniform or 0.0) + fold_u
+            a[i_xu] = fold_u
+        for i, r in zip(iz, menu.values()):                # a word folded by route j in place of the design's fold
+            a[i] = (r.get(k, 0.0) - d.fold.get(k, 0.0)) / LANES
         return a
 
-    cols = {k: col(k) for k in {k for t in tensors for k in t} | set(on_lanes) | set(base) | set(S)
-            | {k for f in fl for k in f} | ({UNI} if uni else set())}
+    # Sorted: each facet's row sums the classes in this order, and in a set's (string-hash) order the last bits, and on a
+    # tie face the LP's vertex, would vary from one interpreter to the next.
+    cols = {k: col(k) for k in sorted({k for t in tensors for k in t} | set(on_lanes) | set(base) | set(S)
+                                      | {k for f in fl for k in f} | ({UNI} if uni else set())
+                                      | {k for r in menu.values() for k in r})}
     missing = set(cols) - set(pi.c)
     if missing:
         raise SystemExit(f"{pi.vector}: no census line for {', '.join(sorted(missing))}")
@@ -613,6 +652,14 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
         a[df[j]] = 1 - f.p
     A_ub.append(a)                                        # Theorem S's budget, after the facets
     b_ub.append(budget)
+    if menu:
+        a = [0.0] * nv
+        for i in (*i_f, il, ib, i_tb, i_xv):
+            a[i] = -1.0
+        for i in iz:
+            a[i] = 1.0
+        A_ub.append(a)                                    # no more words on the fold's routes than are folded on lanes
+        b_ub.append(0.0)
     eq = [[0.0] * nv for _ in range(3 + nf)]
     for i in (*i_f, il, ib, iu, i_dw, i_tb):              # every word but the shortfall
         eq[0][i] = 1.0
@@ -656,7 +703,8 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
                                "table": x[i_tb]},
                filler_uniform=tuple(x[i] for i in fu), n=n, binding=binding(load, x[iT]), pi=lam,
                short={"words": x[i_dw], **{f"filler {j + 1}": x[df[j]] for j in range(nf)}},
-               forms={f.kind: x[i] for f, i in zip(forms, i_f) if x[i] > 1e-12})
+               forms={f.kind: x[i] for f, i in zip(forms, i_f) if x[i] > 1e-12},
+               folds={r: x[i] for r, i in zip(menu, iz) if x[i] > 1e-12})
 
 
 def budget(d: Design) -> float:
@@ -718,9 +766,11 @@ def undominated(fs: list[Form], pi: Machine) -> tuple[Form, ...]:
 def setup(d: Design, pi: Machine, data: Path = DATA, operands: str = "free", credit: str = "H",
           table: Table | None = None) -> Setup:
     """`credit` H and model compare the cheater with honest's kernel; floor with the floor program ♭ (SPEC §0.7a):
-    the tensor route at the noise's φ_del, the fold, the fillers on their own routes and the baseline program, with no
-    overhead. `table` opens the cheater's table route, priced for the design's `index_bits`. The cheater writes on any
-    MMA form Π prices, honest on its own."""
+    the tensor route at the noise's φ_del, the fold at the cheapest mix of the design's fold and its built
+    `fold_routes` on Π (the check reads the fold's result, not its program; a counted route is the cheater's alone),
+    the fillers on their own routes and the baseline program,
+    with no overhead. `table` opens the cheater's table route, priced for the design's `index_bits`. The cheater writes
+    on any MMA form Π prices, honest on its own."""
     table = d.table(table)
     h = honest(d.honest, data)
     fms = undominated(sorted((f for f in forms(data) if f.kind in pi.c), key=lambda f: f.kind != h.form), pi)
@@ -732,8 +782,9 @@ def setup(d: Design, pi: Machine, data: Path = DATA, operands: str = "free", cre
         raise SystemExit("the floor program delivers operands at φ_del: --operands honest reads honest's credit only")
     tm = h.tensor("floor", d.floor) if credit == "floor" else None
     fs = tuple((f, float(f.per_word)) for f in d.filler)
-    built = fastest(d, h, pi, q=None, q_uniform=None, baseline=False, fillers=fs, tensor_mma=tm)
-    base = fastest(d, h, pi, q=None, q_uniform=None, baseline=True, fillers=fs, tensor_mma=tm)
+    fm = credit == "floor"
+    built = fastest(d, h, pi, q=None, q_uniform=None, baseline=False, fillers=fs, tensor_mma=tm, fold_menu=fm)
+    base = fastest(d, h, pi, q=None, q_uniform=None, baseline=True, fillers=fs, tensor_mma=tm, fold_menu=fm)
     return Setup(design=d, honest=h, machine=pi, operands=operands, credit=credit, fillers=fs, as_built=built,
                  baseline=base, table=table, forms=tuple(fms))
 

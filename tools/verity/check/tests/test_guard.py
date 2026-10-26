@@ -1,8 +1,11 @@
 """The read guard in one process and across pytest-xdist workers: a file the tests open outside the suite's inputs fails the
-suite whichever process opened it, and a suite nothing vouches for (no report, a worker without a record) fails too."""
+suite whichever process opened it, and a suite nothing vouches for (no report, a worker without a record) fails too. And
+each suite's own `--basetemp`, which no sweep takes while anything still uses it."""
 from __future__ import annotations
 
 import importlib.util
+import os
+import shutil
 import sys
 import threading
 from pathlib import Path
@@ -79,27 +82,139 @@ def test_a_cached_module_read_outside_the_inputs_is_named_as_its_source(tmp_path
 
 def test_a_suites_tmp_paths_are_under_its_own_basetemp_and_gone_when_it_ends(tmp_path, tmp_path_factory, monkeypatch):
     """pytest keeps its last three base temps (a flock suite's is ~45 GB: vy-cpu-1 and vy-cpu-2 filled on 11 Oct); each suite gets
-    its own `--basetemp`, removed when it ends, unless the caller passed one, and a killed suites.py's are swept by the next."""
-    import os
+    its own `--basetemp`, removed when it ends, unless the caller passed one. While it runs, its owner marker names this process
+    and pytest's session (which the sweep of a later suites.py checks: the sweep tests below)."""
     import tempfile
     S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
     tmp = tmp_path_factory.mktemp("tmp")                         # outside the suite's tree, as /tmp is
     monkeypatch.setattr(tempfile, "tempdir", str(tmp))
-    monkeypatch.setenv("EXPECT", str(tmp / f"{S.BASETEMP}-{os.getpid()}-"))
+    monkeypatch.setenv("EXPECT", str(tmp / f"{S.BASETEMP}-{os.getpid()}m"))
+    monkeypatch.setenv("OWNER", str(os.getpid()))
     (tmp_path / "pkg" / "tests" / "test_reads.py").write_text(
-        "import os\n\ndef test_tmp(tmp_path):\n    (tmp_path / 'big').write_bytes(b'x' * 4096)\n"
-        "    assert str(tmp_path).startswith(os.environ['EXPECT'])\n")
+        "import json, os\n\ndef test_tmp(tmp_path):\n    (tmp_path / 'big').write_bytes(b'x' * 4096)\n"
+        "    assert str(tmp_path).startswith(os.environ['EXPECT'])\n"
+        "    if os.environ['OWNER']:\n"
+        "        doc = json.loads((tmp_path.parents[1] / 'owner.json').read_text())\n"
+        "        assert [o[0] for o in doc['owners']] == [int(os.environ['OWNER'])], doc\n"
+        "        assert [s[0] for s in doc['sessions']] == [os.getpid()] == [os.getsid(0)], doc\n")
     r = S.run(suite, ["pkg"], [], tmp_path / "logs")
     assert (r.status, r.counts["passed"]) == ("passed", 1), r.log.read_text()
     assert list(tmp.iterdir()) == []
     mine = tmp_path_factory.mktemp("mine")
     monkeypatch.setenv("EXPECT", str(mine))
+    monkeypatch.setenv("OWNER", "")
     r = S.run(suite, ["pkg"], [f"--basetemp={mine}"], tmp_path / "logs")
     assert r.status == "passed" and (mine / "test_tmp0" / "big").exists() and list(tmp.iterdir()) == []
-    dead, live = tmp / f"{S.BASETEMP}-999999999-pkg-x", tmp / f"{S.BASETEMP}-{os.getppid()}-pkg-y"
-    dead.mkdir()
-    live.mkdir()
-    assert S.sweep_basetemps() == [dead] and live.exists()
+
+
+
+NOW = 2_000_000_000.0
+HOUR = 3600.0
+
+
+def _proc(root: Path, procs: dict[int, tuple[int, int]], boot: str = "boot-a", ns: str = "pid:[1]") -> Path:
+    """A /proc of this boot and pid namespace, holding ``procs`` (pid: (start time, session)) and nothing else."""
+    if root.exists():
+        shutil.rmtree(root)
+    (root / "sys" / "kernel" / "random").mkdir(parents=True)
+    (root / "sys" / "kernel" / "random" / "boot_id").write_text(boot + "\n")
+    (root / "self" / "ns").mkdir(parents=True)
+    os.symlink(ns, root / "self" / "ns" / "pid")
+    for pid, (start, sid) in {**procs, "self": procs.get(os.getpid(), (7, 7))}.items():
+        (root / str(pid)).mkdir(exist_ok=True)
+        (root / str(pid) / "stat").write_text(f"{pid} (a) b) S 1 {sid} {sid} " + "0 " * 15 + f"{start} 0 0\n")
+    return root
+
+
+def _basetemp(tmp: Path, name: str, owner: dict | None, age_h: float, newest_h: float | None = None) -> Path:
+    """A basetemp named ``name`` with ``owner`` as its marker (None: none), unchanged for ``age_h`` hours but for a file deep in
+    it changed ``newest_h`` hours ago."""
+    import json
+
+    d = tmp / name
+    (d / "b" / "popen-gw0" / "deep").mkdir(parents=True)
+    f = d / "b" / "popen-gw0" / "deep" / "file"
+    f.write_text("x")
+    if owner is not None:
+        (d / "owner.json").write_text(json.dumps(owner))
+    for p in (f, d / "b" / "popen-gw0" / "deep", d / "b" / "popen-gw0", d / "b", *([d / "owner.json"] if owner else []), d):
+        t = NOW - (newest_h if newest_h is not None and p == f else age_h) * HOUR
+        os.utime(p, (t, t))
+    return d
+
+
+def _owner(*owners: tuple[int, int], sessions=(), boot: str = "boot-a", ns: str = "pid:[1]") -> dict:
+    return {"boot": boot, "pidns": ns, "owners": [list(o) for o in owners], "sessions": [list(s) for s in sessions]}
+
+
+def test_a_basetemp_another_namespace_or_boot_owns_is_never_swept_while_anything_in_it_changes(tmp_path, monkeypatch):
+    """INF-95: a sweep that can't see a basetemp's owner (another pid namespace, another boot, a /proc that hides it) never takes
+    it as gone, whatever the owner's pid is here; it waits until nothing in it changed for a day."""
+    S = _load(monkeypatch, "suites_under_test", HERE / "suites.py")
+    (tmp := tmp_path / "tmp").mkdir()
+    proc = _proc(tmp_path / "proc", {})
+    for age, newest in ((1, None), (48, 2), (23.9, None)):
+        _basetemp(tmp, f"verity-suite-mns{age}", _owner((42, 5), ns="pid:[2]"), age, newest)
+        _basetemp(tmp, f"verity-suite-mboot{age}", _owner((42, 5), boot="boot-b"), age, newest)
+    assert S.sweep_basetemps(tmp, proc=proc, now=NOW) == []
+    old = {_basetemp(tmp, "verity-suite-mns-old", _owner((42, 5), ns="pid:[2]"), 25),
+           _basetemp(tmp, "verity-suite-mboot-old", _owner((42, 5), boot="boot-b"), 25)}
+    assert set(S.sweep_basetemps(tmp, proc=proc, now=NOW)) == old and not any(d.exists() for d in old)
+    assert len(list(tmp.iterdir())) == 6
+
+
+def test_a_basetemp_whose_owner_died_here_is_swept_and_a_reused_pid_does_not_keep_it(tmp_path, monkeypatch):
+    """Under this boot and namespace an owner is alive only at its pid with its start time: one gone, or whose pid another process
+    took since (a different start time), leaves its basetemp to the sweep at once; one alive keeps it."""
+    S = _load(monkeypatch, "suites_under_test", HERE / "suites.py")
+    (tmp := tmp_path / "tmp").mkdir()
+    proc = _proc(tmp_path / "proc", {42: (500, 42), 43: (999, 43)})
+    live = _basetemp(tmp, "verity-suite-mlive", _owner((42, 500)), 0)
+    dead = _basetemp(tmp, "verity-suite-mdead", _owner((44, 500)), 0)
+    reused = _basetemp(tmp, "verity-suite-mreused", _owner((43, 500)), 0)
+    assert sorted(S.sweep_basetemps(tmp, proc=proc, now=NOW)) == sorted([dead, reused])
+    assert live.exists() and not dead.exists() and not reused.exists()
+
+
+def test_a_basetemp_stays_while_its_pytest_session_runs_after_its_suites_py_is_killed(tmp_path, monkeypatch):
+    """vy-nebius-1, 18 Oct: two suites.py were killed (SIGKILL) while their pytest, in a session of its own, ran on for 8 and 37
+    minutes; the next suites.py's sweep took their basetemps from under them. A process left in pytest's session (pytest itself,
+    or an xdist worker it left) keeps the basetemp; once the session is empty it is swept."""
+    S = _load(monkeypatch, "suites_under_test", HERE / "suites.py")
+    (tmp := tmp_path / "tmp").mkdir()
+    d = _basetemp(tmp, "verity-suite-morphan", _owner((42, 500), sessions=[(60, 510)]), 0)
+    assert S.sweep_basetemps(tmp, proc=_proc(tmp_path / "proc", {60: (510, 60)}), now=NOW) == [] and d.exists()
+    assert S.sweep_basetemps(tmp, proc=_proc(tmp_path / "proc", {61: (520, 60)}), now=NOW) == [] and d.exists()
+    assert S.sweep_basetemps(tmp, proc=_proc(tmp_path / "proc", {60: (900, 900)}), now=NOW) == [d] and not d.exists()
+
+
+def test_a_basetemp_without_a_marker_is_swept_only_once_nothing_in_it_changed_for_a_day(tmp_path, monkeypatch):
+    """An older suites.py's `verity-suite-<pid>-*`, the guard's `verity-suite-host-*`, or a marker that doesn't parse: the sweep
+    can't tell who uses it, so the age of its newest entry decides, never a pid in its name."""
+    S = _load(monkeypatch, "suites_under_test", HERE / "suites.py")
+    (tmp := tmp_path / "tmp").mkdir()
+    proc = _proc(tmp_path / "proc", {})
+    kept = [_basetemp(tmp, "verity-suite-999999-fresh", None, 1), _basetemp(tmp, "verity-suite-host-deep", None, 30, 23),
+            _basetemp(tmp, "verity-suite-mbroken", {"boot": "boot-a"}, 2)]
+    old = [_basetemp(tmp, "verity-suite-999999-old", None, 25), _basetemp(tmp, "verity-suite-host-old", None, 30),
+           _basetemp(tmp, "verity-suite-mbroken-old", {"owners": "x"}, 25)]
+    (tmp / "verity-suite-file").write_text("not a directory")
+    assert sorted(S.sweep_basetemps(tmp, proc=proc, now=NOW)) == sorted(old)
+    assert all(d.exists() for d in kept) and (tmp / "verity-suite-file").exists()
+
+
+def test_the_marker_a_run_writes_names_this_process_and_pytests_session(tmp_path, monkeypatch):
+    """`mark_basetemp` as `run` calls it, read back by the sweep: this process (by its start time) keeps the basetemp, and so
+    does pytest's session once it is named; with both gone it is swept."""
+    S = _load(monkeypatch, "suites_under_test", HERE / "suites.py")
+    (tmp := tmp_path / "tmp").mkdir()
+    (d := tmp / "verity-suite-mrun").mkdir()
+    me = os.getpid()
+    S.mark_basetemp(d, proc=_proc(tmp_path / "proc", {me: (300, 300)}))
+    assert S.sweep_basetemps(tmp, proc=_proc(tmp_path / "proc", {me: (300, 300)}), now=NOW) == []
+    S.mark_basetemp(d, session=80, proc=_proc(tmp_path / "proc", {me: (300, 300), 80: (310, 80)}))
+    assert S.sweep_basetemps(tmp, proc=_proc(tmp_path / "proc", {81: (320, 80)}), now=NOW) == []
+    assert S.sweep_basetemps(tmp, proc=_proc(tmp_path / "proc", {me: (301, 1)}), now=NOW) == [d]
 
 
 @pytest.mark.parametrize("listed", [False, True])
@@ -191,6 +306,43 @@ def test_under_a_recorded_check_a_skip_for_an_unreachable_store_fails(tmp_path, 
         assert "VERITY_STORE_REQUIRED=1 (a recorded check)" in log
     else:
         assert (r.status, r.counts["failed"], r.counts["error"], r.counts["skipped"]) == ("passed", 0, 0, 3), log
+
+
+def _ours_and_theirs(tmp_path: Path) -> Path:
+    """`mine`, a package in the suite's tree on its tests' `sys.path`, whose `needs` imports a distribution nobody installs."""
+    mine = tmp_path / "pkg" / "tests" / "mine"
+    mine.mkdir()
+    (mine / "__init__.py").write_text("")
+    (mine / "needs.py").write_text("import no_such_distribution_7f1c  # noqa: F401\n")
+    return mine.parent
+
+
+@pytest.mark.parametrize("workers", [1, 2])
+def test_an_importorskip_of_a_module_of_ours_that_moved_fails(tmp_path, monkeypatch, workers):
+    """pytest skips on the `ModuleNotFoundError` a moved module raises, so a test that importorskips a module of ours passed as a
+    skip once it moved. The guard fails it, and still skips a missing third-party package, one a module of ours needs included."""
+    if workers > 1:
+        pytest.importorskip("xdist")
+    S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
+    (_ours_and_theirs(tmp_path) / "test_imports.py").write_text(
+        "import pytest\n\n"
+        "def test_moved():\n    pytest.importorskip('mine.moved', reason='not merged yet')\n\n"
+        "def test_third_party():\n    pytest.importorskip('no_such_distribution_7f1c')\n\n"
+        "def test_ours_needing_a_third_party():\n    pytest.importorskip('mine.needs')\n\n"
+        "def test_ours_present():\n    assert pytest.importorskip('mine').__name__ == 'mine'\n")
+    r = S.run(suite, ["pkg"], [], tmp_path / "logs", workers)
+    log = r.log.read_text()
+    assert (r.status, r.counts["passed"], r.counts["failed"], r.counts["skipped"]) == ("failed", 5, 1, 2), log
+    assert "mine.moved is not importable, and mine is this checkout's" in log
+
+
+def test_a_module_level_importorskip_of_a_module_of_ours_that_moved_fails_collection(tmp_path, monkeypatch):
+    S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
+    (_ours_and_theirs(tmp_path) / "test_collected.py").write_text(
+        "import pytest\n\npytest.importorskip('mine.gone')\n\n\ndef test_never_runs():\n    pass\n")
+    r = S.run(suite, ["pkg"], [], tmp_path / "logs", 1)
+    log = r.log.read_text()
+    assert r.status == "failed" and "mine.gone is not importable" in log, log
 
 
 def test_a_suite_without_the_guards_report_fails(tmp_path, monkeypatch):

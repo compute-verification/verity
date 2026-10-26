@@ -13,12 +13,14 @@ left out, nothing committed).
 """
 from __future__ import annotations
 
+import random
+
 import numpy as np
 import pytest
 import torch
 
 from verity.core.protocols.pouw.coins import Challenger
-from verity_vllm import protocol_options as PO
+from verity_vllm import protocols as PO
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepEnd, StepStart
 from verity_vllm.observe.fold.patterns.pouw import OP, PouwLinear, with_protocols
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Profile, Shared, StepContext, resolve_step
@@ -26,7 +28,7 @@ from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.observe.observer import Observer, Recorder
 from verity_vllm.observe.storage import StorageAdapter
 from verity_vllm.program.frontend.rules.vllm_bindings import triton_launches as TL
-from verity_vllm.protocol_options import pouw
+from verity_vllm.protocols import pouw
 from tests.program import test_pouw_lowering as LW
 
 M, K, NQ = LW.M, LW.K, LW.NQ
@@ -62,7 +64,7 @@ class Model(torch.nn.Module):
 
 
 def _install(model, stage: str):
-    settings = {"pouw": {"coins": Challenger(0)}}
+    settings = {"pouw": {"coins": Challenger(0, random.Random(0).randbytes)}}
     if stage == "capture":
         return PO.at_capture(LW.POUW, model, settings)
     return PO.install(model, PO.Context(stage=stage, enabled=("pouw:ncp-v2",), settings=settings))
@@ -153,14 +155,14 @@ def test_the_capture_serves_the_committed_y_word_for_word(observed, linears):
 
 
 def test_the_capture_context_leaves_sampled_proofs_out_and_is_none_without_an_executor():
-    ctx = PO.capture_context(LW.POUW, settings={"pouw": {"coins": Challenger(0)}, "sampled-proofs": {}})
+    ctx = PO.capture_context(LW.POUW, settings={"pouw": {"coins": Challenger(0, random.Random(0).randbytes)}, "sampled-proofs": {}})
     assert ctx.stage == "capture" and ctx.enabled == ("pouw:ncp-v2",) and set(ctx.settings) == {"pouw"}
     assert PO.capture_context(LW.DEFAULT_TARGET) is None and PO.capture_context(None) is None
 
 
 def test_the_served_y_alone_is_the_commits(linears):
-    from verity_vllm.protocol_options import pouw_circuit as PC
-    from verity_vllm.protocol_options import pouw_native as PN
+    from verity_vllm.protocols.pouw import circuit as PC
+    from verity_vllm.protocols.pouw import native as PN
     rng = np.random.default_rng(2)
     b = rng.integers(-63, 64, (48, 64)).astype(np.int8)
     t = (np.abs(rng.standard_normal(48)).astype(np.float32) * 0.01 + 1e-3).view(np.uint32)
@@ -170,10 +172,12 @@ def test_the_served_y_alone_is_the_commits(linears):
     assert np.array_equal(PN.served(call, block=16), PN.commit_call(0, "ncp-v2", call).y)
 
 
-def test_the_match_capture_installs_its_workloads_target_executors(linears):
+def test_the_match_capture_installs_its_workloads_target_executors(linears, monkeypatch):
     """`m1_capture` installs what the workload's target declares, from its `protocols_config` with the epoch's challenger
-    its own (`pouw.challenged`), and records the entries in the header."""
+    its own (`pouw.challenged`, on the Lean verifier's coins, seeded here), and records the entries in the header."""
     from types import SimpleNamespace
+
+    monkeypatch.setattr(pouw.verifier, "coins", random.Random(5).randbytes)
 
     from verity_vllm.pipeline import m1_capture
     wl = {"target": {"protocols": ["pouw:ncp-v2", "sampled-proofs:vllm-v1"]}, "protocols_config": {"pouw": {}}}

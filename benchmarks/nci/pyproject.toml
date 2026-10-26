@@ -1,0 +1,12 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# The calculator's lower bound cites guarantees by name; the tests check that the lock lists them. ReferenceLayered's
+# falsification test (test_tiers.py) checks the parameters its Lean statements state against tiers.py's.
+inputs = [
+  "Security/lean-audit.json",
+  "Security/Definitions/Nci/Assumptions/Layered.lean",
+  "Security/Definitions/Nci/Guarantees/Layered.lean",
+]

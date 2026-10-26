@@ -78,14 +78,14 @@ impl ProverSeed {
 /// bind one root) and every later tree takes the next id. In a session of several tables, table `j` ([`LeafSalts::table`]) takes
 /// ids from `j << TABLE_SHIFT` instead. A tree's salts are read once, so no salt is used twice and every commitment to a tree
 /// sees one set: level 0's are kept for the proof ([`LeafSalts::level0`]: the session's `Commit`, both reps and the firewall's
-/// recheck all commit that tree), and a tree that both the device and the firewall's shadow build ([`LeafSalts::fork`]) is
-/// kept from its first draw until the other side takes it (zeroed if dropped first). Salts are never written to a record. An
+/// recheck all commit that tree), and a tree whose salts the firewall's Lean finish drew ([`LeafSalts::preset`]) is kept
+/// until the device's tree takes them (zeroed if dropped first). Salts are never written to a record. An
 /// injected seed (a test harness only) expands them with ChaCha20 instead, leaf `i` of tree `id` being blocks
 /// `3i, 3i + 1, 3i + 2` under its `STREAM_SALT` key with nonce `id` ([`chacha20_block`]), so a test proof repeats.
 pub struct LeafSalts {
     /// an injected seed's salt key (on the heap, so moving a `LeafSalts` copies no key byte); `None` in every proving build
     key: Option<Box<[u8; 32]>>,
-    /// the trees kept, shared with this table's forks
+    /// the trees kept
     kept: std::sync::Arc<std::sync::Mutex<Kept>>,
     next: u64,
     level0: u64,
@@ -97,9 +97,8 @@ pub const OS_PIECE: usize = 1 << 16;
 #[derive(Default)]
 struct Kept {
     level0: Option<std::sync::Arc<Vec<u8>>>,
-    /// a fork was taken: each tree's first draw waits here for the other side's, by tree id and leaf count
-    paired: bool,
-    waiting: std::collections::BTreeMap<(u64, usize), ZeroOnDrop>,
+    /// trees whose salts were drawn elsewhere ([`LeafSalts::preset`]), by tree id and leaf count, taken by the first draw
+    preset: std::collections::BTreeMap<(u64, usize), ZeroOnDrop>,
 }
 
 /// The coin-tree nonce the prover sends in `Hello` (docs/coin-tree-v2.md §3): 32 fresh bytes from the OS, once per session,
@@ -136,13 +135,6 @@ impl LeafSalts {
         LeafSalts { key: self.key.clone(), kept: Default::default(), next: level0 + 1, level0 }
     }
 
-    /// These salts at their next id, for the firewall's shadow opening, which builds the trees the device takes from here next
-    /// without taking their ids from it: from now on each tree's first draw, the device's or the shadow's, is kept for the other.
-    pub fn fork(&self) -> LeafSalts {
-        self.kept.lock().unwrap_or_else(std::sync::PoisonError::into_inner).paired = true;
-        LeafSalts { key: self.key.clone(), kept: self.kept.clone(), next: self.next, level0: self.level0 }
-    }
-
     /// The level-0 tree's id (both reps of a table bind its one root).
     pub fn level0_id(&self) -> u64 {
         self.level0
@@ -167,23 +159,44 @@ impl LeafSalts {
         s
     }
 
-    /// Tree `id`'s salts, `leaves` × 192 bytes (level 0's: [`Self::level0`]'s). Under a fork, the first of the two draws of a
-    /// tree reads them and the second takes the same bytes; otherwise every call reads a tree's salts afresh. The two draws pair
-    /// by id and size: a device that draws a tree at another size than the shadow's gets salts of its own, its tree is not the
-    /// shadow's and its opening fails the firewall's check, and neither side panics.
+    /// The level-0 tree's salts drawn elsewhere (the Lean session loop's, `Flock.Firewall.Level0`), before anything reads them:
+    /// every later [`Self::level0`] answers these bytes.
+    pub fn set_level0(&self, s: Vec<u8>) -> Result<(), String> {
+        let mut k = self.kept.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if k.level0.is_some() {
+            return Err("level 0's salts were read before the Lean loop drew them".into());
+        }
+        k.level0 = Some(std::sync::Arc::new(s));
+        Ok(())
+    }
+
+    /// The salts of the next trees from here, drawn elsewhere (the Lean finish's for a firewalled rep's levels ≥ 1,
+    /// `Flock.Firewall.Finish.hiSaltsOf`), in id order, each `leaves` × 192 bytes: the first draw of each such tree at that
+    /// size takes them in place of its own read.
+    pub fn preset(&self, trees: Vec<Vec<u8>>) -> Result<(), String> {
+        let mut k = self.kept.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        for (j, s) in trees.into_iter().enumerate() {
+            if s.is_empty() || s.len() % SALT_BYTES != 0 {
+                return Err(format!("preset salts of {} bytes for a tree, not whole {SALT_BYTES}-byte leaves", s.len()));
+            }
+            let id = self.next + j as u64;
+            k.preset.insert((id, s.len() / SALT_BYTES), ZeroOnDrop(s));
+        }
+        Ok(())
+    }
+
+    /// Tree `id`'s salts, `leaves` × 192 bytes (level 0's: [`Self::level0`]'s): its preset salts at that size, once, else read
+    /// afresh. A device that draws a tree at another size than the Lean finish's gets salts of its own, its tree is not the
+    /// finish's and its opening fails the firewall's check, and nothing panics.
     pub fn expand(&self, id: u64, leaves: usize) -> Vec<u8> {
         if id == self.level0 {
             return self.level0(leaves).to_vec();
         }
-        let mut k = self.kept.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(mut w) = k.waiting.remove(&(id, leaves)) {
-            return std::mem::take(&mut w.0);
+        let preset = self.kept.lock().unwrap_or_else(std::sync::PoisonError::into_inner).preset.remove(&(id, leaves));
+        match preset {
+            Some(mut p) => std::mem::take(&mut p.0),
+            None => self.draw(id, leaves),
         }
-        let b = self.draw(id, leaves);
-        if k.paired {
-            k.waiting.insert((id, leaves), ZeroOnDrop(b.clone()));
-        }
-        b
     }
 
     fn draw(&self, id: u64, leaves: usize) -> Vec<u8> {
@@ -445,7 +458,7 @@ mod tests {
     }
 
     /// A proving build's salts are the OS's: no two trees, proofs or leaves share a salt, a tree's draw spans several
-    /// `getrandom` pieces, level 0's are read once, and a tree drawn on both sides of a fork is one set of salts.
+    /// `getrandom` pieces, and level 0's are read once.
     #[test]
     fn os_salts_are_fresh_per_tree_and_read_once_where_shared() {
         let leaves = 2 * OS_PIECE / SALT_BYTES + 3;
@@ -460,18 +473,26 @@ mod tests {
         for s in [&l0[..], &t1, &t1_again, &b.level0(leaves)[..], &b.expand(id, leaves), &a.table(1).level0(leaves)[..]] {
             assert!(s.chunks(SALT_BYTES).all(|c| seen.insert(c.to_vec())), "a salt read twice");
         }
-        let mut f = a.fork();
-        let (dev, shadow) = (a.next_id(), f.next_id());
-        assert_eq!(dev, shadow, "the fork takes the device's next id");
-        let first = f.expand(shadow, 9);
-        assert_eq!(a.expand(dev, 9), first, "the shadow and the device commit one set of salts");
-        assert_ne!(a.expand(dev, 9), first, "a third draw of the tree reads afresh");
-        let (dev, shadow) = (a.next_id(), f.next_id());
-        let other = a.expand(dev, 10);
-        let own = f.expand(shadow, 9);
-        assert_eq!(own.len(), 9 * SALT_BYTES);
-        assert!(own.chunks(SALT_BYTES).all(|c| !other.chunks(SALT_BYTES).any(|o| o == c)), "a tree drawn at another size shares no salt");
-        assert_eq!(a.expand(dev, 9), own, "the device's draw at the shadow's size is the shadow's tree");
+    }
+
+    /// Salts drawn elsewhere for the next trees ([`LeafSalts::preset`], the Lean finish's): the first draw of each at its size
+    /// takes them; a second draw, a draw at another size and a tree past them read their own.
+    #[test]
+    fn preset_salts_are_the_next_trees() {
+        let mut a = LeafSalts::for_seed(&ProverSeed::from_os());
+        let trees: Vec<Vec<u8>> = vec![vec![1; 4 * SALT_BYTES], vec![2; 2 * SALT_BYTES]];
+        a.preset(trees.clone()).unwrap();
+        let id = a.next_id();
+        assert_eq!(a.expand(id, 4), trees[0], "the first tree is the preset one");
+        assert_ne!(a.expand(id, 4), trees[0], "a second draw of it reads afresh");
+        let id = a.next_id();
+        let other = a.expand(id, 3);
+        assert_eq!(other.len(), 3 * SALT_BYTES);
+        assert!(other.chunks(SALT_BYTES).all(|c| c != &trees[1][..SALT_BYTES]), "a draw at another size reads its own");
+        assert_eq!(a.expand(id, 2), trees[1], "the draw at the preset size still takes them");
+        let id = a.next_id();
+        assert_ne!(a.expand(id, 2), trees[1], "a tree past the preset ones reads afresh");
+        assert!(a.preset(vec![vec![0; 5]]).is_err(), "a preset tree is whole leaves");
     }
 
     /// An injected seed's salts are its ChaCha20 tape: leaf `i` of tree `id` is blocks `3i..3i+2` under the `STREAM_SALT` key with

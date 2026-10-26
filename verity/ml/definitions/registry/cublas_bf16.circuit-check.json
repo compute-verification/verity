@@ -1,0 +1,36 @@
+{
+ "definitions": {
+  "CublasSplitKGemmF32Out_v2{K=64,N=3,SPLIT_K=4,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 91912,
+   "type": "fd070e27a4ea3f5b830d94ec84502713c191682df2a9a8649eb622172242e8471ed2f13d6b1a14322668fdaa30fe194cdd9fdb0e7cffe27e283fff444ed2571e"
+  },
+  "CublasSplitKGemm_v2{K=64,N=3,SPLIT_K=4,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 92110,
+   "type": "bf48aa302b961df03804a7c0aa46f507edff051bb16a7acb7ed44bdf5a68248da5e3c1fb563ae81e5ceb2c90c723c14618e30f2928b73710164f533c8f912ee6"
+  },
+  "GemmF32Out_v2{K=16,N=3,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 21151,
+   "type": "af1f2505f192fda47494122125f808778cfbc073ab6c129a81c3ee6be8bcea38754f735665527e0c9fdf6e9e1ce376df3e9a2411c5055886a8c1e99c8591c2ff"
+  },
+  "GemmF32Out_v2{K=32,N=3,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 43199,
+   "type": "6fd8f41855d0f75b923967385bf62ccfae1e8391467ce2a09a4af50d476a0a3a0aaabb1a367923f3432617c9dff5ee2791265f3fb4e5fbb9e98fcb7c44e68c28"
+  },
+  "HopperBf16Dot16StepFirstX_v1": {
+   "and": 784,
+   "type": "bd9559d8b999db8edf5e7e3a5071b1c564e8655c7247569cc21f4ef4b69f50e9929c197a5881a969b27c5103bcd98dc92a04dd8aedcc3ef7ece19c9125c19baa"
+  },
+  "HopperBf16Dot16StepFirst_v1": {
+   "and": 6789,
+   "type": "87cd277ac88a230b54356f8f36071c9b821b13b7ec443bd9709bccd85ac2ea451c757fbcaeda46c8cde5918ae9365c9c4f6dd821afdbc84754819a2d359452e9"
+  },
+  "HopperBf16Dot16StepX_v1": {
+   "and": 784,
+   "type": "bd9559d8b999db8edf5e7e3a5071b1c564e8655c7247569cc21f4ef4b69f50e9929c197a5881a969b27c5103bcd98dc92a04dd8aedcc3ef7ece19c9125c19baa"
+  },
+  "HopperBf16Dot16Step_v1": {
+   "and": 7088,
+   "type": "b5fbf97843f152bfb0e4c14a2b14a6bfdd0ac0daa2902a9abbfd2cef37f2d01f6d5cc637123151f7d0548440b580400f7bec6fdde99000f9101b32ae0c5cc385"
+  }
+ }
+}

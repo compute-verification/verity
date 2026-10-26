@@ -9,6 +9,8 @@ strided W_UV view at 131,072 runs a read) folded with the GLM53 profile and pers
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import collections
 import itertools
 import json
@@ -110,7 +112,8 @@ def _log(profile, crossed: bool = False) -> list:
                 "kv_ptr": col(2048, 512), "kv_rms_norm_w_ptr": W[i]["kv_a"], "kv_rms_eps": 1e-6, "kpe_ptr": col(2560, 64),
                 "kpe_rope_cos_sin_cache_ptr": cs, "mla_cache_ptr": lat, "index_k_ptr": col(2624, 128),
                 "index_k_layer_norm_w_ptr": W[i]["k_w"], "index_k_layer_norm_bias_ptr": W[i]["k_b"], "index_k_layer_norm_eps": 1e-6,
-                "index_k_rope_cos_sin_cache_ptr": cs, "indexer_cache_ptr": ikc, "indexer_cache_scale_ptr": isc, "topk_indices_ptr": topk}
+                "index_k_rope_cos_sin_cache_ptr": cs, "indexer_cache_ptr": ikc, "indexer_cache_scale_ptr": isc,
+                "indexer_cache_block_size": 64, "indexer_cache_stride": 132, "topk_indices_ptr": topk}
         ev.append(TritonLaunch(next(eid), None, 0, "forward", f"vllm.v1.attention.ops.glm.{DSA.NORM_KERNEL}", DSA.NORM_SRC_SHA,
                                {**args, **NORM_ROPE_PINS}, NORM_ROPE_PINS, [M, 1, 1], 4, 3, 7, None))
         w = W[0 if crossed else i]["w_uv"]
@@ -179,6 +182,7 @@ def _root_names(profile) -> set[str]:
     return {e.name for e in _log(profile) if isinstance(e, Root) and e.role == "weight"}
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("form", ["runs", "progressions"])
 def test_a_moduleless_rank_fold_maps_each_layers_weights_apart(rank, form):
     """[04f0af376] Without Root names the moduleless launches hinted every layer's q_a / kv_a / index-K norm and the CUDA norms alike:
@@ -201,6 +205,7 @@ def _verdict(res: dict) -> tuple:
             sorted(collections.Counter(k for s in res["steps"] for k in (s.get("wiring") or {}).get("different_by_spec_arg", {})).items()))
 
 
+@pytest.mark.slow
 def test_the_progressions_compare_reaches_the_runs_verdict(rank):
     """`--operands progressions` (both sides compact, stored as progressions) against the record form: the same verdict on the served
     fold against itself and against the fold whose layer 1 reads layer 0's W_UV (each of its token rows' W_UV operand, and only it,
@@ -249,6 +254,7 @@ def test_the_compact_load_splices_each_aliased_weight_read(rank, monkeypatch):
     assert calls[0] <= first_reads, (calls[0], first_reads)
 
 
+@pytest.mark.slow
 def test_the_dag_hashes_take_one_trie_step_per_weight_progression(rank):
     """[8dec947cf] GM-01's fast DAG hashes walk a compact W_UV read in one trie step per progression (~2048), not per run (131,072 a
     read, ~5e9 steps a rank), and partition the instances as the runs-form load does."""

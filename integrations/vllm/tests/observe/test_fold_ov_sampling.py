@@ -12,7 +12,7 @@ import pytest
 from verity_vllm.observe.fold import fold as fold_mod
 from verity_vllm.observe.events import RunHeader, StepLink, StepStart, ViewDesc
 from verity_vllm.observe.fold.fold import FoldError, fold
-from tests.observe.test_fold_synthetic import REQ, toy_log, toy_profile  # noqa: F401  (memory fixture lives there)
+from tests.observe.test_fold_synthetic import REQ, toy_log, toy_profile  # memory fixture lives there
 from tests.observe.test_fold_synthetic import memory  # noqa: F401
 from verity.ml.circuits.refs import Affine
 from verity.ml.circuits.types import Array, Value
@@ -74,21 +74,52 @@ def test_plain_requests_are_unchanged(memory):
 # --- (2) family-agnostic sampled-row fallback --------------------------------------------------------------------------
 
 
-def _inst(step, node, spec, row, out_view):
-    return {"step": step, "node": node, "spec": spec, "row": row, "output_views": [out_view]}
+def _inst(step, node, spec, row, out_view, rows=1, request=None, position=None):
+    return {"step": step, "node": node, "spec": spec, "row": row, "rows": rows, "request": request, "position": position,
+            "output_views": [out_view]}
+
+
+def _fold(instances, logits_rows=None):
+    start = None if logits_rows is None else types.SimpleNamespace(logits_rows=logits_rows)
+    return types.SimpleNamespace(instances=instances, cur_start=start)
+
+
+def _node(k):
+    return repr(Affine("n", k, 0, 1))
 
 
 def test_fallback_matches_the_instance_by_output_element():
     sampled = ViewDesc(900, 0, (2,), (1,), "int64", "cuda:0")
     el0, el1 = (ViewDesc(900, i, (), (), "int64", "cuda:0") for i in (0, 1))
     ins = [_inst(3, 40, "GumbelArgmaxBf16_v1{V=16,SEED=7,POS=5}", 0, el0), _inst(3, 41, "GumbelArgmaxBf16_v1{V=16,SEED=8,POS=5}", 1, el1)]
-    f = types.SimpleNamespace(instances=ins)
+    f = _fold(ins)
     ts = fold_mod._Fold._token_select_output
-    assert repr(ts(f, 3, 0, el0)) == repr(Affine("n", 40, 0, 1)) and repr(ts(f, 3, 1, el1)) == repr(Affine("n", 41, 0, 1))
+    assert repr(ts(f, 3, 0, el0)) == _node(40) and repr(ts(f, 3, 1, el1)) == _node(41)
     assert ts(f, 3, 0, None) is None                                          # not a TokenSelect: no by-row guess
     assert ts(f, 3, 0, ViewDesc(901, 0, (), (), "int64", "cuda:0")) is None    # another allocation
     assert ts(f, 2, 0, el0) is None                                           # another step
-    # the registered greedy recognizer's TokenSelect is still found by row when the view is unavailable
-    f2 = types.SimpleNamespace(instances=[_inst(3, 50, "TokenSelect_v1{V=16}", 1, None)])
-    assert repr(ts(f2, 3, 1, None)) == repr(Affine("n", 50, 0, 1)) and ts(f2, 3, 0, None) is None
+    # the registered greedy recognizer's TokenSelect (one Compute over the logits rows) is still found by row when the view is unavailable
+    rows = [("a", 7), ("b", 4)]
+    greedy = [_inst(3, 50, "TokenSelect_v1{V=16}", 0, None, rows=2, request="a", position=7),
+              _inst(3, 51, "TokenSelect_v1{V=16}", 1, None, rows=2, request="b", position=4)]
+    assert repr(ts(_fold(greedy, rows), 3, 1, None)) == _node(51) and repr(ts(_fold(greedy, rows), 3, 0, None)) == _node(50)
+    unattributed = [_inst(3, 52, "TokenSelect_v1{V=16}", 1, None, rows=2)]
+    assert repr(ts(_fold(unattributed, rows), 3, 1, None)) == _node(52) and ts(_fold(unattributed, rows), 3, 0, None) is None
+    assert ts(_fold(unattributed, rows[:1]), 3, 1, None) is None              # a select not spanning the logits rows names none of them
     assert sampled.numel == 2
+
+
+def test_fallback_takes_each_logits_row_s_own_gumbel_select_when_the_sampled_ids_are_freed():
+    """A Gumbel select is one Compute per logits row, each its own row 0, emitted in logits-row order.  When the sampled ids' buffer
+    is freed before SampleEnd (a rank's observer may order the free first), logits row 0 must get the select whose output element
+    it is, not the step's last select: that one is another request's, and taking it feeds request a's next step request b's token."""
+    spec = "GumbelTopPTokenSelectSharedGreedy_v1{V=154880}"
+    el0, el1 = (ViewDesc(47277, i, (1,), (1,), "int64", "cuda:1") for i in (0, 1))
+    rows = [("a", 248), ("b", 90)]
+    ins = [_inst(13, 58, spec, 0, el0, request="a", position=248), _inst(13, 63, spec, 0, el1, request="b", position=90)]
+    ts = fold_mod._Fold._token_select_output
+    f = _fold(ins, rows)
+    assert repr(ts(f, 13, 0, el0)) == _node(58) and repr(ts(f, 13, 1, el1)) == _node(63)
+    assert repr(ts(f, 13, 0, None)) == _node(58) and repr(ts(f, 13, 1, None)) == _node(63)    # no view: by the row's (request, position)
+    assert ts(f, 13, 2, None) is None
+    assert ts(_fold([ins[1]], rows), 13, 0, None) is None                     # row 0's select missing: none, not row 1's

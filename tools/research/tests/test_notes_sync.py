@@ -59,6 +59,17 @@ def test_a_sync_commits_pushes_and_the_other_machine_picks_it_up(machines):
     assert NS.sync(b, secrets=[]) == {**rep, "note": "already on the remote"}
 
 
+def test_a_sync_commits_where_signing_is_configured_but_cannot_sign(machines):
+    origin, a, _ = machines
+    _git(a, "config", "commit.gpgsign", "true")
+    _git(a, "config", "gpg.program", "false")
+    (a / "lanes" / "x").mkdir(parents=True)
+    (a / "lanes" / "x" / "report.md").write_text("CHECKPOINT none (20:00Z) [open] started\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["pushed"], rep["paths"]) == (0, True, 1)
+    assert _git(origin, "show", "main:lanes/x/report.md").startswith("CHECKPOINT")
+
+
 
 
 def _fail_once(monkeypatch, verb: str, stderr: str) -> list:
@@ -647,3 +658,27 @@ def test_machine_resolution_clones_the_registry_on_a_fresh_vm(cloud_vm, tmp_path
     assert "vy-nebius-1" not in remote.load_machines() and not root.exists(), "unset: no clone, no registry"
     monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
     assert remote.resolve_machine("vy-nebius-1", "vy")["host"] == "203.0.113.7" and (root / "machines.d").is_dir()
+
+
+def test_a_stale_index_lock_is_removed_only_when_no_git_works_in_the_repository(tmp_path):
+    """19 Oct: a git killed mid-write left the steward's clone locked three times in three hours, and each later sync failed."""
+    import os
+    from research import notes_sync as NS
+    repo = tmp_path / "notes"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    lock = repo / ".git" / "index.lock"
+    lock.write_text("")
+    procs = tmp_path / "proc"
+    procs.mkdir()
+    now = 1_800_000_000.0
+    os.utime(lock, (now - 60, now - 60))
+    assert not NS.clear_stale_lock(repo, now=now, procs=procs) and lock.exists(), "a fresh lock is a live writer's"
+    os.utime(lock, (now - 3600, now - 3600))
+    (procs / "42").mkdir()
+    (procs / "42" / "comm").write_text("git\n")
+    os.symlink(repo, procs / "42" / "cwd")
+    assert not NS.clear_stale_lock(repo, now=now, procs=procs) and lock.exists(), "a git still works in the repository"
+    os.unlink(procs / "42" / "cwd")
+    os.symlink(tmp_path, procs / "42" / "cwd")
+    assert NS.clear_stale_lock(repo, now=now, procs=procs) and not lock.exists(), "old, and git runs elsewhere"
+    assert not NS.clear_stale_lock(repo, now=now, procs=procs), "no lock, nothing to do"

@@ -10,7 +10,7 @@ preflight refusing it
 (PreflightFailed) is an incident: one post in #agent-alerts naming the machine and the failure, and a "cleared" reply in that
 thread once the preflight passes there again. Infra is the only reader, so each also goes in infra's inbox thread, which wakes it.
 Any other refusal (the machine held exclusively, ssh down) is only logged. A pass that passes leaves one Attempt (campaign
-`infra-probe`). It runs where `research run --on` and `research msg` work (infra's VM, tmux `preflight-probe`).
+`infra-probe`). It runs on the control pod, as the watchers' `preflight-probe` loop (infra/control/watchers.toml).
 
 Each pass also runs `research deploy drift` (`ops deploy`) and posts the same way whenever its findings change: the files on
 the nodes that aren't main's, the processes still running old code, and the strays, with what's new since the last post.

@@ -1,0 +1,92 @@
+# The loops the watchers supervisor (watchers.py) runs on the control pod: each loop that watches the system and used to run in tmux
+# on an agent VM (INF-131). Deployed as /data/watchers/watchers.toml; the supervisor reads it when it starts. `{dir}` and `{src}`
+# stand for the two paths below. A credential reaches a loop only through the files its `env_files` names (watchers.py's
+# docstring); a loop whose `needs` or `env_files` is missing waits for it.
+dir = "/data/watchers"
+src = "/data/watchers/src"                       # a pushed commit's tree: `git archive` of the paths README.md's deploy names
+host = "vy-control-verity"
+lock = "/root/watchers-supervisor.lock"
+extra = "{dir}/extra.d"                          # one-off timed jobs: an executable NAME.sh, done when it exits 0
+heartbeat_env = "/root/.config/verity/store-index.env"
+heartbeat_table = "store_private.control_heartbeat"
+cloud_watch_state = "/data/cloud-watch/state.json"
+
+[env]
+PATH = "{src}/infra/control/bin:{dir}/bin:/data/nebius/bin:/root/.local/bin:/usr/local/bin:/usr/bin:/bin"
+PYTHONPATH = "{src}/tools/research/src:{src}/infra/ops"
+HOME = "/root"
+LC_ALL = "C.UTF-8"
+RESEARCH_SLACK_REGISTRY = "{src}/.agents/skills/using-slack/registry.json"
+RESEARCH_NOTES = "/data/steward/research-notes"
+RESEARCH_MACHINES_D = "/data/steward/research-notes/machines.d"
+RESEARCH_AGENT_URL = "https://cursor.com/agents/bc-5a69647d-04f7-5d94-9ff1-56593e2e1037"   # infra's coordinator, on its posts
+
+# the H200 idle stop and the deadline and lease backstops (h200-idle.sh, dc-backstop.sh, glm53-cpu2-backstop.sh)
+[[loop]]
+name = "vm-stop"
+argv = ["python3.12", "-s", "{src}/infra/control/vm_stop.py", "loop", "--config", "{dir}/vm_stop.toml", "--state", "{dir}/vm_stop.json"]
+env_files = ["/root/.config/verity/monitor.env"]
+
+# every Nebius VM sampled every 5 min, the quota watch, and the 24-h compute report at 15:00Z (fleet.py; tmux `fleet`)
+[[loop]]
+name = "fleet"
+argv = ["python3.12", "-s", "{src}/tools/research/src/research/pods/nebius/fleet.py", "loop"]
+env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/monitor.env"]
+env = { FLEET_DIR = "{dir}/fleet", FLEET_MACHINES_D = "/data/steward/research-notes/machines.d", FLEET_SSH_KEY = "/root/.runpod/ssh/runpodctl-ssh-key", FLEET_RESEARCH = "{src}/infra/control/bin/research" }
+
+# node 2's monitors, the machine watchdogs' alerts and the relay-side monitors, posted to #agent-alerts (tmux `watchdog-relay`)
+[[loop]]
+name = "monitors-relay"
+argv = ["python3.12", "-s", "-m", "research.monitors", "relay", "--by", "vy-watchdog-relay@vy-control-verity", "--on", "n2",
+        "--machine-alerts", "vy-nebius-2=n2:/workspace/monitoring/watchdog/alerts",
+        "--machine-alerts", "vy-nebius-cpu-1=cpu1:/workspace/monitoring/watchdog/alerts",
+        "--alerts", "{dir}/monitors/alerts", "--state", "{dir}/monitors/relay-state.json", "--posts", "{dir}/monitors/relay-posts.json"]
+env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/r2.env"]
+# `drift` (research deploy drift) reads main and origin's branches from a real clone, fetched each run: {src} has no history
+env = { RESEARCH_DEPLOY_REPO = "{dir}/repo" }
+
+# the agent watch's events (/data/agent-watch/events.jsonl) posted to #agent-alerts, and its doorbells.json (tmux
+# `agent-watch-relay`). It waits for its offset: the install writes the events' line count there, so it starts where the VM's
+# relay stopped instead of posting the whole log again
+[[loop]]
+name = "agent-watch-relay"
+argv = ["python3.12", "-s", "{src}/infra/control/agent_watch_relay.py"]
+env_files = ["/root/.config/verity/relay.env"]
+needs = ["{dir}/agent-watch-offset"]
+env = { AGENT_WATCH_ON_POD = "1", AGENT_WATCH_OFFSET = "{dir}/agent-watch-offset" }
+
+# check's preflight on each node, hourly, and the nodes' drift from main (tmux `preflight-probe`). Its tree is a clone the deploy
+# key fetches (README's deploy). The store index it reads for the Lean bundles is on the pod's own disk: on /data's NFS, indexing
+# the attempts takes hours and the lean-deps step times out; after a reset, the first pass rebuilds it in a few minutes
+[[loop]]
+name = "preflight-probe"
+argv = ["python3.12", "-s", "{src}/tools/research/src/research/pods/nebius/preflight_probe.py", "--tree", "{dir}/preflight-tree",
+        "--state", "{dir}/preflight-probe.json"]
+env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/r2.env"]
+needs = ["{dir}/preflight-tree/.git"]
+env = { RESEARCH_STORE = "/root/watchers-preflight-store" }
+
+# top's asks relay (top_watch.py asks, every 15 min; top's Cursor timer asks-relay-v4). It waits for a Notion connection's token
+# shared on the Asks for Daniel database ({dir}/notion.env: NOTION_API_KEY=..., root 0600), and for its seeded state
+[[loop]]
+name = "top-asks"
+argv = ["python3.12", "-s", "{src}/infra/control/top_watch.py", "asks", "--state", "{dir}/top-asks.json"]
+env_files = ["/root/.config/verity/relay.env", "{dir}/notion.env"]
+needs = ["{dir}/top-asks.json"]
+
+# top's hourly sweep (top_watch.py sweep; top's Cursor timer admin-hourly-v3): unanswered asks, agents with no handle, the rules
+# thread, main stalled while next is ahead, idle H200s from fleet's samples
+[[loop]]
+name = "top-sweep"
+argv = ["python3.12", "-s", "{src}/infra/control/top_watch.py", "sweep", "--state", "{dir}/top-sweep.json"]
+env_files = ["/root/.config/verity/relay.env", "/data/agent-watch/cursor.env"]
+needs = ["{dir}/top-sweep.json"]
+env = { FLEET_DIR = "{dir}/fleet" }
+
+# the challenger host's ledger and each ended session put in the store every 5 min (publish.sh, as the challenger-host lane wrote
+# it: it is installed on the pod at {dir}/challenger/publish.sh, not part of {src})
+[[loop]]
+name = "challenger-publish"
+argv = ["bash", "{dir}/challenger/publish.sh", "--every", "300"]
+env_files = ["/root/.config/verity/r2.env"]
+env = { VY_CHALLENGER_STATE = "{dir}/challenger/state", RESEARCH_STORE = "/root/watchers-challenger-store" }

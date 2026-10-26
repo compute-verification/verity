@@ -29,7 +29,7 @@ namespace PousCheck.Keys
 open PousCheck.Prim Identity
 open FlockSoundness.Randomness (frame)
 
-def KEYS_TAG : ByteArray := "verity/pous/p2/keys/v4\x00".toUTF8
+def KEYS_TAG : ByteArray := "verity/pous/p2/keys/v4".toUTF8.push 0
 def PROTOCOL_ID : String := "p2/v4"
 def SALT_BYTES : Nat := 24
 

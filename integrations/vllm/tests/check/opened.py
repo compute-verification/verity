@@ -18,17 +18,9 @@ import hashlib
 import os
 from typing import Any
 
-from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta
-from verity_vllm.check import oracle_compare as OC
+from verity_vllm.commit.committer.native_host import NativeHostCommitter, TensorMeta
 
 PLACEHOLDER = ("placeholder", b"\0" * 4)
-
-
-def raw_bytes(host: Any) -> bytes:
-    """A test double's retained copy (numpy array, an object with `.numpy()`, memoryview or bytes) as its bytes in C order."""
-    if hasattr(host, "numpy"):
-        host = host.numpy()
-    return host.tobytes() if hasattr(host, "tobytes") else bytes(host)
 
 
 def _spec(t: tuple, i: int) -> tuple[str, Any, int, str, tuple | None]:
@@ -36,11 +28,11 @@ def _spec(t: tuple, i: int) -> tuple[str, Any, int, str, tuple | None]:
     return str(t[0]), t[1], ordinal, (str(t[3]) if len(t) > 3 else "uint8"), (tuple(t[4]) if len(t) > 4 else None)
 
 
-def committer(retain: str = "host", run_id: str = "opened-test") -> NativeHostCommitter:
+def committer(retain: str = "host", run_id: str = "opened-test", commit_scheme: str | None = None) -> NativeHostCommitter:
     saved = os.environ.get("VERITY_RETAIN")
     os.environ["VERITY_RETAIN"] = retain
     try:
-        return NativeHostCommitter(None, run_id=run_id, gpu_tree=True)
+        return NativeHostCommitter(None, run_id=run_id, gpu_tree=True, commit_scheme=commit_scheme)
     finally:
         if saved is None:
             del os.environ["VERITY_RETAIN"]
@@ -48,11 +40,12 @@ def committer(retain: str = "host", run_id: str = "opened-test") -> NativeHostCo
             os.environ["VERITY_RETAIN"] = saved
 
 
-def commit_steps(steps: dict[int, list[tuple]], *, retain: str = "host", run_id: str = "opened-test"):
+def commit_steps(steps: dict[int, list[tuple]], *, retain: str = "host", run_id: str = "opened-test", commit_scheme: str | None = None):
     """Commit `steps[s]` (tensors in acquisition order) as packed step blocks -> (committer, run commitment).  Tensors sit at 4-byte-aligned
-    offsets of the step block; a step missing below the last one is a one-tensor placeholder (steps are numbered densely)."""
-    com = committer(retain, run_id)
-    C = GPU_CHUNK_BYTES
+    offsets of the step block; a step missing below the last one is a one-tensor placeholder (steps are numbered densely).  `commit_scheme`
+    rows-sha512: the step trees are `step_rows`'s (the committer's `row_keys` hold their salt keys)."""
+    com = committer(retain, run_id, commit_scheme)
+    C = com.chunk
     for s in range(max(steps) + 1 if steps else 0):
         metas, buf = [], bytearray()
         for i, t in enumerate(steps.get(s) or [PLACEHOLDER]):
@@ -82,22 +75,12 @@ def commit_host_steps(steps: dict[int, list[tuple]], *, run_id: str = "opened-te
     return com, com.commit_offline(stream)
 
 
-def commit_layouts(layouts: dict[int, list], *, host: bool = False, **kw):
-    """A committer double's layouts (metas with `.name`, optional `.ordinal`, retained `.host`) committed -> (committer, run commitment)."""
-    steps = {int(s): [(m.name, raw_bytes(m.host), getattr(m, "ordinal", i)) for i, m in enumerate(ms)] for s, ms in layouts.items()}
-    return commit_host_steps(steps, **kw) if host else commit_steps(steps, **kw)
-
-
 def commit_members(members: dict[tuple[int, str], bytes], **kw):
     """{(step, member name): bytes} committed in insertion order per step -> (committer, run commitment)."""
     steps: dict[int, list] = {}
     for (s, name), raw in members.items():
         steps.setdefault(int(s), []).append((name, raw))
     return commit_steps(steps, **kw)
-
-
-def opened_reader(layouts: dict[int, list], **kw) -> OC.OpenedReader:
-    return OC.OpenedReader(*commit_layouts(layouts, **kw))
 
 
 def retained_block(com: NativeHostCommitter, step: int) -> Any:

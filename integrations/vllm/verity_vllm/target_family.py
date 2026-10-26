@@ -11,7 +11,9 @@ b200 10.0).  Three facts are compared with the row's family:
   declared  -- the manifest's `target.compute_capability` when the workload declares one, else the row's device class when its SM
                count is fixed (`declared_profile`; Build gets it as --target, and a Build-only stage then needs no device)
   device    -- the pod GPU's compute capability (nvidia-smi compute_cap; torch as fallback) when a GPU stage runs here or the Build
-               target is the device (no declared target)
+               target is the device (no declared target); a device-target Build under an empty CUDA_VISIBLE_DEVICES (a leased row,
+               `pipeline.gpu_lease`) is refused, since it would see no device and derive for the default target.  The Match's CPU
+               phase (`--match-phase cpu`: the check, the derives and the fold over GPU legs already captured) is no GPU stage
   built     -- build_summary.json step.target.compute_capability, checked again AFTER Build (--build-summary)
 A WAIVER (`--waiver <reason>`, row_pod.sh: $TARGET_FAMILY_WAIVER) turns a would-be failure into `WAIVED <reason>` -- recorded in
 stages.txt and in the record, never silent; the release canary sets it because its `__l40s__` base rows also run on the Hopper canary
@@ -29,6 +31,7 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.config import TARGET_NUM_SMS, TARGETS, RowEngine, option
 
 FAIL_CLASS = "PRECHECK_FAIL_TARGET_FAMILY"
@@ -87,7 +90,7 @@ def declared_target(workload: dict, row_id: str | None = None) -> tuple[int, int
 
 def device_cc() -> tuple[tuple[int, int] | None, str]:
     """(cc, source) of the GPU this process would use; (None, reason) when no device is visible."""
-    vis = os.environ.get("CUDA_VISIBLE_DEVICES")
+    vis = settings.CUDA_VISIBLE_DEVICES
     try:
         out = subprocess.run(["nvidia-smi", "--query-gpu=index,compute_cap", "--format=csv,noheader"], capture_output=True, text=True, timeout=20)
         rows = [r.strip() for r in out.stdout.splitlines() if r.strip()]
@@ -127,11 +130,11 @@ def fmt(cc: tuple[int, int] | None) -> str:
 
 
 def check(row_id: str, workload: dict | None, stages: list[str], *, want_device: bool = True, build_summary: dict | None = None,
-          waiver: str | None = None) -> dict:
+          waiver: str | None = None, devices: str | None = None, match_phase: str = "all") -> dict:
     tok, fam = row_family(row_id)
     rec: dict[str, Any] = {"schema": SCHEMA, "row": row_id, "device_token": tok, "row_family": list(fam) if fam else None,
-                           "stages": stages, "declared": None, "device": None, "device_source": None, "built": None,
-                           "mismatches": [], "ok": False, "fail_class": None, "waiver": waiver or None, "verdict": None}
+                           "stages": stages, "match_phase": match_phase, "declared": None, "device": None, "device_source": None,
+                           "built": None, "mismatches": [], "ok": False, "fail_class": None, "waiver": waiver or None, "verdict": None}
     if fam is None:
         rec["mismatches"].append({"fact": "row", "value": tok, "why": f"unknown device class {tok!r} in the row id (known: {sorted(DEVICE_FAMILY)})"})
     if workload is not None:
@@ -139,8 +142,13 @@ def check(row_id: str, workload: dict | None, stages: list[str], *, want_device:
         rec["declared"] = list(d) if d else None
         if d and fam and d != fam:
             rec["mismatches"].append({"fact": "declared", "value": fmt(d), "why": f"manifest target.compute_capability {fmt(d)} != row family {fmt(fam)}"})
-    gpu_stage = any(s in ("match", "commit", "bench") for s in stages)
+    gpu_stage = any(s in ("commit", "bench") or (s == "match" and match_phase != "cpu") for s in stages)
     build_on_device = "build" in stages and (workload is None or declared_target(workload, row_id) is None)
+    if want_device and build_on_device and devices == "":
+        rec["mismatches"].append({"fact": "device", "value": None, "why": "the Build's target is this host's GPU, which CUDA_VISIBLE_DEVICES "
+                                  "hides from it (a leased row): declare engine.target's compute_capability and num_sms, or the device "
+                                  "class's SM count in config.TARGET_NUM_SMS"})
+        build_on_device = False
     if want_device and (gpu_stage or build_on_device):
         dc, src = device_cc()
         rec["device"] = list(dc) if dc else None
@@ -193,6 +201,10 @@ class Options:
                              help="do not read the pod GPU (CPU-only host doing a declared-target Build)")
     waiver: str | None = option("--waiver", env="TARGET_FAMILY_WAIVER", default=None,
                                 help="named waiver (canary); recorded, never silent")
+    devices: str | None = option("--devices", env="CUDA_VISIBLE_DEVICES", env_empty=True, default=None,
+                                 help="the GPUs the row's stages see (empty under a GPU lease: a Build then has no device to target)")
+    match_phase: str = option("--match-phase", default="all", choices=("all", "gpu", "cpu"),
+                              help="the Match's phase (the row's --match-phase): cpu runs no GPU leg, so its match reads no device")
     out: str | None = option("--out", default=None, help="write the record here")
 
 
@@ -200,7 +212,8 @@ def main(a: Options) -> int:
     wl = json.load(open(a.workload)) if a.workload and os.path.exists(a.workload) else None
     bs = json.load(open(a.build_summary)) if a.build_summary and os.path.exists(a.build_summary) else None
     stages = [s for s in a.stages.replace(" ", "").split(",") if s]
-    rec = check(a.row, wl, stages, want_device=not a.no_device, build_summary=bs, waiver=a.waiver)
+    rec = check(a.row, wl, stages, want_device=not a.no_device, build_summary=bs, waiver=a.waiver, devices=a.devices,
+                match_phase=a.match_phase)
     if a.out:
         os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
         tmp = a.out + ".tmp"

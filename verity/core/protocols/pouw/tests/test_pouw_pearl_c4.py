@@ -25,13 +25,18 @@ import epoch_coins as E
 import pearl_c4_vectors as V
 from verity.errors import InvalidArtifact
 from verity.ml.circuits.silicon import fp32
-from verity.core.protocols.pouw.audit import Epoch, Prover, Workload
+from verity.core.protocols.pouw.audit import Epoch, Workload
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
 from verity.core.protocols.pouw.schemes import get
 from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c4 as F
 from verity.core.protocols.pouw.schemes import pearl_c_work as W
 from verity.core.protocols.pouw.schemes import pearl_kw as P
+
+# the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
+from clear_audit import Prover  # noqa: E402
+import clear_work as CW  # noqa: E402
 
 # the device-run replay is a benchmark's (benchmarks/pouw/pearl_c4), imported by name so that its forkserver workers find it
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "pearl_c4"))
@@ -310,7 +315,7 @@ def test_check_tile_refuses_a_weight_row_outside_the_rules(clause):
     finite (`pc4Sem_squaresOverflow`). The word clause's widened-BF16 half holds of every opened row, which is BF16 words
     (`parse_row`); `test_row_passes_asks_finite_widened_bf16_words` checks it on `row_passes`. The tile beside it, whose
     weight rows pass, is accepted, and so are both on the honest weight."""
-    from verity.core.protocols.pouw.audit import Verifier
+    from clear_audit import Verifier
 
     s = V.scheme("nvfp4", True)
     rows_a, rows_b = V.rows("weight-rule", "A", 16, K), V.rows("weight-rule", "B", 32, K)
@@ -413,7 +418,7 @@ def test_a_row_the_old_cap_rejected_is_admitted_and_debited_on_the_witness(block
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(blocks)
     assert sum(F.dead_blocks(s.fmt, x)) == blocks > (len(x) // s.fmt.block) // 64 and F.row_passes(s.fmt, x)
     assert sum(F.salt_dead(s.fmt, x, ops.a.alpha[0], ops.a.ae[0])[:blocks * s.fmt.block]) <= blocks
-    assert W.check_opened(s, record, tile, a_rows, b_rows, ops) is None
+    assert CW.check_opened(s, record, tile, a_rows, b_rows, ops) is None
     d = s.last_debit
     assert d.counts["screened_blocks_a"] == blocks and d.dead_pairs == 0
     assert d.counts["forming_elements"] == witness_elements(s, ops) < blocks * s.fmt.block
@@ -428,7 +433,7 @@ def test_a_row_whose_screened_blocks_pass_r1_is_rejected_by_f1_prime():
     F1′ past R1's bound, so declared credited it fails the tile."""
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(16)
     assert F.row_passes(s.fmt, x) and sum(F.salt_dead(s.fmt, x, ops.a.alpha[0], ops.a.ae[0])[:16 * s.fmt.block]) <= 16
-    reason = W.check_opened(s, record, tile, a_rows, b_rows, ops)
+    reason = CW.check_opened(s, record, tile, a_rows, b_rows, ops)
     assert reason is not None and "R1's bound" in reason
     assert s.row_debit_ratio(record, ops, "A", 0) > 1
     cap = s.tile_cap(record, ops, range(4), range(4))[1]
@@ -485,7 +490,7 @@ def test_item_3_never_charges_more_than_its_block_form(a_blocks, b_blocks):
     assert d.counts["screened_block_pairs"] == min(a_blocks, b_blocks)
     assert d.dead_pairs <= s.fmt.block * d.counts["screened_block_pairs"]
     if (a_blocks, b_blocks) == (4, 4):
-        assert d.dead_pairs == 4 and W.check_opened(s, record, tile, a_rows, b_rows, ops) is None
+        assert d.dead_pairs == 4 and CW.check_opened(s, record, tile, a_rows, b_rows, ops) is None
         assert s.fmt.block * d.counts["screened_block_pairs"] > s.tile_cap(record, ops, range(4), range(4))[1]
 
 
@@ -727,10 +732,10 @@ def test_r1_uncredits_a_row_whose_own_debit_passes_its_cell_cap():
     assert all(F.row_passes(s.fmt, F.parse_row(r, k)) for r in a_rows + b_rows)
     assert s.row_over_debit(W.UnitRecord(ctx.matmul, 4, k), ops, "A", 0)
     assert not any(s.row_over_debit(W.UnitRecord(ctx.matmul, 4, k), ops, side, p) for side in "AB" for p in (1, 2, 3))
-    assert W.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (0,)), tile, a_rows, b_rows, ops) is None
-    reason = W.check_opened(s, W.UnitRecord(ctx.matmul, 4, k), tile, a_rows, b_rows, ops)
+    assert CW.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (0,)), tile, a_rows, b_rows, ops) is None
+    reason = CW.check_opened(s, W.UnitRecord(ctx.matmul, 4, k), tile, a_rows, b_rows, ops)
     assert reason is not None and reason.startswith("A row 0 is credited") and "R1's bound" in reason
-    reason = W.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (0, 1)), tile, a_rows, b_rows, ops)
+    reason = CW.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (0, 1)), tile, a_rows, b_rows, ops)
     assert reason is not None and reason.startswith("A row 1 is excluded but passes the per-row rules")
     assert s.r1_rows(ctx, a_rows, b_rows, k) == ({0}, set())
 
@@ -748,7 +753,7 @@ def test_r1_allows_either_declaration_inside_its_tolerance_band():
     near = Near("nvfp4")
     assert near.r1_tolerance == F.R1_TOLERANCE > Fraction(1, 10 ** 10)
     for excluded in ((0,), (0, 1)):
-        reason = W.check_opened(near, W.UnitRecord(ctx.matmul, 4, k, excluded), tile, a_rows, b_rows, ops)
+        reason = CW.check_opened(near, W.UnitRecord(ctx.matmul, 4, k, excluded), tile, a_rows, b_rows, ops)
         assert reason is None or ("R1" not in reason and "per-row rules" not in reason)
 
 
@@ -802,7 +807,7 @@ def test_a_drawn_tile_evaluates_each_rows_f1_once():
 
     s.f1 = counted
     record = W.UnitRecord(ctx.matmul, 4, k, (0,))
-    assert W.check_opened(s, record, tile, a_rows, b_rows, ops) is None
+    assert CW.check_opened(s, record, tile, a_rows, b_rows, ops) is None
     assert sorted(calls) == sorted((id(side), p) for side in (ops.a, ops.b) for p in range(4))
     s.tile_cap(record, ops, range(4), range(4))
     assert len(calls) == 8
@@ -983,7 +988,7 @@ def test_d_sb_rejects_a_non_finite_input_word(word):
         F.parse_row(a[5], K)
     assert s.encode(ctx, s.noise(ctx), a, b, tile) is None
     record = W.UnitRecord(ctx.matmul, 16, K)
-    assert W.check_opened(s, record, tile, a, b, None) == "A row 5 is malformed: non-finite FP32 word"
+    assert CW.check_opened(s, record, tile, a, b, None) == "A row 5 is malformed: non-finite FP32 word"
 
 
 def lifecycle(s: F.PearlC4, real=20, salt_key=None):
@@ -1001,12 +1006,12 @@ def test_the_work_law_audits_pearl_c4():
     s = V.scheme("nvfp4", True)
     epoch, prover, tr, rows_a, rows_b = lifecycle(s)
     splits = {9: W.Split(K)}
-    records = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
+    records = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
     assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), ())]
-    out = W.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8)
+    out = CW.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8)
     assert out.audit.accepted and out.job == s.job_cost(16, K)
-    assert out.wref == W.cell_wref(s, records[0]) * 19 * 16
-    hides = W.audit(s, epoch, prover, tr, splits, [W.UnitRecord(epoch.workload.matmuls[0], 20, K)], E.challenger(), 8)
+    assert out.wref == CW.cell_wref(s, records[0]) * 19 * 16
+    hides = CW.audit(s, epoch, prover, tr, splits, [W.UnitRecord(epoch.workload.matmuls[0], 20, K)], E.challenger(), 8)
     assert not hides.audit.accepted
     assert any("A row 3 is credited but fails" in v.reason for v in hides.audit.verdicts if not v.ok)
 
@@ -1050,8 +1055,8 @@ def test_h3_draws_each_rows_e_a_from_its_own_digest():
 
     s, h0 = V.scheme("nvfp4", True, "h3"), V.scheme("nvfp4", True)
     assert (s.name, s.commitment_hash) == ("pearl-c-nvfp4-v0-h3", "hm96-sha512")
-    assert SchemeId.parse(s.name).hashing == "h3" and hash_format(s) is HASH_FORMATS["h3"] and W.row_cap(s)
-    assert hash_format(h0) is HASH_FORMATS["h0"] and not W.row_cap(h0) and h0.commitment_hash == "sha256"
+    assert SchemeId.parse(s.name).hashing == "h3" and hash_format(s) is HASH_FORMATS["h3"] and CW.row_cap(s)
+    assert hash_format(h0) is HASH_FORMATS["h0"] and not CW.row_cap(h0) and h0.commitment_hash == "sha256"
     assert dict(s.certificate.parameters)["hashing"] == "h3" and "hashing" not in dict(h0.certificate.parameters)
     assert all("cr/sha-512" in x.certificate.claims and not any("blake3" in c for c in x.certificate.claims) for x in (s, h0))
     for bad in ("h1", "h2", "h3s"):
@@ -1085,11 +1090,11 @@ def test_the_work_law_audits_pearl_c4_under_h3():
     s = V.scheme("nvfp4", True, "h3")
     epoch, prover, tr, rows_a, rows_b = lifecycle(s, salt_key=bytes(32))
     splits = {9: W.Split(K)}
-    records = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, transcript=tr)
+    records = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, transcript=tr)
     assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), ())]
-    assert W.volunteer(s, epoch, tr, records, {3: rows_a}, {9: rows_b}) == ({}, {})
-    assert W.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8).audit.accepted
-    h0 = W.audit(V.scheme("nvfp4", True), epoch, prover, tr, splits, records, E.challenger(), 8)
+    assert CW.volunteer(s, epoch, tr, records, {3: rows_a}, {9: rows_b}) == ({}, {})
+    assert CW.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8).audit.accepted
+    h0 = CW.audit(V.scheme("nvfp4", True), epoch, prover, tr, splits, records, E.challenger(), 8)
     assert not h0.audit.accepted and {v.reason for v in h0.audit.verdicts if not v.ok} == {"activation opening"}
 
 
@@ -1100,17 +1105,17 @@ def test_v_ex_a_voluntary_row_that_passes_the_rules_is_accepted():
     s = V.scheme("nvfp4", True)
     epoch, prover, tr, rows_a, rows_b = lifecycle(s)
     splits = {9: W.Split(K)}
-    plain = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
-    records = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, voluntary_a={3: [3, 5]},
+    plain = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
+    records = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, voluntary_a={3: [3, 5]},
                         voluntary_b={9: [2]})
     assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), (), (5,), (2,))]
     assert W.records_root(epoch.salt, epoch.weights_root, splits, records) != \
         W.records_root(epoch.salt, epoch.weights_root, splits, plain)
-    assert W.exclusion_tiles(s, records) == W.exclusion_tiles(s, plain)
-    out = W.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8)
-    assert out.audit.accepted and out.wref == W.cell_wref(s, records[0]) * 18 * 15
+    assert CW.exclusion_tiles(s, records) == CW.exclusion_tiles(s, plain)
+    out = CW.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8)
+    assert out.audit.accepted and out.wref == CW.cell_wref(s, records[0]) * 18 * 15
     as_excluded = [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3, 5), ())]
-    reasons = [v.reason for v in W.audit(s, epoch, prover, tr, splits, as_excluded, E.challenger(), 8).audit.verdicts]
+    reasons = [v.reason for v in CW.audit(s, epoch, prover, tr, splits, as_excluded, E.challenger(), 8).audit.verdicts]
     assert any("A row 5 is excluded but passes" in (r or "") for r in reasons)
 
 
@@ -1119,9 +1124,9 @@ def test_v_ex_leaves_r1_and_the_cap_on_the_credited_rows():
     tile whose credited rows' debit passes the cap.  The spike row itself may be given up instead of excluded."""
     s, ctx, tile, a_rows, b_rows, ops = r1_tile()
     k = ctx.matmul.shape.k
-    reason = W.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (), (), (1,)), tile, a_rows, b_rows, ops)
+    reason = CW.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (), (), (1,)), tile, a_rows, b_rows, ops)
     assert reason is not None and reason.startswith("A row 0 is credited") and "R1's bound" in reason
-    assert W.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (), (), (0,)), tile, a_rows, b_rows, ops) is None
+    assert CW.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (), (), (0,)), tile, a_rows, b_rows, ops) is None
 
     class NoR1(F.PearlC4):
         def row_debit_ratio(self, record, ops, side, pos):
@@ -1132,7 +1137,7 @@ def test_v_ex_leaves_r1_and_the_cap_on_the_credited_rows():
     a_rows, b_rows = dead_rows(2), dead_rows(2)
     tile = type(s.tiles(Shape(64, 1024, 64))[0])(range(2), range(2))
     ops = s.encode(ctx, s.noise(ctx), a_rows, b_rows, tile)
-    reason = W.check_opened(s, W.UnitRecord(ctx.matmul, 2, 1024, (), (), (0,)), tile, a_rows, b_rows, ops)
+    reason = CW.check_opened(s, W.UnitRecord(ctx.matmul, 2, 1024, (), (), (0,)), tile, a_rows, b_rows, ops)
     assert reason is not None and reason.startswith("the replayed debit") and "exceeds the cap" in reason
 
 
@@ -1141,9 +1146,9 @@ def test_v_ex_past_its_count_cap_fails_the_audit():
     s = V.scheme("nvfp4", True)
     epoch, prover, tr, rows_a, rows_b = lifecycle(s)
     splits, u = {9: W.Split(K)}, epoch.workload.matmuls[0]
-    assert (W.voluntary_cap(32), W.voluntary_cap(16), W.voluntary_cap(65)) == (1, 1, 2)
+    assert (CW.voluntary_cap(32), CW.voluntary_cap(16), CW.voluntary_cap(65)) == (1, 1, 2)
     for rec in (W.UnitRecord(u, 20, K, (3,), (), (5, 6)), W.UnitRecord(u, 20, K, (3,), (), (), (1, 2))):
-        out = W.audit(s, epoch, prover, tr, splits, [rec], E.challenger(), 8)
+        out = CW.audit(s, epoch, prover, tr, splits, [rec], E.challenger(), 8)
         assert not out.audit.accepted and "more voluntary rows than V-EX allows" in out.audit.verdicts[0].reason
     with pytest.raises(ValueError):
         W.UnitRecord(u, 20, K, (3,), (), (3,))
@@ -1161,15 +1166,15 @@ def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_cap():
     s = Heavy("nvfp4", k_min=128, tile=(16, 16), n_min=16)
     epoch, prover, tr, rows_a, rows_b = lifecycle(s)
     splits = {9: W.Split(K)}
-    records = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
-    va, vb = W.volunteer(s, epoch, tr, records, {3: rows_a}, {9: rows_b})
+    records = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
+    va, vb = CW.volunteer(s, epoch, tr, records, {3: rows_a}, {9: rows_b})
     assert (va, vb) == ({3: [7]}, {})
-    fixed = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, voluntary_a=va, voluntary_b=vb)
-    assert W.audit(s, epoch, prover, tr, splits, fixed, E.challenger(), 8).audit.accepted
+    fixed = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, voluntary_a=va, voluntary_b=vb)
+    assert CW.audit(s, epoch, prover, tr, splits, fixed, E.challenger(), 8).audit.accepted
     tile = s.tiles(epoch.workload.matmuls[0].shape)[0]
     ctx = Context(epoch.salt, epoch.workload.matmuls[0], tr.activation_roots[0], epoch.weight_roots[9])
     ops = s.encode(ctx, s.noise(ctx), rows_a[:16], rows_b, tile)
-    assert "exceeds the cap" in W.check_opened(s, records[0], tile, rows_a[:16], rows_b, ops)
+    assert "exceeds the cap" in CW.check_opened(s, records[0], tile, rows_a[:16], rows_b, ops)
 
 
 def device_dump(path, s: F.PearlC4, swap_leaves=False, flip_root_a=False) -> None:
@@ -1237,7 +1242,7 @@ def test_replay_rejects(tmp_path):
 
 
 def test_replay_declares_r1_rows_and_its_workers_give_the_serial_transcript(tmp_path):
-    """The replay's prove declares R1's rows as the honest prover does (`pearl_c_work.declare` on the transcript): A row 5,
+    """The replay's prove declares R1's rows as the honest prover does (`clear_work.declare` on the transcript): A row 5,
     the assessor's spike row, passes the per-row rules but its own F1′ passes R1's bound, so prove excludes it and the
     verifier accepts.  Credited, as prove declared before R1 (r20261001-134930-22d2's m64-n512-k2048 unit, B row 386), it
     rejects.  prove maps R1 row by row over its workers, and two workers give the one worker's transcript."""
@@ -1250,7 +1255,7 @@ def test_replay_declares_r1_rows_and_its_workers_give_the_serial_transcript(tmp_
     epoch = Epoch.unverified(Workload((unit,)), prover.weight_roots, b"beacon")
     tr = prover.prove(epoch, {3: rows_a})
     assert F.row_passes(s.fmt, F.parse_row(rows_a[5], K))
-    honest = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, {9: W.Split(K)}, real_rows={3: 20}, transcript=tr)
+    honest = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, {9: W.Split(K)}, real_rows={3: 20}, transcript=tr)
     assert honest == [W.UnitRecord(unit, 20, K, (5,), ())]
     call = {"scheme": s.name, "shape": [32, K, 16], "index": 3, "weight": 9, "real_rows": 20, "epoch_beacon": b"beacon".hex()}
     R.write_dump(tmp_path, call, b"".join(rows_a), b"".join(rows_b), tr.activation_roots[0], prover.weight_roots[9],
@@ -1290,13 +1295,13 @@ def test_b_tilde_is_keyed_by_this_jobs_salt(tmp_path):
     s = V.scheme("nvfp4", True)
     epoch, prover, tr, rows_a, rows_b = lifecycle(s)
     splits = {9: W.Split(K)}
-    records = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
-    assert W.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8).audit.accepted
+    records = CW.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
+    assert CW.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8).audit.accepted
     for n, salt in enumerate((b"another epoch's salt", b"")):
         cheat = stale_b(s, salt)
         assert F.seed_b(salt, prover.weight_roots[9]) != F.seed_b(epoch.salt, prover.weight_roots[9])
         liar = Prover(cheat, {9: rows_b})
-        out = W.audit(s, epoch, liar, liar.prove(epoch, {3: rows_a}), splits, records, E.challenger(), 8)
+        out = CW.audit(s, epoch, liar, liar.prove(epoch, {3: rows_a}), splits, records, E.challenger(), 8)
         assert not out.audit.accepted
         assert {v.reason for v in out.audit.verdicts if not v.ok} == {"checked values"}
         device_dump(tmp_path / str(n), cheat)

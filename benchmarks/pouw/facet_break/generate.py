@@ -47,7 +47,7 @@ LANES = {"iadd3": ("L_IADD3", "IADD3", "ALU"),
          "axi": ("L_AXI", ("IADD3", "LOP3.LUT"), "ALU"), "shfi": ("L_SHFI", "SHF.*", "ALU"),
          "prmti": ("L_PRMTI", "PRMT", "ALU"), "imadwi": ("L_IMADWI", "IMAD.WIDE.U32", "IMADW"),
          "dp4a": ("L_DP4A", "IDP.4A.*", "IMAD"), "dp4ai": ("L_DP4AI", "IDP.4A.*", "IMAD"),
-         "uaxi": ("L_UAXI", ("UIADD3", "ULOP3.LUT"), "UNI")}
+         "uaxi": ("L_UAXI", ("UIADD3", "ULOP3.LUT"), "UNI"), "shfl": ("L_SHFL", "SHFL.BFLY", "SHFL")}
 #: the lanes the targeted part puts beside IMMA.16832 (one class each: the 2-D sections of the joint rows)
 TARGET_LANES = ("sel", "imadw", "iadd64", "ffma", "fmul", "dmul", "dfma", "lop3", "iadd3", "shf", "prmt", "imad",
                 "hfma2", "mnmx", "mufu", "popc", "imadi", "ffmai")
@@ -69,7 +69,8 @@ LOADS = {"lds32": ("D_LDS32", "LDS", "LDS32", True), "lds64": ("D_LDS64", "LDS.6
          "ldg64": ("D_LDG64", "LDG.E.64", None, False), "ldg128": ("D_LDG128", "LDG.E.128", "LDG128", False),
          "tld1": ("D_TLD1", "TLD.LZ", "TLD1", False), "tld2": ("D_TLD2", "TLD.LZ", "TLD2", False),
          "tld4": ("D_TLD4", "TLD.LZ", "TLD4w", False), "tld4n": ("D_TLD4N", "TLD.LZ", "TLD4w", False),
-         "ldg256": ("D_LDG256", "LDG.E.ENL2.256", None, False)}
+         "ldg256": ("D_LDG256", "LDG.E.ENL2.256", None, False),
+         "ldsm4": ("D_LDSM4", "LDSM.16.M88.4", "LDSM_X4", True), "sts128": ("D_STS128", "STS.128", "STS128", True)}
 #: the loads of the mem family (its seeded grid as r20261017-063107-835c ran it)
 MEM_LOADS = ("lds32", "lds64", "lds128", "ldsu8", "ldg32", "ldgnc32", "ldg64", "ldg128", "tld1", "tld2", "tld4", "tld4n")
 PATS = {"line": "P_LINE", "bcast": "P_BCAST", "quad": "P_QUAD"}
@@ -250,7 +251,7 @@ def targeted() -> list[dict]:
 def sampled(seed: int, n: int) -> list[dict]:
     rng = random.Random(seed)
     out = []
-    lanes = sorted(LANES)
+    lanes = sorted(set(LANES) - set(RT9_LANES))  # a seed's grid stays the one its batch ran
     for _ in range(n):
         kind = rng.choices(("mix", "spec"), weights=(4, 1))[0]
         form = rng.choice(sorted(FORMS))
@@ -782,6 +783,93 @@ def targeted_rt8() -> list[dict]:
     return out
 
 
+#: RT3-120's lane classes, which JI3t_0 pools at FMUL's coefficient and no fit run put beside a MMA; `sampled` leaves
+#: them out
+RT9_LANES = ("shfl",)
+#: the load and store kinds RT3-120 puts at the binding schedule: the fit's table loads, and a GEMM's operand staging
+RT9_LOADS = ("lds32", "lds128", "ldg32", "ldg128", "tld1", "ldsm4", "sts128")
+RT9_BASE = "jm_i16832_fmuli_q120_p0_a3u20_w8"
+
+
+def targeted_rt9() -> list[dict]:
+    """RT3-120 against VF3s-16's JI3t_0 (the measured headline's π*), which prices every vector, memory and atomic class
+    at FMUL's coefficient: what its fit runs never put at the binding schedule (IMMA.16832 on 2-3 accumulators, unroll
+    4-16, 2 warps a SMSP, where FMUL beside it is tight). Each load and store kind at 2-8 a 8 MMAs, alone and under 96-120
+    FMUL; SHFL alone and alternating with FMUL; the 64-bit lanes (IMAD.WIDE, IADD.64) alone and beside FMUL;
+    HMMA.16816.F16 (MMA's least) beside the shared kinds at 2 and 4 warps; and RT-FACET's tight program, three copies
+    through the batch."""
+    i = "i16832"
+    rest: list[dict] = []
+    for d in RT9_LOADS:
+        for na in (2, 3):
+            for u, qd in ((4, 8), (8, 2), (8, 4), (16, 2)):
+                for ls, q in (((), 0), ("fmuli", 96), ("fmuli", 112), ("fmuli", 120)):
+                    rest.append(_jm(i, ls, q, 2, na=na, u=u, d=d, qd=qd))
+    for na in (2, 3):
+        for u in (8, 16):
+            for ls, q in (("shfl", 16), ("shfl", 32), ("shfl", 64), (("fmuli", "shfl"), 96), (("fmuli", "shfl"), 120),
+                          (("fmuli", "shfl"), 128)):
+                rest.append(_jm(i, ls, q, 2, na=na, u=u))
+            for ls in ("imadwi", "iadd64", ("fmuli", "imadwi"), ("fmuli", "iadd64")):
+                for q in (96, 120):
+                    rest.append(_jm(i, ls, q, 2, na=na, u=u))
+    for d in ("lds128", "ldsm4", "sts128"):
+        for u, qd in ((8, 2), (8, 4)):
+            for ls, q in (((), 0), ("fmuli", 128), ("fmuli", 160)):
+                for w in (2, 4):
+                    rest.append(_jm("h16816f16", ls, q, w, na=2, u=u, d=d, qd=qd))
+    base = [g for g in targeted_rt4() if name_of(g) == RT9_BASE]
+    out: list[dict] = []
+    for k in range(3):
+        out += [g | {"rep": k + 1} for g in base] + rest[k * len(rest) // 3:(k + 1) * len(rest) // 3]
+    return out
+
+
+#: the ALU- and IMAD-pipe lanes JI3t_0 pools at FMUL's coefficient, which r4 and RT-FACET r1 timed beside IMMA.16832 only
+#: at unroll 1: alone, and alternating with FMUL
+RT10_LANES = ("axi", "shfi", "prmti", ("fmuli", "axi"), ("fmuli", "shfi"), ("fmuli", "prmti"), ("fmuli", "imadi"),
+              ("fmuli", "dp4ai"))
+
+
+def targeted_rt10() -> list[dict]:
+    """RT3-120 against JI3t_0 again: the ALU-pipe lanes (IADD3/LOP3, SHF and PRMT by an immediate) and IMAD-pipe ones
+    beside FMUL at the binding schedule (IMMA.16832 on 2-3 accumulators, unroll 16 and 20, 2 warps a SMSP, 112-144 lane
+    ops a 8 MMAs), where r4 and RT-FACET r1 never took them past unroll 1; and RT-FACET's tight program, three copies
+    through the batch."""
+    rest = [_jm("i16832", ls, q, 2, na=na, u=u) for ls in RT10_LANES for na in (2, 3) for u in (16, 20)
+            for q in (112, 128, 144)]
+    base = [g for g in targeted_rt4() if name_of(g) == RT9_BASE]
+    out: list[dict] = []
+    for k in range(3):
+        out += [g | {"rep": k + 1} for g in base] + rest[k * len(rest) // 3:(k + 1) * len(rest) // 3]
+    return out
+
+
+#: the uniform datapath, which JI3t_0 prices below every vector class (UNI 0.714566 against 0.963546) and RT-FACET r1 and
+#: r1b timed beside IMMA.16832 only up to unroll 8: alternating with each FMA-pipe lane, with FMUL and the ALU lane, and
+#: alone
+RT11_PAIRS = (("fmuli", "uaxi"), ("faddi", "uaxi"), ("ffmai", "uaxi"))
+
+
+def targeted_rt11() -> list[dict]:
+    """RT3-120 against JI3t_0 a third time: the uniform datapath (UIADD3/ULOP3) at the binding schedule (IMMA.16832 on 2-3
+    accumulators, unroll 12-20, 2 warps a SMSP), where RT-FACET r1 and r1b never took it past unroll 8: alternating with
+    FMUL, FADD and FFMA at 96-176 lane ops a 8 MMAs, with FMUL and the ALU lane at 120 and 144, and alone at 32-96; and
+    RT-FACET's tight program, three copies through the batch."""
+    i = "i16832"
+    rest: list[dict] = []
+    for na in (2, 3):
+        for u in (12, 16, 20):
+            rest += [_jm(i, ls, q, 2, na=na, u=u) for ls in RT11_PAIRS for q in (96, 120, 144, 176)]
+            rest += [_jm(i, ("fmuli", "axi", "uaxi"), q, 2, na=na, u=u) for q in (120, 144)]
+            rest += [_jm(i, "uaxi", q, 2, na=na, u=u) for q in (32, 64, 96)]
+    base = [g for g in targeted_rt4() if name_of(g) == RT9_BASE]
+    out: list[dict] = []
+    for k in range(3):
+        out += [g | {"rep": k + 1} for g in base] + rest[k * len(rest) // 3:(k + 1) * len(rest) // 3]
+    return out
+
+
 def sampled_ji(seed: int, n: int) -> list[dict]:
     rng = random.Random(seed)
     lanes = sorted(set(JI_NEW) | set(JI_OLD))
@@ -814,7 +902,8 @@ def grid(seed: int = 0, n: int = 0, targeted_part: bool = True, family: str = "m
               "rt2": (targeted_rt2, sampled_ji), "rt3": (targeted_rt3, sampled_ji),
               "rt4": (targeted_rt4, sampled_ji), "rt5": (targeted_rt5, sampled_ji),
               "rt6": (targeted_rt6, sampled_ji), "rt7": (targeted_rt7, sampled_ji),
-              "rt8": (targeted_rt8, sampled_ji)}[family]
+              "rt8": (targeted_rt8, sampled_ji), "rt9": (targeted_rt9, sampled_ji),
+              "rt10": (targeted_rt10, sampled_ji), "rt11": (targeted_rt11, sampled_ji)}[family]
     for g in (tg() if targeted_part else []) + sm(seed, n):
         nm = name_of(g)
         if nm not in seen:
@@ -902,7 +991,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--n", type=int, default=0, help="sampled programs beside the targeted part")
     p.add_argument("--no-targeted", action="store_true")
     p.add_argument("--family", choices=("mix", "mem", "fine", "l2", "ji", "jifine", "jipair", "r4", "rt", "rt2", "rt3",
-                                             "rt4", "rt5", "rt6", "rt7", "rt8"),
+                                             "rt4", "rt5", "rt6", "rt7", "rt8", "rt9", "rt10", "rt11"),
                    default="mix",
                    help="mix: MMA forms and lane ops (mix.cuh); mem: the table routes' loads (mem.cuh); fine: the "
                         "near-frontier sweep of the lanes the first batch beat or nearly beat; l2: L2-resident loads "
@@ -913,7 +1002,10 @@ def main(argv: list[str] | None = None) -> int:
                         "rt's unroll and uniform co-issue crossed, unroll 8 for the instruction cache; rt3: the FMA "
                         "lane at unroll 8 to 32, past rt2's best; rt4: rt3's break again and around it; rt5: rt3's unroll on every other MMA form; rt6: rt5's break past its "
                         "grid's edge; rt7: the warp-specialized programs with 64-256 lane ops a trip; rt8: two MMA "
-                        "forms in turn in one loop, beside FMUL and alone, and the pipe pairs DS-120 prices together")
+                        "forms in turn in one loop, beside FMUL and alone, and the pipe pairs DS-120 prices together; "
+                        "rt9: loads, LDSM, STS, SHFL and the 64-bit lanes at rt4's binding schedule (JI3t_0's pooled "
+                        "classes); rt10: the ALU- and IMAD-pipe lanes there, alone and beside FMUL; rt11: the "
+                        "uniform datapath there, alone and beside the FMA-pipe lanes")
     p.add_argument("--forms", help="keep only the programs of these MMA forms (comma-separated, e.g. i16832)")
     p.add_argument("--only", type=Path, help="keep only the programs named in this file (one a line): the gate's passes")
     p.add_argument("--emit", type=Path, help="write the probe source here (default: print the programs as JSON lines)")

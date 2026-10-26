@@ -10,6 +10,8 @@ or a step off it that commits one; and a sparse MLA call boundary bound at a ste
 bound to another step's tensor or a layer's other output, or claimed without the attention source attached."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import copy
 import types
 from collections import Counter
@@ -25,6 +27,7 @@ from verity_vllm.acquire.sources import attention_source as AS
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import route_source as RS
 from verity_vllm.commit import binding as B
+from verity_vllm.query.manifest.bind import Binder, source_ports
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TensorMeta
 
 NORM_ROPE = G.fused_norm_rope
@@ -101,6 +104,7 @@ def expected(tid: str, seen: dict[str, Any]) -> torch.Tensor:
             "attn": lambda: seen["attn_mqa"], "attn.mha": lambda: seen["attn_mha"]}[tid]()
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("target", [True, False], ids=["on-target", "off-target"])
 def test_each_step_binds_once_each_name_capture_map_ids_lists(runs, capsys, target):
     r = runs[target]
@@ -111,6 +115,7 @@ def test_each_step_binds_once_each_name_capture_map_ids_lists(runs, capsys, targ
     assert r.att.stats["unpaired"] == 0 and r.att.stats["layout_refused"] == 0 and r.att.stats["mha_unbound"] == 0
 
 
+@pytest.mark.slow
 def test_each_bound_value_is_the_one_the_layer_computed(runs):
     r = runs[True]
     by_name = {n: (tid, i) for tid, layers in r.att.names.items() for i, n in layers.items()}
@@ -126,6 +131,7 @@ def test_each_bound_value_is_the_one_the_layer_computed(runs):
     assert rows == {"v_absorb": 1, "attn": 1, "attn.mha": 3}, "a mixed step's decode row goes through MQA, its prefill rows through MHA"
 
 
+@pytest.mark.slow
 def test_the_shared_top_k_buffer_is_flushed_as_soon_as_it_is_bound(runs):
     log = runs[True].log
     topk = [j for j, (what, name) in enumerate(log) if what == "acquire" and name.endswith("self_attn/topk")]
@@ -144,6 +150,7 @@ def test_pitched_2d_is_the_native_collectors_staging_rule():
     assert not AS.pitched_2d(base[::2, ::2]), "every other word of every other row"
 
 
+@pytest.mark.slow
 def test_every_value_handed_to_the_committer_is_one_the_native_collector_stages(runs):
     """The native collector stages a contiguous tensor or equally spaced contiguous rows and raises on anything else ("layout is
     not 2-D pitched", every rank of r20261013-002759-c965 on 8x H200). The W_UK_T product of a step of more than one token is a
@@ -167,6 +174,7 @@ def routes_bad(violation: dict[str, Any], names: set[str], counts: tuple[int, in
     return violation["routes_bad"] == dict(sorted(want.items())[:8]) and violation["routes_bad_n"] == len(want)
 
 
+@pytest.mark.slow
 def test_identity_check_holds_a_step_to_the_target_only_taps_on_the_target_only(runs, capsys):
     q8 = f"model.layers.{min(INDEXER)}.self_attn/index_q"
     on, off = runs[True], runs[False]
@@ -182,6 +190,7 @@ def test_identity_check_holds_a_step_to_the_target_only_taps_on_the_target_only(
     assert [x["step"] for x in v] == [1] and routes_bad(v[0], {q8}, (1, 0)), "off the target a step that commits it fails"
 
 
+@pytest.mark.slow
 def test_a_cache_write_the_source_did_not_see_binds_no_cache_rows(capsys):
     r = AttnRun()
     wrapped, G.fused_norm_rope = G.fused_norm_rope, NORM_ROPE
@@ -197,6 +206,7 @@ def test_a_cache_write_the_source_did_not_see_binds_no_cache_rows(capsys):
     assert routes_bad(v[0], rows, (0, 1))
 
 
+@pytest.mark.slow
 def test_a_prefill_over_a_chunked_context_leaves_its_mha_output_unbound(capsys):
     md = metadata(prefill=True, dense=True)
     md.prefill.chunked_context = types.SimpleNamespace()
@@ -211,6 +221,7 @@ def test_a_prefill_over_a_chunked_context_leaves_its_mha_output_unbound(capsys):
     assert routes_bad(v[0], mha, (0, 1)), "the step fails closed"
 
 
+@pytest.mark.slow
 def test_the_arena_estimate_covers_what_each_step_binds(runs):
     for r in runs.values():
         est = r.att.extra_step_bytes({}, None)
@@ -220,6 +231,7 @@ def test_the_arena_estimate_covers_what_each_step_binds(runs):
     assert runs[True].att.extra_step_bytes({}, None)["per_token_bytes"] > runs[False].att.extra_step_bytes({}, None)["per_token_bytes"]
 
 
+@pytest.mark.slow
 def test_install_wraps_each_call_and_uninstall_restores_them():
     model = glm_model()
     src = RS.RouteSource(None, model, CMAP, target=True)
@@ -268,11 +280,11 @@ PD = "f" * 64
 
 
 def boundary(step: int, layer: int, rows: int, **kw: Any) -> dict[str, Any]:
-    """A sparse MLA call boundary of rank 3 as the GLM-5.3 TP manifest spells it: the Build's export-wrapper prefix, fx node
-    `dsa_indexer_attn_<step * L + layer>`, [rows, NHL * KVL] bf16 words."""
+    """A sparse MLA call boundary of rank 3 as the GLM-5.3 TP manifest spells it: fx node `dsa_indexer_attn_<step * L + layer>`,
+    [rows, NHL * KVL] bf16 words."""
     k = step * L + layer
     return {"family": "call_boundaries", "request_id": "r0", "step": step, "engine_step": step, "invocation": 0, "rank": 3,
-            "op_path": f"inner.model.model.layers.{layer}.self_attn/dsa_indexer_attn" + (f"_{k}" if k else ""), "output_member": "out",
+            "op_path": f"model.layers.{layer}.self_attn/dsa_indexer_attn" + (f"_{k}" if k else ""), "output_member": "out",
             "element_range": [0, rows * WIDTH], "rows": rows, "width": WIDTH, "dtype": "bf16", "spec": "SparseMlaSplit_v1{T=1,NH=8}", **kw}
 
 
@@ -295,27 +307,31 @@ def bruns() -> dict[bool, AttnRun]:
     return out
 
 
-def test_the_source_claims_a_layers_sparse_mla_output_and_nothing_else():
+def test_the_source_claims_the_attention_bodys_call_boundaries_its_taps_bind_and_nothing_else():
+    """By the Call's Definition and the layer's attention module: the fx node's name does not enter."""
     b = boundary(1, 2, 1)
     assert AS.claims(b) == AS.BINDER and CB.claimed(b) == AS.BINDER and not CB.manifest_sites({"identities": [b]})
-    assert AS.sparse_mla_layer(b) == 2 and AS.sparse_mla_layer(boundary(0, 0, 3)) == 0
-    for other in ({"spec": "SparseMla_v1{T=1}"},):
-        assert AS.claims({**b, **other}) == AS.BINDER
+    assert AS.call_tap(b) == (AS.ATTN_MQA, 2) and AS.call_tap(boundary(0, 0, 3)) == (AS.ATTN_MQA, 0)
+    for other in ({"spec": "SparseMla_v1{T=1}"}, {"op_path": "model.layers.2.self_attn/dsa_norm_rope_9"}):
+        assert AS.call_tap({**b, **other}) == (AS.ATTN_MQA, 2), other
+    assert AS.call_tap({**b, "spec": "BatchedGemm_v1{B=8}", "op_path": "model.layers.2.self_attn/bmm_3"}) == (AS.ARGUMENTS["ql_nope"], 2)
     for other in ({"spec": "DsaMqaLogits_v3{N=2}"}, {"output_member": "lse"}, {"dtype": "f32"}, {"family": "instance_outputs"},
-                  {"op_path": "inner.model.model.layers.2.self_attn/dsa_norm_rope_9"}, {"op_path": "inner.model.model.layers.2.mlp/dsa_indexer_attn_9"}):
+                  {"op_path": "model.layers.2.mlp/dsa_indexer_attn_9"}, {"op_path": "model.layers.2.self_attn"}):
         assert AS.claims({**b, **other}) is None, other
 
 
-def test_each_sparse_mla_call_boundary_binds_the_attn_tensor_of_its_layer_and_step(bruns):
+@pytest.mark.slow
+def test_each_sparse_mla_call_boundary_holds_the_attn_tensor_of_its_layer_and_step(bruns):
     on = bruns[True]
-    attn = on.att.names[AS.ATTN_MQA]
-    want = {attn[i]: {1: (boundary(1, i, 1)["op_path"], "out"), 3: (boundary(3, i, 3)["op_path"], "out")} for i in range(L)}
-    assert on.att.name_bindings() == want and on.att.stats["call_boundaries_held"] == 2 * L
-    assert len(on.com.errors) == 1 and on.com.errors[0].startswith("attention: layer 0 at engine step 2: forward_mqa returned (1, ")
+    labels = {n.rsplit("/", 1)[1] for n in on.att.names[AS.ATTN_MQA].values()}
+    assert len(labels) == 1 and all(on.att.ports()[x] == AS.TAP_PORTS[AS.ATTN_MQA] for x in labels)
+    assert on.att.stats["call_boundaries_held"] == 2 * L
+    assert len(on.com.errors) == 1 and on.com.errors[0].startswith(f"attention: layer 0 at engine step 2: tap {AS.ATTN_MQA} is (1, ")
     off = bruns[False]
-    assert off.att.name_bindings() == {} and off.com.errors == [], "off the target the attn tap is not bound, so neither are they"
+    assert off.att.stats["call_boundaries_held"] == 0 and off.com.errors == [], "off the target the attn tap is not bound, so neither are they"
 
 
+@pytest.mark.slow
 def test_the_binding_map_covers_each_held_call_boundary_exactly_and_names_the_rest(bruns):
     on = bruns[True]
     layouts = {}
@@ -327,24 +343,51 @@ def test_the_binding_map_covers_each_held_call_boundary_exactly_and_names_the_re
             m.stream_off, off = off, off + nb
             layouts[k].append(m)
     steps = [types.SimpleNamespace(root=bytes([k]) * 32) for k in range(len(STEPS))]
-    bmap = B.build_binding_map(layouts, steps, b"\0" * 32, PD, rank=3, name_bindings=B.source_name_bindings([on.att]))
+    bmap = B.build_binding_map(layouts, steps, b"\0" * 32, PD, rank=3, binder=Binder(BOUNDARIES, rank=3, ports=source_ports([on.att])))
     pop = [B.identity(PD, r["request_id"], r["engine_step"], 0, r["op_path"], "out", *r["element_range"], 3) for r in BOUNDARIES]
     cov = B.coverage_check(pop, bmap)
     assert (cov["expected_n"], cov["bound_n"], cov["ambiguous_n"]) == (len(BOUNDARIES), 2 * L, 0)
     assert sorted((m["step"], m["op_path"]) for m in cov["missing"]) == [(0, boundary(0, 0, 3)["op_path"]), (2, boundary(2, 0, 4)["op_path"])]
     attn = on.att.names[AS.ATTN_MQA]
-    tapped = [e for e in bmap["entries"] if e.get("observation") == "tap"]
-    assert len(tapped) == 2 * L
+    tapped = [e for e in bmap["entries"] if e.get("observation") == "port"]
+    assert len(tapped) == 2 * L + 1, "every attn tensor at a step whose layer has its call boundary, the mixed step's among them"
     for e in tapped:
-        i, st, rows = AS.sparse_mla_layer({**e["identity"], "family": CB.FAMILY, "dtype": "bf16", "spec": "SparseMlaSplit_v1"}), e["identity"]["step"], e["encoding"]["shape"][0]
-        assert e["name"] == attn[i] and st in (1, 3) and e["encoding"]["shape"] == [rows, G.NHL, G.KVL]
-        assert e["identity"]["element_range"] == [0, rows * WIDTH] == boundary(st, i, rows)["element_range"]
-    assert not [e for e in bmap["entries"] if e["name"] == attn[0] and e["identity"]["step"] == 2 and e["identity"]["op_path"] != split_attn(attn[0])], \
-        "the mixed step's 1-row tensor stays under its own name"
+        i, st, rows = AS.call_tap({**e["identity"], "family": CB.FAMILY, "dtype": "bf16", "spec": "SparseMlaSplit_v1"})[1], e["identity"]["step"], e["encoding"]["shape"][0]
+        assert e["name"] == attn[i] and e["encoding"]["shape"] == [rows, G.NHL, G.KVL]
+        assert e["identity"]["op_path"] == next(r["op_path"] for r in BOUNDARIES if r["step"] == st and AS.call_tap(r)[1] == i)
+    mixed = next(e for e in tapped if e["identity"]["step"] == 2)
+    assert mixed["identity"]["element_range"] == [0, WIDTH] != boundary(2, 0, 4)["element_range"], "bound, and short of the 4 rows it must hold"
 
 
-def split_attn(name: str) -> str:
-    return B.split_name(name)[0]
+def test_a_step_batching_requests_at_different_steps_of_their_own_holds_and_maps_each_requests_call_boundary():
+    """[GLM-5.3 B8 mixed arrivals] Each request's Program numbers its fx nodes over its own steps, so engine step 9 spells r0's sparse
+    MLA (its step 9, 1 row) `dsa_indexer_attn_<9 * L>` and r1's (its step 0, 3 rows) `dsa_indexer_attn`: the step's one attn tensor
+    holds both, and the binding map writes each request's rows under its own spelling."""
+    rows = (boundary(9, 0, 1), {**boundary(0, 0, 3), "request_id": "r1", "engine_step": 9})
+    src = object.__new__(AS.AttentionSource)
+    src.c, src.stats, src.boundaries = types.SimpleNamespace(errors=[]), {"call_boundaries_held": 0}, {}
+    for r in rows:
+        src.boundaries.setdefault((9, *AS.call_tap(r)), []).append(r)
+    job = types.SimpleNamespace(step=9)
+    src._hold_boundary(AS.ATTN_MQA, 0, torch.zeros(4, G.NHL, G.KVL, dtype=torch.bfloat16), job)
+    assert (src.c.errors, src.stats["call_boundaries_held"]) == ([], 2)
+    src._hold_boundary(AS.ATTN_MQA, 0, torch.zeros(3, G.NHL, G.KVL, dtype=torch.bfloat16), job)
+    assert len(src.c.errors) == 1, "short of the 4 rows the two requests state"
+    src.boundaries[(9, AS.ATTN_MQA, 0)].append({**rows[0], "op_path": rows[1]["op_path"]})
+    src._hold_boundary(AS.ATTN_MQA, 0, torch.zeros(5, G.NHL, G.KVL, dtype=torch.bfloat16), job)
+    assert len(src.c.errors) == 2, "two boundaries of one request at one layer and step"
+
+    name = "model.layers.0.self_attn/attn"
+    m = TensorMeta(0, name, "bfloat16", (4, G.NHL, G.KVL), 4 * WIDTH * 2, GPU_CHUNK_BYTES, 0, 1)
+    m.stream_off = 0
+    steps = [types.SimpleNamespace(root=bytes([k]) * 32) for k in range(10)]
+    binder = Binder(rows, rank=3, ports={"attn": AS.TAP_PORTS[AS.ATTN_MQA]})
+    bmap = B.build_binding_map({9: [m]}, steps, b"\0" * 32, PD, rank=3, request_rows={9: [("r0", 0, 1), ("r1", 1, 4)]}, binder=binder)
+    got = sorted((e["identity"]["request_id"], e["identity"]["op_path"], e["identity"]["element_range"], e["element_offset"]) for e in bmap["entries"])
+    assert got == [("r0", rows[0]["op_path"], [0, WIDTH], 0), ("r1", rows[1]["op_path"], [0, 3 * WIDTH], WIDTH)]
+    pop = [B.identity(PD, r["request_id"], r["engine_step"], 0, r["op_path"], "out", *r["element_range"], 3) for r in rows]
+    cov = B.coverage_check(pop, bmap)
+    assert (cov["expected_n"], cov["bound_n"], cov["ambiguous_n"], cov["missing"]) == (2, 2, 0, [])
 
 
 def test_a_non_contiguous_tap_is_staged_as_a_contiguous_copy_held_for_the_step():

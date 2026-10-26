@@ -14,7 +14,6 @@ import subprocess
 import sys
 import threading
 import urllib.parse
-from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -27,7 +26,6 @@ C = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(C)
 
 READ, WRITE = ("reader", "read-secret"), ("writer", "write-secret")
-REV = "1" * 40
 PLAT = "x86_64-unknown-linux-gnu"
 
 
@@ -220,6 +218,40 @@ def test_the_server_here_refuses_a_bad_signature(s3):
     with pytest.raises(C.urllib.error.HTTPError) as e:
         C.S3(url, "verity-lean-cache", READ[0], "wrong").get("main/x")
     assert e.value.code == 403
+
+
+def test_a_transient_answer_is_retried_and_any_other_is_raised_at_once(monkeypatch):
+    """R2 answered one request of the first publish with a working key with an HTTP 500, and the publish ended (21 Oct).
+    A 500, 502, 503 or 504, or no connection, is retried after each of `RETRY_S`, signed anew; a 403 or 404 is not."""
+    answers, waits, dates = [], [], []
+
+    def urlopen(req, timeout):
+        dates.append(req.headers["X-amz-date"])
+        a = answers.pop(0)
+        if isinstance(a, int):
+            raise C.urllib.error.HTTPError(req.full_url, a, "x", {}, None)
+        if isinstance(a, Exception):
+            raise a
+        return a
+
+    ticks = iter(range(100))
+    monkeypatch.setattr(C.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(C, "_sleep", waits.append)
+    s3 = C.S3("https://r2.example", "b", "k", "s",
+              now=lambda: datetime.datetime(2026, 10, 21, 0, 0, next(ticks), tzinfo=datetime.timezone.utc))
+    answers[:] = [500, C.urllib.error.URLError("reset"), 503, "ok"]
+    assert s3.open("GET", "main/x") == "ok" and waits == list(C.RETRY_S) and len(set(dates)) == 4
+    waits.clear()
+    answers[:] = [500, 500, 500, 500]
+    with pytest.raises(C.urllib.error.HTTPError) as e:
+        s3.open("GET", "main/x")
+    assert e.value.code == 500 and waits == list(C.RETRY_S)
+    waits.clear()
+    for code in (403, 404):
+        answers[:] = [code]
+        with pytest.raises(C.urllib.error.HTTPError) as e:
+            s3.open("GET", "main/x")
+        assert e.value.code == code and waits == []
 
 
 # ---------------------------------------------------------------- publish, then restore
@@ -428,7 +460,7 @@ def test_an_existing_blob_must_be_the_same_bytes(s3, tmp_path, conflict):
     b, url = s3
     b.conflict = conflict
     r, rev = repo(tmp_path)
-    s = stage(tmp_path)
+    stage(tmp_path)
     same = C.BLOBS + hashlib.sha256(b"module archive").hexdigest()
     b.objects[same] = (b"module archive", b.now)
     assert C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None) == "published"
@@ -439,14 +471,18 @@ def test_an_existing_blob_must_be_the_same_bytes(s3, tmp_path, conflict):
     assert not [k for k in b.objects if k.endswith(C.RECORD)]
 
 
-def test_a_different_record_already_published_is_refused(s3, tmp_path):
+def test_a_second_build_of_a_published_commit_keeps_the_first_record(s3, tmp_path):
+    """A rerun of one commit whose build isn't byte-identical (Security on vy-nebius-1, 21 Oct) neither replaces the
+    published record nor fails the publish: the first build stays, and the run says so."""
     b, url = s3
     r, rev = repo(tmp_path)
     s = stage(tmp_path)
     C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None)
+    first = {k: v for k, v in b.objects.items() if k.endswith(C.RECORD)}
     (s / "bb.ltar").write_bytes(b"another build")
-    with pytest.raises(C.CacheError, match="already published with other contents"):
-        C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None)
+    said = []
+    assert C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=said.append) == "kept"
+    assert {k: v for k, v in b.objects.items() if k.endswith(C.RECORD)} == first and "kept it" in said[0]
 
 
 def test_the_read_key_cannot_write(s3, tmp_path):

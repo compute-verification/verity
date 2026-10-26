@@ -473,7 +473,8 @@ static void run_bw(Dev& d, size_t bytes, int reps) {
 }
 
 // ---------------------------------------------------------------- fill: the step beside chained int8 GEMMs on a green split
-// Green contexts through the driver API, by dlopen (as fill_compute's gc_split), so nothing links libcuda.
+// Green contexts through the driver API, by dlopen (as benchmarks/fill_compute/fill.cu's `gc_split` at 1b21bc8f7), so
+// nothing links libcuda.
 template <class F> static F drv(const char* name) {
   static void* h = dlopen("libcuda.so.1", RTLD_NOW | RTLD_GLOBAL);
   return h ? reinterpret_cast<F>(dlsym(h, name)) : nullptr;

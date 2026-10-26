@@ -1,5 +1,5 @@
 import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Soundness.Model.Holo
+import Definitions.Flock.Holo
 
 /-!
 # Recursion: hidden unit circuits' class, registered table and registered schedule

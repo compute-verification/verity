@@ -1,15 +1,9 @@
 """Execution profile (CONTRACT.md §2 / §2.1) shared by production and replay.
 
 Everything that decides *what vLLM runs* lives here so that production and replay
-construct the engine from one place. The declared flags are:
-
-* ``VLLM_BATCH_INVARIANT=1`` (contract §2),
-* ``VLLM_USE_V2_MODEL_RUNNER=1`` (trace replay requires Model Runner V2, which is not
-  the default for Llama/Qwen2 architectures in the pinned wheel: see
-  ``vllm/config/vllm.py::DEFAULT_V2_MODEL_RUNNER_ARCHITECTURES``), and
-* ``VLLM_ENABLE_V1_MULTIPROCESSING=0`` (engine core in-process so the recorder can read
-  the scheduler's step trace and the replay adapter can intercept the model runner; it
-  changes process topology, not the executed kernels).
+construct the engine from one place.  The declared flags are ``engine.env.ENGINE``, each with
+its reason in ``engine.env.REASONS``; batch invariance is the row's execution label's
+(``engine.served``), and a served Commit reads every switch back (``engine.served.require``).
 
 Import this module *before* ``vllm`` so the environment is set first.
 """
@@ -21,7 +15,6 @@ import json
 import os
 import platform
 import subprocess
-import time
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +25,7 @@ DECLARED_ENV = env.ENGINE
 CASES = {
     "B0": {"repo": "HuggingFaceTB/SmolLM2-135M"},
     # [E1 NIGHT 2026-09-12, G3; PROPOSED] the second-model cases: SMOL360 = SmolLM2-360M (B0's architecture, larger), QWEN05 = Qwen2.5-0.5B (B1's
-    # architecture at head dim 64); registry configs verity_vllm.program.registry.b1.{SMOL360,QWEN05}_CONFIG.
+    # architecture at head dim 64); registry configs verity.ml.definitions.registry.b1.{SMOL360,QWEN05}_CONFIG.
     "SMOL360": {"repo": "HuggingFaceTB/SmolLM2-360M"},
     "QWEN05": {"repo": "Qwen/Qwen2.5-0.5B"},
     "B1": {"repo": "Qwen/Qwen2.5-1.5B"},
@@ -94,7 +87,8 @@ def checkpoint_for(case: str, checkpoints_path: str | Path) -> dict[str, Any]:
         if not matches:
             raise SystemExit(f"case {case!r}: not in CASES and no checkpoints.json entry with role {case!r}")
         cp = matches[0]
-    if not cp.get("downloaded") or not cp.get("local_path"):
+    # a recipe pin (fp8_checkpoint, int8_checkpoint) is made on the pod, never downloaded: its snapshot is there or not
+    if not (cp.get("downloaded") or cp.get("recipe")) or not cp.get("local_path"):
         raise SystemExit(f"{cp['repo']} is not downloaded on this pod (manifest says resolve-only)")
     if not Path(cp["local_path"]).exists():
         raise SystemExit(f"{cp['repo']}: local snapshot {cp['local_path']} missing")
@@ -118,8 +112,11 @@ REPLAY_EXECS = ("eager", "compiled-nograph")
 
 TP_WORKER_EXTENSION = "verity_vllm.tp.poc_tp_worker.VerityTPWorkerExtension"
 
+#: vLLM's engine seed (`LLM(seed=...)`) for every profile; the manifest records it in `engine_kwargs`.
+ENGINE_SEED = 0
 
-def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int = 0, enforce_eager: bool = False, custom_ops: str | None = None,
+
+def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int, enforce_eager: bool = False, custom_ops: str | None = None,
                   replay_exec: str = "eager", max_num_batched_tokens: int | None = None,
                   tensor_parallel_size: int | None = 1, quantization: str | None = None) -> dict[str, Any]:
     """LLM(...) kwargs. Production: stock defaults (``enforce_eager`` is a declared flag for the
@@ -206,7 +203,7 @@ def get_scheduler(llm: Any) -> Any:
 def _run(cmd: list[str]) -> str:
     try:
         return subprocess.run(cmd, capture_output=True, text=True, timeout=30).stdout.strip()
-    except Exception:  # noqa: BLE001
+    except (OSError, subprocess.SubprocessError, ValueError):
         return ""
 
 
@@ -418,7 +415,7 @@ def build_manifest(
     quantization: str | None = None,
 ) -> dict[str, Any]:
     sw = software_info(wheel_sha256, vllm_commit)
-    kw = {k: v for k, v in engine_kwargs(cp, replay=False, enforce_eager=enforce_eager, custom_ops=custom_ops,
+    kw = {k: v for k, v in engine_kwargs(cp, replay=False, seed=ENGINE_SEED, enforce_eager=enforce_eager, custom_ops=custom_ops,
                                          max_num_batched_tokens=max_num_batched_tokens,
                                          tensor_parallel_size=tensor_parallel_size,
                                          quantization=quantization).items() if k not in ("model", "tokenizer")}
@@ -461,13 +458,6 @@ def build_manifest(
     return doc
 
 
-def canonical_json_bytes(doc: Any) -> bytes:
-    return json.dumps(doc, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
-
-
 def profile_id_of(manifest: dict[str, Any]) -> str:
-    return hashlib.sha256(canonical_json_bytes(manifest)).hexdigest()[:12]
-
-
-def utc_stamp() -> str:
-    return time.strftime("%Y%m%dT%H%MZ", time.gmtime())
+    from verity.ml.circuits.codec import canonical_json
+    return hashlib.sha256(canonical_json(manifest)).hexdigest()[:12]

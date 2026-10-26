@@ -864,7 +864,7 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
     dest = "/etc/systemd/system/vy-store-evict-research.service.d/src.conf"
     assert f'"$SRC/store_evict_src.conf" {dest}' in (SKY / "cluster_up.sh").read_text()
     deploy = (SKY.parent / "deploy.toml").read_text()
-    assert f'path = "{dest}"\nsrc = "tools/research/src/research/pods/nebius/sky/store_evict_src.conf"\nnodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]' in deploy
+    assert f'path = "{dest}"\nsrc = "tools/research/src/research/pods/nebius/sky/store_evict_src.conf"\nnodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]' in deploy
     for u in ("store_evict.service", "store_evict.timer", "store_evict_research.service", "store_evict_research.timer"):
         assert f'"$SRC/$u"' in (SKY / "cluster_up.sh").read_text() and f'src = "tools/research/src/research/pods/nebius/sky/{u}"' in deploy
     assert 'ExecCondition=/bin/grep -qs "timed False" /workspace/pouw/fill/status.txt' in (SKY / "store_evict_timed.conf").read_text()
@@ -999,3 +999,23 @@ def test_the_store_eviction_keeps_the_fixture_registry_of_the_newest_shipped_tre
     (tool / "research" / "store" / "cli.py").write_text("")
     out, seen = run()
     assert seen["argv"][-3:] == ["--min-mb", "1e12", "--json"] and "no store blob or run file evicted: tool has no --keep-registry (tool)" in out
+
+
+def test_retention_gc_runs_hourly_on_both_nodes_outside_a_timed_window(tmp_path):
+    """Nothing applied the retention policy on a schedule: on 19 Oct 06:40Z node 2 sat at 80% with 3.5 TiB collectable, and the
+    fill runner held every queued run (ci's gates among them) until infra ran `research retention gc` by hand."""
+    import subprocess
+    unit, timer = (SKY / "retention_gc.service").read_text(), (SKY / "retention_gc.timer").read_text()
+    assert "User=research\n" in unit and "python3 -m research retention gc --apply'" in unit and "OnUnitActiveSec=1h\n" in timer
+    deploy = (SKY.parent / "deploy.toml").read_text()
+    for u, path in (("retention_gc.service", "vy-retention-gc.service"), ("retention_gc.timer", "vy-retention-gc.timer")):
+        assert (f'path = "/etc/systemd/system/{path}"\nsrc = "tools/research/src/research/pods/nebius/sky/{u}"\n'
+                f'nodes = ["vy-nebius-1", "vy-nebius-2"]\nrun = ["systemd:vy-retention-gc.timer"]') in deploy
+    cond = re.search(r"^ExecCondition=/bin/sh -c '(.*)'$", unit, re.M)[1]
+    status = tmp_path / "status.txt"
+    gate = lambda: subprocess.run(["sh", "-c", cond.replace("/workspace/pouw/fill/status.txt", str(status))]).returncode
+    assert gate() == 0, "node 1 has no fill status: it runs"
+    status.write_text("2026-10-19T06:40:00Z free GPUs 0/8, timed True, window waiting False\n")
+    assert gate() != 0, "node 2 inside a timed window: skipped"
+    status.write_text("2026-10-19T06:40:00Z free GPUs 0/8, timed False, window waiting False\n")
+    assert gate() == 0

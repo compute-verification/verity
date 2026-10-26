@@ -38,14 +38,14 @@ import dataclasses
 import json
 import os
 import struct
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, BinaryIO
 
 import numpy as np
 
-from verity_vllm.program import dtypes
+from verity.ml.definitions import dtypes
 from verity_vllm.commit import hashing, identity
 
 RU_INDEX_SCHEMA = "verity-vllm/ru-index/v1"
@@ -203,19 +203,6 @@ class Entry:
 DERIVED_FILLS = ("zeros",)
 
 
-def slot_family_id(canonical_id: str) -> str:
-    """The family id of a per-slot value id: the id without its ``e=`` field."""
-    cid = identity.parse(canonical_id)
-    if cid.kind != "value" or cid.expert is None:
-        raise CaptureError(f"{canonical_id}: not a per-expert-slot value id")
-    return str(
-        identity.value_id(
-            cid.profile_id or "", cid.request_id or "", cid.t or 0, cid.phase or "", cid.layer or "",
-            cid.op or "", cid.port or 0, shard=cid.shard, expert=None,
-        )
-    )  # fmt: skip
-
-
 def slot_id(family_id: str, slot: int) -> str:
     """``family_id`` with ``e=<slot>`` appended (families never carry a ``c=`` coordinate)."""
     return f"{family_id}/e={slot}"
@@ -339,12 +326,6 @@ class RUIndex:
 
     def dead_positions(self) -> tuple[int, ...]:
         return tuple(int(t) for t in (self.speculative or {}).get("dead", ()))
-
-    def captured_entries(self) -> list[Entry]:
-        return [e for e in self.entries if e.derived is None]
-
-    def derived_entries(self) -> list[Entry]:
-        return [e for e in self.entries if e.derived is not None]
 
     def to_json(self) -> dict[str, Any]:
         doc = {
@@ -609,56 +590,6 @@ class CaptureWriter:
         self._by_id[canonical_id] = entry
         return entry
 
-    def add_derived_family(
-        self,
-        family_id: str,
-        *,
-        slots: int,
-        active: Sequence[int],
-        dtype: str,
-        shape: Sequence[int],
-        fill: str = "zeros",
-    ) -> dict[str, Any]:
-        """Revision 2: declare the ``slots`` expert slots of one (position, op, port); the slots in
-        ``active`` must be (or become) captured entries ``<family_id>/e=<slot>``; every other slot is
-        a derived leaf with the prescribed ``fill`` bytes, never captured, holding no bytes in
-        values.bin. The population is fixed by the description (layers x positions x slots); the
-        family record only says which slots the run captured."""
-        if self._finished:
-            raise CaptureError("writer is finished")
-        cid = identity.parse(family_id)
-        if cid.kind != "value" or cid.expert is not None or cid.coordinate is not None:
-            raise CaptureError(f"{family_id}: a slot family id is a value id without e=/c=")
-        if (
-            cid.request_id != self.request_id
-            or (self.phase != MIXED_PHASE and cid.phase != self.phase)
-            or cid.t not in self.positions
-        ):
-            raise CaptureError(f"{family_id}: not in this replay unit")
-        if fill not in DERIVED_FILLS:
-            raise CaptureError(f"unknown derived fill {fill!r}")
-        active_l = sorted({int(e) for e in active})
-        if any(e < 0 or e >= slots for e in active_l):
-            raise CaptureError(f"{family_id}: active slot out of range")
-        family = {
-            "family": family_id,
-            "slot_field": "e",
-            "slots": int(slots),
-            "active": active_l,
-            "dtype": dtypes.normalize_dtype(dtype),
-            "shape": [int(d) for d in shape],
-            "fill": fill,
-        }
-        for entry in expand_family(family, 0):  # offsets are patched at finish()
-            if entry.canonical_id in self._by_id:
-                raise StaleCaptureError(
-                    f"{entry.canonical_id}: captured as a value and declared as a derived slot"
-                )
-            self._entries.append(entry)
-            self._by_id[entry.canonical_id] = entry
-        self._families.append(family)
-        return family
-
     def finish(self) -> RUIndex:
         if self._finished:
             raise CaptureError("writer already finished")
@@ -879,16 +810,6 @@ class Boundary:
         """Whether this boundary's tree carries ``output_logprob`` leaves."""
         return self.chosen_logprobs is not None
 
-    def logprob_at(self, t: int) -> float | None:
-        """The bound logprob of the token the sampler produced at position ``t`` (``None`` when the
-        boundary does not bind logprobs or ``t`` produced no token)."""
-        if self.chosen_logprobs is None:
-            return None
-        k = t - self.prompt_len + 1
-        if k < 0 or k >= len(self.chosen_logprobs):
-            return None
-        return self.chosen_logprobs[k]
-
     def phase_at(self, t: int) -> str:
         return phase_of_position(t, self.prompt_len)
 
@@ -901,15 +822,6 @@ class Boundary:
             if t in c.positions:
                 return c
         return None
-
-    def token_at(self, t: int) -> int | None:
-        """The input token at position ``t`` (prompt, then outputs shifted by one)."""
-        if t < 0:
-            return None
-        if t < self.prompt_len:
-            return self.prompt_token_ids[t]
-        k = t - self.prompt_len
-        return self.output_token_ids[k] if k < len(self.output_token_ids) else None
 
     def sampled_token_at(self, t: int) -> int | None:
         """The token the sampler produced at position ``t`` (``output[t - prompt_len + 1]``)."""
@@ -1090,56 +1002,6 @@ class Boundary:
                     ids.append(str(identity.boundary_id(profile_id, rid, "output_logprob", record.t)))
         ids += [str(identity.boundary_id(profile_id, rid, f)) for f in ("sampling_params", "seed", "finish_reason")]
         return ids
-
-    def cached_prefix_problems(self, source_of: Callable[[str], Boundary | None]) -> list[str]:
-        """Cross-request invariants of a prefix-cache binding (capture-format v1.1, R3): the source
-        exists, computed every bound position in its own steps, and both requests fed the same
-        tokens on ``0..t`` for every bound ``t`` -- the condition under which K/V at ``t`` is one
-        value regardless of which request's forward produced it. Both token sequences are
-        committed boundary leaves, so a verifier checks this from the two boundary trees."""
-        problems: list[str] = []
-        for c in self.cached_prefix:
-            src = source_of(c.source_request_id)
-            if src is None:
-                problems.append(f"cached_prefix source {c.source_request_id} has no boundary")
-                continue
-            if src.prompt_len != c.source_prompt_len:
-                problems.append(f"cached_prefix source {c.source_request_id}: prompt_len {src.prompt_len} != {c.source_prompt_len}")
-            top = max(c.positions) if c.positions else -1
-            for t in range(top + 1):
-                if self.token_at(t) != src.token_at(t):
-                    problems.append(f"cached_prefix source {c.source_request_id}: tokens differ at t={t} <= bound position {top}")
-                    break
-            for t in c.positions:
-                if src.step_of(t) is None:
-                    problems.append(f"cached_prefix source {c.source_request_id}: no step computed t={t}")
-                    break
-        return problems
-
-    def covered_positions(self) -> list[int]:
-        """The positions this request's own steps computed, in step order, each once: a recompute
-        step's repeated positions (capture-format v1.1, R4) are dropped, every position of a
-        non-recompute step is kept (a repeat there is the coverage error :meth:`validate` reports).
-        ``sorted(cached_positions()) + covered_positions()`` must be ``0..prompt_len+outputs-2``."""
-        covered: list[int] = []
-        for s in self.steps:
-            if s.recompute:
-                seen = set(covered)
-                covered.extend(t for t in s.positions if t not in seen)
-            else:
-                covered.extend(s.positions)
-        return covered
-
-    def recomputed_positions(self) -> dict[int, list[int]]:
-        """step -> positions that step recomputed (empty for non-preempted trajectories)."""
-        out: dict[int, list[int]] = {}
-        seen: set[int] = set()
-        for s in self.steps:
-            again = [t for t in s.positions if t in seen]
-            if s.recompute and again:
-                out[s.step] = again
-            seen.update(s.positions)
-        return out
 
     def leaves(self, profile_id: str) -> list[Value]:
         """The boundary tree's leaves (contract section 5: prompt ids, output ids, params, seed,
@@ -1580,11 +1442,6 @@ class RunWriter:
         _write_json(path, description, canonical=True)
         return path
 
-    def write_required(self, required: Mapping[str, Any]) -> Path:
-        path = self.run_dir / REQUIRED_FILE
-        _write_json(path, required, canonical=True)
-        return path
-
     def weights(
         self,
         *,
@@ -1724,9 +1581,6 @@ class WeightsReader:
         """Tree leaf ids in tree order."""
         return self.index.ids()
 
-    def tensor_ids(self) -> list[str]:
-        return identity.tree_sorted([e.canonical_id for e in self.index.entries])
-
     def locate(self, canonical_id: str) -> tuple[WeightEntry, tuple[int, int] | None]:
         """``(entry, (first_row, end_row) | None)``; ``None`` = the whole tensor."""
         cid = identity.parse(canonical_id)
@@ -1760,15 +1614,6 @@ class WeightsReader:
 
     def entry(self, canonical_id: str) -> WeightEntry:
         return self.locate(canonical_id)[0]
-
-    def leaf_id_for_row(self, canonical_id: str, row: int) -> str:
-        """The tree leaf holding row ``row`` of a tensor: its block id under a ``rows`` layout, the
-        whole-tensor id otherwise."""
-        entry = self.entry(canonical_id)
-        if entry.layout.kind != "rows":
-            return entry.canonical_id
-        start, _end = entry.block_of(int(row))
-        return entry.block_id(start)
 
     def _read_whole(self, entry: WeightEntry) -> bytes:
         if entry.offset is not None and self._values_path.exists():
@@ -1930,9 +1775,6 @@ class CaptureReader:
     def profile_id(self) -> str:
         return hashing.profile_id(self.manifest)
 
-    def manifest_bytes(self) -> bytes:
-        return (self.run_dir / MANIFEST_FILE).read_bytes()
-
     @property
     def description(self) -> dict[str, Any]:
         return _read_json(self.run_dir / DESCRIPTION_FILE)
@@ -1995,48 +1837,6 @@ class CaptureReader:
 
     def has_weights(self) -> bool:
         return (self.run_dir / WEIGHTS_DIR / INDEX_FILE).exists()
-
-    def recompute_problems(self, request_id: str, *, check_bytes: bool = False) -> list[str]:
-        """Capture-format v1.1 (R4): a replay unit flagged ``recompute`` repeats identities an earlier
-        unit of the request committed; every repeated leaf must equal the first unit's leaf (index
-        leaf hashes, or hashes of the bytes with ``check_bytes``; the audit ties index to bytes).
-        The first unit is the one ``locate`` and the openings use, so a recompute unit that
-        disagrees is a committed second value of one identity -- refused here, never shadowed."""
-        if not self.has_boundary(request_id):
-            return []
-        boundary = self.boundary(request_id)
-        problems: list[str] = []
-        first_step: dict[int, int] = {}
-        for s in boundary.steps:
-            for t in s.positions:
-                first_step.setdefault(t, s.step)
-
-        def leaves_of(step: int) -> dict[str, str]:
-            unit = self.ru(request_id, step)
-            if check_bytes:
-                return {cid: leaf.hex() for cid, leaf in unit.leaves(recompute=True).items()}
-            return {e.canonical_id: e.leaf for e in unit.index.entries}
-
-        for s in boundary.steps:
-            if not s.recompute:
-                continue
-            primaries: dict[int, dict[str, str]] = {}
-            for cid_text, leaf in leaves_of(s.step).items():
-                cid = identity.parse(cid_text)
-                assert cid.t is not None
-                orig = first_step.get(cid.t)
-                if orig is None or orig == s.step:
-                    continue
-                if orig not in primaries:
-                    primaries[orig] = leaves_of(orig)
-                first = primaries[orig].get(cid_text)
-                if first is None:
-                    problems.append(f"step {s.step}: {cid_text} recomputed but never committed by step {orig}")
-                elif first != leaf:
-                    problems.append(f"step {s.step}: {cid_text} recomputed with different bytes than step {orig}")
-                if len(problems) >= 4:
-                    return problems
-        return problems
 
     # lookup by canonical id
     def locate(self, canonical_id: str) -> tuple[str, int] | None:

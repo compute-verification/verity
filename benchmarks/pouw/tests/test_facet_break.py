@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -71,17 +72,35 @@ def test_class_of():
             "REDG.E.MAX.STRONG.GPU": "REDG32", "REDG.E.XOR.64.STRONG.GPU": "REDG64",
             "ATOMG.E.ADD.STRONG.GPU": "ATOMG32", "ATOMG.E.CAS.64.STRONG.GPU": "ATOMG64", "ATOMS.ADD": "ATOMS32",
             "ATOMS.CAST.SPIN.64": "ATOMS64", "ATOM.E.ADD.STRONG.GPU": "ATOME32", "ATOM.E.EXCH.64.STRONG.GPU": "ATOME64",
-            "STS.128": "STS128", "STS": None, "LDGSTS.E.BYPASS.128": "LDGSTS16", "LDSM.16.M88": "LDSM_X1",
+            "STS.128": "STS128", "STS": "STS32", "STS.U8": "STS32", "STG.E": "STG32", "STG.E.128": "STG128",
+            "STG.E.64": None, "REDUX.XOR": "REDUX", "ISETP.LE.AND": "ISETP", "VIADD": "VIADD", "VIADDMNMX": None,
+            "LDGSTS.E.BYPASS.128": "LDGSTS16", "LDSM.16.M88": "LDSM_X1",
             "LDSM.16.MT88.4": "LDSM_X4T", "LDSM.8.MT1616.2": "LDSM8T_X2", "STSM.16.M88.2": "STSM_X2",
-            "STSM.8.MT1616.4": "STSM8T_X4"}
+            "STSM.8.MT1616.4": "STSM8T_X4", "UBLKRED.G.S.XOR": "TMAred512", "UBLKCP.S.G": None, "UTMALDG.2D": None,
+            "UBLKRED*": "TMAred512", "UBLKPF.L2": "UNI"}
     assert {op: loads.class_of(op) for op in want} == want
+
+
+def test_a_bulk_instruction_counts_its_shared_memory_bytes():
+    """A5b (RT4-SHEET-1): a bulk or TMA instruction counts `S/99 KB` in UTMABIG, `S` its size, which it reads or writes
+    in a block's shared memory on at least one side, so DS-120 charges it `S` on DS_smem and at most its one issue slot.
+    fold_bulk.cu's fbw trip reduces 32 KB and twice 16 KB into global memory."""
+    big = loads.BULK_BYTES
+    assert loads.bulk_counts("UBLKRED.G.S.XOR", 32768) == {"UTMABIG": Fraction(32768, big)}
+    for op in ("UBLKRED.S.S.XOR", "UBLKCP.S.S", "UBLKCP.S.G", "UTMALDG.2D", "UTMASTG.3D"):
+        assert loads.bulk_counts(op, 512) == {"UTMABIG": Fraction(512, big)}, op
+    assert loads.bulk_counts("UBLKCP.S.G", big) == {"UTMABIG": Fraction(1)} and big == 99 * 1024
+    for op, n in (("UBLKCP.S.G", big + 16), ("UBLKRED.G.S.ADD", 0), ("UBLKPF.L2", 512)):
+        with pytest.raises(ValueError):
+            loads.bulk_counts(op, n)
 
 
 def test_a_side_unit_counted_by_wildcard_takes_its_class_from_its_name():
     row = {"probe": "hs_red64", "rates": {"0:IMMA.16832.S8.S8": 0.4, "1:REDG*": 0.08}}
     assert loads.rates_by_class(row) == pytest.approx({"IMMA16832": 0.1, "RED64": 0.02})
     assert loads.rates_by_class({"probe": "sa_blkred512", "rates": {"0:UBLKRED*": 0.04}}) == {"TMAred512": 0.01}
-    assert loads.rates_by_class({"probe": "sa_blkred4k", "rates": {"0:UBLKRED*": 0.04}}) == {"UNI": 0.01}
+    assert loads.rates_by_class({"probe": "sa_blkred4k", "rates": {"0:UBLKRED*": 0.04}}) == {"TMAred512": 0.01}
+    assert loads.rates_by_class({"probe": "sa_blkcp1k", "rates": {"0:UBLKCP*": 0.04}}) == {}
 
 
 def test_a_tld_takes_its_width_from_the_program_and_unpriced_loads_are_listed(census):
@@ -104,10 +123,17 @@ def test_fine_grid_sweeps_the_near_frontier_and_the_ji3n_0_form():
 
 
 def test_rt_families_are_unique_and_hold_the_programs_that_broke_ji3s_and_ji3t():
-    sizes = {"rt": 726, "rt2": 408, "rt3": 120, "rt4": 95, "rt5": 168, "rt6": 192, "rt7": 144, "rt8": 377}
+    sizes = {"rt": 726, "rt2": 408, "rt3": 120, "rt4": 95, "rt5": 168, "rt6": 192, "rt7": 144, "rt8": 377, "rt9": 319,
+             "rt10": 99, "rt11": 105}
     names = {f: [g["name"] for g in gen.grid(0, 0, family=f)] for f in sizes}
     assert {f: len(set(n)) for f, n in names.items()} == {f: len(n) for f, n in names.items()} == sizes
     assert "jm_i16832_fmuli_q120_p0_a3u20_w8" in names["rt4"]
+    assert {"jm_i16832_fmuli_q120_p0_a3u20_w8_k3", "jm_i16832_fmuli_q120_p0_a3u16_sts128x2_w8",
+            "jm_i16832_none_q0_p0_a2u8_ldsm4x4_w8", "jm_i16832_fmuli_shfl_q96_p0_a2u8_w8"} <= set(names["rt9"])
+    assert {"jm_i16832_fmuli_q120_p0_a3u20_w8_k2", "jm_i16832_axi_q112_p0_a2u16_w8",
+            "jm_i16832_fmuli_dp4ai_q144_p0_a3u20_w8"} <= set(names["rt10"])
+    assert {"jm_i16832_fmuli_q120_p0_a3u20_w8_k1", "jm_i16832_fmuli_uaxi_q120_p0_a3u16_w8",
+            "jm_i16832_fmuli_axi_uaxi_q144_p0_a2u20_w8", "jm_i16832_uaxi_q64_p0_a3u12_w8"} <= set(names["rt11"])
     assert "jm_isp16864_fmuli_q128_p0_a2u16_w8" in names["rt5"]
     assert {"jx_i16832_isp16864_fmuli_q128_a1u20_w8", "jx_i16832_osf16864_none_q0_a8u4_w8", "al_mufu_popc_w16",
             "jm_isp16864_fmuli_q128_p0_a2u20_w8_k3"} <= set(names["rt8"])
@@ -255,8 +281,8 @@ def test_full_counts_every_instruction_of_the_gates_loop_and_unclassed_ones_on_i
     want = ["IMMA.16832.S8.S8"] * 2 + ["FMUL"] * 6 + ["MOV", "IADD3", "ISETP.NE.AND", "BRA"]
     assert loads.gate_loops(out)["jm_t"] == want
     full, other = loads.load_rows([p], full=True)
-    assert full["x"] == pytest.approx({"IMMA16832": 0.05, "FFMA": 0.15, "NOROW": 0.025, "ALU": 0.025})
-    assert full["x_issue"] == pytest.approx(0.05)
+    assert full["x"] == pytest.approx({"IMMA16832": 0.05, "FFMA": 0.15, "NOROW": 0.025, "ALU": 0.025, "ISETP": 0.025})
+    assert full["x_issue"] == pytest.approx(0.025) and "ISETP" not in c
     assert "x" not in other
     counted = loads.program(one, c, cu)["load"]["issue"]
     assert loads.program(full, c, cu)["load"]["issue"] == pytest.approx(counted + 0.1) and counted == pytest.approx(0.2)

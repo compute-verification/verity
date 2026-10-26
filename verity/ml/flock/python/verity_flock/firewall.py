@@ -5,9 +5,9 @@ proxy (`verity_flock.rec_live`, §10.3).
     python -m verity_flock.firewall relay --state DIR --session ID --part NAME --to HOST:PORT [--listen 127.0.0.1:0] [--sessions N] [--proofs 2]
     python -m verity_flock.firewall record --state DIR
 
-The release side of record is Rust's: ``flock-circuit prove --firewall-state DIR --session ID --part NAME``
-(``flock_live::release``) keeps the same record, byte for byte (``live/src/firewall_record_vectors.json``, which both sides'
-tests run), and the rules below. This module is the inner side's (`rec_live`'s ``serve`` opens and ends recursive sessions
+The release side of record is Lean's: ``flock-circuit prove --firewall-state DIR --session ID --part NAME`` runs each outer
+session through ``core-firewall session`` (``Core.Firewall.Loop`` around the Lean session loop), which keeps the same record,
+byte for byte, and the rules below (``live/src/firewall_record_vectors.json``, which both sides' tests run). This module is the inner side's (`rec_live`'s ``serve`` opens and ends recursive sessions
 here) and the tests' relay.
 
 Every process of one firewall shares its state directory: ``record.jsonl``, its events in order (each with its ``seq``),
@@ -21,8 +21,10 @@ appended under ``record.lock``, and ``slot.lock``, the outer slot. Four rules ho
   again) is a stop at that next statement, never opened, so a statement the worker skips ends the recursive session where
   it stands. After a stop, and after the last statement's release, a relay refuses each outer session of it before
   anything reaches the challenger (``refused``, not a failure: the challenger sees nothing of it).
-* **Outer proofs go one at a time.** The firewall has one slot, across streams and protocols. An outer session takes it at
-  its first request and holds it until the session is released (the challenger's verdict accepts it) or fails. A second
+* **This relay takes outer proofs one at a time**, stricter than AGENTS.md's independent sessions (each statement fixed
+  first, one session each with its own live coins, every verdict counted). It has one slot, across streams and protocols.
+  An outer session takes it at its first request and holds it until the session is released (the challenger's verdict
+  accepts it) or fails. A second
   session that asks meanwhile waits (``wait``) and takes the slot after (``slot``), so each ``slot`` event is followed by its
   session's outcome before the next one. A holder that ended before its outcome (killed, say) is recorded as its session's
   stop by the next session to take the slot.
@@ -31,7 +33,7 @@ appended under ``record.lock``, and ``slot.lock``, the outer slot. Four rules ho
   session that had neither stopped nor released its last statement, on a stream that had not stopped.
 * **Proofs leave at public times.** A recursive session opened with a ``release`` schedule (``start_ms``, and one window a
   statement, ``windows_ms``) releases statement j's proofs at ``start_ms + windows_ms[0] + ... + windows_ms[j]``: proofs
-  ready early wait, and proofs not ready by then are a stop. Only the Rust firewall keeps the times; this module's relay
+  ready early wait, and proofs not ready by then are a stop. Only the Lean firewall keeps the times; this module's relay
   refuses a scheduled session rather than release it early.
 
 An outer session stops when the worker cuts it, when the worker sends ``Finish`` before all of the session's proofs (the
@@ -43,12 +45,13 @@ can't hold up another session's.
 
 What the rules read of the record is kept beside it in ``index-py/`` (`_Index`: each recursive session's open, stop,
 finish and releases, each stream's first open and failures, the last ``slot``, the counts), and a call reads only what
-was appended to the record since the index last read it, by whichever process. The Rust firewall keeps its own, in
-``index/``. The index is rebuilt from the record's start when the record was replaced, cut shorter or no longer holds the
-last bytes the index read, when the machine has booted since the index was written, when a writer of it ended mid-write,
-or when a file of it won't read; an edit further back that leaves the record no shorter isn't seen, nor is a file of the
-index edited by hand that still reads. Since the firewall only appends, the verdicts are the ones a read of the whole
-record gives. A record the index can't answer is read whole at every call, as
+was appended to the record since the index last read it, by whichever process. The Lean firewall keeps none and reads
+the record whole. The index is rebuilt from the record's start when
+the record was replaced, cut shorter or no longer holds the last bytes the index read, when the machine has booted since
+the index was written, when a writer of it ended mid-write, or when a file of it won't read; an edit further back that
+leaves the record no shorter isn't seen, nor is a file of the index edited by hand that still reads. Since the firewall
+only appends, the verdicts are the ones a read of the whole record gives.
+A record the index can't answer is read whole at every call, as
 before, and each rule's read is a scan of it (`_Scan`): one whose last line has no newline yet, or one holding a line
 the firewall doesn't write or a name over `KEY_MAX` bytes. A torn last line (a writer killed inside its append) fails
 every call, so the firewall serves nothing until the developer repairs the record: it fails closed, never by skipping an
@@ -175,7 +178,7 @@ class Firewall:
 
     def open(self, stream: str, parts: list[str], budget: int | None = None, release: dict | None = None) -> str:
         """A new recursive session on ``stream``, opened by its inner session, with its V* statements in their order
-        (``parts``, public: the Rust firewall's rule 1): its id. ``budget`` is the stream's failure budget (P1's ``budget``,
+        (``parts``, public: the firewall's rule 1): its id. ``budget`` is the stream's failure budget (P1's ``budget``,
         b), the same at every open of the stream; once the stream has ``budget`` failures, `Refused`. ``release`` is the
         recursive session's release schedule, public and fixed here, before the session: statement ``j`` is released at the
         end of its window, ``start_ms + sum(windows_ms[:j + 1])`` (rule 3)."""
@@ -221,7 +224,7 @@ class Firewall:
         stopped, has a statement not yet released, its stream has not stopped at its budget, its inner session finished,
         and ``part`` is its next statement. A request for any other statement is the recursive session's stop at the next
         one (never opened), then refused. A refusal is recorded (``refused``). Returns ``part``'s release time (rule 3), or
-        None. Only a ``timed`` caller (one that holds the proofs to that time: the Rust firewall, or a test of its rules)
+        None. Only a ``timed`` caller (one that holds the proofs to that time: the Lean firewall, or a test of its rules)
         is admitted to a scheduled session; this module's relay is not."""
         with self._locked((session,)) as rec:
             why, at = None, None
@@ -241,8 +244,8 @@ class Firewall:
                 why = f"recursive session {session} stopped at {nxt}: {part} is not its next statement"
             elif (r := open_.get("release")) is not None:
                 if not timed:
-                    why = (f"recursive session {session}: its release schedule needs the Rust firewall "
-                           "(flock-circuit prove --firewall-state)")
+                    why = (f"recursive session {session}: its release schedule needs the Lean firewall "
+                           "(core-firewall session: flock-circuit prove --firewall-state)")
                 else:
                     at = r["start_ms"] + sum(r["windows_ms"][:j + 1])
             if why is not None:
@@ -329,7 +332,7 @@ def _orphan(ev: list[dict]) -> dict | None:
 
 #: the encoding `Path.read_text` reads the record in
 _ENCODING = locale.getpreferredencoding(False)
-#: the index's directory in the state directory (the Rust firewall's is ``index/``)
+#: the index's directory in the state directory
 _INDEX = "index-py"
 #: the longest session or stream name the index keeps, in bytes (its files are named by it); a record holding a longer
 #: one is read whole

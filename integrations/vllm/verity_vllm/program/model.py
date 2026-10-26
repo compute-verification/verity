@@ -28,9 +28,9 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry.prims import BF16
-from verity.ml.circuits.types import Array, Record
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry.prims import BF16
+from verity.ml.circuits.types import Array, Record, Value
 
 COS_SIN_MAX_ULP = 1     # gate I9 (frozen with gates.py; change only through an approved decision)
 
@@ -49,11 +49,21 @@ FAMILY_RULES: dict[str, dict[str, Any]] = {
     "qwen3": {"qkv_bias_key": "attention_bias", "default_theta": 1_000_000.0, "qk_norm": "head"},
 }
 
-#: [R15 fp8] the ONE checkpoint quantization the sweep serves: vLLM `Fp8Config` from a `quantization_config` with `quant_method: fp8`,
+#: [R15 fp8] the FP8 checkpoint quantization the sweep serves (the other is `INT8_EXACT_QUANT`): vLLM `Fp8Config` from a `quantization_config` with `quant_method: fp8`,
 #: `fmt: e4m3`, `weight_block_size: [G, G]` (block-scaled weights `weight` e4m3 [N, K] + `weight_scale_inv` f32 [N/G, K/G]) and
 #: `activation_scheme: dynamic` (per-token-group activation quantisation, group G, at run time).  `config_of` records it as
 #: `C["FP8_BLOCK"] = G`; any other quantization_config is refused (`quant_refusal`) -- never served as a looser approximation.
 FP8_BLOCK_QUANT = {"quant_method": "fp8", "fmt": "e4m3", "activation_scheme": "dynamic"}
+#: the exact-int8 profile's checkpoint (`engine.int8_checkpoint`): every linear int8 [N, K] with per-row f32 scales, lm_head bf16;
+#: `config_of` records it as `C["INT8_EXACT"] = weight_max`
+INT8_EXACT_QUANT = {"quant_method": "verity_int8", "weight_max": 127, "modules_to_not_convert": ["lm_head"]}
+#: the same with the LM head int8 too (`engine.int8_checkpoint`'s v2: `lm_head` s8 [V, H] with f32 row scales); `config_of` records
+#: it as `C["INT8_LM_HEAD"] = True`
+INT8_EXACT_LMHEAD_QUANT = {**INT8_EXACT_QUANT, "modules_to_not_convert": []}
+
+
+def is_int8_exact(qc: dict[str, Any] | None) -> bool:
+    return bool(qc) and str(qc.get("quant_method", "")).lower() == INT8_EXACT_QUANT["quant_method"]
 
 
 def _moe_routers(cfg: dict[str, Any] | None) -> set[str]:
@@ -70,9 +80,17 @@ def quant_refusal(qc: dict[str, Any] | None, cfg: dict[str, Any] | None = None) 
     the checkpoint's config.json: a fused-MoE one serves FP8 experts with bf16 routers, so it must list every layer's router."""
     if not qc:
         return None
+    if is_int8_exact(qc):
+        if dict(qc) not in (INT8_EXACT_QUANT, INT8_EXACT_LMHEAD_QUANT):
+            return f"quantization_config {dict(qc)!r} is not the exact-int8 profile's {INT8_EXACT_QUANT!r} or {INT8_EXACT_LMHEAD_QUANT!r}"
+        if any((cfg or {}).get(k) for k in ("num_experts", "num_local_experts", "n_routed_experts")):
+            return "an exact-int8 MoE checkpoint: the int8 profile states dense linears only"
+        if dict(qc) == INT8_EXACT_LMHEAD_QUANT and cfg is not None and cfg.get("tie_word_embeddings", True) is not False:
+            return "an int8 LM head on tied embeddings (tie_word_embeddings): the embedding would be the int8 head's tensor"
+        return None
     for k, v in FP8_BLOCK_QUANT.items():
         if str(qc.get(k, "")).lower() != v:
-            return f"quantization_config.{k}={qc.get(k)!r} is not {v!r} (only block-scaled dynamic e4m3 FP8 is modelled)"
+            return f"quantization_config.{k}={qc.get(k)!r} is not {v!r} (only block-scaled dynamic e4m3 FP8 and the exact-int8 profile are modelled)"
     bs = qc.get("weight_block_size")
     if not (isinstance(bs, (list, tuple)) and len(bs) == 2 and bs[0] == bs[1] and int(bs[0]) > 0 and int(bs[0]) % 32 == 0):
         return f"quantization_config.weight_block_size={bs!r} is not a square block [G, G] with G a multiple of 32"
@@ -163,13 +181,18 @@ def config_of(hf_config: str | Path | dict, *, model: str | None = None, revisio
     # [R15 fp8] family fact: the per-head q/k RMSNorm (Qwen3) -- "hand" because vLLM's model code applies it, config.json does not say
     if rules.get("qk_norm"):
         C["QK_NORM"], prov["QK_NORM"] = rules["qk_norm"], "hand"
-    # [R15 fp8] checkpoint quantization: block-scaled dynamic e4m3 FP8 (`C["FP8_BLOCK"] = G`) or none; anything else refuses here
+    # [R15 fp8] checkpoint quantization: block-scaled dynamic e4m3 FP8 (`C["FP8_BLOCK"] = G`), exact int8 (`C["INT8_EXACT"]`) or none
     qc = cfg.get("quantization_config")
     if qc:
         why = quant_refusal(qc, cfg)
         if why:
             raise ValueError(why)
-        C["FP8_BLOCK"], prov["FP8_BLOCK"] = int(qc["weight_block_size"][0]), "hf-config"
+        if is_int8_exact(qc):
+            C["INT8_EXACT"], prov["INT8_EXACT"] = int(qc["weight_max"]), "hf-config"
+            if not qc["modules_to_not_convert"]:
+                C["INT8_LM_HEAD"], prov["INT8_LM_HEAD"] = True, "hf-config"
+        else:
+            C["FP8_BLOCK"], prov["FP8_BLOCK"] = int(qc["weight_block_size"][0]), "hf-config"
         C["quantization_config"], prov["quantization_config"] = dict(qc), "hf-config"
     for k, v in (hand or {}).items():
         C[k], prov[k] = v, "hand"
@@ -224,8 +247,8 @@ def _fp8_fields(fields: list[tuple[str, Any]], G: int, g: int) -> list[tuple[str
     g)][cdiv(H, g)]` and `w2_ws [E][cdiv(H, g)][cdiv(I, g)]` on the rank's g-block grid (`fp8_moe_block`): the shapes vLLM's
     `Fp8MoEMethod.create_weights` gives `w13_weight_scale_inv` / `w2_weight_scale_inv`.  The router `gate_w` and the norms stay bf16
     (`quant_refusal` admits the router only in `modules_to_not_convert`)."""
-    from verity_vllm.program.registry.fp8 import E4M3, weight_blocks
-    from verity_vllm.program.registry.prims import F32
+    from verity.ml.definitions.registry.fp8 import E4M3, weight_blocks
+    from verity.ml.definitions.registry.prims import F32
 
     def cdiv(a: int, b: int) -> int:
         return -(-a // b)
@@ -281,7 +304,7 @@ FP8_LINEAR_FIELDS: tuple[tuple[str, str], ...] = (("qkv_w", "qkv_ws"), ("o_w", "
 
 
 def dense_layer_weights_type(C: dict[str, Any]) -> Record:
-    """[R15 fp8] `b1.layer_weights_type(C)` with the two family facts a dense Llama-architecture layer may add:
+    """`b1.layer_weights_type(C)` with the two family facts a dense Llama-architecture layer may add:
     * `C["QK_NORM"] == "head"` (Qwen3): `q_norm`, `k_norm` bf16 `[D]` after `qkv_w`/`qkv_b` (vLLM `self_attn.q_norm.weight`,
       `self_attn.k_norm.weight`: ONE head-width vector shared by every head);
     * `C["FP8_BLOCK"] == G`: every linear's weight is e4m3 `[N][K]` (`Value<8>` words, the checkpoint's stored bytes) followed by its
@@ -294,7 +317,23 @@ def dense_layer_weights_type(C: dict[str, Any]) -> Record:
         i = names.index("qkv_b") if "qkv_b" in names else names.index("qkv_w")
         fields[i + 1:i + 1] = [("q_norm", Array(C["D"], BF16)), ("k_norm", Array(C["D"], BF16))]
     G = int(C.get("FP8_BLOCK") or 0)
+    if C.get("INT8_EXACT"):
+        fields = _int8_fields(fields)
     return Record(*(_fp8_fields(fields, G, G) if G else fields))
+
+
+def _int8_fields(fields: list[tuple[str, Any]]) -> list[tuple[str, Any]]:
+    """A dense layer's fields under the exact-int8 checkpoint (`INT8_EXACT_QUANT`): each linear of `FP8_LINEAR_FIELDS` is s8 `[N][K]`
+    (`Value<8>`, the stored bytes) followed by its f32 per-row scale `[N][1]` (`weight_scale`, the checkpoint's and vLLM's shape)."""
+    from verity.ml.definitions.registry.prims import F32
+    scale_of = dict(FP8_LINEAR_FIELDS)
+    out: list[tuple[str, Any]] = []
+    for n, t in fields:
+        if n in scale_of:
+            out += [(n, Array(t.n, Array(t.elem.n, Value(8)))), (scale_of[n], Array(t.n, Array(1, F32)))]
+        else:
+            out.append((n, t))
+    return out
 
 
 def mla_layer_weights_type(C: dict[str, Any], *, dense: bool) -> Record:
@@ -304,8 +343,8 @@ def mla_layer_weights_type(C: dict[str, Any], *, dense: bool) -> Record:
     the shared experts' fused gate/up and down projections, and the routed experts' `w13 [E][2I][H]` / `w2 [E][H][I]`.
     A block-FP8 checkpoint stores every linear except the router and the DSA indexer's replicated key/weight projection as e4m3 followed
     by its f32 block scales.  A bf16 checkpoint retains the original GLM-4.7 layout."""
-    from verity_vllm.program.registry.prims import F32
-    from verity_vllm.program.registry.fp8 import E4M3, weight_blocks
+    from verity.ml.definitions.registry.prims import F32
+    from verity.ml.definitions.registry.fp8 import E4M3, weight_blocks
     H, NH, QL, L, DN, DR, DV = (int(C[k]) for k in ("H", "NH", "Q_LORA", "KV_LORA", "QK_NOPE", "QK_ROPE", "V_HEAD"))
     G = int(C.get("FP8_BLOCK") or 0)
 
@@ -351,8 +390,8 @@ def mla_layer_weights_type(C: dict[str, Any], *, dense: bool) -> Record:
 
 def mla_indexer_weights_type(C: dict[str, Any]) -> Record:
     """One full GLM-5.3 DSA indexer.  Shared indexer layers have no parameters and therefore no entry in the top-level indexer array."""
-    from verity_vllm.program.registry.fp8 import E4M3, weight_blocks
-    from verity_vllm.program.registry.prims import F32
+    from verity.ml.definitions.registry.fp8 import E4M3, weight_blocks
+    from verity.ml.definitions.registry.prims import F32
 
     H, QL, IH, ID, G = (int(C[k]) for k in ("H", "Q_LORA", "INDEX_HEADS", "INDEX_HEAD_DIM", "FP8_BLOCK"))
     return Record(
@@ -389,7 +428,7 @@ def weights_type(C: dict[str, Any]) -> Record:
     [SHARED-CODE lane cov-ln] a configuration with `C["NORM"] == "layernorm"` (GPT-NeoX / Pythia) gets
     `layernorm_layer_weights_type(C)` as its `layers` element, a `norm_b` `[H]` field (the final LayerNorm's bias) after
     `norm`, and a `cos_sin` table of width `rotary_dim(C)` (partial rotary); RMSNorm configurations are unchanged.
-    [R15 fp8] `C["QK_NORM"] == "head"` (Qwen3) and/or `C["FP8_BLOCK"]` (block-scaled FP8 checkpoint) get
+    `C["QK_NORM"] == "head"` (Qwen3) and/or `C["FP8_BLOCK"]` (block-scaled FP8 checkpoint) get
     `dense_layer_weights_type(C)` as the `layers` element (per-head norm weights; e4m3 weights + f32 block scales); a fused-MoE one
     takes `moe_layer_weights_type(C)`, which states both itself.  A configuration with `KV_LORA` (multi-head latent attention)
     gets `mla_weights_type(C)`."""
@@ -397,7 +436,7 @@ def weights_type(C: dict[str, Any]) -> Record:
         return mla_weights_type(C)
     base = b1.weights_type(C)
     fields = list(base.fields)
-    if not C.get("NUM_EXPERTS") and (C.get("QK_NORM") == "head" or C.get("FP8_BLOCK")):
+    if not C.get("NUM_EXPERTS") and (C.get("QK_NORM") == "head" or C.get("FP8_BLOCK") or C.get("INT8_EXACT")):
         fields = [(n, Array(C["NL"], dense_layer_weights_type(C))) if n == "layers" else (n, t) for n, t in fields]
     if C.get("NORM") == "layernorm":
         fields = [(n, Array(C["NL"], layernorm_layer_weights_type(C))) if n == "layers" else (n, t) for n, t in fields]
@@ -418,6 +457,11 @@ def weights_type(C: dict[str, Any]) -> Record:
         fields[i] = ("layers", Array(C["NL"], Record(*layer.fields, *[(n, Array(C["H"], BF16)) for n in extra])))
     if not C.get("tie_word_embeddings", True) and "lm_head" not in dict(fields):
         fields.append(("lm_head", Array(C["V"], Array(C["H"], BF16))))   # guard: b1.weights_type may carry the untied field itself
+    if C.get("INT8_LM_HEAD"):
+        # the int8 LM head (`INT8_EXACT_LMHEAD_QUANT`): s8 `[V][H]` and its f32 per-row scale `[V][1]`, as `_int8_fields` states a linear
+        from verity.ml.definitions.registry.prims import F32
+        i = next(k for k, (n, _) in enumerate(fields) if n == "lm_head")
+        fields[i:i + 1] = [("lm_head", Array(C["V"], Array(C["H"], Value(8)))), ("lm_head_ws", Array(C["V"], Array(1, F32)))]
     if C.get("embed_normalizer") is not None:
         # [ADAPTER lane cov-dense, 2026-09-17] Gemma-2 scales the embedding by `model.normalizer`, a 0-d bf16 *buffer* vLLM's
         # `Gemma2Model.__init__` registers as `torch.tensor(hidden_size ** 0.5)` at the model dtype — a root with no checkpoint

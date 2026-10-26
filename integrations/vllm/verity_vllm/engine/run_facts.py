@@ -88,6 +88,9 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
         if getattr(engine.target, "int8_exact", None) is not None:
             from verity_vllm.program.frontend.target_profile import int8_exact_of
             manifest["backends"]["int8_exact"] = int8_exact_of(engine.model)
+            if "attention" in engine.target.int8_parts:
+                from verity_vllm.program.frontend.kernel_readback import int8_k_scales_of
+                manifest["backends"]["int8_k_scales"] = int8_k_scales_of(engine.model)
         # the MoE gates' cuteDSL ll_bf16_gemm tier (M <= 16), which leaves no torch op behind: written only when a gate took it, so
         # every record without such a gate keeps its profile id
         if moe_gate_ll_bf16_gemm_of(engine.model):
@@ -185,16 +188,16 @@ def host_doc() -> dict:
             if line.startswith("model name"):
                 doc["cpu"] = line.split(":", 1)[1].strip()
                 break
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError):
         pass
     try:
         q = Path("/sys/fs/cgroup/cpu.max").read_text().split()
         doc["cpu_quota"] = None if q[0] == "max" else float(q[0]) / float(q[1])
-    except Exception:  # noqa: BLE001
+    except (OSError, IndexError, ValueError, ZeroDivisionError):
         pass
     try:
         doc["clocksource"] = Path("/sys/devices/system/clocksource/clocksource0/current_clocksource").read_text().strip()
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError):
         pass
     n = 20000
     t0 = time.perf_counter()
@@ -210,7 +213,7 @@ def versions_doc(engine: Engine | None = None) -> dict:
     def ver(name: str) -> str | None:
         try:
             return md.version(name)
-        except Exception:  # noqa: BLE001
+        except md.PackageNotFoundError:
             return None
 
     import triton
@@ -222,7 +225,7 @@ def versions_doc(engine: Engine | None = None) -> dict:
     try:
         props = torch.cuda.get_device_properties(0)
         doc["gpu"] = {"name": props.name, "cc": f"{props.major}.{props.minor}", "sms": int(props.multi_processor_count)}
-    except Exception:  # noqa: BLE001
+    except (AssertionError, RuntimeError, torch.cuda.DeferredCudaCallError):
         pass
     doc["host"] = host_doc()
     if engine is not None:                    # [GEN batch SHARED-CODE] the effective LLM(**kw) of this run (CLI overrides included)
@@ -239,6 +242,6 @@ def versions_doc(engine: Engine | None = None) -> dict:
         export = Path("EXPORT.json")
         if export.exists():
             doc["export"] = json.loads(export.read_text())
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError):
         pass
     return doc

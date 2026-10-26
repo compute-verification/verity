@@ -173,7 +173,7 @@ theorem verify_one_ok {spec : SessionSpec} {st : Setup} {record : String} {proof
     (h : Flock.verify spec #[st] record proofs = .ok ()) :
     ∃ sess sch c, Record.decode spec record = .ok sess ∧ Flock.fast100 st.m = some sch ∧
       verifyRep spec st sch sess 0 0 proofs[0]! = .ok c ∧ verifyRep spec st sch sess 0 1 proofs[1]! = .ok c := by
-  unfold Flock.verify at h
+  unfold Flock.verify Flock.verifyFiles at h
   dsimp only at h
   by_cases c0 : (#[st].size != spec.tables.size || #[st].size == 0) = true
   · rw [ite_eq_left c0] at h; obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0

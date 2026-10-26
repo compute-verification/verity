@@ -210,6 +210,17 @@ def _checked_c(tmp_path, monkeypatch, gh, repo):
     _git(repo, "checkout", "-q", "main")
 
 
+def test_a_merge_push_of_main_off_drive_is_refused_and_pushes_nothing(tmp_path, monkeypatch, capsys):
+    """23 Oct: GitHub's rulesets let only drive's App move `main`; a pure move lands from the control pod (`drive.sh merge`)."""
+    repo, gh, _tips, _merge = _world(tmp_path)
+    _checked_c(tmp_path, monkeypatch, gh, repo)
+    monkeypatch.delenv("RESEARCH_DRIVE")
+    before = _git(repo, "ls-remote", "origin", "refs/heads/main")
+    assert M.main(["C", "--push", "-m", "Merge train TC (c)"]) == 1
+    assert "/data/infra/drive.sh merge" in capsys.readouterr().err
+    assert _git(repo, "ls-remote", "origin", "refs/heads/main") == before
+
+
 def test_a_merge_with_push_lands_on_the_remote_then_sweeps(tmp_path, monkeypatch, capsys):
     """Trains landed through `research merge` and a push by hand, so the sweep ran before the push and closed nothing: with --push
     the merge is on the remote before the sweep reads it, and what the tool runs after a landing starts on the commit pushed."""
@@ -242,6 +253,8 @@ def test_after_a_landing_the_declarations_command_starts_detached_on_the_commit(
     assert "started `python post.py --x abc123def4567`" in lines[0]
     assert M.after_land(tmp_path, "mytools.decl:U", "abc", spawn=spawn) is None
     assert M.after_land(tmp_path, "nothere.decl:T", "abc", spawn=spawn) is None and len(started) == 1
+    assert M.after_land(tmp_path, "mytools.decl:T", "abc", spawn=spawn, attempt="r20261019-010000-0001") == [
+        "python", "post.py", "--x", "abc", "--attempt", "r20261019-010000-0001"], "drive's landing names the check it landed on"
 
 
 def test_the_after_landing_command_runs_in_a_worktree_of_the_landed_commit_that_goes_when_it_ends(tmp_path):
@@ -338,6 +351,26 @@ def test_a_landing_pushed_another_way_gets_its_after_landing_steps_on_the_next_m
     assert M.main(["--sweep"]) == 0 and len(ran) == 5, "caught up once"
 
 
+def test_the_after_landing_command_gets_the_attempt_drive_landed_the_tip_on(tmp_path, monkeypatch):
+    """CI-81: `post_train.py` refused every landing drive made with deferred steps, since none had a passed check in the store
+    yet; drive's `runs` names the attempt of the tip it pushed, and `after_land` gets it.  A tip it doesn't name gets none."""
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "a")
+    _git(repo, "push", "-q", "origin", "HEAD:main", f"HEAD:{M.AFTER_LAND_REF}", f"HEAD:{M.SPEC_ALERTED_REF}")
+    _steps(monkeypatch)
+    got: list[tuple] = []
+    monkeypatch.setattr(M, "after_land", lambda _repo, _tool, sha, **k: got.append((sha, k.get("attempt"))))
+    for rid in ("r20261019-010000-0001", None):
+        _git(repo, "commit", "-q", "--allow-empty", "-m", "Merge #1 into next")
+        tip = _git(repo, "rev-parse", "HEAD")
+        _git(repo, "push", "-q", "origin", "HEAD:main")
+        assert M.caught_up(repo, "origin", "check", log=lambda *_: None, runs={"0" * 40: "r20261019-000000-0000"} |
+                           ({tip: rid} if rid else {})) == tip
+        assert got[-1] == (tip, rid or ""), rid
+
+
 def test_a_merge_with_push_runs_the_steps_from_the_marker_over_what_it_and_the_landings_it_missed_brought(tmp_path, monkeypatch,
                                                                                                         capsys):
     repo, gh, _tips, merge = _world(tmp_path)
@@ -352,6 +385,80 @@ def test_a_merge_with_push_runs_the_steps_from_the_marker_over_what_it_and_the_l
                    ("alert", merge, tip), ("mirror", tip), ("after_land", tip), ("report", merge, tip),          # the push's: C
                    ("landed", merge, tip)]
     assert _marker(repo) == tip
+
+
+def _lean_repo(tmp_path: Path) -> tuple[Path, str, str, str]:
+    """A repository with a Lake package (`pkg/`, its lock and a source): (repo, base, a commit changing the source on it, a
+    commit on that changing only a README)."""
+    repo = tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "-b", "main", str(repo))
+    (repo / "pkg").mkdir()
+    (repo / "pkg/lean-audit.json").write_text("{}\n")
+    (repo / "pkg/A.lean").write_text("def a := 1\n")
+    (repo / "README.md").write_text("r\n")
+    shas = []
+    for path, text in ((None, None), ("pkg/A.lean", "def a := 2\n"), ("README.md", "r2\n")):
+        if path:
+            (repo / path).write_text(text)
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", path or "base")
+        shas.append(_git(repo, "rev-parse", "HEAD"))
+    return repo, *shas
+
+
+def test_a_landing_that_touches_a_lean_package_starts_the_lean_cache_publish_and_one_that_does_not_does_not(tmp_path,
+                                                                                                         monkeypatch):
+    """CI-174: the Lean cache was published only daily, so a landing's Lean waited on a stale cache.  A landing whose range
+    touches a Lake package's source starts infra's publisher with the landed SHA; one that touches none, or an absent script,
+    starts nothing; every case is one line, with the seconds the script took to start."""
+    repo, base, lean, docs = _lean_repo(tmp_path)
+    script = tmp_path / "lean_publish.sh"
+    monkeypatch.setenv(M.LEAN_PUBLISH_ENV, str(script))
+    calls, lines = [], []
+    run = lambda argv, **_k: calls.append(argv) or subprocess.CompletedProcess(argv, 0, "", "")  # noqa: E731
+
+    assert not M.lean_publish(repo, base, docs, log=lines.append, run=run)
+    assert calls == [] and lines[-1].endswith("is absent") and str(script) in lines[-1]
+    script.write_text("#!/bin/sh\n")
+    assert M.lean_publish(repo, base, docs, log=lines.append, run=run, clock=iter([10.0, 11.5]).__next__)
+    assert calls == [[str(script), docs]], "a range with a Lean change in it counts, whatever its tip changed"
+    assert "started" in lines[-1] and "1.5 s" in lines[-1] and M.LEAN_PUBLISH_LOG in lines[-1]
+    assert not M.lean_publish(repo, lean, docs, log=lines.append, run=run)
+    assert len(calls) == 1 and lines[-1].endswith("touches no Lean package")
+    monkeypatch.setenv(M.LEAN_PUBLISH_ENV, "")
+    assert not M.lean_publish(repo, base, lean, log=lines.append, run=run) and len(calls) == 1 and "off" in lines[-1]
+
+
+def test_a_lean_cache_publish_that_fails_is_logged_and_the_landing_stands(tmp_path, monkeypatch):
+    """The publisher's nonzero exit, its timeout or its failure to run is one line naming why and the rerun; `caught_up` still
+    runs the steps after it and moves its marker, so a landing never fails on the publish."""
+    repo, base, lean, _docs = _lean_repo(tmp_path)
+    script = tmp_path / "lean_publish.sh"
+    script.write_text("#!/bin/sh\n")
+    monkeypatch.setenv(M.LEAN_PUBLISH_ENV, str(script))
+    lines: list[str] = []
+
+    def timeout(argv, **k):
+        raise subprocess.TimeoutExpired(argv, k["timeout"])
+
+    for run, why in ((lambda argv, **_k: subprocess.CompletedProcess(argv, 3, "", "cpu-4 unreachable\n"),
+                      "exited 3: cpu-4 unreachable"),
+                     (timeout, f"no exit within {M.LEAN_PUBLISH_TIMEOUT_S} s"),
+                     (lambda argv, **_k: (_ for _ in ()).throw(PermissionError("not executable")), "PermissionError")):
+        assert not M.lean_publish(repo, base, lean, log=lines.append, run=run, clock=iter([0.0, 2.0]).__next__)
+        assert "not started" in lines[-1] and why in lines[-1] and "2.0 s" in lines[-1] and f"rerun: {script} {lean}" in lines[-1]
+
+    origin = tmp_path / "origin.git"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(repo, "remote", "add", "origin", str(origin))
+    _git(repo, "push", "-q", "origin", f"{base}:refs/heads/main", f"{base}:{M.AFTER_LAND_REF}", f"{base}:{M.SPEC_ALERTED_REF}")
+    ran = _steps(monkeypatch)
+    script.write_text('#!/bin/sh\necho "$1" > "$(dirname "$0")/published"\nexit 3\n')
+    script.chmod(0o755)
+    _git(repo, "push", "-q", "origin", f"{lean}:refs/heads/main")
+    assert M.caught_up(repo, "origin", "check", log=lines.append) == lean
+    assert (tmp_path / "published").read_text().strip() == lean and any(f"{script} exited 3" in x for x in lines[-4:])
+    assert ran[-2:] == [("report", base, lean), ("landed", base, lean)] and _marker(repo) == lean
 
 
 def test_a_spec_dm_that_failed_is_sent_again_by_the_next_sweep_which_fails_until_it_goes(tmp_path, monkeypatch, capsys):
@@ -591,6 +698,49 @@ def test_each_run_a_landing_names_gets_one_landed_label_on_the_remote_and_a_reru
     assert st3.labels("r20261011-010203-abcd", "landed")[0].ts == "2026-10-11T01:02:03Z", "the lander's fixed date: the run's start"
 
 
+def test_checked_heads_are_the_train_heads_their_own_check_ran_on_less_a_train_a_later_revert_names(tmp_path, monkeypatch,
+                                                                                                    capsys):
+    """`label_landed` labels every commit of a train on its one check run, but the run checked only its own source commit, so
+    `checked_heads` keeps the label whose value is that commit: each train's head. A head whose train holds a commit a later
+    `git revert` names is left out, and so are labels on commits off the line or on runs the index lacks."""
+    from research.store import bucket_index as BI
+    from research.store.local import LocalStore
+
+    repo = tmp_path / "r"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    sha = {}
+    for name in ("root", "a1", "a2", "b1", "c1", "c2"):
+        _git(repo, "commit", "-q", "--allow-empty", "-m", f"Queue: {name}")
+        sha[name] = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", f"Revert c1\n\nThis reverts commit {sha['c1']}, reversing\nchanges.")
+    sha["rev"] = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "Queue: d1")
+    sha["d1"] = _git(repo, "rev-parse", "HEAD")
+    trains = {"r20261020-010000-aaaa": ("a2", ["a1", "a2"]), "r20261020-020000-bbbb": ("b1", ["b1"]),
+              "r20261020-030000-cccc": ("c2", ["c1", "c2"]), "r20261020-040000-dddd": ("d1", ["rev", "d1"])}
+    store = tmp_path / "store"
+    monkeypatch.setenv("RESEARCH_STORE", str(store))
+    monkeypatch.delenv(BI.READER_ENV, raising=False)
+    idx = BI.SqliteIndex(BI.default_path(LocalStore().root))
+    rows = [BI.Row(rid, "run", "check", None, {"id": rid, "source": {"commit": sha[head]}}) for rid, (head, _) in trains.items()]
+    labels = [(rid, sha[c]) for rid, (_, members) in trains.items() for c in members]
+    labels += [("r20261020-050000-eeee", sha["b1"]), ("r20261020-020000-bbbb", "f" * 40)]
+    rows += [BI.Row(f"label:{i}", "label", "landed", None, {"target": rid, "key": "landed", "value": c, "by": M.LANDED_BY})
+             for i, (rid, c) in enumerate(labels)]
+    idx.add(rows)
+    assert M.checked_heads(repo, "main", idx) == [(sha["a2"], "r20261020-010000-aaaa"), (sha["b1"], "r20261020-020000-bbbb"),
+                                                 (sha["d1"], "r20261020-040000-dddd")]
+    assert M.checked_heads(repo, sha["c2"], idx)[-1] == (sha["c2"], "r20261020-030000-cccc"), "before its revert, c2 counts"
+    idx.close()
+    monkeypatch.chdir(repo)
+    assert research_main(["queue", "checked-heads", "--tip", "main"]) == 0
+    assert capsys.readouterr().out.split() == [sha["a2"], sha["b1"], sha["d1"]]
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "empty"))
+    assert research_main(["queue", "checked-heads"]) == 1
+    assert "no store index" in capsys.readouterr().err
+
+
 def test_the_landings_go_to_the_merge_thread_quietly_and_a_failed_post_leaves_them_standing(tmp_path, capsys):
     from research.monitors import MERGE_THREAD
     from research.slack import is_quiet
@@ -630,6 +780,14 @@ def test_the_sweep_deletes_the_head_branch_of_a_pr_github_marked_merged_itself(t
     log = []
     M.sweep(repo, gh=gh, log=log.append)                                  # A and B are gone: nothing to delete, nothing kept
     assert not [x for x in log if "branch A" in x or "branch B" in x or "kept" in x], log
+
+
+def test_main_line_is_the_checked_heads_newest_first(tmp_path, monkeypatch):
+    """`merge.main_line` is `checked_heads`' commits reversed, so position 0 is main's head: the verifier's `--main`
+    file lists the checked train heads newest first, and a pin's index is the checked trains it is behind."""
+    heads = [("c0", "run-0"), ("c1", "run-1"), ("c2", "run-2")]           # checked_heads is oldest first
+    monkeypatch.setattr(M, "checked_heads", lambda repo, tip, idx: heads)
+    assert M.main_line(tmp_path, "origin/main", object()) == ["c2", "c1", "c0"]
 
 
 def test_the_branch_sweep_deletes_what_is_on_main_and_archives_idle_unmerged_work(tmp_path):

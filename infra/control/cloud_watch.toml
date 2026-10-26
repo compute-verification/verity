@@ -1,0 +1,188 @@
+# The cloud watch's config (infra/control/cloud_watch.py, INF-73): thresholds, prices and paths, as on vy-control-verity.
+# Budget lines are not copied here: spend is compared with budgets.toml's live lines, read from the steward's notes clone (the
+# file the budgets guard reads), so a renewed or raised line needs no change here.
+
+every_s = 900
+state = "/data/cloud-watch/state.json"
+digest_hour_utc = 15                 # 08:00 PDT, the hour fleet.py's daily compute report posts
+unreadable_passes = 3                # a check that fails this many passes in a row opens `<check>|unreadable`
+clear_passes = 2                     # an anomaly clears once it has been gone this many passes in a row
+channel = "C0C5Q30MCNA"              # #agent-alerts (.agents/skills/using-slack/registry.json)
+mention = "S0CA15YVA0P"              # @infra's user group, named in each anomaly's post
+username = "infra"
+
+# Each loop post_start.sh starts, and its success marker: a log line whose first group is its time (`pattern`), a JSON file's
+# time field (`json`), or else the file's mtime. An anomaly when there is no success in 2 x period_s.
+[[loop]]
+name = "Budgets guard"
+started_by = "post_start.sh (research pods guard --supervise)"
+file = "/root/.research/pods/guard-budgets.json"
+json = "last_ok_poll"                # written by each poll that read RunPod (poll_s 60)
+period_s = 300
+
+[[loop]]
+name = "Resource steward"
+started_by = "/data/steward/run.sh"
+file = "/data/steward/watch.log"
+pattern = '^(\d\d:\d\dZ) pass \d+:'  # a pass every ~3 min; a standby copy writes none, but the lease holder does
+period_s = 300
+
+[[loop]]
+name = "/tmp sweep"
+started_by = "/data/infra/tmp_sweep.sh"
+file = "/data/infra/tmp-sweep.log"
+pattern = '^(\S+Z) removed '
+period_s = 3600
+
+[[loop]]
+name = "Store panels (console)"
+started_by = "/data/console/console-loop.sh"
+file = "/data/console/console.log"
+rotated = ["/data/console/console.log.1"]
+pattern = '^\{"at": "(\S+Z)", "group": "store"'
+period_s = 4500                      # late at 2x = 150 min: a pass may run to its 5,400 s timeout after a failed one, plus 10 min sleeps (console, 21:51Z); until the watch tells an active pass from a dead loop
+
+[[loop]]
+name = "Store index"
+started_by = "/data/infra/store_index.sh"
+file = "/data/infra/store-index.log"
+pattern = '^(\S+Z) pass rc=0 '
+period_s = 360                       # 5 min of sleep and a ~1 min pass
+
+[[loop]]
+name = "Fixture export"
+started_by = "/data/infra/fixtures_export.sh"
+file = "/data/infra/fixtures-export.log"
+pattern = '^(\S+Z) pass rc=0 '
+period_s = 360
+
+[[loop]]
+name = "Drive"
+started_by = "/data/infra/drive.sh"
+file = "/data/drive/drive.log"
+pattern = '^(\S+Z) (?:tick rc=0 |stopped: )'   # a tick, then 2 min of sleep; stopped, a line every 10 min
+period_s = 1800                      # a tick that launches several trains waits on each launch (train.sh: up to 10 min)
+
+[[loop]]
+name = "Agent watch"
+started_by = "/data/infra/agent_watch.sh"
+file = "/data/agent-watch/status.json"
+json = "t"                           # each sweep (60 s) rewrites it
+period_s = 300
+
+[[loop]]
+name = "Control disk relay"
+started_by = "/data/infra/control-disk/run.sh (control_disk.sh)"
+file = "/data/infra/control-disk/seen.json"
+period_s = 300
+
+[[loop]]
+name = "Watchers"
+started_by = "/data/watchers/run.sh (watchers.sh: the watchers supervisor, watchers.py)"
+file = "/data/watchers/status.json"
+json = "all_up_t"                    # the last minute every loop was up (running 2 min, waiting on a need, or done)
+period_s = 300
+
+[r2]
+page_cap = 100                       # ListObjectsV2 pages (1000 keys, one class-A op each) per bucket per pass
+keep_sweeps = 60                     # complete sweeps kept per bucket (the 7-day mean needs a week of them)
+max_gib_per_day = 200
+mean_ratio = 2.0                     # ... or growth over 2 x the 7-day mean,
+mean_floor_gib_per_day = 20          # where a mean under 20 GiB/day counts as 20 (a quiet week doesn't make a normal day an anomaly)
+
+# Each bucket by the names of its environment variables (the values never appear here or in a post).
+[[r2.bucket]]
+label = "store"
+bucket_env = "R2_BUCKET"
+endpoint_env = ["R2_ENDPOINT"]
+key_env = "AWS_ACCESS_KEY_ID"
+secret_env = "AWS_SECRET_ACCESS_KEY"
+
+[[r2.bucket]]
+label = "public export"
+bucket_env = "RESEARCH_EXPORT_BUCKET"
+endpoint_env = ["RESEARCH_EXPORT_ENDPOINT", "R2_ENDPOINT"]
+key_env = "AWS_ACCESS_KEY_ID"        # r2.env's pair lists it (fixtures_export.sh writes it with that pair); the export's
+secret_env = "AWS_SECRET_ACCESS_KEY" # read-only RESEARCH_EXPORT_ACCESS_KEY_ID gets 401 on ListObjectsV2
+
+[[r2.bucket]]
+label = "lean cache"
+bucket_env = "LEAN_CACHE_BUCKET"     # a name, not a secret: r2.env's pair lists it (same account and endpoint, 18 Oct)
+endpoint_env = ["LEAN_CACHE_R2_ENDPOINT", "R2_ENDPOINT"]
+key_env = "AWS_ACCESS_KEY_ID"
+secret_env = "AWS_SECRET_ACCESS_KEY"
+stale_after_h = 36                   # vy-lean-cache-daily publishes at 06:15Z each day
+writer = "Publisher: `vy-lean-cache-daily` on vy-nebius-cpu-4 (lean)."
+
+[neon]
+url_env = "STORE_INDEXER_DATABASE_URL"
+schemas = ["store_private"]
+report_schemas = ["store_public"]    # store_index.sh builds it only once /root/.config/verity/store-export.env exists
+size_alert_gib = 8                   # the plan's storage limit isn't recorded anywhere this lane reads; 1.25 GB on 18 Oct
+connections_share = 0.8
+index_stale_s = 1800                 # the store index writes `listings` every pass (~6 min)
+
+[spend]
+budgets = ["/workspace/steward/research-notes/budgets.toml", "~/.research/notes/budgets.toml"]   # the first that exists
+guard_state = "/root/.research/pods/guard-budgets.json"
+steward_log = "/data/steward/watch.log"   # its `ACCOUNT $B at $R/h` lines: RunPod's own rate for every pod and volume
+line_alert_share = 0.8               # a RunPod line at 80% of its cap (the guard itself terminates at 100%)
+runpod_topup_below_usd = 100         # RunPod tops the account up by itself once the balance falls under this (to ~$300; the
+                                     # steward log's ACCOUNT lines show each one), so a balance under it means the top-up failed:
+                                     # at the guard's balance_floor every pod in scope is terminated, and an empty balance stops
+                                     # this pod and can take its /data volume
+r2_alert_usd_per_month = 100         # no budget line covers R2; this is an alert line only
+
+# The keys that would close a gap no check here can cover, each said once in the digest while it is missing.
+[[spend.gap]]
+key = "CLOUDFLARE_API_TOKEN"
+closes = "R2's exact class-A/B operation counts and billed storage (Cloudflare's GraphQL analytics, Account Analytics: Read); without it class-A ops are a lower bound from new objects"
+
+[[spend.gap]]
+key = "NEON_API_KEY"
+closes = "Neon's billing: compute hours, the plan's storage limit and month-to-date cost (the database itself reports only size and connections)"
+
+[[spend.gap]]
+key = "VERCEL_TOKEN"
+closes = "Vercel's deployment errors and usage (function invocations, bandwidth, spend); without it only the public endpoints' status"
+
+[[spend.gap]]
+key = "CURSOR_ADMIN_API_KEY"
+closes = "Cursor's team spend on cloud agents (the Admin API's spend and daily usage); /data/agent-watch/cursor.env's key runs agents only"
+
+[prices]
+# Cloudflare R2 list price (developers.cloudflare.com/r2/pricing, read 18 Oct 2026): storage $0.015/GB-month past 10 GB,
+# class A $4.50/million past 1 million a month. Counted in 10^9-byte GB, the larger count of the two readings of GB.
+r2_storage_usd_per_gb_month = 0.015
+r2_free_gb = 10
+r2_class_a_usd_per_million = 4.50
+r2_class_a_free_million = 1
+r2_gb_bytes = 1e9
+# Only when the steward's log has no ACCOUNT line: RunPod's account rate it read on 18 Oct 19:31Z (the control pod, $0.06/h,
+# and the volumes), which the guard's rate_now leaves out
+runpod_control_usd_per_hour = 0.23
+
+[nebius]
+key_env = ["NEBIUS_SA_ID", "NEBIUS_SA_PUBLIC_KEY_ID", "NEBIUS_SA_PRIVATE_KEY_B64"]
+# every VM as JSON (name, state, preset), with the nebius CLI on PATH; the store index's tools/research tree has fleet.py
+instances_command = ["python3.12", "/data/infra/store-index-src/src/research/pods/nebius/fleet.py", "instances"]
+machines_d = ["/workspace/steward/research-notes/machines.d", "~/.research/notes/machines.d"]   # each VM's rate_usd_per_hour
+
+[github]
+token_env = "GH_TOKEN"
+remaining_share = 0.1
+
+[jobs]
+url = "https://website-docs-sage.vercel.app"   # research.jobs.client's DEFAULT_URL
+token_env = "JOBS_TOKEN"             # `research jobs`' token (read here, never written)
+limit = 200
+stale_queued_h = 24                  # 18 Oct: 20 of audit-main's daily cron jobs queued, none ever claimed
+
+# Public endpoints, unauthenticated: an answer of 500 or more, or none, is an anomaly.
+[[http]]
+name = "Vercel site: Lean cache state"
+url = "https://website-docs-sage.vercel.app/api/lean-cache/state"
+
+[[http]]
+name = "Vercel site: Slack broker"
+url = "https://website-docs-sage.vercel.app/api/agent-slack/call"     # POST only: a GET answers 405 while it is up

@@ -13,6 +13,7 @@ weight arrays O(1) in the descriptor.
 from __future__ import annotations
 
 import bisect
+from itertools import chain, islice
 from typing import Iterator
 
 from .types import Array, Record, Tuple, Type, Value, remove_axis
@@ -134,7 +135,8 @@ class Strided(Refs):
 class Concat(Refs):
     """Concatenation of reference sequences (binary search on `[j]`); descriptor size = number of parts.
 
-    `prefix` is `(log, j)` when the first `j` parts are `log.parts[:j]` (a `Concat` cut from a `PartLog`), else None."""
+    `prefix` is `(log, j)` when the first `j` parts are `log.parts[:j]` (a `Concat` cut from a `PartLog`), else None. A cut's
+    `parts` and `starts` are read-only sequences over the log's lists (`_Prefix`), not copies of their first `j` items."""
 
     __slots__ = ("parts", "starts", "count", "prefix")
 
@@ -153,20 +155,18 @@ class Concat(Refs):
             j += self.count
         if not (0 <= j < self.count):
             raise IndexError(j)
-        k = bisect.bisect_right(self.starts, j) - 1
+        k = _bisect(bisect.bisect_right, self.starts, j) - 1
         return self.parts[k][j - self.starts[k]]
 
     def slice(self, lo: int, hi: int) -> Refs:
         lo, hi = max(lo, 0), min(hi, self.count)
         out: list[Refs] = []
-        starts, parts = self.starts, self.parts
-        k, n = max(bisect.bisect_right(starts, lo) - 1, 0), len(parts)
-        while k < n and starts[k] < hi:
-            st, p = starts[k], parts[k]
+        starts = self.starts
+        k0, k1 = max(_bisect(bisect.bisect_right, starts, lo) - 1, 0), _bisect(bisect.bisect_left, starts, hi)
+        for st, p in zip(starts[k0:k1], self.parts[k0:k1]):
             a, b = max(lo, st) - st, min(hi, st + p.count) - st
             if b > a:
                 out.append(p.slice(a, b))
-            k += 1
         return concat(out)
 
     def to_json(self):
@@ -238,6 +238,67 @@ def concat(parts: list[Refs]) -> Refs:
     return Explicit(tuple(items))
 
 
+class _Prefix:
+    """`base[:n] + list(tail)` as a read-only sequence that shares `base` instead of copying it. `base` is a `PartLog`'s `parts` or
+    `starts`, which only ever grow past `n`, so the sequence never changes. A causal attention cuts one log once per call, so copied
+    prefixes cost O(rows) per call and O(rows^2) per sequence (GLM-5.3 at 2048 rows: tens of GB); a shared one costs O(1)."""
+
+    __slots__ = ("base", "n", "tail")
+    __hash__ = None  # type: ignore[assignment]
+
+    def __init__(self, base: list, n: int, tail: tuple = ()) -> None:
+        self.base, self.n, self.tail = base, n, tail
+
+    def __len__(self) -> int:
+        return self.n + len(self.tail)
+
+    def __getitem__(self, i):
+        n = self.n
+        if type(i) is int and 0 <= i < n:
+            return self.base[i]
+        if isinstance(i, slice):
+            lo, hi, step = i.indices(n + len(self.tail))
+            if step != 1:
+                return list(self)[i]
+            if hi <= lo:
+                return []
+            if lo >= n:
+                return list(self.tail[lo - n:hi - n])
+            if hi <= n:
+                return self.base[lo:hi]
+            return self.base[lo:n] + list(self.tail[:hi - n])
+        if i < 0:
+            i += n + len(self.tail)
+            if i < 0:
+                raise IndexError("index out of range")
+        return self.base[i] if i < n else self.tail[i - n]
+
+    def __iter__(self):
+        return chain(islice(self.base, self.n), self.tail)
+
+    def __reversed__(self):
+        return chain(reversed(self.tail), islice(reversed(self.base), len(self.base) - self.n, None))
+
+    def __eq__(self, other) -> bool:
+        try:
+            m = len(other)
+        except TypeError:
+            return NotImplemented
+        return len(self) == m and all(a == b for a, b in zip(self, other))
+
+    def __repr__(self) -> str:
+        return repr(list(self))
+
+
+def _bisect(search, a, x) -> int:
+    """`search(a, x)` for `search` one of `bisect`'s, on an ascending list or `_Prefix`; a `_Prefix` is searched in C, not item by
+    item through `__getitem__`."""
+    if type(a) is not _Prefix:
+        return search(a, x)
+    k = search(a.base, x, 0, a.n)
+    return k if k < a.n else a.n + search(a.tail, x)
+
+
 class PartLog:
     """Parts in order, cut into `Concat`s that share them as a prefix. The key rows an attention call reads are the rows
     the call before read plus one: cut from one log, each call's sequence costs O(1) parts of work, not O(rows).
@@ -300,24 +361,20 @@ class PartLog:
             if merged[0] is not parts[j - 1]:
                 return concat(parts[:j] + list(extra))
             tail = merged[1:]
-        c = Concat.__new__(Concat)
-        c.parts = parts[:j] + tail
-        c.starts = self.starts[:j]
-        pos = self.starts[j]
-        for p in tail:
-            c.starts.append(pos)
-            pos += p.count
-        c.count, c.prefix = pos, (self, j)
-        return c
+        return self._cut(j, tail)
 
     def raw_cut(self, j: int, extra: list[Refs] = ()) -> Concat:
         """`Concat(parts[:j] + extra)`: the parts as they are, not in `concat`'s normal form (what the descriptor decoder builds)."""
+        return self._cut(j, extra)
+
+    def _cut(self, j: int, tail) -> Concat:
         c = Concat.__new__(Concat)
-        c.parts, c.starts, pos = self.parts[:j], self.starts[:j], self.starts[j]
-        for p in extra:
-            c.parts.append(p)
-            c.starts.append(pos)
+        tail = tuple(tail)
+        starts, pos = [], self.starts[j]
+        for p in tail:
+            starts.append(pos)
             pos += p.count
+        c.parts, c.starts = _Prefix(self.parts, j, tail), _Prefix(self.starts, j, tuple(starts))
         c.count, c.prefix = pos, (self, j)
         return c
 

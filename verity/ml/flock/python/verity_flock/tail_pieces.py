@@ -12,6 +12,7 @@ FA2's inverse sum follow ``fa2_model.cpp``.
 """
 from __future__ import annotations
 
+from verity.ml.circuits.boolean.gather import gather as _bits_gather
 from verity.ml.circuits.ops.boolean.scalar import e4m3_to_f32, f32_to_e2m1_sat, f32_to_e4m3_sat, fmaxmin as _fmaxmin
 from verity.ml.circuits.ops.boolean.softmax import (_eq_const, _is_nan, f32_add_ftz, f32_fma_ftz, f32_fma_sub_ftz, f32_gt, f32_max, f32_mul_ftz,
                                        f32_sub, f32_sub_ftz, ftz, guard_neg_inf_zero)
@@ -109,7 +110,7 @@ def _tanh_rn_table():
 def _gelu_table():
     """``GeluTanhMulBf16_v1``'s activation word ``dense.gelu_tanh_bf16_bits(g)`` for every bf16 word g."""
     import numpy as np
-    from verity_vllm.program.registry import dense
+    from verity.ml.definitions.registry import dense
 
     return np.array([dense.gelu_tanh_bf16_bits(g) for g in range(1 << 16)], np.uint32)
 
@@ -493,6 +494,21 @@ def gather_f32(C, tok, *col):
     return _gather(C, tok, col, 0x7FC00000)
 
 
+def gather_e4m3(C, tok, *col):
+    """``GatherE4m3x{V}_v1`` (a routed expert's FP8 weight word): out of range, 0x7F (the E4M3 NaN)."""
+    return _gather(C, tok, col, 0x7F)
+
+
+def moe_select_bf16(C, e, *column):
+    """``MoeSelectBf16x{E}_v1`` (`verity.ml.circuits.ops.moe`: a static MoE pair unit's select of its expert's word) by the
+    construction of its Boolean form ``MoeSelectBf16x{E}_v2`` (`verity.ml.circuits.ops.boolean.moe`), gate for gate: the
+    multiplexer tree over e's low ceil(log2 E) bits (`boolean.gather`, a word past E standing for 0x7FFF), then 0x7FFF where
+    any higher bit is set. That form is made per E on demand, so `ir_lower._boolean_build` finds it only in a process that made
+    it."""
+    b = (len(column) - 1).bit_length()
+    return mux(C, or_reduce(C, e[b:]), const_bits(0x7FFF, 16), _bits_gather(C, e[:b], list(column), 0x7FFF))
+
+
 # --- gemma-2's tanh family: table reads over |x| between an identity and a saturation region ---------------------------------
 
 def _tanh(C, x, table: str, nan_word: int):
@@ -549,7 +565,7 @@ PIECES = {
     "F32Max_v1": f32_max,
     "GuardNegInfZero_v1": guard_neg_inf_zero,
     "MufuEx2Ftz_v1": mufu_ex2,
-    # the top-p keep word's word gates (verity_vllm.program.registry.topp_word_gates)
+    # the top-p keep word's word gates (verity.ml.definitions.registry.topp_word_gates)
     "BitXor_v1": lambda C, a, b: [a[0] ^ b[0]],
     "U32Xor_v1": lambda C, a, b: [x ^ y for x, y in zip(a, b)],
     "SelectBit_v1": lambda C, c, a, b: mux(C, c[0], a, b),
@@ -581,7 +597,7 @@ PIECES = {
     "F32Fmaxf_v1": lambda C, a, b: _fmaxmin(C, a, b, True),
     "F32Fminf_v1": lambda C, a, b: _fmaxmin(C, a, b, False),
     "F32ToE4m3Sat_v1": f32_to_e4m3_sat,
-    # NVFP4 quantization's casts and the bit AND (PoUW's units; verity_vllm.program.registry.nvfp4)
+    # NVFP4 quantization's casts and the bit AND (PoUW's units; verity.ml.definitions.registry.nvfp4)
     "E4m3ToF32_v1": e4m3_to_f32,
     "F32ToE2m1Sat_v1": f32_to_e2m1_sat,
     "BitAnd_v1": lambda C, a, b: [C.AND(a[0], b[0])],
@@ -609,4 +625,5 @@ PIECES = {
     "GeluTanhMulBf16_v1": gelu_tanh_mul_bf16,
 }
 #: primitive families whose id carries a width: pattern -> piece
-FAMILIES = {r"BitAtx\d+_v1": bit_at, r"GatherBf16x\d+_v1": gather_bf16, r"GatherF32x\d+_v1": gather_f32}
+FAMILIES = {r"BitAtx\d+_v1": bit_at, r"GatherBf16x\d+_v1": gather_bf16, r"GatherF32x\d+_v1": gather_f32,
+            r"GatherE4m3x\d+_v1": gather_e4m3, r"MoeSelectBf16x\d+_v1": moe_select_bf16}

@@ -195,7 +195,7 @@ theorem honest : Honest := by
           have hsync := hR.2.1
           rw [show x.1.1 - 1 = x.1.1 - 4 + 3 by omega] at hsync
           exact ⟨(g, w), ⟨rfl, hsync⟩, hR⟩
-        refine HRuns.bindC ((HRuns.levelChals resp x.2.1 x.2.2 (embedF gw.1) gw.2 (x.1.1 - 4)).frame _)
+        refine HRuns.bindC ((HRuns.levelChals resp _ x.2.1 x.2.2 (embedF gw.1) gw.2 (x.1.1 - 4)).frame _)
           fun f _ => ?_
         refine HRuns.ite (fun _ => ?_) fun hne => absurd (by simp; omega) hne
         refine HRuns.bindDC (HRuns.commit h ms _ _ _ _ _ _) (fun cmN _ => ?_)
@@ -234,8 +234,8 @@ theorem honest : Honest := by
           · obtain rfl := ForInStep.yield.inj e
             rfl
         · intro r y hQ hX hy
-          obtain ⟨rfl, st, ⟨⟨⟨⟨x₁, ⟨x₂, ⟨⟨⟨hf, hx₂, hsync₁⟩, hR⟩, hcm⟩, hx₁, hv₁, hm₁⟩, hst, hv₂, hm₂⟩, hq⟩, hm₃⟩, hbb⟩,
-            hy⟩ := hy
+          obtain ⟨rfl, st, ⟨⟨⟨⟨x₁, ⟨x₂, ⟨⟨⟨hf, hx₂, hsync₁, -⟩, hR⟩, hcm⟩, hx₁, hv₁, hm₁⟩, hst, hv₂, hm₂⟩, hq⟩, hm₃⟩,
+            hbb⟩, hy⟩ := hy
           intro s' e
           obtain rfl := ForInStep.yield.inj e
           have hrp := Pre.get (hX _ rfl).2.1
@@ -246,8 +246,8 @@ theorem honest : Honest := by
           show Mid _ _ _ _ _ _ (st.tab, addScaled st.w _ _)
           rw [h1, h2]
           refine mid_stepN hR.1 hR.2.1 hR.2.2.1 hR.2.2.2.1 hR.2.2.2.2 rfl h4 hI.lvs (hseam _ (by omega))
-            (hlan _ (by omega) (by omega)) (by rw [hcols _ (by omega), hI.sd]; omega) rfl rfl rfl rfl rfl rfl hsync₁
-            (commitP_rows hcm) hv₁ hm₁ hv₂ hm₂ ?_ hm₃
+            (hlan _ (by omega) (by omega)) (by rw [hcols _ (by omega), hI.sd]; omega) rfl rfl rfl rfl rfl rfl
+            (hsync₁ (by simp; omega)) (commitP_rows hcm) hv₁ hm₁ hv₂ hm₂ ?_ hm₃
           rw [hrp, query_pos]
           rfl
       · rw [loop_stepL P (cfOf resp L) sch _ hj1]
@@ -264,7 +264,7 @@ theorem honest : Honest := by
           have hsync := hR.2.1
           rw [show x.1.1 - 1 = x.1.1 - 4 + 3 by omega] at hsync
           exact ⟨(g, w), ⟨rfl, hsync⟩, hR⟩
-        refine HRuns.bindDC ((HRuns.levelChals resp x.2.1 x.2.2 (embedF gw.1) gw.2 (x.1.1 - 4)).frame _)
+        refine HRuns.bindDC ((HRuns.levelChals resp _ x.2.1 x.2.2 (embedF gw.1) gw.2 (x.1.1 - 4)).frame _)
           (fun f _ => ?_)
           (Qf := fun f r => (∃ s', r = .yield s' ∧ (s'.1 = (stepL P (cfOf resp L) sch x).1.1 ∧
             (j + 1 < sch.levels.size - 1 → s'.2.2.1.size = j + 1 + 1 ∧ s'.2.2.2.1.size = j + 1)) ∧
@@ -295,7 +295,7 @@ theorem honest : Honest := by
           · obtain rfl := ForInStep.yield.inj e
             rfl
         · intro r y hQ hX hy
-          obtain ⟨rfl, ⟨⟨⟨hf, hy₁, hsync₁⟩, hR⟩, hq⟩, -⟩ := hy
+          obtain ⟨rfl, ⟨⟨⟨hf, hy₁, -, hsum⟩, hR⟩, hq⟩, -⟩ := hy
           intro s' e
           obtain rfl := ForInStep.yield.inj e
           have hfin := (hX _ rfl).2.2 hjR
@@ -306,7 +306,7 @@ theorem honest : Honest := by
           have hfr := congrArg FinalProof.rows hfin
           unfold Final
           refine goal_last hx.symm hjR hL hsd hrows hR.2.1 hR.2.2.1 hR.2.2.2.1 hR.2.2.2.2 (hseam _ (by omega))
-            (hlan _ (by omega) (by omega)) (by rw [hcols _ (by omega), hI.sd]; omega) hbasis rfl rfl hsync₁
+            (hlan _ (by omega) (by omega)) (by rw [hcols _ (by omega), hI.sd]; omega) hbasis rfl rfl hsum
             (by rw [← hfin]; rfl) ?_
           rw [← hfr, query_pos]
           rfl

@@ -1,8 +1,9 @@
 /-!
 # What the window makes public (`window.py`, "Public items")
 
-`PUBLIC`, exactly the draft's list, in the service's `Public` form, `REGISTERED`, the items a registration carries, and
-`KINDS`, the kinds of an entry.
+`PUBLIC`, the draft's list and the rows' fixed length (19 Oct), in the service's `Public` form, `REGISTERED`, the items
+a registration carries, `LEGACY_REGISTERED`, what one made before the fixed-length rule carries, and `KINDS`, the kinds
+of an entry.
 -/
 
 namespace PouwWindow
@@ -24,11 +25,16 @@ def publicItems : List PublicItem := [
     "scheme fix the auditor's verifier"⟩,
   ⟨"sampling", "structure", "parameter", "ε, δ and the grid, and the law subset:K′ they fix with the level: the guarantee " ++
     "is stated in them"⟩,
+  ⟨"length", "structure", "parameter", "the rows of record's fixed length: each slot's max_tokens, served whatever it " ++
+    "samples (ignore_eos), so the useful work is public"⟩,
   ⟨"drawn", "coins", "outcome", "the verifier's own draw, after the receipt"⟩,
   ⟨"root_W", "commitment", "parameter", "the weights' salted root: what the tiles' weight rows are committed to, hiding"⟩]
 
 /-- `REGISTERED`: the items a registration carries; the verdict and the draw come after it. -/
-def registered : List String := ["work", "check", "sampling", "root_W"]
+def registered : List String := ["work", "check", "sampling", "length", "root_W"]
+
+/-- `LEGACY_REGISTERED`: what a registration made before the fixed-length rule (19 Oct) carries, so not of record. -/
+def legacyRegistered : List String := ["work", "check", "sampling", "root_W"]
 
 /-- `KINDS`. -/
 def kinds : List String := ["call", "filler", "none"]

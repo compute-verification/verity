@@ -1,0 +1,19 @@
+[Unit]
+Description=the verifier's run %i put in the evidence store, as auditor from the pinned tree (benchmarks/live_verifier/host.py publish)
+
+[Service]
+Type=oneshot
+User=auditor
+Group=auditor
+UMask=0022
+WorkingDirectory=/opt/vy-verifier/current
+# infra's store credential (R2_ENDPOINT, R2_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY), root's 0600 file; absent or
+# empty, the put fails here, visibly, and the run stays on the host
+EnvironmentFile=/etc/vy/verifier-store.env
+Environment=PYTHONDONTWRITEBYTECODE=1 HOME=/var/lib/vy-verifier PATH=/usr/bin:/bin
+ExecStart=/usr/bin/python3 -I /opt/vy-verifier/current/benchmarks/live_verifier/host.py publish %i
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/vy-verifier

@@ -15,6 +15,9 @@ inner dimension, `K = αΓ` the per-IU read cap and `μ` the weight on the two r
 * `1/s + μ/u ≥ (1 + √μ)² / (u + s)` (`sq_one_add_sqrt_div_le`) and AM–GM (`am_gm_step`), which together bound each IU's
   share of the weighted reads by `c₁ p τ + c₂ √(p Q Y)` (`iu_reads_ge`), and so the total by `min c₁ c₂ · G`
   (`min_mul_sum_le_reads`).
+* With dark gates (`Contained.lean`): the μ weighting when the partial sums count exceeds the reads by what dark gates
+  absorb (`mu_weighting_budget`), and a second per-IU bound, at most `E` products per input entry an IU uses at its other
+  positions, which gives `μ b_a / Λ` in place of `min c₁ c₂` (`column_le`, `max_mul_sum_le`).
 * `F`'s closed form: the maximum over `μ` of `min c₁ c₂` is attained, at `μ = 1/4` or where the two terms meet
   (`isGreatest_min_one_add_sqrt`, and `isGreatest_F` in the draft's variables), and a total read cap of `α size(D)` makes
   `size(D) / 2G ≥ F` (`F_le_div_of_reads`).
@@ -140,6 +143,74 @@ theorem min_mul_sum_le_reads {ι : Type*} (s : Finset ι) {bw ba d K μ T : ℝ}
         exact add_le_add (mul_le_mul_of_nonneg_right (min_le_left _ _) (mul_nonneg (hp R hR) (hτ R hR)))
           (mul_le_mul_of_nonneg_right (min_le_right _ _) (Real.sqrt_nonneg _))
     _ ≤ _ := iu_reads_ge hbw hba hd hK hμ₀ hμ₁ (hp R hR) (hτ R hR) (hQ R hR) (hY R hR) (hcap R hR)
+
+/-- **The μ weighting with an absorption budget**: as `mu_weighting`, when the second count exceeds `T` by at most `B`
+(the partial sums that parts outside `s` absorb), the weighted reads exceed `T` by at most `(1 - μ) B`. -/
+theorem mu_weighting_budget {ι : Type*} (s : Finset ι) {T B μ : ℝ} {u a b : ι → ℝ} (hμ₀ : 0 ≤ μ) (hμ₁ : μ ≤ 1)
+    (h₁ : ∑ R ∈ s, (u R + a R) ≤ T) (h₂ : ∑ R ∈ s, (u R + b R) ≤ T + B) :
+    ∑ R ∈ s, (u R + μ * a R + (1 - μ) * b R) ≤ T + (1 - μ) * B := by
+  calc ∑ R ∈ s, (u R + μ * a R + (1 - μ) * b R)
+        = μ * ∑ R ∈ s, (u R + a R) + (1 - μ) * ∑ R ∈ s, (u R + b R) := by
+          rw [mul_sum, mul_sum, ← sum_add_distrib]
+          exact sum_congr rfl fun _ _ => by ring
+    _ ≤ μ * T + (1 - μ) * (T + B) :=
+        add_le_add (mul_le_mul_of_nonneg_left h₁ hμ₀) (mul_le_mul_of_nonneg_left h₂ (by linarith))
+    _ = T + (1 - μ) * B := by ring
+
+/-- **The column count, weighted**: an IU within the read cap `b_w p + b_a (d τ + Q) ≤ K` that computes at most
+`g ≤ p τ + E Q` products has `μ b_a g / Λ ≤ b_w p + μ b_a (d τ + Q)` for any `Λ ≥ E` and `Λ ≥ K / (4 b_w d)`: by AM–GM,
+`4 b_w d · b_a p τ ≤ (b_w p + b_a d τ)² ≤ K (b_w p + b_a d τ)`. -/
+theorem column_le {bw ba d K μ p τ Q E Λ g : ℝ} (hbw : 0 < bw) (hba : 0 < ba) (hd : 0 < d) (hK : 0 < K)
+    (hμ₀ : 0 ≤ μ) (hμ₁ : μ ≤ 1) (hp : 0 ≤ p) (hτ : 0 ≤ τ) (hQ : 0 ≤ Q) (hE : E ≤ Λ) (hΛ : K / (4 * bw * d) ≤ Λ)
+    (hcap : bw * p + ba * (d * τ + Q) ≤ K) (hg : g ≤ p * τ + E * Q) :
+    μ * ba / Λ * g ≤ bw * p + μ * (ba * (d * τ + Q)) := by
+  have hΛ0 : 0 < Λ := lt_of_lt_of_le (by positivity) hΛ
+  have hA0 : 0 ≤ bw * p + ba * (d * τ) := by positivity
+  have hA : bw * p + ba * (d * τ) ≤ K := by nlinarith [mul_nonneg hba.le hQ]
+  have h1 : ba * (p * τ) * (4 * bw * d) ≤ K * (bw * p + ba * (d * τ)) := by
+    nlinarith [sq_nonneg (bw * p - ba * (d * τ)), mul_le_mul_of_nonneg_left hA hA0]
+  have h2 : ba * (p * τ) ≤ Λ * (bw * p + ba * (d * τ)) := by
+    have h3 : ba * (p * τ) ≤ K / (4 * bw * d) * (bw * p + ba * (d * τ)) := by
+      rw [div_mul_eq_mul_div, le_div_iff₀ (by positivity)]
+      exact h1
+    exact h3.trans (mul_le_mul_of_nonneg_right hΛ hA0)
+  have h5 : ba * (E * Q) ≤ Λ * (ba * Q) := by
+    nlinarith [mul_le_mul_of_nonneg_right hE (mul_nonneg hba.le hQ)]
+  have h6 : μ * ba * g ≤ μ * (Λ * (bw * p + ba * (d * τ)) + Λ * (ba * Q)) := by
+    have h7 : ba * g ≤ ba * (p * τ) + ba * (E * Q) := by
+      have := mul_le_mul_of_nonneg_left hg hba.le
+      linarith
+    have := mul_le_mul_of_nonneg_left (h7.trans (add_le_add h2 h5)) hμ₀
+    linarith
+  rw [div_mul_eq_mul_div, div_le_iff₀ hΛ0]
+  nlinarith [mul_le_mul_of_nonneg_left hμ₁ (mul_nonneg hΛ0.le (mul_nonneg hbw.le hp))]
+
+/-- **The IUs' weighted reads bound their products, by columns too**: as `min_mul_sum_le_reads`, with the weighted
+reads themselves at most `T`, and each IU's products also at most `p τ + E Q`, `T ≥ max (min c₁ c₂) (μ b_a / Λ) · ∑ g`
+for any `Λ ≥ E` and `Λ ≥ K / (4 b_w d)` (`column_le`). -/
+theorem max_mul_sum_le {ι : Type*} (s : Finset ι) {bw ba d K μ E Λ T : ℝ} (hbw : 0 < bw) (hba : 0 < ba) (hd : 0 < d)
+    (hK : 0 < K) (hμ₀ : 0 ≤ μ) (hμ₁ : μ ≤ 1) (hE : E ≤ Λ) (hΛ : K / (4 * bw * d) ≤ Λ) {p τ Q Y g : ι → ℝ}
+    (hp : ∀ R ∈ s, 0 ≤ p R) (hτ : ∀ R ∈ s, 0 ≤ τ R) (hQ : ∀ R ∈ s, 0 ≤ Q R) (hY : ∀ R ∈ s, 0 ≤ Y R)
+    (hg0 : ∀ R ∈ s, 0 ≤ g R) (hcap : ∀ R ∈ s, bw * p R + ba * (d * τ R + Q R) ≤ K)
+    (hg : ∀ R ∈ s, g R ≤ p R * τ R + √(p R * Q R * Y R)) (hgE : ∀ R ∈ s, g R ≤ p R * τ R + E * Q R)
+    (hT : ∑ R ∈ s, (bw * p R + μ * (ba * (d * τ R + Q R)) + (1 - μ) * (ba / 2 * Y R)) ≤ T) :
+    max (min ((1 + √μ) ^ 2 * (bw * ba * d / K)) (√2 * (1 + √μ) * √(1 - μ) * (ba * √(bw / K)))) (μ * ba / Λ) *
+      ∑ R ∈ s, g R ≤ T := by
+  set c₁ := (1 + √μ) ^ 2 * (bw * ba * d / K)
+  set c₂ := √2 * (1 + √μ) * √(1 - μ) * (ba * √(bw / K))
+  have hc : 0 ≤ min c₁ c₂ := le_min (by positivity) (by positivity)
+  refine le_trans ?_ hT
+  rw [mul_sum]
+  refine sum_le_sum fun R hR => (max_mul_of_nonneg _ _ (hg0 R hR)).le.trans (max_le ?_ ?_)
+  · calc min c₁ c₂ * g R ≤ min c₁ c₂ * (p R * τ R + √(p R * Q R * Y R)) := mul_le_mul_of_nonneg_left (hg R hR) hc
+      _ ≤ c₁ * (p R * τ R) + c₂ * √(p R * Q R * Y R) := by
+          rw [mul_add]
+          exact add_le_add (mul_le_mul_of_nonneg_right (min_le_left _ _) (mul_nonneg (hp R hR) (hτ R hR)))
+            (mul_le_mul_of_nonneg_right (min_le_right _ _) (Real.sqrt_nonneg _))
+      _ ≤ _ := iu_reads_ge hbw hba hd hK hμ₀ hμ₁ (hp R hR) (hτ R hR) (hQ R hR) (hY R hR) (hcap R hR)
+  · have h := column_le hbw hba hd hK hμ₀ hμ₁ (hp R hR) (hτ R hR) (hQ R hR) hE hΛ (hcap R hR) (hgE R hR)
+    have : 0 ≤ (1 - μ) * (ba / 2 * Y R) := mul_nonneg (by linarith) (mul_nonneg (by positivity) (hY R hR))
+    linarith
 
 section ClosedForm
 

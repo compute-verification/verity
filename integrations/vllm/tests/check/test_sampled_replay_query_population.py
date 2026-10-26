@@ -20,10 +20,9 @@ import json
 import pytest
 
 from verity_vllm.check.c2_rules import _query_population_scope
-from verity_vllm.check.verdict import commit_verdict
+from verity.ml.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.check.commit_pass import commit_verdict
 from verity_vllm.check.replay import coverage as COV, driver as SR, index as IX, population as POP
-from verity_vllm.check.replay import replay_codes as RC
-from verity_vllm.program.kernels import rows as RK
 from tests.check import test_sampled_replay as T
 from tests.check.test_sampled_replay import moe_world, world  # noqa: F401  -- fixtures
 
@@ -104,10 +103,30 @@ def test_the_record_carries_the_engine_configuration_the_evaluators_were_conditi
     assert isinstance(v, str) and v and (v.startswith("unavailable: ") or v[0].isupper()), ("torch_preferred_blas_library", v)
     assert "VLLM_BATCH_INVARIANT=1" in eng["rule"] and "never declared" in eng["rule"]
     assert set(eng) == {"VLLM_BATCH_INVARIANT", "CUBLAS_WORKSPACE_CONFIG", "CUBLASLT_WORKSPACE_SIZE", "vllm_batch_invariant_mode",
-                        "torch_allow_bf16_reduced_precision_reduction", "torch_preferred_blas_library", "compute_capability", "rule"}
+                        "torch_allow_bf16_reduced_precision_reduction", "torch_preferred_blas_library", "compute_capability", "cublas", "rule"}
+    # what decides cuBLAS's routes, each fact the route pin's conditions name, measured or named-unavailable, the workspace variables the record's
+    cub = eng["cublas"]
+    assert set(cub) == set(BC.ROUTE_CONDITIONS) | {"cublaslt_version", "cublas_library"}
+    assert cub["env"] == {"CUBLAS_WORKSPACE_CONFIG": ":16:8", "CUBLASLT_WORKSPACE_SIZE": None}
+    assert all(isinstance(v, (int, list)) or (isinstance(v, str) and v) for k, v in cub.items() if k != "env"), cub
     # not set -> None by name, never "1" by default
     monkeypatch.delenv("VLLM_BATCH_INVARIANT")
     assert SR.engine_facts_of_record()["VLLM_BATCH_INVARIANT"] is None
+
+
+def test_the_cublas_version_is_the_mapped_librarys_or_unavailable_by_name(tmp_path):
+    """The version is read from the one libcublas the process maps (never the linker's search order): none mapped, two mapped or one
+    that does not load is 'unavailable: <why>'."""
+    line = "7f0000000000-7f0000001000 r-xp 00000000 08:01 42 {}\n"
+    for files, why in (([], "0 libcublas.so* mapped []"),
+                       (["/a/libcublas.so.12", "/b/libcublas.so.13", "/a/libcublasLt.so.12"], "2 libcublas.so* mapped ['/a/libcublas.so.12', '/b/libcublas.so.13']")):
+        maps = tmp_path / "maps"
+        maps.write_text("7f0000002000-7f0000003000 rw-p 00000000 00:00 0\n" + "".join(line.format(f) for f in files))
+        got = SR.cublas_versions(str(maps))
+        assert got["cublas_version"] == got["cublas_library"] == f"unavailable: LookupError: {why}"
+        assert got["cublaslt_version"].startswith("unavailable: ")
+    maps.write_text(line.format(tmp_path / "libcublas.so.12"))
+    assert SR.cublas_versions(str(maps))["cublas_version"].startswith("unavailable: OSError: ")
 
 
 def test_a_required_identity_no_row_produces_is_named_and_fails_the_reconciliation_and_the_verdict(world):  # noqa: F811
@@ -153,7 +172,7 @@ def test_a_vu_whose_identity_the_query_does_not_require_is_outside_the_query_nev
     rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=1, seed=3, workers=0, manifest=narrowed)["population"]
     chk = rep["query_checks"]
     assert chk["ok"] is False and chk["vus_outside_query"]["n"] == 1
-    assert chk["vus_outside_query"]["first"][0] == {"request_id": "r1", "step": 1, "op_path": drop["op_path"], "member": "0", "spec": chk["vus_outside_query"]["first"][0]["spec"], "class": "vu"}
+    assert chk["vus_outside_query"]["first"][0] == {"request_id": "r1", "step": 1, "op_path": drop["op_path"], "member": drop["output_member"], "spec": chk["vus_outside_query"]["first"][0]["spec"], "class": "vu"}
     assert rep["sampled_strata"]["identities_reached"] == full["sampled_strata"]["identities_reached"] - 1
     assert rep["query_total"]["identities"] == full["query_total"]["identities"] - 1 and chk["accounted"] is True
 
@@ -194,18 +213,6 @@ def test_moe_plane_identities_reconcile_at_their_planes(moe_world):  # noqa: F81
         assert u["mechanism"] and u["class"] != "unstated"
         if u["family"] == "moe_block_stream":
             assert u["class"] == "plane-fed" and u["spec"].startswith("Moe")
-
-
-def _expected_uncovered_class(spec: str) -> str | None:
-    """What the TREE says about a family: an evaluator registered -> its identities are REACHED (None here); in NOT_YET -> uncovered by
-    the class the entry states (K/V history = state-linked); neither -> no-evaluator.  Read from the registry, never hard-coded: dense's
-    RoPE_v1 (af80855b4, R17-9) and Attention_v2/v3 Stage A (M-0156, R17-11) evaluators land on int and this test must hold on both trees
-    (rel M-0157 collision 3)."""
-    if spec in RK.EVALUATORS and spec not in RC.NOT_YET:
-        return None
-    if spec in RC.NOT_YET:
-        return "state-linked" if "K/V history" in RC.NOT_YET[spec] else "no-evaluator"
-    return "no-evaluator"
 
 
 def test_a_required_family_without_a_stated_mechanism_fails_closed(world):  # noqa: F811
@@ -509,15 +516,49 @@ def test_r3_without_a_served_list_the_arithmetic_is_the_mechanism_and_is_named_o
     e = POP.executed_prefix_of_record("r0", a_r=3, lag=1, cap=8, eos_declared=True, served_len_commit=3, **ok)
     assert e["faults"] == [] and e["n_exec"] == 4 and e["r3_one_mechanism"] is False and e["by_rule"] is None
     assert e["mechanism"].startswith("arithmetic(a_r, LAG)") and "served list was not supplied" in e["mechanism"] and "R3" in e["mechanism"]
-    # the served list supplied on a tree WITHOUT the Continuation_v1 unit: the arithmetic, named as such (never silently the same thing)
+    # the served list supplied with no rule: Continuation_v1's own
     e2 = POP.executed_prefix_of_record("r0", a_r=3, lag=1, cap=8, eos_declared=True, served_len_commit=3, served=[5, 7, 2], eos_ids=[2], rule=None, **ok)
-    if POP._continuation_rule() is None:
-        assert e2["mechanism"].startswith("arithmetic(a_r, LAG)") and "not on this tree" in e2["mechanism"] and e2["r3_one_mechanism"] is False
-    else:
-        assert e2["mechanism"].startswith("recurrence(Continuation_v1)") and e2["r3_one_mechanism"] is True and e2["n_exec"] == 4
+    assert e2["mechanism"].startswith("recurrence(Continuation_v1)") and e2["r3_one_mechanism"] is True and e2["n_exec"] == 4
 
 
-@pytest.mark.skipif(POP._continuation_rule() is None, reason="verity_vllm.program.lifting.continuation (pad R17-32) is not on this tree")
+def test_r3_a_broken_continuation_unit_fails_the_import_rather_than_falling_back_to_the_arithmetic(monkeypatch):
+    """The recurrence is the mechanism whenever a served list is supplied: Continuation_v1 failing to import fails the population's import,
+    never a record whose class silently reads 'arithmetic'."""
+    import importlib
+    import sys
+
+    monkeypatch.setitem(sys.modules, "verity_vllm.program.lifting.continuation", None)
+    monkeypatch.delitem(sys.modules, "verity_vllm.check.replay.population")
+    with pytest.raises(ImportError):
+        importlib.import_module("verity_vllm.check.replay.population")
+
+
+class _NotYetPi:
+    """Two NOT_YET rows whose address rule raises on the second: the smallest index `population` reads."""
+    n_steps = 1
+    rows = [{"i": 0, "spec": "AttentionHead_v1{H=2}"}, {"i": 1, "spec": "AttentionHead_v1{H=2}"}]
+
+    def describe(self, r):
+        if r["i"] == 1:
+            raise KeyError("op_path")
+        return {"op_path": "model.layers.0.attn", "step": 0, "members": [("out",)]}
+
+
+def test_a_not_yet_row_whose_address_rule_fails_is_a_mapping_fault_by_name_not_a_dropped_identity():
+    from verity_vllm.check.replay import replay_codes as RC
+
+    addresses, codes = {}, {}
+    vus, ne, nef = POP.population(_NotYetPi(), "r0", addresses=addresses, codes=codes)
+    domain = RC.NOT_YET["AttentionHead_v1"]
+    assert vus == [] and list(addresses) == [("r0", 0, "model.layers.0.attn", "out")] and ne[domain] == 1
+    (why,) = [w for w in ne if w != domain]
+    assert why.startswith("AttentionHead_v1 row address unmodelled") and "KeyError" in why and ne[why] == 1
+    assert codes[why]["class"] == RC.why_class(why) == "mapping" and "mapping" in RC.WHY_CLASSES_FAULT
+    assert nef == {"AttentionHead_v1": 1, "AttentionHead_v1 (address unmodelled)": 1}
+    # without an address accumulator the rule is not consulted: both rows are the family's domain label
+    assert POP.population(_NotYetPi(), "r0")[1] == {domain: 2}
+
+
 def test_r3_the_real_continuation_rule_is_the_mechanism_and_agrees_with_the_arithmetic_on_well_formed_records():
     ok = dict(linked=True, lag_attested=True, a_r_source="match/capture/tokens.json served_by_request sha256 0000")
     for a_r, lag, cap in ((12, 1, 32), (9, 1, 32), (12, 0, 32), (32, 1, 32)):

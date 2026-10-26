@@ -31,6 +31,8 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("RESEARCH_LOCAL_ONLY", "a test's run: its store is a tmp dir")
     monkeypatch.setenv("RESEARCH_MACHINES_D", "none")      # the pod registry (pods/registry.py) is each test's explicit choice
     monkeypatch.setenv("RESEARCH_MERGE_MIRROR", "")        # nor does a merge's push reach node 1's bare repository
+    monkeypatch.setenv("RESEARCH_LEAN_PUBLISH", "")        # nor start the control pod's Lean cache publish
+    monkeypatch.setenv("RESEARCH_DRIVE", "1")              # a test pushes main and next as drive does; the refusal's tests unset it
     # ... nor the public export: an empty URL is no public source (unset, as the clear above leaves it, would mean fetchset.PUBLIC_URL)
     monkeypatch.setenv("RESEARCH_PUBLIC_URL", "")
     # ... nor the machine's hard deadline: lease.sh defaults to /etc/research/deadline, which a Nebius host has
@@ -44,6 +46,8 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     # ... nor cpu-1's rule that a run comes through a check slot (/etc/vy/runs-via-slot)
     monkeypatch.setenv("RUNS_VIA_SLOT_FILE", str(tmp_path_factory.mktemp("slot-only") / "absent-runs-via-slot"))
     monkeypatch.setenv("NODE_SLOT_ONLY_FILE", str(tmp_path_factory.mktemp("slot-only") / "absent-slot_only.py"))
+    # ... nor an auditor host's list of the only commands it runs (/etc/vy/auditor)
+    monkeypatch.setenv("AUDITOR_FILE", str(tmp_path_factory.mktemp("auditor") / "absent-auditor"))
     # ... nor its learned bundle sizes: on vy-nebius-1 the pacer mirrors them to /workspace/jobs/dispatch/bundle-sizes.json
     monkeypatch.setenv("VY_BUNDLE_SIZES", str(tmp_path_factory.mktemp("bundle-sizes") / "bundle-sizes.json"))
     # ... nor its dispatcher's settings: importing dispatch.py loads $VY_DISPATCH_ROOT/dispatch.env (default
@@ -52,6 +56,16 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("VY_DISPATCH_ROOT", str(tmp_path_factory.mktemp("dispatch") / "absent"))
     # ... nor the agent's Cursor identity: without SLACK_BOT_TOKEN, research msg asks this socket for an OIDC token for its broker
     monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(tmp_path_factory.mktemp("cursor") / "absent.sock"))
+    # ... nor does a routed post fetch origin/main to read its registry
+    monkeypatch.setenv("RESEARCH_SLACK_FRESH_CHECK", "0")
+    # ... nor does anything that folds in the inbox routes (holders: research msg, drive's PR owners) read the published ones
+    monkeypatch.setenv("RESEARCH_ROUTES_URL", f"file://{tmp_path_factory.mktemp('routes') / 'absent'}")
+    # ... nor does `research run --on auto` read the nodes' cores and pools over ssh (research.auto): unread, it queues on node 2
+    monkeypatch.setattr("research.auto._reach", _unreachable)
+
+
+def _unreachable(name: str) -> list[str]:
+    raise RuntimeError(f"a test reaches no machine ({name})")
 
 
 @pytest.fixture(autouse=True)

@@ -10,6 +10,8 @@
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import dataclasses
 
 import pytest
@@ -246,15 +248,16 @@ def _ar_ctx(M, notes=None, flags=None):
     return dataclasses.replace(ctx, header=dataclasses.replace(ctx.header, notes=notes or {}, profile=profile))
 
 
-def _build_kind(settings, M, N=H):
-    """The Definition the Build's `AllReduceRule` emits for the same call (`vllm_bindings.collectives._allreduce_kind`)."""
+def _build_kind(settings, M, N=H, rows=None):
+    """The Definition the Build's `AllReduceRule` emits for the same call (`vllm_bindings.collectives._allreduce_kind`), over `rows` of
+    the launch's M (one request's)."""
     from types import SimpleNamespace
     from verity_vllm.program.frontend.rules.vllm_bindings import collectives as BC
     from verity_vllm.program.frontend.rules.vocab import vocabulary_for
-    from verity_vllm.program.registry import tp_allreduce as T
+    from verity.ml.definitions.registry import tp_allreduce as T
 
     setting, route = T.served_route(settings, M, N)
-    plan = {"captured": T.covered(setting, N, route, M), "M": M, "N": N}
+    plan = {"captured": T.covered(setting, N, route, M), "M": M, "rows_n": rows or M, "N": N}
     voc = vocabulary_for("profile", "b1-eager-v3")
     return BC._allreduce_kind(SimpleNamespace(kind=lambda role, node, **st: voc.kind(role, **st)), None, plan, 8)
 
@@ -280,7 +283,8 @@ def test_the_capture_s_settings_are_its_recorded_engine_switches_else_no_route()
     from verity_vllm.observe.fold.patterns.collectives import TpCollective, allreduce_settings
 
     facts = {"tp2": {"facts": {"parallel_config": {"disable_custom_all_reduce": True}}}}
-    assert allreduce_settings(_ar_ctx(1, facts).header) == {"custom_all_reduce": False, "symmetric_memory": True, "flashinfer": True}
+    assert allreduce_settings(_ar_ctx(1, facts).header) == {"custom_all_reduce": False, "symmetric_memory": True, "flashinfer": True,
+                                                            "batch_invariant": False, "nccl_transport": None}
     assert allreduce_settings(_ar_ctx(1, facts, {"VLLM_ALLREDUCE_USE_SYMM_MEM": "0"}).header)["symmetric_memory"] is False
     assert allreduce_settings(_ar_ctx(1).header) is None
     pat = TpCollective(world=8)
@@ -291,3 +295,108 @@ def test_the_capture_s_settings_are_its_recorded_engine_switches_else_no_route()
         r = pat.match(node, ctx)
         assert spec_label(r.spec) == f"AllReduce_v2{{WORLD=8,N={node.enter.args[0].shape[1]}}}" and r.rows == M
         assert not r.operands[0].flat
+
+
+def _requests_ctx(counts, notes=None):
+    """A step whose token rows are each request's run of `counts[j]` rows, in request order."""
+    ctx = _ar_ctx(sum(counts), notes)
+    rows = [(f"r{j}", i) for j, n in enumerate(counts) for i in range(n)]
+    return dataclasses.replace(ctx, start=dataclasses.replace(ctx.start, rows=rows))
+
+
+@pytest.mark.parametrize("counts", [(1, 1), (1, 255), (3, 1, 4)], ids=["decode", "mixed", "three"])
+def test_a_multi_request_tp8_all_reduce_is_the_build_s_one_call_per_request(counts):
+    """The Build reduces each request's rows as its own flat call on the route the launch's M picks (`route_binding(c, 8, M, N, rows)`):
+    the fold states the same calls, each over its request's run of the partial and named as a part of the one call (VLLM-14)."""
+    from verity_vllm.observe.fold.patterns.collectives import TpCollective
+    from verity_vllm.observe.fold.resolver import Group
+
+    M = sum(counts)
+    r = TpCollective(world=8).match(_ar(M), _requests_ctx(counts, {"allreduce_settings": DEFAULTS}))
+    assert isinstance(r, Group) and len(r.parts) == len(counts)
+    lo = 0
+    for j, (n, p) in enumerate(zip(counts, r.parts)):
+        assert p.spec.id == _build_kind(DEFAULTS, M, rows=n).id and p.rows == 1
+        (coll,), (out,) = p.operands, p.outputs
+        assert coll.flat and coll.call == view(5630, (M, H)) and coll.own == view(5630, (n, H), offset=lo * H)
+        assert out.view == view(5631, (1, n * H), offset=lo * H) and p.attribution == tuple((f"r{j}", i) for i in range(n))
+        lo += n
+
+
+def test_a_per_request_all_reduce_is_refused_where_the_route_reduces_by_offset_or_a_request_is_split():
+    from verity_vllm.observe.fold.patterns.collectives import TpCollective
+
+    switch = {**DEFAULTS, "symmetric_memory": False}           # the custom all-reduce's two-stage kernel at 43..682 tokens
+    r = TpCollective(world=8).match(_ar(64), _requests_ctx((1, 63), {"allreduce_settings": switch}))
+    assert isinstance(r, Unsupported) and "offset" in r.reason
+    assert isinstance(TpCollective(world=8).match(_ar(64), _requests_ctx((64,), {"allreduce_settings": switch})), Compute)
+    ctx = _requests_ctx((2, 1), {"allreduce_settings": DEFAULTS})
+    ctx = dataclasses.replace(ctx, start=dataclasses.replace(ctx.start, rows=[("r0", 0), ("r1", 0), ("r0", 1)]))
+    r = TpCollective(world=8).match(_ar(3), ctx)
+    assert isinstance(r, Unsupported) and "apart from its run" in r.reason
+
+
+def _tp8_fold(counts):
+    from verity_vllm.observe.fold.fold import _Fold
+
+    f = _Fold(profile_for_case("QWEN3_4B_FP8"), strict=True)
+    n = len(counts)
+    f.tp, f.tp_peer_ranks = {"rank": 3, "world": 8}, [0, 1, 2, 4, 5, 6, 7]
+    f.cur_step, f.cur_start, f.cur_event = 0, _requests_ctx(counts).start, 1
+    f.requests, f.req_index = [{"request_id": f"r{j}"} for j in range(n)], {f"r{j}": j for j in range(n)}
+    f.peers_param, f.peers_fields, f.peers_leaves = {j: 10 + j for j in range(n)}, {j: [] for j in range(n)}, {j: 0 for j in range(n)}
+    return f
+
+
+def _prepare(f, c):
+    (pname, ptype), = c.spec.signature()[0]
+    return f._collective_prepare(c, c.operands[0], ptype, pname)
+
+
+def test_the_per_request_parts_of_one_all_reduce_keep_its_one_step_k_and_record():
+    """The capture records the call once (`partial_source` and the cross-rank check key it by (step, k)): its parts continue one record
+    over the call's rows, each request with its own peers fields, and the next call takes the next k."""
+    from verity_vllm.observe.fold.fold import FoldError
+    from verity_vllm.observe.fold.patterns.collectives import TpCollective
+
+    counts = (1, 255)
+    f, pat = _tp8_fold(counts), TpCollective(world=8)
+    parts = pat.match(_ar(256), _requests_ctx(counts, {"allreduce_settings": DEFAULTS})).parts
+    preps = [_prepare(f, p) for p in parts]
+    assert [(p["step"], p["k"], p["M"]) for p in preps] == [(0, 0, 1), (0, 0, 255)]
+    assert [p["row_map"][0][2] for p in preps] == [0, 0] and preps[1]["row_map"][254][2] == 254
+    (rec,) = f.collectives
+    assert (rec["k"], rec["rows"], rec["own_view"], rec["flat"]) == (0, 256, view(5630, (256, H)), True)
+    assert [(x["request"], x["rows"], x["peer_rank"]) for x in rec["fields"]] == [(f"r{j}", n, pr) for j, n in enumerate(counts) for pr in f.tp_peer_ranks]
+    assert [len(f.peers_fields[j]) for j in (0, 1)] == [7, 7] and f.peers_leaves == {0: 7 * H, 1: 7 * 255 * H}
+    nxt = pat.match(_ar(256), _requests_ctx(counts, {"allreduce_settings": DEFAULTS})).parts
+    assert _prepare(f, nxt[0])["k"] == 1 and len(f.collectives) == 2
+    with pytest.raises(FoldError, match="follow no open part"):
+        _prepare(_tp8_fold(counts), parts[1])
+
+
+def _tp4_ctx(M, *, gpu=("12.0", 188), p2p_off=True):
+    """A batch-invariant world-4 capture's header as the TP4 rank worker records it: the rank's NCCL environment, the manifest's
+    engine flags and the capture's GPU."""
+    ctx = _ar_ctx(M, {"tp2": {"facts": {"parallel_config": {"disable_custom_all_reduce": True},
+                                        "nccl_env": {"NCCL_P2P_DISABLE": "1"} if p2p_off else {}}}}, {"VLLM_BATCH_INVARIANT": "1"})
+    profile = {**ctx.header.profile, "gpu": {"compute_capability": gpu[0], "multi_processor_count": gpu[1]}}
+    return dataclasses.replace(ctx, header=dataclasses.replace(ctx.header, profile=profile))
+
+
+def test_a_batch_invariant_tp4_all_reduce_on_the_rtx_pro_6000_over_shm_folds_to_nccl_s_tree():
+    """The TP4 capture's all-reduce (pynccl, SHM, 4 RTX PRO 6000) is the Build's one `AllReduceNcclTree_v1` call; another GPU, P2P on
+    or another world stays one `AllReduce_v2` per row."""
+    from verity_vllm.observe.fold.patterns.collectives import TpCollective, allreduce_settings, capture_device
+
+    N = 8192
+    assert allreduce_settings(_tp4_ctx(1).header) == {"custom_all_reduce": False, "symmetric_memory": True, "flashinfer": True,
+                                                      "batch_invariant": True, "nccl_transport": "shm"}
+    assert capture_device(_tp4_ctx(1).header) == ("12.0", 188) and capture_device(_ctx(1).header) == ("9.0", 132)
+    for M in (1, 256):
+        r = TpCollective(world=4).match(_ar(M, N), _tp4_ctx(M))
+        assert isinstance(r, Compute) and r.spec.id == f"AllReduceNcclTree_v1{{WORLD=4,SIZE={M * N},CHAIN=(0,1,2,3)}}", r
+        assert r.rows == 1 and r.operands[0].flat and len(r.attribution) == M
+    for world, ctx in ((4, _tp4_ctx(4, gpu=("9.0", 132))), (4, _tp4_ctx(4, p2p_off=False)), (8, _tp4_ctx(4))):
+        r = TpCollective(world=world).match(_ar(4, N), ctx)
+        assert spec_label(r.spec) == f"AllReduce_v2{{WORLD={world},N={N}}}" and r.rows == 4 and not r.operands[0].flat

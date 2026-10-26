@@ -1135,3 +1135,343 @@ def test_a_cancel_also_signals_the_runs_workers_that_left_its_group_but_never_th
     assert killed == [("pg", 100), ("pid", 300)], "the group, then its setsid worker; never the runner (50) or another run (400)"
     result = [json.loads(l) for l in (d / "events.jsonl").read_text().splitlines()][-1]
     assert result["strays_total"] == 1 and result["strays"][0]["pid"] == 300 and result["strays_signalled"] == 1
+
+
+# ---- the run's cgroup scope: what research cancel and a stage timeout end (INF-93) -------------------------------------------------------
+
+B = 5_000_000                       # past any pid_max, so no fake pid is this test's own
+RID = "r20261019-002224-7f15"
+APP = "/user.slice/user-1001.slice/user@1001.service/app.slice"
+QUEUE, LEASE, SESSION = f"{APP}/cluster-{RID}.scope", f"{APP}/gpu-lease-{B + 100}.scope", "/user.slice/user-1001.slice/session-5.scope"
+
+
+class _World:
+    """A fake /proc and cgroup v2 tree for scope.Sweep: pid -> (ppid, pgrp, session, cgroup, RESEARCH_RUN_DIR, argv).  `kill`
+    records each signal; a pid in `ignores_term` survives SIGTERM and one in `unkillable` survives everything (a D-state task)."""
+
+    def __init__(self, root: Path, procs: dict, *, ignores_term=(), unkillable=()):
+        self.root, self.procs, self.sent = root, dict(procs), []
+        self.ignores_term, self.unkillable = set(ignores_term), set(unkillable)
+        self.start = {p: 7 for p in procs}
+        self._write()
+
+    def _write(self):
+        for f in self.root.rglob("cgroup.procs"):
+            f.write_text("")
+        for p, (_, _, _, cg, _, _) in self.procs.items():
+            d = self.root / cg.lstrip("/")
+            d.mkdir(parents=True, exist_ok=True)
+            with open(d / "cgroup.procs", "a") as f:
+                f.write(f"{p}\n")
+
+    def stat(self, p):
+        if p not in self.procs:
+            return None
+        ppid, pgrp, sess, _, _, argv = self.procs[p]
+        return {"pid": p, "comm": Path(argv[0]).name, "state": "S", "ppid": ppid, "pgrp": pgrp, "session": sess,
+                "starttime_ticks": self.start[p]}
+
+    def pids(self):
+        return sorted(self.procs)
+
+    def cgroup(self, p):
+        return self.procs[p][3] if p in self.procs else None
+
+    def env_of(self, p):
+        return self.procs[p][4] if p in self.procs else None
+
+    def cmdline(self, p):
+        return self.procs[p][5] if p in self.procs else []
+
+    def kill(self, p, sig):
+        import signal
+        if p not in self.procs:
+            raise ProcessLookupError(p)
+        self.sent.append((p, signal.Signals(sig).name))
+        if p not in self.unkillable and (sig == signal.SIGKILL or p not in self.ignores_term):
+            del self.procs[p]
+            for q, (ppid, *rest) in list(self.procs.items()):
+                if ppid == p:
+                    self.procs[q] = (B + 2, *rest)          # reparented to the subreaper, systemd --user
+            self._write()
+
+    def sweep(self, leader, run_dir, **kw):
+        from research.telemetry import scope
+        return scope.Sweep(leader, run_dir, stat=self.stat, pids=self.pids, cgroup=self.cgroup, env_of=self.env_of, cmdline=self.cmdline,
+                           root=self.root, kill=self.kill, **kw)
+
+
+@pytest.fixture
+def fake_time(monkeypatch):
+    """scope's clock, advanced only by its own sleeps; `on_sleep` runs at each one."""
+    from research.telemetry import scope
+    t, hooks = [0.0], []
+    monkeypatch.setattr(scope, "clock", lambda: t[0])
+
+    def sleep(dt):
+        t[0] += dt
+        for h in hooks:
+            h()
+    monkeypatch.setattr(scope, "sleep", sleep)
+    return hooks
+
+
+def _running(d: Path, *, runner: int, pgid: int, start: int = 7) -> None:
+    """status.json as the runner `runner` (start time `start`) writes it when it starts the workload, the leader of group `pgid`."""
+    (d / "status.json").write_text(json.dumps({"state": "running", "pid": pgid, "pgid": pgid, "transitions": [
+        {"state": "running", "stream": f"h:{runner}:{start}", "pid": pgid, "pgid": pgid}]}))
+
+
+def _vllm_world(tmp_path, **kw):
+    """vy-glm53-eu, 19 Oct 01:20Z: a queued run's runner and sampler in its queue scope, its workload under gpu-lease (the leader) whose
+    scope holds vLLM's engine and eight TP rank workers that setsid and were reparented to systemd --user, their environment unreadable;
+    beside it another run's process and a system daemon."""
+    rd = str(tmp_path / RID)
+    py = ["python3", "-c", "..."]
+    procs = {B + 2: (1, B + 2, B + 2, f"/user.slice/user-1001.slice/user@1001.service/init.scope", None, ["systemd", "--user"]),
+             B + 50: (B + 2, B + 50, B + 50, QUEUE, rd, ["python3", "-m", "research", "run", "--runs-dir", "x", "--id", RID]),
+             B + 51: (B + 50, B + 51, B + 51, QUEUE, rd, ["python3", "-m", "research.telemetry", "sample"]),
+             B + 100: (B + 50, B + 100, B + 100, QUEUE, rd, ["bash", "/usr/local/bin/gpu-lease", "8", "--wait", "--", "vllm"]),
+             B + 101: (B + 100, B + 100, B + 100, LEASE, rd, ["python3", "-m", "vllm.entrypoints.openai.api_server"]),
+             **{B + 300 + k: (B + 2, B + 300 + k, B + 300 + k, LEASE, None, py) for k in range(8)},
+             B + 400: (B + 2, B + 400, B + 400, SESSION, "/workspace/research/runs/r20261019-010101-aaaa", py),
+             B + 450: (1, B + 450, B + 450, "/system.slice/nvidia-persistenced.service", None, ["nvidia-persistenced"])}
+    return _World(tmp_path / "cgroup", procs, **kw), rd
+
+
+def test_a_sweep_ends_every_process_of_the_runs_own_scopes_and_never_the_runner(tmp_path, fake_time):
+    """The run's queue scope and its gpu-lease scope are its own: the rank workers there are ended though they left the group, the
+    session and the process tree and their environment can't be read; four ignore SIGTERM and get SIGKILL after the grace.  The
+    runner, its sampler and systemd --user (where the workers were reparented) are spared, and so is everything outside the run."""
+    from research.telemetry import scope
+    w, rd = _vllm_world(tmp_path, ignores_term=[B + 300, B + 301, B + 302, B + 303])
+    rec = w.sweep(B + 100, rd).end(scope.GRACE_S)
+    term = {p for p, s in w.sent if s == "SIGTERM"}
+    assert term == {B + 100, B + 101, *range(B + 300, B + 308)}
+    assert [p for p, s in w.sent if s == "SIGKILL"] == [B + 300, B + 301, B + 302, B + 303]
+    assert set(w.procs) == {B + 2, B + 50, B + 51, B + 400, B + 450}
+    assert set(rec["scopes"]) == {QUEUE, LEASE} and rec["fallback"] is None
+    assert rec["SIGTERM"]["n"] == 10 and rec["SIGKILL"]["n"] == 4 and rec["empty"] is True and rec["left"] == []
+    assert (tmp_path / "cgroup" / LEASE.lstrip("/") / "cgroup.procs").read_text() == ""
+
+
+def test_a_run_in_no_scope_of_its_own_is_ended_by_its_group_session_and_run_dir_and_says_so(tmp_path, fake_time):
+    """A direct run in a person's ssh login: the session scope holds a tmux too, so only the run's processes are ended (the group,
+    a setsid worker naming its run dir) and the record says why."""
+    rd = str(tmp_path / RID)
+    py = ["python3", "-c", "..."]
+    w = _World(tmp_path / "cgroup", {
+        B + 50: (B + 600, B + 50, B + 600, SESSION, None, ["python3", "-m", "research", "run", "--id", RID]),
+        B + 100: (B + 50, B + 100, B + 100, SESSION, rd, py),
+        B + 101: (B + 100, B + 100, B + 100, SESSION, rd, py),
+        B + 300: (1, B + 300, B + 300, SESSION, rd, py),
+        B + 600: (1, B + 600, B + 600, SESSION, None, ["tmux"]),
+        B + 601: (B + 600, B + 601, B + 601, SESSION, None, ["bash"])})
+    rec = w.sweep(B + 100, rd).end(20.0)
+    assert {p for p, _ in w.sent} == {B + 100, B + 101, B + 300} and {s for _, s in w.sent} == {"SIGTERM"}
+    assert set(w.procs) == {B + 50, B + 600, B + 601}
+    assert rec["scopes"] == {} and "no scope of the run's own" in rec["fallback"] and "session-5.scope" in rec["fallback"]
+    assert "SIGKILL" not in rec and rec["empty"] is True
+
+
+def test_a_sweep_never_kills_a_reused_pid_and_names_what_survived(tmp_path, fake_time):
+    """A worker that ignored SIGTERM exits during the grace and its pid goes to another user's process, which SIGKILL must miss; a
+    worker in uninterruptible sleep survives SIGKILL and is named as left, the scope not empty."""
+    w, rd = _vllm_world(tmp_path, ignores_term=[B + 300, B + 301], unkillable=[B + 301])
+
+    def reuse():
+        if w.procs.get(B + 300, (None,))[0] == B + 2 and w.start[B + 300] == 7:
+            w.procs[B + 300] = (1, B + 300, B + 300, "/system.slice/cron.service", None, ["cron"])
+            w.start[B + 300] = 99
+            w._write()
+    fake_time.append(reuse)
+    rec = w.sweep(B + 100, rd).end(20.0)
+    assert (B + 300, "SIGKILL") not in w.sent and B + 300 in w.procs
+    assert (B + 301, "SIGKILL") in w.sent and rec["empty"] is False and rec["left"] == [f"{B + 301} python3"]
+
+
+def test_a_cancel_with_a_grace_terms_the_runs_scope_and_asks_the_runner_to_end_the_rest(tmp_path, monkeypatch):
+    """`research cancel` (cancel-intent --grace-s 20): the group's SIGTERM, then the same to the run's scope less the group it already
+    reached; it SIGKILLs nothing itself, and control/cancel tells the runner the grace and the scopes."""
+    from research.telemetry import cancel, scope
+    w, rd = _vllm_world(tmp_path)
+    Path(rd).mkdir()
+    _running(Path(rd), runner=B + 50, pgid=B + 100)
+    for name, fn in (("stat_fields", w.stat), ("list_pids", w.pids), ("cgroup_of", w.cgroup), ("run_dir_of", w.env_of),
+                     ("cmdline_of", w.cmdline)):
+        monkeypatch.setattr(cancel, name, fn)
+    monkeypatch.setattr(cancel, "pgid_members", lambda g: [{"pid": p, "comm": "x", "starttime_ticks": 7} for p in w.pids()
+                                                           if w.stat(p)["pgrp"] == g])
+    monkeypatch.setattr(scope, "mounts", lambda: {"v2": str(w.root)})
+    group = []
+    monkeypatch.setattr(cancel.os, "killpg", lambda g, s: group.append((g, s)))
+    monkeypatch.setattr(cancel.os, "kill", w.kill)
+    a = argparse.Namespace(actor="manual", attempt_dir=rd, fallback=None, target_pid=None, target_pgid=B + 100, target_pod=None,
+                           expect_starttime=None, expect_comm=None, expect_run_dir=rd, expect_nonempty=False, reason="r", signal=15,
+                           project=None, job=None, attempt=None, controller=None, deliver=True, confirm_exit_s=0.0, grace_s=20.0)
+    assert cancel.cancel(a) == 0
+    assert group == [(B + 100, 15)] and {p for p, _ in w.sent} == set(range(B + 300, B + 308))
+    assert {s for _, s in w.sent} == {"SIGTERM"}
+    ctl = json.loads((Path(rd) / "control" / "cancel").read_text())
+    assert ctl["grace_s"] == 20.0 and ctl["actor"] == "manual" and ctl["scopes"] == sorted([QUEUE, LEASE])
+    result = [json.loads(l) for l in (Path(rd) / "events.jsonl").read_text().splitlines()][-1]
+    assert result["kind"] == "cancel_result" and result["scope"]["runner_kills_after_s"] == 20.0
+    assert result["scope"]["SIGTERM"]["n"] == 8 and "left" not in result["scope"]
+
+
+#: The workload: a setsid worker that ignores SIGTERM (as vLLM's rank workers and xdist's did), its pid published once it does; then
+#: argv[2], if given, is written as research cancel's request; the workload waits on its worker.
+SETSID_WORKER = """
+import os, subprocess, sys
+pidf = sys.argv[1]
+w = subprocess.Popen([sys.executable, "-c", "import os, signal; signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+                      "print(os.getpid(), flush=True); signal.pause()"], stdout=subprocess.PIPE, start_new_session=True)
+open(pidf + ".tmp", "w").write(w.stdout.readline().decode().strip())
+os.replace(pidf + ".tmp", pidf)
+if len(sys.argv) > 2:
+    d = os.environ["RESEARCH_RUN_DIR"]
+    os.makedirs(os.path.join(d, "control"), exist_ok=True)
+    open(os.path.join(d, "control", "cancel"), "w").write(sys.argv[2])
+w.wait()
+"""
+
+
+def _gone(pid: int) -> None:
+    import select
+    try:
+        fd = os.pidfd_open(pid)
+    except ProcessLookupError:
+        return
+    select.select([fd], [], [])
+    os.close(fd)
+
+
+def test_a_stage_timeout_ends_the_runs_workers_outside_its_group_and_records_them(tmp_path, monkeypatch):
+    """The stage clock reads past the timeout once the worker is up, then past the grace: the group's SIGTERM ends the workload, the
+    worker that left its group ignores it and is SIGKILLed, and status.json `scope_end` and a `scope_ended` mark say so."""
+    from research.telemetry import run as trun
+    d, pidf = tmp_path / "a", tmp_path / "worker.pid"
+    d.mkdir()
+    ticks = iter(range(1000))
+    monkeypatch.setattr(trun, "clock", lambda: 0.0 if not pidf.exists() else 100.0 + 10 * next(ticks))
+    rc = trun.main(["--attempt-dir", str(d), "--stage", "t", "--timeout", "50", "--grace", "5", "--no-sampler", "--no-classify", "--",
+                    sys.executable, "-c", SETSID_WORKER, str(pidf)])
+    pid = int(pidf.read_text())
+    _gone(pid)
+    assert rc != 0
+    st = json.loads((d / "status.json").read_text())
+    assert st["state"] == "cancelled" and st["timed_out"] is True
+    se = st["scope_end"]
+    assert se["empty"] is True and any(x.startswith(f"{pid} ") for x in se["SIGKILL"]["pids"])
+    assert any(x.startswith(f"{pid} ") for x in se["SIGTERM"]["pids"]), "the worker got the timeout's SIGTERM before its SIGKILL"
+    recs = [json.loads(l) for l in (d / "events.jsonl").read_text().splitlines() if l.strip()]
+    assert [x["name"] for x in recs if x.get("kind") == "mark" and x.get("name") == "scope_ended"] == ["scope_ended"]
+    assert [x["actor"] for x in recs if x.get("kind") == "cancel_intent"][0] == "timeout"
+
+
+def test_the_runner_ends_what_a_cancel_left_once_its_grace_is_over_and_records_it(tmp_path, monkeypatch):
+    """research cancel's request with a grace of 0: the runner marks it, SIGKILLs the workload (recorded as a manual cancel) and then
+    the run's worker outside the group, and records both in status.json."""
+    from research.telemetry import run as trun
+    d, pidf = tmp_path / "a", tmp_path / "worker.pid"
+    d.mkdir()
+    req = json.dumps({"grace_s": 0, "actor": "manual", "reason": "superseded", "scopes": []})
+    rc = trun.main(["--attempt-dir", str(d), "--stage", "t", "--no-sampler", "--no-classify", "--",
+                    sys.executable, "-c", SETSID_WORKER, str(pidf), req])
+    pid = int(pidf.read_text())
+    _gone(pid)
+    assert rc == 128 + 9
+    recs = [json.loads(l) for l in (d / "events.jsonl").read_text().splitlines() if l.strip()]
+    (seen,) = [x for x in recs if x.get("kind") == "mark" and x.get("name") == "cancel_seen"]
+    assert seen["actor"] == "manual" and seen["grace_s"] == 0 and seen["reason"] == "superseded"
+    kills = [x for x in recs if x.get("kind") == "cancel_intent"]
+    assert [(x["actor"], x["signal"]) for x in kills] == [("manual", 9)]
+    se = json.loads((d / "status.json").read_text())["scope_end"]
+    assert se["empty"] is True and any(x.startswith(f"{pid} ") for x in se["SIGKILL"]["pids"])
+
+
+# ---- who ends a cancelled run: control/cancel, claimed once by the cancel (its request) or by the runner (closed) -----------------------
+
+#: The workload: a child that calls setsid itself and ignores SIGTERM, as the vllm.build stages under GNU `timeout` did (each in a
+#: process group of its own; vy-glm53-cpu-2, 20 Oct 06:12Z), writes its pid to the gate argv[1]; the workload waits on it.
+SETSID_CHILD = """
+import subprocess, sys
+subprocess.Popen([sys.executable, "-c", "import os, signal, sys; os.setsid(); signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+                  "open(sys.argv[1], 'w').write(f'{os.getpid()}\\\\n'); signal.pause()", sys.argv[1]]).wait()
+"""
+
+
+def _cancel_argv(d: Path, pgid: int) -> list[str]:
+    return ["--actor", "manual", "--reason", "superseded", "--target-pgid", str(pgid), "--expect-run-dir", str(d), "--attempt-dir", str(d),
+            "--deliver", "--grace-s", "20"]
+
+
+def test_a_cancel_whose_runner_is_gone_sigkills_the_runs_setsid_child_itself_and_records_it(tmp_path, monkeypatch, fake_time):
+    """No live runner to end the run: the cancel sends the SIGTERM, waits the grace on scope's clock, SIGKILLs the setsid child that
+    ignored it and records that in its cancel_result and in status.json `scope_end` (`"by": "cancel"`)."""
+    import signal
+
+    from research.telemetry import cancel
+    from waits import wait_exit
+    d = tmp_path / "a"
+    d.mkdir()
+    gate = Gate(tmp_path / "child.pid")
+    workload = subprocess.Popen([sys.executable, "-c", SETSID_CHILD, str(gate.path)], start_new_session=True,
+                                env={**os.environ, "RESEARCH_RUN_DIR": str(d.resolve())})
+    child = int(gate.readline())
+    child_fd = os.pidfd_open(child)
+    _running(d, runner=B + 50, pgid=workload.pid)
+    killed, real_kill = [], os.kill
+
+    def kill(pid, sig):
+        real_kill(pid, sig)
+        if sig == signal.SIGKILL:
+            killed.append(pid)
+    monkeypatch.setattr(cancel.os, "kill", kill)
+    fake_time.append(lambda: [wait_exit(p) for p in killed])
+    try:
+        assert cancel.main(_cancel_argv(d, workload.pid)) == 0
+        assert workload.wait() == -signal.SIGTERM
+        assert killed == [child], "the cancel SIGKILLs the child that ignored its SIGTERM"
+        wait_exit(child)
+    finally:
+        try:
+            signal.pidfd_send_signal(child_fd, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        os.close(child_fd)
+        gate.close()
+    result = [json.loads(l) for l in (d / "events.jsonl").read_text().splitlines()][-1]
+    sc = result["scope"]
+    assert sc["runner_kills_after_s"] is None and sc["cancel_killed_after_s"] == 20 and sc["why"] == "the run's runner is gone"
+    assert len(sc["SIGKILL"]["pids"]) == 1 and sc["SIGKILL"]["pids"][0].startswith(f"{child} ")
+    assert sc["empty"] is True and sc["status_json"] == "written"
+    se = json.loads((d / "status.json").read_text())["scope_end"]
+    assert se["by"] == "cancel" and se["empty"] is True and se["SIGKILL"]["n"] == 1
+
+
+def test_a_cancel_after_the_runner_closed_control_cancel_ends_the_run_itself(tmp_path, monkeypatch, fake_time):
+    """The runner, finding no request when it looked, claimed control/cancel as closed and ends nothing more: the cancel SIGKILLs
+    what ignores its SIGTERM itself, and leaves status.json to the runner, which is still live."""
+    from research.telemetry import cancel, scope
+    from research.telemetry import run as trun
+    w, rd = _vllm_world(tmp_path, ignores_term=[B + 300, B + 301])
+    Path(rd).mkdir()
+    _running(Path(rd), runner=B + 50, pgid=B + 100)
+    assert trun._close_cancel(Path(rd)) is None and trun._close_cancel(Path(rd)) is None, "closed once, and stays closed"
+    for name, fn in (("stat_fields", w.stat), ("list_pids", w.pids), ("cgroup_of", w.cgroup), ("run_dir_of", w.env_of),
+                     ("cmdline_of", w.cmdline)):
+        monkeypatch.setattr(cancel, name, fn)
+    monkeypatch.setattr(cancel, "pgid_members", lambda g: [{"pid": p, "comm": "x", "starttime_ticks": 7} for p in w.pids()
+                                                           if w.stat(p)["pgrp"] == g])
+    monkeypatch.setattr(scope, "mounts", lambda: {"v2": str(w.root)})
+    monkeypatch.setattr(cancel.os, "killpg", lambda g, s: None)
+    monkeypatch.setattr(cancel.os, "kill", w.kill)
+    assert cancel.main(_cancel_argv(Path(rd), B + 100)) == 0
+    assert [p for p, s in w.sent if s == "SIGKILL"] == [B + 100, B + 101, B + 300, B + 301]
+    assert set(w.procs) == {B + 2, B + 50, B + 51, B + 400, B + 450}, "never the runner, its sampler or another run"
+    assert "scopes" not in json.loads((Path(rd) / "control" / "cancel").read_text()), "the runner's closed claim stays"
+    sc = [json.loads(l) for l in (Path(rd) / "events.jsonl").read_text().splitlines()][-1]["scope"]
+    assert sc["why"] == "the runner had recorded the workload's exit before the cancel" and sc["empty"] is True
+    assert sc["status_json"] == "not written: its runner is live and writes status.json"
+    assert "scope_end" not in json.loads((Path(rd) / "status.json").read_text())

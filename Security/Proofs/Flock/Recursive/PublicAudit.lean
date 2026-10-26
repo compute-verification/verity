@@ -99,13 +99,18 @@ no registration rows (`nr = 0`) and the public circuit `P` as the simulator's `p
 `2 n_r·δ_{K*}` is zero, the bound is `ε_V(δ_{K*}) + n_h·δ_{K*}`, and the simulator reads `P`, the schedule's transcript
 and the owed outputs.
 
-**A nearly empty event** (vacuity sweep, 16 Oct, LEAN-19): (i)'s event asks that the inner statement have no witness
-(`¬ holds`, with `holds` = `∃ z, Satisfies z`). The inner statement pins each row only by its hm96 commit string
-`b ‖ c`, with the salt a free witness wire, so a commitment to a wrong row under a fresh salt also opens to the right
-row except with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`, `shift_reachable`, on
-cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and (i) bounds it, not a wrong
-computation. The fix is the knowledge form Daniel's claims API states recursion in (PRF-40); `EndToEndHidden` avoids
-this by extraction. -/
+**A nearly empty event** (vacuity sweep, 16 Oct, LEAN-19): (i)'s event asks that the inner statement have no witness (`¬
+holds`, with `holds` = `∃ z, Satisfies z`). The inner statement pins each row only by its hm96 commit string `b ‖ c`,
+with the salt a free witness wire, so a commitment to a wrong row under a fresh salt also opens to the right row except
+with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`, `shift_reachable`, on
+cursor/vacuity-sweep-c7a9). For any cheater the event is then nearly empty, and (i) bounds it, not a wrong computation.
+The fix is the knowledge form Daniel's claims API states recursion in (PRF-40); `EndToEndHidden` avoids this by
+extraction. The knowledge form, `Claims.Recursion.KS`, is at the recursion's level `Claims.Recursion.lam`: about 65 bits
+per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128` target under every weight (ASK-73).
+Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`),
+but `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still
+open (`RecDeploy.ksLin2_deployed_open`), Holo statements being candidate 3's own model, and `BitsLin2` at those
+statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form states no bits. -/
 def PublicAudit : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
     -- the registration's draws, a finite space with an element, and the units each draws
@@ -141,6 +146,74 @@ def PublicAudit : Prop :=
       (innerAt T CT st).Msg)
     -- A3
     (_hA3 : Flock.Premises.UniformRandomBytes Vs)
+    -- the count curve, bounding every session's rate
+    {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
+    (_hr : ∀ R ω t R₂ j S₀
+      (d₀ : Lean.Json) (y₀ : ZkHidden.DrawSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
+      rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
+    -- VBridge at the committed rounds, a premise: V*'s circuits compute the inner verifier at the rounds before the
+    -- last, at the typed sessions and the public statement
+    (_hbr : ∀ h : Typed zr,
+      Flock.Premises.VBridgeC (custodied zr _hCust h) dg N k Rw (fun _ _ => publicHidden st) wmsg Sk cmt msg),
+    prob (fun o => AcceptsPublic obj prog st ∧ VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
+          ¬ (innerAt T CT st).holds (publicHidden st))
+        (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
+    ∃ h : Typed zr,
+      (regFinder (custodied zr _hCust h) dg N (transported zr _hCust h σ)).Finds Refine.H512 ∨
+      RoundFork (custodied zr _hCust h) dg N k Rw (transported zr _hCust h σ) cmt ∨
+      SessionFork (custodied zr _hCust h) dg N k Rw M (transported zr _hCust h σ) ∨
+      InnerForkRec (custodied zr _hCust h) dg N k Rw (transported zr _hCust h σ) (fun _ _ => publicHidden st) wmsg
+        Refine.H512 (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (execClassAt st).cls
+          (execClassAt st).regs (execClassAt st).sch) ∨
+      prob (fun o => AcceptsPublic obj prog st ∧ VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
+            ¬ (innerAt T CT st).holds (publicHidden st))
+          (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤
+        expAt (transported zr _hCust h σ) (fun ω t s => sumV (custodied zr _hCust h σ.1 ω t) dg N
+            (fun R₂ j τ =>
+              (custodied zr _hCust h σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+          ((innerAt T CT st).r : ℝ≥0∞) *
+            expAt (transported zr _hCust h σ) (fun ω t s => sumV (custodied zr _hCust h σ.1 ω t) dg N
+              (fun R₂ j τ => (custodied zr _hCust h σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
+          ENNReal.ofReal (Accounting.tableError (execClassAt st).sch
+            ⟨(execClassAt st).cls.kLog, (execClassAt st).regs.length, (execClassAt st).cls.mPts⟩)) ∧
+  RecursiveFirewallPrivate
+
+/-- **`PublicAudit` with no A3**: `PublicAudit` without its A3 premise, at the same bound. V*'s laws are the full draw
+(`--draw subset:<units>`), which draws every unit at every value of the operating system's bytes
+(`execOS_subset_full_mem`), so no session's miss reads those bytes. -/
+def PublicAuditNoA3 : Prop :=
+  (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
+    -- the registration's draws, a finite space with an element, and the units each draws
+    {n : ℕ} {Ω : Type} [Fintype Ω] [Inhabited Ω] {draw : Ω → Finset (Fin n)} {Reg Cm : Type} {Reg' Reg₂ : Type}
+    -- the verifier's own partition object and program, and the inner statement
+    (obj : Lean.Json) (prog : ByteArray) (st : Flock.Stmt)
+    -- V*'s statements and sessions, as the prover supplies them
+    {Vs : Fin (outerStatementsAt st) → VStmt}
+    (zr : Reg → (drawLaw draw).Ω → List (Cm × (innerAt T CT st).Coin) → Reg₂ →
+      (j : Fin (outerStatementsAt st)) → (Vs j).OuterR Reg')
+    -- the records' custody
+    (_hCust : Flock.Premises.RecordCustody zr)
+    -- the verifier of record's own inputs to V*'s sessions: the inner shape (`--rec-inner`), V*'s bindings for each
+    -- statement (`--rec-bindings`) and the shared rows (`--rec-rows`); session `j` runs with `--rec-part j`
+    (ish : RecVStar.Inner) (bind : Fin (outerStatementsAt st) → VStar.Bindings)
+    (rows : Option (Array Flock.Registered.Port))
+    -- obligation (gap 4): V*'s statement `j`'s file under `bind j` parses to `Vs j`'s circuit
+    (_hob : VStarParses Flock.Tags.circuit ish bind Vs)
+    -- obligation (our code): every session's inputs carry the tags their name names, as `verifyCmd` forms them
+    (_hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I)
+    (dg : ByteArray → ByteArray) (N : ℕ)
+    -- the recursive prover
+    (σ : Strategy (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N))
+    -- the messages V*'s layers hold, the rounds' commit strings and commitments
+    (wmsg : ((j : Fin (outerStatementsAt st)) → (Vs j).Bits) → List (innerAt T CT st).Msg)
+    (Sk : ℕ → (j : Fin (outerStatementsAt st)) →
+      Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
+    (cmt : (j : Fin (outerStatementsAt st)) → Cm →
+      PosK (Vs j).c (Vs j).hU (Vs j).nv →
+      (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
+    (msg : ℕ → ((j : Fin (outerStatementsAt st)) →
+      PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) →
+      (innerAt T CT st).Msg)
     -- the count curve, bounding every session's rate
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
     (_hr : ∀ R ω t R₂ j S₀

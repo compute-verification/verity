@@ -6,12 +6,15 @@ static collections of value *references*; they are structure over references, no
 
 from __future__ import annotations
 
+import bisect
 from dataclasses import dataclass
 from typing import Any
 
 
 class Type:
-    __slots__ = ()
+    # Memos of structural facts (`leaves`, `field_starts`, `width_set`, `field_types`), filled on first use. They are slots of
+    # this base, not dataclass fields, so equality, hashing, repr, replace and pickling see only the type's own fields.
+    __slots__ = ("_leaves", "_starts", "_widths", "_types")
 
     @property
     def leaves(self) -> int:
@@ -70,7 +73,12 @@ class Array(Type):
 
     @property
     def leaves(self) -> int:
-        return self.n * self.elem.leaves
+        try:
+            return self._leaves
+        except AttributeError:
+            n = self.n * self.elem.leaves
+            object.__setattr__(self, "_leaves", n)
+            return n
 
     def leaf_widths(self) -> list[int]:
         return self.elem.leaf_widths() * self.n
@@ -99,7 +107,7 @@ class Tuple(Type):
 
     @property
     def leaves(self) -> int:
-        return sum(f.leaves for f in self.fields)
+        return field_starts(self)[-1]
 
     def leaf_widths(self) -> list[int]:
         out: list[int] = []
@@ -108,10 +116,10 @@ class Tuple(Type):
         return out
 
     def width_set(self) -> frozenset:
-        return frozenset().union(*(f.width_set() for f in self.fields))
+        return _fields_width_set(self)
 
     def field_offset(self, i: int) -> int:
-        return sum(f.leaves for f in self.fields[:i])
+        return field_starts(self)[i]
 
     def to_json(self) -> Any:
         return ["Tuple", [f.to_json() for f in self.fields]]
@@ -136,7 +144,7 @@ class Record(Type):
 
     @property
     def leaves(self) -> int:
-        return sum(t.leaves for _, t in self.fields)
+        return field_starts(self)[-1]
 
     def leaf_widths(self) -> list[int]:
         out: list[int] = []
@@ -145,7 +153,7 @@ class Record(Type):
         return out
 
     def width_set(self) -> frozenset:
-        return frozenset().union(*(t.width_set() for _, t in self.fields))
+        return _fields_width_set(self)
 
     def index(self, name: str) -> int:
         for i, (k, _) in enumerate(self.fields):
@@ -154,7 +162,7 @@ class Record(Type):
         raise KeyError(name)
 
     def field_offset(self, i: int) -> int:
-        return sum(t.leaves for _, t in self.fields[:i])
+        return field_starts(self)[i]
 
     def to_json(self) -> Any:
         return ["Record", [[k, t.to_json()] for k, t in self.fields]]
@@ -178,6 +186,71 @@ def type_from_json(j: Any) -> Type:
 
 def leaves_of(t: Type) -> int:
     return t.leaves
+
+
+def field_types(t: Tuple | Record) -> tuple[Type, ...]:
+    """The field types of a tuple or a record, in order: a record's computed once a type."""
+    if not isinstance(t, Record):
+        return t.fields
+    try:
+        return t._types
+    except AttributeError:
+        types = tuple(ft for _, ft in t.fields)
+        object.__setattr__(t, "_types", types)
+        return types
+
+
+def field_starts(t: Tuple | Record) -> tuple[int, ...]:
+    """Each field's first leaf in a tuple or a record, then its leaf count: computed once a type."""
+    try:
+        return t._starts
+    except AttributeError:
+        out = [0]
+        for ft in field_types(t):
+            out.append(out[-1] + ft.leaves)
+        starts = tuple(out)
+        object.__setattr__(t, "_starts", starts)
+        return starts
+
+
+def field_at(t: Tuple | Record, leaf: int) -> int:
+    """The field of a tuple or a record whose leaves hold leaf ``leaf`` (``0 <= leaf < t.leaves``)."""
+    return bisect.bisect_right(field_starts(t), leaf) - 1
+
+
+def _fields_width_set(t: Tuple | Record) -> frozenset:
+    try:
+        return t._widths
+    except AttributeError:
+        ws = frozenset().union(*(ft.width_set() for ft in field_types(t)))
+        object.__setattr__(t, "_widths", ws)
+        return ws
+
+
+def range_widths(t: Type, lo: int, hi: int) -> frozenset:
+    """The widths of leaves [lo, hi) of `t`, computed structurally (never materialises the leaves)."""
+    if not 0 <= lo <= hi <= t.leaves:
+        raise IndexError(f"leaves [{lo}, {hi}) of a {t!r} ({t.leaves} leaves)")
+    if hi == lo:
+        return frozenset()
+    if lo == 0 and hi == t.leaves:
+        return t.width_set()
+    if isinstance(t, Array):
+        L = t.elem.leaves
+        first, last = lo // L, (hi - 1) // L
+        if first == last:
+            return range_widths(t.elem, lo - first * L, hi - first * L)
+        out = range_widths(t.elem, lo - first * L, L) | range_widths(t.elem, 0, hi - last * L)
+        return out | t.elem.width_set() if last - first >= 2 else out
+    fields, starts = field_types(t), field_starts(t)  # type: ignore[arg-type]
+    out: frozenset = frozenset()
+    i = field_at(t, lo)  # type: ignore[arg-type]
+    while i < len(fields) and starts[i] < hi:
+        a, b = max(lo, starts[i]), min(hi, starts[i + 1])
+        if a < b:
+            out |= range_widths(fields[i], a - starts[i], b - starts[i])
+        i += 1
+    return out
 
 
 def remove_axis(t: Type, axis: int) -> tuple[int, Type]:

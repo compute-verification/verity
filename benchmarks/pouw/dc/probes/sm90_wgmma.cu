@@ -12,93 +12,15 @@
 //   sync_<form>           the other mma.sync shapes. CUDA 13.0 lowers e4m3 m16n8k32 to 2 HMMA.16816.F32 + 4 FADD (no
 //                         native FP8 mma.sync on sm_90) and s4 m16n8k64 to a CALL into an emulation routine (not timed)
 // Lanes (lanes.cuh): mix, imad, lop3, shfl (interleaved only: warp-specialized, ptxas pulls the clock read into a loop),
-// duo (the fold's 3 ops a word). Their alone rates and pipe pairs are scalar.cu's.
+// duo (the fold's 3 ops a word), imadw (IMAD.WIDE.U32), and the memory lanes lde, atome, redg, atoms and lds128
+// (wgU_ and wgmix_ only: LD.E, ATOM.E, REDG, ATOMS and LDS.128 beside the IGMMA, so the census's issue-only classes get
+// their joint issue lines). Their alone rates and pipe pairs are scalar.cu's.
 // dc/analyze.py turns rows.jsonl into words a tensor-pipe cycle and the issue cost a beside each lane.
 #include "../../opcode_probe/probe.cuh"
 #include "../dc.cuh"
 #include "lanes.cuh"
-#include "../wgmma.cuh"
+#include "wg_common.cuh"
 #include "../ffill.cuh"
-
-constexpr int KB = 32;  // every form's K tile is 32 bytes of a row: s8/e4m3 k32, bf16 k16, tf32 k8
-constexpr int AROWS = 64, BROWS = 256;
-
-// Operand bytes: random codes valid for the type (mode 0), or zeros (mode 1).
-template <int TY>
-DC_DEV uint32_t operand_word(uint32_t i, int mode) {
-  if (mode == 1) return 0u;
-  const uint32_t x = dc_mix32(i * 0x9E3779B9u + 0x1234567u);
-  if constexpr (TY == 0) return x;                                   // s8/u8: every code
-  if constexpr (TY == 1) return x & 0x77777777u;                     // e4m3/e5m2: no NaN or inf code
-  if constexpr (TY == 2) return (x & 0x807F807Fu) | 0x3F003F00u;     // bf16 in ±[0.5, 1)
-  if constexpr (TY == 4) return (x & 0x83FF83FFu) | 0x38003800u;     // f16 in ±[0.5, 1)
-  return (x & 0x007FFFFFu) | 0x3F800000u;                            // tf32 in [1, 2)
-}
-
-struct Tiles {
-  uint64_t da, db;
-};
-// Fills A (64 rows) and B (256 rows) in the K-major layout; returns the descriptors. All threads call it.
-template <int TY>
-DC_DEV Tiles fill_tiles(unsigned char* sm, int mode) {
-  uint32_t* w = reinterpret_cast<uint32_t*>(sm);
-  for (uint32_t i = threadIdx.x; i < (AROWS + BROWS) * KB / 4; i += blockDim.x) w[i] = operand_word<TY>(i, mode);
-  fence_async_smem();
-  __syncthreads();
-  const uint32_t base = smem_u32(sm);
-  return {wgmma_desc(base, kmaj_lbo(), kmaj_sbo(KB)), wgmma_desc(base + AROWS * KB, kmaj_lbo(), kmaj_sbo(KB))};
-}
-
-#define FORM(NAME, ACC, NACC, TY)                                                                  \
-  struct F_##NAME {                                                                               \
-    using Acc = ACC;                                                                              \
-    static constexpr int NA = NACC, TYPE = TY;                                                    \
-    DC_DEV static void mma(Acc (&d)[NACC], const Tiles& t, int sd) { wgmma_##NAME(d, t.da, t.db, sd); } \
-  };
-FORM(s8_n8, int, 4, 0)
-FORM(s8_n16, int, 8, 0)
-FORM(s8_n32, int, 16, 0)
-FORM(s8_n64, int, 32, 0)
-FORM(s8_n128, int, 64, 0)
-FORM(s8_n192, int, 96, 0)
-FORM(s8_n256, int, 128, 0)
-FORM(u8s8_n256, int, 128, 0)
-FORM(e4m3_n128, float, 64, 1)
-FORM(e4m3_n256, float, 128, 1)
-FORM(e5m2_n256, float, 128, 1)
-FORM(f16_n256, float, 128, 4)
-FORM(bf16_n256, float, 128, 2)
-FORM(bf16_n128, float, 64, 2)
-FORM(tf32_n256, float, 128, 3)
-FORM(b1_n256, int, 128, 0)
-#undef FORM
-struct F_s8_n256_rs {  // A from registers: each thread's 4 words of the 64 x 32 A fragment
-  using Acc = int;
-  static constexpr int NA = 128, TYPE = 0;
-  DC_DEV static void mma(int (&d)[128], const Tiles& t, int sd) {
-    const uint32_t a[4] = {(uint32_t)t.da ^ threadIdx.x, (uint32_t)(t.da >> 32), (uint32_t)t.db, 0x01020304u};
-    wgmma_s8_n256_rs(d, a, t.db, sd);
-  }
-};
-
-template <class Acc, int N>
-DC_DEV uint32_t fold_acc(const Acc (&d)[N]) {
-  uint32_t x = 0;
-#pragma unroll
-  for (int i = 0; i < N; i++) x ^= *reinterpret_cast<const uint32_t*>(&d[i]);
-  return x;
-}
-
-// Four wgmma into one accumulator: the first overwrites, the rest accumulate.
-template <class F>
-DC_DEV void group4(typename F::Acc (&d)[F::NA], const Tiles& t) {
-  wgmma_fence();
-  F::mma(d, t, 0);
-  F::mma(d, t, 1);
-  F::mma(d, t, 1);
-  F::mma(d, t, 1);
-  wgmma_commit();
-}
 
 // ---- kernels ----------------------------------------------------------------------------------------------------------
 template <class F, int W>
@@ -140,18 +62,18 @@ DC_DEV void wg_spec(const OpArgs& a) {
 }
 
 // wg_spec exact on both sides: the two wgmma warpgroups fixed, each SMSP's lane warp running only while they do
-// (OP_UNTIL), so neither rate counts time at the barrier.
-template <int X, int R>
+// (OP_UNTIL), so neither rate counts time at the barrier. F: the wgmma form (a deeper kind's coupling).
+template <int X, int R, class F = F_s8_n256>
 DC_DEV void wg_until(const OpArgs& a) {
   __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
-  const Tiles t = fill_tiles<0>(sm, a.mode);
+  const Tiles t = fill_tiles<F::TYPE>(sm, a.mode);
   const bool mma_role = threadIdx.x < 256;
-  int d[128] = {};
+  typename F::Acc d[F::NA] = {};
   Lane l(threadIdx.x);
   OP_BEGIN_STOP
   if (mma_role) {
     OP_LOOP(it) {
-      group4<F_s8_n256>(d, t);
+      group4<F>(d, t);
       wgmma_wait<1>();
     }
     wgmma_wait<0>();
@@ -165,15 +87,66 @@ DC_DEV void wg_until(const OpArgs& a) {
   OP_SINK((mma_role ? fold_acc(d) : l.fold()) ^ threadIdx.x)
 }
 
-template <int X, int R>
-DC_DEV void wg_mix(const OpArgs& a) {
+// wg_until with a memory lane (lanes.cuh's mem_ops, M): the lane warps' R accesses a trip.
+template <int M, int R>
+DC_DEV void wg_until_mem(const OpArgs& a) {
   __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
+  constexpr int SX = 32 * MEM_SX;  // 12 warps' scratch, and 64 LDS.128 lines
+  __shared__ __align__(16) unsigned char sx[SX];
+  const Tiles t = fill_tiles<0>(sm, a.mode);
+  const bool mma_role = threadIdx.x < 256;
+  int d[128] = {};
+  Lane l(threadIdx.x);
+  unsigned char* gp = mem_global(a.g);
+  const uint32_t sb = mem_shared<SX>(sx);
+  OP_BEGIN_STOP
+  if (mma_role) {
+    OP_LOOP(it) {
+      group4<F_s8_n256>(d, t);
+      wgmma_wait<1>();
+    }
+    wgmma_wait<0>();
+    OP_DONE
+    wgmma_hold(d);
+  } else {
+    OP_UNTIL(n) { mem_ops<M, R, SX>(l, gp, sb, n); }
+    OP_TRIPS(n)
+  }
+  OP_END_STOP
+  OP_SINK((mma_role ? fold_acc(d) : l.fold()) ^ threadIdx.x)
+}
+
+// wg_mix with a memory lane: each warpgroup's 4 wgmma, then R accesses a warp, then the wait (the honest kernel's shape).
+template <int M, int R>
+DC_DEV void wg_mix_mem(const OpArgs& a) {
+  __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
+  constexpr int SX = 16 * MEM_SX;
+  __shared__ __align__(16) unsigned char sx[SX];
   const Tiles t = fill_tiles<0>(sm, a.mode);
   int d[128] = {};
   Lane l(threadIdx.x);
+  unsigned char* gp = mem_global(a.g);
+  const uint32_t sb = mem_shared<SX>(sx);
   OP_BEGIN
   OP_LOOP(it) {
     group4<F_s8_n256>(d, t);
+    mem_ops<M, R, SX>(l, gp, sb, it);
+    wgmma_wait<0>();
+  }
+  wgmma_hold(d);
+  OP_END
+  OP_SINK(fold_acc(d) ^ l.fold() ^ threadIdx.x)
+}
+
+template <int X, int R, class F = F_s8_n256>
+DC_DEV void wg_mix(const OpArgs& a) {
+  __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
+  const Tiles t = fill_tiles<F::TYPE>(sm, a.mode);
+  typename F::Acc d[F::NA] = {};
+  Lane l(threadIdx.x);
+  OP_BEGIN
+  OP_LOOP(it) {
+    group4<F>(d, t);
     lane_ops<X, R>(l);
     wgmma_wait<0>();
   }
@@ -186,8 +159,9 @@ DC_DEV void wg_mix(const OpArgs& a) {
 // OP_UNTIL loop the gate refuses, DC EPS1 r9): each warpgroup issues its 4 wgmma, then folds the four segments' 512
 // committed words with LI (LOP3 to absorb a word, IMAD to multiply by an odd a) and, for CP > 0, LI-CP-W's per-segment
 // checkpoint (4 LOP3 to XOR a lane's 8 chains, then the warp reduces once by `redux.sync.xor.b32` (CP 1) or the 5-shuffle
-// butterfly fallback (CP 2)), then waits. No filler (that is the design's): this is the honest profile's own loop, and
-// its tensor fraction (the wgmma's rate beside it over its rate alone) is dc90-licpw-redux-l32's measured cycles a MMA.
+// butterfly fallback (CP 2)), then waits. No filler (that is the design's). The fold reads the Lane's registers, not
+// the wgmma's accumulators, so it overlaps its own wgmma, which the receipt can't: dc90-licpw-redux-l32 is timed from
+// RT-HOPPER's wgli_db_w2, which folds the accumulators (RT-HOPPER-8, r20261019-070001-df11).
 template <int CP>
 DC_DEV void li_fold(Lane& l) {
 #pragma unroll
@@ -477,11 +451,39 @@ OP_KERNEL(bulkcp, 32) { bulk_solo<BULK_CP>(a); }
 OP_KERNEL(bulkred, 32) { bulk_solo<BULK_RED>(a); }
 JOINT(duo, L_DUO, 96)
 JOINT(duo, L_DUO, 384)
+JOINT(imadw, L_IMADW, 64)
+JOINT(imadw, L_IMADW, 256)
 #undef JOINT
+OP_KERNEL(wgU_imadw, 384) { wg_until<L_IMADW, 64>(a); }
+OP_KERNEL(wgU_imadw_r256, 384) { wg_until<L_IMADW, 256>(a); }
+#define MEM(LN, M)                                                   \
+  OP_KERNEL(wgU_##LN, 384) { wg_until_mem<M, 16>(a); }               \
+  OP_KERNEL(wgU_##LN##_r32, 384) { wg_until_mem<M, 32>(a); }         \
+  OP_KERNEL(wgmix_##LN##_r16, 256) { wg_mix_mem<M, 16>(a); }
+MEM(lde, M_LDE)
+MEM(atome, M_ATOME)
+MEM(redg, M_REDG)
+MEM(atoms, M_ATOMS)
+MEM(lds128, M_LDS128)
+#undef MEM
 OP_KERNEL(wgU_mix, 384) { wg_until<L_MIX, 64>(a); }
 OP_KERNEL(wgU_imad, 384) { wg_until<L_IMAD, 64>(a); }
 OP_KERNEL(wgU_lop3, 384) { wg_until<L_LOP3, 64>(a); }
 OP_KERNEL(wgU_duo, 384) { wg_until<L_DUO, 48>(a); }
+OP_KERNEL(wgU_li, 384) { wg_until<L_LI, 64>(a); }
+OP_KERNEL(wgU_lif, 384) { wg_until<L_LIF, 64>(a); }
+OP_KERNEL(wgU_li_r512, 384) { wg_until<L_LI, 512>(a); }
+OP_KERNEL(wgU_mix_r512, 384) { wg_until<L_MIX, 512>(a); }
+OP_KERNEL(wgU_lop3_r256, 384) { wg_until<L_LOP3, 256>(a); }
+OP_KERNEL(wgU_lif_r256, 384) { wg_until<L_LIF, 256>(a); }
+OP_KERNEL(wgU_lif_r512, 384) { wg_until<L_LIF, 512>(a); }
+OP_KERNEL(wgUb1_lif_r256, 384) { wg_until<L_LIF, 256, F_b1_n256>(a); }
+OP_KERNEL(wgUb1_lif_r512, 384) { wg_until<L_LIF, 512, F_b1_n256>(a); }
+OP_KERNEL(wgUe4_lif_r512, 384) { wg_until<L_LIF, 512, F_e4m3_n256>(a); }
+OP_KERNEL(wgmixb1_mix_r256, 256) { wg_mix<L_MIX, 256, F_b1_n256>(a); }
+OP_KERNEL(wgmixb1_mix_r512, 256) { wg_mix<L_MIX, 512, F_b1_n256>(a); }
+OP_KERNEL(wgmixe4_mix_r256, 256) { wg_mix<L_MIX, 256, F_e4m3_n256>(a); }
+OP_KERNEL(wgmixe4_mix_r512, 256) { wg_mix<L_MIX, 512, F_e4m3_n256>(a); }
 OP_KERNEL(wgU_sync_k16, 384) { wg_sync_until<16>(a); }
 OP_KERNEL(wgU_sync_k32, 384) { wg_sync_until<32>(a); }
 OP_KERNEL(imma_s8_k32, 512) { imma_alone<32>(a); }
@@ -550,6 +552,8 @@ static const OpProbe PROBES[] = {
      .expect = "IGMMA.64x256x32.S8.S8*=4,LOP3.LUT=272,IMAD*=268,FFMA=24,REDUX*=4", .iters = 4096},
     P_JOINT(duo, 96, "LOP3.LUT=32,IMAD=32"),
     P_JOINT(duo, 384, "LOP3.LUT=128,IMAD=128"),
+    P_JOINT(imadw, 64, "IMAD.WIDE.U32=64"),
+    P_JOINT(imadw, 256, "IMAD.WIDE.U32=256"),
 #undef P_JOINT
 #define WGI "IGMMA.64x256x32.S8.S8*=4"
 #define P_UNTIL(NAME, LPAT) \
@@ -558,9 +562,40 @@ static const OpProbe PROBES[] = {
     P_UNTIL(wgU_imad, "IMAD=64"),
     P_UNTIL(wgU_lop3, "LOP3.LUT=64"),
     P_UNTIL(wgU_duo, "LOP3.LUT=16,IMAD=16"),
+    P_UNTIL(wgU_li, "LOP3.LUT=32,IMAD=32"),
+    P_UNTIL(wgU_lif, "LOP3.LUT=28,IMAD=28,FFMA=8"),
+    P_UNTIL(wgU_li_r512, "LOP3.LUT=256,IMAD=256"),
+    P_UNTIL(wgU_mix_r512, "I*ADD*=256,FFMA=256"),
+    P_UNTIL(wgU_lop3_r256, "LOP3.LUT=256"),
     P_UNTIL(wgU_sync_k16, "IMMA.16816.S8.S8=8"),
     P_UNTIL(wgU_sync_k32, "IMMA.16832.S8.S8=8"),
+    P_UNTIL(wgU_lif_r256, "LOP3.LUT=112,IMAD=112,FFMA=32"),
+    P_UNTIL(wgU_lif_r512, "LOP3.LUT=224,IMAD=224,FFMA=64"),
+    P_UNTIL(wgU_imadw, "IMAD.WIDE.U32=64"),
+    P_UNTIL(wgU_imadw_r256, "IMAD.WIDE.U32=256"),
+#define P_MEM(LN, PAT)                                                                                    \
+  P_UNTIL(wgU_##LN, PAT "=16"), P_UNTIL(wgU_##LN##_r32, PAT "=32"),                                       \
+      {.name = "wgmix_" #LN "_r16", .kernel = (const void*)wgmix_##LN##_r16, .tpb = 256, .expect = WGI "," PAT "=16", \
+       .iters = 4096}
+    P_MEM(lde, "LD.E*"),
+    P_MEM(atome, "ATOM.E*"),
+    P_MEM(redg, "REDG*"),
+    P_MEM(atoms, "ATOMS*"),
+    P_MEM(lds128, "LDS.128"),
+#undef P_MEM
 #undef P_UNTIL
+#define P_UNTILF(NAME, WPAT, LPAT) \
+  {.name = #NAME, .kernel = (const void*)NAME, .tpb = 384, .expect = WPAT ";" LPAT, .warps = "8;4", .iters = 4096, .until = 2}
+    P_UNTILF(wgUb1_lif_r256, "BGMMA.64x256x256.AND.POPC*=4", "LOP3.LUT=112,IMAD=112,FFMA=32"),
+    P_UNTILF(wgUb1_lif_r512, "BGMMA.64x256x256.AND.POPC*=4", "LOP3.LUT=224,IMAD=224,FFMA=64"),
+    P_UNTILF(wgUe4_lif_r512, "QGMMA.64x256x32.F32.E4M3.E4M3*=4", "LOP3.LUT=224,IMAD=224,FFMA=64"),
+#undef P_UNTILF
+#define P_MIXF(NAME, WPAT, LPAT) {.name = #NAME, .kernel = (const void*)NAME, .tpb = 256, .expect = WPAT "," LPAT, .iters = 4096}
+    P_MIXF(wgmixb1_mix_r256, "BGMMA.64x256x256.AND.POPC*=4", "I*ADD*=128,FFMA=128"),
+    P_MIXF(wgmixb1_mix_r512, "BGMMA.64x256x256.AND.POPC*=4", "I*ADD*=256,FFMA=256"),
+    P_MIXF(wgmixe4_mix_r256, "QGMMA.64x256x32.F32.E4M3.E4M3*=4", "I*ADD*=128,FFMA=128"),
+    P_MIXF(wgmixe4_mix_r512, "QGMMA.64x256x32.F32.E4M3.E4M3*=4", "I*ADD*=256,FFMA=256"),
+#undef P_MIXF
 #undef WGI
     {.name = "wgbulk_cp", .kernel = (const void*)wgbulk_cp, .tpb = 384,
      .expect = "IGMMA.64x256x32.S8.S8*=4;UBLKCP*=8", .counted = "UBLKCP*", .warps = "8;1", .words = 1024,

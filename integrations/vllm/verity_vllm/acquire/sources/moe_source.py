@@ -1,4 +1,4 @@
-"""[R13 moe / MOE-03] The fused-MoE block's value families as an acquisition source of the native committer (`NativeHostCommitter.attach_source`,
+"""The fused-MoE block's value families as an acquisition source of the native committer (`NativeHostCommitter.attach_source`,
 the FA2 `HiddenM1Source` precedent): the values the Program's MoE instances produce are materialised device tensors BETWEEN the block's
 kernels, but inside ONE module's forward (`MoERunner`), in workspace buffers the next layer overwrites -- a module forward hook sees only
 the final [M, H] sum.  This source wraps the three Python launch sites of the pinned vLLM and snapshots each producer's output into the
@@ -35,11 +35,11 @@ vLLM fuses the SiLU and the quant (`ops.silu_and_mul_per_block_quant`): no bf16 
 A MoE module that does not all-reduce its output on a rank (GLM-5.3: `reduce_results=False`; the next layer's fused all-reduce norm
 sums it) returns a value no other binder sees: on a TP rank (`world` > 1) the source binds it as `<module>/out` after the forward.
 
-[R16 moe FLUSH-03] "right after its kernel" is only true of a committer that copies at `_acquire`.  The gather collector
+"Right after its kernel" is only true of a committer that copies at `_acquire`.  The gather collector
 (`native_collect_v2b`) STAGES a descriptor and copies at the next flush point -- a module hook -- and the fused-MoE block has no hook
 between its launches: vLLM's TritonExperts carves `intermediate_cache1` (up) and `intermediate_cache3` (down) out of the same workspace
 (`_resize_cache(workspace2, ...)` twice; byte-for-byte alias when 2I == H), so the block's own w2 launch overwrites `up` before the next
-layer's `input_layernorm` pre-flush reads it -> the committed `up` was the same layer's `down` (R16 lane-moe C2 v3 on the real OLMoE B1
+layer's `input_layernorm` pre-flush reads it -> the committed `up` was the same layer's `down` (on the real OLMoE B1
 record, 320/320 MoeExpertGemm_v1 VUs).  The source therefore asks the committer to flush right after staging `up`
 (`committer.flush_after_plane("up")`: one gather launch per MoE layer per step on the gather collector, a no-op on the arena committer);
 `act`, `down`, `sum` are overwritten only by the next layer, after that layer's pre-flush, and the router outputs are fresh allocations.
@@ -64,6 +64,17 @@ f32 [M, TOPK], topk_ids i32 [M, TOPK]) is bound as router_w, router_ids, the ker
 table that does not take `dsv4_topk` is refused (the scored router's Program is that kernel's); a call with another scoring
 function is left to the launches it reaches (`topk_softmax`).
 
+A manifest of record without `moe_block_stream` rows (DeepSeek-V4-Pro's: the Marlin launches and the routers are Calls under the MoE
+module, `<module>/<fx node>`) is bound at those Calls: the source commits each value as `<module>/<label>` (`at_calls`), and
+`bind.Binder` binds a label `PORTS` declares at its port of one of the module's call boundaries: up and down at the Marlin GEMMs,
+act at `SiluMulClamp_v1`'s, sum at `MoeSum_v1`'s, router_w and router_ids at `dsv4_topk`'s, and on a hash layer router_w.hash at
+`MoeRouterHash_v1`'s (a module without router rows of `format.MOE_PLANE_FAMILIES` has no planes: `format.moe_plane_modules`).  A hash
+layer's ids are the module's `GatherI32x{V}` rows, committed as `ids`, and the token ids those gathers read as `in`
+(`hash_router_input`); router_ids and ids are committed as their 32-bit words, as those rows are (`f32`).  `layer_of` tells
+`identity_check` the source's names, a hash layer holding one more.  The call boundaries at those ports are this source's (`claims`,
+one of `call_boundary_source.CLAIMS`): every TP rank attaches it (`engine.rank_worker`), and the CPU gate counts them as the MoE
+source's on several ranks when the manifest names no `moe_block_stream` plane (`taps.attached`).
+
 `<k>` is the layer index of the MoE module whose forward is executing (forward pre-hooks on every `MoERunner`-family module set it, and
 forward hooks clear it).  Exactly `planes` tensors per MoE layer per step are expected (six bf16, seven on Marlin with a scaled
 activation, ten block FP8, fixed by the run's first w2 launch); `NativeHostCommitter.identity_check` verifies that count per layer per
@@ -77,12 +88,16 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import re
 import time
+from collections.abc import Mapping
 from typing import Any
 
+from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources.partial_source import _moe_reduces
 from verity_vllm.engine import hooks
-from verity_vllm.program.registry.moe import router_kernel
+from verity.ml.definitions.registry.moe import router_kernel
+from verity_vllm.query.manifest.bind import Port
 from verity_vllm.query.manifest.format import MOE_FP8_PLANES, MOE_PLANES
 
 MOE_MODULE_CLASSES = {"MoERunner", "MoERunnerInterface", "FusedMoE", "SharedFusedMoE"}
@@ -98,6 +113,51 @@ GROUPED_TOPK_PARAMS = (("hidden_states", None), ("gating_output", None), ("topk"
 TOPK_BIAS_MODULE = "vllm.model_executor.layers.fused_moe.router.fused_topk_bias_router"
 #: moe_wna16_marlin_gemm's positional index of each argument the source reads, after (input, output)
 MARLIN_ARGS = {"a_scales": 3, "top_k": 14, "mul_topk_weights": 15}
+HASH_KERNEL = "topk_hash_softplus_sqrt"
+
+
+def _call(family: str, port: str) -> Port:
+    return Port(frozenset({family}), port, call_boundary=True)
+
+
+#: `bind.Binder`'s declared labels at calls (`at_calls`): each label -> the port of the MoE module's Call whose value it commits
+PORTS = {"router_w": _call("MoeRouterSqrtSoftplus_v1", "0"), "router_ids": _call("MoeRouterSqrtSoftplus_v1", "1"),
+         "router_w.hash": _call("MoeRouterHash_v1", "out"), "up": _call("MarlinMoeExpertGemm_v1", "out"),
+         "act": _call("SiluMulClamp_v1", "out"), "down": _call("MarlinMoeExpertGemmW_v1", "out"), "sum": _call("MoeSum_v1", "out")}
+#: every label the source commits at calls under a MoE module
+LABELS = frozenset({*MOE_FP8_PLANES, *PORTS, "ids", "in"})
+#: (Definition, port) of every call boundary a label of `PORTS` binds
+CALL_PORTS = frozenset((f, p.port) for p in PORTS.values() for f in p.families)
+
+
+PLANE_NAME = re.compile(r"moe/L(\d+)/")
+
+
+def binds_planes(manifest: Mapping[str, Any] | None) -> bool:
+    """Whether the source binds the `moe_block_stream` planes (`moe/L<k>/<plane>`): with no manifest, or one that names them."""
+    return manifest is None or any(r.get("family") == "moe_block_stream" for r in manifest.get("identities") or ())
+
+
+def claims(r: Mapping[str, Any]) -> str | None:
+    """`call_boundary_source.CLAIMS`: a call boundary at a port `PORTS` declares is this source's."""
+    return (MoeBlockSource.short_name if r.get("family") == CB.FAMILY and
+            (str(r.get("spec") or "").split("{", 1)[0], str(r.get("port") or r.get("output_member"))) in CALL_PORTS else None)
+
+
+if claims not in CB.CLAIMS:
+    CB.CLAIMS.append(claims)
+
+
+def plane_layer(name: str) -> int | None:
+    """The layer `k` of a plane's name (`moe/L<k>/<plane>`, the router-softmax tap's too); None for any other name."""
+    m = PLANE_NAME.match(name)
+    return int(m.group(1)) if m else None
+
+
+def hash_router_input(input_tokens: Any, table: Any, topk: int) -> Any:
+    """What a hash layer's K `GatherI32x{V}` calls per token read: each token's id in the table's dtype (as `fused_topk_bias` casts
+    it), K times in a row (pair-major, the gathers' order)."""
+    return input_tokens.to(table.dtype).repeat_interleave(topk)
 
 
 def grouped_topk_args(a: tuple, k: dict) -> dict[str, Any]:
@@ -123,13 +183,18 @@ class MoeBlockSource:
     short_name = "moe"
     ns_name = "moe_block"
 
-    def __init__(self, committer, model, *, world: int = 1) -> None:
+    def __init__(self, committer, model, *, world: int = 1, manifest: Mapping[str, Any] | None = None) -> None:
         import torch
 
         self.torch = torch
         self.c = committer
         self.layers = moe_layers_of(model)
         self.modules = [(n, m) for n, m in model.named_modules() if n in self.layers]
+        self.at_calls = not binds_planes(manifest)
+        #: layer -> its MoE module, the prefix of the layer's names at calls (a plane's is `moe/L<k>`)
+        self.module_of = {k: n for n, k in self.layers.items()}
+        #: the layers whose router read a hash table, at calls (each commits ids and in beside its weights)
+        self.hash_layers: set[int] = set()
         # the MoE modules whose returned value this source binds as `<module>/out`: on a TP rank, those that do not all-reduce it
         self.outputs = {n for n, m in self.modules if world > 1 and not _moe_reduces(m, world)}
         self.cur_layer: int | None = None
@@ -204,6 +269,17 @@ class MoeBlockSource:
         """The MoE modules whose output this source binds as `<module>/out`: expected modules of every step for `identity_check`."""
         return sorted(self.outputs)
 
+    def ports(self) -> dict[str, Port]:
+        return dict(PORTS) if self.at_calls else {}
+
+    def layer_of(self, name: str) -> int | None:
+        """The MoE layer of a name this source commits (not `<module>/out`); None for any other name."""
+        if not self.at_calls:
+            return plane_layer(name)
+        prefix, _, label = name.rpartition("/")
+        k = self.layers.get(prefix)
+        return k if k is not None and label in LABELS else None
+
     def uninstall(self) -> None:
         for h in self._handles:
             h.remove()
@@ -225,7 +301,7 @@ class MoeBlockSource:
             self.c.errors.append(f"moe source: {what} launched outside a MoE module forward (no layer attribution)"[:200])
             return
         t0 = time.perf_counter()
-        name = f"moe/L{self.cur_layer}/{what}"
+        name = f"{self.module_of[self.cur_layer] if self.at_calls else f'moe/L{self.cur_layer}'}/{what}"
         self.c._acquire(name, t, job)
         if what == "up" and self._flush_after_plane is not None and self._flush_after_plane("up"):
             self.stats["plane_flushes"] += 1             # [FLUSH-03] `up` leaves the device before the block's w2 launch overwrites its workspace
@@ -342,7 +418,7 @@ class MoeBlockSource:
         if job is None or args["scoring_func"] != "sqrtsoftplus":
             return
         if args["hash_indices_table"] is not None:
-            kernel = "topk_hash_softplus_sqrt"
+            kernel = HASH_KERNEL
         else:
             idx = self.torch.int32 if args["indices_type"] is None else args["indices_type"]
             if not mod.can_use_dsv4_topk(args["gating_output"], args["e_score_correction_bias"], args["topk"], args["renormalize"], idx):
@@ -356,8 +432,20 @@ class MoeBlockSource:
         step = int(getattr(job, "step", -1))
         if not steps or steps[-1] != step:
             steps.append(step)
-        self._bind("router_w", r[0])
-        self._bind("router_ids", r[1])
+        if not self.at_calls:
+            self._bind("router_w", r[0])
+            self._bind("router_ids", r[1])
+            return
+        ids = r[1].view(self.torch.float32)              # an i32 row of a Call is committed as its 32-bit words ("f32")
+        if kernel != HASH_KERNEL:
+            self._bind("router_w", r[0])
+            self._bind("router_ids", ids)
+            return
+        if self.cur_layer is not None:
+            self.hash_layers.add(self.cur_layer)
+        self._bind("router_w.hash", r[0])
+        self._bind("ids", ids)
+        self._bind("in", hash_router_input(args["input_tokens"], args["hash_indices_table"], args["topk"]))
 
     def _wrap(self, attr: str, orig, mod: Any = None):
         me = self
@@ -435,6 +523,7 @@ class MoeBlockSource:
         return [{"class": "moe_block_stream", "how": "bound-as-leaf", "covers_families": COVERS_FAMILIES, "rule": None, "count": None,
                  "bytes": self.stats["bytes"], "tensors": self.stats["launches"], "layers": self.stats["layers"], "tensors_per_layer": per_layer,
                  "plane_flushes": self.stats["plane_flushes"], "act_scaled": self.act_scaled, "planes": list(self.planes),
+                 "at_calls": self.at_calls, "hash_layers": sorted(self.hash_layers),
                  "router": dict(self.stats["router"]), "router_kernel_steps": {k: list(v) for k, v in self.router_steps.items()},
                  "outputs": {"modules": len(self.outputs), "bound": self.stats["outputs"]},
                  "evidence": ("MOE-03 source: wraps vllm._custom_ops.topk_softmax / moe_sum / moe_wna16_marlin_gemm, "
@@ -449,5 +538,5 @@ class MoeBlockSource:
                               f"registry.moe Definitions bit-exact vs the same kernels); shapes seen {self.stats['shapes']}")}]
 
 
-__all__ = ["MoeBlockSource", "moe_layers_of", "router_kernel", "grouped_topk_args", "MOE_MODULE_CLASSES", "TENSORS_PER_LAYER",
-           "COVERS_FAMILIES", "GROUP_QUANT_OP"]
+__all__ = ["MoeBlockSource", "moe_layers_of", "router_kernel", "grouped_topk_args", "binds_planes", "claims", "hash_router_input",
+           "MOE_MODULE_CLASSES", "TENSORS_PER_LAYER", "COVERS_FAMILIES", "GROUP_QUANT_OP", "HASH_KERNEL", "LABELS", "PORTS", "CALL_PORTS"]

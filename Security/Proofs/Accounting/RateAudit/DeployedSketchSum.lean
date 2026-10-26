@@ -1,5 +1,5 @@
 import Mathlib
-import Models.Accounting.Guarantees.RateAuditDeployed
+import Definitions.Accounting.Guarantees.RateAuditDeployed
 import Proofs.Accounting.RateAudit.Deployed
 import Proofs.Accounting.RateAudit.DeployedSketch
 
@@ -48,22 +48,6 @@ local instance instFintypeOracleFam (N ρ h ks G : ℕ) :
     Fintype (Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) := by
   letI : Fintype (Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) := inferInstance
   exact inferInstance
-
-/-- A uniform finite event whose count times `m` is at most `g` times the sample-space size has probability at most
-`g/m` (restating `DeployedSketch.lean`'s private lemma). -/
-private theorem pr_le_div_of_card_mul_le {α : Type} [Fintype α] (P : α → Prop) [DecidablePred P] (g m : ℕ)
-    (hα : Fintype.card α ≠ 0) (hm : m ≠ 0)
-    (h : (Finset.univ.filter P).card * m ≤ g * Fintype.card α) :
-    pr P ≤ (g : ℝ≥0∞) / m := by
-  unfold pr
-  rw [ENNReal.div_le_iff (by exact_mod_cast hα) (ENNReal.natCast_ne_top _)]
-  rw [show (g : ℝ≥0∞) / m * Fintype.card α =
-      ((g : ℝ≥0∞) * Fintype.card α) / m by
-        simp only [ENNReal.div_eq_inv_mul]
-        ac_rfl]
-  rw [ENNReal.le_div_iff_mul_le (Or.inl (by exact_mod_cast hm)) (Or.inl (ENNReal.natCast_ne_top _))]
-  rw [Finset.filter_congr_decidable]
-  exact_mod_cast h
 
 /-- **Resampling, counted against its ground set.** `card_resample` with the image kept in `G`: if every point of `G`
 has a direction along which `G` and `dir` are constant, and each such line meets `B` in at most `g` points, then
@@ -373,10 +357,10 @@ theorem pr_guess_le
   refine Rate.pr_le_of_fiber _ _ (fun D => ?_)
   change pr (fun O : Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) =>
     t ∈ A.correct sketch σ O D ∧ t ∉ queried A sketch σ O D) ≤ (1 : ℝ≥0∞) / 2 ^ h
-  have hbound := pr_le_div_of_card_mul_le
-    (α := Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)))
+  have hbound := Bandwidth.pr_le_of_card
+    (Ω := Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)))
     (fun O => t ∈ A.correct sketch σ O D ∧ t ∉ queried A sketch σ O D)
-    1 (2 ^ h) Fintype.card_ne_zero (by positivity)
+    (2 ^ h) 1 (by positivity)
     (by simpa [Device.correct, and_comm] using card_guess_le A sketch σ D t)
   push_cast at hbound
   simpa using hbound
@@ -435,9 +419,9 @@ theorem pr_unpaid_rank_family_le {G : ℕ}
   · -- the query term: one budgeted union over the shared data, fibered at each oracle family
     refine Rate.pr_le_of_fiber _ _ (fun Os => ?_)
     have hcard := card_bad_family_le A sketch σ Os g qtot (fun D => hq Os D)
-    have hbound := pr_le_div_of_card_mul_le
+    have hbound := Bandwidth.pr_le_of_card
       (fun D : Data N m ρ Sector => ∃ c, ∃ i : Fin q, Bad (A c) sketch σ (Os c) D i g)
-      (g * qtot) (Fintype.card Sector) Fintype.card_ne_zero (by simp [Sector]) (by
+      (Fintype.card Sector) (g * qtot) (by simp [Sector]) (by
         simpa using hcard)
     have hXc : (Fintype.card Sector : ℝ≥0∞) = 2 ^ 256 := by
       norm_num [Sector]
@@ -593,6 +577,109 @@ theorem pr_unpaid_sum_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks
 
 end SketchDeployedWindow
 
+namespace SketchDeployedSession
+
+variable {n P N m ρ h S L q ks G d : ℕ}
+
+/-- Some window's unpaid words on a uniform store, under `RemoteSessionConservationSketchSum`'s hypotheses: at most
+`n·(ε + P·(G·N/2^h + qtot/2^(8r)))`. -/
+theorem pr_unpaid_sum_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (r X qtot : ℕ) (ε : ℝ≥0∞)
+    (hr32 : r ≤ 32) (hRank : Accounting.Assumptions.SketchRank ks m r ε)
+    (hX : ∀ w η j ι c E σ R O,
+      let B := (A.window w η).device j ι c
+      let D := Data.ofParts E R
+      (B.prog σ D).rebuilds O D * 256 ≤ X)
+    (hq : ∀ w η j ι, Accounting.Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) :
+    pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
+      ∃ w, (A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 + P * (S + (L - ρ * 256) + X) <
+        ((A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1).card * (m * 256))
+      ≤ (n : ℝ≥0∞) * (ε + (P : ℝ≥0∞) * ((G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) + (qtot : ℝ≥0∞) / 2 ^ (8 * r))) := by
+  have hX' : ∀ w η j ι c σ O D, (((A.window w η).device j ι c).prog σ D).rebuilds O D * 256 ≤ X := by
+    intro w η j ι c σ O D
+    let E : SketchStore N m := fun p => D (.inl p)
+    let R : SketchStream ρ := fun i => D (.inr i)
+    have hD : Data.ofParts E R = D := by
+      funext p
+      rcases p with p | p <;> rfl
+    simpa [hD] using hX w η j ι c E σ R O
+  exact pr_unpaid_le A _ _ fun w η =>
+    SketchDeployedWindow.pr_unpaid_sum_le (A.window w η) r X qtot ε hr32 hRank (hX' w η)
+      (fun j ι σ Os D => hq w η j ι σ Os D)
+
+/-- `RemoteSessionConservationSketchSum`'s reading on any store `store ω` drawn before the session's coins, from a
+bound `ε_u` on some window's unpaid words at the slack `S + (L − ρ·256) + X` a pass: the draws' terms hold at every
+store, and only the unpaid words read the store's distribution. -/
+theorem pr_conservation_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
+    (A : SketchDeployedSession n P N m ρ h S L q ks G d) (X : ℕ) (dbar dw : ℝ) (hn : 0 < n) (hP : 0 < P)
+    (hN : 0 < N) (hm : 0 < m) (hdw : dw ≤ 1) (εu : ℝ≥0∞)
+    (hu : pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
+      ∃ w, (A.win w x.2).reads (store x.1) (x.2 w).1 (x.2 w).2.1 + P * (S + (L - ρ * 256) + X) <
+        ((A.win w x.2).correctAll (store x.1) (x.2 w).1 (x.2 w).2.1).card * (m * 256)) ≤ εu) :
+    pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
+      (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1 (x.2 w).2.1) ∧
+        ((((∑ w, (A.win w x.2).reads (store x.1) (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) <
+            (1 - (dbar + gammaSketch N m ρ S L X)) * (n * P * N * m * 256) ∨
+          ∃ w, (((A.win w x.2).reads (store x.1) (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
+            (1 - (dw + gammaSketch N m ρ S L X)) * (P * N * m * 256)))
+      ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) + εu := by
+  let slack := S + (L - ρ * 256) + X
+  have main := pr_paid_of_unpaid_map store A slack
+    ⌊(1 - dbar) * ((n : ℝ) * P * N)⌋₊ ⌊(1 - dw) * ((P : ℝ) * N)⌋₊ εu hu
+  have hγ := gammaSketch_mul N m ρ S L X hN hm
+  have hγ' : gammaSketch N m ρ S L X * ((N : ℝ) * (m * 256)) = (slack : ℝ) := by
+    simpa [slack, mul_assoc] using hγ
+  have hb : (0 : ℝ) < m * 256 := by positivity
+  refine (pr_mono (fun x hx => ?_)).trans (main.trans ?_)
+  · obtain ⟨hall, hT | ⟨w, hw⟩⟩ := hx
+    · refine ⟨hall, Or.inl ?_⟩
+      have hc := Rate.Deployed.count_lt
+        (R := ((∑ w, (A.win w x.2).reads (store x.1) (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ))
+        (t := dbar) (g := gammaSketch N m ρ S L X) (c := (n : ℝ) * P)
+        (Nn := N) (b := (m : ℝ) * 256) (sl := slack) hb hγ'
+        (by simpa [mul_assoc] using hT)
+      rw [← mul_assoc]
+      exact_mod_cast hc
+    · refine ⟨hall, Or.inr ⟨w, ?_⟩⟩
+      have hc := Rate.Deployed.count_lt
+        (R := (((A.win w x.2).reads (store x.1) (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ))
+        (t := dw) (g := gammaSketch N m ρ S L X) (c := (P : ℝ))
+        (Nn := N) (b := (m : ℝ) * 256) (sl := slack) hb hγ'
+        (by simpa [mul_assoc] using hw)
+      exact_mod_cast hc
+  · have e1 : ((n : ℝ) * P * N) = ((n * P * N : ℕ) : ℝ) := by push_cast; ring
+    have e2 : ((P : ℝ) * N) = ((P * N : ℕ) : ℝ) := by push_cast; ring
+    rw [e1, e2]
+    refine add_le_add (add_le_add ?_ ?_) le_rfl
+    · rw [show ((n : ℝ≥0∞) * P * N) = ((n * P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
+      exact Rate.Deployed.horizon_le dbar (n * P * N) (d * n) (by positivity)
+    · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
+      exact Rate.Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
+
+/-- `pr_conservation_of_unpaid` at the deployed receipt parameters (`RemoteSessionConservationSketchDeployed`'s): the
+draws' terms are at most `2·2^-40`. -/
+theorem pr_deployed_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N 128)
+    (A : SketchDeployedSession n P N 128 ρ 512 S L q 16 G 2773) (X : ℕ) (hn : 7 ≤ n) (hP : 0 < P) (hN : 0 < N)
+    (εu : ℝ≥0∞) (hu : pr (fun x : Ω × (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
+      ∃ w, (A.win w x.2).reads (store x.1) (x.2 w).1 (x.2 w).2.1 + P * (S + (L - ρ * 256) + X) <
+        ((A.win w x.2).correctAll (store x.1) (x.2 w).1 (x.2 w).2.1).card * (128 * 256)) ≤ εu) :
+    pr (fun x : Ω × (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
+      (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1 (x.2 w).2.1) ∧
+        ((((∑ w, (A.win w x.2).reads (store x.1) (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) <
+            (1 - (0.0015 + gammaSketch N 128 ρ S L X)) * (n * P * N * 32768) ∨
+          ∃ w, (((A.win w x.2).reads (store x.1) (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
+            (1 - (0.01 + gammaSketch N 128 ρ S L X)) * (P * N * 32768)))
+      ≤ 2 / 2 ^ 40 + εu := by
+  have h := pr_conservation_of_unpaid store A X 0.0015 0.01 (by omega) hP hN (by norm_num) (by norm_num) εu hu
+  refine (le_of_eq ?_).trans (h.trans ?_)
+  · norm_num [mul_assoc]
+  rw [show (2 : ℝ≥0∞) / 2 ^ 40 = 1 / 2 ^ 40 + 1 / 2 ^ 40 by
+    rw [ENNReal.div_add_div_same]; norm_num]
+  gcongr
+  · exact Rate.Deployed.horizon_deployed n hn
+  · exact Rate.Deployed.window_deployed n (by omega)
+
+end SketchDeployedSession
+
 end Accounting.RateSketch
 
 namespace Accounting.SecurityProofs
@@ -634,67 +721,9 @@ theorem RemoteSessionConservationSketchSum :
           (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) +
             (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ (8 * r)) := by
   intro n P N m ρ h S L q ks G d r X qtot ε A dbar dw hn hP hN hm hr32 hdw hRank hX hq
-  let slack := S + (L - ρ * 256) + X
-  let term := (G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) + (qtot : ℝ≥0∞) / 2 ^ (8 * r)
-  have hX' : ∀ w η j ι c σ O D,
-      (((A.window w η).device j ι c).prog σ D).rebuilds O D * 256 ≤ X := by
-    intro w η j ι c σ O D
-    let E : RateSketch.SketchStore N m := fun p => D (.inl p)
-    let R : RateSketch.SketchStream ρ := fun i => D (.inr i)
-    have hD : RateSketch.Data.ofParts E R = D := by
-      funext p
-      rcases p with p | p <;> rfl
-    simpa [hD] using hX w η j ι c E σ R O
-  have hq' : ∀ w η j ι σ (Os : Fin G → RateSketch.Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)))
-      (D : RateSketch.Data N m ρ Sector),
-      ∑ c, ((((A.window w η).device j ι c).prog σ D).queries (Os c) D).length ≤ qtot :=
-    fun w η j ι => hq w η j ι
-  have hε : ∀ w η, pr (fun y : SketchStore N m × SketchWindowCoins P N m ρ h ks G d =>
-      (A.window w η).reads y.1 y.2.1 y.2.2.1 + P * slack <
-        ((A.window w η).correctAll y.1 y.2.1 y.2.2.1).card * (m * 256)) ≤
-      ε + (P : ℝ≥0∞) * term := fun w η =>
-    SketchDeployedWindow.pr_unpaid_sum_le (A.window w η) r X qtot ε hr32 hRank (hX' w η)
-      (fun j ι σ Os D => hq' w η j ι σ Os D)
-  have main := SketchDeployedSession.pr_paid_of_window A slack
-    ⌊(1 - dbar) * ((n : ℝ) * P * N)⌋₊ ⌊(1 - dw) * ((P : ℝ) * N)⌋₊
-    (ε + (P : ℝ≥0∞) * term) hε
-  have hγ := gammaSketch_mul N m ρ S L X hN hm
-  have hγ' : gammaSketch N m ρ S L X * ((N : ℝ) * (m * 256)) = (slack : ℝ) := by
-    simpa [slack, mul_assoc] using hγ
-  have hb : (0 : ℝ) < m * 256 := by positivity
-  refine (pr_mono (fun x hx => ?_)).trans (main.trans ?_)
-  · obtain ⟨hall, hT | ⟨w, hw⟩⟩ := hx
-    · refine ⟨hall, Or.inl ?_⟩
-      have hc := Deployed.count_lt
-        (R := ((∑ w, (A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ))
-        (t := dbar) (g := gammaSketch N m ρ S L X) (c := (n : ℝ) * P)
-        (Nn := N) (b := (m : ℝ) * 256) (sl := slack) hb hγ'
-        (by simpa [mul_assoc] using hT)
-      rw [← mul_assoc]
-      exact_mod_cast hc
-    · refine ⟨hall, Or.inr ⟨w, ?_⟩⟩
-      have hc := Deployed.count_lt
-        (R := (((A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ))
-        (t := dw) (g := gammaSketch N m ρ S L X) (c := (P : ℝ))
-        (Nn := N) (b := (m : ℝ) * 256) (sl := slack) hb hγ'
-        (by simpa [mul_assoc] using hw)
-      exact_mod_cast hc
-  · have e1 : ((n : ℝ) * P * N) = ((n * P * N : ℕ) : ℝ) := by push_cast; ring
-    have e2 : ((P : ℝ) * N) = ((P * N : ℕ) : ℝ) := by push_cast; ring
-    rw [e1, e2]
-    calc
-      _ ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
-          (n : ℝ≥0∞) * (ε + (P : ℝ≥0∞) * term) := by
-        refine add_le_add (add_le_add ?_ ?_) le_rfl
-        · rw [show ((n : ℝ≥0∞) * P * N) = ((n * P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
-          exact Deployed.horizon_le dbar (n * P * N) (d * n) (by positivity)
-        · rw [show ((n : ℝ≥0∞) * P * N) =
-              (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
-          exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
-      _ = ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
-          (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) +
-            (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ (8 * r)) := by
-        ring
+  refine (SketchDeployedSession.pr_conservation_of_unpaid id A X dbar dw hn hP hN hm hdw _
+    (SketchDeployedSession.pr_unpaid_sum_le A r X qtot ε hr32 hRank hX hq)).trans (le_of_eq ?_)
+  ring
 
 /-- **The verbatim sketch session at the deployed receipt parameters, under the per-pass hash budget**
 (`Accounting.Guarantees.RemoteSessionConservationSketchDeployed`). `RemoteSessionConservationSketchSum` at 4 KiB

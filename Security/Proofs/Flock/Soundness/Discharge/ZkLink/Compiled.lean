@@ -164,11 +164,16 @@ def innerCheckC (H : List UInt8 → D) (Ep : Merkle.Enc (F × F) D) (Lp : Merkle
       Merkle.VerifiesL H Ep Lp (fun _ => root) (Nat.log 2 N) (pos (w j)).val (io.pads j).1 (io.pads j).2.1
         (io.pads j).2.2
 
+/-- **Query `jj`'s position**, `pos (w jj)`, and `0` past the last query. -/
+def qposOf {N q : ℕ} (pos : F → Fin N) (w : Fin q → F) (jj : ℕ) : ℕ :=
+  if h : jj < q then (pos (w ⟨jj, h⟩)).val else 0
+
 /-- **The inner proof, compiled** (`innerGame` with `τ` committed, §5): `ε`, `[ρ, σ]`, `γ`, `τ`'s commitment, `β`, `Y`
-and the queries. Its verdict is a function of the openings, sent after the last coin. -/
+and the queries. Its verdict is a function of the openings, sent after the last coin, and it records the position each
+query `w` drew (`qposOf`), the only position where the verifier hashes that query's pads opening. -/
 def innerGameC (H : List UInt8 → D) (Ep : Merkle.Enc (F × F) D) (Lp : Merkle.Leaf (F × F) Sl D H)
     (Lτ : Merkle.Leaf F Sl D H) {N : ℕ} (dom : Fin N ↪ F) (s nP q : ℕ) (pos : F → Fin N) {nA : ℕ}
-    (rows : Fin nA → Lin F s) (tr : Triple s) (root : D) : Game (InnerOpens F D Sl → Prop) := do
+    (rows : Fin nA → Lin F s) (tr : Triple s) (root : D) : Game ((InnerOpens F D Sl → Prop) × (ℕ → ℕ)) := do
   let ε ← draw F
   let ρσ ← recv (F × F)
   let γ ← draw (Fin (nA + 3) → F)
@@ -176,7 +181,7 @@ def innerGameC (H : List UInt8 → D) (Ep : Merkle.Enc (F × F) D) (Lp : Merkle.
   let β ← draw F
   let y ← recv (Fin (s + nP) → F)
   let w ← draw (Fin q → F)
-  pure (innerCheckC H Ep Lp Lτ dom pos rows tr root cτ ε ρσ γ β y w)
+  pure (innerCheckC H Ep Lp Lτ dom pos rows tr root cτ ε ρσ γ β y w, qposOf pos w)
 
 /-! ## The table -/
 
@@ -191,14 +196,15 @@ structure Hashes (F D Sl : Type) where
   Lp : Merkle.Leaf (F × F) Sl D H
   Lτ : Merkle.Leaf F Sl D H
 
-/-- **A compiled `--zk` rep's result**, pending the openings: the Ligerito levels' verdict, caps and requests, and the
-inner proof's check. -/
+/-- **A compiled `--zk` rep's result**, pending the openings: the Ligerito levels' verdict, caps and requests, the
+inner proof's check, and the position the inner proof's query `jj` drew (`qpos jj`, set only by `innerGameC`). -/
 structure PendZ (F D Sl : Type) where
   lig : PendL F D
   inner : InnerOpens F D Sl → Prop
+  qpos : ℕ → ℕ
 
 /-- A rep that rejected. -/
-def PendZ.reject : PendZ F D Sl := ⟨PendL.reject, fun _ => False⟩
+def PendZ.reject : PendZ F D Sl := ⟨PendL.reject, fun _ => False, fun _ => 0⟩
 
 /-- **A compiled `--zk` rep** (`repZK` compiled): the pads root, the masked phase compiled, and the compiled inner proof
 on the phase's rows. -/
@@ -207,7 +213,7 @@ noncomputable def repZC (A : Arith F K) (Hs : Hashes F D Sl) (T : TabZK F mPts) 
   let root ← recv D
   let o ← repMaskedZC (D := D) A T.pads T.padsA T.tr T.S T.sch T.hm T.t T.c₀ r extra
   let v ← innerGameC Hs.H Hs.Ep Hs.Lp Hs.Lτ T.dom T.np T.nP T.q T.pos o.1 T.tr root
-  pure ⟨o.2, v⟩
+  pure ⟨o.2, v.1, v.2⟩
 
 /-- **The final message of a compiled `--zk` table**, after the last coin of both reps: the rows of every level with
 their salts and paths (`Opens`, `Salts`, per rep, level and query), and each rep's inner-proof openings. -/

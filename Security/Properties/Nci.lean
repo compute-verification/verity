@@ -6,21 +6,23 @@ import NciCheck.Check
 
 `NciCheck.evaluate` (`verity/core/protocols/network/nci/lean/NciCheck/Check.lean`, package `nci_check`) is
 the verifier's check of a declared division against the NCI policy, `Nci.Complies Γ α` (`Definitions/Nci.lean`), and
-`NciCheck.check` is `evaluate` with a refusal written `{"error": code}`. The difftest holds it to the Python reference on
+`NciCheck.check` is `evaluate` with a refusal written `{"error": code}` (with a `message` giving the fix for some codes).
+θ, the baseline, holds only input gates bound at registration (`IsRegistered`): one bound per run is refused. The difftest holds it to the Python reference on
 random instances; the statements here say what it computes on every instance. Each is a named `Prop`, proved as
-`NciCheck.Properties.SecurityProofs.X : NciCheck.Properties.X` in `Properties.Proofs.Nci`, and a guarantee of this
+`NciCheck.Properties.SecurityProofs.X : NciCheck.Properties.X` in `Proofs.Properties.Nci`, and a guarantee of this
 package (`lean-audit.json`).
 
 Each statement has one shape (the lean-proofs skill, "One shape"): for every instance, if the check gives a verdict (or
 doesn't refuse with a code), its named conclusion holds. The converses, that the check refuses exactly the malformed
-and gives a verdict on every well-formed instance, are completeness, in `Properties.Proofs.Nci`, each with an instance.
+and gives a verdict on every well-formed instance, are completeness, in `Proofs.Properties.Nci`, each with an instance.
 
 **Refusals: a malformed instance is refused with its code.**
 
 * `RejectsExactly`: if `evaluate j` doesn't refuse with code `k`, then not `Malformed j k` (the first condition `j`
   fails, in the order the check reads them, is `k`'s): so a malformed instance is refused, with that condition's code.
   The conditions are written over `j`'s JSON and what C-Flock's decoder returns for the program (`Flock.Program.decode`,
-  then `Prog.gate` per gate), never over the check's own state.
+  then `Prog.gate` per gate), never over the check's own state, but for one: whether a reference reads a leaf at
+  another width (`Reinterprets`), which is the check's width analysis.
 * `AcceptsExactly`: `evaluate j` gives a verdict only when `WellFormed j`.
 * `CheckRefuses`, `CheckAccepts`: the same of `NciCheck.check`, whose `error` field is the refusal's code and which has
   none on a verdict.
@@ -89,18 +91,33 @@ def GateFault (P : Prog) (g : ℕ) (k : String) : Prop :=
 def IsInput (P : Prog) (g : ℕ) : Prop :=
   ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧ Flock.Program.isInputId (P.defs[p]!).key = true
 
+/-- Gate `g` is bound at registration: its primitive's binding is `registration` (`RegisteredInput<w>_v1`,
+`Flock.Program.inputId?`), not `run` (`Input<w>_v1`). -/
+def IsRegistered (P : Prog) (g : ℕ) : Prop :=
+  ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧
+    (Flock.Program.inputId? (P.defs[p]!).key).map (·.1) = some Flock.Program.REGISTRATION
+
+/-- A reference of `P` reads a leaf at another width than it was committed with, or one the width analysis can't
+decide within its bound (`NciCheck.Widths.reinterpretation`; descriptor v1's `E_REINTERPRET`, which the Python codec
+refuses as it decodes and C-Flock's decoder doesn't look for). Stated through the check's own analysis: that it finds
+exactly the references the codec refuses is the difftest's, not yet a proof. -/
+def Reinterprets (P : Prog) : Prop :=
+  NciCheck.Widths.reinterpretation P ≠ none
+
 /-! ## θ and the owners -/
 
-/-- Entry `t` of θ names an input gate that no earlier entry names. -/
+/-- Entry `t` of θ names an input gate bound at registration that no earlier entry names. -/
 def ThetaOk (P : Prog) (theta : Array Json) (t : ℕ) : Prop :=
-  ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧ ∀ t' < t, natOf? theta[t']! ≠ some g
+  ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧ IsRegistered P g ∧ ∀ t' < t, natOf? theta[t']! ≠ some g
 
 /-- Entry `t` of θ's refusal `k`: `theta-unknown` where it is not a gate id, else `theta-not-input` where its gate is
-not an input gate, else `theta-duplicate` where an earlier entry names the same gate. -/
+not an input gate, else `theta-not-registered` where it is one bound per run, else `theta-duplicate` where an earlier
+entry names the same gate. -/
 def ThetaFault (P : Prog) (theta : Array Json) (t : ℕ) (k : String) : Prop :=
   (k = "theta-unknown" ∧ ∀ g, natOf? theta[t]! = some g → gates P ≤ g) ∨
     (k = "theta-not-input" ∧ ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ ¬ IsInput P g) ∨
-    (k = "theta-duplicate" ∧ ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧
+    (k = "theta-not-registered" ∧ ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧ ¬ IsRegistered P g) ∨
+    (k = "theta-duplicate" ∧ ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧ IsRegistered P g ∧
       ∃ t' < t, natOf? theta[t']! = some g)
 
 /-- Gate `g`'s owner is `"input"` and `g` an input gate, or an IU and `g` a computed gate. -/
@@ -125,7 +142,8 @@ def FirstFault (ok : ℕ → Prop) (fault : ℕ → String → Prop) (n : ℕ) (
 /-! ## (1) Refusals -/
 
 /-- `j` is refused with `k`: the first condition it fails, in the order the check reads them, is `k`'s. First the
-fields (`instance`), `Γ` and `α` (`params`) and the program's decoding (`program`), then gate by gate (`GateFault`), then
+fields (`instance`), `Γ` and `α` (`params`), the program's decoding and its widths (`program`: `Reinterprets`), then
+gate by gate (`GateFault`), then
 θ entry by entry (`ThetaFault`), then one owner per gate (`owner-length`), then gate by gate (`OwnerFault`), then the IUs
 (`empty-iu`). -/
 def Malformed (j : Json) (k : String) : Prop :=
@@ -134,6 +152,7 @@ def Malformed (j : Json) (k : String) : Prop :=
   ∃ i, Parses j i ∧
     (((∃ e, Flock.Program.decode i.program.toUTF8 = .error e) ∧ k = "program") ∨
      ∃ P, Flock.Program.decode i.program.toUTF8 = .ok P ∧
+      ((Reinterprets P ∧ k = "program") ∨ ¬ Reinterprets P ∧
       (FirstFault (GateOk P) (GateFault P) (gates P) k ∨
        (∀ g < gates P, GateOk P g) ∧
         (FirstFault (ThetaOk P i.theta) (ThetaFault P i.theta) i.theta.size k ∨
@@ -141,12 +160,12 @@ def Malformed (j : Json) (k : String) : Prop :=
           ((i.owner.size ≠ gates P ∧ k = "owner-length") ∨
            i.owner.size = gates P ∧
             (FirstFault (OwnerOk P i.owner) (OwnerFault P i.owner) (gates P) k ∨
-             (∀ g < gates P, OwnerOk P i.owner g) ∧ EmptyIU i.owner ∧ k = "empty-iu")))))
+             (∀ g < gates P, OwnerOk P i.owner g) ∧ EmptyIU i.owner ∧ k = "empty-iu"))))))
 
-/-- `j` is well-formed: its fields parse, its program decodes, and every gate, every entry of θ and every owner is as
-stated, with no IU empty. -/
+/-- `j` is well-formed: its fields parse, its program decodes and reads every leaf at its width, and every gate, every
+entry of θ and every owner is as stated, with no IU empty. -/
 def WellFormed (j : Json) : Prop :=
-  ∃ i P, Parses j i ∧ Flock.Program.decode i.program.toUTF8 = .ok P ∧ (∀ g < gates P, GateOk P g) ∧
+  ∃ i P, Parses j i ∧ Flock.Program.decode i.program.toUTF8 = .ok P ∧ ¬ Reinterprets P ∧ (∀ g < gates P, GateOk P g) ∧
     (∀ t < i.theta.size, ThetaOk P i.theta t) ∧ i.owner.size = gates P ∧ (∀ g < gates P, OwnerOk P i.owner g) ∧
     ¬ EmptyIU i.owner
 

@@ -204,6 +204,9 @@ class _Collector:
             self.learned += 1
         return self.byte_cursor, len(self.entries), self.changed, version
 
+    def end_step_full(self, flush, drain):
+        return (*self.end_step(), self.step_bytes, 0.0, 0, 0.0, [])
+
     def export_plan(self, key):
         self.exports += 1
         return [(nid, DTYPES[dt], sizes, nb, off, gap) for nid, dt, sizes, nb, off, gap in self._entries(key)]
@@ -293,7 +296,7 @@ def committer(mp, *, native_worker: bool = False) -> NC.NativeCollectCommitter:
     mp.setattr(NC, "ext", lambda *a, **k: SimpleNamespace(Collector=_Collector, StepHasher=lambda: _StepHasher(tree), cuda_runtime_version=lambda: 0))
     eng = SimpleNamespace(model=torch.nn.Module(), runner=_Runner())
     com = NC.NativeCollectCommitter(eng, run_id="plan-cache", program_digest=PD, geo_digest=GEO, retain_values=False, arena_bytes=None,
-                                    fast_copy=False, native_worker=native_worker)
+                                    fast_copy=False, native_worker=native_worker, commit_scheme="vllm-v1")
     com.arena = _CpuArena(BLOCK, n_blocks=2)
     com.arena.prealloc()
     com._nc.arena_of = lambda ptr: next(b for b in com.arena.all if b.data_ptr() == ptr)
@@ -427,10 +430,12 @@ def test_the_plan_caches_stay_bounded_while_every_step_learns_a_new_plan(monkeyp
 
 
 @WORKERS
-def test_every_root_is_the_root_of_the_same_step_committed_from_one_block(monkeypatch, native_worker):
+@pytest.mark.parametrize("native_end", [True, False], ids=["native-end", "python-end"])
+def test_every_root_is_the_root_of_the_same_step_committed_from_one_block(monkeypatch, native_worker, native_end):
     """Every step's root equals the one-block CPU reference over the same tensors, and the run roots are those main's committer
-    produced on the same schedule."""
+    produced on the same schedule, with the serving thread's step end in one native call or in several."""
     com = committer(monkeypatch, native_worker=native_worker)
+    com.native_end = native_end
     roots = []
     for sched in rising():
         rc = run(com, sched)

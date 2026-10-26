@@ -83,6 +83,27 @@ def test_first_and_delta_ships_go_as_git_objects_and_verify_per_file(repo, tmp_p
     assert remote.ship_source(LOCAL, str(root), repo) == (sha2, dest2, doc2), "a READY tree is not shipped again"
 
 
+def test_a_shipped_checkouts_origin_main_is_the_newest_launchers_and_never_moves_back(repo, tmp_path):
+    root = tmp_path / "root"
+    remote.ship_source(LOCAL, str(root), repo)
+    bare = root / remote.POD_GIT_REPO
+    assert subprocess.run(["git", "rev-parse", "--verify", "-q", "refs/heads/main"], cwd=bare, capture_output=True).returncode != 0, \
+        "a launcher without origin/main ships and leaves main alone"
+    old = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "update-ref", "refs/remotes/origin/main", old)
+    (repo / "a.txt").write_text("beta\n")
+    _git(repo, "commit", "-qam", "two")
+    new = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "update-ref", "refs/remotes/origin/main", new)
+    _, dest, _ = remote.ship_source(LOCAL, str(root), repo)
+    assert _git(Path(dest), "rev-parse", "origin/main") == new, "suites.py --changed origin/main diffs against the launcher's main"
+    _git(repo, "update-ref", "refs/remotes/origin/main", old)
+    (repo / "a.txt").write_text("gamma\n")
+    _git(repo, "commit", "-qam", "three")
+    _, dest3, doc3 = remote.ship_source(LOCAL, str(root), repo)
+    assert doc3["transport"] == "git" and _git(Path(dest3), "rev-parse", "origin/main") == new, "an older launcher doesn't move main back"
+
+
 def test_a_machine_without_git_gets_the_archive_stream_with_one_line(repo, tmp_path, capsys):
     root = tmp_path / "root"
     sha, dest, doc = remote.ship_source(_no_git_machine(tmp_path), str(root), repo)
@@ -161,3 +182,23 @@ def test_nothing_credential_like_is_left_on_the_machine(repo, tmp_path):
     keys = [line.split("=", 1)[0] for line in _git(tree, "config", "--local", "--list").splitlines()]
     assert _git(tree, "remote", "get-url", "origin") == str(bare), "the checkout's one remote is the machine's own bare repository"
     assert not [k for k in keys if k.startswith("credential") or "extraheader" in k], keys
+
+
+def test_a_run_that_edits_the_shared_tree_is_not_what_the_next_run_of_that_commit_gets(repo, tmp_path, capsys):
+    """INF-225: a probe ran `git checkout origin/main -- FILE` inside the node's shared tree for a commit, and every later run of that
+    commit ran main's file.  The machine refuses such a tree, and the next ship sets it aside and ships the commit afresh."""
+    root = tmp_path / "root"
+    sha, dest, doc = remote.ship_source(LOCAL, str(root), repo)
+    (Path(dest) / ".lake").mkdir()
+    (Path(dest) / ".lake" / "build.olean").write_text("built\n")
+    assert remote.tracked_dirt(Path(dest)) == [], "untracked build output is not dirt"
+    (Path(dest) / "pkg" / "b.py").write_text("B = 99\n")
+    assert remote.tracked_dirt(Path(dest)) == ["pkg/b.py"]
+    with pytest.raises(remote.SourceNotReady, match=r"edited its tracked files \(pkg/b\.py\)"):
+        remote.require_ready_source(dest, sha)
+    sha2, dest2, doc2 = remote.ship_source(LOCAL, str(root), repo)
+    assert (sha2, dest2) == (sha, dest) and (Path(dest) / "pkg" / "b.py").read_text() == "B = 2\n"
+    assert remote.require_ready_source(dest, sha) == doc2 and remote.tracked_dirt(Path(dest)) == []
+    (moved,) = (root / "src" / ".quarantine").iterdir()
+    assert moved.name.startswith(f"{sha}-") and (moved / "pkg" / "b.py").read_text() == "B = 99\n", "kept for inspection"
+    assert "an earlier run edited (pkg/b.py)" in capsys.readouterr().err

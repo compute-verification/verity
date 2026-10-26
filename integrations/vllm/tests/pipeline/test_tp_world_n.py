@@ -13,7 +13,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluate import evaluate_region
 from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.program import Program
-from verity_vllm.program.registry import b1_tp2 as TP2, prims as P
+from verity.ml.definitions.registry import b1_tp2 as TP2, prims as P
 from verity_vllm.program.frontend import collective_kinds
 
 
@@ -175,6 +175,51 @@ def test_world_8_collective_rules_bind_captured_default_and_custom_off_routes(mo
     assert [n.fn.id for n in derived.program.fn.body.nodes] == [kind]
 
 
+#: the TP4 capture's switches (vLLM's batch invariance, NCCL over SHM) and GPU
+TP4_ENV = {"VLLM_BATCH_INVARIANT": "1", "NCCL_P2P_DISABLE": "1"}
+RTX_PRO_6000 = ((12, 0), 188)
+
+
+def _derive_world4_all_reduce(monkeypatch, *, env: dict, gpu: tuple, M: int, N: int = 8192):
+    torch = pytest.importorskip("torch")
+    from verity_vllm.program.frontend.derive import derive_report
+    from verity_vllm.program.frontend.export_ops import ensure_ops
+    from verity_vllm.program.frontend.rules import vllm_bindings as VB
+    from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity.ml.definitions.registry.tp_allreduce import settings_of
+
+    ensure_ops()
+    monkeypatch.setitem(VB._OBSERVED, "allreduce_settings", settings_of(True, env))
+    monkeypatch.setitem(VB._OBSERVED, "target_profile", TargetProfile(compute_capability=gpu[0], num_sms=gpu[1]))
+
+    class Collective(torch.nn.Module):
+        def forward(self, *parts):
+            return torch.ops.verity_tp.all_reduce(list(parts))
+
+    rows = tuple(torch.zeros(M, N, dtype=torch.bfloat16) for _ in range(4))
+    return derive_report(Collective(), rows, mode="profile", profile="b1-eager-v3", rules=vllm_ruleset(),
+                         name="world4-collective", check_registry=True, rank=(4, 0))
+
+
+def test_world_4_all_reduce_binds_nccl_s_tree_on_the_rtx_pro_6000_over_shm(monkeypatch):
+    """The TP4 capture's route (batch-invariant pynccl over SHM on 4 RTX PRO 6000) is one `AllReduceNcclTree_v1` call over the
+    flattened [M * N] partials, down the capture's chain (M = 256, the entry's top, is `test_tp_allreduce`'s binding test)."""
+    derived = _derive_world4_all_reduce(monkeypatch, env=TP4_ENV, gpu=RTX_PRO_6000, M=1)
+    assert derived.ok, derived.unsupported
+    assert [n.fn.id for n in derived.program.fn.body.nodes] == ["AllReduceNcclTree_v1{WORLD=4,SIZE=8192,CHAIN=(0,1,2,3)}"]
+
+
+@pytest.mark.parametrize("env,gpu,M,N", [(TP4_ENV, ((9, 0), 132), 1, 8192), ({"VLLM_BATCH_INVARIANT": "1"}, RTX_PRO_6000, 1, 8192),
+                                         ({"NCCL_P2P_DISABLE": "1"}, RTX_PRO_6000, 1, 8192), (TP4_ENV, RTX_PRO_6000, 257, 8192),
+                                         (TP4_ENV, RTX_PRO_6000, 1, 4096)],
+                         ids=["h200", "p2p-on", "not-batch-invariant", "M-257", "N-4096"])
+def test_world_4_all_reduce_off_the_captured_route_is_refused_by_name(monkeypatch, env, gpu, M, N):
+    derived = _derive_world4_all_reduce(monkeypatch, env=env, gpu=gpu, M=M, N=N)
+    assert not derived.ok
+    assert "numerics_unregistered" in repr(derived.unsupported) and "world=4" in repr(derived.unsupported), derived.unsupported
+
+
 # --- tp_links.json: v2 schema at world N, v1 files read as v2 ----------------------------------------------------------------
 
 def test_read_tp_links_upgrades_v1_and_accepts_v2(tmp_path):
@@ -229,7 +274,7 @@ def _rank_events(rank: int, world: int, *, ar_shape=(4, 8), steps=(0,)):
 
 
 def test_link_three_synthetic_ranks():
-    from tests.collectives import collective_link as CL
+    from tests.engine.collectives import collective_link as CL
     W = 3
     sh = {r: CL.extract_rank_shard(_rank_events(r, W), rank=r) for r in range(W)}
     for r in range(W):
@@ -238,7 +283,7 @@ def test_link_three_synthetic_ranks():
     assert link["ranks"] == [0, 1, 2] and link["world_size"] == 3 and link["by_status"] == {"linked": 2}
     ar, ag = link["links"]
     assert ar["definition"]["id"] == "AllReduce_v2{WORLD=3,N=32}" and set(ar["required_writes"]) == {"0", "1", "2"}
-    assert ar["definition"]["module"] == "verity_vllm.program.registry.b1_tp2"
+    assert ar["definition"]["module"] == "verity.ml.definitions.registry.b1_tp2"
     assert ag["definition"]["id"] == "AllGather_v1{WORLD=3,N=8}"
     # world 2 of the same synthetic run keeps the recorded gather identity
     sh2 = {r: CL.extract_rank_shard(_rank_events(r, 2), rank=r) for r in range(2)}
@@ -356,7 +401,7 @@ def test_a_fused_norm_recorder_row_is_the_collective_its_path_folds_to_and_the_u
     the fold's `all_reduce` over the [M, N] partial, on its fused path the fold's fused collective.  The provenance leg leaves the unfused
     calls to the Commit's replay, so they count with the checked ones."""
     from verity_vllm.check.match import rank_match as RMx
-    from verity_vllm.collectives import fused_norm as FN
+    from verity_vllm.engine.collectives import fused_norm as FN
     W, steps = 3, 2
     colls = {r: _colls(r, W, steps=steps) for r in range(W)}
 
@@ -413,3 +458,21 @@ def test_a_residual_add_is_a_partial_producer_only_over_partials_of_its_rank_and
     (name,) = RMx.own_producers_from_record(tmp_path / "instances.jsonl")[(0, 0)]
     assert name.startswith(f"ResidualAdd_v1{{N={N}}}<-") and RMx._admitted(name) is admitted, name
     assert not RMx._admitted(f"ResidualAdd_v1{{N={N}}}<-MoeSum_v1|<not-a-node>") and not RMx._admitted("ResidualAdd_v1{N=8}")
+
+
+@pytest.mark.parametrize("own,admitted", [
+    ("MoeSum_v1{TOPK=6,H=8}", True),
+    ("ResidualAdd_v1{N=8}<-DeepGemmFp8Linear_v1{K=384,N=8}|MoeSum_v1{TOPK=6,H=8}", True),   # the routed sum plus the shared expert's down-proj
+    ("ResidualAdd_v1{N=8}<-DeepGemmFp8Linear_v1{K=384,N=8}|Gemm_v1{K=384,N=8}", False),     # two linears and no routed sum
+    ("DeepGemmFp8Linear_v1{K=384,N=8}", False),                                             # the shared expert alone
+])
+def test_a_moe_sites_partial_is_a_routed_sum_to_which_the_shared_experts_partial_may_be_added(own, admitted):
+    """A MoE runner that reduces its shared expert's output with the routed sum (DeepSeek-V4-Pro's `MoERunner` at TP8) issues the
+    all-reduce of their `ResidualAdd_v1`: the links check admits it at the MoE site, and refuses a partial with no routed sum."""
+    from verity_vllm.check.match import rank_match as RMx
+    W, N, site = 3, 8, "model.layers.1.ffn.experts.runner"
+    colls = {r: [dict(c, site=site) for c in _colls(r, W, steps=1) if c["kind"] == "all_reduce"] for r in range(W)}
+    links = {r: [{"k": 0, "peer_collective_k": 0, "peers": [{"rank": p, "collective_k": 0} for p in range(W) if p != r], "kind": "all_reduce",
+                  "shape": [1, N], "module": site, "module_path": f"{site} (MoERunner)"}] for r in range(W)}
+    res = RMx.cross_rank_check(colls, producers={r: {(0, 0): [own]} for r in range(W)}, links=links)
+    assert ("links" not in res["failed"]) is admitted, next(c for c in res["checks"] if c["name"] == "links")["fails"]

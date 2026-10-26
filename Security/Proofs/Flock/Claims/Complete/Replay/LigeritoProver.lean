@@ -272,8 +272,8 @@ theorem PRuns.powQ (nonce : ℕ → ℕ → UInt64) (c : Cur) (tm : Transcript) 
     PRuns p L (powP nonce 0) c tm ⟨c.msg, c.ood, c.cbn, c.qn + 1, c.cn⟩ (ap (pN p.queryNonces[c.qn]!) tm)
       (fun _ => True) fun _ => True := by
   intro st t l b st' t' l' hl h
-  obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with qn := st.qn.push (nonce 0 st.qn.size) }),
-    ap (pN (nonce 0 st.qn.size)) t), l) = _ from h)
+  obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with qn := st.qn.push 0 }),
+    ap (pN 0) t), l) = _ from h)
   refine ⟨trivial, ⟨Pre.refl _, Pre.refl _, Pre.refl _, Pre.push _ _, Pre.refl _⟩, hl, fun hE _ hc ht => ?_⟩
   subst hc ht
   refine ⟨by simp [pcur], ?_⟩
@@ -284,8 +284,8 @@ theorem PRuns.powC (nonce : ℕ → ℕ → UInt64) (c : Cur) (tm : Transcript) 
     PRuns p L (powP nonce 1) c tm ⟨c.msg, c.ood, c.cbn, c.qn, c.cn + 1⟩ (ap (pN p.consistencyNonces[c.cn]!) tm)
       (fun _ => True) fun _ => True := by
   intro st t l b st' t' l' hl h
-  obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with cn := st.cn.push (nonce 1 st.cn.size) }),
-    ap (pN (nonce 1 st.cn.size)) t), l) = _ from h)
+  obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with cn := st.cn.push 0 }),
+    ap (pN 0) t), l) = _ from h)
   refine ⟨trivial, ⟨Pre.refl _, Pre.refl _, Pre.refl _, Pre.refl _, Pre.push _ _⟩, hl, fun hE _ hc ht => ?_⟩
   subst hc ht
   refine ⟨by simp [pcur], ?_⟩
@@ -296,8 +296,8 @@ theorem PRuns.powB (nonce : ℕ → ℕ → UInt64) (c : Cur) (tm : Transcript) 
     PRuns p L (powP nonce 2) c tm ⟨c.msg, c.ood, c.cbn + 1, c.qn, c.cn⟩ (ap (pN p.claimNonces[c.cbn]!) tm)
       (fun _ => True) fun _ => True := by
   intro st t l b st' t' l' hl h
-  obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with cbn := st.cbn.push (nonce 2 st.cbn.size) }),
-    ap (pN (nonce 2 st.cbn.size)) t), l) = _ from h)
+  obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with cbn := st.cbn.push 0 }),
+    ap (pN 0) t), l) = _ from h)
   refine ⟨trivial, ⟨Pre.refl _, Pre.refl _, Pre.push _ _, Pre.refl _, Pre.refl _⟩, hl, fun hE _ hc ht => ?_⟩
   subst hc ht
   refine ⟨by simp [pcur], ?_⟩
@@ -428,8 +428,9 @@ theorem PRuns.query (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64)
     (PRuns.powC nonce _ _).bind fun _ _ => (PRuns.sampleVec resp (Nat.succ_ne_zero _) _ _).bind fun _ _ =>
     PRuns.pure trivial _ _
 
-/-- **A level's four challenges**, against the model's (`chals`): the last keeps the folded table, then splits it. -/
-theorem levelChals (resp : ℕ → Claims.Msg) (sm : LState) (tm : Transcript) :
+/-- **A level's four challenges**, against the model's (`chals`): the last keeps the folded table, then splits it; at
+the last level (`last`) its message is the unsplit table's. -/
+theorem levelChals (resp : ℕ → Claims.Msg) (last : Bool) (sm : LState) (tm : Transcript) :
     PRuns p L (forIn [:4] (#[] : Array F256) fun i (f : Array F256) =>
         if (i + 1 == 4) = true then do
           let r ← liftT (sampleKP (asksS resp))
@@ -441,7 +442,7 @@ theorem levelChals (resp : ℕ → Claims.Msg) (sm : LState) (tm : Transcript) :
             { tab := embedF (splitK st.tab), w := liftU st.w, msgs := st.msgs, oods := st.oods, qn := st.qn,
               cn := st.cn, cbn := st.cbn }
           let st ← get
-          FlockComplete.sendMsg (roundPoly st.tab st.w)
+          FlockComplete.sendMsg (if last = true then roundPoly d.tab d.w else roundPoly st.tab st.w)
           pure (ForInStep.yield d.tab)
         else do
           let _ ← challengeP (asksS resp) false
@@ -529,7 +530,7 @@ theorem ligeritoP_go (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (
         have hsz := hs.2 hj
         generalize loop P (cfOf resp L) sch (x₀ P (cfOf resp L) sch T cm0.cap t) j = x at hs ⊢
         rw [hs.1]
-        refine PRuns.bind (levelChals resp x.2.1 x.2.2) fun f _ => ?_
+        refine PRuns.bind (levelChals resp _ x.2.1 x.2.2) fun f _ => ?_
         refine PRuns.ite (fun _ => ?_) fun hne => absurd (by simp; omega) hne
         refine PRuns.bindD (PRuns.commit h ms _ _ _ _ _) (fun cmN _ => ?_)
           (Qf := fun cmN r => (∃ s', r = .yield s' ∧ (s'.1 = (stepN P (cfOf resp L) sch j x).1.1 ∧
@@ -557,7 +558,7 @@ theorem ligeritoP_go (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (
       · rw [loop_stepL P (cfOf resp L) sch _ hj1]
         have hjR : j + 1 = sch.levels.size - 1 := by omega
         generalize loop P (cfOf resp L) sch (x₀ P (cfOf resp L) sch T cm0.cap t) j = x at hs ⊢
-        refine PRuns.bindD (levelChals resp x.2.1 x.2.2) (fun f _ => ?_)
+        refine PRuns.bindD (levelChals resp _ x.2.1 x.2.2) (fun f _ => ?_)
           (Qf := fun f r => (∃ s', r = .yield s' ∧ (s'.1 = (stepL P (cfOf resp L) sch x).1.1 ∧
             (j + 1 < sch.levels.size - 1 → s'.2.2.1.size = j + 1 + 1)) ∧ Pre s.2.2.1 s'.2.2.1) ∧
             ∀ s', r = .yield s' → s'.2.2.2.2.yr = Array.foldl (fun acc v => (acc.push v.c0).push v.c1) #[] f)

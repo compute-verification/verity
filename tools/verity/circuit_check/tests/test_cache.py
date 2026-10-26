@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from circuit_check import entries as E
 
 REPO = Path(__file__).resolve().parents[4]
@@ -281,7 +283,7 @@ for _mod, m in SC.binding_modules():                            # each sidecar's
 TG.load_registries = lambda: None
 TG.suite = lambda: dict(sorted(suite.items()))
 TG.templates = lambda: []
-TG.call_families = lambda: set()
+TG.call_families = lambda found=None: set()
 CK.check_definition = check.check_definition
 rep = cli.run([], CK.Options(), everything=True, log=None, cache=root / "cache")
 hits = sorted(t["target"] for t in rep["targets"] if "cache" in t)
@@ -650,6 +652,50 @@ def test_a_module_an_earlier_target_imported_is_held_by_every_check_that_imports
     assert _run(root)["hits"] == []
 
 
+#: body reads under nested recordings: which of SynTop and the SynSub its body calls each recording noted
+BODY_READS = """
+import json, sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+sys.path.insert(0, str(root))
+from circuit_check import cache as CC
+from verity.ml.circuits.defs import bind
+
+CC.trace(root)
+from syn import top
+
+top_, sub = (sp := bind(top.SynTop)), sp.body.nodes[0].fn
+names = lambda fr: sorted(n for n, d in (("top", top_), ("sub", sub)) if id(d) in fr.defs)
+got = {}
+with CC.recording() as a:
+    for _ in range(3):
+        top_.body
+    with CC.recording(merge=False) as b:
+        sub.body
+        sub.body
+    got["b"], got["a then"] = names(b), names(a)
+    sub.body
+    got["a"] = names(a)
+with CC.recording() as c:
+    top_.body
+    with CC.recording() as d:
+        top_.body
+    got["c"], got["d"] = names(c), names(d)
+print(json.dumps(got))
+"""
+
+
+def test_a_body_read_is_noted_in_every_recording_that_reads_it(tmp_path):
+    """A check's layout walks read a specialization's body millions of times, so the tracer notes a read once in the recording
+    it happens in rather than on every read; a read in any other recording (a nested one, its encloser once it ends, a later
+    one) is noted there again, however often the body was read before."""
+    root = _tree(tmp_path)
+    r = subprocess.run([sys.executable, "-c", BODY_READS, str(root)], capture_output=True, text=True, cwd=REPO, check=True)
+    assert json.loads(r.stdout.strip().splitlines()[-1]) == {"b": ["sub"], "a then": ["top"], "a": ["sub", "top"],
+                                                             "c": ["top"], "d": ["top"]}
+
+
 def _bindings(root: Path, *extra: str, families: tuple[str, ...] = ()) -> None:
     """Run the catalog's bindings ``extra`` beside the core and model ones, and keep ``families`` too."""
     _edit(root, "syn/catalog.py", '(("_model_roots:SynOther_v1",), model)]',
@@ -870,7 +916,7 @@ print(CC.untraced())
     assert later.stdout.strip() == "[]"                # the old bytecode is still there, but its header no longer matches
 
 
-#: a kernel module imported, as `verity_vllm.program.kernels` imports its rows, by a registry module the catalog enumerates
+#: a kernel module imported, as `verity.ml.definitions.numerics` imports its rows, by a registry module the catalog enumerates
 KERNEL_FILES = {
     "syn/rows.py": """
 import numpy as np
@@ -932,25 +978,28 @@ def test_the_catalogs_units_are_its_root_functions_and_entries():
     assert {"_kernel_roots", "_vocabulary_bindings", "common"} <= set(units[CC.TARGETS])
     src = srcs[CC.TARGETS]
     assert CC._units_of(src.replace("\ndef catalog(", "\n# a comment\ndef catalog(", 1))[0] == units[CC.TARGETS]
-    b1 = SC.path_of("verity_vllm.program.registry.b1", "py")
+    b1 = SC.path_of("verity.ml.definitions.registry.b1", "py")
     edited = CC._units_of(srcs[b1].replace('("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=16))',
                                            '("ResidualAdd_v1", lambda: bind(b1.ResidualAdd, N=32))', 1))[0]
     assert {u for u in units[b1] if edited.get(u) != units[b1][u]} == {"_model_roots:ResidualAdd_v1"}
 
 
-def test_every_binding_and_pin_is_in_the_module_it_binds():
-    """The tree is migrated (`migrate_bindings.py`): it would move no binding out of `targets.py` and no pin out of the file
-    that holds it, so a binding or pin added in the wrong place fails here."""
-    import importlib.util
+#: `targets.py`'s own binding units: what no one module owns (every kernel's and vocabulary kind's self-check bindings), its
+#: module body, and `_root_bindings`, a helper whose name reads as a binding's
+TARGETS_UNITS = {"_kernel_roots", "_vocabulary_bindings", "_vocabulary_roots", "_root_bindings", "common"}
 
+
+def test_every_binding_and_pin_is_in_the_module_it_binds():
+    """`targets.py` binds only what no one module owns, and every pin is in the file of the module that owns it, so a binding
+    or pin added in the wrong place fails here: a Definition's goes in its module's sidecar (`circuit_check.sidecars`)."""
+    from circuit_check import cache as CC
     from circuit_check import checks as CK
     from circuit_check import sidecars as SC
+    from circuit_check import targets as TG
 
-    spec = importlib.util.spec_from_file_location("migrate_bindings", REPO / "tools/verity/circuit_check/migrate_bindings.py")
-    MB = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(MB)
-    moved, _text, summary = MB.plan(strict=True)
-    assert not moved and not summary["stays"], (sorted(moved), summary["stays"])
+    stray = sorted(set(CC._units_of(CC.TARGETS.read_text())[0]) - TARGETS_UNITS)
+    assert not stray, f"targets.py binds {stray}: move each to the sidecar of the module that defines what it binds"
+    TG.load_registries()
     misplaced = []
     for kind, pins in CK.load_pins().items():
         for key in pins:
@@ -971,7 +1020,7 @@ ON_DEMAND = [("definitions", "GatherBf16x1024u10_v1"), ("definitions", "GatherBf
 keys = sorted({*((kind, key) for kind, pins in CK.load_pins().items() for key in pins), *ON_DEMAND})
 owners = lambda: {f"{kind} {key}": SC.pin_owner(kind, key) for kind, key in keys}
 before = owners()
-from verity_vllm.program.registry import boolean_gather, prims, sampling
+from verity.ml.definitions.registry import boolean_gather, prims, sampling
 _ = bind(boolean_gather.gather_bf16(1100)).body
 boolean_gather.gather_bf16(64), prims.gather_bf16(1), sampling.bit_at(32)
 print(json.dumps({"before": before, "after": owners(), "built": [key for _, key in ON_DEMAND if key in REGISTRY.defs]}))
@@ -987,8 +1036,8 @@ def test_a_pins_owner_is_what_its_key_names_not_what_the_process_built():
     got = json.loads(r.stdout)
     assert len(got["built"]) == 4, got["built"]
     assert got["before"] == got["after"], {k: (v, got["after"][k]) for k, v in got["before"].items() if got["after"][k] != v}
-    assert got["before"]["pieces GatherBf16x1_v1"] == "verity_vllm.program.registry.prims"
-    assert got["before"]["pieces BitAtx32_v1"] == "verity_vllm.program.registry.sampling"
+    assert got["before"]["pieces GatherBf16x1_v1"] == "verity.ml.definitions.registry.prims"
+    assert got["before"]["pieces BitAtx32_v1"] == "verity.ml.definitions.registry.sampling"
     assert got["before"]["definitions GatherBf16x1024u10_v1"] is None
 
 
@@ -1057,3 +1106,62 @@ def test_the_task_list_is_reused_only_while_nothing_its_build_could_depend_on_ch
     out = _run(root)
     assert out["hits"] == ["SynOther_v1"] and "task_list" not in out["stats"] and out["stats"]["stored"] == 1
     assert _run(root)["stats"]["task_list"]
+
+
+#: the harness with each target checked in a process of its own, forked from a zygote that is itself forked from the harness's
+#: process once the task list is built (`cli.Zygote` ``fork``, as `circuit-check` runs), so it holds this process's catalog
+FORKED = HARNESS.replace("log=None, cache=", "log=None, jobs=2, isolate=True, fork=True, cache=")
+
+
+def test_a_zygote_forked_once_the_task_list_is_built_records_what_a_check_here_does(tmp_path):
+    """b103 (6c4f254) built the catalog twice, in circuit-check's process for the keys and again in the forkserver zygote its
+    434 rerun targets fork from: about 40 of its 125 minutes.  Forked from the process that built it, the zygote builds nothing:
+    its children check the harness's own task list, which a forkserver zygote would build again from the real catalog.  A
+    target's process records what checking it first in this process records (less the probes this process's lookups made of
+    the cache's git-ignored directories, which are always absent); its entry is reused, and an edit reruns only what it reaches."""
+    here, forked = _tree(tmp_path / "here"), _tree(tmp_path / "forked")
+    assert _run(here)["hits"] == [] and _run(forked, FORKED)["hits"] == []
+
+    def held(root: Path, target: str) -> dict:
+        reads = _entry(root, target)["reads"]
+        return {**reads, "probes": {p: v for p, v in reads["probes"].items() if not p.startswith("cache/")}}
+
+    assert held(forked, "SynOther_v1") == held(here, "SynOther_v1")
+    for target in ("SynOther_v1", "SynTop_v1"):
+        assert _values(forked, target) == _values(here, target) and _entry(forked, target)["report"]["peak_gb"] > 0
+    assert _run(forked, FORKED)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    _edit(forked, "syn/sub.py", "B.call(SynAdd, a, b)", "B.call(SynAdd, b, a)")
+    out = _run(forked, FORKED)
+    assert out["hits"] == ["SynOther_v1"] and out["stats"]["stored"] == 1
+
+
+#: the harness with the checker a copy inside the tree (``checker/circuit_check``), as `src/circuit_check/` is inside the
+#: repository, whose scheduler's peaks the process has read before the checks (`cli.heavy`, as a run of the parallel path does)
+CHECKER = (HARNESS.replace("sys.path.insert(0, str(root))", "sys.path.insert(0, str(root))\nsys.path.insert(0, str(root / 'checker'))")
+           .replace("rep = cli.run(", "cli.heavy()\nrep = cli.run(")
+           .replace('"hits": hits}', '"hits": hits, "checker": cli.__file__}'))
+
+
+@pytest.mark.slow
+def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
+    """`heavy.json` (`cli.HEAVY`) says only which targets may run beside which (`cli.run`'s scheduler), never what a check
+    computes: an edit to it reuses every target and the task list (17 Oct: `PousSha512Head_v1`'s 161.8 GiB peak was left out
+    of it because adding it made `circuit-check --all` run cold), and so does an edit to the known failures (`cache.KNOWN`,
+    which decide only the summary), while an edit to the checker's code still reruns them all."""
+    import shutil
+
+    root = _tree(tmp_path)
+    checker = root / "checker" / "circuit_check"
+    shutil.copytree(REPO / "tools/verity/circuit_check/src/circuit_check", checker,
+                    ignore=shutil.ignore_patterns("__pycache__", "heavy.json"))
+    (checker / "heavy.json").write_text(json.dumps({"SynOther_v1": 20.0}))
+    assert _run(root, CHECKER)["checker"] == str(checker / "cli.py")
+    (checker / "heavy.json").write_text(json.dumps({"SynOther_v1": 20.0, "SynTop_v1": 161.8}))
+    out = _run(root, CHECKER)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
+    for p in (checker / "known.py", *sorted((checker / "known").rglob("*.toml"))):
+        p.write_text(p.read_text() + "\n# another known failure\n")
+    out = _run(root, CHECKER)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
+    (checker / "checks.py").write_text((checker / "checks.py").read_text() + "\n# another version of the checker\n")
+    assert _run(root, CHECKER)["hits"] == []

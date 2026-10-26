@@ -1,16 +1,18 @@
 /-
-The release side's functions over JSON, as the difftest (`FirewallDifftest`) serves them and Rust's `release::run_op`
-writes them (`live/src/firewall_record_vectors.json`):
+The release side's functions over JSON, as the difftest (`FirewallDifftest`) serves them and the shared record vectors
+write them (`live/src/firewall_record_vectors.json`):
 
 * `op`, `{"op": [NAME, ARGS…], "record": TEXT}`: one call on the record, `{"record": TEXT', "result": R}`. `open` gives
   the session's id, `{"refused": why}` or `{"error": why}`; `admit` gives `{"release_ms": t or null}` or
   `{"refused": why}`; `stop` whether it recorded the stop; `failures` the count; `finish`, `release` and `slot` null.
-* `outer`, `{"now_ms", "part", "prove", "ready", "record", "send", "session"}`: one outer session (`outerSession`),
+* `outer`, `{"now_ms", "part", "prove", "ready", "record", "send", "session"}`: one outer session, the stages
+  `Firewall.Loop` runs (`decide`, then `stopAt` or `settle`) in turn on the record with the clock at `now_ms`,
   `{"outcome", "record", "sent_at", "why"}`. `prove` and `ready` are `"ok"`, `{"err": why}` or `{"panic": msg}`; `send` is
-  the challenger's verdict (a boolean) or `{"panic": msg}`.
+  the challenger's verdict (a boolean) or `{"panic": msg}`. `sent_at` is the release time a session that was sent waited
+  for, if it had one.
 
 A record the firewall can't read, and an op that isn't one of these with arguments of their types, are rejected. An open's
-statements, budget and schedule are checked before the record is read, as Rust and Python check them.
+statements, budget and schedule are checked before the record is read, as Python checks them.
 -/
 import Firewall.Release
 
@@ -101,11 +103,19 @@ def outerFn (input : Json) : V Json := do
   let send ← match ← Flock.J.get input "send" ctx with
     | Json.bool b => pure (Except.ok b)
     | j => match runOf j "send" with
-      | .ok (.fault m) => pure (Except.error m)
+      | .ok (.fault m) => pure (Except.error (faultWhy m))
       | _ => throw "send: not a boolean or {\"panic\": msg}"
-  let (o, r) ← outerSession r (← Flock.J.str input "session" ctx) (← Flock.J.str input "part" ctx) (← Flock.J.nat input "now_ms" ctx)
-    (← runOf (← Flock.J.get input "prove" ctx) "prove") (← runOf (← Flock.J.get input "ready" ctx) "ready") send
-  pure (Json.mkObj [("outcome", Json.str o.kind.name), ("record", Json.str r.text),
-    ("sent_at", optNat o.sentAt), ("why", match o.why with | some w => Json.str w | none => Json.null)])
+  let (s, part) := (← Flock.J.str input "session" ctx, ← Flock.J.str input "part" ctx)
+  let (outcome, why, sentAt, r) ← match ← decide r s part (← Flock.J.nat input "now_ms" ctx)
+      (← runOf (← Flock.J.get input "prove" ctx) "prove") (← runOf (← Flock.J.get input "ready" ctx) "ready") with
+    | (.refused why, r) => pure ("refused", some why, none, r)
+    | (.stop why, r) => do
+      let ((), r) ← stopAt r s part why
+      pure ("stop", some why, none, r)
+    | (.go a, r) => do
+      let (why, r) ← settle r s part send
+      pure (if why.isSome then "stop" else "release", why, a.releaseMs, r)
+  pure (Json.mkObj [("outcome", Json.str outcome), ("record", Json.str r.text),
+    ("sent_at", optNat sentAt), ("why", match why with | some w => Json.str w | none => Json.null)])
 
 end Core.Firewall

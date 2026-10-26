@@ -1,7 +1,7 @@
-"""Live C2 -- value correspondence by ORACLE COMPARE (COORD R15 ruling M-0111 (2), lane manbind).
+"""Live C2 -- value correspondence by ORACLE COMPARE.
 
-The Commit's C1 (coverage) and C3 (openings) cannot see a relabel, a same-name byte swap or a late read (rev-cb F-cb-02/03/04:
-every one of them got COMMIT PASS on rc3 with coverage 12943/12943 and 79/79 openings verified).  C2 asks: are the COMMITTED bytes of
+The Commit's C1 (coverage) and C3 (openings) cannot see a relabel, a same-name byte swap or a late read (every
+one of them got COMMIT PASS with coverage 12943/12943 and 79/79 openings verified).  C2 asks: are the COMMITTED bytes of
 each identity the value the Program produced for that identity?  The reference here is the Match stage of the SAME attempt: the m1
 capture (`verity_vllm.pipeline.m1_capture`, a separate process and a separate acquisition path -- torch dispatcher observer + D2H
 snapshots -- sharing nothing with the native collector) recorded, for every snapshotted engine step, the bytes of every dispatcher
@@ -24,7 +24,7 @@ from the record -- the collector's own bytes never enter the expected side.
 
 Result: `result` is False on ANY mismatch (the verdict fails closed naming the identity), True when every comparable identity of every
 snapshotted step was compared equal AND every step was snapshotted (complete live C2), else None with the coverage stated (partial:
-the finalizer grades C2 'not checked' / partial, COORD M-0111 (1)).  Provenance of the oracle (Match dir, capture created_utc,
+the finalizer grades C2 'not checked' / partial).  Provenance of the oracle (Match dir, capture created_utc,
 profile id, fold digest, snapshot steps, tokens.json sha256) is recorded so a reviewer can tell the reference is this attempt's Match.
 """
 from __future__ import annotations
@@ -44,7 +44,7 @@ METHOD = "oracle-compare (Match capture of the same attempt: snapshots at the fo
 NO_ORACLE_FAMILY_PREFIXES = ("fa2.m1/", "fa3.m1/", "moe/")          # kernel-interior streams: no dispatcher-level value in the Match record
 _ITEMSIZE = {"bfloat16": 2, "float16": 2, "float32": 4, "float64": 8, "int32": 4, "int64": 8, "int16": 2, "int8": 1, "uint8": 1, "bool": 1,
              "float8_e4m3fn": 1, "float8_e5m2": 1}
-_ROPE_MEMBER = {"0": "rope.q", "1": "rope.k"}
+_ROPE_MEMBER = {"query": "rope.q", "key": "rope.k"}                # RoPE's members (the Build's hints) -> the Match fold's hint suffixes
 
 
 def _prod(xs) -> int:
@@ -65,21 +65,21 @@ def _contiguous(shape, strides) -> bool:
 
 
 def oracle_tie_facts(match_dir: str) -> dict[str, Any]:
-    """[rev F-r16-24] the facts that tie an oracle to a Match record: sha256 of match/fold_summary.json, of match/instances.jsonl, of the
-    RunHeader line (line 1 of capture/log.jsonl.gz, the created_utc carrier); a missing file is named None (never a placeholder digest)."""
+    """The facts that tie an oracle to a Match record: sha256 of match/fold_summary.json, of match/instances.jsonl, of the
+    RunHeader line (line 1 of capture/log.jsonl.gz, the created_utc carrier); a missing file is named None (never a placeholder digest),
+    and a log that is there but can't be read is None with `run_header_unreadable` saying why."""
     out: dict[str, Any] = {}
     for key, rel in (("fold_summary_sha256", "fold_summary.json"), ("instances_sha256", "instances.jsonl")):
         pth = os.path.join(match_dir, rel)
         out[key] = hashlib.sha256(open(pth, "rb").read()).hexdigest() if os.path.exists(pth) else None
     lg = os.path.join(match_dir, "capture", "log.jsonl.gz")
-    hdr = None
+    out["run_header_sha256"] = None
     if os.path.exists(lg):
         try:
             with gzip.open(lg, "rb") as f:
-                hdr = hashlib.sha256(f.readline()).hexdigest()
-        except OSError:
-            hdr = None
-    out["run_header_sha256"] = hdr
+                out["run_header_sha256"] = hashlib.sha256(f.readline()).hexdigest()
+        except (OSError, EOFError) as e:
+            out["run_header_unreadable"] = f"unreadable: capture/log.jsonl.gz ({type(e).__name__}: {e})"[:240]
     return out
 
 
@@ -279,7 +279,7 @@ class MatchOracle:
         return idx
 
     def _promoted_instances(self, step: int, producer: dict[str, Any], request_uuid: str | None) -> tuple[list[dict] | None, str | None]:
-        """[R19 int-20, F-r19-int-20; oracle-key] The fold instances that PRODUCE a promoted member, resolved through the Program's own
+        """The fold instances that PRODUCE a promoted member, resolved through the Program's own
         dataflow rather than the hint's module prefix.
 
         A promoted manifest row names an INTERIOR Program row whose output another module reads: identity (producer module, `out`), with
@@ -333,7 +333,7 @@ class MatchOracle:
         return spec in fams
 
     def member_bytes(self, step: int, op_path: str, member: str, request_label: str | None,
-                     producer: dict[str, Any] | None = None) -> tuple[bytes | None, str | None, int]:
+                     producer: dict[str, Any] | None = None, nbytes: int | None = None) -> tuple[bytes | None, str | None, int]:
         """Oracle bytes of (step, op_path, member) for request r<k> (None: all requests, row order): concatenation over the instances'
         output views (operand view 0 for the ids member 'in'); returns (bytes | None, why, n_instances).
 
@@ -342,9 +342,16 @@ class MatchOracle:
         AddScalar / Square / Mean / Rsqrt / ScaleRow / Narrow ... all hinted `model.layers.N.input_layernorm`) is read at the producer's
         instances only; when the producer family occurs k > 1 times per row (the fused norm's two NarrowF32ToBf16: residual, normed) the
         manifest must say which by `ordinal` (index in Program/fold order per row), else the member is 'ambiguous producer' -- partial,
-        never guessed from which candidate happens to equal the committed bytes (that would make F-cb-03 invisible)."""
+        never guessed from which candidate happens to equal the committed bytes (that would make F-cb-03 invisible).
+
+        An `interior` producer (a `call_boundaries` row, op path `<module>/<fx node>`) is read at its module's instances of the producer
+        family.  When every row's group holds the same k > 1 producer instances and their member views together are the identity's
+        `nbytes`, the member is all of them (one Call per instance: an attention row per head, a KV quantization per KV head), in row
+        then storage order."""
         if step not in self.snapshot_steps:
             return None, "step not snapshotted by the Match", 0
+        if (producer or {}).get("interior"):
+            op_path = op_path.split("/", 1)[0]
         uuid: str | None = None
         if request_label is not None and request_label != "*":
             uuid = next((u for u, lab in self.requests.items() if lab == request_label), None)
@@ -388,7 +395,9 @@ class MatchOracle:
             for m in by_spec:
                 per_pos[(m.get("request"), m.get("position"), m.get("row"))].append(m)
             k = max(len(v) for v in per_pos.values())
-            if k > 1:
+            if k > 1 and nbytes is not None and len({len(v) for v in per_pos.values()}) == 1 and self._member_span(by_spec, member, producer) == nbytes:
+                pass
+            elif k > 1:
                 ordinal = (producer or {}).get("ordinal")
                 operand = str((producer or {}).get("operand") or "").split("{", 1)[0].strip()
                 picked = []
@@ -430,15 +439,15 @@ class MatchOracle:
             first = m["output_views"][0] if m.get("output_views") else (m["operand_views"][0] if m.get("operand_views") else {})
             return (int(pos) if pos is not None else (int(m["row"]) if m.get("row") is not None else 0), int(first.get("offset") or 0))
         insts = sorted(insts, key=_order)
+        port = _port_view(member, producer)
         parts: list[bytes] = []
         for m in insts:
             if member == "in":
                 views = m["operand_views"][:1]
             elif member in ("out", "0") or want_hint or producer_view0:
                 views = m["output_views"][:1]
-            elif member.isdigit():
-                j = int(member)
-                views = m["output_views"][j:j + 1]
+            elif port is not None and len(m["output_views"]) > 1:
+                views = m["output_views"][port:port + 1]
             else:
                 views = m["output_views"][:1]
             if not views:
@@ -448,6 +457,20 @@ class MatchOracle:
                 return None, why, len(insts)
             parts.append(b)
         return b"".join(parts), None, len(insts)
+
+    def _member_span(self, insts: list[dict], member: str, producer: dict[str, Any] | None = None) -> int | None:
+        """The bytes of the views `member` reads over `insts` (an instance with one output view: that view; else the member's port view,
+        `_port_view`, else view 0); None when one has no such view."""
+        port = _port_view(member, producer)
+        n = 0
+        for m in insts:
+            ovs = m.get("output_views") or []
+            j = port if port is not None and len(ovs) > 1 else 0
+            r = self._view_bytes_range(ovs[j]) if j < len(ovs) else None
+            if r is None:
+                return None
+            n += r[2] - r[1]
+        return n
 
     def ids_bytes(self, step: int, request_label: str, itemsize: int) -> tuple[bytes | None, str | None]:
         """The input token ids of request r<k>'s rows at `step` (row order), from tokens.json (prompt + generated ids) at the StepStart
@@ -488,6 +511,14 @@ class MatchOracle:
         return ids[i], None
 
 
+def _port_view(member: str, producer: dict[str, Any] | None) -> int | None:
+    """The output view of a several-output Call that `member` is: its manifest row's `port`, else the port `query.required.member_name`
+    spells into it (`<port>`, or `<hint>.<port>` when the Build recorded a hint), when that port is a digit; else None."""
+    port = (producer or {}).get("port")
+    port = str(port) if port is not None else member.rsplit(".", 1)[-1]
+    return int(port) if port.isdigit() else None
+
+
 def _family_of(entry: dict) -> str:
     ident = entry["identity"]
     if entry.get("kind") == "registered-input" or ident.get("op_path") == "weights":
@@ -526,16 +557,22 @@ def query_families_of(manifest: dict[str, Any] | None) -> dict[str, int] | None:
     return dict(Counter(str(r.get("family")) for r in manifest["identities"]))
 
 
+def runtime_rows_of(manifest: dict[str, Any] | None) -> dict[tuple, tuple[int, int]]:
+    """(step, request, op_path, member, invocation) -> (r0, rows) of each identity whose Values are the runtime's rows r0.. (`runtime_rows`)."""
+    return {(int(r["step"]), str(r["request_id"]), str(r["op_path"]), str(r.get("output_member", "out")), int(r.get("invocation", 0))):
+            (int(r["runtime_rows"][0]), int(r["runtime_rows"][1]) - int(r["runtime_rows"][0])) for r in (manifest or {}).get("identities") or () if r.get("runtime_rows")}
+
+
 def producers_of(manifest: dict[str, Any] | None) -> dict[tuple[str, str], dict[str, Any]]:
     """(op_path, output_member) -> {"spec": producer family base, "ordinal": producer_ordinal | None, "operand": producer_operand | None}
     from the required manifest's rows (`spec` is the Program op family that produces the member; `producer_ordinal` the optional index
-    among same-family producers per row; `producer_operand` [M-0458] the family whose output the producer consumes -- the order-free selector).
-    A PROMOTED row [R19 int-20] additionally carries `promoted: True` and `consumers` (the reading modules, Program order, unioned over the
+    among same-family producers per row; `producer_operand` the family whose output the producer consumes -- the order-free selector).
+    A PROMOTED row additionally carries `promoted: True` and `consumers` (the reading modules, Program order, unioned over the
     member's rows): the oracle resolves it through the Value's dataflow, not the hint prefix (MatchOracle._promoted_instances)."""
     out: dict[tuple[str, str], dict[str, Any]] = {}
     consumers: dict[tuple[str, str], list[str]] = {}
     for r in (manifest or {}).get("identities") or []:
-        if r.get("family") != "instance_outputs" or not r.get("spec"):
+        if r.get("family") not in ("instance_outputs", "call_boundaries") or not r.get("spec"):
             continue
         key = (str(r.get("op_path")), str(r.get("output_member")))
         cur = out.get(key)
@@ -543,8 +580,12 @@ def producers_of(manifest: dict[str, Any] | None) -> dict[tuple[str, str], dict[
         # oracle through the Value's dataflow (MatchOracle._promoted_instances); `promoted` is part of the producer's identity here (a
         # promoted and a vocabulary row on one member is a conflict), the consumer lists of the rows are unioned in first-seen order
         ent = {"spec": str(r["spec"]).split("{", 1)[0], "ordinal": r.get("producer_ordinal"), "operand": r.get("producer_operand")}
+        if r.get("port") is not None:
+            ent["port"] = str(r["port"])
         if r.get("promoted"):
             ent["promoted"] = True                    # a vocabulary row's entry is byte-for-byte what it was (no key added)
+        if r.get("family") == "call_boundaries":
+            ent["interior"] = True
         if cur is None:
             out[key] = ent
         elif cur != ent:
@@ -716,16 +757,18 @@ def _ambiguous_steps(pairs_seen: set[tuple[int, str]], attrib: dict[tuple[int, s
 def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None], *,
                    max_report: int = 12, producers: dict[tuple[str, str], dict[str, Any]] | None = None,
                    workload: dict[str, Any] | None = None, aliases: dict[str, Any] | None = None,
-                   query_families: dict[str, int] | None = None, own: frozenset[str] = frozenset()) -> dict[str, Any]:
+                   query_families: dict[str, int] | None = None, own: frozenset[str] = frozenset(),
+                   runtime_rows: dict[tuple, tuple[int, int]] | None = None) -> dict[str, Any]:
     """Compare every binding-map entry's committed bytes with the Match oracle.  `committed(step, name, byte_lo, byte_hi)` returns the
     bytes of member `name` at `step` in [byte_lo, byte_hi) (None if not retained) -- in the Commit an `OpenedReader`, whose
     `OpeningNotVerified` makes the entry a mismatch.  `own` names what the run's sources committed that no module produced (their
-    `own_names`: the KV slots of commit --memory-map), so no Match value: not compared, counted as hidden_stream.  `producers` (producers_of(manifest))
+    `own_names`: the KV slots of commit --memory-map), so no Match value: not compared, counted as hidden_stream.  `runtime_rows`
+    (`runtime_rows_of(manifest)`): an identity that is the runtime's rows r0.. is compared with the fold's rows from r0.  `producers` (producers_of(manifest))
     names each member's producing Program op so exploded-module folds are read at the producer's instances.  `workload` (the run's declared
     requests) is checked against the oracle's request table BY NAME first: a foreign Match record is result False 'foreign oracle' with
-    nothing compared [rev-cb M-0301 R3].
+    nothing compared.
 
-    [reqval F-moe-r17-06, the ORACLE side] a shared module's invocation k >= 1 (the binding map's `invocation`) is a Program op of its own:
+    On the ORACLE side, a shared module's invocation k >= 1 (the binding map's `invocation`) is a Program op of its own:
     the fold's instances are under the per-layer Program paths, so the oracle is read at the path the manifest's `op_path_aliases`
     (`aliases`, the table the replay resolves through) gives for (canonical op, k) -- `model.layers.k.self_attn.rotary_emb`.  Before this,
     every invocation was read at the CANONICAL op (= layer 0's fold instance) while the committed side (moe 24df89c50) reads invocation k's
@@ -838,11 +881,13 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
         else:
             prod = (producers or {}).get((str(ident.get("op_path")), str(ident.get("output_member"))))
             ob, why, n_inst = oracle.member_bytes(step, op_k, str(ident.get("output_member")), rid,
-                                                  producer=(prod if prod and prod.get("spec") else None))
+                                                  producer=(prod if prod and prod.get("spec") else None), nbytes=bhi - blo)
         if ob is None:
             not_cmp[why] += 1
             not_cmp_fam[fam] += 1
             continue
+        r0, n = (runtime_rows or {}).get((step, rid, str(ident.get("op_path")), str(ident.get("output_member")), inv_k), (0, 0))
+        ob = ob[r0 * (len(got) // n):(r0 + n) * (len(got) // n)] if n and len(got) % n == 0 and len(ob) >= (r0 + n) * (len(got) // n) else ob
         compared += 1
         by_fam_cmp[fam] += 1
         steps_cmp.add(step)

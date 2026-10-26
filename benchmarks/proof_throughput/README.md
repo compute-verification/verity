@@ -28,7 +28,7 @@ stratified law the Lean verifier's soundness covers:
    `law.json`: core's `one_stage.draw.derive` of `stratified:B` over the population's program and its
    `Q_template_instance` partition), and the session proves those units only. ZK is off. The statement gives every
    coordinate its own rows (`FLOCK_OWN_ROWS=1`), x included: the verifiers refuse a plain statement whose public file shares
-   rows (`ProvedScope.sharedRowsOk` covers that only for a registered ZK session), so x is committed once per coordinate
+   rows (`ProvedScope.sharedRowsOk` covers that only with the verifier's own registered reads), so x is committed once per coordinate
    rather than once per Call, and that cost is in the numbers. It puts the circuit,
    the public file and every session in the evidence store as one bundle (`out/bundle.json`) and writes the contract
    result with the live verdicts only.
@@ -101,7 +101,7 @@ busy.
 | `bf16-k6144` | `GemmCoordinate_v2{K=6144,DOT=HopperBF16WgmmaDot16_v1}` | lm_head, indexer `wk_weights_proj`, MoE router | 1024 |
 | `fp8-coord-k6144`, `-k2048`, `-k256` | `ScaledMmFp8BlockCoordinate_v2{K,G=128}` | the block-scaled FP8 GEMMs | declared |
 
-The bf16 sites are those of `integrations/vllm/verity_vllm/program/registry/bf16_gemm_check.py`. The cap is the largest
+The bf16 sites are those of `verity/ml/definitions/registry/bf16_gemm_check.py`. The cap is the largest
 power of two of coordinates one statement holds at the hill-climb's 2^35 witness bits (each coordinate one 2^25-bit block
 at K = 6144). The FP8 coordinates are declared with their profile; the point job stages class-statement workloads only, and
 staging them through `benchmarks/served_units/stage.py` is the next workload's work.
@@ -124,11 +124,13 @@ Workers would prove the inner statement natively with ZK off and the outer proof
 (compiled Lean, CPU) would draw the masks and salts, check the outer relations and release; the auditor runs the Lean
 verifier (note:proofs/20261017T0724Z-draft-zk-server). That split doesn't exist. The ZK point measures today's stand-in,
 labelled so in its result (`proof-throughput/zk-standin/v1`): `job.sh ZK=1` proves the same drawn sessions with
-`flock-circuit prove --zk --gpu` (M1's masked protocol) under the firewall's send check (`FC_FIREWALL=1`, PROTOCOL §10, its
-contract `verity/core/service/flock/Flock/Firewall`), which runs in the prover's process on its host threads, and
-`zk-point` writes the result: the prover process's CPU seconds per session, the firewall's recheck and shadow-opening
-times, the session's bytes out and its released proof. The ZK server's CPU per session is that CPU with `FC_FIREWALL=1`
-less the same point's with `FC_FIREWALL=0`. The firewall rechecks a witness the host assembled (`FC_HOST_WITNESS=1`,
+`flock-circuit prove --zk --gpu` (M1's masked protocol) under the ZK server (`FC_FIREWALL=1`, PROTOCOL §10): `flock-circuit`'s
+checks on its host threads and the Lean (`verity/core/service/flock/Flock/Firewall`, the `flock-firewall` processes the
+prover starts on the same node: the session loop, the frames and the finish, which commits level 0 and computes the
+opening and the proof file), and `zk-point` writes the result: the prover process's CPU seconds per session, the
+firewall's recheck and opening times, the session's bytes out and its released proof. The ZK server's CPU per session is
+that CPU with `FC_FIREWALL=1` less the same point's with `FC_FIREWALL=0`; `/usr/bin/time` counts a `flock-firewall`
+process's CPU only once the prover has waited for it. The firewall rechecks a witness the host assembled (`FC_HOST_WITNESS=1`,
 §10.2), so `ZK=1` sets it in both arms. `zk` prints each field and its source.
 
 ## Placement

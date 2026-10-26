@@ -4,7 +4,8 @@ from __future__ import annotations
 import collections
 import dataclasses
 
-from verity_vllm.check.match import batch_decomp as BD
+from verity_vllm.check.match import input_layout as IL
+from verity_vllm.check.match import occurrence as OCC
 from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
 
@@ -34,7 +35,8 @@ def attribute_instances(run: MatchRun, hdr_reqs: list[dict]) -> Attribution:
     _peer_index_all = dict(getattr(B, "peer_index", {}))   # [R17 D90] TP rank fold: peers node -> request index (one per request)
     weights_nodes_error = None
     try:
-        weights_nodes = frozenset(BD.weights_input_nodes(B, len(hdr_reqs), len(_seed_index_all), len(_peer_index_all)))
+        weights_nodes = frozenset(IL.weights_input_nodes(B, len(hdr_reqs), len(_seed_index_all), len(_peer_index_all),
+                                                         len(getattr(B, "witness_index", {}))))
     except ValueError as e:
         weights_nodes, weights_nodes_error = frozenset(), str(e)   # G5 fails by name below; every weight read is then a cross-request read
     meta_of = {o["node"] + n_in: o for o in B.oracle_rows}
@@ -42,8 +44,8 @@ def attribute_instances(run: MatchRun, hdr_reqs: list[dict]) -> Attribution:
     unattributed = []
     # [R19, F-r19-int-15] weight-only instances (every node operand a shared weight or an earlier weight-only instance: gemma2's RMSNorm
     # scale `1 + w`, 11235 on #57 B8 1024/128) carry no request's data.  They are SHARED -- owned by no request, read like a weight --
-    # and belong to the leg of every request with rows in their engine step (BD.shared_legs: the request's own derive computes the node
-    # inside its forward at that step).  The same rule X-09 (BD.decompose) applies, after the meta channel and before the row-count rule,
+    # and belong to the leg of every request with rows in their engine step (OCC.shared_legs: the request's own derive computes the node
+    # inside its forward at that step).  The same rule X-09 (batch_decomp.decompose) applies, after the meta channel and before the row-count rule,
     # which at B>1 refused them ("rows=1 != tokens|logits") and at B=1 handed them to the one request by coincidence.
     shared_nodes: set[int] = set()            # node ids of the weight-only instances (an operand source `is_weight_only` accepts)
     shared_idx: list[tuple[int, int]] = []    # (instance index, engine step)
@@ -53,20 +55,20 @@ def attribute_instances(run: MatchRun, hdr_reqs: list[dict]) -> Attribution:
         o = meta_of.get(r["k"])
         rid = o.get("request") if o else None
         if rid is None and o is not None:
-            if BD.is_weight_only(r, shared_inputs, shared_nodes, _compact):
+            if OCC.is_weight_only(r, shared_inputs, shared_nodes, _compact):
                 shared_nodes.add(r["k"])
                 shared_idx.append((i, int(o["step"])))
                 continue
             st = steps.get(o.get("step"))
             if st is not None:
-                rid, _how = BD.attribute(o, {"rows": st["rows"], "logits_rows": st["logits_rows"]})
+                rid, _how = OCC.attribute(o, {"rows": st["rows"], "logits_rows": st["logits_rows"]})
         if rid is None:
             unattributed.append(i)
         else:
             per_req.setdefault(rid, []).append(i)
     shared_gi: frozenset[int] = frozenset(i for i, _ in shared_idx)
     if shared_idx:
-        per_req = collections.OrderedDict(BD.shared_legs(per_req, shared_idx, steps))
+        per_req = collections.OrderedDict(OCC.shared_legs(per_req, shared_idx, steps))
     return Attribution(weights_nodes=weights_nodes, weights_nodes_error=weights_nodes_error, meta_of=meta_of, per_req=per_req,
                        unattributed=unattributed, shared_idx=shared_idx, shared_gi=shared_gi, peer_index=_peer_index_all)
 

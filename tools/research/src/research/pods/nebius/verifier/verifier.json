@@ -1,0 +1,11 @@
+{
+ "name": "vy-auditor-1",
+ "challenger": {
+  "peer": "vy-auditor-1",
+  "lane": "memory-accounting",
+  "ssh": "-i /var/lib/vy-verifier/.ssh/vy-challenger-gate -o IdentitiesOnly=yes research@204.12.178.84"
+ },
+ "peers": {
+  "vy-nebius-2": {"host_bytes": 1843153879040, "ingress_bytes_per_s": 4.4e9}
+ }
+}

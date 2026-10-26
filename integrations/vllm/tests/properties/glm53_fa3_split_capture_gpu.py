@@ -9,6 +9,8 @@ and nothing else runs when it fails (exit 3).  A phase that raises records its e
 others.
 
   gate     `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs (an H200).
+  switches vLLM at its defaults, as it serves (`environment`: `engine.env.served_defaults` clears every switch the process
+           inherited), and `served` reads batch invariance back from vLLM, off.
   mufu     lg2.approx.ftz.f32 on every word of the exponents LG2_EXPONENTS (FA3 takes the log of a split's sum, in [1 - 2^-24,
            2^12): exponents 126 to 138), on the sm_120 measurement's 2^20-word sweep, and on the powers of two below 1: each word
            against `MufuLg2Ftz_v1` (twin `mufu_lg2_words`, the reference on a sample) but the words the model leaves open
@@ -26,13 +28,15 @@ others.
            blocks (``matching_ns``, a diagnosis, not a check).  A launch of SAME gives its counterpart's words.
   bind     the Programs bind at the served statics.
 
-GO needs every case's launch checks, its words compared with 0 mismatches and 0 unresolved, the reference sampled with 0
+GO needs the switches, every case's launch checks, its words compared with 0 mismatches and 0 unresolved, the reference sampled with 0
 disagreements with the twin, and the bindings.
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/glm53_fa3_split_capture_gpu.py --out DIR [--scratch DIR] [--quick]
 """
 from __future__ import annotations
+
+__models__ = ("zai-org/GLM-5.3",)
 
 import argparse
 import hashlib
@@ -52,9 +56,10 @@ import numpy as np
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
+from verity_vllm.engine.env import served_defaults
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/glm53-fa3-split-capture/v1"
+SCHEMA = "verity-vllm/glm53-fa3-split-capture/v2"
 RECORD = "glm53_fa3_split_capture.json"
 TAG = "glm53-fa3-split"
 #: GLM-5.3 (tests/check/fixtures/glm_moe_dsa/config.json) at TP8: 8 local MLA heads, rope 64, latent 512, nope 192, top 2048
@@ -125,7 +130,7 @@ def _sha(a: np.ndarray) -> str:
 
 
 def _mla() -> dict[str, Any]:
-    from verity_vllm.program.registry import sparse_mla as M
+    from verity.ml.definitions.registry import sparse_mla as M
 
     return {k: v for k, v in M.SPARSE_MLA_GLM53.items() if k != "NH"}
 
@@ -158,7 +163,7 @@ def lg2_jobs(work: Path, case: str, y: np.ndarray, *, e: int | None = None, x: n
 def attn_jobs(work: Path, name: str, s: dict[str, np.ndarray], out: np.ndarray, num_sm: int, pool: dict[str, str],
               checks: dict[str, bool]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """One launch's record (its split counts at ``num_sm`` SMs) and its comparison jobs, one per compared token."""
-    from verity_vllm.program.registry import sparse_mla_split as W
+    from verity.ml.definitions.registry import sparse_mla_split as W
 
     set_name, arg = LAUNCHES[name]
     valid = [int(t) for t in s["valid"]]
@@ -176,8 +181,8 @@ def attn_jobs(work: Path, name: str, s: dict[str, np.ndarray], out: np.ndarray, 
 # ------------------------------------------------------------------------------------------------------------------ comparisons
 def matching_ns(qn: np.ndarray, qr: np.ndarray, kv: np.ndarray, T: int, got: np.ndarray) -> list[int]:
     """The split counts at which the twin gives every head's words: the least NS of each distinct `split_blocks` partition."""
-    from verity_vllm.program.kernels import sparse_mla_split_twins as TW
-    from verity_vllm.program.registry import sparse_mla_split as W
+    from verity.ml.definitions.numerics import sparse_mla_split_twins as TW
+    from verity.ml.definitions.registry import sparse_mla_split as W
 
     seen, out = set(), []
     for ns in range(1, W.LANES + 1):
@@ -194,8 +199,8 @@ def compare_attn(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """One token's NH heads against the twin of `SparseMlaHeadSplit_v1{T, NS}`; head 0 against the reference on REFERENCE."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation import evaluate
-    from verity_vllm.program.kernels import sparse_mla_split_twins as TW
-    from verity_vllm.program.registry import sparse_mla_split as W
+    from verity.ml.definitions.numerics import sparse_mla_split_twins as TW
+    from verity.ml.definitions.registry import sparse_mla_split as W
 
     a = _load(job["paths"])
     i, T, NS = job["token"], job["T"], job["NS"]
@@ -222,8 +227,8 @@ def compare_attn(job: dict[str, Any], rec: dict[str, Any]) -> None:
 def compare_lg2(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Words [lo, hi) of an lg2 launch against `MufuLg2Ftz_v1`'s twin, the open words skipped; the reference on the first two."""
     from verity.ml.circuits.evaluation import evaluate
-    from verity_vllm.program.kernels import sparse_mla_split_twins as TW
-    from verity_vllm.program.registry import sparse_mla_split as W
+    from verity.ml.definitions.numerics import sparse_mla_split_twins as TW
+    from verity.ml.definitions.registry import sparse_mla_split as W
 
     a = _load(job["paths"])
     lo, hi = job["range"]
@@ -246,7 +251,7 @@ def compare_lg2(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_mufu(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """ex2.approx.ftz / rcp.approx.ftz on the sweep against core's tables (`derived_rows.mufu_ex2_ftz`, `mufu_rcp_ftz`)."""
-    from verity_vllm.program.kernels import derived_rows as DR
+    from verity.ml.definitions.numerics import derived_rows as DR
 
     a = _load(job["paths"])
     x, y = np.asarray(a["x"], dtype=np.uint32), np.asarray(a["y"], dtype=np.uint32)
@@ -274,14 +279,14 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 def _mufu(op: str, x: np.ndarray) -> np.ndarray:
     import torch
 
-    from verity_vllm.program.registry import mla_capture as MC
+    from verity_vllm.program import mla_capture as MC
 
     return MC._mufu(op, torch.from_numpy(x.view(np.float32).copy()).to("cuda")).cpu().numpy().view(np.uint32)
 
 
 def sweep_words() -> np.ndarray:
     """The sm_120 measurement's sweep (`mla_capture.mufu_probe`)."""
-    from verity_vllm.program.registry import mla_capture as MC
+    from verity_vllm.program import mla_capture as MC
 
     return MC._splitmix(np.arange(1 << 20, dtype=np.uint64) + (np.uint64(0xABC) << np.uint64(40))).astype(np.uint32)
 
@@ -289,8 +294,8 @@ def sweep_words() -> np.ndarray:
 def phase_mufu(work: Path, quick: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """lg2 on the exponent bands, the sweep and the powers of two below 1; ex2 and rcp on core's table domains and the sweep."""
     from verity.ml.circuits.ops import mufu as MU
-    from verity_vllm.program.kernels import sparse_mla_split_twins as TW
-    from verity_vllm.program.registry import sparse_mla_split as W
+    from verity.ml.definitions.numerics import sparse_mla_split_twins as TW
+    from verity.ml.definitions.registry import sparse_mla_split as W
 
     jobs: list[dict[str, Any]] = []
     m = np.arange(1 << 23, dtype=np.uint32)
@@ -371,8 +376,8 @@ def phase_attn(work: Path, names, num_sm: int) -> tuple[list[dict[str, Any]], li
 def bind_check() -> dict[str, Any]:
     """The Programs bind at GLM-5.3's statics."""
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import sparse_mla as M
-    from verity_vllm.program.registry import sparse_mla_split as W
+    from verity.ml.definitions.registry import sparse_mla as M
+    from verity.ml.definitions.registry import sparse_mla_split as W
 
     mla = _mla()
     targets = {"MufuLg2Ftz_v1": lambda: W.MufuLg2Ftz,
@@ -389,10 +394,23 @@ def bind_check() -> dict[str, Any]:
 
 
 # ------------------------------------------------------------------------------------------------------------------------- run
-def environment(work: Path) -> dict[str, str]:
+def environment(work: Path) -> tuple[dict[str, str], dict[str, str]]:
+    """vLLM's defaults (`served_defaults`) and the Triton cache in scratch, set before vLLM is imported: (the env set, the switches
+    cleared)."""
+    cleared = served_defaults()
     env = {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "TRITON_CACHE_DIR": str(work / "triton_cache")}
     os.environ.update(env)
-    return env
+    return env, cleared
+
+
+def served() -> dict[str, Any]:
+    """The one switch on the decode's path, as vLLM read it: batch invariance, off (`forward_mqa` passes fa_version 3 and reads no
+    switch; `fa_utils` reads batch invariance for FA4 only)."""
+    import vllm.envs as envs
+
+    rec: dict[str, Any] = {"VLLM_BATCH_INVARIANT": bool(envs.VLLM_BATCH_INVARIANT)}
+    rec["ok"] = not rec["VLLM_BATCH_INVARIANT"]
+    return rec
 
 
 def gpu(work: Path, quick: bool, doc: dict[str, Any]) -> list[dict[str, Any]]:
@@ -437,7 +455,8 @@ def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
 def _verdict(doc: dict[str, Any]) -> bool:
     c = cases(doc)
     want = {"mufu/lg2", "mufu/ex2", "mufu/rcp"} | {f"attn/{n}" for n in (QUICK_LAUNCHES if doc.get("quick") else LAUNCHES)}
-    return bool(doc["gate"]["ok"] and not doc["errors"] and doc["bind"].get("ok") is True and want <= set(c)
+    return bool(doc["gate"]["ok"] and doc["served"].get("ok") is True and not doc["errors"] and doc["bind"].get("ok") is True
+                and want <= set(c)
                 and all(v["ok"] for v in c.values()) and _words_ok(doc["totals"]) and doc["totals"]["reference"] > 0)
 
 
@@ -446,10 +465,11 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     outdir.mkdir(parents=True, exist_ok=True)
     tmp = tempfile.TemporaryDirectory(dir=scratch)
     work = Path(tmp.name)
-    env = environment(work)
-    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "quick": quick, "environment": G._environment(),
-                           "gate": C.gate(min_driver, want_cc, want_sms), "errors": {}, "launches": []}
-    print(f"[{TAG}] gate {json.dumps(doc['gate'])}", flush=True)
+    env, cleared = environment(work)
+    doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "env_cleared": cleared, "served": served(), "quick": quick,
+                           "environment": G._environment(), "gate": C.gate(min_driver, want_cc, want_sms), "errors": {},
+                           "launches": []}
+    print(f"[{TAG}] gate {json.dumps(doc['gate'])} served {json.dumps(doc['served'])} cleared {sorted(cleared)}", flush=True)
     if not doc["gate"]["ok"]:
         (outdir / RECORD).write_text(json.dumps(seal_record(doc, False), indent=1) + "\n")
         print("GLM53-FA3-SPLIT GATE-FAIL", flush=True)
@@ -482,7 +502,8 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     doc = seal_record(doc, _verdict(doc))
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     tmp.cleanup()
-    print(f"GLM53-FA3-SPLIT {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} totals={json.dumps(doc['totals'])} "
+    print(f"GLM53-FA3-SPLIT {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} served={doc['served'].get('ok')} "
+          f"totals={json.dumps(doc['totals'])} "
           f"no-go cases={[k for k, c in doc['cases'].items() if not c['ok']]} errors={sorted(doc['errors'])}", flush=True)
     return doc
 

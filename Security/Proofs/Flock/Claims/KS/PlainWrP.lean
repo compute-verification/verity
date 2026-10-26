@@ -16,7 +16,8 @@ the deployed runs. At a plain statement in scope with a draw, `wrP`'s decoders a
 * `PlainLiveW`: `PlainLiveWrPAt` at `plainOpn` where the outputs are public and at `plainOpnH` where they are hidden
   under `hm96-sha512/v1` leaves, and `PlainLiveAccAt` itself where they are hidden under plain SHA-512 leaves, which the
   scope admits and the deployed decoders are not yet proved right at, at the statements in scope that set up at a
-  draw; it gives `PlainLiveAcc` where some run accepts (`plainLiveAcc_of_w`), and with `Extendθ`, KS (`plain_KS_of_w`).
+  draw; it gives `PlainLiveAcc` where some run accepts (`plainLiveAcc_of_w`), and KS at the trimmed record
+  (`plain_KS_of_w`).
 -/
 
 namespace FlockDeploy.KS
@@ -26,7 +27,7 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The checks after the verdict refuse a session without a draw** (`drawLaw zk none`). -/
+/-- **The checks after the verdict refuse a session without a draw** (`drawLaw zk tags false none`). -/
 theorem checks_draw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) : ∃ d, s.read.draw = some d := by
@@ -36,9 +37,27 @@ theorem checks_draw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
   obtain ⟨_, -, h⟩ := Refine.ebind_ok h
   obtain ⟨_, -, h⟩ := Refine.ebind_ok h
   obtain ⟨_, -, h⟩ := Refine.ebind_ok h
+  obtain ⟨_, h, -⟩ := Refine.ebind_ok h
   cases hd : s.read.draw with
   | none => simp [hd, ProvedScope.drawLaw] at h
   | some d => exact ⟨d, rfl⟩
+
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **The checks after the verdict refuse a session without a draw** (`drawLaw zk tags false none`). -/
+theorem checks_draw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    (h : checks zk s spec x link c₁ mids f = .ok ()) : ∃ d, s.read.draw = some d :=
+  _root_.FlockDeploy.KS.checks_draw (checks_base h)
+
+end Gen
+
+namespace Gen
+
+variable [S : ZkSetup]
 
 theorem next_acc_draw {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     (h : ((next zk x as cs).eval sha512).1 = .acc) :
@@ -51,6 +70,17 @@ theorem next_acc_draw {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : 
     obtain ⟨d, hd⟩ := checks_draw hc
     exact ⟨s, spec, sts, d, act_decide ha, hd⟩
 
+end Gen
+
+theorem next_acc_draw {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+    (h : ((next zk x as cs).eval sha512).1 = .acc) :
+    ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d :=
+  Gen.next_acc_draw (S := S₀) (zk := zk) (x := x) (as := as) (cs := cs) (h := h)
+
+namespace Gen
+
+variable [S : ZkSetup]
+
 /-- **A statement some run accepts at SHA-512 sets up at a draw.** -/
 theorem acc_draw {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
     ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
@@ -59,6 +89,13 @@ theorem acc_draw {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha5
   obtain ⟨Ω, P, ω, r, hr⟩ := hacc
   obtain ⟨as, has⟩ := stepWith_acc _ _ _ _ _ _ _ _ _ hr
   exact next_acc_draw has
+
+end Gen
+
+/-- **A statement some run accepts at SHA-512 sets up at a draw.** -/
+theorem acc_draw {zk : Bool} {x : Claims.Msg} (hacc : ¬ Claims.Flock.NoAcc sha512 (V zk) x) :
+    ∃ ins spec sts d, setupOf zk x = some (ins, spec, sts) ∧ ins.read.draw = some d :=
+  Gen.acc_draw (S := S₀) (zk := zk) (x := x) (hacc := hacc)
 
 open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain in
 /-- **`wrP`'s verdict at the draw `d`**: flock-verify accepts what `wrP` writes for the outcome at `d` and no drawn
@@ -211,11 +248,10 @@ theorem plainLiveAcc_of_w {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (
     · exact plainLiveAccAt_of_wrP (hhid hh hleaf)
     · exact hplain hh hleaf
 
-/-- **The deployed plain verifier: KS**, at SHA-512 at the deployed relation, from the live sessions' bound at the
-deployed decoders (`PlainLiveW`) at the statements some run accepts, and `Extendθ` at full-width columns. -/
-theorem plain_KS_of_w (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLiveW x)
-    (hext : Claims.Flock.Extendθ (deployPlain Readable.relation) (wordLen false) (wide false)) :
-    Claims.Flock.KS sha512 (deployPlain Readable.relation) :=
-  plain_KS_of_liveAcc (fun x hno => plainLiveAcc_of_w hno (hl x hno)) hext
+/-- **The deployed plain verifier: KS**, at SHA-512 at the trimmed record at the deployed relation, from the live
+sessions' bound at the deployed decoders (`PlainLiveW`) at the statements some run accepts. -/
+theorem plain_KS_of_w (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLiveW x) :
+    Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
+  plain_KS_of_liveAcc fun x hno => plainLiveAcc_of_w hno (hl x hno)
 
 end FlockDeploy.KS

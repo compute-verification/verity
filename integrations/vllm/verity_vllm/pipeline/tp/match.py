@@ -10,11 +10,14 @@ output, sha256s; the tensors of the first `--store-steps` steps are saved) and t
 `control`: the identical engine without the extension (`tokens.json` only).
 `check` (CPU, offline): the three parts of the TP-aware Match this lane can execute on the collective skeleton of the run —
   1. STRUCTURE: per step and per rank, the sequence (kind, N) of the collectives equals the peer-input signature of THAT rank's
-     Build (`tp_links.json` of `derive_step --tp 2 --rank r`), and the rows of every collective equal the step's token count;
+     Build (`tp_links.json` of `derive_step --tp 2 --rank r`), and the rows of every collective are the step's tokens or sampled rows
+     in the schedule the capture realized (`step_rows`: arrivals and batch membership per step);
   2. CROSS-RANK PROVENANCE: for every stored collective k of every step, the value each rank RECEIVED equals the registered
      Definition of the two ranks' COMMITTED partials — `AllReduce2_v1{N}` (`bf16(f32(part_rank0) + f32(part_rank1))` per element) /
-     `AllGather2_v1{N}` (`[part_rank0 | part_rank1]`) — bit-exactly, and both ranks received the same value; a
-     `fused_allreduce_rms_norm` call on its fused path, the new residual (`collectives.fused_norm.expected_residual`);
+     `AllGather2_v1{N}` (`[part_rank0 | part_rank1]`) — bit-exactly, and both ranks received the same value; a world-8 all-reduce, the
+     routed Definition its rank Program binds (`xrank_dump.route_of`: the route for its M and N under the all-reduce switches every
+     rank's capture log header recorded), any other world's, the `AllReduce_v2` chain; a `fused_allreduce_rms_norm` call on its fused
+     path, the new residual (`collectives.fused_norm.expected_residual`);
   3. TOKENS: the instrumented run's tokens equal the control's (non-interference of the seam), per request.
 It is NOT the instance-sequence Match of `row_pod.sh` (the fold of a per-rank log against the rank Program: the fold needs a
 peer-input operand class and a sharded weights Record — see tp-STATUS); a PASS here is intermediate evidence, not a green row.
@@ -31,18 +34,31 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.collectives import fused_norm as FN
+from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.config import option
 from verity_vllm.pipeline.build import read_tp_links, same_module_path
+from verity_vllm.pipeline.launch_context import rows_at
+from verity_vllm import settings
+
+
+def step_rows(tok: dict) -> dict[int, tuple[int, int]]:
+    """{engine step: (tokens, sampled rows)} of the schedule a capture's `tokens.json` realized: each request from the forward that ran
+    its prefill (`timing.requests[rid].first_step`, 0 without one) for one forward per generated token, as `launch_context.rows_at`
+    schedules a declared request (a chunked prefill is not modelled: its steps' rows differ and fail)."""
+    timing = (tok.get("timing") or {}).get("requests") or {}
+    reqs = [{"arrive_step": int((timing.get(str(q["request_id"])) or {}).get("first_step") or 0), "prompt_len": len(q["prompt_token_ids"]),
+             "max_tokens": len(q["generated_token_ids"])} for q in tok["requests"]]
+    last = max((q["arrive_step"] + max(1, q["max_tokens"]) for q in reqs), default=0)
+    return {e: (sum(rows_at(q, e) for q in reqs), sum(1 for q in reqs if rows_at(q, e))) for e in range(last)}
 
 
 def _engine_main(args) -> None:
-    from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.engine import engine_profile as prof, env as engine_env
 
     prof.apply_env()
     from vllm import LLM
 
-    from verity_vllm.engine import vllm_adapter as va
+    from verity_vllm.engine import served, vllm_adapter as va
     from verity_vllm.pipeline.tp.capture import parse_engine_args
     from verity_vllm.engine.rank_worker import EXTENSION
 
@@ -50,9 +66,10 @@ def _engine_main(args) -> None:
     out.mkdir(parents=True, exist_ok=True)
     wl = va.load_workload(args.workload, None)
     case = va.case_of(wl, args.case)
-    env_flags = prof.apply_env()
+    env_flags = {**prof.apply_env(), **served.apply(wl["execution"])}
+    engine_env.step_timeout(args.rpc_timeout)
     cp = prof.checkpoint_for(case, args.checkpoints)
-    kw = prof.engine_kwargs(cp, replay=False, enforce_eager=True, tensor_parallel_size=args.tp)
+    kw = prof.engine_kwargs(cp, replay=False, seed=prof.ENGINE_SEED, enforce_eager=True, tensor_parallel_size=args.tp)
     kw["enable_prefix_caching"] = False
     kw["max_num_seqs"] = int(args.max_num_seqs)
     kw.update(parse_engine_args(args.engine_arg))
@@ -67,10 +84,10 @@ def _engine_main(args) -> None:
     topo = llm.collective_rpc("tp2_probe", timeout=args.rpc_timeout) if instrumented else None
     (out / "topology.json").write_text(json.dumps({"arm": args.arm, "tp": args.tp, "build_s": round(build_s, 1),
                                                     "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")},
-                                                    "env": {k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS"))},
+                                                    "env": settings.redact({k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS"))}),
                                                     "ranks": topo}, indent=1, default=str) + "\n")
     if not args.no_warmup:
-        warm = va.throwaway_requests(eng, wl["requests"])
+        warm = va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED)
         _, tw = va.run_requests(eng, warm, wl["sampling"])
         print(f"[tp2match:{args.arm}] warm-up {tw['wall_s']:.2f}s, {tw['engine_steps']} steps", flush=True)
     if instrumented:
@@ -117,8 +134,7 @@ def _check_main(args) -> int:
     recorder_sha = {str(r): hashlib.sha256((cap / f"coll.rank{r}.jsonl").read_bytes()).hexdigest() for r in ranks}
     steps = sorted({x["step"] for r in ranks for x in recs[r]})
     tok = json.load(open(cap / "tokens.json"))
-    n_tok_step = {}   # tokens per step: prefill = sum of prompt lens (one request at a time is the only admitted shape here), decode = #live requests
-    prompts = [len(q["prompt_token_ids"]) for q in tok["requests"]]
+    sched = step_rows(tok)
     gens = [len(q["generated_token_ids"]) for q in tok["requests"]]
     # ---- 1. structure vs each rank's Build peer-input signature
     struct = {"pass": True, "per_rank": {}}
@@ -137,12 +153,18 @@ def _check_main(args) -> int:
         per_step = {}
         bad = []
         bad_sites = []
+        bad_rows = []
         for s in steps:
             xs = [x for x in recs[r] if x["step"] == s]
             got = [(x["kind"], int(x["shape"][-1])) for x in xs]
-            # rows: the hidden-stream all-reduces carry the step's TOKENS (prefill = prompt tokens), the logits all-gather the step's SAMPLED rows
+            # rows (`step_rows`): the hidden-stream all-reduces carry the step's TOKENS; the all-gathers are of TWO row classes [R19 tp2
+            # F-r19-tp2-1]: the logits all-gather carries the step's SAMPLED rows and must be present, and a MID-MODULE all-gather
+            # (OlmoeAttention's q/k gathers) carries the step's tokens like the all-reduces.  Any other row count fails.
             rows_ar = sorted({int(x["shape"][0]) for x in xs if x["kind"] == "all_reduce" and len(x["shape"]) == 2})
             rows_ag = sorted({int(x["shape"][0]) for x in xs if x["kind"] == "all_gather" and len(x["shape"]) == 2})
+            n_tok, n_samp = sched.get(s, (0, 0))
+            if not (rows_ar == [n_tok] and n_samp in rows_ag and set(rows_ag) <= {n_samp, n_tok}):
+                bad_rows.append({"step": s, "rows_all_reduce": rows_ar, "rows_all_gather": rows_ag, "tokens": n_tok, "sampled": n_samp})
             ok = got == sig
             got_sites = [x.get("module") for x in xs]
             # [rev-pm M-0470] fail CLOSED by absence: a link without module_path or a record without a module is a site mismatch at that
@@ -160,6 +182,7 @@ def _check_main(args) -> int:
                     {"k": min(len(got_sites), len(sig_sites)), "record": None, "link": None, "note": "length mismatch"})})
         struct["per_rank"][r] = {"build_signature_len": len(sig), "build_digest": links["program_digest"], "n_steps": len(steps),
                                  "n_collectives": len(recs[r]), "steps_mismatching": bad,
+                                 "steps_rows_mismatching": bad_rows[:5], "n_steps_rows_mismatching": len(bad_rows),
                                  "sites_checked_per_step": len(sig_sites), "steps_site_mismatching": bad_sites[:5], "n_steps_site_mismatching": len(bad_sites),
                                  "site_rule": ("record.module == link.module (link.module_path minus the derive's RECORDED model_root, ' (Class)' dropped), per k; "
                                                if sites_exact else
@@ -171,21 +194,10 @@ def _check_main(args) -> int:
                                  "decode_rows_all_reduce": sorted({tuple(per_step[s]["rows_all_reduce"]) for s in steps[1:]}) if len(steps) > 1 else None,
                                  "decode_rows_all_gather": sorted({tuple(per_step[s]["rows_all_gather"]) for s in steps[1:]}) if len(steps) > 1 else None,
                                  "by_kind": _count(x["kind"] for x in recs[r]), "modules": _count(f'{x["module_class"]}' for x in recs[r])}
-        struct["pass"] &= not bad and not bad_sites and len(recs[r]) == len(sig) * len(steps)
-    # token count per step (B=1, arrivals none: one prefill of all prompt tokens, then one row per decode step)
-    if steps:
-        pre = struct["per_rank"][0]["prefill"]
-        struct["prefill_all_reduce_rows_equal_prompt_tokens"] = (pre["rows_all_reduce"] == [sum(prompts)])
-        # [R19 tp2 F-r19-tp2-1, after moe F-r19-moe-1] the prefill's all-gathers are of TWO row classes: the logits all-gather carries the
-        # step's SAMPLED rows (#requests) and must be present; a MID-MODULE all-gather (OlmoeAttention's q/k gathers, recorded since the
-        # recorder patches the model module's own import) carries the step's TOKENS, exactly like the hidden-stream all-reduces.  The R13 rule
-        # `rows_all_gather == [#requests]` read the 3755-row q/k gathers of row #70 as a structure FAIL (rows [8, 3755]) although every one
-        # of the 66 sites matched its link at every step.  Any other row count still fails.
-        rows_ag = list(pre["rows_all_gather"])
-        struct["prefill_all_gather_rows_equal_requests"] = (len(prompts) in rows_ag) and set(rows_ag) <= {len(prompts), sum(prompts)}
-        struct["prefill_all_gather_rows"] = {"observed": rows_ag, "sampled_rows": len(prompts), "prompt_tokens": sum(prompts),
-                                             "rule": "logits all-gather rows == #requests (required); mid-module all-gather rows == prompt tokens; nothing else"}
-        struct["pass"] &= bool(struct["prefill_all_reduce_rows_equal_prompt_tokens"] and struct["prefill_all_gather_rows_equal_requests"])
+        struct["pass"] &= not bad and not bad_sites and not bad_rows and len(recs[r]) == len(sig) * len(steps)
+    struct["step_rows"] = {s: list(sched.get(s, (0, 0))) for s in steps}
+    struct["rows_rule"] = ("per step of the realized schedule (tokens.json timing.requests first_step + generated tokens): all-reduce rows == "
+                           "the step's tokens; the logits all-gather's rows == its sampled rows (required); mid-module all-gather rows == its tokens; nothing else")
     res["structure"] = struct
     # ---- 2. cross-rank provenance on the stored steps
     prov = {"pass": True, "steps_checked": 0, "collectives_checked": 0, "elements_checked": 0, "all_reduce_checked": 0, "all_gather_checked": 0,
@@ -205,15 +217,16 @@ def _check_main(args) -> int:
         if len(prov["digest_mismatches"]) < 20:
             prov["digest_mismatches"].append({"rank": rank, "step": s, "k": k, "tensor": what, "why": why})
 
-    # [lane vllm-tp-n] world > 2: the Definition's chain of one-rounding bf16 adds in `allreduce_order(world)` (AllReduce_v2{WORLD,N});
-    # a mismatch is a named finding.  Diagnostics travel with it: how many received values equal the f32-accumulate-then-round-once
-    # alternative (`alt_f32_once_equal`) and the ascending rank-order chain (`alt_ascending_equal`) -- never a relabel, facts for the finding.
-    from verity_vllm.program.registry.b1_tp2 import allreduce_order
+    # [lane vllm-tp-n] world > 2: the Definition's chain of one-rounding bf16 adds in `allreduce_order(world)` (AllReduce_v2{WORLD,N}),
+    # world 8 the routed Definition (`_route`); a mismatch is a named finding.  Diagnostics travel with it: how many received values equal
+    # the f32-accumulate-then-round-once alternative (`alt_f32_once_equal`) and the ascending rank-order chain (`alt_ascending_equal`).
+    from verity.ml.definitions.registry.b1_tp2 import allreduce_order
     order = allreduce_order(world)
     prov["definition_order"] = ("world 2: bf16(f32(part0) + f32(part1)); world > 2: acc = part[order[0]]; acc = bf16(f32(acc) + f32(part[r])) "
-                                f"for r in order[1:], order = {list(order)} (b1_tp2.allreduce_order)")
+                                f"for r in order[1:], order = {list(order)} (b1_tp2.allreduce_order); world 8: the routed Definition")
     prov["alt_f32_once_equal"] = 0
     prov["alt_ascending_equal"] = 0
+    settings = _routed_settings(cap, ranks, world, prov)
     for s in steps:
         pts = [cap / f"coll.rank{r}.step{s}.pt" for r in ranks]
         if not all(p.exists() for p in pts):
@@ -244,10 +257,12 @@ def _check_main(args) -> int:
                 if int(xr.get("k", k)) != k or int(xr.get("step", s)) != s:
                     _digest_fail(rank, s, k, "key", f"recorder row keyed (step {xr.get('step')}, k {xr.get('k')}) at position {k} of step {s}")
             kind = x0[k]["kind"]
-            exp = _expected(kind, x0[k].get("path"), parts, outs, order, prov)
+            route = _route(kind, parts, world, settings)
+            exp = _expected(kind, x0[k].get("path"), parts, outs, order, prov, route)
             if exp is None:
                 if kind != FN.KIND:
-                    prov["mismatches"].append({"step": s, "k": k, "kind": kind, "why": "unbound collective kind"})
+                    prov["mismatches"].append({"step": s, "k": k, "kind": kind, "module": x0[k]["module"],
+                                               "why": (route or {}).get("why", "unbound collective kind")})
                     prov["pass"] = False
                 continue
             same_all = all(torch.equal(outs[0], o) for o in outs[1:])
@@ -258,7 +273,8 @@ def _check_main(args) -> int:
             if not (same_all and all(eqs)):
                 d0 = int((outs[0].view(torch.int16) != exp.view(torch.int16)).sum()) if outs[0].shape == exp.shape else -1
                 mm = {"step": s, "k": k, "kind": kind, "module": x0[k]["module"], "received_equal_both_ranks": same_all,
-                      "rank0_received_equals_definition": eqs[0], "rank1_received_equals_definition": eqs[1], "n_diff_rank0": d0}
+                      "rank0_received_equals_definition": eqs[0], "rank1_received_equals_definition": eqs[1], "n_diff_rank0": d0,
+                      **({"definition": route["spec"]} if route else {})}
                 if world > 2:
                     mm["received_equals_definition_per_rank"] = eqs
                 prov["mismatches"].append(mm)
@@ -285,17 +301,67 @@ def _check_main(args) -> int:
     return 0 if res["pass"] else 1
 
 
-def _expected(kind: str, path: str | None, parts: list, outs: list, order: Any, prov: dict) -> Any:
+def _routed_settings(cap: Path, ranks: list[int], world: int, prov: dict) -> dict | None:
+    """At the routed world, the all-reduce switches every rank's capture ran under, read from its log header as the fold reads them
+    (`fold.patterns.collectives.allreduce_settings`), {"why"} when a rank recorded none or two ranks disagree; None at any other world.
+    Recorded in ``prov`` with the count of all-reduces per Definition."""
+    from verity_vllm.observe.fold.patterns.collectives import allreduce_settings
+    from verity_vllm.observe.log import header_of, read_log
+    from verity_vllm.pipeline.tp.xrank_dump import ROUTED_WORLD
+
+    prov["all_reduce_definitions"] = {}
+    settings = None
+    if world == ROUTED_WORLD:
+        per = {r: allreduce_settings(header_of(read_log(p))) if (p := cap / f"log.rank{r}.jsonl.gz").exists() else None for r in ranks}
+        settings = per[ranks[0]]
+        if any(v is None for v in per.values()):
+            settings = {"why": f"no all-reduce switches in the capture log header of ranks {[r for r, v in per.items() if v is None]}"}
+        elif any(v != settings for v in per.values()):
+            settings = {"why": f"the ranks' captures ran under different all-reduce switches: {per}"}
+    prov["allreduce_settings"] = settings
+    return settings
+
+
+def _route(kind: str, parts: list, world: int, settings: dict | None) -> dict | None:
+    """The routed Definition of one all-reduce of the ranks' [M, N] ``parts`` at the routed world (`xrank_dump.route_of`), {"why"} when
+    the switches were not recorded, the partial is not [M, N] or no captured route covers it; None for any other collective or world."""
+    from verity_vllm.pipeline.tp.xrank_dump import route_of
+
+    if kind != "all_reduce" or settings is None:
+        return None
+    if "why" in settings:
+        return settings
+    if parts[0].dim() != 2:
+        return {"why": f"partial of shape {tuple(parts[0].shape)}, not [M, N]"}
+    return route_of(settings, int(parts[0].shape[0]), int(parts[0].shape[1]), world)
+
+
+def _expected(kind: str, path: str | None, parts: list, outs: list, order: Any, prov: dict, route: dict | None = None) -> Any:
     """What every rank must have received for one collective of ``kind`` from the ranks' ``parts``, counted in ``prov``; None for a
-    kind with no relation here.  An all-reduce is the Definition's chain in ``order`` (world > 2 adds two diagnostics); a
-    `fused_norm.KIND` call on the fused path is its new residual (`fused_norm.expected_residual`), and on the unfused path (past
-    FlashInfer's token budget, the communicator's route) it is counted and left to the Commit's replay."""
+    kind with no relation here or a ``route`` that names none.  An all-reduce is ``route``'s Definition (`_route`) or else the chain in
+    ``order`` (world > 2 adds two diagnostics); a `fused_norm.KIND` call on the fused path is its new residual
+    (`fused_norm.expected_residual`), and on the unfused path (past FlashInfer's token budget, the communicator's route) it is counted and
+    left to the Commit's replay."""
     import torch
 
     if kind == "all_reduce":
-        exp = parts[order[0]]
-        for r_ in order[1:]:
-            exp = (exp.float() + parts[r_].float()).to(torch.bfloat16)      # world 2: exactly the R13 rule bf16(f32(a) + f32(b))
+        if route is not None and "why" in route:
+            return None
+        if route is not None:
+            import numpy as np
+
+            from verity_vllm.check.match import xrank_collectives as XC
+
+            words = np.stack([XC.words(p) for p in parts])
+            (out,) = XC.routed_expected(route["family"], route["statics"], words, list(range(words.shape[1])))
+            exp = torch.from_numpy(np.ascontiguousarray(out, np.uint16).view(np.int16)).view(torch.bfloat16)
+            fam = route["family"]
+        else:
+            exp = parts[order[0]]
+            for r_ in order[1:]:
+                exp = (exp.float() + parts[r_].float()).to(torch.bfloat16)      # world 2: exactly the R13 rule bf16(f32(a) + f32(b))
+            fam = "AllReduce2_v1" if len(parts) == 2 else "AllReduce_v2"
+        prov["all_reduce_definitions"][fam] = prov["all_reduce_definitions"].get(fam, 0) + 1
         prov["all_reduce_checked"] += 1
         if len(parts) > 2:
             alt = sum(pr.float() for pr in parts).to(torch.bfloat16)

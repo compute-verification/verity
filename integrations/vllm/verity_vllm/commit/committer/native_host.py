@@ -37,6 +37,7 @@ import json
 import re
 import queue
 import ctypes
+import gc
 import os
 import threading
 import time
@@ -49,12 +50,15 @@ try:
 except ImportError:                      # the offline core (tests, CPU cross-checks) needs no torch
     torch = None  # type: ignore[assignment]
 
-from verity_vllm.commit import hiding, scheme
+from verity_vllm import settings
+from verity_vllm.commit import leaf_rule, scheme, step_rows
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
 from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
+from verity_vllm.commit.committer.window_views import WindowViews, _StepJob
 from verity_vllm.commit.native_ranges import NativeRangeOpenings, open_levels
 from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration
 from verity_vllm.engine import hooks
+from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm.pipeline.spans import Spans
 
 GPU_CHUNK_BYTES = 256
@@ -88,7 +92,7 @@ class SkipRefused(RuntimeError):
 
 def skip_classes_of_env() -> frozenset[str]:
     """VERITY_SKIP: a comma list of module classes whose module-output acquisition a per-row MARGINAL-cost ablation drops (NOT a commitment)."""
-    return frozenset(filter(None, os.environ.get("VERITY_SKIP", "").split(",")))
+    return frozenset(settings.VERITY_SKIP)
 
 
 def _dtype_name(t: Any) -> str:
@@ -109,27 +113,6 @@ class TensorMeta:
     dev_off: int = 0                                             # arena staging: byte offset of this tensor in its device block
     stream_off: int = -1                                         # packed mode: byte offset of this tensor in the step's packed stream
     dev_block: Any = field(default=None, repr=False)             # arena staging: the device block (released after D2H)
-
-
-@dataclass
-class _StepJob:
-    step: int
-    metas: list[TensorMeta]
-    event: Any
-    t_step_end: float = 0.0
-    backlog: int = 0
-    blocks: list = field(default_factory=list)
-    arena: Any = None                       # arena staging: current device block
-    cursor: int = 0                         # arena staging: bytes used in `arena`
-    overflow: list = field(default_factory=list)   # arena staging: (block, used_bytes) of earlier, filled blocks of this step
-    stream: Any = None                      # packed mode: memoryview of the whole packed step stream (pinned host copy)
-    stream_handle: Any = None               # fast path: raw cudaStream_t of the compute stream (cached per step)
-    arena_ptr: Any = None                   # fast path: data_ptr of job.arena (cached)
-    host_pre: Any = None                    # inline-D2H: pinned host block already receiving the packed step (issued on the compute stream)
-    acq_s: float = 0.0                      # fast path: serving-thread seconds inside the hooks (acquisition + memcpy issue), this step
-    acq_bytes: int = 0
-    deferred_dst: list = field(default_factory=list)   # batched acquisition: arena views awaiting the step-end _foreach_copy_
-    deferred_src: list = field(default_factory=list)   # ... and their (held) sources
 
 
 class _DeviceArena:
@@ -168,8 +151,8 @@ class _DeviceArena:
     # P0 (R13) backpressure: the ring never grows past its preallocation while a fitting block is merely BUSY; the serving thread waits for
     # the worker to release one (the engine stalls instead of the collector OOMing).  Growth only when NO block of the ring can ever fit (a
     # step larger than every block), with VERITY_ARENA_GROW=1 (R12), or `wait=False`: the worker, the only releaser, must not wait on itself.
-    GROW = os.environ.get("VERITY_ARENA_GROW", "0").strip() in ("1", "true", "yes")
-    WAIT_TIMEOUT_S = float(os.environ.get("VERITY_ARENA_WAIT_S", "600"))
+    GROW = bool(settings.VERITY_ARENA_GROW)
+    WAIT_TIMEOUT_S = settings.VERITY_ARENA_WAIT_S
 
     def _best_free(self, min_bytes: int) -> int:
         best = -1
@@ -227,15 +210,35 @@ TP_PARTIAL_RE = re.compile(r"/(part|shard)_rank\d+$")   # [R14 TP-03] <module pa
 CALL_DEPENDENT_RE = re.compile(r"/(all_reduce|x_q|x_s)$")   # bound only on the calls whose token count takes that path; the manifest requires them
 
 
+def tp_partials_bad(man: dict[str, Any], names: "Counter[str]") -> dict[str, int]:
+    """TP-03 rank-local collective inputs: exactly one `tp/<site>/{part,shard}_rank<r>` per expected site, none from elsewhere
+    (`NativeHostCommitter.identity_check`'s per-step TP rule over the step's tensor names)."""
+    from collections import Counter
+
+    tp_bad: dict[str, int] = {}
+    tp_sites = man.get("tp_sites") or []
+    tp_counts = Counter(n.rsplit("/", 1)[0] for n in names.elements() if TP_PARTIAL_RE.search(n))
+    if tp_sites:
+        tp_want = man.get("tp_site_counts") or {}                     # [R19 moe] a mid-module site binds its static call count per step
+        tp_bad = {s: tp_counts.get(s, 0) for s in tp_sites if tp_counts.get(s, 0) != int(tp_want.get(s, 1))}
+        tp_bad.update({s: c for s, c in tp_counts.items() if s not in tp_sites})
+        rk = man.get("tp_rank")
+        if rk is not None and any(not n.endswith(f"_rank{rk}") for n in names if TP_PARTIAL_RE.search(n)):
+            tp_bad["<foreign rank tag>"] = sum(c for n, c in names.items() if TP_PARTIAL_RE.search(n) and not n.endswith(f"_rank{rk}"))
+    elif tp_counts:
+        tp_bad = {"<undeclared tp source>": sum(tp_counts.values())}
+    return tp_bad
+
+
 def hazard_of_record(name: str, HAZARD_LEAVES: "tuple[str, ...] | frozenset[str] | set[str]") -> bool:
     """v1's in-place HAZARD decision for one acquired tensor name (`<module path>/<slot>`, a tap plane or a TP partial): snapshot at the hook
     (True) or batch at step end (False).  Encodes vLLM's aliasing by leaf name (`NativeHostCommitter.HAZARD_LEAVES` + the two name rules) --
-    a by-name lifetime table (F-r19-int-20, Draft 3 §11.3.1), owned HERE; `verity_vllm.acquire.plan` names it as a RESIDUAL through this one
+    a by-name lifetime table (Draft 3 §11.3.1), owned HERE; `verity_vllm.acquire.plan` names it as a RESIDUAL through this one
     function rather than restating it."""
     if TP_PARTIAL_RE.search(name) or CALL_DEPENDENT_RE.search(name):
         return True          # [R14 TP-03] a collective's input partial (or a value overwritten or freed right after): snapshot now
-    if name.startswith("moe/") and name.endswith("/up"):
-        return True          # [R16 moe FLUSH-03] the fused-MoE up plane: its workspace is the block's own w2 output (cache1/cache3 alias)
+    if name.endswith("/up"):
+        return True          # [R16 moe FLUSH-03] the fused-MoE up value (`moe/L<k>/up`, or `<MoE module>/up` at calls): its workspace is the block's own w2 output (cache1/cache3 alias)
     base, _, idx = name.partition("/")
     leaf = base.rsplit(".", 1)[-1]
     if leaf in HAZARD_LEAVES or "embed" in leaf:                 # the caller's table (NativeHostCommitter.HAZARD_LEAVES of record); named so the by-name lint sees the rule
@@ -257,6 +260,43 @@ def value_family(name: str) -> str:
         if sub in name:
             return fam
     return "other"
+
+
+class GcPauses:
+    """`gc.callbacks` while a run is installed: each collection of at least `min_s`, as (generation, start, seconds, thread), the start on
+    `time.perf_counter` like the steps' `t_step_end`, so a pause lands on its step.
+
+    `install` first collects and freezes the heap, as vLLM does once its warm-up is done (`gc_utils.freeze_gc_heap`): the committer, its
+    sources and the manifests they hold are built after that freeze, and a full collection over them took 720-960 ms on every rank's
+    serving thread of GLM-5.3 TP8, stalling all ranks behind the next all-reduce (r20261017-193316-4d59).  Collections never touch a value."""
+
+    def __init__(self, min_s: float = 1e-3) -> None:
+        self.min_s = min_s
+        self.pauses: list[tuple[int, float, float, str]] = []
+        self.freeze_s: list[float] = []
+        self._t0 = 0.0
+
+    def __call__(self, phase: str, info: dict) -> None:
+        if phase == "start":
+            self._t0 = time.perf_counter()
+        elif (dt := time.perf_counter() - self._t0) >= self.min_s:
+            self.pauses.append((int(info["generation"]), self._t0, dt, threading.current_thread().name))
+
+    def install(self) -> None:
+        if self in gc.callbacks:
+            return
+        t0 = time.perf_counter()
+        gc.collect()
+        gc.freeze()
+        self.freeze_s.append(time.perf_counter() - t0)
+        gc.callbacks.append(self)
+
+    def uninstall(self) -> None:
+        if self in gc.callbacks:
+            gc.callbacks.remove(self)
+
+    def record(self) -> dict[str, Any]:
+        return {"min_s": self.min_s, "pauses": list(self.pauses), "total_s": sum(p[2] for p in self.pauses), "freeze_s": list(self.freeze_s)}
 
 
 class _Footprint:
@@ -317,7 +357,7 @@ def _cfg(model: Any, *names: str, default: int | None = None) -> int | None:
 
 
 def moe_bytes_per_token(model: Any, moe_layers: int) -> int:
-    """[R13 MOE-03] bytes per token per step the MoE block source binds: per MoE layer TOPK x (f32 weight + i32 id) + TOPK x (2I + I + H) bf16
+    """Bytes per token per step the MoE block source binds: per MoE layer TOPK x (f32 weight + i32 id) + TOPK x (2I + I + H) bf16
     pair rows + the H bf16 sum (`moe_source.MoeBlockSource`)."""
     if not moe_layers:
         return 0
@@ -328,7 +368,7 @@ def moe_bytes_per_token(model: Any, moe_layers: int) -> int:
 
 
 def schedule_stream_bound(asz: dict[str, Any], reqs: list[dict[str, Any]], sampling: dict[str, Any] | None = None) -> dict[str, Any]:
-    """[R17 fp8, F-dA-15 bounded admission] The bytes the collector binds over the WHOLE RUN under the workload's DECLARED schedule (each
+    """The bytes the collector binds over the WHOLE RUN under the workload's DECLARED schedule (each
     request prefills at its `arrive_step` in one step, then decodes one token per step for `max_tokens`), with the same per-token / per-
     sequence / per-step widths and the same FA2/FA3 hidden-m1 launch geometry as `step_bound_bytes` (`asz` = its record).  The envelope
     bound `retained_bytes_bound` is a worst case over any packing (B x max_prompt tokens of prefill, every sequence padded to the longest);
@@ -397,7 +437,7 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
                        host_cap_bytes: int | None, hidden_factor: float = 1.05, other_factor: float = 2.0, slack_bytes: int = 6 << 30,
                        pairs: int = 1, c2_programs_bytes: int = 0, c2_freed_before_replay: bool = True, pool_exact: bool = PINNED_EXACT,
                        replay_cache: bool = False, fork_children_bytes: int = 0, c2_residual_bytes: int = 0, pool_carry_bytes: int = 0) -> dict[str, Any]:
-    """[R17 fp8, F-dA-15 / R17-7.3] the host peak bound of a `--bounded-staging` Commit, TERM BY TERM, from the declared-schedule stream
+    """The host peak bound of a `--bounded-staging` Commit, TERM BY TERM, from the declared-schedule stream
     (`schedule_stream_bound`).  Every term is a measured quantity on the B1 1024/128 row (cp-h100, FP8-STAGING.md §3) or a budget the run
     enforces by name:
       raw     = hidden x f_hidden + other x f_other        hidden (the FA3 slab, padded to the step's longest query) sized exact to 1.2 MB on
@@ -413,7 +453,7 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
                                                            per-step RSS, try 4 pairs3) 16.7 -> 25.6 (pair 0 + replay) -> 29.6 (pair 1 run)
                                                            -> 30.2 (pair 1 replay) -> 30.2 flat through pair 2: +4.6 GiB = 41 % of one
                                                            frozen pool, ONCE; the term takes the whole pool (bounded, converged after pair 1)
-    [R17 fp8 F-fp8-C2PROG / F-fp8-POW2 (FP8-STAGING §6; B8 attempt 1, VmHWM 223,776 vs bound 193,827)] two more named terms, and the
+    [F-fp8-C2PROG / F-fp8-POW2 (FP8-STAGING §6; B8 attempt 1, VmHWM 223,776 vs bound 193,827)] two more named terms, and the
     bound is the MAX over the process's PHASES (each a sum of the terms live in it), not one sum:
       c2_programs   the Programs of record loaded for the C2 sampled replay (`RM._programs_for`: 8 Programs / 7.85 M instances = 70,300 MiB
                     of Python objects at B8; ~6.6 GB at B1) -- an EMPIRICAL FORECAST the caller derives from the instance files (json
@@ -433,7 +473,7 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
                     and freed when the openings-after-release view dies; the replay pool becomes the next pair's and grows to the run's size)
                     and levels + kept + learn (once) for the torch pool; with `replay_cache` pairs >= 2 reuse pair 0's C2 record and the
                     c2 phase happens once (its term stays in the max either way).
-    [R17 fp8 F-fp8-C2RESID / F-fp8-POOLCARRY (B8 attempt 3, VmHWM 150,935 vs bound 156,654: under, but the peak was pair 2's replay phase
+    [F-fp8-C2RESID / F-fp8-POOLCARRY (B8 attempt 3, VmHWM 150,935 vs bound 156,654: under, but the peak was pair 2's replay phase
     151,097, not the predicted c2 phase -- the replay phase was predicted 118,303 and observed 130,895 (pair 0) / 151,097 (pair 2))] two more
     EMPIRICAL terms the caller passes, both measured by the run's footprint (`rss_bytes` - `pinned_pool_bytes` per phase):
       c2_residual   what the freed Programs leave resident: 7.85 M dead small objects die into pymalloc arenas / glibc's heap, which return
@@ -528,7 +568,8 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
             "margin_frac": ((host_cap_bytes - bound) / host_cap_bytes) if host_cap_bytes else None, "retain": retain, "retain_exclude": sorted(excl)}
 
 
-def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[str, Any], *, hidden_m1: bool, attn_backend: str = "fa2", moe_layers: int = 0) -> dict[str, Any]:
+def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[str, Any], *, hidden_m1: bool, attn_backend: str = "fa2", moe_layers: int = 0,
+                     chunk: int = GPU_CHUNK_BYTES) -> dict[str, Any]:
     """Upper bound of the bytes ONE engine step binds into the arena, from the acquired-module set (the required-value manifest of the
     native path: forward outputs of ACQUIRE_CLASSES, per token) and the workload envelope (`batch`, `max_prompt`, `max_new`,
     `max_num_batched_tokens`, `max_model_len`).  Prefill: the admitted prompt tokens of one step (<= max_num_batched_tokens, <= B x max
@@ -550,7 +591,7 @@ def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[
     # [R17 stoch F-dA-15] a module SHARED by every layer (Llama's one `rotary_emb`, registered under layer 0) is acquired once per
     # INVOCATION -- `layers` times per step -- not once per module: count it per layer, else the bound is `(layers - 1) x width` per token
     # short (76,800 B/token on Llama-3.2-1B = the 1-3 % by which the R16 records' prefill steps exceeded this bound).
-    n_rope = sum(1 for _n, _m in modules if "RotaryEmbedding" in _mro_names(_m))
+    n_rope = sum(1 for _n, _m in modules if LC.ROTARY in _mro_names(_m))
     rope_mult = max(1, -(-layers // n_rope)) if n_rope else 1
     for name, m in modules:
         names = _mro_names(m)
@@ -560,37 +601,36 @@ def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[
         except StopIteration:
             isz = 2
         w = 0
-        if "LogitsProcessor" in names:
+        if LC.LOGITS in names:
             per_seq += vocab * 4
-        elif "Sampler" in names:
+        elif LC.SAMPLER in names:
             per_seq += 8
-        elif "VocabParallelEmbedding" in names:
+        elif LC.EMBEDDING in names:
             w = int(getattr(m, "embedding_dim", hidden) or hidden) * isz + 4          # + the input ids (ACQUIRE_INPUT_CLASSES)
-        elif names & {"LinearBase", "ColumnParallelLinear", "RowParallelLinear", "QKVParallelLinear", "MergedColumnParallelLinear", "ReplicatedLinear"}:
+        elif names & LC.LINEAR:
             out = getattr(m, "output_size_per_partition", None) or getattr(m, "output_size", None)
             if not out and hasattr(m, "weight") and isinstance(m.weight, torch.Tensor):
                 out = int(m.weight.shape[0])
             w = int(out or hidden) * isz
-        elif names & {"RMSNorm", "GemmaRMSNorm", "LayerNorm"}:
+        elif names & LC.NORMS:
             hs = int(m.weight.numel()) if hasattr(m, "weight") and isinstance(m.weight, torch.Tensor) else hidden
             w = 2 * hs * isz                                                            # fused add+norm returns (out, residual)
-        elif names & {"SiluAndMul", "GeluAndMul", "GeluAndMulSparse", "MulAndSilu", "SiluAndMulWithClamp"}:
+        elif names & LC.GATED_ACTS:
             w = inter * 2
-        elif "RotaryEmbedding" in names:
+        elif LC.ROTARY in names:
             w = (heads + kv_heads) * head_dim * 2 * rope_mult                           # returns (q, k); once per layer when shared
-        elif "Attention" in names:
+        elif LC.ATTENTION in names:
             w = heads * head_dim * 2
         else:
             w = hidden * 2
         per_token += w
-        per_step += GPU_CHUNK_BYTES
-        cls = next((c for c in ("LogitsProcessor", "Sampler", "VocabParallelEmbedding", "RMSNorm", "RotaryEmbedding", "Attention", "SiluAndMul",
-                                "LinearBase") if c in names), "other")
+        per_step += chunk
+        cls = next((c for c in (LC.LOGITS, LC.SAMPLER, LC.EMBEDDING, LC.RMS_NORM, LC.ROTARY, LC.ATTENTION, LC.SILU_AND_MUL, LC.LINEAR_BASE) if c in names), "other")
         widths[cls] = widths.get(cls, 0) + w
     moe_pt = moe_bytes_per_token(model, moe_layers)
     if moe_pt:
         per_token += moe_pt
-        per_step += moe_layers * 6 * GPU_CHUNK_BYTES
+        per_step += moe_layers * 6 * chunk
         widths["MoeBlock"] = moe_pt
     B = max(1, int(envelope.get("batch") or 1))
     max_prompt = max(1, int(envelope.get("max_prompt") or 1))
@@ -654,7 +694,16 @@ def _gib(n: float) -> str:
     return f"{n / 2**30:.2f} GiB"
 
 
-_MEMTRACE = bool(os.environ.get("VERITY_MEMTRACE"))
+def _split_step_names(srcs: list[Any], names: Any, step: int, padding_only: bool) -> tuple[Any, dict[str, tuple[int, int]]]:
+    """The step's names with each call-boundary source's own split off in turn, and every source's mismatches."""
+    bad: dict[str, tuple[int, int]] = {}
+    for src in srcs:
+        names, mine = src.split_step_names(names, step, padding_only)
+        bad.update(mine)
+    return names, bad
+
+
+_MEMTRACE = settings.VERITY_MEMTRACE
 
 
 def memtrace(where: str, step: int | None = None) -> None:
@@ -669,14 +718,17 @@ def memtrace(where: str, step: int | None = None) -> None:
           f"device-used {(total - free) / 2**30:6.2f} GiB", flush=True)
 
 
-class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
+class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafSchemeRule):
     name = "native_host"
 
     def __init__(self, engine: Any, *, program_digest: bytes | None = None, run_id: str = "run", chunk: int = DEFAULT_CHUNK,
                  hash_threads: int = 2, retain_values: bool = True, acquire_classes: set[str] | None = None, staging: str = "arena",
                  arena_bytes: int = 512 << 20, batch_copy: bool = False, fast_copy: bool = False, regen_row4: bool = False, gpu_tree: bool = False,
-                 geo_digest: bytes | None = None, leaf_scheme: str = scheme.NAME, populate_threads: int | None = None) -> None:
-        """`engine=None` builds the OFFLINE core (hashing, roots, openings, verification; no hooks, no CUDA) for the security tests.  `leaf_scheme`: vllm-v1 position leaves (default) or hm96-sha256/v1 hiding leaves over them (`hiding.LeafSchemeRule`).  `populate_threads`: the pinned pool's (`PinnedPool`)."""
+                 geo_digest: bytes | None = None, leaf_scheme: str = scheme.NAME, populate_threads: int | None = None,
+                 commit_scheme: str | None = None) -> None:
+        """`engine=None` builds the OFFLINE core (hashing, roots, openings, verification; no hooks, no CUDA) for the security tests.  `leaf_scheme`: vllm-v1 position leaves (default) or hm96-sha256/v1 hiding leaves over them (`leaf_rule.LeafSchemeRule`).  `populate_threads`: the pinned pool's (`PinnedPool`).
+        `commit_scheme` rows-sha512: the offline core's GPU-tree steps (`commit_block_offline`) under `step_rows`, as the windowed collector
+        commits a served run's (`NativeCollectCommitter(commit_scheme=)`, which sets its own)."""
         self.engine = engine
         self.runner = getattr(engine, "runner", None)
         self.model = getattr(engine, "model", None)
@@ -687,6 +739,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self.program_digest = program_digest or hashlib.sha256(b"cmt-integ/no-program-digest/" + run_id.encode()).digest()
         self.acquire_classes = acquire_classes or ACQUIRE_CLASSES
         self.spans = Spans(scheme.NAME)
+        self.gc_pauses = GcPauses()
         self.x03_expected = 0
         self.x03_committed = 0
         # [X-03 F-r19-int-22] the Program's per-layer attention Call statics (fa2_plane_classes.AttnLayerDecl, set by the driver from the
@@ -699,6 +752,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self._hooks = hooks.Hooks()
         self._cur: _StepJob | None = None
         self._step_index = 0
+        self._init_views()
         self._q: queue.Queue = queue.Queue()
         self._done: dict[int, StepCommitment] = {}
         self._levels: dict[int, list[list[bytes]]] = {}
@@ -710,7 +764,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self.sources: list[Any] = []
         self._worker: threading.Thread | None = None
         # optional CPU pinning experiment (env VERITY_PIN=1): serving thread -> one core, worker + hash threads -> other cores
-        self.pin = os.environ.get("VERITY_PIN") == "1" and hasattr(os, "sched_setaffinity")
+        self.pin = settings.VERITY_PIN and hasattr(os, "sched_setaffinity")
         self._cores = sorted(os.sched_getaffinity(0)) if self.pin else []
         self._pool_exec = ThreadPoolExecutor(max_workers=self.hash_threads, thread_name_prefix="cmt-hash",
                                              initializer=(lambda: self._pin_thread(2)) if self.pin else None)
@@ -745,18 +799,24 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             self.name = f"{self.name}_gputree"
             self.chunk = GPU_CHUNK_BYTES
         self._init_leaf_scheme(leaf_scheme, gpu_tree or type(self)._commit_step is not NativeHostCommitter._commit_step)
+        if commit_scheme not in (None, scheme.NAME):
+            if commit_scheme != step_rows.NAME or engine is not None or not gpu_tree or self.hiding is not None:
+                raise ValueError(f"commit_scheme {commit_scheme!r}: the offline core takes {step_rows.NAME} over GPU-tree steps with vllm-v1 "
+                                 "leaves (engine=None, gpu_tree=True); a served run's is the windowed collector's")
+            self.commit_scheme, self.rows, self.row_keys, self.chunk = step_rows.NAME, True, {}, step_rows.ROW_BYTES
+            self.name = f"{self.name}+{step_rows.NAME}"
         # R13 P0: where absorbed raw bytes live (see RETAIN_MODES); `retain_values=False` (offline tests) maps to "none"
         # P0: host retention goes to pinned pool memory unless VERITY_RETAIN_PINNED=0 (pageable D2H is ~1 GB/s and synchronous)
-        self.retain_pinned = os.environ.get("VERITY_RETAIN_PINNED", "1").strip() not in ("0", "false", "no")
-        self.retain = os.environ.get("VERITY_RETAIN", "device" if retain_values else "none").strip().lower()
+        self.retain_pinned = settings.VERITY_RETAIN_PINNED
+        self.retain = r if (r := settings.VERITY_RETAIN) is not None else "device" if retain_values else "none"
         if self.retain not in RETAIN_MODES:
             raise ValueError(f"VERITY_RETAIN={self.retain!r}: expected one of {RETAIN_MODES}")
         self.retain_windows: set[tuple[int, int]] = set()   # retain=sample (windowed only): (step, window k) pairs whose raw bytes are kept
         if self.retain != "device":
             self.name = f"{self.name}+retain_{self.retain}"
-        self.footprint = _Footprint(os.environ["VERITY_FOOTPRINT"]) if os.environ.get("VERITY_FOOTPRINT") else None
+        self.footprint = _Footprint(fp) if (fp := settings.VERITY_FOOTPRINT) else None
         self.released_bytes = 0                     # device bytes freed by release_staging() (reported by commit_delta)
-        self.inline_d2h = os.environ.get("VERITY_INLINE_D2H") == "1"
+        self.inline_d2h = settings.VERITY_INLINE_D2H
         if self.inline_d2h and self._rt is not None:
             self.name = f"{self.name}_inl"
         self.regen_row4 = bool(regen_row4)
@@ -802,16 +862,18 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             hidden_m1 = any("Hidden" in type(s).__name__ for s in getattr(self, "sources", []))
         backend = "fa3" if any(type(s).__name__ in ("HiddenM1SourceFA3", "NativeHiddenM1SourceFA3") for s in getattr(self, "sources", [])) else "fa2"
         moe_src = next((s for s in getattr(self, "sources", []) if getattr(s, "short_name", "") == "moe"), None)
+        chunk = self.chunk if self.gpu_tree else GPU_CHUNK_BYTES
         rec = step_bound_bytes(self.model, self._modules, envelope, hidden_m1=bool(hidden_m1), attn_backend=backend,
-                               moe_layers=(len(moe_src.layers) if moe_src is not None else 0))
+                               moe_layers=(len(moe_src.layers) if moe_src is not None else 0), chunk=chunk)
         # [R14 TP-03] sources that bind extra tensors per step (TP partial source) widen the bound: per token / per sequence / chunk padding
-        extra_pt = extra_ps = extra_n = 0
+        extra_pt = extra_ps = extra_step = extra_n = 0
         for s in getattr(self, "sources", []):
             f = getattr(s, "extra_step_bytes", None)
             if f is None:
                 continue
             e = f(envelope, self.model)
             extra_pt += int(e.get("per_token_bytes", 0)); extra_ps += int(e.get("per_seq_bytes", 0)); extra_n += int(e.get("tensors_per_step", 0))
+            extra_step += int(e.get("per_step_bytes", 0))
         if self.acquire_inputs:
             # [R19 int-20] the manifest-driven `<consumer>/in` acquisitions: one per-token tensor per consumer per step (its width from the
             # promoted member's registry signature), minus the embedding-class inputs the module table already counts
@@ -821,11 +883,12 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                     continue
                 extra_pt += int(bpt); extra_n += 1
             rec["promoted_inputs"] = {"consumers": sorted(self.acquire_inputs), "per_token_bytes": sum(int(v) for v in self.acquire_inputs.values())}
-        if extra_pt or extra_ps or extra_n:
+        if extra_pt or extra_ps or extra_step or extra_n:
             B = max(1, int(envelope.get("batch") or 1))
-            add_prefill = int(rec["prefill_tokens"]) * extra_pt + B * extra_ps + extra_n * GPU_CHUNK_BYTES
-            add_decode = B * extra_pt + B * extra_ps + extra_n * GPU_CHUNK_BYTES
-            rec["extra_sources"] = {"per_token_bytes": extra_pt, "per_seq_bytes": extra_ps, "tensors_per_step": extra_n, "prefill_add": add_prefill, "decode_add": add_decode}
+            add_prefill = int(rec["prefill_tokens"]) * extra_pt + B * extra_ps + extra_step + extra_n * chunk
+            add_decode = B * extra_pt + B * extra_ps + extra_step + extra_n * chunk
+            rec["extra_sources"] = {"per_token_bytes": extra_pt, "per_seq_bytes": extra_ps, "per_step_bytes": extra_step, "tensors_per_step": extra_n,
+                                    "prefill_add": add_prefill, "decode_add": add_decode}
             rec["prefill_step_bytes"] = int(rec["prefill_step_bytes"]) + add_prefill
             rec["decode_step_bytes"] = int(rec["decode_step_bytes"]) + add_decode
             rec["step_bound_bytes"] = max(int(rec["prefill_step_bytes"]), int(rec["decode_step_bytes"]))
@@ -981,14 +1044,14 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
 
     def _acquires_input(self, name: str, m: Any) -> bool:
         """Whether module `name`'s first positional tensor argument is acquired as `<name>/in`: by class (the embedding's ids,
-        ACQUIRE_INPUT_CLASSES) or [R19 int-20] because the required manifest names it as a promoted member's consumer (`acquire_inputs`).
+        ACQUIRE_INPUT_CLASSES) or because the required manifest names it as a promoted member's consumer (`acquire_inputs`).
         [v2 acquire] under a plan (`plan_inputs` set) the plan's consumer-input sites decide, the class table is not consulted."""
         if self.plan_inputs is not None:
             return name in self.plan_inputs
         return bool(_mro_names(m) & ACQUIRE_INPUT_CLASSES) or name in self.acquire_inputs
 
     def _input_only_modules(self) -> list[tuple[str, Any]]:
-        """[R19 int-20] the manifest's consumer modules the committer did NOT select (no acquire class): their input is acquired, their
+        """The manifest's consumer modules the committer did NOT select (no acquire class): their input is acquired, their
         output is not (it is no identity of the Program).  Sorted by name; a consumer that is not a module of the built model is skipped
         here and left unbound (coverage names it).  [v2 acquire] under a plan: the plan's consumer-input sites not among the selected modules."""
         if getattr(self, "model", None) is None:
@@ -1015,7 +1078,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         # [R16 sys SYS-05] host (default, the path below) | device | device-checked: the same leaves (pos_leaf over self.chunk-byte pieces of
         # the tensor's bytes) and the same per-tensor fold on the GPU (verity_vllm.commit.committer.leafhash / native_leafhash.cu); the root
         # construction below is untouched.  device-checked computes both and refuses a mismatch (validation runs record the equality).
-        mode = os.environ.get("VERITY_WEIGHTS_HASH", "host")
+        mode = settings.VERITY_WEIGHTS_HASH
         if mode not in ("host", "device", "device-checked"):
             raise ValueError(f"VERITY_WEIGHTS_HASH must be host | device | device-checked, got {mode!r}")
         LH = None
@@ -1064,7 +1127,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self.name = f"{self.name}+{getattr(src, 'short_name', 'hidden_m1')}"
 
     def flush_after_plane(self, what: str) -> bool:  # noqa: ARG002
-        """[R16 moe FLUSH-03] hook for acquisition sources whose tensor is overwritten before the next module hook: the arena committer
+        """Hook for acquisition sources whose tensor is overwritten before the next module hook: the arena committer
         snapshots at `_acquire` (D2D on the compute stream), so nothing is staged and nothing needs to leave early -> False.  The gather
         collector (`native_collect.NativeCollectCommitter`) overrides this with the flush."""
         return False
@@ -1074,6 +1137,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             return
         self._check_skip()
         self._start_worker()
+        self.gc_pauses.install()
         for src in self.sources:
             src.install()
         for name, m in self._modules:
@@ -1094,8 +1158,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             if dummy or getattr(scheduler_output, "total_num_scheduled_tokens", 0) == 0:
                 return orig_exec(scheduler_output, *a, **kw)
             me._end_step()                       # a step whose sample() we never saw
-            me._step_min_bytes = 0 if me.arena_explicit else me.step_min_bytes(   # X-02 as native_collect; an explicit ring is one size
-                int(scheduler_output.total_num_scheduled_tokens), len(getattr(scheduler_output, "num_scheduled_tokens", ()) or ()))
+            me._plan_shape = (int(scheduler_output.total_num_scheduled_tokens), len(getattr(scheduler_output, "num_scheduled_tokens", ()) or ()))
+            me._step_min_bytes = 0 if me.arena_explicit else me.step_min_bytes(*me._plan_shape)   # X-02 as native_collect; an explicit ring is one size
             me._begin_step()
             return orig_exec(scheduler_output, *a, **kw)
 
@@ -1114,6 +1178,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                         st = getattr(so, "sampled_token_ids", None)
                         if isinstance(st, torch.Tensor) and st.device.type == "cuda":
                             me._acquire("runner.sampler/sampled_token_ids", st, job)
+                            for s in (s for s in me.sources if hasattr(s, "on_sample")):   # a source of the draw's inputs (served_record)
+                                s.on_sample(a[1] if len(a) > 1 else kw.get("input_batch"), int(st.shape[0]), job)
                     except Exception as e:  # noqa: BLE001
                         me.errors.append(f"sampler acquire: {e!r}"[:200])
                     me._end_step()
@@ -1126,7 +1192,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         if not self.installed:
             return
         self._end_step()
-        for src in self.sources:
+        self.gc_pauses.uninstall()
+        for src in reversed(self.sources):
             src.uninstall()
         for h in self._handles:
             h.remove()
@@ -1150,7 +1217,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self.padding_stats = None
         self._step_index = 0
         self.spans = Spans(scheme.NAME)
-        self.pool.reset()
+        self.gc_pauses.pauses, self.gc_pauses.freeze_s = [], []
+        self._reset_views()
         self.errors = []
 
     def close(self) -> None:
@@ -1161,7 +1229,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
     # ------------------------------------------------------------------ acquisition (serving thread)
 
     def _begin_step(self) -> None:
-        self._cur = _StepJob(self._step_index, [], None)
+        self._cur = _StepJob(self._step_index, [], None, com=self._window_view(), seq=self._next_seq())
         self._step_index += 1
         for src in self.sources:
             src.on_step_begin()
@@ -1200,6 +1268,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         job.event.record(torch.cuda.current_stream())
         job.t_step_end = time.perf_counter()
         job.backlog = self._q.qsize()
+        self.staged_bytes += int(job.acq_bytes)
         self.spans.add("acquisition", time.perf_counter() - t0, step=job.step)
         if self.footprint is not None:
             self.footprint.event("end_step", step=job.step, used=int(job.cursor), backlog=job.backlog)
@@ -1232,8 +1301,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             # verity.ml.circuits / verity_vllm / vllm-poc as loaded in this process) is written beside the attempt when the driver names the
             # dir ($VERITY_SOURCE_IDENTITY_DIR, set by commit_delta from --out): <dir>/source_identity.gpu_ext_load.json.  The start-of-run
             # record has hidden_gpu loaded:false; this one is the evidence that what LOADED at the import site was this tree's.
-            _sid_dir = os.environ.get("VERITY_SOURCE_IDENTITY_DIR")
-            _sid_out = os.path.join(_sid_dir, "source_identity.gpu_ext_load.json") if _sid_dir else None
+            _sid_out = os.path.join(d, "source_identity.gpu_ext_load.json") if (d := settings.VERITY_SOURCE_IDENTITY_DIR) else None
             _sid_doc = _sid.precheck("commit.gpu_ext_load", _tree, out=_sid_out)
             _sid_doc.setdefault("loaded_modules", {})["hidden_gpu"] = {"file": getattr(HG, "__file__", None), "repo": getattr(HG, "REPO", None)}
             if _sid_out:
@@ -1300,6 +1368,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 torch.cuda.current_stream().synchronize()
             self._footprint_absorbed(job, padded, levels, keep)
             self.arena.release(job.arena)
+            job.arena = None
             memtrace("worker: block released", job.step)
         mr = mr_t.numpy().astype("uint32").tobytes() if hasattr(mr_t, "numpy") else bytes(mr_t)
         self._gpu_t["leaf_ms"] += ev[0].elapsed_time(ev[1])
@@ -1315,33 +1384,39 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self._gpu_levels[job.step] = levels
         self._gpu_blocks[job.step] = (keep, used)
         self._layouts[job.step] = job.metas
-        job.arena = None
         self._done[job.step] = StepCommitment(job.step, root, mr, n, nbytes, len(job.metas), layout_dig, job.t_step_end, t2, job.backlog,
                                               hashing_s=t1 - t0, root_finalisation_s=t2 - t1)
 
     def commit_block_offline(self, step: int, stream: bytes | bytearray, metas: list[TensorMeta]) -> StepCommitment:
         """CPU reference of the GPU chunk tree for ONE packed step block (tests; no CUDA): the same 256 B chunk leaves (CMT-2 header), the
         same production fold, the same retention policy (`retain`), the same per-step state the worker leaves behind, so `open()`,
-        `release_staging()`, `verify()` and `finalize()` run unchanged on the result."""
+        `release_staging()`, `verify()` and `finalize()` run unchanged on the result.  Under rows-sha512, `step_rows`'s tree over the
+        block's rows, salted from a fresh step key (`row_keys`), as the windowed worker commits it."""
         chunk = self.chunk
         used = len(stream)
         padded = -(-used // chunk) * chunk
         buf = bytes(stream) + b"\0" * (padded - used)
-        layout = self._gpu_layout(step, padded // 4)
-        leaves = [scheme.chunk_leaf(scheme.chunk_header(layout, step, i, chunk // 4, self.GPU_TREE_SRC), buf[i * chunk:(i + 1) * chunk]) for i in range(padded // chunk)]
-        lv_bytes = scheme.fold_levels(leaves)
-        levels = [torch.frombuffer(bytearray(b"".join(lv)), dtype=torch.int32).reshape(len(lv), 8).clone() for lv in lv_bytes]
+        n = padded // chunk
+        if self.rows:
+            dom = self._row_domain(step, n)
+            lv_bytes = step_rows.levels(dom, [buf[i * chunk:(i + 1) * chunk] for i in range(n)], self._row_key(step), 8 * chunk)
+            levels = [torch.frombuffer(bytearray(b"".join(lv)), dtype=torch.uint8).reshape(len(lv), step_rows.ROOT_BYTES).clone() for lv in lv_bytes]
+            mr = lv_bytes[-1][0] if lv_bytes else dom.empty_root()
+        else:
+            layout = self._gpu_layout(step, padded // 4)
+            leaves = [scheme.chunk_leaf(scheme.chunk_header(layout, step, i, chunk // 4, self.GPU_TREE_SRC), buf[i * chunk:(i + 1) * chunk]) for i in range(n)]
+            lv_bytes = scheme.fold_levels(leaves)
+            levels = [torch.frombuffer(bytearray(b"".join(lv)), dtype=torch.int32).reshape(len(lv), 8).clone() for lv in lv_bytes]
+            mr = lv_bytes[-1][0]
         keep = torch.frombuffer(bytearray(buf), dtype=torch.uint8).clone() if self.retain != "none" else None
         if keep is not None and self.retain == "device":
             keep = keep.cuda()
             levels = [lv.cuda() for lv in levels]
         for m in metas:
             m.stream_off = m.dev_off
-        mr = lv_bytes[-1][0]
-        n = len(leaves)
         nbytes = sum(m.nbytes for m in metas)
         layout_dig = self.layout_digest(metas)
-        root = scheme.step_root(self.program_digest, self._ctx_digest(step), self._geo_digest, layout_dig, n, mr)
+        root = (step_rows if self.rows else scheme).step_root(self.program_digest, self._ctx_digest(step), self._geo_digest, layout_dig, n, mr)
         self._gpu_levels[step] = levels
         self._gpu_blocks[step] = (keep, used)
         self._layouts[step] = metas
@@ -1385,19 +1460,19 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         if self.footprint is None:
             return
         self.footprint.event("absorbed", step=job.step, used=int(job.cursor), padded=int(padded),
-                             levels_bytes=sum(int(lv.numel()) * 4 for lv in levels), levels_device=bool(levels and levels[0].is_cuda),
+                             levels_bytes=sum(int(lv.nbytes) for lv in levels), levels_device=bool(levels and levels[0].is_cuda),
                              keep_bytes=int(keep.numel()) if keep is not None else 0, keep_device=(keep.is_cuda if keep is not None else None),
                              retain=self.retain, arena_block_bytes=int(job.arena.numel()) if job.arena is not None else None,
                              retained_device_total=self._retained_device_bytes(), families=_Footprint.families(job.metas),
                              t_step_end=round(job.t_step_end - self.footprint.t0, 6) if job.t_step_end else None, backlog=job.backlog)
 
     def _retained_device_bytes(self) -> int:
-        n = sum(int(lv.numel()) * 4 for lvls in self._gpu_levels.values() for lv in lvls if lv.is_cuda)
+        n = sum(int(lv.nbytes) for lvls in self._gpu_levels.values() for lv in lvls if lv.is_cuda)
         n += sum(int(b.numel()) for b, _u in self._gpu_blocks.values() if b is not None and b.is_cuda)
         return n
 
     def release_staging(self, *, levels_to_host: bool = True) -> dict[str, int]:
-        """R13 P0: drop every RAW retained copy that still lives on the device (mode `device`) and, optionally, move the tree levels to host.
+        """Drop every RAW retained copy that still lives on the device (mode `device`) and, optionally, move the tree levels to host.
         After this the device holds only the arena blocks; openings need `open(..., values_from=)` (replay) or a host copy.  Returns bytes."""
         freed = {"raw_device_bytes": 0, "levels_device_bytes": 0}
         for step, (blk, used) in list(self._gpu_blocks.items()):
@@ -1407,7 +1482,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         if levels_to_host:
             for step, lvls in list(self._gpu_levels.items()):
                 if lvls and lvls[0].is_cuda:
-                    freed["levels_device_bytes"] += sum(int(lv.numel()) * 4 for lv in lvls)
+                    freed["levels_device_bytes"] += sum(int(lv.nbytes) for lv in lvls)
                     self._gpu_levels[step] = [lv.cpu() for lv in lvls]
         if torch is not None and torch.cuda.is_available():
             torch.cuda.synchronize()
@@ -1449,7 +1524,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
     def _acquire_impl(self, name: str, t: Any, job: _StepJob) -> None:
         t0 = time.perf_counter()
         if self._rt is not None and t.is_contiguous():
-            return self._acquire_fast(name, t, job, t0)
+            return self._acquire_by_cudart(name, t, job, t0)
         src = t.detach()
         if not src.is_contiguous():
             src = src.contiguous()          # a device copy: counted under acquisition (bytes noted)
@@ -1492,10 +1567,10 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         self.spans.add("acquisition", (t1 - t0) + (time.perf_counter() - t2), step=job.step)
         self.spans.add("movement", t2 - t1, step=job.step, nbytes=nbytes)
 
-    # ---- fast acquisition: no torch ops on the serving thread at all -- the snapshot is one cudaMemcpyAsync (D2D, stream-ordered on the
-    # compute stream) issued through libcudart via ctypes on raw data pointers (~2 us CPU instead of ~15-20 us for slice+view+copy_).  Bit
-    # semantics identical to the arena copy (the value check compares the committed bytes with hook-time clones).
-    def _acquire_fast(self, name: str, t: Any, job: _StepJob, t0: float) -> None:
+    # ---- acquisition by libcudart: no torch ops on the serving thread at all -- the snapshot is one cudaMemcpyAsync (D2D, stream-ordered
+    # on the compute stream) issued through libcudart via ctypes on raw data pointers (~2 us CPU instead of ~15-20 us for slice+view+copy_).
+    # Bit semantics identical to the arena copy (the value check compares the committed bytes with hook-time clones).
+    def _acquire_by_cudart(self, name: str, t: Any, job: _StepJob, t0: float) -> None:
         nbytes = t.numel() * t.element_size()
         if nbytes == 0:
             return
@@ -1713,26 +1788,30 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             job = self._q.get()
             if job is self._stop:
                 return
-            try:
-                self._commit_step(job)
-            except Exception as e:  # noqa: BLE001
-                self.errors.append(f"worker step {job.step}: {e!r}"[:300])
-                self._done[job.step] = StepCommitment(job.step, b"", b"", 0, 0, 0, b"", job.t_step_end, time.perf_counter(), job.backlog)
+            self._absorb_job(job)
+
+    def _absorb_step(self, job: _StepJob) -> None:
+        """Worker: commit ``job`` into this committer (or window view); a step that raises is recorded failed, its blocks released."""
+        try:
+            self._commit_step(job)
+        except Exception as e:  # noqa: BLE001
+            self.errors.append(f"worker step {job.step}: {e!r}"[:300])
+            for blk in [job.arena, *(b for b, _u in job.overflow)] if self.arena is not None and job.arena is not None else []:
+                self.arena.release(blk)      # the serving thread waits on the ring for the blocks a failed step holds
+            self._done[job.step] = StepCommitment(job.step, b"", b"", 0, 0, 0, b"", job.t_step_end, time.perf_counter(), job.backlog)
 
     # Ablations for the cost decomposition ONLY (env VERITY_ABL, comma list; none of them is a commitment):
     #   nocopy  : hooks + metadata + arena bookkeeping, no D2D snapshot launch      noworker: worker discards the step (no D2H, no hashing)
     #   nohash  : worker does the D2H but skips hashing / roots
-    ABL = frozenset(filter(None, os.environ.get("VERITY_ABL", "").split(",")))
+    ABL = frozenset(settings.VERITY_ABL)
 
     def _commit_step(self, job: _StepJob) -> None:
         if self.gpu_tree and job.arena is not None:
             return self._commit_step_gpu(job)
         if "noworker" in self.ABL:
             job.event.synchronize()
-            if job.arena is not None:
-                self.arena.release(job.arena)
-                for blk, _ in job.overflow:
-                    self.arena.release(blk)
+            for blk in [job.arena, *(b for b, _u in job.overflow)] if job.arena is not None else []:
+                self.arena.release(blk)
             self._layouts[job.step] = job.metas
             self._done[job.step] = StepCommitment(job.step, b"", b"", 0, sum(m.nbytes for m in job.metas), len(job.metas), b"", job.t_step_end,
                                                   time.perf_counter(), job.backlog)
@@ -1799,6 +1878,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         if step in self._gpu_levels:
             lv0 = self._gpu_levels[step][0]
             return [lv0[i].cpu().numpy().astype("uint32").tobytes() for i in range(int(lv0.shape[0]))]
+        if step not in self._levels and not getattr(self, "retain_levels", True):
+            raise RuntimeError(f"step {step}: this run kept no tree levels (retain_levels=False), so its leaves cannot be refolded with padding")
         return list(self._levels[step][0])
 
     def _apply_padding(self, steps: list[StepCommitment]) -> list[StepCommitment]:
@@ -1857,8 +1938,9 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
     def finalize(self) -> RunCommitment:
         t0 = time.perf_counter()
         self._end_step()
-        # wait for the worker to drain the queue (root-ready delay = this wait + the run-root fold)
+        # wait for the worker to drain the queue (root-ready delay = this wait + the run-root fold); a detached window's, to end it
         with self.spans.span("wait"):
+            self.wait_absorbed()
             while len(self._done) < self._step_index:
                 time.sleep(0.0005)
         steps = [self._done[s] for s in range(self._step_index)]
@@ -1881,7 +1963,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 "hook_wall_s": t_hook - t1, "apply_wall_s": time.perf_counter() - t_hook,
                 "padding_bytes_over_executed": (sum(ps.n_bytes for ps in pads) / ex_bytes) if ex_bytes else None}
         step_roots = [s.root for s in steps]    # b"": a placeholder step (a learn-only warm-up pass, or a failed step whose error is recorded)
-        run_root = scheme.run_root(self.program_digest, self._geo_digest, step_roots) if all(len(r) == 32 for r in step_roots) else b""
+        run_root = self._fold_run_root(step_roots) or b""
         t2 = time.perf_counter()
         self.spans.add("root_finalisation", t2 - t1)
         last_end = max((s.t_step_end for s in steps), default=t0)
@@ -1896,14 +1978,14 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                                     "pinned_register_s": self.pool.times.get("register_s", 0.0), "pinned_populate_threads": self.pool.populate_threads,
                                     "pinned_reserved_bytes": self.pool.reserved_bytes, "pinned_reserve_unused": self.pool.reserve_unused,
                                     "pinned_pool_blocks": len(self.pool.all), "errors": self.errors[:10],
-                                    "errors_n": len(self.errors),
+                                    "errors_n": len(self.errors), "gc": self.gc_pauses.record(),
                                     # X-03 reference integrity (Python acquisition path; the native collector overrides these in its finalize)
                                     "expected_tensors": self.x03_expected, "committed_tensors": self.x03_committed,
                                     "identity_check": self.identity_check() if self._layouts else None,
                                     "hash_threads": self.hash_threads, "chunk": self.chunk, "modules_hooked": len(self._modules), **self._leaf_record(steps),
                                     "staging": self.staging, "fast_copy": self.cudart_path, "gpu_tree": self.gpu_tree, "gpu_tree_ms": dict(self._gpu_t),
                                     "gpu_tree_retained_bytes": self._retained_device_bytes(),
-                                    "host_retained_bytes": sum(int(lv.numel()) * 4 for lvls in self._gpu_levels.values() for lv in lvls if not lv.is_cuda)
+                                    "host_retained_bytes": sum(int(lv.nbytes) for lvls in self._gpu_levels.values() for lv in lvls if not lv.is_cuda)
                                     + sum(int(getattr(b, "retained_bytes", None) if getattr(b, "retained_bytes", None) is not None else b.numel())
                                           for b, _u in self._gpu_blocks.values() if b is not None and not b.is_cuda),
                                     "retain": self.retain, "released_device_bytes": self.released_bytes,
@@ -1961,16 +2043,24 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             modules += [s for s in (sites() if sites is not None else ()) if s not in modules]
         return {"modules": modules, "attention_layers": attn_layers, "fa2_hidden_per_layer": 1 if fa2 else 0, "sampler_ids": 1 if any(n == "runner.sampler" for n in modules) else 0,
                 "moe_layers": moe_layers, "moe_tensors_per_layer": (getattr(moe_src, "stats", {}).get("tensors_per_layer", 6) if moe_src is not None else 0),
+                "moe_hash_layers": sorted(getattr(moe_src, "hash_layers", ())),        # a hash layer's router commits one more (`moe_source`: ids, in)
                 "router_softmax_layers": sorted(int(k) for k in rs_src.layers) if rs_src is not None else [], "tp_sites": sorted(tp_src.site_names()) if tp_src is not None else [], "tp_rank": (tp_src.rank if tp_src is not None else None),
                 # [R19 moe F-r19-moe-1] partials per site per step: 1, or a mid-module site's call count (OlmoeAttention: 2 gathers); the calls its instance's flags rule out are listed
                 "tp_site_counts": (dict(tp_src.site_counts()) if tp_src is not None and hasattr(tp_src, "site_counts") else {}), "tp_sites_ruled_out": list(getattr(tp_src, "mid_sites_ruled_out", None) or [])}
+
+    def _moe_layer_of(self) -> Any:
+        """The MoE source's `layer_of`: the layer of each name it commits (its planes, or its values at calls under a MoE module),
+        which it holds to its own rule; None for every name without one.  Without the source (an offline committer), a plane's layer."""
+        from verity_vllm.acquire.sources.moe_source import plane_layer
+        src = next((s for s in self.sources if getattr(s, "short_name", "") == "moe"), None)
+        return getattr(src, "layer_of", None) or plane_layer
 
     def identity_check(self, manifest: dict[str, Any] | None = None) -> dict[str, Any]:
         """X-03 on IDENTITIES.  For every committed step: (1) every module of the expected manifest produced >= 1 committed tensor and no
         tensor came from a module outside it; (2) the FA2/FA3 hidden source produced, per attention layer, exactly the plane inventory the
         layer's class implies -- DERIVED per layer from the Program's attention Call statics x the step's active sequences when the driver
-        handed `attention_layer_decls` (fa2_plane_classes; F-r19-int-22: a windowed layer and a global GQA layer of one step legitimately
-        differ), else the R13 rule "every layer the same positive count"; (3) exactly one sampled-ids tensor; (4) the multiset of
+        handed `attention_layer_decls` (fa2_plane_classes: a windowed layer and a global GQA layer of one step legitimately
+        differ), else the uniform rule "every layer the same positive count"; (3) exactly one sampled-ids tensor; (4) the multiset of
         module-tensor NAMES (with multiplicity: a shared RotaryEmbedding is legitimately called once per layer) is the same in every step of
         the run -- the per-step call structure of the model does not depend on the token count.  A step that drops one tensor and
         duplicates another keeps its count and FAILS (1) or (4).  With a route source (`acquire.sources.route_source`: the capture map's
@@ -1996,19 +2086,25 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         # covered, the sampler-ids identity present -- a step that drops one identity's ⊥ still FAILS by name.  Never a relabel: the
         # padding's words are checked == bot by `padding_steps.padded_population`, its placement by the composition check.
         padded_run = bool(getattr(self, "_padding", None))
-        padding_only_steps: list[int] = []
-        padding_tensors_n = 0
+        padding_only_steps, padding_tensors_n = [], 0
         # per-step names held to the source's own rule, not rule (4): the call-boundary targets; the capture map's names on the step's routes
         rt_src = next((s for s in self.sources if hasattr(s, "step_modules")), None)
-        cb_src = next((s for s in self.sources if hasattr(s, "split_step_names") and s is not rt_src), None)
+        cb_srcs = [s for s in self.sources if hasattr(s, "split_step_names") and s is not rt_src]
         own = frozenset().union(*(getattr(s, "own_names", ()) for s in self.sources))   # what a source commits that no module produced (KV slots)
+        moe_of = self._moe_layer_of()
 
         def _identity_of_padding(n: str) -> str:                     # "<executed name>/<rid>/bot" -> "<executed name>"
             return n[:-len("/bot")].rsplit("/", 1)[0] if n.endswith("/bot") and "/" in n[:-len("/bot")] else n
 
+        # no padding, step-reading source or attention declarations: a step's verdict reads its names, step 0's and the manifest only
+        step_free, verdicts = not padded_run and rt_src is None and not cb_srcs and not (decls and man["fa2_hidden_per_layer"]), {}
         for step in sorted(self._layouts):
             metas_all = self._layouts[step]
             cols = metas_all.names if hasattr(metas_all, "scan") else None   # a cached plan's record (plan_cache): its names, no TensorMeta built
+            if step_free and cols in verdicts:                         # a plan-name tuple already judged (None is never a key)
+                fa2_rules_used.update({"uniform": 1} if man["fa2_hidden_per_layer"] else {})
+                violations.extend([{**verdicts[cols], "step": step}] if verdicts[cols] else [])
+                continue
             ps = self._padding.get(step) if padded_run else None
             # a padding meta: the step has a PaddingStep, the meta sits in the padding block of the step stream (`stream_off >= stream_base`;
             # an executed arena meta reads -1, an executed packed meta < stream_base) and carries the padding name (fix (c))
@@ -2021,24 +2117,12 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 padding_only_steps.append(int(step))
             names_all = Counter(m.name for m in metas_all) if cols is None else Counter(cols)   # fa2 per-layer uniformity reads every plane of the step (rule (a) planes included)
             names = Counter(m.name for m in metas) if cols is None else names_all
-            mod_names = Counter({n: c for n, c in names.items() if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n) and n not in own})
+            mod_names = Counter({n: c for n, c in names.items() if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and moe_of(n) is None and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n) and n not in own})
             pad_ident = Counter(_identity_of_padding(m.name) for m in pad_metas)
-            pad_mod_names = Counter({n: 1 for n in pad_ident if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n) and n not in own})
+            pad_mod_names = Counter({n: 1 for n in pad_ident if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and moe_of(n) is None and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n) and n not in own})
             if padding_only:
                 mod_names = pad_mod_names                                # the identities materialized as ⊥, one each (set semantics below)
-            # [R14 TP-03] rank-local collective inputs: exactly one `tp/<site>/{part,shard}_rank<r>` per expected site, none from elsewhere
-            tp_bad: dict[str, int] = {}
-            tp_sites = man.get("tp_sites") or []
-            tp_counts = Counter(n.rsplit("/", 1)[0] for n in names.elements() if TP_PARTIAL_RE.search(n))
-            if tp_sites:
-                tp_want = man.get("tp_site_counts") or {}                     # [R19 moe] a mid-module site binds its static call count per step
-                tp_bad = {s: tp_counts.get(s, 0) for s in tp_sites if tp_counts.get(s, 0) != int(tp_want.get(s, 1))}
-                tp_bad.update({s: c for s, c in tp_counts.items() if s not in tp_sites})
-                rk = man.get("tp_rank")
-                if rk is not None and any(not n.endswith(f"_rank{rk}") for n in names if TP_PARTIAL_RE.search(n)):
-                    tp_bad["<foreign rank tag>"] = sum(c for n, c in names.items() if TP_PARTIAL_RE.search(n) and not n.endswith(f"_rank{rk}"))
-            elif tp_counts:
-                tp_bad = {"<undeclared tp source>": sum(tp_counts.values())}
+            tp_bad = tp_partials_bad(man, names)
             mod_names, rt_bad = rt_src.split_step_names(mod_names, step, padding_only, metas) if rt_src is not None else (mod_names, {})
             by_module = Counter()
             for n, c in mod_names.items():
@@ -2072,15 +2156,16 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             # counted one per padding META = per inactive request, so >= 2 inactive requests read n_inactive x moe_tensors_per_layer -> false refusal)
             moe_src = (Counter({n: 1 for n in pad_ident}) if padding_only else names)
             if man.get("moe_layers"):
-                moe_counts = Counter(int(n.split("/L", 1)[1].split("/", 1)[0]) for n in moe_src.elements() if n.startswith("moe/L"))
-                want, rs_layers = int(man.get("moe_tensors_per_layer") or 0), set(man.get("router_softmax_layers") or [])
-                moe_bad = {k: moe_counts.get(k, 0) for k in man["moe_layers"] if moe_counts.get(k, 0) != want + (k in rs_layers)}
+                moe_counts = Counter(k for n in moe_src.elements() if (k := moe_of(n)) is not None)
+                want, rs_layers, hash_layers = (int(man.get("moe_tensors_per_layer") or 0), set(man.get("router_softmax_layers") or []),
+                                                set(man.get("moe_hash_layers") or []))
+                moe_bad = {k: moe_counts.get(k, 0) for k in man["moe_layers"] if moe_counts.get(k, 0) != want + (k in rs_layers) + (k in hash_layers)}
                 moe_bad.update({k: c for k, c in moe_counts.items() if k not in man["moe_layers"]})
             elif any(n.startswith("moe/") for n in moe_src):
                 moe_bad = {-1: sum(c for n, c in moe_src.items() if n.startswith("moe/"))}      # MoE tensors from no declared source
             n_ids = (1 if "runner.sampler/sampled_token_ids" in pad_ident else 0) if padding_only else names.get("runner.sampler/sampled_token_ids", 0)
             sampler_bad = bool(man["sampler_ids"]) and n_ids != man["sampler_ids"]
-            mod_names, cb_bad = cb_src.split_step_names(mod_names, step, padding_only) if cb_src is not None else (mod_names, {})
+            mod_names, cb_bad = _split_step_names(cb_srcs, mod_names, step, padding_only)
             split_bad = {k: bad for k, bad in (("call_boundaries", cb_bad), ("routes", rt_bad)) if bad}
             ref_names = mod_names if ref_names is None else ref_names
             if padding_only:                                              # (b): set equality of identity names with step 0, not multiplicity
@@ -2094,6 +2179,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                                    **{k: v for sn, bad in split_bad.items() for k, v in ((f"{sn}_bad", dict(sorted(bad.items())[:8])), (f"{sn}_bad_n", len(bad)))},
                                    **({"fa2_detail": fa2_detail} if fa2_detail else {}),
                                    **({"padding_only": padding_only, "padding_tensors": len(pad_metas)} if pad_metas else {})})
+            if step_free and cols is not None:
+                verdicts[cols] = violations[-1] if violations and violations[-1]["step"] == step else None
         return {"ok": not violations, "steps_checked": len(self._layouts),
                 **({"padding": {"steps_with_padding": len(self._padding), "padding_only_steps": padding_only_steps, "padding_tensors": padding_tensors_n,
                                 "rule": "padding tensors (<name>/<rid>/bot, host-only) are counted apart: a mixed step's executed metas are checked as an unpadded step's; "
@@ -2110,7 +2197,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 "violations": violations[:5], "violations_n": len(violations)}
 
     def _plane_policy(self):
-        """[F-r19-int-22] the collector's hidden-plane staging rule (`fa2_plane_classes.LayoutPolicy`): the explicit override, else read from
+        """The collector's hidden-plane staging rule (`fa2_plane_classes.LayoutPolicy`): the explicit override, else read from
         the installed hidden source -- the native FA2 source's `Fa2Wrap.compact` (per-sequence compaction), the Python source stages whole
         buffers, the FA3 sources stage whole PackGQA launches."""
         from verity_vllm.acquire import fa2_plane_classes as FP
@@ -2128,10 +2215,10 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         return FP.LayoutPolicy()
 
     def _step_sequences(self, step: int, metas: list) -> Any:
-        """[F-r19-int-22] the step's active-sequence set (`fa2_plane_classes.StepSequences`): the collector's row record `step_rows[step]`
+        """The step's active-sequence set (`fa2_plane_classes.StepSequences`): the collector's row record `step_rows[step]`
         (BIND-01: [(request, row_lo, row_hi)] in launch order) when present; else (n_seq, tokens) read from the executed layout -- the
         sampled-ids member has one slot per co-scheduled sequence, the integer ids input one row per token; None when neither is known
-        (the caller then runs the R13 uniform rule for the step).  Never read from the hidden planes themselves."""
+        (the caller then runs the uniform rule for the step).  Never read from the hidden planes themselves."""
         from verity_vllm.acquire import fa2_plane_classes as FP
 
         rows = (getattr(self, "step_rows", None) or {}).get(int(step))
@@ -2149,7 +2236,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         return FP.StepSequences.from_counts(n_seq, tokens)
 
     def layouts_dump(self) -> dict[int, list[dict[str, Any]]]:
-        """R14: the published per-step layouts as plain dicts ({step: [{name, dtype, shape, nbytes, numel, first_leaf, n_leaves, stream_off}]}) --
+        """The published per-step layouts as plain dicts ({step: [{name, dtype, shape, nbytes, numel, first_leaf, n_leaves, stream_off}]}) --
         the collector's CLAIM that lane manifest's `required_manifest.coverage_check` and bind's binding map are checked against."""
         out: dict[int, list[dict[str, Any]]] = {}
         for step in sorted(self._layouts):
@@ -2196,7 +2283,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         return True if holds is None else bool(holds(lo, hi))
 
     def leaf_retained(self, step: int, index: int) -> bool:
-        """[R17 fp8] True when leaf `index` of `step` opens from THIS committer's retained raw bytes; False when it must open by replay
+        """True when leaf `index` of `step` opens from THIS committer's retained raw bytes; False when it must open by replay
         (raw bytes released / never kept / an excluded family's interior chunk)."""
         if self._padding_leaf(step, index) is not None:
             return True                                   # [B9.1] a padding leaf's bytes are the synthesized block's, always held
@@ -2211,7 +2298,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         """Openings for (step, leaf) positions.  The value bytes come from this committer's retained copy (device or host), or -- when the raw
         copy was released / never kept (`retain=none`), or the leaf lies in a range that was not retained (retain=sample; retain=host with
         excluded families) -- from `values_from`: a committer that REPLAYED the same committed inputs (same layouts, same bytes under BI
-        determinism).  The sibling path comes from THIS committer's levels, or -- `paths_from_replay` (R17-5: regenerated values AND
+        determinism).  The sibling path comes from THIS committer's levels, or -- `paths_from_replay` (regenerated values AND
         authentication-path material) -- from the replay's levels; either way `verify()` checks the result against THIS run's original
         roots, so a replay that differs in any byte (value or tree) fails to open."""
         out = []
@@ -2228,7 +2315,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 if step in self._gpu_blocks:
                     blk, used = self._gpu_blocks[step]           # lazy D2H of the 256 B chunk (zero-padded past `used`) + level sibling path
                     lo = index * self.chunk
-                    levels = self._gpu_levels[step]
+                    levels = self._gpu_levels.get(step)
                     if not self._block_holds(blk, lo, lo + self.chunk) or (paths_from_replay and values_from is not None):
                         if values_from is None or step not in values_from._gpu_blocks:
                             raise RuntimeError(f"open({step}, {index}): raw bytes released / not retained (retain={self.retain}) and no replay source holds step {step}")
@@ -2242,9 +2329,11 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                             if step not in values_from._gpu_levels:
                                 raise RuntimeError(f"open({step}, {index}): the replay source has no tree levels for step {step}")
                             levels = values_from._gpu_levels[step]
+                    if levels is None:
+                        raise RuntimeError(f"open({step}, {index}): this run kept no tree levels (retain_levels=False): open with a replay "
+                                           "source and paths_from_replay=True")
                     value = bytes(blk[lo:lo + self.chunk].cpu().numpy().tobytes())
-                    path = self._HG.gpu_open(levels, index) if self._HG is not None else open_levels(levels, index)
-                    out.append(Opening(step, index, value, tuple(path), ident))
+                    out.append(Opening(step, index, value, tuple(self._level_path(levels, index)), ident, self._gpu_salt(step, index)))
                     continue
                 if ident.get("packed"):
                     value = bytes(self._streams[step][ident["byte_lo"]:ident["byte_hi"]])
@@ -2255,9 +2344,15 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 out.append(Opening(step, index, value, path, ident, self._salts_of(step, index, index + 1)))
         return out
 
+    def _level_path(self, levels: list, index: int) -> tuple:
+        """Leaf `index`'s sibling path in a GPU-tree step's levels."""
+        return tuple(self._HG.gpu_open(levels, index) if self._HG is not None and not self.rows else open_levels(levels, index))
+
     def verify(self, run: RunCommitment, opening: Opening) -> bool:
         """Production verifier core: shape rule + fold to the bare root, then the context binding to the ORIGINAL step root, then the
         step root's membership in the run root."""
+        if self.rows:
+            return self._verify_rows(run, opening)
         try:
             sc = run.steps[opening.step]
         except IndexError:
@@ -2300,37 +2395,47 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             return False
         return len(run.run_root) == 32 and self._run_root(run) == run.run_root
 
+    def _refuse_padding(self, padding: list) -> None:
+        if padding and self.rows:
+            raise ValueError(f"padding steps are vllm-v1 position-leaf blocks: not implemented under {step_rows.NAME}")
+        super()._refuse_padding(padding)
+
+    def _leaf_record(self, steps: list) -> dict:
+        rec = super()._leaf_record(steps)
+        return {**rec, "commit_scheme": self.commit_scheme} if self.rows else rec
+
     # ------------------------------------------------------------------ coverage
 
     # module (class-name) -> census root families whose NATURALLY-MATERIALIZED outputs the hook on that module binds
     FAMILY_OF_MODULE = {
-        "Linear": ("Gemm_v1",), "RMSNorm": ("RMSNormFusedCuda_v2", "RMSNormTriton_v1"), "GemmaRMSNorm": ("RMSNormFusedCuda_v2", "RMSNormTriton_v1"),
-        "SiluAndMul": ("SiluMul_v1", "SiluMul_v2"), "GeluAndMul": ("GeluMul_v1",), "RotaryEmbedding": ("RoPE_v1",), "Attention": ("Attention_v3",),
-        "VocabParallelEmbedding": ("Embedding_v1",), "LogitsProcessor": ("Gemm_v1",), "Sampler": ("TokenSelect_v1",),
+        LC.LINEAR_GROUP: ("Gemm_v1",), LC.RMS_NORM: ("RMSNormFusedCuda_v2", "RMSNormTriton_v1"), LC.GEMMA_RMS_NORM: ("RMSNormFusedCuda_v2", "RMSNormTriton_v1"),
+        LC.SILU_AND_MUL: ("SiluMul_v1", "SiluMul_v2"), LC.GELU_AND_MUL: ("GeluMul_v1",), LC.ROTARY: ("RoPE_v1",), LC.ATTENTION: ("Attention_v3",),
+        LC.EMBEDDING: ("Embedding_v1",), LC.LOGITS: ("Gemm_v1",), LC.SAMPLER: ("TokenSelect_v1",),
     }
 
     def _module_class(self, name: str) -> str:
         base = name.split("/")[0]
         if base == "runner.sampler":
-            return "Sampler"
+            return LC.SAMPLER
         for n, m in self._modules:
             if n == base:
                 names = _mro_names(m)
                 for k in self.FAMILY_OF_MODULE:
-                    if k in names or (k == "Linear" and names & {"LinearBase", "ColumnParallelLinear", "RowParallelLinear"}):
+                    if k in names or (k == LC.LINEAR_GROUP and names & {LC.LINEAR_BASE, LC.COLUMN_LINEAR, LC.ROW_LINEAR}):
                         return k
                 return type(m).__name__
         leaf = base.rsplit(".", 1)[-1]
         if not self._modules and "norm" in leaf.lower():      # offline core (tests): infer from the module path
-            return "RMSNorm"
+            return LC.RMS_NORM
         return leaf
 
     def coverage_declaration(self, run: RunCommitment) -> dict:
         by_class: dict[str, dict] = {}
         families: set[str] = set()
+        moe_of = self._moe_layer_of()
         for step, metas in self._layouts.items():
             for m in metas:
-                if m.name.startswith(("fa2.m1/", "fa3.m1/", "moe/")) or m.name.endswith("/row4_f32"):
+                if m.name.startswith(("fa2.m1/", "fa3.m1/", "moe/")) or moe_of(m.name) is not None or m.name.endswith("/row4_f32"):
                     continue                                  # declared separately (hidden source / MoE block source / row-4 regenerate baseline)
                 mc = self._module_class(m.name)
                 compiled_kernel = len(m.name) > 3 and m.name[0] == "c" and m.name[1:3].isdigit() and m.name[3] == "."   # R15 S3: c<piece>.<kernel>/<role>
@@ -2376,7 +2481,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             # R10a / R10b (norm kernel interiors): DECLARED treatment only.  Every interior fp32 value of fused_add_rms_norm_kernel (squares,
             # cub block-reduction partials, variance/N, rsqrtf, x*rstd) and of the layer-0 Triton _rms_norm_kernel is a deterministic function
             # of the BOUND source row (the token's residual/embedding bf16 row, R2e / R2b) and the registered weight row under the pinned
-            # kernel's fixed reduction order = the registry's exact model (`verity_vllm/program/registry/b1.py` RMSNormFusedCuda v2, 2340/2340 rows
+            # kernel's fixed reduction order = the registry's exact model (`verity/ml/definitions/registry/b1.py` RMSNormFusedCuda v2, 2340/2340 rows
             # conformant).  So the derived-value route applies with a ROW-sourced phi: opening = source-row leaf(s) + weight opening + op-by-op
             # replay; no interior word needs a leaf.  The verifier for that multi-source phi is NOT implemented in this lane -> the checker
             # reports 'derived-declared', never secure.  Alternative = M1-style export of 47.6 MB/request (not built).

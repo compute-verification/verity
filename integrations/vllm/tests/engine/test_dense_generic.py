@@ -14,7 +14,7 @@ import pytest
 from verity_vllm.config import ROOT
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.patterns import GemmLaunch
-from verity_vllm.engine.profiles import dense_generic as dg
+from verity_vllm.engine.profiles import dense_generic as dg, generic
 from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
 from verity_vllm.engine.profiles.gen_llama_patterns import ADA_TUNED_GEMM, GemmLaunchTuned
 
@@ -122,7 +122,7 @@ def test_refuses_fail_closed_outside_the_family_facts_table(patch, needle):
     (a MoE type without experts, a windowed Mistral), refuses with the stated reason."""
     cfg = {**json.loads(MISTRAL_CFG.read_text()), **patch}
     with pytest.raises(ValueError, match=needle):
-        dg.build_dense_profile("X", cfg)
+        generic.build_profile("X", 1, hf_config=cfg)
 
 
 def test_unknown_role_and_bad_module_names():

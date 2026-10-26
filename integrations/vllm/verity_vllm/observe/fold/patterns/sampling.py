@@ -9,7 +9,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from verity.ml.circuits.defs import bind
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_int, sub_rows
@@ -160,7 +160,8 @@ class TokenSelectGumbelTwoStage:
 class TokenSelectArgmax:
     """`aten.argmax(logits[R,V], dim=-1)` (phase sample, greedy) → `Compute(TokenSelect_v1{V}, rows=R, (PerRow(logits),),
     (PerRow(out),))`.  The registered `TokenSelect_v1` is the argmax over *bf16* logits; float32 logits are Unsupported
-    (reported, not silently accepted)."""
+    (reported, not silently accepted).  An argmax over an integer tensor is not over logits: the integer rule's
+    (`classify_transparent`), as vLLM's `split_decodes_and_prefills` finding a mixed step's first prefill request."""
 
     vocab: int | None = None
     name: str = "sample.argmax_token_select"
@@ -174,6 +175,8 @@ class TokenSelectArgmax:
         outs = node.output_views()
         if not isinstance(x, ViewDesc) or not outs:
             return unsupported(node, "argmax arguments not bound as expected", args={k: _fmt(v) for k, v in a.items()})
+        if is_int(x):
+            return None
         if x.rank == 1:
             logits = ViewDesc(x.alloc, x.offset, (1, x.shape[0]), (x.shape[0] * x.strides[0], x.strides[0]), x.dtype, x.device)
             if dim not in (None, 0, -1):
@@ -244,7 +247,7 @@ def _f32_bits(x: float) -> int:
 
 @dataclass
 class TokenSelectGumbelTopP:
-    """[R15 stoch] vLLM V2 sampler (d9105ea80 `Sampler.sample`), the SEEDED temperature + top-p path (an explicit `SamplingParams.seed`
+    """vLLM V2 sampler (d9105ea80 `Sampler.sample`), the SEEDED temperature + top-p path (an explicit `SamplingParams.seed`
     disables FlashInfer sampling; `top_k` off).  The launch chain of one sampling step, on `logits32 = f32(logits)` (the exact widening
     `classify_transparent` records):
 
@@ -261,10 +264,10 @@ class TokenSelectGumbelTopP:
         Compute(GumbelTopPTokenSelect_v1{V}, 1, (PerRow(logits_bf16[r]), Const32[top_p], Param(seed of rid), Const64[pos], Const32[T], Const32[S]),
                 (PerRow(sampled[r]),))
 
-    -- the registry composite (`verity_vllm/program/registry/sampling.py`: TemperatureScale -> TopPMask{V} (topp_split model) -> GumbelSelectF32),
+    -- the registry composite (`verity/ml/definitions/registry/sampling.py`: TemperatureScale -> TopPMask{V} (topp_split model) -> GumbelSelectF32),
     the same instance the derived Program's `GumbelTopPTokenSelect[vllm]` rule emits: temperature / top_p / pos are Program constants
     (the fold emits their `Const` instances in operand order right before the select), the seed is the request's `seed` PARAMETER.  S
-    ([R16 stoch, coord M-0169] the 6th operand, `Const32[S]` "splits") is read from the split kernels' constexpr (the launch geometry:
+    (the 6th operand, `Const32[S]` "splits") is read from the split kernels' constexpr (the launch geometry:
     live batch x SM count), must agree across the three kernels, and is bound at compare to the request Program's `splits` Input entry
     for the event (or held equal to a single-request Program's own `Const32[S]`); the relation S = SplitsFor_v1(|live(t)|, num_SMs) is
     checked per engine step by GM-01 G6.  Values (which seed / T / p the kernels consumed) are NOT read from device memory here: they
@@ -523,8 +526,8 @@ class TokenSelectGumbelTopP:
             return unsupported(node, "sampled ids are not an integer [R] view", out=repr(out))
         if out.rank == 1:
             out = ViewDesc(out.alloc, out.offset, (R, 1), (out.strides[0], 1), out.dtype, out.device)
-        from verity_vllm.program.registry import sampling as _sampling
-        from verity_vllm.program.registry import sampling_vocab
+        from verity.ml.definitions.registry import sampling as _sampling
+        from verity.ml.definitions.registry import sampling_vocab
         construction = self.construction or target_of(ctx)[0].effective_sampler_construction()
         spec = bind(sampling_vocab.select_for(_sampling.GumbelTopPTokenSelect, construction), V=V)
         S = int(s2["S"])        # the split kernels' constexpr: the launch's S -> the 6th operand (bound to the Program's `splits` Input)

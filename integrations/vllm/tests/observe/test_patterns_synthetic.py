@@ -150,12 +150,13 @@ def gemm_launch(b: Builder, a_view, w_root_view, c_alloc, K, N, M, phase="forwar
 
 def decode_step(step=1, position=32, token=42, prev_token=7, with_unknown=False, with_dangling=False,
                 gemm_over=None, mm_wrapper=False, f32_logits=False, sampler="argmax", kv_layout="kappa",
-                metadata_kernel=False, num_sms=128, qkv_bias=None) -> tuple[list, StepStart]:
+                metadata_kernel=False, num_sms=128, qkv_bias=None, first_prefill=False) -> tuple[list, StepStart]:
     """One decode step of layer 0 + final norm + sampling, as one request `r0` at absolute position `position`.
     `sampler`: `argmax` (plain `aten.argmax` over the logits) or `gumbel` (the V2 sampler's two-stage
     `_gumbel_sample_kernel` + argmax + gather); `metadata_kernel` adds the model runner's integer-only input-preparation
     Triton launch (phase `other`); `qkv_bias` makes qkv_proj Qwen2's biased linear (`linear_batch_invariant`'s `output + bias`
-    after the launch; q, k, v read the sum): "add", or "reread" (a view of the pre-bias output taken after the add as well)."""
+    after the launch; q, k, v read the sum): "add", or "reread" (a view of the pre-bias output taken after the add as well);
+    `first_prefill` adds the attention metadata's host-side `is_prefill.int().argmax(-1)` over a mixed step's two requests."""
     M = 1
     T = position + 1
     block_table = [0, 1, 2]
@@ -172,6 +173,13 @@ def decode_step(step=1, position=32, token=42, prev_token=7, with_unknown=False,
                   "block_tables_ptr": ViewDesc(A_BLOCK_TABLE, 0, (8, 256), (256, 1), "int32", CUDA), "slot_mappings_ptr": i64(A_SLOTS, (M,)),
                   "PAD_ID": -1, "BLOCK_SIZE": BS, "NUM_BLOCKS": 1024},
                  {"BLOCK_SIZE": BS, "NUM_BLOCKS": 1024}, [1, 1], 4, 3, phase="other")
+    if first_prefill:
+        # vllm/v1/attention/backends/utils.py split_decodes_and_prefills: `is_prefill.int().argmax(dim=-1).item()` on the host
+        is_prefill, as_int = i64(320, (2,), "bool", "cpu"), i64(321, (2,), "int32", "cpu")
+        b.leaf("aten.to.dtype", "aten::to.dtype(Tensor(a) self, ScalarType dtype, bool non_blocking=False, bool copy=False, MemoryFormat? memory_format=None) -> Tensor(a)",
+               [is_prefill, "torch.int32"], outs=as_int, phase="other")
+        b.leaf("aten.argmax.default", "aten::argmax(Tensor self, int? dim=None, bool keepdim=False) -> Tensor", [as_int, -1],
+               outs=i64(322, (), "int64", "cpu"), phase="other")
     # embedding: input_ids.long() then aten.embedding
     ids64 = i64(300, (M,))
     b.leaf("aten._to_copy.default", "aten::_to_copy(Tensor self, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None, bool non_blocking=False, MemoryFormat? memory_format=None) -> Tensor",
@@ -509,8 +517,8 @@ def test_registered_values_bind_the_norms_and_attention_that_read_them_as_inputs
     import numpy as np
 
     from verity_vllm.observe.fold.resolver import Supplied
-    from verity_vllm.program.registry import b1
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import b1
+    from verity.ml.definitions.registry import prims as P
 
     events, start = decode_step()
     se = step_events(events)
@@ -523,7 +531,7 @@ def test_registered_values_bind_the_norms_and_attention_that_read_them_as_inputs
     f1, _f2 = specs["RMSNormFusedCuda_v4{N=576}"]
     assert f1.operands == (PerRow(bf(305, (1, H))), PerRow(bf(301, (1, H))), Shared(bf(A_LN2, (H,))), eps)
     (a,) = specs["Attention_v10{T=33,NH=9,KVH=3,D=64,BN=128}"]
-    assert a.operands[3] == Supplied("registration", "scale_log2_d64", 32, b1._scale_log2_bits(D)) and len(a.operands) == 4
+    assert a.operands[3] == Supplied("registration", "scale_log2_d64", 32, b1.scale_log2_bits(D)) and len(a.operands) == 4
     assert not [k for k in specs if k.startswith(("RMSNormTriton_v1", "RMSNormFusedCuda_v2", "Attention_v3"))]
 
 
@@ -533,14 +541,14 @@ def test_registered_values_on_the_rtx_pro_6000_bind_fa2s_check_inf_chain_with_th
     import dataclasses
 
     from verity_vllm.observe.fold.resolver import Supplied
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
 
     events, start = decode_step(num_sms=188)
     se = step_events(events)
     base = _context_on_host(start, se.sample, 188, (12, 0))
     specs = by_spec(resolve_step(se, dataclasses.replace(base, profile=dataclasses.replace(base.profile, registered_values=True))))
     (a,) = [r for k, v in specs.items() if k.startswith("Attention_v11{T=33,NH=9,KVH=3,D=64,") for r in v]
-    assert a.operands[3] == Supplied("registration", "scale_log2_d64", 32, b1._scale_log2_bits(D)) and len(a.operands) == 4
+    assert a.operands[3] == Supplied("registration", "scale_log2_d64", 32, b1.scale_log2_bits(D)) and len(a.operands) == 4
     assert "RMSNormTriton_v3{N=576}" in specs and "RMSNormFusedCuda_v4{N=576}" in specs
     assert not [k for k in specs if k.startswith(("RMSNormTriton_v1", "RMSNormFusedCuda_v2", "Attention_v3", "Attention_v5"))]
 
@@ -765,6 +773,20 @@ def test_integer_metadata_triton_kernel_is_noop():
     assert se.roots[0].op.endswith("_compute_slot_mappings_kernel") and se.roots[0].phase == "other"
     assert isinstance(r, Transparent) and r.effect == "noop" and r.pattern == "transparent.triton_metadata"
     assert r.kernels == ("_compute_slot_mappings_kernel",)
+
+
+def test_a_mixed_steps_first_prefill_argmax_is_integer_metadata():
+    """[GLM-5.3 B8] vLLM's `split_decodes_and_prefills` finds a mixed step's first prefill request as an argmax over the host's
+    int32 `is_prefill` (its width the step's requests): integer step metadata (noop) under either sampler, never a TokenSelect."""
+    events, start = decode_step(first_prefill=True)
+    for sampling in (GREEDY, {"greedy": False, "temperature": 0.8, "top_p": 0.95}):
+        se = step_events(events)
+        res = resolve_step(se, context(start, se.sample, sampling=sampling))
+        meta = [r for root, r in zip(se.roots, res) if root.phase == "other"]
+        assert [r.effect for r in meta] == ["noop", "noop"] and {r.pattern for r in meta} == {"transparent.aten"}, meta
+        if sampling is GREEDY:
+            assert not [r for r in res if isinstance(r, Unsupported)]
+            assert len(by_spec(res)["TokenSelect_v1{V=49152}"]) == 1
 
 
 def test_stacked_kv_cache_layout_also_resolves():

@@ -78,7 +78,8 @@ theorem callsColl_deployRec {H : Msg → Msg} {IV : Claims.Verifier Coin} {ivSco
 def ReadersLogCollR {Col T : Type} (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings)
     (DO : Claims.Flock.Deploy Coin Col T) : Prop :=
   ∀ (x : Msg) (as : List Msg) (cs : List Coin) (ws : List Claims.Flock.Wit), as.length = IV.k (xIOf x) + kS x →
-    cs.length = as.length → Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
+    cs.length = as.length → (∀ s < nS x, StagedPart b.st s x ((stagedAll b.st x as cs).getD s [])) →
+      Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
       (∀ e ∈ callsOf b.rd x ws, H e.1 = e.2) →
         (∀ e ∈ (innerRunAt H IV b.rd x ws cs).vLog, e ∈ callsOf b.rd x ws) ∨
           ReadersColl H b x (stagedAll b.st x as cs) ws
@@ -88,7 +89,8 @@ def ReadersLogCollR {Col T : Type} (H : Msg → Msg) (IV : Claims.Verifier Coin)
 def ReadersOpenPlayedR {Col T : Type} (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings)
     (DO : Claims.Flock.Deploy Coin Col T) (opening : Claims.Recursion.Opening) : Prop :=
   ∀ (x : Msg) (as : List Msg) (cs : List Coin) (ws : List Claims.Flock.Wit), as.length = IV.k (xIOf x) + kS x →
-    cs.length = as.length → Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
+    cs.length = as.length → (∀ s < nS x, StagedPart b.st s x ((stagedAll b.st x as cs).getD s [])) →
+      Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
       (∀ e ∈ callsOf b.rd x ws, H e.1 = e.2) →
         ∀ j < (innerRunAt H IV b.rd x ws cs).msgs.length, (∃ es, es ⊆ callsOf b.rd x ws ∧
           opening.opens (as.getD j []) (((innerRunAt H IV b.rd x ws cs).msgs.map Prod.fst).getD j []) es) ∨
@@ -100,23 +102,24 @@ def ReadersAcceptR {Col T : Type} (H : Msg → Msg) (IV : Claims.Verifier Coin) 
     (DO : Claims.Flock.Deploy Coin Col T) (shape : Claims.Recursion.Form → Prop) : Prop :=
   ∀ (x : Msg) (s : Claims.Recursion.Stmt), parse x = some s → shape s.form →
     ∀ (as : List Msg) (cs : List Coin) (ws : List Claims.Flock.Wit), as.length = IV.k (xIOf x) + kS x →
-      cs.length = as.length → Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
+      cs.length = as.length → (∀ s < nS x, StagedPart b.st s x ((stagedAll b.st x as cs).getD s [])) →
+        Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
         (∀ e ∈ callsOf b.rd x ws, H e.1 = e.2) →
           (innerRunAt H IV b.rd x ws cs).out = .acc ∨ ReadersColl H b x (stagedAll b.st x as cs) ws
 
 theorem ReadersLogColl.toR {Col T : Type} {H : Msg → Msg} {IV : Claims.Verifier Coin} {b : Brings}
     {DO : Claims.Flock.Deploy Coin Col T} (h : ReadersLogColl H IV b DO) : ReadersLogCollR H IV b DO :=
-  fun x as cs ws hl hc ho ht => (h x as cs ws hl hc ho ht).imp_right Or.inl
+  fun x as cs ws hl hc hs ho ht => (h x as cs ws hl hc hs ho ht).imp_right Or.inl
 
 theorem ReadersOpenPlayed.toR {Col T : Type} {H : Msg → Msg} {IV : Claims.Verifier Coin} {b : Brings}
     {DO : Claims.Flock.Deploy Coin Col T} {opening : Claims.Recursion.Opening}
     (h : ReadersOpenPlayed H IV b DO opening) : ReadersOpenPlayedR H IV b DO opening :=
-  fun x as cs ws hl hc ho _ j hj => Or.inl (h x as cs ws hl hc ho j hj)
+  fun x as cs ws hl hc hs ho _ j hj => Or.inl (h x as cs ws hl hc hs ho j hj)
 
 theorem ReadersAccept.toR {Col T : Type} {H : Msg → Msg} {IV : Claims.Verifier Coin} {b : Brings}
     {DO : Claims.Flock.Deploy Coin Col T} {shape : Claims.Recursion.Form → Prop} (h : ReadersAccept H IV b DO shape) :
     ReadersAcceptR H IV b DO shape :=
-  fun x s hs hf as cs ws hl hc ho ht => (h x s hs hf as cs ws hl hc ho ht).imp_right Or.inl
+  fun x s hs hf as cs ws hl hc hsp ho ht => (h x s hs hf as cs ws hl hc hsp ho ht).imp_right Or.inl
 
 /-! ## The V\* facts at `deployRec`, with registered ties -/
 
@@ -137,7 +140,8 @@ theorem callsLogCollR {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.I
     rw [run_replay_seen, coins_getD r (show I.V.k (xIOf x) ≤ I.V.k (xIOf x) + kS x by omega)]
     rfl
   rw [hrun]
-  exact (hL x _ _ ws hl hc ho (hT x _ _ ws hl hc ho)).imp_left fun h e he => Or.inl (h e he)
+  have hsp := stagedAll_run H I.V b x P ω r hg.1
+  exact (hL x _ _ ws hl hc hsp ho (hT x _ _ ws hl hc hsp ho)).imp_left fun h e he => Or.inl (h e he)
 
 /-- **`VStar.CallsOpenPlayed` at `deployRec`** from the readers' facts, with no fixed or public round: the inner view
 is the inner verifier's run of the readers' messages, which plays at most the inner rounds (`run_length_le`). -/
@@ -156,7 +160,8 @@ theorem callsOpenPlayedR {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursio
       (innerRunAt H I.V b.rd x ws (runCs (I.V.k (xIOf x) + kS x) r)).seen :=
     innerView_eq H I.V b.rd x r ws (Nat.le_add_right _ _)
   rw [hv] at hj ⊢
-  rcases hO x _ _ ws hl hc ho (hT x _ _ ws hl hc ho) j hj with ⟨es, hes, hop⟩ | hcoll
+  have hsp := stagedAll_run H I.V b x P ω r hg.1
+  rcases hO x _ _ ws hl hc hsp ho (hT x _ _ ws hl hc hsp ho) j hj with ⟨es, hes, hop⟩ | hcoll
   · refine Or.inl ⟨es, hes, ?_⟩
     have hjk : j < I.V.k (xIOf x) :=
       Nat.lt_of_lt_of_le hj (Claims.Recursion.run_length_le H _ I.V (xIOf x) () _)
@@ -182,7 +187,7 @@ theorem vstarAcceptsR {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.I
       (innerRunAt H I.V b.rd x ws (runCs (I.V.k (xIOf x) + kS x) r)).seen :=
     innerView_eq H I.V b.rd x r ws (Nat.le_add_right _ _)
   rw [hv]
-  exact hA x s hs hf _ _ ws hl hc ho ht
+  exact hA x s hs hf _ _ ws hl hc (stagedAll_run H I.V b x P ω r hacc) ho ht
 
 /-- **`VStar.InnerAcceptsR` at `deployRec`** from the readers' facts and V*'s circuits at the dense, holo and sparse
 shapes, with `refuses`. -/
@@ -205,8 +210,6 @@ at `VStar.KS_of_flockKS_played`, from the readers' facts with registered ties (`
 theorem ksA_deployed_reg (rel relO : Flock.Readable.Parsed → Flock.Readable.Relation) (ivScope : Msg → Bool)
     (b : Brings) (opening : Claims.Recursion.Opening)
     (hF : Claims.Flock.KS FlockDeploy.sha512 (deployZkRec relO))
-    (hext : Claims.Flock.Extendθ (FlockDeploy.deployPlain rel) (FlockDeploy.KS.wordLen false)
-      (FlockDeploy.KS.wide false))
     (htab : Claims.Recursion.TableBoundθOnAcc FlockDeploy.sha512 (FlockDeploy.deployPlain rel)
       (FlockDeploy.KS.wordLen false) (FlockDeploy.KS.wide false))
     (hT : ReadersTrue FlockDeploy.sha512 (FlockDeploy.V false) b (deployZkRec relO))
@@ -217,12 +220,12 @@ theorem ksA_deployed_reg (rel relO : Flock.Readable.Parsed → Flock.Readable.Re
     (hS : ReadersAcceptR FlockDeploy.sha512 (FlockDeploy.V false) b (deployZkRec relO)
       Claims.Recursion.Form.Sparse)
     (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace)
-    (hdec : Claims.Recursion.decOK (FlockDeploy.deployPlain rel) decI) :
+    (hdec : Claims.Recursion.decOK (FlockDeploy.deployPlainTrim rel) decI) :
     Claims.Recursion.KSA FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b)
-      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) :=
-  let I := Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI
+      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlainTrim rel) decI) (deployZkRec relO) :=
+  let I := Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlainTrim rel) decI
   Claims.Recursion.VStar.KS_of_flockKS_played FlockDeploy.sha512 (deployRec I.V ivScope b) I (deployZkRec relO)
-    opening FlockDeploy.decCoin hF (FlockDeploy.KS.plain_KSAbort rel hext htab decI hdec)
+    opening FlockDeploy.decCoin hF (FlockDeploy.KS.plain_KSAbort rel htab decI hdec)
     (refuses I.V ivScope b FlockDeploy.sha512) (innerRounds I ivScope b) (sessionNums I.V ivScope b relO)
     (tableErrNonneg I.V ivScope b) (sessionRounds I ivScope b relO) (sessionAccepts I.V ivScope b)
     (sessionRuns_sha512 I ivScope b relO) (innerViewRun FlockDeploy.sha512 I ivScope b (deployZkRec relO))
@@ -233,13 +236,16 @@ theorem ksA_deployed_reg (rel relO : Flock.Readable.Parsed → Flock.Readable.Re
     (roundsMargin_deployRec_V false FlockDeploy.sha512 I rfl ivScope b)
     (FlockDeploy.coinsShown_V FlockDeploy.sha512 false) (callsNil I.V ivScope b FlockDeploy.sha512)
 
-/-- **`KSFlock` at `deployRec`, with registered ties**: `ksA_deployed_reg` at every inner decoder that meets the spec,
-as `KSA` is `KS`. -/
+/-- **`KSFlock` at `deployRec`, with registered ties**: `ksA_deployed_reg` at every inner decoder that meets the spec, as
+`KSA` is `KS`. Its level (`Claims.Recursion.lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner
+table at `m = 35`, `γ`'s weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every
+weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
+(`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
+`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
+candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
 theorem ksFlock_deployed_reg (rel relO : Flock.Readable.Parsed → Flock.Readable.Relation) (ivScope : Msg → Bool)
     (b : Brings) (opening : Claims.Recursion.Opening)
     (hF : Claims.Flock.KS FlockDeploy.sha512 (deployZkRec relO))
-    (hext : Claims.Flock.Extendθ (FlockDeploy.deployPlain rel) (FlockDeploy.KS.wordLen false)
-      (FlockDeploy.KS.wide false))
     (htab : Claims.Recursion.TableBoundθOnAcc FlockDeploy.sha512 (FlockDeploy.deployPlain rel)
       (FlockDeploy.KS.wordLen false) (FlockDeploy.KS.wide false))
     (hT : ReadersTrue FlockDeploy.sha512 (FlockDeploy.V false) b (deployZkRec relO))
@@ -250,9 +256,9 @@ theorem ksFlock_deployed_reg (rel relO : Flock.Readable.Parsed → Flock.Readabl
     (hS : ReadersAcceptR FlockDeploy.sha512 (FlockDeploy.V false) b (deployZkRec relO)
       Claims.Recursion.Form.Sparse) :
     Claims.Recursion.KSFlock FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b)
-      (FlockDeploy.deployPlain rel) (deployZkRec relO) :=
+      (FlockDeploy.deployPlainTrim rel) (deployZkRec relO) :=
   (Claims.Recursion.KSFlockA_iff_KSFlock _ _ _ _).1 fun decI hdec =>
-    ksA_deployed_reg rel relO ivScope b opening hF hext htab hT hL hO hD hH hS decI hdec
+    ksA_deployed_reg rel relO ivScope b opening hF htab hT hL hO hD hH hS decI hdec
 
 /-- **The recursion's KS at `deployRec` from V\*'s parts at a layout**: `ksA_deployed_reg`'s chain with every code fact
 about the readers and V* from V*'s parts (`VStar.codeFacts_of_parts`), where `deployRec` brings the layout's readers
@@ -262,35 +268,33 @@ opens (`FinalOpens`), and V*'s parts meet `VStarParts` at the dense, holo and sp
 theorem ksA_deployed_parts (rel relO : Flock.Readable.Parsed → Flock.Readable.Relation) (ivScope : Msg → Bool)
     (b : Brings) (L : Claims.Recursion.VStar.Layout) (hb : b.rd = readersOf L) (opening : Claims.Recursion.Opening)
     (hF : Claims.Flock.KS FlockDeploy.sha512 (deployZkRec relO))
-    (hext : Claims.Flock.Extendθ (FlockDeploy.deployPlain rel) (FlockDeploy.KS.wordLen false)
-      (FlockDeploy.KS.wide false))
     (htab : Claims.Recursion.TableBoundθOnAcc FlockDeploy.sha512 (FlockDeploy.deployPlain rel)
       (FlockDeploy.KS.wordLen false) (FlockDeploy.KS.wide false))
     (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace)
-    (hdec : Claims.Recursion.decOK (FlockDeploy.deployPlain rel) decI)
+    (hdec : Claims.Recursion.decOK (FlockDeploy.deployPlainTrim rel) decI)
     (hT : ∀ s, Claims.Recursion.VStar.PartCallsTrue FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b)
       (deployZkRec relO) L s)
     (hPub : Claims.Recursion.VStar.ReadsPub FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b)
-      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) L)
+      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlainTrim rel) decI) (deployZkRec relO) L)
     (hFin : Claims.Recursion.VStar.FinalOpens FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b)
-      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) opening)
+      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlainTrim rel) decI) (deployZkRec relO) opening)
     (hD : Claims.Recursion.VStar.VStarParts FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b)
-      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) L opening
+      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlainTrim rel) decI) (deployZkRec relO) L opening
       Claims.Recursion.Form.Dense)
     (hH : Claims.Recursion.VStar.VStarParts FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b)
-      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) L opening
+      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlainTrim rel) decI) (deployZkRec relO) L opening
       Claims.Recursion.Form.Holo)
     (hS : Claims.Recursion.VStar.VStarParts FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b)
-      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) L opening
+      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlainTrim rel) decI) (deployZkRec relO) L opening
       Claims.Recursion.Form.Sparse) :
     Claims.Recursion.KSA FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b)
-      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) :=
-  let I := Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI
+      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlainTrim rel) decI) (deployZkRec relO) :=
+  let I := Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlainTrim rel) decI
   have hR := readsThrough_deployRec FlockDeploy.sha512 I.V ivScope b L hb
   have hcf := Claims.Recursion.VStar.codeFacts_of_parts (refuses I.V ivScope b FlockDeploy.sha512) hR
     (vstarLen_deployRec I.V ivScope b) hT hPub hFin hD hH hS
   Claims.Recursion.VStar.KS_of_flockKS_played FlockDeploy.sha512 (deployRec I.V ivScope b) I (deployZkRec relO)
-    opening FlockDeploy.decCoin hF (FlockDeploy.KS.plain_KSAbort rel hext htab decI hdec)
+    opening FlockDeploy.decCoin hF (FlockDeploy.KS.plain_KSAbort rel htab decI hdec)
     (refuses I.V ivScope b FlockDeploy.sha512) (innerRounds I ivScope b) (sessionNums I.V ivScope b relO)
     (tableErrNonneg I.V ivScope b) (sessionRounds I ivScope b relO) (sessionAccepts I.V ivScope b)
     (sessionRuns_sha512 I ivScope b relO) hcf.1 hcf.2.2.1 hcf.2.2.2.2.1 hcf.2.2.2.1 hcf.2.2.2.2.2

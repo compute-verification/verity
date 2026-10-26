@@ -24,12 +24,13 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # `verity-evaluate` themselves, from those sources, and so declare no `artifacts`; `check` runs them after its Lean steps
 # (`AFTER_LEAN`), since that build writes into the verifier's `.lake`.
 inputs = ["verity", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/program/__init__.py",
-          "integrations/vllm/verity_vllm/program/registry", "Security/Definitions/Pouw/PearlC/RowPrimVectors.lean",
+          "verity/ml/definitions/registry", "Security/Definitions/Pouw/PearlC/RowPrimVectors.lean",
           "integrations/vllm/tests/regression/store_io.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/__main__.py",
-          "tools/research/src/research/cli.py", "tools/research/src/research/clone.py", "tools/research/src/research/compare.py",
+          "tools/research/src/research/cli.py", "tools/research/src/research/waitcap.py", "tools/research/src/research/clone.py", "tools/research/src/research/compare.py",
           "tools/research/src/research/env.py", "tools/research/src/research/record.py", "tools/research/src/research/remote.py",
           "tools/research/src/research/result.py", "tools/research/src/research/runs.py",
+          "tools/research/src/research/withdraw.py",
           "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry",
           "benchmarks/numerical/tests/bench/data/captured-101/slices/silumul-v1-i8192",

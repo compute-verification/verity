@@ -16,7 +16,7 @@ sequentially by this module's orchestrator (`subprocess`), then a torch-free com
                              tensors D2H asynchronously into fresh pinned buffers (stream-ordered right after the module,
                              i.e. before the next layer's in-place `fused_add_rms_norm` overwrites them); after every
                              `engine.step()` the driver synchronises once and hashes.  Output: `hooks.json`, `tokens.json`.
-  (c) `bench/m1_capture.py --no-observer`  fully bare (nothing installed, `driver.run_requests`): `tokens.json`.
+  (c) `bench/m1_capture.py --no-observer`  fully bare (nothing installed, `vllm_adapter.run_requests`): `tokens.json`.
 
 Tensors compared, per step s and layer L (values are bf16 row-major `[M, H]`, M = token rows of the step):
   hidden[s, L]   = `LlamaDecoderLayer.forward` return[0] = the MLP `down_proj` output.
@@ -52,7 +52,6 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
-import os
 import re
 import subprocess
 import sys
@@ -62,6 +61,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.config import option
 from verity_vllm.properties.noninterference_families import FINAL_NORM_MODULES, parallel_residual_boundaries, unfused_norm_boundaries
 from verity_vllm.properties.record import seal
@@ -134,7 +134,7 @@ def run_observer_variant(workload: str, out_dir: str, checkpoints: str, *, max_t
     print(f"[nonint/a] engine built in {eng.build_s:.1f}s (case {eng.case}, {eng.cp['repo']})", flush=True)
     (out / "versions.json").write_text(json.dumps(va.versions_doc(eng), indent=1) + "\n")
     if warmup:
-        _, tw = va.run_requests(eng, va.throwaway_requests(eng, wl["requests"]), wl["sampling"])
+        _, tw = va.run_requests(eng, va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED), wl["sampling"])
         print(f"[nonint/a] warm-up: {tw['wall_s']:.2f}s, {tw['engine_steps']} steps", flush=True)
     try:
         revision = json.loads(Path("EXPORT.json").read_text()).get("commit", "unknown")
@@ -169,7 +169,7 @@ def run_hooks_variant(workload: str, out_dir: str, checkpoints: str, *, max_toke
     prof.apply_env()
     import torch
 
-    from verity_vllm.engine import vllm_adapter as va
+    from verity_vllm.engine import arrivals as AR, vllm_adapter as va
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -178,7 +178,7 @@ def run_hooks_variant(workload: str, out_dir: str, checkpoints: str, *, max_toke
     print(f"[nonint/b] engine built in {eng.build_s:.1f}s (case {eng.case}, {eng.cp['repo']})", flush=True)
     (out / "versions.json").write_text(json.dumps(va.versions_doc(eng), indent=1) + "\n")
     if warmup:
-        _, tw = va.run_requests(eng, va.throwaway_requests(eng, wl["requests"]), wl["sampling"])
+        _, tw = va.run_requests(eng, va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED), wl["sampling"])
         print(f"[nonint/b] warm-up: {tw['wall_s']:.2f}s, {tw['engine_steps']} steps", flush=True)
         torch.cuda.synchronize()
 
@@ -213,7 +213,7 @@ def run_hooks_variant(workload: str, out_dir: str, checkpoints: str, *, max_toke
     arrivals = sorted(wl["requests"], key=lambda r: int(r.get("arrive_step") or 0))
     steps: list[dict] = []
     tokens: dict[str, list[int]] = {}
-    k = 0
+    k, forwards = 0, AR.ForwardCounter(engine, AR.scheduler_of(eng.llm))
     t_run0 = time.perf_counter()
 
     def _admit(r: dict) -> None:
@@ -221,13 +221,13 @@ def run_hooks_variant(workload: str, out_dir: str, checkpoints: str, *, max_toke
                            params=va.sampling_params(r, wl["sampling"]))
 
     while arrivals or engine.has_unfinished_requests():
-        while arrivals and int(arrivals[0].get("arrive_step") or 0) <= k:
+        while arrivals and int(arrivals[0].get("arrive_step") or 0) <= forwards.n:
             _admit(arrivals.pop(0))
         if not engine.has_unfinished_requests():
             _admit(arrivals.pop(0))
             continue
         t0 = time.perf_counter()
-        outs = engine.step()
+        forwards.stepped(outs := engine.step())
         torch.cuda.synchronize()
         wall = time.perf_counter() - t0
         recs = []
@@ -570,7 +570,7 @@ def compare(dir_: str, accepted_ctl: str | None, expected_layers: int | None = N
         "layers": seen_layers if seen_layers is not None else sorted(map(str, layer_counts)),
         "schema": "verity-capture/noninterference/v1", "utc": _utc(), "dir": str(d),
         "variants": {"a_observer": "full observer + hash-only snapshots of every step (HashOnlyCapture)",
-                     "b_hooks": hashes_b.get("method"), "c_bare": "bench.m1_capture --no-observer (driver.run_requests, nothing installed)"},
+                     "b_hooks": hashes_b.get("method"), "c_bare": "bench.m1_capture --no-observer (vllm_adapter.run_requests, nothing installed)"},
         "hooked_modules_b": hashes_b.get("hooked_modules"), "hook_fire_counts_b": hashes_b.get("hook_fire_counts"),
         "tokens": {k: v for k, v in toks.items()}, "tokens_equal_accepted": token_eq, "reference": "clean control run (generated_token_ids)",
         "tokens_equal_workload_accepted": workload_accepted_eq,
@@ -693,7 +693,7 @@ def orchestrate(args) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     py = args.python or sys.executable
-    env = dict(os.environ)
+    env = settings.environ()
     common = ["--workload", args.workload, "--checkpoints", args.checkpoints, "--max-num-seqs", str(args.max_num_seqs)]
     if args.case:
         common += ["--case", args.case]

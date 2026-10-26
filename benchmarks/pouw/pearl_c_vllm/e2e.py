@@ -15,7 +15,8 @@ The run (research store ``docs/pouw/mvp-e2e.md``, "RTX PRO 6000"):
   (`CYCLE`: fp8, pearlc, fp8, pearlc-nohash, fp8, bf16), each rep on the same prompts in every mode.  If the second engine
   can't start beside the first, the run falls back to ABAB blocks (`BLOCKS` engine lifetimes, alternating), and records it.
 - **Prefill** (the panel's m = 8,192): one prompt of 8,192 random tokens with max_tokens 1 and a batch budget of 8,192 tokens,
-  so each linear call has m = 8,192.
+  so each linear call has m = 8,192.  ``--prefill P`` sets the prompt's tokens and the batch budget (`configure`); off 8,192
+  its key is ``prefill_<P>``, so `panel_rows.py` (``prefill_8192``) never reads it as the panel's prefill row.
 - **Decode** (the panel's m = 32): 32 prompts of 64 tokens.  The step is (t(1 + D tokens) − t(1 token)) / D over D = 64
   decode steps, whose linear calls have m = 32.  ``--batch B`` and ``--prompt P`` set the decode batch and its prompts'
   length (a sweep's point; `configure`): its key is ``decode_b<B>_step``, with ``_p<P>`` before ``_step`` off 64 tokens.
@@ -33,13 +34,16 @@ The run (research store ``docs/pouw/mvp-e2e.md``, "RTX PRO 6000"):
 - **The panel's shapes** (the coordinator, 11:50Z): `SHAPES`, under ``pearl-c-sm120`` v1-h3; `panel_rows.py` writes the rows.
 
 ``--whole-step`` (with ``--graphs``) builds the arm engine with vLLM's FULL decode graphs (no compile, the decode batch's
-size only), and each Pearl-C arm's decode forward is captured whole with its calls' graph steps inside
+size only, or ``--capture``'s sizes), and each Pearl-C arm's decode forward is captured whole with its calls' graph steps inside
 (`pouw_pearl_c_whole`): a decode step is one graph replay after one slot upload.  Prefill runs eagerly; a retained decode
 replays its own capture, which also keeps each call's A words and tree.  Its gate (`whole_check`) holds a forward's calls
 replayed whole to the eager calls, and a retained pass replayed whole to an eager one, bit for bit; the decode response
 counts the steps replayed and run eagerly.  vLLM's eager decode isn't its graph's bit for bit, so the verify pass's eager
 check compares Pearl-C's graphed calls with its eager ones both under vLLM's eager decode.  ``--whole-defer`` (with
-``--whole-step``) captures each call's tile hashing beside the next call (`pouw_pearl_c_graphs`), under the same gate.
+``--whole-step``) captures each call's tile hashing beside the next call (`pouw_pearl_c_graphs`), ``--whole-defer-a``
+(with ``--whole-defer``) each call's A tree beside its own forming and GEMM, ``--whole-tree-sm`` (with
+``--whole-defer-a``) that GEMM leaving the tree's CTA its SM, and ``--whole-fork-stats`` (with ``--whole-defer``) each
+call's A scales beside its A commitment, under the same gate.
 
 ``--statement CUBIN`` (with ``--whole-step``; hm96_rows.cu built for sm_120a) adds the mode ``pearlc-zk``: ``pearlc`` with
 each decode forward replayed whole also committing its calls' A rows and its tile rows in the ZK statement's format,
@@ -90,7 +94,7 @@ CYCLE = ("fp8", "pearlc", "fp8", "pearlc-nohash", "fp8", "bf16")
 BLOCKS = 4
 #: the decode batch and its prompts' length are ``--batch`` and ``--prompt`` (`configure`); these are their defaults, the panel's
 PREFILL, BATCH, PROMPT, STEPS = 8192, 32, 64, 64
-BATCH_DEFAULT, PROMPT_DEFAULT = BATCH, PROMPT
+PREFILL_DEFAULT, BATCH_DEFAULT, PROMPT_DEFAULT = PREFILL, BATCH, PROMPT
 #: the served y's bound against the float product (the scheme's tested bound, verity/core/protocols/pouw's sm120 useful-output test)
 ERR = 0.08
 #: the negative control's omitted steps: every write of the commitment (A's row digests and row tree, the tile leaves)
@@ -99,8 +103,11 @@ CONTROL_OMITS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "hash_l
 #: ``--graphs``, whose leaves reach the pass through a copy) the tile leaves alone
 CONTROLS = {"control": CONTROL_OMITS, "control-leaves": frozenset({"hash_leaf"})}
 #: ``--smoke --retain``'s served requests, each one chat prompt (vllm_bench's PROMPTS, by index) as a retained pass: the
-#: request whose calls a ZK proof opens (served_zk), and another request, whose commitment is that proof's foreign control
+#: request whose calls a ZK proof opens (served_zk), and another request, whose commitment is that proof's foreign control.
+#: Each is served at the fixed length SERVED_TOKENS under ignore_eos (Daniel, 19 Oct, ASK-39), and how it was served goes
+#: beside its pass as SERVED_RECORD (``{"ignore_eos", "max_tokens", "served"}``), which served_zk's committer registers
 SERVED, SERVED_TOKENS = {"request": 0, "other": 1}, 4
+SERVED_RECORD = "served.json"
 #: the quality run's schemes: Pearl-C v1 (G = 4) and v2 (no promotion), each in an arm engine of its own
 QUALITY = {"pearlc-v1": "pearl-c-sm120-v1-h3", "pearlc-v2": "pearl-c-sm120-unpromoted-v1-h3"}
 #: WikiText-2 (raw), its test split, at the revision cached on node 2
@@ -112,14 +119,22 @@ SHAPES = {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-l
 
 
 def configure(args) -> None:
-    """``--batch`` and ``--prompt`` in this process (the controller's, and each engine's: spawn re-imports this module).  Off
-    the defaults, the decode key names both, ``decode_b<B>_step`` with ``_p<P>`` before ``_step`` when the prompt isn't 64
-    tokens, so `panel_rows.py` (``decode_b32_step``) never reads a sweep point as the panel's decode row."""
-    global BATCH, PROMPT, CAPTURE_SIZES
+    """``--batch``, ``--prompt`` and ``--prefill`` in this process (the controller's, and each engine's: spawn re-imports this
+    module).  Off the defaults, the decode key names both, ``decode_b<B>_step`` with ``_p<P>`` before ``_step`` when the prompt
+    isn't 64 tokens, and the prefill key its length, ``prefill_<P>``, so `panel_rows.py` (``decode_b32_step``,
+    ``prefill_8192``) never reads a sweep point as the panel's row."""
+    global BATCH, PROMPT, PREFILL, CAPTURE_SIZES
     BATCH, PROMPT = getattr(args, "batch", BATCH_DEFAULT), getattr(args, "prompt", PROMPT_DEFAULT)
+    PREFILL = getattr(args, "prefill", PREFILL_DEFAULT)
     CAPTURE_SIZES = [s for s in CAPTURE_32 if s < BATCH] + [BATCH]
-    SHAPES.pop(next((k for k in SHAPES if k.startswith("decode_")), None), None)
+    for phase in ("prefill_", "decode_"):
+        SHAPES.pop(next((k for k in SHAPES if k.startswith(phase)), None), None)
+    SHAPES[prefill_key()] = f"e2e-llama31-8b-vllm-m{PREFILL}"
     SHAPES[decode_key() + "_step"] = f"e2e-llama31-8b-vllm-m{BATCH}" + (f"-p{PROMPT}" if PROMPT != PROMPT_DEFAULT else "")
+
+
+def prefill_key() -> str:
+    return f"prefill_{PREFILL}"
 
 
 def decode_key() -> str:
@@ -140,7 +155,7 @@ def pass_capacity(tile: int, ns: list[int]) -> tuple[int, int]:
     and at least the device run's defaults: the prompts' prefill in chunks of `PREFILL` tokens, then 1 + `STEPS` forwards of the
     batch, each forward's rows padded to `ROW_ALIGN` and its tiles to whole tile rows, with as many forwards again for
     vLLM's mixed prefill-and-decode steps.  Every linear (`ns`, their n) runs once per forward."""
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
     cdiv = lambda a, b: -(-a // b)  # noqa: E731
     prompt_rows, forwards = BATCH * PROMPT, 2 * (cdiv(BATCH * PROMPT, PREFILL) + 1 + STEPS)
     tile_rows = cdiv(prompt_rows, tile) + forwards * cdiv(BATCH, tile)
@@ -165,7 +180,8 @@ def engine(args, group: str):
         return LLM(**kw, compilation_config={"cudagraph_capture_sizes": CAPTURE_SIZES})
     if group == "arm" and getattr(args, "whole_step", False):
         kw["enforce_eager"] = False
-        return LLM(**kw, compilation_config={"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY", "cudagraph_capture_sizes": [BATCH]})
+        sizes = getattr(args, "capture", None) or [BATCH]
+        return LLM(**kw, compilation_config={"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY", "cudagraph_capture_sizes": sizes})
     try:
         return LLM(**kw, compilation_config={"mode": 0})
     except TypeError:
@@ -173,15 +189,15 @@ def engine(args, group: str):
 
 
 def install(model, args, coins):
-    """Every LinearBase layer's apply, found by type (`verity_vllm.linear.vllm_site`), through one `Stack` whose executor is a
+    """Every LinearBase layer's apply, found by type (`verity_vllm.protocols.linear.vllm_site`), through one `Stack` whose executor is a
     `PearlCDeviceRun` over the layers' own weights, attached through `engine.hooks`.  The epoch's salt is `coins`' salt coin,
     asked for once the weights are committed (`Coins`).  Returns the run, the weights by id and the stack; the stack starts
     inactive (vLLM's own apply), and `arm_of` gives each mode's arm."""
     from verity.core.protocols.pouw.audit import weights_root
     from verity_vllm.engine.hooks import Hooks
-    from verity_vllm.linear import vllm_site
-    from verity_vllm.linear.api import Stack
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.linear import vllm_site
+    from verity_vllm.protocols.linear.api import Stack
+    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     sites = vllm_site.discover(model)
     weights = {site.weight_id: layer.weight.data for site, layer in sites}
@@ -196,7 +212,10 @@ def install(model, args, coins):
     opening = coins.open("salt", weights_root(roots))
     run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, coins.commitment, opening, time_gemm=True,
                               schedule=getattr(args, "schedule", "serial"), graphs=getattr(args, "graphs", False),
-                              whole_defer=getattr(args, "whole_defer", False), capacity=tiles, flag_rows=rows, salt_key=salt_key)
+                              whole_defer=getattr(args, "whole_defer", False), capacity=tiles, flag_rows=rows, salt_key=salt_key,
+                              whole_defer_a=getattr(args, "whole_defer_a", False),
+                              whole_fork_stats=getattr(args, "whole_fork_stats", False),
+                              whole_tree_sm=getattr(args, "whole_tree_sm", False))
     if getattr(args, "statement", None):
         import importlib.util
         spec = importlib.util.spec_from_file_location("served_zk_statement", HERE.parent / "served_zk" / "statement.py")
@@ -216,7 +235,7 @@ def whole_step(llm, run, stack):
     engine's in-process model runner."""
     from verity_vllm.engine.engine_profile import get_model_runner
     from verity_vllm.engine.hooks import Hooks
-    from verity_vllm.protocol_options.pouw_pearl_c_whole import WholeStep
+    from verity_vllm.protocols.pouw.pearl_c.whole import WholeStep
     return WholeStep(run, stack, get_model_runner(llm), Hooks(tag=f"{run.entry}:whole-step"))
 
 
@@ -224,7 +243,7 @@ def arm_of(mode: str, run, args):
     """The arm engine's arm for `mode`: ``bf16`` is vLLM's own apply with the stack attached (so the wrapper's cost is inside
     the baseline), ``pearlc-nohash`` and ``pearlc`` the run without and with hashing, under the run's schedule, and
     ``pearlc-zk`` ``pearlc`` with its statement enabled (``--statement``)."""
-    from verity_vllm.linear.api import Arm, PassSpec
+    from verity_vllm.protocols.linear.api import Arm, PassSpec
     if getattr(run, "statement", None) is not None:
         run.statement.enabled = mode in ZK
     if mode not in PEARLC:
@@ -235,7 +254,8 @@ def arm_of(mode: str, run, args):
 
 def gate(run, weights: dict, whole: bool = False) -> list[dict]:
     """Served y against x·Wᵀ, and with hashing the same call's commitment twice and the negative control, at every
-    distinct (n, k) and both m; with `whole` (``--whole-step``), `whole_check` too."""
+    distinct (n, k) and both m; with `whole` (``--whole-step``), `whole_check` too.  The checks that compare passes repeat
+    one pass's call indices (`PearlCDeviceRun.begin`'s ``at``), since the epoch numbers calls across passes."""
     import torch
     out, seen = [], set()
     gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20260930)
@@ -245,9 +265,9 @@ def gate(run, weights: dict, whole: bool = False) -> list[dict]:
         seen.add(tuple(W.shape))
         for m in (PREFILL, BATCH):
             x = torch.randn(m, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16)
-            commits, served = [], None
+            commits, served, at = [], None, run.epoch_calls()
             for omit in ((), (), ("hash_leaf",)) if run.hashing else ((),):
-                run.begin()
+                run.begin(at=at)
                 run.poison()
                 run.omit = frozenset(omit)
                 y = run.gemm(w, x, W, None)
@@ -275,17 +295,19 @@ def gate(run, weights: dict, whole: bool = False) -> list[dict]:
     return out
 
 
-def whole_check(run, weights: dict) -> dict:
-    """With ``--whole-step``, a forward's calls (every weight once, m = 32, in weight order) made eagerly twice in one pass,
-    then captured whole in one CUDA graph after a warm-up outside it (as vLLM captures a decode forward) and replayed twice
-    in each of two fresh passes on poisoned outputs, between `whole_replay` and `whole_replayed`, as vLLM's decode steps
-    replay it: each pass must give the eager pass's A roots, tile root, screen flags and outputs, bit for bit, and each
-    pass's second replay must upload the slots the first one staged (with hashing)."""
+def whole_check(run, weights: dict, m: int | None = None) -> dict:
+    """With ``--whole-step``, a forward's calls (every weight once, `m` rows, default `BATCH`, in weight order) made eagerly
+    twice in one pass, then captured whole in one CUDA graph after a warm-up outside it (as vLLM captures a decode forward)
+    and replayed twice in each of two fresh passes on poisoned outputs, between `whole_replay` and `whole_replayed`, as vLLM's
+    decode steps replay it: each pass must give the eager pass's A roots, tile root, screen flags and outputs, bit for bit,
+    and each pass's second replay must upload the slots the first one staged (with hashing).  A retained capture keeps a
+    stage for each weight and m₁₆, so the check runs at any m beside the sizes vLLM's graphs captured."""
     import torch
+    m = BATCH if m is None else m
     dev = next(iter(weights.values())).device
     gen = torch.Generator(device=dev).manual_seed(20261002)
-    xs = {w: torch.randn(BATCH, W.shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, W in weights.items()}
-    rows = 2 * BATCH * len(weights) if run.hashing else 0
+    xs = {w: torch.randn(m, W.shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, W in weights.items()}
+    rows = 2 * m * len(weights) if run.hashing else 0
     forward = lambda: [run.gemm(w, xs[w], W, None) for w, W in weights.items()]
     keep = ("transcript_root", "activation_roots", "units", "tiles")
 
@@ -294,6 +316,7 @@ def whole_check(run, weights: dict) -> dict:
 
     run.graphs = False
     run.begin()
+    at = run.cur.base
     run.poison()
     forward()
     want = ended(forward())
@@ -311,7 +334,7 @@ def whole_check(run, weights: dict) -> dict:
     run.end()
     got, staged = [], []
     for _ in range(2):
-        run.begin()
+        run.begin(at=at)
         run.poison()
         for _ in range(2):
             staged.append(run.whole_replay(calls))
@@ -345,6 +368,7 @@ def whole_retained_check(run, forward, side) -> bool:
     try:
         run.graphs = False
         run.begin(retain=str(dirs[0]))
+        at = run.cur.base
         forward()
         want = ended()
         run.graphs = True
@@ -359,7 +383,7 @@ def whole_retained_check(run, forward, side) -> bool:
         finally:
             calls = run.whole_capture_end()
         run.end()
-        run.begin(retain=str(dirs[1]))
+        run.begin(retain=str(dirs[1]), at=at)
         run.whole_replay(calls)
         graph.replay()
         run.whole_replayed(calls)
@@ -380,9 +404,9 @@ def schedule_check(run, weights: dict) -> dict:
     w, W = next(iter(weights.items()))
     gen = torch.Generator(device=W.device).manual_seed(20260932)
     xs = [torch.randn(m, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16) for m in (32, 128, 32)]
-    commits, mine = {}, run.schedule.name
+    commits, mine, at = {}, run.schedule.name, run.epoch_calls()
     for name in ("serial", mine):
-        run.begin(schedule=name)
+        run.begin(schedule=name, at=at)
         run.poison()
         for x in xs:
             run.gemm(w, x, W, None)
@@ -397,7 +421,7 @@ def graphs_check(run, weights: dict) -> list[dict]:
     fresh pass on poisoned outputs, must give the same A roots, tile root, screen flags and y, bit for bit.  And the screen
     of an m = 8,192 call read from its BF16 x must give the flags it gives from A's FP32 words."""
     import torch
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
     out, seen = [], set()
     gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20261001)
     for w, W in weights.items():
@@ -405,10 +429,10 @@ def graphs_check(run, weights: dict) -> list[dict]:
             continue
         seen.add(tuple(W.shape))
         x = torch.randn(BATCH, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16)
-        got = []
+        got, at = [], run.epoch_calls()
         for graphs in (False, True, True):
             run.graphs = graphs
-            run.begin()
+            run.begin(at=at)
             run.poison()
             y = run.gemm(w, x, W, None).clone()
             flags = run.flag_buf[:BATCH].clone()
@@ -441,7 +465,7 @@ def screen_check(run, weights: dict) -> dict:
     entries, one over the noise floor's bound, the rest ordinary) whose flags, from the run's screen, must be the torch
     screen's on the same rows and the kernel's own α and ρ."""
     import torch
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
     w, W = next(iter(weights.items()))
     k = W.shape[1]
     gen = torch.Generator(device=W.device).manual_seed(20260931)
@@ -545,7 +569,7 @@ def serve(conn, args, group: str, coins: dict) -> None:
                 *_, outs = timed(chat, SamplingParams(temperature=0.0, max_tokens=48))
                 zk = run.statement.take() if run is not None and run.statement is not None and run.statement.enabled else None
                 conn.send({"tokens": [list(o.outputs[0].token_ids) for o in outs], "texts": [o.outputs[0].text for o in outs[:4]],
-                           **({"statement": zk} if zk else {})})
+                           **({"statement": zk} if zk else {}), **({"whole_step": whole.take()} if whole is not None else {})})
             elif op == "prefill":
                 dt, gemm, commit, _ = timed([{"prompt_token_ids": cmd["prompt"]}], one)
                 conn.send({"s": dt, "gemm_s": gemm, "commitment": commit})
@@ -559,14 +583,15 @@ def serve(conn, args, group: str, coins: dict) -> None:
             elif op == "ppl":
                 conn.send(prompt_logprobs(llm, SamplingParams, timed, cmd["windows"]))
             elif op == "verify":
-                from verity_vllm.linear.api import Control
+                from verity_vllm.protocols.linear.api import Control
                 stack.activate(arm_of("pearlc", run, args))
                 out = {}
                 if whole is not None:
                     whole.take()
                 for name, prompts, sp in (("prefill", [cmd["prefill"]], one), ("decode", cmd["decode"], many)):
-                    _, _, got, _ = timed([{"prompt_token_ids": x} for x in prompts], sp, retain=str(Path(args.retain) / name))
                     want = cmd["want"][name]
+                    run.repeat_at = want.get("base")     # the timed pass's call indices, so its commitment can repeat
+                    _, _, got, _ = timed([{"prompt_token_ids": x} for x in prompts], sp, retain=str(Path(args.retain) / name))
                     same = all(got.get(k) == want.get(k) for k in ("transcript_root", "activation_roots", "units", "tiles"))
                     out[name] = {"manifest": got.get("manifest"), "commitment": got, "same_commitment_as_timed": same,
                                  **({"whole_step": whole.take()} if whole is not None else {})}
@@ -576,8 +601,10 @@ def serve(conn, args, group: str, coins: dict) -> None:
                             whole.enabled = False
                         try:
                             if whole is not None:
+                                run.repeat_at = want.get("base")
                                 _, _, ref, _ = timed(p, sp)
                             run.graphs = False
+                            run.repeat_at = want.get("base")
                             _, _, eager, _ = timed(p, sp)
                         finally:
                             run.graphs = True
@@ -594,10 +621,16 @@ def serve(conn, args, group: str, coins: dict) -> None:
                 stack.activate(arm_of("pearlc", run, args))
                 sp = SamplingParams(temperature=0.0, max_tokens=SERVED_TOKENS, ignore_eos=True)
                 out = {}
+                if whole is not None:
+                    whole.take()
                 for name, i in SERVED.items():
                     _, _, got, outs = timed([chat[i]], sp, retain=str(Path(args.retain) / name))
-                    out[name] = {"prompt": PROMPTS[i], "tokens": list(outs[0].outputs[0].token_ids),
-                                 "text": outs[0].outputs[0].text, "manifest": got.get("manifest"), "commitment": got}
+                    tokens = list(outs[0].outputs[0].token_ids)
+                    length = {"ignore_eos": sp.ignore_eos, "max_tokens": [sp.max_tokens], "served": [len(tokens)]}
+                    (Path(args.retain) / name / SERVED_RECORD).write_text(json.dumps(length, sort_keys=True) + "\n")
+                    out[name] = {"prompt": PROMPTS[i], "tokens": tokens, "length": length,
+                                 "text": outs[0].outputs[0].text, "manifest": got.get("manifest"), "commitment": got,
+                                 **({"whole_step": whole.take()} if whole is not None else {})}
                 conn.send(out)
             else:
                 raise ValueError(f"unknown command {op!r}")
@@ -624,12 +657,18 @@ def prompt_logprobs(llm, sampling_params, timed, windows: list[list[int]]) -> di
 
 class Coins:
     """The challenger's side of one epoch in the controller: its coins (`coins.Challenger`), committed before any engine
-    starts.  A coin opens once; an engine started again in the same epoch (the ABAB blocks) asking for it after the same
-    record gets the one opening again, and after any other record a refusal, so nothing redraws."""
+    starts, drawn from `entropy` (by default the Lean verifier of record's, `pouw.verifier.coins`, `IO.getRandomBytes`),
+    which a claim instance must name (`challenger.served_claim`). A coin opens once; an engine started again in the same
+    epoch (the ABAB blocks) asking for it after the same record gets the one opening again, and after any other record a
+    refusal, so nothing redraws."""
 
     def __init__(self, epoch: int, entropy=None):
+        from verity.core.protocols.pouw import verifier
         from verity.core.protocols.pouw.coins import Challenger
-        self.challenger, self.opened = (Challenger(epoch, entropy) if entropy else Challenger(epoch)), {}
+        from verity.core.protocols.sampled_proofs.challenger import served_claim
+        entropy = verifier.coins if entropy is None else entropy
+        served_claim(entropy)
+        self.challenger, self.opened = Challenger(epoch, entropy), {}
         self.commitment = self.challenger.commitment
 
     def open(self, label: str, after: bytes):
@@ -743,17 +782,17 @@ def schedule(reps: int, interleave: str, graphed: bool = False, zk: bool = False
 
 def timing(records: list[dict]) -> dict:
     """Each mode's medians over its reps, and its reps, from the controller's records."""
-    out, d = {}, decode_key()
+    out, p, d = {}, prefill_key(), decode_key()
     for mode in MODES + GRAPHED + ZK:
         pre = [r for r in records if r["mode"] == mode and r["phase"] == "prefill"]
         dec = [r for r in records if r["mode"] == mode and r["phase"] == "decode"]
         if not pre or not dec:
             continue
-        out[mode] = {"timing": {"prefill_8192_s": statistics.median(r["s"] for r in pre),
-                                "prefill_8192_gemm_s": statistics.median(r["gemm_s"] for r in pre),
+        out[mode] = {"timing": {f"{p}_s": statistics.median(r["s"] for r in pre),
+                                f"{p}_gemm_s": statistics.median(r["gemm_s"] for r in pre),
                                 f"{d}_step_s": statistics.median(r["step_s"] for r in dec),
                                 f"{d}_step_gemm_s": statistics.median(r["gemm_step_s"] for r in dec)},
-                     "reps": {"prefill_8192": pre, d: dec}}
+                     "reps": {p: pre, d: dec}}
     return out
 
 
@@ -775,7 +814,7 @@ def split(results: dict) -> dict:
     kernel), hashing and records (``pearlc`` less the no-hash mode) and everything else."""
     t = {m: r["timing"] for m, r in results.items() if "timing" in r}
     out = {}
-    for key in ("prefill_8192", decode_key() + "_step"):
+    for key in (prefill_key(), decode_key() + "_step"):
         if not all(m in t for m in MODES):
             continue
         full, nohash, gemm = t["pearlc"][f"{key}_s"], t["pearlc-nohash"][f"{key}_s"], t["pearlc-nohash"][f"{key}_gemm_s"]
@@ -796,21 +835,25 @@ def split(results: dict) -> dict:
 
 
 def state_entropy(path: str):
-    """The challenger's entropy held in the file `path` (created from os.urandom when absent, readable only by its owner):
-    the same coins for the controller here and for the challenger process that later draws the window's units
-    (`served_commit.py challenger --state`)."""
+    """The challenger's entropy held in the file `path` (readable only by its owner; when absent, created from the Lean
+    verifier of record's coins, `pouw.verifier.coins`, before any engine starts): the same coins for the controller here
+    and for the challenger process that later draws the window's units (`served_commit.py challenger --state`), so named
+    by the Lean's claim instance (`verifier.CLAIM`)."""
+    from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw.coins import COIN_BYTES, HM96, LABELS
     p = Path(path)
     if not p.exists():
+        entropy = verifier.coins(len(LABELS) * (COIN_BYTES + HM96.salt_bytes))
         p.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "wb") as f:
-            f.write(os.urandom(len(LABELS) * (COIN_BYTES + HM96.salt_bytes)))
+            f.write(entropy)
     data, at = p.read_bytes(), [0]
 
     def take(n: int) -> bytes:
         at[0] += n
         return data[at[0] - n:at[0]]
+    take.claim = verifier.CLAIM
     return take
 
 
@@ -844,7 +887,10 @@ def smoke(args) -> None:
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-smoke/v1", "coins": coins.commitment.to_json(), "scheme": getattr(args, "scheme", SCHEME),
                  "schedule": getattr(args, "schedule", "serial"),
                  "whole_step": getattr(args, "whole_step", False), "whole_defer": getattr(args, "whole_defer", False),
-                 "statement": getattr(args, "statement", None), "run": os.environ.get("RESEARCH_RUN_ID"), "steps": [], "resident": False}
+                 "whole_defer_a": getattr(args, "whole_defer_a", False),
+                 "whole_fork_stats": getattr(args, "whole_fork_stats", False),
+                 "whole_tree_sm": getattr(args, "whole_tree_sm", False),
+                 "capture": getattr(args, "capture", None), "statement": getattr(args, "statement", None), "run": os.environ.get("RESEARCH_RUN_ID"), "steps": [], "resident": False}
 
     def step(name, f):
         t0 = time.perf_counter()
@@ -969,7 +1015,7 @@ def agree(a, b) -> float:
 
 def main() -> None:
     from verity.core.protocols.pouw.serving import SCHEDULES
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--model", required=True)
     ap.add_argument("--revision")
@@ -979,6 +1025,7 @@ def main() -> None:
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--batch", type=int, default=BATCH_DEFAULT, help="the decode batch: its prompts, and each decode call's m")
     ap.add_argument("--prompt", type=int, default=PROMPT_DEFAULT, help="each decode prompt's tokens (the context decode starts at)")
+    ap.add_argument("--prefill", type=int, default=PREFILL_DEFAULT, help="the prefill prompt's tokens, and the engines' batch budget")
     ap.add_argument("--mem-base", type=float, default=0.2, help="the FP8 engine's gpu_memory_utilization (weights about 8 GB)")
     ap.add_argument("--mem-arm", type=float, default=0.3, help="the BF16 engine's; Pearl-C's buffers (about 13 GB) sit outside it")
     ap.add_argument("--interleave", choices=["rep", "blocks"], default="rep", help="blocks: skip co-residency, go straight to ABAB")
@@ -993,8 +1040,18 @@ def main() -> None:
     ap.add_argument("--whole-step", action="store_true",
                     help="(implies --graphs) the arm engine runs vLLM's FULL decode graphs, Pearl-C's captured inside them "
                          "(pouw_pearl_c_whole); retained passes run eagerly")
+    ap.add_argument("--capture", type=lambda s: sorted({int(x) for x in s.split(",")}), metavar="SIZES",
+                    help="(with --whole-step) the arm engine's CUDA-graph batch sizes, comma-separated (default the decode batch)")
     ap.add_argument("--whole-defer", action="store_true",
                     help="(with --whole-step) a whole capture runs each call's tile hashing beside the next call's A tree")
+    ap.add_argument("--whole-defer-a", action="store_true",
+                    help="(with --whole-defer) and each call's A tree beside its own forming and GEMM, on a kernel whose "
+                         "pipeline splits A's commitment")
+    ap.add_argument("--whole-tree-sm", action="store_true",
+                    help="(with --whole-defer-a) the GEMM beside each call's A tree launching one persistent CTA fewer, "
+                         "leaving the tree's CTA its SM")
+    ap.add_argument("--whole-fork-stats", action="store_true",
+                    help="(with --whole-defer) and each call's A scales beside its A commitment")
     ap.add_argument("--statement", metavar="CUBIN",
                     help="(with --whole-step) hm96_rows.cu's cubin: adds pearlc-zk, each decode forward's rows committed in the "
                          "ZK statement's format too, once after the forward (served_zk/statement.py)")
@@ -1003,15 +1060,24 @@ def main() -> None:
     ap.add_argument("--ppl-windows", type=int, help="the quality run's first N windows (default all)")
     ap.add_argument("--chunk-min", type=float, default=7.0, help="the quality run starts no group after this many minutes")
     args = ap.parse_args()
-    if args.batch < 1 or args.prompt < 1:
-        ap.error("--batch and --prompt are positive")
-    if args.whole_step and -(-args.batch // PPD.ROW_ALIGN) * PPD.ROW_ALIGN > PPD.GRAPH_ROWS:
-        ap.error(f"--whole-step captures the decode batch whole: --batch {args.batch}'s calls, filler rows to a multiple of "
-                 f"{PPD.ROW_ALIGN} included, are over {PPD.GRAPH_ROWS} rows (pouw_pearl_c_whole)")
+    if args.batch < 1 or args.prompt < 1 or args.prefill < 1:
+        ap.error("--batch, --prompt and --prefill are positive")
+    for size in (args.batch, *(args.capture or ())) if args.whole_step else ():
+        if not 0 < -(-size // PPD.ROW_ALIGN) * PPD.ROW_ALIGN <= PPD.GRAPH_ROWS:
+            ap.error(f"--whole-step captures the decode batch whole: a batch of {size}'s calls, filler rows to a multiple of "
+                     f"{PPD.ROW_ALIGN} included, are not 1 to {PPD.GRAPH_ROWS} rows (pouw_pearl_c_whole)")
+    if args.capture and not args.whole_step:
+        ap.error("--capture sets the whole-step arm's graph sizes: it needs --whole-step")
     configure(args)
     args.graphs = args.graphs or args.whole_step
     if args.whole_defer and not args.whole_step:
         ap.error("--whole-defer defers within a whole capture: it needs --whole-step")
+    if args.whole_defer_a and not args.whole_defer:
+        ap.error("--whole-defer-a defers A's trees beside the deferred tile hashing: it needs --whole-defer")
+    if args.whole_tree_sm and not args.whole_defer_a:
+        ap.error("--whole-tree-sm leaves a deferred A tree its SM: it needs --whole-defer-a")
+    if args.whole_fork_stats and not args.whole_defer:
+        ap.error("--whole-fork-stats forks A's scales within a deferred whole capture: it needs --whole-defer")
     if args.statement and not args.whole_step:
         ap.error("--statement commits the forwards vLLM replays whole: it needs --whole-step")
     if args.smoke:
@@ -1023,7 +1089,8 @@ def main() -> None:
     records: list[dict] = []
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "scheme": args.scheme, "schedule": args.schedule, "graphs": args.graphs, "fp8_graphs": args.fp8_graphs,
                  "decode": {"batch": BATCH, "prompt": PROMPT, "steps": STEPS, "key": decode_key()},
-                 "whole_step": args.whole_step, "whole_defer": args.whole_defer,
+                 "whole_step": args.whole_step, "whole_defer": args.whole_defer, "whole_defer_a": args.whole_defer_a,
+                 "whole_fork_stats": args.whole_fork_stats, "whole_tree_sm": args.whole_tree_sm, "capture": args.capture,
                  "statement": args.statement, "run": os.environ.get("RESEARCH_RUN_ID"),
                  "coins": coins.commitment.to_json(), "interleave": args.interleave, "resident_failure": None}
     ready, tokens, verify = {}, {}, {}

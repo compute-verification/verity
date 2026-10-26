@@ -1,6 +1,6 @@
 import Proofs.Flock.Claims.Sampling.Binding
 import Proofs.Flock.Verifier.Registered
-import Properties.Proofs.NetworkCertifier.Bytes
+import Proofs.Properties.NetworkCertifier.Bytes
 
 /-!
 # The registered path check binds (frame-v3-sha512)
@@ -11,8 +11,7 @@ is as an oracle program that queries the code's own frames in the code's order (
 * `climbOC`: from a digest at index `idx` of level `d`, each sibling's node frame (`nodeIn`) queried, the left child
   first at an even index, ending true when the last digest is the root.
 * `regPathAt reg`: at the registered port `reg`, a position among its leaves, one 64-byte sibling per level of
-  `log2ceil leaves`, the leaf's frame (`leafIn`, the `hm96-sha512/row/v1` schema at the position) queried, then the
-  climb.
+  `log2ceil leaves`, the leaf's frame (`leafInAs`, the port's leaf schema at the position) queried, then the climb.
 * `regPath own`: the deployed check, at the verifier's own port whose root is `root`, false at any other root.
 * `regPath_binds`: **`PathBinds H (regPath own)` for every `H`.** Two different leaves accepted under one root at one
   position query two different frames; where their climbs first reach one digest, the two queries there are different
@@ -50,9 +49,9 @@ theorem nodeIn_size (dom : ByteArray) (d idx : ℕ) (l r l' r' : ByteArray) :
   simp only [nodeIn, frame, List.foldl, step_size, be64_size]
   omega
 
-theorem leafIn_size (dom : ByteArray) (pos : ℕ) (x y : ByteArray) :
-    (leafIn dom pos x).size + y.size = (leafIn dom pos y).size + x.size := by
-  simp only [leafIn, frame, List.foldl, step_size, be64_size]
+theorem leafIn_size (schema : String) (dom : ByteArray) (pos : ℕ) (x y : ByteArray) :
+    (leafInAs schema dom pos x).size + y.size = (leafInAs schema dom pos y).size + x.size := by
+  simp only [leafInAs, frame, List.foldl, step_size, be64_size]
   omega
 
 /-- Equal node frames with right children of one length have the same children. -/
@@ -69,11 +68,12 @@ theorem nodeIn_eq_of_left {dom : ByteArray} {d idx : ℕ} {l r l' r' : ByteArray
   have := nodeIn_size dom d idx l r l' r'
   exact nodeIn_inj hl (by omega) h
 
-/-- Equal leaf frames at one position have the same payload. -/
-theorem leafIn_eq {dom : ByteArray} {pos : ℕ} {x y : ByteArray} (h : leafIn dom pos x = leafIn dom pos y) : x = y := by
+/-- Equal leaf frames at one position and schema have the same payload. -/
+theorem leafIn_eq {schema : String} {dom : ByteArray} {pos : ℕ} {x y : ByteArray}
+    (h : leafInAs schema dom pos x = leafInAs schema dom pos y) : x = y := by
   have hs := congrArg ByteArray.size h
-  have := leafIn_size dom pos x y
-  exact leafIn_inj (by omega) h
+  have := leafIn_size schema dom pos x y
+  exact leafInAs_inj (by omega) h
 
 /-! ## The check -/
 
@@ -85,12 +85,12 @@ def climbOC (dom : ByteArray) (root : Msg) : Msg → ℕ → ℕ → List ByteAr
     .query (bs (if idx % 2 = 0 then nodeIn dom d (idx / 2) (bytes cur) sib else nodeIn dom d (idx / 2) sib (bytes cur)))
       fun h => climbOC dom root h (idx / 2) (d + 1) rest
 
-/-- **The registered path check at port `reg`**: `leaf` (the row's `hm96-sha512/row/v1` leaf) at `pos` under `root`
-through `π`: a position among the port's leaves, one 64-byte sibling per level, the leaf's frame-v3 frame queried, then
-the climb to `root` (`Flock.Registered.opensLeaf`, its hash the oracle). -/
+/-- **The registered path check at port `reg`**: `leaf` (the row's hm96 leaf of the port's schema) at `pos` under
+`root` through `π`: a position among the port's leaves, one 64-byte sibling per level, the leaf's frame-v3 frame
+queried, then the climb to `root` (`Flock.Registered.opensLeaf`, its hash the oracle). -/
 def regPathAt (reg : Registered.Port) (root : Msg) (pos : ℕ) (leaf π : Msg) : OC Bool :=
   if pos < reg.leaves ∧ π.length = 64 * log2ceil reg.leaves then
-    .query (bs (leafIn reg.domain pos (bytes leaf))) fun l =>
+    .query (bs (leafInAs reg.schema reg.domain pos (bytes leaf))) fun l =>
       climbOC reg.domain root l pos 0 (sibs (bytes π) (log2ceil reg.leaves))
   else .ret false
 
@@ -168,8 +168,8 @@ theorem regPathAt_binds (H : Msg → Msg) (reg : Registered.Port) (root : Msg) (
   unfold regPathAt at h₁ h₂ ⊢
   split_ifs at h₁ h₂ ⊢ with c₁ c₂
   · simp only [OC.eval] at h₁ h₂ ⊢
-    set q := bs (leafIn reg.domain pos (bytes leaf)) with hq
-    set q' := bs (leafIn reg.domain pos (bytes leaf')) with hq'
+    set q := bs (leafInAs reg.schema reg.domain pos (bytes leaf)) with hq
+    set q' := bs (leafInAs reg.schema reg.domain pos (bytes leaf')) with hq'
     have hqq : q ≠ q' := fun e => hne (bytes_inj (leafIn_eq (bs_inj e)))
     by_cases he : H q = H q'
     · exact ⟨(q, H q), List.mem_append_left _ (List.mem_cons_self ..), (q', H q'),
@@ -235,9 +235,10 @@ theorem regPath_sha512 (own : Array Registered.Port) (root : Msg) (pos : ℕ) (l
       split_ifs with c
       · simp only [OC.eval]
         rw [climbOC_sha512]
-        have e : bytes (sha512Msg (bs (leafIn reg.domain pos (bytes leaf)))) = rowLeaf reg.domain pos (bytes leaf) := by
+        have e : bytes (sha512Msg (bs (leafInAs reg.schema reg.domain pos (bytes leaf)))) =
+            leafAs reg.schema reg.domain pos (bytes leaf) := by
           simp only [sha512Msg, bytes_bs]
-          exact (rowLeaf_eq _ _ _).symm
+          exact (leafAs_eq _ _ _ _).symm
         rw [e, decide_eq_true_eq]
         constructor
         · intro h

@@ -1,4 +1,4 @@
-"""Lane `ov-moe`: the pair-major MoE definitions (`verity_vllm.program.registry.quarantine.ov_moe.moe`), the `MoEFusedExperts`
+"""Lane `ov-moe`: the pair-major MoE definitions (`verity_vllm.program.quarantine.ov_moe.moe`), the `MoEFusedExperts`
 recognizer (positive and negative cases on synthetic events shaped exactly like the pinned vLLM's `vllm.moe_forward`
 body as recorded in out/gen/lanes/moe/runs/olmoe_3x1_1req), and — when wave 1's real captures are present in the
 worktree — the end-to-end resolve / fold / VU-population facts quoted in out/gen/lanes/ov-moe/REPORT.md."""
@@ -23,9 +23,9 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluate import evaluate_region
 from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.program import Program
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import prims as P
+from verity_vllm.program.quarantine.ov_moe import moe as Q
 
 C = OV.C
 H, I, E, TOPK = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"]
@@ -114,8 +114,10 @@ def test_router_stand_in_ids_and_tie_rule():
 def test_quarantine_identity_and_conformance_labels():
     assert Q.SEMANTIC_ID == "ov-moe/MoeExpertGemm@v1"
     assert Q.MoeRouterTopK.conformance == "not-yet-established" and Q.NvExpf.id == "NvExpf_v1"   # cov-moe: the CUDA expf sequence, no stand-in
-    for d in (Q.MoeExpertGemm, Q.MoeExpertGemmW, Q.MoeSum):
+    for d in (Q.MoeExpertGemm, Q.MoeExpertGemmW):
         assert d.conformance == "not-yet-established" and d.version == 1
+    assert Q.MoeSum.version == 1 and Q.MoeSum.conformance.startswith("exact-model-tested")
+    assert "glm53_block_fp8_capture/v4" in Q.MoeSum.conformance
 
 
 # --- NvExpf: the CUDA math-library expf as nvcc emits it (cov-moe) -------------------------------------------------------
@@ -273,19 +275,20 @@ def _start(M: int, step: int = 0, padded: int | None = None) -> StepStart:
                      list(range(M)), [("r0", M - 1)], [M - 1], 1, M, padded if padded is not None else M, None, None, "prefill")
 
 
-def _ctx(start: StepStart) -> StepContext:
-    header = RunHeader("verity-capture/log/v1", "2026-09-17T00:00:00Z", "672e5db02", {"vllm": "d9105ea80"}, {"repo": OV.MODEL, "config": {}}, {"requests": []})
+def _ctx(start: StepStart, target: dict | None = None) -> StepContext:
+    profile = {"vllm": "d9105ea80", **({"target": target} if target else {})}
+    header = RunHeader("verity-capture/log/v1", "2026-09-17T00:00:00Z", "672e5db02", profile, {"repo": OV.MODEL, "config": {}}, {"requests": []})
     roots = {7: [Root(view(7, (E, 2 * I, H)), "weight", "model.layers.0.mlp.experts.routed_experts.w13_weight")],
              8: [Root(view(8, (E, H, I)), "weight", "model.layers.0.mlp.experts.routed_experts.w2_weight")]}
     return StepContext(header, start, None, [], roots, C, OV.PROFILE)
 
 
-def _resolve(M: int, **kw):
+def _resolve(M: int, target: dict | None = None, **kw):
     start_kw = {k: kw.pop(k) for k in ("padded",) if k in kw}
     evs = moe_scope_events(M, **kw)
     start = _start(M, **start_kw)
     se = step_events([start, *evs])
-    return resolve_step(se, _ctx(start)), se
+    return resolve_step(se, _ctx(start, target)), se
 
 
 @pytest.mark.parametrize("M,naive", [(3, False), (32, False), (1, True)])
@@ -335,6 +338,26 @@ def test_moe_scope_declines_with_the_observed_values(kw, needle):
     res, _ = _resolve(3, **kw)
     assert len(res) == 1 and isinstance(res[0], Unsupported), res
     assert needle in res[0].reason, res[0].reason
+
+
+def test_a_tuned_tile_binds_hoppers_expert_step_on_cc90():
+    """vLLM launches its tuned tile (the H200's at one row: BLOCK_SIZE_M 16, N 64, K 64, 5 stages) with or without batch invariance; on
+    cc 9.0 the scope binds the expert GEMMs with Hopper's step there, and on another target it declines the tile."""
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+    tile = {"BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 64, "GROUP_SIZE_M": 1}
+    kw = dict(consts_up=tile, consts_down=tile, num_stages=5)
+    served = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False).to_json()
+    for target in (served, TargetProfile(compute_capability=(9, 0), num_sms=132).to_json()):
+        res, _ = _resolve(3, target=target, **kw)
+        assert len(res) == 1 and isinstance(res[0], Group), res
+        specs = [p.spec.id for p in res[0].parts if isinstance(p, Compute)]
+        assert specs[1] == f"MoeExpertGemm_v2{{E={E},K={H},N={2 * I},DOT=HopperBF16WgmmaDot16_v1}}"
+        assert specs[3] == f"MoeExpertGemmW_v2{{E={E},K={I},N={H},DOT=HopperBF16WgmmaDot16_v1}}"
+    res, _ = _resolve(3, target=None, **kw)
+    assert len(res) == 1 and isinstance(res[0], Unsupported) and "tiling" in res[0].reason, res
+    assert "cc 9.0 only" in res[0].detail["tuned"], res
+    res, _ = _resolve(3, target=served, consts_up={**tile, "BLOCK_SIZE_K": 40}, consts_down=tile, num_stages=5)
+    assert isinstance(res[0], Unsupported) and "k16 step" in res[0].detail["tuned"], res
 
 
 def test_profile_is_the_tuned_gemm_plus_the_pairwise_pattern_and_not_accepted():

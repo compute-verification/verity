@@ -199,7 +199,9 @@ private=db)` rebuilds the public tables: the artifacts whose manifests are in th
 `--postgres`: both schemas of `$STORE_INDEXER_DATABASE_URL` through `psql`, rows only, so grants survive). The control pod runs
 it every 5 minutes, `--public` once `store-export.env` exists (`infra/control/store_index.sh`). Displays read it via `reader`
 (Neon's `store_private` with `$STORE_PRIVATE_READER_URL`, else `index.sqlite`, else the catalog), with its listing time and the
-records only here.
+records only here. `select` names its source and that time on stderr in every output form (`--json` stays a list), and exits 1
+when there is no index that ever listed the bucket and the catalog holds no artifact: a `research run` job's store, where an empty
+answer had read as "none" (19 Oct).
 
 ## 6. Tools, derivations, conditions, closures, scratch
 
@@ -250,8 +252,11 @@ exec.exclusive  exec.load_start  exec.load_end  exec.project  exec.campaign  exe
 probe itself failed); nobody else normalises. Tools may add keys under `tool.<name>.<key>` via `Tool.conditions(env) -> dict`.
 `source.lockfiles.<name>` is one key per lockfile found at the source root (`uv.lock`, `Cargo.lock`), hashed from the files
 themselves; `env.source_identity(conds)` gives the nested `source` block used by the manifest and the reuse key. A shipped
-`git archive` has no `.git`: the control side passes the commit/tree/dirty it knew (`research run --source-identity`, added by
-`--on --source`) and the machine fills only what git could not tell it. `rt.torch` / `rt.triton` are the runner interpreter's
+`git archive` has no `.git`: the control side passes the identity of the commit it shipped (`research run --source-identity`,
+added by `--on --source` after the ship, so always that commit, clean) and the machine takes it whole where git knows no commit,
+and ignores it where git does. `source.commit` is the commit HEAD named when the read began, and a read a commit lands during is
+taken again. `source.dirty` means the working tree's bytes differ from that commit's (a dirty source's `source.dirty_digest`
+is never the empty string's sha256). `rt.torch` / `rt.triton` are the runner interpreter's
 distributions (`importlib.metadata`, never imported); a workload in another venv may differ.
 
 ### 6.4 Derivation id and reuse key
@@ -401,10 +406,14 @@ prints the table; the groups are:
   `authentication` (enum: included | included-hash | excluded), `campaign`, `relation`, `mode` (enum: interactive | fiat-shamir), `zk` (bool),
   `overhead`, `seconds_per_vu`, `track` (enum), `scope` (enum: unit | vu | component), `label`, `note`, `assumptions` (list),
   `omitted` (list), `domain` (`total` | `finite-only`: the operand domain the statement covers), `breakthrough` (bool); grouping and configuration a table selects on: `lane`, `row`, `sweep`, `arm`, `stage`,
-  `source`, `superseded_by`, `interaction_attempt_of` (the cell an interaction attempt belongs to), `hash`, `sharing`, `fold` (int), `pipeline` (int);
+  `source`, `superseded_by`, `of-record` (bool: the lane's evidence of record for its `goal`), `goal` (the outcome it is evidence for),
+  `interaction_attempt_of` (the cell an interaction attempt belongs to), `hash`, `sharing`, `fold` (int), `pipeline` (int);
   `abandoned` (text: the line of work the evidence belongs to was given up, in a few words; `label` refuses it unless `--ref`
   names the note that says why, as `note:<lane>/<file name without .md>` or the notes README's `note:<campaign>/<lane>/<name>`, which
-  stay valid when the file moves into a month folder).
+  stay valid when the file moves into a month folder); `memory-line-of-record` (text `lean conditional on NAMES`, on a gate run's
+  verifier run: its line of record is the `auditor_line.json` of the run `--ref` names by id, which `label` requires, computed by the
+  Lean, that file's `line_by`, and conditional on what that file's `conditional_on` names, in its order, which must include
+  `NoOutsideCompute` or `ProviderLockdown`; `label` reads the file from the ref run's record and refuses a value that isn't its).
 - **verification** — an independent verifier, never the producer: `verified` (enum: accepted | rejected | not-transferable |
   no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `below_bar` (bool: verified, but the whole-proof bound misses the tables' 2^-128 bar,
   so it is shown in the below-bar drill-down and never as a Table 2 cell), `outcome`; `independently_verified` (bool) is the back-fill's

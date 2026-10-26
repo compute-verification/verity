@@ -29,9 +29,9 @@ from verity.ml.circuits import Program, bind
 from verity.ml.circuits.codec import _spec_id, encode_program, program_digest
 from verity.ml.circuits.defs import REGISTRY
 from verity_vllm.program import workload as W
-from verity_vllm.program.registry import b1, lifted as L
-from verity_vllm.program.kernels import serve3_reference as ref
-from verity_vllm.program.registry.b1 import weights_type
+from verity.ml.definitions.registry import b1, lifted as L
+from verity.ml.definitions.numerics import serve3_reference as ref
+from verity.ml.definitions.registry.b1 import weights_type
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs
 from verity.ml.circuits.types import Array, Value
 
@@ -40,11 +40,17 @@ CAP = D_MAX + 1
 BOUNDARY = "Final_v2"  # Serve_v2's root emits `t=<T>/final` = Final_v2{…} → the token; a derived flat body has TokenSelect_v1 at root
 
 
+def tiny_component(steps: int):
+    """GP-01's component of `Serve_v2{TINY, LP, steps}` under the request wrapper's parameter names, as every pad test builds it: one
+    descriptor is one cached component (`workload._REQUEST_CACHE`, `lifted._LREQUEST_CACHE`) whatever the names, so a build under
+    other names leaves another test in the process a workload root without `shared.weights`."""
+    desc = encode_program(Program(b1.serve_v2(TINY, LP, steps)))
+    return W.request_component(desc, REGISTRY, [("prompt", repr(Array(LP, I32))), ("weights", repr(weights_type(TINY)))])
+
+
 @pytest.fixture(scope="module")
 def component():
-    sp = b1.serve_v2(TINY, LP, D_MAX)
-    desc = encode_program(Program(sp))
-    return W.request_component(desc, REGISTRY, None)
+    return tiny_component(D_MAX)
 
 
 @pytest.fixture(scope="module")
@@ -146,6 +152,7 @@ def test_component_is_the_flat_program_and_the_lift_has_exactly_the_guard_nodes_
     assert L._reads(body_l.ret) == set(lifted.output_nodes) and lifted.continuation == "continuation-v1"
 
 
+@pytest.mark.slow
 def test_active_prefix_is_bit_exact_at_every_mapped_gate_and_the_rest_is_bot(component, lifted):
     pu, tu, out_u = _run(component.fn, _inputs_per_param(component.fn.body.params, False))
     pl, tl, out_l = _run(lifted, _inputs_per_param(component.fn.body.params, True))
@@ -206,7 +213,7 @@ def test_a_served_shape_component_is_refused_against_the_declared_cap(component)
     """F-pad-15 (padrev M-0157, A3): a component derived at the SERVED shape (`build_request_LP<lp>_T<served>`, MOE-05's eos-truncated
     derivation) has fewer sampling events than the declared `max_tokens`; lifting it would make the served length the "fixed population".
     Refused by name; the same component under its own (wrong) count is what the refusal prevents."""
-    served = W.request_component(encode_program(Program(b1.serve_v2(TINY, LP, D_MAX - 3))), REGISTRY, None)  # served 6 of cap 9
+    served = tiny_component(D_MAX - 3)  # served 6 of cap 9
     assert len(L.request_boundaries(served.fn.body, BOUNDARY)) == CAP - 3
     with pytest.raises(ValueError, match=r"has 6 sampling events but the manifest declares max_tokens=9.*F-pad-15"):
         L.lift_request_component(served.fn, (17,), max_tokens=CAP, lag=0, boundary_prefix=BOUNDARY)
@@ -301,6 +308,7 @@ def test_lag1_candidate_the_placeholder_step_is_active_on_the_eos_and_bit_exact_
         L.lift_request_component(component.fn, (17,), max_tokens=CAP, boundary_prefix=BOUNDARY)  # type: ignore[call-arg]
 
 
+@pytest.mark.slow
 def test_continuation_v1_words_of_the_lifted_program_equal_the_rules_recurrence_under_both_profiles(component):
     """coord R17-39 (e) 'add the lifted-Program tests' / revb S-r17b-20: the controller words the LIFTED PROGRAM computes on the fixture's own
     transcript -- `slot=t/emit`, `slot=t/is_eos`, `slot=t/out` and `r_t` (= 1 at the unguarded slots, else `s=t-1/live`) -- EQUAL

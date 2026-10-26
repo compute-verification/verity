@@ -187,6 +187,47 @@ def test_the_runs_hello_is_checked_by_both(monkeypatch):
     assert V.hello(*run, [key], ["selection"], 2, ["session"]).codes == (V.DISAGREE,)
 
 
+def test_a_streams_coins_are_the_leans(monkeypatch):
+    """A stream's default coins are the Lean verifier of record's `IO.getRandomBytes` (A3): every byte its salt and its
+    draw read is a `coins` answer, and the draw of record is the Lean's on exactly those bytes."""
+    a, b = V.coins(64), V.coins(64)
+    assert len(a) == len(b) == 64 and a != b and V.coins(0) == b""
+    answered, selected = [], []
+    real = V._server.call
+
+    def spy(fn, value):
+        kind, body = real(fn, value)
+        if fn == "coins":
+            answered.append(bytes.fromhex(body))
+        if fn == "select":
+            selected.append(bytes.fromhex(value["source"]))
+        return kind, body
+    monkeypatch.setattr(V._server, "call", spy)
+    stream = S.Stream(_spec(), PAIR, budget=1, delta=DELTA, challenger="c")
+    assert stream.salt() == answered[0] and len(answered[0]) == 64
+    draw = stream.select(stream.register(_record(), _ports(6)))
+    assert len(draw.units) == 2 and selected == [b"".join(answered[1:])] and len(selected[0]) > 0
+
+
+def test_coins_the_lean_cannot_give_are_no_coins(monkeypatch):
+    for n in (-1, V.COINS_MAX + 1, 2.0, True):
+        with pytest.raises(ValueError, match="coins"):
+            V.coins(n)
+    assert V.lean("coins", "64") == {"refused": "coins: the input is a number of bytes"}
+    assert V.lean("coins", V.COINS_MAX + 1) == {"refused": f"coins: {V.COINS_MAX + 1} bytes in one request, past "
+                                                           f"{V.COINS_MAX}"}
+    for answer in (("reject", "no"), ("output", "zz"), ("output", "00" * 7)):
+        monkeypatch.setattr(V._server, "call", lambda fn, value, answer=answer: answer)
+        with pytest.raises(V.LeanError):
+            V.coins(8)
+
+    def broken(fn, value):
+        raise V.LeanError("lake is not on the PATH")
+    monkeypatch.setattr(V._server, "call", broken)
+    with pytest.raises(V.LeanError, match="lake"):
+        V.coins(8)
+
+
 def test_lean_that_cannot_run_fails_closed(monkeypatch):
     _, reg, draw = _drawn()
 
@@ -209,6 +250,32 @@ def test_floats_reach_the_lean_as_python_wrote_them():
     for delta in (DELTA, 0.05, 0.1):
         assert V.audit_record(**_args(reg, draw, statement=floats, delta=delta))["verifiers"]["agree"]
     assert not V.audit_record(**_args(reg, draw, statement={"x": -0.0}))["verifiers"]["agree"]
+
+
+def test_a_stream_rules_disagreement_stops_the_stream(monkeypatch):
+    """A stream's own rules decide each op by both, on what they hold of the stream that the op reads: where the Lean
+    decides otherwise, or holds another state after it, the op is refused (`disagree`, naming both), and so is every op
+    after it."""
+    stream, reg, draw = _drawn()
+    assert stream._rule_entries == [{"order": 0, "registration": S._registration_token(reg), "draw": S._draw_token(draw),
+                                     "proved": len(draw.proved), "drawn_at": stream._entries[0].drawn_at,
+                                     "delivered": False, "session": None, "final": False}]
+    _lean_answering(monkeypatch, "stream", lambda got: {**got, "decision": {"ok": "late"}})
+    with pytest.raises(S.Refused) as e:
+        stream.deliver(draw, [SESSION])
+    v = e.value.verdict
+    assert v.codes == (V.DISAGREE,) and v.detail[V.DISAGREE]["lean"]["decision"] == {"ok": "late"}
+    assert v.verifiers["python"]["decision"] == {"unchecked": "now"}
+    monkeypatch.undo()
+    for op in (lambda: stream.deliver(draw, [SESSION]), stream.ready):
+        with pytest.raises(S.Refused) as e:
+            op()
+        assert e.value.verdict is v
+    stream = _stream()
+    _lean_answering(monkeypatch, "stream", lambda got: {**got, "state": got["state"].replace('"failures":0', '"failures":1')})
+    with pytest.raises(S.Refused) as e:
+        stream.register(_record(), _ports(6))
+    assert e.value.verdict.codes == (V.DISAGREE,) and stream.failures == 0 and stream.log == ()
 
 
 def test_the_switch_is_one_line(monkeypatch):

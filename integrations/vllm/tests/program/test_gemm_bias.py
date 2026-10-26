@@ -9,7 +9,7 @@ row kernel agrees.  The launch is the export's carrier (`verity_cba::triton_laun
 
 `GemmBias_v2{K,N,DOT}` is the same pair with `Gemm_v2`'s k16 step: the frontend binds it where the target's record says
 `gemm_bias_dot` (cc 12.0 and cc 9.0), at every M (vLLM's linear runs the same launch at M = 1); a family whose record lacks it keeps
-`Gemm_v2` + `BiasAdd_v1`.  Either one-Call form is its module's slot `0` in the manifest, as the collector binds a Linear's value.
+`Gemm_v2` + `BiasAdd_v1`.  Either one-Call form is its module's one member `out`, which `query.manifest.bind` binds to the Linear's slot `0`.
 """
 from __future__ import annotations
 
@@ -27,12 +27,12 @@ from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import gemm_pins_for, vllm_ruleset
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.kernels import rows as RK
-from verity_vllm.program.registry import b1, gemm_bias, hopper
+from verity.ml.definitions.numerics import rows as RK
+from verity.ml.definitions.registry import b1, gemm_bias, hopper
 from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.kernels.serve3_reference import materialize
+from verity.ml.definitions.numerics.serve3_reference import materialize
 from verity_vllm.query import required as RQ
-from verity_vllm.query import word as W
+from verity.ml.definitions import word as W
 
 BF = torch.bfloat16
 M, K, N = 3, 32, 8
@@ -104,13 +104,6 @@ def test_the_replay_evaluates_a_one_call_biased_linear_from_a_committed_row_and_
 def test_q_word_cuts_gemm_bias_v2_into_one_unit_per_output_word_with_no_committed_interior():
     rule = W.unit_rule(bind(gemm_bias.GemmBiasV2, K=K, N=N, DOT=hopper.HopperBF16WgmmaDot16))
     assert rule["units_per_call"] == N and rule["committed_interior_words"] == 0 and rule["max_out_bits"] == 16, rule
-
-
-@pytest.mark.parametrize("family", ["GemmBias_v1", "GemmBias_v2"])
-def test_a_one_call_biased_linear_is_its_modules_slot_0(family):
-    r = RQ._residual_for(family, "out", own_parameter=True)
-    assert r is not None and r.v1_member == "0", r
-    assert RQ._residual_for(family, "out", own_parameter=False) is None
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -328,10 +321,11 @@ def _qwen2_qkv_program(one_call: bool, rows: int = 2, layers: int = 2):
     return ProgramView(tuple(calls), (weights, xs), (R(len(calls) - 1, "out"),), "synthetic", "synthetic")
 
 
-def test_a_one_call_biased_qkv_commits_slot_0_and_no_call_boundary():
+def test_a_one_call_biased_qkv_commits_one_member_and_no_call_boundary():
     """The Qwen2.5-1.5B B1 control on cc 12.0 (main without this binding) carried 3,584 more identities than the coverage Build: one
     `call_boundaries` row per (step, layer) at the pre-bias word `qkv_proj/triton_launch_1/out`, host-evaluated at Commit.  Under
-    `Q_word` the one-Call form has none, and the module's committed value is slot `0`, as the collector binds a Linear's output."""
+    `Q_word` the one-Call form has none, and the module's one member `out` binds the Linear's committed slot `0`."""
+    from verity_vllm.query.manifest.bind import Binder
     from verity_vllm.correspondence.reader_for_query import Correspondence
     res = {"program": {"digest": "d0", "function": "f"}, "attention_impls_observed": {},
            "target": {"declared": {"compute_capability": [12, 0]}}}
@@ -345,8 +339,10 @@ def test_a_one_call_biased_qkv_commits_slot_0_and_no_call_boundary():
     qkv = [f"model.layers.{i}.self_attn.qkv_proj" for i in range(2)]
     assert rows(man[True], "call_boundaries") == []
     assert rows(man[False], "call_boundaries") == [(f"{q}/triton_launch_1", "out", (0, 2 * N), "Gemm_v2") for q in qkv]
-    assert [r for r in rows(man[True], "instance_outputs") if r[0] in qkv] == [(q, "0", (0, 2 * N), "GemmBias_v2") for q in qkv]
-    rest = lambda m: sorted(json.dumps(x, sort_keys=True) for x in m["identities"]  # noqa: E731
+    assert [r for r in rows(man[True], "instance_outputs") if r[0] in qkv] == [(q, "out", (0, 2 * N), "GemmBias_v2") for q in qkv]
+    assert Binder.of_manifest(man[True], rank=0).bind(0, [f"{qkv[0]}/in", *(f"{q}/0" for q in qkv)]) == [
+        (qkv[0], "in", 0, "label"), *((q, "out", 0, "slot") for q in qkv)]
+    rest = lambda m: sorted(json.dumps({k: v for k, v in x.items() if k != "position"}, sort_keys=True) for x in m["identities"]  # noqa: E731
                             if x["family"] != "call_boundaries" and x["op_path"] not in qkv)
     assert rest(man[True]) == rest(man[False])
     assert len(man[False]["identities"]) - len(man[True]["identities"]) == len(qkv)

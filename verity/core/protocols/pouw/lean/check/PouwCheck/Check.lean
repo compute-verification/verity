@@ -2,17 +2,22 @@ import CoreProtocol.Protocol
 import PouwWindow.Grid
 import PouwWindow.Draw
 import PouwWindow.Public
+import PouwWindow.Length
 import PouwCheck.Inputs
+import PouwCheck.WindowSalt
 
 /-!
 # PoUW's rule (`core_check.py`, "the check")
 
 `registered` holds the registration to PoUW's rule: a served window in the verifier's context registering exactly
-`window.REGISTERED`, a work level whose tiles lie in the declared range, each item the verifier's own at that level, the
+`window.REGISTERED` (a registration of `window.LEGACY_REGISTERED`, made before the fixed-length rule, is not of record),
+its `length` item a fixed-length window's at the verifier's max_tokens (`window.length_problem`: no EOS-keyed row, each
+slot served its max_tokens; Daniel, 19 Oct, ASK-39), a work level whose tiles lie in the declared range, each item the verifier's own at that level, the
 population N = point(level + 1), the law subset:K′ with K′ the window's exact `k_prime`, and the check's query and
 scheme. `outcome` then holds the service's answer to it: one-stage's, for this registration's digest, and on acceptance
-a profile and draw of the registered partition's N units drawn subset:K′ at the window's δ. Every refusal is the first
-rule it breaks, in this order, with `core_check.py`'s reason.
+a profile and draw of the registered partition's N units drawn subset:K′ at the window's δ, and a live window's salt its
+live coin's (`windowSaltReason`; a seeded window's answer carries none). Every refusal is the first rule it breaks, in
+this order, with `core_check.py`'s reason.
 
 The service's reject is a reject and its undecided is undecided. On acceptance PoUW publishes `window.PUBLIC` and the
 profile is the service's `Core.Integrity`, passed through.
@@ -32,6 +37,9 @@ def toRat (r : Core.Ratio) : Rat := mkRat r.num r.den
 
 /-- `sorted(window.REGISTERED)`. -/
 def registeredSorted : List String := (PouwWindow.registered.toArray.qsort (· < ·)).toList
+
+/-- `sorted(window.LEGACY_REGISTERED)`. -/
+def legacySorted : List String := (PouwWindow.legacyRegistered.toArray.qsort (· < ·)).toList
 
 /-- What a registration that keeps PoUW's rule fixes: the level's work, the sampling item and K′, and `root_W`. -/
 structure Fixed where
@@ -66,8 +74,12 @@ def registered (p : Params) (c : Registration) : Except String Fixed :=
   if ¬ (win.kind = "served" ∧ win.context = p.context) then
     .error s!"window: registered kind {win.kind} in context {win.context}, the verifier's served in {p.context}"
   else if ks ≠ registeredSorted then
-    .error s!"public-items: registered {", ".intercalate ks}, declared {", ".intercalate registeredSorted}"
-  else match levelOf win.items with
+    if ks = legacySorted then
+      .error "window-form: no-fixed-length: registered before the fixed-length rule (19 Oct), so not of record"
+    else .error s!"public-items: registered {", ".intercalate ks}, declared {", ".intercalate registeredSorted}"
+  else match PouwWindow.lengthProblem (get win.items "length") p.maxTokens with
+  | some r => .error r
+  | none => match levelOf win.items with
   | none => .error "level: the registration names no work level"
   | some ell =>
     if PouwWindow.level bits (PouwWindow.floorPoint bits p.hi) < ell + 1 ∨ PouwWindow.point bits ell < p.lo then
@@ -92,6 +104,7 @@ structure Public where
   check : CheckItem
   work : Work
   sampling : Sampling
+  maxTokens : List Nat
   rootW : Option String
   drawn : Array Nat
   deriving DecidableEq, Repr
@@ -99,7 +112,8 @@ structure Public where
 /-- The published items in `window.PUBLIC`'s order. -/
 def Public.entries (pub : Public) : List (String × Json) :=
   [("verdict", true), ("work", pub.work.itemJson pub.check.tileWork), ("check", pub.check.toJson),
-   ("sampling", pub.sampling.toJson), ("drawn", Json.arr (pub.drawn.map fun (u : Nat) => Json.num u)),
+   ("sampling", pub.sampling.toJson), ("length", PouwWindow.lengthItem pub.maxTokens),
+   ("drawn", Json.arr (pub.drawn.map fun (u : Nat) => Json.num u)),
    ("root_W", rootWJson pub.rootW)]
 
 def Public.toJson (pub : Public) : Json := Json.mkObj pub.entries
@@ -152,7 +166,10 @@ def outcome (p : Params) (c : Registration) (f : Fixed) (e : Evidence) : Core.Ou
       .reject s!"draw: {draw.law.name} over {draw.population}, not subset:{k} over {n}"
     else if ¬ UnitsOk draw.units k n then
       .reject s!"draw: its {draw.units.size} units are not {k} ascending distinct units below {n}"
-    else .accept ⟨p.check, f.work, f.sampling, f.rootW, draw.units⟩ prof
+    else
+      let why := windowSaltReason p f.rootW e.salt
+      if why.isSome then .reject s!"salt: {why.getD ""}"
+      else .accept ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩ prof
 
 def check (p : Params) (c : Registration) (e : Evidence) : Core.Outcome Public Core.Integrity :=
   match registered p c with

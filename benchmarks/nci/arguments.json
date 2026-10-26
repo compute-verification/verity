@@ -1,0 +1,705 @@
+{
+ "claims": [
+  {
+   "id": "c1-inference-complies",
+   "rung": 1,
+   "statement": "Every supported inference session complies as declared: one block, reading only its prompt.",
+   "status": "established",
+   "premises": [
+    "p-calibration",
+    "p-inference-theorem"
+   ],
+   "attacks": [
+    "a-calibration-capture"
+   ],
+   "next": "Name the calibration (session length, token coding, non-text inputs) in every headline."
+  },
+  {
+   "id": "c2-one-declaration",
+   "rung": 2,
+   "statement": "Within the monitored circuit, with theta registered once, a compliant circuit that contains a standard dense pretraining recipe runs it at an efficiency of about 1e-7 to 3e-7 (slowdown 1e6-1e7 at kimi-k2-1m-raw).",
+   "status": "conditional",
+   "premises": [
+    "p-thread-theorem",
+    "p-weights-incompressible",
+    "p-threading",
+    "p-contains",
+    "p-construction",
+    "p-rates",
+    "p-loss-axis",
+    "p-partial-sum-lemma",
+    "p-public-templates"
+   ],
+   "attacks": [
+    "a-value-not-bit",
+    "a-boundary-code",
+    "a-threading-unproven",
+    "a-theorem-slack",
+    "a-construction-reads",
+    "a-one-recipe",
+    "a-gate-units"
+   ],
+   "next": "Prove the partial-sum lemma on the reference circuit and restate incompressibility in bits (support); price the construction over the attacker's boundary codes."
+  },
+  {
+   "id": "c3-policy-throttles-pretraining",
+   "rung": 3,
+   "statement": "Under the policy, pretraining a new model is slowed by the one-circuit factor however long the run, and the model it produces can't be served without paying about the same factor again (it was never registered).",
+   "status": "conditional",
+   "premises": [
+    "c2-one-declaration",
+    "p-one-registration",
+    "p-theta-budgets"
+   ],
+   "attacks": [
+    "a-recommitment",
+    "a-committed-corpus"
+   ],
+   "next": "Fix the registered set's budgets; decide whether any re-registration channel exists, since every such channel is a recommitment route and must be slow and priced."
+  },
+  {
+   "id": "c4-known-methods",
+   "rung": 4,
+   "statement": "Every catalogued training method is either throttled by at least the floor or has not been shown to produce broad capability gains.",
+   "status": "open",
+   "premises": [
+    "p-library",
+    "p-rates"
+   ],
+   "attacks": [
+    "a-seed-in-block",
+    "a-in-block-families",
+    "a-free-padding"
+   ],
+   "next": "Grow the library; run the learning-rule bake-off redesigned to score multiplier x boundary bits."
+  },
+  {
+   "id": "c5-capability-and-time",
+   "rung": 5,
+   "statement": "Translated into capability and time: a year of the world's compute under the policy buys what seconds to minutes of it buy today (a lag of several years of compute growth).",
+   "status": "contested",
+   "premises": [
+    "c3-policy-throttles-pretraining",
+    "p-loss-axis"
+   ],
+   "attacks": [
+    "a-free-inference"
+   ],
+   "next": "State it on the pretraining-loss axis as a lag (a world-year buys a Llama-1-7B to Llama-3-70B class base model); treat capability bought with free inference as its own axis."
+  },
+  {
+   "id": "c6-unknown-algorithms",
+   "rung": 6,
+   "statement": "Any method that teaches a model frontier-scale new capability must integrate far more than K bits per block, so every learner is throttled, not only today's.",
+   "status": "open",
+   "premises": [
+    "p-information-limits"
+   ],
+   "attacks": [
+    "a-elicitation",
+    "a-circuit-lower-bounds"
+   ],
+   "next": "An information-theoretic argument for teaching versus elicitation; memory- and communication-sample trade-offs as the tool."
+  }
+ ],
+ "premises": [
+  {
+   "id": "p-calibration",
+   "kind": "policy-rule",
+   "status": "proposed",
+   "statement": "K and Gamma are set by the longest supported session: K = 2e7 bits, Gamma = 6.4e16 at kimi-k2-1m-raw.",
+   "refs": {
+    "estimates": [
+     "b_tok/raw"
+    ]
+   }
+  },
+  {
+   "id": "p-inference-theorem",
+   "kind": "theorem",
+   "status": "proved",
+   "statement": "A declaration divided into sessions reading only theta and their prompts complies.",
+   "refs": {
+    "lean": [
+     "Nci.SecurityProofs.Inference"
+    ]
+   }
+  },
+  {
+   "id": "p-thread-theorem",
+   "kind": "theorem",
+   "status": "proved",
+   "statement": "Under threading, weight incompressibility and containment, slowdown >= kappa b_a / (2 alpha Lambda).",
+   "refs": {
+    "lean": [
+     "Nci.SecurityProofs.ThreadedReads",
+     "Nci.SecurityProofs.ThreadedTraining"
+    ]
+   }
+  },
+  {
+   "id": "p-weights-incompressible",
+   "kind": "assumption",
+   "status": "assumed",
+   "statement": "A small subcircuit of the reference circuit reads b_w bits per updated weight it uses and b_a per thread value. Stated over wiring; proofs recommends the support form. False at step 0 and for small-batch reference circuits.",
+   "refs": {
+    "lean": [
+     "Nci.Assumptions.WeightsIncompressible"
+    ],
+    "estimates": [
+     "b_w.pretrained/frontier-lossy",
+     "b_a.activation/boundary-training"
+    ]
+   }
+  },
+  {
+   "id": "p-threading",
+   "kind": "assumption",
+   "status": "false-as-instantiated",
+   "statement": "The reference circuit is (d, e)-threaded with d the entry fee and e the fan-out. Lean derives only (1, 0)-threading from structure; with a committed corpus layer 1 needs no thread reads, and the unembedding needs e >= vocabulary.",
+   "refs": {
+    "lean": [
+     "Nci.SecurityProofs.ThreadedReads"
+    ]
+   }
+  },
+  {
+   "id": "p-contains",
+   "kind": "assumption",
+   "status": "assumed",
+   "statement": "The declared circuit contains the reference circuit gate for gate (Declaration.Contains).",
+   "refs": {
+    "lean": [
+     "Nci.SecurityProofs.ThreadedThrottled"
+    ]
+   }
+  },
+  {
+   "id": "p-construction",
+   "kind": "construction",
+   "status": "analytic",
+   "statement": "slowdown.search: blocks cover slices of a token's computation; never run; omits gradient aggregation and attention reads.",
+   "refs": {
+    "rows": [
+     "pretrain-full"
+    ],
+    "algorithms": [
+     "backprop"
+    ]
+   }
+  },
+  {
+   "id": "p-rates",
+   "kind": "estimate",
+   "status": "measured",
+   "statement": "Literature rates for weights, activations, updates and tokens.",
+   "refs": {
+    "estimates": [
+     "b_w.pretrained/frontier-lossy",
+     "b_a.activation/boundary-training",
+     "activation.boundary_bits/d7168",
+     "b_w.delta/rl",
+     "b_tok/entropy-coded"
+    ],
+    "findings": [
+     "tseng-2024-qtip/1",
+     "he-2025-tahquant/1",
+     "deepseekai-2024-deepseek-v3/1"
+    ]
+   }
+  },
+  {
+   "id": "p-loss-axis",
+   "kind": "model",
+   "status": "measured",
+   "statement": "Efficiency is read on held-out loss through a Chinchilla law; past the stall it is 1/rho within about 10%, and the choice of law moves it at most 1.6x.",
+   "refs": {
+    "findings": [
+     "ho-2024-algorithmic-progress/1",
+     "gundlach-2025-origin/1"
+    ]
+   }
+  },
+  {
+   "id": "p-partial-sum-lemma",
+   "kind": "theorem",
+   "status": "proved",
+   "statement": "Proved as ContainedTraining: the Hong-Kung / Loomis-Whitney law on a reference circuit that the declared circuit contains, with its only assumptions the support-form incompressibility of one chain at b_w and b_a (ActivationsSupport, PartialSumsSupport). A chain charges each weight once per layer, so it covers one forward path: for Kimi K2 the dense path, 7% of training's work, giving rho >= 2.6e5 at kimi-k2-1m-raw (thread theorem 9.6e4, construction 1.4e7); the dense-100b example gives 4.2e6. Chain families (routed experts, the backward pass) with a joint charge would take kappa toward the thread theorem's 0.60. The Appendix A draft (Notion, 'A bound on updated-parameter multiplications per task') states the same law per task, at most (x/2)·sqrt(y) products for x operand entries in and y output entries out, and admits compression only as an allowance that weakens the ceiling as its 3/2 power; in bits, compressing both operands by a factor r weakens this law by about r^1.5. The draft's per-task output budget has no proof-only analogue: the proof fixes what a block computes from its declared inputs, not who else learns its values, so a block can copy a value out and have it re-enter later as a novel input, charged only to its reader. A per-block cap would hold with network taps that bind every link's content to the declared wires (what network accounting's certifier is built toward) and with every novel input bound to bytes that arrived over a tapped ingress link, so a server can't feed its own leftovers back in. Even then the simple version gains only about 1.6x at kimi-k2-1m-raw, because the law's full-position branch charges no outputs and binds; it waits for taps.",
+   "refs": {
+    "lean": [
+     "Nci.SecurityProofs.ContainedTraining",
+     "Nci.SecurityProofs.ContainedMatMul",
+     "Nci.Assumptions.PartialSumsSupport",
+     "Nci.Assumptions.ActivationsSupport"
+    ],
+    "findings": [
+     "hong-1981-red-blue-pebble/1",
+     "irony-2004-comm-lower-bounds-mm/1",
+     "loomis-1949-inequality/1"
+    ]
+   }
+  },
+  {
+   "id": "p-one-registration",
+   "kind": "policy-rule",
+   "status": "proposed",
+   "statement": "The monitored computation is one circuit, built by appending as it streams, over one registration up front: theta is the registered set and every computed value is novel. A run spread over time is part of that circuit, so the one-circuit theorems cover it with no composition step.",
+   "refs": {}
+  },
+  {
+   "id": "p-public-templates",
+   "kind": "policy-rule",
+   "status": "proposed",
+   "statement": "Every multiplication of the declared circuit runs inside a public classical matmul template (a fixed number format and adder tree, over a public range of shapes), and at most a public fraction of its gates lie outside templates. Products are then gates of the declared circuit itself, so the Loomis-Whitney law applies to it directly, with no reference recipe and no Contains: Strassen-style and re-associated recipes become templates over combined operands. What remains is how compressible the operands crossing blocks are (a-boundary-code, a-value-not-bit) and the outside-template cap. A minimum shape must admit attention's head dimension (64-192) and MoE experts' widths (2048 in Kimi-K2). Stated in support form on the declared circuit, the law then needs no incompressibility assumption: it is parameterized by the novel bits each operand entry actually carries (zero for registered weights, so inference is free), and how few bits training can run on is the empirical question. A fixed narrow format also hinders exact Strassen-style restructuring, whose operand sums need wider entries.",
+   "refs": {
+    "findings": [
+     "ballard-2012-graph-expansion/4"
+    ]
+   }
+  },
+  {
+   "id": "p-theta-budgets",
+   "kind": "policy-rule",
+   "status": "proposed",
+   "statement": "Two public budgets on theta (matrix-weight bits and other bits), checked inside the proof so no architecture is revealed.",
+   "refs": {
+    "rows": [
+     "zo-seed-pool"
+    ]
+   }
+  },
+  {
+   "id": "p-library",
+   "kind": "model",
+   "status": "measured",
+   "statement": "The algorithm library: 83 algorithms with traits and measured multipliers; queries give a bracket and the read breakdown.",
+   "refs": {
+    "algorithms": [
+     "fine-grained-moe",
+     "subspace-activation-compression",
+     "diloco"
+    ],
+    "findings": [
+     "wen-2025-fantastic-optimizers/1",
+     "gundlach-2025-origin/1"
+    ]
+   }
+  },
+  {
+   "id": "p-information-limits",
+   "kind": "theorem",
+   "status": "proposed",
+   "statement": "Learning with bounded memory or communication needs more samples (memory-sample and communication lower bounds).",
+   "refs": {
+    "findings": [
+     "raz-2016-fast-learning-memory/1",
+     "zhang-2013-distributed-estimation/1"
+    ]
+   }
+  }
+ ],
+ "attacks": [
+  {
+   "id": "a-recommitment",
+   "severity": "fatal",
+   "status": "answered",
+   "targets": [
+    "c3-policy-throttles-pretraining"
+   ],
+   "found_by": [
+    "systems",
+    "algorithms",
+    "gaming",
+    "round2-formal",
+    "round2-empirical"
+   ],
+   "title": "Recommitting theta makes the throttle per declaration",
+   "mechanism": "Theta has no provenance or cadence rule. Commit a checkpoint, train a block's worth reading only theta, emit a gradient, recommit. Even daily release lets blocks take hundreds of local steps (DiLoCo-style) from committed weights.",
+   "effect": "efficiency 0.3-1 if theta could be refreshed; closed by one registration phase, except through any re-registration channel the policy later allows",
+   "repair": "p-one-registration",
+   "refs": {
+    "findings": [
+     "douillard-2023-diloco/1",
+     "charles-2025-diloco-scaling/1"
+    ]
+   }
+  },
+  {
+   "id": "a-value-not-bit",
+   "severity": "major",
+   "status": "repair-proposed",
+   "targets": [
+    "c2-one-declaration"
+   ],
+   "found_by": [
+    "compression",
+    "theory",
+    "round2-formal"
+   ],
+   "title": "The theorem charges values, not bits",
+   "mechanism": "Packing a crossing into a few wide values, or deriving operands from theta, slips under the per-value charge.",
+   "effect": "proven ceiling loosens to about 9.4e-4 - 1.2e-2",
+   "repair": "Restate incompressibility in bits (support form) and charge coded crossings soundly.",
+   "refs": {
+    "findings": [
+     "kuratov-2025-cramming/2"
+    ]
+   }
+  },
+  {
+   "id": "a-boundary-code",
+   "severity": "major",
+   "status": "open",
+   "targets": [
+    "c2-one-declaration"
+   ],
+   "found_by": [
+    "compression",
+    "systems"
+   ],
+   "title": "Boundary width is the attacker's choice",
+   "mechanism": "Subspace-confined residuals cut a crossing about 140x at 1T; joint coding may cut more until the per-step optimizer-state floor.",
+   "effect": "achievable efficiency rises from about 1e-7 to about 1e-5 (one group's results to 8.6B, if its m stays about 1; a matched-token replication at only 8x loses 14-15% in loss at 1B, m about 0.04)",
+   "repair": "Measure boundary rate-distortion at scale; price the construction over codes.",
+   "refs": {
+    "findings": [
+     "ramasinghe-2025-protocolmodels/1",
+     "ryabinin-2023-swarm/2",
+     "janson-2026-mapl/3"
+    ],
+    "algorithms": [
+     "subspace-activation-compression"
+    ]
+   }
+  },
+  {
+   "id": "a-threading-unproven",
+   "severity": "major",
+   "status": "open",
+   "targets": [
+    "c2-one-declaration"
+   ],
+   "found_by": [
+    "theory"
+   ],
+   "title": "Threading is unproven for any transformer and false as instantiated",
+   "mechanism": "Layer 1 needs no thread reads when the corpus is committed; the unembedding needs e >= vocabulary.",
+   "effect": "the blue line is a conditional estimate; repaired, within about 1.1x at 1e28",
+   "repair": "Derive threading from the circuit; drop products computable from theta.",
+   "refs": {}
+  },
+  {
+   "id": "a-theorem-slack",
+   "severity": "favors-defender",
+   "status": "repair-proposed",
+   "targets": [
+    "c2-one-declaration"
+   ],
+   "found_by": [
+    "blue-formal",
+    "systems",
+    "theory"
+   ],
+   "title": "Most of the band is the theorem's slack",
+   "mechanism": "The thread theorem never charges partial sums, so its ceiling loosens as models widen.",
+   "effect": "the true one-circuit value is about 1e-7 to 3e-7; the proven partial-sum law reaches 3.6e-6 at kimi-k2-1m-raw on one forward chain",
+   "repair": "p-partial-sum-lemma, extended to chain families",
+   "refs": {}
+  },
+  {
+   "id": "a-construction-reads",
+   "severity": "favors-defender",
+   "status": "open",
+   "targets": [
+    "c2-one-declaration"
+   ],
+   "found_by": [
+    "compression",
+    "systems"
+   ],
+   "title": "The construction omits reads",
+   "mechanism": "Gradient aggregation and attention reads are not charged.",
+   "effect": "the red line should drop 2-4x",
+   "repair": "Add aggregation and attention to slowdown.search.",
+   "refs": {}
+  },
+  {
+   "id": "a-one-recipe",
+   "severity": "moderate",
+   "status": "repair-proposed",
+   "targets": [
+    "c2-one-declaration"
+   ],
+   "found_by": [
+    "scaling",
+    "algorithms",
+    "gaming"
+   ],
+   "title": "The bound covers one literal recipe",
+   "mechanism": "Contains embeds one recipe gate for gate; equivalent re-wirings (re-association, Strassen, recompute) escape it; recipe choice moves the theorem 2-4x.",
+   "effect": "2-25x on the proven line",
+   "repair": "p-public-templates",
+   "refs": {}
+  },
+  {
+   "id": "a-gate-units",
+   "severity": "moderate",
+   "status": "open",
+   "targets": [
+    "c2-one-declaration"
+   ],
+   "found_by": [
+    "systems",
+    "gaming"
+   ],
+   "title": "A declared gate is not a chip-second",
+   "mechanism": "size is unweighted and blind to width.",
+   "effect": "an exchange-rate factor of 0.005-10",
+   "repair": "Weight gates by cost.",
+   "refs": {}
+  },
+  {
+   "id": "a-committed-corpus",
+   "severity": "moderate",
+   "status": "repair-proposed",
+   "targets": [
+    "c3-policy-throttles-pretraining"
+   ],
+   "found_by": [
+    "theta-workstream"
+   ],
+   "title": "Committed data silences the theorem and frees small models",
+   "mechanism": "With the corpus in theta, Contains fails; budgets bound but don't close smuggling (a one-hot activation copies any theta entry; checkpoint slack holds about 2e11 tokens).",
+   "effect": "small-model training at efficiency about 1 up to about 1e16 FLOP",
+   "repair": "p-theta-budgets, and a theorem with a term for committed data.",
+   "refs": {
+    "rows": [
+     "zo-seed-pool"
+    ]
+   }
+  },
+  {
+   "id": "a-free-inference",
+   "severity": "major",
+   "status": "open",
+   "targets": [
+    "c5-capability-and-time"
+   ],
+   "found_by": [
+    "scaling",
+    "gaming",
+    "algorithms"
+   ],
+   "title": "Loss is not capability, and inference is free",
+   "mechanism": "Search, test-time compute and tiny-update RL buy capability back in verifiable domains.",
+   "effect": "capability-matched efficiency x10-1000; x1-3 on knowledge-bound tasks",
+   "repair": "Keep the pretraining claim on the loss axis; measure the inference-for-training exchange.",
+   "refs": {
+    "findings": [
+     "schulman-2025-lora-without-regret/1",
+     "morris-2026-tinylora/1",
+     "yue-2025-rlvr-boundary/1",
+     "muennighoff-2025-s1/1"
+    ]
+   }
+  },
+  {
+   "id": "a-seed-in-block",
+   "severity": "major",
+   "status": "open",
+   "targets": [
+    "c4-known-methods"
+   ],
+   "found_by": [
+    "library",
+    "theta-workstream"
+   ],
+   "title": "Seed-based post-training fits in a block",
+   "mechanism": "A seed pool's decoding fits under Gamma, and under the 11 MB policy every seed row does.",
+   "effect": "slowdown about 1-3.5 for fine-tuning-scale gains",
+   "repair": "Measure seed methods' capability ceiling; price decoding in gates.",
+   "refs": {
+    "findings": [
+     "malladi-2023-mezo/1",
+     "qiu-2025-es-at-scale/3"
+    ],
+    "rows": [
+     "zo-seed-pool"
+    ],
+    "algorithms": [
+     "zo-seed-pool"
+    ]
+   }
+  },
+  {
+   "id": "a-in-block-families",
+   "severity": "moderate",
+   "status": "open",
+   "targets": [
+    "c4-known-methods"
+   ],
+   "found_by": [
+    "algorithms",
+    "round2-empirical"
+   ],
+   "title": "In-block families beat the stall at mid scale",
+   "mechanism": "Routing over small experts, retrieval, recursion and test-time training stay inside blocks.",
+   "effect": "x6-150 between 1e23 and 3e25; x1 at frontier loss",
+   "repair": "Add them to the library and measure.",
+   "refs": {}
+  },
+  {
+   "id": "a-free-padding",
+   "severity": "moderate",
+   "status": "open",
+   "targets": [
+    "c4-known-methods"
+   ],
+   "found_by": [
+    "systems",
+    "algorithms"
+   ],
+   "title": "Padding is free compute",
+   "mechanism": "Padding gates can do theta-only work: data curation, rephrasing, distillation from committed teachers.",
+   "effect": "x2-10 on the comparator",
+   "repair": "Price what padding may compute.",
+   "refs": {}
+  },
+  {
+   "id": "a-calibration-capture",
+   "severity": "moderate",
+   "status": "open",
+   "targets": [
+    "c1-inference-complies"
+   ],
+   "found_by": [
+    "gaming"
+   ],
+   "title": "Calibration capture",
+   "mechanism": "K is set by the most permissive session: long text, video tokens, embedding inputs.",
+   "effect": "K x12 for 10M-token text, x600 for video, vacuous for embeddings",
+   "repair": "Charge non-text inputs as activations; prefer entropy-coded prompts.",
+   "refs": {
+    "findings": [
+     "scher-2024-verification-mechanisms/1"
+    ],
+    "estimates": [
+     "b_tok/entropy-coded"
+    ]
+   }
+  },
+  {
+   "id": "a-elicitation",
+   "severity": "major",
+   "status": "open",
+   "targets": [
+    "c6-unknown-algorithms"
+   ],
+   "found_by": [
+    "capability-review"
+   ],
+   "title": "A few bits elicit a lot",
+   "mechanism": "Every demonstrated small-update gain elicits latent skill; the policy caps new information, not what it unlocks.",
+   "effect": "a one-time elicitation overhang",
+   "repair": "Claim 'no new base models plus a bounded overhang', not 'no progress'.",
+   "refs": {
+    "findings": [
+     "lester-2021-prompt-tuning/1",
+     "agarwal-2024-many-shot-icl/2"
+    ]
+   }
+  },
+  {
+   "id": "a-circuit-lower-bounds",
+   "severity": "major",
+   "status": "open",
+   "targets": [
+    "c6-unknown-algorithms"
+   ],
+   "found_by": [
+    "theory-review"
+   ],
+   "title": "Generic lower bounds hit known barriers",
+   "mechanism": "Much stronger generic round lower bounds would separate P from NC1, so no proof covers every algorithm.",
+   "effect": "claims about all learners need structure",
+   "repair": "Bound classes of learners; price what lies outside.",
+   "refs": {
+    "findings": [
+     "roughgarden-2018-shuffles-circuits/3"
+    ]
+   }
+  }
+ ],
+ "plans": [
+  {
+   "id": "e-hong-kung-lemma",
+   "from": "blue-formal",
+   "title": "Hong-Kung law on the reference circuit",
+   "verdict": "survives with repair",
+   "note": "Per declaration only; 1,500-3,000 Lean lines; coded crossings need a sound charge (rho >= 2e4)."
+  },
+  {
+   "id": "e-closed-form",
+   "from": "blue-formal",
+   "title": "One closed form, rho = c b_a sqrt(b_w) Gamma / K^1.5",
+   "verdict": "survives with repair",
+   "note": "Algebra holds; 'constant in N' fails for coded crossings."
+  },
+  {
+   "id": "e-rates-are-widths",
+   "from": "blue-formal",
+   "title": "The bound without a named assumption",
+   "verdict": "broken",
+   "note": "Coding prices an entry at w/d; one step per declaration certifies nothing."
+  },
+  {
+   "id": "e-escape-pricing",
+   "from": "blue-formal",
+   "title": "Escape routes priced under a square root",
+   "verdict": "broken",
+   "note": "Recommitment lowers the in-block floor to 1.92 at one per day; activation compression enters linearly."
+  },
+  {
+   "id": "e-independent-checks",
+   "from": "blue-formal",
+   "title": "Independent analyses reproduce the law",
+   "verdict": "survives",
+   "note": "Confirms one-declaration geometry only."
+  },
+  {
+   "id": "e-boundary-rd",
+   "from": "blue-empirical",
+   "title": "Boundary rate-distortion at scale",
+   "verdict": "compelling with redesign",
+   "note": "Judge at the attacker's best multiplier x width; it measures achievable, not the proven ceiling."
+  },
+  {
+   "id": "e-no-crossing",
+   "from": "blue-empirical",
+   "title": "The in-block ceiling, measured",
+   "verdict": "compelling with redesign",
+   "note": "Add recursion and test-time training (about 35x)."
+  },
+  {
+   "id": "e-bake-off",
+   "from": "blue-empirical",
+   "title": "Learning-rule bake-off",
+   "verdict": "not compelling",
+   "note": "Scores extra compute as a cost the policy gives free; misses the round-1 escapes."
+  },
+  {
+   "id": "e-meter",
+   "from": "blue-empirical",
+   "title": "The NCI meter",
+   "verdict": "compelling with redesign",
+   "note": "Add a multi-declaration mode with a theta ledger and output metering; sweep release interval and ledger price (about 2,000 H100-hours)."
+  },
+  {
+   "id": "e-bounty",
+   "from": "blue-empirical",
+   "title": "A red-team bounty",
+   "verdict": "not compelling",
+   "note": "Grants too small for tier-1 attempts; recommitment fits no tier."
+  }
+ ]
+}

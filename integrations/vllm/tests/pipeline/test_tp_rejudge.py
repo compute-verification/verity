@@ -32,7 +32,8 @@ def _commit(d: Path, ranks: list[dict] | None = None, stamp: str | None = STAMP,
     """A TP2 Commit's record as `tp.commit` writes it: rows appended to runs.jsonl, per-pair cross-rank records, the summary."""
     d.mkdir(parents=True, exist_ok=True)
     per_rank = ranks or [_rank(rank="0"), _rank(rank="1")]
-    run_pass = False if any(r["commit_pass"] is False for r in per_rank) else True
+    vs = [r["commit_pass"] for r in per_rank]
+    run_pass = False if False in vs else None if None in vs else True
     rows = []
     for p in range(pairs):
         st = {"commit_started": stamp} if stamp else {}
@@ -69,6 +70,18 @@ def test_a_failed_rank_fails_its_run_and_the_verdict_by_name(tmp_path: Path) -> 
     run0 = rep["gates"]["ranks"]["per_run"][0]
     assert run0["recomputed"] is False and run0["recorded"] == [False, False] and "recorded more than once" in run0["failed"]["1"]
     assert rep["gates"]["verdict"]["agrees"] and rep["gates"]["verdict"]["recorded"] is False
+
+
+def test_a_pending_rank_rejudges_pending_not_failed(tmp_path: Path) -> None:
+    rc, rep = _rejudge(_commit(tmp_path / "c", ranks=[_rank(rank="0"), _rank(None, rank="1")]))
+    assert rc == 3 and rep["verdict"] == "PENDING" and rep["failed"] == []
+    assert rep["gates"]["ranks"]["result"] is None and rep["gates"]["ranks"]["pending"] and rep["gates"]["ranks"]["agrees"]
+    assert rep["gates"]["verdict"]["result"] is None and "deferred replay" in rep["gates"]["verdict"]["why"]
+
+
+def test_a_failed_rank_beside_a_pending_one_still_fails(tmp_path: Path) -> None:
+    rc, rep = _rejudge(_commit(tmp_path / "c", ranks=[_rank(False, rank="0"), _rank(None, rank="1")]))
+    assert rc == 1 and rep["verdict"] == "FAIL" and rep["failed"] == ["ranks", "verdict"]
 
 
 def test_a_rank_bound_to_another_program_than_the_manifest_s_fails_the_manifest_gate(tmp_path: Path) -> None:

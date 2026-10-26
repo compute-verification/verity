@@ -5,6 +5,8 @@ PTX scan, the bindings, the verdict and `main` end to end (the GPU run is `tests
 an H200)."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import copy
 import json
 from pathlib import Path
@@ -16,12 +18,13 @@ import torch
 from tests.properties import glm53_dsa_capture_gpu as X
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.defs import bind
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.kernels import sparse_mla_split_twins as TW
-from verity_vllm.program.registry import dsa
-from verity_vllm.program.registry import ref_prims as RP
-from verity_vllm.program.registry import sparse_mla as M
-from verity_vllm.program.kernels.fp8_twins import np_f32_to_e4m3_sat
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.numerics import sparse_mla_split_twins as TW
+from verity.ml.definitions.registry import dsa
+from verity.ml.definitions.registry import ref_prims as RP
+from verity.ml.definitions.registry import sparse_mla as M
+from verity_vllm.engine.env import SERVED_DEFAULTS
+from verity.ml.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 PAIRS = [(a, b) for fs in (X.L_FORMS, X.H_FORMS) for i, a in enumerate(fs) for b in fs[i + 1:]]
@@ -399,12 +402,13 @@ COMPS = [("k", "served"), ("k", "probe"), ("q", "served"), ("logits", "prefill")
 
 
 def _doc() -> dict:
-    return {"schema": X.SCHEMA, "gate": {"ok": True}, "errors": {}, "selection": {"ok": True}, "ptx": {"ok": True}, "bind": {"ok": True},
-            "rope": {"ok": True}, "topk": {"ok": True}, "launches": copy.deepcopy(LAUNCHES),
+    return {"schema": X.SCHEMA, "gate": {"ok": True}, "served": {"ok": True}, "errors": {}, "selection": {"ok": True}, "ptx": {"ok": True},
+            "bind": {"ok": True}, "rope": {"ok": True}, "topk": {"ok": True}, "launches": copy.deepcopy(LAUNCHES),
             "comparisons": [{"phase": p, "case": c, **TOT} for p, c in COMPS], "totals": {k: v * len(COMPS) for k, v in TOT.items()}}
 
 
-@pytest.mark.parametrize("path,value", [(("gate", "ok"), False), (("errors", "logits"), "boom"), (("selection", "ok"), False),
+@pytest.mark.parametrize("path,value", [(("gate", "ok"), False), (("served", "ok"), False), (("errors", "logits"), "boom"),
+                                        (("selection", "ok"), False),
                                         (("ptx", "ok"), None), (("bind", "ok"), False), (("rope", "ok"), False), (("topk", "ok"), False),
                                         (("totals", "mismatch"), 1), (("totals", "unresolved"), 1), (("totals", "reference"), 0),
                                         (("totals", "twin_mismatch"), 1), (("totals", "words"), 0),
@@ -447,8 +451,14 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
     monkeypatch.setitem(sys.modules, "vllm.config", vc)
-    for k in ("VLLM_USE_DEEP_GEMM", "VLLM_ENABLE_V1_MULTIPROCESSING", "TRITON_CACHE_DIR", "DG_JIT_CACHE_DIR"):
+    for k in SERVED_DEFAULTS:
+        monkeypatch.setenv(k, "0")
+    for k in ("VLLM_ENABLE_V1_MULTIPROCESSING", "TRITON_CACHE_DIR", "DG_JIT_CACHE_DIR"):
         monkeypatch.setenv(k, "")
+    monkeypatch.setenv("PATH", X.os.environ.get("PATH", ""))
+    monkeypatch.delenv("CUDA_HOME", raising=False)
+    seen: list[dict] = []
+    monkeypatch.setattr(X, "served", lambda: (seen.append({k: X.os.environ.get(k) for k in SERVED_DEFAULTS}), {"ok": True})[1])
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "ptx", lambda cache, outdir: {"kernels": {}, "ok": True})
@@ -475,7 +485,9 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     assert {c: v["ok"] for c, v in doc["cases"].items()} == {"k/served": True, "k/probe": False, "q/served": False,
                                                              "logits/prefill": True, "logits/decode": False, "attn": False}
     assert doc["totals"]["mismatch"] == 1 and doc["totals"]["words"] == 3 * (X.D + 1) + 21 + 6
-    assert doc["env"]["VLLM_USE_DEEP_GEMM"] == "0" and doc["env"]["DG_JIT_CACHE_DIR"].endswith("deep_gemm")
+    assert doc["env_cleared"] == {k: "0" for k in SERVED_DEFAULTS} and seen == [{k: None for k in SERVED_DEFAULTS}]
+    assert not set(SERVED_DEFAULTS) & set(doc["env"]) and doc["env"]["DG_JIT_CACHE_DIR"].endswith("deep_gemm")
+    assert doc["env"]["CUDA_HOME"] == "/usr/local/cuda" and doc["env"]["PATH"].split(":")[1] == "/usr/local/cuda/bin"
     printed = capsys.readouterr().out
     assert "ROPE k_pe=RoPEHeadGptJ_v1 q_pe=RoPEHeadGptJ_v1" in printed and "GLM53-DSA NO-GO" in printed
     assert "no-go cases=['k/probe', 'q/served', 'logits/decode', 'attn']" in printed

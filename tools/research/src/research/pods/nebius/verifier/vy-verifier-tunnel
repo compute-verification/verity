@@ -1,0 +1,22 @@
+#!/bin/sh
+# vy-verifier-tunnel: the forced command of the verifier host's two tunnel accounts (12-vy-verifier.conf), which holds a session
+# open for its forwarding and runs nothing else (benchmarks/live_verifier/host.py).
+#   - prover: the audited node's `ssh -L` to a run's port. It prints `listening PORT` once a run's verifier, auditor's, listens on
+#     one of the run ports (an `ssh -L` takes the prover's connection before the verifier listens, and the prover's connect doesn't
+#     retry a closed one), so the prover connects after that line, and it ends once none listens, so the tunnel ends with the run.
+#   - challenger: vy-challenger-1's `ssh -R` of a session's port (benchmarks/live_challenger/serve.py), held until the session
+#     ends it.
+set -eu
+case "$(id -un)" in
+  prover)
+    uid=$(id -u auditor)
+    listening() {
+      ss -Hltne | awk -v u=" uid:$uid " '$4 ~ /^127\.0\.0\.1:795[1-8]$/ && index($0, u) { sub(/.*:/, "", $4); print $4; exit }'
+    }
+    until [ -n "$(listening)" ]; do sleep 1; done
+    echo "listening $(listening)"
+    while [ -n "$(listening)" ]; do sleep 5; done
+    ;;
+  challenger) exec sleep 86400 ;;
+  *) echo "vy-verifier-tunnel: not a tunnel account" >&2; exit 3 ;;
+esac

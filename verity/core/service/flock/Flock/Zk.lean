@@ -361,12 +361,20 @@ def shapeOk (st : Stmt) : V Unit := do
   if !maskFree st r then
     throw "zk: a pair of Δ or a region meets the mask slot (D12: the zero-knowledge proof covers no such statement)"
 
-/-- META `mask_log` of a circuit file (14 when absent), which the identity names. -/
+/-- META `mask_log` of a circuit file (14 when absent), which the identity names. It reads the file's second line, the
+META line, and nothing past it, so it costs that line's bytes whatever the file's size; a file that isn't UTF-8 past it
+`HmOut.parse` refuses. -/
 def maskLogOf (circuit : ByteArray) : Nat :=
-  let line := ((String.fromUTF8? circuit).getD "" |>.splitOn "\n").getD 1 ""
-  match Json.parse (line.drop 5).toString with
-  | .ok j => (j.getObjValAs? Nat "mask_log").toOption.getD 14
-  | .error _ => 14
+  match findByte circuit 10 with
+  | none => 14
+  | some e1 =>
+    let e2 := (findByte circuit 10 (e1 + 1)).getD circuit.size
+    match String.fromUTF8? (circuit.extract (e1 + 1) e2) with
+    | none => 14
+    | some line =>
+      match Json.parse (line.drop 5).toString with
+      | .ok j => (j.getObjValAs? Nat "mask_log").toOption.getD 14
+      | .error _ => 14
 
 private def s (x : String) : Json := Json.str x
 
@@ -397,8 +405,8 @@ def tags (t : Tags) (maskLog count : Nat) : Tags :=
   { t with identity := t.identity.setObjVal! "hooks" (hooks maskLog (count > 1) t.osMasks) }
 
 /-- M2's committed coin schedule for a session's tables (upstream's `coin_spec_of`): the session's stream, then every table's
-two reps, 256 rounds of at most 512 coins each. -/
+two reps, 512 rounds of at most 512 coins each. -/
 def coinSpec (tables : Array String) : CoinTree.Spec :=
-  ⟨#["session"] ++ tables.flatMap (fun t => #[s!"{t}/rep0", s!"{t}/rep1"]), 8, 512⟩
+  ⟨#["session"] ++ tables.flatMap (fun t => #[s!"{t}/rep0", s!"{t}/rep1"]), 9, 512⟩
 
 end Flock.Zk

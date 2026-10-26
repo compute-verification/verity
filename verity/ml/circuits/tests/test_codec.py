@@ -12,6 +12,7 @@ import json
 import pytest
 
 from verity.ml.circuits import Array, Program, Value, bind, composite, decode_program, encode_program, program_digest, REGISTRY
+from verity.ml.circuits import codec
 from verity.ml.circuits.codec import IdentityConflict
 from verity.ml.circuits.defs import CompositeDefinition
 
@@ -248,3 +249,18 @@ def test_concat_normalises_repeated_references_to_one_value_into_a_zero_stride_s
     assert isinstance(concat([Affine("n", 3, 0, 1), Affine("n", 3, 1, 1)]), Affine)
 
 
+
+
+# -- the canonical JSON domain: a list of integers is checked whole ----------------------------------------------
+
+@pytest.mark.parametrize("v", [[], [1, 2, 3], (0, -(2**53 - 1), 2**53 - 1), [1, 2**53, 3, -(2**53), 5], [True, 2**53, 1],
+                               [[1, 2**53], [3, -(2**54)]], {"a": [1, 2**53], "b": [7, 2**53 + 5]}, [1, "\x7f", 2**53], [1, 1.5]])
+def test_a_list_of_integers_is_checked_whole_as_item_by_item(v):
+    """`jcs_domain_error` checks a list of integers in one pass (a census lists hundreds of millions) and names what checking
+    each item would: the last one out of range."""
+    def itemwise(v):  # a trailing null, which the domain allows, keeps a list from being checked whole
+        if isinstance(v, (list, tuple)):
+            return [itemwise(y) for y in v] + [None]
+        return {k: itemwise(y) for k, y in v.items()} if isinstance(v, dict) else v
+
+    assert codec.jcs_domain_error(v) == codec.jcs_domain_error(itemwise(v))

@@ -493,7 +493,7 @@ theorem placedNet_fit {types : String → Option CircuitType} {ls : Array Flock.
   have hc3 := c3 j'
   simp only [lookupEntry, add_zero] at hc3
   cases hown : (ls.getD j default).own with
-  | derive => rw [hdl hown]; simpa [lookupEntry] using hc3
+  | derive => rw [hdl hown]; simpa [lookupEntry, Net.b] using hc3
   | gen sha nb vb lo =>
     obtain ⟨r, hdh, hr, -, -, -, -, hlk⟩ := placedNet_gen h hown
     obtain ⟨-, -, hnc⟩ := gen_facts hd hj hown

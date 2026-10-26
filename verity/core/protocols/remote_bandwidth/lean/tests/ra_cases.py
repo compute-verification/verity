@@ -3,9 +3,10 @@
 (`RemoteAudit.Difftest`), and the sessions the tests record. Where the two differ, the Python is what is wrong.
 
 The decoders mirror `RemoteAudit.Difftest`'s: byte strings lowercase hex, indices integers, a registration checked as
-`audit.register` checks one, and `bind` refused (the Lean covers receipts of blocks alone). Past decoding each side is
+`audit.register` checks one, and `bind` refused (the Lean covers receipts of blocks alone), as `audit.Registry.register`
+refuses a registration that would bind (counted, for a node with one live). Past decoding each side is
 the Python's own code on the decoded objects. A session's events run through `audit.Session` itself, on a clock each
-event sets, with a `coins.Challenger` whose generator replays the case's coins (`Tape`).
+event sets, its coins those of a challenger that replays the case's (`Replay`).
 
 A recorded session is one `Run` drives through a real `Session`, the prover's side computed by `audit.Prover` from a
 `Store`, honest or with one deviation, every call kept as an event with the clock it read. `SCENARIOS` are the recorded
@@ -25,13 +26,16 @@ from typing import Any
 
 import verity_difftest as D
 from verity_difftest import protocol as P
-from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
+from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, wire
 from verity.core.protocols.remote_bandwidth.audit import Params, Session, SessionError
 from verity.core.protocols.remote_bandwidth.receipts import Plan
+from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES as LIVE_COIN_BYTES, HM96, LiveChallenger
 
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parent
 EXE = "remote-audit-difftest"
+#: The ports' side of record (`verity_difftest`): the Lean, as `benchmarks/remote_session/verifier.py`'s `VERDICT`.
+OF_RECORD = "lean"
 #: What the Python raises where the Lean refuses: a decoder's `Reject`, and the Python's own refusals, `ValueError`
 #: (`verity.errors.ProtocolError` and `InvalidArtifact` among them), `TypeError` and `IndexError`.
 REFUSALS = (D.Reject, ValueError, TypeError, IndexError)
@@ -179,7 +183,8 @@ def opening_of(v: Any) -> audit.Opening:
 
 
 def event_of(v: Any) -> tuple:
-    """`eventOf`: an event as a tuple, its kind first."""
+    """`eventOf`: an event as a tuple, its kind first. A `verify` carries its openings, or the frames they came in
+    (`frames`), read as the live verifiers read them (`wire.openings_of`)."""
     kind = _str(v, "kind")
     if kind in ("start", "boundary"):
         return kind, nat(v, "now")
@@ -200,6 +205,8 @@ def event_of(v: Any) -> tuple:
     if kind == "close":
         return kind, int_(v, "t"), nat(v, "now")
     if kind == "verify":
+        if "frames" in v:
+            return kind, int_(v, "t"), wire.openings_of(hexes(v, "frames"))
         return kind, int_(v, "t"), [opening_of(o) for o in _list(v, "openings")]
     raise D.Reject(f"no event kind {kind}")
 
@@ -214,20 +221,28 @@ class Clock:
         return self.now
 
 
-class Tape:
-    """The challenger's generator replaying a case's coins: each committed coin with a zero salt, then the append coins in
-    the order drawn. Past them it refuses the case, as the Lean does."""
+class Replay:
+    """Session k's challenger replaying a case's coins: a `LiveChallenger` of the session's layout whose coins are the
+    case's 2W, then its append coins in the order drawn, each the audit's 32 bytes padded to the challenger's 64 under a
+    zero salt. Past the case's append coins it refuses the case, as the Lean does."""
 
-    def __init__(self, committed: list[bytes], appends: list[bytes]) -> None:
-        self.out = [x for c in committed for x in (c, bytes(coins.HM96.salt_bytes))]
-        self.appends = list(appends)
+    def __init__(self, k: int, windows: int, committed: list[bytes], appends: list[bytes], per_coin: int = 1) -> None:
+        a = max(coins.APPENDS, len(appends))
+        padded = [c + bytes(LIVE_COIN_BYTES - len(c)) for c in [*committed, *appends]]
+        out = iter(x for c in padded + [bytes(LIVE_COIN_BYTES)] * (a - len(appends))
+                   for x in (c, bytes(HM96.salt_bytes)))
+        self.live = LiveChallenger(coins.SCHEME, k, coins.families(windows, a, per_coin), lambda n: next(out))
+        self.commitment, self.appends = self.live.commitment, len(appends)
 
-    def __call__(self, n: int) -> bytes:
-        if self.out:
-            return self.out.pop(0)
-        if self.appends:
-            return self.appends.pop(0)
-        raise D.Reject("the append coins ran out")
+    def open(self, label: str, index: int, after: bytes) -> coins.LiveOpening:
+        if label == coins.APPEND and index >= self.appends:
+            raise D.Reject("the append coins ran out")
+        return self.live.open(label, index, after)
+
+
+def replayed(reg: audit.Registration, k: int, windows: int, committed: list[bytes], appends: list[bytes],
+             per_coin: int = 1) -> coins.Coins:
+    return coins.Coins(Replay(k, windows, committed, appends, per_coin), reg.digest, k, windows, per_coin=per_coin)
 
 
 def verdict_json(v: audit.Verdict) -> dict:
@@ -269,13 +284,19 @@ def apply(s: Session, clock: Clock, e: tuple) -> dict:
 
 
 def summary(s: Session) -> dict:
-    """`summaryJ`: what `Session.record` gives that the port computes."""
+    """`summaryJ`: what `Session.record` gives that the port computes, which is all of it but the coin commitment's
+    root, the block size and the registration's fields its digest binds, and of each window's profile its draws; and
+    `sessionFn`'s `groups_per_coin` when it isn't 1."""
     rec = s.record()
-    return {"appended": rec.appended, "appends": None if rec.appends is None else rec.appends.hex(),
+    shared = {} if rec.groups_per_coin == 1 else {"groups_per_coin": rec.groups_per_coin}
+    return shared | {"appended": rec.appended, "appends": None if rec.appends is None else rec.appends.hex(),
+            "blocks": rec.blocks, "lifetime": rec.lifetime, "pace": None if rec.pace is None else rec.pace.to_json(),
             "registration": rec.registration.hex(), "released": rec.released,
-            "windows": [{"deadline_ns": w.deadline_ns, "drawn": w.profile.drawn["receipt"], "lengths": list(w.lengths),
-                         "opened_ns": w.opened_ns, "post_seed": list(w.post_seed), "released_ns": w.released_ns,
-                         "steps": list(w.steps)} for w in rec.windows]}
+            "windows": [{"arrived_ns": list(w.arrived_ns), "deadline_ns": w.deadline_ns,
+                         "drawn": w.profile.drawn["receipt"], "heads": [None if h is None else h.hex() for h in w.heads],
+                         "lengths": list(w.lengths), "opened_ns": w.opened_ns, "post_seed": list(w.post_seed),
+                         "released_ns": w.released_ns, "stale": list(w.stale), "steps": list(w.steps)}
+                        for w in rec.windows]}
 
 
 def _positive(p: Any, k: str) -> int:
@@ -285,16 +306,30 @@ def _positive(p: Any, k: str) -> int:
     return n
 
 
+def pace_of(v: Any) -> audit.Pace | None:
+    """`sessionOf`'s pace: None, or `{"k", "window_ns"}`, each a positive integer, and `in_flight`, 1 or 2, if it names
+    it (`flightOf`: 2 when it doesn't)."""
+    if v is None:
+        return None
+    k, window_ns = _positive(v, "k"), _positive(v, "window_ns")
+    f = nat(v, "in_flight") if "in_flight" in v else 2
+    if f not in (1, 2):
+        raise D.Reject("a pace's in_flight is 1 or 2")
+    return audit.Pace(k, window_ns, f)
+
+
 def session_of(v: Any) -> tuple[dict, list[bytes], list[bytes], int]:
     """`sessionOf`: a session's parameters (`Params`' keywords less the registration's, refused as `Params` refuses
-    them), its 2W coins, its append coins and its `not_before_ns`."""
+    them), its W + ⌈W/g⌉ coins, its append coins and its `not_before_ns`. `groups_per_coin` (g) is 1 when absent."""
     p = _get(v, "params")
     kw = {k: _positive(p, k) for k in ("deadline_ns", "windows", "samples", "min_passes", "window_ns", "lifetime")}
     kw["deferred"] = _bool(p, "deferred")
+    kw["pace"] = pace_of(_get(p, "pace"))
+    kw["groups_per_coin"] = _positive(p, "groups_per_coin") if "groups_per_coin" in p else 1
     Params(1, **kw)
     committed = hexes(v, "coins")
-    if len(committed) != 2 * kw["windows"] or any(len(c) != coins.COIN_BYTES for c in committed):
-        raise D.Reject("2W coins of 32 bytes")
+    if len(committed) != Params(1, **kw).coins or any(len(c) != coins.COIN_BYTES for c in committed):
+        raise D.Reject("W + ⌈W/g⌉ coins of 32 bytes")
     appends = hexes(v, "append_coins")
     if any(len(c) != coins.COIN_BYTES for c in appends):
         raise D.Reject("append coins are 32 bytes")
@@ -313,7 +348,7 @@ def session(v: Any) -> dict:
         events = [event_of(e) for e in _list(v, "events")]
         params = params_of(reg, kw)
     clock = Clock()
-    s = Session(params, reg, None, coins.Challenger(reg.digest, 0, params.coins, Tape(committed, appends)),
+    s = Session(params, reg, None, replayed(reg, 0, params.windows, committed, appends, params.groups_per_coin),
                 not_before_ns=not_before, clock=clock)
     results = [apply(s, clock, e) for e in events]
     return {"outcome": s.outcome, "record": summary(s) if s.outcome == "accepted" else None, "results": results}
@@ -349,12 +384,10 @@ def registry_op(v: Any) -> tuple:
     in the case, or in full."""
     op = _str(v, "op")
     if op == "register":
-        if _bool(v, "bind"):
-            raise D.Reject("a registration that binds PoUW's tile outputs is not covered: the Lean refuses it")
-        kind = _str(v, "receipt")
+        bind, kind = _bool(v, "bind"), _str(v, "receipt")
         receipts.receipt_kind(kind)
         return (op, hex_(v, "node"), nat(v, "blocks"), hex_(v, "payload_root"), codec_of(_get(v, "codec")), kind,
-                _str(v, "layout"), nat(v, "rows"), hex_(v, "nonce"))
+                bind, _str(v, "layout"), nat(v, "rows"), hex_(v, "nonce"))
     if op == "session":
         which = _get(v, "registration")
         which = nat(v, "registration") if isinstance(which, int) and not isinstance(which, bool) else registration_of(which)
@@ -369,16 +402,16 @@ def registry_op(v: Any) -> tuple:
 
 def _registry_call(r: audit.Registry, source: bytes, drawn: list[audit.Registration], op: str, a: tuple) -> Any:
     if op == "register":
-        node, blocks, root, c, kind, layout, rows, nonce = a
-        reg = r.register(source, node, blocks, root, c, kind, layout=layout, rows=rows, nonce=nonce)
+        node, blocks, root, c, kind, bind, layout, rows, nonce = a
+        reg = r.register(source, node, blocks, root, c, kind, bind=bind, layout=layout, rows=rows, nonce=nonce)
         drawn.append(reg)
         return {"codec_seed": reg.codec_seed.hex(), "digest": reg.digest.hex()}
     if op == "session":
         which, kw, committed, appends, not_before, index = a
         reg = drawn[which] if isinstance(which, int) else which
-        s = r.session(params_of(reg, kw), reg, None, not_before_ns=not_before, clock=Clock(),
-                      entropy=Tape(committed, appends), index=index)
-        return {"session": s.commitment.session}
+        s = r.session(params_of(reg, kw), reg, None, not_before_ns=not_before, clock=Clock(), index=index,
+                      challenger=lambda k: Replay(k, kw["windows"], committed, appends, kw["groups_per_coin"]))
+        return {"session": s.commitment.epoch}
     if op == "event":
         node, k, e = a
         x = r._live.get(audit._node(node))
@@ -483,23 +516,24 @@ class Run:
     clock moves one tick an event unless a call needs more. Every receipt is drawn unless `samples` says fewer."""
 
     def __init__(self, world: World = World(), *, windows: int = 2, samples: int = 10**6, min_passes: int = 1,
-                 lifetime: int = audit.LIFETIME, deferred: bool = False, deadline_ns: int = 100, window_ns: int = 10,
-                 not_before_ns: int = 0, cheat: Callable[[audit.Store], audit.Store] | None = None) -> None:
+                 lifetime: int | None = None, deferred: bool = False, deadline_ns: int = 100, window_ns: int = 10,
+                 not_before_ns: int = 0, cheat: Callable[[audit.Store], audit.Store] | None = None,
+                 pace: audit.Pace | None = None, groups_per_coin: int = 1) -> None:
         self.store = store(world)
         reg = self.store.registration
         self.params = Params(reg.blocks, deadline_ns, windows, samples=samples, min_passes=min_passes,
                              window_ns=window_ns, codec=reg.codec, receipt=reg.receipt, rows=reg.rows, lifetime=lifetime,
-                             deferred=deferred)
+                             deferred=deferred, pace=pace, groups_per_coin=groups_per_coin)
         self.clock = Clock()
         self.clock.now = not_before_ns
         self.not_before_ns = not_before_ns
-        self.challenger = coins.Challenger(reg.digest, 0, self.params.coins, entropy=Entropy(b"coins"))
-        self.s = Session(self.params, reg, None, self.challenger, not_before_ns=not_before_ns, clock=self.clock)
+        self.coins = coins.local(reg.digest, 0, windows, Entropy(b"coins"), per_coin=groups_per_coin)
+        self.s = Session(self.params, reg, None, self.coins, not_before_ns=not_before_ns, clock=self.clock)
         self.prover = audit.Prover(cheat(self.store) if cheat else self.store, None, self.s.commitment,
                                    entropy=Entropy(b"receipt salts"))
         self.events: list[dict] = []
         self.append_coins: list[bytes] = []
-        self.challenges: dict[int, coins.CoinOpening] = {}
+        self.challenges: dict[int, coins.LiveOpening] = {}
         self.t, self.i, self.previous, self.plan, self.step = 0, 0, reg.digest, Plan.whole(reg.blocks), -1
         self.head: bytes | None = None
         self.passes: dict[tuple[int, int], audit.Pass] = {}
@@ -562,7 +596,7 @@ class Run:
         return self._call(event, lambda: self.s.receive(t, i, root, runs, change=change, step=step))
 
     def run(self, plan: Plan | None = None, change=None, *, step: int | None = None, send: dict | None = None,
-            challenge: coins.CoinOpening | None = None, previous: bytes | None = None, head=False,
+            challenge: coins.LiveOpening | None = None, previous: bytes | None = None, head=False,
             at: int | None = None) -> Any:
         """One honest pass of the current window, its plan sent whole (None: the registered store) or as its `change`,
         covering `step` (None: the one after the last). `send` replaces what is sent; `challenge`, `previous` and
@@ -579,14 +613,15 @@ class Run:
         return self.receive(**sent)
 
     def close(self, t: int, at: int | None = None) -> Any:
-        """Window t's draws, at the earliest its roots are final unless `at`."""
+        """Window t's draws, at the earliest its roots are final unless `at`; each window of its draw keeps its share."""
         if at is None:
             w = self.s.windows[t] if 0 <= t < len(self.s.windows) else None
             d = self.s.deadline(t) if w is not None else None
             at = self.clock.now + 1 if w is None or w.final or d is None else max(self.clock.now + 1, d + 1)
         out = self._call({"kind": "close", "t": t, "now": self.tick(at)}, lambda: self.s.close(t))
         if isinstance(out, tuple):
-            self.draws[t] = out
+            for u in self.params.draw_of(t):
+                self.draws[u] = self.s.windows[u].draws
         return out
 
     def openings(self, t: int) -> list[audit.Opening]:
@@ -598,25 +633,32 @@ class Run:
                           lambda: self.s.verify(t, opened))
 
     def finish(self, edit: Callable[[int, list[audit.Opening]], list[audit.Opening]] | None = None) -> None:
-        """Every window not yet drawn closed and verified in order, its openings through `edit`, until one fails."""
+        """Every draw not yet drawn closed at its last window and its windows verified in order, their openings
+        through `edit`, until one fails; a window its close accepted, its share none, isn't verified."""
         for t in range(len(self.s.windows)):
             if t in self.draws:
                 continue
-            out = self.close(t)
+            group = self.params.draw_of(t)
+            out = self.close(group[-1])
             if not isinstance(out, tuple):
                 return
-            v = self.verify(t, None if edit is None else edit(t, self.openings(t)))
-            if not (isinstance(v, audit.Verdict) and v.accepted):
-                return
+            for u in group:
+                if self.s.windows[u].verdict is not None:
+                    continue
+                v = self.verify(u, None if edit is None else edit(u, self.openings(u)))
+                if not (isinstance(v, audit.Verdict) and v.accepted):
+                    return
 
     def case(self) -> dict:
         p = self.params
         return {"append_coins": [c.hex() for c in self.append_coins],
-                "coins": [c.hex() for c, _ in self.challenger._coins], "events": self.events,
+                "coins": [c[:coins.COIN_BYTES].hex() for c, _ in self.coins.challenger._coins[:p.coins]],
+                "events": self.events,
                 "not_before_ns": self.not_before_ns,
                 "params": {"deadline_ns": p.deadline_ns, "deferred": p.deferred, "lifetime": p.lifetime,
-                           "min_passes": p.min_passes, "samples": p.samples, "window_ns": p.window_ns,
-                           "windows": p.windows},
+                           "min_passes": p.min_passes, "pace": None if p.pace is None else p.pace.to_json(),
+                           "samples": p.samples, "window_ns": p.window_ns, "windows": p.windows}
+                | ({} if p.groups_per_coin == 1 else {"groups_per_coin": p.groups_per_coin}),
                 "registration": registration_json(self.store.registration)}
 
 
@@ -907,6 +949,15 @@ def plan_both(r: Run) -> None:
     r.receive(0, 0, bytes(64), runs=((0, 2),), change=((), ()), step=0)
 
 
+def receipts_at_limit(r: Run) -> None:
+    """The store appended to the codec's `max_blocks` and passes of all of it, until one would take window 0's
+    receipts to `RECEIPT_LIMIT`: that pass rejects with `plan`."""
+    r.start()
+    r.commit(bytes(64), P512.max_blocks - r.store.extent)
+    for i in range(audit.RECEIPT_LIMIT // P512.max_blocks):
+        r.receive(0, i, bytes([i]) * 64, runs=((0, P512.max_blocks),), step=i)
+
+
 def plan_released(r: Run) -> None:
     r.start()
     r.run()
@@ -993,6 +1044,110 @@ def few(r: Run) -> None:
     r.finish()
 
 
+def honest_paced(r: Run) -> None:
+    """A paced session (`audit.Pace`, k = 2): each window holds its k roots."""
+    r.start()
+    r.run()
+    r.run()
+    r.boundary()
+    r.run()
+    r.run(Plan(((1, 3), (0, 1)), r.store.extent))
+    r.boundary()
+    r.finish()
+
+
+def honest_paced_drawn_at_k(r: Run) -> None:
+    """A paced session (k = 2) drawn as each window's k-th root arrives once its boundary has left: a draw after one
+    root, or after k before the boundary, is refused; window 0 is drawn before window 1's first root, and the last
+    window before its deadline."""
+    r.start()
+    r.run()
+    r.close(0)
+    r.run()
+    r.close(0, at=r.clock.now + 1)
+    r.boundary()
+    r.close(0, at=r.clock.now + 1)
+    r.verify(0)
+    r.run()
+    r.run(Plan(((1, 3), (0, 1)), r.store.extent))
+    r.boundary()
+    r.close(1, at=r.clock.now + 1)
+    r.verify(1)
+
+
+def after_boundary(r: Run) -> None:
+    """Window 0's second root after its boundary, within its deadline, then window 1's two passes and the close: two
+    windows in flight (`audit.Pace.in_flight`) take it, and one rejects that root `order`."""
+    r.start()
+    r.run()
+    r.boundary()
+    r.t, r.i = 0, 1
+    r.run()
+    r.t, r.i = 1, 0
+    r.run()
+    r.run(Plan(((1, 3), (0, 1)), r.store.extent))
+    r.boundary()
+    r.finish()
+
+
+def boundary_before_root(r: Run) -> None:
+    """Window 0's boundary on a clock reading before its root arrived, then another later: at two windows in flight the
+    first ends window 0 and the second, too soon after window 1's challenge, is refused; at one the first is refused
+    and the second ends window 0.  Window 1's two passes and the close follow."""
+    r.start()
+    r.run(at=20)
+    r.boundary(at=15)
+    r.boundary(at=21)
+    r.run()
+    r.run(Plan(((1, 3), (0, 1)), r.store.extent))
+    r.boundary()
+    r.finish()
+
+
+def honest_shared(r: Run) -> None:
+    """One openings coin over g windows (`Params.groups_per_coin`): every window's passes, then each draw closed at its
+    last window and its windows verified on their shares. A close at a window before its draw's last is refused, and
+    a window whose share is none, accepted at its close, is refused a verify."""
+    r.start()
+    for t in range(r.params.windows):
+        r.run()
+        if t == 1:
+            r.close(0)
+        r.run(Plan(((1, 3), (0, 1)), r.store.extent))
+        r.boundary()
+    r.finish()
+    for u, w in enumerate(r.s.windows):
+        if w.draws == ():
+            r.verify(u, [])
+
+
+SKIPPED = Plan(((0, 3), (4, 2)), 6)
+"""The default world's store but block 3, which only a skipper's window 2 plans to read."""
+
+
+def skipper_shared(r: Run) -> None:
+    """Under one openings coin over four windows, the prover holds block 3 as zeros (`dropping`), which only window 2's
+    pass reads, so it skips that read and makes its receipt from what it holds; fetched again for the opening, the
+    receipt isn't the committed one (`receipt`) at window 2, past the windows before it, which verify."""
+    r.start()
+    for t in range(4):
+        r.run(None if t == 2 else SKIPPED)
+        r.boundary()
+    honest_blocks = r.store.blocks
+    r.finish(lambda t, opened: [dataclasses.replace(o, block=honest_blocks[3])
+                                if r.passes[t, o.pass_index].plan.block(o.position) == 3 else o for o in opened])
+
+
+def few_shared(r: Run) -> None:
+    """Window 0 of a draw over four sees no root: the draw's close at window 3 fails `few` at window 0."""
+    r.start()
+    r.boundary()
+    for _ in range(3):
+        r.run()
+        r.boundary()
+    r.finish()
+
+
 def malformed_root(r: Run) -> None:
     r.start()
     r.receive(0, 0, bytes(32), step=0)
@@ -1054,6 +1209,8 @@ def refusals(r: Run) -> None:
 
 W1 = dict(windows=1)
 DEFERRED = dict(lifetime=2, deferred=True)
+PACED = dict(pace=audit.Pace(2, 10))
+PACED1 = dict(pace=audit.Pace(2, 10, 1))
 P1024 = World(codec.DEFAULT, blocks=3)
 BLOCK = World(receipt=receipts.BLOCK_SHA512)
 ROWS64 = World(rows=64)
@@ -1103,6 +1260,22 @@ SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
     "order-window": (World(), {}, lambda r: order(r, 1, 0), "order"),
     "order-negative": (World(), {}, lambda r: order(r, -1, 0), "order"),
     "order-after-final": (World(), {}, order_after_final, "order"),
+    "honest-paced": (World(), PACED, honest_paced, "accepted"),
+    "honest-paced-drawn-at-k": (World(), PACED, honest_paced_drawn_at_k, "accepted"),
+    "order-past-pace": (World(), PACED, lambda r: (r.start(), r.run(), r.run(), r.run()), "order"),
+    "honest-paced-one-flight": (World(), PACED1, honest_paced, "accepted"),
+    "honest-shared-paced-one-flight": (World(), dict(PACED1, windows=4, groups_per_coin=2, samples=3), honest_shared,
+                                       "accepted"),
+    "after-boundary": (World(), PACED, after_boundary, "accepted"),
+    "after-boundary-one-flight": (World(), PACED1, after_boundary, "order"),
+    "boundary-before-root": (World(), PACED, boundary_before_root, "accepted"),
+    "boundary-before-root-one-flight": (World(), PACED1, boundary_before_root, "accepted"),
+    "honest-shared-4": (World(), dict(windows=8, groups_per_coin=4, samples=5), honest_shared, "accepted"),
+    "honest-shared-paced-uneven": (World(), dict(PACED, windows=5, groups_per_coin=2, samples=3), honest_shared,
+                                   "accepted"),
+    "skipper-shared-4": (World(), dict(windows=4, groups_per_coin=4, cheat=dropping(lambda j: j == 3)), skipper_shared,
+                         "receipt"),
+    "few-shared": (World(), dict(windows=4, groups_per_coin=4), few_shared, "few"),
     "late": (World(), dict(deadline_ns=5), late, "late"),
     "plan-repeated-block": (World(), {}, lambda r: plan(r, ((0, 3), (2, 2))), "plan"),
     "plan-adjacent-runs": (World(), {}, lambda r: plan(r, ((0, 2), (2, 2))), "plan"),
@@ -1115,6 +1288,7 @@ SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
     "plan-change-overlapping": (World(), {}, lambda r: plan_change(r, (((3, 2), (4, 1)), ())), "plan"),
     "plan-both": (World(), {}, plan_both, "plan"),
     "plan-released": (World(), {}, plan_released, "plan"),
+    "plan-receipts-at-limit": (World(), {}, receipts_at_limit, "plan"),
     "release-twice": (World(), {}, lambda r: release(r, ((2, 1),)), "release"),
     "release-malformed": (World(), {}, lambda r: release(r, ((5, 3),)), "release"),
     "release-adjacent": (World(), W1, lambda r: (release(r, ((3, 1),)), r.run(Plan(((0, 1), (4, 2)), 6)),
@@ -1154,7 +1328,8 @@ SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
 
 @functools.cache
 def recorded(name: str) -> tuple[dict, str | None]:
-    """Scenario `name`'s case and the outcome the recorded session reached."""
+    """Scenario `name`'s case and the outcome the recorded session reached. Cached and shared by every test in the
+    process: copy the case before editing it."""
     world, kw, build, _ = SCENARIOS[name]
     r = Run(world, **kw)
     build(r)

@@ -1,4 +1,4 @@
-"""X-03 per-layer attention plane classes (F-r19-int-22): the expected FA2/FA3 hidden-plane inventory of a step is DERIVED per attention
+"""X-03 per-layer attention plane classes: the expected FA2/FA3 hidden-plane inventory of a step is DERIVED per attention
 layer from the Program's attention Call statics x the step's active-sequence set; uniformity across layers is a consequence, never a rule.
 
 The seven questions for the Value `fa2.m1/L<k>` (the FA3 twin `fa3.m1/L<k>` differs only in the launch geometry):
@@ -17,7 +17,8 @@ The seven questions for the Value `fa2.m1/L<k>` (the FA3 twin `fa3.m1/L<k>` diff
  5. Occurrence resolution: layer k = the step's k-th launch (`launches_in_step`); sequence i = the global index in `cu_seqlens_q`
     order = the step's row order (`step_rows`, BIND-01): (request, seqlen_q) per active sequence.
  6. Binding: the name splits into (op_path `fa2.m1/L<k>`, member) -> the manifest identity of that layer at that engine step
-    (`required_manifest.committed_identity`, coverage op-level per step); leaves are position-identified in the packed step stream.
+    (`verity_vllm.query.manifest.bind`; at B>1 coverage holds the op's tensors at the step to the launch's whole stream, each tensor
+    the words its name's geometry declares, `format.batch_launch_shortfall`); leaves are position-identified in the packed step stream.
  7. Independent check (this module): `check_step` recomputes each layer's class and count from the declarations and the active set and
     names every layer whose observed inventory disagrees; the old uniformity rule is kept as `uniform_rule` for runs without declarations.
 No model names anywhere: a layer is described only by its statics (NH, KVH, D, window); classes are derived, never tabulated.
@@ -345,7 +346,7 @@ def check_step(decls: Iterable[AttnLayerDecl], seqs: StepSequences, names: Itera
 
 
 def uniform_rule(counts_by_layer: Mapping[int, int], attention_layers: Iterable[int]) -> dict[int, int]:
-    """The R13 X-03 rule, unchanged, as a pure function (the no-declaration fallback of `identity_check`): every attention layer of the step
+    """The uniform X-03 rule as a pure function (the no-declaration fallback of `identity_check`): every attention layer of the step
     must carry the SAME positive count -- the modal count (ties -> smallest); layers outside `attention_layers` are reported with their count."""
     layers = list(attention_layers)
     counts = {k: int(counts_by_layer.get(k, 0)) for k in layers}
@@ -357,7 +358,7 @@ def uniform_rule(counts_by_layer: Mapping[int, int], attention_layers: Iterable[
 
 
 def counts_by_layer(names: Iterable[str]) -> Counter:
-    """Hidden-plane tensors per layer, every plane counted (executed and padding alike -- what the R13 rule read)."""
+    """Hidden-plane tensors per layer, every plane counted (executed and padding alike -- what `uniform_rule` reads)."""
     c: Counter = Counter()
     for n in names:
         m = _NAME_RE.match(n)

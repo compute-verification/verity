@@ -86,7 +86,7 @@ theorem RunZk.inner_k (hRp : Replay H rel) (hRS : RingSwitchZk H rel) (hLg : Lig
     exact hend
 
 /-- **Every recorded round of a masked rep is consumed** wherever its steps return: the goal `ConsumedZk`. -/
-theorem consumedZk_goal (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel)
+theorem consumedZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : JsonRT.StmtOkZk H rel)
     (hP : JsonRT.ProverOkZk H rel) (hRp : Replay H rel) (hRS : RingSwitchZk H rel) (hLg : LigeritoZk H rel)
     (hIn : Inner H rel) : ConsumedZk H rel := by
   intro o i hi r hr

@@ -144,6 +144,14 @@ SUITES: dict[str, list[tuple[str, dict[str, Any], int]]] = {
             for K, sizes in ((2048, (6272, 16384)), (8192, (1920, 8192))) for n in sizes],
     #: NVFP4 on the RTX 5090 at K = 1536 for the two Flock cells (Fp4 <= 32,768 and ShaFp4 <= 16,384 VUs per proof); 8,192 is the prefix.
     "nvfp4": [("gemm-coordinate", {"K": 1536, "semantics": "sm120.mma.m16n8k64.e2m1.nvf4"}, n) for n in (8192, 16384)],
+    #: The registered compiler's dead-free Definitions a served window draws, at Llama-3.2-1B's shapes (N 2048, D 64) and
+    #: Llama-3.1-8B's (N 4096, D 128): RMSNormTriton_v5, AttentionHead_v18, and TokenSelect_v4's two calls at Llama 3's vocabulary.
+    "dead-free": [("rmsnorm-triton-v5", {"N": 2048, "EPS": 1e-5}, 256),
+                  ("rmsnorm-triton-v5", {"N": 4096, "EPS": 1e-5}, 256),
+                  ("attention-head-v18", {"D": 64, "BN": 128, "T": "1:512"}, 1024),
+                  ("attention-head-v18", {"D": 128, "BN": 64, "T": "1:512"}, 128),
+                  ("token-select-chunk", {"C": 64}, 1024),
+                  ("token-select-combine", {"V": 128256, "C": 64}, 64)],
 }
 
 

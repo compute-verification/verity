@@ -64,7 +64,7 @@ is refused (D12), and the soundness headline at the full draw has no sampling te
 
 A round's content is the transcript-v2 frames the prover absorbed since its last squeeze (PROTOCOL.md §6.1). `split_round`
 sorts them: the domain and labels are public constants and are dropped; a ``BYTES`` frame is a cap (committed as its salted
-top), a proof-of-work nonce (8 bytes, dropped: with live coins grinding buys nothing) or, in a rep's first round, the
+top), a proof-of-work nonce (8 bytes, `0`, dropped: with live coins grinding buys nothing) or, in a rep's first round, the
 statement digest (dropped: it is a function of the hidden statement); the observed field elements are the free message ``F_k``. ``F_k`` is
 laid out as one row of whole :data:`ROW_WORDS`-word blocks (each element 8 words, its 16 bytes lo LE then hi LE; the last
 block zero-padded) and committed as a registered row is (``verity.core.protocols.sampled_proofs.one_stage.registered``:
@@ -94,6 +94,7 @@ from pathlib import Path
 from verity.ml.commitments import hm96
 
 from .rec_algebra import fast100
+from .record_text import session_text
 
 KIND = "rec/inner-transcript/v1"
 SESSION_KIND = "flock-live-session/v1"
@@ -221,6 +222,12 @@ def encode_req(t: int, *f) -> bytes:
 
 def f128_bytes(v: int) -> bytes:
     return struct.pack("<QQ", v & MASK64, v >> 64)
+
+
+def record_bytes(record: dict) -> str:
+    """The coin server's record as ``public.json`` holds it: ``json.dumps(…, indent=1)`` with its rounds first, the
+    format Lean's total reader reads (`Flock.RecRecord.readRecord`, which `recordW` writes)."""
+    return json.dumps({"rounds": record["rounds"], **{k: v for k, v in record.items() if k != "rounds"}}, indent=1)
 
 
 def f128_hex(v: int) -> str:
@@ -517,6 +524,32 @@ def full_draw(program, query: dict) -> dict:
     return {**law, "population": n, "units": list(range(n))}
 
 
+#: `RecSetup.noInnerDraw`: the verifier's refusal, last in a session's verdict, of a session over an inner session whose
+#: record holds no draw
+NO_INNER_DRAW = ("refused: the inner session's record (--rec-inner-session) holds no draw (unit_draw): the recursion's inner "
+                 "session is drawn (the coin server's full draw, rec_live.full_draw), the only inner session the recursion's "
+                 "proof covers")
+
+
+def _not_json(c: str):
+    raise ValueError(f"{c} is not JSON")
+
+
+def inner_draw(record: str):
+    """The inner session's draw: its record's ``unit_draw`` (`Proxy.session_record`) as the verifier reads it
+    (`RecCoins.recordDraw`: absent or null, or a record that is not a JSON object, is none). The verifier refuses every
+    session over an inner session without one (`RecSetup.innerDrawn`, last in its verdict), so V*'s statements over it
+    would all be refused: ValueError (`NO_INNER_DRAW`)."""
+    try:
+        j = json.loads(record, parse_constant=_not_json)
+    except ValueError:
+        j = None
+    d = j.get("unit_draw") if isinstance(j, dict) else None
+    if d is None:
+        raise ValueError(NO_INNER_DRAW)
+    return d
+
+
 def statement_of(text: str) -> dict:
     """The ``STATEMENT`` record in ``flock-circuit statement``'s output (its other lines ignored), or the text as one JSON
     object."""
@@ -552,6 +585,25 @@ def schedule_of(record: dict) -> dict:
             "streams": {s: {"parent": v["parent"], "at": v["at"], "rounds": v["rounds"]} for s, v in sorted(record["streams"].items())},
             "rounds": [{"stream": r["stream"], "k": r["k"], "n": r["n"], "tops": [len(t) for t in r["tops"]], "level0": r["level0"],
                         "commits": len(r["commits"])} for r in record["rounds"]]}
+
+
+def on_schedule(record: dict, schedule: dict) -> None:
+    """The verifier's `RecVStar.checkSchedule`: the coin server's record ``record`` declares exactly the streams of
+    ``schedule`` (`schedule_for` at the verifier's inner shape), each where the schedule opens it and with its round
+    count, and holds the schedule's rounds in its order, each with its stream, number, coin count (``n`` and the coins
+    drawn), tops' node counts, copies of level 0's top and a ``c_k`` exactly where the schedule's round absorbs a
+    message; else ValueError. `Proxy` holds a session to the same schedule, on the prover's side: a session that
+    bypasses it reaches the coin server with any rounds, and its record still ends ``finish``."""
+    want, got = check_schedule(schedule), schedule_of(record)
+    if got["streams"] != want["streams"]:
+        raise ValueError(f"the record declares the streams {canonical(got['streams'])}, and the schedule "
+                         f"{canonical(want['streams'])}")
+    if len(got["rounds"]) != len(want["rounds"]):
+        raise ValueError(f"{len(got['rounds'])} rounds, and the schedule's {len(want['rounds'])}")
+    for j, (r, g, w) in enumerate(zip(record["rounds"], got["rounds"], want["rounds"])):
+        if g != w or len(r["coins"]) != r["n"]:
+            raise ValueError(f"round {j} is {canonical(g)} of {len(r['coins'])} coins, and the schedule's "
+                             f"{canonical(w)}")
 
 
 # --- the verifier's side ----------------------------------------------------------------------------------------------------------
@@ -988,10 +1040,10 @@ class Proxy:
         out = Path(out)
         sess = out / "session"
         sess.mkdir(parents=True, exist_ok=True)
-        (sess / "session.json").write_text(json.dumps(self.session_record(), indent=1))
+        (sess / "session.json").write_text(session_text(self.session_record()))
         for (t, r), b in self.proofs.items():
             (sess / f"{t}.rep{r}.bin").write_bytes(b)
-        (out / "public.json").write_text(json.dumps(self.coins.record(), indent=1))
+        (out / "public.json").write_text(record_bytes(self.coins.record()))
         if self.commitments:
             (out / "coins.json").write_text(json.dumps(self.coins.commitment_record(), indent=1))
         if self.registered:
@@ -1072,7 +1124,7 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
             d = Path(out) / f"s{len(res)}" if sessions > 1 else Path(out)
             if proxy.stopped is not None:
                 d.mkdir(parents=True, exist_ok=True)
-                (d / "public.json").write_text(json.dumps(proxy.coins.record(), indent=1))
+                (d / "public.json").write_text(record_bytes(proxy.coins.record()))
                 res.append({"session": None, "refused": proxy.stopped, "rounds": len(proxy.coins.rounds)})
                 if firewall is not None:
                     firewall.stop(sid, "inner", proxy.stopped)

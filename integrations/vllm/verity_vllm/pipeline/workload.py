@@ -2,7 +2,7 @@
 
     verity-vllm workload --row-id <row-id> --hf-repo <repo> --revision <rev> --batch B --max-input I --max-output O \\
         [--sampling greedy|stoch-t0.8-p0.95|stoch-t0.8-p1] [--arrivals none|staggered] [--tokenizer <snapshot dir or tokenizer.json>] [--case <ROLE>] \\
-        [--lengths-only] [--check] --out workloads/<row-id>.json
+        [--shared-prefix N] [--lengths-only] [--check] --out workloads/<row-id>.json
 
 Output = the existing request-list workload format (a row file, `config.RowConfig`, see `workloads/workload_cov_*.json`) that
 `verity_vllm.engine.vllm_adapter.load_workload` / `bench/commit_delta.py` / `zk/bench/e2e_commit_run.py` / the eager capture consume unchanged,
@@ -22,14 +22,19 @@ every earlier workload) and truncated to the exact planned length.  Sampling `st
 independent stored seed per request (`requests[i].seed`, read by `load_workload`).  `stoch-t0.8-p1`: the same without the top-p mask (temperature and
 Gumbel-max only).  Arrivals `staggered`: request 0 at 0 s, the
 others at seeded offsets over the first ~60 % of a full-length run; stored as `arrival_offsets_s` and as the step-indexed
-`arrive_step` the loaders consume (`arrive_step = round(offset_s / nominal_step_s)`, nominal_step_s = 0.010, recorded).
+`arrive_step` the loaders consume (`arrive_step = round(offset_s / nominal_step_s)`, nominal_step_s = 0.010, recorded), declared
+where the serving loop admits it (`arrivals.realized_arrive_steps`): an arrival after every earlier request has finished is the
+forward after the last of them, since the loop never idles.  The TP Commit places the Build's manifest at the declared steps, so a
+declaration the engine doesn't realize leaves the served identities unbound.
+`--shared-prefix N` (a prefix-caching row): every prompt longer than N starts with the same N tokens of one seeded passage, then its own
+text (`requests[i].shared_prefix_tokens`), the row's `engine.args.enable_prefix_caching` is true, and `--check` requires a request
+longer than N to arrive after the first one (a hit needs the first one's blocks computed).
 `--lengths-only` writes the plan without text/token ids (no tokenizer needed) so lanes can see the shape plan on a laptop.
 """
 from __future__ import annotations
 
 import hashlib
 import json
-import os
 import sys
 import uuid
 from importlib import resources
@@ -38,7 +43,11 @@ from pathlib import Path
 import numpy as np
 from dataclasses import dataclass
 
-from verity_vllm.config import CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, option, row_world
+from verity_vllm import settings
+from verity_vllm.config import (CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, option, row_execution, row_world,
+                                rows_of_record)
+from verity_vllm.engine import served
+from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.engine.profiles.transport import row_custom_all_reduce_off, row_p2p_env
 
 CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"
@@ -50,7 +59,12 @@ SAMPLING = {
     "stoch-t0.8-p1": {"temperature": 0.8, "top_p": 1.0, "top_k": 0},
 }
 NOMINAL_STEP_S = 0.010          # a decode step of the 1–2B models on L40S (R11: 7.5–10.9 ms); converts arrival seconds -> arrive_step
+ARRIVE_STEP_RULE = ("realized_arrive_steps of round(offset_s / nominal_step_s): an arrival after every earlier request has finished "
+                    "is declared at the forward after the last of them, where the serving loop admits it")
 MIN_CAP = 2                     # the "very short" output cap (prefill + one decode step)
+#: the row file's reason for the switch a target with the int8 attention in scope sets (`TargetProfile.engine_args`)
+INT8_ATTENTION_REASON = ("TargetProfile.int8_exact serves the exact-int8 attention (engine.int8_attention_vllm.Int8AttentionImpl), "
+                         "registered as vLLM's CUSTOM backend")
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -134,8 +148,9 @@ def plan_values(n: int, lo: int, hi: int, rng: np.random.Generator, *, anchor_ne
     return out
 
 
-def plan(row_id: str, batch: int, max_input: int, max_output: int, *, sampling: str, arrivals: str) -> dict:
-    """The model-independent shape plan of one row: lengths, caps, sampling seeds, arrival offsets (all deterministic in the row id)."""
+def plan(row_id: str, batch: int, max_input: int, max_output: int, *, sampling: str, arrivals: str, shared_prefix: int = 0) -> dict:
+    """The model-independent shape plan of one row: lengths, caps, sampling seeds, arrival offsets (all deterministic in the row id),
+    and the shared prefix every prompt longer than it starts with (`--shared-prefix`; 0 = none)."""
     seed = row_seed(row_id)
     lo = 8 if max_input >= 32 else 1
     lengths = plan_values(batch, lo, max_input, rng_for(seed, "lengths"), anchor_near_lo=True)
@@ -151,7 +166,8 @@ def plan(row_id: str, batch: int, max_input: int, max_output: int, *, sampling: 
         horizon_s = max(0.1, 0.6 * max_output * NOMINAL_STEP_S)            # arrivals over the first ~60 % of a full-length run
         offs = sorted(round(float(x), 3) for x in r.uniform(0.05, horizon_s, size=batch - 1))
         offsets_s = [0.0] + offs
-        steps = [0] + [max(1, int(round(o / NOMINAL_STEP_S))) for o in offs]
+        drawn = [0] + [max(1, int(round(o / NOMINAL_STEP_S))) for o in offs]
+        steps = realized_arrive_steps([{"max_tokens": c, "arrive_step": a} for c, a in zip(caps, drawn)])
     else:
         offsets_s = [0.0] * batch
         steps = [0] * batch
@@ -160,12 +176,19 @@ def plan(row_id: str, batch: int, max_input: int, max_output: int, *, sampling: 
             "min_input": lo, "min_output": MIN_CAP if max_output >= MIN_CAP else max_output,
             "sampling": sampling, "sampling_params": SAMPLING[sampling], "arrivals": arrivals,
             "input_lengths": lengths, "output_caps": caps, "sampling_seeds": seeds, "arrival_offsets_s": offsets_s, "arrive_steps": steps,
-            "arrival_rule": {"nominal_step_s": NOMINAL_STEP_S, "arrive_step": "round(offset_s / nominal_step_s)",
+            "arrival_rule": {"nominal_step_s": NOMINAL_STEP_S, "arrive_step": ARRIVE_STEP_RULE,
                              "schedule": "0 | sorted U[0.05, 0.6*O*nominal_step_s] s (staggered); all 0 (none)"},
             "length_rule": {"input": "anchors I, lo+{0..3}, one awkward per quartile (Q2,Q3,Q1,Q4), then stratified log-uniform over [lo, I] "
                                      "nudged off powers of two; seeded permutation", "output": "same over [2, O]; paired by seeded permutation",
                             "depends_on": "SHA256(row_id) only"},
-            "seed_rule": "seed = SHA256(row_id); rng(purpose) = default_rng(SHA256(seed || '/' || purpose)); sampling seed i = SHA256(seed||'/sampling/'||i)[:4]"}
+            "seed_rule": "seed = SHA256(row_id); rng(purpose) = default_rng(SHA256(seed || '/' || purpose)); sampling seed i = SHA256(seed||'/sampling/'||i)[:4]",
+            "shared_prefix": int(shared_prefix)}
+
+
+def prefix_sharers(p: dict) -> list[int]:
+    """The requests whose prompt starts with the plan's shared prefix: every one longer than it."""
+    n = int(p.get("shared_prefix") or 0)
+    return [i for i, x in enumerate(p["input_lengths"]) if n and int(x) > n]
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -212,6 +235,11 @@ def check_plan(p: dict) -> list[str]:
         offs = p["arrival_offsets_s"]
         if offs[0] != 0.0 or offs != sorted(offs) or len(set(offs)) < min(B, 4):
             bad.append(f"staggered arrival schedule malformed: {offs}")
+    if p.get("shared_prefix"):
+        arrive = [int(p["arrive_steps"][i]) for i in prefix_sharers(p)]
+        if len(arrive) < 2 or max(arrive) == min(arrive):
+            bad.append(f"shared prefix {p['shared_prefix']}: no request longer than it arrives after the first one (arrive steps "
+                       f"{arrive}), so none could reuse its cached blocks (stagger the arrivals or shorten the prefix)")
     return bad
 
 
@@ -241,7 +269,7 @@ class Tok:
 
 
 def hf_home() -> Path:
-    env = os.environ.get("HF_HOME")
+    env = settings.HF_HOME
     if env:
         return Path(env)
     try:
@@ -268,6 +296,17 @@ def corpus_paragraphs() -> list[dict]:
     return [{"text": p, "source": b["source"], "index": i} for b in doc["books"] for i, p in enumerate(b["paragraphs"])]
 
 
+def _passage(tok: Tok, paras: list[dict], j: int, need: int, ids: list[int] | None = None) -> tuple[list[int], list[str]]:
+    """``need`` token ids: ``ids``, then corpus text from paragraph ``j`` on (a paragraph after earlier text joined by a space)."""
+    ids, used = list(ids or []), []
+    while len(ids) < need:
+        para = paras[j % len(paras)]
+        ids += tok.encode((" " if ids else "") + para["text"])
+        used.append(f"{para['source']} ¶{para['index']}")
+        j += 1
+    return ids[:need], used
+
+
 def build_requests(tok: Tok, p: dict) -> list[dict]:
     paras = corpus_paragraphs()
     B = int(p["batch"])
@@ -275,22 +314,19 @@ def build_requests(tok: Tok, p: dict) -> list[dict]:
     starts = [int(s) for s in rng.choice(len(paras), size=min(B, len(paras)), replace=False)]
     while len(starts) < B:                       # B > #paragraphs: reuse starts with a paragraph offset so prefixes still differ
         starts.append((starts[len(starts) - len(paras)] + 7 * (1 + len(starts) // len(paras))) % len(paras))
+    n, sharers = int(p.get("shared_prefix") or 0), set(prefix_sharers(p))
+    prefix, prefix_used = _passage(tok, paras, int(rng_for(p["seed"], "prefix").integers(len(paras))), n) if sharers else ([], [])
     reqs = []
     for i in range(B):
         need = int(p["input_lengths"][i])
-        ids: list[int] = []
-        used: list[str] = []
-        j = starts[i]
-        while len(ids) < need:
-            para = paras[j % len(paras)]
-            ids += tok.encode((" " if ids else "") + para["text"])
-            used.append(f"{para['source']} ¶{para['index']}")
-            j += 1
-        ids = ids[:need]
+        ids, used = _passage(tok, paras, starts[i], need, prefix if i in sharers else None)
         req = {"request_id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"verity-sweep/{p['row_id']}/{i}")), "index": i,
                "prompt_len": need, "max_tokens": int(p["output_caps"][i]), "arrive_step": int(p["arrive_steps"][i]),
                "arrival_offset_s": float(p["arrival_offsets_s"][i]),
                "prompt_token_ids": ids, "prompt_text": tok.decode(ids), "origin": {"corpus": CORPUS.name, "paragraphs": used}}
+        if i in sharers:
+            req["shared_prefix_tokens"] = n
+            req["origin"]["shared_prefix_paragraphs"] = prefix_used
         if p["sampling_seeds"]:
             req["seed"] = int(p["sampling_seeds"][i])
         reqs.append(req)
@@ -299,10 +335,12 @@ def build_requests(tok: Tok, p: dict) -> list[dict]:
 
 def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok: Tok | None) -> dict:
     B, I, O = int(p["batch"]), int(p["max_input"]), int(p["max_output"])
+    n, sharers = int(p["shared_prefix"]), prefix_sharers(p)
     reqs = build_requests(tok, p) if tok is not None else [
         {"request_id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"verity-sweep/{p['row_id']}/{i}")), "index": i,
          "prompt_len": int(p["input_lengths"][i]), "max_tokens": int(p["output_caps"][i]), "arrive_step": int(p["arrive_steps"][i]),
-         "arrival_offset_s": float(p["arrival_offsets_s"][i]), **({"seed": int(p["sampling_seeds"][i])} if p["sampling_seeds"] else {})}
+         "arrival_offset_s": float(p["arrival_offsets_s"][i]), **({"shared_prefix_tokens": n} if i in sharers else {}),
+         **({"seed": int(p["sampling_seeds"][i])} if p["sampling_seeds"] else {})}
         for i in range(B)]
     variant = p["sampling"]
     variants = {"greedy": SAMPLING["greedy"]}
@@ -310,13 +348,14 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
         variants[variant] = SAMPLING[variant]
     horizon = max(int(r["arrive_step"]) + int(r["max_tokens"]) for r in reqs)
     total_prompt = sum(int(r["prompt_len"]) for r in reqs)
+    of_record = p["row_id"] in rows_of_record()
     doc = {
         "schema": SCHEMA, "model": hf_repo, "case": case,
         "engine": {"revision": revision, "vllm": VLLM,
                    "args": {"max_num_batched_tokens": int(max(2048, total_prompt + B)), "max_model_len": int(I + O)}},
         "seed": 0,
         "variants": variants, "seeds": list(p["sampling_seeds"]),
-        "sampling": {"variant": variant, "seed": None, "n": 1},
+        "sampling": {"variant": variant, "seed": None, "n": 1, **({"ignore_eos": True} if of_record else {})},
         "serving_profile": f"sweep-B{B}" + ("-staggered" if p["arrivals"] == "staggered" else ""), "context_class": f"I{I}-O{O}",
         "length_seed": p["seed"], "prompt_seed": p["seed"], "replicate": 0,
         "length_rule": p["length_rule"],
@@ -331,16 +370,22 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
                                     "arrive_steps", "arrival_rule", "length_rule", "seed_rule")},
         "note": (f"R12 sweep {p['row_id']}: B={B} I<={I} O<={O} {variant} arrivals={p['arrivals']}; prompt lens {p['input_lengths']}, caps "
                  f"{p['output_caps']}, arrive steps {p['arrive_steps']}; every request to max_tokens => {horizon} engine steps; "
-                 f"max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched."),
+                 f"max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  "
+                 + ("A row of record: sampling.ignore_eos, every request done only at its public cap." if of_record else "EOS untouched.")),
     }
     doc["sweep"]["lengths_only"] = tok is None
+    if n:
+        doc["engine"]["args"]["enable_prefix_caching"] = True
+        doc["sweep"]["shared_prefix"] = n
+        doc["note"] += (f"  Shared prefix: requests {sharers} (every prompt longer than {n} tokens) start with the same {n} tokens and "
+                        f"prefix caching is on, so each after the first reuses its cached KV blocks.")
     # [lane vllm-tp-n] a tensor-parallel row (`__tp<N>__` in the row id, N >= 2): the engine's world, the manifests' TP flags of record
-    # (#70 / #75: VLLM_BATCH_INVARIANT=1, or what a `--target` declares; on a SYS target, where P2P hangs, disable_custom_all_reduce and
-    # NCCL_P2P_DISABLE=1) and `sweep.tp`
+    # (#70 / #75: the execution label's VLLM_BATCH_INVARIANT, or what a `--target` declares; on a SYS target, where P2P hangs,
+    # disable_custom_all_reduce and NCCL_P2P_DISABLE=1) and `sweep.tp`
     world = row_world(p["row_id"])
     if world > 1:
         doc["engine"]["args"].update({"tensor_parallel_size": int(world), "disable_custom_all_reduce": row_custom_all_reduce_off(p["row_id"])})
-        doc["engine"]["env"] = {**row_p2p_env(p["row_id"]), "VLLM_BATCH_INVARIANT": "1"}
+        doc["engine"]["env"] = {**row_p2p_env(p["row_id"]), **served.execution_env(row_execution(p["row_id"]))}
         doc["sweep"]["tp"] = int(world)
     return doc
 
@@ -385,15 +430,21 @@ class Options:
                                 help="emit the shape plan without text / token ids (no tokenizer needed)")
     check: bool = option("--check", default=False, action="store_true",
                          help="run the §12 self-check on the plan; exit 1 on a violation")
+    shared_prefix: int = option("--shared-prefix", type=int, default=0,
+                                help="every prompt longer than N tokens starts with the same N tokens (one seeded corpus passage) and the row "
+                                "runs with enable_prefix_caching (vLLM reuses whole KV blocks: N a multiple of the block size reuses all of it)")
     out: str | None = option("--out", default=None, help="default workloads/<row-id>.json (relative to the repo)")
     target: str | None = option("--target", default=None,
                                 help="[R13 hopper] TargetProfile overrides of the row as JSON (e.g. '{\"flash_attn_version\": 2}' for an `…__bi-eager-fa2` row): written "
                                 "to the row's `engine.target` (every GPU stage builds its engine for it; `TargetProfile.engine_args()` is merged into "
                                 "`engine.args`, a TP row's `engine.env` takes `TargetProfile.env()`) and `sweep.execution` = the profile's execution label")
+    reason: list[str] = option("--reason", action="append", default=[], metavar="SWITCH=TEXT",
+                               help="why the row sets a served switch (`engine.served.DEFAULTS`) away from vLLM's default, written to "
+                                    "`engine.reasons`; repeatable.  A served Commit refuses a switch away from the default without one")
 
 
 def main(a: Options) -> int:
-    p = plan(a.row_id, a.batch, a.max_input, a.max_output, sampling=a.sampling, arrivals=a.arrivals)
+    p = plan(a.row_id, a.batch, a.max_input, a.max_output, sampling=a.sampling, arrivals=a.arrivals, shared_prefix=a.shared_prefix)
     bad = check_plan(p)
     if a.check:
         print(f"[check] {a.row_id}: B={a.batch} lens={p['input_lengths']} caps={p['output_caps']} steps={p['arrive_steps']} -> "
@@ -412,6 +463,10 @@ def main(a: Options) -> int:
             return 2
         tok = Tok(tp)
     doc = workload_doc(p, hf_repo=a.hf_repo, revision=a.revision, case=case_for(a.hf_repo, a.revision, a.case), tok=tok)
+    reasons = dict(r.partition("=")[::2] for r in a.reason)
+    if unknown := sorted(set(reasons) - set(served.DEFAULTS)) or [k for k, v in reasons.items() if not v]:
+        print(f"[error] --reason {unknown}: a reason is SWITCH=TEXT for a switch of {sorted(served.DEFAULTS)}", file=sys.stderr)
+        return 2
     if a.target:
         from verity_vllm.program.frontend.target_profile import TargetProfile
         t = json.loads(a.target)
@@ -425,6 +480,10 @@ def main(a: Options) -> int:
         if exec_suffix != tp.execution_label:
             print(f"[error] row id execution suffix {exec_suffix!r} != the target's execution label {tp.execution_label!r}", file=sys.stderr)
             return 3
+        if "attention" in tp.int8_parts:
+            reasons.setdefault("attention_backend", INT8_ATTENTION_REASON)
+    if reasons:
+        doc["engine"]["reasons"] = reasons
     if tok is not None:
         for r in doc["requests"]:
             assert len(r["prompt_token_ids"]) == r["prompt_len"], (r["index"], len(r["prompt_token_ids"]), r["prompt_len"])

@@ -105,12 +105,13 @@ blocks per SM), whose registers and opcodes this capture reads the same way and 
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import argparse
 import ctypes
 import glob
 import hashlib
 import inspect
-import itertools
 import json
 import multiprocessing
 import os
@@ -128,7 +129,7 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties.glm53_block_fp8_capture_gpu import _activation, _error, _load, _save, _u16, _u32
-from verity_vllm.program.kernels import marlin_moe_rows as MR
+from verity.ml.definitions.numerics import marlin_moe_rows as MR
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-marlin-capture/v3"
@@ -881,8 +882,8 @@ def compare_reference(job: dict[str, Any]) -> dict[str, Any]:
     coordinates, and for the w2 launch one coordinate through the expert gather over every expert's rows."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation import evaluate
-    from verity_vllm.program.kernels.derived_rows import f2fp_bf16
-    from verity_vllm.program.registry import marlin_moe as MM
+    from verity.ml.definitions.numerics.derived_rows import f2fp_bf16
+    from verity.ml.definitions.registry import marlin_moe as MM
 
     TK, TN, GRID = job["statics"]
     K, N, E, P, par = job["K"], job["N"], job["E"], job["pairs"], job["par"]
@@ -914,7 +915,7 @@ def compare_reference(job: dict[str, Any]) -> dict[str, Any]:
         n = (P * 7919) % N
         cut = cuts.get(int(blk[0]), MR.schedule(KT, NT, GRID, int(blk[0]), par))[n // TN]
         fn = bind(MM.MarlinMoeExpertCoordinateW, E=E, K=K, TK=TK, DOT=MM.DOT)
-        y = evaluate(fn, x[0].tolist(), cut.astype(int).tolist(), int(e[0]), int(gb[0]), np.asarray(w["wq"][:, n]).ravel().tolist(),
+        y = evaluate(fn, x[0].tolist(), cut.astype(int).tolist(), int(e[0]), int(gb[0]), MR.pack_e2m1(w["wq"][:, n]).ravel().tolist(),
                      np.asarray(w["ws"][:, n]).ravel().tolist())
         twin = MR.coordinates(x[0][None], cut[None], w["wq"][e[0], n][None], w["ws"][e[0], n][None], TK=TK, g=gb[:1])
         rec["reference_expert_coords"] += 1
@@ -947,14 +948,10 @@ def model(served: dict[str, dict[str, list[int] | None]], sms: int) -> dict[str,
     the block's m blocks, and the registers of a driver-compiled kernel, another instantiation at each block)."""
     out: dict[str, Any] = {}
     for kind, by_m in sorted(served.items()):
+        swept = {int(M): c for M, c in by_m.items() if c}
         for block in sorted({block_of(M) for M in SERVED_M}):
-            obs = [(int(M), tuple(c)) for M, c in sorted(by_m.items(), key=lambda kv: int(kv[0])) if c and block_of(int(M)) == block]
-            configs, consistent = MR.thread_configs(block), []
-            for a in itertools.product(range(MR.max_blocks_per_sm(block) + 1), repeat=len(configs)):
-                allow = {(tk, tn): v for (tk, tn, _), v in zip(configs, a) if v}
-                if obs and all(_auto(M, kind, sms, allow) == c for M, c in obs):
-                    consistent.append(allow)
-            out[f"{kind}/{block}"] = {"observed": len(obs), "consistent": len(consistent),
+            consistent = MR.allows(swept, block, shape(kind)[1], TOP_K, launch_top_k(kind), NUM_EXPERTS, sms)
+            out[f"{kind}/{block}"] = {"observed": sum(block_of(M) == block for M in swept), "consistent": len(consistent),
                                       "allow": [{f"{tk}/{tn}": v for (tk, tn), v in allow.items()} for allow in consistent[:8]]}
     return out
 
@@ -966,8 +963,8 @@ def bind_check(served: set[tuple[str, int, int, int]]) -> dict[str, Any]:
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation.batch import type_shape
-    from verity_vllm.program.boolean import boolean_version
-    from verity_vllm.program.registry import marlin_moe as MM
+    from verity.ml.definitions.boolean import boolean_version
+    from verity.ml.definitions.registry import marlin_moe as MM
 
     out: dict[str, Any] = {}
     for kind, TK, TN, GRID in sorted(served):
@@ -976,7 +973,7 @@ def bind_check(served: set[tuple[str, int, int, int]]) -> dict[str, Any]:
                   DOT=MM.DOT)
         params, ret = fn.signature()
         p = {k: list(type_shape(t)) for k, t in params}
-        ok = p["wq"] == [NUM_EXPERTS, N, K] and p["ws"] == [NUM_EXPERTS, N, K // GROUP] and p["x"] == [K] and list(type_shape(ret)) == [N]
+        ok = p["wq"] == [NUM_EXPERTS, N, K // 2] and p["ws"] == [NUM_EXPERTS, N, K // GROUP] and p["x"] == [K] and list(type_shape(ret)) == [N]
         out[descriptor_id(fn)] = {"ok": ok, "boolean": descriptor_id(boolean_version(fn))}
     return {"bindings": out, "ok": bool(out) and all(v["ok"] for v in out.values())}
 

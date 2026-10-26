@@ -1,9 +1,8 @@
-"""Verification plans over IR programs: prescribed inputs are sampled gates (IR §E), under the two-stage law."""
+"""Verification plans over IR programs: prescribed inputs are sampled gates (IR §E)."""
 
 from __future__ import annotations
 
 import importlib.util
-import random
 import sys
 from fractions import Fraction
 from pathlib import Path
@@ -12,7 +11,6 @@ import pytest
 
 from verity.ml.circuits import query
 from verity.ml.circuits.layout import FunctionCall
-from verity.core.protocols.sampled_proofs.two_stage import OwnRandomness, Stage, select_replay_units
 from verity.core.protocols.sampled_proofs.plan import DEFAULT_CLASS, Obligation, UnconditionalObligation, VerificationPlan, weight_binding_plan
 
 RUNNING_EXAMPLE = Path(__file__).resolve().parents[4] / "ml" / "circuits" / "tests" / "test_running_example.py"
@@ -35,12 +33,12 @@ def _running_example():
 def test_plan_input_gates_are_sampled_gates():
     P = _running_example().make_program()
     C = P.circuit
-    # W (param 1) at p = 1 = WB's model binding; everything else sampled at 1/4, each gate its own replay unit
+    # W (param 1) at p = 1 = WB's model binding; everything else sampled at 1/4
     plan = weight_binding_plan(P, [1], other_rate=Fraction(1, 4))
     assert plan.check_probability(C[4]) == 1 and plan.check_probability(C[13]) == 1  # W Input gates
     assert plan.check_probability(C[0]) == Fraction(1, 4)  # X Input gates are sampled like any other gate
     assert plan.check_probability(C[14]) == Fraction(1, 4)
-    assert plan.stage_of(C[14]) == Stage(Fraction(1, 4), 1) and plan.class_of(C[14]) == DEFAULT_CLASS
+    assert plan.class_of(C[14]) == DEFAULT_CLASS
     assert plan.expected_checked(C[0:54]) == 10 + Fraction(44, 4)
     # the same plan with sampled weights
     plan2 = weight_binding_plan(P, [1], other_rate=Fraction(1, 4), weight_rate=Fraction(1, 2))
@@ -50,16 +48,12 @@ def test_plan_input_gates_are_sampled_gates():
     assert ob.to_json()["function_call"]["args"] == [0, 1, 4, 5]
 
 
-def test_a_gate_level_plan_samples_through_the_law():
+def test_a_plan_states_its_rates():
     P = _running_example().make_program()
-    C = P.circuit
     plan = weight_binding_plan(P, [1], other_rate=Fraction(1, 4))
-    units = plan.units(C[0:54])
-    picked = {u.index for u in select_replay_units(OwnRandomness(random.Random(1).randbytes), plan.law, units)}
-    assert set(range(4, 14)) <= picked                 # every weight Input gate, at p = 1
-    assert picked == {u.index for u in select_replay_units(OwnRandomness(random.Random(1).randbytes), plan.law, units)}
-    assert picked < set(range(54))
-    assert plan.to_json()["classes"][0]["stage"] == {"p": "1", "k": 1} and plan.to_json()["default"] == {"p": "1/4", "k": 1}
+    assert plan.to_json()["classes"][0]["rate"] == "1" and plan.to_json()["default"] == "1/4"
+    with pytest.raises(ValueError):
+        VerificationPlan(plan.classes, Fraction(5, 4))
 
 
 def test_unconditional_obligations_are_the_covered_families():
@@ -68,7 +62,6 @@ def test_unconditional_obligations_are_the_covered_families():
     weights = wb.classes[0][0]
     plan = VerificationPlan(wb.classes, wb.default, unconditional=(UnconditionalObligation(weights, "weights of record"),))
     assert plan.covered() == frozenset({weights.name}) and wb.covered() == frozenset()
-    assert plan.law.profile(DEFAULT_CLASS, n_r=44, n_v=1, delta=0.01, covered=plan.covered()).covered == {weights.name}
 
 
 def test_class_names_are_distinct():

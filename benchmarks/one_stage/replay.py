@@ -27,8 +27,7 @@ run recorded.
   checks, verdict; public) and codes.
 * **The whole record.** Where the registration passes and the draw is an object, the audit record itself by the
   verifier of record (`one_stage.verifier.audit_record`: the Lean's `record` beside Python's `audit_record`, equal under
-  canonical JSON but for `wrong_units.bound` under a Bernoulli law, which is Python's on both), on the case's evidence
-  with its floats; whether they agree, and the fields where they don't.
+  canonical JSON), on the case's evidence with its floats; whether they agree, and the fields where they don't.
 * **No recorded verdict.** A run that recorded no verdict (a serving bundle no verifier audited in its own run, an A2
   or A4 run that stopped before its audit record) compares Lean with today's Python on the stages it holds: the whole
   audit where it kept the session, else the registration alone (its `stages`; each outcome read up to them, one that
@@ -51,7 +50,7 @@ import subprocess
 import sys
 import tarfile
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable, Iterator
@@ -64,14 +63,16 @@ from verity.ml.commitments.identity import identity_digest, identity_digest_sha5
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 
+import r2_population as R2
+
 SCHEME = "frame-v3-sha512/hm96-sha512"
 ROW = "hm96-sha512/row/v1"
 #: M0's set-bound frame domains: each tag with its identity digest (`a0.STAND_IN_BINDINGS`)
 STAND_IN_BINDINGS = {"verity/flock-circuit/binding/v2": identity_digest_sha512,
                      "verity/flock-ir-frame/binding/v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
 SERVED_BINDINGS = {"sha512": identity_digest_sha512, "v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
-#: `registration.SERVED_DOMAIN`, today's and before it
-SERVED_TAGS = (R.SERVED_DOMAIN, "verity/one-stage/served-domain/v0")
+#: `registration.WINDOW_DOMAIN`, today's and before it
+SERVED_TAGS = (R.WINDOW_DOMAIN, "verity/one-stage/served-domain/v0")
 STAGES = ("registration", "draw", "checks", "verdict")
 REGISTRATION = ("registration",)
 CHECKS = ("proved", "receipt", "served", "roots", "registered")
@@ -92,7 +93,7 @@ class Gap(Exception):
 
 def _registry() -> None:
     """Every Definition a recorded program may call: the circuit ops and vLLM's program registry."""
-    for name in ("verity.ml.circuits.ops", "verity_vllm.program.registry"):
+    for name in ("verity.ml.circuits.ops", "verity.ml.definitions.registry"):
         pkg = importlib.import_module(name)
         for m in pkgutil.walk_packages(pkg.__path__, pkg.__name__ + "."):
             importlib.import_module(m.name)
@@ -413,7 +414,7 @@ def stand_in_ports(name: str, content_digest: str, n: int, layout: dict[str, tup
 
 
 def served_domain(form: tuple[str, str], program: str, partition: str, port: str, schema: str, leaves: int, run: str) -> str:
-    """`registration.served_domain` under the era's tag and identity digest (`v1`, before 64-byte bindings, or `sha512`)."""
+    """`registration.window_domain` under the era's tag and identity digest (`v1`, before 64-byte bindings, or `sha512`)."""
     tag, binding = form
     doc = {"program": program, "partition": partition, "port": port, "schema": schema, "leaves": int(leaves), "run": run}
     return _domain(SERVED_BINDINGS[binding](tag, doc), leaves)
@@ -608,7 +609,7 @@ def python(c: Case) -> dict:
         return out("undecided", f"the verifier of record {next(k for k, v in of_record if v.get('accepted') is None)} has not run")
     profile = audit.profile(rec, e["draw"], delta).to_json()
     wrong = a["wrong_units"]
-    public = {"bound": wrong["bound"] if isinstance(wrong["bound"], int) else None, "drawn": list(e["draw"]["units"]),
+    public = {"bound": wrong["bound"], "drawn": list(e["draw"]["units"]),
               "per_template": wrong.get("per_template"), "proved": DR.proved(e["draw"])}
     return out("accept", None, public, {**profile, "delta": str(profile["delta"])})
 
@@ -770,7 +771,7 @@ def a0(run: Run) -> Iterator[Case]:
     src = f"{base}/negatives.json"
     draw = a["draw"]
     k = law["k"]
-    smaller = P.population_program(template, n - 1, version=population_version(program))
+    smaller = R2.program([(template, n)], mixed=False, version=population_version(program))
     spart = with_program(partition, smaller)
     first = rec["roots"][0]
     cases: dict[str, Callable[[dict], Case]] = {} if pc is None else {
@@ -867,9 +868,11 @@ def a0_lean(run: Run) -> Iterator[Case]:
 
 
 def _negatives(run: Run, c: Case, neg: dict, src: str, cases: dict[str, Callable[[dict], Case]], *, base_instances: int,
-               session_roots: dict | None, served: list[int] | None = None) -> Iterator[Case]:
+               session_roots: dict | None, served: list[int] | None = None,
+               outside: dict[str, str] | None = None) -> Iterator[Case]:
     """The run's negatives: its own (`cases`), `audit_negatives`' (on the base audit as that function re-decided it:
-    instances = the proved units, the sessions' roots, the served draw), and the ones outside the protocol."""
+    instances = the proved units, the sessions' roots, the served draw), and the ones outside the protocol (`outside`,
+    the driver's own reasons, before `OUTSIDE`)."""
     an = c.but("", "negative", c.recorded, evidence={"instances": base_instances, "session_roots": session_roots,
                                                       "served": served})
     vs = c.evidence["verdicts"]
@@ -894,17 +897,17 @@ def _negatives(run: Run, c: Case, neg: dict, src: str, cases: dict[str, Callable
             provenance={"change": f"the verdicts of record report {value}'s reads opened against another root"}),
     }
     if served is not None:
-        other = next(u for u in range(c.rec["population"]) if u not in set(served))
+        other = [u for u in range(c.rec["population"]) if u not in set(served)][:1]
         shared["served-share-not-the-verifier's-draw (C1)"] = lambda v: an.but(
             "served-share-not-the-verifier's-draw (C1)", "negative", recorded_failed(v, src),
-            evidence={"served": sorted(served)[1:] + [other]})
+            evidence={"served": sorted(served)[1:] + other})
     for name, v in neg.items():
         make = cases.get(name) or shared.get(name)
         if make is not None:
             yield make(v)
         else:
             run.outside.append({"run": c.run, "driver": c.driver, "name": name,
-                                "why": OUTSIDE.get(name, "UNHANDLED: the replay has no case for it")})
+                                "why": (outside or {}).get(name) or OUTSIDE.get(name, "UNHANDLED: the replay has no case for it")})
 
 
 @dataclass
@@ -981,7 +984,7 @@ def a2(run: Run) -> Iterator[Case]:
     yield c
     src = f"{base}/negatives.json"
     draw = a["draw"]
-    smaller = P.population_program(v2.template, n - 1, version=population_version(program))
+    smaller = R2.program([(v2.template, n)], mixed=False, version=population_version(program))
     cases: dict[str, Callable[[dict], Case]] = {
         "public-file-b||c-byte-flipped (R4)": lambda v: c.but(
             "public-file-b||c-byte-flipped (R4)", "negative", recorded_codes(v, "registration", src),
@@ -1176,8 +1179,7 @@ def a3(run: Run) -> Iterator[Case]:
     union = {"law": "subset", "population": n, "k": law["k"], "units": sorted(a["draw"]["units"])}
     proved = sorted(a["proved_units"])
     bases = {name: (lo, lo + cnt) for (name, *_), (_, lo, cnt) in zip(mem, P.ranges(program, query))}
-    fewer = P.mixed_population_program([(d, cnt - (1 if i == 0 else 0)) for i, (_, _, d, cnt) in enumerate(mem)],
-                                       version=population_version(program))
+    fewer = R2.program([(d, cnt) for _, _, d, cnt in mem], mixed=True, version=population_version(program))
     cases: dict[str, Callable[[dict], Case]] = {
         "registration-partition-mismatch": lambda v: c.but(
             "registration-partition-mismatch", "negative", recorded_codes(v, "registration", src), program=fewer,
@@ -1333,8 +1335,7 @@ def a4(run: Run) -> Iterator[Case]:
     n = rec["population"]
     draw = a["draw"]
     proved = sorted(a["proved_units"])
-    other = P.mixed_population_program([(d, cnt - (1 if i == 0 else 0)) for i, (_, _, d, cnt, _) in enumerate(mem)],
-                                       version=population_version(program))
+    other = R2.program([(d, cnt) for _, _, d, cnt, _ in mem], mixed=True, version=population_version(program))
     cases: dict[str, Callable[[dict], Case]] = {
         "registration-partition-mismatch (R2)": lambda v: c.but(
             "registration-partition-mismatch (R2)", "negative", recorded_codes(v, "registration", src), program=other,
@@ -1607,6 +1608,8 @@ SERVED_OUTSIDE = (
     (r"receive-open", "the stream's rule: one registration open at a time (`Stream.register`)"),
     (r"receive-(coin-.*|unrecorded)", "PoUW's epoch coins (`pouw.coins`), the challenger's, before one-stage's checks"),
     (r"select-again", "the service draws once per receipt and never redraws (`select`); the protocol checks the draw it is handed"),
+    (r"receive-after-draw", "the challenger's record order (`Challenger.register`, late-registration): each window is received "
+                            "before the epoch's draw coin is released"),
     (r"(outcome|deliver)-again|retry-.*", "the service's stream: one delivery, a final outcome, the failure budget"),
     (r"open-.*", "served_zk's opening check (a proof's rows are the drawn unit's), a verdict beside the verifier of record's"),
     (r"lean-.*", "the verifier of record (Lean `flock-verify verify --zk`) on one unit's session; the protocol reads its verdict"),
@@ -1641,9 +1644,15 @@ def served_window(run: Run) -> Iterator[Case]:
     def law_at(ell: int) -> dict:
         return Wd.sampling(Fraction(pv["eps"]), Fraction(pv["delta"]), Wd.Work.at(ell, pv["grid_bits"]), tile_work,
                            pv["grid_bits"])["law"]
-    t = pc8.templates(pv["k"], (1, 1), "sm120", hidden=True)["tile"]
+    n0 = Wd.Work.at(levels[0], pv["grid_bits"]).n
+    tiles = {"pc8.side_tile": pc8.side_tile(pv["k"], (1, 1), "sm120"),
+             "pc8's hiding tile": pc8.templates(pv["k"], (1, 1), "sm120", hidden=True)["tile"]}
+    def own(x):
+        return own_population(lambda v: P.population_program(x, n0, version=v), rec["program"])
+    how, t = next(((h, x) for h, x in tiles.items() if PO.program_sha512(own(x)) == rec["program"]),
+                  next(iter(tiles.items())))
     era = None
-    first = own_population(lambda v: P.population_program(t, Wd.Work.at(levels[0], pv["grid_bits"]).n, version=v), rec["program"])
+    first = own(t)
     version = population_version(first)
     if PO.program_sha512(first) != rec["program"]:
         if commit is None:
@@ -1651,7 +1660,7 @@ def served_window(run: Run) -> Iterator[Case]:
         era = era_python(era_tree(run, commit), SERVED_ZK_ERA, json.dumps(pv), json.dumps(levels))
         prov["program"] = f"the era's `served_commit.template` at {commit[:9]} (today's code has no {era['template']})"
     else:
-        prov["program"] = f"P.population_program(pc8 tile template, N at the registered level, version={version})"
+        prov["program"] = f"P.population_program({how} template, N at the registered level, version={version})"
     stubs: list[str] = []
 
     def program_at(ell: int):
@@ -1852,7 +1861,358 @@ def session_digests(run: Run, session: str) -> list[str]:
                   if f["path"].startswith(f"{session}/sessions/") and f["path"].endswith("/session.json"))
 
 
+def population(members: list[tuple[Any, int]], version: int = P.POPULATION_VERSIONS[0]):
+    """The population program over `(template, n)` in order at `version`, and its query, as
+    `serving_rows.population_program` and A6 build them: `TemplateInstances` and `Q_template_instance` for one template,
+    `TemplatePopulations` and `Q_template_instances` for several."""
+    if len(members) == 1:
+        return P.population_program(*members[0], version=version), PO.template_instance_query(members[0][0])
+    return P.mixed_population_program(members, version=version), PO.template_instances_query([t for t, _ in members])
+
+
+def own_members(members: list[tuple[Any, int]], want: str):
+    """`population(members)` at the version whose program is the record's (`own_population`), and that version."""
+    program = own_population(lambda v: population(members, v)[0], want)
+    version = population_version(program)
+    return program, population(members, version)[1], version
+
+
+def sessions_evidence(run: Run, a: dict, sessions: list[tuple[str, str]]) -> tuple[int, dict, list[str]]:
+    """Instances and session roots from each `(session dir, port prefix)`'s `prove.log` LIVE line (roots named
+    `<prefix>/<port>`), and the sessions' SHA-512 (the integrity profile's, else each `session.json`'s)."""
+    instances, roots, digests = 0, {}, []
+    for sdir, prefix in sessions:
+        live = live_line(run.path(f"{sdir}/prove.log")) or {}
+        instances += live.get("instances", 0)
+        roots.update({f"{prefix}/{p}": r for p, r in (live.get("roots") or {}).items()})
+        digests += session_digests(run, sdir)
+    return instances, roots, (a.get("integrity_profile") or {}).get("evidence", {}).get("sessions") or digests
+
+
+#: A5's and A6's recorded refusals that are not the protocol's checks, with why
+A5_OUTSIDE = {"registration-of-another-rank (source)": "A5's check of the window's link (`source`: the stand-in's run, "
+                                                       "`of` and `link` against the verifier's own), beside R1-R7"}
+A6_OUTSIDE = {"statement-binds-another-partition": "A6's statement checks (`statement_checks`: META's partition binding)",
+              "lean-verify-under-another-program": "flock-verify (`verify --zk --partition --program`) on a session under "
+                                                   "another program's partition object; the protocol reads its verdict"}
+
+
+def a5(run: Run) -> Iterator[Case]:
+    """A5 (`a5.py`), and each rank's A5 of a TP Commit's stand-in (`out/standin-<I>/rank<r>/`): a deferred
+    Commit's window, its registration over serving's rows of the Commit's values. The verifier's copies are its window of
+    record as the run wrote it: the program its `program.json` defines (the record's; each template rebuilt from it into
+    the population program, a primitive today's registry lacks an opaque stand-in), the canonical query over the members
+    `summary.json` names, its law and δ, the served domains over the record's ports under the run root of record
+    (`summary.json`'s `run_root`), and the leaf layer over each member's public body (`serving_rows.leaf_layer`, each
+    file's header line dropped). One draw by the subset law, each member served its share."""
+    bases = sorted(f["path"].rsplit("/", 1)[0] for f in run.files
+                   if re.fullmatch(r"out/(a5|standin-[^/]+/rank\d+)/audit\.json", f["path"]))
+    if not bases:
+        raise Missing("out/a5/audit.json")
+    for base in bases:
+        yield from a5_audit(run, base)
+
+
+def a5_audit(run: Run, base: str) -> Iterator[Case]:
+    a = run.json(f"{base}/audit.json")
+    summary = run.json(f"{base}/summary.json")
+    rec = a["registration"]
+    stored, stubs = decode_opaque(run.json(f"{base}/program.json"))
+    if PO.program_sha512(stored) != rec["program"]:
+        raise Gap(f"{base}/program.json is {PO.program_sha512(stored)[:16]}, the record's program {rec['program'][:16]}")
+    members = sorted(summary["members"], key=lambda m: m["base"])
+    tids = [m["template"] for m in members]
+    if any(t not in stored.defs for t in tids):
+        raise Gap(f"{base}/program.json defines no template {[t for t in tids if t not in stored.defs]}")
+    defs = [(stored.defs[m["template"]], m["n"]) for m in members]
+    program, query, version = own_members(defs, rec["program"])
+    prov: dict = {"program": f"the population program (v{version}) over the templates {base}/program.json defines"
+                             + (f" (opaque: {stubs})" if stubs else "")}
+    if PO.program_sha512(program) != rec["program"]:
+        raise Gap(f"the members' population program is {PO.program_sha512(program)[:16]}, the record's {rec['program'][:16]}")
+    partition, prov["partition"] = partition_form(program, query, rec, tids)
+    part = partition if partition is not None else P.partition(program, query)
+    run_root = summary["run_root"]
+    layout = {r["port"]: (ROW, r["leaves"]) for r in rec["roots"]}
+    ports, how, form = choose_served(part, layout, run_root, rec)
+    prov["ports"] = f"{how} over the record's ports and leaves, under {base}/summary.json's run_root"
+
+    def leaf_layer_of(bodies: dict[str, bytes]) -> str:
+        return hashlib.sha512(DT.canonical({t: hashlib.sha512(b).hexdigest() for t, b in bodies.items()}).encode()).hexdigest()
+    bodies = {}
+    for m in members:
+        raw = run.path(f"{base}/m{m['k']}/pub-{m['n']}.bin").read_bytes()
+        bodies[m["template"]] = raw[raw.index(b"\n") + 1:]
+    leaf_layer = leaf_layer_of(bodies)
+    prov["leaf_layer"] = f"serving_rows.leaf_layer over {base}/m<k>/pub-<n>.bin's bodies"
+    counts = a.get("draw_counts") or {}
+    instances, session_roots, sessions = sessions_evidence(
+        run, a, [(f"{base}/session-m{m['k']}", m["template"]) for m in members if counts.get(m["template"])])
+    if not summary.get("served_is_lean_draw"):
+        raise Gap("the sessions' served units are not the Lean draw, and the run kept no other copy of them")
+    served = sorted(a["draw"]["units"])
+    law = summary["law"]
+    p = params(program, query, law, ports, leaf_layer, delta_of(summary["delta"]), partition=partition)
+    e = evidence(a, instances=instances, sessions=sessions, session_roots=session_roots, served=served)
+    prov["evidence"] = (f"{base}/audit.json; instances and session roots from each session's prove.log LIVE line; "
+                        "served = the Lean draw")
+    c = Case(run.id, "a5", rec["format"], f"{base} audit", "audit", program, p, rec, e,
+             recorded_audit(a, f"{base}/audit.json"), prov)
+    yield c
+    src = f"{base}/negatives.json"
+    n = rec["population"]
+    draw, proved = a["draw"], sorted(a["proved_units"])
+    fewer, _ = population(R2.resized(defs), version)
+    first = members[0]["template"]
+    flipped_body = bodies[first][:-1] + bytes([bodies[first][-1] ^ 1])
+    cases: dict[str, Callable[[dict], Case]] = {
+        "registration-partition-mismatch (R2)": lambda v: c.but(
+            "registration-partition-mismatch (R2)", "negative", recorded_codes(v, "registration", src),
+            program=fewer, params={"program": descriptor(fewer), "partition": with_program(partition, fewer)}),
+        "domains-bound-to-another-run-root (R3)": lambda v: c.but(
+            "domains-bound-to-another-run-root (R3)", "negative", recorded_codes(v, "registration", src),
+            params={"ports": served_ports(form, part, layout, "00" * 32)},
+            provenance={"change": "the served domains under the run root 00…00"}),
+        "public-body-not-the-registered-leaf-layer (R4)": lambda v: c.but(
+            "public-body-not-the-registered-leaf-layer (R4)", "negative", recorded_codes(v, "registration", src),
+            params={"leaf_layer": leaf_layer_of({**bodies, first: flipped_body})},
+            provenance={"change": f"the leaf layer over {first}'s body with its last byte flipped"}),
+        "draw-outside-the-partition": lambda v: c.but(
+            "draw-outside-the-partition", "negative", recorded_codes(v, "draw", src),
+            evidence={"draw": {**draw, "units": draw["units"][:-1] + [n]}}),
+        "proved-set-short-of-the-draw": lambda v: c.but(
+            "proved-set-short-of-the-draw", "negative", _proved_check(v, src),
+            evidence={"proved_units": proved[1:], "instances": len(proved) - 1}),
+    }
+    for x in _negatives(run, c, run.json(src), src, cases, base_instances=len(proved), session_roots=session_roots,
+                        served=served, outside=A5_OUTSIDE):
+        yield replace(x, name=f"{base} {x.name}")
+
+
+def a6(run: Run) -> Iterator[Case]:
+    """A6 (`a6.py`): the W8A8 coordinates of an int8 decoder layer, one template per K, staged as members of at most
+    `chunk_cap` units, sampled by the stratified law. The verifier's copies are A6's own: the population program and
+    canonical `Q_template_instances` over `ScaledMmS8Coordinate` at each K of `summary.json`'s `members_spec` (today's
+    Definition, else the templates the run's `program.json` defines), the law `stratified:k`, each member port's set-bound
+    domain over its member's set (A6's row layout: x row-seg, w and o0 row-v2), and the leaf layer the SHA-512 of the
+    map from member to its public file's SHA-512."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops import gemm as OG
+    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
+    base = "out/a6"
+    a = run.json(f"{base}/audit.json")
+    summary = run.json(f"{base}/summary.json")
+    rec = a["registration"]
+    spec = [(int(k), int(x)) for k, x in (m.split(":") for m in summary["members_spec"].split(","))]
+    defs = [(bind(OG.ScaledMmS8Coordinate, K=K, **OG.GEMM_SM120_S8), n) for K, n in spec]
+    program, query, version = own_members(defs, rec["program"])
+    prov: dict = {"program": f"P.mixed_population_program(ScaledMmS8Coordinate at each K of members_spec, version={version}), today's"}
+    if PO.program_sha512(program) != rec["program"]:
+        stored, stubs = decode_opaque(run.json(f"{base}/program.json"))
+        tids = [P.template_id(d) for d, _ in defs]
+        if PO.program_sha512(stored) != rec["program"] or any(t not in stored.defs for t in tids):
+            raise Gap(f"neither today's A6 program nor {base}/program.json is the record's {rec['program'][:16]}")
+        defs = [(stored.defs[t], n) for t, (_, n) in zip(tids, defs)]
+        program, query, version = own_members(defs, rec["program"])
+        prov["program"] = f"the population program over the templates {base}/program.json defines" + \
+            (f" (opaque: {stubs})" if stubs else "")
+    tids = [P.template_id(d) for d, _ in defs]
+    partition, prov["partition"] = partition_form(program, query, rec, tids)
+    k = int(summary["k"])
+    law = DR.parse_law(f"stratified:{k}")
+    def pub_of(m: dict) -> Path:
+        K, j = re.fullmatch(r"s8-coord-k(\d+)(?:-c(\d+))?", m["name"]).groups()
+        return run.path(f"{base}/stage-k{K}/{f'c{j}/' if j is not None else ''}pub-{m['n']}.bin")
+    ports: dict = {}
+    for m in summary["members"]:
+        layout = {f"{m['name']}/{port}": (schema, m["n"]) for port, schema in (("x", SEG), ("w", V2), ("o0", V2))}
+        set_name = m.get("set") or json.loads(pub_of(m).read_bytes().split(b"\n", 1)[0])["set"]
+        ports.update(stand_in_ports(set_name, "", m["n"], layout, "verity/flock-circuit/binding/v2", False,
+                                    prefix=f"{m['name']}/"))
+    prov["ports"] = ("a6.frame_ports over each member's set (summary.json's, else its public file's; x row-seg, w and o0 "
+                     "row-v2)" if matches(ports, rec) else "GAP: a6.frame_ports' domains are not the record's")
+    publics = {m["name"]: sha512_file(pub_of(m)) for m in summary["members"]}
+    leaf_layer_of = lambda pubs: hashlib.sha512(DT.canonical(pubs).encode()).hexdigest()  # noqa: E731
+    leaf_layer = leaf_layer_of(publics)
+    prov["leaf_layer"] = f"SHA-512 of the map from member to the SHA-512 of {base}/stage-k<K>[/c<j>]/pub-<n>.bin"
+    counts = a.get("draw_counts") or {}
+    instances, session_roots, sessions = sessions_evidence(
+        run, a, [(f"{base}/session-{m['name']}", m["name"]) for m in summary["members"] if counts.get(m["name"])])
+    if summary.get("served_is_lean_draw"):
+        served, served_from = sorted(a["draw"]["units"]), "the Lean draw"
+    else:
+        served = sorted(m["base"] + u for m in summary["members"] for f in run.files
+                        if re.fullmatch(rf"{base}/session-{re.escape(m['name'])}/sessions/[^/]+/session\.json", f["path"])
+                        for u in (run.json(f["path"]).get("unit_draw") or {}).get("units", []))
+        served_from = "each member's base plus its sessions' session.json unit_draw (the run's served units)"
+    p = params(program, query, law, ports, leaf_layer, delta_of(summary["delta"]), partition=partition)
+    e = evidence(a, instances=instances, sessions=sessions, session_roots=session_roots, served=served)
+    prov["evidence"] = (f"{base}/audit.json; instances and session roots from each session's prove.log LIVE line; "
+                        f"served = {served_from}")
+    c = Case(run.id, "a6", rec["format"], "audit", "audit", program, p, rec, e, recorded_audit(a, f"{base}/audit.json"), prov)
+    yield c
+    src = f"{base}/negatives.json"
+    n_all = rec["population"]
+    draw, proved = a["draw"], sorted(a["proved_units"])
+    drawn = set(draw["units"])
+    fewer, _ = population(R2.resized(defs), version)
+    ranges = P.ranges(program, query)
+    first = summary["members"][0]["name"]
+    cases: dict[str, Callable[[dict], Case]] = {
+        "registration-partition-mismatch (R2)": lambda v: c.but(
+            "registration-partition-mismatch (R2)", "negative", recorded_codes(v, "registration", src), program=fewer,
+            params={"program": descriptor(fewer), "partition": with_program(partition, fewer)}),
+        "registration-query-drops-a-template (R2)": lambda v: c.but(
+            "registration-query-drops-a-template (R2)", "negative", recorded_codes(v, "registration", src),
+            params={"query": PO.template_instances_query(tids[:-1]),
+                    "partition": with_program(partition, program, drop_template=True)}),
+        "registration-law-another-k (R1)": lambda v: c.but(
+            "registration-law-another-k (R1)", "negative", recorded_codes(v, "registration", src),
+            params={"law": DR.parse_law(f"stratified:{k + 1}")}),
+        "registration-law-subset-not-stratified (R1)": lambda v: c.but(
+            "registration-law-subset-not-stratified (R1)", "negative", recorded_codes(v, "registration", src),
+            params={"law": DR.parse_law(f"subset:{k}")}),
+        "public-file-not-the-registered-leaf-layer (R4)": lambda v: c.but(
+            "public-file-not-the-registered-leaf-layer (R4)", "negative", recorded_codes(v, "registration", src),
+            params={"leaf_layer": leaf_layer_of({**publics, first: "00" * 64})},
+            provenance={"change": f"the leaf layer with {first}'s public file digest 00…00"}),
+        "draw-outside-the-partition": lambda v: c.but(
+            "draw-outside-the-partition", "negative", recorded_codes(v, "draw", src),
+            evidence={"draw": {**draw, "units": draw["units"][:-1] + [n_all]}}),
+        "proved-set-short-of-the-draw": lambda v: c.but(
+            "proved-set-short-of-the-draw", "negative", _proved_check(v, src),
+            evidence={"proved_units": proved[1:], "instances": len(proved) - 1}),
+        "proved-unit-not-drawn": lambda v: c.but(
+            "proved-unit-not-drawn", "negative", _proved_check(v, src),
+            evidence={"proved_units": sorted([next(u for u in range(n_all) if u not in drawn), *proved[1:]]),
+                      "instances": instances}),
+    }
+    if len(ranges) > 1:
+        (_ta, a_lo, a_n), (_tb, b_lo, b_n) = ranges[:2]
+        drop = next(u for u in draw["units"] if a_lo <= u < a_lo + a_n)
+        add = next((u for u in range(b_lo, b_lo + b_n) if u not in drawn), None)
+        if add is not None:
+            cases["draw-moves-a-unit-across-strata"] = lambda v: c.but(
+                "draw-moves-a-unit-across-strata", "negative", recorded_codes(v, "draw", src),
+                evidence={"draw": {**draw, "units": sorted((drawn - {drop}) | {add})}})
+    yield from _negatives(run, c, run.json(src), src, cases, base_instances=len(proved), session_roots=session_roots,
+                          served=served, outside=A6_OUTSIDE)
+
+
+#: A7's recorded refusals that are not the protocol's checks, by the suffix A7 names each with, and why
+A7_OUTSIDE = (
+    (r"\((PlanMatches|Carries|L4)\)$|free \(|\(dummy append or re-key\)$",
+     "the unit's own clause: a witness the prover keeps consistent everywhere, refused only by the unit's ok row (0)"),
+    (r"\(mapped\)$|^ledger-on-", "the remote bandwidth audit's link and ledger (`UnitsLink.mapped`, `audit.ledger`)"),
+    (r"\(binding\)$", "A7's bindings of each unit's rows to the canonical commitments (`bindings`), beside R1-R7"),
+    (r"\((v0 )?bridge[^)]*\)$", "v0's bridge between the remote session and the canonical rows (`v0_bridge`)"),
+    (r"\(opening\)$", "A7's openings of each drawn unit's public and ok rows (`openings`)"),
+    (r"\(Lean roots\)$", "flock-verify recomputing the roots from the public file"),
+    (r"\((receipt|decode)[^)]*\)$|\((plan row|receipt path)\)$",
+     "check 3's units and links, on cursor/zk-check3-unit-c7a9 (not on main)"),
+)
+A7_CHECK3 = ("check 3's audit record, over BlockReceiptCheck_v1 and BlockDecodeCheck_v1, whose Definitions are only on "
+             "cursor/zk-check3-unit-c7a9 (not on main), so the replay can't rebuild the verifier's copies")
+
+
+def a7(run: Run) -> Iterator[Case]:
+    """A7 (`a7.py`): a stand-in requirement's plan and memory-map units (`requirement_units`), one member per template
+    with a unit per step, sampled by the stratified law, beside the canonical commitments their rows bind to. The
+    verifier's copies are A7's own: the population program and canonical `Q_template_instances` over `PlanMatch` and
+    `MemoryMapStep` at the statics `summary.json` records (today's Definitions, else the templates the run's
+    `program.json` defines), the law `stratified:k`, each member port's set-bound domain over its set (every row row-v2;
+    the ports the Definition's rows and `o0`), each canonical commitment's over the rows it publishes, and the leaf
+    layer the SHA-512 of the map from each member and `canon/<kind>` to its public file's SHA-512. Check 3's audit
+    (`check3/`) is outside (`A7_CHECK3`)."""
+    from types import SimpleNamespace
+
+    from verity.ml.circuits import requirement_units as RU
+    from verity.ml.circuits.defs import bind
+    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    base, tag = "out/a7", "verity/flock-circuit/binding/v2"
+    a = run.json(f"{base}/audit.json")
+    summary = run.json(f"{base}/summary.json")
+    rec = a["registration"]
+    sp, sm = summary["standin"]["plan_statics"], summary["standin"]["map_statics"]
+    steps = int(summary["steps"])
+    defs = [(bind(RU.PlanMatch, **sp), steps), (bind(RU.MemoryMapStep, **sm), steps)]
+    program, query, version = own_members(defs, rec["program"])
+    prov: dict = {"program": f"P.mixed_population_program(PlanMatch, MemoryMapStep at summary.json's statics, version={version}), today's"}
+    members = sorted(summary["members"], key=lambda m: m["base"])
+    if PO.program_sha512(program) != rec["program"]:
+        stored, stubs = decode_opaque(run.json(f"{base}/program.json"))
+        tids = [m["template"] for m in members]
+        if PO.program_sha512(stored) != rec["program"] or any(t not in stored.defs for t in tids):
+            raise Gap(f"neither today's A7 program nor {base}/program.json is the record's {rec['program'][:16]}")
+        defs = [(stored.defs[t], n) for t, (_, n) in zip(tids, defs)]
+        program, query, version = own_members(defs, rec["program"])
+        prov["program"] = f"the population program over the templates {base}/program.json defines" + \
+            (f" (opaque: {stubs})" if stubs else "")
+    tids = [P.template_id(d) for d, _ in defs]
+    partition, prov["partition"] = partition_form(program, query, rec, tids)
+    k = int(summary["k"])
+    law = DR.parse_law(f"stratified:{k}")
+    rows = {"plan": RU.plan_rows(SimpleNamespace(**sp)), "map": RU.memory_map_rows(SimpleNamespace(**sm))}
+    ports: dict = {}
+    publics: dict = {}
+    for m in members:
+        kind, n = m["name"].split("-")[0], m["n"]
+        layout = {f"{m['name']}/{r}": (V2, n) for r in [r for r, _b, _ps in rows[kind]] + ["o0"]}
+        ports.update(stand_in_ports(f"unit-a7-{m['name']}", "", n, layout, tag, False, prefix=f"{m['name']}/"))
+        publics[m["name"]] = sha512_file(run.path(f"{base}/stage-{kind}/c0/pub-{n}.bin"))
+    for kind in sorted(re.fullmatch(rf"{base}/canon-([a-z]+)\.bc", f["path"]).group(1) for f in run.files
+                       if re.fullmatch(rf"{base}/canon-[a-z]+\.bc", f["path"])):
+        path = run.path(f"{base}/canon-{kind}.bc")
+        n = path.stat().st_size // 128
+        ports.update(stand_in_ports(f"a7-canon-{kind}", "", n, {f"canon/{kind}": (V2, n)}, tag, False, prefix="canon/"))
+        publics[f"canon/{kind}"] = sha512_file(path)
+    prov["ports"] = ("each member's set-bound domains over unit-a7-<member> (the Definition's rows and o0) and each "
+                     "canon-<kind>.bc's over a7-canon-<kind>" if matches(ports, rec) else
+                     "GAP: A7's member and canonical domains are not the record's")
+    leaf_layer = hashlib.sha512(codec.canonical_json(publics)).hexdigest()
+    prov["leaf_layer"] = (f"SHA-512 of the map from member to {base}/stage-<kind>/c0/pub-<n>.bin's SHA-512 and from "
+                          "canon/<kind> to canon-<kind>.bc's")
+    counts = a.get("draw_counts") or {}
+    instances, session_roots, sessions = sessions_evidence(
+        run, a, [(f"{base}/session-{m['name']}", m["name"]) for m in members if counts.get(m["name"])])
+    if not summary.get("served_is_lean_draw"):
+        raise Gap("the sessions' served units are not the Lean draw, and the run kept no other copy of them")
+    served = sorted(a["draw"]["units"])
+    p = params(program, query, law, ports, leaf_layer, delta_of(summary["delta"]), partition=partition)
+    e = evidence(a, instances=instances, sessions=sessions, session_roots=session_roots, served=served)
+    prov["evidence"] = (f"{base}/audit.json; instances and session roots from each session's prove.log LIVE line; "
+                        "served = the Lean draw")
+    c = Case(run.id, "a7", rec["format"], "audit", "audit", program, p, rec, e, recorded_audit(a, f"{base}/audit.json"), prov)
+    yield c
+    src = f"{base}/negatives.json"
+    n_all = rec["population"]
+    draw, proved = a["draw"], sorted(a["proved_units"])
+    fewer, _ = population(R2.resized(defs), version)
+    cases: dict[str, Callable[[dict], Case]] = {
+        "registration-partition-mismatch (R2)": lambda v: c.but(
+            "registration-partition-mismatch (R2)", "negative", recorded_codes(v, "registration", src), program=fewer,
+            params={"program": descriptor(fewer), "partition": with_program(partition, fewer)}),
+        "registration-law-another-k (R1)": lambda v: c.but(
+            "registration-law-another-k (R1)", "negative", recorded_codes(v, "registration", src),
+            params={"law": DR.parse_law(f"stratified:{k // 2 if k > 1 else k + 1}")}),
+        "registration-without-the-canonical-commitments (R3)": lambda v: c.but(
+            "registration-without-the-canonical-commitments (R3)", "negative", recorded_codes(v, "registration", src),
+            params={"ports": {q: w for q, w in ports.items() if not q.startswith("canon/")}}),
+        "draw-outside-the-partition": lambda v: c.but(
+            "draw-outside-the-partition", "negative", recorded_codes(v, "draw", src),
+            evidence={"draw": {**draw, "units": draw["units"][:-1] + [n_all]}}),
+    }
+    neg = run.json(src)
+    outside = {x: next(why for pat, why in A7_OUTSIDE if re.search(pat, x)) for x in neg
+               if x not in cases and any(re.search(pat, x) for pat, _ in A7_OUTSIDE)}
+    yield from _negatives(run, c, neg, src, cases, base_instances=len(proved), session_roots=session_roots,
+                          served=served, outside=outside)
+    if run.has(f"{base}/check3/audit.json"):
+        run.outside.append({"run": run.id, "driver": "a7", "name": f"{base}/check3/audit.json", "why": A7_CHECK3})
+
+
 DRIVERS: dict[str, Callable[[Run], Iterator[Case]]] = {"a0": a0, "a0-lean": a0_lean, "a2": a2, "a3": a3, "a4": a4,
+                                                       "a5": a5, "a6": a6, "a7": a7,
                                                        "registered-gemm": registered_gemm, "served-audit": served_audit,
                                                        "served-window": served_window, "serving-bundle": serving_bundle,
                                                        "a2-unaudited": a2_unaudited, "a4-unaudited": a4_unaudited}

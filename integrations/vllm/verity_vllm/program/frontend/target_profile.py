@@ -1,4 +1,4 @@
-"""The applicability contract of an ahead-of-time constructed Program (R10 §5, cb-fix).
+"""The applicability contract of an ahead-of-time constructed Program (cb-fix).
 
 Three objects, all pure Python (no torch; testable on any host):
 
@@ -54,7 +54,7 @@ class TargetProfile:
     num_sms             -> vLLM `num_compute_units()` (the persistent GEMM grid; the GEMM rule checks every launch against it)
     batch_invariant     -> env `VLLM_BATCH_INVARIANT` (the switch `RMSNorm.forward_cuda` / `init_batch_invariance` read)
     attention_backend   -> `EngineArgs(attention_backend=...)`; None = vLLM's selector for the declared capability
-    flash_attn_version  -> [R13 hopper] `EngineArgs(attention_config={"flash_attn_version": v})` — the ONLY FA-version input of the
+    flash_attn_version  -> `EngineArgs(attention_config={"flash_attn_version": v})` — the ONLY FA-version input of the
                            pinned vLLM (`fa_utils.get_flash_attn_version` step 2; no env knob exists in d9105ea80). None = the
                            selector's default for the declared capability (`effective_flash_attn_version`: 3 on cc 9.x, 2 below);
                            2 on cc 9.x = the labelled "forced FA2 on Hopper" execution (`execution_label` -> `bi-eager-fa2`).
@@ -62,22 +62,22 @@ class TargetProfile:
                            resolver and the collector receive the same object (run header `profile.target`).
     vllm_revision       -> must be a prefix-match of the running `vllm.__version__` (`+g<rev>`), else refused
     numerics_profile    -> the derive vocabulary (`--profile`); already part of the Program's `SRC` static
-    compilation         -> [R15 compiled] the EXECUTION the profile declares (`execution_label` -> `bi-compiled`): None = eager
+    compilation         -> the EXECUTION the profile declares (`execution_label` -> `bi-compiled`): None = eager
                            (`enforce_eager=True`, every module forward launches its own kernels); `"piecewise"` = vLLM torch.compile
                            (`CompilationMode.VLLM_COMPILE`, Inductor) + CUDA graphs `CUDAGraphMode.PIECEWISE` (attention = splitting op,
                            runs outside the graphs; the decode graphs are captured per batch size and REPLAYED).  Applied at run time as
                            `enforce_eager=False, compilation_config={"cudagraph_mode": "PIECEWISE", "inductor_compile_config":
-                           {"emulate_precision_casts": false}}` (`piecewise-emu`: true, ruling M-0380) (`engine_args()`; the run header records it, GM-01 G1 compares it with the
+                           {"emulate_precision_casts": false}}` (`piecewise-emu`: true) (`engine_args()`; the run header records it, GM-01 G1 compares it with the
                            declaration).  `emulate_precision_casts` (Inductor's own switch) makes every fused Triton kernel perform the bf16
                            roundings the Program specifies at each op boundary; default Inductor carries fp32 through a fused region, so the
-                           Program's intermediate values do not exist in that execution and any observation of them changes it (board
-                           M-0227/M-0285: instrumented != production).  With the emulation the collection boundary is invisible by
-                           construction (measured: production vs instrumented top-8 logprobs bit-identical over 32 steps, M-0153 thread).
+                           Program's intermediate values do not exist in that execution and any observation of them changes it
+                           (instrumented != production).  With the emulation the collection boundary is invisible by
+                           construction (measured: production vs instrumented top-8 logprobs bit-identical over 32 steps).
                            The Program itself is DERIVED eagerly by construction (`engine_args(execution=False)` omits the compile knobs);
                            what the declaration claims for the compiled execution is stated in `modelled_engine()` (boundary-level
-                           conformance on committed bytes; fused region == composed relations NOT established; Daniel's ruling M-0285).
+                           conformance on committed bytes; fused region == composed relations NOT established; Daniel's ruling).
                            Omitted from `to_json()` when None: eager profiles serialise (and digest) exactly as before.
-    fp8_block_gemm      -> [R15 fp8] env `VLLM_USE_DEEP_GEMM`: the ONLY knob of the pinned vLLM's block-scaled FP8 linear kernel choice
+    fp8_block_gemm      -> env `VLLM_USE_DEEP_GEMM`: the ONLY knob of the pinned vLLM's block-scaled FP8 linear kernel choice
                            (`kernels/linear._POSSIBLE_FP8_BLOCK_KERNELS[CUDA]`, first that `can_implement`: FlashInfer-DeepGEMM,
                            DeepGEMM, CUTLASS, ...).  `"cutlass"` -> `VLLM_USE_DEEP_GEMM=0` (both DeepGEMM kernels excluded; on cc 9.x
                            the selector takes `CutlassFp8BlockScaledMMKernel`, the sm90 blockwise CUTLASS GEMM whose arithmetic is the
@@ -85,16 +85,16 @@ class TargetProfile:
                            no registered Definition: the FP8 rules refuse its custom op by name).  Builder AND runtime read the selected
                            kernel class back from the instantiated `Fp8LinearMethod.fp8_linear` and refuse a mismatch; a model without
                            FP8 linears makes a declared kernel a mismatch too (nothing to select — the declaration would be idle).
-                           Omitted from `to_json()` when None so every pre-R15 profile digest is unchanged.
-    int8_exact          -> which layers run steps.py's plain int8 steps (`INT8_EXACT_SCOPES`): every linear (`engine.int8_exact`, an offline int8
-                           checkpoint, vLLM quantization `INT8_EXACT_QUANTIZATION`), every attention layer (`engine.int8_attention`, attention backend
-                           `INT8_EXACT_ATTENTION_BACKEND`), or both; read back from every layer (`int8_exact_of`).  Omitted from `to_json()` when None.
+                           Omitted from `to_json()` when None so every profile digest from before the field is unchanged.
+    int8_exact          -> which layers run the plain exact-int8 arm (`INT8_EXACT_SCOPES`): every linear (`engine.int8_exact`, an offline int8
+                           checkpoint, vLLM quantization `INT8_EXACT_QUANTIZATION`), every attention layer (`engine.int8_attention`, the LUT
+                           softmax, attention backend `INT8_EXACT_ATTENTION_BACKEND`), or both; read back from every layer (`int8_exact_of`).  Omitted from `to_json()` when None.
     moe_backend         -> `EngineArgs.moe_backend`, the fused-MoE experts kernel (applied to `KernelConfig.moe_backend`; an explicit backend that
                            cannot run raises in vLLM's `select_*_moe_backend`, never falls back).  `"triton"` -> `TritonExperts` (`fused_moe_kernel`,
                            the launch `MoeExpertGemm_v1` and the block-FP8 `MoeExpertFp8Gemm_v1` state); None = vLLM's selection.  Builder and runtime
                            read the class back from every fused-MoE layer's `quant_method.experts_cls` and refuse a mismatch; the header attests it
                            (`backends.moe_experts_class`) only when declared, so undeclared MoE runs keep their ids.  Omitted from `to_json()` when None.
-    async_scheduling    -> [R17-1 / DP-pad-02 (b)] the serving profile's RESOLVED async-scheduling configuration the workload Program is
+    async_scheduling    -> [DP-pad-02 (b)] the serving profile's RESOLVED async-scheduling configuration the workload Program is
                            SPECIALIZED for (`SchedulerConfig.async_scheduling` after the pinned vLLM's resolution, `config/vllm.py:1273-1322`
                            of d9105ea80).  Under async scheduling step t+1 is scheduled before step t's sample is known, so a request that
                            samples an EOS at step t is forwarded ONCE more at t+1 (LAG = 1: active internal computation of the Program whose
@@ -103,20 +103,20 @@ class TargetProfile:
                            generate-runner model without speculative decoding on the CUDA uniproc/mp executors) -- a DECLARATION the Program
                            carries (`lag()`), verified by GM-01 G1 against the record header's resolved read-back
                            (`RunHeader.profile.engine_kwargs.async_scheduling`, `vllm_adapter.resolved_async_scheduling`); nothing is ever
-                           inferred from the trace.  Omitted from `to_json()` when None so every pre-R17 profile digest is unchanged.
-    moe_construction    -> [R17-42 / R17-45 (a) route A (3)] HOW the fused-MoE block of a mixture-of-experts model is CONSTRUCTED in the
+                           inferred from the trace.  Omitted from `to_json()` when None so every profile digest from before the field is unchanged.
+    moe_construction    -> [route A (3)] HOW the fused-MoE block of a mixture-of-experts model is CONSTRUCTED in the
                            Program (a Program STATIC, declared-and-bound, NEVER attested: the record is construction-agnostic -- the same
-                           trace serves both constructions; MOE-PAD-SPEC s3/A12, moe M-1066 (2a)).  `"indexed-read"` = MOE-01: router ->
+                           trace serves both constructions; MOE-PAD-SPEC s3/A12).  `"indexed-read"` = MOE-01: router ->
                            TOPK indexed pair rows `MoeExpertGemm_v1` / `MoeExpertGemmW_v1` -> `MoeSum_v1`, the expert id an ordinary value
                            operand (`verity_vllm.program.frontend.rules.vllm_moe` MOE-01 rules).  `"indexed-read-ordered"` (the default when
                            None) = MOE-01 with the router stated in its selection order over one committed softmax
                            (`MoeRouterTopKOrdered_v1`).  `"padded"` = the
                            fixed-slot construction: ONE `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}` call per token over ALL E experts on their own
-                           weights, the TOPK slot outputs selected by the router ids (`verity_vllm.program.registry.moe_pad`; its lift of record is the
+                           weights, the TOPK slot outputs selected by the router ids (`verity.ml.definitions.registry.moe_pad`; its lift of record is the
                            hand-authored `LMoeFfnL_v1` with the unselected slots DISABLED by the enable vector `a_{r,t,e}`).  Two Programs
                            of the same trace differ in digest by construction; GP-01 refuses a workload whose components were derived under
                            another construction than the declared one, and labels the workload (`moe_construction` block) so the row's
-                           population is reported as what it is (R17-45 (1): no forced #Q correspondence).  A dense model ignores the
+                           population is reported as what it is (no forced #Q correspondence).  A dense model ignores the
                            field (no MoE block to construct).  Omitted from `to_json()` when None so every earlier profile digest is unchanged.
     fa3_construction    -> HOW FA3's attention rows are constructed (a Program static, declared-and-bound, never attested).
                            `"guard-every-block"` binds `Attention_v2`, whose blocks all guard a running max of -inf;
@@ -138,7 +138,7 @@ class TargetProfile:
                            declared-and-bound, never attested).  `"shared-per-block"` (the default when None) binds
                            `ScaledMmFp8BlockSharedScale_v1`: each weight block's K/G products once, read by its G coordinates.
                            `"per-coordinate"` binds `ScaledMmFp8Block_v1`, whose every coordinate forms its own.  Omitted from `to_json()` when None.
-    protocols           -> the protocol set the run executes (`verity_vllm.protocol_options`; grammar `config.parse_protocols`).  None =
+    protocols           -> the protocol set the run executes (`verity_vllm.protocols`; grammar `config.parse_protocols`).  None =
                            sampled proofs alone (`config.DEFAULT_ROW_PROTOCOLS`), the Commit as it has always run.  Declared, it is the
                            whole set in its one spelling, sampled proofs included (a profile is the target of sampled proofs' Program);
                            the default spelled out is refused (declare None).  The Commit installs the other protocols beside its
@@ -146,14 +146,15 @@ class TargetProfile:
                            of what it computes).  Omitted from `to_json()` when None.
     ir                  -> the IR the Program is written in (a Program static, declared-and-bound, never attested).  None = word
                            (every Call of the Definition its derive rule binds, on w-bit values).  `"boolean"` = the same Calls,
-                           each of the Boolean version of that Definition, on bits (`verity_vllm.program.boolean.derived`); the
+                           each of the Boolean version of that Definition, on bits (`verity_vllm.program.frontend.boolean.derived`); the
                            Build refuses by name every Definition with no Boolean version.  Declaring `"word"` is refused (declare None).
                            Omitted from `to_json()` when None.
     registered_values   -> where the Program's values live (a Program static, declared-and-bound, never attested).  None = in the
                            Definitions, as constants.  True = the norms' eps and the attention scale are fields of the registered
                            `values` parameter, read by the Definitions that take them as inputs (`RMSNormTriton_v3`,
                            `RMSNormFusedCuda_v4`, `Attention_v10` / `Attention_v11`); a Definition that has no such version keeps
-                           its constants.  Declaring false is refused (declare None).  Omitted from `to_json()` when None.
+                           its constants.  Under `ir = "boolean"` each is its Boolean version, which reads the same field's bits.
+                           Declaring false is refused (declare None).  Omitted from `to_json()` when None.
 
     Derived (not fields; one rule each, `verity_vllm.program.frontend.targets` consumes them): `tensor_core_family` (the registered k16
     tensor-core step of the capability: `ampere` for sm_8x, `hopper` for sm_90, `blackwell_consumer` for sm_120) and `tuned_gemm_arch_family` (vLLM's tuned
@@ -321,12 +322,10 @@ class TargetProfile:
             raise ValueError(f"ir must be None (word) or one of {list(self.IRS)}; got {self.ir!r}")
         if self.registered_values is not None and self.registered_values is not True:
             raise ValueError(f"registered_values must be None (constants) or true; got {self.registered_values!r}")
-        if self.registered_values and self.ir == "boolean":
-            raise ValueError("registered_values has no Boolean Definitions yet: declare it on the word IR only")
 
     # -- derived facts (one rule each; no second table anywhere) ---------------------------------------------------------
     def effective_moe_construction(self) -> str:
-        """[R17-42 route A (3)] The fused-MoE construction the Program is built with: the declared knob, else `indexed-read-ordered`.  A
+        """[route A (3)] The fused-MoE construction the Program is built with: the declared knob, else `indexed-read-ordered`.  A
         Program static, declared-and-bound (`moe_construction_declaration()` is what GP-01 writes; the frontend's MoE rules read it through
         `vllm_bindings.active_target_profile()` and each family applies only under its own construction) -- never attested by a record."""
         return self.moe_construction if self.moe_construction is not None else self.DEFAULT_MOE_CONSTRUCTION
@@ -346,7 +345,7 @@ class TargetProfile:
         return self.fp8_scale_construction if self.fp8_scale_construction is not None else self.DEFAULT_FP8_SCALE_CONSTRUCTION
 
     def moe_construction_declaration(self) -> dict:
-        """[R17-42] The construction block GP-01 writes into the workload Program header: value, whether it was declared explicitly, the
+        """The construction block GP-01 writes into the workload Program header: value, whether it was declared explicitly, the
         rule family and Definitions it binds, and how it is verified (component coupling at GP-01; the digest carries it)."""
         v = self.effective_moe_construction()
         return {"value": v, "declared_explicitly": self.moe_construction is not None, **self.MOE_CONSTRUCTIONS[v],
@@ -356,7 +355,7 @@ class TargetProfile:
                                "same trace; GM-01 reports the label and compares nothing against the record (the record is construction-agnostic)"}
 
     def effective_async_scheduling(self) -> bool:
-        """[R17-1] The async-scheduling configuration the workload Program is specialized for: the declared knob, else the pinned vLLM's
+        """The async-scheduling configuration the workload Program is specialized for: the declared knob, else the pinned vLLM's
         resolution of an unset `SchedulerConfig.async_scheduling` for an admitted profile (`PINNED_ASYNC_SCHEDULING_RESOLUTION`: True).
         A declaration, not an observation: GM-01 G1 compares it with the record header's resolved read-back and FAILS by name on a
         disagreement; the lag is never read from the trace."""
@@ -365,12 +364,12 @@ class TargetProfile:
         return bool(self.PINNED_ASYNC_SCHEDULING_RESOLUTION["value_when_unset"])
 
     def lag(self) -> int:
-        """[R17-1 / DP-pad-02 (b)] LAG: the rows the declared scheduler computes for a request AFTER its EOS sample (1 under async scheduling,
+        """[DP-pad-02 (b)] LAG: the rows the declared scheduler computes for a request AFTER its EOS sample (1 under async scheduling,
         0 synchronous) -- a REQUIRED specialization parameter of the workload Program (`Workload_v1{requests, shared, lag}`)."""
         return 1 if self.effective_async_scheduling() else 0
 
     def async_scheduling_declaration(self) -> dict:
-        """[R17-1] The lag declaration GP-01 writes into the workload Program (`lag` block): value, the resolved configuration it is coupled
+        """The lag declaration GP-01 writes into the workload Program (`lag` block): value, the resolved configuration it is coupled
         to, its source (declared knob / pinned-resolver mirror) and the implementation version pinned."""
         declared = self.async_scheduling is not None
         return {"value": self.lag(), "async_scheduling": self.effective_async_scheduling(),
@@ -424,7 +423,7 @@ class TargetProfile:
 
     def engine_args(self, *, execution: bool = True) -> dict:
         """The vLLM `LLM(**kw)` / `EngineArgs` overrides this profile APPLIES at engine construction (runtime side: Match capture and
-        the collector build their engines with exactly these, so the executing kernels are the declared ones).  [R15 compiled] a
+        the collector build their engines with exactly these, so the executing kernels are the declared ones).  A
         compiled profile adds `enforce_eager=False` + `compilation_config` (the executed mode; recorded in the run header);
         `execution=False` omits them: the Program DERIVATION (`derive_step`) traces module forwards eagerly by construction and declares
         the compiled execution it models in its applicability block (`modelled_engine()`) instead of executing it."""
@@ -451,10 +450,10 @@ class TargetProfile:
         return kw
 
     def modelled_engine(self) -> dict:
-        """[R15 compiled] The engine conditions a Program built for this profile DECLARES it models (GP-01 `applicability.engine`, compared by
+        """The engine conditions a Program built for this profile DECLARES it models (GP-01 `applicability.engine`, compared by
         GM-01 G1 with the record's effective engine kwargs): eager profiles = `enforce_eager True`; a compiled profile = `enforce_eager False`
         + the CompilationMode / CUDAGraphMode facts, with the claim named: boundary-level correspondence (module outputs, attention, logits,
-        sampled ids checked on the committed bytes), kernel interiors Inductor-fused and NOT certified launch-by-launch (board M-0153)."""
+        sampled ids checked on the committed bytes), kernel interiors Inductor-fused and NOT certified launch-by-launch."""
         if self.compilation is None:
             return {"enforce_eager": True}
         return {"enforce_eager": False, "compilation": {**self.COMPILATIONS[self.compilation], "profile": self.compilation},
@@ -767,7 +766,7 @@ def parse_target_arg(s: str | None, *, base: "TargetProfile | None" = None) -> T
     """CLI helper: None -> default; a JSON object -> overrides laid over `base` (`{"compute_capability": [9, 0]}`); a path to a JSON
     file -> the whole profile.  `base` defaults to THIS host's device profile when CUDA is available, else `default()` -- the same
     layering `vllm_adapter.target_of_workload` gives the workload's `target` block, so a row that declares only a knob
-    (`{"fp8_block_gemm": "cutlass"}`, `{"flash_attn_version": 2}`) is built for the pod it runs on.  [R15 fp8] rc3 laid the overrides over
+    (`{"fp8_block_gemm": "cutlass"}`, `{"flash_attn_version": 2}`) is built for the pod it runs on.  rc3 laid the overrides over
     `default()` (capability 8.9 / 128 SMs): on cp-h100 the FP8 row's Build declared an L40S and vLLM selected the sm89 kernel
     ('HummingFP8ScaledMMLinearKernel'), refused as a target mismatch against the declared cutlass kernel."""
     if not s:

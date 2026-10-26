@@ -12,7 +12,8 @@
   writes the Commit's call-boundary plan on a PASS).
 * **Match**: the observed run and the fold (``match``), the per-request comparison (B=1 against the served shape; B>1
   the X-09 decomposition, deriving any shape it names as missing and rerunning once), the global Match (GM-01) and, on
-  a stochastic row, the sampler value check; ``row_records.match_summary`` decides.
+  a stochastic row, the sampler value check; ``row_records.match_summary`` decides.  A leased row runs ``match`` as its GPU
+  phase under the lease, then its CPU phase with no device (`pipeline.gpu_lease`).
 * **Commit**: the pairs protocol (``commit``) with the manifest of record, the Program digest read from the Build, the
   Match record for the live oracle compare, the Build's Programs for the sampled replay and the weights of record
   (derived beside the component Program, re-derived when stale); then the manifest verification and the verdict
@@ -42,23 +43,20 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
 
 from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
+from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline import row_build as RB
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_group as RG
 from verity_vllm.pipeline import row_plan as RP
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Row, Stop, copy_first, stage_on
+from verity_vllm.program import prefix_plan as PP
 
 SKIP = "census,census_reconcile,nonint,nonint_compare,compare,root_policy,golden,wiring,replay_a,replay_chain,fold_2"
 CAP = 14400
-
-
-def _tail(path: str, n: int = 300) -> str:
-    try:
-        lines = open(path, errors="replace").read().splitlines()
-    except OSError:
-        return ""
-    return (lines[-1] if lines else "")[:n]
+#: a derive on ir="boolean" lifts every word Definition to bits after the word derive: 2.6x the word derive's wall on Qwen3-0.6B,
+#: and over 900 s against 357 s on the int8 Llama-3.1-8B row (VLLM-27)
+BOOLEAN_DERIVE_SCALE = 4
 
 
 def _stamp() -> str:
@@ -74,6 +72,7 @@ class SingleRow(Row):
         self.trap = False
         self.config_run = commit.config_run == "1"
         self.replay_pending = False
+        self.tgt, self.tgt_args = "", []      # the declared target (`shape`)
 
     def run(self) -> int:
         try:
@@ -121,7 +120,8 @@ class SingleRow(Row):
         env = self.env
         self.ncb_set = env.native_collect_build
         self.ncb = env.native_collect_build or env.native_collect_default
-        self.setup({"MATCH_IMPL": self.cm.match_impl, "MATCH_PIPELINE": self.cm.match_pipeline, "NATIVE_COLLECT_BUILD": self.ncb})
+        self.setup({"MATCH_IMPL": self.cm.match_impl, "MATCH_PIPELINE": self.cm.match_pipeline, "NATIVE_COLLECT_BUILD": self.ncb,
+                    "VERITY_INSTANCES_FORM": self.cm.instances_form})
         os.makedirs(self.d, exist_ok=True)
         os.makedirs(self.ncb, exist_ok=True)
         if not os.path.isfile(self.path(self.wl)):
@@ -230,25 +230,10 @@ class SingleRow(Row):
         return RB.required_manifest(self, stage, digest)
 
     # ------------------------------------------------------------------------------------------------ Build
-    def request_cmd(self, lp: int, t: int, out: str, lctx: list[str] | None = None) -> list[str]:
+    def request_cmd(self, lp: int, t: int, out: str, lctx: list[str] | None = None, C: int = 0) -> list[str]:
         return self.cli("build", "--model", self.repo, "--revision", self.rev, "--wrapper", "request", "--LP", str(lp), "--T", str(t),
-                        "--max-model-len", str(self.MML), "--workload", self.wl, "--out", out, *self.tgt_args, *(lctx or []))
-
-    def launch_args(self, lp: int, t: int) -> list[str] | None:
-        """A B >= 2 request Program is built under its launch context (``launch-context``); None = the context did not
-        read, which FAILS that shape's Build (it is not "no context")."""
-        if self.B <= 1:
-            return []
-        err = f"{self.d}/launch_context_LP{lp}_T{t}.err"
-        with open(err, "w") as f:
-            r = subprocess.run(self.cli("launch-context", self.wl, str(lp), str(t)), stdout=subprocess.PIPE, stderr=f, text=True,
-                               cwd=self.tree, env=self.child_env)
-        if r.returncode != 0:
-            self.log(f"Build FAIL shape LP{lp} T{t}: launch_context rc={r.returncode} -- {open(err, errors='replace').read().replace(chr(10), ' ')[-300:]}")
-            return None
-        os.remove(err)
-        lc = r.stdout.rstrip("\n")
-        return ["--launch-max-seqlen-q", *lc.split("\n")] if lc else []
+                        *(["--cached", str(C)] if C else []), "--max-model-len", str(self.MML), "--workload", self.wl, "--out", out,
+                        *self.tgt_args, *(lctx or []))
 
     def derive_all(self, to: int) -> tuple[int, int]:
         """The step, request and extra-shape derives, ``--build-jobs`` wide (auto: `row_records.build_jobs_auto`) -> (step rc, request rc)."""
@@ -263,15 +248,15 @@ class SingleRow(Row):
         self.tl("build.jobs", "mark", ("jobs", jobs_n), ("requested", req))
         extra = []
         rc_x = 0
-        for lp, t in R.extra_shapes(self.path(self.wl), self.LP, self.T):
-            out = f"{self.d}/build_request_LP{lp}_T{t}"
+        for s in R.extra_shapes(self.path(self.wl), self.LP, self.T):
+            out = f"{self.d}/build_request_{PP.shape_name(s)}"
             if R.derived_ok(out):
                 continue
-            lx = self.launch_args(lp, t)
+            lx = self.launch_args(*s)
             if lx is None:
                 rc_x = 1
                 continue
-            extra.append((f"build.derive_request_LP{lp}_T{t}", f"{out}.log", self.request_cmd(lp, t, out, lx), out))
+            extra.append((f"build.derive_request_{PP.shape_name(s)}", f"{out}.log", self.request_cmd(s[0], s[1], out, lx, PP.cached_rows(s)), out))
         if jobs_n <= 1:
             rc1 = RC.derive_cached(self, "build.derive_step", to, f"{self.d}/build_step.log", cmd_s, f"{self.d}/build_step")
             rc2 = (RC.derive_cached(self, "build.derive_request", to, f"{self.d}/build_request.log", cmd_r, f"{self.d}/build_request")
@@ -322,9 +307,14 @@ class SingleRow(Row):
         """B >= 2: the workload Program's compose and the manifest beside the derives (`row_build.follow_compose`)."""
         return RB.follow_compose(self, to)
 
+    def derive_timeout(self, lp: int, t: int) -> int:
+        """One derive's limit: `--build-timeout`, else 900 s per (256 positions x 31 tokens), times `BOOLEAN_DERIVE_SCALE` on ir="boolean"."""
+        ir = json.loads(self.tgt or "{}").get("ir")
+        scale = max(1, (max(lp, 256) // 256) * (max(t, 31) // 31)) * (BOOLEAN_DERIVE_SCALE if ir == "boolean" else 1)
+        return self.cb.build_timeout or min(CAP, 900 * scale)
+
     def build(self) -> None:
-        scale = max(1, (max(self.LP, 256) // 256) * (max(self.T, 31) // 31))
-        to = self.cb.build_timeout or min(CAP, 900 * scale)
+        to = self.derive_timeout(self.LP, self.T)
         t0 = int(time.time())
         self.tl("stage.build", "start")
         self.gpu_exclusive("build")
@@ -384,11 +374,11 @@ class SingleRow(Row):
 
     # ------------------------------------------------------------------------------------------------ Match
     def derive_missing(self, derived: list[str], label: str) -> None:
-        """Derive the request shapes X-09 named as missing (one request-wrapper derivation per (LP, T))."""
-        for lp, t in R.missing_derived(self.d):
-            self.log(f"{label}: deriving request Program LP={lp} T={t}")
-            out = f"{self.d}/build_request_LP{lp}_T{t}"
-            self.run_to(self.cb.build_timeout or 900, f"{out}.log", self.request_cmd(lp, t, out))
+        """Derive the request shapes X-09 named as missing (one request-wrapper derivation per (LP, T[, C]))."""
+        for s in R.missing_derived(self.d):
+            self.log(f"{label}: deriving request Program {PP.shape_name(s)}")
+            out = f"{self.d}/build_request_{PP.shape_name(s)}"
+            self.run_to(self.derive_timeout(256, 31), f"{out}.log", self.request_cmd(s[0], s[1], out, C=PP.cached_rows(s)))
             derived += ["--derived", out]
 
     def compare(self, to_c: int) -> tuple[int, int | None, bool]:
@@ -427,18 +417,19 @@ class SingleRow(Row):
                          quiet=True)
             if not os.path.isfile(f"{req_dir}/result.json"):
                 self.log(f"early EOS: served T_r={t_r} != cap-1={self.T} -> deriving request Program LP={self.LP} T={t_r}")
-                scale = max(1, (max(self.LP, 256) // 256) * (max(t_r, 31) // 31))
-                self.run_to(self.cb.build_timeout or min(CAP, 900 * scale), f"{req_dir}.log", self.request_cmd(self.LP, t_r, req_dir))
+                self.run_to(self.derive_timeout(self.LP, t_r), f"{req_dir}.log", self.request_cmd(self.LP, t_r, req_dir))
         open(f"{d}/match_shape.json", "w").write(f'{{"LP": {self.LP}, "T": {t_r}, "cap_T": {self.T}, "derived": "{req_dir}"}}\n')
         return self.run_to(to_c, f"{d}/match_compare.log",
                            self.cli("program-compare", "--a", req_dir, "--b", f"{d}/match", "--out", f"{d}/match_compare.json", py=self.py312)), None, False
 
     def match(self) -> None:
         d, cm = self.d, self.cm
+        if cm.match_phase == "gpu":
+            self.verdict("match", "FAIL", "MATCH_PHASE=gpu is the TP Match's: a single-GPU row runs all or cpu")
+            raise Stop(12)
         sb, st = max(1, self.B), max(1, (self.I + self.O + 287) // 288)
         to = cm.match_timeout or min(CAP, 1800 * sb * st)
         to_c = cm.compare_timeout or min(CAP, 600 * max(sb, 4) * st)
-        self.child_env["VERITY_INSTANCES_FORM"] = cm.instances_form
         self.log(f"fold: instances.jsonl stored form = {cm.instances_form} (F2)")
         self.child_env["MATCH_PHASE"] = cm.match_phase
         if cm.match_phase == "cpu":
@@ -453,11 +444,15 @@ class SingleRow(Row):
             self.log(f"acquisition manifest for the capture: {d}/manifest.json (ACQUIRE_ENGINE={self.env.environ.get('ACQUIRE_ENGINE') or 'v2'})")
         if cm.match_phase == "all" and self.snap_def != "all" and os.path.isfile(f"{d}/manifest.json"):
             self.form_b()
-        cmd_m = self.match_cmd()
         t0 = int(time.time())
         self.tl("stage.match", "start")
         self.gpu_exclusive("match")
-        rcm = self.run_tl("match.run_config", to, f"{d}/match.log", cmd_m)
+        if self.leased and cm.match_phase == "all":
+            rcg = self.run_gpu("match.gpu", to, f"{d}/match_gpu.log", self.match_cmd("gpu"), lease_dir=f"{d}/match/lease",
+                               kept=GL.MATCH_LEG_KEPT)
+            rcm = self.run_tl("match.run_config", to, f"{d}/match.log", self.match_cmd("cpu")) or rcg
+        else:
+            rcm = self.run_tl("match.run_config", to, f"{d}/match.log", self.match_cmd())
         self.tl("match.compare", "start")
         if os.path.isfile(f"{d}/match/program.json") and os.path.isfile(f"{d}/match/instances.jsonl"):
             rcc, gm_rc, shared = self.compare(to_c)
@@ -480,7 +475,7 @@ class SingleRow(Row):
             rcs = self.run_tl("match.stoch_recompute", to_c, f"{d}/match_stoch.log",
                               self.cli("stoch-recompute", "--run", f"{d}/match", "--workload", self.wl, "--build", d, "--out", f"{d}/match_stoch.json",
                                        py=self.py312))
-            self.log(f"stoch value check rc={rcs}: {_tail(f'{d}/match_stoch.log')}")
+            self.log(f"stoch value check rc={rcs}: {R.tail(f'{d}/match_stoch.log')}")
         wall = int(time.time()) - t0
         gm = 97 if gm_rc is None else gm_rc
         self.tl("match.summary", "start")
@@ -493,13 +488,14 @@ class SingleRow(Row):
             self.tl("row", "end", ("ok", "false"), ("stopped_at", "match"))
             raise Stop(11)
 
-    def match_cmd(self) -> list[str]:
+    def match_cmd(self, phase: str | None = None) -> list[str]:
+        """The Match's ``match`` command line, over ``phase`` (default the row's ``--match-phase``)."""
         d, cm = self.d, self.cm
         snapmax = ["--snapshot-max-bytes", cm.snapshot_max_bytes] if cm.snapshot_max_bytes else []
         # the Programs the Match compares against (B=1 the request Program, B>=2 its components): the fold binds their sampler construction
         progs = [p for p in ([f"{d}/build_request"] if self.B <= 1 else sorted(glob.glob(f"{d}/build_request_LP*_T*"))) if os.path.isfile(f"{p}/result.json")]
         return self.cli("match", "--case", self.role, "--workload", self.wl, "--out", f"{d}/match", "--checkpoint-dir", self.ck,
-                        "--phase", cm.match_phase, "--python-gpu", self.py, "--python-cpu", self.py312, "--max-num-seqs", str(self.B),
+                        "--phase", phase or cm.match_phase, "--python-gpu", self.py, "--python-cpu", self.py312, "--max-num-seqs", str(self.B),
                         "--snapshot-steps", self.snap_steps or self.snap_def, *snapmax, *(x for p in progs for x in ("--program-dir", p)), "--skip", SKIP,
                         "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", "--cards-dir", f"{d}/match/cards", py=self.py312)
 
@@ -549,12 +545,12 @@ class SingleRow(Row):
         if self.protocols:
             cmd += self.tgt_args                      # the declared target with the row's protocols; unset, the Commit reads the workload's
         # the windowed collector (ring of window_slots x window_mb MiB, raw copies retained on host, openings verified after release)
-        # is the default; window_mb=0 is per-step blocks, retain=device the device-resident footprint
-        if int(ck.window_mb) > 0:
-            cmd += ["--window-mb", str(ck.window_mb), "--window-slots", str(ck.window_slots)]
-        cmd += ["--retain", ck.retain]
-        if ck.open_after_release != "0":
-            cmd.append("--open-after-release")
+        # is the default; window_mb=0 is per-step blocks, retain=device the device-resident footprint.  Bounded staging is the config
+        # run's (the Commit's own default is bounded whenever windowed)
+        cmd += ["--window-mb", str(ck.window_mb), "--window-slots", str(ck.window_slots), "--retain", ck.retain]
+        if not self.config_run:
+            cmd.append("--no-bounded-staging")
+        cmd.append("--open-after-release" if ck.open_after_release != "0" else "--no-open-after-release")
         cmd += ["--tap-cap-mb", str(ck.tap_cap_mb)]
         for ea in (ck.extra_engine_args or "").split():
             cmd += ["--engine-arg", ea]
@@ -600,7 +596,7 @@ class SingleRow(Row):
             slug, why = R.manifest_not_of_record(R.load_json(f"{d}/manifest.json"), self.program_digest(), self.ck_)
             if not why:
                 man = f"{d}/manifest.json"
-                self.log(f"required-value manifest of record: {man} (built at the Build stage: {_tail(f'{d}/manifest.log', 200)})")
+                self.log(f"required-value manifest of record: {man} (built at the Build stage: {R.tail(f'{d}/manifest.log', 200)})")
             else:
                 prev = f"{d}/manifest.{slug}-{_stamp()}.json"
                 os.replace(f"{d}/manifest.json", prev)
@@ -652,7 +648,7 @@ class SingleRow(Row):
                 rc = subprocess.run(self.cli("weights-of-record", "--program-dir", pd, "--checkpoint-dir", ck, "--out", wor,
                                              *([f"--supersedes={prev}"] if prev else [])),
                                     stdout=f, stderr=subprocess.STDOUT, cwd=self.tree, env=self.child_env).returncode
-            last = _tail(f"{d}/weights_of_record.log", 10**6)
+            last = R.tail(f"{d}/weights_of_record.log", 10**6)
             if rc == 0:
                 self.tl(f"{stage}.weights_of_record", "end", ("rc", 0))
                 self.log(f"weights of record: {last}")
@@ -688,10 +684,10 @@ class SingleRow(Row):
             self.log("manifest of record VERIFIED (manifest_verify: rebuilt by the query path from this attempt's Program x workload == used; commit/manifest_verify.json)")
         else:
             self.tl("validate.manifest_verify", "end", ("rc", 1))
-            self.log(f"manifest of record VERIFY FAILED: {_tail(f'{d}/manifest_verify.log', 200)}")
+            self.log(f"manifest of record VERIFY FAILED: {R.tail(f'{d}/manifest_verify.log', 200)}")
 
-    def commit_prepare(self) -> tuple[int, list[str]]:
-        """The Commit stage up to its command line -> (its timeout, its command)."""
+    def commit_prepare(self) -> tuple[int, list[str], str]:
+        """The Commit stage up to its command line -> (its timeout, its command, its manifest of record or "")."""
         d, ck = self.d, self.ck_
         kb, kt = max(1, (self.B + 3) // 4), max(1, (self.I + self.O + 287) // 288)
         to = ck.commit_timeout or min(CAP, 2400 * kb * kt)
@@ -705,7 +701,7 @@ class SingleRow(Row):
             if served:
                 self.log(f"B=1 EOS-stopped request ({served}, match_shape.json): Program of record at Commit = the CAP-shape build_request; the positions "
                          "past the executed prefix are classified not-executed by rule, not cut from the population (the Match-side served-shape comparison stands)")
-        man = self.man = self.manifest_of_record()
+        man = self.manifest_of_record()
         taps = R.applicable_taps(man, ck) if man else []
         why = R.missing_tap_build(taps, self.env)
         if why:
@@ -727,14 +723,14 @@ class SingleRow(Row):
             self.log(f"WARNING B={self.B}: no {d}/match/instances.jsonl: live C2 oracle-compare NOT armed -- request attribution of decode-step identities unverified")
         cmd += RP.commit_flags(self)
         self.tl("commit.prepare", "end")
-        return to, cmd
+        return to, cmd, man
 
     def commit(self) -> None:
         d, ck = self.d, self.ck_
         if ck.group:
             self.replay_pending = RG.commit(self, CAP)
             return
-        to, cmd = self.commit_prepare()
+        to, cmd, man = self.commit_prepare()
         t0 = int(time.time())
         if ck.hot_engine == "1" and not self.leased:
             self.log(f"HOT_ENGINE=1: Commit on the hot worker (root {self.env.hot_root}, idle {self.env.hot_idle}s)")
@@ -747,8 +743,8 @@ class SingleRow(Row):
         if self.config_run:
             self.replay_pending = RC.commit_verdict(self, rck, wall)
             return
-        if rck == 0 and self.man:
-            self.manifest_verify(self.man)
+        if rck == 0 and man:
+            self.manifest_verify(man)
         self.tl("closure.verdict", "start")
         with open(f"{d}/row.log", "a") as f:
             r = subprocess.run(self.cli("verdict", "from-record", d, "--rc", str(rck)), stdout=subprocess.PIPE, stderr=f, text=True,

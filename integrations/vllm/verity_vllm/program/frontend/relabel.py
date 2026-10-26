@@ -129,7 +129,7 @@ def rank_report(session: DeriveSession, r: int, *, shards: dict[tuple[int, int],
         flat = _flat_definition(session.name, Body(body.params, body.ret_type, nodes, body.ret, body.offsets),
                                 session.flat.bindings["SRC"], session.mode)
         rep = _finish_report(flat, ctx, dict(session.head), mode=session.mode, ruleset=session.ruleset, rank=(world, r),
-                             check_registry=session.check_registry)
+                             check_registry=session.check_registry, dead_free=session.dead_free)
     finally:
         for n, a in saved["args"]:
             n.args = a

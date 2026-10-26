@@ -141,10 +141,6 @@ def _max_zref(z3, p, x):
     return (E, *[E - c for c in _cands(p, x)])
 
 
-def _shift_ref(P: int, d: int) -> int:
-    return P >> d
-
-
 def _zdiv_pow2(z3, value, d, width: int):
     """floor(value / 2^d) for a symbolic shift d >= 0 and value < 2^width, as a nested If (0 once d >= width)."""
     out = z3.IntVal(0)

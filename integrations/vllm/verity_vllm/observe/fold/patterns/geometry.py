@@ -15,7 +15,6 @@ from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.resolver import Gather, Operand, PerRow
 
 INT_DTYPES = frozenset({"int8", "uint8", "int16", "uint16", "int32", "uint32", "int64", "uint64", "bool"})
-FLOAT_DTYPES = frozenset({"bfloat16", "float16", "float32", "float64"})
 
 
 class GeometryError(ValueError):

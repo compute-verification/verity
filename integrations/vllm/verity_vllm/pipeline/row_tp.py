@@ -3,17 +3,24 @@
 * **Build** (CPU): per rank the step Program and one request Program per declared (prompt_len, cap - 1) shape
   (``build --tp W --rank r``), the requests first, then GP-01 per rank; ``--build-jobs`` wide (auto, the default: as many derives as the
   memory holds, at most ranks x (shapes + 1), as the single-GPU Build sizes them; the composes likewise, at most one per rank).  A PASS Build
-  also builds the required-value manifest over the W ranks (``manifest build-global --programs-root build/rank<r>``), and
+  also builds the required-value manifest over the W ranks (``manifest build-global --programs-root build/rank<r>``) under a limit
+  of its own (``--manifest-timeout``, by default scaled with its W x declared requests component builds; ``--build-timeout`` bounds
+  one derive and one compose), and
   the row stops (exit 21) when it names call boundaries (``Row.call_boundaries``: a TP Commit attaches no call-boundary source).
   With ``--build-relabel on`` one template rank's request derives write the other ranks' (`pipeline.tp.relabel_build`); with
   ``--build-programs-only 1`` the Build ends at GP-01, with no manifest and no call-boundary check (`pipeline.neutrality`'s heavy tier).
+  A switched row (its `aot` in ``manifests/records.json``, `config_record.aot_of`) has the AOT Build: each derive is
+  ``predict emit`` (`verity_vllm.program.predict.aot`), the predicted Program with the data its ``aot.trace`` Build holds about it
+  (``--aot-trace``, else fetched from the store), and refuses where they differ; ``--build-construction trace`` traces it.
 * **Match**: the capture under the observer and collective recorder, the ``--no-observer`` control, the collective-level
   check (``tp-match --arm check``); a request that stopped before its cap gets its served-shape Program derived per rank
   and GP-01 recomposed (``eos-truncated``); then, with a rank profile (default ``derived_<ROLE>_tp<W>``; ``--fold-profile ''``
-  = collective-level only, named), the per-rank fold Match (``tp-fold-match``).  A leased item's capture and control each hold the
+  = collective-level only, named), the per-rank fold Match (``tp-fold-match``), its concurrent legs sized to the run's ``--mem-gb``
+  (`TpRow.fold_sizing`).  A leased item's capture and control each hold the
   task's GPUs from right before their engine to their exit (``Row.run_gpu``); everything after them runs on the CPU, unleased.
+  ``--match-phase gpu`` runs the capture and control alone (no Build needed: they can overlap it), ``--match-phase cpu`` the rest.
 * **Commit**: the manifest over the W ranks, complete, then ``tp-commit`` with the windowed staging in its environment
-  (``VERITY_WINDOW_MB`` / ``VERITY_WINDOW_SLOTS`` / ``VERITY_RETAIN``, and a config run's ``VERITY_STAGING_BOUNDED``: flags it does not have) and ``--require-fold-match``
+  (``VERITY_WINDOW_MB`` / ``VERITY_WINDOW_SLOTS`` / ``VERITY_RETAIN``, and ``VERITY_STAGING_BOUNDED``, on in a config run only: flags it does not have) and ``--require-fold-match``
   when a fold Match is on disk.  The ranks run the guarded-max FA2 tap build and every tap the manifest names the family of
   (``row_records.applicable_taps``), as the single-GPU row does.  Each rank's weights registration hashes on its GPU
   (``VERITY_WEIGHTS_HASH=device`` unless the item sets ``host`` or ``device-checked``).  A leased item's ``tp-commit`` holds the task's
@@ -32,21 +39,24 @@ single-GPU row (``row_stages``).
 from __future__ import annotations
 
 import glob
+import json
 import os
 import shutil
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
+from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R
+from verity_vllm.pipeline import store_data as SD
 from verity_vllm.pipeline.row_driver import Row, Stop, stage_on
 
 TP_UTIL = "0.6"
-MATCH_LEG_KEPT = "a Match leg holds its GPUs to its exit: its engine is its last work"
 
 
 def _tail_bytes(path: str, n: int = 200) -> str:
@@ -76,6 +86,8 @@ class TpRow(Row):
         self.trap = False
         self.config_run = commit.config_run == "1"
         self.replay_pending = False
+        self.lctx: dict[tuple[int, int], list[str] | None] = {}
+        self.aot: dict[str, Any] | None = None
 
     def workload_gpu_util(self) -> str | None:
         """The workload's ``gpu_memory_utilization``, for a model whose weights don't fit `TP_UTIL` (GLM-5.3 TP8, about 88 GB a
@@ -117,7 +129,8 @@ class TpRow(Row):
     def prepare(self) -> None:
         env = self.env
         self.ncb = env.native_collect_build or env.native_collect_default
-        self.setup({"NATIVE_COLLECT_BUILD": self.ncb})
+        self.setup({"MATCH_IMPL": self.cm.match_impl, "MATCH_PIPELINE": self.cm.match_pipeline, "NATIVE_COLLECT_BUILD": self.ncb,
+                    "VERITY_INSTANCES_FORM": self.cm.instances_form})
         if not os.path.isfile(self.path(self.wl)):
             print(f"no manifest {self.wl}")
             raise Stop(2)
@@ -126,6 +139,7 @@ class TpRow(Row):
         self.bdir, self.M = f"{self.d}/build", f"{self.d}/match"
         for p in (self.d, self.bdir, self.M, self.ncb):
             os.makedirs(p, exist_ok=True)
+        self.refuse_unserved_engine()
         self.trap = True
         rel_line, _ = self.release_line("")
         tag, bar, rest = rel_line.partition("|")
@@ -138,13 +152,13 @@ class TpRow(Row):
             raise Stop(3)
         self.tl("precheck", "end", ("rc", 0))
         self.verdict("precheck", "PASS", f"source identity == {self.tree}{' @ ' + sha if sha else ''} (verity verity_vllm hidden_gpu research)", quiet=True)
-        rc, line = self.target_family(out=f"{self.d}/target_family.json")
+        rc, line = self.target_family(*([] if self.reads_device() else ["--no-device"]), out=f"{self.d}/target_family.json")
         if rc != 0:
             self.verdict("precheck-target", "FAIL", line)
             raise Stop(3)
         self.verdict("precheck-target", "PASS", line, quiet=True)
         s = R.tp_shape(self.path(self.wl), self.path("manifests/checkpoints.json"), env.hf_home)
-        self.B, self.I, self.O, self.shapes, self.ck = s["B"], s["I"], s["O"], s["shapes"], s["ck"]
+        self.B, self.I, self.O, self.shapes, self.ck, self.requests = s["B"], s["I"], s["O"], s["shapes"], s["ck"], s["requests"]
         self.MML, self.MNBT = s["MML"], s["MNBT"]
         tgt = R.declared_target(self.path(self.wl), row=self.row)
         self.tgt_args = ["--target", tgt] if tgt else []
@@ -161,6 +175,13 @@ class TpRow(Row):
         if not os.path.isdir(self.ck):
             self.verdict("build", "FAIL", f"no local checkpoint dir for {self.repo} @ {self.rev} (checkpoints.json local_path / HF snapshot absent; HF_HUB_OFFLINE=1)")
             raise Stop(10)
+
+    def reads_device(self) -> bool:
+        """Whether a stage of this run reads this host's GPU, so the target-family precheck reads it too: the Commit, the Match's GPU
+        legs, a Build whose target is the device.  ``--match-phase cpu`` reads only legs whose device the GPU half's precheck read, and a
+        declared-target Build derives for its declaration, so a CPU host runs those stages."""
+        return (stage_on(self.stages, "commit") or (stage_on(self.stages, "match") and self.cm.match_phase != "cpu")
+                or (stage_on(self.stages, "build") and not R.declared_target(self.path(self.wl), row=self.row)))
 
     def p2p_env(self) -> str | None:
         """The stages' NCCL_P2P_DISABLE: the row's ``engine.env`` value, else unset (one the caller's environment has is dropped)."""
@@ -199,12 +220,37 @@ class TpRow(Row):
     def rank(self, r: int) -> str:
         return f"{self.bdir}/rank{r}"
 
+    def build_ranks(self) -> list[str]:
+        """``--build-rank <rank dir>`` in rank order: the Build tp-capture and tp-commit read the post-load tensors from."""
+        return [a for r in range(self.W) for a in ("--build-rank", self.rank(r))]
+
     def derive(self, r: int, out: str, *args: str) -> None:
-        """One CPU derive of rank ``r``; the .rc beside its log carries the exit code."""
-        rc = self.run_to(self.to_b, f"{out}.log", self.cli("build", "--model", self.repo, "--revision", self.rev, "--max-model-len", str(self.MML),
-                                                            "--workload", self.wl, "--tp", str(self.W), "--rank", str(r), "--out", out,
-                                                            *self.tgt_args, *args))
-        open(f"{out}.rc", "w").write(f"{rc}\n")
+        """One CPU derive of rank ``r``, a switched row's ``predict emit``; the .rc beside its log carries the exit code."""
+        if self.aot is not None:
+            cmd = self.cli("predict", "emit", "--row", self.row, "--rank", str(r), "--config", os.path.join(self.ck, "config.json"),
+                           "--trace", f"{self.aot_dir}/build/rank{r}/{os.path.basename(out)}", "--out", out, "--aot", json.dumps(self.aot), *args)
+        else:
+            cmd = self.cli("build", "--model", self.repo, "--revision", self.rev, "--max-model-len", str(self.MML), "--workload", self.wl,
+                           "--tp", str(self.W), "--rank", str(r), "--out", out, *self.tgt_args, *args)
+        open(f"{out}.rc", "w").write(f"{self.run_to(self.to_b, f'{out}.log', cmd)}\n")
+
+    def construction(self) -> None:
+        """The Build's construction (``--build-construction``): a switched row's AOT Build reads its ``aot.trace`` Build's derive dirs
+        (``--aot-trace``, else every rank's step and request dirs fetched from the store into ``aot_trace/``), marked
+        ``build.construction``."""
+        self.aot = CR.aot_of(self.row) if self.cb.build_construction == "record" else None
+        if self.aot is not None and not (aot_dir := self.cb.aot_trace):
+            aot_dir = f"{self.d}/aot_trace"
+            dirs = tuple(f"build/rank{r}/{n}/" for r in range(self.W) for n in ["build_step", *(f"build_request_LP{lp}_T{t}" for lp, t in self.shapes)])
+            try:
+                SD.fetch(self.aot["trace"], Path(aot_dir), [p for p in SD.listing(self.aot["trace"]) if p.startswith(dirs)])
+            except RuntimeError as e:
+                self.verdict("build", "FAIL", f"rc=1 the AOT Build's trace {self.aot['trace']} did not fetch ({e}); --aot-trace DIR gives it")
+                self.tl("row", "end", ("ok", "false"), ("stopped_at", "build"))
+                raise Stop(10) from None
+        self.aot_dir = aot_dir if self.aot is not None else None
+        self.tl("build.construction", "mark", ("construction", "aot" if self.aot else "trace"),
+                *((("comparison", self.aot["comparison"]), ("trace", self.aot["trace"])) if self.aot else ()))
 
     def derive_all(self, todo: list[tuple[Any, ...]], jobs: int) -> None:
         with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
@@ -217,9 +263,20 @@ class TpRow(Row):
         return (r, out or f"{self.rank(r)}/build_step", "--wrapper", "step", "--M", str(self.B), "--pos0", "8")
 
     def request(self, r: int, lp: int, t: int) -> tuple[Any, ...]:
+        """A request derive; the AOT Build's predicts its launch batch from the row's requests (`predict.build.launch_batch`)."""
         out = f"{self.rank(r)}/build_request_LP{lp}_T{t}"
         shutil.rmtree(out, ignore_errors=True)
-        return (r, out, "--wrapper", "request", "--LP", str(lp), "--T", str(t))
+        return (r, out, "--wrapper", "request", "--LP", str(lp), "--T", str(t), *([] if self.aot is not None else self.launch_of(lp, t)))
+
+    def launch_of(self, lp: int, t: int) -> list[str]:
+        """The shape's `Row.launch_args`, read once for every rank; one that does not read fails the Build."""
+        if (lp, t) not in self.lctx:
+            self.lctx[(lp, t)] = self.launch_args(lp, t)
+        if self.lctx[(lp, t)] is None:
+            self.verdict("build", "FAIL", f"rc=1 the launch context of shape LP{lp} T{t} did not read (row.log)")
+            self.tl("row", "end", ("ok", "false"), ("stopped_at", "build"))
+            raise Stop(10)
+        return self.lctx[(lp, t)]
 
     def compose(self, r: int) -> None:
         """GP-01's workload Program of rank ``r`` over its request Programs."""
@@ -231,17 +288,23 @@ class TpRow(Row):
                     self.cli("global-program", "--workload", self.wl, *der, "--out", f"{self.rank(r)}/build_workload", "--checkpoint-dir", self.ck))
 
     def compose_all(self, ranks: list[int]) -> None:
-        """GP-01 of each of `ranks`, as many at once as the memory holds at `row_records.COMPOSE_PEAK_RATIO` x the largest shape's
-        derive peak (``--build-ram-budget-gb`` when smaller than the headroom), marked ``build.compose_jobs``."""
-        n = R.build_jobs_auto(self.shapes, R.model_layers(self.ck), derives=len(ranks), peak_ratio=R.COMPOSE_PEAK_RATIO,
-                              budget_gb=self.cb.build_ram_budget_gb)
+        """GP-01 of each of `ranks`, as many at once as the memory holds at `row_records.compose_bytes` a compose
+        (``--build-ram-budget-gb`` when smaller than the headroom), marked ``build.compose_jobs``."""
+        layers = R.model_layers(self.ck)
+        n = R.build_jobs_auto(self.shapes, layers, derives=len(ranks), peak_ratio=R.COMPOSE_PEAK_RATIO, budget_gb=self.cb.build_ram_budget_gb,
+                              job_bytes=R.compose_bytes(self.shapes, layers) if self.shapes and layers else None)
         self.tl("build.compose_jobs", "mark", ("jobs", n), ("ranks", len(ranks)))
         with ThreadPoolExecutor(max_workers=n) as pool:
             for f in [pool.submit(self.compose, r) for r in ranks]:
                 f.result()
 
-    def manifest_global(self, stage: str, to: int) -> int:
-        """The v2 query (Q_module_body_v1 + TP-04) over the W rank Programs, merged by rank -> manifest.json."""
+    def manifest_global(self, stage: str) -> int:
+        """The v2 query (Q_module_body_v1 + TP-04) over the W rank Programs, merged by rank -> manifest.json, under the manifest's own
+        limit: ``--manifest-timeout``, else `row_records.manifest_timeout` of its W x declared requests component builds (0 = none),
+        never one derive's."""
+        n = self.W * self.requests
+        to = R.manifest_timeout(n) if self.cb.manifest_timeout is None else self.cb.manifest_timeout
+        self.log(f"manifest: {n} component builds ({self.W} ranks x {self.requests} requests), limit {f'{to}s' if to else 'none'}")
         manr: list[str] = []
         wds: list[str] = []
         for r in range(self.W):
@@ -272,8 +335,9 @@ class TpRow(Row):
         self.to_b = self.cb.build_timeout or 7200
         t0 = int(time.time())
         self.tl("stage.build", "start")
+        self.construction()
         todo, jobs = self.build_todo(), self.derive_jobs(self.shapes, self.W * (nsh + 1))
-        if self.cb.build_relabel == "on":
+        if self.cb.build_relabel == "on" and self.aot is None:
             from verity_vllm.pipeline.tp import relabel_build
             relabel_build.derive(self, todo, jobs)
         else:
@@ -281,16 +345,20 @@ class TpRow(Row):
         for r in range(self.W):
             for f in sorted(glob.glob(f"{self.rank(r)}/*.rc")):
                 self.log(f"derive {os.path.basename(f[:-3])} rank{r} rc={open(f).read().strip()} {_tail_bytes(f[:-3] + '.log')}")
-        self.compose_all([r for r in range(self.W) if R.derived_ok(f"{self.rank(r)}/build_step")])
+        kept = [r for r in range(self.W) if R.composed_ok(self.rank(r))]
+        if kept:
+            self.log(f"compose: ranks {kept} keep their workload Programs on disk (composed after their request Programs)")
+        self.compose_all([r for r in range(self.W) if R.derived_ok(f"{self.rank(r)}/build_step") and r not in kept])
         ok, rc, programs_only = self.guarded_summary(), None, self.cb.build_programs_only == "1"
         if ok == "PASS" and not programs_only:   # the Build's manifest, as SingleRow's: an incomplete one (rc 4) fails the Build its Commit would refuse
-            rc = self.manifest_global("build.required_manifest", self.to_b)
+            rc = self.manifest_global("build.required_manifest")
             self.log(f"build manifest rc={rc}: {R.tp_manifest_line(self.d) or 'no manifest.json'}")
             ok = "PASS" if rc == 0 else "FAIL"
         wall = int(time.time()) - t0
         digest, digests = R.tp_build_digests(self.d)
         wds = "/".join(R.tp_rank_workload_digest(self.bdir, r)[:16] for r in range(self.W))
-        self.verdict("build", ok, f"rc={0 if ok == 'PASS' else 1} manifest_rc={rc} wall={wall}s digest={digest} digests_r1..={digests} workload_digests_r0..={wds} shapes={nsh}")
+        self.verdict("build", ok, f"rc={0 if ok == 'PASS' else 1} manifest_rc={rc} wall={wall}s digest={digest} digests_r1..={digests} workload_digests_r0..={wds} shapes={nsh} "
+                     f"construction={'aot' if self.aot is not None else 'trace'}")
         self.tl("stage.build", "end", ("ok", ok), ("wall_s", wall))
         if ok != "PASS":
             hits = Counter(ln for p in sorted(glob.glob(f"{self.bdir}/rank*/*.log"))
@@ -310,28 +378,65 @@ class TpRow(Row):
             return "FAIL"
 
     # ------------------------------------------------------------------------------------------------ Match
+    def fold_sizing(self) -> tuple[int, int, int]:
+        """The fold Match's ``--rank-workers``, ``--fold-workers`` and one leg's limit: `row_records.fold_plan` over the declared shapes
+        in ``--fold-mem-gb`` (research run's --mem-gb, else the headroom) wherever a flag leaves them to it, marked ``match.fold_plan``;
+        every rank and 7200 s when the checkpoint's layers are unknown.  Memory that holds no planned GM-01 leg beside one fold runs
+        one rank at a time and says so: the plan's ratios are fitted on GLM-5.3 B8 alone."""
+        cm, layers = self.cm, R.model_layers(self.ck)
+        if not layers or not self.shapes:
+            return cm.fold_rank_workers, cm.fold_workers, cm.fold_timeout or R.FOLD_LEG_MIN_S
+        p = R.fold_plan(self.shapes, layers, self.W, int(cm.fold_mem_gb * 1e9) if cm.fold_mem_gb else None, folds=cm.fold_workers)
+        gb = {k: round(p[f"{k}_bytes"] / 1e9) for k in ("gm", "fold", "mem")}
+        rw, fw = (cm.fold_rank_workers, cm.fold_workers) if cm.fold_rank_workers else (p["rank_workers"], p["fold_workers"])
+        to = cm.fold_timeout or p["leg_s"]
+        self.tl("match.fold_plan", "mark", ("rank_workers", rw), ("fold_workers", fw), ("leg_s", to), ("fits", p["fits"]),
+                *((f"{k}_gb", v) for k, v in gb.items()))
+        short = "" if p["fits"] or cm.fold_rank_workers else f"; WARNING: {gb['mem']} GB holds no planned GM-01 leg beside one fold (a larger --mem-gb)"
+        self.log(f"fold Match: {rw} ranks' compare and GM-01 legs at once ({gb['gm']} GB planned each), {fw or rw} folds ({gb['fold']} GB each), "
+                 f"{to}s a leg, in {gb['mem']} GB ({'--mem-gb' if cm.fold_mem_gb else 'the headroom'}){short}")
+        return rw, fw, to
+
     def match(self) -> None:
         """The capture and the control, the GPU legs, each under the item's lease when it has one (`Row.run_gpu`: all the task's GPUs from
         right before the leg's engine to its exit, recorded in ``match/lease/<leg>/``); the check, the served-shape derives and the fold
-        Match after them, on the CPU, with no device and no lease."""
-        cm, M = self.cm, self.M
-        to_m, to_f = cm.match_timeout or 3600, cm.fold_timeout or 7200
+        Match after them, on the CPU, with no device and no lease.  ``--match-phase gpu`` runs the GPU legs alone, which need no Build, and
+        stops the row; ``--match-phase cpu`` runs the rest over the legs ``match/gpu_legs.json`` records."""
+        cm, M, phase = self.cm, self.M, self.cm.match_phase
+        to_m = cm.match_timeout or 3600
         self.to_b = self.cb.build_timeout or 7200
-        for r in range(self.W):
+        for r in range(self.W if phase != "gpu" else 0):
             if not R.derived_ok(f"{self.rank(r)}/build_step"):
                 self.verdict("match", "FAIL", f"no step Program for rank {r} ({self.rank(r)}/build_step): Build first")
                 raise Stop(11)
+        rw, fw, to_f = self.fold_sizing() if phase != "gpu" and self.fold_profile else (0, 0, 0)
         br = [a for r in range(self.W) for a in ("--build-rank", f"{self.rank(r)}/build_step")]
         cap = self.cli("tp-capture", "--workload", self.wl, "--case", self.role, "--tp", str(self.W), "--max-num-seqs", str(self.B),
-                       "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", *self.engine)
+                       "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", *self.engine, *self.build_ranks())
         t0 = int(time.time())
         self.tl("stage.match", "start")
-        rc_cap = self.run_gpu("match.capture", to_m, f"{M}/capture.log", [*cap, "--record-collectives", "--out", f"{M}/capture"],
-                              lease_dir=f"{M}/lease/capture", kept=MATCH_LEG_KEPT)
-        ranks = " ".join(_grep(f"{M}/capture.log", lambda s: s.startswith("[tp2] rank ") and s[11:].split(":", 1)[0].isdigit() and ":" in s[11:]))
-        self.log(f"match capture rc={rc_cap} {(ranks + ' ' if ranks else '')[:300]}")
-        rc_ctl = self.run_gpu("match.control", to_m, f"{M}/control.log", [*cap, "--no-observer", "--out", f"{M}/control"],
-                              lease_dir=f"{M}/lease/control", kept=MATCH_LEG_KEPT)
+        if phase == "cpu":
+            legs = R.load_json(f"{M}/gpu_legs.json")
+            if not legs:
+                self.verdict("match", "FAIL", f"MATCH_PHASE=cpu without {M}/gpu_legs.json: run the GPU legs first (--match-phase gpu or all)")
+                raise Stop(11)
+            rc_cap, rc_ctl = legs["capture_rc"], legs["control_rc"]
+            self.log(f"match: MATCH_PHASE=cpu over the GPU legs already in {M} (capture rc={rc_cap}, control rc={rc_ctl})")
+        else:
+            shutil.rmtree(f"{M}/fold_match", ignore_errors=True)      # an earlier capture's folds and legs, which --match-reuse must never keep
+            rc_cap = self.run_gpu("match.capture", to_m, f"{M}/capture.log", [*cap, "--record-collectives", "--out", f"{M}/capture"],
+                                  lease_dir=f"{M}/lease/capture", kept=GL.MATCH_LEG_KEPT)
+            ranks = " ".join(_grep(f"{M}/capture.log", lambda s: s.startswith("[tp2] rank ") and s[11:].split(":", 1)[0].isdigit() and ":" in s[11:]))
+            self.log(f"match capture rc={rc_cap} {(ranks + ' ' if ranks else '')[:300]}")
+            rc_ctl = self.run_gpu("match.control", to_m, f"{M}/control.log", [*cap, "--no-observer", "--out", f"{M}/control"],
+                                  lease_dir=f"{M}/lease/control", kept=GL.MATCH_LEG_KEPT)
+            with open(f"{M}/gpu_legs.json", "w") as f:
+                json.dump({"capture_rc": rc_cap, "control_rc": rc_ctl}, f)
+        if phase == "gpu":
+            ok, wall = "PASS" if rc_cap == 0 and rc_ctl == 0 else "FAIL", int(time.time()) - t0
+            self.verdict("match-gpu", ok, f"rc={rc_cap}/{rc_ctl} wall={wall}s: the check and the fold Match run with --match-phase cpu")
+            self.tl("stage.match", "end", ("ok", ok), ("wall_s", wall))
+            raise Stop(0 if ok == "PASS" else 11)
         rc_chk = self.run_tl("match.check", to_m, f"{M}/check.log", self.cli("tp-match", "--arm", "check", "--out", M, *br))
         chk = R.tp_check_line(M)
         self.log(f"match check rc={rc_chk}: {chk or 'no tp2_match.json'}")
@@ -363,10 +468,17 @@ class TpRow(Row):
                 gp = f"{self.rank(r)}/build_workload/workload_program.json"
                 if os.path.isfile(gp):
                     fargs += ["--gprog-rank", f"{r}={gp}"]
-            rc_fold = self.run_tl("match.fold_match", to_f, f"{M}/fold_match.log",
+            if phase == "cpu" and cm.match_reuse != "off":
+                fargs += ["--reuse-fold", *(["--reuse-legs"] if cm.match_reuse == "legs" else [])]
+            if cm.match_pipeline == "shared":
+                fargs.append("--shared-x09")
+            # --timeout bounds each subprocess: a rank runs three in turn (fold, compare, GM-01), and the cross-rank leg follows them
+            ranks_at_once = min(rw or self.W, self.W)
+            phase_s = R.fold_phase_s(to_f, self.W, ranks_at_once, min(fw or ranks_at_once, self.W))
+            rc_fold = self.run_tl("match.fold_match", phase_s, f"{M}/fold_match.log",
                                   self.cli("tp-fold-match", "--capture", f"{M}/capture", "--profile", fp, *fargs, "--workload", self.wl,
-                                           "--tp2-match", f"{M}/tp2_match.json", "--within-step", "dag", "--rank-workers", "0", "--python", self.py,
-                                           "--timeout", str(to_f), "--out", f"{M}/fold_match"))
+                                           "--tp2-match", f"{M}/tp2_match.json", "--within-step", "dag", "--rank-workers", str(rw),
+                                           "--fold-workers", str(fw), "--python", self.py, "--timeout", str(to_f), "--out", f"{M}/fold_match"))
             fold = f"fold_match rc={rc_fold} {R.tp_fold_line(M)}"
             self.log(f"match fold ({fp}): {fold}")
         wall = int(time.time()) - t0
@@ -401,7 +513,7 @@ class TpRow(Row):
             self.log(f"required manifest of record: the one beside the Build{' (config run)' if self.config_run else ''}")
         else:
             self.log(f"manifest.json beside the Build is not of record ({why}): rebuilding it")
-            rc_man = self.manifest_global("commit.required_manifest", to_k)
+            rc_man = self.manifest_global("commit.required_manifest")
         man = R.tp_manifest_line(d)
         self.log(f"manifest rc={rc_man}: {man or 'no manifest.json'}")
         if rc_man != 0 or not R.tp_manifest_complete(d):
@@ -415,11 +527,9 @@ class TpRow(Row):
             self.verdict("commit", "FAIL", why)
             raise Stop(12)
         self.log(f"taps: {', '.join(taps) or 'none'} (on, and the manifest names their families); guarded max {'on' if ck.guarded_max_tap == '1' else 'off'}")
-        if ck.window_mb > 0:
-            self.child_env.update({"VERITY_WINDOW_MB": str(ck.window_mb), "VERITY_WINDOW_SLOTS": str(ck.window_slots)})
+        self.child_env.update({"VERITY_WINDOW_MB": str(ck.window_mb), "VERITY_WINDOW_SLOTS": str(ck.window_slots)})
         self.child_env["VERITY_RETAIN"] = ck.retain
-        if self.config_run:
-            self.child_env["VERITY_STAGING_BOUNDED"] = "1"
+        self.child_env["VERITY_STAGING_BOUNDED"] = "1" if self.config_run else "0"
         self.child_env.setdefault(GL.WEIGHTS_HASH, "device")
         self.log(f"commit staging: window_mb={ck.window_mb} slots={ck.window_slots} retain={ck.retain}{' bounded' if self.config_run else ''}; "
                  f"weights hash {self.child_env[GL.WEIGHTS_HASH]}")
@@ -447,14 +557,13 @@ class TpRow(Row):
     def commit_cmd(self, taps: list[str]) -> list[str]:
         """`tp-commit`'s command line; `taps`: the row's taps that apply to it (`row_records.applicable_taps`), whose sources the ranks attach."""
         ck, d = self.ck_, self.d
-        brk = [a for r in range(self.W) for a in ("--build-rank", self.rank(r))]
         if self.config_run:                       # one instrumented run, k units over the ranks; no Match to compare against
             match, arms = [], ["--pairs", "1", "--warmup", "1", "--only-arm", "instrumented", "--replay-k", str(ck.replay_k)]
         else:
             match, arms = ["--match-dir", self.M], ["--pairs", str(ck.pairs), "--warmup", "2", "--value-check"]
         cmd = self.cli("tp-commit", "--workload", self.wl, "--case", self.role, "--tp", str(self.W), "--committer", "native_collect_v2b",
                        "--hidden-so", self.hidden_so, "--openings", "64", "--max-num-seqs", str(self.B),
-                       "--engine-arg", f"gpu_memory_utilization={self.commit_util}", *self.engine, *brk,
+                       "--engine-arg", f"gpu_memory_utilization={self.commit_util}", *self.engine, *self.build_ranks(),
                        "--required-manifest", f"{d}/manifest.json", *match, "--checkpoint-dir", self.ck, "--checkpoint-model", self.repo,
                        *arms, "--replay-workers", str(ck.replay_workers), "--label", self.row, "--out", f"{d}/commit")
         if not self.config_run and self.fold_profile and os.path.isfile(f"{self.M}/fold_match/tp2_fold_match.json"):

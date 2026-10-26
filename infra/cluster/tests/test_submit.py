@@ -80,6 +80,24 @@ def test_a_guest_gpu_job_goes_to_node_2_its_runner_on_its_shares_cpus_and_its_wo
     assert out["job"]["node"] == "vy-nebius-2" and out["job"]["max_s"] == 600
 
 
+def test_a_guest_cpu_job_on_node_2_claims_whole_cores_of_its_share_at_nice_0():
+    """Every queued run had all of 48-95 at nice 19, 34 at once at load 1000 (19 Oct), and nice orders nothing between their
+    scopes: the placement names the share and the CPUs to claim of it (`research cpu-hold` on the machine), and the wrapper,
+    named on the share, gets the claimed cores in its place."""
+    out = submit.resolve(model.load(NEBIUS), _job(cpus=4, memory_gib=16, node="vy-nebius-2"), "r1", T)
+    assert out["cores"] == {"cpus": "48-95", "n": 4}
+    assert "AllowedCPUs=48-95" in out["wrap"] and out["wrap"][-3:] == ["taskset", "-c", "48-95"] and "nice" not in out["wrap"]
+    gpu = submit.resolve(model.load(NEBIUS), _job(gpus=1, cpus=4, memory_gib=64), "r1", T)
+    assert "cores" not in gpu, "a GPU job's runner keeps the share at nice 19"
+    home = submit.resolve(model.load(NEBIUS), _job(cpus=4, memory_gib=16), "r1", T)
+    assert home["node"] == "vy-nebius-1" and "cores" not in home
+    owner = submit.resolve(model.load(NEBIUS), _job(project="pous", cpus=4, memory_gib=16, node="vy-nebius-2"), "r1", T)
+    assert "cores" not in owner
+    gate = submit.resolve(model.load(NEBIUS), _job(priority="gate", cpus=16, memory_gib=16, node="vy-nebius-2"), "r1", T)
+    fill = submit.resolve(model.load(NEBIUS), _job(priority="fill", cpus=4, memory_gib=16, node="vy-nebius-2"), "r1", T)
+    assert gate["cores"]["rank"] == 150 and fill["cores"]["rank"] == -490, "cpu-hold's line is by class (INF-147)"
+
+
 def test_quiet_and_pinned_gpus_reach_gpu_lease():
     out = submit.resolve(model.load(NEBIUS), _job(project="pous", gpus=2, quiet=True, preempt="never", gpu_ids=(3, 4)), "r1", T)
     lease = out["workload_wrap"]
@@ -104,6 +122,18 @@ def test_a_pinned_node_is_the_only_one_tried():
     with pytest.raises(submit.Refused) as e:
         submit.resolve(c, _job(gpus=1, quiet=True, node="vy-nebius-1"), "r1", T)
     assert "vy-nebius-2" not in str(e.value)
+
+
+def test_once_node_1_has_stopped_verity_jobs_go_to_its_share_on_node_2():
+    """nebius-after-n1.toml, staged for node 1's retirement (INF-57): what the router does once it replaces nebius.toml."""
+    c = model.load(Path(NEBIUS).with_name("nebius-after-n1.toml"))
+    assert model.validate(c) == [] and set(c.nodes) == {"vy-nebius-2"} and c.workstreams == ()
+    cpu = submit.resolve(c, _job(cpus=4, memory_gib=16), "r1", T)
+    assert cpu["node"] == "vy-nebius-2" and cpu["wrap"][-3:] == ["taskset", "-c", "48-95"] and "nice" not in cpu["wrap"]
+    gpu = submit.resolve(c, _job(gpus=1), "r1", T)
+    assert gpu["node"] == "vy-nebius-2" and gpu["workload_wrap"][0] == submit.GPU_LEASE
+    with pytest.raises(submit.Refused, match="vy-nebius-1"):
+        submit.resolve(c, _job(node="vy-nebius-1"), "r1", T)
 
 
 def test_node_1s_gpus_take_a_pinned_job_through_its_own_gpu_lease_only_with_the_executor_switched_on():
@@ -159,6 +189,23 @@ def test_the_cli_prints_the_placement_or_the_refusal(capsys):
     out = json.loads(cap.out)
     assert cap.err == "cluster: --node is now --on\n"
     assert out["gpu_host"] is True and "CPUWeight=idle" not in out["wrap"]
+
+
+def test_the_cli_places_with_the_stop_each_node_reports_and_the_refusal_names_where_the_stop_came_from(capsys):
+    """INF-113: a node renewed on the machine (its /etc/research/deadline) but not in this tree's description places with the stop
+    the caller read from the node (`--stop`); without one the description's stop stands, and the refusal says which it was."""
+    stop = model.load(NEBIUS).nodes["vy-nebius-2"].stops_at
+    base = ["submit", NEBIUS, "--run-id", "r1", "--now", str(stop - 3600), "--project", "verity", "--submitter", "lane-x",
+            "--max-s", "600", "--mem-gb", "8", "--on", "vy-nebius-2"]
+    assert cli.main(base) == 3
+    refused = json.loads(capsys.readouterr().out)["refused"]
+    assert "admission end" in refused and "from the description's stops_at" in refused and "7200 s drain" in refused
+    assert cli.main([*base, "--stop", f"vy-nebius-2={stop + 2 * 86400}"]) == 0
+    assert json.loads(capsys.readouterr().out)["machine"] == "vy-nebius-2", "the share lasts until the node's stop, renewals included"
+    assert cli.main([*base, "--stop", f"vy-nebius-2={stop - 86400}"]) == 3, "a stop brought forward on the node holds too"
+    assert "from the node's live /etc/research/deadline" in json.loads(capsys.readouterr().out)["refused"]
+    assert cli.main([*base, "--stop", "vy-nebius-9=1"]) == 3
+    assert "unknown node 'vy-nebius-9'" in json.loads(capsys.readouterr().out)["refused"]
 
 
 KINDS = Path(__file__).parents[1] / "kinds"

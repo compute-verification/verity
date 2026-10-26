@@ -1,0 +1,6113 @@
+[
+ {
+  "id": "backprop",
+  "name": "Standard pretraining",
+  "family": "reference",
+  "description": "End-to-end backprop through a transformer, every weight updated every step.",
+  "sources": [
+   "tseng-2024-qtip",
+   "he-2025-tahquant"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "State at the scratch-trained rate b_w = 2.5 bits per weight (b_w.pretrained central) and a momentum-free optimizer, the attacker's choice; activations cross at 4 bits (b_a.activation central).",
+  "convention": "attacker"
+ },
+ {
+  "id": "backprop-fp8-boundaries",
+  "name": "Standard pretraining, 8-bit boundaries",
+  "family": "reference",
+  "description": "As backprop, with activations crossing at 8 bits as production systems send them.",
+  "sources": [
+   "deepseekai-2024-deepseek-v3"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 8.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "b_a.activation high.",
+  "convention": "attacker"
+ },
+ {
+  "id": "backprop-bottleneck",
+  "name": "Pretraining with a trained residual bottleneck",
+  "family": "architecture",
+  "description": "Backprop through an architecture whose residual crosses layer boundaries at half width.",
+  "sources": [
+   "ryabinin-2023-swarm"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 0.5,
+   "boundary_bits": 4.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "A linear d/2 bottleneck costs SWARM 26-28% more steps; not counted here (efficiency multiplier < 1).",
+  "convention": "attacker"
+ },
+ {
+  "id": "backprop-subspace",
+  "name": "Pretraining with a 1% residual subspace",
+  "family": "architecture",
+  "description": "Backprop through an architecture that confines the residual to 1% of its width at boundaries, 16 bits.",
+  "sources": [
+   "ramasinghe-2025-protocolmodels",
+   "janson-2026-mapl"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 0.01,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "The most aggressive published claim (Subspace Networks, mostly 2-8B). Its one independent replication, at 4-8x rather than 100x, loses 8-15% in loss and falls to m about 0.04 at 1B (subspace-activation-compression).",
+  "convention": "attacker"
+ },
+ {
+  "id": "diloco",
+  "name": "DiLoCo (local SGD, sync every 30 steps)",
+  "family": "parallel-communication",
+  "description": "Workers each run ordinary backprop on a full replica and average pseudo-gradients every H steps.",
+  "sources": [
+   "douillard-2023-diloco",
+   "charles-2025-diloco-scaling",
+   "kale-2025-eager-diloco",
+   "kolehmainen-2025-noloco",
+   "douillard-2026-decoupled-diloco",
+   "qi-2025-dilocox",
+   "he-2024-localsgd-scaling",
+   "iacob-2025-desloc",
+   "liu-2024-async-localsgd",
+   "woodworth-2020-localsgd",
+   "stich-2018-localsgd",
+   "ortiz-2021-localsgd-tradeoffs"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Within a worker, blocks still pass the same state and activations as standard training, so its per-block traits equal backprop's: less traffic between workers does not shrink what crosses a block.",
+  "scaling": [
+   {
+    "evidence": [
+     "charles-2025-diloco-scaling/4",
+     "charles-2025-diloco-scaling/7"
+    ],
+    "metric": "loss vs data-parallel, M = 4",
+    "compute_range_flop": [
+     1.5e+17,
+     6.9e+20
+    ],
+    "multiplier": 0.95,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "Derived: 0.66 at 35M, 0.95 at 2.4B; M = 1-2 about 1.0-1.1 at 2.4B."
+   },
+   {
+    "evidence": [
+     "douillard-2023-diloco/1"
+    ],
+    "metric": "quality vs synchronous, 8 workers",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "500x less."
+   },
+   {
+    "evidence": [
+     "therien-2025-muloco/1"
+    ],
+    "metric": "benchmarks vs DP AdamW, 15B, K = 16",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "Matches."
+   },
+   {
+    "evidence": [
+     "charles-2025-diloco-scaling/2",
+     "charles-2025-diloco-scaling/6"
+    ],
+    "metric": "C4 eval loss vs data-parallel at 20 tokens/param, M = 4",
+    "compute_range_flop": [
+     6.9e+20,
+     1.2e+22
+    ],
+    "multiplier": 0.94,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Derived with the data-parallel law's slope (d ln L/d ln C about -0.0477): M = 4 0.947 (2.4B), 0.945 (4B), 0.942 (10B); M = 2 1.03, 1.04, 1.04. The replica penalty stopped shrinking above 2.4B."
+   },
+   {
+    "evidence": [
+     "kale-2025-eager-diloco/1",
+     "kale-2025-eager-diloco/2"
+    ],
+    "metric": "C4 eval loss vs data-parallel at Chinchilla budgets, H = 30",
+    "compute_range_flop": [
+     9.4e+17,
+     1.9e+20
+    ],
+    "multiplier": 1.0,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "Derived: 0.87 at 100M, 0.92-0.93 at 200M-500M, 1.0 at 1B; losses given to 0.01."
+   },
+   {
+    "evidence": [
+     "kolehmainen-2025-noloco/1",
+     "kolehmainen-2025-noloco/2"
+    ],
+    "metric": "C4 validation perplexity vs FSDP, 6.8B, 16 replicas x 4 pipeline stages",
+    "compute_range_flop": null,
+    "multiplier": 0.48,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "Derived from 17.3 vs 15.7; NoLoCo 0.66; token budget not Chinchilla-matched; 16 replicas."
+   },
+   {
+    "evidence": [
+     "douillard-2026-decoupled-diloco/1",
+     "douillard-2026-decoupled-diloco/2"
+    ],
+    "metric": "downstream average vs data-parallel, asynchronous M = 8, 2B-9B",
+    "compute_range_flop": [
+     3.1e+20,
+     7.6e+21
+    ],
+    "multiplier": 1.0,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Matches at 2B/5B/9B; downstream, not loss."
+   },
+   {
+    "evidence": [
+     "qi-2025-dilocox/1",
+     "qi-2025-dilocox/2"
+    ],
+    "metric": "training loss vs AllReduce, 107B, 4,000 steps",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "0.30 nats worse; not converged; not convertible."
+   },
+   {
+    "evidence": [
+     "he-2024-localsgd-scaling/1",
+     "he-2024-localsgd-scaling/2"
+    ],
+    "metric": "fitted loss law vs DDP in parameters, 8 nodes, to 3B",
+    "compute_range_flop": null,
+    "multiplier": 1.11,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "A ratio in parameters (about 1.23 in compute) extrapolated past 3B; token budgets not Chinchilla-matched; kept out of the multiplier."
+   },
+   {
+    "evidence": [
+     "charles-2025-diloco-scaling/8"
+    ],
+    "metric": "EXTRAPOLATION of Table 7's independent power laws in N, M = 4",
+    "compute_range_flop": [
+     1e+24,
+     1e+26
+    ],
+    "multiplier": 1.29,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "EXTRAPOLATION, do not use as multiplier: the same fit predicts 1.08 at 10B where 0.94 was measured, and its leave-one-out residual (charles-2025-diloco-scaling/9) exceeds the gaps it extrapolates."
+   }
+  ],
+  "multiplier": {
+   "value": 0.94,
+   "trend": "constant",
+   "evidence": [
+    "charles-2025-diloco-scaling/2",
+    "charles-2025-diloco-scaling/6"
+   ],
+   "metric": "C4 eval loss vs data-parallel, M = 4, 10B (1.2e22 FLOP)"
+  },
+  "convention": "attacker"
+ },
+ {
+  "id": "greedy-layerwise",
+  "name": "Greedy layer-wise (local) learning",
+  "family": "local-learning",
+  "description": "Each layer is trained with a local loss on the frozen prefix's outputs; no gradient crosses a layer boundary.",
+  "sources": [
+   "belilovsky-2018-greedy-imagenet"
+  ],
+  "traits": {
+   "theorem_applies": false,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 1,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "No source in the index yet. Activations still cross forward; the thread theorem does not cover it, since it is not end-to-end backprop. One vision source, no LM evidence. Activations still cross forward; the thread theorem does not cover it, since it is not end-to-end backprop.",
+  "convention": "attacker",
+  "scaling": [
+   {
+    "evidence": [
+     "belilovsky-2018-greedy-imagenet/1",
+     "belilovsky-2019-dgl/1"
+    ],
+    "metric": "ImageNet top-1 vs end-to-end (CNN)",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "VGG-11 layer-wise -0.3 points; per-layer DGL (K = 10) on VGG-13 -2.2; total compute not reported; no LM result at any scale."
+   }
+  ]
+ },
+ {
+  "id": "full-finetune",
+  "name": "Full fine-tuning from a committed base",
+  "family": "fine-tuning",
+  "description": "Backprop over every weight, starting from committed weights; the state is the delta.",
+  "sources": [
+   "yu-2024-dare"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 0.1,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "b_w.delta/sft central: 0.1 bits per base weight.",
+  "convention": "attacker"
+ },
+ {
+  "id": "lora-16",
+  "name": "LoRA rank 16 on every matrix",
+  "family": "low-rank",
+  "description": "Continued training of rank-16 adapters on every matrix, the base frozen.",
+  "sources": [
+   "hu-2022-lora",
+   "biderman-2024-lora-learns-less"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 0.0101,
+   "state_bits_per_param": 16.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 4.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.003,
+   "uses_per_thread": 2,
+   "entry_fee_override": 16,
+   "fanout_override": 7168
+  },
+  "notes": "Updated fraction ~ 16 (1/7168 + 1/2048) for Kimi K2 shapes; bf16 adapter; 4 flops per active parameter per token (no weight gradients for the base); the adapter's up-projection has a 16-value entry fee. No evidence that rank-16 adapters on a frozen base can pretrain; native low-rank collapses already at rank d/8 (janson-2026-spectron/2).",
+  "convention": "as-published",
+  "scaling": [
+   {
+    "evidence": [
+     "zhang-2024-scaling-meets-finetuning/1",
+     "zhang-2024-scaling-meets-finetuning/2",
+     "zhang-2024-scaling-meets-finetuning/3"
+    ],
+    "metric": "fine-tuning loss vs PEFT size, 1B-16B (not pretraining)",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Adapter-size scaling ineffective; the law mispredicts at 16B."
+   },
+   {
+    "evidence": [
+     "glentis-2025-param-efficient-survey/4",
+     "glentis-2025-param-efficient-survey/3"
+    ],
+    "metric": "held-out loss, frozen random base + rank-512 adapters from init, 1B",
+    "compute_range_flop": [
+     1.05e+20,
+     1.05e+20
+    ],
+    "multiplier": 0.26,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Rank d/4, not 16: the nearest pretraining point."
+   }
+  ],
+  "multiplier": null
+ },
+ {
+  "id": "rl-rank1-lora",
+  "name": "RL with a rank-1 LoRA on every matrix",
+  "family": "rl-adapter",
+  "description": "Rollouts and updates of rank-1 adapters on every matrix, including every routed expert.",
+  "sources": [
+   "schulman-2025-lora-without-regret"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 0.00061,
+   "state_bits_per_param": 16.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 1,
+   "flops_per_token_per_param": 2.0,
+   "data_tokens_per_token": 0.05,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.0004,
+   "uses_per_thread": 2,
+   "entry_fee_override": 1,
+   "fanout_override": 7168
+  },
+  "notes": "Priced at rollout cost (2 flops per active parameter per token, forward only); prompts are a small share of the tokens a rollout generates.",
+  "convention": "as-published"
+ },
+ {
+  "id": "expert-subset-sft",
+  "name": "Expert-specialized fine-tuning (10% of experts)",
+  "family": "fine-tuning",
+  "description": "Backprop that updates a tenth of the routed experts.",
+  "sources": [
+   "wang-2024-esft"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 0.1,
+   "state_bits_per_param": 0.1,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.067,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "b_w.delta/sft central.",
+  "convention": "attacker"
+ },
+ {
+  "id": "mezo",
+  "name": "Zeroth-order fine-tuning (MeZO, 20k steps)",
+  "family": "seed-based",
+  "description": "Two forward passes per step with a seeded perturbation; the update is seeds and one scalar per step.",
+  "sources": [
+   "malladi-2023-mezo"
+  ],
+  "traits": {
+   "theorem_applies": false,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": false,
+   "description_bits": 320000.0,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 1,
+   "flops_per_token_per_param": 4.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 200000.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "The description does not split across slices: a block must read every seed to rebuild any slice. Decoding regenerates each step's perturbation, 10 flops per parameter per step.",
+  "convention": "as-published",
+  "scaling": [
+   {
+    "evidence": [
+     "duchi-2015-two-point-zo/1",
+     "duchi-2015-two-point-zo/2",
+     "chaubard-2026-soma/2",
+     "hinton-2022-forward-forward/1"
+    ],
+    "metric": "queries to equal accuracy, convex worst case (theory)",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "m ~ 1.5/d, tight: 1.5e-9 / 1.5e-10 / 1.5e-11 / 1.5e-12 at 1e9-1e12 parameters (extrapolation)."
+   },
+   {
+    "evidence": [
+     "yue-2023-zo-weak-dimension/1",
+     "yue-2023-zo-weak-dimension/2",
+     "larsen-2022-degrees-of-freedom/1",
+     "gan-2026-neural-thickets/1"
+    ],
+    "metric": "queries to equal loss in effective dimension (theory)",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "m ~ 1.5/ED; ED is unmeasured for pretraining and is largest from random init to low loss."
+   },
+   {
+    "evidence": [
+     "sarkar-2025-eggroll/4",
+     "allaire-2025-zo-pretraining/3"
+    ],
+    "metric": "pretraining loss at equal data, population 2 / one query",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "MeZO's regime underperforms or diverges from scratch; for pretraining it is bounded by zo-sgd's 4e-4."
+   }
+  ],
+  "multiplier": null
+ },
+ {
+  "id": "es-30",
+  "name": "Evolution strategies (population 30, 500 iterations)",
+  "family": "seed-based",
+  "description": "Perturb, evaluate, and move along fitness-weighted seeded noise.",
+  "sources": [
+   "qiu-2025-es-at-scale"
+  ],
+  "traits": {
+   "theorem_applies": false,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": false,
+   "description_bits": 240000.0,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 1,
+   "flops_per_token_per_param": 2.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 150000.0,
+   "kappa": 0.667,
+   "uses_per_thread": 1,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "15,000 perturbations at 10 flops per parameter each.",
+  "convention": "as-published",
+  "scaling": [
+   {
+    "evidence": [
+     "dahal-2026-dust/6"
+    ],
+    "metric": "FLOPs to equal held-out loss vs tuned SGD backprop, 37.7M transformer, weight-space ES at 64 forward passes per update",
+    "compute_range_flop": [
+     4.8e+16,
+     9.7e+16
+    ],
+    "multiplier": 0.00036,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "6.3e-4 at 10M tokens, 3.6e-4 at 20M; 2.35 nats behind backprop. Worst-case theory 3/d; calibrated to this cell with effective dimension proportional to d: 1.4e-5 to 1.4e-8 at 1e9-1e12 (extrapolation)."
+   },
+   {
+    "evidence": [
+     "gan-2026-neural-thickets/1",
+     "gan-2026-neural-thickets/2"
+    ],
+    "metric": "post-training accuracy at equal FLOPs, 0.5B-8B",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Random search matches RL only near pretrained weights; from an untrained net it is a needle in a haystack."
+   }
+  ],
+  "multiplier": {
+   "value": 0.00036,
+   "trend": "shrinks-with-scale",
+   "evidence": [
+    "dahal-2026-dust/6"
+   ],
+   "metric": "FLOPs to equal held-out loss vs tuned SGD backprop, 37.7M transformer"
+  }
+ },
+ {
+  "id": "zo-seed-pool",
+  "name": "Zeroth-order over a fixed 4096-seed pool",
+  "family": "seed-based",
+  "description": "The update is one coefficient per seed of a fixed pool, so decoding costs the same for any run length.",
+  "sources": [
+   "qin-2024-fedkseed"
+  ],
+  "traits": {
+   "theorem_applies": false,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": false,
+   "description_bits": 320000.0,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 1,
+   "flops_per_token_per_param": 4.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 40960.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "4096 seeds at 10 flops per parameter each.",
+  "convention": "as-published",
+  "scaling": [
+   {
+    "evidence": [
+     "gressmann-2020-random-bases/1",
+     "gressmann-2020-random-bases/2",
+     "larsen-2022-degrees-of-freedom/1"
+    ],
+    "metric": "accuracy at a fixed random-subspace dimension",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "A fixed 4,096-seed pool is a fixed 4,096-dimensional subspace; even with exact gradients a 400x subspace reaches 78% of SGD on CIFAR-10 and more steps don't help. m -> 0 for pretraining targets."
+   }
+  ],
+  "multiplier": null
+ },
+ {
+  "id": "lstm-recurrent-baseline",
+  "name": "LSTM in place of the Transformer",
+  "family": "architecture",
+  "description": "Replace self-attention blocks with LSTM recurrence (the pre-2017 recipe).",
+  "sources": [
+   "gundlach-2025-origin",
+   "ho-2024-algorithmic-progress",
+   "kaplan-2020-scaling-laws"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "The one scale-dependent architecture multiplier; the reference already contains it. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Sequential recurrence: a block boundary in time carries the recurrent state; no attention. Standardized to compute at equal held-out loss (confidence medium); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
+  "scaling": [
+   {
+    "evidence": [
+     "gundlach-2025-origin/9"
+    ],
+    "metric": "compute to equal held-out loss vs modern Transformer (E=1.9 subtracted)",
+    "compute_range_flop": [
+     1000000000000000.0,
+     1e+18
+    ],
+    "multiplier": 0.0385,
+    "trend": "exponent-change",
+    "exponent_change": null,
+    "note": "Measured: 6.28x at loss 5.3, 26x at 4.4."
+   },
+   {
+    "evidence": [
+     "gundlach-2025-origin/13",
+     "gundlach-2025-origin/15"
+    ],
+    "metric": "same, from Gundlach's fitted exponents",
+    "compute_range_flop": [
+     1.3e+22,
+     1.3e+22
+    ],
+    "multiplier": 0.00138,
+    "trend": "exponent-change",
+    "exponent_change": null,
+    "note": "EXTRAPOLATION by the authors: 725x at 1.3e22; 6x at 1e15 and more than 100x at 1e23."
+   },
+   {
+    "evidence": [
+     "gundlach-2025-origin/13",
+     "gundlach-2025-origin/15",
+     "ho-2026-least-understood/4"
+    ],
+    "metric": "same, gap proportional to C^0.15-0.29 through the quoted points",
+    "compute_range_flop": [
+     1e+24,
+     1e+26
+    ],
+    "multiplier": 0.00039,
+    "trend": "exponent-change",
+    "exponent_change": null,
+    "note": "EXTRAPOLATION: gap 140-2,600x at 1e24 and 290-9,900x at 1e26; experiments stop at 1e18."
+   },
+   {
+    "evidence": [
+     "ho-2024-algorithmic-progress/2"
+    ],
+    "metric": "compute-equivalent gain of the Transformer (observational)",
+    "compute_range_flop": null,
+    "multiplier": 0.139,
+    "trend": "exponent-change",
+    "exponent_change": null,
+    "note": "7.2x (CI 3.3-45.7x)."
+   }
+  ],
+  "multiplier": {
+   "value": 0.0385,
+   "trend": "exponent-change",
+   "evidence": [
+    "gundlach-2025-origin/9"
+   ],
+   "metric": "compute to equal held-out loss vs modern Transformer, measured up to 1e18 FLOP"
+  },
+  "confidence": "high",
+  "convention": "as-published"
+ },
+ {
+  "id": "transformer-component-tweaks",
+  "name": "SwiGLU, rotary embeddings and pre-RMSNorm",
+  "family": "architecture",
+  "description": "Gated FFN (SwiGLU), rotary position encoding, and pre-normalization with RMSNorm.",
+  "sources": [
+   "gundlach-2025-origin",
+   "shazeer-2020-glu"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Each tweak is small and scale-invariant; they do not multiply (see the bundle). Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated. Standardized to compute at equal held-out loss (confidence medium); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
+  "scaling": [
+   {
+    "evidence": [
+     "gundlach-2025-origin/2"
+    ],
+    "metric": "CEG at equal held-out loss, SwiGLU vs GeLU, 3.6M params",
+    "compute_range_flop": [
+     1000000000000000.0,
+     1e+17
+    ],
+    "multiplier": 1.17,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Measured."
+   },
+   {
+    "evidence": [
+     "gundlach-2025-origin/3"
+    ],
+    "metric": "same, RoPE vs sinusoidal",
+    "compute_range_flop": [
+     1000000000000000.0,
+     1e+17
+    ],
+    "multiplier": 1.44,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Measured."
+   },
+   {
+    "evidence": [
+     "gundlach-2025-origin/5"
+    ],
+    "metric": "same, pre-RMSNorm vs post-RMSNorm (1.09x vs pre-LayerNorm)",
+    "compute_range_flop": [
+     1000000000000000.0,
+     1e+17
+    ],
+    "multiplier": 1.87,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Measured."
+   },
+   {
+    "evidence": [
+     "gundlach-2025-origin/11",
+     "ho-2026-least-understood/4"
+    ],
+    "metric": "same, assumed scale-invariant",
+    "compute_range_flop": [
+     1e+24,
+     1e+26
+    ],
+    "multiplier": 1.17,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "EXTRAPOLATION: holds only if the near-identical exponents measured up to 1e18 persist 6-8 orders higher."
+   }
+  ],
+  "multiplier": {
+   "value": 1.17,
+   "trend": "constant",
+   "evidence": [
+    "gundlach-2025-origin/2"
+   ],
+   "metric": "CEG at equal held-out loss, SwiGLU vs GeLU, 3.6M params"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "modern-transformer-bundle",
+  "name": "Modern vs 2017 Transformer bundle",
+  "family": "architecture",
+  "description": "All post-2017 component changes together, at fixed scale.",
+  "sources": [
+   "gundlach-2025-origin",
+   "narang-2021-transformer-modifications",
+   "sanderson-2025-compute-paths"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Stacked tweaks are sub-multiplicative; summing their log m_A overstates C_eff. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated. Standardized to compute at equal held-out loss (confidence medium); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
+  "scaling": [
+   {
+    "evidence": [
+     "gundlach-2025-origin/7",
+     "gundlach-2025-origin/11"
+    ],
+    "metric": "CEG at equal held-out loss, modern vs retro Transformer (measured composite)",
+    "compute_range_flop": [
+     1000000000000000.0,
+     1e+18
+    ],
+    "multiplier": 1.33,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Ablations multiply to 3.43x; the measured composite is 1.33x."
+   },
+   {
+    "evidence": [
+     "gundlach-2025-origin/13",
+     "gundlach-2025-origin/16"
+    ],
+    "metric": "scale-invariant innovations at the 2023 frontier (experiment plus literature)",
+    "compute_range_flop": [
+     1.3e+22,
+     1.3e+22
+    ],
+    "multiplier": 2.6,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "A constant 2x against dense Transformers means 0% growth per year."
+   },
+   {
+    "evidence": [
+     "sanderson-2025-compute-paths/1"
+    ],
+    "metric": "combined CEG, nanoGPT",
+    "compute_range_flop": null,
+    "multiplier": 3.5,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Upper end."
+   }
+  ],
+  "multiplier": {
+   "value": 1.33,
+   "trend": "constant",
+   "evidence": [
+    "gundlach-2025-origin/7",
+    "gundlach-2025-origin/11"
+   ],
+   "metric": "CEG at equal held-out loss, measured composite; 1.33-2.6x at 1e24-1e26 if constant (EXTRAPOLATION)"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "primer",
+  "name": "Primer (squared ReLU + depthwise conv on Q, K, V)",
+  "family": "architecture",
+  "description": "Squared-ReLU FFN activation and a depthwise convolution after each attention projection.",
+  "sources": [
+   "so-2021-primer"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Baseline predates SwiGLU/RoPE; the gain over a modern baseline is unmeasured. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated. Standardized to compute at equal held-out loss (confidence low); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
+  "scaling": [
+   {
+    "evidence": [
+     "so-2021-primer/4"
+    ],
+    "metric": "compute to vanilla Transformer's final held-out perplexity, LM1B, 35M, library-default hyperparameters",
+    "compute_range_flop": null,
+    "multiplier": 2.12,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "2.12 / 2.13 / 1.72 across three library and hardware setups."
+   },
+   {
+    "evidence": [
+     "so-2021-primer/4"
+    ],
+    "metric": "same, Primer over Transformer++ (derived ratio)",
+    "compute_range_flop": null,
+    "multiplier": 1.38,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Derived: 1.29-1.55."
+   },
+   {
+    "evidence": [
+     "so-2021-primer/3",
+     "so-2021-primer/1"
+    ],
+    "metric": "loss vs compute, C4, 20M-1.9B",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Parallel lines mean a constant reduction factor; only absolute savings grow."
+   },
+   {
+    "evidence": [
+     "so-2021-primer/2"
+    ],
+    "metric": "FLAGGED downstream: compute to equal one-shot, 1.9B",
+    "compute_range_flop": null,
+    "multiplier": 3.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Not held-out loss."
+   },
+   {
+    "evidence": [
+     "so-2021-primer/5"
+    ],
+    "metric": "masked LM",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Not obviously better than Transformer++."
+   }
+  ],
+  "multiplier": {
+   "value": 1.3,
+   "trend": "constant",
+   "evidence": [
+    "so-2021-primer/4",
+    "so-2021-primer/3"
+   ],
+   "metric": "compute at equal held-out perplexity vs Transformer++ (derived), constant to 1e24-1e26 (EXTRAPOLATION)"
+  },
+  "confidence": "low",
+  "convention": "as-published"
+ },
+ {
+  "id": "mqa-sparse-attention",
+  "name": "Multi-query and sparse attention",
+  "family": "architecture",
+  "description": "Share K/V heads (MQA) or restrict attention to a sparse pattern, for cheaper inference.",
+  "sources": [
+   "sanderson-2025-compute-paths"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Training m_A below 1, approaching 1 with scale; a deployment choice, not a training gain. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Smaller KV state per token; no change to updated state.",
+  "scaling": [
+   {
+    "evidence": [
+     "sanderson-2025-compute-paths/2"
+    ],
+    "metric": "CEG vs standard attention, nanoGPT compact to full",
+    "compute_range_flop": null,
+    "multiplier": 0.931,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "MQA 0.673 -> 0.931; sparse attention 0.515 -> 0.964."
+   }
+  ],
+  "multiplier": {
+   "value": 0.931,
+   "trend": "grows-with-scale",
+   "evidence": [
+    "sanderson-2025-compute-paths/2"
+   ],
+   "metric": "CEG vs standard attention, nanoGPT compact to full"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "kernel-linear-attention",
+  "name": "Kernel linear attention (Performer)",
+  "family": "architecture",
+  "description": "Replace softmax attention with a random-feature kernel approximation.",
+  "sources": [
+   "tay-2022-scaling-vs-architectures"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A falls with scale. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated.",
+  "scaling": [
+   {
+    "evidence": [
+     "tay-2022-scaling-vs-architectures/2"
+    ],
+    "metric": "perplexity drop base -> large",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "exponent-change",
+    "exponent_change": null,
+    "note": "2.7% vs 8.4% for the Transformer: a worse exponent."
+   }
+  ],
+  "multiplier": null,
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "selective-ssm",
+  "name": "Selective state-space models (Mamba, Mamba-2)",
+  "family": "architecture",
+  "description": "Replace attention with input-dependent linear recurrences (SSD).",
+  "sources": [
+   "dao-2024-mamba2",
+   "gu-2023-mamba",
+   "waleffe-2024-mamba-empirical"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Loss m_A about 1 at small scale, below 1 on in-context abilities at 8B. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Per-token recurrent state of fixed size replaces the KV cache; boundary per token unchanged.",
+  "scaling": [
+   {
+    "evidence": [
+     "gu-2023-mamba/1"
+    ],
+    "metric": "loss under the Chinchilla protocol",
+    "compute_range_flop": [
+     2e+18,
+     2e+20
+    ],
+    "multiplier": 1.0,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Matches Transformer++ at 125M-1.3B."
+   },
+   {
+    "evidence": [
+     "gu-2023-mamba/2"
+    ],
+    "metric": "loss at fixed size, 300B tokens",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Mamba-3B matches Transformers twice its size (not compute-matched)."
+   },
+   {
+    "evidence": [
+     "waleffe-2024-mamba-empirical/1"
+    ],
+    "metric": "5-shot MMLU, 8B, 1.1T tokens",
+    "compute_range_flop": [
+     5.3e+22,
+     5.3e+22
+    ],
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "About 15 points behind the Transformer on in-context tasks."
+   },
+   {
+    "evidence": [
+     "dao-2024-mamba2/1"
+    ],
+    "metric": "throughput of the core layer",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "2-8x faster than Mamba."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "constant",
+   "evidence": [
+    "gu-2023-mamba/1"
+   ],
+   "metric": "loss under the Chinchilla protocol"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "hybrid-recurrent-attention",
+  "name": "Hybrid recurrence + attention (Griffin, Mamba-2-Hybrid)",
+  "family": "architecture",
+  "description": "Interleave linear-recurrent or SSM layers with a few (local or global) attention layers.",
+  "sources": [
+   "de-2024-griffin",
+   "waleffe-2024-mamba-empirical",
+   "yang-2024-gated-deltanet"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A slightly above 1 and holding at 8B/3.5T; no equal-loss compute ratio published. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. 7% attention layers in the 8B hybrid; the rest carry a fixed-size recurrent state.",
+  "scaling": [
+   {
+    "evidence": [
+     "de-2024-griffin/1"
+    ],
+    "metric": "held-out loss vs MQA Transformer",
+    "compute_range_flop": [
+     1e+18,
+     1e+21
+    ],
+    "multiplier": null,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Lowest loss at every budget; slightly above 1."
+   },
+   {
+    "evidence": [
+     "waleffe-2024-mamba-empirical/2"
+    ],
+    "metric": "12-task average, 8B, 3.5T tokens",
+    "compute_range_flop": [
+     1.7e+23,
+     1.7e+23
+    ],
+    "multiplier": null,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "+2.65 points over the 8B Transformer."
+   },
+   {
+    "evidence": [
+     "yang-2024-gated-deltanet/1"
+    ],
+    "metric": "LM and retrieval benchmarks vs Mamba2",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Gated DeltaNet hybrids improve further."
+   }
+  ],
+  "multiplier": null,
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "linear-recurrent-lm",
+  "name": "Linear RNNs (RWKV, HGRN2, TNL, xLSTM)",
+  "family": "architecture",
+  "description": "Linear-attention or gated linear recurrences with matrix or scalar memory.",
+  "sources": [
+   "beck-2025-xlstm-scaling",
+   "peng-2023-rwkv",
+   "shen-2024-linear-scaling"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A about 1-1.2 on loss; below 1 on retrieval. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated.",
+  "scaling": [
+   {
+    "evidence": [
+     "shen-2024-linear-scaling/1"
+    ],
+    "metric": "loss vs LLaMA at equal FLOPs, 70M-7B, 300B tokens",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Same scaling trend, better perplexity, worse retrieval."
+   },
+   {
+    "evidence": [
+     "beck-2025-xlstm-scaling/1"
+    ],
+    "metric": "loss at equal compute, 80M-7B",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Pareto-dominates Transformers (authors' comparison)."
+   },
+   {
+    "evidence": [
+     "peng-2023-rwkv/1"
+    ],
+    "metric": "quality at matched size, up to 14B",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "On par."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "constant",
+   "evidence": [
+    "peng-2023-rwkv/1"
+   ],
+   "metric": "quality at matched size, up to 14B"
+  },
+  "confidence": "low",
+  "convention": "as-published"
+ },
+ {
+  "id": "differential-attention",
+  "name": "Differential Transformer",
+  "family": "architecture",
+  "description": "Attention scores as the difference of two softmax maps, cancelling common-mode noise.",
+  "sources": [
+   "ye-2024-diff-transformer"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Separate parameter and token savings of 1.5x; the compute-optimal m_A is likely about 1.5. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated.",
+  "scaling": [
+   {
+    "evidence": [
+     "ye-2024-diff-transformer/1",
+     "ye-2024-diff-transformer/2"
+    ],
+    "metric": "parameters or tokens to equal loss",
+    "compute_range_flop": null,
+    "multiplier": 1.54,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "About 65% of parameters or tokens, 830M-13B; 62.2% at 11B-equivalent."
+   }
+  ],
+  "multiplier": {
+   "value": 1.54,
+   "trend": "constant",
+   "evidence": [
+    "ye-2024-diff-transformer/1",
+    "ye-2024-diff-transformer/2"
+   ],
+   "metric": "parameters or tokens to equal loss"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "ngpt-hypersphere",
+  "name": "nGPT (normalized Transformer)",
+  "family": "architecture",
+  "description": "Normalize all embeddings, weights and hidden states to unit norm; layers move along the hypersphere.",
+  "sources": [
+   "loshchilov-2024-ngpt"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Step multipliers, unreplicated at scale; per-FLOP m_A unknown. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated.",
+  "scaling": [
+   {
+    "evidence": [
+     "loshchilov-2024-ngpt/1"
+    ],
+    "metric": "training steps to equal accuracy",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "4-20x fewer steps depending on context length; per-step cost is higher."
+   }
+  ],
+  "multiplier": null,
+  "confidence": "low",
+  "convention": "as-published"
+ },
+ {
+  "id": "hyper-connections",
+  "name": "Hyper-connections",
+  "family": "architecture",
+  "description": "Replace the residual stream by n parallel streams mixed by learned connection weights.",
+  "sources": [
+   "zhu-2024-hyperconnections"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 4.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Raises m_A while widening boundaries 4x, which raises the shard construction's cost. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. The hidden state is replicated n = 4 times, so each layer boundary carries 4x the values.",
+  "scaling": [
+   {
+    "evidence": [
+     "zhu-2024-hyperconnections/1"
+    ],
+    "metric": "tokens to equal loss, OLMoE-1B-7B",
+    "compute_range_flop": null,
+    "multiplier": 1.8,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Advantage kept to 500B tokens."
+   }
+  ],
+  "multiplier": {
+   "value": 1.8,
+   "trend": "unknown",
+   "evidence": [
+    "zhu-2024-hyperconnections/1"
+   ],
+   "metric": "tokens to equal loss, OLMoE-1B-7B"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "byte-latent-transformer",
+  "name": "Byte Latent Transformer",
+  "family": "architecture",
+  "description": "Model raw bytes grouped into entropy-sized patches instead of a fixed tokenizer.",
+  "sources": [
+   "pagnoni-2024-blt"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A about 1; changes how novel data bits are counted. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Input is raw bytes at 8 bits each, so data bits per BPE-token-equivalent are higher.",
+  "scaling": [
+   {
+    "evidence": [
+     "pagnoni-2024-blt/1"
+    ],
+    "metric": "loss at equal training FLOPs vs Llama 3 BPE, up to 8B",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Parity; up to 50% inference-FLOP savings at small loss cost."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "constant",
+   "evidence": [
+    "pagnoni-2024-blt/1"
+   ],
+   "metric": "loss at equal training FLOPs vs Llama 3 BPE, up to 8B"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "looped-recursive",
+  "name": "Looped / recursive Transformers (MoR, recurrent depth)",
+  "family": "architecture",
+  "description": "Reuse one block of layers several times per token, optionally with per-token recursion depth.",
+  "sources": [
+   "bae-2024-relaxed-recursive",
+   "bae-2025-mor",
+   "geiping-2025-recurrent-depth",
+   "tay-2022-scaling-vs-architectures"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 8,
+   "flops_per_token_per_param": 24.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 8,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A about 1 at small scale; concentrates many gates of work on few updated weights. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Unique updated weights per FLOP fall by the loop count (about 2x in MoR); same weights reused. Traits at r = 4 loops: n_active counts unique parameters, each used 4x per token (24 flops per parameter, uses per thread 8). Looping cuts state reads per FLOP by r but not activation crossings, which scale with the loops. Crossings 8: activations cross each slice boundary once per loop, forward and backward, so looping amortizes state reads but not boundary traffic.",
+  "scaling": [
+   {
+    "evidence": [
+     "schwethelm-2026-iso-depth-looped/1",
+     "schwethelm-2026-iso-depth-looped/2"
+    ],
+    "metric": "held-out loss at equal training FLOPs, joint law over r in {1,2,4,8}",
+    "compute_range_flop": [
+     4e+17,
+     2.15e+19
+    ],
+    "multiplier": 0.55,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "phi = 0.46: m = r^(phi-1) at equal tokens (0.69 r=2, 0.47 r=4, 0.33 r=8); 0.58 at r=4 with re-allocation; no compute dependence, so 0.47-0.58 at r=4 at 1e24-1e26 (extrapolation)."
+   },
+   {
+    "evidence": [
+     "schwethelm-2026-iso-depth-looped/3"
+    ],
+    "metric": "held-out loss r=4 vs r=1",
+    "compute_range_flop": [
+     4e+20,
+     4e+20
+    ],
+    "multiplier": 0.54,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "0.061 nats."
+   },
+   {
+    "evidence": [
+     "saunshi-2025-looped/1"
+    ],
+    "metric": "held-out perplexity vs iso-FLOP dense, 1B/250B tokens",
+    "compute_range_flop": [
+     1.5e+21,
+     1.5e+21
+    ],
+    "multiplier": 0.52,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "12x2 vs 24x1: +0.065 nats."
+   },
+   {
+    "evidence": [
+     "schwethelm-2026-iso-depth-looped/4"
+    ],
+    "metric": "same law with hyperconnections",
+    "compute_range_flop": [
+     4e+17,
+     2.15e+19
+    ],
+    "multiplier": 0.62,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "phi = 0.65."
+   },
+   {
+    "evidence": [
+     "lan-2020-albert/1"
+    ],
+    "metric": "fine-tuned downstream average at matched score, BERT",
+    "compute_range_flop": null,
+    "multiplier": 0.6,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Downstream, not loss."
+   },
+   {
+    "evidence": [
+     "csordas-2024-moeut/1",
+     "csordas-2024-moeut/2",
+     "csordas-2024-moeut/3"
+    ],
+    "metric": "C4 perplexity at equal MACs, up to 1B, 6.6B tokens",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Sharing plus MoE beats undertrained baselines; plain sharing is not compute-efficient."
+   }
+  ],
+  "multiplier": {
+   "value": 0.55,
+   "trend": "constant",
+   "evidence": [
+    "schwethelm-2026-iso-depth-looped/2",
+    "schwethelm-2026-iso-depth-looped/3",
+    "saunshi-2025-looped/1"
+   ],
+   "metric": "held-out loss at equal training FLOPs, r = 4 (r = 2: about 0.7)"
+  },
+  "confidence": "low",
+  "convention": "as-published"
+ },
+ {
+  "id": "fine-grained-moe",
+  "name": "Fine-grained mixture of experts",
+  "family": "sparsity-moe",
+  "description": "Replace dense FFNs by many small routed experts (plus shared experts), activating a few per token.",
+  "sources": [
+   "dai-2024-deepseekmoe",
+   "gundlach-2025-origin",
+   "krajewski-2024-finegrained-moe",
+   "ludziejewski-2025-joint-moe",
+   "tian-2025-efficiency-leverage"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "The largest and only clearly growing m_A, and it shrinks the state one token touches. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Active share 32B of 1.04T in Kimi K2 (the NCI board's row); E = 64 in Krajewski's fits gives an FFN active share of 1/64. Per-token updated state falls by the active share; routing adds all-to-all boundaries. Krajewski's law L = c + (g/G^gamma + a)/N^alpha + b/D^beta is fitted at 129M-3.7B; over 40x past 1e25 FLOP is extrapolation. MoE belongs to the base recipe (algorithmic progress), and a block spanning many tokens touches nearly every expert.",
+  "scaling": [
+   {
+    "evidence": [
+     "krajewski-2024-finegrained-moe/1",
+     "krajewski-2024-finegrained-moe/2"
+    ],
+    "metric": "compute to equal loss vs dense",
+    "compute_range_flop": [
+     1e+19,
+     1e+25
+    ],
+    "multiplier": 20,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "20x at 1e20, over 40x past 1e25 (extrapolated from 129M-3.7B fits, E = 64)."
+   },
+   {
+    "evidence": [
+     "tian-2025-efficiency-leverage/1",
+     "tian-2025-efficiency-leverage/2"
+    ],
+    "metric": "efficiency leverage at 1T tokens",
+    "compute_range_flop": [
+     5e+21,
+     5e+21
+    ],
+    "multiplier": 7,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "0.85B-active MoE equals a 6.1B dense model."
+   },
+   {
+    "evidence": [
+     "dai-2024-deepseekmoe/1"
+    ],
+    "metric": "compute to match LLaMA2 7B",
+    "compute_range_flop": null,
+    "multiplier": 2.5,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Different data."
+   },
+   {
+    "evidence": [
+     "gundlach-2025-origin/8"
+    ],
+    "metric": "literature estimate at fixed expert count",
+    "compute_range_flop": null,
+    "multiplier": 2,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Conservative bound."
+   },
+   {
+    "evidence": [
+     "ludziejewski-2025-joint-moe/1"
+    ],
+    "metric": "loss under a joint memory and compute budget",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Still better than dense when total parameters are capped."
+   },
+   {
+    "evidence": [
+     "abnar-2025-parameters-vs-flops/1",
+     "abnar-2025-parameters-vs-flops/2"
+    ],
+    "metric": "held-out loss at equal FLOPs vs MoE sparsity",
+    "compute_range_flop": [
+     3e+19,
+     1e+21
+    ],
+    "multiplier": null,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Optimal sparsity approaches 1 at every budget; same-perplexity sparse models do worse on reading comprehension (abnar/3); memory and communication ignored (abnar/4)."
+   },
+   {
+    "evidence": [
+     "he-2024-peer/1"
+    ],
+    "metric": "held-out C4 perplexity at isoFLOP, converted with the table's own dense slope (0.22)",
+    "compute_range_flop": [
+     6e+18,
+     2e+19
+    ],
+    "multiplier": 1.6,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "PEER 1.9 at 6e18 to 1.6 at 2e19; two points."
+   }
+  ],
+  "multiplier": {
+   "value": 20,
+   "trend": "grows-with-scale",
+   "evidence": [
+    "krajewski-2024-finegrained-moe/1",
+    "krajewski-2024-finegrained-moe/2"
+   ],
+   "metric": "compute to equal loss vs dense"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "switch-top1-moe",
+  "name": "Coarse top-1/top-2 MoE (Switch, routed LMs)",
+  "family": "sparsity-moe",
+  "description": "Replace FFNs by FFN-sized experts with top-1 or top-2 routing.",
+  "sources": [
+   "clark-2022-routed-scaling",
+   "fedus-2021-switch"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Coarse routing's m_A shrinks with N under fixed tokens; fine-grained MoE reverses this. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Active share about 1/E of FFN parameters for top-1 over E experts.",
+  "scaling": [
+   {
+    "evidence": [
+     "fedus-2021-switch/1"
+    ],
+    "metric": "step-time speedup to equal quality, T5-Base",
+    "compute_range_flop": null,
+    "multiplier": 7,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Up to 7x; 4x over T5-XXL at trillion parameters."
+   },
+   {
+    "evidence": [
+     "clark-2022-routed-scaling/1",
+     "clark-2022-routed-scaling/2"
+    ],
+    "metric": "effective parameter gain from routing",
+    "compute_range_flop": [
+     1.2e+19,
+     1e+21
+    ],
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Improvement shrinks with base size; zero past 937B (S-BASE) at 130B fixed tokens."
+   },
+   {
+    "evidence": [
+     "he-2024-peer/1"
+    ],
+    "metric": "held-out C4 perplexity at isoFLOP, converted",
+    "compute_range_flop": [
+     6e+18,
+     2e+19
+    ],
+    "multiplier": 1.4,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "1.6 at 6e18 to 1.4 at 2e19."
+   }
+  ],
+  "multiplier": {
+   "value": 4,
+   "trend": "shrinks-with-scale",
+   "evidence": [
+    "fedus-2021-switch/1",
+    "clark-2022-routed-scaling/1",
+    "he-2024-peer/1"
+   ],
+   "metric": "time to equal pretraining perplexity at equal FLOPs per token, T5-XXL (7x is T5-Base)"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "weight-sparsity",
+  "name": "Unstructured / n:m weight sparsity",
+  "family": "sparsity-moe",
+  "description": "Train with a fixed fraction of weights pruned to zero.",
+  "sources": [
+   "frantar-2023-sparsity-scaling"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 0.25,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 1.5,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.1668,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "About 1 at Chinchilla allocation; a parameter-efficiency gain when over-training. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. At 75% sparsity a quarter of weight positions are updated and used. Priced with sparse kernels (FLOPs fall with the state, 1.5 per parameter at 25% density), matching m = 1; on dense hardware use 6.0 with m 0.25-0.4. Jin's schedule starts dense, so early blocks read the whole model.",
+  "scaling": [
+   {
+    "evidence": [
+     "jin-2025-journey-matters/1",
+     "jin-2025-journey-matters/4"
+    ],
+    "metric": "held-out loss at equal compute, counting non-zero-weight FLOPs",
+    "compute_range_flop": [
+     3.7e+18,
+     6.8e+20
+    ],
+    "multiplier": 1.0,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Chinchilla with the average parameter count fits sparse and dense; m = 1 by construction (past 6.8e20 is extrapolation)."
+   },
+   {
+    "evidence": [
+     "jin-2025-journey-matters/3"
+    ],
+    "metric": "same, counting real FLOPs (masked dense matmuls)",
+    "compute_range_flop": [
+     3.7e+18,
+     6.8e+20
+    ],
+    "multiplier": 0.4,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "N_avg/N_init: 0.4 at 80% final sparsity, about 0.7 at 50%."
+   },
+   {
+    "evidence": [
+     "evci-2020-rigl/1"
+    ],
+    "metric": "char-LM loss vs dense-then-prune",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Negative, small GRU."
+   },
+   {
+    "evidence": [
+     "frantar-2023-sparsity-scaling/1"
+    ],
+    "metric": "loss at fixed non-zero parameters",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "Sparsity becomes optimal only when training well past Chinchilla."
+   },
+   {
+    "evidence": [
+     "frantar-2023-sparsity-scaling/2"
+    ],
+    "metric": "equivalent dense size, 75% sparsity",
+    "compute_range_flop": null,
+    "multiplier": 2.15,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Parameter multiplier in the infinite-data limit, not a compute multiplier."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "constant",
+   "evidence": [
+    "jin-2025-journey-matters/1",
+    "frantar-2023-sparsity-scaling/1"
+   ],
+   "metric": "held-out loss at equal non-zero-weight compute (0.4 on dense hardware)"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "conditional-depth",
+  "name": "Conditional depth (Mixture-of-Depths, progressive layer dropping)",
+  "family": "sparsity-moe",
+  "description": "Skip some layers for some tokens (MoD routing) or randomly and progressively during training (PLD).",
+  "sources": [
+   "kaddour-2023-no-train-no-gain",
+   "raposo-2024-mod",
+   "zhang-2020-pld"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 3.4,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A about 1 against tuned baselines. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Per-token compute varies; layer boundaries are skipped by routed-out tokens. Mixture-of-Depths skips compute but reads every layer's weights, so reads per FLOP rise: 3.4 flops per parameter at 12.5% capacity in alternating layers.",
+  "scaling": [
+   {
+    "evidence": [
+     "raposo-2024-mod/1"
+    ],
+    "metric": "training loss at equal FLOPs",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Up to 1.5% better log-probability objective; m_A slightly above 1."
+   },
+   {
+    "evidence": [
+     "zhang-2020-pld/1"
+    ],
+    "metric": "pre-training time to equal downstream accuracy, BERT",
+    "compute_range_flop": null,
+    "multiplier": 2.5,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Claimed."
+   },
+   {
+    "evidence": [
+     "kaddour-2023-no-train-no-gain/1"
+    ],
+    "metric": "gain vs fully-decayed baseline",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Layer-dropping gains vanish against a tuned baseline."
+   },
+   {
+    "evidence": [
+     "raposo-2024-mod/1",
+     "raposo-2024-mod/2"
+    ],
+    "metric": "training loss at equal FLOPs, isoFLOP 6e18-1e20, 60M-3B",
+    "compute_range_flop": [
+     6e+18,
+     1e+20
+    ],
+    "multiplier": 1.3,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Up to 1.5% better objective, about 0.03-0.05 nats at 0.15-0.2 nats per e-fold; training, not held-out, loss."
+   }
+  ],
+  "multiplier": {
+   "value": 1.2,
+   "trend": "unknown",
+   "evidence": [
+    "raposo-2024-mod/1",
+    "kaddour-2023-no-train-no-gain/1"
+   ],
+   "metric": "loss at equal training FLOPs, up to 1e20 (the 2.5 from progressive layer dropping is BERT downstream wall-clock vs an untuned baseline)"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "chinchilla-allocation",
+  "name": "Compute-optimal allocation (Chinchilla vs Kaplan)",
+  "family": "data",
+  "description": "Scale parameters and tokens equally (about 20 tokens per parameter) instead of N proportional to C^0.73.",
+  "sources": [
+   "besiroglu-2024-chinchilla-replication",
+   "gundlach-2025-origin",
+   "hoffmann-2022-chinchilla",
+   "kaplan-2020-scaling-laws",
+   "porian-2024-resolving-discrepancies"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Part of the reference recipe; listed because it is the second scale-dependent gain. Its multiplier is 1, since the reference already allocates this way; its gain over Kaplan allocation (the scaling entries) is base-recipe progress. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated. Standardized to compute at equal held-out loss (confidence high); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
+  "scaling": [
+   {
+    "evidence": [
+     "gundlach-2025-origin/10"
+    ],
+    "metric": "CEG of Chinchilla over Kaplan allocation (analytic, Chinchilla law)",
+    "compute_range_flop": [
+     1e+16,
+     1e+24
+    ],
+    "multiplier": 10,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "Below 10x over 1e16-1e24."
+   },
+   {
+    "evidence": [
+     "gundlach-2025-origin/13"
+    ],
+    "metric": "same",
+    "compute_range_flop": [
+     1.3e+22,
+     1.3e+22
+    ],
+    "multiplier": 3.7,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "3.67x here and 9.4x at 2e23."
+   },
+   {
+    "evidence": [
+     "ho-2024-algorithmic-progress/4"
+    ],
+    "metric": "compute-equivalent multiplier, Chinchilla over Kaplan",
+    "compute_range_flop": [
+     1e+21,
+     2.5e+24
+    ],
+    "multiplier": 4,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "1.75x at GPT-2 scale, 4x at PaLM scale."
+   },
+   {
+    "evidence": [
+     "gundlach-2025-origin/17",
+     "besiroglu-2024-chinchilla-replication/2"
+    ],
+    "metric": "same, Appendix B closed form recomputed",
+    "compute_range_flop": [
+     1e+24,
+     1e+26
+    ],
+    "multiplier": 17.5,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "EXTRAPOLATION: 17.5 / 46 / 129x at 1e24 / 1e25 / 1e26 with Chinchilla constants; 7.8 / 17 / 39x with the Besiroglu refit. The Kaplan arm is a counterfactual nobody trains."
+   },
+   {
+    "evidence": [
+     "hoffmann-2022-chinchilla/1",
+     "kaplan-2020-scaling-laws/2",
+     "pearce-2024-reconciling/1",
+     "bi-2024-deepseek-llm/1"
+    ],
+    "metric": "optimal N(C) exponent",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "exponent-change",
+    "exponent_change": null,
+    "note": "0.73 vs 0.5, explained by non-embedding counts at small scale; 0.45-0.58 depending on data quality."
+   },
+   {
+    "evidence": [
+     "gadre-2024-overtraining/1",
+     "sardana-2023-beyond-chinchilla/1"
+    ],
+    "metric": "compute at equal held-out loss, 200 tokens per parameter vs optimal (derived, Besiroglu law)",
+    "compute_range_flop": [
+     1e+20,
+     1e+26
+    ],
+    "multiplier": 0.61,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "0.67 to 0.58 at 200 t/p; 0.83 to 0.75 at 100 t/p. Over-training is a constant penalty."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "constant",
+   "evidence": [
+    "hoffmann-2022-chinchilla/1"
+   ],
+   "metric": "1 against the reference by construction: the reference is Chinchilla-optimal. The scaling entries' 3.7-17.5x are over Kaplan allocation, a gain that belongs in g, not in m_A"
+  },
+  "confidence": "high",
+  "convention": "as-published"
+ },
+ {
+  "id": "data-repetition",
+  "name": "Multi-epoch training on repeated data",
+  "family": "data",
+  "description": "Train for up to about 4 epochs over a smaller unique corpus.",
+  "sources": [
+   "muennighoff-2023-data-constrained"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 0.249,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A about 1 while cutting novel data per token 4x. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Novel data bits per training token fall about 4x (17.3/4) if repeats are re-read from committed data.",
+  "scaling": [
+   {
+    "evidence": [
+     "muennighoff-2023-data-constrained/1"
+    ],
+    "metric": "loss vs unique-data training, up to 9B / 900B tokens",
+    "compute_range_flop": [
+     null,
+     4.9e+22
+    ],
+    "multiplier": 1.0,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Negligible loss change up to 4 epochs; value decays to zero beyond."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "constant",
+   "evidence": [
+    "muennighoff-2023-data-constrained/1"
+   ],
+   "metric": "loss vs unique-data training, up to 9B / 900B tokens"
+  },
+  "confidence": "high",
+  "convention": "as-published"
+ },
+ {
+  "id": "classifier-quality-filtering",
+  "name": "Model-based quality filtering (FineWeb-Edu, DCLM)",
+  "family": "data",
+  "description": "Keep web documents a classifier rates as educational or high quality.",
+  "sources": [
+   "li-2024-dclm",
+   "penedo-2024-fineweb"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Among the largest constant m_A; no change to NCI state. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated. Standardized to compute at equal held-out loss (confidence low); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
+  "scaling": [
+   {
+    "evidence": [
+     "penedo-2024-fineweb/1",
+     "penedo-2024-fineweb/2"
+    ],
+    "metric": "FLAGGED downstream: tokens to equal MMLU, 1.71B",
+    "compute_range_flop": null,
+    "multiplier": 10,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Benchmark-targeted."
+   },
+   {
+    "evidence": [
+     "li-2024-dclm/1"
+    ],
+    "metric": "FLAGGED downstream: compute to equal 53-task average, 7B, vs Llama 3 8B",
+    "compute_range_flop": [
+     1.1e+23,
+     1.1e+23
+    ],
+    "multiplier": 6.6,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Confounded by other differences."
+   },
+   {
+    "evidence": [
+     "penedo-2024-fineweb/3"
+    ],
+    "metric": "held-out perplexity on Paloma domains at equal compute, FineWeb-Edu vs FineWeb, 1.71B",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Worse on broad web text (common-crawl +0.235 nats per token, reddit); better on Wikipedia, pes2o and code."
+   },
+   {
+    "evidence": [
+     "goyal-2024-data-filtering-compute/1"
+    ],
+    "metric": "FLAGGED vision-language: CLIP accuracy vs compute",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Aggressive filtering loses once the filtered pool repeats."
+   },
+   {
+    "evidence": [
+     "lourie-2025-unreliable/2",
+     "magnusson-2023-paloma/1"
+    ],
+    "metric": "choice of held-out corpus",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "The validation set can flip which data recipe wins."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "unknown",
+   "evidence": [
+    "penedo-2024-fineweb/3",
+    "lourie-2025-unreliable/2"
+   ],
+   "metric": "compute at equal broad held-out loss: no positive evidence; as-published downstream 6.6-10x if benchmarks are the yardstick"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "perplexity-pruning",
+  "name": "Perplexity-based data pruning",
+  "family": "data",
+  "description": "Drop documents by a small reference model's perplexity.",
+  "sources": [
+   "ankner-2024-perplexed",
+   "marion-2023-when-less-is-more",
+   "sorscher-2022-beyond-scaling"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A about 1.45; the exponent change is unshown for LMs. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated.",
+  "scaling": [
+   {
+    "evidence": [
+     "ankner-2024-perplexed/1"
+    ],
+    "metric": "steps to baseline downstream, 3B",
+    "compute_range_flop": null,
+    "multiplier": 1.45,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "125M reference."
+   },
+   {
+    "evidence": [
+     "marion-2023-when-less-is-more/1"
+    ],
+    "metric": "loss with pruned data",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Beats the baseline on as little as 30% of the data."
+   },
+   {
+    "evidence": [
+     "sorscher-2022-beyond-scaling/1",
+     "sorscher-2022-beyond-scaling/2"
+    ],
+    "metric": "error vs pruned dataset size",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "exponent-change",
+    "exponent_change": null,
+    "note": "Exponential scaling in theory; metrics scale poorly to ImageNet."
+   }
+  ],
+  "multiplier": {
+   "value": 1.45,
+   "trend": "unknown",
+   "evidence": [
+    "ankner-2024-perplexed/1"
+   ],
+   "metric": "steps to baseline downstream, 3B"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "semantic-dedup-d4",
+  "name": "Semantic deduplication and diversification (D4)",
+  "family": "data",
+  "description": "Cluster documents by embedding, remove near-duplicates and prototypical points.",
+  "sources": [
+   "tirumala-2023-d4"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Small constant m_A. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated.",
+  "scaling": [
+   {
+    "evidence": [
+     "tirumala-2023-d4/1"
+    ],
+    "metric": "efficiency gain at 6.7B",
+    "compute_range_flop": null,
+    "multiplier": 1.2,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "20% efficiency gain."
+   }
+  ],
+  "multiplier": {
+   "value": 1.2,
+   "trend": "unknown",
+   "evidence": [
+    "tirumala-2023-d4/1"
+   ],
+   "metric": "efficiency gain at 6.7B"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "mixture-and-ordering",
+  "name": "Domain reweighting and curricula (DoReMi, curriculum)",
+  "family": "data",
+  "description": "Choose domain mixture weights with a proxy model, or order data from easy to hard.",
+  "sources": [
+   "xie-2023-doremi",
+   "zhang-2025-curriculum"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A 1.2-2.6 against weak default mixtures. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated. Standardized to compute at equal held-out loss (confidence low); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
+  "scaling": [
+   {
+    "evidence": [
+     "xie-2023-doremi/1"
+    ],
+    "metric": "FLAGGED downstream: steps to baseline accuracy, 8B; baseline is the Pile's untuned default weights",
+    "compute_range_flop": null,
+    "multiplier": 2.6,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Proxy compute excluded."
+   },
+   {
+    "evidence": [
+     "xie-2023-doremi/2"
+    ],
+    "metric": "held-out per-domain Pile log-perplexity, 8B, equal steps",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Improves all domains; magnitude given only in Figure 4."
+   },
+   {
+    "evidence": [
+     "xie-2023-doremi/3"
+    ],
+    "metric": "FLAGGED downstream: steps to baseline, 280M-1B, same-size proxy",
+    "compute_range_flop": null,
+    "multiplier": 4,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Does not shrink across 280M-1B."
+   },
+   {
+    "evidence": [
+     "zhang-2025-curriculum/1"
+    ],
+    "metric": "steps to baseline, early/mid training",
+    "compute_range_flop": null,
+    "multiplier": 1.4,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Unchanged."
+   }
+  ],
+  "multiplier": {
+   "value": 2.6,
+   "trend": "constant",
+   "evidence": [
+    "xie-2023-doremi/1",
+    "xie-2023-doremi/2"
+   ],
+   "metric": "steps to equal downstream accuracy (not converted); held-out Pile loss also improves, magnitude unreported in text"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "synthetic-rephrasing",
+  "name": "Synthetic and rephrased pretraining data (WRAP, BeyondWeb, phi)",
+  "family": "data",
+  "description": "Train on web text rephrased or generated by an existing LLM, mixed with real data.",
+  "sources": [
+   "datologyai-2025-beyondweb",
+   "gunasekar-2023-phi1",
+   "maini-2024-wrap",
+   "kang-2025-synthetic-scaling"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Large m_A that excludes generation compute; the generator is a sunk model. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Generated text is still token ids (17.3 raw bits), but the generator's compute is a separate, uncounted circuit.",
+  "scaling": [
+   {
+    "evidence": [
+     "maini-2024-wrap/1"
+    ],
+    "metric": "speed-up on C4",
+    "compute_range_flop": null,
+    "multiplier": 3,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Rephraser compute excluded."
+   },
+   {
+    "evidence": [
+     "datologyai-2025-beyondweb/1"
+    ],
+    "metric": "speed-up vs open web data",
+    "compute_range_flop": null,
+    "multiplier": 7.7,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "2.7x vs Nemotron-Synth."
+   },
+   {
+    "evidence": [
+     "gunasekar-2023-phi1/1"
+    ],
+    "metric": "HumanEval at 1.3B / 7B tokens",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Task-specific."
+   },
+   {
+    "evidence": [
+     "nguyen-2025-rewire/1"
+    ],
+    "metric": "unique-data-equivalent at equal tokens, downstream",
+    "compute_range_flop": [
+     6e+21,
+     6e+21
+    ],
+    "multiplier": 2,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Rewrites worth about 2x unique web data at 1-7B in a data-limited regime."
+   },
+   {
+    "evidence": [
+     "nguyen-2025-rewire/2"
+    ],
+    "metric": "downstream, synthetic only",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Synthetic-only data is worse than raw."
+   },
+   {
+    "evidence": [
+     "su-2024-nemotron-cc/1"
+    ],
+    "metric": "downstream at matched tokens",
+    "compute_range_flop": [
+     4.8e+22,
+     4.8e+22
+    ],
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "+1.5 points."
+   },
+   {
+    "evidence": [
+     "su-2024-nemotron-cc/2"
+    ],
+    "metric": "downstream vs Llama 3.1 8B (not matched)",
+    "compute_range_flop": [
+     7.2e+23,
+     7.2e+23
+    ],
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "+0.5 points average."
+   },
+   {
+    "evidence": [
+     "abdin-2024-phi4/2"
+    ],
+    "metric": "MMLU, 12 epochs of synthetic vs fresh web",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Synthetic repeated beats fresh web on MMLU."
+   },
+   {
+    "evidence": [
+     "dohmatob-2024-strong-collapse/1"
+    ],
+    "metric": "theory",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Collapse bound."
+   },
+   {
+    "evidence": [
+     "maini-2024-wrap/2"
+    ],
+    "metric": "held-out Pile perplexity at equal training compute, 1.3B, C4-only baseline",
+    "compute_range_flop": [
+     1.2e+21,
+     2.3e+21
+    ],
+    "multiplier": 2.4,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Derived: more than 10% lower perplexity is about 0.105 nats, about 2.4x via the Besiroglu law (illustrative); the narrow baseline means part of the gain is domain coverage."
+   },
+   {
+    "evidence": [
+     "ho-2026-least-understood/5"
+    ],
+    "metric": "accounting",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Generator compute must be counted, or m is bounded only by the generator; under the policy a registered generator is free."
+   },
+   {
+    "evidence": [
+     "kang-2025-synthetic-scaling/1",
+     "kang-2025-synthetic-scaling/3"
+    ],
+    "metric": "tokens to equal held-out loss at a fixed 1B model, 1B-200B tokens, vs CommonCrawl",
+    "compute_range_flop": [
+     6e+18,
+     1.2e+21
+    ],
+    "multiplier": null,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "5-10x at larger data budgets; fixed model size, so mostly over-trained and not against a compute-optimal reference. An 8B generator does as well as a 70B one; generation compute excluded."
+   }
+  ],
+  "multiplier": {
+   "value": 2.4,
+   "trend": "unknown",
+   "evidence": [
+    "maini-2024-wrap/2"
+   ],
+   "metric": "compute at equal held-out Pile loss vs C4-only (derived), generator compute excluded (a registered generator is free under the policy)"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "teacher-guided-data-selection",
+  "name": "Teacher-guided data selection (MiniPLM difference sampling)",
+  "family": "data",
+  "description": "A registered teacher and a small reference model resample the corpus offline; the student trains normally on the selected data.",
+  "sources": [
+   "gu-2024-miniplm"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Traits as synthetic-rephrasing: the student trains normally; only the data changes.",
+  "scaling": [
+   {
+    "evidence": [
+     "gu-2024-miniplm/2"
+    ],
+    "metric": "held-out loss at fixed size, extrapolated",
+    "compute_range_flop": [
+     7.2e+22,
+     7.2e+22
+    ],
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Extrapolated 0.06 nats below plain pretraining for a 1.2B student at 1T and 10T tokens; a fixed-size tokens multiplier, not a frontier multiplier."
+   }
+  ],
+  "multiplier": null,
+  "convention": "as-published"
+ },
+ {
+  "id": "multi-token-prediction",
+  "name": "Multi-token prediction",
+  "family": "objective",
+  "description": "Predict the next n tokens with n heads on a shared trunk.",
+  "sources": [
+   "gloeckle-2024-mtp"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Task gains, not loss-based m_A. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated.",
+  "scaling": [
+   {
+    "evidence": [
+     "gloeckle-2024-mtp/1",
+     "gloeckle-2024-mtp/2"
+    ],
+    "metric": "generative benchmark gain",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "12-17% more coding problems at 13B; increasingly useful with size."
+   }
+  ],
+  "multiplier": null,
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "ul2r-denoisers",
+  "name": "UL2R mixture-of-denoisers continuation",
+  "family": "objective",
+  "description": "Continue a causal LM briefly with UL2's mixture of denoising objectives.",
+  "sources": [
+   "tay-2022-ul2r"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A about 2 on downstream metrics at frontier scale. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated. Standardized to compute at equal held-out loss (confidence low); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
+  "scaling": [
+   {
+    "evidence": [
+     "tay-2022-ul2r/1"
+    ],
+    "metric": "FLAGGED downstream: compute to equal few-shot performance, PaLM 540B",
+    "compute_range_flop": [
+     2.5e+24,
+     2.5e+24
+    ],
+    "multiplier": 2,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "The only in-scope gain measured at frontier scale."
+   },
+   {
+    "evidence": [
+     "tay-2022-ul2r/2"
+    ],
+    "metric": "held-out causal LM loss",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Losses not comparable; no held-out-loss measure exists."
+   }
+  ],
+  "multiplier": {
+   "value": 2,
+   "trend": "unknown",
+   "evidence": [
+    "tay-2022-ul2r/1"
+   ],
+   "metric": "FLAGGED downstream, not convertible to loss; standardized m unmeasured"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "masked-diffusion",
+  "name": "Masked diffusion language models",
+  "family": "objective",
+  "description": "Train to denoise randomly masked tokens instead of left-to-right prediction.",
+  "sources": [
+   "nie-2024-mdm",
+   "prabhudesai-2025-diffusion-data"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 0.01,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A 1/16 per FLOP with ample data; trades compute for data. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Up to 100 epochs nearly as good as fresh data: novel bits per training token about 17.3/100.",
+  "scaling": [
+   {
+    "evidence": [
+     "nie-2024-mdm/1"
+    ],
+    "metric": "compute to equal validation loss",
+    "compute_range_flop": null,
+    "multiplier": 0.0625,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Same exponent as AR."
+   },
+   {
+    "evidence": [
+     "prabhudesai-2025-diffusion-data/1",
+     "prabhudesai-2025-diffusion-data/2"
+    ],
+    "metric": "loss under repeated data",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "exponent-change",
+    "exponent_change": null,
+    "note": "Overtakes AR past a critical compute when data is scarce."
+   }
+  ],
+  "multiplier": {
+   "value": 0.0625,
+   "trend": "constant",
+   "evidence": [
+    "nie-2024-mdm/1"
+   ],
+   "metric": "compute to equal validation loss"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "sgd-momentum",
+  "name": "SGD with momentum",
+  "family": "optimizer",
+  "description": "Drop Adam's adaptive second moment.",
+  "sources": [
+   "gundlach-2025-origin",
+   "zhao-2024-deconstructing-optimizers"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 64.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A about 0.53 for one fewer state word. Traits as published (from the scaling corpus): state at its stored precision, 64 bits per updated parameter. fp32 weights + momentum.",
+  "scaling": [
+   {
+    "evidence": [
+     "gundlach-2025-origin/6"
+    ],
+    "metric": "CEG vs AdamW",
+    "compute_range_flop": null,
+    "multiplier": 0.53475935828877,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Scale-invariant gap."
+   },
+   {
+    "evidence": [
+     "zhao-2024-deconstructing-optimizers/1"
+    ],
+    "metric": "optimum and robustness",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "The only optimizer clearly worse than Adam."
+   }
+  ],
+  "multiplier": {
+   "value": 0.53475935828877,
+   "trend": "constant",
+   "evidence": [
+    "gundlach-2025-origin/6"
+   ],
+   "metric": "CEG vs AdamW"
+  },
+  "confidence": "high",
+  "convention": "as-published"
+ },
+ {
+  "id": "muon",
+  "name": "Muon (orthonormalized momentum)",
+  "family": "optimizer",
+  "description": "Orthonormalize each matrix's momentum update by Newton-Schulz iteration.",
+  "sources": [
+   "essential-2025-muon-practical",
+   "liu-2025-muon-scalable",
+   "wen-2025-fantastic-optimizers"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 64.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A about 1.1 near 1B and shrinking. Traits as published (from the scaling corpus): state at its stored precision, 64 bits per updated parameter. fp32 weights + momentum; the orthonormalization reads whole matrices. Standardized to compute at equal held-out loss (confidence medium); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
+  "scaling": [
+   {
+    "evidence": [
+     "liu-2025-muon-scalable/1",
+     "liu-2025-muon-scalable/3"
+    ],
+    "metric": "training FLOPs to equal validation loss, compute-optimal; AdamW grid-searched",
+    "compute_range_flop": [
+     2.1e+19,
+     3.5e+20
+    ],
+    "multiplier": 1.92,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Muon reuses AdamW's hyperparameters."
+   },
+   {
+    "evidence": [
+     "liu-2025-muon-scalable/2"
+    ],
+    "metric": "same, from fitted laws 2.506C^-0.052 vs 2.608C^-0.054",
+    "compute_range_flop": [
+     1e+24,
+     1e+26
+    ],
+    "multiplier": 1.36,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "EXTRAPOLATION: m proportional to C^-0.037: 1.36 / 1.25 / 1.15 at 1e24 / 1e25 / 1e26."
+   },
+   {
+    "evidence": [
+     "essential-2025-muon-practical/1"
+    ],
+    "metric": "tokens to equal loss, 100M-4B",
+    "compute_range_flop": null,
+    "multiplier": 1.15,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Unchanged."
+   },
+   {
+    "evidence": [
+     "wen-2025-fantastic-optimizers/1",
+     "wen-2025-fantastic-optimizers/4",
+     "wen-2025-fantastic-optimizers/7"
+    ],
+    "metric": "speedup vs tuned AdamW",
+    "compute_range_flop": [
+     2e+18,
+     1.4e+21
+    ],
+    "multiplier": 1.1,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "1.4x to 1.1x."
+   },
+   {
+    "evidence": [
+     "wen-2025-fantastic-optimizers/1",
+     "wen-2025-fantastic-optimizers/4"
+    ],
+    "metric": "same, log-linear in C",
+    "compute_range_flop": [
+     1e+24,
+     1e+26
+    ],
+    "multiplier": 1.0,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "EXTRAPOLATION: crosses 1 near 2e22; floored at 1."
+   }
+  ],
+  "multiplier": {
+   "value": 1.1,
+   "trend": "shrinks-with-scale",
+   "evidence": [
+    "wen-2025-fantastic-optimizers/1",
+    "wen-2025-fantastic-optimizers/4",
+    "liu-2025-muon-scalable/2"
+   ],
+   "metric": "compute at equal held-out loss vs tuned AdamW; 1.0-1.36 at 1e24-1e26 (EXTRAPOLATION)"
+  },
+  "confidence": "high",
+  "convention": "as-published"
+ },
+ {
+  "id": "curvature-preconditioned",
+  "name": "Matrix and Hessian preconditioners (Shampoo, SOAP, Sophia)",
+  "family": "optimizer",
+  "description": "Precondition with Kronecker-factored curvature (Shampoo, SOAP) or a diagonal Hessian estimate (Sophia).",
+  "sources": [
+   "kaddour-2023-no-train-no-gain",
+   "kasimbeg-2025-algoperf",
+   "liu-2023-sophia",
+   "vyas-2024-soap",
+   "wen-2025-fantastic-optimizers"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A 1.2-1.3 below 1B, shrinking with scale. Traits as published (from the scaling corpus): state at its stored precision, 2.5 bits per updated parameter. AdamW state plus Kronecker factors and eigenbases (SOAP); Sophia keeps two diagonal words like Adam. Standardized to compute at equal held-out loss (confidence medium); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
+  "scaling": [
+   {
+    "evidence": [
+     "wen-2025-fantastic-optimizers/6"
+    ],
+    "metric": "speedup vs tuned AdamW, 300-520M",
+    "compute_range_flop": null,
+    "multiplier": 1.25,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "SOAP 1.2-1.3x."
+   },
+   {
+    "evidence": [
+     "wen-2025-fantastic-optimizers/1",
+     "wen-2025-fantastic-optimizers/6"
+    ],
+    "metric": "same, log-linear in C",
+    "compute_range_flop": [
+     1e+24,
+     1e+26
+    ],
+    "multiplier": 1.0,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "EXTRAPOLATION: reaches about 1 by 1e22."
+   },
+   {
+    "evidence": [
+     "kasimbeg-2025-algoperf/1"
+    ],
+    "metric": "wall-clock vs NadamW",
+    "compute_range_flop": null,
+    "multiplier": 1.28,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Unchanged."
+   },
+   {
+    "evidence": [
+     "liu-2023-sophia/1",
+     "wen-2025-fantastic-optimizers/5",
+     "kaddour-2023-no-train-no-gain/1"
+    ],
+    "metric": "speedup vs Adam",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "Unchanged."
+   }
+  ],
+  "multiplier": {
+   "value": 1.25,
+   "trend": "shrinks-with-scale",
+   "evidence": [
+    "wen-2025-fantastic-optimizers/6"
+   ],
+   "metric": "speedup vs tuned AdamW, 300-520M; about 1.0 at 1e24-1e26 (EXTRAPOLATION)"
+  },
+  "confidence": "high",
+  "convention": "as-published"
+ },
+ {
+  "id": "reduced-state-adaptive",
+  "name": "Lion and Adam-mini (one state word)",
+  "family": "optimizer",
+  "description": "Sign-momentum update (Lion) or one second-moment value per parameter block (Adam-mini).",
+  "sources": [
+   "chen-2023-lion",
+   "wen-2025-fantastic-optimizers",
+   "zhang-2024-adam-mini"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 64.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A 0.95-1 for one fewer state word. Traits as published (from the scaling corpus): state at its stored precision, 64 bits per updated parameter. fp32 weights + one moment.",
+  "scaling": [
+   {
+    "evidence": [
+     "wen-2025-fantastic-optimizers/3"
+    ],
+    "metric": "slowdown vs AdamW",
+    "compute_range_flop": [
+     2e+18,
+     1.4e+21
+    ],
+    "multiplier": 0.95,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "At most 5% slower; Lion's gap widens and Adam-mini's narrows with scale."
+   },
+   {
+    "evidence": [
+     "chen-2023-lion/1",
+     "zhang-2024-adam-mini/1"
+    ],
+    "metric": "LM quality vs Adam",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Similar or better."
+   }
+  ],
+  "multiplier": {
+   "value": 0.95,
+   "trend": "unknown",
+   "evidence": [
+    "wen-2025-fantastic-optimizers/3"
+   ],
+   "metric": "slowdown vs AdamW"
+  },
+  "confidence": "high",
+  "convention": "as-published"
+ },
+ {
+  "id": "adafactor",
+  "name": "Adafactor (factored second moment, no momentum)",
+  "family": "optimizer",
+  "description": "Keep row and column sums of the second moment and drop momentum.",
+  "sources": [
+   "shazeer-2018-adafactor",
+   "zhao-2024-deconstructing-optimizers"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 32.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A about 1 with a third of AdamW's per-parameter state. Traits as published (from the scaling corpus): state at its stored precision, 32 bits per updated parameter. fp32 weights plus O(rows + columns) factors: about 32 bits per parameter.",
+  "scaling": [
+   {
+    "evidence": [
+     "shazeer-2018-adafactor/1"
+    ],
+    "metric": "translation quality vs Adam",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Comparable."
+   },
+   {
+    "evidence": [
+     "zhao-2024-deconstructing-optimizers/1"
+    ],
+    "metric": "LM optimum and robustness",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Comparable to Adam."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "unknown",
+   "evidence": [
+    "shazeer-2018-adafactor/1"
+   ],
+   "metric": "translation quality vs Adam"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "8bit-adam",
+  "name": "8-bit Adam (block-wise quantized state)",
+  "family": "optimizer",
+  "description": "Store Adam's two moments in block-wise dynamic 8-bit quantization.",
+  "sources": [
+   "dettmers-2021-8bit-optimizers"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 48.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A about 1. Traits as published (from the scaling corpus): state at its stored precision, 48 bits per updated parameter. fp32 weights + two 8-bit moments.",
+  "scaling": [
+   {
+    "evidence": [
+     "dettmers-2021-8bit-optimizers/1"
+    ],
+    "metric": "quality vs 32-bit Adam, up to 1.5B",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Maintains 32-bit performance."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "constant",
+   "evidence": [
+    "dettmers-2021-8bit-optimizers/1"
+   ],
+   "metric": "quality vs 32-bit Adam, up to 1.5B"
+  },
+  "confidence": "high",
+  "convention": "as-published"
+ },
+ {
+  "id": "swan-stateless",
+  "name": "SWAN (stateless normalized, whitened SGD)",
+  "family": "optimizer",
+  "description": "Normalize and whiten each step's gradient; keep no optimizer state.",
+  "sources": [
+   "ma-2024-swan",
+   "wen-2025-fantastic-optimizers"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 32.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "No multiplier: the claimed 2x is tokens to equal perplexity below 1x Chinchilla (wen-2025-fantastic-optimizers/8), where matrix optimizers gain most, and tuned matrix optimizers fall to 1.1x by 1.2B (wen-2025-fantastic-optimizers/1), so m_A is probably about 1 at Chinchilla budgets, with SGD's state. Traits as published (from the scaling corpus): state at its stored precision, 32 bits per updated parameter. fp32 weights only.",
+  "scaling": [
+   {
+    "evidence": [
+     "ma-2024-swan/1"
+    ],
+    "metric": "tokens to equal perplexity, 350M-1.3B",
+    "compute_range_flop": null,
+    "multiplier": 2,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Claimed."
+   },
+   {
+    "evidence": [
+     "wen-2025-fantastic-optimizers/8"
+    ],
+    "metric": "regime of the claim",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Below 1x Chinchilla, where matrix optimizers gain most."
+   }
+  ],
+  "multiplier": null,
+  "confidence": "low",
+  "convention": "as-published"
+ },
+ {
+  "id": "lr-schedules",
+  "name": "Learning-rate schedules (WSD, Schedule-Free)",
+  "family": "optimizer",
+  "description": "Warmup-stable-decay or schedule-free averaging instead of cosine decay.",
+  "sources": [
+   "gundlach-2025-origin",
+   "hagele-2024-wsd",
+   "kasimbeg-2025-algoperf"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A about 1. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated.",
+  "scaling": [
+   {
+    "evidence": [
+     "hagele-2024-wsd/1",
+     "gundlach-2025-origin/4"
+    ],
+    "metric": "loss vs cosine",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Under 5% across schedules."
+   },
+   {
+    "evidence": [
+     "kasimbeg-2025-algoperf/1"
+    ],
+    "metric": "wall-clock, self-tuning AlgoPerf",
+    "compute_range_flop": null,
+    "multiplier": 1.08,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Schedule-Free AdamW."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "constant",
+   "evidence": [
+    "hagele-2024-wsd/1",
+    "gundlach-2025-origin/4"
+   ],
+   "metric": "loss vs cosine"
+  },
+  "confidence": "high",
+  "convention": "as-published"
+ },
+ {
+  "id": "fp8-training",
+  "name": "FP8 training",
+  "family": "precision",
+  "description": "Run matmul inputs (and optionally optimizer moments) in E4M3/E5M2 with scaling.",
+  "sources": [
+   "fishman-2024-fp8-trillion",
+   "kumar-2024-precision-scaling",
+   "micikevicius-2022-fp8"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 48.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 8.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A about 1 per FLOP; per gate, an 8-bit multiplier is several times cheaper than bf16. Traits as published (from the scaling corpus): state at its stored precision, 48 bits per updated parameter. FP8 Adam moments as in Fishman 2024; master weights fp32.",
+  "scaling": [
+   {
+    "evidence": [
+     "micikevicius-2022-fp8/1"
+    ],
+    "metric": "quality vs 16-bit, up to 175B",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Matches."
+   },
+   {
+    "evidence": [
+     "fishman-2024-fp8-trillion/1"
+    ],
+    "metric": "loss vs BF16, 7B on 2T tokens",
+    "compute_range_flop": [
+     8.4e+22,
+     8.4e+22
+    ],
+    "multiplier": 1.0,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "On par, 34% higher throughput."
+   },
+   {
+    "evidence": [
+     "kumar-2024-precision-scaling/4"
+    ],
+    "metric": "compute-optimal precision",
+    "compute_range_flop": [
+     null,
+     2.7e+20
+    ],
+    "multiplier": null,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "7-8 bits are compute-optimal, independent of compute."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "constant",
+   "evidence": [
+    "fishman-2024-fp8-trillion/1"
+   ],
+   "metric": "loss vs BF16, 7B on 2T tokens"
+  },
+  "confidence": "high",
+  "convention": "as-published"
+ },
+ {
+  "id": "fp4-training",
+  "name": "FP4 training (NVFP4, Quartet)",
+  "family": "precision",
+  "description": "Run matmul inputs in 4-bit block-scaled formats with Hadamard transforms and stochastic rounding.",
+  "sources": [
+   "castro-2025-quartet",
+   "nvidia-2025-nvfp4"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Per-FLOP m_A slightly below 1; per gate a large gain. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Master weights, gradients for accumulation and optimizer state stay fp32.",
+  "scaling": [
+   {
+    "evidence": [
+     "nvidia-2025-nvfp4/6",
+     "nvidia-2025-nvfp4/7"
+    ],
+    "metric": "loss vs FP8, 12B on 10T tokens",
+    "compute_range_flop": [
+     7.2e+23,
+     7.2e+23
+    ],
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "1.5% relative loss gap; 0.5% after switching the forward pass to higher precision."
+   },
+   {
+    "evidence": [
+     "castro-2025-quartet/4",
+     "castro-2025-quartet/5"
+    ],
+    "metric": "accuracy-vs-computation",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Competitive with FP8/FP16; loss gap tied to forward error."
+   }
+  ],
+  "multiplier": null,
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "ternary-weights",
+  "name": "Ternary-weight training (BitNet b1.58, Spectra)",
+  "family": "precision",
+  "description": "Quantize forward weights to {-1, 0, 1} with high-precision latent weights.",
+  "sources": [
+   "kaushal-2024-spectra",
+   "ma-2024-bitnet-b158"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 8.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A about 1 at matched size above about 3B. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. 8-bit activations; latent weights and optimizer state stay high precision.",
+  "scaling": [
+   {
+    "evidence": [
+     "ma-2024-bitnet-b158/2"
+    ],
+    "metric": "perplexity at equal size and tokens",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Matches from 3B."
+   },
+   {
+    "evidence": [
+     "kaushal-2024-spectra/1"
+    ],
+    "metric": "benchmarks, 3.9B, 300B tokens",
+    "compute_range_flop": [
+     7e+21,
+     7e+21
+    ],
+    "multiplier": 1.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Matches the float 3.9B."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "unknown",
+   "evidence": [
+    "kaushal-2024-spectra/1"
+   ],
+   "metric": "benchmarks, 3.9B, 300B tokens"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "streaming-diloco",
+  "name": "Streaming DiLoCo",
+  "family": "parallel-communication",
+  "description": "Synchronize parameter fragments on a staggered schedule, overlapped with compute, in 4-bit.",
+  "sources": [
+   "douillard-2025-streamingdiloco",
+   "kale-2025-eager-diloco"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A about 1. Traits as published (from the scaling corpus): state at its stored precision, 2.5 bits per updated parameter. Each fragment syncs every H steps (H = 30-100 in its tables); FP4 communication.",
+  "scaling": [
+   {
+    "evidence": [
+     "douillard-2025-streamingdiloco/4",
+     "douillard-2025-streamingdiloco/5"
+    ],
+    "metric": "loss vs data-parallel, 1B",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Slightly better with 400x fewer bits exchanged."
+   },
+   {
+    "evidence": [
+     "kale-2025-eager-diloco/1",
+     "kale-2025-eager-diloco/2"
+    ],
+    "metric": "C4 eval loss vs data-parallel at Chinchilla budgets, one-inner-step overlap, H = 30",
+    "compute_range_flop": [
+     9.4e+17,
+     1.9e+20
+    ],
+    "multiplier": 1.0,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "2.48 vs 2.49 at 1B; 3.21 vs 3.19 at 100M (0.87). Eager outer-step overlap: 0.58 at 100M to 0.92 at 1B, 0.77 at H = 100."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "grows-with-scale",
+   "evidence": [
+    "kale-2025-eager-diloco/1"
+   ],
+   "metric": "C4 eval loss vs data-parallel at Chinchilla budget, 1B (1.9e20 FLOP)"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "demo",
+  "name": "DeMo (decoupled momentum)",
+  "family": "parallel-communication",
+  "description": "Send only the top DCT components of the momentum each step; keep the rest local.",
+  "sources": [
+   "peng-2024-demo"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 64.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A about 1. Traits as published (from the scaling corpus): state at its stored precision, 64 bits per updated parameter. fp32 weights + local momentum; per-step sync of a sparse update.",
+  "scaling": [
+   {
+    "evidence": [
+     "peng-2024-demo/5"
+    ],
+    "metric": "loss vs AdamW-DDP, 300M-1B",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Up to 85x less data per GPU."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "unknown",
+   "evidence": [
+    "peng-2024-demo/5"
+   ],
+   "metric": "loss vs AdamW-DDP, 300M-1B"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "sparseloco",
+  "name": "SparseLoCo (top-k, 2-bit pseudo-gradients)",
+  "family": "parallel-communication",
+  "description": "DiLoCo with error feedback, top-k sparsification and 2-bit quantization of the outer update.",
+  "sources": [
+   "sarfi-2025-sparseloco",
+   "lidin-2026-covenant72b"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A at or above DiLoCo's; updates are very low-entropy. Traits as published (from the scaling corpus): state at its stored precision, 2.5 bits per updated parameter. H = 15 in its tables; outer updates carry 1-3% of entries at 2 bits.",
+  "scaling": [
+   {
+    "evidence": [
+     "sarfi-2025-sparseloco/6"
+    ],
+    "metric": "final loss vs dense DiLoCo, 178M-2B",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "Lower loss at 97-99% sparsity."
+   },
+   {
+    "evidence": [
+     "lidin-2026-covenant72b/5"
+    ],
+    "metric": "zero-shot benchmarks vs LLaMA-2-70B (2T tokens), 72B on 1.1T tokens",
+    "compute_range_flop": [
+     4.8e+23,
+     4.8e+23
+    ],
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "No matched baseline: MMLU 67.1 vs 65.6, HellaSwag 80.6 vs 84.3, ARC-C 56.8 vs 57.4; not convertible. The existing multiplier is against DiLoCo; against data-parallel multiply by about 0.94."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "constant",
+   "evidence": [
+    "sarfi-2025-sparseloco/6"
+   ],
+   "metric": "final loss vs dense DiLoCo, 178M-2B"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "subspace-activation-compression",
+  "name": "Subspace networks (compressed pipeline boundaries)",
+  "family": "parallel-communication",
+  "description": "Confine activations and their gradients at pipeline cuts to a fixed low-dimensional subspace.",
+  "sources": [
+   "ramasinghe-2025-protocolmodels",
+   "janson-2026-mapl"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 0.01,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "No multiplier: the authors' one compute-optimal held-out result (640M, about 12B tokens) gives about 1, and the only independent replication (janson-2026-mapl, at matched tokens) gives 0.1-0.125 at 500M and 6x and 0.034-0.044 at 1B and 8x, read off its own uncompressed curve; nobody measures 100x above 640M. Break-even against full backprop on Kimi K2 is m 0.0103 at this width under the construction and 0.035 under the thread bound, and 0.125 and 0.44 at the replication's 8x, where it fails. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. About 100x fewer values per token cross each pipeline cut.",
+  "scaling": [
+   {
+    "evidence": [
+     "ramasinghe-2025-protocolmodels/6",
+     "ramasinghe-2025-protocolmodels/10"
+    ],
+    "metric": "C4 training loss against wall-clock time vs centralized, 8B",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Training loss only, at a run length not stated and not shown compute-optimal; equal throughput, so about equal compute."
+   },
+   {
+    "evidence": [
+     "ramasinghe-2025-protocolmodels/9"
+    ],
+    "metric": "validation perplexity at compute-optimal, 640M, about 12B tokens",
+    "compute_range_flop": [
+     4.6e+19,
+     4.6e+19
+    ],
+    "multiplier": 1.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "C4 12.53 vs 12.61; compression ratio at this width not stated."
+   },
+   {
+    "evidence": [
+     "janson-2026-mapl/4"
+    ],
+    "metric": "compute at equal held-out loss on the paper's uncompressed curve, 500M, 6x (derived)",
+    "compute_range_flop": [
+     3e+19,
+     3e+19
+    ],
+    "multiplier": 0.11,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Loss 3.09 / 3.12 (P = 4 / 8) vs 2.84; the uncompressed curve, interpolated log-linearly, reaches it at 2.9e18-3.8e18 FLOP: 0.1-0.125."
+   },
+   {
+    "evidence": [
+     "janson-2026-mapl/3",
+     "janson-2026-mapl/4"
+    ],
+    "metric": "compute at equal held-out loss on the paper's uncompressed curve, 1B, 8x (derived)",
+    "compute_range_flop": [
+     1.2e+20,
+     1.2e+20
+    ],
+    "multiplier": 0.04,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Loss 3.05 / 3.08 vs 2.68; the uncompressed curve, interpolated log-linearly, reaches it at 4.1e18-5.3e18 FLOP: 0.034-0.044. The AdamW version (3.38) is above the 150M baseline's loss."
+   }
+  ],
+  "multiplier": null,
+  "confidence": "low",
+  "convention": "as-published"
+ },
+ {
+  "id": "branch-train-merge",
+  "name": "Branch-Train-Merge (embarrassingly parallel experts)",
+  "family": "parallel-communication",
+  "description": "Train domain expert LMs independently from a shared seed model and ensemble or average them.",
+  "sources": [
+   "li-2022-btm",
+   "gururangan-2023-cbtm",
+   "sukhbaatar-2024-btx",
+   "filippova-2024-smalltalk",
+   "wortsman-2022-lofi"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Perplexity m_A about 2.5 for an ensemble; inference cost differs. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. No synchronization during expert training. Shrinking the replica belongs in the model shape (n_active = expert size), not the traits. Confidence low; the earlier 2.5 is against a reference that is not compute-optimal.",
+  "scaling": [
+   {
+    "evidence": [
+     "li-2022-btm/1"
+    ],
+    "metric": "compute to equal perplexity, 64 domains",
+    "compute_range_flop": null,
+    "multiplier": 2.5,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "22.4B total parameters vs a Transformer with 2.5x the compute; gains grow with domain count."
+   },
+   {
+    "evidence": [
+     "filippova-2024-smalltalk/1",
+     "filippova-2024-smalltalk/2"
+    ],
+    "metric": "test perplexity at equal training FLOPs vs dense 1.3B, 32 x 335M experts",
+    "compute_range_flop": [
+     2.2e+21,
+     2.5e+21
+    ],
+    "multiplier": 1.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "9.07 vs 9.1 at 2.5e21 vs 2.2e21 FLOP; the 1.3B baseline is 10x overtrained, so 0.9-1.0 against a compute-optimal reference (derived)."
+   },
+   {
+    "evidence": [
+     "gururangan-2023-cbtm/1",
+     "gururangan-2023-cbtm/2"
+    ],
+    "metric": "C4 perplexity, training FLOPs incl. OPT seed, vs OPT-6.7B continued",
+    "compute_range_flop": null,
+    "multiplier": 3.5,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "Reference not compute-optimal."
+   },
+   {
+    "evidence": [
+     "sukhbaatar-2024-btx/1",
+     "sukhbaatar-2024-btx/2"
+    ],
+    "metric": "downstream average vs dense, Llama-2 7B seed, same data",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "BTM top-2 43.4 vs dense 44.5 (negative); BTX with a joint MoE finetune 47.9."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "unknown",
+   "evidence": [
+    "filippova-2024-smalltalk/1",
+    "filippova-2024-smalltalk/2"
+   ],
+   "metric": "test perplexity at equal training FLOPs, Chinchilla-adjusted, 2.2e21 FLOP"
+  },
+  "confidence": "low",
+  "convention": "as-published"
+ },
+ {
+  "id": "greedy-local-learning",
+  "name": "Greedy block-wise local learning",
+  "family": "local-learning",
+  "description": "Split the network into K gradient-isolated blocks, each trained by its own auxiliary loss.",
+  "sources": [
+   "moon-2026-greedy-local",
+   "siddiqui-2023-blockwise-ssl",
+   "belilovsky-2019-dgl",
+   "wang-2021-infopro"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A 0.6-0.85 by block count. Crossings stay 2: backprop stays inside each block and only the K - 1 block boundaries carry forward activations alone, while the construction cuts a token into thousands of slices, so crossings of 1 would need a block per slice, far past the K = 2-4 the multiplier is measured at, where the gap grows steeply with K (wang-2021-infopro/1). Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter.",
+  "scaling": [
+   {
+    "evidence": [
+     "moon-2026-greedy-local/2"
+    ],
+    "metric": "NLL gap to end-to-end, K = 2, 400M",
+    "compute_range_flop": [
+     1.9e+18,
+     1.9e+19
+    ],
+    "multiplier": 0.84,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Derived from +0.027 nats (first-block MTP auxiliary)."
+   },
+   {
+    "evidence": [
+     "moon-2026-greedy-local/1",
+     "moon-2026-greedy-local/3"
+    ],
+    "metric": "NLL gap to end-to-end, K = 4, 400M",
+    "compute_range_flop": [
+     1.9e+18,
+     1.9e+19
+    ],
+    "multiplier": 0.67,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "Derived from +0.062 nats; the K = 4 gap shrinks from 125M to 400M."
+   },
+   {
+    "evidence": [
+     "siddiqui-2023-blockwise-ssl/1"
+    ],
+    "metric": "ImageNet linear probe, 4 blocks",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Vision: 1.1% below end-to-end."
+   },
+   {
+    "evidence": [
+     "belilovsky-2019-dgl/1"
+    ],
+    "metric": "ImageNet top-1 vs backprop, K = 2-4 modules (CNN)",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Vision: VGG-13 K = 4 +1.2, VGG-19 K = 2 +1.1, ResNet-152 K = 2 +0.1 points."
+   },
+   {
+    "evidence": [
+     "wang-2021-infopro/1"
+    ],
+    "metric": "CIFAR-10 test error vs end-to-end, ResNet-32, K = 2-16",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Vision: 7.37% to 10.30/16.07/21.19/24.59% at K = 2/4/8/16; the gap grows steeply with K."
+   }
+  ],
+  "multiplier": {
+   "value": 0.84,
+   "trend": "unknown",
+   "evidence": [
+    "moon-2026-greedy-local/2"
+   ],
+   "metric": "NLL gap to end-to-end, K = 2, 400M"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "forward-gradient",
+  "name": "Forward gradients with local guesses",
+  "family": "local-learning",
+  "description": "Estimate gradients by forward-mode directional derivatives along guessed directions.",
+  "sources": [
+   "fournier-2023-forward-gradient"
+  ],
+  "traits": {
+   "theorem_applies": false,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 1,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Per-FLOP m_A well below 1 and falling with dimension; no LM results. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Forward-mode JVPs only; usually paired with local losses.",
+  "scaling": [
+   {
+    "evidence": [
+     "fournier-2023-forward-gradient/1",
+     "fournier-2023-forward-gradient/2"
+    ],
+    "metric": "accuracy vs backprop, CNNs",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Random guesses fail in high dimension; local-loss guesses help."
+   },
+   {
+    "evidence": [
+     "ren-2023-forward-gradient-local-losses/3"
+    ],
+    "metric": "ImageNet top-1 test error vs backprop, equal epochs",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "58.37% vs 36.82% even with many local losses."
+   },
+   {
+    "evidence": [
+     "flugel-2025-multi-tangent/1",
+     "baydin-2022-forward-gradient/1"
+    ],
+    "metric": "accuracy / wall-clock vs backprop, MNIST-CIFAR10",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Up to 2x wall-clock on MNIST; a significant gap remains on CIFAR10."
+   },
+   {
+    "evidence": [
+     "ren-2023-forward-gradient-local-losses/1",
+     "ren-2023-forward-gradient-local-losses/2"
+    ],
+    "metric": "estimator variance (theory)",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Weight perturbation m ~ 1.2/d (1.2e-9 to 1.2e-12); activity perturbation m ~ 1.5/width (7e-4 to 6e-5) at 1e9-1e12 (extrapolation)."
+   }
+  ],
+  "multiplier": null,
+  "confidence": "low",
+  "convention": "as-published"
+ },
+ {
+  "id": "eggroll-es",
+  "name": "EGGROLL (low-rank evolution strategies)",
+  "family": "zeroth-order",
+  "description": "Population-based ES with rank-r perturbations; update from fitness-weighted noise.",
+  "sources": [
+   "sarkar-2025-eggroll"
+  ],
+  "traits": {
+   "theorem_applies": false,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 8.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 1,
+   "flops_per_token_per_param": 4.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Per-FLOP m_A far below 1; a data-efficiency, not compute-efficiency, method. Traits as published (from the scaling corpus): state at its stored precision, 8 bits per updated parameter. int8 weights; updates are seeds plus fitness scalars.",
+  "scaling": [
+   {
+    "evidence": [
+     "sarkar-2025-eggroll/8"
+    ],
+    "metric": "GPU-hours vs backprop SGD, int8 RNN LM",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Beats backprop at equal data with about 180x the GPU-hours."
+   },
+   {
+    "evidence": [
+     "sarkar-2025-eggroll/1"
+    ],
+    "metric": "throughput vs batch inference",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Up to 91% of inference throughput."
+   },
+   {
+    "evidence": [
+     "dahal-2026-dust/6",
+     "dahal-2026-dust/7"
+    ],
+    "metric": "FLOPs to equal held-out loss vs tuned SGD backprop, 37.7M transformer, 16,384 forward passes per update",
+    "compute_range_flop": [
+     1.2e+18,
+     2.5e+19
+    ],
+    "multiplier": 1.1e-05,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "4.6e-5 at 1M, 1.6e-5 at 10M, 1.1e-5 at 20M tokens; 1.23 nats behind at 20M; cosine with the gradient below 0.05 at 128k."
+   },
+   {
+    "evidence": [
+     "dahal-2026-dust/6"
+    ],
+    "metric": "same, cheapest cell (64 forward passes)",
+    "compute_range_flop": [
+     4.8e+16,
+     9.7e+16
+    ],
+    "multiplier": 0.00036,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Best EGGROLL cell per FLOP."
+   },
+   {
+    "evidence": [
+     "chaubard-2026-soma/3"
+    ],
+    "metric": "test nats/byte at about 150 GPU-h, about 8.44M models",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "2.21 vs 2.00-2.11 for SPSA and 1.76 for SOMA N=2."
+   }
+  ],
+  "multiplier": {
+   "value": 0.00036,
+   "trend": "shrinks-with-scale",
+   "evidence": [
+    "dahal-2026-dust/6"
+   ],
+   "metric": "FLOPs to equal held-out loss vs tuned SGD backprop, 37.7M transformer, best population (sarkar-2025-eggroll/8's 180x GPU-hours is as-published)"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "zo-sgd",
+  "name": "Zeroth-order SGD (MeZO-style, DeepZero)",
+  "family": "zeroth-order",
+  "description": "Estimate gradients from paired forward passes along random or coordinate perturbations.",
+  "sources": [
+   "allaire-2025-zo-pretraining",
+   "chen-2024-deepzero"
+  ],
+  "traits": {
+   "theorem_applies": false,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 16.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 1,
+   "flops_per_token_per_param": 4.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Per-FLOP m_A orders of magnitude below 1, shrinking with parameter count. Traits as published (from the scaling corpus): state at its stored precision, 16 bits per updated parameter. bf16 weights, no optimizer state; updates are seeds plus scalars.",
+  "scaling": [
+   {
+    "evidence": [
+     "allaire-2025-zo-pretraining/1",
+     "allaire-2025-zo-pretraining/5"
+    ],
+    "metric": "time to accuracy vs FO, Llama2-20M",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Days vs hours; time is O(n) larger."
+   },
+   {
+    "evidence": [
+     "chen-2024-deepzero/4",
+     "chen-2024-deepzero/5"
+    ],
+    "metric": "accuracy vs FO, ResNet-20",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Approaches FO only on a small CNN."
+   },
+   {
+    "evidence": [
+     "chaubard-2026-soma/1",
+     "chaubard-2026-soma/3"
+    ],
+    "metric": "validation nats/byte at equal GPU-hours vs BPTT, about 8.44M byte-level LSTM",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "m < 0.33 (loose): BPTT at 50 GPU-h (1.02) beats monolithic SPSA at about 150 GPU-h (2.00-2.11)."
+   },
+   {
+    "evidence": [
+     "duchi-2015-two-point-zo/1",
+     "duchi-2015-two-point-zo/2",
+     "chaubard-2026-soma/2",
+     "hinton-2022-forward-forward/1"
+    ],
+    "metric": "queries to equal accuracy, convex worst case (theory)",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "m ~ 1.5/d, tight: 1.5e-9 / 1.5e-10 / 1.5e-11 / 1.5e-12 at 1e9-1e12 parameters (extrapolation)."
+   },
+   {
+    "evidence": [
+     "yue-2023-zo-weak-dimension/1",
+     "yue-2023-zo-weak-dimension/2",
+     "larsen-2022-degrees-of-freedom/1",
+     "gan-2026-neural-thickets/1"
+    ],
+    "metric": "queries to equal loss in effective dimension (theory)",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "m ~ 1.5/ED; ED is unmeasured for pretraining and is largest from random init to low loss."
+   }
+  ],
+  "multiplier": {
+   "value": 0.0004,
+   "trend": "shrinks-with-scale",
+   "evidence": [
+    "dahal-2026-dust/6",
+    "chaubard-2026-soma/3"
+   ],
+   "metric": "FLOPs to equal held-out loss vs tuned SGD backprop, 37.7M transformer (weight-space ES as proxy; SPSA at least as good as EGGROLL per SOMA)"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "pretraining-distillation",
+  "name": "Pre-training distillation",
+  "family": "distillation",
+  "description": "Train the student on a teacher's (truncated) next-token distribution alongside or instead of labels.",
+  "sources": [
+   "busbridge-2025-distillation-scaling",
+   "peng-2024-pretraining-distillation"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 69.364,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Small m_A with a sunk teacher; about 70x more novel data bits per token. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Top-p-k teacher logits: about 15 TB over 100B tokens, about 1,200 bits per token. Twelve importance-sampled teacher tokens per position match full distillation, while top-12 or top-50 truncation is worse than plain cross-entropy (anshumann-2025-sparse-logit/3): the teacher signal is roughly 240-400 bits per token.",
+  "scaling": [
+   {
+    "evidence": [
+     "busbridge-2025-distillation-scaling/1",
+     "busbridge-2025-distillation-scaling/2",
+     "busbridge-2025-distillation-scaling/4"
+    ],
+    "metric": "held-out CE at equal student compute, teacher free",
+    "compute_range_flop": [
+     3e+19,
+     3e+21
+    ],
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Law keeps L_S > L_T, so targets at or below the teacher are unreachable. Extrapolated m for target L_T+0.1: 1.8-2.4 (1e24 teacher), 2.7-4.2 (1e26); for L_T+0.02: 0.6-1.0."
+   },
+   {
+    "evidence": [
+     "anshumann-2025-sparse-logit/1"
+    ],
+    "metric": "held-out LM loss at equal student tokens, teacher free",
+    "compute_range_flop": [
+     1.8e+21,
+     1.8e+21
+    ],
+    "multiplier": 1.35,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "3B student, Llama-3-8B teacher, 100B tokens, 0.026 nats; m 1.2-1.5 depending on the slope used."
+   },
+   {
+    "evidence": [
+     "anshumann-2025-sparse-logit/2"
+    ],
+    "metric": "held-out LM loss at equal student tokens, teacher free",
+    "compute_range_flop": [
+     1.8e+19,
+     1.8e+20
+    ],
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "300M student: m about 1.5 at 10B tokens, about 0.95 at 100B tokens (16x Chinchilla)."
+   },
+   {
+    "evidence": [
+     "rawat-2024-salt/1",
+     "rawat-2024-salt/2"
+    ],
+    "metric": "held-out log-perplexity at equal steps, smaller teacher",
+    "compute_range_flop": [
+     9e+21,
+     9e+21
+    ],
+    "multiplier": 1.1,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "1.5B teacher, 2.8B student, KD for the first 36K of 208K steps; KD for the whole run ends 0.2 nats worse."
+   },
+   {
+    "evidence": [
+     "gemma-team-2024-gemma2/1"
+    ],
+    "metric": "parameter-equivalent at equal tokens, validation perplexity",
+    "compute_range_flop": null,
+    "multiplier": 2.5,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "200M-1B students, 7B teacher; token count not stated."
+   },
+   {
+    "evidence": [
+     "gu-2024-miniplm/1"
+    ],
+    "metric": "downstream at equal FLOPs including online teacher",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Counting teacher inference, KD is no better than plain pretraining at 200M."
+   },
+   {
+    "evidence": [
+     "peng-2024-pretraining-distillation/1"
+    ],
+    "metric": "benchmark average, 1.9B student",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "+1.6%."
+   }
+  ],
+  "multiplier": {
+   "value": 1.3,
+   "trend": "shrinks-with-scale",
+   "evidence": [
+    "anshumann-2025-sparse-logit/1",
+    "rawat-2024-salt/1",
+    "busbridge-2025-distillation-scaling/2"
+   ],
+   "metric": "held-out loss at equal student compute, teacher free, target above the teacher's loss (0 for targets at or below it)"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "prune-and-distill",
+  "name": "Structured pruning plus distillation (Minitron, Sheared LLaMA)",
+  "family": "distillation",
+  "description": "Prune a trained larger model and retrain it with distillation on a small token budget.",
+  "sources": [
+   "muralidharan-2024-minitron",
+   "xia-2023-sheared-llama"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Reuse of sunk compute, not an m_A for a fresh run. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Starts from committed teacher weights; per-step state as the reference.",
+  "scaling": [
+   {
+    "evidence": [
+     "muralidharan-2024-minitron/2"
+    ],
+    "metric": "downstream at equal student tokens vs random init",
+    "compute_range_flop": [
+     2.4e+21,
+     9.6e+21
+    ],
+    "multiplier": 4,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Pruned and distilled 4B at 100B tokens beats random init at 400B (MMLU 37.8 vs 26.2); 15B teacher free."
+   },
+   {
+    "evidence": [
+     "sreenivas-2024-minitron-practice/1",
+     "sreenivas-2024-minitron-practice/2"
+    ],
+    "metric": "downstream vs the teacher's own from-scratch recipe",
+    "compute_range_flop": [
+     1.8e+22,
+     1.8e+22
+    ],
+    "multiplier": 40,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Target is a copy of the teacher. Assumes the ~100B-token teacher correction is free; the policy throttles it."
+   },
+   {
+    "evidence": [
+     "muralidharan-2024-minitron/1",
+     "xia-2023-sheared-llama/1"
+    ],
+    "metric": "family cost with the teacher's training counted",
+    "compute_range_flop": null,
+    "multiplier": 1.8,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "The earlier entry."
+   }
+  ],
+  "multiplier": {
+   "value": 4,
+   "trend": "unknown",
+   "evidence": [
+    "muralidharan-2024-minitron/2"
+   ],
+   "metric": "downstream, equal student tokens, target at or above the teacher's loss"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "gstack-depth-growth",
+  "name": "Depthwise stacking (G_stack)",
+  "family": "growth-reuse",
+  "description": "Train a small model, stack its layers to initialize a deeper one, continue training.",
+  "sources": [
+   "du-2024-gstack"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A about 1.5 at 7B. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. The growth step copies weights; training afterwards is standard.",
+  "scaling": [
+   {
+    "evidence": [
+     "du-2024-gstack/1"
+    ],
+    "metric": "training loss, base FLOPs counted",
+    "compute_range_flop": [
+     1.26e+22,
+     1.26e+22
+    ],
+    "multiplier": 1.55,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Authors' log-curve extension to 8T tokens is extrapolation (du-2024-gstack/2)."
+   },
+   {
+    "evidence": [
+     "saunshi-2024-midas/1"
+    ],
+    "metric": "held-out loss, all stages counted",
+    "compute_range_flop": [
+     3e+21,
+     2.4e+22
+    ],
+    "multiplier": 1.24,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "1.24-1.26x at 1B, 2B and 8B, loss within 0.003 at 8B."
+   }
+  ],
+  "multiplier": {
+   "value": 1.3,
+   "trend": "constant",
+   "evidence": [
+    "saunshi-2024-midas/1",
+    "du-2024-gstack/1"
+   ],
+   "metric": "held-out or training loss at equal loss"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "width-growth",
+  "name": "Learned or function-preserving width growth (LiGO, HyperCloning)",
+  "family": "growth-reuse",
+  "description": "Initialize a wider model from a smaller pretrained one by a learned or function-preserving map.",
+  "sources": [
+   "samragh-2024-hypercloning",
+   "wang-2023-ligo"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A 2-4 excluding the small model's compute. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated.",
+  "scaling": [
+   {
+    "evidence": [
+     "wang-2023-ligo/1"
+    ],
+    "metric": "compute vs scratch",
+    "compute_range_flop": null,
+    "multiplier": 2,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Up to 50% saved."
+   },
+   {
+    "evidence": [
+     "samragh-2024-hypercloning/1"
+    ],
+    "metric": "time to random-init final accuracy",
+    "compute_range_flop": null,
+    "multiplier": 3,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "2.2-4x."
+   },
+   {
+    "evidence": [
+     "chen-2022-bert2bert/1"
+    ],
+    "metric": "steps to equal quality, source model free",
+    "compute_range_flop": [
+     5e+19,
+     5e+19
+    ],
+    "multiplier": 1.85,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "bert2BERT."
+   },
+   {
+    "evidence": [
+     "yao-2024-msg/1"
+    ],
+    "metric": "compute to equal quality, all stages counted",
+    "compute_range_flop": null,
+    "multiplier": 1.4,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "1.4 for GPT-2, 2.2 for BERT."
+   }
+  ],
+  "multiplier": {
+   "value": 1.8,
+   "trend": "shrinks-with-scale",
+   "evidence": [
+    "wang-2023-ligo/1",
+    "chen-2022-bert2bert/1",
+    "samragh-2024-hypercloning/2"
+   ],
+   "metric": "steps or FLOPs to equal quality, mostly downstream"
+  },
+  "confidence": "low",
+  "convention": "as-published"
+ },
+ {
+  "id": "sparse-upcycling",
+  "name": "Sparse upcycling (dense to MoE)",
+  "family": "growth-reuse",
+  "description": "Initialize an MoE's experts from a dense checkpoint's FFNs and continue training.",
+  "sources": [
+   "komatsuzaki-2022-sparse-upcycling",
+   "liew-2025-upcycling-scaling"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Reuse gain that shrinks with C. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. After upcycling, per-token state is the MoE's active share.",
+  "scaling": [
+   {
+    "evidence": [
+     "liew-2025-upcycling-scaling/1",
+     "liew-2025-upcycling-scaling/2"
+    ],
+    "metric": "held-out loss, upcycled vs MoE from scratch",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "L = A D1^-a1 D2^(-a2+a3 log D1) + E. With D1 = D2, seed-free m reaches 1 at D* = 4B tokens for a 1B seed (fit); extrapolated about 1B tokens at 10B and 0.08-0.4B for 1e24-1e26-scale seeds (log base ambiguous)."
+   },
+   {
+    "evidence": [
+     "nakamura-2025-drop-upcycling/1",
+     "nakamura-2025-drop-upcycling/2"
+    ],
+    "metric": "downstream at equal MoE training FLOPs vs dense",
+    "compute_range_flop": [
+     1.98e+22,
+     7.43e+22
+    ],
+    "multiplier": 3.75,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Partial re-initialization; 1.6 with the seed counted. Plain upcycling slows later."
+   },
+   {
+    "evidence": [
+     "he-2024-upcycling-moe/1",
+     "he-2024-upcycling-moe/2"
+    ],
+    "metric": "MMLU vs continued dense on the same 1T tokens",
+    "compute_range_flop": [
+     9e+22,
+     9e+22
+    ],
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "+2.3 MMLU at 1/8 of the seed's budget."
+   },
+   {
+    "evidence": [
+     "wei-2024-skywork-moe/1"
+    ],
+    "metric": "vs MoE from scratch",
+    "compute_range_flop": [
+     3.6e+20,
+     1.1e+21
+    ],
+    "multiplier": 1,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Parity at 2/3 of the seed budget; scratch wins at 2x."
+   }
+  ],
+  "multiplier": {
+   "value": 1.5,
+   "trend": "shrinks-with-scale",
+   "evidence": [
+    "liew-2025-upcycling-scaling/1",
+    "wei-2024-skywork-moe/1",
+    "nakamura-2025-drop-upcycling/1"
+   ],
+   "metric": "equal-quality student compute, seed free"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "retrieval-augmented-lm",
+  "name": "Retrieval-augmented pretraining (RETRO, kNN datastores)",
+  "family": "retrieval",
+  "description": "Condition on chunks retrieved from a large datastore by a frozen retriever.",
+  "sources": [
+   "borgeaud-2021-retro",
+   "shao-2024-massiveds"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Large parameter-equivalent gain; it raises novel data bits per token. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Retrieved neighbours are extra data read per token; the retriever is frozen.",
+  "scaling": [
+   {
+    "evidence": [
+     "wang-2023-retro-study/1"
+    ],
+    "metric": "parameter-equivalent at equal tokens, held-out perplexity",
+    "compute_range_flop": [
+     2.5e+20,
+     1.6e+22
+    ],
+    "multiplier": 3,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Derived 3.0x, 4.0x, 5.2x, then about 3.1x (extrapolated) from 126M to 8.3B; the gain is on knowledge tasks only (wang-2023-retro-study/2), and the database is the training corpus, so validation overlap is possible."
+   }
+  ],
+  "multiplier": {
+   "value": 3,
+   "trend": "shrinks-with-scale",
+   "evidence": [
+    "wang-2023-retro-study/1",
+    "borgeaud-2021-retro/2"
+   ],
+   "metric": "parameter-equivalent at equal tokens"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "low-rank-optimizer-state",
+  "name": "Low-rank projected optimizer state (GaLore, APOLLO)",
+  "family": "low-rank",
+  "description": "Keep Adam's moments in a rank-r projection of each gradient matrix (GaLore) or a random projection (APOLLO).",
+  "sources": [
+   "glentis-2025-param-efficient-survey",
+   "su-2025-galore2",
+   "zhao-2024-galore",
+   "zhu-2024-apollo"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 48.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A about 1 at 7B; state reduction, not update-rank reduction. Traits as published (from the scaling corpus): state at its stored precision, 48 bits per updated parameter. GaLore at r = 1024, d = 4096: 32 + 64 r/d = 48 bits; weights still all updated (full-rank over time).",
+  "scaling": [
+   {
+    "evidence": [
+     "su-2025-galore2/1",
+     "su-2025-galore2/2"
+    ],
+    "metric": "validation loss vs 8-bit Adam, 7B / 500B tokens",
+    "compute_range_flop": [
+     2.1e+22,
+     2.1e+22
+    ],
+    "multiplier": 1.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Lags to 150B tokens, ahead from about 200B."
+   },
+   {
+    "evidence": [
+     "zhao-2024-galore/1",
+     "zhao-2024-galore/2"
+    ],
+    "metric": "perplexity vs 8-bit Adam, 7B, 19.7B tokens",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "14.65 vs 14.61."
+   },
+   {
+    "evidence": [
+     "zhu-2024-apollo/1"
+    ],
+    "metric": "pre-training vs AdamW",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Rank-1 APOLLO-Mini on par."
+   },
+   {
+    "evidence": [
+     "glentis-2025-param-efficient-survey/1"
+    ],
+    "metric": "perplexity vs tuned full-rank",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Full-rank is best."
+   },
+   {
+    "evidence": [
+     "glentis-2025-param-efficient-survey/3"
+    ],
+    "metric": "held-out loss vs Stable-SPAM full-rank, 1B/13.1B tokens",
+    "compute_range_flop": [
+     1.05e+20,
+     1.05e+20
+    ],
+    "multiplier": 0.34,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "GaLore 15.57 gives 0.34 (0.21-0.43 over the slope range); Fira 15.10 gives 0.46. Against Glentis's own AdamW (16.52): 1.8 and 2.5."
+   },
+   {
+    "evidence": [
+     "chen-2024-fira/1",
+     "chen-2024-fira/2"
+    ],
+    "metric": "held-out loss vs copied full-rank Adam, 1B",
+    "compute_range_flop": [
+     1.05e+20,
+     1.05e+20
+    ],
+    "multiplier": 2.3,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Untuned baseline and method; not adopted."
+   },
+   {
+    "evidence": [
+     "chen-2024-fira/3"
+    ],
+    "metric": "vs GaLore only, 7B/19.7B tokens",
+    "compute_range_flop": [
+     8.3e+20,
+     8.3e+20
+    ],
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "No full-rank 7B run."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "unknown",
+   "evidence": [
+    "su-2025-galore2/2",
+    "glentis-2025-param-efficient-survey/3"
+   ],
+   "metric": "held-out loss vs 8-bit Adam at 7B/500B tokens (0.34-0.46 vs tuned full-rank at 1B)"
+  },
+  "confidence": "high",
+  "convention": "as-published"
+ },
+ {
+  "id": "relora",
+  "name": "ReLoRA (merged low-rank updates)",
+  "family": "low-rank",
+  "description": "Train low-rank adapters, merge them into the weights periodically, restart.",
+  "sources": [
+   "lialin-2023-relora"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "m_A about 1 with a full-rank phase; low-rank updates between merges. Traits as published (from the scaling corpus): state at its stored precision, 2.5 bits per updated parameter. Between merges each update is rank r per matrix (r = 128 at 1.3B). Merges write every weight, so updated_fraction stays 1.0; between merges only about 2r/d of the parameters change. All multipliers convert a held-out loss gap with s = 0.10 nats per e-fold of compute (range 0.07-0.13) against spike-stabilized AdamW where available.",
+  "scaling": [
+   {
+    "evidence": [
+     "lialin-2023-relora/2",
+     "lialin-2023-relora/3"
+    ],
+    "metric": "held-out loss vs full-rank, 1.3B, converted",
+    "compute_range_flop": null,
+    "multiplier": 0.76,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Derived: +0.44 ppl, about +0.03 nats, after a 33% full-rank warm start; baseline not swept."
+   },
+   {
+    "evidence": [
+     "huh-2024-lora-the-explorer/1"
+    ],
+    "metric": "samples to converge vs standard training",
+    "compute_range_flop": null,
+    "multiplier": 0.71,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Derived 1/1.4 (LTE)."
+   },
+   {
+    "evidence": [
+     "loeschcke-2024-loqt/1",
+     "loeschcke-2024-loqt/2"
+    ],
+    "metric": "held-out loss vs full-rank, 1B/13.1B tokens",
+    "compute_range_flop": [
+     1.05e+20,
+     1.05e+20
+    ],
+    "multiplier": 1.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "15.55 vs copied 15.56, one seed; 0.34 against Stable-SPAM's 13.97. Nothing above 1B trained to convergence."
+   },
+   {
+    "evidence": [
+     "weiss-2025-relora-slm/1"
+    ],
+    "metric": "loss vs full-rank, 11M-66M, no warm start",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "The gap widens with size."
+   },
+   {
+    "evidence": [
+     "lialin-2023-relora/1",
+     "lialin-2023-relora/3"
+    ],
+    "metric": "perplexity vs full training, up to 1.3B",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Needs a full-rank warm start (33% of steps at 1.3B)."
+   }
+  ],
+  "multiplier": {
+   "value": 0.76,
+   "trend": "unknown",
+   "evidence": [
+    "lialin-2023-relora/2"
+   ],
+   "metric": "held-out loss vs full-rank at 1.3B, converted"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "cola-low-rank-activations",
+  "name": "CoLA (low-rank bottleneck layers)",
+  "family": "low-rank",
+  "description": "Replace full-size linear layers with auto-encoder pairs that enforce low-rank activations.",
+  "sources": [
+   "liu-2025-cola"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Claimed m_A 2 on short budgets; unreplicated at Chinchilla allocation. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Default rank halves parameters and compute; internal bottlenecks narrow activations.",
+  "scaling": [
+   {
+    "evidence": [
+     "liu-2025-cola/1",
+     "glentis-2025-param-efficient-survey/3"
+    ],
+    "metric": "held-out loss vs Stable-SPAM full-rank, 1B/13.1B tokens, CoLA at 0.5x compute",
+    "compute_range_flop": [
+     1.05e+20,
+     1.05e+20
+    ],
+    "multiplier": 0.7,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "15.52 vs 13.97 = +0.105 nats at half compute; against its own copied baseline (15.56) the same run gives 2.0."
+   },
+   {
+    "evidence": [
+     "liu-2025-cola/2"
+    ],
+    "metric": "held-out loss vs 8-bit Adam, 7B/19.7B tokens",
+    "compute_range_flop": [
+     8.3e+20,
+     8.3e+20
+    ],
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "12.73 vs 14.61 at half compute, below compute-optimal, copied baseline; not adopted."
+   },
+   {
+    "evidence": [
+     "liu-2025-cola/3"
+    ],
+    "metric": "held-out loss vs own full-rank, 350M at 8x Chinchilla",
+    "compute_range_flop": [
+     1.1e+20,
+     1.1e+20
+    ],
+    "multiplier": 2.9,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "13.96 vs 14.47 at half compute; own baseline."
+   }
+  ],
+  "multiplier": {
+   "value": 0.7,
+   "trend": "unknown",
+   "evidence": [
+    "liu-2025-cola/1",
+    "glentis-2025-param-efficient-survey/3"
+   ],
+   "metric": "held-out loss vs tuned full-rank at 1B, converted"
+  },
+  "confidence": "low",
+  "convention": "as-published"
+ },
+ {
+  "id": "dion-low-rank",
+  "name": "Dion (low-rank orthonormalized updates)",
+  "family": "low-rank",
+  "description": "Amortized power iteration on momentum gives rank-r orthonormal updates with error feedback.",
+  "sources": [
+   "ahn-2025-dion"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 64.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Low-rank m_A approaches full-rank Muon with scale. Traits as published (from the scaling corpus): state at its stored precision, 64 bits per updated parameter. Each step's update and its communication are rank r (down to d/16).",
+  "scaling": [
+   {
+    "evidence": [
+     "ahn-2025-dion/1"
+    ],
+    "metric": "validation loss vs full-rank Muon, 354M-3B",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "Larger models increasingly robust to r = d/16."
+   },
+   {
+    "evidence": [
+     "amsel-2026-dion3/2"
+    ],
+    "metric": "held-out loss vs tuned NorMuon, 1B/100B tokens",
+    "compute_range_flop": [
+     6e+20,
+     6e+20
+    ],
+    "multiplier": 1.13,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "About -0.012 nats; against NorMuon, not AdamW."
+   },
+   {
+    "evidence": [
+     "amsel-2026-dion3/3"
+    ],
+    "metric": "held-out loss vs NorMuon, 3B-14B on 10B tokens",
+    "compute_range_flop": [
+     1.8e+20,
+     8.4e+20
+    ],
+    "multiplier": 1.3,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "-0.012 (3B) to -0.027 (14B); far below Chinchilla tokens."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "grows-with-scale",
+   "evidence": [
+    "ahn-2025-dion/1",
+    "amsel-2026-dion3/2"
+   ],
+   "metric": "held-out loss vs full-rank Muon/NorMuon (multiply by Muon's own multiplier for AdamW)"
+  },
+  "confidence": "medium",
+  "convention": "as-published"
+ },
+ {
+  "id": "native-factorized-low-rank",
+  "name": "Native factorized low-rank pretraining (W = BA at rank d/4; Spectron, SLTrain)",
+  "family": "low-rank",
+  "description": "Every matrix is a product of two rank-d/4 factors trained from scratch.",
+  "sources": [
+   "janson-2026-spectron",
+   "han-2024-sltrain",
+   "glentis-2025-param-efficient-survey"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 0.55,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 3.3,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "A smaller model in disguise: state and FLOPs both fall to about 0.55 of dense, so reads per FLOP don't change. Confidence medium. All multipliers convert a held-out loss gap with s = 0.10 nats per e-fold of compute (range 0.07-0.13) against spike-stabilized AdamW where available.",
+  "scaling": [
+   {
+    "evidence": [
+     "janson-2026-spectron/1",
+     "janson-2026-spectron/3"
+    ],
+    "metric": "held-out loss at equal FLOPs, rank d/4, vs Muon dense",
+    "compute_range_flop": [
+     2.2e+18,
+     3.57e+19
+    ],
+    "multiplier": 1.0,
+    "trend": "constant",
+    "exponent_change": null,
+    "note": "454M = 780M dense. N_opt ~ C^0.479 vs 0.49: 0.85-0.89 of the dense size at 1e24-1e26 (extrapolation). Rank d/8 collapses (janson-2026-spectron/2)."
+   },
+   {
+    "evidence": [
+     "glentis-2025-param-efficient-survey/6"
+    ],
+    "metric": "held-out loss vs Stable-SPAM, 1B, with restarts, 0.5x compute",
+    "compute_range_flop": [
+     1.05e+20,
+     1.05e+20
+    ],
+    "multiplier": 1.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "15.01 gives 0.98; plain low-rank 18.22 gives 0.14."
+   },
+   {
+    "evidence": [
+     "han-2024-sltrain/1",
+     "han-2024-sltrain/3"
+    ],
+    "metric": "held-out loss vs copied full-rank, 1B",
+    "compute_range_flop": [
+     1.05e+20,
+     1.05e+20
+    ],
+    "multiplier": 1.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "0.38 against Stable-SPAM at dense FLOPs; worse than GaLore at 7B/1.4B tokens."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "constant",
+   "evidence": [
+    "janson-2026-spectron/1"
+   ],
+   "metric": "held-out loss at equal training FLOPs, rank d/4"
+  },
+  "convention": "as-published"
+ },
+ {
+  "id": "frozen-random-base-lora",
+  "name": "LoRA from initialization on a frozen random base (no merges)",
+  "family": "low-rank",
+  "description": "A seeded random base stays frozen; only rank-d/4 adapters train from scratch.",
+  "sources": [
+   "glentis-2025-param-efficient-survey",
+   "zhang-2024-scaling-meets-finetuning"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 0.45,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.7,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.27,
+   "uses_per_thread": 2,
+   "entry_fee_override": 512,
+   "fanout_override": null
+  },
+  "notes": "The base comes from a seed, so only the adapters are novel state. Confidence low. All multipliers convert a held-out loss gap with s = 0.10 nats per e-fold of compute (range 0.07-0.13) against spike-stabilized AdamW where available.",
+  "scaling": [
+   {
+    "evidence": [
+     "glentis-2025-param-efficient-survey/4",
+     "glentis-2025-param-efficient-survey/3"
+    ],
+    "metric": "held-out loss vs Stable-SPAM, 1B/13.1B tokens",
+    "compute_range_flop": [
+     1.05e+20,
+     1.05e+20
+    ],
+    "multiplier": 0.26,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "15.83 vs 13.97 at 1.12x FLOPs; 1.4 against Glentis's AdamW; 0.11 in the GaLore-paper table (19.21)."
+   }
+  ],
+  "multiplier": {
+   "value": 0.26,
+   "trend": "unknown",
+   "evidence": [
+    "glentis-2025-param-efficient-survey/3"
+   ],
+   "metric": "held-out loss vs tuned full-rank at 1B, converted"
+  },
+  "convention": "as-published"
+ },
+ {
+  "id": "memory-layers",
+  "name": "Sparse memory and million-expert layers (PEER, Memory+)",
+  "family": "sparsity-moe",
+  "description": "Large key-value memory or tiny-expert layers, each token reading a few rows.",
+  "sources": [
+   "he-2024-peer",
+   "berges-2024-memory-layers"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Each token reads a few rows, but a block's tokens touch most of the table. Confidence low.",
+  "scaling": [
+   {
+    "evidence": [
+     "he-2024-peer/1"
+    ],
+    "metric": "held-out C4 perplexity at isoFLOP, converted",
+    "compute_range_flop": [
+     6e+18,
+     2e+19
+    ],
+    "multiplier": 1.6,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "1.9 to 1.6; two points."
+   },
+   {
+    "evidence": [
+     "berges-2024-memory-layers/1",
+     "berges-2024-memory-layers/2"
+    ],
+    "metric": "downstream accuracy vs dense compute, up to 8B/1T tokens",
+    "compute_range_flop": null,
+    "multiplier": 2,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "Downstream only; loses MBPP and PIQA at 8B."
+   }
+  ],
+  "multiplier": {
+   "value": 1.6,
+   "trend": "shrinks-with-scale",
+   "evidence": [
+    "he-2024-peer/1"
+   ],
+   "metric": "held-out loss at equal FLOPs, 2e19, converted"
+  },
+  "convention": "as-published"
+ },
+ {
+  "id": "dion3-row-sparse",
+  "name": "Dion3 row-sparse orthogonal updates (f = 1/4)",
+  "family": "optimizer",
+  "description": "Each step updates a rotating quarter of each matrix's rows with an orthogonalized step.",
+  "sources": [
+   "amsel-2026-dion3"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 48.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "The selected rows rotate, so a block of four or more steps updates nearly every row; 48 bits of state assumes bf16 weights plus fp32 momentum. Confidence low.",
+  "scaling": [
+   {
+    "evidence": [
+     "amsel-2026-dion3/2"
+    ],
+    "metric": "held-out loss vs tuned NorMuon, 1B/100B tokens",
+    "compute_range_flop": [
+     6e+20,
+     6e+20
+    ],
+    "multiplier": 1.13,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "About -0.012 nats."
+   },
+   {
+    "evidence": [
+     "amsel-2026-dion3/3"
+    ],
+    "metric": "held-out loss vs NorMuon, 3B-14B on 10B tokens",
+    "compute_range_flop": [
+     1.8e+20,
+     8.4e+20
+    ],
+    "multiplier": 1.3,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "Undertrained."
+   }
+  ],
+  "multiplier": {
+   "value": 1.1,
+   "trend": "unknown",
+   "evidence": [
+    "amsel-2026-dion3/2"
+   ],
+   "metric": "held-out loss vs tuned NorMuon at 1B"
+  },
+  "convention": "as-published"
+ },
+ {
+  "id": "dust-node-perturbation",
+  "name": "Dust node perturbation (activity-space ES, population 64)",
+  "family": "zeroth-order",
+  "description": "Perturbs activations rather than weights and updates from per-token rewards.",
+  "sources": [
+   "dahal-2026-dust"
+  ],
+  "traits": {
+   "theorem_applies": false,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 64.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 52,
+   "flops_per_token_per_param": 102.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 52,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Not seed-described: the update needs the seeds plus K x T per-token rewards, so its crossings grow with K (about 0.8K + 2) and under NCI it costs more than backprop. 64 bits of state assumes fp32 weights plus momentum. Confidence low.",
+  "scaling": [
+   {
+    "evidence": [
+     "dahal-2026-dust/9"
+    ],
+    "metric": "FLOPs to equal held-out loss vs tuned SGD-momentum backprop, 37.7M transformer, 64 draws",
+    "compute_range_flop": [
+     3800000000000000.0,
+     7.7e+16
+    ],
+    "multiplier": 0.015,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "3.2e-2 at 1M, 2.2e-2 at 10M, 1.5e-2 at 20M tokens."
+   },
+   {
+    "evidence": [
+     "dahal-2026-dust/1",
+     "dahal-2026-dust/2",
+     "dahal-2026-dust/4"
+    ],
+    "metric": "same, 1,024-16,384 draws",
+    "compute_range_flop": [
+     6.3e+16,
+     2e+19
+    ],
+    "multiplier": 0.0016,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Beats backprop per token at 1M tokens with 1k draws (m about 3.6e-3); 0.17 nats behind at 20M with 16k (about 1.6e-4)."
+   },
+   {
+    "evidence": [
+     "dahal-2026-dust/5"
+    ],
+    "metric": "loss gap at 16k draws and 10M tokens across 2.0M-243M parameters",
+    "compute_range_flop": [
+     5.3e+17,
+     6.4e+19
+    ],
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "The gap grows by only 0.047 nats over 120x parameters."
+   },
+   {
+    "evidence": [
+     "ren-2023-forward-gradient-local-losses/1",
+     "chaubard-2026-soma/2"
+    ],
+    "metric": "population for fixed estimate quality (theory)",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "K grows with layers x width: 1.25e-3 / 3.1e-4 / 7.5e-5 / 1.9e-5 at 1e9-1e12 (extrapolation; Dust's own size sweep declines far more slowly)."
+   }
+  ],
+  "multiplier": {
+   "value": 0.015,
+   "trend": "shrinks-with-scale",
+   "evidence": [
+    "dahal-2026-dust/9"
+   ],
+   "metric": "FLOPs to equal held-out loss vs tuned SGD backprop, 37.7M, 20M tokens (upper bound)"
+  },
+  "convention": "as-published"
+ },
+ {
+  "id": "frozen-random-layers",
+  "name": "Frozen random layers (reservoir transformers)",
+  "family": "architecture",
+  "description": "A third of the layers stay at their seeded random values; backprop trains the rest.",
+  "sources": [
+   "shen-2021-reservoir-transformers",
+   "raen-2026-which-layers-bp"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 0.67,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 5.3,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "The 0.67 updated fraction is an assumed configuration (one layer in three frozen).",
+  "scaling": [
+   {
+    "evidence": [
+     "shen-2021-reservoir-transformers/1",
+     "raen-2026-which-layers-bp/1",
+     "raen-2026-which-layers-bp/2"
+    ],
+    "metric": "perplexity at similar wall-clock (RoBERTa); matched budget at Llama-1B up to 50M tokens",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "The crossover sits at about 0.25% of Chinchilla tokens; past it, full backprop wins."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "shrinks-with-scale",
+   "evidence": [
+    "shen-2021-reservoir-transformers/1",
+    "raen-2026-which-layers-bp/1"
+   ],
+   "metric": "perplexity at similar wall-clock or matched small budgets"
+  },
+  "convention": "as-published"
+ },
+ {
+  "id": "random-net-small-part",
+  "name": "Training a small part of a seeded random network (BatchNorm-only, embeddings-only)",
+  "family": "seed-based",
+  "description": "A seeded random network stays frozen except for a tiny trained part.",
+  "sources": [
+   "frankle-2021-batchnorm-only",
+   "zhong-2024-random-transformers",
+   "ramanujan-2020-hidden-random",
+   "pensia-2020-subsetsum-lottery",
+   "nooralinejad-2023-pranc",
+   "ha-2017-hypernetworks"
+  ],
+  "traits": {
+   "theorem_applies": false,
+   "updated_fraction": 0.006,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 4.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Every variant is found by backprop. Confidence low. No multiplier for the restricted problem: the reachable loss is capped far above frontier loss (m = 0 for redoing a frontier pretrain); 0.05 is a parameter-equivalent of that cap.",
+  "scaling": [
+   {
+    "evidence": [
+     "frankle-2021-batchnorm-only/1",
+     "frankle-2021-batchnorm-only/2",
+     "zhong-2024-random-transformers/1",
+     "zhong-2024-random-transformers/2"
+    ],
+    "metric": "reachable quality vs fully trained",
+    "compute_range_flop": null,
+    "multiplier": 0.05,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "A random 512-wide transformer with only its embeddings trained equals a fully trained 0.7M model; tokens unmatched. BatchNorm-only reaches 32% top-5 on ImageNet."
+   }
+  ],
+  "multiplier": null,
+  "convention": "as-published"
+ },
+ {
+  "id": "dfa",
+  "name": "Direct feedback alignment",
+  "family": "local-learning",
+  "description": "Each layer gets the output error through a fixed random projection instead of backpropagated gradients.",
+  "sources": [
+   "launay-2020-dfa-scales",
+   "bartunov-2018-bio-scalability"
+  ],
+  "traits": {
+   "theorem_applies": false,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 96.0,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 16.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 4.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "No compute-equal multiplier exists.",
+  "scaling": [
+   {
+    "evidence": [
+     "launay-2020-dfa-scales/1",
+     "launay-2020-dfa-scales/2"
+    ],
+    "metric": "perplexity at equal epochs vs backprop",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "52.0 vs 29.8: a 0.56-nat gap."
+   },
+   {
+    "evidence": [
+     "bartunov-2018-bio-scalability/1"
+    ],
+    "metric": "accuracy vs backprop as tasks scale",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Biologically motivated alternatives fall further behind on harder tasks."
+   }
+  ],
+  "multiplier": null,
+  "convention": "as-published"
+ },
+ {
+  "id": "path-composition",
+  "name": "DiPaCo path composition (256 paths of 150M)",
+  "family": "parallel-communication",
+  "description": "Paths through a shared pool of modules train mostly independently; each path is a small model.",
+  "sources": [
+   "douillard-2024-dipaco"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Per-block traits match backprop's inside a path; what shrinks is the replica, which belongs in the model shape. Confidence low.",
+  "scaling": [
+   {
+    "evidence": [
+     "douillard-2024-dipaco/1",
+     "douillard-2024-dipaco/2",
+     "douillard-2024-dipaco/3"
+    ],
+    "metric": "C4 validation perplexity vs dense 1.3B, compute-matched (derived)",
+    "compute_range_flop": [
+     7.7e+21,
+     7.7e+21
+    ],
+    "multiplier": 0.05,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "256 paths of 150M match a dense 1.3B at about 21.5x its FLOPs; the authors call it significantly less FLOP-efficient and did not study its scaling."
+   }
+  ],
+  "multiplier": {
+   "value": 0.05,
+   "trend": "unknown",
+   "evidence": [
+    "douillard-2024-dipaco/1"
+   ],
+   "metric": "C4 validation perplexity vs dense, compute-matched (derived)"
+  },
+  "convention": "attacker"
+ },
+ {
+  "id": "diffusion-blocks",
+  "name": "DiffusionBlocks (block-independent denoising objectives)",
+  "family": "local-learning",
+  "description": "Each block is trained as an independent denoiser; no activation or gradient crosses between blocks in training.",
+  "sources": [
+   "shing-2025-diffusionblocks"
+  ],
+  "traits": {
+   "theorem_applies": false,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 0.0,
+   "boundary_bits": 4.0,
+   "crossings": 0,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "No activation crosses a block boundary during training and every block reads the whole token stream: its construction is about 1,500x cheaper than backprop's. One paper at about 100M with generation metrics only. Confidence low.",
+  "scaling": [
+   {
+    "evidence": [
+     "shing-2025-diffusionblocks/2",
+     "shing-2025-diffusionblocks/3"
+    ],
+    "metric": "MAUVE and generative perplexity vs end-to-end AR, 12 layers, 4 blocks",
+    "compute_range_flop": null,
+    "multiplier": null,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "LM1B MAUVE 0.71 vs 0.50, OpenWebText 0.82 vs 0.85; perplexity is non-trivial to compute, so no held-out loss."
+   }
+  ],
+  "multiplier": null,
+  "convention": "attacker"
+ },
+ {
+  "id": "async-pipeline",
+  "name": "Asynchronous pipeline parallelism (stale weights)",
+  "family": "parallel-communication",
+  "description": "Pipeline stages update without waiting, using stale weights.",
+  "sources": [
+   "ajanthan-2025-async-pp",
+   "chen-2016-sync-sgd"
+  ],
+  "traits": {
+   "theorem_applies": true,
+   "updated_fraction": 1.0,
+   "state_bits_per_param": 2.5,
+   "state_splits": true,
+   "description_bits": null,
+   "boundary_width_fraction": 1.0,
+   "boundary_bits": 4.0,
+   "crossings": 2,
+   "flops_per_token_per_param": 6.0,
+   "data_tokens_per_token": 1.0,
+   "decode_flops_per_param": 0.0,
+   "kappa": 0.667,
+   "uses_per_thread": 2,
+   "entry_fee_override": null,
+   "fanout_override": null
+  },
+  "notes": "Same bits cross per block, just stale. Confidence low.",
+  "scaling": [
+   {
+    "evidence": [
+     "ajanthan-2025-async-pp/1",
+     "ajanthan-2025-async-pp/2"
+    ],
+    "metric": "validation perplexity vs synchronous GPipe at equal iterations, 8 stages, 134M-1B",
+    "compute_range_flop": null,
+    "multiplier": 1.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "27.72 vs 30.63 WikiText perplexity at 134M; iteration-matched, not compute-optimal."
+   }
+  ],
+  "multiplier": {
+   "value": 1.0,
+   "trend": "unknown",
+   "evidence": [
+    "ajanthan-2025-async-pp/1"
+   ],
+   "metric": "validation perplexity vs synchronous pipeline at equal iterations"
+  },
+  "convention": "attacker"
+ }
+]

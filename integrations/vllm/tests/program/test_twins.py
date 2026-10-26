@@ -1,4 +1,4 @@
-"""verity_vllm/program/kernels/twins.py — every twin against the gate evaluator on synthetic small statics (laptop-fast), the
+"""verity/ml/definitions/numerics/twins.py — every twin against the gate evaluator on synthetic small statics (laptop-fast), the
 Replayer's `--evaluator` switch on the synthetic toy (gates / twins / auto agree word for word), the `--check`
 evidence file, and — behind `CAPTURE_BIG=1` like `test_replay_m1.py` — tier b step 0 of M1 (the whole 32-row
 SmolLM2 prefill, 9666 instances) with `--evaluator twins`: 0 divergences, `partial == False`, < 1.5 GB."""
@@ -13,8 +13,8 @@ import numpy as np
 import pytest
 
 from verity_vllm.check.replay import replay
-from verity_vllm.program.kernels import kernel_registry as KR
-from verity_vllm.program.kernels import twins as TW
+from verity.ml.definitions.numerics import kernel_registry as KR
+from verity.ml.definitions.numerics import twins as TW
 from verity_vllm.pipeline import cli
 from tests.check.test_replay_synthetic import consistent_toy, snapshots  # noqa: F401 - fixtures
 from verity.ml.circuits.evaluation import evaluate
@@ -119,6 +119,7 @@ def _twinned(r) -> set[int]:
     return {m["node"] for m in r.instances if KR.covers(m["_spec"], TW.KERNEL) is None}
 
 
+@pytest.mark.slow
 def test_tier_b_evaluators_agree_and_are_reported(consistent_toy, snapshots):  # noqa: F811
     r, weights, _, toks = consistent_toy
     twinned = _twinned(r)

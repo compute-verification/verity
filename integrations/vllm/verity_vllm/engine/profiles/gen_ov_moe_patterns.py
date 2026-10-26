@@ -41,10 +41,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from verity.ml.circuits.defs import bind
-from verity_vllm.program.registry import act as _ACT
-from verity_vllm.program.registry import moe as _MOE
+from verity.ml.definitions.registry import act as _ACT
+from verity.ml.definitions.registry import moe as _MOE
 from verity_vllm.program.frontend import targets as T
-from verity_vllm.program.registry.quarantine.ov_moe import moe as Q
+from verity_vllm.program.quarantine.ov_moe import moe as Q
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns import (SiluAndMul, bound_args, find_descendants, is_int, is_row_major, op_name, scope_transparents, target_of,
@@ -56,10 +56,6 @@ from verity_vllm.program.frontend.target_profile import TargetProfile
 
 #: The op name prefix of the MoE custom op(s) (`vllm.moe_forward.default`, `vllm.moe_forward_shared.default`).
 MOE_OP_PREFIX = "moe_forward"
-
-#: Device kernels of the fused-MoE block on the pinned vLLM (Triton function names / CUDA kernel tokens), for the census reader.
-MOE_KERNELS_EXPECTED = ("topk_softmax", "moe_align_block_size", "fused_moe_kernel", "silu_and_mul", "moe_sum")
-
 
 def _view(v: Any) -> dict[str, Any]:
     return {"shape": list(v.shape), "dtype": v.dtype, "strides": list(v.strides), "offset": v.offset, "alloc": v.alloc}
@@ -140,8 +136,8 @@ ROUTER_VPT_BY_E: dict[int, int] = {64: 8, 128: 8}
 
 def _root_name(ctx, view, fallback: str) -> str:
     """The expert stack's weight ROOT name (the parameter fqn, `model.layers.<k>.mlp.experts.routed_experts.w13_weight`), the hint tail
-    every other pattern uses (`hint_of(node, roots[0].name)`): `cb_a.compare` reads the record's weight field names from it.  [R13 MOE-01:
-    the literal `w13`/`w2` tails made every expert-GEMM weight operand differ from the derived Program's by NAME only.]"""
+    every other pattern uses (`hint_of(node, roots[0].name)`): `cb_a.compare` reads the record's weight field names from it (the
+    literal `w13`/`w2` tails made every expert-GEMM weight operand differ from the derived Program's by NAME only)."""
     roots = ctx.roots_of(view)
     return roots[0].name if roots else fallback
 
@@ -383,14 +379,18 @@ class MoEFusedExperts:
         return unsupported(node, f"no profile pattern resolves the router's gate GEMM inside {op_name(node.op)}", child_id=gate.id)
 
     def _tiling(self, node: TreeNode, launch: TreeNode, ctx: StepContext) -> Unsupported | None:
-        """None when the launch's tiling is the profile's pinned one (`fused_pins`, warps, stages)."""
+        """None when the launch's tiling is the profile's pinned one (`fused_pins`, warps, stages) or a tuned tile the Build accepts
+        (`targets.moe_tuned_tile_refusal`)."""
         e = launch.enter
         consts = dict(e.constexprs)
         bad = {k: (consts.get(k), v) for k, v in self.fused_pins.items() if consts.get(k) != v}
         if bad or e.num_warps != self.fused_num_warps or e.num_stages != self.fused_num_stages:
+            why = T.moe_tuned_tile_refusal(target_of(ctx)[0], consts.get("BLOCK_SIZE_K"))
+            if why is None:
+                return None
             return unsupported(node, "fused_moe_kernel tiling differs from the pinned profile",
                                mismatches={k: {"observed": o, "pinned": p} for k, (o, p) in bad.items()},
-                               num_warps=e.num_warps, num_stages=e.num_stages)
+                               num_warps=e.num_warps, num_stages=e.num_stages, tuned=why)
         return None
 
     def _fused(self, node: TreeNode, launch: TreeNode, ctx: StepContext, *, expect_weighted: bool, expect_top_k: int, E: int, K: int, N: int,
@@ -440,7 +440,7 @@ class MoEFusedExperts:
 
 @dataclass
 class MoEFusedExpertsPadded(MoEFusedExperts):
-    """[R17-42 route A (4), `moe_construction = padded`] The SAME six kernels, the SAME pins and shape checks as `MoEFusedExperts` --
+    """[`moe_construction = padded`] The SAME six kernels, the SAME pins and shape checks as `MoEFusedExperts` --
     folded to ONE `Compute(MoeFfnFixedL_v1{E,TOPK,VPT,H,I}, rows=M)` per token: `(PerRow(hidden), PerRow(logits), Shared(w13), Shared(w2))
     -> PerRow(out)`.  This is the fold-side twin of the frontend's `PaddedMoeSumRule` (verity_vllm/program/frontend/rules/vllm_moe.py), so GM-01
     sees the record and the Build in the same vocabulary; which twin folds is the workload's DECLARED construction
@@ -462,7 +462,7 @@ class MoEFusedExpertsPadded(MoEFusedExperts):
         if (dot := T.moe_expert_dot(target_of(ctx)[0])) is not None:
             return unsupported(node, f"padded construction on a target whose fused_moe_kernel runs the k16 step {dot.id}: MoeFfnFixedL_v1's "
                                "expert bodies run the Ampere one", dot=dot.id)
-        from verity_vllm.program.registry import moe_pad as MP  # noqa: PLC0415  (the padded Definitions register on first use, as vocab.py's kind does)
+        from verity.ml.definitions.registry import moe_pad as MP  # noqa: PLC0415  (the padded Definitions register on first use, as vocab.py's kind does)
         if self.renormalize:
             return unsupported(node, "padded construction with renormalize=True: MoeFfnFixedL_v1 states the MoeRouterTopK_v1 (unnormalised) router only",
                                renormalize=True)
@@ -715,7 +715,7 @@ def ov_moe_patterns(config: dict[str, Any], *, gemm_constexprs: dict[str, Any] |
                     moe_construction: str | None = None) -> list:
     """The MoE architecture's patterns, placed BEFORE the base list (the tuned-GEMM specialization must see `o_proj` first; the MoE
     scope pattern matches the custom op no base pattern knows).  `moe_construction` (None = `TargetProfile.DEFAULT_MOE_CONSTRUCTION`)
-    selects the scope pattern: the workload's DECLARED construction, never inferred (R17-42 route A (4)).  [P6] the tuned GEMM is the
+    selects the scope pattern: the workload's DECLARED construction, never inferred.  The tuned GEMM is the
     target-agnostic `gen_llama_patterns.GemmLaunchTuned` (the record target's table; `gemm_constexprs` is accepted and unused: the
     delegate `GemmLaunch` pins the target's tiling)."""
     key = moe_construction or TargetProfile.DEFAULT_MOE_CONSTRUCTION

@@ -348,6 +348,11 @@ impl<C: Challenger> Masking<C> {
                 "masking: {} of {} values absorbed masked", self.at, self.order.len());
         (self.inner, self.coins, self.coins_l0)
     }
+    /// [`Masking::finish`] for a rep the firewall failed, whose rounds from its failure on are the Lean session loop's places
+    /// sent with no device round in them: this challenger absorbed none of their values.
+    pub fn finish_failed(self) -> (C, Vec<F128>, Vec<F128>) {
+        (self.inner, self.coins, self.coins_l0)
+    }
     fn pad(&mut self, v: F128) -> F128 {
         let i = *self.order.get(self.at).expect("masking: more absorbed values than the layout's");
         self.at += 1;
@@ -1224,6 +1229,36 @@ mod tests {
         let mut pr2 = pr.clone();
         pr2.opened[3].0 += F128::ONE;
         assert!(verify_inner(&pr2, &lay, F128::ZERO, vec![("t", l)], &mut Tape::new(&coins)).is_err());
+    }
+
+    /// `coin_stop_vectors.json`, which `test_firewall_frame.py` holds the Lean frame's `ρ` and `β` stops to: Rust's
+    /// cross-checks of the same coins (`rho_independent`, `prove_inner`'s `β = 0`) agree case by case.
+    #[test]
+    fn rust_coin_stops_agree_with_the_lean_frames_vectors() {
+        use flock_core::pcs::ligerito::zk::rho_independent;
+        use flock_field::F256;
+        let v: serde_json::Value = serde_json::from_str(include_str!("coin_stop_vectors.json")).unwrap();
+        let word = |s: &serde_json::Value| {
+            let x = u128::from_str_radix(s.as_str().unwrap(), 16).unwrap();
+            F128::new(x as u64, (x >> 64) as u64)
+        };
+        for c in v["rho"].as_array().unwrap() {
+            let w: Vec<F128> = c["coins"].as_array().unwrap().iter().map(word).collect();
+            assert_eq!(rho_independent([F256::new(w[0], w[1]), F256::new(w[2], w[3])]), c["independent"].as_bool().unwrap(), "{}", c["case"]);
+        }
+        let lay = Layout::new(20, 16, 0, 0);
+        let p = Pads::draw(&mut ProverRng::from_seed(ProverSeed::injected([5; 32])), &lay, 0);
+        let salts = crate::zk_hooks::LeafSalts::for_seed(&ProverSeed::injected([6; 32])).expand(9, Code::new(lay.len() + K_PAD).n);
+        let ic = InnerCommit::new(&p, salts);
+        let cons = vec![("t", Lin::konst(F128::ZERO, lay.len()))];
+        // ε, then a batching coin per row, then β
+        let at = 2 + cons.len() + triple_constraints(&lay, F128::ZERO, F128::ZERO, F128::ZERO).len();
+        for c in v["beta"].as_array().unwrap() {
+            let mut coins: Vec<F128> = (1..2000u64).map(|i| F128::new(i * 7919, i)).collect();
+            coins[at - 1] = word(&c["coin"]);
+            let r = prove_inner(&ic, &p, &lay, F128::ZERO, cons.clone(), SelfCheck::Skip, &mut Tape::new(&coins));
+            assert_eq!(r.err(), c["stop"].as_bool().unwrap().then(|| "PROVER-STOPPED: degenerate coin β = 0".to_string()), "{}", c["coin"]);
+        }
     }
 
     /// `final_c'` is a constant of two rows (`replay`'s c_eval, the ring switch's c claim), so a prover who knew `γ` before

@@ -1,27 +1,29 @@
 """The primitives, composites and serving family's Definition modules import only `verity`, Definition modules, the standard
 library and numpy: every import in the module, a function's lazy one included.  Twins (numpy/torch/CUDA references,
-difftests, capture helpers) and vocabulary (which Definition a serving role binds) live outside the registry
-(`tools/migrate/split_prims_serve.py`), so a catalog can take these modules without the integration."""
+difftests, capture helpers) and vocabulary (which Definition a serving role binds) live outside the registry, so a
+catalog can take these modules without the integration."""
 
 from __future__ import annotations
 
 import ast
+import importlib.util
 import sys
 from pathlib import Path
 
 import pytest
 
-REGISTRY = Path(__file__).resolve().parents[2] / "verity_vllm" / "program" / "registry"
-REG = "verity_vllm.program.registry"
+REG = "verity.ml.definitions.registry"
+REGISTRY = Path(importlib.util.find_spec(REG).origin).parent
 FAMILY = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "tables", "value_inputs", "operand_widths", "b1",
           "b1_tp2", "serve3", "spec", "pouw_rows")
 #: the other families' Definition modules this family reads (each family's own split judges its modules)
-OTHER_FAMILIES = {"dense", "fa2_softcap", "fa3_check_inf", "fp8_moe_experts", "sampling", "topp_geometry", "topp_word_gates"}
+OTHER_FAMILIES = {"dense", "dsa_topk", "fa2_softcap", "fa3_check_inf", "fp8_moe_experts", "marlin_moe", "sampling", "topp_geometry",
+                  "topp_word_gates"}
 THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.ml.circuits"
 #: (module, what it imports outside the rule) -> why it stays
-EXCEPTIONS = {("pouw_rows", "verity.core.protocols.pouw.circuit.ncp2"): "NcpDequant is PoUW's own Definition, which the row binds"}
+EXCEPTIONS: dict[tuple[str, str], str] = {}
 
 
 def _imports(name: str) -> list[tuple[int, str]]:
@@ -51,7 +53,8 @@ def _core(name: str) -> bool:
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
     moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.ml.private_circuits", "verity.ml.circuits.ops",
-                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock")
+                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock",
+                "verity.ml.definitions")
     return under("verity") and (not any(map(under, moved_in))
                                 or any(map(under, ("verity.core.protocols", "verity.core.claims"))))
 
@@ -71,7 +74,7 @@ def _allowed(mod: str) -> bool:
 def test_definition_module_imports_only_definitions(name):
     bad = [f"{name}.py:{line}: {mod}" for line, mod in _imports(name) if not _allowed(mod) and (name, mod) not in EXCEPTIONS]
     assert not bad, ("a Definition module imports what is not a Definition module (move the code that needs it out of the "
-                     "registry, as tools/migrate/split_prims_serve.py does):\n  " + "\n  ".join(bad))
+                     "registry, into the integration package):\n  " + "\n  ".join(bad))
 
 
 def test_every_exception_is_still_needed():

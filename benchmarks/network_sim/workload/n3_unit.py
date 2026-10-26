@@ -26,8 +26,8 @@ first descriptor: the port's index times the port's capacity, plus the frames th
 (less their salt frames), all public occupancy. `record` is the root of N2's commitment to the link-window's certified
 records (`LinkWindows`, `verity.core.protocols.certifier.service`), `record_domain` its domain id (one-stage's served
 domain of the run, the link and the window) and `direction` the port's end of the link (0 egress, 1 ingress). `roots`
-and `domains` are the units' outbox commitments and domain ids, `salt` the window number (u64, big-endian) and the
-revealed salt commitment.
+and `domains` are the units' outbox commitments and domain ids, `salt` the salt frame's payload: the window number
+(u64, big-endian) and the 64 bytes after it, which the live certifier fills with `active.PLACEHOLDER`.
 
 **Witness.** The frames, the n descriptors (the layout's rows at at, at + 1, ...) with their hiding salts and paths, for
 each descriptor's segment g < G the outbox row it reads with its salt and path, the record head's bytes before its
@@ -41,7 +41,10 @@ i puts on its segments' rows (`N3Frame`, `assemble`). (4) The salt frame, when S
 The head's bytes and N2's frames root of the N frames (`certificate.frames_root`, depth D = bitlen(T r - 1)) are a
 head whose status byte is 0 (complete), and that head opens at leaf 2 + direction of N2's commitment (`N3HidingRead`,
 depth 2), the leaf N2 commits beside each certified record (`service.HEADS`). The head's other fields are N2's to
-check: N2's accepted outcome on the same root says that leaf holds the certified head of (link, direction, window).
+check: N2's accepted outcome on the same root says that leaf holds the certified head of (link, direction, window),
+and, where the link declares its occupancy profile, that the head's counts are the profile's (N2's head check,
+`head_check.NetworkHeadCheck_v2`, which opens the same leaf).
+The frames root holds N to the head's Σ n_t (leaf k is frame k for k < Σ n_t and E_0 after), so to the profile's total.
 
 **A descriptor** (`Descriptor`, LW bits, `encode`): a mode (RAW 1, BASE64 2; 0 and 3 are invalid, and `NONE` pads the
 tree), the text's byte offset p, its data length r, the suffix offset s, the prefix (P bytes) and suffix (Q bytes), and
@@ -51,7 +54,9 @@ stream is the segments' XOR. The frame is prefix XOR text << 8p XOR suffix << 8s
 first min(r, B) bytes, and the text the data (RAW) or its base64 (BASE64; `assemble`).
 
 **The outbox** (`outbox_rows`): a unit's outgoing messages in φ's send order (`Phi.send_order`), back to back, each
-message the bytes `framing.encode` packs its crossing values into. Its rows overlap: row q holds bytes
+message the bytes `framing.encode` packs its crossing values into, then the framing bytes the unit sends besides them
+(`Statement.framing`: the simulator's `HELLO`s, the lab's request lengths and heads, which public structure fixes). Its
+rows overlap: row q holds bytes
 qB ... qB + 2B - 1 (zero past the end) for q < k = max(1, ceil(bytes / B)), and zero rows follow up to a power of two.
 A message is then one contiguous range of its source's outbox, and any run of at most B of its bytes lies in one row,
 the row of the run's first byte, so a frame reads it as one segment, one row.
@@ -59,8 +64,8 @@ the row of the run's first byte, so a frame reads it as one segment, one row.
 **Commitments and who registers them.** Each producing unit registers its outbox (`register_outbox`), beside its values,
 under the binding SHA-512(`OUTBOX_LABEL` || program || unit). Its domain id makes its row count public, 2^depth with
 depth = bitlen(k - 1): that is all it discloses of the unit's crossing bytes. That the outbox holds the bytes of the
-unit's committed values, each byte the same in every row that holds it, is not proved here; it needs a proof unit of
-its own. The prover registers the layout before the run (`register_layout`): one advice tree of the descriptors, one
+unit's committed values and its framing, each byte the same in every row that holds it, is not proved here; it needs a
+proof unit of its own. The prover registers the layout before the run (`register_layout`): one advice tree of the descriptors, one
 per (port, frame index) at port * CAP + index, under the binding SHA-512(`LAYOUT_LABEL` || program || placement
 root). The record commitment is N2's, which the firewall registers (`LinkWindows.commit`, `registration`): its root
 alone is public, and the heads, certificates and salts stay behind the firewall. Here `Certifier` stands in for the
@@ -89,8 +94,9 @@ from typing import Callable, NamedTuple, Sequence
 import numpy as np
 
 from verity.core.protocols.certifier import certificate as CT
+from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier import service as N2
-from verity.core.protocols.certifier.active import DATA, HEADER, LAST, encode_frame
+from verity.core.protocols.certifier.active import DATA, HEADER, LENGTH, encode_frame
 from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Reason, Status, fill
 from verity.core.protocols.certifier.schedule import SyncSet
 from verity.ml.circuits import boolean as BL
@@ -133,10 +139,10 @@ SALT, SALT_STREAM = 3, 0xFFFF_FFFF
 SALT_PAYLOAD = 72
 
 
-def salt_frame(window: int, commitment: bytes, frame_bytes: int) -> bytes:
+def salt_frame(window: int, value: bytes, frame_bytes: int) -> bytes:
     """Window `window`'s salt frame as the ingress certifier records it: kind `SALT` on `SALT_STREAM`, its payload the
-    window (u64, big-endian) and the salt's 64-byte commitment, which is public once the salt is revealed."""
-    return encode_frame(SALT, SALT_STREAM, window.to_bytes(8, "big") + commitment, frame_bytes)
+    window (u64, big-endian) and 64 public bytes, the live certifier's `active.PLACEHOLDER`."""
+    return encode_frame(SALT, SALT_STREAM, window.to_bytes(8, "big") + value, frame_bytes)
 
 
 def _is_salt(frame: bytes) -> bool:
@@ -776,7 +782,7 @@ def _build_salteq(C, S, frame, *salt):
 
 
 N3SaltEq = _part("N3SaltEq", ("B",), _sig_salteq, _build_salteq,
-                 "1 iff the frame is the salt frame of the payload salt (the window and the salt's commitment)")
+                 "1 iff the frame is the salt frame of the payload salt (the window and its 64 public bytes)")
 
 
 N3IsZero = _part("N3IsZero", ("W",), lambda S: ((("x", Array(S.W, BIT)),), BIT),
@@ -1312,8 +1318,8 @@ def _lms_key(H: int, seed: bytes) -> lms.PrivateKey:
 @dataclass
 class Certifier:
     """A stand-in for the network certifier and the firewall: an LMS key of 2^H one-time keys (the deployed N = 64,
-    W = 1) that signs each record head in one certifier session, and N2's commitment to each link-window
-    (`LinkWindows.commit`), its salts drawn from a seed."""
+    W = 1) that signs each record head's salted digest in one certifier session, and N2's commitment to each
+    link-window (`LinkWindows.commit`), its salts and the certifier's drawn from a seed."""
 
     key: lms.PrivateKey
     seed: bytes
@@ -1330,16 +1336,18 @@ class Certifier:
         return CT.LmsKey(self.key.params, lms.public_key(self.key))
 
     def certify(self, head: CT.RecordHead) -> CT.CertifiedRecord:
-        digest, key_id = head.digest(), self.public.key_id
+        salt = hashlib.shake_256(self.seed + b"/salt_c/" + self.used.to_bytes(8, "big")).digest(CT.SALT_BYTES)
+        digest, key_id = CT.certificate_digest(salt, head.digest()), self.public.key_id
         message = CT.certificate_message(key_id, self.session, head.link, head.direction, head.window, digest)
         signature = lms.sign_at(self.key, self.used, message).encode()
         self.used += 1
-        return CT.CertifiedRecord(head, CT.Certificate(key_id, head.link, head.direction, head.window, digest,
-                                                       signature))
+        return CT.CertifiedRecord(head, salt, CT.Certificate(key_id, head.link, head.direction, head.window, digest,
+                                                             signature))
 
     def commit(self, link: str, window: int, heads: Sequence[CT.RecordHead], egress: GridParams, ingress: GridParams,
-               sync_set: SyncSet) -> Committed:
-        lw = N2.LinkWindows(link, egress, sync_set, self.public, self.run, self.session, ingress=ingress)
+               sync_set: SyncSet, occupancy: tuple = (None, None)) -> Committed:
+        lw = N2.LinkWindows(link, egress, sync_set, self.public, self.run, self.session, ingress=ingress,
+                            occupancy=occupancy)
         salts = _salts(self.seed + b"/n2/" + link.encode() + b"\0" + window.to_bytes(8, "big"), N2.LEAVES)
         return Committed(lw, lw.commit(window, *(self.certify(h) for h in heads), salts))
 
@@ -1355,13 +1363,15 @@ class UnitTable:
     domains: list[bytes]
     trees: dict[str, Tree]
     data: dict[str, bytes]
+    program: bytes = b""
+    seed: bytes = b""
 
     @classmethod
     def register(cls, outboxes: dict[str, bytes], B: int, program: bytes, seed: bytes) -> "UnitTable":
         """Each unit's outbox registered, the units in the order given."""
         trees = {u: register_outbox(program, u, x, B, seed) for u, x in outboxes.items()}
         return cls(list(trees), tuple(t.depth for t in trees.values()), [t.root for t in trees.values()],
-                   [t.domain_id for t in trees.values()], trees, dict(outboxes))
+                   [t.domain_id for t in trees.values()], trees, dict(outboxes), program, seed)
 
     def index(self, key: tuple) -> int:
         return self.names.index(key[0])
@@ -1433,6 +1443,7 @@ class Statement:
     gates: dict[str, tuple[int, ...]]
     program: bytes
     placement_root: bytes
+    framing: dict[str, bytes] = field(default_factory=dict)
 
     def locate(self, unit: str, gate: int) -> tuple[int, int]:
         """(row, bit offset) of a value the unit holds by the placement, whether or not the unit committed it."""
@@ -1456,18 +1467,18 @@ class Statement:
 
     @cached_property
     def outboxes(self) -> tuple[dict[str, bytes], dict[int, int]]:
-        """Each unit's outbox, its outgoing messages' bytes in send order, and each message's byte offset in its
-        source's."""
+        """Each unit's outbox, its outgoing messages' bytes in send order and then its `framing`, and each message's
+        byte offset in its source's."""
         data: dict[str, bytes] = dict.fromkeys(self.hw.unit_names(), b"")
         base = {}
         for m in self.phi.send_order():
             base[m.stream] = len(data[m.src])
             data[m.src] += self.payload(m)
-        return data, base
+        return {u: x + self.framing.get(u, b"") for u, x in data.items()}, base
 
-    def message(self, m: F.Message) -> list[tuple]:
-        """The message's bits as pieces: one run of its source's outbox."""
-        return [("r", (m.src,), 8 * self.outboxes[1][m.stream], 8 * ((m.bits + 7) // 8))]
+    def framing_at(self, unit: str) -> int:
+        """Where the unit's `framing` starts in its outbox."""
+        return len(self.outboxes[0][unit]) - len(self.framing.get(unit, b""))
 
     def table(self, seed: bytes) -> UnitTable:
         """Every unit's outbox, registered."""
@@ -1498,61 +1509,79 @@ def statement(public: dict, witness: dict) -> Statement:
                      bytes.fromhex(public.get("program", "")), bytes.fromhex(public.get("placement", "")))
 
 
-def _data_frame(kind: int, stream: int, payload: list[tuple], n: int, B: int) -> list[tuple]:
-    return [const(HEADER.pack(kind, stream, n)), *payload, zeros(B - HEADER.size - n)]
+def sim_framing(S: Statement) -> tuple[dict[str, bytes], dict[tuple[str, str], int]]:
+    """What each unit sends besides its messages' bytes: the `HELLO` of each connection it opens
+    (`framing.hello_data`), in send order, and each one's offset in its unit's by connection."""
+    data: dict[str, bytes] = {}
+    at = {}
+    for src, dst in S.phi.openers():
+        at[src, dst] = len(data.get(src, b""))
+        data[src] = data.get(src, b"") + F.hello_data(S.hw, src, dst)
+    return data, at
 
 
-def sim_declared(S: Statement) -> dict[str, list[tuple[int, list[tuple]]]]:
-    """Per certified link direction, φ's frames as (bucket, pieces) in grid order: send order, stably by bucket."""
-    phi, B = S.phi, S.phi.frame_bytes
-    room = B - HEADER.size
+def sim_declared(S: Statement, hellos: dict[tuple[str, str], int]) -> dict[str, list[tuple[int, list[tuple]]]]:
+    """Per certified link direction, φ's frames as (bucket, pieces) in grid order: send order, stably by bucket. A
+    message's frames are `active.data_frames` of its run of its source's outbox, and a connection's `HELLO` that of its
+    run of its source's framing (at `hellos` past `Statement.framing_at`)."""
+    from . import n3_canonical as C
+
+    phi, B, base = S.phi, S.phi.frame_bytes, S.outboxes[1]
     streams = phi.by_stream()
+    cut: dict[int, list[list[tuple]]] = {}
     out: dict[str, list[tuple[int, list[tuple]]]] = {}
     for key, slots in phi.slots().items():
         frames = []
         for s in slots:
             if s.kind == "hello":
-                frames.append((s.bucket, [const(F.hello(S.hw, s.src, s.dst, B))]))
+                (hello,) = C.data_pieces([(s.src, S.framing_at(s.src) + hellos[s.src, s.dst], F.HELLO.size)], B)
+                frames.append((s.bucket, hello))
                 continue
             m = streams[s.stream]
-            message = S.message(m)
-            nbytes, last = (m.bits + 7) // 8, s.index == F.frame_count(m, B) - 1
-            lo, hi = s.index * room, min((s.index + 1) * room, nbytes)
-            frames.append((s.bucket, _data_frame(LAST if last else DATA, m.stream, _slice(message, 8 * lo, 8 * hi),
-                                                 hi - lo, B)))
+            if m.stream not in cut:
+                cut[m.stream] = C.data_pieces([(m.src, base[m.stream], m.nbytes)], B)
+            frames.append((s.bucket, cut[m.stream][s.index]))
         out[key] = sorted(frames, key=lambda x: x[0])
     return out
 
 
-def lab_declared(S: Statement, block: str) -> tuple[list, list]:
-    """The block's egress frames (its events in position order) and ingress frames (its requests in session order) as
-    pieces."""
+def lab_framing(lab) -> tuple[bytes, dict[tuple[str, int], int]]:
+    """What the outside host sends on the lab's links besides the messages it relays: each request's length (u32be),
+    head (`lab.REQUEST`) and padding (`Lab.request_pad`), block by block in session order, and each one's offset by
+    (block, session index)."""
     from . import lab as L
 
-    B = S.phi.frame_bytes
-    lab = L.Lab(S.model, S.hw, S.placement, S.phi.messages, B)
-    messages = {stream: S.message(m) for stream, m in lab.messages.items()}
+    data, at = b"", {}
+    for b in lab.blocks:
+        for s in lab.sessions[b]:
+            at[b, s.index] = len(data)
+            data += LENGTH.pack(lab.request_length(s)) + L.REQUEST.pack(s.index, lab.request_length(s) - L.REQUEST.size)
+            data += bytes(lab.request_pad(s))
+    return data, at
+
+
+def lab_declared(S: Statement, lab, block: str, heads: dict[tuple[str, int], int]) -> tuple[list, list]:
+    """The block's egress frames (its events in position order, `active.event` of each chunk) and ingress frames (its
+    requests in session order, `active.request_frames`) as pieces, from the outboxes: a chunk is a run of its
+    message's, a padding event's none, and a request is its length, head and padding from the outside host's framing
+    (at `heads` past `Statement.framing_at`) and then its messages' runs."""
+    from . import lab as L
+    from . import n3_canonical as C
+    from .hardware import OUTSIDE
+
+    B, base = S.phi.frame_bytes, S.outboxes[1]
     egress = []
-    for p, (j, m, c) in enumerate(lab.events[block]):
-        nbytes = (m.bits + 7) // 8
-        lo, hi = c * lab.chunk, min((c + 1) * lab.chunk, nbytes)
-        head = b"id: %d\nevent: %d\ndata: " % (p, m.stream)
-        n = len(head) + 4 * -(-(hi - lo) // 3) + 2
-        payload = [const(head), ("b", tuple(_slice(messages[m.stream], 8 * lo, 8 * hi)), hi - lo), const(b"\n\n")]
-        egress.append(_data_frame(DATA, j + 1, payload, n, B))
-    ingress = []
-    room = B - HEADER.size
+    for j, m, c in lab.events[block]:
+        if m is None:
+            egress.append(C.event_pieces(block, 0, 0, B))
+            continue
+        lo, hi = c * lab.chunk, min((c + 1) * lab.chunk, (m.bits + 7) // 8)
+        egress.append(C.event_pieces(m.src, base[m.stream] + lo, hi - lo, B))
+    ingress, framing = [], S.framing_at(OUTSIDE)
     for s in lab.sessions[block]:
-        n_frames = -(-lab.request_length(s) // room)
-        body = sum((m.bits + 7) // 8 for m in s.inbound)
-        request = [const(L.REQUEST.pack(s.index, body))]
-        for m in s.inbound:
-            request += messages[m.stream]
-        total = L.REQUEST.size + body
-        for k in range(n_frames):
-            lo, hi = k * room, min((k + 1) * room, total)
-            ingress.append(_data_frame(LAST if k == n_frames - 1 else DATA, s.stream, _slice(request, 8 * lo, 8 * hi),
-                                       hi - lo, B))
+        runs = [(OUTSIDE, framing + heads[block, s.index], LENGTH.size + L.REQUEST.size + lab.request_pad(s))]
+        runs += [(m.src, base[m.stream], (m.bits + 7) // 8) for m in s.inbound]
+        ingress += C.data_pieces(runs, B)
     return egress, ingress
 
 
@@ -1563,7 +1592,7 @@ EMPTY = "nothing recorded"
 
 @dataclass
 class Window:
-    """One port-window: the frames the record holds, its public counts and status, the revealed salt commitment of a
+    """One port-window: the frames the record holds, its public counts and status, the salt frame's payload of a
     salted window, the record's grid (when not the frames filled by the counts), and the unit's instance; `why` says
     why no unit runs (refused from public data alone, or `EMPTY`)."""
 
@@ -1598,7 +1627,8 @@ class Window:
 class Setup:
     """A run's statement, units, registered layout, the ports' links (the link-window commitment each records into,
     and its end), each port's grid, Σ_sync, each port's link as its certifier names it in its heads (when not its
-    commitment's), the certifier, and every link-window's commitment: what every window's instance is built from."""
+    commitment's), the certifier, every link-window's commitment, and each port's occupancy profile where it declares
+    one (N2's `LinkWindows.occupancy`): what every window's instance is built from."""
 
     S: Statement
     units: UnitTable
@@ -1610,6 +1640,7 @@ class Setup:
     named: dict[str, str] = field(default_factory=dict)
     certifier: Certifier | None = None
     committed: dict[tuple[str, int], Committed] = field(default_factory=dict)
+    occupancy: dict[str, tuple[tuple[int, ...], ...]] = field(default_factory=dict)
 
     @classmethod
     def build(cls, S: Statement, declared: dict[str, list[list[tuple]]], ports: list[str],
@@ -1647,8 +1678,15 @@ class Setup:
             ports = {v: k for k, v in self.links.items()}
             heads = [self.head(ports[(link, d)], window, recorded.get((link, d, window))) for d in (0, 1)]
             self.committed[(link, window)] = self.certifier.commit(  # type: ignore[union-attr]
-                link, window, heads, self.grids[ports[(link, 0)]], self.grids[ports[(link, 1)]], self.sync_set)
+                link, window, heads, self.grids[ports[(link, 0)]], self.grids[ports[(link, 1)]], self.sync_set,
+                tuple(self.occupancy.get(ports[(link, d)]) for d in (0, 1)))
         return self.committed[(link, window)]
+
+    def head_checks(self, link: str, window: int, recorded: dict[tuple[str, int, int], Window]) -> bool:
+        """N2's head checks on the link-window's commitment (`LinkWindows.head_checks`, each `head_check.reference`):
+        each head complete under its end's grid and, on an end with a profile, its counts the profile's row."""
+        c = self.commit(link, window, recorded)
+        return all(i is not None and HC.reference(i) for i in c.lw.head_checks(c.opening, c.root))
 
     def attach(self, windows: list[Window]) -> list[Window]:
         """Each window's instance, its port's earlier frames giving its first descriptor's position; or why none
@@ -1709,18 +1747,24 @@ def sim_windows(public: dict, witness: dict, records: dict[str, list[tuple[int, 
                 seed: bytes = b"n3-unit") -> tuple[Setup, list[Window]]:
     """The simulator's windows: per certified link direction, `buckets` buckets a window, the recorded frames in grid
     order (stably by bucket), against the layout of φ's declared frames, registered before the run. Every port's grid
-    is `buckets` buckets of r slots, r the most frames any port declared or recorded in one bucket."""
+    is `buckets` buckets of r slots, r the most frames any port declared or recorded in one bucket. φ fixes every
+    frame's bucket, so each port's declared counts are its occupancy profile, through the last window any port
+    declares, and every port has a window for each of them and for each window it recorded past them."""
     S = statement(public, witness)
     links = sim_ports(S.hw)
-    declared = sim_declared(S)
+    S.framing, hellos = sim_framing(S)
+    declared = sim_declared(S, hellos)
     per_bucket = [n for v in (*declared.values(), *records.values()) for n in Counter(b for b, _ in v).values()]
     grid = GridParams(buckets, max([1] + per_bucket), S.phi.frame_bytes)
+    W = max([b for v in declared.values() for b, _ in v] + [-1]) // buckets + 1
+    occupancy = {key: tuple(tuple(sum(1 for b, _ in declared.get(key, []) if b == t)
+                                  for t in range(w * buckets, (w + 1) * buckets)) for w in range(W)) for key in links}
     setup = Setup.build(S, {k: [p for _, p in v] for k, v in declared.items()}, list(links), links,
-                        dict.fromkeys(links, grid), seed)
+                        dict.fromkeys(links, grid), seed, occupancy=occupancy)
     windows = []
     for key in links:
         rec = sorted(records.get(key, []), key=lambda x: x[0])
-        last = max([b for b, _ in rec] + [-1])
+        last = max([b for b, _ in rec] + [W * buckets - 1])
         for w in range(last // buckets + 1):
             lo, hi = w * buckets, (w + 1) * buckets
             frames = [f for b, f in rec if lo <= b < hi]
@@ -1733,17 +1777,21 @@ def lab_windows(public: dict, witness: dict, published: dict[str, Sequence],
                 grids: tuple[GridParams, GridParams] | None = None,
                 sync_set: SyncSet | None = None) -> tuple[Setup, list[Window]]:
     """The lab's windows: per block and link (`lab.EGRESS`, `lab.INGRESS`), each record's released frames, against the
-    layout of the declared frames. With `salts`, each salted ingress window's revealed salt commitment by (block,
-    window): one of its frames is then the certifier's salt frame, and the rest are the port's next declared frames.
-    `grids` are the egress and ingress grids (default: each link's first record's shape) and `sync_set` the egress
+    layout of the declared frames. With `salts`, each salted ingress window's 64 public bytes of its salt frame by
+    (block, window): one of its frames is then the certifier's salt frame, and the rest are the port's next declared
+    frames. `grids` are the egress and ingress grids (default: each link's first record's shape) and `sync_set` the egress
     Σ_sync, as the calibration report gives them. A block's two links share one N2 commitment a window, named for the
     block, its egress record at leaf 0 and its ingress record at leaf 1."""
     from verity.core.protocols.certifier.grid import occupancy
 
     from . import lab as L
 
+    from .hardware import OUTSIDE
+
     S = statement(public, witness)
     B = S.phi.frame_bytes
+    lab = L.Lab(S.model, S.hw, S.placement, S.phi.messages, B)
+    S.framing[OUTSIDE], heads = lab_framing(lab)
     blocks = sorted(S.hw.units)
     kinds = (L.EGRESS, L.INGRESS)
     links = {f"{b}:{k}": (b, d) for b in blocks for d, k in enumerate(kinds)}
@@ -1753,7 +1801,7 @@ def lab_windows(public: dict, witness: dict, published: dict[str, Sequence],
                       for r in first)  # type: ignore[assignment]
     declared = {}
     for b in blocks:
-        declared[f"{b}:{L.EGRESS}"], declared[f"{b}:{L.INGRESS}"] = lab_declared(S, b)
+        declared[f"{b}:{L.EGRESS}"], declared[f"{b}:{L.INGRESS}"] = lab_declared(S, lab, b, heads)
     setup = Setup.build(S, declared, list(links), links, {p: grids[d] for p, (_, d) in links.items()}, seed,
                         named={p: p.split(":")[1] for p in links}, **({"sync_set": sync_set} if sync_set else {}))
     windows = []
@@ -1769,16 +1817,16 @@ def lab_windows(public: dict, witness: dict, published: dict[str, Sequence],
 # --- the demo ---------------------------------------------------------------------------------------------------------
 
 DEMO_FRAMES = [
-    [const(encode_frame(LAST, F.HELLO_STREAM, F.HELLO.pack(0, 1), 16))],
+    [const(encode_frame(2, 0, F.HELLO.pack(0, 1), 16))],
     [const(HEADER.pack(DATA, 1, 5)), ("r", ("u0",), 8 * 14, 8 * 5), zeros(2)],
     [const(HEADER.pack(DATA, 1, 6)), ("b", (("r", ("u1",), 0, 8), ("r", ("u0",), 8 * 20, 8)), 2), const(b"\n\n"),
      zeros(1)],
     [const(HEADER.pack(DATA, 2, 6)), ("r", ("u0",), 8 * 33, 8 * 2), zeros(1), ("r", ("u0",), 8 * 36, 8 * 3),
      zeros(1)],
 ]
-"""Four frames of every kind, B = 16, on port p0: a HELLO-like constant frame, a frame of u0's bytes 14 ... 18 across
-its rows 0 and 1, an event-like frame of base64 over two units' bytes, and a frame of two runs of u0's row 2 around a
-zero byte."""
+"""Four frames of every kind, B = 16, on port p0: a constant frame (of kind 2, which no sender uses), a frame of u0's
+bytes 14 ... 18 across its rows 0 and 1, an event-like frame of base64 over two units' bytes, and a frame of two runs of
+u0's row 2 around a zero byte."""
 
 
 @dataclass
@@ -1829,7 +1877,24 @@ def _sized(windows: list[Window], circuit: bool) -> list[dict]:
     return out
 
 
+def link_checks(setup: Setup, windows: list[Window], checked: Sequence[dict] = ()) -> list[dict]:
+    """Every link-window N2 commits, in order: N2's head checks' bit (`Setup.head_checks`), the N3 ok bit of each of
+    its port-windows (`checked`'s, else the window's reference or its public data), and their conjunction. N2 compares
+    no grid in the clear, so the link-window is ok only with both."""
+    recorded = {(*setup.links[w.port], w.window): w for w in windows}
+    known = {(r["port"], r["window"]): r["ok"] for r in checked}
+    out = []
+    for link, window in sorted({(link, w) for link, _, w in recorded}):
+        ports = [recorded[(link, d, window)] for d in (0, 1) if (link, d, window) in recorded]
+        n3 = {w.port: known.get((w.port, w.window), None) for w in ports}
+        n3 = {p: w.check(circuit=False)["ok"] if n3[p] is None else n3[p] for p, w in zip(n3, ports)}
+        n2 = setup.head_checks(link, window, recorded)
+        out.append({"link": link, "window": window, "n2": n2, "n3": n3, "ok": n2 and all(n3.values())})
+    return out
+
+
 def _sim(args) -> dict:
+    from . import n3_canonical as C
     from .block import Context
     from .n3 import merge
     from .run import run_memory
@@ -1846,8 +1911,21 @@ def _sim(args) -> dict:
     records, _ = merge(results)
     setup, windows = sim_windows(public, witness, records, args.buckets)
     checked = _sized(windows, not args.reference_only)
-    return {"config": config, "buckets": args.buckets, "format": setup.fmt._asdict(), "summary": summarize(checked),
-            "windows": checked}
+    links = link_checks(setup, windows, checked)
+    v5 = sim_v5(setup, windows)
+    summary = summarize(checked) | {"link_windows": len(links), "link_windows_ok": sum(r["ok"] for r in links),
+                                    "n2_not_ok": [f"{r['link']}[{r['window']}]" for r in links if not r["n2"]],
+                                    "n3_v5": C.summary(v5)}
+    return {"config": config, "buckets": args.buckets, "format": setup.fmt._asdict(), "summary": summary,
+            "windows": checked, "link_windows": links, "n3_v5": v5}
+
+
+def sim_v5(setup: Setup, windows: Sequence[Window]) -> list[dict]:
+    """N3Window_v5's verdicts with the template on the simulator's windows: every frame on every link direction is
+    `active.data_frames`', the requests' template (`n3_canonical.INGRESS`)."""
+    from . import n3_canonical as C
+
+    return C.verdicts(setup, windows, kinds=dict.fromkeys(setup.links, C.INGRESS))
 
 
 def _lab(args) -> dict:

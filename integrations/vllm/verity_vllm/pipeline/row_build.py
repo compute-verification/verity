@@ -12,14 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
 
 from verity_vllm.pipeline import row_records as R
-
-
-def _tail(path: str, n: int = 300) -> str:
-    try:
-        lines = open(path, errors="replace").read().splitlines()
-    except OSError:
-        return ""
-    return (lines[-1] if lines else "")[:n]
+from verity_vllm.program import prefix_plan as PP
 
 
 def required_manifest(row: Any, stage: str, digest: Callable[[], str] | None = None) -> int | None:
@@ -58,7 +51,7 @@ def required_manifest(row: Any, stage: str, digest: Callable[[], str] | None = N
         return None
     if rc == 0:
         row.tl(f"{stage}.required_manifest", "end", ("rc", 0))
-        row.log(f"required-value manifest of record ({R.QUERY_OF_RECORD}, B={row.B}{', workload digest ' + wd[:16] if wd else ''}): {_tail(log)}")
+        row.log(f"required-value manifest of record ({R.QUERY_OF_RECORD}, B={row.B}{', workload digest ' + wd[:16] if wd else ''}): {R.tail(log)}")
         return 0
     if os.path.exists(f"{row.d}/manifest.json"):
         os.remove(f"{row.d}/manifest.json")
@@ -68,7 +61,7 @@ def required_manifest(row: Any, stage: str, digest: Callable[[], str] | None = N
         row.tl(f"{stage}.required_manifest", "end", ("rc", 3), ("fail_class", "PRECHECK_FAIL_REGISTRY_UNAVAILABLE"))
         return 3
     row.tl(f"{stage}.required_manifest", "end", ("rc", 1))
-    row.log(f"required-value manifest NOT built (rc={rc}; see manifest.log): {_tail(log)}")
+    row.log(f"required-value manifest NOT built (rc={rc}; see manifest.log): {R.tail(log)}")
     return 1
 
 
@@ -84,7 +77,7 @@ def follow_compose(row: Any, to: int) -> tuple[Any, str, str]:
             os.remove(f)
     wl = row.path(row.wl)
     dirs = [*([f"{row.d}/build_request"] if (row.LP, row.T) in R.request_shapes(wl) else []),
-            *(f"{row.d}/build_request_LP{lp}_T{t}" for lp, t in R.extra_shapes(wl, row.LP, row.T))]
+            *(f"{row.d}/build_request_{PP.shape_name(s)}" for s in R.extra_shapes(wl, row.LP, row.T))]
     cmd = row.cli("global-program", "--workload", row.wl, *(x for d in dirs for x in ("--derived", d)), "--out", f"{row.d}/build_workload",
                   "--checkpoint-dir", row.ck, "--follow", str(to), "--follow-done", done, "--follow-stop", stop, py=row.py312)
     pool = ThreadPoolExecutor(max_workers=3)

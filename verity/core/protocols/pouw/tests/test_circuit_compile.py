@@ -227,7 +227,7 @@ UNIT_REFUSED = [
     ("E_PORT_KIND" if SEEDS else "position", "own-position", _own_position),
     ("position", "own-roots", _own_roots),
     ("E_COIN_FLOW" if SEEDS else "salt-flow", "salt-leak", _salt_leak),
-    ("E_COIN_FLOW" if SEEDS else "noise-in-z", "noised-z", _noised_z),
+    ("noise-in-z", "noised-z", _noised_z),
 ]
 UNIT_REFUSED = [pytest.param(code, _bad(name, body), id=name) for code, name, body in UNIT_REFUSED]
 
@@ -777,6 +777,44 @@ def test_seed_group_never_spans_a_chain():
     assert e.value.code == "span" and "node 0" in str(e.value), str(e.value)
 
 
+#: the floor's forms (`Scheme.noise`): the s8 accumulator's on both rows, S8Dot's with B's rows clean, none for S8Matmul
+FLOOR = C.register(C.Scheme("compile-test-floor", (2, 2), {C.ANY: _unit(UNIT)}, rows={},
+                            noise={"GemmAccumulatorS8_v1": C.RowNoise(a=(0, 1), b=(256, 1)),
+                                   "S8Dot_v1": C.RowNoise(a=(0, 1), b=(0, 0))}))
+
+
+def _floored_body(B, S, x, w):
+    acc = B.batch(_acc(64), x, w, axes=(None, 0))
+    dot = B.call(bind(S8.S8Dot, **S8.SMOKE_PLAIN), x, w[0])
+    mm = B.call(bind(S8.S8Matmul, N=2, **S8.SMOKE_PLAIN), x, Coll(Array(2, w.type.elem), w.refs.slice(0, 2 * 64)))
+    return Coll(Array(6, V32), concat([acc.refs, dot.refs, mm.refs]))
+
+
+#: x against 3 rows of w on the accumulator, x · w[0] on S8Dot and x against w[0..1] on S8Matmul
+FLOORED = _def("CompileTestFloored", (), lambda S: ((("x", Array(64, V8)), ("w", Array(3, Array(64, V8)))), Array(6, V32)),
+               _floored_body)
+
+
+@compiles
+def test_floor_is_each_units_noised_multiply_adds():
+    """`Compiled.floor`, PouwBlockCredit's W_b: a unit's dots whose kind's form noises both rows, k = 64 multiply-adds each,
+    by slot and at its batch's node of the root. The accumulator's 3 dots on x's one row are a 1 × 2 tile (128) and a
+    1 × 1 (64); S8Dot's form has B's rows clean and S8Matmul has none, so their units' floor is 0."""
+    c = C.compile(Program(bind(FLOORED)), FLOOR.name)
+    assert [(s.dot.family, s.count) for s in c.sites] == [("GemmAccumulatorS8_v1", 3), ("S8Dot_v1", 1), ("S8Matmul_v1", 2)]
+    assert [(f.kind, f.dots, f.macs) for f in c.floor] == [
+        ("GemmAccumulatorS8_v1", 2, 128), ("GemmAccumulatorS8_v1", 1, 64), ("S8Dot_v1", 0, 0), ("S8Matmul_v1", 0, 0)]
+    assert [len(u.tile.pairs) for u in c.units] == [2, 1, 1, 2]
+    root = c.program.root.body.nodes
+    assert [root[f.node].fn for f in c.floor] == [u.defn for u in c.units]
+    assert [root[f.node].name for f in c.floor] == [f"pouw[{i}]" for i in range(4)]
+    assert all(f.macs == 0 for f in C.compile(Program(bind(FLOORED)), SCHEME).floor)
+    assert FLOOR.plug("S8Matmul_v1", _unit(UNIT), "compile-test-floor-mm").noise == FLOOR.noise
+    for bad in ({"DotBf16_v2": C.QK_ROWS}, {"S8Dot_v1": C.RowNoise(a=(0, 1), b=(-1, 1))}):
+        with pytest.raises(ValueError):
+            C.register(C.Scheme("compile-test-floor-bad", (2, 2), {C.ANY: _unit(UNIT)}, noise=bad))
+
+
 @compiles
 def test_recompute_across_units_is_found():
     """A unit computing a value another unit computes (here each 1 × 1 unit of a shared row folds a · a) fails the gate-level
@@ -852,6 +890,10 @@ def test_positions_and_inputs():
     assert salt == SD.halves(SALT) and pos == [0, 6, 0, 7] and roots == SD.halves(b"".join(_roots(c)[0]))
     with pytest.raises(ValueError):
         c.inputs(SALT, _roots(c) * 2)
+    for short in (SALT[:32], SALT + b"\0", SALT.hex()):
+        for f in (c.inputs, c.seeds):
+            with pytest.raises(ValueError, match="64-byte salt"):
+                f(short, _roots(c))
 
 
 def test_seed_reads_every_field():

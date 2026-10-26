@@ -1,0 +1,28 @@
+{
+ "H": 20,
+ "W": 1,
+ "holder": "auditor (/var/lib/vy-challenger/key, 0700)",
+ "host": "vy-challenger-1",
+ "instance": "computeinstance-u02eghrt307zptfgwq",
+ "pinned": "d2ad7bdea69504f6b4ed848207f65a4d37f31a8b",
+ "pubkey": "e8e2c25488053a913e111f4b9fe9f00d3c53b3107e792950ad9f34275e9cfe980c9f0823e3a61506d946595971f08b1c1c4f476f355f128d8af89acea101df6ce919cf803b61626cecf82b64bcda8620",
+ "pubkey_sha512": "27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc",
+ "retired": [
+  {
+   "H": 20,
+   "W": 1,
+   "pubkey": "201520d0e5bec1742505e05f16b5e8beb5b12bd9f284e1f3fb5234226a38eff602b000951545072a7fa2f337f89f27c4d2809a71fcb37de97ae3837a7781cb73a98cce26ee0973b2173de53ea9188eab",
+   "pubkey_sha512": "2a9b71992af60fce7db6cad989692f57374eb710b87746e739afa3d96484c306793c34c02fb1bb9a85857376cfec9d94e8a7103c7f4de15cf433ccfb27fb5ba7",
+   "retired_utc": "2026-10-20T09:37:20Z",
+   "sessions": [
+    "r20261020-072121-679d",
+    "r20261020-075147-995f",
+    "r20261020-080952-3579",
+    "r20261020-084127-578b"
+   ],
+   "why": "readable by every research job on the host (RT4-INT-18): exposed"
+  }
+ ],
+ "schema": "challenger-key/v1",
+ "valid_from_utc": "2026-10-20T09:45:24Z"
+}

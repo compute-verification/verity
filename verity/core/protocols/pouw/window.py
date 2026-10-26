@@ -3,14 +3,15 @@ the size of the uniform draw, and the window's advice (its per-call entries and 
 with the window statement's reference (`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`,
 PoUW; the joint note's L2, L3 and L4).
 
-**Public items** (`PUBLIC`), exactly the draft's list.  The service refuses a registration that makes anything else public;
-the window's own root and W's root are salted roots, which the rule allows.
+**Public items** (`PUBLIC`), the draft's list and the rows' fixed length (19 Oct).  The service refuses a registration
+that makes anything else public; the window's own root and W's root are salted roots, which the rule allows.
 
     item       kind         source     what it is
     verdict    output       outcome    every drawn tile proved and opened, or not
     work       output       window     the credited work, as the tile count N padded to a grid level (`bucket`)
     check      structure    parameter  the tile template every unit instantiates, its work per tile, the commitment scheme
     sampling   structure    parameter  ε, δ, the grid and the law subset:K′ they fix with the work level (`k_prime`)
+    length     structure    parameter  the rows of record's fixed length: each slot's public max_tokens (`length_item`)
     drawn      coins        outcome    the verifier's own draw, after the receipt
     root_W     commitment   parameter  the weights' salted root
 
@@ -26,6 +27,13 @@ under 1 − 2^-s of the credit (at most 11% at s = 3) and the factor N / g_ℓ <
 **The draw** (L3): uniform subset:K′ over the N equal tiles, K′ the smallest K with (1 − ε·W/(N·w_max))^K <= δ, W the
 credited work and w_max the most work a tile does (`k_prime`).  A wrong set holding a share ε of W has at least ε·W/w_max
 tiles, so a draw of K′ without replacement misses it with probability at most δ.  Filler tiles are credited nothing.
+
+**The fixed length**: correct tokens served past the honest run's end of sequence are not useful work (Daniel, 19 Oct,
+ASK-39).  A row of record serves its slot's public max_tokens whatever it samples (vLLM's ``ignore_eos``), so W_use is
+public: the `length` item is ``{"stop": "fixed", "max_tokens": [...], "served": [...]}``, one entry a slot, and
+`length_problem` refuses an EOS-keyed row (`window-form: eos-keyed-row`) and a slot that served another length
+(`window-form: length-mismatch`).  A registration made before the rule carries `LEGACY_REGISTERED`, without the item,
+and is not of record.
 
 **The advice** (L2): one entry per committed call, then one filler entry, then empty entries up to the public bound P, each
 an `Entry` row committed in one window root registered before the draw.  A call's sides are dense: each side tree holds only
@@ -45,6 +53,19 @@ holds those to the entries.  It is not proved yet: no Program states it.
 leaves (`DEPTHS`) padded with frame-v3's pad leaf under the window's side domains (`side_domain`, `side_levels`,
 `side_path`), and the tile instances' public inputs (`PUBLIC_PORTS`, `sessions`, `session_cap`, `instance_ts`,
 `public_inputs`); `tests/vectors/window.json` pins them.
+
+**Live windows** (decision 36).  The check item's optional ``coins`` is the window's coin mode, ``live`` or ``seeded``
+(`mode`; an item that names none is seeded, as Pearl-C's served path registers).  A seeded window's noise is its scheme's
+derivation from the salt and the prover's roots.  A live window's comes from the proof service's challenger
+(`verity.core.protocols.sampled_proofs.challenger`), whose first client this is: the epoch's coins are the layout
+`live_families(R)` under `LIVE_SCHEME`, its salt coin, its draw coin and R round coins (``pouw/round``, rounds numbered
+from 0 as Compose's `Declared.round` numbers them), all committed before the epoch.  The salt coin opens once, after the
+window's open root (`salt.window_open_root` of its weights' root, its round-0 request table's root and its session; the
+rule is `core_check.salt`).  Round r's coin opens once, after the verifier recorded round r's root, the root of the values
+round r commits, and round r's noise key is `round_key` of that coin and that root.  `rounds_reason` is the rule on a
+window's round coins (Lean: `PouwWindow.Rounds`).  A Pearl-C pass's session takes its salt coin alone
+(`SALT_FAMILIES`, `salt_epoch_reason`; Lean `Properties.Pouw.LiveSalt.SaltEpoch`), opened after its epoch's root
+(`salt.epoch_open_root`), so it ends complete once that coin is released.
 """
 from __future__ import annotations
 
@@ -52,17 +73,20 @@ import hashlib
 import json
 import math
 import struct
+from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 from typing import Any, Mapping, Sequence
 
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.commitments import hm96
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
+from verity.ml.randomness import Key, derive
 
 GRID_BITS = 3
 
@@ -75,12 +99,22 @@ PUBLIC = (
                                         "scheme fix the auditor's verifier"),
     ("sampling", "structure", "parameter", "ε, δ and the grid, and the law subset:K′ they fix with the level: the guarantee "
                                            "is stated in them"),
+    ("length", "structure", "parameter", "the rows of record's fixed length: each slot's max_tokens, served whatever it "
+                                         "samples (ignore_eos), so the useful work is public"),
     ("drawn", "coins", "outcome", "the verifier's own draw, after the receipt"),
     ("root_W", "commitment", "parameter", "the weights' salted root: what the tiles' weight rows are committed to, hiding"),
 )
 #: the items a registration carries; the verdict and the draw come after it
-REGISTERED = ("work", "check", "sampling", "root_W")
+REGISTERED = ("work", "check", "sampling", "length", "root_W")
+#: what a registration made before the fixed-length rule (19 Oct) carries: no `length`, so not of record
+LEGACY_REGISTERED = ("work", "check", "sampling", "root_W")
 KINDS = ("call", "filler", "none")
+#: the check item's coin mode (`mode`), Compose's `CoinMode`
+COINS = "coins"
+MODES = ("live", "seeded")
+LIVE_SCHEME = "verity/pouw/epoch-coins/live/v1"
+SALT, DRAW, ROUND = "pouw/salt", "pouw/draw", "pouw/round"
+ROUND_NOISE_DOMAIN = "verity/pouw/round-noise/v1"
 
 
 # ---- the grid ---------------------------------------------------------------------------------------------------------------
@@ -221,10 +255,79 @@ def k_prime(eps: Fraction, delta: Fraction, credited: int, n: int, w_max: int) -
     return k
 
 
+#: `eps_at` reports ε on the grid of multiples of 2^-EPS_BITS
+EPS_BITS = 32
+
+
+def eps_at(k: int, delta: Fraction, credited: int, n: int, w_max: int) -> Fraction:
+    """`k_prime` inverted: the least ε = j/2^`EPS_BITS` (1 <= j <= 2^`EPS_BITS`) whose K′ at δ and the window's inputs
+    (`k_prime(ε, δ, credited, n, w_max)`) is at most `k`, so a draw of `k` establishes ε at δ, rounded up to the grid.
+    Bisection over j, K′ being nonincreasing in ε; ValueError when `k` isn't a positive integer, the inputs are outside
+    `k_prime`'s domain, or not even ε = 1 has K′ <= `k`."""
+    if not _positive(k):
+        raise ValueError(f"eps_at needs K >= 1, not {k}")
+    one = 1 << EPS_BITS
+
+    def ok(j: int) -> bool:
+        return k_prime(Fraction(j, one), delta, credited, n, w_max) <= k
+
+    if not ok(one):
+        raise ValueError(f"K = {k} establishes no ε <= 1 at δ = {Fraction(delta)}")
+    lo, hi = 0, one
+    while lo + 1 < hi:
+        mid = (lo + hi) // 2
+        if ok(mid):
+            hi = mid
+        else:
+            lo = mid
+    return Fraction(hi, one)
+
+
 def sampling(eps: Fraction, delta: Fraction, work: Work, tile_work: int, bits: int = GRID_BITS) -> dict[str, Any]:
     """The `sampling` item: ε, δ, the grid and the law they fix with the level (every tile does `tile_work`)."""
     k = k_prime(eps, delta, work.credited * tile_work, work.n, tile_work)
     return {"eps": str(Fraction(eps)), "delta": str(Fraction(delta)), "grid_bits": bits, "law": {"law": "subset", "k": k}}
+
+
+# ---- the fixed length -----------------------------------------------------------------------------------------------------
+
+#: a row of record's stop mode: it serves its slot's max_tokens whatever it samples (vLLM's ``ignore_eos``)
+STOP_FIXED = "fixed"
+LENGTH_KEYS = ("max_tokens", "served", "stop")
+
+
+def length_item(max_tokens: Sequence[int]) -> dict[str, Any]:
+    """The `length` item of a window whose slots serve `max_tokens`: stop mode fixed, each slot served its max_tokens."""
+    return {"max_tokens": list(max_tokens), "served": list(max_tokens), "stop": STOP_FIXED}
+
+
+def _nats(x: Any) -> list[int] | None:
+    return list(x) if isinstance(x, list) and all(_int(v) and v >= 0 for v in x) else None
+
+
+def length_problem(item: Any, max_tokens: Sequence[int]) -> str | None:
+    """Why a registered `length` item is not a fixed-length window's at the verifier's `max_tokens` (one per slot), or
+    None, the first rule it breaks: it is ``{max_tokens, served, stop}``; its stop mode is fixed, not EOS-keyed; its
+    max_tokens and served are lists of natural numbers; its max_tokens is the verifier's; and each slot served its
+    max_tokens."""
+    if not isinstance(item, Mapping) or sorted(item) != list(LENGTH_KEYS):
+        return "window-form: length is not {max_tokens, served, stop}"
+    stop = item["stop"]
+    if not isinstance(stop, str):
+        return "window-form: length's stop is not a string"
+    if stop != STOP_FIXED:
+        return f"window-form: eos-keyed-row: the stop mode is {stop}, not {STOP_FIXED} (ignore_eos)"
+    m, served = _nats(item["max_tokens"]), _nats(item["served"])
+    if m is None or served is None:
+        return "window-form: length's max_tokens and served are not lists of natural numbers"
+    if m != list(max_tokens):
+        return f"window-form: max-tokens: registered {m}, the verifier's {list(max_tokens)}"
+    if len(served) != len(m):
+        return f"window-form: length-mismatch: {len(served)} slots served, not {len(m)}"
+    for i, (s, n) in enumerate(zip(served, m)):
+        if s != n:
+            return f"window-form: length-mismatch: slot {i} served {s} tokens, not its max_tokens {n}"
+    return None
 
 
 # ---- the entry row ----------------------------------------------------------------------------------------------------------
@@ -660,8 +763,66 @@ def public_inputs(registration: Mapping[str, Any], drawn: Sequence[int], sigma: 
     return json.dumps(head, sort_keys=True).encode() + b"\n" + body
 
 
-__all__ = ["DEPTHS", "ENTRY_SCHEMA", "Entry", "GRID_BITS", "KINDS", "M_MAX", "PORT", "PUBLIC", "PUBLIC_INPUTS_FORMAT",
-           "PUBLIC_PORTS", "REGISTERED", "T_BITS", "Work", "bucket", "entry_bc", "entry_digest", "entry_leaf", "floor_point",
-           "instance_ts", "k_prime", "layout_problem", "level", "levels", "on_grid", "pad_node", "pass_tiles", "point",
-           "public_inputs", "record_digest", "record_problem", "sampling", "session_cap", "sessions", "side_domain",
-           "side_index", "side_levels", "side_path", "side_row", "tile_at", "tile_in", "tile_read", "tiles", "window_problem"]
+# ---- live windows -----------------------------------------------------------------------------------------------------------
+
+def mode(check: Mapping[str, Any]) -> str:
+    """A window's coin mode (`MODES`), its check item's ``coins``: seeded when the item names none."""
+    return check.get(COINS, "seeded")
+
+
+def live_families(rounds: int) -> tuple[tuple[str, int], ...]:
+    """A live epoch's coin layout: its salt coin, its draw coin and `rounds` round coins, the most rounds a window takes."""
+    return ((SALT, 1), (DRAW, 1), (ROUND, rounds))
+
+
+def live_challenger(epoch: int, rounds: int, entropy: Callable[[int], bytes]) -> Ch.LiveChallenger:
+    """A live epoch's challenger, its coins and hm96 salts drawn from `entropy`: a served one's is the Lean verifier of
+    record's (`verifier.coins`, `IO.getRandomBytes`, A3)."""
+    return Ch.LiveChallenger(LIVE_SCHEME, epoch, live_families(rounds), entropy)
+
+
+def live_epoch_reason(commitment: Ch.LiveCommitment) -> str | None:
+    """Why `commitment` is not a live epoch's coin commitment (`LIVE_SCHEME`, `live_families`); None when it is."""
+    if commitment.scheme != LIVE_SCHEME:
+        return f"the coin commitment's scheme is {commitment.scheme}, not {LIVE_SCHEME}"
+    f = commitment.families
+    if len(f) != 3 or f[0] != (SALT, 1) or f[1] != (DRAW, 1) or f[2][0] != ROUND:
+        return "the coin commitment's coins are not a live epoch's: one salt, one draw, then the rounds'"
+    return None
+
+
+#: a Pearl-C pass's live layout: its salt coin alone, so a session reserved with it is complete exactly when it released
+#: that coin
+SALT_FAMILIES = ((SALT, 1),)
+
+
+def salt_epoch_reason(commitment: Ch.LiveCommitment) -> str | None:
+    """Why `commitment` is not a Pearl-C salt session's coin commitment (`LIVE_SCHEME`, `SALT_FAMILIES`); None when it
+    is."""
+    if commitment.scheme != LIVE_SCHEME:
+        return f"the coin commitment's scheme is {commitment.scheme}, not {LIVE_SCHEME}"
+    if commitment.families != SALT_FAMILIES:
+        return "the coin commitment's coins are not a Pearl-C salt session's: its salt coin alone"
+    return None
+
+
+def rounds_reason(commitment: Ch.LiveCommitment, roots: Sequence[bytes], openings: Sequence[Ch.LiveOpening]) -> str | None:
+    """Why `openings` are not a live window's round coins over the round roots the verifier recorded, `roots` in order:
+    round r's coin opened once, after round r's root, and every recorded round's coin opened; None when they are."""
+    return live_epoch_reason(commitment) or Ch.order_reason(commitment, ROUND, roots, openings)
+
+
+def round_key(commitment: Ch.LiveCommitment, coin: bytes, r: int, root: bytes) -> Key:
+    """Round r's noise key, from its opened coin and the round's root: no Fiat–Shamir over the prover's roots."""
+    return derive(coin, ROUND_NOISE_DOMAIN, {"coins": commitment.root, "epoch": commitment.epoch, "root": root, "round": r})
+
+
+__all__ = ["COINS", "DEPTHS", "DRAW", "ENTRY_SCHEMA", "EPS_BITS", "Entry", "GRID_BITS", "KINDS", "LEGACY_REGISTERED",
+           "LENGTH_KEYS", "LIVE_SCHEME", "MODES", "M_MAX", "PORT", "PUBLIC", "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS",
+           "REGISTERED", "ROUND", "ROUND_NOISE_DOMAIN", "SALT", "SALT_FAMILIES", "STOP_FIXED", "T_BITS", "Work", "bucket",
+           "entry_bc", "entry_digest", "entry_leaf", "eps_at", "floor_point", "instance_ts", "k_prime", "layout_problem",
+           "length_item", "length_problem", "level", "levels", "live_challenger", "live_epoch_reason", "live_families",
+           "mode", "on_grid", "pad_node", "pass_tiles", "point", "public_inputs", "record_digest", "record_problem",
+           "round_key", "rounds_reason", "salt_epoch_reason", "sampling", "session_cap", "sessions", "side_domain",
+           "side_index", "side_levels", "side_path", "side_row", "tile_at", "tile_in", "tile_read", "tiles",
+           "window_problem"]

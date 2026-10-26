@@ -19,10 +19,10 @@ from verity.ml.circuits import codec
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import mufu as MU
 from verity.ml.circuits.ops.boolean import gemm as BG
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.registry import mla as M
-from verity_vllm.program.registry import mla_capture as MC
-from verity_vllm.program.registry import mla_check as MK
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.registry import mla as M
+from verity_vllm.program import mla_capture as MC
+from verity.ml.definitions.registry import mla_check as MK
 
 U16, U32 = np.uint16, np.uint32
 HOP = BG.HopperBF16WgmmaDot16
@@ -42,9 +42,9 @@ PINS = {
     "MoeSharedCombineElement_v1{RSF=1072064102}":
         (1579, 2395, 239, "1d96a928f481d0ad9692c7b39f8e1b799f6b8b52861ae0fdc79847a9e722869598f2e3546c57d733a5532f19e4e10f3cc02de3944667f217286e3b953b92dddd"),
     "TritonMlaBlock_v1{DL=16,DR=16,NVIS=2,BN=32,SCALE=1031798784,DOT=HopperBF16WgmmaDot16_v2}":
-        (361161, 696299, 33251, "3d68126c42ced14d453378adf58424a0cbb41dc0d7e130791cb2b198ddee930270d8faea29037a6cc38c19ea0d562c4c22e60a955e8467f57c0a7b8dd8c61c7b"),
+        (361161, 696299, 33251, "b23c13b1729f932adaa8fd230127d1da8413ae15aa1aa124c7b318f78cef1a5a2f3fa61152ca28d8d10c7432cbe5b19df9b5b391484a2a3d2b3618e508d3fc10"),
     "TritonMlaDecode_v1{H=1,T=2,DL=16,DR=16,BN=32,SPLITS=1,SCALE=1031798784,DOT=HopperBF16WgmmaDot16_v2}":
-        (410701, 790157, 37510, "60189d9b465d3b237d40ebb4788e73bccf3f9b4e3ed53ec7a8504d30dc1c382a62806e9225ebc4b09054bf727fb30fcf0a2353a7c97f2c6690439e66a8099700"),
+        (410701, 790157, 37510, "eb46a010deec1ec522b20913ecb719f27716feefcf03ee80863f5be8baf5e048ebd69d320742c642f073ca96755e87d42e634e489c2a9ecf2302d2cb88a8b0da"),
     "MlaBmm_v1{NHEADS=2,K=32,N=3,DOT=HopperBF16WgmmaDot16_v2}":
         (94860, 181176, 9222, "732c8e4c85ba6e3c6128c9ae72f73ae40ad5ab509154829b0a440f5cb06f6edaec2f15dfae461612bd285421e4bbd6a8cba91ef6b4ae0d27d9e82d9613e08fcc"),
     "MoeSharedCombine_v1{H=8,RSF=1072064102}": (12632, 19160, 1912, "8ada4e2f0dbaaa72f92b78bdf6b64ffd0211a1eae36a28023e3d0c502527e59169532c6bf51f26dc9025fa565b2f64ff5df4ad286bbb83698145ff63df534e7b"),
@@ -155,7 +155,6 @@ def test_decode_agrees_with_the_model(T: int, kind: str) -> None:
     _agree_decode(T, kind)
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("T", [2, 16, 17, 31, 32, 64, 65])
 @pytest.mark.parametrize("kind", ["spread", "large", "special", "uniform", "tiny"])
 def test_decode_agrees_with_the_model_at_every_mask_shape(T: int, kind: str) -> None:
@@ -177,8 +176,7 @@ CAPTURED = [
 ]
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize("case,b,digest", CAPTURED, ids=[f"T={c['seqlens'][b]}" for c, b, _ in CAPTURED])
+@pytest.mark.parametrize("case,b,digest", [*CAPTURED[:2], pytest.param(*CAPTURED[2], marks=pytest.mark.slow)], ids=[f"T={c['seqlens'][b]}" for c, b, _ in CAPTURED])
 def test_decode_reproduces_the_captured_hardware_output(case: dict, b: int, digest: str) -> None:
     """`TritonMlaDecode_v1` at GLM-4.7-Flash's statics (20 heads, 512 + 64 latent, sm_scale 2^-4) on a captured request: its
     output words hash to what the RTX PRO 6000 (sm_120) wrote. The only check of the Definition itself at the served widths,
