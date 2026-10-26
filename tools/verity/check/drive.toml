@@ -18,8 +18,10 @@ regenerate_locks = true
 # ready PRs to put at the bottom of `next`, in this order, ahead of members that keep their place (a fix the next train needs)
 first = []
 # scripts each PR passes, run from `main` as `python3 PATH MAIN TOP --json`: TOP is its head at the ready mark's preflight, and
-# its merge onto `next` at the sync, which leaves out what they refuse (26 Oct: #4238's merge took AGENTS.md over its cap)
-landing_gates = ["tools/verity/check/gates/markdown_caps.py"]
+# its merge onto `next` at the sync, which leaves out what they refuse (26 Oct: #4238's merge took AGENTS.md over its cap); the
+# vLLM integration's lint ratchets don't grow, and a change to a lint is judged like source (Daniel's delegation to the vLLM
+# coordinator, 25 Oct 09:40Z)
+landing_gates = ["tools/verity/check/gates/markdown_caps.py", "integrations/vllm/tools/ratchet_gate.py"]
 # how `next` lands: "review", each member on a reviewer's land verdict (`research queue review`), a Lean change once a Lean check
 # passed, and the full check after landing, which reverts what it fails (Daniel, 24 Oct 06:05Z); "check", each train on its check
 land = "review"
@@ -32,7 +34,3 @@ nonlean_first = true
 # the per-PR landing in shadow beside the trains (`research.drive`): at most this many of its checks at once, landing and ejecting
 # nothing; 0 is off (`research queue stats --per-pr` reads what it would land)
 per_pr_shadow = 0
-# scripts, as `main` has them, that a PR's head must pass for its ready mark to count and for the sync to merge it onto `next`
-# (`gate_refusal`): the vLLM integration's lint ratchets don't grow, and a change to a lint is judged like source (Daniel's
-# delegation to the vLLM coordinator, 25 Oct 09:40Z)
-landing_gates = ["integrations/vllm/tools/ratchet_gate.py"]
