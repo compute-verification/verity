@@ -204,7 +204,7 @@ def shapeOf (circuitB pubB : ByteArray) (partition : Json) (program : ByteArray)
     throw (s!"rec-inner: the inner circuit's META names R's shape (m {r.m}, claims {r.claims}), and the verifier names " ++
       "no RecSparse shape (--sparse NU,ELL,S_LOG,T_LOG): R opens the sparse phase's claims, so V*'s list would miss RecSparse")
   let i ← (Flock.RecVStar.innerOf circuitB pubB (some partition) (some program) false).mapError (s!"rec-inner: " ++ ·)
-  pure { i with sparse := none, stacked := none }
+  pure { i with holo := false, sparse := none, stacked := none }
 
 /-- `flock-verify`'s `registeredFile` on a canonical object: the ports, whether the file is complete, the known rows
 and the template parameters the ports read. -/
@@ -344,6 +344,23 @@ where
 inner record drew (`unit_draw.units`), ascending (`OneStageZk.provedUnits`). -/
 def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := OneStageZk.provedUnits pubB record
 
+/-- A part's verdict as the audit's verdict reports it. -/
+def partJson (x : String × V Unit) : Json :=
+  Json.mkObj [("statement", Json.str x.1), ("accepted", Json.bool x.2.toBool),
+    ("why", Json.str (match x.2 with | .ok () => "" | .error e => e))]
+
+/-- The audit's verdict of record: accepted or not, the session, the first part's refusal, the units it proved, each
+part's verdict and the inner program's digest. -/
+def verdictJson (ok : Bool) (session why : String) (units : Array Nat) (parts : Array Json) (programSha : Option String) :
+    Json :=
+  Json.mkObj ([("accepted", Json.bool ok), ("of_record", Json.bool true), ("session", Json.str session),
+    ("why", Json.str why), ("units", natsJson units), ("parts", Json.arr parts)] ++
+    (match programSha with | some h => [("program_sha512", Json.str h)] | none => []))
+
+theorem verdictJson_accepted (ok : Bool) (session why : String) (units : Array Nat) (parts : Array Json)
+    (programSha : Option String) : getD (verdictJson ok session why units parts programSha) "accepted" = .bool ok := by
+  cases programSha <;> rfl
+
 /-- The audit's one verdict of record, `flock-verify/<session>`, with the units an accepted one proved and each part's
 verdict. A refusal where the inputs refuse before any session, or where an accepted session's inner program is not the
 partition object's, or its proved units are not the evidence's. -/
@@ -366,11 +383,7 @@ def verdicts (o : Own) (session : String) (pr : Proofs) (provedUnits? : Option (
     else pure #[]
   if let some want := provedUnits? then
     if ok && units.qsort (· < ·) != want then throw "the units the recursive session proved are not the evidence's proved_units"
-  let partJ := parts.map fun (nm, v) => Json.mkObj [("statement", Json.str nm), ("accepted", Json.bool v.toBool),
-    ("why", Json.str (match v with | .ok () => "" | .error e => e))]
-  pure #[(s!"flock-verify/{session}", Json.mkObj ([("accepted", Json.bool ok), ("of_record", Json.bool true),
-    ("session", Json.str session), ("why", Json.str why), ("units", natsJson units), ("parts", Json.arr partJ)] ++
-    (match programSha with | some h => [("program_sha512", Json.str h)] | none => [])))]
+  pure #[(s!"flock-verify/{session}", verdictJson ok session why units (parts.map partJson) programSha)]
 
 def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
