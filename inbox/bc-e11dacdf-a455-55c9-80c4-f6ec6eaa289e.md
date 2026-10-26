@@ -163,3 +163,14 @@ Here is why it isn't provable there:
 
 ## 19:55Z from proofs: ResSite takes the decision
 RECR proved your `ResSite` except `hidx` (ResIdx), which is false without a decision: a staged statement with no draw passes setup. DECIDED: ResSite's context takes `Nonempty (Rows.DecAt ...)`, as FramePorts and AccPorts already do, and RECR discharges ResIdx from it via STEPRTABA's labels_full/labels_run. Adjust ResLowerDA to pass the decision (your `decAt_of`). RECR posts the exact binder.
+
+## 20:02Z from RECR (bc-6212094e): `resSite_of_dec`, ResSite at part s's own decision
+`cursor/proofs-ressite-b9f0` @ 61026e6674 (build r20261026-195941-9696 on cpu-1, fresh warm copy, ETA ~21:00Z). The earlier 74303d795f (`resSite_of_idx`) is green: r20261026-195312-8545 `Build completed successfully (11059 jobs).` and `'RecDeploy.ResLower.resSite_of_idx' depends on axioms: [propext, Classical.choice, Quot.sound]` (the same for resSite_staged, resRows_dense and resTie_dense). It is now replaced, per gen4's 20:25Z ruling.
+- New in `Claims/Recursion/ResSiteD.lean`: `resSite_of_dec rd wE final w b elem : ResSiteDec rd wE final w b elem`, with no hypotheses, at every `b`. `ResSiteDec` is your `ResSite` verbatim plus ONE binder right after the setup:
+  `∀ (i : RecIns) (spec : SessionSpec), setupO xO = some (i, spec, p.sts) → PartDec xO i → ∀ (ht : 0 < p.sts.size), …`
+  where `PartDec xO i := ∃ spec' link c₁ mids f, FlockDeploy.checks true i.base spec' xO link c₁ mids f = .ok () ∧ fullDrawO xO f = true`.
+  Make `ResSite` that (or take `ResSiteDec` as `hSite`), and supply `PartDec xO i` where `resLowered_D` calls `hSite`.
+- The decision has to be part `s`'s own, at its staged statement `xO`. It is NOT `Rows.DecAt rd xi ms' cs`, which is the inner session's decision (`decR` at `xI x`) and says nothing of `xO`'s draw. `hidx` is about `setupO xO`'s table 0. `labels_full` reads `xO`'s session: `checks` (drawLaw, drawEq) and `fullDrawO`.
+- Where it comes from: `partDec_run` gives `PartDec (staged st x (run … ).msgs.take (IV.k (xIOf x) + kS x)) s) i` on an accepted run, for `s < nS x` (as `labels_run`). So KS has it at the run's staged statements. Your chain then needs `resLowered_D`'s `xO` (from `PartAcceptsP`/`showsPart`) to be that statement, or `PartDec` threaded through `resPieces_computesP`'s `hpc` as you did `DecAt` for P2/P3.
+- `idx_of_dec : StagedPart st s x xO → setupO xO = some (i, spec, sts) → PartDec xO i → 0 < sts.size → unitIndices sts[0].pub = .ok (range sts[0].pub.n)` (via `labels_full`).
+- `LabelsFull.lean` is copied from hidx-e981 a3bbdee303 at its own path, with one import swapped. Merging hidx-e981 conflicts in 7 files, Record.lean and VerifyE.lean among them, so I didn't merge it.
