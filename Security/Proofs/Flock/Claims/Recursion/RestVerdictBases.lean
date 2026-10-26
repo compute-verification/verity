@@ -213,7 +213,7 @@ theorem decR_hashLen {x : Msg} {as : List Msg} {cs : List Coin} {d : DecR} (h : 
   obtain ⟨⟨s, spec, sts⟩, c₁, r₀, rss, fl, link, pf, h1, -, -, -, -, -, rfl⟩ := FlockDeploy.decR_some h
   dsimp only at hpi hk hps ⊢
   have hs : s.setup = .ok (spec, sts) := (FlockDeploy.setupOf_some h1).2
-  have h' := FlockDeploy.Ins.setup_read (zk := false) hs
+  have h' := FlockDeploy.Ins.setup_read hs
   unfold Readable.Read.setup at h'
   rw [hpi] at h'
   have hj : k / 2 < sts.size := by omega

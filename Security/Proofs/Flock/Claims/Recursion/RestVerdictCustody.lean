@@ -461,7 +461,7 @@ theorem custody_decR {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : 
   have htn : spec.tables.toList.Nodup := KS.tables_nodup hs hpi
   have hnd := KS.repNames_nodup htn
   have hts : spec.tables.size = sts.size := by
-    have h' := Ins.setup_read (zk := false) hs
+    have h' := Ins.setup_read hs
     unfold Readable.Read.setup at h'
     rw [hpi] at h'
     exact (FlockComplete.ZkTables.setupTables_size h').2.2
