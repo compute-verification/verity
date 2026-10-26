@@ -7,14 +7,14 @@ import Definitions.NetworkCertifier.Run
 Definitions only. The record the deployed network certifier writes, as a `TapRecord` format
 (`Definitions.NetworkCertifier.Tap`): the egress record of `verity/core/protocols/certifier/warden.py`, whose rows
 `verity/core/protocols/certifier/warden_rows.py` commits. Bucket `b`'s row holds the frames of every connection live in
-it, connection by connection in ordinal order (`conns`), each frame naming its connection (`rowFrames`): `r` padding
+it, connection by connection in ordinal order (`conns`), each frame naming its connection (`bucketFrames`): `r` padding
 frames a bucket from the connection's admission to `adm c + D`, then its lane's cells in their bucket, in order. The
 frames fill the row's first slots, each encoded as a `List Bool` (`enc`), and a slot no connection holds is empty
 (`none`: the Python record's `None`, `B` zero bytes in its rows). Window `i` of the monitoring period's `n` windows of
 `T` buckets is buckets `i·T … i·T + T − 1`, on one egress link (`link`); a bucket's jitter class and statuses are the
 network certifier's, from anything it saw.
 
-Read back (`readLanes`), connection `c`'s cell `j`, for `j < cells c`, is the `(j mod r)`-th of its frames in bucket
+Read back (`lanesOfRows`), connection `c`'s cell `j`, for `j < cells c`, is the `(j mod r)`-th of its frames in bucket
 `adm c + D + ⌊j/r⌋`: `cells c` is the lane's length through its last bucket. A schedule fits the format
 (`RowsFormat.Fits`) when its lanes' cells fall in the monitoring period's buckets and no bucket holds more than `S`
 frames, which the network certifier's admission keeps (at most `lanes` connections a bucket, `r` frames each, and
@@ -38,13 +38,13 @@ def laneFrames (s : WardenSchedule κ) (v : κ → List (ℕ × CellView Cell)) 
 
 /-- **Bucket `b`'s row of frames**: each connection's frames in the bucket (`laneFrames`), connection by connection in
 the order `conns` (the ordinals), each frame naming its connection. -/
-def rowFrames (conns : List κ) (s : WardenSchedule κ) (v : κ → List (ℕ × CellView Cell)) (b : ℕ) :
+def bucketFrames (conns : List κ) (s : WardenSchedule κ) (v : κ → List (ℕ × CellView Cell)) (b : ℕ) :
     List (κ × CellView Cell) :=
   conns.flatMap fun c => (laneFrames s v c b).map (c, ·)
 
 /-- **The lanes read back** from rows of frames under the schedule: connection `c`'s cell `j`, for `j < cells c`, is the
 `(j mod r)`-th of its frames in its bucket `adm c + D + ⌊j/r⌋`. -/
-def readLanes [DecidableEq κ] (s : WardenSchedule κ) (rows : ℕ → List (κ × CellView Cell)) (c : κ) :
+def lanesOfRows [DecidableEq κ] (s : WardenSchedule κ) (rows : ℕ → List (κ × CellView Cell)) (c : κ) :
     List (ℕ × CellView Cell) :=
   (List.range (s.cells c)).map fun j =>
     (s.bucket c j, (((rows (s.bucket c j)).filterMap fun f => if f.1 = c then some f.2 else none)[j % s.r]?).getD .pad)
@@ -75,12 +75,12 @@ def Wf : Prop :=
   F.conns.Nodup ∧ (∀ c, c ∈ F.conns) ∧ ∀ x, F.dec (F.enc x) = some x
 
 /-- **The record** over `n` windows of `S` slots: window `i`'s step `t` is bucket `i·T + t`, whose row on the link holds
-the bucket's frames (`rowFrames`) in its first slots, encoded, and nothing in the rest; every other link's row is
+the bucket's frames (`bucketFrames`) in its first slots, encoded, and nothing in the rest; every other link's row is
 empty. -/
 def record (S n : ℕ) (s : WardenSchedule κ) (a : κ → Arrivals Cell) (v : κ → List (ℕ × CellView Cell)) :
     Fin n → List (Obs L K S) :=
   fun i => (List.range F.T).map fun t =>
-    { rows := fun ℓ σ => if ℓ = F.link then ((rowFrames F.conns s v (i * F.T + t))[σ.val]?).map F.enc else none
+    { rows := fun ℓ σ => if ℓ = F.link then ((bucketFrames F.conns s v (i * F.T + t))[σ.val]?).map F.enc else none
       jitter := F.jitter s a (i * F.T + t)
       status := F.status s a (i * F.T + t) }
 
@@ -92,10 +92,10 @@ def frames {S n : ℕ} (o : Fin n → List (Obs L K S)) (b : ℕ) : List (κ × 
     | none => []
   else []
 
-/-- **The read**: the lanes read back (`readLanes`) from the frames off the record. -/
+/-- **The read**: the lanes read back (`lanesOfRows`) from the frames off the record. -/
 def read [DecidableEq κ] {S n : ℕ} (s : WardenSchedule κ) (o : Fin n → List (Obs L K S)) :
     κ → List (ℕ × CellView Cell) :=
-  readLanes s (F.frames o)
+  lanesOfRows s (F.frames o)
 
 /-- **A schedule fits the format** over `n` windows of `S` slots: every cell of every lane is in one of the monitoring
 period's `n·T` buckets, and no bucket holds more than `S` frames. -/

@@ -49,7 +49,7 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                record (tapCode)
 ../../Definitions/NetworkCertifier/RecordRows.lean  trusted: the network certifier's record as the Python one writes it
                                (RowsFormat): a row a bucket of frames that name their connections, in ordinal order
-                               (rowFrames), the lanes read back from them (readLanes), and the schedules it holds (Fits)
+                               (bucketFrames), the lanes read back from them (lanesOfRows), and the schedules it holds (Fits)
 ../../Definitions/NetworkCertifier/Guarantees/Warden.lean  trusted: the warden's channel bound (the client's view factors through
                                the fail cells, its count, and the whole run's bound with the advice string and content)
 ../../Definitions/NetworkCertifier/SampledCharge.lean  trusted: what the faulty units add under a sampled audit: their
