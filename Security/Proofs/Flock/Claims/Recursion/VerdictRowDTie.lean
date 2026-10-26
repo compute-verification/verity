@@ -253,27 +253,28 @@ theorem shape?_ok {m k c : ℕ} {sh : Shape} (h : RecResiduals.shape? m k c = so
 /-! ## The position tie -/
 
 /-- **Check 5's inner session is the inner statement at the coins** (`InnerCoinsR`): at a V\* statement `xO` part `s`
-stages at `x` and shows the coins `c` at, wherever check 5 loads a table's inner session from its source, the session
-is the inner statement's table 0 (its `m` and `k_log`), its extra claims are the table's at the first coin's link points,
-and each rep's rounds are `canonRounds` of the coins after the link, as row D's readers take them. This is the coin
-side of check 5 at every value it registers (`staged_rep_drawn` is its round-by-round form). -/
+stages at `x` and shows the coins `c` at, where check 5 loads the staged table's (table 0's) inner session from its
+source, the session is the inner statement's table 0 (its `m` and `k_log`), its extra claims are the table's at the
+first coin's link points, and each rep's rounds are `canonRounds` of the coins after the link, as row D's readers take
+them. This is the coin side of check 5 at every value it registers (`staged_rep_drawn` is its round-by-round form). -/
 def InnerCoinsR (untr : TrReader) (b : Brings) (Bk : Msg → ℕ) (s : ℕ) (x : Msg) (c : ℕ → Coin) : Prop :=
   ∀ (xO : Msg), showsPart untr b s x xO c → ∀ (i : RecIns) (spec : SessionSpec) (sts : Array Stmt),
-    setupO xO = some (i, spec, sts) → ∀ t (_ : t < sts.size) (f : RecCoins.Source) (inn : RecCoins.Inner),
-      RecCoins.Source.atC3 i.src i.inner i.commits = some f → f.load sts[t].c.unit.name = .ok inn →
+    setupO xO = some (i, spec, sts) → ∀ (_ : 0 < sts.size) (f : RecCoins.Source) (inn : RecCoins.Inner),
+      RecCoins.Source.atC3 i.src i.inner i.commits = some f → f.load sts[0].c.unit.name = .ok inn →
       ∃ v, setupOf false (xIOf x) = some v ∧ inn.m = (tabsOf v.2.2)[0]!.m ∧ inn.kLog = (tabsOf v.2.2)[0]!.kLog ∧
         inn.extras = (tabsOf v.2.2)[0]!.extra (pointsOf v.2.1 (((List.range (Bk (xIOf x))).map c).headD default)) ∧
         ∀ r < 2, inn.rounds r = .ok (canonRounds v.2.1 v.2.2 ((List.range (Bk (xIOf x))).map c).tail.dropLast r)
 
 /-- **The position tie** (`PosTieR`, the coin side of `CopyDirsTieR`): at a V\* statement `xO` part `s` stages at `x`
-and shows the coins `c` at, wherever check 5 loads a table's inner session from its source and builds `rec-open`'s
-rows at the level part's `LANES`, `HH` (`openRows`), the `dirs` row of a piece `ownQR` gives part `s`, instance
-`rep · q + query` (check 5's order, `copyAtR`'s), is the low `HH` bits of the position `posAt` reads off the coins. -/
+and shows the coins `c` at, where check 5 loads the staged table's (table 0's) inner session from its source and
+builds `rec-open`'s rows at the level part's `LANES`, `HH` (`openRows`), the `dirs` row of a piece `ownQR` gives part
+`s`, instance `rep · q + query` (check 5's order, `copyAtR`'s), is the low `HH` bits of the position `posAt` reads off
+the coins. -/
 def PosTieR (untr : TrReader) (b : Brings) (pieces : Msg → List OpenPiece)
     (posAt : Msg → List Coin → OpenPiece → ℕ) (Bk : Msg → ℕ) (s : ℕ) (x : Msg) (c : ℕ → Coin) : Prop :=
   ∀ (xO : Msg), showsPart untr b s x xO c → ∀ (i : RecIns) (spec : SessionSpec) (sts : Array Stmt),
-    setupO xO = some (i, spec, sts) → ∀ t (_ : t < sts.size) (f : RecCoins.Source) (inn : RecCoins.Inner),
-      RecCoins.Source.atC3 i.src i.inner i.commits = some f → f.load sts[t].c.unit.name = .ok inn →
+    setupO xO = some (i, spec, sts) → ∀ (_ : 0 < sts.size) (f : RecCoins.Source) (inn : RecCoins.Inner),
+      RecCoins.Source.atC3 i.src i.inner i.commits = some f → f.load sts[0].c.unit.name = .ok inn →
       ∀ (r : XR) (ss : Array VStar.Stmt) (lv LANES HH n : ℕ), readX x = some r →
         _root_.Flock.RecVStar.statements r.shape = .ok ss → ss[s]? = some (.recOpen lv LANES HH n) →
       ∀ (cr dr : Array (Array ℕ)), openRows inn LANES HH = some (cr, dr) →
@@ -287,8 +288,8 @@ theorem posTieR_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPie
     {x : Msg} {c : ℕ → Coin} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) (hR : PiecesInRangeR pieces)
     (hI : InnerCoinsR untr b Bk s x c) : PosTieR untr b pieces posAt Bk s x c := by
-  intro xO hsh i spec sts hsu t ht f inn hf hload r ss lv LANES HH n hr hss hsv cr dr hop q hq ho
-  obtain ⟨v, hv, hm, hk, hex, hrd⟩ := hI xO hsh i spec sts hsu t ht f inn hf hload
+  intro xO hsh i spec sts hsu ht f inn hf hload r ss lv LANES HH n hr hss hsv cr dr hop q hq ho
+  obtain ⟨v, hv, hm, hk, hex, hrd⟩ := hI xO hsh i spec sts hsu ht f inn hf hload
   obtain ⟨sh, extras, l, r0, r1, halg, hl, h0, h1, rfl⟩ := openRows_dirs hop
   obtain ⟨hext, hsh'⟩ := algebra_ok halg
   obtain ⟨sch, hsch, hshm, hshk, hshc, hshs, hshh⟩ := shape?_ok hsh'
