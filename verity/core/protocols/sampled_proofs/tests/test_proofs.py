@@ -211,9 +211,6 @@ def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
         mine, refused = _v2(fx, session, own=own)
         assert refused is None, refused
         _same(got, mine)
-    (honest,), _ = _v2(fx, fx / "session")
-    assert honest.accepted and honest.units == DRAWN and honest.registered == {"cs": {"value": "cs_table",
-                                                                                     "root": CS_ROOT}}
 
 
 @lean

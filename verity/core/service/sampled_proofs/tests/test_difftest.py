@@ -1855,9 +1855,9 @@ def _sha(b: bytes) -> str:
 def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     """v2 (`SampledProofs.OneStageZk`, `one_stage.proofs.check_v2`) is v1 with the verdicts its own run of the verifier
     on the proofs. An audit v1 accepts on the verdict its evidence hands in is, in v2: refused for naming verdicts;
-    undecided with them replaced by proofs naming no session (no verifier of record ran); rejected by the session's own
-    verdict when its files are not a statement's; refused when a file it names is in no blob, or its sessions are not
-    the evidence's. `test_proofs.py` holds the verdicts to `verify`'s on a real session."""
+    rejected with them replaced by proofs naming no session (no session proved the units the evidence claims), and by
+    the session's own verdict when its files are not a statement's; refused when a file it names is in no blob, or its
+    sessions are not the evidence's. `test_proofs.py` holds the verdicts to `verify`'s on a real session."""
     s = SETUPS[3]
     law = {"k": 2, "law": "subset"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
@@ -1888,7 +1888,8 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     assert run(evidence | {"proofs": proofs([])}) == (
         "reject", "evidence: the evidence names verdicts: this audit's verdicts are its own run of the verifier on the "
                   "proofs")
-    assert run(base | {"proofs": proofs([])}) == ("undecided", "no verifier of record")
+    assert run(base | {"proofs": proofs([])}) == (
+        "reject", "proofs: the units the sessions proved are not the evidence's proved_units")
     assert run(base | {"proofs": proofs(["s"]), "sessions": ["s"]}) == ("reject", "verdict flock-verify/s did not accept")
     got = run(base | {"proofs": proofs([])}, blobs_=blobs[1:])
     assert got[0] == "reject" and got[1].startswith("proofs: circuit: no blob has the SHA-512"), got
