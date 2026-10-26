@@ -20,7 +20,6 @@
     {"file": "tests/check/test_batch_decomp_e2e.py", "kind": "F401", "symbol": "<module>", "detail": "`tests.observe.test_fold_synthetic._as3` imported but unused"},
     {"file": "tests/check/test_capture_map_versions.py", "kind": "F601", "symbol": "<module>", "detail": "Dictionary key literal `\"rmsnorm-cuda\"` repeated"},
     {"file": "tests/check/test_executed_prefix.py", "kind": "F401", "symbol": "<module>", "detail": "`pytest` imported but unused"},
-    {"file": "tests/check/test_gates_fixtures.py", "kind": "F401", "symbol": "<module>", "detail": "`pytest` imported but unused"},
     {"file": "tests/check/test_gen_adversarial.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.observe.fold.resolver.Compute` imported but unused"},
     {"file": "tests/check/test_param_digests.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 2},
     {"file": "tests/check/test_replay_synthetic.py", "kind": "E731", "symbol": "test_tier_a_covers_every_spec", "detail": "Do not assign a `lambda` expression, use a `def`"},
