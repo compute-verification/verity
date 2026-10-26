@@ -223,7 +223,7 @@ SHAPES = {                     # (K, N, layers): the frozen model, and COVER-ATT
 
 
 def v2_round(card: str, K: int, N: int, L: int, word_bits: int, m: int = M_PREFILL, commit_a: bool = False,
-             built: bool = False) -> dict:
+             built: bool = False, weight_coins: bool = True) -> dict:
     """One prefill call of protocol v2, per MAC in plain INT8 tensor time at η.
 
     Tensor: the product (1) and the four peels, O = T_last − Z_X Uᵀ − V Y_Wᵀ + 256(w_X Eᵀ + X w_Wᵀ). ALU: hashing (S segment words of `word_bits` and O at 32 bits a cell,
@@ -238,7 +238,8 @@ def v2_round(card: str, K: int, N: int, L: int, word_bits: int, m: int = M_PREFI
     S = math.ceil(K / L)
     g_hash = per_comp * per_bit * (S * word_bits + 32) / K
     g_a = per_comp * per_bit * 8 / N if commit_a else 0.0
-    coin_bits = (m + N) * K + 8 * (m + N) * L + S * L * math.log2(L)
+    side = m + N if weight_coins else m
+    coin_bits = side * K + 8 * side * L + (S * L * math.log2(L) if weight_coins else 0)
     g_coin = per_comp * coin_bits / (512 * m * N * K)
     g_rm = RHO_V2 * L / K
     g_wrap = c_op * (P_W + P_X) / 2
@@ -291,6 +292,27 @@ def v2() -> None:
                 tag = "built" if built else ""
                 print(f"  {card:13} {model:16} {wb:5} {budget:6.1%} {s['gamma']:6.2f} {s['gamma_max']:6.2f} "
                       f"{s['h']:5.2f} {s['eps_alg']:7.2%}  K {K} N {N} L {L}: {g:.2f} {tag}")
+
+
+ATT_MODELS = {"Llama-3.1-8B": (128, 4), "Llama-3.1-70B": (128, 8), "DeepSeek-V4-Pro": (512, 128)}  # (d_v, q heads a KV head)
+
+
+def v2_att(budget: float = 0.01) -> None:
+    """ATT's PV with O bound: K = n attended keys, N = d_v, the weight side (Ṽ's dither and noise) streamed once a key
+    and reused by every later query (COVER-ATTN), so a call expands only P̃'s side. At decode m is the KV group's query
+    heads; QKᵀ (K = d_qk) has no L that meets PD2-1's bound, so it stays uncredited."""
+    print(f"\nv2 ATT, PV with O bound (16-bit words, eps_alg budget {budget:.0%}): gamma (L) at n attended keys")
+    for card in V2_CARDS:
+        for model, (dv, group) in ATT_MODELS.items():
+            cells = []
+            for n in (2048, 8192, 32768):
+                pre = v2_pick(card, n, dv, 16, budget, weight_coins=False)
+                dec = v2_pick(card, n, dv, 16, budget, m=group, weight_coins=False)
+                cells.append(f"n {n}: prefill {pre['gamma']:.2f} (L {pre['L']}), decode {dec['gamma']:.2f}")
+            print(f"  {card:13} {model:16} " + "; ".join(cells))
+    for card in V2_CARDS:
+        r = v2_round(card, 128, 4096, 128, 16)
+        print(f"  {card:13} QK^T at K 128 (one segment): eps_alg {r['eps_alg']:.0%} at gamma {r['gamma']:.2f}")
 
 
 def seg_coins() -> None:
@@ -373,4 +395,5 @@ if __name__ == "__main__":
     v1_leaks()
     v2_scan()
     v2()
+    v2_att()
     seg_coins()
