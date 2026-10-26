@@ -45,7 +45,7 @@ VLLM_ENCODED = ROOT.parent.parent / "benchmarks" / "vllm_encoded"
 #: The directory holding ``p2_v1``, P2's encoded weights store (``p2_v1/store.py``) and its CUDA library's wrapper, which
 #: POUS encodes with (`protocols.pous`).
 P2_POUS = ROOT.parent.parent / "benchmarks" / "pous"
-#: The staging decode (``stage.py``, not a package), POUS's decode at use on the GPU.
+#: The staging decode's directory (``stage.py``, loaded as the package ``p2_stage``), POUS's decode at use on the GPU.
 P2_STAGE = ROOT.parent.parent / "benchmarks" / "torch_gpu" / "p2_stage"
 
 
