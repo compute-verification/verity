@@ -280,6 +280,7 @@ import Proofs.Flock.Claims.Recursion.ResSite
 import Proofs.Flock.Claims.Recursion.VerdictRowEOpens
 import Proofs.Flock.Claims.Recursion.LabelsFull
 import Proofs.Flock.Claims.Recursion.VerdictRowECommit
+import Proofs.Flock.Claims.Recursion.VerdictRowEInner
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
