@@ -56,10 +56,12 @@ from typing import Any
 
 from verity_vllm.commit import json_chunks as JC
 from verity_vllm.commit import step_rows
-from verity_vllm.commit.served_record import PORT_NAMES
+from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
 from verity_vllm.config import UsageError
 
 ROWS, V1 = step_rows.NAME, "vllm-v1"
+#: the token budget's floor under rows-sha512: the step-input port's ids fill whole ``step_rows.ROW_BYTES`` rows
+PORT_IDS = step_rows.ROW_BYTES // StepInputPort.IB
 #: the server's Commit schemes, its default first
 SCHEMES = (ROWS, V1)
 #: what a sealed served window's context says it is (`deferred_rows.of_record` reads no Programs of record for it)
@@ -77,9 +79,9 @@ def recorded_scheme(rec: Mapping[str, Any]) -> str | None:
 
 
 def scheme_refusal(opts: Any) -> str | None:
-    """Why ``opts`` can't commit under its scheme (None: it can). rows-sha512 needs the GPU tree and the bench row's manifest.
-    vllm-v1 commits SHA-256, which only a recorded run's readers take, so it only serves again a recorded vllm-v1 run of the
-    same model, the one ``--of-record`` names."""
+    """Why ``opts`` can't commit under its scheme (None: it can). rows-sha512 needs the GPU tree, the bench row's manifest and
+    a token budget of whole step-input port rows (`PORT_IDS`). vllm-v1 commits SHA-256, which only a recorded run's readers
+    take, so it only serves again a recorded vllm-v1 run of the same model, the one ``--of-record`` names."""
     if opts.of_record and opts.scheme != V1:
         return f"--of-record names a recorded {V1} run to serve again under --scheme {V1}, not under --scheme {opts.scheme}"
     if not opts.commit:
@@ -90,6 +92,10 @@ def scheme_refusal(opts: Any) -> str | None:
         return (f"--scheme {ROWS} (the default) commits with the Commit of record's parts, which its bench row's manifest names: "
                 "pass --required-manifest ROW_DIR/manifest.json (and the row's --hidden-so, --norm-tap-so), or --no-commit to serve "
                 "without a Commit")
+    if opts.scheme == ROWS and int(opts.max_num_batched_tokens) % PORT_IDS:
+        return (f"--scheme {ROWS} starts each step's stream with its step-input port, the step's ids in whole "
+                f"{step_rows.ROW_BYTES}-byte rows: pass --max-num-batched-tokens a multiple of {PORT_IDS}, not "
+                f"{opts.max_num_batched_tokens}")
     if opts.scheme != V1:
         return None
     if not opts.of_record:
