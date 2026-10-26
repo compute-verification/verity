@@ -1,5 +1,5 @@
 import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
-import Proofs.Flock.Claims.Recursion.RestReadsAt
+import Proofs.Flock.Claims.Recursion.RestFinal
 import Proofs.Flock.Claims.Recursion.PartsVStar
 import Proofs.Flock.Claims.Recursion.BoundAccepts
 import Proofs.Flock.Claims.Recursion.SlotsCommit
@@ -36,7 +36,7 @@ open Claims (Msg)
 open FlockDeploy (Coin FinalP encNat encBytes encList rowsOf joinR rowsOf_joinR')
 open Claims.Recursion.VStarB
 open RecDeploy.DeployedR
-open RecDeploy.RestRead (DenseX kI lastAt layAt schedBridge finalR_last mapM_map_some)
+open RecDeploy.RestRead (DenseX kI lastAt layAt schedBridge finalR_last)
 open RecDeploy.OpenLower
 open FlockSoundness.Refine (openAt)
 open FlockVBridge.Family (elems bytesAt)
@@ -266,6 +266,11 @@ theorem encLevel_levelSegs (u : Claims.Flock.Wit) (c : Circuit) (q LANES HH k : 
   simp [encList, List.append_assoc]
 
 /-! ## The last message's openings -/
+
+theorem mapM_map_some {α β γ : Type} {f : β → Option γ} {g : α → β} {h : α → γ} (hf : ∀ a, f (g a) = some (h a)) :
+    ∀ l : List α, (l.map g).mapM f = some (l.map h)
+  | [] => rfl
+  | a :: l => by simp [List.mapM_cons, hf, mapM_map_some hf l]
 
 theorem readPieces_cons (p : ℕ × List (Msg × List HmNets.Lin)) (ps : List (ℕ × List (Msg × List HmNets.Lin)))
     (ws : List Claims.Flock.Wit) :
