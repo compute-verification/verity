@@ -447,7 +447,8 @@ class WindowLocate:
     ``Absent(nbytes)`` (zero bytes, a key at or past n), ``Run(name)`` (``n``, the position + 1, one word: a `Position`) and
     ``Registered(value, row, offset, nbytes)`` (bytes of a registered weight). A port of one Registered piece is a registered
     read: its position is the piece's byte offset in the value, ``row * stride(value) + offset``, over the registered row's
-    bytes, which the piece must be exactly. ``Run("token")`` is ingress, which no commitment holds: refused. Coordinates
+    bytes, which the piece must be exactly (``stride`` defaults to one registered row: ``row`` is the registered row, as
+    circuits' `Window.locate` names CMP-160's rows). ``Run("token")`` is ingress, which no commitment holds: refused. Coordinates
     are ``{step, slot, op: the family, unit: the block's index in it}``."""
 
     def __init__(self, window: Any, layout: S.Layout, weights: Mapping[str, Any] | None = None,
@@ -470,8 +471,8 @@ class WindowLocate:
             p = pieces[0]
             e = self.weights[p.value].entry()
             nbytes = e["words"] * e.get("word_bits", REG.WORD_BITS) // 8
-            flat = p.row * (self.stride(p.value) if self.stride else 0) + p.offset
-            if p.nbytes != nbytes or flat % nbytes or (p.row and not self.stride):
+            flat = p.row * (self.stride(p.value) if self.stride else nbytes) + p.offset
+            if p.nbytes != nbytes or flat % nbytes:
                 raise ValueError(f"{port}: {p} is not one whole {nbytes}-byte row of {p.value}")
             return ("registered", p.value, flat // nbytes)
         out: list[Read | Position] = []

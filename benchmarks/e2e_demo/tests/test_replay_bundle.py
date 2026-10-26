@@ -459,9 +459,18 @@ def test_the_window_writers_pieces_build_the_bundle(two_steps) -> None:
     assert _row(doc, STEP1_DRAW[0], "x")["reads"] == want
     with pytest.raises(ValueError, match="in no commitment"):
         wl.locate(B.torch_loop_coords(*w.label(STEP1_DRAW[0])), "", "tok")
-    bad = B.WindowLocate(Writer(), lay, weights)
+    c = {**B.torch_loop_coords(*w.label(STEP1_DRAW[0])), "unit": 3}
+
+    class Rows(Writer):
+        def locate(self, step, slot, family, index, port):
+            value = f"l{layer_of[family]}.{B.LINEAR_NAMES[layer_of[family]]}"
+            return {"wrow": (Registered(value, index, 0, H),), "sw": (Registered(f"{value}.scale", index, 0, 4),),
+                    "half": (Registered(value, index, 0, H // 2),)}[port]
+
+    rows = B.WindowLocate(Rows(), lay, weights)
+    assert [rows.reads(c, "", p) for p in ("wrow", "sw")] == [wl.reads(c, "", p) for p in ("wrow", "sw")]
     with pytest.raises(ValueError, match="not one whole 128-byte row"):
-        bad.reads({**B.torch_loop_coords(*w.label(STEP1_DRAW[0])), "unit": 3}, "", "wrow")
+        rows.reads(c, "", "half")
 
 
 def test_a_tampered_loop_fails_replay(tmp_path) -> None:
