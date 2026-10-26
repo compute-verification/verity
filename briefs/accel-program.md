@@ -1,0 +1,373 @@
+# ACCEL: a minimal accelerator model, and Dither's security under it
+
+Program brief, compute-research lane (coordinator bc-ebc09a9a, handle @compute-research). Written 26 Oct 00:50Z. Every ACCEL
+worker reads all of it, then does its own section. Rules: `briefs/brief-rules.md` on this branch (cloud overrides first).
+
+## 1. The goal (Daniel, 25 Oct; quotes are his)
+
+"We need to develop an elegant, minimalistic accelerator model and we need to prove the security of Dither under it."
+Success is three things:
+
+1. physical assumptions about GPUs, "parameters of which are empirically estimated (e.g. starting just from datasheet
+   speeds/capacities of things)";
+2. a protocol: Dither;
+3. "a proof that under (1) + standard cryptographic assumptions, (2) gives us (1-ε)-work-soundness over a week-long
+   monitoring period", or over the compute of one week of global compute.
+
+**Ruling, binding on every workstream: no algorithmic assumptions.** "The whole point of the physical model of the GPUs
+is to restrict the circuit that the adversary actually runs ... We make no algorithmic assumptions. I just want to make
+assumptions about the physical data flow between things." So no premise of the form "no algorithm does X in less than
+Y". That rules out NaiveOptimal, an A_mm, the circuit class 𝒦 as an assumption, `ChargeVF3j16`, and a per-word work
+premise. The lower bound has to be a **theorem inside the model**. The only trust left:
+
+- that real GPUs obey the model at its stated parameters;
+- standard cryptography: SHA-512 collision resistance, and C-Flock sound and zero-knowledge;
+- live coins from the auditor-trusted challenger.
+
+**The intermediate result he named:** "some GPU model under which we can prove that the naive tiled matrix
+multiplication algorithm is faster than Strassen."
+
+**Wording:**
+
+- Don't use "completeness" for a model property; the word is overloaded.
+- "Known semantics" and "one charge" are protocol-level, not GPU assumptions.
+- Use LaTeX in anything written for Daniel.
+- Say "network certifier", never "warden".
+- Results are per monitoring period over all compute (rule L).
+
+## 2. The draft model (refine it; keep it this small)
+
+A device is \(\mathcal G = (\Sigma, M, R, \rho, \mathcal I, u)\):
+
+- stores \(\Sigma\) (registers and accumulators, shared memory and L1, L2, HBM) with capacities \(M_s\);
+- resources \(R\) (each tensor-core format's pipe, each ALU pipe, each memory path) with rates \(\rho_r\);
+- \(\mathcal I\), the card's whole instruction set, with each instruction's exact semantics and the units \(u_r(i) \ge 0\)
+  it uses of each resource.
+
+The model has two assumptions:
+
+- **(G1) Capacity:** \(\mathrm{held}_s(t) \le M_s\) at every time.
+- **(G2) Rate:** over any interval of length \(T\), \(\sum_{i \text{ run}} u_r(i) \le \rho_r T\) for every \(r\).
+
+The **instance obligation** is that \(\mathcal I\) is the card's whole instruction set and that every parameter is at
+most the data sheet's (or measured, with a run id).
+
+Two data-flow principles restrict the adversary:
+
+- **(P1) Exact products only through fixed operand formats.** Each multiplier unit has an exact domain: operand formats
+  plus the range in which its accumulation is exact.
+  - The INT8 path is s8×s8→s32 at rate \(\rho_8\).
+  - FP16, BF16, TF32, FP8 and FP4 are exact only within stated ranges. `Security/Definitions/Core/TC/*` already
+    transcribes BF16 wgmma accumulation exactly; reuse it.
+  - A wider operand takes \(\lceil w/8 \rceil\) slices per side on the INT8 path.
+- **(P2) A product lives in one accumulator.** Inside an MMA, each multiplier's output is summed into exactly one output
+  element's adder tree. Getting an accumulator's value into any other word costs data movement on the register file,
+  ALU or shared-memory resources, which is (G2) on those resources.
+
+**The elegant target:** P1 and P2 aren't separate axioms but properties of \(\mathcal I\)'s semantics: an MMA's exact
+domain, and its data flow as a reduction tree. Then the whole model is (G1), (G2) and a faithful instruction set, and
+everything is parameterized by \(\theta = (M, \rho, u)\), with the H200 SXM and the RTX PRO 6000 (sm_120) as instances.
+Keep P1 and P2 as named Props only where they can't be derived from the semantics.
+
+## 3. What exists (read it, don't restate it)
+
+**Dither.** Notion `073336e7f7c44d1cb16de39d55025860` ("Dither protocol"). Read the whole page, including top's 23 Oct
+"Extra context" on the 𝒦-machine, the sm_120 machine \(B_\theta\), the `ChargeVF3j16` bridge and Theorem O.
+
+- Protocol: \(\tilde A = A + R\) with \(R \in \{0,1\}^{n\times n}\), and \(\tilde B = B + S\) with
+  \(S_{tj} = U_{j,\,t \bmod L}\) and \(U \in \{\pm1..\pm64\}^{n\times L}\), at \(L = 32\), \(A \le 126\), \(|B| \le 63\).
+- Every 32-step prefix sum is committed through the duo receipt fold, and live draws pick the words to check by
+  zero-knowledge proof.
+
+**Theorem K and Theorem S (proved, within 𝒦).** Theorem K counts by mod-2 rank: each word's cross term has rank \(L\),
+and a product of the covered forms contributes rank ≤ 1 (one-sided, \(p = 0.854\)) or ≤ 2 (affine, \(p = 3/4\)), under
+purity rules. Theorem S pools over instances: \(D = \ln(1/\delta)/(1-p) \approx 190\) at \(\delta = 2^{-40}\).
+
+- `Security/Proofs/Pouw/RelativeSecurity.lean`: `theoremK` (~l.2984), `theoremS_G` (~l.509) and `parity_luck_short`
+  (~l.5712); from ~l.7087, Model B's `machine`, `price120`, `price120θ`, `gridMatMachine120θ` and `serviceFloor_θ`.
+- `Security/Definitions/Pouw/RelativeSecurity.lean`: `OneSided`, `AffProd`, `RunMap`, `ServiceFloor`,
+  `ServiceFloorPerProver` and `breakBound`.
+- `Security/Models/Pouw/Assumptions/RelativeSecurity.lean`: `KScopeAffine` (~l.159), `KScopeOneSided` (~l.189),
+  `ChargeVF3j16` (~l.207) and `ChargeVF3j16Overlap` (~l.339).
+- `Security/Models/Pouw/Guarantees/RelativeSecurity.lean`: the floors, among them `StagedFloorKOneSided`.
+
+**Device models.**
+
+- `Security/Definitions/Accounting/Device.lean`, moving to Core as `Verity.Device` in #4389 (lean's One-vocabulary wave
+  0, branch `cursor/lean-vocab-device-fc8d`). Build on it; don't fork it.
+- `Security/Definitions/Accounting/TS/Sheet.lean`: the data-sheet machine.
+- W1, `Security/Definitions/Pouw/PearlC/W1.lean`: the instruction machine with exact formats; #4448 adds `Fmt.s8`. W1
+  makes oblivious moves free, which contradicts P2: that's the modeling change.
+
+**Measured side.** `benchmarks/pouw/machine_model/` (the census of instruction prices, with the vector of record in
+`data/model.toml`) and `benchmarks/census/hardware.json`.
+
+**The deployed receipt.** `verity/core/protocols/pouw/circuit/segment.py` (`_duo_absorb`, `fold_final`, `fx1_key`) and
+`benchmarks/pouw/served_h1/receipts.py`.
+
+**Paper notes** on Theorem O and its attacks are in `~/.research/notes` (`research notes` CLI):
+
+- `lanes/compute-accounting/20261015T1816Z-draft-rs-lean`
+- `20261016T1135Z-draft-rs-p4-ldmatrix`
+- `20261016T0713Z-draft-e2e-slice`
+- `20261016T0101Z-draft-rs-d2-wide-peel`
+- `20261015T2035Z-draft-cjl-round2`
+- `20261016T0213Z-draft-stride-under-new-prices`
+- `lanes/proofs/20261018T2245Z-draft-appendix-oblivious`
+
+Grep the notes for "Theorem O", "CoincCharged", "P2-FF" and "RS-E-REF". Theorem O is stated as \(c \ge 1-\delta\) given
+CoincCharged\(_\theta\), and \(\tfrac14\) without it. Find out what that \(\tfrac14\) is: it may be the output-bandwidth
+bound in 4(g) below.
+
+## 4. What the coordinator already worked out (start here; check it, don't rediscover it)
+
+**(a) Strassen under P1, in the worst case over int8 inputs.** Each recursion level widens operands by a bit. Of
+Strassen's 7 products, 3 are wide on both sides and 2 on each single side. With \(\lceil w/8\rceil\) slices per side,
+the relative tensor-core cost at depth \(r\) is
+\(E[s_A s_B]\,(7/8)^r\), which is
+
+- 2.5 at \(r = 1\) and \((4 - 4(2/7)^r)(7/8)^r \ge 1.37\) for \(r \le 8\);
+- above 1 up to about \(r = 16\) (a binomial estimate gives ≈ 1.03 at \(r = 16\)), and below 1 from about
+  \(r = 17\), i.e. \(n \gtrsim 4\cdot 10^6\). The coordinator's earlier "≥ 1.06" assumed every product wide on both
+  sides; compute it exactly.
+
+That's before counting any addition. FP16 (11-bit exact, half rate) allows \(r \le 3\) at \(\ge 2(7/8)^3 = 1.34\), and
+BF16 (exact for \(|x| \le 256\), half rate) allows \(r \le 1\) at 1.75. Check every exact path on each card:
+
+- INT8;
+- FP8, with Hopper's limited accumulation precision;
+- FP16, BF16 and TF32;
+- FP4/NVFP4 on sm_120;
+- b1 and INT4 where the ISA still has them.
+
+**(b) P1 isn't enough for Dither.**
+
+- The adversary picks \(A\) and \(B\), and \(A = B = 0\) is admissible. The noise is narrow: \(R\) is bits, and \(U\)
+  is 7-bit.
+- One Strassen level on the cross term \(R\,U^\top\) fits INT8. The R-combinations lie in \(\{-1,0,1,2\}\) and the
+  U-combinations in \([-128,128]\); +128 comes up about once in 16k entries and is fixed by a sparse correction. So
+  depth-1 Strassen needs about 7/8 of naive's tensor-core work.
+- What stops it is P2. Five of the 7 products feed two output blocks, so each level costs \(5n^3/(4L) = 5n^3/128\)
+  extra deliveries, which is 1.25× the honest word count. A delivery costs 0.5–1 IADD3 (an IADD3 has three inputs).
+  One ALU op is about 64 INT8 MACs of time on Hopper: 4096 INT8 MACs per SM per clock at the data-sheet clock,
+  against 64 INT32 lanes.
+- So depth-1 Strassen trades ALU for tensor-core time at roughly 10–19 MAC-times of ALU per MAC saved.
+
+**(c) Linear receipts, checked.**
+
+- duo is nonlinear in each word: \(u = y \oplus p \oplus K\), \(y \leftarrow uK_A + z\), \(z \leftarrow
+  \mathrm{rotl}(u) + y\). So an adversary can't fold Strassen's products into the receipt without forming each word,
+  and the P2 charge stands for duo.
+- Check that xin, fx1 and li are likewise nonlinear in each word, and that the 8 chains can't be merged linearly.
+
+**(d) Theorem O's engine, if every instruction obeys it.** Suppose a product contributes rank ≤ 1 to the mod-2
+bilinear part of each of the \(f_p\) words it feeds. Each word needs rank \(L\), so \(\sum_p f_p \ge n^3\). With a
+delivery price \(d\) in MAC units,
+\[\mathrm{cost} = \#\mathrm{products} + d\sum_p (f_p - 1) \ge \min(1, d)\cdot n^3,\]
+so \(c = 1\) whenever \(d \ge 1\). The research is making "≤ 1 (or 2) rank per word fed" true for every instruction
+in \(\mathcal I\).
+
+**(e) Known threats to (d).**
+
+- *Bitwise ops are cheap mod-2 multipliers.* LOP3 does 32 bit-ANDs a lane, about 2048 per SM per clock against about
+  4096 INT8 MACs.
+- *IMAD packing defeats the mod-2 reduction itself.* Pack 32 R-bits into \(a\) and 32 U-bits reversed into \(b\): bit
+  31 of \(ab\) is \(\sum_i r_i u_i\) plus carries, a whole word's mod-2 form from one IMAD. IMAD.WIDE reaches about
+  1024 pair-terms. Shifts and bit extraction aren't ring homomorphisms mod 2, so Theorem K's technique stops at the
+  ring ops. A potential that sees every bit of the exact word is needed, or a proof that the Boolean glue costs more
+  than it saves: an exact 8×8-bit multiply in LOP3s is about 80 bit-ops, 160× a tensor-core MAC.
+- *Concurrency.* Resources run in parallel, so Strassen's extra additions can run on an idle ALU while the freed tensor
+  cores do other work. The honest Dither kernel is ALU-bound (1.47–1.55× plain INT8, from duo), which is what makes
+  that trade cost wall time.
+- *Packing* narrow products into one int8 lane with spaced accumulation.
+- *Four Russians* for the binary \(R\): table lookups in place of MACs.
+- *Reuse and pre-σ work.* \(AB\) can be computed once for a repeated \((A,B)\). Under rule L, the monitoring period
+  counts all compute on every counted device, so pre-σ work counts. Say how work off the counted devices is handled
+  (the network certifier's \(K\)).
+- *Ballard–Demmel–Holtz–Schwartz:* Strassen moves fewer words than classical, so plain HBM or shared-memory I/O
+  bounds favour Strassen. The leverage has to come from the accumulator level (P2), not from memory traffic.
+
+**(f) What "freed compute" means** (DITHER-THM decides; the lane owns the credit form).
+
+- With parallel resources, a run's time satisfies \(T \ge u_r/\rho_r\) for every \(r\). So for weights \(\lambda\) in
+  the simplex, the priced cost \(\sum_r \lambda_r u_r/\rho_r \le T\), and a passing run \(X\) with concurrent work
+  \(Y\) has \(\mathrm{priced}(X) + \mathrm{priced}(Y) \le T\).
+- The coordinator's recommended definition: no prover strategy gets more credited work plus other work on the period's
+  devices than the honest optimum on the same devices, plus \(\varepsilon C\).
+  - Its LP dual is a price vector \(\lambda\). \(B_\theta\)'s ⅘·B + ⅕·R6 has this form.
+  - Per-resource "tensor-core MACs used ≥ (1−ε)·credited" is the wrong notion, because honest Dither leaves about ⅓
+    of the tensor cores idle.
+- Hypothesis to test: with duo forcing per-word ALU work, ε is governed by the honest kernel's ALU slack over the
+  minimal per-word fold cost \((r_H - r_{\min})\), divided by Strassen's ALU-for-tensor-core exchange rate in (b).
+
+**(g) A fully general but weak bound.**
+
+- The transcript is \(n^3/L\) words of 32 bits, \(n^3\) bits at \(L = 32\), and duo reads each word from a register.
+  So time ≥ \(n^3\) bits divided by the register-file write bandwidth from all units.
+- A k32 INT8 MMA writes 1 bit per MAC of time. Small-k MMAs and the ALU pipes write more in aggregate, so this gives
+  \(c \approx \rho_8/B_{RF}\), perhaps ¼.
+- It covers every instruction with no algebra. Combining it with (d) is a candidate route.
+
+## 5. Workstreams (one cloud worker each)
+
+Every worker owns one Linear sub-issue of the ACCEL parent (ids in its launch message) and comments its status, run ids
+and PRs there. A worker owns only its own files.
+
+### MODEL-SPEC
+
+Write the model as Lean definitions, statement first.
+
+- **The definitions:** \(\mathcal G\), (G1) and (G2), with P1 and P2 derived from the instruction semantics where
+  possible (§2). They go in `Security/Definitions/Core/` on #4389's `Verity.Device`: stack on
+  `cursor/lean-vocab-device-fc8d` until it lands, extend Device rather than forking it, and reuse `Core/TC` for float
+  exactness.
+- **The instances:** the H200 and RTX PRO 6000 as data, with data-sheet placeholders until CALIB delivers.
+- **A non-vacuity witness (rule I):** the honest naive tiled INT8 kernel satisfies the model on the H200 instance at its
+  data-sheet rate.
+- **W1:** say how W1's free oblivious moves map onto P2's priced moves. Don't change W1's readers in this PR.
+- **Size:** count your assumptions. Each one must be a physical data-flow fact about the card, checkable against its
+  documentation or a microbenchmark.
+
+Statement pushed by **Mon 26 Oct 08:00Z**, then stop for the red team.
+
+### NAIVE-STRASSEN
+
+The intermediate result, paper first, then Lean.
+
+- **The theorem:** in the model, for exact int8 matmul in the worst case over inputs, every Strassen–Winograd schedule
+  of depth \(r \ge 1\) takes strictly longer than naive tiled on both instances, up to the stated \(n\). Any mix of exact
+  paths and slicing counts; the bound comes from P1 and G2, before additions.
+- **The generalization:** every integer-coefficient bilinear scheme \(\langle m,k,n\rangle\) of rank \(R\) (Laderman,
+  AlphaTensor's, flip-graph schemes), as one inequality in \(R/(mkn)\) and the operands' coefficient ℓ1 norms.
+- **Its limit:** say exactly where Dither's adversarial-data case escapes the theorem (4b). That case is O-CHARGE's.
+- **Lean:** in `Security/Proofs` (or `Properties`) on MODEL-SPEC's definitions. Until those exist, use a minimal local
+  structure that MODEL-SPEC's definitions will instantiate.
+
+Paper by **Mon 10:00Z**, Lean statement by **Mon 16:00Z**.
+
+### O-CHARGE
+
+Theorem O by P2 charging: every program the model allows that produces Dither's transcript exactly pays at least
+\(c\,n^3\) in priced MAC units, with \(c \ge 1 - \delta_O\), reducing to Theorem K's per-word rank count (4d).
+
+- **Your part:** ring instructions (MMA by format, IMAD as a ring op, IADD3) plus deliveries.
+- **Threats to answer:** 4b, 4c, 4e's concurrency, packing and Four Russians, and 4f's exchange rate.
+- **Protocol changes:** if the bound needs one (a wider \(U\), a different \(L\), a different fold), propose the
+  smallest.
+
+Paper first by **Mon 12:00Z**, the Lean statement after the red team.
+
+### O-BITS
+
+The non-ring half of Theorem O: LOP3, SHF, PRMT, POPC, IMAD's high bits and IMAD.WIDE, BMSK, byte permutes, and table
+lookups through shared memory.
+
+- **The goal:** a progress measure that sees the exact word, not just bit 0 (4e's IMAD packing), together with a proof
+  that each such instruction's progress per priced unit is at most the tensor core's. Or a counterexample, with its cost
+  on the H200 instance.
+- **The weak bound:** work out 4g in full, both as a fallback and as an ingredient.
+
+Paper by **Mon 12:00Z**. You and O-CHARGE meet at one potential function; I relay.
+
+### O-IO
+
+An independent route: a pebbling or data-movement game whose innermost level is the accumulators (P2), with the register
+file, shared memory, L2 and HBM as outer levels at G1's capacities and G2's bandwidths.
+
+- **The bound:** the priced data movement any exact computation of Dither's transcript needs, compared with O-CHARGE's.
+- **Mind 4e's last item:** classical I/O bounds favour Strassen, so the leverage has to come from the accumulator level.
+- **The comparison:** if this game is the cleaner presentation of the model, which is Daniel's "physical data flow", say
+  so.
+
+Paper by **Mon 12:00Z**.
+
+### O-REDTEAM
+
+Break the model and the lower bounds.
+
+- **The threats:** own 4b–4g and find more. For each, give a concrete exact algorithm, its priced cost on the H200
+  instance under G1, G2, P1 and P2, and the principle it violates or exploits.
+- **Checks:** small exact CPU checks run locally (under ~2 GB and ~10 min), and anything larger through `research run`.
+  GPU measurements are batched on the H200 per rule G, only when a paper attack needs one; the demo has priority.
+- **Reviews:** red-team MODEL-SPEC's statement and O-CHARGE's and O-BITS's papers as each lands (I relay them).
+
+First report by **Mon 06:00Z**: the triaged threat list.
+
+### CALIB
+
+\(\theta\) for the H200 SXM (141 GB) and the RTX PRO 6000 (sm_120): every rate and capacity the model reads. Sources go
+in order: data sheet (document and page), then census, then measured run id.
+
+- **Rates:**
+  - tensor-core dense rates per format and shape (k32 against k16);
+  - ALU pipes per SM per clock (IMAD, IADD3, LOP3, SHF, PRMT, dp4a, FFMA);
+  - register-file read and write bandwidth from each unit;
+  - shared memory and L1, L2 and HBM bandwidth.
+- **Capacities and clocks:** register, shared-memory, L2 and HBM capacities, and the clocks, saying which clock the
+  data-sheet TOPS assume.
+- **Exact paths:** which exist on each card (b1, INT4, FP4).
+- **Derived values:**
+  - \(d\), one delivery in INT8 MAC units, by each route;
+  - the ALU-for-tensor-core exchange rate of 4b;
+  - 4g's \(B_{RF}\);
+  - honest duo's ALU ops per word \(r_H\), against your best minimal \(r_{\min}\).
+
+The data goes where layout rule 9 says (census or machine_model), with README tables generated. First table by **Mon
+06:00Z**.
+
+### DITHER-THM
+
+The final guarantee, statement first, with no algorithmic premise. Under (G1), (G2), P1 and P2 at \(\theta\), SHA-512
+collision resistance, C-Flock's soundness and zero knowledge, and live coins from the auditor's challenger, Dither over a
+monitoring period is \((1-\varepsilon)\)-work-sound with \(\varepsilon = f(\theta, \delta, k)\). The terms of
+\(\varepsilon\) are:
+
+- the model's lower-bound slack, from O-CHARGE's and O-BITS's \(c\);
+- sampling luck, \(D/k\);
+- work imported over the network, the network certifier's \(K\).
+
+What the statement must do:
+
+- **Freed compute:** decide and define it (4f), and say why.
+- **Rule L:** state it at a week, a month and a year of an H200 fleet (the census), at \(\delta = 1\%\) and \(10^{-6}\),
+  plus one week of global compute.
+- **Theorem O's slot:** until O-CHARGE's statement exists, it holds a named Prop **inside the model**. Its docstring
+  says it's a theorem to be proved, not an assumption. Never put a premise about algorithms there.
+- **What it replaces:** 𝒦, `ChargeVF3j16` and WORD-WORK's per-word premise. Show the map from today's
+  `StagedFloorKOneSided` and #4363's `H1CheckedCreditPeriod` to it.
+- **A non-vacuity witness (rule I).**
+
+Statement by **Mon 12:00Z**, then stop.
+
+### LIT
+
+Survey what bears on P1, P2 and Theorem O, saying what each result implies for us:
+
+- Hong–Kung and red-blue pebbling; Irony–Toledo–Tiskin; Ballard–Demmel–Holtz–Schwartz, for classical and for Strassen;
+- Raz's bounded-coefficient bound and the Bläser and Landsberg rank bounds (why rank alone can't give \(n^3\)), and the
+  bilinear complexity of \(\langle n, L, n\rangle\) at small \(L\);
+- Strassen on GPU tensor cores, and exact integer Strassen;
+- the Ozaki scheme and INT8 emulation of FP64 (what operand splitting costs);
+- accumulation precision: DeepSeek-V3 on Hopper FP8, and BF16 wgmma;
+- Four Russians, AlphaTensor and flip graphs;
+- proofs of useful work and memory-hard-function lower bounds in pebbling models, the nearest analogues of what we're
+  proving.
+
+A note with citations, plus a one-page "what this means for the model". By **Mon 10:00Z**.
+
+## 6. Coordination
+
+- **Red team:** I red-team every statement before its proof (rule 6). Report to me in your final message, and I relay
+  between workstreams.
+- **Files:**
+  - MODEL-SPEC owns the new module in `Definitions/Core`;
+  - DITHER-THM owns its guarantee module;
+  - NAIVE-STRASSEN, O-CHARGE and O-BITS own their Proofs or Properties modules;
+  - nobody edits another's files;
+  - notes go in `lanes/compute-research/`, as `<UTC>-draft-accel-<name>.md`.
+- **Program targets:**
+  - the model and naive-vs-Strassen proved, in the lock, by Tue 27 Oct;
+  - Dither's theorem stated, with Theorem O's slot named, by Mon 18:00Z;
+  - Theorem O argued on paper, with the red team's verdict, by Tue 27 Oct 12:00Z.
+
+  The 24-hour demo (P-CMP-1) keeps priority on shared machines.
