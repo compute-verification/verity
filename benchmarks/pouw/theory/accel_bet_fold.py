@@ -8,13 +8,16 @@ data sheet (DS-90), and what any fold's term of ε is when the cheater's fold is
 - XC: `y ← y ⊕ w ⊕ w′` (one `LOP3.LUT 0x96`, ½ ALU a word); a dp4a word by `y ← y·K + d` (one IMAD).
 - li (FOLD-LUCK §2, `segment.py` `_li_absorb`): `y ← ((y ⊕ w₀ ⊕ K)·A + w₁)`, A odd (½ ALU + ½ IMAD a word).
 - li-down (FOLD-LUCK §8's candidate): li, then `y ← y + (y >> 16)` (one `IMAD.HI`) before the checkpoint.
-- RA, rotate-add: `y ← rotl(y, s) + w`, and one more `rotl` before the checkpoint. ptxas 12.9 at `-arch=sm_90` emits
-  each step as one `LEA.HI R, y, w, y, s` (rotl then add; the note has the SASS), an integer instruction off IMAD,
-  so DS-90's ALU class (64 a clock): 1 ALU a word.
+- RA, rotate-add: `y ← rotl(y, 1) + w`, then two steps `y ← rotl(y, 1) + c` with constants (`ra_finish`) a chain
+  before the checkpoint, so the last word's top bits reach the low ones. ptxas 12.9 at `-arch=sm_90` emits each step
+  as one `LEA.HI R, y, w, y, s` (rotl then add; the note has the SASS), an integer instruction off IMAD, so DS-90's
+  ALU class (64 a clock): 1 ALU a word.
 - MW, multiply-wide: a two-register state (a, b) takes the pair (w_e, w_o) by `V = a·K + w_e` (64 bits) and
   `(a, b) ← (hi V + b + w_o, lo V)`: one `IMAD.WIDE.U32` with a 64-bit addend (w_e, b + w_o) and one IADD3 a pair,
   then one step with no words before the checkpoint. DS-90 has no IMAD.WIDE line (UNLISTED); `MW_SLOTS` prices it at
   2 IMAD slots, its two 32-bit results, and the table shows 1 beside it.
+- FE, the IMAD pipe alone: `r ← r·K + w` (IMAD), then the Feistel step `(l, r) ← (r, l + hi(r·K′))` (IMAD.HI),
+  2 IMAD a word; RA's design offers it as a second route, for the IMAD pipe RA leaves idle.
 
 **Lemma T** (paper proof in the note; checked below). Call a step triangular (a T-step) if output bit j reads only input
 bits ≤ j, as LOP3, IADD3, IMAD by a constant and XOR all are. A T-step bijective in an input passes a flip of that
@@ -22,14 +25,25 @@ input's top bit to a flip of exactly the output's top bit. So (1) if a word reac
 alone, then C mod 2^(j+1) ignores the word's bits above j, and 2^(j+1)·e_w is in K₊(C_j); (2) if two words meet through
 T-steps before either passes a non-T step, their top-bit pair is in K_⊕ of every component. NCP therefore needs a
 non-T step, bijective in the state, after every word and between any two words of one chain. li, XC and li-down fail
-it, and RA and MW pass it (exhaustively at small widths: `ncp`). NCP is necessary for FOLD-LUCK's slot, not sufficient:
-`ncp` also prints the largest probability that a nonzero change of the words leaves the checkpoint unchanged.
+it; MW and FE pass it at every context checked, and RA at every start state but those with rotl(y0, 1) ≡ 0 mod 2^(W−2)
+(a 2^−30 fraction at 32 bits), exhaustively at small widths (`ncp`). `ncp` also counts NCP⁺'s failures (a component
+whose derivative is constant, 0 or 1, as cheap as an invariant one) and prints the largest probability that a nonzero
+change of the words leaves the checkpoint unchanged. NCP is necessary for FOLD-LUCK's slot, not sufficient.
 
 **The cost floor at L = 32.** RA costs 1 ALU a word, and the ALU retires 64 a clock against the tensor core's 128
 words, so RA alone gives γ ≥ 2 there. MW costs ½ ALU + `MW_SLOTS`/2 IMAD. Among the non-T forms on DS-90's classes
-(`NCP_FORMS`), the most words a clock an NCP fold can absorb is 96 at two IMAD slots for IMAD.WIDE (γ ≥ 4/3), and 128
+(`NCP_FORMS`), the most words a clock an NCP fold can absorb is 96 at two IMAD slots for IMAD.WIDE (γ ≥ 4/3), and 127
 at one. So FOLD-LUCK's budget of 0.54 ALU + 0.54 IMAD a word at L = 32 is met only if IMAD.WIDE with a 64-bit addend
-costs one IMAD slot. At L = 64 RA fits on the ALU alone (γ 1.016).
+costs one IMAD slot. At L = 64 RA fits on the ALU alone.
+
+**Theorem F, the kill** (`barrier`; the proof is in the note). Let T_F(ε) say that every program outputting the receipt
+R_F(A, B, σ) costs at least (1 − ε)·H, H honest's cost, and φ = 1 − 1/γ_plain honest's fold share. (a) Composing any
+program for the words with honest's fold gives one for R_F, so T_F(ε) proves, from θ alone, that every program for the
+words (the exact segment products) costs at least (1 − ε − φ)·H: SAK's content, which R-ACCEL-6 takes as the one
+premise because no proof of it is known. (b) A reduction from SAK that uses a program for R_F only through its outputs
+computes the words from q·32 bits a set of 4096 words and its own work, so it refutes SAK given that much advice. (c)
+Standard crypto binds a receipt only if the checkpoint is a cryptographic primitive, which makes the fold a hash
+(Consequence 2). With sparse checkpoints, T_F uniform in the shape is also a superlinear circuit lower bound for R_F.
 
 **The fold's term of ε** (`table`). Each LP is over one SM-clock at DS-90's rates (`machine_model/data/devices/sm_90/
 sheet.toml`: tensor 4096 s8 MACs, issue 128 lane slots, ALU 64, IMAD 64, SHFL 32, the uniform pipe
@@ -161,26 +175,36 @@ def spec_fe(ws, ctx, W):
     return l ^ r
 
 
+def spec_fa(ws, ctx, W):
+    """FA: FE with the word added, not multiplied in: r ← r + w (IADD3), then the same Feistel step (IMAD.HI)."""
+    m = (1 << W) - 1
+    K2 = top(FE_K, W) | 1
+    l, r = ctx
+    for w in list(ws) + [0]:
+        r = (r + w) & m
+        l, r = r, (l + ((r * K2) >> W)) & m
+    return l ^ r
+
+
 SPECS = {"XC": (spec_xc, 1), "li": (spec_li, 1), "li-down": (spec_li_down, 1), "RA": (spec_ra, 1), "MW": (spec_mw, 2),
-         "FE": (spec_fe, 2)}
+         "FE": (spec_fe, 2), "FA": (spec_fa, 2)}
 
 
 # --------------------------------------------------------------------------------------------------------------------
 # NCP, exhaustively at small widths (FOLD-LUCK §8)
 
-def _span_full(W):
-    """full[mask]: the values whose bits are set in `mask` span F₂^W."""
-    full = np.zeros(1 << (1 << W), dtype=bool)
-    for mask in range(1 << (1 << W)):
-        basis = []
-        for v in range(1 << W):
-            if mask >> v & 1:
-                for b in basis:
-                    v = min(v, v ^ b)
-                if v:
-                    basis.append(v)
-        full[mask] = len(basis) == W
-    return full
+def _odd_masks(W):
+    """For each nonzero S, the 2^W-bit mask of the x with S·x = 1 (W ≤ 6, so a mask fits a uint64)."""
+    assert W <= 6
+    return [np.uint64(sum(1 << x for x in range(1 << W) if (S & x).bit_count() & 1)) for S in range(1, 1 << W)]
+
+
+def _span_full(presence, masks):
+    """The values a presence mask (bit x set when x occurs) holds span F₂^W: no nonzero S is 0 on all of them."""
+    ok = np.ones(presence.shape, dtype=bool)
+    for M in masks:
+        ok &= (presence & M) != 0
+    return ok
 
 
 def ncp(name, W, n, contexts):
@@ -193,11 +217,11 @@ def ncp(name, W, n, contexts):
     idx = np.arange(1 << (W * n), dtype=np.uint64)
     words = [(idx >> np.uint64(W * k)) & np.uint64(m) for k in range(n)]
     C = np.stack([fold(words, tuple(np.uint64(c) for c in ctx), W) for ctx in contexts])
-    full = _span_full(W)
+    masks = _odd_masks(W)
     one = np.uint64(1)
-    out, bad_ctx, P = {}, set(), {}
+    out, bad_ctx, bad_aff, P = {}, set(), set(), {}
     for law in ("xor", "add"):
-        invariant = 0
+        invariant = affine = 0
         P[law] = []
         for d in range(1, 1 << (W * n)):
             if law == "xor":
@@ -207,12 +231,17 @@ def ncp(name, W, n, contexts):
                 for k in range(n):
                     j |= ((words[k] + np.uint64((d >> (W * k)) & m)) & np.uint64(m)) << np.uint64(W * k)
             X = C[:, j.astype(np.int64)] ^ C
-            ok = full[np.bitwise_or.reduce(one << X, axis=1).astype(np.int64)]
+            ok = _span_full(np.bitwise_or.reduce(one << X, axis=1), masks)
             if not ok.all():
                 invariant += 1
                 bad_ctx.update(i for i in range(len(contexts)) if not ok[i])
+            ok_aff = _span_full(np.bitwise_or.reduce(one << (X ^ X[:, :1]), axis=1), masks)
+            if not ok_aff.all():
+                affine += 1
+                bad_aff.update(i for i in range(len(contexts)) if not ok_aff[i])
             P[law].append((X == 0).mean(axis=1))
-        out[law] = {"invariant_d": invariant}
+        out[law] = {"invariant_d": invariant, "constant_derivative_d": affine}
+    out["bad_contexts_constant_derivative"] = [list(map(int, contexts[i])) for i in sorted(bad_aff)]
     good = [i for i in range(len(contexts)) if i not in bad_ctx]
     for law in ("xor", "add"):
         arr = np.stack(P[law])
@@ -224,37 +253,54 @@ def ncp(name, W, n, contexts):
 
 
 def ncp_all(quick):
-    """NCP at (W, n): every context for a one-register state, eight seeded ones for MW's and FE's two registers."""
-    rng = random.Random(0xC4EC)
+    """NCP at (W, n): every context for a one-register state, sixteen seeded ones for a two-register state."""
     cases = [(4, 3)] if quick else [(4, 3), (5, 2), (6, 2)]
     res = {}
     print()
     print("NCP at small widths: the nonzero d (XOR, additive) leaving a component of C invariant for every w at some "
           "context; the contexts where one does; and the largest Pr_w[C(w ⋆ d) = C(w)] at the other contexts")
-    print(f"{'fold':8} {'W':>2} {'n':>2} {'ctx':>4}  {'K⊕ d':>6} {'K₊ d':>6} {'bad ctx':>7}  {'max p ⊕':>8} {'max p +':>8}")
+    print("(NCP⁺ columns: the d giving some component a constant derivative, 0 or 1, and the contexts where one does)")
+    print(f"{'fold':8} {'W':>2} {'n':>2} {'ctx':>4}  {'K⊕ d':>6} {'K₊ d':>6} {'bad ctx':>7}  {'max p ⊕':>8} {'max p +':>8}"
+          f"  {'⁺⊕ d':>6} {'⁺₊ d':>6} {'⁺ ctx':>6}")
     for W, n in cases:
         for name, (_, regs) in SPECS.items():
             if regs == 1:
                 ctxs = [(c,) for c in range(1 << W)]
             else:
-                ctxs = [(rng.randrange(1 << W), rng.randrange(1 << W)) for _ in range(8)]
+                rng = random.Random(f"{name}/W{W}/n{n}")
+                ctxs = [(rng.randrange(1 << W), rng.randrange(1 << W)) for _ in range(16)]
             r = ncp(name, W, n, ctxs)
             res[f"{name}/W{W}/n{n}"] = r
-            fmt = lambda v: "   n/a" if v is None else f"{v:8.4f}"  # noqa: E731
+            fmt = lambda v: "   n/a" if v is None else f"{v:8.4f}"
             print(f"{name:8} {W:2} {n:2} {len(ctxs):4}  {r['xor']['invariant_d']:6} {r['add']['invariant_d']:6} "
-                  f"{len(r['bad_contexts']):7}  {fmt(r['xor']['worst_p'])} {fmt(r['add']['worst_p'])}")
+                  f"{len(r['bad_contexts']):7}  {fmt(r['xor']['worst_p'])} {fmt(r['add']['worst_p'])}  "
+                  f"{r['xor']['constant_derivative_d']:6} {r['add']['constant_derivative_d']:6} "
+                  f"{len(r['bad_contexts_constant_derivative']):6}")
+    clean = lambda r: not r["bad_contexts"] and not r["bad_contexts_constant_derivative"]
     for W, n in cases:
-        g = lambda nm, law: res[f"{nm}/W{W}/n{n}"][law]["invariant_d"]  # noqa: E731
+        g = lambda nm, law, W=W, n=n: res[f"{nm}/W{W}/n{n}"][law]["invariant_d"]
         check(all(g(nm, "xor") > 0 for nm in ("XC", "li", "li-down")),
               f"W={W}, n={n}: XC, li and li-down fail NCP under XOR (the top-bit pair, Lemma T (2))")
         check(all(g(nm, "add") > 0 for nm in ("XC", "li", "li-down")),
               f"W={W}, n={n}: XC, li and li-down fail NCP under addition (Lemma T (1))")
         ra = res[f"RA/W{W}/n{n}"]
-        check(all(ra_bad_context(c[0], W) for c in ra["bad_contexts"]),
-              f"W={W}, n={n}: RA meets NCP at every start state but those with rotl(y0, s) ≡ 0 mod 2^(W−2) "
-              f"({len(ra['bad_contexts'])} of {ra['contexts']} fail, all of that kind)")
-        check(all(not res[f"{nm}/W{W}/n{n}"]["bad_contexts"] for nm in ("MW", "FE")),
-              f"W={W}, n={n}: MW and FE meet NCP at every context checked")
+        if W == 4:
+            check(all(ra_bad_context(c[0], W) for c in ra["bad_contexts"]),
+                  f"W={W}, n={n}: RA fails NCP only at the start states with rotl(y0, 1) ≡ 0 mod 2^(W−2) "
+                  f"({len(ra['bad_contexts'])} of {ra['contexts']})")
+        else:
+            check(len(ra["bad_contexts"]) == ra["contexts"],
+                  f"W={W}, n={n}: RA fails NCP at every start state (rotl by 1 lifts a difference's lowest set bit one "
+                  "place a step, so the low bits miss a word until it wraps)")
+        check(len(ra["bad_contexts_constant_derivative"]) == ra["contexts"],
+              f"W={W}, n={n}: RA fails NCP⁺ at every start state (2^(W−1) on the last word flips bits 0 and 1 together)")
+        check(all(clean(res[f"{nm}/W{W}/n{n}"]) for nm in ("FE", "FA")),
+              f"W={W}, n={n}: FE and FA meet NCP and NCP⁺ at every context checked")
+    if len(cases) > 1:
+        check(any(not clean(res[f"MW/W{W}/n{n}"]) for W, n in cases),
+              "MW fails NCP or NCP⁺ at some context checked (" +
+              ", ".join(f"W={W}: {len(res[f'MW/W{W}/n{n}']['bad_contexts'])} and "
+                        f"{len(res[f'MW/W{W}/n{n}']['bad_contexts_constant_derivative'])}" for W, n in cases) + ")")
     return res
 
 
@@ -289,7 +335,7 @@ def facts_32(trials=2000):
     check(0.4 < frac < 0.6, f"RA at 32 bits: (+2^31 on w_k, −2^(s−1) on w_(k+1)) keeps the checkpoint with probability "
                             f"about 1/2 ({ra_hit}/{trials}): bit 31 of the state after w_k decides the carry")
     y1, y2 = (1 << 32) - 1, 65534
-    down = lambda y: (y + (y >> 16)) & m  # noqa: E731
+    down = lambda y: (y + (y >> 16)) & m
     check(down(y1) == down(y2) and y1 != y2, "li-down's step y + (y >> 16) is no bijection at 32 bits: "
                                              f"{y1:#x} and {y2:#x} both map to {down(y1):#x}")
     out.update(li_pair=li_pair, xc_pair=xc_pair, ra_half=ra_hit, trials=trials)
@@ -458,7 +504,7 @@ def binding(quick=False) -> dict:
 def latin_luts() -> list[int]:
     good = []
     for lut in range(256):
-        f = lambda a, b, c: (lut >> (a << 2 | b << 1 | c)) & 1  # noqa: E731
+        f = lambda a, b, c, lut=lut: (lut >> (a << 2 | b << 1 | c)) & 1
         if all(f(0, b, c) != f(1, b, c) for b in (0, 1) for c in (0, 1)) and \
            all(f(a, 0, c) != f(a, 1, c) for a in (0, 1) for c in (0, 1)) and \
            all(f(a, b, 0) != f(a, b, 1) for a in (0, 1) for b in (0, 1)):
@@ -649,8 +695,14 @@ def folds(design):
         li = {"alu": F(1, 2), "imad": F(1, 2), "issue": 1}
         return {"tensor": [("li", li)], "dp4a": [("li", li)]}
     if design == "RA":
-        ra = add({"alu": 1, "issue": 1}, CP_XC, scale({"alu": 2, "issue": 2}, LANE_SET))
-        return {"tensor": [("LEA.HI", ra)], "dp4a": [("LEA.HI", ra)]}
+        ra = add({"alu": 1, "issue": 1}, CP_XC, scale({"alu": 4, "issue": 4}, LANE_SET))   # ra_finish: 2 a chain, 2 chains
+        fe = add({"imad": 2, "issue": 2}, CP_XC, scale({"imad": 2, "issue": 2}, LANE_SET))  # FE's no-word step
+        return {"tensor": [("LEA.HI", ra), ("FE", fe)], "dp4a": [("LEA.HI", ra), ("FE", fe)]}
+    if design == "FA":
+        fin = scale({"imad": 2, "issue": 2}, LANE_SET)                    # the no-word Feistel step, 2 chains
+        fa = add({"alu": 1, "imad": 1, "issue": 2}, CP_XC, fin)
+        fe = add({"imad": 2, "issue": 2}, CP_XC, fin)
+        return {"tensor": [("FA", fa), ("FE", fe)], "dp4a": [("FA", fa), ("FE", fe)]}
     if design.startswith("MW"):
         slots = int(design[2:]) if design[2:] else MW_SLOTS
         fin = scale({"imad": slots, "alu": 1, "issue": 2}, LANE_SET)
@@ -666,8 +718,8 @@ def per_merge(use, m):
     return {k: F(v) / m for k, v in use.items()}
 
 
-LANE = lambda pipe: {pipe: 1, "issue": 1} if pipe else {"issue": 1}  # noqa: E731
-WARP = lambda pipe: {pipe: 32, "issue": 32} if pipe else {"issue": 32}  # noqa: E731
+LANE = lambda pipe: {pipe: 1, "issue": 1} if pipe else {"issue": 1}
+WARP = lambda pipe: {pipe: 32, "issue": 32} if pipe else {"issue": 32}
 
 CENSUS = {   # accounting-ts-fan-in, sm_90's merges a class (Assumptions/TS.lean), priced on DS-90
     "ALU (IADD3.X, 9)": per_merge(LANE("alu"), 9),
@@ -754,17 +806,23 @@ def cheater(design, level, L, h):
     return lp(acts, routes, need, (set(need), h))
 
 
-def r_prices(design, duals, level):
-    """r_H and r_min a word at the cheater's certificate, in MACs of other work forgone: honest's fold, and the cheapest
-    route the premise allows."""
-    price = lambda use: sum(duals.get(r, 0) * F(v) for r, v in use.items())  # noqa: E731
-    hf = [use for kind in ("tensor", "dp4a") for _, use in folds(design)[kind]]
-    rh = min(price(u) for u in hf)
+def plain():
+    """The plain kernel: other work alone, with dp4a and FFMA beside the tensor core (no bit-sliced MACs)."""
+    return lp({f"other: {k}": (use, 1) for k, use in OTHER.items() if k != "bit-sliced ALU"}, {}, {})
+
+
+def r_prices(design, level):
+    """r_H and r_min a word in MACs of other work forgone, at the plain kernel's dual prices (MACs a unit of each
+    resource): honest's cheapest fold route, and the cheapest route the premise allows."""
+    _, _, duals = plain()
+    price = lambda use: sum(duals.get(r, 0) * F(v) for r, v in use.items())
+    rh = min(price(use) for kind in ("tensor", "dp4a") for _, use in folds(design)[kind])
     routes = {"FREE": [{}], "CENSUS": list(CENSUS.values()), "SEM": list(SEM.values()), "FOLD-OPT": []}[level]
     return rh, min([price(u) for u in routes] + [rh])
 
 
-DESIGNS = [("XC", 32), ("li", 32), ("RA", 32), ("RA", 64), ("MW2", 32), ("MW1", 32)]
+DESIGNS = [("XC", 32), ("XC", 64), ("li", 32), ("RA", 32), ("RA", 64), ("MW2", 32), ("MW1", 32), ("FA", 32),
+           ("FA", 64)]
 LEVELS = ("FREE", "CENSUS", "SEM", "FOLD-OPT")
 
 
@@ -778,7 +836,7 @@ def table(out: dict) -> None:
         for level in LEVELS:
             cv, cmix, cd = cheater(design, level, L, hv)
             eps = cv / hv - 1
-            rh, rm = r_prices(design, cd, level)
+            rh, rm = r_prices(design, level)
             binds = ",".join(sorted(cd))
             print(f"{design:8} {L:3} {level:9} {float(hv):10.2f} {float(cv):10.2f} {float(eps):9.4%}  {float(rh):8.3f} "
                   f"{float(rm):8.3f}  {binds}")
@@ -793,7 +851,7 @@ def table(out: dict) -> None:
 
 def gamma(out: dict) -> None:
     peak = RATES["tensor"]
-    pv, _, _ = lp({f"other: {k}": (use, 1) for k, use in OTHER.items() if k != "bit-sliced ALU"}, {}, {})
+    pv, _, _ = plain()
     print()
     print(f"γ on DS-90 (honest's MACs a clock against the tensor core alone, {float(peak):.0f}, and against the plain "
           f"kernel with dp4a and FFMA beside it, {float(pv):.2f}); hashing every word with SHA-512 beside it:")
@@ -806,41 +864,91 @@ def gamma(out: dict) -> None:
         out.setdefault("gamma", {})[f"{design}/L{L}"] = {
             "honest": str(hv), "gamma_tensor": float(g1), "gamma_plain": float(g2), "honest_binds": sorted(hd),
             "gamma_sha512_word": hash_g}
-    lmin = SHA["mac_per_s"] / (SHA["compressions_per_s"] * SHA["words_per_compression"]) / 10
-    print(f"  SHA-512 a word fits γ ≤ 10 from L ≥ {lmin:.0f}; at L = 8192 it is "
-          f"{SHA['mac_per_s'] / (SHA['compressions_per_s'] * SHA['words_per_compression']) / 8192:.3f}")
-    out["sha512_min_L_gamma10"] = lmin
+    c = SHA["mac_per_s"] / (SHA["compressions_per_s"] * SHA["words_per_compression"])
+    print(f"  SHA-512 a word costs {c:.0f}/L of the MAC time: γ ≤ 10 from L ≥ {c / 10:.0f} if it overlaps the tensor core "
+          f"(γ = max(1, {c:.0f}/L)), from L ≥ {c / 9:.0f} if not (γ = 1 + {c:.0f}/L); at L = 8192 the term is {c / 8192:.3f}")
+    out["sha512_min_L_gamma10"] = {"overlapped": c / 10, "serial": c / 9}
 
 
-NCP_FORMS = {   # non-T forms an NCP fold can absorb a word with on DS-90's classes, a word
+def barrier(out: dict, eps=F(1, 100)) -> None:
+    """Theorem F (a) in numbers: a proved floor (1 − ε)·H on every program for R_F, composed with honest's fold (φ·H,
+    φ = 1 − 1/γ_plain), is a floor (1 − ε − φ)·H on every program for the words, the exact segment products: SAK's
+    content at c_mm = 1 − ε − φ. And the circuit size a floor on R_F implies when its checkpoints are sparse."""
+    print()
+    print(f"Theorem F (a) at ε = {float(eps):.0%}: a proved fold minimum proves, from θ alone, a floor on every program for "
+          "the segment products (SAK's content):")
+    pv, _, _ = plain()
+    res = {}
+    for design, L in DESIGNS:
+        hv, _, _ = honest(design, L)
+        phi = 1 - hv / pv
+        res[f"{design}/L{L}"] = {"phi": str(phi), "c_mm_implied": str(1 - eps - phi)}
+        print(f"  {design:4} L={L:3}: φ {float(phi):.4%}, so T_F(ε) would prove c_mm ≥ {float(1 - eps - phi):.4f} for "
+              "the words from θ alone")
+    # Sparse checkpoints, uniform in n: one LOP3 a gate with its two operands and result in HBM (12 bytes, DS-90's 4.8
+    # TB/s over 132 SMs at 1830 MHz) runs any circuit, so s ≥ ((1 − ε)·H − κ_io·(m + out))/κ_gate.
+    hbm = F(48 * 10**11) / (132 * 1830 * 10**6)
+    k_gate, k_io = F(12) / hbm, F(4) / hbm
+    rows = []
+    for n in (8192, 65536, 1 << 20):
+        H = F(n**3) / pv
+        m = 16 * n * n
+        for cp_words in (SETW, n * n):
+            outbits = 32 * F(n**3, 32 * cp_words)
+            s = ((1 - eps) * H - k_io * (m + outbits)) / k_gate
+            rows.append({"n": n, "words_a_checkpoint": cp_words, "s_over_m_plus_out": float(s / (m + outbits))})
+    for r in rows:
+        print(f"  n = {r['n']:7}, a checkpoint every {r['words_a_checkpoint']:>12} words (L = 32): the circuit it implies "
+              f"for R_F has s/(m + out) ≥ {r['s_over_m_plus_out']:9.3f}  (best known explicit: 3.1)")
+    out["theorem_f"] = {"eps": str(eps), "designs": res, "circuit": rows, "kappa_gate_sm_clocks": float(k_gate)}
+    dense = [r for r in rows if r["words_a_checkpoint"] == SETW]
+    sparse = [r for r in rows if r["words_a_checkpoint"] != SETW]
+    check(all(r["s_over_m_plus_out"] < 3.1 for r in dense),
+          "dense checkpoints (one a set): the circuit bound a fold minimum implies is below 3.1 (m + out), so no circuit "
+          "barrier there; Theorem F (a) is the kill")
+    check(sparse[-1]["s_over_m_plus_out"] > 3.1,
+          "sparse checkpoints (one a K-segment of the whole product) at n = 2^20: beyond every known explicit circuit lower bound")
+
+
+NCP_FORMS = {   # the forms that met NCP and NCP⁺ at every context `ncp` checked, a word on DS-90's classes
+    "FA (IADD3 + IMAD.HI Feistel step)": {"alu": 1, "imad": 1, "issue": 2},
+    "FE (IMAD + IMAD.HI Feistel step)": {"imad": 2, "issue": 2},
+}
+FAILED_FORMS = {   # cheaper forms that fail NCP or NCP⁺ at small widths
     "RA (LEA.HI)": {"alu": 1, "issue": 1},
-    "IADD3 + IMAD.HI Feistel step": {"alu": 1, "imad": 1, "issue": 2},
-    "IMAD + IMAD.HI Feistel step": {"imad": 2, "issue": 2},
+    "MW (IMAD.WIDE at 1)": {"imad": F(1, 2), "alu": F(1, 2), "issue": 1},
+    "MW (IMAD.WIDE at 2)": {"imad": 1, "alu": F(1, 2), "issue": 1},
 }
 
 
+def _floor(forms):
+    acts = {k: (add(tc_word(32), u), 1) for k, u in forms.items()}
+    v, mix, _ = lp(acts, {}, {})
+    per = {r: sum(F(acts[k][0].get(r, 0)) * x for k, x in mix.items()) / v for r in ("alu", "imad")}
+    names = list(forms)
+    cap, _, _ = simplex([F(1)] * len(names), [[F(forms[k].get(r, 0)) for k in names] for r in ("alu", "imad")],
+                        [F(54, 100), F(54, 100)])
+    return {"words": str(v), "gamma": float(128 / v), "mix": {k: str(x) for k, x in mix.items()},
+            "alu_per_word": float(per["alu"]), "imad_per_word": float(per["imad"]), "budget_weight": str(cap)}
+
+
 def ncp_floor(out: dict) -> None:
-    """The most words of L = 32 a clock an NCP fold absorbs, over NCP_FORMS and MW at one and two IMAD slots."""
+    """The most words of L = 32 a clock the NCP⁺ forms absorb, and the most weight of them FOLD-LUCK's budget of 0.54
+    ALU and 0.54 IMAD a word holds (1 would fit); beside them, the cheaper forms that fail."""
     print()
-    print("NCP folds at L = 32 on DS-90: the most words a clock (the tensor core gives 128):")
-    for slots in (2, 1):
-        forms = dict(NCP_FORMS)
-        forms[f"MW (IMAD.WIDE at {slots})"] = {"imad": F(slots, 2), "alu": F(1, 2), "issue": 1}
-        acts = {k: (add(tc_word(32), u), 1) for k, u in forms.items()}
-        v, mix, d = lp(acts, {}, {})
-        per = {r: sum(F(acts[k][0].get(r, 0)) * x for k, x in mix.items()) / v for r in ("alu", "imad")}
-        print(f"  IMAD.WIDE at {slots} IMAD slot(s): {float(v):.2f} words (γ ≥ {float(128 / v):.4f}): "
-              f"{', '.join(f'{k} {float(x):.2f}' for k, x in mix.items())}; a word ALU {float(per['alu']):.3f}, "
-              f"IMAD {float(per['imad']):.3f}")
-        out.setdefault("ncp_floor", {})[f"imad_wide_{slots}"] = {"words": str(v), "gamma": float(128 / v),
-                                                                  "mix": {k: str(x) for k, x in mix.items()},
-                                                                  "alu_per_word": float(per["alu"]),
-                                                                  "imad_per_word": float(per["imad"])}
-    a, b = out["ncp_floor"]["imad_wide_2"], out["ncp_floor"]["imad_wide_1"]
-    check(F(a["words"]) < 128 and a["alu_per_word"] + a["imad_per_word"] > 1.08 - 1e-9 or a["alu_per_word"] > 0.54,
-          "at two IMAD slots for IMAD.WIDE no NCP mix meets 0.54 ALU and 0.54 IMAD a word at L = 32")
-    check(b["alu_per_word"] <= 0.54 and b["imad_per_word"] <= 0.54,
-          "at one IMAD slot MW meets the budget: ½ ALU + ½ IMAD a word")
+    print("Folds at L = 32 on DS-90: the most words a clock (the tensor core gives 128), and the most weight of a word "
+          "within 0.54 ALU + 0.54 IMAD:")
+    res = {}
+    for label, forms in (("NCP⁺ forms", NCP_FORMS), ("with the failing forms too", {**NCP_FORMS, **FAILED_FORMS})):
+        r = res[label] = _floor(forms)
+        print(f"  {label}: {float(F(r['words'])):.2f} words (γ ≥ {r['gamma']:.4f}): "
+              f"{', '.join(f'{k} {float(F(x)):.2f}' for k, x in r['mix'].items())}; a word ALU {r['alu_per_word']:.3f}, "
+              f"IMAD {r['imad_per_word']:.3f}; budget weight {float(F(r['budget_weight'])):.4f}")
+    out["ncp_floor"] = res
+    a = res["NCP⁺ forms"]
+    check(F(a["words"]) <= 64 and F(a["budget_weight"]) < 1,
+          "the NCP⁺ forms absorb at most 64 words a clock at L = 32 (γ ≥ 2) and no mix of them fits 0.54 ALU + 0.54 IMAD "
+          "a word")
 
 
 def checks_lp(out: dict) -> None:
@@ -865,6 +973,7 @@ def main() -> int:
     ncp_floor(out)
     table(out)
     gamma(out)
+    barrier(out)
     checks_lp(out)
     if args.json:
         with open(args.json, "w") as f:

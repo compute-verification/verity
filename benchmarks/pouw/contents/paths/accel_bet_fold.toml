@@ -1,0 +1,4 @@
+order = 368
+path = "`theory/accel_bet_fold.py`"
+runs_on = "CPU"
+what = "ACCEL BET-FOLD (CMP-128): which receipt folds have no cheap part (FOLD-LUCK's NCP, and NCP⁺), exhaustively at widths 4 to 6, with Lemma T's step check, binding at width 8 and 32, the folds' costs on DS-90, the fold's term of ε by an exact two-phase simplex at four premise levels, γ against SHA-512 a word, and Theorem F's numbers (a proved fold minimum is SAK's content for the segment products)"
