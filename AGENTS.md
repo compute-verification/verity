@@ -48,9 +48,10 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       Rust verifier as a cross-check.
 - `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
   (Lean below). `Properties/` is `security_properties` (Lean below).
-- `integrations/`: one directory per serving stack Verity's compute runs in. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
-  builds each served workload's circuit and commits its values while serving; `benchmarks/one_stage/` takes those values
-  through C-Flock's prover and the Lean verifier.
+- `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
+  (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
+- `examples/`: one directory per example: its workload, its placement and the commands that serve and audit it
+  (`examples/README.md`).
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, and the benchmark tools.
   - `benchmarks/census/`: data only. `verity` never reads it; it takes such numbers as parameters.
@@ -61,7 +62,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     `circuit_check/` (the property checks every circuit passes) and `lean/` (the Lean check, `check.py`).
   - `research`: the run recorder and the run-store client: runs, the evidence store, Slack, pods and deploys. It imports
     nothing from Verity.
-  - `agent-guard`: the VM's secret guard, its OOM recorder, and the hook that keeps builds and tests off agent VMs (`research run --on auto` runs them on a node).
+  - `agent-guard`: the VM's secret guard, its OOM recorder, and the hook that keeps builds and tests off agent VMs.
   - `move`: layout moves.
 - `infra/`: our machines.
   - `cluster/` (`cluster`): the shared machines' policy, planner and ledger. Stdlib only.
@@ -98,8 +99,8 @@ Dependencies point inward, and `tests/test_boundaries.py` enforces them:
   `tests/test_integration_boundaries.py`, which only shrinks (Design rules, "Integrations are frontends").
 
 `verity` is the repository's one command (`tools/verity/cli/`): `verity check` runs every part of the
-check, `verity check tests|lean|circuits` runs only those parts, and `verity bench NAME` runs `benchmarks/<NAME>/`'s runner.
-`verity --help` lists the rest.
+check, `verity check tests|lean|circuits` runs only those parts, and `verity bench|example NAME` runs
+`benchmarks/<NAME>/`'s or `examples/<NAME>/`'s runner. `verity --help` lists the rest.
 
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
@@ -203,9 +204,9 @@ the standing rulings stated nowhere else.
   - on a draw, the drawn units' openings, to the prover behind the firewall.
 
   What the circuit means, and how it was built, is the integration's; that it computes what is served is completeness
-  (above). Any serving stack plugs in the same way without changing `verity/`, and `integrations/vllm/` is the only one
-  so far. Nothing under `verity/` imports an integration (the import rules, above), and the serving notions `verity/`
-  still holds (the certifier's advice format, vLLM's scheduler, among them) move out to the integration.
+  (above). Any serving stack plugs in the same way without changing `verity/`. Nothing under `verity/` imports an
+  integration (the import rules, above), and the serving notions `verity/` still holds (the certifier's advice format,
+  vLLM's scheduler, among them) move out to the integration.
 - **Results are per monitoring period, over all compute** (Daniel, 25 Oct). The time length of interest is the
   *monitoring period* (`ARCHITECTURE.md`, Glossary), not the window, the run or the demo. Every result, in a report, a
   table, a PR or a message to Daniel, is presented for monitoring periods of one week, one month and one year, and over
