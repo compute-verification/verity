@@ -76,6 +76,42 @@ def test_a_program_without_registered_reads_or_given_them_goes_on_to_its_files(t
     assert got is None and why[0] == "proof", why
 
 
+def _files(d: Path, groups: int = 1, meta: dict | None = None, header: dict | None = None) -> tuple[Path, Path]:
+    """A circuit file's head (its META and a ``unit`` circuit of `groups` input groups) and a public file's header."""
+    unit = f"flock-ir-unit/v2 u 1 2 {groups}" + " 0 1 1 16" * groups + " 1 1 1 1 16\n0 0\n"
+    circuit, public = d / "circuit.txt", d / "pub.bin"
+    circuit.write_text(f"flock-circuit/v1 u\nMETA {json.dumps(meta or {})}\nCIRCUIT unit 2\n{unit}")
+    public.write_bytes(json.dumps(header or {}).encode() + b"\n")
+    return circuit, public
+
+
+SCOPE = f"refused: {PF.SCOPE_WHY}: a statement form the soundness proof does not cover"
+FORMS = {"unit form, own rows": ({}, None), "two input groups": ({"groups": 2}, SCOPE),
+         "a tail stage returns the outputs": ({"meta": {"out_net": "stage0"}}, SCOPE),
+         "shared rows": ({"header": {"shared_rows": {"x": 2}}}, TABLES),
+         "the scope before the rows": ({"groups": 2, "header": {"shared_rows": {"x": 2}}}, SCOPE)}
+
+
+@pytest.mark.parametrize("form, want", FORMS.values(), ids=FORMS.keys())
+def test_the_mirror_of_the_ks_form_refuses_what_lean_refuses(tmp_path, form, want):
+    """`ks_form_why` on files' heads: `KsScope.filesWhy`'s refusals with its reasons, the scope's first
+    (`verity/ml/flock/tests/test_lean_ks_form.py` holds it to `flock-verify ks-form` on the prover's files)."""
+    assert PF.ks_form_why(*_files(tmp_path, **form)) == want
+
+
+def test_a_session_lean_accepts_in_a_form_the_mirror_refuses_is_refused(tmp_path, monkeypatch):
+    circuit, public = _files(tmp_path, groups=2)
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "session.json").write_text("{}")
+    verdict = {"session": str(tmp_path / "s"), "accepted": True, "why": "", "program_sha512": "p"}
+    monkeypatch.setattr(PF, "executable", lambda: Path("flock-verify"))
+    monkeypatch.setattr(PF.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
+        a, 0, f"VERDICT {json.dumps(verdict)}\n", ""))
+    got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), circuit_sha512=PF.file_sha512(circuit),
+                         program=RUN_ONLY, partition={"program": "p"}, registered=None)
+    assert got is None and why[0] == "form" and why[1].endswith(SCOPE), why
+
+
 @pytest.fixture(scope="module")
 def fx(tmp_path_factory) -> Path:
     sys.path.insert(0, str(VERIFIER))
@@ -107,6 +143,7 @@ def test_the_honest_session_passes_every_check_of_cores_own_verifier_run_but_its
     (f,) = got
     partition = json.loads((fx / "stage" / "partition.json").read_text())
     assert (f.accepted, f.why) == (False, TABLES), f
+    assert PF.ks_form_why(fx / "stage" / "circuit.txt", fx / "stage" / "pub-32.bin") == TABLES
     assert f.program == partition["program"]
     assert f.registered == {"cs": {"value": "cs_table", "root": CS_ROOT}}
     assert f.units == ()
