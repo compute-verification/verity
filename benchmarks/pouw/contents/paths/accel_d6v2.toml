@@ -1,0 +1,4 @@
+order = 290
+path = "`accel_score/d6v2.py`, `gates.py`"
+runs_on = "CPU"
+what = "D6 v2, ACCEL's goals in circuit size (CMP-158): Φ per card in gates a second from 𝓜's units and each instruction's traced Boolean circuit, s_×, S_b over D5 v2.1's menu at gate prices, ε_skip a share of S_reg, coverage of MACs and of gates, the credited share S_reg/(Φ·T), the exclusion bound U/s_× per monitoring period over the census, serving blocks, the channel term k_infil/k_exfil"

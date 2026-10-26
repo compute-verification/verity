@@ -21,6 +21,9 @@ adopted (measured schedules).
 --from PKL prints the report from a build's pickle (--pickle) without rebuilding. --census-vector JSON
 [--census-vector-ref REF] adds the RTX PRO 6000's beside-load rows with its joint issue rows from a machine-model vector
 (ALGO-COST-3's A36; {"vector": name, "rows": {"design | card | model | x": {leak_served, c_inc}}}).
+
+This is D6 v1.1, in μ°. D6 v2 (`d6v2.py`, CMP-158) credits circuit size and retires μ°, the period LP, its duals, μ¹
+and the beside load x as the credit's unit; it reads this module's menu (`job_parts`), picks and ε's draw.
 """
 import contextlib
 import io
@@ -131,19 +134,27 @@ def build_job(card: str, K: int, N: int, t: int, Lp: int, weight_coins: bool = T
     so it is one for both hashing rates; the measured and paper rates differ only in the honest kernel's time (γ). In
     `d5_routes`' form: m['dense'] is OPT*'s method, m['hull'] every method; m['alone'] each one's makespan with the
     job alone; m['honest_tensor'] the deployed kernel's tensor MAC-times a MAC."""
+    c, ms, L, sha, honest, r = job_parts(card, K, N, t, Lp, weight_coins, peel_lanes)
+    best, hull = (pb.price_methods(c, x, L, N, pb.TOKENS, beside=True, items=(sha,), lookups=True) for x in (ms[:1], ms))
+    return c, dict(L=L, n=N, sha=sha, dense=ms[:1], hull=ms, lookups=True, alone=(best.c, hull.c),
+                   honest_tensor=honest.loads["tensor"]), r
+
+
+def job_parts(card: str, K: int, N: int, t: int, Lp: int, weight_coins: bool = True, peel_lanes: bool = True,
+              bit: float | None = None) -> tuple:
+    """`build_job`'s menu at a pick: (D5's card, the methods, L, the hash item, the deployed kernel's price, nofold's
+    round). bit: b cᵀ's term in s8 MAC-times in place of D5's `BIT_COST` (D6 v2's size, `gates.bit_size`)."""
     r = nf.v2_round(card, K, N, t * Lp, 16, tiles=t, weight_coins=weight_coins)
     c = vc.CARDS[card][0]
-    _, bit, depth = pb.BIT_COST[c.family][0]
+    _, bit0, depth = pb.BIT_COST[c.family][0]
     v, digits = nf.V_WIDTH[card], r["digits"]
     L, zleaf, sha, peels, dense, honest = pb._tile_honest(c, t, Lp, K, N, v, r["comps"] / pb.comps_per_mac(t * Lp),
                                                           digits, True)
     if peel_lanes:
         peels = (peels[0], peels[1], {**peels[2], "dp4a": pb.job_items(c, L, K, False, True, [])[1][2]["dp4a"]})
-    ms = pb.tile_methods(c, t, Lp, K, bit, depth, L, zleaf, peels, dense, digits,
+    ms = pb.tile_methods(c, t, Lp, K, bit0 if bit is None else bit, depth, L, zleaf, peels, dense, digits,
                          schemes=dict(d5v2.fast_schemes(card)), v=v)
-    best, hull = (pb.price_methods(c, x, L, N, pb.TOKENS, beside=True, items=(sha,), lookups=True) for x in (ms[:1], ms))
-    return c, dict(L=L, n=N, sha=sha, dense=ms[:1], hull=ms, lookups=True, alone=(best.c, hull.c),
-                   honest_tensor=honest.loads["tensor"]), r
+    return c, ms, L, sha, honest, r
 
 
 _JM: dict = {}
