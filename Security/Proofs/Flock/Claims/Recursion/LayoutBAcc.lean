@@ -422,6 +422,23 @@ theorem accIn_isSome {x : Msg} {r : XR} (hr : readX x = some r) {σ : ℕ}
   rw [ite_eq_left hc', hr, Option.bind_some, hk]
   rfl
 
+/-- `chainAt` at a placed slot: the two elements of round `i`'s bytes from offset `off`. -/
+theorem chainAt_of_accIn {x : Msg} {ms : List Msg} {p i off : ℕ} (hin : accIn rest x (Nat.pair p 0) = some (i, off))
+    (t : ℕ) : chainAt rest x ms t p = #[elemsOf ((ms.getD i []).drop off) 2 0, elemsOf ((ms.getD i []).drop off) 2 1] := by
+  unfold chainAt
+  rw [hin]
+
+/-- Bytes starting with `v`, of at least two elements, carry `v`'s first two. -/
+theorem elems_of_take {L v : Msg} (h : L.take v.length = v) (hl : 32 ≤ v.length) :
+    #[elemsOf L 2 0, elemsOf L 2 1] = #[elemsOf v 2 0, elemsOf v 2 1] := by
+  have hl' : L.take (([] : Msg) ++ v).length = [] ++ v := by
+    rw [List.nil_append]
+    exact h
+  have e0 := elemsOf_drop_of_take hl' (n := 2) (by omega) 0
+  have e1 := elemsOf_drop_of_take hl' (n := 2) (by omega) 1
+  simp only [List.length_nil, List.drop_zero] at e0 e1
+  rw [e0, e1]
+
 /-- **`chainAt` reads row `p`'s owner's value**: at the readers' messages, where slot `Nat.pair p 0` is placed and its
 owner `o` holds `v`, of at least two elements, `chainAt` reads `v`'s first two elements (`rowsLaid_layoutBAcc`). -/
 theorem chainAt_held {x : Msg} {ws : List Claims.Flock.Wit} {p i off o : ℕ} {w : Claims.Flock.Wit} {v : Msg}
@@ -430,13 +447,8 @@ theorem chainAt_held {x : Msg} {ws : List Claims.Flock.Wit} {p i off o : ℕ} {w
     (t : ℕ) : chainAt rest x ((layoutBAcc rest).msgs x ws) t p = #[elemsOf v 2 0, elemsOf v 2 1] := by
   have hlaid := rowsLaid_layoutBAcc rest x ws (Nat.pair p 0) i off hin
   rw [LayoutB.row_of_owner ho hw hv] at hlaid
-  simp only [chainAt, hin]
-  generalize (((layoutBAcc rest).msgs x ws).getD i []).drop off = L at hlaid ⊢
-  have hl' : L.take (([] : Msg) ++ v).length = [] ++ v := by
-    rw [List.nil_append]
-    exact hlaid
-  rw [show elemsOf L 2 0 = elemsOf v 2 0 from elemsOf_drop_of_take hl' (by omega) 0,
-    show elemsOf L 2 1 = elemsOf v 2 1 from elemsOf_drop_of_take hl' (by omega) 1]
+  rw [chainAt_of_accIn rest hin t]
+  exact elems_of_take hlaid hl
 
 end Facts
 
