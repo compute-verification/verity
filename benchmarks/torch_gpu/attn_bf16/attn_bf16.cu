@@ -212,14 +212,23 @@ __device__ __forceinline__ uint32_t ld2(const uint16_t* p, int k, int n, bool pa
     return k < n ? (uint32_t)p[0] : 0u;
 }
 
+// cvt.rn.bf16.f32 of x (low half) and y (high half) as one packed cvt: ptxas lowers a lone cvt.rn.bf16.f32 to F2F.BF16.F32
+// on sm_120a next to packed ones, which the SASS gate refuses.
+__device__ __forceinline__ uint32_t cvt2_bf16(float x, float y) {
+    uint32_t r;
+    asm("cvt.rn.bf16x2.f32 %0, %1, %2;\n" : "=r"(r) : "f"(y), "f"(x));
+    return r;
+}
+
 // cvt of x and y to words k and k + 1 (k even), each only if below n.
 __device__ __forceinline__ void st2(uint16_t* p, float x, float y, int k, int n, bool pairs) {
+    const uint32_t w = cvt2_bf16(x, y);
     if (k + 1 < n && pairs) {
-        *reinterpret_cast<uint32_t*>(p) = pack(cvt_bf16(x), cvt_bf16(y));
+        *reinterpret_cast<uint32_t*>(p) = w;
         return;
     }
-    if (k < n) p[0] = cvt_bf16(x);
-    if (k + 1 < n) p[1] = cvt_bf16(y);
+    if (k < n) p[0] = (uint16_t)w;
+    if (k + 1 < n) p[1] = (uint16_t)(w >> 16);
 }
 
 template <int D>
@@ -360,6 +369,7 @@ __device__ __forceinline__ void pv16(const AttnArgs& a) {
         float acc[D / 8][4];
 #pragma unroll
         for (int dt = 0; dt < D / 8; ++dt) acc[dt][0] = acc[dt][1] = acc[dt][2] = acc[dt][3] = 0.0f;
+#pragma unroll 1
         for (int s = 0; s < steps; ++s) {
             const int ka = 16 * s + 2 * t, kb = ka + 8;  // A's keys ka, ka + 1 and kb, kb + 1; B's rows the same
             const uint32_t A[4] = {ld2(pa + ka, ka, w.seen, pin), ld2(pb + ka, ka, w.seen, pin), ld2(pa + kb, kb, w.seen, pin),
