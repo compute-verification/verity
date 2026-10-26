@@ -207,7 +207,7 @@ four (`../../Definitions/NetworkCertifier/Guarantees/WindowChargeKraft.lean` and
 (`../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`), the period's leak through the wardens
 (`Guarantees/Period.lean`) and the horizon's wrong units (`../../Definitions/NetworkCertifier/Guarantees/Horizon.lean`),
 each listed as `NetTiming.SecurityProofs.G` and proved by the lemma of the same statement whose name it spells in
-UpperCamelCase (the horizon's by `horizonWrongUnits`). All 43 are under `shape.frozen` as
+UpperCamelCase (the period's by `periodLeak`, the horizon's by `horizonWrongUnits`). All 43 are under `shape.frozen` as
 `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `Program`'s `AccSeqs`,
 `expectedRow`, or the grids themselves; the leak bound also over an abstract charge and compiler; advice v1's over its
 charge as `Definitions` states it, the mirror of `ChargeCount_v1{N}`'s or `ChargeCount_v2{N, H, O}`'s Python reference,

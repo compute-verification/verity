@@ -118,9 +118,9 @@ theorem registered_ok (p : Params) (c : Registration) (f : Fixed) :
 theorem outcome_accept (p : Params) (c : Registration) (f : Fixed) (e : Evidence) (pub : Public)
     (prof : Core.Integrity) :
     outcome p c f e = .accept pub prof ↔
-      ∃ draw, ServiceAccepted p c f e prof draw ∧
+      ∃ draw, ServiceAccepted p c f e prof draw ∧ SaltKept p f e ∧
         pub = ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩ := by
-  unfold outcome ServiceAccepted
+  unfold outcome ServiceAccepted SaltKept
   dsimp only
   by_cases h1 : e.protocol = oneStage
   case neg => simp only [ite_eq_left h1, reduceCtorEq, h1, false_and, exists_false]
@@ -163,19 +163,29 @@ theorem outcome_accept (p : Params) (c : Registration) (f : Fixed) (e : Evidence
     rw [ite_eq_left h8]; simp only [reduceCtorEq, false_iff]
     rintro ⟨d, ⟨-, -, ⟨-, rfl⟩, -, -, -, -, -, -, hu⟩, -⟩; exact h8 hu
   rw [ite_eq_right (Classical.not_not.mpr h8)]
+  by_cases h9 : (windowSaltReason p f.rootW e.salt).isSome = true
+  case pos =>
+    rw [ite_eq_left h9]; simp only [reduceCtorEq, false_iff]
+    rintro ⟨d, -, hw, -⟩; simp [hw] at h9
+  rw [ite_eq_right h9]
+  have hw : windowSaltReason p f.rootW e.salt = none := by
+    cases h : windowSaltReason p f.rootW e.salt
+    · rfl
+    · simp [h] at h9
   simp only [Core.Outcome.accept.injEq]
   have hk : draw.law = .subset f.sampling.k := Classical.byContradiction fun h => h7 (.inl h)
   have hn : draw.population = f.work.n := Classical.byContradiction fun h => h7 (.inr h)
   constructor
   · rintro ⟨rfl, rfl⟩
-    exact ⟨draw, ⟨h1, h2, ⟨rfl, rfl⟩, h3, h4, h5, h6, hk, hn, h8⟩, rfl⟩
-  · rintro ⟨d, ⟨_, _, ⟨rfl, rfl⟩, _⟩, rfl⟩
+    exact ⟨draw, ⟨h1, h2, ⟨rfl, rfl⟩, h3, h4, h5, h6, hk, hn, h8⟩, hw, rfl⟩
+  · rintro ⟨d, ⟨_, _, ⟨rfl, rfl⟩, _⟩, _, rfl⟩
     exact ⟨rfl, rfl⟩
 
-/-- The check accepts exactly when the registration keeps PoUW's rule and the service accepted it as the rule fixes. -/
+/-- The check accepts exactly when the registration keeps PoUW's rule and the service accepted it as the rule fixes, with
+the window's salt. -/
 theorem acceptMeans_iff (p : Params) (c : Registration) (e : Evidence) (pub : Public) (prof : Core.Integrity) :
     protocol.check p c e = .accept pub prof ↔
-      ∃ f draw, RegistrationKeeps p c f ∧ ServiceAccepted p c f e prof draw ∧
+      ∃ f draw, RegistrationKeeps p c f ∧ ServiceAccepted p c f e prof draw ∧ SaltKept p f e ∧
         pub = ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩ := by
   rw [check_eq]
   unfold PouwCheck.check
@@ -184,30 +194,30 @@ theorem acceptMeans_iff (p : Params) (c : Registration) (e : Evidence) (pub : Pu
     split at h
     · cases h
     rename_i f hf
-    obtain ⟨draw, hs, hp⟩ := (outcome_accept _ _ _ _ _ _).mp h
-    exact ⟨f, draw, (registered_ok _ _ _).mp hf, hs, hp⟩
-  · rintro ⟨f, draw, hk, hs, hp⟩
+    obtain ⟨draw, hs, hw, hp⟩ := (outcome_accept _ _ _ _ _ _).mp h
+    exact ⟨f, draw, (registered_ok _ _ _).mp hf, hs, hw, hp⟩
+  · rintro ⟨f, draw, hk, hs, hw, hp⟩
     rw [(registered_ok _ _ _).mpr hk]
-    exact (outcome_accept _ _ _ _ _ _).mpr ⟨draw, hs, hp⟩
+    exact (outcome_accept _ _ _ _ _ _).mpr ⟨draw, hs, hw, hp⟩
 
 theorem acceptMeans : AcceptMeans := fun p c e pub prof => (acceptMeans_iff p c e pub prof).1
 
-/-- Completeness of `AcceptMeans`: a registration that keeps PoUW's rule, which the service accepted as the rule fixes, is
-accepted, publishing the rule's items and the service's draw. -/
+/-- Completeness of `AcceptMeans`: a registration that keeps PoUW's rule, which the service accepted as the rule fixes
+with the window's salt, is accepted, publishing the rule's items and the service's draw. -/
 theorem acceptMeans_complete (p : Params) (c : Registration) (e : Evidence) (f : Fixed) (prof : Core.Integrity)
-    (draw : UnitDraw) (hk : RegistrationKeeps p c f) (hs : ServiceAccepted p c f e prof draw) :
+    (draw : UnitDraw) (hk : RegistrationKeeps p c f) (hs : ServiceAccepted p c f e prof draw) (hw : SaltKept p f e) :
     protocol.check p c e = .accept ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩ prof :=
-  (acceptMeans_iff p c e _ prof).2 ⟨f, draw, hk, hs, rfl⟩
+  (acceptMeans_iff p c e _ prof).2 ⟨f, draw, hk, hs, hw, rfl⟩
 
 theorem acceptedIsTheService's : AcceptedIsTheService's := by
   intro p c e pub prof h
-  obtain ⟨f, draw, -, ⟨hp, hc, hs, -⟩, rfl⟩ := acceptMeans p c e pub prof h
+  obtain ⟨f, draw, -, ⟨hp, hc, hs, -⟩, -, rfl⟩ := acceptMeans p c e pub prof h
   exact ⟨hp, hc, draw, hs, rfl⟩
 
 theorem acceptedDraw : AcceptedDraw := by
   intro p c e pub prof h
   obtain ⟨f, draw, ⟨-, -, -, -, -, -, hw, hs, -, -, hpop, hlaw, -⟩,
-    ⟨-, -, -, -, -, -, -, -, -, hsz, hasc, hall⟩, rfl⟩ := acceptMeans p c e pub prof h
+    ⟨-, -, -, -, -, -, -, -, -, hsz, hasc, hall⟩, -, rfl⟩ := acceptMeans p c e pub prof h
   refine ⟨hw, ?_, hpop, hlaw, hsz, hasc, hall⟩
   unfold PouwWindow.sampling at hs
   revert hs
@@ -254,7 +264,7 @@ theorem undecidedOnlyFromService : UndecidedOnlyFromService := by
 count `point (level + 1)` is at most the floor point of `hi`, since `point` increases and inverts `level` on the grid. -/
 theorem acceptedInRange_of_grid (hp : Window.PointEnumerates) : AcceptedInRange := by
   intro p c e pub prof h
-  obtain ⟨f, draw, ⟨-, -, -, -, h3, h4, hw, -⟩, -, rfl⟩ := acceptMeans p c e pub prof h
+  obtain ⟨f, draw, ⟨-, -, -, -, h3, h4, hw, -⟩, -, -, rfl⟩ := acceptMeans p c e pub prof h
   dsimp only
   rw [hw]
   refine ⟨h4, ?_⟩
