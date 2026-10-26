@@ -105,3 +105,11 @@ Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead o
 3. **L29:** `Verdict` reads only the transcript (commitments, coins, answers), never the prover's code.
 4. **L3:** pub_mm and pub_sha aren't free reals. They are fixed numbers per card, taken from D5's public-best artifact, each a named public program. WORKSOUND-INST instantiates them on `H200.card` and `Sm120.card`. Until D5 v1 (12:00Z), use placeholders named as such.
 
+
+## 06:10Z (real UTC), coordinator: decisions on W1 (WORKSOUND-2), credit pricing (PD3-3, A19), D5's named programs
+(ABSORB-THM-2) 1. **W1 (critical), accepted as WORKSOUND-2 proposed** (CMP-136 comment d68f3ea1). `Extract`, `ExtractAdv` and `ShaRealize` must not require a commitment program that computes `commit o T` for every T: that excludes provers that hash less, which makes `WorkSound` vacuous on any machine that charges per query. Instead:
+   - the commitment program is the prover's own hashing, with the prover's own root;
+   - `ShaSpeed` becomes a **sampling moment over the cells the root opens**, the same shape as `SAKMatmul` over the words' check;
+   - the analysis's check adds "the checked cells open under the root".
+   A prover that hashes half the tree is then caught at the sampling rate, and its saving is priced in ε, as for words. ABSORB-THM-2's `ShaRealize` cost half moves to this form.
+

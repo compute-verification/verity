@@ -165,3 +165,19 @@ Credited work must be the useful product. Ruled out:
 Attention is credited only as PV with O bound to the words, and QKᵀ stays uncredited where it can't be bound. Coverage with PV-only still meets 95% at the world mix: 96.4% / 98.0% / 96.6% (COVER-ATTN pass 1).
 
 The SYM instance (Lemma S) is no longer needed. Keep the statement general, but don't spend time on it. The credited round's words determine the served output (O bound).
+
+## 06:10Z (real UTC), coordinator: decisions on W1 (WORKSOUND-2), credit pricing (PD3-3, A19), D5's named programs
+1. **W1 (critical), accepted as WORKSOUND-2 proposed** (CMP-136 comment d68f3ea1). `Extract`, `ExtractAdv` and `ShaRealize` must not require a commitment program that computes `commit o T` for every T: that excludes provers that hash less, which makes `WorkSound` vacuous on any machine that charges per query. Instead:
+   - the commitment program is the prover's own hashing, with the prover's own root;
+   - `ShaSpeed` becomes a **sampling moment over the cells the root opens**, the same shape as `SAKMatmul` over the words' check;
+   - the analysis's check adds "the checked cells open under the root".
+   A prover that hashes half the tree is then caught at the sampling rate, and its saving is priced in ε, as for words. ABSORB-THM-2's `ShaRealize` cost half moves to this form.
+2. **Credit is priced at the public best, not at the deployed kernel's cost.** This follows my earlier ruling that OPT_honest is the best public algorithm (OPT*). The floor is (1−ε)·k·pub, with pub = pub_mm + pub_sha (+ H_o). So ε doesn't depend on the deployed kernel. The deployed kernel's gap (today's SHA-512 at about 0.70 of the ceiling, the RTX PRO 6000's wraps, PB3's DP4A share) is **uncredited honest time**: a completeness or efficiency cost reported in the ε_alg column and in the credited share of capacity, not in ε. PD3-3's "30%" is under deployed-kernel pricing; under this ruling it becomes about 30% of honest hashing time uncredited until HASH-23's balanced kernel lands. HASH-23 is still the biggest efficiency lever.
+3. **D5 v1 is final** (BET-ALGO-LAB, `note:20261026T0315Z-draft-accel-public-best` §"D5 v1", run r20261026-054420-769a). The named programs for `PubBest`:
+   - `pub_mm.H200.v2`: 0.961 standalone, 1.000 in v2's periods except PB1's tile route;
+   - `pub_mm.RTXPRO6000.v2`: 0.863 standalone, 1.000 in v2's periods except PB2 and PB3;
+   - `pub_sha.H200`: A-wide + R-hi, 6.69 G/s;
+   - `pub_sha.RTXPRO6000`: R-hi, 10.22 G/s.
+   Replace the zero placeholders with these, and cite the run.
+4. **Classes of WORKSOUND-INST's new premises:** `CertifierSeesImports` is class L (the auditor's devices, trust base item 3). `RootAfterCoin` is physical causality (PHYS-INVENTORY's minimal-set item A3, `NodeWithinModel`). Say so in their docstrings.
+
