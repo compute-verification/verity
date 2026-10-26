@@ -575,7 +575,8 @@
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C954BELSW",
       "owns": [
-        "integrations/vllm/"
+        "integrations/vllm/",
+        "ruff.toml"
       ],
       "linear": "VLLM",
       "branch_suffixes": [
