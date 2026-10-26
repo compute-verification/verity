@@ -1,6 +1,7 @@
 import Definitions.Core.Boolean
 import Proofs.Core.Circuit
 import Proofs.Flock.Bridge.Count
+import Proofs.Flock.Bridge.Statement
 import Proofs.Flock.Soundness.Discharge.Layout.Outs
 
 /-!
@@ -24,6 +25,10 @@ population `n` (the public file's `pub.n`) give the key program `keyProg D.unrol
   is correct on its openings (`correct_of_progCorrect`). So `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` leaves fewer than
   `K₀` wrong units (`card_wrong_lt_of_relS`), at every circuit and every witness, with no side condition, and at the
   parsed file's circuit (`card_wrong_partsOf_lt`).
+* The registered files' circuit: `regOf tags cf tables pubF` is what a circuit file and its public file fix (`RegFiles`:
+  the descriptor, its unit's rows built, the public file), `none` where they don't read; `circuitOfReg`, `unitsOfReg`,
+  `partsOfReg` and `transcriptOfReg` are `circuitOf`'s at it, at the public file's population and the circuit's
+  constants (`constsOf`). `regOf_eq` reads it off the parse, and `card_wrong_regOf_lt` is the bridge there.
 -/
 
 namespace Flock.Bridge
@@ -374,5 +379,89 @@ theorem card_wrong_partsOf_lt (κ : Fin (keyCircuit D hU n).N → Option Bool) (
   exact card_wrong_lt_of_relS _ κ kd K₀ desc q roots H Cm w h
 
 end Parsed
+
+/-! ## The registered files' circuit -/
+
+/-- The game circuit with no gates. -/
+def emptyAudit : FlockSoundness.Audit.Circuit where
+  N := 0
+  op g := g.elim0
+  topo g := g.elim0
+  outputs := ∅
+
+/-- Its partition into no units. -/
+def emptyParts : FlockSoundness.Audit.Partition emptyAudit 0 where
+  unit g := g.elim0
+  input_iff g := g.elim0
+
+/-- **What the registered files fix**: the descriptor the circuit file parses to, its unit's rows built, and the public
+file read against it. -/
+structure RegFiles where
+  D : Flock.Desc
+  hU : FlockSoundness.Built D.unroll.unit
+  pub : Flock.Public
+
+open Classical in
+/-- **What the registered files fix**: the circuit file `cf` (with its `tables`) parsed under `tags`, and the public
+file `pubF` read against it; `none` when either doesn't read or the unit's rows aren't built. -/
+noncomputable def regOf (tags : Flock.Tags) (cf : ByteArray) (tables : List (String × ByteArray)) (pubF : ByteArray) :
+    Option RegFiles :=
+  if h : ∃ r : RegFiles, Flock.Desc.parse tags cf tables = .ok r.D ∧
+      HmOut.loadPublic tags r.D.unroll pubF = .ok r.pub then
+    some h.choose
+  else none
+
+/-- `regOf` is the files' parse, where they read. -/
+theorem regOf_eq {tags : Flock.Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {pubF : ByteArray}
+    {D : Flock.Desc} (hD : Flock.Desc.parse tags cf tables = .ok D) (hU : FlockSoundness.Built D.unroll.unit)
+    {pub : Flock.Public} (hpub : HmOut.loadPublic tags D.unroll pubF = .ok pub) :
+    regOf tags cf tables pubF = some ⟨D, hU, pub⟩ := by
+  have h : ∃ r : RegFiles, Flock.Desc.parse tags cf tables = .ok r.D ∧
+      HmOut.loadPublic tags r.D.unroll pubF = .ok r.pub := ⟨⟨D, hU, pub⟩, hD, hpub⟩
+  rw [regOf, dif_pos h]
+  obtain ⟨h1, h2⟩ := h.choose_spec
+  generalize h.choose = r at h1 h2 ⊢
+  obtain ⟨D', hU', pub'⟩ := r
+  rw [hD] at h1
+  cases h1
+  rw [hpub] at h2
+  cases h2
+  rfl
+
+/-- **The registered circuit** of a `RegFiles`: `circuitOf` at its descriptor and the public file's population. -/
+noncomputable def circuitOfReg : Option RegFiles → Verity.Circuit
+  | some r => circuitOf r.D r.hU r.pub.n
+  | none => .ofAudit emptyAudit
+
+/-- Its number of units: the public file's population. -/
+def unitsOfReg : Option RegFiles → ℕ
+  | some r => r.pub.n
+  | none => 0
+
+/-- Its units, `partsOf`. -/
+noncomputable def partsOfReg : (o : Option RegFiles) → Verity.Partition (circuitOfReg o) (unitsOfReg o)
+  | some r => partsOf r.D r.hU r.pub.n
+  | none => .ofAudit emptyParts
+
+/-- The transcript the opened values `val` give its wires, at the circuit's constants (`constsOf`). -/
+noncomputable def transcriptOfReg : (o : Option RegFiles) → (ℕ → Option Bool) → (circuitOfReg o).Transcript
+  | some r, val => transcriptOf r.D r.hU r.pub.n (constsOf r.D.unroll r.hU r.pub.n) val
+  | none, _ => Verity.Circuit.ofBits (C := emptyAudit) fun g => g.elim0
+
+/-- **The wrong-units bridge at the registered files**: where the circuit file parses to `D` and the public file reads
+as `pub`, a witness in `RelS` at `δ = C(n − K₀, kd)/C(n, kd)`, in the sampling statement of the key program at its
+constants, leaves fewer than `K₀` of the registered circuit's units wrong in the transcript it opens. -/
+theorem card_wrong_regOf_lt {tags : Flock.Tags} {cf : ByteArray} {tables : List (String × ByteArray)}
+    {pubF : ByteArray} {D : Flock.Desc} (hD : Flock.Desc.parse tags cf tables = .ok D)
+    (hU : FlockSoundness.Built D.unroll.unit) {pub : Flock.Public} (hpub : HmOut.loadPublic tags D.unroll pubF = .ok pub)
+    (kd K₀ : ℕ) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg)
+    (Cm : Commitment Bool) (w : Wit)
+    (h : RelS H Cm (((pub.n - K₀).choose kd : ℝ) / (pub.n.choose kd : ℝ))
+      (stmtOf (keyPartition D hU pub.n) (constsOf D.unroll hU pub.n) kd desc q roots)
+      (partOf (keyPartition D hU pub.n)) w) :
+    ((partsOfReg (regOf tags cf tables pubF)).wrong (transcriptOfReg (regOf tags cf tables pubF)
+      (w.val H Cm (stmtOf (keyPartition D hU pub.n) (constsOf D.unroll hU pub.n) kd desc q roots)))).card < K₀ := by
+  rw [regOf_eq hD hU hpub]
+  exact card_wrong_partsOf_lt D hU pub.n _ kd K₀ desc q roots H Cm w h
 
 end Flock.Bridge
