@@ -11,6 +11,7 @@ import Proofs.Flock.Claims.Bridge.DecodePlain
 import Proofs.Flock.Claims.Bridge.Dead
 import Proofs.Flock.Claims.Bridge.Returns
 import Proofs.Flock.Claims.Bridge.Hm96Tree
+import Proofs.Flock.Claims.Bridge.ErrorTerms
 import Proofs.Flock.Claims.Bridge.WrongSet
 import Proofs.Flock.Claims.Bridge.BindsColl
 import Proofs.Flock.Claims.Bridge.Transports
@@ -28,4 +29,6 @@ deployed plain decoders right at that writer. `WrongSet`: the claims' faulty set
 units wrong on the registration, at a slot map, where each unit lowers and the witness's openings bind. `BindsColl`: those openings bind unless two passing openings'
 checks collide, given that the registered openings read as claims openings and the witness covers the unit.
 `Transports`: the deployed check opens shaped rows only: a misshaped value's leaf is a deployed opening's leaf only by
-a SHA-512 collision (`leaf_misshaped`). -/
+a SHA-512 collision (`leaf_misshaped`). `ErrorTerms`: `EndToEnd`'s error `miss + ε_ks + δ_link` under `KS`'s
+`κ D δ x + √(γ·Pr[B]) + Pr[B_ext]` at a deployment whose `δ` covers the miss and whose `4·ε_table` the rest
+(`e2e_error_le_ks`). -/
