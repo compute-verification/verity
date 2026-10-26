@@ -309,7 +309,7 @@ def execution_of_record(row_dir: str | os.PathLike) -> dict:
         for k, v in re.findall(r"--engine-arg\s+([A-Za-z_]+)=([^\s]+)", cmd):
             try:
                 es[k] = json.loads(v)
-            except Exception:  # noqa: BLE001
+            except ValueError:
                 es[k] = v
         for flag, key in (("--max-num-seqs", "max_num_seqs"), ("--openings", "openings"), ("--pairs", "pairs")):
             m = re.search(flag + r"\s+(\d+)", cmd)
@@ -448,13 +448,14 @@ def from_record(row_dir: str | os.PathLike, *, rc: int | None = None, stage_ok: 
     mv = json.load(open(d / "commit" / "manifest_verify.json")) if (d / "commit" / "manifest_verify.json").is_file() else None
     bs = json.load(open(d / "build_summary.json")) if (d / "build_summary.json").is_file() else None
     results: dict[str, dict] = {}
+    unreadable: list[str] = []
     if bs is None:                                    # no build.summary on the row: the wrappers' own result.json (build_step/, build_request*/)
         for p in sorted(glob.glob(str(d / "build_*" / "result.json"))):
             w = os.path.basename(os.path.dirname(p))
             try:
                 results[{"build_step": "step", "build_request": "request"}.get(w, w)] = json.load(open(p))
-            except (OSError, ValueError):
-                continue
+            except (OSError, ValueError) as e:
+                unreadable.append(f"{os.path.relpath(p, d)} ({e!r:.200})")
     v = build(rows, vd, summary=summ, manifest_verify=mv, file_digests=digests, row=d.name, rc=rc, build_summary=bs, build_results=results,
               execution=execution_of_record(d))
     missing = [rel for rel in ("commit/verdict.json", "commit/runs.jsonl") if rel not in digests]
@@ -462,6 +463,8 @@ def from_record(row_dir: str | os.PathLike, *, rc: int | None = None, stage_ok: 
         v.notes.append(f"record incomplete: {', '.join(missing)} not on the row (Commit never closed / never ran)")
         if v.outcome == PASS:
             v.outcome = INSUFFICIENT
+    if unreadable:
+        v.notes.append(f"build record unreadable: {'; '.join(unreadable)}; the correspondence digest is read from the other wrappers' records only")
     if (d / "stages.txt").is_file():
         stage = [ln for ln in (d / "stages.txt").read_text().splitlines() if ln.startswith("commit ")]
         if stage:

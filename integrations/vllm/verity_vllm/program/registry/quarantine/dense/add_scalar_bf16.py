@@ -7,7 +7,7 @@ the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEM
 """
 from __future__ import annotations
 
-from verity_vllm.program.registry.dense import AddScalarBf16  # noqa: F401
+from verity_vllm.program.registry.dense import AddScalarBf16
 
 SEMANTIC_ID = "dense/AddScalarBf16@v1"
 

@@ -1,8 +1,8 @@
-import Models.Pouw.Assumptions.NCP.RouteUGame
+import Definitions.Pouw.Assumptions.NCP.RouteUGame
 import Proofs.Pouw.NCP.GameProofs
 import Proofs.Pouw.Sanity
 import Proofs.Pouw.NCP.ChainProofs
-import Models.Pouw.Guarantees.NCP
+import Definitions.Pouw.Guarantees.NCP
 
 /-!
 # NCP's checked values on route U: proofs

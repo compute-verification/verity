@@ -20,7 +20,7 @@ from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.replay.opening import model_weights_provider
 from verity_vllm.pipeline.tp import commit as TPC
 from verity_vllm.program.frontend import marlin_moe_leaf as mml
-from verity_vllm.protocol_options import WeightsView
+from verity_vllm.protocols import WeightsView
 
 from tests.check.test_weights_of_record_dsv4_experts import (  # noqa: F401  (dsv4: the checkpoint fixture)
     EX,

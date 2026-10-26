@@ -1,6 +1,6 @@
 import Proofs.Nci.Cover.FanOut
 import Proofs.Nci.Cover.FanOutChain
-import Models.Nci.Guarantees.CoverFanOutValue
+import Definitions.Nci.Guarantees.CoverFanOutValue
 
 /-!
 # The fan-out read tier from wiring

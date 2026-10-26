@@ -1,5 +1,5 @@
 import Definitions.Core.NaiveStrassen
-import Models.Core.Guarantees.NaiveStrassen
+import Definitions.Core.Guarantees.NaiveStrassen
 import Proofs.Core.NaiveStrassen.Eval
 
 /-!

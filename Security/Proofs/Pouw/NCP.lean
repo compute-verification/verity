@@ -1,4 +1,4 @@
-import Models.Pouw.Guarantees.NCP
+import Definitions.Pouw.Guarantees.NCP
 import Proofs.Pouw.NCP.Proofs
 import Proofs.Pouw.NCP.GameProofs
 import Proofs.Pouw.NCP.RelationWitness

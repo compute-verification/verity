@@ -8,7 +8,7 @@ What the device returns over a trace (the records `step` publishes) and what the
 configuration to certify them (each record's direction, grid and Σ_sync, the signer's leaf reservation), the check's
 copy of a certified record, and the check's parameters of the device's configuration, key and certifier session.
 `Properties.CertifierNetwork.Runs` states what an accepted run of the device is over them;
-`Properties.Proofs.CertifierNetwork.Defs` states, as completeness, that the device's own output is accepted.
+`Proofs.Properties.CertifierNetwork.Defs` states, as completeness, that the device's own output is accepted.
 
 **The unit is one link pair**, the device's: `active.py`'s `Proxy` runs one boundary link (`egressLink`, `ingressLink`),
 and `service.LinkWindows` is "network accounting's protocol on one link".

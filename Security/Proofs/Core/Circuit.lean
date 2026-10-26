@@ -1,4 +1,4 @@
-import Models.Core.Guarantees.Circuit
+import Definitions.Core.Guarantees.Circuit
 
 /-!
 # Lemmas about circuits and partitions

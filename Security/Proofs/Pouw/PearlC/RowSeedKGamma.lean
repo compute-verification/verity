@@ -1,4 +1,4 @@
-import Models.Pouw.Assumptions.PearlC.TTOutRowSeedK
+import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeedK
 import Proofs.Pouw.PearlC.RowSeedCode
 import Proofs.Pouw.PearlC.HiddenGamma
 

@@ -60,8 +60,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from verity_vllm import protocol_options as PO
+from verity_vllm import protocols as PO
 from verity_vllm.acquire.sources import hidden_source as HS, taps as TAPS
+from verity_vllm import settings  # noqa: E402 (after the process clock, like the imports around it)
 from verity_vllm.config import group, option
 from verity_vllm.engine import engine_profile as prof  # noqa: F401
 
@@ -129,7 +130,7 @@ POOL_CARRY_BYTES = 20 << 30
 
 
 def c2_programs_forecast(programs_root: str | None, program_dir: str | None, factor: float = C2_PROGRAMS_OBJECT_FACTOR) -> dict[str, Any]:
-    """[R17 fp8, F-fp8-C2PROG] EMPIRICAL FORECAST of the host bytes the C2 sampled replay's loaded Programs take in this process: the
+    """[F-fp8-C2PROG] EMPIRICAL FORECAST of the host bytes the C2 sampled replay's loaded Programs take in this process: the
     instance files it will load (`build_request_*/instances.json.gz` under --programs-root, or --program-dir's), streamed and counted
     (rows = `{"i": ` occurrences, json bytes = decompressed size; nothing is parsed or kept), x `factor` json byte -> object bytes.  One
     calibration point (B8, 7,853,122 rows, 628 B/row json, 9,387 B/row objects); the run measures the real number (C2 PROGRAMS FREED)."""
@@ -172,7 +173,7 @@ def c2_programs_forecast(programs_root: str | None, program_dir: str | None, fac
 
 
 def cgroup_mem_current() -> dict[str, int | None]:
-    """[R17 fp8] the container's memory accounting (what the OOM-killer reads): current / peak / max of the cgroup, bytes (None outside one)."""
+    """The container's memory accounting (what the OOM-killer reads): current / peak / max of the cgroup, bytes (None outside one)."""
     out: dict[str, int | None] = {"current": None, "peak": None, "max": None}
     for k, paths in (("current", ("/sys/fs/cgroup/memory.current", "/sys/fs/cgroup/memory/memory.usage_in_bytes")),
                      ("peak", ("/sys/fs/cgroup/memory.peak", "/sys/fs/cgroup/memory/memory.max_usage_in_bytes")),
@@ -255,7 +256,7 @@ def admission_lag(wl: dict) -> int:
 
 
 def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
-    """[rev M-0485; R17-1 / DP-pad-02 (b), F-moe-r17-03] the Program's DECLARED stop rule, read ONCE for every Commit consumer (required
+    """[DP-pad-02 (b), F-moe-r17-03] the Program's DECLARED stop rule, read ONCE for every Commit consumer (required
     population, composition, boundary linkage, sampled-replay population): `eos` = global_program.stop_rule's eos_token_ids over the pinned
     checkpoint's generation_config / config + the workload's sampling block (None = undeclared); `lag` = the workload Program's declared
     LAG (TargetProfile.lag() of the manifest's declared target -- the SAME fact GP-01 composes into Workload_v1{..., lag}), kept only when
@@ -288,14 +289,14 @@ def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
 
 
 def engine_schedule(request_rows: dict[int, list[tuple[str, int, int]]] | None, declared: dict[str, int], caps: dict[str, int]) -> dict:
-    """[R16 compiled, H100 B8] The engine's schedule of record vs the declaration.  `request_rows` is the scheduler's per-committed-step row
+    """The engine's schedule of record vs the declaration.  `request_rows` is the scheduler's per-committed-step row
     order as the collector recorded it (which requests ran in which step); a request's OBSERVED arrival is the first committed step it ran
     in.  The serving loop admits a request once the engine's forwards reach its declared arrive_step (`arrivals.ForwardCounter`: the
     bookkeeping iteration after the last request finishes runs no forward pass) OR immediately when the engine is idle (nothing running),
     so on a workload with gaps (r0's cap shorter than the next arrival) the committed-step axis and the declared arrive_steps drift apart --
     the required population must be placed on the axis the record is written on.  It is USED only when every declared request was
     observed, each ran a contiguous run of steps (no preemption) of exactly its expected count; otherwise the declaration stands and coverage
-    fails by name.  [R17-1 / F-moe-r17-03] `caps` = the EXPECTED steps per request = its executed prefix of record (the cap on a length stop,
+    fails by name.  [F-moe-r17-03] `caps` = the EXPECTED steps per request = its executed prefix of record (the cap on a length stop,
     served + LAG on an EOS stop -- executed_prefix.executed_prefix_of_record), no longer the bare cap."""
     observed: dict[str, int] = {}
     steps_of: dict[str, list[int]] = {}
@@ -365,7 +366,7 @@ def _process_state() -> dict[str, Any]:
 
 
 def cuda_census() -> dict[int, tuple[int, str]]:
-    """{storage data_ptr: (nbytes, tensor type)} of every CUDA tensor the Python gc can see (R16 sys hot worker: the post-job residue audit
+    """{storage data_ptr: (nbytes, tensor type)} of every CUDA tensor the Python gc can see (the hot worker's post-job residue audit
     diffs this against the census taken right after the engine build; storage held only from C++ is invisible here, so a residue that shows
     in torch.cuda.memory_allocated but not in the census points at a native holder)."""
     out: dict[int, tuple[int, str]] = {}
@@ -504,7 +505,7 @@ def tensor_digests(com, out, pair: int, prev: dict) -> int:
                     d[f"{m.name}/{pl}"] = _hl.blake2b(mv(m.dev_off + off, m.dev_off + off + nb), digest_size=8).hexdigest()
                     off += nb
         cur[step] = d
-        dump = os.environ.get("VERITY_DUMP_STEP")
+        dump = settings.VERITY_DUMP_STEP
         if dump and int(dump) == step:
             # raw bytes of this step's FA2 L0 row (and the whole layout) for offline byte-level diffs across pairs
             for m in com._layouts[step]:
@@ -540,7 +541,7 @@ def tensor_digests(com, out, pair: int, prev: dict) -> int:
 def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: dict | None = None, stop: dict[str, Any] | None = None,
                    finish_reasons: dict | None = None) -> dict[str, Any]:
     """`served_tokens` / `finish_reasons`: {workload request_id: ...} of THIS run (run_workload's); `stop`: stop_rule_of_record's {eos, lag}
-    -- together the executed prefix of record every population consumer is placed over (R17-1 / F-moe-r17-03)."""
+    -- together the executed prefix of record every population consumer is placed over (F-moe-r17-03)."""
     """R14 BIND-01: the binding map (fixed at finalize, digest recorded), the collector-INDEPENDENT expected population (model structure x
     workload requests/steps/ranks), the identity-coverage verdict, and openings drawn from the EXPECTED population (incl. the last step
     and every family) verified against the original roots.  Requests: `r<i>` in workload order; B>1 needs the per-step request->row map
@@ -739,7 +740,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
 
 
 def _positions_digest(positions) -> str | None:
-    """sha256 of the sorted, de-duplicated (step, leaf) list -- the same set recorded by two stages has the same digest (rev F-r17b-13)."""
+    """sha256 of the sorted, de-duplicated (step, leaf) list -- the same set recorded by two stages has the same digest."""
     pos = sorted({(int(s), int(i)) for s, i in (positions or [])})
     if not pos:
         return None
@@ -747,7 +748,7 @@ def _positions_digest(positions) -> str | None:
 
 
 def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, tokens_ref: dict | None = None) -> dict[str, Any]:
-    """R13 P0 acceptance step.  Freeze the finished run's authentication state (roots, layouts, levels), RELEASE every raw device copy, then
+    """The P0 acceptance step.  Freeze the finished run's authentication state (roots, layouts, levels), RELEASE every raw device copy, then
     open the challenge positions (+ forced picks: a leaf of the prefill step, a leaf inside an FA2 hidden `fa2.m1/` row, a leaf of the last
     step) and verify each against the ORIGINAL roots.  Value bytes come from the host copy when the committer retained one (`--retain host`),
     otherwise from a REPLAY: the same workload is executed again under the collector (values kept on host for this run only); BI determinism
@@ -897,7 +898,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
            # original is the whole-run root (every regenerated byte) + the tokens
            "replay_dependencies": ({"engine": "same vLLM engine process as the original run (no reload; weights of record in-process)",
                                     "requests": len(reqs), "sampling": dict(sampling) if isinstance(sampling, dict) else str(sampling),
-                                    "batch_invariant": os.environ.get("VLLM_BATCH_INVARIANT"), "release_before_replay": freed,
+                                    "batch_invariant": settings.raw("VLLM_BATCH_INVARIANT"), "release_before_replay": freed,
                                     "committed_weights_root": (rc.weight_registration or {}).get("root") if isinstance(rc.weight_registration, dict) else None,
                                     "original_run_root": rc.run_root.hex(), "checked_by": ["replay_run_root == original", "replay_tokens_equal",
                                                                                             "every opening verified against the ORIGINAL root"]}
@@ -961,9 +962,9 @@ def hot_unsafe_reasons(args: Options) -> list[str]:
         why.append("--moe-source on")
     if str(args.committer).startswith("plugin:"):
         why.append("plugin committer")
-    if os.environ.get("VERITY_FAULT", "").strip():
-        why.append(f"VERITY_FAULT={os.environ['VERITY_FAULT']!r} (deliberate fault: negative test)")
-    if os.environ.get("VERITY_SWITCH"):
+    if settings.VERITY_FAULT:
+        why.append(f"VERITY_FAULT={settings.raw('VERITY_FAULT')!r} (deliberate fault: negative test)")
+    if settings.raw("VERITY_SWITCH"):
         why.append("VERITY_SWITCH (interpreter switch interval is process-wide)")
     if args.remote_verifier:
         why.append("--remote-verifier (the store binder goes on the engine at its build)")
@@ -990,19 +991,19 @@ def resolve_staging(args: Options) -> Options:
 def staging_environ(args: Options) -> None:
     """The resolved staging options into the environment the committers read (`resolve_staging`), and the late-read
     negative's flush points."""
-    os.environ["VERITY_RETAIN"] = args.retain
-    os.environ["VERITY_WINDOW_MB"] = str(args.window_mb)
+    settings.put("VERITY_RETAIN", args.retain)
+    settings.put("VERITY_WINDOW_MB", str(args.window_mb))
     if args.window_slots is not None:
-        os.environ["VERITY_WINDOW_SLOTS"] = str(args.window_slots)
-    os.environ["VERITY_STAGING_BOUNDED"] = "1" if args.bounded_staging else "0"
+        settings.put("VERITY_WINDOW_SLOTS", str(args.window_slots))
+    settings.put("VERITY_STAGING_BOUNDED", "1" if args.bounded_staging else "0")
     if args.bounded_staging:
-        os.environ["VERITY_LEARN_HOST_BUDGET_MB"] = str(int(args.learn_budget_mb))
+        settings.put("VERITY_LEARN_HOST_BUDGET_MB", str(int(args.learn_budget_mb)))
     if args.retain_exclude:
         if not args.bounded_staging or args.retain != "host" or not args.open_after_release:
             raise SystemExit("--retain-exclude needs --bounded-staging --retain host --open-after-release (the excluded families open by replay)")
-        os.environ["VERITY_RETAIN_EXCLUDE"] = args.retain_exclude
+        settings.put("VERITY_RETAIN_EXCLUDE", args.retain_exclude)
     if args.footprint:
-        os.environ["VERITY_FOOTPRINT"] = args.footprint
+        settings.put("VERITY_FOOTPRINT", args.footprint)
         Path(args.footprint).parent.mkdir(parents=True, exist_ok=True)
     if args.late_read:
         # deliberate late read: the P0 flush after qkv_proj is deferred to the next legal point (past RoPE's in-place q/k rewrite)
@@ -1080,13 +1081,13 @@ class Options:
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
     vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark instance sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
     serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: after pair 0's roots are final and before its seed, commit every unit of the verifier's partition in M0's serving row format (verity_vllm.pipeline.serving_rows; the row stage writes the request: dir, partition, run, committer)")
-    remote_verifier: str | None = option("--remote-verifier", default=None, metavar="HOST:PORT", help="the remote bandwidth session's verifier: the store binder goes on the engine at its build, and the Commit proves its store to it in lockstep with its first instrumented run, a pass an engine step of that run (verity_vllm.store.remote.CommitSession); a rejected session fails the Commit")
+    remote_verifier: str | None = option("--remote-verifier", default=None, metavar="HOST:PORT", help="the remote bandwidth session's verifier: the store binder goes on the engine at its build, and the Commit proves its store to it in lockstep with its first instrumented run, a pass an engine step of that run (verity_vllm.protocols.remote_bandwidth.remote.CommitSession); a rejected session fails the Commit")
     remote_plan: str = option("--remote-plan", default="serve", help="the session's mode: serve, or servedrop:K (negative: the first K blocks appended withheld)")
     remote_kv_pages: int = option("--remote-kv-pages", type=int, default=32, help="the KV pool's pages under the session (num_gpu_blocks_override; outside the registered store); 0: the engine's own pool, at the row's gpu_memory_utilization")
-    remote_filler_gib: float = option("--remote-filler-gib", type=float, default=0.0, help="GiB of zeros on the engine's GPU registered after the build as the session's filler, beside the weights (the KV pool is never registered: verity_vllm.store.binder.Binder.register_filler)")
+    remote_filler_gib: float = option("--remote-filler-gib", type=float, default=0.0, help="GiB of zeros on the engine's GPU registered after the build as the session's filler, beside the weights (the KV pool is never registered: verity_vllm.protocols.remote_bandwidth.binder.Binder.register_filler)")
     remote_weight_blocks: int | None = option("--remote-weight-blocks", type=int, default=None, help="register weight tensors in order up to this many 4 KiB blocks (default: all)")
     remote_kv_lib: str | None = option("--remote-kv-lib", default=None, help="kv.cu built at the codec's field and mask: the store's encode on the GPU (default: the CPU reference)")
-    remote_session_lib: str | None = option("--remote-session-lib", default=None, help="session.cu's build (benchmarks/remote_session): the session reads the store where the engine holds it, its weights and filler encoded in place by --remote-kv-lib, with no copy (verity_vllm.store.in_place)")
+    remote_session_lib: str | None = option("--remote-session-lib", default=None, help="session.cu's build (benchmarks/remote_session): the session reads the store where the engine holds it, its weights and filler encoded in place by --remote-kv-lib, with no copy (verity_vllm.protocols.remote_bandwidth.in_place)")
     remote_step_ms: float = option("--remote-step-ms", type=float, default=0.0, help="the engine step a paced session's pass waits on, in ms: added to the calibration's pass times so the verifier's allowance covers it (a verifier at --paced 1:T_MS:DRAWS:WINDOWS runs each pass's step inside its coin's window); 0 for a session in stated windows")
     memory_map: str | None = option("--memory-map", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: commit each KV layer's `<layer>/slot_mapping` (acquire.sources.kv_slots_source) and, after pair 0's roots are final, write memory-map/v1 of the run's KV to the request's path, its blocks from each request's Program of record at the pages those slots name, its digests from the committed K and V words (verity_vllm.pipeline.memory_map; the request: path, registration, store layout); the prover's witness, never published")
     plan: str | None = option("--plan", default=None, metavar="JSON", help="the Commit's plan, derived before the GPU (verity_vllm.pipeline.commit_plan; the row's `plan` stage): the producer facts are taken from it when its key (Program digest, manifest, workload, Programs, code identity, vLLM version) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json plan)")
@@ -1109,19 +1110,18 @@ class Options:
 def main(args: Options, argv: list[str] | None = None) -> None:
     global TL
     _rs = RS.session_of(args)
-    if os.environ.get("VERITY_HOT_SUBMIT") == "1" and _HOT is None:
+    if settings.VERITY_HOT_SUBMIT and _HOT is None:
         # [R16 sys] route this invocation through the pod's hot Commit worker (verity_vllm/pipeline/hot.py) -- lets an unchanged harness
         # (the e2e negatives in tests/test_commit_fail_closed.py, ad-hoc timing pairs) exercise engine reuse; the worker refuses HOT-UNSAFE
         # jobs and the client falls back to a cold process with the reason on record, so nothing runs that would not run cold.
         from verity_vllm.pipeline import hot as _HC
-        sys.exit(_HC.submit(sys.argv[2:] if argv is None else list(argv), root=Path(os.environ.get("HOT_ROOT", "/workspace/cp/hot")),
-                            idle_s=float(os.environ.get("HOT_IDLE", "900")),
-                            timeout_s=float(os.environ["HOT_TIMEOUT"]) if os.environ.get("HOT_TIMEOUT") else None))
+        sys.exit(_HC.submit(sys.argv[2:] if argv is None else list(argv), root=Path(settings.HOT_ROOT),
+                            idle_s=settings.HOT_IDLE, timeout_s=settings.HOT_TIMEOUT))
     TL = Timeline.from_env("commit_delta", hot=_HOT is not None)      # hot worker: the job's VERITY_TIMELINE (per row attempt), not the worker's
-    if os.environ.get("VERITY_TRACEDUMP"):
+    if (tracedump := settings.VERITY_TRACEDUMP) is not None:
         # diagnostics: dump every thread's Python stack to stderr every N seconds (hang isolation on pods without ptrace)
         import faulthandler
-        faulthandler.dump_traceback_later(float(os.environ["VERITY_TRACEDUMP"]), repeat=True)
+        faulthandler.dump_traceback_later(tracedump, repeat=True)
     # [R18 infra, F-r17-tp-06 / BRIEF Phase 0] source identity precheck BEFORE anything else runs: verity.ml.circuits, verity_vllm, vllm-poc,
     # hidden_gpu (and the telemetry package) must all resolve from THIS tree (the one commit_delta.py lives in; $VERITY_TREE must agree).
     # A mismatch exits 3 with PRECHECK_FAIL_SOURCE_IDENTITY on stderr -- no engine, no inference; the record is written beside the out dir.
@@ -1136,8 +1136,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     print(f"[delta] source identity OK: " + " ".join(f"{k}={(v.get('git_sha') or '-')[:9]}" for k, v in source_identity_doc["packages"].items())
           + f" tree={source_identity_doc['requested_root']}", flush=True)
     if _sid_out is not None:   # [R18 infra, r18-int-2; rev n1] native_host._gpu_ext_load writes its import-site document beside this one
-        os.environ["VERITY_SOURCE_IDENTITY_DIR"] = str(Path(args.out))
-    os.environ["VERITY_WEIGHTS_HASH"] = args.weights_hash       # read by native_host.register_weights (this process and the forked replay)
+        settings.put("VERITY_SOURCE_IDENTITY_DIR", str(Path(args.out)))
+    settings.put("VERITY_WEIGHTS_HASH", args.weights_hash)       # read by native_host.register_weights (this process and the forked replay)
     if _HOT is not None:
         _unsafe = hot_unsafe_reasons(args)
         if _unsafe:
@@ -1146,7 +1146,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     args = resolve_staging(args)
     _planner = RB.prepare(args)
     compiled_src = None
-    fault = os.environ.get("VERITY_FAULT", "").strip()
+    fault = settings.VERITY_FAULT
     compiled_kernels = None
     if args.compiled_taps == "kernels":
         if args.only_arm == "control":
@@ -1209,7 +1209,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         compiled_src.use_plan(required_manifest, out / "compiled_source_plan")     # [v2 acquire] the engine build's wrap_model wraps the plan's boundaries
     # [R16 sys, F-stoch-03] the collector's fail-fast watchdog writes this marker (then _exit(3)) when a "collector dead" run does not fail
     # closed within VERITY_COLLECT_DEAD_GRACE_S; row_pod reads rc 3 as COMMIT FAIL, and a present marker names the hang in the row evidence.
-    os.environ.setdefault("VERITY_COLLECT_WATCHDOG_MARKER", str(out / "COLLECTOR_DEAD_HUNG.json"))
+    settings.setdefault("VERITY_COLLECT_WATCHDOG_MARKER", str(out / "COLLECTOR_DEAD_HUNG.json"))
     wl = va.load_workload(args.workload)
     engine_args = {**(wl.get("engine_args_required") or {}), **va.parse_engine_args(args.engine_arg)}
     TL.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3), label=args.label, workload=str(args.workload),
@@ -1263,7 +1263,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         eng = va.build_engine(_ekw["checkpoints"], max_num_seqs=_ekw["max_num_seqs"], case=_ekw["case"], engine_args=_ekw["engine_args"],
                               target=_ekw["target"], execution=_ekw["execution"])     # [R15 EXEC-02 M-0078] the row's execution decides enforce_eager (header: versions.json)
         TL.end("engine.build", build_s=round(eng.build_s, 3), model=eng.cp["repo"], enforce_eager=eng.kwargs.get("enforce_eager"),
-               engine_reused=False, restart_reason=((_HOT or {}).get("restart_reason") or os.environ.get("VERITY_HOT_RESTART_REASON")
+               engine_reused=False, restart_reason=((_HOT or {}).get("restart_reason") or settings.raw("VERITY_HOT_RESTART_REASON")
                                                     or "fresh process (one commit_delta per Commit stage)"))
         if _HOT is not None:
             gc.collect()
@@ -1294,7 +1294,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     versions["argv"] = list(argv) if argv is not None else sys.argv
     # [R16 sys, BRIEF §10] hot/cold process + engine reused or restarted (+ reason) in the record itself, not only on the timeline
     versions["hot"] = {"hot_process": _HOT is not None, "engine_reused": _live is not None,
-                       "restart_reason": None if _live is not None else ((_HOT or {}).get("restart_reason") or os.environ.get("VERITY_HOT_RESTART_REASON")
+                       "restart_reason": None if _live is not None else ((_HOT or {}).get("restart_reason") or settings.raw("VERITY_HOT_RESTART_REASON")
                                                                           or "fresh process (one commit_delta per Commit stage)"),
                        "worker_job": (_HOT or {}).get("jobs"), "worker_pid": os.getpid() if _HOT is not None else None,
                        "engine_built_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime((_HOT or {}).get("t_built") or time.time())),
@@ -1361,11 +1361,11 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         print(f"[delta] warm-up control {i}: {r['wall_s']:.3f}s {r['iterations']} it", flush=True)
 
     run_id = f"{Path(args.workload).stem}"
-    if os.environ.get("VERITY_SWITCH"):          # GIL-interference experiment: interpreter switch interval (default 5 ms)
+    if switch := settings.raw("VERITY_SWITCH"):          # GIL-interference experiment: interpreter switch interval (default 5 ms)
         import sys as _sys
 
-        _sys.setswitchinterval(float(os.environ["VERITY_SWITCH"]))
-        print(f"[delta] sys.setswitchinterval({os.environ['VERITY_SWITCH']})", flush=True)
+        _sys.setswitchinterval(float(switch))
+        print(f"[delta] sys.setswitchinterval({switch})", flush=True)
     for kind in kinds:
         TL.start("prep.committer_setup", kind=kind)
         com = make_committer(kind, eng, args, run_id)
@@ -1461,8 +1461,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 #            factor 2.0 (the per-token widths of the declaration under-size these planes; bounded, not explained)
                 # A blanket x1.15 on the total held on B1 only because hidden is 78 % of the stream; on B8 (hidden 92 %) it under-sizes the
                 # kept raw by ~7 GiB while over-sizing the levels. Env overrides for a re-derivation, never for a launch.
-                _f_hidden = float(os.environ.get("VERITY_ADMIT_HIDDEN_FACTOR", "1.05"))
-                _f_other = float(os.environ.get("VERITY_ADMIT_OTHER_FACTOR", "2.0"))
+                _f_hidden = settings.VERITY_ADMIT_HIDDEN_FACTOR
+                _f_other = settings.VERITY_ADMIT_OTHER_FACTOR
                 # the run's stream under the workload's DECLARED schedule (per step; the hidden family's share), not the envelope's
                 # any-packing worst case (`retained_bytes_bound` = ceil(B x max_prompt / T_prefill) prefills of the worst step: 3x for the
                 # B8 1024/128 row whose 8 prompts prefill in ONE step) -- both are on the record
@@ -1493,7 +1493,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                             # engine growth after admission (torch host allocator, vLLM bookkeeping, CUDA context, the warm-ups'
                                             # buffers) + pool rounding: B1 timelines RSS 2,218 -> 5,757 MiB before the first pool block (+3,539
                                             # MiB), rounding <= 190 MiB -> 6 GiB (the earlier 4 GiB left 516 MiB on bounded-none try 3)
-                                            slack_bytes=int(float(os.environ.get("VERITY_ADMIT_SLACK_GIB", "6")) * (1 << 30)),
+                                            slack_bytes=int(settings.VERITY_ADMIT_SLACK_GIB * (1 << 30)),
                                             # a 2nd+ pair's frozen pool beside the pinned cache of the first (B1 PAIRS=3 curve, FP8-STAGING §3.4)
                                             pairs=int(getattr(args, "pairs", 1) or 1))
                 _admit.update({"envelope_retained_bytes_bound": int(asz["retained_bytes_bound"]), "schedule_run_bytes": int(_ssb["run_bytes"]),
@@ -1554,7 +1554,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 adm = ADM.admission(asz, reqs, host_cap, retain=str(getattr(com, "retain", "host")),
                                     max_num_batched_tokens=eng.kwargs.get("max_num_batched_tokens"), lag=admission_lag(wl),
                                     envelope_bound_bytes=int(asz["retained_bytes_bound"]), resident=ADM.committer_resident(wl, host_cap, pairs=args.pairs, replay_workers=args.replay_workers))
-                adm["override"] = os.environ.get("VERITY_ADMIT_OVER_BOUND") == "1"
+                adm["override"] = settings.VERITY_ADMIT_OVER_BOUND
                 adm["host_cap_source"] = host_cap_src
                 adm["domain"] = "--retain host (the whole run's raw bytes pinned on host); a non-host retention is recorded, never refused"
                 # [revb M-0254, fp8 x stoch on one tree] a --bounded-staging run pins the NON-excluded families sparsely and opens the excluded
@@ -1582,7 +1582,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 # [rev S-r17-09 n2] an uncomputed admission is not an admission: a --retain host run is REFUSED by name (rc 3) unless
                 # VERITY_ADMIT_OVER_BOUND=1; a non-host retention (nothing pinned for the run) records the error and proceeds
                 _host = str(getattr(com, "retain", "host")) == "host" and not bool(getattr(com, "bounded", False))   # a bounded run: the HOST BOUND above governs (M-0254)
-                _ovr = os.environ.get("VERITY_ADMIT_OVER_BOUND") == "1"
+                _ovr = settings.VERITY_ADMIT_OVER_BOUND
                 asz["admission"] = {"admitted": (None if not _host else False), "override": _ovr, "host_cap_source": host_cap_src,
                                     "why": f"admission not computed: {_ae!r}"[:300] + (" -- refused: an uncomputed admission is not an admission (--retain host)" if _host and not _ovr else "")}
                 (out / f"admission_{kind}.json").write_text(json.dumps(asz["admission"], indent=1, default=str) + "\n")
@@ -2181,6 +2181,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         oc = OC.oracle_compare(_oracle, _bm, _ocr, producers=_prod, workload=_wl,
                                                aliases=(required_manifest.get("op_path_aliases") if isinstance(required_manifest, dict) else None),
                                                query_families=OC.query_families_of(required_manifest),   # [revb n-2.14-1] identities per Q(P) family
+                                               runtime_rows=OC.runtime_rows_of(required_manifest if isinstance(required_manifest, dict) else None),
                                                own=frozenset().union(*(getattr(s, "own_names", ()) for s in getattr(com, "sources", ()))))
                         oc["producer_facts"] = oracle_producers[1]
                         oc["value_source"] = _ocr.record()

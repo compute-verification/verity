@@ -1,12 +1,12 @@
 import Mathlib
-import Models.Pouw.Guarantees.RelativeSecurity
+import Definitions.Pouw.Guarantees.RelativeSecurity
 import Proofs.Pouw.RelativeSecurity
 
 /-!
 # Relative security's guarantees for the staged window: the proofs
 
 `Pouw.SecurityProofs.RelativeSecurity.G : Pouw.Guarantees.RelativeSecurity.G` for each guarantee of
-`Models.Pouw.Guarantees.RelativeSecurity`, from `Proofs.Pouw.RelativeSecurity`: Theorem S by the stages'
+`Definitions.Pouw.Guarantees.RelativeSecurity`, from `Proofs.Pouw.RelativeSecurity`: Theorem S by the stages'
 supermartingale at the luck ¾ (`RoundGame.expBound_of_staged`, `StagedPlay.game_staged`), and the floor by
 `roundsHyp_of_staged` with the chain bound at factor 1 from Lemma G over F₂ (`chainBound_gProd`, `toF2`) and
 `serviceFloor_of_rounds` at `D = 160 ln 2`. With overlapping stages, Theorem S by the per-draw luck's `PassBound (3/4)`

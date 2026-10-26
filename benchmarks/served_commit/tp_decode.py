@@ -245,7 +245,7 @@ def main() -> None:
     prof.apply_env()
     from vllm import LLM
 
-    from verity_vllm import protocol_options as PO
+    from verity_vllm import protocols as PO
     from verity_vllm.engine import served as SV
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.engine.rank_worker import EXTENSION
@@ -265,7 +265,7 @@ def main() -> None:
     case = va.case_of(wl, a.case)
     env_flags = {**prof.apply_env(), **target_env}
     cp = prof.checkpoint_for(case, a.checkpoints)
-    kw = prof.engine_kwargs(cp, replay=False, enforce_eager=True, tensor_parallel_size=a.tp)
+    kw = prof.engine_kwargs(cp, replay=False, seed=prof.ENGINE_SEED, enforce_eager=True, tensor_parallel_size=a.tp)
     kw.update({"enable_prefix_caching": False, "max_num_seqs": max(batches), **target_kw})
     kw.update({k: v for k, v in (wl.get("engine_args_required") or {}).items() if k != "tensor_parallel_size"})
     kw.update(parse_engine_args(a.engine_arg), worker_extension_cls=EXTENSION)
