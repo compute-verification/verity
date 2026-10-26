@@ -126,9 +126,11 @@ prover `A` has
 * a query log `L` of `q` distinct queries with schedule `τ` (B2, N1). `q` and `τ` are `A`'s own (N3);
 * the black-box reading, on every run within the cap: on every oracle and the answer stream it gives the log, the
   rounds' roots are the log's, and every point an accepted opening's check hashes is a logged query (N2);
-* round words programs `Mw w` on advice of at most `Badv` bits fixed before the round's coins, each the walk of the
-  extractor down from the round's root over the queries before it (`MerkleExtract.ext`; a cell it can't reach reads
-  `0`), and commitment programs `Mh w` on the advice, the dither and the words whose output is `A`'s root;
+* round words programs `Mw w` on advice of at most `Badv` bits fixed before the round's coins, each, on every answer
+  stream with distinct answers, the walk of the extractor down from the round's root over the queries before it
+  (`MerkleExtract.ext`; a cell it can't reach reads `0`). Where answers repeat, `ext`'s choice among the matching
+  points can walk into another round's tree, and a repeat is already `κ_x`'s `q²` term (RT-LEAN-2 L40). The
+  commitment programs `Mh w` read the advice, the dither and the words, and their output is `A`'s root;
 * the cost half, over the period. The `Mw w` and `Mh w` use at most the prover's `work` plus `k · ξw + q · ξl` of each
   resource: `ξw` the walk's use per round, `ξl` the upkeep of one log entry.
   - `Mh w` is the prover's commitment path between the round's dither and its root: its SHA-512 calls, each done by
@@ -159,8 +161,8 @@ def Realization (G : Accel) (nf : NoFold) (k : ℕ) (reg : Fin k → (noFoldRoun
     (∀ o x, A.calls o x ≤ Q → ∀ u, Consistent (L.qry x) (eo o) u → A.Accepted reg o x → ∀ w (j : Fin nf.s),
       ∀ y ∈ pts E (pl ((A.ans o x w : Fin nf.s → Word × nf.Path) j).2) ((A.ans o x w : Fin nf.s → Word × nf.Path) j).1,
         ∃ i, L.qry x i u = y) ∧
-    (∀ o x, A.calls o x ≤ Q → ∀ u, Consistent (L.qry x) (eo o) u → ∀ w (c : Fin nf.n × Fin nf.n' × Fin nf.nb),
-      G.Mc.eval (Mw w) (adv o x w, (x w).1) c.1 c.2.1 c.2.2 =
+    (∀ o x, A.calls o x ≤ Q → ∀ u, Consistent (L.qry x) (eo o) u → Function.Injective u →
+      ∀ w (c : Fin nf.n × Fin nf.n' × Fin nf.nb), G.Mc.eval (Mw w) (adv o x w, (x w).1) c.1 c.2.1 c.2.2 =
         (ext ((L.prover x w).oracle u) E ((L.prover x w).pre u) (L.root x w u) (dirs c)).getD 0)
 
 /-- `pouw-commit-realize` (proposed; the realization half of SHA-512 as a random oracle for the commitments, R-ACCEL-3

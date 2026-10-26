@@ -13,7 +13,7 @@ import Definitions.Pouw.MerkleExtract
   among the answers (`q²`), or a post-commitment answer hitting the root or a child digest the log names
   (`q (2τ + 1)`).
 * `extract_of_ro_roots`: the same for `R` roots over one stream, `(q² + ∑_w q (2τ_w + 1)) / |D|`, with one
-  repeated-answer event for all the roots.
+  repeated-answer event for all the roots, which the bound also counts on its own (`mem_repeats_of_not_injective`).
 * Lazy sampling (`exists_consistent`, `card_consistent_le`): every oracle `h : X → D` gives an adaptive querier an
   answer stream, and a querier with distinct queries sees each stream on a `1/|D|^q` share of the oracles.
 * `card_fails_oracle_le`: `extract_of_ro_roots` over a uniform oracle `X → D` instead of the stream.
@@ -185,6 +185,20 @@ theorem card_repeats_le (q : ℕ) :
     _ = q * q * Fintype.card (Fin q → D) := by
         simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]; ring
 
+/-- A stream that gives two queries one answer repeats an answer. -/
+theorem mem_repeats_of_not_injective {q : ℕ} {u : Fin q → D} (hu : ¬ Function.Injective u) :
+    u ∈ Finset.univ.biUnion fun t : Fin q => (repeats q t : Finset (Fin q → D)) := by
+  simp only [Function.Injective, not_forall] at hu
+  obtain ⟨a, b, hab, hne⟩ := hu
+  rw [Finset.mem_biUnion]
+  rcases lt_or_gt_of_ne hne with hlt | hlt
+  · refine ⟨b, Finset.mem_univ _, ?_⟩
+    simp only [repeats, Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_image]
+    exact ⟨a, hlt, hab⟩
+  · refine ⟨a, Finset.mem_univ _, ?_⟩
+    simp only [repeats, Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_image]
+    exact ⟨b, hlt, hab.symm⟩
+
 omit [Fintype D] in
 /-- The targets answer `b` can hit don't read answer `b`. -/
 theorem targetsAt_update {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) (b : Fin q) (u : Fin q → D) (a : D) :
@@ -309,21 +323,23 @@ theorem extract_of_ro [Inhabited D] {q τ : ℕ} (E : Enc X D W) (A : Prover X D
 open Classical in
 /-- **`extract_of_ro_roots`, the `R`-root form**: `R` roots over one answer stream, root `w` sent after the first
 `τ w` answers (`A w` is the prover with that root; in a period the `A w` share their queries). Extraction fails at some
-root on at most a `(q² + ∑_w q (2 τ_w + 1)) / |D|` share of the streams: the repeated-answer event is one for all the
-roots, and each root adds its own targets. -/
+root, or two answers repeat, on at most a `(q² + ∑_w q (2 τ_w + 1)) / |D|` share of the streams: the repeated-answer
+event is one for all the roots, and each root adds its own targets. -/
 theorem extract_of_ro_roots [Inhabited D] {q R : ℕ} {τ : Fin R → ℕ} (E : Enc X D W)
     (A : ∀ w, Prover X D q (τ w)) :
-    (Finset.univ.filter fun u => ∃ w, ExtractFails E (A w) u).card * Fintype.card D ≤
+    (Finset.univ.filter fun u => (∃ w, ExtractFails E (A w) u) ∨ ¬ Function.Injective u).card * Fintype.card D ≤
       (q * q + ∑ w, q * (2 * τ w + 1)) * Fintype.card (Fin q → D) := by
-  have hsub : (Finset.univ.filter fun u => ∃ w, ExtractFails E (A w) u) ⊆
+  have hsub : (Finset.univ.filter fun u => (∃ w, ExtractFails E (A w) u) ∨ ¬ Function.Injective u) ⊆
       (Finset.univ.biUnion fun t => repeats q t) ∪ Finset.univ.biUnion fun w => hits E (A w) := by
     intro u hu
     simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hu
-    obtain ⟨w, hw⟩ := hu
-    rcases Finset.mem_union.mp (fails_sub E (A w) (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hw⟩)) with h | h
-    · exact Finset.mem_union_left _ h
-    · exact Finset.mem_union_right _ (Finset.mem_biUnion.mpr ⟨w, Finset.mem_univ _, h⟩)
-  calc (Finset.univ.filter fun u => ∃ w, ExtractFails E (A w) u).card * Fintype.card D
+    rcases hu with ⟨w, hw⟩ | hu
+    · rcases Finset.mem_union.mp (fails_sub E (A w) (Finset.mem_filter.mpr ⟨Finset.mem_univ _, hw⟩)) with h | h
+      · exact Finset.mem_union_left _ h
+      · exact Finset.mem_union_right _ (Finset.mem_biUnion.mpr ⟨w, Finset.mem_univ _, h⟩)
+    · exact Finset.mem_union_left _ (mem_repeats_of_not_injective hu)
+  calc (Finset.univ.filter fun u => (∃ w, ExtractFails E (A w) u) ∨ ¬ Function.Injective u).card *
+        Fintype.card D
       ≤ ((Finset.univ.biUnion fun t => repeats q t) ∪ Finset.univ.biUnion fun w => hits E (A w)).card *
           Fintype.card D := Nat.mul_le_mul_right _ (Finset.card_le_card hsub)
     _ ≤ ((Finset.univ.biUnion fun t => (repeats q t : Finset (Fin q → D))).card + ∑ w, (hits E (A w)).card) *
@@ -442,15 +458,16 @@ theorem card_consistent_le [Fintype X] [DecidableEq X] {q : ℕ} (qry : Fin q �
 open Classical in
 /-- **`extract_of_ro_roots` over a uniform oracle.** `R` roots over one querier `qry` (adaptive, distinct queries),
 root `w` sent after the first `τ w` answers: the oracles `h : X → D` on whose answer stream extraction fails at some
-root are at most a `(q² + ∑_w q (2 τ_w + 1)) / |D|` share of all oracles. -/
+root, or two answers repeat, are at most a `(q² + ∑_w q (2 τ_w + 1)) / |D|` share of all oracles. -/
 theorem card_fails_oracle_le [DecidableEq D] [Fintype X] [DecidableEq X] [Inhabited D] {q R : ℕ} {τ : Fin R → ℕ}
     (E : Enc X D W) (qry : Fin q → (Fin q → D) → X) (hfresh : ∀ u (i j : Fin q), j < i → qry i u ≠ qry j u)
     (A : ∀ w, Prover X D q (τ w)) :
     (Finset.univ.filter fun h : X → D =>
-        ∃ u, Consistent qry h u ∧ ∃ w, ExtractFails E (A w) u).card * Fintype.card D ≤
+        ∃ u, Consistent qry h u ∧ ((∃ w, ExtractFails E (A w) u) ∨ ¬ Function.Injective u)).card * Fintype.card D ≤
       (q * q + ∑ w, q * (2 * τ w + 1)) * Fintype.card (X → D) := by
-  set S := Finset.univ.filter fun u => ∃ w, ExtractFails E (A w) u
-  have hsub : (Finset.univ.filter fun h : X → D => ∃ u, Consistent qry h u ∧ ∃ w, ExtractFails E (A w) u) ⊆
+  set S := Finset.univ.filter fun u => (∃ w, ExtractFails E (A w) u) ∨ ¬ Function.Injective u
+  have hsub : (Finset.univ.filter fun h : X → D =>
+        ∃ u, Consistent qry h u ∧ ((∃ w, ExtractFails E (A w) u) ∨ ¬ Function.Injective u)) ⊆
       Finset.univ.filter fun h : X → D => ∃ u ∈ S, Consistent qry h u := by
     intro h hh
     simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hh ⊢
@@ -462,7 +479,8 @@ theorem card_fails_oracle_le [DecidableEq D] [Fintype X] [DecidableEq X] [Inhabi
   rw [Fintype.card_fun, Fintype.card_fin] at h2
   refine Nat.le_of_mul_le_mul_right ?_ hpos
   calc (Finset.univ.filter fun h : X → D =>
-          ∃ u, Consistent qry h u ∧ ∃ w, ExtractFails E (A w) u).card * Fintype.card D * Fintype.card D ^ q
+          ∃ u, Consistent qry h u ∧ ((∃ w, ExtractFails E (A w) u) ∨ ¬ Function.Injective u)).card *
+            Fintype.card D * Fintype.card D ^ q
       ≤ (Finset.univ.filter fun h : X → D => ∃ u ∈ S, Consistent qry h u).card * Fintype.card D ^ q *
           Fintype.card D := by
         rw [mul_right_comm]; exact Nat.mul_le_mul_right _ (Nat.mul_le_mul_right _ (Finset.card_le_card hsub))
