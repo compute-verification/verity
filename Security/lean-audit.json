@@ -1895,6 +1895,18 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "Verity.Evaluates": {
+   "owner": "@lean",
+   "digest": "e6ffb734aa9967ab730adf8846a81aa573d0a5e1c738580a49d710731725d020"
+  },
+  "Verity.Partition.IsCK": {
+   "owner": "@lean",
+   "digest": "a78011b108a9369070c518c56ec7264ee084cb9aab661d2ab5ba77a6b4c26cd2"
+  },
+  "Verity.Registration.Honest": {
+   "owner": "@lean",
+   "digest": "0a4f2c916452e983bb5f36924f0e135a1f795b58b155960c67cfcce3b12ca7ec"
   }
  },
  "meaning": [
@@ -8199,7 +8211,10 @@
    "type_hash": "050a6a71067b4a587ac6b196844f86d1b35fe2ea863657b2695c575a06c1d95e"
   },
   "Nci.SecurityProofs.PartitionCovers": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.PartitionCovers : Nci.Guarantees.PartitionCovers"],
+   "assumptions": [],
+   "type_hash": "e91ddc3829ebf746b239f410fb6e3c41921ab211b519ba02ac367583900152ed"
   },
   "Nci.SecurityProofs.ReadBound": {
    "owner": "@lean",
@@ -10468,10 +10483,16 @@
    "type_hash": "cf6ae741ac5e875201f2ca2733ffda1969bd047946b299c8af7546edd595eaf8"
   },
   "Verity.SecurityProofs.BlockDescription": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.BlockDescription : Verity.Guarantees.BlockDescription"],
+   "assumptions": [],
+   "type_hash": "80baa463fd43086b3ca137b50dc78ace3b4400bfbabdb344ddc3c090d1f6dbeb"
   },
   "Verity.SecurityProofs.CKSize": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.CKSize : Verity.Guarantees.CKSize"],
+   "assumptions": [],
+   "type_hash": "d29489247f5da3d50fd1a297d4dedec5e94940fa1ff83ecab62fd5b8fae592df"
   },
   "Verity.SecurityProofs.Compose": {
    "owner": "@proofs",
@@ -10498,10 +10519,16 @@
    "type_hash": "d31e6511bb4fdd3d42e665caac936737a4de4cc765e689f6eb61e9543ede9762"
   },
   "Verity.SecurityProofs.Counting": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.Counting : Verity.Guarantees.Counting"],
+   "assumptions": [],
+   "type_hash": "34e0729bbd40c2fd7311fc30725f7d8bb1f2fb2daed521891c0dada5afd70f77"
   },
   "Verity.SecurityProofs.CountingSum": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.CountingSum : Verity.Guarantees.CountingSum"],
+   "assumptions": [],
+   "type_hash": "1b2f164ab74dfac250ebe357db6363a1d52294716405d3ed10596cb21004e4ef"
   },
   "Verity.SecurityProofs.HopperStepComplete": {
    "owner": "@proofs",
@@ -17688,6 +17715,7 @@
     "Nci.SecurityProofs.PackedContainedFanOutOn",
     "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
     "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
+    "Nci.SecurityProofs.PartitionCovers",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceThreaded",
     "Nci.SecurityProofs.ReferenceTraining",
@@ -17716,10 +17744,14 @@
     "Nci.SecurityProofs.UpdatedMatMulReads",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
     "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Verity.SecurityProofs.BlockDescription",
+    "Verity.SecurityProofs.CKSize",
     "Verity.SecurityProofs.Compose",
     "Verity.SecurityProofs.ComposeCone",
     "Verity.SecurityProofs.ContainsImplements",
     "Verity.SecurityProofs.CorrectOfOpening",
+    "Verity.SecurityProofs.Counting",
+    "Verity.SecurityProofs.CountingSum",
     "Verity.SecurityProofs.PrivateFitsOfLocal",
     "Verity.SecurityProofs.PrivateOutBitsLe",
     "Verity.SecurityProofs.RefineWrong",
@@ -17781,6 +17813,7 @@
     "Nci.SecurityProofs.PackedContainedFanOutOn",
     "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
     "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
+    "Nci.SecurityProofs.PartitionCovers",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceThreaded",
     "Nci.SecurityProofs.ReferenceTraining",
@@ -17807,7 +17840,39 @@
     "Nci.SecurityProofs.Training",
     "Nci.SecurityProofs.UpdatedMatMul",
     "Nci.SecurityProofs.UpdatedMatMulReads",
-    "Verity.SecurityProofs.ContainsImplements"
+    "Verity.SecurityProofs.BlockDescription",
+    "Verity.SecurityProofs.CKSize",
+    "Verity.SecurityProofs.ContainsImplements",
+    "Verity.SecurityProofs.Counting"
+   ]
+  },
+  "Definitions.Core.Formalism": {
+   "digest": "655dd81daf175ffef90581326125c74bc4391fe48b7e958805a06e30c24256be",
+   "definitions": {
+    "Verity.Circuit.Boolean": "a995dfb38aab58517bf9c93b3b0d18603dd69feadf4fc73472ad6f28f1a17ede",
+    "Verity.Circuit.bits": "45f1ab981d34eac7925bd50b8583e9dce1c4439155dc5fec59e9c7a78117de94",
+    "Verity.Declaration.unregistered": "9c3fc707649a9ace5a6f7e78392f398cd871d51d874b3c00d0190866d6268025",
+    "Verity.Decoder": "32b50b1c92e0a6bf91d2718836a6105fd2aa6491e10b4fc78e36cef49ed2a634",
+    "Verity.Decoder.run": "0d0404da4fae79570ec9d0c60b7a725829f656bdcd665fd20bf0526e45d1f3d1",
+    "Verity.Evaluates": "e6ffb734aa9967ab730adf8846a81aa573d0a5e1c738580a49d710731725d020",
+    "Verity.LDL": "f81389f381a8ab1600a672fd46d11b2796b1149214dd45f29f2b140fb4121a3f",
+    "Verity.Partition.IsCK": "a78011b108a9369070c518c56ec7264ee084cb9aab661d2ab5ba77a6b4c26cd2",
+    "Verity.Registration": "4d3873d7edaca6f9c5ecedd369b1c30bfda178515ddd025eb4ecb271db2d5f6d",
+    "Verity.Registration.B": "c47d2b430260bf14d31509f683ee910a131434405a51f20f2a2d709bf9d8f729",
+    "Verity.Registration.Honest": "0a4f2c916452e983bb5f36924f0e135a1f795b58b155960c67cfcce3b12ca7ec",
+    "Verity.Registration.P": "8cc64704c089d0c7dc56fa04b75795936fa9b272e07cec36a33e0d11c1064eb7",
+    "Verity.Registration.d": "6e1e93675ff8e83d2f40c3a8c8370a20c5777f666ff060cb389515ba2690c864",
+    "Verity.Registration.recompute": "51f1593bec32e117d833e68df76650f6e943d00901420ae442ccd2cc29e8e7bd",
+    "Verity.Registration.val": "eecd31e4b834b02f3fac7260073edd5dbb81de978ffaba9b7ad2730d0c350a5a",
+    "Verity.blockProgram": "46eb91fb1ad8504bc8495266d44b120c3d72a162d5a1c8386ebe92592a9829ca",
+    "Verity.indexCode": "216f0f6d0fa5066656396f830b46c8cf48acaf6ba4f14be91df4018037744cc8",
+    "Verity.slowdown": "bcc17fbdb9d4847eb2dad542959451341d0437675065f525f0bb8c86b421ac7b"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.PartitionCovers",
+    "Verity.SecurityProofs.BlockDescription",
+    "Verity.SecurityProofs.CKSize",
+    "Verity.SecurityProofs.Counting"
    ]
   },
   "Definitions.Core.Fp32": {
@@ -17895,6 +17960,21 @@
     "Verity.SecurityProofs.ContainsImplements",
     "Verity.SecurityProofs.CorrectOfOpening",
     "Verity.SecurityProofs.RefineWrong"
+   ]
+  },
+  "Definitions.Core.Guarantees.Formalism": {
+   "digest": "681b3c97b75be5fe5cfc5cdc69f4678c2b7cc440530772c03ba27acfc0b0f645",
+   "definitions": {
+    "Verity.Guarantees.BlockDescription": "f949fc60d3af21c28b2093681ba1b3a2b62924451a7ebcda748aa35db70a8c22",
+    "Verity.Guarantees.CKSize": "e5ae2c049103314a92e25cf1222e01ac19facf5f244deab0b45fbbbbd2db4db0",
+    "Verity.Guarantees.Counting": "c00a9fa2cdff42ac249540011e33c688fbeeac8c0a799d92139829829671facd",
+    "Verity.Guarantees.CountingSum": "0a0b8bba8cac0cd66ec998958d7b16614b762c7e3b58e09e82bc841a787c8c76"
+   },
+   "guarantees": [
+    "Verity.SecurityProofs.BlockDescription",
+    "Verity.SecurityProofs.CKSize",
+    "Verity.SecurityProofs.Counting",
+    "Verity.SecurityProofs.CountingSum"
    ]
   },
   "Definitions.Core.Guarantees.Game": {
@@ -18024,6 +18104,7 @@
     "Nci.SecurityProofs.PackedContainedFanOutOn",
     "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
     "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
+    "Nci.SecurityProofs.PartitionCovers",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedThrottled",
@@ -18039,9 +18120,13 @@
     "Nci.SecurityProofs.UpdatedMatMulReads",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
     "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
+    "Verity.SecurityProofs.BlockDescription",
+    "Verity.SecurityProofs.CKSize",
     "Verity.SecurityProofs.Compose",
     "Verity.SecurityProofs.ComposeCone",
     "Verity.SecurityProofs.CorrectOfOpening",
+    "Verity.SecurityProofs.Counting",
+    "Verity.SecurityProofs.CountingSum",
     "Verity.SecurityProofs.PrivateFitsOfLocal",
     "Verity.SecurityProofs.PrivateOutBitsLe",
     "Verity.SecurityProofs.RefineWrong",
@@ -20580,7 +20665,8 @@
     "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
     "Nci.SecurityProofs.CoveringBound",
     "Nci.SecurityProofs.CoveringBoundPriced",
-    "Nci.SecurityProofs.CoveringBoundTwoCosts"
+    "Nci.SecurityProofs.CoveringBoundTwoCosts",
+    "Nci.SecurityProofs.PartitionCovers"
    ]
   },
   "Definitions.Nci.Dampener": {
@@ -20920,6 +21006,13 @@
     "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
     "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn"
    ]
+  },
+  "Definitions.Nci.Guarantees.PartitionCovers": {
+   "digest": "9e47e6f4498b9173508a6b9041a1d828d20c44ffca67d6320fa5201257a442cd",
+   "definitions": {
+    "Nci.Guarantees.PartitionCovers": "1991db5682e15e6fd4605b4679fd9912ec9cf972dd2c39f6dad0c002a02d8cf3"
+   },
+   "guarantees": ["Nci.SecurityProofs.PartitionCovers"]
   },
   "Definitions.Nci.Guarantees.Reads": {
    "digest": "016cca93308e9ac6c0ad97c73b18da826f0fc8fbd33eb77535c28f63f61b3f72",
