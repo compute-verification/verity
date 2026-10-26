@@ -41,6 +41,20 @@ multiplication algorithm is faster than Strassen."
 - **Daniel also asked** whether Pearl-C gets provable security under the model. Today it doesn't: its γ rests on the
   named conjecture TT_OUT(ρ) over W1 programs, an algorithmic assumption. PEARLC-MODEL owns the question.
 
+**Rulings, 25 Oct 7:00 PM PDT (Daniel):**
+
+- **R-ACCEL-4, the only assumptions are the model's parameters.** "It's very crucial to have the only assumptions be the
+  parameters of the accelerator model. Let's make this work and invest heavily in it if need be."
+  - The trust base is the model's parameters \(\theta\), standard cryptography (R-ACCEL-3 included), and live coins
+    from the auditor's devices.
+  - Every other premise is a **defect to remove**: FOLD-OPT, FILL-OPT and ABSORB; H-μ⁺'s "errors can't be made to
+    cancel"; 𝒦; `ChargeVF3j16`; WORD-WORK's per-word premise; TT_OUT.
+  - ASSUMPTION-AUDIT keeps the burn-down list. A statement may hold a theorem-to-be slot inside the model, but never a
+    premise about algorithms.
+- **R-ACCEL-3, SHA-512 as a random oracle.** Daniel: "I could see this being potentially reasonable". A route may use the
+  random-oracle model for SHA-512, but only as an explicitly named assumption. Say which results use it; Daniel
+  confirms each one that depends on it. Where collision resistance suffices, prefer it.
+
 **Wording:**
 
 - Don't use "completeness" for a model property; the word is overloaded.
@@ -482,6 +496,33 @@ scores the bets against each other. A bet that's killed reports why: that is a r
   - *What it is:* an algorithm-cost lab. Implement in exact CPU emulation the reference Dither kernel and the cheaper-looking alternative exact algorithms for the same transcript: depth-1 Strassen on narrow inputs with sparse correction, packed integer multiplies, bit-sliced arithmetic, Four Russians tables, and alternative receipt-fold implementations.
   - *Method:* count each algorithm's instructions by model class, and price them at data-sheet rates.
   - *Deliverable:* the code, the counted costs, and each algorithm's cost relative to the reference. CPU only.
+
+### Assumption removal (added 26 Oct 02:40Z, after R-ACCEL-4)
+
+- **ASSUMPTION-AUDIT.** Inventory every premise in the chain, from the deployed Dither/H1 (and Pearl-C) to the period
+  guarantee and JointHorizon's PoUW part:
+  - the floors and their premises (`KScope*`, `ChargeVF3j16`, `ServiceSoundStaged*`);
+  - #4363's `H1CheckedCreditPeriod` premises and CMP-127's J10-R ones;
+  - H-μ⁺;
+  - the honest-design TOML's FOLD-OPT and FILL-OPT;
+  - ABSORB;
+  - WORD-WORK's premise;
+  - TT_OUT.
+
+  Classify each as model parameter, standard crypto (random oracle per R-ACCEL-3 marked as such), live coins or trusted
+  device, protocol-code fact (provable from code), or **defect** (an algorithmic or other premise). For each defect,
+  name the workstream that removes it, or say "unowned". Keep the table current as workers report.
+- **FOLD-SAT.** Mechanical lower bounds by SMT superoptimization over the GPU's exact instruction semantics: LOP3,
+  IADD3, IMAD with .HI and .WIDE, SHF, PRMT and the rest of what's relevant. The targets:
+  - the minimal instruction count, and issue-slot count, of one fold step for li, duo and BET-FOLD's candidates;
+  - the same from split-word inputs, word = a + b, which puts ABSORB in cost form;
+  - amortized multi-word steps.
+
+  This makes \(r_{\min}\) a checked fact about the ISA, not an assumption.
+- **ABSORB-THM.** Prove in the model that any program producing the receipt pays at least \(r\) per word for absorbing
+  it: the cost form of ABSORB, from the fold's algebraic structure (dependency, fan-in, degree). Do it for li, duo and
+  BET-FOLD's candidates. The random oracle (R-ACCEL-3) is an optional route, via fold keys or blocks through SHA-512,
+  but hashing every word costs γ ≈ 6455/L, which is too much on its own.
 
 ## 6. Coordination
 

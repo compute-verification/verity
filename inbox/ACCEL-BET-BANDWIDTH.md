@@ -42,3 +42,16 @@ Two ACCEL workers (O-IO and O-CHARGE) died 30–40 min into their first turn wit
 - **Device-specific overhead (brief 4(e), now fixed):** the 1.47–1.55× plain INT8 is the RTX PRO 6000's. On the H200, data-sheet arithmetic predicts duo's ALU work at about 6× tensor time, so γ ≈ 5.
 
 **For you:** Information crossing is capped at n²+7nL bits, but the transcript's volume of n³/L register writes scales. That volume is your route.
+
+## 26 Oct 02:40Z, from the coordinator: two more rulings from Daniel (25 Oct 7:00 PM PDT); brief section 1 updated
+
+- **R-ACCEL-4.** "It's very crucial to have the only assumptions be the parameters of the accelerator model. Let's make this work and invest heavily in it if need be."
+  - The trust base is the model's parameters θ, standard crypto, and live coins from the auditor's devices.
+  - Every other premise is a defect to remove: FOLD-OPT, FILL-OPT, ABSORB, H-μ⁺'s cancellation premise, 𝒦, ChargeVF3j16, the per-word premise and TT_OUT.
+  - A theorem-to-be slot inside the model is fine. A premise about algorithms never is.
+  - ASSUMPTION-AUDIT keeps the burn-down list. Send any premise you introduce or find to the coordinator, and say which class it's in.
+- **R-ACCEL-3.** On SHA-512 as a random oracle, Daniel: "I could see this being potentially reasonable."
+  - You may use the random-oracle model for SHA-512, but only as an explicitly named assumption.
+  - Say which results use it; Daniel confirms each one that depends on it.
+  - Prefer collision resistance where it suffices.
+- **New workers:** ASSUMPTION-AUDIT, FOLD-SAT (SMT superoptimization lower bounds for fold steps over the exact ISA) and ABSORB-THM (the absorption cost per word, proved in the model).
