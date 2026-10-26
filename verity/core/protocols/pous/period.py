@@ -12,7 +12,10 @@ is steps 1 to 3, `audit` steps 4 and 5, so a node's store can be set up once and
    from `coins` under a session id the auditor designates from them, and runs its timed session against the prover's
    answers (`prover`, by default the honest one that holds `C*`), signed under `signer`;
 5. the verifier judges the run, setup's acceptance of `C*` publishing exactly the run's commitment (`tie`) and then
-   `run.check_at`, and answers in the core interface's canonical form (`answer`); the case carries setup's own inputs.
+   `run.check_at`, and answers in the core interface's canonical form (`answer`); the case carries setup's own inputs,
+   or, for a store too large to decode every period, a citation of the setup check's recorded acceptance (`citation`,
+   of `setup_answer`), which the verifier checks published exactly the run's commitment (`cite`) instead of decoding
+   `C*` again.
 
 What an accepted run certifies is `certify`'s, as `PousCheck.RunProtocol.certify` computes it: `s_bits = ⌊ρ·blocks·w⌋`
 at `eps = δ + 2^eps_log2` = 1/100 + 2^-128 when a certificate covers the point (`certificate`: P2's registered one at
@@ -130,14 +133,49 @@ def point_of(doc: Mapping[str, Any]) -> R.Point:
 
 
 def case(point: R.Point, session_id: bytes, trusted: Sequence[bytes], published: R.Setup, digests: bytes,
-         session: R.Session, setup_of: Mapping[str, Any]) -> dict[str, Any]:
+         session: R.Session, setup_of: Mapping[str, Any] | None = None, *,
+         cited: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The run protocol's case, `{"commitment": hex, "evidence": hex, "params": JSON}` (`PousCheck.RunProtocol`): its
-    evidence carries the setup's own commitment and evidence, from `setup_of`, the setup protocol's case."""
+    evidence carries the setup's own commitment and evidence, from `setup_of`, the setup protocol's case, or `cited`, a
+    citation of the setup check's recorded acceptance (`citation`); exactly one of the two."""
+    if (setup_of is None) == (cited is None):
+        raise TypeError("a run's case carries the setup's case or a citation of its acceptance, exactly one")
     params = {"point": point_json(point), "session_id": session_id.hex(), "trusted": [t.hex() for t in trusted]}
-    evidence = {"digests": digests.hex(), "session": session.to_json(),
-                "setup": {"commitment": setup_of["commitment"], "evidence": setup_of["evidence"]}}
+    s = dict(cited) if setup_of is None else {"commitment": setup_of["commitment"], "evidence": setup_of["evidence"]}
+    evidence = {"digests": digests.hex(), "session": session.to_json(), "setup": s}
     return {"commitment": canonical_json_bytes(published.to_json()).hex(),
             "evidence": canonical_json_bytes(evidence).hex(), "params": params}
+
+
+def setup_answer(published: R.Setup) -> dict[str, Any]:
+    """The setup protocol's answer (`Core.Answer.toJson`) on a setup it accepted publishing `published`, as `pous-setup`
+    answers it: the digest `w ‖ salt`, the public outputs, the profile `{"mode": "public"}`."""
+    return {"commitment": (published.commitment + published.salt).hex(), "profile": {"mode": "public"},
+            "protocol": SETUP_PROTOCOL, "public": published.to_json(), "reason": None, "verdict": "accept"}
+
+
+def citation(answer: Mapping[str, Any], q: P2.P2Params, record: str) -> dict[str, Any]:
+    """A run case's citation of the setup check's recorded answer (`PousCheck.RunProtocol.SetupRef`): `answer`, the
+    parameters `q` it checked at, and `record`, where the check's record is (a run or `art:` id)."""
+    return {"answer": dict(answer), "params": q.manifest(), "record": record}
+
+
+def cite(point: R.Point, published: R.Setup, cited: Mapping[str, Any]) -> None:
+    """`PousCheck.RunProtocol.cite`: the citation names its record, and its answer is the setup protocol's acceptance at
+    the point's parameters, its digest `w ‖ salt` and its public outputs exactly `published`, the run's commitment;
+    else raises `run.Refused`, with the cited setup's reason when it did not accept. It reads no block of `C*`."""
+    a = cited["answer"]
+    if not cited["record"]:
+        raise R.Refused("the citation names no record of the setup check")
+    if a["protocol"] != SETUP_PROTOCOL:
+        raise R.Refused(f"the cited answer is {a['protocol']}'s, not the setup check's")
+    if a["verdict"] != "accept":
+        raise R.Refused(f"the cited setup did not accept: {a['reason'] or ''}")
+    if canonical_json_bytes(cited["params"]) != canonical_json_bytes(point.params.manifest()):
+        raise R.Refused("the cited setup was checked at other parameters than the run's")
+    if (a["commitment"] != (published.commitment + published.salt).hex()
+            or canonical_json_bytes(a["public"]) != canonical_json_bytes(published.to_json())):
+        raise R.Refused("the run's commitment is not what its setup published")
 
 
 SetupInputs = tuple[bytes, bytes, Sequence[Sequence[bytes]]]
@@ -161,12 +199,17 @@ def tie(point: R.Point, published: R.Setup, inputs: SetupInputs) -> None:
 
 def answer(point: R.Point, schemes: Mapping[str, mc.Verify], trusted: Collection[bytes], published: R.Setup,
            digests: bytes, session: R.Session, session_id: bytes, protocol: str = PROTOCOL, *,
-           setup_inputs: SetupInputs) -> dict[str, Any]:
-    """The run protocol's answer (`Core.Answer.canonical`) on decoded inputs: `tie` on the setup's own inputs, then
-    `run.check_at`, then `certify`."""
+           setup_inputs: SetupInputs | None = None, cited: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """The run protocol's answer (`Core.Answer.canonical`) on decoded inputs: `tie` on the setup's own inputs, or `cite`
+    on a citation of its recorded acceptance (exactly one of the two), then `run.check_at`, then `certify`."""
+    if (setup_inputs is None) == (cited is None):
+        raise TypeError("a run is judged on the setup's own inputs or a citation of its acceptance, exactly one")
     digest = hashlib.sha512(canonical_json_bytes(published.to_json())).hexdigest()
     try:
-        tie(point, published, setup_inputs)
+        if cited is None:
+            tie(point, published, setup_inputs)
+        else:
+            cite(point, published, cited)
         R.check_at(point, schemes, trusted, published, digests, session, session_id)
     except R.Refused as e:
         return {"commitment": digest, "profile": None, "protocol": protocol, "public": None, "reason": str(e),
@@ -313,11 +356,13 @@ def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, wor
 def audit(node: str, held: Store, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
           trusted: Collection[bytes] | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
           protocol: str = PROTOCOL, prover: Prover = honest, clock: Callable[[], int] = time.perf_counter_ns,
-          party: challenger_party.Party | None = None) -> Period:
+          party: challenger_party.Party | None = None, cited: Mapping[str, Any] | None = None) -> Period:
     """One period's audit of the store `held` on `node` (module docstring, steps 4 and 5): the memory challenger's session
     under the id the auditor designates from `coins` and the setup's root, then the run's check and answer, the tie on
-    the setup case `held` keeps, which the run's case carries. With `party`, the memory challenger is a party of its own
-    (`challenger_party`): its side runs where `party` starts it, with its own coins, key and session log, and the prover
+    the setup case `held` keeps, which the run's case carries; with `cited`, a citation of the setup check's recorded
+    acceptance (`citation`), the case carries it instead and the check reads no block of `C*` (`cite`). With `party`,
+    the memory challenger is a party of its own (`challenger_party`): its side runs where `party` starts it, with its
+    own coins, key and session log, and the prover
     answers it over a socket; `signer`, `log` and `clock` are unused, and the verifier's list is by default the key the
     side reports."""
     point, published = held.point, held.published
@@ -335,6 +380,10 @@ def audit(node: str, held: Store, coins: bytes, *, signer: mc.Signer | None = No
         session_id, key = bytes.fromhex(got["session_id"]), bytes.fromhex(got["public_key"])
         session = R.Session.from_json(got["session"])
     trusted = (key,) if trusted is None else tuple(trusted)
+    if cited is not None:
+        return Period(answer(point, schemes, trusted, published, held.digests, session, session_id, protocol,
+                             cited=cited),
+                      case(point, session_id, trusted, published, held.digests, session, cited=cited), held.setup_case)
     return Period(answer(point, schemes, trusted, published, held.digests, session, session_id, protocol,
                          setup_inputs=setup_inputs(held.setup_case)),
                   case(point, session_id, trusted, published, held.digests, session, held.setup_case), held.setup_case)
@@ -459,5 +508,6 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
 
 
 __all__ = ["PROTOCOL", "SETUP_WORKERS", "Period", "Prover", "SetupInputs", "Store", "answer", "audit", "case",
-           "certificate", "certified_point", "certify", "challenger", "encode", "gaps", "honest", "leg", "point_for",
-           "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs", "setup_store", "tie"]
+           "certificate", "certified_point", "certify", "challenger", "citation", "cite", "encode", "gaps", "honest", "leg",
+           "point_for", "point_of", "profile", "records", "run", "serve", "setup_answer", "setup_case", "setup_inputs",
+           "setup_store", "tie"]
