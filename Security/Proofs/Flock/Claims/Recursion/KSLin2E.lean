@@ -157,7 +157,7 @@ theorem ksLin2_steps_staged (nextE : Msg → List Msg → List Coin → Claims.O
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       FinPieces fin shape ∧
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
-        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+        (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart untr b) (cmtTr untr) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart untr b) (cmtTr untr) s) ∧
@@ -188,7 +188,7 @@ theorem ksLin2_steps_open (nextE : Msg → List Msg → List Coin → Claims.OC 
     ReadsBackB FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) untr →
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
-        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+        (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart untr b) (cmtTr untr) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart untr b) (cmtTr untr) s) ∧
@@ -214,7 +214,7 @@ theorem ksLin2_steps_recRead (nextE : Msg → List Msg → List Coin → Claims.
     ReadsBackB FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) recRead →
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
-        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+        (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart recRead b) (cmtTr recRead) chk s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
@@ -240,7 +240,7 @@ theorem bitsLin2_steps_recRead (nextE : Msg → List Msg → List Coin → Claim
     ReadsBackB FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) recRead →
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
-        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+        (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart recRead b) (cmtTr recRead) chk s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
@@ -255,7 +255,7 @@ theorem bitsLin2_steps_recRead (nextE : Msg → List Msg → List Coin → Claim
 
 /-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`, the coin server's record and
 `VE`'s steps**: `ksLin2_steps_recRead` at `stepsBase_VE`. Beside `ksLin2_deployed_recRead`'s open premises
-(`PartChecksB` at `showsPart recRead`, `DecompB`, the readers' `ReadersTrue` and `ReadsBackB`) it takes the plain
+(`PartChecksBV` at `showsPart recRead`, `DecompB`, the readers' `ReadersTrue` and `ReadsBackB`) it takes the plain
 record's table bound at the abort law at `VE` (`htab`). `VE` accepts every run the deployed plain verifier accepts
 (`FlockDeploy.run_out_VE`), so the inner verifier here accepts the honest runs; this is not a theorem at the deployed
 plain verifier's steps. This bounds no number by itself: its premises are open. -/
@@ -273,7 +273,7 @@ theorem ksLin2_deployedE_recRead (b : Brings)
     ReadsBackB FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) recRead →
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
-        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+        (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart recRead b) (cmtTr recRead) chk s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →
@@ -299,7 +299,7 @@ theorem bitsLin2_deployedE_recRead (b : Brings)
     ReadsBackB FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) recRead →
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
-        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+        (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart recRead b) (cmtTr recRead) chk s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec _root_.Flock.Readable.relation) →

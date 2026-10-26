@@ -263,6 +263,15 @@ theorem vcallsAt_append_true {Coin : Type} {H : Msg → Msg} {D : Deploy Coin} {
     (hT : ∀ e ∈ l, H e.1 = e.2) : ∀ e ∈ l ++ vcallsAt H D xO, H e.1 = e.2 :=
   fun e he => (List.mem_append.1 he).elim (hT e) (vcallsAt_true H D xO e)
 
+/-- The verifier's evaluations at the `s`-th V\* statement are among those at all of them. -/
+theorem vcallsAt_sub {Coin : Type} {H : Msg → Msg} {D : Deploy Coin} {xs : List Msg} {s : ℕ} (hs : s < xs.length) :
+    ∀ e ∈ vcallsAt H D (xs.getD s []), e ∈ setupCalls H D xs := by
+  intro e he
+  have hx : xs.getD s [] ∈ xs := by
+    rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hs, Option.getD_some]
+    exact List.getElem_mem hs
+  exact List.mem_flatMap.2 ⟨_, hx, he⟩
+
 /-- No collision among `l ++ l'` is none among `l`, where every call is a true evaluation. -/
 theorem findColl_false_of_append {H : Msg → Msg} {l l' : List (Msg × Msg)} (ht : ∀ e ∈ l ++ l', H e.1 = e.2)
     (h : (findColl (l ++ l')).isSome = false) : (findColl l).isSome = false :=
