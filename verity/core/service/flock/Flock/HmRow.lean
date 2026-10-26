@@ -1640,6 +1640,22 @@ def outRow (c : Circuit) (o : Nat) : Nat × Nat :=
       ((c.leavesOut.getD u #[]).foldl (fun (r, q) o => (r.set! o (u, q), q + 1)) (r, 0)).1) (Array.replicate c.outWords (0, 0))
     (c.unitNet, ((portCols #[c.unit.outGroups.getD 0 default]).getD (ret.getD o (0, 0)).2 default).1)
 
+/-- Output word `o`'s slot in `outRow`'s net (`outCol`'s): the repeated last stage's, or the unit's that returns it. -/
+def outSlot (c : Circuit) (o : Nat) : Nat :=
+  if c.outNet != c.unitNet then (c.outNetSlots.getD #[]).getD o 0
+  else
+    let ret := (List.range c.upv).foldl (fun r u =>
+      ((c.leavesOut.getD u #[]).foldl (fun (r, q) o => (r.set! o (u, q), q + 1)) (r, 0)).1) (Array.replicate c.outWords (0, 0))
+    (ret.getD o (0, 0)).1
+
+/-- Row `i` of `net` is a linear computed row: past its input rows, below its constant, outside a lookup's product rows
+(whose B the table adds), its B the constant alone. -/
+def linearRow (net : Net) (i : Nat) : Bool :=
+  net.b.row i == #[net.constPos] && decide (net.inWords * WORD ≤ i) && decide (i < net.constPos) &&
+    match net.lookup with
+    | some l => !(decide (l.prod0 ≤ i) && decide (i < l.prod0 + l.bits * 2 ^ (l.n - l.lo)))
+    | none => true
+
 def pinnedRefused : String :=
   "META: pinned_outputs is not the last output ports' names, each once, at least one, of an untyped statement of bit rows (row_schemas) whose padding instance's pinned outputs are zero"
 
@@ -1648,8 +1664,9 @@ def pinnedLinear : String :=
 
 /-- META `pinned_outputs` (CMP-149's form B), as the prover's `Composite::parse` reads it: the names of the last output
 ports, each once, at least one, in a flat statement of bit rows (META `row_schemas`, which makes every row a bit row; at least one row) whose padding instance's pinned
-output words are zero; and each pinned bit's row a linear row (its B the constant alone), so that Δ's copy of the forced-zero
-row onto it (`delta`) pins the bit and its linear form to zero. -/
+output words are zero; and each pinned bit's row a linear row (`linearRow`, its B the constant alone) of a slot of a net
+past the rows' circuits, so that Δ's copy of the forced-zero row onto it (`delta`) pins the bit and its linear form to
+zero. -/
 def checkPinned (c : Circuit) : V Unit := do
   match c.metaJ.getObjVal? "pinned_outputs" with
   | .error _ => pure ()
@@ -1668,7 +1685,8 @@ def checkPinned (c : Circuit) : V Unit := do
     if (List.range' w0 (pinnedWords c)).any (fun o =>
         let (n, r) := outRow c o
         let net := (c.nets.getD n default).2
-        (List.range 16).any fun t => net.b.row (r + t) != #[net.constPos]) then
+        !(decide (n < c.nets.size) && n != c.shaNet && n != c.hmNet && decide (outSlot c o < c.perVu.getD n 0)) ||
+          (List.range 16).any fun t => !linearRow net (r + t)) then
       throw pinnedLinear
 
 /-- What makes the rows inputs then outputs: META `input_ports` is the rows before one output row per output port, each
