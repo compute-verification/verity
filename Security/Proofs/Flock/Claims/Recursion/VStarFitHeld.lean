@@ -157,7 +157,7 @@ theorem rowSlot_of_held {r : XR} {s j : ℕ} {h : ℕ × String × ℕ × ℕ} {
         simp [hf0, hc0] at h1
         subst h1
         try rw [hF]
-        exact ⟨s0, c0, h0, rfl, rfl, rfl⟩
+        exact ⟨s0, c0, h0, rfl, hf0, hc0⟩
 
 /-- **Stream round `j + 1`'s slots** where it has no tops and absorbs a row: the absorbed row's. -/
 theorem slotsAt_held {x : Msg} {r : XR} {rs : Array RecVStar.SchedRound} {j : ℕ} (hr : readX x = some r)

@@ -195,7 +195,6 @@ theorem portRow_cap0 {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fi
     simp [hp, hw]
   rw [portRow_fitPin, pair_append, portRow_ownRows, Option.map_some, hpw]
   · rw [getElem_map_range_toArray, getElem_map_range_toArray]
-    beta_reduce
     rw [fitPortRow_top, hrr, List.getElem?_map, List.getElem?_range hn, Option.map_some]
   · simpa using hn
   · simpa using hn
