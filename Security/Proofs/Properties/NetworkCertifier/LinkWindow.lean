@@ -1,5 +1,6 @@
 import Properties.NetworkCertifier.LinkWindow
 import Proofs.Properties.CertifierDevice.Lms
+import Std.Data.TreeMap.Raw.WF
 
 /-!
 # N2's link-window verdict: what an acceptance establishes
@@ -247,10 +248,10 @@ theorem mkObj_value {l : List (String × Json)} {k : String} {v : Json}
     Std.TreeMap.Raw.ofList_eq_insertMany_empty, Std.TreeMap.Raw.getElem?_insertMany_list Std.TreeMap.Raw.WF.emptyc,
     Std.TreeMap.Raw.getElem?_emptyc, Option.or_none, List.findSomeRev?_eq_findSome?_reverse] at h
   obtain ⟨⟨k', v'⟩, hm, he⟩ := List.exists_of_findSome?_eq_some h
-  split at he
-  · cases he
-    exact ⟨k', List.mem_reverse.1 hm⟩
-  · cases he
+  by_cases hc : compare k' k = .eq
+  · simp only [hc, ↓reduceIte, Option.some.injEq] at he
+    exact ⟨k', he ▸ List.mem_reverse.1 hm⟩
+  · simp [hc] at he
 
 theorem canon_mkObj {l : List (String × Json)} (h : ∀ p ∈ l, ∃ t, Flock.canon p.2 = .ok t) :
     ∃ t, Flock.canon (Json.mkObj l) = .ok t := by
@@ -271,15 +272,15 @@ theorem acceptedOutputs_canon (c : Case) : ∃ t, Flock.canon (acceptedOutputs c
   intro p hp
   cases hk : c.kind with
   | advised view advice =>
-    simp only [hk, List.mem_append, List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at hp
-    rcases hp with rfl | rfl | rfl
+    simp only [hk, List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hp
+    rcases hp with (rfl | rfl) | rfl
     · exact canon_nat 1
     · exact canon_nat 1
     · cases advice with
       | some a => exact canon_str a
       | none => simp only [Flock.canon]; exact ⟨_, rfl⟩
   | plain | served | warden =>
-    simp only [hk, List.append_nil, List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at hp
+    simp only [hk, List.append_nil, List.mem_cons, List.not_mem_nil, or_false] at hp
     rcases hp with rfl | rfl
     · exact canon_nat 1
     · exact canon_nat 1
@@ -290,7 +291,7 @@ theorem verdictDigest_ok (c : Case) : ∃ d, verdictDigest c true (acceptedOutpu
       .ok t := by
     apply canon_mkObj
     intro p hp
-    simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at hp
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
     rcases hp with rfl | rfl | rfl | rfl | rfl
     · exact canon_str _
     · exact canon_str _
@@ -311,7 +312,7 @@ theorem linkWindowAcceptMeans_honest :
   obtain ⟨row, hr, hrow⟩ := opened_of ho
   obtain ⟨d, hd⟩ := verdictDigest_ok c
   have hout : outputsOf c true 3 = acceptedOutputs c := by
-    cases hk : c.kind <;> simp [outputsOf, acceptedOutputs, hk]
+    first | rfl | (cases hk : c.kind <;> simp [outputsOf, acceptedOutputs, hk])
   have hv : verdict c = .ok { accepted := true, outputs := acceptedOutputs c, digest := d, proved := true,
       opened := some 3, certified := true, synced := true } := by
     unfold verdict
