@@ -22,7 +22,8 @@ accounting envelopes is to be stated on these objects.
   a partition `𝓘` of the operation gates into `B` blocks. A block is a unit of a `Partition`. No ordering of the blocks
   is required: Lemma 1 and Theorem 3 read none, so the draft's "inter-block edges point forward" is dropped.
 * A **`(c, k)`-partition** (`Partition.IsCK`) of a Boolean circuit: every block has exactly `c` gates, padding included,
-  and at most `k` unregistered input bits, `|in(I) \ θ| ≤ k` (`unregistered`). Its circuit has size `c · B`.
+  and at most `k` unregistered input bits, `|in(I) \ θ| ≤ k` (`unregistered`). Its circuit has size `c · B`. Blocks of
+  at most `c` gates become exactly `c` by a `Pad`: registered padding gates in each block, read by nothing of `d`.
 * The **slowdown** relative to a reference of size `T₀` is `|C| / T₀` (`slowdown`), a ratio of circuit sizes.
 * **Local description length** (§4): `LDL M t r y` is the length of a shortest program on which the decoder `M`, with
   indexed access to the registered information `r`, outputs `y` within `t` steps, and `⊤` when none does. Side
@@ -31,6 +32,8 @@ accounting envelopes is to be stated on these objects.
 * Lemma 1's block evaluation: `Registration.recompute X u` evaluates block `u`'s gates from the registered values and
   `X`'s values at its unregistered inputs, which a decoder is handed as `blockProgram`: an evaluator `e`, the block's
   index in `⌈log₂ B⌉` bits (`indexCode`) and the bits of `in(I) \ θ` in gate order.
+
+A multi-bit circuit reaches this model through its bit-level expansion (`Definitions.Core.Expand`).
 -/
 
 namespace Verity
@@ -66,6 +69,18 @@ structure Partition.IsCK (d : Declaration) {B : ℕ} (P : Partition d.D B) (c k 
   boolean : d.D.Boolean
   card : ∀ u, (P.gates u).card = c
   reads : ∀ u, (d.unregistered (P.gates u)).card ≤ k
+
+/-- **A padding** of the partition `P` of `d` to the partition `P'` of `d'`, with as many blocks: `d'`'s circuit
+contains `d`'s (`M`), with the same registered gates among `d`'s, every gate of `d` stays in its block, and every
+other gate of `d'`, the padding, is a registered input gate or reads registered gates only. Padding is fixed and
+input-independent, so each block reads the unregistered gates it read before (`Verity.Pad.unregistered`).
+It completes the accounting; it is not evidence that hardware evaluated anything. -/
+structure Pad (d : Declaration) {B : ℕ} (P : Partition d.D B) (d' : Declaration) (P' : Partition d'.D B) where
+  M : Containment d.D d'.D
+  θ_emb : ∀ g, M.emb g ∈ d'.θ ↔ g ∈ d.θ
+  unit_emb : ∀ g, P'.unit (M.emb g) = P.unit g
+  pad_input : ∀ g', g' ∉ Set.range M.emb → d'.D.isInput g' = true → g' ∈ d'.θ
+  pad_reads : ∀ g', g' ∉ Set.range M.emb → ∀ a ∈ d'.D.reads g', a ∈ d'.θ
 
 /-- **The slowdown** of `C` relative to a reference circuit of size `T₀`: `|C| / T₀`. -/
 noncomputable def slowdown (C : Circuit) (T₀ : ℝ) : ℝ := ((C.size C.computed : ℕ) : ℝ) / T₀

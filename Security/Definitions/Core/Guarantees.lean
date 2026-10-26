@@ -3,6 +3,7 @@ import Definitions.Core.Guarantees.Game
 import Definitions.Core.Guarantees.PrivatePartition
 import Definitions.Core.Guarantees.TC
 import Definitions.Core.Guarantees.Formalism
+import Definitions.Core.Guarantees.Expand
 
 /-!
 # Core's guarantees

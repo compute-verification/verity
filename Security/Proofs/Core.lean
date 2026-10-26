@@ -24,6 +24,7 @@ import Proofs.Core.Prims.Round
 import Proofs.Core.TC
 import Proofs.Core.Fp32
 import Proofs.Core.Formalism
+import Proofs.Core.Expand
 
 /-!
 # Proofs of core's guarantees
