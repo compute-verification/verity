@@ -641,14 +641,14 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         union_draw, drawn_law, receipt = dict(draw.draw), dict(draw.law), dict(draw.registration.receipt)
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     (out / "draw.json").write_text(json.dumps(union_draw, sort_keys=True))
+    served_units, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
+    linked = None       # the first drawn chunk with registered reads: its session, for the registered-reads negatives
+    row_verdicts: dict[str, dict] = {}      # each drawn chunk's Lean verdict with registered reads, whose finding the record carries
     if (why := port_refusal(mine, union_draw, port, ports)) is not None:
         summary["refused"] = why
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
         print("A5 " + json.dumps(why))
         return summary, False
-    served_units, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
-    linked = None       # the first drawn chunk with registered reads: its session, for the registered-reads negatives
-    row_verdicts: dict[str, dict] = {}      # each drawn chunk's Lean verdict with registered reads, whose finding the record carries
     drawn_units, drawn = set(union_draw["units"]), []
     for mm in members:
         m = mm["m"]
@@ -656,14 +656,11 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         counts[m.template] = counts.get(m.template, 0) + sum(1 for u in local if m.base + u in drawn_units)
         if local:
             drawn.append((mm, local))
-    jobs = max(1, min(session_jobs(a), len(drawn) or 1))
-    cores = int(os.environ.get("RAYON_NUM_THREADS") or os.cpu_count() or 1)
-    threads = {} if jobs == 1 else {"RAYON_NUM_THREADS": str(max(1, cores // jobs))}
 
     def member_session(i: int, mm: dict, local: list[int]) -> dict:
-        """Member ``mm``'s session on its proved units ``local`` (drawn, and a work draw's closure), on port
-        ``port + i`` (``i`` its place among the members with proved units, `port_refusal`), and Lean's verdicts on it;
-        the members' sessions are independent, so `session_jobs` run at once."""
+        """Member ``mm``'s firewalled session on its proved units ``local`` (drawn, and a work draw's closure), on port
+        ``port + i`` (``i`` its place among the members with proved units, `port_refusal`); `member_checks` adds Lean's
+        verdicts on it."""
         m, k = mm["m"], mm["k"]
         sdir = out / f"session-m{k}"
         sdir.mkdir(parents=True, exist_ok=True)
@@ -677,10 +674,18 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         t = time.time()
         env = {"FC_COINS": "os"} if plain(a) else {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])}
         record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / "draw.json",
-                                  zk=not plain(a), env={**env, **threads}, prove_timeout=a.session_timeout)
+                                  zk=not plain(a), env=env, prove_timeout=a.session_timeout)
         session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": session_draw["population"]}, session_law)
+        return {"mm": mm, "sdir": sdir, "staged_s": staged_s, "session_s": session_s, "record": record, "live": live,
+                "draw_t": draw_t, "draw_check": v}
+
+    def member_checks(s: dict) -> dict:
+        """Lean's verdicts on member session ``s`` (`member_session`) and what the audit takes from it. They read only the
+        session's archive, so they run while the next member is proved."""
+        mm, sdir, record, live, draw_t, v = s["mm"], s["sdir"], s["record"], s["live"], s["draw_t"], s["draw_check"]
+        m, k, session_s = mm["m"], mm["k"], s["session_s"]
         lean_u = a0.lean_draw_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
                                              "instances": (live or {}).get("instances", 0)}], sdir, "u1-u3")
         got = {f"m0-verifier/m{k}": {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
@@ -694,7 +699,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         else:
             got[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True), "tool": "flock-verify verify --zk --archive"}
         lean_v = got[f"lean-verify/m{k}"]
-        return {"mm": mm, "sdir": sdir, "staged_s": staged_s, "verdicts": got, "lean_verify": lean_v,
+        return {"mm": mm, "sdir": sdir, "staged_s": s["staged_s"], "verdicts": got, "lean_verify": lean_v,
                 "served": [m.base + u for u in draw_t.get("units", []) if m.base + u in drawn_units],  # a closure's are `proved`
                 "roots": {m.port(p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()},
                 "proved": a0.proved_units(mm["header"], live or {}), "instances": (live or {}).get("instances", 0),
@@ -704,13 +709,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
                               "lean_verify_s": lean_v.get("verify_s"), "lean_partition": lean_v.get("partition")},
                 "sessions": [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]}
 
-    if jobs == 1:
-        done = [member_session(i, mm, local) for i, (mm, local) in enumerate(drawn)]
-    else:
-        with ThreadPoolExecutor(jobs) as pool:
-            done = list(pool.map(lambda x: member_session(x[0], *x[1]), enumerate(drawn)))
-    summary["sessions_at_once"] = jobs
-    for got in done:        # in the members' order, as one session after another would have left them
+    # outer proofs go through the firewall one at a time (`ONE_AT_A_TIME`): the sessions run here in the members' order, and
+    # only Lean's checks of one member, outside the firewall, overlap the next member's session
+    with ThreadPoolExecutor(1) as lean:
+        checks = [lean.submit(member_checks, member_session(i, mm, local)) for i, (mm, local) in enumerate(drawn)]
+        done = [c.result() for c in checks]
+    for got in done:
         mm = got["mm"]
         summary["staging"]["drawn_s"] = round(summary["staging"].get("drawn_s", 0) + got["staged_s"], 1)
         summary["staging"]["prover_files"] = summary["staging"].get("prover_files", 0) + 1
@@ -884,10 +888,15 @@ def streamed(a: argparse.Namespace) -> bool:
     return a.coins is not None or a.verifier_coins
 
 
-def session_jobs(a: argparse.Namespace) -> int:
-    """How many drawn members' sessions run at once (``--session-jobs``, default one after another), each on its own port and
-    with its share of ``RAYON_NUM_THREADS``."""
-    return max(1, int(getattr(a, "session_jobs", None) or 1))
+#: AGENTS.md's live-coins rule, which keeps an audit's drawn members' sessions one after another
+ONE_AT_A_TIME = "outer proofs go through the firewall one at a time (AGENTS.md, \"Live coins only\")"
+
+
+def one_session(s: str) -> int:
+    """``--session-jobs``: 1, the only value, kept so commands that pass it still run; anything else is refused."""
+    if s.strip() != "1":
+        raise argparse.ArgumentTypeError(f"{s}: {ONE_AT_A_TIME}, so an audit runs its sessions one at a time; pass 1 or omit it")
+    return 1
 
 
 def plain(a: argparse.Namespace) -> bool:
@@ -1119,7 +1128,7 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=7551)
-    ap.add_argument("--session-jobs", type=int, default=1, help="run up to this many drawn members' sessions at once (session_jobs)")
+    ap.add_argument("--session-jobs", type=one_session, default=1, help="1 only: the sessions run one at a time (ONE_AT_A_TIME)")
     ap.add_argument("--session-timeout", type=float, default=14400,
                     help="each drawn member's prover limit in seconds, and each template's compose: one firewalled session of a MoE "
                          "w2 coordinate chunk (MoeExpertFp8GemmW_v2{N=1}, k_log 26) takes ~8 min, and over an hour on a loaded "

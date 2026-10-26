@@ -1,8 +1,8 @@
 """`verity bench all-protocols`'s runner: every window, one run of the toy audited by every protocol's leg, and the
 result over each monitoring period of a datacenter.
 
-    python -m verity_all_protocols.runner --out DIR --tools FILE [--windows N] [--start I] [--window-s S] [--jobs J]
-        [--session-jobs S] [--node NAME] [--tamper W,...] [--law L] [--delta D] [--cap N] [--requests 3,7] [--steps 2] [--pouw h1]
+    python -m verity_all_protocols.runner --out DIR --tools FILE [--windows N] [--start I] [--window-s S] [--jobs 1]
+        [--session-jobs 1] [--node NAME] [--tamper W,...] [--law L] [--delta D] [--cap N] [--requests 3,7] [--steps 2] [--pouw h1]
         [--deployment ID] [--onsite EXE] [--scratch DIR] [--registered] [--tie [--tie-tamper W,...]]
 
 A window is one stretch of one machine's serving and its audits, and a monitoring period is the many windows on every
@@ -10,9 +10,10 @@ machine of a deployment a result is about (`ARCHITECTURE.md`'s Glossary). Per wi
 registers the loop's circuit from its shape and run id (``serve --circuit-only``), the loop serves once
 (`integrations/torch_loop`, run id ``RUN/wW``, so each window has a root of its own) and writes its window into scratch
 with ``period.json`` beside it (the legs' records, `table.PERIOD`); each protocol of `table.TABLE` audits it through its leg
-(`decide`), up to ``--jobs`` windows at once, each audit on ports of its own and with up to ``--session-jobs`` of its
-drawn members' proof sessions at once; and ``DIR/wW/report.json`` holds the window's
-report, also appended to ``DIR/reports.jsonl``:
+(`decide`). Outer proofs go through the firewall one at a time, one firewalled session on the run whichever window it
+belongs to, so the windows are audited one after another and each audit's drawn members' proof sessions too (``--jobs``
+and ``--session-jobs`` take only 1); only what never goes through the firewall, the next window's loop, overlaps an
+audit. ``DIR/wW/report.json`` holds the window's report, also appended to ``DIR/reports.jsonl``:
 
     {"format": "verity/all-protocols-window/v1", "window": W, "node": NAME, "run": RUN, "loop": {...},
      "protocols": {NAME: ROW, ...}, "composed": {...}, "seconds": {...}}
@@ -198,7 +199,7 @@ def loop_window(index: int, run: str, a: argparse.Namespace, scratch: Path, out:
     (window / PERIOD).write_text(json.dumps({
         "window": index, "period": index - getattr(a, "start", 0), "periods": a.windows, "node": a.node,
         "circuit": registered["circuit"], "run_root": got["run"], "law": a.law, "delta": a.delta, "cap": a.cap,
-        "tools": a.tools, "session_jobs": a.session_jobs,
+        "tools": a.tools,
         "pouw": {"mode": a.pouw, "circuit": registered.get("pouw")} if a.pouw else None,
         "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {},
         **({"registered": str(pins)} if pins else {}), **({"tie": tie} if tie else {})}, sort_keys=True))
@@ -249,6 +250,24 @@ def window(index: int, run: str, a: argparse.Namespace, scratch: Path, out: Path
     return report
 
 
+#: AGENTS.md's live-coins rule (a5's `ONE_AT_A_TIME`), which keeps the run to one firewalled session at a time
+ONE_AT_A_TIME = ("outer proofs go through the firewall one at a time (AGENTS.md, \"Live coins only\"): one firewalled "
+                 "session at a time on the run, whichever window it belongs to")
+
+
+def only_one(what: str) -> Callable[[str], int]:
+    """An option whose only value is 1 (`ONE_AT_A_TIME`), kept so commands that pass it still run."""
+    def parse(s: str) -> int:
+        if s.strip() != "1":
+            raise argparse.ArgumentTypeError(f"{s}: {ONE_AT_A_TIME}, so {what}; pass 1 or omit it")
+        return 1
+    return parse
+
+
+one_window = only_one("the windows are audited one at a time")
+one_session = only_one("an audit runs its sessions one at a time")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", required=True)
@@ -257,9 +276,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--start", type=int, default=0, help="the first window's index (another machine's windows start apart)")
     ap.add_argument("--window-s", type=float, default=0, help="each window's loop starts this long after the one before (at "
                     "once when the one before took longer)")
-    ap.add_argument("--jobs", type=int, default=1, help="windows audited at once, each on ports of its own")
-    ap.add_argument("--session-jobs", type=int, default=16,
-                    help="each integrity audit's drawn members' sessions run at once (a5.session_jobs)")
+    ap.add_argument("--jobs", type=one_window, default=1, help="1 only: the windows are audited one at a time (ONE_AT_A_TIME)")
+    ap.add_argument("--session-jobs", type=one_session, default=1,
+                    help="1 only: each integrity audit runs its sessions one at a time (ONE_AT_A_TIME)")
     ap.add_argument("--node", default=os.environ.get("RESEARCH_MACHINE") or os.uname().nodename)
     ap.add_argument("--tamper", default="", help="windows whose loop tampers with its outputs, e.g. 1,3")
     ap.add_argument("--law", help=f"the proof service's law of each window (default {LAW}, and {TIE_LAW} with --tie, "
@@ -295,8 +314,6 @@ def main(argv: list[str] | None = None) -> int:
     run = os.environ.get("RESEARCH_RUN_ID") or "local"
     reports: list[dict] = []
     lock = threading.Lock()
-    if a.jobs > 1 and "RAYON_NUM_THREADS" in os.environ:
-        os.environ["RAYON_NUM_THREADS"] = str(max(1, int(os.environ["RAYON_NUM_THREADS"]) // a.jobs))
 
     def finish(report: dict[str, Any]) -> None:
         with lock:
@@ -311,7 +328,9 @@ def main(argv: list[str] | None = None) -> int:
             print("ALLP " + json.dumps({"monitoring_period": M.lead(m), "window": summary_line(report)}, sort_keys=True),
                   flush=True)
 
-    with tempfile.TemporaryDirectory(dir=a.scratch) as scratch, ThreadPoolExecutor(max(1, a.jobs)) as pool:
+    # one worker: every firewalled session (PoUW's audit, each leg) is a window's audit, and they run one after another,
+    # while this thread serves the next window's loop
+    with tempfile.TemporaryDirectory(dir=a.scratch) as scratch, ThreadPoolExecutor(1) as pool:
         a.weights = {"opening": Path(scratch) / WEIGHTS_OPENING, "pin": out / WEIGHTS_PIN} if a.registered else None
         if a.weights:
             serve(["--commit-weights", str(a.weights["opening"]), "--pin", str(a.weights["pin"])])

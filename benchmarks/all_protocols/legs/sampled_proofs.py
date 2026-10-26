@@ -169,7 +169,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
         argv = [sys.executable, str(RECORDS_AUDIT), "audit", "--window", str(period_dir), "--law", p["law"],
                 "--circuit", p["circuit"], "--run", p["run_root"], "--delta", repr(float(delta)), "--port", str(base),
                 "--ports", str(SPAN), "--m0-pythonpath", t["m0-pythonpath"], "--bin", t["flock-circuit"], "--lean", t["flock-verify"],
-                "--firewall", t["flock-firewall"], "--out", str(work), "--session-jobs", str(p.get("session_jobs") or 1),
+                "--firewall", t["flock-firewall"], "--out", str(work),
                 *(["--registered", p["registered"]] if p.get("registered") else [])]
         with open(out / "audit.log", "w") as log, open(out / "audit.err", "w") as err:
             subprocess.run(argv, cwd=ROOT, env=env, stdout=log, stderr=err, check=False)

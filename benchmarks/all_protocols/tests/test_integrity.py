@@ -142,7 +142,7 @@ TOOLS = os.environ.get("VERITY_ALL_PROTOCOLS_TOOLS")
 @pytest.mark.skipif(not TOOLS, reason="opt-in: VERITY_ALL_PROTOCOLS_TOOLS=tools.json (run.sh's built executables); "
                     "two windows proved under --zk, minutes")
 def test_two_windows_through_the_verifier_of_record(tmp_path):
-    rc = RN.main(["--out", str(tmp_path / "out"), "--tools", TOOLS, "--windows", "2", "--jobs", "2", "--tamper", "1",
+    rc = RN.main(["--out", str(tmp_path / "out"), "--tools", TOOLS, "--windows", "2", "--tamper", "1",
                   "--law", "subset:8", "--requests", "3", "--steps", "1"])
     reports = sorted((json.loads(x) for x in (tmp_path / "out" / "reports.jsonl").read_text().splitlines()),
                      key=lambda r: r["window"])
