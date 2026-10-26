@@ -15,8 +15,8 @@ v3's own picks stay as adopted (measured schedules).
     d5_v2.py>/benchmarks/pouw/theory python3 benchmarks/pouw/accel_score/d6.py [--json OUT] [--pickle OUT]
 
 --from PKL prints the report from a build's pickle (--pickle) without rebuilding. --census JSON [--census-ref REF]
-adds the RTX PRO 6000's beside-load row with emulated b1 from ALGO-COST-3's census routes (`algo_cost3/b1alu_check.py
---census` run at this build's v3.1 picks; keys "card | model | x" with leak_served and c_inc).
+adds the RTX PRO 6000's beside-load rows with emulated b1 from ALGO-COST-3's census routes (`algo_cost3/b1alu_check.py
+--census` run at this build's picks; keys "design | card | model | x" with leak_served and c_inc).
 """
 import contextlib
 import io
@@ -911,23 +911,24 @@ def report(D: dict) -> str:
         L.append("\nD5 v2's job LPs leave out A7's b cᵀ with b1 emulated on the lanes (ALGO-COST-3's A34, route iii). "
                  "Priced as A35's census routes (`algo_cost3/b1alu_check.py --census` at b4830ae7b1: LOP3 and IADD3 on "
                  "the ALU, POPC on a 16-lane XU row, IMAD and IDP.4A on the FMA pipe, each instruction on issue, vec "
-                 "and the register file) in these period LPs at v3.1's picks, the RTX PRO 6000's credited share is "
-                 "this (in brackets the routes' uncredited share at the served duals, as above), and its routes save "
-                 f"1 − c_inc of the makespan increment, 8B / 70B / V4 ({D['census']['ref']}). So the RTX PRO 6000's "
-                 "cells above from x = 0.25 are upper bounds on its share until D5's menu carries the route. On the "
-                 "H200 b1 is native.\n")
-
-        def cen(m, x):
-            return cz[f"RTX PRO 6000 | {m} | {x}"]
-
+                 "and the register file) in these period LPs at each design's picks, the RTX PRO 6000's credited "
+                 "share is this (in brackets the routes' uncredited share at the served duals, as above), and its "
+                 f"routes save 1 − c_inc of the makespan increment, 8B / 70B / V4 ({D['census']['ref']}). So the RTX "
+                 "PRO 6000's cells above from x = 0.25 are upper bounds on its share until D5's menu carries the "
+                 "route. On the H200 b1 is native.\n")
         L.append("| picks, card | " + " | ".join(f"x = {x:g}" for x in BESIDE) + " |")
         L.append("|---|" + "---|" * len(BESIDE))
-        L.append(f"| {HEADLINE}, RTX PRO 6000, with emulated b1 | " + " | ".join(
-            " / ".join(pct(B[HEADLINE, "RTX PRO 6000", m, x]["share0"] * (1 - cen(m, x)["leak_served"])
-                           / (1 - B[HEADLINE, "RTX PRO 6000", m, x]["leak0"]), 1) for m in models) + " ("
-            + " / ".join(pct(cen(m, x)["leak_served"], 1) for m in models) + ")" for x in BESIDE) + " |")
-        L.append(f"| {HEADLINE}, RTX PRO 6000, with emulated b1: 1 − c_inc | " + " | ".join(
-            " / ".join(pct(1 - cen(m, x)["c_inc"], 1) for m in models) for x in BESIDE) + " |")
+        card = "RTX PRO 6000"
+        for name in dict.fromkeys(k.split(" | ")[0] for k in cz):
+            def cen(m, x, name=name):
+                return cz[f"{name} | {card} | {m} | {x}"]
+
+            L.append(f"| {name}, {card}, with emulated b1 | " + " | ".join(
+                " / ".join(pct(B[name, card, m, x]["share0"] * (1 - cen(m, x)["leak_served"])
+                               / (1 - B[name, card, m, x]["leak0"]), 1) for m in models) + " ("
+                + " / ".join(pct(cen(m, x)["leak_served"], 1) for m in models) + ")" for x in BESIDE) + " |")
+            L.append(f"| {name}, {card}, with emulated b1: 1 − c_inc | " + " | ".join(
+                " / ".join(pct(1 - cen(m, x)["c_inc"], 1) for m in models) for x in BESIDE) + " |")
     L.append("\nPB4: the same periods by makespan, which needs no duals. Cells: 1 − c_inc, the share of the credited "
              "rounds' honest makespan increment over the period's fixed load alone that pub's period saves, 8B / 70B / "
              "V4, beside the dual-price figure above. Credit stays at the duals (P12); c_inc shows how much of that "
