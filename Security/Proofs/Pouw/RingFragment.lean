@@ -488,8 +488,11 @@ theorem projF2_prefixDiff (φ : R →+* ZMod 2) (w : Fin np → R) (p₀ : Fin n
       if j = j' then (if s.val ≤ t then 1 else 0) - φ c * (if i = i' ∧ l = l' ∧ s.val ≤ t' then 1 else 0)
       else 0 := by
   rw [projF2_of_ne φ _ Sum.inl_ne_inr, pairDiff_sub_mul, pairDiff_dPrefix_inl_inr, pairDiff_dPrefix_inl_inr]
-  by_cases hj : j = j' <;> by_cases hi : i = i' <;> by_cases hl : l = l' <;> by_cases h1 : s.val ≤ t <;>
-    by_cases h2 : s.val ≤ t' <;> simp [hj, hi, hl, h1, h2, hw, Ne.symm hj]
+  by_cases hj : j = j'
+  · subst hj
+    by_cases hi : i = i' <;> by_cases hl : l = l' <;> by_cases h1 : s.val ≤ t <;> by_cases h2 : s.val ≤ t' <;>
+      simp [hi, hl, h1, h2, hw]
+  · simp [hj, Ne.symm hj]
 
 /-- **The difference's rank**: if `κ(s) = 1` for some block `s`, the difference of cell-block `(i, l, t)`'s
 prefix word and `c` times `(i', l', t')`'s has `F₂` rank at least `2L`: its projection has the identity on the rows
@@ -515,16 +518,16 @@ theorem rank_prefixDiff (φ : R →+* ZMod 2) (w : Fin np → R) (p₀ : Fin np)
     rw [Matrix.submatrix_apply, Matrix.one_apply]
     rcases a with j | j <;> rcases a' with j' | j'
     · simp only [f, g, Sum.elim_inl, hent, hs, Sum.inl.injEq]
-    · simp only [f, g, Sum.elim_inl, Sum.elim_inr]
-      rw [ite_eq_right Sum.inl_ne_inr]
+    · rw [ite_eq_right Sum.inl_ne_inr]
+      simp only [f, g, Sum.elim_inl, Sum.elim_inr]
       by_cases hj : j = j'
       · rw [hj, projF2_self]
       · have ha : (i, j, p₀) ≠ (i, j', p₀) := fun h' => hj (by simpa using h')
         rw [projF2_of_ne φ _ (fun h' => ha (Sum.inl_injective h')), pairDiff_sub_mul,
           pairDiff_dPrefix_inl_inl pc vq w i l t ha, pairDiff_dPrefix_inl_inl pc vq w i' l' t' ha, mul_zero,
           sub_zero, map_zero]
-    · simp only [f, g, Sum.elim_inl, Sum.elim_inr]
-      rw [ite_eq_right Sum.inr_ne_inl]
+    · rw [ite_eq_right Sum.inr_ne_inl]
+      simp only [f, g, Sum.elim_inl, Sum.elim_inr]
       by_cases hj : j = j'
       · rw [hj, projF2_self]
       · have hb : (s, j, l) ≠ (s, j', l) := fun h' => hj (by simpa using h')
