@@ -228,7 +228,8 @@
   "Definitions.Accounting",
   "Definitions.Claims",
   "Definitions.Pouw.Basic",
-  "Definitions.Pouw.Window"
+  "Definitions.Pouw.Window",
+  "Definitions.Pouw.PearlC"
  ],
  "layers": {
   "Properties.Pouw": {
