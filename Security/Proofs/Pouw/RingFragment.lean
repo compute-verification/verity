@@ -570,7 +570,7 @@ theorem prefixDiffRank : PrefixDiffRank := by
       rcases lt_or_gt_of_ne ht with h | h
       · have h' : ¬t'.val ≤ t.val := Nat.not_le.mpr (Fin.lt_def.mp h)
         refine rank_prefixDiff φ w p₀ hw pc vq i i l l t.val t'.val c t' ?_
-        simp [h', hc1] <;> decide
+        simp [h', hc1]
       · have h' : ¬t.val ≤ t'.val := Nat.not_le.mpr (Fin.lt_def.mp h)
         refine rank_prefixDiff φ w p₀ hw pc vq i i l l t.val t'.val c t ?_
         simp [h']
