@@ -24,8 +24,10 @@ and whose simulator's live outcome is that decision's view (`PlainSimRunR`).
 
 namespace FlockDeploy.KS
 
-open Flock FlockSoundness FlockSoundness.Refine FlockSoundness.Discharge FlockSoundness.Discharge.Exec
-open Claims.Bridge.Custody Claims.Bridge.PlainDraw
+open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge
+  FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Tables
+open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainDraw
+open Claims.Bridge.Live
 open RecDeploy (outCoin)
 open Lean (Json)
 
@@ -109,7 +111,7 @@ theorem plainRawLevelColsRV_plain {rd : Claims.Msg → Option FinalP} {x : Claim
                  (lv.streams.getD 1 #[], (FlockDeploy.filesAt (tabsOf sts) (pointsOf spec c₁) f.ps).getD 1
                     ByteArray.empty)] } := by
     unfold runOfR
-    simp [ha, hlv, hex, Except.toOption]
+    simp [ha, hlv, hst, hex, Except.toOption]
   unfold plainRawLevelColsRV
   rw [hrv, hrun]
   rcases k with _ | _ | k
@@ -339,14 +341,21 @@ theorem plainR_levelOpening {rd : Claims.Msg → Option FinalP} {Ω : Type} {P :
   rw [hconv] at ha
   have hshs : (Claims.Flock.plainProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
       (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st))).sched = sch := by
-    simp only [Claims.Flock.plainProofShape, Claims.Flock.plainSched, hsch]
+    have hsch' : fast100 (Setup.ofCircuit st).m = some sch := hsch
+    simp only [Claims.Flock.plainProofShape, Claims.Flock.plainSched, hsch']
     rfl
   have hℓ : 1 ≤ ℓ ∧ ℓ < sch.levels.size := by
     by_contra hn
     rw [plainLevelColsOf, ite_eq_right (by rw [hshs]; exact hn)] at ha
     simp at ha
   obtain ⟨hent, hmc⟩ := hlev ℓ hℓ.1 hℓ.2
-  rw [hent] at ha
+  have hent' : plainLevelColsOf (Claims.Flock.plainProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
+      (2 + extras.size) (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st)))
+      y.rounds (FlockDeploy.filesAt (tabsOf sts) (pointsOf spec c₁) f.ps)[2 * 0 + k]! ℓ =
+      Claims.Flock.zkRepCols (sch.levels.getD ℓ default)
+        (y.rounds[plainLevelRound (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog sch.k0 (2 + extras.size)
+          (sch.levels.size - 1) ℓ]!).coins (openAt p.ligerito (sch.levels.size - 1) ℓ).1 := hent
+  rw [hent'] at ha
   obtain ⟨j, hj, -, hjq, hja⟩ := mem_zkRepCols ha
   have hms : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 ∨
       (Setup.ofCircuit st).merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" := by
