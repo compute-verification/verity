@@ -1,0 +1,4 @@
+order = 372
+path = "`theory/joint_alloc.py`"
+runs_on = "CPU"
+what = "ACCEL ALGO-COST-2's joint shared-memory port and lane allocation of the RTX PRO 6000's honest kernel under P1: a linear program over tile-level mixtures of the standard product, depth-1 Strassen, HK ⟨2,3,3;15⟩ and ⟨3,3,3;23⟩ with 2:4 or lane-side overflow fixes, plus PV lookups, per static shape and pooled over a request, against the prover at A = B = 0 (note:compute-research/20261026T0440Z-draft-accel-algo-cost-2)"
