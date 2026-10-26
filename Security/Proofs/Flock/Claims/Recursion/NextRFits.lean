@@ -347,12 +347,18 @@ theorem vals_nil_of_anyV : ∀ {fs : List Frame}, anyV fs = false → vals fs = 
   | .bytes _ :: fs, h => vals_nil_of_anyV (fs := fs) h
   | .sq _ _ :: fs, h => vals_nil_of_anyV (fs := fs) h
 
-theorem cutLens_caps : ∀ (caps : List (Array ByteArray)) (x : List ByteArray),
-    cutLens (caps.map Array.size) (caps.flatMap Array.toList ++ x) = caps.map Array.toList
+theorem cutLens_caps (f : ByteArray → ByteArray) : ∀ (caps : List (Array ByteArray)) (x : List ByteArray),
+    cutLens (caps.map Array.size) (caps.flatMap (fun a => a.toList.map f) ++ x) = caps.map fun a => a.toList.map f
   | [], _ => rfl
   | c :: cs, x => by
-    rw [List.map_cons, List.flatMap_cons, List.append_assoc, cutLens, ← Array.length_toList, List.take_left,
-      List.drop_left, cutLens_caps cs x, List.map_cons]
+    have hl : (c.toList.map f).length = c.size := by rw [List.length_map, Array.length_toList]
+    rw [List.map_cons, List.flatMap_cons, List.append_assoc, cutLens, List.take_left' hl, List.drop_left' hl,
+      cutLens_caps f cs x, List.map_cons]
+
+theorem map_nodeOf_caps (l : List (Array ByteArray)) :
+    (l.map fun a => a.toList.map nodeRow).map (List.map nodeOf) = l.map Array.toList := by
+  rw [List.map_map]
+  exact List.map_congr_left fun a _ => map_nodeOf_nodeRow a.toList
 
 /-- **Rows the honest prover sends fit**: where the frames' chunks absorb as the schedule's rounds do, and the rounds'
 tops are the caps' node counts, the honest rows are one per round, cut at the tops into the caps, and hold each chunk's
@@ -376,13 +382,13 @@ theorem honestRows_fit : ∀ (sched : List RecVStar.SchedRound) (chs : List (Lis
     have hd : (ss.map (·.2.1.toList)).flatten = (caps.drop tops.size).map Array.size := by
       rw [List.map_drop, ← h2, List.drop_left' hk]
     obtain ⟨l1, l2, l3, l4⟩ := honestRows_fit ss chs (caps.drop tops.size) h1.2 hd
-    have hsum : ((caps.take tops.size).flatMap Array.toList).length = tops.toList.sum := by
-      rw [← ht, List.length_flatMap]
+    have hsum : (((caps.take tops.size).flatMap Array.toList).map nodeRow).length = tops.toList.sum := by
+      rw [List.length_map, ← ht, List.length_flatMap]
       rfl
     simp only [honestRows]
     refine ⟨by simp [l1], by simp [l2], ?_, ?_⟩
-    · show cutLens tops.toList _ ++ topGroups ss _ = _
-      rw [l3, ← ht, cutLens_caps, ← List.map_append, List.take_append_drop]
+    · show (cutLens tops.toList _).map (List.map nodeOf) ++ topGroups ss _ = _
+      rw [l3, ← ht, List.map_flatMap, cutLens_caps, map_nodeOf_caps, ← List.map_append, List.take_append_drop]
     · intro j hj
       cases j with
       | zero =>

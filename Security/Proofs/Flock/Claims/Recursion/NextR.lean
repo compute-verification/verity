@@ -13,11 +13,14 @@ openings, and the fields the transcript never absorbs are what V\* takes for the
 
 * **How a round's rows join** (`joinR`, `rowsOf`, `rowsOf_joinR`): tag `0`, then the rows, so each element-level
   message reads back as its opened rows.
-* **The link** (`linkR`), from round 0's rows, each table's level-0 top in turn: a table's `root_B` is its nodes
+* **Node rows** (`nodeRow`, `nodeOf`, `isNodeRow`): a cap node is opened as a 128-byte row, the node then 64 zero
+  bytes, as the deployed verifier registers it (`rec_live.top_rows`, RecCap's `top`); the reader takes each round-0
+  and tops row's node (`nodeOf`), and `rec-cap-zero` holds the padding.
+* **The link** (`linkR`), from round 0's nodes, each table's level-0 top in turn: a table's `root_B` is its nodes
   joined, and its public words are empty, read from no message (`linkR_publics`, `linkR_s8`); every word round 0
   carries is a `root_B` node (`linkR_rootB`), which `rec-cap` holds.
 * **A rep's proof** (`FitsRep`, `readRep`): rep `k`'s rounds are the schedule's (`RecDeploy.repSchedAt`); round `j`'s
-  rows are its committed tops' nodes, then, where it absorbs, one row of the element values its squeeze answers (`vals`
+  rows are its committed tops' node rows, then, where it absorbs, one row of the element values its squeeze answers (`vals`
   of the `j`-th chunk of `repFrames`, `T` among them). The proof's cap is round 0's nodes for its table, its recursive
   caps the rounds' tops in order, its nonces `0`, and its fields of the lengths a proof decoded at the rep's shape has
   (`DecodeZL.ProofSizes`), so no field carries an entry no frame reads. `readRep` takes a proof and `T` that fit, with
@@ -82,6 +85,51 @@ theorem rowsOf_joinR {rs : List Claims.Msg} (hl : rs.length < 2 ^ 64) (hb : ∀ 
   rw [List.append_nil] at h
   unfold rowsOf joinR
   simp only [h]
+
+/-! ## Node rows -/
+
+/-- **A cap node's row** (`rec_live.top_rows`): its bytes, then 64 zero bytes. -/
+def nodeRow (node : ByteArray) : ByteArray := ⟨(node.data.toList ++ List.replicate 64 0).toArray⟩
+
+/-- **The node a cap row holds**: the row less its last 64 bytes. A deployed cap row is 128 bytes (RecCap's `top`;
+RecOpen's `out`, the climbed node then 512 zero bits, reads the same registration, `RecVStar.checkShared`), so this
+is its first 64, the node. -/
+def nodeOf (row : ByteArray) : ByteArray := ⟨(row.data.toList.take (row.data.size - 64)).toArray⟩
+
+/-- **A row is a node's row**: 128 bytes, the last 64 zero. -/
+def isNodeRow (row : ByteArray) : Bool :=
+  row.data.size == 128 && row.data.toList.drop 64 == List.replicate 64 0
+
+theorem nodeOf_nodeRow (node : ByteArray) : nodeOf (nodeRow node) = node := by
+  show (⟨((node.data.toList ++ List.replicate 64 0).toArray.toList.take
+    ((node.data.toList ++ List.replicate 64 0).toArray.size - 64)).toArray⟩ : ByteArray) = node
+  rw [List.size_toArray, List.length_append, List.length_replicate, Nat.add_sub_cancel, List.toList_toArray,
+    List.take_left, Array.toArray_toList]
+
+theorem size_nodeRow (node : ByteArray) : (nodeRow node).size = node.size + 64 := by
+  show (node.data.toList ++ List.replicate 64 0).toArray.size = node.data.size + 64
+  rw [List.size_toArray, List.length_append, Array.length_toList, List.length_replicate]
+
+theorem map_nodeOf_nodeRow (l : List ByteArray) : (l.map nodeRow).map nodeOf = l := by
+  rw [List.map_map]
+  exact (List.map_congr_left fun b _ => nodeOf_nodeRow b).trans (List.map_id l)
+
+theorem nodeRow_nodeOf {row : ByteArray} (h : isNodeRow row = true) : nodeRow (nodeOf row) = row := by
+  unfold isNodeRow at h
+  simp only [Bool.and_eq_true, beq_iff_eq] at h
+  show (⟨((row.data.toList.take (row.data.size - 64)).toArray.toList ++ List.replicate 64 0).toArray⟩ : ByteArray) =
+    row
+  rw [h.1, List.toList_toArray, ← h.2, show (128 - 64 : ℕ) = 64 from rfl, List.take_append_drop, Array.toArray_toList]
+
+theorem isNodeRow_nodeRow {node : ByteArray} (h : node.data.size = 64) : isNodeRow (nodeRow node) = true := by
+  have hl : node.data.toList.length = 64 := by rw [Array.length_toList]; exact h
+  unfold isNodeRow nodeRow
+  simp only [Bool.and_eq_true, beq_iff_eq]
+  refine ⟨?_, ?_⟩
+  · show (node.data.toList ++ List.replicate 64 0).toArray.size = 128
+    rw [List.size_toArray, List.length_append, hl, List.length_replicate]
+  · show (node.data.toList ++ List.replicate 64 0).toArray.toList.drop 64 = List.replicate 64 0
+    rw [List.toList_toArray, ← hl, List.drop_left]
 
 /-- Consecutive blocks of the given lengths. -/
 def cutLens {α : Type} : List ℕ → List α → List (List α)
@@ -159,9 +207,9 @@ def RowsAt (s : RecVStar.SchedRound) (rs : List ByteArray) (vs : List F128) : Pr
     rs.drop s.2.1.toList.sum = (if s.2.2.2 then [(⟨(colBytes vs).toArray⟩ : ByteArray)] else []) ∧
     (s.2.2.2 = false → vs = [])
 
-/-- The tops the rounds commit, in order: each round's first rows, cut at its tops' node counts. -/
+/-- The tops the rounds commit, in order: each round's first rows, cut at its tops' node counts, each row's node. -/
 def topGroups (sched : List RecVStar.SchedRound) (rows : List (List ByteArray)) : List (List ByteArray) :=
-  (sched.zip rows).flatMap fun q => cutLens q.1.2.1.toList q.2
+  (sched.zip rows).flatMap fun q => (cutLens q.1.2.1.toList q.2).map (List.map nodeOf)
 
 /-- What a rep's frames are read at: its table's setup and schedule, its stream's domain, its claim count, its rounds'
 schedule, its table's level-0 top's nodes (round 0's rows for the table), and the zerocheck's point `z`. -/
@@ -402,7 +450,7 @@ def recJ (spec : SessionSpec) (sts : Array Stmt) (link : List ByteArray × List 
     (recStreams spec sts ms cs) (filesAt (tabsOf sts) (pointsOf spec c₁) ps)
 
 /-- **The reading at a decision**: at a statement that sets up, the last message's proof (`rd`, for what no frame
-reads), round 0's rows as the link (`linkR`), the rounds after it as the reps' proofs (`readPs`), the round
+reads), round 0's rows' nodes as the link (`linkR`), the rounds after it as the reps' proofs (`readPs`), the round
 messages their framed bytes, each with its round's coin, and the record the reader's (`recJ`). -/
 def decR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : Option DecR := do
   let v ← setupOf false x
@@ -410,7 +458,7 @@ def decR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.
   let a₁ ← as.head?
   let c₁ ← cs.head?
   let fl ← rd a
-  let r₀ ← rowsOf a₁
+  let r₀ ← (rowsOf a₁).map (List.map nodeOf)
   let rss ← as.tail.dropLast.mapM rowsOf
   let link ← linkR v.2.2 r₀
   let pf ← readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl
@@ -421,7 +469,7 @@ theorem decR_some {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : Lis
     {d : DecR} (h : decR rd x as cs = some d) :
     ∃ (v : Ins × SessionSpec × Array Stmt) (c₁ : Coin) (r₀ : List ByteArray) (rss : List (List ByteArray))
       (fl : FinalP) (link : List ByteArray × List ByteArray) (pf : Array Flock.Proof × List Claims.Msg),
-      setupOf false x = some v ∧ cs.head? = some c₁ ∧ rowsOf (as.headD []) = some r₀ ∧
+      setupOf false x = some v ∧ cs.head? = some c₁ ∧ (rowsOf (as.headD [])).map (List.map nodeOf) = some r₀ ∧
       as.tail.dropLast.mapM rowsOf = some rss ∧ linkR v.2.2 r₀ = some link ∧
       readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl = some pf ∧
       d = ⟨v.1, v.2.1, v.2.2, link, c₁, pf.2.zip cs.tail.dropLast,
@@ -448,7 +496,8 @@ later rounds' rows, at its table's level-0 nodes among round 0's (`FitsRep`). -/
 theorem decR_fits {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) :
     ∃ (r₀ : List ByteArray) (rss : List (List ByteArray)),
-      rowsOf (as.headD []) = some r₀ ∧ as.tail.dropLast.mapM rowsOf = some rss ∧ d.f.ps.size = 2 * d.sts.size ∧
+      (rowsOf (as.headD [])).map (List.map nodeOf) = some r₀ ∧ as.tail.dropLast.mapM rowsOf = some rss ∧
+      d.f.ps.size = 2 * d.sts.size ∧
       ∀ (k : ℕ) (hk : k < d.f.ps.size), ∃ T,
         FitsRep (repCtx d.spec d.sts d.c₁ r₀ cs.tail.dropLast k) ((cutLens (repLens d.spec d.sts) rss).getD k [])
           d.f.ps[k] T := by
@@ -469,10 +518,10 @@ theorem decR_s8 {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List 
   exact linkR_s8 h8 st
 
 /-- **(b) Every word round 0 carries is a `root_B` node** (`rec-cap`'s): at a decision, the link's `root_B` are round
-0's rows, each table's joined, with no row left over. -/
+0's rows' nodes, each table's joined, with no node left over. -/
 theorem decR_rootB {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) :
-    ∃ r₀, rowsOf (as.headD []) = some r₀ ∧
+    ∃ r₀, (rowsOf (as.headD [])).map (List.map nodeOf) = some r₀ ∧
       d.link.1 = (cutLens (level0Lens d.sts) r₀).map (·.foldl (· ++ ·) ByteArray.empty) ∧
       (cutLens (level0Lens d.sts) r₀).flatten = r₀ := by
   obtain ⟨v, c₁, r₀, rss, fl, link, pf, -, -, h6, -, h8, -, rfl⟩ := decR_some h

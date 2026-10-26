@@ -82,8 +82,8 @@ def sh (i : ℕ) : Shape := shapeOf (D.files cls i).st (D.files cls i).sch (D.fi
 
 /-! ## A rep's values -/
 
-/-- Round 0's rows, as the decision read them. -/
-def r₀ (_ : DecAt rd x ms cs) : List ByteArray := (rowsOf (ms.headD [])).getD []
+/-- Round 0's rows' nodes, as the decision read them. -/
+def r₀ (_ : DecAt rd x ms cs) : List ByteArray := ((rowsOf (ms.headD [])).map (List.map FlockDeploy.nodeOf)).getD []
 
 /-- The later rounds' rows, as the decision read them. -/
 def rss (_ : DecAt rd x ms cs) : List (List ByteArray) := (ms.tail.dropLast.mapM rowsOf).getD []
