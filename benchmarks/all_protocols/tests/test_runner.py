@@ -245,10 +245,17 @@ def test_pouw_h1_audits_before_the_legs(tmp_path, monkeypatch):
     assert "pouw.json" in kept and "rows.bin" not in kept
 
 
+def test_session_jobs_takes_only_one(tmp_path, capsys):
+    assert RN.one_session("1") == 1
+    with pytest.raises(SystemExit):
+        RN.main(["--out", str(tmp_path), "--tools", str(tmp_path / "tools.json"), "--session-jobs", "16"])
+    assert "through the firewall one at a time" in capsys.readouterr().err
+
+
 @pytest.mark.slow
 def test_the_loop_window_keeps_only_public_files(tmp_path):
     a = Namespace(law="subset:2", cap=8, requests="3", steps=1, tamper={0}, node="test-node", tools={"x": "y"},
-                  pouw=None, delta="1/100", session_jobs=4)
+                  pouw=None, delta="1/100")
     d, loop = RN.loop_window(0, "test", a, tmp_path / "scratch", tmp_path / "out")
     kept = sorted(f.name for f in (tmp_path / "out" / "window").iterdir())
     assert "registration.json" in kept and "circuit.json" in kept and "period.json" in kept

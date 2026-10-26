@@ -40,8 +40,9 @@ every machine of a census deployment, the pooled total first and the per-window 
   on the legs' cases. Bandwidth is not an onsite component yet: a rejection there rejects, but its acceptance completes
   nothing.
 - `verity_all_protocols/runner.py`: the windows, each report in `$OUT/w<W>/report.json` and `$OUT/reports.jsonl`, and one
-  `ALLP` line per window, led by the monitoring period. `--jobs J` audits J windows at once, each on its own ports, and
-  `--session-jobs S` (default 16) runs S of each audit's drawn members' proof sessions at once (`a5 --session-jobs`).
+  `ALLP` line per window, led by the monitoring period. `--jobs J` audits J windows at once, each on its own ports. An
+  audit's drawn members' proof sessions run one at a time, since outer proofs go through the firewall one at a time
+  (`--session-jobs` takes only 1).
   `--start I` numbers another machine's windows apart. `--tamper W,...` makes those windows' loop record outputs that
   aren't its model's. `--pouw h1` (until ALLP-H1LOOP's `serve --pouw h1` lands) also serves PoUW's H1 window and audits
   it with `verity_torch_loop.pouw_audit` before the legs.
