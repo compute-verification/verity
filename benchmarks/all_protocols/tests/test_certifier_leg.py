@@ -880,5 +880,5 @@ def test_a_registered_weights_window_reads_unit_for_unit_as_the_plain_one(tmp_pa
     for u, (lab, rows) in want.items():
         assert got[u][0] == lab and all(np.array_equal(got[u][1][p], r) for p, r in rows.items())
     circuit = json.loads((d / "circuit.json").read_text())
-    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit)["free"] == 1024 * (1024 + 32)
+    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit, pins={"w", "sw"})["free"] == 1024 * (1024 + 32)
     assert L.free_inputs(json.loads((plain / "circuit.json").read_text()))["bits"] == FREE
