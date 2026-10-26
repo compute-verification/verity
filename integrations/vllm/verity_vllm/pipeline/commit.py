@@ -46,6 +46,8 @@ from __future__ import annotations
 
 import time
 
+from verity_vllm.records.commit_run import SCHEMA
+
 _T_PROCESS0 = time.time()      # [R16 sys] process start (before the torch / vLLM imports): startup.imports = engine.build start - this
 
 import contextlib
@@ -78,8 +80,6 @@ from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 from verity_vllm.pipeline.report import bootstrap_ci  # noqa: E402
 from verity_vllm.pipeline import commit_coins as CC, remote_session as RS  # noqa: E402
-
-SCHEMA = "verity/commit-integ/delta/v1"
 
 # [R16 sys, BRIEF §5/§10] automatic stage telemetry of THIS process: hot/cold, engine built or reused (+ reason), warm-up, arms, validation
 TL = Timeline.from_env("commit_delta", hot=False)

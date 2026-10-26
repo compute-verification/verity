@@ -13,4 +13,8 @@ package imports nothing else from `verity_vllm`, so every stage may import it.
   its `load` also refuses a field no writer writes (`fields.UnknownField`), and `dump` writes it back.
 * `global_match` -- GM-01's Match result (`cb-a/global-match/v1`), as the executed prefix's link to the Match account reads it;
   `load` refuses an unknown field and `dump` writes it back, as `workload`'s do.
+* `build_summary` -- the Build's summary (`build_summary.json`, in its `tp1`, `tp` and `tp2-r19` layouts), as the verdict reads the
+  Build's correspondence digest; `load` refuses an unknown field and `dump` writes it back, as `workload`'s do.
+* `commit_run` -- the Commit record, one run of a pair (a line of `commit/runs.jsonl`: `verity/commit-integ/delta/v1`, the TP
+  writer's `delta-tp/v1` and a sealed serving window's), as the verdict reads it; `load` refuses an unknown top-level field.
 """
