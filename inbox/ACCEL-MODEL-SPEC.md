@@ -157,3 +157,6 @@ O-IO's results:
 
 ## 03:52Z (real UTC, date -u), coordinator
 Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.
+
+## 04:19Z (real UTC), coordinator
+FYI: WORKSOUND-2 adds an oracle query interface (SHA-512 queries priced at shaPub) for RT-LEAN L28. If `Accel` needs a matching op for `CardWithinAccel`, coordinate on CMP-136/CMP-109.
