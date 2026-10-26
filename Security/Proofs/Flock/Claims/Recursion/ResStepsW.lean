@@ -1,5 +1,7 @@
 import Proofs.Flock.Claims.Recursion.ResChainW
 import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
+import Proofs.Flock.Claims.Recursion.CapLowerPin
+import Proofs.Flock.Claims.Recursion.ResPiecesD
 
 /-!
 # The steps half of P3 (`StepsW`): the outer witnesses' chain carries row D's running sums
@@ -177,5 +179,126 @@ theorem accHolds_chainW (elem : (r : XR) → List (Fin r.w.parts.length × List 
     rw [hbi', e₀]
   · refine (chainW_owner hr hcan₁ hw₁ q.table).trans ?_
     rw [hbo', e₁]
+
+/-! ## `StepsW` from four facts at each row D piece's copy -/
+
+/-- **`StepsW`'s reading of the last message and decision** at `x`, `c`, `ws`: `F` at the opened messages, wherever
+the last message reads as `os` and `last` and a decision of the opened messages exists. -/
+abbrev AtDecW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
+    (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    (x : Msg) (c : ℕ → Coin) (ws : List Claims.Flock.Wit) (F : List Msg → Prop) : Prop :=
+  ∀ os last, (_root_.RecDeploy.bdR rd wE final w).final
+      (((DeployedR.layR elem).msgs x ws).getD
+        ((_root_.RecDeploy.bdR rd wE final w).DE.V.k (Claims.Recursion.xI (DRL rd wE final w b elem) x) - 1)
+        []) = some (os, last) →
+    os.length + 1 = (_root_.RecDeploy.bdR rd wE final w).DE.V.k (Claims.Recursion.xI (DRL rd wE final w b elem) x) →
+  ∀ _ : Rows.DecAt rd (Claims.Recursion.xI (DRL rd wE final w b elem) x)
+      ((_root_.RecDeploy.bdR rd wE final w).opened os last)
+      ((List.range ((_root_.RecDeploy.bdR rd wE final w).DE.V.k
+        (Claims.Recursion.xI (DRL rd wE final w b elem) x))).map c),
+    F ((_root_.RecDeploy.bdR rd wE final w).opened os last)
+
+/-- **A row D piece's copy's coefficients are `coefRead`'s** at the coins `StepsW` reads, at its owner's witness
+(`AtPiecesP` at row D's pieces). -/
+def CoefW (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
+    (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
+    (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
+  OpenLower.AtPiecesP FlockDeploy.sha512 (DRL rd wE final w b elem) shape untr b cmt (DeployedR.layR elem)
+    (Rows.rowDPieces key) fun x c _ LANES HH _ _ wt p ht q =>
+      _root_.Flock.Readable.openCoefs
+          (OpenLower.copyR (Claims.Recursion.xI (DRL rd wE final w b elem) x) wt p ht q) LANES HH =
+        Rows.coefRead (Claims.Recursion.xI (DRL rd wE final w b elem) x)
+          ((List.range ((_root_.RecDeploy.bdR rd wE final w).DE.V.k
+            (Claims.Recursion.xI (DRL rd wE final w b elem) x))).map c) q
+
+/-- **A row D piece's copy reads `chainW`'s rows at its position and the next** on its `acc` and `acc_out` columns,
+at its owner's witness, at every reading of the last message and decision (`AtDecW`): bytes `bi` on the copy's `acc`
+columns and `bo` on its `acc_out` columns whose first two elements are `chainW`'s rows at the piece's position
+(`Rows.chainPos` at the decided side's schedule) and the next. -/
+def RowsW (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
+    (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
+    (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
+  OpenLower.AtPiecesP FlockDeploy.sha512 (DRL rd wE final w b elem) shape untr b cmt (DeployedR.layR elem)
+    (Rows.rowDPieces key) fun x c ws LANES HH _ _ wt p ht q =>
+      AtDecW rd wE final w b elem x c ws fun ms =>
+        ∃ bi bo : ByteArray,
+          FlockVBridge.ColsHold (OpenLower.copyR (Claims.Recursion.xI (DRL rd wE final w b elem) x) wt p ht q)
+            (128 * LANES + 1024 * max 1 ((HH + 1) / 2)) bi ∧ 32 ≤ bi.size ∧
+          FlockVBridge.ColsHold (OpenLower.copyR (Claims.Recursion.xI (DRL rd wE final w b elem) x) wt p ht q)
+            (FlockVBridge.Family.outCol LANES HH + 1024) bo ∧ 32 ≤ bo.size ∧
+          chainW x ws q.table (Rows.chainPos (Rows.sideAt rd (Claims.Recursion.xI (DRL rd wE final w b elem) x) ms q).sch
+              q.rep q.level q.query) = #[elemsOf bi.data.toList 2 0, elemsOf bi.data.toList 2 1] ∧
+          chainW x ws q.table (Rows.chainPos (Rows.sideAt rd (Claims.Recursion.xI (DRL rd wE final w b elem) x) ms q).sch
+              q.rep q.level q.query + 1) = #[elemsOf bo.data.toList 2 0, elemsOf bo.data.toList 2 1]
+
+section Assembly
+
+variable {rd : Msg → Option FinalP} {wE : Msg → ℝ} {final : Msg → Option (List (List (Msg × Salt)) × Msg)}
+  {w : Msg → ℝ} {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
+  {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg}
+
+/-- Under `JointP`, every part has a staged statement at its own witness (`OpenLevW.stagedAt_of_jointP`'s proof). -/
+private theorem stagedAt_jointP {x : Msg} {c : ℕ → Coin} {ws : List Claims.Flock.Wit}
+    (hJ : OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
+      (AccP rd wE final w b elem shape untr cmt) x c ws)
+    {s : ℕ} (hs : s < ws.length) {r : XR} {ss : Array VStar.Stmt} {sv : VStar.Stmt} (hr : readX x = some r)
+    (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss) (hsv : ss[s]? = some sv) :
+    ∃ (xO : Msg) (p : _root_.Flock.Readable.Parsed),
+      OpenLower.StagedAt FlockDeploy.sha512 (DRL rd wE final w b elem) untr b cmt (DeployedR.layR elem) s x c
+        ((DeployedR.layR elem).msgs x ws) sv xO ws[s] p := by
+  obtain ⟨-, xO, hck, hT, hc, hsh, hh, hp, hm, hrw⟩ := hJ.2.2.2 s hs
+  obtain ⟨p, r', sv', hx, ht, hpi, hr', ⟨ss', hss', hsv'⟩, hsz, htab⟩ := stagedReads hsh
+  have hck' : Claims.Flock.check (_root_.Flock.Readable.parseOf _root_.Flock.Readable.relation readOfO) xO ws[s] =
+      true := hck
+  have hcp := _root_.Flock.Readable.stmtCopies_of_allOuts htab
+    (_root_.Flock.Readable.allOuts_of_check hck' hx ht hpi)
+  rw [hr] at hr'
+  cases hr'
+  rw [hss] at hss'
+  cases hss'
+  rw [hsv] at hsv'
+  cases hsv'
+  exact ⟨xO, p, hx, hsz, hcp, ⟨hh, hp, hm, hrw⟩, hT, hc, hsh.1, hck, hsh.2⟩
+
+end Assembly
+
+/-- **`StepsW` from four facts at each row D piece's copy**, at the dense form: the copy is a level table's outputs
+(`hL`, `OpenLevW.LevelOutsW`'s), reads the piece's opening at the decided side (`hO`, `OpenLevW.OpenCopyW`'s), its
+coefficients are `coefRead`'s (`hC`), and its `acc` and `acc_out` columns read `chainW`'s rows at its position and the
+next (`hR`). Each piece has its level's part as owner (`openOwned_D`), staged at its own witness under `JointP`, and
+`accHolds_of_copy` steps `chainW` there. -/
+theorem stepsW_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
+    (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
+    (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (untr : TrReader)
+    (cmt : Msg → ℕ → Msg → Msg)
+    (hL : OpenLower.AtPiecesP FlockDeploy.sha512 (DRL rd wE final w b elem) Claims.Recursion.Form.Dense untr b cmt
+      (DeployedR.layR elem) (Rows.rowDPieces key) fun x _ _ LANES HH _ _ wt p ht q =>
+        _root_.Flock.Readable.LevelOuts
+          (OpenLower.copyR (Claims.Recursion.xI (DRL rd wE final w b elem) x) wt p ht q) LANES HH)
+    (hO : OpenLower.AtPiecesP FlockDeploy.sha512 (DRL rd wE final w b elem) Claims.Recursion.Form.Dense untr b cmt
+      (DeployedR.layR elem) (Rows.rowDPieces key) fun x c ws LANES HH _ _ wt p ht q =>
+        AtDecW rd wE final w b elem x c ws fun ms =>
+          OpenCopy (Rows.sideAt rd (Claims.Recursion.xI (DRL rd wE final w b elem) x) ms q) q LANES HH
+            (OpenLower.copyR (Claims.Recursion.xI (DRL rd wE final w b elem) x) wt p ht q))
+    (hC : CoefW rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt)
+    (hR : RowsW rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt) :
+    StepsW rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt := by
+  intro x st hx hf c ws hJ os last hfin hos hD q hq
+  obtain ⟨s, hs, ho⟩ := DecompBR.openOwned_D key x ⟨st, hx, hf⟩ q hq
+  obtain ⟨-, r, ss, hr, hss, LANES, HH, n, hsv⟩ := OpenLower.ownQR_some ho
+  have hsw : s < ws.length := lt_of_lt_of_eq hs hJ.1.symm
+  have hw : ws[s]? = some ws[s] := List.getElem?_eq_getElem hsw
+  obtain ⟨xO, p, hst⟩ := stagedAt_jointP hJ hsw hr hss hsv
+  have ht : 0 < p.sts.size := hst.2.1
+  have hLO := hL x st hx hf c ws hJ r ss s q.level LANES HH n hr hss hsv xO ws[s] p hw hst q hq ho ht
+  have hOC := hO x st hx hf c ws hJ r ss s q.level LANES HH n hr hss hsv xO ws[s] p hw hst q hq ho ht os last hfin hos
+    hD.some
+  have hCf := hC x st hx hf c ws hJ r ss s q.level LANES HH n hr hss hsv xO ws[s] p hw hst q hq ho ht
+  obtain ⟨bi, bo, hbi, hszi, hbo, hszo, hin, hout⟩ :=
+    hR x st hx hf c ws hJ r ss s q.level LANES HH n hr hss hsv xO ws[s] p hw hst q hq ho ht os last hfin hos hD.some
+  exact accHolds_of_copy (Rows.sideAt rd) Rows.coefRead (fun _ _ => chainW x ws) q _ _ _ hLO hOC.1 hOC.2.2.1 hCf
+    hbi hszi hbo hszo hin hout
 
 end RecDeploy.ResLower
