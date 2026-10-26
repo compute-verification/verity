@@ -179,6 +179,54 @@ def slots (c : Circuit) (pin : In.PartIn) : Array (Array (Array Bool)) :=
     else if n == c.unitNet then (Array.range (nb * cnt)).map fun x => evalNet net (unitIns c pin (x / cnt) (x % cnt))
     else (Array.range (nb * cnt)).map fun _ => evalNet net (Array.replicate (net.inWords * WORD) false)
 
+/-- A sparse matrix's rows, decoded: past them every row is empty, as `Sparse.row`'s. -/
+def rowsOf (m : Sparse) : Array (Array Nat) := (Array.range m.len.size).map m.row
+
+theorem getD_rowsOf (m : Sparse) (i : Nat) : (rowsOf m).getD i #[] = m.row i := by
+  unfold rowsOf
+  rw [Array.getD_eq_getD_getElem?, Array.getElem?_map]
+  by_cases h : i < m.len.size
+  · simp [h]
+  · have h0 : m.len.getD i 0 = 0 := by simp [Array.getD_eq_getD_getElem?, Array.getElem?_eq_none (Nat.le_of_not_lt h)]
+    simp [h, Sparse.row, h0]
+
+/-- `evalNet` with its A and B rows read from `ra` and `rb`. -/
+def evalNetR (net : Net) (ra rb : Array (Array Nat)) (ins : Array Bool) : Array Bool :=
+  let first := net.inWords * WORD
+  let z0 := (Array.range (2 ^ net.unitLog)).map fun i =>
+    if i == net.constPos then true else i < first && (ra.getD i #[]).size == 1 && ins.getD i false
+  (List.range' first (net.useful - first)).foldl (fun z i =>
+    if i == net.constPos then z
+    else z.set! i ((ra.getD i #[]).foldl (fun s k => s ^^ z.getD k false) false &&
+      (rb.getD i #[]).foldl (fun s k => s ^^ z.getD k false) false)) z0
+
+theorem evalNetR_rowsOf (net : Net) : evalNetR net (rowsOf net.a) (rowsOf net.b) = evalNet net := by
+  funext ins
+  simp only [evalNetR, evalNet, getD_rowsOf]
+
+/-- Net `n`'s slots, as `slots` computes them, from its rows decoded (`ra`, `rb`): a call of its own, so that compiled code
+decodes them once per net and not at every slot. -/
+@[noinline] def netSlots (c : Circuit) (pin : In.PartIn) (nb : Nat) (rows : Array (Array (Array Bool) × Array (Array Bool)))
+    (n : Nat) (net : Net) (ra rb : Array (Array Nat)) : Array (Array Bool) :=
+  let cnt := (c.rangeOf n).count
+  if n == c.shaNet then (Array.range (nb * cnt)).map fun x => evalNetR net ra rb ((rows.getD (x / cnt) default).1.getD (x % cnt) #[])
+  else if n == c.hmNet then (Array.range (nb * cnt)).map fun x => evalNetR net ra rb ((rows.getD (x / cnt) default).2.getD (x % cnt) #[])
+  else if n == c.unitNet then (Array.range (nb * cnt)).map fun x => evalNetR net ra rb (unitIns c pin (x / cnt) (x % cnt))
+  else (Array.range (nb * cnt)).map fun _ => evalNetR net ra rb (Array.replicate (net.inWords * WORD) false)
+
+/-- `slots`, each net's rows decoded once (`netSlots`). -/
+def slotsFast (c : Circuit) (pin : In.PartIn) : Array (Array (Array Bool)) :=
+  let nb := 2 ^ nbl c pin
+  let rows := (Array.range nb).map (rowIns c pin)
+  (Array.range c.nets.size).map fun n =>
+    let net := (c.nets.getD n default).2
+    netSlots c pin nb rows n net (rowsOf net.a) (rowsOf net.b)
+
+/-- Compiled code runs `slotsFast`; the kernel and every proof see `slots`. -/
+@[csimp] theorem slots_eq_slotsFast : @slots = @slotsFast := by
+  funext c pin
+  simp only [slots, slotsFast, netSlots, evalNetR_rowsOf]
+
 /-- Witness bit `q` (`Stmt::witness_with`): in block `q / 2^kLog` at column `q % 2^kLog`, the value of the slot covering it
 (a circuit's range, slot `k` at `slot k`, one slot's `2^unitLog` bits; the last circuit's where two cover it), else the mask
 range's bit, else zero. `checkLayout` makes the ranges disjoint and a unit range's slots its circuit's size. -/
@@ -199,6 +247,55 @@ def bitAt (c : Circuit) (z : Array (Array (Array Bool))) (mask : Nat → Nat →
     match c.ranges.toList.reverse.find? (fun r => r.kind == Kind.mask && r.start ≤ col && col < r.start + 2 ^ r.slotLog) with
     | some r => mask blk (col - r.start)
     | none => false
+
+/-- What `bitAt` reads of the circuit at every bit, computed once: the block size, the nets newest first, each net's range
+and slot size, and the ranges newest first. -/
+structure BitTables where
+  bs : Nat
+  ns : List Nat
+  rs : Array Range
+  us : Array Nat
+  ms : List Range
+
+def bitTables (c : Circuit) : BitTables :=
+  { bs := 2 ^ c.kLog, ns := (List.range c.nets.size).reverse, rs := (Array.range c.nets.size).map c.rangeOf,
+    us := (Array.range c.nets.size).map fun n => 2 ^ (c.nets.getD n default).2.unitLog, ms := c.ranges.toList.reverse }
+
+/-- `bitAt` reading its tables from `tb`. -/
+def bitAtT (z : Array (Array (Array Bool))) (mask : Nat → Nat → Bool) (tb : BitTables) (q : Nat) : Bool :=
+  let blk := q / tb.bs
+  let col := q % tb.bs
+  let fromNet := tb.ns.findSome? fun n =>
+    let r := tb.rs.getD n default
+    let k := (col - r.start) / 2 ^ r.slotLog
+    let t := col - r.slot k
+    let zs := z.getD n #[]
+    if r.start ≤ col && k < r.count && t < tb.us.getD n 0 && blk * r.count + k < zs.size then
+      some ((zs.getD (blk * r.count + k) #[]).getD t false)
+    else none
+  match fromNet with
+  | some v => v
+  | none =>
+    match tb.ms.find? (fun r => r.kind == Kind.mask && r.start ≤ col && col < r.start + 2 ^ r.slotLog) with
+    | some r => mask blk (col - r.start)
+    | none => false
+
+theorem findSome?_congr_mem {α β} {l : List α} {f g : α → Option β} (h : ∀ a ∈ l, f a = g a) :
+    l.findSome? f = l.findSome? g := by
+  induction l with
+  | nil => rfl
+  | cons a l ih =>
+    simp only [List.findSome?_cons, h a List.mem_cons_self, ih fun x hx => h x (List.mem_cons_of_mem _ hx)]
+
+theorem bitAtT_bitTables (c : Circuit) (z : Array (Array (Array Bool))) (mask : Nat → Nat → Bool) :
+    bitAtT z mask (bitTables c) = bitAt c z mask := by
+  funext q
+  simp only [bitAtT, bitAt, bitTables]
+  congr 1
+  apply findSome?_congr_mem
+  intro n hn
+  have h : n < c.nets.size := List.mem_range.mp (List.mem_reverse.mp hn)
+  simp [Array.getD_eq_getD_getElem?, Array.getElem?_map, Array.getElem?_range, h]
 
 /-- What the assigner mirrors: no typed template, no lookup, no segmented row, and no wire but the rows' (into a
 `sha512x3` or `hm96` slot). -/
@@ -239,5 +336,21 @@ def digests (c : Circuit) (pin : In.PartIn) (mask : Nat → Nat → Bool) : Opti
       (Sha512.hash (pack f (b * bs) bs),
        c.ranges.map fun r => Sha512.hash (pack f (b * bs + r.start) (r.count * 2 ^ r.slotLog))))
   else none
+
+/-- `digests` with `bitAt`'s tables computed once (`bitTables`). -/
+def digestsFast (c : Circuit) (pin : In.PartIn) (mask : Nat → Nat → Bool) : Option (Array (ByteArray × Array ByteArray)) :=
+  if supported c then
+    let z := slots c pin
+    let f := bitAtT z mask (bitTables c)
+    let bs := 2 ^ c.kLog
+    some ((Array.range (2 ^ nbl c pin)).map fun b =>
+      (Sha512.hash (pack f (b * bs) bs),
+       c.ranges.map fun r => Sha512.hash (pack f (b * bs + r.start) (r.count * 2 ^ r.slotLog))))
+  else none
+
+/-- Compiled code runs `digestsFast`; the kernel and every proof see `digests`. -/
+@[csimp] theorem digests_eq_digestsFast : @digests = @digestsFast := by
+  funext c pin mask
+  simp only [digests, digestsFast, bitAtT_bitTables]
 
 end VStar.Trace
