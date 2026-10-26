@@ -333,7 +333,7 @@ theorem coinTie_sized (hq : ∀ (a : Array Json) (lt : Json → Json → Bool) x
         by_cases hs : s = name
         · subst hs; simp
         · have : s.toUTF8.toList ≠ name.toUTF8.toList := fun e => hs (toUTF8_toList_inj e)
-          simp [hs, this]
+          simpa [hs] using this
   refine ⟨R, hRead, sp, ?_, fun m hm => ?_⟩
   · rcases hsized with ⟨hid, hs⟩ | ⟨j, hj, hs, hjn, hemp⟩
     · exact Or.inl ⟨hid, by omega⟩
@@ -394,7 +394,7 @@ theorem canon_eq {spec : SessionSpec} {st : Stmt} {rs : Array RecVStar.SchedRoun
   have hl : FlockDeploy.repLens spec #[st] = [rs.size, rs.size] := by
     show (List.range 2).map (fun k => (repSchedAt spec (#[st] : Array Stmt)[k / 2]!).length) = _
     rw [show List.range 2 = [0, 1] from rfl, List.map_cons, List.map_cons, List.map_nil]
-    simp only [h0, h1, hsc, Array.length_toList]
+    simp only [h0, hsc, Array.length_toList]
   have hget : (#[st] : Array Stmt)[k / 2]! = st := by
     obtain rfl | rfl : k = 0 ∨ k = 1 := by omega
     · exact h0
@@ -612,7 +612,7 @@ theorem stmt_unit {f : RecCoins.Files} {u u' : String} {p : SessionSpec × Stmt}
     obtain ⟨spec, sts⟩ := q
     intro h
     cases hs : sts[0]? with
-    | none => simp [hs, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
+    | none => simp [hs, bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
     | some st => simpa [hs, bind, Except.bind, pure, Except.pure] using h
 
 /-- **What `Inner.load` sets up**: the files' statement, whose `m` and `k_log` the session has, and whose circuit fold
