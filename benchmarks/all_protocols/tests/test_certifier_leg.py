@@ -477,7 +477,7 @@ def test_the_session_proves_n2s_members_one_firewalled_session_at_a_time(tmp_pat
                                                  "m0-pythonpath": ""})
     monkeypatch.setattr(L, "lean_exes", lambda: {"network-records": "nr"})
     monkeypatch.setattr(L, "requests_of", lambda d: ([1, 2], 3, 4))
-    monkeypatch.setattr(L, "_stub", lambda *a: (Stub(), "http://stub"))
+    monkeypatch.setattr(L, "_stub", lambda *a, **k: (Stub(), "http://stub"))
     monkeypatch.setattr(L, "_run", run)
     monkeypatch.setenv("CERTIFIER_TAMPER", "extra")
     L._session(period, s)
