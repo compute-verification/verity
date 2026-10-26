@@ -50,3 +50,8 @@ Daniel (25 Oct 7:06 PM PDT): "don't worry about proving, I know for a fact that 
 
 ## 26 Oct 03:00Z, from the coordinator
 PROTO-DESIGN's protocol pick is J10-R v6 with the li fold at L = 32, on 32×32 whole-K units. Once RingKCount's fragment proof is in, state its instance over that protocol's words.
+
+## 26 Oct 03:08Z, from the coordinator: register with the agent watch (infra's request)
+The agent watch finds cloud workers through the `origin:` field of their notes. Put this exact line in your note's front matter and keep it there:
+`origin: ACCEL BET-K-DISCHARGE, bc-d34ea944-bc34-53ec-a803-cc1f8ec0b203, launched by compute-research bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac; code cursor/compute-research-accel-bet-k-discharge-ea24`
+Then sync. Without it, nobody hears when your `research run`s end.

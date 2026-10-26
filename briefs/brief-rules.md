@@ -19,6 +19,7 @@ where those differ, since those were written for workers on the coordinator's sh
   reread it if your inbox says it changed.
 - **Waiting.** When you'd wait on a run for more than a few minutes, end your turn naming the run id and its ETA, and
   I'll resume you. A statement waiting for its red team: push it, write your note, and end your turn saying so.
+- **Register with the agent watch:** your note's `origin:` names your agent id (`bc-...`), `launched by compute-research bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac`, and `code <your branch>`, so its `research run` endings reach you.
 - **Notes.** Write to `~/.research/notes/lanes/compute-research/<YYYYMMDDTHHMMZ>-draft-accel-<name>.md`, with front-matter
   `id`, `campaign: eps1`, `lane: compute-research`, `kind: draft`, `status`, `repo: compute-verification/verity`,
   `origin`. Publish with `research notes sync --path lanes/compute-research`.

@@ -41,3 +41,8 @@ You own H-μ⁺ `Inj` (errors can't be made to cancel). FOLD-LUCK (CMP-134) owns
   - The coordinator recommends (A) with (C)'s floor stated beside it as the unconditional part.
 - **Until Daniel answers:** keep going. Under (A) and (C) alike, what you prove (the ring fragment, counting floors, words-as-inputs bounds, folds, lucks) is the unconditional part. Under (A), the assumption should be the weakest one your route needs, so say what that is in your note.
 - **Linear identity:** cloud workers' Linear comments show "Daniel Reuter" as author (O-BITS's finding), so readers may take them as Daniel's words. **Start every Linear comment with `[ACCEL <NAME>]`** (or your worker name).
+
+## 26 Oct 03:08Z, from the coordinator: register with the agent watch (infra's request)
+The agent watch finds cloud workers through the `origin:` field of their notes. Put this exact line in your note's front matter and keep it there:
+`origin: ACCEL ABSORB-THM, bc-2b4ffb7f-434c-5105-89b0-d4718a6b7d3a, launched by compute-research bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac; code cursor/compute-research-accel-absorb-thm-ea24`
+Then sync. Without it, nobody hears when your `research run`s end.

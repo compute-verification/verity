@@ -71,3 +71,8 @@ Daniel (25 Oct 7:06 PM PDT): "don't worry about proving, I know for a fact that 
 
 ## 26 Oct 03:00Z, from the coordinator
 FOLD-SAT (CMP-131) reports that your `Isa.lean` at 738a30c30f has no LEA.HI or IMAD.HI, so honest duo is priced at 4 instructions instead of 3. Add both under R4's coverage table. FOLD-SAT's SMT models cover every integer instruction in your Isa.lean but not FP32; align the semantics where they differ.
+
+## 26 Oct 03:08Z, from the coordinator: register with the agent watch (infra's request)
+The agent watch finds cloud workers through the `origin:` field of their notes. Put this exact line in your note's front matter and keep it there:
+`origin: ACCEL MODEL-SPEC, bc-8e07fa19-b949-54d8-bd2e-c07b670e5cc2, launched by compute-research bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac; code cursor/compute-research-accel-model-spec-ea24`
+Then sync. Without it, nobody hears when your `research run`s end.

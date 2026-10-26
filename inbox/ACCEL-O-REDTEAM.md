@@ -72,3 +72,8 @@ Daniel (25 Oct 7:06 PM PDT): "don't worry about proving, I know for a fact that 
 
 ## 26 Oct 03:00Z, from the coordinator
 PROTO-DESIGN's smell: "the H200 headline design" in the earlier relays, `dither-1s-li-l32`, has model ε 12.5% (its peel is unchecked and can be skipped at A = 0). The li headline should be `dither-2s-li-l32` (ε 0.68%). Re-read your FOLD-OPT finding against it.
+
+## 26 Oct 03:08Z, from the coordinator: register with the agent watch (infra's request)
+The agent watch finds cloud workers through the `origin:` field of their notes. Put this exact line in your note's front matter and keep it there:
+`origin: ACCEL O-REDTEAM, bc-3d215ce6-106c-5012-8b5d-a8cc32ca0312, launched by compute-research bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac; code cursor/compute-research-accel-o-redteam-ea24`
+Then sync. Without it, nobody hears when your `research run`s end.

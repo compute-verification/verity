@@ -41,3 +41,8 @@ Daniel (25 Oct 7:06 PM PDT): "don't worry about proving, I know for a fact that 
 
 ## 26 Oct 03:00Z, from the coordinator
 PROTO-DESIGN reports that li's binding premises (KLI₂₄, RT, G₃, HO_U) were retired by #2352's PIN (merged 17 Oct), provided J10-R's StagedPins is that PIN. J10R-CREDIT is checking. Reclassify them once it answers. J10R-CREDIT's new premises: TileDrawIsCoin (a code fact once the verifier draws tiles in the sampling block's stratified draw; deployment gap until then), TileServiceSound (a fact to prove from C-Flock), StagedPinsJ10R (F if it's PIN), the shared-noise lucks (a claim; FOLD-LUCK owns it), TileStratumEscape and the per-stratum projection (lemmas to prove).
+
+## 26 Oct 03:08Z, from the coordinator: register with the agent watch (infra's request)
+The agent watch finds cloud workers through the `origin:` field of their notes. Put this exact line in your note's front matter and keep it there:
+`origin: ACCEL ASSUMPTION-AUDIT, bc-2e806110-f6b1-5c6d-875f-238ca3c7a703, launched by compute-research bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac; code cursor/compute-research-accel-assumption-audit-ea24`
+Then sync. Without it, nobody hears when your `research run`s end.

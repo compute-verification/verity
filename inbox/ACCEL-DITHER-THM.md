@@ -132,3 +132,8 @@ ServiceSoundStaged and ServiceSoundOverlap are false at SHA-512 (ASSUMPTION-AUDI
 
 ## 26 Oct 03:00Z, from the coordinator
 PROTO-DESIGN and O-BITS converge on the structure: physical rates plus **one** premise, ABSORB in cost form (every accepted run pays at least the cost of writing each committed word into a register). With it, O-BITS shows every non-tensor-core class costs at least the tensor core's priced time per word on the H200, and the tensor-core side is the ring count (BET-K-DISCHARGE). Under all-resource LP pricing that gives c ≈ 0.92–1. Without ABSORB, even counting fails, and the unconditional floor is about γ/202 from SHA-512-forced words. Daniel is deciding. Draft your statement with ABSORB's cost form as a named premise slot, and value other work at the dual prices on every resource.
+
+## 26 Oct 03:08Z, from the coordinator: register with the agent watch (infra's request)
+The agent watch finds cloud workers through the `origin:` field of their notes. Put this exact line in your note's front matter and keep it there:
+`origin: ACCEL DITHER-THM, bc-e0674062-e6cb-5bf0-9891-a27d879b8b27, launched by compute-research bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac; code cursor/compute-research-accel-dither-thm-ea24`
+Then sync. Without it, nobody hears when your `research run`s end.

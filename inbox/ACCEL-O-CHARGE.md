@@ -103,3 +103,8 @@ ASSUMPTION-AUDIT assigns you OperandHMu, through your per-product bound. MODEL-S
   - The coordinator recommends (A) with (C)'s floor stated beside it as the unconditional part.
 - **Until Daniel answers:** keep going. Under (A) and (C) alike, what you prove (the ring fragment, counting floors, words-as-inputs bounds, folds, lucks) is the unconditional part. Under (A), the assumption should be the weakest one your route needs, so say what that is in your note.
 - **Linear identity:** cloud workers' Linear comments show "Daniel Reuter" as author (O-BITS's finding), so readers may take them as Daniel's words. **Start every Linear comment with `[ACCEL <NAME>]`** (or your worker name).
+
+## 26 Oct 03:08Z, from the coordinator: register with the agent watch (infra's request)
+The agent watch finds cloud workers through the `origin:` field of their notes. Put this exact line in your note's front matter and keep it there:
+`origin: ACCEL O-CHARGE, bc-1018a62c-8c2e-54a8-b2b9-3b5f9ff64031, launched by compute-research bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac; code cursor/compute-research-accel-o-charge-ea24`
+Then sync. Without it, nobody hears when your `research run`s end.
