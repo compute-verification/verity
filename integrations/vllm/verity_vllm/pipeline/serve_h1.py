@@ -30,8 +30,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-#: the H1 scheme the arm serves, `pouw_h1.SCHEME`
-SCHEME = "eps1-sm120-h1fx1"
+from verity_vllm.protocols.pouw.h1 import SCHEME
+
 ENTRY = f"pouw:{SCHEME}"
 #: the pouw settings the server sets for each window itself
 OWN = ("rows", "steps", "runner", "served", "transcript_dir", "coins", "rounds")

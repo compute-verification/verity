@@ -28,10 +28,6 @@ from tests.protocols.test_pouw_h1_served import _unit
 PROMPTS = ({"a": [5, 6, 7], "b": [8, 9]}, {"c": [11, 12], "d": [13, 14, 15, 16]})
 
 
-def test_the_arms_scheme_is_h1s():
-    assert SH.SCHEME == PH.SCHEME and SH.ENTRY == f"pouw:{PH.SCHEME}"
-
-
 class _Server:
     """The server's Commit as the arm sees it: the committer (`test_pouw_h1_commit.Committer`) with its step-input port
     and the bench row's int8 source at engine steps 0..S-1 of each window (the committer's steps restart at its reset),
