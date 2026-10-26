@@ -7,8 +7,9 @@ A leg is ``benchmarks/all_protocols/legs/<component>.py`` (``-`` as ``_``) defin
 ``period_dir`` is the window's loop records: the window `verity_torch_loop.serve` wrote (``registration.json``,
 ``circuit.json``, ``window.json``, ``index.json``, the value files, ``serve.json``; with ``--pouw h1`` PoUW's window in
 ``pouw/``), with ``period.json`` (`PERIOD`, its name kept for the legs written against it: the window's index as
-``window`` and ``period``, the circuit the verifier registered before the loop ran, the run root it published, the law,
-each window's δ and the member cap, the built tools, the prover's environment) and ``answers/<component>.json``, the answers of the legs that ran before
+``window``, its place in this run as ``period`` (what a leg serving one session a run indexes it by), the circuit
+the verifier registered before the loop ran, the run root it published, the law, each window's δ and the member cap,
+the built tools, the prover's environment) and ``answers/<component>.json``, the answers of the legs that ran before
 it (in `TABLE`'s order: integrity first, which PoUW's evidence reads). ``node`` is the machine the loop ran on. ``out`` is
 the leg's own directory, kept in the run's ``$OUT``.
 
@@ -54,8 +55,9 @@ TABLE: tuple[Entry, ...] = (
     Entry("integrity", "sampled-proofs", "compute-accounting"),
     Entry("work", "pouw", "compute-accounting"),
     Entry("space", "pous", "memory-accounting"),
-    Entry("bandwidth", "bandwidth", "memory-accounting", onsite=False),
+    Entry("bandwidth", "bandwidth", "memory-accounting"),
     Entry("communication", "certifier", "network-accounting"),
+    Entry("wipe", "wipe", "memory-accounting", onsite=False),
 )
 
 

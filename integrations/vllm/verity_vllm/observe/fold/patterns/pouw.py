@@ -20,7 +20,7 @@ from verity_vllm.observe.fold.patterns.ops import base_op
 from verity_vllm.observe.fold.patterns.resolutions import attribution_for, hint_of, unsupported
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Profile, Resolution, Shared, StepContext
 from verity_vllm.observe.fold.tree import TreeNode
-from verity_vllm.program.registry import pouw_rows
+from verity.ml.definitions.registry import pouw_rows
 
 OP = "verity_pouw.ncp_linear"
 

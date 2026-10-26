@@ -7,7 +7,7 @@ from __future__ import annotations
 import numpy as np
 
 from verity_vllm.check.replay import evaluate as EV, opening as OP
-from verity_vllm.program.kernels.moe_align_rows import moe_align_ranks
+from verity.ml.definitions.numerics.moe_align_rows import moe_align_ranks
 
 E, P, BM, ROW = 3, 8, 2, 1
 EXPERTS = "model.layers.0.ffn.experts"
