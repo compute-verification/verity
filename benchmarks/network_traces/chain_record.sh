@@ -34,7 +34,9 @@
 #      CR_PATH=certifier-only (the records are the certifier rehearsal's alone, with no warden rows: the scan isn't run
 #      or required, and the report names what that path stubs, chain_record.STUBBED)
 #      CR_AUDIT (the served units' compute audit windows, space-separated directories: the report's --audit, d1's K)
-#      CR_SERIAL=1 (n2 then scan; at once by default)  CR_CACHE (the build cache; hidden_zk's by default)
+#      CR_SCAN_ONLY=1 (the scan alone, its report given no N2 summary: "scan only, N2 not given"; the record's N2 runs
+#      in jobs of its own)  CR_SERIAL=1 (n2 then scan; at once by default)  CR_CACHE (the build cache; hidden_zk's by
+#      default)
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
 # file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive, a signer's
 # state or a gate run's witness/ (custody uploads all of $OUT; a warden run's witness is its lane key's only).
@@ -150,7 +152,7 @@ scan() {
   [ "$(cat "$W/scan.rc")" = 0 ] || tail -n 1 "$OUT/scan.log" | cut -c1-600 > "$W/scan.why"
   [ -n "$wr" ] && echo "$WARDEN" > "$W/scan.warden"
 }
-if [ -n "${CR_SERIAL:-}" ]; then n2; scan; else n2 & scan & wait; fi
+if [ -n "${CR_SCAN_ONLY:-}" ]; then scan; elif [ -n "${CR_SERIAL:-}" ]; then n2; scan; else n2 & scan & wait; fi
 
 # ---- the report --------------------------------------------------------------------------------------------------------
 "$PY" - "$OUT/job.json" "$W" <<EOF
@@ -163,11 +165,12 @@ json.dump({"run": os.environ.get("RESEARCH_RUN_ID"), "tree": "${RESEARCH_SOURCE_
            "path": os.environ.get("CR_PATH"),
            "lean": "$(sha256sum "$LEAN" | cut -c1-64) $LEAN", "bin": "$(sha256sum "$BIN" | cut -c1-64)",
            "n2_cmd": os.environ.get("CR_N2_CMD"), "scan_cmd": os.environ.get("CR_SCAN_CMD"),
+           "scan_only": bool(os.environ.get("CR_SCAN_ONLY")),
            "rc": {"n2": text("n2.rc"), "scan": text("scan.rc")}, "why": {"n2": text("n2.why"), "scan": text("scan.why")},
            "stand_in": {"n2": text("n2.standin")}}, open(sys.argv[1], "w"), indent=1)
 EOF
 "$PY" "$CR" report --custody "$OUT/custody.json" --certs "$OUT/certs.json" --endpoint "$OUT/endpoint/report.json" \
-  --n2 "$OUT/n2/summary.json" --scan "$OUT/scan/summary.json" --job "$OUT/job.json" \
+  $( [ -n "${CR_SCAN_ONLY:-}" ] || echo --n2 "$OUT/n2/summary.json") --scan "$OUT/scan/summary.json" --job "$OUT/job.json" \
   $( [ -f "$W/scan.warden" ] && echo --warden-run "$(cat "$W/scan.warden")") ${CR_AUDIT:+--audit $CR_AUDIT} \
   --out "$OUT/report" | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}
