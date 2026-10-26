@@ -70,8 +70,11 @@ theorem foldRanges_congr (hc : st.c = st'.c) (hl : st.leaf = st'.leaf) (a : F128
 
 theorem unitShare_congr (hc : st.c = st'.c) (a : F128) (lw rho rr : Array F128) (r : Range) :
     st.unitShare a lw rho rr r = st'.unitShare a lw rho rr r := by
-  unfold Stmt.unitShare
-  rw [hc]
+  cases st
+  cases st'
+  dsimp only at hc
+  subst hc
+  rfl
 
 theorem partialRangesT_congr (hc : st.c = st'.c) (hl : st.leaf = st'.leaf) (a : F128) (lw rho rr : Array F128) :
     ∀ rs bases out, st.partialRangesT a lw rho rr rs bases out = st'.partialRangesT a lw rho rr rs bases out
@@ -114,9 +117,10 @@ theorem regions_same {c : Circuit} {pub pop : Public} (hn : pub.n = pop.n)
     intro p hp b g
     unfold FlockSoundness.Discharge.Layout.bcChunk Circuit.instOf
     rw [hn]
-    split_ifs with hi
-    · exact hd _ hi p hp
-    · rfl
+    by_cases hi : b * c.g + g < pop.n
+    · simp only [hi, ↓reduceIte]
+      exact hd _ hi p hp
+    · simp only [hi, ↓reduceIte]
   unfold HmOut.regions
   simp only []
   apply mapM_range_congr
