@@ -1013,6 +1013,25 @@ def test_the_reader_lists_slot_checks_with_a_failed_step_or_a_bad_end_and_each_o
     assert rows["bbbb"].get("step") is None and rows["bbbb"]["class"] == "CANCELLED_DEADMAN" and rows["bbbb"]["rc"] == 143
 
 
+def test_the_reader_takes_no_stopped_step_for_the_failed_one(tmp_path):
+    """r20261026-141511-8d3f: drive cancelled the post-landing run for a failed suite, and lean-agreement, stopped with an empty
+    log, was posted as the step that failed, its first failing line `none`. A stopped step found nothing: the run is a cancel."""
+    slot = ["python3", "tools/verity/check/slot.py", "--", "uv", "run", "python", "tools/verity/check/check.py"]
+    write_run(tmp_path, "r20261003-200000-aaaa", command=slot, state="failed", rc=143,
+              steps=[{"step": "lean-build", "status": "passed"},
+                     {"step": "lean-agreement", "status": "stopped", "rc": -15, "log": "lean-agreement.log"},
+                     {"step": "pytest", "status": "stopped", "rc": -2, "log": "pytest.log"}],
+              logs={"lean-agreement.log": ""}, failure={"class": "CANCELLED_MANUAL", "why": "drive: suite x failed"})
+    write_run(tmp_path, "r20261003-200000-bbbb", command=slot, state="failed", rc=1,
+              steps=[{"step": "pytest", "status": "stopped", "rc": -2}, {"step": "lean-build", "status": "failed", "rc": 1}])
+    script = M.failed_reader(T0, runs=str(tmp_path / "runs"), requests=str(tmp_path / "requests"), line=str(tmp_path / "none"))
+    rows = {r["run"][-4:]: r for r in json.loads(subprocess.run([sys.executable, "-"], input=script, capture_output=True,
+                                                                text=True, check=True).stdout)["rows"]}
+    assert rows["aaaa"].get("step") is None and rows["aaaa"]["class"] == "CANCELLED_MANUAL"
+    assert rows["bbbb"]["step"] == "lean-build"
+    assert M.failed_check(M.Ctx(now=T0, memo={}), REG, "vy-nebius-cpu-1", rows["aaaa"]) is None
+
+
 def test_the_reader_waits_for_the_classification_of_a_run_that_ended_before_any_step_failed(tmp_path):
     """`research run` writes failure.json a few seconds after status.json; read in between, a hand cancel was posted as
     "unclassified: no reason recorded" (dc04, 12 Oct). One whose classification never comes is still listed, later."""

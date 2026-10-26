@@ -1085,7 +1085,8 @@ for n in names:
         continue
     st = load(os.path.join(d, "status.json"))
     last = (st.get("transitions") or [{}])[-1]
-    bad = next((s for s in steps(os.path.join(d, "steps.jsonl")) if s.get("status") not in ("passed", "skipped")), None)
+    # a stopped step found nothing: another step failed, or the run was cancelled (check.py's `stopped`)
+    bad = next((s for s in steps(os.path.join(d, "steps.jsonl")) if s.get("status") not in ("passed", "skipped", "stopped")), None)
     suite = failed_suite(os.path.join(d, "stdout.log")) if bad is None else None
     if suite:
         bad = {"step": "suite " + suite[0], "ended_utc": last.get("ended_utc") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)),
