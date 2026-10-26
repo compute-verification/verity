@@ -1,6 +1,7 @@
 """The seeded weights and their registration root (`verity_torch_loop.weights`, CMP-95 interface 1)."""
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 from pathlib import Path
@@ -13,6 +14,7 @@ from verity.core.protocols.sampled_proofs.one_stage import registered as REG
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value
+from verity.ml.commitments import hm96
 from verity.ml.commitments.gates import embedding
 from verity_torch_loop import weights as W
 
@@ -73,7 +75,7 @@ def test_h200_sizes():
     assert layer_s8 == 139_695_489_024 and f"{layer_s8 / 2**30:.2f}" == "130.10"
     assert all(t.leaves & (t.leaves - 1) == 0 for t in ts), "a tree with pads"
     assert [t.offset for t in ts] == [sum(u.nbytes for u in ts[:i]) for i in range(len(ts))]
-    assert W.tensor(W.H200, "l0.wup").words == 128 and W.tensor(W.H200, "l0.wup").leaves == 65536 * 64
+    assert W.tensor(W.H200, "l0.wup").words == 4096 and W.tensor(W.H200, "l0.wup").leaves == 65536 * 2
 
 
 def test_stream_and_write(tmp_path):
@@ -124,17 +126,55 @@ def test_root_opens_under_the_verifiers_entries():
     assert W.registration_digest(W.TINY, prog, roots) != W.registration_digest(W.TINY, PROG, plain)
 
 
-def test_tok_is_what_the_embed_unit_reads():
-    """``tok``'s row r is token r's embedding, and it opens under ``EmbeddingRead_v1``'s reference at the hidden
-    token."""
+def test_tok_is_one_coordinate_a_row():
+    """``tok`` is (H, V) in ``hm96-sha512/row/v2`` (CMP-95 option (a)): row j, coordinate j over the tokens, opens whole by
+    an ordinary registered read at position j and at no other, and the unit that reads it selects token t's coordinate
+    j, the generator's element t of tok's generation row j."""
     s, prog = W.TINY, reading_program(W.TINY, ["tok", "l0.wq"])
     t = W.tensor(s, "tok")
-    assert (t.rows, t.cols, t.words, t.leaves, t.schema) == (s.vocab, s.width, s.width, s.vocab, embedding.SCHEMA)
+    assert (t.rows, t.cols, t.words, t.leaves, t.schema) == (s.width, s.vocab, s.vocab, s.width, REG.SCHEMA_V2)
+    c = W.commit(s, SEED, KEY, prog, "tok")
+    assert W.root(s, SEED, KEY, prog, ["tok"])["tok"] == c.root
+    inst, table = hm96.SHA512, W.generate(s, SEED, "tok")
+    for j in (0, 5, s.width - 1):
+        row = list(c.rows[j])
+        bc = inst.commit_string(inst.default_key, REG.row_digest(row, 16, REG.SCHEMA_V2), c.salts[j])
+        assert bc == c.bcs[j]
+        assert REG.verify_read(c.domain, c.root, j, bc, c.path(j), REG.SCHEMA_V2)
+        assert not REG.verify_read(c.domain, c.root, j ^ 1, bc, c.path(j), REG.SCHEMA_V2)
+        raw = W.row_bytes(SEED, "tok", j, 2 * s.vocab)
+        for tok in (0, 97, s.vocab - 1):
+            u = int.from_bytes(raw[2 * tok:2 * tok + 2], "little")
+            assert row[tok] == u & 0x8000 | 0x3F00 | u & 0x7F == table[j, tok]
+    assert [c.rows[j][97] for j in range(s.width)] == table[:, 97].tolist()
+
+
+def test_tok_one_token_a_row():
+    """With `Shape.tok_rows` ``"token"``, ``tok`` is (V, H) in row/v2: token r's embedding opens at position r and at
+    no other."""
+    s = dataclasses.replace(W.TINY, name="tiny-tok-token", tok_rows="token")
+    prog = reading_program(s, ["tok", "l0.wq"])
+    t = W.tensor(s, "tok")
+    assert (t.rows, t.cols, t.words, t.leaves, t.schema) == (s.vocab, s.width, s.width, s.vocab, REG.SCHEMA_V2)
     c = W.commit(s, SEED, KEY, prog, "tok")
     assert W.root(s, SEED, KEY, prog, ["tok"])["tok"] == c.root
     for tok in (0, 97, s.vocab - 1):
+        assert list(c.rows[tok]) == W.generate(s, SEED, "tok", [tok])[0].tolist()
+        assert REG.verify_read(c.domain, c.root, tok, c.bcs[tok], c.path(tok), REG.SCHEMA_V2)
+        assert not REG.verify_read(c.domain, c.root, tok ^ 1, c.bcs[tok], c.path(tok), REG.SCHEMA_V2)
+
+
+def test_tok_in_the_embed_units_format():
+    """With `Shape.tok_rows` ``"token"`` and `Shape.tok_schema` ``hm96-sha512/row-seg/v1``, a token's row opens under
+    ``EmbeddingRead_v1``'s reference at the hidden token, and at no other."""
+    s = dataclasses.replace(W.TINY, name="tiny-row-seg", tok_rows="token", tok_schema=REG.SCHEMA_SEG)
+    prog = reading_program(s, ["tok", "l0.wq"])
+    assert W.tensor(s, "tok").schema == embedding.SCHEMA
+    c = W.commit(s, SEED, KEY, prog, "tok")
+    assert W.root(s, SEED, KEY, prog, ["tok"])["tok"] == c.root
+    assert c.root != W.commit(dataclasses.replace(s, tok_schema=REG.SCHEMA_V2), SEED, KEY, prog, "tok").root
+    for tok in (0, 97, s.vocab - 1):
         row = W.generate(s, SEED, "tok", [tok])[0].tolist()
-        assert list(c.rows[tok]) == row
         path = c.path(tok)
         h, ok = embedding.reference(s.vocab, tok, c.root, c.domain.domain_id, row, c.salts[tok],
                                     [path[i:i + 64] for i in range(0, len(path), 64)])
@@ -163,6 +203,8 @@ def test_refusals():
         W.generate(W.TINY, SEED, "l0.wq", [W.tensor(W.TINY, "l0.wq").rows])
     with pytest.raises(ValueError, match="multiple of row_codes"):
         W.tensors(W.Shape("bad", 48, 1, 1, 16, 1, 64, 256, 8, 32))
+    with pytest.raises(ValueError, match="'coordinate' or 'token'"):
+        W.tensors(dataclasses.replace(W.TINY, tok_rows="column"))
     with pytest.raises(ValueError, match="program digest"):
         W.root(W.TINY, SEED, KEY, "the-old-string-program")
     with pytest.raises(ValueError, match="has no parameter 'l0.wk'"):

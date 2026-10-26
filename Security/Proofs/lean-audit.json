@@ -51,6 +51,8 @@
   "Proofs.Properties.RemoteAudit.Schedule",
   "Proofs.Properties.RemoteAudit.Live",
   "Proofs.Properties.Pouw.LiveSalt.Ledger",
+  "Proofs.Properties.Pouw.LiveSalt.Canon",
+  "Proofs.Properties.Pouw.LiveSalt.Coin",
   "Proofs.Properties.Nci.ReadsExact",
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded",
   "Proofs.Properties.Composition",

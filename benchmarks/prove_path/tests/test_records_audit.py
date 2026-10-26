@@ -8,7 +8,11 @@
   circuit is another or that writes none, and a length other than the registered one or none;
 * a compiler registered under a commit runs from a checkout of that commit, not the auditing tree's, and a commit whose code
   doesn't hash to the registered digest is refused;
-* the leak bound's count is the circuit's unwired input bits, reported beside the advice's charge and vacuous past it;
+* the leak bound's count is the circuit's unwired input bits, reported beside the advice's charge and vacuous past it, and
+  a record that declares registered reads counts those of a parameter the verifier pinned registered and the rest free
+  (`declared_count`);
+* a circuit reading registered values is audited against the entries the verifier pinned, each under its own domain
+  (`pinned`), and refused before any draw without them;
 * `source` and the negatives refuse what the records don't bind, and `fixed_before_draw` refuses advice re-committed after
   the coins;
 * the gate's coins (``--challenger gate:USER@HOST``) reach the challenger's session with the peer and the key record;
@@ -29,7 +33,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
@@ -245,6 +249,224 @@ def test_the_leak_count_is_the_circuits_unwired_input_bits_and_vacuous_past_the_
     assert got["other_inputs"] == got["inputs"] - 4 * x and got["external"] == 5 * x
 
 
+def _registered_circuit(n: int = 2, free: str | None = None) -> IF.Circuit:
+    """``n`` coordinates whose every input row is a registered read of one parameter ``a``, but port ``free``'s."""
+    rows, at, reads = IF.layout(COORD).rows, 0, []
+    for p, words in rows:
+        if p != free:
+            reads.append(IF.Read(TID, p, "a", at=0, radix=(n,), base=at, step=(words,)))
+        at += n * words
+    return IF.Circuit("test", ((COORD, n),), registered=IF.Registered({"a": at}, reads=tuple(reads)))
+
+
+def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_charge(tmp_path, capsys):
+    """A stated record whose inputs are declared is counted from its description alone: with every input row registered at
+    a root the verifier pinned before the run nothing is free, so its other inputs are the advice's bits, the charge; a port
+    left free adds its rows and the bound is vacuous, and so does every registered read when the verifier pins no root.
+    ``records_audit.py count`` prints the same from the record's file."""
+    doc, inputs = _registered_circuit().description(), 2 * sum(16 * w for _p, w in IF.layout(COORD).rows)
+    assert RA.declared_count(doc, 1687, pins={"a"}) == {
+        "units": 2, "inputs": inputs, "wired": 0, "registered": inputs, "ingress": 0, "free": 0, "other_inputs": 1687,
+        "advice_bits": 1687, "bound": "within the charge"}
+    unpinned = RA.declared_count(doc, 1687)
+    assert (unpinned["registered"], unpinned["free"], unpinned["bound"]) == (0, inputs, "vacuous")
+    x = 16 * dict(IF.layout(COORD).rows)["x"]
+    loose = RA.declared_count(_registered_circuit(free="x").description(), 1687, pins={"a"})
+    assert (loose["free"], loose["other_inputs"], loose["bound"]) == (2 * x, 2 * x + 1687, "vacuous")
+    (tmp_path / "c.json").write_bytes(IF.circuit_bytes(doc))
+    for pins in ([], ["a"]):
+        capsys.readouterr()
+        assert RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", *(f"--pin={p}" for p in pins)]) == 0
+        assert json.loads(capsys.readouterr().out) == RA.declared_count(doc, 1687, pins=pins)
+    with pytest.raises(ValueError, match="counted from its members"):
+        RA.declared_count({"templates": doc["templates"]}, 0)
+
+
+def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge(tmp_path, monkeypatch, capsys):
+    """``prove_path.py window-circuit`` on the synthetic serve-openai run of `test_prove_path` (I2's window circuit stubbed,
+    one whose every input is registered): it writes the circuit's record from its description (members stated at its cap,
+    no run) or, ``--description``, the description, prints the length the registration charges with the count, and exits
+    `records_audit.REFUSED` where I2's circuit refuses the advice. ``records_audit.py count`` over the record finds the
+    charge."""
+    import prove_path as PP
+    from test_prove_path import _served
+    from verity_vllm.program.predict import window_circuit as WC
+    from verity_vllm.program.predict.build import Unexpressible
+
+    s, circuit, refuse = _served(tmp_path, monkeypatch), _registered_circuit(), []
+
+    def lower(registered, compiled, cls):
+        assert cls == WC.CLASS_OF_RECORD and compiled.requests
+        if refuse:
+            raise Unexpressible("a family the window's lowering doesn't take")
+        return circuit
+
+    monkeypatch.setattr(WC, "window_circuit", lower)
+    (tmp_path / "advice.bin").write_bytes(s.data)
+    bits = s.bound["advice"]["bits"]
+    base = ["window-circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", s.a.row_dir, "--advice",
+            str(tmp_path / "advice.bin"), "--cap", "4", "--pin", "a"]
+    capsys.readouterr()
+    assert PP.main([*base, "--out", str(tmp_path / "c.json")]) == 0
+    got = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert (got["bits"], got["count"]) == (bits, IF.input_count(circuit.description(), pins={"a"}))
+    rec = json.loads((tmp_path / "c.json").read_text())
+    assert rec == IF.descriptor_record(circuit, 4) and (rec["cap"], rec["registered"]) == (4, circuit.registered.doc())
+    assert PP.main([*base, "--out", str(tmp_path / "d.json"), "--description"]) == 0
+    assert json.loads((tmp_path / "d.json").read_text()) == circuit.description()
+    capsys.readouterr()
+    assert RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", str(bits), "--pin", "a"]) == 0
+    count = json.loads(capsys.readouterr().out)
+    assert (count["free"], count["other_inputs"], count["bound"]) == (0, bits, "within the charge")
+    refuse.append(True)
+    assert PP.main([*base, "--out", str(tmp_path / "e.json")]) == RA.REFUSED
+    assert "prove_path.py window-circuit: I2's window circuit refuses the advice" in capsys.readouterr().err
+
+
+def _registered(d: Path, n: int = 8, cap: int = 4) -> SimpleNamespace:
+    """A window of ``n`` coordinates each reading its ``wrow`` from a registered value of 4 rows (unit u row u % 4), committed
+    by core's registered rows, and the verifier's pin of it."""
+    rng = np.random.default_rng(1)
+    rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
+    value = REG.Registered.commit("test/model", "w", rows.tolist(), schema=REG.SCHEMA_V2)
+    read = IF.Read(TID, "wrow", "w", 0, (n // 4, 4), 0, (0, K // 2))
+    win = IF.Window(IF.Circuit("test", ((COORD, n),), registered=IF.Registered({"w": 4 * K // 2}, reads=(read,))), RUN,
+                    D.parse_law(LAW), cap, registered={"w": value})
+    x = rng.integers(-128, 128, (n, K)).astype(np.int8)
+    sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
+    ins = [x.view(np.uint8), sx.view(np.uint32), rows[np.arange(n) % 4].view(np.uint8), sw.view(np.uint32)]
+    win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
+    win.write(win.close(), d, {"label": "test"}, registrar=R)
+    return SimpleNamespace(dir=d, value=value, pin={"program": "test/model", "values": {"w": value.entry()}})
+
+
+def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_free_inputs(tmp_path, capsys):
+    got = _registered(tmp_path / "w")
+    mine, doc, _sets = RA.verifier_window(got.dir, D.parse_law(LAW), None)
+    pins = RA.pinned(got.pin)
+    files = IF.registered_reads(doc, mine, pins, registered=REG)
+    assert [f["ports"]["wrow"]["reads"] for f in files.values()] == [[0, 1, 2, 3], [0, 1, 2, 3]]
+    assert all(f["ports"]["wrow"]["root"] == got.value.root.hex() for f in files.values())
+    per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
+    count = RA.declared_count(doc, 0, pins=pins)
+    assert (count["inputs"], count["registered"], count["free"]) == (8 * per_unit, 8 * 8 * K, 8 * per_unit - 8 * 8 * K)
+    assert count["other_inputs"] == count["free"] and count["bound"] == "vacuous"
+    with pytest.raises(ValueError, match="another value or domain"):
+        RA.pinned({**got.pin, "program": "test/other"})
+    with pytest.raises(ValueError, match="a pin is"):
+        RA.pinned({"values": {}})
+    base = ["audit", "--window", str(got.dir), "--law", LAW, "--circuit", "00" * 64, "--run", RUN, "--m0-pythonpath", ".",
+            "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "o")]
+    assert RA.main(base) == 1
+    assert "didn't pin" in json.loads((tmp_path / "o" / "summary.json").read_text())["refused"]["records"]
+    (tmp_path / "circuit.json").write_bytes((got.dir / "circuit.json").read_bytes())
+    assert RA.main(["count", "--circuit", str(tmp_path / "circuit.json"), "--bits", "0", "--pin", "w"]) == 0
+    assert json.loads(capsys.readouterr().out.splitlines()[-1])["free"] == count["free"]
+
+
+def test_a_windows_committed_activations_are_held_to_domains_binding_its_run():
+    rows = [[1, 2], [3, 4]]
+    mine = {v: REG.Registered.commit("test/model", v, rows, schema=REG.SCHEMA_V2, window=RUN).entry() for v in ("x", "sx")}
+    w = {"run": RUN, "activations": {"program": "test/model", "values": mine}}
+    got = RA.committed_activations(w)
+    assert got["ok"] and got["detail"]["values"]["x"] == {"root": mine["x"]["root"], "leaves": 2, "words": 2}
+    assert RA.committed_activations({"run": RUN}) is None
+    elsewhere = REG.Registered.commit("test/model", "x", rows, schema=REG.SCHEMA_V2, window="cd" * 64).entry()
+    for bad, code in (({**w, "run": "cd" * 64}, "domains"), ({**w, "activations": {**w["activations"], "program": "other"}}, "domains"),
+                      ({**w, "activations": {"program": "test/model", "values": {**mine, "x": elsewhere}}}, "domains"),
+                      ({**w, "activations": {"program": "test/model", "values": {}}}, "activations"),
+                      ({**w, "activations": {"program": "test/model"}}, "activations")):
+        v = RA.committed_activations(bad)
+        assert not v["ok"] and code in v["codes"], (bad, v)
+
+
+def _crafted(reads: tuple[IF.Read, ...], params: dict[str, int], n: int = 33) -> dict:
+    """A stated record of ``n`` coordinates declaring ``reads`` of ``params`` (no wires)."""
+    return {"templates": [[TID, n]], "wires": [], "registered": IF.Registered(params, reads=reads).doc()}
+
+
+#: coordinates 0..31 write their one-word ``o0`` as leaves 0..31 of ``y``, which coordinate 32's ``x`` (32 words) reads: a
+#: tie; coordinates 0..31 read their ``x`` from ``e``, which no output port writes
+TIE = (IF.Read(TID, "o0", "y", 0, (32,), 0, (1,)), IF.Read(TID, "x", "y", 32, (1,), 0, (32,)))
+INPUT_ONLY = (IF.Read(TID, "x", "e", 0, (32,), 0, (32,)),)
+PARAMS = {"y": 32, "e": 32 * 32}
+
+
+def test_a_value_is_a_tie_only_when_output_ports_write_every_leaf_its_input_ports_take():
+    """`tied_values`: ``y``, written by the coordinates' outputs and read by another's input, is a tie; ``e``, read only
+    by input ports, isn't; nor is a value whose readers take leaves no output writes; a value nothing reads isn't either."""
+    doc = _crafted(TIE + INPUT_ONLY, PARAMS)
+    assert RA.tied_values(doc, {"y", "e", "z"}) == {"y"}
+    assert RA.tied_values(doc, {"e"}) == set() and RA.tied_values(doc, ()) == set()
+    half = (IF.Read(TID, "o0", "p", 0, (16,), 0, (1,)), IF.Read(TID, "wrow", "p", 32, (1,), 0, (32,)))
+    assert RA.tied_values(_crafted(half, {"p": 32}), {"p"}) == set()
+
+
+def test_an_input_only_window_value_is_free_in_the_count_and_named():
+    """`declared_count` with ``untied``: the input rows read from a value no output port writes leave ``registered`` for
+    ``free``, by exactly those rows, and the count names it; a tie's reads stay registered. Both are pins, as the audit
+    pins every value it opens."""
+    doc = _crafted(TIE + INPUT_ONLY, PARAMS)
+    per_unit = 16 * sum(w for _p, w in IF.layout(COORD).rows)
+    before, after = RA.declared_count(doc, 0, pins=PARAMS), RA.declared_count(doc, 0, pins=PARAMS, untied={"e"})
+    assert before["registered"] == 16 * 32 + 32 * 16 * 32 and before["free"] == 33 * per_unit - before["registered"]
+    assert after["registered"] == 16 * 32 and after["free"] - before["free"] == 32 * 16 * 32 and after["untied"] == ["e"]
+    assert "untied" not in before
+
+
+def test_the_windows_own_values_the_circuit_reads_are_pinned_only_when_they_are_ties():
+    """`window_pins`: the per-window values the circuit reads are the registration's entries, each held to a domain binding
+    the window's run root, split into ties (pinned) and the untied (read only by input ports, counted free); one it
+    doesn't read is neither, and one committed under another run, or naming another value, is refused."""
+    rows = [[1, 2], [3, 4]]
+    mine = {v: REG.Registered.commit("test/model", v, rows, schema=REG.SCHEMA_V2, window=RUN).entry() for v in ("x", "y", "e")}
+    w = {"run": RUN, "activations": {"program": "test/model", "values": mine}}
+    circuit = _crafted(TIE + INPUT_ONLY, PARAMS)
+    assert RA.window_pins(w, circuit) == ({"y": mine["y"]}, {"e": mine["e"]})
+    assert RA.window_pins(w, {}) == ({}, {}) and RA.window_pins({"run": RUN}, circuit) == ({}, {})
+    elsewhere = REG.Registered.commit("test/model", "y", rows, schema=REG.SCHEMA_V2, window="cd" * 64).entry()
+    for bad in ({**w, "run": "cd" * 64}, {**w, "activations": {"program": "test/model", "values": {"y": elsewhere}}},
+                {**w, "activations": {"program": "test/model", "values": {"y": mine["x"]}}}):
+        with pytest.raises(ValueError, match="another value or a domain"):
+            RA.window_pins(bad, circuit)
+
+
+def test_the_toys_ties_are_pinned_and_its_embedding_fed_rows_are_free(tmp_path):
+    """The toy's wired window (`verity_torch_loop`, registered weights): its six ties, each written by a unit's output port
+    and read by the next unit's input port, are pinned; the first linears' ``(x, sx)`` (the embedding's rows, committed as
+    activations) are no parameter of the circuit, so they are neither pinned nor registered, and are its 2,112 free bits.
+    Naming them as parameters read by those linears' input ports (V3b's crafted window) makes them untied: the count is
+    the same 2,112 free bits, where counting them registered would leave none."""
+    sys.path.insert(0, str(HERE.parents[2] / "integrations" / "torch_loop"))
+    from verity_torch_loop import loop as L
+
+    loop = L.TorchLoop(L.Model(), [3, 7], steps=2, wired=True, registered=True)
+    weights = L.commit_weights(L.Model(), wired=True)
+    win = loop.window(D.parse_law("stratified:3"), cap=1, weights=weights)
+    win.write(win.close(salt_key=bytes(32)), tmp_path, {"loop": "torch-loop",
+                                                         "activations": L.activations(loop.model, loop.commit_activations())},
+              registrar=R)
+    doc = json.loads((tmp_path / "circuit.json").read_text())
+    w = json.loads((tmp_path / "registration.json").read_text())["window"]
+    ties, untied = RA.window_pins(w, doc)
+    assert set(ties) == {"up", "up_codes", "up_scale", "down", "down_codes", "down_scale"} and untied == {}
+    assert {"x", "sx"} <= set(w["activations"]["values"]) and not {"x", "sx"} & set(ties)
+    honest = RA.declared_count(doc, 0, pins={*weights, *ties}, untied=untied)
+    h, r = L.H, 2
+    assert honest["free"] == r * 16 * (h // 2 + 2) == 2112
+    tm = descriptor_id(L.linear_template(h))
+    crafted = json.loads(json.dumps(doc))
+    crafted["registered"]["params"] |= {"x": r * h // 2, "sx": r * 2}
+    crafted["registered"]["reads"] += [IF.Read(tm, "x", "x", 0, (r,), 0, (h // 2,)).doc(),
+                                       IF.Read(tm, "sx", "sx", 0, (r,), 0, (2,)).doc()]
+    ties2, untied2 = RA.window_pins(w, crafted)
+    assert set(ties2) == set(ties) and set(untied2) == {"x", "sx"}
+    pins = {*weights, *ties2, *untied2}
+    assert RA.declared_count(crafted, 0, pins=pins)["free"] == 0
+    fixed = RA.declared_count(crafted, 0, pins=pins, untied=untied2)
+    assert (fixed["free"], fixed["registered"], fixed["untied"]) == (2112, honest["registered"], ["sx", "x"])
+
+
 def test_a_window_with_row_tables_is_refused_until_its_records_carry_their_segment_roots(written, monkeypatch):
     mine, doc = IF.of_records(written.dir, D.parse_law(LAW), IF.resolve)
     assert not mine.row_tables
@@ -306,6 +528,46 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
                     "peer": "vy-nebius-1", "key_record": "key.json"}
 
 
+def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path, monkeypatch):
+    """A session listens on one port a member with a proved unit (closure included), so 20 proved members need 20 ports:
+    the audit reserves one a member, not a rank's 16 (`a5.RANK_PORTS`), and a draw needing more than ``--ports`` is
+    refused before any session listens, since the next one could reach another audit's verifier."""
+    import a5 as A5
+
+    got = _write(tmp_path / "w", n=20, cap=1)
+    mine, _doc, _sets = RA.verifier_window(got.dir, D.parse_law(LAW), None)
+    assert len(mine.members) == 20 > A5.RANK_PORTS
+    every = {"law": "work", "units": [18, 19], "closure": list(range(18))}
+    assert A5.port_refusal(mine, every, 10000, A5.RANK_PORTS) == {
+        "sessions-past-the-reserved-ports": {"sessions": 20, "ports": 16, "from": 10000}}
+    assert A5.port_refusal(mine, every, 10000, 20) is None and A5.port_refusal(mine, every, 10000, None) is None
+    assert A5.port_refusal(mine, {"law": "subset", "units": [3, 7]}, 10000, 2) is None
+
+    class Opened(Exception):
+        pass
+
+    seen = {}
+
+    def free_ports(span):
+        seen["span"] = span
+        return 20000
+
+    def audit(a, sets, out, mine, served, source, port, summary, more, **kw):
+        seen.update(port=port, ports=kw["ports"])
+        raise Opened
+
+    monkeypatch.setattr(RA, "free_ports", free_ports)
+    monkeypatch.setattr(A5, "audit", audit)
+    args = ["audit", "--window", str(got.dir), "--law", LAW, "--circuit", got.rec["window"]["circuit"], "--run", RUN,
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out")]
+    for extra, want in (([], {"span": 20, "port": 20000, "ports": 20}), (["--port", "10000", "--ports", "16"],
+                                                                         {"port": 10000, "ports": 16})):
+        seen.clear()
+        with pytest.raises(Opened):
+            RA.main([*args, *extra])
+        assert seen == want
+
+
 def test_the_audit_from_the_records_imports_no_vllm(written, tmp_path):
     """The verifier's window, the compile check, `source`, the negatives and the draw-order check, in a fresh process: no
     `verity_vllm` module is loaded."""
@@ -317,7 +579,7 @@ import json, sys
 from pathlib import Path
 sys.path.insert(0, {str(HERE.parent)!r})
 import records_audit as RA
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R
 import a5 as A5
 d, t = Path({str(written.dir)!r}), Path({str(tmp_path)!r})
 mine, doc, sets = RA.verifier_window(d, D.parse_law({LAW!r}), None)
@@ -365,6 +627,37 @@ def test_the_served_compilers_command_charges_the_registered_length_and_refuses_
     (tmp_path / "bad.bin").write_bytes(b"\xff" * 7)
     assert PP.main([*base, "--advice", str(tmp_path / "bad.bin")]) == RA.REFUSED
     assert "prove_path.py circuit:" in capsys.readouterr().err
+
+
+def test_the_output_class_is_the_given_ranges_and_every_uncut_registered_read_of_an_output_port():
+    """`output_class`: the verifier's own ranges, with each uncut registered read of an ``o<j>`` port adding its reader's
+    units at the template's base in the population; a read of an input port, or a cut one, adds none."""
+    circuit = {"templates": [["a", 8], ["b", 16]], "registered": {"reads": [
+        {"reader": "b", "port": "o0", "at": 4, "radix": [2, 2], "cut": [0, 1]},
+        {"reader": "a", "port": "o1", "at": 0, "radix": [2]},
+        {"reader": "b", "port": "w", "at": 0, "radix": [16], "cut": [0, 1]},
+        {"reader": "b", "port": "o0", "at": 12, "radix": [4], "cut": [1, 2]}]}}
+    assert RA.output_class(circuit) == [[0, 2], [12, 16]]
+    assert RA.output_class(circuit, [[2, 4], [20, 24]]) == [[0, 4], [12, 16], [20, 24]]
+    assert RA.output_class({"templates": [["a", 8]]}, [[4, 8]]) == [[4, 8]]
+    assert RA.output_class({"templates": [["a", 8]]}) == []
+    tie = {"templates": [["a", 8], ["b", 8]], "registered": {"reads": [
+        {"reader": "a", "port": "o0", "param": "y", "at": 0, "radix": [8]},
+        {"reader": "b", "port": "x", "param": "y", "at": 0, "radix": [8]},
+        {"reader": "b", "port": "o0", "param": "out", "at": 4, "radix": [4]}]}}
+    assert RA.output_class(tie, own={"y"}) == [[12, 16]]
+    assert RA.output_class(tie) == [[0, 8], [12, 16]]
+
+
+def test_a_served_output_that_the_next_step_reads_keeps_its_units_in_the_output_class():
+    """A decode loop's served ``out``, pinned from outside the window, is read by an output port and by the next step's
+    input port: it isn't one of the window's own values, so its writers stay in the class (keying the exclusion on any
+    value an input port reads would leave the class empty)."""
+    decode = {"templates": [["a", 8], ["b", 8]], "registered": {"reads": [
+        {"reader": "b", "port": "o0", "param": "out", "at": 0, "radix": [8]},
+        {"reader": "a", "port": "x", "param": "out", "at": 0, "radix": [8]}]}}
+    assert RA.output_class(decode) == [[8, 16]]
+    assert RA.output_class(decode, own={"y"}) == [[8, 16]]
 
 
 def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_ignored_by_the_compile_check(tmp_path, monkeypatch):

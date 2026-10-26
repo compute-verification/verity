@@ -393,13 +393,10 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
 def case_for(hf_repo: str, revision: str, explicit: str | None) -> str | None:
     if explicit:
         return explicit
-    try:                                    # the adapter's fixed cases first (B0 = SmolLM2, B1 = Qwen2.5-1.5B, ...)
-        from verity_vllm.engine.engine_profile import CASES
-        for k, v in CASES.items():
-            if v.get("repo") == hf_repo:
-                return k
-    except Exception:  # noqa: BLE001
-        pass
+    from verity_vllm.engine.profiles.cases import CASES
+    for k, v in CASES.items():              # the adapter's fixed cases first (B0 = SmolLM2, B1 = Qwen2.5-1.5B, ...)
+        if v.get("repo") == hf_repo:
+            return k
     try:
         doc = json.loads(CHECKPOINTS.read_text())
     except (OSError, ValueError):
