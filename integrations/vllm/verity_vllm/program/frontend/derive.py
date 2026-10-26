@@ -137,7 +137,7 @@ def _runs_intersect(a: list[tuple[str, int, int, int]], b: list[tuple[str, int, 
 
 
 def module_registrations(module) -> tuple[set[str], dict[str, str]]:
-    """[R15 moe GATE-PATH] (every registered path of every submodule, duplicate path -> first registration).  `named_modules()` (the
+    """[GATE-PATH] (every registered path of every submodule, duplicate path -> first registration).  `named_modules()` (the
     implementation's vocabulary, what a hook-based collector names its tensors by) yields each module ONCE under its first path;
     `remove_duplicate=False` yields the other registrations of the same object (vLLM's MoERunner re-registers the block's router as
     its own `gate`; `get_rope` shares one RotaryEmbedding across layers).  Not a torch module: nothing known."""
@@ -288,14 +288,14 @@ class Ctx:
 
     def stack_path(self, node) -> str:
         """The producing module's path in the source module's OWN vocabulary (`named_modules()`), from the node's `nn_module_stack`.
-        [R15 moe GATE-PATH] the export names a module by the attribute path the trace took; a module reached through a holder that is
+        [GATE-PATH] the export names a module by the attribute path the trace took; a module reached through a holder that is
         not its registering parent comes out UNROOTED (vLLM 0.28's MoERunner keeps the router as `self.gate` and calls it inside its own
         forward: the router Gemm's stack ends in a bare `gate`, one name for 48 layers) or under a DUPLICATE registration
         (`...mlp.experts.gate` where `named_modules()` yields `...mlp.gate`).  Rooted entries are kept verbatim (a shared RoPE instance
         stays under each layer's path, as the manifest's alias rule expects); an unrooted entry is resolved relative to its parent's
         registered path or, extending the previous unrooted entry, to that entry's holder (GLM-5.3's `_shared_experts._layer.act_fn`,
         from `...mlp.experts`), a duplicate registration replaced by the first (`...mlp.shared_experts.act_fn`, the collector's name).
-        M-0595: a ROOTED duplicate stays under the duplicate name (C1 coverage FAILS it as missing, never a silent merge); an unrooted
+        A ROOTED duplicate stays under the duplicate name (C1 coverage FAILS it as missing, never a silent merge); an unrooted
         entry under NO registered path keeps its bare name and is COUNTED in `unresolved_module_paths` (provenance)."""
         stack = node.meta.get("nn_module_stack") or {}
         if not stack:

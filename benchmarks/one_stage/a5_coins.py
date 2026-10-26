@@ -137,6 +137,26 @@ def lines(path: Path) -> list[str]:
     return [x for x in path.read_text().split("\n") if x]
 
 
+#: how long a client waits for an opened session's address to listen: the gate's open answers once the session's challenger
+#: has signed its commitment, before its `ssh -R` tunnel listens on the peer's 127.0.0.1:PORT (live_challenger/serve.py)
+TUNNEL_WAIT_S = 120
+
+
+def connect_when_listening(address: str, secret: bytes | None, connect: Callable[..., Any] = R.RemoteChallenger.connect,
+                           wait_s: float = TUNNEL_WAIT_S, clock: Callable[[], float] = time.monotonic,
+                           sleep: Callable[[float], None] = time.sleep) -> Any:
+    """The session's client at `address` once something listens there. A refused connection sends no hello and opens no
+    coin, so it is tried again every half second for up to `wait_s`; any other failure raises at once."""
+    deadline = clock() + wait_s
+    while True:
+        try:
+            return connect(address, secret)
+        except ConnectionRefusedError:
+            if clock() >= deadline:
+                raise
+            sleep(0.5)
+
+
 class Draws:
     """The step's coins over the window root `window_root` for every rank of `ranks`. Each rank plans its draw (`plan`).
     Once every rank has planned or ended (`wait_planned`), the session either opens (`connect`: its client, one
@@ -184,7 +204,7 @@ class Draws:
         refusing every rank's draw, when either fails."""
         client = None
         try:
-            client = R.RemoteChallenger.connect(address, None if secret is None else bytes.fromhex(secret))
+            client = connect_when_listening(address, None if secret is None else bytes.fromhex(secret))
             if commitment is not None and client.commitment.root.hex() != commitment:
                 raise Ch.CoinError(f"the challenger's hello answered commitment {client.commitment.root.hex()[:16]}…, not "
                                    f"the gate's {commitment[:16]}…")

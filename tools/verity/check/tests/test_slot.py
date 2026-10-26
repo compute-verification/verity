@@ -45,8 +45,10 @@ def outside_a_run(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def outside_a_slot(monkeypatch):
-    """A check runs these tests inside its own slot, whose CHECK_SLOT would otherwise make main() run CMD in it at once."""
+    """A check runs these tests inside its own slot, whose CHECK_SLOT would otherwise make main() run CMD in it at once, and a
+    `research run --mem-gb` (an agent-test job's 16 GiB) sets RUN_MEM_ENV, which would raise every slot's mem= the tests name."""
     monkeypatch.delenv("CHECK_SLOT", raising=False)
+    monkeypatch.delenv(SLOT.RUN_MEM_ENV, raising=False)
 
 
 def test_a_slot_py_inside_a_held_slot_runs_its_command_there_and_a_stale_check_slot_waits_its_turn(tmp_path, monkeypatch):
