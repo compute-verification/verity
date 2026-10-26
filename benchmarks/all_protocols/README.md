@@ -71,6 +71,11 @@ every machine of a census deployment, the pooled total first and the per-window 
   `scan_zk --window W`, and the stub's `byte` and `extra` pass the scan, so only the in-the-clear tie refuses them. `block_leg`
   turns a period's accepted answer of either path into the block record's certifier leg (`verity/block-record/v1`,
   CMP-95 item 6), the one shape a loop's leg and the H200 fallback write.
+- `legs/nci.py`: intensity, real. NCI's check of record (`verity/nci/v1`) on the window's declaration: the verifier's
+  population program of the circuit it registered, its record the window's registration, one IU of the program's units,
+  θ empty (the weights are registered reads, not registered parameters). The answer is `nci_reference`'s, and Lean's
+  `nci serve` must agree; it writes `nci.case.json`, onsite's NCI case. The toy reads about 235 novel bits a gate, so
+  its policy point is α = 256 bits a gate at Γ = 2^44; at the GLM-5.3 demo's α = 2^-25 it doesn't comply.
 - `verity_all_protocols/runner.py`: the windows, each report in `$OUT/w<W>/report.json` and `$OUT/reports.jsonl`, and
   one `ALLP` line per window, led by the monitoring period. Outer proofs go through the firewall one at a time, one
   firewalled session on the run whichever window it belongs to, so the windows are audited one after another and each
@@ -88,6 +93,7 @@ every machine of a census deployment, the pooled total first and the per-window 
 | space | PoUS | `legs/pous.py` | memory-accounting | missing |
 | bandwidth | the bandwidth audit over PoUS's store, or remote bandwidth | `legs/bandwidth.py` | memory-accounting | missing |
 | communication | the network certifier | `legs/certifier.py` | network-accounting | real |
+| intensity | NCI | `legs/nci.py` | network-accounting | real |
 
 ~~~sh
 research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 -- \

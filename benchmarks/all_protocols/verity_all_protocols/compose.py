@@ -103,6 +103,7 @@ PORTS = {
     "PouwCheck.protocol": ("pouw", "verity/pouw/v1"),
     "NetworkCheck.Check.protocol": ("certifier", "verity/network-certificate/v4"),
     "NetworkCheck.Period.protocol": ("certifier", "verity/certifier/v0"),
+    "NciCheck.Protocol.protocol": ("nci", "verity/nci/v1"),
     "PousCheck.RunProtocol.protocol": ("pous", "verity/pous/p2/v4/run"),
     "RemoteAudit.Protocol.protocol": ("bandwidth", "verity/remote-bandwidth/v0"),
 }

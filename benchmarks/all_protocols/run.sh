@@ -4,8 +4,8 @@
 # $OUT/reports.jsonl, and the monitoring-period report over the windows so far in $OUT/monitoring-period.json
 # (verity_all_protocols.runner, .monitoring). Builds what the legs run first, as benchmarks/prove_path/run.sh does: M0's
 # flock-circuit, Lean's flock-verify and flock-firewall, the sampled-proofs verifier of record, onsite, PoUS's run and
-# setup checks (pous-run-protocol, pous-setup), the remote bandwidth session's (remote-audit-protocol) and the streamed
-# wipe's (wipe-protocol), in scratch and the clone; the legs find them in period.json's tools. Its arguments go to the
+# setup checks (pous-run-protocol, pous-setup), the remote bandwidth session's (remote-audit-protocol), the streamed
+# wipe's (wipe-protocol) and NCI's (nci), in scratch and the clone; the legs find them in period.json's tools. Its arguments go to the
 # runner (--windows N, --start I, --tamper W,..., --pouw h1, --registered); ALLP_FLOCK_WORK=DIR keeps M0's build
 # across runs.
 #   research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 64 -- \
@@ -37,10 +37,12 @@ PRUN=$REPO/verity/core/protocols/pous/check/.lake/build/bin/pous-run-protocol; P
 RBW=$REPO/verity/core/protocols/remote_bandwidth/lean/.lake/build/bin/remote-audit-protocol
 (cd verity/core/devices/memory_challenger/lean && lake build wipe-protocol) > $O/build-wipe.log 2>&1 || { tail -40 $O/build-wipe.log; exit 7; }
 WIPE=$REPO/verity/core/devices/memory_challenger/lean/.lake/build/bin/wipe-protocol
-sha256sum $BIN $LEAN $FWL $ONSITE $PRUN $PSET $RBW $WIPE | tee $O/binaries.sha256
+(cd verity/core/protocols/network/nci/lean && lake build nci) > $O/build-nci.log 2>&1 || { tail -40 $O/build-nci.log; exit 7; }
+NCI=$REPO/verity/core/protocols/network/nci/lean/.lake/build/bin/nci
+sha256sum $BIN $LEAN $FWL $ONSITE $PRUN $PSET $RBW $WIPE $NCI | tee $O/binaries.sha256
 M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
 $PY -c 'import json, sys; print(json.dumps(dict(zip(["flock-circuit", "flock-verify", "flock-firewall", "m0-pythonpath",
-  "pous-run-protocol", "pous-setup", "remote-audit-protocol", "wipe-protocol"], sys.argv[1:]))))' $BIN $LEAN $FWL $M0PATH $PRUN $PSET $RBW \
-  $WIPE > $O/tools.json
+  "pous-run-protocol", "pous-setup", "remote-audit-protocol", "wipe-protocol", "nci"], sys.argv[1:]))))' $BIN $LEAN $FWL $M0PATH $PRUN \
+  $PSET $RBW $WIPE $NCI > $O/tools.json
 export RAYON_NUM_THREADS=$(nproc) RUST_MIN_STACK=$((64 << 20))
 PYTHONPATH=$REPO/benchmarks/all_protocols:$REPO/integrations/torch_loop $PY -m verity_all_protocols.runner --out $O --tools $O/tools.json --onsite $ONSITE --scratch $W "$@"
