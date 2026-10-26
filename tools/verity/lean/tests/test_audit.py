@@ -2395,6 +2395,36 @@ def test_the_closure_replay_checks_each_imported_module_once_and_then_reuses_it(
     assert rep["failures"] == [] and counts(rep) == (3, 1) and rep["replay"]["closure"]["checked"] == 0
 
 
+def test_a_replay_marks_every_entry_it_reuses_used_so_eviction_keeps_the_closure(tmp_path, monkeypatch):
+    """The replay cache keeps its `REPLAYS_KEPT` newest entries by mtime, and a reuse never touched one: Mathlib's and
+    ArkLib's entries, stored once and reused by every replay, were the first evicted, so Security's and Properties' replays
+    checked 1,300 to 3,800 closure modules again in most of 26 Oct's Lean checks (150 to 260 s each). A replay now marks
+    each entry it reuses, its own modules' and the closure's, and stores those it checked; nothing else is touched."""
+    graph = {"Init": [], "Std": ["Init"], "Old": ["Init"], "A": ["Std"], "B": ["A"]}
+    facts = {"graph": {m: {"imports": i} for m, i in graph.items()}, "modules": ["A", "B"], "axioms": []}
+    cache = tmp_path / "replay"
+    cache.mkdir()
+    for m in ("Init", "Old", "A", "Unrelated"):
+        (cache / f"{m}.json").write_text("{}")
+        os.utime(cache / f"{m}.json", (1000, 1000))
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain: {m: m for m in facts["graph"]})
+    monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
+    argv = []
+
+    def run(cmd, cwd, log, timeout=None):
+        argv.extend(cmd)
+        (tmp_path / "replay.json").write_text(json.dumps({"axioms": []}))
+        return 0, ""
+
+    monkeypatch.setattr(A, "run", run)
+    fails, stats = A.replay_step(tmp_path, {"roots": ["A"]}, facts, "t", tmp_path, cache, closure=True)
+    assert fails == [] and stats["checked"] == 1 and stats["reused"] == 1 and stats["closure"]["checked"] == 1
+    assert argv[argv.index("--closure") + 1:] == ["Std"] and argv[argv.index("--reused") + 1] == "A"
+    mtime = {p.stem: p.stat().st_mtime for p in cache.glob("*.json")}
+    assert sorted(mtime) == ["A", "B", "Init", "Old", "Std", "Unrelated"]
+    assert mtime["Init"] > 1000 and mtime["Old"] > 1000 and mtime["A"] > 1000 and mtime["Unrelated"] == 1000
+
+
 def test_two_packages_storing_one_replay_key_at_once_both_succeed(tmp_path, monkeypatch):
     """The gate audits its packages in threads of one process, and two whose closures share a module store its replay key
     at once; with the temporary file named by the pid alone, the second store renamed the first's away and the first's
