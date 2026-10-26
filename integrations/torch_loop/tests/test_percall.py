@@ -107,7 +107,7 @@ def test_a_step_from_the_drivers_tables_reads_its_first_rows():
 def test_the_audits_catalog_resolves_the_templates_the_circuit_record_names(tmp_path):
     pc = P.PerCall(P.stand_in(TINY, 4, b"r"), SALT, "00" * 64, 64)
     (tmp_path / "params.json").write_text(json.dumps(pc.params("q")))
-    names = list(P.IF.Window(pc.circuit(), pc.run, pc.law, P.CAP).circuit_record()["statements"])
+    names = [P.descriptor_id(fn) for fn, _ in pc.circuit().templates]  # `Window.circuit_record`'s statement keys
     for resolve in (pc.resolve, P.resolver(tmp_path)):
         assert [resolve(t).id for t in names] == [P.tile(64).id]
     with pytest.raises(KeyError, match="v6 tile"):
