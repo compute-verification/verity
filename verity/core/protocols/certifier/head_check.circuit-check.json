@@ -14,6 +14,9 @@
   }
  },
  "digests": {
+  "NetworkHeadCheck_v2{L=6,T=32,COUNTS=0}": {
+   "sha512": "1651ea8d9ae94a06359a0170a22e923b2cb37ea3c149baec6f86f5cc0a4ae56d7e56e516c027dd69a4e10932452315c83fc8e1d8454247f333f6cd059d0b052f"
+  },
   "NetworkHeadCheck_v2{L=6,T=60,COUNTS=0}": {
    "sha512": "ce1905f1d607af89bac155907419a5bdca4b07e9da07b60d43297673b95b8700b9190bf9968424f3eae968395740a0fad20e1b12655db85082ecaf39547e40bd"
   },
