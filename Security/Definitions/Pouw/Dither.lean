@@ -70,10 +70,12 @@ variable (G : Accel)
 devices' memory. A table of answers indexed by the live coins is a program, so G1 bounds it. -/
 def G1 : Prop := ∀ {I O : Type} (f : G.Mc.Alg I O) (x : I), G.Mc.size f + G.held f x ≤ G.mem
 
-/-- **(G2) rate**: every resource runs at a positive rate, and a run uses each at most at its rate over its wall time. -/
+/-- **(G2) rate**: every resource runs at a positive rate, a run uses each at most at its rate over its wall time, and
+its uses and imported bits are counts (nonnegative). -/
 def G2 : Prop :=
   (∀ r, 0 < G.rate r) ∧
-    ∀ {I O : Type} (f : G.Mc.Alg I O) (x : I) (r : G.Res), 0 ≤ G.use f x r ∧ G.use f x r ≤ G.rate r * G.wall f x
+    ∀ {I O : Type} (f : G.Mc.Alg I O) (x : I),
+      0 ≤ G.ext f x ∧ ∀ r : G.Res, 0 ≤ G.use f x r ∧ G.use f x r ≤ G.rate r * G.wall f x
 
 /-- **A run's cost at the prices `μ`**: `Σ_r μ_r u_r`, `μ_r` the price of a unit of resource `r`. At `μ_r = λ_r / ρ_r`
 it is the device-seconds the run takes at the price vector `λ`; at a point mass it is one resource's busy time. -/
