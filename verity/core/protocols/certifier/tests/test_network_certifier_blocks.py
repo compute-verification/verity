@@ -61,28 +61,31 @@ def blocks() -> dict:
                           copy.deepcopy(RESPONSE)]}
 
 
+WIRE_OUT = {"server": "s0", "dir": "out", "kind": "wire", "value": "h", "window": WINDOW,
+            "t": {"base": 1, "radix": [S * O], "step": [0]}, "leaves": 2 * S * O,
+            "writes": [{"writer": DOT, "out": "o0", "at": 0, "radix": [S * O], "base": 0, "step": [2]}]}
+WIRE_IN = {"server": "s1", "dir": "in", "kind": "wire", "value": "h", "window": WINDOW,
+           "t": {"base": 1, "radix": [S * O], "step": [0]}}
+
+
 def two_servers() -> tuple[IF.Circuit, dict]:
     """The circuit cut in two servers, the dot's units s0's and the cast's s1's: the dot's outputs cross from s0 to s1
-    as a wire, s0's egress (``h_out``) and s1's ingress (``h``), each under its uplink's certifier."""
+    as a wire ``h``, s0's egress (transfers[4]) and s1's ingress (transfers[5]), each under its uplink's certifier."""
     c = circuit(wired=False, reads=(IF.Read(CAST, "a", "h", 0, (S * O,), 0, (2,)),), params={"h": 2 * S * O})
     b = blocks()
     b["server"] = [{"name": "s0", "uplink": UPLINK, "units": [[DOT, 0, S * O]]},
                    {"name": "s1", "uplink": UPLINK1, "units": [[CAST, 0, S * O]]}]
     b["transfers"][3]["server"] = "s1"
-    b["transfers"] += [{"server": "s0", "dir": "out", "kind": "wire", "value": "h_out", "window": WINDOW,
-                        "t": {"base": 1, "radix": [S * O], "step": [0]}, "leaves": 2 * S * O,
-                        "writes": [{"writer": DOT, "out": "o0", "at": 0, "radix": [S * O], "base": 0, "step": [2]}]},
-                       {"server": "s1", "dir": "in", "kind": "wire", "value": "h", "window": WINDOW,
-                        "t": {"base": 1, "radix": [S * O], "step": [0]}}]
+    b["transfers"] += [copy.deepcopy(WIRE_OUT), copy.deepcopy(WIRE_IN)]
     return c, b
 
 
 def values(seed: int = 7) -> dict[str, list[list[int]]]:
-    """Each transfer's rows as the certifier saw them cross."""
+    """Each value's rows as the certifiers saw them cross."""
     rng = random.Random(seed)
     word = lambda n, w: [[rng.randrange(1 << 16) for _ in range(w)] for _ in range(n)]  # noqa: E731
     return {"w": word(O, 16), "bias": word(1, 2), "request": word(S, NP + 1), "response": word(S * O, 1),
-            "h_out": word(S * O, 2), "h": word(S * O, 2)}
+            "h": word(S * O, 2)}
 
 
 def public(seed: bytes) -> LmsKey:
@@ -102,14 +105,21 @@ class Certifiers:
     def keys(self) -> dict:
         return {u: (public(u.encode()), i.session) for u, i in self.issuers.items()}
 
-    def register(self, doc: dict, b: dict, data: dict | None = None, *, at: dict | None = None) -> list[dict]:
-        """Each transfer of ``b`` committed and signed by its uplink's certifier: ``at`` overrides the (link, direction,
-        window) a value's certificate signs for, its head the transfer's own."""
+    def register(self, doc: dict, b: dict, data: dict | None = None, *, at: dict | None = None,
+                 received: dict | None = None, fresh: bool = False) -> list[dict]:
+        """Each transfer of ``b`` committed and signed by its uplink's certifier, a wire's in under its out's salts:
+        ``at`` overrides the (link, direction, window) a value's certificate signs for, its head the transfer's own;
+        ``received``, the rows a wire's receiving certifier saw, by value (its out's by default); ``fresh``, a wire's in
+        under salts of its own."""
         data, servers = data or values(), {s["name"]: s["uplink"] for s in b["server"]}
-        out = []
-        for t in b["transfers"]:
+        out, sent = [], {}
+        for t in sorted(b["transfers"], key=lambda t: t["kind"] == "wire" and t["dir"] == "in"):
             link, d = servers[t["server"]], BK.DIRS[t["dir"]]
-            tr = TR.Transfer.commit(link, d, t["window"], t["kind"], doc["program"], t["value"], data[t["value"]])
+            wire_in = t["kind"] == "wire" and t["dir"] == "in"
+            rows = (received or {}).get(t["value"], data[t["value"]]) if wire_in else data[t["value"]]
+            salts = sent[t["value"]].salts if wire_in and not fresh else None
+            tr = TR.Transfer.commit(link, d, t["window"], t["kind"], doc["program"], t["value"], rows, salts)
+            sent[t["value"]] = tr
             sign = {"link": link, "direction": d, "window": t["window"], **((at or {}).get(t["value"], {}))}
             out.append(TR.registration(tr.head, self.issuers[link].sign(sign["link"], sign["direction"], sign["window"],
                                                                         tr.head.digest())))
@@ -197,7 +207,8 @@ def test_the_demos_request_and_response_rows_bind_at_the_frozen_shape(tmp_path):
     assert sorted(pins) == ["k", "request"] and IF.input_count(doc, pins=pins)["free"] == 0
     assert IF.input_count(doc, pins={"k"})["free"] == 16 * 2 * R * TR.GENERATED
     heads = BK.certified(doc, b, lays, regs, certs.keys())
-    assert (heads["request"].rows, heads["response"].rows, heads["response"].words) == (16, 48, 2)
+    req, resp = heads["request", Direction.INGRESS], heads["response", Direction.EGRESS]
+    assert (req.rows, resp.rows, resp.words) == (16, 48, 2)
     short = edit(b, ("transfers", 2, "leaves"), 2 * R * (TR.GENERATED - 1))
     with pytest.raises(ValueError, match="isn't whole rows of 2 words among the value's 92 leaves"):
         BK.check(doc, short, lays)
@@ -209,11 +220,13 @@ def test_two_servers_pin_each_transfer_from_its_own_uplinks_certifier(tmp_path):
     c, b = two_servers()
     doc, lays = record(c), layouts(c)
     certs = Certifiers(tmp_path)
-    pins = BK.pins(doc, b, lays, certs.register(doc, b), certs.keys())
+    regs = certs.register(doc, b)
+    pins = BK.pins(doc, b, lays, regs, certs.keys())
     assert sorted(pins) == ["bias", "h", "request", "w"] and IF.input_count(doc, pins=pins)["free"] == 0
-    heads = BK.certified(doc, b, lays, certs.register(doc, b), certs.keys())
-    assert heads["h_out"].link == UPLINK and heads["h_out"].direction is Direction.EGRESS
-    assert heads["h"].link == UPLINK1 and heads["response"].link == UPLINK1
+    heads = BK.certified(doc, b, lays, regs, certs.keys())
+    sent, got = heads["h", Direction.EGRESS], heads["h", Direction.INGRESS]
+    assert (sent.link, got.link, heads["response", Direction.EGRESS].link) == (UPLINK, UPLINK1, UPLINK1)
+    assert sent.root == got.root and sent.domain == got.domain and pins["h"] == got.root.hex()
     keys = certs.keys()
     keys[UPLINK1] = keys[UPLINK]
     with pytest.raises(ValueError, match="'response' .*doesn't verify"):
@@ -266,6 +279,7 @@ def test_refuses_an_uncovered_external_row(tiny):
         BK.check(record(half), blocks(), lays)
     b = blocks()
     b["transfers"][3]["writes"][0]["radix"] = [S * O - 1]
+    b["transfers"][3]["leaves"], b["transfers"][3]["t"] = S * O - 1, {"base": 1, "radix": [S * O - 1], "step": [0]}
     with pytest.raises(ValueError, match=f"external port {CAST}/o0: 1 of its {S * O} unit rows are no transfer's"):
         BK.check(doc, b, lays)
     more = circuit(external=(f"{DOT}/a", f"{CAST}/o0", f"{DOT}/o0"))
@@ -308,7 +322,7 @@ def edit(b: dict, path: tuple, value) -> dict:
     (("transfers", 2, "dir"), "out", "an out transfer's leaves and writes"),
     (("transfers", 3, "kind"), "wire", "a wire's rows are never the circuit's external ports"),
     (("transfers", 3, "writes", 0, "base"), 1, "isn't whole rows of 1 words among the value's 4 leaves"),
-    (("transfers", 3, "leaves"), S * O + 1, "its t is over its 5 rows"),
+    (("transfers", 3, "t"), {"base": 1, "radix": [S * O + 1], "step": [0]}, "its t is over its 4 rows"),
     (("transfers", 3, "server"), "s9", "no server of the circuit's"),
     (("transfers", 1, "value"), "w", "a transfer is of a new value"),
     (("format",), "verity/blocks/v0", "verity/blocks/v1 object"),
@@ -326,3 +340,93 @@ def test_refuses_a_read_that_is_not_whole_rows_of_the_value():
         IF.Read(DOT, "acc", "bias", 0, (S * O,), 0, (0,)))))
     with pytest.raises(ValueError, match="'w': read .* isn't whole rows of 16 words"):
         BK.check(record(c), blocks(), layouts(c))
+
+
+def write(at: int, radix: list, base: int, step: list) -> dict:
+    """A write of the cast's output rows into the response."""
+    return {"writer": CAST, "out": "o0", "at": at, "radix": radix, "base": base, "step": step}
+
+
+@pytest.mark.parametrize("writes,leaves,why", [
+    ([write(0, [S * O], 0, [0])], S * O, "writes its row 0 from 4 units"),
+    ([write(0, [2], 0, [1]), write(2, [2], 1, [1])], S * O, "its row 1 is written twice"),
+    ([write(0, [S, O], 0, [1, 1])], S * O, "its row 1 is written twice"),
+    ([write(0, [S * O], 0, [1])], S * O + 1, "its row 4 of 5 is written by no unit"),
+])
+def test_refuses_an_out_value_row_written_by_no_unit_or_two(tiny, writes, leaves, why):
+    _c, doc, lays = tiny
+    b = edit(edit(blocks(), ("transfers", 3, "writes"), writes), ("transfers", 3, "leaves"), leaves)
+    with pytest.raises(ValueError, match=f"'response': .*{why}; an out value's every row is written by exactly one unit"):
+        BK.check(doc, b, lays)
+
+
+@pytest.mark.parametrize("writes", [
+    [write(0, [S * O], S * O - 1, [-1])],
+    [write(0, [S * O, 1], 0, [1, 7])],
+    [write(0, [O, S], 0, [1, O])],
+    [write(2, [2], 0, [1]), write(0, [2], 2, [1])],
+])
+def test_an_out_value_written_once_in_any_order(tiny, writes):
+    _c, doc, lays = tiny
+    response = BK.check(doc, edit(blocks(), ("transfers", 3, "writes"), writes), lays).transfers[3]
+    assert (response.value, response.rows, len(response.gates)) == ("response", S * O, len(writes))
+
+
+def unpaired(name: str) -> tuple[IF.Circuit, dict]:
+    """`two_servers` with its wire ``h`` broken as ``name`` says."""
+    c, b = two_servers()
+    t = b["transfers"]
+    if name == "no out":
+        del t[4]
+    elif name == "no in":
+        del t[5]
+    elif name == "two ins":
+        t.append(copy.deepcopy(WIRE_IN))
+    elif name == "a response of it":
+        t.append({**copy.deepcopy(RESPONSE), "value": "h"})
+    elif name == "other rows":
+        c = circuit(wired=False, reads=(IF.Read(CAST, "a", "h", 0, (S * O,), 0, (2,)),), params={"h": 2 * S * O + 2})
+        t[5]["t"]["radix"] = [S * O + 1]
+    elif name == "other steps":
+        t[5]["t"]["base"] = 2
+    return c, b
+
+
+@pytest.mark.parametrize("name,why", [
+    ("no out", "wire 'h': its out and its in, one each"),
+    ("no in", "wire 'h': its out and its in, one each"),
+    ("two ins", "a transfer is of a new value, named, but a wire's other one"),
+    ("a response of it", "a transfer is of a new value, named, but a wire's other one"),
+    ("other rows", "wire 'h': its out is 4 rows of 2 words and its in 5 rows of 2"),
+    ("other steps", "wire 'h': .*each row of a wire crosses both uplinks at one step"),
+])
+def test_refuses_a_wire_not_paired(name, why):
+    c, b = unpaired(name)
+    with pytest.raises(ValueError, match=why):
+        BK.check(record(c), b, layouts(c))
+
+
+def test_a_wires_in_may_come_before_its_out_but_not_on_its_own_server():
+    c, b = two_servers()
+    b["transfers"][4:] = [b["transfers"][5], b["transfers"][4]]
+    assert [(t.value, t.direction) for t in BK.check(record(c), b, layouts(c)).transfers[4:]] == [
+        ("h", Direction.INGRESS), ("h", Direction.EGRESS)]
+    b = blocks()
+    b["transfers"] += [copy.deepcopy(WIRE_OUT), {**copy.deepcopy(WIRE_IN), "server": "s0"}]
+    with pytest.raises(ValueError, match="wire 'h': from server s0 to itself"):
+        BK.check(record(c), b, layouts(c))
+
+
+def test_refuses_a_wire_whose_rows_arrived_other_than_they_left(tmp_path):
+    c, b = two_servers()
+    doc, lays = record(c), layouts(c)
+    certs = Certifiers(tmp_path)
+    for regs in (certs.register(doc, b, fresh=True), certs.register(doc, b, received={"h": values(seed=8)["h"]})):
+        with pytest.raises(ValueError, match="wire 'h': the root s1/uplink's network certifier signed isn't the one "
+                                             "s0/uplink's signed"):
+            BK.pins(doc, b, lays, regs, certs.keys())
+    regs = certs.register(doc, b)
+    with pytest.raises(ValueError, match="names a value and a direction, once: 'h' 'ingress'"):
+        BK.pins(doc, b, lays, [*regs, regs[-1]], certs.keys())
+    with pytest.raises(ValueError, match="'h' \\(wire ingress on s1/uplink, window 3\\): no certificate"):
+        BK.pins(doc, b, lays, [r for r in regs if (r["value"], r["direction"]) != ("h", "ingress")], certs.keys())
