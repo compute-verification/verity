@@ -565,7 +565,7 @@ def test_a_commit_that_deferred_nothing_is_refused(tmp_path):
 # ------------------------------------------------------------------------------------------------ the rank's process
 
 def _worker(tmp_path, cfg, bmap):
-    from verity_vllm.engine import rank_worker as W
+    from verity_vllm.pipeline.tp import rank_worker as W
 
     class Stub:
         _deferred_replay = W.TP2CaptureWorkerExtension._deferred_replay

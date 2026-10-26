@@ -141,7 +141,7 @@ def test_a_rank_that_does_not_realise_the_declared_target_fails_closed_before_an
 
 
 @pytest.mark.parametrize("extra, extension", [(("--no-observer",), "verity_vllm.engine.int8_ranks.Int8Ranks"),
-                                              ((), "verity_vllm.engine.rank_worker.TP2CaptureWorkerExtension")], ids=["control", "capture"])
+                                              ((), "verity_vllm.pipeline.tp.rank_worker.TP2CaptureWorkerExtension")], ids=["control", "capture"])
 def test_an_int8_targets_ranks_register_its_parts_through_their_extension(tmp_path, stand_ins, monkeypatch, extra, extension):
     """The driver registers the int8 parts and exports them (``VERITY_INT8_PARTS``); every engine it builds names an extension whose
     import registers them in each rank, a Match control's included."""
@@ -243,7 +243,7 @@ class _Worker:
 
 
 def _extension(monkeypatch, model):
-    from verity_vllm.engine import rank_worker as RW
+    from verity_vllm.pipeline.tp import rank_worker as RW
     monkeypatch.setattr(RW, "_tp_facts", lambda worker: {"tp": {"rank": 1, "world_size": 2}})
     w = _Worker(model)
     w.__class__ = type("Worker", (_Worker, RW.TP2CaptureWorkerExtension), {})

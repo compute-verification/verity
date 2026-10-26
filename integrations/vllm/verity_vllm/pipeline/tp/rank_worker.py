@@ -75,7 +75,7 @@ def repo_modules_loaded() -> dict[str, Any]:
     return {"method": "runtime: sys.modules of this process filtered to the repo root + vllm-poc, plus native_collect's cpp_extension sources when loaded (TP-11)",
             "pid": os.getpid(), "n": len(files), "files": sorted(files), "native_collect_jit_sources": jit}
 
-EXTENSION = "verity_vllm.engine.rank_worker.TP2CaptureWorkerExtension"
+EXTENSION = "verity_vllm.pipeline.tp.rank_worker.TP2CaptureWorkerExtension"
 
 
 def _moe_collective_modules() -> list[Any]:
