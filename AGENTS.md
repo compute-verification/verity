@@ -1,7 +1,7 @@
 # Verity
 
 Verity represents AI datacenter computations exactly as Boolean circuits, proves claims about them, and derives
-compute, memory and network accounting from those proofs. `ARCHITECTURE.md` has the architecture and the Glossary, whose terms
+compute, memory and network accounting from those proofs. `ARCHITECTURE.md` has the architecture and the Glossary (older names: `glossary/`), whose terms
 code, docs and output use. This file states what is true on `main` now: what each directory is, the design rules, and how
 work lands. Each package's contents are in its own README and docstrings. Your checkout, and this file in your prompt, can
 be older than `main` (a cloud VM boots from a snapshot), so when they differ, `git show origin/main:AGENTS.md` wins.
@@ -171,7 +171,7 @@ the standing rulings stated nowhere else.
   doesn't control, never as a process on the prover's node, and trust in the device and its host provider is a named
   assumption (`trusted-host`). Nothing the prover runs or hosts is trusted. A network certifier functions as an
   active warden, in network steganography's sense, but "network certifier" is its one name: never "warden" or "tap"
-  (Daniel, 25 Oct; old names in `ARCHITECTURE.md`'s Glossary).
+  (Daniel, 25 Oct; old names in `glossary/`).
 - **The audited hardware is untrusted, and so is its vendor** (Daniel, 17 Oct: an international scheme may treat the chip
   designer as adversarial). No guarantee rests on a GPU attesting its own SKU, firmware or clocks. Hardware constants
   (f_max, peak rates) come from the data sheet for now, quoted under two or three readings rather than one main line,

@@ -128,7 +128,7 @@ frame k for k < N and E_0 after, so padding slots never enter the tree, and open
 frame-v3's SHA-512 tree (`frame-v3-sha512`) doesn't fit, for three reasons:
 - its `CommitmentDomain` takes a 32-byte SHA-256 `binding`, and its positions compute a SHA-256 identity eagerly, so the
   record would rest on `cr/sha-256` as well;
-- its `owner` is a weights, boundary or replay unit, not a link-window;
+- its `owner` is a weights, boundary or replay block, not a link-window;
 - it pads its leaves to the next power of two of N, so its depth and opening shape change with the occupancy.
 
 **The signed digest** hides the record digest R under `salt_c`, 64 bytes the certifier draws from its own
@@ -1363,7 +1363,7 @@ term (`k`: the egress data bits no proved unit fixes, `ε` times the data bits a
 not an assumption. For the circuit's Program, `SecurityProofs.SampledLeakAccepted` counts it: the faulty proof blocks'
 committed bits plus log2 of the number of possible faulty sets, except with probability δ + ε_ks + ε_bind.
 
-The inference-only policy charges an isolation unit the ingress covert capacity from the last wipe before it starts,
+The inference-only policy charges an isolation block the ingress covert capacity from the last wipe before it starts,
 plus what survived that wipe. `capacity.k_share` expresses bits as a share of K, which the caller passes in bits
 (`calibrate(k_bits=…)`, `--k-bits`): 9.12e7 under NCI's inference-only policy (α·Γ = 9.6e−11 × 9.5e17). The
 calibration report records the K it used.
@@ -1462,21 +1462,22 @@ The notation is for one audit of W windows:
     #𝒜_c · #Φ · #Σ_sync^W · D^n   elements,   that is   c + 1 + I_ε + W·log2 #Σ_sync + n·log2 D bits,
 
 and the audit accepts a run whose sequence lies outside it with probability at most δ_audit. Here Φ is the influence
-of the wrong units (step 3 below), I_ε = log2 #Φ, and δ_audit = δ + ε_ks + δ_link + δ_in is the error of
+of the faulty proof blocks (step 3 below), I_ε = log2 #Φ, and δ_audit = δ + ε_ks + δ_link + δ_in is the error of
 `audit_influence` (`Security/Proofs/Flock/Soundness/Audit/Influence.lean`).
 
 **Why it holds.**
 1. **Fix a.** Then every unit's circuit is fixed, because `compile` is a function of the registered items and of a. So
    for each a the audit is the one-stage audit of a fixed circuit, and `audit_influence` applies: the audit accepts
    while the values it delivers lie outside Φ_a with probability at most δ_audit. Φ_a is the set of values reachable
-   when the wrong units form a set whose escape is at least δ, and it is fixed before the draw.
-2. **With no wrong unit, the egress is a function of I and a.** Every committed value is the forward evaluation of the
+   when the faulty proof blocks form a set whose acceptance probability is at least δ, and it is fixed before the draw.
+2. **With no faulty proof block, the egress is a function of I and a.** Every committed value is the forward evaluation of the
    compiled circuits from I, w and a, because every value a circuit reads has exactly one writer (A2). Each tie unit
    then holds its frame to the canonical frame of the committed token at the (request, position) the advice maps it to.
    N2 holds each window's counts to the counts that the ingress counts and the advice derive. So the egress rows are
    the Program `constantRate T W ss frames` with content advice a: `frames ins a ℓ` gives each frame's payload, anchor
    and logical index.
-3. **A wrong unit adds its influence.** Take the content advice of step 2 to be (a, φ), where φ is the wrong units and
+3. **A faulty proof block adds its influence.** Take the content advice of step 2 to be (a, φ), where φ is the faulty
+   proof blocks and
    what they let through, so that Ac = 𝒜_c × Φ.
    - A wrong step unit lets through its outputs, at most 16 bits (a unit's outputs are at most 16 bits), plus the
      choice of which unit is wrong. That is `card_influenceSet_le_harm`'s `H + log2 Σ_{j ≤ K} C(n, j)`.
@@ -1534,7 +1535,7 @@ Each assumption, and what breaks without it:
   in its context. Every consumer (the compiler, N2 and the tie) reads that one advice. If the advice can follow the
   draw, the prover picks, after the draw, an a under which the drawn units pass. The error then grows to as much as
   #𝒜_c · δ, which is vacuous. Each window's advice must precede its own units' draw. It may follow an earlier window's
-  draw, since an earlier window's wrong units are counted in Φ by their exits, whatever later circuits read them.
+  draw, since an earlier window's faulty proof blocks are counted in Φ by their exits, whatever later circuits read them.
 - **A5, the charge is the encoding every consumer decodes.**
   - `bits` counts the canonical, self-delimiting encoding of every field any consumer reads, and no consumer reads
     anything else. A field read from elsewhere (the Commit's row metadata, a default, a field an encoding stopped
@@ -2699,13 +2700,13 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   release-order` adds requests to the engine in the order they were released: `x-verity-release: N`, N its `END`'s
   index among the ingress records' `END` cells, and `x-verity-release-run:` the warden's `run_id` (in
   `deployment.json`). The server gets a request whole at its `END`'s release, and nothing of a connection that fails
-  before it. The headers are on the server's leg only. No cell or record holds them, so the cell counts, the prompt
+  before it. The headers are on the server's side only. No cell or record holds them, so the cell counts, the prompt
   lengths and the I/O tie's request frames are unchanged. They reach the server, never the client, so the leak bound
   is unchanged. The active certifier's served proxy adds the same headers (`active_replay.ReleaseProxy`), with
   N = s − 1 for request stream s.
 
 **Named gaps:**
-- TLS isn't terminated: both legs are plain TCP.
+- TLS isn't terminated: both sides are plain TCP.
 - Every recorded run had the warden on the server's host, and the server gets the ingress bytes over loopback, with no
   shim on its side. `warden-rehearse` puts the warden and its client on the auditor's host and reaches the server
   through the gate's ssh tunnel to the peer's loopback. No run of it is recorded yet, and the tunnel's far end is still
