@@ -123,6 +123,10 @@
    "owner": "@memory-accounting",
    "digest": "98fbba3bae29f20560d86a31473797edc89dc0b1e28c7cde20737d9bf6e4254a"
   },
+  "Pous.P2.Assumptions.P2RingRoundSecureWide": {
+   "owner": "@memory-accounting",
+   "digest": "4a1d6a842a5a90a31cd8edb101f4323728eae66616fd84ee93952ebe4cb6a921"
+  },
   "Pous.Period.RingDevice": {
    "owner": "@memory-accounting",
    "digest": "635c2edca25704b425275a4f2d3944bccd1dfc3878fc051e8b3700d198e7454d"
@@ -146,10 +150,6 @@
   "Properties.RemoteAudit.ScheduleLayoutGap": {
    "owner": "@memory-accounting",
    "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
-  },
-  "Pous.P2.Assumptions.P2RingRoundSecureWide": {
-   "owner": "@memory-accounting",
-   "digest": "4a1d6a842a5a90a31cd8edb101f4323728eae66616fd84ee93952ebe4cb6a921"
   }
  },
  "meaning": [
