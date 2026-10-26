@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.VerdictPieces
 import Proofs.Flock.Claims.Recursion.NextShaDec
+import Proofs.Flock.Claims.Recursion.RestVerdictCustody
 import Proofs.Flock.Claims.KS.PlainDrawRCols
 
 /-!
@@ -14,9 +15,9 @@ messages and the coins. This file says which of them the inner statement fixes a
   parses (`parse_innerOk`: the scope check passes) the rep streams' names are distinct (`namesDistinct_of_setup`).
 * **`.after` is the statement's where `decR` fixes its statement and draw** (`holdsR_after`): `checksAtJ` at `jAt` is
   the statement check, the draw check, custody, the scope check and the draw law. The scope check and the draw law
-  are the statement's (`parse_innerOk`); custody is read off the reader's own record (`recJ`). The statement check
-  reads `f.stmt` and the draw check `recJ`'s `unit_draw` (the setup's `spec.unitDraw`): taken as `hstmt` and `hdraw`,
-  facts about `decR` (see the note `proofs/…-report-restverdict`).
+  are the statement's (`parse_innerOk`); custody is read off the reader's own record (`recJ`, `custody_decR`). The
+  statement check reads `f.stmt` and the draw check `recJ`'s `unit_draw` (the setup's `spec.unitDraw`): taken as
+  `hstmt` and `hdraw`, facts about `decR` (see the note `proofs/…-report-restverdict`).
 * **`.shaped` is not the statement's** (`holdsR_shaped_of`): `ProofShaped` reads the Ligerito openings, which
   `absorbedFrom` takes from the last message's proof. Every length a rep's frames read is `FitsRep`'s (`decR_fits`),
   and the initial cap is the cap (`decR_initialCap`); the openings' levels and the file's size are `hopen`, which the
@@ -120,13 +121,10 @@ theorem holdsR_names {x : Msg} {st : Claims.Recursion.Stmt} (hx : parse x = some
 
 /-- **The checks after the verdict hold** at every decision of `nextR` at an inner statement the recursive reader
 parses, at message and coin lists of one length, where every decision's statement is the statement (`hstmt`), its
-record's draw the statement's (`hdraw`), and custody passes at the reader's record (`hcust`). -/
+record's draw the statement's (`hdraw`). Custody passes at the reader's record (`custody_decR`). -/
 theorem holdsR_after
     (hstmt : ∀ x as cs (d : DecR), decR rd x as cs = some d → d.f.stmt = x)
     (hdraw : ∀ x as cs (d : DecR), decR rd x as cs = some d → drawEq (drawOfJ d.f.j) d.s.read.draw = true)
-    (hcust : ∀ x as cs (d : DecR), decR rd x as cs = some d → as.length = cs.length →
-      ∃ lv, liveOfJ d.spec (jAt FlockDeploy.sha512 d.spec d.sts d.c₁ d.mids d.f) = .ok lv ∧
-        custody d.spec lv d.link d.c₁ d.mids = .ok ())
     {x : Msg} {st : Claims.Recursion.Stmt} (hx : parse x = some st) (ms : List Msg) (cs : List Coin)
     (hl : ms.length = cs.length) : holdsR FlockDeploy.sha512 rd .after (xIOf x) ms cs := by
   obtain ⟨s₀, spec₀, sts₀, h₀, hck, hdr⟩ := parse_innerOk hx
@@ -146,7 +144,8 @@ theorem holdsR_after
     have hd := FlockDeploy.actR_decide h
     have e : f.stmt = xIOf x := hstmt _ _ _ _ hd
     have hD : drawEq (drawOfJ f.j) s₀.read.draw = true := hdraw _ _ _ _ hd
-    obtain ⟨lv, hlv, hc⟩ := hcust _ _ _ _ hd hl
+    obtain ⟨lv, hlv, hc⟩ :=
+      FlockDeploy.RestCustody.custody_decR hd (Claims.Bridge.Custody.publicInputs_none_of_check hck) hl
     refine checksAtJ_ok (lv := lv) ?_ hD hlv hc hck ?_
     · show (f.stmt == xIOf x) = true
       rw [e]
@@ -234,14 +233,10 @@ theorem baseElem_holds {q : VerdictR} {x : Msg}
   exact hos
 
 /-- **`.setup`, `.names` and `.after` hold off any witnesses** at every compiled statement the recursive reader
-parses (`hrest`'s case of these three), where `decR` fixes its statement and draw and custody passes at the reader's
-record (`holdsR_after`'s hypotheses). -/
+parses (`hrest`'s case of these three), where `decR` fixes its statement and draw (`holdsR_after`'s hypotheses). -/
 theorem restBases_fixed
     (hstmt : ∀ x as cs (d : DecR), decR rd x as cs = some d → d.f.stmt = x)
     (hdraw : ∀ x as cs (d : DecR), decR rd x as cs = some d → drawEq (drawOfJ d.f.j) d.s.read.draw = true)
-    (hcust : ∀ x as cs (d : DecR), decR rd x as cs = some d → as.length = cs.length →
-      ∃ lv, liveOfJ d.spec (jAt FlockDeploy.sha512 d.spec d.sts d.c₁ d.mids d.f) = .ok lv ∧
-        custody d.spec lv d.link d.c₁ d.mids = .ok ())
     (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings) (L : LayoutB)
     (IV : Claims.Verifier Coin) {q : VerdictR} (hq : q = .setup ∨ q = .names ∨ q = .after) {x : Msg}
     {st : Claims.Recursion.Stmt} (hx : (recBound rel' b L IV).parse x = some st) (c : ℕ → Coin) (ms : List Msg) :
@@ -256,7 +251,7 @@ theorem restBases_fixed
   rcases hq with rfl | rfl | rfl
   · exact holdsR_setup rd _ ms' cs'
   · exact holdsR_names rd hx' ms' cs'
-  · exact holdsR_after rd hstmt hdraw hcust hx' ms' cs' hl
+  · exact holdsR_after rd hstmt hdraw hx' ms' cs' hl
 
 end Rest
 
