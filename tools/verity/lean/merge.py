@@ -11,13 +11,17 @@ a map of entries by name: the guarantees, the modules under `reads`, the depende
 side's change to an entry (added, changed or removed) applies, and an entry both sides changed differently refuses the merge.
 A guarantee's record (its `owner` aside, which merges on its own) and a dependency's digest are one entry each. Under `reads`, which two branches adding guarantees that
 read one module both change, the module's definitions merge the same way, its readers (`guarantees`) as sets, and its digest
-is recomputed from the merged definitions (`audit.module_digest`). The merge also refuses when one side stops reading a
-definition in a module the other side changed: the record does not say which guarantees read which definition. A side
+is recomputed from the merged definitions (`audit.module_digest`). When one side stops reading a definition (or a whole
+module) whose module the other side changed, a reads-only clash, the record does not say which guarantees read which
+definition, so the merge keeps the union: the definition with the other side's hash, and the readers as sets, less those
+the merged record no longer lists (a group left with none is dropped). It names those entries in one line on stderr. A
+definition both sides changed to different hashes still refuses, and so does every clash outside `reads`. A side
 written before guarantees were called that (`pins`) is read under today's names (`audit.as_guarantees`).
 
 Exit 0: merged. Exit 1: refused, the entries named on stderr and OURS left as it was, which git reports as a conflict; then
 regenerate the record on the merged tree (`check.py --update`), as without the driver. A merged record is a candidate, never
-a verdict: `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference, as for any record.
+a verdict: `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference, as for any record, and
+a train's (`--regenerate`) commits the regenerated `reads` on landing.
 
 The layer rules (`layers`), which two branches that each widen a layer for a guarantee both change, merge field by field: `imports`
 and `except` as lists, `why` as a list of its `; ` clauses (`layers`). Every list of names (the roots, `meaning`, `proved_in`,
@@ -130,25 +134,26 @@ def core(group):
     return None if group is None else (A.definitions(group), sorted(group.get("guarantees", [])))
 
 
-def group(m: str, x: dict, y: dict, z: dict, why: list[str]) -> dict:
-    """One module's `reads` entry, both sides having changed it: definitions entry by entry, readers as sets."""
+def group(m: str, x: dict, y: dict, z: dict, why: list[str], candidate: list[str]) -> dict:
+    """One module's `reads` entry, both sides having changed it: definitions entry by entry, readers as sets.  A definition one
+    side no longer reads while the other still reads it stays, with the other side's hash: the record does not say which
+    guarantees read it, so the union is the candidate (``candidate``), and the train's Lean check regenerates the group."""
     xd, yd, zd = A.definitions(x), A.definitions(y), A.definitions(z)
     defs = {}
     for d in sorted(set(xd) | set(yd) | set(zd)):
         p, q, r = xd.get(d, MISSING), yd.get(d, MISSING), zd.get(d, MISSING)
-        v = one(f"reads[{m}].definitions[{d}]", p, q, r, why)
-        if v is not MISSING:
+        if p is not MISSING and (q is MISSING) != (r is MISSING):
+            defs[d] = q if r is MISSING else r
+            candidate.append(f"reads[{m}].definitions[{d}]")
+        elif (v := one(f"reads[{m}].definitions[{d}]", p, q, r, why)) is not MISSING:
             defs[d] = v
-        elif p is not MISSING and (q is MISSING) != (r is MISSING):
-            why.append(f"reads[{m}].definitions[{d}]: no longer read on one side, while the other side changed what the "
-                       f"guarantees read in {m}; the record does not say which guarantees read {d}")
     if len({len(h) for h in defs.values() if isinstance(h, str)}) > 1:
         why.append(f"reads[{m}]: its definitions would mix 32-bit and SHA-256 hashes (one side's record was rehashed)")
     xp, yp, zp = set(x.get("guarantees", [])), set(y.get("guarantees", [])), set(z.get("guarantees", []))
     return {"definitions": defs, "guarantees": sorted((yp & zp) | (yp - xp) | (zp - xp))}
 
 
-def reads(o: dict, a: dict, b: dict, why: list[str]) -> dict:
+def reads(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) -> dict:
     out = {}
     for m in sorted(set(a) | set(b)):
         x, y, z = o.get(m), a.get(m), b.get(m)
@@ -159,10 +164,10 @@ def reads(o: dict, a: dict, b: dict, why: list[str]) -> dict:
         elif core(z) == core(x):
             g = y
         elif y is None or z is None:
-            why.append(f"reads[{m}]: no longer read on one side, while the other side changed what the guarantees read there")
-            continue
+            g = group(m, x or {}, y or {}, z or {}, why, [])
+            candidate.append(f"reads[{m}]")
         else:
-            g = group(m, x or {}, y, z, why)
+            g = group(m, x or {}, y, z, why, candidate)
         if g is not None:
             defs = A.definitions(g)
             out[m] = {"digest": A.module_digest(defs), "definitions": dict(sorted(defs.items())),
@@ -205,14 +210,17 @@ def layers(o: dict, a: dict, b: dict, why: list[str]) -> dict:
     return out
 
 
-def merge(base: dict, ours: dict, theirs: dict) -> tuple[dict, list[str]]:
-    """(the merged record, why it is refused: empty when it merged).  A pure function of the three records."""
+def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = None) -> tuple[dict, list[str]]:
+    """(the merged record, why it is refused: empty when it merged).  A pure function of the three records.  ``candidate``
+    collects the `reads` entries merged although the sides disagree on which guarantees read what (a reads-only clash): the
+    union, which the train's Lean check regenerates."""
     why: list[str] = []
+    candidate = [] if candidate is None else candidate
     out = {}
     for k in keys("", ours, theirs):
         o, a, b = base.get(k, MISSING), ours.get(k, MISSING), theirs.get(k, MISSING)
         if k == "reads":
-            v = reads({} if o is MISSING else o, {} if a is MISSING else a, {} if b is MISSING else b, why)
+            v = reads({} if o is MISSING else o, {} if a is MISSING else a, {} if b is MISSING else b, why, candidate)
         elif k == "guarantees" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = guarantees({} if o is MISSING else o, a, b, why)
         elif k == "layers" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
@@ -226,11 +234,15 @@ def merge(base: dict, ours: dict, theirs: dict) -> tuple[dict, list[str]]:
         if v is not MISSING:
             out[k] = v
     kept = set(out.get("guarantees", {}))
-    for m, g in out.get("reads", {}).items():
-        if not g["definitions"] or not g["guarantees"]:
-            why.append(f"reads[{m}]: the merge leaves it without {'definitions' if not g['definitions'] else 'readers'}")
+    for m, g in list(out.get("reads", {}).items()):
         if extra := sorted(set(g["guarantees"]) - kept):
-            why.append(f"reads[{m}]: read by {', '.join(extra)}, which the merged record does not list as guarantees")
+            g["guarantees"] = [r for r in g["guarantees"] if r in kept]
+            candidate.append(f"reads[{m}].guarantees[{', '.join(extra)}]")
+        if not g["guarantees"]:
+            del out["reads"][m]
+            candidate.append(f"reads[{m}]")
+        elif not g["definitions"]:
+            why.append(f"reads[{m}]: the merge leaves it without definitions")
     return out, why
 
 
@@ -397,14 +409,18 @@ def main(argv: list[str]) -> int:
             what = "requires and string arrays" if a.lakefile else "import lists"
             print(f"merge.py: {path}: {left} conflict(s) beyond {what}", file=sys.stderr)
         return 1 if left else 0
+    candidate: list[str] = []
     try:
-        merged, why = merge(load(base), load(ours), load(theirs))
+        merged, why = merge(load(base), load(ours), load(theirs), candidate)
     except ValueError as e:
         why = [f"a side is not JSON ({e})" if isinstance(e, json.JSONDecodeError) else f"a side: {e}"]
     if why:
         print(f"merge.py: {path}: refused; regenerate the record on the merged tree (`check.py --update`):", file=sys.stderr)
         print("\n".join(f"  {w}" for w in why), file=sys.stderr)
         return 1
+    if candidate:
+        print(f"merge.py: {path}: merged reads as a candidate, the union of both sides, which the train's Lean check "
+              f"regenerates: {'; '.join(dict.fromkeys(candidate))}", file=sys.stderr)
     ours.write_text(A.text(merged))
     return 0
 

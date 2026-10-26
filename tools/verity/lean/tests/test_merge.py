@@ -105,14 +105,86 @@ def test_an_owner_merges_apart_from_the_statement():
     assert M.merge(unowned, base, other)[1] == ["guarantees[P.t].owner: added on both sides, differently"]
 
 
-def test_a_definition_one_side_stops_reading_refuses_when_the_other_side_changed_its_module():
+def test_a_definition_one_side_stops_reading_merges_as_the_union_when_the_other_side_changed_its_module():
+    """A reads-only clash (lean's One-vocabulary PRs move definitions out of a module that queued PRs' new guarantees read):
+    the record doesn't say which guarantees read the definition, so it stays, and the train's Lean check regenerates."""
     base = record(t=thm([F, G]))
     ours = record(t=thm([F], "P.f n + 0 = n", "00000000000000dd"))
     theirs = record(t=thm([F, G]), v=thm([H], "P.h n = n", "00000000000000cc"))
-    assert M.merge(base, ours, theirs)[1] == [
-        "reads[P.Defs].definitions[P.g]: no longer read on one side, while the other side changed what the guarantees read "
-        "in P.Defs; the record does not say which guarantees read P.g"]
+    candidate: list[str] = []
+    merged, why = M.merge(base, ours, theirs, candidate)
+    assert why == [] and candidate == ["reads[P.Defs].definitions[P.g]"]
+    assert merged["guarantees"] == record(t=thm([F], "P.f n + 0 = n", "00000000000000dd"),
+                                          v=thm([H], "P.h n = n", "00000000000000cc"))["guarantees"]
+    group = merged["reads"]["P.Defs"]
+    assert group["definitions"] == theirs["reads"]["P.Defs"]["definitions"] and list(group["definitions"]) == ["P.f", "P.g", "P.h"]
+    assert group["guarantees"] == ["P.t", "P.v"] and group["digest"] == A.module_digest(group["definitions"])
+    other = record(t=thm([F, read("P.g", "P.Defs", "7" * 16)]), v=thm([H], "P.h n = n", "00000000000000cc"))
+    merged, why = M.merge(base, ours, other, candidate := [])
+    assert why == [] and candidate == ["reads[P.Defs].definitions[P.g]"]
+    assert merged["reads"]["P.Defs"]["definitions"] == other["reads"]["P.Defs"]["definitions"], \
+        "with the other side's hash when it changed it"
     assert M.merge(base, ours, record(t=thm([F, G]), v=thm([K], "P.k n = n", "00000000000000cc")))[1] == []
+
+
+def test_a_module_one_side_stops_reading_merges_as_the_union_and_one_left_unread_is_dropped():
+    base = record(t=thm([F, K]))
+    ours = record(t=thm([F], "P.f n + 0 = n", "00000000000000dd"))
+    m = read("P.m", "P.More", "6" * 16)
+    theirs = record(t=thm([F, K]), w=thm([m], "P.m n = n", "00000000000000cc"))
+    candidate: list[str] = []
+    merged, why = M.merge(base, ours, theirs, candidate)
+    assert why == [] and candidate == ["reads[P.More]"]
+    assert merged["reads"]["P.More"]["definitions"] == theirs["reads"]["P.More"]["definitions"]
+    assert list(merged["reads"]["P.More"]["definitions"]) == ["P.k", "P.m"]
+    assert merged["reads"]["P.More"]["guarantees"] == ["P.w"], "t stopped reading it on ours"
+    rehashed = read("P.k", "P.More", "5" * 16)
+    merged, why = M.merge(base, ours, record(t=thm([F, rehashed])), candidate := [])
+    assert why == [] and "P.More" not in merged["reads"] and candidate == ["reads[P.More]"] * 2, \
+        "no guarantee of the merged record reads it: dropped"
+
+
+def test_a_clash_beyond_reads_still_refuses_beside_a_reads_only_one():
+    """A guarantee restated two ways, an assumption's digest changed two ways and one definition's hash changed two ways
+    refuse as before, whatever reads-only clash merges beside them."""
+    base = record(t=thm([F, G]))
+    drop_g = record(t=thm([F]), u=thm([F], "P.f n = 0 + n", "00000000000000bb"))
+    keep_g = record(t=thm([F, G]), v=thm([H], "P.h n = n", "00000000000000cc"))
+    restated = M.merge(base, drop_g | {"guarantees": record(t=thm([F], "P.f n ≤ n", "00000000000000dd"))["guarantees"]},
+                       keep_g | {"guarantees": record(t=thm([F, G], "P.f n < n + 1", "00000000000000ee"))["guarantees"]})[1]
+    assert restated == ["guarantees[P.t]: changed on both sides, differently"]
+    hyp = lambda d: {"assumptions": {"P.Hyp": {"owner": "@lean", "digest": d * 64}}}
+    assumed = M.merge(base | hyp("a"), drop_g | hyp("b"), keep_g | hyp("c"))[1]
+    assert assumed == ["assumptions[P.Hyp]: changed on both sides, differently"]
+    f9, f8 = read("P.f", "P.Defs", "9" * 16), read("P.f", "P.Defs", "8" * 16)
+    two_ways = M.merge(base, record(t=thm([f9])), record(t=thm([f8, G]), v=thm([H], "P.h n = n", "00000000000000cc")))[1]
+    assert two_ways == ["reads[P.Defs].definitions[P.f]: changed on both sides, differently"]
+    frozen = lambda why: {"shape": {"frozen": {"P.t": why}}}
+    assert M.merge(base, drop_g | frozen("lemma"), keep_g | frozen("restatable"))[1] == [
+        "shape[frozen][P.t]: added on both sides, differently"]
+
+
+FIXTURES = HERE / "fixtures" / "merge"
+
+
+def test_4406_onto_next_merges_its_reads_as_a_candidate(tmp_path, capsys):
+    """#4406 (cursor/lean-vocab-hash-fc8d at 172198e129) onto `next` at aa5d70a9f1, base main's b6b9338dcb (26 Oct): #4406
+    moves `Hash.Digest` out of `Definitions.Hash.Basic` while `next` adds readers there, and the driver refused the train.
+    The fixture is that group on each side with the records of its readers (a sample of #4406's new ones)."""
+    sides = json.loads((FIXTURES / "hash-basic-4406-onto-next.json").read_text())
+    for n in ("base", "ours", "theirs"):
+        (tmp_path / n).write_text(A.text(sides[n]))
+    assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "Security/lean-audit.json"]) == 0
+    err = capsys.readouterr().err.strip().splitlines()
+    assert err == ["merge.py: Security/lean-audit.json: merged reads as a candidate, the union of both sides, which the train's "
+                   "Lean check regenerates: reads[Definitions.Hash.Basic].definitions[Hash.Digest]; "
+                   "reads[Definitions.Hash.Basic].definitions[Hash.Digest.bytes]"]
+    group = json.loads((tmp_path / "ours").read_text())["reads"]["Definitions.Hash.Basic"]
+    theirs = sides["theirs"]["reads"]["Definitions.Hash.Basic"]["definitions"]
+    assert group["definitions"] == dict(sorted({**theirs, **{d: sides["ours"]["reads"]["Definitions.Hash.Basic"]["definitions"][d]
+                                                            for d in ("Hash.Digest", "Hash.Digest.bytes")}}.items()))
+    assert set(group["guarantees"]) == set(sides["ours"]["reads"]["Definitions.Hash.Basic"]["guarantees"]) | set(
+        sides["theirs"]["reads"]["Definitions.Hash.Basic"]["guarantees"])
 
 
 def test_a_32_bit_group_is_not_merged_with_a_rehashed_one():
