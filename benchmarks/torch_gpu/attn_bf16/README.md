@@ -14,14 +14,18 @@ causal prefill and prefill chunks, head dims 64 and 128, MHA, GQA and MQA over a
   `_h16`'s where no query sees more than 32 keys (the H200 model's decode step): a warp loads K's or V's fragments once
   for all of its head groups. `attn.LAUNCH` picks the tiling and launch shape for each op, and `attn.serves` says where
   each applies.
-- `attn.py`: the kernels as torch functions with the skeleton's attention interface, `qk(q, k)` and `pv(p, v)` (PV's K
-  is 32 for every KV length 1..32), one launch each on torch's current stream from the shipped cubin.
+- `attn.py`: the kernels as torch functions with `attn_ref`'s interface (the skeleton's), `qk(q, k, lens=None, *, out,
+  fill, warps, check_lens)` and `pv(p, v, lens=None, *, out, kpv, warps, check_lens)`: S past `lens` is `fill` (-inf),
+  and PV's K is `kpv` = 32 for every KV length 1..32 (the skeleton's `GemmCoordinatePad_v1{T, K=32}`; `kpv=0` is
+  `attn_ref`'s pad16). Without `lens` each call is one launch on torch's current stream, from the shipped cubin.
 - `build.sh`: on a CPU node, both cubins (`-fmad=false`, no FTZ or fast-math), `sass_gate.py` on each, and
   `fixture.py`'s check.
 - `fixture.py`: the cases and the buffers the kernels must leave, from the Definition's twin, held to its reference
   evaluator on a sample; the H200 model's whole decode step as per-sequence digests over `gen.py`'s inputs.
-- `run.py`: on the card, the identity check, every case under 0xA5 poison in each tiling at three launch shapes, a
-  no-launch control that must fail, and diagnostic timing against SDPA and torch's matmuls at the model's decode step.
+- `run.py`: on the card, the identity check, every case under 0xA5 poison in each tiling at several launch shapes, a
+  no-launch control that must fail, the whole decode step also over its first 4,096 and 12,288 sequences (the skeleton's
+  and the block's M), `attn.py`'s functions on every decode case, and diagnostic timing against SDPA and torch's matmuls
+  at the model's decode step for M = 4,096, 12,288 and 20,480.
 - `session.sh`: the card's part as one run from the build's ship (sent as `ship.tar`), `run.py` under `gpu-lease 1`. The
   card's canary is `benchmarks/tc_probe`'s own run.
 
