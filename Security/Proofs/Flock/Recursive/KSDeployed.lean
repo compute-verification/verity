@@ -31,13 +31,12 @@ theorem recursiveKSAt_of_leaves_deployed (wE w : Msg → ℝ)
       (recL DeployedR.rdR (deployedB b) aux nOf hd recRest wE DeployedR.finalR w (DeployedR.layR OpenRows.elemR))
       (bdR DeployedR.rdR wE DeployedR.finalR w) (DeployedR.layR OpenRows.elemR) Claims.Recursion.Form.Dense
       (acceptsL DeployedR.rdR (deployedB b) aux nOf hd recRest wE DeployedR.finalR w (DeployedR.layR OpenRows.elemR)))
-    (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
     (hres : ResLower.ResLowered DeployedR.rdR wE DeployedR.finalR w (bB (deployedB b) aux nOf hd recRest)
       OpenRows.elemR Claims.Recursion.Form.Dense recRead (cmtTr recRead) resPD ownRD
       (Rows.elemReadC (Top.accRC DeployedR.rdR key)) Rows.resVRead) :
     Flock.Guarantees.RecursiveKSAt DeployedR.rdR DeployedR.finalR OpenRows.elemR wE w (deployedB b) aux nOf hd
       recRest :=
-  recursiveKSAt_of_leaves wE w (deployedB b) aux nOf hd recRest key hEJ S (RestRead.finalReads OpenRows.elemR)
+  recursiveKSAt_of_leaves wE w (deployedB b) aux nOf hd recRest key hEJ (RestRead.finalReads OpenRows.elemR)
     RestElem.readsAt_elemR_closed hres (resSetup_deployedB b)
 
 end Flock.SecurityProofs

@@ -27,7 +27,7 @@ chain's (`Top.accRC rd key`), so `TargetE` is proved (`targetE_accRC`, `rowEHold
 
 **The leaves** (`recKSDecompL_of_leaves`):
 
-* the row targets: `TargetRDep` and `TargetDMerkle` (`TargetDecode` is `decode_at` under `Claims.JsonSpec`);
+* the row targets: `TargetRDep` and `TargetDMerkle` (`TargetDecode` is `decode_at`, with no JSON premise);
 * `hrest`, the checks no part holds: `BasesHold` (the base checks), `FinalReadsL`, `RoundLensL`, `ReadsAtL` (the last
   message's reading, the rounds' lengths, the record's reading; RESTREAD's three at `L`), `SaltRowRest` (a round's
   commit strings where no part holds it) and `PiecesOwned` (every piece has an owner, so `hrest` is asked of none);
@@ -254,7 +254,6 @@ theorem recKSDecompL_of_leaves
     (hDm : Top.TargetDMerkle rd (PD rd resP key elemAt vvAt side posAt) (Top.accRC rd key))
     (hEJ : Top.RowEJoint rd key FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) (bdR rd wE final w) L
       Claims.Recursion.Form.Dense (acceptsL rd b aux nOf hd rest wE final w L))
-    (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
     (hB : BasesHold rd) (hF : FinalReadsL final L) (hLn : RoundLensL L) (hRd : ReadsAtL rd final L)
     (hSR : SaltRowRest rd b aux nOf hd rest wE final w L) (hOwn : PiecesOwned resP key ownR)
     (hlowR : RestLowR rd b aux nOf hd rest wE final w L)
@@ -276,7 +275,7 @@ theorem recKSDecompL_of_leaves
     Top.targets_of_open rd _ _ _ hRdep hDm
       (Top.targetE_accRC rd key (fun P' ch h => Top.targetE_rowD rd P' ch key h) _
         (rowEHolds_PD rd resP key elemAt vvAt side posAt))
-      (DecodeAt.decode_at S rd _)
+      (DecodeAt.decode_at rd _)
   have hP : ∀ x, (recL rd b aux nOf hd rest wE final w L).parse x = parse x := fun _ => rfl
   have hS : ∀ f, Claims.Recursion.Form.Dense f → Claims.Recursion.Form.Dense f := fun _ h => h
   have hC := OpenLower.openCopyR_of FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
@@ -412,7 +411,6 @@ theorem recKSDecompD_of_leaves
     (hEJ : Top.RowEJoint rd key FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w (DeployedR.layR elem))
       (bdR rd wE final w) (DeployedR.layR elem) Claims.Recursion.Form.Dense
       (acceptsL rd b aux nOf hd rest wE final w (DeployedR.layR elem)))
-    (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
     (hB : BasesHold rd) (hF : RestRead.FinalReads final (DeployedR.restR elem))
     (hRd : RestRead.ReadsAt rd final (DeployedR.restR elem))
     (hSR : SaltRowRest rd b aux nOf hd rest wE final w (DeployedR.layR elem)) (hOwn : PiecesOwned resP key ownR)
@@ -432,7 +430,7 @@ theorem recKSDecompD_of_leaves
       (bdR rd wE final w) rd (Rows.rowDPieces key) Rows.posAt) :
     RecKSDecompL rd b aux nOf hd rest wE final w (DeployedR.layR elem) :=
   recKSDecompL_of_leaves rd b aux nOf hd rest wE final w (DeployedR.layR elem) resP key elemAt vvAt
-    (OpenLower.sideAtR rd) Rows.posAt ownR hRdep (targetDMerkle_PD rd resP key elemAt vvAt _) hEJ S hB hF
+    (OpenLower.sideAtR rd) Rows.posAt ownR hRdep (targetDMerkle_PD rd resP key elemAt vvAt _) hEJ hB hF
     (RestRead.roundLens (DeployedR.restR elem))
     (fun x hx c ws hl hT os last hf hos =>
       hRd x hx c ws hl (fun e he => hT e (allCalls_layR elem x ws he)) os last hf hos)

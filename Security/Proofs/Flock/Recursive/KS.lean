@@ -115,10 +115,9 @@ Proved: the extra calls (`moreSlotsTrue_deployed`), the reader's bound (`plainRd
 owners (`piecesOwned_D`), the latter two from V*'s list and the parts' sessions' checks as `readX` holds them, the copies' openings (`copyOpensR_layR`) and their directions (`copyDirsTieR_layR` from
 `dirsSideR_of`, check 5's `m` from `staged_innerAt` and its coin tie from `posTieR_dense`) and the level parts' `out`
 rows bound to RecCap's `top` rows (`outBindRP_deployed`), and the reader's side of the cap tie from `hRd`
-(`sideCapR_leaf`). Open, each a named leaf: each algebra part's share of the pieces (`hres`, LOWRES'
+(`sideCapR_leaf`), and the base checks (`basesHold_spec`). Open, each a named leaf: each algebra part's share of the pieces (`hres`, LOWRES'
 `ResLowered`, which gives `ResLowJ` by `resLowJ_of_resLowered`),
-row E's chain at the joint witnesses (`hEJ`), the JSON parser's spec (`S`,
-which also gives the base checks, `basesHold_spec`), the last message's reading (`hF`, `hRd`), and the setup's listing
+row E's chain at the joint witnesses (`hEJ`), the last message's reading (`hF`, `hRd`), and the setup's listing
 (`hset`). -/
 theorem recursiveKSAt_of_leaves (wE w : Msg → ℝ)
     (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
@@ -128,14 +127,12 @@ theorem recursiveKSAt_of_leaves (wE w : Msg → ℝ)
       (recL DeployedR.rdR b aux nOf hd recRest wE DeployedR.finalR w (DeployedR.layR OpenRows.elemR))
       (bdR DeployedR.rdR wE DeployedR.finalR w) (DeployedR.layR OpenRows.elemR) Claims.Recursion.Form.Dense
       (acceptsL DeployedR.rdR b aux nOf hd recRest wE DeployedR.finalR w (DeployedR.layR OpenRows.elemR)))
-    (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
     (hF : RestRead.FinalReads DeployedR.finalR (DeployedR.restR OpenRows.elemR))
     (hRd : RestRead.ReadsAt DeployedR.rdR DeployedR.finalR (DeployedR.restR OpenRows.elemR))
     (hres : ResLower.ResLowered DeployedR.rdR wE DeployedR.finalR w (bB b aux nOf hd recRest) OpenRows.elemR
       Claims.Recursion.Form.Dense recRead (cmtTr recRead) resPD ownRD (Rows.elemReadC (Top.accRC DeployedR.rdR key))
       Rows.resVRead)
-    (hset : ∀ xO, ∀ u ∈ ResLower.resSetup xO, u ∈ b.setup xO)
- :
+    (hset : ∀ xO, ∀ u ∈ ResLower.resSetup xO, u ∈ b.setup xO) :
     Flock.Guarantees.RecursiveKSAt DeployedR.rdR DeployedR.finalR OpenRows.elemR wE w b aux nOf hd recRest := by
   have hO : OpenLower.CopyOpensR FlockDeploy.sha512
       (recL DeployedR.rdR b aux nOf hd recRest wE DeployedR.finalR w (DeployedR.layR OpenRows.elemR))
@@ -177,8 +174,8 @@ theorem recursiveKSAt_of_leaves (wE w : Msg → ℝ)
   obtain rfl := List.mem_singleton.1 hs
   exact recKSDecompDP_of_leavesJ DeployedR.rdR b aux nOf hd recRest OpenRows.elemR wE DeployedR.finalR w resPD key
     (Rows.elemReadC (Top.accRC DeployedR.rdR key)) Rows.resVRead ownRD
-    (targetRDep_readers DeployedR.rdR (resPiecesAt_D DeployedR.rdR key _ _)) hEJ S
-    (basesHold_spec S DeployedR.rdR) hF hRd (saltRowsJ_layR DeployedR.rdR wE w OpenRows.elemR) (piecesOwned_D key)
+    (targetRDep_readers DeployedR.rdR (resPiecesAt_D DeployedR.rdR key _ _)) hEJ
+    (basesHold_spec DeployedR.rdR) hF hRd (saltRowsJ_layR DeployedR.rdR wE w OpenRows.elemR) (piecesOwned_D key)
     (resLowJ_of_resLowered DeployedR.rdR b aux nOf hd recRest wE DeployedR.finalR w OpenRows.elemR _ _ hres) hO hDirs
     hOut (CapLower.sideCapR_leaf wE w b aux nOf hd recRest key hRd)
 

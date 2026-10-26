@@ -219,7 +219,6 @@ theorem recKSDecompLP_of_leavesJ
     (hDm : Top.TargetDMerkle rd (PD rd resP key elemAt vvAt side posAt) (Top.accRC rd key))
     (hEJ : Top.RowEJoint rd key FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) (bdR rd wE final w) L
       Claims.Recursion.Form.Dense (acceptsL rd b aux nOf hd rest wE final w L))
-    (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
     (hB : BasesHold rd) (hF : FinalReadsL final L) (hLn : RoundLensL L) (hRd : ReadsAtL rd final L)
     (hSR : SaltRowRest rd b aux nOf hd rest wE final w L) (hOwn : PiecesOwned resP key ownR)
     (hlowR : RestLowJ rd b aux nOf hd rest wE final w L)
@@ -241,7 +240,7 @@ theorem recKSDecompLP_of_leavesJ
     Top.targets_of_open rd _ _ _ hRdep hDm
       (Top.targetE_accRC rd key (fun P' ch h => Top.targetE_rowD rd P' ch key h) _
         (rowEHolds_PD rd resP key elemAt vvAt side posAt))
-      (DecodeAt.decode_at S rd _)
+      (DecodeAt.decode_at rd _)
   have hP : ∀ x, (recL rd b aux nOf hd rest wE final w L).parse x = parse x := fun _ => rfl
   have hS : ∀ f, Claims.Recursion.Form.Dense f → Claims.Recursion.Form.Dense f := fun _ h => h
   have hC := OpenLower.openCopyR_of FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
@@ -358,7 +357,6 @@ theorem recKSDecompDP_of_leavesJ
     (hEJ : Top.RowEJoint rd key FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w (DeployedR.layR elem))
       (bdR rd wE final w) (DeployedR.layR elem) Claims.Recursion.Form.Dense
       (acceptsL rd b aux nOf hd rest wE final w (DeployedR.layR elem)))
-    (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
     (hB : BasesHold rd) (hF : RestRead.FinalReads final (DeployedR.restR elem))
     (hRd : RestRead.ReadsAt rd final (DeployedR.restR elem))
     (hSRJ : SaltRowsJ rd wE final w (DeployedR.layR elem)) (hOwn : PiecesOwned resP key ownR)
@@ -377,7 +375,7 @@ theorem recKSDecompDP_of_leavesJ
       (bdR rd wE final w) rd (Rows.rowDPieces key) Rows.posAt) :
     RecKSDecompLP rd b aux nOf hd rest wE final w (DeployedR.layR elem) :=
   recKSDecompLP_of_leavesJ rd b aux nOf hd rest wE final w (DeployedR.layR elem) resP key elemAt vvAt
-    (OpenLower.sideAtR rd) Rows.posAt ownR hRdep (targetDMerkle_PD rd resP key elemAt vvAt _) hEJ S hB hF
+    (OpenLower.sideAtR rd) Rows.posAt ownR hRdep (targetDMerkle_PD rd resP key elemAt vvAt _) hEJ hB hF
     (RestRead.roundLens (DeployedR.restR elem))
     (fun x hx c ws hl hT os last hf hos =>
       hRd x hx c ws hl (fun e he => hT e (allCalls_layR elem x ws he)) os last hf hos)
