@@ -790,20 +790,23 @@ def plots(r: dict, outdir: Path) -> list[str]:
     import matplotlib.pyplot as plt
 
     names = []
+    colors = dict(zip(CLASSES, ("#0072B2", "#D55E00", "#009E73"), strict=True))
     fig, axes = plt.subplots(1, 2, figsize=(16, 7), sharey=True)
     for ax, (name, fo) in zip(axes, r["fleets"].items(), strict=True):
         xs = [x["beta_side"] for x in fo["beta_sweep"]]
+        remote = {m["class"]: m["D"] for m in fo["monitored"]
+                  if m["horizon"] == "year" and m["delta"] == 1e-6 and m["mode"] == "remote"}
         for cls in CLASSES:
-            ax.plot(xs, [x[f"D_onsite_{cls}"] for x in fo["beta_sweep"]], label=f"{cls}, onsite")
-        remote = [m for m in fo["monitored"] if m["horizon"] == "year" and m["delta"] == 1e-6 and m["mode"] == "remote"]
-        for m in remote:
-            ax.axhline(m["D"], ls=":", lw=1.5, color="gray")
-        ax.axvline(fo["block"]["beta_takeover"], ls="--", color="k", lw=1)
+            ax.plot(xs, [x[f"D_onsite_{cls}"] for x in fo["beta_sweep"]], color=colors[cls], lw=2,
+                    label=f"{cls}, onsite")
+            ax.axhline(remote[cls], ls=":", lw=1.5, color=colors[cls], label=f"{cls}, remote")
+        ax.axvline(fo["block"]["beta_takeover"], ls="--", color="k", lw=1,
+                   label=f"side channels = R + I_cert ({g(fo['block']['beta_takeover'])} b/s)")
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_title(f"{name}: D over a year (delta 1e-6)")
         ax.set_xlabel("side channels per location (bit/s)")
-        ax.legend()
+        ax.legend(fontsize=8, loc="center left")
     axes[0].set_ylabel("D, fleet compute / reference training")
     fig.tight_layout()
     fig.savefig(outdir / "beta_side.png")
@@ -814,13 +817,17 @@ def plots(r: dict, outdir: Path) -> list[str]:
             fig, ax = plt.subplots(figsize=(12, 7))
             rows = rows[:12][::-1]
             base = rows[0]["base"] if rows else 1
+            ends = [v for x in rows for v in (x["at_low"], x["at_high"])] + [base]
             for i, x in enumerate(rows):
                 lo, hi = sorted((x["at_low"], x["at_high"]))
                 ax.barh(i, hi - lo, left=lo, color="#0072B2")
+                ax.text(hi * 1.05, i, f"{g(x['low'])} -> {g(x['at_low'])}, {g(x['high'])} -> {g(x['at_high'])}",
+                        va="center", fontsize=8)
             ax.axvline(base, color="k", lw=1)
             ax.set_yticks(range(len(rows)), [x["key"] for x in rows])
             ax.set_xscale("log")
-            ax.set_title(f"{name}: {metric}, tornado")
+            ax.set_xlim(min(ends) / 1.5, max(ends) * 8)
+            ax.set_title(f"{name}: {metric} (year, delta 1e-6), tornado: parameter end -> metric")
             fig.tight_layout()
             fn = f"tornado_{name}_{metric}.png"
             fig.savefig(outdir / fn)
