@@ -1,6 +1,10 @@
-"""`tools/ratchet_gate.py` on toy repositories: a branch's own commits judged together against its merge base, each queue merge
-on its own, a new or moved ratchet, the changes it doesn't judge (tests and docs only), the exemptions (a revert, a pure move
-the base's move_check certifies), and its command line."""
+"""`tools/ratchet_gate.py` on toy repositories: a branch's own commits judged together against its merge base (the merge of its
+merge bases, when it has several), each queue merge on its own, no ratchet growing (by entries, per ratchet, or by an entry's
+count), a new, moved or renamed ratchet, the changes it doesn't judge, the base's lint code run on the change's tree (a
+loosened, deleted or bypassed lint fails, naming what it still finds; a tightened one passes once its findings are fixed), the
+ruff lint rerun with the base's config and pin (a loosened config, lint or pin fails), the `noqa` count (no change adds more
+than it removes; a moved one is kept; only comments count; a new copy of a line is named where it was added), the exemptions
+(a revert, a pure move the base's move_check certifies), and its command line."""
 from __future__ import annotations
 
 import importlib.util
@@ -19,22 +23,52 @@ sys.modules.setdefault("ratchet_gate", G)
 _spec.loader.exec_module(G)
 
 P01 = "integrations/vllm/tests/lint/allowlists/p01_core.json"
+P02 = "integrations/vllm/tests/lint/allowlists/p02_more.json"
+LINT = "integrations/vllm/tests/lint/test_p01_core.py"
 #: a stand-in for move_check: certified when every change is a 100% rename
 MOVE_CHECK = """\
 import subprocess, sys
 out = subprocess.run(["git", "diff", "--name-status", "-M100%", sys.argv[1], sys.argv[2]], capture_output=True, text=True).stdout
 sys.exit(0 if out and all(line.startswith("R100") for line in out.splitlines()) else 1)
 """
+#: a toy lint in the real ones' shape: a library file matching WORD is a violation, keyed by its file
+TOY_LINT = '''\
+import json
+import re
+from pathlib import Path
+
+import pytest
+
+NAME = "p01_core"
+WORD = re.compile(r"BAD")
+HERE = Path(__file__).resolve().parent
+
+
+def found():
+    return sorted(f"verity_vllm/{p.name}" for p in (HERE.parents[1] / "verity_vllm").glob("*.py") if WORD.search(p.read_text()))
+
+
+@pytest.mark.slow
+def test_no_new_violations():
+    allowed = {e["file"] for e in json.loads((HERE / "allowlists" / f"{NAME}.json").read_text())["entries"]}
+    new = [f for f in found() if f not in allowed]
+    assert not new, "P1: not in its allowlist:\\n" + "\\n".join(f"  {f} [k]" for f in new)
+
+
+def test_allowlist_has_no_stale_entries():
+    assert False, "the gate runs no stale-entry test"
+'''
 ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
        "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
 
 
-def _entry(file: str, symbol: str) -> dict:
-    return {"file": file, "kind": "k", "symbol": symbol, "detail": "d"}
+def _entry(file: str, symbol: str, count: int = 1) -> dict:
+    return {"file": file, "kind": "k", "symbol": symbol, "detail": "d", **({"count": count} if count != 1 else {})}
 
 
 def _allowlist(*entries: dict) -> str:
-    return json.dumps({"rule": "p01", "entries": list(entries)})
+    """one entry a line, as the lints' allowlists are kept"""
+    return '{"rule": "p01", "entries": [\n' + ",\n".join(json.dumps(e) for e in entries) + "\n]}\n"
 
 
 class Repo:
@@ -74,25 +108,56 @@ def repo(tmp_path, monkeypatch) -> Repo:
     return r
 
 
+@pytest.fixture
+def linted(repo) -> Repo:
+    """``repo`` with the toy lint, whose two violations (a.py, b.py) P01 allows."""
+    repo.commit("lint", {LINT: TOY_LINT, "integrations/vllm/verity_vllm/a.py": "A = 'BAD'\n",
+                         "integrations/vllm/verity_vllm/b.py": "B = 'BAD'\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    return repo
+
+
 def _verdicts(doc: dict) -> list[tuple[str, str]]:
     return [(c["name"], c["verdict"]) for c in doc["changes"]]
 
 
-def test_a_branch_is_judged_against_its_merge_base_and_must_retire_an_exception(repo):
+def test_a_branch_is_judged_against_its_merge_base_and_may_not_grow_a_ratchet(repo):
     base = repo.git("rev-parse", "main")
     repo.git("checkout", "-q", "-b", "pr")
     repo.commit("one", {"integrations/vllm/verity_vllm/a.py": "A = 2\n"})
-    head = repo.commit("two", {"integrations/vllm/verity_vllm/c.py": "C = 1\n"})
+    assert _verdicts(G.gate("main", "pr")) == [(f"{base[:12]}..{repo.git('rev-parse', 'HEAD')[:12]}", "untouched")]
+    head = repo.commit("two", {"integrations/vllm/verity_vllm/c.py": "C = 1\n",
+                               P01: _allowlist(_entry("verity_vllm/a.py", "A"), _entry("verity_vllm/b.py", "B"),
+                                               _entry("verity_vllm/c.py", "C"))})
     doc = G.gate("main", "pr")
     [c] = doc["changes"]
-    assert (c["base"], c["commit"], c["verdict"], c["before"], c["after"]) == (base, head, "failed", 2, 2)
-    assert c["source"] == ["integrations/vllm/verity_vllm/a.py", "integrations/vllm/verity_vllm/c.py"]
-    assert "retire at least 1" in c["why"]
-    assert c["fix"][0] == f"{P01}: verity_vllm/a.py k A d"          # the entry in a file it already changes comes first
-    assert c["fix"][-1] == f"each ratchet's entries, fewest first: {P01} 2"
+    assert (c["base"], c["commit"], c["verdict"], c["before"], c["after"], c["touched"]) == (base, head, "failed", 2, 3, [P01])
+    assert c["why"].startswith(f"grows {P01} 2 -> 3 entries: no change adds a ratchet exception")
+    assert c["fix"] == [f'{P01}: new {G.key(_entry("verity_vllm/c.py", "C"))}']
     assert doc["failures"] == [{"commit": head, "pr": None, "why": c["why"], "fix": c["fix"]}]
-    repo.commit("three", {P01: _allowlist(_entry("verity_vllm/b.py", "B"))})
-    assert _verdicts(G.gate("main", "pr")) == [(f"{base[:12]}..{repo.git('rev-parse', 'HEAD')[:12]}", "passed")]
+    repo.commit("three: the entry moves with the code", {"integrations/vllm/verity_vllm/b.py": None,
+                                                        P01: _allowlist(_entry("verity_vllm/a.py", "A"),
+                                                                        _entry("verity_vllm/c.py", "C"))})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["before"], c["after"]) == ("passed", 2, 2)
+
+
+def test_no_recorded_count_grows_and_one_ratchet_does_not_pay_for_another(repo):
+    repo.commit("p02, and a count", {P02: _allowlist(_entry("verity_vllm/a.py", "X")),
+                                     P01: _allowlist(_entry("verity_vllm/a.py", "A", 2), _entry("verity_vllm/b.py", "B"))})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("raises a count, retires another", {P01: _allowlist(_entry("verity_vllm/a.py", "A", 3))})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["before"], c["after"]) == ("failed", 3, 2)
+    assert c["why"].startswith(f'grows {P01} count 2 -> 3 for {G.key(_entry("verity_vllm/a.py", "A"))}')
+    repo.git("checkout", "-q", "-b", "trade", "main")
+    repo.commit("retires from p01, adds to p02", {P01: _allowlist(_entry("verity_vllm/b.py", "B")),
+                                                 P02: _allowlist(_entry("verity_vllm/a.py", "X"), _entry("verity_vllm/b.py", "Y"))})
+    [c] = G.gate("main", "trade")["changes"]
+    assert (c["verdict"], c["before"], c["after"]) == ("failed", 3, 3) and f"{P02} 1 -> 2 entries" in c["why"]
+    repo.git("checkout", "-q", "-b", "lower", "main")
+    repo.commit("lowers a count", {P01: _allowlist(_entry("verity_vllm/a.py", "A"), _entry("verity_vllm/b.py", "B"))})
+    assert _verdicts(G.gate("main", "lower"))[0][1] == "passed"
 
 
 def test_main_moving_on_keeps_the_branch_judged_against_its_merge_base(repo):
@@ -101,27 +166,73 @@ def test_main_moving_on_keeps_the_branch_judged_against_its_merge_base(repo):
     repo.git("checkout", "-q", "main")
     repo.commit("main moves", {"integrations/vllm/verity_vllm/b.py": "B = 2\n", "other.txt": "x\n"})
     [c] = G.gate("main", "pr")["changes"]
-    assert (c["verdict"], c["before"], c["after"], c["source"]) == ("passed", 2, 1, ["integrations/vllm/verity_vllm/a.py"])
+    assert (c["verdict"], c["before"], c["after"], c["touched"]) == ("passed", 2, 1, [P01])
+
+
+def test_a_branch_with_two_merge_bases_is_judged_against_their_merge(repo):
+    """``pr`` merged ``main`` and a side branch that ``main`` landed since, so the two have two merge bases; against either,
+    what ``main`` brought by the other route (a noqa each, and an allowlist entry) would count as ``pr``'s."""
+    repo.git("checkout", "-q", "-b", "side")
+    repo.commit("side: a noqa", {"integrations/vllm/verity_vllm/c.py": "import os  # noqa: F401\n"})
+    repo.git("checkout", "-q", "main")
+    repo.commit("main: a noqa and its entry", {"integrations/vllm/verity_vllm/d.py": "import re  # noqa: F401\n",
+                                               P01: _allowlist(_entry("verity_vllm/a.py", "A"), _entry("verity_vllm/b.py", "B"),
+                                                               _entry("verity_vllm/d.py", "D"))})
+    repo.git("checkout", "-q", "-b", "pr", "main~1")
+    repo.commit("pr", {A_PY: "A = 2\n"})
+    repo.git("merge", "-q", "--no-ff", "-m", "merge main", "main")
+    repo.git("merge", "-q", "--no-ff", "-m", "merge side", "side")
+    repo.git("checkout", "-q", "main")
+    repo.queue(7, "side", "side")
+    assert len(repo.git("merge-base", "--all", "main", "pr").split()) == 2
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["noqa_added"], c["touched"]) == ("untouched", 0, [])
+    repo.git("checkout", "-q", "pr")
+    repo.commit("pr's own noqa", {"integrations/vllm/verity_vllm/e.py": "import sys  # noqa: F401\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", ["verity_vllm/e.py:1: import sys  # noqa: F401"])
+
+
+def test_merge_bases_that_conflict_are_refused_with_how_to_leave_one(repo):
+    repo.git("checkout", "-q", "-b", "side")
+    repo.commit("side", {A_PY: "A = 'side'\n"})
+    repo.git("checkout", "-q", "main")
+    repo.commit("main", {A_PY: "A = 'main'\n"})
+    repo.git("checkout", "-q", "-b", "pr", "main~1")
+    repo.commit("pr", {"integrations/vllm/verity_vllm/c.py": "C = 1\n"})
+    repo.git("merge", "-q", "--no-ff", "-m", "merge main", "main")
+    repo.git("merge", "-q", "--no-ff", "-X", "ours", "-m", "merge side", "side")
+    repo.git("checkout", "-q", "main")
+    repo.git("merge", "-q", "--no-ff", "-X", "ours", "-m", "Queue: #7 side", "side")
+    with pytest.raises(G.GitError, match="don't merge cleanly, so it has no one base to be judged against: merge .* into the"):
+        G.gate("main", "pr")
+    repo.git("checkout", "-q", "pr")
+    repo.git("merge", "-q", "--no-ff", "-m", "merge main again", "main")
+    assert _verdicts(G.gate("main", "pr"))[0][1] == "untouched"
 
 
 def test_each_queue_merge_is_one_pr_against_the_one_below(repo):
-    base = repo.git("rev-parse", "main")
+    base = repo.commit("p02", {P02: _allowlist(_entry("verity_vllm/a.py", "X"))})
     repo.git("checkout", "-q", "-b", "one")
     one = repo.commit("retires A", {"integrations/vllm/verity_vllm/a.py": "A = 2\n", P01: _allowlist(_entry("verity_vllm/b.py", "B"))})
     repo.git("checkout", "-q", "-b", "two", base)
-    two = repo.commit("adds code", {"integrations/vllm/verity_vllm/c.py": "C = 1\n"})
+    two = repo.commit("adds code and its exception", {"integrations/vllm/verity_vllm/c.py": "C = 1\n",
+                                                      P02: _allowlist(_entry("verity_vllm/a.py", "X"), _entry("verity_vllm/c.py", "C"))})
     repo.git("checkout", "-q", "-b", "three", base)
-    three = repo.commit("tests only", {"integrations/vllm/tests/test_c.py": "def test(): pass\n"})
+    three = repo.commit("code and tests only", {"integrations/vllm/verity_vllm/d.py": "D = 1\n",
+                                                "integrations/vllm/tests/test_c.py": "def test(): pass\n"})
     repo.git("checkout", "-q", "-b", "next", base)
-    m1, m2, m3 = repo.queue(1, "retire", one), repo.queue(2, "feature", two), repo.queue(3, "tests", three)
+    m1 = repo.queue(1, "retire", one)
+    m2 = repo.queue(2, "feature", two)
+    m3 = repo.queue(3, "tests", three)
     doc = G.gate("main", "next")
     assert _verdicts(doc) == [("#1", "passed"), ("#2", "failed"), ("#3", "untouched")]
-    assert [(c["base"], c["before"], c["after"]) for c in doc["changes"][:2]] == [(base, 2, 1), (m1, 1, 1)]
+    assert [(c["base"], c["before"], c["after"]) for c in doc["changes"][:2]] == [(base, 3, 2), (m1, 2, 3)]
     assert [(f["commit"], f["pr"]) for f in doc["failures"]] == [(m2, 2)]
     assert doc["changes"][2]["commit"] == m3
 
 
-def test_a_new_ratchet_is_its_own_baseline_and_a_moved_one_is_still_compared(repo):
+def test_a_new_ratchet_is_its_own_baseline_and_a_moved_or_renamed_one_is_still_compared(repo):
     repo.git("checkout", "-q", "-b", "pr")
     moved = "integrations/vllm/tests/lint/moved/allowlists/p01_core.json"
     repo.commit("adds p02, moves p01 and retires from it", {
@@ -129,6 +240,12 @@ def test_a_new_ratchet_is_its_own_baseline_and_a_moved_one_is_still_compared(rep
         "integrations/vllm/tests/p02_allowlist.json": _allowlist(*(_entry("verity_vllm/a.py", str(i)) for i in range(5)))})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["before"], c["after"]) == ("passed", 2, 1)
+    repo.git("checkout", "-q", "-b", "slug", "main")
+    by_slug = "integrations/vllm/tests/lint/allowlists/core.json"
+    repo.commit("names p01 by its slug and grows it", {P01: None, by_slug: _allowlist(
+        _entry("verity_vllm/a.py", "A"), _entry("verity_vllm/b.py", "B"), _entry("verity_vllm/c.py", "C"))})
+    [c] = G.gate("main", "slug")["changes"]
+    assert (c["verdict"], c["before"], c["after"]) == ("failed", 2, 3) and c["why"].startswith(f"grows {by_slug} 2 -> 3")
 
 
 def test_an_allowlist_left_unreadable_fails(repo):
@@ -138,38 +255,234 @@ def test_an_allowlist_left_unreadable_fails(repo):
     assert c["verdict"] == "failed" and f"leaves {P01} unreadable" in c["why"]
 
 
-def test_docs_and_tests_under_the_package_are_not_source():
-    assert G.is_source("integrations/vllm/verity_vllm/engine/x.py")
-    assert G.is_source("integrations/vllm/verity_vllm/kernels/k.cu")
-    assert not any(map(G.is_source, ["integrations/vllm/verity_vllm/README.md", "integrations/vllm/verity_vllm/x/test_y.py",
-                                      "integrations/vllm/verity_vllm/x/tests/y.py", "integrations/vllm/verity_vllm/conftest.py",
-                                      "integrations/vllm/tests/test_x.py", "integrations/vllm/tools/scorecard.py"]))
+def test_what_is_a_ratchet_lint_code_and_a_slug():
     assert G.is_ratchet("integrations/vllm/tests/lint/allowlists/p07.json")
     assert G.is_ratchet("integrations/vllm/tests/by_name_allowlist.json")
     assert not G.is_ratchet("integrations/vllm/tests/fixtures/x.json")
+    assert G.is_lint_code(LINT) and G.is_lint_code("integrations/vllm/tests/lint/_ratchet.py")
+    assert not any(map(G.is_lint_code, [P01, "integrations/vllm/tests/lint/README.md", "integrations/vllm/tests/test_x.py"]))
+    assert {G.slug(P01), G.slug(LINT), G.slug("x/allowlists/core.json"), G.slug("x/test_core.py")} == {"core"}
+    assert G.lint_selection([LINT, P02, "integrations/vllm/tests/by_name_allowlist.json"]) == ["core", "more"]
+    assert G.lint_selection([LINT, "integrations/vllm/tests/lint/_ratchet.py"]) is None
 
 
-def test_a_revert_and_a_pure_move_are_exempt(repo):
-    repo.git("checkout", "-q", "-b", "pr")
-    repo.commit('Revert "Queue: #9 retire B"', {"integrations/vllm/verity_vllm/b.py": "B = 0\n",
-                                                P01: _allowlist(*(_entry("verity_vllm/b.py", str(i)) for i in range(3)))})
+def test_a_revert_and_a_pure_move_are_exempt(linted):
+    linted.commit('Revert "Queue: #9 retire B"', {"integrations/vllm/verity_vllm/c.py": "C = 'BAD'\n",
+                                                  P01: _allowlist(*(_entry(f"verity_vllm/{f}.py", f) for f in "abc"))})
     assert _verdicts(G.gate("main", "pr"))[0][1] == "exempt"
-    repo.git("checkout", "-q", "-b", "move", "main")
-    repo.git("mv", "integrations/vllm/verity_vllm/a.py", "integrations/vllm/verity_vllm/moved_a.py")
-    repo.commit("move a", {})
+    linted.git("checkout", "-q", "-b", "move", "main")
+    linted.git("mv", P01, "integrations/vllm/tests/lint/allowlists/p01_other.json")
+    linted.commit("move p01's allowlist off its lint's name", {})
     [c] = G.gate("main", "move")["changes"]
-    assert (c["verdict"], c["why"]) == ("exempt", f"a pure move ({G.MOVE_CHECK} certifies it)")
-    repo.git("checkout", "-q", "-b", "next", "main")
-    repo.queue(4, 'Revert "x"', "pr")
+    assert (c["verdict"], c["why"], c["lints"]) == ("exempt", f"a pure move ({G.MOVE_CHECK} certifies it)", ["p01_core"])
+    linted.git("checkout", "-q", "-b", "next", "main")
+    linted.queue(4, 'Revert "x"', "pr")
     assert _verdicts(G.gate("main", "next")) == [("#4", "exempt")]
+
+
+def test_a_retired_entry_passes_once_the_base_lint_agrees_it_is_gone(linted):
+    linted.commit("fixes a.py and retires its entry", {"integrations/vllm/verity_vllm/a.py": "A = 'ok'\n",
+                                                       P01: _allowlist(_entry("verity_vllm/b.py", "B"))})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["before"], c["after"], c["lints"]) == ("passed", 2, 1, ["p01_core"])
+    linted.commit("drops b.py's entry with b.py unchanged", {P01: _allowlist()})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", ["p01_core: verity_vllm/b.py [k]"])
+    assert "the base's lint code" in c["why"] and "finds 1 violation(s)" in c["why"] and G.MOVE_CHECK not in c["why"]
+
+
+def test_a_move_the_base_lint_refuses_is_pointed_at_move_check(linted):
+    linted.git("mv", "integrations/vllm/verity_vllm/b.py", "integrations/vllm/verity_vllm/c.py")
+    linted.commit("moves b.py, and its entry with it, but not as a pure move", {P01: _allowlist(_entry("verity_vllm/a.py", "A"))})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", ["p01_core: verity_vllm/c.py [k]"])
+    assert f"is exempt once `python3 {G.MOVE_CHECK} " in c["why"]
+
+
+@pytest.mark.parametrize("loosen", [
+    {LINT: TOY_LINT.replace('r"BAD"', 'r"WORSE"')},
+    {LINT: None},
+    {LINT: TOY_LINT.replace("if WORD.search(p.read_text())", "if WORD.search(p.read_text()) and False"),
+     "integrations/vllm/tests/__init__.py": "raise SystemExit(0)\n"},
+], ids=["threshold", "deleted", "bypassed"])
+def test_loosening_a_lint_to_drop_its_entries_fails_naming_what_the_base_lint_finds(linted, loosen):
+    head = linted.commit("loosens the lint and drops its entries", {**loosen, P01: _allowlist()})
+    doc = G.gate("main", "pr")
+    [c] = doc["changes"]
+    assert (c["verdict"], c["before"], c["after"], c["lints"]) == ("failed", 2, 0, ["p01_core"])
+    assert c["fix"] == ["p01_core: verity_vllm/a.py [k]", "p01_core: verity_vllm/b.py [k]"]
+    assert doc["failures"] == [{"commit": head, "pr": None, "why": c["why"], "fix": c["fix"]}]
+
+
+def test_deleting_a_lint_and_its_allowlist_passes_once_nothing_is_left(linted):
+    linted.commit("fixes both", {"integrations/vllm/verity_vllm/a.py": "A = 1\n", "integrations/vllm/verity_vllm/b.py": "B = 1\n",
+                                 LINT: None, P01: None})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["before"], c["after"], c["lints"]) == ("passed", 2, 0, ["p01_core"])
+
+
+def test_tightening_a_lint_passes_once_its_findings_are_fixed_and_fails_if_they_grow_the_allowlist(linted):
+    linted.git("checkout", "-q", "main")
+    linted.commit("c.py", {"integrations/vllm/verity_vllm/c.py": "C = 'BAR'\n"})
+    linted.git("checkout", "-q", "-b", "tighten")
+    tighter = {LINT: TOY_LINT.replace('r"BAD"', 'r"BA[DR]"')}
+    linted.commit("tightens the lint and fixes c.py", {**tighter, "integrations/vllm/verity_vllm/c.py": "C = 'ok'\n"})
+    [c] = G.gate("main", "tighten")["changes"]
+    assert (c["verdict"], c["before"], c["after"], c["lints"]) == ("passed", 2, 2, ["p01_core"])
+    linted.git("checkout", "-q", "-b", "tighten-and-allow", "main")
+    linted.commit("tightens the lint and allows c.py", {**tighter, P01: _allowlist(
+        *(_entry(f"verity_vllm/{f}.py", f) for f in "abc"))})
+    [c] = G.gate("main", "tighten-and-allow")["changes"]
+    assert (c["verdict"], c["before"], c["after"]) == ("failed", 2, 3) and c["why"].startswith(f"grows {P01} 2 -> 3")
+
+
+def test_shared_lint_code_runs_every_lint_and_an_error_is_named(linted):
+    linted.commit("a test that isn't a lint", {"integrations/vllm/tests/lint/test_other.py": "import no_such_package\n"})
+    linted.git("checkout", "-q", "main")
+    linted.git("merge", "-q", "pr")
+    linted.git("checkout", "-q", "-b", "helper")
+    linted.commit("a helper", {"integrations/vllm/tests/lint/_helper.py": "X = 1\n"})
+    [c] = G.gate("main", "helper")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["p01_core"])
+    assert G.violations([{"lint": "p10_size", "test": "test_no_new_x", "error": True,
+                          "message": "Traceback:\n  File x\nFileNotFoundError: gone.py\n"}]) == [
+        "p10_size: test_no_new_x raised FileNotFoundError: gone.py"]
+
+
+REAL_LINT = SCRIPT.parents[1] / "tests" / "lint"
+RUFF_LINT = "integrations/vllm/tests/lint/test_ruff.py"
+RUFF_JSON = "integrations/vllm/tests/lint/allowlists/ruff.json"
+RUFF_TOML = '[lint]\nselect = ["F"]\n'
+F401 = {"file": "verity_vllm/a.py", "kind": "F401", "symbol": "<module>", "detail": "`os` imported but unused"}
+
+
+def _pyproject(pin: str, *more: str) -> str:
+    return "[dependency-groups]\ndev = [" + ", ".join(f'"{d}"' for d in (*more, pin)) + "]\n"
+
+
+@pytest.fixture
+def ruffed(repo) -> Repo:
+    """``repo`` with the real ruff lint, its config selecting pyflakes, and this Python's ruff pinned: a.py's unused import
+    is its one finding, which ruff.json allows."""
+    version = subprocess.run([sys.executable, "-m", "ruff", "--version"], capture_output=True, text=True, check=True).stdout
+    repo.pin = f"ruff=={version.split()[1]}"
+    repo.commit("ruff", {RUFF_LINT: (REAL_LINT / "test_ruff.py").read_text(),
+                         "integrations/vllm/tests/lint/_ratchet.py": (REAL_LINT / "_ratchet.py").read_text(),
+                         G.RUFF_CONFIG: RUFF_TOML, G.PYPROJECT: _pyproject(repo.pin), RUFF_JSON: _allowlist(F401),
+                         "integrations/vllm/verity_vllm/a.py": "import os\nA = 1\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    return repo
+
+
+@pytest.mark.parametrize("loosen", [
+    {G.RUFF_CONFIG: RUFF_TOML + 'ignore = ["F401"]\n'},
+    {G.RUFF_CONFIG: RUFF_TOML + '[lint.per-file-ignores]\n"verity_vllm/*" = ["F401"]\n'},
+    {G.RUFF_CONFIG: 'extend-exclude = ["verity_vllm"]\n' + RUFF_TOML},
+    {RUFF_LINT: (REAL_LINT / "test_ruff.py").read_text().replace(
+        "for f in json.loads(r.stdout))", "for f in json.loads(r.stdout) if f['code'] != 'F401')")},
+    {G.PYPROJECT: _pyproject("ruff==0.0.1")},
+    {G.RUFF_CONFIG: None, RUFF_LINT: None, RUFF_JSON: None},
+], ids=["ignore", "per-file-ignore", "exclude", "lint-code", "pin", "deleted"])
+def test_loosening_ruff_to_drop_its_findings_fails_naming_what_the_base_ruff_finds(ruffed, loosen):
+    ruffed.commit("loosens ruff and drops its entry", {RUFF_JSON: _allowlist(), **loosen})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["before"], c["after"], c["lints"]) == ("failed", 3, 2, ["ruff"]), c["why"]
+    assert c["fix"] == ["ruff: verity_vllm/a.py:1 [F401] <module>: `os` imported but unused"]
+
+
+def test_tightening_ruff_passes_once_its_findings_are_fixed_and_a_kept_pin_is_not_ruffs_change(ruffed):
+    ruffed.git("checkout", "-q", "main")
+    ruffed.commit("c.py", {"integrations/vllm/verity_vllm/c.py": "f = lambda: 0\n"})
+    ruffed.git("checkout", "-q", "-B", "pr")
+    ruffed.commit("selects E731, fixes c.py, and leaves the formatter off", {
+        G.RUFF_CONFIG: RUFF_TOML.replace('["F"]', '["E731", "F"]') + '[format]\nexclude = ["*"]\n',
+        "integrations/vllm/verity_vllm/c.py": "def f():\n    return 0\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["touched"], c["lints"]) == ("passed", [G.RUFF_CONFIG], ["ruff"]), c["why"]
+    ruffed.git("checkout", "-q", "-b", "deps", "main")
+    ruffed.commit("another dev dependency, the same ruff", {G.PYPROJECT: _pyproject(ruffed.pin, "pytest==9")})
+    assert _verdicts(G.gate("main", "deps"))[0][1] == "untouched"
+    ruffed.commit("a new pin", {G.PYPROJECT: _pyproject("ruff==0.0.1", "pytest==9")})
+    [c] = G.gate("main", "deps")["changes"]
+    assert (c["verdict"], c["touched"], c["lints"]) == ("passed", [G.PYPROJECT], ["ruff"]), c["why"]
+
+
+def test_the_ruff_lint_runs_on_this_python_when_its_ruff_is_the_pin_else_on_one_uv_makes(ruffed, monkeypatch):
+    here = [sys.executable, "-I"]
+    assert G.ruff_pin("main") == ruffed.pin and G.ruff_pin(ruffed.git("rev-parse", "main~1")) is None
+    assert G.python_for(None, None) == here and G.python_for("ruff==0.0.1", ["core"]) == here
+    assert G.python_for(ruffed.pin, ["ruff"]) == here
+    monkeypatch.setattr(G.shutil, "which", lambda name: f"/opt/{name}")
+    assert G.python_for("ruff==0.0.1", None) == ["/opt/uv", "run", "--no-project", "--quiet", "--python", sys.executable,
+                                                 "--with", "ruff==0.0.1", "--", "python", "-I"]
+    monkeypatch.setattr(G.shutil, "which", lambda name: None)
+    with pytest.raises(G.GitError, match="no `uv` to provide it"):
+        G.python_for("ruff==0.0.1", ["ruff"])
+
+
+A_PY = "integrations/vllm/verity_vllm/a.py"
+
+
+def test_a_change_adds_no_more_noqa_lines_than_it_removes(repo):
+    repo.commit("noqas", {A_PY: "import os  # noqa: F401\nA = 1\n", "integrations/vllm/verity_vllm/b.py": "B = 1  # noqa: E1\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("a new noqa, and one that only names it", {"integrations/vllm/verity_vllm/c.py": (
+        '"""Say why in a `# noqa: CODE`."""\nimport sys  # noqa: F401\nX = "# noqa"\n')})
+    doc = G.gate("main", "pr")
+    [c] = doc["changes"]
+    assert (c["verdict"], c["noqa_added"], c["noqa_removed"], c["touched"]) == ("failed", 1, 0, [])
+    assert c["why"].startswith("adds 1 `# noqa` line(s) under integrations/vllm/ and removes 0: a noqa is an exception, so "
+                               "fix the finding each new one suppresses, or delete a stale noqa elsewhere in the same change")
+    assert c["fix"] == ["verity_vllm/c.py:2: import sys  # noqa: F401"] and doc["failures"][0]["fix"] == c["fix"]
+    repo.commit("deletes a stale one", {"integrations/vllm/verity_vllm/b.py": "B = 1\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["noqa_added"], c["noqa_removed"]) == ("passed", 1, 1)
+    assert c["why"] == "1 `# noqa` line(s) added, 1 removed"
+
+
+def test_a_new_copy_of_a_noqa_line_is_named_where_the_diff_adds_it(repo):
+    bare = "    except Exception:  # noqa: BLE001"
+    repo.commit("one", {A_PY: f"try:\n    A = 1\n{bare}\n    A = 0\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("another", {A_PY: f"try:\n    A = 1\n{bare}\n    A = 0\ntry:\n    B = 1\n{bare}\n    B = 0\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["noqa_added"], c["fix"]) == ("failed", 1, [f"verity_vllm/a.py:7: {bare.strip()}"])
+
+
+def test_a_noqa_that_moves_with_its_code_is_kept_and_a_file_wide_one_counts(repo):
+    repo.commit("a noqa", {A_PY: "import os  # noqa: F401\nA = 1\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("moves the import to c.py, edits a line beside it", {
+        A_PY: "A = 2\n", "integrations/vllm/verity_vllm/c.py": "C = 0\n\nimport os  # noqa: F401\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["noqa_added"], c["noqa_removed"]) == ("untouched", 0, 0)
+    repo.commit("edits the line it's on", {"integrations/vllm/verity_vllm/c.py": "C = 0\n\nimport re  # noqa: F401\n"})
+    assert _verdicts(G.gate("main", "pr"))[0][1] == "passed"
+    for name, text in [("ruff", "# ruff: noqa\nA = 1\n"), ("flake8", "# flake8: noqa: E1\nA = 1\n"),
+                       ("unparsed", "A = (  # NOQA:E1\n")]:
+        repo.git("checkout", "-q", "-B", name, "main")
+        repo.commit(f"a {name} noqa", {"integrations/vllm/verity_vllm/d.py": text})
+        [c] = G.gate("main", name)["changes"]
+        assert (c["verdict"], c["fix"]) == ("failed", [f"verity_vllm/d.py:1: {text.splitlines()[0]}"]), name
+
+
+def test_a_noqa_outside_the_integration_or_in_a_revert_is_not_held(repo):
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("elsewhere", {"tools/x.py": "import os  # noqa: F401\n", "integrations/vllm/notes.md": "# noqa\n"})
+    assert _verdicts(G.gate("main", "pr"))[0][1] == "untouched"
+    repo.git("checkout", "-q", "-b", "revert", "main")
+    repo.commit('Revert "Queue: #9 drops a noqa"', {A_PY: "A = 1  # noqa: E1\n"})
+    assert _verdicts(G.gate("main", "revert"))[0][1] == "exempt"
 
 
 def test_the_command_line(repo):
     repo.git("checkout", "-q", "-b", "pr")
-    repo.commit("feature", {"integrations/vllm/verity_vllm/c.py": "C = 1\n"})
+    repo.commit("feature", {"integrations/vllm/verity_vllm/c.py": "C = 1\n",
+                            P01: _allowlist(_entry("verity_vllm/a.py", "A"), _entry("verity_vllm/b.py", "B"),
+                                            _entry("verity_vllm/c.py", "C"))})
     run = lambda *a: subprocess.run([sys.executable, str(SCRIPT), *a], cwd=repo.root, capture_output=True, text=True)  # noqa: E731
     r = run("main", "pr")
-    assert r.returncode == 1 and "failed: changes 1 source file(s)" in r.stdout and f"{P01} 2" in r.stdout, r.stdout
+    assert r.returncode == 1 and f"failed: grows {P01} 2 -> 3 entries" in r.stdout and "verity_vllm/c.py" in r.stdout, r.stdout
     r = run("main", "pr", "--json")
     assert r.returncode == 1 and json.loads(r.stdout)["kind"] == G.KIND
     assert run("main", "main").returncode == 0
