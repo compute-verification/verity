@@ -287,6 +287,52 @@ theorem ParseFactsPre.facts {tags : Tags} {pre : Array (String × Net)} {c : Cir
     kinds := P.kinds, check := P.check, rowNets := P.rowNets, recNet := P.recNet, recResiduals := P.recResiduals,
     recSparse := P.recSparse, recOpening := P.recOpening, typed := P.typed, tmpl := P.tmpl }
 
+/-- **`ParseFactsPre` whatever the circuit's template**: every fact but `tmpl`, none of which reads `Circuit.tmpl`, so a
+templated circuit (`HmOut.parseTmpl`'s, the circuit `HmRow.parse` read with its template carried) has them too
+(`ParseFactsU.retmpl`). -/
+structure ParseFactsU (tags : Tags) (pre : Array (String × Net)) (c : Circuit) : Prop where
+  nets : ∀ x ∈ c.nets.toList, x ∈ pre.toList ∨ Built x.2 ∨ ∃ nm tb n lo bits, Lookup.build nm tb n lo bits = .ok x.2
+  portWords : ∀ p ∈ c.ports.toList, p.v2 = false → 2 * p.words = 128 * p.chunks
+  v1Segs : ∀ p ∈ c.ports.toList, p.v2 = false → p.segs = none
+  rowWires : ∃ rest, c.wires.toList = (HmRow.rowWires c.ports c.shaNet c.hmNet).toList ++ rest ∧
+    ∀ w ∈ rest, w.dst.1 ≠ c.shaNet ∧ w.dst.1 ≠ c.hmNet
+  unitNet : c.unitNet < c.nets.size
+  shaNet : c.shaNet < c.nets.size
+  hmNet : c.hmNet < c.nets.size
+  kinds : ∀ r ∈ c.ranges.toList, ∀ i, r.kind = .net i → i < c.nets.size
+  check : ∃ ls, HmRow.check c tags ls = .ok ()
+  rowNets : HmNets.check c = .ok ()
+  recNet : RecOpen.check c = .ok ()
+  recResiduals : RecResiduals.check c = .ok ()
+  recSparse : RecSparse.check c = .ok ()
+  recOpening : RecOpening.check c = .ok ()
+  typed : c.typed = none
+
+theorem ParseFactsPre.toU {tags : Tags} {pre : Array (String × Net)} {c : Circuit} (P : ParseFactsPre tags pre c) :
+    ParseFactsU tags pre c :=
+  ⟨P.nets, P.portWords, P.v1Segs, P.rowWires, P.unitNet, P.shaNet, P.hmNet, P.kinds, P.check, P.rowNets, P.recNet,
+    P.recResiduals, P.recSparse, P.recOpening, P.typed⟩
+
+/-- `ParseFacts` is `ParseFactsU` at any `pre`. -/
+theorem ParseFacts.toU {tags : Tags} {c : Circuit} (P : ParseFacts tags c) (pre : Array (String × Net) := #[]) :
+    ParseFactsU tags pre c :=
+  ⟨fun x hx => .inr (P.nets x hx), P.portWords, P.v1Segs, P.rowWires, P.unitNet, P.shaNet, P.hmNet, P.kinds, P.check,
+    P.rowNets, P.recNet, P.recResiduals, P.recSparse, P.recOpening, P.typed⟩
+
+/-- `ParseFactsU` doesn't read the circuit's template. -/
+theorem ParseFactsU.retmpl {tags : Tags} {pre : Array (String × Net)} {c : Circuit} (P : ParseFactsU tags pre c)
+    (t : Option TmplUnit) : ParseFactsU tags pre { c with tmpl := t } :=
+  ⟨P.nets, P.portWords, P.v1Segs, P.rowWires, P.unitNet, P.shaNet, P.hmNet, P.kinds, P.check, P.rowNets, P.recNet,
+    P.recResiduals, P.recSparse, P.recOpening, P.typed⟩
+
+/-- `ParseFactsU` of a flat circuit with `pre`'s nets `Built` is `ParseFacts`. -/
+theorem ParseFactsU.facts {tags : Tags} {pre : Array (String × Net)} {c : Circuit} (P : ParseFactsU tags pre c)
+    (hpre : ∀ x ∈ pre.toList, Built x.2) (ht : c.tmpl = none) : ParseFacts tags c :=
+  { nets := fun x hx => (P.nets x hx).elim (fun h => .inl (hpre x h)) id, portWords := P.portWords,
+    v1Segs := P.v1Segs, rowWires := P.rowWires, unitNet := P.unitNet, shaNet := P.shaNet, hmNet := P.hmNet,
+    kinds := P.kinds, check := P.check, rowNets := P.rowNets, recNet := P.recNet, recResiduals := P.recResiduals,
+    recSparse := P.recSparse, recOpening := P.recOpening, typed := P.typed, tmpl := ht }
+
 set_option maxHeartbeats 4000000 in
 /-- **What `HmRow.parse` accepted, with nets `pre` first, of any kind** (a typed flat class's unit net, #307, or a
 templated file's committed unit net): its nets are `pre`'s, then the file's own, each `Net.parse`'s or a lookup slot,

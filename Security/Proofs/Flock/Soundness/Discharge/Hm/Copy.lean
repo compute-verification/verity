@@ -223,6 +223,12 @@ theorem RowRanges.ofL {st : Stmt} {tags : Tags} (L : Layout st) (P : ParseFacts 
   ⟨L.disj, L.bound, L.slotLog, C.count, C.one_range, fun i => (L.fit i).1, P.shaNet, P.hmNet, C.perVu_sha, C.perVu_hm,
     P.rowNets, L.kLog⟩
 
+/-- `ofL` of a flat or a templated circuit (`ParseFactsU`). -/
+theorem RowRanges.ofLU {st : Stmt} {tags : Tags} {pre : Array (String × Net)} (L : Layout st)
+    (P : ParseFactsU tags pre st.c) (C : CheckFacts st.c) : RowRanges st.c :=
+  ⟨L.disj, L.bound, L.slotLog, C.count, C.one_range, fun i => (L.fit i).1, P.shaNet, P.hmNet, C.perVu_sha, C.perVu_hm,
+    P.rowNets, L.kLog⟩
+
 namespace RowRanges
 
 variable {c : Circuit} (R : RowRanges c)
