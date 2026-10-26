@@ -13,8 +13,9 @@ Two exact kernels, each with that epilogue fused in that order (run.py's `--kern
   after the main loop. Its grid is a set of SMs (`Cfg` cN: at most N CTAs), the producer its own warpgroup role, and the
   main loop issues no integer work but counters, for KP2-DEC's decode warps beside it. Two variants change only where
   the operands and sums travel: `:m2` runs clusters of two CTAs on M-adjacent tiles that share each W box by TMA
-  multicast (a third less L2 traffic at 128 x 256), and `:kN` splits K for the narrow linears (kv, head), each split's
-  s32 sums added into a workspace (integer addition: exact in any order) and the epilogue run once on the total. Adopted over int8_fused on this card because Triton reached about 47% of the
+  multicast (a third less L2 traffic at 128 x 256), and `:kN` splits K where the tiles leave SMs idle (the narrow
+  linears, kv and head, at decode), each split's s32 sums added into a workspace (integer addition: exact in any order)
+  and the epilogue run once on the total. Adopted over int8_fused on this card because Triton reached about 47% of the
   H200's 1,942.7 s8 TOPS (r20261019-183823-8641) and mma.sync runs at 0.656 of the wgmma rate on sm_90.
 - **sm_120: `verity_vllm.engine.int8_fused.scaled_mm`**, as vLLM's int8 profile serves it: one Triton GEMM on mma.sync
   m16n8k32 (about 93% of the RTX's 807.5 TOPS at M = 8192, r20261019-183925-ef93); on sm_90 a second exact kernel beside

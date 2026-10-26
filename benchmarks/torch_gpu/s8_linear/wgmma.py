@@ -76,7 +76,8 @@ class Cfg(tuple):
     """(TM, BN, CTAs, group, cluster, splits); `Cfg.parse("128x256:c0:g8")`, `"128x256:c0:g8:m2"`, `"64x64:c0:g8:k0"`.
     CTAs 0: as many as keep the rounds (`Lib.grid`). Cluster 2: s8mm2_*, CTA pairs on M-adjacent tiles sharing W's box by
     multicast (the group counts pairs of tile rows, the CTAs stay a cap: half as many pairs). Splits of K (cluster 1
-    only): their s32 sums meet in a workspace, exactly (`Lib.workspace`); 0: as many as fill the SMs (`auto_splits`)."""
+    only, and only where the tiles leave SMs idle, `splits_for`): their s32 sums meet in a workspace, exactly
+    (`Lib.workspace`); 0: as many as fill the SMs (`auto_splits`)."""
 
     def __new__(cls, tm: int, bn: int, ctas: int = 0, group: int = 8, cluster: int = 1, splits: int = 1):
         if ((tm, bn) not in TILES or ctas < 0 or group < 1 or cluster not in (1, 2) or ctas == 1 and cluster == 2
@@ -101,6 +102,12 @@ class Cfg(tuple):
 def auto_splits(units: int, kb: int, sms: int = 132) -> int:
     """Splits of K that put a unit on every SM when the tiles alone don't, each at least two 128-deep blocks."""
     return max(1, min(sms // units, kb // 2))
+
+
+def splits_for(units: int, kb: int, splits: int, sms: int = 132) -> int:
+    """The splits a launch runs: none where the tiles alone give every SM one (so the workspace stays under a round of
+    tiles, never [M, N] at prefill), else `splits` (0: `auto_splits`), at most one a 128-deep block."""
+    return 1 if units >= sms else min(splits or auto_splits(units, kb, sms), kb)
 
 
 def default_cfg(m: int, n: int, k: int, sms: int = 132) -> Cfg:
@@ -219,7 +226,7 @@ class Lib:
         p.sa, p.sw, p.y = s_a.data_ptr(), s_w.data_ptr(), y.data_ptr()
         p.M, p.N, p.K, p.group = m, n, k, group
         units, kb = cdiv(cdiv(m, tm), cl) * cdiv(n, bn), cdiv(k, BK)
-        p.splits = min(splits or auto_splits(units, kb, self.sms), kb)
+        p.splits = splits_for(units, kb, splits, self.sms)
         if p.splits > 1:
             ws, cnt = self.workspace(m, n, tm, units)
             p.ws, p.cnt = ws.data_ptr(), cnt.data_ptr()

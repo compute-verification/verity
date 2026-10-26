@@ -35,6 +35,11 @@ def test_split_k_fills_the_sms_and_keeps_two_blocks_a_split():
     assert W.auto_splits(200, 128) == 1 and W.auto_splits(1, 3) == 1 and W.auto_splits(1, 1) == 1
 
 
+def test_split_k_runs_only_where_the_tiles_leave_sms_idle():
+    assert W.splits_for(132, 128, 3) == 1 and W.splits_for(40960, 128, 0) == 1
+    assert W.splits_for(64, 128, 3) == 3 and W.splits_for(64, 128, 0) == 2 and W.splits_for(8, 4, 16) == 4
+
+
 def test_every_tile_fits_the_cards_shared_memory_and_its_swizzle():
     for tm, bn in W.TILES:
         assert 2 <= W.stages(tm, bn) <= W.MAX_STAGES and W.smem(tm, bn) <= SM90_SMEM
