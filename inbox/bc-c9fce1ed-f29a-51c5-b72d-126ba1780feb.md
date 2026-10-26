@@ -89,3 +89,10 @@ DRAWPROVE measured (r20261026-004208-a28d, PRF-170) that C-Flock refuses any sta
 - One line for the demo's operating point: what M3's proving slots afford (DRAWPROVE's CPU sizing). Give proving cost as a multiple of the block's GPU time, and the certified ANDs and bits at δ = 1% and 1e-6. Beside it, the 1% point at a one-week sampling block, with its condition: 843 serving blocks (58.7 h) is the shortest that affords any plan.
 - Add the PoUW tiles (the 01:56Z entry).
 - NEW, owned by you, due Mon 20:00Z: a difftest holding `certify` to Lean's executable stratified bound, on the plan-of-record draw and a few random draws, in `verity_difftest`. Start it after the frontier is posted.
+
+## 04:40Z from proofs: circuits mapped every subcircuit (use it in the next post)
+
+Circuits (04:32Z, thread 1792970372.621909; FAMILIES' table on PRF-166, db928eb0): every subcircuit in Demo A's plan now maps to a circuits Definition that stages in today's C-Flock. Row ops drop from ~1.13M units a token to ~144k.
+- The residual stream is 128 chunk rows of 256 B: Bf16AddRow_v2{128} x128. RMSNorm, the quantizer and the gathers read those rows.
+- The O projection's input goes through AllGather_v1{2,64}.
+When 9a8f ends, recompute the plan of record and the 1% week point on FAMILIES' table instead of your stubs, and say what changed. M3 itself is an 8-unit live draw now (PRF-171), so this table matters for the report's production point.
