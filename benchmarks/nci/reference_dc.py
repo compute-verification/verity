@@ -373,13 +373,14 @@ def island(p: dict, f: dict) -> dict:
 
 
 def dark(p: dict, f: dict, share: float, H: float) -> dict:
-    """The dark share's operating points: one island, the share cooperating (a replica per island, every sync across
-    side channels), and its raw capacity (ignoring coordination)."""
+    """The dark share's operating points: one island, the share cooperating (a replica per island, ``coop_syncs`` syncs
+    a run across side channels; ``coop_t_step`` is its time per reference step), and its raw capacity (ignoring
+    coordination)."""
     one = island(p, f)
     N = dark_locations(p, f, share)
     t_sync = p["exfil_sync_bits"] / p["beta_side"]
     coop_run = max(one["t_run"] / N, p["coop_syncs"] * t_sync)
-    coop_step = max(one["t_step"] / N, t_sync)
+    coop_step = coop_run / steps_per_run(p)
     capacity = N * one["flops"] * H
     return {"share": share, "locations": N, "island": one, "t_sync": t_sync, "coop_t_run": coop_run,
             "coop_t_step": coop_step, "coop_beats_island_above_bps": p["coop_syncs"] * p["exfil_sync_bits"] / one["t_run"],
@@ -532,7 +533,7 @@ def evaluate(p: dict, fleets: dict, path: Path = PARAMS) -> dict:
         fo["beta_sweep"] = beta_sweep(p, f)
         fo["dark_sweep"] = dark_sweep(p, f)
         fo["tornado"] = {f"D_{cls}_{mode}": tornado(p, f, lambda q, g, c=cls, m=mode: headline_D(q, g, c, m), path)
-                         for cls in ("fan", "thread") for mode in MODES}
+                         for cls in CLASSES for mode in MODES}
         out["fleets"][name] = fo
     return out
 
@@ -742,11 +743,13 @@ def render(p: dict, fleets: dict, r: dict, path: Path = PARAMS) -> str:
         for d in fo["dark"]:
             i = d["island"]
             rows.append([d["horizon"], g(d["share"]), g(d["locations"]), dur(i["t_step"]), dur(i["t_run"]),
-                         g(d["island_runs_in_H"]), i["fits"], dur(i["t_offload"]), dur(d["coop_t_run"]),
-                         g(d["coop_beats_island_above_bps"]), dur(d["capacity_t_run"]), g(d["capacity_runs"])])
+                         g(d["island_runs_in_H"]), i["fits"], dur(i["t_offload"]), dur(d["coop_t_step"]),
+                         dur(d["coop_t_run"]), g(d["coop_beats_island_above_bps"]), dur(d["capacity_t_run"]),
+                         g(d["capacity_runs"])])
         out.append(table(["horizon", "dark share", "islands", "island t(step)", "island t(run)", "runs in H (island)",
-                          "state fits", "offload floor a step", "cooperating t(run)", "coop beats one island above (b/s)",
-                          "capacity t(run), no coordination", "capacity runs in H"], rows))
+                          "state fits", "offload floor a step", "cooperating t(step)", "cooperating t(run)",
+                          "coop beats one island above (b/s)", "capacity t(run), no coordination",
+                          "capacity runs in H"], rows))
         out.append("\n### Exfiltration (side channels at beta_side per location)\n")
         rows = []
         for share, refs in fo["exfil"].items():

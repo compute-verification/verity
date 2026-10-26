@@ -146,6 +146,7 @@ def test_islands_memory_and_cooperation():
     d = M.dark(P, H200, 0.01, M.YEAR)
     assert d["locations"] == pytest.approx(0.01 / 0.99 * M.servers(P, H200))
     assert d["coop_t_run"] == pytest.approx(P["coop_syncs"] * P["exfil_sync_bits"] / P["beta_side"])
+    assert d["coop_t_step"] * M.steps_per_run(P) == pytest.approx(d["coop_t_run"])
     at = M.dark(P | {"beta_side": d["coop_beats_island_above_bps"]}, H200, 0.01, M.YEAR)
     assert at["coop_t_run"] == pytest.approx(h["t_run"])
 
