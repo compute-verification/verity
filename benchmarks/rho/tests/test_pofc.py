@@ -152,9 +152,10 @@ def test_the_constructions_open_where_the_page_says():
     ep = pofc.episode(wide_p, m)
     assert pofc.LastLayers(m, wide_p, 1).allowance(p)(ep) == 0.6 * ep.compute / 2
     assert pofc.LastLayers(m, wide_p, 1).allowance(p)(Budget(ep.compute, ep.inputs)) == 0.0
-    with pytest.raises(Outside):
-        pofc.Palindrome(m, RULES).allowance(p)
-    assert pofc.Palindrome(m, replace(RULES, commit=3.0)).allowance(p)(ep) == 0.6 * ep.compute / 2
+    for rules in (RULES, replace(RULES, commit=3.0)):
+        with pytest.raises(Outside):
+            pofc.Palindrome(m, rules).allowance(p)
+    assert pofc.Palindrome(m, replace(RULES, commit=3.0, per_operator=2.0)).allowance(p)(ep) == 0.6 * ep.compute / 2
     big = pofc.episode(replace(RULES, n_max=1e8), m)
     t = pofc.trained(p, m, RULES, 1)
     full, served = (pofc.WeightsAsActivations(m, RULES, 1, b).allowance(p)(big) for b in (None, RULES.act_bits))
@@ -194,9 +195,8 @@ def test_pofc_never_lowers_the_guarantee_and_its_class_binds_only_below_a_toll_o
 def test_a_scenario_under_pofc_evaluates_and_its_bracket_is_ordered_unless_a_premise_is_named_false():
     s, _ = reference()
     for n in N_MAX:
-        r = replace(RULES, n_max=n)
-        w = replace(s, regime=pofc.wrap(s.regime, r, s.model), bounds=s.bounds + pofc.bounds(s.model, r),
-                    attacks=s.attacks + pofc.attacks(s.model, r, s.context))
+        w = pofc.apply(s, replace(RULES, n_max=n))
+        assert w.regime.name == f"{s.regime.name}+pofc" and len(w.bounds) == len(s.bounds) + 2
         for f in evaluate(w).families:
             assert f.lo <= f.hi * (1 + 1e-9) or f.contradictions
 

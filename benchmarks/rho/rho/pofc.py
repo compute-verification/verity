@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from rho.families import Family
     from rho.instances import Model, Run
     from rho.regimes import Context, Regime
+    from rho.scenario import Scenario
 
 #: the page's conjecture, its rules (enforced on declared episodes), its physical instantiation and its known attacks;
 #: `SIGNAL` is the premise that bounds sharded backprop (`Backprop.signal`)
@@ -195,12 +196,13 @@ def trained(p: Profile, model: Model, rules: Rules, depth: int | None = None) ->
 
 @dataclass(frozen=True)
 class Backprop:
-    """Exact backprop whose gradient must reach depth `L`, completed inside one episode (the page's conjecture). A block
-    under a forward cut finishes at most the counted products of the tokens whose positions the weights behind the cut
-    leave free, `κ/2 · token_flops · (cut − behind) / s` (`Trained.within`): every trained token's activation takes a
-    position, and trains at the reference algorithm's cost. `theorem.share` caps it at `κ C / 2`, so it binds only
-    when `(1 − t) n_max · token_flops < C`; with `token_flops = C / n_max` (rule 6 charged a position) it is the page's
-    useful share, `(1 − t) κ C / 2`.
+    """Exact backprop whose gradient must reach depth `L`, completed inside one episode (the page's conjecture). What
+    it caps is the counted products of the tokens a block trains to depth `L` (a token run only forward, or whose
+    gradient stops short of `L`, finishes none of them). A block under a forward cut finishes at most those of the
+    tokens whose positions the weights behind the cut leave free, `κ/2 · token_flops · (cut − behind) / s`
+    (`Trained.within`): every trained token's activation takes a position, and trains at the reference algorithm's
+    cost. `theorem.share` caps it at `κ C / 2`, so it binds only when `(1 − t) n_max · token_flops < C`; with
+    `token_flops = C / n_max` (rule 6 charged a position) it is the page's useful share, `(1 − t) κ C / 2`.
 
     At `t ≥ 1` the within-episode route is blocked and only sharding across episodes remains, which this class doesn't
     bound and the NCI classes price at the episode's `X`: it gives no cap (`math.inf`) there, nor on a block with no
@@ -257,7 +259,8 @@ class LastLayers:
 class Palindrome:
     """Commit layer `i`'s weights to operators `i` and `k − i + 1`, so the chain's first half runs the forward and its
     second the backward (attack c): it pays by commitment, so it is open when the spare commitment holds every trained
-    layer the last operator doesn't, and then trains unthrottled under a forward cut. Blocks without one comply."""
+    layer the last operator doesn't and `p` holds one at the training precision (a backward operator's copy), and then
+    trains unthrottled under a forward cut. Blocks without one comply."""
 
     model: Model
     rules: Rules
@@ -271,6 +274,8 @@ class Palindrome:
         need = max(0, t.depth - t.held) * t.layer_params * t.weight_bits
         if need > t.spare:
             raise Outside(f"{p.name} needs {need:.3g} bits committed again; P leaves {t.spare:.3g}")
+        if self.rules.per_operator * self.rules.commit_bits < self.rules.weight_bits:
+            raise Outside(f"p holds {self.rules.per_operator:g} honest layers, short of one at the training precision")
         return lambda budget: t.kappa * budget.compute / 2 if _cut(budget) else 0.0
 
 
@@ -419,6 +424,13 @@ def attacks(model: Model, rules: Rules, ctx: Context, depth: int | None = None) 
             JunkEpisodes(model, rules, junk_share(rules, model, ctx), depth))
 
 
+def apply(s: Scenario, rules: Rules, link: float | None = None, depth: int | None = None) -> Scenario:
+    """`s` under PoFC: its regime wrapped (`wrap`), and PoFC's bounds and attacks beside its own."""
+    return replace(s, regime=wrap(s.regime, rules, s.model, link),
+                   bounds=s.bounds + bounds(s.model, rules, depth),
+                   attacks=s.attacks + attacks(s.model, rules, s.context, depth))
+
+
 @dataclass(frozen=True)
 class Top:
     """`family` training only the top `depth` layers: its state is theirs, and its target its own work (`m = 1`)."""
@@ -475,9 +487,7 @@ def versus(registry: Registry, scenario: str = "reference-onsite-h200", n_maxes:
         plain = evaluate(replace(base, families=families))
         for n in n_maxes:
             r = replace(r0, n_max=n)
-            s = replace(base, regime=wrap(base.regime, r, base.model, bandwidth), families=families,
-                        bounds=base.bounds + bounds(base.model, r, depth),
-                        attacks=base.attacks + attacks(base.model, r, base.context, depth))
+            s = apply(replace(base, families=families), r, bandwidth, depth)
             for f, f0 in zip(evaluate(s).families, plain.families, strict=True):
                 rho = {e.argument: e.rho for e in f.bounds}
                 t = trained(f.profile, base.model, r, depth)
