@@ -1,0 +1,4 @@
+order = 286
+path = "`accel_score/p1_width.py`"
+runs_on = "CPU"
+what = "P1's operand width, exactly: per operand distribution (Dither's R and U at A = B = 0, real activations at σ = 25 of 127, full-width noise), the share of depth-1 Strassen's pair sums outside int8 and one level's tensor-core cost with that side wide"
