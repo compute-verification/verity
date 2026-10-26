@@ -101,9 +101,11 @@ def small_k(w) -> bool:
     return w[1] == "tensor" and w[2] / w[3] < 32
 
 
-def lp(card, reading, heads_only: bool, no_small_k: bool = False):
-    """4(g): max distinct words a SM-clock, writers at once, under issue and each pipe (A2, A4, G2)."""
-    ws = [w for w in card if (w[5] or not heads_only) and not (no_small_k and small_k(w))]
+def lp(card, reading, heads_only: bool, no_small_k: bool = False, lanes_only: bool = False):
+    """4(g): max distinct words a SM-clock, writers at once, under issue and each pipe (A2, A4, G2); `lanes_only`
+    leaves the tensor pipe out (R-ACCEL-1: what the lanes write beside a tensor core busy with other work)."""
+    ws = [w for w in card if (w[5] or not heads_only) and not (no_small_k and small_k(w))
+          and not (lanes_only and w[1] == "tensor")]
     pipes = sorted({w[1] for w in ws})
     A, b = [[1.0] * len(ws)], [ISSUE]
     for p in pipes:
@@ -188,6 +190,13 @@ def main() -> None:
         for r in READINGS:
             print(f"  {r:8s} " + "; ".join(f"{f}: {fr:5.1f} words, +{g:.1%}" for f in FOLDS
                                          for fr, g in [concurrency(card, r, f)]))
+        print(f"   the head measure's ceiling on the lanes alone (heads, no tensor pipe): words a SM-clock, over the "
+              f"tensor peak's, and the words a lane instruction a filler must credit to price them out")
+        for r in READINGS:
+            best, mix, _ = lp(card, r, heads_only=True, lanes_only=True)
+            issue_used = sum(mix.values())
+            print(f"  {r:8s} {best:6.1f} words (+{best / (1 / k32_word_time(card, r)):.0%}), "
+                  f"{best / (32 * issue_used):.2f} words a lane instruction  mix {mix}")
     print("\nSHA-512 a word (section 'barrier'): ~3,570 32-bit ALU instructions a 1,024-bit block, 111.6 a word")
     for cname, alu, k32 in (("H200", 64, 128), ("sm_120", 64, 32)):
         g = (3570 / 32) / alu / (1 / k32)
