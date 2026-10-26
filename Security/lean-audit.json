@@ -8856,7 +8856,10 @@
    "type_hash": "b6ab57abe9ed0a1a43be839204bb683d6642ecbde4190d898b4a3ccc1d7b6003"
   },
   "Pous.SecurityProofs.StreamedWipeMeets141GB5": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.StreamedWipeMeets141GB5 : Pous.Guarantees.StreamedWipeMeets141GB5"],
+   "assumptions": [],
+   "type_hash": "1bd390853519827186390dd19f174a1a431546919678b8db3c48dfcb0cf5b91c"
   },
   "Pous.SecurityProofs.StreamedWipeMeets2600GB": {
    "owner": "@memory-accounting",
@@ -8877,7 +8880,10 @@
    "type_hash": "c26c23adbc15ab18912cbd9a9ff20ad52027001e35dd08dc661c67472b511255"
   },
   "Pous.SecurityProofs.StreamedWipeMeetsReads": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.StreamedWipeMeetsReads : Pous.Guarantees.StreamedWipeMeetsReads"],
+   "assumptions": [],
+   "type_hash": "a2f5444f8d5e25a0cfbb34ecce8550e64849fff88fd423a419993391aa377856"
   },
   "Pouw.Fp8Atom.H1T.Proofs.h1tGamma": {
    "owner": "@compute-accounting",
@@ -21777,9 +21783,11 @@
     "Pous.SecurityProofs.SegTagMeets14",
     "Pous.SecurityProofs.StreamedWipe",
     "Pous.SecurityProofs.StreamedWipeMeets141GB",
+    "Pous.SecurityProofs.StreamedWipeMeets141GB5",
     "Pous.SecurityProofs.StreamedWipeMeets2600GB",
     "Pous.SecurityProofs.StreamedWipeMeets96GiB",
-    "Pous.SecurityProofs.StreamedWipeMeetsFamily"
+    "Pous.SecurityProofs.StreamedWipeMeetsFamily",
+    "Pous.SecurityProofs.StreamedWipeMeetsReads"
    ]
   },
   "Definitions.Pous.Guarantees": {
@@ -21908,6 +21916,14 @@
     "Pous.SecurityProofs.StreamedWipeMeets96GiB",
     "Pous.SecurityProofs.StreamedWipeMeetsFamily"
    ]
+  },
+  "Definitions.Pous.Guarantees.StreamedWipeReads": {
+   "digest": "a776db79696cc65dec20f466f3d75a87f62c8a16bae8e11b933ba24b5f734db2",
+   "definitions": {
+    "Pous.Guarantees.StreamedWipeMeets141GB5": "a659ed0e0a86432ae5a56ef1ca3a397bf07257409ef21debb6fb79f29086b530",
+    "Pous.Guarantees.StreamedWipeMeetsReads": "0a36a70da47be9c52663087b4373ad8a41f51d28ed4116e3037324b6045057de"
+   },
+   "guarantees": ["Pous.SecurityProofs.StreamedWipeMeets141GB5", "Pous.SecurityProofs.StreamedWipeMeetsReads"]
   },
   "Definitions.Pous.Model.Audit": {
    "digest": "ae9ed577afee6873bd59d0b44e3a7daa4019bdf0958b65f2ec852459c09a026e",
@@ -22543,9 +22559,11 @@
     "Accounting.SecurityProofs.Remote.PooledDraw",
     "Pous.SecurityProofs.StreamedWipe",
     "Pous.SecurityProofs.StreamedWipeMeets141GB",
+    "Pous.SecurityProofs.StreamedWipeMeets141GB5",
     "Pous.SecurityProofs.StreamedWipeMeets2600GB",
     "Pous.SecurityProofs.StreamedWipeMeets96GiB",
-    "Pous.SecurityProofs.StreamedWipeMeetsFamily"
+    "Pous.SecurityProofs.StreamedWipeMeetsFamily",
+    "Pous.SecurityProofs.StreamedWipeMeetsReads"
    ]
   },
   "Definitions.Pous.P2.Cost": {
