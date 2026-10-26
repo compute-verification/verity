@@ -26,7 +26,10 @@ eyeball review, and the full check runs after landing); `land` below, and drive'
                                                    --stale`, tests/test_module_strings.py, test_pins.py, test_doc_paths.py,
                                                    test_repository.py, tools/research/tests/test_pythonpath.py, or `pytest
                                                    --collect-only` in a suite
-                                                   whose inputs its change touches; --no-preflight skips it (the lander's)
+                                                   whose inputs its change touches, or breaks the build of a Lean module that
+                                                   is or imports what it changes (on a warm Lean tree: here on a node, else
+                                                   with --on on vy-nebius-cpu-1), naming the PR on `next` that owns it;
+                                                   --no-preflight skips it (the lander's)
     research queue drive (--on MACHINE | --config PATH [--config-from-tree]) [--max-running N] [--train-size N] [--marked-after TS]
                          [--first N,...] [--defer STEPS] [--[no-]regenerate-locks] [--per-pr-shadow N]
                          [--landing review|check] [--[no-]after-landing-no-cache] [--dry-run]
@@ -102,7 +105,10 @@ Preflight.  Each of 17 Oct's marks that broke or cancelled a train was cheap to 
 on `next`, a stale Lake pin, a module string naming a module only an unlanded PR adds, a workspace member without its REAL_ROOTS
 entry, a test that read a row another queued PR refits away (an error at collection), and one lane's unlanded branch carried in
 two PRs.  20 Oct's two failed `tests/test_repository.py` (a Markdown cap, a report-genre name), which the preflight now runs
-too, as it runs the landing gates the sync would (on the head; the sync, on its merge onto `next`).  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
+too, as it runs the landing gates the sync would (on the head; the sync, on its merge onto `next`).  26 Oct's four Lean breaks
+(#4405 changing a signature #4363's Accept.lean used, #4473 dropping premises three other PRs' callers passed, #4622 dropping an
+import #4260 read, #4641 breaking two Flock recursion files) each passed its own Lean check and broke a module another PR on
+`next` owned, found an hour later by drive's Lean check of the stack; the preflight builds those modules (`LakeBuild`).  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
 failure `next` has too refuses nothing, and what keeps a check from running is said and refuses nothing (the train's check is the
 gate).  `--no-preflight` skips it, for the lander.
 
@@ -170,6 +176,7 @@ import posixpath
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -1900,6 +1907,21 @@ PREFLIGHT_BUDGET_S = 120.0
 PREFLIGHT_JOBS = 2
 #: below this share of memory available, no suite is collected, so a mark never OOMs the VM's other agents (infra's hook threshold)
 PREFLIGHT_MIN_FREE = 0.25
+#: the Lean step's bounds (`Preflight._lean`): the most modules it builds (those the change touches and every module importing one,
+#: transitively, each rebuilt since an import changed), and the seconds its builds may take, on the merged tree and, for what fails
+#: there, on `next`; past either it notes why and refuses nothing.  With `PREFLIGHT_BUDGET_S` the whole preflight stays within
+#: 5 minutes, and a warm tree rebuilds a few changed modules and their importers in a minute or two (TOP-90 row 58)
+PREFLIGHT_LEAN_MODULES = 40
+PREFLIGHT_LEAN_S = 180.0
+#: where the Lean step builds for `ready --on` when this machine keeps no warm Lean tree: `verity lean try`'s node and pool, whose
+#: `build` Lean slots keep their trees warm
+PREFLIGHT_LEAN_ON, PREFLIGHT_LEAN_POOL = "vy-nebius-cpu-1", "research"
+#: the merged tree's builder (`lean_changed.py --build FILE...`, on a `build` Lean slot's warm tree), and its last line's prefix
+LEAN_BUILDER, LEAN_BUILD_LINE = "tools/verity/lean/lean_changed.py", "lean-build: "
+#: `lean_slot.py`'s SLOTS: a machine whose file lists a `build` pool keeps warm Lean trees; an agent VM has none
+LEAN_SLOTS = Path(os.environ.get("LEAN_SLOTS", "/workspace/research/locks/lean-slots"))
+#: the Lake packages the Lean step reads: a directory with a lakefile and a `lean-audit.json`, the auditor's fixtures aside
+LEAN_FIXTURES = "tools/verity/lean/"
 #: the temporary worktrees' prefix (`merged_worktree`), `<tmp>/research-merged-<pid>-*`: one whose process is gone is swept (a kill
 #: skips `finally`)
 MERGED_PREFIX = "research-merged-"
@@ -2131,6 +2153,240 @@ def touched_suites(repo: Path, commit: str, base: str, how: LocalSuites | Remote
         return Touched(notes=[why], tail=why)
 
 
+_IMPORT = re.compile(r"(?:public\s+)?(?:meta\s+)?import\s+(?:all\s+)?(.*)")
+
+
+def lean_imports(text: str) -> list[str]:
+    """The modules a Lean file's header imports (`import M`, `public import M`, `meta import M`, `import all M`), read up to its
+    first command, past comments (nested `/- -/` too), `module` and `prelude`."""
+    out, depth = [], 0
+    for line in text.splitlines():
+        s = line.strip()
+        while s:
+            if depth:
+                i, j = s.find("/-"), s.find("-/")
+                if j < 0 and i < 0:
+                    s = ""
+                elif i >= 0 and (j < 0 or i < j):
+                    depth, s = depth + 1, s[i + 2:]
+                else:
+                    depth, s = depth - 1, s[j + 2:].strip()
+            elif s.startswith("/-"):
+                depth, s = 1, s[2:]
+            else:
+                break
+        if not s or s.startswith("--") or s in ("module", "prelude"):
+            continue
+        if not (m := _IMPORT.fullmatch(s)):
+            break
+        out += m.group(1).split("--", 1)[0].split()
+    return out
+
+
+@dataclass
+class LakePackage:
+    """A Lake package of a tree: its directory (``path``, from the root), where its modules' names start (``src``, its `srcDir`),
+    its libraries' roots (a module under one is what `lake build +M` builds) and the packages it requires by path (its manifest's
+    `path` entries, the inherited ones too)."""
+    path: str
+    src: str
+    roots: tuple[str, ...]
+    requires: tuple[str, ...]
+
+    def module(self, f: str) -> str | None:
+        rel = posixpath.relpath(f, self.src)
+        return None if rel.startswith("../") or not rel.endswith(".lean") else rel.removesuffix(".lean").replace("/", ".")
+
+    def builds(self, module: str) -> bool:
+        return any(module == r or module.startswith(r + ".") for r in self.roots)
+
+
+def lake_packages(wt: Path, files: list[str]) -> dict[str, LakePackage]:
+    """The Lake packages of the tree ``wt`` holding ``files``: each directory with a `lean-audit.json` and a lakefile, outside
+    `LEAN_FIXTURES`."""
+    have = set(files)
+    out = {}
+    for f in files:
+        if not f.endswith("/lean-audit.json") or f.startswith(LEAN_FIXTURES):
+            continue
+        d = f.rsplit("/", 1)[0]
+        src, roots, requires = ".", [], []
+        try:
+            if f"{d}/lakefile.toml" in have:
+                doc = tomllib.loads((wt / d / "lakefile.toml").read_text())
+                src = doc.get("srcDir", ".")
+                roots = [r for lib in doc.get("lean_lib", []) for r in (lib.get("roots") or [lib.get("name")]) if isinstance(r, str)]
+                requires = [r["path"] for r in doc.get("require", []) if isinstance(r.get("path"), str)]
+            elif f"{d}/lakefile.lean" in have:
+                text = (wt / d / "lakefile.lean").read_text()
+                src = (m.group(1) if (m := re.search(r'srcDir\s*:=\s*"([^"]*)"', text)) else ".")
+                roots = re.findall(r"lean_lib\s+«?([\w.]+)»?", text)
+            else:
+                continue
+            if f"{d}/lake-manifest.json" in have:
+                manifest = json.loads((wt / d / "lake-manifest.json").read_text())
+                requires += [p["dir"] for p in manifest.get("packages", []) if p.get("type") == "path" and isinstance(p.get("dir"), str)]
+        except (OSError, ValueError, AttributeError, TypeError):
+            continue
+        out[d] = LakePackage(d, posixpath.normpath(posixpath.join(d, src)), tuple(roots),
+                             tuple(sorted({posixpath.normpath(posixpath.join(d, p)) for p in requires} - {d})))
+    return out
+
+
+@dataclass
+class LeanGraph:
+    """The Lean step's view of a merged tree: {file: module} of each `.lean` file of the packages a change reaches, its imports
+    among them, and ``targets``, {file: module} of what the step builds."""
+    module: dict[str, str] = field(default_factory=dict)
+    imports: dict[str, list[str]] = field(default_factory=dict)
+    targets: dict[str, str] = field(default_factory=dict)
+
+    def upstream(self, f: str) -> list[str]:
+        """The files ``f``'s module imports, transitively, among those the graph holds."""
+        files = {m: g for g, m in self.module.items()}
+        seen, todo = set(), list(self.imports.get(self.module.get(f, ""), []))
+        while todo:
+            if (m := todo.pop()) in seen or m not in files:
+                continue
+            seen.add(m)
+            todo += self.imports.get(m, [])
+        return sorted(files[m] for m in seen)
+
+
+def lean_graph(wt: Path, files: list[str], changed: list[str]) -> LeanGraph:
+    """What the Lean step builds for a change to ``changed`` (paths from the root, deleted ones too) on the tree ``wt`` holding
+    ``files``: for each Lake package a changed `.lean` file belongs to (`lake_packages`, the deepest holding it), the changed
+    modules and every module importing one, transitively (`lean_imports`), among that package's own files and those of every
+    package requiring it by path; only modules under a library's root, which `lake build +M` names.  Empty without a Lean change."""
+    pkgs = lake_packages(wt, files)
+    owner = lambda f: max((p for p in pkgs if f.startswith(p + "/")), key=len, default=None)    # noqa: E731
+    touched = {p for f in changed if f.endswith(".lean") and (p := owner(f)) and not f.endswith("/lakefile.lean")}
+    graph = LeanGraph()
+    if not touched:
+        return graph
+    scope = {p for p, pkg in pkgs.items() if p in touched or touched & set(pkg.requires)}
+    for f in files:
+        if f.endswith(".lean") and not f.endswith("lakefile.lean") and (p := owner(f)) in scope and (m := pkgs[p].module(f)):
+            graph.module[f] = m
+            try:
+                graph.imports[m] = lean_imports((wt / f).read_text(errors="replace"))
+            except OSError:
+                graph.imports[m] = []
+    start = {m for f in changed if (p := owner(f)) in touched and f.endswith(".lean") and (m := pkgs[p].module(f))}
+    importers: dict[str, set[str]] = {}
+    for m, imps in graph.imports.items():
+        for i in imps:
+            importers.setdefault(i, set()).add(m)
+    reached, todo = set(start), list(start)
+    while todo:
+        for m in importers.get(todo.pop(), ()):
+            if m not in reached:
+                reached.add(m)
+                todo.append(m)
+    graph.targets = {f: m for f, m in graph.module.items() if m in reached and pkgs[owner(f)].builds(m)}
+    return graph
+
+
+@dataclass
+class LeanBuilt:
+    """What the Lean step's build gave: {file: its first Lean error} for each file that failed, and what it said otherwise."""
+    failed: dict[str, str] = field(default_factory=dict)
+    notes: list[str] = field(default_factory=list)
+
+
+def run_group(argv: list[str], cwd: Path, left: float) -> tuple[int | None, str]:
+    """``argv``'s exit status and output (stderr after stdout), in a process group of its own that is killed whole once ``left``
+    seconds pass (a `lake build` it started included, which would otherwise go on in a slot's tree), and then None."""
+    p = subprocess.Popen(argv, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors="replace",
+                         stdin=subprocess.DEVNULL, start_new_session=True)
+    try:
+        out, err = p.communicate(timeout=max(left, 0))
+        return p.returncode, out + err
+    except subprocess.TimeoutExpired:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(p.pid, signal.SIGKILL)
+        out, err = p.communicate()
+        return None, out + err
+
+
+#: `research run`'s line naming the run it started (or refused), as `verity lean try` reads it
+RUN_STARTED_RE = re.compile(r"^research: run (\S+) (?:launched|refused) on ", re.M)
+
+
+@dataclass
+class LakeBuild:
+    """The Lean step's builds (`Preflight._lean`): the tree's `LEAN_BUILDER` (`lean_changed.py --build FILE...`), which builds the
+    files' modules on the warm tree of a node's `build` Lean slot as `verity lean try` builds one, and ends with one
+    `LEAN_BUILD_LINE`.  It runs here when this machine's Lean slot file (``slots``) lists a `build` pool, in a process group
+    killed at the step's deadline; else, given ``on`` (`ready --on`), as a `research run` of the tree there (``pool``, a slot
+    named for ``by``), bounded by the same deadline; else not at all, and says so: an agent VM builds nothing (AGENTS.md,
+    "Tests"), and its preflight never starts a run unasked."""
+    on: str | None = None
+    pool: str | None = PREFLIGHT_LEAN_POOL
+    by: str | None = None
+    slots: Path = LEAN_SLOTS
+    run: Callable[[list[str], Path, float], tuple[int | None, str]] = run_group
+    runs: Callable[[], Path] | None = None
+
+    def warm(self) -> bool:
+        try:
+            return any(ln.split("#")[0].split()[:1] == ["build"] for ln in self.slots.read_text().splitlines())
+        except OSError:
+            return False
+
+    def __call__(self, wt: Path, files: list[str], left: float) -> LeanBuilt | str:
+        if left <= 0:
+            return "the Lean step's budget was spent before it started"
+        if not (wt / LEAN_BUILDER).is_file():
+            return f"the merged tree has no {LEAN_BUILDER}"
+        if self.warm():
+            rc, text = self.run([sys.executable, LEAN_BUILDER, "--build", *files], wt, left)
+            where = "here"
+        elif self.on:
+            rc, text, where = self._remote(wt, files, left)
+        else:
+            return (f"this machine keeps no warm Lean tree (no `build` pool in {self.slots}; an agent VM builds nothing): "
+                    f"`ready --on MACHINE` builds them on {PREFLIGHT_LEAN_ON}")
+        if rc is None:
+            return (f"its build {where} hadn't ended after {left:.0f} s (a wait in its pool's line counts){': ' + text if text else ''}"
+                    if where != "here" else f"its build here was still going after {left:.0f} s{': ' + text if text else ''}")
+        doc = next((ln[len(LEAN_BUILD_LINE):] for ln in reversed(text.splitlines()) if ln.startswith(LEAN_BUILD_LINE)), None)
+        try:
+            doc = json.loads(doc) if doc is not None else None
+        except ValueError:
+            doc = None
+        if not isinstance(doc, dict):
+            return f"its build {where} exited {rc} without a result line: {text.strip()[-300:]}"
+        built, skipped = doc.get("built") or {}, doc.get("skipped") or {}
+        notes = [f"{p} not built: {why}" for p, why in skipped.items()]
+        failed = {f: str(e) for f, e in (doc.get("failed") or {}).items()}
+        notes += [f"`lake build` in {p} exited {c} with no Lean error in a file" for p, c in built.items()
+                  if c and not any(f.startswith(p + "/") for f in failed)]
+        if not built and not failed:
+            return "; ".join(notes) or f"its build {where} built nothing (exit {rc})"
+        return LeanBuilt(failed, notes)
+
+    def _remote(self, wt: Path, files: list[str], left: float) -> tuple[int | None, str, str]:
+        """`LEAN_BUILDER --build` as a `research run` of ``wt``'s HEAD on ``on``, waited for within ``left``; its exit status (None:
+        it didn't end), its stdout, and where it ran."""
+        from . import runs as R
+
+        secs = f"{max(left - 10, 1):.0f}"
+        argv = [sys.executable, "-m", "research", "run", "--on", self.on, *(["--pool", self.pool, "--pool-wait", secs] if self.pool else []),
+                *(["--as", self.by] if self.by else []), "--project", "verity", "--source", str(wt), "--cwd", "clone",
+                "--timeout", secs, "--wait", "--wait-every", "5", "--wait-max", secs, "--",
+                "python3", LEAN_BUILDER, "--build", *files]
+        rc, said = self.run(argv, wt, left)
+        where = f"on {self.on}"
+        if not (m := RUN_STARTED_RE.search(said)):
+            return rc, said.strip()[-300:] if rc is not None else "", where
+        rid, where = m.group(1), f"on {self.on} (run {m.group(1)})"
+        self.run([sys.executable, "-m", "research", "fetch", rid, "--on", self.on, "--all"], wt, 60)
+        log = (self.runs or R.runs_root)() / rid / "stdout.log"
+        text = log.read_text(errors="replace") if log.is_file() else ""
+        return (None if rc == waitcap.STILL_GOING else rc), text, where
+
+
 class Preflight:
     """`ready`'s preflight, before the mark (and before the quick tier): refused, each refusal naming its fix, when the head
     (a) conflicts with `next` (`conflicting_files`, no worktree), naming the paths and the PRs on `next` that touched them;
@@ -2138,27 +2394,36 @@ class Preflight:
     reaches, or `pytest --collect-only` in a suite whose inputs
     the change touches (`touched_suites` with `LocalSuites`, from `next` to the merged tree), or the merged tree's `uv sync --locked`
     finds its lock stale; (c) contains another open PR's head that isn't admitted (no ready mark at that head, held, or no
-    owner), naming each; or (d) fails one of drive.toml's `landing_gates` at `main` (`_gates`), with the gate's fix.  17 Oct's
-    train breakers were each one of (a) to (c) (memory accounting's thread in #agent-coordination).
+    owner), naming each; (d) fails one of drive.toml's `landing_gates` at `main` (`_gates`), with the gate's fix; or (e) merged
+    onto `next`, breaks the build of a Lean module that is or imports, transitively, a module it changes, in that module's package
+    or one requiring it by path (`lean_graph`), built by ``lean`` (`LakeBuild`, on a warm Lean tree) within `lean_s`, naming the
+    module, its first error and the PR on `next` that owns it (`touched_by`), or for a module of its own, those that changed what it
+    imports.  17 Oct's train breakers were each one of (a) to (c) (memory accounting's thread in #agent-coordination); 26 Oct's
+    four Lean breaks each one of (e).
 
     `next` is fetched fresh; a PR already on it is merged onto the commit below its old head, as drive's next sync would rebuild
-    it.  The checks of (b) run in a temporary worktree of the caller's repository at the merge (`merged_worktree`), with its own environment
-    (`sync`; ``python`` stands in for its interpreter), under `budget_s` together, and the worktree is removed whatever
-    happens.  The fetched fixtures under the collected suites' inputs come into it first (``fetch``, by default `_fetch_fixtures`:
-    through ``store``, within `PREFLIGHT_FETCH_S` of the budget); a suite whose fixtures can't be fetched (no credentials, no
-    source) is named once and not judged.  A failure that `next` has too (a pin already stale there) isn't the PR's:
-    each failed check runs again at `next` in the same worktree, within the same budget, and only what fails on the merge alone
-    refuses.  What keeps a check from running (no `next` to fetch, the budget spent, labels that can't be pulled) is said and
-    refuses nothing: the preflight saves a train, and the train's check is still the gate."""
+    it.  The checks of (b) and (e) run in a temporary worktree of the caller's repository at the merge (`merged_worktree`), (e)
+    first, within `lean_s`, while the tree is clean (a `research run` ships it), then (b) with its own environment (`sync`;
+    ``python`` stands in for its interpreter), under `budget_s` together, and the worktree is removed whatever happens.  Before
+    (b), the fetched fixtures under the collected suites' inputs come into it (``fetch``, by default `_fetch_fixtures`: through
+    ``store``, within `PREFLIGHT_FETCH_S` of the budget); a suite whose fixtures can't be fetched (no credentials, no source) is
+    named once and not judged.  A failure that `next` has too (a pin already stale there, a module two PRs on `next` already
+    broke) isn't the PR's: each failed check runs again at `next` in the same worktree, within the same budget, and only what
+    fails on the merge alone refuses.  What keeps a check from running (no `next` to fetch, the budget spent, labels that can't
+    be pulled, more than `lean_modules` Lean modules, no warm Lean tree) is said and refuses nothing: the preflight saves a
+    train, and the train's check is still the gate."""
 
     def __init__(self, repo: Path, remote: str, store, *, sync: tuple[str, ...] | None = PREFLIGHT_SYNC, python: str | None = None,
                  budget_s: float = PREFLIGHT_BUDGET_S, jobs: int = PREFLIGHT_JOBS, clock: Callable[[], float] = time.monotonic,
                  root: Path | None = None, log: Callable[[str], None] = print,
                  free: Callable[[], float | None] = free_memory,
-                 fetch: Callable[[Path, list[str], float], tuple[set[str], str]] | None = None):
+                 fetch: Callable[[Path, list[str], float], tuple[set[str], str]] | None = None,
+                 lean: Callable[[Path, list[str], float], LeanBuilt | str] | None = None,
+                 lean_s: float = PREFLIGHT_LEAN_S, lean_modules: int = PREFLIGHT_LEAN_MODULES):
         self.repo, self.remote, self.store, self.sync, self.python = Path(repo), remote, store, sync, python
         self.budget_s, self.jobs, self.clock, self.log, self.free = budget_s, jobs, clock, log, free
         self.fetch = fetch or self._fetch_fixtures
+        self.lean, self.lean_s, self.lean_modules = lean, lean_s, lean_modules
         self.root = Path(root or tempfile.gettempdir())
 
     def __call__(self, pr: PR, prs: list[PR]) -> str | None:
@@ -2178,7 +2443,7 @@ class Preflight:
                            "(it carries unlanded PRs)")
         else:
             try:
-                found += self._merged(pr, base, onto, notes)
+                found += self._merged(pr, base, onto, notes, members)
             except QueueError as e:
                 notes.append(f"the merged tree's checks not run ({e})")
         took = f"{self.clock() - start:.0f} s" + (f"; {'; '.join(notes)}" if notes else "")
@@ -2252,30 +2517,86 @@ class Preflight:
         notes += unjudged
         return refused
 
-    def _merged(self, pr: PR, base: str, onto: str, notes: list[str]) -> list[str]:
-        """(b), in a temporary worktree at the merge of the head onto ``base``."""
+    def _merged(self, pr: PR, base: str, onto: str, notes: list[str], members: list[Member] | None = None) -> list[str]:
+        """(b) and (e), in a temporary worktree at the merge of the head onto ``base``."""
         r = _git(self.repo, "merge-tree", "--write-tree", "--no-messages", base, pr.head, check=False)
         if r.returncode:
             notes.append(f"the merged tree's checks not run: `git merge-tree` exited {r.returncode} ({(r.stderr or r.stdout).strip()[-200:]})")
             return []
         tree = r.stdout.split()[0]
         commit = _out(self.repo, "commit-tree", tree, "-p", base, "-p", pr.head, "-m", f"preflight: #{pr.number} onto {base[:12]}")
-        deadline = self.clock() + self.budget_s
         fixtures: dict[str, list[str]] = {}
         with merged_worktree(self.repo, commit, self.root) as wt:
+            graph, lean_failed, lean_deadline = self._lean(wt, base, tree, notes)
+            deadline = self.clock() + self.budget_s
             failed = self._checks(wt, base, tree, None, notes, deadline, fixtures)
-            if not any(failed.values()):
+            if not any(failed.values()) and not lean_failed:
                 return []
             _git(wt, "checkout", "-q", "--detach", "--force", base)
             _git(wt, "clean", "-qffdx", "-e", "/.venv")
-            again = self._checks(wt, base, tree, {k for k, v in failed.items() if v}, [], deadline, fixtures)
+            again = (self._checks(wt, base, tree, {k for k, v in failed.items() if v}, [], deadline, fixtures)
+                     if any(failed.values()) else {})
+            lean_again = self._lean_at_base(wt, lean_failed, lean_deadline) if lean_failed else {}
         out = []
         for name, fails in failed.items():
             if fails and name not in again:
                 notes.append(f"{name} failed on the merged tree and couldn't run on {onto} to compare: {'; '.join(fails.values())}")
             elif new := [line for k, line in sorted(fails.items()) if k not in again[name]]:
                 out.append(self._finding(name, new))
+        if isinstance(lean_again, str):
+            notes.append(f"Lean: {', '.join(sorted(lean_failed))} failed to build on the merged tree and couldn't be built on {onto} "
+                         f"to compare ({lean_again}): {'; '.join(lean_failed.values())}")
+        else:
+            changed = set(_out(self.repo, "diff", "--name-only", "--no-renames", base, tree).split())
+            cache: dict[str, set[str]] = {}
+            out += [self._lean_finding(f, line, graph, members or [], f in changed, cache)
+                    for f, line in sorted(lean_failed.items()) if f not in lean_again]
         return out
+
+    def _lean(self, wt: Path, base: str, tree: str, notes: list[str]) -> tuple[LeanGraph, dict[str, str], float]:
+        """(e): the modules of the merged tree in ``wt`` that the change from ``base`` touches and every module importing one, transitively
+        (`lean_graph`), built by ``lean`` (`LakeBuild`) within `lean_s`: the graph, {file: its first Lean error} of each that failed,
+        and the step's deadline.  Past `lean_modules` modules, or when the build can't run, a note and nothing failed."""
+        deadline = self.clock() + self.lean_s
+        if self.lean is None:
+            return LeanGraph(), {}, deadline
+        changed = _out(self.repo, "diff", "--name-only", "--no-renames", base, tree).split()
+        graph = lean_graph(wt, _out(wt, "ls-files").splitlines(), changed)
+        if not graph.targets:
+            return graph, {}, deadline
+        if len(graph.targets) > self.lean_modules:
+            notes.append(f"Lean: not built: {len(graph.targets)} modules are or import what it changes, over the "
+                         f"{self.lean_modules} the preflight builds; drive's Lean check of `{BRANCH}` builds them")
+            return graph, {}, deadline
+        res = self.lean(wt, sorted(graph.targets), deadline - self.clock())
+        if isinstance(res, str):
+            notes.append(f"Lean: {len(graph.targets)} module(s) not built: {res}")
+            return graph, {}, deadline
+        notes += [f"Lean: {n}" for n in res.notes]
+        notes.append(f"Lean: built {len(graph.targets)} module(s), {len(res.failed)} failed")
+        return graph, res.failed, deadline
+
+    def _lean_at_base(self, wt: Path, failed: dict[str, str], deadline: float) -> dict[str, str] | str:
+        """Which of the files that ``failed`` on the merged tree fail on `next` too (checked out in ``wt``), or why that couldn't be
+        built: a file `next` lacks fails only on the merge."""
+        there = sorted(f for f in failed if (wt / f).is_file())
+        if not there:
+            return {}
+        res = self.lean(wt, there, deadline - self.clock())
+        return res if isinstance(res, str) else res.failed
+
+    def _lean_finding(self, f: str, line: str, graph: LeanGraph, members: list[Member], own: bool,
+                      cache: dict[str, set[str]]) -> str:
+        """The refusal for ``f``, which fails to build on the merged tree and not on `next`, naming the PR on `next` that owns it
+        (`touched_by`), or, when it is the head's own (``own``) or no member's, those that changed what it imports."""
+        mod, stack = graph.module.get(f, f), "merge or stack on that PR, never merge `next` (it carries unlanded PRs)"
+        if owners := [] if own else touched_by(self.repo, members, [f], cache):
+            return f"Lean: `{mod}` ({f}), of {', '.join(owners)} on `{BRANCH}`, fails to build with this head merged: {line}: {stack}"
+        whose = "this head's own" if own else "on `main`"
+        if ups := touched_by(self.repo, members, graph.upstream(f), cache):
+            return (f"Lean: `{mod}` ({f}), {whose}, fails to build with this head merged: {line}: it imports what "
+                    f"{', '.join(ups)} on `{BRANCH}` changed: {stack}")
+        return f"Lean: `{mod}` ({f}), {whose}, fails to build with this head merged and not on `{BRANCH}`: {line}: fix the branch"
 
     @staticmethod
     def _finding(name: str, lines: list[str]) -> str:
@@ -2781,7 +3102,9 @@ def main(argv: list[str]) -> int:
                     help="ready: skip the preflight (the lander's): the head merged onto a fresh `next` must merge cleanly, contain "
                          "no open PR that isn't admitted, and pass `pins.py --stale`, the invariant tests (module strings, pins, "
                          "doc paths, pythonpath) and `pytest --collect-only` of the suites its change touches, in a temporary "
-                         f"worktree, in about {PREFLIGHT_BUDGET_S:g} s")
+                         f"worktree, in about {PREFLIGHT_BUDGET_S:g} s, and build the Lean modules that are or import what it "
+                         f"changes (at most {PREFLIGHT_LEAN_MODULES}, in {PREFLIGHT_LEAN_S:g} s, on a warm Lean tree: here on a "
+                         f"node, else with --on on {PREFLIGHT_LEAN_ON})")
     ap.add_argument("--max-running", type=int, help="drive: the most checks of `next` its launches keep running at once (default 2); "
                                                     "report: of merge groups")
     ap.add_argument("--train-size", type=int, help="drive: PRs per checked train on `next` (default 4)")
@@ -2910,7 +3233,8 @@ def main(argv: list[str]) -> int:
         if a.command == "ready":
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
             tier = MarkOnly() if a.mark else RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)
-            pre = None if a.no_preflight else Preflight(top, remote, store)
+            pre = None if a.no_preflight else Preflight(top, remote, store,
+                                                        lean=LakeBuild(on=PREFLIGHT_LEAN_ON if a.on else None, by=a.by))
             return ready(GitHub(repo), store, a.pr, a.by, tier, again=a.again, preflight=pre, sha=a.sha, as_json=a.json)
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
