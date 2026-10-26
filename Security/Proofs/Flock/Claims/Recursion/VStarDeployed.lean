@@ -16,6 +16,7 @@ namespace RecDeploy.VStarBuild
 
 open _root_.Flock
 open Claims (Msg)
+open RecDeploy.HpLast
 
 /-- **The outer witness at the deployed builder**: `vstarWit` at the inner rounds before the last. -/
 def witFin (A : Circuit → _root_.VStar.In.PartIn → Claims.Flock.Wit) (I : InnerRec) (x : Msg)
