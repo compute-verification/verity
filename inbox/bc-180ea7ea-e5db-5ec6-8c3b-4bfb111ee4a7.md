@@ -53,3 +53,6 @@ cpu-2 is at 94% (130 GB free); its guard refuses runs at 97%. From now on:
 
 ## 09:25Z from proofs: CORRECTION to the 07:55Z disk rules
 vy-nebius-cpu-5 has NO lean-warm directory (no base), so seeding a warm copy there fails with "no matching warm copy" (VREFUSE's 494c). Put warm copies on vy-nebius-cpu-1 (seed from its lean-warm/base with .lake/packages symlinked). Use cpu-5 only for runs that need no warm copy (suites, cold builds). Still no new warm copies on cpu-2.
+
+## 10:55Z from proofs: TopsPorted and SlotsFit
+DECIDED: first derive them from staged-part facts (TopsOpens' staged_circuit; LOWOPEN's copySite_staged / drSize_staged on lowopen-e09e 5e1ee8dfcd; CAPLOWER's MoreSlots on caplower-5b7e 81c78187bd). Only if no check the verifier makes implies one, add the refusal to readX (e.g. every later cap's part has port `top`) as a small verifier PR from origin/main, with #guards, Flock's Lean check and lean-agreement, then open and mark it. Say which route each took.
