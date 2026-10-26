@@ -60,43 +60,63 @@ theorem notMem_acc {sh : Shape} (hh : sh.holo = false) (r : ℕ) :
   simp [FlockDecodeTies.zcEls, FlockDecodeTies.lcEls, FlockDecodeTies.rsEls, FlockDecodeTies.ligEls,
     FlockDecodeTies.msgEls, h0, h1]
 
-/-- **A running sum's slot**: a key that no round holds, at slot `j` of `accNames` and at none before, sits at `j` past
-the rounds' elements in w. -/
-theorem wi_tail {sh : Shape} {k : Key} (hk : k ∉ (rounds sh).flatten) {j : ℕ} (hj : j < accNames.size)
-    (hkj : accNames[j] = k) (hfirst : ∀ j' (h : j' < j), accNames[j']'(by omega) ≠ k) :
-    wi sh k = some ((rounds sh).flatten.size + j) := by
-  have hlt : (rounds sh).flatten.size + j < (wNames sh).size := by
-    rw [wNames, Array.size_append]
-    omega
-  rw [wi, Array.idxOf?_eq_map_finIdxOf?_val,
-    (Array.finIdxOf?_eq_some_iff (i := ⟨_, hlt⟩)).2 ⟨?_, fun j' hj' => ?_⟩]
-  · rfl
-  · show ((rounds sh).flatten ++ accNames)[(rounds sh).flatten.size + j] = k
-    rw [Array.getElem_append_right (by omega)]
-    simp only [Nat.add_sub_cancel_left, hkj]
-  · have hj'' : j'.val < (rounds sh).flatten.size + j := Fin.lt_def.1 hj'
-    show ¬ ((rounds sh).flatten ++ accNames)[j'.val] = k
-    by_cases hl : j'.val < (rounds sh).flatten.size
-    · rw [Array.getElem_append_left hl]
-      exact fun e => hk (e ▸ Array.getElem_mem hl)
-    · rw [Array.getElem_append_right (by omega)]
-      exact hfirst _ (by omega)
+/-- **A tail key's first slot**: a key that `xs` doesn't hold, at slot `j` of `ys` and at none before, is first at
+`xs.size + j` in `xs ++ ys`. -/
+theorem idxOf?_append_of {α : Type} [DecidableEq α] {xs ys : Array α} {a : α} (ha : a ∉ xs) {j : ℕ}
+    (hy : ys[j]? = some a) (hfirst : ∀ j' < j, ys[j']? ≠ some a) :
+    (xs ++ ys).idxOf? a = some (xs.size + j) := by
+  have hj : j < ys.size := by
+    rcases Nat.lt_or_ge j ys.size with h | h
+    · exact h
+    · rw [Array.getElem?_eq_none h] at hy; cases hy
+  have hlt : xs.size + j < (xs ++ ys).size := by rw [Array.size_append]; omega
+  have hat : (xs ++ ys)[xs.size + j]? = some a := by
+    rw [Array.getElem?_append_right (Nat.le_add_right _ _), Nat.add_sub_cancel_left]
+    exact hy
+  have h : (xs ++ ys).finIdxOf? a = some ⟨xs.size + j, hlt⟩ := by
+    rw [Array.finIdxOf?_eq_some_iff]
+    refine ⟨?_, fun j' hj' => ?_⟩
+    · show (xs ++ ys)[xs.size + j]'hlt = a
+      exact Option.some.inj ((Array.getElem?_eq_getElem hlt).symm.trans hat)
+    · have hm : j'.val < xs.size + j := Fin.lt_def.1 hj'
+      intro e
+      have e' : (xs ++ ys)[j'.val]? = some a := by
+        rw [Array.getElem?_eq_getElem j'.isLt]
+        exact congrArg some e
+      by_cases hl : j'.val < xs.size
+      · rw [Array.getElem?_append_left hl] at e'
+        obtain ⟨p, hp⟩ := Array.getElem?_eq_some_iff.1 e'
+        exact ha (hp ▸ Array.getElem_mem p)
+      · rw [Array.getElem?_append_right (by omega)] at e'
+        exact hfirst (j'.val - xs.size) (by omega) e'
+  rw [Array.idxOf?_eq_map_finIdxOf?_val, h]
+  rfl
 
 theorem wi_acc0 {sh : Shape} (hh : sh.holo = false) {r : ℕ} (hr : r < 2) :
     wi sh (.acc0 r) = some ((rounds sh).flatten.size + r) := by
+  show ((rounds sh).flatten ++ accNames).idxOf? (.acc0 r) = _
   rcases (by omega : r = 0 ∨ r = 1) with rfl | rfl
-  · exact wi_tail (notMem_acc hh 0).1 (by decide) rfl fun j' h => absurd h (by omega)
-  · exact wi_tail (notMem_acc hh 1).1 (by decide) rfl fun j' h => by
+  · exact idxOf?_append_of (notMem_acc hh 0).1 (by decide) fun j' h => absurd h (by omega)
+  · exact idxOf?_append_of (notMem_acc hh 1).1 (by decide) fun j' h => by
       obtain rfl : j' = 0 := by omega
       decide
 
 theorem wi_acc1 {sh : Shape} (hh : sh.holo = false) {r : ℕ} (hr : r < 2) :
     wi sh (.acc1 r) = some ((rounds sh).flatten.size + (2 + r)) := by
+  show ((rounds sh).flatten ++ accNames).idxOf? (.acc1 r) = _
   rcases (by omega : r = 0 ∨ r = 1) with rfl | rfl
-  · exact wi_tail (notMem_acc hh 0).2 (by decide) rfl fun j' h => by
+  · exact idxOf?_append_of (notMem_acc hh 0).2 (by decide) fun j' h => by
       rcases (by omega : j' = 0 ∨ j' = 1) with rfl | rfl <;> decide
-  · exact wi_tail (notMem_acc hh 1).2 (by decide) rfl fun j' h => by
+  · exact idxOf?_append_of (notMem_acc hh 1).2 (by decide) fun j' h => by
       rcases (by omega : j' = 0 ∨ j' = 1 ∨ j' = 2) with rfl | rfl | rfl <;> decide
+
+theorem valOf_acc0 {sh : Shape} {w comb : Array F128} {cons : ℕ → ℕ → F128} {r j : ℕ}
+    (h : wi sh (.acc0 r) = some j) : valOf sh w comb cons (.acc0 r) = w[j]! := by
+  simp only [valOf, h]
+
+theorem valOf_acc1 {sh : Shape} {w comb : Array F128} {cons : ℕ → ℕ → F128} {r j : ℕ}
+    (h : wi sh (.acc1 r) = some j) : valOf sh w comb cons (.acc1 r) = w[j]! := by
+  simp only [valOf, h]
 
 theorem getElem!_append_length {L : List F128} {a : Array F128} (t : ℕ) :
     (L.toArray ++ a)[L.length + t]! = a[t]! := by
@@ -205,9 +225,9 @@ theorem readsEnds_accE (chainAt : Claims.Msg → List Claims.Msg → ℕ → ℕ
   have he := D.accE_rep cls chainAt i r
   intro r' hr'
   refine ⟨?_, ?_⟩
-  · rw [FlockVBridge.Family.valOf_acc0 (wi_acc0 hh hr'), ← Flock.RecAlgebra.getElem!_el, ht, he]
+  · rw [valOf_acc0 (wi_acc0 hh hr'), ht, he]
     rcases (by omega : r' = 0 ∨ r' = 1) with rfl | rfl <;> rfl
-  · rw [FlockVBridge.Family.valOf_acc1 (wi_acc1 hh hr'), ← Flock.RecAlgebra.getElem!_el, ht, he]
+  · rw [valOf_acc1 (wi_acc1 hh hr'), ht, he]
     rcases (by omega : r' = 0 ∨ r' = 1) with rfl | rfl <;> rfl
 
 /-! ## `UnitSums` -/
