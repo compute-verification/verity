@@ -1,7 +1,8 @@
 """`verity.ml.circuits.ops.boolean.scalar`: the bf16 comparator, the selects and the bit AND agree with their word primitives on every input
-(the comparator on all 2^32 pairs of words, each select over its whole truth table); the f32 equality, arithmetic, max / min and casts
-agree with theirs (`trace.word_of`) on every tuple of special words and on random words (the bf16 and E4M3 widenings on every
-word, the E4M3 cast on every exponent around its range, the E2M1 cast on every boundary of its grid and on all 2^32 words);
+(the comparator on all 2^32 pairs of words, each select over its whole truth table); the f32 equality, arithmetic, max / min, casts
+and 16-bit halves agree with theirs (`trace.word_of`) on every tuple of special words and on random words (the bf16 and E4M3
+widenings on every word, the E4M3 cast on every exponent around its range, the E2M1 cast on every boundary of its grid and on
+all 2^32 words, the s8 cast on every rounding position of its range);
 each carries exactly its builder's live ANDs and is pinned by gate count and program digest."""
 from __future__ import annotations
 
@@ -27,7 +28,7 @@ from verity.ml.circuits.boolean.forms import Circuit
 from verity.ml.circuits.silicon.cast import E2M1_UP
 
 DEFS = [BSC.Bf16GtStrict, BSC.SelectBf16, BSC.SelectI32, BSC.SelectF32, BSC.F32Eq, BSC.F32Add, BSC.F32Mul, BSC.F32Fma, BSC.F32Div, BSC.F32Fabs, BSC.F32Fmaxf,
-        BSC.F32Fminf, BSC.Bf16ToF32, BSC.F32ToE4m3Sat, BSC.E4m3ToF32, BSC.F32ToE2m1Sat, BSC.BitAnd]
+        BSC.F32Fminf, BSC.Bf16ToF32, BSC.F32ToE4m3Sat, BSC.E4m3ToF32, BSC.F32ToE2m1Sat, BSC.BitAnd, BSC.F32ToS8RniSat, BSC.U32Hi16]
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -48,6 +49,8 @@ PINS = {
     "E4m3ToF32_v2": (15, 22, 4, "f400f0c9cc9c035ebc678b71131bc62ae2c3030414ca993045a8dc89d454bca14dd6a50992ed275edad0cf039c0cabe3a38cf4205974097e53e79d30ae3b913e"),
     "F32ToE2m1Sat_v2": (60, 86, 2, "262b97bd6873c99e7ae520c63d16238c32e397f6717d21dab5ebe665223172c7337563f8d904c21dd927e8870fac35dc7882acf3a799b612e911373b46d14334"),
     "BitAnd_v2": (1, 0, 0, "aa243ece6f21049abb7a8c4ecb98adbc92d9c237b824273463b4ae7e06e691f8d02cf3fb592d4465e11914e6a39f609f8d18a3d41cdb6752e8880ef302c30ae7"),
+    "F32ToS8RniSat_v2": (313, 482, 45, "0be737231eeb81aa82ec05193d49ecb0b78d9c48a2fe474f95c69bbd91f0d9c51611f28107a9ac934481363e77c3beb64683ec88e1c297290d2e7ab9061ee28e"),
+    "U32Hi16_v2": (0, 0, 0, "e50e70260bcac2a1d87e3bb87ce5cb60e05ca213b6607ffde918418667d09e11c98e1c4f8a24f20c599b3ed3651793007d50c606895807e41f44ddcdfef29d0c"),
 }
 
 #: signed zeros, the smallest subnormals, the largest finite values, the smallest normals, ones, infinities and NaNs (quiet,
@@ -102,6 +105,17 @@ def _e2m1_edges(rng) -> np.ndarray:
     return np.concatenate([w, w | np.uint32(0x80000000)])
 
 
+def _s8_range(rng) -> np.ndarray:
+    """Every exponent from 2^-9 to 2^9 (fields 118..136, where the s8 cast rounds or saturates), each under all 512 patterns of
+    the fraction's top nine bits (the rounding position is at or above bit 15, so every tie and its neighbours) with its low 14
+    bits 0, 1, all ones or one of four random patterns; both signs."""
+    e = np.arange(118, 137, dtype=np.uint32)[:, None, None] << np.uint32(23)
+    hi = np.arange(512, dtype=np.uint32)[None, :, None] << np.uint32(14)
+    lo = np.concatenate([np.array([0, 1, (1 << 14) - 1], np.uint32), rng.integers(0, 1 << 14, 4, dtype=np.uint64).astype(np.uint32)])
+    w = (e | hi | lo[None, None, :]).reshape(-1)
+    return np.concatenate([w, w | np.uint32(0x80000000)])
+
+
 def _inputs(d, rng) -> list[np.ndarray]:
     if d is BSC.Bf16GtStrict:
         grid = np.array(list(itertools.product(range(len(BF16_SPECIALS)), repeat=2)), np.int64).T
@@ -118,6 +132,8 @@ def _inputs(d, rng) -> list[np.ndarray]:
     inputs = _f32_inputs(len(d.signature(None)[0]), rng)
     if d is BSC.F32ToE2m1Sat:
         return [np.concatenate([inputs[0], _e2m1_edges(rng)])]
+    if d is BSC.F32ToS8RniSat:
+        return [np.concatenate([inputs[0], _s8_range(rng)])]
     return [np.concatenate([inputs[0], _e4m3_range(rng)])] if d is BSC.F32ToE4m3Sat else inputs
 
 

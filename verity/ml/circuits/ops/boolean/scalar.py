@@ -23,12 +23,16 @@ operations of the served FP8 linear, around its tensor-core steps, and of NVFP4 
     F32ToE4m3Sat_v2                    (x: Array<32, Value<1>>) -> Array<8, Value<1>>          word view: F32ToE4m3Sat_v1
     E4m3ToF32_v2                       (x: Array<8, Value<1>>) -> Array<32, Value<1>>          word view: E4m3ToF32_v1
     F32ToE2m1Sat_v2                    (x: Array<32, Value<1>>) -> Array<4, Value<1>>          word view: F32ToE2m1Sat_v1
+    F32ToS8RniSat_v2                   (x: Array<32, Value<1>>) -> Array<8, Value<1>>          word view: F32ToS8RniSat_v1
+    U32Hi16_v2                         (a: Array<32, Value<1>>) -> Array<16, Value<1>>         word view: U32Hi16_v1
 
 Each is traced from a builder over `forms` (`trace.definition`), the circuit C-Flock's lowering runs for its word primitive. The
 builders are also pieces of larger circuits, such as an argmax over a logits row: `bf16_key` maps a bf16 word to a NaN flag and a
 16-bit key whose unsigned order is the value order (+0 and -0 one key), `f32_key` an f32 word likewise, `gt_u` compares two keys,
 `select` is the bitwise multiplexer. The arithmetic is `elementwise`'s and the bf16 widening `cast`'s, named here too; max / min,
 the E4M3 and E2M1 casts and the bit AND are written here (the first two formerly C-Flock's `tail_pieces`, which imports them).
+The s8 cast is `int8`'s two builders in a row, `f32_rint` (ties to even) then `f32_to_s8_rzi` (saturating, NaN 0), which is
+exact on the integer rint leaves.
 """
 from __future__ import annotations
 
@@ -44,14 +48,16 @@ from verity.ml.circuits.silicon.cast import E2M1_UP
 from verity.ml.circuits.silicon import fp
 from .cast import Bf16ToF32
 from .elementwise import F32Add, F32Div, F32Fma, F32Mul
+from .int8 import f32_rint, f32_to_s8_rzi
 from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
 from .softmax import _eq_const, _is_nan, f32_gt
 from verity.ml.circuits.boolean.trace import definition
 
 __all__ = ["BitAnd", "BitNot", "BitOr", "Bf16GtStrict", "Bf16ToF32", "E4m3ToF32", "F32Add", "F32BitsShl23", "F32Div", "F32Eq",
            "F32Fabs", "F32Fma", "F32Fmaxf", "F32Fminf", "F32IsFinite", "F32Mul", "F32Neg", "F32Sat", "F32ToE2m1Sat", "F32ToE4m3Sat",
-           "I32Eq", "I32Le", "SelectBf16", "SelectF32", "SelectI32", "bf16_gt_strict", "bf16_key", "const_word", "e4m3_to_f32",
-           "f32_eq", "f32_key", "f32_sat", "f32_to_e2m1_sat", "gt_u", "i32_le", "select"]
+           "F32ToS8RniSat", "I32Eq", "I32Le", "SelectBf16", "SelectF32", "SelectI32", "U32Hi16", "bf16_gt_strict",
+           "bf16_key", "const_word", "e4m3_to_f32", "f32_eq", "f32_key", "f32_sat", "f32_to_e2m1_sat", "f32_to_s8_rni_sat", "gt_u",
+           "i32_le", "select"]
 
 BIT = BL.BIT
 BF16 = Array(16, BIT)
@@ -257,6 +263,17 @@ F32BitsShl23 = definition("F32BitsShl23", 2, lambda C, a: [ZERO] * 23 + list(a[:
                           doc="the encoding shifted left by 23 on bits: F32BitsShl23_v1, 23 zero bits below a's low 9")
 F32IsFinite = definition("F32IsFinite", 2, lambda C, a: [NOT(and_reduce(C, a[23:31]))], (("a", F32),), BIT, word=S.F32IsFinite,
                          doc="isfinite on f32 bits: F32IsFinite_v1, not every exponent bit set")
+
+
+def f32_to_s8_rni_sat(C, x):
+    """``F32ToS8RniSat_v1`` (``cvt.rni.sat.s8.f32``): `int8.f32_rint`, then `int8.f32_to_s8_rzi`."""
+    return f32_to_s8_rzi(C, f32_rint(C, x))
+
+
+F32ToS8RniSat = definition("F32ToS8RniSat", 2, f32_to_s8_rni_sat, (("x", F32),), Array(8, BIT), word=S.F32ToS8RniSat,
+                           doc="cvt.rni.sat.s8.f32 on bits: F32ToS8RniSat_v1, ties to even, saturated to [-128, 127], NaN 0")
+U32Hi16 = definition("U32Hi16", 2, lambda C, a: list(a[16:]), (("a", I32),), Array(16, BIT), word=S.U32Hi16,
+                     doc="a 32-bit word's high 16 bits, on bits: U32Hi16_v1")
 
 _CONSTS: dict[tuple[int, int], object] = {}
 
