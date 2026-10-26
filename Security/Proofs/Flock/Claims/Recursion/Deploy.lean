@@ -14,15 +14,15 @@ record and the coin server's transcript). `RecDeploy.V` is that as one `Claims.V
 
 * **Statement.** `x` is the canonical bytes (`RecX.encode`) of what the verifier holds before the run: the inner
   statement's bytes (a `FlockDeploy.Raw` encoding: its circuit, public and partition files), the verifier's own inner
-  shape (`--rec-inner`) and bindings (`--rec-bindings`), the circuit registration, and per V* part its Flock statement
-  and `--rec-rows`. `parse` and `scopeCheck` are the deployed parser's (`Flock.RecScope.parseOf`, `scopeCheckOf`) at
+  shape (`--rec-inner`) and bindings (`--rec-bindings`), the circuit registration, and per V* part its Flock statement.
+  V*'s shared rows (`--rec-rows`) are no part of `x`: they are staged (below). `parse` and `scopeCheck` are the
+  deployed parser's (`Flock.RecScope.parseOf`, `scopeCheckOf`) at
   `decodeR`: what `readX` reads (it refuses unless the inner statement's dimensions read, `RecVStar.innerOf`, Flock's
   plain verifier sets the inner statement up, its statement check passes and it carries a draw, which at one table is
   the public file's header's, `innerOk`, and there is
   one part per V*
   statement of the verifier's inner shape, `RecVStar.statements`, each part's circuit V*'s statement's of its index,
-  `partsVStar`, as each part's session holds it, `RecVStar.checkCircuit`, every part with the same `--rec-rows`,
-  `rowsShared`), as the verifier's inner
+  `partsVStar`, as each part's session holds it, `RecVStar.checkCircuit`), as the verifier's inner
   shape and the inner statement's files with no records (`readOf`), where the setup's checks accept that shape
   (`RecScope.accepts`). The V* records are run messages, so the statement carries no draws, and `scopeCheck` reads
   only the inner scope check: the compiled verifier refuses the draw and shape conditions at each session's decision
@@ -34,12 +34,15 @@ record and the coin server's transcript). `RecDeploy.V` is that as one `Claims.V
   answered `.msg []`, the last one `.acc`; the compiled verifier refuses a session that accepts before its last round,
   and a session whose last round ended on a coin rather than a decision (`decided`).
 * **Staging.** `vstar stage` (`rec_vstage.stage`) is the prover's: each part's public file holds the prover's
-  registered entries (its running sums' chain, committed under its own salts), and the inner session's record is the
-  prover's. So the prover sends them, after the inner rounds and before any V* session, as the staging round's message
-  (`encStage`); the coin server's transcript of the inner rounds is the verifier's own (`Brings.tr`).
-* **V\* statements.** Part `s`'s statement is what the prover staged (`Stage.ofMsg`: the part's public file and the
-  inner session's record off the staging message, the transcript the coin server's), in the part's recursive flags
-  (`staged`). Its numbers (`numsOf`: `VO`'s rounds and `deployZkRec`'s errors, `N₀` and weight) are to be the ones `x`
+  registered entries (its running sums' chain, committed under its own salts), the inner session's record is the
+  prover's, and so are V*'s shared rows (`--rec-rows`: `acc0`, `rec-top-L<l>` and `rec-c<k>`, registrations of the
+  prover's values), one set for every part. So the prover sends them, after the inner rounds and before any V*
+  session, as the staging round's message (`encStage`); the coin server's transcript of the inner rounds is the
+  verifier's own (`Brings.tr`). The deployed composer (`flock-verify rec-compose`) accepts only where every part was
+  checked against one staged rows file.
+* **V\* statements.** Part `s`'s statement is what the prover staged (`Stage.ofMsg`: the part's public file, the
+  inner session's record and the shared rows off the staging message, the transcript the coin server's), in the part's
+  recursive flags (`staged`). Its numbers (`numsOf`: `VO`'s rounds and `deployZkRec`'s errors, `N₀` and weight) are to be the ones `x`
   fixes (`nums`, those of a staged statement that sets up, when one does): the compiled verifier refuses a part whose
   staged statement has others, and `vstar` reads such a part as that statement (`vstarAt`), so every V* statement
   `vstar` gives has `nums`' numbers.
@@ -75,11 +78,11 @@ open Lean (Json)
 
 /-! ## The compiled verifier's statement -/
 
-/-- A V* part as the compiled statement holds it: its Flock statement (its public file the prover's, staged) and the
-verifier's own `--rec-rows`. -/
+/-- A V* part as the compiled statement holds it: its Flock statement (its public file the prover's, staged). Its
+shared rows (`--rec-rows`) are no part of it: they register the prover's running sums, so the prover stages them, one
+set for every part (`Stage.rows`). -/
 structure PartX where
   base : Raw
-  rows : Option ByteArray
 
 /-- **What the compiled verifier holds before the run**: the inner statement's bytes, the verifier's own inner shape
 (`--rec-inner`) and bindings (`--rec-bindings`), the circuit registration (`--rec-inner-registration`), and the V*
@@ -92,9 +95,9 @@ structure RecX where
   parts : List PartX
 
 /-- The compiled statement's format string, its first field. -/
-def XFORMAT : String := "flock-verify-recursion/v1"
+def XFORMAT : String := "flock-verify-recursion/v2"
 
-def PartX.encode (p : PartX) : Claims.Msg := encBytes ⟨p.base.encode.toArray⟩ ++ encOpt encBytes p.rows
+def PartX.encode (p : PartX) : Claims.Msg := encBytes ⟨p.base.encode.toArray⟩
 
 /-- **The compiled statement's canonical bytes.** -/
 def RecX.encode (w : RecX) : Claims.Msg :=
@@ -104,8 +107,7 @@ def RecX.encode (w : RecX) : Claims.Msg :=
 def PartX.read : Rd PartX := do
   let b ← rdBytes
   let some base := FlockDeploy.decode b.data.toList | failure
-  let rows ← rdOpt rdBytes
-  pure ⟨base, rows⟩
+  pure ⟨base⟩
 
 def RecX.read : Rd RecX := do
   if (← rdStr) ≠ XFORMAT then failure
@@ -221,18 +223,11 @@ def partsVStar (shape : RecVStar.Inner) (b : ByteArray) (parts : List PartX) (vs
     | some f, some p, some sv => partVStar shape f sv p
     | _, _, _ => false
 
-/-- **The parts hold one `--rec-rows`**: every part's rows are the first part's. The verifier's record of V*'s shared
-rows is one file for every session of the family (`RecVStar.checkShared`, `RecVStar.checkAcc`), which each part's
-rec-acc ports must be, so two parts' sessions open one rec-acc tree; the honest stager writes the same file for every
-part (`85-rec-reprice.sh`'s `rows-<part>.json`, all V*'s shared rows with `acc0` among them). -/
-def rowsShared (parts : List PartX) : Bool :=
-  parts.all fun p => decide (p.rows = parts.head?.bind (·.rows))
-
 /-- The compiled statement's reading before the parts' circuits are held to V\*'s: its bytes decode, the inner
 statement's decode and set up (`RecVStar.innerOf`) and pass Flock's own setup and statement check with a draw
 (`innerOk`), the verifier's own inner shape reads (`RecVStar.Inner.ofJson`), and there is one part per V* statement of
 that shape, whose circuit names the statement's message-round ports (`portsNamed`), the last part's RecCap's port
-`top` (`capPorted`), every part holding the same rows (`rowsShared`). -/
+`top` (`capPorted`). -/
 def readXPre (x : Claims.Msg) : Option XR := do
   let w ← decodeX x
   let ri ← FlockDeploy.decode w.inner
@@ -243,8 +238,7 @@ def readXPre (x : Claims.Msg) : Option XR := do
     innerOk w.inner
     pure dims).toOption
   let vs ← (RecVStar.statements shape).toOption
-  if w.parts.length ≠ vs.size ∨ portsNamed w.parts vs = false ∨ capPorted w.parts = false ∨
-      rowsShared w.parts = false then none
+  if w.parts.length ≠ vs.size ∨ portsNamed w.parts vs = false ∨ capPorted w.parts = false then none
   pure ⟨w, ri, partition, shape, dims⟩
 
 /-- **The compiled statement's reader**: `readXPre`, where each part's circuit is V\*'s statement's of its index
@@ -332,51 +326,57 @@ def nS (x : Claims.Msg) : ℕ :=
 /-! ## The V* statements -/
 
 /-- **The V* parts' staged inputs**, read off the compiled statement and the rounds before the sessions as the run
-shows them: each part's public file, the inner session's record and the coin server's transcript. -/
+shows them: each part's public file, the inner session's record, the coin server's transcript, and V*'s shared rows
+(`--rec-rows`), one set every part reads. -/
 structure Stage where
   pub : Claims.Msg → List (Claims.Msg × Claims.Out) → ℕ → ByteArray
   record : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArray
   transcript : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArray
+  rows : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArray
 
-/-- The staging rounds: one, whose message holds every part's public file and the inner session's record. -/
+/-- The staging rounds: one, whose message holds every part's public file, the inner session's record and V*'s shared
+rows. -/
 def kS (_ : Claims.Msg) : ℕ := 1
 
-/-- **The staging message**: each part's public file, then the inner session's record. -/
-def encStage (pubs : List ByteArray) (record : ByteArray) : Claims.Msg := encList encBytes pubs ++ encBytes record
+/-- **The staging message**: each part's public file, then the inner session's record, then V*'s shared rows. -/
+def encStage (pubs : List ByteArray) (record rows : ByteArray) : Claims.Msg :=
+  encList encBytes pubs ++ encBytes record ++ encBytes rows
 
-def readStage : Rd (List ByteArray × ByteArray) := do
+def readStage : Rd (List ByteArray × ByteArray × ByteArray) := do
   let pubs ← rdList rdBytes
   let record ← rdBytes
-  pure (pubs, record)
+  let rows ← rdBytes
+  pure (pubs, record, rows)
 
 /-- The staging message read back, on all of it. -/
-def decodeStage (m : Claims.Msg) : Option (List ByteArray × ByteArray) :=
+def decodeStage (m : Claims.Msg) : Option (List ByteArray × ByteArray × ByteArray) :=
   match readStage.run m with
   | some (p, []) => some p
   | _ => none
 
 /-- The staging message of rounds `ms`: their last message. -/
-def stageOf (ms : List (Claims.Msg × Claims.Out)) : Option (List ByteArray × ByteArray) :=
+def stageOf (ms : List (Claims.Msg × Claims.Out)) : Option (List ByteArray × ByteArray × ByteArray) :=
   decodeStage ((ms.getLast?.map Prod.fst).getD [])
 
 /-- **The staged inputs as the compiled verifier reads them** off the rounds `ms` before the sessions: each part's
-public file and the inner session's record off the staging message, `ms`' last, and the coin server's transcript `tr`
-of the inner rounds before it; empty where the staging message doesn't read. -/
+public file, the inner session's record and V*'s shared rows off the staging message, `ms`' last, and the coin
+server's transcript `tr` of the inner rounds before it; empty where the staging message doesn't read. -/
 def Stage.ofMsg (tr : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArray) : Stage where
   pub _ ms s := ((stageOf ms).bind fun p => p.1[s]?).getD ByteArray.empty
-  record _ ms := ((stageOf ms).map Prod.snd).getD ByteArray.empty
+  record _ ms := ((stageOf ms).map (·.2.1)).getD ByteArray.empty
   transcript x ms := tr x ms.dropLast
+  rows _ ms := ((stageOf ms).map (·.2.2)).getD ByteArray.empty
 
 /-- Part `s`'s recursive statement: its Flock statement at the staged public file, the verifier's own inner shape,
-`--rec-part s`, the bindings and rows, the inner statement's files, the staged record and transcript, the
-registration, and how the inner statement is set up (`innerFormOf`). -/
+`--rec-part s`, the bindings, the staged shared rows, the inner statement's files, the staged record and transcript,
+the registration, and how the inner statement is set up (`innerFormOf`). -/
 def partRaw (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (s : ℕ) (p : PartX) :
     RecRaw where
   base := { p.base with publicFile := st.pub x ms s }
   recInner := some r.w.recInner
   recPart := some s
   recBindings := some r.w.bindings
-  recRows := p.rows
+  recRows := some (st.rows x ms)
   innerCircuit := some r.innerRaw.circuit
   innerPublic := some r.innerRaw.publicFile
   innerPartition := r.innerRaw.partition
@@ -606,11 +606,12 @@ structure RefParts where
 
 attribute [instance] RefParts.ne
 
-/-- **A stager**, `vstar stage`'s layout: each part's public file and the inner session's record, at the statement,
-the inner rounds and the hm96 commit strings the staging message holds. -/
+/-- **A stager**, `vstar stage`'s layout: each part's public file, the inner session's record and V*'s shared rows, at
+the statement, the inner rounds and the hm96 commit strings the staging message holds. -/
 structure Stager where
   pub : Claims.Msg → List (Claims.Msg × Claims.Out) → List Claims.Msg → ℕ → ByteArray
   record : Claims.Msg → List (Claims.Msg × Claims.Out) → List Claims.Msg → ByteArray
+  rows : Claims.Msg → List (Claims.Msg × Claims.Out) → List Claims.Msg → ByteArray
 
 /-- **What the deployment brings** besides the inner verifier: the coin server's transcript of the inner rounds (`tr`),
 the stager the record's `stage` reads (`hs`) and the number of commit strings it lays out (`nC`), the outer witnesses'
@@ -630,10 +631,10 @@ structure Brings where
 def Brings.st (b : Brings) : Stage := Stage.ofMsg b.tr
 
 /-- **The staging message of a stager** at the inner rounds `ms` and the commit strings `cs`: its public file of each
-part, and its inner session record. -/
+part, its inner session record, and its shared rows. -/
 def stageMsg (hs : Stager) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (cs : List Claims.Msg) :
     Claims.Msg :=
-  encStage ((List.range (nS x)).map (hs.pub x ms cs)) (hs.record x ms cs)
+  encStage ((List.range (nS x)).map (hs.pub x ms cs)) (hs.record x ms cs) (hs.rows x ms cs)
 
 /-- A salt at the pinned hm96 key. -/
 abbrev Salt : Type := Fin Hm96.sha512.saltBytes → UInt8

@@ -20,7 +20,6 @@ import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
 import Proofs.Flock.Claims.Recursion.DeployInputs
 import Proofs.Flock.Claims.Recursion.DeployOuter
 import Proofs.Flock.Claims.Recursion.Deploy
-import Proofs.Flock.Claims.Recursion.RowsShared
 import Proofs.Flock.Claims.Recursion.DeployComplete
 import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion.DeployFacts

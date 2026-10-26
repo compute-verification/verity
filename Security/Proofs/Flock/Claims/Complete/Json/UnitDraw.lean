@@ -36,7 +36,7 @@ theorem unitDraw_one (S : Claims.JsonSpec printJ Flock.canon) {rel : Readable.Pa
   rw [hpi] at hs
   obtain ⟨st, hone, hspec⟩ : ∃ st, Discharge.HiddenExec.setupOne s.read.tags s.read.I.circuitFile s.read.I.publicFile
       s.read.coins s.read.I.tables s.read.draw s.read.I.partition s.read.I.program = .ok st ∧ spec = st.spec := by
-    rcases Discharge.HiddenExec.setupTables_okAny hs with ⟨-, st, hst, hsp, -⟩ | ⟨-, hsz, -⟩
+    rcases Discharge.HiddenExec.setupTables_okAny hs with ⟨-, st, hst, hsp, -⟩ | ⟨hc1, hsz, -⟩
     · exact ⟨st, by rw [← ht]; exact hst, hsp⟩
     · omega
   obtain ⟨⟨c', pop, hl, hdr⟩, hinst, -, -⟩ := setupOne_stmt hone
