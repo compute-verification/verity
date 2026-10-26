@@ -368,7 +368,7 @@ def report() -> dict:
             "lane_chunk_s": lane_chunk_s(), "rows": rows, "pearl_c_h3": pearl_c_h3(), "operand_rows": operand_rows(),
             "crosscheck": crosscheck(), "v5v6": v5v6_row(by["j10r-asbuilt"]),
             "periods": {name: period_rows(by[name]["f_side"], by[name]["draw_s"])
-                        for name in ("v1-4x8-k64", "j10r-asbuilt", "j10r-k4096", "j10r-wcall-li")}}
+                        for name in ("v1-4x8-k64", "j10r-asbuilt", "j10r-k4096", "j10r-wcall")}}
 
 
 def fmt(x, nd=2):
