@@ -308,18 +308,21 @@ def fileFinder (θ F : ByteArray) : Claims.Finder where
   cost _ := 2
 
 /-- **`B^τ`'s collision premise, quantitative**: subprotocol `a`'s finder applied to the strategy outputs a SHA-512
-collision with probability at most the published bound at the strategy's SHA-512 calls (`ε_cr`). -/
+collision with probability at most the published bound at the strategy's SHA-512 calls (`ε_cr`). `ecr/sha-512` is asked
+at the finder's budget, `callsMul θ a * cost θ F c σ + callsAdd θ a` calls (`finder_calls`), a defined function of the
+strategy's `cost` as ONE8's `qF`/`qS` are of `t'`. -/
 def FinderCR (a : Audit) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Prop :=
   (V.finder a θ F c σ).Pr sha512Msg ≤ V.crBound θ a (V.cost θ F c σ)
 
 open Classical in
 /-- **Subprotocol `a`'s error at a strategy**: where its finder meets its collision premise (`FinderCR`), its
-published `δ` at the strategy's SHA-512 calls plus its loss at the probability that the finder outputs a collision;
-elsewhere no bound (`⊤`). C-Flock's conditional bound is the case `loss = 0` (ONE8, F3), the additive one the case
-`crBound = 1`. -/
+period's error (`Accounting.PeriodLive.error`: its published `δ` at the strategy's SHA-512 calls plus its loss at the
+probability that the finder outputs a collision); elsewhere no bound (`⊤`). This is ONE8's
+`condError FinderCR δ σ := if FinderCR σ then δ σ else ⊤`; C-Flock's conditional bound is the case `loss = 0` (F3), the
+additive one the case `crBound = 1`. -/
 noncomputable def error (a : Audit) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : ℝ≥0∞ :=
   if V.FinderCR a θ F c σ then
-    V.delta θ a (V.cost θ F c σ) + V.loss a θ ((V.live θ F c).collides sha512Msg a σ)
+    (V.live θ F c).error sha512Msg a (V.delta θ a (V.cost θ F c σ)) (V.loss a θ) σ
   else ⊤
 
 /-- **Soundness for the acceptance `acc`, in the causal game.** At all parameters `θ`, committed files `F` and
