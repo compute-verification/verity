@@ -22,7 +22,8 @@ the calls. -/
 theorem rowsRead_layR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (x : Msg)
     (s : ℕ) (w : Claims.Flock.Wit) (ms : List Msg) : (DeployedR.layR elem).RowsRead x s w ms := by
   intro r v i o h _
-  have h0 : (DeployedR.layR elem).rowAt x s r = none := rfl
-  simp [Claims.Recursion.VStarB.LayoutB.rowHeld, h0] at h
+  have h0 : (DeployedR.layR elem).rowHeld x s w r = none := rfl
+  rw [h0] at h
+  cases h
 
 end RecDeploy
