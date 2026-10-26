@@ -247,6 +247,33 @@ def _paths(paths: object) -> bool:
         type(x) is tuple and all(type(d) is bytes and len(d) == DIGEST_BYTES for d in x) for x in paths)
 
 
+def check(registration: Registration, seed: bytes, plan: Plan, root: bytes, i: int, p: int, o: Opening,
+          sketcher: Sketcher | None = None) -> str | None:
+    """Opening `o` of receipt (i, p), position p of pass i under `seed` and `plan`, whose receipt tree's root is
+    `root`: None if it checks, else the first of `malformed` (not (i, p), not four 2,056-byte blocks with four paths of
+    64-byte siblings, a leaf salt not 192 bytes, or receipts not the size of the position's leaf), `receipt-path`,
+    `payload-path` (a block not unit g's on the vk root, under PoUS's leaf) and `receipt` (y recomputed from the
+    four blocks not the opened one).  `sketcher` is the pass's, if the caller holds one (`Sketcher(seed, rows)`)."""
+    if (type(o) is not Opening or o.pass_index != i or o.position != p or type(o.blocks) is not tuple
+            or len(o.blocks) != UNIT_BLOCKS or any(type(b) is not bytes or len(b) != BLOCK_BYTES for b in o.blocks)
+            or not _paths(o.paths) or type(o.leaf) is not bytes or type(o.leaf_salt) is not bytes
+            or len(o.leaf_salt) != SALT_BYTES or type(o.receipt_path) is not tuple
+            or any(type(x) is not bytes or len(x) != DIGEST_BYTES for x in o.receipt_path)):
+        return "malformed"
+    g = plan.block(p)
+    y = receipts.leaf_receipt(o.leaf, p, plan.length)
+    if y is None:
+        return "malformed"
+    if not receipts.verify_leaf(seed, plan, root, p, o.leaf, o.leaf_salt, o.receipt_path):
+        return "receipt-path"
+    key = registration.key
+    if not all(key.check_path(UNIT_BLOCKS * g + b, x, path) for b, (x, path) in enumerate(zip(o.blocks, o.paths))):
+        return "payload-path"
+    if (sketcher or Sketcher(seed, registration.rows))(g, b"".join(o.blocks)) != y:
+        return "receipt"
+    return None
+
+
 class Session(audit.Session):
     """The verifier's side of one session over a P2 store: the audit's session (`audit.Session`) with units for blocks,
     its openings checked on PoUS's vk (`_check`), and no appends."""
@@ -266,24 +293,8 @@ class Session(audit.Session):
         return self._fail(self.filling, "append")
 
     def _check(self, t: int, i: int, p: int, o: Opening, key: VerifierKey, receipters: dict) -> str | None:
-        if (type(o) is not Opening or o.pass_index != i or o.position != p or type(o.blocks) is not tuple
-                or len(o.blocks) != UNIT_BLOCKS or any(type(b) is not bytes or len(b) != BLOCK_BYTES for b in o.blocks)
-                or not _paths(o.paths) or type(o.leaf) is not bytes or type(o.leaf_salt) is not bytes
-                or len(o.leaf_salt) != SALT_BYTES or type(o.receipt_path) is not tuple
-                or any(type(x) is not bytes or len(x) != DIGEST_BYTES for x in o.receipt_path)):
-            return "malformed"
-        plan = self.windows[t].plans[i]
-        g = plan.block(p)
-        seed = receipts.seed(self.windows[t].challenge, i, self._previous(t, i))
-        y = receipts.leaf_receipt(o.leaf, p, plan.length)
-        if y is None:
-            return "malformed"
-        if not receipts.verify_leaf(seed, plan, self.windows[t].roots[i], p, o.leaf, o.leaf_salt, o.receipt_path):
-            return "receipt-path"
-        if not all(key.check_path(UNIT_BLOCKS * g + b, x, path) for b, (x, path) in enumerate(zip(o.blocks, o.paths))):
-            return "payload-path"
+        w = self.windows[t]
+        seed = receipts.seed(w.challenge, i, self._previous(t, i))
         if i not in receipters:
             receipters[i] = Sketcher(seed, self.registration.rows)
-        if receipters[i](g, b"".join(o.blocks)) != y:
-            return "receipt"
-        return None
+        return check(self.registration, seed, w.plans[i], w.roots[i], i, p, o, receipters[i])

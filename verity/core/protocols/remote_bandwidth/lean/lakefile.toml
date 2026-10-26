@@ -1,8 +1,9 @@
 # The remote bandwidth audit's verifier as executable Lean (`verity/remote-bandwidth/v0`), its definition: a window's
 # receipt checks (`RemoteAudit.verifyWindow`), the session's bookkeeping (`RemoteAudit.Session`) and the verifier's
 # registrations (`RemoteAudit.Registry`), which `audit.py` is held to by the difftest (`remote-audit-difftest`), and the
-# verifier's process the driver runs (`remote-audit-verifier`, `RemoteAudit.Verifier`). Code: Lean core and the packages
-# below, no Mathlib and nothing of Security.
+# verifier's process the driver runs (`remote-audit-verifier`, `RemoteAudit.Verifier`); a P2 store's receipts and
+# openings (`RemoteAudit.P2`), which `p2.py` is held to by the same difftest. Code: Lean core and the packages below, no
+# Mathlib and nothing of Security.
 name = "remote_audit"
 defaultTargets = ["RemoteAudit", "remote-audit-difftest", "remote-audit-verifier"]
 
@@ -21,6 +22,12 @@ path = "../../../primitives/randomness"
 [[require]]
 name = "verity_difftest"
 path = "../../../difftest/lean"
+
+# A P2 store's openings are checked on PoUS's vk (`RemoteAudit.P2`), by PoUS's own leaf and path check
+# (`PousCheck.Merkle`).
+[[require]]
+name = "pous_check"
+path = "../../pous/check"
 
 [[lean_lib]]
 name = "RemoteAudit"
