@@ -75,7 +75,6 @@
     {"file": "verity_vllm/pipeline/source_identity.py", "kind": "environ", "symbol": "manifest", "detail": "VERITY_TREE"},
     {"file": "verity_vllm/pipeline/source_identity.py", "kind": "environ", "symbol": "manifest", "detail": "os.environ.get"},
     {"file": "verity_vllm/pipeline/source_identity.py", "kind": "environ", "symbol": "requested_tree", "detail": "VERITY_TREE"},
-    {"file": "verity_vllm/pipeline/workload.py", "kind": "broad-except", "symbol": "case_for", "detail": "except Exception"},
     {"file": "verity_vllm/check/root_policy.py", "kind": "broad-except", "symbol": "_check_prompt_root", "detail": "except Exception"},
     {"file": "verity_vllm/check/weights_of_record.py", "kind": "cwd", "symbol": "_default_manifest", "detail": "pathlib.Path.cwd"},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "broad-except", "symbol": "_tuned_gemm_arch_family", "detail": "except Exception"},
