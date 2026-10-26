@@ -1908,7 +1908,33 @@
   "Proofs.Accounting.TS.Session",
   "PouwCheck.Inputs",
   "Properties.Pous",
-  "Properties.Pouw.Period"
+  "Properties.Pouw.Period",
+  "PouwWindow.Grid",
+  "PouwWindow.Draw",
+  "PouwWindow.Public",
+  "PouwWindow.Length",
+  "PouwWindow.Json",
+  "PouwCheck.Json",
+  "PouwCheck.Tile",
+  "PouwCheck.Check",
+  "PouwCheck.Protocol",
+  "PouwCheck.Pass",
+  "PouwCheck.Credit",
+  "CoreProtocol.Ratio",
+  "CoreProtocol.Profile",
+  "CoreProtocol.Protocol",
+  "Identity.Sha512",
+  "Identity.Tagged",
+  "Lms",
+  "PousCheck",
+  "MemoryChallenger",
+  "PouwCommit.Tagged",
+  "PouwCommit.Frame",
+  "PouwCommit.Rows",
+  "PouwCommit.Py",
+  "PouwCommit.Coins",
+  "PouwCommit.Draws",
+  "SampledProofs"
  ],
  "claims": {
   "modules": ["Definitions.Claims"],
@@ -2475,7 +2501,8 @@
   }
  },
  "reads_exempt": {
-  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Randomness": "core's randomness (`core_randomness`), read through PoUS's period statement (`Properties.Pous.EndToEnd`'s coin streams) by `Accounting.SecurityProofs.JointHorizonBlocksDeployed`: its lock declares no spec layer yet (draft #1499), so its definitions are recorded here as read rather than as a spec"
  },
  "trees": {
   "definitions": ["Definitions", "Models"],
