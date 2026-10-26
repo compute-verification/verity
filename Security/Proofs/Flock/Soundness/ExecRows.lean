@@ -95,6 +95,8 @@ theorem parse_built {lines : Array String} {net : Net} (h : Net.parse lines = .o
   · rw [ite_eq_right_of_eq_false _ _ (eq_false hL)] at h
     exact ite_throw_ok (ite_throw_ok h)
 
+/-- **The parser orders every net it accepts**: the rows it stored as `A` and `B` have `RowOrder`,
+so #144's `Rows.topo` for a parsed net is an executable check, not a hypothesis. -/
 theorem parse_rowOrder {lines : Array String} {net : Net} (h : Net.parse lines = .ok net) :
     ∃ ra rb, RowOrder (net.inWords * WORD) net.constPos ra rb ∧
       Sparse.ofRows ra (2 ^ net.unitLog) = .ok net.a ∧ Sparse.ofRows rb (2 ^ net.unitLog) = .ok net.b :=
