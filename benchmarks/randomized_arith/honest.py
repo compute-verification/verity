@@ -12,7 +12,9 @@ added to the int32 accumulators, or the basis the linears' dots run in:
 * `sr`: stochastic rounding of every activation code (Q, K, P, V and every linear input), a fresh uniform coin each.
 * `dither`: one uniform offset a row of each requantization (a verifier offset), `⌊y + u⌋`.
 * `noise1`: RTN, then ±1 LSB uniform on every activation code (bounded noise that survives integer inputs).
-* `accG`: RTN, then a uniform integer in `[−2^(G−1), 2^(G−1))` added to every int32 accumulator of every dot.
+* `accG`: RTN, then a uniform integer in `[−2^(G−1), 2^(G−1))` added to every int32 accumulator of every dot. `acc2`,
+  noise far below every accumulator's size, is the placebo: what a near-tie question's flip under any fresh noise
+  costs against the one deterministic `rtn` draw.
 * `sr+accG`: both.
 * `had`: a fresh random-sign block-Hadamard rotation (block 128, or the largest power of two dividing a narrower
   width) of each linear's input dimension, weights rotated and
@@ -66,7 +68,8 @@ class Arm:
 
 ARMS = {a.name: a for a in [
     Arm("bf16", quant=False), Arm("rtn"), Arm("sr", act="sr"), Arm("dither", act="dither"),
-    Arm("noise1", act="noise", noise_lsb=1), Arm("acc4", acc_bits=4), Arm("acc6", acc_bits=6), Arm("acc8", acc_bits=8),
+    Arm("noise1", act="noise", noise_lsb=1), Arm("acc2", acc_bits=2), Arm("acc4", acc_bits=4), Arm("acc6", acc_bits=6),
+    Arm("acc8", acc_bits=8),
     Arm("acc10", acc_bits=10), Arm("acc12", acc_bits=12), Arm("sr+acc6", act="sr", acc_bits=6),
     Arm("sr+acc8", act="sr", acc_bits=8), Arm("had", rot="hadamard"), Arm("perm", rot="signperm"),
 ]}
@@ -512,6 +515,7 @@ def main() -> int:
     ap.add_argument("--seeds", type=int, default=3, help="seeds a random arm's perplexity runs")
     ap.add_argument("--evals", default="wikitext2,c4,mmlu,gsm8k")
     ap.add_argument("--task-arms", default="", help="arms MMLU runs (default every arm)")
+    ap.add_argument("--task-seeds", type=int, default=1, help="seeds a random arm's MMLU runs")
     ap.add_argument("--gen-arms", default="", help="arms GSM8K runs (default MMLU's)")
     ap.add_argument("--mmlu-per", type=int, default=20)
     ap.add_argument("--gsm8k-n", type=int, default=500)
@@ -575,10 +579,12 @@ def main() -> int:
         emit(a.out, {"kind": "data", "set": "mmlu", "test_sha256": sha256_file(a.data / "mmlu-test.json"),
                      "dev_sha256": sha256_file(a.data / "mmlu-dev.json"), "questions": len(prompts)})
         for arm in task_arms:
-            set_arm(arm, 0)
-            t0 = time.time()
-            r = mmlu(model, tok, prompts, 8)
-            emit(a.out, {"kind": "mmlu", "arm": arm.name, "seed": 0, **r, "seconds": round(time.time() - t0, 1)})
+            for seed in range(a.task_seeds if arm.random else 1):
+                set_arm(arm, seed)
+                t0 = time.time()
+                r = mmlu(model, tok, prompts, 8)
+                emit(a.out, {"kind": "mmlu", "arm": arm.name, "seed": seed, **r,
+                             "seconds": round(time.time() - t0, 1)})
     if "gsm8k" in evals:
         try:
             rows = gsm8k_rows(a.data)[: 4 if a.smoke else a.gsm8k_n]

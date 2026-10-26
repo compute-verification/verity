@@ -6,6 +6,7 @@
 #
 #   RA_MODELS  which of smoke,llama,qwen to run (default all three)
 #   RA_GEN     the arms GSM8K runs on Llama (default below)
+#   RA_LLAMA   more `honest.py` flags for Llama, after the defaults (the last of a repeated flag wins)
 #   RA_MAX_MIN the lease's bound in minutes (default 300)
 set -uo pipefail
 if [[ -z ${GPU_LEASE_UUID:-} ]]; then
@@ -41,7 +42,9 @@ if [[ $MODELS == *smoke* ]]; then
   [[ $r == 0 || $r == 2 ]] || exit 1
 fi
 if [[ $MODELS == *llama* ]]; then
-  run llama-3.1-8b --snapshot "$(snap unsloth--Llama-3.1-8B)" --family llama3 --seeds 3 --gen-arms "$GEN" || rc=1
+  # shellcheck disable=SC2086  # RA_LLAMA is a list of flags
+  run llama-3.1-8b --snapshot "$(snap unsloth--Llama-3.1-8B)" --family llama3 --seeds 3 --gen-arms "$GEN" \
+    ${RA_LLAMA:-} || rc=1
 fi
 if [[ $MODELS == *qwen* ]]; then
   run qwen3-8b --snapshot "$(snap Qwen--Qwen3-8B)" --seeds 1 --evals wikitext2,mmlu,gsm8k \

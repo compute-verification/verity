@@ -125,8 +125,8 @@ def table(mechs: list[dict]) -> str:
 
 
 def honest(results: Path) -> str:
-    """Per arm: perplexity (mean over seeds, and its range), its change from `rtn`, MMLU and GSM8K accuracy and their
-    paired change from `rtn` (questions right under one and not the other)."""
+    """Per arm: perplexity (mean over seeds, and its range), its change from `rtn`, MMLU and GSM8K accuracy (mean over
+    seeds) and their paired change from `rtn` (questions right under one and not the other, summed over seeds)."""
     recs = [json.loads(line) for line in results.read_text().splitlines() if line.strip()]
     ppl: dict = {}
     task: dict = {}
@@ -134,7 +134,7 @@ def honest(results: Path) -> str:
         if r["kind"] == "ppl":
             ppl.setdefault((r["set"], r["arm"]), []).append(r["ppl"])
         elif r["kind"] in ("mmlu", "gsm8k"):
-            task[(r["kind"], r["arm"])] = r
+            task.setdefault((r["kind"], r["arm"]), []).append(r)
     sets = sorted({s for s, _ in ppl})
     arms = list(dict.fromkeys([a for _, a in ppl] + [a for _, a in task]))
     head = ["arm"] + [f"{s} ppl (Δ vs rtn)" for s in sets] + ["MMLU (Δ, n)", "GSM8K (Δ, n)"]
@@ -152,16 +152,20 @@ def honest(results: Path) -> str:
             d = f" ({100 * (mean / (sum(ref) / len(ref)) - 1):+.2f}%)" if ref else ""
             cells.append(f"{mean:.4f}{rng}{d}")
         for kind in ("mmlu", "gsm8k"):
-            r, ref = task.get((kind, arm)), task.get((kind, "rtn"))
-            if not r:
+            rs, ref = task.get((kind, arm)), task.get((kind, "rtn"))
+            if not rs:
                 cells.append("")
                 continue
+            acc = sum(r["acc"] for r in rs) / len(rs)
+            rng = f" [{100 * min(r['acc'] for r in rs):.1f}, {100 * max(r['acc'] for r in rs):.1f}]" if len(rs) > 1 else ""
             d = ""
             if ref:
-                gain = sum(a > b for a, b in zip(r["right"], ref["right"]))
-                loss = sum(a < b for a, b in zip(r["right"], ref["right"]))
-                d = f" ({100 * (r['acc'] - ref['acc']):+.1f} pt, +{gain}/−{loss})"
-            cells.append(f"{100 * r['acc']:.1f}%{d}, {r['n']}")
+                ref = ref[0]
+                gain = sum(a > b for r in rs for a, b in zip(r["right"], ref["right"]))
+                loss = sum(a < b for r in rs for a, b in zip(r["right"], ref["right"]))
+                d = f" ({100 * (acc - ref['acc']):+.1f} pt, +{gain}/−{loss})"
+            seeds = f" × {len(rs)} seeds" if len(rs) > 1 else ""
+            cells.append(f"{100 * acc:.1f}%{rng}{d}, {rs[0]['n']}{seeds}")
         lines.append("| " + " | ".join(cells) + " |")
     stats = [r for r in recs if r["kind"] == "ppl" and "log2_rms_acc" in r]
     if stats:
