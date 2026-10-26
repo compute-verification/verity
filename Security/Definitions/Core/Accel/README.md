@@ -29,12 +29,12 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 | HMMA with f16 accumulators | `mma.sync` `.f16` D | missing | f16 accumulators |
 | BMMA (b1 `.and.popc`, `.xor.popc`) | `mma.sync` `.b1` | coarse | `mma` b1 at `Open.b1` tensor units and an issue slot. `.xor.popc` is missing |
 | HGMMA, IGMMA, QGMMA, BGMMA (sm_90) | `wgmma.mma_async` | covered | `mma` at m = 64, A in registers or shared memory, B in shared memory, its operand words paying bank units (R2) |
-| QMMA.16832 (sm_120: e4m3, e5m2, e2m1) | `mma.sync` `kind::f8f6f4` | covered | `mma`. Same-format dots are pinned; mixed pairings are `Open.dot`. FP6 (e3m2, e2m3) is missing |
+| QMMA.16832 (sm_120: e4m3, e5m2, e2m1) | `mma.sync` `kind::f8f6f4` | covered | `mma`. The E4M3 and E5M2 same-format K32 dots are pinned at every accumulator (`Sm120.f8Pipeline`, RT-MODEL M8); E2M1 and the mixed pairings are `Open.dot`. FP6 (e3m2, e2m3) is missing |
 | OMMA.SF.16864 (sm_120: nvf4, mxf4) | `mma.sync` `kind::mxf4nvf4` `.block_scale` | covered | `mma` nvf4/mxf4. The dot is `Open.dot` (pinned in Python only) |
 | QMMA.SF (sm_120 `kind::mxf8f6f4`) | `mma.sync` `.block_scale` | missing | block-scaled FP8 and FP6 |
 | HMMA.SP, IMMA.SP, QMMA.SP, the sparse GMMA | `mma.sp`, `wgmma.mma_async.sp` | covered | `Op.mmaSp`: the kept pairs (each kept element of A with the element of B its 2-bit selector names) at the dense forms' tensor units a real product, so twice the logical rate; dots `Open.dotSp` under `AccelProductForm` |
 | OMMA.SP (sm_120) | `mma.sp` `kind::mxf4nvf4` | missing | block-scaled sparse FP4 |
-| DMMA (sm_90) | `mma.sync` `.f64` | over-approximated | `Op.dmma`: exact integer MMA on FP64's exact integers, 128 MACs an SM clock (32 units a MAC) |
+| DMMA (sm_90) | `mma.sync` `.f64` | over-approximated | `Op.dmma`: exact integer MMA on FP64's exact integers, on the tensor cores at 128 MACs an SM clock at 1980 MHz (32 · 1830/1980 units of `tensor` and `tensorLong` a MAC, so it shares the low-precision formats' long-window budget) |
 | DMMA (sm_120) | `mma.sync` `.f64` | over-approximated | `Op.dmma` at a placeholder 32 MACs an SM clock; rate undocumented (θ row) |
 
 ## Integer and floating-point lanes
@@ -76,10 +76,11 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 | MOVM (`movmatrix`) | missing | |
 | LDGSTS (`cp.async`) | coarse | a copy from device memory or L2 to shared memory, with no latency |
 | UTMALDG, UTMASTG, UBLKCP (TMA, `cp.async.bulk`) | coarse | a bulk copy of any length with shared memory at one end |
-| UTMAREDG (TMA reduce), TMA multicast | missing | |
+| UTMAREDG (TMA reduce, `cp.reduce.async.bulk`), integer add, min, max and bitwise | covered | `Op.red` from shared memory into L2 or device memory, priced as the bulk copy |
+| UTMAREDG 64-bit, float, `inc`, `dec`; TMA multicast | missing | |
 | ATOMS, ATOMG, ATOM, RED (add, exch) | covered | `atom` add and exch on shared memory, L2 and device memory. RED is an `atom` whose old value is discarded |
-| RED vector forms (`red.v2`, `.v4`), integer | coarse | `Op.red` from up to 4 registers, any `Lane.reduces` function (integer forms are scalar on the card) |
-| RED float forms (`.f32`, `.f16x2`, `.bf16x2`, `.v8`) | missing | the card flushes subnormals, unlike `Lane.fadd` |
+| RED vector forms (`red.v2`, `.v4`), integer | coarse | `Op.red` from up to 8 registers, any `Lane.reduces` function (integer forms are scalar on the card) |
+| RED float forms (`.f32`, `.f16x2`, `.bf16x2`, `.v8`) | over-approximated | `Op.red` by `iadd3` and `add2`: exact integer adds, from up to 8 registers |
 | ATOMS, ATOMG (min, max, and, or, xor, inc, dec, cas), float atomics | missing | |
 | LDC (constant bank operands) | missing | constant-bank operands |
 | TEX, TLD, TLD4, TXD, TMML, SULD, SUST, SURED, SUATOM | **missing, important** | the texture path has its own bandwidth and filtering arithmetic (weighted sums of texels) outside every resource here |

@@ -5,9 +5,9 @@ import Definitions.Core.Accel.H200
 
 An honest run meets every hypothesis (rule I): the resident `wgmma` kernel below computes `C = A·B` exactly for any
 `n × n` `s8` matrices `A` and `B` (`n` a multiple of 256, at most 2048), meets G1, G2 and the code fetch on the H200
-instance at every value of its open parameters, and takes at most `2n + n³/524288 + n²/604 + 1` ticks. At
-`n = 2048` that is 27,425 ticks against the tensor core's 15,888 at the data sheet's rate. `Witness` is the statement;
-its proof is to come.
+instance at every value of its open parameters with a backlog of at least a tick (θ's floor), and takes at most
+`2n + 21n³/10485760 + n²/604 + 1` ticks. At `n = 2048` that is 28,244 ticks against the 17,192 the tensor core's
+long-window rate (`tensorLong`, the data sheet's) needs for the products alone. `Witness` is the statement.
 
 **The kernel.** `A` sits in HBM row-major and `B` column-major, a byte an entry, four to a word; `C` row-major, a word
 an entry. Three phases, one after the other:
@@ -15,13 +15,15 @@ an entry. Three phases, one after the other:
 * **loads** (`load`): `2n` bulk copies HBM → shared memory, one a tick, each a row of `A` or a column of `B`
   (`n/4` words, at most 512 of HBM's 606 a tick);
 * **MMAs** (`mma`): `n³/524288` `wgmma.m64n256k32.s32.s8.s8` with `A` and `B` from shared memory, one a tick (524,288
-  of the tensor core's 540,672 units, 2,560 of the banks' 4,224 words), slice by slice along `k`, each adding its
-  64 × 256 block's products of the slice to the block's accumulators in registers (zero at the first slice);
+  of the tensor core's 540,672 units at the tick's clock, 2,560 of the banks' 4,224 words) with an idle tick after
+  every 20 (`mmaTick`: 20 · 524,288 ≤ 21 · 499,712, so with a tick of backlog every window meets `tensorLong`), slice
+  by slice along `k`, each adding its 64 × 256 block's products of the slice to the block's accumulators in registers
+  (zero at the first slice);
 * **stores** (`store`): `n²/4` four-word copies registers → HBM, 151 a tick (604 of HBM's 606 words).
 
 Each instruction is the text of a thread of its own (`prog`), so the code is the instruction count: at `n = 2048`,
-1,069,056 instructions, 4,276,224 words fetched beside 6,291,456 data words, within the 16,621,212 the run's HBM port
-carries at `slack = 0`. Tick `t` steps the threads of the plan's tick `t` (`sched`). `A` and `B` (`n²/2` words) fit
+1,069,056 instructions, 4,276,224 words fetched beside 6,291,456 data words, within the 17,117,575 the run's HBM port
+carries without the backlog. Tick `t` steps the threads of the plan's tick `t` (`sched`). `A` and `B` (`n²/2` words) fit
 in shared memory and `C`'s accumulators (`n²`) in the register file, both pooled (`Card`).
 -/
 
@@ -103,10 +105,17 @@ def store (n w : ℕ) : Ins :=
 /-- Items `k t, …, k t + k - 1` of a stream of `len`, those that exist. -/
 def chunk (len k t : ℕ) : List ℕ := List.range' (k * t) (min k (len - k * t))
 
-/-- **The kernel's plan**: the loads, then the MMAs, then the stores. -/
+/-- MMA tick `j`: idle when `j % 21 = 20`, else MMA `j - j / 21`, so that 21 consecutive ticks run at most 20
+`wgmma`s (`tensorLong`'s 499,712 units a tick against a `wgmma`'s 524,288: 20 · 524,288 ≤ 21 · 499,712). -/
+def mmaTick (n j : ℕ) : List Ins := if j % 21 = 20 then [] else [mma n (j - j / 21)]
+
+/-- The MMAs a kernel runs: `n/32` slices of `blocks n` each. -/
+def mmas (n : ℕ) : ℕ := n / 32 * blocks n
+
+/-- **The kernel's plan**: the loads, then the MMAs with an idle tick after every 20, then the stores. -/
 def kernel (n : ℕ) : List (List Ins) :=
   (List.range (2 * n)).map (fun c => [load n c]) ++
-    (List.range (n / 32 * blocks n)).map (fun p => [mma n p]) ++
+    (List.range (mmas n + mmas n / 20)).map (mmaTick n) ++
     (List.range ((n * n / 4 + 150) / 151)).map fun u => (chunk (n * n / 4) 151 u).map (store n)
 
 /-! ## The statement -/
@@ -121,17 +130,17 @@ def Placed {ι : Type} {x : Open} {cap : ι → ℕ} {oracle : ℕ} (n : ℕ) (A
   (∀ i l : Fin n, byteOf (M ((machine x cap oracle).loc Store.dram (addrA n i (l / 4)))) (l % 4) = A i l) ∧
     ∀ l j : Fin n, byteOf (M ((machine x cap oracle).loc Store.dram (addrB n j (l / 4)))) (l % 4) = B l j
 
-/-- **The witness**: on the H200 at any open parameters, from any state holding `A` and `B`, the kernel meets G1, G2
-and the code fetch, leaves `A·B` in `C` exactly (each entry's sum, a 32-bit word), and takes at most
-`2n + n³/524288 + n²/604 + 1` ticks. -/
+/-- **The witness**: on the H200 at any open parameters with a backlog of at least a tick (θ's floor), from any state
+holding `A` and `B`, the kernel meets G1, G2 and the code fetch, leaves `A·B` in `C` exactly (each entry's sum, a
+32-bit word), and takes at most `2n + 21n³/10485760 + n²/604 + 1` ticks. -/
 def Witness : Prop :=
-  ∀ {ι : Type} (x : Open) (cap : ι → ℕ) (oracle : ℕ) (n : ℕ), 0 < n → 256 ∣ n → n ≤ 2048 →
+  ∀ {ι : Type} (x : Open) (cap : ι → ℕ) (oracle : ℕ) (n : ℕ), 1 ≤ x.slack → 0 < n → 256 ∣ n → n ≤ 2048 →
     ∀ (A B : Fin n → Fin n → BitVec 8) (σ : (machine x cap oracle).State (ℕ × ℕ)), (∀ θ, σ.pc θ = 0) →
       Placed n A B σ.mem →
       Machine.Fits (prog (kernel n)) σ (sched (kernel n)) ∧
       (∀ i j : Fin n, (Machine.run (prog (kernel n)) σ (sched (kernel n))).1.mem
           ((machine x cap oracle).loc Store.dram (dramC n i j)) =
         BitVec.ofInt 32 (∑ l : Fin n, (A i l).toInt * (B l j).toInt)) ∧
-      ((sched (kernel n)).length : ℚ≥0) ≤ 2 * (n : ℚ≥0) + (n : ℚ≥0) ^ 3 / 524288 + (n : ℚ≥0) ^ 2 / 604 + 1
+      ((sched (kernel n)).length : ℚ≥0) ≤ 2 * (n : ℚ≥0) + 21 * (n : ℚ≥0) ^ 3 / 10485760 + (n : ℚ≥0) ^ 2 / 604 + 1
 
 end Verity.Accel.H200.Resident

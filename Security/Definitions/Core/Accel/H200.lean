@@ -9,7 +9,9 @@ footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'; the driver's max
 note:20261017T0452Z-draft-eps1-dc; `Accounting.TS.Sheets.H200.fmaxMHz`). Every per-SM figure is over the 132 SMs
 (whitepaper Table 3, H100 SXM5). These are data-sheet placeholders until CALIB (CMP-115) measures them.
 
-**Stores** (words of 32 bits): the register file, 64 Ki registers an SM ('Register File Size / SM 256 KB'); shared
+**Stores** (words of 32 bits): the register file, 64 Ki registers an SM ('Register File Size / SM 256 KB'), plus the
+uniform registers (63 a warp at 64 warps, 4032 words), the predicates (7 bits a thread at 2048 threads, 448 words) and
+the uniform predicates (7 bits a warp, 14 words), 4494 words an SM on top (RT-MODEL M4); shared
 memory with L1, 256 KB an SM ('Combined L1 Cache / Shared Memory 256 KB'; shared memory alone is configurable to
 228 KB, so the pool is the larger); L2, 50 MB ('L2 Cache Size 50 MB'), taken as 50 MiB; HBM3e, 141 GB (H200 data
 sheet, nvidia.com/en-us/data-center/h200, 'GPU Memory 141GB'), taken as 141 GiB, above the 143,771 MiB the driver
@@ -17,7 +19,11 @@ reports.
 
 **Rates** (units a tick):
 * tensor: 4096 s8 MACs an SM clock (`Accounting.TS.Sheets.H200` A3: the data sheet's 1,979 dense INT8 TOPS over
-  2 · 132 SMs at the 1830 MHz tensor boost clock), so 540,672; a MAC of `e4m3` or `e5m2` uses 1 unit (the same
+  2 · 132 SMs at the 1830 MHz tensor boost clock), so 540,672 a tick at the tick's clock (`tensor`, the per-clock
+  peak); the sheet's 1,979 TOPS is at 1830 MHz, so over long windows an MMA's units are capped at
+  132 · 4096 · 1830/1980 = 499,712 a tick (`tensorLong`, RT-MODEL M1: whitepaper V1.04 Table 3's 1830 MHz boost clock
+  for the FP8, FP16, BF16, TF32 and INT8 tensor figures, against 1980 MHz for FP64 tensor, FP32 and FP64; measured
+  1,942.7 TOPS at about 1797 MHz under saturated `wgmma`, r20261019-053910-d2c9); a MAC of `e4m3` or `e5m2` uses 1 unit (the same
   1,979 TFLOPS), of `f16` or `bf16` 2 (989.5), of `tf32` 4 (494.5); `b1` has no peak in any document (`Open.b1`);
 * `mma.sync`: its tensor rate apart from `wgmma`'s, which is the data sheet's (no document gives `mma.sync`'s on
   Hopper, where it runs below `wgmma`), is `Open.sync` (`scale`) until CALIB measures it;
@@ -26,8 +32,12 @@ reports.
 * `alu` and `imad`: 64 lanes an SM clock each (CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 9.0: 32-bit integer
   add, compare, min, max, logic and shift 64; multiply and multiply-add 64), so 8448 each;
 * `f64`: 64 lanes an SM clock (Programming Guide Table 7, CC 9.0: 64-bit floating-point add, multiply, multiply-add
-  64), so 8448; DMMA (`Op.dmma`) 128 MACs an SM clock, 32 tensor units a MAC (whitepaper: FP64 Tensor Core 67 TFLOPS
-  over 132 SMs at 1980 MHz is 128.2);
+  64), so 8448: the FP64 cores, 64 an SM apart from the tensor cores (whitepaper Table 3, 'FP64 Cores / SM (excl.
+  Tensor)'); DMMA (`Op.dmma`) runs on the tensor cores (A100 whitepaper: the third-generation Tensor Cores accelerate
+  'all data types including FP16, BF16, TF32, FP64, INT8'), 128 MACs an SM clock at 1980 MHz (whitepaper: FP64 Tensor
+  Core 67 TFLOPS over 132 SMs at 1980 MHz is 128.2), so a DMMA MAC uses 32 · 1830/1980 units of `tensor` and of
+  `tensorLong`: over a long window DMMA alone reaches the sheet's 67 TFLOPS, and DMMA beside the low-precision
+  formats shares their one budget;
 * shared memory: 32 banks of one 32-bit word a clock an SM (Programming Guide, 'Shared Memory', CC 9.0), so 4224;
 * HBM: 4.8 TB/s (H200 data sheet, 'GPU Memory Bandwidth 4.8TB/s'), 4.8 · 10¹² / (4 · 1.98 · 10⁹) = 20000/33 words.
 
@@ -40,7 +50,7 @@ uniform opcodes, integer only, and no document gives their issue cost; measured 
 1.08–1.19 SMSP cycles, RT-H200-EMP, run r20261019-064443-0ae6, and 0.984 beside a saturated lane stream, the census's
 UNI line, DC-90; `[uniform_issue]` of the sm_90 sheet); copies of at most 4 words (a lane's 128-bit load or store),
 and bulk copies of any length with shared memory at one end (TMA); atomics on shared memory, L2 and HBM; integer
-reductions (`Lane.reduces`) of up to 4 registers into memory (`red`), and of any length from shared memory into L2 or
+reductions (`Lane.reduces`) of up to 8 registers into memory (`red`), and of any length from shared memory into L2 or
 HBM (`cp.reduce.async.bulk`), priced as the copy.
 
 **Captured dots** (`captured`): the integer path exactly, `silicon.integer.HOPPER_SM90_S8_K32` (the clamp or wrap at
@@ -56,8 +66,9 @@ Every other dot is `Open.dot`. `wgmma` `.s8` at m64n64k32, m64n128k32 and m64n25
 
 **Where the instance is coarser than the card** (each lets a program do more): the pools of `Card`; a `wgmma` charged
 one issue slot (it is a warpgroup's four warp instructions); `IMAD.WIDE` one `imad` lane (it takes two); FP32 lane
-functions charged an issue slot's share only; uniform registers pooled with the register file. A cross-lane move is
-`SHFL` on the shuffle pipe (32 lanes a SM-clock, its own pipe beside the `alu`) or a register copy on the `alu`.
+functions charged an issue slot's share only; uniform registers and predicates in the register store. A cross-lane
+move is `SHFL` on the shuffle pipe (32 lanes a SM-clock, its own pipe beside the `alu`) or a register copy on the
+`alu`.
 
 **2:4 sparse MMAs** (`mma.sp`, `wgmma.mma_async.sp`, PTX ISA 9.0 §9.7.14.6 and §9.7.15.6): at the dense forms'
 shapes and twice their `k`, at the same tensor units a real product (so twice the logical rate: CALIB's
@@ -80,7 +91,7 @@ namespace Verity.Accel.H200
 
 /-- The words of each store. -/
 def size : Store → ℕ
-  | .reg => 132 * 65536
+  | .reg => 132 * (65536 + 4494)
   | .smem => 132 * 65536
   | .l2 => 50 * 2 ^ 20 / 4
   | .dram => 141 * 2 ^ 30 / 4
@@ -88,6 +99,7 @@ def size : Store → ℕ
 /-- Each resource's units a tick. -/
 def ρ : Res → ℚ≥0
   | .tensor => 132 * 4096
+  | .tensorLong => 132 * 4096 * 1830 / 1980
   | .issue => 132 * 4
   | .alu => 132 * 64
   | .imad => 132 * 64
@@ -101,7 +113,7 @@ def weight : Fmt → ℚ≥0
   | .s8 | .u8 | .e4m3 | .e5m2 => 1
   | .f16 | .bf16 => 2
   | .tf32 => 4
-  | .f64 => 32
+  | .f64 => 32 * 1830 / 1980
   | _ => 0
 
 /-- PTX's `k` for each format, `mma.sync`'s (PTX ISA 9.0 §9.7.14); `wgmma` takes one of them, `wgK`. -/
@@ -165,8 +177,10 @@ def captured (fa fb : Fmt) (sat : Bool) (k : ℕ) : Option Dot :=
 rates are the tensor core's s8 MACs, the 132 · 128 FP32 lanes, and HBM's bits a tick rounded up
 (4.8 · 10¹² · 8 / 1.98 · 10⁹ = 19,393.9). θ's floors: `sync ≥ 1` (the tensor pipe's peak is the data sheet's, which
 `wgmma` reaches, so no MMA form beats it), `b1 ≥ 1/8` (CALIB, CMP-115; the A100's binary peak is 8 × its INT8 peak)
-and `madHi ≥ 2` (`IMAD.HI` at 32 lanes a SM-clock against `IMAD`'s 64, CUDA C++ Programming Guide §6.4.1 Table 7,
-CC 9.0, footnote 6; CALIB measured 30.6, r20261017-095350-02ff). -/
+`madHi ≥ 2` (`IMAD.HI` at 32 lanes a SM-clock against `IMAD`'s 64, CUDA C++ Programming Guide §6.4.1 Table 7,
+CC 9.0, footnote 6; CALIB measured 30.6, r20261017-095350-02ff), and `slack ≥ 1` (a backlog of at least a tick: an
+MMA completes after the tick that issues it, and `Rate` and `CodeFetch` only get weaker as `slack` grows, so this floor
+adds nothing to `Assumptions.CardWithinAccel`). -/
 def card : Card where
   size := size
   size_pos := by intro s; cases s <;> decide
@@ -180,7 +194,7 @@ def card : Card where
   tc := 132 * 4096
   cuda := 132 * 128
   bw := 19394
-  floors x := 1 ≤ x.sync ∧ 1 / 8 ≤ x.b1 ∧ 2 ≤ x.madHi
+  floors x := 1 ≤ x.sync ∧ 1 / 8 ≤ x.b1 ∧ 2 ≤ x.madHi ∧ 1 ≤ x.slack
 
 /-- **The H200 SXM** as an accelerator, its open parameters `x`. -/
 def machine {ι : Type} (x : Open) (cap : ι → ℕ) (oracle : ℕ) : Machine ι := card.machine x cap oracle

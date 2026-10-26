@@ -9,9 +9,12 @@ capture fixes yet (`Open`). Both instances (`Accel.H200`, `Accel.Sm120`) are tab
 * **Stores** (`Store`): the register file, shared memory (with L1), L2 and device memory (HBM or GDDR), each pooled over
   the card.
 * **Resources** (`Res`): the tensor core (one pipe every format shares, a MAC of format `f` using `weight f` units:
-  the formats' peaks are one pipe's rate at different widths), the warp schedulers' issue slots, the integer `alu` and
-  `imad` pipes, the shuffle pipe, the FP64 pipe, shared memory's banks, and device memory's bandwidth. The FP32 pipe's rate is the
-  issue rate, so it is not a resource of its own; L2's bandwidth and the register file's ports are in no document, so they are free.
+  the formats' peaks are one pipe's rate at different widths), twice: at the tick's clock (`tensor`, the per-clock
+  peak) and at the data sheet's tensor clock (`tensorLong`, which over any window longer than the backlog caps the MMAs
+  at the sheet's figure), the warp schedulers' issue slots, the integer `alu` and
+  `imad` pipes, the shuffle pipe, the FP64 pipe, shared memory's banks, and device memory's bandwidth. The FP32 pipe's
+  rate is the issue rate, so it is not a resource of its own; L2's bandwidth and the register file's ports are in no
+  document, so they are free.
 * **Units** (`use`): an MMA uses `m·n·k·weight` tensor units and an issue slot; a lane function `1/32` of a slot
   (a warp instruction is 32 lanes' functions) and one lane of its pipe; a uniform instruction a whole slot (the
   uniform datapath has its own ALU, but its instruction takes the warp's issue slot); a copy `1/32` of a slot and, per
@@ -42,8 +45,13 @@ inductive Store
 
 /-- A GPU's resources. -/
 inductive Res
-  /-- the tensor core, in s8 MACs -/
+  /-- the tensor core, in s8 MACs, at the tick's clock: its per-clock peak, the short-window cap -/
   | tensor
+  /-- the tensor core over long windows, in s8 MACs: the data sheet's rate at its tensor clock, where that is below
+  the tick's (the H200's 1830 MHz against its 1980, RT-MODEL M1). Every tensor-core instruction, DMMA included (one
+  datapath for every format, FP64 too: A100 whitepaper, 'Third-generation Tensor Cores'), uses as many units of it as
+  of `tensor`, so the formats share one long-window budget -/
+  | tensorLong
   /-- the warp schedulers' issue slots, in warp instructions -/
   | issue
   /-- the integer ALU pipe, in lanes -/
@@ -69,14 +77,16 @@ def port : Store → Res → ℚ≥0
 /-- **The units an opcode uses**, `weight f` tensor units a MAC of format `f` at shape scale `scale sh`. An MMA's
 operand words read from shared memory pay its banks, a word a bank unit, as a copy's do (`wgmma` reads `B`, and
 maybe `A`, there). Every unit is per word or per product, so a price vector over the resources prices an MMA per
-product, a lane function per result, and a copy per word moved. An `IMAD.HI` uses `hi` lanes of `imad`, its own
+product, a lane function per result, and a copy per word moved; an MMA with `D ≠ C` delivers its accumulators to
+new words at no units beyond its own (P2's fork, RT-MODEL M5), so no such pricing covers a per-seed delivery cost.
+An `IMAD.HI` uses `hi` lanes of `imad`, its own
 price, not tied to `IMAD`'s. -/
 def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) : Op Store → Res → ℚ≥0
   | .mma fa fb _ sh sa sb, r =>
-    (if r = .tensor then (sh.m * sh.n * sh.k : ℕ) * weight fa * scale sh else 0) + (if r = .issue then 1 else 0) +
+    (if r = .tensor ∨ r = .tensorLong then (sh.m * sh.n * sh.k : ℕ) * weight fa * scale sh else 0) + (if r = .issue then 1 else 0) +
       ((if sa = .smem then (sh.wa fa : ℚ≥0) else 0) + (if sb = .smem then (sh.wb fb : ℚ≥0) else 0)) * port .smem r
   | .mmaSp fa fb _ sh sa sb, r =>
-    (if r = .tensor then (sh.m * sh.n * (sh.k / 2) : ℕ) * weight fa * scale sh else 0) + (if r = .issue then 1 else 0) +
+    (if r = .tensor ∨ r = .tensorLong then (sh.m * sh.n * (sh.k / 2) : ℕ) * weight fa * scale sh else 0) + (if r = .issue then 1 else 0) +
       ((if sa = .smem then (sh.waSp fa : ℚ≥0) else 0) + (if sb = .smem then (sh.wb fb : ℚ≥0) else 0)) * port .smem r
   | .lane g, r =>
     match r, g.pipe with
@@ -92,7 +102,8 @@ def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) 
       (if s = .reg ∧ t = .reg ∧ r = .alu then (n : ℚ≥0) else 0)
   | .atom s _, r => (if r = .issue then 1 / 32 else 0) + port s r
   | .red s t n _, r => (if r = .issue then 1 / 32 else 0) + (n : ℚ≥0) * (port s r + port t r)
-  | .dmma sh, r => (if r = .tensor then (sh.m * sh.n * sh.k : ℕ) * weight .f64 else 0) + (if r = .issue then 1 else 0)
+  | .dmma sh, r =>
+    (if r = .tensor ∨ r = .tensorLong then (sh.m * sh.n * sh.k : ℕ) * weight .f64 else 0) + (if r = .issue then 1 else 0)
 
 /-- What no document states and no capture has pinned yet: a parameter of the instance until it is measured. -/
 structure Open where

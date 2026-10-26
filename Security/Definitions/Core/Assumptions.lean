@@ -65,11 +65,11 @@ its block scales. That is P2 at the hardware's level: the routing of pairs to on
 Checked per card by a pair-swap capture: swap operand pairs whose `mulOut` agree, within one output and across
 outputs, and compare every output bit for bit. The captured dots have the form by their captures (H200:
 `HOPPER_SM90_S8_K32`, `HOPPER_BF16_M16N8K16`, the E4M3 and E5M2 K32 captures at a zero accumulator; RTX PRO 6000:
-the `BLACKWELL_SM120_*_M16N8K32` integer captures and BF16; `Accel.CapturedProductForm`, to prove). The open dots it
-covers, each still to capture: on the H200 FP8 at a nonzero accumulator, mixed E4M3 × E5M2 `wgmma`, f16, tf32 and b1;
-on the RTX PRO 6000 the E4M3, E5M2 and E2M1 K32 atom (its `BLACKWELL_SM120_*` value captures agree with
-`Sm120.f8Pipeline` in 99.96–99.997% of atoms only, PEARLC-MODEL; their pair swaps are this Prop's check), the
-block-scaled NVF4 and MXF4 (pinned in Python only), mixed f8f6f4 pairings, f16, tf32 and b1. The 2:4 sparse MMAs'
+the `BLACKWELL_SM120_*_M16N8K32` integer captures, BF16, and the E4M3 and E5M2 K32 captures at every accumulator;
+`Accel.CapturedProductForm`, to prove). The open dots it covers, each still to capture: on the H200 FP8 at a nonzero
+accumulator, mixed E4M3 × E5M2 `wgmma`, f16, tf32 and b1; on the RTX PRO 6000 the E2M1 K32 atom (its value captures
+agree with `Sm120.f8Pipeline` on finite accumulators and left NaN and infinite ones record-only), the block-scaled
+NVF4 and MXF4 (pinned in Python only), mixed f8f6f4 pairings, f16, tf32 and b1. The 2:4 sparse MMAs'
 dots (`x.dotSp`, no capture on either card) have the form over their `k/2` kept pairs: the metadata only routes each
 kept element of `A` to the element of `B` it names (`Accel.mmaSpEval`), and each such pair meets one multiplier. -/
 def AccelProductForm (x : Accel.Open) : Prop :=
@@ -96,9 +96,12 @@ and incompressible; a method bound by device memory or L2 on compressible data o
 is added with its rate: `f16` accumulators, the 64-bit and `inc`/`dec` reductions, sm_120's block-scaled sparse MMA, and
 NVSwitch `multimem` reductions, and the H200's `mma.sync` FP8. **Over-approximated units:** DMMA, the FP64 lanes,
 `HFMA2`, the float reductions and `redux.sync` are in the model as exact integer versions at the unit's rate, each at
-least as capable as the unit on the integers it computes exactly (`Accel.Isa`'s docstring). `can` uses each of them
-within that exact range: the card's results on other operands (non-integers, magnitudes past the range, and its
-roundings there) are not simulated (coordinator's ruling, 26 Oct 04:00Z). The node's host CPUs and its host and peer
+least as capable as the unit on the integers it computes exactly (`Accel.Isa`'s docstring). **Scope limit** (RT-LEAN
+L30; coordinator, 26 Oct 04:25Z): the model reads their operands as two's-complement integers and an operand out of
+range as zero, where the card reads float codes, and this Prop equates the stores bit for bit. So `can` covers code
+that uses these units only where the two readings agree, which on nonzero float operands is almost nowhere: code that
+uses them on nonzero operands is outside the claim, as are the card's results on non-integers and its roundings past
+the exact range (coordinator's ruling, 26 Oct 04:00Z). The node's host CPUs and its host and peer
 links are other devices of the period (RT-PROTO P9, RT-UNITS U9), not units of the card. -/
 def CardWithinAccel {ι : Type} (c : Accel.Card) (cap : ι → ℕ) (oracle : ℕ) (can : (c.Mem → c.Mem) → ℕ → Prop) :
     Prop :=
