@@ -415,6 +415,24 @@ def inputArg (P : Flock.Program.Prog) (a : Flock.Program.Arg) : Option Nat :=
     | none => none
   | _ => none
 
+/-- Refuses with `why` unless `b`: one step of a `do` block, so what its acceptance gives is read off it step by step
+(`Properties.NetworkScan`). -/
+def need (b : Bool) (why : String) : V Unit := if b then pure () else throw why
+
+/-- `o`'s value, refusing with `why` where there is none, as one step. -/
+def needSome {α : Type} (o : Option α) (why : String) : V α := match o with
+  | some a => pure a
+  | none => throw why
+
+/-- The generator form's ingress templates, from the templates before the egress template's: bucket 0's, and the later
+ingress buckets' when there are later buckets. -/
+def ingressTemplates : List (Flock.Program.Node × Flock.Program.Defn) →
+    V ((Flock.Program.Node × Flock.Program.Defn) × Option (Flock.Program.Node × Flock.Program.Defn))
+  | [f] => pure (f, none)
+  | [f, b] => pure (f, some b)
+  | _ => throw "scan: not the generator form's templates: bucket 0's, the later ingress buckets' and the egress \
+    bucket's"
+
 /-- A compute audit's layout terms and its Program, from the Program's descriptor (`Flock.Program.decode` of its
 canonical bytes): its units are its root's template instances, each committing its template's return; a root with no
 template is refused. -/
@@ -449,65 +467,55 @@ ingress template's row, and every template's argument, is one input node's leave
 an input and a template reads only input gates outside its own; and no egress template's argument is an ingress row's
 input node, so no egress gate depends on an ingress gate. -/
 def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
-  let prog ← match Flock.Program.decode (← Flock.canon j).toUTF8 with
-    | .ok prog => pure prog
-    | .error e => throw s!"scan: {e}"
-  unless Flock.hexOf prog.sha512 == program do throw "scan: its SHA-512 is not the registered Program's (program)"
-  let some root := prog.defs[prog.root]? | throw "scan: no root"
+  let prog ← (Flock.Program.decode (← Flock.canon j).toUTF8).mapError fun e => s!"scan: {e}"
+  need (Flock.hexOf prog.sha512 == program) "scan: its SHA-512 is not the registered Program's (program)"
+  let root ← needSome prog.defs[prog.root]? "scan: no root"
   let templates := (templateNodes prog).toArray.map fun k => (root.body.nodes[k]!, prog.defs[root.body.nodes[k]!.fn]!)
   let T := s.window
   let row : Flock.Program.Ty := .array (s.allocation * s.cellBytes) (.array 8 (.value 1))
-  let some (xe, de) := templates.back? | throw "scan: no template"
-  if de.params.any (fun p => p.1 == "row" || p.2 == row) then
-    throw "scan: the egress template takes its row as an input (the checker form): no egress gate is an input \
-      (NetTiming.Layout.Fits)"
-  let ((xf, df), later) ← match templates.pop.toList with
-    | [f] => pure (f, none)
-    | [f, b] => pure (f, some b)
-    | _ => throw "scan: not the generator form's templates: bucket 0's, the later ingress buckets' and the egress \
-      bucket's"
-  unless df.params.map (·.1) == firstParams && later.all (·.2.params.map (·.1) == ingressParams) &&
-      de.params.map (·.1) == egressParams do
-    throw s!"scan: the templates' parameters are not {firstParams}, {ingressParams} and {egressParams}"
+  let (xe, de) ← needSome templates.back? "scan: no template"
+  need (!de.params.any (fun p => p.1 == "row" || p.2 == row)) "scan: the egress template takes its row as an input \
+    (the checker form): no egress gate is an input (NetTiming.Layout.Fits)"
+  let ((xf, df), later) ← ingressTemplates templates.pop.toList
+  need (df.params.map (·.1) == firstParams && later.all (·.2.params.map (·.1) == ingressParams) &&
+      de.params.map (·.1) == egressParams)
+    s!"scan: the templates' parameters are not {firstParams}, {ingressParams} and {egressParams}"
   let laterN := match later with
     | some (x, _) => if x.form == .batch && 1 ≤ x.n then some x.n else none
     | none => some 0
-  unless xf.form == .batch && xf.n == 1 && laterN == some (T - 1) && xe.form == .batch && xe.n == T do
-    throw s!"scan: not bucket 0, {T - 1} later ingress buckets and {T} egress buckets, the link-window's"
-  unless df.params[0]!.2 == row && later.all (·.2.params[0]!.2 == row) do
-    throw "scan: an ingress template's row is not the schedule's"
-  unless later.all fun (_, d) => d.params[2]!.2 == df.params[1]!.2 && d.ret == df.ret do
-    throw "scan: the ingress templates' prog or return differ"
-  unless de.ret == .tuple #[.array outBits (.value 1), row] do
-    throw "scan: the egress template doesn't return a u16 and the schedule's row"
+  need (xf.form == .batch && xf.n == 1 && laterN == some (T - 1) && xe.form == .batch && xe.n == T)
+    s!"scan: not bucket 0, {T - 1} later ingress buckets and {T} egress buckets, the link-window's"
+  need (df.params[0]!.2 == row && later.all (·.2.params[0]!.2 == row))
+    "scan: an ingress template's row is not the schedule's"
+  need (later.all fun (_, d) => d.params[2]!.2 == df.params[1]!.2 && d.ret == df.ret)
+    "scan: the ingress templates' prog or return differ"
+  need (de.ret == .tuple #[.array outBits (.value 1), row])
+    "scan: the egress template doesn't return a u16 and the schedule's row"
   let inputs := root.body.nodes.foldl (fun n x => n + match prog.defs[x.fn]? with
     | some d => ((Flock.Program.inputWidth? d.key).map (· * x.members)).getD 0
     | none => 0) 0
   let laterBits := (later.map (paramBits ·.2.params)).getD 0
-  unless inputs == paramBits df.params + (T - 1) * laterBits + T * paramBits de.params do
-    throw "scan: an input gate that is no template's parameter"
-  unless NciCheck.Desc.rootLaidOut prog && NciCheck.Desc.inputsAtRoot prog && NciCheck.Desc.walkable prog do
-    throw "scan: not laid out as C-Flock's decoder lays a Program out, or past what its resolution walks \
+  need (inputs == paramBits df.params + (T - 1) * laterBits + T * paramBits de.params)
+    "scan: an input gate that is no template's parameter"
+  need (NciCheck.Desc.rootLaidOut prog && NciCheck.Desc.inputsAtRoot prog && NciCheck.Desc.walkable prog)
+    "scan: not laid out as C-Flock's decoder lays a Program out, or past what its resolution walks \
       (NciCheck.Desc.rootLaidOut, inputsAtRoot and walkable)"
   let ke := (templateNodes prog).getLast?.getD 0
-  unless (root.body.ret.parts.any fun q => match q with
+  need (root.body.ret.parts.any fun q => match q with
       | .affine false k 0 c => k == ke && T * de.outLeaves ≤ c
-      | _ => false) do
-    throw "scan: the root doesn't return every egress leaf, so an egress gate would be one the Program doesn't return \
+      | _ => false)
+    "scan: the root doesn't return every egress leaf, so an egress gate would be one the Program doesn't return \
       (NetTiming.Layout.Fits)"
-  unless (ownReturns prog)[xe.fn]! do
-    throw "scan: the egress template returns a leaf it doesn't compute (a parameter's, passed through), so an egress \
-      gate would be an input (NetTiming.Layout.Fits)"
+  need ((ownReturns prog)[xe.fn]!) "scan: the egress template returns a leaf it doesn't compute (a parameter's, passed \
+    through), so an egress gate would be an input (NetTiming.Layout.Fits)"
   let ingress := #[xf] ++ (later.map (#[·.1])).getD #[]
   let rows := ingress.map fun x => x.args[0]?.bind (inputArg prog)
-  unless rows.all (·.isSome) do
-    throw "scan: an ingress template's row is not one input node's leaves, so an ingress gate would be no input \
-      (NetTiming.Layout.Fits)"
-  unless (ingress.push xe).all fun x => x.args.all fun a => (inputArg prog a).isSome do
-    throw "scan: a template's argument is not one input node's leaves"
-  unless xe.args.all fun a => !rows.contains (inputArg prog a) do
-    throw "scan: an egress template's argument is an ingress row's input node, so an egress gate would depend on the \
-      ingress (NetTiming.Layout.Fits)"
+  need (rows.all (·.isSome)) "scan: an ingress template's row is not one input node's leaves, so an ingress gate \
+    would be no input (NetTiming.Layout.Fits)"
+  need ((ingress.push xe).all fun x => x.args.all fun a => (inputArg prog a).isSome)
+    "scan: a template's argument is not one input node's leaves"
+  need (xe.args.all fun a => !rows.contains (inputArg prog a)) "scan: an egress template's argument is an ingress \
+    row's input node, so an egress gate would depend on the ingress (NetTiming.Layout.Fits)"
   pure { steps := T, free := T * bitsOf df.params[1]!.2, ingress := bitsOf df.ret, egress := bitsOf de.ret }
 
 def paramsOf (j : Json) : V Params := do
