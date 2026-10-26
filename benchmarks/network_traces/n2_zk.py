@@ -9,10 +9,15 @@ decides nothing.
     python benchmarks/network_traces/n2_zk.py virtual --out DIR [--requests 40] [--tokens 4]
     python benchmarks/network_traces/n2_zk.py prove --run DIR [--extra DIR] [--late DIR] --bin flock-circuit
       --lean flock-verify --out DIR [--jobs 4] [--debug-clear] [--dry]
+    python benchmarks/network_traces/n2_zk.py prove --warden-run DIR --bin flock-circuit --lean flock-verify --out DIR
 
 * **The runs.** A certifier-serve run's directory (`certifier_serve.py rehearse`'s per strategy, or `virtual`'s): its
   `plan.json`, `calibration.json`, `deployment.json` and `certified.jsonl`. `virtual` makes them on an injected clock
   against a stub endpoint that answers at once (certifier-serve's tests' run), honest, extra and late, with fresh keys.
+  Or, with ``--warden-run``, an active warden's run (`warden_serve.py`'s, or the gate's ``warden-rehearse``'s), read by
+  `warden_chain`: its own certified records under its key and session, on the warden link (`service.WardenProfile`:
+  both heads at the warden's grid and parameters digest, no sync declared or charged), a certifier rehearsal's run
+  refused by name; its members are honest and tampered, the tampered head failing its signed digest alone.
 * **Members.** One stream each, over all of the run's link-windows: ``honest``; ``tampered``, the honest records with
   window 0's egress head one count off (`one_count`), committed by the prover under its own root, the certificates still
   the certifier's; with ``--extra``, certifier-serve's ``extra`` run (the shim wrote one event more and the certifier
@@ -120,20 +125,36 @@ def link(run: Path) -> tuple[LinkWindows, dict]:
     return lw, plan
 
 
-def link_windows(run: Path, edit=None, clock=None) -> SimpleNamespace:
+def warden_link(run: Path) -> tuple[LinkWindows, dict, dict, list]:
+    """A warden run's link (`warden_chain.link`: the active warden's own records, its key and session, no sync), the
+    plan it stands for (its windows, no syncs), its certified records by (direction, window) and the signer's
+    refusals. A certifier rehearsal's run is refused by name (`warden_chain.PROXY`)."""
+    import warden_chain as WC
+
+    lw, dep, _ = WC.link(run)
+    got, refused = WC.pairs(run, dep)
+    certified = {(d, w): r for w, pair in enumerate(got) for d, r in zip((Direction.EGRESS, Direction.INGRESS), pair)}
+    return lw, {"windows": dep["windows"], "syncs": [], "warden_run": dep["run_id"]}, certified, refused
+
+
+def link_windows(run: Path, edit=None, clock=None, warden: bool = False) -> SimpleNamespace:
     """Every link-window of the run with both certified records, as the prover holds it before it registers: its opening
     (fresh salts), the root it commits (`LinkWindows.root`), the unit's arguments under that root (None where the unit
     takes no instance), each end's head check's failed parts (`head_check.reference_parts`) and the unit's output word by
     the gates' references (`LinkWindows.outputs`); and the certifier's certificates, which the verifier receives from
     the certifier. ``edit(lw, w, pair)``: the records the prover commits in place of the certified ones. ``expect``: the
-    verdict the verifier of record should reach on an honest proof of the opening.
+    verdict the verifier of record should reach on an honest proof of the opening. With ``warden``, ``run`` is an active
+    warden's run (`warden_link`), its records and certificates the warden's own and no sync declared.
 
     With ``clock``, for a report on runs nothing is proved for (network_e2e), also on N2's stream as certifier-serve's
     check takes it: each link-window registered (``digest``), selected (Selection All) and decided before the next by
     `LinkWindows.unproved_outcome`, in the clear (``host``), and the link's network verdict (``network``)."""
-    lw, plan = link(run)
+    if warden:
+        lw, plan, certified, refused = warden_link(run)
+    else:
+        lw, plan = link(run)
+        certified, refused = cs.read_certified(run / "certified.jsonl")
     syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
-    certified, refused = cs.read_certified(run / "certified.jsonl")
     out = []
     for w in range(plan["windows"]):
         pair = certified.get((Direction.EGRESS, w)), certified.get((Direction.INGRESS, w))
@@ -147,7 +168,8 @@ def link_windows(run: Path, edit=None, clock=None) -> SimpleNamespace:
         insts = lw.head_checks(opening, root)
         args = lw.arguments(opening, root, syncs)
         word = lw.outputs(opening, root, syncs) if args is not None else None
-        others = lw.certified(w, certificates) and w < len(syncs) and syncs[w] in lw.sync_set
+        others = lw.certified(w, certificates) and (lw.warden is not None
+                                                    or (w < len(syncs) and syncs[w] in lw.sync_set))
         out.append(SimpleNamespace(
             window=w, opening=opening, root=root, insts=insts, args=args, word=word, certificates=certificates,
             failed={e: None if i is None else [k for k, ok in HC.reference_parts(i).items() if not ok]
@@ -185,7 +207,8 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
     """Whether the member's references are its round's: every unit takes an instance, and its verdict bit is 1 exactly
     where no part fails; honest, none fails and every window accepts; tampered, window 0's egress head fails its counts
     and its signed digest only (its signed digest alone on the advice profile, whose counts the unit leaves to N2's
-    advised unit); extra, egress heads fail their counts alone, on one window or more; late, egress heads
+    advised unit, and on a warden link, whose counts are its schedule's); extra, egress heads fail their counts alone,
+    on one window or more; late, egress heads
     fail their fields and counts, on one window or more. The ingress heads fail nothing, and every negative member
     refuses one window or more."""
     xs = rd.windows
@@ -198,8 +221,8 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
     if name == "honest":
         return all(x.expect for x in xs)
     if name == "tampered":
-        advice = (rd.plan.get("occupancy") or {}).get("kind") == cs.ADVICE
-        return eg[0] == (["signed"] if advice else ["counts", "signed"]) and not any(eg[1:])
+        signed = (rd.plan.get("occupancy") or {}).get("kind") == cs.ADVICE or rd.lw.warden is not None
+        return eg[0] == (["signed"] if signed else ["counts", "signed"]) and not any(eg[1:])
     allowed = {"extra": ([], ["counts"]), "late": ([], ["fields", "counts"])}[name]
     return all(f in allowed for f in eg) and allowed[1] in eg
 
@@ -565,10 +588,17 @@ def _member_scan(M, sg, rd, out: Path, received=None) -> dict:
 def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    summary: dict = {"run": str(a.run), "extra": a.extra and str(a.extra), "late": a.late and str(a.late),
+    warden = a.warden_run is not None
+    run = Path(a.warden_run if warden else a.run)
+    summary: dict = {"run": str(run), "extra": a.extra and str(a.extra), "late": a.late and str(a.late),
                      "debug_clear": a.debug_clear, "received": RECEIVED}
     t = time.time()
-    members = {"honest": link_windows(Path(a.run)), "tampered": link_windows(Path(a.run), edit=one_count)}
+    members = {"honest": link_windows(run, warden=warden), "tampered": link_windows(run, edit=one_count, warden=warden)}
+    if warden:
+        summary["warden_run"] = members["honest"].plan["warden_run"]
+        summary["warden"] = {"syncs": "none: the warden runs no shaper clock, so a window declares no sync and the "
+                                      "link's charge is 0",
+                             "counts": "the warden's schedule's (service.WardenProfile), not a profile's"}
     for name in ("extra", "late"):
         if getattr(a, name):
             members[name] = link_windows(Path(getattr(a, name)))
@@ -644,7 +674,10 @@ def main(argv=None) -> int:
     v.add_argument("--requests", type=int, default=40)
     v.add_argument("--tokens", type=int, default=4)
     p = sub.add_parser("prove", help="each link-window's unit proved --zk and decided by N2's verifier of record")
-    p.add_argument("--run", required=True, type=Path, help="the honest run's directory")
+    run = p.add_mutually_exclusive_group(required=True)
+    run.add_argument("--run", type=Path, help="the honest run's directory")
+    run.add_argument("--warden-run", type=Path, help="an active warden's run (warden_serve.py's, or the gate's "
+                     "warden-rehearse's): its own certified records, no certifier rehearsal (warden_chain)")
     p.add_argument("--extra", type=Path, help="certifier-serve's extra run of the same plan")
     p.add_argument("--late", type=Path, help="certifier-serve's late run of the same plan")
     p.add_argument("--rounds", default=",".join(ROUNDS), help="the members to run, comma-separated")
@@ -663,6 +696,9 @@ def main(argv=None) -> int:
         log(f"virtual: {plan['windows']} windows, served {plan['served']}, under {a.out}")
         return 0
     a.rounds = tuple(x for x in a.rounds.split(",") if x)
+    if a.warden_run is not None and (a.extra or a.late):
+        raise SystemExit("--extra and --late are certifier-serve's runs: a warden run's members are honest and "
+                         "tampered")
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
     return prove(a)
