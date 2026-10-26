@@ -27,6 +27,9 @@ ALLOWED: dict[str, str] = {
     "verity/core/protocols/network/nci/lean/NciCheck/Desc.lean":
         "NciCheck.Desc's members of a node reading part of a mapped argument, one by one: bounded by walkAtMost, "
         "which refuses past its limit",
+    "verity/core/protocols/network/nci/lean/NciCheck/DescFuzz.lean":
+        "NciCheck.DescFuzz, the desc fuzzer the Lean audit runs (NciCheck.DescFuzzMain): it visits every member of every "
+        "node of a generated Program, under caps.work, to decide DescAgrees' open statements there; the verifier never runs it",
     "verity/core/protocols/network/nci/lean/NciCheck/Check.lean":
         "NciCheck.check, the gate-by-gate reference NciCheck.Desc is difftested against (runs NciCheck.DescDifftestMain); "
         "`nci-check` runs it only with --unrolled",
