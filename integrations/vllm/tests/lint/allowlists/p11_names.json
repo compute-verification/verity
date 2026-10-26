@@ -75,7 +75,6 @@
     {"file": "verity_vllm/pipeline/tp/c2.py", "kind": "doc-board-id", "symbol": "weights_pin_component", "detail": "M-nnnn"},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "doc-lane", "symbol": "_build_dirs", "detail": "[lane"},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
-    {"file": "verity_vllm/engine/collectives/embedding_shard.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/program/frontend/export_ops.py", "kind": "doc-lane", "symbol": "CollectiveBus._peers_of", "detail": "[lane"},
     {"file": "verity_vllm/pipeline/tp/fold_match.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "F-rN"},
     {"file": "verity_vllm/pipeline/tp/fold_match.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "M-nnnn"},
