@@ -59,11 +59,12 @@ description, which main's one-description rule (25 Oct) forbids. The rate is sym
 
 *The lucks at J10-R's noise* are one claim, `SharedNoiseLucks`: `OperandHMu`, `ReceiptLuckAt` and `GuessLuckAt` in their
 per-tile form (`PerLiveTile`), claimed of J10-R's tile games, where the units of a call row read that row's noise and
-the units of a call column the column's. Each luck is a claim of one tile's game and `CircuitCreditPeriod`'s rate reads
-them per tile, so the sharing changes the games the claims are of, not the claims' form. They are computational, not
-luck: every coin that enters the honest receipt (the noise, the salt, the fold's keys) is read by the prover before it
-commits, so each says how cheaply a program computes the receipt, and they belong to Theorem O's one computational
-slot. `SharedNoiseLucks` holds their place until FOLD-LUCK (CMP-134) states them through that slot.
+the units of a call column the column's. Its claim is the call-level one (FOLD-LUCK's reduction,
+note:compute-research/20261026T0222Z-draft-accel-fold-luck §7): the whole call is the round, and the three lucks of its
+tiles are special cases of one moment-form slot over the call's joint coins, which assumes no independence between
+tiles sharing a row's or a column's noise. They are computational, not luck: every coin that enters the honest receipt
+(the noise, the salt, the fold's keys) is read by the prover before it commits, so each says how cheaply a program
+computes the receipt. `CircuitCreditPeriod`'s rate reads them per tile, so the premise keeps that form.
 
 *ρ.* `ρ` is a public bound on the live share: every tile's detected weight (`shareCone`, its late cone's share of the
 committed words) at most `1/(ρ·N_p)`. The population is the tile stratum as registered, of a fixed public size padded
@@ -91,6 +92,9 @@ and 65,536 (down); such a unit is past C-Flock's `2^27` until `h1zy` has J10-R l
 * `TileServiceSound`: a fact to prove, C-Flock's soundness at each drawn unit under live coins.
 * `SharedNoiseLucks`: a claim (above). The unit's place (`place`) is a parameter: no Lean function exports the verifier's derivation of a
 unit's call and blocks (`Credit.registeredFile`'s `j10r`).
+* `UnitFixed` (`Accounting.Assumptions.TS`), a named premise, not a code fact: it bounds the play's `fixed` and `folded`
+  words, which `Play` leaves abstract (no definition from the committed values until the adaptive model), so no code
+  can prove it. `Proofs.Pouw.PeriodJ10R.Honest`'s `j10r_meets` shows it, and every other premise, satisfiable.
 
 The proofs are to be in `Proofs.Pouw.PeriodJ10R`, as `Proofs.Pouw.Period`'s: `CircuitCreditPeriod` at `tileRun`.
 -/
@@ -330,14 +334,25 @@ def j10rAtCoin {C B V : Type} {m n Np : ℕ} (hm : 0 < m) (enc : C → ByteArray
 
 /-- **The lucks at J10-R's shared noise** (one claim; a decided-by-lane card for M3, a defect under R-ACCEL-4 that
 FOLD-LUCK, CMP-134, owns): every live tile's game in every window meets the three per-tile lucks, `OperandHMu`
-(`μ = Sc.mu k`), `ReceiptLuckAt` (`r_B = Sc.rB k`) and `GuessLuckAt` (`p0 = Sc.guess k`), `CircuitCreditPeriod`'s three
-luck premises, unchanged in form. It differs from them in the games they are claimed of, not in what they say of a
-game: J10-R derives a call's noise from one seed (`J10R.callSeed`), so the units of a call row read that row's noise
-and the units of a call column that column's (`J10R.j10rNoise` from the unit's bases), and only the fold keys are a
-unit's own (`J10R.unitKeys`). The per-tile lucks were argued (#2482's H-μ at `μ = 3/4`, B′ at `r_B = ½`, the guess
-bound at `½`) of a tile whose noise is its own; here each tile's game shares its coins with the other tiles of its row
-and its column, whose work the cheater also does or skips. Every coin these games read reaches the prover before it
-commits, so the claim is computational, an instance of Theorem O's one slot; FOLD-LUCK states its form there. -/
+(`μ = Sc.mu k`), `ReceiptLuckAt` (`r_B = Sc.rB k`) and `GuessLuckAt` (`p0 = Sc.guess k`), the form
+`CircuitCreditPeriod`'s rate reads. J10-R derives a call's noise from one seed (`J10R.callSeed`), so the units of a
+call row read that row's noise `U_r` and the units of a call column that column's `F_c` (`J10R.j10rNoise` from the
+unit's bases), and only the fold keys are a unit's own (`J10R.unitKeys`). The per-tile lucks were argued (#2482's H-μ
+at `μ = 3/4`, B′ at `r_B = ½`, the guess bound at `½`) of a tile whose noise is its own.
+
+What it claims is the call-level form (FOLD-LUCK's reduction, note:compute-research/20261026T0222Z-draft-accel-fold-luck
+§§6–7). The round is the whole call: every tile that reads the call's `U_r` and `F_c` is in one round, over the
+call's joint coins, and the three lucks of each of its tiles are special cases of one moment-form slot at that round,
+`E[1_pass · e^{η(c − cost/H)₊}] ≤ 1` (the proposed `Pouw.TheoremO.Slot`). That slot is one expectation over the joint
+coins and assumes no independence between tiles that share `U_r` or `F_c`; the period multiplies moments across
+rounds (live coins in sequence), never across a call's tiles. Read per tile, each tile's game is its game given the
+coins it shares with the call's other tiles (`PerLiveTile`'s "whatever the past"), and the slot is what makes that
+reading sound. Sharing changes no constant: each of a tile's terms `A_rB_c + A_rF_c + U_rB_c + U_rF_c` reads its own
+data block or its own pair `(U_r, F_c)` (§7). Every coin these games read reaches the prover before it commits, so the
+claim is computational, not luck (§§1, 6), and §8's no-cheap-part property of the fold is necessary for the slot at
+a useful `(c, η)`. Under R-ACCEL-6 (Daniel, 25 Oct 7:37 PM PDT) the one computational premise covers exact matrix
+products only, so this claim is to be proved in the slot's model or designed away (the no-fold receipt, R-ACCEL-7),
+not assumed; until then it is a named premise. -/
 def SharedNoiseLucks {ι K C Ω : Type} [Fintype C] (Sc : Scheme K) (Cd : Declared ι) {Np M n : ℕ}
     (Wp : Period C Ω (Fin Np) M n) : Prop :=
   Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) ∧
