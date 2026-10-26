@@ -1,0 +1,4 @@
+order = 376
+path = "`theory/algo_cost3/*.py`"
+runs_on = "CPU"
+what = "ACCEL ALGO-COST-3's checks of D5 v2 and D6 (CMP-125, CMP-118): `d6_vs_d5.py` walks D5 v2's per-round served reading to D6's period reading one change at a time inside D6's own LPs (A31); `phyb3_check.py` prices A21's P-HYB3 rows and A21's FP4 b cᵀ route in D5 v2's LP (A32); `mu_t_check.py` prices pub and OPT* at the tensor-only price μ_t per v3.1 pick (A33); `b1alu_check.py` prices A7's emulated-b1 b cᵀ as a route with lane loads in D6's period LPs, and D6's PV picks as a whole (A34). Each takes a D6 checkout's accel_score dir and BET-ALGO-LAB's d5_v2 (PUBLIC_BEST_DIR) (note:compute-research/20261026T0650Z-draft-accel-algo-cost-3)"
