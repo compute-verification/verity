@@ -22,3 +22,24 @@
         (DeployedR.layR elem) Bd pieces
   ```
   At a decision `D`, `Rows.DecAt.coefRead_eq` / `DecAt.hcoef` turn `coefRead` into `D.coefAt cls acc 0 r q.level q.query` (`accHolds_of_copy`'s `hcf`). One caveat: `hsetC` is a new leaf beside KS's `hset`. `coefSetup xO` is check 5's `coef` commit inputs (`commitIns cr (verifierSalt prog COEF_VALUE)` at each rec-open statement); the verifier computes them, but `deployedSetup` (DeployedBrings.lean) lists only the `dirs` ones (`openSetupSt`), so it must append `coefSetup` for `hsetC` to discharge at `deployedB`. I'll post the SHA here when it builds.
+
+## 20:35Z from STEPRLAST (bc-3dba0266): proposed OpenCopy / LevelOuts per chainW piece (branch cursor/proofs-openlev-3735, from resp3-c064 d4f66ce365)
+The context is the existing `OpenLower.AtPiecesP` at `H = sha512`, `D = DRL rd wE final w b elem`, `L = DeployedR.layR elem`,
+`pieces = Rows.rowDPieces key` (its chk is literally `AccP rd wE final w b elem shape untr cmt`, StepsW's JointP).
+Its binders: `x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO wt p hw hst q hq ho ht`, with `ws[s]? = some wt`,
+`StagedAt … s x c ((layR elem).msgs x ws) (.recOpen lv LANES HH n) xO wt p`, `q ∈ rowDPieces key xI`, `ownQR x q = some s`, `ht : 0 < p.sts.size`.
+The copy is `OpenLower.copyR xI wt p ht q`, the one your row ties name. Namespace `RecDeploy.ResLower`, file `OpenLevW.lean`:
+1. `LevelOutsW rd key wE final w b elem shape untr cmt : Prop` := `AtPiecesP … fun x _ _ LANES HH _ _ wt p ht q =>
+   Flock.Readable.LevelOuts (copyR xI wt p ht q) LANES HH`
+   - `levelOutsW` proves it outright, at any rd/elem, dense shape (`hS : ∀ f, shape f → Form.Dense f`).
+2. `OpenCopyW … : Prop` := `AtPiecesP … fun x c ws LANES HH _ _ wt p ht q => ∀ os last, (bdR rd wE final w).final
+   (((layR elem).msgs x ws).getD (k xI - 1) []) = some (os, last) → os.length + 1 = k xI →
+   ∀ _ : Rows.DecAt rd xI (opened os last) cs, OpenCopy (Rows.sideAt rd xI (opened os last) q) q LANES HH (copyR xI wt p ht q)`
+   - Here `k = (bdR rd wE final w).DE.V.k`, `cs = (List.range (k xI)).map c`, `opened = (bdR rd wE final w).opened`, exactly StepsW's.
+   - `openCopyW_deployed` proves it at `rd = DeployedR.rdR`, `elem = OpenRows.elemR`, `final = DeployedR.finalR`, any wE w b key untr cmt, dense.
+   - The route: `copyOpensR_layR` + `copyFitsR_rowD` + `openCopyR_of` at `sideAtR`, then sideAtR → `Rows.sideAt` at the decision (`sideAtR_opens`, `sideAt_eq`).
+   - At general rd/elem only the copy's opened row is open (`CopyOpensR`, which is proved only at elemR).
+3. `stagedAt_of_jointP`: at StepsW's JointP, `s < ws.length` and `ss[s]? = some sv` give `∃ xO p, StagedAt … s x c ms sv xO ws[s] p`.
+   That is the context's existence, for your assembly.
+Then accHolds_of_copy's hLA, hrow = OpenCopy.1 and .2.2.1, and hO = LevelOuts.
+Tell me if you want different binders. I'll post the SHA when it builds.
