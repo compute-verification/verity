@@ -118,10 +118,15 @@ theorem colon_not_mem_toString (n : ℕ) : ':' ∉ (toString n).toList := fun h 
   absurd (digit_of_mem_toString n ':' h) (by decide)
 
 theorem splitOn_subset (n : ℕ) : ("subset:" ++ toString n).splitOn ":" = ["subset", toString n] := by
-  rw [splitOn_colon, String.toList_append, show "subset:".toList = "subset".toList ++ [':'] by decide,
-    List.append_assoc, List.singleton_append, List.splitOn_eq_splitOnP,
-    List.splitOnP_append_cons_of_forall_mem (by decide) ':' rfl, List.splitOnP_eq_singleton]
-  · simp
+  have hpre : "subset:".toList = ['s', 'u', 'b', 's', 'e', 't'] ++ [':'] := by simp
+  have hs6 : ∀ x ∈ ['s', 'u', 'b', 's', 'e', 't'], (x == ':') = false := by
+    intro x hx
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl <;> rfl
+  rw [splitOn_colon, String.toList_append, hpre, List.append_assoc, List.singleton_append, List.splitOn_eq_splitOnP,
+    List.splitOnP_append_cons_of_forall_mem hs6 ':' rfl, List.splitOnP_eq_singleton]
+  · have h6 : String.ofList ['s', 'u', 'b', 's', 'e', 't'] = "subset" := by first | decide | rfl | simp
+    simp only [List.map_cons, List.map_nil, String.ofList_toList, h6]
   · intro x hx
     simp only [beq_eq_false_iff_ne, ne_eq]
     rintro rfl
@@ -139,7 +144,7 @@ theorem digits_toString (n : ℕ) : digits (toString n) = true := by
   exact ⟨Nat.repr_ne_empty, fun c hc => digit_of_mem_toString n c hc⟩
 
 theorem toNat!_toString (n : ℕ) : (toString n).toNat! = n := by
-  have h := String.toNat?_repr n
+  have h := Nat.toNat?_repr n
   change (Nat.repr n).toNat! = n
   unfold String.toNat? String.Slice.toNat? at h
   unfold String.toNat! String.Slice.toNat!
@@ -175,35 +180,25 @@ theorem deriveLaw_subset (d : Program) (query : Json) (k : ℕ) (table : Option 
   unfold Draw.deriveLaw at h
   have hk : getD (subsetObj k) "law" = .str "subset" := rfl
   simp only [hk] at h
-  first
-    | exact (Except.ok.inj h).symm
-    | (rw [if_pos (by decide)] at h; exact (Except.ok.inj h).symm)
+  exact (Except.ok.inj h).symm
 
 /-- **`flockLaw` takes `subset:K`'s law object as `subset K`**, where `K` is at most the population. -/
 theorem flockLaw_subset (k n : ℕ) (parsed : Flock.Draw.Law) (h : Draw.flockLaw (subsetObj k) n = .ok parsed) :
     parsed = .subset k ∧ k ≤ n := by
+  have hk : getD (subsetObj k) "law" = .str "subset" := rfl
   unfold Draw.flockLaw at h
+  simp only [hk] at h
   split at h
-  next s hs =>
-    have hk : "subset" = s := Json.str.inj ((rfl : getD (subsetObj k) "law" = .str "subset").symm.trans hs)
-    dsimp only at h
+  · exact absurd h (throw_bind_ne _ _ _)
+  split at h
+  · rename_i k' hnat
     split at h
-    · split at h
-      · exact absurd h (throw_bind_ne _ _ _)
-      split at h
-      · rename_i k' hnat
-        split at h
-        · exact absurd h (throw_bind_ne _ _ _)
-        · obtain rfl := (Except.ok.inj h).symm
-          rw [subsetObj, getD_k, nat_toJson] at hnat
-          cases hnat
-          exact ⟨rfl, by omega⟩
-      · exact absurd h (throw_ne _ _)
-    all_goals first
-      | exact absurd h (throw_ne _ _)
-      | exact absurd h (throw_bind_ne _ _ _)
-      | (exfalso; subst hk; simp_all)
-  next => exact absurd h (throw_ne _ _)
+    · exact absurd h (throw_bind_ne _ _ _)
+    · obtain rfl := (Except.ok.inj h).symm
+      rw [subsetObj, getD_k, nat_toJson] at hnat
+      cases hnat
+      exact ⟨rfl, by omega⟩
+  · exact absurd h (throw_ne _ _)
 
 /-! ## The draw -/
 
@@ -283,6 +278,7 @@ theorem declaredUnits : DeclaredUnits := by
     exact hr' g hg
   · have hr' := hrus r hr
     rw [hu] at hr'
+    show u < Np₀
     simpa using hr'
 
 end Properties.Compose.SecurityProofs

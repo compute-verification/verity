@@ -21,10 +21,11 @@ committing by the IR's cuts, a computed value only its own unit reads (a receipt
 `Declared.Live` and `LayerCommitted`), and describe the designed protocol.
 PoUW's code today has one salt a window and derives every noise in the scheme, so every window it runs is seeded, and
 its credit is the seeded statements' (`CircuitWorkSeeded`, `CircuitCreditSeeded`), over the same circuit, at decision
-122's grinding premium per seed group. The certificate records which (`Certificate.coins`). Nothing yet builds a
-`Declared` from a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would tie its units, its commit
-coins and its draw to the service's, is unproved: until both exist, these speak of the declared circuit, not of a
-served workload.
+122's grinding premium per seed group. The certificate records which (`Certificate.coins`).
+`Properties.Compose.declaredOf` builds a `Declared` from a compiled Program, its units and draw the service's
+(`Properties.Compose.DeclaredUnits`), but its gates and schedule are those of the circuit it is given, which nothing
+yet reads off the served Program or checks its commit coins against: until something does, these speak of the
+declared circuit, not of a served workload.
 
 Decision 113 splits the credit in two, and `CircuitCredit` is their composition:
 
@@ -253,9 +254,10 @@ at the decided `½` a query, 1.120% if `GuessLuckAt` holds at `2^-64`, and 0.101
 it would hold here too; reading it needs a per-round moment premise and a rate lemma in place of `SplitRate`, a
 statement of its own to red-team, so this line leaves that margin unused.
 
-Nothing yet builds a `Declared` from a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would tie its
-units, commit coins and draw to the service's, is unproved: until both exist, this speaks of the declared circuit, not
-of a served workload. -/
+`Properties.Compose.declaredOf` builds a `Declared` from a compiled Program, its units and draw the service's
+(`Properties.Compose.DeclaredUnits`), but its gates and schedule are those of the circuit it is given, which nothing
+yet reads off the served Program or checks its commit coins against: until something does, this speaks of the
+declared circuit, not of a served workload. -/
 def CircuitWork : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {Np Kd : ℕ} (_hN : Cd.units ≤ Np) (hr : 0 < Cd.rounds)
@@ -336,9 +338,10 @@ sees each word's row and column bits and charges `1 + κ = 5` per unit of unluck
 folded tile's one point luck `p = 7/8` at `1/(1 − p) = 8`, from which no moment at `κ = 4` follows (`κ > 7` is
 needed). The premium `a·Π_F + b·Π_0` is what the seeded line pays for its seeds.
 
-Nothing yet builds a `Declared` from a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would tie its
-units, commit coins and draw to the service's, is unproved: until both exist, this speaks of the declared circuit, not
-of a served workload. -/
+`Properties.Compose.declaredOf` builds a `Declared` from a compiled Program, its units and draw the service's
+(`Properties.Compose.DeclaredUnits`), but its gates and schedule are those of the circuit it is given, which nothing
+yet reads off the served Program or checks its commit coins against: until something does, this speaks of the
+declared circuit, not of a served workload. -/
 def CircuitWorkSeeded : Prop :=
   ∀ {ι K T L U B Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype B] [Fintype Ξ]
     [Nonempty V] {Tq : ℕ} (Sc : Scheme K) (Cd : Declared ι) {Np Kd : ℕ} (_hN : Cd.units ≤ Np)
@@ -397,9 +400,11 @@ premise it reads granted or #2466's (0.722%, 0.772% and 0.873% closed at the ung
 pair's is above it at small-batch decode under every premise but `WholeEntropyAt`'s (`CircuitCreditSeeded`). Work is
 the prover system's, and the certificate is what the
 physical layer's ledger consumes: what device time the work took, and whose, is the ledger's, which credits one
-device's time once (decisions 111 and 113). Nothing yet builds a `Declared` from a compiled Program, and
-`Properties.Compose.UnitsOfLayout`, which would tie its units, commit coins and draw to the service's, is unproved:
-until both exist, this speaks of the declared circuit, not of a served workload. -/
+device's time once (decisions 111 and 113).
+`Properties.Compose.declaredOf` builds a `Declared` from a compiled Program, its units and draw the service's
+(`Properties.Compose.DeclaredUnits`), but its gates and schedule are those of the circuit it is given, which nothing
+yet reads off the served Program or checks its commit coins against: until something does, this speaks of the
+declared circuit, not of a served workload. -/
 def CircuitCredit : Prop :=
   ∀ {ι K P T L U F X C Ξ V : Type} [Fintype K] [Fintype P] [DecidableEq P] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] [Fintype C] [Fintype Ξ] [Nonempty V]
@@ -448,9 +453,10 @@ and `ε_μ = 0` under FOLD-OPT, its `ε` at `r = 1` and `T_q = 2^128` is:
 
 The live pair's is 0.744% closed and 0.681% sharp. It is the credit of every window PoUW's code runs, whose noise it
 derives from the salt, once the code's seed preimages name what each round reads (`SeedNamed`, in `ScopeSeeded`) and
-its binding is checked at the draw. Nothing yet builds a `Declared` from a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would
-tie its units, commit coins, seed preimages and draw to the service's, is unproved: until both exist, this speaks of
-the declared circuit, not of a served workload. -/
+its binding is checked at the draw. `Properties.Compose.declaredOf` builds a `Declared` from a compiled Program, its
+units and draw the service's (`Properties.Compose.DeclaredUnits`), but its gates and schedule, its seed preimages
+among them, are those of the circuit it is given, which nothing yet reads off the served Program: until something
+does, this speaks of the declared circuit, not of a served workload. -/
 def CircuitCreditSeeded : Prop :=
   ∀ {ι K P T L U F X B Ξ V : Type} [Fintype K] [Fintype P] [DecidableEq P] [Fintype T] [Fintype L] [Fintype U]
     [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] [Fintype B] [Fintype Ξ] [Nonempty V] {Tq : ℕ}

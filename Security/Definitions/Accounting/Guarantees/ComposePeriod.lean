@@ -244,8 +244,7 @@ attribution inside the period (one certificate for the prefix's device interval)
 first failure (no retry, and none dropped); no link between windows beyond each window's inputs, cut where its IR cuts them; no period over
 windows run at once (above); no check that the service's record ran the windows in order or kept its periods disjoint
 (above); nothing of seeded windows, which every served window is today (above); and, as `CircuitWork`, nothing of a
-served workload until a `Declared` is built from a compiled Program and `Properties.Compose.UnitsOfLayout` is
-proved. -/
+served workload until the circuit `Properties.Compose.declaredOf` is given is read off the served Program. -/
 def CircuitWorkPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)

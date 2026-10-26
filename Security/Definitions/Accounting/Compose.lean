@@ -367,7 +367,8 @@ before its coin (`credit.a_link`, RT4-INT-34). A seeded window's coins are still
 (`verity/core/protocols/pouw/coins.py`'s `LABELS = ("salt", "draw")`), with no per-round coin or root, and the salt opens
 before the activations are committed (RT-COMPOSE r3). No code checks this order itself: that every value the served
 Program writes is committed under the root of the round its `commitRound` names. A served Program's commit coins reach
-`Declared` only through `Properties.Compose.UnitsOfLayout`, which is unproved. The seeded statements don't read it: they
+`Declared` only through the schedule `Properties.Compose.declaredOf` keeps from the circuit it is given, which nothing
+ties to the code yet. The seeded statements don't read it: they
 read the circuit at the draw (`Declared.atDraw`) and at the IR (`Declared.atIR`, which meets it), and take its seeded
 mirror, `SeedNamed`. -/
 def LayerCommitted {ι : Type} (Cd : Declared ι) : Prop :=
@@ -405,7 +406,7 @@ it, as `Scope` carries `LayerCommitted`.
 
 Today's code doesn't meet it: each unit's seed is `seeds.PouwSeed` of the salt, its position and its seed group's
 `pouw.roots` slot, a Program input that nothing ties to the unit's operand rows, and no seed names a run input or an
-earlier round's output, so only registered inputs are named (`Properties.Compose.UnitsOfLayout`'s seed conjunct). -/
+earlier round's output, so only registered inputs are named (`Properties.Compose.SeededSchedule`'s seed conjunct). -/
 def SeedNamed {ι : Type} (Cd : Declared ι) : Prop :=
   ∀ ℓ j, Cd.Writes ℓ → Cd.Reads j ℓ → Cd.coinMode (Cd.round (Cd.call j)) = .seeded → ¬ Cd.Late ℓ j →
     Cd.binding ℓ = some .registered ∨ Cd.seedNames (Cd.round (Cd.call j)) ℓ = true
