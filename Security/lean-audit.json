@@ -31059,7 +31059,7 @@
    ]
   },
   "Flock.Draw": {
-   "digest": "7c66a0fe4851d87052ab3e7f93ae393bfda41946975c508c6c2c39e79ed30e3a",
+   "digest": "c72832f8d6015ee63bde4a0805ac37d4d7a903f00f486c633207cd181b560340",
    "definitions": {
     "Flock.Draw.Law": "89d70aef494b09e73d1a96bde31b4b235372685ef6f2c157ffafdcc9607b9106",
     "Flock.Draw.Law.bernoulli": "74f514d660c8772abf134bce094e4bc4c8b12f30a7c18bcfcb3de380468388db",
@@ -31080,6 +31080,7 @@
     "Flock.Draw.Stratum.toJson": "99b3fa0850e43be80bbbf39fd0df4d5d4465295906e01f370df179d8ee48339c",
     "Flock.Draw.Stratum.unit": "49c442c22e2fcdf2dd1c8d42263032e3a03d26a993a2e21870c759d380d2fd70",
     "Flock.Draw.Stratum.units": "6cb39eabc04d0183dd8cb498aa9c345c24f4f5d1d11d44c5b691c0a88cd080c7",
+    "Flock.Draw.TABLES_LAW": "3ee6a056db0fabfe645d15828935e72c4bc83eb6f89196c6d60a420ea24d94cb",
     "Flock.Draw.UnitDraw": "83415836d21d53b361887361dc10abc929ec0865a1092a862feb643877104154",
     "Flock.Draw.UnitDraw.closure": "6577e6f6d70ce0695b6829c92c9ed56fdfe1be10c99cda64b9552e4510827c82",
     "Flock.Draw.UnitDraw.law": "b01e91051bcef69ceecfeaa5250e0d58aac9ad8b6823c973d31d2c01e13e16a5",
@@ -31945,7 +31946,7 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "2c82c701bbcc5c14d22d21bcfe6c5da1d9926d20cc7b7842a460e1ce73ce59d4",
+   "digest": "4a41a483b020725cda97d1243bf548f35479b22a10bd69019a3502fce746d98e",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -32086,8 +32087,8 @@
     "Flock.Stmt.setupH": "03851d5cef424a2669e8283c06476b616860761edf5055ccfaae563b9eefd3c7",
     "Flock.Stmt.setupH._sparseCasesOn_5": "d7fa2775d3f894d247b591b627dbe1dd5ebfde6070f3edf2d7aa1afbbfa0d77b",
     "Flock.Stmt.setupHidden": "740f3d08c1f4ba6145070e9c89797a58c12879e50b4fb479bfd4b1b3d6164a0e",
-    "Flock.Stmt.setupTables": "80776bd21e06c9026c9213d4035f4541af6d41fc221ca17b91010a9c6670c93b",
-    "Flock.Stmt.setupTables._sparseCasesOn_16": "56ea21fd4f73f92f1da9c2c4e69df2807862751397ac9b294c499a5db7357a11",
+    "Flock.Stmt.setupTables": "1892c2067f50db6d4f9360503c0a58eb235013e0f1f02283b9f40b066842dff4",
+    "Flock.Stmt.setupTables._sparseCasesOn_16": "abecbf134d8566d384a2419a9a8480800ecc94399c74983a3f0c0cbb769cddc2",
     "Flock.Stmt.setupTables._sparseCasesOn_3": "b9beebeb51c735d270108a9b6098482a6bfab1be9da211c9eb94313e817d5695",
     "_private.Flock.HmRow.0.Flock.HmRow.ctx": "be137ad375de546cbbc26a3840c9dda721fa5d02e7a0e715321bc4d87666e495",
     "_private.Flock.HmRow.0.Flock.HmRow.intLists": "0c26d755fb4eada06d94d2a78a53ea3ab79542eac0d9e569c9d05341cd625f89",
@@ -32999,6 +33000,10 @@
     "Flock.SecurityProofs.IntegrityHorizonBlocks",
     "Flock.SecurityProofs.IntegrityPeriod",
     "Flock.SecurityProofs.IntegrityPeriodLog",
+    "Flock.SecurityProofs.JointStratified",
+    "Flock.SecurityProofs.JointStratifiedHorizon",
+    "Flock.SecurityProofs.JointStratifiedHorizonMT",
+    "Flock.SecurityProofs.JointStratifiedMT",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",

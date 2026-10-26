@@ -8,8 +8,9 @@ flock-verify `--zk` accepts, at any number of tables, `DrawOkZKHJ` holds at `mPt
 points, from the record's custody alone (`RecordsLiveZKJ`, and `DrawFileZK` at the stratified law). The draw file
 decodes only to the verifier's draw of the drawn units, `∑ s, ks s` of them (`execOS_draw_card_or`; a run that reads
 past its bytes draws every unit, and then `sum_ks_of_univ`), and an accepted record's units split into the tables evenly
-(`setupTables_units`), so `drawOkZKHJ_of_size` applies. Unlike `drawOkZKHJ_of_accepts`, it does not read flock-verify's
-refusal of a stratified draw at several tables (`setupTables_subset`): it holds as well where `verify --zk` takes one.
+(`setupTables_units`), so `drawOkZKHJ_of_size` applies. It is `drawOkZKHJ_of_accepts`'s statement, and
+`drawOkZKHJ_of_custodyJS` gives the same from `RecordCustodyZKJS` (`ZkReg/Guarded.lean`), where `verify --zk` takes a
+stratified draw at several tables.
 -/
 
 namespace FlockSoundness.Discharge.ZkHidden

@@ -1563,13 +1563,16 @@ setting (`verify --session-tables J`, default 1), never the record's. Only `veri
 statements define such a session; any other statement refuses `J > 1`.
 
 - **The tables.** Take the session's units: the record's draw's (§7.3), or without a draw the population's `0 … N − 1`.
-  - The draw must be a `subset` draw of the registered population. A Bernoulli or stratified draw is refused, since its
-    count is not fixed.
+  - The draw must have a fixed count: a `subset` draw of the registered population (`k` units), or a `stratified` one
+    (Σ_s k_s units, one draw over the sampling block, every stratum included). A Bernoulli draw is refused, since its
+    count is not fixed, and so is a work draw, whose closure is not split (`Draw.tablesWhy`, `Draw.TABLES_LAW`).
   - Refused as well: `J > 64`, no units, or a count `J` doesn't divide.
   - The units split into `J` equal consecutive parts of `k` units. Table `j` is `circuit-{j:02}`. Its statement is §16.10's
     drawn statement of `{"law": "subset", "population": N, "k": k, "units": part j}`, under the identity plus
     `session: {tables: J, table: j, units: "the draw's units (without a draw, the population's) in equal consecutive
-    parts; table j proves part j as a subset draw of the population"}`.
+    parts; table j proves part j as a subset draw of the population"}`. A stratified draw's parts are subset
+    statements too: the draw's sorted units split consecutively, whatever their strata, and only the session's draw
+    (U1–U3) is held to the stratified law.
   - Nothing in the record describes a table's units.
 - **The session.**
   - Every table must have the same `m_pts`.
