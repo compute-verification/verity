@@ -28,6 +28,7 @@
   "Proofs.Properties.CertifierDevice",
   "Proofs.Properties.Pous",
   "Proofs.Properties.NetworkCertifier",
+  "Proofs.Properties.NetworkCertifier.LinkWindow",
   "Proofs.Properties.CertifierNetwork",
   "Proofs.Properties.CertifierNetwork.Runs",
   "Proofs.Properties.Identity",

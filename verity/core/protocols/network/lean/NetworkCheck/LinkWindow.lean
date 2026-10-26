@@ -390,7 +390,7 @@ def opened (c : Case) (row : Option ByteArray) : Option Nat := do
   let bcs ← commitments file unit
   let word ← c.output
   if word ≥ 4 then none
-  let #[bcPub, _, bcOut] := bcs.toArray | none
+  let [bcPub, _, bcOut] := bcs | none
   if opens row (8 * row.size) c.saltPub bcPub && opens (le 2 word) outBits c.saltOut bcOut then some word else none
 
 /-! ## The certificates and the sync -/

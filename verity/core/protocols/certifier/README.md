@@ -307,7 +307,9 @@ to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
   (`benchmarks/network_traces/n2_lean_replay.py`): 193 link-windows of seven runs, plain and served, 180 accepted and 13
   refused, each with nine injected controls that both reject (r20261026-050730-1027).
 - the Python keeps running beside the Lean as the reference.
-- the properties of the Lean's verdict are in `Security/Properties/NetworkCertifier/LinkWindow.lean`.
+- the Lean's verdict has its property in `Security/Properties/NetworkCertifier/LinkWindow.lean`
+  (`Properties.NetworkCertifier.LinkWindowAcceptMeans`, proved): an accepted link-window was proved, opened to the
+  word 0b11, certified on both ends and synced within Σ_sync, and its public outputs are verdict 1 and deadline 1.
 
 `tie_service.IngressTie.verify`, the ingress tie's verifier, is not ported and stays Python.
 

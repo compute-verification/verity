@@ -15,6 +15,7 @@
   "Properties.CertifierDevice",
   "Properties.Pous",
   "Properties.NetworkCertifier",
+  "Properties.NetworkCertifier.LinkWindow",
   "Properties.CertifierNetwork",
   "Properties.CertifierNetwork.Runs",
   "Properties.Identity",
@@ -295,9 +296,9 @@
    "why": "the bridge is stated against core's identity hash and C-Flock's SHA-512, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.NetworkCertifier": {
-   "imports": ["NetworkCheck.Check", "Properties.Identity"],
+   "imports": ["NetworkCheck.Check", "NetworkCheck.LinkWindow", "Properties.Identity"],
    "except": [],
-   "why": "the properties are stated against the check's own functions, never a proof"
+   "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, never a proof"
   },
   "Properties.Evaluate": {
    "imports": ["Evaluate", "Definitions.Core.Scalar", "Definitions.Core.Fp32", "Definitions.Core.Prims"],
@@ -1168,6 +1169,11 @@
    "signature": ["Properties.NetworkCertifier.decodeRefusals : Properties.NetworkCertifier.DecodeRefusals"],
    "assumptions": [],
    "type_hash": "64c07fa7fcc1d56eab150448fadaa807e4fa0e131405d72cb77939aa6598c9df"
+  },
+  "Properties.NetworkCertifier.linkWindowAcceptMeans": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkCertifier.linkWindowAcceptMeans : Properties.NetworkCertifier.LinkWindowAcceptMeans"],
+   "assumptions": []
   },
   "Properties.NetworkCertifier.malformedEvidenceRejects": {
    "owner": "@network-accounting",
@@ -2680,6 +2686,10 @@
    },
    "Properties.NetworkCertifier.acceptsLinkWindows": {
     "function": "NetworkCheck.Check.protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkCertifier.linkWindowAcceptMeans": {
+    "function": "NetworkCheck.LinkWindow.verdict",
     "outcome": "accept"
    },
    "Properties.NetworkCertifier.undecidedPending": {
