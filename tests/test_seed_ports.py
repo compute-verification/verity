@@ -46,7 +46,9 @@ UNITS = {
         "vllm's served-trees tests' stand-in tile, a position beside its receipt sink",
 }
 KEY_COUNTS = {
-    "verity/ml/circuits/ops/gemm.py::KEY_COUNT": "PvRowPad's key count n (and QkSoftmaxRowPad's): attention padded to T = 32",
+    "verity/ml/circuits/ops/boolean/softmax_row.py::QkSoftmaxRowPad":
+        "QkSoftmaxRowPad's key count n: attention padded to T = 32",
+    "verity/ml/circuits/ops/gemm.py::KEY_COUNT": "PvRowPad's key count n: attention padded to T = 32",
 }
 TESTS = {
     "verity/ml/circuits/tests/test_ports.py::SEED": "the port rules' seed vectors (E_COIN_REUSE, E_PORT_KIND, batched seeds)",
