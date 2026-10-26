@@ -35845,7 +35845,7 @@
    ]
   },
   "Flock.RecVStar": {
-   "digest": "0655ef7979599d35f6920b02ccda0ae3cea60ec476180303044e6f57bcfae1ce",
+   "digest": "36e65c49ad1d026d367006198b6c741f48ad20a88e34caaa02c650ec4a43d974",
    "definitions": {
     "Flock.RecVStar.ACC_VALUE": "d296633d397b8e10ccccb733a9b2e1b21acfa7e9700302160ffa4a4dac396c09",
     "Flock.RecVStar.CLAIM_VALUE": "14791ba5dbace24801878ebd6c2418a152a92342a8c3c5872a822d765fda9def",
@@ -35893,7 +35893,7 @@
     "Flock.RecVStar.candidate3Statements": "c88124e0ab10562250329912b6c9141da4aae7334f8742d9e617cce79cef62b8",
     "Flock.RecVStar.check": "c90f0d96089029480adddbd043ce249b3218ae90536a04dffca04c8dbdb343f6",
     "Flock.RecVStar.checkAcc": "32ab2741375e897afa06a79943a4c3da70f3a5a6c4254b989cc0af3d7fca11c3",
-    "Flock.RecVStar.checkAccReads": "f02bda542777c1a48e87f413bba7a6b40db1d58ba3069e5f5f8ab55ba5414861",
+    "Flock.RecVStar.checkAccReads": "9bae5253c03bb842dd59356fcda67d5232dd94278c2f5a0a6dc65759d8b117a9",
     "Flock.RecVStar.checkCandidate3": "1fcba29d6555156a6454fbf9e03b2154349f2d682ba8d8cb7b2105b9f2d260d2",
     "Flock.RecVStar.checkCandidate3Lists": "4ed92c4aeb5133f10e2907a76ed572a4cd9f21182babefdc5b303127a5b582da",
     "Flock.RecVStar.checkCandidate3Lists._sparseCasesOn_1": "9f1ef42063f413127cb6899bf258add435c7a13f1f0b3caac79eba49d727e674",
@@ -35904,6 +35904,7 @@
     "Flock.RecVStar.checkCircuit": "3bed6b4507df57d946b45050343aae39391a0fd13bf7c08dfb3bc1622c10955e",
     "Flock.RecVStar.checkCommitRounds": "bfbd3513c814845c7628ba30d1482feb6f8c4ac8647bbf4ebb850a242a84e997",
     "Flock.RecVStar.checkCovers": "23551cb87aa62e9d989db5bcab340308eb18b04fd23d7c8cb3382e173b68da37",
+    "Flock.RecVStar.checkEndReads": "c971d02801ff05dc3ce85ba399b25dd1324436e8a7bfa7d62a55256cb17ae1d4",
     "Flock.RecVStar.checkFile": "2ef6c095ade95ff21883bc3c9a80656b94fa8eb9812da1d66700d6e88899cb24",
     "Flock.RecVStar.checkFinished": "b55b5c6e3372d286cec76fda66f165a2ef8ae3bc751298f2b8ae85e04dde754f",
     "Flock.RecVStar.checkHolo": "b5cd7f82887dc7a4ed0b91cc8b799afc5611fc618ce47a570d58dccb436ae363",
@@ -35937,6 +35938,8 @@
     "Flock.RecVStar.coinsOf": "09527f9642314ca4c5bc012c423744b96973dbad8316f951255554abb1f6285a",
     "Flock.RecVStar.commitRounds": "5d8b51d9739cd1db9557e1ad9fef72957d52bf6b78c8c1f13161bf905a3c534a",
     "Flock.RecVStar.dupName?": "2b7eae84a8c22a9c8985faa3e7b12600f46943871f582e9158571202503ddbd2",
+    "Flock.RecVStar.endReads": "219a5b2848941f5dbdd3b4e309e496b50bce955d3a22fba743325cf236ecc2db",
+    "Flock.RecVStar.endWant": "9a9c7e9fcf4e5efaf6bba23bd3f372467134ee34e60fc3d7714ad35cb999641e",
     "Flock.RecVStar.firstDiff?": "68be6da858fdc751102fcfbcb411d2c50f932565e36382ee4824acba01eb7331",
     "Flock.RecVStar.fixedRow": "02f2cfc240d9b9b13aeaa146810be15ecb752dcfc1f6f7c1a5ca22238ec5d8fd",
     "Flock.RecVStar.hRound": "1bffb21737f73986457342254c3c901061baf88ae03f7f8aae80cff39103ec9c",
