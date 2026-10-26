@@ -34,6 +34,7 @@ if [ ! -f "$desc" ]; then
   desc=$(find "$d/build" -name descriptor.json.gz | head -1)
   [ -n "$desc" ] || { cat "$OUT/fetch.log"; exit 3; }
 fi
+cd "$d"  # the clone's integrations/vllm is no longer the cwd, so a sent tree's verity_vllm is the one imported
 if [ -n "${PROBE:-}" ]; then
   nproc; free -g | head -2
   "$PY" -c "import sys; sys.path.insert(0, '$HERE'); from units import load; p = load(__import__('pathlib').Path('$desc')); \
