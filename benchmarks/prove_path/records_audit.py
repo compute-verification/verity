@@ -305,7 +305,7 @@ def window_pins(w: Mapping[str, Any], circuit: Mapping[str, Any]) -> dict[str, d
     (ValueError) unless it names its value and a root and its domain binds the window's run root. The registration fixes
     them before the draw, so the Lean verifier's registered reads open each tie's rows against a root the prover chose
     before it knew which units are drawn."""
-    params = set(((circuit.get("registered") or {}).get("params") or {}))
+    params = set((circuit.get("registered") or {}).get("params") or {})
     acts = w.get("activations") or {}
     values = {v: dict(e) for v, e in (acts.get("values") or {}).items() if v in params}
     for v, e in values.items():
@@ -436,22 +436,20 @@ def verifier_window(window_dir: Path, law: Mapping[str, Any], template_sets: Pat
     return mine, doc, sets
 
 
-def output_class(circuit: Mapping[str, Any], given: Iterable[Iterable[int]] = ()) -> list[list[int]]:
+def output_class(circuit: Mapping[str, Any], given: Iterable[Iterable[int]] = (), own: Iterable[str] = ()) -> list[list[int]]:
     """The units the verifier proves whole (a5's output class), as ascending ``[lo, hi)`` ranges: the ``given`` ranges (the
     verifier's own, from the circuit's shape) and every unit an uncut registered read of an output port (``o<j>``)
     covers in the circuit record (``registered``'s ``reads``: units ``[at, at + prod(radix))`` of its reader template,
-    the population's indices from the templates' order), unless an input port also reads that value: such a value is a
-    tie inside the window (a wired loop's activations), whose units the draw samples like any other."""
+    the population's indices from the templates' order), unless it reads one of the window's ``own`` values
+    (`window_pins`: a tie inside the window, a wired loop's activations), whose units the draw samples like any other. A
+    value pinned from outside the window (a served ``out`` that the next step also reads) keeps its units in the class."""
     base, at = {}, 0
     for t, n in circuit["templates"]:
         base[t], at = at, at + n
-    units = {u for lo, hi in given for u in range(lo, hi)}
-    def output(port: str) -> bool:
-        return port[:1] == "o" and port[1:].isascii() and port[1:].isdigit()
-    reads = (circuit.get("registered") or {}).get("reads", ())
-    tied = {r["param"] for r in reads if "param" in r and not output(r["port"])}
-    for r in reads:
-        if output(r["port"]) and r.get("cut", [0, 1]) == [0, 1] and r.get("param") not in tied:
+    units, own = {u for lo, hi in given for u in range(lo, hi)}, set(own)
+    for r in (circuit.get("registered") or {}).get("reads", ()):
+        j = r["port"][1:]
+        if r["port"][:1] == "o" and j.isascii() and j.isdigit() and r.get("cut", [0, 1]) == [0, 1] and r.get("param") not in own:
             units.update(range(base[r["reader"]] + r["at"], base[r["reader"]] + r["at"] + math.prod(r["radix"])))
     out: list[list[int]] = []
     for u in sorted(units):
@@ -510,7 +508,7 @@ def audit(a: argparse.Namespace) -> int:
     a.port = a.port if a.port is not None else free_ports(a.ports)
     a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.law
     a.compose_cache = None
-    a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else ())
+    a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (), own=ties)
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
     if a.challenger:

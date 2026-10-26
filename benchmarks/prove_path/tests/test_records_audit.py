@@ -500,7 +500,19 @@ def test_the_output_class_is_the_given_ranges_and_every_uncut_registered_read_of
         {"reader": "a", "port": "o0", "param": "y", "at": 0, "radix": [8]},
         {"reader": "b", "port": "x", "param": "y", "at": 0, "radix": [8]},
         {"reader": "b", "port": "o0", "param": "out", "at": 4, "radix": [4]}]}}
-    assert RA.output_class(tie) == [[12, 16]]
+    assert RA.output_class(tie, own={"y"}) == [[12, 16]]
+    assert RA.output_class(tie) == [[0, 8], [12, 16]]
+
+
+def test_a_served_output_that_the_next_step_reads_keeps_its_units_in_the_output_class():
+    """A decode loop's served ``out``, pinned from outside the window, is read by an output port and by the next step's
+    input port: it isn't one of the window's own values, so its writers stay in the class (keying the exclusion on any
+    value an input port reads would leave the class empty)."""
+    decode = {"templates": [["a", 8], ["b", 8]], "registered": {"reads": [
+        {"reader": "b", "port": "o0", "param": "out", "at": 0, "radix": [8]},
+        {"reader": "a", "port": "x", "param": "out", "at": 0, "radix": [8]}]}}
+    assert RA.output_class(decode) == [[8, 16]]
+    assert RA.output_class(decode, own={"y"}) == [[8, 16]]
 
 
 def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_ignored_by_the_compile_check(tmp_path, monkeypatch):
