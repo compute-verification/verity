@@ -41,6 +41,7 @@ from verity_vllm.check.match import batch_decomp as bd
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.pipeline import global_program as gp
 from verity_vllm.program import workload as W
+from verity_vllm.records import workload as WL
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
 from verity.ml.circuits.program import Program
@@ -226,10 +227,12 @@ def _derived_dir(tmp_path, LP, T, execution="bi-eager"):
 
 
 def _manifest(tmp_path, reqs, name="workload.json", **extra):
+    """A workload record (`records.workload`) of `reqs`, its greedy sampling block holding `extra`, on an eager row."""
     p = tmp_path / name
-    json.dump({"requests": [{"request_id": f"uuid-{i}", "prompt_token_ids": list(range(1, r["LP"] + 1)), "max_tokens": r["cap"],
+    json.dump({"schema": WL.SCHEMA, "model": "toy", "engine": {}, "variants": {"greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0}},
+               "requests": [{"request_id": f"uuid-{i}", "prompt_token_ids": list(range(1, r["LP"] + 1)), "max_tokens": r["cap"],
                              "arrive_step": r.get("arrive", 0)} for i, r in enumerate(reqs)],
-               "sampling": {"temperature": 0.0, **extra}, "execution": "bi-eager"}, open(p, "w"))
+               "sampling": {"variant": "greedy", "temperature": 0.0, **extra}, "sweep": {"execution": "bi-eager"}}, open(p, "w"))
     return str(p)
 
 

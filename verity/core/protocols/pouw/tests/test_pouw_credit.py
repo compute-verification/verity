@@ -85,6 +85,10 @@ DRAWN_EXPECT = {
     "kn": ("layout", "n whole blocks of the tile's"), "blocks": ("layout", "is read by some call of K"),
     "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
 }
+WINDOW_DRAWN_EXPECT = {
+    "coin-form": ("coin", "the draw coin: " + Ch.OPENING_FORM), "args-form": ("draw", Cr.DRAW_ARGS),
+    "descriptor-hex": ("layout", Cr.DESCRIPTOR_HEX), "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
+}
 OUTCOME_EXPECT = {
     "missing": ("missing", "Prove and verify every drawn unit"), "failed": ("failed", "refuses the whole window"),
     "twice": ("outcome", "a retry never reproves it"), "undrawn": ("outcome", NOT_DRAWN), "chosen": ("outcome", NOT_DRAWN),
@@ -216,6 +220,7 @@ def _credited(name: str, seed: int):
 def test_every_mutation_is_aimed():
     assert set(CREDIT_EXPECT) == set(cases.CREDIT_NAMES)
     assert set(DRAWN_EXPECT) == set(cases.DRAWN_NAMES) - {"budget"}
+    assert set(WINDOW_DRAWN_EXPECT) == set(cases.WINDOW_DRAWN_NAMES)
     assert set(OUTCOME_EXPECT) == set(cases.OUTCOME_NAMES)
     assert set(WINDOW_EXPECT) == set(cases.WINDOW_NAMES) - {"j10r"}
     assert set(PERIOD_EXPECT) == set(cases.PERIOD_NAMES)
@@ -342,6 +347,36 @@ def _served(d: dict) -> list[int]:
 def _drawn(name: str, seed: int):
     d = cases.drawn_instance(random.Random(f"{name}/{seed}"), name)
     return Cr.drawn(*(d[k] for k in cases.DRAWN_KEYS))
+
+
+def _window_drawn(name: str, seed: int):
+    d = cases.window_drawn_instance(random.Random(f"{name}/{seed}"), name)
+    if not (type(d["descriptor"]) is str and Cr._HEX.fullmatch(d["descriptor"])):
+        return d, (None, ("layout", Cr.DESCRIPTOR_HEX))
+    lay, why = Cr.layout_of(bytes.fromhex(d["descriptor"]))
+    assert why is None, why
+    ss, why = Cr.strata(lay)
+    assert why is None, why
+    return d, Cr._window_drawn(d["window"], d["draw"], ss, d["k"])
+
+
+@pytest.mark.parametrize("name", sorted(WINDOW_DRAWN_EXPECT))
+def test_window_drawn_mutation(name):
+    code, part = WINDOW_DRAWN_EXPECT[name]
+    for seed in range(5):
+        _d, (got, refused) = _window_drawn(name, seed)
+        assert got is None and refused[0] == code and part in refused[1], (seed, refused)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_the_window_draw_is_its_coins(seed):
+    """`credit._window_drawn` draws the units `credit.drawn` does at the draw coin it opens, the window's root as the
+    stream, the draw's root as the registration and its receipts, over the strata of the descriptor's layout."""
+    d, (got, refused) = _window_drawn("honest", seed)
+    lay, _ = Cr.layout_of(bytes.fromhex(d["descriptor"]))
+    want, why = Cr.drawn(d["draw"]["coin"]["coin"], d["window"]["root"], d["draw"]["root"],
+                         {"receipts": d["draw"]["receipts"]}, lay, d["k"])
+    assert refused is None and why is None and got == want
 
 
 def _outcome(name: str, seed: int):

@@ -11,7 +11,8 @@ pass's step reads, `W`'s credited bits there less an explicit share `ε` of the 
 held what (the node's boundary, HBM against host DRAM) is attribution, stated apart. It composes the stacked remote
 audit in its deployed sketch form (`StackedSessionConservationSketchDeployed`), on a layout the prover may steer after
 the coins, with the carriers' cost read from the property's caps (`Gates.Property`, under
-`Accounting.Assumptions.EncodeChainHardness`) and the audit linked to `W`'s placed requirement (A1's
+`Accounting.Assumptions.SquaringFloor` and `Accounting.Assumptions.ChainSum`) and the audit linked to `W`'s placed
+requirement (A1's
 `Definitions/Accounting/Requirement.lean`) pass by pass, each pass and window on the devices' clocks. It credits `W`'s
 appended blocks only: a registered block's key is fixed for the registration, so nothing bounds its carriers, and the
 weights and the filler are the registration audit's to count. Its theorem is
@@ -71,9 +72,12 @@ tiles are not bounded. `G` holds at every value of them; what they are on a node
 named assumptions).
 
 *The circuit.* `Wc` is in the restricted class (`Gates.Restricted B`) and passes the stacking property at the caps
-`caps` on `Aud` (`Gates.Property`): in each window its budgeted units are within `c = caps.total` a byte `Aud`
-certifies, and its run inputs within that window's `R_in,v = caps.runBytes v` bytes. A window certifies at most its
-passes' stores, `P·N·4096` bytes.
+`caps` on `Aud` (`Gates.Property`): in each window its nonlinear units (its budgeted units and its data products,
+`Gates.nonlinear`) are within `c = caps.total` a byte `Aud` certifies, its data products within `caps.products` a
+byte, and its run inputs within that window's `R_in,v = caps.runBytes v` bytes. A window certifies at most its
+passes' stores, `P·N·4096` bytes. An encode of a word costs `E` nonlinear units, with `E ≤ 3·S·e_s` (`S = 1,021`
+squarings a root) under `Accounting.Assumptions.SquaringFloor` at `e_s` nonlinear units a squaring and
+`Accounting.Assumptions.ChainSum` at the deployed codec (p1024, 3 rounds, `ε ≥ 2^−64`).
 
 *The requirement.* The prover chooses everything on `W`'s side after every coin: the placed execution `p x` (each
 value's device `leaf` and the tick `ticks d s` at which device `d` begins engine step `s`), the layout of values in
@@ -159,7 +163,8 @@ group a page, so a chunk may complete several pages while their coins are out; i
 and both of `G`'s thresholds are positive at the 30 s life for 8B and for 70B (`life30_8b`, `life30_70b`).
 
 Proof (`Accounting.SecurityProofs.DeclaredCircuitRequirement`): under the lifetime cap each carrier's inputs are at
-most `8·R_L` and its encodes at most `L·c·P·N·4096` units (`OfCircuit` with the property), so every pass rebuilds at
+most `8·R_L` and its encodes at most `L·c·P·N·4096` nonlinear units (`OfCircuit` with the property), so every pass
+rebuilds at
 most `X_r·τ + C` bits of its appended tiles, and its tiles of `W` are appended tiles; the conservation runs on a pass's
 tiles of `W` alone (their sectors held, read, linked or rebuilt), so the rebuilds of registered tiles, which nothing
 bounds, never enter it; an unpaid window at slack `k` tiles a pass has a rank-poor sign matrix, a guessed tag (at every
@@ -175,9 +180,10 @@ within `L` windows of the one it joined, with the rebuilds of appended tiles cha
 passing the stacking property within its caps over `L` windows, its shortfall read pass by pass against the circuit's
 credited reads in appended blocks at the step each pass is bound to, with the memory map and plans holding its
 credited blocks (one-sided), each pass and window on the devices' clocks, in the random-oracle and ideal encoding
-models, under the per-pass hash budget, `EncodeChainHardness`, `KeyBinding`, `CircuitCarriers` and `SteeredLayout`. -/
+models, under the per-pass hash budget, `SquaringFloor`, `ChainSum`, `KeyBinding`, `CircuitCarriers` and
+`SteeredLayout`. -/
 def DeclaredCircuitRequirement : Prop :=
-  ∀ (n P N ρ S q G Xr Lr qr τ k a L E B εnum εden T M : ℕ) (ε δ : ℝ≥0∞) {ιW : Type} (Wc : Gates.Dag ιW)
+  ∀ (n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T M : ℕ) (ε δ : ℝ≥0∞) {ιW : Type} (Wc : Gates.Dag ιW)
     (caps : Gates.Caps) (Aud : Gates.Audit) {Ω Ca Ch : Type} [Fintype Ω] [Fintype Ca]
     (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin 128 → RateSketch.Sector))
     (choose : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch)
@@ -196,7 +202,8 @@ def DeclaredCircuitRequirement : Prop :=
     7 ≤ n → 0 < P → 0 < N → 0 < E →
     Assumptions.SketchRank 16 128 12 ε →
     Assumptions.KeyBinding T M δ enc →
-    Assumptions.EncodeChainHardness Gates.p1024 3 B E εnum εden → εden ≤ 2 ^ 64 * εnum →
+    Assumptions.SquaringFloor Gates.p1024 es εnum εden → Assumptions.ChainSum Gates.p1024 3 B es εnum εden →
+    E ≤ 3 * Gates.p1024.squarings * es → εden ≤ 2 ^ 64 * εnum →
     (∀ s w η j pre, Assumptions.SketchHashBudget (((A.session s).window w η).device j pre) (qr * τ)) →
     Assumptions.CircuitCarriers (fun c y => A.session (steer c y)) (RateSketch.steeredStore enc choose layout) layout
       joined (Xr * τ) L B εnum εden Wc Aud →

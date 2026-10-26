@@ -293,7 +293,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
                  time_gemm: bool = False, schedule: str | Schedule = SERIAL, graphs: bool = False, whole_defer: bool = False,
                  flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None, whole_defer_a: bool = False,
                  whole_fork_stats: bool = False, lag_ends: bool = False, whole_tree_sm: bool = False, aside_ends: bool = False,
-                 pass_index: int | None = None, whole_prefetch_b: bool = False, whole_eager: str | Schedule | None = None):
+                 pass_index: int | None = None, whole_prefetch_b: bool = False, whole_eager: str | Schedule | None = None,
+                 whole_shape_joins: bool = False):
         """`coins` is the epoch's coin commitment, held in this process or a live session's on the auditor host, and `opening`
         its salt coin, opened after the weights' root, or a live session's after salt epoch `pass_index`'s root (`epoch_of`,
         which raises `DomainError` otherwise): the salt is the coin's.
@@ -302,12 +303,12 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         too, its tile tree runs on a stream of its own over a copy of the leaves (`LaneCalls._end_aside`).  `whole_eager`
         is the schedule a forward a whole-step arm runs eagerly takes (`eager_forward`)."""
         whole_options(entry, kernel, whole_defer, whole_defer_a, whole_fork_stats, whole_tree_sm, lag_ends, aside_ends,
-                      whole_prefetch_b)
+                      whole_prefetch_b, whole_shape_joins)
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.nb, self.salt_key, self.retain_dir, self.retained, self._weight_files = kernel.run.NB, salt_key, None, 0, {}
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
         self.whole_defer, self.whole_defer_a, self.whole_fork_stats = whole_defer, whole_defer_a, whole_fork_stats
-        self.whole_tree_sm, self.whole_prefetch_b = whole_tree_sm, whole_prefetch_b
+        self.whole_tree_sm, self.whole_prefetch_b, self.whole_shape_joins = whole_tree_sm, whole_prefetch_b, whole_shape_joins
         self.lag_ends, self.aside_ends, self._lagged, self._end_side = lag_ends, aside_ends, None, None
         self._graphs: dict[tuple, _Graph] = {}
         self.variant = scheme.device.name
@@ -370,6 +371,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
                        + (" (the GEMM leaving the tree its SM)" if whole_tree_sm else "")
                        + (", its A scales beside its A commitment" if whole_fork_stats else "")
                        + (", its B̃ prefetched into L2 beside its A commitment" if whole_prefetch_b else "")
+                       + (", its side steps joined before its shape's next call" if whole_shape_joins else "")
                        + (f", an eager forward's pass under {self.whole_eager.name}" if self.whole_eager else ""))
             if self.graphs else None,
             "pass_end": ("an engine step's commitment read back at the next end" + (", its tile tree on a stream of its own"
