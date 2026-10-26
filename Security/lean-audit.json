@@ -1944,6 +1944,18 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "Pouw.Assumptions.CoinsConfidential": {
+   "owner": "@compute-research",
+   "digest": "d8393ab6968720ddd2ebc0ab09931d9b238144a58e0fb8b5391cf9385cd23115"
+  },
+  "Pouw.Assumptions.OwnDither": {
+   "owner": "@compute-research",
+   "digest": "14587c33d7d3ff0bdab1def743552da1bfff7faa306ac293271baf4686c60772"
+  },
+  "Pouw.Dither.MomentSound": {
+   "owner": "@compute-research",
+   "digest": "b2f280b18c92267044f5539005dcd2395eae9960c595f4d4631bd6274e4e4874"
   }
  },
  "meaning": [
@@ -9147,14 +9159,17 @@
    "assumptions": [],
    "type_hash": "80e9555a95a1298330b1ecdc05f029d07f6984edd8311de2bb42bf252c9560e5"
   },
+  "Pouw.SecurityProofs.Dither.WorkMoment": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Dither.WorkMoment : Pouw.Guarantees.Dither.WorkMoment"],
+   "assumptions": [],
+   "type_hash": "7725090eea4c29a06f682107c30cdaff94aa3c5500b65579b5cce4660ff61675"
+  },
   "Pouw.SecurityProofs.Dither.WorkSound": {
    "owner": "@compute-research",
    "signature": ["Pouw.SecurityProofs.Dither.WorkSound : Pouw.Guarantees.Dither.WorkSound"],
    "assumptions": [],
    "type_hash": "d6773d52a6c5d776bb73acfb2282f6e4087777d1cce85e4aa4ae1c7d9d2a1d6b"
-  },
-  "Pouw.SecurityProofs.Dither.WorkMoment": {
-   "owner": "@compute-research"
   },
   "Pouw.SecurityProofs.Dither.WorkSoundNoFold": {
    "owner": "@compute-research",
@@ -23321,15 +23336,19 @@
    "guarantees": ["Pouw.SecurityProofs.Dimension.A2WordsIff"]
   },
   "Definitions.Pouw.Assumptions.Dither": {
-   "digest": "b3cd00ef338f10989664d8b3db45b7880f57d268d6ec42618768f3a2a43980b3",
+   "digest": "c26eb9db3ca1a15738310a5a63865dd2547de35af9623385c3cd445a4db04fad",
    "definitions": {
+    "Pouw.Assumptions.CoinsConfidential": "d8393ab6968720ddd2ebc0ab09931d9b238144a58e0fb8b5391cf9385cd23115",
     "Pouw.Assumptions.ImportWithinCertifier": "da3d3b0e08858ad33f905c8e639f5f63d576cccc0197c9ae5dac826a40b6084d",
     "Pouw.Assumptions.OutsourceWithinEgress": "b56a56840f42a8ccfc2418f4a8b4169d2e1025ce9933babced5498b9fff7fbc8",
+    "Pouw.Assumptions.OwnDither": "14587c33d7d3ff0bdab1def743552da1bfff7faa306ac293271baf4686c60772",
     "Pouw.Assumptions.SAKMatmul": "aca93284b4344597af71ea0c3d855de46f764cce17a7649612e8145c68315919",
     "Pouw.Assumptions.ServiceSound": "ad7aa962f2d81c72c56e9a919f0f84a08e2183e328b115ed7192fc51fd7ab19f",
     "Pouw.Assumptions.ShaSpeed": "a7aaf286384107345096ab0159333defd5d18be6702c647d43c33036731f1ccf"
    },
    "guarantees": [
+    "Pouw.SecurityProofs.Dither.FleetSound",
+    "Pouw.SecurityProofs.Dither.WorkMoment",
     "Pouw.SecurityProofs.Dither.WorkSound",
     "Pouw.SecurityProofs.Dither.WorkSoundNoFold",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundH200",
@@ -23748,6 +23767,7 @@
     "Pouw.Assumptions.ShaRealize": "c0a7b2a0583613cdc66de3bb9c2fb24feb188ebf99fbd7668f87ceb42985e6ad"
    },
    "guarantees": [
+    "Pouw.SecurityProofs.Dither.WorkMoment",
     "Pouw.SecurityProofs.Dither.WorkSound",
     "Pouw.SecurityProofs.Dither.WorkSoundNoFold",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundH200",
@@ -24148,7 +24168,7 @@
    "guarantees": ["Pouw.SecurityProofs.Dimension.A2WordsIff"]
   },
   "Definitions.Pouw.Dither": {
-   "digest": "fd28260d2b0d3eaf470453e9fa0aac249750d47973a0e9b446eaf49610724c08",
+   "digest": "1fcd74142507d0e12a40ffb47d0f907f5f5e0ab30799713f7ff92153a28a68c0",
    "definitions": {
     "Pouw.Dither.Accel": "9ec480ad86ec2d74ede4f0425a6de1dc7b028b5da50ebe62f1272b00fa7b531d",
     "Pouw.Dither.Accel.G1": "4653da5027854c6fcc140db720f6a2dedbae2c9b3ec44e4c96c63aafd4278963",
@@ -24170,6 +24190,7 @@
     "Pouw.Dither.Accel.use": "f007520fb83e7f1590095b739c0c874f3aeaf50bac9d9eb4b80fd4c383c71bbc",
     "Pouw.Dither.Accel.wall": "ed94fd59ce3d84f3a84155a33d4361089a9a29721ffe3b8ef03904c36330f390",
     "Pouw.Dither.FreedSound": "d651f64f2dd7178c2c19065387a5d8e53b3dffadda6f93a99e55a3a3d0112613",
+    "Pouw.Dither.MomentSound": "b2f280b18c92267044f5539005dcd2395eae9960c595f4d4631bd6274e4e4874",
     "Pouw.Dither.NoFold": "524a3001ca92a9049b4995d6172d95c2948cb1f4c5b727bbbd3bff7e057d9b46",
     "Pouw.Dither.NoFold.Chk": "f087b3c7c0e1971c5f066d0baae0ac481c570ec940ad6c4956aebd37f1512795",
     "Pouw.Dither.NoFold.Draw": "ac76d77cbe561e9e4fbbfa4fafd2df43707424ea1c0507dc63906f908591713e",
@@ -24239,6 +24260,7 @@
     "Pouw.Dither.avg": "a5ccab788ce3ef5b5b0f4704acf4a359e91c867611e0b77c34f9562e06d2dd40",
     "Pouw.Dither.commitMoment": "fc3b55f8225d99de96ca451e1437ad8a18504492ad327546f79a9c4f16d4458a",
     "Pouw.Dither.epsWorkSound": "71ce05753d99daf0eed4b806f1ff0f55b86b567b34d715a03b0950ba2415c1e7",
+    "Pouw.Dither.fleetLuck": "b59e224a07418794f1d4c198b335444b1b24d1b06e0ef3730764fcd89d5f4875",
     "Pouw.Dither.noFoldRound": "113bb6a1c4a48fc341b28857f0c044c2088c42fd0b9c68be428d0881e30532e1",
     "Pouw.Dither.noFoldWord": "065991b2e0abd88b32919f01355bb47c746db331c5c912089f8ea9deca46c2e7",
     "Pouw.Dither.roundShortfall": "02b16cb81b88bdc126b916354d4327f99dd54555cfd218838c7c240f98d752c3",
@@ -24247,6 +24269,7 @@
    "guarantees": [
     "Pouw.SecurityProofs.Dither.FleetSound",
     "Pouw.SecurityProofs.Dither.FreedOfFloor",
+    "Pouw.SecurityProofs.Dither.WorkMoment",
     "Pouw.SecurityProofs.Dither.WorkSound",
     "Pouw.SecurityProofs.Dither.WorkSoundNoFold",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundH200",
@@ -25043,16 +25066,18 @@
    "guarantees": ["Pouw.SecurityProofs.Dimension.A2WordsIff"]
   },
   "Definitions.Pouw.Guarantees.Dither": {
-   "digest": "257f5434147ada36bda66df9de6e96a9c2c9604d48509be39e94208a889b1872",
+   "digest": "dc3a54e6bf7f841a930419d46d9fb5f095a3771592be0552f5639bc67bf939cf",
    "definitions": {
-    "Pouw.Guarantees.Dither.FleetSound": "09bb3eb51ded79a8e1899b586b6846be76d25b3c5a2b7bdbc12cc19658c0b6d1",
+    "Pouw.Guarantees.Dither.FleetSound": "65a38e9df4c518edc4350f0c8739b71ca85a8105efd7d758b98928e71e16653a",
     "Pouw.Guarantees.Dither.FreedOfFloor": "74e917dc708f8b7be81a2fae05513cc389e1d165d42c37e4b0e572857934f858",
+    "Pouw.Guarantees.Dither.WorkMoment": "f0a604d0b3ff4b20d65ed9bca3e670b22ab1d5335d812a4216397929ceea6c76",
     "Pouw.Guarantees.Dither.WorkSound": "10330a4977ca86e77b5b1e7b85c15a7a80dcdcffcf8685ffca28a15cb7ceeae1",
     "Pouw.Guarantees.Dither.WorkSoundNoFold": "e4b1286b9c196dee999c938be655ee28ae86a035137d85bcdbe580debada2f3d"
    },
    "guarantees": [
     "Pouw.SecurityProofs.Dither.FleetSound",
     "Pouw.SecurityProofs.Dither.FreedOfFloor",
+    "Pouw.SecurityProofs.Dither.WorkMoment",
     "Pouw.SecurityProofs.Dither.WorkSound",
     "Pouw.SecurityProofs.Dither.WorkSoundNoFold"
    ]
@@ -29084,6 +29109,7 @@
     "Flock.SoundAtBridge.soundAtBridge_nonvacuous",
     "Pouw.SecurityProofs.Dither.FleetSound",
     "Pouw.SecurityProofs.Dither.FreedOfFloor",
+    "Pouw.SecurityProofs.Dither.WorkMoment",
     "Pouw.SecurityProofs.Dither.WorkSound",
     "Pouw.SecurityProofs.Dither.WorkSoundNoFold",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundH200",
