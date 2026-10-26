@@ -445,8 +445,9 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
         w[a], w[b] = (w[a][0], w[a][1], w[b][2]), (w[b][0], w[b][1], w[a][2])
         neg["partial-wired-to-another-combine-slot (§16.13)"] = {"refused": bool(WI.check(rewired(j, tuple(w)), publics))}
     m = members[k]
+    names = [q for q, _ in m.all_rows]
     body = bytearray(publics[m.key])
-    body[WI.string_offset(m, p, publics[m.key])] ^= 1
+    body[names.index(p) * WI.BC_BYTES] ^= 1
     neg["wired-row-not-its-writer-s-output (§16.13)"] = {"refused": bool(WI.check(members, {**publics, m.key: bytes(body)}))}
     return neg
 

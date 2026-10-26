@@ -3,9 +3,7 @@ one ``(port, out, writers)`` per wire) reads, unit by unit, other units' output 
 ``writers[i]``'s ``out`` row, committed under that row's salt, so the two rows' ``b || c`` are one string.  Lean's links hold
 inside one statement; these join statements (one coordinate's K-chunks, chunk c's ``acc`` chunk c - 1's output; split partials,
 a combine unit's ``in<j>.s`` split s's), so the verifier holds them on the public bodies the leaf layer binds, before the draw
-(`check`), and a drawn unit's input is the committed output of the unit that wrote it. A shared-row member (one reading
-registered rows) may be wired on its other ports, each its own table of one row a unit: its unit's string is that table's
-row at the unit's ref, both in its public body."""
+(`check`), and a drawn unit's input is the committed output of the unit that wrote it."""
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
@@ -35,7 +33,7 @@ def validate(members: Sequence[Any]) -> None:
         if len({p for p, _o, _ws in m.wired}) != len(m.wired):
             raise ValueError(f"{m.key}: ports {[p for p, _o, _ws in m.wired]} are wired more than once")
         for p, o, ws in m.wired:
-            if dict(m.tables).get(p, m.n) != m.n or p not in dict(m.rows) or len(ws) != m.n or min(ws) < 0 or max(ws) >= total:
+            if m.tables or p not in dict(m.rows) or len(ws) != m.n or min(ws) < 0 or max(ws) >= total:
                 raise ValueError(f"{m.key}: wiring {p!r} is not one writer in [0, {total}) per unit of an input port of its own rows")
             for wm, _mine, _theirs in _writers(members, ws):
                 if dict(wm.out_rows).get(o) != dict(m.rows)[p] or wm.schema(o) != m.schema(p):
@@ -56,52 +54,12 @@ def salts(members: Sequence[Any], rows: Mapping[str, np.ndarray], ys: dict[str, 
             ys[m.port(p)] = y.tobytes()
 
 
-def _layout(m: Any, body: bytes) -> tuple[list[str], list[int], np.ndarray] | None:
-    """A shared-row member's public body (``rows.Committed.public_body``): each port's table size, in port order, and the
-    refs (instance-major, a column a port); None when the body is not that."""
-    names, tables = [q for q, _ in m.all_rows], dict(m.tables)
-    sizes = [tables.get(q, m.n) for q in names]
-    at = sum(sizes) * BC_BYTES
-    if len(body) != at + 4 * m.n * len(names):
-        return None
-    refs = np.frombuffer(body, dtype="<u4", offset=at).reshape(m.n, len(names))
-    return names, sizes, refs
-
-
 def _strings(publics: Mapping[str, bytes], m: Any, port: str) -> np.ndarray | None:
-    """Each of member ``m``'s units' ``port`` string in its public body: its own (instance-major), or in a shared-row member
-    its port table's row at its ref."""
     names = [q for q, _ in m.all_rows]
     body = publics.get(m.key)
-    if body is None:
+    if body is None or len(body) != m.n * len(names) * BC_BYTES:
         return None
-    if not m.tables:
-        if len(body) != m.n * len(names) * BC_BYTES:
-            return None
-        return np.frombuffer(body, dtype=np.uint8).reshape(m.n, len(names), BC_BYTES)[:, names.index(port)]
-    lay = _layout(m, body)
-    if lay is None:
-        return None
-    names, sizes, refs = lay
-    j = names.index(port)
-    col = refs[:, j]
-    if (col >= sizes[j]).any():
-        return None
-    table = np.frombuffer(body, dtype=np.uint8, count=sizes[j] * BC_BYTES, offset=sum(sizes[:j]) * BC_BYTES)
-    return table.reshape(sizes[j], BC_BYTES)[col]
-
-
-def string_offset(m: Any, port: str, body: bytes) -> int:
-    """The byte offset of unit 0's ``port`` string in member ``m``'s public ``body`` (what `check` reads for it)."""
-    names = [q for q, _ in m.all_rows]
-    if not m.tables:
-        return names.index(port) * BC_BYTES
-    lay = _layout(m, body)
-    if lay is None:
-        raise ValueError(f"{m.key}: its public body is not a shared-row member's")
-    names, sizes, refs = lay
-    j = names.index(port)
-    return (sum(sizes[:j]) + int(refs[0, j])) * BC_BYTES
+    return np.frombuffer(body, dtype=np.uint8).reshape(m.n, len(names), BC_BYTES)[:, names.index(port)]
 
 
 def check(members: Sequence[Any], publics: Mapping[str, bytes]) -> dict[str, str]:
@@ -112,7 +70,7 @@ def check(members: Sequence[Any], publics: Mapping[str, bytes]) -> dict[str, str
         for p, o, ws in m.wired:
             mine = _strings(publics, m, p)
             if mine is None:
-                bad[m.key] = f"its public body is not {m.n} units of {len(m.all_rows)} strings, or their tables and refs"
+                bad[m.key] = f"its public body is not {m.n} units of {len(m.all_rows)} strings"
                 break
             for wm, sel, theirs in _writers(members, ws):
                 got = _strings(publics, wm, o)
