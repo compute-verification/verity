@@ -191,8 +191,13 @@ in \(\mathcal I\).
   ring ops. A potential that sees every bit of the exact word is needed, or a proof that the Boolean glue costs more
   than it saves: an exact 8×8-bit multiply in LOP3s is about 80 bit-ops, 160× a tensor-core MAC.
 - *Concurrency.* Resources run in parallel, so Strassen's extra additions can run on an idle ALU while the freed tensor
-  cores do other work. The honest Dither kernel is ALU-bound (1.47–1.55× plain INT8, from duo), which is what makes
-  that trade cost wall time.
+  cores do other work. The honest Dither kernel is ALU-bound, which is what makes that trade cost wall time.
+  **The figures are per device** (LIT's smell, 02:20Z):
+  - The measured 1.47–1.55× plain INT8 with duo is the **RTX PRO 6000's**.
+  - On the **H200**, data-sheet arithmetic (one ALU op ≈ 64 INT8 MACs of time, duo ≈ 3 ops per 32-MAC word) predicts
+    ALU time ≈ 6× tensor time with duo. That means γ ≈ 5, with about 5/6 of the tensor cores idle.
+  - The H200 headline design uses the LI fold, which O-REDTEAM reads as balanced against the census row JI90_0.
+  - CALIB states r_H and the measured overhead per instance. Until then, quote γ and the idle share only with their device.
 - *Packing* narrow products into one int8 lane with spaced accumulation.
 - *Four Russians* for the binary \(R\): table lookups in place of MACs.
 - *Reuse and pre-σ work.* \(AB\) can be computed once for a repeated \((A,B)\). Under rule L, the monitoring period
@@ -209,8 +214,7 @@ in \(\mathcal I\).
 - The coordinator's recommended definition: no prover strategy gets more credited work plus other work on the period's
   devices than the honest optimum on the same devices, plus \(\varepsilon C\).
   - Its LP dual is a price vector \(\lambda\). \(B_\theta\)'s ⅘·B + ⅕·R6 has this form.
-  - Per-resource "tensor-core MACs used ≥ (1−ε)·credited" is the wrong notion, because honest Dither leaves about ⅓
-    of the tensor cores idle.
+  - Per-resource "tensor-core MACs used ≥ (1−ε)·credited" is the wrong notion, because honest Dither leaves tensor cores idle: about ⅓ on the RTX PRO 6000 (measured), and possibly far more on the H200 with duo (see 4(e)).
 - Hypothesis to test: with duo forcing per-word ALU work, ε is governed by the honest kernel's ALU slack over the
   minimal per-word fold cost \((r_H - r_{\min})\), divided by Strassen's ALU-for-tensor-core exchange rate in (b).
 
