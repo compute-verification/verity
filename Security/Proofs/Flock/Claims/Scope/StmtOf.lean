@@ -33,14 +33,16 @@ theorem tableAt_model {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts)
     simp only [Bool.false_eq_true, ↓reduceIte] at hd
     obtain ⟨hwf, hrw⟩ := Refine.setupH_wf hd
     have P := parse_facts (setupH_spec ht' hd).1
-    exact ⟨hwf, hrw, fun a b => ⟨Integrate.placedA_eq P.netWidths (setupH_layout ht' hd) (Integrate.setupH_leaf hd) a b,
-      Integrate.placedB_eq P.netWidths (setupH_layout ht' hd) (Integrate.setupH_leaf hd) a b⟩⟩
+    exact ⟨hwf, hrw, fun a b => ⟨Integrate.placedA_eq P (setupH_layout ht' hd) (Integrate.setupH_leaf hd) a b,
+      Integrate.placedB_eq P (setupH_layout ht' hd) (Integrate.setupH_leaf hd) a b⟩⟩
   · rw [hh] at hd
     simp only [↓reduceIte] at hd
     obtain ⟨hwf, hrw⟩ := Hidden.setupHidden_wf hd
     have s := Hidden.setupHidden_spec' hd
-    have P := Hidden.parseCommit_netWidths ht' s.parse
-    exact ⟨hwf, hrw, fun a b => ⟨Integrate.placedA_eq P (Hidden.hidden_layout' ht' hd) s.leaf a b,
-      Integrate.placedB_eq P (Hidden.hidden_layout' ht' hd) s.leaf a b⟩⟩
+    have hC := Hidden.committed_of_commit s.parse
+    have hW := hC.netWidths ht'
+    have hK := hC.netKinds ht'
+    exact ⟨hwf, hrw, fun a b => ⟨Integrate.placedA_eqW hW hK (Hidden.hidden_layout' ht' hd) s.leaf a b,
+      Integrate.placedB_eqW hW hK (Hidden.hidden_layout' ht' hd) s.leaf a b⟩⟩
 
 end Flock.Readable

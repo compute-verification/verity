@@ -2,6 +2,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Commit
 import Proofs.Flock.Soundness.Discharge.Hidden.Flat
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 import Proofs.Flock.Soundness.Discharge.Layout.Scope
+import Proofs.Flock.Soundness.Discharge.Hidden.Commit
 
 /-!
 # A hidden-output statement's flat twin
@@ -115,13 +116,13 @@ theorem outPairs_ne_unit (L : Layout st) (F : Aliased.UnitFacts tags st) (hrows 
     (show AtSlot st.c st.c.unitNet s₀ b _ from ⟨hs₀, hb', he⟩)
 
 /-- **An untyped hidden statement reads its flat twin's rows at every unit slot's row**, at unsegmented output rows, its Δ being
-`HmRow.delta`'s, then `outPairs` ([wave2-hidden]'s `Hidden.hidden_delta'`). -/
-theorem unitRowsFlat (ht : tags.typed = false)
-    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st)
+`HmRow.delta`'s, then `outPairs` ([wave2-hidden]'s `Hidden.hidden_delta'`), of a session on its committed circuit, flat
+or templated (`Hidden.SpecC`). -/
+theorem unitRowsFlatC (ht : tags.typed = false) (sc : Hidden.SpecC tags cf pf coins tables draw st)
     (hrows : Hidden.Any.OutRowsS st.c) : UnitRowsFlat st := by
-  have s := Hidden.setupHidden_spec' h
-  have L := flat_layout ht h
-  have F := flat_unitFacts ht h
+  have s := sc.self
+  have L := sc.flatLayout ht
+  have F := sc.unitFacts ht
   intro s₀ hs₀ b hb r j hr
   have hout : ∀ q ∈ Hidden.outPairs st.c, q.1 ≠ r.val := fun q hq => by
     rw [hr]; exact outPairs_ne_unit L F hrows hq hs₀ hb
@@ -134,6 +135,12 @@ theorem unitRowsFlat (ht : tags.typed = false)
   · show rangesEntry st (slotEntryB st) r.val j.val + deltaEntry st.db r.val j.val =
       rangesEntry st (slotEntryB st) r.val j.val + deltaEntry (HmRow.delta st.c st.pin).2 r.val j.val
     rw [hdb, Hidden.deltaEntry_append_out hout]
+
+/-- **`unitRowsFlatC` at `Stmt.setupHidden`'s accept.** -/
+theorem unitRowsFlat (ht : tags.typed = false)
+    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st)
+    (hrows : Hidden.Any.OutRowsS st.c) : UnitRowsFlat st :=
+  unitRowsFlatC ht (Hidden.setupHidden_specCC h) hrows
 
 /-! ## The rows `scopeOkH` covers -/
 

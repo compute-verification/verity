@@ -62,20 +62,6 @@ theorem parseCommit_checkFacts (ht : tags.typed = false) (h : HmOut.parseCommit 
   have hty : c.typed = none := by rw [he]; exact P.typed
   exact check_facts (tags := tags) (ls := ls) hty hl
 
-/-- **A committed untyped circuit's nets are as the placement reads them** (`Integrate.NetWidths`): `HmRow.parse`'s for a
-flat file, the template's committed net then the file's for a templated one (`parseTmpl_net_width`). -/
-theorem parseCommit_netWidths (ht : tags.typed = false) (h : HmOut.parseCommit tags cf tables = .ok c) :
-    Integrate.NetWidths c := by
-  cases hi : tags.isTmpl
-  · rw [parseCommit_flat hi] at h
-    exact (parse_facts (parse_untyped ht h).1).netWidths
-  · rw [parseCommit_tmpl hi] at h
-    refine ⟨fun hn => ?_, ?_⟩
-    · obtain ⟨h1, h2, h3, -⟩ := parseTmpl_net_width h hn
-      exact ⟨h1, h2, h3⟩
-    · obtain ⟨tu, c₀, hp, -, -, rfl⟩ := TmplValue.parseTmpl_cases h
-      exact (parse_factsPre_nets hp).1.kinds
-
 /-- A committed circuit has the tags' leaf scheme. -/
 theorem parseCommit_leafScheme (h : HmOut.parseCommit tags cf tables = .ok c) : c.leafScheme = tags.merkleLeaf := by
   cases hi : tags.isTmpl
@@ -341,7 +327,71 @@ theorem Committed.unrolled_unit (hty : tags.typed = false) (h : Committed tags c
   · have hf := parse_tmpl_none hty h
     rw [unrolled_flat hf, lunit_flat hf]
     exact ⟨rfl, hf, rfl⟩
-  · obtain ⟨-, -, -, -, -, -, -, -, he⟩ := unrolled_of_parseTmpl h
+  · obtain ⟨_tu, _n, -, -, -, -, -, -, he⟩ := unrolled_of_parseTmpl h
     exact ⟨FlockSoundness.unrolled_unit h, unrolled_tmpl h, by rw [he]⟩
+
+/-- **The statement circuit is the committed one with other nets and no template**: every other field (ports, leaves,
+ranges, `units_per_vu`, the net indices) is the committed circuit's. -/
+theorem Committed.unrolled_eq (hty : tags.typed = false) (h : Committed tags cf tables c) :
+    ∃ nets, HmOut.unrolled c = { c with nets := nets, tmpl := none } := by
+  rcases h with h | h
+  · have hf := parse_tmpl_none hty h
+    refine ⟨c.nets, ?_⟩
+    rw [unrolled_flat hf]
+    cases c
+    simp only at hf
+    subst hf
+    rfl
+  · obtain ⟨_tu, _n, -, -, -, -, -, -, he⟩ := unrolled_of_parseTmpl h
+    exact ⟨_, he⟩
+
+/-- **A committed circuit is untyped and passes `HmRow.check` and `HmOut.checkRows`.** -/
+theorem Committed.check (hty : tags.typed = false) (h : Committed tags cf tables c) :
+    c.typed = none ∧ (∃ ls, HmRow.check c tags ls = .ok ()) ∧ HmOut.checkRows c = .ok () := by
+  rcases h with h | h
+  · obtain ⟨hp, hc⟩ := parse_untyped hty h
+    have P := parse_facts hp
+    exact ⟨P.typed, P.check, hc⟩
+  · obtain ⟨tu, c₀, P, hck, he, -, -⟩ := TmplValue.parseTmpl_facts h
+    obtain ⟨ls, hcheck⟩ := P.check
+    exact ⟨by rw [he]; exact P.typed, ⟨ls, by rw [he]; exact hcheck⟩, by rw [he]; exact hck⟩
+
+/-- **A committed circuit's nets store `A` and `B` at their slots' widths**, flat (`Integrate.net_width`) or templated
+(`parseTmpl_net_width`). -/
+theorem Committed.netWidths (hty : tags.typed = false) (h : Committed tags cf tables c) : Integrate.NetWidths c := by
+  rcases h with h | h
+  · exact Integrate.netWidths_of (parse_facts (parse_untyped hty h).1)
+  · exact fun _ hn => have w := parseTmpl_net_width h hn; ⟨w.1, w.2.1, w.2.2.1⟩
+
+theorem Committed.netKinds (hty : tags.typed = false) (h : Committed tags cf tables c) : Integrate.NetKinds c := by
+  rcases h with h | h
+  · exact (parse_facts (parse_untyped hty h).1).kinds
+  · obtain ⟨tu, c₀, P, -, he, -, -⟩ := TmplValue.parseTmpl_facts h
+    subst he
+    exact P.kinds
+
+/-- **A session's layout**, flat or templated (`hidden_layoutC`). -/
+theorem SpecC.layout (ht : tags.typed = false) (s : SpecC tags cf pf coins tables draw st) : Layout st :=
+  Or.elim s (hidden_layoutC ht) fun s => by
+    obtain ⟨hp, hc⟩ := parse_untyped ht s.parse
+    have P := parse_facts hp
+    exact hidden_layout_of (layout_of P s.pin rfl rfl s.m s.kLog) P.typed s.da s.db (outPairs_inBit hp hc)
+
+/-- **A session's layout model is `stmtOf` of its statement**, flat or templated (`Integrate.model_eqW`). -/
+theorem SpecC.model_eq (ht : tags.typed = false) (s : SpecC tags cf pf coins tables draw st) (L : Layout st)
+    (hwf : StmtWF st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) : L.model regs = stmtOf st hwf regs :=
+  Integrate.model_eqW (Committed.netWidths ht s.committed) (Committed.netKinds ht s.committed) L s.self.leaf hwf regs
+
+/-- **A session's statement circuit is `HmOut.parseStmt`'s**: its committed circuit, unrolled. -/
+theorem SpecC.parseStmt_eq (ht : tags.typed = false) (s : SpecC tags cf pf coins tables draw st) :
+    HmOut.parseStmt tags cf tables = .ok (HmOut.unrolled st.c) :=
+  Or.elim s (fun s => parseStmt_of_commit ht s.parse) fun s => by
+    rw [unrolled_flat (parse_tmpl_none ht s.parse)]
+    exact parseStmt_of_parse (HmOut.parse_isTmpl s.parse) s.parse
+
+/-- **A flat session's circuit is `HmOut.parse`'s.** -/
+theorem SpecC.parse_flat (hi : tags.isTmpl = false) (s : SpecC tags cf pf coins tables draw st) :
+    HmOut.parse tags cf tables = .ok st.c :=
+  Or.elim s (fun s => by rw [← parseCommit_flat hi]; exact s.parse) (fun s => s.parse)
 
 end FlockSoundness.Discharge.Hidden

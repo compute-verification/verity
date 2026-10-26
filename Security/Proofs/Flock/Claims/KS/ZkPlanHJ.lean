@@ -31,8 +31,8 @@ open FlockSoundness.Discharge.Tables (DecodesTable)
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **A `DrawSetupZHJ`'s table is `zkTab`** at its statement, at every layout and link layout: the same schedule and
-`t_pad`, `stmtOf` the layout's model statement (`Integrate.model_eq`: the committed circuit's nets are as the placement
-reads them, `parseCommit_netWidths`, and its leaf is the default one), and the same padding constant, pads and inner code. -/
+`t_pad`, `stmtOf` the layout's model statement (`Integrate.model_eqW`: the committed circuit's nets are as the placement
+reads them, `Hidden.Committed.netWidths`/`netKinds`, and its leaf is the default one), and the same padding constant, pads and inner code. -/
 theorem tableH_eq_zkTab {n mPts : ℕ} {I' : Exec.Inputs} {S : Finset (Fin n)} {d : Lean.Json}
     (ht : I'.tags.typed = false) (y : DrawSetupZHJ I' mPts S d) {st : Stmt} (hst : y.x.st = st)
     (L : Layout st) {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule st.m = .ok (sch, tPad))
@@ -43,7 +43,8 @@ theorem tableH_eq_zkTab {n mPts : ℕ} {I' : Exec.Inputs} {S : Finset (Fin n)} {
   obtain ⟨rfl, rfl⟩ := Prod.ext_iff.1 (Except.ok.inj (hz'.symm.trans hz))
   have s := Hidden.setupHidden_spec' x.h
   have hS : Refine.stmtOf x.st x.wf.1 (Refine.regionsOf x.st) = L.model (Refine.regionsOf x.st) :=
-    (Integrate.model_eq (Hidden.parseCommit_netWidths ht s.parse) L s.leaf x.wf.1 _).symm
+    (Integrate.model_eqW ((Hidden.committed_of_commit s.parse).netWidths ht)
+      ((Hidden.committed_of_commit s.parse).netKinds ht) L s.leaf x.wf.1 _).symm
   unfold DrawSetupZHJ.table DrawSetupZHJ.tabAt zkTab
   congr 1
 

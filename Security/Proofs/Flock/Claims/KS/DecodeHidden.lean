@@ -261,7 +261,7 @@ theorem tableAtH_plainTab {I : Exec.Inputs} (ht : I.tags.typed = false) (hi : I.
   simp only [Accounting.Schedule.mk.injEq, List.cons.injEq] at hs
   obtain ⟨rfl, rfl, ⟨rfl, rfl, rfl⟩, rfl⟩ := hs
   have hS' : L.model (Refine.regionsOf yst) = Refine.stmtOf yst ywf.1 (Refine.regionsOf yst) :=
-    Integrate.model_eq (parse_facts (Hidden.parse_untyped ht (HiddenExec.setupHidden_parseC hi yh)).1).netWidths L
+    Integrate.model_eq (parse_facts (Hidden.parse_untyped ht (HiddenExec.setupHidden_parseC hi yh)).1) L
       (Hidden.setupHidden_spec yh).leaf ywf.1 _
   unfold plainTab
   simp only [HiddenExec.DrawSetupH.table, HiddenExec.DrawSetupH.specAt]
