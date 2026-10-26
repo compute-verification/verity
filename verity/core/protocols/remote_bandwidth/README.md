@@ -59,8 +59,10 @@ The memory line held over time is the line of record a gate run publishes (`audi
 read over each stretch of a paced session's groups, from their timings, the store, the on-chip storage, the node's
 rates and bursts and the wrong receipts, in exact rationals. The Lean computes it (`lean/RemoteAudit/Line.lean`, its
 W from `Pooled.lean`), as the verifier process's `line_record` request, off the Lean verifier's record of the session
-(`lineOfRecord`: its groups' passes, its windows' receipts and draws and its registered blocks the record's, each
-window's draws refused unless `min(s, U_t)`), with the auditor's times and each group's reads by kind beside it; and
+(`lineOfRecordAt`: its groups' passes, its windows' receipts and draws and its registered blocks the record's, each
+window's draws refused unless `min(s, U_t)`; drawn g > 1 windows a coin, its draws' receipts and draws, each `g`
+windows' summed and refused unless `min(s, U)` and below 2^64, and at one window in flight no line), with the
+auditor's times and each group's reads by kind beside it; and
 `line.py` computes it beside it from the same inputs (`line_of_record`): `auditor_line.py` holds the two exactly equal
 and refuses the line where they differ, and `lean/tests/test_line.py`'s difftest holds them together, every refusal
 compared word for word. The Lean statement that the line is true of the trace that produced the record is
@@ -110,6 +112,9 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   which decide it in the verifier.
   `benchmarks/remote_session/store_layout.py` writes pins and synthetic checkpoints.
 - `timing.py`: the honest schedule, the stated claim read through the ledger, and the sketch's rank bound.
+- `monitoring.py`: one accepted session's `q_bytes` and `eps` over a week, a month and a year of a deployment's
+  sessions, at δ = 1% and 10⁻⁶: pooled by #4413's count bound (all but M − 1 sessions certify), with each session at
+  δ/T beside it. The deployment's machines and window are parameters.
 
 Tests: `uv run tools/verity/check/suites.py verity/core/protocols/remote_bandwidth` (the Python), and
 `verity/core/protocols/remote_bandwidth/lean` (the difftest and the replay, which build the Lean).

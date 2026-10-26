@@ -1,4 +1,4 @@
 order = 330
 path = "`machine_model/`"
 runs_on = "CPU"
-what = "The sm_120 machine model's price vectors (`machine-model list`; `data/model.toml`'s `current` is the vector of record): the LP, the rows, census and attack families as data, `machine-model solve NAME` and `machine-model render`, which prints its tables (its own README, and its own suite)"
+what = "The sm_120 machine model's price vectors (`machine-model list`; `data/model.toml`'s `current` is the vector of record): the LP, the rows, census and attack families as data, `machine-model solve NAME` and `machine-model render`, which prints its tables; and θ for the H200 and the RTX PRO 6000, every rate, capacity, clock and exact path with its document then its run, with d, Strassen's exchange rate, B_RF and r_H derived (`machine-model theta`) (its own README, and its own suite)"

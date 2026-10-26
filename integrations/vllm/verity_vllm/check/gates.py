@@ -340,7 +340,8 @@ class RunArtifacts:
     @property
     def C(self) -> dict | None:
         """The profile configuration: `run.json["C"]` (values; a card-style `{field: {"value", "provenance"}}` is
-        accepted too), else the profile module named in the manifest.  A gate never reads the log itself."""
+        accepted too), else the profile module named in the manifest; `ArtifactError` when that profile can't be loaded.  A gate never
+        reads the log itself."""
         C = self.manifest.get("C")
         if isinstance(C, dict) and C:
             return {k: (v["value"] if isinstance(v, dict) and "value" in v else v) for k, v in C.items()}
@@ -350,8 +351,8 @@ class RunArtifacts:
         if "C_from_profile" not in self._cache:
             try:
                 self._cache["C_from_profile"] = dict(load_profile_config(name))
-            except Exception:  # noqa: BLE001 - the gate reports the absence
-                self._cache["C_from_profile"] = None
+            except Exception as e:
+                raise ArtifactError(f"profile {name!r} could not be loaded: {type(e).__name__}: {e}") from e
         return self._cache["C_from_profile"]
 
     def workload_requests(self) -> list[dict]:
@@ -559,7 +560,11 @@ def gate_G1(run: RunArtifacts) -> GateResult:
         counts = sorted({(r.get("layers_a"), r.get("layers_b")) for r in rows})
         if rows and counts != [(exp_layers, exp_layers)]:
             problems.append(f"per-step layer counts {counts} != expected_layers={exp_layers} in both variants")
-        C = run.C
+        try:
+            C = run.C
+        except ArtifactError as e:
+            C = None
+            problems.append(f"expected_layers={exp_layers} not checked against the profile's NL: {e}")
         if C and C.get("NL") is not None and int(C["NL"]) != exp_layers:
             problems.append(f"expected_layers={exp_layers} disagrees with the profile's NL={C['NL']}")
     detail["noninterference"] = {"PASS": ni.get("PASS"), "hash_comparisons": n_cmp, "hash_equal": n_eq, "steps": len(steps),
