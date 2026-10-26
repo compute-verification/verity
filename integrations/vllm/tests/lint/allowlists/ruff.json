@@ -535,7 +535,6 @@
     {"file": "verity/ml/definitions/registry/spec.py", "kind": "F811", "symbol": "<module>", "detail": "Redefinition of unused `ZERO32`: `ZERO32` redefined here"},
     {"file": "verity/ml/definitions/registry/topp_keep_builder.py", "kind": "E731", "symbol": "_folds", "detail": "Do not assign a `lambda` expression, use a `def`", "count": 2},
     {"file": "verity/ml/definitions/registry/topp_keep_builder.py", "kind": "E731", "symbol": "_state", "detail": "Do not assign a `lambda` expression, use a `def`"},
-    {"file": "tests/check/adversarial.py", "kind": "F401", "symbol": "M1Record.catalogue", "detail": "`verity_vllm.observe.fold.profiles.vllm_d9105ea80_sm89_eager.make_weight_field` imported but unused"},
     {"file": "verity_vllm/observe/fold/profiles/gen_llama_patterns.py", "kind": "F401", "symbol": "<module>", "detail": "`dataclasses.field` imported but unused"},
     {"file": "verity_vllm/observe/fold/profiles/gen_llama_patterns.py", "kind": "RUF100", "symbol": "<module>", "detail": "Unused `noqa` directive (unused: `E402`)"},
     {"file": "verity_vllm/observe/fold/profiles/gen_ov_moe_patterns.py", "kind": "RUF100", "symbol": "MoEFusedExpertsFp8._fp8_parts", "detail": "Unused `noqa` directive (non-enabled: `PLC0415`)"},
