@@ -96,7 +96,7 @@ theorem rd_issue (s : Store) : rd s .issue = 0 := by
 
 /-- Every instruction uses part of an issue slot. -/
 theorem use_issue_pos (i : m.Instr) : 0 < i.use .issue := by
-  rcases i with ⟨o, _, _, _⟩ | ⟨_, _⟩
+  rcases i with ⟨o, _, _, _⟩ | ⟨_, _, _⟩
   · cases o <;>
       simp only [Instr.use, Card.use, slot, rd_issue, port_issue, mul_zero, add_zero, zero_add, ↓reduceIte,
         reduceCtorEq, and_false, false_and] <;>
@@ -114,7 +114,8 @@ theorem units_append (a b : List m.Instr) (r : Res) : units (a ++ b) r = units a
 theorem step_none {Θ : Type} [DecidableEq Θ] (P : m.Prog Θ) (σ : m.State Θ) (θ : Θ)
     (h : (step P σ θ).2 = none) : (step P σ θ).1 = σ := by
   unfold step at h ⊢
-  rcases hP : (P θ)[σ.pc θ]? with _ | (_ | _) <;> simp_all
+  rcases hP : (P θ)[σ.pc θ]? with _ | (_ | _) <;> simp only [hP] at h ⊢ <;>
+    first | rfl | (split at h <;> simp at h) | simp_all
 
 /-- **A run that uses no issue slot runs no instruction**, so it leaves the memory as it was. -/
 theorem run_mem_of_issue_zero {Θ : Type} [DecidableEq Θ] (P : m.Prog Θ) :

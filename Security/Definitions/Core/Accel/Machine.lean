@@ -55,10 +55,12 @@ inductive Operand
   | imm (w : Word)
 
 /-- An instruction: an opcode on operands, predicated on bit `b` of register `r` (`pred = some (r, b)`: it writes
-only when the bit is set), or a branch to `target` when bit `p.2` of register `p.1` is set. -/
+only when the bit is set), or a branch, taken when its predicate bit is set (always, with none), to the instruction its
+`target` names (a fixed index, a register's value plus an offset, or an immediate), writing the next instruction's index
+to register `link` if it names one (a call; a return is a branch to that register). -/
 inductive Instr
   | op (o : Op m.sem) (src : Fin o.nIn → Operand) (dst : Fin o.nOut → Operand) (pred : Option (ℕ × ℕ))
-  | bra (p : ℕ × ℕ) (target : ℕ)
+  | bra (pred : Option (ℕ × ℕ)) (target : Operand) (link : Option ℕ)
 
 /-- A program: each thread's text. -/
 abbrev Prog (Θ : Type) : Type := Θ → List m.Instr
@@ -87,6 +89,12 @@ def Operand.readIn (s : Store) (x : Operand) (M : m.Mem) : Word :=
     | some l => M l
     | none => 0
 
+/-- The instruction index a branch's target names in `M`. -/
+def Operand.target : Operand → m.Mem → ℕ
+  | .direct i, _ => i
+  | .indirect r off, M => (M (m.loc .reg r)).toNat + off
+  | .imm w, _ => w.toNat
+
 /-- `M` with `w` written where the output operand `x` names in store `s` of `M₀` (the memory before the instruction,
 so an address is read before any write). -/
 def Operand.writeIn (s : Store) (x : Operand) (M₀ M : m.Mem) (w : Word) : m.Mem :=
@@ -104,7 +112,7 @@ def execOp (o : Op m.sem) (src : Fin o.nIn → Operand) (dst : Fin o.nOut → Op
 /-- The units of resource `r` an instruction uses: its opcode's, or a branch's lane share of an issue slot. -/
 def Instr.use : m.Instr → Res → ℚ≥0
   | .op o _ _ _ => m.card.use o
-  | .bra _ _ => slot (1 / 32)
+  | .bra _ _ _ => slot (1 / 32)
 
 variable {Θ : Type} [DecidableEq Θ]
 
@@ -114,8 +122,11 @@ def step (P : m.Prog Θ) (σ : m.State Θ) (θ : Θ) : m.State Θ × Option m.In
   | none => (σ, none)
   | some (.op o src dst pred) =>
       (⟨execOp o src dst pred σ.mem, Function.update σ.pc θ (σ.pc θ + 1)⟩, some (.op o src dst pred))
-  | some (.bra p t) =>
-      (⟨σ.mem, Function.update σ.pc θ (if bit σ.mem p then t else σ.pc θ + 1)⟩, some (.bra p t))
+  | some (.bra p t l) =>
+      if p.all (bit σ.mem) then
+        (⟨l.elim σ.mem fun r => Function.update σ.mem (m.loc .reg r) (BitVec.ofNat 32 (σ.pc θ + 1)),
+          Function.update σ.pc θ (t.target σ.mem)⟩, some (.bra p t l))
+      else (⟨σ.mem, Function.update σ.pc θ (σ.pc θ + 1)⟩, some (.bra p t l))
 
 /-- **A run** of `P` from `σ` on a schedule (the threads stepped, in order): the final state, and the instructions run. -/
 def run (P : m.Prog Θ) : m.State Θ → List Θ → m.State Θ × List m.Instr
