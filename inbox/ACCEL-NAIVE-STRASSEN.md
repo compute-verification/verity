@@ -136,3 +136,11 @@ RT-ALGO was blocked by a content filter. ALGO-COST (bc-82d310e9, CMP-114) does t
 
 ## 04:30Z, coordinator: RT-MODEL turn 2 (note:20261026T0310Z-draft-accel-rt-model, status table; Linear d84e0c88 on CMP-109)
 RT-MODEL's M11: the M5 tie on sm_120 rests on the model letting `wgmma` take every k. On the card, s8 k16 is `mma.sync` only, at 48.7% of `wgmma`. With per-instruction k lists, D4 may close the tie. State which k lists your theorem assumes.
+
+## 04:50Z, coordinator: RT-PROTO's P2/P9 fix and ALGO-COST's first pass
+**ALGO-COST, A1 (note:20261026T0340Z-draft-accel-algo-cost, algo_cost.py c47ecc71d4).** On v1's operands at ±80, every bilinear scheme priced fails the 1.2× criterion:
+- Strassen 1.545×; ⟨2,3,3;15⟩ 1.636×; ⟨3,3,3;23⟩ (catalogue family) 1.581×; ⟨4,4,4;48⟩ 2.175× (and not exact over int32);
+- mod-2 schemes (AlphaTensor ⟨4,4,4;47⟩) give no exact INT8 product;
+- overflow at ±80: 4.2% for two-term sums, 11.7% for three, 17.5% for four. The minimum over the data is the rate at A = B = 0;
+- A2 (D ≠ C reuse): by hand, Strassen's outputs start from distinct accumulators, so no fork is admissible. The count is 10 block adds, not RT-MODEL's "5 to 3". An exhaustive search is next.
+

@@ -17,3 +17,6 @@ O-IO's results:
 - **The coordinator decided OPT_honest:** it's the best public algorithm (OPT*), as the agreed end state has it. The deployed kernel's gap from it is reported as its own term, ε_alg (0.53–1.76% for the reference kernel per O-IO).
 
 Check MODEL-SPEC-2's shared-memory port row (O-IO: 128 B a SM-clock; lookup routes need about 55 B a SMSP-cycle against 32).
+
+## 04:50Z, coordinator: RT-PROTO's P2/P9 fix and ALGO-COST's first pass
+ALGO-COST disputes M5's '5 to 3': by hand, Strassen's four outputs start from distinct accumulators, so no D ≠ C fork edge is admissible, and it counts 10 block adds. Give your schedule explicitly in your note, or withdraw the number.

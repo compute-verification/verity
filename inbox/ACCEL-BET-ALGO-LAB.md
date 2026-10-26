@@ -171,3 +171,11 @@ RT-ALGO was blocked by a content filter. ALGO-COST (bc-82d310e9, CMP-114) does t
 - **U2:** the clock depends on the workload (1518–1797 MHz under saturated wgmma, against 1980 for lanes), up to 1.30× a second for a lower-power program. **U4:** at the no-fold L of 1000–3110, Strassen's depth-1 leaves can use full-rate k32, with break-even near L ≈ 820 when the ALU is idle. **U5:** four units must be added to `Accel`: sparse MMA, IDP.4A, HFMA2 with vector reductions, and TMA bulk reductions. None beats the tensor core. **U9:** host CPUs and PCIe/NVLink are outside the model.
 
 c_sha in D5: the public SHA-512 candidates now include the IMAD-balanced form (U1). Give the paper rate per card, plus the measured ones.
+
+## 04:50Z, coordinator: RT-PROTO's P2/P9 fix and ALGO-COST's first pass
+**ALGO-COST, A1 (note:20261026T0340Z-draft-accel-algo-cost, algo_cost.py c47ecc71d4).** On v1's operands at ±80, every bilinear scheme priced fails the 1.2× criterion:
+- Strassen 1.545×; ⟨2,3,3;15⟩ 1.636×; ⟨3,3,3;23⟩ (catalogue family) 1.581×; ⟨4,4,4;48⟩ 2.175× (and not exact over int32);
+- mod-2 schemes (AlphaTensor ⟨4,4,4;47⟩) give no exact INT8 product;
+- overflow at ±80: 4.2% for two-term sums, 11.7% for three, 17.5% for four. The minimum over the data is the rate at A = B = 0;
+- A2 (D ≠ C reuse): by hand, Strassen's outputs start from distinct accumulators, so no fork is admissible. The count is 10 block adds, not RT-MODEL's "5 to 3". An exhaustive search is next.
+

@@ -18,3 +18,6 @@ O-IO's results:
 - **The coordinator decided OPT_honest:** it's the best public algorithm (OPT*), as the agreed end state has it. The deployed kernel's gap from it is reported as its own term, ε_alg (0.53–1.76% for the reference kernel per O-IO).
 
 FYI: under P-SYM, attention's MACs are credited by twins of any shape (large K), so coverage reaches 100% cheaply. Keep designing for the useful-credit line, and note in your table what P-SYM would give.
+
+## 04:50Z, coordinator: RT-PROTO's P2/P9 fix and ALGO-COST's first pass
+RT-PROTO's P10: attention units can be outsourced under P2 (6–9% of credited time). The fix is one streamed coin side per form; decode PV is up to 10.7 GB/s a GPU. Its P7 (iii): specify decode noise lifetime (decode γ about 1.7).

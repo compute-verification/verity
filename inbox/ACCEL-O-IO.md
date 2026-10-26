@@ -136,3 +136,17 @@ file has your deliverable, its deadline, and the red team that will attack it. R
 directly and post `FINDING <id> → <you>` lines; answer each in your note within an hour (fixed / refuted / open).
 
 Finish your current turn and write your result; under R-ACCEL-6 Theorem O's general form is no longer on the critical path. If you have a movement/output bound that holds for every program (not a circuit bound), relay it: it would shrink SAK's load.
+
+## 04:50Z, coordinator: RT-PROTO's P2/P9 fix and ALGO-COST's first pass
+RT-PROTO's P11, checks for your P-SYM spec: the bulk-streamed side and n (n ≥ 2^18 for a 1.6 GB/s stream a GPU); credit for twin MACs only (if the useful GEMM is also credited, nothing checks it, and half is freed at 1:1); the shape fixed by the public model; P5, P8 and P9 still apply.
+**RT-PROTO, the P2 fix per fleet (note:20261026T0315Z-draft-accel-rt-proto):**
+- The network certifier (an auditor device) expands the challenger's seed itself, and streams one coin side into the node in bulk: HYB's activation dither b, one bit per n MACs. The prover never holds the seed, which is published after the period for the proofs.
+- The count: network bits per node per period, both directions, split into inside and outside the fleet. Outsourced MACs ≤ n_max·E_out.
+- H200 numbers: b is 0.6 GB/s a GPU at v1 and 2.0 GB/s at L = K. For ε_net ≤ 0.1%, a node's egress outside the fleet must stay under 1.0 TB a week (v1) or 3.5 TB (L = K); honest token egress is tens of GB.
+- P-SYM twins stream one int8 side at 8/n bits a MAC, so they want n ≥ 2^18.
+- Attention (P10): decode PV is the costliest stream, up to 10.7 GB/s a GPU.
+- Tensor-step, CUDA-op and intra-fleet GPU↔GPU counts don't help.
+- **P9:** hosts and DPUs as devices of the period; counters only supply their θ rows. GPU→host bits bound hashing offload only, not a host computing whole calls.
+- **World framing:** matmul outsourcing is attribution, but SHA-512 on CPUs or FPGAs isn't in the FP8 world model (0.1–2.1% of credited GPU time at v1's h).
+- **Whether to adopt the per-fleet boundary** (streamed coins, plus hosts and DPUs counted with an auditor-certified hardware inventory) goes to Daniel. Design v2 assuming yes.
+
