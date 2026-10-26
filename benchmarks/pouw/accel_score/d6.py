@@ -1,16 +1,18 @@
 """D6, the number table for protocol v3 (D1, CMP-118 e0cd4061) and v3.1, printed from code (PROTO-DESIGN-4).
 
 Credit is pub, the public best at the period's dual prices (06:10Z, 06:37Z, 07:04Z): one LP over every credited round
-of the period with every public route (`d5_routes.period`), priced at the honest served period's duals, so a winning
-route lowers pub and leaves honest time uncredited, never ε. v3.1 is v3 with L′ chosen by the coordinator's 07:04Z
-rule, taken at the period (`rule`). ε, in model units, is the sampling term (P15/P20's Poisson draw, η from the
-measured free-guess rate, P16's replica groups) plus ε_net (P18). γ is from measured hashing, with the paper ceiling
-beside it. Every LP (v3.1's picks, the period, the routes) hashes at every SHA-512 schedule θ admits (U13; ALGO-COST-3's
-A27b: R-hi on sm_120, unmeasured), so it is one for both hashing rates; v3's own picks stay as adopted (measured
-schedules).
+of the period with every public method and route of D5 v2's hull (`build_job`: its fast schemes, O-IO's lookups, and
+the peels on DP4A beside the MMA; `d5_routes.period`), priced at the honest served period's duals, so a winning route
+lowers pub and leaves honest time uncredited, never ε. The world FP8 FLOP rows are a tensor-unit claim (08:24Z): the
+same LP priced at the tensor-only price μ_t, a column of its own beside the model-unit share at μ°. v3.1 is v3 with L′
+chosen by the coordinator's 07:04Z rule, taken at the period (`rule`). ε, in model units, is the sampling term
+(P15/P20's Poisson draw, η from the measured free-guess rate, P16's replica groups) plus ε_net (P18). γ is from
+measured hashing, with the paper ceiling beside it. Every LP (v3.1's picks, the period, the routes) hashes at every
+SHA-512 schedule θ admits (U13; ALGO-COST-3's A27b: R-hi on sm_120, unmeasured), so it is one for both hashing rates;
+v3's own picks stay as adopted (measured schedules).
 
-    PUBLIC_BEST_DIR=<checkout of cursor/compute-research-accel-bet-algo-lab-ea24>/benchmarks/pouw/theory \\
-        python3 benchmarks/pouw/accel_score/d6.py [--json OUT]
+    PUBLIC_BEST_DIR=<checkout of cursor/compute-research-accel-bet-algo-lab-ea24 at 34866fd9f8 or later, which has
+    d5_v2.py>/benchmarks/pouw/theory python3 benchmarks/pouw/accel_score/d6.py [--json OUT]
 """
 import contextlib
 import io
@@ -28,6 +30,7 @@ import nofold as nf  # noqa: E402
 import v3_caps as vc  # noqa: E402
 
 pb = dr.pb
+import d5_v2 as d5v2  # PUBLIC_BEST_DIR's, beside public_best
 
 # ---------------------------------------------------------------------------------------------------------------------
 # η (RT-LEAN-2 L38, coordinator 06:34Z): η ≤ 1 − p, p the best free guess's success rate on one opened unit.
@@ -110,16 +113,39 @@ def quiet(f, *a, **kw):
         return f(*a, **kw)
 
 
-def job_methods(card: str, K: int, N: int, t: int, Lp: int, weight_coins: bool = True):
-    """D5's job at a pick with every route (d5_routes.methods), hashing at nofold's word model, with every SHA-512
-    schedule θ admits in the LP (A27b: R-hi on sm_120, unmeasured). The LP is the model's, so it is one for both
-    hashing rates; the measured and paper rates differ only in the honest kernel's time (γ)."""
+def build_job(card: str, K: int, N: int, t: int, Lp: int, weight_coins: bool = True, peel_lanes: bool = True):
+    """D5 v2's job at a pick (`public_best.tile_job`'s hull, PUBLIC-BEST-2's): PD3-4's routes, D5 v2's fast schemes (the
+    2×2 orbit at depth 1 and 2 and the integral catalogue, `d5_v2.fast_schemes`) and O-IO's lookups, hashing at
+    nofold's word model with every SHA-512 schedule θ admits in the LP (A27b: R-hi on sm_120, unmeasured). peel_lanes:
+    the peels and the zero-high-digit peel may also run on DP4A at D5's own load (`job_items`' route beside the MMA),
+    which `tile_job` leaves out (08:24Z: price them); the deployed kernel keeps them on the MMA. The LP is the model's,
+    so it is one for both hashing rates; the measured and paper rates differ only in the honest kernel's time (γ). In
+    `d5_routes`' form: m['dense'] is OPT*'s method, m['hull'] every method; m['alone'] each one's makespan with the
+    job alone; m['honest_tensor'] the deployed kernel's tensor MAC-times a MAC."""
     r = nf.v2_round(card, K, N, t * Lp, 16, tiles=t, weight_coins=weight_coins)
     c = vc.CARDS[card][0]
     _, bit, depth = pb.BIT_COST[c.family][0]
-    m = dr.methods(c, t, Lp, K, N, bit, depth, nf.V_WIDTH[card], 1.0, digits=r["digits"], comps=r["comps"],
-                   model_sha=True)
-    return c, m, r
+    v, digits = nf.V_WIDTH[card], r["digits"]
+    L, zleaf, sha, peels, dense, honest = pb._tile_honest(c, t, Lp, K, N, v, r["comps"] / pb.comps_per_mac(t * Lp),
+                                                          digits, True)
+    if peel_lanes:
+        peels = (peels[0], peels[1], {**peels[2], "dp4a": pb.job_items(c, L, K, False, True, [])[1][2]["dp4a"]})
+    ms = pb.tile_methods(c, t, Lp, K, bit, depth, L, zleaf, peels, dense, digits,
+                         schemes=dict(d5v2.fast_schemes(card)), v=v)
+    best, hull = (pb.price_methods(c, x, L, N, pb.TOKENS, beside=True, items=(sha,), lookups=True) for x in (ms[:1], ms))
+    return c, dict(L=L, n=N, sha=sha, dense=ms[:1], hull=ms, lookups=True, alone=(best.c, hull.c),
+                   honest_tensor=honest.loads["tensor"]), r
+
+
+_JM: dict = {}
+
+
+def job_methods(card: str, K: int, N: int, t: int, Lp: int, weight_coins: bool = True, peel_lanes: bool = True):
+    """`build_job`, cached (the picks')."""
+    key = (card, K, N, t, Lp, weight_coins, peel_lanes)
+    if key not in _JM:
+        _JM[key] = build_job(*key)
+    return _JM[key]
 
 
 _FREED: dict = {}
@@ -160,18 +186,18 @@ _GRID: dict = {}
 
 
 def grid(card: str, K: int, N: int, weight_coins: bool = True) -> list[dict]:
-    """Every L′ on v3's grid (t·L′ ≤ K, under the card's limit) for one round class, with its job-only leak
-    (`v3_caps.leak`: D5's LP at the round's makespan, every schedule θ admits) and its γ at measured hashing
-    (overlapped)."""
+    """Every L′ on v3's grid (t·L′ ≤ K, under the card's limit) for one round class, with its job-only leak (the job
+    alone at its makespan, `build_job`'s hull against OPT*) and its γ at measured hashing (overlapped). Uncached
+    jobs: the grid keeps two numbers an L′, and `job_methods` caches only the picks."""
     key = (card, K, N, weight_coins)
     if key not in _GRID:
         _, t, lmax, _ = vc.CARDS[card]
         t = t if t * vc.LPS[0] <= K else 1
         _GRID[key] = []
         for Lp in [x for x in vc.LPS if t * x <= K and (lmax is None or x <= lmax)] or [K]:
-            lk, j, _ = vc.leak(card, K, N, t, Lp, model_sha=True, weight_coins=weight_coins)
-            _GRID[key].append(dict(t=t, Lp=Lp, leak=lk, gamma_lp=j["honest"].c,
-                                   gamma=round_gamma(card, K, N, t, Lp, weight_coins)))
+            best, hull = build_job(card, K, N, t, Lp, weight_coins)[1]["alone"]
+            lk = 1 - min(1.0, hull / best)
+            _GRID[key].append(dict(t=t, Lp=Lp, leak=lk, gamma=round_gamma(card, K, N, t, Lp, weight_coins)))
     return _GRID[key]
 
 
@@ -292,13 +318,20 @@ def as_picks(static: dict, pv: dict) -> dict:
 _JOB: dict = {}
 
 
-def job_lps(card: str, K: int, N: int, t: int, Lp: int, weight_coins: bool) -> tuple[dict, dict]:
-    """A job's methods and its two LPs (dense, hull) as `price_methods` builds them, cached across designs."""
-    key = (card, K, N, t, Lp, weight_coins)
+def job_lps(card: str, K: int, N: int, t: int, Lp: int, weight_coins: bool,
+            peel_lanes: bool = True) -> tuple[dict, dict]:
+    """A job's methods and its two LPs (dense, hull) as `price_methods` builds them, and m['at_tensor'], each one's
+    price at μ_t, cached across designs."""
+    key = (card, K, N, t, Lp, weight_coins, peel_lanes)
     if key not in _JOB:
-        c, m, _ = job_methods(card, K, N, t, Lp, weight_coins=weight_coins)
+        c, m, _ = job_methods(card, K, N, t, Lp, weight_coins=weight_coins, peel_lanes=peel_lanes)
+        m["at_tensor"] = {wh: dr.mu_price(c, m, wh, MU_T) for wh in ("dense", "hull")}
         _JOB[key] = (m, {wh: dr.captured(c, m, wh) for wh in ("dense", "hull")})
     return _JOB[key]
+
+
+MU_T = {"tensor": 1.0}   # 08:24Z: the tensor-only price, in tensor MAC-times (the tensor row's cap is 1)
+BOUND_SLACK = (0.0, 0.25, 1.0)   # the bounded tensor minimum's deadlines: OPT*'s served makespan × (1 + s)
 
 
 def serve_loads(card) -> dict:
@@ -319,16 +352,22 @@ def fixed_alone(c, lp: dict, F: dict) -> float:
     return float(max(np.array(f) / -np.array([row[0] for row in lp["A_ub"]]))) * c.s8
 
 
-def period(card: str, model: dict, static: dict, pv: dict, beside: float = 0.0) -> dict:
+def period(card: str, model: dict, static: dict, pv: dict, beside: float = 0.0, peel_lanes: bool = True,
+           bounded: bool = False) -> dict:
     """Per credited MAC, in honest-kernel units at θ (c = SM-clocks · s8): OPT*'s period (`dense`: the honest words'
     best programs) and pub (`hull`: every route), each over the credited rounds alone and in the served period (plus
     QKᵀ, the indexer and plain PV as fixed load, and `beside` plain INT8 MACs a credited MAC of other tensor work:
     uncredited decode, other jobs; A29). Credit is each one's price at the honest served period's duals μ°
-    (`at_served`, P20's C(μ) at the dual where the honest period sits). `freed`: per row, the share of OPT* the routes
-    free at that row's single-row dual (`d5_routes.freed`, makespan ≤ OPT*'s), cost-weighted over the credited rounds
-    (P12 re-raised). Also Σ_w q_w (P20's draw multiplier): each round's own makespan share of the honest period, and
-    PB4's c_inc, the credited rounds' share of the period's makespan increment over its fixed load alone (pub's
-    period over OPT*'s, no duals)."""
+    (`at_served`, P20's C(μ) at the dual where the honest period sits). `at_tensor`: each one's price at the
+    tensor-only price μ_t (08:24Z: tensor MAC-times a credited MAC, lanes free), beside the deployed kernel's tensor
+    (`honest_tensor`); bounded: also pub's least tensor with the period held to OPT*'s served makespan × (1 + s)
+    (`tensor_bounded`, for s in BOUND_SLACK: a sensitivity on a deadline the protocol doesn't enforce). `net_most`:
+    max_k N_k × round k's price at each μ, for ε_net (`eps_terms`). `static` and `pv`: the same
+    prices over each kind of credited round alone (v3.1's PV picks priced as a whole). `freed`: per row, the share of
+    OPT* the routes free at that row's single-row dual (`d5_routes.freed`, makespan ≤ OPT*'s), cost-weighted over the
+    credited rounds (P12 re-raised). Also Σ_w q_w (P20's draw multiplier): each round's own makespan share of the
+    honest period, and PB4's c_inc, the credited rounds' share of the period's makespan increment over its fixed load
+    alone (pub's period over OPT*'s, no duals)."""
     c = vc.CARDS[card][0]
     hist, st, qk, pvm, ix = nf.world_macs(model)
     jobs, rounds = {"dense": [], "hull": []}, {"dense": 0.0, "hull": 0.0}
@@ -347,8 +386,8 @@ def period(card: str, model: dict, static: dict, pv: dict, beside: float = 0.0) 
     cred = sum(it[2] for it in items)
     ms, freed_ = [], {}
     for K, N, w, p, wc in items:
-        m, lps = job_lps(card, K, N, p["t"], p["Lp"], wc)
-        ms.append((w / cred, m))
+        m, lps = job_lps(card, K, N, p["t"], p["Lp"], wc, peel_lanes)
+        ms.append((w / cred, m, wc, N))
         for wh in jobs:
             box, pr = lps[wh]
             jobs[wh].append((w / cred, box))
@@ -373,11 +412,26 @@ def period(card: str, model: dict, static: dict, pv: dict, beside: float = 0.0) 
                        served_binding=served["binding"], served_mu=served["mu"], own_dual=served["c"] - muF * c.s8)
     # Both priced at the honest served period's duals μ°, where the honest prover's period sits.
     mu0 = out["dense"]["served_mu"]
+    kinds = {"static": True, "pv": False}
     for wh in jobs:
-        out[wh]["at_served"] = sum(w * dr.mu_price(c, m, wh, mu0) for w, m in ms)
+        each = [(w, wc, dr.mu_price(c, m, wh, mu0), m["at_tensor"][wh], N) for w, m, wc, N in ms]
+        out[wh]["at_served"] = sum(w * a for w, _, a, _, _ in each)
+        out[wh]["at_tensor"] = sum(w * b for w, _, _, b, _ in each)
+        out[wh]["net_most"] = dict(served=max(N * a for _, _, a, _, N in each),
+                                   tensor=max(N * b for _, _, _, b, N in each))
+        for kind, wc_ in kinds.items():
+            sel = [(w, a, b) for w, wc, a, b, _ in each if wc == wc_]
+            out[wh][kind] = dict(w=sum(w for w, _, _ in sel), at_served=sum(w * a for w, a, _ in sel),
+                                 at_tensor=sum(w * b for w, _, b in sel))
     assert abs(out["dense"]["at_served"] / out["dense"]["own_dual"] - 1) < 1e-4, (out["dense"], card, model["name"])
+    out["honest_tensor"] = sum(w * m["honest_tensor"] for w, m, _, _ in ms)
+    if bounded:
+        out["hull"]["tensor_bounded"] = {s: dr.period_row_min(c, jobs["hull"], F, "tensor",
+                                                              out["dense"]["served"] * (1 + s)) for s in BOUND_SLACK}
     out["leak"] = 1 - out["hull"]["alone"] / out["dense"]["alone"]
     out["leak_served"] = 1 - out["hull"]["at_served"] / out["dense"]["at_served"]
+    out["leak_kind"] = {k: (1 - out["hull"][k]["at_served"] / out["dense"][k]["at_served"]
+                            if out["dense"][k]["w"] > 0 else None) for k in kinds}
     out["leak_job"] = 1 - rounds["hull"] / rounds["dense"]
     out["q_sum"] = rounds["dense"] / out["dense"]["served"]
     out["fixed_alone"] = T_F = fixed_alone(c, jobs["dense"][0][1], F)
@@ -419,10 +473,14 @@ def model_of(name: str) -> dict:
     return next(m for m in nf.WORLD if m["name"] == name)
 
 
-def eps_terms(card: str, model: dict, eta_: float, cred_macs: float, q_sum: float) -> dict:
+def eps_terms(card: str, model: dict, eta_: float, per: dict) -> dict:
     """ε in model units, a share of C at every dual (P20): ε_S = ln(1/δ)/(ηk) with P15's Poisson draw (expected draws
     k Σ_w q_w); P16 per replica group, the union bound over G groups (ε_S at k a group, and the k a group that holds
-    ε_S at 0.1%); ε_net = n_max E / credited MACs (P18, n_max the largest N of a credited round, E the wire bits)."""
+    ε_S at 0.1%); ε_net = n_max E / credited MACs (P18, n_max the largest N of a credited round, E the wire bits).
+    `at`: ε at 8-GPU groups as a share of the claim at μ° and at μ_t, with ε_net priced at that μ: a bit exported in
+    round k stands for N_k of its MACs at its price, so ε_net = E max_k(N_k price_k) / (credited MACs × the mean
+    price), n_max E / credited MACs where prices are equal; None where the claim at that μ is 0."""
+    cred_macs, q_sum = per["cred_macs"], per["q_sum"]
     out = dict(eta=eta_, k=K_DRAWS, draws=K_DRAWS * q_sum, q_sum=q_sum)
     out["eps_S"] = {d: math.log(1 / d) / (eta_ * K_DRAWS) for d in DELTAS}
     n_max = max([N for _, N, _ in nf.SHAPES[model["name"]]] + [model["dv"]])
@@ -438,6 +496,15 @@ def eps_terms(card: str, model: dict, eta_: float, cred_macs: float, q_sum: floa
         groups[g]["draws_world"] = G * groups[g]["k_group"] * q_sum
         groups[g]["eps"] = {d: groups[g]["eps_S"][d] + out["eps_net"] for d in DELTAS}
     out["groups"] = groups
+    h = per["hull"]
+    out["at"] = {}
+    for mu, mean in (("served", h["at_served"]), ("tensor", h["at_tensor"])):
+        if mean <= 1e-12:
+            out["at"][mu] = None
+            continue
+        net = E * h["net_most"][mu] / (cred_macs * mean)
+        out["at"][mu] = dict(net_scale=net / out["eps_net"], eps_net=net,
+                             eps={d: groups[8]["eps_S"][d] + net for d in DELTAS})
     return out
 
 
@@ -457,8 +524,15 @@ def share(card: str, row: dict, per: dict) -> dict:
          "routes": per["hull"]["at_served"] / per["dense"]["at_served"]}
     s = math.prod(f.values())
     pd3 = max(row["T_c"], row["A_nw"] / R_SHA[card]) / max(row["T_c"], row["A_nw"])
+    # 08:24Z: the same honest time credited in tensor MAC-times at μ_t (FP8 FLOP / 2), pub's against OPT*'s, the
+    # deployed kernel's and, where `period` bounds it, pub's least tensor at OPT*'s served makespan.
+    to_t = s / per["hull"]["at_served"]
+    tensor = dict(share=to_t * per["hull"]["at_tensor"], opt=to_t * per["dense"]["at_tensor"],
+                  honest=to_t * per["honest_tensor"])
+    if "tensor_bounded" in per["hull"]:
+        tensor["bounded"] = {s: to_t * x for s, x in per["hull"]["tensor_bounded"].items()}
     return dict(share=s, factors=f, pd3_r_reading=pd3, routes_job=1 - per["leak_job"], cov=cov,
-                with_hosts=s / (1 + HOST[card][1]))
+                with_hosts=s / (1 + HOST[card][1]), tensor=tensor)
 
 
 def worst_gamma(card: str, model: dict, static: dict, pv: dict, built: bool) -> dict:
@@ -533,7 +607,7 @@ def decode(static: dict) -> dict:
     return out
 
 
-def evaluate(static: dict, pv: dict, rates=(True, False)) -> dict:
+def evaluate(static: dict, pv: dict, rates=(True, False), bounded: bool = False) -> dict:
     """One design at the world model: {(card, rate, model): its nofold row, period, credited share, worst round}."""
     out, pers = {}, {}
     pk = as_picks(static, pv)
@@ -542,7 +616,7 @@ def evaluate(static: dict, pv: dict, rates=(True, False)) -> dict:
             card = row["card"].split(" built")[0]
             model = model_of(row["model"])
             if (card, model["name"]) not in pers:
-                pers[card, model["name"]] = period(card, model, static, pv)
+                pers[card, model["name"]] = period(card, model, static, pv, bounded=bounded)
             per = pers[card, model["name"]]
             out[card, "measured" if built else "paper", model["name"]] = dict(
                 card=card, rate="measured" if built else "paper", model=model["name"], world=row, period=per,
@@ -569,7 +643,8 @@ def beside_sweep(P: dict, tau_picks: dict) -> dict:
             for x in BESIDE:
                 per = e["period"] if x == 0 else period(card, model, static, pv, beside=x)
                 out[name, card, mname, x] = dict(leak=per["leak_served"], binding=per["dense"]["served_binding"],
-                                                 c_inc=per["c_inc"], gamma=e["world"]["gamma"],
+                                                 c_inc=per["c_inc"], leak_kind=per["leak_kind"],
+                                                 gamma=e["world"]["gamma"],
                                                  share0=e["share"]["share"], leak0=e["period"]["leak_served"])
                 out[name, card, mname, x]["share"] = (e["share"]["share"] * (1 - per["leak_served"])
                                                       / (1 - e["period"]["leak_served"]))
@@ -583,12 +658,18 @@ def build() -> dict:
     eta_min = min(e["eta"] for e in eta_.values())
     out = dict(eta=eta_, rows={}, k=K_DRAWS, rule=sweep)
     for design, (static, pv) in P.items():
-        for (card, rate, mname), e in evaluate(static, pv).items():
+        for (card, rate, mname), e in evaluate(static, pv, bounded=design == HEADLINE).items():
             model = model_of(mname)
             e["design"] = design
-            e["eps"] = eps_terms(card, model, eta_min, e["period"]["cred_macs"], e["period"]["q_sum"])
+            e["eps"] = eps_terms(card, model, eta_min, e["period"])
             if design == HEADLINE and rate == "measured":
                 e["streaming"] = streaming(card, model, e["world"], pv)
+                # 08:24Z's gap: the peels and the zero-high-digit peel on the MMA only, as `tile_job` has them.
+                h = period(card, model, static, pv, peel_lanes=False)["hull"]
+                e["mma_peels"] = dict(at_served=h["at_served"], at_tensor=h["at_tensor"],
+                                      share=e["share"]["share"] * h["at_served"] / e["period"]["hull"]["at_served"],
+                                      share_t=e["share"]["tensor"]["share"] * h["at_tensor"]
+                                      / e["period"]["hull"]["at_tensor"])
             out["rows"][design, card, rate, mname] = e
     out["beside"] = beside_sweep(P, tau_picks)
     out["decode"] = decode(P[HEADLINE][0])
@@ -613,11 +694,18 @@ def report(D: dict) -> str:
     L.append(f"The headline is {HEADLINE}. Columns are 8B / 70B / V4 unless stated. ε is in model units, a share of C "
              "at every dual price (P20). "
              "Credit is pub at the period's dual prices: one LP over the period's credited rounds with every public "
-             "route (`d5_routes.period`). A route that wins there leaves honest time uncredited and never adds to ε.\n")
+             "method and route of D5 v2's hull (its fast schemes and lookups, and the peels on DP4A beside the MMA; "
+             "`d5_routes.period`). A route that wins there leaves honest time uncredited and never adds to ε.\n")
     L.append(f"### The world (rule L2): pooled, every window, both δ, {HEADLINE}, V4 as the world's request (8B, 70B "
              "below)\n")
-    L.append("ε at P16's 8-GPU groups. C is the world's FP8 FLOP (brief rule L2); the credited share and ε are one "
-             "card's, scaled to the world.\n")
+    L.append("Two tables in different units. C is the world's FP8 FLOP in the window (brief rule L2). What is scaled: "
+             "the whole fleet is taken to be one card serving one model, so every figure is that card's share times "
+             "C, and P16's groups are C's GPUs at the card's FP8 rate over 8 (not a census). εC is ε times the claim "
+             "beside it: ε is a share of the claim at every dual (P20), at 8-GPU groups, with ε_net's MACs each at the "
+             "dearest credited round's price at that table's μ over the period's mean. (D6 v0 and v0.1 printed εC "
+             "as ε times C, too large by the credited share; corrected here.)\n")
+    L.append("**Model units at μ°, the cards' headline.** Credited is honest device time at pub(μ°), the honest served "
+             "period's duals, as FP8 FLOP-equivalents of that time (share × C).\n")
     L.append("| card, model | window | C (FP8 FLOP) | credited (FLOP-eq.) | εC δ 1% | εC δ 1e-6 | "
              "honest time uncredited (FLOP-eq.) | QKᵀ + indexer + plain PV, uncredited MACs |")
     L.append("|---|---|---|---|---|---|---|---|")
@@ -626,9 +714,50 @@ def report(D: dict) -> str:
             r = rows[HEADLINE, card, "measured", m]
             for win, F in WORLD_FLOP.items():
                 s = r["share"]["share"]
-                g8 = r["eps"]["groups"][8]["eps"]
-                L.append(f"| {card}, {short[m]} | {win} | {F:.2e} | {s * F:.2e} | {g8[0.01] * F:.1e} | "
-                         f"{g8[1e-6] * F:.1e} | {(1 - s) * F:.1e} | {pct(r['world']['uncredited'], 1)} |")
+                e = r["eps"]["at"]["served"]["eps"]
+                L.append(f"| {card}, {short[m]} | {win} | {F:.2e} | {s * F:.2e} | {e[0.01] * s * F:.1e} | "
+                         f"{e[1e-6] * s * F:.1e} | {(1 - s) * F:.1e} | {pct(r['world']['uncredited'], 1)} |")
+    L.append("")
+    L.append("**Tensor units at μ_t (08:24Z), the world FP8 FLOP claim.** Credited FP8 FLOP is twice the tensor MACs of "
+             "the cheapest public route at the tensor-only price μ_t: every lane is free, so it counts only work the "
+             "tensor pipe must do however long the lanes take. Every product in D5's menu may run on the lanes "
+             "(DP4A, the integer ALU), so where that column is 0, no tensor work is forced at all. A nonzero tensor "
+             "claim needs a deadline: the bounded columns are pub's least tensor with the period held to OPT*'s served "
+             "makespan × (1 + s). That deadline is not in the protocol or in P20's theorem, so they are sensitivities "
+             "with no ε. The MMA-only column is `tile_job`'s menu, whose peels and zero-high-digit peel have no lane "
+             "route (08:24Z: price them or name the gap); D6 prices them at D5's own DP4A load.\n")
+    sl = BOUND_SLACK
+    L.append("| card, model | window | credited FP8 FLOP at μ_t | εC δ 1% / 1e-6 | peels on the MMA only | "
+             + " | ".join(f"deadline OPT* × {1 + s:g}" for s in sl) + " | the deployed kernel's tensor FP8 FLOP |")
+    L.append("|---|---|---|---|---|" + "---|" * len(sl) + "---|")
+    for card in vc.CARDS:
+        for m in reversed(models):
+            r = rows[HEADLINE, card, "measured", m]
+            t, a = r["share"]["tensor"], r["eps"]["at"]["tensor"]
+            for win, F in WORLD_FLOP.items():
+                ec = (f"{a['eps'][0.01] * t['share'] * F:.1e} / {a['eps'][1e-6] * t['share'] * F:.1e}" if a
+                      else "0 / 0")
+                L.append(f"| {card}, {short[m]} | {win} | {t['share'] * F:.2e} | {ec} | "
+                         f"{r['mma_peels']['share_t'] * F:.2e} | "
+                         + " | ".join(f"{t['bounded'][s] * F:.2e}" for s in sl) + f" | {t['honest'] * F:.2e} |")
+    L.append("")
+    L.append("The same as shares of C, beside the model-unit share, with ε at each μ (8-GPU groups, δ 1e-6; in brackets "
+             "ε_net's scale over the equal-price n_max E / credited MACs). OPT* is the honest words' best program.\n")
+    L.append("| card, model | model units at μ° | ε at μ° | μ_t: pub | μ_t: OPT* | ε at μ_t | peels on the MMA only | "
+             + " | ".join(f"deadline × {1 + s:g}" for s in sl) + " | deployed kernel's tensor |")
+    L.append("|---|---|---|---|---|---|---|" + "---|" * len(sl) + "---|")
+
+    def eps_at(a):
+        return f"{pct(a['eps'][1e-6], 3)} (×{a['net_scale']:.2f})" if a else "— (claim 0)"
+
+    for card in vc.CARDS:
+        for m in models:
+            r = rows[HEADLINE, card, "measured", m]
+            t, a = r["share"]["tensor"], r["eps"]["at"]
+            L.append(f"| {card}, {short[m]} | {pct(r['share']['share'], 1)} | {eps_at(a['served'])} | "
+                     f"{pct(t['share'], 1)} | {pct(t['opt'], 1)} | {eps_at(a['tensor'])} | "
+                     f"{pct(r['mma_peels']['share_t'], 1)} | " + " | ".join(pct(t["bounded"][s], 1) for s in sl)
+                     + f" | {pct(t['honest'], 1)} |")
     L.append("")
     L.append("### ε (goal ≤ 1% at δ = 1e-6)\n")
     L.append("ε = ε_S + ε_net. P16 (07:04Z): the theorem holds per serving-replica group (coins in lockstep inside a "
@@ -637,9 +766,12 @@ def report(D: dict) -> str:
              "census). 8-GPU groups lead; 1 and 64 GPUs are in the P16 table. ε_net: RT-PROTO-2's assumptions (n_max "
              "the largest credited N, 4 bytes a token crossing the node's boundary, 4,500-token requests; ×6.5 if "
              "HTTP/SSE crosses it).\n")
+    L.append("The last column is ε at δ 1e-6 as a share of the claim at μ° (the world table's), ε_net's MACs each at its "
+             "round's price.\n")
     L.append("| card | η | k a group (expected draws, P20) | ε_S δ 1% / 1e-6, 8-GPU groups | ε_net | "
-             "ε δ 1%, 8-GPU groups | **ε δ 1e-6, 8-GPU groups** | ε δ 1e-6, one sequence (no P16) |")
-    L.append("|---|---|---|---|---|---|---|---|")
+             "ε δ 1%, 8-GPU groups | **ε δ 1e-6, 8-GPU groups** | ε δ 1e-6, one sequence (no P16) | "
+             "ε δ 1e-6, a share of the claim at μ° |")
+    L.append("|---|---|---|---|---|---|---|---|---|")
     for card in vc.CARDS:
         r0 = rows[HEADLINE, card, "measured", models[0]]["eps"]
         g8 = r0["groups"][8]
@@ -649,7 +781,8 @@ def report(D: dict) -> str:
                  f"{w(lambda r: pct(r['eps']['eps_net'], 4), HEADLINE, card, 'measured')} | "
                  f"{w(lambda r: pct(r['eps']['groups'][8]['eps'][0.01], 3), HEADLINE, card, 'measured')} | "
                  f"{w(lambda r: pct(r['eps']['groups'][8]['eps'][1e-6], 3), HEADLINE, card, 'measured')} | "
-                 f"{w(lambda r: pct(r['eps']['eps'][1e-6], 3), HEADLINE, card, 'measured')} |")
+                 f"{w(lambda r: pct(r['eps']['eps'][1e-6], 3), HEADLINE, card, 'measured')} | "
+                 f"{w(lambda r: pct(r['eps']['at']['served']['eps'][1e-6], 3), HEADLINE, card, 'measured')} |")
     L.append("")
     L.append("### γ (goal ≤ 10), credited share and coverage (goal ≥ 95%)\n")
     L.append("| design, card, SHA-512 rate | γ overlapped | γ additive | worst round's γ | tensor util. | "
@@ -726,6 +859,28 @@ def report(D: dict) -> str:
             if (name, card, models[0], 0.0) in B:
                 L.append(f"| {name}, {card} | " + " | ".join(
                     " / ".join(pct(1 - B[name, card, m, x]["c_inc"], 1) for m in models) for x in BESIDE) + " |")
+    L.append("\nv3.1's PV picks priced as a whole (08:24Z), beside its static rounds, in the same period LP and at the "
+             "same duals: each kind's share of the credited MACs, the routes' leak over that kind's rounds at x = 0 "
+             "and x = 1 (pub over OPT* at the period's μ°), and its pub at μ_t (tensor MAC-times a credited MAC). "
+             "8B / 70B / V4.\n")
+    L.append("| picks, card, kind | credited MACs | leak x = 0 | leak x = 1 | pub at μ_t |")
+    L.append("|---|---|---|---|---|")
+
+    def kind_leak(name, card, kind, x):
+        return " / ".join("—" if B[name, card, m, x]["leak_kind"][kind] is None
+                          else pct(B[name, card, m, x]["leak_kind"][kind]) for m in models)
+
+    for card in vc.CARDS:
+        for name in (HEADLINE, "v3.1, RTX PRO 6000 PV L′ 64"):
+            if (name, card, models[0], 0.0) not in B:
+                continue
+            for kind in ("static", "pv"):
+                pers = [rows[name, card, "measured", m]["period"] for m in models]
+                L.append(f"| {name}, {card}, {kind} | " + " / ".join(pct(p["hull"][kind]["w"], 1) for p in pers)
+                         + f" | {kind_leak(name, card, kind, 0.0)} | {kind_leak(name, card, kind, 1.0)} | "
+                         + " / ".join(
+                             f"{p['hull'][kind]['at_tensor'] / p['hull'][kind]['w']:.3f}" if p["hull"][kind]["w"]
+                             else "—" for p in pers) + " |")
     for card in vc.CARDS:
         taus = [n for n in names if n.startswith("τ ")]
         best = {}

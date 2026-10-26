@@ -71,11 +71,13 @@ def methods(card, t, Lp, K, n, bit, depth, v, hash_scale=1.0, o_route=True, zhd=
 
 
 def priced(card, m, which, hook=None):
-    """`price_methods` over m[which] ('dense': the honest words' best program, OPT*; 'hull': every route)."""
+    """`price_methods` over m[which] ('dense': the honest words' best program, OPT*; 'hull': every route), with O-IO's
+    lookup routes where m['lookups'] says so."""
+    kw = dict(beside=True, items=(m["sha"],), lookups=m.get("lookups", False))
     if hook is None:
-        return pb.price_methods(card, m[which], m["L"], m["n"], pb.TOKENS, beside=True, items=(m["sha"],))
+        return pb.price_methods(card, m[which], m["L"], m["n"], pb.TOKENS, **kw)
     with _lp(hook):
-        return pb.price_methods(card, m[which], m["L"], m["n"], pb.TOKENS, beside=True, items=(m["sha"],))
+        return pb.price_methods(card, m[which], m["L"], m["n"], pb.TOKENS, **kw)
 
 
 def row_min(card, m, which, row, c_max):
@@ -137,6 +139,21 @@ def period(card, jobs, fixed=None):
     served work), {resource: load}. Returns T·s8 (honest-kernel units), the rows' loads and their duals μ
     (Σ μ_r cap_r = 1)."""
     names, caps = rows(card), pb.cap(card)
+    A_ub, b_ub, A_eq, b_eq, tcol = _period_lp(card, jobs, fixed)
+    nv = A_ub.shape[1]
+    res = pb.linprog(np.r_[1.0, np.zeros(nv - 1)], A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq,
+                     bounds=[(0, None)] * nv, method="highs")
+    assert res.status == 0, res.message
+    T = res.x[0]
+    load = (A_ub[:, 1:] @ res.x[1:] - b_ub) / -tcol * card.s8
+    mu = -res.ineqlin.marginals * -tcol
+    return dict(c=T * card.s8, loads=dict(zip(names, load)), mu=dict(zip(names, mu)),
+                binding=[r for r, x in zip(names, load) if x >= T * card.s8 * (1 - 1e-6)], caps=caps)
+
+
+def _period_lp(card, jobs, fixed):
+    """`period`'s LP: (A_ub, b_ub, A_eq, b_eq, the makespan column), the fixed loads moved into b_ub."""
+    names = rows(card)
     tcol = np.array([jobs[0][1]["A_ub"][j][0] for j in range(len(names))])
     ub = [sparse.csr_matrix(np.array(lp["A_ub"])[:, 1:] * w) for w, lp in jobs]
     b_ub = sum(w * np.array(lp["b_ub"]) for w, lp in jobs)
@@ -150,16 +167,22 @@ def period(card, jobs, fixed=None):
     A_ub = sparse.hstack([sparse.csr_matrix(tcol[:, None])] + ub).tocsr()
     eq = sparse.block_diag([sparse.csr_matrix(np.array(lp["A_eq"])[:, 1:]) for _, lp in jobs])
     A_eq = sparse.hstack([sparse.csr_matrix((eq.shape[0], 1)), eq]).tocsr()
-    b_eq = np.concatenate([lp["b_eq"] for _, lp in jobs])
-    nv = A_ub.shape[1]
-    res = pb.linprog(np.r_[1.0, np.zeros(nv - 1)], A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq,
-                     bounds=[(0, None)] * nv, method="highs")
+    return A_ub, b_ub, A_eq, np.concatenate([lp["b_eq"] for _, lp in jobs]), tcol
+
+
+def period_row_min(card, jobs, fixed, row, T_max):
+    """The least load the jobs put on one row (a resource, honest-kernel units a credited MAC, the fixed loads' share
+    of it left out) over every job's programs at once, with the period's makespan held to T_max (honest-kernel
+    units): `period`'s LP with T bounded and that row's load as the objective."""
+    j = rows(card).index(row)
+    A_ub, b_ub, A_eq, b_eq, tcol = _period_lp(card, jobs, fixed)
+    obj = A_ub[j].toarray().ravel()
+    obj[0] = 0.0
+    res = pb.linprog(obj, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq,
+                     bounds=[(0, T_max / card.s8 * (1 + 1e-9))] + [(0, None)] * (A_ub.shape[1] - 1), method="highs")
     assert res.status == 0, res.message
-    T = res.x[0]
-    load = (A_ub[:, 1:] @ res.x[1:] - b_ub) / -tcol * card.s8
-    mu = -res.ineqlin.marginals * -tcol
-    return dict(c=T * card.s8, loads=dict(zip(names, load)), mu=dict(zip(names, mu)),
-                binding=[r for r, x in zip(names, load) if x >= T * card.s8 * (1 - 1e-6)], caps=caps)
+    b_free = sum(w * lp["b_ub"][j] for w, lp in jobs)
+    return float(((A_ub[j, 1:] @ res.x[1:])[0] - b_free) / -tcol[j] * card.s8)
 
 
 def job(card, t, Lp, K, n, bit, depth, v, hash_scale, o_route=True, zhd=True, digits=(2, 2), comps=None,
