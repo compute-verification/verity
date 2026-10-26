@@ -101,17 +101,29 @@ def test_packed_dfma_fits_three_products_at_80_and_loses_the_issue_slots_to_dp4a
 
 def test_v2_tile_route_on_h200_wins_through_the_joint_facet_when_peels_pass_three_eighths():
     _, bit, depth = PB.BIT_COST["sm_90"][0]
-    big = PB.tile_job_at(PB.H200, 2, 1024, 4096, 6144, bit, depth, 80, 1.15)
-    small = PB.tile_job_at(PB.H200, 2, 384, 4096, 6144, bit, depth, 80, 1.10)
+    tiles_only = dict(o_route=False, zhd=False)
+    big = PB.tile_job_at(PB.H200, 2, 1024, 4096, 6144, bit, depth, 80, 1.15, **tiles_only)
+    small = PB.tile_job_at(PB.H200, 2, 384, 4096, 6144, bit, depth, 80, 1.10, **tiles_only)
     assert "joint0" in big["honest"].binding and big["c"] < 0.9
     assert small["c_route"] >= 1 and small["c"] == pytest.approx(1.0)
 
 
+def test_pd3_4_routes_win_where_the_tile_route_alone_does_not():
+    """PD3-4: PD2-1's O-route and the zero-high-digit peel are in the hull. At v2's H200 L' 384 on K 4096 the tile
+    route alone loses, and the hull takes O by a route; both match PROTO-DESIGN-3's d5_routes (bbe690dfe5)."""
+    _, bit, depth = PB.BIT_COST["sm_90"][0]
+    r = PB.tile_job_at(PB.H200, 2, 384, 4096, 6144, bit, depth, 80, 1.10)
+    assert r["c_route"] >= 1 and r["c_opt"] < 0.95 and set(r["route"].mix) == {"dense, O by route"}
+    off = PB.tile_job_at(PB.H200, 2, 384, 4096, 6144, bit, depth, 80, 1.10, o_route=False)
+    assert r["c_opt"] < off["c_opt"] < 1
+
+
 def test_v2_tile_route_in_the_job_beats_four_tiles_on_sm120_and_mixed_with_dense_tiles_reaches_further():
     _, bit, depth = PB.BIT_COST["sm_120"][0]
-    four = PB.tile_job_at(PB.SM120, 4, 256, 16384, 16512, bit, depth, 80, 1.0)
-    past = PB.tile_job_at(PB.SM120, 4, 256, 16384, 16512, bit, depth, 80, 1.1)
-    three = PB.tile_job_at(PB.SM120, 3, 256, 16384, 16512, bit, depth, 80, 1.0)
+    kw = dict(o_route=False, zhd=False)
+    four = PB.tile_job_at(PB.SM120, 4, 256, 16384, 16512, bit, depth, 80, 1.0, **kw)
+    past = PB.tile_job_at(PB.SM120, 4, 256, 16384, 16512, bit, depth, 80, 1.1, **kw)
+    three = PB.tile_job_at(PB.SM120, 3, 256, 16384, 16512, bit, depth, 80, 1.0, **kw)
     assert four["alu"] == pytest.approx(1.0, abs=1e-3) and four["c"] < four["c_route"] < 0.98
     assert four["c_opt"] < 0.98
     assert past["c_route"] >= 1 and past["c_opt"] < 1 and 0 < past["route"].mix["tiles"] < 1
