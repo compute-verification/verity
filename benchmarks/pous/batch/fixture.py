@@ -10,8 +10,10 @@ proved family) and 4,096 blocks. A batch of b blocks has the deadline `sizing.de
 margin, at two links, `ssh` (2 MiB channel window over the 97.39 ms round trip) and `10g` (10 Gbit/s). Its prover's
 answer is modelled to land RTT + the indices' and blocks' transfer time after the batch is sent. The party's own channel
 (the indices out, 2,056·b bytes back through a local socket, Python on both ends) takes time a link's transfer would
-overlap; each store's `local` sessions (no wait) measure it, and every prover waits that much less, so its answer lands
-at the modelled time. The cases, each one session:
+overlap; each store's `local` sessions (no wait) measure it, and every prover waits the least of them less, so its
+answer lands no sooner than the modelled time. That channel's time varies by more than sizing's 10 ms margin (16-31 ms
+for 4,096 blocks on the shared card, r20261026-003424-c967), so the fixture's T adds `JITTER_S` to it. The cases, each
+one session:
 
 - `seq`: the 256-block store at its certified point, honest, no added round trip: accepted, S certified.
 - `seq-far`: the same with the round trip added to every round: refused, late (854 µs is no deadline off-region).
@@ -58,8 +60,9 @@ from verity.core.protocols.pous.schemes import p2 as P2
 
 RTT_NS = 97_390_000
 """p50 of 20 TCP connects vy-dc-h200-2 → vy-auditor-1 (r20261025-233837-25b4); cpu-1 → vy-dc-h200-2 97.44 ms."""
-RTT_MAX_S, MARGIN_S = 0.10018, 0.010
-"""The largest of 20 connects vy-dc-h200 → vy-auditor-1 (r20261025-233837-b76c), and the margin T adds."""
+RTT_MAX_S, MARGIN_S, JITTER_S = 0.10018, 0.010, 0.015
+"""The largest of 20 connects vy-dc-h200 → vy-auditor-1 (r20261025-233837-b76c), the margin sizing's T adds, and what
+the fixture's T adds for its local channel's spread past the credit (up to 14.3 ms at 4,096 blocks)."""
 LINKS = {"ssh": 2 * Z.MIB / (RTT_NS / 1e9), "10g": 1.25e9}
 FLOOR_BLOCK_NS, FLOOR_THREADS = 2 * 5_960_540, 16
 """Two roots a block at the timing red team's single-core floor (`schemes.p2.ROOT_CALL_NS`'s derivation), on each of the
@@ -140,7 +143,7 @@ def setup_gpu(lib: str, point: R.Point, store: bytes, coins: bytes) -> tuple[per
 
 
 def batched_point(held: period.Store, b: int, bw: float, rounds: int = 1) -> R.Point:
-    t = Z.deadline_s(b, RTT_MAX_S, bw, MARGIN_S)
+    t = Z.deadline_s(b, RTT_MAX_S, bw, MARGIN_S + JITTER_S)
     return R.Point(held.point.params, b * rounds, math.ceil(t * 1e9), b)
 
 
@@ -234,7 +237,7 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     out, node = Path(os.environ.get("OUT", ".")), socket.gethostname()
     scratch = Path(tempfile.mkdtemp(prefix="pous-batch-"))
-    summary: dict = {"node": node, "rtt_ns": RTT_NS, "rtt_max_s": RTT_MAX_S, "margin_s": MARGIN_S,
+    summary: dict = {"node": node, "rtt_ns": RTT_NS, "rtt_max_s": RTT_MAX_S, "margin_s": MARGIN_S, "jitter_s": JITTER_S,
                      "links": LINKS, "floor": {"block_ns": FLOOR_BLOCK_NS, "threads": FLOOR_THREADS}, "drop": DROP,
                      "stores": {}, "sessions": []}
     try:
