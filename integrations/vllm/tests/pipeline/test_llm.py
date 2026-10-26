@@ -33,7 +33,7 @@ def test_the_package_exports_llm_and_what_it_is_built_from():
     assert verity_vllm.LLM is L.LLM and verity_vllm.EnginePin is EnginePin
     assert verity_vllm.EngineSpec is spec.EngineSpec and verity_vllm.TargetProfile is target_profile.TargetProfile
     with pytest.raises(AttributeError, match="no attribute 'Engine'"):
-        verity_vllm.Engine
+        _ = verity_vllm.Engine
 
 
 @pytest.mark.parametrize("opt", ["tokenizer", "speculative_config"])
