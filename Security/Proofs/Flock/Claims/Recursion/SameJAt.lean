@@ -22,7 +22,7 @@ open Flock
 open Lean (Json)
 open Claims.Json (Same Good)
 open FlockDeploy (Coin Live mapKey mapArr mapArrIdx mapStream mapRounds setPoints eraseCoins fillCoins coinSubJ
-  shaSubJ shaArr_honest hexArr nOf nameOf streamOffset roundsOf liveOfJ streamJ roundJ getObjVal?_mapKey_self
+  shaSubJ shaArr_honest hexArr nOf nameOf streamOffset liveOfJ streamJ roundJ getObjVal?_mapKey_self
   getObjVal?_mapKey_ne getObjValAs_mapKey_ne nat_mapKey_ne arr_mapKey_mapArr arr_mapKey_ne bind_ok
   array_mapM_ok_inv streamJ_map roundJ_ok fld_mapKey_self proofKey_ne_streams proofKey_ne_link)
 open FlockComplete (dgOf)
@@ -316,9 +316,9 @@ theorem streamOffset_shaSubJ (spec : SessionSpec) (ds : Array ByteArray) (j : Js
   have ha : Record.arr (eraseCoins (shaSubJ spec ds j)) "streams" = Record.arr (eraseCoins j) "streams" := by
     simp only [eraseCoins, mapRounds, setPoints, shaSubJ, arr_mapKey_mapArr, arr_mapKey_ne _ _ hSL,
       arr_mapKey_ne _ _ (proofKey_ne_streams spec).symm]
-  have hro : roundsOf (eraseCoins (shaSubJ spec ds j)) = roundsOf (eraseCoins j) := by
+  have hro : FlockDeploy.roundsOf (eraseCoins (shaSubJ spec ds j)) = FlockDeploy.roundsOf (eraseCoins j) := by
     funext name
-    unfold roundsOf
+    unfold FlockDeploy.roundsOf
     rw [ha]
   funext name
   unfold streamOffset
@@ -365,7 +365,6 @@ theorem fill_of_live {spec : SessionSpec} {h : ByteArray → ByteArray} {rootB :
         (spec.repStreams.toList.map (·.2.2))[t']'(by simpa using ht') := by simpa using e
     exact (List.Nodup.getElem_inj_iff hnd).1 e'
   unfold liveOfJ at hl
-  obtain ⟨_, -, hl⟩ := bind_ok hl
   obtain ⟨_, -, hl⟩ := bind_ok hl
   obtain ⟨_, -, hl⟩ := bind_ok hl
   obtain ⟨_, -, hl⟩ := bind_ok hl
