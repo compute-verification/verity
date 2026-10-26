@@ -96,8 +96,12 @@ def Record.summary (node : Node) (r : Record) : Option RemoteAudit.Session.Summa
 the rest unchanged. A trace's registered blocks are the model's name for the store; at `T.blocks = N` this is `T`. -/
 def overBlocks {Ω : Type} (T : Trace Ω) (N : ℕ) : Trace Ω :=
   let re : Finset (Fin T.blocks) → Finset (Fin N) := fun s => Finset.univ.filter fun j => (j : ℕ) ∈ s.image Fin.val
-  { T with blocks := N, plan := fun ω p => re (T.plan ω p), correct := fun ω p => re (T.correct ω p),
-    mem := fun ω t => re (T.mem ω t), chip := fun ω t => re (T.chip ω t) }
+  { T with
+    blocks := N
+    plan := fun ω p => re (T.plan ω p)
+    correct := fun ω p => re (T.correct ω p)
+    mem := fun ω t => re (T.mem ω t)
+    chip := fun ω t => re (T.chip ω t) }
 
 /-- **The trace of record**: the trace `T` over the registration's blocks (`overBlocks` at `Node.blocks`, the `N` the
 Lean verifier's record of the session gives the line) with the Lean verifier's verdict on the record, accepting exactly

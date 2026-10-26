@@ -1,6 +1,6 @@
 import Definitions.Accounting.Schedule
 import RemoteAudit.Schedule
-import RemoteAudit.Window
+import Properties.RemoteAudit
 
 /-!
 # The schedule check fixes each credited pass's plan (`RemoteAudit.Schedule`)
@@ -123,23 +123,21 @@ def CodeLayoutTiles : Prop :=
       some (((codeLayout blocks dflt appends pl.runs i).1 : ℕ), ((codeLayout blocks dflt appends pl.runs i).2 : ℕ))
 
 /-- **The verifier checks each opened block at its position.** Whenever `checkOpening` accepts draw `(i, p)`'s opening
-`o`, the block opened is store index `j`, the block at position `p` of pass `i`'s plan, and `position` puts it at
-`(t, j)`: its decoding under the registration's key at index `j` is a payload at leaf `j` of the registration's payload
-tree when `t = 0`, and under append `t − 1`'s coin, at leaf `j` of that append's tree, when `t ≥ 1`. -/
+`o` (under the registration's digest and the receipter of pass `i`'s seed, as `Session` checks it), the block opened is
+store index `j`, the block at position `p` of pass `i`'s plan, and `position` puts it at `(t, j)`: `t = 0` and its
+decoding under the registration's key at index `j` is a payload at leaf `j` of the registration's payload tree, or
+`t ≥ 1` and its decoding under append `t − 1`'s coin is a payload at leaf `j` of that append's tree. -/
 def OpensAtPosition : Prop :=
-  ∀ (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord) (receipter : Receipter)
-    (i p : ℕ) (o : Opening),
-    checkOpening reg digest appends w receipter i p o = none →
-    ∃ t payload,
-      position reg.blocks (appends.map fun a => (a.first, a.count)) (w.passes[i]!.plan.block p) =
-        some (t, w.passes[i]!.plan.block p) ∧
-      if t = 0 then
-        Codec.decode o.block (w.passes[i]!.plan.block p) reg.key none = .ok (some payload) ∧
-          FrameV3.verifyOpening reg.payloadDomain reg.payloadRoot (w.passes[i]!.plan.block p)
-            (hidden payload o.payloadSalt) SCHEMA o.payloadPath = true
-      else ∃ a, appends[t - 1]? = some a ∧
-        Codec.decode o.block (w.passes[i]!.plan.block p) reg.key (some (o.digest, some a.coin)) = .ok (some payload) ∧
-          FrameV3.verifyOpening (appendDomain digest a.first a.count) a.root (w.passes[i]!.plan.block p)
-            (hidden payload o.payloadSalt) SCHEMA o.payloadPath = true
+  ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (i p : ℕ) (o : Opening),
+    checkOpening reg reg.digest appends w (receipterOf reg w i) i p o = none →
+    let j := w.passes[i]!.plan.block p
+    ∃ t, position reg.blocks (appends.map fun a => (a.first, a.count)) j = some (t, j) ∧ ∃ payload,
+      (t = 0 ∧ Codec.decode o.block j reg.key none = .ok (some payload) ∧
+        FrameV3.verifyOpening reg.payloadDomain reg.payloadRoot j (hidden payload o.payloadSalt) SCHEMA
+          o.payloadPath = true) ∨
+      (0 < t ∧ ∃ a, appends[t - 1]? = some a ∧
+        Codec.decode o.block j reg.key (some (o.digest, some a.coin)) = .ok (some payload) ∧
+        FrameV3.verifyOpening (appendDomain reg.digest a.first a.count) a.root j (hidden payload o.payloadSalt)
+          SCHEMA o.payloadPath = true)
 
 end Properties.RemoteAudit

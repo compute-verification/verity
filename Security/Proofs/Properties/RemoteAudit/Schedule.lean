@@ -1,4 +1,7 @@
+import Batteries.Tactic.OpenPrivate
 import Properties.RemoteAudit.Schedule
+import Proofs.Properties.RemoteAudit.Plan
+import Proofs.Properties.RemoteAudit.Window
 import Definitions.Accounting.Assumptions.Stacking
 import Mathlib.Tactic.Choose
 import Batteries.Lean.Except
@@ -18,13 +21,21 @@ to the schedule (each list after its length, a block's tag before its write's st
 two facts off `malformed` finding nothing (`wf_of_malformed`): a freed block's free comes after its write, so its tag
 `f − w + 1` is at least 2, and the steps increase, so their rises give them back.
 
-From the code to the model, under `ScheduleLayoutGap`: a layout the check accepted at the cap `a` the session committed
-before its coins is the verifier's plan of a well-formed schedule of at most `a` bits
+From the code to the model, at the verifier's layout (`sessionLayout`, where `ScheduleLayoutGap` holds by definition,
+`scheduleLayoutGap_code`): a layout the check accepted at the cap `a` the session committed before its coins is the
+verifier's plan of a well-formed schedule of at most `a` bits
 (`scheduleDeterministic_of_checked`; the cap is one `a` at every coin, where the bits of each coin's own schedule
 would not be), and a layout that is
 `ScheduleDeterministic` at `a` is `SteeredLayout` at `a + 1`: its summary is the schedule's bits padded to `a + 1` with
 a one and zeros (`pad`, one-to-one on strings of at most `a` bits), read back by the schedule they pad
 (`steered_of_scheduleDeterministic`).
+
+That layout is where the verifier checks. A plan's position `p` is entry `p` of its runs' blocks (`planBlocks`: the
+running ends' bisection finds the run, `block_spec`, and the offset into it is the entry, `getElem?_flatMap_range'`). A
+plan the verifier makes reads distinct blocks (`planReadsDistinct`), and a tile's position's second coordinate is its
+block (`snd_of_tileAt`), so a plan of `N` blocks with positions in range is one embedding, which `codeLayout` picks
+(`codeLayoutTiles`). An accepted opening passed `checkOpening`'s checks (`checkOpening_none`), whose tree is the
+registration's below `N` and `appendOf`'s above, the tree `position` names (`opensAtPosition`).
 
 The collapse it rules out: `coinLayout` puts a pass's one block where a coin bit says. It is `SteeredLayout` at one bit
 (`coinLayout_steered`), as every layout is at `a = |Y|`, and `ScheduleDeterministic` at no `a` under a schedule that
@@ -35,6 +46,8 @@ session in Python).
 -/
 
 open RemoteAudit
+
+open private RemoteAudit.endsOf from RemoteAudit.Plan
 
 namespace Properties.RemoteAudit
 
@@ -441,6 +454,137 @@ theorem scheduleLayoutGap_code {Pfx Y : Type} {N T M : ℕ} (blocks : ℕ) (dflt
     (appended sent : Pfx → Y → Array (ℕ × ℕ)) :
     ScheduleLayoutGap (fun c => codeLayout blocks (dflt c)) appended sent (sessionLayout blocks dflt appended sent) :=
   fun _ _ => rfl
+
+/-! ## The verifier's layout is where it checks -/
+
+theorem make_ends {runs : Array (Int × Int)} {blocks : ℕ} {pl : Plan} (h : Plan.make? runs blocks = some pl) :
+    pl.ends = RemoteAudit.endsOf pl.runs := by
+  unfold Plan.make? at h
+  simp only [Bool.not_eq_true', Option.bind_eq_bind, Option.bind_none] at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  cases h
+  rfl
+
+theorem length_runBlocks (rs : Array (ℕ × ℕ)) : (runBlocks rs).length = (rs.toList.map (·.2)).sum := by
+  simp [runBlocks, List.length_flatMap]
+
+/-- Entry `p` of runs' blocks, `p` in run `r`: the run's first block, `p`'s offset into it on. -/
+theorem getElem?_flatMap_range' : ∀ (l : List (ℕ × ℕ)) (r p : ℕ) (hr : r < l.length),
+    ((l.map (·.2)).take r).sum ≤ p → p < ((l.map (·.2)).take r).sum + l[r].2 →
+      (l.flatMap fun x => List.range' x.1 x.2)[p]? = some (l[r].1 + (p - ((l.map (·.2)).take r).sum))
+  | [], _, _, hr, _, _ => absurd hr (by simp)
+  | x :: xs, 0, p, _, _, h2 => by
+    simp only [List.take_zero, List.sum_nil, Nat.zero_add, List.getElem_cons_zero, Nat.sub_zero] at h2 ⊢
+    rw [List.flatMap_cons, List.getElem?_append_left (by simpa using h2), List.getElem?_range' h2, Nat.one_mul]
+  | x :: xs, r + 1, p, hr, h1, h2 => by
+    simp only [List.map_cons, List.take_succ_cons, List.sum_cons, List.getElem_cons_succ] at h1 h2 ⊢
+    rw [List.flatMap_cons, List.getElem?_append_right (by simp only [List.length_range']; omega),
+      List.length_range', getElem?_flatMap_range' xs r (p - x.2) (by simpa using hr) (by omega) (by omega)]
+    congr 2
+    omega
+
+theorem planBlocks_of (b : ℕ) (rs : Array (ℕ × ℕ)) (ends : Array ℕ) (hP : PrefixSums ends (rs.toList.map (·.2))) :
+    Plan.length ⟨b, rs, ends⟩ = (runBlocks rs).length ∧
+      ∀ p < Plan.length ⟨b, rs, ends⟩, (runBlocks rs)[p]? = some (Plan.block ⟨b, rs, ends⟩ p) := by
+  have hlen : Plan.length ⟨b, rs, ends⟩ = (rs.toList.map (·.2)).sum := back_getD_of_prefix hP
+  refine ⟨hlen.trans (length_runBlocks rs).symm, fun p hp => ?_⟩
+  rw [hlen] at hp
+  obtain ⟨hr, hlo, hhi, hb⟩ := block_spec b rs ends hP p hp
+  rw [hb, getElem!_pos rs _ hr]
+  rw [getElem!_pos rs _ hr] at hhi
+  have := getElem?_flatMap_range' rs.toList (bisectRight ends p) p (by simpa using hr) hlo
+    (by rw [Array.getElem_toList]; exact hhi)
+  rw [Array.getElem_toList] at this
+  exact this
+
+theorem whole_prefix (blocks : ℕ) : PrefixSums #[blocks] ((#[(0, blocks)] : Array (ℕ × ℕ)).toList.map (·.2)) :=
+  ⟨rfl, fun i hi => by obtain rfl : i = 0 := by simpa using hi; rfl⟩
+
+theorem planBlocks : PlanBlocks := by
+  refine ⟨fun runs blocks pl h => ?_, fun blocks p hp => ?_⟩
+  · obtain ⟨b, rs, ends⟩ := pl
+    have he : ends = RemoteAudit.endsOf rs := make_ends h
+    subst he
+    exact planBlocks_of b rs _ (endsOf_prefix rs)
+  · obtain ⟨hlen, hget⟩ := planBlocks_of blocks #[(0, blocks)] #[blocks] (whole_prefix blocks)
+    refine hget p ?_
+    rw [hlen, length_runBlocks]
+    simpa using hp
+
+/-- A tile's position's second coordinate is its block. -/
+theorem snd_of_tileAt {blocks : ℕ} {appends runs : Array (ℕ × ℕ)} {i t m : ℕ}
+    (h : tileAt blocks appends runs i = some (t, m)) : (runBlocks runs)[i]? = some m := by
+  unfold tileAt at h
+  cases hj : (runBlocks runs)[i]? with
+  | none => simp [hj] at h
+  | some j =>
+    rw [hj] at h
+    change position blocks appends j = some (t, m) at h
+    unfold position at h
+    split at h
+    · exact congrArg some (Prod.mk.inj (Option.some.inj h)).2
+    · dsimp only at h
+      split at h
+      · cases h
+      · exact congrArg some (Prod.mk.inj (Option.some.inj h)).2
+
+theorem codeLayoutTiles : CodeLayoutTiles := by
+  intro N T M blocks extent dflt appends runs pl hmake hN hpos i
+  obtain ⟨hlen, hget⟩ := planBlocks.1 runs extent pl hmake
+  have hdist := (planReadsDistinct runs extent pl hmake).2
+  choose t m hspec using hpos
+  let f : Fin N → Fin T × Fin M := fun k => (⟨t k k.2, (hspec k k.2).2.1⟩, ⟨m k k.2, (hspec k k.2).2.2⟩)
+  have hf : Function.Injective f := by
+    intro a b hab
+    have hm : m a a.2 = m b b.2 := congrArg (fun x => (x.2 : ℕ)) hab
+    have ha := snd_of_tileAt (hspec a a.2).1
+    have hb := snd_of_tileAt (hspec b b.2).1
+    have hpa : (a : ℕ) < pl.length := by have := a.2; omega
+    have hpb : (b : ℕ) < pl.length := by have := b.2; omega
+    rw [hget a hpa, hm] at ha
+    rw [hget b hpb] at hb
+    exact Fin.ext (hdist a b hpa hpb (Option.some.inj (ha.trans hb.symm)))
+  have hex : ∃ e : Fin N ↪ Fin T × Fin M, (runBlocks pl.runs).length = N ∧
+      ∀ k : Fin N, tileAt blocks appends pl.runs k = some (((e k).1 : ℕ), ((e k).2 : ℕ)) :=
+    ⟨⟨f, hf⟩, hN, fun k => (hspec k k.2).1⟩
+  have hc : codeLayout blocks dflt appends pl.runs = hex.choose := by
+    unfold codeLayout
+    split
+    · rfl
+    · rename_i hn
+      exact absurd hex hn
+  rw [hc]
+  exact hex.choose_spec.2 i
+
+theorem opensAtPosition : OpensAtPosition := by
+  intro reg appends w i p o h
+  have hp := checkOpening_none h
+  unfold OpeningPasses at hp
+  dsimp only at hp ⊢
+  generalize w.passes[i]!.plan.block p = j at hp ⊢
+  obtain ⟨-, -, -, -, -, -, -, -, -, _, -, -, ⟨payload, ⟨hj, hdec, hver⟩ | ⟨hj, a, ha, hdec, hver⟩⟩, -⟩ := hp
+  · exact ⟨0, by simp [position, hj], payload, Or.inl ⟨rfl, hdec, hver⟩⟩
+  · unfold appendOf at ha
+    dsimp only at ha
+    split at ha
+    · cases ha
+    · rename_i hk
+      have hmap : (appends.map fun a => (a.first, a.count)).map Prod.fst = appends.map (·.first) := by
+        simp [Array.map_map, Function.comp_def]
+      refine ⟨bisectRight (appends.map (·.first)) j, ?_, payload,
+        Or.inr ⟨Nat.pos_of_ne_zero hk, a, ha, hdec, hver⟩⟩
+      unfold position
+      rw [hmap]
+      simp [Nat.not_lt.mpr hj, hk]
 
 /-- One block, put at position `y` of one append: the coin bit `y` steers it. -/
 def coinLayout : Unit → Fin 2 → Fin 1 ↪ Fin 1 × Fin 2 :=
