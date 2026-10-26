@@ -170,18 +170,26 @@ def _cells(run: Path) -> dict[tuple[str, int], dict]:
 
 def test_the_registration_names_each_link_windows_warden_rows_its_ports_read(tmp_path):
     """The rows form's hold (`NetworkCheck.Period`: the scan's registration names each of W's row registrations' root
-    and domain): a G = 2 group's honest round names, as ``warden/<direction>/<w>``, each of the four row registrations
+    and domain): a G = 2 group's honest round names, as ``rows/<direction>/<w>``, each of the four row registrations
     of the run's ``cells.jsonl``, T leaves each (ingress's row ports and egress's o1 read them); the tampered round,
-    egress only, names the egress rows alone, the re-signed link-window's in its place."""
+    egress only, names the egress rows alone, the re-signed link-window's in its place. No root is named as the value
+    Lean reports a read under, so the audit's registered reads (`audit.session_registered`, Lean's ``registered`` of
+    each member) hold none of them, as the registration registers none."""
     G, T = 2, sz.TEST.params.window
     run = published(tmp_path / "run", sz.TEST, windows=G)
     h = sz.host(tmp_path / "host", run, setup=sz.TEST, group=G)
     regs = _cells(run)
-    assert sz.warden_roots([{"warden": m.warden} for m in h.rounds["honest"]]) == [
-        {"port": f"warden/{d}/{w}", "root": regs[d, w]["root"], "leaves": T, "domain": regs[d, w]["domain"]}
+    roots = sz.warden_roots([{"warden": m.warden} for m in h.rounds["honest"]])
+    assert roots == [
+        {"port": f"rows/{d}/{w}", "root": regs[d, w]["root"], "leaves": T, "domain": regs[d, w]["domain"]}
         for d in ("egress", "ingress") for w in range(G)]
+    verdicts = {f"lean-verify/{m.name}": {"of_record": True, "accepted": True, "registered": {
+        p: {"value": d["value"], "root": d["root"]} for p, d in m.warden.items()}} for m in h.rounds["honest"]}
+    assert {e["value"] for v in verdicts.values() for e in v["registered"].values()} == {
+        f"warden/{d}/{w}" for d in ("egress", "ingress") for w in range(G)}
+    assert sz.AU.session_registered(verdicts, {"roots": roots}) == {}
     tampered, w = sz.warden_roots([{"warden": m.warden} for m in h.rounds["tampered"]]), h.at.tampered.window
-    assert [r["port"] for r in tampered] == [f"warden/egress/{x}" for x in range(G)]
+    assert [r["port"] for r in tampered] == [f"rows/egress/{x}" for x in range(G)]
     assert tampered[w]["root"] == h.at.tampered.registration["root"] != regs["egress", w]["root"]
     assert all(tampered[x]["root"] == regs["egress", x]["root"] for x in range(G) if x != w)
 
@@ -200,7 +208,7 @@ def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
     query = sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES])
     N, law = sum(counts.values()), sz.DR.parse_law(f"stratified:{2 * G * T}")
     reg = R.record(program, query, law, sz.S.SCHEME,
-                   [{"port": "warden/egress/1", "root": "aa" * 64, "leaves": T, "domain": "bb" * 64}],
+                   [{"port": "rows/egress/1", "root": "aa" * 64, "leaves": T, "domain": "bb" * 64}],
                    {"kind": "stand-in"}, leaf_layer="ee" * 64)
     draw = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
     record = {"accepted": True, "registration": reg, "draw": draw, "proved_units": list(range(N))}
@@ -214,6 +222,33 @@ def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
     assert CC.answer_of(r)["verdict"] == "reject" and r["reason"] == why and r["commitment"] == a["commitment"]
     with pytest.raises(SystemExit, match="another registration"):
         sz.window_answer(reg, {**record, "registration": {**reg, "population": 1}}, sz.Fraction(1, 100), "")
+
+
+def test_an_audit_refused_with_every_member_held_answers_each_link_window_naming_its_failed_checks(tmp_path):
+    """`answers` of a round whose members Lean all held but whose audit refused (a check of the record's own, say its
+    registered reads): each link-window's answer is the reject of the round's registration, its reason the failed
+    checks and their codes, and its registrations its own two."""
+    G = 2
+    h = sz.host(tmp_path / "host", published(tmp_path / "run", sz.TEST, windows=G), setup=sz.TEST, group=G)
+    (out := tmp_path / "scan" / "honest").mkdir(parents=True)
+    reg = R.record(*_program(G, h.at.T), sz.S.SCHEME, [], {"kind": "stand-in"}, leaf_layer="ee" * 64)
+    (out / "registration.json").write_text(json.dumps(reg))
+    res = {"window_accepted": False, "why": {"lean-verify/egress-0": None}, "failed": {"registered": ["registered"]}}
+    got = sz.answers(h.at, out.parent, res, sz.Fraction(1, 100))
+    why = "the scan's audit of link-windows [0, 1] refused: check registered: registered"
+    assert got == {"verdict": "reject", "bound": None, "reason": why, "commitment": R.digest(reg)}
+    doc = json.loads((out.parent / "answers.json").read_text())
+    assert [x["window"] for x in doc["windows"]] == [0, 1] and all(x["answer"]["reason"] == why for x in doc["windows"])
+    assert [x["registrations"] for x in doc["windows"]] == [
+        [h.at.sides[s][w].registration for s in ("ingress", "egress")] for w in range(G)]
+
+
+def _program(G: int, T: int) -> tuple:
+    """The scan's Program, query and law (every unit drawn) for a group of G link-windows of T buckets."""
+    counts = sz.counts_of(sz.members_of(sz.TEMPLATES, G, T))
+    defs = {"first": FIRST, "ingress": ING, "egress": EG}
+    return (sz.PA.mixed_population_program([(defs[t], counts[t]) for t in sz.TEMPLATES]),
+            sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES]), sz.DR.parse_law(f"stratified:{2 * G * T}"))
 
 
 def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail(tmp_path):

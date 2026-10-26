@@ -46,7 +46,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   §16.13), so S_t is the one leaf unit t computes and unit t + 1 reads, the view the one leaf ingress t computes and
   egress t reads, and the egress row the one the warden signed: the chains are wires through the registered roots, not
   the prover's word. Accepted: every o0 opens to 1. The registration's roots also name, as
-  ``warden/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden
+  ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden
   port reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
 * **The answers** (``answers.json``, `answers`): the honest round's registration and, for each link-window W of the
   group, the warden's two row registrations of W and the scan's one-stage answer (`window_answer`), the same for every
@@ -815,14 +815,18 @@ def coins_outcome(a, coins: SimpleNamespace, spec: S.Spec, units: list, counts: 
 # --- the audit ----------------------------------------------------------------------------------------------------------
 
 def warden_roots(members) -> list[dict]:
-    """The registration's ``warden/<direction>/<w>`` roots: each warden row registration its members' warden ports read
+    """The registration's ``rows/<direction>/<w>`` roots: each warden row registration its members' warden ports read
     (an ingress unit's ``row``, an egress unit's ``o1``), its root and domain as the warden registered them
     (`warden_rows.registration`, read back by the verifier), its T rows the leaves. A period check
-    (`NetworkCheck.Period`'s rows form) holds a link-window's answer to its rows by these."""
+    (`NetworkCheck.Period`'s rows form) holds a link-window's answer to its rows by these, by root and domain.
+
+    A port is never the row registration's value (``warden/<direction>/<w>``, the name Lean reports the reads under):
+    the audit takes a root port named as a value for a registered value of the record (`audit.session_registered`),
+    which this registration lists none of, and refuses the round."""
     out = {}
     for m in members:
         for doc in m["warden"].values():
-            p = f"warden/{doc['direction']}/{doc['window']}"
+            p = f"rows/{doc['direction']}/{doc['window']}"
             out[p] = {"port": p, "root": doc["root"], "leaves": doc["rows"], "domain": doc["domain"]}
     return [out[p] for p in sorted(out)]
 
@@ -879,7 +883,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     vdir.mkdir(exist_ok=True)
     if not all(v["ok"] for v in checks.values()):
         return {**res, "checks": checks, "accepted": False, "window_accepted": False, "verdicts": {}, "why": {},
-                "opened": {}}
+                "opened": {}, "failed": {c: v.get("codes") for c, v in checks.items() if not v["ok"]}}
     stream = None
     if coins is None:
         p = a0.run([a.lean, "draw", "--program", str(pg.program_file), "--partition", str(pg.partition_file),
@@ -993,6 +997,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
             "draw": {"law": f"stratified:{k}", "coins": source, "units": lean_draw["units"], "of": rec["population"]},
             **({"coins": told, "coin_negatives": {x: y["refused"] for x, y in neg.items()}} if told else {}),
             "audit": {x: result.get(x) for x in ("accepted", "complete", "wrong_units")},
+            "failed": {c: v.get("codes") for c, v in (result.get("checks") or {}).items() if not v.get("ok")},
             "charge": charge_terms(M, result, members, a.delta),
             "per_unit": per_unit(members, statement),
             "verdicts": {x: y.get("accepted") for x, y in verdicts.items()},
@@ -1062,8 +1067,9 @@ def answers(at: SimpleNamespace, out: Path, res: dict, delta: Fraction) -> dict:
     record = json.loads(f.read_text()) if res.get("window_accepted") and f.exists() else None
     why = "; ".join(f"{k.split('/', 1)[1]}: {v}" for k, v in sorted(res.get("why", {}).items())
                     if v and k.startswith("lean-verify/"))
+    failed = "; ".join(f"check {c}: {', '.join(codes or ())}" for c, codes in sorted((res.get("failed") or {}).items()))
     reason = (f"the scan's audit of link-windows {at.windows} refused: " +
-              (why or f"audit {res.get('audit')}, outputs {res.get('opened')}"))
+              (why or failed or f"audit {res.get('audit')}, outputs {res.get('opened')}"))
     answer = window_answer(reg, record, delta, reason)
     doc = {"format": ANSWERS, "delta": str(delta), "registration": reg,
            "windows": [{"window": w, "answer": answer,
