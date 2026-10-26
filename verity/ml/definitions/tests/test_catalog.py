@@ -12,7 +12,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from verity_vllm.program.registry import catalog
+from verity.ml.definitions.registry import catalog
 
 REPO = Path(__file__).resolve().parents[4]
 

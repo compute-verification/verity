@@ -1082,7 +1082,7 @@ class TP2CaptureWorkerExtension:
 
         from verity_vllm.engine import env as engine_env
         from verity_vllm.pipeline.tp import xrank_dump as XD
-        from verity_vllm.program.registry.tp_allreduce import device_of, settings_of
+        from verity.ml.definitions.registry.tp_allreduce import device_of, settings_of
 
         settings = settings_of(self.vllm_config.parallel_config.disable_custom_all_reduce, engine_env.snapshot())
         p = torch.cuda.get_device_properties(torch.cuda.current_device())
