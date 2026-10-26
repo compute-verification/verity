@@ -104,7 +104,6 @@ theorem partVStar_of_setup {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Cl
     rw [hib]
     simp only [Except.toOption, Option.bind_eq_bind, Option.bind_some]
     rw [← htg, ← hcf3, ← htb3, ← hcf2, ← htb, hc0]
-    rfl
   have hown : ownBindings r.w.bindings = some f := by
     dsimp only [partRaw] at hb
     simp only [Option.mapM_some] at hb
@@ -170,7 +169,7 @@ theorem readX_partVStar {x : Claims.Msg} {r : XR} (h : readX x = some r) :
       rw [hc] at hall
       simp only [Bool.and_eq_true] at hall
       obtain ⟨⟨h1, h2⟩, h3⟩ := hall
-      refine ⟨f, r.w.parts[s], c, rfl, List.getElem?_eq_getElem hs', rfl, ?_, ?_, ?_⟩
+      refine ⟨f, r.w.parts[s], c, rfl, List.getElem?_eq_getElem hs', hc, ?_, ?_, ?_⟩
       · revert h1; cases RecVStar.checkFile vs[s] f r.w.parts[s].base.circuit r.shape.holo <;>
           simp [Except.isOk, Except.toBool]
       · revert h2; cases RecVStar.checkParsed vs[s] c <;> simp [Except.isOk, Except.toBool]
