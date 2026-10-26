@@ -91,7 +91,7 @@ def test_v19s_heads_are_key_blocks_with_their_gathers():
 
 
 @pytest.mark.skipif(not os.environ.get("VERITY_PROVE_PATH_CLASS_OF_RECORD"),
-                    reason="the class of record at Llama-3.2-1B: some 370M units, an hour and tens of GB on a pod; set "
+                    reason="the class of record at Llama-3.2-1B: 368M units, some 22 minutes and 42 GB on a pod; set "
                            "VERITY_PROVE_PATH_CLASS_OF_RECORD=1")
 def test_the_class_of_record_lowers_at_llama_3_2_1b(monkeypatch):
     """The class of record (8 slots of 1,087 positions) at Llama-3.2-1B's geometry and CIR-95's grain lowers whole: no unit

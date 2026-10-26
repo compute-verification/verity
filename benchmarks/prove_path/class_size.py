@@ -2,9 +2,9 @@
 
 `window_circuit.class_circuit` lowers the class Program once a slot, exactly. At the class of record
 (`window_circuit.CLASS_OF_RECORD`: 8 slots, 1,024 prompt ids, 64 outputs, 1,087 positions a Program) a Program at
-Llama-3.2-1B is some 46M units, which take a pod some minutes to lower. So the size is also a projection (`project`) from
-an exact lowering of one Program of the same registration at a small probe class within one key block, which the tests hold
-to the exact lowering past one block:
+Llama-3.2-1B is 46,028,317 units, and the class's 8 take a pod some 22 minutes and 42 GB to lower. So the size is also a
+projection (`project`) from an exact lowering of one Program of the same registration at a small probe class within one
+key block, which the tests hold to the exact lowering past one block and two, and at the class of record itself:
 
 * every template but the heads and their key gathers is a fixed number of units a position (`TokenFeed_v1` a prompt
   position, `SlotRow_v1` one a Program), read off the probe, which is refused unless each divides evenly;
