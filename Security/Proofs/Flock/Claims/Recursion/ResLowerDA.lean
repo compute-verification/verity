@@ -10,7 +10,7 @@ import Proofs.Flock.C3.Reps.AtList
 
 `ResLowerDD`'s `resLowered_D` (`ResLoweredPD` at the deployed constants: the dense form, `recRead`, `cmtTr recRead`,
 the concrete pieces and owners `resPD`/`ownRD`, `elemAt := Rows.elemReadC (Top.accRC rd key)`, `vvAt :=
-Rows.resVRead`) is `resPieces_computesP`'s share at each piece, from P2 (`FramePorts`), P3 (`AccPorts`), the site
+Rows.resVRead`) is `resPieces_computesV`'s share at each piece, from P2 (`FramePorts`), P3 (`AccPorts`), the site
 facts at part `s`'s decision (`resSite_of_dec`), `ReadsAt` and the base checks (`BasesHold`). This file has its steps:
 
 * **Which part.** The piece's owner `s` is V\*'s statement `.inner q.key.1 nm _` (`ownRD_some`), named for its group

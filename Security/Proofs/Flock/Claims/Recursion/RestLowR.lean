@@ -275,10 +275,11 @@ theorem recKSDecompLV_of_leavesJS (shows : ℕ → Msg → Msg → (ℕ → Coin
     (hSR : SaltRowRest rd b aux nOf hd rest wE final w L) (hOwn : PiecesOwned resP key ownR)
     (hlowR : RestLowJ rd b aux nOf hd rest wE final w L)
     (hres : ∀ (x : Msg) (st : Claims.Recursion.Stmt), parse x = some st → Claims.Recursion.Form.Dense st.form →
-      ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
-        JointP FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) L
-          (PartAcceptsP FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
-            (deployZkRec _root_.Flock.Readable.relation) L Claims.Recursion.Form.Dense shows (cmtTr recRead)) x c ws →
+      ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit),
+        OpenLower.JointV FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) L
+          (PartAcceptsV FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
+            (deployZkRec _root_.Flock.Readable.relation) L Claims.Recursion.Form.Dense shows (cmtTr recRead)) x c xs
+            ws →
         ∀ s < nS x, PiecesComputes (bdR rd wE final w) (recL rd b aux nOf hd rest wE final w L) resP
           (resHolds elemAt vvAt) ownR s x c (L.msgs x ws))
     (hSch : OpenLower.SideSchR FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
@@ -389,7 +390,7 @@ theorem recKSDecompLV_of_leavesJS (shows : ℕ → Msg → Msg → (ℕ → Coin
     refine VPieces.piecesComputes_vown ownR ownQR (fun _ _ => none) (bdR rd wE final w)
       (recL rd b aux nOf hd rest wE final w L) resP (Rows.rowDPieces key) (fun _ => []) (resHolds elemAt vvAt)
       (openE rd key side posAt) (fun _ _ _ _ => True) ⟨x, st, hx, hf, rfl⟩
-      (hres x st hx hf c ws (OpenLower.jointP_of_jointV hJD) s hs) ?_ ?_
+      (hres x st hx hf c xs ws hJD s hs) ?_ ?_
     · have hop := OpenLower.openPieces_deployedP FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
         Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) L (bdR rd wE final w) side
         (Rows.rowDPieces key) posAt hC hT hx hf hJP hs
@@ -426,8 +427,9 @@ theorem recKSDecompLV_of_leavesJ
       Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) L (bdR rd wE final w) side
       (Rows.rowDPieces key) posAt) :
     RecKSDecompLV rd b aux nOf hd rest wE final w L :=
-  recKSDecompLV_of_leavesJS rd b aux nOf hd rest wE final w L resP key elemAt vvAt side posAt ownR _ (fun h => h)
-    hRdep hDm hEJ hB hF hLn hRd hSR hOwn hlowR hres hSch hO hDirs hTop
+  recKSDecompLV_of_leavesJS rd b aux nOf hd rest wE final w L resP key elemAt vvAt side posAt ownR
+    (showsPart recRead (bB b aux nOf hd rest)) (fun h => h) hRdep hDm hEJ hB hF hLn hRd hSR hOwn hlowR
+    (fun x st hx hf c _ ws hJV s hs => hres x st hx hf c ws (OpenLower.jointP_of_jointV hJV) s hs) hSch hO hDirs hTop
 
 end Assembly
 
