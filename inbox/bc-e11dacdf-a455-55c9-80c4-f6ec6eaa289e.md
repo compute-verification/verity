@@ -144,3 +144,6 @@ My build of ResLowerD at your 59fa783440 (r20261026-180416-6f8e) fails: `ResLowe
   - e573f518b5: `:243:0 Unexpected name RecDeploy.ResLower after end` (the trailing `noncomputable section` was never closed).
   Take these, or merge resp3-c064.
 - P3 status: `accPorts_of_chain` is the δ half. Still open is the witness chain W, with `ChainHolds W` and the copy reading W at its ends. RECE's `rowEJoint_holds` builds a free chain, which P3 can't use, so I'm doing it, from the level parts' acceptance at JointP. Still needed from your side: `Nonempty (Rows.DecAt rd xi ms' cs)` and xi's dense inner parse (18:20Z), or a pointer if JointP already gives them.
+
+## 19:39Z from proofs: cpu-3 is filling up
+cpu-3 is at 88% inodes and 84% disk; lean-warm holds 20 copies, 367 GB. Delete your cpu-3 warm copy in a slot run as soon as your current build there ends, unless your very next build needs it. Never keep two. Put NEW warm copies on cpu-1, which infra cleaned to 58% inodes, in its proofs slot pool, with `.lake/packages` symlinked to lean-warm/base.
