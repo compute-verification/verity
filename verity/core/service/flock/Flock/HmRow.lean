@@ -1623,10 +1623,6 @@ def outGroup (c : Circuit) (j : Nat) : Nat × Nat × Nat × Nat :=
 def pinnedFrom (c : Circuit) : Nat :=
   (c.outPorts.extract 0 (c.outPorts.size - HmRow.pinnedCount c.metaJ)).foldl (· + ·.2) 0
 
-/-- The pinned output ports' words. -/
-def pinnedWords (c : Circuit) : Nat :=
-  (c.outPorts.extract (c.outPorts.size - HmRow.pinnedCount c.metaJ) c.outPorts.size).foldl (· + ·.2) 0
-
 /-- Output word `o`'s first row in the net that computes it, `(net, row)`, 16 rows from it: the last stage's output port,
 or the unit's output group where the unit returns it (`outCol`'s column within its slot). -/
 def outRow (c : Circuit) (o : Nat) : Nat × Nat :=
@@ -1658,9 +1654,9 @@ def checkPinned (c : Circuit) : V Unit := do
     let w0 := pinnedFrom c
     if k == 0 || k > c.outPorts.size || names != some ((c.outPorts.extract (c.outPorts.size - k) c.outPorts.size).map (·.1))
         || c.typed.isSome || c.cls.isSome || J.has c.metaJ "template" || !J.has c.metaJ "row_schemas"
-        || (List.range' w0 (pinnedWords c)).any (fun o => c.dummyOutputs.getD o 1 != 0) then
+        || (List.range' w0 (c.outWords - w0)).any (fun o => c.dummyOutputs.getD o 1 != 0) then
       throw pinnedRefused
-    if (List.range' w0 (pinnedWords c)).any (fun o =>
+    if (List.range' w0 (c.outWords - w0)).any (fun o =>
         let (n, r) := outRow c o
         let net := (c.nets.getD n default).2
         (List.range 16).any fun t => net.b.row (r + t) != #[net.constPos]) then
@@ -1785,23 +1781,8 @@ def outCol (c : Circuit) : Nat → Nat → Nat :=
       let (u, q) := ret.getD o (0, 0)
       c.slotCol c.unitNet g u + (unitCols.getD q default).1
 
-/-- Δ's pairs on the pinned outputs (META `pinned_outputs`), which have no row: per VU each pinned output word's bit `t`,
-`(i, i)` and `(i, z)` at its column `i`, `z` the unit range's first slot's forced-zero row, on both sides. On a linear row
-(its B the constant alone, `checkPinned`) they make the row `(a·z + z_i)(1 + z_i) = z_i`, so `z_i = 0` and `a·z = 0`. -/
-def pinPairs (c : Circuit) : Array (Nat × Nat) := Id.run do
-  let forcedZero := c.unitRange.slot 0 + c.unit.useful
-  let col := outCol c
-  let w0 := pinnedFrom c
-  let mut d : Array (Nat × Nat) := #[]
-  for g in [0:c.g] do
-    for o in [0:pinnedWords c] do
-      for t in [0:16] do
-        d := d.push (col g (w0 + o) + t, col g (w0 + o) + t) |>.push (col g (w0 + o) + t, forcedZero)
-  return d
-
 /-- Δ: `HmRow.delta`'s, then per VU each output row's message bits: word `k` bit `t` (bit `t % 8` of row byte `2k + t / 8`) a
-copy of the output bit, zero (the unit range's first slot's forced-zero row) past its port's words, then the pinned
-outputs' (`pinPairs`). -/
+copy of the output bit, zero (the unit range's first slot's forced-zero row) past its port's words. -/
 def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) := Id.run do
   let (da, db) := HmRow.delta c pin
   let (_, where_) := rowSlots c.ports
@@ -1824,7 +1805,11 @@ def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :
         for t in [0:16] do
           let i := msgCol g (k0 + j) (2 * k + t / 8) (t % 8)
           d := d.push (i, i) |>.push (i, if k < w then col g (at_ + k) + t else forcedZero)
-  return (da ++ d ++ pinPairs c, db ++ d ++ pinPairs c)
+  for g in [0:c.g] do
+    for o in [pinnedFrom c:c.outWords] do
+      for t in [0:16] do
+        d := d.push (col g o + t, col g o + t) |>.push (col g o + t, forcedZero)
+  return (da ++ d, db ++ d)
 
 /-- The regions: each row's `b ‖ c` of every VU (its hm96 slot's output; a padding VU's the pinned dummy). -/
 def regions (c : Circuit) (pub : Public) : V (Array Region) := do
