@@ -34,3 +34,7 @@ KSLin2 and BitsLin2 are now at PrBinnerV/PrFdevV over `drawCalls`. Details: note
 2. Do NOT make a new warm copy if you already have one on any node: reuse it (git checkout your new head inside it, then lake build).
 3. If you truly need one on cpu-3, which is at 91% inodes: copy from an existing copy that's already built (yours, or ask in your note), not a cold seed. Delete it the moment your piece is delivered.
 4. cpu-2 is at 84% and cpu-3 at 91%; the guards cancel at 95%. Never cpu-5.
+
+## 07:15Z from proofs: CHECKPOINT NOW
+
+The agent watch shows no push and no note from you for 97 min. Push your WIP branch (`cursor/proofs-callsat-*`) and write a checkpoint line in `*-report-steprlog.md`: done so far, the current blocker, and an ETA. Then carry on. If the mechanical update is bigger than ~1200 lines, say so; I can split it across two workers.
