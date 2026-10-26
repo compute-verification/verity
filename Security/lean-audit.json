@@ -33120,16 +33120,19 @@
    ]
   },
   "Flock.Record": {
-   "digest": "697ae51ec236fcac0660648d58f086c1c39e2a404c7b943fde2e6d3f35e06bc5",
+   "digest": "abc2d9674c65d4deeb2cb03fa6e60a83494e7470ee5a8404201e977eeaf168b0",
    "definitions": {
     "Flock.Record.arr": "9df0e1daf24196fc6e670a3a7f3d4f0a3c82c61e8eee4d5bf3a08271c3106721",
     "Flock.Record.check": "bba52587ec1aba9b29fabcd7a69510dd279175672cb253a09dec230cb8ef566f",
-    "Flock.Record.decode": "262806cc44027839d1ee362b9743c0863b3ba662a781b7d550dd9b090d8593f1",
+    "Flock.Record.decode": "b8c17de005c29f4820d49adf4ebdac93270fdda47672e4531873c7ad9f2a8f5d",
     "Flock.Record.decode._sparseCasesOn_1": "db3cf4d64ba54afdc52ff5c3157a190182857d75dd3aca61716adafe72922ed9",
     "Flock.Record.f128s": "04e28d3233afdc499f00fd193535bd0587ef0f280717aabf3c02e27e7dd45515",
     "Flock.Record.fld": "217db7f71969f89fe63a196c3d79470e4fa8a9ead499212240ac6d00b588f88d",
     "Flock.Record.isNull": "3194e4cc0fa1b2bcd866c572048dd869c632e141ec45c009ee26716ffbc2c367",
     "Flock.Record.isNull._sparseCasesOn_1": "c13e04fd31a746dee2c7a11be56bdc254f72e407af4e8ce12df41e9de55dea42",
+    "Flock.Record.isTrue": "ea2203537677e29e31cbde3445db5dd049f87229280417c8fee789ffb4db5c5d",
+    "Flock.Record.isTrue._sparseCasesOn_1": "6e142bd684461a04e543a0d8dc5cfd0c6c23ce199a5c9bbac9de836abee4a872",
+    "Flock.Record.isTrue._sparseCasesOn_2": "f302d3f14dec78577d6577305af4ae2f5d51682ccee180bbb8101952e3ab004a",
     "Flock.Record.nat": "672f46bb8548d424aa1b45c27a1364d8ad7e01d7cec9e2c00414f3c5b1b5dc53",
     "Flock.Record.str": "6133fc2aca280d4d493b1f8cd66836fa08c76c3d38fea206fe2d9cad4d6ac87d",
     "Flock.Session": "8d1afe89d47dd8a7bf2e41bb94d62ba2dfc84ffeae5b0ead3eecdccfe55d1744",
