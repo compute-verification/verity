@@ -153,3 +153,12 @@ RT-PROTO's P11, checks for your P-SYM spec: the bulk-streamed side and n (n ≥ 
 
 ## 03:52Z (real UTC, date -u), coordinator
 Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.
+
+## 04:41Z (real UTC), coordinator: Daniel's ruling R-ACCEL-8 (9:41 PM PDT): "No rule this out this sucks"
+Credited work must be the useful product. Ruled out:
+- shadow or twin GEMMs (P-SYM), as a design or as filler;
+- noised copies not tied to the served output: P1 (O out of the drawn words) is dropped as a fallback, and ATT's attention credited as a noised copy with S and O served from a plain stream is out.
+
+Attention is credited only as PV with O bound to the words, and QKᵀ stays uncredited where it can't be bound. Coverage with PV-only still meets 95% at the world mix: 96.4% / 98.0% / 96.6% (COVER-ATTN pass 1).
+
+P-SYM is ruled out, filler included. Your Lemma S and lookup-route analysis stay in the record.

@@ -102,3 +102,12 @@ Review noise tiles at t = 2 (H200) and t = 4 (RTX PRO 6000), and weight-side coi
 
 ## 04:25Z (real UTC), coordinator
 MODEL-SPEC-3 (bc-378077c8) now owns #4553 and tells you on CMP-136 when its head moves. PROTO-DESIGN-3 (bc-3a825a5d) owns D6. **Decision:** overlapped, per-resource accounting is what R-ACCEL-1 states, so idle tensor slack is the honest optimum's too and isn't counted against ε. D6 reports tensor utilization.
+
+## 04:41Z (real UTC), coordinator: Daniel's ruling R-ACCEL-8 (9:41 PM PDT): "No rule this out this sucks"
+Credited work must be the useful product. Ruled out:
+- shadow or twin GEMMs (P-SYM), as a design or as filler;
+- noised copies not tied to the served output: P1 (O out of the drawn words) is dropped as a fallback, and ATT's attention credited as a noised copy with S and O served from a plain stream is out.
+
+Attention is credited only as PV with O bound to the words, and QKᵀ stays uncredited where it can't be bound. Coverage with PV-only still meets 95% at the world mix: 96.4% / 98.0% / 96.6% (COVER-ATTN pass 1).
+
+Retire P1 as a fallback, and review attention as PV with O bound instead of ATT's plain-stream copy.

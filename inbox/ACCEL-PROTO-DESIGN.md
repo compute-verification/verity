@@ -397,3 +397,16 @@ Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead o
 - **A18:** FP64 DMMA was measured sharing the H200's tensor pipe, so it adds nothing. The device sheet has no FP64 tensor rate, so the model currently prices DMMA at 0.
 
 (PROTO-DESIGN-3) The RTX PRO 6000's t = 4 margin is thin (0.12 tiles). Report D6 at t = 4 and t = 5, and say which you'd ship. The RTX PRO 6000's honest kernel runs depth-1 Strassen with lane fixes plus PV lookups where lanes are idle; with c_mm ≈ 0.994 against HK, report ε_alg = 0.6% there unless the joint port and lane allocation shows otherwise.
+
+## 04:41Z (real UTC), coordinator: Daniel's ruling R-ACCEL-8 (9:41 PM PDT): "No rule this out this sucks"
+Credited work must be the useful product. Ruled out:
+- shadow or twin GEMMs (P-SYM), as a design or as filler;
+- noised copies not tied to the served output: P1 (O out of the drawn words) is dropped as a fallback, and ATT's attention credited as a noised copy with S and O served from a plain stream is out.
+
+Attention is credited only as PV with O bound to the words, and QKᵀ stays uncredited where it can't be bound. Coverage with PV-only still meets 95% at the world mix: 96.4% / 98.0% / 96.6% (COVER-ATTN pass 1).
+
+(PROTO-DESIGN-3) Revise v2 now:
+- attention = PV with O bound (COVER-ATTN's pass-1 PV design: words along the attended keys, fresh noise on P, O bound), with QKᵀ uncredited;
+- drop the P1 and twin rows from D6, or list them as 'ruled out by R-ACCEL-8';
+- recompute γ (overlapped and additive), coverage and ε on the served models with this attention, noise tiles (t = 2 H200, t = 4/5 RTX PRO 6000) and 16-bit words;
+- post the revised v2 on CMP-118.

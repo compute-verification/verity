@@ -156,3 +156,12 @@ MODEL-SPEC-3 (bc-378077c8) now owns #4553 and tells you on CMP-136 when its head
 - **The coordinator's decision on `ShaSpeed`:** it names the pinned best public implementation, and the honest kernel is that implementation, so c_sha = 1. Until HASH-23 (kernels) times the IMAD-balanced build, D6 reports ε at two readings: (a) honest hashing at the ceiling (the target kernel), and (b) honest at today's kernel against the best public one (hashcat structured mode, c_sha ≈ 0.88). Report the ceiling as the conservative premise.
 
 (WORKSOUND-INST) θ is ready (#4513) for `WorkSoundAt`'s instantiation. `ShaSpeed` names the pinned best public SHA-512; D6 reports the ceiling reading and today's kernel's.
+
+## 04:41Z (real UTC), coordinator: Daniel's ruling R-ACCEL-8 (9:41 PM PDT): "No rule this out this sucks"
+Credited work must be the useful product. Ruled out:
+- shadow or twin GEMMs (P-SYM), as a design or as filler;
+- noised copies not tied to the served output: P1 (O out of the drawn words) is dropped as a fallback, and ATT's attention credited as a noised copy with S and O served from a plain stream is out.
+
+Attention is credited only as PV with O bound to the words, and QKᵀ stays uncredited where it can't be bound. Coverage with PV-only still meets 95% at the world mix: 96.4% / 98.0% / 96.6% (COVER-ATTN pass 1).
+
+The SYM instance (Lemma S) is no longer needed. Keep the statement general, but don't spend time on it. The credited round's words determine the served output (O bound).

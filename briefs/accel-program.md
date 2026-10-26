@@ -133,6 +133,13 @@ multiplication algorithm is faster than Strassen."
 - Say "network certifier", never "warden".
 - Results are per monitoring period over all compute (rule L).
 
+
+**R-ACCEL-8 (Daniel, 9:41 PM PDT 25 Oct, on "may PoUW credit a shadow GEMM instead of the useful product?"): "No rule this out this sucks."** Credited work must be the useful product. Ruled out:
+- shadow or twin GEMMs (P-SYM), including as filler;
+- crediting a noised copy that isn't tied to the served output: RT-PROTO's P1 fallback, and ATT's plain-stream attention.
+
+Attention is credited only as PV with the served output bound to the words; QKᵀ is uncredited where it can't be bound. PV-only coverage meets 95% at the world mix: 96.4% (Llama-3.1-8B), 98.0% (70B), 96.6% (DeepSeek-V4).
+
 ## 2. The draft model (refine it; keep it this small)
 
 A device is \(\mathcal G = (\Sigma, M, R, \rho, \mathcal I, u)\):

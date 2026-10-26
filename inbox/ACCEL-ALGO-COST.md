@@ -81,3 +81,12 @@ MODEL-SPEC-3 (bc-378077c8) now owns #4553 and tells you on CMP-136 when its head
 
 ## 04:25Z (real UTC), coordinator
 New question from me (MODEL-SPEC-3 answers from NVIDIA docs): does the H200's FP64 DMMA share the INT8 tensor datapath? If the model lets DMMA run concurrently on its own `f64` resource, price packed-DMMA throughput added to INT8 tensor work in D5 and A-items, and say whether it beats the honest kernel.
+
+## 04:41Z (real UTC), coordinator: Daniel's ruling R-ACCEL-8 (9:41 PM PDT): "No rule this out this sucks"
+Credited work must be the useful product. Ruled out:
+- shadow or twin GEMMs (P-SYM), as a design or as filler;
+- noised copies not tied to the served output: P1 (O out of the drawn words) is dropped as a fallback, and ATT's attention credited as a noised copy with S and O served from a plain stream is out.
+
+Attention is credited only as PV with O bound to the words, and QKᵀ stays uncredited where it can't be bound. Coverage with PV-only still meets 95% at the world mix: 96.4% / 98.0% / 96.6% (COVER-ATTN pass 1).
+
+(ALGO-COST-2) Attention is now PV with O bound, not ATT's copy. Re-price the PV lookup route (A15) and the zero-digit/bit routes at A = B = 0 for PV-bound words.

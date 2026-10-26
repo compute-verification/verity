@@ -41,6 +41,8 @@ by data sheet, and the table says so.
 - **Public best (BET-ALGO-LAB, 68d6a42285):** closest alternative Strassen d1 at A = B = 0, 3.82× honest, priced with
   the old fold design. Must be redone on the no-fold operands, where words are sparser.
 
+> **R-ACCEL-8 (04:41Z):** no shadow GEMMs and no noised copies. Credited work is the useful product with O bound. See brief section 1.
+
 ## Who builds what, and who red-teams it
 
 | Deliverable | Builder | Red team |
