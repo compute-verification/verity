@@ -14,7 +14,7 @@ capture/, with its values beside it.
 """
 from __future__ import annotations
 
-from verity_vllm.pipeline import m1_capture  # noqa: I001  (first: m1_capture applies the engine environment before vLLM is imported)
+from verity_vllm.pipeline import m1_capture  # first: m1_capture applies the engine environment before vLLM is imported
 
 import argparse
 import json

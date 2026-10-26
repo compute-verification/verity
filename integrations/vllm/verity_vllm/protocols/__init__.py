@@ -413,12 +413,9 @@ def at_row(knob: Any, workload: Mapping[str, Any], *, world: int = 1) -> tuple[s
 def own_auditor(config: str | Path | Mapping[str, Any] | None, profile: Any) -> dict[str, dict[str, Any]]:
     """The protocols config (`load_settings`) of a pipeline that is its run's own auditor (the Commit, a Match capture):
     PoUW's ``coins`` a challenger of the epoch held in this process when ``profile`` declares PoUW (`pouw.challenged`),
-    unless the config names the auditor host's ``challenger``, H1's one coin source."""
+    unless the config names the auditor host's ``challenger``, the coins' one source."""
     from verity_vllm.protocols import pouw
-    settings = load_settings(config)
-    if "challenger" in settings.get(pouw.NAME, {}):
-        return settings
-    return pouw.challenged(settings, getattr(profile, "protocols", None))
+    return pouw.challenged(load_settings(config), getattr(profile, "protocols", None))
 
 
 def commit_guard(profile: Any, *, world: int = 1, hot: bool = False, installs: bool = True, settings: Any = None) -> Any:

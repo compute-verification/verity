@@ -12,6 +12,7 @@ import Proofs.Accounting.ChainWork
 import Proofs.Accounting.Prob
 import Proofs.Accounting.Joint
 import Proofs.Accounting.JointPeriod
+import Proofs.Accounting.JointBlocksAbstract
 import Proofs.Accounting.JointBridge.CommOfPeriodLeakAccepted
 import Proofs.Accounting.Pouw
 import Proofs.Accounting.PouwWork

@@ -24,6 +24,7 @@ import Definitions.Accounting.Guarantees.Headline
 import Definitions.Accounting.Guarantees.HeadlineDc
 import Definitions.Accounting.Guarantees.Joint
 import Definitions.Accounting.Guarantees.JointPeriod
+import Definitions.Accounting.Guarantees.JointBlocksAbstract
 import Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted
 import Definitions.Accounting.Guarantees.Localization
 import Definitions.Accounting.Guarantees.Memory

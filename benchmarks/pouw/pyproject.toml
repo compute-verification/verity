@@ -80,6 +80,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/kernel.py",
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/lanes.py",
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/manifest.py",
+          "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/ends.py",
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",

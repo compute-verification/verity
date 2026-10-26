@@ -177,7 +177,7 @@ class VllmProtocol(PlainProtocol):
                 raise RequestError(f"serve-openai does not serve {k}={body.get(k)!r}", param=k)
         try:
             r = self.P.CompletionRequest.model_validate(body)
-        except Exception as e:  # noqa: BLE001  (pydantic's ValidationError and vLLM's own)
+        except Exception as e:  # pydantic's ValidationError and vLLM's own
             raise RequestError(str(e)) from e
         prompt = r.prompt
         if isinstance(prompt, list) and len(prompt) == 1 and isinstance(prompt[0], (list, str)):
