@@ -14,9 +14,9 @@ _ARGS_MODELLED = ("disable_custom_all_reduce", "max_model_len", "max_num_batched
                   "enable_chunked_prefill")
 
 
-def check_phi(phi: Phi, domain: tuple[tuple[int, ...], str, str]) -> None:
-    """Refuse φ outside a decoder's domain (worlds, execution, checkpoint dtype) or the samplers the vocabulary has."""
-    worlds, execution, dtype = domain
+def check_phi(phi: Phi, domain: tuple[tuple[int, ...], str, tuple[str, ...]]) -> None:
+    """Refuse φ outside a decoder's domain (worlds, execution, checkpoint dtypes) or the samplers the vocabulary has."""
+    worlds, execution, dtypes = domain
     facts = []
     s = phi.sampling or {}
     if s.get("kind", "greedy") == "stochastic":
@@ -33,8 +33,8 @@ def check_phi(phi: Phi, domain: tuple[tuple[int, ...], str, str]) -> None:
         facts.append(f"numerics profile {phi.profile!r}")
     if phi.execution != execution:
         facts.append(f"execution {phi.execution!r}")
-    if (phi.model or {}).get("dtype", "bfloat16") != dtype:
-        facts.append(f"checkpoint dtype {phi.model.get('dtype')!r} ({dtype} only)")
+    if (phi.model or {}).get("dtype", "bfloat16") not in dtypes:
+        facts.append(f"checkpoint dtype {phi.model.get('dtype')!r} ({' or '.join(dtypes)} only)")
     facts += engine_facts(phi, world)
     if facts:
         raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))

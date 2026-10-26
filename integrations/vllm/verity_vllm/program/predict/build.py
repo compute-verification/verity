@@ -646,10 +646,13 @@ def decoder(phi: Phi, M: int = 1, history: int = 0):
 class _Decoder:
     """The dense or fused-MoE Llama-family decoder (`ModelShape`) under the bi-eager profile, on one rank or two."""
 
-    DOMAIN = ((1, 2), "bi-eager", "bfloat16")
+    DOMAIN = ((1, 2), "bi-eager", ("bfloat16", "int8"))
 
     def __init__(self, phi: Phi, M: int, history: int) -> None:
         C = model_shape(phi.hf_config)
+        if (phi.model or {}).get("dtype", "int8" if C.int8 else "bfloat16") != ("int8" if C.int8 else "bfloat16"):
+            raise Unexpressible(f"vocabulary cannot express: checkpoint dtype {phi.model['dtype']!r} for "
+                                f"{'an exact-int8' if C.int8 else 'a bf16'} checkpoint (the row's dtype is its checkpoint's)")
         if C.window is not None and history > C.window:
             raise Unexpressible(f"vocabulary cannot express: a history of {history} keys under the sliding window of {C.window} keys")
         self.world, self.rank = int(phi.tp.get("world", 1)), int(phi.tp.get("rank", 0))

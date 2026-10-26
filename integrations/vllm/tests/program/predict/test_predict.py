@@ -291,6 +291,22 @@ def test_the_int8_linears_follow_the_build_of_records_rule():
     assert len(leaves) == len(weight_leaves(model_shape(TINY))) + 4 * 2
 
 
+def test_an_int8_rows_dtype_is_its_checkpoints():
+    """`score.phi_of` names an int8 row's checkpoint dtype "int8" (`config.DTYPES`): the decoder predicts it as the exact-int8
+    checkpoint, and refuses a dtype its checkpoint isn't or one it has no linears for."""
+    def as_row(phi: Phi, dtype: str) -> Phi:
+        return Phi.from_json({**phi.to_json(), "model": {**phi.model, "dtype": dtype}})
+
+    int8, bf16 = _phi(INT8, target=INT8_LINEARS), _phi(TINY)
+    assert build_program(as_row(int8, "int8"), "step").digest == build_program(int8, "step").digest
+    with pytest.raises(Unexpressible, match=re.escape("checkpoint dtype 'bfloat16' for an exact-int8 checkpoint")):
+        build_program(as_row(int8, "bfloat16"), "step")
+    with pytest.raises(Unexpressible, match=re.escape("checkpoint dtype 'int8' for a bf16 checkpoint")):
+        build_program(as_row(bf16, "int8"), "step")
+    with pytest.raises(Unexpressible, match=re.escape("checkpoint dtype 'float8_e4m3fn' (bfloat16 or int8 only)")):
+        build_program(as_row(bf16, "float8_e4m3fn"), "step")
+
+
 @pytest.mark.parametrize("cfg,phi_kw,fact", [
     ({**TINY, "model_type": "gpt2"}, {}, "model_type 'gpt2': not in the family facts table"),
     ({**TINY, "attention_bias": True}, {}, "attention_bias"),
