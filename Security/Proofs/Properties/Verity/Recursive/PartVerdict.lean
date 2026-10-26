@@ -49,26 +49,26 @@ def partFiles (spec : SessionSpec) (s : PartProof) (bs : Core.Blobs) : V (Array 
     let some (_, d) := s.reps.find? (·.1 == n) | throw s!"session files: the session names no rep file {n}"
     (bs.get d s!"session files: {n}")
 
-theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
+private theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
     ∃ a, x = .ok a ∧ f a = .ok b := by
   cases x with
-  | error e => cases h
+  | error e => first | cases h | simp [bind, Except.bind] at h
   | ok a => exact ⟨a, rfl, h⟩
 
-theorem ok_bind {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {a : α} {b : β} (hx : x = .ok a)
+private theorem ok_bind {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {a : α} {b : β} (hx : x = .ok a)
     (hf : f a = .ok b) : (x >>= f) = .ok b := by
   rw [hx]
   exact hf
 
-theorem map_ok {ε α β : Type} {x : Except ε α} {f : α → β} {b : β} (h : Except.map f x = .ok b) :
+private theorem map_ok {ε α β : Type} {x : Except ε α} {f : α → β} {b : β} (h : Except.map f x = .ok b) :
     ∃ a, x = .ok a ∧ f a = b := by
   cases x with
-  | error e => cases h
+  | error e => first | cases h | simp [Except.map] at h
   | ok a => exact ⟨a, rfl, Except.ok.inj h⟩
 
-theorem throw_ne {α : Type} {e : String} {a : α} : (throw e : V α) ≠ .ok a := by
+private theorem throw_ne {α : Type} {e : String} {a : α} : (throw e : V α) ≠ .ok a := by
   intro h
-  cases h
+  first | cases h | simp [throw, throwThe, MonadExceptOf.throw] at h
 
 /-- A blob's bytes don't depend on the name a refusal would give it. -/
 theorem get_what {bs : Core.Blobs} {d w w' : String} {b : ByteArray} (h : bs.get d w = .ok b) :
@@ -85,7 +85,7 @@ theorem get_what {bs : Core.Blobs} {d w w' : String} {b : ByteArray} (h : bs.get
       · exact h
       · simp [throw, throwThe, MonadExceptOf.throw] at h
 
-theorem mapM_ok_of_getElem {α β ε : Type} (g : α → Except ε β) :
+private theorem mapM_ok_of_getElem {α β ε : Type} (g : α → Except ε β) :
     ∀ (l : List α) (l' : List β), l.length = l'.length →
       (∀ i (hi : i < l.length) (hi' : i < l'.length), g l[i] = .ok l'[i]) → l.mapM g = .ok l'
   | [], [], _, _ => rfl
@@ -120,15 +120,15 @@ theorem partFiles_eq {spec : SessionSpec} {s : PartProof} {bs : Core.Blobs} {pro
     simp only [hfind]
     exact get_what hget
 
-theorem fullDraw_some (i : Flock.RecVStar.Inner) (b : Bool) (d : Option Json) (r : String) :
+private theorem fullDraw_some (i : Flock.RecVStar.Inner) (b : Bool) (d : Option Json) (r : String) :
     Flock.RecSetup.fullDraw (some i) b d r = Flock.RecSetup.fullDraw (some i) true d r := by
   cases b <;> first | rfl | simp [Flock.RecSetup.fullDraw]
 
-theorem innerDrawn_record {s s' : Flock.RecCoins.Source} (h : s.record = s'.record) :
+private theorem innerDrawn_record {s s' : Flock.RecCoins.Source} (h : s.record = s'.record) :
     Flock.RecSetup.innerDrawn (some s) = Flock.RecSetup.innerDrawn (some s') := by
   simp only [Flock.RecSetup.innerDrawn, h]
 
-theorem recordDraw_eq (r : String) :
+private theorem recordDraw_eq (r : String) :
     FlockSoundness.Discharge.Exec.recordDraw r = Flock.Witness.recordDraw r := rfl
 
 /-- **The compiled part's verdict, unfolded**: where part `j`'s verdict is `.ok ()`, it read the statement's tags, the
@@ -210,27 +210,25 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
     cases hpr : p.registered with
     | none =>
       rw [hpr] at hr
-      cases hr
+      have hr := Except.ok.inj hr
+      simp only [Prod.mk.injEq] at hr
+      obtain ⟨rfl, -⟩ := hr
       rfl
     | some r =>
       rw [hpr] at hr
-      cases hro : registeredOf r with
-      | error e =>
-        rw [hro] at hr
-        cases hr
-      | ok v =>
-        rcases v with ⟨own, c, k, ps⟩
-        rw [hro] at hr
-        cases hr
-        change (registeredOf r).toOption.map (·.1) = some own
-        rw [hro]
-        all_goals rfl
+      obtain ⟨⟨own, c, k, ps⟩, hro, hr⟩ := map_ok hr
+      simp only [Prod.mk.injEq] at hr
+      obtain ⟨rfl, -⟩ := hr
+      change (registeredOf r).toOption.map (·.1) = some own
+      rw [hro]
+      all_goals rfl
   split at hst
   rotate_left
   · cases hst
   rename_i spec' sts' hsu
   obtain ⟨⟨⟩, -, hpair⟩ := map_ok hst
-  cases hpair
+  simp only [Prod.mk.injEq] at hpair
+  obtain ⟨rfl, rfl⟩ := hpair
   obtain ⟨⟨⟩, -, hsu⟩ := bind_ok hsu
   obtain ⟨⟨⟩, -, hsu⟩ := bind_ok hsu
   obtain ⟨r, hbs, hsu⟩ := bind_ok hsu
@@ -238,7 +236,7 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
     repeat (obtain ⟨⟨⟩, -, hsu⟩ := bind_ok hsu)
     exact Except.ok.inj hsu
   subst hr'
-  exact ⟨tags0, circuitB, pubB, registered, rB, record, spec', sts', proofs, rfl, hc, hp, hreg, hrB, hu, hds, hbs, hf,
+  exact ⟨tags0, circuitB, pubB, registered, rB, record, spec', sts', proofs, hT, hc, hp, hreg, hrB, hu, hds, hbs, hf,
     hzv, hsc, hfd, hid, hrt⟩
 
 /-- **Piece E: a V\* part's compiled verdict is the model's decision at its session.** Where part `j`'s compiled
