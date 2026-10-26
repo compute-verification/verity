@@ -28,7 +28,7 @@ open FlockSoundness.Discharge.Exec (chunks closes glue chunks_append repFrames z
 
 /-! ## Chunks of a prefix -/
 
-theorem chunks_fst_append (F G : List Frame) : ∃ X, (chunks (F ++ G)).1 = (chunks F).1 ++ X := by
+theorem chunks_fst_append (F G : List Frame) : ∃ Xs, (chunks (F ++ G)).1 = (chunks F).1 ++ Xs := by
   rw [chunks_append]
   unfold glue
   split
@@ -37,7 +37,7 @@ theorem chunks_fst_append (F G : List Frame) : ∃ X, (chunks (F ++ G)).1 = (chu
 
 theorem chunks_getD_append {F : List Frame} (G : List Frame) {j : ℕ} (hj : j < (chunks F).1.length) :
     (chunks (F ++ G)).1.getD j [] = (chunks F).1.getD j [] := by
-  obtain ⟨X, hX⟩ := chunks_fst_append F G
+  obtain ⟨Xs, hX⟩ := chunks_fst_append F G
   rw [hX, List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_append_left hj]
 
 theorem roundPat_length (F : List Frame) : (roundPat F).1.length = (chunks F).1.length := by
@@ -112,8 +112,8 @@ theorem repFrames_splitS (st : Flock.Setup) (sch : Flock.Schedule) (d : ByteArra
   obtain ⟨k, hk⟩ : ∃ k, sch.levels.size - 1 = i + 1 + k := ⟨sch.levels.size - 1 - (i + 1), by omega⟩
   have hr : List.range' 0 (sch.levels.size - 1) = List.range' 0 i ++ i :: List.range' (i + 1) k := by
     rw [hk, show i + 1 + k = i + (k + 1) by omega, ← List.range'_append_1, List.range'_succ, Nat.zero_add]
-  obtain ⟨X, hX⟩ : ∃ X, levelFr sch p.ligerito i = chFr p.ligerito (sch.k0 + 4 + 7 * i) 4 ++ X := ⟨_, rfl⟩
-  refine ⟨X ++ (List.range' (i + 1) k).flatMap (levelFr sch p.ligerito), ?_⟩
+  obtain ⟨Xs, hX⟩ : ∃ Xs, levelFr sch p.ligerito i = chFr p.ligerito (sch.k0 + 4 + 7 * i) 4 ++ Xs := ⟨_, rfl⟩
+  refine ⟨Xs ++ (List.range' (i + 1) k).flatMap (levelFr sch p.ligerito), ?_⟩
   rw [repFrames_split0, hr, List.flatMap_append, List.flatMap_cons, hX]
   simp only [preFr, List.append_assoc, List.cons_append]
 
@@ -237,7 +237,6 @@ theorem schedPat_hd (sch : Flock.Schedule) (m kLog claims : ℕ) :
 theorem hdS_length (sch : Flock.Schedule) (m kLog claims : ℕ) :
     (hdS sch m kLog claims).length = 3 + (m - 5) + 1 + (kLog - 6) + 1 + claims + 1 + 2 + sch.k0 := by
   simp only [hdS, List.length_append, List.length_cons, List.length_nil, List.length_replicate]
-  omega
 
 theorem topsN_hdS (sch : Flock.Schedule) (m kLog claims : ℕ) : topsN (hdS sch m kLog claims) = 0 := by
   simp [topsN, hdS]
@@ -372,7 +371,8 @@ theorem fit_chunk {c : RepCtx} (hsc : SchedOf c) {rows rows' : List (List ByteAr
     (chunksOf c p T).getD j [] = (chunksOf c p' T').getD j [] := by
   obtain ⟨e, hn, hp⟩ := h.sizes
   obtain ⟨e', hn', hp'⟩ := h'.sizes
-  obtain rfl : e' = e := by omega
+  have hee : e' = e := by omega
+  rw [hee] at hp'
   have hj' : j < rows'.length := by
     have := congrArg List.length hpre
     simp only [List.length_take] at this
