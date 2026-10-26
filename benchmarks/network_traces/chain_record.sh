@@ -34,9 +34,10 @@
 #      CR_PATH=certifier-only (the records are the certifier rehearsal's alone, with no warden rows: the scan isn't run
 #      or required, and the report names what that path stubs, chain_record.STUBBED)
 #      CR_AUDIT (the served units' compute audit windows, space-separated directories: the report's --audit, d1's K)
-#      CR_PERIOD_ANSWER (certifier/v0's network-period check answer on the period, a path or a name under inputs/)
-#      and CR_SERVER (the node the block ran on): an accepted report also writes $OUT/report/block.json, the block
-#      record's certifier entry (chain_record.block_entry)
+#      CR_PERIOD_ANSWER (certifier/v0's network-period check answer on the period, X.answer.json with its case
+#      X.case.json beside it, a path or a name under inputs/) and CR_SERVER (the node the block ran on): network-period
+#      is built, and an accepted report whose answer is this chain's and network-period's own on its case also writes
+#      $OUT/report/block.json, the block record's certifier entry (chain_record.block_entry)
 #      CR_SERIAL=1 (n2 then scan; at once by default)  CR_CACHE (the build cache; hidden_zk's by default)
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
 # file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive or a signer's
@@ -97,9 +98,10 @@ BOUND=$("$PY" -c 'import json, sys; b = json.load(open(sys.argv[1]))["chain"]["b
   "$E2E/report.json" 2>/dev/null || echo 0)
 (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
-(cd verity/core/protocols/network/lean && lake build network-records) > "$OUT/build-network-records.log" 2>&1 \
-  || { tail -40 "$OUT/build-network-records.log"; exit 7; }
+(cd verity/core/protocols/network/lean && lake build network-records ${CR_PERIOD_ANSWER:+network-period}) \
+  > "$OUT/build-network-records.log" 2>&1 || { tail -40 "$OUT/build-network-records.log"; exit 7; }
 export VERITY_NETWORK_RECORDS_EXE=$SRC/verity/core/protocols/network/lean/.lake/build/bin/network-records
+[ -z "${CR_PERIOD_ANSWER:-}" ] || export VERITY_NETWORK_PERIOD_EXE=$SRC/verity/core/protocols/network/lean/.lake/build/bin/network-period
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
   > "$OUT/build-firewall.log" 2>&1
