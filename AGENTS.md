@@ -46,9 +46,10 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       Rust verifier as a cross-check.
 - `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
   (Lean below). `Properties/` is `security_properties` (Lean below).
-- `integrations/`: one directory per serving stack Verity's compute runs in. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
-  builds each served workload's circuit and commits its values while serving; `benchmarks/one_stage/` takes those values
-  through C-Flock's prover and the Lean verifier.
+- `integrations/`: one directory per serving stack Verity's compute runs in, holding only what attaches Verity to it.
+  `integrations/vllm/` (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
+- `examples/`: one directory per example, not a package: its workload, where each party runs, and the commands that serve
+  and audit it (`examples/README.md`). The protocols they run stay in `verity/core/`.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, and the benchmark tools.
   - `benchmarks/census/`: data only. `verity` never reads it; it takes such numbers as parameters.
