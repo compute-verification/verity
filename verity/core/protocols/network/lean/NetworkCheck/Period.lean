@@ -409,8 +409,8 @@ def templateNodes (P : Flock.Program.Prog) : List Nat :=
 /-- The root node a template's argument reads when the argument is that input node's leaves in order from its first
 (one affine run), as the generator form binds each parameter to an input array of its own. -/
 def inputArg (P : Flock.Program.Prog) (a : Flock.Program.Arg) : Option Nat :=
-  match a.seq.parts with
-  | #[.affine false k 0 _] => match (P.defs[P.root]!).body.nodes[k]? with
+  match a.seq.parts.toList with
+  | [.affine false k 0 _] => match (P.defs[P.root]!).body.nodes[k]? with
     | some n => if NciCheck.Desc.isInputNode P n then some k else none
     | none => none
   | _ => none
@@ -454,18 +454,16 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
     | .error e => throw s!"scan: {e}"
   unless Flock.hexOf prog.sha512 == program do throw "scan: its SHA-512 is not the registered Program's (program)"
   let some root := prog.defs[prog.root]? | throw "scan: no root"
-  let templates := root.body.nodes.filterMap fun x => match prog.defs[x.fn]? with
-    | some d => if d.prim then none else some (x, d)
-    | none => none
+  let templates := (templateNodes prog).toArray.map fun k => (root.body.nodes[k]!, prog.defs[root.body.nodes[k]!.fn]!)
   let T := s.window
   let row : Flock.Program.Ty := .array (s.allocation * s.cellBytes) (.array 8 (.value 1))
   let some (xe, de) := templates.back? | throw "scan: no template"
   if de.params.any (fun p => p.1 == "row" || p.2 == row) then
     throw "scan: the egress template takes its row as an input (the checker form): no egress gate is an input \
       (NetTiming.Layout.Fits)"
-  let ((xf, df), later) ← match templates.pop with
-    | #[f] => pure (f, none)
-    | #[f, b] => pure (f, some b)
+  let ((xf, df), later) ← match templates.pop.toList with
+    | [f] => pure (f, none)
+    | [f, b] => pure (f, some b)
     | _ => throw "scan: not the generator form's templates: bucket 0's, the later ingress buckets' and the egress \
       bucket's"
   unless df.params.map (·.1) == firstParams && later.all (·.2.params.map (·.1) == ingressParams) &&

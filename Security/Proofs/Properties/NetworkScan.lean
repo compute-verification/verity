@@ -1,4 +1,5 @@
 import Properties.NetworkScan
+import Proofs.Properties.NetworkScan.Fits
 
 /-!
 # An accepted scan's statements are in the sampled audit's scope, from its layout fitting
