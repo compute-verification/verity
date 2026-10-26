@@ -6,9 +6,12 @@ rows: each is the committed row of that step's ``l<i>.wk.gather`` (``l<i>.wv.gat
 Every opening is then checked (`replay_bundle.check_reads`) against a registration naming every step's root
 (`replay_bundle.steps_provenance`), and refused against one whose step root differs, with a path or a word tampered.
 
-    python benchmarks/e2e_h200/kv_reads.py --out OUT [--secret FILE] [--registered ROOTS.json] [--slots K] [--blocks N]
-        [--workers W] [run flags as m3draw.py's]
+    python benchmarks/e2e_h200/kv_reads.py --out OUT [--phase all|replay|open --private DIR] [--secret FILE]
+        [--registered ROOTS.json] [--slots K] [--blocks N] [--workers W] [run flags as m3draw.py's]
 
+``--phase replay`` (the GPU's part: the run, the root check and the drawn slots' and blocks' replay) writes the drawn slots'
+committed rows, the salt keys and the blocks' port rows to ``--private DIR/state.pkl`` (0600, the prover's: never under
+``$OUT``); ``--phase open`` (CPU only, so the card's lease is released) opens and checks them from there. ``all`` does both.
 ``--secret``: m3draw's salt secret (``SHA-512(tag || secret || step)[:32]`` a step), else the run id's fixture salt keys.
 ``--registered``: m3draw's ``roots.json``, every step's and slot's root, which the run's must equal (exit 5 otherwise).
 Writes ``OUT/kv_reads.json`` (public: the step registration naming every step's root, the blocks, their reads' public
@@ -22,6 +25,8 @@ import bisect
 import copy
 import hashlib
 import json
+import os
+import pickle
 import sys
 import time
 from collections.abc import Sequence
@@ -109,6 +114,8 @@ def find_row(rows: SlotRows, layout: Any, unit: int, value: bytes) -> tuple[int,
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--phase", default="all", choices=("all", "replay", "open"), help="replay on the GPU, open on the CPU, or both")
+    ap.add_argument("--private", default="", help="the prover's state between the phases (a 0700 directory outside --out)")
     ap.add_argument("--secret", default="", help="m3draw's salt secret (0600, outside the run dir); default fixture salt keys")
     ap.add_argument("--registered", default="", help="m3draw's roots.json, which every root must equal")
     ap.add_argument("--slots", type=int, default=2, help="slots drawn (fixture coin); every step of each is rebuilt")
@@ -155,10 +162,9 @@ def tamper_path(reads: list[dict]) -> list[dict]:
     return out
 
 
-def main(argv: list[str] | None = None) -> int:
-    a = parser().parse_args(argv)
-    out = Path(a.out)
-    out.mkdir(parents=True, exist_ok=True)
+def replay(a: argparse.Namespace) -> dict[str, Any] | int:
+    """The GPU's part: the run, its roots held to the registered ones, and the drawn slots and blocks replayed: the state
+    `open_state` opens (the drawn slots' rows and the salt keys are the prover's), or an exit code."""
     shape = SHAPES[a.shape]
     seed = {"test": SW.TEST_SEED, "demo": SW.DEMO_SEED}.get(a.seed, a.seed.encode())
     weights = Weights(shape, seed)
@@ -195,14 +201,15 @@ def main(argv: list[str] | None = None) -> int:
     t0 = time.perf_counter()
     slots = draw_slots(a.batch, a.slots, a.run_id.encode(), s)
     blocks = draw_blocks(shape, slots, a.blocks, a.run_id.encode())
-    records: dict[int, dict[int, SlotRows]] = {t: {} for t in range(len(results))}
+    sources: dict[int, dict[int, list[list[np.ndarray]]]] = {t: {} for t in range(len(results))}
     items, docs, bad = [], [], 0
     for b in slots:
         op = replay_slot(shape, params, committer, results, prompts, b, s, a.device, a.attention)
         if not all(op.roots_equal):
             raise SystemExit(f"slot {b}'s replay is not its committed slot roots at steps {op.roots_equal}")
-        for t in range(s + 1):
-            records[t][b] = slot_rows(committer, op.driver.steps[t])
+        rows = {t: slot_rows(committer, op.driver.steps[t]) for t in range(s + 1)}
+        for t, r in rows.items():
+            sources[t][b] = r.sources
         rp = Replayer(shape, weights, op.driver.steps, op.tokens)
         fams = {f.name: f for f in rp.model_families(s)}
         for bb, fam, layer, head in blocks:
@@ -215,7 +222,7 @@ def main(argv: list[str] | None = None) -> int:
             kv, d = inputs[1], inputs[1].shape[1]
             pieces = []
             for t in range(s + 1):
-                rank, start = find_row(records[t][b], lay, unit, kv[t].tobytes())
+                rank, start = find_row(rows[t], lay, unit, kv[t].tobytes())
                 pieces.append(RB.Read(t, b, unit, rank, at=t * d, start=start, nbytes=2 * d))
             c = {"block": 0, "step": s, "slot": b, "layer": layer, "op": f.name, "unit": head}
             items.append((c, np.ascontiguousarray(kv).tobytes(), pieces))
@@ -227,10 +234,35 @@ def main(argv: list[str] | None = None) -> int:
                 entry["n"] = int(inputs[2][0])
             docs.append(entry)
             bad += not ok
+        del op, rp, fams
     seconds["replay"] = time.perf_counter() - t0
-    com = RB.Commitment(committer.context, lay, a.batch,
-                        {(0, t): RB.StepRecord(results[t].salt_key, records[t], tuple(results[t].slot_roots))
-                         for t in range(s + 1)})
+    store.close()
+    return {"run_id": a.run_id, "shape": a.shape, "batch": a.batch, "steps": len(results), "rc": rc, "seconds": seconds,
+            "docs": docs, "bad": bad, "items": items, "sources": sources,
+            "salt_keys": [results[t].salt_key for t in range(s + 1)],
+            "slot_roots": [tuple(results[t].slot_roots) for t in range(s + 1)]}
+
+
+def private_state(a: argparse.Namespace) -> Path:
+    d = Path(a.private).resolve()
+    if d.is_relative_to(Path(a.out).resolve()) or (d.exists() and d.stat().st_mode & 0o077):
+        raise SystemExit(f"{d}: the private state is the prover's: outside --out, and 0700")
+    d.mkdir(mode=0o700, parents=True, exist_ok=True)
+    return d / "state.pkl"
+
+
+def open_state(a: argparse.Namespace, st: dict[str, Any]) -> int:
+    """The CPU's part: every read opened against its own step's root, checked against a registration naming every step
+    root and refused under a tampered one, and the public record written."""
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    shape, s, seconds, items = SHAPES[st["shape"]], st["steps"] - 1, st["seconds"], st["items"]
+    ctx, key = fixture_secrets(st["run_id"])
+    lay_committer = Committer("slots", ctx, key, shape, "cpu", fixture_salt(st["run_id"]))
+    lay = lay_committer.layout
+    com = RB.Commitment(lay_committer.context, lay, st["batch"],
+                        {(0, t): RB.StepRecord(st["salt_keys"][t], {b: SlotRows(lay, src) for b, src in st["sources"][t].items()},
+                                               st["slot_roots"][t]) for t in range(s + 1)})
 
     t0 = time.perf_counter()
     reads, payload = RB.open_reads(com, items, workers=a.workers)
@@ -247,13 +279,14 @@ def main(argv: list[str] | None = None) -> int:
                 "a changed word": RB.check_reads(cdoc, [(rows[0][0], bytes([rows[0][1][0] ^ 1]) + rows[0][1][1:], rows[0][2])],
                                                  payload)}
     seconds["check"] = time.perf_counter() - t0
-    step_reg = RB.step_registration(com, {}, {"law": "subset", "k": 8}, run=a.run_id, program="", block=0, step=s,
+    step_reg = RB.step_registration(com, {}, {"law": "subset", "k": 8}, run=st["run_id"], program="", block=0, step=s,
                                     read_steps=True)
     refused = all(refusals.values()) and all(refusals["another step-0 root"].get(f"row {i}") for i, (_, _, p) in
                                              enumerate(items) if any(isinstance(q, RB.Read) and q.step == 0 for q in p))
+    docs, bad = st["docs"], st["bad"]
     ok = not verdict and refused and not bad
-    doc = {"format": FORMAT, "run_id": a.run_id, "shape": shape.name, "batch": a.batch, "steps": len(results), "step": s,
-           "layout_digest": cdoc["layout_digest"], "root_check": rc, "step_registration": step_reg,
+    doc = {"format": FORMAT, "run_id": st["run_id"], "shape": shape.name, "batch": st["batch"], "steps": st["steps"],
+           "step": s, "layout_digest": cdoc["layout_digest"], "root_check": st["rc"], "step_registration": step_reg,
            "step_registration_digest": RB.step_digest(step_reg), "blocks": docs,
            "reads": [[{k: v for k, v in q.items() if k not in ("row", "salt")} for q in r] for r in reads],
            "payload_bytes": len(payload), "check": verdict, "refusals": refusals, "ok": ok, "seconds": seconds,
@@ -264,8 +297,27 @@ def main(argv: list[str] | None = None) -> int:
                                    "steps_read": sorted({q["slot"]["step"] for r in reads for q in r if q["kind"] == "step"}),
                                    "check": verdict or "clean", "refused": {k: len(v) for k, v in refusals.items()},
                                    "step_registration": RB.step_digest(step_reg)[:32], "seconds": seconds}), flush=True)
-    store.close()
     return 0 if ok else 3
+
+
+def main(argv: list[str] | None = None) -> int:
+    a = parser().parse_args(argv)
+    if a.phase != "all" and not a.private:
+        raise SystemExit(f"--phase {a.phase} passes its state through --private DIR")
+    if a.phase == "open":
+        with private_state(a).open("rb") as f:
+            st = pickle.load(f)
+    else:
+        st = replay(a)
+        if isinstance(st, int):
+            return st
+        if a.phase == "replay":
+            path = private_state(a)
+            with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
+                pickle.dump(st, f, protocol=pickle.HIGHEST_PROTOCOL)
+            print(json.dumps({"replayed": len(st["docs"]), "replay_bad": st["bad"], "seconds": st["seconds"]}), flush=True)
+            return 0
+    return open_state(a, st)
 
 
 if __name__ == "__main__":
