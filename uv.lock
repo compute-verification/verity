@@ -34,6 +34,7 @@ members = [
     "verity-check",
     "verity-circuit-check",
     "verity-cli",
+    "verity-commit-slots",
     "verity-commitments-benchmarks",
     "verity-config",
     "verity-core-composition",
@@ -2233,6 +2234,21 @@ requires-dist = [
 name = "verity-cli"
 version = "0.0.0"
 source = { editable = "tools/verity/cli" }
+
+[[package]]
+name = "verity-commit-slots"
+version = "0.0.0"
+source = { virtual = "benchmarks/torch_gpu/commit_slots" }
+dependencies = [
+    { name = "numpy" },
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy" },
+    { name = "verity", editable = "." },
+]
 
 [[package]]
 name = "verity-commitments-benchmarks"
