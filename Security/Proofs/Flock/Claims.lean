@@ -175,6 +175,9 @@ import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
 import Proofs.Flock.Claims.Recursion.NonVacuous
 import Proofs.Flock.Claims.Recursion.VerdictRowEAcc
 import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
+import Proofs.Flock.Claims.Recursion.PartAcceptsPin
+import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
+import Proofs.Flock.Claims.Recursion.OpenLowerJointV
 import Proofs.Flock.Claims.Recursion.VerdictRowEJoint
 import Proofs.Flock.Claims.Recursion.VerdictRowEBytes
 import Proofs.Flock.Claims.Recursion.VerdictRowEOpens
