@@ -6,16 +6,16 @@ import Proofs.Pouw.Period.Honest
 
 The positive twin of `Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodH200`, and of `WorkOfCreditedWords`
 at its instance: `Properties.Pouw.Period.SecurityProofs.HonestH1`'s live-salt period of `n ≥ 1` windows, 128 words
-live and fixed a window, run by a device that spends `512` INT8 tensor-core multiply-adds on each word and imports
-none, meets every hypothesis at the H200's INT8 price with the work certificate the whole priced credit,
-`W = 512·credit` (`h200_sound`, `credited_sound`).
+live and fixed a window, run by a device that spends `512` INT8 tensor-core multiply-adds on each word and outsources
+no unit, meets every hypothesis at the H200's INT8 price, at `PouwH1Tile_v1`'s `2048` multiply-adds a unit and
+`b_unit = 1024`, with the work certificate the whole priced credit, `W = 512·credit` (`h200_sound`, `credited_sound`).
 
 * The period (`jointRun`): one coin coordinate, PoUW's, which is H1's paths; one account; the empty circuit; a window
   of one tick, in which the compute account runs `512·128·n` tensor-core multiply-adds and nothing else, the device's
   whole rate (`device`). PoUW's audit accepts where the play does, everywhere.
 * The certificates (`cert`): `W = 512·creditPrefix(n, 128·n)`, the check's credit at the honest period's accepted
   prefix and live words (`HonestH1.prefixLen_all`, `HonestH1.checkedLive_all`) at `m = 512` and `p(tc) = 1`
-  (`h200S8Price_tc`), and `K = 0`, so `help = 0` meets `HelpWithinCertifier`.
+  (`h200S8Price_tc`), and `K = 0`, so `help = 0` units meets `HelpWithinCertifier`.
 * `m = 512`: the honest circuit's 128 words are all credited (`HonestH1.wordsOf_eq`), so the minimum is over them
   (`minWordMacs_const`), and `WordCostsMacs` is `512·1·(n·128) ≤ 512·128·n`, the period's work (`work_jointRun`).
 -/
@@ -111,12 +111,12 @@ theorem work_jointRun (n : ℕ) (p : Accounting.Price) (ξ : (i : Unit) → Path
 noncomputable def cert (n : ℕ) (δs : ℝ) : Accounting.Certificates :=
   ⟨0, 512 * creditPrefix Honest.scheme HonestH1.circuit 144 n (128 * n) 1 1 (67 / 8) δs, 0, 0, 0⟩
 
-/-- PoUW's audit of the honest period credits H1's checked words at the H200's INT8 price, `512` multiply-adds and
-`32` bits a word. -/
+/-- PoUW's audit of the honest period credits H1's checked words at the H200's INT8 price, `512` multiply-adds a word,
+`2048` a unit and `1024` bits a unit. -/
 noncomputable def realizes (n : ℕ) (δs : ℝ) (sha fetch : ℚ) :
     Accounting.RealizesCreditedWords (jointRun n) (cert n δs) (Accounting.h200S8Price sha fetch)
-      (minWordMacs Honest.scheme HonestH1.circuit (fun _ => Accounting.receiptWordMacs 4 8)) 32 (Paths HonestH1.Ω1 n)
-      (fun _ => (HonestH1.play n).accepts)
+      (minWordMacs Honest.scheme HonestH1.circuit (fun _ => Accounting.receiptWordMacs 4 8))
+      (Accounting.receiptUnitMacs 64 4 8) 1024 (Paths HonestH1.Ω1 n) (fun _ => (HonestH1.play n).accepts)
       (fun _ x => creditPrefix Honest.scheme HonestH1.circuit 144 ((HonestH1.windows n).prefixLen HonestH1.prm x)
         (checkedLive Honest.scheme HonestH1.circuit (HonestH1.period n) HonestH1.prm (HonestH1.windows n) x) 1 1
         (67 / 8) δs) where
@@ -124,25 +124,25 @@ noncomputable def realizes (n : ℕ) (δs : ℝ) (sha fetch : ℚ) :
   accepts_iff := fun _ _ => ⟨fun _ => trivial, fun _ => trivial⟩
   cert_le := fun _ y _ => by
     simp only [Equiv.refl_apply, HonestH1.prefixLen_all, HonestH1.checkedLive_all, minWordMacs_honest,
-      h200S8Price_tc, cert, Accounting.Certificates.helpWords]
+      h200S8Price_tc, cert, Accounting.Certificates.helpUnits]
     norm_num
 
 theorem wordCosts (n : ℕ) (δs : ℝ) (sha fetch : ℚ) :
     Accounting.Assumptions.WordCostsMacs (jointRun n) (Accounting.h200S8Price sha fetch)
       (minWordMacs Honest.scheme HonestH1.circuit (fun _ => Accounting.receiptWordMacs 4 8))
-      (realizes n δs sha fetch).coin (fun _ => (HonestH1.play n).accepts)
+      (Accounting.receiptUnitMacs 64 4 8) (realizes n δs sha fetch).coin (fun _ => (HonestH1.play n).accepts)
       (fun _ x => n * ((HonestH1.play n).run x).fixed) (fun _ _ => 0) := by
   intro ξ y _
   have hfix : ((HonestH1.play n).run ((realizes n δs sha fetch).coin y)).fixed = 128 := rfl
-  simp only [hfix, work_jointRun, minWordMacs_honest, h200S8Price_tc]
+  simp only [hfix, work_jointRun, minWordMacs_honest, h200S8Price_tc, mul_zero, add_zero]
   push_cast
   linarith
 
 theorem helpWithin (n : ℕ) (δs : ℝ) (sha fetch : ℚ) :
-    Accounting.Assumptions.HelpWithinCertifier (jointRun n) (cert n δs) 32 (realizes n δs sha fetch).coin
+    Accounting.Assumptions.HelpWithinCertifier (jointRun n) (cert n δs) 1024 (realizes n δs sha fetch).coin
       (fun _ => (HonestH1.play n).accepts) (fun _ _ => 0) := by
   intro _ _ _
-  simp [cert, Accounting.Certificates.helpWords]
+  simp [cert, Accounting.Certificates.helpUnits]
 
 /-! ## Every hypothesis -/
 
@@ -153,7 +153,7 @@ theorem h200_sound (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetc
     (jointRun n).Sound (cert n δs) (Accounting.h200S8Price sha fetch) .pouw (δs + n * (0 + 0)) := by
   obtain ⟨hN, hM, hS, hρN, hwmax, hlk, hG, hDD, hPre, hMoved, hReg, hDraw, hServ, hSalt, hStaged, hMu, hRB, hGs,
     hUF, -, -, -⟩ := HonestH1.h1_meets n hn hδs
-  exact WorkOfH1CheckedCreditPeriodH200 sha fetch 4 8 Unit Unit Unit (fun _ => Paths HonestH1.Ω1 n) (device n)
+  exact WorkOfH1CheckedCreditPeriodH200 sha fetch 64 4 8 1024 Unit Unit Unit (fun _ => Paths HonestH1.Ω1 n) (device n)
     emptyCircuit (jointRun n) (cert n δs) Honest.scheme HonestH1.circuit hn hN HonestH1.hr1 hM HonestH1.hK24
     HonestH1.prm HonestH1.enc HonestH1.staged HonestH1.flat δs 0 0 (fun _ => HonestH1.windows n)
     (fun _ => HonestH1.opened) (fun _ => HonestH1.salt) (fun _ => HonestH1.period n) (fun _ => HonestH1.play n)
@@ -166,7 +166,8 @@ theorem h200_sound (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetc
 theorem credited_sound (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetch : ℚ) :
     (jointRun n).Sound (cert n δs) (Accounting.h200S8Price sha fetch) .pouw (δs + n * (0 + 0)) := by
   refine WorkOfCreditedWords Unit Unit Unit (fun _ => Paths HonestH1.Ω1 n) (device n) emptyCircuit (jointRun n)
-    (cert n δs) (Accounting.h200S8Price sha fetch) _ 32 _ _ (fun _ x => n * ((HonestH1.play n).run x).fixed) _
+    (cert n δs) (Accounting.h200S8Price sha fetch) _ (Accounting.receiptUnitMacs 64 4 8) 1024 _ _
+    (fun _ x => n * ((HonestH1.play n).run x).fixed) _
     (fun _ _ => 0) (δs + n * (0 + 0)) (realizes n δs sha fetch) (wordCosts n δs sha fetch)
     (helpWithin n δs sha fetch) fun _ => ?_
   refine le_trans ?_ (HonestH1.h1_credit n hn hδs)

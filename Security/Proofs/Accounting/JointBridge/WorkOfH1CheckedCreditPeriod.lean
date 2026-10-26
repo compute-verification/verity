@@ -9,7 +9,7 @@ import Proofs.Pouw.Period
 `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod` at the source's instance there bounds the play's
 acceptance with `n` times its fixed words below the check's credit, which is the bound the bridge takes, read through
 `Pouw.pr` (`pr_le_prob_of_equiv` at the identity). The H200's instance is it at `Accounting.h200S8Price`,
-`receiptWordMacs 4 8` multiply-adds a word and `32` bits.
+`receiptWordMacs R C` multiply-adds a word and `receiptUnitMacs K R C` a unit.
 -/
 
 namespace Accounting.SecurityProofs.Bridge
@@ -32,14 +32,14 @@ theorem pr_le_prob_of_equiv {A X : Type} [Fintype A] [Fintype X] (e : A ≃ X) {
   rw [Finset.card_map] at this
   convert (Nat.cast_le (α := ℝ)).2 this using 3
 
-/-- `WorkOfH1CheckedCreditPeriodAt p macs b` from `H1CheckedCreditPeriod`, at the source's instance at each value of
-the coins. -/
+/-- `WorkOfH1CheckedCreditPeriodAt p macs u b_unit` from `H1CheckedCreditPeriod`, at the source's instance at each
+value of the coins. -/
 theorem workOfH1CheckedCreditPeriodAt_of (hsrc : H1CheckedCreditPeriod) (p : Price) (macs : Compose.Kind → ℕ)
-    (b : ℕ) : Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodAt p macs b := by
+    (u bUnit : ℕ) : Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodAt p macs u bUnit := by
   intro ι α I _ _ Ω _ d C r c ι' K T L U Cn Ξ V _ _ _ _ _ _ _ Sc Cd n hn hN hr hM hK prm enc staged flat δs δbind
     δks ws opened salt Wp Pl folded help real hcost hhelp hScope hρ hw hluck hgame hdead hpre hbind hreg hdraw hsvc
     hsalt hpins hmu hrb hguess hfix
-  refine WorkOfCreditedWords ι α I Ω d C r c p _ b _ _ (fun ξ x => n * ((Pl ξ).run x).fixed) _ help
+  refine WorkOfCreditedWords ι α I Ω d C r c p _ u bUnit _ _ (fun ξ x => n * ((Pl ξ).run x).fixed) _ help
     (δs + n * (δbind + δks)) real hcost hhelp fun ξ => ?_
   have hs := hsrc Sc Cd hn hN hr hM hK prm (ws ξ) (opened ξ) (salt ξ) enc staged flat (Wp ξ) (Pl ξ) (folded ξ) δs
     δbind δks hScope hρ hw hluck (hgame ξ) (hdead ξ) (hpre ξ) (hbind ξ) (hreg ξ) (hdraw ξ) (hsvc ξ) (hsalt ξ) hpins
@@ -47,14 +47,15 @@ theorem workOfH1CheckedCreditPeriodAt_of (hsrc : H1CheckedCreditPeriod) (p : Pri
   refine le_trans ?_ hs
   exact pr_le_prob_of_equiv (Equiv.refl _) fun _ h => h
 
-/-- **The joint period's PoUW guarantee from H1's checked credit**, at every price, per-kind multiply-add count and
-word width (`Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod`). -/
+/-- **The joint period's PoUW guarantee from H1's checked credit**, at every price, per-kind multiply-add count, unit
+count and unit width (`Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod`). -/
 theorem WorkOfH1CheckedCreditPeriod : Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod :=
   workOfH1CheckedCreditPeriodAt_of Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod
 
 /-- **The joint period's PoUW guarantee from H1's checked credit on the H200, at INT8**
 (`Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodH200`). -/
 theorem WorkOfH1CheckedCreditPeriodH200 : Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodH200 :=
-  fun sha fetch R C => WorkOfH1CheckedCreditPeriod (h200S8Price sha fetch) (fun _ => receiptWordMacs R C) 32
+  fun sha fetch K R C bUnit =>
+    WorkOfH1CheckedCreditPeriod (h200S8Price sha fetch) (fun _ => receiptWordMacs R C) (receiptUnitMacs K R C) bUnit
 
 end Accounting.SecurityProofs.Bridge
