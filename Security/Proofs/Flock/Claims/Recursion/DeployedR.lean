@@ -219,9 +219,7 @@ theorem rdLevel_encLevel {rows : Array (Array F128)} {sibs salts : Array ByteArr
       (by simpa using h1) rest
   simp only [rdLevel, encLevel, List.append_assoc, StateT.run_bind, e1,
     rdBytes_list (by simpa using h3) h4, rdBytes_list (by simpa using h5) h6, Option.bind_eq_bind, Option.bind_some]
-  show some (((rows.toList.map Array.toList).map List.toArray).toArray, sibs.toList.toArray, salts.toList.toArray) =
-    some (rows, sibs, salts)
-  simp
+  simp [StateT.run_pure, Option.pure_def, Function.comp_def]
 
 /-- A proof's openings fit their length words. -/
 def OpensFit (p : Flock.Proof) : Prop :=
@@ -241,10 +239,20 @@ theorem rdOpens_encOpens {p : Flock.Proof} (h : OpensFit p) (rest : Msg) :
       (by simpa using hn) rest
   simp only [rdOpens, encOpens, List.append_assoc, StateT.run_bind, rdLevel_encLevel hi, e2, rdLevel_encLevel hf,
     Option.bind_eq_bind, Option.bind_some]
-  show some (opensOnly { rows := p.ligerito.initialProof.rows, siblings := p.ligerito.initialProof.siblings,
-      salts := p.ligerito.initialProof.salts } p.ligerito.recursiveProofs.toList.toArray p.ligerito.finalProof.rows
-      p.ligerito.finalProof.siblings p.ligerito.finalProof.salts, rest) = some (opensOf p, rest)
-  simp [opensOf]
+  simp only [StateT.run_pure, Option.pure_def]
+  rfl
+
+/-- **What a reader takes of the last message's proof is its openings**: `absorbedFrom` keeps of `q` only the fields
+`opensOf` keeps. -/
+theorem absorbedFrom_opensOf (c : FlockDeploy.RepCtx) (a q : Flock.Proof) :
+    FlockDeploy.absorbedFrom c a (opensOf q) = FlockDeploy.absorbedFrom c a q := rfl
+
+/-- **A rep reads the same off a proof's openings as off the proof** (so `ReadsBack` at `fl.ps = ps` carries over
+to `rdR`'s `ps.map opensOf`). -/
+theorem readRep_opensOf (c : FlockDeploy.RepCtx) (rows : List (List ByteArray)) (q : Flock.Proof) :
+    FlockDeploy.readRep c rows (opensOf q) = FlockDeploy.readRep c rows q := by
+  unfold FlockDeploy.readRep
+  simp only [absorbedFrom_opensOf]
 
 /-- **`rdR` reads `encLast`**: the statement, and each proof's openings (`opensOf`), where every length fits its
 word. -/
