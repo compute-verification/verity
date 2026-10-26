@@ -4,8 +4,9 @@ stretch length, with bursts, the host tier, filler, wrong receipts (the pooled b
 fill one group or spill into the next, ties between stretches, and each refusal (the windows', the node's inputs, a
 group's, a stretch's empty span), with malformed inputs rejected by both. The same line read off an accepted session's
 record (`line_record`, `line.line_of_record`: its groups' passes, its windows and its registered blocks the record's,
-what the auditor saw of each window beside it), with the record's own refusals (the auditor saw another count of
-windows, a window drew other than min(s, U_t)) and malformed records. The line of record is the Lean's
+what the auditor saw of each window beside it), with the record's own refusals (a record not of the registration given
+with it, the auditor saw another count of windows, a window drew other than min(s, U_t)) and malformed records and
+registrations. The line of record is the Lean's
 (`auditor_line.py` runs the verifier process's `line_record` and holds it exactly to the Python's), so the Lean is of
 record here."""
 
@@ -20,7 +21,7 @@ from hypothesis import strategies as st
 
 import ra_cases as M
 import verity_difftest as D
-from verity.core.protocols.remote_bandwidth import line
+from verity.core.protocols.remote_bandwidth import audit, line, receipts
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -224,10 +225,16 @@ def test_both_lines_charge_the_chips_in_whole_blocks_rounded_up(server) -> None:
     assert D.replay(port(), over, server) == D.replay(port(), six, server) == six_blocks
 
 
+def registration(blocks: int, root: bytes = bytes(64)) -> audit.Registration:
+    """A registration of `blocks` blocks, its codec seed given, as `line_record` reads one (`M.registration_of`)."""
+    return audit.Registration(M.NODE, blocks, root, bytes(32), M.P512, receipts.DEFAULT, False, receipts.LAYOUT,
+                              receipts.SKETCH_ROWS)
+
+
 def recorded(v: dict, samples: int = 1) -> dict:
-    """`session`'s inputs read off a record (`line_record`'s form): window t is group t, each of its passes reading
-    the N registered blocks, drawn `min(samples, U_t)`, the rest of the record well formed; what the auditor saw of it
-    each group's times and reads."""
+    """`session`'s inputs read off a record of `registration(N)` (`line_record`'s form): window t is group t, each of
+    its passes reading the N registered blocks, drawn `min(samples, U_t)`, the rest of the record well formed; what the
+    auditor saw of it each group's times and reads."""
     ws = []
     for t, g in enumerate(v["groups"]):
         k = g["passes"]
@@ -235,17 +242,28 @@ def recorded(v: dict, samples: int = 1) -> dict:
                    "heads": [None, "ab" * 64][:k] + [None] * (k - 2), "stale": [N] * k,
                    "arrived_ns": [g["last_ns"]] * k, "released_ns": g["released_ns"], "deadline_ns": g["last_ns"] + 5,
                    "opened_ns": g["last_ns"] + 1, "drawn": min(samples, k * N)})
+    reg = registration(v["blocks"])
     record = {"windows": ws, "blocks": v["blocks"], "appended": 0, "released": 0, "lifetime": 2,
-              "pace": {"k": 2, "window_ns": 1}, "appends": None, "registration": "00" * 64}
-    return {"record": record, "samples": samples, "seen": [{k: g[k] for k in line.SEEN} for g in v["groups"]],
+              "pace": {"k": 2, "window_ns": 1}, "appends": None, "registration": reg.digest.hex()}
+    return {"record": record, "registration": M.registration_json(reg), "samples": samples,
+            "seen": [{k: g[k] for k in line.SEEN} for g in v["groups"]],
             **{k: v[k] for k in ("per", "block_bytes", "chip_bytes", "node_bytes", "delta", "rates")}}
+
+
+INVALID = (("rows", 3), ("layout", "x"), ("bind", True), ("node", ""), ("node", "ab" * 65), ("blocks", 0),
+           ("payload_root", "00" * 63), ("codec_seed", "00" * 31), ("receipt", "x"), ("receipt", receipts.BLOCK_SHA512),
+           ("codec", {"field": "p256", "masked": False, "rounds": 2}),
+           ("codec", {"field": "p512", "masked": False, "rounds": 1}))
+"""A registration's fields as JSON gives them, each well formed but one `Registration.make?` refuses."""
 
 
 @st.composite
 def records(draw) -> dict:
-    """An accepted session's record and what the auditor saw of each window, as they are or with one fault: the
-    auditor seeing another count of windows, a window drawn other than min(s, U_t), one of the node's inputs `line`
-    refuses, or a malformed record, seen or input (most often none: Hypothesis leans to each choice's first)."""
+    """An accepted session's record of a registration given with it and what the auditor saw of each window, as they
+    are or with one fault: the record not of the registration given (another registration, or the record's blocks
+    another count), the auditor seeing another count of windows, a window drawn other than min(s, U_t), one of the
+    node's inputs `line` refuses, or a malformed record, registration, seen or input (most often none: Hypothesis leans
+    to each choice's first)."""
     per = draw(st.sampled_from([2, 3, 1]))
     n_groups = draw(st.sampled_from([2 * per, 3 * per + 1, per, 1, 0]))
     blocks, b, samples = draw(st.integers(1, 40)), draw(st.sampled_from([B, 7])), draw(st.integers(1, 30))
@@ -269,17 +287,26 @@ def records(draw) -> dict:
              **{k: draw(rational(10)) for k in line.RATES[3:]}}
     pace = draw(st.one_of(st.none(), st.builds(lambda k, w: {"k": k, "window_ns": w}, st.integers(1, 3),
                                                st.integers(1, 10 ** 9))))
+    reg = registration(blocks, draw(st.binary(min_size=64, max_size=64)))
     record = {"windows": ws, "blocks": blocks, "appended": draw(st.integers(0, 5)),
               "released": draw(st.integers(0, 5)), "lifetime": draw(st.integers(1, 4)), "pace": pace,
               "appends": draw(st.one_of(st.none(), st.binary(min_size=64, max_size=64).map(bytes.hex))),
-              "registration": "ab" * 64}
-    v = {"record": record, "samples": samples, "seen": seen, "per": per, "block_bytes": b,
+              "registration": reg.digest.hex()}
+    rj = M.registration_json(reg)
+    v = {"record": record, "registration": rj, "samples": samples, "seen": seen, "per": per, "block_bytes": b,
          "chip_bytes": draw(st.integers(0, 3 * b)), "node_bytes": draw(st.integers(1, 10 ** 6)),
          "delta": draw(st.sampled_from(DELTAS)), "rates": rates}
     if (clock := draw(st.sampled_from([None, *line.CLOCKS]))) is not None:
         v["clock"] = clock
-    fault = {3: "seen", 4: "drawn", 5: "malformed", 6: "times"}.get(draw(st.integers(0, 6)))
-    if fault == "times" and seen:
+    fault = {3: "seen", 4: "drawn", 5: "malformed", 6: "times", 7: "registration"}.get(draw(st.integers(0, 7)))
+    if fault == "registration":
+        other = draw(st.sampled_from(["blocks", "root", "record"]))
+        if other == "record":
+            record["blocks"] = draw(st.integers(0, 2 * blocks).filter(lambda k: k != blocks))
+        else:
+            v["registration"] = M.registration_json(
+                registration(blocks + 1) if other == "blocks" else registration(blocks, bytes([1]) * 64))
+    elif fault == "times" and seen:
         draw(st.sampled_from(seen))[draw(st.sampled_from(["released_ns", "last_ns"]))] += 1
     elif fault == "seen":
         v["seen"] = draw(st.sampled_from([seen[:-1], [*seen, seen[-1]]])) if seen else [
@@ -289,9 +316,20 @@ def records(draw) -> dict:
         w["drawn"] = draw(st.integers(0, sum(w["lengths"]) + 1).filter(lambda d: d != w["drawn"]))
     elif fault == "malformed":
         bad = draw(st.sampled_from([-1, "1", None, True, [], {}, "xyz", "AB" * 64]))
-        at = draw(st.sampled_from(["record", "window", "list", "heads", "pace", "appends", "seen", "input"]))
+        at = draw(st.sampled_from(["record", "window", "list", "heads", "pace", "appends", "seen", "input",
+                                   "registration", "invalid"]))
         if at == "record":
-            record[draw(st.sampled_from(["windows", "blocks", "appended", "released", "lifetime"]))] = bad
+            record[draw(st.sampled_from(["windows", "blocks", "appended", "released", "lifetime",
+                                         "registration"]))] = bad
+        elif at == "registration":
+            k = draw(st.sampled_from(sorted(rj)))
+            if k == "codec" and draw(st.booleans()):
+                rj["codec"] = {**rj["codec"], draw(st.sampled_from(sorted(rj["codec"]))): bad}
+            else:
+                rj[k] = bad
+        elif at == "invalid":
+            k, x = draw(st.sampled_from(INVALID))
+            rj[k] = x
         elif at == "window" and ws:
             draw(st.sampled_from(ws))[draw(st.sampled_from(["released_ns", "deadline_ns", "opened_ns", "drawn"]))] = bad
         elif at == "list" and ws:
@@ -308,9 +346,9 @@ def records(draw) -> dict:
             x = draw(st.sampled_from(seen))
             x[draw(st.sampled_from(line.SEEN))] = bad
         elif at == "input":
-            v[draw(st.sampled_from(["samples", "seen", "record", "clock"]))] = bad
+            v[draw(st.sampled_from(["samples", "seen", "record", "clock", "registration"]))] = bad
         if draw(st.booleans()):
-            target = draw(st.sampled_from([v, record, *ws[:1], *seen[:1]]))
+            target = draw(st.sampled_from([v, record, rj, *ws[:1], *seen[:1]]))
             target.pop(draw(st.sampled_from(sorted(target))))
     return v
 
@@ -356,11 +394,21 @@ def seven_a_stretch(r: dict) -> None:
     r["per"] = 7
 
 
+def another_registration(r: dict) -> None:
+    r["registration"] = M.registration_json(registration(N, bytes([1]) * 64))
+
+
+def more_blocks(r: dict) -> None:
+    r["registration"] = M.registration_json(registration(N + 1))
+
+
 @pytest.mark.parametrize("change,why", [
     (short_seen, "the auditor saw 11 windows, not the record's 12"),
     (drew_five, "window 3 drew 5 of its 2000 receipts, not min(1, 2000)"),
-    (no_blocks, "the store is one or more blocks"),
+    (no_blocks, "the record's 0 registered blocks are not the registration's 1000"),
     (seven_a_stretch, "the session's 12 groups at 7 a stretch leave no stretch before the closing one"),
+    (another_registration, "the record is not of the registration given"),
+    (more_blocks, "the record is not of the registration given"),
 ])
 def test_each_refusal_of_a_record_is_the_leans_word_for_word(server, change, why) -> None:
     r = recorded(session())

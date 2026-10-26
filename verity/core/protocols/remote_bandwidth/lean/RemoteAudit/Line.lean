@@ -10,7 +10,8 @@ The line of record a gate run publishes (the verifier process's `line_record` re
 `Security/Definitions/Accounting/Guarantees/RemoteHeld.lean`, read over each stretch of a paced session's groups in exact
 rationals, every refusal the Python's word for word. `lineOfRecord` reads the session's groups, its windows and its
 registered blocks off the Lean verifier's record of it (`Session.Summary`), each group's times and reads beside it
-(`Seen`); `line` takes them given. The wrong receipts W are the pooled bound of the record's windows
+(`Seen`), refused unless the record is of the registration given with it (`lineOfRegistered`); `line` takes them
+given. The wrong receipts W are the pooled bound of the record's windows
 (`RemoteAudit.Pooled.pooled`: their receipts and draws at δ). `line.py`'s docstring has the form; `tests/test_line.py`
 holds the two together through `RemoteAudit.Difftest`'s `line` and `line_record`. Code: Lean core only.
 -/
@@ -273,9 +274,8 @@ def unregistered (reg : Registration) (digest : ByteArray) (sm : Session.Summary
     some s!"the record's {sm.blocks} registered blocks are not the registration's {reg.blocks}"
   else none
 
-/-- `lineOfRecordOn` of a record given bare, without the session's transcript, which names registration `digest`:
-refused first unless it is a record of the registration `reg` given with it (`unregistered`), so that the line credits
-the registration's registered blocks. -/
+/-- `lineOfRecordOn` of a record that names registration `digest`, refused first unless it is a record of the
+registration `reg` given with it (`unregistered`), so that the line credits that registration's registered blocks. -/
 def lineOfRegistered (onRecord : Bool) (reg : Registration) (digest : ByteArray) (sm : Session.Summary)
     (samples : Nat) (seen : Array Seen) (per blockBytes chipBytes nodeBytes : Nat) (δ : Rat) (rates : Rates) :
     Except String Line :=
