@@ -224,7 +224,8 @@ MINUTES = (1, 720)
 MAX_DRAW_K = 1 << 24
 ROOT = re.compile(r"[0-9a-f]{128}")
 PINNED = re.compile(r"[0-9a-f]{40}")
-TEMPLATE = re.compile(r"k[1-9][0-9]{0,7}")
+#: a circuit file's template: K's tile template (``k<K>``) or the live Program's (``live``), PoUW's `credit._TEMPLATE`
+TEMPLATE = re.compile(r"k[1-9][0-9]{0,7}|live")
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
 SCHEME = re.compile(r"[a-z0-9][a-z0-9/._-]{0,127}")
 SESSION = re.compile(r"s\d{8}T\d{6}Z-[0-9a-f]{4}")
@@ -452,8 +453,8 @@ def weights_root_of(s: str) -> str:
 
 def circuit_files_of(s: str) -> dict[str, str]:
     """A period-open's circuit files (`--circuit-files`, written as `circuit_files`): a JSON object taking each K's
-    template (``k<K>``) to the SHA-512 of the circuit file the auditor's lowering built for it, in lowercase hex, as
-    PoUW's credit reads it (`committed_files`); or Refused."""
+    template (``k<K>``, and ``live`` the live Program's) to the SHA-512 of the circuit file the auditor's lowering built
+    for it, in lowercase hex, as PoUW's credit reads it (`committed_files`); or Refused."""
     def pairs(items: list) -> dict | None:
         return dict(items) if len({k for k, _ in items}) == len(items) else None
 
@@ -464,7 +465,7 @@ def circuit_files_of(s: str) -> dict[str, str]:
     if not (isinstance(files, dict) and 0 < len(files) <= 64 and all(
             TEMPLATE.fullmatch(k) and type(v) is str and ROOT.fullmatch(v) for k, v in files.items())):
         raise Refused(f"--circuit-files {s[:200]!r}: each K's template to its circuit file's SHA-512, a JSON object "
-                      '{"k<K>": "<128 lowercase hex>", ...} of 1 to 64 distinct K')
+                      '{"k<K>" or "live": "<128 lowercase hex>", ...} of 1 to 64 distinct K')
     return files
 
 
