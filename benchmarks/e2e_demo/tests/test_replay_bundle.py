@@ -465,3 +465,105 @@ def test_a_tampered_loop_fails_replay(tmp_path) -> None:
     doc, payload = _build((tmp_path, weights, com), [5, 300])
     assert B.check(doc, payload) == {u: "its committed outputs are not its Definition's on its committed inputs"
                                      for u in ("unit:5", "unit:300")}
+
+
+#: unit 5 is slot 0, layer 0, output coordinate 5: layout unit 0 * 129 + 1 + 5 of slot 0 (`B.torch_loop_layout`)
+STEP_INDEX = 6
+
+
+@pytest.fixture(scope="module")
+def step(fresh) -> tuple[dict, dict, bytes]:
+    """The fixture's step registered (`B.step_registration`, its draw over every (slot, layout unit)), and the one-block
+    bundle of drawn index `STEP_INDEX`."""
+    _, weights, com = fresh
+    (b, s), = com.steps
+    reg = B.step_registration(com, weights, {"law": "subset", "k": 8}, run=B.RUN_ID, program="torch-loop/mlp-w8a8-h128/seed0",
+                              block=b, step=s)
+    doc, payload = _build(fresh, [5], draw={"source": "fixture", "law": {"law": "subset", "k": 1}})
+    return reg, json.loads(json.dumps(doc)), payload
+
+
+def test_a_drawn_block_holds_to_its_step_registration(step) -> None:
+    reg, doc, payload = step
+    assert reg["population"] == 2 * 258 and len(reg["slot_roots"]) == 2
+    assert B.block_of(reg, STEP_INDEX) == (0, 6)
+    assert B.check_step(doc, payload, reg, STEP_INDEX) == {}
+    assert len(B.step_digest(reg)) == 128 and B.step_digest(reg) != B.step_digest({**reg, "population": reg["population"] + 1})
+
+
+@pytest.mark.parametrize("port", ["x", "o0"])
+@pytest.mark.parametrize("edit", [
+    lambda s: s["path"].append("00" * 64),
+    lambda s: s["slot_path"]["proof"].__setitem__(0, "00" * 64),
+    lambda s: s["step_path"]["proof"].__setitem__(0, "00" * 64),
+], ids=["unit-path", "slot-path", "step-path"])
+def test_a_drawn_block_with_a_tampered_path_is_refused(step, edit, port) -> None:
+    reg, doc, payload = step
+    doc = copy.deepcopy(doc)
+    edit(_row(doc, 5, port)["slot"])
+    assert B.check_step(doc, payload, reg, STEP_INDEX) == {f"unit:5/{port}": PATHS}
+
+
+def test_a_drawn_block_under_another_slot_root_is_refused(step) -> None:
+    reg, doc, payload = step
+    doc = copy.deepcopy(doc)
+    _row(doc, 5, "sx")["slot"]["step_path"]["roots"][0] = reg["slot_roots"][1]
+    assert B.check_step(doc, payload, reg, STEP_INDEX) == {"unit:5/sx": PATHS,
+                                                          "step:sx": "it does not open under the registered step's slot root"}
+
+
+@pytest.mark.parametrize("index", [STEP_INDEX + 1, STEP_INDEX + 258, 0])
+def test_a_block_at_another_index_than_its_draw_is_refused(step, index) -> None:
+    reg, doc, payload = step
+    assert set(B.check_step(doc, payload, reg, index)) == {"step:index"}
+
+
+def test_an_index_outside_the_registered_population_is_refused(step) -> None:
+    reg, doc, payload = step
+    assert set(B.check_step(doc, payload, reg, reg["population"])) == {"step"}
+    assert set(B.check_step(doc, payload, {**reg, "population": reg["population"] - 1}, STEP_INDEX)) == {"step"}
+
+
+def test_another_registered_step_is_refused(step) -> None:
+    """A registration whose step root or slot roots are not the bundle's: the bundle's paths reach its own commitment, which
+    is not the registered one."""
+    reg, doc, payload = step
+    assert B.check_step(doc, payload, {**reg, "step_root": "00" * 64}, STEP_INDEX) == {
+        "step:root": "its commitment does not hold the registered step root"}
+    other = {**reg, "slot_roots": ["00" * 64] * reg["slots"]}
+    assert set(B.check_step(doc, payload, other, STEP_INDEX)) == {"step:x", "step:sx", "step:o0"}
+    assert set(B.check_step(doc, payload, {**reg, "context": "11" * 64}, STEP_INDEX)) == {"step:commitment"}
+    assert set(B.check_step(doc, payload, {**reg, "extra": 1}, STEP_INDEX)) == {"step"}
+
+
+def test_a_registered_read_the_step_does_not_name_is_refused(step) -> None:
+    reg, doc, payload = step
+    wrong = [{**w, "root": "00" * 64} if w["value"] == "l0.wup" else w for w in reg["weights"]]
+    assert B.check_step(doc, payload, {**reg, "weights": wrong}, STEP_INDEX) == {
+        "step:wrow": "its registered value's root is not one the step registration names"}
+
+
+def test_a_bundle_of_more_than_one_block_is_refused(fresh, step) -> None:
+    reg, _, _ = step
+    doc, payload = _build(fresh, [5, 6], draw={"source": "fixture", "law": {"law": "subset", "k": 2}})
+    assert set(B.check_step(doc, payload, reg, STEP_INDEX)) == {"step:units"}
+
+
+def test_a_drawn_block_reading_earlier_steps_holds_to_every_registered_step_root(two_steps) -> None:
+    """M3 proper: the step registration names every step's root up to the drawn one (``steps``), and a drawn step-1 block
+    whose ``x`` reads step 0's commitment holds to it; without ``steps``, or with another step-0 root, the read is
+    refused."""
+    _, weights, _, kv = two_steps
+    reg = B.step_registration(kv, weights, {"law": "subset", "k": 8}, run=B.RUN_ID, program="torch-loop/mlp-w8a8-h128/seed0",
+                              block=0, step=1, read_steps=True)
+    assert [s["step"] for s in reg[B.STEPS_KEY]] == [0, 1] and reg[B.STEPS_KEY][1]["root"] == reg["step_root"]
+    doc, payload = _kv_build(two_steps, drawn=[260])
+    index = 0 * 258 + 0 * (H + 1) + 1 + 4
+    assert B.check_step(doc, payload, reg, index) == {}
+    why = "a read does not open under the registered step's slot root or a step root the registration names"
+    assert B.check_step(doc, payload, {k: v for k, v in reg.items() if k != B.STEPS_KEY}, index) == {"step:x": why}
+    other = {**reg, B.STEPS_KEY: [{"step": 0, "root": "00" * 64}, reg[B.STEPS_KEY][1]]}
+    assert B.check_step(doc, payload, other, index) == {"step:x": why}
+    assert set(B.check_step(doc, payload, {**reg, B.STEPS_KEY: reg[B.STEPS_KEY][:1]}, index)) == {"step"}
+    assert set(B.check_step(doc, payload, {**reg, B.STEPS_KEY: [*reg[B.STEPS_KEY], {"step": 2, "root": "00" * 64}]},
+                            index)) == {"step"}

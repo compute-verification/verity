@@ -955,6 +955,108 @@ def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, 
     return bad
 
 
+#: a step's commit-slots roots registered before a coin draws its proof blocks (PRF-172's M3): the draw's population is
+#: every (slot, layout unit) of the step, and each drawn block is proved from a one-member window of its own. ``steps``
+#: (optional, `STEPS_KEY`) names the root of every step of the block a drawn block can read (attention's K and V rows at
+#: steps 0 .. the drawn step), ``[{step, root}]``; a registration without it holds every read to the drawn step
+STEP_FORMAT = "verity/commit-slots-step-registration/v1"
+STEP_KEYS = {"format", "run", "program", "block", "step", "step_root", "slot_roots", "slots", "layout_digest", "context",
+             "units_per_slot", "population", "law", "weights"}
+STEPS_KEY = "steps"
+
+
+def step_digest(reg: Mapping[str, Any]) -> str:
+    """The step registration's digest, which the challenger's receipt names and the gate binds before the coin."""
+    return identity_digest_sha512(STEP_FORMAT, dict(reg)).hex()
+
+
+def step_registration(com: Commitment, weights: Mapping[str, REG.Registered], law: Mapping[str, Any], *, run: str,
+                      program: str, block: int, step: int, read_steps: bool = False) -> dict[str, Any]:
+    """The registration of step ``(block, step)`` of ``com`` (the prover's records) under ``law``, naming the registered
+    values ``weights`` its blocks read; ``read_steps``: and the root of every step of ``block`` up to ``step`` (`STEPS_KEY`),
+    which ``com`` must hold."""
+    steps = _Steps(com)
+    reg = {"format": STEP_FORMAT, "run": run, "program": program, "block": block, "step": step,
+           "step_root": steps.step(block, step).root.hex(), "slot_roots": [r.hex() for r in steps.roots(block, step)],
+           "slots": com.slots, "layout_digest": S.layout_digest(com.layout).hex(), "context": com.context.hex(),
+           "units_per_slot": com.layout.unit_count, "population": com.slots * com.layout.unit_count, "law": dict(law),
+           "weights": [{"value": v, "root": w.root.hex()} for v, w in sorted(weights.items())]}
+    if read_steps:
+        reg[STEPS_KEY] = [{"step": s, "root": steps.step(block, s).root.hex()} for s in range(step + 1)]
+    return reg
+
+
+def block_of(reg: Mapping[str, Any], index: int) -> tuple[int, int]:
+    """A drawn proof block's ``(slot, layout unit)``: index ``slot * units_per_slot + unit``."""
+    return divmod(int(index), int(reg["units_per_slot"]))
+
+
+def check_step(doc: Mapping[str, Any], payload: bytes, reg: Mapping[str, Any], index: int, *,
+               registration: Mapping[str, Any] | None = None) -> dict[str, str]:
+    """`check` of a drawn block's bundle, then the bundle held to the step registration ``reg`` at drawn ``index``:
+    ``{key: why}``, empty when it holds. Its commitment is the registered step (root, slot roots, layout, context), it is
+    one proof block whose outputs open in the layout unit ``index`` names, every row opens against the registered step
+    or a registered value whose root ``reg`` names, and each step row's slot root is the registered one. A row made of
+    reads (`Read`) holds each read to the registered step's slot root, or, at an earlier step, to that step's root as
+    ``reg``'s `STEPS_KEY` names it: a read at a step ``reg`` doesn't name is refused. The paths themselves are `check`'s,
+    which runs first, so a row whose paths don't reach the registered step root is refused."""
+    bad = check(doc, payload, registration=registration)
+    if set(reg) - {STEPS_KEY} != STEP_KEYS or reg["format"] != STEP_FORMAT:
+        return {**bad, "step": f"not a {STEP_FORMAT} with exactly {sorted(STEP_KEYS)} and optionally {STEPS_KEY}"}
+    if (reg["population"] != reg["slots"] * reg["units_per_slot"] or len(reg["slot_roots"]) != reg["slots"]
+            or not 0 <= int(index) < reg["population"]):
+        return {**bad, "step": "its population is not slots x units_per_slot over its slot roots, or the index is outside it"}
+    named = {s["step"]: s["root"] for s in reg.get(STEPS_KEY) or ()}
+    if STEPS_KEY in reg and (len(named) != len(reg[STEPS_KEY]) or named.get(reg["step"]) != reg["step_root"]
+                             or any(not 0 <= s <= reg["step"] for s in named)):
+        return {**bad, "step": f"its {STEPS_KEY} are not distinct steps up to its own, with its own step's root"}
+    com = doc["commitment"]
+    try:
+        unit_count = layout_of_json(com["layout"]).unit_count
+    except (ValueError, KeyError, TypeError) as e:
+        return {**bad, "step:layout": f"not read: {e}"}
+    if (com["layout_digest"], com["context"], com["slots"], unit_count) != (reg["layout_digest"], reg["context"],
+                                                                             reg["slots"], reg["units_per_slot"]):
+        bad["step:commitment"] = "its layout, context, slots or units a slot are not the registered step's"
+    roots = {(b["block"], s["step"]): s["root"] for b in com["blocks"] for s in b["steps"]}
+    if roots.get((reg["block"], reg["step"])) != reg["step_root"]:
+        bad["step:root"] = "its commitment does not hold the registered step root"
+    if len(doc["units"]) != 1:
+        return {**bad, "step:units": f"{len(doc['units'])} units, not the one drawn proof block"}
+    unit, (slot, lu) = doc["units"][0], block_of(reg, index)
+    c = unit["coords"]
+    outs = {s["unit"] for r in unit["rows"] if r["kind"] == "out"
+            for s in ([r["slot"]] if r["slot"] is not None else [q["slot"] for q in r.get("reads") or () if q["kind"] == "step"])}
+    if (c["block"], c["step"], c["slot"]) != (reg["block"], reg["step"], slot) or outs != {lu}:
+        bad["step:index"] = f"its block is not drawn index {index} (slot {slot}, layout unit {lu})"
+    values = {v["value"]: v["root"] for v in doc["weights"]["values"]}
+    weights = {w["value"]: w["root"] for w in reg["weights"]}
+
+    def registered_step(s: Mapping[str, Any]) -> bool:
+        if s["block"] != reg["block"] or not 0 <= s["slot"] < reg["slots"]:
+            return False
+        if s["step"] == reg["step"]:
+            return s["step_path"]["roots"] == [reg["slot_roots"][s["slot"]]]
+        return s["step"] in named and roots.get((reg["block"], s["step"])) == named[s["step"]]
+
+    for r in unit["rows"]:
+        key = f"step:{r['port']}"
+        if r["slot"] is not None:
+            s = r["slot"]
+            if (s["block"], s["step"]) != (reg["block"], reg["step"]) or not registered_step(s):
+                bad[key] = "it does not open under the registered step's slot root"
+        elif r.get("reads") is not None:
+            if not all(registered_step(q["slot"]) for q in r["reads"] if q["kind"] == "step"):
+                bad[key] = "a read does not open under the registered step's slot root or a step root the registration names"
+        elif r["registered"] is not None:
+            name = r["registered"]["value"]
+            if name not in weights or values.get(name) != weights[name]:
+                bad[key] = "its registered value's root is not one the step registration names"
+        else:
+            bad[key] = "it opens against neither the registered step nor a registered value"
+    return bad
+
+
 def _binding(win: Mapping[str, Any], port: str, schema: str, leaves: int) -> bytes:
     return identity_digest_sha512(CS.DOMAIN_TAG, {"program": win["program"], "partition": win["partition"], "port": port,
                                                   "schema": schema, "leaves": int(leaves), "run": win["run"]})
