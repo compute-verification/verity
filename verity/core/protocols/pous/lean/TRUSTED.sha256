@@ -19,13 +19,12 @@ f880248af5267b110f4cdfd91c67000c4a81917eb942429f7cae2ee5d4850f66  ../../../../..
 730f8de8e2edaae95ea447c7340b39e581a9add7a77b97dd426b97b298e6c393  ../../../../../Security/Definitions/Pous/Accounting/Params.lean
 900c51a66e89220a189e1e48e2d7adf5746b7e201580c8f3f50c86f110c41544  ../../../../../Security/Definitions/Pous/Accounting/PubMeets.lean
 d288169b3dc60861ae150688cdc6facb8ae60d95a9ab91704852285843434db0  ../../../../../Security/Definitions/Pous/Accounting/Rebuild.lean
-c04e1afa2733b8d35f5a428d0843d44b510b051c32e26b851e4bdd17287afae6  ../../../../../Security/Definitions/Pous/Assumptions.lean
-cf7cc24c3ee9426aa8ebddc9b734ea54c9a6990b69bd56a2e6809bddab4516d3  ../../../../../Security/Definitions/Pous/Assumptions/Obligation.lean
+80287395e1bd5ee050165df0215af429058d3a5903e4031d6830514caa24e9fe  ../../../../../Security/Definitions/Pous/Assumptions.lean
 c1f3114390c593fcab239b629bed7ac2aa8ba42a4c405b0c54b1875a9a611b8d  ../../../../../Security/Definitions/Pous/Assumptions/P2.lean
 b677a8872dabcb6219f1ae2c271c35d1d8ca1ca3a4327a880500992691e0f0bc  ../../../../../Security/Definitions/Pous/Game/Oracle.lean
 88069a0c9b4dda40aee828ba450e3eea2cdcf0f87d277834f8374ec12022d8d7  ../../../../../Security/Definitions/Pous/Game/Prob.lean
 16bdbfdeebc9c9be1ba8cbb7306b2eca23ea0f5d28103bf8b3728b77e1af8059  ../../../../../Security/Definitions/Pous/Guarantees.lean
-9f032661f371bec1f021e954d8b9204a5125b1f421b7c827f9815f9caa13f3ab  ../../../../../Security/Definitions/Pous/Guarantees/Obligation.lean
+6958bb6124e89aea106e5c6bc14c6d89caca3c401e4df86a4e824aa1d6eca281  ../../../../../Security/Definitions/Pous/Guarantees/Obligation.lean
 e42e5066c3a3ad7077406e623e58ffba216e6be149d5b09f4931518da6afb6fc  ../../../../../Security/Definitions/Pous/Guarantees/P2.lean
 c8d78f5c2bdf9f4fc7b84b118d89e82ab6703c5aaa55ae1a9cfee3bde463d423  ../../../../../Security/Definitions/Pous/Guarantees/SecureErasure.lean
 553dc52a24ef78a0faf6308a1902308b614b513fc59263ab7bc0f81c0fea4e1e  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipe.lean
@@ -53,5 +52,5 @@ f17be8cbc547930461d46c4f41040ea165bfff15169972934aade312603dc129  ../../../../..
 57e605cac56a8976de264946d3e0e7573efd583318d01ead07b1731fca0a248d  ../../../../../Security/Definitions/Pous/Model/SegLift.lean
 f5671be4b98bfe70d0cafff562ed2c79f5ac500482a652ac3c6d669e0fc836c1  ../../../../../Security/Definitions/Pous/Model/StreamedWipe.lean
 58c66950dee05bce6131152a168b1910b8059fd8d7967bc78259331ff96a15a5  ../../../../../Security/Definitions/Pous/P2/Cost.lean
-f69f992c8f67ddd9f227a362248be2546f16d47bbba834818e752c12e84e8224  ../../../../../Security/Definitions/Pous/P2/Mutable.lean
+820e3315c31eafa922a98a3e9ce18dd085f66a9a2948d8f35b08f8f3e2576c79  ../../../../../Security/Definitions/Pous/P2/Mutable.lean
 d8f6004051961b914e007d744f4acbef542bff8fc2a99b7ce36de33b6a9d469b  ../../../../../Security/Definitions/Pous/P2/Rounds.lean

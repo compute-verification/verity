@@ -4,8 +4,8 @@ import Definitions.Pous.P2.Mutable
 /-!
 # PoUS as an obligation over one audit window: the deployed check's acceptance certifies the snapshot's space
 
-Under PoUS as an obligation the store changes while the prover serves: each KV page is re-encoded on write under a fresh
-tag, its coin drawn by the memory challenger after the page's plaintext commitment
+Under PoUS as an obligation the device's memory holds the weights' P2 encoding while the prover serves, each block under
+the key pair of its tag, its coin drawn by the memory challenger, and a block re-encoded later under a fresh tag
 (`Security/Definitions/Pous/P2/Mutable.lean`). One audit window runs one session against the store's snapshot at
 the window's start, so the window is `PeriodHeld`'s period with that snapshot as `C*`. The store's oracle is the ring's
 labeling and a key pair per tag. The window's capacity coins are the snapshot's primitive (`Mutable.snap`) and the
@@ -19,9 +19,9 @@ the server may depend on them.
   probability at most `δ + ε_max` (`1% + 2^-128`).
 
 It rests on `PeriodHeld`'s premises at the snapshot, `RingDevice` among them, with the other tags' keys read as part of
-the other coins. The reading for content that depends on the ring itself (the labeling, or keys of pages committed
-earlier) is `Pous.Guarantees.ObligationOfCommitted`'s conjecture, not a premise here. `PeriodCapacity` gives the joint's
-capacity guarantee at each value of the other tags' keys as it stands.
+the other coins. The weights are content fixed before the ring is drawn; content that depends on the ring itself (the
+labeling, or keys of blocks committed earlier) is outside it. `PeriodCapacity` gives the joint's capacity guarantee at
+each value of the other tags' keys as it stands.
 -/
 
 namespace Pous.Period

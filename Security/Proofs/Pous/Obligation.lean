@@ -10,10 +10,11 @@ import Proofs.Pous.Thm1.Theorem1ii
 For an injective snapshot `tag`, reading a function on tags at the snapshot and off it is a bijection (`splitEquiv`),
 so the store's oracle with any other coins is, as a uniform sample, the other tags' key pairs beside the snapshot's
 primitive and those coins (`oracleEquiv`). An event bounded at every value of the other tags' keys is then bounded over
-the whole oracle (`pr_snap_le`, and `pr_snap_le_real` for `Pouw.pr`). The window's bounds are that at each value: P2's
-graded bound (`PousP2Rounds.graded`) for a payload and responder fixed by those keys, its chain over the rounds under the
-committed-content conjecture, and `PeriodHeld` at the snapshot for the deployed check. A block's offset absorbs its
-content by translating the offset's element by the difference of the contents' elements.
+the whole oracle (`pr_snap_le`, and `pr_snap_le_real` for `Pouw.pr`). The window's bounds are that at each value: any
+bound on P2's audit at the block count, P2's graded bound (`PousP2Rounds.graded`) for a payload and responder fixed by
+those keys, and `PeriodHeld` at the snapshot for the deployed check. The demo's state bound is a floor computed by
+`norm_num`. A block's offset absorbs its content by translating the offset's element by the difference of the contents'
+elements.
 -/
 
 namespace Pous.Mutable.SecurityProofs
@@ -122,20 +123,31 @@ theorem ObligationOfRoundSecure : Pous.Guarantees.ObligationOfRoundSecure := by
       varPassesOn _ k k (W e) (A₁ e) (A₂ e) x) _
     fun e => PousP2Rounds.graded p ε₀ D Q L h N h1 h2 Sz k (W e) (A₁ e) (A₂ e)
 
-/-- **An audit window of the mutable store with content committed before its key coins**
-(`Pous.Guarantees.ObligationOfCommitted`). -/
-theorem ObligationOfCommitted : Pous.Guarantees.ObligationOfCommitted := by
-  intro p ε₀ D Q L h N _ h1 h2 T _ _ tag htag π W hW Sz k A₁ A₂
+/-- **An audit window of the mutable store at every block count, from P2's audit at that count**
+(`Pous.Guarantees.ObligationOfStatic`). -/
+theorem ObligationOfStatic : Pous.Guarantees.ObligationOfStatic := by
+  intro N _ T _ _ tag htag Sz k D Q L c h W A₁ A₂
   have : Nonempty (Fin N) := ⟨⟨0, Nat.pos_of_ne_zero (NeZero.ne N)⟩⟩
-  refine Pous.Mutable.SecurityProofs.pr_snap_le tag htag
+  exact Pous.Mutable.SecurityProofs.pr_snap_le tag htag
     (fun e (x : Outcome (p2ring N 16448 (2 ^ 16448 - 21065) 16432) k) =>
-      varPassesOn _ k k (W e x.1) (A₁ e) (A₂ e) x) _ fun e => ?_
-  obtain ⟨bad, hbad, hstep⟩ := h N h1 h2 (π e) (W e) (hW e) Sz k (A₁ e) (A₂ e)
-  classical
-  have hc := PousP2Rounds.pr_chain (fun j x => varPassesOn _ k j (W e x.1) (A₁ e) (A₂ e) x ∧ ¬ bad x)
-    (fun j => Sz j ≤ (p2ring N 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ) (1 - p) k
-    (fun j x hx => ⟨PousP2Rounds.varPassesOn_of_succ _ _ _ _ x hx.1, hx.2⟩) (fun j hj hlow => hstep j hj hlow) k le_rfl
-  exact (PousP2Rounds.pr_le_and_not_add _ bad).trans (add_le_add hc hbad)
+      varPassesOn _ k k (W e) (A₁ e) (A₂ e) x) c
+    fun e => h (W e) (A₁ e) (A₂ e)
+
+/-- `S₀ = ⌊(18/19)·1038·2^16·16448⌋`, the demo's state bound, whatever `p` and `b`. -/
+theorem stateBound_p2ring_demo (N p b : ℕ) [NeZero N] [NeZero p] (hN : N = 1038 * 2 ^ 16) :
+    (p2ring N 16448 p b).stateBound Params.ρ = 1060008348186 := by
+  subst hN
+  rw [Scheme.stateBound, Nat.floor_eq_iff (mul_nonneg (by norm_num [Params.ρ]) (Nat.cast_nonneg _))]
+  change ((1060008348186 : ℕ) : ℚ) ≤ 18 / 19 * ((1038 * 2 ^ 16 * 16448 : ℕ) : ℚ) ∧
+    18 / 19 * ((1038 * 2 ^ 16 * 16448 : ℕ) : ℚ) < (1060008348186 : ℕ) + 1
+  norm_num
+
+/-- **The demo's memory term, P2's part** (`Pous.Guarantees.ObligationDemo`). -/
+theorem ObligationDemo : Pous.Guarantees.ObligationDemo := by
+  intro N _ hN
+  refine ⟨stateBound_p2ring_demo N _ _ hN, by norm_num, by norm_num, ?_⟩
+  intro T _ _ tag htag Sz k D Q L c _ h W A₁ A₂
+  exact ObligationOfStatic N T tag htag Sz k D Q L c h W A₁ A₂
 
 end Pous.SecurityProofs
 
