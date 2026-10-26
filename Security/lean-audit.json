@@ -9153,6 +9153,9 @@
    "assumptions": [],
    "type_hash": "d6773d52a6c5d776bb73acfb2282f6e4087777d1cce85e4aa4ae1c7d9d2a1d6b"
   },
+  "Pouw.SecurityProofs.Dither.WorkMoment": {
+   "owner": "@compute-research"
+  },
   "Pouw.SecurityProofs.Dither.WorkSoundNoFold": {
    "owner": "@compute-research",
    "signature": ["Pouw.SecurityProofs.Dither.WorkSoundNoFold : Pouw.Guarantees.Dither.WorkSoundNoFold"],
@@ -10935,7 +10938,8 @@
   "frozen": {
    "Pouw.SecurityProofs.Dither.WorkSound": "frozen (verdict): a probability statement over a quantified service verdict whose soundness is the premise ServiceSound, not a property of one function; it gets the shape when the proof service's verdict is a named Lean function the event reads (CMP-136).",
    "Pouw.SecurityProofs.Dither.WorkSoundNoFold": "frozen (verdict): as WorkSound, on the no-fold round with ExtractOfRealize in place of ExtractAdv (CMP-136, RT-LEAN-2 L39).",
-   "Pouw.SecurityProofs.Dither.FleetSound": "frozen (verdict): the union bound over units each sound at its own quantified verdict, as WorkSound (CMP-136, RT-PROTO-2 P16).",
+   "Pouw.SecurityProofs.Dither.WorkMoment": "frozen (verdict): as WorkSound, before its Markov step: the per-replica moment over a quantified service verdict, which FleetSound pools (CMP-152, CMP-136).",
+   "Pouw.SecurityProofs.Dither.FleetSound": "frozen (verdict): the accepted replicas' moments pooled by convexity, each at its own quantified verdict, as WorkSound (CMP-152, RT-PROTO-2 P16).",
    "Pouw.SecurityProofs.Dither.FreedOfFloor": "lemma: weak duality, the step from the rounds' floor at the dual price to WorkSound's conclusion; a fact of linear programming about no protocol function (CMP-136).",
    "Pouw.SecurityProofs.ShaRealize.ExtractOfRealize": "frozen (premise): ExtractAdv from ShaRealize and SHA-512 as a random oracle, one premise's form from another's, about no protocol function's acceptance (CMP-132).",
    "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200": "frozen (verdict): as WorkSoundH200, at the open parameters card-within-accel(H200) gives (CMP-136, RT-LEAN L10, L31).",

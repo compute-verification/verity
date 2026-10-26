@@ -13,11 +13,13 @@ The ACCEL program's headline (CMP-136, D2), on the accelerator model of `Definit
   one round at a time on instances registered before it (`Prover`),
   `Pr[accepted ∧ rv + W_other > OPT_honest + ε_A C] ≤ δ + κ_S + κ_x(A) + κ_sha(A) + k (κ_dmm + κ_dsha)`, `C` the
   registered rounds' honest cost at the dual price.
+* `WorkMoment`: `WorkSound` before its Markov step at `δ_coin`, the per-replica moment a fleet pools (CMP-152).
 * `WorkSoundNoFold`: the no-fold round with commit-and-open from SHA-512 as a random oracle
   (`Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`) at the query budget the period's capacity allows, so
   one `ε` and one `κ` for every prover (RT-LEAN-2 L39).
-* `FleetSound`: a fleet of units, each its own period whose coins reach only it, by the union bound over the units
-  (RT-PROTO-2 P16).
+* `FleetSound`: a fleet of replicas, each its own period, whose moments are pooled by convexity on every set of
+  accepted replicas at once, at `ln(N / (s δ_coin))` of luck rather than the union bound's `ln(N / δ_coin)` a replica,
+  under `OwnDither` and `CoinsConfidential` (CMP-152, tier A; RT-PROTO-2 P16).
 * `FreedOfFloor`: the rounds' floor at the period's dual price bounds freed compute by `ε C` (weak duality); the step
   from the floor to `WorkSound`'s conclusion.
 -/
@@ -121,6 +123,36 @@ def WorkSound : Prop :=
       (∑ r, μ r * (1 * Pd.hon r))
       (fun A => δ + κS + κx A + κsha A + k * (κdmm (Badv A) + κdsha (Badv A)))
 
+/-- **A replica's moment** (CMP-152): `WorkSound` before its Markov step, which `FleetSound` pools across a fleet's
+replicas. Under `WorkSound`'s premises without `δ` (and without `η > 0`, which only the luck reads), every prover's
+period is sound in moment at rate `η` (`MomentSound`): its sampling blocks' combined priced shortfall `D` against the
+public bests has `e^{η D}` below their stopped supermartingale, of average at most 1, off the service's `κ_S`, the
+crypto failures `δ_crypto` (`κ_x(A)` of the extraction and `κ_sha(A)` of the oracle) and the degenerate dithers'
+`k (κ_dmm + κ_dsha)`; there it frees at most `(ε_A + D / C) C`, with `ε_A` the rest of `ε_skip`: `epsWorkSound` with
+no luck term (`ln(1/1)/η = 0`) plus the walk and log `μ · ξ_A / C`. Markov at `δ_coin` gives `WorkSound` back, its
+luck `ln(1/δ_coin)/η` added to `ε_A C`. -/
+def WorkMoment : Prop :=
+  ∀ (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Set P.Inst) (reg : Fin k → P.Inst) (Obs : Type)
+    (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (Pd : Period G) (μ : G.Res → ℝ)
+    (Hmm Hsha Ho pubmm pubsha : P.Inst → ℝ) (η β K κS Q : ℝ) (κdmm κdsha : ℕ → ℝ) (Badv : Prover G P k → ℕ)
+    (ξ : Prover G P k → G.Res → ℝ) (κx κsha : Prover G P k → ℝ),
+    (∀ w, reg w ∈ Reg) → Pd.DualOpt μ 1 →
+    (∀ a ∈ Reg, 0 < Hmm a ∧ 0 < Hsha a ∧ 0 ≤ Ho a ∧ pubmm a ≤ Hmm a ∧ pubsha a ≤ Hsha a) →
+    ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)) = ∑ r, μ r * Pd.hon r →
+    0 ≤ β → 0 ≤ K → (∀ A r, 0 ≤ ξ A r) → (∀ B, 0 ≤ κdmm B ∧ 0 ≤ κdsha B) →
+    (∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) →
+    G.G1 → G.G2 → G.G3 → G.P1 → G.P2 →
+    SAKMatmul G P μ Reg pubmm (fun a => η * (Hmm a + Hsha a + Ho a) / Hmm a) κdmm →
+    ShaSpeed G P k reg μ pubsha (fun a => η * (Hmm a + Hsha a + Ho a) / Hsha a) κdsha κsha →
+    OutsourceWithinEgress G μ β → ServiceSound G P k reg verdict dev κS →
+    ImportWithinCertifier G P k verdict dev K → ExtractAdv G P k reg Q Badv ξ κx →
+    MomentSound G P k verdict dev Pd 1
+      (fun A => epsWorkSound (fun w => Hmm (reg w) + Hsha (reg w) + Ho (reg w)) (fun w => pubmm (reg w))
+          (fun w => pubsha (reg w)) η 1 β K +
+        (∑ r, μ r * ξ A r) / ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)))
+      (∑ r, μ r * (1 * Pd.hon r)) η
+      (fun A => κS + κx A + κsha A + k * (κdmm (Badv A) + κdsha (Badv A)))
+
 /-- **The no-fold protocol is `(1 − ε)`-work-sound at one bound for every prover** (RT-LEAN-2 L39; CMP-136).
 `WorkSound` on the no-fold round `noFoldRound nf`, with commit-and-open's extraction proved from SHA-512 as a random
 oracle (`Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`) rather than assumed. The oracle is a uniform table
@@ -181,28 +213,55 @@ def WorkSoundNoFold : Prop :=
             k * ((k + 1) * (⌈Q⌉₊ + V) * ((k + 1) * (⌈Q⌉₊ + V) + 1)) : ℕ) : ℝ) /
           Fintype.card D + κsha + k * (κdmm Badv + κdsha Badv))
 
-/-- **A fleet of units, each its own period** (RT-PROTO-2 P16: the rounds of units whose coins aren't serialized are
-not one sequence). Unit `u` of `N` runs its own period of `k` rounds on its own devices `Pd u`, under the service's
-verdict `verdict u` on its transcript and its devices' readings `dev u`. One oracle serves the fleet, and each unit
-draws its own coins, which reach no other machine before that unit has them. Unit `u`'s prover `A u` may read every
-other unit's coins, past and future (a coalition of units at its worst); what other units compute for it is work it
-exchanges with machines outside its devices, which the network certifier counts. If every unit's period is
-`(1 − ε_u(A))`-work-sound but with probability `κ_u(A)` for every prover `A` (`WorkSound`, or `WorkSoundNoFold` at
-one bound for every prover), and `κ_u(A u y) ≤ κmax_u` at every value `y` of the other units' coins, the probability
-over the oracle and every unit's coins that some unit's period is accepted while it frees more than
-`ε_u(A u y) C_u` is at most `Σ_u κmax_u`. Each unit at `δ/N`, so a luck term `ln(N/δ)/η` in its `ε_u`, gives the
-fleet `δ` for the luck, with `k` rounds a unit. -/
+/-- **A fleet of replicas, pooled by convexity** (CMP-152, tier A; RT-PROTO-2 P16: the sampling blocks of replicas
+whose coins aren't serialized are not one sequence). Replica `u` of `N` runs its own period of `k` sampling blocks on
+its own devices `Pd u`, under the service's verdict `verdict u` on its transcript and its devices' readings `dev u`.
+One oracle serves the fleet. The challenger issues the coins from its randomness `Ω` (`coin`), each replica its own
+(`OwnDither`). The strategy the fleet runs on replica `u` (`A u`, at the challenger's randomness) reads every other
+replica's coins, past and future (a coalition at its worst), and none of its own (`CoinsConfidential`); what other
+replicas compute for it is work it exchanges with machines outside its devices, which the network certifier counts.
+If every replica's period is sound in moment at rate `η_u` (`MomentSound`, from `WorkMoment`), with `ε_u` its `ε_skip`
+without the luck and `κ_u(A u ω) ≤ κmax_u`, then the probability over the oracle and the challenger's randomness that
+some nonempty set `S` of replicas is accepted, with other work `z_u` fitting beside each one's sampling blocks, while
+no share `d ≥ 0` of the fleet's luck on `S` (`fleetLuck`) has each `u ∈ S` free at most `(ε_u + d_u / C_u) C_u`, is at
+most `δ_coin + Σ_u κmax_u`.
+
+**The fleet is registered before any member's first coin** (RT-POOL RP30): its members, their periods `Pd u` and
+registered costs `C u` (each replica's `W_reg,u`, their total the fleet's `W_F = Σ_u C_u`), and so their rates `η u`,
+are the statement's parameters, fixed before the challenger's randomness `Ω`. A fleet named or grown after any coin is
+outside it: named after the outcomes, the union over fleets returns. `N` counts the claim's replicas, not the fleet's
+GPUs over a replica's size (RP15).
+
+So the accepted share is published with its `ε`. A failed replica voids only its own period, and on the accepted set
+`S` the fleet frees at most `Σ_{u ∈ S} ε_u C_u + Λ_S (ln (Λ / Λ_S) + ln (1/δ_coin))`, `Λ_S = Σ_{u ∈ S} 1/η_u`, for every
+`S` at once: at equal rates `η = q / C`, `ε_u + ln(N / (s δ_coin)) / q` of the accepted credit at `s` accepted
+replicas. The union bound over replicas paid `ln(N / δ_coin) / q` at every `s`: at D6's parameters (`δ_coin = 1e-6`,
+`q = 13,816` checks a replica-week) the luck's share is 0.1000% with every replica accepted, against the union's
+0.2177% (H200 V4) and 0.2206% (RTX PRO 6000 V4). A headline taking the smaller of this bound and another tier's runs
+each at `δ_coin / 2` (RP31).
+
+The failure is `δ_coin + Σ_u κmax_u` (RP29): pooling takes `ln N` out of the luck, not `Σ_u κ_u` out of the failure.
+Each `κ_u` carries its `k` sampling blocks' degenerate dithers, `k (κ_dmm + κ_dsha)`, beside `κ_S` and `δ_crypto`
+(`WorkMoment`), so at D6's fleet the failure stays near `δ_coin = 1e-6` only if a sampling block's `κ_dmm + κ_dsha` is
+at most about `2^-73` (H200 V4; a replica's `κ` at most `8.7e-14`), a budget no premise yet states.
+
+Its rate stays one replica's: replicas that cheat on one shared coin attain it (`Proofs.Pouw.Pool`'s
+`convex_pool_tight`). A product over replicas would need (a) moments pointwise in the other replicas' dithers, which
+`SAKMatmul`'s average form doesn't give (`not_pool_of_average_moments`), (b) each sampling block's selection
+independent after its root and (c) independent dithers (RP2); this bound needs only (c), as `OwnDither`. -/
 def FleetSound : Prop :=
   ∀ (G : Accel) (P : RoundProto) (k N : ℕ) (Obs : Type) (verdict : Fin N → Verdict P k Obs)
     (dev : Fin N → Readings G P k Obs) (Pd : Fin N → Period G) (ε κ : Fin N → Prover G P k → ℝ)
-    (C κmax : Fin N → ℝ),
-    (∀ u, 0 ≤ κmax u) → (∀ u, FreedSound G P k (verdict u) (dev u) (Pd u) 1 (ε u) (C u) (κ u)) →
-    ∀ A : (u : Fin N) → ({v : Fin N // v ≠ u} → Fin k → P.Draw × P.Chk) → Prover G P k,
-      (∀ u y, κ u (A u y) ≤ κmax u) →
-      prob (fun ox : P.Orc × (Fin N → Fin k → P.Draw × P.Chk) => ∃ u,
-        (A u fun v => ox.2 v.1).Passes (verdict u) (dev u) ox.1 (ox.2 u) ∧
-          ∃ z, (Pd u).Fits ((A u fun v => ox.2 v.1).timedUse ox.1 (ox.2 u)) z ∧
-            ¬ (Pd u).FreedWithin 1 z (ε u (A u fun v => ox.2 v.1)) (C u)) ≤ ∑ u, κmax u
+    (C η κmax : Fin N → ℝ) (δcoin : ℝ) (Ω : Type) [Fintype Ω] (coin : Ω → Fin N → Fin k → P.Draw × P.Chk)
+    (A : Fin N → Ω → Prover G P k),
+    (∀ u, 0 < η u) → 0 < δcoin → (∀ u, 0 ≤ κmax u) →
+    (∀ u, MomentSound G P k (verdict u) (dev u) (Pd u) 1 (ε u) (C u) (η u) (κ u)) →
+    OwnDither P k N coin → CoinsConfidential coin A → (∀ u ω, κ u (A u ω) ≤ κmax u) →
+    prob (fun oω : P.Orc × Ω => ∃ S : Finset (Fin N), S.Nonempty ∧ ∃ z : (u : Fin N) → (Pd u).J → ℝ,
+      (∀ u ∈ S, (A u oω.2).Passes (verdict u) (dev u) oω.1 (coin oω.2 u) ∧
+        (Pd u).Fits ((A u oω.2).timedUse oω.1 (coin oω.2 u)) (z u)) ∧
+      ¬ ∃ d : Fin N → ℝ, (∀ u ∈ S, 0 ≤ d u ∧ (Pd u).FreedWithin 1 (z u) (ε u (A u oω.2) + d u / C u) (C u)) ∧
+        ∑ u ∈ S, d u ≤ fleetLuck η S δcoin) ≤ δcoin + ∑ u, κmax u
 
 /-- **Freed compute is at most `ε C` at the period's dual price** (R-ACCEL-1). On a period's devices (`Period`), let
 `μ ≥ 0` be a dual price for the other work (every job worth at most its use at `μ`) at which an honest strategy

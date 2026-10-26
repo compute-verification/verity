@@ -25,7 +25,9 @@ The headline of the ACCEL program (`Definitions.Pouw.Guarantees.Dither.WorkSound
   verdict on the transcript and the auditor's devices' readings (`Verdict`, `Readings`, `Prover.Passes`);
 * **freed compute** (`Period`, `Period.FreedWithin`, `Period.DualOpt`, `FreedSound`): R-ACCEL-1's definition, kept in
   this one place, and its probability form, the headline's conclusion;
-* the error (`epsWorkSound`).
+* **a replica's moment** (`MomentSound`): the probability form before its Markov step, which a fleet pools at its
+  luck (`fleetLuck`; CMP-152);
+* the error (`epsWorkSound`, `ε_skip`).
 -/
 
 namespace Pouw.Dither
@@ -451,6 +453,29 @@ def FreedSound (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Ve
     Prop :=
   ∀ A : Prover G P k, prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) => A.Passes verdict dev ox.1 ox.2 ∧
     ∃ z, Pd.Fits (A.timedUse ox.1 ox.2) z ∧ ¬ Pd.FreedWithin W z (ε A) C) ≤ κ A
+
+/-- **A replica's moment** (CMP-152): `FreedSound` before its Markov step, the form a fleet pools. For every prover,
+a shortfall `D ≥ 0` and a moment `M ≥ 0` over the oracle and the challenger's coins, of average at most 1, and a bad
+event of probability at most `κ` (the service's and the crypto failures, `δ_crypto`, and the degenerate dithers'),
+such that wherever the service accepts the period, the bad event is off and other work `z` fits on the period's
+devices beside its sampling blocks' timed work, `e^{η D} ≤ M` and the period frees at most `(ε + D / C) C`. `ε` is
+`ε_skip` without the luck, and `η` a rate a unit of priced cost (`η = q / C` at `q` checks a period). Markov on `M` at
+`δ_coin` gives `FreedSound` at `ε + ln(1/δ_coin)/(η C)` and `δ_coin + κ`; a fleet adds its replicas' shortfalls by
+convexity instead (`Definitions.Pouw.Guarantees.Dither.FleetSound`). -/
+def MomentSound (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Verdict P k Obs)
+    (dev : Readings G P k Obs) (Pd : Period G) (W : ℝ) (ε : Prover G P k → ℝ) (C η : ℝ) (κ : Prover G P k → ℝ) :
+    Prop :=
+  ∀ A : Prover G P k, ∃ (D M : P.Orc × (Fin k → P.Draw × P.Chk) → ℝ) (Bad : P.Orc × (Fin k → P.Draw × P.Chk) → Prop),
+    (∀ ox, 0 ≤ D ox) ∧ (∀ ox, 0 ≤ M ox) ∧ avg M ≤ 1 ∧ prob Bad ≤ κ A ∧
+    ∀ ox z, A.Passes verdict dev ox.1 ox.2 → ¬ Bad ox → Pd.Fits (A.timedUse ox.1 ox.2) z →
+      Real.exp (η * D ox) ≤ M ox ∧ Pd.FreedWithin W z (ε A + D ox / C) C
+
+/-- **The fleet's luck on a set `S` of its `N` replicas** (CMP-152, RT-POOL RP24), in units of priced cost:
+`Λ_S (ln (Λ / Λ_S) + ln (1/δ_coin))`, with `Λ_S = Σ_{u ∈ S} 1/η_u` and `Λ = Σ_u 1/η_u`. At equal rates `η = q / C`
+it is `ln(N / (s δ_coin)) / q` of the credited cost of `s` replicas: at `s = N`, one replica's `ln(1/δ_coin)/q`, with
+no `ln N`. -/
+noncomputable def fleetLuck {N : ℕ} (η : Fin N → ℝ) (S : Finset (Fin N)) (δ : ℝ) : ℝ :=
+  (∑ u ∈ S, 1 / η u) * (Real.log ((∑ u, 1 / η u) / ∑ u ∈ S, 1 / η u) + Real.log (1 / δ))
 
 end Freed
 

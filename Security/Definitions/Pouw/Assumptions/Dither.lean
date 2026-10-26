@@ -18,6 +18,13 @@ commit-and-open's extraction (`Definitions.Pouw.Assumptions.ShaRealize.ExtractAd
   (C-Flock sound and zero knowledge, live coins from the auditor's challenger);
 * `ImportWithinCertifier`: an accepted period exchanged at most `K` bits, the network certifier's count (class L).
 
+`Definitions.Pouw.Guarantees.Dither.FleetSound` adds two on the challenger's coins across a fleet's replicas (CMP-152):
+
+* `OwnDither`: the challenger issues each replica its own coins, uniform and independent of every other replica's
+  (RT-POOL's `IndependentCoins` across the fleet, from the coins' derivation, RP25);
+* `CoinsConfidential`: a replica's coins reach no machine outside it before it has them, so the strategy run on it
+  reads none of them (for the MVP, by one device that produces a server's coins and runs its certifier; RP4).
+
 Only `SAKMatmul`, `ShaSpeed`, `OutsourceWithinEgress` and `ExtractAdv` say anything about which algorithms a prover
 runs.
 
@@ -141,5 +148,39 @@ verdict reads its signed count and refuses a period past `K`. The certifier's ow
 def ImportWithinCertifier (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Verdict P k Obs)
     (dev : Readings G P k Obs) (K : ℝ) : Prop :=
   ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), A.Passes verdict dev o x → A.ext o x ≤ K
+
+/-- `pouw-own-dither` (proposed; the challenger on `trusted-nebius-host`, RT-POOL RP2(c), RP25, CMP-152). **Each
+replica's coins are its own**: the challenger issues every replica of a fleet of `N` its own dither and check coins,
+drawn fresh for it, so its randomness `Ω` gives every replica's coins together the uniform distribution (`coin`
+carries the uniform measure on `Ω` to the uniform measure on `Fin N → Fin k → Draw × Chk`). With each replica's own
+coins uniform, as `MomentSound`'s sample space has them, this is RT-POOL's `IndependentCoins` across the fleet.
+
+It rests on the coins' derivation (RP25): the challenger derives each coin as
+`derive(K_ch, "verity/pouw-accel/<kind>/v1", {period, replica, sampling block index, root receipt digest})`, its key
+`K_ch` never leaving the challenger, so no two of the fleet's coins share a context, and the derivation is taken as
+uniform. `verity.ml.randomness.derive` is deterministic, so a coin keyed by its roots alone would repeat with them.
+
+A dither broadcast to several replicas puts a replica's own dither in the others' coins, which `FleetSound` hands to
+its strategy, and then its moment fails. The check coins are in it too: `FleetSound`'s strategies read every other
+replica's coins, so a check coin shared with another replica would reach a replica's strategy before the challenger
+issues it. -/
+def OwnDither (P : RoundProto) (k N : ℕ) {Ω : Type} [Fintype Ω] (coin : Ω → Fin N → Fin k → P.Draw × P.Chk) :
+    Prop :=
+  ∀ f : (Fin N → Fin k → P.Draw × P.Chk) → ℝ, avg (fun ω => f (coin ω)) = avg f
+
+/-- `pouw-coins-confidential` (proposed; the network certifiers on `trusted-nebius-host`, RT-POOL RP4, CMP-152). **A
+replica's coins reach no machine outside it before it has them**: a sampling block's dither and check coin are
+readable only inside its replica's certifier boundary until its root. For the MVP it holds by one device (Daniel's
+RP4 ruling, 26 Oct): the device that runs a server's network certifier also produces that server's live coins, so the
+challenger issues them inside the boundary the certifier counts, and trust in that device and its host provider is
+`trusted-nebius-host`.
+
+So the strategy a fleet runs on replica `u` (its prover `A u ω` at the challenger's randomness `ω`) may read every
+other replica's coins, past and future (a coalition at its worst), but none of its own: those reach `u` only through
+its own programs, in the challenger's order, as `Prover` has them. A machine outside the boundary that read a coin
+early could serve the block's words, work no extraction sees. -/
+def CoinsConfidential {G : Accel} {P : RoundProto} {k N : ℕ} {Ω : Type} (coin : Ω → Fin N → Fin k → P.Draw × P.Chk)
+    (A : Fin N → Ω → Prover G P k) : Prop :=
+  ∀ u ω ω', (∀ v, v ≠ u → coin ω v = coin ω' v) → A u ω = A u ω'
 
 end Pouw.Assumptions
