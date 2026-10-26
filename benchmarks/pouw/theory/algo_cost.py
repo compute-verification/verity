@@ -76,7 +76,8 @@ def strassen_overlapped(lane_load: float, pX: float, pW: float, lane_per_add: fl
 
     lane_load is the honest program's own lane time (hashing) over its tensor time. Each of the five summed forms a side
     goes either to one 2:4 pass with lane leftovers (tensor) or to sparse adds on the lanes (lane_per_add MAC-times an
-    add, port_per_add MAC-times of shared-memory port an add). Returns the cheapest (time, X forms on 2:4, W forms on 2:4).
+    add, port_per_add MAC-times of shared-memory port an add). Returns the cheapest (time, X forms on 2:4,
+    W forms on 2:4).
     """
     def leftover(p: float) -> float:
         return (4 * p**3 * (1 - p) + 2 * p**4) / 4
