@@ -18,7 +18,10 @@ each proved ``--zk`` behind the Lean firewall one session at a time (`n2_zk.py p
 kept across both. Its records (heads and salts, syncs, request and response records, the shim's events, the plan's
 prompts) are witness and stay in the scratch; the runner's ``--out/certifier-session/`` gets each run's deployment,
 calibration, the client's certificates and clock certificates, and on a tied run the network certifier's out records
-alone (`publish`, `PUBLIC_SESSION`), and ``summary.json`` the session's counts.
+alone (`publish`, `PUBLIC_SESSION`), and ``summary.json`` the session's counts. A step that fails (a stub, a rehearse,
+N2's prove) raises with its log's last `LOG_TAIL` lines and copies that log, the step's own output and never a record,
+into the leg's ``out``, or the runner's ``--out/certifier-session/`` for its relay (`failed`): the scratch is gone by the
+time anyone reads the error.
 
 **A period** (`leg`): its link-window, and for the first period every link-window N2 decided before it and for the last
 every one after (`period_windows`), so each certified link-window is some period's. Their certified outputs (the egress
@@ -72,18 +75,20 @@ behind the Lean firewall; a round not as expected or witness in what its verifie
 its audit record is one-stage's answer for its registration, re-decided at its term's δ (`scan_window`: the rows form's
 terms are the audits and each link-window's scan, `term_delta`). A period whose
 every link-window has a scan answer is decided in certifier/v0's rows form (`rows_case_of`, ``network-period check``):
-per link-window the scan's registration in the commitment (its ``warden/<side>`` roots the rows' registrations' roots
-and domains, `scan_zk.warden_roots`) and, in the evidence, its answer, the three records' certificates and the two rows'
-registrations, under the deployment's key and its one schedule; the scan's layout terms
-its free inputs (`scan_free`, every scan row but the network certifier's own cells, an overcount) over a link-window's
-buckets. A period with a link-window the scan didn't answer raises (`WARDEN_PENDING`: link-window 0 alone is proved
-yet, and a ``late`` run's is refused before the scan registers it).
+per link-window the scan's registration in the commitment (its ``rows/<direction>/<w>`` roots the rows' registrations'
+roots and domains, `scan_zk.warden_roots`) and, in the evidence, its answer, the three records' certificates and the
+two rows' registrations, under the deployment's key and its one schedule; the scan's Program its descriptor
+(`scan_zk`'s ``joint/program.json``, the generator form's), off which the period check reads the scan's terms (it
+refuses a checker form, whose egress rows are inputs, by name). A period with a link-window the scan didn't answer
+raises (`WARDEN_PENDING`: link-window 0 alone is proved yet, and a ``late`` run's is refused before the scan registers
+it).
 
 Layout terms (`layout`): the audit's free inputs (`free_inputs`, from the window's ``circuit.json``: every unit's
-input-row bits, less the rows wires feed or ``external`` names), the observation horizon the link's (its link-windows'
-buckets, `certifier_serve.WINDOW_BUCKETS` each), jitter bound 1 (N2 holds the planned profile's egress counts exactly,
-so no observation moves), and no connection through the network certifier but the link, whose counts the profile fixes
-(``cells`` empty).
+input-row bits, less the rows wires feed or ``external`` names) and its Program (`audit_program`, the window's
+population program rebuilt from its records, off which the period check reads its units and the bits each commits),
+the observation horizon the link's (its link-windows' buckets, `certifier_serve.WINDOW_BUCKETS` each), jitter bound 1
+(N2 holds the planned profile's egress counts exactly, so no observation moves), and no connection through the network
+certifier but the link, whose counts the profile fixes (``cells`` empty).
 
 **The block record** (`block_leg`): a period's accepted answer, of either path, as the certifier leg of
 ``verity/block-record/v1`` (CMP-95 item 6): K in bits, its error the answer's exact ``eps``, and the certificate at
@@ -122,6 +127,8 @@ SESSION = "certifier-session"
 DELTAS = (Fraction(1, 100), Fraction(1, 10 ** 6))
 #: N2's stream decides at `certifier_serve.DELTA`
 N2_DELTA = Fraction(2) ** -40
+#: the lines of a failed session step's log its error carries (`failed`)
+LOG_TAIL = 40
 #: the leg's records, by ``CERTIFIER_PATH``: ``certifier`` (the default), `certifier_serve.py`'s certifier-only path
 #: (`session`, `certifier_leg`); ``warden``, the network certifier's own cells as one device (`warden_session`,
 #: `warden_leg`), which `verity/certifier/v0` decides once it has the device's form
@@ -142,10 +149,8 @@ _TIE_GAP = {
     "fix": "NET-68's advised tie: the certified ids proved to be the registered outputs' (io_tie) inside the period's "
            "proofs"}
 _SCAN_GAP = {
-    "gap": "the scan's layout terms are the leg's overcount (its free inputs every scan row but the network certifier's "
-           "own cells, `scan_free`), and its draw the verifier's own Lean coins on link-window 0 alone",
-    "fix": "LEAK-LEAN's exact K terms against the Lean, and IO-TIE's scan_zk --window W on the challenger's coins "
-           "(#4387)"}
+    "gap": "the scan's draw is the verifier's own Lean coins on link-window 0 alone",
+    "fix": "IO-TIE's scan_zk --window W on the challenger's coins (#4387)"}
 #: what each path's verdict still stands on that isn't the network certifier's own, each with its fix (``stubbed`` in
 #: ``summary.json``); ``tied``: the certifier path on a period whose outputs the runner tied (``--tie``), where Lean's
 #: registered reads refuse an output unit whose row doesn't open the root the network certifier signed, so no clear
@@ -179,7 +184,7 @@ WARDEN_PENDING = "scan_zk.py proves link-window 0 alone (no --window W), so no l
 #: the scan's sampled draw (``SCAN_DRAW``): Lean ``draw --stratified K`` of the window's 2T units
 SCAN_DRAW = 16
 #: what `scan_prove` keeps of a scan's ``--out``: its summary and its honest round's registration, draw and audit record
-SCAN_KEEP = ("summary.json", "honest/registration.json", "honest/draw.json", "honest/audit.json")
+SCAN_KEEP = ("summary.json", "joint/program.json", "honest/registration.json", "honest/draw.json", "honest/audit.json")
 
 
 def _env_int(name: str, default: int) -> int:
@@ -321,14 +326,29 @@ def lean_exes() -> dict[str, str]:
     return {n: str(LEAN / ".lake" / "build" / "bin" / n) for n in ("network-period", "network-records")}
 
 
-def _stub(steps: int, h: int, log: Path, tamper: str | None = None) -> tuple[subprocess.Popen, str]:
+def failed(why: str, log: Path, keep: Path | None = None) -> RuntimeError:
+    """A session step's failure: ``why`` and the last `LOG_TAIL` lines of its ``log``, which is in the runner's scratch
+    and gone by the time anyone reads the error, so the log is copied into ``keep`` (custody's: the leg's ``out``, or
+    the runner's ``--out/certifier-session`` for its relay) and the error names that copy. A log is the step's own
+    output (its verdict tables, its announce line of public keys and ids, a traceback), never a record."""
+    lines = log.read_text(errors="replace").splitlines() if log.is_file() else []
+    if keep is not None and log.is_file():
+        keep.mkdir(parents=True, exist_ok=True)
+        log = Path(shutil.copy(log, keep / log.name))
+    tail = lines[-LOG_TAIL:]
+    return RuntimeError(f"{why} ({log}); its last {len(tail)} lines:\n" + "\n".join(tail))
+
+
+def _stub(steps: int, h: int, log: Path, tamper: str | None = None,
+          keep: Path | None = None) -> tuple[subprocess.Popen, str]:
     tampered = ["--tamper", tamper, "--tamper-at", "0"] if tamper else []
     proc = subprocess.Popen([sys.executable, str(TRACES / "torch_loop_stub.py"), "--steps", str(steps), "--h", str(h),
                              *tampered], stdout=subprocess.PIPE, stderr=open(log, "w"), text=True, cwd=ROOT)
     line = json.loads(proc.stdout.readline() or "{}")
     if "listening" not in line:
         proc.kill()
-        raise RuntimeError(f"the stub exited before listening ({log})")
+        proc.wait()
+        raise failed("the stub exited before listening", log, keep)
     return proc, line["listening"]
 
 
@@ -360,12 +380,13 @@ def _env(tools: Mapping[str, str], exes: Mapping[str, str]) -> dict[str, str]:
 
 
 def relay(s: Path, prompts: Sequence[int], steps: int, h: int, periods: int, tools: Mapping[str, str],
-          out_program: str | None = None) -> dict[str, Any]:
+          out_program: str | None = None, keep: Path | None = None) -> dict[str, Any]:
     """The session's relay (module docstring): `certifier_serve.py rehearse` of the run's ``periods`` periods of
     ``prompts`` through the network certifier into ``s``, honest and under `CERTIFIER_TAMPER`, before any proof; its
     record ``relay.json``. The runner relays before the loop serves when the loop's outputs are tied to the certified
     ones (``--tie``), the network certifier then committing each link-window's output for the reading program
-    ``out_program`` (``--out-program``); `session` relays at the first period otherwise."""
+    ``out_program`` (``--out-program``); `session` relays at the first period otherwise. A step that fails copies its
+    log into ``keep`` (`failed`)."""
     if (s / "relay.json").exists():
         return json.loads((s / "relay.json").read_text())
     s.mkdir(parents=True, exist_ok=True)
@@ -373,7 +394,7 @@ def relay(s: Path, prompts: Sequence[int], steps: int, h: int, periods: int, too
     tamper = os.environ.get("CERTIFIER_TAMPER", "extra")
     strategies = ["honest", *([tamper] if tamper else [])]
     frames = steps * math.ceil(4 * h / TOKEN_BYTES)
-    stub, url = _stub(steps, h, s / "stub.log")
+    stub, url = _stub(steps, h, s / "stub.log", keep=keep)
     try:
         rc = _run([sys.executable, str(TRACES / "certifier_serve.py"), "rehearse", "--upstream", url,
                    "--out", str(s / "rehearsal"), "--traffic", "fixed", "--profile", "planned",
@@ -386,7 +407,7 @@ def relay(s: Path, prompts: Sequence[int], steps: int, h: int, periods: int, too
         stub.terminate()
         stub.wait()
     if not (s / "rehearsal" / "summary.json").exists():
-        raise RuntimeError(f"certifier_serve.py rehearse exited {rc} with no summary ({s / 'rehearse.log'})")
+        raise failed(f"certifier_serve.py rehearse exited {rc} with no summary", s / "rehearse.log", keep)
     rec = {"prompts": list(prompts), "steps": steps, "h": h, "periods": periods, "height": height,
            "strategies": strategies, "tamper": tamper or None, "frames": frames, "rehearse_exit": rc, "exes": exes,
            "dir": str(s), "out_program": out_program}
@@ -405,14 +426,14 @@ def once(s: Path, make: Callable[[Path], dict[str, Any]]) -> dict[str, Any]:
         return make(s)
 
 
-def session(period_dir: Path) -> dict[str, Any]:
+def session(period_dir: Path, keep: Path | None = None) -> dict[str, Any]:
     """The run's one certifier session (module docstring), made at its first period in the runner's scratch beside the
     period's window (``period_dir.parent``): its relay (`relay`, unless the runner relayed already) and N2's proofs;
-    its record ``session.json`` (`once`)."""
-    return once(period_dir.parent / SESSION, lambda s: _session(period_dir, s))
+    its record ``session.json`` (`once`). A step that fails copies its log into ``keep`` (`failed`)."""
+    return once(period_dir.parent / SESSION, lambda s: _session(period_dir, s, keep))
 
 
-def _session(period_dir: Path, s: Path) -> dict[str, Any]:
+def _session(period_dir: Path, s: Path, keep: Path | None = None) -> dict[str, Any]:
     tools = _tools(period_dir)
     prompts, steps, h = requests_of(period_dir)
     if (s / "relay.json").exists():
@@ -421,7 +442,7 @@ def _session(period_dir: Path, s: Path) -> dict[str, Any]:
             raise RuntimeError(f"the runner relayed prompts {rec['prompts']} for {rec['steps']} steps at H "
                                f"{rec['h']}, and the loop served {prompts} for {steps} at {h}")
     else:
-        rec = relay(s, prompts, steps, h, _periods(period_dir), tools)
+        rec = relay(s, prompts, steps, h, _periods(period_dir), tools, keep=keep)
     strategies, tamper, env = rec["strategies"], rec["tamper"], _env(tools, rec["exes"])
     scratch = Path(tempfile.mkdtemp(prefix="certifier-leg-n2-"))
     try:
@@ -435,7 +456,7 @@ def _session(period_dir: Path, s: Path) -> dict[str, Any]:
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
     if not (s / "n2zk" / "summary.json").exists():
-        raise RuntimeError(f"n2_zk.py prove exited {n2_rc} with no summary ({s / 'n2zk.log'})")
+        raise failed(f"n2_zk.py prove exited {n2_rc} with no summary", s / "n2zk.log", keep)
     rec = {**rec, "n2_exit": n2_rc}
     (s / "session.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     return rec
@@ -519,17 +540,19 @@ def scan_dry(run: Path, log: Path, env: Mapping[str, str] | None = None) -> dict
 
 
 def warden_rehearse(s: Path, prompts: Sequence[int], steps: int, h: int, periods: int, height: int,
-                    strategies: Sequence[str], env: Mapping[str, str] | None = None) -> dict[str, Any]:
+                    strategies: Sequence[str], env: Mapping[str, str] | None = None,
+                    keep: Path | None = None) -> dict[str, Any]:
     """Each strategy's warden run of the prompts into ``s/rehearsal/<strategy>``, a group of them a period, each
     behind its own stub (``honest``, else the stub's ``--tamper``), then the scan's dry chain over its link-window 0
-    (`scan_dry`); the prompts file (``s/prompts.json``) and every run's records stay in ``s``."""
+    (`scan_dry`); the prompts file (``s/prompts.json``) and every run's records stay in ``s``. A step that fails
+    copies its log into ``keep`` (`failed`)."""
     env = dict(env or _traces_env())
     (s / "prompts.json").write_text(json.dumps([[t] for t in prompts]))
     schedule = scan_schedule(env)
     exits, accepted, scans = {}, {}, {}
     for strategy in strategies:
         run = s / "rehearsal" / strategy
-        stub, url = _stub(steps, h, s / f"stub-{strategy}.log", None if strategy == "honest" else strategy)
+        stub, url = _stub(steps, h, s / f"stub-{strategy}.log", None if strategy == "honest" else strategy, keep)
         try:
             exits[strategy] = _run(warden_argv(url, run, s / "prompts.json", len(prompts) * periods, steps, height,
                                                schedule), s / f"rehearse-{strategy}.log", env)
@@ -537,8 +560,8 @@ def warden_rehearse(s: Path, prompts: Sequence[int], steps: int, h: int, periods
             stub.terminate()
             stub.wait()
         if not (run / "check.json").exists():
-            raise RuntimeError(f"warden_serve.py rehearse ({strategy}) exited {exits[strategy]} with no check.json "
-                               f"({s / f'rehearse-{strategy}.log'})")
+            raise failed(f"warden_serve.py rehearse ({strategy}) exited {exits[strategy]} with no check.json",
+                         s / f"rehearse-{strategy}.log", keep)
         accepted[strategy] = json.loads((run / "check.json").read_text()).get("accepted")
         scans[strategy] = scan_dry(run, s / f"scan-{strategy}.log", env)
     return {"prompts": list(prompts), "steps": steps, "h": h, "periods": periods, "height": height,
@@ -591,16 +614,10 @@ def scan_prove(run: Path, s: Path, strategy: str, tools: Mapping[str, str], draw
     return {"exit": rc, "ok": summary.get("ok"), "dir": str(keep), "draw": draw}
 
 
-def scan_free(summary: Mapping[str, Any]) -> int:
-    """The scan's free inputs a link-window, the leg's overcount: each of its T buckets' ingress and egress units' rows
-    (``summary.json``'s ``bits``) but the network certifier's own cells (``row``), which its rows' registrations bind."""
-    return summary["T"] * sum(b for k, b in summary["bits"].items() if k.rsplit("/", 1)[-1] != "row")
-
-
-def scan_window(sess: Mapping[str, Any], strategy: str, delta: Fraction) -> tuple[dict, dict, int] | None:
+def scan_window(sess: Mapping[str, Any], strategy: str, delta: Fraction) -> tuple[dict, dict, dict] | None:
     """Link-window 0's scan registration, its one-stage answer re-decided at ``delta`` (`audit_answer`; a refused
-    audit is a reject for that registration), and its free inputs (`scan_free`); None when the run's scan proved
-    nothing (refused before it registered, or not run)."""
+    audit is a reject for that registration), and its Program's descriptor (``joint/program.json``); None when the
+    run's scan proved nothing (refused before it registered, or not run)."""
     sp = (sess.get("scan_prove") or {}).get(strategy)
     if not sp or not (Path(sp["dir"]) / "honest" / "registration.json").exists():
         return None
@@ -613,7 +630,7 @@ def scan_window(sess: Mapping[str, Any], strategy: str, delta: Fraction) -> tupl
         answer = {"commitment": R.digest(reg), "profile": None, "protocol": ONE_STAGE, "public": None,
                   "reason": f"the scan's audit of link-window 0 refused (scan_zk.py exited {sp['exit']})",
                   "verdict": "reject"}
-    return reg, answer, scan_free(json.loads((d / "summary.json").read_text()))
+    return reg, answer, json.loads((d / "joint" / "program.json").read_text())
 
 
 def warden_tampers() -> list[str]:
@@ -628,17 +645,18 @@ def warden_tampers() -> list[str]:
     return list(got)
 
 
-def warden_session(period_dir: Path) -> dict[str, Any]:
+def warden_session(period_dir: Path, keep: Path | None = None) -> dict[str, Any]:
     """The run's one warden session (module docstring), made at its first period in the runner's scratch beside the
-    period's window (``period_dir.parent``); its record ``session.json`` (`once`)."""
-    return once(period_dir.parent / WARDEN_SESSION, lambda s: _warden_session(period_dir, s))
+    period's window (``period_dir.parent``); its record ``session.json`` (`once`). A step that fails copies its log
+    into ``keep`` (`failed`)."""
+    return once(period_dir.parent / WARDEN_SESSION, lambda s: _warden_session(period_dir, s, keep))
 
 
-def _warden_session(period_dir: Path, s: Path) -> dict[str, Any]:
+def _warden_session(period_dir: Path, s: Path, keep: Path | None = None) -> dict[str, Any]:
     tools, exes = _tools(period_dir), lean_exes()
     prompts, steps, h = requests_of(period_dir)
     rec = warden_rehearse(s, prompts, steps, h, _periods(period_dir), _env_int("CERTIFIER_HEIGHT", 10),
-                          ["honest", *warden_tampers()])
+                          ["honest", *warden_tampers()], keep=keep)
     draw = _env_int("SCAN_DRAW", SCAN_DRAW)
     rec["scan_prove"] = {st: scan_prove(s / "rehearsal" / st, s, st, tools, draw) for st in rec["strategies"]
                          if rec["scan"][st]["accepted"]}
@@ -852,16 +870,34 @@ def _window_buckets(plan: Mapping[str, Any]) -> int:
     return cs.WINDOW_BUCKETS
 
 
-def layout(free: Sequence[int], horizon: int) -> dict[str, Any]:
-    """The layout terms (module docstring): each audit's free inputs and the link's observation horizon."""
-    return {"audits": [{"free": f, "steps": horizon} for f in free], "cells": [], "jitter": 1}
+def layout(free: Sequence[int], programs: Sequence[Mapping[str, Any]], horizon: int) -> dict[str, Any]:
+    """The layout terms (module docstring): each audit's free inputs and Program, and the link's observation horizon."""
+    if len(free) != len(programs):
+        raise ValueError(f"{len(free)} free-input counts for {len(programs)} audits' Programs")
+    return {"audits": [{"free": f, "program": p, "steps": horizon} for f, p in zip(free, programs)], "cells": [],
+            "jitter": 1}
+
+
+def audit_program(period_dir: Path) -> dict[str, Any]:
+    """The period's compute audit's Program, its descriptor: the window's population program rebuilt from its records
+    (`interface.of_records`, each template from Verity's catalog, the record held to the registration), whose SHA-512
+    must be the registration's ``program``."""
+    from verity.ml.circuits import codec
+    from verity.ml.windows import interface as IF
+
+    reg = json.loads((period_dir / "registration.json").read_text())
+    window, _ = IF.of_records(period_dir, reg["law"], IF.resolve)
+    desc = codec.encode_program(window.program)
+    if codec.program_digest(desc) != reg["program"]:
+        raise RuntimeError(f"{period_dir}: the window's records rebuild another Program than its registration's")
+    return desc
 
 
 def case_of(rw: Mapping[str, Any], windows: Sequence[int], audits: Sequence[tuple[dict, dict]], first: int,
-            free: Sequence[int]) -> dict[str, Any]:
+            free: Sequence[int], programs: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """``verity/certifier/v0``'s case (`NetworkCheck.Period`'s formats) of the link-windows ``windows`` of a run
-    (`run_windows`) and the compute ``audits`` (registration, answer), each with its ``free`` inputs (`free_inputs`);
-    the observation horizon is the link-windows' buckets."""
+    (`run_windows`) and the compute ``audits`` (registration, answer), each with its ``free`` inputs (`free_inputs`)
+    and its Program (`audit_program`); the observation horizon is the link-windows' buckets."""
     sys.path.insert(0, str(TRACES))
     import certifier_serve as cs
 
@@ -874,9 +910,9 @@ def case_of(rw: Mapping[str, Any], windows: Sequence[int], audits: Sequence[tupl
     program = {x["registration"]["program"] for x in xs}
     if len(program) != 1:
         raise RuntimeError(f"the link-windows register {len(program)} Programs, not the link's one")
-    params = {**layout(free, len(xs) * cs.WINDOW_BUCKETS), "key": key.public.hex(), "link": dep["links"]["n2"],
-              "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": program.pop(), "session": dep["session"],
-              "sync_set": {"deltas": list(setup.sync_set.deltas),
+    params = {**layout(free, programs, len(xs) * cs.WINDOW_BUCKETS), "key": key.public.hex(),
+              "link": dep["links"]["n2"], "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": program.pop(),
+              "session": dep["session"], "sync_set": {"deltas": list(setup.sync_set.deltas),
                            "rhos": [[r.numerator, r.denominator] for r in setup.sync_set.rhos]},
               "windows": len(xs), "first": first}
     commitment = canonical_json({"audits": [r for r, _ in audits], "windows": [x["registration"] for x in xs]})
@@ -886,13 +922,14 @@ def case_of(rw: Mapping[str, Any], windows: Sequence[int], audits: Sequence[tupl
     return {"commitment": commitment.hex(), "evidence": evidence.hex(), "params": params}
 
 
-def rows_case_of(rw: Mapping[str, Any], windows: Sequence[int], scans: Mapping[int, tuple[dict, dict, int]],
-                 audits: Sequence[tuple[dict, dict]], first: int, free: Sequence[int]) -> dict[str, Any]:
+def rows_case_of(rw: Mapping[str, Any], windows: Sequence[int], scans: Mapping[int, tuple[dict, dict, dict]],
+                 audits: Sequence[tuple[dict, dict]], first: int, free: Sequence[int],
+                 programs: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """``verity/certifier/v0``'s case in the rows form (`NetworkCheck.Period`'s) of a warden run's link-windows
-    ``windows`` (`warden_windows`), each with its scan's registration and answer (``scans[w]``, `scan_window`), and
-    the compute ``audits`` with their ``free`` inputs: the network certifier's one schedule and key from the run's
-    deployment, the scan's layout terms its free inputs over one link-window's buckets, and the audits' horizon the
-    link-windows' buckets."""
+    ``windows`` (`warden_windows`), each with its scan's registration, answer and Program's descriptor (``scans[w]``,
+    `scan_window`), and the compute ``audits`` with their ``free`` inputs and Programs: the network certifier's one
+    schedule and key from the run's deployment, the scan's descriptor, and the audits' horizon the link-windows'
+    buckets."""
     sys.path.insert(0, str(TRACES))
     import warden_serve as WS
 
@@ -902,13 +939,13 @@ def rows_case_of(rw: Mapping[str, Any], windows: Sequence[int], scans: Mapping[i
     key, T = WS.cs.read_public(dep["key"]), dep["params"]["window"]
     N, W, H = dep["key"]["params"]
     xs, sc = [rw["windows"][w] for w in windows], [scans[w] for w in windows]
-    program, scan_free_bits = {r["program"] for r, _, _ in sc}, {f for _, _, f in sc}
-    if len(program) != 1 or len(scan_free_bits) != 1:
-        raise RuntimeError(f"the link-windows' scans register {len(program)} Programs and {len(scan_free_bits)} "
-                           "layouts, not the scan's one")
-    params = {**layout(free, len(xs) * T), "key": key.public.hex(), "link": WS.LINK,
+    program, descs = {r["program"] for r, _, _ in sc}, {canonical_json(d) for _, _, d in sc}
+    if len(program) != 1 or len(descs) != 1:
+        raise RuntimeError(f"the link-windows' scans register {len(program)} Programs and {len(descs)} descriptors, "
+                           "not the scan's one")
+    params = {**layout(free, programs, len(xs) * T), "key": key.public.hex(), "link": WS.LINK,
               "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": program.pop(),
-              "scan": {"free": scan_free_bits.pop(), "steps": T}, "schedule": dict(dep["params"]),
+              "scan": sc[0][2], "schedule": dict(dep["params"]),
               "session": dep["session"], "windows": len(xs), "first": first}
     commitment = canonical_json({"audits": [r for r, _ in audits], "windows": [r for r, _, _ in sc]})
     evidence = canonical_json({"audits": [a for _, a in audits], "windows": [
@@ -1027,8 +1064,9 @@ def match_outputs(requests: Sequence[Mapping[str, Any]], events: Sequence[bytes]
 
 def term_delta(delta: Fraction, terms: int) -> Fraction:
     """The δ each of a case's ``terms`` is decided at for its answer to hold at ``delta``: `NetworkCheck.Period`'s
-    ``eps`` is the sum of its terms' δ (each compute audit's, and in the rows form each link-window's scan's; the clock
-    form's link-window answers add none), so each takes an equal share."""
+    ``eps`` is the sum of its terms' δ (the clock form's compute audits', or the rows form's link-windows' scans', whose
+    compute audits are acceptance conditions in no term; the clock form's link-window answers add none), so each takes
+    an equal share."""
     if terms < 1:
         raise ValueError(f"a case has at least one term, not {terms}")
     return delta / terms
@@ -1099,7 +1137,7 @@ def warden_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     tampered period must be refused. Its answer at δ = 1/100; a period with a link-window the scan didn't answer
     raises (`WARDEN_PENDING`)."""
     index = json.loads((period_dir / "period.json").read_text())["period"]
-    sess = warden_session(period_dir)
+    sess = warden_session(period_dir, out)
     warden_publish(sess, out.parent.parent / WARDEN_SESSION)
     summary: dict[str, Any] = {
         "path": "warden", "stubbed": list(STUBBED["warden"]),
@@ -1120,6 +1158,7 @@ def warden_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
             raise fail(f"scan_zk.py prove of the {name} run's link-window 0 exited {sp['exit']}: a round not as "
                        f"expected, or witness in what the verifier received ({sp['dir']})")
     exe, answer, records = sess["exes"]["network-period"], None, _audit_records(period_dir, out)
+    program = audit_program(period_dir)
     for strategy in sess["strategies"]:
         rw = warden_windows(sess, strategy)
         ws = warden_period_windows(rw["groups"], index, per)
@@ -1136,9 +1175,9 @@ def warden_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
                               "the scan refused link-window 0 before it registered it: no scan answer to decide on")
         else:
             for k, delta in enumerate(DELTAS):
-                d = term_delta(delta, len(records) + len(ws))
+                d = term_delta(delta, len(ws))
                 case = rows_case_of(rw, ws, {0: scan_window(sess, strategy, d)}, _audits(records, d), ws[0],
-                                    [summary["free_inputs"]["bits"]])
+                                    [summary["free_inputs"]["bits"]], [program])
                 a = check(exe, case)
                 holds_at(index, a, delta)
                 name = ("" if strategy == "honest" else f"{strategy}.") + "certifier" + (
@@ -1182,7 +1221,7 @@ def warden_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
 def certifier_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     """The period on `certifier_serve.py`'s certifier-only path (module docstring); its answer at δ = 1/100."""
     index = json.loads((period_dir / "period.json").read_text())["period"]
-    sess = session(period_dir)
+    sess = session(period_dir, out)
     publish(sess, out.parent.parent / SESSION)
     n2 = n2_report(sess)
     tie = tie_of(period_dir, out)
@@ -1199,6 +1238,7 @@ def certifier_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     free = free_inputs(json.loads((period_dir / "circuit.json").read_text()))
     integrity = json.loads((period_dir / "answers" / "sampled-proofs.json").read_text())["verdict"]
     per, exe, records = len(sess["prompts"]), sess["exes"]["network-period"], _audit_records(period_dir, out)
+    program = audit_program(period_dir)
     summary["free_inputs"] = free
     if tie is not None:
         tie["io"] = io(run_windows(sess, tie["strategy"]), index, [tie["window"]], outputs, sess["steps"],
@@ -1231,7 +1271,7 @@ def certifier_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
                                     f"answered {integrity}, so the case decides on its audit")
         for k, delta in enumerate(DELTAS):
             d = term_delta(delta, len(records))
-            case = case_of(rw, ws, _audits(records, d), ws[0], [free["bits"]])
+            case = case_of(rw, ws, _audits(records, d), ws[0], [free["bits"]], [program])
             a = check(exe, case)
             holds_at(index, a, delta)
             suffix = "" if k == 0 else f".delta-{delta.denominator}"
@@ -1292,10 +1332,10 @@ def block_leg(answer: Mapping[str, Any], *, server: str, runs: Sequence[str], so
 __all__ = ["BLOCK_DELTAS", "BLOCK_ERROR_FROM", "DELTAS", "PATHS", "PROTOCOL", "PUBLIC_SESSION", "STUBBED",
            "TAMPERED_WINDOW", "WARDEN_PENDING", "WARDEN_PUBLIC", "WARDEN_TAMPERED_PERIOD", "WARDEN_TAMPERS",
            "answer_of_outcome", "audit_answer", "block_leg", "case_of", "certified_events", "certifier_leg", "check",
-           "relay", "relayed", "tie_holds", "tie_of",
-           "clock_evidence", "free_inputs", "holds_at", "io", "layout", "leg", "loop_units", "match_ids",
+           "relay", "relayed", "tie_holds", "tie_of", "audit_program",
+           "clock_evidence", "failed", "free_inputs", "holds_at", "io", "layout", "leg", "loop_units", "match_ids",
            "match_outputs", "n2_refusal", "n2_report", "once", "period_windows", "publish", "registered_outputs", "requests_of",
-           "rows_case_of", "SCAN_DRAW", "SCAN_KEEP", "scan_dry", "scan_free", "scan_prove", "scan_schedule",
+           "rows_case_of", "SCAN_DRAW", "SCAN_KEEP", "scan_dry", "scan_prove", "scan_schedule",
            "scan_window", "session", "term_delta", "warden_argv", "warden_ids", "warden_io", "warden_leg",
            "warden_period_windows", "warden_publish", "warden_rehearse", "warden_session", "warden_tampers",
            "warden_windows"]
