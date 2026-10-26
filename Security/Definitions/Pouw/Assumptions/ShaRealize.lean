@@ -68,6 +68,11 @@ Open:
   prover. `WorkSound`, at each prover's own `Badv A` and `ξ A`, still holds for it, at whatever bound its own
   `ExtractAdvAt` gives. Letting `Mw w` read the oracle through priced calls closes this, and changes what SAK(matmul)
   and SHA-512's speed quantify over.
+* **The padding's upkeep.** The cost clause charges `ξl` for each of the log's `q` positions, so at one schedule for
+  every prover the dummy queries that pad its segments are charged too, and the log's term in `WorkSoundNoFold`'s `ε`
+  is `k + 1` times the calls'. Charging only the logged calls and evaluations (a count of entries beside `q`), or
+  letting each root come at a stopping time of the log instead of a fixed position (`QueryLog.root_dep`, with
+  `extract_of_ro_roots` over it), would remove the factor.
 -/
 
 namespace Pouw.Assumptions
