@@ -62,7 +62,7 @@ theorem ofJson_asc {d : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
     refine ⟨asc_of_all (FlockSoundness.Discharge.Layout.of_not_not_true ‹¬(!(List.range _).all _) = true›), ?_⟩
-    have hcl := ‹(pure _ : V (Array ℕ)) = Except.ok _›
+    have hcl := ‹(pure _ : Flock.V (Array ℕ)) = Except.ok _›
     simp only [pure, Except.pure, Except.ok.injEq] at hcl
     subst hcl
     first
@@ -134,9 +134,7 @@ theorem asc_of_any {a : Array ℕ} {n : ℕ} {b : Bool}
   refine ⟨hs, fun j hj0 hj => ?_⟩
   have := ha j (by omega)
   by_contra hge
-  first
-  | exact this hj0 (Nat.le_of_not_lt hge)
-  | exact this ⟨hj0, Nat.le_of_not_lt hge⟩
+  exact this hj0 (Nat.le_of_not_lt hge)
 
 set_option maxHeartbeats 4000000 in
 /-- **A registered population's labels ascend, one per instance**: `loadPublic` refuses any other. -/
@@ -184,10 +182,10 @@ theorem setupOne_pub {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables :
     exact ⟨_, pop, FlockSoundness.Discharge.Hidden.loadPublic_nil hl, hn, fun d e => hd d e⟩
   · rw [FlockSoundness.Discharge.HiddenExec.setupOne_public hh] at h
     cases draw with
-    | none => exact ⟨st.c, st.pub, setupH_none h, fun _ => rfl, fun d e => by cases e⟩
+    | none => exact ⟨st.c, st.pub, setupH_none h, fun _ => rfl, fun d (e : (none : Option Lean.Json) = some d) => by cases e⟩
     | some d =>
       obtain ⟨pop, hl, hd⟩ := FlockSoundness.Discharge.Layout.setupH_drawn h
-      exact ⟨st.c, pop, hl, fun e => by cases e, fun d' e => by cases e; exact hd⟩
+      exact ⟨st.c, pop, hl, fun (e : some d = none) => by cases e, fun d' (e : some d = some d') => by cases e; exact hd⟩
 
 /-! ## The setup's label check -/
 
@@ -200,8 +198,6 @@ theorem recSetup_labels {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h 
   all_goals first
     | (cases h; done)
     | (cases h; assumption)
-    | (cases h; exact absurd hi ‹_›)
-    | (cases h; simp only [hi, ↓reduceIte] at *; assumption)
 
 theorem checkLabel_idx {dj : Lean.Json} {pub : Public} {j : ℕ} (h : RecVStar.checkLabel dj pub j = .ok ())
     {D : Draw.UnitDraw} (hD : Draw.UnitDraw.ofJson dj = .ok D) :
@@ -240,7 +236,7 @@ theorem labels_staged {st : RecDeploy.Stage} {s : ℕ} {x xO : Msg} (hS : RecDep
   | some d =>
     rw [hd] at hl
     have hl0 := FlockC3.PubRows.checkLabels_at hl 0 (by simp)
-    rw [show RecVStar.tableDraw d i.base.read.I.count 0 = d by unfold RecVStar.tableDraw; exact if_pos hc] at hl0
+    rw [show RecVStar.tableDraw d i.base.read.I.count 0 = d by unfold RecVStar.tableDraw; exact ite_eq_left hc] at hl0
     change RecVStar.checkLabel d st0.pub 0 = .ok () at hl0
     obtain ⟨D, hD, -, hn, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec (hdr d hd)
     obtain ⟨idx, hidx, rfl⟩ := checkLabel_idx hl0 hD
