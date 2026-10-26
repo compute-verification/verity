@@ -125,11 +125,13 @@ def fast_schemes(card: str) -> tuple:
 
 
 def job(nf, card: str, K: int, N: int, t: int, Lp: int, pv: bool = False, schemes: bool = True,
-        model_sha: bool = True, match: str = "comps", **kw) -> tuple[dict, dict]:
+        model_sha: bool = True, match: str = "comps", sha_scale: float = 1.0, **kw) -> tuple[dict, dict]:
     """nofold's round (16-bit words; PV with the weight side streamed) and D5's job at it. match: 'comps' prices
     nofold's compressions a MAC in D5's units (PROTO-DESIGN-3's v3_caps); 'lane' scales the hashing to nofold's
-    honest ALU-over-tensor load instead (ALGO-COST-2's v3_caps, which carries nofold's η)."""
+    honest ALU-over-tensor load instead (ALGO-COST-2's v3_caps, which carries nofold's η). sha_scale multiplies the
+    compressions, to price a compression at another figure than D5's schedules at θ."""
     r = nf.v2_round(card, K, N, t * Lp, 16, tiles=t, weight_coins=not pv)
+    r = dict(r, comps=r["comps"] * sha_scale)
     c = CARDS[card]
     _, bit, depth = pb.BIT_COST[c.family][0]
     sch = dict(fast_schemes(card)) if schemes else None
@@ -414,6 +416,7 @@ def weighted(rows: list, col: str) -> dict:
 # pub_sha in model units (U13), P-HYB3's rows (A21), advice (P14, L28), the named programs (L3, WORKSOUND-INST-2).
 
 THETA_SHA = {"H200": 38.29, "RTX PRO 6000": 38.11}   # θ's sha_ceiling (CALIB #4513), IMAD.WIDE at two lanes (U13)
+U13_ONE_LANE = {"H200": 35.4, "RTX PRO 6000": 35.6}  # the model's own figure with IMAD.WIDE one imad lane (RT-UNITS)
 
 
 def sha_rows() -> dict:
@@ -569,16 +572,22 @@ def run(nf, quick: bool = False, jobs: int = 1) -> dict:
     res = {}
     res["static"], res["pv"] = rounds(nf, quick, jobs)
     res["sweep"] = sweep(nf, quick, jobs)
+    res["sha"] = sha_rows()
     res["matching"] = {}
     for card in CARDS:
+        best = res["sha"][card]["d5_best"][1]
         for model, shapes in SHAPES.items():
             K, N, _ = shapes[0]
             t, Lp = T_V3[card], V3_STATIC[card][K, N]
-            res["matching"][card, model] = {
-                f"{m}, {s}": analyse(nf, card, K, N, t, Lp, match=m, model_sha=s == "model sha", sens=())["served"]
-                for m in ("comps", "lane") for s in ("model sha", "measured sha")}
+            kw = {f"{m}, {s}": dict(match=m, model_sha=s == "model sha") for m in ("comps", "lane")
+                  for s in ("model sha", "measured sha")}
+            kw["comps at θ's ceiling"] = dict(sha_scale=THETA_SHA[card] / best)
+            kw["comps at U13's one-lane IMAD.WIDE"] = dict(sha_scale=U13_ONE_LANE[card] / best)
+            res["matching"][card, model] = {}
+            for k, a in kw.items():
+                o = analyse(nf, card, K, N, t, Lp, sens=(), fixed=(), **a)
+                res["matching"][card, model][k] = dict(served=o["served"], job=o["job"])
     res["world_x"] = world_x(nf)
-    res["sha"] = sha_rows()
     res["phyb3"] = phyb3_rows(quick)
     res["advice"] = advice_rows(nf)
     res["named"] = named(res) + named(res, "06:37Z")
@@ -646,9 +655,11 @@ def report(res: dict) -> None:
                 own = f"; own QK^T {wx['qk']:.4f} + indexer {wx['indexer']:.4f}" if wx else ""
                 x0 = [r["served"]["X0_macs"] for r in rows if r["w"] > 0]
                 print(f"  {design:8} {card:13} {model:16} X0 {min(x0):.3f}-{max(x0):.3f}{own}")
-    print("\n== hashing matched two ways (frozen-first shape of each model, CMP-118's caps, served c)")
+    print("\n== hashing priced six ways (frozen-first shape of each model, CMP-118's caps), served c / job c; D5 v2 "
+          "prices 'comps, model sha'")
     for (card, model), d in res["matching"].items():
-        print(f"  {card:13} {model:16} " + "; ".join(f"{k}: {v['c']:.4f}" for k, v in d.items()))
+        print(f"  {card:13} {model:16} " + "; ".join(f"{k}: {v['served']['c']:.4f}/{v['job']['c']:.4f}"
+                                                   for k, v in d.items()))
     print("\n== pub_sha (SM-clocks a compression)")
     for card, s in res["sha"].items():
         print(f"  {card}: model {s['model']} (θ), D5's best schedule {s['d5_best'][0]} {s['d5_best'][1]:.2f} "
