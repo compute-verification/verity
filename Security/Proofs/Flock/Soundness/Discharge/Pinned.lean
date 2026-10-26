@@ -44,7 +44,7 @@ theorem PinnedRow.block_eq {r zero : Fin (2 ^ S.kLog)} {a : Fin (2 ^ S.kLog) →
     S.block z o r = 0 ∧ dotProduct a (S.block z o) = 0 := by
   have hr := hz.1 o r
   have hp : dotProduct (fun j => if j = S.pin then (1 : ZMod 2) else 0) (S.block z o) = 1 := by
-    simp [dotProduct, ite_mul, hz.2 o]
+    simpa [dotProduct, ite_mul] using hz.2 o
   rw [mulVec_two S.A₀ h.1, mulVec_two (a := fun j => if j = S.pin then (1 : ZMod 2) else 0) S.B₀ h.2, hp, hzero]
     at hr
   simp only [add_zero] at hr
@@ -58,9 +58,7 @@ theorem window_eq {w j : ℕ} {row sel d y : ℕ → ZMod 2} (hsel : ∀ t < 16 
   intro t ht
   have h := hxor t ht
   rw [hpin t ht, hsel t ht] at h
-  revert h
-  generalize row (16 * w * j + t) = s
-  generalize y t = x
-  fin_cases s <;> fin_cases x <;> decide
+  have key : ∀ s x : ZMod 2, 0 = s + x → x = s := by decide
+  exact key _ _ h
 
 end FlockSoundness.Discharge.Pinned
