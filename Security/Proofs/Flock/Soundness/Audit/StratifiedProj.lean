@@ -38,7 +38,9 @@ theorem stratified_proj_escape (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : 
   have hd : (fun ω : (stratified σ k hk).Ω => Disjoint (ω s).1 B) =
       fun ω => ∀ t ∈ ({s} : Finset (Fin m)), Disjoint (ω t).1 B := by
     funext ω
-    exact propext ⟨fun h t ht => (Finset.mem_singleton.1 ht) ▸ h, fun h => h s (Finset.mem_singleton_self s)⟩
+    refine propext ⟨fun h t ht => ?_, fun h => h s (Finset.mem_singleton_self s)⟩
+    obtain rfl := Finset.mem_singleton.1 ht
+    exact h
   rw [hd]
   refine (prCoin_pi_forall (Ω := fun s => ((stratum σ s).powersetCard (k s))) {s}
     (fun s S => Disjoint S.1 B)).trans ?_
@@ -72,7 +74,8 @@ theorem stratified_escape_eq_exp (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk 
     (stratified σ k hk).escape B =
       ENNReal.ofReal (Real.exp (-∑ s, stratumRisk σ k s (B.filter (σ · = s)).card)) := by
   rw [stratified_escape, ← Finset.sum_neg_distrib, Real.exp_sum,
-    ENNReal.ofReal_prod_of_nonneg (fun s _ => (Real.exp_pos _).le)]
+    ENNReal.ofReal_prod_of_nonneg (f := fun s => Real.exp (-stratumRisk σ k s (B.filter (σ · = s)).card))
+      (fun s _ => (Real.exp_pos _).le)]
   refine Finset.prod_congr rfl fun s _ => ?_
   unfold stratumRisk
   exact choose_div_eq_exp (hc s)
