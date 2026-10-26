@@ -38,9 +38,10 @@ tar -c --exclude=./.git --exclude=./.venv --exclude=./out --exclude=.lake . | "$
 LISTEN=0.0.0.0:$PORT TARGET=$ADDR:$PORT LINK=()
 if [ "$TUNNEL" = 1 ]; then
   LPORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
-  # Not a control master (-M): ssh -N sets TCP_NODELAY on its connection only when it isn't one, and without it a read
-  # waits out the peer's delayed ACK (r20261026-092852-4c4d: one round trip of 41.5 ms, past the 20 ms deadline).
-  "${SSHO[@]}" -N -o ExitOnForwardFailure=yes -L "127.0.0.1:$LPORT:127.0.0.1:$PORT" "${TO[@]}" &
+  # AES-GCM, not ssh's default chacha20-poly1305, which rekeys after each 1 GiB: a rekey inside the reads holds one past
+  # the 20 ms deadline (r20261026-092852-4c4d, r20261026-093246-fcfd: read 1536 of a 1 GiB fill, 41.5 and 41.7 ms).
+  "${SSHO[@]}" -N -c aes128-gcm@openssh.com -o ExitOnForwardFailure=yes -L "127.0.0.1:$LPORT:127.0.0.1:$PORT" \
+    "${TO[@]}" &
   TPID=$!
   for _ in $(seq 100); do
     python3 -c 'import socket, sys; socket.create_connection(("127.0.0.1", int(sys.argv[1])), 1).close()' "$LPORT" \
