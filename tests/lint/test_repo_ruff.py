@@ -13,7 +13,8 @@ RUF100's stale ``# noqa``).
 
 The ratchet gate (``integrations/vllm/tools/ratchet_gate.py``) refuses a change that grows the list, and judges a change to this
 module, to ``ruff.toml`` or to the ruff pin by running this lint as the change's base has it on the change's tree.  So it imports
-only the standard library and pytest, and ``test_no_new_findings`` takes no fixture.
+only the standard library and pytest, and ``test_no_new_findings`` takes no fixture.  The gate also lints the Python a PR
+changes outside ``LEFT_OUT``, which it reads from the base's copy of this module, and refuses a PR whose findings grow.
 
     python3 tests/lint/test_repo_ruff.py --prune   # delete and lower what this tree no longer finds: the list only shrinks
     python3 tests/lint/test_repo_ruff.py --write   # the list as this tree's findings, for a move: the gate refuses one that grows it

@@ -6,8 +6,8 @@
 # ARG002, E702, E741, PERF203) have thousands of findings the code never suppressed, so they're off and those comments are stale.
 # Two lints hold the findings to lists that only shrink: integrations/vllm/tests/lint/test_ruff.py the integration's (and
 # verity/ml/definitions'), tests/lint/test_repo_ruff.py every other tracked file's. The ratchet gate
-# (integrations/vllm/tools/ratchet_gate.py) judges a change here by running the base's copy on the change's tree. The formatter
-# stays off.
+# (integrations/vllm/tools/ratchet_gate.py) judges a change here by running the base's copy on the change's tree, and refuses a
+# PR whose own Python outside the integration's lint gains a finding under main's copy. The formatter stays off.
 target-version = "py312"
 # the same files on every machine, whatever a checkout ignores
 respect-gitignore = false

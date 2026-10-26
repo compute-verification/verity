@@ -35,21 +35,33 @@ allowlist, and every change is judged by it: in the ``*.py`` files it touches un
 no more ``noqa`` comments (``# noqa``, ``# noqa: CODE``, a file's ``# ruff: noqa``) than it removes.  A line is matched by its stripped text, codes included, so one
 that moves with its code counts as kept, and deleting a stale ``noqa`` pays for a new one.
 
+The top change's Python is linted too (the vLLM coordinator, 26 Oct 22:45Z: drive lands before the suites run, so a new
+finding would land and be reverted), when its base has the repository's ruff lint: each ``*.py`` and ``*.pyi`` file the change
+adds or modifies outside that lint's ``LEFT_OUT`` (the integration's ruff lint's files, and ``archive/``) is checked by ruff
+under the base's root ``ruff.toml``, as it is before the change and after it, and the change fails when any (file, rule) count
+grows, naming each new finding ``file:line RULE message``.  A renamed file's before is its old path's (``git diff -M``), so a
+move keeps its findings, and a file the change doesn't touch is never linted.  Only the top change is linted: a PR's own
+commits at the preflight, its merge onto `next` at the sync, where the members below were linted at their own merges.
+
 Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR title starts ``Revert``) and a pure move that
 BASE's ``tools/verity/check/move_check.py`` certifies.
 
 It runs on git, in the repository of the current directory, and runs no code but the base's (its lints and the ruff it pins,
 and BASE's move_check), so the merge queue runs `main`'s copy of it, which a PR can't weaken, on `main` and a PR's head (or,
 at the sync, its merge onto `next`, each member below judged again) as it admits the PR (a landing gate in drive.toml's ``landing_gates``: `research queue ready`'s preflight refuses the mark, and the
-sync onto `next` leaves the PR out).  The lints run on the Python that runs it, the ruff lint too when that Python's ruff is
-the base's pin, else on one ``uv run --with`` gives the pin.  Before marking a branch, run
+sync onto `next` leaves the PR out).  The lints run on the Python that runs it, and ruff (the ruff lints, and the source lint)
+on the first Python whose ``-m ruff`` is the base's pin: this one, else one ``uv run --offline --with`` makes from uv's cache,
+else one ``uv run --with`` fetches the pin for (the network, once per uv cache).  Before marking a branch, run
 ``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes, 1 when one fails
-(with the fix), 2 on a usage or git error, or when the base's lints can't run (the ruff lint, with no ``uv``).  ``--json``
-prints `KIND`, whose ``failures`` name each failing change's top ``commit``.
+(with the fix), 2 on a usage or git error, or when the base's lints or ruff can't run (with the fix for the host), which the
+sync takes as a refusal: the gate never passes what it couldn't judge.  ``--json`` prints `KIND`, whose ``failures`` name
+each failing change's top ``commit``.
 """
 from __future__ import annotations
 
 import argparse
+import ast
+import functools
 import io
 import json
 import re
@@ -75,6 +87,10 @@ PYPROJECT = "pyproject.toml"
 REPO_LINT = "tests/lint"
 REPO_RUFF_LINT = "repo_ruff"
 REPO_RUFF_CONFIG = "ruff.toml"
+#: the repository's ruff lint's module, whose ``LEFT_OUT`` says which files the source lint leaves to others
+REPO_RUFF_MODULE = f"{REPO_LINT}/test_{REPO_RUFF_LINT}.py"
+#: a git tree entry's modes that are a file ruff reads (a symlink or a submodule isn't)
+FILE_MODES = {"100644", "100755"}
 #: the lint directories, each run as its base has it
 LINTS = (LINT, REPO_LINT)
 #: each ruff lint's directory and the configs it reads: the integration's extends the root's
@@ -226,6 +242,8 @@ class Change:
     noqa_added: int = 0
     noqa_removed: int = 0
     pooled: list[str] = field(default_factory=list)
+    #: the files the source lint read (None: it didn't run, below the top or with no repository ruff lint at the base)
+    linted: list[str] | None = None
 
     @property
     def name(self) -> str:
@@ -234,7 +252,7 @@ class Change:
     def doc(self) -> dict:
         return {"name": self.name, "commit": self.hi, "base": self.lo, "pr": self.pr, "verdict": self.verdict, "why": self.why,
                 "before": self.before, "after": self.after, "touched": self.touched, "lints": self.lints, "fix": self.fix,
-                "noqa_added": self.noqa_added, "noqa_removed": self.noqa_removed, "pooled": self.pooled}
+                "noqa_added": self.noqa_added, "noqa_removed": self.noqa_removed, "pooled": self.pooled, "linted": self.linted}
 
 
 def merge_base(base: str, top: str) -> str:
@@ -343,18 +361,40 @@ def ruff_pin(rev: str) -> str | None:
     return next((d for d in dev if isinstance(d, str) and re.split(r"[\s=<>!~;\[]", d, maxsplit=1)[0] == "ruff"), None)
 
 
-def python_for(pin: str | None, slugs: list[str] | None) -> list[str]:
-    """The isolated Python the base's lints run on: this one, unless a ruff lint is to run and this Python's ruff isn't
-    the base's ``pin``, when ``uv run --with`` makes one that has it."""
-    if pin is None or (slugs is not None and not RUFF_LINTS.keys() & set(slugs)):
-        return [sys.executable, "-I"]
-    r = subprocess.run([sys.executable, "-m", "ruff", "--version"], capture_output=True, text=True)
-    if r.returncode == 0 and pin.startswith("ruff==") and r.stdout.split() == ["ruff", pin.removeprefix("ruff==").strip()]:
-        return [sys.executable, "-I"]
+def has_ruff(python: tuple[str, ...], pin: str, exact: bool) -> bool:
+    """Whether ``python -m ruff`` runs, and, ``exact``, is the version ``pin`` (``ruff==X``) names."""
+    try:
+        r = subprocess.run([*python, "-m", "ruff", "--version"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    except OSError:
+        return False
+    return r.returncode == 0 and (not exact or r.stdout.split() == ["ruff", pin.removeprefix("ruff==").strip()])
+
+
+@functools.lru_cache(maxsize=None)
+def ruff_python(pin: str) -> tuple[str, ...]:
+    """The isolated Python whose ``-m ruff`` is ``pin``, with no network when one has it: this one, else one ``uv run
+    --offline --with`` makes from uv's cache, else one ``uv run --with`` fetches the pin for."""
+    if pin.startswith("ruff==") and has_ruff((sys.executable, "-I"), pin, exact=True):
+        return sys.executable, "-I"
+    fix = (f"install it where the gate's Python finds it, `uv pip install --python {sys.executable} --break-system-packages "
+           f"{pin}`, and the gate needs neither uv nor the network")
     uv = shutil.which("uv")
     if uv is None:
-        raise GitError(f"the base's ruff lint runs {pin}, which {sys.executable} lacks, and there is no `uv` to provide it")
-    return [uv, "run", "--no-project", "--quiet", "--python", sys.executable, "--with", pin, "--", "python", "-I"]
+        raise GitError(f"the base's ruff is {pin}, which {sys.executable} lacks, and there is no `uv` to provide it: {fix}")
+    for offline in (("--offline",), ()):
+        python = (uv, "run", "--no-project", "--quiet", "--python", sys.executable, *offline, "--with", pin, "--", "python", "-I")
+        if has_ruff(python, pin, exact=False):
+            return python
+    raise GitError(f"the base's ruff is {pin}, which neither {sys.executable} nor `uv run --with` (from uv's cache, then the "
+                   f"index) provides here: {fix}")
+
+
+def python_for(pin: str | None, slugs: list[str] | None) -> list[str]:
+    """The isolated Python the base's lints run on: this one, unless a ruff lint is to run under the base's ``pin``, when it
+    is the one ``ruff_python`` finds."""
+    if pin is None or (slugs is not None and not RUFF_LINTS.keys() & set(slugs)):
+        return [sys.executable, "-I"]
+    return list(ruff_python(pin))
 
 
 def noqa_lines(rev: str, path: str) -> list[tuple[int, str]]:
@@ -399,6 +439,104 @@ def noqa_change(lo: str, hi: str, diff: list[str]) -> tuple[list[str], int, int]
                 picked.add((f, n))
     named = [f"{f.removeprefix(f'{INTEGRATION}/')}:{n}: {text}" for f, n, text in now if (f, n) in picked]
     return named, sum(added.values()), sum(removed.values())
+
+
+def left_out(rev: str) -> tuple[str, ...] | None:
+    """The path prefixes the repository's ruff lint at ``rev`` leaves out (its ``LEFT_OUT``), or None when ``rev`` has no
+    such lint, or no root ``ruff.toml`` for it to read."""
+    try:
+        git("cat-file", "-e", f"{rev}:{REPO_RUFF_CONFIG}")
+        source = git("show", f"{rev}:{REPO_RUFF_MODULE}")
+    except GitError:
+        return None
+    try:
+        for node in ast.parse(source).body:
+            if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "LEFT_OUT" for t in node.targets):
+                left = ast.literal_eval(node.value)
+                if isinstance(left, tuple) and all(isinstance(p, str) for p in left):
+                    return left
+    except (SyntaxError, ValueError):
+        pass
+    raise GitError(f"{REPO_RUFF_MODULE} at {rev[:12]} has no LEFT_OUT tuple of path prefixes, so the gate can't tell which "
+                   f"files its ruff lint holds")
+
+
+def changed_sources(lo: str, hi: str, left: tuple[str, ...]) -> list[tuple[str, str | None, str]]:
+    """(path, its blob before or None, its blob after) of each ``*.py`` and ``*.pyi`` file ``lo..hi`` adds or modifies outside
+    ``left``.  A renamed file's blob before is its old path's, so a move keeps its findings."""
+    fields = git("diff", "--raw", "-z", "-M", "--no-abbrev", lo, hi).split("\0")
+    out, i = [], 0
+    while i + 1 < len(fields):
+        old_mode, new_mode, old, new, status = fields[i].lstrip(":").split()
+        n = 2 if status[0] in "RC" else 1
+        path, i = fields[i + n], i + 1 + n
+        if new_mode in FILE_MODES and path.endswith((".py", ".pyi")) and not path.startswith(left):
+            out.append((path, old if old_mode in FILE_MODES and status[0] != "C" else None, new))
+    return out
+
+
+def blobs(shas: set[str]) -> dict[str, bytes]:
+    """Each blob in ``shas``, read by one ``git cat-file --batch``."""
+    order = sorted(shas)
+    r = subprocess.run(["git", "cat-file", "--batch"], input="".join(f"{s}\n" for s in order).encode(), capture_output=True)
+    out, data, at = {}, r.stdout, 0
+    for s in order:
+        end = data.find(b"\n", at)
+        head = data[at:end].split()
+        if r.returncode or len(head) != 3:
+            raise GitError(f"git cat-file --batch: {s} unreadable ({r.stderr.decode(errors='replace').strip()[-300:]})")
+        size = int(head[2])
+        out[s], at = data[end + 1:end + 1 + size], end + 2 + size
+    return out
+
+
+def ruff_findings(ruff: list[str], config: str, files: dict[str, bytes]) -> list[tuple[str, str, int, str]]:
+    """(file, rule, line, message) of each finding ``ruff`` makes on ``files`` (path: content), laid out as in the tree with
+    ``config`` as the root ``ruff.toml``, as the repository's ruff lint runs it."""
+    if not files:
+        return []
+    with tempfile.TemporaryDirectory(prefix="ratchet-gate-ruff-") as d:
+        root = Path(d).resolve()
+        for path, data in files.items():
+            (root / path).parent.mkdir(parents=True, exist_ok=True)
+            (root / path).write_bytes(data)
+        (root / REPO_RUFF_CONFIG).write_text(config, encoding="utf-8")
+        r = subprocess.run([*ruff, "check", "--config", REPO_RUFF_CONFIG, "--no-cache", "--exit-zero", "--output-format",
+                            "json", "--", *sorted(files)], cwd=root, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        try:
+            found = json.loads(r.stdout) if r.returncode == 0 else None
+        except ValueError:
+            found = None
+        if not isinstance(found, list):
+            raise GitError(f"ruff check exited {r.returncode} on the change's Python: {(r.stderr or r.stdout).strip()[-300:]}")
+        return [(Path(f["filename"]).resolve().relative_to(root).as_posix(), f["code"] or "syntax-error", f["location"]["row"],
+                 f["message"]) for f in found]
+
+
+def source_lint(c: Change, base: str) -> tuple[list[str], list[str]]:
+    """(each finding the change adds, ``file:line RULE message``; each (file, rule) that grew, with its counts): ruff under the
+    base's root ``ruff.toml`` on the Python the change adds or modifies that the base's repository ruff lint holds, before
+    and after.  Of a grown key's findings, those on lines the change adds are named first.  Sets ``c.linted``."""
+    left = left_out(base)
+    if left is None:
+        return [], []
+    sources = changed_sources(c.lo, c.hi, left)
+    c.linted = [path for path, *_ in sources]
+    if not sources:
+        return [], []
+    config = git("show", f"{base}:{REPO_RUFF_CONFIG}")
+    data = blobs({b for _, lo, hi in sources for b in (lo, hi) if b})
+    ruff = [*python_for(ruff_pin(base), [REPO_RUFF_LINT]), "-m", "ruff"]
+    was = Counter((f, rule) for f, rule, *_ in ruff_findings(ruff, config, {p: data[lo] for p, lo, _ in sources if lo}))
+    now = ruff_findings(ruff, config, {p: data[hi] for p, _, hi in sources})
+    counts = Counter((f, rule) for f, rule, *_ in now)
+    grown = sorted(k for k in counts if counts[k] > was[k])
+    named = []
+    for f, rule in grown:
+        fresh = added_rows(c.lo, c.hi, f)
+        sites = sorted((line not in fresh, line, message) for g, r, line, message in now if (g, r) == (f, rule))
+        named += [(f, line, f"{f}:{line} {rule} {message}") for _, line, message in sites[:counts[f, rule] - was[f, rule]]]
+    return [n for *_, n in sorted(named)], [f"{f} {rule} {was[f, rule]} -> {counts[f, rule]}" for f, rule in grown]
 
 
 def lint_selection(touched: list[str], lint: str = LINT) -> list[str] | None:
@@ -460,15 +598,18 @@ def violations(failures: list[dict]) -> list[str]:
     return out
 
 
-def judge(c: Change, base: str) -> None:
+def judge(c: Change, base: str, top: bool = False) -> None:
+    """Sets ``c``'s verdict, why and fix; ``top``: ``c`` is the top change, whose Python the source lint reads."""
     diff = git("diff", "--no-renames", "--name-only", "-z", c.lo, c.hi).split("\0")
     c.touched = sorted(f for f in diff if f and (is_ratchet(f) or is_lint_code(f) or f in (RUFF_CONFIG, REPO_RUFF_CONFIG)
                                                  or f == PYPROJECT and ruff_pin(c.lo) != ruff_pin(c.hi)))
     new_noqa, c.noqa_added, c.noqa_removed = noqa_change(c.lo, c.hi, diff)
     noqa = [f"{c.noqa_added} `# noqa` line(s) added, {c.noqa_removed} removed"] if c.noqa_added or c.noqa_removed else []
-    if not c.touched and not noqa:
+    new_findings, ruff_grown = source_lint(c, base) if top else ([], [])
+    if not c.touched and not noqa and not c.linted:
         c.verdict, c.why = "untouched", (f"changes no ratchet, no lint code under {' or '.join(f'{x}/' for x in LINTS)}, no "
-                                         f"{RUFF_CONFIG} or {REPO_RUFF_CONFIG}, no ruff pin and no `# noqa` under {INTEGRATION}/")
+                                         f"{RUFF_CONFIG} or {REPO_RUFF_CONFIG}, no ruff pin and no `# noqa` under {INTEGRATION}/"
+                                         + (", and no Python the repository's ruff lint holds" if c.linted == [] else ""))
         return
     grown, added, bad, found = [], [], [], []
     if c.touched:
@@ -483,10 +624,11 @@ def judge(c: Change, base: str) -> None:
         if selection:
             c.lints, failures = base_lints(c, selection, after)
             found = violations(failures)
-    if not (grown or bad or noqa_grows or found):
+    if not (grown or bad or noqa_grows or found or new_findings):
         c.verdict, c.why = "passed", "; ".join(
             ([f"{c.before} -> {c.after} ratchet exceptions"] if c.touched else []) + [f"pooled: {p}" for p in c.pooled] + noqa
-            + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"] if c.lints else []))
+            + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"] if c.lints else [])
+            + ([f"ruff finds nothing new in the {len(c.linted)} Python file(s) it changes"] if c.linted else []))
         return
     if is_revert(c):
         c.verdict, c.why = "exempt", "a revert"
@@ -507,20 +649,26 @@ def judge(c: Change, base: str) -> None:
                  f"exception, so fix the finding each new one suppresses, or delete a stale noqa elsewhere in the same change "
                  f"(a noqa line that moves with its code counts as kept)")
         c.fix = new_noqa[:CHEAPEST] + ([f"... and {len(new_noqa) - CHEAPEST} more"] if len(new_noqa) > CHEAPEST else [])
-    else:
+    elif found:
         moves = git("diff", "--name-only", "-M", "--diff-filter=R", c.lo, c.hi).strip()
         c.why = (f"the base's lint code ({c.lo[:12]}) finds {len(found)} violation(s) on its tree that its allowlists don't "
                  f"cover: a change to a lint is judged like source, so fix the code or keep the lint and its entries"
                  + (f" (a layout move, whose lints move with it, is exempt once `python3 {MOVE_CHECK} {c.lo[:12]} "
                     f"{c.hi[:12]}` certifies it)" if moves else ""))
         c.fix = found[:CHEAPEST] + ([f"... and {len(found) - CHEAPEST} more"] if len(found) > CHEAPEST else [])
+    else:
+        c.why = (f"adds {len(new_findings)} ruff finding(s) to the Python it changes, under the base's root {REPO_RUFF_CONFIG} "
+                 f"({'; '.join(ruff_grown)}): fix the code (`ruff check --fix PATH` fixes some, F401 and F541 among them), or, "
+                 f"where a rule is wrong for that line, say why in a `# noqa: CODE` on it")
+        c.fix = new_findings[:CHEAPEST] + ([f"... and {len(new_findings) - CHEAPEST} more"]
+                                           if len(new_findings) > CHEAPEST else [])
 
 
 def gate(base: str, top: str) -> dict:
     base, top = (git("rev-parse", "--verify", f"{r}^{{commit}}").strip() for r in (base, top))
     cs = changes(base, top)
     for c in cs:
-        judge(c, base)
+        judge(c, base, top=c.hi == top)
     failed = [c for c in cs if c.verdict == "failed"]
     return {"kind": KIND, "base": base, "top": top, "changes": [c.doc() for c in cs],
             "failures": [{"commit": c.hi, "pr": c.pr, "why": c.why, "fix": c.fix} for c in failed]}

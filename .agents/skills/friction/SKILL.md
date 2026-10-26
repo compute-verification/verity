@@ -146,7 +146,9 @@ Landing:
   retirement. The ratchet gate counts them, with no allowlist.
 - (26 Oct, the vLLM coordinator, rolling out Daniel's 25 Oct ask for vLLM's practices repo-wide) One ruff rule set, the root
   `ruff.toml`: the rest of the tree (all but the integration's lint and `archive/`) is held to the no-growth list
-  `tests/lint/allowlists/repo_ruff.json` by the same gate; its `noqa` lines aren't counted.
+  `tests/lint/allowlists/repo_ruff.json` by the same gate; its `noqa` lines aren't counted. Since drive lands before the
+  suites run, the gate lints each PR's own changed Python too (22:45Z), and refuses a PR whose ruff findings under the root
+  config grow, per file and rule: the fix is the code, never the list.
 
 Protocols and claims:
 

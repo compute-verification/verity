@@ -52,6 +52,11 @@ longer finds. Exempt are reverts and pure moves that `tools/verity/check/move_ch
 PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. `tools/verity/check/drive.toml`'s `landing_gates` names
 it, so the merge queue runs `integrations/vllm/tools/ratchet_gate.py` from `main` when a PR is marked ready and when it is merged onto `next`,
 and refuses a PR that grows a ratchet (naming the entries it added) or that the base's lints refuse (naming each violation).
+It lints the PR's own Python too (the vLLM coordinator, 26 Oct 22:45Z: drive lands before the suites run): ruff, under `main`'s
+root `ruff.toml`, on each `*.py` file the PR adds or modifies outside this lint's files and `archive/`, before and after, and
+a PR whose (file, rule) count grows is refused, naming each new finding `file:line RULE message`. Fix the code; the list
+never takes a new finding. A renamed file keeps its findings, and a file the PR doesn't touch is never linted. If ruff
+can't run where drive runs the gate, the gate can't judge, and the sync leaves the PR out.
 Before marking, run `python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD`.
 
 **A `# noqa` is an exception too** (the vLLM coordinator, 25 Oct 11:20Z). In `integrations/vllm`, a change may add no more
