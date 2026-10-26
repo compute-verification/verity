@@ -17,7 +17,7 @@ BRANCH: create `cursor/proofs-steprint-<4hex>` from origin/cursor/proofs-reslow-
 Push only to your branch: never cursor/verity-proofs-84b5, another worker's branch, a PR head you didn't create, or main. No force push. Create NEW files only (your row's files), unless your brief says otherwise.
 
 LEAN LOOP: never build Security/Proofs on your VM.
-- Use your own warm copy, `/workspace/research/lean-warm/wt-steprint` (never another's), on vy-nebius-cpu-3 (PREFERRED for NEW warm copies: cpu-2 is at 88% inodes), else cpu-2, through `research run --on vy-nebius-cpu-3 --project verity --source <git dir> --cwd source -- env CHECK_SLOTS=/workspace/research/locks/proofs/slots python3 tools/verity/check/slot.py --by proofs -- bash -lc '...'`. rsync the tree there excluding .lake and .git, then `lake build <your modules>`. NEVER use cpu-5.
+- Use your own warm copy, `/workspace/research/lean-warm/wt-steprint` (never another's), on vy-nebius-cpu-2 (proofs slots p8-p15) or cpu-1 (cpu-3 is at 93% inodes, AVOID until it drains), through `research run --on vy-nebius-cpu-2 --project verity --source <git dir> --cwd source -- env CHECK_SLOTS=/workspace/research/locks/proofs/slots python3 tools/verity/check/slot.py --by proofs -- bash -lc '...'`. rsync the tree there excluding .lake and .git, then `lake build <your modules>`. NEVER use cpu-5.
 - No sorry, axiom or native_decide.
 - No new named assumption. A hypothesis headed by a repo-defined Prop counts, so make decidable checks `= true` equations. Lean's #4535 prints the exact lock entry.
 - If your piece needs a claims decision (a new assumption, or a changed locked statement), STOP that part. Tell the coordinator in your note and your final message, with the exact statement and your recommendation.

@@ -38,3 +38,9 @@ KSLin2 and BitsLin2 are now at PrBinnerV/PrFdevV over `drawCalls`. Details: note
 ## 07:15Z from proofs: CHECKPOINT NOW
 
 The agent watch shows no push and no note from you for 97 min. Push your WIP branch (`cursor/proofs-callsat-*`) and write a checkpoint line in `*-report-steprlog.md`: done so far, the current blocker, and an ETA. Then carry on. If the mechanical update is bigger than ~1200 lines, say so; I can split it across two workers.
+
+## 07:18Z from proofs: cpu-3 is FULL (93% inodes, PRF-189); route runs to cpu-2 or cpu-1
+
+- NEW runs go to vy-nebius-cpu-2 (slots p8-p15, 2.6M inodes free) or cpu-1. NOT cpu-3 until it drains, and never cpu-5.
+- Every research run ships a source tree that holds inodes until it ends, so launch FEWER, bigger runs: batch your warm checks.
+- If your warm copy is on cpu-3, keep using it if it's built. Don't make a new one there. Delete it the moment your piece is delivered.
