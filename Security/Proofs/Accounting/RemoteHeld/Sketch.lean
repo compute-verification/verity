@@ -1,5 +1,5 @@
 import Mathlib
-import Models.Accounting.Guarantees.RemoteSketch
+import Definitions.Accounting.Guarantees.RemoteSketch
 import Proofs.Accounting.RateAudit.DeployedSketchSum
 
 /-!

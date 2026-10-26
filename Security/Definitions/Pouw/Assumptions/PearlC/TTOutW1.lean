@@ -7,7 +7,7 @@ import Definitions.Pouw.PearlC.W1
 /-!
 # TT_OUT at W1 (trusted; named assumptions, `Prop`s taken as hypotheses, never `axiom`s)
 
-`TTOut` (`Models.Pouw.Assumptions.PearlC.TTOut`) is stated over any `CostModel`, and which one it is believed at (W1 at
+`TTOut` (`Definitions.Pouw.Assumptions.PearlC.TTOut`) is stated over any `CostModel`, and which one it is believed at (W1 at
 the device's measured prices) is prose in its docstring. Here that cost model is a term: TT_OUT's game with
 `CM := W1.w1Priced dv salt`, the W1 machine on the device `dv` with the salt's bytes `salt`, priced with no refund
 (Daniel, item 9). A strategy's cost is W1's cost, so an attack on these assumptions is a W1 program.

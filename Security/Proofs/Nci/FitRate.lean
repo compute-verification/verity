@@ -1,4 +1,4 @@
-import Models.Nci.Guarantees.FitRate
+import Definitions.Nci.Guarantees.FitRate
 import Proofs.Accounting.Actual.Windows
 import Proofs.Nci.Fit
 

@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.TS.Steer
+import Definitions.Accounting.Guarantees.TS.Steer
 import Proofs.Accounting.TS.Stages
 
 /-!

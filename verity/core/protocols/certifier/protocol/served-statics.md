@@ -33,7 +33,7 @@ sample.
 **Positions.** The tie reads the Programs' positions, which are public, and binds no position leaf of the Commit. On vllm's
 eager path a Program's RoPE positions are static structure (`RotaryEmbeddingRule` refuses computed ones), so no eager
 Program reads a committed position. The compiled path's RoPE reads ``c00.input/positions``, a committed value
-(`verity_vllm.predict.compiled`). For a compiled-path window the committed positions are what the compute read, and the
+(`verity_vllm.program.predict.compiled`). For a compiled-path window the committed positions are what the compute read, and the
 routed tie holds the served rows to them.
 
 **Idle blocks are proved.** Every block of every window is a unit, under `Selection` All, the idle blocks too. A step

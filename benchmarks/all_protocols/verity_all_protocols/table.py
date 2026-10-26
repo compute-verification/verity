@@ -55,8 +55,9 @@ TABLE: tuple[Entry, ...] = (
     Entry("integrity", "sampled-proofs", "compute-accounting"),
     Entry("work", "pouw", "compute-accounting"),
     Entry("space", "pous", "memory-accounting"),
-    Entry("bandwidth", "bandwidth", "memory-accounting", onsite=False),
+    Entry("bandwidth", "bandwidth", "memory-accounting"),
     Entry("communication", "certifier", "network-accounting"),
+    Entry("wipe", "wipe", "memory-accounting", onsite=False),
 )
 
 

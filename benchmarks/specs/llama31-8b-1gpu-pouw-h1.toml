@@ -1,7 +1,7 @@
 schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama31-8b-1gpu-pouw-h1"
-# PoUW's H1 + fx1 (`pouw:eps1-sm120-h1fx1`, `verity_vllm.protocol_options.pouw_h1`) on the eager int8_exact engine of the
+# PoUW's H1 + fx1 (`pouw:eps1-sm120-h1fx1`, `verity_vllm.protocols.pouw.h1`) on the eager int8_exact engine of the
 # int8 Llama-3.1-8B pin (int8_exact "all": every linear and attention layer on the plain exact-int8 arm), timed against
 # that engine without PoUW (`stock-int8`), its token control: H1's arm serves its own y, so its tokens must equal exact
 # int8's on every gate and timed rep. T (`rows`) is the engine's max_num_batched_tokens, 64 as in kernels' served_h1 and

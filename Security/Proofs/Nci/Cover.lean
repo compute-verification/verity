@@ -29,19 +29,19 @@ Each piece is its own file. The steps every tier shares: paths into a block (`Pa
 products it finishes (`Charge`), the per-block area count and the sum over a cover (`Area`), the additive charge's two
 steps (`Additive`), and a witness that `UpdateHardness` and the upstream certificate hold together (`Witness`). `Gates`
 relates this vocabulary to Daniel's (`Nci.Covering`) on a declaration's gates: inference blocks, covers and
-parameter-hardness agree. The additive covering bound (`Models.Nci.Guarantees.CoverAdditive`), stated in Daniel's
+parameter-hardness agree. The additive covering bound (`Definitions.Nci.Guarantees.CoverAdditive`), stated in Daniel's
 vocabulary, is `CoveringAdditive`, with its witness (`CoveringAdditiveWitness`). The fan-in/fan-out bounds
-(`Models.Nci.Guarantees.CoverFanOut`) have their plan (`FanOutPlan`), its pieces (`FanOutWalk`, `FanOutRootCost`), the
+(`Definitions.Nci.Guarantees.CoverFanOut`) have their plan (`FanOutPlan`), its pieces (`FanOutWalk`, `FanOutRootCost`), the
 bounds (`FanOut`), their witness (`FanOutWitness`), and the key chains' one spent value each (`FanOutChain`). The read
-tier from wiring (`Models.Nci.Guarantees.CoverFanOutValue`) is `FanOutValue`, with its witness
-(`FanOutValueWitness`). The partial-sum bounds (`Models.Nci.Guarantees.CoverPartialSum`) have their pieces
+tier from wiring (`Definitions.Nci.Guarantees.CoverFanOutValue`) is `FanOutValue`, with its witness
+(`FanOutValueWitness`). The partial-sum bounds (`Definitions.Nci.Guarantees.CoverPartialSum`) have their pieces
 (`PartialSumRead`, `PartialSumCube`, `PartialSumRate`, `PartialSumCover`, `PartialSumKeyed`), the bounds (`PartialSum`)
 and their witness (`PartialSumWitness`). `Bits` translates a declaration's gates to the bits the cover theorem counts:
 the block of a set of gates, what it computes and what it is handed. `Sum` adds the per-block bounds over a division at
 the NCI policy's rate. `Training` joins them to a declaration that complies with the NCI policy
-(`Models.Nci.Guarantees.CoverTraining`), `Aligned` gives its variant on whole-word activations, and `Checked` carries it
+(`Definitions.Nci.Guarantees.CoverTraining`), `Aligned` gives its variant on whole-word activations, and `Checked` carries it
 to a verdict of the NCI check: the gate-level check's, and the check of record's given `DescAgrees`'s open statement
 (`Novel.ReadsExact`). `Chained` is the same join counting the covering bound's chained multiplication blocks on the reference
-circuit's bits as a declaration (`Models.Nci.Guarantees.CoverChained`), with its witness (`ChainedWitness`), and
+circuit's bits as a declaration (`Definitions.Nci.Guarantees.CoverChained`), with its witness (`ChainedWitness`), and
 `CheckedChained` carries it to a verdict as `Checked` does.
 -/

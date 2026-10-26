@@ -5,6 +5,8 @@
 * the per-window figure beside it is ``IntegrityPeriod``'s least threshold at δ/T a window, exact, and it grows with T;
 * a window that rejects rejects the monitoring period, and with no accepted window nothing is scaled;
 * the deployment is read from the census, and a missing one names where to add it;
+* the network certifier's K per machine is pooled over the same periods, one machine's windows and the deployment's
+  machines, beside the communication resource row;
 * the summary line leads with the week, the month and the year at both δ;
 * space pools to a count (#4418's ``pooledShort``): at p = 1% + 2^-128 a machine-week of 60 s windows certifies at least
   9,948 of its 10,080 at δ = 1% and 1,000 machine-years 520,337,076 of 5.256·10⁸, memory's published figures;
@@ -18,7 +20,7 @@ from fractions import Fraction
 
 import pytest
 
-from verity_all_protocols import monitoring as M
+from verity_all_protocols import compose as C, monitoring as M
 
 DEP = {"id": "test-dc", "machines": 10, "window_s": 3600}
 
@@ -85,6 +87,24 @@ def test_the_line_leads_with_every_period_at_both_deltas():
     assert set(lead) == {"observed", "week", "month", "year", "composed"}
     assert set(lead["year"]) == {"1/100", "1/1000000"}
     assert lead["year"]["1/100"]["pooled"] == 73 and lead["year"]["1/100"]["per_window"] > 73
+
+
+def test_the_network_certifiers_k_is_pooled_over_the_deployments_periods():
+    q = {"K": 28, "eps": "1/100", "windows": 1, "schedules": 4, "cells": 3,
+         "audits": [{"units": 3, "drawn": 3, "free": 1, "jitter": 2, "faulty_sets": 2, "faulty_bits": 16}]}
+    windows = [report(0, "accept"), report(1, "accept")]
+    for w, (verdict, quantity) in zip(windows, (("accept", q), ("reject", None))):
+        w["protocols"]["communication"] = {"verdict": verdict, "protocol": C.CERTIFIER, "quantity": quantity,
+                                           "owner": "network-accounting"}
+    m = M.monitoring(windows, DEP)
+    c = m["communication"]
+    assert m["resources"]["communication"]["observed"]["accepted"] == 1
+    assert (c["periods"], c["accepted"], c["refused"], c["period_s"]) == (2, 1, 1, DEP["window_s"])
+    assert [c[p]["periods"] for p, _ in M.PERIODS] == [168, 720, 8760]
+    for p, _ in M.PERIODS:
+        assert set(c[p]["pooled"]) == set(c[p]["fleet"]) == {str(d) for d in M.DELTAS}
+        assert c[p]["fleet"]["1/100"]["machines"] == DEP["machines"]
+    assert c["week"]["pooled"]["1/100"] == C.horizon_leak([q], Fraction(1, 100), 168)
 
 
 MEMORY_P = Fraction(1, 100) + Fraction(1, 2**128)

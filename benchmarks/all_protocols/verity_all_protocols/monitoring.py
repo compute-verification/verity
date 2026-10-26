@@ -33,6 +33,11 @@ The other resource rows pool as their statements do, from the run's own answers 
   schedules, cells) every window, and the faulty units paid once, ``⌈ln(1/δ)/q⌉ · (16 + log2(N + 1))`` bits over the
   period's ``N`` units, instead of each window's faulty terms every window. #4367 is conditional on its per-window inputs
   ``hesc`` and ``hleak``, not yet discharged, so it is not the deployed system's bound until they are.
+
+Beside the resource rows, the report's ``communication`` (`compose.communication`) is the network certifier's K per
+machine over the same periods and δs: one machine's windows pooled with the faulty units paid for once (#4367,
+conditional), the deployment's machines joined by a union bound (not in Lean), and each accepted window's own K beside
+it, where the communication resource row pools every machine's windows as one sequence.
 """
 from __future__ import annotations
 
@@ -42,6 +47,8 @@ from collections.abc import Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
+
+from . import compose as C
 
 ROOT = Path(__file__).resolve().parents[3]
 CENSUS = ROOT / "benchmarks" / "census" / "deployments.json"
@@ -285,8 +292,9 @@ RESOURCES = {"space": space, "bandwidth": bandwidth, "communication": communicat
 
 
 def monitoring(reports: Sequence[Mapping[str, Any]], dep: Mapping[str, Any]) -> dict[str, Any]:
-    """The monitoring-period report over the run's window reports: the deployment, integrity's result (`integrity`), each
-    protocol's verdicts over the windows, and the composed verdict (any window's reject rejects)."""
+    """The monitoring-period report over the run's window reports: the deployment, integrity's result (`integrity`), the
+    resource rows (`RESOURCES`), the network certifier's K per machine (`compose.communication`), each protocol's
+    verdicts over the windows, and the composed verdict (any window's reject rejects)."""
     good = [r for r in reports if "protocols" in r]
     names = list(good[0]["protocols"]) if good else []
     verdicts = {n: sorted({r["protocols"][n]["verdict"] for r in good}) for n in names}
@@ -298,6 +306,7 @@ def monitoring(reports: Sequence[Mapping[str, Any]], dep: Mapping[str, Any]) -> 
     return {"format": FORMAT, "deployment": dict(dep), "deltas": [str(d) for d in DELTAS], "statements": STATEMENTS,
             "integrity": integrity([r["protocols"]["integrity"] for r in good if "integrity" in r["protocols"]], dep),
             "resources": resources,
+            "communication": C.communication(good, dep["window_s"], dict(PERIODS), DELTAS, dep["machines"]),
             "protocols": {n: {"verdicts": v, "owner": good[0]["protocols"][n].get("owner")} for n, v in verdicts.items()},
             "composed": {"verdict": worst, "windows": len(composed), "errors": len(reports) - len(good)},
             "windows": [{"window": r.get("window"), "run": r.get("run"), "node": r.get("node"),

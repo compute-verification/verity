@@ -1,4 +1,4 @@
-"""The falsification test of `Accounting.Assumptions.EncodeChainHardness` (Security/Models/Accounting/Assumptions/
+"""The falsification test of `Accounting.Assumptions.EncodeChainHardness` (Security/Definitions/Accounting/Assumptions/
 EncodeChain.lean): every known construction of a squaring mod p1024 in the circuit model costs at least the conjectured
 `e = L − d(ε)` budgeted units, `L = n/8` and `d(ε) = d₀ + log₂(1/ε)/8` with `d₀ = 4`, at every `ε ≥ 2^−64`.
 

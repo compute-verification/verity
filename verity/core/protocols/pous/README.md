@@ -64,7 +64,13 @@ answer after reading its receipt time (`block_digest`, its `sha512/row/v2` diges
 `answer_circuit.py` opens), and signs the session's round records once, under a header bound to the setup's root of `C*`.
 A session's id is the auditor's for one audit, and its `SessionLog` refuses an id it has used. `verdict` checks a
 signed session in the clear and publishes only the verdict. It accepts S1's LMS over SHA-512 at `lms.DEPLOYED`
-(`memory_challenger.LMS`) and nothing else: a test-signed or unsigned record is refused.
+(`memory_challenger.LMS`) and nothing else: a test-signed or unsigned record is refused. `verdict_circuit`'s
+`PousVerdict_v1{K, M, LIMIT}` is the verdict over the rounds as one proof unit, its one output bit the public verdict: 1
+iff at most `M` of the `K` rounds miss, a round hitting when its record names it, is on time within `LIMIT` and holds
+the expected digest of its block (`PousVerdict.verdictProg_accepts`, `Security/Proofs/Pous/Continuous/Verdict.lean`).
+Its gates as Lean code, `PousCheck.Verdict.prog` (`check/PousCheck/Verdict.lean`), are `verdictProg` gate for gate
+(`Security/Proofs/Pous/Continuous/VerdictCode.lean`), and `check/tests/test_verdict_difftest.py` holds the Definition's
+compiled circuit to that code.
 
 ~~~python
 from verity.ml.crypto import lms
@@ -108,6 +114,13 @@ signed = c.close(egress_bits=certified)                                        #
 v, sides = wipe_verdict.judge(signed, c.commitment, trusted={signer.public_key})  # wipe_verdict.py, loaded by its path
 print(v.public())                                                              # {"accepted": ..., "egress_mib": ...}
 ~~~
+
+A period's wipe is `wipe_period`: one streamed wipe of the node, the memory challenger a party of its own on
+`period.json`'s `challenger_host` (`wipe_party`, which streams the fill and times the reads over a socket), judged as the
+wipe's component of onsite Verity, `verity/wipe/v0` (`MemoryChallenger.WipeProtocol`, `wipe-protocol` in
+`verity/core/devices/memory_challenger/lean/`). An accepted wipe publishes `M` and the foreign content it may leave,
+`⌈M/19⌉ + E` at `2^-128` with 2,152 reads, a fill of at least 32 MiB and the egress counted, and `M` (vacuous) otherwise;
+an unsigned session is undecided. `wipe_period.leg(period_dir, node, out)` is the wipe's leg of the all-protocols period runner.
 
 Tests: `uv run pytest verity/core/protocols/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.
 Regenerate the vectors with `python verity/core/protocols/pous/tests/pous_vectors.py`, and the Lean vectors with
