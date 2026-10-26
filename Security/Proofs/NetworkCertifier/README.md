@@ -44,8 +44,12 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                (WardenSchedule), what reaches it from the server (Arrivals), its code (wardenLane,
                                wardenCode), the fail cell (failCell) and the client's view (clientView)
 ../../Definitions/NetworkCertifier/Tap.lean  trusted: the tap, the warden and the certifier as one auditor device on a
-                               server's uplink: its record format (TapRecord: every cell it sends reads back from its
-                               record) and its one code run giving the cells and the record (tapCode)
+                               server's uplink: its record format (TapRecord: on a schedule it holds, every cell its
+                               code sends reads back from its record) and its one code run giving the cells and the
+                               record (tapCode)
+../../Definitions/NetworkCertifier/RecordRows.lean  trusted: the network certifier's record as the Python one writes it
+                               (RowsFormat): a row a bucket of frames that name their connections, in ordinal order
+                               (rowFrames), the lanes read back from them (readLanes), and the schedules it holds (Fits)
 ../../Definitions/NetworkCertifier/Guarantees/Warden.lean  trusted: the warden's channel bound (the client's view factors through
                                the fail cells, its count, and the whole run's bound with the advice string and content)
 ../../Definitions/NetworkCertifier/SampledCharge.lean  trusted: what the faulty units add under a sampled audit: their
@@ -98,9 +102,13 @@ SampledCharge.lean  the leak bound under a sampled audit: by the layout's causal
 SampledLeak.lean  the leak bound under an accepted sampled audit: its relation (RAcc) gives the leak
                                          relation (rLeak_of_rAcc), composed with SampledAuditAccepted as a
                                          hypothesis (sampledLeak; sampledLeak_reg at the registered inputs pinned)
-Tap.lean        what the tap's certifier saw is what its warden sent: under trusted-host its cells read
-                                         back from the record its same run writes (tap_cells_read), and each data cell
-                                         its lane sends before the fail cell is in it (tap_data_read)
+Tap.lean        what the tap's certifier saw is what its warden sent: under trusted-host, on a schedule its
+                                         record format holds, its cells read back from the record its same run writes
+                                         (tap_cells_read), and each data cell its lane sends before the fail cell is
+                                         in it (tap_data_read)
+RecordRows.lean  the rows format reads back the code's cells on every schedule that fits it (read_record), so it
+                                         is a record format (tapRecord); #guards hold it to the Python network
+                                         certifier's egress records
 TapRows.lean    the leak bound at the network certifier's rows: the sampling relation at a trace that agrees
                                          with its openings gives the leak relation at them (rLeakTap_of_r, through the
                                          trace filled in with its values), and a disagreement is a collision
@@ -303,8 +311,12 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   gates are the advice the count already charges, so the count is unchanged. The network certifier is one device on
   the server's uplink, and it functions as an active warden (`Definitions/NetworkCertifier/Tap.lean`; Daniel, 25 Oct):
   one run of its code (`tapCode`, under one `trusted-host`) gives the cells the client receives and the observations
-  the audits read, its record of those cells, so the cells read back from the observations (`tap_cells_read`, a lemma,
-  not a premise). The record holds the fail cells and padding too, so the proof counts the cells through the
+  the audits read, its record of those cells, so on every schedule its record format holds (`TapRecord.fits`) the
+  cells read back from the observations (`tap_cells_read`, a lemma, not a premise). The format the Python network
+  certifier writes, a row a bucket of frames naming their connections (`RowsFormat`,
+  `Definitions/NetworkCertifier/RecordRows.lean`), is one (`RowsFormat.tapRecord`), on the schedules whose cells fall
+  in the monitoring period's buckets, at most `S` a bucket, and its `#guard`s hold it to the Python records. The record
+  holds the fail cells and padding too, so the proof counts the cells through the
   observations and needs no fail-cell charge: `∏_c (cap_c + 1)` is room. Its named assumptions are
   `Claims.Sampling.KS`, `Commitment.Binds`, `Claims.Flock.ListWithin` and `trusted-host`. The union over the monitoring
   period's live coins and the registration's binding of the prover's values at `reg` are not yet stated.
@@ -329,8 +341,8 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   meeting it number at most
   `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n_i`: the
   faulty units cost `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits once over the monitoring period, `b = 16` by a proof
-  unit's output limit. The network certifier is one device, as in the period's bound: the cells the client receives
-  read back from its record (`tap_cells_read`), so its one named assumption is `trusted-host`. Over live audits the two
+  unit's output limit. The network certifier is one device, as in the period's bound: on every schedule its record
+  format holds, the cells the client receives read back from its record (`tap_cells_read`), so its one named assumption is `trusted-host`. Over live audits the two
   inputs are `Flock.Guarantees.SampledKSLive` at each window's history and the live `SampledLeakAccepted` (P2),
   neither discharged, so it is not the deployed system's bound over a monitoring period until they are.
 

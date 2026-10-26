@@ -9,8 +9,8 @@ import Definitions.NetworkCertifier.Tap
 A monitoring period is `n` windows, each audited by the sampled verifier at a statement it registered (`sw i`, with its
 partition `Pw i` and the values `ρ i` the registration commits at its registered inputs). The network certifier is one
 device on the server's uplink, and it functions as an active warden (`Definitions.NetworkCertifier.Tap`): one run of its
-code gives the cells the client receives and the observations the audits read, its record of those cells, so the
-client's view reads back from the observations. The network certifier registers its records at the transfer gates: its
+code gives the cells the client receives and the observations the audits read, its record of those cells, so on every
+schedule its record format holds the client's view reads back from the observations. The network certifier registers its records at the transfer gates: its
 openings `tops s` under the statement's roots, its signed root for the window, so they vary with what the server did
 (`TapOpens`). `PeriodLeakAccepted` composes the sampled leak bound at the network certifier's rows (`RLeakTap`, with the
 prover's registered inputs pinned: `AsReg`) with that read-back, so the content term of the bound comes from the
@@ -45,9 +45,9 @@ deployment `D` of the sampled verifier where `Claims.Sampling.KS` holds and the 
 (`Commitment.Binds`), with a decoder that lists every trace within Flock's radius, over a monitoring period of `n`
 windows registered as `sw i` (partition `Pw i`, registered values `ρ i`, operator `op i`, and `β i` bounding the
 committed bits of each of its possible faulty sets), with the network certifier's openings `tops s` at each statement,
-and a network certifier that runs its code by `trusted-host` on schedules in `Ss`, each giving connection `c` at most
-`cap c` cells, its one run giving the cells the client receives and the observations of the monitoring period's
-windows (its record of those cells, in the format `f`):
+and a network certifier that runs its code by `trusted-host` on schedules in `Ss`, each held by its record format `f`
+(`TapRecord.fits`) and giving connection `c` at most `cap c` cells, its one run giving the cells the client receives
+and the observations of the monitoring period's windows (its record of those cells, in the format `f`):
 
 * each window's audit, at a statement in its scope, has `Pr[acc ∧ ¬RLeakTap δ] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`;
 * where at every window's statement the network certifier registers its observations at that window's operator
@@ -68,6 +68,7 @@ def PeriodLeakAccepted : Prop :=
     (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
     (htrust : Verity.Assumptions.TrustedHost tap run fun p => tapCode f p.1 (arr p.2))
     (cap : Conn → ℕ) (Ss : Set (WardenSchedule Conn)) (hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c)
+    (hfit : ∀ s ∈ Ss, f.fits s)
     (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv) (hs : ∀ z ∈ Zs, schedOf z ∈ Ss)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run tap (schedOf z, srvOf z)).1 = z)
     (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Wit) (tops : Stmt → List (Opening Bool)) (hb : D.commit.Binds H),

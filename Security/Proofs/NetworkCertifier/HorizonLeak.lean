@@ -18,7 +18,8 @@ The count half: a family of faulty sets with fewer than `Fmax` units in total is
 `Fin Fmax → Option (Σ i, Fin (n i))` (`exists_famOf_eq`), so there are at most `(N + 1)^Fmax` of them. At one family,
 each window's observations number at most `2^#(freeInputs \ reg) · 2^(faultyBits) · Dj^k` (`encard_leakAt_le`, from
 `encard_acceptedFaulty_le` at `AsReg`), and the faulty bits sum to at most `b · Fmax`. Under `trusted-host` the cells
-the client receives read back from the network certifier's record under the schedule (`tap_cells_read`), so they
+the client receives read back from the network certifier's record under the schedule, one its record format holds
+(`tap_cells_read`), so they
 number at most `#Ss` times those records, which bounds the secrets they decode to (`encard_horizonGood_le`);
 `∏_c (cap_c + 1)` is room, as in the period's bound.
 -/
@@ -185,7 +186,7 @@ theorem encard_horizonGood_le {L K S : ℕ} (lay : Stmt → Layout L S) (k : Stm
     (f : TapRecord Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
     (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
     (htrust : Verity.Assumptions.TrustedHost tap run fun p => tapCode f p.1 (arr p.2))
-    (cap : Conn → ℕ) (Ss : Set (WardenSchedule Conn))
+    (cap : Conn → ℕ) (Ss : Set (WardenSchedule Conn)) (hfit : ∀ s ∈ Ss, f.fits s)
     (Zs : Set Z) (sched : Z → WardenSchedule Conn) (srv : Z → Srv) (hs : ∀ z ∈ Zs, sched z ∈ Ss)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run tap (sched z, srv z)).1 = z)
     (W : Z → Fin m → Finset ℕ) (hWn : ∀ z i, W z i ⊆ range (n i)) (Fmax : ℕ) :
@@ -213,7 +214,7 @@ theorem encard_horizonGood_le {L K S : ℕ} (lay : Stmt → Layout L S) (k : Stm
       exact hleak i
   have hsub : G ⊆ dec '' V := fun z hz =>
     ⟨(run tap (sched z, srv z)).1, ⟨(sched z, (run tap (sched z, srv z)).2), ⟨hs z hz.1, hgood z hz⟩,
-      (tap_cells_read f arr tap run htrust _ _).symm⟩, hdz z hz.1⟩
+      (tap_cells_read f arr tap run htrust _ (hfit _ (hs z hz.1)) _).symm⟩, hdz z hz.1⟩
   have hX : ∀ g ∈ s, (X g).encard ≤ ((B : ℕ) : ℕ∞) := by
     intro g hg
     have hlt : ∑ i, (famOf g i).card < Fmax := (Finset.mem_filter.1 hg).2
@@ -268,10 +269,10 @@ theorem encard_horizonGood_le {L K S : ℕ} (lay : Stmt → Layout L S) (k : Stm
 `pr_adaptive_add_le` at the conditional escape, a union bound over the leak relations, and `encard_horizonGood_le` at
 each draw of the coins. -/
 theorem horizonLeak : Guarantees.HorizonLeakAccepted := by
-  intro L K S lay k reg Dj m sw Pw ρ op n b hb Ω _ _ Conn Cell Srv Dev Z _ arr f tap run htrust cap Ss hcap Zs
+  intro L K S lay k reg Dj m sw Pw ρ op n b hb Ω _ _ Conn Cell Srv Dev Z _ arr f tap run htrust cap Ss hcap hfit Zs
     schedOf srvOf hs dec hdz acc hacc W hW hWn e e' he q hq0 hq1 hesc hleak δ hδ Fmax hF
   refine ⟨fun z hz => ?_, fun ω => encard_horizonGood_le lay k reg Dj sw Pw ρ op n b hb arr f tap run htrust cap Ss
-    Zs (fun z => schedOf z ω) (fun z => srvOf z ω) (fun z hz => hs z hz ω) (dec ω) (fun z hz => hdz z hz ω)
+    hfit Zs (fun z => schedOf z ω) (fun z => srvOf z ω) (fun z hz => hs z hz ω) (dec ω) (fun z hz => hdz z hz ω)
     (fun z => W z ω) (fun z i => hWn z ω i) Fmax⟩
   classical
   have hmiss := pr_adaptive_add_le (Ω := Ω) (r := 1 - q) (by linarith) (by linarith) m (acc z)

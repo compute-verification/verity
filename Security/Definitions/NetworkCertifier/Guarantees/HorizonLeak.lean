@@ -27,8 +27,8 @@ plus the advice and timing terms and the schedule terms. A proof unit's outputs 
 
 The network certifier is one device on the server's uplink, as in `PeriodLeakAccepted`
 (`Definitions.NetworkCertifier.Tap`): one run of its code gives the cells the client receives (it functions as an
-active warden) and its record of them, the observations the audits read, so the client's cells read back from the
-record. Its one named assumption is `trusted-host`.
+active warden) and its record of them, the observations the audits read, so on every schedule its record format holds
+the client's cells read back from the record. Its one named assumption is `trusted-host`.
 
 The statement is conditional: it holds for any audits that satisfy the two inputs. Over a monitoring period of live
 audits they are `Flock.Guarantees.SampledKSLive` at each window's history (at `K₀ = |W_i|`) and the live
@@ -46,8 +46,9 @@ set_option linter.unusedVariables false
 /-- **The leak through the network certifier over a monitoring period of accepted sampled audits** (conditional on its
 two per-window inputs). Over `m` windows on independent live coins, window `i` registered as `sw i` (partition `Pw i`,
 values `ρ i` at the registered inputs, operator `op i`), with `n i` units, each committing at most `b` bits; with the
-network certifier running its code by `trusted-host` on schedules in `Ss`, each giving connection
-`c` at most `cap c` cells, its one run giving the cells the client receives and its record of them in the format `f`,
+network certifier running its code by `trusted-host` on schedules in `Ss`, each held by its record format `f`
+(`TapRecord.fits`) and giving connection `c` at most `cap c` cells, its one run giving the cells the client receives
+and its record of them in the format `f`,
 the windows' observations; and a covert sender in the server whose secrets `z ∈ Zs` a decoder recovers from the
 client's cells at the period's coins. For each secret, `acc z i ω x` is window `i`'s audit accepting at its coins `x`
 after the earlier windows' coins `ω`, and `W z ω i ⊆ range (n i)` is the faulty set of the witness computed from window
@@ -74,6 +75,7 @@ def HorizonLeakAccepted : Prop :=
     (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
     (htrust : Verity.Assumptions.TrustedHost tap run fun p => tapCode f p.1 (arr p.2))
     (cap : Conn → ℕ) (Ss : Set (WardenSchedule Conn)) (hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c)
+    (hfit : ∀ s ∈ Ss, f.fits s)
     (Zs : Set Z) (schedOf : Z → (Fin m → Ω) → WardenSchedule Conn) (srvOf : Z → (Fin m → Ω) → Srv)
     (hs : ∀ z ∈ Zs, ∀ ω, schedOf z ω ∈ Ss) (dec : (Fin m → Ω) → (Conn → List (ℕ × CellView Cell)) → Z)
     (hdz : ∀ z ∈ Zs, ∀ ω, dec ω (run tap (schedOf z ω, srvOf z ω)).1 = z)
