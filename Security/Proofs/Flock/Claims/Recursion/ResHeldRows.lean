@@ -123,7 +123,7 @@ theorem held_commit_ms (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin)
       have hrow : ((rowPiece r h.1).map fun p => pieceLen p.2).sum = 128 := by
         have e : (rowPiece r h.1).map (fun p => pieceLen p.2) = (rowPiece r h.1).map fun _ => 128 :=
           List.map_congr_left fun p hp => by
-            obtain ⟨-, -, -, -, -, hp2⟩ := rowPiece_mem hp
+            obtain ⟨h1, -, -, c1, -, hp2⟩ := rowPiece_mem hp
             rw [hp2]
             simp [pieceLen, hmCommit_length]
         have hle : (rowPiece r h.1).length ≤ 1 := toList_length_le _
@@ -157,7 +157,17 @@ theorem held_calls_layR (elem : (r : XR) → List (Fin r.w.parts.length × List 
     refine List.mem_map.2 ⟨p, OpenSlots.mem_layR_of_dep elem ?_, rfl⟩
     simp only [layoutBDeployed, hr, Option.bind_some, hc, Option.map_some, Option.getD_some]
     exact List.mem_flatMap.2 ⟨h, hh, hp⟩
-  exact ⟨hm _ List.mem_cons_self, hm _ (List.mem_cons_of_mem _ List.mem_cons_self)⟩
+  refine ⟨?_, ?_⟩
+  · have e := hm (Hm96.Default512.saltPrefix.data.toList, hmSalt c h.2.2.1 h.2.2.2, (hmCommit c h.2.2.1 h.2.2.2).drop 512)
+      (by unfold hmCalls; exact List.mem_cons_self)
+    dsimp only at e ⊢
+    exact e
+  · have e := hm ((c.ports[h.2.2.1]?.map fun p => (HmRow.rowPrefix p.words).data.toList).getD [],
+      ((rowHidden c h.2.1 h.2.2.2).getD []).map HmNets.Lin.var, hmDigest c h.2.2.1 h.2.2.2)
+      (by unfold hmCalls; exact List.mem_cons_of_mem _ List.mem_cons_self)
+    unfold rowPfx
+    dsimp only at e ⊢
+    exact e
 
 theorem rowPfx_length {c : Circuit} {q : ℕ} (hq : q < c.ports.size) : (rowPfx c q).length = 128 := by
   simp only [rowPfx, Array.getElem?_eq_getElem hq, Option.map_some, Option.getD_some]
@@ -178,17 +188,32 @@ theorem rows_eq_of_calls' {l : List (Msg × Msg)} (hT : ∀ e ∈ l, FlockDeploy
     readForms w row = readForms w' row' := by
   have hsp : FlockSoundness.Refine.K512.saltPrefix = Hm96.Default512.saltPrefix.data.toList := by
     unfold FlockSoundness.Refine.K512; rfl
-  have e := CapLower.commit_of_true (c := c) (q := q) (n := n) (w := w) (R := rowPfx c q ++ readForms w row)
-    (hT _ hs) (hT _ hr)
+  have hs1 : FlockDeploy.sha512 (Hm96.Default512.saltPrefix.data.toList ++ readForms w (hmSalt c q n)) =
+      readForms w ((hmCommit c q n).drop 512) := by
+    have h := hT _ hs; exact h
+  have hr1 : FlockDeploy.sha512 (rowPfx c q ++ readForms w row) = readForms w (hmDigest c q n) := by
+    have h := hT _ hr; exact h
+  have hs1' : FlockDeploy.sha512 (Hm96.Default512.saltPrefix.data.toList ++ readForms w' (hmSalt c' q' n')) =
+      readForms w' ((hmCommit c' q' n').drop 512) := by
+    have h := hT _ hs'; exact h
+  have hr1' : FlockDeploy.sha512 (rowPfx c' q' ++ readForms w' row') = readForms w' (hmDigest c' q' n') := by
+    have h := hT _ hr'; exact h
+  have e := CapLower.commit_of_true (c := c) (q := q) (n := n) (w := w) (R := rowPfx c q ++ readForms w row) hs1 hr1
   have e' := CapLower.commit_of_true (c := c') (q := q') (n := n') (w := w') (R := rowPfx c' q' ++ readForms w' row')
-    (hT _ hs') (hT _ hr')
+    hs1' hr1'
+  have hy0 : Hm96.Default512.saltPrefix.data.toList ++ readForms w (hmSalt c q n) ∈ l.map Prod.fst :=
+    List.mem_map.2 ⟨_, hs, rfl⟩
+  have hy0' : Hm96.Default512.saltPrefix.data.toList ++ readForms w' (hmSalt c' q' n') ∈ l.map Prod.fst :=
+    List.mem_map.2 ⟨_, hs', rfl⟩
   have hy : FlockSoundness.Refine.K512.saltPrefix ++ readForms w (hmSalt c q n) ∈ l.map Prod.fst := by
-    rw [hsp]; exact List.mem_map.2 ⟨_, hs, rfl⟩
+    rw [hsp]; exact hy0
   have hy' : FlockSoundness.Refine.K512.saltPrefix ++ readForms w' (hmSalt c' q' n') ∈ l.map Prod.fst := by
-    rw [hsp]; exact List.mem_map.2 ⟨_, hs', rfl⟩
+    rw [hsp]; exact hy0'
+  have hr0 : rowPfx c q ++ readForms w row ∈ l.map Prod.fst := List.mem_map.2 ⟨_, hr, rfl⟩
+  have hr0' : rowPfx c' q' ++ readForms w' row' ∈ l.map Prod.fst := List.mem_map.2 ⟨_, hr', rfl⟩
   have hb := CapLower.commit_bind (r := rowPfx c q ++ readForms w row) (r' := rowPfx c' q' ++ readForms w' row')
-    (y := readForms w (hmSalt c q n)) (y' := readForms w' (hmSalt c' q' n')) hT hnc
-    (List.mem_map.2 ⟨_, hr, rfl⟩) (List.mem_map.2 ⟨_, hr', rfl⟩) hy hy' (e.symm.trans (hcm.trans e'))
+    (y := readForms w (hmSalt c q n)) (y' := readForms w' (hmSalt c' q' n')) hT hnc hr0 hr0' hy hy'
+    (e.symm.trans (hcm.trans e'))
   exact (List.append_inj hb hpfx).2
 
 /-- **Two holders with one commit string hold one row**, at `layR` and the joint witnesses: where every part's
@@ -247,7 +272,7 @@ theorem held_rowSlot (elem : (r : XR) → List (Fin r.w.parts.length × List (Ms
   obtain ⟨h0, hf0, hσ0⟩ := Option.bind_eq_some_iff.1 hσ0
   obtain ⟨c0, hc0, rfl⟩ := Option.map_eq_some_iff.1 hσ0
   have hh0 : h0 ∈ heldRows r s0 := List.mem_of_find?_eq_some hf0
-  have hj0 : h0.1 = h.1 := beq_iff_eq.1 (List.find?_some hf0)
+  have hj0 : h0.1 = h.1 := by simpa using List.find?_some hf0
   have hw0 : ws[s0]? = some ws[s0] := List.getElem?_eq_getElem hs0l
   refine ⟨ws[s0], hw0, ?_⟩
   have hsw : s < ws.length := (List.getElem?_eq_some_iff.1 hw).1
