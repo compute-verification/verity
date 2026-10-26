@@ -175,7 +175,7 @@ class Audit:
         if len(self.salts_raw) != R.SALT_BYTES * self.tree.G:
             raise SystemExit(f"--salts holds {len(self.salts_raw)} bytes, not {self.tree.G} leaves' {R.SALT_BYTES}")
         self.salts = self.tree.salts(self.salts_raw)
-        self.P = K.Pass(self.seed, self.units, DEVICE)
+        self.P = K.Pass(self.seed, self.units, DEVICE, stream=args.sketch_stream)
         self.gap_s = 0.0
         self.gap_units = 0
 
@@ -204,9 +204,13 @@ class Audit:
             gap(at, self.units)
         return out
 
+    def sketch(self, rows: torch.Tensor, first: int, j0: int, j1: int) -> None:
+        self.P.read(rows, first, j0, j1)
+        self.P.join()
+
     def read_gap(self, segs: Segments, r: range, reps: int) -> None:
         rows = segs.rows(r)
-        self.gap_s += min(events(partial(self.P.read, rows, r.start, r.start, r.stop), reps))
+        self.gap_s += min(events(partial(self.sketch, rows, r.start, r.start, r.stop), reps))
         self.gap_units += len(r) // self.K.PER
         del rows
 
@@ -218,7 +222,8 @@ class Audit:
         return {"seed": self.seed.hex(), "challenge": self.challenge.hex(), "pass": self.index,
                 "previous": self.previous.hex(), "units": self.units, "leaves": tree.G, "root": P.root.hex(),
                 "start_ns": P.start_ns, "end_ns": P.end_ns, "pass_wall_s": round((P.end_ns - P.start_ns) / 1e9, 3),
-                "gap_units": self.gap_units, "gap_sketch_s": round(self.gap_s, 6), "y_s": round(y_s, 6),
+                "sketch_stream": P.stream is not None, "gap_units": self.gap_units, "gap_sketch_s": round(self.gap_s, 6),
+                "y_s": round(y_s, 6),
                 "root_s": round(root_s, 6), "finish_s": round(finish_s, 6),
                 "sigma_sha512": hashlib.sha512(P.sigma.cpu().numpy().astype("<i4").tobytes()).hexdigest(),
                 "y_sha512": hashlib.sha512(tree.y.cpu().numpy().tobytes()).hexdigest(),
@@ -268,6 +273,8 @@ def decode(args, lay: L.StoreLayout, segs: Segments, t: L.Tensor, audit: Audit |
 def sketched(store: S.Store, sk, layer: int, name: str, w: torch.Tensor) -> None:
     store.sketch = sk
     S.decode_matrix(store, layer, name, w)
+    if sk is not None:
+        sk.join()
 
 
 def stage_pass(args, lay: L.StoreLayout, src: L.Weights, tensors: list[L.Tensor], out: Out) -> tuple[dict, bool]:
@@ -298,7 +305,7 @@ def stage_pass(args, lay: L.StoreLayout, src: L.Weights, tensors: list[L.Tensor]
                 poison = partial(S.flat(w).fill_, 0xA5)
                 if audit:
                     tw = events(partial(sketched, store, audit.P, t.layer, t.name, w), args.reps, poison)
-                    tk = events(partial(audit.P.read, store.rows, store.first, t.first_block, t.block_range.stop), args.reps)
+                    tk = events(partial(audit.sketch, store.rows, store.first, t.first_block, t.block_range.stop), args.reps)
                     rec.update(decode_sketch_s=[round(x, 6) for x in tw], sketch_s=[round(x, 6) for x in tk])
                     with_s, sketch_s = with_s + min(tw), sketch_s + min(tk)
                 ts = events(partial(sketched, store, None, t.layer, t.name, w), args.reps, poison)
@@ -460,6 +467,8 @@ def main(argv=None) -> int:
     ap.add_argument("--previous", default=FULL_PREVIOUS, help="the root before (the registration's digest at pass 0)")
     ap.add_argument("--salts", type=Path, help="with --receipts: the leaves' salts, 192 bytes each (default fresh)")
     ap.add_argument("--keep", type=Path, help="with --receipts: σ, y, the salts and the pass for bw_ref.py")
+    ap.add_argument("--sketch-stream", action="store_true", help="with --receipts: the sketch on its own stream, beside "
+                    "the decode")
     ap.add_argument("--device", default="cuda")
     args = ap.parse_args(argv)
     DEVICE = torch.device(args.device)
@@ -495,7 +504,8 @@ def main(argv=None) -> int:
     rc = summary.get("receipts")
     print(f"full {'PASS' if ok else 'FAIL'}: {summary['tensors']} tensors staged and held to the manifest's SHA-256, "
           f"decode step {summary['decode_step_s']} s"
-          + (f"; receipts pass {rc['pass']} over {rc['units']} units, root {rc['root'][:16]}..., step with receipts "
+          + (f"; receipts pass {rc['pass']}{' (the sketch on its own stream)' if rc['sketch_stream'] else ''} over "
+             f"{rc['units']} units, root {rc['root'][:16]}..., step with receipts "
              f"{rc['receipts_step_s']} s (decode with the sketch {rc['decode_sketch_step_s']} s + padding "
              f"{rc['gap_sketch_s']} s + y and root {rc['finish_s']} s), overhead {rc['overhead_s']} s, ratio "
              f"{rc['step_ratio']}" if rc else ""), flush=True)

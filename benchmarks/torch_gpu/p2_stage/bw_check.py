@@ -80,24 +80,28 @@ def fixture(args, dev: torch.device) -> dict:
         root = P.finish(tree, salts)
         rec["y"] = same(hexes(P.y), p["receipts"])
         rec["root"] = root.hex() == p["root"]
-        if lay is not None:
+        for stream in ((False, True) if dev.type == "cuda" else (False,)) if lay is not None else ():
             import stage as S
-            D = K.Pass(seed, units, dev)
+            D = K.Pass(seed, units, dev, stream=stream)
             st = S.Store(lay, rows, 0, args.lib)
             st.sketch = D
             for layer, _, size, _ in doc["staging"]:
                 S.decode_layer(st, layer, torch.empty(size, dtype=torch.uint8, device=dev))
+            D.join()
             unread = [g for g in range(units) if not bool(D.seen[g])]
             for g in unread:
                 D.read(rows, 0, p2.UNIT_BLOCKS * g, p2.UNIT_BLOCKS * (g + 1))
-            rec["decode"] = {"units_the_decode_read": units - len(unread), "read_after": unread,
-                             "sigma": same(le(D.sigma), p["sigmas"]), "root": D.finish(tree, salts).hex() == p["root"]}
+            root_d = D.finish(tree, salts)
+            rec["decode_stream" if stream else "decode"] = {
+                "units_the_decode_read": units - len(unread), "read_after": unread,
+                "sigma": same(le(D.sigma), p["sigmas"]), "root": root_d.hex() == p["root"]}
         out["passes"].append(rec)
         previous = root
     ok = out["pinned"] and all(
         r["seed"] and r["pi"]["match"] == r["pi"]["of"] and all(s["match"] == s["of"] for s in r["sigma"].values())
         and r["y"]["match"] == r["y"]["of"] and r["root"]
-        and ("decode" not in r or (r["decode"]["sigma"]["match"] == r["decode"]["sigma"]["of"] and r["decode"]["root"]))
+        and all(k not in r or (r[k]["sigma"]["match"] == r[k]["sigma"]["of"] and r[k]["root"])
+                for k in ("decode", "decode_stream"))
         for r in out["passes"])
     out["ok"] = bool(ok)
     return out
@@ -196,7 +200,9 @@ def main(argv=None) -> int:
         s = min(r["sigma"].values(), key=lambda v: v["match"])
         line.append(f"pass {r['pass']}: pi {r['pi']['match']}/{r['pi']['of']} sigma {s['match']}/{s['of']} "
                     f"y {r['y']['match']}/{r['y']['of']} root {'match' if r['root'] else 'DIFFERS'}"
-                    + (f" (decode path root {'match' if r['decode']['root'] else 'DIFFERS'})" if "decode" in r else ""))
+                    + (f" (decode path root {'match' if r['decode']['root'] else 'DIFFERS'}" if "decode" in r else "")
+                    + (f", sketch on its own stream {'match' if r['decode_stream']['root'] else 'DIFFERS'}"
+                       if "decode_stream" in r else "") + (")" if "decode" in r else ""))
     if "random" in res:
         r = res["random"]
         line.append(f"random {r['units']} units: sigma {r['sigma_sampled'] - len(r['sigma_bad'])}/{r['sigma_sampled']} "
