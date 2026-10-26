@@ -750,7 +750,7 @@ def main(opts: Options) -> int:
               "required_manifest_path": getattr(com, "required_manifest_path", None),
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
-              "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of()}
+              "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model)}
     (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
     if mirror is not None:
         mirror()
