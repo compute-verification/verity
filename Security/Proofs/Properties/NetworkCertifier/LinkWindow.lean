@@ -178,8 +178,8 @@ theorem verifies_of {c : Case} {x : Cert} {m : ByteArray} {sig : Lms.Signature} 
     (hs : Lms.Signature.decode c.lms x.signature = .ok sig) (hv : Lms.verify c.lms c.key m sig = .ok true) :
     verifies c x = true := by
   unfold verifies
-  rw [hm, hs, hv]
-  simp [hk, Except.toOption]
+  rw [hm, hs]
+  simp [hk, hv, Except.toOption]
 
 theorem certified_of {c : Case} (h : WindowCertified c) : certified c = true := by
   obtain ⟨hs, hall⟩ := h
@@ -313,13 +313,10 @@ theorem linkWindowAcceptMeans_honest :
   obtain ⟨d, hd⟩ := verdictDigest_ok c
   have hout : outputsOf c true 3 = acceptedOutputs c := by
     first | rfl | (cases hk : c.kind <;> simp [outputsOf, acceptedOutputs, hk])
-  have hv : verdict c = .ok { accepted := true, outputs := acceptedOutputs c, digest := d, proved := true,
-      opened := some 3, certified := true, synced := true } := by
+  have hv : verdict c = .ok ⟨true, acceptedOutputs c, d, true, some 3, true, true⟩ := by
     unfold verdict
-    rw [hr]
-    simp only [proved_of hp, hrow, certified_of hc, synced_of hs, acceptedOf, ↓reduceIte, Option.getD_some,
-      bind, Except.bind, pure, Except.pure]
-    simp only [show (some 3 == some 3) = true from rfl, Bool.and_self, hout, hd]
+    simp only [hr, proved_of hp, ↓reduceIte, hrow, certified_of hc, synced_of hs, acceptedOf, beq_self_eq_true,
+      Bool.and_self, Option.getD_some, hout, hd, bind, Except.bind, pure, Except.pure]
   exact ⟨by rw [hv]; rfl, _, hv, rfl, hd⟩
 
 /-- **An honest warden link-window is accepted** (the honest lemma of `LinkWindowAcceptMeans` on a warden link): one
