@@ -2,7 +2,8 @@
 # β(C) (beta.py) on the exact-int8 Llama-3.1-8B request Program the census read (job.sh's Build in r20261018-045058-23f7 at
 # a4f5a429c5, LP=256, T=31, 724,643 root nodes), with the input term shared over the 8B row's KV pool (share.py's M_dyn for 8
 # engines). ART=art:... and ART_PATH read another Build, M_NODE=BYTES another pool, CHUNKS="N ..." the coarse bounds before the
-# fine one, PROBE=1 stops once the Program decodes. Where /workspace/jobs/venv312 isn't (the CPU nodes), it syncs the workspace
+# fine one, PROBE=1 stops once the Program decodes. The Build binds its weights as run inputs, so a root input past
+# REGISTERED_ABOVE bits (default 32768: the prompt is 8,192, the smallest weight, a norm's, 65,536) is taken as registered. Where /workspace/jobs/venv312 isn't (the CPU nodes), it syncs the workspace
 # with CPU torch into scratch. A node with no store remote takes the descriptor sent along (`research data fetch ART --path
 # out/descriptor.json.gz`, then --send it). A descriptor whose primitives' signatures have since changed under the same id
 # decodes only against its own registry: send that commit's packages, `git archive C verity integrations/vllm/verity_vllm |
@@ -47,4 +48,4 @@ fi
 chunks=()
 for n in ${CHUNKS:-4096 256}; do chunks+=(--chunk "$n"); done
 /usr/bin/time -v "$PY" "$HERE/beta.py" "$desc" --out "$OUT/beta-8b.json" --m-dyn-node "${M_NODE:-609801469952}" "${chunks[@]}" \
-  2> >(tee "$OUT/beta.log" >&2)
+  --registered-above "${REGISTERED_ABOVE:-32768}" 2> >(tee "$OUT/beta.log" >&2)

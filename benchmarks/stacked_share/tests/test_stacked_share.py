@@ -1,7 +1,7 @@
 """The stacked-share tool on toys: `units.py` on a small Program (property/v1's units by callee and step, the cross-check against
 `stacking.analyze`), the exact window fit and its refusal of another form, the attention window of a KV call a head and a row
 call a (row, head), a modeled TP variant, and `share.py`'s trace totals, its refusal of keys the requests can't account for, the
-per-step split, f and the levers."""
+per-step split, f and the levers, the attention row's data products, and the declared-circuit witness's lives."""
 from __future__ import annotations
 
 import sys
@@ -223,7 +223,9 @@ def test_the_trace_totals_are_exact_with_a_split_prompt():
 
 
 DOC = {"program": {"function": "toy"}, "tokens": 4, "samples": 2, "token": {"roundings": 10}, "sample": {"compare_select": 3, "roundings": 10},
-       "attention": {"coefficients": {"roundings": {"r0": 1, "b_q": 2, "b_kv": 5, "w0": 7, "w_start": -1}}, "calls": 3},
+       "attention": {"coefficients": {"roundings": {"r0": 1, "b_q": 2, "b_kv": 5, "w0": 7, "w_start": -1}}, "calls": 3,
+                     "families": ["Int8KvQuant_v1", "Int8LutAttentionRow_v1"],
+                     "statics": {"G": 1, "H": 2, "Int8LutAttentionRow_v1": {"D": 3}}},
        "callees": {"g": {"family": "Gemm_v2", "instances": 2, "units": {"roundings": 20}},
                    "q": {"family": "Int8RowQuant_v1", "instances": 8, "units": {"roundings": 24}}},
        "levers": {"attention_per_key": {"Int8StaticQuant_v1": {"roundings": 2}, "Int8ColumnQuant_v1": {"roundings": 1},
@@ -240,12 +242,15 @@ def test_rates_f_and_the_levers():
     m = share.model_units(DOC)
     t = share.exact(mix(), REQUESTS)
     u = share.step_units(m, **{k: t[k] for k in share.MODEL})
-    # token 8 rows, sample 5 rows, attention 3 calls of 8 + 2 * 20 + 5 * 17 + 7 * 6 - 2
-    assert u == {"roundings": 10 * 8 + 10 * 5 + 3 * (8 + 40 + 85 + 42 - 2), "compare_select": 15}
+    # token 8 rows, sample 5 rows, attention 3 calls of 8 + 2 * 20 + 5 * 17 + 7 * 6 - 2, and of H 2 · 2 · D 3 data products
+    # a (row, key) pair over Q's 20
+    assert u == {"roundings": 10 * 8 + 10 * 5 + 3 * (8 + 40 + 85 + 42 - 2), "compare_select": 15, "products": 3 * 12 * 20}
     r = share.rates(m, mix(), REQUESTS)
     assert r["busy_s"] == 2.0 and r["mean"] == float(share.total(u)) / 2.0
     with pytest.raises(ValueError, match="doesn't budget"):
-        share.by_class({"products": 1})
+        share.by_class({"family": 1})
+    with pytest.raises(ValueError, match="can't be priced"):
+        share.model_units({**DOC, "attention": {**DOC["attention"], "families": ["Int8KvQuant_v1"]}})
     assert share.pool(mix()) == 10 * 16 * 1024 * 2
     assert share.f(1e9, 6126, 600, 1e5, 1e12) == pytest.approx((128 * 1e9 * 600 / 6126 + 1e5 * 600) / 1e12)
     lv = share.lever_models(DOC)
@@ -259,4 +264,23 @@ def test_rates_f_and_the_levers():
     assert toy["engines"] == 2 and toy["M_dyn"] == 2 * share.pool(mix())
     assert list(toy["levers"]) == list(lv) and "| toy | 10 min |" in share.markdown(tab)
     prims = share.primitives(DOC, mix(), REQUESTS)  # table() holds their sum to the document's
-    assert list(prims)[0] == "D|roundings" and prims["G|roundings"] == Fraction(50, 8) and toy["primitives_per_token"] == prims
+    assert list(prims)[:2] == ["Int8LutAttentionRow_v1 Q'K'^T and P V'|products", "D|roundings"]
+    assert prims["G|roundings"] == Fraction(50, 8) and toy["primitives_per_token"] == prims
+    assert toy["levers"]["as built"]["c"] == toy["levers"]["as built"]["R_cap_node"]["peak"] / share.CERTIFIED_B_PER_S
+
+
+def test_the_witness_lives_are_the_lean_statements():
+    """`witness_life` at `bounds_8b`'s and `bounds_70b`'s inputs gives the lives they state (6 windows for 8B; 30 a window and
+    31 a session for 70B), and `witness_c` at the stated life is a threshold the stated c sits under, one life longer over."""
+    w = share.WITNESS
+    assert share.witness_life(w["c"]["8B"], w["E"]) == {"session": 6, "window": 6}
+    assert share.witness_life(w["c"]["70B"], w["E"]) == {"session": 31, "window": 30}
+    for name, life in w["L"].items():
+        assert share.witness_c(w["E"], life) > w["c"][name] > share.witness_c(w["E"], life + 1)
+    # c and E move together: three times both keeps the life
+    assert share.witness_life(3 * w["c"]["8B"], 3 * w["E"]) == share.witness_life(w["c"]["8B"], w["E"])
+    tab = share.table({"8B": (DOC, mix(), REQUESTS)}, gpus=4)
+    got = tab["models"]["8B"]["witness"]
+    assert got["lever"] == share.WITNESS_LEVER and got["stated"]["witness_life"]["window"] == 6
+    assert got["holds_at_stated_life"]["2^-40"] == (got["c"] < got["c_at_stated_life"]["2^-40"])
+    assert "c at the stated life" in share.markdown(tab)

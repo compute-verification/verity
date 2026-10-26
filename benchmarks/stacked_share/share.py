@@ -4,9 +4,14 @@
     f        = stock(L) / M_dyn
 
 This is `Security/Definitions/Accounting/Guarantees/Stacking.lean`'s C = 8 R_in life + 1024 (c_rho reads) life / E in bits, read in
-bytes: c_rho reads, the budgeted units the audit allows a second, is the honest Program's rate R_cap; E is the units an encode of
-one 1024-bit word costs (E / 128 a byte); L is a carrier's lifetime in seconds and R_in the node's run-input bytes a second. f
-past 1 means the stock outgrows the pool: no KV is credited.
+bytes: c_rho reads, the nonlinear units the audit allows a second, is the honest Program's rate R_cap; E is the nonlinear units
+an encode of one 1024-bit word costs (E / 128 a byte); L is a carrier's lifetime in seconds and R_in the node's run-input bytes a
+second. f past 1 means the stock outgrows the pool: no KV is credited.
+
+Nonlinear units are #4622's gate model (`Security/Definitions/Accounting/Gates/Model.lean`, `nonlinear`): property/v1's
+budgeted units plus data products, one a product of two run-time values. `units.py` counts the budgeted ones; the data
+products are the attention row's Q′K′ᵀ and P V′, 2·D a head a (query row, key) pair (`products_per_key`), and nothing else's: a
+MAC by a weight is a linear map, free.
 
 R_cap comes from `units.py`'s units for one model and a served trace (`benchmarks/serve_bandwidth/mix.py`'s mix.json). A step's
 units are
@@ -29,6 +34,11 @@ The rate is units over the trace's busy time (the union of its steps' spans) and
 
 M_dyn is vLLM's KV pool: kv_blocks blocks of `block` tokens of kv_bytes_per_token bytes on each of an engine's tp GPUs.
 
+The declared-circuit witness (`Witness.lean`'s `bounds_8b`, `bounds_70b`) reads c = caps.total, R_cap over the bytes a second
+the audit certifies, against thresholds set at the thin-lane prices (`WITNESS`). Its carrier term is 128 L P c / E, so it
+holds at the new E as long as c grew no more than E did: `witness` gives each model's c at the peak, the life the witness's
+thresholds allow at it (`witness_life`) and the c its stated life allows at each E (`witness_c`).
+
     python share.py --model 8B=units-8b.json,mix.json --model 70B=units-70b.json,mix-70b.json --out share.json
 """
 from __future__ import annotations
@@ -41,19 +51,28 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-#: E, the units an encode of one 1024-bit word costs, each over 3 rounds of 1,021 squarings: proved (8 units a squaring; counting
-#: proves 8 to 24), conjectured (SquaringFloor and ChainSum at 2^-40 before data products were priced; in nonlinear
-#: units they price 1,145,562, read only against caps that count data products too), and the red team's cheapest
-#: construction (160 a squaring under
-#: #2420, 128 while hole B is open)
-E_WORD = {"proved": 8 * 3 * 1021, "conjectured": 364_497, "red team (#2420)": 160 * 3 * 1021,
-          "red team, hole B open": 128 * 3 * 1021}
+#: E, the nonlinear units (#4622's gate model: budgeted units plus data products) an encode of one 1024-bit word costs over 3
+#: rounds of 1,021 squarings: SquaringFloor and ChainSum at ε = 2^-40 and at the carrier threshold 2^-20
+#: (note:memory-accounting/20261026T0110Z-report-s5-lowerbounds), and the cheapest construction found, the seam square at
+#: 16,544 a squaring, which no E exceeds. No E is proved: counting caps a squaring's bound near its output bits (`FoolingCap`).
+E_WORD = {"2^-40": 1_145_562, "2^-20": 1_151_688, "best found": 16_544 * 3 * 1021}
 LIFETIMES = {"10 min": 600, "1 h": 3600}
 R_INS = (100_000, 1_000_000)
 BLOCK = 16
 WIDTH = 1.0
-CLASSES = ("roundings", "compare_select", "gathers", "folds")
+CLASSES = ("roundings", "compare_select", "gathers", "folds", "products")
 COEFFICIENTS = ("r0", "b_q", "b_kv", "w0", "w_start")
+#: the attention row whose Q′K′ᵀ and P V′ are data products, 2·S·D a head's row (`property_redteam/products_pass.py`)
+ATTENTION_ROW = "Int8LutAttentionRow_v1"
+#: bytes a second the audit certifies (`P·N·4096/T` at 61 ms a pass; note:memory-accounting/20261018T0230Z-report-declared-circuit-g):
+#: c = caps.total is R_cap over it
+CERTIFIED_B_PER_S = 1.294e13
+#: `Security/Proofs/Accounting/DeclaredCircuit/Witness.lean`'s `bounds_8b` and `bounds_70b`, at the thin-lane prices: c at most
+#: `c`, E at least `E`, the life `L` windows, and γ = γ0 + (8 L R0 + 1) / (N0 32768) + 128 L P0 c / E (`gamma_bound`)
+WITNESS = {"c": {"8B": Fraction(221, 500), "70B": Fraction(459, 5000)}, "E": 364_497, "L": {"8B": 6, "70B": 30},
+           "P0": 984, "R0": 6_000_000, "N0": 1 << 24, "gamma0": Fraction(835, 100_000)}
+#: the lever the witness's c was read at (both of K′ and V′ quantized at the write)
+WITNESS_LEVER = "+ V' at write"
 
 
 def F(x: Any) -> Fraction:
@@ -83,10 +102,24 @@ def add(*us: Mapping[str, Any]) -> dict[str, Fraction]:
     return {c: v for c, v in out.items() if v}
 
 
+def products_per_key(att: Mapping[str, Any]) -> int:
+    """The attention's data products a (query row, key) pair a call: H heads of `ATTENTION_ROW`, 2·D each (its Q′K′ᵀ and P V′
+    multiply run-time values by run-time values). The linears' MACs by weights and the KV quantizers have none."""
+    st = att.get("statics") or {}
+    if ATTENTION_ROW not in att.get("families", ()) or "H" not in st or "D" not in st.get(ATTENTION_ROW, {}):
+        raise ValueError(f"the attention's families {att.get('families')} and statics {st} don't give {ATTENTION_ROW}'s H and D, "
+                         f"so its data products can't be priced")
+    return 2 * int(st["H"]) * int(st[ATTENTION_ROW]["D"])
+
+
 def model_units(doc: Mapping[str, Any]) -> dict:
-    """`units.py`'s document as the step model's parts: token, sample, the attention's coefficients and its calls a request-step."""
+    """`units.py`'s document as the step model's parts in nonlinear units: token, sample, the attention's coefficients (with
+    ``products``, `products_per_key` a key a query row, unless the document counts them) and its calls a request-step. The
+    token rows and the sample have no data products: their products are by weights."""
     att = doc["attention"]
     co = {c: {k: F(v) for k, v in att["coefficients"].get(c, {}).items()} for c in att["coefficients"]}
+    if "products" not in co:
+        co["products"] = {name: F(products_per_key(att) if name == "b_q" else 0) for name in COEFFICIENTS}
     return {"token": {k: F(v) for k, v in doc["token"].items()}, "sample": {k: F(v) for k, v in doc["sample"].items()},
             "coefficients": co, "calls": int(att["calls"])}
 
@@ -267,9 +300,39 @@ def primitives(doc: Mapping[str, Any], mix: Mapping[str, Any], requests: Sequenc
         out[f"(TP all-reduce)|{k}"] += F(v)
     for k, v in pr["sample"].items():
         out[k] += F(v) * t["X"] / t["T"]
-    for k, co in pr["attention"].items():
+    att = dict(pr["attention"])
+    if not any(k.endswith("|products") for k in att):
+        att[f"{ATTENTION_ROW} Q'K'^T and P V'|products"] = model_units(doc)["coefficients"]["products"]
+    for k, co in att.items():
         out[k] += int(doc["attention"]["calls"]) * sum((F(co[c]) * x[c] for c in COEFFICIENTS), Fraction(0)) / t["T"]
     return {k: v for k, v in sorted(out.items(), key=lambda kv: -kv[1]) if v}
+
+
+THRESHOLDS = {"session": Fraction(15, 10_000), "window": Fraction(1, 100)}
+
+
+def witness_life(c: Any, E: Any) -> dict[str, int]:
+    """The longest life L, in windows, at which the witness's thresholds stay positive at c units a certified byte and E:
+    `bounds_8b`'s and `bounds_70b`'s ``t + γ < 1`` with `gamma_bound`'s γ at L (`WITNESS`), t 0.15% a session and 1% a
+    window. At c ≤ 0.442 and E = 364,497 it is 6 windows, at c ≤ 0.0918 30 a window and 31 a session, as they state."""
+    w, c, E = WITNESS, F(c), F(E)
+    if c < 0 or E <= 0:
+        raise ValueError(f"c >= 0 and E > 0, not c={c} E={E}")
+    tiles = F(w["N0"] * 32768)
+    per_life = 8 * F(w["R0"]) / tiles + 128 * w["P0"] * c / E
+    out = {}
+    for name, t in THRESHOLDS.items():
+        q = (1 - t - w["gamma0"] - 1 / tiles) / per_life
+        out[name] = q.numerator // q.denominator - (q.denominator == 1)  # the largest integer L < q
+    return out
+
+
+def witness_c(E: Any, life: int, threshold: str = "window") -> float:
+    """The c below which the witness's ``threshold`` stays positive at `life` windows and E: its threshold on c restated at E."""
+    w, E = WITNESS, F(E)
+    tiles = F(w["N0"] * 32768)
+    room = 1 - THRESHOLDS[threshold] - w["gamma0"] - (8 * life * F(w["R0"]) + 1) / tiles
+    return float(room * E / (128 * life * w["P0"]))
 
 
 def table(models: Mapping[str, tuple[Mapping[str, Any], Mapping[str, Any], Sequence[Mapping[str, int]]]], gpus: int,
@@ -283,10 +346,11 @@ def table(models: Mapping[str, tuple[Mapping[str, Any], Mapping[str, Any], Seque
         for lever, m in lever_models(doc).items():
             r = rates(m, mix, requests, width)
             node = {"mean": r["mean"] * engines, "peak": r["peak"] * engines}
+            c = node["peak"] / CERTIFIED_B_PER_S
             rows[lever] = {
                 "units_per_token": float(r["units_per_token"]), "R_cap_node": node,
                 "R_cap_node_by_class_peak": {c: x * engines for c, x in r["by_class_peak"].items()},
-                "share": r["share"],
+                "share": r["share"], "c": c, "witness_life": {e: witness_life(c, E) for e, E in E_WORD.items()},
                 "f": {lt: {e: {str(R_in): {"peak": f(node["peak"], E, L, R_in, M), "mean": f(node["mean"], E, L, R_in, M)}
                                for R_in in R_INS} for e, E in E_WORD.items()} for lt, L in LIFETIMES.items()}}
             if lever == "as built":
@@ -300,6 +364,13 @@ def table(models: Mapping[str, tuple[Mapping[str, Any], Mapping[str, Any], Seque
                                "kv_bytes_per_token": mix["kv_bytes_per_token"], "tp": mix["args"]["tp"],
                                "program": doc["program"], "levers": rows,
                                "input_term": {lt: {str(R_in): R_in * L / M for R_in in R_INS} for lt, L in LIFETIMES.items()}}
+        if name in WITNESS["c"]:
+            cw, life = WITNESS["c"][name], WITNESS["L"][name]
+            out["models"][name]["witness"] = {
+                "lever": WITNESS_LEVER, "c": rows[WITNESS_LEVER]["c"], "stated": {"c": cw, "E": WITNESS["E"], "life": life,
+                                                                                  "witness_life": witness_life(cw, WITNESS["E"])},
+                "c_at_stated_life": {e: witness_c(E, life) for e, E in E_WORD.items()},
+                "holds_at_stated_life": {e: rows[WITNESS_LEVER]["c"] < witness_c(E, life) for e, E in E_WORD.items()}}
     return out
 
 
@@ -328,6 +399,15 @@ def markdown(t: Mapping[str, Any]) -> str:
             lines.append(f"| {name} | {lever} | {r['units_per_token']:.3g} | {r['R_cap_node']['peak']:.3g} | "
                          f"{dom} {r['share'][dom]:.0%} | "
                          + " | ".join(_pct(r["f"]["1 h"][e][str(R_INS[0])]["peak"]) for e in E) + " |")
+    wit = {name: m["witness"] for name, m in t["models"].items() if "witness" in m}
+    if wit:
+        lines += ["", "| model | c (stated) | c, nonlinear | " + " | ".join(f"life (window), E {e}" for e in E)
+                  + " | " + " | ".join(f"c at the stated life, E {e}" for e in E) + " |", "|---|---|---|" + "---|" * 2 * len(E)]
+        for name, w in wit.items():
+            built = t["models"][name]["levers"][w["lever"]]
+            lines.append(f"| {name} | {float(w['stated']['c']):.3g} at life {w['stated']['life']} | {w['c']:.3g} | "
+                         + " | ".join(str(built["witness_life"][e]["window"]) for e in E) + " | "
+                         + " | ".join(f"{w['c_at_stated_life'][e]:.3g}" for e in E) + " |")
     lines += ["", "| model | primitive (class) | units/token, as built | share |", "|---|---|---|---|"]
     for name, m in t["models"].items():
         whole = sum(m["primitives_per_token"].values())

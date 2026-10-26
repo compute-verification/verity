@@ -1,8 +1,9 @@
 """`beta.py`, the min-cut bound β(C) on the stacked share of dynamic memory, on toys whose answer is known: Dinic's flow and the
 bound's network held to every cut by enumeration, writes a cheap function of a 1-bit input (β ≈ 0), writes of encodings the
 circuit computes (β = 1), an attention whose work grows with its context behind a fixed-width output (the bound charges the
-output, not the work), a hyperedge paid once, unknown work kept out of D, a window, and coarse graining, which never lowers
-the bound. Every number is exact: E, R_in and L are rationals and the bound a `Fraction`."""
+output, not the work), data products as work beside a weight's free MACs, a hyperedge paid once, unknown work kept out of D,
+a window, the least E below M_dyn, and coarse graining, which never lowers the bound. Every number is exact: E, R_in and L are
+rationals and the bound a `Fraction`."""
 from __future__ import annotations
 
 import itertools
@@ -17,6 +18,7 @@ import pytest
 from verity.ml.circuits import stacking as P
 from verity.ml.circuits.census import census
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
+from verity.ml.circuits.ops import prims
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import array_of, coll_concat
 from verity.ml.circuits.types import Array, Value
@@ -25,7 +27,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import beta as B  # noqa: E402
 
-S32, BIT = Value(32), Value(1)
+S32, S8, BIT = Value(32), Value(8), Value(1)
+E40 = B.E_WORD["2^-40"]
 
 
 def stand_in(name: str, params, ret=S32) -> PrimitiveDefinition:
@@ -36,6 +39,7 @@ def stand_in(name: str, params, ret=S32) -> PrimitiveDefinition:
 MUL = stand_in("F32Mul", (("a", S32), ("b", S32)))  # roundings
 SEL = stand_in("SelectI32", (("c", BIT), ("a", S32), ("b", S32)))  # compare_select
 UNLISTED = stand_in("TestBetaUnlisted", (("c", BIT),))
+IMMA = stand_in("BlackwellS8ImmaDot32", (("acc", S32), ("a", Array(32, S8)), ("b", Array(32, S8))))  # an s8-family step
 
 
 def comp(name: str, params, ret, body) -> CompositeDefinition:
@@ -127,11 +131,11 @@ def test_cheap_writes_give_beta_near_zero():
     write at the cut on the writes. Under inputs="window" the input's 1 bit crosses once, however many selects read it."""
     g, info = graph_of(*cheap_writes())
     assert (info["writes"], g.m_dyn, info["unknown_work_nodes"]) == (32, 1024, 0)
-    b = B.bound(g, E=B.E_PROVED)
-    assert b.crossing == 0 and b.work == 32 and b.beta == Fraction(32, B.E_PROVED)  # 0.13%
-    w = B.bound(g, E=B.E_PROVED, inputs="window")
-    assert w.crossing == 1 and w.beta == (1 + Fraction(32 * 1024, B.E_PROVED)) / 1024
-    r = B.bound(g, E=B.E_PROVED, R_in=1, L=2)
+    b = B.bound(g, E=E40)
+    assert b.crossing == 0 and b.work == 32 and b.beta == Fraction(32, E40)  # 0.0028%
+    w = B.bound(g, E=E40, inputs="window")
+    assert w.crossing == 1 and w.beta == (1 + Fraction(32 * 1024, E40)) / 1024
+    r = B.bound(g, E=E40, R_in=1, L=2)
     assert r.s_stack == b.cut + 16 and r.input_bits == 16  # R_in·L is bytes: 8 bits a byte
 
 
@@ -171,6 +175,50 @@ def test_node_work_is_property_v1s():
         assert sum(g.work) == sum(sum(s["units"].values()) for s in a.steps)
 
 
+def products(registered: tuple[str, ...] = ("w",)) -> tuple[Program, list[int]]:
+    """Step 0: two 32-lane s8 dots, x·y of two run inputs and x·w by `registered` w; step 1 multiplies their results."""
+    ends: list[int] = []
+
+    def body(Bd, _S, x, y, w):
+        ends.clear()
+        z = Bd.call(prims.ZERO32)
+        a, b = Bd.call(IMMA, z, x, y), Bd.call(IMMA, z, x, w)
+        ends.append(len(Bd.nodes))
+        out = Bd.call(MUL, a, b)
+        ends.append(len(Bd.nodes))
+        return out
+
+    fn = comp("TestBetaProducts", (("x", Array(32, S8)), ("y", Array(32, S8)), ("w", Array(32, S8))), S32, body)
+    return Program(fn, registered=registered), ends
+
+
+def test_data_products_are_work_and_a_weights_macs_are_not():
+    """Nonlinear units (#4622): the dot of two run inputs is 32 data products, each a unit of its node's work; the dot by a
+    registered w is a linear map and free. A root input `registered` takes (as a Build that binds its weights as run inputs
+    needs) carries no bits and makes its products by it free; one that isn't a root input is refused."""
+    program, ends = products()
+    g, info = graph_of(program, ends)
+    assert (info["products"], info["budgeted_units"], info["work_units"]) == (32, 1, 33)
+    assert info["products_by_callee"] == {"BlackwellS8ImmaDot32_v1": 32} and list(info["run_inputs"].values()) == [256, 256]
+    assert sorted(w for w in g.work if w) == [1, 32] and g.m_dyn == 64
+    g2, info2 = graph_of(program, ends, registered=[0])
+    assert (info2["products"], info2["work_units"], info2["registered_inputs"]) == (0, 1, 1) and len(info2["run_inputs"]) == 1
+    assert g2.inputs == frozenset({1}) and all(not x.dynamic for x in g2.values if x.producer == 0)
+    assert graph_of(*products(("w", "y")))[1]["products"] == 0
+    with pytest.raises(ValueError, match="registered names root inputs"):
+        graph_of(program, ends, registered=[3])
+
+
+def test_leaves_one_is_the_least_e_below_m_dyn():
+    """The encoder's writes cost 4 units a 32-bit word in D: the cut drops below their 1024 bits once 1024·128/E < 1024, at
+    E = 129, and at E = 128 it is M_dyn still. A graph whose writes are free leaves 1 at once."""
+    g, _ = graph_of(*encoder())
+    E = B.leaves_one(g)
+    assert E == 129 and B.bound(g, E=E, R_in=0).cut < g.m_dyn == B.bound(g, E=E - 1, R_in=0).cut
+    assert B.leaves_one(B.Graph([0, 0], [B.Value(0, 8, (1,)), B.Value(1, 8, write=True)], ["a", "b"])) == 1
+    assert B.leaves_one(B.Graph([0], [], ["a"])) is None
+
+
 def test_window_holds_earlier_calls_in_u():
     """Over the window of steps 2..n-1, steps 0 and 1 are held in U: their values reach the window as advice at their bits,
     and their KV is not the window's to write."""
@@ -199,7 +247,7 @@ def test_unknown_work_never_in_d():
     program = Program(comp("TestBetaUnknown", (("x", Array(1, BIT)),), S32, body))
     g, info = graph_of(program, ends)
     assert info["unknown_work_nodes"] == 1 and info["refused"] == {"unlisted:TestBetaUnlisted_v1": 1}
-    assert B.bound(g, E=B.E_CONJECTURED).beta == 1
+    assert B.bound(g, E=E40).beta == 1
 
 
 def test_a_value_read_twice_is_paid_once():
@@ -257,7 +305,7 @@ def test_bound_is_the_least_cut():
     for seed in range(120):
         rng = random.Random(seed)
         g = random_graph(rng, rng.randint(1, 9))
-        for E, inputs in ((Fraction(B.E_PROVED), "rate"), (Fraction(64), "window"), (Fraction(7, 3), "rate")):
+        for E, inputs in ((Fraction(E40), "rate"), (Fraction(64), "window"), (Fraction(7, 3), "rate")):
             assert B.bound(g, E=E, c=1024, inputs=inputs).cut == brute(g, E, 1024, inputs), (seed, E, inputs)
 
 
@@ -288,7 +336,7 @@ def test_coarse_graining_never_lowers_the_bound():
         g = random_graph(rng, rng.randint(1, 9))
         groups = [rng.randrange(max(1, len(g.work) // 2)) for _ in g.work]
         coarse = B.coarsen(g, groups.__getitem__)
-        for E, inputs in ((Fraction(64), "rate"), (Fraction(B.E_PROVED), "window")):
+        for E, inputs in ((Fraction(64), "rate"), (Fraction(E40), "window")):
             assert B.bound(coarse, E=E, inputs=inputs).cut >= B.bound(g, E=E, inputs=inputs).cut, seed
     g, _ = graph_of(*attention(6, 8))
     fine = B.bound(g, E=64)
@@ -304,7 +352,7 @@ def test_report_writes_each_bound_and_coarse_ones_are_looser():
     strictly looser, and JSON throughout."""
     g, info = graph_of(*attention(5, 8))
     seen: list[list[str]] = []
-    doc = B.report(g, info, chunks=(3, 1), first=info["inputs"], Es=(64, B.E_CONJECTURED), Ls=(0, 600), m_node=1 << 30,
+    doc = B.report(g, info, chunks=(3, 1), first=info["inputs"], Es=(64, E40), Ls=(0, 600), m_node=1 << 30,
                    write=lambda d: seen.append(sorted(d["coarse"]) + ["fine"] * ("bounds" in d)))
     assert seen[-1] == ["by_1_calls", "by_3_calls", "by_step", "fine"] and len(seen) == 4
     fine = [Fraction(r["cut_bits"]) for r in doc["bounds"]]
@@ -324,11 +372,13 @@ def spec(name: str) -> dict:
 
 
 def test_the_8b_decoder_adds_up_to_the_census_request():
-    """The 8B spec's blocks are the census's request Program's units, 9,404,379,802 (its ``check``): 32 steps, the KV of
-    steps 0..30 (256 + 30 rows a layer) and 31 tokens written. A term one unit off is refused."""
+    """The 8B spec's blocks are the census's request Program's budgeted units, 9,404,379,802 (its ``check``), and its data
+    products are 32 heads · 2 · 128 a (query row, key) pair a layer over the request's 256·257/2 + (257 + .. + 287) = 41,328
+    pairs: 32 steps, the KV of steps 0..30 (256 + 30 rows a layer) and 31 tokens written. A term one unit off is refused."""
     s = spec("decoder-llama31-8b-int8.json")
     g, info = B.decoder(s)
-    assert (info["work_units"], info["steps"], info["writes"]) == (9_404_379_802, 32, 32 * 31 + 31)
+    assert (info["budgeted_units"], info["steps"], info["writes"]) == (9_404_379_802, 32, 32 * 31 + 31)
+    assert info["products"] == 41_328 * 32 * 8192 and info["work_units"] == 9_404_379_802 + info["products"] == sum(g.work)
     assert g.m_dyn == 32 * (256 + 30) * 32768 + 31 * 32
     with pytest.raises(ValueError, match="not the measured"):
         B.decoder({**s, "sample": s["sample"] + 1})
@@ -365,7 +415,7 @@ def test_decoder_attention_is_charged_its_output_not_its_work():
 
 def test_table_moves_only_the_input_term():
     g, _ = graph_of(*cheap_writes(4))
-    rows = B.table(g, Es=(B.E_PROVED,), Ls=(0, 600, 3600))
+    rows = B.table(g, Es=(E40,), Ls=(0, 600, 3600))
     assert [r["input_bits"] for r in rows] == ["0", str(8 * B.R_IN * 600), str(8 * B.R_IN * 3600)]
     assert len({r["cut_bits"] for r in rows}) == 1
 
@@ -373,8 +423,8 @@ def test_table_moves_only_the_input_term():
 def test_the_input_term_is_shared_over_the_node():
     """One request's graph on a node holding M_node bits of dynamic memory: β = cut/M_dyn + R_in·L/M_node."""
     g, _ = graph_of(*cheap_writes(4))
-    b = B.bound(g, E=B.E_PROVED, R_in=1, L=2, m_node=10 * g.m_dyn)
-    assert b.beta == Fraction(32, B.E_PROVED) + Fraction(16, 10 * g.m_dyn) and b.s_stack == b.beta * g.m_dyn
-    assert B.table(g, Es=(B.E_PROVED,), Ls=(2,), R_in=1, m_node=10 * g.m_dyn)[0]["beta"] == str(b.beta)
+    b = B.bound(g, E=E40, R_in=1, L=2, m_node=10 * g.m_dyn)
+    assert b.beta == Fraction(32, E40) + Fraction(16, 10 * g.m_dyn) and b.s_stack == b.beta * g.m_dyn
+    assert B.table(g, Es=(E40,), Ls=(2,), R_in=1, m_node=10 * g.m_dyn)[0]["beta"] == str(b.beta)
     with pytest.raises(ValueError, match="m_node"):
         B.bound(g, m_node=g.m_dyn - 1)

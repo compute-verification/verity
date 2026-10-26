@@ -13,10 +13,13 @@ with M_dyn the bits of the writes. The cut D = {the writes} gives β ≤ 1 up to
 
 The graph (`Graph`):
 
-- **Nodes.** A node is a root Call of a Program (`from_program`), or a group of Calls (`coarsen`). Its work is its property/v1
-  units (`verity.ml.circuits.stacking`): only gates with an operand that depends on a run input count. A node with a gate
-  property/v1 refuses (unlisted, or a word read at another width) has unknown work and never sits in D, since charging it
-  less would lower the bound below what it bounds.
+- **Nodes.** A node is a root Call of a Program (`from_program`), or a group of Calls (`coarsen`). Its work is its nonlinear
+  units, the gate model's `nonlinear` (`Security/Definitions/Accounting/Gates/Model.lean`, #4622): property/v1's budgeted
+  units (`verity.ml.circuits.stacking`; only gates with an operand that depends on a run input count) plus its data
+  products, each lane of an s8-family step whose two multiplicands both depend on a run input (attention's QKᵀ and PV;
+  a MAC by a weight is a linear map, free), as `benchmarks/property_redteam/products_pass.py` counts them. E is in the
+  same units. A node with a gate property/v1 refuses (unlisted, or a word read at another width) has unknown work and
+  never sits in D, since charging it less would lower the bound below what it bounds.
 - **Values.** A value is a run of a node's outputs (census/v1's values), with its bits and its readers. A value that no run
   input reaches carries 0 bits: registered words and constants are fixed before the seed, as in property/v1. A selection's
   candidates count as its reads.
@@ -42,9 +45,9 @@ What property/v1 refuses but still tallies is charged as tallied and reported (`
 than B operand bits, and an s8 core step whose window isn't proven. An encode built from such gates may cost less than E
 of them, so a Program with either has no property/v1 verdict, and its β reads E in the basis property/v1 counts.
 
-    python beta.py DESCRIPTOR.json[.gz] --out beta.json [--E 24504 --E 364497] [--L 600 --L 3600] [--m-dyn-node BYTES] \\
-        [--chunk N]...                      # a Build's request Program: coarse bounds (by step, N Calls at a time), then the fine one
-    python beta.py --decoder decoder-llama31-70b-tp8.json --out beta.json     # a modeled decoder's request (`decoder`)
+    python beta.py DESCRIPTOR.json[.gz] --out beta.json [--E 1145562 --E 1151688] [--L 600 --L 3600] [--m-dyn-node BYTES] \\
+        [--chunk N]... [--registered-above BITS]   # a Build's request Program: coarse bounds (by step, N Calls at a time), then fine
+    python beta.py --decoder decoder-llama31-70b-tp8.json --out beta.json [--leaves-one]   # a modeled decoder's request (`decoder`)
 """
 from __future__ import annotations
 
@@ -53,7 +56,7 @@ import json
 import sys
 import time
 from collections import Counter, deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from fractions import Fraction
 from math import lcm
 from numbers import Rational
@@ -62,10 +65,12 @@ from typing import Any, Callable, Hashable, Iterable, Mapping, Sequence
 
 #: |c|: the bits of one encoded word
 WORD_BITS = 1024
-#: E, the property/v1 units one encode of a 1024-bit word costs: proved and conjectured
-#: (note:memory-accounting/20261018T0651Z-report-stacked-share-int8)
-E_PROVED = 24_504
-E_CONJECTURED = 364_497
+#: E, the nonlinear units one encode of a 1024-bit word costs under SquaringFloor and ChainSum at p1024, k = 3, at ε = 2^-40
+#: and at the carrier threshold 2^-20 (#4622; note:memory-accounting/20261026T0110Z-report-s5-lowerbounds): `share.E_WORD`'s
+#: conjectured rows. No E is proved: counting caps a squaring's bound near its output bits (`FoolingCap`).
+E_WORD = {"2^-40": 1_145_562, "2^-20": 1_151_688}
+#: `products_pass.py`'s directory: data products on property/v1's pass
+REDTEAM = Path(__file__).resolve().parents[1] / "property_redteam"
 #: R_in's default, bytes a second (`stacking.R_IN`)
 R_IN = 100_000
 INPUTS = ("rate", "window")
@@ -97,7 +102,7 @@ class Value:
 
 @dataclass
 class Graph:
-    """Nodes with their work (property/v1 units, an int or a Fraction; None: unknown, never in D) and names; the values between
+    """Nodes with their work (nonlinear units, an int or a Fraction; None: unknown, never in D) and names; the values between
     them; the run-input nodes; and the nodes held on U's side (`fixed`: outside the window)."""
 
     work: list[Any]
@@ -242,7 +247,7 @@ class Bound:
         return out
 
 
-def bound(g: Graph, *, E: Any = E_PROVED, c: int = WORD_BITS, R_in: Any = R_IN, L: Any = 0, inputs: str = "rate",
+def bound(g: Graph, *, E: Any = E_WORD["2^-40"], c: int = WORD_BITS, R_in: Any = R_IN, L: Any = 0, inputs: str = "rate",
           m_node: int | None = None, progress: Callable[[int, int], None] | None = None) -> Bound:
     """The min-cut bound on `g` at E units an encode of a `c`-bit word, R_in bytes a second over L seconds; ``inputs`` as the
     module says, ``m_node`` as `Bound` says. E, R_in and L are exact (`exact`)."""
@@ -331,30 +336,55 @@ def coarsen(g: Graph, key: Callable[[int], Hashable]) -> Graph:
     return Graph(work, values, names, frozenset(of[v] for v in g.inputs), frozenset(of[v] for v in g.fixed))
 
 
+class _Fixed(list):
+    """A body's run dependence as `stacking._Pass.walk` fills it node by node, with the nodes in `fixed` taken as fixed
+    before the coins."""
+
+    def __init__(self, fixed: Iterable[int]) -> None:
+        super().__init__()
+        self.fixed = frozenset(fixed)
+
+    def append(self, dyn: bool) -> None:
+        super().append(bool(dyn) and len(self) not in self.fixed)
+
+
 def from_program(program: Any, ends: Sequence[int] | None = None, *, doc: Mapping | None = None,
-                 window: range | None = None, writes: Callable[[int, int, Sequence[int]], bool] | None = None
-                 ) -> tuple[Graph, dict]:
-    """The graph of `program`'s root Calls over its census/v1 steps `ends` (`doc`: that census, else computed), and what
-    property/v1 refused or flagged in it.
+                 window: range | None = None, writes: Callable[[int, int, Sequence[int]], bool] | None = None,
+                 registered: Iterable[int] = ()) -> tuple[Graph, dict]:
+    """The graph of `program`'s root Calls over its census/v1 steps `ends` (`doc`: that census, else computed), each at its
+    nonlinear units (`products_pass.ProductsPass`: property/v1's pass with data products), and what property/v1 refused or
+    flagged in it.
 
     ``window`` (a range of steps, default all): Calls before it are held in U, so the values they made reach the window as
     advice at their bits; Calls after it are dropped. ``writes(v, producer, readers)`` marks the dynamic-memory writes
-    (default: a value a Call of the window makes that a later step reads)."""
+    (default: a value a Call of the window makes that a later step reads). ``registered``: root inputs the Build binds as
+    run inputs that are fixed before the coins all the same (the census's 8B Build binds its weights so): their values
+    carry no bits and no product reads them as data, so a weight's MACs stay linear maps."""
     from verity.ml.circuits import stacking as P
     from verity.ml.circuits.census import census, step_of
     from verity.ml.circuits.program import RUN, input_id, is_input
 
+    if str(REDTEAM) not in sys.path:
+        sys.path.insert(0, str(REDTEAM))
+    from products_pass import ProductsPass
+
+    if not hasattr(P.Step, "acc"):  # a Program decoded on a tree before PouwSegDot0 (a4f5a429c5): every family step accumulates
+        P.Step.acc = True
     nodes = program.root.body.nodes
     doc = census(program, list(ends) if ends is not None else None) if doc is None else doc
     I = doc["inputs"]
+    fixed = frozenset(registered)
+    if not fixed <= set(range(I)):
+        raise ValueError(f"registered names root inputs, nodes 0..{I - 1}, not {sorted(fixed - set(range(I)))[:5]}")
     step = step_of(doc)
     S = len(doc["steps"]["ends"])
     win = range(S) if window is None else window
     if not isinstance(win, range) or win.step != 1 or not 0 <= win.start < win.stop <= S:
         raise ValueError(f"the window is a non-empty range of the census's {S} steps, not {window!r}")
-    p = P._Pass()
-    dyns: list[bool] = []
+    p = ProductsPass()
+    dyns = _Fixed(fixed)
     work: list[Any] = [0] * len(nodes)
+    products: list[int] = [0] * len(nodes)
     refused: Counter = Counter()
     unproven: Counter = Counter()
     for k, t in p.walk(program.root.body, (), (), program.root.id, [], dyns, {}):
@@ -364,6 +394,7 @@ def from_program(program: Any, ends: Sequence[int] | None = None, *, doc: Mappin
                 refused[f"{code}:{fid}"] += m
         elif work[k] is not None:
             work[k] += sum(t.units.values())
+            products[k] = t.units.get("products", 0)
         unproven.update(t.unproven)
     wide = {g: b for g, (cls, b) in sorted(p.shapes.items())
             if cls in P.BUDGETED and b > P.OPERAND_BITS and not P._column(g)}
@@ -371,6 +402,7 @@ def from_program(program: Any, ends: Sequence[int] | None = None, *, doc: Mappin
     after = {k for k in range(I, len(nodes)) if step(k) >= win.stop}
     for k in after | before:
         work[k] = 0
+        products[k] = 0
     cand: dict[int, set[int]] = {}
     for k, vs in zip(doc["selects"]["call"], doc["selects"]["values"]):
         for v in vs:
@@ -386,16 +418,27 @@ def from_program(program: Any, ends: Sequence[int] | None = None, *, doc: Mappin
         w = (writes(v, j, allr) if writes is not None else any(step(r) > step(j) for r in allr)) and not inp and j not in before
         values.append(Value(j, bits, tuple(rs), dyns[j], w, inp))
     names = [f"{k}:{nd.fn.id}" + (f"@{step(k)}" if k >= I else "") for k, nd in enumerate(nodes)]
-    inputs = frozenset(k for k in range(I) if input_id(nodes[k].fn.id)[0] == RUN)  # type: ignore[index]
+    inputs = frozenset(k for k in range(I) if input_id(nodes[k].fn.id)[0] == RUN and k not in fixed)  # type: ignore[index]
+    by_callee: Counter = Counter()
+    for k, n in enumerate(products):
+        if n:
+            by_callee[nodes[k].fn.id] += n
+    input_bits: Counter = Counter()
+    for x in values:
+        if x.producer < I:
+            input_bits[x.producer] += x.bits
+    total = sum(w for w in work if w is not None)
     info = {"nodes": len(nodes), "inputs": I, "steps": S, "window": [win.start, win.stop], "values": len(values),
-            "writes": sum(x.write for x in values), "work_units": sum(w for w in work if w is not None),
-            "unknown_work_nodes": sum(w is None for w in work), "refused": dict(refused),
+            "writes": sum(x.write for x in values), "work_units": total, "budgeted_units": total - sum(products),
+            "products": sum(products), "products_by_callee": dict(by_callee.most_common(12)),
+            "run_inputs": {names[k]: input_bits[k] for k in sorted(inputs)},
+            "registered_inputs": len(fixed), "unknown_work_nodes": sum(w is None for w in work), "refused": dict(refused),
             "operand_bits": {"B": P.OPERAND_BITS, "past_B": wide}, "s8_unproven": dict(unproven)}
     assert all(is_input(nodes[k].fn) for k in range(I))
     return Graph(work, values, names, inputs, before), info
 
 
-def table(g: Graph, *, Es: Iterable[Any] = (E_PROVED, E_CONJECTURED), Ls: Iterable[Any] = (0,), R_in: Any = R_IN,
+def table(g: Graph, *, Es: Iterable[Any] = tuple(E_WORD.values()), Ls: Iterable[Any] = (0,), R_in: Any = R_IN,
           c: int = WORD_BITS, inputs: str = "rate", m_node: int | None = None,
           progress: Callable[[int, int], None] | None = None) -> list[dict]:
     """`bound` at each E and L (one max-flow an E: L moves only the input term)."""
@@ -409,6 +452,31 @@ def table(g: Graph, *, Es: Iterable[Any] = (E_PROVED, E_CONJECTURED), Ls: Iterab
     return out
 
 
+def leaves_one(g: Graph, *, c: int = WORD_BITS, inputs: str = "rate", top: int = 1 << 40) -> int | None:
+    """The least integer E at which `g`'s min cut is below M_dyn, so its β's cut part below 1 (None if not by `top`): the cut
+    is nonincreasing in E, so a bisection finds it."""
+    if not g.m_dyn:
+        return None
+
+    def below(E: int) -> bool:
+        return bound(g, E=E, c=c, R_in=0, inputs=inputs).cut < g.m_dyn
+
+    if below(1):
+        return 1
+    lo, hi = 1, 2
+    while not below(hi):
+        if hi >= top:
+            return None
+        lo, hi = hi, min(2 * hi, top)
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        if below(mid):
+            hi = mid
+        else:
+            lo = mid
+    return hi
+
+
 def decoder(spec: Mapping[str, Any]) -> tuple[Graph, dict]:
     """A modeled request of a decoder as a coarse graph, and its totals. Step 0 runs the prompt's rows (``prompt``), each of
     ``decode`` steps after it one row; with ``"prefill": "rows"`` each prompt row is a step of its own, reading its prompt
@@ -416,16 +484,19 @@ def decoder(spec: Mapping[str, Any]) -> tuple[Graph, dict]:
 
     - ``embed``: the rows' embedding (``row.embed`` a row), reading the prompt (a run input) or the token sampled a step before;
     - per layer, ``pre`` (``row.pre`` a row: norm, quantizer, QKV, RoPE), which writes the layer's KV rows and hands its queries
-      to ``attn`` (the window's units(N, S) = r0 N + b_q R + b_kv S + w0 + w_start [N = S], R = N S - N (N - 1) / 2, times
-      ``attention.calls``; `units.py`'s fit), whose output goes to ``post`` (``row.post``: O, residual, norm, MLP), which
-      reads the layer's residual too;
+      to ``attn`` (the window's budgeted units(N, S) = r0 N + b_q R + b_kv S + w0 + w_start [N = S], R = N S - N (N - 1) / 2,
+      `units.py`'s fit, plus ``attention.products`` data products a (query row, key) pair, all times ``attention.calls``),
+      whose output goes to ``post`` (``row.post``: O, residual, norm, MLP), which reads the layer's residual too;
     - ``head``: the final norm on every row (``row.final``) and the sample (``sample``), writing the next step's token.
 
+    ``attention.products`` is H·2·D for H query heads of D a call: `Int8LutAttentionRow`'s Q′K′ᵀ and P V′, 2·S·D a head's
+    row (`products_pass.py`). The rows, the sample and the rest of attention have none: their products are by weights.
+
     ``bits`` are a row's widths: ``hidden``, ``q``, ``kv`` (a layer's K and V), ``o`` and ``token``. A KV row or token a later
-    step reads is a write. Each node's work is the sum of property/v1 units of the Calls it stands for, and each value's bits
-    are those of the Calls' outputs between them, so the bound is a coarse graph's (`coarsen`): valid and at least the fine
-    Program's, as far as the units and widths are the Program's. ``check`` (optional) holds the model's total work to a
-    measured one."""
+    step reads is a write. Each node's work is the sum of the nonlinear units of the Calls it stands for, and each value's
+    bits are those of the Calls' outputs between them, so the bound is a coarse graph's (`coarsen`): valid and at least the
+    fine Program's, as far as the units and widths are the Program's. ``check`` (optional) holds the model's budgeted units
+    to a measured total."""
     P, T, Lc = int(spec["prompt"]), int(spec["decode"]), int(spec["layers"])
     row, bits, at = spec["row"], spec["bits"], spec["attention"]
     if spec.get("prefill", "batched") not in ("batched", "rows"):
@@ -442,10 +513,15 @@ def decoder(spec: Mapping[str, Any]) -> tuple[Graph, dict]:
         work.append(w)
         return len(work) - 1
 
+    products = 0
+
     def units(N: int, S: int) -> int:
+        nonlocal products
         R = N * S - N * (N - 1) // 2
         u = at["r0"] * N + at["b_q"] * R + at["b_kv"] * S + at["w0"] + at["w_start"] * (N == S)
-        return int(at.get("calls", 1)) * u
+        p = int(at.get("products", 0)) * R
+        products += int(at.get("calls", 1)) * p
+        return int(at.get("calls", 1)) * (u + p)
 
     prompt = node("prompt", 0)
     kv_readers: list[list[list[int]]] = [[[] for _ in range(steps)] for _ in range(Lc)]
@@ -479,11 +555,12 @@ def decoder(spec: Mapping[str, Any]) -> tuple[Graph, dict]:
             values.append(Value(kv_makers[layer][s], N * bits["kv"], tuple(kv_readers[layer][s]), write=s < steps - 1))
     g = Graph(work, values, names, frozenset({prompt}))
     total = sum(work)
-    if "check" in spec and total != spec["check"]:
-        raise ValueError(f"the model's work {total} is not the measured {spec['check']}: a row, sample or attention term is off")
+    if "check" in spec and total - products != spec["check"]:
+        raise ValueError(f"the model's budgeted units {total - products} are not the measured {spec['check']}: a row, sample "
+                         f"or attention term is off")
     info = {"label": spec.get("label"), "nodes": len(work), "values": len(values), "steps": steps, "rows": P + T,
-            "m_dyn_bits": g.m_dyn,
-            "writes": sum(x.write for x in values), "work_units": total, "checked": "check" in spec}
+            "m_dyn_bits": g.m_dyn, "writes": sum(x.write for x in values), "work_units": total,
+            "budgeted_units": total - products, "products": products, "checked": "check" in spec}
     return g, info
 
 
@@ -527,7 +604,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "m_dyn_node_bytes is --m-dyn-node's default")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--sample", default="TokenSelect_v1", help="the family that ends a request Program's steps")
-    ap.add_argument("--E", action="append", help=f"units an encode of a word costs (default {E_PROVED} and {E_CONJECTURED})")
+    ap.add_argument("--E", action="append", help="nonlinear units an encode of a word costs (default `E_WORD`'s, "
+                    + " and ".join(map(str, E_WORD.values())) + ")")
     ap.add_argument("--L", action="append", help="seconds of lifetime (default 600 and 3600)")
     ap.add_argument("--R-in", default=str(R_IN), help="run-input bytes a second")
     ap.add_argument("-c", type=int, default=WORD_BITS, help="|c|, bits of an encoded word")
@@ -536,6 +614,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "the Program's own writes)")
     ap.add_argument("--chunk", type=int, action="append", default=[],
                     help="also the coarse bound of each step's Calls taken N at a time, before the fine one")
+    ap.add_argument("--registered-above", type=int, metavar="BITS",
+                    help="take a root input of more than BITS bits as registered (`from_program`'s registered): a Build that "
+                    "binds its weights as run inputs, as the census's 8B one does, beside a prompt of a few kbit")
+    ap.add_argument("--leaves-one", action="store_true", help="also the least E at which the cut drops below M_dyn "
+                    "(`leaves_one`; a max-flow a bisection step, so for small graphs)")
     a = ap.parse_args(argv)
     if (a.descriptor is None) == (a.decoder is None):
         ap.error("give a descriptor or --decoder SPEC, one of them")
@@ -549,6 +632,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.decoder is not None:
         spec = json.loads(a.decoder.read_text())
         g, info = decoder(spec)
+        log(f"{info['products']} data products of {info['work_units']} nonlinear units")
         m_node_bytes = m_node_bytes or spec.get("m_dyn_node_bytes")
         source = {"decoder": str(a.decoder), "spec": spec}
     else:
@@ -560,7 +644,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         program = load(a.descriptor)
         ends = step_ends(program, [a.sample])
         log(f"loaded: {len(program.root.body.nodes)} root nodes, {len(ends)} steps")
-        g, info = from_program(program, doc=census(program, ends))
+        doc = census(program, ends)
+        reg: list[int] = []
+        if a.registered_above is not None:
+            bits: Counter = Counter()
+            for j, b in zip(doc["values"]["producer"], doc["values"]["bits"]):
+                if j < doc["inputs"]:
+                    bits[j] += b
+            reg = sorted(k for k, b in bits.items() if b > a.registered_above)
+            log(f"registered: {len(reg)} root inputs of more than {a.registered_above} bits, {sum(bits[k] for k in reg)} bits")
+        g, info = from_program(program, doc=doc, registered=reg)
+        log(f"run inputs: {info['run_inputs']}; {info['products']} data products of {info['work_units']} nonlinear units, "
+            f"by callee {info['products_by_callee']}")
         first = info["inputs"]
         source = {"descriptor": str(a.descriptor)}
     m_node = None if m_node_bytes is None else int(8 * exact(m_node_bytes, "--m-dyn-node"))
@@ -568,8 +663,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     def write(doc: dict) -> None:
         a.out.write_text(json.dumps({**doc, **source}, indent=1, default=str))
 
-    doc = report(g, info, chunks=a.chunk, first=first, write=write, log=log, Es=a.E or (E_PROVED, E_CONJECTURED),
+    doc = report(g, info, chunks=a.chunk, first=first, write=write, log=log, Es=a.E or tuple(E_WORD.values()),
                  Ls=a.L or (600, 3600), R_in=a.R_in, c=a.c, inputs=a.inputs, m_node=m_node)
+    if a.leaves_one:
+        doc["leaves_one_E"] = leaves_one(g, c=a.c, inputs=a.inputs)
+        write(doc)
+        log(f"the cut drops below M_dyn at E = {doc['leaves_one_E']}")
     print(json.dumps({"graph": doc["graph"], "bounds": [{k: r[k] for k in ("E", "L", "beta_float", "cut_bits", "m_dyn_bits")}
                                                         for r in doc["bounds"]]}, indent=1, default=str))
     return 0

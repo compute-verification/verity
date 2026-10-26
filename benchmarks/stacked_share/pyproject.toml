@@ -5,6 +5,7 @@
 testpaths = ["tests"]
 
 [tool.verity.tests]
-# units.py and beta.py read property/v1 and census/v1 (verity.ml.circuits); share.py imports nothing of verity
+# units.py and beta.py read property/v1 and census/v1 (verity.ml.circuits), beta.py the data products' pass beside it
+# (property_redteam/products_pass.py); share.py imports nothing of verity
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/kernels/__init__.py",
-          "verity/ml/kernels/tc.py"]
+          "verity/ml/kernels/tc.py", "benchmarks/property_redteam/products_pass.py"]
