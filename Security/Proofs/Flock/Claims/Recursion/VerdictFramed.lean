@@ -292,7 +292,7 @@ theorem framed_ctx (hG : D.RowG cls acc i) (hi : i < D.sts.size)
       exact (hS j hj (by omega) (by omega)).1
     rw [e]
     exact hnd'.sublist (List.take_sublist _ _)
-  obtain ⟨-, hrs⟩ := Claims.Bridge.Custody.repStreams_getElem D.d.spec (i := i) (r := r)
+  obtain ⟨hlt, hrs⟩ := Claims.Bridge.Custody.repStreams_getElem D.d.spec (i := i) (r := r)
     (by rw [← hsp]; exact hti) r.isLt
   have hname : D.sess.streams[2 * i + r].name = toString D.spec.tables[i]! ++ toString "/rep" ++ toString r :=
     (hS _ hkL hR1 hR2).1.trans (by rw [hrs, hsp]; try rfl)
