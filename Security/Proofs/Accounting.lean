@@ -13,9 +13,16 @@ import Proofs.Accounting.Prob
 import Proofs.Accounting.Joint
 import Proofs.Accounting.JointBlocks
 import Proofs.Accounting.JointPeriod
+import Proofs.Accounting.JointBridge.WorkOfCreditedWords
+import Proofs.Accounting.JointBridge.SpaceOfPeriodHeld
+import Proofs.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
+import Proofs.Accounting.JointBridge.CommOfPeriodLeakAccepted
 import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
+import Proofs.Accounting.JointBridge.HonestH200
 import Proofs.Accounting.JointBridge.IntegrityOfIntegrityPeriod
 import Proofs.Accounting.JointBlocksAbstract
+import Proofs.Accounting.JointBridge.IntegrityOfIntegrityBlock
+import Proofs.Accounting.JointBridge.JointHorizonBlocksDeployed
 import Proofs.Accounting.Pouw
 import Proofs.Accounting.PouwWork
 import Proofs.Accounting.BandwidthAudit

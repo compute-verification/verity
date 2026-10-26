@@ -1,6 +1,7 @@
 """The boundary's layout and the verifier's Fits check (`boundary`): the record-grain check (`checked_refusal`) held to
 `NetTiming.Layout.Fits` itself, its first conjunct taking the checked row (`prog_fits`, ``checked``), on each toy window
-flattened to gates; and the verifier's `refusal`, which refuses a window that passes it until Lean's Fits takes it."""
+flattened to gates; and the verifier's `refusal`, which refuses a window that passes it, its frame an input, which
+Lean's Fits takes no egress gate to be."""
 from __future__ import annotations
 
 import copy
@@ -180,13 +181,15 @@ def test_a_record_that_fits_only_at_the_gate_grain_is_refused():
     assert BD.refusal(doc).startswith("Layout.Fits, causal: egress bucket 0 of link 0 (unit 2) depends on ingress bucket 1")
 
 
-def test_prog_fits_is_layout_fits_on_its_three_conjuncts():
+def test_prog_fits_is_layout_fits_on_its_conjuncts():
     eg = lambda gs: (lambda t, ell, s: gs[t])  # noqa: E731
     gates = [("input", ()), ("input", ()), ("xor", (0, 1)), ("not", (3,)), ("and", (1,))]
     assert BD.prog_fits(gates, [2, 4], eg({0: (4, []), 1: (2, [])}), lambda t: [[1], [0]][t], 1, 1, 2)
     # step 0's slot reads step 1's ingress gate 0
     assert not BD.prog_fits(gates, [2, 4], eg({0: (2, []), 1: (4, [])}), lambda t: [[1], [0]][t], 1, 1, 2)
-    # reflexive: a returned input gate is step 0's presence and step 1's ingress
+    # a returned input gate as a slot gate, with no ingress, and as step 1's ingress too
+    assert not BD.prog_fits(gates, [0, 2], eg({0: (0, [])}), lambda t: [], 1, 1, 1)
+    assert not BD.prog_fits(gates, [0, 2], eg({0: (2, [0])}), lambda t: [], 1, 1, 1)
     assert not BD.prog_fits(gates, [0, 2], eg({0: (0, []), 1: (2, [])}), lambda t: [[1], [0]][t], 1, 1, 2)
     # past the horizon nothing is read
     assert BD.prog_fits(gates, [2, 4], eg({0: (2, []), 1: (4, [])}), lambda t: [[], [0]][t], 1, 1, 1)
@@ -198,11 +201,13 @@ def test_prog_fits_is_layout_fits_on_its_three_conjuncts():
     assert BD.prog_fits(gates + [("xor", (9, 4))], [2, 5], eg({0: (5, []), 1: (2, [])}), lambda t: [[], [0]][t], 1, 1, 2)
     assert not BD.prog_fits(gates + [("xor", (9, 2))], [2, 5], eg({0: (5, []), 1: (2, [])}), lambda t: [[], [0]][t], 1, 1, 2)
     assert not BD.prog_fits([("not", (1,)), ("input", ())], [0], eg({0: (0, []), 1: (0, [])}), lambda t: [[], [1]][t], 1, 1, 2)
-    # the checked row: a frame gate that is an input fits only ``checked``; a presence gate is returned either way, and a
-    # frame gate that is neither returned nor an input fits neither way
+    # the checked row: a frame gate that is an input, returned or not, fits only ``checked``; a presence gate is returned
+    # and not an input either way, and a frame gate that is neither returned nor an input fits neither way
     assert not BD.prog_fits(gates, [2], eg({0: (2, [0])}), lambda t: [], 1, 1, 1)
     assert BD.prog_fits(gates, [2], eg({0: (2, [0])}), lambda t: [], 1, 1, 1, checked=True)
+    assert BD.prog_fits(gates, [0, 2], eg({0: (2, [0])}), lambda t: [], 1, 1, 1, checked=True)
     assert not BD.prog_fits(gates, [2], eg({0: (0, [])}), lambda t: [], 1, 1, 1, checked=True)
+    assert not BD.prog_fits(gates, [0, 2], eg({0: (0, [])}), lambda t: [], 1, 1, 1, checked=True)
     assert not BD.prog_fits(gates, [2], eg({0: (2, [4])}), lambda t: [], 1, 1, 1, checked=True)
     # reflexive: a frame input gate of step 0 is step 1's ingress
     assert not BD.prog_fits(gates, [2, 4], eg({0: (4, [0]), 1: (2, [])}), lambda t: [[1], [0]][t], 1, 1, 2, checked=True)
@@ -309,9 +314,9 @@ def test_the_scans_link_window_passes_the_check_and_waits_on_lean():
     assert BD.checked_refusal(doc) is None
     assert BD.refusal(doc) == (
         "Layout.Fits, egress gates are returned: EgressBucket's frame 'row' is its checked row, an input its verdict 'o0' "
-        "holds to the cells it renders, and NetTiming.Layout.Fits returns every slot gate (C.outs), which a frame of R·B = "
-        "16·512 bytes can't be (a unit's outputs are at most 16 bits): refused until Layout.Fits takes a frame gate that is "
-        "an input (prog_fits, checked)")
+        "holds to the cells it renders, and NetTiming.Layout.Fits takes every slot gate to be returned (C.outs), which a "
+        "frame of R·B = 16·512 bytes can't be (a unit's outputs are at most 16 bits), and not an input, which the Program "
+        "reads from the advice (prog_fits)")
 
 
 def test_parse_reads_only_the_boundary():
