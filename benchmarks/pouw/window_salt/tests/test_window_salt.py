@@ -62,6 +62,23 @@ def test_the_window_salt_is_the_sessions_and_only_its_windows(gate, tmp_path):
     assert CC.window_salt({"check": {}}, REC, got.answer) == CC.SEEDED_SALT
 
 
+def test_the_client_waits_for_the_sessions_tunnel(gate, tmp_path, monkeypatch):
+    """vy-challenger-1's open answers before its tunnel listens on the peer (r20261026-213145-6be6's salt phase connected
+    first and was refused): refused connects open no coin, so `issue` connects once the address listens."""
+    g, main = gate
+    real, refused = WS.remote.socket.create_connection, []
+
+    def create_connection(address, *a, **k):
+        if len(refused) < 2:
+            refused.append(address)
+            raise ConnectionRefusedError(111, "Connection refused")
+        return real(address, *a, **k)
+
+    monkeypatch.setattr(WS.remote.socket, "create_connection", create_connection)
+    got = WS.issue(g, REC, 0, main, tmp_path / "out")
+    assert len(refused) == 2 and CC.window_salt(params(got.live), REC, got.answer) is None
+
+
 def test_activations_committed_after_the_salt_are_refused(gate, tmp_path):
     """A prover that takes the salt first and commits its activations after it (x chosen knowing the salt) registers
     activations whose root X is not the one the salt session was opened on: the ledger opened no session on the
