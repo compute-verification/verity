@@ -496,7 +496,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         st_dir = out / f"m{k}"
         st_dir.mkdir(parents=True, exist_ok=True)
         t = time.time()
-        if m.template in composed:      # a chunked template's chunks: one circuit, bound to the same partition and program
+        if m.template in composed:      # a template's members: one circuit, composed from the same input set, partition and program
             circuit, made, circ = composed[m.template]
         elif own:
             circuit = st_dir / "circuit.txt"
@@ -513,8 +513,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
                 raise RuntimeError(f"composing member {k}'s circuit failed: {p.stderr[-2000:]}")
             circuit, made = st_dir / "circuit.txt", json.loads(p.stdout.strip().splitlines()[-1])
             circ = FI.flock_circuit(circuit.read_bytes())
-            if chunked:
-                composed[m.template] = (circuit, made, circ)
+            composed[m.template] = (circuit, made, circ)
         compose_s = round(time.time() - t, 1)
         got = FI.flock_input_files(served, k, circ, st_dir / "prover", write=("pub",), files=files)
         link(Path(got["pub"]), st_dir / f"pub-{m.n}.bin")
