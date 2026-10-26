@@ -1162,6 +1162,10 @@
    "owner": "@proofs",
    "digest": "4c6283114e6093bce72430d7e41df49d280807a9f7dcfd337e81398948a04d9f"
   },
+  "Hash.EmbeddingRead.ok": {
+   "owner": "@proofs",
+   "digest": "73696546bac79ee16ad2c05ca0bb24e36f024e4c37114acd714e1160e0bf8c35"
+  },
   "Hash.RowLeaf.accepts": {
    "owner": "@kernels",
    "digest": "263fd6e9a4a0df8f6ad4ed23bf92236e58354b1007cca6fe6e818d1fa4862cde"
@@ -7858,6 +7862,12 @@
    "assumptions": [],
    "type_hash": "e68eb3b88c65d2f37e9f5f41402a589d574ad22ab95867ac9f47a796660fcbbe"
   },
+  "Hash.SecurityProofs.EmbeddingReadBinding": {
+   "owner": "@proofs",
+   "signature": ["Hash.SecurityProofs.EmbeddingReadBinding : Hash.Guarantees.EmbeddingReadBinding"],
+   "assumptions": [],
+   "type_hash": "c0490a64c93269da77a51fd49be5835792c0659fce6b3962e9750167c044c221"
+  },
   "Hash.SecurityProofs.RowBinding": {
    "owner": "@kernels",
    "signature": ["Hash.SecurityProofs.RowBinding : Hash.Guarantees.RowBinding"],
@@ -10886,6 +10896,10 @@
    },
    "Hash.SecurityProofs.TreeBinding": {
     "function": "Hash.Tree.accepts",
+    "outcome": "accept"
+   },
+   "Hash.SecurityProofs.EmbeddingReadBinding": {
+    "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
    }
   },
@@ -16825,6 +16839,7 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SamplingClaimsStated",
+    "Hash.SecurityProofs.EmbeddingReadBinding",
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding",
     "NetTiming.SecurityProofs.HorizonWrongUnitsLe",
@@ -19799,17 +19814,34 @@
     "Accounting.SecurityProofs.Remote.PooledDraw",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
+    "Hash.SecurityProofs.EmbeddingReadBinding",
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding"
    ]
   },
-  "Definitions.Hash.Guarantees": {
-   "digest": "19e9fcea482aa5af527ceb48166741b5c12059a2133c4b0f9d00d9ae6ab64713",
+  "Definitions.Hash.EmbeddingRead": {
+   "digest": "6d8abddb35b01ea8434d37aa1522b3f9973f698db76116215f51c3dfd976c5cf",
    "definitions": {
+    "Hash.EmbeddingRead.FILL_WORD": "0d56a4964d71bcc7c34c10236c7f57ffb45883d28965dd1be72751f133e8c120",
+    "Hash.EmbeddingRead.fill": "8473642ac7be2d62d95ed40411b107f78f3fb042e9183743e3b4311287ec5e40",
+    "Hash.EmbeddingRead.h": "e32e4776a5c9672af071ce5d8f33cbfb5101573b25ced4402337404cc4c89e62",
+    "Hash.EmbeddingRead.ok": "73696546bac79ee16ad2c05ca0bb24e36f024e4c37114acd714e1160e0bf8c35",
+    "Hash.EmbeddingRead.verifier": "44a465880256ba5a4dee2b876927b9339bcffd997721ffd2ab4da4064e476c41"
+   },
+   "guarantees": ["Hash.SecurityProofs.EmbeddingReadBinding"]
+  },
+  "Definitions.Hash.Guarantees": {
+   "digest": "f2b8af9c96d4c2b6cf862175f78ebd52043e0a7207342c310db358c27c83a9d7",
+   "definitions": {
+    "Hash.Guarantees.EmbeddingReadBinding": "fb62619313fdc15cf07ebedef7c3c73009727b9e8a501c6cf130b2da65e8b3b8",
     "Hash.Guarantees.RowBinding": "eb2b5136f8ce060b9e18a900cd57bd9df1a732e36d8756e3a59b202fc98e2edf",
     "Hash.Guarantees.TreeBinding": "5a6ac8239b2f217ee43962de29f8aca8baceb9c73ebc5f095fa328da95bd9d1a"
    },
-   "guarantees": ["Hash.SecurityProofs.RowBinding", "Hash.SecurityProofs.TreeBinding"]
+   "guarantees": [
+    "Hash.SecurityProofs.EmbeddingReadBinding",
+    "Hash.SecurityProofs.RowBinding",
+    "Hash.SecurityProofs.TreeBinding"
+   ]
   },
   "Definitions.Hash.Hm96": {
    "digest": "a25e93ee3e42e5c6fb4928fcbc844fa373b338928a514b95d66128aac4291dc7",
@@ -19832,6 +19864,7 @@
     "Accounting.SecurityProofs.Remote.PooledDraw",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
+    "Hash.SecurityProofs.EmbeddingReadBinding",
     "Hash.SecurityProofs.RowBinding"
    ]
   },
@@ -19867,6 +19900,7 @@
     "Accounting.SecurityProofs.Remote.PooledDraw",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
+    "Hash.SecurityProofs.EmbeddingReadBinding",
     "Hash.SecurityProofs.RowBinding"
    ]
   },
@@ -19895,6 +19929,7 @@
     "Accounting.SecurityProofs.Remote.PooledDraw",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
+    "Hash.SecurityProofs.EmbeddingReadBinding",
     "Hash.SecurityProofs.RowBinding"
    ]
   },
@@ -19914,6 +19949,7 @@
     "Accounting.SecurityProofs.Remote.PooledDraw",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
+    "Hash.SecurityProofs.EmbeddingReadBinding",
     "Hash.SecurityProofs.RowBinding"
    ]
   },
@@ -19941,6 +19977,7 @@
     "Accounting.SecurityProofs.Remote.PooledDraw",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
+    "Hash.SecurityProofs.EmbeddingReadBinding",
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding"
    ]
