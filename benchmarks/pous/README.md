@@ -85,6 +85,13 @@ Implementations:
     (`store.py toy --plain` writes them). `tests/test_pous_p2_store.py` regenerates both. `store.py commit` is
     `setup.commit` of the real W, regenerated in this layout from the seeded generator (`verity_torch_loop.weights`),
     with each s8 tensor held to the generator's manifest by SHA-256 as the pass reads it.
+  - `serve.py`: the toy served from that store under the remote bandwidth audit (`remote_bandwidth.p2`), the CPU
+    reference of the serving loop: each engine step decodes the store layer by layer, runs the layer's matmuls on what
+    it decoded, sketches each block's bytes as it decodes them, and commits one root, which the next step's seed chains
+    from; each window's openings are answered before the next step. `store-toy/receipts.json` (`serve.py fixture`) is
+    the decode kernel's sketch fixture: two chained passes' seeds, sign rows, every block's partial and every unit's
+    sketch and receipt (the interface is `remote_bandwidth`'s `PROTOCOL.md` §11). `tests/test_pous_p2_serve.py`
+    regenerates it.
 
 - `p2-gpu`: the efficient-cryptography campaign's tuned P2 kernel (`p2_gpu/`, CGBN) for the **experimental**
   `p2-16448/v2`, whose ChaCha8 keys the spec does not allow (its F4 names counter-mode SHA-512). The registered P2 with the
