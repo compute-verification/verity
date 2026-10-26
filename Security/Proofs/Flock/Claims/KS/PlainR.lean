@@ -204,9 +204,10 @@ theorem accR_cols {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Pr
     | none => simp [colsOf, hrr, Claims.Flock.lookCol] at hu
     | some rr =>
       simp only [colsOf, hrr] at hu
-      obtain ⟨⟨s, spec, sts⟩, -, -, -, -, -, -, hv, -, -, -, -, -, rfl⟩ := decR_some hd
       obtain ⟨st, hst, hm⟩ := runOfDecR_m hrr
-      refine ⟨spec, st, tables_head hv hst, ?_⟩
+      obtain ⟨⟨s, spec, sts⟩, -, -, -, -, -, -, hv, -, -, -, -, -, hdd⟩ := decR_some hd
+      have hst' : sts[0]? = some st := by rw [hdd] at hst; exact hst
+      refine ⟨spec, st, tables_head hv hst', ?_⟩
       obtain ⟨p, hp, rfl⟩ := exists_of_lookCol hu
       simp only [Bool.false_eq_true, ↓reduceIte]
       rw [plainRunCols_width hp, hm]
