@@ -83,7 +83,6 @@ import json
 import math
 import os
 import random
-import re
 import socket
 import subprocess
 import sys
@@ -428,7 +427,8 @@ def output_class(circuit: Mapping[str, Any], given: Iterable[Iterable[int]] = ()
         base[t], at = at, at + n
     units = {u for lo, hi in given for u in range(lo, hi)}
     for r in (circuit.get("registered") or {}).get("reads", ()):
-        if re.fullmatch(r"o[0-9]+", r["port"]) and r.get("cut", [0, 1]) == [0, 1]:
+        j = r["port"][1:]
+        if r["port"][:1] == "o" and j.isascii() and j.isdigit() and r.get("cut", [0, 1]) == [0, 1]:
             units.update(range(base[r["reader"]] + r["at"], base[r["reader"]] + r["at"] + math.prod(r["radix"])))
     out: list[list[int]] = []
     for u in sorted(units):
