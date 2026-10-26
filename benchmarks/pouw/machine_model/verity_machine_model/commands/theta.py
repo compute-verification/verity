@@ -1,8 +1,11 @@
 """machine-model theta [--check]           a device's θ (theta.toml): each figure against its document, then d by each
-                                          delivery route, Strassen's ALU-for-tensor-core exchange rate, B_RF and
-                                          c ≈ ρ₈/B_RF, and each honest profile's r_H against r_min and γ, each on
-                                          the data sheet and measured, with its arithmetic; --check prints the
-                                          figures alone; exits 1 when a figure doesn't hold"""
+                                          delivery route and the mma.sync seed, Strassen's ALU-for-tensor-core
+                                          exchange rate (at the honest L and the no-fold L), B_RF and c ≈ ρ₈/B_RF,
+                                          each honest profile's r_H against r_min and γ, those ratios per second,
+                                          every RT-UNITS unit's verdict, and SHA-512 against the public figures and
+                                          the card's ceiling, each on the data sheet and measured, with its
+                                          arithmetic; --check prints the figures alone; exits 1 when a figure
+                                          doesn't hold"""
 from __future__ import annotations
 
 from verity_machine_model import theta as T
@@ -39,6 +42,9 @@ def run(args) -> int:
     for reading in T.READINGS:
         for r in T.routes(t, reading):
             print(f"  {reading:8} {r.name}: {r.rho8:g} / {r.per_clk:.4g} [{r.how}] = {r.d:.2f}{_filled(r.filled)}")
+    print(f"  seed: mma.sync D ≠ C writes C, with the products it computes anyway, into a new accumulator: marginal d 0 "
+          f"while those products are needed; charged its issue slot, ρ₈ / (issue · 128 words) = "
+          f"{T.seed(t, 'sheet'):.2f} / {T.seed(t, 'measured'):.2f} (sheet / measured)")
     hs = T.folds(t, args.data)
     L = hs[0].L
     s0 = T.strassen(t, "sheet", L)
@@ -54,6 +60,15 @@ def run(args) -> int:
         print(f"{head}; exchange 5d/(4L) / (1 − {s.tensor:.4f}), MAC-times a MAC saved:")
         for name, x in s.rates.items():
             print(f"             {name}: {x:.3f}")
+    print(f"  at the no-fold receipt's L, where the k = L/2 products are k32 MMAs at full rate (post-additions only; the "
+          f"pre-additions and operand fix-ups are BET-ALGO-LAB's), the cheapest route's exchange:")
+    for big in T.NOFOLD_L:
+        cells = []
+        for reading in T.READINGS:
+            s = T.strassen(t, reading, big)
+            name, x = min(s.rates.items(), key=lambda kv: kv[1]) if s.rates else ("no exchange", None)
+            cells.append(f"{reading} {x:.4g} ({name})" if x is not None else f"{reading}: {name}")
+        print(f"    L = {big}: " + "; ".join(cells))
     print("\nB_RF, the most register bits all units write a SM-clock (warp instructions a SM-clock at the optimum); "
           "c ≈ ρ₈/B_RF")
     for reading in (*T.READINGS, "measured only"):
@@ -83,9 +98,24 @@ def run(args) -> int:
                     else "; Strassen frees no tensor time to trade it for: 0")
             print(f"    {reading:8} slack (r_H − r_min) at each class's lane rate: {f.slack[reading]:.4f} tensor "
                   f"MAC-times a MAC{tail}")
+    _per_second(t, L)
     _units(t)
     _sha(t)
     return 0 if ok else 1
+
+
+def _per_second(t: T.Theta, L: int) -> None:
+    print(f"\nper second, the tensor figures at their clock and the lanes at {t.clocks['fmax'].mhz:g} MHz: each "
+          f"tensor-over-lane ratio above times the clocks' ratio (1 where the card's figures share one clock); "
+          f"c with every writer at the lane clock")
+    for reading in T.READINGS:
+        k = T.tick(t, reading)
+        d = min(r.d for r in T.routes(t, reading) if r.name in T.ADDING)
+        s = T.strassen(t, reading, L)
+        x = f"{min(s.rates.values()):.3f} → {k * min(s.rates.values()):.3f}" if s.rates else "none"
+        c = T.bound(t, reading).c
+        print(f"  {reading:8} × {k:.4f}: least adding d {d:.2f} → {k * d:.2f}; exchange at L = {L} {x}; "
+              f"c {c:.4f} → {k * c:.4f}")
 
 
 def _units(t: T.Theta) -> None:
@@ -117,3 +147,15 @@ def _sha(t: T.Theta) -> None:
         p = s.public
         print(f"  {p.form:10} {p.impl} on the {p.card}: {p.gps:g} G/s over {p.sms} SMs at ≤ {p.mhz:g} MHz = "
               f"≥ {s.per_clk:.6f}; ours over it {r.measured / s.per_clk:.3f}, c_sha ≤ {s.c:.3f}")
+    if t.sha_mix is None:
+        return
+    m = t.sha_mix
+    print(f"  the card's ceiling for the mix ({m['alu']} ALU instructions, {m['rotates']} rotations and {m['adds']} "
+          f"2-input adds IMAD can take; {m['source']}): an LP over ALU, IMAD and issue")
+    for shared in (False, True):
+        for reading in T.READINGS:
+            c = T.sha_ceiling(t, reading, shared)
+            print(f"    {'one pool' if shared else 'apart':8} {reading:8} {c.clocks:.2f} SM-clocks (ALU alone "
+                  f"{c.alu_only:.2f}; {c.rotates:.0f} rotations, {c.adds:.0f} adds to IMAD) = {c.rate:.6f}; ours over it "
+                  f"{r.measured / c.rate:.3f}")
+    print(f"    ALU and IMAD on this mix: {m['overlap']}")

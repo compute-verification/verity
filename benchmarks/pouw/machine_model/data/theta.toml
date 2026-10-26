@@ -830,6 +830,16 @@ against = "sha512"
 why = "the host computes every compression of data it holds, so what bounds it is the words' bytes, not compressions: host.link's 64e9 B/s carry 0.5e9 · κ compressions' worth of words a second, which at κ = 1 is 0.5e9 / (188 SMs · 2,092 MHz, sha512's measured clock) = 0.00127131 a SM-clock; the share of device time it frees is that over the card's hashing rate whatever L is (the link runs through the tensor time too), up to the hashing's own share of device time"
 gap = "κ, the receipt's compressions a 128 B of words: about 1 for a long run of words a leaf, 2 for a binary tree over 128-B leaves (PROTO-DESIGN's no-fold receipt fixes it); a pinned device-to-host copy test for host.link (GPU queue)"
 
+# A compression's lane instructions, for SHA-512's ceiling on the card's pipes (`sha_ceiling`): `alu` on the ALU pipe,
+# of which `rotates` rotations or shifts (two SHF each) may go to IMAD; IADD.64 is one instruction, so no add gains.
+[sha512_mix]
+alu = 3415
+other = 0
+rotates = 864
+adds = 0
+overlap = "not on this mix: commit_gpu's SHA_ROT (rotations as mul.hi/mad.lo) runs 5.28 G/s against 7.13, 'IMAD issues at the same rate and doesn't overlap' (benchmarks/pouw/commit_gpu/README.md), so the shared reading is the card's"
+source = "benchmarks/pouw/commit_gpu/README.md 'What decides the speed': our kernel's 1728 SHF, 927 LOP3 and 760 IADD.64 a block, every one on the integer pipe; 864 rotations and shifts at two SHF each"
+
 [[public]]
 impl = "hashcat 7.1.2 sha512crypt (mode 1800, 5,000 rounds, each one compression of a block holding the last round's 64-B digest)"
 form = "generic"

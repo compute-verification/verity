@@ -213,6 +213,10 @@ def _theta(data: Path) -> str | None:
     for name in rs["sheet"]:
         body.append([f"d: {name}", *(f"{rs[rd][name].d:.2f}" if name in rs[rd] else "–" for rd in T.READINGS),
                      "ρ₈ over deliveries a SM-clock"])
+    body.append(["d: mma.sync D ≠ C seed, charged its issue slot", *(f"{T.seed(t, rd):.2f}" for rd in T.READINGS),
+                 "ρ₈ / (issue · 128 words); 0 while the seed MMA's products are needed"])
+    body.append(["per second over per SM-clock, a tensor-over-lane ratio", *(f"{T.tick(t, rd):.4f}" for rd in T.READINGS),
+                 "the tensor figures' clock over the lanes'"])
     ss = {rd: T.strassen(t, rd, L) for rd in T.READINGS}
     body.append([f"Strassen at L = {L}: tensor time over naive", *(f"{ss[rd].tensor:.4f}" for rd in T.READINGS),
                  f"7/8 · ρ_k{L} / ρ_k{L // 2}"])
@@ -220,6 +224,11 @@ def _theta(data: Path) -> str | None:
         body.append([f"exchange: {name}", *(f"{ss[rd].rates[name]:.3f}" if name in ss[rd].rates else "none"
                                             for rd in T.READINGS),
                      "5d/(4L) / (1 − tensor time); none: the level saves no tensor time"])
+    for big in T.NOFOLD_L:
+        cheapest = [min(s.rates.values(), default=None) for s in (T.strassen(t, rd, big) for rd in T.READINGS)]
+        body.append([f"exchange at L = {big}, the cheapest route", *(f"{x:.4g}" if x is not None else "none"
+                                                                     for x in cheapest),
+                     "k32 products at full rate: 10d/L"])
     bs = {rd: T.bound(t, rd) for rd in (*T.READINGS, "measured only")}
     mo = bs["measured only"]
     body.append(["B_RF, words a SM-clock", f"{bs['sheet'].words:.1f}", f"{bs['measured'].words:.1f}",
@@ -254,6 +263,15 @@ def _theta(data: Path) -> str | None:
                          f"{s.public.mhz:g}", f"{s.per_clk:.6f}", f"{ours / s.per_clk:.3f}", f"{s.c:.3f}",
                          s.public.source]
                         for s in T.sha(t)])]
+    if t.sha_mix is not None:
+        cs = [(shared, T.sha_ceiling(t, rd, shared)) for shared in (False, True) for rd in T.READINGS]
+        out += ["### SHA-512's ceiling on the card's pipes (`[sha512_mix]`, an LP over ALU, IMAD and issue)",
+                _table(["ALU and IMAD", "reading", "SM-clocks a compression", "ALU alone", "rotations to IMAD",
+                        "adds to IMAD", "a SM-clock", "ours over it"],
+                       [["one pool" if shared else "apart", c.reading, f"{c.clocks:.2f}", f"{c.alu_only:.2f}",
+                         f"{c.rotates:.0f}", f"{c.adds:.0f}", f"{c.rate:.6f}", f"{ours / c.rate:.3f}"]
+                        for shared, c in cs]),
+                f"Mix: {t.sha_mix['source']}. ALU and IMAD on it: {t.sha_mix['overlap']}."]
     return "\n\n".join(out)
 
 

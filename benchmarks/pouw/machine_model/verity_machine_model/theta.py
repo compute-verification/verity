@@ -12,7 +12,12 @@ value, and the sheet's where no run has one, which the result lists as filled).
   the fold reads each word nonlinearly, so the level splits each segment's k into halves: 7 products of k = L/2 for 8,
   and 5 of the 7 feed two output blocks, 5/(4L) extra deliveries a naive MAC. Its exchange rate is the delivery
   route's MAC-times a tensor MAC-time saved, 5d/(4L) over 1 − (7/8)·ρ_L/ρ_{L/2}, which is 10d/L when the k = L/2 form
-  runs at the k = L form's rate; when it runs slower the level saves no tensor time, and there is no exchange.
+  runs at the k = L form's rate; when it runs slower the level saves no tensor time, and there is no exchange. A
+  product whose k is a multiple of 32 runs as k32 MMAs (`form`), so at the no-fold receipt's L (`NOFOLD_L`) it's 10d/L.
+- `seed`: mma.sync with D ≠ C delivers its C into a new accumulator with the products it computes anyway, at no
+  marginal price while those are needed; charged its issue slot, d = ρ₈ / (issue · 128).
+- `tick`: a tensor-over-lane ratio per second over per SM-clock, the tensor figures' clock over the lanes'; every d,
+  exchange rate and c above times it is that figure per second.
 - `bound`: B_RF, the most register bits all units together write a SM-clock, an LP over the writers' warp instructions
   a SM-clock under the issue row, each pipe and, measured, the joint issue rows; c ≈ ρ₈/B_RF, since the transcript is
   one bit a MAC at L = 32 and the fold reads each word from a register. Measured, it is also read with the unmeasured
@@ -26,6 +31,9 @@ value, and the sheet's where no run has one, which the result lists as filled).
   open (with the run that would settle it), none, a clock or bandwidth scale, or absent.
 - `sha`: SHA-512, our measured compressions a SM-clock against each public implementation's figure (`[[public]]`) read
   at its card's highest clock, the lowest per-clock reading it can have; ours over it, at most 1, is c_sha's reading.
+  `sha_ceiling`: the most a compression of `[sha512_mix]` gets from the card's pipes, an LP over ALU, IMAD and issue
+  with rotations and 2-input adds movable to IMAD, the ALU and IMAD apart or as one pool: the rate a `ShaSpeed`
+  premise is stated at, since no instruction schedule of that mix beats it.
 
 `figures` holds each rate's `figure`, the per-second number its document prints at `clock`, to 2 · sheet · SMs · clock.
 """
@@ -46,6 +54,7 @@ SMSPS = 4                   # a joint issue row's SMSP-cycles a SM-clock
 TOL = 0.005                 # a figure holds within 0.5%: the documents round, and a DS prints the sparse figure
 INT8 = "tensor.s8.k32"
 READINGS = ("sheet", "measured")
+NOFOLD_L = (1024, 8192, 16384)  # segment lengths of the no-fold receipt's γ figures (L ≤ K, K 16384 to 65536)
 FOLD_RATE = {"ALU": "alu.lop3", "IMAD": "imad", "SHFL": "shfl"}   # the lane rate each fold class issues at
 ADDING = ("IADD3, two deliveries a lane instruction", "IADD3, one delivery a lane instruction",
           "IMAD a·1 + c, one delivery a lane instruction", "IADD3 on the ALU pipe and IMAD beside it",
@@ -79,6 +88,7 @@ class Clock:
     grade: str
     source: str
     measured: str
+    measured_mhz: float | None = None   # the clock a measured reading runs at, where a run gives one
 
 
 @dataclass(frozen=True)
@@ -164,6 +174,7 @@ class Theta:
     joints: dict[str, Joint]
     units: dict[str, Unit] = field(default_factory=dict)
     public: tuple[Public, ...] = ()
+    sha_mix: dict | None = None     # `[sha512_mix]`: a compression's lane instructions and the ones IMAD can take
 
     def at(self, key: str, reading: str) -> tuple[float | None, bool]:
         """A rate on the sheet or measured, and whether a measured reading took the sheet's value for want of a run."""
@@ -182,7 +193,8 @@ def theta(data: Path) -> Theta:
     if not p.is_file():
         raise SystemExit(f"{data}: no {THETA}; the devices with one are sm_120 (data/) and sm_90")
     t = tomllib.loads(p.read_text())
-    clocks = {c: Clock(c, v["mhz"], v["grade"], v["source"], v.get("measured", "")) for c, v in t["clocks"].items()}
+    clocks = {c: Clock(c, v["mhz"], v["grade"], v["source"], v.get("measured", ""), v.get("measured_mhz"))
+              for c, v in t["clocks"].items()}
     rates: dict[str, Rate] = {}
     for v in t["rate"]:
         if v["key"] in rates:
@@ -205,7 +217,7 @@ def theta(data: Path) -> Theta:
     th = Theta(gpu=t["gpu"], sms=t["sms"], sms_source=t["sms_source"], honest=tuple(t["honest"]),
                documents=tuple(t["documents"]), clocks=clocks, rates=rates, capacities=caps,
                paths=tuple(t.get("path", ())), fp8=tuple(t.get("fp8", ())), writers=writers, joints=joints,
-               units=units, public=public)
+               units=units, public=public, sha_mix=t.get("sha512_mix"))
     if problems := check(th):
         raise SystemExit(f"{p}:\n  " + "\n  ".join(problems))
     return th
@@ -259,6 +271,13 @@ def check(t: Theta) -> list[str]:
             out.append(f"unit {u.key}: no rate {u.against}")
     if t.public and "sha512" not in t.rates:
         out.append("[[public]] SHA-512 figures need the `sha512` rate they're read against")
+    if t.sha_mix is not None:
+        if "sha512" not in t.rates:
+            out.append("[sha512_mix] needs the `sha512` rate its ceiling is read against")
+        if missing := [k for k in ("alu", "rotates", "adds", "overlap", "source") if k not in t.sha_mix]:
+            out.append(f"[sha512_mix] lacks {', '.join(missing)}")
+        elif 2 * (t.sha_mix["rotates"] + t.sha_mix["adds"]) > t.sha_mix["alu"]:
+            out.append("[sha512_mix]: the movable rotates and adds take two ALU instructions each, more than `alu`")
     return out
 
 
@@ -334,6 +353,22 @@ def routes(t: Theta, reading: str) -> list[Route]:
     return out
 
 
+def seed(t: Theta, reading: str) -> float:
+    """mma.sync with D ≠ C writes its C, plus the products it computes anyway, into a new accumulator: a delivery of 128
+    words (the m16n8 tile) at no marginal price while those products are needed. Charged its issue slot alone, its d."""
+    return t.at(INT8, reading)[0] / (t.at("issue", reading)[0] * 128)
+
+
+def tick(t: Theta, reading: str) -> float:
+    """Per second over per SM-clock for a ratio of a tensor rate to a lane rate: the tensor figures' clock over the
+    lanes' (`[clocks.tensor]` against `[clocks.fmax]`; measured, the tensor clock a saturated run reaches). 1 on a card
+    whose figures share one clock."""
+    if "tensor" not in t.clocks:
+        return 1.0
+    c = t.clocks["tensor"]
+    return (c.measured_mhz if reading == "measured" and c.measured_mhz else c.mhz) / t.clocks["fmax"].mhz
+
+
 # --- Strassen's exchange rate ------------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
@@ -356,10 +391,15 @@ class Strassen:
         return 5 / (4 * self.L)
 
 
+def form(k: int) -> str:
+    """The INT8 rate a k-long product runs at: k32 MMAs end to end once k is a multiple of 32, else its own form."""
+    return f"tensor.s8.k{32 if k % 32 == 0 else k}"
+
+
 def strassen(t: Theta, reading: str, L: int) -> Strassen:
     if L % 2:
         raise SystemExit(f"L = {L}: one Strassen level halves k, so L is even")
-    keys = (f"tensor.s8.k{L}", f"tensor.s8.k{L // 2}")
+    keys = (form(L), form(L // 2))
     if missing := [k for k in keys if k not in t.rates]:
         raise SystemExit(f"{t.gpu}: no rate {', '.join(missing)}, which Strassen at L = {L} reads")
     (rl, fl), (rh, fh) = (t.at(k, reading) for k in keys)
@@ -508,3 +548,40 @@ def sha(t: Theta) -> list[ShaReading]:
         per_clk = p.gps * 1e9 / (p.sms * p.mhz * 1e6)
         out.append(ShaReading(p, per_clk, min(1.0, ours / per_clk)))
     return out
+
+
+@dataclass(frozen=True)
+class ShaCeiling:
+    reading: str
+    alu_only: float         # SM-clocks a compression with every instruction on the ALU pipe
+    clocks: float           # the LP's SM-clocks a compression
+    rotates: float          # rotations moved to IMAD at the optimum
+    adds: float             # 2-input 64-bit adds moved
+    shared: bool            # ALU and IMAD read as one pool
+
+    @property
+    def rate(self) -> float:
+        return 1 / self.clocks
+
+
+def sha_ceiling(t: Theta, reading: str, shared: bool = False) -> ShaCeiling | None:
+    """The fewest SM-clocks a compression of `[sha512_mix]` takes on the card's pipes: an LP over ALU, IMAD and issue in
+    which a rotation (two SHF) may go to IMAD as IMAD.HI + IMAD + IMAD.WIDE (disjoint parts, so no carry) and a 2-input
+    64-bit add (two IADD3) as IMAD.WIDE + IMAD. `shared` reads ALU and IMAD as one pool, as commit_gpu measured on sm_120
+    (U8). None without a mix."""
+    m = t.sha_mix
+    if m is None:
+        return None
+    a, i, hi, w = (t.at(k, reading)[0] for k in ("alu.lop3", "imad", "imad.hi", "imad.wide"))
+    lanes = LANES * t.at("issue", reading)[0]
+    rot, add = 1 / hi + 1 / i + 1 / w, 1 / w + 1 / i     # IMAD SM-clocks a moved rotation, a moved add
+    if shared:                                            # rows over (rotations, adds, T)
+        rows, rhs = [[rot - 2 / a, add - 2 / a, -1]], [-m["alu"] / a]
+    else:
+        rows, rhs = [[-2 / a, -2 / a, -1], [rot, add, -1]], [-m["alu"] / a, 0]
+    rows.append([1 / lanes, 0, -1])
+    rhs.append(-(m["alu"] + m.get("other", 0)) / lanes)
+    s = linprog([0, 0, 1], A_ub=rows, b_ub=rhs, bounds=[(0, m["rotates"]), (0, m["adds"]), (0, None)], method="highs")
+    if s.status != 0:
+        raise SystemExit(f"SHA-512's LP ({reading}): {s.message}")
+    return ShaCeiling(reading, m["alu"] / a, s.x[2], s.x[0], s.x[1], shared)

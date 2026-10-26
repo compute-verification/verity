@@ -102,6 +102,29 @@ def test_sha512_against_the_public_figures():
     assert h["H100 SXM 80GB HBM3", "structured"].c == pytest.approx(0.8847, abs=1e-3)
 
 
+def test_the_seed_the_clock_split_and_strassen_at_the_no_fold_l():
+    h, r = T.theta(SM90), T.theta(SM120)
+    assert T.seed(h, "sheet") == 8 and T.seed(r, "sheet") == 2
+    assert T.tick(h, "sheet") == pytest.approx(1830 / 1980) and T.tick(h, "measured") == pytest.approx(1797 / 1980)
+    assert T.tick(r, "sheet") == T.tick(r, "measured") == 1
+    for t, d in ((h, 128 / 7), (r, 4)):
+        for L in (32, *T.NOFOLD_L):
+            s = T.strassen(t, "sheet", L)
+            assert s.tensor == pytest.approx(7 / 8) and min(s.rates.values()) == pytest.approx(10 * d / L)
+    assert not T.strassen(h, "measured", 32).rates and T.strassen(h, "measured", 1024).tensor == pytest.approx(7 / 8)
+
+
+def test_sha512_ceiling_on_the_card_pipes():
+    h = T.sha_ceiling(T.theta(SM90), "sheet")
+    rotations = (3536 - 2 * 88 - 3 * 88) / 7   # ALU (3536 − 2r − 176)/64 against IMAD (5r + 264)/64
+    assert h.alu_only == pytest.approx(3536 / 64) and h.adds == pytest.approx(88)
+    assert h.rotates == pytest.approx(rotations) and h.clocks == pytest.approx(5 * rotations / 64 + 264 / 64)
+    r = T.theta(SM120)
+    apart, pool = T.sha_ceiling(r, "sheet"), T.sha_ceiling(r, "sheet", shared=True)
+    assert apart.clocks == pytest.approx(5 * 3415 / 7 / 64) and pool.rotates == 0
+    assert pool.rate == pytest.approx(r.rates["sha512"].sheet, abs=1e-6)
+
+
 def test_the_rules_refuse_a_missing_unit_or_an_unbounded_one(tmp_path):
     shutil.copytree(SM90, tmp_path / "d", ignore=shutil.ignore_patterns("census", "vectors", "designs"))
     p = tmp_path / "d" / T.THETA
@@ -137,10 +160,12 @@ def test_the_command_and_the_render(capsys):
     assert "texture: texture filtering: 4 texture units a SM; ≤ 16 against tensor.s8.k32: 0.39% / 0.39%" in out
     assert "c_sha ≤ 0.885" in out
     assert "    mma.sync m16n8k32 s8: 128.0 / 84.0\n" in out and "    mma.sync m16n8k4 tf32: 256.0 / 256.0*\n" in out
+    assert "ρ₈ / (issue · 128 words) = 8.00 / 8.00" in out and "least adding d 18.29 → 16.90" in out
+    assert "apart    sheet    38.68 SM-clocks" in out and "L = 8192: sheet 0.02232" in out
     assert main(["theta", "--check"]) == 0
     assert "holds" in capsys.readouterr().out
     assert main(["render", "theta"]) == 0
     out = capsys.readouterr().out
-    assert "| `tensor.s8.k16` |" in out and "### FP8 atoms" in out
+    assert "| `tensor.s8.k16` |" in out and "### FP8 atoms" in out and "### SHA-512's ceiling" in out
     with pytest.raises(SystemExit, match="no theta.toml"):
         main(["--device", "sm_80", "theta"])

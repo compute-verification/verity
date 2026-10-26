@@ -88,8 +88,9 @@ The data, each kind of thing a file or a line of its own:
   every tensor rate by format and shape, every lane pipe, the register file, shared memory, L1, L2 and HBM, the
   capacities and clocks, each with its vendor document and page first, then the census or run that measured it, or the
   run that would (`gap`); the exact paths (b1, INT4, FP4) with their ISA reference; the FP8 atoms' semantics; the
-  units that write registers, which B_RF's LP reads; a verdict for every unit RT-UNITS lists (`[[unit]]`); and the
-  public SHA-512 figures our compressions are read against (`[[public]]`).
+  units that write registers, which B_RF's LP reads; a verdict for every unit RT-UNITS lists (`[[unit]]`); the
+  public SHA-512 figures our compressions are read against (`[[public]]`); and a compression's instruction mix
+  (`[sha512_mix]`), which SHA-512's ceiling on the card's pipes reads.
 - `data/devices/sm_NN/`: another device's data ("Devices" below).
 
 The code:
@@ -116,7 +117,9 @@ The code:
   sheet and measured: d, one delivery in INT8 MAC units by route; Strassen's ALU-for-tensor-core exchange rate at the
   honest kernel's L; B_RF, the most register bits all units write a SM-clock, and c ≈ ρ₈/B_RF; and, for each honest
   profile `honest` lists (duo's and LI's), r_H against the fold's r_min and, measured, γ against the lone INT8 MMA;
-  each RT-UNITS unit's verdict and the most a bounded one adds; and c_sha, our SHA-512 against each public figure.
+  the mma.sync D ≠ C seed's d; Strassen's exchange at the no-fold receipt's L too; each tensor-over-lane ratio per
+  second (`tick`); each RT-UNITS unit's verdict and the most a bounded one adds; and c_sha, our SHA-512 against each
+  public figure, with the card's ceiling for the compression's instruction mix (`sha_ceiling`).
 - `verity_machine_model/cli.py` and `verity_machine_model/commands/`: the `machine-model` command. `cli.py` only
   dispatches; each command is a module of `commands/` with its usage as its docstring, `add(sub)` its arguments and
   `run(args)` its body, so a new command is a new module and touches no other.
