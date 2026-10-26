@@ -652,9 +652,7 @@ theorem resTie_staged {b : Brings} {IV : Claims.Verifier Coin}
   refine ⟨inn, rows, hinn, hrows, fun hptv hpto hwv hwo hnr hsz hVc hOc => ?_⟩
   have hzn : n < (RecCoins.zeroRows 2 RecCoins.OUT_WORDS).size := by simpa [RecCoins.zeroRows] using hn2
   obtain ⟨prog, hprog, hpv⟩ := check5_bytes hS hck hr hpc hsu h0 hidx hown hcv hqv hn2 hnr hnp
-  obtain ⟨prog', hprog', hpo⟩ := check5_bytes hS hck hr hpc hsu h0 hidx hown hcz hqo hn2 hzn hnp
-  have hpp : prog' = prog := Except.ok.inj (hprog'.symm.trans hprog)
-  rw [hpp] at hpo
+  obtain ⟨-, -, hpo⟩ := check5_bytes hS hck hr hpc hsu h0 hidx hown hcz hqo hn2 hzn hnp
   beta_reduce at hpv hpo
   have hst : resSetupSt (RecCoins.Source.atC3 i.src i.inner i.commits) sts[0] =
       commitIns rows (RecCoins.verifierSalt prog RecCoins.V_VALUE) ++
