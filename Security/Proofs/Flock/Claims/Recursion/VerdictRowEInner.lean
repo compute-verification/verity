@@ -105,8 +105,8 @@ theorem innerAccRow_table {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.
     have h1 : nm ∈ (pt.S.ports.map (·.1)).filter (fun nm => nm == "acc0" || nm == "acc1") := hnm
     exact (List.mem_filter.1 h1).1
   obtain ⟨rws2, reg2, a, hrws2, hreg2, ha, hdiff⟩ := FlockC3.HPort.rowPort_of_checkRows hrows hrp
-  obtain rfl : reg2 = reg := Option.some.inj (hreg2.symm.trans hfr)
-  obtain rfl : rws2 = rws := Option.some.inj (hrws2.symm.trans hrws)
+  obtain rfl : reg = reg2 := Option.some.inj (hfr.symm.trans hreg2)
+  obtain rfl : rws = rws2 := Option.some.inj (hrws.symm.trans hrws2)
   obtain ⟨-, hra⟩ := FlockC3.HPort.site_reads_of_portDiff hdiff
   have hreg := RecIns.setup_registered hset sts[0] (Array.getElem_mem h0)
   rw [hown] at hreg
