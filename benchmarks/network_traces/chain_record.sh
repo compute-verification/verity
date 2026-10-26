@@ -19,8 +19,8 @@
 #   report   $OUT/report/report.json and report.md (chain_record.py report)
 # env: CR_MEM_GB (what job.sh's stages may take, within the slot's)
 #      CR_GATES (space-separated: a tarball's name under the run's inputs/, an art: id, or a directory)
-#      CR_CLIENT (the client's kept files, a path under the unpacked gates; by default the directory holding
-#      certificates.jsonl, else the certifier rehearsal's honest directory)  CR_DEPLOYED=1 (certs refuses a key that
+#      CR_CLIENT (the client's kept files, a path under the unpacked gates; by default the certifier rehearsal's
+#      own client/, else its honest directory, never a file of another gate run)  CR_DEPLOYED=1 (certs refuses a key that
 #      isn't LMS at lms.DEPLOYED, H = 20)
 #      CR_ENDPOINT (the endpoint's records, network_e2e chain.ENDPOINT's four files: a tarball's name under inputs/,
 #      an art: id, or a directory)
@@ -62,7 +62,7 @@ done
 HONEST=$(find "$G" -path '*/out/honest/plan.json' -print -quit); HONEST=${HONEST%/plan.json}
 [ -n "$HONEST" ] || { log "chain: no certifier rehearsal (out/honest/plan.json) in $CR_GATES"; exit 3; }
 if [ -n "${CR_CLIENT:-}" ]; then CLIENT=$(find "$G" -path "*$CR_CLIENT" -print -quit)
-else CLIENT=$(find "$G" -name certificates.jsonl -printf '%h\n' -quit); CLIENT=${CLIENT:-$HONEST}; fi
+else CLIENT=$HONEST/client; [ -d "$CLIENT" ] || CLIENT=$HONEST; fi
 WARDEN=; [ -z "${CR_WARDEN_RUN:-}" ] || WARDEN=$(find "$G" -path "*$CR_WARDEN_RUN" -print -quit)
 log "chain: certifier run ${HONEST#$G/}, client ${CLIENT#$G/}, warden run ${WARDEN:-none}"
 mkdir -p "$OUT/gates"
