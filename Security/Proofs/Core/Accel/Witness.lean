@@ -432,4 +432,39 @@ theorem kernel_fits (n : ℕ) (h256 : 256 ∣ n) (hn : n ≤ 2048)
     Machine.Fits (prog (kernel n)) σ (sched (kernel n)) :=
   ⟨kernel_progFits n h256 hn, kernel_rate n hn σ hpc, kernel_codeFetch n h256 hn σ hpc⟩
 
+/-! ## Writes -/
+
+section Writes
+
+variable {α β γ : Type} [DecidableEq β]
+
+theorem foldl_update_not_mem (f : α → β) (g : α → γ) (b : β) :
+    ∀ (l : List α) (M : β → γ), (∀ a ∈ l, f a ≠ b) →
+      l.foldl (fun M' a => Function.update M' (f a) (g a)) M b = M b
+  | [], _, _ => rfl
+  | a :: l, M, h => by
+    rw [List.foldl_cons, foldl_update_not_mem f g b l _ (fun a' ha' => h a' (by simp [ha'])),
+      Function.update_of_ne (h a (by simp)).symm]
+
+theorem foldl_update_mem (f : α → β) (g : α → γ) :
+    ∀ (l : List α) (M : β → γ), (∀ a ∈ l, ∀ a' ∈ l, f a = f a' → a = a') → l.Nodup → ∀ a ∈ l,
+      l.foldl (fun M' a => Function.update M' (f a) (g a)) M (f a) = g a
+  | [], _, _, _, _, h => absurd h (by simp)
+  | a₀ :: l, M, hinj, hnd, a, ha => by
+    rw [List.foldl_cons]
+    have hnd' := List.nodup_cons.mp hnd
+    rcases List.mem_cons.mp ha with rfl | ha'
+    · rw [foldl_update_not_mem f g (f a) l _ (fun a' ha' e =>
+        hnd'.1 (hinj a' (by simp [ha']) a (by simp) e ▸ ha')), Function.update_self]
+    · exact foldl_update_mem f g l _ (fun a ha a' ha' => hinj a (by simp [ha]) a' (by simp [ha'])) hnd'.2 a ha'
+
+theorem execOp_direct {ι : Type} {m : Machine ι} (o : m.Op) (src : Fin (m.nIn o) → Machine.Operand)
+    (d : Fin (m.nOut o) → ℕ) (M : m.Mem) :
+    Machine.execOp o src (fun i => .direct (d i)) none M =
+      (List.finRange (m.nOut o)).foldl (fun M' i => Function.update M' (m.loc (m.outStore o i) (d i))
+        (m.eval o (fun i => (src i).readIn (m.inStore o i) M) i)) M := by
+  simp [Machine.execOp, Machine.Operand.writeIn, Machine.Operand.locIn]
+
+end Writes
+
 end Verity.Accel.H200.Resident
