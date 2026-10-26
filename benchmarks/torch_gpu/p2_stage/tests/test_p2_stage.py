@@ -1,8 +1,11 @@
-"""The staging decode's CPU parts: where a layer's matrices lie in W, the scatter of decoded rows into a staging buffer,
-P2's reference decode of one block (pinned to the spec's deployment vector), and the GEMM's twin against
-`ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}`."""
+"""The staging decode's CPU parts: the store's layout as CMP-95 item 2's fixture gives it, the stream's bytes laid out as
+the store's W, the scatter of decoded rows into a staging buffer, P2's reference decode of one block (pinned to the
+spec's deployment vector), the fixture's toy store through the staging path under P2's reference, and the GEMM's twin
+against `ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}`."""
 from __future__ import annotations
 
+import argparse
+import hashlib
 import json
 import random
 import sys
@@ -21,13 +24,38 @@ import stage as S  # noqa: E402
 
 ROOT = HERE.parents[2]
 VECTORS = json.loads((ROOT / "benchmarks/pous/p2_v1/vectors.json").read_text())
+TOY = ROOT / "benchmarks/pous/p2_v1/store-toy"
 PREFIX = L.registered_prefix(bytes(range(24)))
 
 
+def model(width: int, layers: int, heads: int, ff: int, vocab: int = 256) -> list[tuple[str, int, int, int]]:
+    """`(name, layer, N, K)` in the fixture's order: each layer's QKV (one KV head of 64), O, up and down, then the head."""
+    out = []
+    for i in range(layers):
+        out += [(L.matrix_name(i, "qkv"), i, (heads + 2) * 64, width), (L.matrix_name(i, "o"), i, width, heads * 64),
+                (L.matrix_name(i, "up"), i, ff, width), (L.matrix_name(i, "down"), i, width, ff)]
+    return out + [("lm_head.weight", layers, vocab, width)]
+
+
+def layout_doc(tensors: list[tuple[str, int, int, int]], per_segment: int = 1 << 16) -> dict:
+    """A layout in the fixture's format by its rules: each tensor from a block boundary, back to back by blocks; each
+    layer's staging buffer from 0, every tensor at a multiple of 256."""
+    rows, block, layer, staging = [], 0, None, 0
+    for name, i, n, k in tensors:
+        if i != layer:
+            layer, staging = i, 0
+        blocks = -(-n * k // L.PAYLOAD)
+        rows.append([name, i, n, k, block * L.PAYLOAD, n * k, block, blocks, staging])
+        block += blocks
+        staging += -(-n * k // 256) * 256
+    p = L.S.P2Params(16448, 21065, per_segment, max(1, -(-block // per_segment)))
+    return {"schema": L.SCHEMA, "scheme": L.SCHEME, "params": p.manifest(), "block_bytes": p.block_bytes,
+            "payload_bytes": p.payload_bytes, "blocks": p.blocks, "tensor_columns": list(L.COLUMNS), "tensors": rows}
+
+
 def stream_manifest(width: int = 64, mlp: int = 256, layers: int = 2) -> dict:
-    """A small weights-stream manifest with the frozen shape's tensor order (one KV head of `width // 4`)."""
+    """A small weights-stream manifest with the frozen shape's tensor order (one query head, one KV head of 64)."""
     rows, at = [], 0
-    kv = width // 4
 
     def add(name, shape, size):
         nonlocal at
@@ -37,7 +65,7 @@ def stream_manifest(width: int = 64, mlp: int = 256, layers: int = 2) -> dict:
     add("tok", [width, 256], 2 * width * 256)
     for i in range(layers):
         add(f"l{i}.attn_norm", [width], 2 * width)
-        for t, n, k in (("wq", width, width), ("wk", kv, width), ("wv", kv, width), ("wo", width, width)):
+        for t, n, k in (("wq", 64, width), ("wk", 64, width), ("wv", 64, width), ("wo", width, 64)):
             add(f"l{i}.{t}", [n, k], n * k)
             add(f"l{i}.{t}.scale", [n], 4 * n)
         add(f"l{i}.mlp_norm", [width], 2 * width)
@@ -57,28 +85,75 @@ def test_blocks_of():
         L.blocks_of(-1, 2)
 
 
-def test_layout_of_both_manifests():
-    doc = stream_manifest()
-    lay = L.layout_of(doc, PREFIX)
-    assert [p.name for p in lay.parts(1, "qkv")] == ["l1.wq", "l1.wk", "l1.wv"]
-    assert [p.name for p in lay.parts(0, "down", scales=True)] == ["l0.wdown.scale"]
-    assert lay.nbytes(0, "qkv") == 64 * 64 + 2 * 16 * 64
-    assert lay.nbytes(0, "qkv", scales=True) == 4 * (64 + 32)
-    span = lay.span(0)
-    first, last = lay.tensor(0, "wq"), lay.tensor(0, "wdown.scale")
-    assert span == range(first.offset // L.PAYLOAD, -(-(last.offset + last.size) // L.PAYLOAD))
-    again = L.layout_of(lay.layout.manifest(), PREFIX)
-    assert again.layout.tensors == lay.layout.tensors
+def test_store_layout_is_cmp95s_at_the_frozen_shape():
+    """CMP-95 item 2's numbers: 1,038 segments; layer l from block 1,307,915 l; QKV, O, up and down at blocks 0, 131,711,
+    262,401 and 785,158 of it and staging offsets 0, 270,532,608, 538,968,064 and 1,612,709,888; the head at block
+    68,011,580 over 2,043 blocks."""
+    lay = L.store_layout(layout_doc(model(16384, 52, 256, 65536)), PREFIX)
+    assert (lay.params.segments, lay.params.blocks) == (1038, 68_026_368)
+    for i in (0, 1, 51):
+        ts = lay.layer(i)
+        assert [t.matrix for t in ts] == list(L.MATRICES)
+        assert [t.first_block - 1_307_915 * i for t in ts] == [0, 131_711, 262_401, 785_158]
+        assert [t.blocks for t in ts] == [131_711, 130_690, 522_757, 522_757]
+        assert [t.staging_offset for t in ts] == [0, 270_532_608, 538_968_064, 1_612_709_888]
+        assert lay.blocks(i) == range(1_307_915 * i, 1_307_915 * (i + 1))
+        assert lay.staging_bytes(i) == 2_686_451_712
+    qkv = lay.tensor(0, "qkv")
+    assert (qkv.n, qkv.k, qkv.name) == (16512, 16384, "model.layers.0.self_attn.qkv_proj.weight")
+    assert lay.tensor(0, qkv.name) == qkv
+    (head,) = lay.layer(52)
+    assert (head.first_block, head.blocks, head.matrix) == (68_011_580, 2_043, None)
+    assert lay.spec.blocks_per_segment == 65536 and lay.spec.p == L.SPEC.p
     with pytest.raises(KeyError):
-        lay.parts(0, "gate")
+        lay.tensor(0, "gate")
 
 
-def test_layout_refuses_a_prefix_not_whole_blocks_and_another_point():
+def test_store_layout_reads_the_toy_doc_and_refuses_other_layouts():
+    doc = layout_doc(model(64, 2, 1, 64), per_segment=11)
+    lay = L.store_layout({"layout": doc}, PREFIX)
+    assert lay.params.blocks_per_segment == 11 and lay.layer(2)[0].name == "lm_head.weight"
+    for bad in ({"schema": "other"}, {"scheme": "p2-16448/v3"}, {"blocks": doc["blocks"] + 11},
+                {"params": {**doc["params"], "c0": 21069}}):
+        with pytest.raises(ValueError):
+            L.store_layout({**doc, **bad}, PREFIX)
+    rows = doc["tensors"]
+    for i, col, delta in ((1, 4, 1), (1, 7, 1), (1, 6, -1), (1, 8, -256), (0, 2, 1)):
+        changed = [list(r) for r in rows]
+        changed[i][col] += delta
+        with pytest.raises(ValueError):
+            L.store_layout({**doc, "tensors": changed}, PREFIX)
+    with pytest.raises(ValueError):
+        L.store_layout(doc, PREFIX[:-1])
+
+
+@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="CMP-95 item 2's toy (benchmarks/pous/p2_v1/store-toy) isn't here")
+def test_layout_doc_is_the_toys():
+    toy = json.loads((TOY / "toy.json").read_text())["layout"]
+    assert layout_doc(model(64, 2, 1, 64), per_segment=11) == {k: toy[k] for k in layout_doc([]).keys()}
+
+
+def test_payloads_are_the_streams_bytes_block_aligned():
     doc = stream_manifest()
-    with pytest.raises(ValueError):
-        L.layout_of(doc, PREFIX[:-1])
-    with pytest.raises(ValueError):
-        L.StoreLayout(L.Layout.of(L.S.P2Params(16448, 21065, 1 << 10), [("a", 1)]), PREFIX)
+    lay = L.store_layout(layout_doc(model(64, 2, 1, 256)), PREFIX)
+    src = L.Weights.of(doc)
+    w = np.random.default_rng(1).integers(0, 256, doc["stream_bytes"], dtype=np.uint8).tobytes()
+    read = lambda o, n: w[o:o + n]  # noqa: E731
+    assert src.shape(1, "qkv") == (192, 64) and src.shape(1, "down") == (64, 256)
+    by = {t["name"]: t for t in doc["tensors"]}
+    for t in lay.layer(1):
+        want = b"".join(w[by[f"l1.{p}"]["offset"]:][:by[f"l1.{p}"]["nbytes"]] for p in L.PARTS[t.matrix])
+        got = L.payloads(lay, src, read, t.first_block, t.blocks)
+        assert got[:t.size] == want and not any(got[t.size:])
+    whole = L.payloads(lay, src, read, lay.blocks(1).start, len(lay.blocks(1)))
+    assert len(whole) == len(lay.blocks(1)) * L.PAYLOAD
+    lo, hi = src.span(1)
+    assert lo == by["l1.wq"]["offset"] and hi == by["l1.wdown.scale"]["offset"] + by["l1.wdown.scale"]["nbytes"]
+    with pytest.raises(KeyError):
+        L.payloads(lay, src, read, lay.layer(2)[0].first_block, 1)
+    narrow = L.store_layout(layout_doc(model(64, 2, 1, 128)), PREFIX)
+    with pytest.raises(ValueError, match="in the stream"):
+        L.payloads(narrow, src, read, narrow.tensor(0, "up").first_block, 1)
 
 
 @pytest.mark.parametrize("case", range(40))
@@ -130,20 +205,20 @@ def deployment_vector():
 def test_decode_block_is_the_spec_vector():
     prefix, j, c, m = deployment_vector()
     assert m[:L.LEAD] == bytes(L.LEAD)
-    assert L.decode_block(prefix, j, c) == m[L.LEAD:]
-    assert L.check_blocks(prefix, j, c, m[L.LEAD:]) == []
+    assert L.decode_block(L.SPEC, prefix, j, c) == m[L.LEAD:]
+    assert L.check_blocks(L.SPEC, prefix, j, c, m[L.LEAD:]) == []
 
 
-def test_decode_block_refuses_what_decode_segment_refuses():
+def test_decode_block_refuses_what_the_store_refuses():
     prefix, j, c, m = deployment_vector()
     with pytest.raises(ValueError, match="not below p"):
-        L.decode_block(prefix, j, S.P_BYTES)
+        L.decode_block(L.SPEC, prefix, j, S.P_BYTES)
     with pytest.raises(ValueError, match="bytes, not"):
-        L.decode_block(prefix, j, c[1:])
-    bad = L.check_blocks(prefix, j + 1, c, m[L.LEAD:])
+        L.decode_block(L.SPEC, prefix, j, c[1:])
+    bad = L.check_blocks(L.SPEC, prefix, j + 1, c, m[L.LEAD:])
     assert len(bad) == 1 and bad[0][0] == j + 1
     flipped = bytes([c[0], c[1] ^ 1]) + c[2:]
-    assert len(L.check_blocks(prefix, j, flipped, m[L.LEAD:])) == 1
+    assert len(L.check_blocks(L.SPEC, prefix, j, flipped, m[L.LEAD:])) == 1
 
 
 def test_twin_is_the_definition():
@@ -181,20 +256,62 @@ def test_bf16_rn_is_round_to_nearest_even():
     assert torch.equal(G.bf16_rn(f), want)
 
 
+class RefKernels:
+    """P2's reference (`reference.decode` under `reference.keys_after`) behind `p2_v1.gpu.Kernels`'s interface, on the
+    CPU. A row at or above p decodes to zeros, so refusing it is left to the staging decode's own screen."""
+
+    def __init__(self, lib_dir, build_dir, params, prefix):
+        self.params, self.prefix, self.device = params, bytes(prefix), torch.device("cpu")
+
+    def decode(self, c, first=0):
+        out = torch.zeros_like(c)
+        for i in range(c.shape[0]):
+            v = int.from_bytes(bytes(c[i].numpy()), "big")
+            if v < self.params.p:
+                k, t, _ = L.R.keys_after(self.prefix, self.params, *divmod(first + i, self.params.blocks_per_segment))
+                m = L.R.decode(self.params, v, k, t).to_bytes(L.ROW, "big")
+                out[i] = torch.frombuffer(bytearray(m), dtype=torch.uint8)
+        return out
+
+    def raised(self):
+        return 0
+
+
+@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="CMP-95 item 2's toy (benchmarks/pous/p2_v1/store-toy) isn't here")
+def test_toy_store_stages_as_the_fixture_says(tmp_path, monkeypatch):
+    """The toy's C* through `decode_layer` under P2's reference: each layer's staging buffer by its digest, each negative
+    block refused with its flag bit, another salt refused, and the spot vectors at the real store's indices."""
+    import layer
+
+    monkeypatch.setattr(S.gpu, "Kernels", RefKernels)
+    monkeypatch.setattr(layer, "DEVICE", torch.device("cpu"))
+    out = layer.Out(tmp_path)
+    assert layer.toy(argparse.Namespace(toy=TOY, lib="unused"), out)
+    rec = json.loads((tmp_path / "layer.json").read_text().splitlines()[-1])
+    assert [n["flags"] for n in rec["negatives"]] == [1 << n["flag"] for n in rec["negatives"]] == [8, 4, 4]
+    assert len(rec["staging"]) == 3 and len(rec["spots"]) == 5 and rec["other_salt_flags"] & S.WIDE
+
+
 class XorKernels:
-    """A stand-in for `p2_v1.gpu.Kernels` on the CPU: block j's row XOR a keystream of (prefix, j), so the driver's
-    plumbing (store, scatter, screen, staging, GEMM check) runs without the GPU library. Not P2."""
+    """A stand-in for `p2_v1.gpu.Kernels` on the CPU, its own inverse: block j's payload XOR a keystream of (prefix, j),
+    its two lead bytes XOR a hash of (prefix, j, the row's payload before and after), so a corrupt row or other keys
+    decode wider than the payload, as P2's do. The driver's plumbing (store, scatter, screen, staging, GEMM check) runs
+    without the GPU library. Not P2."""
 
     def __init__(self, lib_dir, build_dir, params, prefix):
         self.prefix, self.device = bytes(prefix), torch.device("cpu")
 
-    def _pad(self, first, n):
-        import hashlib
-        pads = b"".join(hashlib.shake_256(self.prefix + (first + i).to_bytes(8, "big")).digest(L.ROW) for i in range(n))
-        return torch.frombuffer(bytearray(pads), dtype=torch.uint8).view(n, L.ROW)
-
     def decode(self, c, first=0):
-        return c ^ self._pad(first, c.shape[0])
+        out = c.clone()
+        for i in range(c.shape[0]):
+            key = self.prefix + (first + i).to_bytes(8, "big")
+            pad = np.frombuffer(hashlib.shake_256(key).digest(L.PAYLOAD), dtype=np.uint8)
+            payload = c[i, L.LEAD:].numpy()
+            pair = sorted((payload.tobytes(), (payload ^ pad).tobytes()))
+            lead = np.frombuffer(hashlib.shake_256(key + pair[0] + pair[1]).digest(L.LEAD), dtype=np.uint8)
+            out[i, L.LEAD:] = torch.from_numpy(payload ^ pad)
+            out[i, :L.LEAD] = torch.from_numpy(c[i, :L.LEAD].numpy() ^ lead)
+        return out
 
     encode = decode
 
@@ -202,39 +319,76 @@ class XorKernels:
         return 0
 
 
+def test_decode_layer_zeroes_the_gaps_and_refuses_padding(monkeypatch):
+    monkeypatch.setattr(S.gpu, "Kernels", XorKernels)
+    lay = L.store_layout(layout_doc(model(64, 2, 1, 256), per_segment=11), PREFIX)
+    blocks = lay.blocks(1)
+    w = np.random.default_rng(2).integers(0, 256, len(blocks) * L.PAYLOAD, dtype=np.uint8)
+    for t in lay.layer(1):
+        w[t.offset + t.size - blocks.start * L.PAYLOAD:(t.first_block + t.blocks - blocks.start) * L.PAYLOAD] = 0
+    kern = XorKernels(None, None, None, PREFIX)
+    rows = kern.encode(torch.cat([torch.zeros(len(blocks), L.LEAD, dtype=torch.uint8),
+                                  torch.from_numpy(w).view(-1, L.PAYLOAD)], dim=1), blocks.start)
+    buf = torch.full((lay.staging_bytes(1),), 0xA5, dtype=torch.uint8)
+    S.decode_layer(S.Store(lay, rows, blocks.start, "unused"), 1, buf)
+    at = 0
+    for t in lay.layer(1):
+        assert not buf[at:t.staging_offset].any()
+        rel = t.offset - blocks.start * L.PAYLOAD
+        assert bytes(buf[t.staging_offset:t.staging_offset + t.size].numpy()) == w[rel:rel + t.size].tobytes()
+        at = t.staging_offset + t.size
+    o = lay.tensor(1, "o")
+    m = kern.decode(rows[o.first_block + o.blocks - 1 - blocks.start:][:1], o.first_block + o.blocks - 1)
+    m[0, -1] ^= 1
+    bad = rows.clone()
+    bad[o.first_block + o.blocks - 1 - blocks.start] = kern.encode(m, o.first_block + o.blocks - 1)[0]
+    with pytest.raises(S.StoreError) as e:
+        S.decode_layer(S.Store(lay, bad, blocks.start, "unused"), 1, buf)
+    assert e.value.flags == S.PADDING
+    with pytest.raises(ValueError):
+        S.decode_layer(S.Store(lay, rows, blocks.start, "unused"), 1, buf[:-1])
+
+
 def test_layer_driver_stages_and_checks_on_a_stand_in_codec(tmp_path, monkeypatch):
     import check
     import layer
 
     monkeypatch.setattr(S.gpu, "Kernels", XorKernels)
+    monkeypatch.setattr(layer.gpu, "Kernels", XorKernels)
     doc = stream_manifest()
-    w = np.random.default_rng(5).integers(0, 256, doc["stream_bytes"] + 4 * L.PAYLOAD, dtype=np.uint8)
+    w = np.random.default_rng(5).integers(0, 256, doc["stream_bytes"], dtype=np.uint8)
     for t in doc["tensors"]:
         if t["name"].endswith(".scale"):
             n = t["nbytes"] // 4
             w[t["offset"]:t["offset"] + t["nbytes"]] = ((np.arange(n, dtype=np.float32) + 1) * 2.0 ** -14).view(np.uint8)
     (tmp_path / "m.json").write_text(json.dumps(doc))
     (tmp_path / "w.bin").write_bytes(w.tobytes())
+    layout = layout_doc(model(64, 2, 1, 256), per_segment=11)
+    (tmp_path / "layout.json").write_text(json.dumps(layout))
     out = tmp_path / "out"
-    base = ["--manifest", str(tmp_path / "m.json"), "--w", str(tmp_path / "w.bin"), "--store", str(tmp_path / "store"),
-            "--lib", "unused", "--salt", "00" * 24, "--out", str(out), "--layer", "1", "--device", "cpu",
-            "--m", "32", "--reps", "1", "--samples", "4", "--encode-chunk", "3"]
-    lay = L.layout_of(doc, L.registered_prefix(bytes(24)))
-    qkv = layer.matrix_blocks(lay, 1, "qkv")
-    first = lay.span(1).start
-    assert layer.main(base + ["--encode-blocks", str(qkv.stop - first)]) == 0
+    common = ["--layout", str(tmp_path / "layout.json"), "--weights", str(tmp_path / "m.json"), "--w", str(tmp_path / "w.bin"),
+              "--store", str(tmp_path / "store"), "--salt", "00" * 24, "--out", str(out), "--layer", "1"]
+    base = common + ["--lib", "unused", "--device", "cpu", "--m", "32", "--reps", "1", "--samples", "4", "--encode-chunk", "3"]
+    lay = L.store_layout(layout, L.registered_prefix(bytes(24)))
+    assert layer.main(base + ["--encode-blocks", str(lay.tensor(1, "qkv").blocks)]) == 0
     recs = [json.loads(x) for x in (out / "layer.json").read_text().splitlines()]
     assert [r["ready"] for r in recs if "ready" in r] == [["qkv"]]
     assert layer.main(base) == 0
     recs = [json.loads(x) for x in (out / "layer.json").read_text().splitlines()]
     staged = [r for r in recs if r["step"] == "stage" and r.get("matrix") in L.MATRICES]
     assert [r["matrix"] for r in staged] == ["qkv", "qkv", "o", "up", "down"]
-    assert all(r["weights"]["mismatched_bytes"] == 0 and r["scales"]["mismatched_bytes"] == 0 for r in staged)
+    assert all(r["weights"]["mismatched_bytes"] == 0 for r in staged)
+    whole = [r for r in recs if r.get("matrix") == "layer"]
+    assert len(whole) == 1 and whole[0]["matches_matrices"] and whole[0]["nonzero_gap_bytes"] == 0
     gemms = [r for r in recs if r["step"] == "gemm"]
     assert len(gemms) == 5 and all(r["twin"]["mismatches"] == 0 for r in gemms)
-    assert [r["k"] for r in gemms[-4:]] == [64, 64, 64, 256] and [r["n"] for r in gemms[-4:]] == [96, 64, 256, 64]
-    ctl = [r for r in recs if r["step"] == "controls"][-1]["refused"]
-    assert ctl["other_keys"] and ctl["row_at_p"] and ctl["honest"] is None
+    assert [r["k"] for r in gemms[-4:]] == [64, 64, 64, 256] and [r["n"] for r in gemms[-4:]] == [192, 64, 256, 64]
+    ctl = [r for r in recs if r["step"] == "controls"]
+    assert all(c["ok"] for c in ctl) and set(ctl[-1]["results"]) == {"other_keys", "corrupt_row", "row_at_p", "honest",
+                                                                       "padding"}
+    assert ctl[-1]["results"]["padding"]["flags"] == S.PADDING
     assert any(r["step"] == "summary" for r in recs)
     res = check.check_gemm(out)
     assert set(res) == set(L.MATRICES) and all(v["mismatches"] == 0 and v["samples"] == 4 for v in res.values())
+    with pytest.raises(SystemExit, match="another store"):
+        layer.main([a.replace("00" * 24, "01" * 24) for a in base] + ["--steps", "stage"])

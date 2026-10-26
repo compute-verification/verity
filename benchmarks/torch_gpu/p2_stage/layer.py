@@ -1,27 +1,34 @@
 """One layer of the frozen shape through the staging decode on one GPU, and the exact W8A8 GEMMs on what it staged.
 
-    python layer.py --manifest M --w W --store DIR --lib LIB --salt HEX --out OUT [--layer 0] [--steps encode,stage,gemm]
-                    [--encode-budget S] [--encode-blocks N] [--m 20480] [--reps 3]
+    python layer.py --layout LAYOUT --weights M --w W --store DIR --lib LIB --salt HEX --out OUT [--layer 0]
+                    [--steps toy,encode,stage,gemm] [--toy TOY] [--encode-budget S] [--encode-blocks N] [--m 20480]
 
-- `M` is the weights stream's manifest (`verity_torch_loop.weights manifest`), read by `layout.layout_of` (each matrix's
-  [N, K] from its tensors' shapes); `W` a file holding the stream's bytes at their stream offsets (`weights write`), at
-  least the layer's blocks.
-- `DIR` is the development store: `c.bin`, the encoded rows of the layer's span of blocks, and `c.json` (the first block,
-  the count, how many are encoded so far, the digests of the prefix and the layout). Until memory-accounting's encoded
-  store and its layout fixture (CMP-95 item 2) are on the card, the layer is encoded here, under the registered prefix of
-  the public test salt `HEX`.
-- **encode** extends the store in stream order by the library's `p2v1_encode` for `S` seconds (or `N` blocks), each chunk
-  decoded back on the device and held to W before it is written, so one layer's encode (about 1.31 M blocks, two roots a
-  block) can span several leases. QKV and O are the span's first 262 K blocks, up the next 523 K, down the last.
-- **stage**, for each matrix whose blocks are all encoded: its rows onto the GPU, a staging buffer poisoned with 0xA5,
-  `stage.decode_matrix` (and its scales), the staged bytes against W's on the device (mismatching bytes and blocks), and
-  `reps` timed decodes; the layer's four matrices and scales timed back to back once all are encoded; and three controls
-  the decode must refuse: other keys, one corrupted row, one row at p.
+- `LAYOUT` is the store's layout, CMP-95 item 2's fixture (`p2_v1/store.py layout`'s JSON), read by
+  `layout.store_layout`. `M` is the weights stream's manifest (`verity_torch_loop.weights manifest`) and `W` a file
+  holding the stream's bytes at their stream offsets (`weights write`), at least the layer's: the plaintext and the scales.
+- `DIR` is the development store: `c.bin`, the encoded rows of the layer's blocks, and `c.json` (the first block, the
+  count, how many are encoded so far, and the digests of the prefix, the layout and the weights manifest). Until
+  memory-accounting's encoded store is on the card, the layer is encoded here, under the registered prefix of the public
+  test salt `HEX`.
+- **toy**: the fixture's toy store (`TOY`, `store-toy/`) through the same decode: each layer's staging buffer against
+  `toy.json`'s digest, each negative block refused with its flag (and the other layer not), another salt refused, and
+  the spot vectors (blocks at the real store's indices, `spot.json`) decoded to their payloads' digests.
+- **encode** extends the store in block order by the library's `p2v1_encode` for `S` seconds (or `N` blocks), each chunk
+  decoded back on the device and held to the store's W (`layout.payloads`) before it is written, so one layer's encode
+  (1,307,915 blocks, two roots a block) can span several leases. QKV and O are its first 262,401 blocks, up the next
+  522,757, down the last 522,757.
+- **stage**, for each matrix whose blocks are all encoded: its rows onto the GPU, a buffer poisoned with 0xA5,
+  `stage.decode_matrix`, the staged bytes against the stream's (mismatching bytes and blocks), and `reps` timed decodes;
+  once all four are encoded, `stage.decode_layer` into one poisoned staging buffer, timed and held to the four matrices
+  at their staging offsets and zero between them; and controls on the last 64 blocks of a matrix: other keys, one
+  corrupted row, one row at p and a last block nonzero past the matrix's end, each refused with its flag, and the honest
+  blocks passed.
 - **gemm**, for each staged matrix: x [M, K] s8 and sx [M] f32 seeded on the device (rows 0, 1 and 2 all -128, all 127
-  and all 0), `gemm.scaled_mm` timed, every output word against `gemm.twin`, and samples for `check.py`. With all four,
-  the implied step: 52 layers x (the layer's decode + its four GEMMs).
+  and all 0), the stream's f32 scales sw, `gemm.scaled_mm` timed, every output word against `gemm.twin`, and samples for
+  `check.py`. With all four, the implied step: 52 layers x (the layer's `decode_layer` + its four GEMMs).
 
-Writes `OUT/layer.json` (one record per step and matrix) and `OUT/samples-<matrix>.npz`.
+Writes `OUT/layer.json` (one record per step and matrix) and `OUT/samples-<matrix>.npz`; exits 1 if the toy or a
+control isn't as the fixture says.
 """
 from __future__ import annotations
 
@@ -57,12 +64,22 @@ class Out:
             f.write(json.dumps(row) + "\n")
 
 
-def read_w(path: Path, offset: int, size: int) -> bytes:
-    with open(path, "rb") as f:
-        data = os.pread(f.fileno(), size, offset)
-    if len(data) != size:
-        raise ValueError(f"{path} ends before W byte {offset + size}")
-    return data
+def reader(path: Path) -> L.Read:
+    def read(offset: int, size: int) -> bytes:
+        with open(path, "rb") as f:
+            data = os.pread(f.fileno(), size, offset)
+        if len(data) != size:
+            raise ValueError(f"{path} ends before byte {offset + size}")
+        return data
+    return read
+
+
+def digest(doc: dict) -> str:
+    return hashlib.sha256(json.dumps(doc, sort_keys=True).encode()).hexdigest()
+
+
+def sha512(t: torch.Tensor) -> str:
+    return hashlib.sha512(S.flat(t).cpu().numpy().tobytes()).hexdigest()
 
 
 def to_device(data: bytes) -> torch.Tensor:
@@ -74,27 +91,15 @@ def sync() -> None:
         torch.cuda.synchronize()
 
 
-def shapes(manifest: dict, layer: int) -> dict[str, tuple[int, int]]:
-    """Each matrix's (K, N): its tensors' rows stacked, their common row length."""
-    by = {t["name"]: t["shape"] for t in manifest["tensors"]}
-    out = {}
-    for name, parts in L.MATRICES.items():
-        ss = [by[f"l{layer}.{p}"] for p in parts]
-        if len({s[1] for s in ss}) != 1:
-            raise ValueError(f"{name}'s tensors {parts} have different row lengths")
-        out[name] = (ss[0][1], sum(s[0] for s in ss))
-    return out
-
-
 class DevStore:
-    """`c.bin` and `c.json` of the layer's span."""
+    """`c.bin` and `c.json` of the layer's blocks."""
 
-    def __init__(self, root: Path, lay: L.StoreLayout, span: range) -> None:
-        self.root, self.span = root, span
+    def __init__(self, root: Path, lay: L.StoreLayout, blocks: range, weights_sha256: str) -> None:
+        self.root, self.span = root, blocks
         self.c, self.meta_path = root / "c.bin", root / "c.json"
-        want = {"first": span.start, "blocks": len(span), "row": L.ROW,
-                "prefix_sha256": hashlib.sha256(lay.prefix).hexdigest(),
-                "layout_sha256": hashlib.sha256(json.dumps(lay.manifest(), sort_keys=True).encode()).hexdigest()}
+        want = {"first": blocks.start, "blocks": len(blocks), "row": L.ROW,
+                "prefix_sha256": hashlib.sha256(lay.prefix).hexdigest(), "layout_sha256": digest(lay.manifest()),
+                "weights_sha256": weights_sha256}
         root.mkdir(parents=True, exist_ok=True)
         if self.meta_path.exists():
             self.meta = json.loads(self.meta_path.read_text())
@@ -103,7 +108,7 @@ class DevStore:
         else:
             self.meta = {**want, "done": 0}
             with open(self.c, "wb") as f:
-                f.truncate(len(span) * L.ROW)
+                f.truncate(len(blocks) * L.ROW)
             self.save()
 
     def save(self) -> None:
@@ -123,16 +128,17 @@ class DevStore:
         return torch.from_numpy(a.reshape(n, L.ROW)).to(DEVICE)
 
 
-def encode(args, lay: L.StoreLayout, dev: DevStore, out: Out) -> None:
-    kern = gpu.Kernels(str(args.lib), "", L.SPEC, lay.prefix)
+def encode(args, lay: L.StoreLayout, src: L.Weights, dev: DevStore, out: Out) -> None:
+    kern = gpu.Kernels(str(args.lib), "", lay.spec, lay.prefix)
     kern.raised()
+    read = reader(args.w)
     t0, n0 = time.monotonic(), dev.meta["done"]
     stop = len(dev.span) if args.encode_blocks is None else min(len(dev.span), n0 + args.encode_blocks)
     with open(dev.c, "r+b") as fc:
         while dev.meta["done"] < stop and time.monotonic() - t0 < args.encode_budget:
             j0 = dev.span.start + dev.meta["done"]
             n = min(args.encode_chunk, dev.span.start + stop - j0)
-            payload = to_device(read_w(args.w, j0 * L.PAYLOAD, n * L.PAYLOAD)).view(n, L.PAYLOAD)
+            payload = to_device(L.payloads(lay, src, read, j0, n)).view(n, L.PAYLOAD)
             c = S.encode_rows(kern, payload, j0)
             m = kern.decode(c, j0)
             if kern.raised() or bool((m[:, :L.LEAD] != 0).any()) or not torch.equal(m[:, L.LEAD:], payload):
@@ -148,15 +154,10 @@ def encode(args, lay: L.StoreLayout, dev: DevStore, out: Out) -> None:
                done=dev.meta["done"], of=len(dev.span))
 
 
-def matrix_blocks(lay: L.StoreLayout, layer: int, name: str) -> range:
-    rs = [L.blocks_of(p.offset, p.size) for s in (False, True) for p in lay.parts(layer, name, s)]
-    return range(min(r.start for r in rs), max(r.stop for r in rs))
-
-
 def ready(lay: L.StoreLayout, dev: DevStore, layer: int) -> list[str]:
     e = dev.encoded
-    return [n for n in L.MATRICES if e.start <= matrix_blocks(lay, layer, n).start
-            and matrix_blocks(lay, layer, n).stop <= e.stop]
+    return [n for n in L.MATRICES
+            if e.start <= lay.tensor(layer, n).first_block and lay.tensor(layer, n).block_range.stop <= e.stop]
 
 
 def timed(fn, reps: int) -> list[float]:
@@ -178,91 +179,161 @@ def timed(fn, reps: int) -> list[float]:
     return times
 
 
-def staged_against_w(args, lay, layer, name, buf, scales) -> dict:
-    """Mismatching bytes and blocks of `buf` (the staged matrix or its scales) against W's bytes."""
-    got, at, bad_bytes, bad_blocks = S.flat(buf), 0, 0, set()
-    for p in lay.parts(layer, name, scales):
-        ref = to_device(read_w(args.w, p.offset, p.size))
-        ne = got[at:at + p.size] != ref
-        k = int(ne.sum())
-        if k:
-            bad_bytes += k
-            idx = ne.nonzero().flatten()
-            bad_blocks.update(((idx + p.offset) // L.PAYLOAD).unique().tolist())
-        at += p.size
-    return {"bytes": at, "mismatched_bytes": bad_bytes, "mismatched_blocks": len(bad_blocks),
-            "first_bad_blocks": sorted(bad_blocks)[:8]}
+def against_stream(lay, src: L.Weights, read: L.Read, layer: int, name: str, buf) -> dict:
+    """Mismatching bytes and blocks of the staged matrix `buf` against the stream's bytes of it."""
+    t = lay.tensor(layer, name)
+    ne = S.flat(buf) != to_device(src.read(src.parts(layer, name), 0, t.size, read))
+    k = int(ne.sum())
+    bad = ((ne.nonzero().flatten() + t.offset) // L.PAYLOAD).unique().tolist() if k else []
+    return {"bytes": t.size, "mismatched_bytes": k, "mismatched_blocks": len(bad), "first_bad_blocks": bad[:8]}
 
 
-def stage(args, lay, dev: DevStore, out: Out, layer: int, dims: dict) -> tuple[dict, float | None]:
+def scales(src: L.Weights, read: L.Read, layer: int, name: str, n: int) -> torch.Tensor:
+    parts = src.parts(layer, name, scales=True)
+    if sum(size for _, size in parts) != 4 * n:
+        raise ValueError(f"{name}'s scales in the stream are not {n} f32 words")
+    return to_device(src.read(parts, 0, 4 * n, read)).view(torch.float32)
+
+
+def stage(args, lay, src, dev: DevStore, out: Out, layer: int) -> tuple[dict, float | None, bool]:
     staged, whole_s = {}, None
     names = ready(lay, dev, layer)
     out.record(step="stage", ready=names, encoded=[dev.encoded.start, dev.encoded.stop])
     if not names:
-        return staged, whole_s
+        return staged, whole_s, True
+    read = reader(args.w)
     store = S.Store(lay, dev.rows(dev.encoded), dev.encoded.start, args.lib, chunk=args.chunk)
     for name in names:
-        K, N = dims[name]
-        w = torch.empty(N, K, dtype=torch.int8, device=DEVICE)
-        sw = torch.empty(N, dtype=torch.float32, device=DEVICE)
+        t = lay.tensor(layer, name)
+        w = torch.empty(t.n, t.k, dtype=torch.int8, device=DEVICE)
         S.flat(w).fill_(0xA5)
-        S.flat(sw).fill_(0xA5)
         before = store.blocks_decoded
         S.decode_matrix(store, layer, name, w)
-        S.decode_scales(store, layer, name, sw)
         blocks = store.blocks_decoded - before
-        cw, cs = staged_against_w(args, lay, layer, name, w, False), staged_against_w(args, lay, layer, name, sw, True)
+        cw = against_stream(lay, src, read, layer, name, w)
         ts = timed(lambda: S.decode_matrix(store, layer, name, w), args.reps)
-        nbytes = lay.nbytes(layer, name)
-        out.record(step="stage", matrix=name, shape=[N, K], blocks=blocks, weights=cw, scales=cs,
-                   decode_s=[round(t, 6) for t in ts], decode_gb_s=round(nbytes / min(ts) / 1e9, 2),
-                   rows_gb_s=round(len(matrix_blocks(lay, layer, name)) * L.ROW / min(ts) / 1e9, 2),
-                   sha256=hashlib.sha256(S.flat(w).cpu().numpy().tobytes()).hexdigest())
-        staged[name] = (w, sw)
+        out.record(step="stage", matrix=name, tensor=t.name, shape=[t.n, t.k], first_block=t.first_block, blocks=blocks,
+                   weights=cw, decode_s=[round(x, 6) for x in ts], decode_gb_s=round(t.size / min(ts) / 1e9, 2),
+                   rows_gb_s=round(t.blocks * L.ROW / min(ts) / 1e9, 2), sha512=sha512(w))
+        staged[name] = (w, scales(src, read, layer, name, t.n))
     if len(names) == len(L.MATRICES):
-        def whole():
-            for name in L.MATRICES:
-                S.decode_matrix(store, layer, name, staged[name][0])
-                S.decode_scales(store, layer, name, staged[name][1])
-        ts = timed(whole, args.reps)
+        buf = torch.full((lay.staging_bytes(layer),), 0xA5, dtype=torch.uint8, device=DEVICE)
+        S.decode_layer(store, layer, buf)
+        same, gaps, at = True, 0, 0
+        for t in sorted(lay.layer(layer), key=lambda t: t.staging_offset):
+            same &= torch.equal(buf[t.staging_offset:t.staging_offset + t.size], S.flat(staged[t.matrix][0]))
+            gaps += int((buf[at:t.staging_offset] != 0).sum())
+            at = t.staging_offset + t.size
+        ts = timed(lambda: S.decode_layer(store, layer, buf), args.reps)
         whole_s = min(ts)
-        nbytes = sum(lay.nbytes(layer, n) + lay.nbytes(layer, n, True) for n in L.MATRICES)
-        out.record(step="stage", matrix="layer", bytes=nbytes, decode_s=[round(t, 6) for t in ts],
+        nbytes = sum(t.size for t in lay.layer(layer))
+        out.record(step="stage", matrix="layer", call="decode_layer", bytes=nbytes, staging_bytes=buf.numel(),
+                   matches_matrices=bool(same), nonzero_gap_bytes=gaps, decode_s=[round(x, 6) for x in ts],
                    decode_gb_s=round(nbytes / whole_s / 1e9, 2))
-    controls(args, lay, store, out, layer, names[0])
+        del buf
+    ok = controls(args, lay, src, store, out, layer, names[0])
     del store
-    return staged, whole_s
+    return staged, whole_s, ok
 
 
-def refused(fn) -> str | None:
+def run_window(st: S.Store, offset: int, size: int) -> tuple[int, str | None]:
+    """The flags `st` refuses W bytes [offset, offset + size), a tensor's last bytes, with (0 when it decodes)."""
+    st.decode_into(offset, size, torch.empty(size, dtype=torch.uint8, device=st.rows.device), end=True)
     try:
-        fn()
+        st.check()
     except S.StoreError as e:
-        return str(e)
-    return None
+        return e.flags, str(e)
+    return 0, None
 
 
-def controls(args, lay, store: S.Store, out: Out, layer: int, name: str) -> None:
-    """Other keys, a corrupted row and a row at p, each on a window of `name`'s blocks: all must be refused."""
-    j0 = matrix_blocks(lay, layer, name).start
-    n = min(64, store.blocks.stop - j0)
-    rows = store.rows[j0 - store.first:j0 - store.first + n].clone()
-    other = S.Store(lay.__class__(lay.layout, bytes([lay.prefix[0] ^ 1]) + lay.prefix[1:]), rows, j0, args.lib)
-    bad = rows.clone()
-    bad[n // 2, 1000] ^= 0x01
-    corrupt = S.Store(lay, bad, j0, args.lib)
-    high = rows.clone()
-    high[n - 1] = torch.from_numpy(np.frombuffer(S.P_BYTES, dtype=np.uint8).copy()).to(DEVICE)
-    at_p = S.Store(lay, high, j0, args.lib)
+def controls(args, lay, src, store: S.Store, out: Out, layer: int, name: str) -> bool:
+    """Other keys, a corrupted row, a row at p and a last block nonzero past the matrix's end, each among the last 64
+    blocks of `name`: each refused with its flag bit among those it raises (other keys' garbage is nonzero past the end
+    too), and the honest blocks passed."""
+    t = lay.tensor(layer, name)
+    last = t.block_range.stop - 1
+    j0 = max(t.first_block, last - 63)
+    n = last + 1 - j0
+    rows = store.rows[j0 - store.first:last + 1 - store.first].clone()
+    other = L.StoreLayout(lay.params, lay.tensors, bytes([lay.prefix[0] ^ 1]) + lay.prefix[1:])
+    corrupt, at_p = rows.clone(), rows.clone()
+    corrupt[n // 2, 1000] ^= 0x01
+    at_p[n // 2] = torch.from_numpy(np.frombuffer(S.P_BYTES, dtype=np.uint8).copy()).to(rows.device)
+    cases = {"other_keys": (other, rows, S.WIDE), "corrupt_row": (lay, corrupt, S.WIDE), "row_at_p": (lay, at_p, S.WIDE),
+             "honest": (lay, rows, 0)}
+    used = t.offset + t.size - last * L.PAYLOAD
+    if used < L.PAYLOAD:
+        payload = bytearray(L.payloads(lay, src, reader(args.w), last, 1))
+        payload[-1] ^= 1
+        padded = rows.clone()
+        padded[n - 1] = S.encode_rows(store.kernels, to_device(bytes(payload)).view(1, L.PAYLOAD), last)[0]
+        cases["padding"] = (lay, padded, S.PADDING)
     res = {}
-    for label, st in (("other_keys", other), ("corrupt_row", corrupt), ("row_at_p", at_p)):
-        st.decode_rows(j0, j0 + n)
-        res[label] = refused(st.check)
-    honest = S.Store(lay, rows, j0, args.lib)
-    honest.decode_rows(j0, j0 + n)
-    res["honest"] = refused(honest.check)
-    out.record(step="controls", matrix=name, blocks=[j0, j0 + n], refused=res,
-               ok=all(res[k] for k in ("other_keys", "corrupt_row", "row_at_p")) and res["honest"] is None)
+    for label, (lo, rs, want) in cases.items():
+        flags, why = run_window(S.Store(lo, rs, j0, args.lib), j0 * L.PAYLOAD, t.offset + t.size - j0 * L.PAYLOAD)
+        res[label] = {"flags": flags, "want": want, "why": why}
+    ok = all(v["flags"] & v["want"] if v["want"] else not v["flags"] for v in res.values())
+    out.record(step="controls", matrix=name, blocks=[j0, last + 1], last_block_used=used, results=res, ok=ok)
+    return ok
+
+
+def negative_row(neg: dict, c_star: bytes) -> bytes:
+    """A toy negative's block: its `c` in hex, ``"p"`` for p itself, or C*'s own block with byte `xor[0]` xored by
+    `xor[1]` (the fixture's `store.negative`)."""
+    i = neg["block"]
+    if "xor" in neg:
+        c = bytearray(c_star[L.ROW * i:L.ROW * (i + 1)])
+        c[neg["xor"][0]] ^= neg["xor"][1]
+        return bytes(c)
+    return S.P_BYTES if neg["c"] == "p" else bytes.fromhex(neg["c"])
+
+
+def toy(args, out: Out) -> bool:
+    doc = json.loads((args.toy / "toy.json").read_text())
+    spot = json.loads((args.toy / "spot.json").read_text())
+    c_star, spot_c = (args.toy / "c-star.bin").read_bytes(), (args.toy / "spot-c.bin").read_bytes()
+    salt = bytes.fromhex(doc["salt"])
+    lay = L.store_layout(doc, L.registered_prefix(salt))
+    pins = {"prefix": lay.prefix.hex() == doc["prefix"] == spot["prefix"],
+            "c_star": hashlib.sha512(c_star).hexdigest() == doc["c_star_sha512"],
+            "spot_c": hashlib.sha512(spot_c).hexdigest() == spot["c_sha512"]}
+    rows = to_device(c_star).view(-1, L.ROW)
+
+    def staging(lo: L.StoreLayout, rs: torch.Tensor, layer: int) -> tuple[str | None, int]:
+        buf = torch.full((lo.staging_bytes(layer),), 0xA5, dtype=torch.uint8, device=DEVICE)
+        try:
+            S.decode_layer(S.Store(lo, rs, 0, args.lib), layer, buf)
+        except S.StoreError as e:
+            return None, e.flags
+        return sha512(buf), 0
+
+    layers = [{"layer": l, "bytes": size, "match": staging(lay, rows, l) == (sha, 0)} for l, _, size, sha in doc["staging"]]
+    negatives = []
+    for neg in doc["negatives"]:
+        bad = rows.clone()
+        bad[neg["block"]] = to_device(negative_row(neg, c_star))
+        flags, rest = staging(lay, bad, neg["layer"])[1], staging(lay, bad, 1 - neg["layer"])[1]
+        negatives.append({"id": neg["id"], "flag": neg["flag"], "flags": flags, "other_layer_flags": rest,
+                          "ok": flags == 1 << neg["flag"] and rest == 0})
+    other = bytes(salt[:-1]) + bytes([salt[-1] ^ 1])
+    other_salt = staging(L.store_layout(doc, L.registered_prefix(other)), rows, 0)[1]
+    q = spot["params"]
+    real = L.StoreLayout(L.S.P2Params(q["w"], q["c0"], q["blocks_per_segment"], q["segments"]), (), lay.prefix)
+    spots = []
+    srows = to_device(spot_c).view(-1, L.ROW)
+    for j, v in enumerate(spot["vectors"]):
+        st = S.Store(real, srows[j:j + 1].clone(), v["i"], args.lib)
+        m = st.decode_rows(v["i"], v["i"] + 1)
+        try:
+            st.check()
+            flags = 0
+        except S.StoreError as e:
+            flags = e.flags
+        spots.append({"id": v["id"], "i": v["i"], "flags": flags, "match": sha512(m[0, L.LEAD:]) == v["m_sha512"]})
+    ok = bool(all(pins.values()) and all(x["match"] for x in layers) and all(x["ok"] for x in negatives)
+              and other_salt & S.WIDE and all(x["match"] and not x["flags"] for x in spots))
+    out.record(step="toy", ok=ok, pins=pins, staging=layers, negatives=negatives, other_salt_flags=other_salt, spots=spots)
+    return ok
 
 
 def activations(M: int, K: int, gen: torch.Generator) -> tuple[torch.Tensor, torch.Tensor]:
@@ -272,12 +343,12 @@ def activations(M: int, K: int, gen: torch.Generator) -> tuple[torch.Tensor, tor
     return x, sx
 
 
-def gemm(args, staged: dict, dims: dict, out: Out) -> float | None:
+def gemm(args, staged: dict, out: Out) -> float | None:
     gen = torch.Generator(device=DEVICE).manual_seed(args.seed)
     cpu = torch.Generator().manual_seed(args.seed)
     total = 0.0
     for name, (w, sw) in staged.items():
-        K, N = dims[name]
+        N, K = w.shape
         x, sx = activations(args.m, K, gen)
         y = G.scaled_mm(x, sx, w, sw)
         t_int = timed(lambda: torch._int_mm(x, w.t()), args.reps)
@@ -298,12 +369,14 @@ def gemm(args, staged: dict, dims: dict, out: Out) -> float | None:
 def main(argv=None) -> int:
     global DEVICE
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--manifest", type=Path, required=True)
-    ap.add_argument("--w", type=Path, required=True)
+    ap.add_argument("--layout", type=Path, required=True, help="the store's layout JSON (CMP-95 item 2)")
+    ap.add_argument("--weights", type=Path, required=True, help="the weights stream's manifest")
+    ap.add_argument("--w", type=Path, required=True, help="the weights stream's bytes at their stream offsets")
     ap.add_argument("--store", type=Path, required=True)
     ap.add_argument("--lib", type=Path, required=True)
     ap.add_argument("--salt", required=True, help="the public test salt, 24 bytes hex")
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--toy", type=Path, help="the fixture's store-toy/ directory, for the toy step")
     ap.add_argument("--layer", type=int, default=0)
     ap.add_argument("--steps", default="encode,stage,gemm")
     ap.add_argument("--encode-budget", type=float, default=600.0)
@@ -317,24 +390,38 @@ def main(argv=None) -> int:
     ap.add_argument("--device", default="cuda")
     args = ap.parse_args(argv)
     DEVICE = torch.device(args.device)
-    manifest = json.loads(args.manifest.read_text())
-    lay = L.layout_of(manifest, L.registered_prefix(bytes.fromhex(args.salt)))
-    dims = shapes(manifest, args.layer)
-    span = lay.span(args.layer)
-    dev = DevStore(args.store, lay, span)
-    out = Out(args.out)
-    out.record(step="start", layer=args.layer, span=[span.start, span.stop], encoded=dev.meta["done"],
-               device=torch.cuda.get_device_name() if DEVICE.type == "cuda" else str(DEVICE), torch=torch.__version__,
-               prefix_sha256=dev.meta["prefix_sha256"])
     steps = args.steps.split(",")
+    out = Out(args.out)
+    ok = True
+    if "toy" in steps:
+        if args.toy is None:
+            ap.error("the toy step needs --toy")
+        ok &= toy(args, out)
+    if not {"encode", "stage", "gemm"} & set(steps):
+        return 0 if ok else 1
+    manifest = json.loads(args.weights.read_text())
+    lay = L.store_layout(json.loads(args.layout.read_text()), L.registered_prefix(bytes.fromhex(args.salt)))
+    src = L.Weights.of(manifest)
+    for t in lay.layer(args.layer):
+        if src.shape(args.layer, t.matrix) != (t.n, t.k):
+            raise SystemExit(f"{t.name} is [{t.n}, {t.k}] in the store, {list(src.shape(args.layer, t.matrix))} in the stream")
+    blocks = lay.blocks(args.layer)
+    dev = DevStore(args.store, lay, blocks, digest(manifest))
+    out.record(step="start", layer=args.layer, blocks=[blocks.start, blocks.stop], encoded=dev.meta["done"],
+               staging_bytes=lay.staging_bytes(args.layer),
+               device=torch.cuda.get_device_name() if DEVICE.type == "cuda" else str(DEVICE), torch=torch.__version__,
+               prefix_sha256=dev.meta["prefix_sha256"], layout_sha256=dev.meta["layout_sha256"])
     if "encode" in steps:
-        encode(args, lay, dev, out)
-    staged, decode_s = stage(args, lay, dev, out, args.layer, dims) if "stage" in steps or "gemm" in steps else ({}, None)
-    gemm_s = gemm(args, staged, dims, out) if "gemm" in steps else None
+        encode(args, lay, src, dev, out)
+    staged, decode_s = {}, None
+    if "stage" in steps or "gemm" in steps:
+        staged, decode_s, controls_ok = stage(args, lay, src, dev, out, args.layer)
+        ok &= controls_ok
+    gemm_s = gemm(args, staged, out) if "gemm" in steps else None
     if decode_s is not None and gemm_s is not None:
         out.record(step="summary", m=args.m, layers=LAYERS, decode_layer_s=round(decode_s, 6), gemm_layer_s=round(gemm_s, 6),
                    step_s=round(LAYERS * (decode_s + gemm_s), 3), gemm_only_step_s=round(LAYERS * gemm_s, 3))
-    return 0
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":
