@@ -235,6 +235,7 @@ import Proofs.Flock.Claims.Recursion.VStarHonest
 import Proofs.Flock.Claims.Recursion.VStarCap0
 import Proofs.Flock.Claims.Recursion.VStarPortsM
 import Proofs.Flock.Claims.Recursion.VStarFitHeld
+import Proofs.Flock.Claims.Recursion.VStarFinal
 import Proofs.Flock.Claims.Recursion.LastSharedR
 import Proofs.Flock.Claims.Recursion.LastFilesR
 import Proofs.Flock.Claims.Recursion.RowDLevels
