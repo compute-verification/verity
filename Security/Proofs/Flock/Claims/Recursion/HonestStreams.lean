@@ -72,8 +72,7 @@ theorem schedN_eq_repNs {m kLog claims : ℕ} {sch : Flock.Schedule} (hs : fast1
     rw [show m - 5 = m - 6 + 1 by omega, List.replicate_succ']
   unfold schedN repNs zcNs lcNs rsNs ligNs
   rw [h5, hloop]
-  simp only [lvN, qNs, bitLength_pred hq0, List.append_assoc, List.cons_append, List.singleton_append,
-    List.nil_append]
+  simp only [lvN, qNs, bitLength_pred hq0, List.append_assoc, List.cons_append, List.nil_append]
 
 /-! ## Names and schemes -/
 
@@ -178,7 +177,8 @@ theorem run_proof_rec {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) (o 
     (hex : (tabsOf o.sts)[k / 2]!.extra (pointsOf o.spec o.recC₁) = .ok (o.extras (k / 2)))
     (hk : k < 2 * o.sts.size) : o.proof (k / 2) (k % 2) = o.recPs[k]! := by
   obtain ⟨-, hts⟩ := setup_tables o.setup
-  have hdec := ((sessionS_reps h64 (rfl : o.resp 0 = o.recC₁.bytes) hts.symm o.recTabsOk o.ran [] []).2 k hk).1
+  have hdec : decodeProof (shapeAt (tabsOf o.sts) (pointsOf o.spec o.recC₁) k) o.proofs[k]! = .ok o.recPs[k]! :=
+    ((sessionS_reps h64 (rfl : o.resp 0 = o.recC₁.bytes) hts.symm o.recTabsOk o.ran [] []).2 k hk).1
   have hi : k / 2 < o.tabs.size := by rw [run_tabs_size]; omega
   unfold Run.proof Run.bytes
   rw [show 2 * (k / 2) + k % 2 = k by omega]
@@ -413,7 +413,6 @@ theorem rep_facts (h64 : Claims.Out64 sha512) (g : Goals sha512 Readable.relatio
     apply ByteArray.ext
     apply Array.toList_inj.1
     rw [hRj]
-    rfl
 
 /-! ## The reader's streams and link -/
 
@@ -499,6 +498,5 @@ theorem recLink_eq (h64 : Claims.Out64 sha512) (g : Goals sha512 Readable.relati
     simp [FlockComplete.flat, Array.foldl_toList]
   unfold Run.recLink
   rw [e]
-  rfl
 
 end FlockDeploy
