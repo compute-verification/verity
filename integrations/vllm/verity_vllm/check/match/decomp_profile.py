@@ -4,10 +4,10 @@ when `X09_PROFILE_OUT` names it."""
 from __future__ import annotations
 
 import collections
-import os
 import sys
 import time
 
+from verity_vllm import settings
 from verity_vllm.check.match import program_compare as C
 
 # [R18 x09, F-r18-x09-1] PHASE ACCOUNTING of the per-request leg.  `X09_PROFILE_OUT=<path>` writes one JSON sidecar beside the document
@@ -22,10 +22,10 @@ _profile_counters = collections.Counter()   # process-local: per-run fallback / 
 
 
 def _profile_on() -> bool:
-    return bool(os.environ.get(PROFILE_ENV, "").strip())
+    return bool((settings.get(PROFILE_ENV) or "").strip())
 
 
-def _fast_stats():
+def _memo_stats():
     m = sys.modules.get("verity_vllm.check.match.global_match_fast")
     return getattr(m, "stats", None) if m is not None else None
 
@@ -38,14 +38,14 @@ class _Phase:
 
     def __enter__(self):
         self.t0 = time.time()
-        st = _fast_stats()
+        st = _memo_stats()
         self.s0 = dict(st) if st is not None else None
         self.c0 = dict(_profile_counters)
         return self
 
     def __exit__(self, *exc):
         d = {"seconds": round(time.time() - self.t0, 3)}
-        st = _fast_stats()
+        st = _memo_stats()
         if st is not None and self.s0 is not None:
             delta = {k: int(v - self.s0.get(k, 0)) for k, v in st.items() if v - self.s0.get(k, 0)}
             if delta:

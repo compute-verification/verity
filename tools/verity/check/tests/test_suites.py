@@ -1689,6 +1689,31 @@ def test_a_parallel_suite_starts_the_test_its_kept_pass_says_is_longest(tmp_path
     assert "tests/test_z.py::test_zz" in first.values(), log.read_text()
 
 
+def test_a_run_of_some_files_starts_the_longest_test_it_collects(tmp_path):
+    """The guard got the suite's `workers` longest kept tests, and a run of some of its files collected none of them: a sixth of
+    verity-vllm's files (r20261025-202541-cb5f) ran its own longest two back to back on one worker while three sat idle."""
+    import json
+
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_z.py").write_text("".join(f"def test_{c}():\n    pass\n\n" for c in "abcd")
+                                     + "import os as _os, pytest as _pytest\n\n\n@_pytest.fixture(autouse=True)\n"
+                                     "def _order(request):\n    with open(_os.environ['ORDER_LOG'], 'a') as f:\n"
+                                     "        f.write(_os.environ.get('PYTEST_XDIST_WORKER', '-') + ' ' + request.node.nodeid + '\\n')\n")
+    kept = tmp_path / "cache" / "per-test" / "pkg"
+    kept.mkdir(parents=True)
+    (kept / "all--earlier.json").write_text(json.dumps({"when": "2026-10-25 00:00", "passed": {
+        "tests/test_heavy.py::test_heavy": 300.0, "tests/test_heavy.py::test_heavy_too": 200.0, "tests/test_z.py::test_d": 100.0}}))
+    log = tmp_path / "order.log"
+    p = _run_suite(root, tmp_path, "--jobs", "2", "--", "tests/test_z.py", extra={"ORDER_LOG": str(log)})
+    assert p.returncode == 0 and "on 2 workers" in p.stdout, p.stdout
+    first = {}
+    for line in log.read_text().splitlines():
+        worker, node = line.split(" ", 1)
+        first.setdefault(worker, node)
+    assert "tests/test_z.py::test_d" in first.values(), log.read_text()
+
+
 def test_a_change_under_a_name_git_quotes_selects_the_suite_that_owns_it(tmp_path, monkeypatch):
     """`git diff --name-only` quotes a name with bytes outside ASCII (`"a/\\303\\251.py"`), which is under no suite's inputs, so
     `--changed` (the quick tier `research queue ready` runs) skipped the suite owning such a file."""
@@ -1819,3 +1844,19 @@ def test_the_verifiers_lake_build_holds_the_trees_build_lock_so_two_runs_of_one_
     log = tmp_path / "lean-build.log"
     assert mod.lean_build(log) is None
     assert log.read_text().strip() == "locked"
+
+
+def test_a_fetch_that_prints_no_report_names_its_error_and_keeps_its_own_log(tmp_path, monkeypatch, capsys):
+    """check's pytest and lean-suites steps fetch into one logs directory: each call's log stays its own, and a fetch that
+    crashed says why in the step's output."""
+    S = _suites(monkeypatch, tmp_path)
+    crash = subprocess.CompletedProcess([], 1, "", "research data fetch-fixtures: [Errno 2] No such file or directory: 'x/.tmp-a'\n")
+    monkeypatch.setattr(S.subprocess, "run", lambda *a, **k: crash)
+    first, second = tmp_path / "fetch-fixtures-1.log", tmp_path / "fetch-fixtures-2.log"
+    assert S.fetch_fixtures({"f/a.bin": "art:" + "0" * 64}, first) == {"f/a.bin"}
+    out = capsys.readouterr().out
+    assert f"fetch-fixtures failed (rc 1); log: {first}" in out and "[Errno 2] No such file or directory" in out
+    ok = subprocess.CompletedProcess([], 0, '{"entries": [], "fetch": {"blobs": {"fetched": 0, "bytes": 0}}}', "")
+    monkeypatch.setattr(S.subprocess, "run", lambda *a, **k: ok)
+    assert S.fetch_fixtures({"f/a.bin": "art:" + "0" * 64}, second) == set()
+    assert "Errno 2" in first.read_text() and "Errno 2" not in second.read_text()
