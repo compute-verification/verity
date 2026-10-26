@@ -23,7 +23,9 @@ steps:
   (`Vocab.Coins`: the game's probability of any event is the coins' probability of the outcome they lead to), whose
   verdict for `a` holds where `Vocab.Logged` does (the component accepts, its releases are logged, no break), and whose claim for `a`
   holding means the game's does (`Vocab.WorldRuns`, the world the play realizes), gives `ComponentBound`'s event at
-  most `δ` from `r.Sound … a δ`, averaged over the other coins (`Pouw.pr_le_of_update`).
+  most `δ` from `r.Sound … a δ`, averaged over the other coins (`Pouw.pr_le_of_update`). `Coins` holds of every play
+  whose run's coins are in bijection with the device's rounds' (`coins_play`, at `Legs.playOut`); `WorldRuns` is the
+  world's (`Vocab.world`).
 * **At the code** (`work`, `space`, `bandwidth`, `network`): `Sound` at `atCode r A`, the run `r` with the verdicts
   `A`, from the bridge and one refinement hypothesis: what `A` means for the bridge's verdict. In the game `A` is
   `Vocab.Logged` at the outcome the coins lead to (the component accepts its case, every release its check read is
@@ -54,6 +56,90 @@ namespace Verity
 open Accounting Core
 open scoped ENNReal
 
+namespace Legs
+
+/-! ## The play's coins -/
+
+variable {α β γ : Type}
+
+theorem map_bind (h : α → β) (K : β → Game γ) : ∀ g : Game α, (g.map h).bind K = g.bind (fun a => K (h a))
+  | .ret _ => rfl
+  | .send M k => congrArg (Game.send M) (funext fun m => map_bind h K (k m))
+  | @Game.coin _ C _ _ k => congrArg (@Game.coin _ C _ _) (funext fun c => map_bind h K (k c))
+
+theorem prob_cast (p : α → Prop) {g g' : Game α} (h : g = g') (s : Game.Strategy g) :
+    Game.prob p g s = Game.prob p g' (cast (congrArg Game.Strategy h) s) := by
+  subst h; rfl
+
+theorem avg_prod {A B : Type} [Fintype A] [Fintype B] [Nonempty A] [Nonempty B] (f : A × B → ℝ≥0∞) :
+    Game.avg f = Game.avg fun a => Game.avg fun b => f (a, b) := by
+  simp only [Game.avg, Fintype.card_prod, Nat.cast_mul, Fintype.sum_prod_type, Finset.mul_sum, ← mul_assoc]
+  rw [ENNReal.mul_inv (Or.inr (ENNReal.natCast_ne_top _)) (Or.inl (ENNReal.natCast_ne_top _))]
+
+/-- The coins of the device's rounds `ns`, one per round. -/
+def CoinsOf : List ℕ → Type
+  | [] => Unit
+  | n :: ns => (Fin n → Bool) × CoinsOf ns
+
+instance instFintypeCoinsOf : ∀ ns : List ℕ, Fintype (CoinsOf ns)
+  | [] => inferInstanceAs (Fintype Unit)
+  | n :: ns => @instFintypeProd (Fin n → Bool) (CoinsOf ns) _ (instFintypeCoinsOf ns)
+
+instance instNonemptyCoinsOf : ∀ ns : List ℕ, Nonempty (CoinsOf ns)
+  | [] => inferInstanceAs (Nonempty Unit)
+  | n :: ns => @instNonemptyProd (Fin n → Bool) (CoinsOf ns) _ (instNonemptyCoinsOf ns)
+
+/-- The device's rounds `ns`, then `K` of the log. -/
+def releasesK : List ℕ → (List Release → Game α) → Game α
+  | [], K => K []
+  | n :: ns, K => .send ByteArray fun b => .coin (Fin n → Bool) fun x =>
+      releasesK ns fun log => K (⟨b, List.ofFn x⟩ :: log)
+
+theorem releases_bind : ∀ (ns : List ℕ) (K : List Release → Game α), (releases ns).bind K = releasesK ns K
+  | [], _ => rfl
+  | n :: ns, K => congrArg (Game.send ByteArray) (funext fun _ => congrArg (@Game.coin _ (Fin n → Bool) _ _)
+      (funext fun _ => (map_bind _ K (releases ns)).trans (releases_bind ns _)))
+
+/-- Where the coins `xs` lead under the strategy `s`: the device's log, and the strategy left for `K` of it. -/
+def outK : (ns : List ℕ) → (K : List Release → Game α) → Game.Strategy (releasesK ns K) → CoinsOf ns →
+    (log : List Release) × Game.Strategy (K log)
+  | [], _, s, _ => ⟨[], s⟩
+  | _ :: ns, K, s, (x, xs) =>
+      let o := outK ns (fun log => K (⟨s.1, List.ofFn x⟩ :: log)) (s.2 x) xs
+      ⟨⟨s.1, List.ofFn x⟩ :: o.1, o.2⟩
+
+theorem prob_releasesK (q : α → Prop) : ∀ (ns : List ℕ) (K : List Release → Game α)
+    (s : Game.Strategy (releasesK ns K)),
+    Game.prob q (releasesK ns K) s = Game.avg fun xs => Game.prob q (K (outK ns K s xs).1) (outK ns K s xs).2
+  | [], _, _ => (Game.avg_const _).symm
+  | n :: ns, K, s => by
+      have ih := fun x => prob_releasesK q ns (fun log => K (⟨s.1, List.ofFn x⟩ :: log)) (s.2 x)
+      show Game.avg (fun x => Game.prob q (releasesK ns fun log => K (⟨s.1, List.ofFn x⟩ :: log)) (s.2 x)) = _
+      rw [funext ih]
+      exact (avg_prod (A := Fin n → Bool) (B := CoinsOf ns)
+        (fun xs => Game.prob q (K (outK (n :: ns) K s xs).1) (outK (n :: ns) K s xs).2)).symm
+
+/-- **The outcome of the play of `σ` at the device's coins `xs`.** -/
+def playOut (ns : List ℕ) (θ F c : ByteArray) (σ : Game.Strategy (play ns θ F c)) (xs : CoinsOf ns) : Outcome :=
+  let o := outK ns _ (cast (congrArg Game.Strategy (releases_bind ns _)) σ) xs
+  ⟨θ, F, c, o.1, o.2.1⟩
+
+theorem prob_play (q : Outcome → Prop) (ns : List ℕ) (θ F c : ByteArray) (σ : Game.Strategy (play ns θ F c)) :
+    Game.prob q (play ns θ F c) σ = Game.prCoin fun xs => q (playOut ns θ F c σ xs) :=
+  (prob_cast q (releases_bind ns _) σ).trans (prob_releasesK q ns _ _)
+
+theorem prCoin_eq_ofReal_pr {C : Type} [Fintype C] (p : C → Prop) :
+    Game.prCoin p = ENNReal.ofReal (Pouw.pr p) := by
+  classical
+  rw [Game.prCoin_eq_card p]
+  unfold Pouw.pr
+  rcases (Fintype.card C).eq_zero_or_pos with h | h
+  · have := Fintype.card_eq_zero_iff.mp h
+    simp
+  · rw [ENNReal.ofReal_div_of_pos (by exact_mod_cast h), ENNReal.ofReal_natCast, ENNReal.ofReal_natCast]
+
+end Legs
+
 namespace Vocab
 
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α)
@@ -81,6 +167,14 @@ variable {C : Verity.Circuit} {I : Type} {Ω : I → Type} [Fintype I] [Decidabl
 of the outcome `out ξ` they lead to. -/
 def Coins (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (out : ((i : I) → Ω i) → Outcome) : Prop :=
   ∀ q : Outcome → Prop, Game.prob q (V.game θ F c) σ = ENNReal.ofReal (Pouw.pr fun ξ => q (out ξ))
+
+/-- **`Coins` holds of every play**: a period run's coins in bijection `e` with the device's rounds' coins realize
+the play of `σ`, each leading to the outcome its rounds' coins do. -/
+theorem coins_play (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
+    (e : ((i : I) → Ω i) ≃ Legs.CoinsOf (V.rounds θ)) :
+    V.Coins θ F c σ fun ξ => Legs.playOut (V.rounds θ) θ F c σ (e ξ) := fun q =>
+  (Legs.prob_play q (V.rounds θ) θ F c σ).trans (by
+    rw [Legs.prCoin_eq_ofReal_pr, Pouw.pr_equiv e fun xs => q (Legs.playOut _ θ F c σ xs)])
 
 /-- **The run's claim for `a` is the world's**: where the period run `r`'s claim for `a` holds at the coins `ξ`, at the
 published certificates and price, the claim `a` certifies holds in the game at the outcome they lead to. -/
