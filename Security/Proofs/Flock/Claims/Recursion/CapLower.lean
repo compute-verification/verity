@@ -14,17 +14,13 @@ opened position (`CopyTopR`). This file reduces the second half to two facts.
   instance commit to one registered row of `rec-top-L<l>` (`RecCoins.checkOpenTops`, `RecVStar.checkTopRows`;
   `capRow_bytes`). Both ports are 64 words, so their rows' hm96 inputs share a prefix, and the two slots' calls force
   the rows equal unless some two calls collide (`slot_rows_eq`). The calls are two parts', so the collision escape
-  this needs is `DecompB`'s, over every part's calls (`LayoutB.allCalls`), not a part's own (`PartAccepts`, `Joint`).
-  `JointNC` is `Joint` with that escape excluded, and `decompB_of_jointNC` is `decompB_of_joint` at it: `DecompB`'s
-  conclusion already has the escape as its right disjunct.
+  this needs is over every part's calls (`LayoutB.allCalls`), which `Joint` excludes.
 * **The reader** (`SideCapR`): the side's cap entry is the node RecCap's opened row carries. A RecCap's opened row is
   its whole hidden `top` row, 1024 bits (`rowHidden`, eight bits a byte), the node then 64 bytes of padding, while
   a climb's top and `FitsRep.sizes`' cap entries are 64 bytes (`DecodeZL.ProofSizes.capEach`, `rcapsEach`). So the
-  reader takes each cap row's node (`FlockDeploy.nodeOf`): `topGroups` does, so `ligR`'s recursive caps do, but
-  `capR` reads round 0's rows whole, at which `SideCapR` fails at level 0.
+  reader takes each cap row's node (`FlockDeploy.nodeOf`), as `topGroups` and `capR` do.
 
-`capTop_of` gives the climb's top (`CapTopNC`, `CopyTopR` away from a joint collision) from the two, and
-`openPieces_deployedNC` is LOWOPEN's `openPieces_deployed` at `JointNC`.
+`capTop_of` gives LOWOPEN's `CopyTopR` at `sideAtR rd` from the two, and `openTieR_deployed` its `OpenTieR`.
 -/
 
 namespace RecDeploy.CapLower
@@ -34,30 +30,7 @@ open Claims (Msg)
 open FlockDeploy (Coin FinalP nodeOf)
 open Claims.Recursion.VStarB
 open FlockVBridge.Family (bytesAt outCol)
-open RecDeploy.OpenLower (Joint StagedAt AtPieces AtOpened ownQR ownQR_some copyR copyAtR schAt sideAtR sideLevel
-  OpenCopyR CopyBitsR CopyTopR openPieces_computesA)
-
-/-! ## `DecompB` with the parts' joint collision escape -/
-
-/-- **`Joint`, with no collision among every part's calls**: what `DecompB` leaves to prove once its escape
-(`findColl (L.allCalls x ws)`) is excluded. -/
-def JointNC (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (L : LayoutB)
-    (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (x : Msg) (c : ℕ → Coin) (ws : List Claims.Flock.Wit) : Prop :=
-  Joint H D L chk x c ws ∧ (Claims.findColl (L.allCalls x ws)).isSome = false
-
-/-- **`DecompB` is antitone in the parts' checks at their own messages, away from a joint collision**: it holds at
-`chk'` wherever it holds at `chk` and, with no two of every part's calls colliding, every part's `chk'` at the parts'
-own messages gives every part's `chk` there. -/
-theorem decompB_of_jointNC {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {IV : Claims.Verifier Coin}
-    {L : LayoutB} {shape : Claims.Recursion.Form → Prop} {chk chk' : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
-    (hle : ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
-      ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit), JointNC H D L chk' x c ws →
-        ∀ s < D.nS x, chk s x c (L.msgs x ws))
-    (hD : DecompB H D IV L shape chk) : DecompB H D IV L shape chk' := by
-  intro x st hx hf c ws hl hT hC
-  by_cases hcol : (Claims.findColl (L.allCalls x ws)).isSome = true
-  · exact Or.inr hcol
-  · exact hD x st hx hf c ws hl hT (hle x st hx hf c ws ⟨⟨hl, hT, hC⟩, by simpa using hcol⟩)
+open RecDeploy.OpenLower (AtPieces AtOpened copyR schAt sideAtR sideLevel CopyBitsR CopyTopR OpenTieR openTieR_of)
 
 /-! ## What a cap row carries -/
 
@@ -160,16 +133,11 @@ variable (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (shape : Claims.Re
   (untr : TrReader) (b : Brings) (cmt : Msg → ℕ → Msg → Msg) (L : LayoutB)
   (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace) (rd : Msg → Option FinalP)
 
-/-- No two of every part's calls collide (`DecompB`'s escape excluded; `JointNC`'s second conjunct). -/
-abbrev NoJointColl (x : Msg) (ws : List Claims.Flock.Wit) : Prop :=
-  (Claims.findColl (L.allCalls x ws)).isSome = false
-
-/-- **The binding** (U14b's own fact): at a level part's piece, away from a joint collision, at every RecCap part of
-the piece's level holding the row the opening climbs to (`capIdx`), the copy's climb's top is the node RecCap's `top`
-row carries there. -/
+/-- **The binding** (U14b's own fact): at a level part's piece, at every RecCap part of the piece's level holding the
+row the opening climbs to (`capIdx`), the copy's climb's top is the node RecCap's `top` row carries there. -/
 def OutBindR (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
   AtPieces H D shape untr b cmt L pieces fun x c ws LANES HH _ _ w p ht q =>
-    NoJointColl L x ws → ∀ (r : XR) (ss : Array VStar.Stmt), readX x = some r →
+    ∀ (r : XR) (ss : Array VStar.Stmt), readX x = some r →
       _root_.Flock.RecVStar.statements r.shape = .ok ss →
     ∀ (s' N' : ℕ) (c' : Circuit) (w' : Claims.Flock.Wit), ss[s']? = some (.cap q.level N') →
       r.w.parts[s']?.bind partCircuit = some c' → ws[s']? = some w' →
@@ -196,54 +164,29 @@ def SideCapR (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → Op
           nodeOf (capRow c' w' (capIdx (Claims.Recursion.xI D x) q
             (posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q) HH))
 
-/-- **The cap tie away from a joint collision**: LOWOPEN's `CopyTopR`, given `NoJointColl`. -/
-def CapTopNC (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
-  AtPieces H D shape untr b cmt L pieces fun x c ws LANES HH _ _ w p ht q =>
-    NoJointColl L x ws → AtOpened D Bd x (L.msgs x ws) fun ms' =>
-      bytesAt (copyR (Claims.Recursion.xI D x) w p ht q) (outCol LANES HH) 64 =
-        (FlockSoundness.Refine.capAt (sideAtR rd (Claims.Recursion.xI D x) ms' q).cap
-            (sideAtR rd (Claims.Recursion.xI D x) ms' q).lig q.level).getD
-          ((posAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q) >>>
-            (((sideAtR rd (Claims.Recursion.xI D x) ms' q).sch.levels[q.level]!).d -
-              ((sideAtR rd (Claims.Recursion.xI D x) ms' q).sch.levels[q.level]!).cap)) ByteArray.empty
-
 /-- **The cap tie from the binding and the reader**, at the deployed reader's statements at the dense form: the level
 part's siblings below the cap, `HH`, are the side's level's `d − c` (`sideLevel`). -/
 theorem capTop_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hP : ∀ x, D.parse x = parse x) (hD : ∀ f, shape f → Claims.Recursion.Form.Dense f)
     (hO : OutBindR H D shape untr b cmt L Bd pieces posAt) (hS : SideCapR H D shape untr b cmt L Bd rd pieces posAt) :
-    CapTopNC H D shape untr b cmt L Bd rd pieces posAt := by
-  intro x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht hnc os last hfin hl
+    CopyTopR H D shape untr b cmt L Bd (sideAtR rd) pieces posAt := by
+  intro x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht os last hfin hl
   obtain ⟨r', ss', hr', hss', s', N', c', w', hs', hc', hw', hlt, hcap⟩ :=
     hS x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht os last hfin hl
-  obtain ⟨-, hHH⟩ := sideLevel D shape rd hP hD hx hf hr hss hsv ho (Bd.opened os last)
+  obtain ⟨-, hHH⟩ := sideLevel D shape (sideAtR rd) hP hD hx hf hr hss hsv ho (ms := Bd.opened os last) rfl
   rw [← hHH]
-  exact (hO x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht hnc r' ss' hr' hss' s' N' c' w'
+  exact (hO x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht r' ss' hr' hss' s' N' c' w'
     hs' hc' hw' hlt).trans hcap.symm
 
-/-- **The `rec-open` pieces' share at the deployed layout, away from a joint collision**: LOWOPEN's
-`openPieces_deployed` at `JointNC`, with `OpenTie` as its two halves, the cap tie (`CapTopNC`) among them. -/
-theorem openPieces_deployedNC (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
-    (hC : OpenCopyR H D shape untr b cmt L Bd rd pieces) (hB : CopyBitsR H D shape untr b cmt L Bd rd pieces posAt)
-    (hT : CapTopNC H D shape untr b cmt L Bd rd pieces posAt)
-    {x : Msg} {st : Claims.Recursion.Stmt} (hx : D.parse x = some st) (hf : shape st.form) {c : ℕ → Coin}
-    {ws : List Claims.Flock.Wit}
-    (hJ : JointNC H D L (PartAccepts H D (deployZkRec _root_.Flock.Readable.relation) L shape (showsPart untr b) cmt)
-      x c ws) {s : ℕ} (hs : s < D.nS x) :
-    PiecesComputes Bd D pieces (openHolds (sideAtR rd) posAt) ownQR s x c (L.msgs x ws) := by
-  intro q hq ho
-  obtain ⟨-, r, ss, hr, hss, LANES, HH, n, hsv⟩ := ownQR_some ho
-  refine openPieces_computesA (hJ.1.2.2 s hs) hr hss (Or.inl hsv) Bd pieces ownQR (sideAtR rd) posAt
-    (fun xO w p hxO hsz hcp hA hT' hc hsh q' hq' ho' => ?_) q hq ho
-  have hst : StagedAt H D untr cmt L s x c (L.msgs x ws) (.recOpen q.level LANES HH n) xO w p :=
-    ⟨hxO, hsz, hcp _ hsv, hA, hT', hc, hsh⟩
-  obtain ⟨hob, hgb, hub, hcp'⟩ :=
-    hC x st hx hf c ws hJ.1 r ss s q.level LANES HH n hr hss hsv xO w p hst q' hq' ho' hsz
-  exact ⟨0, hsz, _, _, _, hob, hgb, hub, fun os last hfin hl =>
-    ⟨hcp' os last hfin hl, And.intro
-      (hB x st hx hf c ws hJ.1 r ss s q.level LANES HH n hr hss hsv xO w p hst q' hq' ho' hsz os last hfin hl)
-      (hT x st hx hf c ws hJ.1 r ss s q.level LANES HH n hr hss hsv xO w p hst q' hq' ho' hsz hJ.2 os last hfin
-        hl)⟩⟩
+/-- **The registration ties at the deployed layout at `sideAtR rd`**: LOWOPEN's `OpenTieR`, its cap half
+(`CopyTopR`) from the binding and the reader (`capTop_of`). -/
+theorem openTieR_deployed (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
+    (hP : ∀ x, D.parse x = parse x) (hD : ∀ f, shape f → Claims.Recursion.Form.Dense f)
+    (hB : CopyBitsR H D shape untr b cmt L Bd (sideAtR rd) pieces posAt)
+    (hO : OutBindR H D shape untr b cmt L Bd pieces posAt) (hS : SideCapR H D shape untr b cmt L Bd rd pieces posAt) :
+    OpenTieR H D shape untr b cmt L Bd (sideAtR rd) pieces posAt :=
+  openTieR_of H D shape untr b cmt L Bd (sideAtR rd) pieces posAt hB (capTop_of H D shape untr b cmt L Bd rd pieces
+    posAt hP hD hO hS)
 
 end Deployed
 
