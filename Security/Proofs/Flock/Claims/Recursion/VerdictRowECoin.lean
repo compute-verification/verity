@@ -130,6 +130,7 @@ end RecDeploy.Rows
 
 namespace RecDeploy.Top
 
+open Flock
 open Claims (Msg)
 open FlockDeploy (Coin FinalP)
 open RecDeploy.Rows (accHolds sideAt coefRead rowDPieces)
