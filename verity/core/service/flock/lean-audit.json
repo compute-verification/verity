@@ -60,6 +60,7 @@
   "Flock.Test.FrameStep",
   "Flock.Test.RegionBytes",
   "Flock.Test.PlainHidden",
+  "Flock.Test.RequireLink",
   "VStar"
  ],
  "exempt": {
