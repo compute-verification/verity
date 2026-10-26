@@ -196,8 +196,8 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
   served step on every SM, the least overhead is the commit at high priority on 64 SMs: a step of 4.343 s, +1.046 s
   over serving alone (3.298 s in that run), 1.10 times CMP-149's 0.95 s, against +1.095 s for the uncapped commit at low
   priority in the same run. From 56 to 88 SMs it stays at +1.05 to +1.10 s. Below 48 SMs the commit alone outlasts the
-  forward. SM clocks stay at 1,980 MHz with no clock event reason, at 619 to 641 W median (instant at most 698 W)
-  against the 700 W limit, so power never binds.
+  forward. SM clocks stay at 1,980 MHz with no clock event reason in every run; the high and equal runs from 56 to 88
+  SMs draw 619 to 641 W median against the 700 W limit, and no sample exceeds 697.9 W, so power never binds.
 - **The forward on the other SMs** (`:Nr`) is worse at every N (run r20261026-181159-8f26; `serve:shared:3:Nr` is the
   served step alone there), for two reasons. The forward slows on fewer SMs: 3.534 s on 124, 4.182 on 92, 5.201 on 68,
   against 3.274 s on all 132. And when the commit lags, torch's allocator, at 146.3 of 150.1 GB, frees its cache for
