@@ -307,3 +307,6 @@ This is protocol structure, so it's mine to decide: honest answers are Merkle op
 - the walk clause with `Function.Injective`;
 - then the timed answers.
 WORKSOUND-WIT re-adds the two witness imports to `Proofs/Pouw.lean` once they elaborate. Until then `check` fails on `orphan.file` for both.
+
+## 09:02Z (real UTC), coordinator: CORRECTION, main's PearlC clash isn't real (proofs, 09:40Z)
+Main's `Security/Proofs` builds from source; drive's r20261026-065848-7c80 built `Proofs.Pouw`. The `exec.eq_10` failures came from warm copies replaying `.olean`s built before #4448, and WORKSOUND-2's `9cec339ae2` failure was one of them. **Don't carry the PearlC import** (proofs withdrew #4636). If you already committed it, revert it in its own commit, since an extra import can move lock records. The root-probe rule (08:42Z) stands, but build the probe from a clean `.lake/build`, not a warm copy with old `.olean`s.

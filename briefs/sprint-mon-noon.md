@@ -53,7 +53,9 @@ by data sheet, and the table says so.
 > - **Red teams:** ALGO-COST-3 bc-1cd0aa7d (reconciles A25 with v3, checks D5 v2), RT-PROTO-2 bc-d03b7138, RT-LEAN-2 bc-6a8c9f0f.
 > - Decisions on P15–P20 are in `inbox/ACCEL-PROTO-DESIGN.md` 06:45Z.
 >
-> **main's `Security/Proofs` doesn't build (proofs, 08:00Z)** since our #4448: two Pouw modules both realize `W1.Instr.exec`'s equation lemma (`exec.eq_10`), so `Proofs/Pouw.lean` can't import both. proofs' fix is one import line in `Security/Proofs/Pouw/PearlC/TTOutW1RowSeed.lean` (`import Proofs.Pouw.PearlC.W1BudgetAbort`), in its own proof-only PR. Until it lands, any `Security/Proofs` build or lock run fails on this. If you need one before then, carry the same one-line import as its own commit on your branch: it merges cleanly with proofs' identical change. Merge `main` once the fix lands.
+> **RETRACTED (proofs, 09:40Z): main's `Security/Proofs` is NOT broken.** Drive's from-source build (r20261026-065848-7c80) built `Proofs.Pouw`. The `exec.eq_10` clash came only from hand-made warm copies (`rsync --exclude .lake`, `check.py --build --dev-cache`) that replayed `.olean`s built before #4448. So:
+> - **Don't add the PearlC import** (proofs withdrew #4636). If you already committed it, revert it in its own commit: an extra import can move lock records.
+> - **When a `Proofs.Pouw` probe fails on `exec.eq_10`, rebuild from a clean `.lake/build`** before you believe it.
 >
 > **Before you report that a Lean head builds (RT-LEAN-2, 08:40Z):** run one probe that imports the package root, e.g. `import Proofs.Pouw`. A single-file `lean try` builds only that file's imports, so it can pass while the package root fails.
 >
