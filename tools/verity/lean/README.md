@@ -147,11 +147,8 @@ The audit prints `closure: N modules checked, M reused` under each package's lin
 `--closure` against the node's kept cache (`lean_audit.FLAGS`, `lean-replay/`), so a dependency module that skipped the
 kernel fails the merge check, and the `closure_dependency` control fails without `--fresh`. Cold, after a bump of the
 toolchain, Mathlib or ArkLib, or a change to `Replay.lean`, the first audit on each node checks the closure once; warm, the
-closure adds nothing to the kernel's work. Each replay marks the entries it reuses as used, so the node's cap
-(`lean_audit.REPLAYS_KEPT`) evicts the least recently used, never the closure every replay reads. The entries a recorded
-check stores travel in its verdict pack, which the next recorded check on any node gathers (`check.gather_verdicts`, every
-recorded check in `common.RECORDED_CHECKS`), as do the module versions its audit built (`lean_audit.py --bundle`,
-`shared_bundles`). `lean_audit.py --fresh` (the uncached nightly check) gives its packages one cache in
+closure adds nothing to the kernel's work. A replay marks the entries it reuses as used, so the cap
+(`lean_audit.REPLAYS_KEPT`) evicts the least recently used. `lean_audit.py --fresh` (the uncached nightly check) gives its packages one cache in
 its scratch tree, so `Security` reuses what `Security/Proofs` checked in the same run.
 
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
