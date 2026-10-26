@@ -766,6 +766,24 @@ def test_an_import_that_binds_another_name_is_refused(tmp_path):
     assert f["path"] == "pkg/app/use.py" and "BW" in f["hunk"]
 
 
+PAREN_OLD = "from app import store as ST\nfrom app.store.remote import (Session,\n                              Other)\n"
+
+
+def test_a_parenthesized_import_continued_on_an_unchanged_line_is_certified(tmp_path):
+    r = _app(tmp_path, {"pkg/app/use.py": PAREN_OLD}, {"pkg/app/use.py": PAREN_OLD.replace(
+        "from app import store as ST", "from app.protocols import bandwidth as ST").replace(
+        "app.store.remote", "app.protocols.bandwidth.remote")})
+    assert r["certified"], r["refusals"]
+
+
+def test_a_parenthesized_import_of_a_module_that_did_not_move_there_is_refused(tmp_path):
+    for old in (PAREN_OLD, PAREN_OLD.replace("import (Session,", "import (")):
+        new = old.replace("from app import store as ST", "from app.protocols import bandwidth as ST").replace(
+            "app.store.remote", "app.protocols.linear.api")
+        [f] = _app(tmp_path / str(len(old)), {"pkg/app/use.py": old}, {"pkg/app/use.py": new})["refusals"]
+        assert f["path"] == "pkg/app/use.py" and "linear.api" in f["hunk"]
+
+
 def test_a_module_anchor_that_names_another_directory_is_refused(tmp_path):
     [f] = _app(tmp_path, {"pkg/app/use.py": PY_OLD},
                {"pkg/app/use.py": PY_NEW.replace("parents[2]", "parents[3]")})["refusals"]
