@@ -317,8 +317,8 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
 - A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies lands alone, ahead
   of the queue: the lander lands it with `research merge --push` on its own passing check, from the control pod
   (`/data/infra/drive.sh merge ...`), and drive's next sync rebuilds `next` on it. Only drive's App pushes `main` and `next`
-  (GitHub's rulesets, 23 Oct): `research` refuses those pushes off the pod, and an eject run elsewhere only withdraws the mark,
-  for drive's next tick to rebuild `next`.
+  (GitHub's rulesets, 23 Oct): `research` refuses those pushes off the pod, and an eject, on the pod or off it, only withdraws
+  the mark, for drive's next tick to rebuild `next`.
 - `land = "check"`, drive's default, lands trains on their own check instead (`research.drive`'s docstring).
 
 ## Lean
@@ -467,7 +467,7 @@ Never print a secret's value.
   `research data label <run id|art:…> <key> <value> --by <lane> --ref <run id>`.
 - **Open work** (an ask that outlives its thread, what a handoff hands over) is an issue in the owning handle's Linear
   team (the using-slack skill).
-- **Architecture decisions** and Daniel's decisions log go in Notion, which the admin keeps.
+- **Architecture decisions** and Daniel's decisions log go in Notion.
 
 ## Lanes (worker agents)
 
@@ -476,9 +476,9 @@ If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md`
 Each coordinator (a handle's holder, which its inbox route records: `research msg handles`) is a plain Cursor cloud agent on the
 one-repo environment "Verity compute-verification". It owns one vertical slice and runs its own workers as subagents.
 There are no Cursor Projects (Daniel, 13 Oct). The admin holds `@top`: it opens handovers, keeps the roster, the
-quiet-lane sweep and Daniel's decisions log, relays to Daniel, and announces and settles; it does no lane work.
-Coordinators are launched, handed over and archived from Daniel's laptop with `infra/cursor/launch_coordinator.py`
-(`infra/cursor/README.md`).
+quiet-lane sweep and Daniel's decisions log, relays to Daniel, and announces and settles; it does no lane work. It owns
+consolidation (Daniel, 26 Oct): work, records and notation converge, not multiply. Coordinators are launched, handed
+over and archived as `infra/cursor/README.md` says.
 
 - **Reread the rules every night.** At the start of each night, reread this file and the rulings in
   `.agents/skills/friction/SKILL.md` and `.agents/skills/lean-proofs/SKILL.md`: rules change during the day, and a lane
