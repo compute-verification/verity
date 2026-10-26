@@ -624,7 +624,7 @@
       "usergroup": "S0CAYGG5BDW",
       "owns": [
         "benchmarks/hash/",
-        "benchmarks/torch_gpu/s8_dec_linear/"
+        "benchmarks/torch_gpu/"
       ],
       "branch_suffixes": [
         "15ad"
