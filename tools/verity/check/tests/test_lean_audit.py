@@ -943,8 +943,11 @@ def test_the_launcher_signs_only_this_trees_pinned_bundles(tmp_path, monkeypatch
     signed = []
     remote = types.SimpleNamespace(presign=lambda key, ttl: signed.append((key, ttl)) or f"https://r2/{key}?sig")
     monkeypatch.setattr(pytest.importorskip("research.store.remote"), "load_remote", lambda: remote)
+    monkeypatch.setattr(LA, "shared_bundles", lambda: ["ef" * 32])
     p = LA.url_file(tmp_path, ttl_s=60)
-    assert json.loads(p.read_text()) == {k: f"https://r2/objects/sha256/{'ab' * 32}?sig"} and signed == [(f"objects/sha256/{'ab' * 32}", 60)]
+    assert json.loads(p.read_text()) == {k: f"https://r2/objects/sha256/{'ab' * 32}?sig",
+                                         LA.SHARED + "ef" * 32: f"https://r2/objects/sha256/{'ef' * 32}?sig"}
+    assert signed == [(f"objects/sha256/{'ab' * 32}", 60), (f"objects/sha256/{'ef' * 32}", 60)]
     assert p.name == LA.URLS and p.stat().st_mode & 0o777 == 0o600
 
 
