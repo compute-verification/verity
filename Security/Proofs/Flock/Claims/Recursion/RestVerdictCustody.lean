@@ -171,7 +171,7 @@ theorem find_streamObj {spec : SessionSpec} {h : ByteArray → ByteArray} {rb : 
         streamObj spec h rb (spec.repStreams[k]'(by simp [hss] at hk; omega), streams[k]'(by simp at hk; omega)) := by
     intro k hk
     simp [Array.getElem_zip]
-  have := find_named hnd hl (fun k hk => by rw [hA k hk, streamObj_name]; simp) i (by simp [hss, hi])
+  have := find_named hnd hl (fun k hk => by rw [hA k hk, streamObj_name]; simp <;> rfl) i (by simp [hss, hi])
   rw [hA i (by simp [hss, hi])] at this
   simpa using this
 
@@ -350,11 +350,12 @@ theorem liveOfJ_sub (spec : SessionSpec) (c₁ : Coin) (mids : List (Msg × Coin
       (fun k (y : Round) => y.bytes = some ((streams[i][k]!).bytes.getD ByteArray.empty)) (fun k hk => by
         have hk' : k < streams[i].size := by simpa using hk
         have hlt := htot i hi' k hk'
-        refine ⟨_, ?_, rfl⟩
-        simp only [Array.getElem_mapIdx, Array.getElem_map, Array.getElem_range]
-        unfold fillG
-        rw [hof, List.getElem?_eq_getElem hlt]
-        exact roundJ_fill spec h k _ _)
+        refine ⟨_, ?_, ?_⟩
+        · simp only [Array.getElem_mapIdx, Array.getElem_map, Array.getElem_range]
+          unfold fillG
+          rw [hof, List.getElem?_eq_getElem hlt]
+          exact roundJ_fill spec h k _ _
+        · rfl)
     refine ⟨ys, hys, ?_⟩
     rw [getElem!_pos streams i hi']
     apply List.ext_getElem (by simp [hsz])
@@ -452,7 +453,7 @@ theorem readPs_len {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ :
     obtain ⟨T, hT, hms⟩ := FlockDeploy.readRep_fits hg
     rw [show rs[k].2 = _ from hms]
     simp only [FlockDeploy.framesOf, List.length_map]
-    rw [hT.rounds, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h₂, Option.getD_some]
+    rw [hT.rounds, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem (by simpa using h₂), Option.getD_some]
   · rw [if_neg hc] at h
     cases h
 
@@ -523,12 +524,10 @@ theorem custodyRecJ (rd : Msg → Option FinalP) : CustodyRecJ rd := by
     rw [List.all_eq_true]
     intro q hq
     obtain ⟨t, ht, rfl⟩ := List.mem_iff_getElem.1 hq
-    have ht₁ : t < (lv.streams.toList.flatMap fun s : Array Round => s.toList).length := by
-      simp only [List.length_zip] at ht
-      omega
-    have ht₂ : t < (pf.2.zip cs.tail.dropLast).length := by
-      simp only [List.length_zip] at ht
-      omega
+    have ht₁ : t < (lv.streams.toList.flatMap fun s : Array Round => s.toList).length :=
+      lt_of_lt_of_le ht (by rw [List.length_zip]; exact Nat.min_le_left _ _)
+    have ht₂ : t < (pf.2.zip cs.tail.dropLast).length :=
+      lt_of_lt_of_le ht (by rw [List.length_zip]; exact Nat.min_le_right _ _)
     have ht₃ : t < pf.2.length := by
       rw [List.length_zip] at ht₂
       exact lt_of_lt_of_le ht₂ (Nat.min_le_left _ _)
