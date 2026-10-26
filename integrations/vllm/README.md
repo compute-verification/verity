@@ -381,7 +381,7 @@ A row's one config is its file `workloads/<row-id>.json`, schema `verity-vllm/wo
 checkpoint's repo (`model`) and role (`case`), an `engine` block (`config.RowEngine`: the checkpoint's full `revision`, the
 `vllm` commit, the engine `args`, the `env` that selects kernels, the declared `target`, and `reasons`: why the row sets a served
 switch away from vLLM's default), and the workload (requests, sampling, the sweep's parameters).  `verity-vllm workload` writes it.  The κ profile a Match folds with is the role's
-(`engine.profiles.generic.module_name`), never a field.  The stages' flags and variables override how a run goes, never the
+(`observe.fold.profiles.generic.module_name`), never a field.  The stages' flags and variables override how a run goes, never the
 file; `row run` writes what a run used, its effective config, to `<sweep dir>/<row>/effective_config.json`.  Every Commit reads back,
 on every rank, the switches that select its kernels (`engine/served.py`: batch invariance, DeepGEMM, the shared-experts stream,
 the FlashInfer sampler, the model runner, NCCL P2P, the custom all-reduce, eager and compilation modes, the attention backend and

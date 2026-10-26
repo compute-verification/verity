@@ -350,7 +350,7 @@ class RowEngine:
     ``model``), the ``vllm`` commit, the engine ``args``, the ``env`` its engines run under (kernel selection: ``VLLM_BATCH_INVARIANT``,
     ``NCCL_P2P_DISABLE``), the declared ``target`` (``TargetProfile`` fields; None: the device's) and ``reasons``: why the row sets a
     switch away from vLLM's default, by the switch's name (``engine.served.DEFAULTS``; a served Commit refuses one without).  The κ
-    profile a Match folds with is the role's (``engine.profiles.generic.module_name``), never a field."""
+    profile a Match folds with is the role's (``observe.fold.profiles.generic.module_name``), never a field."""
 
     revision: str | None = None
     vllm: str = VLLM

@@ -53,7 +53,7 @@ from verity_vllm.observe.fold.patterns import (GeometryError, SiluAndMul, as_flo
                                                find_descendants, is_row_major, op_name, target_of, triton_name, unsupported)
 from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Resolution, Shared, StepContext, Transparent, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
-from verity_vllm.engine.profiles.gen_ov_moe_patterns import (K_ALIGN_KERNELS, K_FUSED, K_QUANT, K_SUM, TRITON_EXPERTS, MoEFusedExpertsFp8,
+from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import (K_ALIGN_KERNELS, K_FUSED, K_QUANT, K_SUM, TRITON_EXPERTS, MoEFusedExpertsFp8,
                                                              _as_rows, _contig, _flat, _root_name, _same, header_moe_experts_class)
 
 SHARED_OP = "moe_forward_shared"

@@ -229,7 +229,7 @@ class Graph:
             if not TOP_MODULE_RE.match(pkg) or not self.exists(pkg):
                 continue
             self.add(src_mod, pkg)
-            if pkg == "verity_vllm.engine.profiles":                     # resolved by name from the workload's case at runtime
+            if pkg == "verity_vllm.observe.fold.profiles":                     # resolved by name from the workload's case at runtime
                 for m in self.file_of:
                     if m.startswith(pkg + "."):
                         self.add(src_mod, m)
@@ -464,7 +464,7 @@ def build(imported: set[str] | None, with_dates: bool, with_artifacts: bool) -> 
     roots = set(roots_by_mod)
     live = g.closure(roots)
     static = set(live)
-    profiles_mods = {m for m in g.file_of if m.startswith("verity_vllm.engine.profiles.")}
+    profiles_mods = {m for m in g.file_of if m.startswith("verity_vllm.observe.fold.profiles.")}
     live_sans_profiles = g.closure(roots, skip=profiles_mods)
     saved = set(g.edges["verity_vllm.pipeline.match"])
     g.edges["verity_vllm.pipeline.match"] -= set(RUN_CONFIG_SKIPPED_STAGE_MODULES)

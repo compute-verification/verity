@@ -458,7 +458,7 @@ def expected_layers_for(case: str | None) -> int | None:
     if not case:
         return None
     try:
-        from verity_vllm.engine.profiles import profile_for_case
+        from verity_vllm.observe.fold.profiles import profile_for_case
         return int(profile_for_case(case).config["NL"])
     except Exception:  # noqa: BLE001
         return None
