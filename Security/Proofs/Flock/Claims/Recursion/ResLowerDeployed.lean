@@ -3,6 +3,7 @@ import Proofs.Flock.Claims.Recursion.VerdictPieces
 import Proofs.Flock.Claims.Recursion.SlotsCommit
 import Proofs.Flock.Claims.Recursion.OpensReads
 import Proofs.Flock.Soundness.ExecRows
+import Proofs.Flock.Recursive.ValueInner
 
 /-!
 # The `rec-residuals` pieces' lowering at the deployed run (U12)
@@ -184,19 +185,6 @@ def commitIns (rows : Array (Array ℕ)) (salt : ℕ → ByteArray) : List Msg :
     [rowInput (RecCoins.padTo rows[i]! (Registered.rowWords rows[i]!.size 16)),
       (Hm96.Default512.saltPrefix ++ salt i).data.toList]
 
-/-- **Check 5's `v` rows at a `rec-residuals` part `j`** (`RecCoins.checkResiduals`' `rows`): rep `r`'s, the verifier's
-values at its coins of part `j`'s elements of `v`, the comb last, as words padded to the port's. -/
-def resRows (inn : RecCoins.Inner) (j : ℕ) : Except String (Array (Array ℕ)) := do
-  let (sh, extras) ← inn.algebra
-  let gs ← RecResiduals.groups (← RecAlgebra.structureOf sh) (RecResiduals.portSizes sh)
-  let some (_, _, vs) := gs[j]? | throw "no part"
-  #[0, 1].mapM fun r => do
-    let rep ← inn.rep sh extras r
-    let base := rep.v.extract 0 (rep.v.size - 64)
-    let comb ← if vs.any (· ≥ base.size) then inn.comb r rep else pure RecCoins.ZERO_COMB
-    let full := base ++ comb
-    pure (RecCoins.padTo (RecCoins.words (vs.map (full[·]!))) (RecResiduals.portWordsOf vs.size))
-
 /-- **Check 5's evaluations at one statement `st`** of a `rec-residuals` unit, at its source `src`: `checkValue`'s at
 `v` (the verifier's rows under `verifierSalt` of META's `program_sha512`) and `checkZero`'s at `out` (two zero rows of
 `OUT_WORDS` under `zeroSalt`). None at any other unit. -/
@@ -204,7 +192,7 @@ def resSetupSt (src : Option RecCoins.Source) (st : Stmt) : List Msg :=
   match RecResiduals.params st.c.unit.name, src with
   | some (_, _, _, j), some f =>
     match (f.load st.c.unit.name).toOption, (st.c.metaJ.getObjValAs? String "program_sha512").toOption with
-    | some inn, some prog => match (resRows inn j).toOption with
+    | some inn, some prog => match FlockSoundness.Discharge.Recursion.residualRows inn j with
       | some rows => commitIns rows (RecCoins.verifierSalt prog RecCoins.V_VALUE) ++
           commitIns (RecCoins.zeroRows 2 RecCoins.OUT_WORDS) (RecCoins.zeroSalt RecCoins.ZERO_VALUE)
       | none => []
@@ -612,6 +600,87 @@ theorem check5_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   rw [hsl]
   simp [Array.getD_eq_getD_getElem?, hn]
 
+/-- **Check 5's tie at one instance of a staged `rec-residuals` part**: `resTie_layVR` with check 5's public rows from
+the statement's setup. The setup ran `RecCoins.check` at the part's table, so `checkResiduals` at its inner session
+(`residualsCheck_of_check`, `residualsBoth_of_check`), whose `v` and `out` rows the slots read (`check5_bytes`), and
+the deployed `Brings.setup` lists their evaluations (`hset`). What is left are facts of the code: the table's labels
+(`hidx`), the unit's name being no other V\* unit's, the slots, the ports' word counts and where the copy's columns
+sit. -/
+theorem resTie_staged {b : Brings} {IV : Claims.Verifier Coin}
+    {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {s : ℕ} {x xO : Msg}
+    {w : Claims.Flock.Wit}
+    (hT : ∀ e ∈ (layVR elem).calls x s w, FlockDeploy.sha512 e.1 = e.2)
+    (hnc : (Claims.findColl ((layVR elem).calls x s w ++ vcallsAt FlockDeploy.sha512
+      (recBound _root_.Flock.Readable.relation b (layVR elem) IV) xO)).isSome = false)
+    (hS : StagedPart b.st s x xO) (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true)
+    {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss)
+    {j : ℕ} {nm' : String} {pt : VStar.Part} (hsv : ss[s]? = some (.inner j nm' pt)) {c : Circuit}
+    (hpc : r.w.parts[s]?.bind partCircuit = some c) {i : RecIns} {spec : SessionSpec} {sts : Array Stmt}
+    (hsu : setupO xO = some (i, spec, sts)) (h0 : 0 < sts.size)
+    (hidx : Registered.unitIndices sts[0].pub = .ok (Array.range sts[0].pub.n))
+    {own : Array Registered.Port} (hown : i.base.registered = some own)
+    {m k cl jj : ℕ} (hres : RecResiduals.params sts[0].c.unit.name = some (m, k, cl, jj))
+    (hso : RecCoins.stackedParams sts[0].c.unit.name = none) (hop : RecOpening.params sts[0].c.unit.name = none)
+    (hsp : RecSparse.params sts[0].c.unit.name = none) (ho : RecOpen.params sts[0].c.unit.name = none)
+    {f : RecCoins.Source} (hf : RecCoins.Source.atC3 i.src i.inner i.commits = some f)
+    (hset : ∀ u ∈ resSetup xO, u ∈ b.setup xO)
+    {qv qo n : ℕ} (hn2 : n < 2) (hnp : n < sts[0].pub.n)
+    (hqv : c.ports.findIdx? (·.name == "v") = some qv) (hqo : c.ports.findIdx? (·.name == "out") = some qo)
+    (hvin : qv < HmOut.nIn c) (hoout : ¬ qo < HmOut.nIn c)
+    (hslv : SlotCommits c "v" qv n w)
+    (hslo : readForms w (hmCommit c qo n) = FlockSoundness.Binding.commitString
+      (rowPfx c qo ++ readForms w (outForms c qo n)) (readForms w (hmSalt c qo n))) :
+    ∃ (inn : RecCoins.Inner) (rows : Array (Array ℕ)), f.load sts[0].c.unit.name = .ok inn ∧
+      FlockSoundness.Discharge.Recursion.residualRows inn jj = some rows ∧
+      ∀ {ptv pto : Port} {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} {v : ℕ → Bool},
+        c.ports[qv]? = some ptv → c.ports[qo]? = some pto →
+        ptv.words = (RecCoins.padTo rows[n]! (Registered.rowWords rows[n]!.size 16)).size →
+        pto.words = (RecCoins.padTo (RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!
+          (Registered.rowWords (RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!.size 16)).size →
+        n < rows.size → 8 * nv ≤ rows[n]!.size →
+        (∀ i < 128 * nv, ∃ hl : i < (rowForms c "v" qv n).length,
+          v (FlockVBridge.OfVStar.vBase (FlockVBridge.OfVStar.partRep ns nv) + i) =
+            formBit w (rowForms c "v" qv n)[i]) →
+        (∀ q < 128 * S.res.length, ∃ hl : q < (rowForms c "out" qo n).length,
+          v (FlockVBridge.OfVStar.partBase S ns nv + q) = formBit w (rowForms c "out" qo n)[q]) →
+        ResTie S ns nv (wordsElems nv rows[n]!) v := by
+  obtain ⟨-, hset0⟩ := setupO_some hsu
+  have hcoin := Flock.Readable.array_forM_ok (RecIns.setup_coins hset0) 0 h0
+  rw [hown, hf] at hcoin
+  obtain ⟨inn, hinn, hcr⟩ := FlockSoundness.Discharge.Recursion.residualsCheck_of_check hcoin hso hop hsp ho hres
+  obtain ⟨rows, what, hrows, hcv, hcz⟩ := FlockSoundness.Discharge.Recursion.residualsBoth_of_check hcr
+  refine ⟨inn, rows, hinn, hrows, fun hptv hpto hwv hwo hnr hsz hVc hOc => ?_⟩
+  have hzn : n < (RecCoins.zeroRows 2 RecCoins.OUT_WORDS).size := by simpa [RecCoins.zeroRows] using hn2
+  obtain ⟨prog, hprog, hpv⟩ := check5_bytes hS hck hr hpc hsu h0 hidx hown hcv hqv hn2 hnr hnp
+  obtain ⟨prog', hprog', hpo⟩ := check5_bytes hS hck hr hpc hsu h0 hidx hown hcz hqo hn2 hzn hnp
+  obtain rfl : prog' = prog := Except.ok.inj (hprog'.symm.trans hprog)
+  beta_reduce at hpv hpo
+  have hst : resSetupSt (RecCoins.Source.atC3 i.src i.inner i.commits) sts[0] =
+      commitIns rows (RecCoins.verifierSalt prog RecCoins.V_VALUE) ++
+        commitIns (RecCoins.zeroRows 2 RecCoins.OUT_WORDS) (RecCoins.zeroSalt RecCoins.ZERO_VALUE) := by
+    unfold resSetupSt
+    simp only [hres, hf, hinn, hprog, Except.toOption, hrows]
+  have hmemS : ∀ u ∈ resSetupSt (RecCoins.Source.atC3 i.src i.inner i.commits) sts[0], u ∈ b.setup xO :=
+    fun u hu => hset u (by unfold resSetup; rw [hsu]; exact List.mem_flatMap.2 ⟨sts[0], by simp, hu⟩)
+  rw [hst] at hmemS
+  have hci : ∀ {rs : Array (Array ℕ)} {sl : ℕ → ByteArray}, n < rs.size →
+      rowInput (RecCoins.padTo rs[n]! (Registered.rowWords rs[n]!.size 16)) ∈ commitIns rs sl ∧
+        (Hm96.Default512.saltPrefix ++ sl n).data.toList ∈ commitIns rs sl := fun hn' => by
+    unfold commitIns
+    exact ⟨List.mem_flatMap.2 ⟨n, List.mem_range.2 hn', List.mem_cons_self⟩,
+      List.mem_flatMap.2 ⟨n, List.mem_range.2 hn', List.mem_cons_of_mem _ List.mem_cons_self⟩⟩
+  have hzr : ∀ i, ((RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!).getD i 0 = 0 := fun i => by
+    rw [Array.getD_eq_getD_getElem?]
+    by_cases hi : i < ((RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!).size
+    · rw [Array.getElem?_eq_getElem hi, Option.getD_some, ← getElem!_pos _ _ hi]
+      exact FlockSoundness.Discharge.Recursion.zeroRows_get 2 _ n i
+    · rw [Array.getElem?_eq_none (Nat.le_of_not_lt hi)]
+      rfl
+  exact resTie_layVR hT hnc hr hss hsv hpc hn2 hqv hqo hvin hoout hslv hslo hptv hpto hwv hwo hzr hpv.symm hpo.symm
+    (hmemS _ (List.mem_append_left _ (hci hnr).1)) (hmemS _ (List.mem_append_left _ (hci hnr).2))
+    (hmemS _ (List.mem_append_right _ (hci hzn).1)) (hmemS _ (List.mem_append_right _ (hci hzn).2))
+    hsz hVc hOc
+
 /-! ## The share at the pieces' copies -/
 
 /-- **`resPieces_computes` with the tie at the pieces' copies only**, and the whole acceptance at hand: wherever part
@@ -680,7 +749,7 @@ theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
 /-! ## The statements -/
 
 /-- **The coin tie**: at a V\* statement `xO` part `s` stages at `x` and shows the coins `c` at, wherever check 5 loads
-a `rec-residuals` statement's inner session and computes its `v` rows (`resRows`), the verifier's values the coins give
+a `rec-residuals` statement's inner session and computes its `v` rows (`residualRows`), the verifier's values the coins give
 at a copy (`vvAt` at the inner statement and the coins) are the elements of that copy's instance's row, at the
 verifier's part `(S, ns, nv)`. `staged_rep_drawn` is its coin side. -/
 def VVTie (untr : TrReader) (b : Brings) (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
@@ -690,7 +759,7 @@ def VVTie (untr : TrReader) (b : Brings) (vvAt : Msg → List Coin → ℕ × �
       RecResiduals.params sts[t].c.unit.name = some (m, k, cl, jj) →
       ∀ (f : RecCoins.Source) (inn : RecCoins.Inner) (rows : Array (Array ℕ)),
         RecCoins.Source.atC3 i.src i.inner i.commits = some f → f.load sts[t].c.unit.name = .ok inn →
-        resRows inn jj = .ok rows →
+        FlockSoundness.Discharge.Recursion.residualRows inn jj = some rows →
         ∀ (sh : _root_.Flock.Shape) (holo : Bool) (S : _root_.Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ),
           RecResiduals.shape? m k cl = some sh → RecResiduals.holoOf sts[t].c = .ok holo →
           RecResiduals.part { sh with holo } jj = .ok (S, ns, nv) →
