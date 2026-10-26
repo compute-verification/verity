@@ -2,7 +2,7 @@
 
 * today's lowering projected from a probe of 3 positions is, template for template, TINY's exact lowering at a class of 7
   positions (`window_circuit.class_circuit`): every template but the heads and their key gathers is a fixed count a
-  position, `TokenFeed_v1` one a prompt position;
+  position, `TokenFeed_v1` one a prompt position and `SlotRow_v1` one a Program;
 * v19's heads (#4263), at a block of 3 keys: a head over T keys is its first block, ceil(T / 3) - 1 full ones and its end;
   its keys reach it through one gather a full block, shared, and its first block's own where that block is neither one key
   nor full;
@@ -78,13 +78,15 @@ def test_size_prices_the_measured_units_and_refuses_the_unmeasured():
         CZ.size({"AllGather_v1{WORLD=128,N=4}": 4, "AllGather_v1{WORLD=256,N=4}": 2})
     assert CZ.measured("TokenFeed_v1{NP=1024,FIRST=false}")[:2] == (62, 23)
     assert CZ.measured("TokenFeed_v1{NP=2048,FIRST=true}")[:2] == (30, 24)
+    assert (CZ.measured("SlotRow_v1{NP=1024}")[:2], CZ.measured("SlotMask_v1{}")[:2]) == ((0, 23), (32, 22))
 
 
 def test_window_circuit_and_class_size_default_to_the_class_of_record():
     """Without ``--class``, ``window-circuit`` and ``class-size`` take the class of record, the certifier run of record's
-    envelope (8 slots, the endpoint's ``--window-requests 8``; 1,024 prompt ids, 64 outputs); a given class is read as
-    SLOTS,PROMPT,OUTPUTS."""
+    envelope at ASK-122's fixed slots (8 slots, 4 at each of buckets 0 and 16, EVERY 16; 1,024 prompt ids, 64 outputs); a
+    given class is read as SLOTS,PROMPT,OUTPUTS[,LANES,EVERY], every slot at one boundary without LANES."""
     import prove_path as PP
 
-    assert PP.window_class_of(None) == CLASS_OF_RECORD == WindowClass(8, 1024, 64)
-    assert PP.window_class_of("1,2,2") == PROBE
+    assert PP.window_class_of(None) == CLASS_OF_RECORD == WindowClass(8, 1024, 64, lanes=4, every=16)
+    assert PP.window_class_of("8,1024,64,4,16") == CLASS_OF_RECORD
+    assert PP.window_class_of("1,2,2") == PROBE and PROBE.boundaries == (0,)
