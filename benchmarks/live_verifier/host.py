@@ -69,7 +69,8 @@ pinned, one run at a time, each run's parameters a lane's request held to a fixe
   security groups admit from the card only. Each party's LMS key and session log are `<root>/parties/<wipe|pous>/`, made
   on the host, never leaving it; `party_key wipe|pous` prints the public half, which the lane pins as `--trusted`. A lane
   never names a path, an address or an egress count: a session signs `UNCOUNTED` egress until the network certifier's
-  count reaches the host. A session waits for no verifier unit to run, and each party serves one session at a time.
+  count reaches the host. A session waits for no verifier unit to run, each party serves one session at a time, and the
+  gate kills a party after its session's `--minutes M` (60 by default, at most 180), so a session no prover joined ends.
 - **The store.** When a run's or a replay's unit stops, `vy-verifier-publish@<run>.service` puts `runs/<run>/` (`research
   data put --kind verifier-run/v1 --tree ... --preserve`, from the pinned tree) with the credential infra keeps in
   `/etc/vy/verifier-store.env`, which only that unit reads.
@@ -91,6 +92,7 @@ import signal
 import subprocess
 import sys
 import tarfile
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -134,6 +136,9 @@ MODEL_PINS = Path("verity/core/protocols/pouw/lean/check/models.json")
 PARTIES = {"wipe_party": ("wipe", "verity.core.protocols.pous.wipe_party", 47611),
            "challenger_party": ("pous", "verity.core.protocols.pous.challenger_party", 47610)}
 PARTY_INTS = {"--reads": (1, 1 << 20), "--threads": (1, 256)}
+PARTY_MINUTES = (1, 180)
+"""A party session's limit (`--minutes M`, 60 by default): the gate kills the party then, so one no prover joined, or whose ssh
+connection dropped, never holds its port and lock."""
 UNIT = "vy-verifier@{}.service"
 REPLAY_UNIT = "vy-verifier-replay@{}.service"
 LOG_LINES = 20
@@ -544,6 +549,18 @@ def _as_auditor_python(*args: str) -> list[str]:
             "PATH=/usr/bin:/bin", "/usr/bin/python3", "-s", "-E", *args]
 
 
+def party_args(verb: str, rest: list[str]) -> tuple[list[str], int]:
+    """`rest` without `--minutes M`, and M (`PARTY_MINUTES`, 60 by default)."""
+    if "--minutes" not in rest:
+        return list(rest), 60
+    i = rest.index("--minutes")
+    v = rest[i + 1] if i + 1 < len(rest) else ""
+    lo, hi = PARTY_MINUTES
+    if not COUNT.fullmatch(v) or not lo <= int(v) <= hi or rest.count("--minutes") > 1:
+        raise Refused(f"{verb} --minutes takes one integer in [{lo}, {hi}], got {v!r}")
+    return rest[:i] + rest[i + 2:], int(v)
+
+
 def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
     """The party's command line for `verb` (`PARTIES`): its module from the pinned tree as `auditor`, its key and session log in
     `<root>/parties/<name>` (made there, never leaving the host), listening on every address at its port. A lane names
@@ -571,22 +588,34 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
     return _as_auditor_python("-m", module, "--device", str(host.parties / name), "--listen", f"0.0.0.0:{port}", *extra)
 
 
-def exec_party(argv: list[str], sink: BinaryIO, log: Path) -> int:
-    """Run the party with the gate's stdin (the request line), its stdout forwarded line by line to `sink` and to `log`."""
+def exec_party(argv: list[str], sink: BinaryIO, log: Path, minutes: int) -> int:
+    """Run the party with the gate's stdin (the request line), its stdout forwarded line by line to `sink` and to `log`; killed
+    after `minutes`, which `log` records."""
     with open(log, "ab") as out, subprocess.Popen(argv, cwd=TREE, stdout=subprocess.PIPE) as p:
-        for line in p.stdout:
-            sink.write(line)
-            sink.flush()
-            out.write(line)
-            out.flush()
+        ran_out = threading.Event()
+        timer = threading.Timer(minutes * 60, lambda: (ran_out.set(), p.kill()))
+        timer.start()
+        try:
+            for line in p.stdout:
+                out.write(line)
+                out.flush()
+                with contextlib.suppress(OSError):
+                    sink.write(line)
+                    sink.flush()
+        finally:
+            timer.cancel()
+        p.wait()
+        if ran_out.is_set():
+            out.write(json.dumps({"killed": f"the session's {minutes} min ran out"}).encode() + b"\n")
     return p.returncode
 
 
 def gate_party(verb: str, rest: list[str], host: Host, *, by: str, now: datetime, busy: Callable[[], list[str]],
-               own: Callable[[Path], None], run: Callable[[list[str], BinaryIO, Path], int], sink: BinaryIO) -> int:
+               own: Callable[[Path], None], run: Callable[[list[str], BinaryIO, Path, int], int], sink: BinaryIO) -> int:
     """`wipe_party` / `challenger_party`: one session of the party, served while the ssh connection lasts; refused while a
     verifier unit runs (its cores would time the reads) or the same party serves another session. Each session's request
     and end go to `<root>/parties/<name>/requests.jsonl`, its stdout to `log/<utc>.jsonl` beside it."""
+    rest, minutes = party_args(verb, rest)
     argv = party_argv(verb, rest, host)
     d = host.parties / PARTIES[verb][0]
     for p in (host.parties, d, d / "log"):
@@ -604,8 +633,9 @@ def gate_party(verb: str, rest: list[str], host: Host, *, by: str, now: datetime
         log = d / "log" / f"{stamp}.jsonl"
         reqs = d / "requests.jsonl"
         with open(reqs, "a") as f:
-            f.write(json.dumps({"verb": verb, "by": by, "utc": utc(now), "argv": argv, "log": log.name}, sort_keys=True) + "\n")
-        rc = run(argv, sink, log)
+            f.write(json.dumps({"verb": verb, "by": by, "utc": utc(now), "argv": argv, "log": log.name, "minutes": minutes},
+                               sort_keys=True) + "\n")
+        rc = run(argv, sink, log, minutes)
         with open(reqs, "a") as f:
             f.write(json.dumps({"verb": verb, "by": by, "log": log.name, "rc": rc}, sort_keys=True) + "\n")
         for p in (reqs, log):
@@ -645,7 +675,8 @@ def run_keygen(argv: list[str]) -> str:
 USAGE = ("verbs: run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS] | --sessions N "
          "[--windows W] [--window-ms MS] [--samples S]) [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L] "
          "[--verdict lean|both] [--model ROLE [--engines E] --arena-blocks A] | replay RUN | stop RUN | close NODE_HEX "
-         "| wipe_party [--reads K] [--native [--threads T]] | challenger_party (the request line on stdin) "
+         "| wipe_party [--reads K] [--native [--threads T]] [--minutes M] | challenger_party [--minutes M] (the request line "
+         "on stdin) "
          "(a lane's own gate key, or vy-admin) | status [RUN] | fetch RUN [--transcripts] | party_key wipe|pous")
 
 
