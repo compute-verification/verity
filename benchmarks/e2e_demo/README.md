@@ -3,26 +3,36 @@
 The interfaces between the legs of the one-H200 E2E demo (P-CMP-1, CMP-95 items 5 and 6). Not a package: run the
 modules with this directory on `PYTHONPATH` (the suite's `pyproject.toml` sets it, with `integrations/torch_loop`).
 
-## The drawn-unit replay bundle (`verity/drawn-unit-bundle/v1`)
+## The drawn-unit replay bundle (`verity/drawn-unit-bundle/v2`)
 
-`verity_e2e_demo/replay_bundle.py`, schema `verity_e2e_demo/schemas/drawn-unit-bundle.v1.schema.json`. What the prover
+`verity_e2e_demo/replay_bundle.py`, schema `verity_e2e_demo/schemas/drawn-unit-bundle.v2.schema.json`. What the prover
 behind the firewall reads to prove a window's drawn units: per unit its coordinates (block, step, slot, layer, op, unit),
-its template id and binding, each row's opening (input and output rows against the per-slot commitment subtree, weight
-rows against their registered value's root, every row against its window port's registered root) and the C-Flock `--zk`
-session's member, subset draw and `frame_v3` header entry. A JSON document holds the public part; the private rows and
-salts are a binary payload beside it (`<name>.bin`, mode 0600), each named by `[offset, length]`. The payload is each unit's
-rows in order, each row's u16 words little-endian then its 192-byte salt.
+its template id and binding, each row's opening (input and output rows against the step commitment, weight rows against
+their registered value's root, every row against its window port's registered root) and the C-Flock `--zk` session's
+member, subset draw and `frame_v3` header entry. A JSON document holds the public part; the private rows and salts are a
+binary payload beside it (`<name>.bin`, mode 0600), each named by `[offset, length]`. The payload is each unit's rows in
+order, each row's u16 words little-endian then its 192-byte salt.
 
-The slot tree is the fixture shape `verity/slot-tree/fixture-v0` until kernels posts the per-slot commitment (CMP-95
-item 3): per server-time block, per step, per slot, a frame-v3-sha512 tree over the slot's committed rows; a step's tree
-over its slots' roots; a block's tree over its steps' roots.
+The step commitment is kernels' commit call (CMP-95 item 3, `verity/commit-slots/v1`): a step tree over slot trees over
+unit trees over rows, only each unit's outputs committed. An output row opens in its unit's own commitment unit. An input
+row opens where its producer committed it, and names the producer's coordinates (the torch loop's `x` and `sx` open at
+their layer's input quantizer). The bundle adds a block tree over each server-time block's step roots.
+`verity_e2e_demo/commit_slots.py` is kernels' CPU reference vendored at the commit `REFERENCE` pins (#4469). Once their
+commit_slots package is on `main`, import it and delete the copy. The suite pins the SHA-512 of their fixture,
+`commit-slots-v1.json`, which the copy must reproduce.
+
+`target` names the card's binding of the templates' dot: `GEMM_SM90_S8` for the H200's INT8, `GEMM_HOPPER` for its BF16,
+`GEMM_SM120_S8` for the RTX PRO 6000. `check` refuses a template that binds another dot. On `main`, `GEMM_SM90_S8`
+resolves to the same s8 dot as `GEMM_SM120_S8`, so only the field tells the two cards apart. A `live` draw carries
+`draw.receipt`, the challenger's live-coin receipt; `check` and `build` refuse one without it.
 
     python -m verity_e2e_demo.replay_bundle fixture --out DIR --scratch "$(mktemp -d)"
     python -m verity_e2e_demo.replay_bundle check DIR/drawn-unit-bundle.json [--registration SCRATCH/registration.json]
 
 The fixture (`fixture` writes it as `drawn-unit-bundle.{json,bin}`) is the torch loop's window (two requests, one step,
-both linears, width 128: 512 units) with four drawn units, its weights registered as core's registered values under a test
-salt key. It is built in seconds, so it isn't tracked: the suite builds it and pins its SHA-512s. `check` recomputes every string, path and domain and replays each unit's Definition on its input rows.
+both linears, width 128: 512 units) with four drawn units, its weights registered as core's registered values and its step
+committed under test salt keys, its target the RTX PRO 6000's. It is built in seconds, so it isn't tracked: the suite
+builds it and pins its SHA-512s. `check` recomputes every string, path and domain and replays each unit's Definition on its input rows.
 
 ## The block record (`verity/block-record/v1`)
 
