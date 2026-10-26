@@ -1198,6 +1198,9 @@
    "assumptions": [],
    "type_hash": "3336933546d64f572ec7438b455edf45e362bad2977349e223b6eaa67961b9e5"
   },
+  "Properties.NetworkPeriod.clockKBoundsCount": {
+   "owner": "@network-accounting"
+  },
   "Properties.NetworkPeriod.rowsKBoundsCount": {
    "owner": "@network-accounting",
    "signature": ["Properties.NetworkPeriod.rowsKBoundsCount : Properties.NetworkPeriod.RowsKBoundsCount"],
@@ -2456,6 +2459,10 @@
    "Properties.NetworkCertifier.undigestedParamsReject": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.clockKBoundsCount": {
+    "function": "NetworkCheck.Period.terms",
+    "outcome": "none"
    },
    "Properties.NetworkPeriod.rowsKBoundsCount": {
     "function": "NetworkCheck.Period.rowsTerms",
