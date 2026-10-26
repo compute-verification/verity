@@ -201,11 +201,12 @@ def v2_scan(budget: float = 0.004) -> None:
 
 V2_CARDS = {
     # name: (INT8 dense MAC/s, SHA-512 compressions/s at the public best, tensor MACs per ALU op, s_b)
-    # H200: RT-UNITS U1's IMAD-balanced rate argued on paper (1.43 × 4.79 G/s), RT-MODEL M2's 59.2, M13's s_b 8.
-    # RTX PRO 6000: the README measured the IMAD move slower, so 7.13 G/s stands until CALIB; s_b 2 (0/1 NVFP4).
-    "H200": (MAC_RATE, 1.43 * 4.79e9, 59.2, 8),
-    "RTX PRO 6000": (1.0e15 / 2, 7.13e9, 8, 2),
+    # SHA-512: RT-UNITS's paper IMAD schedules (H200 6.80 G/s; RTX PRO 6000 9.82 G/s at 2092 MHz); SHA_BUILT is the
+    # ALU-only build measured. RT-MODEL M2's 59.2 ALU op on the H200; M13's s_b (b1 wgmma 8×; 0/1 NVFP4 2×).
+    "H200": (MAC_RATE, 6.80e9, 59.2, 8),
+    "RTX PRO 6000": (1.0e15 / 2, 9.82e9, 8, 2),
 }
+SHA_BUILT = {"H200": 4.79e9, "RTX PRO 6000": 7.13e9}
 U_W, U_X = 80, 96              # BET-HYBRID-2 K (±80 both) and NAIVE-STRASSEN (V ±96 to depth 13): the larger of each
 P_W, P_X = 0.0119, 0.0042      # wrap densities at those widths, Llama-3.1-8B (BET-HYBRID-2 H; 70B p_X 0.64%)
 RHO_V2 = 4                     # Z_X Uᵀ and V Y_Wᵀ, two base-128 digits each; Z_X = Σ_s X_s π_sᵀ absorbs (VΠ)Uᵀ
@@ -221,7 +222,8 @@ SHAPES = {                     # (K, N, layers): the frozen model, and COVER-ATT
 }
 
 
-def v2_round(card: str, K: int, N: int, L: int, word_bits: int, m: int = M_PREFILL, commit_a: bool = False) -> dict:
+def v2_round(card: str, K: int, N: int, L: int, word_bits: int, m: int = M_PREFILL, commit_a: bool = False,
+             built: bool = False) -> dict:
     """One prefill call of protocol v2, per MAC in plain INT8 tensor time at η.
 
     Tensor: the product (1) and the four peels, O = T_last − Z_X Uᵀ − V Y_Wᵀ + 256(w_X Eᵀ + X w_Wᵀ). ALU: hashing (S segment words of `word_bits` and O at 32 bits a cell,
@@ -231,7 +233,7 @@ def v2_round(card: str, K: int, N: int, L: int, word_bits: int, m: int = M_PREFI
     anyway). ε_alg is the larger of the two routes PD2-1 found at A = B = 0.
     """
     mac, sha, c_op, s_b = V2_CARDS[card]
-    per_comp = ETA * mac / sha
+    per_comp = ETA * mac / (SHA_BUILT[card] if built else sha)
     per_bit = LEAF_BLOCKS * TREE / LEAF_DATA_BITS
     S = math.ceil(K / L)
     g_hash = per_comp * per_bit * (S * word_bits + 32) / K
@@ -254,12 +256,12 @@ def v2_pick(card: str, K: int, N: int, word_bits: int, budget: float = EPS_ALG_V
     return min(ok, key=lambda r: r["gamma"]) if ok else min(rounds, key=lambda r: r["eps_alg"])
 
 
-def v2_static(card: str, model: str, word_bits: int, budget: float = EPS_ALG_V2) -> dict:
+def v2_static(card: str, model: str, word_bits: int, budget: float = EPS_ALG_V2, **kw) -> dict:
     """MAC-weighted γ (additive and overlapped), h; ε_alg weighted by honest cost; the worst shape's γ."""
     macs = cost = cost_max = hashed = saved = 0.0
     worst = (0.0, None)
     for K, N, reps in SHAPES[model]:
-        r = v2_pick(card, K, N, word_bits, budget)
+        r = v2_pick(card, K, N, word_bits, budget, **kw)
         w = K * N * reps
         macs += w
         cost += w * r["gamma"]
@@ -279,14 +281,32 @@ def v2() -> None:
           f"a shape; k = {k6} draws (eps_S {EPS_S_V1:.1%} at 1e-6, {LN['1%'] / k6:.3%} at 1%)")
     print(f"  {'card':13} {'model':16} {'words':>5} {'budget':>6} {'gamma':>6} {'g_max':>6} {'h':>5} {'eps_alg':>7}"
           f"  worst shape")
+    print(f"  SHA-512 compressions per 128 B of words, tree included: {1024 * LEAF_BLOCKS * TREE / LEAF_DATA_BITS:.3f}")
     for card in V2_CARDS:
         for model in SHAPES:
-            for wb in (32, 16, 8):
-                for budget in (0.005, 0.01, 0.02):
-                    s = v2_static(card, model, wb, budget)
-                    g, (K, N, L) = s["worst"]
-                    print(f"  {card:13} {model:16} {wb:5} {budget:6.1%} {s['gamma']:6.2f} {s['gamma_max']:6.2f} "
-                          f"{s['h']:5.2f} {s['eps_alg']:7.2%}  K {K} N {N} L {L}: {g:.2f}")
+            for wb, budget, built in [(32, 0.01, False), (16, 0.005, False), (16, 0.01, False), (16, 0.02, False),
+                                      (16, 0.01, True)]:
+                s = v2_static(card, model, wb, budget, built=built)
+                g, (K, N, L) = s["worst"]
+                tag = "built" if built else ""
+                print(f"  {card:13} {model:16} {wb:5} {budget:6.1%} {s['gamma']:6.2f} {s['gamma_max']:6.2f} "
+                      f"{s['h']:5.2f} {s['eps_alg']:7.2%}  K {K} N {N} L {L}: {g:.2f} {tag}")
+
+
+def seg_coins() -> None:
+    """SKIP-FIX's SEG-COINS points against PD2-1's O-route, which coin timing doesn't touch.
+
+    At A = B = 0 a prover gets O = bcᵀ from the dither bits at K/s_b after the final coins arrive and skips the peel
+    (ρL a cell), so ε_alg ≥ (ρL − K/s_b)/(γK) at every long-segment length L. γ is SKIP-FIX's convention.
+    """
+    print("\nSEG-COINS at SKIP-FIX's points (K 16384), PD2-1's O-route: eps_alg >= (rho L - K/s_b)/(gamma K)")
+    K, C = 16384, 10970
+    for label, L, rho, w in [("one long segment 7K/8, rho 1", 7 * K / 8, 1, 2),
+                             ("two long segments 7K/16, rho 2", 7 * K / 16, 2, 3),
+                             ("two long segments 7K/16, v2's rho 4", 7 * K / 16, RHO_V2, 3)]:
+        g = 1 + 0.17 + C * w / K + rho * L / K
+        cells = [f"{card} {max(0.0, rho * L - K / s_b) / (g * K):.1%}" for card, (_, _, _, s_b) in V2_CARDS.items()]
+        print(f"  {label:36} gamma {g:4.2f}: " + ", ".join(cells))
 
 
 def main() -> None:
@@ -353,3 +373,4 @@ if __name__ == "__main__":
     v1_leaks()
     v2_scan()
     v2()
+    seg_coins()
