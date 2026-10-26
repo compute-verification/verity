@@ -170,9 +170,12 @@ def _program_splits(build_dir: str | Path | None, workload: str | Path | None) -
             by_shape[(int(r["LP"]), int(r["T"]))] = {"derived": int(nsm)} if nsm is not None else {"derived": None}
         elif sp is not None:
             by_shape[(int(r["LP"]), int(r["T"]))] = sp
+    w = json.loads(Path(workload).read_text())
     out: dict[str, list[int] | int | None] = {}
-    for r in Workload.load(workload).requests:
-        out[r.request_id] = by_shape.get((r.prompt_length or 0, r.max_tokens - 1))
+    for r in w.get("requests", []):
+        rid = r.get("request_id") or r.get("id")
+        lp, cap = int(r.get("prompt_len") or len(r.get("prompt_token_ids") or [])), int(r.get("max_tokens") or 0)
+        out[rid] = by_shape.get((lp, cap - 1))
     return out
 
 
