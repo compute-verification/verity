@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # The drawn-unit replay bundle proved (prove_bundle.py; PRF-171's M1, and with PB_K M3's rehearsal): the torch loop's window
 # and its tampered twin written under the fixture's test key, and the bundle made from the window (`prove_bundle.py make`).
-# Without PB_K the draw is the fixture's FIXTURE_DRAW; with PB_K=K the challenger logs its receipt of the window's
-# registration and Lean `flock-verify draw` draws K units uniformly over the window's whole partition on its own coins.
+# Without PB_K the draw is the fixture's FIXTURE_DRAW under its registered subset:4; with PB_K=K the windows register
+# subset:K, the challenger logs its receipt of the window's registration, and Lean `flock-verify draw --registration`
+# draws the registered law's units uniformly over the window's whole partition on its own coins.
 # Then each drawn member is proved by C-Flock `prove --zk` (CPU) behind the Lean firewall, one outer proof at a time, and
 # decided by Lean `verify --zk`. The negatives are the first session's one-bit proof edits, refused by Lean, and the tampered
 # loop's member, stopped by the firewall and refused by Lean without it.
