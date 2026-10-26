@@ -1695,6 +1695,20 @@ def parseTmpl (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteAr
   checkRows c
   return { c with tmpl := some tu }
 
+/-- **A templated file's statement circuit** (ASK-112, option A): the flat circuit its template unrolls to, its unit net
+`Tmpl.unroll`'s in place of the committed one (`Tmpl.unitNet`), carrying no template. A circuit without one is its own. -/
+def unrolled (c : Circuit) : Circuit :=
+  match c.tmpl with
+  | some tu => match Tmpl.unroll tu.t with
+    | .ok n => { c with nets := c.nets.set! c.unitNet ("unit", n), tmpl := none }
+    | .error _ => c
+  | none => c
+
+/-- **The statement circuit of a hidden-output file**: a templated statement's (`Tags.isTmpl`) is the flat circuit its
+template unrolls to (`unrolled`), any other's `parse`'s. -/
+def parseStmt (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit :=
+  if tags.isTmpl then return unrolled (← parseTmpl tags bytes tables) else parse tags bytes tables
+
 /-- Row `p` of the padding instance (u16 LE): zero, or an output row's pinned dummy outputs, zero-padded. -/
 def dummyRow (c : Circuit) (p : Nat) : ByteArray := Id.run do
   let words := (c.ports.getD p default).words

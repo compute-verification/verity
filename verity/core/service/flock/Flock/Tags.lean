@@ -435,6 +435,9 @@ def circuitTmpl : Tags :=
 refuses it, so they are outside `all` and `find?`, which the proofs read. -/
 def templated : List Tags := [circuitTmpl]
 
+/-- A templated statement's tags (`templated`, by name, as `verify` reads them). -/
+def isTmpl (t : Tags) : Bool := templated.any (·.name == t.name)
+
 end Tags
 
 end Flock

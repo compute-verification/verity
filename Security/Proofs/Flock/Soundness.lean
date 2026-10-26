@@ -96,6 +96,7 @@ import Proofs.Flock.Soundness.ExecSetup
 import Proofs.Flock.Soundness.TmplNetOK
 import Proofs.Flock.Soundness.TmplUnitAt
 import Proofs.Flock.Soundness.TmplLayout
+import Proofs.Flock.Soundness.ParseStmt
 import Proofs.Flock.Soundness.ExecTyped
 import Proofs.Flock.Soundness.ExecTemplate
 import Proofs.Flock.Soundness.ExecTemplatePlace
