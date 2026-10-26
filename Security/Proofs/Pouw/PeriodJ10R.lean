@@ -129,4 +129,55 @@ theorem h1J10RCheckedCreditPeriod : H1J10RCheckedCreditPeriod := by
     at h
   exact h
 
+private theorem find_getD_nDigitsFrom (ks : ℕ) :
+    ∀ f m, (((List.range f).map (· + m)).find?
+        (fun m => 128 * ks ≤ 128 ^ m && 127 * ks / 128 ^ (m - 1) ≤ 127)).getD (m + f) =
+      J10R.nDigitsFrom ks f m := by
+  intro f
+  induction f with
+  | zero => intro m; simp [J10R.nDigitsFrom]
+  | succ f ih =>
+    intro m
+    have hl : (List.range (f + 1)).map (· + m) = m :: (List.range f).map (· + (m + 1)) := by
+      rw [List.range_succ_eq_map, List.map_cons, List.map_map]
+      congr 1
+      · simp
+      · apply List.map_congr_left; intro i _; simp only [Function.comp]; omega
+    rw [hl, List.find?_cons, J10R.nDigitsFrom]
+    by_cases h : 128 * ks ≤ 128 ^ m ∧ 127 * ks / 128 ^ (m - 1) ≤ 127
+    · have hb : (128 * ks ≤ 128 ^ m && 127 * ks / 128 ^ (m - 1) ≤ 127) = true := by simpa using h
+      simp only [hb, if_pos h, Option.getD_some]
+    · have hb : (128 * ks ≤ 128 ^ m && 127 * ks / 128 ^ (m - 1) ≤ 127) = false := by simpa using h
+      simp only [hb, if_neg h]
+      rw [← ih (m + 1), show m + (f + 1) = m + 1 + f by omega]
+
+/-- The verifier's digit count is H1's (`J10R.nDigits`): both search `m = 1, …, KS + 1` for the same least `m`, and
+`m = KS + 1` always qualifies, so their different fallbacks are never read. -/
+theorem nDigits_eq (k : ℕ) : PouwCheck.Credit.nDigits k = J10R.nDigits k := by
+  unfold PouwCheck.Credit.nDigits J10R.nDigits
+  dsimp only
+  rw [← find_getD_nDigitsFrom (k / 32) (k / 32 + 1) 1]
+  cases hf : ((List.range (k / 32 + 1)).map (· + 1)).find?
+      (fun m => 128 * (k / 32) ≤ 128 ^ m && 127 * (k / 32) / 128 ^ (m - 1) ≤ 127) with
+  | some v => rfl
+  | none =>
+    exfalso
+    have hk : k / 32 ≤ 128 ^ (k / 32) := (Nat.lt_pow_self (by norm_num)).le
+    have hmem : k / 32 + 1 ∈ (List.range (k / 32 + 1)).map (· + 1) :=
+      List.mem_map.2 ⟨k / 32, List.mem_range.2 (Nat.lt_succ_self _), rfl⟩
+    refine List.find?_eq_none.1 hf _ hmem ?_
+    simp only [Nat.add_sub_cancel, Bool.and_eq_true, decide_eq_true_eq]
+    refine ⟨?_, Nat.div_le_of_le_mul ?_⟩
+    · rw [pow_succ, Nat.mul_comm (128 ^ (k / 32))]
+      exact Nat.mul_le_mul le_rfl hk
+    · rw [Nat.mul_comm 127]
+      exact Nat.mul_le_mul hk le_rfl
+
+/-- **The verifier's blocks are J10-R's** (witness W1): `Credit.j10rBlocks`, which the statement's `Place.blocks`
+reads, is `J10R.unitBlocks` at every slot, contraction, tile and place. -/
+theorem j10rBlocks_eq (M k R C I J : ℕ) :
+    PouwCheck.Credit.j10rBlocks M k (R, C) I J = J10R.unitBlocks M k R C I J := by
+  simp only [PouwCheck.Credit.j10rBlocks, J10R.unitBlocks, J10R.Layout.row, J10R.Layout.col, J10R.rb, J10R.cb,
+    J10R.rowBits, J10R.colBits, nDigits_eq]
+
 end Properties.Pouw.PeriodJ10R.SecurityProofs
