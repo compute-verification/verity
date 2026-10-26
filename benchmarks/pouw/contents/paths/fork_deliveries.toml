@@ -1,0 +1,4 @@
+order = 370
+path = "`theory/fork_deliveries.py`"
+runs_on = "CPU"
+what = "ACCEL ALGO-COST item 2 (RT-MODEL M5, mma.sync D != C): the fewest block adds a segment for one Strassen level when MMA chains fork from existing accumulators, exhaustive over the 41,472 signed forests on the five shared products with each output's accumulator carried (note:compute-research/20261026T0340Z-draft-accel-algo-cost)"
