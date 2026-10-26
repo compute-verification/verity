@@ -54,6 +54,7 @@ import Proofs.Pous.Pooled
 import Proofs.Pous.Obligation
 import Proofs.Pous.EndToEndAt
 import Proofs.Pous.PeriodAt
+import Proofs.Pous.PeriodDeployed
 
 /-!
 # The proved guarantees
