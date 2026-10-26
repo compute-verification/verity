@@ -56,14 +56,22 @@ h1u_build() {
   mkdir -p "$lib"
   local flags=(-O3 -std=c++17 -shared -Xcompiler -fPIC --expt-relaxed-constexpr -gencode arch=compute_90a,code=sm_90a
                --no-compress)
+  local jw=$S/jw/benchmarks/hash/dither/h1u.cu src
+  case " ${H1U_ARMS:-} " in *-DH1U_JW=1*)
+    mkdir -p "$(dirname "$jw")" && cp benchmarks/hash/dither/h1u.cu "$jw" && patch -s -p1 -d "$S/jw" < "$D/h1u_jw.patch" ||
+      { echo "job.sh: h1u_jw.patch does not apply to this tree's h1u.cu" >&2; return 2; } ;;
+  esac
   for v in ${H1U_ARMS:-kr=$H1U_BASE kra=$H1U_A kraq=$H1U_A,-DH1U_PF=1,-DH1U_JPI=1,-DH1U_JCS=2}; do
     arm=${v%%=*}; def=${v#*=}
+    # an arm that sets H1U_JW builds h1u.cu with h1u_jw.patch applied
+    src=benchmarks/hash/dither/h1u.cu; case ",$def," in *,-DH1U_JW=1,*) src=$jw ;; esac
     # shellcheck disable=SC2086
-    "$nv" "${flags[@]}" ${def//,/ } benchmarks/hash/dither/h1u.cu -o "$lib/h1u_$arm.so" > "$lib/build-h1u_$arm.log" 2>&1 &
+    "$nv" "${flags[@]}" -I benchmarks/hash/dither ${def//,/ } "$src" -o "$lib/h1u_$arm.so" > "$lib/build-h1u_$arm.log" 2>&1 &
     pids+=($!)
   done
   for p in "${pids[@]}"; do wait "$p" || rc=2; done
-  [ $rc = 0 ] || { tail -30 "$lib"/build-h1u_*.log; return 2; }
+  [ -f "$jw" ] && sha256sum "$jw" "$D/h1u_jw.patch" > "$lib/JW.txt"
+  [ $rc = 0 ] || tail -30 "$lib"/build-h1u_*.log
   local deps
   deps=$("$nv" -M -std=c++17 benchmarks/hash/dither/h1u.cu 2>/dev/null | tr ' \\' '\n\n' | grep -v -E ':$|\.o$' | grep . \
     | xargs -r realpath -m --relative-to="$ROOT" | grep -v '^\.\./' | sort -u)
@@ -77,6 +85,7 @@ h1u_build() {
   POUW_CUDA_BIN=$(dirname "$nv") POUW_SASS_GATE_CACHE=none python3 benchmarks/pouw/harness/sass_gate.py "$lib"/h1u_*.so \
     --json "$OUT/sass-gate.json" > "$OUT/sass-gate.txt" 2>&1
   echo "sass gate (sass_pins.json as it stands, diagnostic): rc $?"; tail -20 "$OUT/sass-gate.txt"
+  return $rc
 }
 
 # KP2-S8's exact plain linear (benchmarks/torch_gpu/s8_linear, #4463 and #4520), sent as files: its build.sh run unchanged

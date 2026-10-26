@@ -92,6 +92,15 @@ class H1u:
     def words(self, k: int) -> int:
         return int(self.h.kh_words(k))
 
+    def ws_bytes(self, m: int, n: int, k: int) -> int:
+        """A call's row workspace: kh_j10r_jw_bytes (h1u_jw.patch's builds: its column blocks and W' too), else
+        kh_j10r_rows_bytes."""
+        if hasattr(self.h, "kh_j10r_jw_bytes"):
+            self.h.kh_j10r_jw_bytes.restype = ctypes.c_ulonglong
+            self.h.kh_j10r_jw_bytes.argtypes = [ctypes.c_uint] * 3
+            return int(self.h.kh_j10r_jw_bytes(m, n, k))
+        return int(self.h.kh_j10r_rows_bytes(m, k))
+
 
 class H1uCall:
     """One call on one H1u build: its seeds [units, 16] int64 ([seed_c, sigma_R] words), row workspace and receipts
@@ -106,7 +115,7 @@ class H1uCall:
         self.live = torch.ones(m // T, dtype=torch.uint8, device="cuda")
         self.seeds = torch.empty((self.units, 16), dtype=torch.int64, device="cuda")
         self.out = torch.empty((self.units, lib.words(k)), dtype=torch.int32, device="cuda")
-        self.rws = torch.empty((int(lib.h.kh_j10r_rows_bytes(m, k)),), dtype=torch.uint8, device="cuda")
+        self.rws = torch.empty((lib.ws_bytes(m, n, k),), dtype=torch.uint8, device="cuda")
         self.next = torch.zeros(int(lib.h.kh_smc_words()), dtype=torch.int32, device="cuda") if lib.sm else None
         t = np.zeros(2, dtype=UCALLR)
         t[0] = (a.data_ptr(), b.data_ptr(), self.seeds.data_ptr(), self.out.data_ptr(), self.rws.data_ptr(), n, k, 0,
