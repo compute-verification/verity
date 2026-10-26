@@ -78,7 +78,7 @@ theorem ownRD_some {x : Msg} {q : ResPiece} {s : ℕ} (ho : ownRD x q = some s) 
           exact ⟨nm, pt, ht⟩
         | _ => simp [isResOf] at hp
       obtain ⟨nm, pt, hget⟩ := key ss[s] (Array.getElem?_eq_getElem hsz) hp
-      exact ⟨r, ss, nm, pt, rfl, rfl, hget⟩
+      exact ⟨r, ss, nm, pt, hr, hss, hget⟩
 
 /-- **The concrete pieces, opened**: a piece of `resPD x` is group `p`'s at rep `r < 2`, keyed `(p, r, 0, 0)` at the
 `S` of `shI`'s part `p`. -/
@@ -305,7 +305,7 @@ theorem resLowered_D (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ →
       rw [← hk1]; exact hpart'
     have h := hp0.symm.trans hpart0
     simp only [Except.ok.injEq, Prod.mk.injEq] at h
-    exact h.1.symm
+    exact h.1
   refine ⟨hSS.trans hqS.symm, rfl, ?_, ?_⟩
   · -- check 5's tie
     have hk' : q'.key = (q'.key.1, q'.key.2.1, q'.key.2.2.1, 0) := by simp only [hk]
@@ -359,8 +359,10 @@ end RecDeploy.ResLower
 
 namespace RecDeploy.DecompBR
 
+open Flock
 open Claims (Msg Out)
 open FlockDeploy (Coin FinalP)
+open Claims.Recursion.VStarB
 
 /-- **`ResLowJP` at the deployed constants**: `resLowered_DB` through `resLowJP_of_resLoweredP`, at the concrete pieces
 and owners, `Rows.elemReadC (Top.accRC rd key)` and `Rows.resVRead`. -/
