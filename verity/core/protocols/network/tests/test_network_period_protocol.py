@@ -103,19 +103,40 @@ ROWS_REFUSALS = {
     "rows-reg-key": ("not under the deployment key in the session", "doesn't verify under"),
     "rows-answer-window": ("another window's answer", "another window's answer"),
     "rows-schedule": ("another schedule's digest than the bound one", "the registration's parameters is"),
+    "rows-delta": ("is not the period's", "is not the period's"),
+    "rows-units": ("not the scan's 2T", "not the scan's 2T"),
 }
 
 
 def test_the_rows_form_refuses_what_it_must(server):
     """A link-window missing one of its records' certificates, a registration not under the deployment key, the scan's
-    answer for another window's rows, and rows under a schedule whose digest isn't the bound one: Lean and the mirror
-    each refuse every one at that check."""
+    answer for another window's rows, rows under a schedule whose digest isn't the bound one, scans at two δ, and a
+    scan answered over other than its 2T units: Lean and the mirror each refuse every one at that check."""
     for m, (lean, mirror) in ROWS_REFUSALS.items():
         for n in range(4):
             case = build(m, n, small=n % 2 == 0)
             assert mirror in reference(case)["reason"], (m, n, reference(case))
             verdict, out = D.replay(PORT, case, server)
             assert verdict == REJECT and lean in json.loads(out)["reason"], (m, n, out)
+
+
+def test_the_scan_is_read_off_its_program(server):
+    """The rows form's scan terms are its registered Program's: T, T instances' `prog` bits free, and an ingress and an
+    egress instance's committed bits (their state and view, and their row, each with its return); and Lean and the
+    mirror refuse, as parameters, a scan that isn't a descriptor, another Program's, one whose templates have other
+    parameters or other than T instances each, or rows other than the schedule's, and one with an input gate no
+    template's."""
+    for n in range(3):
+        case = build("rows-honest", n, small=n % 2 == 0)
+        p, desc = PC.params(case["params"]), case["params"]["scan"]
+        state, prog, view, _words = PC._scan_widths(desc)
+        T, row = p.schedule.window, WR.row_bytes(p.schedule)
+        assert p.scan == PC.Scan(T, T * prog, state + view + 1, 8 * row + 16), (n, p.scan)
+        for bad in PC.bad_scans(case["params"]):
+            broken = case | {"params": bad}
+            assert reference(broken)["reason"].startswith("params: scan:"), (n, reference(broken))
+            verdict, out = D.replay(PORT, broken, server)
+            assert verdict == REJECT and "scan" in json.loads(out)["reason"], (n, out)
 
 
 def test_the_mirror_reads_a_registration_as_the_network_certifier_writes_it():
@@ -144,12 +165,11 @@ def test_a_small_period_reaches_its_verdict(server):
 @pytest.mark.parametrize("form", FORMS)
 def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
     """`case(kind, seed, form)` reaches its kind's verdict for each kind, the ones that fail to decode refused where
-    they fail (a digest only once the commitment decodes); an accepted period's eps is its audits' and scans' deltas
-    summed,
-    and its profile names no sync; in the clock form its evidence holds each clock certificate alone, and in the rows
-    form each link-window's three records' certificates and two row registrations, with one scan a link-window and no
-    schedules term; `cases(seed, form)` is one of each with its answer; and Lean gives every one of them the mirror's
-    answer."""
+    they fail (a digest only once the commitment decodes); an accepted period's eps is its units' deltas summed (the
+    clock form's audits', the rows form's scans'), and its profile names no sync; in the clock form its evidence holds
+    each clock certificate alone, and in the rows form each link-window's three records' certificates and two row
+    registrations, with one scan a link-window, all at one δ, and a schedules term equal to the cells';
+    `cases(seed, form)` is one of each with its answer; and Lean gives every one of them the mirror's answer."""
     drawn = {(k, s): PC.case(k, s, form) for k in KINDS for s in range(6)}
     answers = {ks: PC.answer(c) for ks, c in drawn.items()}
     assert {ks: a["verdict"] for ks, a in answers.items()} == {(k, s): verdict_of(k) for k, s in drawn}
@@ -158,7 +178,7 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
                for (k, _), a in answers.items() if k.startswith("broken-"))
     accepted = [a["public"] for (k, _), a in answers.items() if k == ACCEPT]
     assert all(isinstance(x["K"], int) and x["eps"] == str(sum(
-        (Fraction(t["delta"]) for t in x["audits"] + x.get("scans", [])), Fraction(0))) for x in accepted)
+        (Fraction(t["delta"]) for t in x.get("scans", x["audits"])), Fraction(0))) for x in accepted)
     assert all(sorted(a["profile"]) == ["link", "windows"] for (k, _), a in answers.items() if k == ACCEPT)
     shown = [w for (k, _), c in drawn.items() if k == ACCEPT
              for w in json.loads(bytes.fromhex(c["evidence"]))["windows"]]
@@ -168,7 +188,8 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
     else:
         assert all(sorted(w) == PC.ROWS_WINDOW_KEYS and len(w["certificates"]) == 3 and len(w["registrations"]) == 2
                    for w in shown)
-        assert all(x["schedules"] == 0 and len(x["scans"]) == x["windows"] for x in accepted)
+        assert all(x["schedules"] == x["cells"] and len(x["scans"]) == x["windows"]
+                   and len({t["delta"] for t in x["scans"]}) == 1 for x in accepted)
     assert PC.cases(3, form) == {k: (drawn[k, 3], answers[k, 3]) for k in KINDS}
     D.run(dataclasses.replace(PORT, inputs=st.sampled_from(list(drawn.values()))), examples=2 * len(drawn),
           server=server)
@@ -191,16 +212,20 @@ def test_the_bound_counts_what_it_says():
 
 
 def test_the_rows_forms_bound_counts_what_it_says():
-    """The rows form's K worked by hand (Lean's `rowsTerms` `#guard`s): no schedules term under its one schedule, 7
-    cells on one connection, the audit above, and over 3 link-windows one scan of 20 units drawn at δ = 1/15 with at
-    most 3 wrong (1351 sets), 1 free input and jitter below 2 over 2 steps; and eps over the audit's δ = 1/10 and the
-    scans' 1/15 and 1/6."""
-    p = Params(((0, 3),), (7,), 0, 2, "a", None, b"", "", None, 3, WardenParams(), (1, 2))
+    """The rows form's K worked by hand (Lean's `rowsTerms` `#guard`s): 7 cells on one connection and 2 on another, 5
+    bits for the schedules and 5 again for the fail cells, an audit in no term, and over 1 link-window one scan of 20
+    units (T = 10) drawn at δ = 1/15 with at most 3 wrong (1351 sets), 1,120 free inputs, instances committing 300 and
+    512 bits, and jitter below 2 over its 10 steps; with every unit drawn, no faulty term; and eps over the scans' δ
+    alone."""
+    p = Params(((0, 3),), (7, 2), 0, 2, "a", None, b"", "", None, 1, WardenParams(), PC.Scan(10, 1120, 300, 512))
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [Facts(20, 5, Fraction(1, 15), 3)])
     (scan,) = out["scans"]
     assert at_most(20, 3) == 1351 and clog2(1351) == 11
     assert (out["schedules"], out["cells"], scan["free"], scan["faulty_sets"], scan["faulty_bits"], scan["jitter"],
-            out["K"]) == (0, 3, 1, 11, 48, 2, 0 + 3 + (0 + 9 + 64 + 3) + (1 + 11 + 48 + 2))
-    two = dataclasses.replace(p, audits=((0, 0),), windows=2, scan=(0, 0))
+            out["K"]) == (5, 5, 1120, 11, 3 * 512, 10, 5 + 5 + (1120 + 11 + 3 * 512 + 10))
+    assert out["audits"] == [{"delta": "1/10", "drawn": 3, "units": 10, "wrong_units": 4}]
+    drawn = dataclasses.replace(p, audits=(), cells=(), jitter=1, scan=PC.Scan(4, 0, 300, 512))
+    assert public(drawn, [], [Facts(8, 8, Fraction(1, 100), 0)])["K"] == 0
+    two = dataclasses.replace(p, cells=(), windows=2, scan=PC.Scan(0, 0, 0, 0))
     assert public(two, [Facts(1, 1, Fraction(1, 10), 0)],
-                  [Facts(1, 1, Fraction(1, d), 0) for d in (15, 6)])["eps"] == "1/3"
+                  [Facts(1, 1, Fraction(1, 15), 0)] * 2)["eps"] == "2/15"
