@@ -127,13 +127,14 @@ class ControlResponder:
     `answer(i) -> (block, device_ns, server_ns, hold_ns)`.  With `real_delay`, an answer is held `hold_ns` before it is sent
     (`wait`, a busy-wait), so on the wall clock a late control's answer is really late; only the late control holds one: a
     recomputed answer has already spent its time when `answer` returns, so it is sent at once.  The CPU tests read the reported
-    server time through the memory challenger's logical clock instead."""
+    server time through the memory challenger's logical clock instead.  It listens on `host:port` (port 0: one the system
+    picks); a fixed port is one an SSH tunnel forwards to."""
 
     def __init__(self, block_bytes: int, answer: Callable[[int], tuple[bytes, int, int, int]], real_delay: bool = False,
-                 wait: Callable[[int], None] = busy_wait) -> None:
+                 wait: Callable[[int], None] = busy_wait, host: str = "127.0.0.1", port: int = 0) -> None:
         self.block_bytes, self.answer, self.real_delay, self.wait = block_bytes, answer, real_delay, wait
         self.counts = {"answered": 0, "pings": 0}
-        self.sock = socket.create_server(("127.0.0.1", 0))
+        self.sock = socket.create_server((host, port))
         self.thread = threading.Thread(target=self._serve, daemon=True)
         self.thread.start()
 
@@ -151,6 +152,7 @@ class ControlResponder:
             conn, _ = self.sock.accept()
         except OSError:
             return
+        conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         with conn:
             while True:
                 req = b""
