@@ -24,10 +24,9 @@ of words. At p1024 and `k = 3` that is 5,120 units, so `EncodeChainHardness p102
 gather and fold units; property/v1's census reads its MACs as informational), so these circuits also satisfy it at any
 caps that allow the key's gather units.
 
-The cost has moved to MACs: one a gate-level AND. At the toy fields here a word is ≈10^5 ANDs (n = 8) and ≈10^6
-(n = 16); at p1024 a product is ≈ n² ANDs for the partial products plus ≈ 8n² in its 2n conditional subtractions, so a
-word is ≈ 3 · 1,530 · 9n² ≈ 4·10^10 (modeled; 1,530 products a root at p1024 is `(p+1)/4`'s 1,021 squarings and 509
-multiplications).
+The cost has moved to MACs: one a gate-level AND. A field product here is ≈ 17n² of them (measured: 36,214 MACs a
+word at n = 8 and 336,688 at n = 16, three rounds), so at p1024 a word, ≈ 3 · 2,040 products (`(p+1)/4`'s 1,021
+squarings and 1,018 multiplications a root), is ≈ 1.1·10^11 MACs (modeled from those two fields).
 """
 
 from __future__ import annotations
