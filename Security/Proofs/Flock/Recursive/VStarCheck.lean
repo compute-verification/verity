@@ -378,7 +378,9 @@ check passes has no META `holo`. -/
 theorem checkCircuit_plain {i : RecVStar.Inner} {j : ℕ} {c : Flock.Circuit} {n : ℕ} {circuitB : ByteArray}
     {f : VStar.Bindings} {s : VStar.Stmt} (h : RecVStar.checkCircuit i j c n circuitB f = .ok s)
     (hi : i.holo = false) : RecResiduals.holoOf c = .ok false := by
-  rw [checkCircuit_holo h, RecVStar.partHolo, hi, Bool.false_and]
+  have h' := checkCircuit_holo h
+  rw [hi] at h'
+  exact h'
 
 /-- **`checkStmt` at an inner shape, the verifier's own reads, statement `j` and bindings `f`**: the statement is set
 up under tags named V*'s `Tags.circuit` with no lookup table (refusals 5 and 6), and its circuit file is
