@@ -44,7 +44,7 @@ def prompts_for(run_id: str, batch: int, p: int) -> np.ndarray:
 def make_store(a, weights: Weights, device: str):
     salt = bytes.fromhex(a.salt) if a.salt else hashlib.sha512(b"e2e-h200/salt-fixture\0" + a.run_id.encode()).digest()[:24]
     if a.store == "generator":
-        return GeneratorStore(weights)
+        return GeneratorStore(weights, a.workers)
     if a.store == "p2-encode":
         return P2Store.encode(weights, salt, workers=a.workers)
     if a.store.startswith("p2:"):
@@ -109,6 +109,7 @@ def main(argv: list[str] | None = None) -> int:
         "wipe": L.wipe_reload(store, lambda: drive()[1][-1].root, results[-1].root),
         "pouw": L.not_run("pouw", "ALLP-H1LOOP's H1 tiles over the step's INT8 linears, with ALLP-SALT's live salt"),
     }
+    store.close()
     doc = REC.write_record(
         out, run_id=a.run_id, shape=shape, batch=a.batch, device=a.device,
         weights={**weights.manifest(), "registration_digest_test_key":

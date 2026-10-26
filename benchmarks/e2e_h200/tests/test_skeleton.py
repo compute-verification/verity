@@ -16,7 +16,7 @@ from e2e_h200 import store as STO
 from e2e_h200.commit import Committer, fixture_secrets
 from e2e_h200.driver import Driver
 from e2e_h200.legs import pous_spot_reads, wipe_reload
-from e2e_h200.shape import TINY
+from e2e_h200.shape import SMALL, TINY
 from e2e_h200.store import GeneratorStore, P2Store
 from e2e_h200.units import Replayer
 from e2e_h200.weights import Weights
@@ -114,6 +114,18 @@ def test_store_layout_stages_and_loads_every_tensor(weights, monkeypatch):
         assert np.array_equal(s.load(name).reshape(-1).view(np.uint8), weights.array(name).reshape(-1).view(np.uint8)), name
     assert [STO.blocks_of(STO.PAYLOAD - 1, 2).start, STO.blocks_of(STO.PAYLOAD - 1, 2).stop] == [0, 2]
     assert list(STO.blocks_of(STO.PAYLOAD, STO.PAYLOAD)) == [1]
+
+
+def test_parallel_generator_stages_the_serial_codes():
+    w = Weights(SMALL)
+    s = GeneratorStore(w, workers=2)
+    try:
+        for name in ("l0.wup", "l1.wdown", "head"):
+            dst = torch.empty(w.dims[name], dtype=torch.int8)
+            assert torch.equal(s.stage(name, dst), torch.from_numpy(w.codes(name))), name
+            assert np.array_equal(s.stage(name), w.codes(name)), name
+    finally:
+        s.close()
 
 
 def test_wipe_reload_recomputes_the_root(weights, honest, monkeypatch):

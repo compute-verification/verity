@@ -23,6 +23,8 @@ from __future__ import annotations
 import hashlib
 import sys
 from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import get_context
+from multiprocessing.shared_memory import SharedMemory
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +32,7 @@ import numpy as np
 
 from verity.core.protocols.pous.schemes import p2 as S
 
-from .weights import Weights
+from .weights import SW, Weights
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "benchmarks" / "pous"))
@@ -94,16 +96,58 @@ class Store:
     def describe(self) -> dict:
         return {"kind": self.kind}
 
+    def close(self) -> None:
+        pass
+
+
+def _generate_rows(args: tuple) -> None:
+    shape, seed, name, lo, hi, shm_name = args
+    shm = SharedMemory(shm_name)
+    try:
+        rows = SW.generate(shape, seed, name, range(lo, hi))
+        view = np.ndarray(rows.shape, rows.dtype, shm.buf, lo * rows[0].nbytes)
+        view[...] = rows
+        del view
+    finally:
+        shm.close()
+
 
 class GeneratorStore(Store):
-    """No encoded store: ``stage`` regenerates the codes (a FIXTURE for the decode call)."""
+    """No encoded store: ``stage`` regenerates the codes (a FIXTURE for the decode call), over ``workers`` processes that
+    write disjoint rows of one shared buffer (the generator is about 110 MB/s a core: the frozen shape's 130 GiB a step)."""
     kind = "generator-fixture"
 
-    def __init__(self, weights: Weights) -> None:
-        self.weights = weights
+    def __init__(self, weights: Weights, workers: int = 1) -> None:
+        self.weights, self.workers = weights, workers
+        self._pool: ProcessPoolExecutor | None = None
+        self._shm: SharedMemory | None = None
 
     def stage(self, name: str, dst: Any | None = None) -> Any:
-        return _into(self.weights.codes(name), dst)
+        rows, cols = self.weights.dims[name]
+        if self.workers <= 1 or rows < 2 * self.workers:
+            return _into(self.weights.codes(name), dst)
+        if self._pool is None:
+            self._pool = ProcessPoolExecutor(self.workers, mp_context=get_context("forkserver"))
+            self._shm = SharedMemory(create=True, size=max(r * c for r, c in self.weights.dims.values()))
+        step = -(-rows // (4 * self.workers))
+        jobs = [(self.weights.shape, self.weights.seed, name, lo, min(lo + step, rows), self._shm.name)
+                for lo in range(0, rows, step)]
+        list(self._pool.map(_generate_rows, jobs))
+        codes = np.ndarray((rows, cols), np.int8, self._shm.buf)
+        try:
+            return _into(codes, dst) if dst is not None else codes.copy()
+        finally:
+            del codes
+
+    def close(self) -> None:
+        if self._pool is not None:
+            self._pool.shutdown()
+            self._shm.close()
+            self._shm.unlink()
+            self._pool = self._shm = None
+
+    def describe(self) -> dict:
+        return {"kind": self.kind, "workers": self.workers}
 
     def load(self, name: str) -> np.ndarray:
         return self.weights.array(name)
