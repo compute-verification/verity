@@ -16,11 +16,11 @@ import Proofs.Flock.Claims.Bridge.Committed
 * `plainRawLevelColsRV rd v k ℓ`: `plainRawLevelCols` at that run, rep `k`'s level-`ℓ` columns of table 0.
 * `PlainAccPrRdR rd x`: `plain_accPr_le_rdAllK`'s statement at `VR rd`, with `GoodTable` at `deployPlain` (it reads
   neither `V` nor `cols`, so it is the same `GoodTable` at any record built on `deployPlain` with `V := VR rd`).
-* `colsRV_run`: where `VR rd` accepts only at its last round (`AccLast`), `colsRV rd` at an accepting run is
+* `colsRV_run`: since `VR rd` accepts only at its last round (`accLast_VR`), `colsRV rd` at an accepting run is
   `colsR` at its messages and coins, since the answers show the coins (`run_outCoinsR`).
 * `plain_first_of_simDR`, `plain_le_sessionsRawLR`, `plainOffL_le_rdR`, `plain_accPr_le_rdLR`: the `K` chain at
   `VR rd`, at a simulator `P'` sending `plainRootR`'s roots (`PlainSimR`) with its clashes (`PlainClashRunR`).
-* `plain_accPr_le_rdAllR_of rd hal hno hIn : PlainAccPrRdR rd x`, from what the simulation and the decoders still owe
+* `plain_accPr_le_rdAllR_of rd hno hIn : PlainAccPrRdR rd x`, from what the simulation and the decoders still owe
   (`PlainRdInR rd x`), and `rdAllAt_R`: `PlainKSLinR`'s `RdAllAt` at `deployPlainR Readable.relation rd`.
 -/
 
@@ -170,16 +170,15 @@ theorem run_outCoinsR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claim
       (List.range L).map (Claims.coinSeq r) ++ [default] := he
   rw [he', hL', List.range_succ, List.map_append, List.map_singleton, List.dropLast_concat]
 
-/-- **`colsRV rd` reads an accepting run's columns** where `VR rd` accepts only at its last round (`hal`): the view's
-coins are the run's (`run_outCoinsR`), so `colsRV_eq`. -/
-theorem colsRV_run (rd : Claims.Msg → Option FinalP) (hal : Claims.Recursion.AccLast sha512 (VR rd)) {Ω : Type}
-    {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((VR rd).k x) → Coin}
+/-- **`colsRV rd` reads an accepting run's columns**: `VR rd` accepts only at its last round (`accLast_VR`), and the
+view's coins are the run's (`run_outCoinsR`), so `colsRV_eq`. -/
+theorem colsRV_run (rd : Claims.Msg → Option FinalP) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((VR rd).k x) → Coin}
     (h : (Claims.run sha512 P (VR rd) x ω r).out = .acc) :
     colsRV rd (Claims.run sha512 P (VR rd) x ω r).seen =
       colsR rd x ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst)
         ((List.range ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst).length).map (Claims.coinSeq r)) := by
   have ha := FlockDeploy.KS.run_acc_next sha512 P (VR rd) x ω r h
-  have hlen := hal x _ _ (by simp) ha
+  have hlen := accLast_VR rd x _ _ (by simp) ha
   refine colsRV_eq rfl ?_ ?_ ha
   · rw [List.length_map]
     exact run_outCoinsR rd P x ω r h
@@ -274,9 +273,8 @@ open Classical in
 /-- **The plain mixture's first bound at the statement's draw, from a simulation, at `VR rd`**
 (`plain_first_of_simDK`'s proof, at `plainVerdictAtJK id` by `plainVerdictAtJK_of_runR`, with `colsRV rd` the run's
 columns by `colsRV_run`). -/
-theorem plain_first_of_simDR (rd : Claims.Msg → Option FinalP) (hal : Claims.Recursion.AccLast sha512 (VR rd))
-    {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {M : ℕ} (C : Fin M → List 𝔽) (mPts : ℕ) {s₀ : Ins}
-    {spec₀ : SessionSpec} {sts₀ : Array Stmt} {d : Json} (hset : setupOf false x = some (s₀, spec₀, sts₀))
+theorem plain_first_of_simDR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
+    (ω : Ω) {M : ℕ} (C : Fin M → List 𝔽) (mPts : ℕ) {s₀ : Ins} {spec₀ : SessionSpec} {sts₀ : Array Stmt} {d : Json} (hset : setupOf false x = some (s₀, spec₀, sts₀))
     (hd : s₀.read.draw = some d) {nMax : ℕ} (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray)
     (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type} [Fintype τ] [Nonempty τ] (P' : Claims.Prover (Ω × τ))
     (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin)
@@ -309,7 +307,7 @@ theorem plain_first_of_simDR (rd : Claims.Msg → Option FinalP) (hal : Claims.R
     obtain ⟨-, -, -, rfl, -⟩ := hd'
     simp [plainRootR, hv', hr₀, hl]
   rw [hroot, hsim u r' hacc s spec sts link c₁ mids f hact]
-  rw [colsRV_run rd hal hacc] at hno
+  rw [colsRV_run rd hacc] at hno
   exact hv d hd C hno
 
 open Classical in
@@ -522,7 +520,7 @@ open Classical in
 /-- `plain_accPr_le_rdLK` at `VR rd`, at a simulator `P'` of `P` (`hσ`, `hrun`), its clashes (`hsc`) and slots
 (`hslot`). -/
 theorem plain_accPr_le_rdLR (rd : Claims.Msg → Option FinalP)
-    (hal : Claims.Recursion.AccLast sha512 (VR rd)) {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
+    {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) (hset : setupOf false x = some (ins, spec, sts))
     (h : tables false x = [(spec, st)]) {d : Json} (hd : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
@@ -589,7 +587,7 @@ theorem plain_accPr_le_rdLR (rd : Claims.Msg → Option FinalP)
         ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
           Claims.Flock.lookCol (colsRV rd (Claims.run sha512 P (VR rd) x ω r).seen 0) p.val = some u ∧ u ≠ C p := by
   have hL := plainN_add hset
-  have htr := plain_first_of_simDR rd hal P x ω C spec.mPts hset hd plainN (plainDg spec) (plainW spec hw)
+  have htr := plain_first_of_simDR rd P x ω C spec.mPts hset hd plainN (plainDg spec) (plainW spec hw)
     P' (plainΦ x spec st) (Pr_plainΦ hL) hrun
   have hmain := plain_le_sessionsRawLR rd Lf h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay P ω C hT (plainTape x)
     (capOfRoot (plainRootR P x ω)[0]!) (fun u => simAt execArith Refine.H512 Refine.enc512 Lf
@@ -676,10 +674,9 @@ def PlainRdInR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) : Prop :=
 
 open Classical in
 /-- **The bound at `VR rd` against the reader's read sets** (`plain_accPr_le_rdAllK`'s proof at `VR rd`): at a
-statement some run of `VR rd` accepts, where `VR rd` accepts only at its last round (`hal`), from the simulation and
-the decoders (`PlainRdInR`). -/
-theorem plain_accPr_le_rdAllR_of (rd : Claims.Msg → Option FinalP) (hal : Claims.Recursion.AccLast sha512 (VR rd))
-    {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (VR rd) x) (hIn : PlainRdInR rd x) : PlainAccPrRdR rd x := by
+statement some run of `VR rd` accepts, from the simulation and the decoders (`PlainRdInR`). -/
+theorem plain_accPr_le_rdAllR_of (rd : Claims.Msg → Option FinalP) {x : Claims.Msg}
+    (hno : ¬ Claims.Flock.NoAcc sha512 (VR rd) x) (hIn : PlainRdInR rd x) : PlainAccPrRdR rd x := by
   obtain ⟨s, hs, hin⟩ := accR_inScope Readable.relation hno
   obtain ⟨ins, spec, sts, d, hset, hd⟩ := accR_draw hno
   have h1 := plain_one hs hin hset
@@ -704,7 +701,7 @@ theorem plain_accPr_le_rdAllR_of (rd : Claims.Msg → Option FinalP) (hal : Clai
   obtain ⟨Lf, opn, hdec, hP⟩ := hIn s hs hin ins spec sts hset _ ht d hd L _ k0 l₀ l₁ rest ext hsch hk0 hm13 hlay
   obtain ⟨P', ⟨hσ, hS, hrun⟩, hC⟩ := hP P ω
   obtain ⟨hsc, hrel⟩ := hC C hw
-  exact plain_accPr_le_rdLR rd hal Lf hset ht hd L _ k0 l₀ l₁ rest ext hsch hk0 hm13 hlay opn hdec
+  exact plain_accPr_le_rdLR rd Lf hset ht hd L _ k0 l₀ l₁ rest ext hsch hk0 hm13 hlay opn hdec
     (plain_mPts hs hin hset).1 P ω C (hnc C hw hg) P' hσ hrun hsc
     (fun r ℓ u => slotRSL_lead L (plain_mPts hs hin hset).2.2 execArith Refine.H512 Refine.enc512 Lf _ k0 l₀ l₁ rest
       ext hsch hk0 hm13 PT_LOCAL spec.mPts (capOfRoot (plainRootR P x ω)[0]!)
@@ -720,9 +717,9 @@ theorem plain_accPr_le_rdAllR_of (rd : Claims.Msg → Option FinalP) (hal : Clai
 
 /-- **`RdAllAt` at the plain record at the deployed reader** (U2b's form), from `plain_accPr_le_rdAllR_of` at every
 statement some run of `VR rd` accepts. -/
-theorem rdAllAt_R (rd : Claims.Msg → Option FinalP) (hal : Claims.Recursion.AccLast sha512 (VR rd))
+theorem rdAllAt_R (rd : Claims.Msg → Option FinalP)
     (hIn : ∀ x, ¬ Claims.Flock.NoAcc sha512 (VR rd) x → PlainRdInR rd x) :
     RdAllAt (deployPlainR Readable.relation rd) (fun _ => plainRawLevelColsRV rd) :=
-  fun x hno => plain_accPr_le_rdAllR_of rd hal hno (hIn x hno)
+  fun x hno => plain_accPr_le_rdAllR_of rd hno (hIn x hno)
 
 end FlockDeploy.KS
