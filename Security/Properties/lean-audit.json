@@ -485,10 +485,16 @@
    "type_hash": "d9f255e477992784b174c2ec19e62a74285cab29e74c5516ab850ccd97937f29"
   },
   "Pous.Cited.SecurityProofs.citedRunAccepted": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Pous.Cited.SecurityProofs.citedRunAccepted : Pous.Cited.CitedRunAccepted"],
+   "assumptions": [],
+   "type_hash": "63720661f05ea562c38f76e19a14f3a91b8fcdd7ab4779041725194686049c47"
   },
   "Pous.Cited.SecurityProofs.rootDecodes": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Pous.Cited.SecurityProofs.rootDecodes : Pous.Cited.RootDecodes"],
+   "assumptions": [],
+   "type_hash": "b088101dc39ed78370e247006124e935045512a8bb9b57d8d31f27c01656c64b"
   },
   "Pous.EndToEnd.SecurityProofs.drawExact": {
    "owner": "@memory-accounting",
@@ -3650,7 +3656,7 @@
    ]
   },
   "CoreProtocol.Protocol": {
-   "digest": "af75233a1ddc56df133e1e652d0bd324af3de16d6854a0fcd298b209209667fd",
+   "digest": "f688a6c1fff616359ab583c5e071dc3f3d77815e5aed58f6aa6027e2cb11824b",
    "definitions": {
     "Core.Answer": "5da1a1dc7c3a38866fb726c7c8f20f4a5f59ee249feb3cda145b8e3cb4143014",
     "Core.Answer.digest": "d836aa67c9938f2a8b2b90aa9072dee781ea1e90129eca96845002ccbcb3e2b0",
@@ -3697,10 +3703,13 @@
     "Core.Verdict.undecided": "c286e20877f53e983e2847548bf0864728a1ee7a2988a2c852bc9684a58c2b7d",
     "Core.canonicalJson": "248f540589e66dcee3fed2d3a1b6dfc238132c311c5694875a67c6ab98bff35c",
     "Core.canonicalJson._sparseCasesOn_3": "636006752adbd5a614a0be69f18609f0783764283355527f05cc5159d5172c06",
+    "Core.instDecidableEqVerdict": "f46bce4ed5ce4155001bb005897480dc26f2267c50d3b4c2cf4c622a33d232db",
     "Core.instReprVerdict.repr.match_1": "512a9ee16b4e82345f3343510c022654d75d82c2a8b0218985a2e4bf3cb23d3d",
     "_private.CoreProtocol.Protocol.0.Core.opt": "7720a69b388da12990009ab9c126a25370b5ea8b036100358463e2813c7a0710"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
+    "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
@@ -5145,6 +5154,8 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
+    "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
@@ -5258,6 +5269,8 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
+    "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
@@ -5426,6 +5439,8 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
+    "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
@@ -5541,6 +5556,8 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
+    "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
@@ -5610,6 +5627,8 @@
    "guarantees": [
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
+    "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -5891,6 +5910,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
@@ -6089,6 +6109,8 @@
     "Identity.Sha512.init": "89edeb8d92675d3fd8c6aa32da7bb2b09cfb3c963165ed7e2202d607b57a03b1"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
+    "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
@@ -6129,6 +6151,8 @@
     "Identity.taggedState": "47ed529cb2cbb2d42fa243cf0c5d734417fb83045300c8c253efe871407407d1"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
+    "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
@@ -6226,6 +6250,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -6275,6 +6300,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
@@ -6302,14 +6328,16 @@
    ]
   },
   "MemoryChallenger.Protocol": {
-   "digest": "038dd1a36c1c54edd3c42b163360563d654f514480145d4d25faaf7dbe7f6406",
+   "digest": "02f65b7594d63418d684197768571d15bf8dc08afcead536840a88a718ce3729",
    "definitions": {
     "MemoryChallenger.Digests": "9f5fa02321f5051365a0261249653d12cff78b4aa12fb0b50604175a58399f88",
-    "MemoryChallenger.Digests.find": "214e718e77fb761e5bb139201e52328f23a349b37ecb89cb9f47a1e06a88e7f3"
+    "MemoryChallenger.Digests.find": "214e718e77fb761e5bb139201e52328f23a349b37ecb89cb9f47a1e06a88e7f3",
+    "MemoryChallenger.exactly": "adaee847e1fa4e160a956f3d4d5835651a87a8867fe8647f2c666da554b48a12"
    },
    "guarantees": [
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
-    "MemoryChallenger.Properties.SecurityProofs.judgeSigned"
+    "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
+    "Pous.Cited.SecurityProofs.citedRunAccepted"
    ]
   },
   "MemoryChallenger.Records": {
@@ -6385,6 +6413,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.EndToEnd.SecurityProofs.drawExact",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
@@ -6406,6 +6435,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld"
@@ -6440,6 +6470,7 @@
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld"
@@ -7148,6 +7179,8 @@
     "PousCheck.Commit.manifestJson": "09e6a40193c8ebf72415e83a7f610c7fe54fa3b9ad92e9836dd11fd4c2c512df"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
+    "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
@@ -7176,6 +7209,8 @@
     "PousCheck.Keys.pad128": "b9c5905f71f7ee855b6342015267268bd819febb3b0e2707c70f7a0f2a2f9b3c"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
+    "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
@@ -7195,6 +7230,8 @@
     "PousCheck.Merkle.split": "4bb1e1efa3bbbd5a85e23be9b73e4d0212fab4ec2a2e23aa5b576fed1231324a"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
+    "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -7204,7 +7241,7 @@
    ]
   },
   "PousCheck.P2": {
-   "digest": "d400feddef59485cd8983039ef5d39fef3c5d0747674451f449b5fb578fbbd1f",
+   "digest": "07191dfe018cbd194ecf15b153c32cecf33a8ddc5da6ed64ffdb024d03147f9a",
    "definitions": {
     "PousCheck.P2.EXPANDER": "941bb64c0e73b59ca19ff58e7b6baae62573a2a9dca9a5ec9db4d62b398effe2",
     "PousCheck.P2.Params": "399bad128231f2f5574272474b195257c3d48852e09e36b2efdd6226489881c0",
@@ -7212,11 +7249,13 @@
     "PousCheck.P2.Params.blocks": "d6b807ae1832c9fbcdc046d80d44b4783ec3be18f7d4304a7de952316f37ecc0",
     "PousCheck.P2.Params.blocksPerSegment": "e36bd1fa809de3f1551f648ef2a5b14349ef5ee8d81447a6e5a4e4a4f39bf5d3",
     "PousCheck.P2.Params.c0": "8c68c3bf51b2ca0254834b24c0feb80e657ea7dd2246c98d97f05b56fa8cc3c0",
+    "PousCheck.P2.Params.casesOn": "129f2f0732df6a0c249c9f8a7e759acde32c009b0146f9e1110aad0efd2063d8",
     "PousCheck.P2.Params.deployed": "2f984577ea9487bd85232b0a2f9c184d0568634e527ac3d330b2b1b2b41435b1",
     "PousCheck.P2.Params.p": "15d8b48d2626070f06ccea792eeb236ab3a9c8c76e9fb4f059ee9c755a4ec7e0",
     "PousCheck.P2.Params.payloadBytes": "98c664902a07dde98e94a1f0ae7b6730b4869ffd67e9fbe5a7a81a9340483149",
     "PousCheck.P2.Params.primeId": "b4a61876a988a9d4c550d4f99804c62f6c927e5a991c9083f6dd40c6cf4e1b35",
     "PousCheck.P2.Params.profile": "79a859687fc0aa539679cfc1c59e81af165433b6ef1a9f65ce5c6b32c129b646",
+    "PousCheck.P2.Params.rec": "72a24a4ba8a406aabe0e05aac73fdbf7aa5f0674910b5f9d57cea82ca6e0fc80",
     "PousCheck.P2.Params.segmentBytes": "8df9fffea25a2ede76cb60b6d23d38aa674ff3f9936a6333e9a7c58f2e187894",
     "PousCheck.P2.Params.segments": "52e208670feb863f3ee97d121bd070504ff822a7b1e327a9cdb157bf5af7cdbb",
     "PousCheck.P2.Params.validate": "0b0ae898c1975318419b47075f89c1a131a34c00f9974354025f4bad0ffd92be",
@@ -7237,6 +7276,8 @@
     "PousCheck.P2.square": "9cf00be25789c94955f710c2ba301938ba65e53bc0821f3c6262a37cf29efa0f"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
+    "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
@@ -7259,6 +7300,7 @@
     "PousCheck.W_BYTES": "b2aa7e1660031dc72c628103605c42c9e9958d1ae57378c78923458b5e1c7765"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
@@ -7277,6 +7319,8 @@
     "PousCheck.Prim.zeros": "d69ecaabe57a2ee3bb80328697532a0f36c5a73da5594922ea098ae8eb7d67a2"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
+    "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
@@ -7329,10 +7373,28 @@
     "PousCheck.Run.rowLeaves": "dfa5cfe42a5f55cca539b81b1033b796dfd910cb7d6e2716c9f1fa2d7b257915"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld"
    ]
+  },
+  "PousCheck.RunProtocol": {
+   "digest": "fa21e9c2e3a3af3f0e0ed10a46c9f9cd4de43e45e5f2c71f689fe1a083699be5",
+   "definitions": {
+    "PousCheck.RunProtocol.SetupRef": "ac2988ab4121213afeb26d406e13c9839fade3b0efc63da0cc0b200cf881591b",
+    "PousCheck.RunProtocol.SetupRef.answer": "fbf5451fe08474e2ac77453149ee1876d0ad88799157ffc50c4c3bf2b454d162",
+    "PousCheck.RunProtocol.SetupRef.params": "5ecdc7830a1a337c9bc2eb1b3cef929e403e693fbe4af68ed99418ececcb82e9",
+    "PousCheck.RunProtocol.SetupRef.record": "6c3e3f33f5e9582e303d02b02741d373db80db3d329b7c89f1143b2ecea3c29c",
+    "PousCheck.RunProtocol.acceptsCited": "908b7eb34a9927b6fa597e812dbcc8ceeae81ea83306988bc1a0ec72fffd5d95",
+    "PousCheck.RunProtocol.cite": "187a2a7e0413a4beeda9dd7d578151b4a9b1a73afcbfa4347ed2932e7590b045",
+    "PousCheck.RunProtocol.instDecidableEqParams": "5a69911834389ac2d569adad20cdba1e79a5b3b16c84caeb1c5446c2876ad1d7",
+    "PousCheck.RunProtocol.instDecidableEqParams.decEq": "74937d197ab21320f254434ca6a5311e86be884e93c4692fb72621d0f3f49e1b",
+    "PousCheck.RunProtocol.instDecidableEqPublic": "bb15b7316eb2232ed107f6d79492e2903bb3a7e0b256ca679806ebb109af8c0f",
+    "PousCheck.RunProtocol.instDecidableEqPublic.decEq": "c9688916b2bf6451a9fa53024c0d1ce6bc6c30b6a2d073471b9ec554b5a1192f",
+    "PousCheck.RunProtocol.publishedOf": "ba7332ddbf0fcf5faa247b177f7ecbaf60b0192da466d19021b0a1e32f706189"
+   },
+   "guarantees": ["Pous.Cited.SecurityProofs.citedRunAccepted"]
   },
   "PousCheck.Setup": {
    "digest": "369d32cb35688d77475a78abff9fdf2451e64821e4db2faf61748d95cefaba4b",
@@ -7356,6 +7418,8 @@
     "PousCheck.Setup.verifierKeyFromEncoding": "a151341775d2b482de1c14855ca7009c0b8743a11b2e9c4cecf08e748bfbe254"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
+    "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
@@ -7363,7 +7427,7 @@
    ]
   },
   "PousCheck.SetupProtocol": {
-   "digest": "46a17ccd9e3f10771339d1f112da3b745391ec8a2915782bfd0d92dbcca04cb8",
+   "digest": "f18693d47053eb1652de5686e2f9ffb1231d2ff469cb899c173cc8b067343a3e",
    "definitions": {
     "PousCheck.SetupProtocol.Commitment": "58939f0d2ad8f2af1c08b38082dac4384187208375918d700f27818f1dff1591",
     "PousCheck.SetupProtocol.Commitment.salt": "854329050841c86bfee9d3d0cf1dddc717bad5d1dde1d2f6c410b56152e24ea6",
@@ -7371,7 +7435,10 @@
     "PousCheck.SetupProtocol.ID": "b259bf7e5db3fc1e64f04fa9b8732f0b2efd48438f552fb5b8eeaea3e8858651",
     "PousCheck.SetupProtocol.Public": "eafd0c9e1182613ac87714f34a65e743a1d519cda4cf9aa5d8fe2dbf020a5f04",
     "PousCheck.SetupProtocol.Public.blocks": "7eca6475f00997186fdc0bc1bf850956bfca1361f5aa04198776ed03f59769b5",
+    "PousCheck.SetupProtocol.Public.casesOn": "95e87692bc134f242a21c05e9d8ac0c4157f972f15af7661589b8c51038ba6e3",
     "PousCheck.SetupProtocol.Public.commitment": "924b0c03b3910131404d502b253a659bb7d340b64d857591d565ad7e7f049949",
+    "PousCheck.SetupProtocol.Public.ofJson": "524118c7dacc3c3b9e6a385c948217c4ae1fe76d497123bca3b2483a71b6b3d7",
+    "PousCheck.SetupProtocol.Public.rec": "b77f3fda68af6c6b98be1efa6a9778fd259cdbea693efed19ec9b0baf656f287",
     "PousCheck.SetupProtocol.Public.root": "c6250f8a8d593a4204bab075405ef408d5235774630a66ed87ece757a8343ed8",
     "PousCheck.SetupProtocol.Public.salt": "bc7826069e04d3276e93cba3498ae1f893447ac011c43a5f1c9629670ae31d80",
     "PousCheck.SetupProtocol.Public.toJson": "866a0fd479fcac8a5b591535b749be9041839803bb66c04888d9779f1541fbdb",
@@ -7386,6 +7453,8 @@
     "_private.PousCheck.SetupProtocol.0.PousCheck.SetupProtocol.u32be": "f547e86afd95356c53630479070df0b45d34eeb962cdff80c3fea6d4c1a8fd16"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
+    "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -8602,7 +8671,7 @@
    ]
   },
   "Properties.Pous": {
-   "digest": "2b441606eaf35a16f58580f22b4c696d510069ff5f239ad65067aa5a5e26caf3",
+   "digest": "604ca001ac1f31d71058b55b3ed7b03325c9483fbc87aa866573b93ea67a1160",
    "definitions": {
     "PousCheck.Properties.AcceptsDecodes": "f868d8718cc355d0ebe11ee22c08fcdabdfb34118763167a0ba646a7345ec31e",
     "PousCheck.Properties.BlockDecodes": "8c536b03ff9ac621c61703738f25bf6d3b679e9cb6a0ca1d8f1de949ad6e1ad9",
@@ -8611,9 +8680,11 @@
     "PousCheck.Properties.Deployed": "64310ef44823daae5664c18e7a537912c42a490dacf9dc239b731d09176d2275",
     "PousCheck.Properties.Published": "30dfb737497d31a45a4a96e73adf800180afb431a979d66037a0e5fc92e96d16",
     "PousCheck.Properties.PublishesRoot": "680e12cbfc7b08535e30f388ece5bc8eb694ff263ca847a79d27cb403177b59c",
+    "PousCheck.Properties.ShapedAt": "87743dfd640095e23aa8eb6bbe5ae592dcff65d4babbd3367b11f93c00a7b109",
     "PousCheck.Properties.leaves": "e61904c6a66752a477d96b3e0d26722603e21234f8467472407cd45e0a83174f"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -8623,8 +8694,18 @@
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts"
    ]
   },
+  "Properties.Pous.Cited": {
+   "digest": "9a3a59f6222304e75655a7eabaf2c50a518014601a742d0f631729012675996f",
+   "definitions": {
+    "Pous.Cited.CitedRunAccepted": "12ff36519e6d808c350c5cce0e1ece3021a2f6edb3f225c7ef3730693eb602fb",
+    "Pous.Cited.RootDecodes": "4266e8083851cc0a2128f558455a86b2c2460232391deb3f69dbc0ed26713400",
+    "Pous.Cited.StoreBreak": "f45178607f4c4c2de06a81f774e7560d14d098e5d55e3d2a06cb110b0fc3b928",
+    "Pous.Cited.storeStrings": "c80618ca8bb843cdc5a83466f2e0b945e162adfab2fe2c53ba0683eb07fc3e3b"
+   },
+   "guarantees": ["Pous.Cited.SecurityProofs.citedRunAccepted", "Pous.Cited.SecurityProofs.rootDecodes"]
+  },
   "Properties.Pous.EndToEnd": {
-   "digest": "2b83ff9948dde449acbb5c7c25abdaf6b0daed722aeb0bc3fba70a921cab7ce8",
+   "digest": "5854d781e279af15c6a4d0bc54978539a35cba5aee37ef48342da4f19e37b331",
    "definitions": {
     "Pous.EndToEnd.Accepted": "2e4b9d66656d37af29ef1ab265dc6df753e5bf2485cd55f953c568f3e18e6ddb",
     "Pous.EndToEnd.AnsweredOnTime": "c2870b618539d7df4b0ed74c56d7a427ea19457463d0c6ec11753c881fc1bdf8",
@@ -8645,7 +8726,7 @@
     "Pous.EndToEnd.Server": "e706220cebed59ed039f899be9e67aaeca1081543a73eea7ed780df53b340e10",
     "Pous.EndToEnd.Server.pre": "19017563e1eaac00c3aebb7cc8bf0a82c78924e57f6077b6b99e5daaf7ee7329",
     "Pous.EndToEnd.Server.step": "0e10b276b3fc9991e269e17ee9b4d63d13bda64ab25f0c5aec4447b4147b47d3",
-    "Pous.EndToEnd.Shaped": "ba2e4cc10ff2ec1c3c986feb77e25410fe39e9bced76006a4dfa71d88dbcc3c2",
+    "Pous.EndToEnd.Shaped": "d4297d35f5d4049b3c84ef8b898eb04d05682114556372ff8c2ea4323e261ada",
     "Pous.EndToEnd.Streams": "7c059106a0d82756ef3e40cf54b425661e4193335a9660f53a6f1a0e5645be13",
     "Pous.EndToEnd.TableBreak": "32f889f8007524389584767ce4b85f48c2f9a562ceb77201249e990a212818ab",
     "Pous.EndToEnd.answers": "ef4fa0ce9649115d77f7d0bf23ce5e7ef808589e3b79e53e926cd9003dae18eb",
@@ -8662,6 +8743,8 @@
     "Pous.EndToEnd.tableStrings": "3f780560c4a6f6ed22c7f24f80f99482d7ad6c870d48f5a69b4cfa663001c65d"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.citedRunAccepted",
+    "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.EndToEnd.SecurityProofs.drawExact",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
@@ -8754,6 +8837,7 @@
     "PousCheck.Properties.runStrings": "f34261036fb3997ade21148495d219eaadde9e4bf9fa30b1138115bb50f96ad1"
    },
    "guarantees": [
+    "Pous.Cited.SecurityProofs.rootDecodes",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
