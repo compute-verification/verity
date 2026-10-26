@@ -997,7 +997,7 @@ theorem flock_verify_sound_205 (I : Inputs) :
       else SoundExec205 I (Bool.eq_false_of_ne_true hh)) ∧
     ∀ (own : Array Flock.Registered.Port) (t : Exec.Transcript), FlockVerifyAcceptsR false I own t →
       I.tags.hiddenOutputs = true ∨ FlockVerifyAccepts false I t := by
-  refine ⟨?_, (flock_verify_sound false I).2⟩
+  refine ⟨?_, (flock_verify_sound false I).2.1⟩
   have h := (flock_verify_sound false I).1
   by_cases hh : I.tags.hiddenOutputs = true
   · rw [dite_eq_left hh] at h ⊢
