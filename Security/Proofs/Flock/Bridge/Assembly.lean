@@ -55,8 +55,8 @@ theorem _root_.Flock.Bridge.constsOf_isInput {c : Flock.Circuit} {hU : Built c.u
 
 /-- **The assembly, with canonical openings** (`Bridge.AssemblyTargetC`). -/
 theorem _root_.Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC := by
-  intro hT hF _ hC hE n Reg I ht D hD hU pub hpub hpt hscope hv2 hdup hroots kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb
-    src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS desc q L P vb σ Xr δ Cc rows roots Cd κ hTab hLink
+  intro hT hF _ hC hE n Reg I ht D hD hU pub hpub hpt hscope hv2 hdup hroots desc _ _ kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω
+    _ _ Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS q L P vb σ Xr δ Cc rows roots Cd κ hTab hLink
   by_cases hk0 : kd = 0
   · refine (FlockSoundness.Game.prob_le_one _ _ τ).trans (le_trans (le_of_eq ?_) (le_self_add.trans le_self_add))
     rw [hk0]
