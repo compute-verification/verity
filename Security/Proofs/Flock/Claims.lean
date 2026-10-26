@@ -289,6 +289,7 @@ import Proofs.Flock.Claims.Recursion.ResPiecesD
 import Proofs.Flock.Claims.Recursion.SideCapPos
 import Proofs.Flock.Claims.Recursion.ResLowJD
 import Proofs.Flock.Claims.Recursion.ResLowerD
+import Proofs.Flock.Claims.Recursion.LabelsFull
 import Proofs.Flock.Claims.Recursion.ResSiteD
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
