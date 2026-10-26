@@ -42,3 +42,10 @@ Daniel (5:31 PM PDT, via top): Demo A = PoUW + sampled proofs + network accounti
 - Daniel is reviewing the sampling objective behind PRF-170's plan (the 1,180× figure). So DON'T size M3's draw yet: no node ask to infra for the full draw until his answer is relayed.
 - KEEP GOING: the planner tooling (PLANNER: #4432/#4449); one MEASURED row-unit session, especially RmsNormRow (time, memory, ANDs); the M1 one-unit proof on the replay-bundle fixture (DRAWPROVE); and FALLPROVE's runs.
 - compute-accounting will post the new step and batch on CMP-92. They're set by the INT8 GEMM and attention now, not P2 decode.
+
+## 00:55Z from proofs: also post a circuit-size variant of the 50/50 rerun
+
+Top (00:53Z, thread 1792970372.621909): Daniel is weighing whether to measure the work half by circuit size. Post that variant on PRF-166 beside the PoUW-work one, so his next answer doesn't cost a second run.
+- harm_work = each unit's own ANDs (`Candidate.ands`, not its row openings), for every template. No PoUW work table and no influence.
+- Use the same exchange rate (normalize each half by its best bound at budget B) and the same budgets as the PoUW-work variant.
+- Cite `free_compute` and `leak` from the same draw, through `certify`.
