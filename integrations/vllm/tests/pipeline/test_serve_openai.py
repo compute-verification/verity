@@ -24,6 +24,7 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
+from verity_vllm.pipeline import serve_seal as ss
 from verity_vllm.pipeline.serve_admit import Admission
 
 CERTIFIER_BODY = {"model": "m", "prompt": [128000, 791, 4062], "max_tokens": 4, "min_tokens": 4, "stream": True,
@@ -126,6 +127,7 @@ def test_ids_frames_are_the_scans_id_events():
 def test_command_is_registered_and_defaults_to_the_setting_that_fits_the_certifiers_plan():
     opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", "/tmp/x", "--no-commit", "--port", "0"], environ={})
     assert (opts.port, opts.commit, opts.precision, opts.gpu_tree, opts.window_steps) == (0, False, "verity_int8", True, 64)
+    assert (opts.scheme, opts.of_record) == ("rows-sha512", None)
     assert (opts.protocol, opts.run_id, opts.hf_home) == ("vllm", "local", None)
     assert so.engine_options(opts)["quantization"] == "verity_int8" and "attention_backend" not in so.engine_options(opts)
     exact = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--precision", "int8_exact", "--no-gpu-tree"], environ={})
@@ -148,15 +150,59 @@ def test_every_precision_registers_the_verity_int8_method_before_the_engine(prec
     assert set(so.INT8_PARTS) == set(so.PRECISIONS)
 
 
-def test_preflight_refuses_a_gpu_tree_without_ninja_before_the_model_loads():
-    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r"], environ={})
-    with pytest.raises(cli.UsageError, match="ninja.*--no-gpu-tree"):
+def test_preflight_refuses_a_gpu_tree_without_ninja_before_the_model_loads(tmp_path):
+    (man := tmp_path / "manifest.json").write_text("{}")
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man)], environ={})
+    with pytest.raises(cli.UsageError, match=r"ninja is\) on PATH$"):
         so.preflight(opts, which=lambda _: None)
     so.preflight(opts, which=lambda _: "/v/bin/ninja")
-    so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--no-gpu-tree"], environ={}), which=lambda _: None)
+    so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--no-commit"], environ={}), which=lambda _: None)
     with pytest.raises(cli.UsageError, match="window-steps"):
         so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--window-steps", "0"], environ={}),
                      which=lambda _: "/v/bin/ninja")
+
+
+def test_the_served_commit_is_rows_sha512_unless_a_recorded_sha256_run_is_served_again(tmp_path):
+    """rows-sha512 is the default (VLLM-17): a committing run that names no scheme is refused before the model loads until it
+    names its bench row's manifest, and is never served under SHA-256. vllm-v1 is served only by name, to serve again a recorded
+    vllm-v1 run of the same model (``--of-record``: its serve.json says vllm-v1, or predates the field); the committer refuses
+    it too, before it builds anything."""
+    def parse(*more: str) -> so.Options:
+        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", *more], environ={})
+
+    def refusal(opts: so.Options, which: Any = lambda _: "/v/bin/ninja") -> str | None:
+        try:
+            so.preflight(opts, which=which)
+        except cli.UsageError as e:
+            return str(e)
+        return None
+
+    def record(name: str, **rec: Any) -> str:
+        (d := tmp_path / name).mkdir()
+        (d / "serve.json").write_text(json.dumps({"model": "m", "revision": "r", "commit": True, **rec}))
+        return str(d)
+
+    (man := tmp_path / "manifest.json").write_text("{}")
+    assert parse().scheme == ss.ROWS == ss.SCHEMES[0] == "rows-sha512" and ss.V1 in ss.SCHEMES
+    assert "(the default)" in refusal(parse()) and "--required-manifest ROW_DIR/manifest.json" in refusal(parse())
+    assert "drop --no-gpu-tree" in refusal(parse("--no-gpu-tree", "--required-manifest", str(man)))
+    assert refusal(parse("--required-manifest", str(man))) is None and refusal(parse("--no-commit")) is None
+    with pytest.raises(cli.UsageError, match="--required-manifest ROW_DIR/manifest.json"):
+        ss.committer(parse(), llm=None)
+
+    v1, old = ("--scheme", "vllm-v1"), record("v1", scheme="vllm-v1")
+    assert "commits SHA-256" in refusal(parse(*v1)) and "--of-record RUN_DIR" in refusal(parse(*v1))
+    with pytest.raises(cli.UsageError, match="commits SHA-256"):
+        ss.committer(parse(*v1), llm=None)
+    assert refusal(parse(*v1, "--of-record", old)) is None
+    assert refusal(parse(*v1, "--of-record", record("before-serve-json-named-it"))) is None
+    assert refusal(parse(*v1, "--of-record", old, "--no-gpu-tree"), which=lambda _: None) is None
+    assert refusal(parse(*v1, "--of-record", old), which=lambda _: None).endswith("or pass --no-gpu-tree")
+    assert "committed under rows-sha512, not under vllm-v1" in refusal(parse(*v1, "--of-record", record("rows", scheme="rows-sha512")))
+    assert "committed nothing" in refusal(parse(*v1, "--of-record", record("uncommitted", commit=False, scheme=None)))
+    assert "served m2@r, not m@r" in refusal(parse(*v1, "--of-record", record("other", model="m2", scheme="vllm-v1")))
+    assert "not a recorded serve-openai run" in refusal(parse(*v1, "--of-record", str(tmp_path / "none")))
+    assert "not under --scheme rows-sha512" in refusal(parse("--required-manifest", str(man), "--of-record", old))
 
 
 # ---------------------------------------------------------------------------------------------------------------- stand-ins
