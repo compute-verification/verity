@@ -89,21 +89,21 @@ def msgsOf (rs : Array RecVStar.SchedRound) (rr : ℕ → List _root_.VStar.In.R
 
 /-- A row's words as bytes, each word little-endian (`VStar.In.wordsOf`'s inverse). -/
 def wordsBytes (ws : Array ℕ) : ByteArray :=
-  ⟨ws.flatMap fun w => #[(w % 256).toUInt8, (w / 256 % 256).toUInt8]⟩
+  ⟨(Array.range (2 * ws.size)).map fun i =>
+    if i % 2 = 0 then (ws[i / 2]! % 256).toUInt8 else (ws[i / 2]! / 256 % 256).toUInt8⟩
 
-/-- **The tops** (`VStar.In.Src.tops`), by rep and level, each node with its salt: level 0's, rep `rep`'s half of round
-`0`'s rows (RecCap's instances `rep · n + t`); each later level's, the schedule's next top (`topSizes`' order), at rep
-`rep`'s round committing it, the rows after the round's earlier tops. -/
+/-- **The tops** (`VStar.In.Src.tops`), by rep and level, each node (a top row's first 32 words, `Firewall.topRows`'
+inverse) with its salt: level 0's, round `0`'s rows, the one tree both reps share; each later level's, the schedule's
+next top (`topSizes`' order), at rep `rep`'s round committing it, the rows after the round's earlier tops. -/
 def topsOf (rs : Array RecVStar.SchedRound) (rr : ℕ → List _root_.VStar.In.Row) :
     Array (Array (Array (ByteArray × ByteArray))) :=
-  let node := fun (rw : _root_.VStar.In.Row) => (wordsBytes rw.words, rw.salt)
+  let node := fun (rw : _root_.VStar.In.Row) => (wordsBytes (rw.words.extract 0 32), rw.salt)
   ((List.range 2).map fun rep =>
-    let n := (rr 0).length / 2
     let later := (List.range rs.size).flatMap fun k =>
       let sizes := (rs.getD k default).2.1.toList
       (List.range sizes.length).map fun e =>
         ((rr (rep * rs.size + k + 1)).drop (sizes.take e).sum).take (sizes.getD e 0)
-    ((((rr 0).drop (rep * n)).take n :: later).map fun l => (l.map node).toArray).toArray).toArray
+    ((rr 0 :: later).map fun l => (l.map node).toArray).toArray).toArray
 
 /-- **The stager's inputs** at the compiled statement `x`, off the inner witness `w`, the inner prover's tape `ρ` and the
 inner rounds `hist`: `rest`, with the message rounds and the tops the rows the inner prover committed (`roundRows`).
