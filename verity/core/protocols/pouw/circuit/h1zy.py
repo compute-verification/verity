@@ -96,15 +96,25 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   unit on chunk rows is `PouwH1TileZyChunks_v2{UNIT, CHUNKS = n}`: v1's body with UNIT's ``call`` and ``blocks`` after
   ``roots``, passed on as they are. UNIT runs on the whole rows at the whole K, so its noise is the call-scale stream's
   rows and columns from ``blocks`` (`h1tile.j10r_blocks` at the call's slot and the whole K, `Layout`(R, C, K)'s RB and
-  CB), `h1tile.j10r_reference`'s word for word: chunking cuts the committed rows, never the noise stream. A J10-R leaf
-  has no lanes (`PouwH1LaneZy` is over v1 and v3).
+  CB), `h1tile.j10r_reference`'s word for word: chunking cuts the committed rows, never the noise stream.
+* **A J10-R leaf's lanes.** A drawn per-call unit over `PouwH1Tile_v5` is proved as v1's leaf is, its 32 lanes and their
+  combine, a lane past `CHUNK_MAX` in `chunks`(K) chunks: `PouwH1LaneZy_v2{TILE}` and `PouwH1LaneZyChunk_v2{TILE, CHUNKS,
+  CHUNK}` are v1's lane and lane chunk with the unit's ``call`` and ``blocks`` after ``roots`` (`PUBLIC_J10R`), and
+  `PouwH1Combine_v1` takes the v5 leaf as it is (it reads only the layout). Their noise is v5's: seed_c from one
+  `seeds.PouwCallSeeds` (every chunk; a chunk past the first leaves its σ_R unread), each block's counter the leaf's row or
+  column offset, picked over the index as v1's is, plus ``blocks[0]`` or ``blocks[1]`` (`seeds.PouwAdd64`), so row i's
+  blocks are blocks[0] + i RB + t and column j's blocks[1] + j CB + t, `h1tile.j10r_noise`'s; their keys are v1's, block
+  l of σ_R's at the unit's own position. So the lanes' partials XOR to `PouwH1Tile_v5`'s receipt, and the rest is v1's.
+  Over v5 only: v6's one-stream z, as v3's, has no lane in chunks, and every served J10-R K is past 4096.
 
 `records` gives a unit's honest record on words (`scaled_mm_zy`'s for its rows and scales), `reference` the unit on words,
 ``(receipt, ok)``, and `chunks_reference` the unit on chunk rows (each with ``j10r``: over J10-R), `lane_partial` a lane's honest partials row, and `lane_reference` and `combine_reference` a lane's and the
-combine's ok; `lane_chunk_carries` a lane's honest carries in chunks, and `lane_chunk_reference` a chunk's ok.
+combine's ok; `lane_chunk_carries` a lane's honest carries in chunks, and `lane_chunk_reference` a chunk's ok (each a
+lane's, with ``j10r``: over J10-R's v5).
 `statement_rows` is a lane's, a chunk's and the combine's input rows as `class_statement.unit_lowering` takes them, and
 `statement_ports` their C-Flock ports, each input's and the output's bits in its port's row, which Lean states as
-`PouwWindow.Lanes` (with each port's registered row, and each unit input wire's port and bit) for proofs' decoders.
+`PouwWindow.Lanes` (with each port's registered row, and each unit input wire's port and bit) for proofs' decoders (v1's
+forms; the J10-R forms are not in Lean yet).
 """
 from __future__ import annotations
 
@@ -306,8 +316,8 @@ def lane_cells(lay: H.Layout, ln: int) -> list[int]:
     return [i * lay.c + j for i in lay.rows(ln) for j in lay.cols(ln)]
 
 
-def _refuse_lane(b: dict) -> str | None:
-    why = _refuse_tile(b)
+def _refuse_lane(b: dict, tiles: tuple[str, ...] = TILES) -> str | None:
+    why = _refuse_tile(b, tiles)
     if why:
         return why
     r, c = b["TILE"].bindings["R"], b["TILE"].bindings["C"]
@@ -346,35 +356,58 @@ def _pick(B: Any, sel: list, cands: list) -> Coll:
     return cands[0]
 
 
-def _noise(B: Any, seed: Coll, sel: list, firsts: list[int], n: int, const: Any, at: int = 0) -> Coll:
-    """Bits [at, at + n) of seed's stream from block firsts[sel]: each block's u64 counter picked from the constants."""
+def _noise(B: Any, seed: Coll, sel: list, firsts: list[int], n: int, const: Any, at: int = 0,
+           base: Coll | None = None) -> Coll:
+    """Bits [at, at + n) of seed's stream from block firsts[sel]: each block's u64 counter picked from the constants, and
+    with ``base`` that counter plus ``base`` (`seeds.PouwAdd64`, J10-R's counters from a unit's public ``blocks``)."""
     t0 = at // SD.BLOCK_BITS
     blocks = []
     for t in range(t0, -(-(at + n) // SD.BLOCK_BITS)):
         cands = [Coll(Array(64, BIT), Explicit(tuple(const(v) for v in SD.position_leaves(f + t, True)))) for f in firsts]
-        blocks.append(B.call(SD.PouwNoiseBlockBits, seed, Coll(SD.POS_BITS, _pick(B, sel, cands).refs)))
+        counter = Coll(SD.POS_BITS, _pick(B, sel, cands).refs)
+        if base is not None:
+            counter = B.call(SD.PouwAdd64Bits, base, counter)
+        blocks.append(B.call(SD.PouwNoiseBlockBits, seed, counter))
     lo = at - t0 * SD.BLOCK_BITS
     return Coll(Array(n, BIT), concat([blk.refs for blk in blocks]).slice(lo, lo + n))
 
 
-def _lane_body(B: Any, S: Any, a: Coll, b: Coll, admit: Coll, zy: Coll, partials: Coll, salt: Coll, position: Coll,
-               roots: Coll, lane: Coll) -> Coll:
+def _lane_seeds(B: Any, S: Any, v: dict, keys: bool) -> tuple[Coll, Coll | None, tuple[Coll, Coll] | None, int]:
+    """A lane statement's noise seed, σ_R (with ``keys``), the bases its counters add to (J10-R's ``blocks``, else None)
+    and what each column's first block (`h1tile.Layout.col`) less is its counter: seed_j and today's constant counters,
+    or under J10-R seed_c from one `seeds.PouwCallSeeds`, row i's blocks from ``blocks[0] + i RB`` and column j's from
+    ``blocks[1] + j CB``, as `h1tile`'s v5 derives them. A J10-R chunk past the first takes seed_c from the same call and
+    leaves its σ_R unread."""
+    lay = _lane_layout(S)
+    if S.TILE.defn.id in J10R_TILES:
+        seed_c, sigma_r = SD.call_seeds_call(B, v["salt"], v["position"], v["call"], v["roots"], True)
+        return seed_c, sigma_r, (v["blocks"][0], v["blocks"][1]), lay.col(0)
+    if keys:
+        return (*SD.unit_seeds_call(B, v["salt"], v["position"], v["roots"], True), None, 0)
+    return SD.seed_call(B, v["salt"], v["position"], v["roots"], True), None, None, 0
+
+
+def _lane_body(B: Any, S: Any, *args: Coll) -> Coll:
+    v = dict(zip([p for p, _t in _lane_signature(S)[0]], args, strict=True))
+    a, b, admit, zy, partials, lane = v["a"], v["b"], v["admit"], v["zy"], v["partials"], v["lane"]
     lay = _lane_layout(S)
     G, Q = lay.r // 4, lay.c // 8
     sel = [lane[t] for t in range(lane_bits(lay.r, lay.c))]
     qb, const = Q.bit_length() - 1, _consts(B)
-    seed_j, sigma_r = SD.unit_seeds_call(B, salt, position, roots, True)
+    seed_j, sigma_r, base, col0 = _lane_seeds(B, S, v, True)
+    rb, cb = base or (None, None)
     codes = [a[s].field("codes") for s in range(4)], [b[t].field("codes") for t in range(8)]
     X, A, XIN = [], [], []
     for s in range(4):
-        nz = _noise(B, seed_j, sel[qb:], [lay.row(g + G * s) for g in range(G)], lay.row_bits, const)
+        nz = _noise(B, seed_j, sel[qb:], [lay.row(g + G * s) for g in range(G)], lay.row_bits, const, base=rb)
         x, d, xin = H._row(B, codes[0][s], nz, lay)
         X.append(x)
         A.append(d)
         XIN.append(xin)
     W, U, NU, WIN = [], [], [], []
     for t in range(8):
-        nz = _noise(B, seed_j, sel[:qb], [lay.col(2 * q + 2 * Q * (t >> 1) + (t & 1)) for q in range(Q)], lay.col_bits, const)
+        nz = _noise(B, seed_j, sel[:qb], [lay.col(2 * q + 2 * Q * (t >> 1) + (t & 1)) - col0 for q in range(Q)],
+                    lay.col_bits, const, base=cb)
         u, nu, w, win = H._col(B, codes[1][t], nz, lay)
         U.append(u)
         NU.append(nu)
@@ -444,6 +477,26 @@ PouwH1LaneZy = CompositeDefinition(
         "of the record are its rows' product z (TILE's v1 or v3 form) and PouwZyDequant_v2 of z at each cell's row and "
         "column scale.")
 
+#: the J10-R tile a leaf's lanes are proved over: v5's exact dots (v6's one-stream z, as v3's, has no lane in chunks)
+J10R_LANE_TILES = ("PouwH1Tile_v5",)
+
+
+def _refuse_lane_j10r(b: dict) -> str | None:
+    t = getattr(getattr(b.get("TILE"), "defn", None), "id", None)
+    if t in TILES:
+        return f"PouwH1LaneZy_v2 is over J10-R's PouwH1Tile_v5, not {t}: {t}'s lane is PouwH1LaneZy_v1"
+    return _refuse_lane(b, J10R_LANE_TILES)
+
+
+PouwH1LaneZy2 = CompositeDefinition(
+    "PouwH1LaneZy", 2, ("TILE",), _lane_signature, _lane_body, conformance="protocol-defined", refuse=_refuse_lane_j10r,
+    register=H.SG is not None, ports=_lane_ports,
+    doc="v1's lane over J10-R (`circuit.h1zy`): one lane of TILE's R × C leaf, TILE PouwH1Tile_v5, with v1's parameters "
+        "and the unit's call and blocks after its roots, before the lane index. Its noise is seed_c's (PouwCallSeeds_v2 "
+        "at the call's first position) at its rows' and columns' blocks, each counter the leaf's row or column offset "
+        "picked over the index plus blocks[0] or blocks[1] (PouwAdd64_v2), and its keys block lane of σ_R's at the unit's "
+        "own position, so its chain's words are the lane's part of PouwH1Tile_v5's receipt. ok is v1's.")
+
 
 def _combine_signature(S: Any) -> tuple:
     lay = _lane_layout(S)
@@ -459,11 +512,11 @@ def _combine_body(B: Any, S: Any, partials: Coll, receipt: Coll) -> Coll:
 
 
 PouwH1Combine = CompositeDefinition(
-    "PouwH1Combine", 1, ("TILE",), _combine_signature, _combine_body, conformance="protocol-defined", refuse=_refuse_lane,
-    register=H.SG is not None,
+    "PouwH1Combine", 1, ("TILE",), _combine_signature, _combine_body, conformance="protocol-defined",
+    refuse=lambda b: _refuse_lane(b, TILES + J10R_LANE_TILES), register=H.SG is not None,
     doc="The receipt check of TILE's leaf over its lanes' committed partials (`circuit.h1zy`): ok is 1 exactly when, word "
         "by word, the XOR over the lanes in lane order of each partial's word (PouwXor32_v2) is the leaf's committed "
-        "receipt's.")
+        "receipt's. It reads only the leaf's layout, so it is one Definition over v1's, v3's and J10-R's v5 lanes.")
 
 
 #: the least K at which a leaf's combine is proved (`combine`); a lane is proved at any K the Definitions bind (64 <= K)
@@ -487,9 +540,9 @@ def _leaf(tile: Any) -> int:
 
 def lane(tile: Any) -> Any:
     """`PouwH1LaneZy` over ``tile`` (the leaf's H1 tile bound to its full grid, `h1window.h1_tile`'s): the lane a prover
-    stages, at any K and R `_leaf` takes."""
+    stages, at any K and R `_leaf` takes; v1 over PouwH1Tile_v1 and _v3, v2 over J10-R's PouwH1Tile_v5."""
     _leaf(tile)
-    return bind(PouwH1LaneZy, TILE=tile)
+    return bind(PouwH1LaneZy2 if tile.defn.id in J10R_TILES else PouwH1LaneZy, TILE=tile)
 
 
 def combine(tile: Any) -> Any:
@@ -554,14 +607,15 @@ def _chunk_signature(S: Any) -> tuple:
     return (*ps, *params[2:], ("lane", LANE)), Record(("ok", BIT))
 
 
-def _refuse_chunk(b: dict) -> str | None:
-    why = _refuse_lane(b)
+def _refuse_chunk(b: dict, tile: str = "PouwH1Tile_v1") -> str | None:
+    why = _refuse_lane(b, TILES + J10R_TILES)
     if why:
         return why
     t, n, c = b["TILE"], b.get("CHUNKS"), b.get("CHUNK")
-    if t.defn.id != "PouwH1Tile_v1":
-        return ("a lane in chunks is over PouwH1Tile_v1: v3's one-stream z starts from O' and the digits, which only the "
-                "last chunk has, and corrects them over every segment of K, so the earlier chunks' corrections would be a "
+    if t.defn.id != tile:
+        return (f"this lane in chunks is over {tile}, not {t.defn.id} (PouwH1LaneZyChunk_v1 is over PouwH1Tile_v1 and _v2 "
+                "over J10-R's PouwH1Tile_v5): v3's and v6's one-stream z starts from O' and the digits, which only the last "
+                "chunk has, and corrects them over every segment of K, so the earlier chunks' corrections would be a "
                 "carried sum the last adds, an s32 add the tile has no Definition for")
     if getattr(t.bindings["EXACT"], "defn", None) is not BG.GemmAccumulatorS8:
         return "TILE's EXACT is GemmAccumulatorS8_v2, whose DOT steps a chunk continues from the carried z"
@@ -593,15 +647,13 @@ def _chunk_body(B: Any, S: Any, *args: Coll) -> Coll:
     G, Q = lay.r // 4, lay.c // 8
     sel = [lane[t] for t in range(lane_bits(lay.r, lay.c))]
     qb, const = Q.bit_length() - 1, _consts(B)
-    if c:
-        seed_j = SD.seed_call(B, v["salt"], v["position"], v["roots"], True)
-    else:
-        seed_j, sigma_r = SD.unit_seeds_call(B, v["salt"], v["position"], v["roots"], True)
+    seed_j, sigma_r, base, col0 = _lane_seeds(B, S, v, not c)
+    rb, cb = base or (None, None)
     codes = [a[s].field("codes") for s in range(4)], [b[t].field("codes") for t in range(8)]
     X, Y, A = [], [], []
     for s in range(4):
         nz = _noise(B, seed_j, sel[qb:], [lay.row(g + G * s) for g in range(G)], kc + (32 * (m - 1) if last else 0), const,
-                    lo)
+                    lo, rb)
         x = B.batch(SG.PouwI8AddBit, codes[0][s], nz[0:kc], axes=(0, 0))
         y = cin.field("res")[s] if c else B.batch(SG.PouwSx8, x[0:32], axes=(0,))
         for seg in range(0 if c else 1, ks):
@@ -612,13 +664,13 @@ def _chunk_body(B: Any, S: Any, *args: Coll) -> Coll:
             A.append(H._sum_digits(B, y, [nz[kc + 32 * d:kc + 32 * d + 32] for d in range(m - 1)], m))
     W, U, NU = [], [], []
     for t in range(8):
-        firsts = [lay.col(2 * q + 2 * Q * (t >> 1) + (t & 1)) for q in range(Q)]
+        firsts = [lay.col(2 * q + 2 * Q * (t >> 1) + (t & 1)) - col0 for q in range(Q)]
         if last:
-            nz = _noise(B, seed_j, sel[:qb], firsts, kc + H.U_BITS, const, lo)
+            nz = _noise(B, seed_j, sel[:qb], firsts, kc + H.U_BITS, const, lo, cb)
             cz, uz = nz[0:kc], nz[kc:kc + H.U_BITS]
         else:
-            cz = _noise(B, seed_j, sel[:qb], firsts, kc, const, lo)
-            uz = _noise(B, seed_j, sel[:qb], firsts, H.U_BITS, const, lay.k)
+            cz = _noise(B, seed_j, sel[:qb], firsts, kc, const, lo, cb)
+            uz = _noise(B, seed_j, sel[:qb], firsts, H.U_BITS, const, lay.k, cb)
         u = B.batch(H.PouwU129, Coll(Array(32, H.I8), uz.refs), axes=(0,))
         if last:
             NU.append(B.batch(SG.PouwI8Neg, u, axes=(0,)))
@@ -686,11 +738,23 @@ PouwH1LaneZyChunk = CompositeDefinition(
         "leaf's lanes, the rows' scales are the carried ones (past the first), and the last chunk's checks are the whole "
         "lane's, any other's carry_out what it computed.")
 
+PouwH1LaneZyChunk2 = CompositeDefinition(
+    "PouwH1LaneZyChunk", 2, ("TILE", "CHUNKS", "CHUNK"), _chunk_signature, _chunk_body, conformance="protocol-defined",
+    refuse=lambda b: _refuse_chunk(b, "PouwH1Tile_v5"), register=H.SG is not None, ports=_lane_ports,
+    doc="v1's lane chunk over J10-R (`circuit.h1zy`): chunk CHUNK of CHUNKS of one lane of TILE's R × C leaf, TILE "
+        "PouwH1Tile_v5 over GemmAccumulatorS8_v2, with v1's parameters and the unit's call and blocks after its roots, "
+        "before the lane index. Its noise is the whole lane's under J10-R, seed_c's (PouwCallSeeds_v2 at the call's first "
+        "position, every chunk) at the chunk's entries and U's, each counter the leaf's row or column offset picked over "
+        "the index plus blocks[0] or blocks[1] (PouwAdd64_v2); chunk 0's keys are block lane of σ_R's at the unit's own "
+        "position. Its carries and ok are v1's, so the last chunk's partial is the lane's part of PouwH1Tile_v5's receipt.")
+
 
 def lane_chunk(tile: Any, n: int, c: int) -> Any:
-    """`PouwH1LaneZyChunk` over ``tile`` (the leaf's H1 tile, as `lane` takes it): chunk ``c`` of the lane in ``n``."""
+    """`PouwH1LaneZyChunk` over ``tile`` (the leaf's H1 tile, as `lane` takes it): chunk ``c`` of the lane in ``n``, v1
+    over PouwH1Tile_v1 and v2 over J10-R's PouwH1Tile_v5."""
     _leaf(tile)
-    return bind(PouwH1LaneZyChunk, TILE=tile, CHUNKS=int(n), CHUNK=int(c))
+    d = PouwH1LaneZyChunk2 if tile.defn.id in J10R_TILES else PouwH1LaneZyChunk
+    return bind(d, TILE=tile, CHUNKS=int(n), CHUNK=int(c))
 
 
 def lane_statements(tile: Any) -> list[Any]:
@@ -813,6 +877,8 @@ def window_unit(tile: Any) -> Any:
 #: a lane's public row ``pub``: the leaf's salt, position and roots and the lane's index, in that order (#3116's
 #: `pouw.leaf_lanes.PUBLIC`)
 PUBLIC = ("salt", "position", "roots", "lane")
+#: a J10-R lane's (`PouwH1LaneZy_v2`, `PouwH1LaneZyChunk_v2`): the unit's call and blocks after its roots
+PUBLIC_J10R = ("salt", "position", "roots", "call", "blocks", "lane")
 
 
 def _fields(path: str, t: Any, bit: int) -> list[tuple[str, int, int]]:
@@ -828,21 +894,22 @@ def statement_rows(d: Any) -> list[tuple[str, list[str]]]:
     """The input rows of a leaf's lane, lane chunk or combine statement, ``d`` `PouwH1LaneZy`, `PouwH1LaneZyChunk` or
     `PouwH1Combine` bound to its TILE, in order, each ``(port, params)`` as `class_statement.unit_lowering` takes them
     (``a[0]`` row 0 of ``a``): a lane's ``a0`` .. ``a3`` (its A rows by row slot), ``b0`` .. ``b7``, ``admit``, ``zy``,
-    ``partials`` and ``pub`` (`PUBLIC`); a chunk's the same rows of its entries, then those of ``carry_in``, ``admit``,
-    ``zy``, ``partials`` and ``carry_out`` it reads, and ``pub``; the combine's ``p0`` .. ``p<lanes - 1>`` (its partials
-    rows) and ``receipt``; as #3116's `pouw.leaf_lanes` reads them."""
+    ``partials`` and ``pub`` (`PUBLIC`; a J10-R lane's `PUBLIC_J10R`); a chunk's the same rows of its entries, then those
+    of ``carry_in``, ``admit``, ``zy``, ``partials`` and ``carry_out`` it reads, and ``pub``; the combine's ``p0`` ..
+    ``p<lanes - 1>`` (its partials rows) and ``receipt``; as #3116's `pouw.leaf_lanes` reads them (v1's forms)."""
     ty = dict(d.signature()[0])
-    if d.defn is PouwH1LaneZy:
+    pub = [("pub", list(PUBLIC_J10R if d.defn in (PouwH1LaneZy2, PouwH1LaneZyChunk2) else PUBLIC))]
+    if d.defn in (PouwH1LaneZy, PouwH1LaneZy2):
         rows = ([(f"{n}{i}", [f"{n}[{i}]"]) for n in ("a", "b") for i in range(ty[n].n)]
-                + [(n, [n]) for n in ("admit", "zy", "partials")] + [("pub", list(PUBLIC))])
-    elif d.defn is PouwH1LaneZyChunk:
+                + [(n, [n]) for n in ("admit", "zy", "partials")] + pub)
+    elif d.defn in (PouwH1LaneZyChunk, PouwH1LaneZyChunk2):
         rows = ([(f"{n}{i}", [f"{n}[{i}]"]) for n in ("a", "b") for i in range(ty[n].n)]
-                + [(n, [n]) for n in ("carry_in", "admit", "zy", "partials", "carry_out") if n in ty]
-                + [("pub", list(PUBLIC))])
+                + [(n, [n]) for n in ("carry_in", "admit", "zy", "partials", "carry_out") if n in ty] + pub)
     elif d.defn is PouwH1Combine:
         rows = [(f"p{x}", [f"partials[{x}]"]) for x in range(ty["partials"].n)] + [("receipt", ["receipt"])]
     else:
-        raise ValueError(f"a leaf's statement is PouwH1LaneZy_v1, PouwH1LaneZyChunk_v1 or PouwH1Combine_v1, not {d.defn.id}")
+        raise ValueError(f"a leaf's statement is PouwH1LaneZy, PouwH1LaneZyChunk (v1 or v2) or PouwH1Combine_v1, not "
+                         f"{d.defn.id}")
     if {p.partition("[")[0] for _port, ps in rows for p in ps} != set(ty):
         raise AssertionError(f"{d.defn.id}: the ports {rows} are not its parameters {list(ty)}")
     return rows
@@ -918,16 +985,27 @@ def chunks_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], sa:
     return receipt, int(ok and same)
 
 
+#: a J10-R unit's ``(call, blocks)`` (`h1tile.j10r_reference`'s), or None for today's noise
+J10R = tuple[int, tuple[int, int]] | None
+
+
+def _leaf_noise(salt: bytes, position: int, roots: tuple[bytes, bytes], lay: H.Layout, j10r: J10R) -> tuple[list, list]:
+    if j10r is None:
+        return H.noise(SD.seed(salt, position, *roots), lay)
+    return H.j10r_noise(SD.call_seed(salt, j10r[0], *roots), lay, j10r[1])
+
+
 def lane_partial(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], admit: Sequence[int], salt: bytes, position: int,
-                 roots: tuple[bytes, bytes], lane: int, tile: tuple[int, int]) -> list[int]:
+                 roots: tuple[bytes, bytes], lane: int, tile: tuple[int, int], j10r: J10R = None) -> list[int]:
     """Lane ``lane``'s honest partial on words, the row the prover commits for it, from its 4 A rows and 8 B rows by slot
-    (s8 encodings) and the leaf's R admit bits: `h1tile.lane_partials`' for the lane, zero words for a dead leaf."""
+    (s8 encodings) and the leaf's R admit bits: `h1tile.lane_partials`' for the lane, zero words for a dead leaf. With
+    ``j10r`` ``(call, blocks)`` the leaf is J10-R's v5, its noise `h1tile.j10r_noise`'s."""
     lay = H.Layout(int(tile[0]), int(tile[1]), len(a[0]))
     if isinstance(admit, (bool, int)) or len(admit) != lay.r:
         raise ValueError(f"admit is the leaf's {lay.r} admit bits, not {admit!r}")
     if not any(g & 1 for g in admit):
         return [0] * (2 * lay.sets)
-    rows, cols = H.noise(SD.seed(salt, position, *roots), lay)
+    rows, cols = _leaf_noise(salt, position, roots, lay, j10r)
     af: list = [None] * lay.r
     bf: list = [None] * lay.c
     for s, i in enumerate(lay.rows(lane)):
@@ -940,17 +1018,18 @@ def lane_partial(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], admit: 
 
 def lane_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], sa: Sequence[int], sw: Sequence[int],
                    admit: Sequence[int], zy: tuple[Sequence[int], Sequence[int]], partial: Sequence[int], salt: bytes,
-                   position: int, roots: tuple[bytes, bytes], lane: int, tile: tuple[int, int]) -> int:
+                   position: int, roots: tuple[bytes, bytes], lane: int, tile: tuple[int, int], j10r: J10R = None) -> int:
     """`PouwH1LaneZy` on words: ok of lane ``lane`` of an R × C ``tile``'s leaf, from the lane's 4 A rows and 8 B rows by
     slot (s8 encodings) and their scales, the leaf's R admit bits, its record ``zy`` (all R C cells), the lane's committed
     ``partial``, and the leaf's salt, position and roots: 1 exactly when ``lane`` is one of the leaf's lanes, the partial
-    is `lane_partial`'s and the lane's cells of the record pass `check`; ``lane`` a `LANE` word."""
+    is `lane_partial`'s and the lane's cells of the record pass `check`; ``lane`` a `LANE` word. With ``j10r``
+    ``(call, blocks)`` it is `PouwH1LaneZy_v2`'s, over J10-R's v5."""
     lay = H.Layout(int(tile[0]), int(tile[1]), len(a[0]))
     if not 0 <= lane < 1 << LANE.n:
         raise ValueError(f"a lane index is a {LANE.n}-bit word, not {lane}")
     if lane >= lay.lanes:
         return 0
-    want = lane_partial(a, b, admit, salt, position, roots, lane, tile)
+    want = lane_partial(a, b, admit, salt, position, roots, lane, tile, j10r)
     z = [H.SG.seg_dot(0, a[s], b[t]) for s in range(4) for t in range(8)]
     cells = lane_cells(lay, lane)
     return int([v & M32 for v in partial] == want and check([zy[0][u] for u in cells], [zy[1][u] for u in cells], z, sa, sw))
@@ -1007,20 +1086,20 @@ def _chunk_step(lay: H.Layout, n: int, c: int, a: Sequence[Sequence[int]], b: Se
     return {"state": st, "t": T, "res": Y, "z": z, "words": words, "sa": [v & M32 for v in sa], "sw": [v & M32 for v in sw]}
 
 
-def _chunk_noise(salt: bytes, position: int, roots: tuple[bytes, bytes], lay: H.Layout, ln: int) -> tuple:
-    rows, cols = H.noise(SD.seed(salt, position, *roots), lay)
+def _chunk_noise(salt: bytes, position: int, roots: tuple[bytes, bytes], lay: H.Layout, ln: int, j10r: J10R) -> tuple:
+    rows, cols = _leaf_noise(salt, position, roots, lay, j10r)
     return rows, cols, H.fold_keys(SD.receipt_seed(salt, position, *roots), lay)[ln]
 
 
 def lane_chunk_carries(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], sa: Sequence[int], sw: Sequence[int],
                        salt: bytes, position: int, roots: tuple[bytes, bytes], lane: int, tile: tuple[int, int],
-                       n: int) -> list[dict]:
+                       n: int, j10r: J10R = None) -> list[dict]:
     """Lane ``lane``'s chain in ``n`` chunks on words, from its 4 A rows and 8 B rows by slot over the whole K (s8
     encodings) and their scales: each chunk's carry out (`CARRY`, as `carry_words` takes it), the honest ``carry_out`` of
     chunks 0 .. n - 2 and the ``carry_in`` of chunks 1 .. n - 1; the last's ``words`` are the lane's chain, unmasked, and
-    its ``z`` the lane's cells' exact products."""
+    its ``z`` the lane's cells' exact products. With ``j10r`` ``(call, blocks)``: over J10-R's v5, at the whole K."""
     lay = H.Layout(int(tile[0]), int(tile[1]), len(a[0]))
-    rows, cols, key = _chunk_noise(salt, position, roots, lay, lane)
+    rows, cols, key = _chunk_noise(salt, position, roots, lay, lane, j10r)
     kc, out, cin = lay.k // n, [], None
     for c in range(n):
         cin = _chunk_step(lay, n, c, [r[c * kc:c * kc + kc] for r in a], [r[c * kc:c * kc + kc] for r in b], sa, sw, rows,
@@ -1032,20 +1111,22 @@ def lane_chunk_carries(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], s
 def lane_chunk_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], sa: Sequence[int], sw: Sequence[int],
                          admit: Sequence[int] | None, zy: tuple[Sequence[int], Sequence[int]] | None,
                          partial: Sequence[int] | None, carry_in: dict | None, carry_out: dict | None, salt: bytes,
-                         position: int, roots: tuple[bytes, bytes], lane: int, tile: tuple[int, int], n: int, c: int) -> int:
+                         position: int, roots: tuple[bytes, bytes], lane: int, tile: tuple[int, int], n: int, c: int,
+                         j10r: J10R = None) -> int:
     """`PouwH1LaneZyChunk` on words: ok of chunk ``c`` of ``n`` of lane ``lane`` of an R × C ``tile``'s leaf, from the lane's
     4 A rows and 8 B rows by slot at the chunk's entries (s8 encodings) and the rows' scales, ``carry_in`` (past chunk 0),
     the last chunk's ``admit``, ``zy`` and ``partial`` as `lane_reference` takes them, any other's ``carry_out`` (each a
     carry as `carry_words` takes it, the others None), and the leaf's salt, position and roots: 1 exactly when ``lane`` is
     one of the leaf's lanes, the scales are ``carry_in``'s, and the last chunk's partial is the chain's words (zero for a
-    dead leaf) and its cells pass `check`, any other's ``carry_out`` what it computed."""
+    dead leaf) and its cells pass `check`, any other's ``carry_out`` what it computed. With ``j10r`` ``(call, blocks)`` it
+    is `PouwH1LaneZyChunk_v2`'s, over J10-R's v5 (``blocks`` at the whole K)."""
     lay = H.Layout(int(tile[0]), int(tile[1]), len(a[0]) * n)
     if not 0 <= lane < 1 << LANE.n:
         raise ValueError(f"a lane index is a {LANE.n}-bit word, not {lane}")
     if lane >= lay.lanes:
         return 0
     last = c == n - 1
-    rows, cols, key = _chunk_noise(salt, position, roots, lay, lane)
+    rows, cols, key = _chunk_noise(salt, position, roots, lay, lane, j10r)
     got = _chunk_step(lay, n, c, a, b, sa, sw, rows, cols, None if c else key, lane, carry_in if c else None)
     ok = not c or got["sa"] + got["sw"] == [v & M32 for v in (*carry_in["sa"], *carry_in["sw"])]
     if not last:
@@ -1056,9 +1137,10 @@ def lane_chunk_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]],
                and check([zy[0][u] for u in cells], [zy[1][u] for u in cells], got["z"], sa, sw))
 
 
-__all__ = ["BF16", "CARRY", "CHUNKED", "CHUNK_ALIGN", "CHUNK_MAX", "F32", "LANE", "LEAST_K", "PUBLIC", "S32", "S8",
-           "PouwAndBit", "PouwH1Combine", "PouwH1LaneZy", "PouwH1LaneZyChunk", "PouwH1TileZy", "PouwH1TileZyChunks",
-           "PouwH1TileZyChunks2", "PouwMuxBit",
+__all__ = ["BF16", "CARRY", "CHUNKED", "CHUNK_ALIGN", "CHUNK_MAX", "F32", "J10R", "J10R_LANE_TILES", "LANE", "LEAST_K",
+           "PUBLIC", "PUBLIC_J10R", "S32", "S8",
+           "PouwAndBit", "PouwH1Combine", "PouwH1LaneZy", "PouwH1LaneZy2", "PouwH1LaneZyChunk", "PouwH1LaneZyChunk2",
+           "PouwH1TileZy", "PouwH1TileZyChunks", "PouwH1TileZyChunks2", "PouwMuxBit",
            "PouwZyCell", "PouwZyCheck", "PouwZyDequant", "PouwZyDequantWord", "RECORD", "ROW", "J10R_TILES", "TILES",
            "carry_words",
            "check", "chunk_leaves", "chunk_words", "chunks", "chunks_reference", "combine", "combine_reference", "dequant",
