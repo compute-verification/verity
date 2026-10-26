@@ -1331,9 +1331,18 @@ def reruns_suites(files: Iterable[str]) -> bool:
 
 def conflicting_files(repo: Path, base: str, head: str) -> list[str]:
     """The files a merge of ``head`` onto ``base`` would leave conflicted, from `git merge-tree` (no worktree touched), so
-    `status` names a conflict on any VM, not only on the one whose last sync recorded it; [] when it merges cleanly."""
-    r = _git(repo, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head, check=False)
-    return sorted({f for f in r.stdout.splitlines()[1:] if f}) if r.returncode == 1 else []
+    `status` names a conflict on any VM, not only on the one whose last sync recorded it; [] when it merges cleanly.  It
+    merges as `Queue._merge` does: with ``base``'s merge drivers (`--attr-source`, where the clone has them installed), and
+    a conflict only in pins counts as none, since the sync rebuilds them (`repinned`; 26 Oct: the preflight refused #4491
+    over PoUS's TRUSTED.sha256, which the sync merges)."""
+    r = _git(repo, f"--attr-source={base}", "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head,
+             check=False)
+    if r.returncode == 129 and "attr-source" in r.stderr:
+        r = _git(repo, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head, check=False)
+    if r.returncode != 1:
+        return []
+    files = sorted({f for f in r.stdout.splitlines()[1:] if f})
+    return [] if repinned(repo, r.stdout.split()[0], base, head, files) else files
 
 
 def pins_at(repo: Path, ref: str) -> dict[str, tuple[str | None, str]]:
