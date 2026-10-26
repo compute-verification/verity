@@ -27,6 +27,11 @@ sequencing (`Chain.pr_pass_le`, with no sample: `pr_coins_le`), and a union boun
 **Grinding.** A pass unpaid at the candidate it kept is unpaid in the chain that keeps that candidate at every pass
 (`GrindChain.exists_unpaid`), and each such chain's pass is bounded by sequencing (`Chain.pr_unpaid_pass_le`): a union
 bound over the passes and the `G` candidates gives `P·G` times the per-pass error (`GrindChain.pr_unpaid_le`).
+
+**Live pass coins.** Relabel a live window's coins as the game's coins over roots of no bits and the live coins
+(`LiveChain.split`); at each value of the live coins the window is a grinding chain with one candidate
+(`LiveChain.toGrind`), so `RateGrindPaidRO` and `RateGrindPaid` at `G = 1` bound it (`LiveChain.pr_unpaid_le`). At
+the deployed coins the named premise `LiveSeedRandom` carries the bound over, plus its `ε`.
 -/
 
 namespace Accounting.Rate
@@ -279,6 +284,46 @@ theorem pr_unpaid_le {τ : ℕ} (A : GrindChain P N b h ρ S L q r s G) (tier : 
 
 end GrindChain
 
+namespace LiveChain
+
+variable {P κ S L q : ℕ}
+
+/-- A pass's game coins as a pass's coins over roots of no bits: the oracle family at its one root. -/
+def toPass : Coins N b h ρ s ≃ PassCoins N b h ρ 0 s :=
+  (Equiv.refl _).prodCongr ((Equiv.funUnique (Bits 0) (Oracle N b h ρ)).symm.prodCongr (Equiv.refl _))
+
+/-- The window's live coins as the game's coins over roots of no bits, and the live coins themselves. -/
+def split : Store N b × (Fin P → LiveCoins N b h ρ κ s) ≃
+    (Store N b × (Fin P → PassCoins N b h ρ 0 s)) × (Fin P → Bits κ) where
+  toFun x := ((x.1, fun j => toPass (x.2 j).2), fun j => (x.2 j).1)
+  invFun y := (y.1.1, fun j => (y.2 j, toPass.symm (y.1.2 j)))
+  left_inv x := by simp
+  right_inv y := by simp
+
+/-- At live coins `c`, the chained prover over roots of no bits that grinds one candidate: pass `j`'s device reads
+the earlier passes' live coins from `c`. -/
+def toGrind (A : LiveChain P N b h ρ κ S L q s) (c : Fin P → Bits κ) : GrindChain P N b h ρ S L q 0 s 1 where
+  device j η _ := A.device j (fun i => (c i.1, toPass.symm (η i)))
+  cand _ _ _ _ := default
+  pick _ _ _ _ := 0
+
+/-- A window with live pass coins is unpaid with at most the bound its grinding chain at `G = 1` has at every value
+of the live coins. -/
+theorem pr_unpaid_le {τ : ℕ} (A : LiveChain P N b h ρ κ S L q s) (tier : ℕ → Fin τ) (slack : ℕ) (ε : ℝ≥0∞)
+    (hε : ∀ c, pr (fun x : Store N b × (Fin P → PassCoins N b h ρ 0 s) =>
+        ∑ j, (∑ t, ((A.toGrind c).dev j x.1 x.2).tierReads tier t x.1 (x.2 j).1 ((A.toGrind c).oracle j x.1 x.2) +
+            ((A.toGrind c).dev j x.1 x.2).rebuilt x.1 (x.2 j).1 ((A.toGrind c).oracle j x.1 x.2) * b) + P * slack <
+          ∑ j, (((A.toGrind c).dev j x.1 x.2).correct x.1 (x.2 j).1 ((A.toGrind c).oracle j x.1 x.2)).card * b) ≤ ε) :
+    pr (fun x : Store N b × (Fin P → LiveCoins N b h ρ κ s) =>
+        ∑ j, (∑ t, (A.dev j x.2).tierReads tier t x.1 (x.2 j).2.1 (x.2 j).2.2.1 +
+            (A.dev j x.2).rebuilt x.1 (x.2 j).2.1 (x.2 j).2.2.1 * b) + P * slack <
+          ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).2.1 (x.2 j).2.2.1).card * b) ≤ ε := by
+  classical
+  rw [pr_equiv split]
+  exact pr_le_of_fiber _ _ (fun c => (Bandwidth.pr_mono (fun x hx => hx)).trans (hε c))
+
+end LiveChain
+
 end Accounting.Rate
 
 namespace Accounting.SecurityProofs
@@ -341,5 +386,43 @@ theorem RateGrindPaid : Accounting.Guarantees.RateGrindPaid := by
   intro P N b h ρ S L q r s G m lam τ tier A
   exact GrindChain.pr_unpaid_le A tier (S + (L - ρ) + lam + m * b) _ (fun j η c =>
     (Bandwidth.pr_mono (fun _ hx => by omega)).trans (RatePaid N b h ρ S L q m lam τ tier (A.device j η c)))
+
+/-- **A window with live pass coins is paid for pass by pass, with side sources that ignore the oracle**
+(`Accounting.Guarantees.RateLivePaidRO`): `RateGrindPaidRO` at `G = 1`. -/
+theorem RateLivePaidRO : Accounting.Guarantees.RateLivePaidRO := by
+  intro P N b h ρ κ S L q s lam τ tier A hA
+  have h1 := LiveChain.pr_unpaid_le A tier (S + (L - ρ) + lam) _ (fun c =>
+    RateGrindPaidRO P N b h ρ S L q 0 s 1 lam τ tier (A.toGrind c) (fun j η _ => hA j _))
+  rwa [Nat.cast_one, one_mul] at h1
+
+/-- **A window with live pass coins is paid for pass by pass, with any side sources**
+(`Accounting.Guarantees.RateLivePaid`): `RateGrindPaid` at `G = 1`. -/
+theorem RateLivePaid : Accounting.Guarantees.RateLivePaid := by
+  intro P N b h ρ κ S L q s m lam τ tier A
+  have h1 := LiveChain.pr_unpaid_le A tier (S + (L - ρ) + lam + m * b) _ (fun c =>
+    RateGrindPaid P N b h ρ S L q 0 s 1 m lam τ tier (A.toGrind c))
+  rwa [Nat.cast_one, one_mul] at h1
+
+/-- **A window at the deployed live coins is paid for pass by pass, with side sources that ignore the oracle**
+(`Accounting.Guarantees.RateLiveSeedPaidRO`): the premise at `RateLivePaidRO`'s event. -/
+theorem RateLiveSeedPaidRO : Accounting.Guarantees.RateLiveSeedPaidRO := by
+  intro Hs _ P N b h ρ κ S L q s lam τ H ε tier A hH hA
+  refine (hH (fun y : Store N b × (Fin P → LiveCoins N b h ρ κ s) =>
+    ∑ j, (∑ t, (A.dev j y.2).tierReads tier t y.1 (y.2 j).2.1 (y.2 j).2.2.1 +
+        (A.dev j y.2).rebuilt y.1 (y.2 j).2.1 (y.2 j).2.2.1 * b) + P * (S + (L - ρ) + lam) <
+      ∑ j, ((A.dev j y.2).correct y.1 (y.2 j).2.1 (y.2 j).2.2.1).card * b)).trans ?_
+  gcongr
+  exact RateLivePaidRO P N b h ρ κ S L q s lam τ tier A hA
+
+/-- **A window at the deployed live coins is paid for pass by pass, with any side sources**
+(`Accounting.Guarantees.RateLiveSeedPaid`): the premise at `RateLivePaid`'s event. -/
+theorem RateLiveSeedPaid : Accounting.Guarantees.RateLiveSeedPaid := by
+  intro Hs _ P N b h ρ κ S L q s m lam τ H ε tier A hH
+  refine (hH (fun y : Store N b × (Fin P → LiveCoins N b h ρ κ s) =>
+    ∑ j, (∑ t, (A.dev j y.2).tierReads tier t y.1 (y.2 j).2.1 (y.2 j).2.2.1 +
+        (A.dev j y.2).rebuilt y.1 (y.2 j).2.1 (y.2 j).2.2.1 * b) + P * (S + (L - ρ) + lam + m * b) <
+      ∑ j, ((A.dev j y.2).correct y.1 (y.2 j).2.1 (y.2 j).2.2.1).card * b)).trans ?_
+  gcongr
+  exact RateLivePaid P N b h ρ κ S L q s m lam τ tier A
 
 end Accounting.SecurityProofs

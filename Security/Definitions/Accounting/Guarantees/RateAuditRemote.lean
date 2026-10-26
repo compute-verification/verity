@@ -1,16 +1,21 @@
 import Definitions.Accounting.RateAudit
 import Definitions.Accounting.RateAuditInteractive
 import Definitions.Accounting.RateAuditRemote
+import Definitions.Accounting.Assumptions.RateAuditRemote
 
 /-!
 # The remote rate audit: conservation over tiers, and chained passes (trusted)
 
 The game is `RateAudit.lean`'s with interactive side sources (`Definitions/Accounting/RateAuditInteractive.lean`), and
 the tiers, correct receipts and chained passes of `Definitions/Accounting/RateAuditRemote.lean`; proofs are in
-`Security/Proofs/Accounting/RateAudit/Conservation.lean` and `Chain.lean`. No named assumption: as for `RateAudit`, the
-device's bounds define the class the guarantees quantify over, and the claims registry carries them to a deployed node
+`Security/Proofs/Accounting/RateAudit/Conservation.lean` and `Chain.lean`. As for `RateAudit`, the device's bounds
+define the class the guarantees quantify over, and the claims registry carries them to a deployed node
 (`bandwidth-s-chip` at every pass boundary, `bandwidth-side-cap` at the node's NIC, `rate-codec-work` for `c_enc`,
-`random-oracle` for the receipt and the chained seed, `fiat-shamir` for its derivation from the prover's root).
+`random-oracle` for the receipt). The one named assumption is `Accounting.Assumptions.LiveSeedRandom`
+(`Definitions/Accounting/Assumptions/RateAuditRemote.lean`), which `RateLiveSeedPaidRO` and `RateLiveSeedPaid` take:
+the oracles SHA-512 gives at the live pass coins are within `ε` of independent uniform ones. Pass seeds derived from the
+prover's root (`fiat-shamir`, receipt format `seed/v0`) are `RateGrindPaidRO`'s and `RateGrindPaid`'s; the session
+refuses them.
 
 The stated instance is Sloth over a 1,024-bit prime, masked with `σ_K` between rounds, at three rounds (`k = 3`). Its
 rebuild work per word is `c_enc`, a parameter of every statement here, so the codec changes no statement.
@@ -25,7 +30,10 @@ rebuild work per word is `c_enc`, a parameter of every statement here, so the co
 * `RateChainRO`, `RateChain`: a window of chained passes certifies the sum over its passes.
 * `RatePaidRO`, `RatePaid`, `RateChainPaidRO`, `RateChainPaid`: conservation at every count of correct receipts, for a
   pass and summed over a window's passes, with no sample: the remote audit's route `Paid`.
-* `RateGrindPaidRO`, `RateGrindPaid`: the same for a prover that grinds its roots against the Fiat–Shamir seed.
+* `RateGrindPaidRO`, `RateGrindPaid`: the same for a prover that grinds its roots against a Fiat–Shamir seed.
+* `RateLivePaidRO`, `RateLivePaid`: the same with live pass coins, with no grinding term: `RateGrindPaidRO` at `G = 1`.
+* `RateLiveSeedPaidRO`, `RateLiveSeedPaid`: the same at the oracles SHA-512 gives at the live coins, under
+  `LiveSeedRandom`, plus its `ε`.
 -/
 
 namespace Accounting.Guarantees
@@ -331,9 +339,10 @@ fix, picked as any function of pass `j`'s whole oracle family, and pass `j`'s de
 devices' side sources ignore the oracle: the probability of `RateChainPaidRO`'s event is at most
 `P·G·(N/2^h + 2^q/2^λ)`.
 
-**The reading.** The pass seed is Fiat–Shamir (`fiat-shamir`), so a prover may hash `G` candidate roots for pass `j − 1`
-with pass `j`'s seed and keep the root whose oracle suits it: the window's correct receipts are still paid for pass by
-pass, at `G` times the error. The pick here sees the store and the whole family for free, so it can keep a candidate
+**The reading.** A pass seed derived from the prover's root is Fiat–Shamir (`fiat-shamir`), so a prover may hash `G`
+candidate roots for pass `j − 1` with pass `j`'s seed and keep the root whose oracle suits it: the window's correct
+receipts are still paid for pass by pass, at `G` times the error. The protocol's seeds were so derived up to receipt
+format `seed/v0`; from `seed/v1` on they are live coins, and `RateLivePaidRO` is this at `G = 1`. The pick here sees the store and the whole family for free, so it can keep a candidate
 whose device guessed right, and the factor reaches the guessing term too. A pick that is part of the pass's device,
 seeing the store only through counted reads and the family only through counted queries, would leave `N/2^h` alone and
 add its queries to `q` (not stated).
@@ -363,5 +372,90 @@ def RateGrindPaid : Prop :=
             (A.dev j x.1 x.2).rebuilt x.1 (x.2 j).1 (A.oracle j x.1 x.2) * b) + P * (S + (L - ρ) + lam + m * b) <
           ∑ j, ((A.dev j x.1 x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card * b)
       ≤ (P : ℝ≥0∞) * (G * ((N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam))
+
+/-- **A window with live pass coins is paid for pass by pass, with side sources that ignore the oracle.** For every
+chained prover with live pass coins (`Rate.LiveChain`: pass `j`'s interactive device of `RateAudit`'s class, any
+function of the earlier passes' coins, their `κ`-bit live coins included) whose devices' side sources ignore the
+oracle, and every split into tiers, over a uniform store and each pass's uniform live coin, stream, oracle and sample:
+the probability that the correct receipts' words, summed over the passes, exceed the passes' reads of every tier and
+rebuilt words plus each pass's on-chip state, free link bits and `λ`,
+
+  `∑ⱼ (∑ᵢ readsⱼᵢ + rebuiltⱼ·b) + P·(S + (L − ρ) + λ) < ∑ⱼ #correctⱼ·b`,
+
+is at most `P·(N/2^h + 2^q/2^λ)`.
+
+**The reading.** `RateChainPaidRO` for the protocol's seeds from `seed/v1` on: the challenger releases pass `j`'s coin
+only after `root_{j−1}` arrives, one round trip a pass, so the root fixes nothing of pass `j`'s oracle and the prover
+has no seed to grind. The bound has no factor `G`: it is `RateGrindPaidRO` at `G = 1`.
+
+Proof: `Accounting.SecurityProofs.RateLivePaidRO`, `RateGrindPaidRO` at `G = 1` over roots of no bits at each value of
+the live coins.
+
+Frozen (no-function, hash): as `RateAudit`. -/
+def RateLivePaidRO : Prop :=
+  ∀ (P N b h ρ κ S L q s lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.LiveChain P N b h ρ κ S L q s),
+    (∀ j η E R O O', (A.device j η).side E R O = (A.device j η).side E R O') →
+    pr (fun x : Store N b × (Fin P → LiveCoins N b h ρ κ s) =>
+        ∑ j, (∑ t, (A.dev j x.2).tierReads tier t x.1 (x.2 j).2.1 (x.2 j).2.2.1 +
+            (A.dev j x.2).rebuilt x.1 (x.2 j).2.1 (x.2 j).2.2.1 * b) + P * (S + (L - ρ) + lam) <
+          ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).2.1 (x.2 j).2.2.1).card * b)
+      ≤ (P : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h + (2 ^ q : ℝ≥0∞) / 2 ^ lam)
+
+/-- **A window with live pass coins is paid for pass by pass, with any side sources.** `RateLivePaidRO` for devices
+whose side sources may relay receipts: with `m` words a pass added to the slack, the probability is at most
+`P·(C(N, m)·2^L/2^(h·m) + 2^q/2^λ)`, `RateGrindPaid` at `G = 1`. Proof: `Accounting.SecurityProofs.RateLivePaid`.
+
+Frozen (no-function, hash): as `RateAudit`. -/
+def RateLivePaid : Prop :=
+  ∀ (P N b h ρ κ S L q s m lam τ : ℕ) (tier : ℕ → Fin τ) (A : Rate.LiveChain P N b h ρ κ S L q s),
+    pr (fun x : Store N b × (Fin P → LiveCoins N b h ρ κ s) =>
+        ∑ j, (∑ t, (A.dev j x.2).tierReads tier t x.1 (x.2 j).2.1 (x.2 j).2.2.1 +
+            (A.dev j x.2).rebuilt x.1 (x.2 j).2.1 (x.2 j).2.2.1 * b) + P * (S + (L - ρ) + lam + m * b) <
+          ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).2.1 (x.2 j).2.2.1).card * b)
+      ≤ (P : ℝ≥0∞) * ((N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam)
+
+/-- **A window at the deployed live coins is paid for pass by pass, with side sources that ignore the oracle.** For
+every hash `H` keyed by a `κ`-bit coin, drawn from a finite family `Hs`, whose oracles at the window's live coins are
+within `ε` of independent uniform ones (`Accounting.Assumptions.LiveSeedRandom H P s ε`), and every chained prover of
+`RateLivePaidRO`'s class: over the hash, a uniform store and each pass's uniform live coin `c_j`, stream and sample,
+with pass `j`'s oracle the hash keyed by `c_j`, `H(c_j, ·)`, the probability of `RateLivePaidRO`'s event is at most
+`P·(N/2^h + 2^q/2^λ) + ε`.
+
+**The reading.** The remote audit's window as deployed from `seed/v1` on: pass `j`'s seed is the challenger's 64-byte
+coin (`κ = 512`), released after `root_{j−1}`, and its receipts, sketch signs and tree binding are SHA-512 keyed by
+it. The one random-oracle step is the named premise; in the random-oracle model `ε ≤ P·(P + Q)/2^512` for `Q` hashes
+the prover computes over the session, and the bound has no grinding term.
+
+Proof: `Accounting.SecurityProofs.RateLiveSeedPaidRO`, the premise at `RateLivePaidRO`'s event.
+
+Frozen (no-function, hash): as `RateAudit`, its random-oracle step a named premise. -/
+def RateLiveSeedPaidRO : Prop :=
+  ∀ (Hs : Type) [Fintype Hs] (P N b h ρ κ S L q s lam τ : ℕ) (H : Hs → Bits κ → Oracle N b h ρ) (ε : ℝ)
+    (tier : ℕ → Fin τ) (A : Rate.LiveChain P N b h ρ κ S L q s),
+    Accounting.Assumptions.LiveSeedRandom H P s ε →
+    (∀ j η E R O O', (A.device j η).side E R O = (A.device j η).side E R O') →
+    pr (fun x : Hs × Store N b × (Fin P → SeedCoins N ρ κ s) =>
+        ∑ j, (∑ t, (A.dev j (atSeeds (H x.1) x.2.2)).tierReads tier t x.2.1 (x.2.2 j).2.1 (H x.1 (x.2.2 j).1) +
+            (A.dev j (atSeeds (H x.1) x.2.2)).rebuilt x.2.1 (x.2.2 j).2.1 (H x.1 (x.2.2 j).1) * b) +
+            P * (S + (L - ρ) + lam) <
+          ∑ j, ((A.dev j (atSeeds (H x.1) x.2.2)).correct x.2.1 (x.2.2 j).2.1 (H x.1 (x.2.2 j).1)).card * b)
+      ≤ (P : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h + (2 ^ q : ℝ≥0∞) / 2 ^ lam) + ENNReal.ofReal ε
+
+/-- **A window at the deployed live coins is paid for pass by pass, with any side sources.** `RateLiveSeedPaidRO` for
+devices whose side sources may relay receipts: with `m` words a pass added to the slack, the probability is at most
+`P·(C(N, m)·2^L/2^(h·m) + 2^q/2^λ) + ε`. Proof: `Accounting.SecurityProofs.RateLiveSeedPaid`, the premise at
+`RateLivePaid`'s event.
+
+Frozen (no-function, hash): as `RateAudit`, its random-oracle step a named premise. -/
+def RateLiveSeedPaid : Prop :=
+  ∀ (Hs : Type) [Fintype Hs] (P N b h ρ κ S L q s m lam τ : ℕ) (H : Hs → Bits κ → Oracle N b h ρ) (ε : ℝ)
+    (tier : ℕ → Fin τ) (A : Rate.LiveChain P N b h ρ κ S L q s),
+    Accounting.Assumptions.LiveSeedRandom H P s ε →
+    pr (fun x : Hs × Store N b × (Fin P → SeedCoins N ρ κ s) =>
+        ∑ j, (∑ t, (A.dev j (atSeeds (H x.1) x.2.2)).tierReads tier t x.2.1 (x.2.2 j).2.1 (H x.1 (x.2.2 j).1) +
+            (A.dev j (atSeeds (H x.1) x.2.2)).rebuilt x.2.1 (x.2.2 j).2.1 (H x.1 (x.2.2 j).1) * b) +
+            P * (S + (L - ρ) + lam + m * b) <
+          ∑ j, ((A.dev j (atSeeds (H x.1) x.2.2)).correct x.2.1 (x.2.2 j).2.1 (H x.1 (x.2.2 j).1)).card * b)
+      ≤ (P : ℝ≥0∞) * ((N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam) + ENNReal.ofReal ε
 
 end Accounting.Guarantees
