@@ -60,13 +60,14 @@ theorem checkForm_ok {fm : RecCoins.InnerForm} {st : Stmt} {u : Unit}
       _, _, _, ‹fm.draw = some _›, jsonOf_of ‹String.fromUTF8? _ = some _› ‹Except.mapError _ _ = .ok _› "draw",
       ‹Draw.UnitDraw.ofJson _ = .ok _›, by simpa using ‹¬(_ != Array.range st.n) = true›⟩
 
-/-- **The setup's shape check**: where `RecSetup.checkShape` passes on the inner statement's files, they set it up, the
-inner shape's `m`, `k_log`, regions and claims are the ones they set it up at, and `RecSetup.checkForm` passes there. -/
-theorem checkShape_files {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit}
+/-- **The setup's shape check, whole**: where `RecSetup.checkShape` passes on the inner statement's files, they set it
+up, the inner shape's `m`, `k_log`, regions and claims are the ones they set it up at, its shared-row tables are within
+`RecBudget.innerRows`, and `RecSetup.checkForm` passes there. -/
+theorem checkShape_spec {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit}
     (h : RecSetup.checkShape (some i) (some (.files f)) = .ok u) :
     ∃ spec st, f.stmt "the inner session" = .ok (spec, st) ∧ i.m = st.m ∧ i.kLog = st.c.kLog ∧
       i.regions = st.regions.size ∧ i.claims = 2 + spec.points * st.regions.size ∧
-      RecSetup.checkForm f.form st = .ok u := by
+      RecBudget.innerRows st = .ok () ∧ RecSetup.checkForm f.form st = .ok u := by
   unfold RecSetup.checkShape at h
   rcases hf : f.stmt "the inner session" with e | ⟨spec, st⟩
   · simp [hf, bind, Except.bind] at h
@@ -76,8 +77,36 @@ theorem checkShape_files {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit}
   · simp [hc, throw, throwThe, MonadExceptOf.throw] at h
   · simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Decidable.not_not] at hc
     obtain ⟨⟨⟨e1, e2⟩, e3⟩, e4⟩ := hc
-    refine ⟨spec, st, rfl, e1, e2, e3, e4, ?_⟩
-    simpa [e1, e2, e3, e4, pure, Except.pure] using h
+    rcases hr : RecBudget.innerRows st with e | v
+    · simp [e1, e2, e3, e4, hr, pure, Except.pure] at h
+    · cases v
+      refine ⟨spec, st, rfl, e1, e2, e3, e4, hr, ?_⟩
+      simpa [e1, e2, e3, e4, hr, pure, Except.pure] using h
+
+/-- **The setup's shape check**: where `RecSetup.checkShape` passes on the inner statement's files, they set it up, the
+inner shape's `m`, `k_log`, regions and claims are the ones they set it up at, and `RecSetup.checkForm` passes there. -/
+theorem checkShape_files {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit}
+    (h : RecSetup.checkShape (some i) (some (.files f)) = .ok u) :
+    ∃ spec st, f.stmt "the inner session" = .ok (spec, st) ∧ i.m = st.m ∧ i.kLog = st.c.kLog ∧
+      i.regions = st.regions.size ∧ i.claims = 2 + spec.points * st.regions.size ∧
+      RecSetup.checkForm f.form st = .ok u := by
+  obtain ⟨spec, st, hf, e1, e2, e3, e4, -, hform⟩ := checkShape_spec h
+  exact ⟨spec, st, hf, e1, e2, e3, e4, hform⟩
+
+/-- **The inner statement's shared-row tables are within the cap**: where `RecSetup.checkShape` passes on the inner
+statement's files, each shared-row table of the statement they set up holds at most `RecBudget.MAX_INNER_ROWS` rows. -/
+theorem checkShape_rows {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit}
+    (h : RecSetup.checkShape (some i) (some (.files f)) = .ok u) :
+    ∃ spec st, f.stmt "the inner session" = .ok (spec, st) ∧
+      ∀ t, st.pub.tables = some t → ∀ r ∈ t.counts, r ≤ RecBudget.MAX_INNER_ROWS := by
+  obtain ⟨spec, st, hf, -, -, -, -, hr, -⟩ := checkShape_spec h
+  refine ⟨spec, st, hf, fun t ht r hrt => ?_⟩
+  unfold RecBudget.innerRows at hr
+  rw [ht] at hr
+  by_cases ha : (t.counts.any (RecBudget.MAX_INNER_ROWS < ·)) = true
+  · simp [ha, throw, throwThe, MonadExceptOf.throw] at hr
+  · refine Nat.le_of_not_lt fun hlt => ha (Array.any_eq_true'.2 ⟨r, hrt, ?_⟩)
+    exact decide_eq_true hlt
 
 /-! ## Flock's plain verifier on the inner statement -/
 
