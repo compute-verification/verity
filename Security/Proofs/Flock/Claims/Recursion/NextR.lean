@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Recursion.NextS
 import Proofs.Flock.Claims.Complete.Encode
 import Proofs.Flock.Claims.Recursion.RepFramesBind
+import Proofs.Flock.Claims.Recursion.VarLen
 
 /-!
 # `IVStar`'s last step at the deployed reader (`nextR`)
@@ -11,7 +12,7 @@ fixed: every absorbed value of a decided proof is read from an opened round, the
 openings, and the fields the transcript never absorbs are what V\* takes for them (`params` the pinned ones,
 `ligerito.initialCap` the cap, `zerocheck.finalC` V\*'s `v_C`).
 
-* **How a round's rows join** (`joinR`, `rowsOf`, `rowsOf_joinR`): tag `0`, then the rows, so each element-level
+* **How a round's rows join** (`joinR`, `rowsOf`, `rowsOf_joinR'`): tag `0`, then the rows, so each element-level
   message reads back as its opened rows.
 * **Node rows** (`nodeRow`, `nodeOf`, `isNodeRow`): a cap node is opened as a 128-byte row, the node then 64 zero
   bytes, as the deployed verifier registers it (`rec_live.top_rows`, RecCap's `top`); the reader takes each round-0
@@ -64,28 +65,24 @@ noncomputable section
 
 /-! ## Rows -/
 
-/-- **How a round's rows join**: tag `0`, then the rows. -/
-def joinR (rs : List Claims.Msg) : Claims.Msg := 0 :: encList encBytes (rs.map fun r => (⟨r.toArray⟩ : ByteArray))
+/-- **How a round's rows join**: tag `0`, then the rows, every length in variable-length bytes (`encV`). -/
+def joinR (rs : List Claims.Msg) : Claims.Msg := 0 :: encVL encVB (rs.map fun r => (⟨r.toArray⟩ : ByteArray))
 
 theorem joinR_head (rs : List Claims.Msg) : ∃ a, joinR rs = 0 :: a := ⟨_, rfl⟩
 
 /-- An element-level message read back as its rows. -/
 def rowsOf : Claims.Msg → Option (List ByteArray)
   | 0 :: body =>
-    match (rdList rdBytes).run body with
+    match (rdVLs rdVB).run body with
     | some (v, []) => some v
     | _ => none
   | _ => none
 
-/-- **A joined round reads back as its rows**, where its lengths fit their words. -/
-theorem rowsOf_joinR {rs : List Claims.Msg} (hl : rs.length < 2 ^ 64) (hb : ∀ r ∈ rs, r.length < 2 ^ 64) :
+/-- **A joined round reads back as its rows**, at every length. -/
+theorem rowsOf_joinR' (rs : List Claims.Msg) :
     rowsOf (joinR rs) = some (rs.map fun r => (⟨r.toArray⟩ : ByteArray)) := by
-  have h := FlockComplete.rdList_encList (r := rdBytes) (e := encBytes) (l := rs.map fun r => (⟨r.toArray⟩ : ByteArray)) (fun b hb' => by
-      obtain ⟨r, hr, rfl⟩ := List.mem_map.1 hb'
-      refine FlockComplete.rdBytes_encBytes ?_
-      show r.toArray.size < 2 ^ 64
-      rw [List.size_toArray]
-      exact hb r hr) (by rw [List.length_map]; exact hl) []
+  have h := rdVLs_encVL (r := rdVB) (e := encVB) (l := rs.map fun r => (⟨r.toArray⟩ : ByteArray))
+    (fun b _ rest => rdVB_encVB b rest) []
   rw [List.append_nil] at h
   unfold rowsOf joinR
   simp only [h]
@@ -134,6 +131,11 @@ theorem isNodeRow_nodeRow {node : ByteArray} (h : node.data.size = 64) : isNodeR
     rw [List.size_toArray, List.length_append, hl, List.length_replicate]
   · show (node.data.toList ++ List.replicate 64 0).toArray.toList.drop 64 = List.replicate 64 0
     rw [List.toList_toArray, ← hl, List.drop_left]
+
+/-- `rowsOf_joinR'` at its earlier bounds. -/
+theorem rowsOf_joinR {rs : List Claims.Msg} (_hl : rs.length < 2 ^ 64) (_hb : ∀ r ∈ rs, r.length < 2 ^ 64) :
+    rowsOf (joinR rs) = some (rs.map fun r => (⟨r.toArray⟩ : ByteArray)) :=
+  rowsOf_joinR' rs
 
 /-- Consecutive blocks of the given lengths. -/
 def cutLens {α : Type} : List ℕ → List α → List (List α)
