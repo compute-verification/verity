@@ -27,7 +27,7 @@ linear, QK^T and PV coordinate is one unit (`ScaledMmS8Coordinate_v1{K}`, no K-s
 | Attention | `attention.py`: `GemmCoordinate_v2{GEMM_HOPPER}` and the MUFU ex2 table, numpy on the CPU, per group of equal positions | KP2-ATTN |
 | Commit | `commit.py`: `verity_vllm.commit.row_tables` (`--commit reference`), its C++ twin (`host`) or its CUDA kernel (`device`); one table an op, a row a slot keyed (slot, position); `slots.commit_step` is the per-slot-subtree stand-in | kernels' commit tree with a subtree a slot (CMP-95 item 3) |
 | Replay | `e2e_h200/units.py`: coordinate units through `replay.py`'s templates (main's Definitions); row units through compositions of `replay.py`'s word functions until circuits' row Definitions land; a row's attention reads its slot's K and V rows at the steps that wrote them; a fixture coin draws K a family | circuits' row Definitions; PRF-170's plan through `replay.draw` |
-| Bundle and record | `record.py`: provisional v0 schemas | IFACE-B's (CMP-95 items 5 and 6, the e2e_demo bundle, #4454) |
+| Bundle and record | `record.py`: provisional v0 schemas | IFACE-B's `verity/drawn-unit-bundle/v1` and `verity/block-record/v1` (CMP-95 items 5 and 6, PR #4454) |
 | Legs | `legs.py`: PoUS spot reads, wipe and reload, certifier digests as fixtures; bandwidth and PoUW not run; integrity is the replay | MEM-67/69, CMP-97, NET-72, ALLP-H1LOOP/SALT, C-Flock `--zk` and Lean |
 
 `replay.py` and `cpu_step.py` are the replay lane's (#4460): the CPU replay of drawn units in the 16-bit forms, and an
