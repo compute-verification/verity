@@ -156,6 +156,7 @@ import time
 from collections.abc import Iterator, Sequence
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import replace
+from fractions import Fraction
 from pathlib import Path
 from typing import Callable
 
@@ -644,6 +645,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     if not streamed(a):
         result = V.audit_record(rec, receipt, union_draw, drawn_law, sorted(proved), instances, statement, verdicts, a.delta,
                                 sessions=sessions, served=sorted(served_units), session_roots=session_roots)
+        write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
+                   {"draw": union_draw, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
+                    "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
+                   served=sorted(served_units))
     else:  # every verdict of record names the sessions delivered (`service.check_verdicts`)
         verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in verdicts.items()}
         given = {"proved_units": sorted(proved), "instances": instances, "served": sorted(served_units),
@@ -663,6 +668,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
             return summary, False
         result["coins"] = {"source": stream.coin_source, "segment": segment, "read": read.hex(),
                            "outcome": summary["coins"]["outcome"]}
+        write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
+                   {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
+                    "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
+                   served=given["served"])
     result["draw_counts"] = counts
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
@@ -743,6 +752,26 @@ def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.W
                 want, leaf_layer=leaf_layer, work_table=mine.work_table)
     neg["registration-drawing-the-transfer-gates-as-the-rest (R1)"] = {"refused": not v.ok, "codes": list(v.codes)}
     return neg
+
+
+def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_layer: str | None, delta: float,
+               work_table: dict | None, rec: dict, record: dict, *, instances: int, sessions: list[str],
+               session_roots: dict, served: list[int]) -> None:
+    """The audit as `SampledProofs.OneStage`'s case, what onsite's evidence carries for sampled proofs
+    (`replay.Case.case`: the registration record, the evidence `audit_record` was handed and the verifier's params, δ the
+    audit's as an exact ratio), in ``out/case.json``, and today's Python on it (`replay.python`) in
+    ``out/case-python.json``."""
+    try:
+        import replay as RP
+
+        d = str(Fraction(delta).limit_denominator(10**12))
+        p = RP.params(program, query, law, ports, leaf_layer, d, work_table=work_table)
+        e = RP.evidence(record, instances=instances, sessions=sessions, session_roots=session_roots, served=served)
+        c = RP.Case("", "a5", rec["format"], "audit", "audit", program, p, rec, e, None)
+        (out / "case.json").write_text(json.dumps(c.case(), sort_keys=True))
+        (out / "case-python.json").write_text(json.dumps(RP.python(c), sort_keys=True, default=str))
+    except Exception as x:  # noqa: BLE001: the case is a copy of the audit for onsite; its failure leaves the audit's verdict
+        (out / "case-error.txt").write_text(f"{type(x).__name__}: {x}\n")
 
 
 def streamed(a: argparse.Namespace) -> bool:

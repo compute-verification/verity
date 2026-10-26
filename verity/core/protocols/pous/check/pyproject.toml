@@ -1,7 +1,7 @@
 [project]
 name = "pous-check"
 version = "0.1.0"
-description = "The differential test of pous_check, the PoUS setup check in Lean, against the Python reference: the core difftest harness drives its functions (pous-setup-difftest), its protocol (pous-setup) and the composed check of a recorded run (pous-run serve, against run.check_at); interop.py, the timed audit's wire (pous-audit-difftest serve) against wire.py on the spec's vectors; and timed_audit.py, the strict timed audit's verdict of record (pous-timed-audit) against memory_challenger.verdict."
+description = "The differential test of pous_check, the PoUS setup check in Lean, against the Python reference: the core difftest harness drives its functions (pous-setup-difftest), its protocol (pous-setup) and the composed check of a recorded run (pous-run serve, against run.check_at); interop.py, the timed audit's wire (pous-audit-difftest serve) against wire.py on the spec's vectors; timed_audit.py, the strict timed audit's verdict of record (pous-timed-audit) against memory_challenger.verdict; and test_verdict_difftest.py, the verdict unit's code (pous-verdict-difftest) against the Definition verdict_circuit.PousVerdict, compiled."
 requires-python = ">=3.12"
 dependencies = ["verity", "verity-difftest", "hypothesis>=6.100"]
 
@@ -21,12 +21,14 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # memory challenger's verdict (`band_gpu/memory_challenger.py`), and drives its strict audit against the harness's responder.
 # `test_run.py` holds `PousCheck.Run` to `run.py`: `lake` builds the memory challenger's Lean package and LMS's through the
 # path requires, and the test draws its sessions with that package's `tests/mc_cases.py`, which signs with the PoUS tests'
-# test signer, read by path.
+# test signer, read by path. `test_run_protocol.py` holds `PousCheck.RunProtocol` (onsite's PoUS component) to `run.py`
+# and the period hook (`period.py`) on the same sessions and on the hook's own periods. `test_verdict_difftest.py` holds
+# `PousCheck.Verdict` to `verdict_circuit.py`'s Definition, compiled and run by `verity.ml.circuits`' evaluator.
 # Of `verity` and the difftest harness (whose Lean `lake` builds too), what the tests import: these in place of both trees.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/core/difftest", "verity/ml/__init__.py",
-          "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
+          "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
           "verity/core/protocols/interface", "verity/core/primitives/identity", "verity/core/primitives/randomness", "verity/core/service/flock/Flock",
           "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",
           "verity/core/service/flock/lean-toolchain", "benchmarks/pous/p2_v1/vectors.json",

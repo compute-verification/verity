@@ -747,10 +747,10 @@ BATCH_REGISTRATION = ("LLAMA32_1B", "rtxpro6000")
 def batch(templates: Callable[[], list] | None = None) -> dict:
     """``--batch``'s report: batch invariance (`verity_vllm.check.batch`: (a) separable, (b) shape-invariant) of each template
     ``templates()`` gives, by default every one a request-major compilation of `BATCH_REGISTRATION` calls
-    (`verity_vllm.predict.batch.templates`), each verdict held to the one declared beside it."""
+    (`verity_vllm.program.predict.batch.templates`), each verdict held to the one declared beside it."""
     from verity_vllm.check import batch as BI
     if templates is None:
-        from verity_vllm.predict import batch as PB
+        from verity_vllm.program.predict import batch as PB
 
         def templates() -> list:
             return PB.templates(PB.registered_phi(*BATCH_REGISTRATION))
