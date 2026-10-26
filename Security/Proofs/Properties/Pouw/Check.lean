@@ -118,7 +118,7 @@ theorem registered_ok (p : Params) (c : Registration) (f : Fixed) :
 theorem outcome_accept (p : Params) (c : Registration) (f : Fixed) (e : Evidence) (pub : Public)
     (prof : Core.Integrity) :
     outcome p c f e = .accept pub prof ↔
-      ∃ draw, ServiceAccepted p c f e prof draw ∧ SaltKept p f e ∧
+      ∃ draw, ServiceAccepted p c f e prof draw ∧ SaltKept p c e ∧
         pub = ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩ := by
   unfold outcome ServiceAccepted SaltKept
   dsimp only
@@ -163,13 +163,13 @@ theorem outcome_accept (p : Params) (c : Registration) (f : Fixed) (e : Evidence
     rw [ite_eq_left h8]; simp only [reduceCtorEq, false_iff]
     rintro ⟨d, ⟨-, -, ⟨-, rfl⟩, -, -, -, -, -, -, hu⟩, -⟩; exact h8 hu
   rw [ite_eq_right (Classical.not_not.mpr h8)]
-  by_cases h9 : (windowSaltReason p f.rootW e.salt).isSome = true
+  by_cases h9 : (windowSaltReason p c e.salt).isSome = true
   case pos =>
     rw [ite_eq_left h9]; simp only [reduceCtorEq, false_iff]
     rintro ⟨d, -, hw, -⟩; simp [hw] at h9
   rw [ite_eq_right h9]
-  have hw : windowSaltReason p f.rootW e.salt = none := by
-    cases h : windowSaltReason p f.rootW e.salt
+  have hw : windowSaltReason p c e.salt = none := by
+    cases h : windowSaltReason p c e.salt
     · rfl
     · simp [h] at h9
   simp only [Core.Outcome.accept.injEq]
@@ -185,7 +185,7 @@ theorem outcome_accept (p : Params) (c : Registration) (f : Fixed) (e : Evidence
 the window's salt. -/
 theorem acceptMeans_iff (p : Params) (c : Registration) (e : Evidence) (pub : Public) (prof : Core.Integrity) :
     protocol.check p c e = .accept pub prof ↔
-      ∃ f draw, RegistrationKeeps p c f ∧ ServiceAccepted p c f e prof draw ∧ SaltKept p f e ∧
+      ∃ f draw, RegistrationKeeps p c f ∧ ServiceAccepted p c f e prof draw ∧ SaltKept p c e ∧
         pub = ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩ := by
   rw [check_eq]
   unfold PouwCheck.check
@@ -205,7 +205,7 @@ theorem acceptMeans : AcceptMeans := fun p c e pub prof => (acceptMeans_iff p c 
 /-- Completeness of `AcceptMeans`: a registration that keeps PoUW's rule, which the service accepted as the rule fixes
 with the window's salt, is accepted, publishing the rule's items and the service's draw. -/
 theorem acceptMeans_complete (p : Params) (c : Registration) (e : Evidence) (f : Fixed) (prof : Core.Integrity)
-    (draw : UnitDraw) (hk : RegistrationKeeps p c f) (hs : ServiceAccepted p c f e prof draw) (hw : SaltKept p f e) :
+    (draw : UnitDraw) (hk : RegistrationKeeps p c f) (hs : ServiceAccepted p c f e prof draw) (hw : SaltKept p c e) :
     protocol.check p c e = .accept ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩ prof :=
   (acceptMeans_iff p c e _ prof).2 ⟨f, draw, hk, hs, hw, rfl⟩
 

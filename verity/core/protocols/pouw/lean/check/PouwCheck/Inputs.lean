@@ -137,11 +137,18 @@ def rootOf? (j : Json) : Option Root := do
   guard (keys j == some ["domain", "leaves", "port", "root"])
   pure ⟨← str? (get j "port"), ← str? (get j "root"), ← nat? (get j "leaves"), ← str? (get j "domain")⟩
 
-/-- The record's `window`: its kind, its context, and the items it registers. -/
+/-- `core_check.WINDOW_VALUES`: the window's optional groups of committed values, the activations it committed before
+its salt and the registered weights' entries (`valuesRoot?`). -/
+def WINDOW_VALUES : List String := ["activations", "registered"]
+
+/-- The record's `window`: its kind, its context, the items it registers, and its groups of committed values
+(`WINDOW_VALUES`), each `some` exactly when the window has the key, whatever its value. -/
 structure Window where
   kind : String
   context : String
   items : Json
+  activations : Option Json
+  registered : Option Json
 
 /-- The registration: the canonical bytes its digest hashes, and the record's fields PoUW's rule reads. -/
 structure Registration where
@@ -175,11 +182,14 @@ def registrationOf (b : ByteArray) : V Registration := do
   let some roots := roots | throw "roots is not a list of {domain, leaves, port, root}"
   let w := get rec_ "window"
   let window : Option Window := do
-    guard (keys w == some ["context", "kind", "public"])
+    guard ((keys w).map (·.filter (!WINDOW_VALUES.contains ·)) == some ["context", "kind", "public"])
     let items := get w "public"
     guard (keys items).isSome
-    pure ⟨← str? (get w "kind"), ← str? (get w "context"), items⟩
-  let some window := window | throw "window is not {context, kind, public} with strings and an object"
+    pure ⟨← str? (get w "kind"), ← str? (get w "context"), items, PouwWindow.field? w "activations",
+      PouwWindow.field? w "registered"⟩
+  let some window := window
+    | throw ("window is not {context, kind, public}, with strings and an object, and optionally activations " ++
+        "and registered")
   pure { bytes := b, format, program, query, partition, scheme, population, law, roots, window }
 
 /-- `registration.digest`: SHA-512(format ‖ 0 ‖ the canonical record). -/
