@@ -39,19 +39,26 @@ theorem pin_row {μ α β x : ZMod 2} (h : (α + μ * x) * (β + μ * x) = x) (h
   exact key μ α β x h hβ
 
 /-- **A witness of a statement with pinned copies satisfies the statement without them**, and carries 0 on each row
-copied an odd number of times: where its forced-zero row carries 0 and, at those rows, `B` without the copies
-evaluates to 1. -/
+copied an odd number of times: where, at those rows, its forced-zero row carries 0 and `B` without the copies
+evaluates to 1. A statement with no copies (`μ = 0`) needs neither. -/
 theorem sat_unpin {S : Model.Statement} {A B : Matrix (Fin (2 ^ S.kLog)) (Fin (2 ^ S.kLog)) (ZMod 2)}
     {zero : Fin (2 ^ S.kLog)} {μ : Fin (2 ^ S.kLog) → ZMod 2} (h : PinRows S A B zero μ) {z : Model.Witness S.m}
-    (hz : S.Satisfies z) (hzero : ∀ o, S.block z o zero = 0)
+    (hz : S.Satisfies z) (hzero : ∀ o r, μ r = 1 → S.block z o zero = 0)
     (hone : ∀ o r, μ r = 1 → B.mulVec (S.block z o) r = 1) :
     ({ S with A₀ := A, B₀ := B } : Model.Statement).Satisfies z ∧ ∀ o r, μ r = 1 → S.block z o r = 0 := by
   have row : ∀ o r, A.mulVec (S.block z o) r * B.mulVec (S.block z o) r = S.block z o r ∧
       (μ r = 1 → S.block z o r = 0) := by
     intro o r
     have hr := hz.1 o r
-    rw [mulVec_pin S.A₀ A (fun j => (h r j).1), mulVec_pin S.B₀ B (fun j => (h r j).2), hzero o, add_zero] at hr
-    exact pin_row hr (hone o r)
+    rw [mulVec_pin S.A₀ A (fun j => (h r j).1), mulVec_pin S.B₀ B (fun j => (h r j).2)] at hr
+    by_cases hμ : μ r = 1
+    · rw [hzero o r hμ, add_zero] at hr
+      exact pin_row hr (hone o r)
+    · have h0 : μ r = 0 := by
+        have key : ∀ m : ZMod 2, ¬ m = 1 → m = 0 := by decide
+        exact key _ hμ
+      rw [h0, zero_mul, add_zero, add_zero] at hr
+      exact ⟨hr, fun h1 => absurd h1 hμ⟩
   exact ⟨⟨fun o r => (row o r).1, hz.2.1, hz.2.2⟩, fun o r hr => (row o r).2 hr⟩
 
 /-- **The forced-zero row carries 0** in every block of a satisfying witness, when it has no copies (`μ zero = 0`) and

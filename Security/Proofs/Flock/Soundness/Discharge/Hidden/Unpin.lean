@@ -23,8 +23,9 @@ namespace FlockSoundness.Discharge.Hidden
 
 open Refine
 
-/-- **`st` without Δ's pinned copies**: Δ is `HmRow.delta`, then `outPairs`. -/
-def unpin (st : Stmt) : Stmt :=
+/-- **`st` without Δ's pinned copies**: Δ is `HmRow.delta`, then `outPairs`. Reducible, as `flatTwin` is, so that its
+circuit, pin and regions are `st`'s to `rw` and `simp`. -/
+abbrev unpin (st : Stmt) : Stmt :=
   { st with da := (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray,
             db := (HmRow.delta st.c st.pin).2 ++ (outPairs st.c).toArray }
 
@@ -37,6 +38,12 @@ def pinnedCols (c : Circuit) : List ℕ :=
 theorem pinList_eq (c : Circuit) : pinList c = (pinnedCols c).flatMap fun i => [(i, i), (i, Hm.zeroCol c)] := by
   unfold pinList pinnedCols
   simp only [List.flatMap_assoc, List.flatMap_map, Function.comp_def]
+
+/-- **No pinned outputs, no pinned bits.** -/
+theorem pinnedCols_nil {c : Circuit} (h : HmRow.pinnedCount c.metaJ = 0) : pinnedCols c = [] := by
+  unfold pinnedCols
+  rw [pinnedWords_zero h]
+  simp
 
 /-- **`(i, i)` and `(i, zero)` for each `i` of `L`** hold the pair `(r, j)` `L.count r` times for each of `j = r` and
 `j = zero`. -/
@@ -125,7 +132,7 @@ theorem sat_unpin {st : Stmt} (hda : st.da = (HmOut.delta st.c st.pin).1)
     (hdb : st.db = (HmOut.delta st.c st.pin).2) (hwf : StmtWF st)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {zero : Fin (2 ^ st.c.kLog)}
     (hzero : zero.val = Hm.zeroCol st.c) {z : Model.Witness st.m} (hz : (stmtOf st hwf regs).Satisfies z)
-    (hz0 : ∀ o, (stmtOf st hwf regs).block z o zero = 0)
+    (hz0 : ∀ o r, ((pinnedCols st.c).count r.val : ZMod 2) = 1 → (stmtOf st hwf regs).block z o zero = 0)
     (hone : ∀ o r, ((pinnedCols st.c).count r.val : ZMod 2) = 1 →
       (stmtOf (unpin st) (unpin_wf hwf) regs).B₀.mulVec ((stmtOf st hwf regs).block z o) r = 1) :
     (stmtOf (unpin st) (unpin_wf hwf) regs).Satisfies z ∧

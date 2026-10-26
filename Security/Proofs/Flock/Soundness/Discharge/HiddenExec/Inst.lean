@@ -50,20 +50,14 @@ theorem outPairs_ne_net {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout st)
   intro he
   exact Hm.atSlot_ne L F (R.rowNet_lt hn') hn hne hat ⟨hs₀, hb, he⟩
 
-/-- **Δ at the input bits a wire fills, in an accepted hidden-output statement** (`WiredDelta`): its flat twin's
-(`delta_wired`), at output rows that fit. -/
-theorem wiredDeltaH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
-    {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
-    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st)
-    (hrows : Hidden.Any.OutRowsS st.c) : WiredDelta st := by
+/-- **Δ at the input bits a wire fills** (`WiredDelta`), at a Δ that is `HmRow.delta`'s, then `outPairs`: its flat
+twin's (`delta_wired`), at output rows that fit. -/
+theorem wiredDelta_out {tags : Tags} {st : Stmt} (Lf : FlockSoundness.Layout (Hidden.flatTwin st))
+    (F : Aliased.UnitFacts tags (Hidden.flatTwin st)) (hrows : Hidden.Any.OutRowsS st.c)
+    (hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray) : WiredDelta st := by
   intro n g i o s hn hsha hhm hg hi hf j
-  have sp := Hidden.setupHidden_spec' h
-  have Lf := flat_layout ht h
-  have F := flat_unitFacts ht h
   have P : ParseFacts tags st.c := F.parse
   have C : CheckFacts st.c := F.check
-  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
-    rw [sp.da, Hidden.hidden_delta_unpinned (Hidden.setupHidden_unpinned ht h hrows.1)]
   have hflat := delta_wired Lf F hn hsha hhm hg hi hf j
   obtain ⟨ho, -⟩ := feed_some hf
   obtain ⟨p, tb, hp, htb, hpt⟩ := Aliased.mem_portBits ho
@@ -80,6 +74,14 @@ theorem wiredDeltaH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
     List.count_eq_zero.2 fun hm => outPairs_ne_net Lf F hrows hm hn hsha hhm hs₀ hb (pos_eq st.c g n i o),
     Nat.add_zero]
   exact hflat
+
+/-- **Δ at the input bits a wire fills, in an accepted hidden-output statement without its pinned copies**
+(`wiredDelta_out` at `Hidden.unpin`, whose Δ is `HmRow.delta`'s, then `outPairs`, by definition). -/
+theorem wiredDeltaH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
+    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st)
+    (hrows : Hidden.Any.OutRowsS st.c) : WiredDelta (Hidden.unpin st) :=
+  wiredDelta_out (st := Hidden.unpin st) (flat_layout ht h) (flat_unitFacts ht h) hrows rfl
 
 /-! ## A composite input's value -/
 
@@ -575,8 +577,7 @@ theorem out_copy_instH {T : Model.Statement} {c : Flock.Circuit} {n : ℕ} (a : 
   have s := Hidden.setupHidden_spec' h
   have L0 := flat_layout ht' h
   have F0 := flat_unitFacts ht' h
-  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
-    rw [s.da, Hidden.hidden_delta_unpinned (Hidden.setupHidden_unpinned ht' h hrows.1)]
+  have hda : (Hidden.unpin st).da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := rfl
   have hmc := Hidden.Any.msg_copyF L L0 F0 hda hrows hz o' hg hjo hkw ht
   generalize o - Hidden.outAt st.c (outPortOf st.c o) = kk at hk hkw hsrc hmc
   have hb' : (16 * kk + t) / 8 = 2 * kk + t / 8 := by omega

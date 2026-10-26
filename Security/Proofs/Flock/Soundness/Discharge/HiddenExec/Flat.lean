@@ -1,6 +1,7 @@
 import Proofs.Flock.Soundness.Discharge.Hidden.Flat
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 import Proofs.Flock.Soundness.Discharge.Layout.Scope
+import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
 
 /-!
 # A hidden-output statement's flat twin
@@ -137,6 +138,26 @@ theorem unitRowsFlat (ht : tags.typed = false)
   · show rangesEntry st (slotEntryB st) r.val j.val + deltaEntry st.db r.val j.val =
       rangesEntry st (slotEntryB st) r.val j.val + deltaEntry (HmRow.delta st.c st.pin).2 r.val j.val
     rw [hdb, Hidden.deltaEntry_append_out hout]
+
+/-- **`unpin` of an untyped hidden statement reads its flat twin's rows at every unit slot's row**, pinned outputs or
+not: its Δ is `HmRow.delta`'s, then `outPairs`, by definition (`Hidden.unpin`). -/
+theorem unitRowsFlat_unpin (ht : tags.typed = false)
+    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st)
+    (hrows : Hidden.Any.OutRowsS st.c) : UnitRowsFlat (Hidden.unpin st) := by
+  have L := flat_layout ht h
+  have F := flat_unitFacts ht h
+  intro s₀ hs₀ b hb r j hr
+  have hout : ∀ q ∈ Hidden.outPairs st.c, q.1 ≠ r.val := fun q hq => by
+    rw [hr]; exact outPairs_ne_unit L F hrows hq hs₀ hb
+  refine ⟨?_, ?_⟩
+  · show rangesEntry st (slotEntryA st) r.val j.val +
+        deltaEntry ((HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray) r.val j.val =
+      rangesEntry st (slotEntryA st) r.val j.val + deltaEntry (HmRow.delta st.c st.pin).1 r.val j.val
+    rw [Hidden.deltaEntry_append_out hout]
+  · show rangesEntry st (slotEntryB st) r.val j.val +
+        deltaEntry ((HmRow.delta st.c st.pin).2 ++ (Hidden.outPairs st.c).toArray) r.val j.val =
+      rangesEntry st (slotEntryB st) r.val j.val + deltaEntry (HmRow.delta st.c st.pin).2 r.val j.val
+    rw [Hidden.deltaEntry_append_out hout]
 
 /-! ## The rows `scopeOkH` covers -/
 

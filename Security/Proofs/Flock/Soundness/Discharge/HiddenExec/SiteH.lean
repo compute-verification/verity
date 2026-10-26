@@ -14,7 +14,7 @@ set_option Elab.async false
 
 * `siteAddrH a o x`: in-block column `x` of block `o`, as an address of `T`;
 * `bc_site_ofH`: in a satisfying witness, the 128 bytes at row `p`'s `hm96` output are the population's `b ‖ c` of the
-  proved unit at rank `o · c.g + g`, for every row, input or output (`Hidden.bc_drawnW`);
+  proved unit at rank `o · c.g + g`, for every row, input or output (`Hidden.bc_drawnW_unpin`);
   `BcSiteH` bundles what it reads;
 * `copy_siteH`: a stacked unit input whose Δ key is message bit `bit` of byte `byte` of row `q` holds the witness's bit
   at that message column (`copyPos_blockH`, `Aliased.copyPos_key` at the flat twin);
@@ -100,7 +100,7 @@ def BcSiteH (a : AcceptedH T) (pop : Public) (o : Fin (2 ^ T.nbl)) (g u : ℕ) :
     HmOut.loadPublic a.tags a.st.c a.pf = .ok pop ∧ g < 2 ^ a.st.c.g.log2 ∧
     D.proved[o.val * a.st.c.g + g]? = some u
 
-/-- **The `b ‖ c` at a drawn unit's site is the population's** (`Hidden.bc_drawnW`), at a `BcSiteH`, for every row
+/-- **The `b ‖ c` at a drawn unit's site is the population's** (`Hidden.bc_drawnW_unpin`), at a `BcSiteH`, for every row
 `p`. -/
 theorem bc_site_ofH {a : AcceptedH T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ} (hs : BcSiteH a pop o g u)
     {z : Witness T.m} (hz : T.Satisfies z) (hg : g < a.st.c.g) {p : ℕ} (hp : p < a.st.c.ports.size) :
@@ -112,7 +112,7 @@ theorem bc_site_ofH {a : AcceptedH T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u 
   dsimp only at hd hregs hpop hu hg hg2 hp ⊢
   subst hd
   obtain ⟨hr, rfl⟩ := Array.getElem?_eq_some_iff.1 hu
-  exact Hidden.bc_drawnW h hpop hD hlt L regs hregs hz o hg hg2 hp hr
+  exact Hidden.bc_drawnW_unpin h hpop hD hlt L regs hregs hz o hg hg2 hp hr
 
 /-! ## Copies at a site -/
 
@@ -187,8 +187,7 @@ theorem out_copyH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
   have L0 := flat_layout ht' h
   have F0 := flat_unitFacts ht' h
   have R : RowRanges st.c := RowRanges.ofL (st := Hidden.flatTwin st) L0 F0.parse F0.check
-  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
-    rw [s.da, Hidden.hidden_delta_unpinned (Hidden.setupHidden_unpinned ht' h hrf.1.1)]
+  have hda : (Hidden.unpin st).da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := rfl
   have hrows := hrf.1
   obtain ⟨h16, -, hlo⟩ := Layout.check_out P.typed ho hls
   have hget : ∀ u < st.c.upv, st.c.leavesOut.getD u #[] = st.c.leavesOut[u]! := fun u hu => by
@@ -234,8 +233,7 @@ theorem AcceptedH.row_bc (a : AcceptedH T) (hupv : 0 < a.st.c.upv)
   have s := Hidden.setupHidden_spec' h
   have L0 := flat_layout ht h
   have F0 := flat_unitFacts ht h
-  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
-    rw [s.da, Hidden.hidden_delta_unpinned (Hidden.setupHidden_unpinned ht h hrf.1.1)]
+  have hda : (Hidden.unpin st).da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := rfl
   have hz0 := Hidden.Any.sat_flatF L L0 F0 hda hrf.1 hz
   exact Hidden.Any.row_bc_tgtS L0 F0 rfl hupv hz0 o hg hp (hrf.kind hp)
 
