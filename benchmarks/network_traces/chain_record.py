@@ -310,6 +310,10 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
               and (s.get("ok") is True and rc in (None, "0") or any(v["escaped_the_draw"] for v in members.values())))
     if not proved and honest.get("windows"):
         why = "; ".join(f"{k}: {', '.join(v['unexpected'])}" for k, v in members.items() if v.get("unexpected")) or why
+    elif proved:
+        gone = [k for k, v in members.items() if v["escaped_the_draw"]]
+        why = (f"the driver's ok is false only for {', '.join(gone)}: accepted with none of its faulty windows drawn, "
+               "within the draw's bound" if gone else None)
     return {"verdict": ("accepted" if honest.get("network_accepted") else "refused") if proved else
             ("dry" if "members" in s and not honest.get("windows") else "failed"), "why": why, "stand_in": stand_in,
             "ok": s.get("ok"), "unit": (s.get("link") or {}).get("unit"), "members": members,
