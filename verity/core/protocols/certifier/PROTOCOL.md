@@ -1198,16 +1198,11 @@ requests, whose frames are a function of the prompt's length alone), for every p
   holding v0's prompt lengths to the certified bodies. Each window's sync is signed: the certifier's salted clock
   certificate beside its egress record, so it needs no head change
   ([protocol/clock-certificate.md](protocol/clock-certificate.md)).
-- **Named gap: the clock's opening** (owned by network-accounting). What the certifier signs is witness, so a window's
-  clock certificate signs its sync salted (`certificate.clock_commitment`), and the verifier reads the sync only
-  through the opening, the sync and `salt_c`, against that digest (`advised.SignedClocks`). Until N2's advised unit
-  opens it, the verifier of record opens it on the host, as the in-the-clear check opens a record
-  (`CertifiedRecord.verify`): on an accepted window the sync it reads is the declared one, a public output already,
-  and on a refused one it reads the sync the certifier ran. Design: the unit takes each window's clock opening as
-  witness, checks it against the certificate's signed digest (the clock digest and its salted digest, two SHA-512s
-  of a few blocks, as the head check computes a head's signed digest), and computes the floor from the opened syncs
-  inside the unit, so the floor leaves the public row; the verifier then reads no sync. It changes N2's advised unit, its pinned digest and its public
-  row, so it lands with that unit's change.
+- **Named gap: the clock's opening** (owned by network-accounting). A window's clock certificate signs its sync salted
+  (`certificate.clock_commitment`), and until N2's advised unit opens it the verifier of record opens it on the host
+  (`advised.SignedClocks`), so on a refused window it reads the sync the certifier ran. Closing it is a circuit change
+  to N2's advised unit, with its `circuit-check` report, not a Lean one: the design is in
+  [protocol/clock-certificate.md](protocol/clock-certificate.md) ("The opening is on the host").
 - **Premises** of "an honest advised link is accepted", on which N2's claim doesn't rest:
   - `release` is the certified egress record's: each kept output is one egress frame, in the link's canonical order,
     which IO-TIE fixes (within a bucket the order doesn't change the counts);
