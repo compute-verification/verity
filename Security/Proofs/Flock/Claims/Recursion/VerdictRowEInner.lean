@@ -222,13 +222,13 @@ theorem innerAccCommit_eq {st st' : Stage} {s s' : ℕ} {x xO xO' : Msg} {w w' :
     (hx : xO ∈ xs) (hx' : xO' ∈ xs) :
     Claims.Recursion.VStarB.readForms w (hmCommit c q n) =
       Claims.Recursion.VStarB.readForms w' (hmCommit c' q' n') := by
-  obtain ⟨reg, rws, a0, hreg, -, hrw, ha0, hs, -, t, positions, paths, ht, hp, he, hlt, hps, -, hrdc⟩ :=
+  obtain ⟨reg, rws, a0, hreg, -, hrw, ha0, hs, -, t, positions, paths, ht, hp, he, -, hps, -, hrdc⟩ :=
     innerAccRow_table hS hck hr hpc hsv hsch hsu h0 hidx hown hnm hd hq hnp
-  obtain ⟨reg', rws', a0', hreg', -, hrw', ha', hs', t', positions', paths', ht', hp', he', hlt', hps', -, hrd'⟩ :=
+  obtain ⟨reg', rws', a0', hreg', -, hrw', ha', hs', t', positions', paths', ht', hp', he', -, hps', -, hrd'⟩ :=
     accRow_table hS' hck' hr hpc' hsv' hsch hsu' h0' hidx' hown' hnm' hq' hn' hnp'
-  have ho := mem_regOpenings hsu hown (st := sts[0]) (by simp) (by simpa using hreg) (mem_portOpenings ht hp he hlt)
+  have ho := mem_regOpenings hsu hown (st := sts[0]) (by simp) (by simpa using hreg) (mem_portOpenings ht hp he hnp)
   have ho' := mem_regOpenings hsu' hown' (st := sts'[0]) (by simp) (by simpa using hreg')
-    (mem_portOpenings ht' hp' he' hlt')
+    (mem_portOpenings ht' hp' he' hnp')
   have hpp : positions.getD (Registered.ref t sts[0].c.ports.size q n) 0 =
       positions'.getD (Registered.ref t' sts'[0].c.ports.size q' n') 0 := by
     rw [hps, hps']
@@ -271,13 +271,13 @@ theorem innerInnerCommit_eq {st st' : Stage} {s s' : ℕ} {x xO xO' : Msg} {w w'
     (hx : xO ∈ xs) (hx' : xO' ∈ xs) :
     Claims.Recursion.VStarB.readForms w (hmCommit c q n) =
       Claims.Recursion.VStarB.readForms w' (hmCommit c' q' n') := by
-  obtain ⟨reg, rws, a0, hreg, -, hrw, ha0, hs, -, t, positions, paths, ht, hp, he, hlt, hps, -, hrdc⟩ :=
+  obtain ⟨reg, rws, a0, hreg, -, hrw, ha0, hs, -, t, positions, paths, ht, hp, he, -, hps, -, hrdc⟩ :=
     innerAccRow_table hS hck hr hpc hsv hsch hsu h0 hidx hown hnm hd hq hnp
-  obtain ⟨reg', rws', a0', hreg', -, hrw', ha0', hs', -, t', positions', paths', ht', hp', he', hlt', hps', -,
+  obtain ⟨reg', rws', a0', hreg', -, hrw', ha0', hs', -, t', positions', paths', ht', hp', he', -, hps', -,
     hrdc'⟩ := innerAccRow_table hS' hck' hr hpc' hsv' hsch hsu' h0' hidx' hown' hnm' hd' hq' hnp'
-  have ho := mem_regOpenings hsu hown (st := sts[0]) (by simp) (by simpa using hreg) (mem_portOpenings ht hp he hlt)
+  have ho := mem_regOpenings hsu hown (st := sts[0]) (by simp) (by simpa using hreg) (mem_portOpenings ht hp he hnp)
   have ho' := mem_regOpenings hsu' hown' (st := sts'[0]) (by simp) (by simpa using hreg')
-    (mem_portOpenings ht' hp' he' hlt')
+    (mem_portOpenings ht' hp' he' hnp')
   have hpp : positions.getD (Registered.ref t sts[0].c.ports.size q n) 0 =
       positions'.getD (Registered.ref t' sts'[0].c.ports.size q' n') 0 := by
     rw [hps, hps']

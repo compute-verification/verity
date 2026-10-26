@@ -252,9 +252,9 @@ theorem honest_len (o : Run sha512 Readable.relation) {cs : List Coin} (hcs : o.
 /-! ## The record's draw -/
 
 /-- **The session's draw is the statement's** at a plain completeness run, under the record's JSON specification. -/
-theorem honest_drawTied (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) (o : Run sha512 Readable.relation) :
+theorem honest_drawTied (o : Run sha512 Readable.relation) :
     drawEq (RecDeploy.drawOfU o.spec.unitDraw) o.s.read.draw = true := by
-  obtain ⟨-, -, hDO, hU⟩ := JsonRT.stmtOk (H := sha512) (rel := Readable.relation) S o.toCase
+  obtain ⟨-, -, hDO, hU⟩ := JsonRT.stmtOk (H := sha512) (rel := Readable.relation) o.toCase
   have hne : ∀ d, o.s.read.draw = some d → d ≠ Lean.Json.null := by
     intro d hd
     unfold JsonRT.DrawOk at hDO
@@ -286,7 +286,7 @@ theorem honest_drawJ (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) (o :
     o.s.read.draw = true
   rw [recJ, RecDeploy.drawOfJ_recordObj]
   exact RecDeploy.drawEq_map_norm
-    (fun e he => (FlockDeploy.insOf_draw_norm (FlockDeploy.setupOf_some o.setup).1 he).1) (honest_drawTied S o)
+    (fun e he => (FlockDeploy.insOf_draw_norm (FlockDeploy.setupOf_some o.setup).1 he).1) (honest_drawTied o)
 
 /-! ## The reading and the checks -/
 
