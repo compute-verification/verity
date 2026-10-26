@@ -16,7 +16,8 @@ every micro-batch's attention. Each run here is ``--steps`` lockstep steps at po
   flight on the side stream, which trails the forward by at most ``LAG`` groups across step boundaries too, so the commit
   of step t's last groups runs while step t + 1 computes and no step's tables stay resident beyond those groups; the
   driver's ticks synchronize the forward's stream only. ``low``: the forward on a high-priority stream, the commit on a
-  priority-0 side stream; ``high``: the commit's stream high, the forward's 0; ``equal``: both 0.
+  priority-0 side stream; ``high``: the commit's stream high, the forward's 0; ``equal``: both 0. With ``--host-lag`` the
+  forward's host waits for those reads too before it allocates the next group's tables (`Pipelined.host_lag`).
 * ``low-thread``, ``high-thread``: ``low`` and ``high`` with the commit's adds and closes issued by a host thread of
   their own, so the forward's launches never wait behind the commit's on the host (an ``add`` holds its caller while
   the launch queue is full, and on a pageable upload's synchronization).
@@ -216,11 +217,20 @@ class Pipelined(LayoutCommitter):
     groups behind the forward across steps. A step's root is taken (``Pending.result``) once ``depth`` later steps have
     finished, or by ``drain``."""
 
+    #: the forward's host waits for the reads too, before it allocates the next group's tables: else at the HBM cap the
+    #: allocator frees its cache for them, waiting on every stream (the side stream's pending reads included)
+    host_lag = False
+
     def __init__(self, *args: Any, depth: int = 1) -> None:
         super().__init__(*args)
         self._read, self.depth = [], depth
         self.inflight: list[tuple[int, Any]] = []
         self.roots: dict[int, bytes] = {}
+
+    def _wait(self, read: Any) -> None:
+        super()._wait(read)
+        if self.host_lag:
+            read.synchronize()
 
     def begin(self, st: CM.StepTables, salt_key: bytes | None = None, nonce0: int = 0) -> None:
         st.salt_key = salt_key or (self.salt(st.step) if self.salt else S.fresh_salt_key())
@@ -287,7 +297,7 @@ class Threaded(Pipelined):
         if len(self._read) > CM.LAG:
             done = self._read.pop(0).result()
             if done is not None:
-                torch.cuda.current_stream(self.plan.device).wait_event(done)
+                self._wait(done)
 
     def finish(self, st: CM.StepTables) -> CM.Roots:
         self.inflight.append((st.step, self._submit(st.pending.finish)))
@@ -360,6 +370,8 @@ def run_one(name: str, mode: str, steps: int, d: OverlapDriver, plan: G.Plan | N
     committer: Any = Null() if mode == "serve" else \
         Threaded(plan, ctx, key, shape, salt) if mode.endswith("-thread") else \
         Pipelined(plan, ctx, key, shape, salt) if mode in OVERLAPPED else LayoutCommitter(plan, ctx, key, shape, salt)
+    host_lag = isinstance(committer, Pipelined) and a.host_lag
+    committer.host_lag = host_lag
     d.committer, d.results, d.device_sync = committer, [], mode not in OVERLAPPED
     tabs = stand_in(shape, a.batch, dev, a.table_seed) if mode == "commit" else None
     torch.cuda.synchronize(dev)
@@ -413,6 +425,7 @@ def run_one(name: str, mode: str, steps: int, d: OverlapDriver, plan: G.Plan | N
         "leaf_minb": getattr(plan, "leaf_minb", None) if plan is not None else None,
         "sms": sms, "commit_sms": None if plan is None else part.sms if part else every,
         "forward_sms": None if mode == "commit" else part.rest if rest else every, "forward_on_rest": rest,
+        "host_lag": host_lag,
         "hbm": {"before_gb": round(m0 / 1e9, 3), "peak_gb": round(torch.cuda.max_memory_allocated(dev) / 1e9, 3),
                 "peak_over_before_gb": round((torch.cuda.max_memory_allocated(dev) - m0) / 1e9, 3)},
         "allocator": {k: torch.cuda.memory_stats(dev).get(k, 0) - c0.get(k, 0) for k in ALLOCATOR},
@@ -508,7 +521,8 @@ def verdicts(doc: dict) -> list[str]:
                 (f", commit alone at its SMs {e['commit_s']:.3f} s, hidden {e['hidden_s']:.3f} s "
                  f"({100 * e['hidden_fraction']:.1f}% of it; {100 * e.get('hidden_fraction_of_full_commit', 0):.1f}% of the "
                  f"commit alone on every SM)")
-            out.append(f"VERDICT {name}: commit on {e['commit_sms']} SMs, forward on {e['forward_sms']}: step "
+            lag = ", its host waiting on the reads" if r.get("host_lag") else ""
+            out.append(f"VERDICT {name}: commit on {e['commit_sms']} SMs, forward on {e['forward_sms']}{lag}: step "
                        f"{e['step_s']:.3f} s, overhead {e['overhead_s']:+.3f} s against <= {TARGET_S} s (ratio "
                        f"{e['ratio_to_target']:.3f}, target met {e['meets_target']}){hid}{ref}; {_power(t, limits)}; HBM "
                        f"peak {r['hbm']['peak_gb']} GB")
@@ -593,6 +607,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--run-id", default="e2e-h200-overlap")
     ap.add_argument("--skip", type=float, default=1.0, help="seconds of each run the telemetry statistics skip")
     ap.add_argument("--leaf-minb", type=int, default=0, help="the plan's leaf kernel blocks an SM (0: the plan's default)")
+    ap.add_argument("--host-lag", action="store_true",
+                    help="overlapped runs: the forward's host waits for the side stream's reads LAG groups back (Pipelined.host_lag)")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     from verity_torch_loop import weights as SW
