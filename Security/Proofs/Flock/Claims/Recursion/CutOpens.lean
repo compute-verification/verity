@@ -13,7 +13,7 @@ namespace RecDeploy.CutOpens
 
 open Claims (Msg)
 
-theorem saltBytes_eq : Hm96.sha512.saltBytes = 192 := rfl
+theorem saltBytes_eq : Flock.Hm96.sha512.saltBytes = 192 := rfl
 
 /-- **One round's cut gives back its rows and salts**, each row then its 192-byte salt, laid end to end. -/
 theorem cutRound_pairs (rest : Msg) : ∀ l : List (Msg × Msg), (∀ p ∈ l, p.2.length = 192) →

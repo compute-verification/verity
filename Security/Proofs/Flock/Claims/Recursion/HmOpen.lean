@@ -147,8 +147,14 @@ theorem checks_of_calls {w : Claims.Flock.Wit} {c : Circuit} {nm : String} {q n 
       [(Hm96.Default512.saltPrefix.data.toList, hmSalt c q n, (hmCommit c q n).drop 512),
         (rowPfx c q, ((rowHidden c nm n).getD []).map HmNets.Lin.var, hmDigest c q n)] := rfl
   rw [hc] at hT
-  have h1 := hT _ List.mem_cons_self
-  have h2 := hT _ (List.mem_cons_of_mem _ List.mem_cons_self)
-  exact ⟨saltCheck_of h1, rowCheck_of hpfx h2⟩
+  simp only [List.forall_mem_cons, List.forall_mem_nil, and_true] at hT
+  obtain ⟨h1, h2⟩ := hT
+  have h1' : FlockDeploy.sha512 (Hm96.Default512.saltPrefix.data.toList ++ readForms w (hmSalt c q n)) =
+      readForms w ((hmCommit c q n).drop 512) := h1
+  have h2' : FlockDeploy.sha512 (rowPfx c q ++ readForms w (((rowHidden c nm n).getD []).map HmNets.Lin.var)) =
+      readForms w (hmDigest c q n) := h2
+  have e1 := saltCheck_of h1'
+  have e2 := rowCheck_of hpfx h2'
+  exact ⟨e1, e2⟩
 
 end RecDeploy.HmOpen
