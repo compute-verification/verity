@@ -1,4 +1,5 @@
 import Models.Pouw.Assumptions.Deadline
+import Models.Pouw.Assumptions.Dither
 import Models.Pouw.Assumptions.Dimension.A2Words
 import Models.Pouw.Assumptions.Dimension.Assumptions
 import Models.Pouw.Assumptions.Dimension.Embed
