@@ -28,6 +28,7 @@ e42e5066c3a3ad7077406e623e58ffba216e6be149d5b09f4931518da6afb6fc  ../../../../..
 c8d78f5c2bdf9f4fc7b84b118d89e82ab6703c5aaa55ae1a9cfee3bde463d423  ../../../../../Security/Definitions/Pous/Guarantees/SecureErasure.lean
 553dc52a24ef78a0faf6308a1902308b614b513fc59263ab7bc0f81c0fea4e1e  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipe.lean
 2062ab1f060a0ce92f006f2deb4fcd7313fb294cebbd42caa57d60d8a43b70d3  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean
+b1ae1987eaad57aff9246dff623e1ff2f7a662719f7a5f6b43e035125e22b1f1  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipeReads.lean
 11e8efe5ca9c6d092347de8ef8a41bbe2e010e9209c915e98c674f6396d714a4  ../../../../../Security/Definitions/Pous/Model/Audit.lean
 5a3a5196064a7b60bfd1c62a98076098d3093a8e4ceddc5bc5200fb51ff84ed9  ../../../../../Security/Definitions/Pous/Model/BandChain.lean
 de7f95a3337997aebdcc6bc391f32055040272e5262d9616a797cecdc003bc7f  ../../../../../Security/Definitions/Pous/Model/BandGraph.lean
