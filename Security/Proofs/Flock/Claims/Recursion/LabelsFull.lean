@@ -203,7 +203,7 @@ theorem labels_run (hacc : (run H P (RecDeploy.V IV st) x ω r).out = .acc) {s :
   simp only [Option.some.injEq, Prod.mk.injEq] at e
   obtain ⟨rfl, rfl, rfl⟩ := e
   obtain ⟨hins, -⟩ := setupO_some hi'
-  obtain ⟨-, -, hinner, -⟩ := insO_staged hins
+  obtain ⟨_, -, hinner, -⟩ := insO_staged hins
   rw [← hib] at hc
   exact labels_full hi' (by simp [hinner]) h0 hc hf
 
@@ -217,7 +217,7 @@ theorem labels_stagedAll (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brin
     ∀ s < nS x, ∀ (i : RecIns) (spec : SessionSpec) (sts : Array Stmt),
       setupO ((stagedAll b.st x (runAs (IV.k (xIOf x) + kS x) (run H P (RecDeploy.V IV b.st) x ω r))
         (runCs (IV.k (xIOf x) + kS x) r)).getD s []) = some (i, spec, sts) →
-      0 < sts.size → Registered.unitIndices sts[0].pub = .ok (Array.range sts[0].pub.n) := by
+      ∀ h0 : 0 < sts.size, Registered.unitIndices sts[0].pub = .ok (Array.range sts[0].pub.n) := by
   intro s hs
   rw [stagedAll, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range hs, Option.map_some,
     Option.getD_some, ← take_roundsOf H IV b x P ω r hacc]
