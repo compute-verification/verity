@@ -31,8 +31,8 @@ from importlib import metadata
 from typing import Any
 
 from verity_vllm import protocols as PO
-from verity_vllm.config import (ROOT, WORKLOADS, BuildConfig, CommitConfig, MatchConfig, RowConfig, RunEnv, UsageError,
-                                done_source_refusal, group, option, row_world)
+from verity_vllm.config import (ROOT, BuildConfig, CommitConfig, MatchConfig, RowConfig, RunEnv, UsageError, done_source_refusal,
+                                group, option, row_file, row_path, row_world)
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import research
 from verity_vllm import settings
@@ -46,7 +46,7 @@ ENGINE_ENV = ("VLLM_", "NCCL_", "CUBLAS", "TORCH_", "TORCHINDUCTOR_", "TRITON_",
 
 @dataclass(frozen=True, kw_only=True)
 class _Row:
-    row: str = option("row", help="row id (workloads/<row>.json)")
+    row: str = option("row", help="row id (workloads/<row>.json, or in a directory $VERITY_WORKLOADS names: config.row_file)")
     role: str = option("role", help="checkpoint role (manifests/checkpoints.json)")
     repo: str = option("repo", help="HF repo")
     rev: str = option("rev", help="revision")
@@ -142,7 +142,7 @@ def effective_config(o: Run | Stage, stages: str, protocols: tuple[str, ...] | N
     """What a run of a row used: its config (the row file without its requests, and the file's digest), the stage configs in full with
     the options a flag or variable set away from its default, the run's positionals, the installed vLLM and the engine environment
     the stages inherit (``ENGINE_ENV``)."""
-    wl = WORKLOADS / f"{o.row}.json"
+    wl = row_file(o.row)
     cfg = RowConfig.load(wl) if wl.is_file() else None
     try:
         vllm = metadata.version("vllm")
@@ -155,7 +155,7 @@ def effective_config(o: Run | Stage, stages: str, protocols: tuple[str, ...] | N
     environ = o.env.environ
     return {"schema": EFFECTIVE_SCHEMA, "row": o.row,
             "config": None if cfg is None else {k: v for k, v in cfg.to_json().items() if k != "requests"},
-            "file": None if cfg is None else {"path": f"workloads/{o.row}.json", "sha256": hashlib.sha256(wl.read_bytes()).hexdigest()},
+            "file": None if cfg is None else {"path": row_path(o.row), "sha256": hashlib.sha256(wl.read_bytes()).hexdigest()},
             "run": run, "run_differs_from_config": differs,
             "stages": {"build": asdict(o.build), "match": asdict(o.match), "commit": asdict(o.commit)},
             "overrides": {**_overrides(o.build, "build."), **_overrides(o.match, "match."), **_overrides(o.commit, "commit."),
@@ -166,7 +166,7 @@ def effective_config(o: Run | Stage, stages: str, protocols: tuple[str, ...] | N
 
 
 def run_row(o: Run | Stage, stages: str) -> int:
-    wl = WORKLOADS / f"{o.row}.json"
+    wl = row_file(o.row)
     doc = json.loads(wl.read_text()) if wl.is_file() else {}
     try:
         protocols = PO.at_row(o.protocols, doc, world=o.world if o.world is not None and row_world(o.row) > 1 else row_world(o.row))
@@ -204,8 +204,7 @@ def run_row(o: Run | Stage, stages: str) -> int:
 
 
 def _workload(row: str) -> str:
-    from verity_vllm.config import WORKLOADS
-    return str(WORKLOADS / f"{row}.json")
+    return str(row_file(row))
 
 
 def fa_version(workload: str, target: str | None = None) -> int:
