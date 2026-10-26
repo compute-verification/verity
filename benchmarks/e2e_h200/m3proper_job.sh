@@ -22,7 +22,8 @@ FLAGS=(--shape h200 --seed demo --device cuda --batch 512 --steps 32 --prompt-by
 LEASE=(gpu-lease 1 --wait --mem-gb 0 -- bash -c 'nvidia-smi --query-gpu=name,uuid,memory.used --format=csv && exec "$@"' _)
 if [ "$PHASE" = commit ]; then
   mkdir -p "$SECRET_DIR"; chmod 700 "$SECRET_DIR"
-  "${LEASE[@]}" uv run --no-sync python benchmarks/e2e_h200/m3draw.py commit --out "$OUT/m3" --secret "$SECRET" --new-secret \
+  NEW=(--new-secret); [ -e "$SECRET" ] && NEW=()  # a secret an earlier attempt wrote and no run committed under
+  "${LEASE[@]}" uv run --no-sync python benchmarks/e2e_h200/m3draw.py commit --out "$OUT/m3" --secret "$SECRET" "${NEW[@]}" \
     --workers "$(nproc)" "${FLAGS[@]}"
   stat -c '%a %s %n' "$SECRET"
   research keep --owner @compute-accounting --expires 14d --priority keep --root "$HOME" \

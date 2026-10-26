@@ -200,7 +200,8 @@ def replay(a: argparse.Namespace) -> dict[str, Any] | int:
     shape = SHAPES[a.shape]
     seed = {"test": SW.TEST_SEED, "demo": SW.DEMO_SEED}.get(a.seed, a.seed.encode())
     weights = Weights(shape, seed)
-    store = RUN.make_store(argparse.Namespace(store="generator", salt="", stage_lib="", workers=a.workers, run_id=a.run_id),
+    store = RUN.make_store(argparse.Namespace(store="generator", salt="", stage_lib="", weights_file="", weights_manifest="",
+                                              workers=a.workers, run_id=a.run_id),
                            weights, a.device)
     ctx, key = fixture_secrets(a.run_id)
     if a.secret:
