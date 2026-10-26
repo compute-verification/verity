@@ -50,7 +50,8 @@ theorem words_of_roundWords {ss : Array VStar.Stmt} (h : RecVStar.checkRoundWord
     have key : ∀ q ∈ RecVStar.roundPorts ss, ∃ f, (RecVStar.roundPorts ss).find? (·.1 == q.1) = some f ∧
         f.2.1 = q.2.1 := by
       intro q hq
-      obtain ⟨f, hf'⟩ := Option.isSome_iff_exists.1 (List.find?_isSome.2 ⟨q, hq, by simp⟩)
+      obtain ⟨f, hf'⟩ := Option.isSome_iff_exists.1
+        ((List.find?_isSome (p := fun x : ℕ × Option ℕ × String × String => x.1 == q.1)).2 ⟨q, hq, by simp⟩)
       exact ⟨f, hf', by simpa [hf'] using hall q hq⟩
     obtain ⟨f, hf1, e1⟩ := key p hp
     obtain ⟨f', hf2, e2⟩ := key p' hp'
@@ -106,9 +107,10 @@ theorem zip_map_map {α β γ : Type} (f : α → β) (g : α → γ) :
 
 /-- An input row's words, found by its name among the rows `A` lays first. -/
 theorem find_rows {A : List (String × ℕ)} {rest : List (String × ℕ × ℕ)} {nm : String} {w : ℕ} (hm : (nm, w) ∈ A) :
-    (((A.map fun p => (p.1, p.2, 16 * p.2)) ++ rest).find? (·.1 == nm)).map (·.2.1) =
-      (A.find? (·.1 == nm)).map (·.2) := by
-  obtain ⟨a, ha⟩ := Option.isSome_iff_exists.1 (List.find?_isSome.2 ⟨_, hm, by simp⟩)
+    (((A.map fun p : String × ℕ => (p.1, p.2, 16 * p.2)) ++ rest).find? fun x => x.1 == nm).map
+        (fun x => x.2.1) = (A.find? fun x => x.1 == nm).map (fun x => x.2) := by
+  obtain ⟨a, ha⟩ := Option.isSome_iff_exists.1
+    ((List.find?_isSome (p := fun x : String × ℕ => x.1 == nm)).2 ⟨_, hm, by simp⟩)
   simp [List.find?_append, List.find?_map, Function.comp_def, ha]
 
 /-- **A message-round port's words off the description**: at a statement whose unit builds, a port of its own
@@ -136,8 +138,8 @@ theorem ownWords_rows {s : VStar.Stmt} {u : VStar.UnitC} (hu : s.unit = .ok u)
     have hm : (nm, VStar.portWordsOf x) ∈ p.S.ports.map (fun p => (p.1, VStar.portWordsOf p.2)) :=
       List.mem_map.2 ⟨(nm, x), hmem, rfl⟩
     show (((((p.S.ports.map (·.1) ++ ["v"]).zip (p.S.ports.map (fun p => VStar.portWordsOf p.2) ++
-        [VStar.portWordsOf p.S.gf.nv])).map fun p => (p.1, p.2, 16 * p.2)) ++ _).find? (·.1 == nm)).map (·.2.1) =
-      (p.S.ports.find? (·.1 == nm)).map (VStar.portWordsOf ·.2)
+        [VStar.portWordsOf p.S.gf.nv])).map fun p : String × ℕ => (p.1, p.2, 16 * p.2)) ++ _).find? fun x => x.1 == nm).map (fun x => x.2.1) =
+      (p.S.ports.find? fun x => x.1 == nm).map (fun x => VStar.portWordsOf x.2)
     rw [hz, List.map_append, List.append_assoc, find_rows hm]
     simp [List.find?_map, Function.comp_def]
   | sparse sh hr =>
@@ -158,8 +160,9 @@ theorem ownWords_rows {s : VStar.Stmt} {u : VStar.UnitC} (hu : s.unit = .ok u)
         rw [hin]
         exact zip_map_map _ _ _
       have hm' : (nm, w) ∈ (RecSparse.ports sh).map (fun p => (p.1, p.2)) := by simpa using hmem
-      show ((((((RecSparse.ports sh).map (·.1)).zip u.inPorts).map fun p => (p.1, p.2, 16 * p.2)) ++ _).find?
-          (·.1 == nm)).map (·.2.1) = ((RecSparse.ports sh).find? (·.1 == nm)).map (·.2)
+      show ((((((RecSparse.ports sh).map (·.1)).zip u.inPorts).map fun p : String × ℕ => (p.1, p.2, 16 * p.2)) ++
+          _).find? fun x => x.1 == nm).map (fun x => x.2.1) = ((RecSparse.ports sh).find? fun x => x.1 == nm).map
+          (fun x => x.2)
       rw [hz, find_rows hm']
       simp [List.find?_map, Function.comp_def]
     have hmsg : ∀ nm n, (nm, n) ∈ RecSparse.messagePorts sh → (nm, RecSparse.portWords n) ∈ RecSparse.ports sh := by
