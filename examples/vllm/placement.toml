@@ -14,7 +14,8 @@ COMMIT_RUN = "r20261024-055630-5377"
 DISK_FLOOR_GB = "300"
 
 [node.vy-nebius-1.serving]
-# the endpoint's taps of record, which only the runs that serve get: a row's own stages pick theirs (HIDDEN_SO would override it)
+# the endpoint's taps of record, which only the runs that serve get: a row's Build, Match and Commit pick theirs (HIDDEN_SO
+# would override that)
 HIDDEN_SO = "/workspace/cp/fa2/build/matReqG/verity_fa2_matReqG.so"
 NORM_TAP_SO = "/workspace/cp/norm_tap/build/verity_norm_tap.so"
 

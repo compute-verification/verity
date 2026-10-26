@@ -312,7 +312,8 @@ def row_file(row: str) -> Path:
 
 
 def row_path(row: str) -> str:
-    """:func:`row_file` from ``ROOT``, where a row's stages run: ``workloads/<row>.json`` for a row of the integration's own."""
+    """:func:`row_file` from ``ROOT``, where a row's Build, Match and Commit run: ``workloads/<row>.json`` for a row of the
+    integration's own."""
     return os.path.relpath(row_file(row), ROOT)
 
 #: How a row's requests are done: at their public cap (``sampling.ignore_eos``: every request runs its ``max_tokens`` steps), or at an
