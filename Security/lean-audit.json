@@ -3352,6 +3352,12 @@
    "assumptions": [],
    "type_hash": "68dde909d4760fe6bf5586fa1e9c403148c9c10907160757d962f5fdfdba5159"
   },
+  "Accounting.SecurityProofs.JointHorizonBlocksLive": {
+   "owner": "@lean"
+  },
+  "Accounting.SecurityProofs.JointHorizonLive": {
+   "owner": "@lean"
+  },
   "Accounting.SecurityProofs.JointPerRun": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.JointPerRun : Accounting.Guarantees.JointPerRun"],
@@ -3369,6 +3375,9 @@
    "signature": ["Accounting.SecurityProofs.JointPeriod : Accounting.Guarantees.JointPeriod"],
    "assumptions": [],
    "type_hash": "199c3429112a2415364481b6adda32dad7324bcf045feef1f65fd46b2d7717d1"
+  },
+  "Accounting.SecurityProofs.JointPeriodLive": {
+   "owner": "@lean"
   },
   "Accounting.SecurityProofs.LengthCode": {
    "owner": "@memory-accounting",
@@ -11685,6 +11694,9 @@
    "Accounting.SecurityProofs.JointHorizonBlocks": "frozen (no-function): Like JointHorizon, over a horizon of server-time blocks and the wipes that open them, on one coin space: each block's five per-period guarantees, each wipe's survivor bound and each block's PoUS memory term are hypotheses over an abstract block of the device model whose verdicts, and each wipe's surviving foreign content, are fields of the run, not Lean functions (Security/Definitions/Accounting/JointBlocks.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointHorizonBlocksLegs": "frozen (no-function): Like JointHorizon, over a horizon of server-time blocks on one coin space, for a set of the audits: each block's per-period guarantees for the audits of the set are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointHorizonBlocksA": "frozen (no-function): Demo A's composed theorem, JointHorizonBlocksLegs at sampled proofs, PoUW and the network certifier: each block's three per-period guarantees are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.JointPeriodLive": "frozen (no-function): Like JointPeriod, over the period as a causal game (Verity.Game, R5) rather than product coins: each audit's per-period guarantee is a hypothesis over an abstract live period of the device model whose verdicts, openings and schedule are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
+   "Accounting.SecurityProofs.JointHorizonLive": "frozen (no-function): Like JointPeriodLive, over a horizon of periods in one causal game: each period's per-period guarantees are hypotheses over an abstract live period of the device model whose verdicts, openings and schedule are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
+   "Accounting.SecurityProofs.JointHorizonBlocksLive": "frozen (no-function): Like JointHorizonLive, over a horizon of server-time blocks and the wipes that open them in one causal game: each block's per-period guarantees, each wipe's survivor bound and each block's PoUS memory term are hypotheses over an abstract live block of the device model whose verdicts, and each wipe's surviving foreign content, are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": "lemma: the forking step behind the remote audit's receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which PooledDraw and the drawn memory-line guarantees charge, over a session and its receipts, not a Lean function: with the held row by definition the plurality of the rows the receipt shows over window t's continuations (Accounting.Remote.Draw.Receipts.held, at Accounting.Remote.Draw.cont) and no premise beyond L_t holding every receipt window t opens, the binding term is at most sum_t sqrt(|L_t| s_t (fork_t + split_t)), fork_t the chance that two runs from window t's cut on independent openings coins hash a SHA-512 collision between one receipt's two openings' checks (Receipts.Broken, Hash.SecurityProofs.RowBinding) and split_t the chance that their roots, ranks or verifiers differ (Receipts.Split); split_t is not bounded for the deployed committed play, whose prover may compute window t's roots from the coin commitment (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": "lemma: ReceiptsBindingOfFork under claim cr/sha-512 (Claims.StrictBirthday) at each window's fork finder (Accounting.Remote.Draw.Receipts.finder, at q_t SHA-512 calls): the receipts' binding term is at most sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), not a Lean function; where the window's cut fixes its roots split_t = 0 and it is sum_t sqrt(|L_t| s_t) q_t/2^256.5 (Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed), ledger.binding's form, which the code charges at the session's bounds (L_t the most receipts a window of the session can have, s_t its draw cap), not at one record's U_t and s'_t; the deployed committed play doesn't fix the roots (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close)."
   },
