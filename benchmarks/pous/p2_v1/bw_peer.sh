@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # bw_session.sh's two sessions at fixture scale with the verifier on a cluster peer, in the shape of a party of
 # vy-auditor-2's gate: each session starts `p2_party --listen` on PEER over ssh (`bandwidth.py session --party`; PEER's
-# line in /etc/vy/peers, the vy-cluster key), whose stdout says its port and then its own record of the answer, and the
-# prover reaches that port over TCP. The cluster's nodes pass only ssh to each other, so here the TCP goes through an
+# line in /etc/vy/peers, the vy-cluster key) as the gate starts a party (the system python3 -s -E with a cleared
+# environment, from the tree, its `--device` directory), whose stdout says its port and then its own record of the
+# answer, and the prover reaches that port over TCP. The cluster's nodes pass only ssh to each other, so here the TCP goes through an
 # `ssh -L` forward of the same port (the card reaches vy-auditor-2's party port directly). The prover serves the toy's
 # C* (`bandwidth.py toy`) through kernels' staging decode with P2's reference decode on the CPU; the peer builds the
 # toy's registration itself and holds that, never the prover's. PEER is the lane's machine, not the auditor's, so the
@@ -13,7 +14,8 @@
 #
 # PEER is the first of those named that ssh reaches and that isn't this host. $OUT/<session>/session.json is each
 # session's record (the verifier's own answer in `verifier_record`), $OUT/verdicts.txt each verdict line, which passes
-# only if the verifier's record is the answer the session ended with. The peer's scratch is removed on exit.
+# only if the verifier's record is the answer the session ended with, and $OUT/party-answers.jsonl the device's own
+# log of them. The peer's scratch is removed on exit.
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 [ $# -gt 0 ] || { echo "usage: bw_peer.sh PEER [PEER ...]"; exit 2; }
@@ -41,8 +43,9 @@ uv run --no-sync python benchmarks/pous/p2_v1/bandwidth.py toy "$S/toy" > "$O/pr
 PORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
 "${SSHO[@]}" -f -N -M -S "$S/ctl" -o ExitOnForwardFailure=yes -L "127.0.0.1:$PORT:127.0.0.1:$PORT" "${TO[@]}"
 { hostname; echo "$PEER ${TO[-1]}, its 127.0.0.1:$PORT forwarded to this host's"; git rev-parse HEAD; } > "$O/hosts.txt"
-PARTY="${SSH[*]} cd $R '&&' exec .venv/bin/python -m verity.core.protocols.remote_bandwidth.p2_party"
-PARTY+=" --registration $R/toy/registration.json --listen 127.0.0.1:$PORT"
+PARTY="${SSH[*]} cd $R '&&' exec /usr/bin/env -i PYTHONDONTWRITEBYTECODE=1 PATH=/usr/bin:/bin /usr/bin/python3 -s -E"
+PARTY+=" -m verity.core.protocols.remote_bandwidth.p2_party --device $R/party --listen 127.0.0.1:$PORT"
+PARTY+=" --registration $R/toy/registration.json"
 : > "$O/verdicts.txt"
 
 session() {  # NAME EXPECT [bandwidth.py session options]
@@ -58,5 +61,6 @@ session() {  # NAME EXPECT [bandwidth.py session options]
 rc=0
 session honest accept --windows 2 --passes 2 --samples 16 --window-s 1 --deadline-s 1 || rc=1
 session cheat reject --windows 1 --passes 1 --samples 8 --window-s 1 --deadline-s 1 --skip-layer 1 || rc=1
+"${SSH[@]}" cat "$R/party/answers.jsonl" > "$O/party-answers.jsonl" || rc=1
 cat "$O/verdicts.txt"
 exit $rc
