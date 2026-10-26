@@ -361,15 +361,38 @@ theorem floor_of_rounds {k : ℕ} (H pm ps cw ch cw' ch' ew eh D : Fin k → ℝ
   · rw [sub_mul, add_mul, one_mul, div_mul_cancel₀ _ hC, div_mul_cancel₀ _ hC]
     linarith
 
+/-! ## The cap on oracle calls -/
+
+/-- **A run whose work fits makes at most `Q` oracle calls** (RT-LEAN-2 L39): by (G3) the rounds' calls use at least
+`calls · callUse` of each resource, which fits within the capacity, so their priced cost `calls · shaPub_μ` is at most
+`μ · cap ≤ Q shaPub_μ`. -/
+theorem calls_le_of_fits {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (Pd : Period G) (μ : G.Res → ℝ)
+    {Q : ℝ} (hG3 : G.G3) (hμ : ∀ r, 0 ≤ μ r) (hneeds : ∀ j r, 0 ≤ Pd.needs j r) (hpos : 0 < G.shaPub μ)
+    (hcap : ∑ r, μ r * Pd.cap r ≤ Q * G.shaPub μ) (o : P.Orc) (x : Fin k → P.Draw × P.Chk) {z : Pd.J → ℝ}
+    (hfit : Pd.Fits (A.workUse o x) z) : A.calls o x ≤ Q := by
+  have h1 : ∀ r, A.calls o x * G.callUse r ≤ A.workUse o x r := fun r => by
+    unfold Prover.calls Prover.workUse
+    rw [Finset.sum_mul]
+    exact Finset.sum_le_sum fun w _ => (hG3 (A.work w) (A.workIn o x w)).2 r
+  have h2 : ∀ r, A.workUse o x r ≤ Pd.cap r := fun r =>
+    le_trans (le_add_of_nonneg_right (Finset.sum_nonneg fun j _ => mul_nonneg (hfit.1 j) (hneeds j r))) (hfit.2 r)
+  have h3 : A.calls o x * G.shaPub μ ≤ ∑ r, μ r * Pd.cap r := by
+    unfold Accel.shaPub
+    rw [Finset.mul_sum]
+    exact Finset.sum_le_sum fun r _ => by
+      calc A.calls o x * (μ r * G.callUse r) = μ r * (A.calls o x * G.callUse r) := by ring
+        _ ≤ μ r * Pd.cap r := mul_le_mul_of_nonneg_left ((h1 r).trans (h2 r)) (hμ r)
+  exact le_of_mul_le_mul_right (h3.trans hcap) hpos
+
 /-! ## The headline -/
 
 /-- `Definitions.Pouw.Guarantees.Dither.WorkSound`. -/
 theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
-  intro G P k Reg reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η δ β K κS κdmm κdsha Badv ξ κx κsha
-    hreg hdual hpos hH hη hδ hδ1 hβ hK hξ hκd hG1 hG2 hP1 hP2 hsak hsha hout hserv himp hextr A
+  intro G P k Reg reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η δ β K κS Q κdmm κdsha Badv ξ κx κsha
+    hreg hdual hpos hH hη hδ hδ1 hβ hK hξ hκd hshaPub hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv himp hextr A
   beta_reduce
   classical
-  obtain ⟨Adv, adv, Mw, Mh, henc, hadv, hroot, huse, hext, hx⟩ := hextr hG1 hG2 hP1 hP2 A
+  obtain ⟨Adv, adv, Mw, Mh, henc, hadv, hroot, huse, hext, hx⟩ := hextr hG1 hG2 hG3 hP1 hP2 A
   obtain ⟨hμ, hneeds, hval, z', hfit', hslack⟩ := hdual
   have hreg' : ∀ w, 0 < Hmm (reg w) ∧ 0 < Hsha (reg w) ∧ 0 ≤ Ho (reg w) ∧ pubmm (reg w) ≤ Hmm (reg w) ∧
       pubsha (reg w) ≤ Hsha (reg w) := fun w => hpos _ (hreg w)
@@ -532,20 +555,20 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
       exact hκ2
   -- The bad oracles and advice.
   have E3 : prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) => ∃ w, ¬ Good ox.1 w (adv ox.1 ox.2 w)) ≤ κsha A := by
-    refine le_trans (prob_mono fun ox h => ?_) (hsha hG1 hG2 hP1 hP2 A (Badv A) Adv henc adv hadv Mw' Mh'
+    refine le_trans (prob_mono fun ox h => ?_) (hsha hG1 hG2 hG3 hP1 hP2 A (Badv A) Adv henc adv hadv Mw' Mh'
       (fun w i => (hMw' w i).2.1) (fun w i => (hMh' w i).2.1) hroot')
     obtain ⟨w, hw⟩ := h
     exact ⟨w, fun hD => hw ((hGood _ _ _).mpr hD)⟩
   -- The extraction.
   have E2 : prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>
-      A.Accepted reg ox.1 ox.2 ∧ ∃ w, ¬ okw ox.1 ox.2 w) ≤ κx A := by
+      A.Accepted reg ox.1 ox.2 ∧ A.calls ox.1 ox.2 ≤ Q ∧ ∃ w, ¬ okw ox.1 ox.2 w) ≤ κx A := by
     refine le_trans (prob_mono fun ox h => ?_) hx
-    obtain ⟨hacc, w, hw⟩ := h
-    exact ⟨hacc, w, fun hk => hw ((hokw _ _ _).mpr hk)⟩
+    obtain ⟨hacc, hq, w, hw⟩ := h
+    exact ⟨hacc, hq, w, fun hk => hw ((hokw _ _ _).mpr hk)⟩
   -- The union bound.
   refine le_trans (prob_mono (q := fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>
       ((((A.Passes verdict dev ox.1 ox.2 ∧ ¬ A.Accepted reg ox.1 ox.2) ∨
-          (A.Accepted reg ox.1 ox.2 ∧ ∃ w, ¬ okw ox.1 ox.2 w)) ∨
+          (A.Accepted reg ox.1 ox.2 ∧ A.calls ox.1 ox.2 ≤ Q ∧ ∃ w, ¬ okw ox.1 ox.2 w)) ∨
         (∃ w, ¬ Good ox.1 w (adv ox.1 ox.2 w))) ∨
         (∃ w, Good ox.1 w (adv ox.1 ox.2 w) ∧ deg ox.1 ox.2 w)) ∨
         ((∀ w, Good ox.1 w (adv ox.1 ox.2 w) ∧ ¬ deg ox.1 ox.2 w ∧ okw ox.1 ox.2 w) ∧
@@ -563,7 +586,8 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
             · exact absurd (FreedOfFloor G Pd 1 _ (A.workUse o x) μ z z' hμ hneeds hval zero_le_one hε hfit'
                 hslack hfit (hfloor o x hv (not_le.mp hD))) hnot
         · exact Or.inl (Or.inl (Or.inr (not_forall.mp hg)))
-      · exact Or.inl (Or.inl (Or.inl (Or.inr ⟨hacc, not_forall.mp hok⟩)))
+      · exact Or.inl (Or.inl (Or.inl (Or.inr
+          ⟨hacc, calls_le_of_fits A Pd μ hG3 hμ hneeds hshaPub hcap o x hfit, not_forall.mp hok⟩)))
     · exact Or.inl (Or.inl (Or.inl (Or.inl ⟨hv, hacc⟩)))
   · refine (prob_or5_le _ _ _ _ _).trans ?_
     have := add_le_add (add_le_add (add_le_add (add_le_add (hserv A) E2) E3) E4) E5

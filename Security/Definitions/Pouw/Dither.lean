@@ -6,9 +6,10 @@ import Definitions.Pouw.RelativeSecurity
 The headline of the ACCEL program (`Definitions.Pouw.Guarantees.Dither.WorkSound`) is stated over:
 
 * **the accelerator model** `G = (Σ, M, R, ρ, I, u)` (`Accel`): a machine's programs, the period's devices' resources
-  with their data-sheet rates `ρ`, their memory `M`, a run's use of each resource `u`, the two device premises (G1)
-  capacity and (G2) rate (`Accel.G1`, `Accel.G2`) and the arithmetic premises (P1) and (P2) (`Accel.P1`, `Accel.P2`),
-  which MODEL-SPEC (CMP-109) instantiates from `Definitions.Core.Accel`;
+  with their data-sheet rates `ρ`, their memory `M`, a run's use of each resource `u`, the three device premises (G1)
+  capacity, (G2) rate and (G3) priced oracle calls (`Accel.G1`, `Accel.G2`, `Accel.G3`), the oracle reached only
+  through calls (`Accel.OracleCalls`) and the arithmetic premises (P1) and (P2) (`Accel.P1`, `Accel.P2`), which
+  MODEL-SPEC (CMP-109) instantiates from `Definitions.Core.Accel`;
 * **prices** on the resources (`Accel.cost`): a run's cost `Σ_r μ_r u_r` at a price `μ_r ≥ 0` a unit of resource `r`
   (at `μ_r = λ_r / ρ_r`, the device-seconds it takes at the price vector `λ`);
 * **a round** of a commit-then-check protocol (`RoundProto`): the words the prover computes after the first coin, their
@@ -19,8 +20,8 @@ The headline of the ACCEL program (`Definitions.Pouw.Guarantees.Dither.WorkSound
   SAK(matmul) on the words and SHA-512's speed on their commitment (`Definitions.Pouw.Assumptions.Dither`'s
   `SAKMatmul`, `ShaSpeed`), in units of priced cost, outside a degenerate set of dithers;
 * **a monitoring period's prover** round by round on instances registered before the period (`Prover`), what it
-  sends (`Prover.transcript`), its credited use (`Prover.workUse`), and the service's verdict on the transcript and the
-  auditor's devices' readings (`Verdict`, `Readings`, `Prover.Passes`);
+  sends (`Prover.transcript`), its credited use (`Prover.workUse`) and oracle calls (`Prover.calls`), and the service's
+  verdict on the transcript and the auditor's devices' readings (`Verdict`, `Readings`, `Prover.Passes`);
 * **freed compute** (`Period`, `Period.FreedWithin`, `Period.DualOpt`, `FreedSound`): R-ACCEL-1's definition, kept in
   this one place, and its probability form, the headline's conclusion;
 * the error (`epsWorkSound`).
@@ -35,9 +36,10 @@ section Model
 /-- **The accelerator model** at the granularity this guarantee reads: a machine `Mc` (its programs, what they compute
 and their composition), the period's devices' resources `Res` (tensor cores, issue slots, shared-memory and register
 ports, device memory, links), each at its data-sheet rate `rate` (`ρ`, units a second), their memory `mem` (`M`, bits),
-and per run its use of each resource `use` (`u`), the bits it holds at its peak `held`, its wall time `wall`, and the
-bits it exchanges with machines outside the period's devices `ext` (what the network certifier counts). `P1` and `P2` are the
-arithmetic premises, exact operand formats and one accumulator per product, as MODEL-SPEC (CMP-109) defines them in
+and per run its use of each resource `use` (`u`), the bits it holds at its peak `held`, its wall time `wall`, the
+bits it exchanges with machines outside the period's devices `ext` (what the network certifier counts), and its oracle
+calls `calls`, each a step of the machine that uses `callUse` (RT-LEAN-2 L28). `P1` and `P2` are the arithmetic
+premises, exact operand formats and one accumulator per product, as MODEL-SPEC (CMP-109) defines them in
 `Definitions.Core.Accel.Principles`. `θ = (M, ρ, u)` are the model's parameters. -/
 structure Accel where
   /-- The programs, what they compute and how they compose. -/
@@ -58,6 +60,10 @@ structure Accel where
   /-- The bits a run exchanges with machines outside the period's devices, in either direction (what the network
   certifier counts, into and out of the devices), other than the certifier's own coin stream (RT-PROTO-2 P18). -/
   ext : ∀ {I O : Type}, Mc.Alg I O → I → ℝ
+  /-- The oracle calls a run makes: SHA-512 evaluations through the machine's oracle-call step. -/
+  calls : ∀ {I O : Type}, Mc.Alg I O → I → ℝ
+  /-- The oracle-call step's use of each resource: the pinned public SHA-512 implementation's, a call. -/
+  callUse : Res → ℝ
   /-- (P1) exact operand formats, as MODEL-SPEC defines it. -/
   P1 : Prop
   /-- (P2) a product lives in one accumulator, as MODEL-SPEC defines it. -/
@@ -80,9 +86,27 @@ def G2 : Prop :=
     ∀ {I O : Type} (f : G.Mc.Alg I O) (x : I),
       0 ≤ G.ext f x ∧ ∀ r : G.Res, 0 ≤ G.use f x r ∧ G.use f x r ≤ G.rate r * G.wall f x
 
+/-- **(G3) oracle calls are priced steps** (RT-LEAN-2 L28): a run's oracle calls are a count, and each is a step of
+the machine that uses `callUse` of every resource, so a run uses at least its calls' `callUse`. -/
+def G3 : Prop :=
+  ∀ {I O : Type} (f : G.Mc.Alg I O) (x : I), 0 ≤ G.calls f x ∧ ∀ r, G.calls f x * G.callUse r ≤ G.use f x r
+
+/-- **Programs reach the oracle only through their calls** (RT-LEAN-2 L28), at an oracle that is a table
+`eo : Orc ≃ (X → D)`: at every oracle and input, a program that reads the oracle computes the same at every oracle
+that agrees with it on some set of at most as many points as its calls. With (G3), a program pays `callUse` for every
+point of the table it reads; nothing reads the table as data. The oracle stays in the programs' input types (the
+machine has no oracle step of its own), and this premise is what makes that input a query interface. -/
+def OracleCalls {Orc X D : Type} (eo : Orc ≃ (X → D)) : Prop :=
+  ∀ {J O : Type} (f : G.Mc.Alg (Orc × J) O) (o : Orc) (j : J), ∃ S : Finset X, (S.card : ℝ) ≤ G.calls f (o, j) ∧
+    ∀ o', (∀ y ∈ S, eo o' y = eo o y) → G.Mc.eval f (o', j) = G.Mc.eval f (o, j)
+
 /-- **A run's cost at the prices `μ`**: `Σ_r μ_r u_r`, `μ_r` the price of a unit of resource `r`. At `μ_r = λ_r / ρ_r`
 it is the device-seconds the run takes at the price vector `λ`; at a point mass it is one resource's busy time. -/
 noncomputable def cost (μ : G.Res → ℝ) {I O : Type} (f : G.Mc.Alg I O) (x : I) : ℝ := ∑ r, μ r * G.use f x r
+
+/-- **An oracle call's priced cost** at the prices `μ`: `shaPub_μ = Σ_r μ_r callUse_r`, the public implementation's
+cost a call (RT-LEAN-2 L28). -/
+noncomputable def shaPub (μ : G.Res → ℝ) : ℝ := ∑ r, μ r * G.callUse r
 
 end Accel
 
@@ -294,6 +318,11 @@ def Accepted (reg : Fin k → P.Inst) (o : P.Orc) (x : Fin k → P.Draw × P.Chk
 answers and whatever the prover does outside its rounds are other work. -/
 noncomputable def workUse (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (r : G.Res) : ℝ :=
   ∑ w, G.use (A.work w) (A.workIn o x w) r
+
+/-- **The rounds' oracle calls**: every round's `work` at its input (RT-LEAN-2 L39). On a run whose work fits the
+period's devices, (G3) caps them at the capacity over a call's cost. -/
+noncomputable def calls (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : ℝ :=
+  ∑ w, G.calls (A.work w) (A.workIn o x w)
 
 /-- The rounds' exchanged bits (`Accel.ext`), their work's and answers'. -/
 noncomputable def ext (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : ℝ :=
