@@ -198,11 +198,9 @@ theorem hpEarly {mask : ℕ → ℕ → Bool} {I : InnerRec} {x : Msg} {w : Clai
     rw [hw, Option.map_some, Option.getD_some, vstarWit_eq hp hsrc hi', hseg]
     obtain ⟨hT1, hT2⟩ := hT _ st c src pin hp hsrc hi'
     have e := readSegs_commit hT1 hT2 hq hrw hps
-    unfold Claims.Recursion.VStarB.readSegs at e
-    simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil] at e
     rw [List.getElem?_eq_getElem hb] at hrk
-    rw [Option.some.inj hrk]
-    exact e
+    rw [Option.some.inj hrk, ← e]
+    simp only [Claims.Recursion.VStarB.readSegs, List.flatMap_cons, List.flatMap_nil, List.append_nil, A0]
   have h := hp_of_assembled (L := DeployedR.layR OpenRows.elemR) (x := x) (i := i) hs' hm
   simp only [wOs, List.getElem_map, List.getElem_range] at h
   exact h
