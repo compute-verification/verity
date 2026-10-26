@@ -115,7 +115,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/certifier/advised.circuit-check.json",
           "verity/core/protocols/pouw/window.py", "verity/core/protocols/sampled_proofs/service.py",
           "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/pouw/weights.py",
-          "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py", "integrations/vllm/verity_vllm/program",
+          "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py", "integrations/vllm/verity_vllm/program",
           "integrations/vllm/verity_vllm/check", "integrations/vllm/verity_vllm/commit", "integrations/vllm/verity_vllm/correspondence",
           "integrations/vllm/verity_vllm/observe", "integrations/vllm/verity_vllm/query", "integrations/vllm/verity_vllm/records",
           "integrations/vllm/verity_vllm/engine/hooks.py",
