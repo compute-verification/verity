@@ -57,9 +57,8 @@ the verdict accepts did its rounds' work within the period's capacity (`TimedWor
 
 The other devices are resources of `G` at their θ rates (RT-PROTO P9): the honest optimum and the capacity count them,
 and `SAKMatmul` and `ShaSpeed` hold at the dual price over them too. That they are all of the processors the cards
-reach is `Assumptions.PeriodInventory`, held pending Daniel and not read here. `Q` calls cost at least the capacity
-(`μ · cap ≤ Q shaPub_μ`); at a dual price that prices none of the resources a compression uses, `shaPub_μ = 0` and the
-headline says nothing there. -/
+reach is `Assumptions.PeriodInventory`, held pending Daniel and not read here. `Q` calls use at least the capacity of
+one card resource `r` a public compression uses (`cap_r ≤ Q callUse_r`, `CallsAtPub`), whatever the price. -/
 def WorkSoundAtX (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Verity.Accel.Open) : Prop :=
   ∀ (D : Devices c) (P : RoundProto) (L : Layout (D.machine x) P) (G : Accel)
     (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res), OnCard G c x D P L e → HostsCounted D hr → CallsAtPub G e pb →
@@ -73,7 +72,7 @@ def WorkSoundAtX (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Ve
       pubCost e μ pb.sha (comps a) ≤ Hsha a ∧ Hmm a + Hsha a + Ho a ≤ Hmac * macs a) →
     ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)) = ∑ r, μ r * Pd.hon r →
     0 < η → 0 < δ → δ ≤ 1 → 0 ≤ nmax → 0 ≤ Hmac → 0 ≤ Ein → 0 ≤ Eout → k * Δ ≤ Pd.T → (∀ A r, 0 ≤ ξ A r) →
-    (∀ B, 0 ≤ κdmm B ∧ 0 ≤ κdsha B) → 0 < G.shaPub μ → ∑ r, μ r * Pd.cap r ≤ Q * G.shaPub μ →
+    (∀ B, 0 ≤ κdmm B ∧ 0 ≤ κdsha B) → (∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) →
     G.G1 → G.G2 → G.G3 → G.P1 → G.P2 →
     SAKMatmul G P μ Reg (fun a => pubCost e μ pb.mm (macs a)) (fun a => η * (Hmm a + Hsha a + Ho a) / Hmm a)
       κdmm →

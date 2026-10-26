@@ -32,8 +32,8 @@ open scoped NNRat
 theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Verity.Accel.Card)
     (pb : PubBest c) (hr : HostRow) (x : Verity.Accel.Open) : WorkSoundAtX c pb hr x := by
   intro D P L G e _ _ _ k Reg reg Obs verdict dev Pd μ Hmm Hsha Ho macs comps η δ nmax Hmac Ein Eout κS Δ Q κdmm κdsha
-    Badv ξ κx κsha t cin cout arrive hreg hdual hinst hH hη hδ hδ1 hn hHmac hEi hEo hkΔ hξ hκd hsp hcap g1 g2 g3 p1 p2
-    sak sha out svc sees clock ext
+    Badv ξ κx κsha t cin cout arrive hreg hdual hinst hH hη hδ hδ1 hn hHmac hEi hEo hkΔ hξ hκd hcap g1 g2 g3 p1 p2 sak
+    sha out svc sees clock ext
   have hinst' : ∀ a ∈ Reg, 0 < Hmm a ∧ 0 < Hsha a ∧ 0 ≤ Ho a ∧ pubCost e μ pb.mm (macs a) ≤ Hmm a ∧
       pubCost e μ pb.sha (comps a) ≤ Hsha a := fun a ha =>
     ⟨(hinst a ha).1, (hinst a ha).2.1, (hinst a ha).2.2.1, (hinst a ha).2.2.2.1, (hinst a ha).2.2.2.2.1⟩
@@ -44,8 +44,8 @@ theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Ve
     fun A o x hv => (sees A o x).trans (add_le_add hv.1.2.1 hv.1.2.2)
   refine ⟨h G P k Reg reg Obs _ dev Pd μ Hmm Hsha Ho (fun a => pubCost e μ pb.mm (macs a))
     (fun a => pubCost e μ pb.sha (comps a)) η δ (nmax * Hmac) (Ein + Eout) κS Q κdmm κdsha Badv ξ κx κsha hreg hdual
-    hinst' hH hη hδ hδ1 (mul_nonneg hn hHmac) (add_nonneg hEi hEo) hξ hκd hsp hcap g1 g2 g3 p1 p2 sak sha out svc' imp
-    ext, ?_⟩
+    hinst' hH hη hδ hδ1 (mul_nonneg hn hHmac) (add_nonneg hEi hEo) hξ hκd hcap g1 g2 g3 p1 p2 sak sha out svc' imp ext,
+    ?_⟩
   intro A o x hv r
   have hrate : 0 ≤ G.rate r := (g2.1 r).le
   have hw : ∀ w, G.use (A.work w) (A.workIn o x w) r ≤ G.rate r * Δ := fun w => by
