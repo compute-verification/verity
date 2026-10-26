@@ -276,8 +276,9 @@ theorem check_eq (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) 
   rfl
 
 /-- What a draw's law is, when no soundness claim draws by it at the session's form (PROTOCOL.md §16.15): the one rule
-for which law each form draws by. The stratified law at every form `check` passes, each claim at one table
-(`SoundExec`, `SoundExecH`, `SoundZ`, `SoundZH`). The subset law under `--zk` (`SoundZJ`, `SoundZHJ`, `SoundZHJR`) and,
+for which law each form draws by. The stratified law at every form `check` passes: at one table (`SoundExec`,
+`SoundExecH`, `SoundZ`, `SoundZH`), and at several, which `check` admits only under `--zk`, as one draw that the tables
+split (`Draw.tablesWhy`, `JointStratifiedMT`). The subset law under `--zk` (`SoundZJ`, `SoundZHJ`, `SoundZHJR`) and,
 without it, exactly where a plain claim draws by it: at hidden outputs, at the one table `check` admits there
 (`SoundExecH` at its subset draw design). So a bernoulli draw, a work draw (with or without a closure) and a subset draw
 without `--zk` at public outputs are outside them. -/
