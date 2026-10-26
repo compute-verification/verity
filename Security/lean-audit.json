@@ -38,10 +38,6 @@
    "owner": "@memory-accounting",
    "digest": "5498d5e7d18daccbeca6770254fcff11cf1f52a2e00a0e92c5f9fd897d84610d"
   },
-  "Accounting.Assumptions.HelpWithinCertifier": {
-   "owner": "@compute-research",
-   "digest": ""
-  },
   "Accounting.Assumptions.KeyBinding": {
    "owner": "@memory-accounting",
    "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
@@ -245,10 +241,6 @@
   "Accounting.Assumptions.UniformLabels": {
    "owner": "@memory-accounting",
    "digest": "8a5606786b3b26b8e965277006ad1272a3769f44ae8512e98c60ecd6430e4672"
-  },
-  "Accounting.Assumptions.WordCostsMacs": {
-   "owner": "@compute-research",
-   "digest": ""
   },
   "Accounting.Assumptions.WorkHardness": {
    "owner": "@memory-accounting",
