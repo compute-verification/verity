@@ -1478,15 +1478,230 @@ def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_a
 def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monkeypatch, capsys):
     from research import queue as Q
 
-    seen = []
-    monkeypatch.setattr(Q, "ready", lambda *a, preflight=None, **kw: seen.append(preflight) or 0)
+    seen, gates = [], []
+    monkeypatch.setattr(Q, "ready", lambda *a, preflight=None, records=None, **kw: seen.append(preflight) or gates.append(records) or 0)
     monkeypatch.chdir(world.dev)
     base = ["queue", "ready", "3", "--mark", "--by", "lane-3", "--remote", str(world.origin), "--repo", "o/r"]
     assert research_main(base) == 0 and research_main([*base, "--no-preflight"]) == 0
     assert isinstance(seen[0], Q.Preflight) and seen[1] is None
+    assert all(isinstance(g, Q.RecordsGate) for g in gates) and len(gates) == 2        # the records gate isn't the preflight's
     with pytest.raises(SystemExit) as e:
         research_main(["queue", "status", "--no-preflight"])
     assert e.value.code == 2 and "--no-preflight is for ready only" in capsys.readouterr().err
+
+
+LOCK = "pkg/lean-audit.json"
+
+
+def _lock(**entries: str) -> str:
+    """A lock with one entry a line, so git merges two sides' changes to entries apart."""
+    return json.dumps({k: entries.get(k, "1") for k in "ABCDE"}, indent=1) + "\n"
+
+
+def _published(world: World, commit: str, *, pkg: str = "pkg", passed: bool = True, path: str = "slot",
+               files: dict[str, str] | None = None, steps: list | None = None) -> str:
+    """A run of ``commit`` that another machine published to the store's remote, as `research run` does: a records run
+    (`lean_changed.py --records PKG`, result `lean-fast/v1`) with ``files`` as its run files, or with ``steps`` a check."""
+    from research.runs import new_run_id
+
+    node = LocalStore(world.tmp / "node", config_path=world.tmp / "store.toml")
+    rid, outputs = new_run_id(), {}
+    if files is not None:
+        tree = world.tmp / "run-files" / rid
+        for rel, text in files.items():
+            (tree / rel).parent.mkdir(parents=True, exist_ok=True)
+            (tree / rel).write_text(text)
+        outputs["run_files"] = node.put_artifact("run-files/v1", {}, tree=tree)
+    kind = "check/v1" if steps is not None else "lean-fast/v1"
+    meta = {"schema": "research/result/v0.1", "kind": kind, "run_id": rid, "validation": {"status": "passed" if passed else "failed"},
+            **({"steps": steps} if steps is not None else {"workload_fingerprint": {"package": pkg, "update": True, "path": path}})}
+    outputs["result"] = node.put_artifact(kind, meta)
+    node.put_attempt({
+        "schema": "research/attempt/v0.1", "id": rid, "tool": {"name": "python3", "version": None}, "derivation": "drv:" + "0" * 64,
+        "reuse_key": None, "argv": ["python3", "tools/verity/lean/lean_changed.py", "--records", pkg, "--update"], "params": {},
+        "key_params": [], "inputs": {}, "conditions": {}, "key_conditions": [], "source": {"commit": commit, "dirty": False},
+        "closure": None, "execution": {}, "cost": None, "status": {"state": "done" if passed else "failed", "rc": 0 if passed else 1},
+        "outputs": outputs, "telemetry": None})
+    for art in outputs.values():
+        node.push(art)
+    node.push_attempt(rid)
+    return rid
+
+
+def _audit(pkg: str = "pkg", failure: str | None = None) -> str:
+    """check.py's `audit.json` of a records run on its slot's tree, ``pkg`` failing with ``failure`` when given."""
+    at = f"/w/lean-records/build-0/{pkg}"
+    return json.dumps({"passed": failure is None, "failed": [at] if failure else [],
+                       "packages": [{"package": at, "failures": [failure] if failure else []}]})
+
+
+def _gate(world: World, store=None):
+    from research.queue import RecordsGate
+
+    return RecordsGate(world.dev, str(world.origin), store or world.store, log=world.logs.append,
+                       lock_merge=world.tmp / "lock_merge.py")
+
+
+def _mark(world: World, n: int, head: str, store=None) -> int:
+    from research.queue import MarkOnly, ready
+
+    world.gh.put(n, head, ready=False)
+    return ready(world.gh, store or world.store, n, f"lane-{n}", MarkOnly(), records=_gate(world, store))
+
+
+def test_a_head_that_changes_a_lock_is_marked_only_on_a_records_run_of_it_that_passed_and_a_refusal_names_the_run(world, capsys):
+    """26 Oct (TOP-90 row 58): three marks of heads whose own records run had printed `AUDIT: FAIL` for Security, the written
+    record read as a pass, each failed a train's Lean check, about 50 minutes each (the last S1's r20261026-145922-6329).  With no
+    run the refusal names the command to start; with a failing one, that run and the first line of the package's failure."""
+    from research.queue import RECORDS_COMMAND, StoreLabels
+
+    world.with_store_remote()
+    h = world.change({LOCK: _lock(A="2"), "pkg/A.lean": "theorem a : True := trivial\n"})
+    capsys.readouterr()
+    assert _mark(world, 1, h) == 1
+    err = capsys.readouterr().err
+    assert f"#1 is not marked ready at {h[:12]}: it changes the Lean lock of pkg against `main`" in err
+    assert f"start `{RECORDS_COMMAND.format(pkg='pkg')}`" in err
+    assert ("research run --on vy-nebius-cpu-1 --pool research --project verity --source . --cwd clone --declared-output "
+            "'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records pkg --update") in err
+    failed = _published(world, h, passed=False, files={"lean-audit/audit.json": _audit(
+        failure="guarantees.readers: T's readers in the record are stale\n  more detail")})
+    assert _mark(world, 1, h) == 1
+    err = capsys.readouterr().err
+    assert f"records run {failed} failed pkg: guarantees.readers: T's readers in the record are stale" in err
+    assert "more detail" not in err and RECORDS_COMMAND.format(pkg="pkg") in err
+    assert StoreLabels(world.store, log=world.logs.append).ready(1, h) is False
+
+    passed = _published(world, h, files={"lean-audit/audit.json": _audit()})
+    assert _mark(world, 1, h) == 0
+    assert f"records gate: pkg: records run {passed} of {h[:12]} passed it" in world.logs[-1]
+    assert StoreLabels(world.store, log=world.logs.append).ready(1, h) is True
+
+    plain = world.change({"a.txt": "no lock\n"})                     # no lock changed: nothing is read, not even the store
+    assert _mark(world, 2, plain, store=LocalStore(world.tmp / "bare", config_path=world.tmp / "none.toml")) == 0
+
+
+def test_a_package_passes_as_a_requirer_on_a_reused_path_or_in_a_lean_check_and_only_its_own_verdict_counts(world, capsys):
+    """A records run of PKG audits each package whose guarantees read PKG's build (`requirer-<path>/`): its pass there counts for
+    that package, and a run that failed only PKG still passed it.  A run that took `path: reused` passed on the same inputs; a check
+    whose `lean-audit` step passed without regenerating the lock passed it too."""
+    world.with_store_remote()
+    two = world.change({LOCK: _lock(A="2"), "lib/lean-audit.json": _lock(B="2")})
+    _published(world, two, pkg="lib", passed=False, files={"lean-audit/audit.json": _audit("lib", failure="lean: X.lean:3: error"),
+                                                             "lean-audit/requirer-pkg/audit.json": _audit("pkg")})
+    capsys.readouterr()
+    assert _mark(world, 1, two) == 1
+    err = capsys.readouterr().err
+    assert "it changes the Lean lock of lib against" in err and "failed lib: lean: X.lean:3: error" in err
+    _published(world, two, pkg="lib", path="reused")
+    assert _mark(world, 1, two) == 0
+
+    h = world.change({LOCK: _lock(C="2")})
+    _published(world, h, steps=[{"step": "lean-audit", "status": "passed"}],
+               files={"lean-audit/audit.json": json.dumps({"passed": True, "regenerated": {"pkg": "lean-audit/x/lean-audit.json"}}),
+                      "lean-audit/x/lean-audit.json": "{}"})
+    assert _mark(world, 2, h) == 1                                     # it passed by regenerating this lock: not the head's
+    rid = _published(world, h, steps=[{"step": "lean-audit", "status": "passed"}],
+                     files={"lean-audit/audit.json": json.dumps({"passed": True, "regenerated": {}})})
+    assert _mark(world, 2, h) == 0 and f"the Lean check {rid} of {h[:12]} passed it" in world.logs[-1]
+
+
+def test_a_package_audited_beside_pkg_is_read_from_its_own_report(world, capsys):
+    """A records run of `Security` audits `Security/Proofs` too (its `proved_in`), with that package's verdict in
+    `audit-Proofs/report.json`: a head changing both locks is vouched for by one run when the report passed, and refused with its
+    first failure line when it didn't."""
+    world.with_store_remote()
+    both = {LOCK: _lock(A="2"), "pkg/Proofs/lean-audit.json": _lock(B="2")}
+    def report(failure=None):
+        return json.dumps({"package": "/w/lean-records/build-0/pkg/Proofs", "failures": [failure] if failure else []})
+
+    h = world.change(both)
+    _published(world, h, passed=False, files={"lean-audit/audit.json": _audit(),
+                                              "lean-audit/audit-Proofs/report.json": report("replay: P.t: stale\n  more")})
+    capsys.readouterr()
+    assert _mark(world, 1, h) == 1
+    err = capsys.readouterr().err
+    assert "the Lean lock of pkg/Proofs against" in err and "failed pkg/Proofs: replay: P.t: stale" in err
+    assert "--records pkg/Proofs --update" in err and "more" not in err
+
+    h2 = world.change({"pkg/Proofs/P.lean": "theorem p : True := trivial\n"}, base=h)
+    rid = _published(world, h2, files={"lean-audit/audit.json": _audit(), "lean-audit/audit-Proofs/report.json": report()})
+    assert _mark(world, 2, h2) == 0
+    assert any(f"records gate: pkg/Proofs: records run {rid} of {h2[:12]} passed it" in line for line in world.logs)
+
+
+def test_a_records_run_whose_update_wrote_a_record_vouches_only_for_the_commit_of_that_record(world, capsys):
+    """`--update` passes by writing the record, kept as `record/lean-audit.json` when it differs from the commit's lock: the head
+    it ran on still has the old lock, which a train's Lean check fails.  The commit of exactly that record over it is vouched for
+    by the run below it, so a lane needs no second run; any other lock there is refused."""
+    world.with_store_remote()
+    h1 = world.change({LOCK: _lock(A="2"), "pkg/A.lean": "theorem a : True := trivial\n"})
+    rec = _lock(A="2", B="2")
+    rid = _published(world, h1, files={"lean-audit/audit.json": _audit(), "lean-audit/record/lean-audit.json": rec})
+    capsys.readouterr()
+    assert _mark(world, 1, h1) == 1
+    err = capsys.readouterr().err
+    assert f"records run {rid} of {h1[:12]} passed pkg only with the record its `--update` wrote" in err
+    assert "commit its `record/lean-audit.json`" in err
+    assert _mark(world, 1, world.change({LOCK: _lock(A="2", B="3")}, base=h1)) == 1
+    h2 = world.change({LOCK: rec}, base=h1)
+    assert _mark(world, 1, h2) == 0
+    assert f"{h2[:12]} commits the record records run {rid} of {h1[:12]} regenerated, where pkg passed" in world.logs[-1]
+
+
+#: `tools/verity/lean/merge.py` as the gate runs it on a lock both sides changed: ours, with each entry theirs changed
+LOCK_MERGE = """\
+import json, sys
+from pathlib import Path
+o, a, b = (json.loads(Path(p).read_text() or "{}") for p in sys.argv[1:4])
+Path(sys.argv[2]).write_text(json.dumps({**a, **{k: v for k, v in b.items() if o.get(k) != v}}))
+"""
+
+
+def test_a_head_that_only_merged_main_into_a_vouched_head_is_marked_with_no_run_of_its_own(world, capsys):
+    """A lane merges `main` after its records run passed.  The fast path builds nothing for such a head and reports `path: reused`
+    (every Lean input it changed is main's whole, and its lock is merge.py's merge of the two sides): that lock is a candidate,
+    which the train's Lean check rebuilds and regenerates where another PR moved what it reads, so the gate marks it too, from
+    the run below, with no new run.  A merge whose lock isn't merge.py's (a hand resolution), or that changes a file of its own,
+    is no such head and needs its own run."""
+    world.with_store_remote()
+    (world.tmp / "lock_merge.py").write_text(LOCK_MERGE)
+    _move_main(world, {LOCK: _lock()})
+    h1 = world.change({LOCK: _lock(A="2"), "pkg/A.lean": "theorem a : True := trivial\n"})
+    rid = _published(world, h1, files={"lean-audit/audit.json": _audit()})
+    _move_main(world, {LOCK: _lock(E="2"), "b.txt": "b on main\n"})
+    h2 = _merge_main(world, h1)
+    assert _git(world.dev, "show", f"{h2}:{LOCK}") == _lock(A="2", E="2").strip()
+    assert _mark(world, 1, h2) == 0
+    assert (f"{h2[:12]} only merges `main`'s" in world.logs[-1] and
+            f"where records run {rid} of {h1[:12]} passed it" in world.logs[-1])
+
+    for files in ({LOCK: _lock(A="2", C="9", E="2")}, {"pkg/A.lean": "theorem a : True := by trivial\n"}):
+        _git(world.dev, "checkout", "-q", "--detach", h1)
+        _git(world.dev, "merge", "-q", "--no-ff", "--no-commit", "origin/main")
+        for rel, text in files.items():
+            (world.dev / rel).write_text(text)
+        _git(world.dev, "commit", "-q", "-am", "merge main, by hand")
+        h3 = _git(world.dev, "rev-parse", "HEAD")
+        _git(world.dev, "push", "-q", "origin", f"{h3}:refs/dev/{h3}")
+        capsys.readouterr()
+        assert _mark(world, 1, h3) == 1
+        assert "--records pkg --update" in capsys.readouterr().err
+
+
+def test_the_records_gate_refuses_when_the_store_cant_be_read_and_never_fails_open(world, capsys, monkeypatch):
+    """A VM whose shell lost its store secrets has no remote, and one whose endpoint is down can't list it: the runs other machines
+    published aren't here, so a mark would rest on nothing."""
+    h = world.change({LOCK: _lock(A="2")})
+    capsys.readouterr()
+    assert _mark(world, 1, h, store=LocalStore(world.tmp / "bare", config_path=world.tmp / "none.toml")) == 1
+    assert "the store's records runs can't be read" in capsys.readouterr().err
+    world.with_store_remote()
+    _published(world, h, files={"lean-audit/audit.json": _audit()})
+    monkeypatch.setattr(LocalStore, "remote", property(lambda self: _Unreachable()))
+    assert _mark(world, 1, h, store=LocalStore(world.tmp / "cut-off", config_path=world.tmp / "store.toml")) == 1
+    err = capsys.readouterr().err
+    assert "can't be read (OSError: injected: endpoint unreachable)" in err and "never fails open" in err
 
 
 #: a `suites.py` that says what it was asked and what it found, and fails one test when FAKE_FAIL names it
