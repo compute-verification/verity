@@ -14,6 +14,7 @@ model's event.
 -/
 
 open Lean (Json)
+open Flock (V)
 open SampledProofs SampledProofs.OneStageZk
 
 namespace Properties.SampledProofs.OneStageZk
@@ -56,7 +57,7 @@ theorem get_names {blobs : Array ByteArray} {d what : String} {b : ByteArray}
     · rw [hf] at h
       have hb' : b' = b := by cases h; rfl
       subst hb'
-      have hp : (x == d') = true := Array.find?_some hf
+      have hp : (x == d') = true := Array.find?_some (p := fun e => e.1 == d') hf
       have hm := Array.mem_of_find?_eq_some hf
       simp only [Core.Blobs.ofArray, Array.mem_map, Prod.mk.injEq] at hm
       obtain ⟨c, _, hx, hcb⟩ := hm
@@ -75,7 +76,7 @@ theorem buildSessionOf_ok {tags : Flock.Tags} {cB pB : ByteArray} {coins : Flock
     Flock.Stmt.setupTables tags cB pB coins count tables draw partition program = .ok (spec, sts) := by
   unfold buildSessionOf at h
   obtain ⟨_, _, h⟩ := bind_ok h
-  obtain ⟨⟨spec', sts'⟩, h1, h⟩ := bind_ok h
+  obtain ⟨r, h1, h⟩ := bind_ok h
   obtain ⟨_, _, h⟩ := bind_ok h
   obtain ⟨_, _, h⟩ := bind_ok h
   cases h
@@ -152,7 +153,7 @@ theorem push_ok {I : Flock.Witness.Inputs} {rd : Reads} {programSha : Option Str
       | some p =>
         refine ⟨p, rfl, ?_⟩
         cases hb : (Json.str p == want)
-        · exact (hne (show (!(Json.str p == want)) = true by rw [hb]; rfl)).elim
+        · exact (hne (show (!(Json.str p == want)) = true by simp [hb])).elim
         · rfl
 
 /-- A step that leaves the run accepting verified its session. -/
@@ -199,8 +200,8 @@ theorem fold_ok {I : Flock.Witness.Inputs} {rd : Reads} {blobs : Array ByteArray
       rcases hx with rfl | hx
       · exact hacc
       · exact hss x hx
-    · rw [hpr, hpr1]; rfl
-    · rw [hsz, hsz1, List.length_cons]; omega
+    · (rw [hpr, hpr1]) <;> rfl
+    · (rw [hsz, hsz1, List.length_cons]) <;> omega
 
 /-- A run that returns accepting, on proved units `want`. -/
 theorem run_ok {p : Own} {pub : String} {sessions : Array Session} {want : Array Nat} {blobs : Array ByteArray}
@@ -215,7 +216,7 @@ theorem run_ok {p : Own} {pub : String} {sessions : Array Session} {want : Array
       (sessions.size ≠ 0 → ∃ h, programDigest p.program = some h ∧ (Json.str h == getD p.partition "program") = true) := by
   unfold run at h
   cases ht : Flock.Tags.find? STATEMENT with
-  | none => simp only [ht] at h; cases h
+  | none => simp only [ht] at h <;> cases h
   | some tags0 =>
     simp only [ht] at h
     obtain ⟨_, _, h⟩ := bind_ok h
@@ -225,7 +226,7 @@ theorem run_ok {p : Own} {pub : String} {sessions : Array Session} {want : Array
     obtain ⟨rd, _, h⟩ := bind_ok h
     obtain ⟨r1, hf, h⟩ := bind_ok h
     rw [← Array.foldlM_toList] at hf
-    dsimp only at h
+    try dsimp only at h
     split at h
     · cases h
     · rename_i hne
@@ -233,7 +234,7 @@ theorem run_ok {p : Own} {pub : String} {sessions : Array Session} {want : Array
       obtain ⟨_, ss, hlen, hss, hpr, hsz, hprog⟩ := fold_ok _ _ _ hf hall
       have hq : r1.proved.qsort (· < ·) = want := by simpa [hall] using hne
       refine ⟨tags0, circuitB, pubB, ss, rfl, get_names hc, get_names hpb, hlen, hss, ?_, ?_, ?_⟩
-      · rw [← hq, hpr]
+      · (rw [← hq, hpr]) <;> rfl
       · simpa using hsz
       · intro hn
         apply hprog
@@ -255,8 +256,7 @@ theorem acceptMeans : AcceptMeans := by
       cases hall : r.all with
       | false => simp [hr, hv, hall] at h
       | true =>
-        simp only [hr, hv, hall] at h
-        simp at h
+        simp [hr, hv, hall] at h
         obtain ⟨rfl, rfl⟩ := h
         obtain ⟨tags, circuitB, pubB, ss, ht, hcB, hpB, hlen, hss, hq, hsize, hprog⟩ := run_ok hr hall
         obtain ⟨_, _, _, _, _, _, hva, _⟩ := _root_.Properties.SampledProofs.acceptMeans _ _ _ _ _ hv
