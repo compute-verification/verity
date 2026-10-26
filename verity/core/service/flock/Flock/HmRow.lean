@@ -1704,6 +1704,11 @@ def unrolled (c : Circuit) : Circuit :=
     | .error _ => c
   | none => c
 
+/-- **The circuit a hidden-output session commits**: a templated statement's (`Tags.isTmpl`) as `parseTmpl` reads it,
+carrying its template, any other's `parse`'s. -/
+def parseCommit (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit :=
+  if tags.isTmpl then parseTmpl tags bytes tables else parse tags bytes tables
+
 /-- **The statement circuit of a hidden-output file**: a templated statement's (`Tags.isTmpl`) is the flat circuit its
 template unrolls to (`unrolled`), any other's `parse`'s. -/
 def parseStmt (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit :=
