@@ -68,6 +68,22 @@ theorem commit_tie {l : List (Msg × Msg)} (hT : ∀ e ∈ l, FlockDeploy.sha512
     rw [FlockSoundness.Discharge.Hm.length_digBytes, FlockSoundness.Refine.K512.mask_len]; rfl
   exact FlockSoundness.Merkle.xorBytes_inj (hl A) (hl B) h1
 
+/-- **The executable's commit string is the model's**: `Hm96.Default512.commitString` of a row's SHA-512 under a salt
+is `Binding.commitString` of the row's bytes and the salt's. -/
+theorem commitString_exec (r : Msg) (salt : ByteArray) :
+    (Hm96.Default512.commitString (Sha512.hash ⟨r.toArray⟩) salt).data.toList =
+      FlockSoundness.Binding.commitString r salt.data.toList := by
+  have hsp : (⟨(FlockSoundness.Refine.K512.saltPrefix ++ salt.data.toList).toArray⟩ : ByteArray) =
+      Hm96.Default512.saltPrefix ++ salt := by
+    rw [show FlockSoundness.Refine.K512.saltPrefix = Hm96.Default512.saltPrefix.data.toList from rfl,
+      ← Array.toList_append, ← ByteArray.data_append, FlockSoundness.Refine.bytes_of_list]
+  rw [FlockSoundness.Binding.commitString, FlockSoundness.Binding.digBytes, FlockSoundness.Binding.digBytes,
+    FlockSoundness.Refine.dig_eq, FlockSoundness.Refine.dig_eq, FlockSoundness.Refine.H512_val,
+    FlockSoundness.Refine.H512_val, FlockSoundness.Refine.K512_mask, FlockSoundness.Refine.bytes_of_list, hsp,
+    ← FlockSoundness.Refine.xor_range _ _ 64 (FlockSoundness.Refine.sha512_size _)
+      (FlockSoundness.Refine.mask_size salt), ← Array.toList_append, ← ByteArray.data_append]
+  rfl
+
 /-! ## V\*'s bound layout with check 5's calls -/
 
 /-- **Output port `q`'s row at instance `n`**, at forms: word `k` bit `t` (row bit `16 k + t`) the output bit
@@ -203,7 +219,8 @@ def resSetup (xO : Msg) : List Msg :=
 
 /-! ## The statements -/
 
-/-- The instance a copy `(o, g, ·)` of a part's table is: block `o`'s VU `g` (`rowHidden`'s index). -/
+/-- The instance copy `(o, g, 0)` of a part's table is: block `o`'s VU `g`, its first unit (`rowHidden`'s index). Check 5
+holds instances `0` and `1` (reps `0` and `1`), so only copies `(o, g, 0)` with `instOf c o g < 2` are tied. -/
 def instOf (c : Circuit) (o g : ℕ) : ℕ := o * c.g + g
 
 /-- The `nv` elements a row of words carries, 8 words an element (`RecCoins.words`), zero past `nv`. -/
@@ -225,8 +242,8 @@ def VVTie (untr : TrReader) (b : Brings) (vvAt : Msg → List Coin → ℕ × �
         ∀ (sh : _root_.Flock.Shape) (holo : Bool) (S : _root_.Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ),
           RecResiduals.shape? m k cl = some sh → RecResiduals.holoOf sts[t].c = .ok holo →
           RecResiduals.part { sh with holo } jj = .ok (S, ns, nv) →
-          ∀ o g u, instOf sts[t].c o g < 2 →
-            vvAt (xIOf x) ((List.range (Bk (xIOf x))).map c) (t, o, g, u) =
+          ∀ o g, g < sts[t].c.g → instOf sts[t].c o g < 2 →
+            vvAt (xIOf x) ((List.range (Bk (xIOf x))).map c) (t, o, g, 0) =
               wordsElems nv rows[instOf sts[t].c o g]!
 
 /-- **The `rec-residuals` pieces' share of `hlowP` at the deployed layout** (U12's statement): at the compiled record
