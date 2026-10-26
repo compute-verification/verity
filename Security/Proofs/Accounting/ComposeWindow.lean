@@ -46,8 +46,8 @@ theorem CircuitCreditPerWindow : Accounting.Guarantees.Compose.CircuitCreditPerW
     obtain ⟨W, Pl, pr, folded, lam, h⟩ := h
     obtain ⟨ρ, p', p0, wmax, Λ, δs, δbind, δks, win, h⟩ := h
     obtain ⟨R, _, e, hpre, hE, hδ⟩ := h
-    obtain ⟨hS, hρ, hρN, hwm, hlk, hΛ, hSR, hgame, hOf, hMoved, hJS, hPins, hMu, hRB, hG, hUF, hFits, hMS, hSplit, hClock,
-        hDisp, hTen, hPipe, hSmem, hWords, hSem, hFold, hFill⟩ := hpre
+    obtain ⟨hS, hρ, hρN, hwm, hlk, hΛ, hSR, hgame, hOf, hMoved, hJS, hPins, hMu, hRB, hG, hUF, hFits, hMS, hSplit,
+      hClock, hDisp, hTen, hPipe, hSmem, hWords, hSem, hFold, hFill⟩ := hpre
     have hc := Accounting.SecurityProofs.Compose.CircuitCredit Sc Cd Sh Z H hN hr hK W Pl pr folded lam ρ p' p0 wmax Λ
       δs δbind δks win hS hρ hρN hwm hlk hΛ hSR hgame hOf hMoved hJS hPins hMu hRB hG hUF hFits hMS hSplit hClock hDisp
       hTen hPipe hSmem hWords hSem hFold hFill
