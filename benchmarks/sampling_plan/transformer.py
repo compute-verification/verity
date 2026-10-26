@@ -382,7 +382,7 @@ def monitoring(plan: Plan, cands: list[Candidate], s: Serving, *, servers: int =
 
 
 def handoff(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
-    """The plan as the GPU loop registers it (`integrations/torch_loop`'s circuit record): its templates in proof units,
+    """The plan as the GPU loop registers it (`examples/toy`'s circuit record): its templates in proof units,
     each a Definition's descriptor id (a stub's id until CIR-100 lands) with its units, and the `work:1` law whose work
     table's floors are the plan's k per template, which `draw.derive` expands to exactly those k (`work_k`)."""
     rule = work_law(plan, cands)

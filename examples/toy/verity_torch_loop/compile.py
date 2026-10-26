@@ -28,9 +28,9 @@ NAME = "torch-loop/compile/v0"
 REFUSED = 2
 #: the repository paths whose code fixes the map from schedule to circuit, which the compiler's digest is over: this package
 #: and Verity, whose interface and circuits it builds the record with
-CODE = ("integrations/torch_loop/verity_torch_loop", "verity")
+CODE = ("examples/toy/verity_torch_loop", "verity")
 #: the repository paths the command imports from, its ``PYTHONPATH`` in the verifier's checkout of its commit
-PYTHONPATH = (".", "integrations/torch_loop")
+PYTHONPATH = (".", "examples/toy")
 REPO = Path(__file__).resolve().parents[3]
 
 
