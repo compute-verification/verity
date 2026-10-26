@@ -747,15 +747,26 @@ def torch_loop_window(out: str | Path, requests: Sequence[int] = (3, 7), steps: 
 FIXTURE_DRAW = (5, 200, 300, 511)
 
 
-def fixture(out_dir: str | Path, scratch: str | Path) -> tuple[Path, Path]:
-    """The checked-in fixture: the torch loop (requests 3 and 7, one step, width 128: 512 units in members of 8) written to
-    ``scratch``, and the bundle of `FIXTURE_DRAW` (slot 0 layer 0, slot 0 layer 1, slot 1 layer 0, slot 1 layer 1) in
-    ``out_dir``, its templates on the RTX PRO 6000's dot (``GEMM_SM120_S8``) and its draw a fixture's."""
+def fixture_bundle(scratch: str | Path) -> tuple[dict[str, Any], bytes]:
+    """The fixture: the torch loop (requests 3 and 7, one step, width 128: 512 units in members of 8) written to ``scratch``,
+    and the bundle of `FIXTURE_DRAW` (slot 0 layer 0, slot 0 layer 1, slot 1 layer 0, slot 1 layer 1), its templates on the
+    RTX PRO 6000's dot (``GEMM_SM120_S8``) and its draw a fixture's. It is built, not tracked; the suite pins its digests
+    (`digests`)."""
     _, weights, com = torch_loop_window(scratch)
-    doc, pay = build(scratch, FIXTURE_DRAW, commitment=com, locate=torch_loop_locate(128), binding="GEMM_SM120_S8",
-                     reads=torch_loop_reads, weights=weights,
-                     draw={"source": "fixture", "law": {"law": "subset", "k": len(FIXTURE_DRAW)}})
-    return write(doc, pay, out_dir, "drawn-unit-bundle")
+    return build(scratch, FIXTURE_DRAW, commitment=com, locate=torch_loop_locate(128), binding="GEMM_SM120_S8",
+                 reads=torch_loop_reads, weights=weights,
+                 draw={"source": "fixture", "law": {"law": "subset", "k": len(FIXTURE_DRAW)}})
+
+
+def digests(doc: Mapping[str, Any], payload: bytes) -> dict[str, str]:
+    """The SHA-512s of a bundle's document as `write` writes it and of its payload."""
+    return {"json": hashlib.sha512((json.dumps(doc, indent=1, sort_keys=True) + "\n").encode()).hexdigest(),
+            "bin": hashlib.sha512(payload).hexdigest()}
+
+
+def fixture(out_dir: str | Path, scratch: str | Path) -> tuple[Path, Path]:
+    """`fixture_bundle` written to ``out_dir`` as ``drawn-unit-bundle.{json,bin}``."""
+    return write(*fixture_bundle(scratch), out_dir, "drawn-unit-bundle")
 
 
 def main(argv: Sequence[str] | None = None) -> int:

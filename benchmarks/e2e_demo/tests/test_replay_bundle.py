@@ -1,6 +1,6 @@
-"""The drawn-unit replay bundle: the checked-in fixture checks clean and fits its schema, each kind of tampering is refused by
-name, the vendored commit call reproduces kernels' fixture, and a fresh bundle from the torch loop's window agrees with the
-fixture and refuses a tampered loop's outputs."""
+"""The drawn-unit replay bundle: the fixture, built from the torch loop's window, is its pinned digests, checks clean and fits
+its schema, each kind of tampering is refused by name, the vendored commit call reproduces kernels' fixture, and a tampered
+loop's outputs are refused."""
 from __future__ import annotations
 
 import copy
@@ -13,16 +13,29 @@ import pytest
 
 from verity_e2e_demo import commit_slots as S, replay_bundle as B
 
-HERE = Path(__file__).parent
-FIXTURE = HERE / "fixtures" / "drawn-unit-bundle.json"
-SLOTS_FIXTURE = HERE / "fixtures" / "commit-slots-v1.json"
 SCHEMA = Path(B.__file__).parent / "schemas" / "drawn-unit-bundle.v2.schema.json"
 PATHS = "its paths do not reach its unit, slot and step roots"
+#: `B.digests` of `B.fixture_bundle`: a change to the bundle's bytes changes these (`python -m verity_e2e_demo.replay_bundle
+#: fixture` writes it to look at)
+GOLDEN = {"json": "bff29e1f61c7d41d28d4f5566a1e9cedf7f7cdf8a9ecb03dc5ee793c5ea3a2c80ad27a4eef89ddda1f5a4709553cfdea9b90467627ffeb4ac1935eef0fb13aa4",
+          "bin": "183e9e504664b5d831135407b51246829dc10eedf9587917cd88cef516599d2c9685bb19e9b013f403bba1aba68e270495c2e830139fea7efa961f0c823b3db3"}
+#: SHA-512 of kernels' fixtures/commit-slots-v1.json at the commit `B.REFERENCE` pins, which `S.fixture()` writes as
+#: ``json.dumps(fixture, indent=1) + "\n"``
+SLOTS_FIXTURE_SHA512 = ("45f61de8c4c0d28ab0f21802b6586e60d8d45a9661a87271376b845a36801530"
+                        "b7c782ffbe5e96cb7154ab33276b81da008facdc6022913a86a1569dc7a3f6b4")
 
 
 @pytest.fixture(scope="module")
-def bundle() -> tuple[dict, bytes]:
-    return B.read(FIXTURE)
+def fresh(tmp_path_factory) -> tuple[Path, dict, B.Commitment]:
+    d = tmp_path_factory.mktemp("window")
+    _, weights, com = B.torch_loop_window(d)
+    return d, weights, com
+
+
+@pytest.fixture(scope="module")
+def bundle(fresh) -> tuple[dict, bytes]:
+    doc, payload = _build(fresh, B.FIXTURE_DRAW, draw={"source": "fixture", "law": {"law": "subset", "k": len(B.FIXTURE_DRAW)}})
+    return json.loads(json.dumps(doc)), payload
 
 
 @pytest.fixture(scope="module")
@@ -41,7 +54,7 @@ def _row(doc: dict, unit: int, port: str) -> dict:
 
 
 def test_the_vendored_commit_call_is_kernels_fixture() -> None:
-    assert S.fixture() == json.loads(SLOTS_FIXTURE.read_text())
+    assert hashlib.sha512((json.dumps(S.fixture(), indent=1) + "\n").encode()).hexdigest() == SLOTS_FIXTURE_SHA512
 
 
 def test_fixture_checks_clean_and_fits_its_schema(bundle, validator) -> None:
@@ -181,24 +194,16 @@ def test_a_tampered_output_is_refused_by_replay(bundle) -> None:
     assert B.replay(u, payload) and not B.replay(u, bytes(bad))
 
 
-@pytest.fixture(scope="module")
-def fresh(tmp_path_factory) -> tuple[Path, dict, B.Commitment]:
-    d = tmp_path_factory.mktemp("window")
-    _, weights, com = B.torch_loop_window(d)
-    return d, weights, com
-
-
 def _build(fresh, drawn, binding: str = "GEMM_SM120_S8", **kw) -> tuple[dict, bytes]:
     d, weights, com = fresh
     return B.build(d, drawn, commitment=com, locate=B.torch_loop_locate(128), binding=binding, reads=B.torch_loop_reads,
                    weights=kw.pop("weights", weights), **kw)
 
 
-def test_a_fresh_bundle_is_the_fixture(fresh) -> None:
-    doc, payload = _build(fresh, B.FIXTURE_DRAW, draw={"source": "fixture", "law": {"law": "subset", "k": len(B.FIXTURE_DRAW)}})
+def test_the_fixture_is_its_digests(fresh, bundle) -> None:
+    doc, payload = bundle
+    assert B.digests(doc, payload) == GOLDEN
     assert B.check(doc, payload, registration=json.loads((fresh[0] / "registration.json").read_text())) == {}
-    want, want_payload = B.read(FIXTURE)
-    assert payload == want_payload and json.loads(json.dumps(doc)) == want
 
 
 def test_the_build_names_the_card_binding(fresh) -> None:

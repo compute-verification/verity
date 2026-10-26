@@ -258,7 +258,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0 if not bad else 1
     a.out.mkdir(parents=True, exist_ok=True)
     for name, rec in tonight(a.r2, a.r1, a.wipe).items():
-        (a.out / f"{name}.json").write_text(json.dumps(rec, indent=1, sort_keys=True, ensure_ascii=False) + "\n")
+        (a.out / f"{name}.json").write_text(json.dumps(rec, separators=(",", ":"), sort_keys=True, ensure_ascii=False) + "\n")
         print(a.out / f"{name}.json")
     return 0
 
