@@ -8,6 +8,7 @@
    "imports": [
     "CoreComposition.Blobs",
     "CoreComposition.Cases",
+    "NciCheck.Protocol",
     "NetworkCheck.Period",
     "PousCheck.RunProtocol",
     "PouwCheck.Protocol",

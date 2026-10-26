@@ -3,10 +3,12 @@ vendored from #1036's trial, over the harness's framing of the core interface (`
 `Core.Protocol.case` and `answer` decode a case), and each component's own Python: PoUW's `core_check.case`
 (`verity/pouw/v1`), the network certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python
 mirror over the certifier's certificates and one-stage's answers,
-`verity/core/protocols/network/tests/test_network_period_protocol.py`), for sampled proofs' one-stage audit on the
-proofs themselves (`verity/sampled-proofs/one-stage/v2`) `one_stage_zk`: v2's framing over v1's `one_stage` and decoders
-(`verity/core/service/sampled_proofs/tests/test_difftest.py`), on the cases v2 decides without a proof, and for space
-(`verity/pous/p2/v4/run`) and bandwidth
+`verity/core/protocols/network/tests/test_network_period_protocol.py`), NCI's protocol difftest's `reference`
+(`verity/nci/v1`, onsite's registration check, `nci_reference`'s `check_baseline`,
+`verity/core/protocols/network/tests/test_nci_protocol.py`), for sampled proofs (`verity/sampled-proofs/v1`, the form
+its params and evidence name: one-stage v2's audit on the proofs themselves, `one_stage_zk`, v2's framing over v1's
+`one_stage` and decoders, `verity/core/service/sampled_proofs/tests/test_difftest.py`, on the cases v2 decides without a
+proof), and for space (`verity/pous/p2/v4/run`) and bandwidth
 (`verity/remote-bandwidth/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
 `periods.py`). Each component's own difftest holds its Lean to that Python; this one holds the composition of them.
 
@@ -75,6 +77,9 @@ POUW_CASES = module("pouw_check_cases", CORE / "protocols/pouw/lean/check/tests/
 #: The network certifier's period difftest: `reference` is the period check's Python mirror, and `build` makes a signed
 #: period with one change.
 PERIOD = module("network_period_difftest", CORE / "protocols/network/tests/test_network_period_protocol.py")
+#: NCI's protocol difftest: `reference` is `check_baseline` behind the protocol's decoders, and `cases` draws
+#: declarations, honest or with one change.
+NCI = module("nci_protocol_difftest", CORE / "protocols/network/tests/test_nci_protocol.py")
 
 
 def trial_verdict(verdicts: list[str]) -> str:
@@ -241,6 +246,7 @@ def sampled_proofs(case: Any) -> dict:
 
 
 CERTIFIER = Ported("verity/certifier/v0", PERIOD.reference)
+NCI_CHECK = Ported("verity/nci/v1", NCI.reference)
 POUW = Ported("verity/pouw/v1", core_check.case)
 #: Sampled proofs (`VStar.Recursive.Sampled`): one-stage v2, the audit on the proofs themselves (`SampledProofs.OneStageZk`),
 #: or the recursive audit, as the params' form names it.
@@ -368,6 +374,86 @@ class Product:
         return [] if isinstance(answers, str) else [a["verdict"] for _, a in answers]
 
 
-#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids.
+@dataclass(frozen=True)
+class Registered:
+    """`Core.Composition.registered id R s components`: the registration check ``registration`` on the registration's
+    case first, a refusal refusing the whole, then ``product`` of the components on the rest, under the commitment's
+    first 64 bytes; the rest of the commitment is the registration's digest, which the component ``committer`` must have
+    committed to once the cases fit the composition (one registration digest in both)."""
+
+    id: str
+    registration: Ported
+    committer: str
+    product: Product
+
+    def params(self, j: Any) -> tuple[tuple[str, str], list[tuple[str, str]]]:
+        _exactly(j, ["components", "registration"], "the composition's params")
+        r = j["registration"]
+        _exactly(r, ["id", "params"], "the registration's params")
+        return (_str(r, "id"), canonical(r["params"])), self.product.params({"components": j["components"]})
+
+    @staticmethod
+    def commitment(b: bytes) -> tuple[bytes, bytes]:
+        if len(b) < 64:
+            raise Reject(f"the binding of the components' digests is 64 bytes, then the registration's digest: not {len(b)}")
+        return b[:64], b[64:]
+
+    def evidence(self, b: bytes) -> tuple[tuple[str, str, bytes, bytes], list]:
+        j = P.canonical_json(b)
+        _exactly(j, ["components", "registration"], "the composition's evidence")
+        r = j["registration"]
+        _exactly(r, ["commitment", "evidence", "id", "params"], "the registration's case")
+        reg = (_str(r, "id"), canonical(r["params"]), P.unhex(_str(r, "commitment")), P.unhex(_str(r, "evidence")))
+        return reg, self.product.evidence(canonical({"components": j["components"]}).encode())
+
+    def check(self, p, c, e, blobs: list[bytes] = ()) -> tuple:
+        (n, ps), (b, d), (k, ev) = p, c, e
+        R = self.registration
+        if n[0] != R.id:
+            return REJECT, f"params: the registration is {R.id}'s, not {n[0]}'s"
+        if k[0] != R.id:
+            return REJECT, f"evidence: the registration is {R.id}'s, not {k[0]}'s"
+        if k[1] != n[1]:
+            return REJECT, "evidence: the registration's case carries params other than the composition's"
+        a = R.answer({"commitment": k[2].hex(), "evidence": k[3].hex(), "params": json.loads(n[1])})
+        if a["verdict"] != ACCEPT:
+            return REJECT, f"registration: {R.id} {a['verdict']}: {a.get('reason') or ''}"
+        if a["commitment"] != d.hex():
+            return REJECT, "the commitment does not bind the registration's digest"
+        answers = self.product.run(ps, ev, blobs)
+        if isinstance(answers, str):
+            return REJECT, answers
+        # A component's answer carries its digest exactly when its commitment decodes and it doesn't reject before;
+        # where `committedBy` has a digest the answer doesn't, the component rejects, and so does the composition.
+        got = next((x["commitment"] for i, x in answers if i == self.committer), None)
+        if got != d.hex():
+            return REJECT, f"registration: {R.id} checked {d.hex()}, {self.committer} committed {got or 'no digest'}"
+        return self.product.check(ps, b, ev, blobs)
+
+    def answer(self, case: Any) -> dict:
+        """`Core.BlobProtocol.case` of the registered composition, its components on the case's blobs: the outcome of one
+        `serve` line."""
+        try:
+            case, blobs = self.product.split(case)
+        except Reject as e:
+            return P.outcome(self.id, REJECT, f"case: {e}")
+        return P.answer(self.id, case, params=self.params, commitment=self.commitment, evidence=self.evidence,
+                        check=lambda p, c, e: self.check(p, c, e, blobs), digest=lambda c: c[0] + c[1])
+
+    def verdicts(self, case: Any) -> list[str]:
+        """The components' verdicts on a case whose components fit the composition, else none."""
+        try:
+            case, blobs = self.product.split(case)
+            _, ps = self.params(case["params"])
+            _, ev = self.evidence(P.unhex(case["evidence"]))
+            answers = self.product.run(ps, ev, blobs)
+        except (Reject, KeyError, TypeError):
+            return []
+        return [] if isinstance(answers, str) else [a["verdict"] for _, a in answers]
+
+
+#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids, onsite's after its
+#: registration check, NCI's.
 REMOTE = Product("verity/remote/v0", (POUW, SAMPLED_PROOFS))
-ONSITE = Product("verity/onsite/v0", (CERTIFIER, POUS, POUW, BANDWIDTH, SAMPLED_PROOFS))
+ONSITE = Registered("verity/onsite/v0", NCI_CHECK, SAMPLED_PROOFS.id,
+                    Product("verity/onsite/v0", (CERTIFIER, POUS, POUW, BANDWIDTH, SAMPLED_PROOFS)))

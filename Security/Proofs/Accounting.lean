@@ -16,6 +16,7 @@ import Proofs.Accounting.JointPeriod
 import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
 import Proofs.Accounting.JointBridge.IntegrityOfIntegrityPeriod
 import Proofs.Accounting.JointBlocksAbstract
+import Proofs.Accounting.JointBridge.CommOfPeriodLeakAccepted
 import Proofs.Accounting.Pouw
 import Proofs.Accounting.PouwWork
 import Proofs.Accounting.BandwidthAudit

@@ -4,6 +4,9 @@ import Definitions.NetworkCertifier.Guarantees.AdviceV1
 import Definitions.NetworkCertifier.Guarantees.WindowCharge
 import Definitions.NetworkCertifier.Guarantees.Warden
 import Definitions.NetworkCertifier.Guarantees.Horizon
+import Definitions.NetworkCertifier.Guarantees.Period
+import Definitions.NetworkCertifier.Guarantees.HorizonLeak
+import Definitions.Accounting.Guarantees.JointBridge.PeriodClaim
 import Proofs.NetworkCertifier.Lemmas
 import Proofs.NetworkCertifier.Occupancy
 import Proofs.NetworkCertifier.Counting
@@ -17,6 +20,9 @@ import Proofs.NetworkCertifier.SampledLeakReg
 import Proofs.NetworkCertifier.SampledLeakRegPlain
 import Proofs.NetworkCertifier.PeriodSum
 import Proofs.NetworkCertifier.Horizon
+import Proofs.NetworkCertifier.TapRows
+import Proofs.NetworkCertifier.Period
+import Proofs.NetworkCertifier.HorizonLeak
 import Proofs.NetworkCertifier.Schedule
 import Proofs.NetworkCertifier.PerWindow
 import Proofs.NetworkCertifier.Sanity
@@ -26,6 +32,9 @@ import Proofs.NetworkCertifier.AdviceString
 import Proofs.NetworkCertifier.AdviceV1
 import Proofs.NetworkCertifier.WindowCharge
 import Proofs.NetworkCertifier.Warden
+import Proofs.NetworkCertifier.Tap
+import Proofs.NetworkCertifier.RecordRows
+import Proofs.NetworkCertifier.PeriodClaim
 
 /-!
 # Proofs of the network certifier's guarantees
@@ -37,8 +46,9 @@ whole windows), `AdviceString` (the leak bound: the advice string's charge), `Ad
 the leak bound with it), `WindowCharge` (advice v1's whole-window charge counts, and the leak bound with it),
 `SampledCharge` (the leak bound under a sampled audit: the faulty units' charge) or `Warden`
 (the warden's channel bound),
-and every lemma behind them. `SampledLeak` composes `SampledCharge`'s count with `SampledAuditAccepted`, taken as a hypothesis until
-PRF-144 proves it (`NetTiming.sampledLeak`), and `SampledLeakReg` moves its count to the registration's values
+and every lemma behind them. `SampledLeak` composes `SampledCharge`'s count with `SampledAuditAccepted`, taken as a
+hypothesis (`NetTiming.sampledLeak`), which the module `SampledAuditAccepted` proves (PRF-144), and `SampledLeakReg`
+moves its count to the registration's values
 (`NetTiming.sampledLeak_registered`);
 `SampledLeakRegPlain` states it at the deployed plain record (`NetTiming.sampledLeak_registered_plain_sha512`). `Sanity` shows every named assumption satisfiable. `Code` proves the certifier's program
 (`certifier_program`, `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
@@ -46,6 +56,9 @@ PRF-144 proves it (`NetTiming.sampledLeak`), and `SampledLeakReg` moves its coun
 check accepts is a run of the constant-rate Program under the declared advice, so the guarantees here count it.
 `SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection.
 `SampledAuditInstance` takes its `KS` hypothesis from `Claims.Sampling.sampling_assembled_of`, at the assembled records.
+`TapRows` bounds the leak at the network certifier's rows (`TapProof.sampledLeak_tap`): an accepted audit's extracted
+trace carries the network certifier's registered rows outside the faulty units, unless its openings collide with the
+network certifier's; `Period` counts with it.
 -/
 
 namespace NetTiming.SecurityProofs
@@ -165,6 +178,9 @@ theorem WardenViewEqClientView : NetTiming.Guarantees.WardenViewEqClientView := 
 theorem EncardWardenViewsLe : NetTiming.Guarantees.EncardWardenViewsLe := @NetTiming.encard_wardenViews_le
 theorem EncardWardenDecodableLe : NetTiming.Guarantees.EncardWardenDecodableLe :=
   @NetTiming.encard_wardenDecodable_le
+theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTiming.periodLeak
 theorem HorizonWrongUnitsLe : NetTiming.Guarantees.HorizonWrongUnitsLe := NetTiming.horizonWrongUnits
+theorem HorizonLeakAccepted : NetTiming.Guarantees.HorizonLeakAccepted := NetTiming.horizonLeak
+theorem PeriodClaimSound : NetTiming.Guarantees.PeriodClaimSound := @NetTiming.SecurityProofs.PeriodClaim.sound
 
 end NetTiming.SecurityProofs
