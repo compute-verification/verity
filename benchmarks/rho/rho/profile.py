@@ -69,7 +69,9 @@ class Profile:
     # Depth (`MulBlocks.Upstream`, `ActivationChainedAt`) and layers
     #: `L`: layers a token's computation passes through
     layers: int | None = None
-    #: distinct updated weights one token's computation uses in one layer (`Upstream`'s `D` per layer; Kimi K2: 4·10⁸)
+    #: distinct updated weights one token's computation uses in one layer's MLP, the products between the layer's
+    #: attention output and the next layer's input, the least over layers (`Upstream`'s `D` per layer, the attention
+    #: left out, which only lowers it; Kimi K2: 4·10⁸)
     layer_weights: float | None = None
     #: bits of one layer's whole update: a block that reads it computes that layer's products from token ids (E1)
     layer_bits: float | None = None

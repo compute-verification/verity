@@ -46,8 +46,8 @@ head = [["head", 7168, 129280, 1, 1]]
 # integrations/vllm/tests/check/fixtures/deepseek_v4/config.json: q_lora_rank 1536, one 512-wide kv head, 128 query heads
 # of 512, the output projected in 16 groups of 8 heads (o_lora_rank 1024), a 64 x 128 indexer query in the 30 CSA
 # layers; 384 routed experts of 3072, 6 active, 1 shared, in every layer. The compressors, the mHC mixing and the MTP
-# module are left out (under 2% of the parameters). Derived from these, legs is 1536 and fanout 65536 (wq_b's output),
-# where reference.toml takes 512 (assumed) and 43392 (the MoE input).
+# module are left out (under 2% of the parameters). reference.toml's legs (1536) and fanout (65536, wq_b's output) are
+# derived from these.
 [model.deepseek-v4-pro.matrices]
 attention = [["wq_a", 7168, 1536, 61, 61], ["wkv", 7168, 512, 61, 61], ["wq_b", 1536, 65536, 61, 61],
              ["wo_a", 4096, 1024, 976, 976], ["wo_b", 16384, 7168, 61, 61], ["indexer_wq_b", 1536, 8192, 30, 30]]
@@ -126,17 +126,20 @@ head = [["head", 1536, 151936, 1, 1]]
 model = "kimi-k2"
 kind = "pretrain"
 tokens = { value = 1.55e13, unit = "token", source = "Kimi K2 technical report: 15.5T tokens", status = "datasheet" }
+step_tokens = { value = 6.7e7, unit = "token", source = "Kimi K2 technical report (arXiv 2507.20534): 67M tokens a batch", status = "datasheet" }
 
 [run.frontier-pretrain]
 model = "deepseek-v4-pro"
 kind = "pretrain"
 compute = { value = 3e26, unit = "FLOP", source = "a frontier pretraining run of 2026, about 3e26 FLOP (the training lane's brief), on V4-Pro's architecture, the newest frontier one with known shapes (overtrained at 49B active: about 1e15 tokens)", status = "assumed" }
+step_tokens = { value = 9.44e7, unit = "token", source = "ruling: Daniel 25 Oct work reference, one V4-Pro optimizer step is a 94.4M-token batch (run.v4-step)", status = "ruled" }
 
 [run.llama3-405b-pretrain]
 model = "llama3-405b"
 kind = "pretrain"
 tokens = { value = 1.56e13, unit = "token", source = "Llama 3 herd paper: 15.6T tokens", status = "datasheet" }
 compute = { value = 3.8e25, unit = "FLOP", source = "Llama 3 herd paper: 3.8e25 FLOP", status = "datasheet" }
+step_tokens = { value = 1.6e7, unit = "token", source = "Llama 3 herd paper: the batch grows to 16M tokens", status = "datasheet" }
 
 [run.dense-100b-pretrain]
 model = "dense-100b"
@@ -162,6 +165,7 @@ compute = { value = 3e23, unit = "FLOP", source = "benchmarks/nci/parameters.jso
 model = "qwen25-1b5"
 kind = "rl-elicit"
 tokens = { value = 2.6e7, unit = "token", source = "note:training-20261024T2336Z-report-tvi-findings A2 (art:d8feafe2a5fc): GRPO on GSM8K, 48 prompts x 100 steps (the 7B arm used a third); about 8 rollouts of about 700 tokens a prompt, assumed", status = "assumed" }
+step_tokens = { value = 2.6e5, unit = "token", source = "a hundredth of the run's tokens: 48 prompts x about 8 rollouts x about 700 tokens a step", status = "assumed" }
 
 [run.kimi-k2-sft]
 model = "kimi-k2"

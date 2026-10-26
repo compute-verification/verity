@@ -3,12 +3,9 @@ import math
 import pytest
 from rho import instances
 from rho.instances import RUN_KINDS, Run
-from rho.params import DATA, Registry
+from rho.params import Registry
 
 REG = Registry.load()
-_MODELS = Registry.load([DATA / "models.toml"])
-#: the models whose sizes models.toml states (DeepSeek-V4-Pro's are reference.toml's; models.toml adds its matrices)
-OWN = [n for n in _MODELS.names("model") if f"model.{n}.n_total" in _MODELS]
 
 
 def shaped():
@@ -22,11 +19,27 @@ def test_the_matrices_add_up_to_the_stated_sizes(model):
     assert math.isclose(model.active(), model.n_active, rel_tol=0.05)
 
 
-@pytest.mark.parametrize("name", OWN)
-def test_legs_and_fanout_are_derived_from_the_matrices(name):
-    m = instances.model(REG, name)
+@pytest.mark.parametrize("m", shaped(), ids=lambda m: m.name)
+def test_legs_and_fanout_are_derived_from_the_matrices(m):
     assert m.legs == instances.derived_legs(m)
     assert m.fanout == instances.derived_fanout(m)
+
+
+def test_the_per_layer_shape_at_hand():
+    kimi = instances.model(REG, "kimi-k2")
+    att = 7168 * 1536 + 1536 * 12288 + 7168 * 576 + 512 * 16384 + 8192 * 7168
+    expert, router = 3 * 7168 * 2048, 7168 * 384
+    assert instances.dense_layers(kimi) == 1 and instances.per_layer(kimi, "attention") == att
+    assert instances.per_layer(kimi, "experts") == 8 * expert
+    # the dense layer's MLP is the least (an MoE layer's is 9 experts and the router)
+    assert instances.layer_weights(kimi) == 3 * 7168 * 18432 < 9 * expert + router
+    assert instances.shared_run(kimi) == att + 3 * 7168 * 18432 + att + router + expert
+    assert instances.tile_shape(kimi) == (7168, 4096)
+    assert instances.spanned(kimi, ["experts"]) == 60 and instances.spanned(kimi, ["dense"]) == 1
+    llama = instances.model(REG, "llama3-405b")
+    assert instances.shared_run(llama) is None and instances.tile_shape(llama) == (16384, 2 * 53248)
+    v4 = instances.model(REG, "deepseek-v4-pro")
+    assert instances.dense_layers(v4) == 0 and instances.layer_weights(v4) == 7 * 3 * 7168 * 3072 + 7168 * 384
 
 
 def test_the_derivation_at_hand():
