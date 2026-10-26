@@ -30,7 +30,7 @@
 // (B, K^T).  PV's is 16 d (A, V^T) x 8 columns (B, P^T) over k = keys, and in _h16 16 heads (A, P's rows) x 8 d (B, V).  The
 // step's products are exact and its total semantics symmetric in its operands (a NaN product is the one canonical NaN), so
 // which operand holds the heads doesn't change a word.  _h16 loads A's rows and stores S's and O's word pairs 32 bits at a
-// time where the buffer's strides and base allow.
+// time where the buffer's strides and base allow, and its PV O's rows 16 bytes a lane where they allow that (store_o).
 // A word's products depend only on its row of A and column of B, so keys past a column's length are zero
 // codes in both operands, as the Definition pads them: P is loaded as zero there, and V too.  V is shared by the tile's
 // columns, and in the query-tiled kernels they can stop at different keys, so in a 16-key block each distinct stopping
@@ -237,6 +237,56 @@ __device__ __forceinline__ void st2(uint16_t* p, float x, float y, int k, int n,
     if (k + 1 < n) p[1] = (uint16_t)(w >> 16);
 }
 
+// Whether a [B][H][rows][cols] buffer's 8-word runs at columns 8i are 16-byte aligned: its base and every stride.
+__device__ __forceinline__ bool quads_ok(const void* base, const int64_t (&st)[3]) {
+    return ((st[0] | st[1] | st[2]) & 7) == 0 && (reinterpret_cast<uintptr_t>(base) & 15) == 0;
+}
+
+// The quad's 4 x 4 transpose of 32-bit words: lane t's w[j] becomes lane j's w[t] (t = lane & 3), by exchanges with lanes
+// t ^ 1 and t ^ 2 and integer selects.  It moves bits only, and every lane of the warp must run it.
+__device__ __forceinline__ void quad_transpose(uint32_t (&w)[4], int t) {
+    const bool t0 = t & 1, t1 = t & 2;
+#pragma unroll
+    for (int j1 = 0; j1 < 2; ++j1) {  // swap the lane's bit 0 with the index's: send the words whose index bit 0 isn't t0
+        const uint32_t got = __shfl_xor_sync(0xffffffffu, t0 ? w[2 * j1] : w[2 * j1 + 1], 1);
+        if (t0) w[2 * j1] = got; else w[2 * j1 + 1] = got;
+    }
+#pragma unroll
+    for (int j0 = 0; j0 < 2; ++j0) {  // then bit 1
+        const uint32_t got = __shfl_xor_sync(0xffffffffu, t1 ? w[j0] : w[2 + j0], 2);
+        if (t1) w[j0] = got; else w[2 + j0] = got;
+    }
+}
+
+// PV's words of rows Oa (heads h0 + g) and Ob (h0 + g + 8) for N d tiles from Oa's and Ob's column.  Where O's 8-word runs
+// are 16-byte aligned, each 4 tiles' words are transposed within the quad, so lane t stores columns 32c + 8t .. + 7 of
+// each row as one 16-byte word and a row's 4 lanes 64 contiguous bytes; else each lane stores its word pairs as they come.
+template <int N>
+__device__ __forceinline__ void store_o(uint16_t* Oa, uint16_t* Ob, const float (&acc)[N][4], int t, bool quads, bool pairs) {
+    static_assert(N % 4 == 0, "store_o transposes 4 d tiles at a time");
+    if (quads) {
+#pragma unroll
+        for (int c = 0; c < N / 4; ++c) {
+            uint32_t wa[4], wb[4];
+#pragma unroll
+            for (int i = 0; i < 4; ++i) {
+                wa[i] = cvt2_bf16(acc[4 * c + i][0], acc[4 * c + i][1]);
+                wb[i] = cvt2_bf16(acc[4 * c + i][2], acc[4 * c + i][3]);
+            }
+            quad_transpose(wa, t);
+            quad_transpose(wb, t);
+            *reinterpret_cast<uint4*>(Oa + 32 * c + 8 * t) = make_uint4(wa[0], wa[1], wa[2], wa[3]);
+            *reinterpret_cast<uint4*>(Ob + 32 * c + 8 * t) = make_uint4(wb[0], wb[1], wb[2], wb[3]);
+        }
+        return;
+    }
+#pragma unroll
+    for (int dt = 0; dt < N; ++dt) {  // d = 8 dt + 2t, + 1 of heads h0 + g (acc 0, 1) and h0 + g + 8 (2, 3)
+        st2(Oa + 8 * dt + 2 * t, acc[dt][0], acc[dt][1], 0, 2, pairs);
+        st2(Ob + 8 * dt + 2 * t, acc[dt][2], acc[dt][3], 0, 2, pairs);
+    }
+}
+
 // The _h16 and _s16 PV's d a pass (8 d tiles), which bounds their registers at head dim 128.
 constexpr int PV_DC = 64;
 
@@ -385,7 +435,7 @@ __device__ __forceinline__ void pv16(const AttnArgs& a) {
     const Groups w = groups_of<16>(a);
     if (!w.seen) return;
     const int steps = max(a.kpv >> 4, (w.seen + 15) >> 4);
-    const bool pin = pairs_ok(a.x, a.xs), pout = pairs_ok(a.out, a.os);
+    const bool pin = pairs_ok(a.x, a.xs), pout = pairs_ok(a.out, a.os), qout = quads_ok(a.out, a.os);
     const int64_t vr = a.kvs[2];
 #pragma unroll 1
     for (int h0 = w.h0; h0 < a.H; h0 += w.hstep) {
@@ -407,13 +457,8 @@ __device__ __forceinline__ void pv16(const AttnArgs& a) {
 #pragma unroll
                 for (int dt = 0; dt < PV_DC / 8; ++dt) mma_bf16(acc[dt], A, Bv[dt], acc[dt]);
             }
-            uint16_t* Oa = a.out + w.b * a.os[0] + (h0 + g) * a.os[1] + w.q * a.os[2] + d0 + 2 * t;
-            uint16_t* Ob = Oa + 8 * a.os[1];
-#pragma unroll
-            for (int dt = 0; dt < PV_DC / 8; ++dt) {  // d = d0 + 8 dt + 2t, + 1 of heads h0 + g (acc 0, 1), h0 + g + 8 (2, 3)
-                st2(Oa + 8 * dt, acc[dt][0], acc[dt][1], 0, 2, pout);
-                st2(Ob + 8 * dt, acc[dt][2], acc[dt][3], 0, 2, pout);
-            }
+            uint16_t* Oa = a.out + w.b * a.os[0] + (h0 + g) * a.os[1] + w.q * a.os[2] + d0;
+            store_o(Oa, Oa + 8 * a.os[1], acc, t, qout, pout);
         }
     }
 }
@@ -475,7 +520,7 @@ __device__ __forceinline__ void pv16s(const AttnArgs& a) {
     if (!w.seen) return;
     const int steps = max(a.kpv >> 4, (w.seen + 15) >> 4);
     if (steps > S16_KEYS / 16) return;
-    const bool pin = pairs_ok(a.x, a.xs), pout = pairs_ok(a.out, a.os);
+    const bool pin = pairs_ok(a.x, a.xs), pout = pairs_ok(a.out, a.os), qout = quads_ok(a.out, a.os);
     const int64_t vr = a.kvs[2];
 #pragma unroll 1
     for (int d0 = 0; d0 < D; d0 += PV_DC) {
@@ -504,13 +549,8 @@ __device__ __forceinline__ void pv16s(const AttnArgs& a) {
                     for (int dt = 0; dt < PV_DC / 8; ++dt) mma_bf16(acc[dt], A, Bv[s][dt], acc[dt]);
                 }
             }
-            uint16_t* Oa = a.out + w.b * a.os[0] + (h0 + g) * a.os[1] + w.q * a.os[2] + d0 + 2 * t;
-            uint16_t* Ob = Oa + 8 * a.os[1];
-#pragma unroll
-            for (int dt = 0; dt < PV_DC / 8; ++dt) {
-                st2(Oa + 8 * dt, acc[dt][0], acc[dt][1], 0, 2, pout);
-                st2(Ob + 8 * dt, acc[dt][2], acc[dt][3], 0, 2, pout);
-            }
+            uint16_t* Oa = a.out + w.b * a.os[0] + (h0 + g) * a.os[1] + w.q * a.os[2] + d0;
+            store_o(Oa, Oa + 8 * a.os[1], acc, t, qout, pout);
         }
     }
 }

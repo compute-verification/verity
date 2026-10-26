@@ -10,7 +10,10 @@ CUDA driver API (ctypes on libcuda.so.1; numpy for the buffers, torch only for t
    tiling that serves the case (attn.serves: h8 and h16 where 8 or 16 divides the query heads a KV head serves, s16 too
    where no query sees more than 32 keys and PV's K is at most 32; a block per query row and sequence and Y blocks of head
    groups), each with one group a block of 1 warp, every 8th group a block of 8 warps, all of them in one block of 4
-   warps, and all of them in one warp: each gives the tiles to other warps, for the same bytes.  A control arm fills the buffers and launches nothing,
+   warps, and all of them in one warp: each gives the tiles to other warps, for the same bytes.  Each tiling again at 4
+   warps with S and O starting SHIFTS words into their buffers (1: no word pair 32-bit aligned, 2: no 8-word run 16-byte
+   aligned), so the kernels take their narrower stores.  The SLACK poisoned words around S and O must stay poison in every
+   arm.  A control arm fills the buffers and launches nothing,
    and must be rejected.  The inputs must come back unchanged.  A FULL case (<case>.full.npz) makes its inputs with gen.py, checks
    them against the fixture's digests (exit 5 if the generator disagrees), and compares each sequence's S and O digests:
    first over its first FULL_B sequences each (the skeleton's M = 4,096 and the block's 16,384, cases <case>_m<B>: gen.py's
@@ -59,6 +62,10 @@ CARDS = {"9.0": (("NVIDIA H100", "NVIDIA H200"), "sm_90a"), "12.0": (("NVIDIA RT
 CC_MAJOR, CC_MINOR = 75, 76
 POISON = 0xA5
 WARPS = (4, 1, 8)
+#: words of poison past each output buffer: room for the shifted arms, and where no kernel may write
+SLACK = 8
+#: the shifted arms' offsets of S and O into their buffers, in words (Attn.shift_outputs)
+SHIFTS = (1, 2)
 
 u, i32, vp, sz, u64, P = C.c_uint, C.c_int, C.c_void_p, C.c_size_t, C.c_uint64, C.POINTER
 CUDA = {
@@ -152,10 +159,17 @@ class Attn:
         self.tilings = ("q8", *(t for t in attn.GROUP if attn.serves(t, G, self.Lcap, self.kpv)))
         self.s_shape, self.o_shape = (self.B, self.H, self.Mq, self.Lcap), (self.B, self.H, self.Mq, self.D)
         self.dev = {k: cu.put(z[k]) for k in ("Q", "K", "V", "P", "lens", "nq")}
-        self.S = cu.alloc(int(np.prod(self.s_shape)) * 2)
-        self.O = cu.alloc(int(np.prod(self.o_shape)) * 2)
+        self.S = cu.alloc((int(np.prod(self.s_shape)) + SLACK) * 2)
+        self.O = cu.alloc((int(np.prod(self.o_shape)) + SLACK) * 2)
+        self.shift, self.strays = 0, 0
         self.qk_args = self._args("Q", "K", self.S, z["Q"].shape, z["K"].shape, self.s_shape)
         self.pv_args = self._args("P", "V", self.O, z["P"].shape, z["V"].shape, self.o_shape)
+
+    def shift_outputs(self, words: int) -> None:
+        """S and O from ``words`` words into their buffers: at 1 no word pair is 32-bit aligned, at 2 no 8-word run is
+        16-byte aligned, so the kernels take their narrower stores."""
+        self.shift = words
+        self.qk_args.out, self.pv_args.out = self.S + 2 * words, self.O + 2 * words
 
     def _args(self, x: str, kv: str, out: int, xs: tuple, kvs: tuple, os_: tuple) -> Args:
         return Args(self.dev[x], self.dev[kv], out, self.dev["lens"], self.dev["nq"], (C.c_int64 * 3)(*strides(xs)),
@@ -183,8 +197,8 @@ class Attn:
         return list(dict.fromkeys(out))
 
     def poison(self) -> None:
-        self.cu("cuMemsetD8_v2", self.S, POISON, int(np.prod(self.s_shape)) * 2)
-        self.cu("cuMemsetD8_v2", self.O, POISON, int(np.prod(self.o_shape)) * 2)
+        self.cu("cuMemsetD8_v2", self.S, POISON, (int(np.prod(self.s_shape)) + SLACK) * 2)
+        self.cu("cuMemsetD8_v2", self.O, POISON, (int(np.prod(self.o_shape)) + SLACK) * 2)
         self.cu("cuCtxSynchronize")
 
     def run(self, tiling: str, warps: int, Y: int = 0) -> None:
@@ -193,7 +207,14 @@ class Attn:
         self.cu("cuCtxSynchronize")
 
     def outputs(self) -> tuple[np.ndarray, np.ndarray]:
-        return (self.cu.get(self.S, np.empty(self.s_shape, np.uint16)), self.cu.get(self.O, np.empty(self.o_shape, np.uint16)))
+        """S and O as the kernels left them; self.strays counts the words around them (the slack) that aren't poison."""
+        got, self.strays = [], 0
+        for p, shape in ((self.S, self.s_shape), (self.O, self.o_shape)):
+            n = int(np.prod(shape))
+            buf = self.cu.get(p, np.empty(n + SLACK, np.uint16))
+            self.strays += int((buf[:self.shift] != 0xA5A5).sum() + (buf[self.shift + n:] != 0xA5A5).sum())
+            got.append(buf[self.shift:self.shift + n].reshape(shape))
+        return got[0], got[1]
 
     def free(self) -> None:
         for p in (*self.dev.values(), self.S, self.O):
@@ -214,6 +235,19 @@ def _head(name: str, z: dict, a: Attn) -> dict:
             "tilings": list(a.tilings), "arms": {}}
 
 
+def check_arm(a: Attn, z: dict, tiling: str, warps: int, Y: int) -> tuple[bool, dict]:
+    """Both ops once under poison: whether every word of S and O equals the fixture's and none past them was written."""
+    a.poison()
+    a.run(tiling, warps, Y)
+    S, O = a.outputs()
+    arm = {"S_mismatches": int((S != z["S"]).sum()), "O_mismatches": int((O != z["O"]).sum()), "strays": a.strays,
+           "S_sha512": sha(S), "O_sha512": sha(O)}
+    if arm["S_mismatches"] or arm["O_mismatches"]:
+        arm["examples"] = [{"buffer": k, "at": i, "got": int(got[tuple(i)]), "want": int(z[k][tuple(i)])}
+                           for k, got in (("S", S), ("O", O)) for i in np.argwhere(got != z[k])[:4].tolist()]
+    return not (arm["S_mismatches"] or arm["O_mismatches"] or arm["strays"]), arm
+
+
 def check_case(cu: Cuda, funcs: dict, path: str) -> dict:
     name = os.path.basename(path)[: -len(".npz")]
     z = dict(np.load(path))
@@ -222,20 +256,20 @@ def check_case(cu: Cuda, funcs: dict, path: str) -> dict:
     row["words"] = {"S": int((z["S"] != 0xA5A5).sum()), "O": int((z["O"] != 0xA5A5).sum())}
     ok = True
     for tiling, warps, Y in a.shapes():
-        a.poison()
-        a.run(tiling, warps, Y)
-        S, O = a.outputs()
-        arm = {"S_mismatches": int((S != z["S"]).sum()), "O_mismatches": int((O != z["O"]).sum()), "S_sha512": sha(S), "O_sha512": sha(O)}
-        if arm["S_mismatches"] or arm["O_mismatches"]:
-            ok = False
-            arm["examples"] = [{"buffer": k, "at": i, "got": int(got[tuple(i)]), "want": int(z[k][tuple(i)])}
-                               for k, got in (("S", S), ("O", O)) for i in np.argwhere(got != z[k])[:4].tolist()]
-        row["arms"][arm_name(tiling, warps, Y)] = arm
+        good, row["arms"][arm_name(tiling, warps, Y)] = check_arm(a, z, tiling, warps, Y)
+        ok &= good
+    for shift in SHIFTS:
+        a.shift_outputs(shift)
+        for tiling in a.tilings:
+            good, row["arms"][arm_name(tiling, 4, 0 if tiling == "q8" else 1) + f"+{shift}"] = \
+                check_arm(a, z, tiling, 4, 0 if tiling == "q8" else 1)
+            ok &= good
+    a.shift_outputs(0)
     a.poison()
     S, O = a.outputs()
-    ctl = {"S_mismatches": int((S != z["S"]).sum()), "O_mismatches": int((O != z["O"]).sum())}
+    ctl = {"S_mismatches": int((S != z["S"]).sum()), "O_mismatches": int((O != z["O"]).sum()), "strays": a.strays}
     ctl["rejected"] = bool(ctl["S_mismatches"] and ctl["O_mismatches"])
-    ok &= ctl["rejected"]
+    ok &= ctl["rejected"] and not ctl["strays"]
     row["arms"]["control"] = ctl
     row["inputs_unchanged"] = all(np.array_equal(cu.get(a.dev[k], z[k]), z[k]) for k in ("Q", "K", "V", "P", "lens", "nq"))
     ok &= row["inputs_unchanged"]
@@ -286,17 +320,17 @@ def full_case(cu: Cuda, funcs: dict, path: str, B: int = 0) -> dict:
         S, O = a.outputs()
         sd, od = gen.digests(S), gen.digests(O)
         arm = {"S_sequences_differing": int((sd != f["S"]).any(axis=1).sum()), "O_sequences_differing": int((od != f["O"]).any(axis=1).sum()),
-               "S_sha512": sha(S), "O_sha512": sha(O)}
+               "strays": a.strays, "S_sha512": sha(S), "O_sha512": sha(O)}
         if arm["S_sequences_differing"] or arm["O_sequences_differing"]:
-            ok = False
             arm["examples"] = {k: np.flatnonzero((d != f[k]).any(axis=1))[:8].tolist() for k, d in (("S", sd), ("O", od))}
+        ok &= not (arm["S_sequences_differing"] or arm["O_sequences_differing"] or arm["strays"])
         row["arms"][arm_name(tiling, warps, Y)] = arm
     a.poison()
     S, O = a.outputs()
     ctl = {"S_sequences_differing": int((gen.digests(S) != f["S"]).any(axis=1).sum()),
-           "O_sequences_differing": int((gen.digests(O) != f["O"]).any(axis=1).sum())}
+           "O_sequences_differing": int((gen.digests(O) != f["O"]).any(axis=1).sum()), "strays": a.strays}
     ctl["rejected"] = bool(ctl["S_sequences_differing"] == B and ctl["O_sequences_differing"] == B)
-    ok &= ctl["rejected"]
+    ok &= ctl["rejected"] and not ctl["strays"]
     row["arms"]["control"] = ctl
     row["inputs_unchanged"] = all(np.array_equal(cu.get(a.dev[k], z[k]), z[k]) for k in ("Q", "K", "V", "P", "lens", "nq"))
     ok &= row["inputs_unchanged"]
@@ -550,6 +584,7 @@ def main(argv: list[str]) -> int:
             (lambda v: f"{v['S_sequences_differing']}+{v['O_sequences_differing']} sequences")
         print(f"{r['case']}: {'ok' if r['ok'] else 'FAILED'}  S {r['words']['S']} O {r['words']['O']} words, mismatches "
               + ", ".join(f"{k} {mism(v)}" for k, v in arms.items() if k != "control")
+              + f", strays {sum(v.get('strays', 0) for v in arms.values())}"
               + f", control rejected {arms.get('control', {}).get('rejected')}", file=sys.stderr)
         if r.get("generator_disagrees"):
             print(f"REFUSED: {r['case']}: gen.py's inputs differ from the fixture's ({r['input_chunks_differing']})", file=sys.stderr)
