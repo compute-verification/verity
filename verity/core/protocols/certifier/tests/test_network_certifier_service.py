@@ -373,6 +373,7 @@ def test_the_verdict_of_record_is_the_proofs(tmp_path):
     honest = prove(opening, "honest")
     v = verdict(honest)
     assert v["accepted"] and v["public"] == {"verdict": 1, "deadline": 1} and v["decided_by"] == "proof"
+    assert v["by"] == SVC.OF_RECORD["plain"] == "lean" and v["reference"] == {"accepted": True}
     assert "clear" not in v and verdict(honest, opening=opening)["clear"] == {"accepted": True}
     assert set(honest.salts) == {"pub", "o0"} and honest.output == 0b11
     eg, ig = opening.records
@@ -390,8 +391,8 @@ def test_the_verdict_of_record_is_the_proofs(tmp_path):
     assert prove(off, 6).output == 0b10
     for k, (delivered, kw) in enumerate(cases):
         v = verdict(delivered, **kw)
-        assert v["accepted"] is False and v["public"]["verdict"] == 0, k
-        assert set(v) == {"of_record", "decided_by", "accepted", "digest", "sessions", "public"}, k
+        assert v["accepted"] is False and v["public"]["verdict"] == 0 and v["reference"] == {"accepted": False}, k
+        assert set(v) == {"of_record", "decided_by", "by", "accepted", "digest", "sessions", "public", "reference"}, k
 
 
 def _accepts_every_head(B, S_, *args):
