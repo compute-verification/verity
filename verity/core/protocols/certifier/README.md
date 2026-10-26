@@ -179,9 +179,10 @@ A spec-level reference for network accounting's timing channel:
   last egress bucket, `admitted + D + ⌊n/r⌋`) and its egress view, the state as `egress.EgressBucket` reads it (bucket,
   then per slot live, q, admitted, n and the output ids), its outputs beside a public ok bit; `IngressScanFirst`, the
   first bucket's, starts from the empty state, constants of its circuit. `Class.serves` names the warden parameters it
-  takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides in one registration: ingress unit t's
-  state and view outputs are committed as registered reads of the scan's state and view rows t, which ingress unit
-  t + 1 and egress unit t read, so the chain is wires through the registered roots;
+  takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides of a group of link-windows in one
+  registration: ingress unit t's state and view outputs are committed as registered reads of the scan's state and view
+  rows t, which ingress unit t + 1 and egress unit t read, and egress unit t's row as a registered read of the warden's
+  egress row t, so the chains are wires through the registered roots;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
