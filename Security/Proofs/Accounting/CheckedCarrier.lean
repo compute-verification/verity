@@ -1,5 +1,5 @@
 import Mathlib.Data.Fintype.Pi
-import Models.Accounting.Guarantees.CheckedCarrier
+import Definitions.Accounting.Guarantees.CheckedCarrier
 
 /-!
 # A value check bounds what a carrier stacks, proved

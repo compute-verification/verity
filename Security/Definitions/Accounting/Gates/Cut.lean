@@ -3,7 +3,7 @@ import Definitions.Accounting.Gates.Model
 /-!
 # A cut of a circuit: the gates on its write side, with what crosses into them as inputs (trusted)
 
-The min-cut bound (`Models/Accounting/Guarantees/Cut.lean`) prices the words a circuit `C` of the model computes by
+The min-cut bound (`Definitions/Accounting/Guarantees/Cut.lean`) prices the words a circuit `C` of the model computes by
 the gates on one side `D` of a cut and the values that cross into `D`, not by all of `C`. A cut is a set `D` of `C`'s
 gate positions, the side that holds every write; the other side is every other gate.
 

@@ -1,5 +1,5 @@
 import Proofs.Accounting.Gates
-import Models.Accounting.Guarantees.Cut
+import Definitions.Accounting.Guarantees.Cut
 
 /-!
 # The min-cut bound, proved
