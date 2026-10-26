@@ -56,6 +56,7 @@ from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.config import UsageError, option
+from verity_vllm.observe.kernel_trace import kernels_of_trace_events, load_trace, summarize_kernels
 from verity_vllm.properties.record import seal
 
 # ---------------------------------------------------------------------------------------------------------
@@ -159,40 +160,6 @@ def claims_for(kernel_name: str, declared: set[str] | frozenset[str]) -> list[st
 # GPU half: profile the bare run step by step
 # ---------------------------------------------------------------------------------------------------------
 
-_KERNEL_CATS = {"kernel", "Kernel", "gpu_memcpy", "gpu_memset", "cuda_runtime_kernel", "gpu_op"}
-
-
-def kernels_of_trace_events(evs: list[dict]) -> list[dict]:
-    """Device-side events (`ph == "X"`) of a Kineto Chrome trace: kernels, memcpys, memsets; in launch order."""
-    ks = [e for e in evs if e.get("ph") == "X" and e.get("cat") in _KERNEL_CATS]
-    ks.sort(key=lambda e: (e.get("ts", 0), e.get("name", "")))
-    return ks
-
-
-def summarize_kernels(ks: list[dict]) -> "OrderedDict[str, dict]":
-    """name -> {count, us, grid, block, first_index} (first launch's grid/block), by first appearance."""
-    out: "OrderedDict[str, dict]" = OrderedDict()
-    for i, e in enumerate(ks):
-        n = e.get("name", "")
-        d = out.get(n)
-        if d is None:
-            a = e.get("args", {}) or {}
-            d = out[n] = {"count": 0, "us": 0.0, "grid": a.get("grid"), "block": a.get("block"), "first_index": i,
-                          "cat": e.get("cat")}
-        d["count"] += 1
-        d["us"] += float(e.get("dur", 0.0) or 0.0)
-    for d in out.values():
-        d["us"] = round(d["us"], 1)
-    return out
-
-
-def _load_trace(path: Path) -> list[dict]:
-    op = gzip.open if path.suffix == ".gz" else open
-    with op(path, "rt") as f:
-        doc = json.load(f)
-    return doc["traceEvents"] if isinstance(doc, dict) else doc
-
-
 def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens: int | None, warmup: bool,
                max_num_seqs: int, keep_traces: bool, case: str | None = None, engine_args: dict | None = None) -> dict:
     import shutil
@@ -258,7 +225,7 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
             it += 1
             tr = out / "traces" / f"{tag}-engine_step{k}.json"
             pr.export_chrome_trace(str(tr))
-            evs = _load_trace(tr)
+            evs = load_trace(tr)
             ks = kernels_of_trace_events(evs)
             for o in outs:
                 tokens[o.request_id] = [int(t) for t in o.outputs[0].token_ids]

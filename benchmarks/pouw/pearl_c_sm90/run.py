@@ -32,7 +32,8 @@ One JSON object per line on stdout as each part finishes, a summary on stderr.
                                  PEARLC_WORDS_WIN=0 for A'F_B on one 64 x 32 CTA and pa at 64-row tiles,
                                  PEARLC_FORM_EP=0 for A's E' in a launch of its own, PEARLC_WORDS_FORM=0 for A'F_B's
                                  windows in one of their own, PEARLC_PDL=0 for PDL_KERNELS launched plainly,
-                                 PEARLC_GRID_BALANCE=0 for persistent GEMMs on every SM they may take)
+                                 PEARLC_GRID_BALANCE=0 for persistent GEMMs on every SM they may take,
+                                 PEARLC_ONE_COMMIT=0 for pd_commit and pd_tree in the shape's pd variant)
 
 Dry runs on a stand-in driver only: PEARLC_ANY_GPU=1 skips the identity check, and PEARLC_UNGATED=1 (refused without it)
 times regardless of the check and marks every row ungated.
@@ -72,14 +73,18 @@ WORDS_FORM = os.environ.get("PEARLC_WORDS_FORM", "1") != "0"
 #: as on 131), leaving the rest of the SMs to the side lanes; a tile's bytes don't depend on its CTA.  PEARLC_GRID_BALANCE=0
 #: takes every SM it may
 GRID_BALANCE = os.environ.get("PEARLC_GRID_BALANCE", "1") != "0"
-#: the main lane's launches that may start behind the launch before them on their stream (programmatic stream serialization,
-#: cuLaunchKernelEx), each kernel waiting at its entry for that launch to complete (pearl_c_sm90.cu's pdl_entry), so they
-#: read and write what they did (gemm_pearlc_d's producer waits only before P_A, which alone of what it reads its launch
-#: before, pa_w or pa, writes): only from a cubin whose kernels wait (its kernel PDL_MARK, `Dev.pdl`); PEARLC_PDL=0
-#: launches them plainly
+#: pd_commit and pd_tree launch a shape's variant without PD_GROUP, which only pd_tiles reads (the same code and bytes), so
+#: every call's A commitment runs one function, its code warm (at decode's 16 rows gate_up's pd_commit_979 took ~95 us
+#: against the other k = 4096 calls' pd_commit_851 at ~81, r20261025-014522-4f0a; pearl_c_sm120's run.py made this cut,
+#: r20261024-104625-7b57).  PEARLC_ONE_COMMIT=0 launches the shape's variant
+ONE_COMMIT = os.environ.get("PEARLC_ONE_COMMIT", "1") != "0"
+#: PEARLC_PDL=0 launches PDL_KERNELS and PDL_ENTRY_KERNELS (below PD_SERVED) plainly
 PDL = os.environ.get("PEARLC_PDL", "1") != "0"
-PDL_KERNELS = frozenset({"form_s5", "form_s5_ep", "form_s5_epw", "gemm_words_win_d", "pa_w", "gemm_pearlc_d"})
-PROGRAMMATIC_STREAM_SERIALIZATION, PDL_MARK = 6, "pdl_waits"
+PROGRAMMATIC_STREAM_SERIALIZATION, PDL_MARK, PDL_ENTRY_MARK = 6, "pdl_waits", "pdl_waits_entry"
+#: a split pipeline's pd_commit may read a call's BF16 rows in its FP32 words' place (`Pipeline.reads_bf16`), from a cubin
+#: with BF16_ROWS_MARK, so the call's widen_a can run beside it; PEARLC_BF16_ROWS=0 says no
+BF16_ROWS = os.environ.get("PEARLC_BF16_ROWS", "1") != "0"
+BF16_ROWS_MARK = "pd_reads_bf16"
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
 #: every GEMM's operand pair, a set of four tensor maps (A, B, P_A, P_B) each at `tma` + MAP_SET * slot: the chain's (P_A, P_B
 #: the peel's), the words' (A'F_B, B~F_A, G) and the baselines' (A and B again for the tail, which they don't load)
@@ -185,6 +190,7 @@ class Dev:
         self.live: set[int] = set()
         self.stream = None               # where launch() and copy_async() enqueue unless told otherwise (a harness's stream)
         self.pdl = False                 # PDL_KERNELS launched programmatically (`open`: PDL, and the cubin has PDL_MARK)
+        self.pdl_names = frozenset()     # the launches that are: PDL_KERNELS, and PDL_ENTRY_KERNELS with PDL_ENTRY_MARK
 
     def identity(self, expect_uuid: str | None) -> list[str]:
         """What stops the run before any context or launch: the reasons, empty if this is the expected device."""
@@ -212,6 +218,8 @@ class Dev:
         self.ck("cuModuleLoadData", C.byref(self.mod), self.cubin)
         mark = vp()
         self.pdl = PDL and self.cu.cuModuleGetFunction(C.byref(mark), self.mod, PDL_MARK.encode()) == 0
+        entry = self.pdl and self.cu.cuModuleGetFunction(C.byref(mark), self.mod, PDL_ENTRY_MARK.encode()) == 0
+        self.pdl_names = (PDL_KERNELS | PDL_ENTRY_KERNELS if entry else PDL_KERNELS) if self.pdl else frozenset()
 
     def ck(self, f: str, *a) -> None:
         r = getattr(self.cu, f)(*a)
@@ -265,7 +273,8 @@ class Dev:
     def copy_async(self, dst: int, src: int, n: int, stream=None) -> None:
         self.ck("cuMemcpyDtoDAsync_v2", u64(dst), u64(src), n, self.stream if stream is None else stream)
 
-    def launch(self, name: str, grid, block: int, smem: int = 0, p=(), i=(), stream=None) -> None:
+    def launch(self, name: str, grid, block: int, smem: int = 0, p=(), i=(), stream=None, pdl: bool = True) -> None:
+        """`name` on `stream` (else `stream`'s attribute); one of `pdl_names` programmatically unless `pdl` is False."""
         a = Args()
         for j, v in enumerate(p):
             a.p[j] = v
@@ -273,7 +282,7 @@ class Dev:
             a.i[j] = v
         g = tuple(grid) + (1,) * (3 - len(grid)) if isinstance(grid, (tuple, list)) else (grid, 1, 1)
         params, s = (vp * 1)(C.addressof(a)), self.stream if stream is None else stream
-        if self.pdl and name in PDL_KERNELS:
+        if pdl and name in self.pdl_names:
             attr = LaunchAttr(id=PROGRAMMATIC_STREAM_SERIALIZATION, value=1)
             cfg = LaunchConfig((u * 3)(*g), (u * 3)(block, 1, 1), smem, s.value if isinstance(s, vp) else s, C.pointer(attr), 1)
             self.ck("cuLaunchKernelEx", C.byref(cfg), self.fn(name), params, None)
@@ -348,6 +357,15 @@ PD_SERVED, PD_MAX_ROWS, PD_MAX_K, PD_PAIR_SMEM, PD_G, PD_WHOLE, PD_GROUP = (851,
 #: and the stamps' layout: PD_SLOTS (timer, clock) pairs of u64 a row, a row a pd_commit CTA and the tail's after them
 PD_STAMP, PD_SLOTS = 32, 16
 PD_STAMPED = tuple(v | PD_STAMP for v in PD_SERVED)
+#: the main lane's launches that may start behind the launch before them on their stream (programmatic stream serialization,
+#: cuLaunchKernelEx), each kernel waiting at its entry for that launch to complete (pearl_c_sm90.cu's pdl_entry, and
+#: hash_decode.cuh's pd_commit under PD_PDL), so they read and write what they did (gemm_pearlc_d's producer waits only
+#: before P_A, which alone of what it reads its launch before, pa_w or pa, writes): only from a cubin whose kernels wait (its
+#: kernel PDL_MARK, `Dev.pdl`).  PDL_ENTRY_KERNELS, a call's widen_a behind the model's launch before it and its pd_commit
+#: behind widen_a (each resident when the one before completes), only from a cubin that also has PDL_ENTRY_MARK, since an
+#: older cubin's widen_a and pd_commit don't wait
+PDL_KERNELS = frozenset({"form_s5", "form_s5_ep", "form_s5_epw", "gemm_words_win_d", "pa_w", "gemm_pearlc_d"})
+PDL_ENTRY_KERNELS = frozenset({"widen_a", *(f"pd_commit_{v}" for v in (*PD_SERVED, *PD_STAMPED))})
 PD_STAMP_BYTES = 16 * PD_SLOTS * (PD_MAX_ROWS + 1)
 #: hash_prefill.cuh's launches past decode's rows (`Pipeline`'s chain "pl"), in the variant pearl_c_sm90.cu builds them
 #: (PL_INSTANCE): pl_leaves, A's level 0 at PL_ROWS rows a CTA; pl_levels, PL_LEVELS levels a launch; pl_seed_a; pl_seeds,
@@ -436,12 +454,14 @@ def widen(dev, kind: str, src: int, scales: int, out: int, rows: int, k: int) ->
     dev.launch(WIDEN[kind], cdiv(rows * k // 8, 256), 256, p=(src, scales, out), i=(rows, k))
 
 
-def widen_a(dev, src: int, out: int, rows: int, filled: int, k: int, stream=None) -> None:
+def widen_a(dev, src: int, out: int, rows: int, filled: int, k: int, stream=None, pdl: bool = True) -> None:
     """A served call's A words (widen_a): its `rows` BF16 rows at src widened into out (FP32), then out's rows `rows` to
-    `filled` - 1 zero, in one launch."""
+    `filled` - 1 zero, in one launch; with `pdl` False plainly, as off the main lane, where the launch before it on its
+    stream isn't the one it follows."""
     if k % 8 or filled < rows:
         raise ValueError(f"widen_a takes k a multiple of 8 and filled >= rows, not k {k}, rows {rows}, filled {filled}")
-    dev.launch("widen_a", cdiv(filled * k // 8, 256), 256, p=(src, 0, out), i=(rows, k, filled), stream=stream)
+    dev.launch("widen_a", cdiv(filled * k // 8, 256), 256, p=(src, 0, out), i=(rows, k, filled), stream=stream,
+               **({} if pdl else {"pdl": False}))
 
 
 def tile_suffix(bm: int, bn: int) -> str:
@@ -501,6 +521,9 @@ class Pipeline:
     #: pd_tiles takes PD_GROUP's tiles, PD_G a CTA, at every pd shape (the same leaves on a quarter of the CTAs): a whole
     #: capture's tile hashing beside A's tree, whose CTA and pd_commit's each hold an SM whole
     tiles_group = False
+    #: where `reads_bf16`, a call's BF16 rows (address, rows: contiguous, k halves each) that pd_commit's mode 1 (`rows_a`)
+    #: reads in xa's place, its rows past them zero, so xa (their widening) needn't be written before it: the same words
+    rows_bf16: tuple[int, int] | None = None
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
                  bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None, weight: int = 0,
@@ -677,20 +700,35 @@ class Pipeline:
                  i=(mr, n))
         d.launch("s512_folds", cdiv(self.tiles, RS_FOLD_NT), RS_FOLD_NT, p=(b["segdig_t"], b["leaves"]), i=(self.tiles, 32, full, last))
 
+    @property
+    def pd_a(self) -> int:
+        """The pd variant A's commitment launches (pd_commit, pd_tree): `pd`, without PD_GROUP under ONE_COMMIT."""
+        return self.pd & ~PD_GROUP if ONE_COMMIT else self.pd
+
+    def reads_bf16(self) -> bool:
+        """Whether `rows_a` may read a call's BF16 rows (`rows_bf16`): a split pd pipeline, BF16_ROWS, and a cubin whose
+        pd_commit reads them (BF16_ROWS_MARK)."""
+        return (BF16_ROWS and self.pd is not None and self.split_a
+                and getattr(self.dev, "has", lambda _: False)(BF16_ROWS_MARK))
+
     def pd_commit(self, mode: int = 0) -> None:
         """A's commitment under pd (`FUSED`'s steps), pd_commit in mode 0: a CTA a real row, E_A's lines for all m rows (row
         i < m_real's under its own line key, the rest under line_a), its counter left zero.  Mode 1 (`rows_a`) stops after A's
-        level 0 and the rows' lines, and `pd_tree` does the rest."""
-        d, b, kk, v, s = self.dev, self.b, self.keys, self.pd | (PD_STAMP if self.stamps else 0), self.k // 256
+        level 0 and the rows' lines, and `pd_tree` does the rest; it reads `rows_bf16` where they are set."""
+        d, b, kk, v, s = self.dev, self.b, self.keys, self.pd_a | (PD_STAMP if self.stamps else 0), self.k // 256
+        rows = self.rows_bf16 if mode == 1 else None
+        if rows is not None and not self.reads_bf16():
+            raise RuntimeError("rows_bf16 is set on a pipeline whose pd_commit doesn't read BF16 rows (`reads_bf16`)")
         d.launch(f"pd_commit_{v}", self.m_real, 32 * (cdiv(s, 32) * 2 + 2), d.pd_smem[v],
                  p=(b["xa"], b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], kk["unit"], kk["dom_a"], kk["salt_key"],
-                    kk["hm"], b["pd_count"], b["seed_a"], b["line_a"], b["ea_codes"], self.stamps),
-                 i=(self.m_real, self.k, mode, self.m))
+                    kk["hm"], b["pd_count"], b["seed_a"], b["line_a"], b["ea_codes"], self.stamps,
+                    *((0, rows[0]) if rows else ())),
+                 i=(self.m_real, self.k, mode, self.m, *((0, rows[1]) if rows else ())))
 
     def pd_tree(self) -> None:
         """`split_a`'s `tree_seed_a`: pd_tree, one CTA, A's levels above level 0, seed_A, line_a, and with `fillers` the
         padding rows' E_A lines under it (rows m_real..m - 1, where there are any)."""
-        d, b, kk, v = self.dev, self.b, self.keys, self.pd | (PD_STAMP if self.stamps else 0)
+        d, b, kk, v = self.dev, self.b, self.keys, self.pd_a | (PD_STAMP if self.stamps else 0)
         ea = b["ea_codes"] if self.m_real < self.m and self.fillers else 0
         d.launch(f"pd_tree_{v}", 1, 128, d.pd_tree_smem[v],
                  p=(0, 0, b["tree_a"], 0, 0, kk["unit"], kk["dom_a"], 0, 0, 0, b["seed_a"], b["line_a"], ea, self.stamps),

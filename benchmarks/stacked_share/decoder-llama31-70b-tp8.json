@@ -1,0 +1,12 @@
+{
+ "label": "Llama-3.1-70B TP8 int8, LP=256 T=31: the census's modeled 70B (the 8B callees at one rank's statics, 8 ranks) as pre/attn/post blocks a layer",
+ "source": "units-70b.json of r20261018-045058-23f7 (art:dc25549e...), every callee's units on all 8 ranks: pre = RMSNormFusedCuda{N=8192} 335888 + Int8RowQuant{K=8192} 458768 + ScaledMmS8{N=1280} 40960 + RoPE 8192 + 1024; post = Int8RowQuant{K=1024} 57360 + ScaledMmS8 O 262144 + all-reduce 57344 + RMSNormFusedCuda 335888 + Int8RowQuant{K=8192} 458768 + gate_up 229376 + SiluMul 28672 + Int8RowQuant{K=3584} 200720 + down 262144 + all-reduce 57344; embed 65648 + its all-reduce 57344; a row is units-70b.json's token (223,993,752) and a sample its sample; attention its per-rank fit on 8 ranks; widths bf16 (hidden, q, o 8192; K and V 8 x 128 a layer); data products (#4622's prices) a rank Int8LutAttentionRow's Q'K'^T, 8 heads x 128 a key, and P V', 8 x 128 a key padded to 32 keys, as the 8B's Program counts them",
+ "prompt": 256,
+ "decode": 31,
+ "layers": 80,
+ "row": {"embed": 122992, "pre": 844832, "post": 1949760, "final": 303400},
+ "sample": 66308348,
+ "attention": {"r0": 13384, "b_q": 104, "b_kv": 1536, "w0": 384, "w_start": -16, "products": {"per_key": 1024, "per_padded_key": 1024, "block": 32}, "calls": 8},
+ "bits": {"hidden": 131072, "q": 131072, "kv": 32768, "o": 131072, "token": 32},
+ "m_dyn_node_bytes": 608777011200
+}

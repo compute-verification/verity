@@ -1644,14 +1644,16 @@ class Codes(frozenset):
 
 #: the failures `--update` settles from the build alone, by code: a guarantee, a `reads` group or an assumption whose record
 #: differs from the build (two records, each right on its own side of a merge), an owned guarantee or assumption with no
-#: record yet, and a premise the lock doesn't list (the premise rule adds it with its guarantees' owner).  A missing name, an
-#: owner, and every other failure take a person
+#: record yet, a premise the lock doesn't list (the premise rule adds it with its guarantees' owner), and an assumption no
+#: guarantee reads (an update drops it; `merge.py` keeps one entry a side removed while the other changed it).  A missing
+#: name, an owner, and every other failure take a person
 RECORD_DIFFERENCE = Codes({
     "guarantees.signature", "guarantees.assumptions", "guarantees.type-hash",       # its record's statement differs
     "guarantees.reads-new", "guarantees.reads-gone", "guarantees.reads-changed",    # a `reads` group differs
     "guarantees.readers", "guarantees.reads-digest",
     "guarantees.unrecorded",                                                        # owned, with no record yet
     "assumptions.digest", "assumptions.unrecorded", "assumptions.unlisted-premise",
+    "assumptions.unread",
 })
 
 
