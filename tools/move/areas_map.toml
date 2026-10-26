@@ -49,5 +49,5 @@ exclude = ["tools/move/**", "archive/**", "tools/research/**", ".agents/skills/f
 # is a module only where a whole import line or a quoted string names it.
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
             '(?m)^[ \t]*(?:namespace|end|open|export)[ \t].*$',
-            '(?<!Proofs\.)(?:(?<!import )(?<!")|(?!Properties\.RemoteAudit\.(?:Coins|Pooled|Schedule|Line(?:\.Premises|\.Record)?)(?:["\s]|$)))Properties\.(?:CertifierDevice|CertifierNetwork|NetworkCertifier|NetworkRecords|Identity|RemoteAudit)\.(?!Runs\b)[\w«]']
+            '(?<!Proofs\.)(?:(?<!import )(?<!")|(?!Properties\.RemoteAudit\.(?:Coins|Pooled|Schedule|Shared|Live|Line(?:\.Premises|\.Record)?)(?:["\s]|$)))Properties\.(?:CertifierDevice|CertifierNetwork|NetworkCertifier|NetworkRecords|Identity|RemoteAudit)\.(?!Runs\b)[\w«]']
 strings = []
