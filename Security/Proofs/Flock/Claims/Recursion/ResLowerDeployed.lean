@@ -644,6 +644,70 @@ theorem slotV_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   exact slotCommits_table ht' hd (by omega) hv1 hl L regs hz1 hqv (in_block hrows hout hqv)
     (div_lt_blocks_two hn2 hnbl)
 
+/-- **Where a copy's `v` columns sit**: at a staged algebra part, instance `o·g_c + g`'s `v` row (`rowHidden_eq`) is
+copy `(0, o, g, 0)`'s columns from the port's first word past the first input group's column, which lie below the unit's
+constant (`in_block`, `leaves_le_constPos`). So `resTie_copyOf`'s `hVc` holds wherever VBridge's `vBase` is that column
+(`hvb`). -/
+theorem vCols_of_base {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
+    {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss)
+    {j : ℕ} {nm' : String} {pt : VStar.Part} (hsv : ss[s]? = some (.inner j nm' pt)) {c : Circuit}
+    (hpc : r.w.parts[s]?.bind partCircuit = some c) {p : Flock.Readable.Parsed}
+    (hx : Flock.Readable.parseBytes readOfO xO = some p) (ht : 0 < p.sts.size)
+    {qv : ℕ} (hqv : c.ports.findIdx? (·.name == "v") = some qv) (hvin : qv < HmOut.nIn c)
+    {ptv : Port} (hptv : c.ports[qv]? = some ptv) {ns : List ℕ} {nv : ℕ} (hwb : 8 * nv ≤ ptv.words)
+    {o g n : ℕ} (hg : g < c.g) (hn : o * c.g + g = n)
+    (hvb : FlockVBridge.OfVStar.vBase (FlockVBridge.OfVStar.partRep ns nv) =
+      (c.unit.inGroups.getD 0 default).col * Flock.WORD + 16 * (c.ports.extract 0 qv).foldl (· + ·.words) 0) :
+    ∀ i < 128 * nv, ∃ hl : i < (rowForms c "v" qv n).length,
+      Flock.Readable.copyOf p 0 ht w o g 0 (FlockVBridge.OfVStar.vBase (FlockVBridge.OfVStar.partRep ns nv) + i) =
+        formBit w (rowForms c "v" qv n)[i] := by
+  obtain ⟨p', r', sv, hx', ht', hpi, hr', ⟨ss', hss', hsv'⟩, h0, htab⟩ := stagedTables hS
+  rw [hx] at hx'
+  cases hx'
+  rw [hr] at hr'
+  cases hr'
+  rw [hss] at hss'
+  cases hss'
+  rw [hsv] at hsv'
+  cases hsv'
+  have hS' := hS
+  obtain ⟨-, i0, spec, sts, -, hsu, -⟩ := hS'
+  have hp : p = { i0.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
+  have hsz : p.sts.size = 1 := by rw [hp]; exact (oneFull_staged hS hsu).1
+  have hc0 := partCircuit_staged hS hx ht' hpi hr hpc h0
+  obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht' hpi h0
+  obtain ⟨u, -, hupv, -, hl, hrows⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok (htab 0 h0).2.2
+  obtain ⟨hscope, -⟩ := staged_scope hS hx h0
+  have hv1 := FlockSoundness.Discharge.Layout.scopeOk_ports
+    ((FlockSoundness.Discharge.FailClosed.scopeOk_eq _).symm.trans hscope)
+  subst hc0
+  have hout : "v" ∉ (VStar.Stmt.inner j nm' pt).sub.outputs := by show "v" ∉ ["out"]; decide
+  have hN := in_block hrows hout hqv
+  obtain ⟨hqs, -, -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hqv
+  have hpq : p.sts[0].c.ports[qv] = ptv := Option.some.inj ((Array.getElem?_eq_getElem hqs).symm.trans hptv)
+  rw [getElem!_pos _ _ hqs] at hN
+  have hrh := rowHidden_eq n hl hqv hqs hN
+  have hbits : ptv.bits = 16 * ptv.words := hpq ▸ (hv1 _ (Array.getElem_mem_toList hqs)).2.1
+  rw [hpq] at hN hrh
+  have hcp := leaves_le_constPos P hl (by omega)
+  have hdiv : n / p.sts[0].c.g = o := by
+    subst hn
+    rw [Nat.add_comm, Nat.add_mul_div_right _ _ (by omega), Nat.div_eq_of_lt hg, Nat.zero_add]
+  have hmod : n % p.sts[0].c.g = g := by
+    subst hn
+    rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hg]
+  intro i hi
+  have hlen : (rowForms p.sts[0].c "v" qv n).length = ptv.bits := by simp [rowForms, hvin, hrh]
+  refine ⟨by omega, ?_⟩
+  have hel : (rowForms p.sts[0].c "v" qv n)[i]'(by omega) = HmNets.Lin.var (n / p.sts[0].c.g * 2 ^ p.sts[0].c.kLog +
+      (p.sts[0].c.unitRange.slot (n % p.sts[0].c.g * p.sts[0].c.upv) +
+        ((p.sts[0].c.unit.inGroups.getD 0 default).col * Flock.WORD +
+          16 * (p.sts[0].c.ports.extract 0 qv).foldl (· + ·.words) 0 + i))) := by
+    simp [rowForms, hvin, hrh]
+  rw [hel, formBit_var, hvb, Claims.Recursion.VStar.copyOf_eq (by omega), hdiv, hmod]
+  simp [Claims.Recursion.VStar.copyIdx, hsz, hupv]
+  omega
+
 /-- **Check 5's tie at one instance of a staged `rec-residuals` part**: `resTie_layVR` with check 5's public rows from
 the statement's setup. The setup ran `RecCoins.check` at the part's table, so `checkResiduals` at its inner session
 (`residualsCheck_of_check`, `residualsBoth_of_check`), whose `v` and `out` rows the slots read (`check5_bytes`), and
