@@ -270,8 +270,8 @@ def test_a_sync_by_merge_tree_builds_the_next_and_refusals_the_worktree_merges_b
         world.gh.put(n, heads[n])
     new = world.queue()
     monkeypatch.setattr(new, "_merge_in_worktree", lambda *a: pytest.fail("merged in the worktree"))
-    old = Queue(world.tmp / "q-old" / "verity", remote=str(world.origin), github=world.gh, store=world.store, log=world.logs.append,
-                ready=lambda n, h: (n, h) in world.gh.ready, shadow=True)
+    old = Queue(world.tmp / "q-old" / "verity", remote=str(world.origin), github=world.gh, store=world.store,
+                log=world.logs.append, ready=lambda n, h: (n, h) in world.gh.ready, shadow=True)
     old._attr_source = False
 
     def same() -> list:
@@ -286,10 +286,8 @@ def test_a_sync_by_merge_tree_builds_the_next_and_refusals_the_worktree_merges_b
         return got, ge
 
     first, entries = same()
-    refused = {n: e.why for n, e in entries.items() if e.state == "refused"}
-    assert refused == {10: "conflicts with `next` in a.txt, shared.txt (touched by #1, #5)", 15: "conflicts with `next` in shared.txt "
-                       "(touched by #5)", 20: "conflicts with `next` in a.txt, shared.txt (touched by #1, #5)", 25: "conflicts with "
-                       "`next` in shared.txt (touched by #5)", 30: "conflicts with `next` in a.txt, shared.txt (touched by #1, #5)"}
+    two, one = "conflicts with `next` in a.txt, shared.txt (touched by #1, #5)", "conflicts with `next` in shared.txt (touched by #5)"
+    assert {n: e.why for n, e in entries.items() if e.state == "refused"} == {10: two, 15: one, 20: two, 25: one, 30: two}
     assert {7, 14, 21, 28, 29} <= {m.pr for m in first}
     world.gh.put(31, world.change({"f31.txt": "31\n"}))
     again, _ = same()

@@ -338,6 +338,8 @@ class DriveFlags:
     #: scripts a PR's head passes to be admitted (`gate_refusal`: the ready mark's preflight, and the sync that merges it onto
     #: `next`), each by its path from the repository's root, run as it is at `main`; drive's landing runs none
     landing_gates: tuple[str, ...] = ()
+    #: the most Lean checks of `land = "review"` running at once: a lower one and those stacked above it (`drive.lean_stack`)
+    max_lean_checks: int = 2
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml") -> "DriveFlags":
@@ -366,7 +368,7 @@ class DriveFlags:
             if not (on := names("on")):
                 raise bad("on", "at least one machine (train.sh's: a machine, or `auto`)")
             got["on"] = ",".join(on)
-        for k in ("max_running", "train_size"):
+        for k in ("max_running", "train_size", "max_lean_checks"):
             if k in doc:
                 if type(doc[k]) is not int or doc[k] < 1:
                     raise bad(k, "a whole number, 1 or more")
@@ -503,9 +505,9 @@ def label_target(pr: int, head: str) -> str:
 def lean_running(state: dict, pr: int) -> str | None:
     """The run ids of a running review-landing Lean check (`drive["lean"]`) whose checked prefix holds ``pr``, or None: an
     ejection of ``pr`` waits to rebuild `next` until it ends, as a sync would take its commit off `next` and cancel it (24 Oct:
-    r20261024-165000-3c72 was cancelled mid-audit)."""
+    r20261024-165000-3c72 was cancelled mid-audit).  A stacked one (`Driver._stack_lean`) doesn't hold it."""
     for rec in ((state.get("drive") or {}).get("lean") or {}).values():
-        if rec.get("state") is None and any(n == pr for n, _ in rec.get("members") or ()):
+        if rec.get("state") is None and not rec.get("stacked") and any(n == pr for n, _ in rec.get("members") or ()):
             return " ".join(rec.get("ids") or ())
     return None
 
@@ -2612,7 +2614,7 @@ def main(argv: list[str]) -> int:
             Driver(q, on=flags.on, max_running=flags.max_running, train_size=flags.train_size, defer=frozenset(flags.defer),
                    regenerate_locks=flags.regenerate_locks, per_pr_shadow=flags.per_pr_shadow, land=flags.land,
                    after_landing_no_cache=flags.after_landing_no_cache, reviews=labels.reviews,
-                   ready_by=labels.ready_by).tick(dry_run=a.dry_run)
+                   ready_by=labels.ready_by, max_lean_checks=flags.max_lean_checks).tick(dry_run=a.dry_run)
             return 0
         if a.command == "report":
             from .mergequeue import Reporter, Statuses
