@@ -17,10 +17,13 @@ digests are the tables' rows), so the leaf map is the verifier's, at every accep
 * `rootsOfL c L`, `portsOfL c L roots`, `pathOfL C rows L`, `commitDepL C rows c L roots`: `rootsOf`, `portsOf`,
   `pathOf` and `commitDep` at `L`. A position's path has its own port's levels; its row's bits sit after `L.d` levels
   at every position. At `ident` they are `rootsOf`, `portsOf`, `pathOf` and `commitDep` (`rootsOfL_ident`, ...).
+* Each port in its own row format, as `rootsOf` and `commitDep` read it: its leaves framed at its schema (`schemaOf`,
+  `Registered.portSchema`) and its rows hashed in its format (`rowDep`: `sha512/row/v1`, `sha512/row/v2` or
+  `sha512/row-seg/v1`). At a `RowsV2` file that is every port at row/v2 (`leavesL_v2`, `commitDepL_v2`).
 * `RootFixesDomainL c L`: `PortRoots.RootFixesDomain` at `rootsOfL` (`rootFixesDomainL_ident`).
 * `Bridge.TransportsLiveCR`: `TransportsLiveC` with or without shared rows (no `pub.tables = none`), at the binding
-  `ZkReg.rsZHJS` and the public file's leaf map. At `pub.tables = none` it is `TransportsLiveC`
-  (`transportsLiveC_of_R`, `TransportsRefs.lean`).
+  `ZkReg.rsZHJS` and the public file's leaf map, at every file whose ports are rows the verifier of record reads
+  (`RowsOk`). At `pub.tables = none` it is `TransportsLiveC` (`transportsLiveC_of_R`, `TransportsRefs.lean`).
 
 No unit's ref is pinned to `⌊u / G⌋` here: these hold at every ref the verifier accepts.
 -/
@@ -70,10 +73,11 @@ theorem LeafMap.dig_ref (c : Flock.Circuit) (pub : Flock.Public) (nl q u : ℕ) 
   unfold LeafMap.ofPublic Flock.Public.digest
   cases pub.tables <;> rfl
 
-/-- Port `q`'s leaves at `L`: leaf `r` is the `hm96-sha512/row/v2` frame-v3 leaf of the tree leaf of `L.dig q r`. -/
+/-- Port `q`'s leaves at `L`: leaf `r` is the frame-v3 leaf, at the port's schema (`schemaOf`), of the tree leaf of
+`L.dig q r`. -/
 def leavesL (c : Flock.Circuit) (L : LeafMap) (q : ℕ) : Array ByteArray :=
   (Array.range (L.cnt q)).map fun r =>
-    Flock.Registered.leafAs Flock.HmRow.ROW_SCHEMA_V2 (domOf c q) r (Flock.Hm96.Default512.treeLeaf (L.dig q r))
+    Flock.Registered.leafAs (schemaOf c q) (domOf c q) r (Flock.Hm96.Default512.treeLeaf (L.dig q r))
 
 /-- **The registration's frame-v3 roots at a leaf map**: per port, the root over its `L.cnt q` leaves. -/
 def rootsOfL (c : Flock.Circuit) (L : LeafMap) : List Msg :=
@@ -82,47 +86,87 @@ def rootsOfL (c : Flock.Circuit) (L : LeafMap) : List Msg :=
 theorem rootsOfL_ident (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) :
     rootsOfL c (LeafMap.ident c pub nl) = rootsOf c pub nl := rfl
 
-/-- **The registered ports at a leaf map**: `portsOf` with port `q`'s `L.cnt q` leaves. -/
+/-- **The registered ports at a leaf map**: `portsOf` with port `q`'s `L.cnt q` leaves, each at its own schema. -/
 def portsOfL (c : Flock.Circuit) (L : LeafMap) (roots : List Msg) : Array Flock.Registered.Port :=
   (Array.range c.ports.size).map fun q =>
     { name := (c.ports[q]?.map (·.name)).getD "", value := "", root := bytes (roots.getD q []), leaves := L.cnt q,
-      words := none, wordBits := 0, domain := domOf c q, readsRel := #[], schema := Flock.HmRow.ROW_SCHEMA_V2 }
+      words := none, wordBits := 0, domain := domOf c q, readsRel := #[], schema := schemaOf c q }
 
 theorem portsOfL_ident (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) (roots : List Msg) :
     portsOfL c (LeafMap.ident c pub nl) roots = portsOf c nl roots := rfl
 
-/-- The port of the row at claims position `i` (`0` where none). -/
-def portOfPos (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (i : ℕ) : ℕ :=
+/-- The port index of the row at claims position `i` (`0` where none). -/
+def portIdxOf (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (i : ℕ) : ℕ :=
   ((rowOfPos C rows i).map (·.port)).getD 0
 
 /-- **An opening's path at a leaf map**: its position's port's levels, after the salt. -/
 def pathOfL (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (L : LeafMap) (o : Opening Bool) :
     Msg :=
-  pathOf (Flock.log2ceil (L.cnt (portOfPos C rows o.pos))) o
+  pathOf (Flock.log2ceil (L.cnt (portIdxOf C rows o.pos))) o
 
 theorem pathOfL_ident (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (pub : Flock.Public) (nl : ℕ) : pathOfL C rows (LeafMap.ident c pub nl) = pathOf (Flock.log2ceil nl) := rfl
 
 /-- **The deployed trace commitment at a leaf map**: `commitDep` at `L`'s ports, each position's path at its port's
-levels and the row's bits after `L.d` levels. -/
+levels, the row's bits after `L.d` levels, and each row in its port's format (`rowDep`). -/
 noncomputable def commitDepL (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (L : LeafMap) (roots : List Msg) : Commitment Bool :=
-  pathCommit (atOf C rows) (hm96Leaf (SamplingDeploy.row (placeOf C rows) (bitsOf L.d)) saltOf)
+  pathCommit (atOf C rows) (hm96Leaf (rowDep C rows c (placeOf C rows) (bitsOf L.d)) saltOf)
     (pathOfL C rows L) (regPath (portsOfL c L roots)) fun _ _ _ => []
 
 theorem commitDepL_ident (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (pub : Flock.Public) (nl : ℕ) (roots : List Msg) :
     commitDepL C rows c (LeafMap.ident c pub nl) roots = commitDep C rows c nl roots := rfl
 
-/-- **`commitDepL` binds, at every `H`**, as `commitDep` does. -/
+/-- **`commitDepL` binds, at every `H`**, as `commitDep` does: at a circuit file with no segmented port. -/
 theorem commitDepL_binds (H : Msg → Msg) (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt)
-    (c : Flock.Circuit) (L : LeafMap) (roots : List Msg) : (commitDepL C rows c L roots).Binds H :=
-  pathCommit_binds (hm96Leaf_binds H (SamplingDeploy.row_places _ _) _) (regPath_binds H _)
+    (c : Flock.Circuit) (hseg : c.ports.all (fun p => !p.segs.isSome) = true) (L : LeafMap) (roots : List Msg) :
+    (commitDepL C rows c L roots).Binds H :=
+  pathCommit_binds (hm96Leaf_binds H (rowDep_places C rows c hseg _ _) _) (regPath_binds H _)
 
-/-- **A sampled verifier's code whose commitment is `commitDepL`'s layout.** -/
+/-! ### Row/v2, a case -/
+
+/-- **At a `RowsV2` file every port's schema is row/v2.** -/
+theorem schemaOf_v2 {c : Flock.Circuit} (h : RowsV2 c) {q : ℕ} (hq : q < c.ports.size) :
+    schemaOf c q = Flock.HmRow.ROW_SCHEMA_V2 := by
+  have hpq := (Array.all_eq_true.mp h) q hq
+  simp only [Bool.and_eq_true, Option.isNone_iff_eq_none] at hpq
+  simp [schemaOf, hq, Flock.Registered.portSchema, hpq.1, hpq.2]
+
+/-- **At a `RowsV2` file every row's message is its `sha512/row/v2` input** (`SamplingDeploy.row`). -/
+theorem rowDep_v2 (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) {c : Flock.Circuit}
+    (h : RowsV2 c) (place : ℕ → (w : ℕ) × Fin w) (bits : Msg → ℕ → Bool) :
+    rowDep C rows c place bits = SamplingDeploy.row place bits := by
+  funext o
+  unfold rowDep
+  split
+  · rename_i p hp
+    obtain ⟨r, -, hr⟩ := Option.bind_eq_some_iff.mp hp
+    obtain ⟨hq, rfl⟩ := Array.getElem?_eq_some_iff.mp hr
+    have hpq := (Array.all_eq_true.mp h) r.port hq
+    simp only [Bool.and_eq_true, Option.isNone_iff_eq_none] at hpq
+    simp [rowMsg, hpq.1, hpq.2, SamplingDeploy.row]
+  · rfl
+
+/-- **At a `RowsV2` file a port's leaves are `hm96-sha512/row/v2` leaves.** -/
+theorem leavesL_v2 {c : Flock.Circuit} (h : RowsV2 c) (L : LeafMap) {q : ℕ} (hq : q < c.ports.size) :
+    leavesL c L q = (Array.range (L.cnt q)).map fun r =>
+      Flock.Registered.leafAs Flock.HmRow.ROW_SCHEMA_V2 (domOf c q) r (Flock.Hm96.Default512.treeLeaf (L.dig q r)) := by
+  simp only [leavesL, schemaOf_v2 h hq]
+
+/-- **At a `RowsV2` file `commitDepL` hashes every row as a `sha512/row/v2` row.** -/
+theorem commitDepL_v2 (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) {c : Flock.Circuit}
+    (h : RowsV2 c) (L : LeafMap) (roots : List Msg) :
+    commitDepL C rows c L roots =
+      pathCommit (atOf C rows) (hm96Leaf (SamplingDeploy.row (placeOf C rows) (bitsOf L.d)) saltOf)
+        (pathOfL C rows L) (regPath (portsOfL c L roots)) fun _ _ _ => [] := by
+  unfold commitDepL
+  rw [rowDep_v2 C rows h]
+
+/-- **A sampled verifier's code whose commitment is `commitDepL`'s layout**: at a `RowsV2` file, as `LayoutIs`. -/
 def LayoutIsL (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (L : LeafMap)
     (roots : List Msg) (cd : SamplingDeploy.Code) : Prop :=
-  cd.at_ = atOf C rows ∧ cd.place = placeOf C rows ∧ cd.bits = bitsOf L.d ∧ cd.salt = saltOf ∧
+  RowsV2 c ∧ cd.at_ = atOf C rows ∧ cd.place = placeOf C rows ∧ cd.bits = bitsOf L.d ∧ cd.salt = saltOf ∧
     cd.π = pathOfL C rows L ∧ cd.own = portsOfL c L roots
 
 theorem layoutIsL_ident (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
@@ -152,14 +196,16 @@ open Classical in
 `TransportsLiveC` without `pub.tables = none`, at the binding with or without shared rows (`ZkReg.rsZHJS`) and the
 public file's leaf map (`LeafMap.ofPublic`): unit `u`'s row at port `q` is leaf `ref q u` of `q`'s tree, under the
 roots `rootsOfL` over each port's own leaves, and some data opens each canonical opening's position to its bit under
-`commitDepL`. At `pub.tables = none` it is `TransportsLiveC` (`transportsLiveC_of_R`). -/
+`commitDepL`. It holds at every circuit file whose ports are rows the verifier of record reads (`RowsOk`: all
+`sha512/row/v1`, or each `sha512/row/v2` or `sha512/row-seg/v1`), each port's leaves at its own schema and each row in
+its own format. At `pub.tables = none` it is `TransportsLiveC` (`transportsLiveC_of_R`). -/
 def _root_.Flock.Bridge.TransportsLiveCR : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
     (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
-    (_hv2 : Bridge.RowsV2 D.unroll)
+    (_hrows : Bridge.RowsOk D.unroll)
     (_hdup : Flock.Registered.dupName D.unroll = none)
     (_hroots : Bridge.RootFixesDomainL D.unroll (Bridge.LeafMap.ofPublic D.unroll pub n))
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
