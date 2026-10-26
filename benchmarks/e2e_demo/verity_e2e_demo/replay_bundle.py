@@ -76,9 +76,10 @@ import argparse
 import bisect
 import hashlib
 import json
+import multiprocessing
 import os
 import sys
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -336,6 +337,19 @@ def _run_starts(index: Mapping[str, Any]) -> list[tuple[int, int, Any, int]]:
     return [(a, b, x, first[json.dumps(x, sort_keys=True)]) for a, b, x in spans]
 
 
+@dataclass(frozen=True)
+class _Slot:
+    """One slot's subtree as `_Steps.slot` rebuilds it: every row's string, the kept units' trees, the slot tree."""
+
+    strings: Sequence[bytes]
+    units: Mapping[int, MerkleTree]
+    tree: RootTree
+
+    @property
+    def root(self) -> bytes:
+        return self.tree.root
+
+
 class _Steps:
     """The step commitments a bundle opens, rebuilt from the prover's records: a slot's subtree from its rows (one at a time:
     at the H200's six million units a slot, a bundle can't hold many), step trees over the slot roots, block trees."""
@@ -360,9 +374,21 @@ class _Steps:
             raise ValueError(f"block {b} step {s}: {len(rows)} slots' rows for {self.com.slots} slots")
         return rows[j]
 
-    def slot(self, b: int, s: int, j: int) -> S.SlotCommit:
-        rec = self.record(b, s)
-        sc = S.commit_slot(self.com.context, self.com.layout, rec.salt_key, j, self.rows(b, s, j))
+    def slot(self, b: int, s: int, j: int, units: Iterable[int] = ()) -> _Slot:
+        """Slot ``j``'s subtree (`commit_slot`'s), keeping only ``units``' trees: at the H200's six million units a slot,
+        every unit's tree is gigabytes."""
+        rec, com = self.record(b, s), self.com
+        rows, keep = self.rows(b, s, j), set(units)
+        if len(rows) != com.layout.row_count:
+            raise ValueError(f"block {b} step {s} slot {j}: {len(rows)} rows for the layout's {com.layout.row_count}")
+        strings = S._strings(rows, S.row_salts(rec.salt_key, j, 0, len(rows)))
+        roots, trees = [], {}
+        for u, (base, rows_u) in enumerate(zip(com.layout.row_base, com.layout.units, strict=True)):
+            t = S._unit_tree(S.unit_domain(com.context, com.layout, u), strings[base:base + len(rows_u)])
+            roots.append(t.commitment.root)
+            if u in keep:
+                trees[u] = t
+        sc = _Slot(strings, trees, RootTree(S.slot_domain(com.context, com.layout), roots))
         if rec.slot_roots and sc.root != rec.slot_roots[j]:
             raise ValueError(f"block {b} step {s} slot {j}: its rows are not its committed slot root")
         return sc
@@ -496,17 +522,44 @@ def _opener(want: Wants) -> Callable[..., dict[str, Any]]:
     return opening
 
 
-def _fill(want: Wants, steps: _Steps) -> None:
-    """Every wanted opening's paths, one slot's subtree at a time."""
-    layout = steps.com.layout
-    for (b, s, slot) in sorted(want):
-        sc, step_path = steps.slot(b, s, slot), steps.step(b, s).open([slot]).to_json()
-        for lu, rank, bc, o, why in want[b, s, slot]:
-            g = layout.row_base[lu] + rank
-            if bc is not None and sc.strings[g] != bc:
-                raise ValueError(f"{why} (other bytes or salts)")
-            o.update({"path": _path(sc.units[lu], rank), "slot_path": sc.tree.open([lu]).to_json(), "step_path": step_path})
-        del sc
+def _slot_paths(steps: _Steps, want: Wants, key: tuple[int, int, int]) -> list[dict[str, Any]]:
+    """The paths of the openings wanted in one slot of one step, from its rebuilt subtree."""
+    b, s, slot = key
+    items, layout = want[key], steps.com.layout
+    sc, step_path = steps.slot(b, s, slot, {lu for lu, *_ in items}), steps.step(b, s).open([slot]).to_json()
+    out = []
+    for lu, rank, bc, _o, why in items:
+        if bc is not None and sc.strings[layout.row_base[lu] + rank] != bc:
+            raise ValueError(f"{why} (other bytes or salts)")
+        out.append({"path": _path(sc.units[lu], rank), "slot_path": sc.tree.open([lu]).to_json(), "step_path": step_path})
+    return out
+
+
+def _task(steps: _Steps, want: Wants, key: tuple[int, int, int]) -> tuple[Any, ...]:
+    """What a worker needs to rebuild one (step, slot): that slot's rows alone, under its step's slot roots."""
+    b, s, slot = key
+    com = steps.com
+    rec = StepRecord(steps.record(b, s).salt_key, {slot: steps.rows(b, s, slot)}, steps.roots(b, s))
+    return com.context, com.layout, com.slots, key, rec, [(lu, rank, bc, None, why) for lu, rank, bc, _o, why in want[key]]
+
+
+def _worker_paths(task: tuple[Any, ...]) -> list[dict[str, Any]]:
+    context, layout, slots, key, rec, items = task
+    return _slot_paths(_Steps(Commitment(context, layout, slots, {key[:2]: rec})), {key: items}, key)
+
+
+def _fill(want: Wants, steps: _Steps, workers: int = 1) -> None:
+    """Every wanted opening's paths, a slot's subtree at a time; with ``workers`` > 1 in spawned processes, one (step, slot)
+    each, sent its slot's rows alone (never forked: the prover's process holds threads and a GPU)."""
+    keys = sorted(want)
+    if workers > 1 and len(keys) > 1:
+        with multiprocessing.get_context("spawn").Pool(min(workers, len(keys)), maxtasksperchild=1) as pool:
+            got = pool.map(_worker_paths, (_task(steps, want, k) for k in keys), chunksize=1)
+    else:
+        got = [_slot_paths(steps, want, k) for k in keys]
+    for k, paths in zip(keys, got, strict=True):
+        for (_lu, _rank, _bc, o, _why), p in zip(want[k], paths, strict=True):
+            o.update(p)
 
 
 def _read_entries(who: str, c: Mapping[str, Any], kind: str, row: bytes, pieces: Sequence[Read | Position], steps: _Steps,
@@ -560,32 +613,35 @@ def commitment_doc(commitment: Commitment, steps: _Steps | None = None) -> dict[
             "blocks": (steps or _Steps(com)).blocks()}
 
 
-def open_reads(commitment: Commitment, coords: Mapping[str, Any], row: bytes, pieces: Sequence[Read | Position],
-               kind: str = "in") -> tuple[list[dict[str, Any]], bytes]:
-    """One port row's reads opened outside a window, as `build` opens them (offsets into the returned payload): what a
-    writer or a run checks before its window exists, with `check_reads`."""
+def open_reads(commitment: Commitment, rows: Sequence[tuple[Mapping[str, Any], bytes, Sequence[Read | Position]]], *,
+               kind: str = "in", workers: int = 1) -> tuple[list[list[dict[str, Any]]], bytes]:
+    """Port rows' reads opened outside a window, as `build` opens them (offsets into the one returned payload), each
+    ``(coords, row, pieces)``: what a writer or a run checks before its window exists, with `check_reads`. Each (step,
+    slot) read is rebuilt once, in ``workers`` processes."""
     payload, want = bytearray(), {}
-    steps = _Steps(commitment)
-    reads = _read_entries("row", coords, kind, row, pieces, steps, payload, _opener(want))
-    _fill(want, steps)
+    steps, opening = _Steps(commitment), _opener(want)
+    reads = [_read_entries(f"row {i}", c, kind, row, pieces, steps, payload, opening) for i, (c, row, pieces) in enumerate(rows)]
+    _fill(want, steps, workers)
     return reads, bytes(payload)
 
 
-def check_reads(commitment: Mapping[str, Any], coords: Mapping[str, Any], row: bytes, reads: Sequence[Mapping[str, Any]],
+def check_reads(commitment: Mapping[str, Any], rows: Sequence[tuple[Mapping[str, Any], bytes, Sequence[Mapping[str, Any]]]],
                 payload: bytes, *, kind: str = "in", registration: Mapping[str, Any] | None = None) -> dict[str, str]:
-    """`check`'s verdict on one port row's reads against a ``commitment`` section (`commitment_doc`), each step root held to
-    the ``registration``'s when given: ``{key: why}``, empty when they hold."""
+    """`check`'s verdict on port rows' reads (each ``(coords, row, reads)``, `open_reads`'s) against a ``commitment``
+    section (`commitment_doc`), each step root held to the ``registration``'s when given: ``{key: why}``, empty when they
+    hold."""
     bad: dict[str, str] = {}
     com = _check_commitment({"commitment": commitment}, bad, registration)
-    r = {"kind": kind, "words": len(row) // 2, "reads": list(reads)}
-    if (why := _check_reads(r, {"coords": coords}, row, payload, com)) is not None:
-        bad["row"] = why
+    for i, (coords, row, reads) in enumerate(rows):
+        r = {"kind": kind, "words": len(row) // 2, "reads": list(reads)}
+        if (why := _check_reads(r, {"coords": coords}, row, payload, com)) is not None:
+            bad[f"row {i}"] = why
     return bad
 
 
 def build(window_dir: str | Path, drawn: Sequence[int], *, commitment: Commitment, locate: Locate, binding: str,
           coords: Coords = torch_loop_coords, reads: Reads | None = None,
-          weights: Mapping[str, Any] | None = None, draw: Mapping[str, Any] | None = None
+          weights: Mapping[str, Any] | None = None, draw: Mapping[str, Any] | None = None, workers: int = 1
           ) -> tuple[dict[str, Any], bytes]:
     """The bundle of ``drawn`` (global unit indices) from the window in ``window_dir`` (what ``Window.write`` wrote, prover's
     files included): ``(document, payload)``.
@@ -599,7 +655,8 @@ def build(window_dir: str | Path, drawn: Sequence[int], *, commitment: Commitmen
     offset in its labelled run. ``reads(coords, template, port)``: the ``(value, position)`` a unit's port reads of a
     registered value; ``weights``: those values, the prover's side (``program``, ``schema``, ``entry()``, ``path(position)``
     and the row's string, ``string(position)`` or ``bcs[position]``: `registered.Registered`). ``draw``: the draw's ``law``,
-    ``source`` and ``receipt`` (default ``{"source": "fixture"}``; a live draw without its receipt is refused).
+    ``source`` and ``receipt`` (default ``{"source": "fixture"}``; a live draw without its receipt is refused). ``workers``:
+    processes rebuilding the opened (step, slot) subtrees, one each.
 
     Refused (ValueError) when a row is neither in the step commitment nor a registered read, when a window string is not
     the step commitment's or the registered value's (a row committed under other salts has no path to that root), when a
@@ -680,7 +737,7 @@ def build(window_dir: str | Path, drawn: Sequence[int], *, commitment: Commitmen
         mm["local"].sort()
         mm["draw"] = {"law": "subset", "population": mm["n"], "k": len(mm["local"]), "units": mm["local"]}
 
-    _fill(want, steps)
+    _fill(want, steps, workers)
 
     progs = {weights[v].program for v in used_values}
     if len(progs) > 1:

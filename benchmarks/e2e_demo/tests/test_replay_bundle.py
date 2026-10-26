@@ -408,14 +408,18 @@ def test_open_reads_with_a_position_and_absent_words(two_steps) -> None:
     k0, k1 = kv.steps[0, 0].rows[1][g][:16], kv.steps[0, 1].rows[1][g][16:32]
     row = (2).to_bytes(2, "little") + k0 + k1 + bytes(16)
     pieces = [B.Position(1, 0), B.Read(0, 1, 0, 0, at=1, nbytes=16), B.Read(1, 1, 0, 0, at=9, start=16, nbytes=16)]
-    reads, payload = B.open_reads(kv, c, row, pieces)
+    (reads, again), payload = B.open_reads(kv, [(c, row, pieces), (c, row, pieces)], workers=2)
+    assert again == [{**q, "row": [q["row"][0] + 640, q["row"][1]], "salt": [q["salt"][0] + 640, q["salt"][1]]}
+                     if q["kind"] == "step" else q for q in reads]
+    assert B.open_reads(kv, [(c, row, pieces)])[0][0] == reads
     doc = B.commitment_doc(kv)
     reg = _kv_registration(two_steps, kv)
-    assert B.check_reads(doc, c, row, reads, payload, registration=reg) == {}
-    assert B.check_reads(doc, c, row[:-2] + b"\1\0", reads, payload) == {"row": "a word no read covers is not zero"}
-    assert B.check_reads(doc, {**c, "step": 0}, row, reads, payload)["row"].startswith("read 0: the word is not")
+    assert B.check_reads(doc, [(c, row, reads), (c, row, again)], payload, registration=reg) == {}
+    assert B.check_reads(doc, [(c, row[:-2] + b"\1\0", reads)], payload) == {"row 0": "a word no read covers is not zero"}
+    assert B.check_reads(doc, [(c, row, reads), ({**c, "step": 0}, row, again)], payload)["row 1"].startswith(
+        "read 0: the word is not")
     with pytest.raises(ValueError, match="not its step \\+ 1"):
-        B.open_reads(kv, {**c, "step": 0}, row, pieces[:1])
+        B.open_reads(kv, [({**c, "step": 0}, row, pieces[:1])])
 
 
 def test_the_window_writers_pieces_build_the_bundle(two_steps) -> None:
