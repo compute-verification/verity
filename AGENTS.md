@@ -209,9 +209,8 @@ the standing rulings stated nowhere else.
 - **Results are per monitoring period, over all compute** (Daniel, 25 Oct). The time length of interest is the
   *monitoring period* (`ARCHITECTURE.md`, Glossary), not the window, the run or the demo. Every result, in a report, a
   table, a PR or a message to Daniel, is presented for monitoring periods of one week, one month and one year, and over
-  all compute: the *adversary resource model* (Glossary), the world's compute (Daniel, 25 Oct, 7:11 PM PDT), the census
-  entry `world-inference-2027` (`benchmarks/census/adversary.json`), about 9.4e30 FP8 FLOP a year, though a demo checks
-  one machine. A deployment's or a datacenter's figure goes beside it, never instead of it. The datacenter's size (from
+  all compute: the world's, the *adversary resource model* (census `world-inference-2027`, ~9.4e30 FP8 FLOP a year),
+  though a demo checks one machine; a datacenter's figure goes beside it, never instead. The datacenter's size (from
   `benchmarks/census/`) and the window's length are stated parameters, and a figure scaled from one machine says which
   parts are proved and which are scaled. Give each bound as its pooled total over the period and as a share of the
   compute it covers, beside the per-window figure, never the per-window figure alone: a per-window δ that looks weak is
