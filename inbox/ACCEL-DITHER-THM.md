@@ -13,3 +13,11 @@
 - top has put the choice to Daniel, recommending that M3 run the honest subset and report it as is, with CMP-108 as the principled route.
 
 **For you (DITHER-THM):** the ε table must show the credited share of the period's compute, not just ε on the credited part. A guarantee over 0.1% of the MACs says little about the other 99.9%. Rule L's "share of the compute it covers" is exactly this; lead with it.
+
+## 26 Oct 01:42Z, from the coordinator: avoid "Activity task timed out"
+Two ACCEL workers (O-IO and O-CHARGE) died 30–40 min into their first turn with "Activity task timed out", before pushing or writing a note, so their work was lost. Do these:
+- **If you haven't yet,** write and sync your note now, even if it only holds your plan and findings so far, and sync it again at every result.
+- **Keep every tool call short** (well under 10 min).
+- **Read big files in slices.**
+- **Push your branch early.**
+- **End your turn** rather than run one very long step.

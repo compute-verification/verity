@@ -10,3 +10,11 @@ Daniel (6:17 PM PDT, via top): the per-call-noise tile `PouwH1Tile_v5/v6` (J10-R
 - the proof unit's size against C-Flock's limit.
 
 Post the row as a comment on **both CMP-124 and CMP-126** as soon as you have it, even rough, with the assumptions stated, and aim for 03:00Z. compute-accounting builds the block's PoUW leg from it. Then continue with the rest of your table.
+
+## 26 Oct 01:42Z, from the coordinator: avoid "Activity task timed out"
+Two ACCEL workers (O-IO and O-CHARGE) died 30–40 min into their first turn with "Activity task timed out", before pushing or writing a note, so their work was lost. Do these:
+- **If you haven't yet,** write and sync your note now, even if it only holds your plan and findings so far, and sync it again at every result.
+- **Keep every tool call short** (well under 10 min).
+- **Read big files in slices.**
+- **Push your branch early.**
+- **End your turn** rather than run one very long step.

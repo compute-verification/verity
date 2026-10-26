@@ -15,3 +15,11 @@ Daniel (01:05Z): "Let's take a bunch of parallel bets and see what pays off." Th
 
 ## 26 Oct 01:25Z, from the coordinator: the per-call-noise tile is being built for the H200
 Daniel (6:05 PM PDT, via top): kernels has started the sm_90a build of `PouwH1Tile_v5/v6` (per-call noise, J10-R) with KCOMMIT-FB: the recompile, the SASS gate and the exactness gates, on vy-dc-h200 (not the demo card). Whether M3's credit cites it is still Daniel's decision. Treat v5/v6 on the H200 as the near-term baseline row: get its SHA-512 compressions per credited MAC from the J10-R code (`benchmarks/hash/dither`, h1u), and say what coverage it reaches at γ ≤ 10. When kernels posts measured numbers, I'll relay them.
+
+## 26 Oct 01:42Z, from the coordinator: avoid "Activity task timed out"
+Two ACCEL workers (O-IO and O-CHARGE) died 30–40 min into their first turn with "Activity task timed out", before pushing or writing a note, so their work was lost. Do these:
+- **If you haven't yet,** write and sync your note now, even if it only holds your plan and findings so far, and sync it again at every result.
+- **Keep every tool call short** (well under 10 min).
+- **Read big files in slices.**
+- **Push your branch early.**
+- **End your turn** rather than run one very long step.
