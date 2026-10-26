@@ -18,8 +18,10 @@ Pearl-C pass's, and honest draws, then one mutation each aimed at every refusal)
 salt was had, or the same refusal.
 
 Its `window` and `period` against `credit.window` and `credit.period_credit`, the only entries, and its `credit`,
-`drawn`, `outcome`, `a-link` and `weights` against the steps they run or will, `credit._credited`, `credit.drawn`,
-`credit._outcome`, `credit._a_link` and `credit._weights` (`PouwCheck.Credit.Internal`'s): one `Port` each, over the cases
+`drawn`, `window-drawn`, `outcome`, `a-link` and `weights` against the steps they run or will, `credit._credited`,
+`credit.drawn`, `credit._window_drawn` (at the strata of the descriptor's layout, `Credit.descriptorDrawn`, the draw the
+J10-R period's statement reads), `credit._outcome`, `credit._a_link` and `credit._weights` (`PouwCheck.Credit.Internal`'s):
+one `Port` each, over the cases
 `pouw_credit_cases` generates (a served window whose draw coin opened after its draw root over the manifest's credit bits,
 the units a draw coin draws from a window's layout and each of them proved, a served window whole with its layout read
 from its circuit's descriptor (`credit.layout_of`) and its round log held to the challenger's (`core_check.rounds`) and
@@ -268,6 +270,20 @@ def drawn(case: dict) -> dict:
     return {"drawn": got} if refused is None else {"refused": list(refused)}
 
 
+def window_drawn(case: dict) -> dict:
+    """`credit._window_drawn` over the strata of the descriptor's layout, as `Credit.descriptorDrawn` reads them."""
+    got, refused = None, ("layout", Cr.DESCRIPTOR_HEX)
+    if type(case["descriptor"]) is str and Cr._HEX.fullmatch(case["descriptor"]):
+        lay, refused = Cr.layout_of(bytes.fromhex(case["descriptor"]))
+        ss = None
+        if refused is None:
+            ss, refused = Cr.strata(lay)
+        if refused is None:
+            got, refused = Cr._window_drawn(case["window"], case["draw"], ss, case["k"])
+    _counted(refused, "window-drawn")
+    return {"drawn": got} if refused is None else {"refused": list(refused)}
+
+
 def outcome(case: dict) -> dict | None:
     refused = Cr._outcome(*(case[k] for k in credit_cases.OUTCOME_KEYS))
     _counted(refused, "outcome")
@@ -322,6 +338,7 @@ def _port(name: str, fn, instance, names: list[str]) -> D.Port:
 
 CREDIT = _port("credit", credit, credit_cases.credit_instance, credit_cases.CREDIT_NAMES)
 DRAWN = _port("drawn", drawn, credit_cases.drawn_instance, credit_cases.DRAWN_NAMES)
+WINDOW_DRAWN = _port("window-drawn", window_drawn, credit_cases.window_drawn_instance, credit_cases.WINDOW_DRAWN_NAMES)
 OUTCOME = _port("outcome", outcome, credit_cases.outcome_instance, credit_cases.OUTCOME_NAMES)
 WINDOW = _port("window", window, credit_cases.window_instance, credit_cases.WINDOW_NAMES)
 PERIOD = _port("period", period, credit_cases.period_instance, credit_cases.PERIOD_NAMES)
@@ -353,13 +370,14 @@ def test_credit(pass_server):
     refusal of `credit.window`, `credit.period_credit` and the steps they run."""
     CREDITED.clear()
     stats = {p.fn: D.run(p, examples=n, server=pass_server)
-             for p, n in ((CREDIT, 300), (DRAWN, 300), (OUTCOME, 300), (WINDOW, 150), (PERIOD, 100), (A_LINK, 400),
+             for p, n in ((CREDIT, 300), (DRAWN, 300), (WINDOW_DRAWN, 100), (OUTCOME, 300), (WINDOW, 150), (PERIOD, 100), (A_LINK, 400),
                              (WEIGHTS, 300), (REGISTERED_FILE, 150))}
     swept = Counter()
     for port, instance, names in ((CREDIT, credit_cases.credit_instance, credit_cases.CREDIT_NAMES),
                                   (REGISTERED_FILE, credit_cases.registered_file_instance,
                                    credit_cases.REGISTERED_FILE_NAMES),
                                   (DRAWN, credit_cases.drawn_instance, credit_cases.DRAWN_NAMES),
+                                  (WINDOW_DRAWN, credit_cases.window_drawn_instance, credit_cases.WINDOW_DRAWN_NAMES),
                                   (OUTCOME, credit_cases.outcome_instance, credit_cases.OUTCOME_NAMES),
                                   (WINDOW, credit_cases.window_instance, credit_cases.WINDOW_NAMES),
                                   (PERIOD, credit_cases.period_instance, credit_cases.PERIOD_NAMES),
@@ -369,7 +387,7 @@ def test_credit(pass_server):
                          for name in ["honest", *names] for seed in range(3))
     print(f"pouw-check-difftest credit: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(CREDITED.items()))}")
-    assert {"credit accept", "drawn accept", "outcome accept", "window accept", "period accept",
+    assert {"credit accept", "drawn accept", "window-drawn accept", "outcome accept", "window accept", "period accept",
             "a-link accept", "weights accept", "registered-file accept", "registered-file accept j10r",
             "registered-file accept j10r chunked"} <= set(CREDITED)
     for part in ("credit draw: the draw root over the manifest", "credit draw: the window's draw root is not",

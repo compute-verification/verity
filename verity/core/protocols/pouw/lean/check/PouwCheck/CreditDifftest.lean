@@ -12,6 +12,8 @@ Beside `PouwCheck.Difftest`'s, behind the same `pouw-check-difftest` (`PouwCheck
   `Credit.Internal.credited`): `{"credited": [indices]}`, or `{"refused": [code, why]}`.
 * `drawn` (`coin`, `stream`, `registration`, `receipt`, `layout`, as `credit.drawn` takes them): `{"drawn": [units]}`,
   or `{"refused": [code, why]}`.
+* `window-drawn` (`window`, `draw`, `descriptor` in hex, `k`): `Credit.descriptorDrawn`, `credit._window_drawn` over
+  the strata of the descriptor's `layoutOf`: `{"drawn": [units]}`, or `{"refused": [code, why]}`.
 * `outcome` (`drawn`'s and `proofs`, as `credit._outcome` takes them) and `a-link` (`rounds`, `entries`, `calls`, the
   window's call count, and `rows`, `{value: rows}` the layout gives or null for none, as `credit._a_link` takes them),
   `Credit.Internal`'s: null, or `{"refused": [code, why]}`.
@@ -44,6 +46,11 @@ def drawnOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
   PouwCheck.Difftest.refusal (fun out => Json.mkObj [("drawn", toJson out)])
     (Credit.drawn (← f "coin") (← f "stream") (← f "registration") (← f "receipt") (← f "layout") (← f "k"))
+
+def windowDrawnOf (j : Json) : Except String Json := do
+  let f := PouwCheck.Difftest.get j
+  PouwCheck.Difftest.refusal (fun out => Json.mkObj [("drawn", toJson out)])
+    (Credit.descriptorDrawn (← f "window") (← f "draw") (← f "descriptor") (← f "k"))
 
 def outcomeOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
@@ -105,8 +112,8 @@ def registeredFileOf (j : Json) : Except String Json := do
   PouwCheck.Difftest.refusal id got
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
-  ("credit", creditOf), ("drawn", drawnOf), ("outcome", outcomeOf), ("window", windowOf), ("period", periodOf),
-  ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf), ("leaf-words", leafWordsOf)]
+  ("credit", creditOf), ("drawn", drawnOf), ("window-drawn", windowDrawnOf), ("outcome", outcomeOf),
+  ("window", windowOf), ("period", periodOf), ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf), ("leaf-words", leafWordsOf)]
 
 /-- `pouw-check-difftest`'s functions: `PouwCheck.Difftest.table`'s, then these. -/
 def all (name : String) : Option _root_.Difftest.Fn := PouwCheck.Difftest.table name <|> table name

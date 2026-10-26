@@ -27,7 +27,7 @@ draw size is the block's `k s_T`, read from the block's draw, not chosen here.
 * `Registered`, `Answered`, `WindowAccepts`, `CreditWindows`, `creditDrawn`: `Credit.window`'s 18 inputs, split into what
   the window registers before its draw coin and the rest; its verdict, an accept being some credited calls; each
   window's inputs as functions of the period's coins; and the units its draw demands proofs of, as `windowLayout`
-  computes them (`Credit.drawnOf` at the descriptor's strata and the draw coin).
+  draws them (`Credit.descriptorDrawn`: `Credit.windowDrawn` at the descriptor's strata and the draw coin).
 * `CreditWindows.AcceptedUpTo`, `CreditWindows.prefixLen`, `creditLive`: the prefix before the first refused window
   and its live words, as `Properties.Pouw.Period`'s with `Credit.window`'s verdict.
 * `tileRun`, `tileLayer`: the period's proofs with `Credit.window`'s verdict as every drawn tile's (`Credit.window`
@@ -82,9 +82,10 @@ and 65,536 (down); such a unit is past C-Flock's `2^27` until `h1zy` has J10-R l
 * `TileDrawIsCoin`, a code fact once its code exists. The code change (CMP-126): the verifier draws the tiles inside
   the sampling block's stratified draw, the tiles joining the integrity registration as one subcircuit, and reads
   `k s_T` from it; today `Credit.window` draws by its own work law (`Credit.law`, one stratum a `K` template, the
-  period's committed `k`). `creditDrawn` is to be held to the Python `credit._drawn` and `windowLayout` by a PouwCheck
-  difftest entry on fixed coins (not yet written). Its reading of the model's uniform permutation as the draw is exact only when the draw's stream is the
-  live coin's own bits; a stream expanded from the coin by SHA-512 is read as uniform under SHA-512 as a random oracle
+  period's committed `k`). `creditDrawn` is the verifier's own draw (`Credit.windowDrawn`, which `windowLayout` holds
+  the proofs to), and PouwCheck's `window-drawn` difftest holds it to the Python verifier's `credit._window_drawn`. Its
+  reading of the model's uniform permutation as the draw is exact only when the draw's stream is the live coin's own
+  bits; a stream expanded from the coin by SHA-512 is read as uniform under SHA-512 as a random oracle
   (R-ACCEL-3), a named assumption Daniel confirms, which this statement then uses.
 * `RegisteredBeforeDraw`, `SaltIsLiveCoin`: as in `H1CheckedCreditPeriod`.
 * `TileServiceSound`: a fact to prove, C-Flock's soundness at each drawn unit under live coins.
@@ -170,17 +171,12 @@ def WindowAccepts (r : Registered) (e : Answered) : Prop :=
   ∃ got : List ℕ, PouwCheck.Credit.window e.key e.ledger e.pins e.main r.window e.session r.salt r.calls r.served
     r.commit e.rounds e.draw r.descriptor r.entries e.proofs e.live r.k r.rows = .ok got
 
-/-- **The units the window's draw demands proofs of**, as `Credit.windowLayout` computes them: `Credit.drawnOf` at
-the draw coin (`LiveOpening.ofJson` of the draw's `coin`), the window's root, the draw's root, its receipts, the strata
-of the descriptor's layout (`Credit.strata` of `Credit.layoutOf` of the hex-decoded descriptor) and the period's `k`. -/
-def creditDrawn (r : Registered) (e : Answered) : PouwCheck.R (Array ℕ) := do
-  let some d := (match r.descriptor with
-      | .str s => if PouwCheck.Credit.isHexBytes s then PouwCheck.hex? (.str s) else none
-      | _ => none) | throw ("layout", "the descriptor is not hex")
-  let ss ← PouwCheck.Credit.strata (← PouwCheck.Credit.layoutOf d)
-  let o ← (SampledProofs.Challenger.LiveOpening.ofJson (PouwCheck.get e.draw "coin")).mapError fun m => ("coin", m)
-  PouwCheck.Credit.drawnOf o.coin (PouwCheck.get r.window "root") (PouwCheck.get e.draw "root")
-    (Json.mkObj [("receipts", PouwCheck.get e.draw "receipts")]) ss r.k
+/-- **The units the window's draw demands proofs of**: `Credit.descriptorDrawn`, the verifier's `Credit.windowDrawn`
+(the draw `Credit.windowLayout` holds the proofs to) over the strata of the descriptor's layout, at the window's root,
+the draw's coin, root and receipts and the period's `k`. The `window-drawn` difftest holds it to the Python verifier's
+`credit._window_drawn`. -/
+def creditDrawn (r : Registered) (e : Answered) : PouwCheck.R (Array ℕ) :=
+  PouwCheck.Credit.descriptorDrawn r.window e.draw r.descriptor r.k
 
 /-- **A period's windows as `Credit.window` reads them**: on the period's coins, window `w`'s registration and the
 rest of its inputs, each any function of the coins. -/

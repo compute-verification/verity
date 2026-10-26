@@ -1165,6 +1165,18 @@ def _drawn(coin: bytes, stream: Any, registration: Any, receipt: Any, ss: list[d
     return (None, ("sampler", "the draw's stream ran out")) if got is None else (got, None)
 
 
+def _window_drawn(window: dict, draw: dict, ss: list[dict], k: Any
+                  ) -> tuple[list[int] | None, tuple[str, str] | None]:
+    """The units the window's draw coin (`draw`'s ``coin``, a live opening) draws over the strata `ss` at the period's
+    committed K `k`, its stream the window's root, its registration the draw's root and its receipt ``{"receipts": …}``
+    (`_drawn`), and None; or None and the refusal."""
+    try:
+        coin = Ch.LiveOpening.from_json(draw.get("coin")).coin
+    except Ch.CoinError as e:
+        return None, ("coin", f"the draw coin: {e}")
+    return _drawn(coin, window.get("root"), draw.get("root"), {"receipts": draw.get("receipts")}, ss, k)
+
+
 def _finding(x: Any) -> list[tuple[str, str, str]] | None:
     """A session's registered finding (flock-verify's ``registered``, ``{port: {value, root}}``: each registered port's
     value and the root its reads were opened against) as ``(port, value, root)`` in port order, or None."""
@@ -1922,8 +1934,7 @@ def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: A
         why = _length(max_tokens, rows, layout, len(rounds))
     if why is not None:
         return None, why
-    units, why = _drawn(Ch.LiveOpening.from_json(draw["coin"]).coin, window["root"], draw["root"],
-                        {"receipts": draw["receipts"]}, ss, k)
+    units, why = _window_drawn(window, draw, ss, k)
     proofs = None
     if why is None:
         proofs, why = proved(layout, bytes.fromhex(descriptor), units, len(rounds))
