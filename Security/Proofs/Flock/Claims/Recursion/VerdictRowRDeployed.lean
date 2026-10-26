@@ -245,7 +245,7 @@ theorem sh_alg {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo =
   have e : D.sh cls 0 = FlockSoundness.Refine.shapeOf (Setup.ofCircuit st) ((fast100 st.m).getD default)
       (D.files cls 0).extras.size := by
     show FlockSoundness.Refine.shapeOf (tabsOf D.sts)[0]! ((fast100 (tabsOf D.sts)[0]!.m).getD default) _ = _
-    rw [htab] <;> rfl
+    rw [htab]; rfl
   rw [e]
   have hmm : st.m = r.shape.m := by rw [hm, e1]
   have hkk : st.c.kLog = r.shape.kLog := by rw [hk, e2]
@@ -300,8 +300,8 @@ theorem w_size (hG : D.RowG cls acc i) (hpts : D.sess.points = pointsOf D.spec D
   have hs := D.ctx_sch cls acc i r hG
   have hv := FlockDecodeTies.vals_repFrames_rounds (sh := D.sh cls i) (st := (D.ctx (2 * i + r)).st)
     (sch := (D.ctx (2 * i + r)).sch) (n := (D.ctx (2 * i + r)).n) (D.ctx (2 * i + r)).dom D.d.f.ps[2 * i + r]!
-    (D.T (2 * i + r)) (by rw [D.ctx_st cls acc i r hG] <;> rfl)
-    (by rw [D.ctx_st cls acc i r hG] <;> exact hG.foldKLog) hn hs rfl hp.r1ab hp.r1c hp.zPartial
+    (D.T (2 * i + r)) (by rw [D.ctx_st cls acc i r hG]; rfl)
+    (by rw [D.ctx_st cls acc i r hG]; exact hG.foldKLog) hn hs rfl hp.r1ab hp.r1c hp.zPartial
     (fun k hk => FlockDecodeTies.rsEach_get hp (by rw [← hn]; exact hk))
     (by rw [hs]; exact FlockDecodeTies.yr_size hp)
   rw [← Array.length_toList]
@@ -327,7 +327,7 @@ theorem partsZero_of_pieces {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (
     (elemAt : Claims.Msg → List Claims.Msg → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
     (vvAt : Claims.Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
     (hres : ∀ q ∈ rpieces, resHolds elemAt vvAt q x ms cs) (keyAt : ℕ → ℕ × ℕ × ℕ × ℕ)
-    (hcover : ∀ p (hp : p < gs.size), ∃ q ∈ rpieces, q.key = keyAt p ∧
+    (hcover : ∀ p (_hp : p < gs.size), ∃ q ∈ rpieces, q.key = keyAt p ∧
       ∃ ns nv, RecResiduals.part (D.sh cls i) p = .ok (q.S, ns, nv))
     (hE : ∀ p (hp : p < gs.size) k (hk : k < (wIdx (portSizes (D.sh cls i)) gs[p].2.1).size),
       elemAt x ms (keyAt p) k = el (D.rep cls acc i r).w (wIdx (portSizes (D.sh cls i)) gs[p].2.1)[k])
@@ -377,7 +377,7 @@ theorem runs_assembled_R {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : 
     (hres : ∀ q ∈ rpieces, resHolds elemAt vvAt q x ms cs) (keyAt : Fin 2 → ℕ → ℕ × ℕ × ℕ × ℕ)
     (hcoverR : ∀ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
       structureOf (D.sh cls i) = .ok S → groups S (portSizes (D.sh cls i)) = .ok gs →
-      ∀ (r : Fin 2) p (hp : p < gs.size), ∃ q ∈ rpieces, q.key = keyAt r p ∧
+      ∀ (r : Fin 2) p (_hp : p < gs.size), ∃ q ∈ rpieces, q.key = keyAt r p ∧
         ∃ ns nv, RecResiduals.part (D.sh cls i) p = .ok (q.S, ns, nv))
     (hE : ∀ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
       structureOf (D.sh cls i) = .ok S → groups S (portSizes (D.sh cls i)) = .ok gs →
