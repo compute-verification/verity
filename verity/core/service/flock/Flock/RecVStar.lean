@@ -466,7 +466,8 @@ def vstarRows (sub : VStar.Sub) (u : VStar.UnitC) : List (String × Nat × Nat) 
     (sub.outputs.zip u.outPorts).map fun (nm, w) => (nm, (w + 63) / 64 * 64, 16 * ((w + 63) / 64 * 64))
 
 /-- **The circuit parsed from V*'s file carries V*'s META** (`VStar.metaHead`): one unit per VU, no leaf cuts, the
-unit's input leaves its input words in order, and V*'s row ports (`vstarRows`). `checkFile` holds the bytes to V*'s;
+unit's input leaves its input words in order, V*'s row ports (`vstarRows`), and the unit's output leaves its output words
+in order (`UnitC.leaves`' `out`). `checkFile` holds the bytes to V*'s;
 this holds what the verifier parsed from them, which no proof reads through `Lean.Json.parse`, to what V* wrote. -/
 def checkParsed (s : VStar.Stmt) (c : Circuit) : V Unit := do
   let u ← match s.unit with
@@ -479,6 +480,8 @@ def checkParsed (s : VStar.Stmt) (c : Circuit) : V Unit := do
   let ports := c.ports.toList.map fun p => (p.name, p.words, p.bits)
   if ports != vstarRows s.sub u then
     throw s!"{s.name}: the parsed circuit's row ports {ports} are not V*'s {vstarRows s.sub u}"
+  if c.leavesOut.getD 0 #[] != Array.range u.outWords then
+    throw s!"{s.name}: the parsed circuit's output leaves are not V*'s, its {u.outWords} output words in order"
 
 /-- The whole S's row ports' names (`VStar.Algebra.spec`'s): round `r`'s `m<r>`, then `acc0` and `acc1`. -/
 def portNames (sh : Shape) : Array String :=
@@ -576,9 +579,21 @@ def checkMeta (c : Circuit) (f : VStar.Bindings) : V Unit := do
   let (mc, fc) := (← canon b.programDigests, ← canon f.programDigests)
   if mc != fc then throw s!"{name}: META program_digests {mc}, the verifier's bindings' {fc}"
 
+/-- Whether V*'s file of statement `s` over an inner session of holo flag `holo` carries META `holo` (`circuitFile`):
+at a part's statement over a holo session. -/
+def partHolo (s : VStar.Stmt) (holo : Bool) : Bool := holo && s matches .inner ..
+
+/-- **The parsed circuit's META `holo` is V*'s file's**: `RecResiduals.holoOf c` is `true` exactly at a part's statement
+over a holo inner session, where `circuitFile` writes META `holo` (`VStar.emitCircuitHolo`), and `false` elsewhere, where
+it writes none. `checkFile` holds the bytes to V*'s; this holds what `checkPart` reads of the parsed circuit, which no
+proof reads through `Lean.Json.parse`, to what V* wrote. -/
+def checkHolo (s : VStar.Stmt) (c : Circuit) (holo : Bool) : V Unit := do
+  if (← RecResiduals.holoOf c) != partHolo s holo then
+    throw s!"{s.name}: the circuit's META holo is not V*'s file's ({partHolo s holo}) at the inner session's holo flag {holo}"
+
 /-- `checkMeta` of the circuit `c`, parsed from the circuit file `circuitB`, against the verifier's own bindings `f`, then
 `check` on its unit over `n` instances at the inner shape `i` as V*'s statement `part`, `checkFile` on `circuitB` under
-`f` at `i`'s holo flag, and `checkParsed` and `checkPart` on `c`. -/
+`f` at `i`'s holo flag, `checkParsed` and `checkPart` on `c`, and `checkHolo` on `c` at `i`'s holo flag. -/
 def checkCircuit (i : Inner) (part : Nat) (c : Circuit) (n : Nat) (circuitB : ByteArray) (f : VStar.Bindings) :
     V VStar.Stmt := do
   checkMeta c f
@@ -586,6 +601,7 @@ def checkCircuit (i : Inner) (part : Nat) (c : Circuit) (n : Nat) (circuitB : By
   checkFile s f circuitB i.holo
   checkParsed s c
   checkPart s c
+  checkHolo s c i.holo
   pure s
 
 /-- A statement's message ports that `ownPorts` leaves out: RecSparse's messages but `h` and `claim`, each `<p>` under
