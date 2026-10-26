@@ -41,7 +41,8 @@ nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit 
 mkdir -p "$STORE"
 research keep "$STORE" --owner @kernels --expires 2026-11-01 --priority normal \
   --why "KSTAGE (HASH-12): layer $LAYER's W blocks and its P2 development store, encoded across leases" > /dev/null 2>&1
-"$PY" -m verity_torch_loop.weights manifest --shape h200 --out "$STORE/manifest.json" 2> "$O/prepare.log"
+"$PY" -m verity_torch_loop.weights manifest --shape h200 --seed "$SEED" --out "$STORE/manifest.json" 2> "$O/prepare.log" \
+  || { step manifest $?; cat "$O/rc.txt" "$O/prepare.log"; exit 2; }
 read -r LO HI < <("$PY" - <<'EOF'
 import json, os, sys
 sys.path.insert(0, os.environ["D"])
