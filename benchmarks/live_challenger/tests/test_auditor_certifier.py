@@ -48,8 +48,8 @@ def test_a_lane_key_starts_a_rehearsal_and_a_second_waits_for_it_to_end(host):
                    started=started)
     doc = json.loads(out)
     assert rc == 0 and doc == {"run": "c20261023T110000Z-ab12", "peer": "vy-nebius-1", "port": 8011, "minutes": 30,
-                               "tamper": "extra", "requests": 400, "profile": "planned", "temperature": 0.0,
-                               "top_p": 1.0, "by": "network-accounting",
+                               "tamper": "extra", "requests": 400, "height": 20, "profile": "planned",
+                               "temperature": 0.0, "top_p": 1.0, "by": "network-accounting",
                                "requested_utc": "2026-10-23T11:00:00Z", "unit": "vy-certifier@c20261023T110000Z-ab12.service"}
     assert started == [doc["run"]]
     request = json.loads((host.certifier / doc["run"] / "request.json").read_text())
@@ -73,6 +73,8 @@ A_SAMPLING_REFUSED = [
     ("--top-p", "above 0, at most 1", ["0", "0.0", "0.0000", "1.0001", "1.1", "2", "-0.5", ".9", "nan", "1e0", "9e-1",
                                        "0.99999", ""]),
 ]
+#: what both rehearsal verbs refuse of `--height`, (value, the refusal)
+A_HEIGHT_REFUSED = [(v, "10 to 20") for v in ("9", "1", "0", "21", "30", "010", "20.0", "+20", "20 ", "1e1", "H", "")]
 
 
 @pytest.mark.parametrize("bad, why", [
@@ -106,6 +108,7 @@ A_SAMPLING_REFUSED = [
     (["--upstream", "http://10.0.0.2:8011"], "unrecognized arguments: --upstream"),
     (["--command", "id"], "unrecognized arguments: --command"),
     *[([flag, v], f"--{flag[2:]} {v!r}: {why}") for flag, why, values in A_SAMPLING_REFUSED for v in values],
+    *[(["--height", v], f"--height {v!r}: {why}") for v, why in A_HEIGHT_REFUSED],
 ])
 def test_the_gate_refuses_a_rehearsal_it_cant_check(host, bad, why):
     good = dict(zip(REQUEST[1::2], REQUEST[2::2]))
@@ -224,8 +227,9 @@ def test_the_rehearsal_runs_certifier_serve_on_the_requests_shim_and_profile_thr
     req = {"requests": 400, "tamper": None, "profile": "planned"}
     argv = A.certifier_command(req, tmp_path, "http://127.0.0.1:40001", tree=Path("/opt/vy-challenger") / PIN)
     assert argv[1:] == [f"/opt/vy-challenger/{PIN}/benchmarks/network_traces/certifier_serve.py", "rehearse",
-                        "--upstream", "http://127.0.0.1:40001", "--out", str(tmp_path), "--requests", "400",
-                        "--temperature", "0.0", "--top-p", "1.0", "--profile", "planned", "--strategies", "honest"]
+                        "--upstream", "http://127.0.0.1:40001", "--out", str(tmp_path), "--height", "20",
+                        "--requests", "400", "--temperature", "0.0", "--top-p", "1.0", "--profile", "planned",
+                        "--strategies", "honest"]
     assert A.certifier_command(req | {"tamper": "late"}, tmp_path, "u")[-2:] == ["--strategies", "late"]
     assert A.certifier_command(req | {"profile": "served"}, tmp_path, "u")[-4:-2] == ["--profile", "served"]
     del req["profile"]
@@ -277,19 +281,37 @@ def test_a_rehearsals_sampling_is_recorded_and_reaches_every_request(host, tmp_p
     assert [float(argv[argv.index(f) + 1]) for f in ("--temperature", "--top-p")] == list(recorded.values())
 
 
+@pytest.mark.parametrize("given, height", [([], 20), (["--height", "20"], 20), (["--height", "16"], 16),
+                                           (["--height", "10"], 10), (["--traffic", "varied"], 20),
+                                           (["--traffic", "varied", "--height", "10"], 10)])
+def test_a_rehearsals_keys_are_the_deployed_keys_height_unless_its_request_gives_one(host, tmp_path, given, height):
+    """The keys' height is the deployed key's (`lms.DEPLOYED`, 20) unless the request gives `--height` (10 to 20),
+    recorded and passed on to `certifier_serve.py rehearse`, which makes both keys at it: a run of record never signs
+    at a rehearsal's own 10 by default."""
+    assert A.REHEARSAL_HEIGHT == (10, A.lms.DEPLOYED.H) and A.lms.DEPLOYED.H == 20
+    rc, out = gate(host, REQUEST + given, started=[])
+    assert rc == 0, out
+    request = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
+    assert request["height"] == height
+    argv = A.certifier_command(request, tmp_path, "u")
+    assert argv.count("--height") == 1 and argv[argv.index("--height") + 1] == str(height)
+
+
 def test_with_neither_in_flight_nor_tokens_the_request_and_command_are_todays(host, tmp_path):
     """A request without `--in-flight` or `--tokens` records neither and runs `certifier_serve.py rehearse` on its own
     4 and 64, exactly as before the gate took them; a request.json written before them reads the same. Its sampling is
-    the defaults, temperature 0 and top_p 1, always recorded and passed on."""
+    the defaults, temperature 0 and top_p 1, and its keys' height the deployed key's, 20, each always recorded and
+    passed on, a request.json written before the gate took them running at the same."""
     run = started_run(host)
     request = json.loads((host.certifier / run / "request.json").read_text())
     assert "in_flight" not in request and "tokens" not in request
-    assert request["temperature"] == 0.0 and request["top_p"] == 1.0
+    assert request["temperature"] == 0.0 and request["top_p"] == 1.0 and request["height"] == 20
     argv = A.certifier_command(request, tmp_path, "http://127.0.0.1:40001", tree=Path("/opt/vy-challenger") / PIN)
     assert argv == [sys.executable, f"/opt/vy-challenger/{PIN}/benchmarks/network_traces/certifier_serve.py",
-                    "rehearse", "--upstream", "http://127.0.0.1:40001", "--out", str(tmp_path), "--requests", "400",
-                    "--temperature", "0.0", "--top-p", "1.0", "--profile", "planned", "--strategies", "honest"]
-    older = {k: v for k, v in request.items() if k not in ("temperature", "top_p")}
+                    "rehearse", "--upstream", "http://127.0.0.1:40001", "--out", str(tmp_path), "--height", "20",
+                    "--requests", "400", "--temperature", "0.0", "--top-p", "1.0", "--profile", "planned",
+                    "--strategies", "honest"]
+    older = {k: v for k, v in request.items() if k not in ("temperature", "top_p", "height")}
     assert A.certifier_command(older, tmp_path, "http://127.0.0.1:40001", tree=Path("/opt/vy-challenger") / PIN) == argv
 
 
@@ -327,14 +349,14 @@ def test_a_varied_rehearsal_records_its_flags_when_given_and_runs_the_varied_pla
     doc = json.loads(out)
     assert rc == 0 and started == [doc["run"]]
     assert {k: v for k, v in doc.items() if k not in ("run", "by", "requested_utc", "unit")} == {
-        "peer": "vy-nebius-1", "port": 8011, "minutes": 30, "tamper": "token", "requests": 400, "traffic": "varied",
-        "temperature": 0.0, "top_p": 1.0} | recorded
+        "peer": "vy-nebius-1", "port": 8011, "minutes": 30, "tamper": "token", "requests": 400, "height": 20,
+        "traffic": "varied", "temperature": 0.0, "top_p": 1.0} | recorded
     request = json.loads((host.certifier / doc["run"] / "request.json").read_text())
     assert request == {k: v for k, v in doc.items() if k != "unit"}
     argv = A.certifier_command(request, tmp_path, "http://127.0.0.1:40001", tree=Path("/opt/vy-challenger") / PIN)
     assert argv == [sys.executable, f"/opt/vy-challenger/{PIN}/benchmarks/network_traces/certifier_serve.py",
-                    "rehearse", "--upstream", "http://127.0.0.1:40001", "--out", str(tmp_path), "--requests", "400",
-                    *passed, "--temperature", "0.0", "--top-p", "1.0", "--traffic", "varied", "--name", doc["run"],
+                    "rehearse", "--upstream", "http://127.0.0.1:40001", "--out", str(tmp_path), "--height", "20",
+                    "--requests", "400", *passed, "--temperature", "0.0", "--top-p", "1.0", "--traffic", "varied", "--name", doc["run"],
                     "--strategies", "token"]
 
 
