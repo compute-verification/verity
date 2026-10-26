@@ -119,11 +119,20 @@ def test_a_kind_is_in_its_direction():
 
 
 def test_request_and_response_rows():
-    assert TR.request_rows([b"hi", b"abc"], 3, 4) == [[2, 104, 105, 0, 0], [3, 97, 98, 99, 0], [0, 0, 0, 0, 0]]
-    assert TR.response_rows([b"x", b""], 2, 2) == [[120 | 256], [0], [0], [0]]
-    with pytest.raises(ValueError, match="past the class's 4"):
+    assert TR.request_rows([b"hi", b"ab"], 2, 2) == [[104, 0], [105, 0], [97, 0], [98, 0]]
+    assert TR.response_rows([b"\xff"], 1, 1) == [[255, 0]]
+    req, resp = [bytes(range(8)), b"\x80" * 8], [bytes(range(24)), bytes(range(255, 231, -1))]
+    rows = TR.request_rows(req, 2)
+    assert len(rows) == 2 * TR.PROMPT and rows[TR.PROMPT + 3] == [0x80, 0] and rows[5] == [5, 0]
+    rows = TR.response_rows(resp, 2)
+    assert len(rows) == 2 * TR.GENERATED and rows[TR.GENERATED] == [255, 0] and rows[23] == [23, 0]
+    with pytest.raises(ValueError, match="is 5 bytes, not the class's 4: its rows carry no length"):
         TR.request_rows([b"hello"], 1, 4)
-    with pytest.raises(ValueError, match="requests in a window of 1 slots"):
-        TR.request_rows([b"a", b"b"], 1, 4)
-    with pytest.raises(ValueError, match="past the class's 1"):
-        TR.response_rows([b"ab"], 1, 1)
+    with pytest.raises(ValueError, match="is 3 bytes, not the class's 4"):
+        TR.request_rows([b"abc"], 1, 4)
+    with pytest.raises(ValueError, match="2 requests in a window of 1 slots"):
+        TR.request_rows([b"a", b"b"], 1, 1)
+    with pytest.raises(ValueError, match="1 responses in a window of 2 slots: .* no absent marker"):
+        TR.response_rows([b"a"], 2, 1)
+    with pytest.raises(ValueError, match="is 23 bytes, not the class's 24"):
+        TR.response_rows([bytes(23)], 1)
