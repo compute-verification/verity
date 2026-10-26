@@ -35,7 +35,8 @@
   "Properties.Accounting.Served",
   "Properties.RemoteAudit.Line",
   "Properties.RemoteAudit.Schedule",
-  "Properties.RemoteAudit.Live"
+  "Properties.RemoteAudit.Live",
+  "Properties.Composition"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -200,9 +201,16 @@
   "CircuitRequirement",
   "Definitions.Accounting",
   "Definitions.Claims",
-  "Definitions.Pouw.Basic"
+  "Definitions.Pouw.Basic",
+  "Properties.Composition",
+  "CoreComposition"
  ],
  "layers": {
+  "Properties.Composition": {
+   "imports": ["CoreComposition.Product"],
+   "except": [],
+   "why": "the properties are stated against the composition's own functions and the core interface's, on Lean core: nothing of Mathlib or of `security`"
+  },
   "Properties.Pouw": {
    "imports": ["PouwWindow", "PouwCheck", "PouwCommit"],
    "except": ["Properties.Pouw.Credit"],
@@ -563,6 +571,12 @@
    "signature": ["Properties.CertifierDevice.records : Properties.CertifierDevice.Records"],
    "assumptions": [],
    "type_hash": "3d10d8c7be7195759652912607c6aa1859289fc9b053d0891c0df0d5576643f3"
+  },
+  "Properties.Composition.acceptMeans": {
+   "owner": "@proofs"
+  },
+  "Properties.Composition.answerAccepts": {
+   "owner": "@proofs"
   },
   "Properties.Evaluator.Casts.bf16ToF32": {
    "owner": "@circuits",
@@ -2024,6 +2038,14 @@
    "Properties.CertifierDevice.records": {
     "function": "CertifierDevice.step",
     "outcome": "none"
+   },
+   "Properties.Composition.acceptMeans": {
+    "function": "Core.Composition.check",
+    "outcome": "accept"
+   },
+   "Properties.Composition.answerAccepts": {
+    "function": "Core.Protocol.answer",
+    "outcome": "accept"
    },
    "Properties.Evaluator.Casts.bf16ToF32": {
     "function": "Evaluate.Casts.bf16ToF32",
