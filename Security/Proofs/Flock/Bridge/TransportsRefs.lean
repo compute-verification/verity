@@ -243,13 +243,12 @@ theorem loadPublic_counts {tags : Flock.Tags} {c : Flock.Circuit} {file : ByteAr
        obtain rfl := Option.some.inj ht
        exact sharedRows_spec ‹_›)
 
-theorem getD_eq_getElem! (a : Array ℕ) (k : ℕ) : a.getD k 0 = a[k]! := by
+theorem getD_zero_eq_getElem! (a : Array ℕ) (k : ℕ) : a.getD k 0 = a[k]! := by
+  rw [Array.getD_eq_getD_getElem?]
   by_cases h : k < a.size
-  · rw [getElem!_pos a k h]
-    simp [Array.getD, h]
-  · rw [getElem!_neg a k h]
-    simp [Array.getD, h]
-    rfl
+  · rw [Array.getElem?_eq_getElem h, Option.getD_some, getElem!_pos a k h]
+  · rw [Array.getElem?_eq_none (by omega), Option.getD_none, getElem!_neg a k h]
+    try rfl
 
 /-- **The verifier's leaf map holds every unit's row**: at a public file `HmOut.loadPublic` accepts, unit `u`'s ref at
 port `q` is below `q`'s leaf count, with or without shared rows. -/
@@ -261,16 +260,19 @@ theorem ref_lt_cnt {tags : Flock.Tags} {c : Flock.Circuit} {file : ByteArray} {p
   | none => rw [LeafMap.ofPublic_none nl ht]; exact hu
   | some t =>
     rw [LeafMap.ofPublic_some nl ht]
-    obtain ⟨hrs, hlt, -, -⟩ := (FlockSoundness.Discharge.Hidden.loadPublic_shared h').2 t ht
+    obtain ⟨-, hlt, -, -⟩ := (FlockSoundness.Discharge.Hidden.loadPublic_shared h').2 t ht
     obtain ⟨hcs, hpos⟩ := loadPublic_counts h' t ht
-    dsimp only at hrs hlt hcs
+    have hlt' : ∀ k < t.refs.size, t.refs[k]! < t.counts[k % c.ports.size]! := hlt
+    have hcs' : t.counts.size = c.ports.size := hcs
     show t.refs.getD (u * c.ports.size + q) 0 < t.counts.getD q 0
-    rw [getD_eq_getElem!, getD_eq_getElem!]
+    rw [getD_zero_eq_getElem!, getD_zero_eq_getElem!]
     by_cases hk : u * c.ports.size + q < t.refs.size
-    · have := hlt _ hk
-      rwa [Nat.mul_comm, Nat.mul_add_mod, Nat.mod_eq_of_lt hq] at this
+    · have hmod : (u * c.ports.size + q) % c.ports.size = q := by
+        rw [Nat.mul_comm, Nat.mul_add_mod, Nat.mod_eq_of_lt hq]
+      have := hlt' _ hk
+      rwa [hmod] at this
     · rw [getElem!_neg t.refs _ hk]
-      have hqc : q < t.counts.size := by rw [hcs]; exact hq
+      have hqc : q < t.counts.size := by rw [hcs']; exact hq
       rw [getElem!_pos t.counts q hqc]
       exact hpos _ (Array.getElem_mem hqc)
 

@@ -67,8 +67,14 @@ theorem LeafMap.ofPublic_some {c : Flock.Circuit} {pub : Flock.Public} {t : Floc
 `pub.digest u q np`, what the game's registered leaf hashes. -/
 theorem LeafMap.dig_ref (c : Flock.Circuit) (pub : Flock.Public) (nl q u : ℕ) :
     (LeafMap.ofPublic c pub nl).dig q ((LeafMap.ofPublic c pub nl).ref q u) = pub.digest u q c.ports.size := by
-  unfold LeafMap.ofPublic Flock.Public.digest
-  cases pub.tables <;> rfl
+  unfold LeafMap.ofPublic
+  cases h : pub.tables with
+  | none => rfl
+  | some t =>
+    have e : pub.digest u q c.ports.size =
+        pub.digests.getD (t.starts.getD q 0 + t.refs.getD (u * c.ports.size + q) 0) ByteArray.empty := by
+      simp only [Flock.Public.digest, h]
+    exact e.symm
 
 /-- Port `q`'s leaves at `L`: leaf `r` is the `hm96-sha512/row/v2` frame-v3 leaf of the tree leaf of `L.dig q r`. -/
 def leavesL (c : Flock.Circuit) (L : LeafMap) (q : ℕ) : Array ByteArray :=
