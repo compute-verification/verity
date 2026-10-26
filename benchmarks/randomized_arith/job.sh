@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# `honest.py` on one GPU of vy-dc-h200 (`research run --on vy-dc-h200 --gpus 1 --cwd source`, the two pinned ppl sets
-# sent with it): a smoke pass on SmolLM2-135M that checks the harness's exactness, then Llama-3.1-8B (the census model)
+# `honest.py` on one GPU of vy-dc-h200 under its own `gpu-lease 1 --wait` (`research run --on vy-dc-h200 --cwd source`,
+# the two pinned ppl sets sent with it): a smoke pass on SmolLM2-135M that checks the harness's exactness, then Llama-3.1-8B (the census model)
 # and Qwen3-8B. Each model's results are `$OUT/<model>/results.jsonl`; MMLU and GSM8K are fetched into the run's scratch
 # and their sha256 recorded there.
 #
 #   RA_MODELS  which of smoke,llama,qwen to run (default all three)
 #   RA_GEN     the arms GSM8K runs on Llama (default below)
+#   RA_MAX_MIN the lease's bound in minutes (default 300)
 set -uo pipefail
+if [[ -z ${GPU_LEASE_UUID:-} ]]; then
+  exec gpu-lease 1 --wait --max-min "${RA_MAX_MIN:-300}" -- bash "$0" "$@"
+fi
 OUT=${RESEARCH_RUN_DIR:?}/out
 mkdir -p "$OUT"
 PY=/workspace/cp/venv312/bin/python

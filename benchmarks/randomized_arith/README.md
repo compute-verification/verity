@@ -9,8 +9,8 @@ stacking cheater (workstream S3 of approach:stacking-properties/program)? This d
   5-shot on a fixed subset and GSM8K 8-shot.
 
 ~~~text
-research run --on vy-dc-h200 --gpus 1 --max-min 300 --project verity --campaign stacking-properties --source . \
-  --cwd source --send /path/wikitext-2-raw-v1-test.json --send /path/c4-validation.00000-of-00008.json.gz \
+research run --on vy-dc-h200 --project verity --campaign stacking-properties --source . --cwd source \
+  --env GPU_LEASE_WHO=memory-accounting-s3 --send /path/wikitext-2-raw-v1-test.json --send /path/c4-validation.00000-of-00008.json.gz \
   -- bash benchmarks/randomized_arith/job.sh
 ~~~
 
