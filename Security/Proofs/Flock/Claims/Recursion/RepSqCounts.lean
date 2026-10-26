@@ -198,6 +198,7 @@ theorem repRounds_counts {m kLog claims : ℕ} {sch : Flock.Schedule} {rs : Arra
     (hs : fast100 m = some sch) (hd : DimSeam sch) (h : RecVStar.repRounds m kLog claims = some rs) :
     rs.toList.map (·.1) = schedN sch m kLog claims := by
   obtain ⟨-, -, -, hc0, -, hcs, -⟩ := hd
+  simp only [Array.getD_eq_getD_getElem?] at hc0 hcs
   unfold RecVStar.repRounds at h
   simp only [hs, Std.Legacy.Range.forIn_eq_forIn_range'] at h
   simp only [Option.bind_eq_bind, Option.pure_def, Option.bind_some] at h
@@ -213,15 +214,16 @@ theorem repRounds_counts {m kLog claims : ℕ} {sch : Flock.Schedule} {rs : Arra
       · by_cases hi : i + 1 < sch.levels.size - 1
         · simp [h4, hi] at ht
           have hs2 := hI (by omega)
+          simp only [Array.getD_eq_getD_getElem?] at hs2
           have hc := hcs i (by omega)
+          have hsp : s.2 - 4 = (sch.levels[i + 1]?.getD default).cols := by omega
           refine ⟨_, ht.symm, ?_, fun _ => ?_⟩
-          · simp [passN, lvN, hi, rep3]
-            omega
-          · show s.2 - 4 + 1 = _
+          · simp [passN, lvN, hi, rep3, hsp]
+          · simp only [Array.getD_eq_getD_getElem?]
             omega
         · simp [h4, hi] at ht
           refine ⟨_, ht.symm, ?_, fun h' => absurd h' (by omega)⟩
-          simp [passN, hi, rep3]) _ _ _ _ (fun _ => by simp [hc0]; omega) hl
+          simp [passN, hi, rep3]) _ _ _ _ (fun _ => by simp only [Array.getD_eq_getD_getElem?]; omega) hl
   refine key.trans ?_
   simp [schedN, lvN]
 
@@ -238,7 +240,10 @@ theorem fast100_q_two {m : ℕ} {sch : Flock.Schedule} (hs : fast100 m = some sc
     ∀ i < sch.levels.size, 2 ≤ (sch.levels.getD i default).q := by
   have key : ∀ m : Fin 40, ∀ s ∈ fast100 m.val, (s.levels.all fun lv => decide (2 ≤ lv.q)) = true := by
     decide +kernel
-  have hm : m < 40 := by have := Rows.fast100_m hs; omega
+  have hm : m < 40 := by
+    by_contra h
+    rw [FlockSoundness.Refine.exec_fast100_none m (by omega)] at hs
+    cases hs
   intro i hi
   have h := Array.all_eq_true.1 (key ⟨m, hm⟩ sch hs) i hi
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi, Option.getD_some]
@@ -251,8 +256,8 @@ theorem sqs_levelFr {sch : Flock.Schedule} (p : Flock.LigeritoProof)
   rw [sqs_append, sqs_chFr]
   by_cases hc : i + 1 < sch.levels.size - 1
   · have hq1 := hq (i + 1) (by omega)
-    simp only [hc, ↓reduceIte, sqs_cons, sqs_append, sqs_introFr, sqs_queryFr p (lv := sch.levels.getD (i + 1) default) (by omega), sqs_kFr,
-      lvN, bitLength_pred hq1]
+    simp only [hc, ↓reduceIte, sqs_cons, sqs_append, sqs_introFr,
+      sqs_queryFr p (lv := sch.levels.getD (i + 1) default) (by omega), sqs_kFr, lvN, bitLength_pred hq1]
     simp [sqOf, capFr, sqs_nil]
   · have hq1 := hq (sch.levels.size - 1) (by omega)
     simp only [hc, ↓reduceIte, sqs_append, sqs_map_one,
