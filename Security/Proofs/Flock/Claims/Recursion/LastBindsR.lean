@@ -1,4 +1,7 @@
 import Proofs.Flock.Claims.KS.PlainDrawRColsE
+import Proofs.Flock.Claims.KS.PlainLock
+import Proofs.Flock.Claims.Complete.Zk.Run
+import Proofs.Flock.Claims.Recursion.VStarCross
 
 /-!
 # (P4) modulo what `E*` reads, and `LastCoinFree`, at the deployed reader (`nextR`)
@@ -28,6 +31,15 @@ open Claims.Recursion (Bound bindOC)
 open FlockDeploy (Coin FinalP nextR actR decR)
 
 /-! ## `LastCoinFree` -/
+
+/-- A coin request at some coins is one at any nonempty coins, of their own last coin. -/
+theorem act_coin_transfer {x : Msg} {as : List Msg} {cs cs' : List Coin} {c : Coin} (hc' : cs' ≠ [])
+    (h : FlockDeploy.act false x as cs = .coin c) : FlockDeploy.act false x as cs' = .coin (cs'.getLast hc') := by
+  rcases hs : FlockDeploy.setupOf false x with _ | ⟨s, spec, sts⟩
+  · rw [FlockDeploy.KS.act_none hs] at h
+    cases h
+  · obtain ⟨t, ht⟩ := act_coin_tag h
+    exact FlockComplete.act_coin_any hs ht (List.getLast?_eq_some_getLast hc')
 
 /-- **Off a coin request, `nextR`'s step reads no last coin**, past a first coin: `act` asks for no coin at either last
 coin (`act_coin_transfer`), and `decR` reads the coins only at the first and between the first and the last. -/

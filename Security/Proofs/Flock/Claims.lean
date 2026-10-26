@@ -66,8 +66,6 @@ import Proofs.Flock.Claims.Recursion.KSLin2
 import Proofs.Flock.Claims.Recursion.BitsLin2
 import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
 import Proofs.Flock.Claims.Recursion.SetupCalls
-import Proofs.Flock.Claims.Recursion.InnerLogFree
-import Proofs.Flock.Claims.Recursion.WithSetup
 import Proofs.Flock.Claims.Recursion.KSLin2Deployed
 import Proofs.Flock.Claims.Recursion.KSLin2Plain
 import Proofs.Flock.Claims.Recursion.LamDeployed
@@ -181,8 +179,12 @@ import Proofs.Flock.Claims.Recursion.VerdictLoop
 import Proofs.Flock.Claims.KS.PlainR
 import Proofs.Flock.Claims.Recursion.LastBindsR
 import Proofs.Flock.Claims.Recursion.KSLin2R
+import Proofs.Flock.Claims.Recursion.RoundSizes
 import Proofs.Flock.Claims.KS.PlainRConflict
 import Proofs.Flock.Claims.Recursion.LastSharedR
+import Proofs.Flock.Claims.Recursion.LastFilesR
+import Proofs.Flock.Claims.Recursion.LastCallsR
+import Proofs.Flock.Claims.Recursion.KSFlockLinR
 import Proofs.Flock.Claims.Recursion.VerdictFramed
 import Proofs.Flock.Claims.Recursion.CapPieces
 import Proofs.Flock.Claims.Recursion.RestVerdictDraw

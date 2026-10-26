@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Recursion.VerdictTargetL
+import Proofs.Flock.Claims.Recursion.RoundSizes
 import Proofs.Flock.Claims.Recursion.VerdictPublics
 import Proofs.Flock.Claims.Recursion.VerdictFramed
 import Proofs.Flock.Claims.Recursion.VerdictRowDCover
@@ -9,7 +10,7 @@ import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
 # `NonVacuous`'s row targets from the rows' deployed forms
 
 `TargetR` and `TargetD` from what rows R and D leave open at the deployed reader, with each rep's coin rounds at the
-shape's sizes from `Top.hsz_of_sched` at the schedule's coin counts (`hsched`):
+shape's sizes from `Top.hsz` (`RoundSizes`):
 
 * `targetR_of`: `TargetR` from `TargetRDep`, each rep's four accumulators (`hacc`) and the `rec-residuals` pieces with
   their cover and ties (`hcoverR`, `hE`, `hvv`): S and its groups are `DecAt.structure_ok`, `hw` is `DecAt.hw_of_acc`
@@ -43,14 +44,12 @@ section Targets
 variable (rd : Msg → Option FinalP) (P : Msg → List Msg → List Coin → Prop)
   (acc : Msg → List Msg → List Coin → ℕ → Array F128)
 
-/-- **Row R's target at the deployed reader**: the schedule's coin counts at the shape's round sizes (`hsched`), each
-rep's four accumulators, and `rec-residuals` pieces that hold, with one piece per (rep, group) at the copy `keyAt r p`
+/-- **Row R's target at the deployed reader**: each rep's four accumulators, and `rec-residuals` pieces that hold, with one piece per (rep, group) at the copy `keyAt r p`
 (`hcoverR`), the copy's elements `w` at the group's row ports (`hE`) and its verifier values `verifierRows`' `v` at
 the group's `V` (`hvv`). -/
 def TargetRDep : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ),
     i < D.sts.size →
-      (RecDeploy.repSchedAt D.spec D.sts[i]!).map (·.1) = FlockVBridge.Family.roundSizes (D.sh cls i) ∧
       (∀ r : Fin 2, (acc x ms cs (2 * i + r)).size = 4) ∧
       ∃ (rpieces : List ResPiece) (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
         (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128) (keyAt : Fin 2 → ℕ → ℕ × ℕ × ℕ × ℕ),
@@ -106,30 +105,28 @@ variable {rd : Msg → Option FinalP} {P : Msg → List Msg → List Coin → Pr
 theorem targetR_of (h : TargetRDep rd P acc) : TargetR rd P acc := by
   intro x ms cs hA D cls i hi
   obtain ⟨⟨xo, sto, hst, hf, hx⟩, hr, hb, -⟩ := id hA
-  obtain ⟨hsched, hacc, rpieces, elemAt, vvAt, keyAt, hres, hcoverR, hE, hvv⟩ := h x ms cs hA D cls i hi
+  obtain ⟨hacc, rpieces, elemAt, vvAt, keyAt, hres, hcoverR, hE, hvv⟩ := h x ms cs hA D cls i hi
   obtain ⟨S, gs, hS, hg⟩ := D.structure_ok cls hst hf hx hi D.points_eq
   have hG := D.rowG cls (acc x ms cs) hst hf hx hi
-  exact ⟨S, gs, hS, hg, hsz_of_sched acc hA D cls hi hsched,
+  exact ⟨S, gs, hS, hg, hsz acc hA D cls hi hS,
     fun r => D.hw_of_acc cls (acc x ms cs) i r hG D.points_eq (idx_lt D hi r)
       (shaped_of_base hr hb D _ (idx_lt D hi r)) hS (hacc r),
     fun r => D.partsZero_of_pieces cls (acc x ms cs) i r rpieces elemAt vvAt hres (keyAt r) (hcoverR S gs hS hg r)
       (hE S gs hS hg r) fun v info kappa hv => hvv S gs hS hg r v info kappa hv⟩
 
-/-- **`TargetD` from row D's deployed form**, with the reps' round sizes (`Top.hsz_of_sched` at `TargetRDep`'s
-`hsched`) for the verifier rows' run. -/
-theorem targetD_of (hR : TargetRDep rd P acc) (h : TargetDDep rd P acc) : TargetD rd P acc := by
+/-- **`TargetD` from row D's deployed form**, with the reps' round sizes (`Top.hsz`) for the verifier rows' run. -/
+theorem targetD_of (h : TargetDDep rd P acc) : TargetD rd P acc := by
   intro x ms cs hA D cls i hi
   obtain ⟨⟨xo, sto, hst, hf, hx⟩, -, -, -⟩ := id hA
   have hti : i < D.spec.tables.size := by
     obtain ⟨h1, h2⟩ := D.tables_of_dense hst hf hx
     omega
   obtain ⟨S, gs, hS, -⟩ := D.structure_ok cls hst hf hx hi D.points_eq
-  obtain ⟨hsched, -⟩ := hR x ms cs hA D cls i hi
   obtain ⟨key, hlev⟩ := h x ms cs hA D cls i hi
   exact D.rowD_target cls (acc x ms cs) key hi (Rows.sideAt rd) Rows.posAt
     (D.hside cls i hi (Rows.DecAt.rowDPiecesAt key i x))
     (D.hpos cls (acc x ms cs) i hst hf hx hi hti (Rows.DecAt.rowDPiecesAt key i x))
-    (D.rowsRun_of cls (acc x ms cs) hti hS (hsz_of_sched acc hA D cls hi hsched)) hlev
+    (D.rowsRun_of cls (acc x ms cs) hti hS (hsz acc hA D cls hi hS)) hlev
 
 /-- **`TargetDDep` from the Merkle checks** (`DecAt.levels_of_merkleOk`), at the copies `(t, r, ℓ, j)`. -/
 theorem targetDDep_of_merkle (h : TargetDMerkle rd P acc) : TargetDDep rd P acc := by
@@ -149,7 +146,7 @@ theorem targets_of_open (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → 
   ⟨fun x ms cs hA D cls _ hi r =>
       let ⟨_, _, hst, hf, hx⟩ := hA.1
       D.framed_dense cls (acc x ms cs) r hst hf hx hi,
-    targetL_holds acc, targetD_of hR (targetDDep_of_merkle hD), targetR_of hR, hE, hDec,
+    targetL_holds acc, targetD_of (targetDDep_of_merkle hD), targetR_of hR, hE, hDec,
     fun _ _ _ _ D => D.publics_empty⟩
 
 end Top
