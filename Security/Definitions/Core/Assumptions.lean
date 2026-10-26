@@ -1,4 +1,5 @@
 import Definitions.Core.TC.Spec
+import Definitions.Core.Accel.Card
 
 /-!
 # Named assumptions
@@ -37,17 +38,67 @@ and the special-value campaign in `total.py`. -/
 def GemmAmpereStep (step : Nat → List Nat → List Nat → Nat) : Prop :=
   ∀ acc a b, StepInputs AMPERE_BF16_M16N8K16 acc a b → step acc a b = Spec.tcDotTotal AMPERE_BF16_M16N8K16 acc a b
 
-/-- **`trusted-nebius-host`**: the auditor-trusted `device` (a network certifier, the memory challenger) is the
-auditor's hardware on a machine its host provider runs and the prover doesn't control; it runs its stated `code` on its
-Nebius host, and its host never restores an earlier copy of the state the device keeps there. `run device x` is
-everything the device does on input `x`: what it emits, and how it uses its clock and its keys. The host changes none of
-it. Nothing attests this, since no attestation hardware stands behind the device: it is trust in the auditor's device
-and its host provider, Nebius, never in a host the prover controls. It doesn't say the keys stay secret: a protocol that
-relies on the device's signatures proves its claim or finds, from the run, a forgery under the device's key.
+/-- **`trusted-host`**: the auditor-trusted `device` (a network certifier, the active warden, the memory challenger)
+is the auditor's hardware on a machine its host provider runs and the prover doesn't control; it runs its stated
+`code` on its host, and its host never restores an earlier copy of the state the device keeps there. `run device x`
+is everything the device does on input `x`: what it emits, when it emits it, and how it uses its clock and its keys.
+The host changes none of it. Two parts of that are easy to miss, and both are part of the assumption: the host
+isolates the device's CPU from every other tenant, so no other workload's load changes when the device runs or makes
+it miss a deadline its code meets; and it gives the device a monotonic clock, which never steps backwards. Nothing
+attests this, since no attestation hardware stands behind the device: it is trust in the auditor's device and its
+host provider, never in a host the prover controls. It doesn't say the keys stay secret: a protocol that relies on
+the device's signatures proves its claim or finds, from the run, a forgery under the device's key.
 
 This definition states only the part about one run. The state the device keeps on its host outlasts a run, which a
 statement of one run can't name; a property that relies on it names it in its docstring and takes no premise for it. -/
-def TrustedNebiusHost {Device In Out : Type} (device : Device) (run : Device → In → Out) (code : In → Out) : Prop :=
+def TrustedHost {Device In Out : Type} (device : Device) (run : Device → In → Out) (code : In → Out) : Prop :=
   ∀ x, run device x = code x
+
+/-- **`accel-product-form(card)`**, per product term: in every tensor-core MMA of the card whose semantics no capture
+pins (`x.dot`, the accelerator model's open dots), each multiplier forms one product from one operand pair (an element
+of a row of `A` and the same element of a column of `B`), and its output feeds exactly one adder tree, that row's and
+column's output, as `Accel.mulOut` (the operands' classes, the product's sign, the significands' product and the
+exponent fields' sum) and nothing else of the pair. The tree reads only its multipliers' outputs, its accumulator and
+its block scales. That is P2 at the hardware's level: the routing of pairs to one tree is the MMA's semantics
+(`Accel.mmaEval`, `P2Local`, `P2Distinct`), and this Prop states the rest for the open dots (`Accel.ProductForm`).
+
+Checked per card by a pair-swap capture: swap operand pairs whose `mulOut` agree, within one output and across
+outputs, and compare every output bit for bit. The captured dots have the form by their captures (H200:
+`HOPPER_SM90_S8_K32`, `HOPPER_BF16_M16N8K16`, the E4M3 and E5M2 K32 captures at a zero accumulator; RTX PRO 6000:
+the `BLACKWELL_SM120_*_M16N8K32` integer captures and BF16; `Accel.CapturedProductForm`, to prove). The open dots it
+covers, each still to capture: on the H200 FP8 at a nonzero accumulator, mixed E4M3 × E5M2 `wgmma`, f16, tf32 and b1;
+on the RTX PRO 6000 the E4M3, E5M2 and E2M1 K32 atom (its `BLACKWELL_SM120_*` value captures agree with
+`Sm120.f8Pipeline` in 99.96–99.997% of atoms only, PEARLC-MODEL; their pair swaps are this Prop's check), the
+block-scaled NVF4 and MXF4 (pinned in Python only), mixed f8f6f4 pairings, f16, tf32 and b1. -/
+def AccelProductForm (x : Accel.Open) : Prop :=
+  ∀ fa fb sat k, Accel.ProductForm fa fb k (x.dot fa fb sat k)
+
+/-- **`card-within-accel(card)`**: the card can do no more than its accelerator model, the refinement direction (a
+theorem about `c.machine` reaches the card only through it). `can f t` says the card, running any code on its units
+other than the exclusions below, takes every content `M` of its stores to `f M` within `t` ticks of the instance's
+clock. Then the card's true open parameters are some `x` meeting θ's floors (`c.floors`) with the product form
+(`AccelProductForm x`), and some program of `c.machine x` does the same on every content within `t` ticks, meeting
+G1 and G2 (`Machine.Fits`). So a theorem that holds over the instance at every `x` meeting the floors and the product
+form holds on the card: the open parameters are not a premise of their own, θ's floors and the product form are
+the whole of what is assumed about them.
+
+**Exclusions**, each a unit `can` doesn't use because it can't compute a committed word or a hash more cheaply than
+the model prices (the reasons are rows of the coverage table, `Accel/README.md`): the video and JPEG engines
+(fixed-function codecs on pixel formats); sm_120's RT cores (FP32 ray-box and ray-triangle tests); the texture path's
+filtering (FP interpolation at 8-bit fractional weights); the copy engines (moves only, at device memory's and the
+host link's bandwidth, which the model prices); and compute data compression (U7: the committed words are noised
+and incompressible; a method bound by device memory or L2 on compressible data of its own is outside the claim).
+
+**Gaps**, units the card has that the instances don't have yet, so the claim is open for code that uses them until
+each is added with its rate: 2:4-sparse MMA and its metadata selector, DMMA, `HFMA2` and `f16` accumulators, vector
+atomics and reductions (`red.v4`, `redux.sync`), TMA bulk reductions (`cp.reduce.async.bulk`), NVSwitch `multimem`
+reductions. The node's host CPUs and its host and peer links are other devices of the period
+(RT-PROTO P9, RT-UNITS U9), not units of the card. -/
+def CardWithinAccel {ι : Type} (c : Accel.Card) (cap : ι → ℕ) (oracle : ℕ) (can : (c.Mem → c.Mem) → ℕ → Prop) :
+    Prop :=
+  ∃ x : Accel.Open, c.floors x ∧ AccelProductForm x ∧
+    ∀ f t, can f t → ∃ (P : (c.machine x cap oracle).Prog ℕ) (sched : List (List ℕ)), sched.length ≤ t ∧
+      ∀ σ : (c.machine x cap oracle).State ℕ, (∀ θ, σ.pc θ = 0) →
+        Accel.Machine.Fits P σ sched ∧ (Accel.Machine.run P σ sched).1.mem = f σ.mem
 
 end Verity.Assumptions

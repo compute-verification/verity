@@ -1,0 +1,165 @@
+# The accelerator model: opcode coverage
+
+`Accel.Machine` is the model and `Accel.Isa` its instruction set. `Accel.H200` and `Accel.Sm120` are the two cards. The
+model claims that **the card can do no more than this machine**. That claim needs every SASS opcode of the card to be
+covered: either an opcode of `Accel.Isa` with the same semantics at no fewer units, or a coarser one that lets a
+program do at least as much. **The claim is not established yet.** The table below is a first transcription. It must
+be checked opcode by opcode against the source, and every *missing* row is a hole in it until that opcode is added.
+
+Sources:
+- **BU**: CUDA Binary Utilities 12.9, the instruction-set tables: §4.3 for Hopper (sm_90) and §4.4 for Blackwell (CC
+  10.0 to 12.0, sm_120 among them).
+- **PTX**: PTX ISA 9.0.
+- **Sheet**: the machine model's device sheets for sm_90 and sm_100.
+- **Census**: the DS-120 and DC-90 SASS census.
+
+Marks:
+- **covered**: the same semantics at the same or fewer units;
+- **coarse**: a model opcode that does at least as much, at no more units;
+- **missing**: not in the model.
+
+Where the two cards differ, a row says which. Otherwise it holds for both.
+
+## Tensor core
+
+| SASS | PTX | Mark | Model, or what is missing |
+|---|---|---|---|
+| IMMA.16816, IMMA.16832 (s8, u8, `.SAT`) | `mma.sync` m16n8k16/k32 | covered | `mma` s8/u8; dot pinned (`HOPPER_SM90_S8_K32`, `BLACKWELL_SM120_S8_M16N8K32`). On the H200 the tensor rate is `Open.sync` (CALIB) |
+| HMMA.16816 (f16, bf16), HMMA.1688 (tf32) | `mma.sync` | covered | `mma`. The bf16 dot is pinned; f16 and tf32 are `Open.dot`. On the H200 the rate is `Open.sync` |
+| HMMA with f16 accumulators | `mma.sync` `.f16` D | missing | f16 accumulators |
+| BMMA (b1 `.and.popc`, `.xor.popc`) | `mma.sync` `.b1` | coarse | `mma` b1 at `Open.b1` tensor units and an issue slot. `.xor.popc` is missing |
+| HGMMA, IGMMA, QGMMA, BGMMA (sm_90) | `wgmma.mma_async` | covered | `mma` at m = 64, A in registers or shared memory, B in shared memory, its operand words paying bank units (R2) |
+| QMMA.16832 (sm_120: e4m3, e5m2, e2m1) | `mma.sync` `kind::f8f6f4` | covered | `mma`. Same-format dots are pinned; mixed pairings are `Open.dot`. FP6 (e3m2, e2m3) is missing |
+| OMMA.SF.16864 (sm_120: nvf4, mxf4) | `mma.sync` `kind::mxf4nvf4` `.block_scale` | covered | `mma` nvf4/mxf4. The dot is `Open.dot` (pinned in Python only) |
+| QMMA.SF (sm_120 `kind::mxf8f6f4`) | `mma.sync` `.block_scale` | missing | block-scaled FP8 and FP6 |
+| HMMA.SP, IMMA.SP, QMMA.SP, OMMA.SP, the sparse GMMA | `mma.sp`, `wgmma.mma_async.sp` | missing | 2:4 sparsity: the same products at the same rate with a free gather of A |
+| DMMA (sm_90) | `mma.sync` `.f64` | missing | 128 f64 MACs an SM clock (Sheet); an int8 × int8 product is exact in f64 |
+| DMMA (sm_120) | `mma.sync` `.f64` | missing | to check: whether sm_120 has a tensor DMMA at any rate |
+
+## Integer and floating-point lanes
+
+| SASS | Mark | Model, or what is missing |
+|---|---|---|
+| IADD3, IMAD, IMAD.WIDE, LOP3, SHF, PRMT, POPC, FLO, BREV, ISETP, SEL, IMNMX, LEA | covered | `Lane` (`iadd3`, `mad`, `madWide` coarsely at one lane, `lop3`, `shf`, `prmt`, `popc`, `flo`, `brev`, `setp`, `sel`, `min`, `max`, `lea`) |
+| IMAD.HI, LEA.HI | covered, semantics not captured | `Lane.madHi` (PTX `mad.hi`), `Lane.leaHi` (the high word of the funnel shift, plus `b`); added at FOLD-SAT's report (CMP-131); their SASS semantics are to capture, and FOLD-SAT's SMT models are to align |
+| IDP.4A (dp4a) | covered | `Lane.dp4a` |
+| IDP.2A (dp2a) | missing | |
+| IABS, BMSK, SGXT, IMUL.HI (`mul.hi`), ISCADD | missing | each is a short sequence of covered lanes, at more units |
+| FADD, FMUL, FFMA | covered | `Lane.fadd`, `fmul`, `ffma` (round to nearest even), issue-bound |
+| FMNMX, FSEL, FSET, FSETP, FCHK, FSWZADD | missing | float compare, select and min/max |
+| MUFU (rcp, rsq, sqrt, ex2, lg2, sin, cos, tanh) | missing | the SFU pipe and its rate |
+| HADD2, HFMA2, HMUL2, HMNMX2, HSET2, HSETP2 | missing | two f16/bf16 results a lane (SIMD in a word) |
+| DADD, DFMA, DMUL, DSETP | missing | the FP64 pipe |
+| VABSDIFF, VABSDIFF4, VIMNMX (video, SIMD in a word) | missing | |
+| F2F, F2I, I2F, I2I, FRND, F2FP (the PACK_AB pack), I2FP, F2IP, I2IP | missing | conversions. F2FP is W1's `cvt` |
+
+## Uniform datapath
+
+| SASS | Mark | Model, or what is missing |
+|---|---|---|
+| UIADD3, UIMAD, ULOP3, USHF, UPRMT, UPOPC, UFLO, UBREV, UISETP, USEL, ULEA, UMOV | covered | `uni` at one issue slot (measured: Sheet `[uniform_issue]`) |
+| R2UR, S2UR, UR2UP, UP2UR, ULDC | coarse | uniform registers are pooled with the register file, so a move between them is a register copy |
+| REDUX, VOTEU, UF2FP, UBMSK, USGXT | missing | |
+
+## Moves, memory and atomics
+
+| SASS | Mark | Model, or what is missing |
+|---|---|---|
+| MOV | coarse | a register copy on the `alu` |
+| SHFL | covered | `Lane.shfl` on the shuffle pipe (`Res.shfl`, 32 lanes a SM-clock), beside the `alu` |
+| LDG, STG, LDS, STS, LDL, STL, LD, ST | covered | `copy` of at most 4 words, direct or `indirect` (an address register plus an offset) |
+| LDSM, STSM (`ldmatrix`, `stmatrix`) | coarse | 4-word copies. The `.trans` forms move 16-bit halves across lanes, which is missing |
+| MOVM (`movmatrix`) | missing | |
+| LDGSTS (`cp.async`) | coarse | a copy from device memory or L2 to shared memory, with no latency |
+| UTMALDG, UTMASTG, UBLKCP (TMA, `cp.async.bulk`) | coarse | a bulk copy of any length with shared memory at one end |
+| UTMAREDG (TMA reduce), TMA multicast | missing | |
+| ATOMS, ATOMG, ATOM, RED (add, exch) | covered | `atom` add and exch on shared memory, L2 and device memory. RED is an `atom` whose old value is discarded |
+| ATOMS, ATOMG (min, max, and, or, xor, inc, dec, cas), float atomics | missing | |
+| LDC (constant bank operands) | missing | constant-bank operands |
+| TEX, TLD, TLD4, TXD, TMML, SULD, SUST, SURED, SUATOM | **missing, important** | the texture path has its own bandwidth and filtering arithmetic (weighted sums of texels) outside every resource here |
+
+## Control and synchronization
+
+| SASS | Mark | Model, or what is missing |
+|---|---|---|
+| BRA, EXIT | covered | `bra` on a register, and a thread past its text's end |
+| predication (`@P`) | coarse | `pred` on a register (predicates are registers here) |
+| BRX, JMX, CALL, RET | missing | indirect branches and calls, which are emulable by `bra` trees at more units |
+| BSSY, BSYNC, WARPSYNC, BREAK | coarse | convergence: no data effect, and the schedule is free |
+| BAR, SYNCS (mbarrier), MEMBAR, FENCE, DEPBAR, ERRBAR, CCTL | coarse | the model is sequential within a tick and latency-free, so every synchronization holds at no cost |
+| S2R (`%tid`, `%clock`, `%smid`), CS2R | missing | special registers. A clock read is time as data, a side channel the model doesn't have |
+| VOTE, MATCH, ELECT | missing | |
+| NANOSLEEP, YIELD, PMTRIG | coarse | no data effect |
+
+## Every opcode of BU's lists
+
+The rows below take every opcode name in BU §4.3 (Hopper, 204 names) and §4.4 (Blackwell and Rubin, 257 names), as
+the page lists them (docs.nvidia.com/cuda/cuda-binary-utilities, fetched 26 Oct 2026). §4.4 doesn't say which of its
+opcodes sm_120 has, so its rows are the family's: the `tcgen05` and tensor-memory rows are sm_100's. A mark here is by
+the opcode's name and BU's one-line description, not yet by each variant's semantics: a *covered* opcode can still have
+uncovered variants (`.64`, other atomic operations, `f16` accumulators).
+
+### sm_90 (BU §4.3)
+
+| Opcodes | Mark | Model |
+|---|---|---|
+| BRA | covered | `Instr.bra` |
+| IDP4A | covered | `Lane.dp4a` |
+| FADD, FADD32I, FFMA32I, FFMA, FMUL, FMUL32I | covered | `Lane.fadd`/`ffma`/`fmul` (an immediate is an operand) |
+| FSEL, BREV, FLO, IADD, IADD3, IADD32I, IMAD, IMNMX, IMUL, IMUL32I, ISCADD, ISCADD32I, ISETP, LEA, LOP, LOP3, LOP32I, POPC, SHF, SHL, SHR, PRMT, SEL | covered | `Lane` integer functions (an immediate is an operand; `IMUL` is `mad` at `c = 0`, `SHL`/`SHR` are `shf`, `ISCADD` is `lea`) |
+| ATOM, ATOMS, ATOMG, REDAS, REDG | covered | `Op.atom` (the modelled operations; others missing) |
+| MOV, MOV32I, LD, LDG, LDL, LDS, LDSM, STSM, ST, STG, STL, STS, R2UR | covered | `Op.copy` (a lane load or store, at most 4 words) |
+| LDGSTS, STAS, UBLKCP, UTMALDG, UTMASTG | covered | `Op.copy` (bulk, shared memory at one end) |
+| BMMA, BGMMA | covered | `Op.mma` (`b1`, `Open.b1`) |
+| QGMMA | covered | `Op.mma` (`e4m3`/`e5m2`) |
+| HMMA, HGMMA | covered | `Op.mma` (`f16`/`bf16`/`tf32` with `f32` accumulators; `f16` accumulators missing) |
+| IMMA, IGMMA | covered | `Op.mma` (`s8`/`u8`, the integer path) |
+| UBREV, UFLO, UIADD3, UIMAD, UISETP, ULEA, ULOP, ULOP3, ULOP32I, UMOV, UPOPC, UPRMT, USEL, USHF, USHL, USHR | covered | `Op.uni` (integer, a whole issue slot) |
+| PLOP3, PSETP, P2R, R2P, UP2UR, UPLOP3, UPSETP, UR2UP | covered | predicates are registers: `Lane.lop3`, `setp`, register copies |
+| LDC, ULDC | coarse | a copy from device memory (constant banks) |
+| SHFL | covered | `Lane.shfl` on the shuffle pipe (`Res.shfl`) |
+| FENCE, LDGDEPBAR, SYNCS, CCTL, CCTLL, ERRBAR, MEMBAR, CCTLT, UCGABAR_ARV, UCGABAR_WAIT, USETMAXREG, WARPGROUP, WARPGROUPSET, UBLKPF, UTMACCTL, UTMACMDFLUSH, UTMAPF, ACQBULK, BMOV, BPT, BREAK, BSSY, BSYNC, CGAERRBAR, ENDCOLLECTIVE, EXIT, KILL, NANOSLEEP, PREEXIT, WARPSYNC, YIELD, BAR, DEPBAR, NOP, PMTRIG | coarse | no data effect: the schedule is free, so a program may omit it |
+| UCLEA, UIADD3.64, ULEPC | missing | 64-bit uniform and immediate moves, `UCLEA`, `ULEPC` |
+| FCHK, FMNMX, FSET, FSETP, FSWZADD | missing | FP32 compare, min/max, check, swizzle |
+| DADD, DFMA, DMMA, DMUL, DSETP | missing | FP64 |
+| MUFU | missing | MUFU (transcendentals) |
+| LDGMC, UBLKRED, UTMAREDG | missing | bulk and TMA reductions, multimem loads, shared reductions |
+| F2F, F2I, I2F, I2I, I2IP, I2FP, F2IP, FRND | missing | conversions |
+| QSPC, ELECT, GETLMEMBASE, LEPC, SETCTAID, SETLMEMBASE | missing | elect, address-space query, local-memory base, block id, work id, virtual count |
+| HADD2, HADD2_32I, HFMA2, HFMA2_32I, HMNMX2, HMUL2, HMUL2_32I, HSET2, HSETP2 | missing | half2 and mixed half arithmetic |
+| BRX, BRXU, CALL, JMP, JMX, JMXU, RET, RPCMOV | missing | indirect branches, calls, returns, jumps |
+| BMSK, IABS, IDP, SGXT, UBMSK, USGXT | missing | integer abs, sign extend, bit mask, `IDP.2A` |
+| MOVM, MATCH, REDUX, VOTEU, VOTE | missing | matrix move, match, vote, reduce |
+| S2UR, B2R, CS2R, S2R | missing | special registers (thread and block ids, clocks) |
+| SUATOM, SULD, SURED, SUST | missing | surfaces |
+| TEX, TLD, TLD4, TMML, TXD, TXQ | missing | texture path |
+| UF2FP | missing | uniform FP and conversions (the instances allow integer `uni` only) |
+| VABSDIFF, VABSDIFF4, VHMNMX, VIADD, VIADDMNMX, VIMNMX, VIMNMX3 | missing | video and three-way min/max integer ops |
+
+204 opcodes: 85 covered, 38 coarse, 81 missing.
+
+### Blackwell additions over sm_90 (BU §4.4; sm_120 has a subset)
+
+| Opcodes | Mark | Model |
+|---|---|---|
+| OMMA | covered | `Op.mma` (`e2m1`, block-scaled dots `Open.dot`) |
+| QMMA | covered | `Op.mma` (`e4m3`/`e5m2`) |
+| UIMNMX | covered | `Op.uni` (integer, a whole issue slot) |
+| LDCU | coarse | a copy from device memory (constant banks) |
+| SYNCSU, USYNCS, UBLKL2CCTL, UTMAL2CCTL, ACQSHMINIT | coarse | no data effect: the schedule is free, so a program may omit it |
+| MOV64IUR, UMOV.64 | missing | 64-bit uniform and immediate moves, `UCLEA`, `ULEPC` |
+| FMNMX3 | missing | FP32 compare, min/max, check, swizzle |
+| REDS, UREDGR | missing | bulk and TMA reductions, multimem loads, shared reductions |
+| UGETNEXTWORKID, UMEMSETS, UVIRTCOUNT | missing | elect, address-space query, local-memory base, block id, work id, virtual count |
+| FHADD, FHADD2, FHFMA, FHFMA2, FHMUL2 | missing | half2 and mixed half arithmetic |
+| UIABS | missing | integer abs, sign extend, bit mask, `IDP.2A` |
+| CREDUX | missing | matrix move, match, vote, reduce |
+| FADD2, FFMA2, FMUL2 | missing | paired FP32 |
+| DECOMPRESS, SPARSIFY | missing | sparsity, decompression |
+| CS2UR | missing | special registers (thread and block ids, clocks) |
+| LDT, LDTM, STT, STTM, UTCATOMSWS, UTCBAR, UTCCP, UTCHMMA, UTCIMMA, UTCOMMA, UTCQMMA, UTCSHIFT | missing | tensor memory and `tcgen05` (not on sm_120: PTX ISA gives `tcgen05` to sm_100a, sm_101a and sm_103a) |
+| UFADD, UF2F, UF2I, UF2IP, UFFMA, UFMNMX, UFMUL, UFRND, UFSEL, UFSET, UFSETP, UI2F, UI2FP, UI2I, UI2IP | missing | uniform FP and conversions (the instances allow integer `uni` only) |
+| USTGR | missing | uniform global store |
+| UVIADD, UVIMNMX, VISET | missing | video and three-way min/max integer ops |
+
+61 opcodes: 3 covered, 6 coarse, 52 missing.
