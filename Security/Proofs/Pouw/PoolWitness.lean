@@ -73,10 +73,7 @@ section Value
 /-- Every honest strategy on the witness period is worth at most 32: `μ · cap`, the period's capacity at the dual
 price. -/
 theorem value_le (W' : ℝ) (z' : twPd.J → ℝ) (h : twPd.Fits (fun r => W' * twPd.hon r) z') : twPd.value W' z' ≤ 32 := by
-  have hr : ∀ r : Fin 3, W' * twHon r + z' r ≤ 8 := fun r => by
-    have := h.2 r
-    change W' * twHon r + ∑ j : Fin 3, z' j * (if j = r then 1 else 0) ≤ 1 * 8 at this
-    simpa using this
+  have hr : ∀ r : Fin 3, W' * twHon r + ∑ j : Fin 3, z' j * (if j = r then 1 else 0) ≤ 1 * 8 := h.2
   have h0 := hr 0
   have h1 := hr 1
   have h2 := hr 2
@@ -172,7 +169,7 @@ theorem WorkMoment_nontrivial :
     ¬ MomentSound tw twRound 2 (fun _ _ _ _ => True) twDev twPd 1 (fun _ => 1 / 7) 14 twη (fun _ => 0) := by
   intro h
   obtain ⟨D, M, Bad, -, -, hav, hbad, hfree⟩ := h idle
-  haveI : Nonempty (twRound.Orc × (Fin 2 → twRound.Draw × twRound.Chk)) :=
+  have : Nonempty (twRound.Orc × (Fin 2 → twRound.Draw × twRound.Chk)) :=
     (inferInstance : Nonempty (Unit × (Fin 2 → TDraw × Fin 2)))
   refine absurd hav (not_le.2 (one_lt_avg fun ox => ?_))
   obtain ⟨hM, hfw⟩ := hfree ox (fun _ => 8) trivial (not_of_prob_le_zero hbad ox) (idle_fits ox.1 ox.2)
@@ -218,12 +215,13 @@ theorem FleetSound_nontrivial (n : ℕ) :
     simp only [twη, one_div_one_div]
     push_cast
     ring
-  have hluck : fleetLuck (fun _ => twη) univ twδ = 7 * ((n : ℝ) + 1) * Real.log 2 := by
+  have hluck : fleetLuck (N := n + 1) (fun _ => twη) univ twδ = 7 * ((n : ℝ) + 1) * Real.log 2 := by
     simp only [fleetLuck]
-    rw [hx, div_self (by positivity), Real.log_one, zero_add]
+    rw [hx, div_self (by positivity : 7 * ((n : ℝ) + 1) ≠ 0), Real.log_one, zero_add]
     norm_num [twδ]
   rw [hluck] at hsum
   have hn : (0 : ℝ) < (n : ℝ) + 1 := by positivity
-  nlinarith [Real.log_two_lt_d9]
+  have hl : Real.log 2 ≤ 1 := by linarith [Real.log_le_sub_one_of_pos (by norm_num : (0 : ℝ) < 2)]
+  nlinarith [mul_le_mul_of_nonneg_left hl hn.le]
 
 end Pouw.SecurityProofs.Dither
