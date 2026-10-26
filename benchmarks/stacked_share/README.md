@@ -40,6 +40,22 @@ At f ≥ 1 no KV is credited.
   It also gives the units a token by primitive over the trace, held to the step model's total.
 - `job.sh` builds the exact-int8 8B request Program (LP=256, T=31) on one GPU and runs `units.py` on it (`DESCRIPTOR=PATH`
   skips the Build and needs no GPU).
+- `beta.py DESCRIPTOR.json.gz --out beta.json [--chunk N ...]` bounds the stacked share by a min cut instead of the law's
+  rate. The graph is the Program's root Calls over its census/v1 steps. A value a later step reads is a dynamic-memory
+  write, and each read is an edge from the Call that made it. Over cuts (U, D) with every write on D's side:
+
+      S_stack ≤ min [ b(U→D) + |c| W(D) / E ] + R_in L        β = S_stack / M_dyn
+
+  It is one exact max-flow: s→v at |c| w(v)/E (property/v1's units), u→v at the bits of the values u hands v (a value read
+  twice is paid once), and each write tied to t. Work property/v1 refuses stays in U. `--chunk N` also bounds the graph
+  coarsened to N Calls a step. Merging nodes only removes cuts, so a coarse bound is a valid upper bound that is looser
+  (never lower). `--decoder SPEC.json` bounds a modeled request instead (`pre`, `attn` and `post` a layer at the units
+  `units.py` measured or modeled): `decoder-llama31-8b-int8.json`, `decoder-llama31-70b-tp8.json`, and
+  `decoder-e2e-h200-mqa.json` (the e2e demo's frozen MQA H200 shape, units estimated from its shapes).
+  `--m-dyn-node BYTES` spreads the input term over the node's pool, since the cut scales with the requests and R_in L
+  doesn't.
+- `beta_job.sh` runs `beta.py` for `research run` on a CPU node, on the Program the census read (r20261018-045058-23f7's
+  Build), whose descriptor decodes only with that commit's `verity` and `verity_vllm` (`inputs/tree.tar.gz`).
 
 What is measured and what is modeled:
 
