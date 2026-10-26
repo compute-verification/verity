@@ -1568,6 +1568,18 @@
    "assumptions": [],
    "type_hash": "a689e7512d811f97c080ab5920d02bea4bec2633b2a6d4ec515d7d7e183daf52"
   },
+  "Properties.Pouw.LiveSalt.liveCoinBinding": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.LiveSalt.liveCoinBinding : Properties.Pouw.LiveSalt.LiveCoinBinding"],
+   "assumptions": [],
+   "type_hash": "6a4f2a38e49ed53c55f4d4ef8cac841394717eaeb553b22fa833e793abacb403"
+  },
+  "Properties.Pouw.LiveSalt.onePair": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.LiveSalt.onePair : Properties.Pouw.LiveSalt.OnePair PouwCheck.liveSaltCheck"],
+   "assumptions": [],
+   "type_hash": "57869adb3ff29c03998916c610afca59953d0f995b5afeef79df776645a3b476"
+  },
   "Properties.Pouw.LiveSalt.oneRoot": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.LiveSalt.oneRoot : Properties.Pouw.LiveSalt.OneRoot PouwCheck.liveSaltCheck"],
@@ -3240,6 +3252,14 @@
    "Properties.NetworkCertifier.linkWindowAcceptMeans": {
     "function": "NetworkCheck.LinkWindow.verdict",
     "outcome": "accept"
+   },
+   "Properties.Pouw.LiveSalt.liveCoinBinding": {
+    "function": "SampledProofs.Challenger.liveReason",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.LiveSalt.onePair": {
+    "function": "PouwCheck.liveSaltCheck",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -3255,12 +3275,13 @@
    "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Pouw.LiveSalt.epochRootBinding": "restatable: its hypotheses, 64-byte weights' roots and epochs below 2^64, are not an acceptance of `epochOpenRoot`, which returns on any input; stated over `PouwCheck.liveSaltCheck`'s acceptances, whose weights' roots are SHA-512 digests and whose `pass_index` is refused at 2^64 (`PASS_FORM`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.LiveSalt.rowSeedBinding": "restatable: its hypotheses, call indices and rows below 2^32 and two different pairs, are not an acceptance of `rowSeed`, which returns on any input; stated over the Pearl-C period's credit (CMP-82), which refuses a call index of 2^32 or more (`CALL_RANGE`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
-   "Properties.Pouw.LiveSalt.LiveCoinBinding": "unstated: no guarantee states it yet: its `c = c'` needs `Flock.canon` injective on the live domain's binding (scheme, epoch and layout), which no lemma proves, and the climb from the coin to the root, frame by frame (CMP-81). The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod": "frozen (no-function,world-unlisted): E2E-POUW's bridge (#4363, red team at 28a6d49e15), CircuitWorkPeriod at the period's proofs with the deployed check's verdict (Properties.Pouw.Period.checkedRun): a window is credited exactly when PouwCheck.protocol.check accepts it and every earlier window, so the accepted prefix and its live words are the check's (checkedLive); except with probability delta_s + n (delta_bind + delta_ks). The check is read inside the event, through the prefix, not as one acceptance hypothesis, and the event is a Pouw.RelativeSecurity.prob that shape.events does not list. Its premises off the premises list: CircuitWorkPeriod's claims; RegisteredBeforeDraw, DrawIsCoin and ServiceSound (in place of JointSound) are listed under assumptions, each a named Prop with its own record (ASK-133, option A, decided by the lane): RegisteredBeforeDraw and DrawIsCoin protocol-code facts to prove (the record doesn't order registration before the draw coin, CMP-91's to fix; the check's draw is the model's), ServiceSound standard crypto (C-Flock's soundness under live coins); proved from CircuitWorkPeriod (Proofs.Pouw.Period).",
    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod": "frozen (no-function,world-unlisted): CheckedWorkPeriod's credit in live words, CircuitCreditPeriod at the deployed check's accepted prefix (checkedRun): at a, b > 0 an accepted period has at least (1 - eps(j))+ of the check's accepted prefix's live words fixed right, eps at the realized prefix j (Windows.prefixLen), except with probability delta_s + n (delta_bind + delta_ks); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list, with CheckedWorkPeriod's premises, of which RegisteredBeforeDraw, DrawIsCoin and ServiceSound are listed under assumptions (ASK-133, option A, decided by the lane: RegisteredBeforeDraw and DrawIsCoin protocol-code facts to prove, ServiceSound standard crypto, C-Flock's); proved from CircuitCreditPeriod (Proofs.Pouw.Period).",
    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": "frozen (no-function,world-unlisted): CheckedCreditPeriod at H1's tile unit on the torch loop (PouwH1Tile_v1 K=64 R=4 C=8, N_p = 144, K_d = 24, one round a window, rho = 8/9, lucks 7/8 and 1/2, a = b = 1, Lambda = 67/8 from SplitRateClosed), Pins from SaltIsLiveCoin and StagedPins; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its five premises beyond CheckedCreditPeriod's claims are listed under assumptions, each a named Prop with its own record (ASK-133, option A, decided by the lane): DrawIsCoin, StagedPins and RegisteredBeforeDraw protocol-code facts to prove (the loop's registration has anchors [] and wires [], so it commits no row before the draw, CMP-91's to fix with ALLP-WIRE's anchors); ServiceSound standard crypto (C-Flock's soundness); SaltIsLiveCoin a deployment gap until CMP-90 (#4405: the loop is given its salt before serving and nothing binds it to a live coin). Non-vacuous: Proofs.Pouw.Period.Accept evaluates the deployed check to an accept at #4351's parameters for every draw (N = 144, K' = 24), and Proofs.Pouw.Period.Honest builds a live-salt period meeting every premise (h1_meets).",
    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod": "frozen (no-function,world-unlisted): the joint period's PoUW guarantee (Accounting.PeriodRun.Sound at .pouw, error delta_s + n (delta_bind + delta_ks)) for a period realizing H1's checked credit (RealizesWorkOfH1CheckedCreditPeriod), from Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod at the source's instance at each value of the other coins. As its source: no deployed function's outcome is one hypothesis (the verdict is a PeriodRun field), the event is a Pouw.pr through PeriodRun.Sound that shape.events does not list, and the source's premises stay as they are (SaltIsLiveCoin, RegisteredBeforeDraw, StagedPins off the premises list). The bridge's one added gap is RealizesWorkOfH1CheckedCreditPeriod.work_of_fixed (RT4-LOGIC-6): the words fixed right are within the compute account's work at p.",
-   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.DeclaredCircuitRequirement's game, premises and bound (its frozen reason in Security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check."
+   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.DeclaredCircuitRequirement's game, premises and bound (its frozen reason in Security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
+   "Properties.Pouw.LiveSalt.liveCoinBinding": "restatable: its hypothesis `c.root = c'.root` is not an acceptance of `liveReason`; stated over one root, the commitments `⟨s, e, fs, r⟩` and `⟨s', e', fs', r⟩` with `r` bound once (equivalent), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
+   "Properties.Pouw.LiveSalt.onePair": "restatable: its hypotheses `EpochRoot m w k` and `EpochRoot m' w k` are not acceptances of `PouwCheck.liveSaltCheck`, and they come before its conclusion because `w` and `k` are bound ahead of the two acceptances; with `∀ w k` bound after the acceptances (equivalent) it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -6392,6 +6413,8 @@
     "Properties.Pouw.Commit.frameSizes",
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.Pouw.LiveSalt.acceptMeans",
+    "Properties.Pouw.LiveSalt.liveCoinBinding",
+    "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -6495,6 +6518,8 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.LiveSalt.acceptMeans",
+    "Properties.Pouw.LiveSalt.liveCoinBinding",
+    "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -6694,6 +6719,8 @@
     "Properties.Pouw.Commit.taggedSize",
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.epochRootBinding",
+    "Properties.Pouw.LiveSalt.liveCoinBinding",
+    "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.LiveSalt.rowSeedBinding",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
@@ -6791,6 +6818,8 @@
     "Properties.Pouw.Commit.epochSaltAccepts",
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.Pouw.LiveSalt.acceptMeans",
+    "Properties.Pouw.LiveSalt.liveCoinBinding",
+    "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -6888,6 +6917,8 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.LiveSalt.acceptMeans",
+    "Properties.Pouw.LiveSalt.liveCoinBinding",
+    "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -7163,6 +7194,8 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.LiveSalt.acceptMeans",
+    "Properties.Pouw.LiveSalt.liveCoinBinding",
+    "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -7274,6 +7307,8 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.LiveSalt.acceptMeans",
+    "Properties.Pouw.LiveSalt.liveCoinBinding",
+    "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -7542,6 +7577,7 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.LiveSalt.acceptMeans",
+    "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -9142,6 +9178,7 @@
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.LiveSalt.acceptMeans",
+    "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -9285,6 +9322,7 @@
     "Properties.Pouw.Commit.saltRefusals",
     "Properties.Pouw.Commit.saltSize",
     "Properties.Pouw.LiveSalt.acceptMeans",
+    "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot"
    ]
   },
@@ -9359,6 +9397,7 @@
     "Properties.Pouw.Commit.drawCoinAccepts",
     "Properties.Pouw.Commit.epochSaltAccepts",
     "Properties.Pouw.LiveSalt.acceptMeans",
+    "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -9391,6 +9430,7 @@
     "Properties.Pouw.Commit.epochSaltAccepts",
     "Properties.Pouw.Commit.taggedSize",
     "Properties.Pouw.LiveSalt.acceptMeans",
+    "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot"
    ]
   },
@@ -9537,6 +9577,7 @@
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.LiveSalt.acceptMeans",
+    "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -10538,7 +10579,7 @@
    ]
   },
   "Properties.Pouw.LiveSalt": {
-   "digest": "6a78772fdd0bb097db527c0fcc634c8350df3d8a5fac915656f882e479821181",
+   "digest": "5d16c6de543788d79c6ec2a53bc17bded9da25cabeed0c29c6f3ea8ffa4e4702",
    "definitions": {
     "Properties.Pouw.LiveSalt.AcceptMeans": "7bd676e53caf1f68324c10f6f0e4b1d8ccd43c406e5bd079b0ab5b0e21813b87",
     "Properties.Pouw.LiveSalt.Accepted": "7c40a7fa110222406791f3f0d9987ffeedce52cdf07ac79254d84ba355b902e2",
@@ -10550,27 +10591,39 @@
     "Properties.Pouw.LiveSalt.EpochRoot": "734e96412b6a31fe7473602101921299262ef9f0d105913acf57be6f58537e80",
     "Properties.Pouw.LiveSalt.EpochRootBinding": "223271095723180eef90305c421f74b74004f14f8ddb8e1f98ff2c6698fe9ed9",
     "Properties.Pouw.LiveSalt.LedgerShows": "b928ec88a3da91dbc538d49d9ac011907841c5e70c92225f7750d32cd1828dc6",
+    "Properties.Pouw.LiveSalt.LiveCoinBinding": "4e44f7ab2719a0bb322cc0cf33ac467cbe32b725ca7e19e7be98e0b2716a88cb",
     "Properties.Pouw.LiveSalt.ManifestNames": "3c525356d02186ed6c0e09c3c993602bf990d17a270d9ab6ab6eaab346f6e9d1",
+    "Properties.Pouw.LiveSalt.OnePair": "4a2a175cec76b36765d6274b9d016b1ab1122caeba3db9b38d9cdc45b51695f8",
     "Properties.Pouw.LiveSalt.OneRoot": "50264f5bba5ebc226c8e032781f0b46e8d3b82d6264b8b40809c78e4c879b93a",
     "Properties.Pouw.LiveSalt.RowSeedBinding": "791f9621227f680a3da6a09d0d6cf5ec0232e8d194c18d483257d17338a67ca6",
     "Properties.Pouw.LiveSalt.SALT_FAMILIES": "f4f50cc08308230b6f381406f2a1499abb1d336ba4afe830cfe753047988c967",
     "Properties.Pouw.LiveSalt.SEED_A_LABEL": "81c03161cb9ae901d806a77dcd9cfc98b451500c60fcd769fdc955da46f2515d",
     "Properties.Pouw.LiveSalt.SaltEpoch": "60ad4c1d4367da5414eae6feeba1f781dbc4062648edfc51c76fe3c626a0f7ca",
     "Properties.Pouw.LiveSalt.WeightsRoot": "cbb0ebc1c3b33ffe7f02db8497c7f260d42527beafb0097274574da663462abd",
+    "Properties.Pouw.LiveSalt.climbFrames": "1571287fe015d7b6826c22e6bd43dc488afd1b728ab06e415a472f68939a3b1f",
+    "Properties.Pouw.LiveSalt.domainHashed": "13c45d3776715fc3c42145437c7b5bd33fb738d6cfa1233aa10702d9cfd92f49",
+    "Properties.Pouw.LiveSalt.domainHashed._sparseCasesOn_1": "732d8515894fa61b8b90eaa4effec93db7bd80b2000bbe5d0b342efa8099a15c",
     "Properties.Pouw.LiveSalt.entries": "0597700585032967511087f46074027df94917135c0aa97c2e01f2076be5dcb3",
     "Properties.Pouw.LiveSalt.entries._sparseCasesOn_1": "38dca2a29ecd23a98207b76e8c8aff3e3ef384a9a6b672c2fcf467c0fb60020d",
     "Properties.Pouw.LiveSalt.epochMessage": "5422862db06a92ffa203021868eda76af3b06537255d6cdeea4b63242e36047d",
     "Properties.Pouw.LiveSalt.epochOpenRoot": "0d2e70b1a73a87e5f246f64a4d7bcd362ee0a4f140f39161df1e7c280de65cca",
+    "Properties.Pouw.LiveSalt.fv3Message": "50d9206e9c83c80b50e0070fd1634cfb774d771e16dbf5d2207450d44c877c69",
+    "Properties.Pouw.LiveSalt.hashedBy": "5e2b23e5b8bed582a18475d45bd286aecd3f95e194e406c0e461c20fe1326eda",
+    "Properties.Pouw.LiveSalt.hashedBy._sparseCasesOn_1": "8ef485e3f97459ca7ee6f20a8df92fc193905a0edb4e1ea7ba4995b49407505d",
     "Properties.Pouw.LiveSalt.le64": "9c1f6e1ad7884bdce2ad57d5d7df436ad712e5491d28c8a696b3bb5f2b85f4eb",
+    "Properties.Pouw.LiveSalt.liveHashed": "57b47d67514c1db6873936f08257189afa7b52371257634a2c2f4e04c40a684f",
     "Properties.Pouw.LiveSalt.liveSalt": "dcfe248829e593070652001501defc7898045a0b60f818c86b507213fa1bdd5c",
     "Properties.Pouw.LiveSalt.openRoot": "3d2f4e71c4918973696c0420bca46f7f6b0645f74c1926605043f69778864294",
     "Properties.Pouw.LiveSalt.rootWindow": "e09a3e89a769ae0bd4ecf6cce2f83f79ebbdc150bc435025494b152ec765c2dc",
     "Properties.Pouw.LiveSalt.rowSeed": "397ba8db76cf4e236caaf170409a733000702d2ed4c14d0dffc8c8656847bae2",
-    "Properties.Pouw.LiveSalt.rowSeedMessage": "cd8284de4b566b6df5446eb215814071b2f62ae6eec29276f047fb2ca7362181"
+    "Properties.Pouw.LiveSalt.rowSeedMessage": "cd8284de4b566b6df5446eb215814071b2f62ae6eec29276f047fb2ca7362181",
+    "Properties.Pouw.LiveSalt.taggedMessage": "8a8770ba7182d06597f2ee6a3fa101e2d1d2369e4ded5789d5435dc2e9da506c"
    },
    "guarantees": [
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.epochRootBinding",
+    "Properties.Pouw.LiveSalt.liveCoinBinding",
+    "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.LiveSalt.rowSeedBinding"
    ]
@@ -11721,6 +11774,8 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.LiveSalt.acceptMeans",
+    "Properties.Pouw.LiveSalt.liveCoinBinding",
+    "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -11765,6 +11820,7 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.LiveSalt.acceptMeans",
+    "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -11922,6 +11978,7 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.LiveSalt.acceptMeans",
+    "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -12034,6 +12091,7 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.LiveSalt.acceptMeans",
+    "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
@@ -12169,6 +12227,7 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.LiveSalt.acceptMeans",
+    "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
