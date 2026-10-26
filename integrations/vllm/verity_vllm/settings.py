@@ -5,8 +5,9 @@ setting can change:
 
 * ``value`` (`VALUE`): what is computed or committed.  `record` carries every value setting in force, and the value families
   (`FAMILIES`), so a value setting can't stay out of a run's record.  A setting is ``value`` unless it is one of the other two.
-  A credential's value never enters a record: `record` names it with `REDACTED` in place of its value.  A credential is a
-  setting declared ``secret``, or any variable whose name holds one of `SECRET_WORDS`, declared or not.
+  A credential's value never enters a record: `record` names it with `REDACTED` in place of its value, and so does `redact`,
+  through which every other record that copies the environment by family passes it.  A credential is a setting declared
+  ``secret``, or any variable whose name holds one of `SECRET_WORDS`, declared or not.
 * ``where`` (`WHERE`): only where and how long things run: paths, devices, hosts, interpreters, run ids and liveness bounds.
 * ``debug`` (`DEBUG`): diagnostics that change nothing a run computes: dumps, traces, profiles, injected delays.
 
@@ -378,11 +379,18 @@ def is_secret(name: str) -> bool:
     return bool(s and s.secret) or any(w in name.upper() for w in SECRET_WORDS)
 
 
+def redact(environ: Mapping[str, str]) -> dict[str, str]:
+    """``environ`` as a record holds it: each variable in its order, a credential (`is_secret`) by name, `REDACTED` in place of its
+    value.  `record` holds its values so, as does every record that copies a family of the environment
+    (``tests/test_record_credentials.py``)."""
+    return {k: REDACTED if is_secret(k) else v for k, v in environ.items()}
+
+
 def record(environ: Mapping[str, str] | None = None) -> dict[str, Any]:
     """The value settings in force: every ``value`` variable that is set, as the environment holds it (a credential by name,
-    `REDACTED` in place of its value: `is_secret`), with the digest (SHA-512 of the canonical JSON of ``values``)."""
+    `REDACTED` in place of its value: `redact`), with the digest (SHA-512 of the canonical JSON of ``values``)."""
     env = os.environ if environ is None else environ
-    values = {k: REDACTED if is_secret(k) else env[k] for k in sorted(env) if role_of(k) == VALUE}
+    values = redact({k: env[k] for k in sorted(env) if role_of(k) == VALUE})
     blob = json.dumps(values, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
     return {"schema": RECORD_SCHEMA, "values": values, "digest": hashlib.sha512(blob).hexdigest()}
 
