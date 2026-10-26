@@ -153,6 +153,7 @@ def pv_gamma(card: str, n: int, dv: int, p: dict, built: bool = True) -> float:
 
 
 TAUS = (1e-4, 0.01, 0.05, 0.2, 1.0)    # job-only leak tolerances the 07:04Z rule sweeps
+BESIDE = (0.0, 0.25, 1.0, 4.0)          # other plain INT8 tensor work beside the period, MACs a credited MAC (A29)
 _GRID: dict = {}
 
 
@@ -207,7 +208,7 @@ def rule(static_keys, pv_keys) -> tuple[dict, dict, dict]:
     TAUS whose picks (`rule_pick`) give the largest mean credited share over the three models, ties within 0.1 point
     to the lower mean γ. A round class with no L′ at γ ≤ 10 (short PV) is credited at its least-γ L′ where
     `value_test` is positive at every model whose period holds it, else served plain. Returns (static, pv, sweep)."""
-    sweep, chosen = {}, {}
+    sweep, chosen, tau_picks = {}, {}, {}
     for tau in TAUS:
         st = {k: rule_pick(*k, tau) for k in static_keys}
         pv = {k: rule_pick(*k, tau, weight_coins=False) for k in pv_keys}
@@ -220,6 +221,7 @@ def rule(static_keys, pv_keys) -> tuple[dict, dict, dict]:
                 if not pv[k]["feasible"]:
                     users.setdefault(k, []).append(value_test(card, model, k, pv[k], e))
         pv = {k: (None if k in users and min(users[k]) <= 0 else p) for k, p in pv.items()}
+        tau_picks[tau] = (st, pv)
         ev = evaluate(st, pv, rates=(True,))
         for card in vc.CARDS:
             es = [e for (c, _, _), e in ev.items() if c == card]
@@ -234,7 +236,7 @@ def rule(static_keys, pv_keys) -> tuple[dict, dict, dict]:
     st = {k: sweep[k[0], chosen[k[0]]]["picks"][0][k] for k in static_keys}
     pv = {k: sweep[k[0], chosen[k[0]]]["picks"][1][k] for k in pv_keys}
     return st, pv, dict(sweep={k: {x: y for x, y in v.items() if x != "picks"} for k, v in sweep.items()},
-                        tau=chosen)
+                        tau=chosen, tau_picks=tau_picks)
 
 
 def p19_pv(pv_keys) -> dict:
@@ -299,10 +301,11 @@ def serve_loads(card) -> dict:
                 issue=card.mma_issue)
 
 
-def period(card: str, model: dict, static: dict, pv: dict, paper: bool = False) -> dict:
+def period(card: str, model: dict, static: dict, pv: dict, paper: bool = False, beside: float = 0.0) -> dict:
     """Per credited MAC, in honest-kernel units at θ (c = SM-clocks · s8): OPT*'s period (`dense`: the honest words'
     best programs) and pub (`hull`: every route), each over the credited rounds alone and in the served period (plus
-    QKᵀ, the indexer and plain PV as fixed load). Credit is each one's price at the honest served period's duals μ°
+    QKᵀ, the indexer and plain PV as fixed load, and `beside` plain INT8 MACs a credited MAC of other tensor work:
+    uncredited decode, other jobs; A29). Credit is each one's price at the honest served period's duals μ°
     (`at_served`, P20's C(μ) at the dual where the honest period sits). `freed`: per row, the share of OPT* the routes
     free at that row's single-row dual (`d5_routes.freed`, makespan ≤ OPT*'s), cost-weighted over the credited rounds
     (P12 re-raised). Also Σ_w q_w (P20's draw multiplier): each round's own makespan share of the honest period."""
@@ -333,7 +336,7 @@ def period(card: str, model: dict, static: dict, pv: dict, paper: bool = False) 
             if wh == "dense":
                 for r, x in p.get("freed", {}).items():
                     freed_[r] = freed_.get(r, 0.0) + w / cred * pr.c * x
-    F_macs = (qk * (1 + nf.SOFTMAX_PASS) + ix + plain_pv) / cred
+    F_macs = (qk * (1 + nf.SOFTMAX_PASS) + ix + plain_pv) / cred + beside
     F = {r: v * F_macs for r, v in serve_loads(c).items()}
     out = dict(cred_macs=cred, plain_pv=plain_pv, rounds=rounds,
                freed={r: x / rounds["dense"] for r, x in freed_.items()})
@@ -523,8 +526,33 @@ def evaluate(static: dict, pv: dict, rates=(True, False)) -> dict:
     return out
 
 
+def beside_sweep(P: dict, tau_picks: dict) -> dict:
+    """A29: the served duals move with what else the period holds. For v3, the headline, dual-safe and each τ of the
+    rule's sweep, at BESIDE plain INT8 MACs of other tensor work a credited MAC (uncredited decode, other jobs) on top
+    of the period's own uncredited work: what the routes leave uncredited at those duals (`leak`) and the honest
+    period's binding rows. The credited share at x is the share at x = 0 with its routes factor moved to x's: beside
+    work overlaps the credited rounds, and at the period's duals their OPT* price is at least the period time they
+    add, so dividing it by their standalone honest time would count the overlap as a loss. The rule's value test
+    stays at x = 0."""
+    sets = {d: P[d] for d in ("v3", HEADLINE, "dual-safe")}
+    sets.update({f"τ {tau:g}": p for tau, p in tau_picks.items()})
+    out = {}
+    for name, (static, pv) in sets.items():
+        for (card, _, mname), e in evaluate(static, pv, rates=(True,)).items():
+            model = model_of(mname)
+            for x in BESIDE:
+                per = e["period"] if x == 0 else period(card, model, static, pv, beside=x)
+                out[name, card, mname, x] = dict(leak=per["leak_served"], binding=per["dense"]["served_binding"],
+                                                 gamma=e["world"]["gamma"], share0=e["share"]["share"],
+                                                 leak0=e["period"]["leak_served"])
+                out[name, card, mname, x]["share"] = (e["share"]["share"] * (1 - per["leak_served"])
+                                                      / (1 - e["period"]["leak_served"]))
+    return out
+
+
 def build() -> dict:
     P, sweep = picks()
+    tau_picks = sweep.pop("tau_picks")
     eta_ = eta(*P[HEADLINE])
     eta_min = min(e["eta"] for e in eta_.values())
     out = dict(eta=eta_, rows={}, k=K_DRAWS, rule=sweep)
@@ -536,6 +564,7 @@ def build() -> dict:
             if design == HEADLINE and rate == "measured":
                 e["streaming"] = streaming(card, model, e["world"], pv)
             out["rows"][design, card, rate, mname] = e
+    out["beside"] = beside_sweep(P, tau_picks)
     out["decode"] = decode(P[HEADLINE][0])
     out["picks"] = {design: {k: p and dict(t=p["t"], Lp=p["Lp"], freed=p["freed"], leak=p.get("leak"),
                                            gamma=round_gamma(*k, p["t"], p["Lp"], weight_coins=k in P[design][0]))
@@ -622,6 +651,36 @@ def report(D: dict) -> str:
         L.append(f"| {card} | {tau:g}{mark} | " + " / ".join(pct(v, 1) for v in x["share"]) + " | "
                  + " / ".join(f"{v:.2f}" for v in x["gamma"]) + " | " + " / ".join(pct(v, 1) for v in x["cov"])
                  + f" | {x['infeasible']} / {x['plain']} |")
+    L.append("")
+    L.append("### A29: the served duals at a stated beside load\n")
+    L.append("The rows above price the period with only its own uncredited work beside (QKᵀ's two softmax passes, "
+             "V4's indexer, plain PV). There the H200's honest period is bound by ALU and the RTX PRO 6000's by ALU "
+             "and register file, so the routes' tensor saving is worth nothing. x more plain INT8 MACs of tensor work a "
+             "credited MAC (uncredited decode, other jobs) move the duals onto the joint facet and tensor. Cells: "
+             "credited share (routes uncredited at those duals), 8B / 70B / V4. The share is x = 0's with its routes "
+             "factor moved to x's (beside work overlaps the credited rounds, whose OPT* price at the period's duals "
+             "is at least the period time they add); the value test stays at x = 0.\n")
+    B = D["beside"]
+    names = list(dict.fromkeys(k[0] for k in B))
+    L.append("| picks, card | " + " | ".join(f"x = {x:g}" for x in BESIDE) + " |")
+    L.append("|---|" + "---|" * len(BESIDE))
+    for card in vc.CARDS:
+        for name in names:
+            L.append(f"| {name}, {card} | " + " | ".join(
+                " / ".join(pct(B[name, card, m, x]["share"], 1) for m in models) + " ("
+                + " / ".join(pct(B[name, card, m, x]["leak"], 1) for m in models) + ")" for x in BESIDE) + " |")
+    for card in vc.CARDS:
+        taus = [n for n in names if n.startswith("τ ")]
+        best = {}
+        for x in BESIDE:
+            mean = {n: np.mean([B[n, card, m, x]["share"] for m in models]) for n in taus}
+            top = max(mean.values())
+            best[x] = min((n for n in taus if mean[n] >= top - 1e-3),
+                          key=lambda n: np.mean([B[n, card, m, x]["gamma"] for m in models]))
+        bind = {x: B[HEADLINE, card, models[0], x]["binding"] for x in BESIDE}
+        L.append(f"\n{card}: the rule's τ by load: " + "; ".join(f"x {x:g} → {best[x][2:]}" for x in BESIDE)
+                 + f". {HEADLINE}'s 8B period binds " + "; ".join(f"x {x:g}: {', '.join(bind[x])}" for x in BESIDE)
+                 + ".")
     L.append("")
     L.append("### v3.1's picks against v3's (P19): L′ and the round's γ at measured hashing\n")
     L.append("Static, per model's shapes (K×N: v3 L′ → v3.1 L′, γ v3 → v3.1):\n")
