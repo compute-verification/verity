@@ -37,7 +37,7 @@ def test_iface_b_records_render_with_placeholders() -> None:
     for name in D.MEASURED:
         assert f"| ⟨{name}⟩ | unfilled |" in out, name
     assert "⟨H_A_SHARE⟩" in out and "⟨Y⟩" in out and "⟨PLANNER_RATIO⟩" in out
-    assert "**What was checked.** 2 drawn units of 1,024" in out
+    assert "**What was checked.** A handful: k = 2 units, drawn uniformly over the whole partition (1,024" in out
     assert "at most K = 15,764 bits leaked" in out
     assert "W_cert = 262,144 (128 tiles credited)" in out
     assert "a deployment of D = 100,000 H200s (dc-12500-machines-600s" in out
@@ -83,18 +83,57 @@ def test_a_measurement_it_may_not_hold_is_refused(doc: dict, why: str) -> None:
         D.render([_load("block-record-r2-period0")], doc)
 
 
+def _costed() -> dict:
+    doc = _m(PROVING_GPU_S=5400, BLOCK_GPU_S=60, H_A=10, BLOCK_ANDS=1000, PLANNER_PREDICTED_S=6000,
+             BLOCK_OUTPUT_BITS=100, PROVE_S_PER_AND=1e-6, BLOCK_FLOP=200)
+    doc["values"]["WORLD_FLOP_YEAR"] = {"value": 9.4e30, "source": "test", "label": "world-inference-2027"}
+    doc["subcircuits"] = [
+        {"name": "a", "units": 1000, "ands_per_unit": 20000, "out_bits": 16, "fixed_s": 36, "source": "test"},
+        {"name": "b", "units": 250, "ands_per_unit": 500, "out_bits": 16, "fixed_s": 72, "source": "test"}]
+    return doc
+
+
 def test_derived_figures_follow_their_inputs() -> None:
-    doc = _m(PROVING_GPU_S=5400, BLOCK_GPU_S=60, H_A=10, BLOCK_ANDS=1000, PLANNER_PREDICTED_S=6000, H_POOLED=500,
-             B_POOLED=40, BLOCK_OUTPUT_BITS=100)
-    doc["subcircuits"] = [{"name": "a", "fixed_s": 36, "source": "test"},
-                          {"name": "b", "fixed_s": 72, "source": "test"}]
-    out = D.render([_load("block-record-r2-period0")], doc)
+    out = D.render([_load("block-record-r2-period0")], _costed())
     assert "proving this block cost 90× the block's own GPU time" in out
     assert "at most 10 of the block's 1,000 ANDs (1%)" in out
     assert "actual / predicted = 0.9" in out
     assert "That's 2 H200-hours, which D H200s fill in 0.0012 minutes." in out
-    assert "| week | 8,400,000 | 500 | 4.96e-08% | 40 | 3.97e-08% |" in out
+    assert ("| week | 100,000 | 3,126,428 | 3.47e-22% *(world-inference-2027)* | 0.00031% | 177,688 | "
+            "1.97e-22% *(world-inference-2027)* | 0.000176% |") in out
     assert "across 2 subcircuits" in out
+
+
+def test_part_3s_h_and_b_are_the_planners_at_one_week() -> None:
+    out = D.render([_load("block-record-r2-period0")], _costed())
+    assert "budget 6,048 GPU-s = 1% of a one-week sampling block (604,800 H200-s" in out
+    assert "a: n 10,080,000, 20,000 ANDs, 16 output bits, fixed 36 GPU-s, k 296,953" in out
+    assert "in its\nAND-weighted form: work is circuit size, so the detection budget is counted in ANDs." in out
+    doc = _costed()
+    del doc["values"]["PROVE_S_PER_AND"]
+    unmeasured = D.render([_load("block-record-r2-period0")], doc)
+    assert "| week | 100,000 | ⟨H_POOLED⟩ | ⟨H_WORLD_SHARE_WEEK⟩ | ⟨H_SHARE_WEEK⟩ | ⟨B_POOLED⟩ |" in unmeasured
+    with pytest.raises(ValueError, match="⟨H_POOLED⟩ is derived"):
+        D.render([_load("block-record-r2-period0")], _m(H_POOLED=500))
+
+
+def test_the_world_figure_carries_its_census_label() -> None:
+    doc = _m(WORLD_FLOP_YEAR=9.4e30)
+    with pytest.raises(ValueError, match="world-inference-2027"):
+        D.render([_load("block-record-r2-period0")], doc)
+    assert "compute, ⟨WORLD_FLOP_YEAR⟩ FP8 FLOP a year" in D.render([_load("block-record-r2-period0")])
+
+
+def test_a_stub_caveat_drops_once_the_measurements_show_it_fixed() -> None:
+    rec = _load("block-record-r2-period0")
+    out = D.render([rec])
+    assert "(#4405, #4426)" in out and "(NET-71)" in out
+    assert "This block drew k = 2, not M3's handful of 8 (PRF-171)." in out
+    assert "run on the prover's node for the demo" in out
+    fixed = D.render([rec], {**_m(), "fixed": {"pouw-live-salt": "run r1"}})
+    assert "(#4405, #4426)" not in fixed and "(NET-71)" in fixed
+    with pytest.raises(ValueError, match="fixed 'salt'"):
+        D.render([rec], {**_m(), "fixed": {"salt": "run r1"}})
 
 
 def test_the_bound_cites_the_joint_statement_only_when_locked() -> None:
@@ -128,8 +167,10 @@ def test_the_pytorch_dry_run_renders_labelled() -> None:
     out = D.render([rec], _load("demo-a-dry-run.measurements"), record_label="PyTorch dry run")
     assert out.splitlines()[2].startswith("> The PyTorch dry run's numbers are not marked in place")
     assert "sampled proofs, PoUW and network accounting: **accept**." in out.replace("\n", " ")
-    assert "64 drawn units of 1,024 across 1 subcircuits" in out
-    assert "in 53 sessions (r20261025-230005-b71a)" in out
+    assert "k = 64 units, drawn uniformly over the whole partition (1,024 units across 1 subcircuits" in out.replace(
+        "\n", " ")
+    assert "in 53 sessions\n(r20261025-230005-b71a)" in out
+    assert "This block drew k = 64, not M3's handful of 8 (PRF-171)." in out
     assert "at most 68 of its" in out and "at most K = 1,449 bits leaked" in out
     assert "Commit on the H200: 225 *(H200 bench HASH-7, not the demo block)* GB/s" in out
     assert "(15.7% *(HASH-20 bench, not the demo block)*)" in out

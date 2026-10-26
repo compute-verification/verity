@@ -22,6 +22,18 @@ block's server, reject when one rejected, pending otherwise, with their errors s
 **The guarantee** cites LEAN-56's ``Flock.Guarantees.JointStratified`` when ``JOINT_LOCKED`` is true (locked by M3),
 else #4358's per-subcircuit bound, with the joint figure labelled unlocked.
 
+**The draw** is a handful (Daniel, 25 Oct 7:34 PM PDT): k = `HANDFUL` units drawn uniformly over the whole partition by
+the live coins (PRF-171), never sized to a proving budget; a block that drew another k says so in the caveats.
+
+**Part 3's H and B** are the planner's (`planned`): `sampled_proofs.optimize.for_budget` at 1% of a one-week sampling
+block, each subcircuit's units scaled from the demo block's, priced at part 2's measured costs, in the planner's
+AND-weighted form (a unit's work is its ANDs). They stay ``⟨H_POOLED⟩`` and ``⟨B_POOLED⟩`` until every cost is measured.
+Each share is stated against the world's compute (``WORLD_FLOP_YEAR``, the adversary's resources) with the deployment's
+beside it.
+
+**Stubs.** Each of `STUBS` is a caveat until the measurements file's ``fixed`` names it, with the run that shows it
+fixed.
+
 **Words.** Each protocol by its name, "sampling block" and "subcircuit": `render` refuses a report that says "leg",
 "window" or "template" (`BANNED`), measurement text included.
 
@@ -29,7 +41,9 @@ The measurements file::
 
     {"format": "verity/demo-a-measurements/v1",
      "values": {"PROVING_GPU_S": {"value": 5400.0, "source": "PRF-171 run r..., sessions' GPU-seconds", "label": null}},
-     "subcircuits": [{"name": "...", "units": 1024, "drawn": 64, "ands_per_unit": 1, "fixed_s": 30.0, "source": "..."}],
+     "subcircuits": [{"name": "...", "units": 1024, "drawn": 8, "ands_per_unit": 21963, "out_bits": 16,
+                      "fixed_s": 30.0, "source": "..."}],
+     "fixed": {"pouw-live-salt": "the run that shows it"},
      "caveats": ["what was stubbed"]}
 
     python -m verity_e2e_demo.report RECORD.json [RECORD.json ...] [--measurements M.json] [--record-label TEXT] \
@@ -38,15 +52,18 @@ The measurements file::
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
+from math import floor, log2
 from pathlib import Path
 from typing import Any
 
+from verity.core.protocols.sampled_proofs import optimize
 from verity_e2e_demo import block_record
 
 TEMPLATE = Path(__file__).parent / "demo_a.template"
@@ -54,6 +71,18 @@ MEASUREMENTS = "verity/demo-a-measurements/v1"
 DELTA = Fraction(1, 100)
 #: the share of compute spent on proving in part 3
 BUDGET = Fraction(1, 100)
+#: M3's draw: k units over the whole partition (PRF-171)
+HANDFUL = 8
+#: part 3's sampling block, in H200-seconds
+SAMPLING_BLOCK_S = 7 * 86400
+WORLD_LABEL = "world-inference-2027"
+#: what keeps the CPU demo's ACCEPT from being "no stubs", until the measurements file's ``fixed`` names it
+STUBS = {
+    "pouw-live-salt": "PoUW's salt isn't yet the live coin read in its answer, nor its rows the committed activations "
+                      "(#4405, #4426), so the demo's ACCEPT isn't yet \"no stubs\".",
+    "certifier-output-tie": "Network accounting's output tie reads a rehearsal's records under fake salts, not the "
+                            "network certifier's own cells (NET-71), so the demo's ACCEPT isn't yet \"no stubs\".",
+}
 DEMO_A = ("integrity", "pouw", "certifier")
 PROTOCOL_NAMES = {"integrity": "sampled proofs", "pouw": "PoUW", "certifier": "network accounting", "pous": "PoUS",
                   "bandwidth": "the bandwidth audit", "wipe": "the wipe"}
@@ -125,18 +154,20 @@ MEASURED: dict[str, str] = {
     "SERVE_COMMIT_S": "CMP-97's block run: seconds of commits a step (HASH-20)",
     "SERVE_STEP_S": "CMP-97's block run: seconds a step",
     "SERVE_NOISE_SHARE": "CMP-126 (KCOMMIT-FB): per-call noise's timed overhead over plain INT8 at the block's M",
-    "H_POOLED": "`sampled_proofs.optimize.for_budget` at 1% of a sampling block's compute with part 2's costs: "
-                "`certify`'s harm in ANDs, pooled over the horizon",
-    "B_POOLED": "the same plan's harm in output bits, pooled over the horizon",
     "SIMULATED_RTT_MS": "CMP-97's block run: the challenger's simulated round trip",
+    "BLOCK_FLOP": "the block's circuit: 2 × its MACs, its INT8 ops counted as FP8 FLOP",
+    "WORLD_FLOP_YEAR": f"the world's compute, FP8 FLOP a year, labelled {WORLD_LABEL} (census entry pending, CMP-133)",
 }
 
 _PERIOD_DERIVED: dict[str, str] = {}
 for _p, _ in PERIODS:
     _P = _p.upper()
+    _world = f"WORLD_FLOP_YEAR × a {_p} / a year / BLOCK_FLOP"
     _PERIOD_DERIVED |= {
-        f"BLOCKS_{_P}": f"D_GPUS × a {_p} / (N_HOURS × 3600 s): the {_p}'s sampling blocks",
+        f"BLOCKS_{_P}": f"D_GPUS × a {_p} / a week: the {_p}'s one-week sampling blocks",
+        f"H_WORLD_SHARE_{_P}": f"H_POOLED / ({_world} × BLOCK_ANDS)",
         f"H_SHARE_{_P}": f"H_POOLED / (D_GPUS × a {_p} × BLOCK_ANDS / BLOCK_GPU_S)",
+        f"B_WORLD_SHARE_{_P}": f"B_POOLED / ({_world} × BLOCK_OUTPUT_BITS)",
         f"B_SHARE_{_P}": f"B_POOLED / (D_GPUS × a {_p} × BLOCK_OUTPUT_BITS / BLOCK_GPU_S)",
     }
 
@@ -153,6 +184,12 @@ DERIVED: dict[str, str] = {
     "SUBCIRCUIT_COUNT": "the subcircuits measured (part 2), else the block record's per-subcircuit draw",
     "N_HOURS": "the largest subcircuit fixed proving cost / 1%, in hours",
     "M_MINUTES": "N_HOURS × 60 / D_GPUS",
+    "PLANNER": "`sampled_proofs.optimize` (its source's sha256) and its inputs: needs PROVE_S_PER_AND, BLOCK_GPU_S and "
+               "every subcircuit's units, ands_per_unit, out_bits and fixed_s",
+    "H_POOLED": "PLANNER's `for_budget` at 1% of a one-week sampling block, AND-weighted: its certificate's faulty "
+                "ANDs (`density_bound`), pooled over the horizon",
+    "B_POOLED": "the same plan's leaked bits: `density_bound` of output bits plus which units are wrong "
+                "(`consumers.location_bits`' term), pooled over the horizon",
     **_PERIOD_DERIVED,
 }
 
@@ -266,9 +303,9 @@ def from_record(record: Mapping[str, Any], label: str | None = None) -> dict[str
     return out
 
 
-def load_measurements(doc: Mapping[str, Any]) -> tuple[dict[str, V], list[dict[str, Any]], list[str]]:
-    """The measurements file's values, subcircuits and caveats; refuses a name it may not fill and a value with no
-    source."""
+def load_measurements(doc: Mapping[str, Any]) -> tuple[dict[str, V], list[dict[str, Any]], list[str], dict[str, str]]:
+    """The measurements file's values, subcircuits, caveats and fixed stubs; refuses a name it may not fill and a value
+    or a fix with no source."""
     if doc.get("format") != MEASUREMENTS:
         raise ValueError(f"measurements: format {doc.get('format')!r}, not {MEASUREMENTS}")
     values: dict[str, V] = {}
@@ -282,11 +319,60 @@ def load_measurements(doc: Mapping[str, Any]) -> tuple[dict[str, V], list[dict[s
         if not str(x.get("source") or "").strip():
             raise ValueError(f"measurements: ⟨{name}⟩ names no source; say which run or field it came from")
         values[name] = V(x["value"], x["source"], x.get("label"))
+    if "WORLD_FLOP_YEAR" in values and values["WORLD_FLOP_YEAR"].label != WORLD_LABEL:
+        raise ValueError(f"measurements: ⟨WORLD_FLOP_YEAR⟩ is labelled {WORLD_LABEL!r}, the census entry's")
     subcircuits = [dict(s) for s in doc.get("subcircuits") or []]
     for s in subcircuits:
         if not s.get("name") or not str(s.get("source") or "").strip():
             raise ValueError(f"measurements: subcircuit {s!r} needs a name and a source")
-    return values, subcircuits, [str(c) for c in doc.get("caveats") or []]
+    fixed = dict(doc.get("fixed") or {})
+    for k, src in fixed.items():
+        if k not in STUBS or not str(src or "").strip():
+            raise ValueError(f"measurements: fixed {k!r} needs to be one of {sorted(STUBS)} with the run that shows it")
+    return values, subcircuits, [str(c) for c in doc.get("caveats") or []], fixed
+
+
+def planned(values: Mapping[str, V], subcircuits: Sequence[Mapping[str, Any]]) -> dict[str, V]:
+    """PLANNER, H_POOLED and B_POOLED: the planner at 1% of a one-week sampling block with part 2's measured costs, or
+    nothing while one is missing (module docstring)."""
+    per_and, gs = _num(values.get("PROVE_S_PER_AND")), _num(values.get("BLOCK_GPU_S"))
+    keys = ("units", "ands_per_unit", "out_bits", "fixed_s")
+    if per_and is None or not gs or not subcircuits or not all(
+            isinstance(s.get(k), (int, float)) and not isinstance(s.get(k), bool) for s in subcircuits for k in keys):
+        return {}
+    scale = SAMPLING_BLOCK_S / gs
+    cands = [optimize.Candidate(op=s["name"], template=s["name"], units=max(1, round(s["units"] * scale)),
+                                work=int(s["ands_per_unit"]), ands=int(s["ands_per_unit"]), out_bits=int(s["out_bits"]),
+                                cap=max(1, round(s["units"] * scale))) for s in subcircuits]
+    costs = optimize.CostModel(templates={s["name"]: optimize.TemplateCost(statement_fixed=float(s["fixed_s"]),
+                                                                           statement_per_unit=0.0)
+                                          for s in subcircuits}, per_and=float(per_and))
+    objective, budget = optimize.Objective(float(DELTA)), float(BUDGET) * SAMPLING_BLOCK_S
+    plan = optimize.for_budget(optimize.frontier(cands, costs, objective, exact=False), budget, candidates=cands,
+                               costs=costs, objective=objective, exact=False)
+    labels = sorted({values[n].label for n in ("PROVE_S_PER_AND", "BLOCK_GPU_S") if values[n].label}
+                    | {s["label"] for s in subcircuits if s.get("label")})
+    label = "; ".join(labels) or None
+    version = hashlib.sha256(Path(optimize.__file__).read_bytes()).hexdigest()[:12]
+    inputs = (f"`for_budget` over `frontier` (exact=False) at δ = 1/100, `Objective` work = ANDs, budget "
+              f"{_fmt(budget)} GPU-s = 1% of a one-week sampling block ({SAMPLING_BLOCK_S:,} H200-s, each "
+              f"subcircuit's units × {scale:.4g} = a week / BLOCK_GPU_S); per_and {_fmt(float(per_and))} GPU-s "
+              f"(PROVE_S_PER_AND); " + "; ".join(
+                  f"{c.template}: n {c.units:,}, {c.ands:,} ANDs, {c.out_bits} output bits, fixed "
+                  f"{_fmt(float(s['fixed_s']))} GPU-s" + (f", k {plan.sizes[c.template]:,}" if plan else "")
+                  for c, s in zip(cands, subcircuits)))
+    out = {"PLANNER": V(f"`sampled_proofs.optimize` sha256:{version}" + ("" if plan else ": no plan fits 1%"),
+                        inputs, label)}
+    if plan is None:
+        return out
+    n = sum(c.units for c in cands)
+    wrong = floor(optimize.density_bound(((c.units, plan.sizes[c.template], 1.0) for c in cands), float(DELTA)))
+    x = wrong / n
+    where = 0.0 if wrong <= 0 else float(n) if 2 * wrong >= n else n * (-x * log2(x) - (1 - x) * log2(1 - x))
+    bits = optimize.density_bound(((c.units, plan.sizes[c.template], float(c.out_bits)) for c in cands), float(DELTA))
+    out["H_POOLED"] = V(plan.certificate.free_compute, DERIVED["H_POOLED"], label)
+    out["B_POOLED"] = V(bits + where, DERIVED["B_POOLED"], label)
+    return out
 
 
 def derive(values: Mapping[str, V], subcircuits: Sequence[Mapping[str, Any]]) -> dict[str, V]:
@@ -322,16 +408,21 @@ def derive(values: Mapping[str, V], subcircuits: Sequence[Mapping[str, Any]]) ->
     n = _num(out.get("N_HOURS"))
     if n is not None and d:
         out["M_MINUTES"] = V(float(n * 60 / d), DERIVED["M_MINUTES"], out["N_HOURS"].label)
+    out |= planned(values, subcircuits)
+    values = {**values, **out}
+    year = dict(PERIODS)["year"]
+    gs, world, flop = (_num(values.get(k)) for k in ("BLOCK_GPU_S", "WORLD_FLOP_YEAR", "BLOCK_FLOP"))
     for p, seconds in PERIODS:
         P = p.upper()
-        if n and d:
-            out[f"BLOCKS_{P}"] = V(float(d * seconds / (n * 3600)), DERIVED[f"BLOCKS_{P}"], out["N_HOURS"].label)
-        gs = _num(values.get("BLOCK_GPU_S"))
-        for harm, total, share in (("H_POOLED", "BLOCK_ANDS", f"H_SHARE_{P}"),
-                                   ("B_POOLED", "BLOCK_OUTPUT_BITS", f"B_SHARE_{P}")):
+        if d:
+            put(f"BLOCKS_{P}", float(d * seconds / SAMPLING_BLOCK_S), "D_GPUS")
+        for harm, total, share in (("H_POOLED", "BLOCK_ANDS", "H"), ("B_POOLED", "BLOCK_OUTPUT_BITS", "B")):
             h, t = _num(values.get(harm)), _num(values.get(total))
+            if h is not None and t and world and flop:
+                put(f"{share}_WORLD_SHARE_{P}", _pct(h / (world * seconds / year / flop * t)), harm, total,
+                    "WORLD_FLOP_YEAR", "BLOCK_FLOP")
             if h is not None and t and gs and d:
-                put(share, _pct(h / (d * seconds * t / gs)), harm, total, "BLOCK_GPU_S", "D_GPUS")
+                put(f"{share}_SHARE_{P}", _pct(h / (d * seconds * t / gs)), harm, total, "BLOCK_GPU_S", "D_GPUS")
     return out
 
 
@@ -363,7 +454,7 @@ def _records(records: Sequence[Mapping[str, Any]]) -> str:
 
 def _subcircuits(subcircuits: Sequence[Mapping[str, Any]], quiet: str | None) -> str:
     cols = (("units", "units"), ("drawn", "drawn"), ("ands_per_unit", "ANDs a unit"),
-            ("fixed_s", "fixed proving cost per sampling block (GPU-s)"))
+            ("out_bits", "output bits a unit"), ("fixed_s", "fixed proving cost per sampling block (GPU-s)"))
     rows = ["| subcircuit | " + " | ".join(c for _, c in cols) + " |", "|" + " --- |" * (len(cols) + 1)]
     if not subcircuits:
         rows.append("| ⟨SUBCIRCUITS⟩ |" + " ⟨SUBCIRCUITS⟩ |" * len(cols))
@@ -374,20 +465,29 @@ def _subcircuits(subcircuits: Sequence[Mapping[str, Any]], quiet: str | None) ->
     return "\n".join(rows)
 
 
+def _period_names(p: str) -> tuple[str, ...]:
+    P = p.upper()
+    return (f"BLOCKS_{P}", "H_POOLED", f"H_WORLD_SHARE_{P}", f"H_SHARE_{P}", "B_POOLED", f"B_WORLD_SHARE_{P}",
+            f"B_SHARE_{P}")
+
+
 def _periods(values: Mapping[str, V], quiet: str | None) -> str:
-    rows = [("| period | sampling blocks | H faulty ANDs | share of the period's ANDs | B leaked bits | "
-             "share of the period's output bits |"), "|" + " --- |" * 6]
+    rows = [("| period | one-week sampling blocks | H faulty ANDs | share of the world's ANDs | share of the "
+             "deployment's ANDs | B leaked bits | share of the world's output bits | share of the deployment's output "
+             "bits |"), "|" + " --- |" * 8]
     for p, _ in PERIODS:
-        P = p.upper()
-        rows.append(f"| {p} | " + " | ".join(_cell(n, values, quiet) for n in (
-            f"BLOCKS_{P}", "H_POOLED", f"H_SHARE_{P}", "B_POOLED", f"B_SHARE_{P}")) + " |")
+        rows.append(f"| {p} | " + " | ".join(_cell(n, values, quiet) for n in _period_names(p)) + " |")
     return "\n".join(rows)
 
 
 def _caveats(records: Sequence[Mapping[str, Any]], values: Mapping[str, V], extra: Sequence[str],
-             quiet: str | None) -> str:
+             quiet: str | None, fixed: Mapping[str, str]) -> str:
     r = records[0]
-    lines = []
+    lines = [STUBS[k] for k in STUBS if k not in fixed]
+    if (k := values.get("DRAWN_UNITS")) is not None and k.value != HANDFUL:
+        lines.append(f"This block drew k = {_fmt(k.value)}, not M3's handful of {HANDFUL} (PRF-171).")
+    lines.append("The challenger and the network certifier run on the prover's node for the demo, not on a machine the "
+                 "prover doesn't control (fine for the demo, Daniel, 25 Oct 7:34 PM PDT).")
     for p in DEMO_A:
         lg = r["legs"].get(p)
         if lg is None or lg["server"] != r["server"]:
@@ -419,8 +519,9 @@ def _sources(order: Sequence[str], values: Mapping[str, V], subcircuits: Sequenc
         v = values.get(name)
         if name == "SUBCIRCUITS":
             src = "; ".join(f"{s['name']}: {s['source']}" for s in subcircuits) or \
-                  "CMP-97's block and PRF-171's prove run: per subcircuit its units, drawn units, ANDs a unit and " \
-                  "fixed proving cost per sampling block (`sampled_proofs.costfit`'s statement_fixed)"
+                  "CMP-97's block and PRF-171's prove run: per subcircuit its units, drawn units, ANDs a unit, " \
+                  "output bits a unit and fixed proving cost per sampling block (`sampled_proofs.costfit`'s " \
+                  "statement_fixed)"
             filled += bool(subcircuits)
             rows.append(f"| ⟨SUBCIRCUITS⟩ | {'filled' if subcircuits else 'unfilled'} | {src} |")
             continue
@@ -440,7 +541,7 @@ def render(records: Sequence[Mapping[str, Any]], measurements: Mapping[str, Any]
     if not records:
         raise ValueError("render needs at least one block record: the first is the block the report is about")
     text = TEMPLATE.read_text() if template is None else template
-    measured, subcircuits, caveats = load_measurements(measurements or {"format": MEASUREMENTS})
+    measured, subcircuits, caveats, fixed = load_measurements(measurements or {"format": MEASUREMENTS})
     values = {**from_record(records[0], record_label), **measured}
     for r in records[1:]:
         from_record(r)
@@ -458,15 +559,15 @@ def render(records: Sequence[Mapping[str, Any]], measurements: Mapping[str, Any]
         if name in ("BOUND_CITATION", "HORIZON_CITATION"):
             names.append("JOINT_LOCKED")
         if name == "PERIODS":
-            names = [n for p, _ in PERIODS for n in (f"BLOCKS_{p.upper()}", "H_POOLED", f"H_SHARE_{p.upper()}",
-                                                     "B_POOLED", f"B_SHARE_{p.upper()}")]
+            names = [n for p, _ in PERIODS for n in _period_names(p)]
         order += [n for n in dict.fromkeys(names) if n not in order]
     banner = (f"> The {record_label}'s numbers are not marked in place: every number read from the block records "
               f"(block record {records[0]['run']}), and every measurement labelled *({record_label})*, is the "
               f"{record_label}'s, not the demo block's. Any other number that isn't the demo block's own is marked "
               f"in place.") if record_label else "> A number that isn't the demo block's own is marked in place."
     blocks = {"LABEL": banner, "RECORDS": _records(records), "SUBCIRCUITS": _subcircuits(subcircuits, record_label),
-              "PERIODS": _periods(values, record_label), "CAVEATS": _caveats(records, values, caveats, record_label),
+              "PERIODS": _periods(values, record_label),
+              "CAVEATS": _caveats(records, values, caveats, record_label, fixed),
               "SOURCES": _sources(order, values, subcircuits)}
     out = PLACEHOLDER.sub(lambda m: blocks[m[1]] if m[1] in blocks else _cell(m[1], values, record_label), text)
     vocabulary(out)
