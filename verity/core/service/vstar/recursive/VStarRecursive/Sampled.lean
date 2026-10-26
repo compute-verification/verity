@@ -1,8 +1,8 @@
 /-
-Sampled proofs' integrity (`verity/sampled-proofs/integrity/v1`), a `Core.BlobProtocol`: one-stage v2's audit
+Sampled proofs (`verity/sampled-proofs/v1`), a `Core.BlobProtocol`: one-stage v2's audit
 (`SampledProofs.OneStageZk`) or the recursive audit (`VStar.Recursive`), whichever the auditor's params name.
 
-`Core.Composition.product` reads every component's case, so integrity is one component and the form is the params':
+`Core.Composition.product` reads every component's case, so sampled proofs is one component and the form is the params':
 
 * **params**: `{"form": "one-stage" | "recursive", ...}`, the rest that form's params. The auditor fixes the form with the
   rest of its params, before any coin;
@@ -12,13 +12,13 @@ Sampled proofs' integrity (`verity/sampled-proofs/integrity/v1`), a `Core.BlobPr
 -/
 import VStarRecursive.Protocol
 
-namespace VStar.Recursive.Integrity
+namespace VStar.Recursive.Sampled
 
 open Lean (Json)
 open Flock (V)
 open SampledProofs
 
-def PROTOCOL : String := "verity/sampled-proofs/integrity/v1"
+def PROTOCOL : String := "verity/sampled-proofs/v1"
 
 def ONE_STAGE : String := "one-stage"
 def RECURSIVE : String := "recursive"
@@ -71,4 +71,4 @@ def protocol : Core.BlobProtocol where
 #guard (paramsOfJson (Json.mkObj [("form", "two-stage")])).toOption.isNone
 #guard (evidenceOf "{\"form\":\"recursive\"}".toUTF8).toOption.isNone
 
-end VStar.Recursive.Integrity
+end VStar.Recursive.Sampled
