@@ -35,8 +35,8 @@ def OpensAt (C : FlockSoundness.Audit.Circuit) (κ : Fin C.N → Option Bool) (H
   else ∃ o : Opening Bool, o.pos = posOf C g ∧ Cm.Opens H roots o = true ∧ o.val = v
 
 /-- **Each wire opens to one value** under `roots`. -/
-def OpensUnique (C : FlockSoundness.Audit.Circuit) (κ : Fin C.N → Option Bool) (H : Claims.Msg → Claims.Msg)
-    (Cm : Commitment Bool) (roots : List Claims.Msg) : Prop :=
+def OpensUnique (C : FlockSoundness.Audit.Circuit) (κ : Fin C.N → Option Bool)
+    (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (roots : List Claims.Msg) : Prop :=
   ∀ (g : Fin C.N) (v v' : Bool), OpensAt C κ H Cm roots g v → OpensAt C κ H Cm roots g v' → v = v'
 
 theorem opening_of_val {H : Claims.Msg → Claims.Msg} {Cm : Commitment Bool} {s : Claims.Sampling.Stmt} {w : Wit}
@@ -228,7 +228,8 @@ noncomputable def badIn {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ :
 
 theorem badIn_subset_unbound {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (roots : List Claims.Msg) (val : ℕ → Option Bool)
-    (hU : OpensUnique C κ H Cm roots) {T : (Verity.Circuit.ofAudit C).Transcript} (hT : OpensTo P κ H Cm roots T) :
+    (hU : OpensUnique C κ H Cm roots) {T : (Verity.Circuit.ofAudit C).Transcript}
+    (hT : OpensTo P κ H Cm roots T) :
     badIn P κ H Cm roots T ⊆ unbound P κ H Cm roots val := by
   classical
   intro u hu
