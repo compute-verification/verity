@@ -11,7 +11,7 @@ it takes from one. Both only shrink: a new outside import of a module outside ``
 that is gone, so the lists stay exact. Move an importer onto a public interface (growing the interface when it lacks what
 the importer needs) and delete the line.
 
-An import is what `tests/test_backend_boundaries.py` counts: an import statement, a string handed to
+An import is what `tests/test_integration_boundaries.py` counts: an import statement, a string handed to
 ``importlib.import_module``, ``__import__`` or ``pytest.importorskip``, or a ``"module:attr"`` string. ``from P import n``
 imports the module ``P.n`` when that is a module of the package, else the name ``n`` of ``P``. A stand-in module a test
 builds under a package name (``ModuleType("verity_vllm.x")``) is not an import.
