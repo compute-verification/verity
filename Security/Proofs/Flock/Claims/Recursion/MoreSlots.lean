@@ -383,7 +383,7 @@ theorem accRead_other {r : XR} {sv : VStar.Stmt} {nm : String} {u : ℕ} (ha : n
       have e1 : ("out" : String) ≠ "acc0" := by decide
       have e2 : ("out" : String) ≠ "acc1" := by decide
       simp [h1, e1, e2] at h
-    · simp [h1] at h
+    · simp only [if_neg h1, Option.isSome_none, Bool.false_eq_true] at h
   | _ => unfold accRead at h; simp [ha] at h
 
 /-- A read of the chain at `acc` is a level's, whose statement outputs `acc_out`. -/
@@ -452,20 +452,20 @@ theorem moreSlotsTrue {st : Stage} (hP : PastIn st) (hA : AccFits) :
       cases sv with
       | inner j nm' pt =>
         obtain ⟨nm, -, hh⟩ := List.mem_flatMap.1 hh
-        dsimp only at hh
-        split at hh
-        · rename_i q hq
+        cases hq : c.ports.findIdx? (·.name == nm) with
+        | none => simp [hq] at hh
+        | some q =>
+          simp only [hq] at hh
           obtain ⟨n, hn, rfl⟩ := List.mem_map.1 hh
           exact portCallsG_true hP hS hck hr hss hsv hpc hq (Or.inr (List.mem_range.1 hn)) p hp
-        · simp at hh
       | recOpen l L H n =>
         obtain ⟨nm, -, hh⟩ := List.mem_flatMap.1 hh
-        dsimp only at hh
-        split at hh
-        · rename_i q hq
+        cases hq : c.ports.findIdx? (·.name == nm) with
+        | none => simp [hq] at hh
+        | some q =>
+          simp only [hq] at hh
           obtain ⟨i, hi, rfl⟩ := List.mem_map.1 hh
           exact portCallsG_true hP hS hck hr hss hsv hpc hq (Or.inl (List.mem_range.1 hi)) p hp
-        · simp at hh
       | _ => simp at hh
   · unfold accCalls at hp
     cases hpc : r.w.parts[s]?.bind partCircuit with
@@ -478,25 +478,24 @@ theorem moreSlotsTrue {st : Stage} (hP : PastIn st) (hA : AccFits) :
       have hrd : (accRead r sv nm u).isSome = true := (List.mem_filter.1 hh).2
       unfold accPortCalls at hp
       rcases List.mem_append.1 hp with hp | hp
-      · dsimp only at hp
-        split at hp
-        · rename_i q hq
+      · cases hq : c.ports.findIdx? (·.name == nm) with
+        | none => simp [hq] at hp
+        | some q =>
+          simp only [hq] at hp
           by_cases ha : nm = "acc"
           · subst ha
             exact hmCallsG_true hS hck hr hss hsv hpc hq (not_output (by decide) (by decide))
               (Or.inl (hA r ss s sv hss hsv u hrd)) p hp
           · obtain ⟨hu, hnm⟩ := accRead_other ha hrd
             exact hmCallsG_true hS hck hr hss hsv hpc hq hnm (Or.inr hu) p hp
-        · simp at hp
-      · dsimp only at hp
-        split at hp
-        · rename_i ha
-          subst ha
-          split at hp
-          · rename_i q hq
-            exact accOutCallsG_true hP hS hck hr hss hsv hpc hq (accRead_acc hrd)
+      · by_cases ha : nm = "acc"
+        · subst ha
+          cases hqo : c.ports.findIdx? (·.name == "acc_out") with
+          | none => simp [hqo] at hp
+          | some q =>
+            simp only [hqo, eq_self_iff_true, ↓reduceIte] at hp
+            exact accOutCallsG_true hP hS hck hr hss hsv hpc hqo (accRead_acc hrd)
               (Or.inl (hA r ss s sv hss hsv u hrd)) p hp
-          · simp at hp
-        · simp at hp
+        · simp [ha] at hp
 
 end RecDeploy.MoreSlots
