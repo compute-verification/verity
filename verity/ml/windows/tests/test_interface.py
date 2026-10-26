@@ -337,7 +337,7 @@ def test_a_circuit_declares_its_registered_reads_and_the_record_counts_its_free_
                                                      "ingress": 0, "free": bits - 12 * 8 * K}
     assert "registered" not in json.loads(I.circuit_bytes(window()[0].circuit_record()))
     for bad, why in [({**doc["registered"], "params": {"w": 5 * K // 2}}, "leaves"),
-                     ({**doc["registered"], "reads": [{**doc["registered"]["reads"][0], "port": "o0"}]}, "names no parameter"),
+                     ({**doc["registered"], "reads": [{**doc["registered"]["reads"][0], "port": "frames"}]}, "names no parameter"),
                      ({**doc["registered"], "reads": doc["registered"]["reads"] * 2}, "both fill rows"),
                      ({**doc["registered"], "reads": [{**doc["registered"]["reads"][0], "x": 0}]}, "a read's record")]:
         with pytest.raises(ValueError, match=why):

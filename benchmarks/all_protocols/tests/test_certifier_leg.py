@@ -6,7 +6,10 @@
 * N2's outcome of record is one-stage's answer on the link-window's one unit, and its refusal a reject;
 * the integrity leg's accepted audit is re-decided at the leg's δ (one-stage's bound on wrong units), and its refusal
   kept as it is;
-* the certified text matches the registered outputs by stream, else by content, and a changed byte is no match;
+* the certified text matches the registered outputs by stream, else by content, and a changed byte is no match; a
+  period's relayed outputs are its link-window's responses in the plan's order, and a short or non-hex one is refused;
+* a tied period reports its integrity audit's output class and Lean's refusals at the output port's registered read,
+  and the leg asserts an honest relay's accepted audit proved the class and a tampered relay's was refused there;
 * `case_of`'s case of signed link-windows and the period's audit is the period check's (its Python mirror, which
   `network-period` is held to): accepted with K and eps at each δ, refused when N2 refused a link-window or the case
   names another first window;
@@ -180,6 +183,51 @@ def test_the_certified_text_is_matched_to_the_registered_outputs():
     assert not L.match_outputs(reqs, events[:-1], FRAMES, outputs, STEPS)["equal"]
     with pytest.raises(ValueError, match="plan requests"):
         L.match_outputs(reqs[:1], events, FRAMES, outputs, STEPS)
+
+
+def test_a_periods_relayed_outputs_are_its_link_windows_responses_in_the_plans_order(tmp_path, monkeypatch):
+    report, p = plan(2)
+    run = tmp_path / "rehearsal" / "honest"
+    run.mkdir(parents=True)
+    (run / "plan.json").write_text(json.dumps(p))
+    (run / "calibration.json").write_text(json.dumps(report))
+    said = [bytes([16 * i + k for k in range(STEPS)]) * 2 * H for i in range(2)]
+    events = [t[j:j + L.TOKEN_BYTES] for t in (s.hex().encode() for s in said) for j in range(0, len(t), L.TOKEN_BYTES)]
+    got: dict[str, list] = {"events": events}
+    monkeypatch.setattr(L, "certified_events", lambda r, fb, ws: got["events"] if ws == [1] else [])
+    rec = {"dir": str(tmp_path), "prompts": [3, 7], "frames": FRAMES, "h": H, "steps": STEPS}
+    assert L.relayed(rec, "honest", 1) == (1, said)
+    with pytest.raises(RuntimeError, match="canonical events"):
+        L.relayed(rec, "honest", 0)
+    got["events"] = events[:-1] + [b"zz" * (L.TOKEN_BYTES // 2)]
+    with pytest.raises(RuntimeError, match="not the hex of"):
+        L.relayed(rec, "honest", 1)
+
+
+def test_a_tied_period_reports_its_audits_output_class_and_lean_refusals_of_the_output_port(tmp_path):
+    (tmp_path / "p").mkdir()
+    audit = tmp_path / "out" / "integrity" / "audit"
+    audit.mkdir(parents=True)
+    period = {"period": 0}
+    (tmp_path / "p" / "period.json").write_text(json.dumps(period))
+    assert L.tie_of(tmp_path / "p", tmp_path / "out" / "communication") is None
+    tie = {"value": "out", "port": "o0", "stratum": "output class", "strategy": "byte", "window": 0}
+    (tmp_path / "p" / "period.json").write_text(json.dumps(period | {"tie": tie}))
+    why = {"lean-verify/m17": "registered reads: port o0: table row 0 does not open out's registered root at position 0",
+           "lean-verify/m3": "zk inner: τ does not match its commitment"}
+    (audit / "summary.json").write_text(json.dumps({"audit": {"why": why},
+                                                    "outputs": {"units": 128, "proved": False}}))
+    got = L.tie_of(tmp_path / "p", tmp_path / "out" / "communication")
+    assert got == {**tie, "outputs": {"units": 128, "proved": False}, "refused": {"lean-verify/m17": why["lean-verify/m17"]}}
+    L.tie_holds(0, got, "reject")
+    for t, integrity in ((got | {"refused": {}}, "reject"), (got, "accept"),
+                         (got | {"strategy": "honest", "refused": {}}, "accept")):
+        with pytest.raises(RuntimeError, match="registered|output class"):
+            L.tie_holds(0, t, integrity)
+    L.tie_holds(0, got | {"strategy": "honest", "outputs": {"units": 128, "proved": True}}, "accept")
+    L.tie_holds(0, got | {"strategy": "honest"}, "reject")
+    assert L.STUBBED["tied"] == (L._PROXY_GAP, L._OFF_HOST_GAP) and "out-records.jsonl" in L.PUBLIC_SESSION
+    assert not any("witness" in f for f in L.PUBLIC_SESSION)
 
 
 def session_run(windows: list[int], refused: frozenset[int] = frozenset()) -> dict:
