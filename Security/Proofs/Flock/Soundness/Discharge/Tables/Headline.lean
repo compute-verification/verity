@@ -7,8 +7,8 @@ import Proofs.Flock.Soundness.Discharge.Tables.Session
 tables at each draw, `plan S R` of length `J`, and the live session is `liveSession` over them.
 
 * `Prog.flock_headline_live_tables`: `Prog.flock_headline_execL` with `hRef` discharged by `execRefines_tables`, at the
-  live stratified draw. flock-verify refuses a stratified draw at more than one table (`Stmt.setupTables`: several
-  tables need a subset draw), so for `J > 1` the next is the one flock-verify accepts.
+  live stratified draw, which flock-verify splits over `J > 1` tables as one draw (`Stmt.setupTables`, `Draw.tablesWhy`:
+  several tables need a subset or stratified draw).
 * `Prog.flock_headline_live_tables_subset`: the same at the live subset draw `Law.execOS src (.subset kd) n`, whose
   count curve is the uniform `kd`-subset's, `C(n − K, kd) / C(n, kd)` (`Law.subset_miss`), under A3.
 
