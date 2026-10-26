@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Complete.Encode
 import Proofs.Flock.Claims.Recursion.Deploy
+import Proofs.Properties.Verity.Recursive.Names
 import VStarRecursive
 
 /-!
@@ -20,9 +21,9 @@ the compiled `setupOf` and so concludes `setupO (staged st x ms s) = some _`.
   (`jsonOf_what`), `Blobs.get` whatever it names (`blobs_get_what`), and the compiled `registeredOf`'s ports
   (`registeredOf_own`). `innerHeld_ok` reads `innerHeld`'s fields off the blobs.
 * **The correspondence** (`insO_staged_partIns`) takes `Names`' clauses (PRF-202, piece B) and `Shows`' as hypotheses by
-  name, at `readX`'s reading `r` of `x` (`readXPre_spec` relates it to `Names`' `w` and `ri`), and `PartForm`, the
-  form compiled part `s` sets up (statement `verity/flock-circuit`, `--zk`, one table, no work, stratified, closure or
-  public input words), which `Names` is to carry.
+  name, at `readX`'s reading `r` of `x` (`readXPre_spec` relates it to `Names`' `w` and `ri`), and `Names`'
+  `PartForm`, the form compiled part `s` sets up (statement `verity/flock-circuit`, `--zk`, one table, no work,
+  stratified, closure or public input words).
 * `vstarAt_eq_staged`: where part `s`'s staged numbers are `nums`' (piece C2), its V\* statement is the staged one.
 -/
 
@@ -81,6 +82,11 @@ theorem rdOptNat {a : Option Nat} (h : ∀ n ∈ a, n < 2 ^ 64) (rest : List UIn
     (rdOpt rdNat).run (encOpt encNat a ++ rest) = some (a, rest) :=
   rdOpt_encOpt (fun n hn rest => FlockComplete.rdNat_encNat (h n hn) rest) rest
 
+theorem run_bind_of {α β : Type} {x : Rd α} {f : α → Rd β} {s s' : Claims.Msg} {a : α}
+    (h : x.run s = some (a, s')) : (x >>= f).run s = (f a).run s' := by
+  rw [StateT.run_bind, h]
+  rfl
+
 theorem raw_read_encode {w : Raw} (h : RawFits w) (rest : List UInt8) :
     Raw.read.run (w.encode ++ rest) = some (w, rest) := by
   obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15⟩ := h
@@ -89,14 +95,20 @@ theorem raw_read_encode {w : Raw} (h : RawFits w) (rest : List UInt8) :
       let b ← rdBytes
       pure (n, b))).run (encList (fun p => encStr p.1 ++ encBytes p.2) w.tables ++ rest) = some (w.tables, rest) :=
     fun rest => FlockComplete.rdList_encList (fun p hp rest => by
-      simp only [List.append_assoc, StateT.run_bind, FlockComplete.rdStr_encStr (h5 p hp).1,
-        FlockComplete.rdBytes_encBytes (h5 p hp).2, Option.bind_eq_bind, Option.bind_some]
+      rw [List.append_assoc, run_bind_of (FlockComplete.rdStr_encStr (h5 p hp).1 _),
+        run_bind_of (FlockComplete.rdBytes_encBytes (h5 p hp).2 _)]
       rfl) h4 rest
-  simp only [Raw.read, Raw.encode, List.append_assoc, StateT.run_bind, FlockComplete.rdStr_encStr format_fits,
-    Option.bind_eq_bind, Option.bind_some, ne_eq, not_true_eq_false, ite_false,
-    FlockComplete.rdStr_encStr h1, FlockComplete.rdBytes_encBytes h2, FlockComplete.rdBytes_encBytes h3, ht,
-    rdBool_encBool, FlockComplete.rdNat_encNat h6, rdOptBytes h7, rdOptBytes h8, rdOptBytes h9, rdOptNat h10,
-    rdOptBytes h11, rdOptNat h12, rdOptBytes h13, rdOptBytes h14, rdOptBytes h15]
+  simp only [Raw.encode, List.append_assoc]
+  unfold Raw.read
+  rw [run_bind_of (FlockComplete.rdStr_encStr format_fits _)]
+  dsimp only
+  rw [if_neg (fun h => h rfl)]
+  rw [run_bind_of (FlockComplete.rdStr_encStr h1 _), run_bind_of (FlockComplete.rdBytes_encBytes h2 _),
+    run_bind_of (FlockComplete.rdBytes_encBytes h3 _), run_bind_of (ht _), run_bind_of (rdBool_encBool _ _),
+    run_bind_of (rdBool_encBool _ _), run_bind_of (FlockComplete.rdNat_encNat h6 _), run_bind_of (rdOptBytes h7 _),
+    run_bind_of (rdOptBytes h8 _), run_bind_of (rdOptBytes h9 _), run_bind_of (rdOptNat h10 _),
+    run_bind_of (rdOptBytes h11 _), run_bind_of (rdOptNat h12 _), run_bind_of (rdOptBytes h13 _),
+    run_bind_of (rdOptBytes h14 _), run_bind_of (rdOptBytes h15 _)]
   rfl
 
 /-- **Flock's statement reads back as itself** where it fits. -/
@@ -115,8 +127,8 @@ theorem rdTables {ts : List (String × ByteArray)} (h : ts.length < 2 ^ 64 ∧ �
       let b ← rdBytes
       pure (n, b))).run (encList (fun p => encStr p.1 ++ encBytes p.2) ts ++ rest) = some (ts, rest) :=
   FlockComplete.rdList_encList (fun p hp rest => by
-      simp only [List.append_assoc, StateT.run_bind, FlockComplete.rdStr_encStr (h.2 p hp).1,
-        FlockComplete.rdBytes_encBytes (h.2 p hp).2, Option.bind_eq_bind, Option.bind_some]
+      rw [List.append_assoc, run_bind_of (FlockComplete.rdStr_encStr (h.2 p hp).1 _),
+        run_bind_of (FlockComplete.rdBytes_encBytes (h.2 p hp).2 _)]
       rfl) h.1 rest
 
 theorem recRaw_read_encode {w : RecRaw} (h : RecRawFits w) (rest : List UInt8) :
@@ -127,13 +139,22 @@ theorem recRaw_read_encode {w : RecRaw} (h : RecRawFits w) (rest : List UInt8) :
     simpa using hb
   have hdec : FlockDeploy.decode (⟨w.base.encode.toArray⟩ : ByteArray).data.toList = some w.base := by
     simpa using decode_encode_fits h0
-  simp only [RecRaw.read, RecRaw.encode, List.append_assoc, StateT.run_bind, FlockComplete.rdStr_encStr rformat_fits,
-    Option.bind_eq_bind, Option.bind_some, ne_eq, not_true_eq_false, ite_false,
-    FlockComplete.rdBytes_encBytes hbs, hdec, rdOptBytes h1, rdOptNat h2, rdOptBytes h3, rdOptBytes h4, rdOptBytes h5,
-    rdOptBytes h6, rdOptBytes h7, rdOptBytes h8, rdOptBytes h9, rdOptBytes h10, rdOptBytes h11,
-    rdOpt_encOpt (fun t ht rest => FlockComplete.rdStr_encStr (h12 t ht) rest),
-    rdOpt_encOpt (fun b _ rest => rdBool_encBool b rest),
-    rdOpt_encOpt (fun ts hts rest => rdTables (h13 ts hts) rest), rdOptBytes h14]
+  simp only [RecRaw.encode, List.append_assoc]
+  unfold RecRaw.read
+  rw [run_bind_of (FlockComplete.rdStr_encStr rformat_fits _)]
+  dsimp only
+  rw [if_neg (fun h => h rfl)]
+  rw [run_bind_of (FlockComplete.rdBytes_encBytes hbs _)]
+  dsimp only
+  rw [hdec]
+  dsimp only
+  rw [run_bind_of (rdOptBytes h1 _), run_bind_of (rdOptNat h2 _), run_bind_of (rdOptBytes h3 _),
+    run_bind_of (rdOptBytes h4 _), run_bind_of (rdOptBytes h5 _), run_bind_of (rdOptBytes h6 _),
+    run_bind_of (rdOptBytes h7 _), run_bind_of (rdOptBytes h8 _), run_bind_of (rdOptBytes h9 _),
+    run_bind_of (rdOptBytes h10 _), run_bind_of (rdOptBytes h11 _),
+    run_bind_of (rdOpt_encOpt (fun t ht rest => FlockComplete.rdStr_encStr (h12 t ht) rest) _),
+    run_bind_of (rdOpt_encOpt (fun b _ rest => rdBool_encBool b rest) _),
+    run_bind_of (rdOpt_encOpt (fun ts hts rest => rdTables (h13 ts hts) rest) _), run_bind_of (rdOptBytes h14 _)]
   rfl
 
 /-- **A V\* statement reads back as itself** where it fits. -/
@@ -172,13 +193,6 @@ theorem readXPre_spec {x : Claims.Msg} {r : XR} (h : readXPre x = some r) :
   · cases h
   · cases h
     exact ⟨hw, hri, toOption_ok hshape, toOption_ok hpart⟩
-
-/-- **The form compiled part `s` sets up**: the statement `verity/flock-circuit` (`VStar.Recursive.STATEMENT`) under
-`--zk`, its coins the keyed coin tree, one table and no lookup tables, and no `--work`, `--work-table`, `--stratified`,
-`--closure` or `--public-inputs`. `Names` is to carry it for each part. -/
-def PartForm (b : Raw) : Prop :=
-  b.statement = VStar.Recursive.STATEMENT ∧ b.zk = true ∧ b.osCoins = false ∧ b.count = 1 ∧ b.tables = [] ∧
-    b.work = none ∧ b.workTable = none ∧ b.stratified = none ∧ b.closure = none ∧ b.publicInputs = none
 
 theorem len_encBytes (b : ByteArray) : (encBytes b).length = 8 + b.size := by
   show (encNat b.size ++ b.data.toList).length = _
@@ -325,7 +339,9 @@ theorem insO_staged {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stag
     insO (staged st x ms s) = (partRaw r st x ms s q).ins.toOption := by
   rw [staged_eq hr hq hfit]
   unfold insO
-  simp [decodeRec_encode_fits hfit, partRaw, hzk]
+  rw [decodeRec_encode_fits hfit]
+  have hz : (partRaw r st x ms s q).base.zk = true := hzk
+  simp only [Option.bind_eq_bind, Option.bind_some, hz, Bool.true_eq_false, ite_false]
 
 /-- **Where part `s`'s staged numbers are `nums`', its V\* statement is the staged one.** -/
 theorem vstarAt_eq_staged {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ}
@@ -523,6 +539,12 @@ theorem jsonOf_what {a a' : String} {b : ByteArray} {j : Json} (h : jsonOf a b =
     | error e => intro h; cases h
     | ok j' => intro h; exact h
 
+theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : x >>= f = .ok b) :
+    ∃ a, x = .ok a ∧ f a = .ok b := by
+  cases x with
+  | error => cases h
+  | ok a => exact ⟨a, rfl, h⟩
+
 /-- A blob's lookup doesn't depend on what it names. -/
 theorem blobs_get_what {bs : Core.Blobs} {d a a' : String} {b : ByteArray} (h : bs.get d a = .ok b) :
     bs.get d a' = .ok b := by
@@ -558,16 +580,16 @@ reads text; its shape (`shapeOf`), check 5's source, the inner circuit's binding
 theorem innerHeld_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs : Core.Blobs}
     {h : VStar.Recursive.InnerHeld} (hh : VStar.Recursive.innerHeld o pr bs = .ok h) :
     ∃ (circuitB pubB recB drawB trB : ByteArray) (record t : String) (reg : Option String),
-      bs.get o.circuit "the inner circuit" = .ok circuitB ∧ bs.get pr.pub "the inner public file" = .ok pubB ∧
+      bs.get o.circuit "the inner circuit" = .ok circuitB ∧ bs.get o.pub "the inner public file" = .ok pubB ∧
       VStar.Recursive.shapeOf circuitB pubB o.partition o.program = .ok h.shape ∧
       bs.get pr.record "the inner session's record" = .ok recB ∧ String.fromUTF8? recB = some record ∧
-      bs.get pr.draw "the inner statement's draw" = .ok drawB ∧
+      bs.get o.draw "the inner statement's draw" = .ok drawB ∧
       h.src = .files
         { circuit := circuitB, pub := pubB, partition := o.partition, record := record,
           form := some { statement := VStar.Recursive.INNER_STATEMENT, os := true, tables := [], draw := some drawB } } ∧
       h.bound = (do RecSetup.metaBound (← VStar.Recursive.metaOf circuitB)) ∧
       bs.get pr.transcript "rec inner transcript" = .ok trB ∧ String.fromUTF8? trB = some t ∧
-      (pr.registration.mapM fun d => do
+      (o.registration.mapM fun d => do
           let some s := String.fromUTF8? (← bs.get d "rec inner registration")
             | throw "rec inner registration: not UTF-8"
           pure s : Flock.V (Option String)) = .ok reg ∧
@@ -739,13 +761,13 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
       (s!"rec rows: " ++ ·)) = .ok rows)
     (hbindC : RecVStar.ownBindingsOfJson pj.bindings = .ok bindings)
     (hIc : bs.get o.circuit "the inner circuit" = .ok r.innerRaw.circuit)
-    (hIp : bs.get pr.pub "the inner public file" = .ok r.innerRaw.publicFile)
+    (hIp : bs.get o.pub "the inner public file" = .ok r.innerRaw.publicFile)
     (hIstmt : r.innerRaw.statement = VStar.Recursive.INNER_STATEMENT) (hIos : r.innerRaw.osCoins = true)
     (hItab : r.innerRaw.tables = [])
     (hIpart : r.innerRaw.partition.map (jsonOf "partition") = some (.ok o.partition))
-    (hIdraw : r.innerRaw.draw = (bs.get pr.draw "the inner statement's draw").toOption)
+    (hIdraw : r.innerRaw.draw = (bs.get o.draw "the inner statement's draw").toOption)
     (hIshape : (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" r.w.recInner)) = .ok h.shape)
-    (hIreg : (pr.registration.mapM fun d => (bs.get d "rec inner registration").toOption) = some r.w.registration)
+    (hIreg : (o.registration.mapM fun d => (bs.get d "rec inner registration").toOption) = some r.w.registration)
     (hPform : PartForm q.base) (hPc : q.base.circuit = circuitB)
     (hPpart : q.base.partition.map (jsonOf "partition") = some (.ok pj.partition))
     (hPprog : q.base.program = some pj.program)
@@ -913,13 +935,13 @@ theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {s
       (s!"rec rows: " ++ ·)) = .ok rows)
     (hbindC : RecVStar.ownBindingsOfJson pj.bindings = .ok bindings)
     (hIc : bs.get o.circuit "the inner circuit" = .ok r.innerRaw.circuit)
-    (hIp : bs.get pr.pub "the inner public file" = .ok r.innerRaw.publicFile)
+    (hIp : bs.get o.pub "the inner public file" = .ok r.innerRaw.publicFile)
     (hIstmt : r.innerRaw.statement = VStar.Recursive.INNER_STATEMENT) (hIos : r.innerRaw.osCoins = true)
     (hItab : r.innerRaw.tables = [])
     (hIpart : r.innerRaw.partition.map (jsonOf "partition") = some (.ok o.partition))
-    (hIdraw : r.innerRaw.draw = (bs.get pr.draw "the inner statement's draw").toOption)
+    (hIdraw : r.innerRaw.draw = (bs.get o.draw "the inner statement's draw").toOption)
     (hIshape : (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" r.w.recInner)) = .ok h.shape)
-    (hIreg : (pr.registration.mapM fun d => (bs.get d "rec inner registration").toOption) = some r.w.registration)
+    (hIreg : (o.registration.mapM fun d => (bs.get d "rec inner registration").toOption) = some r.w.registration)
     (hPform : PartForm q.base) (hPc : q.base.circuit = circuitB)
     (hPpart : q.base.partition.map (jsonOf "partition") = some (.ok pj.partition))
     (hPprog : q.base.program = some pj.program)
