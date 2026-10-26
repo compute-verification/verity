@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""R13 lane hopper: turn a pinned vllm-flash-attn tree (506341a1) into the FA3-tapped tree (M1 export tap, layout v9 = FA2 v8 word
+"""Turn a pinned vllm-flash-attn tree (506341a1) into the FA3-tapped tree (M1 export tap, layout v9 = FA2 v8 word
 layout keyed by packed PackGQA rows).
 
   apply_fa3_tap.py <tree>/hopper <this src dir>

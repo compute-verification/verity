@@ -26,6 +26,7 @@ prefix can be its first turn's prompt and its previous turn's suffix). Rows past
 committed sample. Given the request's finish, the stream must also end where it says (`finish_problems`), so a stream
 cut short can't pass with its missing ids taken for an overrun; a client's abort ends it anywhere short of ``max_tokens``,
 and then at most one committed sample runs past it (the step in flight when the abort was applied, under async scheduling).
+A request aborted before it was ever scheduled streamed nothing and has no committed row, and `Record.check` passes it.
 
 Stdlib only, but `committed_ints`, which reads a committer's retained bytes with numpy (and torch for a GPU block).
 """
@@ -419,7 +420,9 @@ class Record:
               finish: Mapping[str, Any] | None = None, decode: Callable[[Sequence[int]], str] | None = None) -> dict[str, Any]:
         rec = self.requests.get(request)
         if rec is None:
-            return {"passed": False, "problems": ["no committed row"], "prompt_ids": len(prompt_ids), "streamed_ids": len(streamed_ids)}
+            gone = finish is not None and finish.get("reason") == "abort" and not streamed_ids and not finish.get("k")
+            return {"passed": gone, "problems": [] if gone else ["no committed row"], "prompt_ids": len(prompt_ids),
+                    "streamed_ids": len(streamed_ids)}
         return rec.check(prompt_ids, streamed_ids, seed=seed, prefix_sources=self.requests, finish=finish, decode=decode)
 
 

@@ -1,4 +1,4 @@
-"""Falsification tests of H-1T's two conjectures (`Security/Models/Pouw/Assumptions/Fp8Atom/H1TAssumptions.lean`), the
+"""Falsification tests of H-1T's two conjectures (`Security/Definitions/Pouw/Assumptions/Fp8Atom/H1TAssumptions.lean`), the
 tests that `shape.conjectures` in `Security/lean-audit.json` names:
 
 * `DistinctLiveH1T`: on a legal unit `U`, `U.word` is injective and no credited word is free (a constant or a raw XOF

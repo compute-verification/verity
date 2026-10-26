@@ -1,6 +1,6 @@
 """verity_vllm/observe/prefix_cache.py — prefix caching as a *state/request linkage* mechanism (coverage row M1).  Torch-free.
 
-Locked semantics (window 2026-09-17).  Previously computed KV state is NOT a free prescribed input.  A warm request that
+Locked semantics.  Previously computed KV state is NOT a free prescribed input.  A warm request that
 reuses a cached prefix consumes KV blocks that another request's gates produced; the Program must link that state to its
 producing computation — request → physical blocks → the writing rows/step (→ the k/v projection instances of that step) —
 otherwise the cell is not closed.  Matching tokens alone is not closure: it says the *declared* prompt equals the producer's
@@ -39,6 +39,7 @@ import re
 import sys
 import uuid
 from collections import defaultdict
+from importlib import resources
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -46,7 +47,7 @@ from .events import Event, RunHeader, StepStart
 from .log import read_log
 from dataclasses import dataclass, field
 
-from verity_vllm.config import VLLM, WORKLOAD_SCHEMA, option
+from verity_vllm.config import VLLM, WORKLOAD_SCHEMA, checkpoint_entries, option
 
 SCHEMA_LINKAGE = "verity-capture/prefix-linkage/v1"
 
@@ -84,7 +85,7 @@ def _paragraph_tokens(tok: Any, paras: list[dict], start: int, n: int) -> tuple[
     return ids[:n], used
 
 
-def prefix_requests(tok: Any, *, case: str = "B0", seed: int = 0, prefix_tokens: int = PREFIX_TOKENS, cont_tokens: int = CONT_TOKENS,
+def prefix_requests(tok: Any, *, case: str = "B0", seed: int, prefix_tokens: int = PREFIX_TOKENS, cont_tokens: int = CONT_TOKENS,
                     max_tokens: int = MAX_TOKENS, warm_arrive_step: int = WARM_ARRIVE_STEP) -> list[dict]:
     """The two requests: P+X (arrive 0) and P+Y (arrive `warm_arrive_step`), P shared, X != Y.  Text from the coverage corpus at
     seeded paragraph starts (numpy RNG like the generator), tokenized with the served model's tokenizer."""
@@ -112,8 +113,8 @@ def prefix_requests(tok: Any, *, case: str = "B0", seed: int = 0, prefix_tokens:
     return reqs
 
 
-def prefix_workload_docs(tok: Any, *, case: str = "B0", model: str = "HuggingFaceTB/SmolLM2-135M", tokenizer_revision: str | None = None,
-                         seed: int = 0, block_size: int = BLOCK_SIZE_ASSUMED) -> dict[str, dict]:
+def prefix_workload_docs(tok: Any, *, case: str = "B0", model: str, tokenizer_revision: str | None = None,
+                         seed: int, block_size: int = BLOCK_SIZE_ASSUMED) -> dict[str, dict]:
     """{stem: doc} for the warm and the cold file (identical requests; only `engine.args` and the labels differ)."""
     from verity_vllm.pipeline import coverage_workloads as gw
 
@@ -374,6 +375,9 @@ def summarize(rec: dict) -> str:
 
 #: census kernels whose first-launch grid.x counts the step's token rows (one CTA per token) — the prefill-row witness
 ROW_COUNT_KERNELS = ("reshape_and_cache_flash_kernel", "rotary_embedding_kernel")
+#: lowered-name substrings that mark a census kernel as a GEMM, besides the architecture tags of `GEMM_ARCH_TAGS`
+GEMM_KERNEL_MARKERS = ("gemm", "cutlass", "cublas", "xmma")
+GEMM_ARCH_TAGS = resources.files("verity_vllm") / "engine" / "profiles" / "gemm_arch_tags.json"
 
 
 def _jload(p: Path) -> Any:
@@ -405,12 +409,13 @@ def census_row_witness(census: dict | None, step: int) -> dict:
     if st is None:
         return {"error": f"census has no step {step}", "steps": [s.get("step", s.get("engine_step")) for s in census.get("steps") or []]}
     ks = st.get("kernels") or {}
+    gemm = GEMM_KERNEL_MARKERS + tuple(json.loads(GEMM_ARCH_TAGS.read_text())["tags"])
     out: dict[str, Any] = {"n_kernels": st.get("n_kernels"), "device_us": st.get("device_us"), "row_kernels": {}, "gemm_kernels": {}}
     for name, d in ks.items():
         low = name.lower()
         if any(k in name for k in ROW_COUNT_KERNELS):
             out["row_kernels"][name[:80]] = {"count": d.get("count"), "grid": d.get("grid"), "block": d.get("block")}
-        elif "gemm" in low or "cutlass" in low or "sm90" in low or "sm80" in low or "ampere" in low or "cublas" in low or "xmma" in low:
+        elif any(k in low for k in gemm):
             out["gemm_kernels"][name[:100]] = {"count": d.get("count"), "grid": d.get("grid"), "block": d.get("block")}
     return out
 
@@ -519,7 +524,7 @@ class GenOptions:
     tokenizer: str = option("--tokenizer")
     tokenizer_revision: str | None = option("--tokenizer-revision", default=None)
     case: str = option("--case", default="B0")
-    model: str = option("--model", default="HuggingFaceTB/SmolLM2-135M")
+    model: str | None = option("--model", default=None, help="HF repo of the served model (default: the case's pin in checkpoints.json)")
     seed: int = option("--seed", type=int, default=0)
     out_dir: str = option("--out-dir", default=str(Path(__file__).resolve().parents[1] / "engine" / "profiles"))
     cmd: str = field(default="gen", init=False)
@@ -558,7 +563,10 @@ def main(a: GenOptions | ExtractOptions | EvidenceOptions) -> int:
         from verity_vllm.pipeline import coverage_workloads as gw
 
         tok = gw.Tok(a.tokenizer)
-        for p in write_workloads(tok, Path(a.out_dir), case=a.case, model=a.model, tokenizer_revision=a.tokenizer_revision, seed=a.seed):
+        model = a.model or next((c["repo"] for c in checkpoint_entries() if c.get("role") == a.case), None)
+        if model is None:
+            raise SystemExit(f"case {a.case!r}: no checkpoints.json pin has that role; pass --model")
+        for p in write_workloads(tok, Path(a.out_dir), case=a.case, model=model, tokenizer_revision=a.tokenizer_revision, seed=a.seed):
             d = json.loads(p.read_text())
             print(f"{p.name}: {d['note'][:240]}", file=sys.stderr)
         return 0
