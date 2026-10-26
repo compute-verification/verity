@@ -1,7 +1,7 @@
 """The block record (CMP-95 interface 6): what each leg writes for one server-time block and what the composed verdict reads,
 one document ``verity/block-record/v1``. It extends the all-protocols runner's per-period report
 (``verity/all-protocols-period/v1``, and its per-window ``verity/all-protocols-window/v1``) with the block's server and
-steps, every leg in one shape, the composed verdict with the JointHorizon error sum, and the monitoring period.
+steps, every leg in one shape, the composed verdict with the JointHorizonLive error sum, and the monitoring period.
 
 **The record.**
 
@@ -20,7 +20,7 @@ steps, every leg in one shape, the composed verdict with the JointHorizon error 
   one, and ``joint_horizon``: `JOINT_HORIZON`'s error over this block, the composed legs' errors summed, and at each δ of
   `DELTAS` that δ times the legs established at it. The statement names five audits; the wipe is ``outside_statement``.
 * ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
-  `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointHorizon's union bound over them at this
+  `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointHorizonLive's union bound over them at this
   block's errors (``error_sum`` × blocks), and the per-block error each δ of `DELTAS` needs over the period (δ / blocks).
 
 `check` recomputes every derived field from the legs. `from_period` builds a record from a runner report and extra legs.
@@ -43,8 +43,8 @@ LEGS = ("integrity", "pouw", "pous", "bandwidth", "certifier", "wipe")
 RUNNER_KEYS = {"integrity": "integrity", "pouw": "work", "pous": "space", "bandwidth": "bandwidth", "certifier": "communication"}
 DELTAS: tuple[Fraction, ...] = (Fraction(1, 100), Fraction(1, 10**6))
 PERIODS: tuple[tuple[str, int], ...] = (("week", 7 * 86400), ("month", 30 * 86400), ("year", 365 * 86400))
-JOINT_HORIZON = {"name": "Accounting.Guarantees.JointHorizon", "proved": False,
-                 "file": "Security/Definitions/Accounting/Guarantees/JointPeriod.lean",
+JOINT_HORIZON = {"name": "Accounting.Guarantees.JointHorizonLive", "proved": True,
+                 "file": "Security/Definitions/Accounting/Guarantees/JointLive.lean",
                  "audits": ["integrity", "pouw", "pous", "bandwidth", "certifier"]}
 
 
@@ -129,7 +129,7 @@ def leg(name: str, row: Mapping[str, Any], *, server: str, runs: Sequence[str], 
 
 
 def compose(server: str, legs: Mapping[str, Any]) -> dict[str, Any]:
-    """The composed verdict and the JointHorizon error over the block (module docstring)."""
+    """The composed verdict and the JointHorizonLive error over the block (module docstring)."""
     here = {k: v for k, v in legs.items() if v is not None and v["server"] == server}
     elsewhere = sorted(k for k, v in legs.items() if v is not None and v["server"] != server)
     missing = sorted(k for k in LEGS if k not in here)
