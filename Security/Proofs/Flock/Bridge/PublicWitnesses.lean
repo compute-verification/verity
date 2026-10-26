@@ -36,8 +36,8 @@ theorem _root_.Flock.Bridge.kDep_bounds :
     rw [div_le_iff₀ he] at h
     unfold Bridge.kDep
     linarith [mul_comm (Real.exp 1) (⌈(2 : ℝ) ^ 24 / Real.exp 1⌉₊ : ℝ)]
-  · have h : Bridge.kDep ≤ 2 ^ 24 :=
-      Nat.ceil_le.2 (by push_cast; exact div_le_self (by positivity) he1)
+  · have h2 : (2 : ℝ) ^ 24 / Real.exp 1 ≤ (2 : ℝ) ^ 24 := div_le_self (by positivity) he1
+    have h : Bridge.kDep ≤ 2 ^ 24 := Nat.ceil_le.2 (h2.trans_eq (by norm_num))
     exact_mod_cast h
 
 /-- **`SampledKSLivePub`'s parameter hypotheses hold as deployed**: `1 ≤ k`, `1 ≤ R_w`, `1 ≤ M`, `ρ < 1`,
@@ -56,6 +56,7 @@ theorem sampledKSLivePub_honest :
 
 /-- **`deltaPub` is below `1` as deployed**: at `k = ⌈2^24/e⌉`, `q_F = 2^81`, `q_S = 2^80`, `t' = 2^80`,
 `M = R_w = 2^192` and `ρ = 1/2`, for a draw whose miss is at most `1/4` and at most `2^40` commit strings. -/
+set_option exponentiation.threshold 1024 in
 theorem _root_.Flock.Bridge.deltaPub_deployed_lt_one {n kd K₀ W : ℕ}
     (hmiss : ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) ≤ 1 / 4) (hW : (W : ℝ) ≤ 2 ^ 40) :
     Bridge.deltaPub n kd K₀ Bridge.kDep (2 ^ 81) (2 ^ 80) (2 ^ 80) (2 ^ 192) (2 ^ 192) W (1 / 2) < 1 := by
@@ -88,19 +89,20 @@ theorem _root_.Flock.Bridge.deltaPub_deployed_lt_one {n kd K₀ W : ℕ}
     norm_num
   have hks : ksClosedM1 Bridge.kDep (2 ^ 81) (2 ^ 80) ≤ 1 / 16 := by
     unfold ksClosedM1
-    rw [show (2 * 25638 + 2 ^ 14 + 2 : ℝ) = 67662 by norm_num]
-    linarith
+    exact le_trans (add_le_add (add_le_add (add_le_add h203 (mul_le_mul_of_nonneg_left hx (by norm_num))) hqS) hkx)
+      (by norm_num)
   have ht1 : 2 * ((2 : ℝ) ^ 80 * (1 + Bridge.kDep)) / 2 ^ (256 : ℝ) ≤ 1 / 2 ^ 150 := by
     rw [h256]
     calc 2 * ((2 : ℝ) ^ 80 * (1 + Bridge.kDep)) / 2 ^ 256 ≤ 2 * ((2 : ℝ) ^ 80 * (1 + 2 ^ 24)) / 2 ^ 256 := by
           gcongr
       _ ≤ 1 / 2 ^ 150 := by norm_num
   have hM : (2 : ℝ) ^ 192 ≤ Real.exp 1 * 2 ^ 192 := le_mul_of_one_le_left (by positivity) he1
+  have hc : ((2 ^ 192 : ℕ) : ℝ) = (2 : ℝ) ^ 192 := by norm_num
   have ht2 : 1 / (Real.exp 1 * ((2 ^ 192 : ℕ) : ℝ)) ≤ 1 / 2 ^ 192 := by
-    push_cast
+    rw [hc]
     exact one_div_le_one_div_of_le (by positivity) hM
   have ht3 : (Bridge.kDep : ℝ) / (Real.exp 1 * ((2 ^ 192 : ℕ) : ℝ)) ≤ 2 ^ 24 / 2 ^ 192 := by
-    push_cast
+    rw [hc]
     exact (div_le_div_of_nonneg_left hk0 (by positivity) hM).trans (div_le_div_of_nonneg_right hk (by positivity))
   have hB0 : 0 ≤ 2 * ((2 : ℝ) ^ 80 * (1 + Bridge.kDep)) / 2 ^ (256 : ℝ) +
       1 / (Real.exp 1 * ((2 ^ 192 : ℕ) : ℝ)) + (Bridge.kDep : ℝ) / (Real.exp 1 * ((2 ^ 192 : ℕ) : ℝ)) := by
