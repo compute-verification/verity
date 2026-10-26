@@ -8596,15 +8596,6 @@
    "assumptions": [],
    "type_hash": "9d968ee8cd314d2f358b07d062e218a6b24ef0ed4d1bf6669caaec94c0801c65"
   },
-  "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted :",
-    "  NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRateV1Counted"
-   ],
-   "assumptions": [],
-   "type_hash": "7d7b2cc9599ec64be69b1be215cfba86f23ad464848daf7aef91be781b9f00ee"
-  },
   "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Whole": {
    "owner": "@network-accounting",
    "signature": [
@@ -8619,12 +8610,6 @@
    "signature": ["NetTiming.SecurityProofs.EncardChargedLe : NetTiming.Guarantees.EncardChargedLe"],
    "assumptions": [],
    "type_hash": "886ea913690fe8450cf3a35d36d9851949a8c17ee3fb4b36b0b98d45a6aa050a"
-  },
-  "NetTiming.SecurityProofs.EncardChargedLeCounted": {
-   "owner": "@network-accounting",
-   "signature": ["NetTiming.SecurityProofs.EncardChargedLeCounted : NetTiming.Guarantees.EncardChargedLeCounted"],
-   "assumptions": [],
-   "type_hash": "89ddc83c6f306f60d9f871c3237dfdfcf2ef33fab77240d9b44398330390de03"
   },
   "NetTiming.SecurityProofs.EncardChargedLeWhole": {
    "owner": "@network-accounting",
@@ -8675,15 +8660,6 @@
    "assumptions": [],
    "type_hash": "d88f0cba3aa004a8778740fc4e4abff70e425bb894d4c7ce024701cb880b4a50"
   },
-  "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted :",
-    "  NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindowV1Counted"
-   ],
-   "assumptions": [],
-   "type_hash": "6ad0233446a7ef060ee4bc607f1bc614267b1353c1cfa8492f14277fbdd6b6b6"
-  },
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Whole": {
    "owner": "@network-accounting",
    "signature": [
@@ -8700,15 +8676,6 @@
    ],
    "assumptions": [],
    "type_hash": "62a501bc4842f040a02106fe3def5bb875618490e8e0f114594c719095f1547d"
-  },
-  "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted": {
-   "owner": "@network-accounting",
-   "signature": [
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted :",
-    "  NetTiming.Guarantees.EncardDecodableWithinLeCompiledV1Counted"
-   ],
-   "assumptions": [],
-   "type_hash": "4c1965a5e2a5e713ecff8b0684b90ccb00b7f75cab2d0552c2fb38625f4bfb8e"
   },
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole": {
    "owner": "@network-accounting",
@@ -11864,10 +11831,6 @@
    "Nci.Cover.SecurityProofs.CoverTrainingChained": "frozen (no-function): Like CoverTraining, it is about an arbitrary reference training circuit, here as its bits made a declaration (bitDecl, Security/Definitions/Nci/BitDecl.lean) with its multiplication blocks and token computations (Nci.Covering.MulBlocks), and a declaration that contains it with its baseline registered (the named BaselineRegistered, Security/Definitions/Nci/Assumptions/Baseline.lean), under the named ParameterHardAt on those bits and with ActivationChainedAt read in its statement (Security/Definitions/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; Security/Proofs/Nci/Cover/CheckedChained.lean joins it to a verdict (coverTrainedChained, from NciCheck.Properties.Witnesses), and stating that join among the properties is what would give it an acceptance.",
    "Nci.SecurityProofs.CoveringBoundPriced": "frozen (no-function): CoveringBoundTwoCosts's twin with a price per weight in place of one weight cost c_w, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardPricedAt (Security/Definitions/Nci/Assumptions/CoveringPriced.lean) and with ActivationChainedAt read in its statement (Security/Definitions/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Accounting.SecurityProofs.DeclaredCircuitRequirement": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed's game (sketch receipts at 16 rows, 2,773 openings a window, a store per pass made by the append-coin rule) on a layout that reads the codec and the append coins through an a-bit summary the pass's devices are told (Accounting.Assumptions.SteeredLayout: RateSketch.steeredStore, RateSketch.SketchSummarySession), each append's blocks read within the lifetime cap L of the window it joined (RateSketch.LifetimeCapped), a layer-1 bound on the prover system parametric in its resources a pass within the pass deadline tau (kept S, link Lr*tau, hash budget qr*tau, rebuilds Xr*tau), carriers of a declared circuit passing the stacking property (Gates.Property, Gates.Restricted) within its caps, charged over L windows (Accounting.Assumptions.CircuitCarriers, RateSketch.Provenance.OfCircuit: C = 8*R_L + ceil(1024*L*c*P*N*4096/E), R_L the most run-input bytes of L windows, a window certifying at most P*N*4096 bytes), slack k tiles a pass traded against k+1 query guesses ((qr*tau/2^96)^(k+1), 2^a once per pass), and its shortfall read pass by pass: the distinct sectors each pass read (RateSketch.SketchDeployedWindow.readsIn) from the tiles holding the appended blocks of the circuit's credited reads at the step it is bound to (strictly increasing), against the larger of the circuit's credited live bits in those blocks and its read bits in appended blocks less a block a group (Requirement.bitsAt, bits, OneBlockEach), with the memory map holding the circuit's credited blocks and each pass's plan covering its reads (Requirement.StoreMatches, PlanMatches: one-sided, other blocks may be resident or planned and earn nothing) and the plan's blocks at distinct positions of the pass's store, for a placed execution (Requirement.Placement, Placement.Deadlines: each pass tau ticks of the devices' clocks), layout, groups, binding, memory map, plans and addresses chosen after every coin; abstract verbatim pass devices in the random-oracle and ideal encoding models under the named assumptions SketchRank, SketchHashBudget, SquaringFloor and ChainSum (at their floor, epsilon at least 2^-64), KeyBinding, CircuitCarriers and SteeredLayout, not the rate audit's, the memory map's or the engine's code; attribution to the node's devices and tiers is not here. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest nonlinear units, budgeted units and data products, of Gates.encodeCosts, ⊤ where there is none).",
-   "NetTiming.SecurityProofs.EncardChargedLeCounted": "frozen (no-function): It counts each window's decision stream and counts by AdviceV1.chargesCounted, the decisions' charge (the definitions' mirror of arith_encode.py's reference_charge, ChargeCount_v1{N}'s charge) plus any count code's length (lengths meeting Kraft), not a compiled program's code: circuit-check holds ChargeCount_v1's circuit to that reference, no circuit codes the counts yet, and no Lean program of the network check computes the charge, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted": "frozen (no-function): It bounds AccSeqsWithin with each window's decision stream and counts under a count code (AdviceV1.bitsCounted: the decisions' charge, the mirror of arith_encode.py's reference_charge, plus any count code's length, lengths meeting Kraft), the observation sequences an abstract Program accepts with advice within the caps, not runs of the network check's code, and takes no assumption about the charge; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, each window's decision stream and counts under a count code (AdviceV1.bitsCounted: the decisions' charge, the mirror of arith_encode.py's reference_charge, plus any count code's length, lengths meeting Kraft) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, each window's decision stream and counts under a count code (AdviceV1.bitsCounted: the decisions' charge, the mirror of arith_encode.py's reference_charge, plus any count code's length, lengths meeting Kraft) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "Accounting.SecurityProofs.Remote.SketchBoundLine": "frozen (no-function,hash): It carries the receipts' sketch bound to the memory line's coins (Accounting.Remote.Draw.Coins n κ X at X a sketch outcome, the space LineHeld is stated over), not the verifier's code: SketchBound at δ on the line's trace read on the sketch outcomes (Accounting.Remote.Held.Trace.sketch, a block computed on outside the node counted with the chips') is SketchBoundAt at δ on the line's trace, so Accounting.SecurityProofs.Remote.SketchBoundDeployed on that trace, its prover's coins carrying the openings coins, gives LineHeld's SketchBoundAt premise at its δs, timing.sketch_failure (red team RD-25, note:20261025T0040Z-report-sketch-lift).",
    "NetTiming.SecurityProofs.EncardChargedLeWhole": "frozen (no-function): It counts each window's decisions, hits and order entries by WindowCharge.charges, the definitions' mirror of window_charge.py's reference_window (ChargeCount_v2{N, H, O}'s charge, every count coded inside the coder as code_v1 codes it), not a compiled program's code: circuit-check holds ChargeCount_v2's circuit to that reference, and no Lean program of the network check computes the charge yet, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Whole": "frozen (no-function): It bounds AccSeqsWithin with each window's decisions, hits and order entries (WindowCharge.bits: ChargeCount_v2's whole-window charge, the mirror of window_charge.py's reference_window, every count coded inside the coder), the observation sequences an abstract Program accepts with advice within the caps, not runs of the network check's code, and takes no assumption about the charge; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
