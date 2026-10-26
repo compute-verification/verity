@@ -44,6 +44,10 @@ plan = G.Plan(context, G.regroup(layout, 4))
   group goes through in passes of as many slots as keep its temporaries within `temp_bytes`: about four (rows, slots)
   digest buffers, so a group of 117,400 rows takes 35 slots a pass at 1 GiB. A pass's salts are its slots' own
   (nonce `nonce0 + s`), so passes change no root.
+  The leaf kernel writes a one-row unit's slot-tree leaf itself, from the unit's frame table (the engine's `frame_table`,
+  one compression a unit an add), so such a unit's row-slot costs nine SHA-512 compressions: its row digest one, hm96's c
+  and h two each (h's padding block over a constant schedule), its frame leaf one, its unit's slot-tree leaf one, and
+  about one slot-tree node, two; with three ChaCha20 blocks and the hm96 mask (`tests/test_cost.py` counts them).
 - `step`: the step's index; `slots`: how many sequence slots it has.
 - `salt_key`: 32 bytes, `S.fresh_salt_key()` (the OS generator), fresh each step and the prover's alone, kept with the
   step's record to open from.
@@ -160,5 +164,5 @@ FAMILIES' layout, `gpu.sh` and one FAMILIES step), on the engine:
 - `tests/`: the reference against the fixture and C-Flock's salts and an independent tree build, openings and their
   refusals, the host twin against the reference (regrouped layouts included), the streamed slot trees against the leaf
   matrix they replaced and the reference (unit counts around powers of two, groups cut anywhere, one-slot passes), a
-  step's memory (counted: its frontier and one pass), planning at six million units, and (with a GPU) the device
-  against the host twin.
+  step's memory (counted: its frontier and one pass), a row-slot's compressions (counted), planning at six million
+  units, and (with a GPU) the device against the host twin.

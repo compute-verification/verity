@@ -22,8 +22,13 @@ small slot counts. Grouping is the prover's plumbing: the layout's digest, the s
 A step holds no slot's leaves: each slot's tree is its frontier, the left sibling a level still waiting for its right one
 ((slots, depth + 1, 8) words, 1.5 KB a slot at six million units). ``add`` folds a group's unit leaves into the frontiers
 a level at a time, and ``finish`` closes them with the subtrees of pads alone, which the Plan computes once. A group goes
-through in passes of as many slots as keep its temporaries (row digests, leaves, unit roots, their slot-tree leaves) within
-the Plan's ``temp_bytes``.
+through in passes of as many slots as keep its temporaries (row digests, the run of slot-tree leaves, the leaves of the
+units of several rows) within the Plan's ``temp_bytes``.
+
+A row-slot of a one-row unit costs the engine nine compressions (one of them over a constant schedule), three ChaCha20
+blocks and the hm96 mask: its row digest (one), hm96's c (two) and h (two), its frame leaf in the unit's domain (one), the
+unit's slot-tree leaf (one, from the unit's midstate, ``frame_table``, set up once an add), all in the leaf kernel's thread,
+and about one slot-tree node (two).
 """
 from __future__ import annotations
 
@@ -45,7 +50,7 @@ __all__ = ["TEMP_BYTES", "E", "Pending", "Plan", "StepCommitter", "build", "comm
 HERE = Path(__file__).resolve().parent
 ENGINE = HERE.parent / "sha512_rows" / "engine.py"
 TEMP_BYTES = 1 << 30
-TEMP_BUFFERS = 4      # a pass's live (rows, slots) digest buffers at most: row digests and leaves, or unit roots and two copies
+TEMP_BUFFERS = 4      # a pass's live (rows, slots) digest buffers at most: row digests, the run, the rest's leaves, a level
 PAD_CHUNK = 16        # pads alone are hashed 2^16 at a time
 
 
@@ -89,8 +94,9 @@ class _Engine(E.Engine):
 class _Shape:
     """A group's rows and units as arrays, the same for every group the layout repeats (its layers): each row's parts
     (``a`` then ``b``, ``b_len`` 0 for a one-part row) and its unit and rank, the engine's row spec with byte offsets in
-    place of addresses (``row_setup`` done), the row kernel's order, and for each row count n > 1 its units and their
-    first rows."""
+    place of addresses (``row_setup`` done), the row kernel's order, and each row's ``dest`` (the leaf kernel's): its unit
+    when the unit is that row alone, else the units plus its index among the ``rest``, the rows of the units of n > 1 rows,
+    which ``multi`` gives as n: (those units, their first index in the rest, how many)."""
     rows: int
     units: int
     unit_of_row: np.ndarray
@@ -101,9 +107,9 @@ class _Shape:
     spec: Any
     order: Any
     nbytes: tuple[int, ...]
-    single: Any
-    single_rows: Any
-    multi: dict[int, tuple[Any, Any]]
+    dest: Any
+    rest: int
+    multi: dict[int, tuple[Any, int, int]]
 
 
 @dataclass(frozen=True)
@@ -172,13 +178,17 @@ class Plan:
         for k in range(2):
             has = ln[k] > 0
             np.maximum.at(extent, src[k][has], off[k][has] + ln[k][has])
-        multi = {}
+        dest = np.zeros(G, dtype=np.int64)
+        ones = np.flatnonzero(n == 1)
+        dest[first[ones]] = ones
+        multi, rest = {}, 0
         for m in sorted(set(n.tolist()) - {1}):
             units = np.flatnonzero(n == m)
-            multi[m] = (self.put(units), self.put(first[units][:, None] + np.arange(m)))
-        ones = np.flatnonzero(n == 1)
+            dest[(first[units][:, None] + np.arange(m)).reshape(-1)] = len(n) + rest + np.arange(len(units) * m)
+            multi[m] = (self.put(units), rest, len(units))
+            rest += len(units) * m
         return _Shape(G, len(n), np.repeat(np.arange(len(n)), n), np.arange(G) - np.repeat(first, n), self.put(src), off, extent,
-                      spec, self.engine._up(order), tuple(nbytes.tolist()), self.put(ones), self.put(first[ones]), multi)
+                      spec, self.engine._up(order), tuple(nbytes.tolist()), self.engine.u32s(dest), rest, multi)
 
     def _group(self, i: int, u0: int, shape: _Shape) -> _Group:
         dids = self.unit_dids[u0:u0 + shape.units]
@@ -230,22 +240,18 @@ class Plan:
             w[:, 5] = (w[:, 5] & 0xFFFFFFFF) | (a16 << 32)
         return E.RowTable(spec, shape.rows, slots, shape.nbytes, tuple(tensors), shape.order)
 
-    def unit_roots(self, grp: _Group, leaves: Any) -> Any:
-        """(units, S, 8): each unit's root over its rows' (G, S, 8) leaves; a one-row unit's root is its leaf, and the units
-        of each larger row count are one call."""
-        shape, S_ = grp.shape, int(leaves.shape[1])
-        if shape.units == shape.rows:
-            return leaves
-        roots = self.empty(shape.units, S_)
-        roots[shape.single] = leaves[shape.single_rows]
-        for m, (units, rows) in shape.multi.items():
-            x = leaves[rows]
-            x = x.transpose(0, 2, 1, 3) if self.host else x.permute(0, 2, 1, 3)
+    def multi_units(self, grp: _Group, frames: Any, rest: Any, run: Any) -> None:
+        """The slot-tree leaves of the units of several rows into ``run`` (S, units, 8): each unit's root over its rows'
+        leaves (``rest``, (shape.rest, S, 8), as the leaf kernel left them), then its frame leaf under ``frames``; the units of
+        each row count are one call each."""
+        S_ = int(run.shape[0])
+        for m, (units, r0, n) in grp.shape.multi.items():
+            x = rest[r0:r0 + n * m].reshape(n, m, S_, 8)
+            x = np.ascontiguousarray(x.transpose(0, 2, 1, 3)) if self.host else x.permute(0, 2, 1, 3).contiguous()
             dids = grp.dids[units]
             dids = np.repeat(dids, S_, axis=0) if self.host else dids.repeat_interleave(S_, dim=0)
-            r = self.engine.root(x.reshape(-1, m, 8) if self.host else x.reshape(-1, m, 8).contiguous(), dids)
-            roots[units] = r.reshape(len(units), S_, 8)
-        return roots
+            roots = self.engine.root(x.reshape(-1, m, 8), dids)
+            self.engine.frame_units(frames, units, roots.reshape(n, S_, 8), run)
 
     def empty(self, *shape: int) -> Any:
         """Digest words, (*shape, 8)."""
@@ -277,10 +283,10 @@ class Plan:
             w[:, 2] += s0 * w[:, 3]
         return E.RowTable(spec, table.G, s1 - s0, table.nbytes, table.tensors, table.order)
 
-    def nodes(self, children: Any, level: int, first: int) -> Any:
-        """(T, w, 8): the slot trees' nodes (level, first + i) over (T, 2w, 8) children."""
-        children = np.ascontiguousarray(children) if self.host else children.contiguous()
-        return self.engine.level(children, [self.slot_did], level, first, self.mids[level])
+    def nodes(self, children: Any, level: int, first: int, pre: Any = None) -> Any:
+        """(T, w, 8): the slot trees' nodes (level, first + i) over (T, 2w, 8) children, or over ``pre`` (T, 8) and then
+        (T, 2w - 1, 8) children; read in place."""
+        return self.engine.level(children, [self.slot_did], level, first, self.mids[level], pre)
 
     def _cat(self, parts: Sequence[Any], axis: int) -> Any:
         return np.concatenate(parts, axis=axis) if self.host else self.torch.cat(list(parts), dim=axis)
@@ -289,18 +295,22 @@ class Plan:
         """Fold ``run`` (T, m, 8), leaves ``first`` .. ``first + m - 1`` of T slot trees, into their ``frontier`` (T, depth + 1,
         8), in place. A frontier over the first n leaves holds at level k, for each set bit k of n, the node (k, (n >> k) - 1):
         a left child still waiting for its right sibling. A run at level k starting at an odd index takes that node in front,
-        and one ending at an odd index leaves its last node there."""
+        and one ending at an odd index leaves its last node there (after the level's nodes have read the one in front).
+        Nothing is copied but that last node."""
         a, b, k = first, first + int(run.shape[1]), 0
         while a < b:
+            pre = keep = None
             if a & 1:
-                run = self._cat((frontier[:, k:k + 1], run), 1)
+                pre = frontier[:, k]
                 a -= 1
             if b & 1:
-                frontier[:, k] = run[:, -1]
+                keep = run[:, -1]
                 run = run[:, :-1]
                 b -= 1
-            if a < b:
-                run = self.nodes(run, k, a >> 1)
+            up = self.nodes(run, k, a >> 1, pre) if a < b else run
+            if keep is not None:
+                frontier[:, k] = keep
+            run = up
             a, b, k = a >> 1, b >> 1, k + 1
 
     def close(self, frontier: Any) -> Any:
@@ -397,33 +407,38 @@ class StepCommitter:
             plan.stream.wait_stream(plan.torch.cuda.current_stream(plan.device))
         with plan.side():
             table = plan.rows(grp.shape, tensors)
+            frames = plan.engine.frame_table([plan.slot_did], grp.first_unit, grp.shape.units)
             per = plan.per_pass(grp.shape, self.slots)
             for s0 in range(0, self.slots, per):
                 s1 = min(self.slots, s0 + per)
-                leaves, done = self._leaves(grp, plan.slots_of(table, s0, s1), s0, s1 == self.slots)
-                plan.fold(self.frontier[s0:s1], grp.first_unit, leaves)
-                del leaves
+                run, done = self._leaves(grp, frames, plan.slots_of(table, s0, s1), s0, s1 == self.slots)
+                plan.fold(self.frontier[s0:s1], grp.first_unit, run)
+                del run
                 self._mark("fold")
         self.k += 1
         return done
 
-    def _leaves(self, grp: _Group, table: Any, s0: int, last: bool) -> tuple[Any, Any]:
-        """(slots in the pass, units, 8): the group's units' slot-tree leaves in slots s0 .. of ``table``; and on the pass
-        over the last slots, the event after which the group's tensors are read."""
-        plan, eng, done = self.plan, self.plan.engine, None
+    def _leaves(self, grp: _Group, frames: Any, table: Any, s0: int, last: bool) -> tuple[Any, Any]:
+        """(slots in the pass, units, 8): the group's units' slot-tree leaves in slots s0 .. of ``table``, those of one-row
+        units from the leaf kernel itself; and on the pass over the last slots, the event after which the group's tensors
+        are read."""
+        plan, eng, shape, done = self.plan, self.plan.engine, grp.shape, None
         x = eng.row_digests(table)
         self._mark("rows")
         if last and not plan.host:
             done = plan.torch.cuda.Event()
             done.record(plan.stream)
-        leaves = eng.leaves(grp.leaf_table, x, E.SaltKey(self.salts.key, self.salts.nonce0 + s0))
+        S_ = table.slots
+        run, rest = plan.empty(S_, shape.units), plan.empty(shape.rest, S_)
+        eng.leaves(grp.leaf_table, x, E.SaltKey(self.salts.key, self.salts.nonce0 + s0), rest, frames=frames, dest=shape.dest,
+                   run=run)
         del x
         self._mark("leaves")
-        roots = plan.per_slot(plan.unit_roots(grp, leaves))
-        del leaves
-        out = eng.frame_leaves(roots, [plan.slot_did], grp.first_unit)
+        if shape.multi:
+            plan.multi_units(grp, frames, rest, run)
+        del rest
         self._mark("units")
-        return out, done
+        return run, done
 
     def _check(self, t: Any, n: int) -> None:
         if self.plan.host:

@@ -1,9 +1,14 @@
 // The commitment's hashes as host+device functions, one thread's work each (engine.py is the call, README.md the formats):
 // nvcc builds rows.cu (the kernels), g++ builds rows_host.cpp (the host twin, a loop a kernel), and both run what is below.
 // A digest is 8 u64 words, each the big-endian value of its 8 bytes. C is a compression: C::run(st, w) has sx::compress's
-// contract.
+// contract, C::kw(st, kw) sx::compress_kw's. SXR_COUNT_CHACHA(), if defined, runs once a ChaCha20 block (the host twin's
+// count).
 #pragma once
 #include "sha512x.cuh"
+
+#ifndef SXR_COUNT_CHACHA
+#define SXR_COUNT_CHACHA()
+#endif
 
 #ifndef __CUDACC__
 struct uint4 {
@@ -137,6 +142,24 @@ SX_HD void frame_head(Msg& m, const char (&tag)[N], const u64* did) {   // frame
   put_digest(m, did);
 }
 
+// --- a block built in registers: Msg's offsets are run-time values, so the device keeps a Msg in local memory ------------
+
+// w[0, NW) |= the NV words v at byte offset off (off >> 3 <= MAXQ, off + 8 NV <= 8 NW). Every index is a constant (the word
+// offset is selected, not indexed), so w and v stay in registers.
+template <int NW, int NV, int MAXQ>
+SX_HD void place(u64* w, const u64* v, u32 off) {
+  const u32 qw = off >> 3, sh = 8 * (off & 7);
+  u64 u[NV + 1];
+#pragma unroll
+  for (int k = 0; k <= NV; ++k) u[k] = (k < NV ? v[k] >> sh : 0) | ((k > 0 && sh) ? v[k - 1] << (64 - sh) : 0);
+#pragma unroll
+  for (int i = 0; i < NW; ++i) {
+#pragma unroll
+    for (int j = 0; j <= MAXQ; ++j)
+      if (i - j >= 0 && i - j <= NV && qw == (u32)j) w[i] |= u[i - j];
+  }
+}
+
 // --- sha512/row/v2 -------------------------------------------------------------------------------------------------------
 
 // row_setup: P(8 nbytes) = ("verity/sha512-row/v2\0" || u64be(8 nbytes)) zero-padded to 128 bytes, compressed from the IV
@@ -204,6 +227,7 @@ SX_HD void row_digest(const RowSpec& r, u64 s, u64* x) {
   x[a] += x[b]; x[d] ^= x[a]; x[d] = (x[d] << 8) | (x[d] >> 24);                                                           \
   x[c] += x[d]; x[b] ^= x[c]; x[b] = (x[b] << 7) | (x[b] >> 25);
 SX_HD void chacha20(const u32* key, u64 counter, u64 nonce, u32* out) {
+  SXR_COUNT_CHACHA();
   const u32 st[16] = {0x61707865u, 0x3320646eu, 0x79622d32u, 0x6b206574u, key[0], key[1], key[2], key[3], key[4], key[5],
                       key[6], key[7], (u32)counter, (u32)(counter >> 32), (u32)nonce, (u32)(nonce >> 32)};
   u32 x[16];
@@ -231,7 +255,7 @@ SX_HD void salt_key_words(const u32* key, u64 nonce, u64 salt_row, u64* Y) {
 struct LeafArgs {
   const LeafRow* rows;
   const u64* x;          // (G, S, 8) inner digests
-  u64* out;              // (G, S, 8) leaves
+  u64* out;              // (G, S, 8) leaves; with frames, (rest, S, 8): the leaves of the rows whose unit has several
   const uint8_t* T;      // hm96's Hankel table (engine.hankel_table): T_v, 256 rows of 256 bytes
   const uint8_t* salts;  // (G, S, 192) the caller's y, or null for the salt key's
   u32 key[8];            // the salt key (ChaCha20's key words), when salts is null
@@ -241,6 +265,11 @@ struct LeafArgs {
   u32 G, S;
   u32 minb;              // the device kernel's blocks an SM (its register cap): 1 or 2, 0 for the default
   u32 pad_;
+  const LeafRow* frames; // null, or each unit's slot-tree leaf (frame_setup)
+  const u32* dest;       // with frames, row g's unit d < units when that unit is the row alone: its leaf is the unit's
+                         // root, whose slot-tree leaf goes to units_out[s][d]; else units + i, its leaf going to out[i][s]
+  u64* units_out;        // with frames, (S, units, 8)
+  u32 units, pad2_;
 };
 
 // leaf_setup: the leaf prefix (merkle.CommitmentDomain.leaf_prefix(rank, position, schema, 64)), its first block compressed
@@ -257,6 +286,42 @@ SX_HD void leaf_setup(LeafRow& r, const u64* dids, const uint8_t* schema, u32 sc
   C::run(r.mid, m.w);
   r.q = m.n - 128;
   for (int i = 0; i < 16; ++i) r.tail[i] = m.w[16 + i];
+}
+
+// frame_setup: a unit's slot-tree leaf (rank, rank, schema) in domain did, as leaf_setup sets up a row's
+template <class C>
+SX_HD void frame_setup(LeafRow& r, u64 rank, const u64* did, const uint8_t* schema, u32 schema_len) {
+  r.rank = r.position = rank;
+  r.did = r.salt_row = r.pad_ = 0;
+  leaf_setup<C>(r, did, schema, schema_len);
+}
+
+// the frame leaf of the 64-byte value v under r's prefix (out may be v): one compression from r.mid when the rest of the
+// prefix and v fit one block (q <= 47: ranks and positions of at most 6 bytes together, as a row's; a unit's below 2^24), in
+// registers; else Msg's two
+template <class C>
+SX_HD void frame_tail(const LeafRow& r, const u64* v, u64* out) {
+  const u32 q = r.q;
+  if (q <= 47) {
+    u64 w[16], vm[9];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) w[i] = i < 6 ? r.tail[i] : 0;
+#pragma unroll
+    for (int i = 0; i < 8; ++i) vm[i] = v[i];
+    vm[8] = 0x8000000000000000ull;
+    place<16, 9, 5>(w, vm, q);
+    w[15] = 8 * (128 + 64 + (u64)q);
+#pragma unroll
+    for (int i = 0; i < 8; ++i) out[i] = r.mid[i];
+    C::run(out, w);
+    return;
+  }
+  Msg m;
+  msg_init(m);
+  put_words(m, r.tail, (int)q);
+  for (int i = 0; i < 8; ++i) put(m, v[i], 8);
+  for (int i = 0; i < 8; ++i) out[i] = r.mid[i];
+  msg_hash<C>(m, 128, out);
 }
 
 // M_key y as 16 little-endian u32 (mask byte 4w + k is byte k of m[w]), from T (rows `stride` apart: TSTRIDE in shared
@@ -289,7 +354,8 @@ SX_HD void mask(const uint8_t* T, int stride, const u64* Y, u32* m) {
 }
 
 // row g's leaf in slot s: b = x ^ M y, c = SHA-512(salt_prefix || y), h = SHA-512(leaf_prefix(key) || b || c), then the frame
-// leaf SHA-512(leaf prefix || h). T is A.T's table at `stride` (in shared memory on the device).
+// leaf SHA-512(leaf prefix || h), and with A.frames, for a unit of this row alone, its slot-tree leaf over that (the unit's
+// root). T is A.T's table at `stride` (in shared memory on the device).
 template <class C>
 SX_HD void leaf(const LeafArgs& A, const uint8_t* T, int stride, u32 g, u32 s) {
   const LeafRow& r = A.rows[g];
@@ -325,18 +391,24 @@ SX_HD void leaf(const LeafArgs& A, const uint8_t* T, int stride, u32 g, u32 s) {
   for (int i = 0; i < 8; ++i) h[i] = A.ms_leaf[i];
   for (int i = 0; i < 16; ++i) w[i] = bc[i];
   C::run(h, w);
-  for (int i = 0; i < 16; ++i) w[i] = 0;
-  w[0] = 0x8000000000000000ull;
-  w[15] = (128 + 128) * 8;
-  C::run(h, w);
-  Msg m;
-  msg_init(m);
-  put_words(m, r.tail, (int)r.q);
-  for (int i = 0; i < 8; ++i) put(m, h[i], 8);
-  u64 out[8];
-  for (int i = 0; i < 8; ++i) out[i] = r.mid[i];
-  msg_hash<C>(m, 128, out);
-  for (int i = 0; i < 8; ++i) A.out[8 * gs + i] = out[i];
+  C::kw(h, sx::kw_pad256());
+  const LeafRow* unit = nullptr;
+  u64* dst = A.out + 8 * gs;
+  if (A.frames) {
+    const u32 d = A.dest[g];
+    if (d < A.units) {
+      unit = A.frames + d;
+      dst = A.units_out + 8 * ((u64)s * A.units + d);
+    } else {
+      dst = A.out + 8 * ((u64)(d - A.units) * A.S + s);
+    }
+  }
+  const u32 hops = unit ? 2 : 1;
+#ifdef __CUDA_ARCH__
+#pragma unroll 1
+#endif
+  for (u32 k = 0; k < hops; ++k) frame_tail<C>(k ? *unit : r, h, h);
+  for (int i = 0; i < 8; ++i) dst[i] = h[i];
 }
 
 // --- frame-v3-sha512 leaves of digests, nodes and pads -------------------------------------------------------------------
@@ -367,18 +439,30 @@ SX_HD void node_mid(const u64* did, u32 level, u64* mid) {
   C::run(mid, m.w);
 }
 
-// CommitmentDomain.node(level, index, left, right), from node_mid's chaining value
+// CommitmentDomain.node(level, index, left, right), from node_mid's chaining value: the 146 + n bytes after its first block
+// (u64be(n)'s last two, index's n, then u64be(64) || left || u64be(64) || right) and the padding are two blocks, built in
+// registers
 template <class C>
 SX_HD void node(const u64* mid, u64 index, const u64* left, const u64* right, u64* out) {
-  Msg m;
-  msg_init(m);
-  const int n = uint_len(index);
-  put(m, (u64)n, 2);
-  put(m, index, n);
-  put_digest(m, left);
-  put_digest(m, right);
+  const u32 n = (u32)uint_len(index);
+  u64 w[32], v[19];
+#pragma unroll
+  for (int i = 0; i < 32; ++i) w[i] = 0;
+  w[0] = (u64)n << 48;
+  const u64 ix = n == 8 ? index : index << (64 - 8 * n);
+  place<32, 1, 0>(w, &ix, 2);
+  v[0] = v[9] = 64;
+#pragma unroll
+  for (int i = 0; i < 8; ++i) {
+    v[1 + i] = left[i];
+    v[10 + i] = right[i];
+  }
+  v[18] = 0x8000000000000000ull;
+  place<32, 19, 1>(w, v, 2 + n);
+  w[31] = 8 * (128 + 146 + (u64)n);
   for (int i = 0; i < 8; ++i) out[i] = mid[i];
-  msg_hash<C>(m, 128, out);
+  C::run(out, w);
+  C::run(out, w + 16);
 }
 
 // CommitmentDomain.pad(rank)

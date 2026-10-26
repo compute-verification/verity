@@ -183,4 +183,82 @@ SX_HD void compress(u64* st, u64* W) {
   st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
 }
 
+// K[t] + W[t] for the block that ends a 256-byte message (0x80, zeros, the bit length 2048): every word is a constant, so
+// the whole schedule is (hm96's h ends with this block)
+#define SX_KW_PAD256_LIST                                                                                              \
+  0xc28a2f98d728ae22ull, 0x7137449123ef65cdull, 0xb5c0fbcfec4d3b2full, 0xe9b5dba58189dbbcull,                          \
+      0x3956c25bf348b538ull, 0x59f111f1b605d019ull, 0x923f82a4af194f9bull, 0xab1c5ed5da6d8118ull,                      \
+      0xd807aa98a3030242ull, 0x12835b0145706fbeull, 0x243185be4ee4b28cull, 0x550c7dc3d5ffb4e2ull,                      \
+      0x72be5d74f27b896full, 0x80deb1fe3b1696b1ull, 0x9bdc06a725c71235ull, 0xc19bf174cf692e94ull,                      \
+      0x649b69c19ef14ad2ull, 0xf0be4786384f6603ull, 0x11c1adc68b8cd5b9ull, 0x240ca1ec77ae9c65ull,                      \
+      0x3df12c6f5b2b0295ull, 0x8a7485aaeebaec83ull, 0xdcb4cbddcd4a0514ull, 0x76f988da859153d5ull,                      \
+      0x9c4761d2eea767ebull, 0xaa35d66d41be3364ull, 0xe153c8abb9126168ull, 0x1f638fc7e2ef2f28ull,                      \
+      0x692570a455e2d00dull, 0x5b83d78905a3b687ull, 0x5f75a7a48ba84f02ull, 0x66cb4d902419302aull,                      \
+      0x27e8ff16d9def4fcull, 0x31deadd7acf94f06ull, 0x4865f165bf7d7aaaull, 0x6c60f495411c8347ull,                      \
+      0x0f85fc3af2085fbeull, 0x21660a2af9acf803ull, 0xc272cbb84d8a6a11ull, 0xd28c166752e28881ull,                      \
+      0x9378463cace01b32ull, 0x62fb7bfb31387799ull, 0xe663fdc140b72139ull, 0x8ac6a6f028b7547eull,                      \
+      0x319b8bee593abeeeull, 0x27f7ca2cdcfe9b1cull, 0x8cda485d8bca9aebull, 0xe9d09c09ee420668ull,                      \
+      0xa1f8e3c50aafc84aull, 0x968146382170b10dull, 0x290b6fde6dc7c47aull, 0x85be4a15267185a2ull,                      \
+      0xd9863caf8b055b5dull, 0x6cf1a4c45b9a9afaull, 0x5e4f2aaaf504ec15ull, 0xbaa4b690a16e887dull,                      \
+      0xd6deefafa6e9b80eull, 0xdaaa2b21fbdcdfe1ull, 0x7c27540e4c494849ull, 0x7eedd22ad2df02e3ull,                      \
+      0xddee79d9e75f1cc4ull, 0xd111d2bce9610b19ull, 0x9fb24be9b8d7371cull, 0x78f7fd060071ddb4ull,                      \
+      0x4cb381c27994ef77ull, 0x0ac1b70a8ce453a9ull, 0x790d6d8995529634ull, 0xfa975f11f18abfbdull,                      \
+      0xbb17b998273ce801ull, 0x01a0bacb85aa2c16ull, 0xc7291aa80f5eae0eull, 0x9c4ffed7fc1252ecull,                      \
+      0x0ea1f738a106aa51ull, 0x1647c833b33903b5ull, 0xb05a0c5531353616ull, 0xc72da5195d3a71fcull,                      \
+      0xaa484e02078b8d74ull, 0xa0af66f3caa8eeaeull, 0x5729dd1286eb91f0ull, 0x76e07546e6f85510ull
+
+__constant__ u64 KW_PAD256_DEV[80] = {SX_KW_PAD256_LIST};
+static const u64 KW_PAD256_HOST[80] = {SX_KW_PAD256_LIST};
+#undef SX_KW_PAD256_LIST
+
+SX_HD const u64* kw_pad256() {
+#ifdef __CUDA_ARCH__
+  return KW_PAD256_DEV;
+#else
+  return KW_PAD256_HOST;
+#endif
+}
+
+// compress's rounds alone, over a block whose K[t] + W[t] are given (kw_pad256): the chaining value compress gives over that
+// block, without its schedule
+template <int V, int ROLL>
+SX_HD void compress_kw(u64* st, const u64* KW) {
+  constexpr int M0 = V & 3, M1 = (V >> 2) & 3;
+  u64 a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
+#define SX_ROUND(a, b, c, d, e, f, g, h, kw)                                                                               \
+  do {                                                                                                                     \
+    const u64 t1_ = (h) + S1<M1>(e) + ch(e, f, g) + (kw);                                                                  \
+    (d) += t1_;                                                                                                            \
+    (h) = t1_ + S0<M0>(a) + maj(a, b, c);                                                                                  \
+  } while (0)
+#define SX_EIGHT_KW(t)                                                                                                     \
+  SX_ROUND(a, b, c, d, e, f, g, h, KW[(t) + 0]);                                                                           \
+  SX_ROUND(h, a, b, c, d, e, f, g, KW[(t) + 1]);                                                                           \
+  SX_ROUND(g, h, a, b, c, d, e, f, KW[(t) + 2]);                                                                           \
+  SX_ROUND(f, g, h, a, b, c, d, e, KW[(t) + 3]);                                                                           \
+  SX_ROUND(e, f, g, h, a, b, c, d, KW[(t) + 4]);                                                                           \
+  SX_ROUND(d, e, f, g, h, a, b, c, KW[(t) + 5]);                                                                           \
+  SX_ROUND(c, d, e, f, g, h, a, b, KW[(t) + 6]);                                                                           \
+  SX_ROUND(b, c, d, e, f, g, h, a, KW[(t) + 7])
+  if constexpr (ROLL) {
+#ifdef __CUDA_ARCH__
+#pragma unroll 1
+#endif
+    for (int t = 0; t < 80; t += 16) {
+      SX_EIGHT_KW(t);
+      SX_EIGHT_KW(t + 8);
+    }
+  } else {
+#ifdef __CUDA_ARCH__
+#pragma unroll
+#endif
+    for (int t = 0; t < 80; t += 8) {
+      SX_EIGHT_KW(t);
+    }
+  }
+#undef SX_EIGHT_KW
+#undef SX_ROUND
+  st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
+}
+
 }  // namespace sx

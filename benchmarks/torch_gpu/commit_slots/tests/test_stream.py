@@ -21,15 +21,33 @@ CTX = bytes(range(64))
 KEY = bytes(range(100, 132))
 
 
+def unit_roots(plan: G.Plan, grp: Any, leaves: np.ndarray) -> np.ndarray:
+    """(units, S, 8): each unit's root over its rows' (G, S, 8) leaves, a one-row unit's its leaf (the host's arrays)."""
+    shape, S_ = grp.shape, int(leaves.shape[1])
+    n = np.bincount(shape.unit_of_row, minlength=shape.units)
+    first = np.concatenate(([0], np.cumsum(n)[:-1]))
+    roots = np.zeros((shape.units, S_, 8), dtype=np.uint64)
+    for m in sorted(set(n.tolist())):
+        units = np.flatnonzero(n == m)
+        x = leaves[first[units][:, None] + np.arange(m)]
+        if m == 1:
+            roots[units] = x[:, 0]
+            continue
+        x = np.ascontiguousarray(x.transpose(0, 2, 1, 3)).reshape(-1, m, 8)
+        roots[units] = plan.engine.root(x, np.repeat(grp.dids[units], S_, axis=0)).reshape(len(units), S_, 8)
+    return roots
+
+
 def matrix_commit(plan: G.Plan, step: int, salt_key: bytes, outputs: list[list[Any]], slots: int) -> S.StepCommit:
-    """The leaf-matrix path this replaced, kept as the yardstick: every slot's unit leaves in one (slots, units) matrix,
-    padded and rooted at the end."""
+    """The leaf-matrix path this replaced, kept as the yardstick: every row's leaf from the leaf kernel alone, unit roots and
+    their slot-tree leaves (``frame_leaves``, from the IV) as separate calls, and every slot's unit leaves in one (slots,
+    units) matrix, padded and rooted at the end."""
     eng = plan.engine
     leaves = plan.empty(slots, plan.layout.unit_count)
     for grp, tensors in zip(plan.groups, outputs, strict=True):
         x = eng.leaves(grp.leaf_table, eng.row_digests(plan.rows(grp.shape, tensors)), G.E.SaltKey(salt_key))
         u0 = grp.first_unit
-        leaves[:, u0:u0 + grp.shape.units] = eng.frame_leaves(plan.per_slot(plan.unit_roots(grp, x)), [plan.slot_did], u0)
+        leaves[:, u0:u0 + grp.shape.units] = eng.frame_leaves(plan.per_slot(unit_roots(plan, grp, x)), [plan.slot_did], u0)
     slot_roots = eng.root(leaves, [plan.slot_did])
     step_did = S.step_domain(plan.context, plan.layout, step, slots).domain_id
     root = eng.root(eng.frame_leaves(slot_roots.reshape(1, slots, 8), [step_did]), [step_did])
