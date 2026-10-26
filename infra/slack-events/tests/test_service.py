@@ -157,7 +157,8 @@ def test_a_git_deployment_builds_only_main_and_only_when_the_service_changed():
     assert ignore.decide({"VERCEL_GIT_COMMIT_REF": "cursor/x-1234"}, diff(True))[0] == 0 and asked == []
     assert ignore.decide({"VERCEL_GIT_COMMIT_REF": "main", "VERCEL_GIT_PREVIOUS_SHA": "abc"}, diff(False))[0] == 0
     assert ignore.decide({"VERCEL_GIT_COMMIT_REF": "main", "VERCEL_GIT_PREVIOUS_SHA": "abc"}, diff(True))[0] == 1
-    assert ignore.decide({"VERCEL_GIT_COMMIT_REF": "main"}, diff(None))[0] == 1 and asked == ["abc", "abc", "HEAD^"]
+    assert ignore.decide({"VERCEL_GIT_COMMIT_REF": "main", "VERCEL_GIT_PREVIOUS_SHA": "abc"}, diff(None))[0] == 1
+    assert ignore.decide({"VERCEL_GIT_COMMIT_REF": "main"}, diff(False))[0] == 1 and asked == ["abc", "abc", "abc"]  # main's first
     assert set(ignore.INPUTS) >= {f"{p}" for p in build_sources()}
 
 

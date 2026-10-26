@@ -31,15 +31,15 @@ from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
 #: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
 #: re-rendered in the canonical text the verifier requires)
-FIXTURE = "art:eeb1ed6ad88c683f6dfd3b0ffd2e9941c47f2fcb6f39c097e8f2f20720c6ce4a"
+FIXTURE = "art:88544efa5af6f50ab24ad04a8e8d3118075e9f62898e41bbfb45ec3f3bc3d85b"
 VERIFIER = Path(__file__).resolve().parents[4] / "ml" / "flock" / "verifier"
 #: the SHA-512 of the fixture's circuit file, as an auditor would commit it (its public file's `circuit_sha512` pin)
 CIRCUIT = ("7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a"
            "9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0")
-CS_ROOT = ("2deda0ffb88e7c0e56693ec7e41b16c21bca80726956209c5c56505c922b5ac1"
-           "a176ca20f9238c9298ef77b0678e94681352a92ec2f95059a9f92e6a56054001")
+CS_ROOT = ("948510d0ecf54caa346f3e026e5c8c88776f0987ebabcc9943df4703cdbcf069"
+           "4444af17eaad24879b0020b5a9cec4360a2c1c285a4f3d6689e3df1bbd12a4e5")
 #: the instances the session's own draw drew, which are the units, the public file's indices being 0..31
-DRAWN = (1, 2, 3, 6, 8, 10, 11, 13, 16, 17, 21, 22, 24, 26, 28, 30)
+DRAWN = (0, 1, 2, 3, 5, 7, 10, 13, 14, 18, 20, 21, 22, 24, 26, 29)
 #: `verify --zk`'s last refusal, of a shared-row public file (`KsScope.TABLES_WHY`)
 TABLES = ("refused: a shared-row public file (header shared_rows) under --zk: a statement form the soundness proof does "
           "not cover")
@@ -225,3 +225,46 @@ def test_missing_proof_files_are_refused(fx, tmp_path):
     got, why = PF.verify(PF.Proof(st / "circuit.txt", st / "pub-32.bin", (tmp_path / "none",)), circuit_sha512=CIRCUIT,
                          program=b"{}", partition={}, registered={})
     assert got is None and why[0] == "proof", why
+
+
+def _v2(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True):
+    st = fx / "stage"
+    return PF.verdicts_v2(PF.Proof(st / "circuit.txt", st / public, (session,)), circuit_sha512=circuit,
+                          program=json.loads((st / "program.json").read_bytes()),
+                          partition=json.loads((st / "partition.json").read_text()),
+                          registered=json.loads((st / "registered.json").read_text()) if own else None)
+
+
+def _same(v1, v2):
+    """The two runs' findings agree on all but the session's name (a path for `verify`, a name for the v2 audit)."""
+    (a,), (b,) = v1, v2
+    assert (a.accepted, a.why, a.program, a.registered, a.units) == (b.accepted, b.why, b.program, b.registered,
+                                                                    b.units), (a, b)
+
+
+@lean
+@pytest.mark.slow
+def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
+    """The v2 audit (`SampledProofs.OneStageZk`) runs `flock-verify verify --zk`'s one-stage path inside its own Lean, on
+    the files as blobs: on the honest session (refused for its shared-row public file alone, `TABLES`, as `verify`
+    refuses it), a session whose proof bytes were tampered with (record kept or rehashed), and the honest session without
+    the verifier's registered file, its finding is `verify`'s, reason and units included."""
+    for session, own in ((fx / "session", True), (_tampered(fx, tmp_path / "kept", False), True),
+                         (_tampered(fx, tmp_path / "rehashed", True), True), (fx / "session", False)):
+        got, why = _verify(fx, session, own=own)
+        assert why is None, why
+        mine, refused = _v2(fx, session, own=own)
+        assert refused is None, refused
+        _same(got, mine)
+        if own and session == fx / "session":
+            (f,) = mine
+            assert (f.accepted, f.why, f.units) == (False, TABLES, ()), f
+
+
+@lean
+@pytest.mark.slow
+def test_the_v2_audit_refuses_a_circuit_no_blob_holds(fx):
+    """The circuit file's blob is found only by the SHA-512 of its own bytes, so a digest other than the file's is a
+    refusal before any session is set up."""
+    got, why = _v2(fx, fx / "session", circuit="ab" * 64)
+    assert got is None and why.startswith("circuit: no blob has the SHA-512"), why

@@ -35,9 +35,9 @@ public budget. The design is `note:proofs/20261006T0307Z-draft-proof-service-arc
 
 **The sampling designs.** `subset:K` is a uniform `K`-subset of the `N` units, and `bernoulli:NUM/DEN` takes each unit
 independently with probability `NUM/DEN`.
-The default is `stratified:K` (Daniel, Sep 27): one stratum per template, and inside each an independent uniform draw
+The default is `stratified:K` (Daniel, Sep 27): one stratum per subcircuit, and inside each an independent uniform draw
 without replacement of `k_s = max(1, ⌊(2 K n_s + N) / (2N)⌋)` units, that is `K n_s / N` rounded half up and never fewer
-than one, so every template is exercised in every audit. `work:K` (Daniel, Sep 28) keeps those strata and that sampler
+than one, so every subcircuit is exercised in every audit. `work:K` (Daniel, Sep 28) keeps those strata and that sampler
 but sizes each stratum by the work its units are credited: with `W = Σ_s w_s n_s`, stratum `s` draws
 `k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))`, where `w_s` and the floor `f_s ≥ 1` come from the verifier's own work table.
 A work draw may add a closure, units proved with the drawn ones. Each verifier derives the strata from its own program and
@@ -45,7 +45,7 @@ query, never from the prover.
 
 **What an accepted audit establishes.** Under a stratified draw, a set of faulty units has acceptance probability
 `Π_s C(n_s − m_s, k_s) / C(n_s, k_s)` (the probability that the draw misses all of them), `m_s` being its units in
-stratum `s`, so a template that is faulty in every unit is never missed. Under the work sampling design, faulty units
+stratum `s`, so a subcircuit that is faulty in every unit is never missed. Under the work sampling design, faulty units
 doing a fraction `ε` of the credited work have acceptance probability at most `(1 − ε)^K`; at `K = 27,713`, a 0.1% share
 has at most `2^-40`. The per-unit proof system adds its knowledge-soundness and binding errors (ε_ks and ε_bind).
 Applications weight the profile's faulty units by what each one costs them: exfiltration security by their output bits,
@@ -97,6 +97,14 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   (`Claims.Sampling.Partition`, `Deploy.checked`): the partition as two classes, the population's strata and then the
   root's input gates (drawn `all`: the input unit is always checked), each replay unit one proof unit, and the draw's
   checked proof units as `(slot, index)` in class, stratum and replay-unit order.
+- **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `SampledProofs/OneStageZk.lean`, the executable
+  `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters add the auditor's
+  circuit digest and the verifier's registered file, its evidence names the public file and each session's record and
+  rep files by SHA-512 in place of `verdicts`, and the files come in as `Core.Blobs`. The check runs
+  `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds the
+  evidence's `proved_units` to what the accepted sessions proved, and hands the verdicts to v1's `check`.
+  `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
+  to `verify`'s. Onsite, remote and composition still read v1.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
@@ -140,9 +148,9 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   - `Stream(spec, unit, budget=, delta=, challenger=, rounds=1)` has the calls `register`, `select` (with a work
     sampling design's `closure=`), `session`, `deliver` and `outcome`, which
     raise `Refused` (with its `Verdict`) or `Pending`; `halted` is its halt's cause once its fleet halted it. Its `unit`
-    is one template, or a window's several in order (a TP rank's served window): the check's `program` is then their
+    is one subcircuit, or a window's several in order (a TP rank's served window): the check's `program` is then their
     digests and its query `Q_template_instances`, `register(counts=)` gives the challenger's own instances of each,
-    and the window is drawn once by `stratified:K`, a stratum per template.
+    and the window is drawn once by `stratified:K`, a stratum per subcircuit.
   - `Fleet()` has `attach(stream, operator)`, before the stream's first registration; `halted` maps each halted
     operator to its halt's cause.
   - `selection_law` is the sampling design a rule names over N units, and `select_draw` the draw object from the
@@ -182,11 +190,11 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   `weight_binding_plan`.
 - `optimize`: the untrusted planner. From `Candidate`s, a `CostModel` (per statement, per unit, commitment, serve-time
   `Commitment`s, replay) and an `Objective` (harm per unit at δ), `frontier` is the certified Pareto frontier of total
-  cost against harm. `for_budget` and `for_target` query it, `weigh` weights block kinds, `overlaps` prices repeated
+  cost against harm. `for_budget` and `for_target` query it, `weigh` weights weight classes, `overlaps` prices repeated
   commitments, `certify` recomputes a plan's `Certificate`, `sensitivity` and `needs_benchmark` name what moves it,
   and `work_law` registers it as `work:1`.
-- `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP within the width rule;
-  `pressure` gives the developer hints.
+- `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP, each unit's outputs
+  in a public size class (`one_stage.partition.unit_class`); `pressure` gives the developer hints.
 - `costfit`: C-Flock's cost model fitted from measurements, as a cost-model/v1 record.
 
 ## Not yet in Lean
@@ -261,9 +269,9 @@ only inside a proof (`one_stage.registered`).
   registered the prover under): R6 refuses a record whose window doesn't name both (`R6-stream`, `R6-prover`), and the
   window salt binds them, so each (prover, stream, window, position) gets its own seed and a tile proved for one stream
   is refused in another, in the same window or not.
-- Reads at a public position: the verifier derives every unit's reads from its own program (`reads`). A unit's template
+- Reads at a public position: the verifier derives every unit's reads from its own program (`reads`). A unit's subcircuit
   parameter whose leaves are exactly row `r` of a registered value reads row `r`; a parameter that holds part of a row,
-  or reads the value in one unit and not in another of its template, is refused. Data-dependent reads are not public
+  or reads the value in one unit and not in another of its subcircuit, is refused. Data-dependent reads are not public
   reads and are not covered here.
 - A statement that reads registered rows is a shared-row file whose registered port's table rows carry the
   registration's salts (`Registered.statement`, `table` for each instance's position), so its `b ‖ c` are the
@@ -306,10 +314,12 @@ digest `SHA-512("verity/partition/v1\0" ‖ canon(object))`.
 - The units are core's evaluation of the query, which refuses a malformed query and a program that is not topological.
   The verifier applies the query to its own copy of the program, and never takes a population or a unit index on the
   prover's word.
-- The one-stage audit applies only `Q_template_instance` v0 and `Q_template_instances` v0: each instance of a listed
-  template in the program's root body is one unit, in canonical order (node, then member), with no width rule. They are
-  demo queries for template runs, not the serving partition. Only they define strata; any other query refuses the
-  stratified and work sampling designs.
+- The one-stage audit applies `Q_template_instance` v0 and `Q_template_instances` v0, and `Q_word` v1 at X = 16 and
+  `Q_call` v1 at X <= 16. Under a template query each instance of a listed template in the program's root body is one
+  unit, in canonical order (node, then member). Every unit's committed bits fit a public size class, a power of two
+  from 16 to `UNIT_CLASS_MAX` bits (`unit_class`; ASK-61, provisional), and a program with a wider unit is refused. The
+  template queries are demo queries for template runs, not the serving partition. Only they define strata; any other
+  query refuses the stratified and work sampling designs.
 - A record made before the canonical envelope names `{"program", "query"}`, and keeps that object's digest under the same
   rule (`partition.digest`).
 
@@ -331,7 +341,7 @@ Code and records call a sampling design a `law`; the name stays until a format v
   `draw.derive`: `{"law": "stratified", "k": K, "strata": [{"template", "units", "k"}, ...]}` and
   `{"law": "work", "k": K, "strata": [{"template", "units", "work", "floor", "k"}, ...]}`. The registration carries the
   sampling design expanded.
-- `derive` refuses a `K` outside `[1, N]`, a work sampling design without the verifier's work table, a template the
+- `derive` refuses a `K` outside `[1, N]`, a work sampling design without the verifier's work table, a subcircuit the
   table does not name, and a population that does no work.
 - Two sampling designs are the same when their canonical JSON bytes are (`draw.same_law`), so `true` is not `1`, as the
   Lean verifier reads them.
@@ -350,12 +360,12 @@ credit is a rule of its own (the Pearl-C statement review, item 5), documented w
 - Filler is credited nothing: a unit of filler only, or one the prover declares uncredited before the draw, does work 0.
   Its floor still draws it for integrity, and missing it costs no work. A unit mixing real and filler rows is credited
   its real cells only.
-- The work sampling design weights by template, so every unit of a template is credited the same work. A template whose
+- The work sampling design weights by subcircuit, so every unit of a subcircuit is credited the same work. A subcircuit whose
   units are padded differently is split before the sampling design is derived, or credited 0: the bound needs every
-  unit's inclusion probability to be at least `K w_u / W` over the credited `W`, which a per-template work that
+  unit's inclusion probability to be at least `K w_u / W` over the credited `W`, which a per-subcircuit work that
   over-credits a unit breaks.
 
-`test_derive_expands_the_work_rule_over_the_verifiers_table` covers a template credited nothing.
+`test_derive_expands_the_work_rule_over_the_verifiers_table` covers a subcircuit credited nothing.
 
 ### The audit record and the profile
 
@@ -376,13 +386,13 @@ The audit record (`audit.audit_record`) is `{"format": "verity/one-stage/audit/v
   incomplete (`complete` is false).
 - The record is accepted only when there is a verifier of record (`of_record`), every one of them ran and accepted, every
   other verdict that ran accepted, and every check passed. The profiles are present only then.
-- A session that proves one template's units is served that template's share as a `subset:k_s` draw over its `n_s` units,
+- A session that proves one subcircuit's units is served that subcircuit's share as a `subset:k_s` draw over its `n_s` units,
   in its own indices; the record keeps the union draw.
 - `profile` is the profile's JSON, except that a stratified or work sampling design keeps the v0 form: its JSON with
-  `delta` and the count drawn per template.
+  `delta` and the count drawn per subcircuit.
 - `wrong_units` is `{"delta", "of": population, "bound", "rule", ["per_template"]}`: `bound` is core's exact
   `Stratified.count_bound` at delta for `subset` (one stratum), `stratified` and `work`, and `Bernoulli.count_bound` for
-  `bernoulli`; a stratified or work sampling design adds each template's own bound.
+  `bernoulli`; a stratified or work sampling design adds each subcircuit's own bound.
 - `integrity_profile` is `verity/integrity-profile/v1`: `{"format", "protocol", "program", "query", "partition",
   "population", "registration": <digest>, "scheme", "roots": [{"port", "root", "leaves"}], "law", "drawn",
   "inputs": {"anchored": <anchors>, "linked": []}, "budget_log2_t": null, "terms": null, "epsilon_log2": null,
