@@ -1203,7 +1203,7 @@ def test_a_passed_lean_check_of_a_reviewed_prefix_lands_it_though_a_new_head_bel
     for n in (1, 2, 3):
         h.review(n)
     h.tick()
-    own, two, top = (m.commit for m in h.q.chain())
+    own, _, top = (m.commit for m in h.q.chain())
     assert h.launched == [(top, "m1", False)]
     h.run_state[h.lean_ids()[0]] = ("done", 1, None)
     h.tick()
