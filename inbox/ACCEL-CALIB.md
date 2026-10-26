@@ -172,3 +172,12 @@ RT-UNITS' U1, U2, U6 and U8: SHA-512 rows per card (ALU-only vs IMAD-balanced), 
 
 ## 04:30Z, coordinator: RT-MODEL turn 2 (note:20261026T0310Z-draft-accel-rt-model, status table; Linear d84e0c88 on CMP-109)
 RT-MODEL's M12 and M13: madHi = 2 on both cards per the programming guide (please confirm footnote 6), sync ≥ 1, b1 ≥ 1/8 on the H200, and no native b1 on sm_120 (ptxas emulates at ≥ 0.77; FP4 at ½ is the cheapest route). Also host rows for P9: per-core SHA-512 and INT8 (AMX), DDR, and PCIe 5.0 ×16 at about 63 GB/s each way.
+
+## 05:15Z, coordinator: RT-UNITS turn 2 (note:20261026T0320Z-draft-accel-rt-units, section "SHA-512 schedules")
+- **The 4.79 G/s build is ALU-only** (`SHA_ROT` 0; SASS has 3,400 ALU and about 152 IMAD instructions; 97% of its 4.92 G/s ceiling).
+- **Paper schedules:** H200 **6.80 G/s (1.38×)**, moving 152 64-bit adds to IMAD.WIDE + IMAD and 394 rotations to IMAD.HI + IMAD + IMAD.WIDE; 6.56 G/s without IMAD.HI. RTX PRO 6000 **9.82 G/s at 2092 MHz (1.33×)**, 11.4 at 2430. Use these as v2's honest hashing rates.
+- **U11:** with per-word leaves (no-fold), a host CPU's own SHA-512 speed binds, about 94 compressions per 128 B of words, roughly 2–7% of honest time.
+- **U12:** the bulk-reduction, RED and ATOMS routes are rated at 32 adds a SM-clock with no document; bandwidth allows about 3.9.
+- **Narrow paths:** b1 `wgmma` on the H200 at 8× INT8, for 0/1 operands only. sm_120 has no native b1; its bound is 2× through FP4 0/1 values. No card has a rated INT4 path, so INT4 is priced as INT8. Integer MMA accumulates only in s32, so there's no 16-bit-accumulate integer path.
+
+RT-UNITS U10 (c_sha row: message-format difference), U11 (host CPU binds under per-word leaves) and U12 (reductions rated at 32 without a document; about 3.9 by bandwidth). The SHA-512 schedules per card are in its note.

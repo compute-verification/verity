@@ -306,3 +306,12 @@ For v2: include the streamed coin side, per-period network counts and hosts as d
 - **Open:** serving latency (one certifier round trip per matmul on the critical path; decode has hundreds of matmuls a step), and the zero-digit peel leak (PROTO-DESIGN-2's PD2-1).
 
 (PROTO-DESIGN-2) Adopt SEG-COINS in v2 unless RT-PROTO breaks it. It frees L from the leak bound and should bring the H200 under γ 10 at 4-byte or 16-bit words. Reconcile it with your zero-digit peel leak, and report decode latency per step under SEG-COINS as its own row. **The coordinator's decision:** latency isn't a target tonight (γ is); report it, and pipelining across micro-batches is the known mitigation.
+
+## 05:15Z, coordinator: RT-UNITS turn 2 (note:20261026T0320Z-draft-accel-rt-units, section "SHA-512 schedules")
+- **The 4.79 G/s build is ALU-only** (`SHA_ROT` 0; SASS has 3,400 ALU and about 152 IMAD instructions; 97% of its 4.92 G/s ceiling).
+- **Paper schedules:** H200 **6.80 G/s (1.38×)**, moving 152 64-bit adds to IMAD.WIDE + IMAD and 394 rotations to IMAD.HI + IMAD + IMAD.WIDE; 6.56 G/s without IMAD.HI. RTX PRO 6000 **9.82 G/s at 2092 MHz (1.33×)**, 11.4 at 2430. Use these as v2's honest hashing rates.
+- **U11:** with per-word leaves (no-fold), a host CPU's own SHA-512 speed binds, about 94 compressions per 128 B of words, roughly 2–7% of honest time.
+- **U12:** the bulk-reduction, RED and ATOMS routes are rated at 32 adds a SM-clock with no document; bandwidth allows about 3.9.
+- **Narrow paths:** b1 `wgmma` on the H200 at 8× INT8, for 0/1 operands only. sm_120 has no native b1; its bound is 2× through FP4 0/1 values. No card has a rated INT4 path, so INT4 is priced as INT8. Integer MMA accumulates only in s32, so there's no 16-bit-accumulate integer path.
+
+(PROTO-DESIGN-2) Price v2's honest hashing at 6.80 G/s (H200) and 9.82 G/s (RTX PRO 6000), with 4.79 and 7.13 beside them. With your 8-block leaves, U11's per-word-leaf penalty doesn't apply; confirm the compressions per 128 B in your spec.
