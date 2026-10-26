@@ -6,7 +6,8 @@ import Mathlib.Tactic.NormNum
 
 The integer path is exact on the s32 range, saturating or not (`p1Int`). P2's halves that need no capture: an MMA's
 output reads only its own row, column and accumulator (`p2Local`), its outputs are distinct products' destinations
-(`p2Distinct`), an opcode writes no word but its outputs (`p2Frame`), and every opcode takes at least a lane's share of an issue slot (`p2Priced`). Each card refines its coarse `Device` (`H200.refines`, `Sm120.refines`).
+(`p2Distinct`), an opcode writes no word but its outputs (`p2Frame`), and every opcode takes at least a lane's share
+of an issue slot (`p2Priced`). Each card refines its coarse `Device` (`H200.refines`, `Sm120.refines`).
 -/
 
 open scoped NNRat
