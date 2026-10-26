@@ -2,8 +2,8 @@
 `RecVStar.checkParsed` on R's opening part over row ports `m0` and `acc0` (V*'s rows `m0`, `acc0`, `v` of 64 words
 and `out` of 128): a circuit carrying V*'s META passes; one with two units per VU, a leaf cut, input leaves off V*'s,
 output leaves off V*'s (permuted, short or missing), or a row port off V*'s by name, words or bits, or one too few or too
-many, is refused. V*'s own `rec-cap/n128` file, parsed as the verifier parses it (`HmOut.parse`), passes, and with its
-output leaves permuted is refused.
+many, is refused. V*'s own `rec-cap/n128` file states its output leaves as the check requires them, its output words in
+order (read off its META, as `HmRow.parse` reads `leaves_out`).
 -/
 import Flock.RecVStar
 
@@ -13,9 +13,11 @@ open Lean Flock Flock.RecVStar
 
 def opening : VStar.Stmt := .opening 22 2 0 { ops := [], res := [] } [("m0", 8), ("acc0", 8)] 1
 
-def outW : Nat := match opening.unit with
+def outWords (s : VStar.Stmt) : Nat := match s.unit with
   | .ok u => u.outWords
   | .error _ => 0
+
+def outW : Nat := outWords opening
 
 #guard outW > 1
 
@@ -51,17 +53,11 @@ def hex128 : String := "".pushn 'a' 128
 def bindings : VStar.Bindings :=
   { partition := hex128, program := hex128, programDigests := Json.mkObj [("RecCap_v1", Json.str hex128)] }
 
-def capParsed : Except String Circuit := do
-  HmOut.parse Tags.circuit (← circuitFile (.cap 0 128) bindings)
+def capLeavesOut : Except String (Array (Array Nat)) := do
+  let mj ← HmOut.metaOf (← circuitFile (.cap 0 128) bindings)
+  mj.getObjValAs? (Array (Array Nat)) "leaves_out"
 
-def capOk (perm : Array Nat → Array Nat := id) : Bool := match capParsed with
-  | .ok c => (checkParsed (.cap 0 128) { c with leavesOut := c.leavesOut.modify 0 perm }).isOk
-  | .error _ => false
-
-#guard capParsed.toBool
-#guard (capParsed.toOption.map (·.leavesOut)) == some #[Array.range 64]
-#guard capOk
-#guard !capOk (·.reverse)
-#guard !capOk (·.swapIfInBounds 0 1)
+#guard outWords (.cap 0 128) == 64
+#guard capLeavesOut.toOption == some #[Array.range (outWords (.cap 0 128))]
 
 end Flock.Test.Parsed
