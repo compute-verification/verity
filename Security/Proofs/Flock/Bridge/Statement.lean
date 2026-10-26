@@ -7,9 +7,9 @@ import Proofs.Flock.Bridge.Deployed
 
 `SampledKSLive` is `EndToEndHidden`'s setting with its event read in the sampling claims' relation, at the deployed
 trace commitment: for every live prover, the probability that flock-verify accepts and the committed transcript fixed
-at registration (`XplurZC`), read as the sampling witness `Bridge.witDep` of the session's statement (`Bridge.stmtOf`,
-`Bridge.partOf`), is outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` is at most `δ + ε_ks + δ_link`, `EndToEndHidden`'s
-terms. `RelS` is read at SHA-512 (`Claims.Sampling.sha512Msg`), under the registration's frame-v3 roots over the public
+at registration (`XplurZC`), read as the sampling witness `Bridge.witDep` of the session's statement (`Bridge.stmtOf`
+at the circuit's constants `Bridge.constsOf`, `Bridge.partOf`), is outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` is
+at most `δ + ε_ks + δ_link`, `EndToEndHidden`'s terms. `RelS` is read at SHA-512 (`Claims.Sampling.sha512Msg`), under the registration's frame-v3 roots over the public
 file's rows (`Bridge.rootsOf`), and at the deployed commitment `Bridge.commitDep`, whose layout is the game's rows read
 off the circuit file (`HiddenExec.rowOfH`); nothing of the commitment, its roots or its hash is a free parameter. Its
 named assumptions are `EndToEndHidden`'s: A3, `live-verifier`, `cr/sha-512` and `ecr/sha-512`.
@@ -27,6 +27,13 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
+
+open Classical in
+/-- **The circuit's constants**: `keyProg`'s constant wire `oneG` is `1` and its zero `zeroG` is `0`, public circuit
+structure, so `progOf` lowers them to constants (`.const`), which a proof unit reads with no opening. -/
+noncomputable def _root_.Flock.Bridge.constsOf (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ)
+    (g : Fin (Discharge.Layout.keyN c hU n)) : Option Bool :=
+  if g = Discharge.Layout.oneG then some true else if g = Discharge.Layout.zeroG then some false else none
 
 open Classical in
 /-- **The sampled audit's knowledge soundness, live.** `EndToEndHidden`'s setting: for every live prover `τ`, descriptor
@@ -78,13 +85,15 @@ def SampledKSLive : Prop :=
     -- the registration's frame-v3 roots, over the public file's rows
     let roots := Bridge.rootsOf D.unroll pub n
     let Cd := Bridge.commitDep Cc rows D.unroll n roots
+    -- the circuit's constants, public
+    let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hU n g
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
     prob (fun o => LiveAcceptsZK I o ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P kd desc q roots) (Bridge.partOf P)
+        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
           (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
@@ -99,7 +108,7 @@ commitment, roots, hash and registration): in `EndToEndHidden`'s setting, at eve
 `u` and every opening `o` of `g`'s registered commit string at the prover's registration, some data opens `g`'s claims
 position to `o`'s bit there, under the registration's roots at SHA-512. With `tr i o := ⟨i, vb.bit (vb.val o) (φ i), d⟩`,
 `d` chosen by it, it is `WrongSet.Transports execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb sha512Msg Cd
-(stmtOf P kd desc q roots) (reg σ) u φ tr` at every `u`, `kd`, `desc`, `q` and every `φ` that maps into `P.io u` only
+(stmtOf P κ kd desc q roots) (reg σ) u φ tr` at every `u`, `kd`, `desc`, `q` and every `φ` that maps into `P.io u` only
 committed positions, its wire's (`φ i ∈ P.io u → posOf Cc (φ i) = i`). -/
 def _root_.Flock.Bridge.TransportsLive : Prop :=
   ∀ (n : ℕ) (Reg : Type)
