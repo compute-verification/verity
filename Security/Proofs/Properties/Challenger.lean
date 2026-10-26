@@ -24,7 +24,7 @@ theorem liveAnswer : LiveAnswer := by
         cases hξ : L.coins p c ev with
         | error r => simp [hp, hc, hev, L.factors, hξ] at h
         | ok ξ =>
-          refine ⟨p, c, ev, ξ, rfl, rfl, rfl, rfl, ?_⟩
+          refine ⟨p, c, ev, ξ, hp, hc, hev, hξ, ?_⟩
           simpa [Core.Protocol.answerAt, Core.Live.at, Core.Protocol.answer, hp, hc, hev, L.factors, hξ] using h
 
 theorem coinsFromLog (hd : DrawnByDevice) : CoinsFromLog := by
