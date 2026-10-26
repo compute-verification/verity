@@ -42,7 +42,7 @@ theorem leaf_rowCommit (ws : Array ℕ) (y : Salt) :
       FlockSoundness.Binding.commitString (rowMsg ws) (saltBytes y).data.toList := by
   rw [← ResLower.commitString_exec, _root_.Flock.Hm96.Default512.commitString]
   simp only [ByteArray.data_append, Array.toList_append]
-  congr 1
+  refine congrArg₂ (· ++ ·) ?_ ?_
   · apply List.ext_getElem (by simp)
     intro n h1 h2
     simp only [List.getElem_ofFn, digestOf, maskOf, saltBytes, FlockDeploy.sha512, Claims.toMsg, Claims.ofMsg,
@@ -52,7 +52,8 @@ theorem leaf_rowCommit (ws : Array ℕ) (y : Salt) :
         Claims.toMsg (_root_.Flock.Hm96.Default512.saltPrefix ++ saltBytes y) := by
       rw [toMsg_append]
       simp [Claims.toMsg, saltBytes]
-    simp only [FlockDeploy.sha512, hs, Claims.ofMsg_toMsg]
+    rw [hs]
+    simp only [FlockDeploy.sha512, Claims.ofMsg_toMsg]
     rfl
 
 /-- **The inner prover's message is its round's rows' commit strings**, in order, each row under its round's and
@@ -69,6 +70,17 @@ theorem P_rowCommits (I : InnerRec) (w : Claims.Flock.Wit) (xI : Msg) (h : List 
   intro n h1 h2
   simp only [List.getElem_map, List.getElem_mapIdx]
   exact leaf_rowCommit _ _
+
+/-- **The deployed inner prover before the last round sends its round's rows' commit strings**: at the inner rounds
+`hist`'s first `i`, with `i` before the last round. -/
+theorem PFin_rowCommits (A : Circuit → _root_.VStar.In.PartIn → Claims.Flock.Wit) (I : InnerRec) (x : Msg)
+    (w : Claims.Flock.Wit) (xI : Msg) (hist : List (Msg × Msg)) (ρ : I.Tape) {i : ℕ} (hl : (hist.take i).length = i)
+    (hi : i < RestRead.kI x - 1) :
+    (((PFin A I x w).next xI (hist.take i) ρ).eval FlockDeploy.sha512).1 =
+      (roundRows I w ρ hist i).flatMap fun rw =>
+        FlockSoundness.Binding.commitString (rowMsg rw.words) rw.salt.data.toList := by
+  rw [PFin_before A I x w xI (hist.take i) ρ (by rw [hl]; omega), P_rowCommits, hl]
+  rfl
 
 /-- **The deployed record's pieces**: `b` with the reference prover's pieces `refPartsFin`. -/
 abbrev finB (b : Brings) (A : Circuit → _root_.VStar.In.PartIn → Claims.Flock.Wit) (I : InnerRec) (x : Msg) :
@@ -93,8 +105,6 @@ theorem hmsg_run (A : Circuit → _root_.VStar.In.PartIn → Claims.Flock.Wit) (
       (IV.k (xIOf x))).map histOf).take i).length = i := by
     simp only [List.length_take, List.length_map]
     omega
-  have hPI : (finB b A I x).ref.PI w = PFin A I x w := rfl
-  rw [hPI, PFin_before A I x w _ _ _ (by rw [hl]; omega), P_rowCommits, hl]
-  rfl
+  exact PFin_rowCommits A I x w _ _ _ hl hi
 
 end RecDeploy.VStarBuild
