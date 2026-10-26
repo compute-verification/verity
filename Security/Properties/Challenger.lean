@@ -1,5 +1,6 @@
 import CoreProtocol.Live
 import SampledProofs.ChallengerDraw
+import SampledProofs.OneStage
 
 /-!
 # Coins from the device's log: what a draw's coins are, stated against the code that reads them
@@ -10,6 +11,8 @@ what that record shows, for every input: the coins the challenger device drew, o
 
 * `LiveAnswer`: what `Protocol.answer` accepts, `Protocol.answerAt` accepts at the coins its evidence's record shows.
   It follows from `Live.factors` and reads no device.
+* `CoinsFromLog`, ONE-4's target: what a component that reads its coins through that reader (`ReadsChallenger`)
+  accepts, it accepts at coins that are what the device released, or a `Break`; one-stage reads so (`oneStageReads`).
 * `DrawnByDevice`: what `SampledProofs.Challenger.drawCoins` reads, under the verifier's key, window and family, is the
   concatenation of the coins of that family that a session of the device released after `after`, a session the device's
   own ledger opens on the window (`OpensOn`), or the run carries a `Break`.
@@ -343,5 +346,36 @@ def CoinsFromLog : Prop :=
           (∃ s ∈ dev.sessions d.key.pub, OpensOn dev d.key.pub d.window s.id ∧
             R.decode (s.released d.label d.after) = ξ) ∨
           Break dev d.key d.label (R.record ev)
+
+/-! ## One-stage reads its coins through the challenger -/
+
+/-- What one-stage's coins are read under (`OneStage.coinsOf`): with the parameters' challenger and window, its key, the
+window, its family, and the registration's digest. -/
+def oneStageSource (p : SampledProofs.OneStage.Params) (c : SampledProofs.OneStage.Commitment) : Option Draws :=
+  match p.challenger, p.verifier.windowRoot with
+  | some (key, label), some w => some ⟨key, w, label, c.digest⟩
+  | _, _ => none
+
+theorem oneStage_reads (p : SampledProofs.OneStage.Params) (c : SampledProofs.OneStage.Commitment) (d : Draws)
+    (h : oneStageSource p c = some d) (e : SampledProofs.OneStage.Evidence) (ξ : Option ByteArray)
+    (hξ : SampledProofs.OneStage.coinsOf p c e = .ok ξ) :
+    ∃ raw, drawCoins d.key d.window d.label d.after e.coins = .ok raw ∧ some raw = ξ := by
+  unfold oneStageSource at h
+  unfold SampledProofs.OneStage.coinsOf at hξ
+  rcases hch : p.challenger with _ | ⟨key, label⟩ <;> rcases hw : p.verifier.windowRoot with _ | w <;>
+    simp only [hch, hw] at h hξ <;> try cases h
+  cases hr : drawCoins key w label c.digest e.coins with
+  | error r => simp [hr, Except.mapError, Functor.map, Except.map] at hξ
+  | ok raw =>
+    simp [hr, Except.mapError, Functor.map, Except.map] at hξ
+    exact ⟨raw, hr, hξ⟩
+
+/-- **One-stage reads its coins through the challenger's reader** (`OneStage.live`), wherever its parameters name a
+challenger and a window. -/
+def oneStageReads : ReadsChallenger SampledProofs.OneStage.protocol SampledProofs.OneStage.live where
+  source := oneStageSource
+  record := SampledProofs.OneStage.Evidence.coins
+  decode := fun b => (some b : Option ByteArray)
+  reads := oneStage_reads
 
 end Properties.Challenger
