@@ -23,9 +23,33 @@ theorem parse_leaves {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi)
     pi.leaves.size = c.upv ∧ ∀ u < c.upv, (pi.leaves[u]!).size = (c.leavesIn.getD u #[]).size := by
   unfold HmIn.parse at h
   dsimp only at h
-  repeat' walk_step
-  all_goals trace_state
-  all_goals sorry
+  cases hj : c.metaJ.getObjVal? "public_inputs" with
+  | error e =>
+    rw [hj] at h
+    try dsimp only at h
+    try simp only [throw_bind', pure_bind] at h
+    repeat' walk_step
+    all_goals
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      first | simp at hne | exact absurd hne (by decide)
+  | ok pj =>
+    rw [hj] at h
+    try dsimp only at h
+    try simp only [throw_bind', pure_bind] at h
+    repeat' walk_step
+    all_goals
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      have hc := ‹¬ (_ || _) = true›
+      try dsimp only
+      refine ⟨?_, fun u hu => ?_⟩
+      · by_contra hn
+        exact hc (by simp [hn])
+      · by_contra hn
+        refine hc ?_
+        simp only [Bool.or_eq_true, List.any_eq_true, List.mem_range]
+        exact Or.inr ⟨u, hu, by simp [hn]⟩
 
 /-- A list of 16s sums to 16 per entry. -/
 theorem sum_16 {l : List ℕ} (h : ∀ b ∈ l, b = 16) : l.sum = 16 * l.length := by
