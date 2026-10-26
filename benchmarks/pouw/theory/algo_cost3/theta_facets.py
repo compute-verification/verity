@@ -12,8 +12,8 @@ routes for emulated b1.
     PUBLIC_BEST_DIR=<D5 v2>/benchmarks/pouw/theory python3 theta_facets.py <D6 accel_score dir> PICKS OUT_PREFIX \
         [--vector NAME]
 
-NAME defaults to the vector of record; VF3s-16 (RT-FACET's refit, which measured programs beating JI3s_0-9) is the
-tighter one.
+NAME defaults to the vector of record. VF3s-16, the newest epoch and not adopted, is RT-FACET's refit of JI3s_0-17
+after measured programs beat JI3s_0-9. `--vector theta` keeps the card's JI3e rows: the control, through the same code.
 """
 import json
 import math
@@ -33,7 +33,9 @@ import b1alu_check as b  # noqa: E402
 FORM = "IMMA16832"
 
 
-def vector_facets():
+def vector_facets(card):
+    if VECTOR == "theta":
+        return "θ JI3e", [(f"JI3e_{i}", a * 4096 / card.s8, v) for i, (a, v) in enumerate(card.facets)]
     m = mm.model()
     v = mm.vector(VECTOR or m.current)
     c = mm.census(m, v.epoch)
@@ -42,8 +44,8 @@ def vector_facets():
 
 
 def main():
-    current, facets = vector_facets()
     card = b.d6.vc.CARDS["RTX PRO 6000"][0]
+    current, facets = vector_facets(card)
     print(f"{current}: {len(facets)} joint issue rows at {FORM}; θ's JI3e_0..2 were "
           + ", ".join(f"({a * 4096 / card.s8:.3f}, {v:.3f})" for a, v in card.facets))
     for r, a, v in facets:
@@ -53,7 +55,8 @@ def main():
     print(f"  at a full tensor pipe: {full:.3f} vector instructions a SMSP-cycle, θ's JI3e {jie:.3f}")
     P = pickle.load(open(sys.argv[2], "rb"))
     b.static, b.pv = P["v3.1"]
-    object.__setattr__(card, "facets", tuple((a * card.s8 / 4096, v) for _, a, v in facets))
+    if VECTOR != "theta":
+        object.__setattr__(card, "facets", tuple((a * card.s8 / 4096, v) for _, a, v in facets))
     Path(sys.argv[3] + ".facets.json").write_text(json.dumps({"vector": current, "facets": facets}, indent=1))
     out = {"menu": b.run(("RTX PRO 6000",), f"{current} facets, menu")}
     b.pb.tile_methods = b.patched
