@@ -248,7 +248,7 @@ def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArra
   let sigma := Sha256.hash (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
   let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
   return { tags, leaf, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma, hello,
-    coinTree := coins.tree?, merkle }
+           coinTree := coins.tree?, merkle }
 
 namespace Stmt
 
