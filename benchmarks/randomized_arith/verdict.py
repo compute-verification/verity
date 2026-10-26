@@ -65,25 +65,31 @@ def mechanisms(rows: dict) -> list[dict]:
     out = [
         {"mechanism": "none (property/v1 as is)", "units": seam, "ratio": 1.0, "macs": rows["anyfn_seam"]["macs"],
          "how": "anyfn_seam"},
-        {"mechanism": "SR or dither, the format keeping a deterministic integer narrowing (mod, and, byte, I32Div)",
-         "units": seam, "ratio": 1.0, "macs": rows["anyfn_seam"]["macs"], "how": "anyfn_seam on those primitives"},
+        {"mechanism": "SR or dither on the roundings, property/v1's any-function gates (SR leaves an integer as it is)",
+         "units": seam, "ratio": 1.0, "macs": rows["anyfn_seam"]["macs"], "how": "anyfn_seam"},
         {"mechanism": "signed permutation (any)", "units": seam, "ratio": 1.0, "macs": rows["anyfn_seam"]["macs"],
          "how": "exact: commutes with every exact dot"},
         {"mechanism": "fresh Hadamard rotation of every dot (block 128)", "units": seam, "ratio": 1.0,
          "macs": rows["anyfn_seam"]["macs"] * 128, "how": "one nonzero a block: exact, 128x the MACs"},
-        {"mechanism": "restricted primitives only (det floors, clamps; no randomization)",
+        {"mechanism": "primitive semantics, no coins (det floors + clamps)",
          "units": rows["restricted_det_b8"]["units"], "ratio": rows["restricted_det_b8"]["units"] / seam,
          "macs": rows["restricted_det_b8"]["macs"], "how": "restricted_det_b8"},
-        {"mechanism": "SR or dither on every rounding, restricted primitives", "units": rows["restricted_sr_b7"]["units"],
-         "ratio": rows["restricted_sr_b7"]["units"] / seam, "macs": rows["restricted_sr_b7"]["macs"],
-         "how": "restricted_sr_b7"},
-        {"mechanism": "±1 LSB noise on every rounding, restricted primitives",
+        {"mechanism": "SR or dither on the roundings, primitive semantics, the format's exact byte primitives kept",
+         "units": rows["restricted_det_b8"]["units"], "ratio": rows["restricted_det_b8"]["units"] / seam,
+         "macs": rows["restricted_det_b8"]["macs"], "how": "restricted_det_b8 as S32ByteCarry + S32LowByte"},
+        {"mechanism": "SR or dither on every rounding, primitive semantics, no deterministic narrowing left",
+         "units": rows["restricted_sr_b7"]["units"], "ratio": rows["restricted_sr_b7"]["units"] / seam,
+         "macs": rows["restricted_sr_b7"]["macs"], "how": "restricted_sr_b7"},
+        {"mechanism": "±1 LSB noise on every rounding, primitive semantics, no deterministic narrowing left",
          "units": rows["restricted_noise1_b6"]["units"], "ratio": rows["restricted_noise1_b6"]["units"] / seam,
          "macs": rows["restricted_noise1_b6"]["macs"], "how": "restricted_noise1_b6"},
     ]
     for g in sorted({r["noise_g"] for r in rows.values() if r.get("noise_g")}):
-        for fam, ref, label in (("anyfn_fixup", fix0, f"accumulator noise 2^{g} (deterministic roundings)"),
-                                ("restricted_acc_sr", seam, f"accumulator noise 2^{g} + SR, restricted")):
+        for fam, ref, label in (
+                ("anyfn_fixup", fix0, f"accumulator noise 2^{g}, property/v1's any-function gates"),
+                ("restricted_acc_det", seam, f"accumulator noise 2^{g}, primitive semantics, exact byte primitives kept"),
+                ("restricted_acc_sr", seam, f"accumulator noise 2^{g} + SR, primitive semantics, no deterministic "
+                                            "narrowing left")):
             cands = [r for n, r in rows.items() if n.startswith(fam) and r.get("noise_g") == g and ok(r)]
             if not cands:
                 continue

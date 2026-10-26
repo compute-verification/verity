@@ -83,6 +83,14 @@ def test_randomized_gates_refuse_any_function_gates():
         bld.anyfn(lambda v: v[0] % 7, [x], 0, 6)
 
 
+@pytest.mark.parametrize("name", ["restricted_acc_det_b8_g4_r4", "restricted_acc_sr_b7_g4_r4", "anyfn_fixup_b8_g4_r4"])
+def test_accumulator_noise_constructions_clean_every_draw(name):
+    """Right on fresh noise each draw, at 2^4 times the honest square's n² products (each repeated 2^rep times)."""
+    r = C.measure(name, trials=4)
+    assert (r["right"], r["proven"], r["operand_bits_128"]) == (4, True, True)
+    assert r["macs"] == C.n_digits(r["b"]) ** 2 * 16
+
+
 def test_accumulator_noise_needs_its_guard_bits():
     with pytest.raises(AssertionError, match="guard 4 < noise 6"):
         C.build(C.spec("restricted_acc_sr_b7_g6_r4"))

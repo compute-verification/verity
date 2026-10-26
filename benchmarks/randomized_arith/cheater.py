@@ -36,10 +36,12 @@ computed the same way, is at most the reference's (`reference_fail_log2`): compa
 * `anyfn_fixup(b, G, rep)`: one greedy any-function carry pass over `b`-bit digits, its top carry folded into a fixup group;
   with `G > 0` the group gates read noisy columns and clean them inside (accumulator noise, deterministic roundings).
 * `restricted(mech, b)`: rounding gates are `nfloor`s and narrowing is a `clamp`: a ripple a digit (`nfloor` carry +
-  `clamp` digit), with an exact precomputed seam carry. `det` (exact floors) is the restricted model's own baseline;
-  `sr` needs signed radix-128 digits (`d = x − 128·SR(x/128)` always lies in `[−128, 127]`); `noise1` radix 64.
-* `restricted_acc(mech, g, rep, b)`: both mechanisms: each unfolded noisy column cleaned exactly (`nfloor` + `cmp` under
-  SR), then `restricted`'s ripple."""
+  `clamp` digit), with an exact precomputed seam carry. `det` (exact floors) is the restricted model's own baseline,
+  and what the format's own exact byte primitives give at the same count whatever the coins do (`S32ByteCarry_v2`
+  `(y − sext8(y))/256` the carry, `S32LowByte` the digit, `verity/ml/circuits/ops/boolean/s8.py`); `sr` needs signed
+  radix-128 digits (`d = x − 128·SR(x/128)` always lies in `[−128, 127]`); `noise1` radix 64.
+* `restricted_acc(mech, g, rep, b)`: both mechanisms: each unfolded noisy column cleaned exactly (one `nfloor` under
+  `det`, as a byte carry does; `nfloor` + `cmp` under SR), then `restricted`'s ripple."""
 
 from __future__ import annotations
 
@@ -564,6 +566,7 @@ def grid() -> list[str]:
     names = []
     for g in NOISE_BITS:
         names += [f"anyfn_fixup_b{b}_g{g}_r{max(0, g - 2 * (8 - b))}" for b in range(8, 3, -1)]
+        names += [f"restricted_acc_det_b{b}_g{g}_r{max(0, g - 2 * (8 - b))}" for b in range(8, 3, -1)]
         names += [f"restricted_acc_sr_b{b}_g{g}_r{max(0, g - 2 * (7 - b))}" for b in range(7, 3, -1)]
     return names
 
