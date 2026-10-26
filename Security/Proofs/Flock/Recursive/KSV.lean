@@ -10,7 +10,8 @@ read at the run's V\* statement for it, and the collision outcome over the recor
 own evaluations at the run's V\* statements (`setupCalls`), which list the registered reads' leaves and climbs wherever
 the brings do (`RecDeploy.RegSetup`, `RecDeploy.regListed_recBound`). `DecompBP` gives `DecompBV`
 (`decompBV_of_decompBP`), so this asks no more; a lowering under `JointV` may read two parts' commit strings as one
-through the setup's openings (`RecDeploy.bc_eq_of_setup`).
+through the setup's openings (`RecDeploy.bc_eq_of_setup`). `hM` is at the recursion's brings' stage
+(`{b with tr := recTr …}.st`, which `Brings.st` reads off `tr`), the stage the readers read.
 -/
 
 namespace Flock.SecurityProofs
@@ -24,7 +25,8 @@ theorem recursiveKSAt_ofV (rd : Msg → Option FinalP)
     (b : RecDeploy.Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (hIn : ∀ x, ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.VR rd) x → FlockDeploy.KS.PlainRdInR rd x)
-    (hM : RecDeploy.MoreSlotsTrue (RecDeploy.deployZkRec _root_.Flock.Readable.relation) b.st)
+    (hM : RecDeploy.MoreSlotsTrue (RecDeploy.deployZkRec _root_.Flock.Readable.relation)
+      ({ b with tr := RecDeploy.recTr aux nOf hd recRest } : RecDeploy.Brings).st)
     (hD : ∀ shape ∈ [Claims.Recursion.Form.Dense],
       Claims.Recursion.VStarB.DecompBV FlockDeploy.sha512
         (RecDeploy.recBound _root_.Flock.Readable.relation { b with tr := RecDeploy.recTr aux nOf hd recRest }
