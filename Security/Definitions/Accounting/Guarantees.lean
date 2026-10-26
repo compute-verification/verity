@@ -41,6 +41,7 @@ import Definitions.Accounting.Guarantees.RateAuditSketch
 import Definitions.Accounting.Guarantees.Responder
 import Definitions.Accounting.Guarantees.RemoteHeld
 import Definitions.Accounting.Guarantees.RemoteDraw
+import Definitions.Accounting.Guarantees.RemoteBinding
 import Definitions.Accounting.Guarantees.RemoteSketch
 import Definitions.Accounting.Guarantees.RemoteSketchLine
 import Definitions.Accounting.Guarantees.Requirement

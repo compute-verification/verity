@@ -42,13 +42,16 @@ is efficient has an efficient distinguisher, and one whose prover isn't gets no 
 held exactly the first openings under every 256-bit key of window `t`'s stream would pass the window with almost all
 its receipts wrong. The hiding terms are hm96's (claim `statistical-hiding`, at the pinned key `common-reference-string`
 and `hash-derived-key`): at most `n·2^-191` over a session's `n` windows (`Committed.hide`, `ledger.hiding`). The
-binding term rests on the collision resistance of SHA-512 (claim `cr/sha-512`) for the fork finder: it runs the
-prover twice from window `t`'s roots on independent openings coins, checks both runs' openings, and outputs a
-collision when some receipt opened in both carries different accepted rows. The held row being the likeliest, receipt
-`p`'s chance of moving is at most the square root of that finder's chance on `p`, so window `t`'s share of the term is
-at most `√(U_t·s'_t·ε_t)`, `ε_t ≤ q_t²/2^513` the finder's chance at its `q_t` SHA-512 calls (`ledger.binding`). That
-step is the forking argument `Accounting.SecurityProofs.TS.DrawnBindingOfFork` proves for a sampled window's proof
-layer; for the receipts it is on paper, and no Lean states it yet.
+binding term is bounded by `ReceiptsBindingOfCR` (`RemoteBinding`), under the collision resistance of SHA-512 (claim
+`cr/sha-512`) for window `t`'s fork finder (`Receipts.finder`): it runs the prover twice from window `t`'s cut on
+independent openings coins, checks both runs' openings, and outputs a collision when some receipt opened in both
+carries different accepted rows at one root. The held row being the likeliest (`HeldLikeliest`), receipt `p`'s chance
+of moving is at most the square root of the chance that the two runs show it with different rows, so window `t`'s
+share of the term is at most `√(|L_t|·s_t·(q_t²/2^513 + split_t))`, `q_t` the finder's SHA-512 calls and `split_t` the
+chance that the two runs' roots differ (`Receipts.split`). With roots fixed by the cut, `split_t = 0` and the bound has
+`ledger.binding`'s form, `Σ_t √(|L_t|·s_t)·q_t/2^256.5`, which the code reads at the record's `U_t` and `s'_t`. The
+prover of `F.play com` holds the commitment to every coin, and a root it computes from it reads window `t`'s coin:
+there `split_t` is not bounded, and `ledger.binding`, which takes it as 0, charges a bound no theorem gives.
 -/
 
 namespace Accounting.Guarantees.Remote

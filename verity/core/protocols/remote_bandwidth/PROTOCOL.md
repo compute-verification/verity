@@ -1325,8 +1325,11 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   fixed before its coin only once that root is (`Live` of `Committed.view`). Plus the receipts' binding term
   (`Receipts.binding`, `ledger.binding`): `Refused` lets an opened receipt through only correct or moved off the row
   its root holds, and a move is two accepted openings of one root and rank with different rows, a SHA-512 collision
-  among their checks (`Hash.Guarantees.RowBinding`, proved), charged under `cr/sha-512` through the fork form (a
-  forking step on paper, not yet in Lean).
+  among their checks (`Hash.Guarantees.RowBinding`, proved), charged under `cr/sha-512` through the fork form:
+  `ReceiptsBindingOfCR` bounds it by \(\sum_t \sqrt{|L_t| s_t (q_t^2/2^{513} + \mathrm{split}_t)}\), two runs from
+  window \(t\)'s cut on independent openings coins, with \(\mathrm{split}_t\) the chance that their roots differ.
+  `ledger.binding` charges it at \(\mathrm{split}_t = 0\), which holds where the cut fixes the roots; the deployed
+  prover may compute them from the coin commitment, so that step is still on paper.
   `pooled` is computed in exact rationals in the verifier's Lean
   (`lean/RemoteAudit/Pooled.lean`, `pooled.py` held to it by a difftest), the budget \(\bar d \cdot S\) from above by a
   certified rational root, and `Properties.RemoteAudit.PooledCovers` proves its W at least the bound `PooledDraw`

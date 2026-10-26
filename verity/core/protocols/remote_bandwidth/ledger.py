@@ -185,13 +185,14 @@ def binding(record: audit.Record, node: Node) -> float:
     """The receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`): the probability that some opened
     receipt moved, presented with an accepted row other than the one its root holds, the likeliest given what precedes
     its window's coin, which hashes a SHA-512 collision (`Hash.Guarantees.RowBinding`).  Window t's fork finder runs
-    the prover twice from its roots on independent coins and checks both runs' openings, q_t = 2·F·C +
+    the prover twice from its cut on independent coins and checks both runs' openings, q_t = 2·F·C +
     2·s'_t·`OPENING_HASHES` SHA-512 calls, F·C the most compressions the prover makes over the span (`sketch`'s);
-    under claim `cr/sha-512` (`SHA512CRStrict`) it finds a collision with probability ε_t ≤ q_t²/2^513.  Each receipt
-    moves with probability at most the square root of the finder's chance on it, so over window t's U_t receipts, at
-    most s'_t opened a run, its share is at most √(U_t·s'_t·ε_t) (Cauchy–Schwarz; the forking step
-    `Accounting.SecurityProofs.TS.DrawnBindingOfFork` proves for the proof layer), read at the record's U_t and s'_t:
-    Σ_t √(U_t·s'_t)·q_t/2^256.5."""
+    under claim `cr/sha-512` it finds a collision with probability ε_t ≤ q_t²/2^513.
+    `Accounting.Guarantees.Remote.ReceiptsBindingOfCR` proves the term at most Σ_t √(|L_t|·s_t·(ε_t + split_t)),
+    L_t the receipts window t can open, s_t its draws and split_t the chance that the two runs' roots differ; where the
+    cut fixes the roots, split_t = 0 and that is Σ_t √(U_t·s'_t)·q_t/2^256.5, read here at the record's U_t and s'_t.
+    The deployed prover holds the coin commitment, from which it may compute a window's roots, so split_t has no bound
+    yet and this charge takes it as 0 (note:20261025T0010Z-report-bind-fork)."""
     fc = node.sketch_outside * compressions(record, node)
     total = 0.0
     for w in record.windows:

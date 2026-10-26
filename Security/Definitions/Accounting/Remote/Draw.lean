@@ -74,9 +74,9 @@ the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openin
   accepting both openings at the receipt's root and rank with different rows, and `Collides t ω p` two different
   messages hashed by the two checks with one digest, which every move gives (`Hash.Guarantees.RowBinding`, proved).
   `binding D prf rest` is **the receipts' binding term**: the probability that some window's opened receipt moved,
-  and so collides. The held row being the likeliest, two runs of the prover from window `t`'s roots on independent
-  coins present receipt `p` opened with different accepted rows with probability at least the square of its moving
-  (the fork form), so the term's bound is that of such a finder (claim `cr/sha-512`, `ledger.binding`).
+  and so collides. With the held row the likeliest, its bound is the fork form (`Remote.Fork`, `ReceiptsBindingOfFork`):
+  two runs from window `t`'s cut collide or split the receipt's roots. Without a split it is a collision a finder outputs
+  (`ReceiptsBindingOfCR`, claim `cr/sha-512`); `ledger.binding` charges that, the split at 0.
 * `pooled n U s' δ`: `audit.pooled`'s horizon reading, the most wrong receipts `Σ_t f_t·U_t` over the shares `f_t` with
   `0 ≤ f_t ≤ 1 − s'_t/U_t` and `Σ_t s'_t·f_t ≤ budget S δ = S·(1 − δ^(1/S))`, `S = Σ_t s'_t`. `audit.pooled` computes it
   greedily, the windows taken by `U_t/s'_t` falling (the fractional knapsack's optimum); that the greedy order reaches

@@ -490,6 +490,10 @@
    "owner": "@memory-accounting",
    "digest": "a8ae94ed79b221dba199d5216232dfcbfdba8e97ead1d4501176191e60b12c62"
   },
+  "Accounting.Remote.Draw.Assumptions.HeldLikeliest": {
+   "owner": "@memory-accounting",
+   "digest": "8adbe0bb481e9725e660f3a14343fb966b4345ffd6894b55523344e8ced914de"
+  },
   "Accounting.Remote.Draw.Assumptions.Live": {
    "owner": "@memory-accounting",
    "digest": "8dbfee2935ed0fb5a3386fde91c2bbde338f00ce3f6301fa27cb1e10c3b554d9"
@@ -3758,6 +3762,22 @@
    "signature": ["Accounting.SecurityProofs.Remote.PooledDraw : Accounting.Guarantees.Remote.PooledDraw"],
    "assumptions": [],
    "type_hash": "e11bd8f0d7411ecef278283d438e8bb82499aa76458b00817ae5109a7008ad97"
+  },
+  "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR : Accounting.Guarantees.Remote.ReceiptsBindingOfCR"
+   ],
+   "assumptions": [],
+   "type_hash": "b548507034d640166412194e4e7aabc59a646d57368d1120f89faeb1c1f59067"
+  },
+  "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork : Accounting.Guarantees.Remote.ReceiptsBindingOfFork"
+   ],
+   "assumptions": [],
+   "type_hash": "26fd0a6eaacfe57684738f19ad110ac0c51d3fa200a790d2ac498a67532d7fe6"
   },
   "Accounting.SecurityProofs.Remote.SketchBoundDeployed": {
    "owner": "@memory-accounting",
@@ -11482,11 +11502,11 @@
    "Nci.SecurityProofs.CoveringBoundTwoCosts": "frozen (no-function): CoveringBound's twin at two costs, a weight's c_w and an activation's c_a, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardAt and with ActivationChainedAt read in its statement (Security/Definitions/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Flock.SecurityProofs.SessionLoopZK": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound at the session loop's release (ofLoop at the deployed relation, SHA-512, the hm96 hiding gap at the pinned key): as a simulation statement against every malicious verifier it has no acceptance of a function to take; at the loop's own tables (Loop.realOf, at every level-0 source), it takes the loop's obligation (Flock.Guarantees.LoopInnerRound0), the tables' obligation (Flock.Guarantees.TablesAdmitUnrefused), the transport's round trusts (LeanRelease.LinkRoundEq, FinishIs, LiveRoundEq, FillRoundEq) and the tables' side (CoinLayer Tables, Complete, DummyReg, Causal, SwCausal, TapeOK), premises that aren't on the list, at a statement the loop serves (Loop.Serves).",
    "Flock.SecurityProofs.SessionLoopZKDeployed": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound at the session loop's release at the deployed tables (Masked.dataE, ofLoop at the deployed relation, SHA-512, the hm96 hiding gap at the pinned key): as a simulation statement against every malicious verifier it has no acceptance of a function to take; at the loop's own tables (Loop.realOf, at every level-0 source), at the loop's own link and Finish (ofLoopLink: Loop.linkOf, the level-0 roots the loop draws; LeanRelease.withFiles, Loop.filesE: each rep's Finish.proofFile on what the loop holds of it, and the record the auditor assembles, recordJson of the streams it saw), it takes the statement in scope (Claims.Flock.Scope, which the loop does not check and the verifier checks only at its verdict), every input the loop takes from its host and operating system being the tape's (Loop.Src, flock-firewall-os-src: its level-0 inputs, Loop.Level0Src, and its rep draws, Loop.RepSrc), the loop's obligation (Flock.Guarantees.LoopInnerRound0), the transport's round trusts (LeanRelease.FinishIs, LiveRoundEq, FillRoundEq) and the tables' side (CoinLayer Tables, Complete, DummyReg, Causal, SwCausal, TapeOK), premises that aren't on the list, at a statement the loop serves (Loop.Serves).",
-   "Accounting.SecurityProofs.Remote.PooledDraw": "frozen (no-function): It is about the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, the likeliest given what precedes the window's coin), and a move is a SHA-512 collision between the two openings' checks (Hash.SecurityProofs.RowBinding), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding, claim cr/sha-512 for the fork finder that runs the prover twice from the window's roots, through a forking step on paper, not in Lean; note:20261024T2140Z-report-err-terms), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
-   "Accounting.SecurityProofs.Remote.LiveCoinsDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.PooledDraw at a fixed W, about the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, the likeliest given what precedes the window's coin), and a move is a SHA-512 collision between the two openings' checks (Hash.SecurityProofs.RowBinding), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding, claim cr/sha-512 for the fork finder that runs the prover twice from the window's roots, through a forking step on paper, not in Lean; note:20261024T2140Z-report-err-terms), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
-   "Accounting.SecurityProofs.Remote.HeldDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.Held with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, the likeliest given what precedes the window's coin), and a move is a SHA-512 collision between the two openings' checks (Hash.SecurityProofs.RowBinding), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding, claim cr/sha-512 for the fork finder that runs the prover twice from the window's roots, through a forking step on paper, not in Lean; note:20261024T2140Z-report-err-terms), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
-   "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.HeldOverTime with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, the likeliest given what precedes the window's coin), and a move is a SHA-512 collision between the two openings' checks (Hash.SecurityProofs.RowBinding), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding, claim cr/sha-512 for the fork finder that runs the prover twice from the window's roots, through a forking step on paper, not in Lean; note:20261024T2140Z-report-err-terms), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
-   "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.HeldOverTimeLinks with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, the likeliest given what precedes the window's coin), and a move is a SHA-512 collision between the two openings' checks (Hash.SecurityProofs.RowBinding), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding, claim cr/sha-512 for the fork finder that runs the prover twice from the window's roots, through a forking step on paper, not in Lean; note:20261024T2140Z-report-err-terms), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
+   "Accounting.SecurityProofs.Remote.PooledDraw": "frozen (no-function): It is about the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, the likeliest given what precedes the window's coin), and a move is a SHA-512 collision between the two openings' checks (Hash.SecurityProofs.RowBinding), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which this committed play leaves unbounded since its prover may compute the roots from the coin commitment (note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
+   "Accounting.SecurityProofs.Remote.LiveCoinsDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.PooledDraw at a fixed W, about the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, the likeliest given what precedes the window's coin), and a move is a SHA-512 collision between the two openings' checks (Hash.SecurityProofs.RowBinding), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which this committed play leaves unbounded since its prover may compute the roots from the coin commitment (note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
+   "Accounting.SecurityProofs.Remote.HeldDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.Held with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, the likeliest given what precedes the window's coin), and a move is a SHA-512 collision between the two openings' checks (Hash.SecurityProofs.RowBinding), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which this committed play leaves unbounded since its prover may compute the roots from the coin commitment (note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
+   "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.HeldOverTime with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, the likeliest given what precedes the window's coin), and a move is a SHA-512 collision between the two openings' checks (Hash.SecurityProofs.RowBinding), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which this committed play leaves unbounded since its prover may compute the roots from the coin commitment (note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
+   "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.HeldOverTimeLinks with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, the likeliest given what precedes the window's coin), and a move is a SHA-512 collision between the two openings' checks (Hash.SecurityProofs.RowBinding), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which this committed play leaves unbounded since its prover may compute the roots from the coin commitment (note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10R": "frozen (no-function,world-unlisted,scope): StagedFloorKOneSided at call scope under J10-R (RT-ALGO-17, card bbf40543), each stage a call (JStage), its run one straight-line program over the call's bits, both sides shared across the call and each segment's coin x coin part one <n, L, n'> product. It is stated over an arbitrary Machine and Service and an analysis map (JRunMap), not the service's code, and takes three premises about that map: ServiceSoundStagedJ10R (ServiceSoundStaged with the seed identified with the window's call coins), KScopeOneSidedJ10R (Theorem K's one-sided scope on the call: products one-sided of any form between the rows' dither bits and the columns' coin and U bits, the error the call's int8-wrapped prefix product, and charging purity mod 2 at every segment's row and column frame, which no check of the service refuses a run outside of) and ChargeVF3j16J10R (the active vector VF3j-16's prices with B_theta complete, kappa a product of the call's program). Its floor and luck are StagedFloorKOneSided's: c = 1 on the call's one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies.",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10R": "frozen (no-function,world-unlisted,scope): OverlapFloorKOneSided at call scope under J10-R (RT-ALGO-17, card bbf40543), each draw a call of any shape (OJSpot), the round's run one straight-line program over every call's bits, both sides shared across each call and each segment's coin x coin part one <n, L, n'> product. It is stated over an arbitrary Machine and Service and an analysis map (JORunMap), not the service's code, and takes three premises about that map: ServiceSoundOverlapJ10R (ServiceSoundOverlap with the seed identified with the overlapped window's call coins), KScopeOverlapOneSidedJ10R (Theorem K's scope across calls: products one-sided per call at every bit point of the other calls' (OneSidedAtJ), the error each call's int8-wrapped prefix product, and charging purity across calls mod 2 at every segment's frame, which no check of the service refuses a run outside of) and ChargeVF3j16OverlapJ10R (the active vector VF3j-16's prices with B_theta complete, each product counted once). Its floor and luck are OverlapFloorKOneSided's: c = 1 on the calls' one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies.",
    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate": "frozen (no-function): It bounds AccSeqsWithin, the observation sequences an abstract Program accepts with advice within the caps, not runs of the network check's code, and takes BitsCount about an abstract charge; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
@@ -11623,7 +11643,9 @@
    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod": "frozen (no-function): It carries C-Flock's integrity audit over a horizon of windows (Flock.Guarantees.IntegrityHorizon) to the sampled audit's per-period guarantee (PeriodRun.Sound) of an abstract period of the device model whose verdict is a field of the run, not a Lean function, through a realization whose fields are properties of the deployed run (Accounting.RealizesIntegrityOfIntegrityPeriod, Security/Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod.lean): wrong_eq is the program-from-circuit correspondence (M1) until Lowers/progOf/partOf land, and units_eq with gates_nonempty is the partition's public unit-size property. It bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointHorizonBlocks": "frozen (no-function): Like JointHorizon, over a horizon of server-time blocks and the wipes that open them, on one coin space: each block's five per-period guarantees, each wipe's survivor bound and each block's PoUS memory term are hypotheses over an abstract block of the device model whose verdicts, and each wipe's surviving foreign content, are fields of the run, not Lean functions (Security/Definitions/Accounting/JointBlocks.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointHorizonBlocksLegs": "frozen (no-function): Like JointHorizon, over a horizon of server-time blocks on one coin space, for a set of the audits: each block's per-period guarantees for the audits of the set are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
-   "Accounting.SecurityProofs.JointHorizonBlocksA": "frozen (no-function): Demo A's composed theorem, JointHorizonBlocksLegs at sampled proofs, PoUW and the network certifier: each block's three per-period guarantees are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list."
+   "Accounting.SecurityProofs.JointHorizonBlocksA": "frozen (no-function): Demo A's composed theorem, JointHorizonBlocksLegs at sampled proofs, PoUW and the network certifier: each block's three per-period guarantees are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": "lemma: the forking step behind the remote audit's receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which PooledDraw and the drawn memory-line guarantees charge, over a session and its receipts, not a Lean function: with the held row the likeliest of window t's continuations (Accounting.Remote.Draw.Assumptions.HeldLikeliest, at Accounting.Remote.Draw.cont), the binding term is at most sum_t sqrt(|L_t| s_t (fork_t + split_t)), fork_t the chance that two runs from window t's cut on independent openings coins hash a SHA-512 collision between one receipt's two openings' checks (Receipts.Broken, Hash.SecurityProofs.RowBinding) and split_t the chance that their roots, ranks or verifiers differ (Receipts.Split); split_t is not bounded for the deployed committed play, whose prover may compute window t's roots from the coin commitment (note:20261025T0010Z-report-bind-fork).",
+   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": "lemma: ReceiptsBindingOfFork under claim cr/sha-512 (Claims.StrictBirthday) at each window's fork finder (Accounting.Remote.Draw.Receipts.finder, at q_t SHA-512 calls): the receipts' binding term is at most sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), not a Lean function; where the window's cut fixes its roots split_t = 0 and it is sum_t sqrt(|L_t| s_t) q_t/2^256.5 (Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed), ledger.binding's form, which the code reads at the record's U_t and s'_t; the deployed committed play doesn't fix the roots (note:20261025T0010Z-report-bind-fork)."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -11773,7 +11795,9 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
-    "Accounting.SecurityProofs.Remote.PooledDraw"
+    "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork"
    ]
   },
   "Definitions.Accounting.Actual.WipeHeld": {
@@ -11898,6 +11922,16 @@
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
     "Accounting.SecurityProofs.StackedSessionConservationRelay",
     "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
+   ]
+  },
+  "Definitions.Accounting.Assumptions.RemoteBinding": {
+   "digest": "5b689697d0200fa2f3978c9c085f37e3829a52823f81a88e99796fa1f5cdb00c",
+   "definitions": {
+    "Accounting.Remote.Draw.Assumptions.HeldLikeliest": "8adbe0bb481e9725e660f3a14343fb966b4345ffd6894b55523344e8ced914de"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork"
    ]
   },
   "Definitions.Accounting.Assumptions.RemoteDraw": {
@@ -13848,6 +13882,17 @@
     "Accounting.SecurityProofs.SketchRankFiber"
    ]
   },
+  "Definitions.Accounting.Guarantees.RemoteBinding": {
+   "digest": "a6aa4fb39b24caa364f2d559c5cbdde388b5b421e359f68eb01abcfff00325ff",
+   "definitions": {
+    "Accounting.Guarantees.Remote.ReceiptsBindingOfCR": "067f6f58a3254bba52a961b3fae412b6dc38ec4ce96ccad7ec3af6dc260631b0",
+    "Accounting.Guarantees.Remote.ReceiptsBindingOfFork": "5f207cf65b40235f2e44f7e71f5e83ce767d3cb34f175c2abb22fd967dc51066"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork"
+   ]
+  },
   "Definitions.Accounting.Guarantees.RemoteDraw": {
    "digest": "7dfdd02e342a70e70a095b8e60d12feaef61f6148e3f0c7e29824e7f445a1007",
    "definitions": {
@@ -15363,7 +15408,26 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Accounting.SecurityProofs.Remote.SketchBoundLine"
+   ]
+  },
+  "Definitions.Accounting.Remote.Fork": {
+   "digest": "39a5f27de649ce99f82437542c802aa213f821e1d65078ff36459da5bca68479",
+   "definitions": {
+    "Accounting.Remote.Draw.Receipts.Broken": "59501d40cf08d6960b9970b1ba1855b835be76d1a4312d9442cef71fd968c75f",
+    "Accounting.Remote.Draw.Receipts.Finds": "34a33bce4db88f4c1fad60bf4e35b1149805487d1fb25932fd3f1676361ee070",
+    "Accounting.Remote.Draw.Receipts.Shows": "b1578b2161811998c5899a0b1cb64da72b0ff220f0660fc3612aacccaad4f959",
+    "Accounting.Remote.Draw.Receipts.Split": "16cde9c0af4e33e83a79410d52c04c8b791fbc83477096f91a7214f129d122c8",
+    "Accounting.Remote.Draw.Receipts.finder": "5716de2bb2d0b43404cca31348a9c6a631bb2e277443930a1d4f08ebe91c6e5f",
+    "Accounting.Remote.Draw.Receipts.fork": "ca927660822cd18804b8ea2ab0564c0dc2ba9e27bbb19ac19386f6ac120f47d0",
+    "Accounting.Remote.Draw.Receipts.split": "239466009ed13774ffc6ade859df949fd3f9cc4dc8408fc73e5bb154a0695d96",
+    "Accounting.Remote.Draw.cont": "6b8333254ae6181a181e5638072b1547400c6724f1d6f1fd3fce5cb36287dea8"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork"
    ]
   },
   "Definitions.Accounting.Remote.Held": {
@@ -15688,6 +15752,8 @@
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
     "Accounting.SecurityProofs.ComposePeriod.PeriodBudget",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Accounting.SecurityProofs.TS.AdditiveFixed",
     "Accounting.SecurityProofs.TS.DrawnBindingOfFork",
     "Accounting.SecurityProofs.TS.DrawnRightOff",
@@ -16645,6 +16711,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Claims.Bits_fails",
     "Claims.Complete_fails",
     "Claims.Flock.Bits_fails",
@@ -19708,6 +19776,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding"
    ]
@@ -19739,6 +19809,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Hash.SecurityProofs.RowBinding"
    ]
   },
@@ -19772,6 +19844,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Hash.SecurityProofs.RowBinding"
    ]
   },
@@ -19798,6 +19872,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Hash.SecurityProofs.RowBinding"
    ]
   },
@@ -19815,6 +19891,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Hash.SecurityProofs.RowBinding"
    ]
   },
@@ -19840,6 +19918,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding"
    ]
@@ -21946,6 +22026,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
     "Accounting.SecurityProofs.Remote.SketchBoundLine",
     "Accounting.SecurityProofs.Remote.SketchBoundSession",
@@ -22530,6 +22612,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
