@@ -1,6 +1,8 @@
 import Proofs.Flock.Claims.Recursion.VerdictRowEInner
-import Proofs.Flock.Claims.Recursion.ResStepsW
-import Proofs.Flock.Claims.Recursion.ResEndsW
+import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
+import Proofs.Flock.Claims.Recursion.ResPiecesD
+import Proofs.Flock.Claims.Recursion.ResLowerDA
+import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
 import Proofs.Flock.Claims.Recursion.ResLowerDD
 import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
 import Proofs.Flock.Claims.Recursion.DeployedBrings
@@ -63,7 +65,38 @@ theorem fast100_of_read {x : Msg} {r : XR} (hr : readX x = some r) : ∃ sch, fa
   obtain ⟨_, _, _, sch, -, -, -, hf, -⟩ := DecompBR.listed_of_statements hvs
   exact ⟨sch, hf⟩
 
-/-- **A level's instances are its schedule level's two reps' queries** (`levelMatch`, at `schAt_fast100`'s
+/-- **The inner schedule is V\*'s** at a dense statement with a level part (`levelMatch`'s); ResStepsW's
+`schAt_fast100`, here so that this file needs no chain module. -/
+private theorem schAt_fast100A {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
+    (hd : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt}
+    (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss) {s lv LANES HH n : ℕ}
+    (hsv : ss[s]? = some (.recOpen lv LANES HH n)) :
+    fast100 r.shape.m = some (OpenLower.schAt (xIOf x) 0) := by
+  obtain ⟨r', hr', -, rfl⟩ := parse_read hst
+  rw [hr] at hr'
+  cases hr'
+  have hh : r.shape.holo = false := hd.1
+  have hsp : r.shape.sparse = none := by
+    have h2 : (r.shape.sparse.map fun sp => (sp.nu, sp.ell, sp.sLog, sp.tLog)) = none := hd.2
+    cases hs : r.shape.sparse with
+    | none => rfl
+    | some _ => simp [hs] at h2
+  obtain ⟨sch, hsch, -, -, -, -⟩ := OpenLower.recOpen_dense hss hsp hh hsv
+  obtain ⟨s', spec, t, hset, htm⟩ := OpenLower.inner_m hst hr
+  have e : OpenLower.schAt (xIOf x) 0 = sch := by
+    unfold OpenLower.schAt
+    rw [hset]
+    have htabs : FlockDeploy.tabsOf #[t] = #[_root_.Flock.Setup.ofCircuit t] := by simp [FlockDeploy.tabsOf]
+    have h0 : (FlockDeploy.tabsOf #[t])[0]!.m = t.m := by
+      rw [htabs]
+      rfl
+    dsimp only
+    rw [h0, htm, hsch]
+    rfl
+  rw [e]
+  exact hsch
+
+/-- **A level's instances are its schedule level's two reps' queries** (`levelMatch`, at `schAt_fast100A`'s
 schedule). -/
 theorem recOpen_n {x : Msg} {st : Claims.Recursion.Stmt} (hx : parse x = some st)
     (hf : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) {sch : Schedule}
@@ -78,7 +111,7 @@ theorem recOpen_n {x : Msg} {st : Claims.Recursion.Stmt} (hx : parse x = some st
     rw [hss] at hsv
     obtain ⟨hl, -, -, hm⟩ := OpenLower.levelMatch hx hf hr hss hsv
     have he : OpenLower.schAt (xIOf x) 0 = sch :=
-      Option.some.inj ((schAt_fast100 hx hf hr hss hsv).symm.trans hsch)
+      Option.some.inj ((schAt_fast100A hx hf hr hss hsv).symm.trans hsch)
     rw [he, ← hl] at hm
     exact hm
 
