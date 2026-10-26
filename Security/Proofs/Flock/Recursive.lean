@@ -64,6 +64,7 @@ import Proofs.Flock.Recursive.ValueInner
 import Proofs.Flock.Recursive.PartTie
 import Proofs.Flock.Recursive.HPortTie
 import Proofs.Flock.Recursive.KSStatement
+import Proofs.Flock.Recursive.KSNontrivial
 import Proofs.Flock.Recursive.KS
 import Proofs.Flock.Recursive.KSV
 import Proofs.Flock.Recursive.KSDeployed
