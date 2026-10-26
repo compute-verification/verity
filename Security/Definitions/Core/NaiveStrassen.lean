@@ -163,15 +163,27 @@ def instances : List (List Atom) := [h200Sheet, h200Measured, rtx6000Sheet, rtx6
 /-! ## The statements -/
 
 /-- **Theorem 1**: at every depth budget `l ≤ L`, every schedule over `fs` for int8 operands that applies Strassen
-or Winograd somewhere costs at least naive tiled's `8^(l+1)` plus 32, i.e. `1 + 4·8^(-l)` times naive. `L` is 13 on
-the H200 (both `k`) and the RTX PRO 6000 at the measured `k`, and 12 on the RTX PRO 6000's data sheet, where with b1
-at `1/8` a schedule reaches `0.998267` of naive at depth 13. -/
+or Winograd somewhere costs at least naive tiled's `8^(l+1)` plus 32, i.e. `1 + 4·8^(-l)` times naive.
+
+It is stated at `L = 10`, the depth that served shapes reach. Their inner and outer dimensions are at most 65536
+(DeepSeek-V4's and Llama-3.1-70B's MLPs), and a leaf is at least the H200 `wgmma` tile's 64, so a recursion on a
+served product is at most `log₂(65536 / 64) = 10` deep. Deeper schedules pad past the served size, and the size
+form `NaiveBeatsStrassenUpTo` at `c = 1024` covers them at every depth.
+
+The exact tables hold further: to depth 13 on the H200 (both `k`) and the RTX PRO 6000 at the measured `k`, and to
+12 on the RTX PRO 6000's data sheet, where with b1 at `1/8` a schedule reaches `0.998267` of naive at depth 13. -/
 def NaiveBeatsStrassen (fs : List Atom) (L : Nat) : Prop :=
   ∀ l ≤ L, ∀ S : Sched, S.valid fs schemes 0 l 256 256 = true → S.fast = true → 8 ^ (l + 1) + 32 ≤ S.cost l
 
-/-- **Theorem 1 in size**: an `n × n` product padded to `2^l` leaves of size `b` loses to naive tiled's `8 n³`
-whenever `n ≤ c·b` (`c = 16113` on the H200's data sheet: `2^14 G_14^(1/3) = 16113.9`, `G_14` the least cost at
-depth 14). -/
+/-- **Theorem 1 in size**: an `n × n` product padded to `2^l` leaves of size `b`, at any depth `l`, loses to naive
+tiled's `8 n³` whenever `n ≤ c·b`.
+
+It is stated at `c = 1024 = 65536 / 64`, which covers every served shape (dimensions at most 65536, leaves at least
+64). The proof uses Theorem 1 up to depth 10, the least cost at depth 11 (naive), and `cost ≥ 7^l` beyond.
+
+The exact tables give larger constants, such as `c = 16113` on the H200's data sheet
+(`2^14 G_14^(1/3) = 16113.9`, with `G_14` the least cost at depth 14), but certifying them needs tables to depth
+16. -/
 def NaiveBeatsStrassenUpTo (fs : List Atom) (c : Nat) : Prop :=
   ∀ (l b n : Nat) (S : Sched), S.valid fs schemes 0 l 256 256 = true → S.fast = true → 1 ≤ n → n ≤ 2 ^ l * b →
     n ≤ c * b →
