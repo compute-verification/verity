@@ -39,7 +39,7 @@
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_host -> pipeline.spans"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "repo-path", "symbol": "NativeHostCommitter._gpu_ext_load", "detail": "_tree"},
     {"file": "verity_vllm/correspondence/reader_for_acquire.py", "kind": "layer", "symbol": "<module>", "detail": "correspondence.reader_for_acquire -> observe.runtime_tree"},
-    {"file": "verity_vllm/engine/code_identity.py", "kind": "layer", "symbol": "<module>", "detail": "engine.code_identity -> check.kernel_identity"},
+    {"file": "verity_vllm/engine/code_identity.py", "kind": "layer", "symbol": "<module>", "detail": "engine.code_identity -> engine.kernel_identity"},
     {"file": "verity_vllm/engine/profiles/gen_dense2_patterns.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.gen_dense2_patterns -> observe.fold.patterns"},
     {"file": "verity_vllm/engine/profiles/gen_dense2_patterns.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.gen_dense2_patterns -> observe.fold.resolver"},
     {"file": "verity_vllm/engine/profiles/gen_dense2_patterns.py", "kind": "layer", "symbol": "<module>", "detail": "engine.profiles.gen_dense2_patterns -> observe.fold.tree"},

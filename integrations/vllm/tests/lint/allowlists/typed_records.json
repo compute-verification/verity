@@ -17,7 +17,7 @@
     {"file": "verity_vllm/check/gates.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-gen/fold-summary/v1"},
     {"file": "verity_vllm/check/gates.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-gen/gates/v1"},
     {"file": "verity_vllm/check/gates.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-ir/query-use/v1"},
-    {"file": "verity_vllm/check/kernel_identity.py", "kind": "schema-literal", "symbol": "collect", "detail": "verity-vllm/kernel-identity/v1"},
+    {"file": "verity_vllm/engine/kernel_identity.py", "kind": "schema-literal", "symbol": "collect", "detail": "verity-vllm/kernel-identity/v1"},
     {"file": "verity_vllm/check/match", "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": 110},
     {"file": "verity_vllm/check/match/batch_decomp.py", "kind": "schema-literal", "symbol": "decompose", "detail": "cb-a/batch-decomp/v1"},
     {"file": "verity_vllm/check/match/batch_decomp.py", "kind": "schema-literal", "symbol": "decompose", "detail": "cb-a/x09-profile/v1"},
