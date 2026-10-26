@@ -491,4 +491,28 @@ theorem copy_exec (s t : Store) (len : ℕ) (h : Avail (.copy s t len)) (a b : �
   simp [Card.machine, machine, Op.eval, getD, Op.outStore, Op.inStore, Op.nIn, Machine.Operand.readIn,
     Machine.Operand.locIn, hi]
 
+theorem copy_at (s t : Store) (len : ℕ) (h : Avail (.copy s t len)) (a b : ℕ)
+    (M : (machine x cap oracle).Mem) (u : Store) (q : ℕ) (hq : q < (machine x cap oracle).size u)
+    (hb : b + len ≤ (machine x cap oracle).size t) :
+    instrExec (copyN s t len h a b).instr M ((machine x cap oracle).loc u q) =
+      if u = t ∧ b ≤ q ∧ q < b + len then M ((machine x cap oracle).loc s (a + (q - b)))
+      else M ((machine x cap oracle).loc u q) := by
+  rw [copy_exec]
+  split_ifs with hin
+  · obtain ⟨rfl, h1, h2⟩ := hin
+    have := foldl_update_mem (fun i : Fin len => (machine x cap oracle).loc u (b + i.val))
+      (fun i => M ((machine x cap oracle).loc s (a + i.val))) (List.finRange len) M
+      (fun i _ j _ e => by
+        have e2 := ((loc_eq_iff (m := machine x cap oracle) u u _ _).mp e).2
+        rw [Nat.mod_eq_of_lt (by omega), Nat.mod_eq_of_lt (by omega)] at e2
+        exact Fin.ext (by omega))
+      (List.nodup_finRange len) ⟨q - b, by omega⟩ (List.mem_finRange _)
+    simp only at this
+    rwa [show b + (q - b) = q by omega] at this
+  · apply foldl_update_not_mem
+    intro i _ e
+    obtain ⟨rfl, e2⟩ := (loc_eq_iff (m := machine x cap oracle) t u _ _).mp e
+    rw [Nat.mod_eq_of_lt (by omega), Nat.mod_eq_of_lt hq] at e2
+    exact hin ⟨rfl, by omega, by omega⟩
+
 end Verity.Accel.H200.Resident
