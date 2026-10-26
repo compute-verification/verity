@@ -46,25 +46,35 @@
      "type": "object", "required": ["port", "leaf", "path"], "additionalProperties": false,
      "properties": {"port": {"type": "string"}, "leaf": {"$ref": "#/$defs/nat"}, "path": {"$ref": "#/$defs/path"}}
     },
-    "slot": {
-     "oneOf": [
-      {"type": "null"},
-      {"type": "object", "required": ["block", "step", "slot", "unit", "rank", "path", "slot_path", "step_path", "producer"],
-       "additionalProperties": false,
-       "properties": {"block": {"$ref": "#/$defs/nat"}, "step": {"$ref": "#/$defs/nat"}, "slot": {"$ref": "#/$defs/nat"},
-                      "unit": {"$ref": "#/$defs/nat"}, "rank": {"$ref": "#/$defs/nat"}, "path": {"$ref": "#/$defs/path"},
-                      "slot_path": {"$ref": "#/$defs/opening"}, "step_path": {"$ref": "#/$defs/opening"},
-                      "producer": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/producer"}]}}}
-     ]
-    },
+    "slot": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/committed"}]},
     "registered": {
      "oneOf": [
       {"type": "null"},
       {"type": "object", "required": ["value", "position", "path"], "additionalProperties": false,
        "properties": {"value": {"type": "string"}, "position": {"$ref": "#/$defs/nat"}, "path": {"$ref": "#/$defs/hex"}}}
      ]
+    },
+    "reads": {
+     "description": "an input row made of committed rows (replay_bundle.Read: at the unit's step or an earlier one, its own slot, e.g. attention's K and V rows) and position words (replay_bundle.Position); every word no read covers is zero; slot and registered are then null",
+     "type": "array", "minItems": 1, "items": {"oneOf": [
+      {"type": "object", "required": ["kind", "at", "words", "start", "row", "salt", "string", "slot"], "additionalProperties": false,
+       "properties": {"kind": {"const": "step"}, "at": {"$ref": "#/$defs/nat"}, "words": {"type": "integer", "minimum": 1},
+                      "start": {"$ref": "#/$defs/nat"}, "row": {"$ref": "#/$defs/span"}, "salt": {"$ref": "#/$defs/span"},
+                      "string": {"type": "string", "pattern": "^[0-9a-f]{256}$"}, "slot": {"$ref": "#/$defs/committed"}}},
+      {"type": "object", "required": ["kind", "at", "offset"], "additionalProperties": false,
+       "properties": {"kind": {"const": "position"}, "at": {"$ref": "#/$defs/nat"}, "offset": {"enum": [0, 1]}}}
+     ]}
     }
    }
+  },
+  "committed": {
+   "description": "a committed row's opening: rank in its layout unit (path), the unit root in its slot tree (slot_path), the slot root in its step tree (step_path); producer null for the unit's own output",
+   "type": "object", "required": ["block", "step", "slot", "unit", "rank", "path", "slot_path", "step_path", "producer"],
+   "additionalProperties": false,
+   "properties": {"block": {"$ref": "#/$defs/nat"}, "step": {"$ref": "#/$defs/nat"}, "slot": {"$ref": "#/$defs/nat"},
+                  "unit": {"$ref": "#/$defs/nat"}, "rank": {"$ref": "#/$defs/nat"}, "path": {"$ref": "#/$defs/path"},
+                  "slot_path": {"$ref": "#/$defs/opening"}, "step_path": {"$ref": "#/$defs/opening"},
+                  "producer": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/producer"}]}}
   }
  },
  "properties": {
@@ -119,11 +129,12 @@
     "context": {"$ref": "#/$defs/h64"},
     "layout": {"type": "object", "required": ["name", "groups"], "additionalProperties": false,
                "properties": {"name": {"type": "string"},
-                              "groups": {"type": "array", "items": {
-                               "type": "object", "required": ["sources", "units"], "additionalProperties": false,
-                               "properties": {"sources": {"type": "array", "items": {"$ref": "#/$defs/nat"}},
-                                              "units": {"type": "array", "items": {"type": "array", "items": {"type": "array", "items": {
-                                               "type": "array", "items": {"$ref": "#/$defs/nat"}, "minItems": 3, "maxItems": 3}}}}}}}}},
+                              "groups": {"type": "array", "items": {"oneOf": [
+                               {"description": "a group the layout repeats: the index of its first place", "$ref": "#/$defs/nat"},
+                               {"type": "object", "required": ["sources", "units"], "additionalProperties": false,
+                                "properties": {"sources": {"type": "array", "items": {"$ref": "#/$defs/nat"}},
+                                               "units": {"type": "array", "items": {"type": "array", "items": {"type": "array", "items": {
+                                                "type": "array", "items": {"$ref": "#/$defs/nat"}, "minItems": 3, "maxItems": 3}}}}}}]}}}},
     "layout_digest": {"$ref": "#/$defs/h64"},
     "slots": {"type": "integer", "minimum": 1},
     "blocks": {"type": "array", "items": {

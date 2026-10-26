@@ -17,7 +17,7 @@ SCHEMA = Path(B.__file__).parent / "schemas" / "drawn-unit-bundle.v2.schema.json
 PATHS = "its paths do not reach its unit, slot and step roots"
 #: `B.digests` of `B.fixture_bundle`: a change to the bundle's bytes changes these (`python -m verity_e2e_demo.replay_bundle
 #: fixture` writes it to look at)
-GOLDEN = {"json": "a9e10ec969ab5ebcf41b00fa68cfb5a292dc634e4b01e7d0c23f399ede8a77b31ffc9e91a808fadf2c986e2b84dd7df137745e52a29c8047269841d20b933a18",
+GOLDEN = {"json": "fb509ff3a87ce874cc7fa2bbf5536e3cb7365c0d88153f81ae024fba511b169369e45c43fffa3e669189eeee76dcc6429eb45b820328ada7cbe4008961642cd7",
           "bin": "183e9e504664b5d831135407b51246829dc10eedf9587917cd88cef516599d2c9685bb19e9b013f403bba1aba68e270495c2e830139fea7efa961f0c823b3db3"}
 #: SHA-512 of kernels' fixtures/commit-slots-v1.json at the commit `B.REFERENCE` pins, which `S.fixture()` writes as
 #: ``json.dumps(fixture, indent=1) + "\n"``
@@ -273,6 +273,191 @@ def test_rows_under_other_step_salts_are_refused(fresh) -> None:
                          {k: B.StepRecord(hashlib.sha256(b"another step key").digest(), r.rows) for k, r in com.steps.items()})
     with pytest.raises(ValueError, match="not the step commitment's row"):
         _build((d, weights, other), [5])
+
+
+#: step-1 units of the two-step loop: slot 0 layers 0 and 1, slot 1 layers 0 and 1
+STEP1_DRAW = (260, 400, 777, 1000)
+H = 128
+
+
+@pytest.fixture(scope="module")
+def two_steps(tmp_path_factory) -> tuple[Path, dict, B.Commitment, B.Commitment]:
+    """The loop over two steps, and a commitment in which step 0 holds, in each slot's layer-l quantizer codes row, the
+    codes step 1's layer l reads (as a K row written at step 0 is read at step 1): step 1's units then read their ``x``
+    half from step 0 and half from step 1."""
+    d = tmp_path_factory.mktemp("two-steps")
+    _, weights, com = B.torch_loop_window(d, steps=2)
+    lay = com.layout
+    rows0 = [list(r) for r in com.steps[0, 0].rows]
+    for j, rows1 in enumerate(com.steps[0, 1].rows):
+        for layer in range(len(lay.groups)):
+            g = lay.row_base[layer * (H + 1)]
+            rows0[j][g] = rows1[g]
+    kv = B.Commitment(com.context, lay, com.slots,
+                      {(0, 0): B.StepRecord(com.steps[0, 0].salt_key, tuple(map(tuple, rows0))), (0, 1): com.steps[0, 1]})
+    return d, weights, com, kv
+
+
+def _kv_locate(at_step0: int = 32, slot_of=lambda c: c["slot"], step_of=lambda c: c["step"] - 1):
+    base_locate = B.torch_loop_locate(H)
+
+    def locate(c, template, port):
+        if port != "x" or c["step"] == 0:
+            return base_locate(c, template, port)
+        base = c["layer"] * (H + 1)
+        producer = {"layer": c["layer"], "op": f"{c['op']}.input_quant", "unit": base}
+        return [B.Read(step_of(c), slot_of(c), base, 0, at=0, nbytes=2 * at_step0, producer=producer),
+                B.Read(c["step"], c["slot"], base, 0, at=at_step0, start=2 * at_step0, producer=producer)]
+    return locate
+
+
+def _kv_build(two_steps, drawn=STEP1_DRAW, locate=None, commitment=None) -> tuple[dict, bytes]:
+    d, weights, _, kv = two_steps
+    return B.build(d, drawn, commitment=commitment or kv, locate=locate or _kv_locate(), binding="GEMM_SM120_S8",
+                   reads=B.torch_loop_reads, weights=weights, draw={"source": "fixture", "law": {"law": "subset", "k": 4}})
+
+
+def _kv_registration(two_steps, commitment: B.Commitment) -> dict:
+    reg = json.loads((two_steps[0] / "registration.json").read_text())
+    reg["window"] = {**reg["window"], **B.steps_provenance(commitment)}
+    return reg
+
+
+def test_rows_read_across_steps_open_against_each_steps_registered_root(two_steps, validator) -> None:
+    """A step-1 unit's ``x`` read half from step 0's commitment and half from step 1's: each read carries its committed
+    row, salt and paths to its own step's root, and checks clean against the registration that names both steps' roots."""
+    doc, payload = _kv_build(two_steps)
+    validator.validate(json.loads(json.dumps(doc)))
+    for u in doc["units"]:
+        x = _row(doc, u["unit"], "x")
+        assert x["slot"] is None and x["registered"] is None
+        assert [(q["kind"], q["at"], q["words"], q["slot"]["step"], q["slot"]["slot"]) for q in x["reads"]] == \
+            [("step", 0, 32, 0, u["coords"]["slot"]), ("step", 32, 32, 1, u["coords"]["slot"])]
+    assert B.check(doc, payload) == {}
+    assert B.check(doc, payload, registration=_kv_registration(two_steps, two_steps[3])) == {}
+    assert all(B.replay(u, payload) for u in doc["units"])
+
+
+def test_a_step_root_the_registration_does_not_name_fails_closed(two_steps) -> None:
+    """The window's own registration names the loop's step-0 root, not the one these reads open against: step 0 and
+    every read of it are refused; a registration naming no step commitment refuses every opening."""
+    doc, payload = _kv_build(two_steps)
+    bad = B.check(doc, payload, registration=json.loads((two_steps[0] / "registration.json").read_text()))
+    assert bad.pop("step:0/0") == "not the step root the registration names"
+    assert bad == {f"unit:{u}/x": "read 0: its step is not in the commitment, or not the registration's" for u in STEP1_DRAW}
+    reg = _kv_registration(two_steps, two_steps[3])
+    del reg["window"]["commitment"]
+    bad = B.check(doc, payload, registration=reg)
+    assert bad.pop("commitment:registration")
+    assert set(bad) == {"step:0/0", "step:0/1"} | {f"unit:{u}/{p}" for u in STEP1_DRAW for p in ("x", "sx", "o0")}
+
+
+@pytest.mark.parametrize("edit, why", [
+    (lambda q: q["slot"]["path"].__setitem__(0, "00" * 64), "read 0: " + PATHS),
+    (lambda q: q["slot"]["step_path"]["proof"].__setitem__(0, "00" * 64), "read 0: " + PATHS),
+    (lambda q: q["slot"].__setitem__("step", 2), "read 0: it opens outside its unit's slot, or after its step (an output's at its own step)"),
+    (lambda q: q["slot"].__setitem__("slot", 1 - q["slot"]["slot"]), "read 0: it opens outside its unit's slot, or after its step (an output's at its own step)"),
+    (lambda q: q["slot"]["producer"].__setitem__("unit", 7), "read 0: its producer's coordinates are not where it opens"),
+    (lambda q: q.__setitem__("start", 2), "read 0: the row's words are not its bytes"),
+    (lambda q: q.__setitem__("words", 31), "a word no read covers is not zero"),
+], ids=["unit-path", "step-path", "after-its-step", "another-slot", "producer", "other-bytes", "uncovered"])
+def test_a_tampered_read_is_refused(two_steps, edit, why) -> None:
+    doc, payload = _kv_build(two_steps, drawn=STEP1_DRAW[:1])
+    doc = copy.deepcopy(doc)
+    edit(_row(doc, STEP1_DRAW[0], "x")["reads"][0])
+    assert B.check(doc, payload) == {f"unit:{STEP1_DRAW[0]}/x": why}
+
+
+def test_reads_the_build_refuses(two_steps) -> None:
+    with pytest.raises(ValueError, match="at its step or an earlier one"):
+        _kv_build(two_steps, locate=_kv_locate(step_of=lambda c: c["step"] + 1))
+    with pytest.raises(ValueError, match="at its step or an earlier one"):
+        _kv_build(two_steps, locate=_kv_locate(slot_of=lambda c: 1 - c["slot"]))
+    with pytest.raises(ValueError, match="are not step 0's row 0"):
+        _kv_build(two_steps, commitment=two_steps[2])
+    with pytest.raises(ValueError, match="a word no read covers is not zero"):
+        _kv_build(two_steps, locate=lambda c, t, p: _kv_locate()(c, t, p)[:1] if p == "x" and c["step"] else
+                  B.torch_loop_locate(H)(c, t, p))
+
+
+def test_kept_rows_of_only_the_read_slots_and_every_slot_root(two_steps) -> None:
+    """The H200's records: the rows of the slots the drawn units read and every slot's root. The bundle is the full
+    records' bundle; rows that are not their committed slot root are refused."""
+    kv = two_steps[3]
+    roots = {k: tuple(S.commit_slot(kv.context, kv.layout, r.salt_key, j, rows).root for j, rows in enumerate(r.rows))
+             for k, r in kv.steps.items()}
+    sparse = B.Commitment(kv.context, kv.layout, kv.slots,
+                          {k: B.StepRecord(r.salt_key, {0: r.rows[0]}, roots[k]) for k, r in kv.steps.items()})
+    slot0 = [u for u in STEP1_DRAW if u < 512]
+    assert _kv_build(two_steps, drawn=slot0, commitment=sparse) == _kv_build(two_steps, drawn=slot0)
+    with pytest.raises(ValueError, match="no rows kept of slot 1"):
+        _kv_build(two_steps, commitment=sparse)
+    other = B.Commitment(kv.context, kv.layout, kv.slots,
+                         {k: B.StepRecord(r.salt_key, {0: (*r.rows[0][:-1], bytes(len(r.rows[0][-1])))}, roots[k])
+                          for k, r in kv.steps.items()})
+    with pytest.raises(ValueError, match="its rows are not its committed slot root"):
+        _kv_build(two_steps, drawn=slot0, commitment=other)
+
+
+def test_open_reads_with_a_position_and_absent_words(two_steps) -> None:
+    """`open_reads` / `check_reads` outside a window: a softmax-like row of n (step + 1), a key row from step 0, one from
+    step 1 and an absent key (zero words)."""
+    kv = two_steps[3]
+    c = {"block": 0, "step": 1, "slot": 1, "layer": 0, "op": "attn", "unit": 0}
+    g = kv.layout.row_base[0]
+    k0, k1 = kv.steps[0, 0].rows[1][g][:16], kv.steps[0, 1].rows[1][g][16:32]
+    row = (2).to_bytes(2, "little") + k0 + k1 + bytes(16)
+    pieces = [B.Position(1, 0), B.Read(0, 1, 0, 0, at=1, nbytes=16), B.Read(1, 1, 0, 0, at=9, start=16, nbytes=16)]
+    reads, payload = B.open_reads(kv, c, row, pieces)
+    doc = B.commitment_doc(kv)
+    reg = _kv_registration(two_steps, kv)
+    assert B.check_reads(doc, c, row, reads, payload, registration=reg) == {}
+    assert B.check_reads(doc, c, row[:-2] + b"\1\0", reads, payload) == {"row": "a word no read covers is not zero"}
+    assert B.check_reads(doc, {**c, "step": 0}, row, reads, payload)["row"].startswith("read 0: the word is not")
+    with pytest.raises(ValueError, match="not its step \\+ 1"):
+        B.open_reads(kv, {**c, "step": 0}, row, pieces[:1])
+
+
+def test_the_window_writers_pieces_build_the_bundle(two_steps) -> None:
+    """`WindowLocate` over a window writer that answers in circuits' pieces (CIR-115): ``x`` as Segments of two steps'
+    rows, ``o0`` as its own Segment, ``wrow`` and ``sw`` as Registered bytes; the bundle is the `Read`s' bundle."""
+    from collections import namedtuple
+    Segment = namedtuple("Segment", "step slot row offset nbytes")
+    Registered = namedtuple("Registered", "value row offset nbytes")
+    Run = namedtuple("Run", "name")
+    _, weights, _, kv = two_steps
+    lay = kv.layout
+    w = B._Window(two_steps[0])
+    layer_of = {c["op"]: c["layer"] for c in (B.torch_loop_coords(*w.label(u)) for u in STEP1_DRAW)}
+
+    class Writer:
+        def locate(self, step, slot, family, index, port):
+            layer = layer_of[family]
+            base, value = layer * (H + 1), f"l{layer}.{B.LINEAR_NAMES[layer]}"
+            g = lay.row_base[base]
+            return {"x": (Segment(step - 1, slot, g, 0, 64), Segment(step, slot, g, 64, 64)),
+                    "sx": (Segment(step, slot, g + 1, 0, 4),),
+                    "o0": (Segment(step, slot, lay.row_base[base + 1 + index], 0, 2),),
+                    "wrow": (Registered(value, index, 0, H),),
+                    "sw": (Registered(f"{value}.scale", 0, 4 * index, 4),),
+                    "tok": (Run("token"),)}[port]
+
+    wl = B.WindowLocate(Writer(), lay, weights, stride=lambda value: H)
+    doc, payload = B.build(two_steps[0], STEP1_DRAW, commitment=kv, locate=wl.locate, reads=wl.reads,
+                           binding="GEMM_SM120_S8", weights=weights,
+                           draw={"source": "fixture", "law": {"law": "subset", "k": 4}})
+    assert B.check(doc, payload, registration=_kv_registration(two_steps, kv)) == {}
+    o0 = _row(doc, STEP1_DRAW[0], "o0")
+    assert o0["slot"] is None and [q["slot"]["step"] for q in o0["reads"]] == [1]
+    want = copy.deepcopy(_row(_kv_build(two_steps)[0], STEP1_DRAW[0], "x")["reads"])
+    for q in want:
+        q["slot"]["producer"] = None
+    assert _row(doc, STEP1_DRAW[0], "x")["reads"] == want
+    with pytest.raises(ValueError, match="in no commitment"):
+        wl.locate(B.torch_loop_coords(*w.label(STEP1_DRAW[0])), "", "tok")
+    bad = B.WindowLocate(Writer(), lay, weights)
+    with pytest.raises(ValueError, match="not one whole 128-byte row"):
+        bad.reads({**B.torch_loop_coords(*w.label(STEP1_DRAW[0])), "unit": 3}, "", "wrow")
 
 
 def test_a_tampered_loop_fails_replay(tmp_path) -> None:
