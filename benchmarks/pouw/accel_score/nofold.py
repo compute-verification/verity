@@ -135,6 +135,30 @@ def v1_card_pv(name: str, T: int, e: float = E_V1) -> tuple[int, float]:
     return L, a + c / L + HYB_RHO * L / T
 
 
+S_B = {"H200": 8, "RTX PRO 6000": 2}   # bit product over INT8: b1 wgmma .and.popc (RT-UNITS, measured), 0/1 NVFP4
+
+
+def v1_leaks() -> None:
+    """Routes v1's budget e misses, at A = B = 0 where O = bcᵀ (FINDING PD2-1).
+
+    O-route: serve O by the bit product (K/s_b a cell) instead of the five peels (ρL), saving ρL − K/s_b.
+    Zero digits: Y_X = Σ_s b and Y_W = Σ_s c are below 128, so the two high-digit peels are zero products (2L).
+    """
+    print("\nv1 leaks at A = B = 0 (each a share of the honest round, gamma K a cell)")
+    for name in CARDS:
+        _, rows = v1_card(name)
+        tot = acc = 0.0
+        for shape, K, N, L, _gh, _gr, _ga, g, _h, _sk in rows:
+            o_route = max(0.0, HYB_RHO * L - K / S_B[name]) / (g * K)
+            zero = 2 * L / (g * K)
+            budgeted = max(0.0, L - K / S_B[name]) / (g * K)
+            tot += K * N
+            acc += K * N * max(o_route, zero)
+            print(f"  {name:13} {shape:5} K {K:6} L {L:5}: O-route {o_route:6.2%}, zero digits {zero:6.2%}, "
+                  f"v1's budgeted last-segment skip {budgeted:6.2%}")
+        print(f"  {name}: MAC-weighted leak {acc / tot:.2%} (v1 budgeted e = {E_V1:.2%})")
+
+
 def main() -> None:
     print(f"C = {C:.0f} (leaves only, data sheet: {C_LEAF:.0f}); words 4 B, tree x2, plain at eta {ETA}")
     print("\ncoordinator's points (unchecked peel), gamma = 1 + A + C/L + L/K:")
@@ -196,3 +220,4 @@ def main() -> None:
 if __name__ == "__main__":
     main()
     v1()
+    v1_leaks()
