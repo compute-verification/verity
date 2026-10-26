@@ -9,7 +9,6 @@ import Proofs.Flock.Bridge.Assembly
 import Proofs.Flock.Bridge.EndToEndHiddenC
 import Proofs.Flock.Bridge.FaultyRightC
 import Proofs.Flock.Bridge.Refused
-import Proofs.Flock.Bridge.ScopeGate
 import Proofs.Flock.Bridge.KSLive
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
@@ -17,9 +16,7 @@ of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 
 the sampled statement at `RowsOk` circuit files (row/v1, row/v2 and row-seg/v1 ports) and the constants `κ` and
 `canonAt`, proved (`Flock.Bridge.assemblyTargetC` with every target it takes), and
 `Flock.SecurityProofs.SampledKSLiveV3 : Flock.Guarantees.SampledKSLiveV3`, V2 with its file preconditions read off the
-verifiers' acceptance (`Refused`), and
-`Flock.SecurityProofs.SampledKSLiveV4 : Flock.Guarantees.SampledKSLiveV4`, V3 with its six remaining file and draw
-preconditions refused by `verify --zk` (`ScopeGate`). `Lowers`: the claims program `progOf C κ` lowers every unit of every circuit
+verifiers' acceptance (`Refused`). `Lowers`: the claims program `progOf C κ` lowers every unit of every circuit
 (`Flock.Bridge.lowers`).
 `FaultyRightC`: a unit right on its shaped openings is not faulty (`Flock.Bridge.faultyRightC`). -/
 
