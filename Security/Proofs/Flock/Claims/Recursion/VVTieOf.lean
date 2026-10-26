@@ -346,7 +346,7 @@ theorem staged_plain {untr : TrReader} {b : Brings} {s : ℕ} {x : Msg} {c : ℕ
   obtain ⟨r, hr, hinner, -⟩ := insO_staged hins
   have hC := RecIns.setup_checks hset
   rw [hinner, insO_staged_part hins] at hC
-  obtain ⟨-, -, -, -, -, hc⟩ := checkStmt_circuit (checks_stmt hC t ht)
+  obtain ⟨_, _, _, -, -, hc⟩ := checkStmt_circuit (checks_stmt hC t ht)
   obtain ⟨r', hr', -, rfl⟩ := parse_read hst
   rw [hr] at hr'
   cases hr'
