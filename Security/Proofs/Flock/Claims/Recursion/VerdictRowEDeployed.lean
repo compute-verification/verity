@@ -187,8 +187,8 @@ theorem frames_length (hG : D.RowG cls acc i) (hpts : D.sess.points = pointsOf D
   have hp : ProofSizes (D.sh cls i) ((D.files cls i).proof r) := decodeProof_sizes _ _ _ hdec
   have hv := FlockDecodeTies.vals_repFrames_rounds (sh := D.sh cls i) (st := (D.ctx (2 * i + r)).st)
     (sch := (D.ctx (2 * i + r)).sch) (n := (D.ctx (2 * i + r)).n) (D.ctx (2 * i + r)).dom ((D.files cls i).proof r)
-    (D.T (2 * i + r)) (by rw [D.ctx_st cls acc i r hG] <;> rfl)
-    (by rw [D.ctx_st cls acc i r hG] <;> exact hG.foldKLog) (D.ctx_n cls acc i r hG hext) (D.ctx_sch cls acc i r hG)
+    (D.T (2 * i + r)) (by rw [D.ctx_st cls acc i r hG]; rfl)
+    (by rw [D.ctx_st cls acc i r hG]; exact hG.foldKLog) (D.ctx_n cls acc i r hG hext) (D.ctx_sch cls acc i r hG)
     rfl hp.r1ab hp.r1c hp.zPartial
     (fun k hk => FlockDecodeTies.rsEach_get hp (by rw [D.ctx_n cls acc i r hG hext] at hk; exact hk))
     (by rw [D.ctx_sch cls acc i r hG]; exact FlockDecodeTies.yr_size hp)

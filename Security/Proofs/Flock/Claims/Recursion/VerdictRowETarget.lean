@@ -42,6 +42,7 @@ theorem eq (D D' : DecAt rd x ms cs) : D = D' := by
 
 end Rows.DecAt
 
+open Classical in
 /-- **The reps' accumulators** at `x`, `ms`, `cs`: `DecAt.accE` at the decision, where there is one. -/
 noncomputable def accR (rd : Msg → Option FinalP) (chainAt : Msg → List Msg → ℕ → ℕ → Array F128) (x : Msg)
     (ms : List Msg) (cs : List Coin) (k : ℕ) : Array F128 :=
