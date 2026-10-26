@@ -2469,9 +2469,14 @@
    "why": "C-Flock's definitions, extracted from Proofs/Flock, are trusted text: they import no assumption, guarantee or proof"
   },
   "Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted": {
-   "imports": ["Definitions.Accounting.JointPeriod", "Definitions.NetworkCertifier.Period"],
+   "imports": [
+    "Definitions.Accounting.JointPeriod",
+    "Definitions.NetworkCertifier.Period",
+    "Definitions.NetworkCertifier.Tap",
+    "Definitions.Core.Assumptions"
+   ],
    "except": [],
-   "why": "the network certifier's bridge to the joint period reads the period run (Definitions.Accounting.JointPeriod) and the network certifier's window good event (Definitions.NetworkCertifier.Period), and imports no assumption, guarantee or proof"
+   "why": "the network certifier's bridge to the joint period reads the period run (Definitions.Accounting.JointPeriod), the network certifier's window good event (Definitions.NetworkCertifier.Period), and the deployed network certifier's code and record format (Definitions.NetworkCertifier.Tap) with its trust, trusted-host (Definitions.Core.Assumptions), which the run carries as a field; it imports no guarantee or proof"
   }
  },
  "reads_exempt": {
