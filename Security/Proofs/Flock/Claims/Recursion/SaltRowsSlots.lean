@@ -56,12 +56,24 @@ theorem saltRowsJ_of_slots (rd : Msg → Option FinalP) (wE w : Msg → ℝ) (L 
     intro os last hf o ho
     obtain ⟨s, hs, cc, nm, q, n, hC, hpfx, ho', hcm⟩ := hO x hx ws hl os last hf j i o ho
     refine ⟨cc, nm, q, n, ws[s], ho', hcm, HmOpen.checks_of_calls (fun p hp => ?_) hpfx⟩
-    exact hT _ (RecDeploy.CapLower.mem_allCalls (List.getElem?_eq_getElem hs) (hC p hp))
-  refine ⟨fun os last hf o ho => ?_, fun os last hf o ho => ?_⟩
-  · obtain ⟨cc, nm, q, n, w', rfl, hcm, hS, -⟩ := hslot os last hf o ho
+    have he := RecDeploy.CapLower.mem_allCalls (List.getElem?_eq_getElem hs) (hC p hp)
+    have hTe := hT _ he
+    exact hTe
+  have hk : (bdR rd wE DeployedR.finalR w).DE.V.k (xIOf x) = kI x := rfl
+  have hfin : (bdR rd wE DeployedR.finalR w).final = DeployedR.finalR := rfl
+  constructor
+  · intro os last hf o ho
+    rw [hk, hfin] at hf
+    obtain ⟨cc, nm, q, n, w', rfl, hcm, hS, -⟩ := hslot os last hf o ho
+    show FlockDeploy.sha512 (Claims.toMsg Hm96.Default512.saltPrefix ++ List.ofFn _) =
+      (commitAt ((L.msgs x ws).getD j []) i).drop 64
     rw [hcm]
     exact hS
-  · obtain ⟨cc, nm, q, n, w', rfl, hcm, -, hR⟩ := hslot os last hf o ho
+  · intro os last hf o ho
+    rw [hk, hfin] at hf
+    obtain ⟨cc, nm, q, n, w', rfl, hcm, -, hR⟩ := hslot os last hf o ho
+    show FlockDeploy.sha512 (rowInDeployed _) = Claims.Recursion.xorMask ((commitAt ((L.msgs x ws).getD j []) i).take 64)
+      (fun i : Fin 64 => (Hm96.Default512.mask ⟨Array.ofFn _⟩).get! i.val)
     rw [hcm]
     exact hR
 
