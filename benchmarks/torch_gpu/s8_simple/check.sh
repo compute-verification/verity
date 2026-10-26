@@ -14,7 +14,7 @@ HERE=benchmarks/torch_gpu/s8_simple
 TMP=/workspace/pouw; mkdir -p "$TMP" 2>/dev/null && [ -w "$TMP" ] || TMP=${TMPDIR:-/tmp}
 S=$(mktemp -d "$TMP/tmp-s8simple.XXXXXX"); trap 'rm -rf "$S"' EXIT
 for v in /workspace/jobs/venv312 /workspace/cp/venv312; do [ -z "${PY:-}" ] && [ -x "$v/bin/python3" ] && PY=$v/bin/python3; done
-export PYTHONPATH=$PWD/integrations/torch_loop:$PWD PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH=$PWD/examples/toy:$PWD PYTHONDONTWRITEBYTECODE=1
 WM=(); [ -f "$D/inputs/weights.py" ] && WM=(--weights-module "$D/inputs/weights.py")
 git rev-parse HEAD > "$OUT/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}" > "$OUT/commit.txt"
 "$PY" "$HERE/check.py" weights --scratch "$S" "${WM[@]}" "$@" || { echo "weights 4" | tee "$OUT/status.txt"; exit 4; }

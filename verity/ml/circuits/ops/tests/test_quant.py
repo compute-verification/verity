@@ -1,5 +1,5 @@
 """`verity.ml.circuits.ops.quant` and `ops.boolean.quant`: the s8 quantizer's units are the torch loop's ``quantize`` of the row,
-relu'd first under RELU (here in numpy float32, the same IEEE operations; torch itself in `integrations/torch_loop`'s tests), on
+relu'd first under RELU (here in numpy float32, the same IEEE operations; torch itself in `examples/toy`'s tests), on
 random rows and on the edge rows (all zero, all -0, all negative, ties at .5, NaN with saturating neighbours, ±inf, subnormal);
 a row wider than one unit, as RowAbsMax over the row then a chunk unit a chunk, is the row unit; the scale reads any amax word as
 ``torch.where(amax > 0, amax / 127, 1)``; each Boolean unit computes its word Definition, at small widths; and `bind` refuses

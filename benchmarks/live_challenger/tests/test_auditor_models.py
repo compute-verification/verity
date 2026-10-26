@@ -200,7 +200,7 @@ MLP = ((UP, 32, 64), (DN, 64, 32))
 TORCH_LOOP_ROLE = "TORCH_LOOP_MLP_H128_W8A8"
 TORCH_LOOP_ENTRY = {
     "linears": [UP, DN],
-    "note": "the torch loop's served weights (integrations/torch_loop, `loop.Model()`), written by `python -m "
+    "note": "the torch loop's served weights (examples/toy, `loop.Model()`), written by `python -m "
             "verity_torch_loop.checkpoint`; no hub repo holds them",
     "recipe": {"h": 128, "id": "torch-loop/mlp-w8a8/v1", "seed": 0, "vocab": 16},
     "repo": "verity-torch-loop/mlp-w8a8-h128", "revision": "ef47a4f92c408f8c64778a9934b81c9729f2df2b"}
@@ -253,7 +253,7 @@ def test_a_tree_pinned_before_the_torch_loops_manifest_still_serves_vllms_roles(
     with pytest.raises(M.Refused, match="0 entries"):
         M.manifest_entry(model["tree"], TORCH_LOOP_ROLE)
     (mlp["tree"] / M.MANIFESTS[1]).write_text("{")
-    with pytest.raises(M.Refused, match="integrations/torch_loop/manifests/checkpoints-int8.json is not readable JSON"):
+    with pytest.raises(M.Refused, match="examples/toy/manifests/checkpoints-int8.json is not readable JSON"):
         M.manifest_entry(mlp["tree"], "LLAMA32_1B_INT8")
     (mlp["tree"] / M.MANIFESTS[1]).write_text(json.dumps({"checkpoints": [mlp["entry"]]}))
     (mlp["tree"] / M.MANIFEST).unlink()

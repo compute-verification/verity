@@ -2,7 +2,7 @@
 of record, which is a stand-in, and the gate, which is infra's run on this node under a test key. Run by hand; never
 collected.
 
-    cd integrations/vllm && PYTHONPATH=$ROOT:$ROOT/integrations/vllm:$ROOT/integrations/torch_loop:$ROOT/benchmarks/all_protocols/legs \\
+    cd integrations/vllm && PYTHONPATH=$ROOT:$ROOT/integrations/vllm:$ROOT/examples/toy:$ROOT/benchmarks/all_protocols/legs \\
       python -m pouw_period --out OUT --tree TGZ --commit SHA --main MAIN_TXT
 
 * **The gate** is infra's (`local_gate.py`: `benchmarks/live_challenger/auditor.py` of the ``--tree`` archive, ``git
