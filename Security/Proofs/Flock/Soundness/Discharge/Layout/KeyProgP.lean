@@ -76,6 +76,19 @@ def KeysRowP : Prop :=
 
 variable {c hU n pi rowW}
 
+/-- **`KeysRowP` from `KeysRow`**: an input on a public leaf has a public word bit as its key, and one off every public
+leaf keeps its key (`Aliased.srcKeyP_of_neg`). -/
+theorem keysRowP_of_keysRow (h : KeysRow c hU rowW) : KeysRowP c hU pi rowW := by
+  intro i x hx hlt
+  by_cases hp : 0 ≤ Aliased.pubLeaf c pi x.val
+  · obtain ⟨t, ht⟩ := Aliased.srcKeyP_of_nonneg hp
+    exact .inr (.inr ⟨_, t, ht⟩)
+  · unfold RowKeyP
+    rw [Aliased.srcKeyP_of_neg (by omega)]
+    rcases h i x hx hlt with h0 | ⟨q, byte, bit, hk, hq⟩
+    · exact .inl (by rw [h0])
+    · exact .inr (.inl ⟨q, byte, bit, by rw [hk], hq⟩)
+
 theorem keyRowOfP_spec {g : Fin (keyN c hU n)} {u : Fin n} {q : Fin c.ports.size} {k : Fin (rowW q)}
     (h : keyRowOfP c hU n pi rowW g = some (u, ⟨q, k⟩)) :
     2 ≤ g.val ∧ g.val < 2 + n * keyB c hU ∧ u.val = (g.val - 2) / keyB c hU ∧

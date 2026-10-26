@@ -20,6 +20,11 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Headline
 import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
+import Proofs.Flock.Soundness.Discharge.HiddenExec.TablesP
+import Proofs.Flock.Soundness.Discharge.HiddenExec.SitesP
+import Proofs.Flock.Soundness.Discharge.HiddenExec.RowsAtHP
+import Proofs.Flock.Soundness.Discharge.HiddenExec.LiveOnP
+import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExecP
 
 /-!
 # flock-verify's acceptance under hidden outputs, and the headline over hidden-output sessions
@@ -52,4 +57,9 @@ Since #757 main's prover writes the hidden-output statement (`verity/flock-circu
 * `HeadlineExec`: `flock_headline_exec_hidden`, #828's `flock_headline_exec` for hidden-output sessions, `hdec` open.
 * `HeadlineInst`: `flock_headline_exec_hidden_inst`, the same at `instProg`, with no condition on the unit's input
   groups or on where the outputs are returned.
+* `TablesP`, `SitesP`: the one-table plan at the verifier's public inputs `own` (`tableAtHP`, `planAtHP`, `tablesAtHP`)
+  and its sites (`sitesAtHP`, `ppHP`, `hConstHP`, `hZeroHP`) for `Placed.keyProgP`.
+* `RowsAtHP`: `lay` and `rs` there (`layAtHP`, `rsAtHP`, `rsAtHP_computes`), `BcSiteHP` at every satisfiable site.
+* `LiveOnP`: R11 for one-table sessions at `own` (`AcceptsP`, `DecodesOnP`, `Prog.flock_headline_live_onXP`).
+* `HeadlineExecP`: `flock_headline_exec_hiddenP`, `flock_headline_exec_hidden` at `own` and `Placed.keyProgP`.
 -/
