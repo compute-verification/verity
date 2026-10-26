@@ -116,7 +116,7 @@ A period's wipe is `wipe_period`: one streamed wipe of the node, the memory chal
 wipe's component of onsite Verity, `verity/wipe/v0` (`MemoryChallenger.WipeProtocol`, `wipe-protocol` in
 `verity/core/devices/memory_challenger/lean/`). An accepted wipe publishes `M` and the foreign content it may leave,
 `⌈M/19⌉ + E` at `2^-128` with 2,152 reads, a fill of at least 32 MiB and the egress counted, and `M` (vacuous) otherwise;
-an unsigned session is undecided. `wipe_period.leg(period_dir, node, out)` is the wipe's leg of `benchmarks/all_protocols`.
+an unsigned session is undecided. `wipe_period.leg(period_dir, node, out)` is the wipe's leg of the all-protocols period runner.
 
 Tests: `uv run pytest verity/core/protocols/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.
 Regenerate the vectors with `python verity/core/protocols/pous/tests/pous_vectors.py`, and the Lean vectors with
