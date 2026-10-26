@@ -282,14 +282,14 @@ def parseRest (tags : Tags) (tables : List (String × ByteArray)) (tmpl : Option
     if a.size != 2 then throw "META: an out port is not [name, words]"
     pure (← J.asStr a[0]! "out port name", ← J.asNat a[1]! "out port words")
   let outRowPorts ← match mj.getObjVal? "out_row_ports" with
-    | .error _ => pure (Array.replicate outPorts.size 1)
+    | .error _ => pure (Array.replicate (outPorts.size - HmRow.pinnedCount mj) 1)
     | .ok v => do
       let bad := "META: out_row_ports is not each output row's run of output ports, in order, covering every output port once"
       let r ← (← J.asArr v "out_row_ports").mapM fun x => do
         let k ← J.asNat x "out_row_ports"
         if k < 1 || k > outPorts.size then throw bad
         pure k
-      if r.foldl (· + ·) 0 != outPorts.size then throw bad
+      if r.foldl (· + ·) 0 != outPorts.size - HmRow.pinnedCount mj then throw bad
       pure r
   let mut perVu := (Array.replicate nets.size 0).set! unitNet upv
   match mj.getObjVal? "per_vu" with
@@ -862,6 +862,7 @@ def Stmt.setupHiddenWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
     (c.ports.getD (c.ports.size - c.outRowPorts.size + j) default).segs.isNone && c.outRowPorts[j]! > 1
   let identity := if !J.has c.metaJ "out_row_ports" then identity
     else if v2Run then Tags.outRowsV2Identity identity else Tags.outRowsIdentity identity
+  let identity := if HmRow.pinnedCount c.metaJ > 0 then Tags.pinnedIdentity identity else identity
   let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
