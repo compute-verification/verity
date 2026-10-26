@@ -967,6 +967,10 @@
    "owner": "@proofs",
    "digest": "e5c2a5e2cfb598e2208b5ea0627f7a747fec4562254dae7bb3aaabec8ecb9d73"
   },
+  "FlockSoundness.Assumptions.Zk.RecordCustodyZK": {
+   "owner": "@lean",
+   "digest": "2e0bf4d9d5faf00058b89619d736c802946990d5c49f4b3c3d8f6603544c9eb1"
+  },
   "FlockSoundness.Assumptions.Zk.RecordCustodyZKHJLaw": {
    "owner": "@proofs",
    "digest": "3a23040e8d989f39188671d30f2b9a00b84e325f6b01e4817042185549b6bc37"
@@ -1852,10 +1856,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "FlockSoundness.Assumptions.Zk.RecordCustodyZK": {
-   "owner": "@lean",
-   "digest": "2e0bf4d9d5faf00058b89619d736c802946990d5c49f4b3c3d8f6603544c9eb1"
   }
  },
  "meaning": [
