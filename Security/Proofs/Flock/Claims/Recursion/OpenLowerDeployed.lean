@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.OpenPieces
 import Proofs.Flock.Claims.Recursion.SchedDense
+import Proofs.Flock.Claims.Recursion.VerdictRowDCover
 
 /-!
 # The `rec-open` pieces' lowering at the deployed layout (`OpenCopy`, `OpenTie`)
@@ -554,6 +555,18 @@ theorem openCopyR_of (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse x = 
 table's schedule. `RecDeploy.Rows.rowDPieces`'s are (`mem_rowDPiecesOf`, where `Rows.schAt v.2.2` is `schAt`). -/
 def PiecesInRangeR (pieces : Msg → List OpenPiece) : Prop :=
   ∀ xI, ∀ q ∈ pieces xI, q.rep < 2 ∧ q.query < ((schAt xI q.table).levels[q.level]!).q
+
+theorem piecesInRangeR_rowDPieces (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) :
+    PiecesInRangeR (RecDeploy.Rows.rowDPieces key) := by
+  intro xI q hq
+  unfold RecDeploy.Rows.rowDPieces at hq
+  unfold schAt
+  cases h : setupOf false xI with
+  | none => rw [h] at hq; cases hq
+  | some v =>
+    rw [h] at hq
+    obtain ⟨-, hr, -, hj, -⟩ := RecDeploy.Rows.mem_rowDPiecesOf.1 hq
+    exact ⟨hr, hj⟩
 
 /-- **The staged level circuit holds its statement's instances** (`StagedFitsR`): at a level part `.recOpen lv LANES
 HH n` and its staged statement, the parsed table has a VU and a copy, and its blocks' VUs hold all `n` instances. -/
