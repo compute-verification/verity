@@ -8,12 +8,12 @@ import Proofs.Flock.Claims.KS.PlainLeafClashJK
 reader `VR rd`, whose accepted run decides (`accR_decide`) at the parsed value `jAt sha512` and the read proofs' files,
 and whose simulator's live outcome is that decision's view (`PlainSimRunR`).
 
-* `runOfRV_eq`, `runOfRV_run`, `plainRawLevelColsRV_plain`: the run `plainRawLevelColsRV rd` reads on an accepted run's
+* `runOfRV_eq`, `runOfRV_runD`, `plainRawLevelColsRV_plain`: the run `plainRawLevelColsRV rd` reads on an accepted run's
   view is `runOfR`'s, so its level-`ℓ` rows are `plainLevelColsOf` at `shapeOf` on `liveOfJ`'s rep streams and the
   files (`colsRV_eq` and `colsR_plain` at every level).
 * `wrPDJK_viewR`: the session `wrPDJK id` writes for the decision's view has its files and, at each rep stream, its
   rounds' coins.
-* `plainR_opening₀`, `plainR_levelOpening`: each row the decision's rep `k` opens, at level 0 and at a later level, is
+* `plainR_opening₀`, `plainR_levelOpeningD`: each row the decision's rep `k` opens, at level 0 and at a later level, is
   an `Opening` in the run's log, against the link's `root_B` and against the rep's `ℓ − 1`-th recursive cap.
 * `plainClashRunR_of`: a self-clash at the simulator's decoded outcome is a collision of an accepted run of `VR rd`
   (`PlainClashRunR`), from the J decoders' entries clash (`EntriesClashJK`, `LaterEntriesClashJK`).
@@ -55,7 +55,7 @@ theorem runOfRV_eq {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : Li
     simp only [hx, decR_dropLast rd x ms h2, actR_decide hact]
 
 /-- **On an accepted run of `VR rd`, `runOfRV` is `runOfR` at its messages and coins** (`colsRV_run` at `runOfRV`). -/
-theorem runOfRV_run {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem runOfRV_runD {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω r).out = .acc) :
     runOfRV rd (Claims.run sha512 P (VR rd) x ω r).seen =
       runOfR rd x ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst)
@@ -261,7 +261,7 @@ proof, at the decision): on an accepted run of `VR rd` deciding at `(spec, sts)`
 points, a level-`ℓ` row rep `k` opens at `q` (`plainLevelColsOf` at `shapeOf` on `liveOfJ`'s rep stream `k` and file
 `k`) is an `Opening` of `q` against the flattened `ℓ − 1`-th recursive cap of rep `k`'s proof, file `k` decoded at
 `shapeOf`, every SHA-512 input of it in the run's verifier log. -/
-theorem plainR_levelOpening {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
+theorem plainR_levelOpeningD {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
     {ω : Ω} {r : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω r).out = .acc) {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : FinalP}
@@ -418,7 +418,7 @@ open Classical in
 live self-clash at the verdict at the draw holds only on an accepted run of `VR rd`, whose decision's view is the
 outcome (`PlainSimRunR`). The J decoders' entries clash (`hE`) puts two different rows of one position among the
 decision's rep rows, at level 0 or at a later level, and both are `Opening`s in the run's log against one root
-(`plainR_opening₀`, `plainR_levelOpening`). -/
+(`plainR_opening₀`, `plainR_levelOpeningD`). -/
 theorem plainClashRunR_of (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt}
@@ -504,7 +504,7 @@ theorem plainClashRunR_of (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {
             (Claims.run sha512 P (VR rd) x ω (plainΦ x spec st (u, r'))).vLog q row := by
       intro v hv
       rw [hpr, plainLevelColsOf_congr _ _ _ (hco spec #[st'] sess hsu hdec k hk y hy), ← getD_empty] at hv
-      exact plainR_levelOpening hacc hact hrun hlv (by simp) hf' hp2 hk hv
+      exact plainR_levelOpeningD hacc hact hrun hlv (by simp) hf' hp2 hk hv
     obtain ⟨p, row, hp, hra, ho⟩ := hmem ha
     obtain ⟨p', row', hp', hrb, ho'⟩ := hmem hb
     obtain rfl := Except.ok.inj (hp.symm.trans hp')
@@ -573,7 +573,7 @@ theorem plainRel_ofR (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {s : C
   obtain ⟨spec'', st', sess, sch', hsu, hdec, hf', -, y₀, p, hy₀, -, -, hent⟩ := hL
   obtain ⟨e₄, e₅⟩ := Prod.mk.inj (Except.ok.inj (hsetA.symm.trans hsu))
   subst spec'' e₅
-  have hcols := plainRawLevelColsRV_plain (congrFun (runOfRV_run hacc) 0) hact hlv hvd (by simp) hf' hp2 r.isLt (ℓ + 1)
+  have hcols := plainRawLevelColsRV_plain (congrFun (runOfRV_runD hacc) 0) hact hlv hvd (by simp) hf' hp2 r.isLt (ℓ + 1)
   rw [hcols, ← hpr]
   have hmem := List.mem_map_of_mem (f := fun x => (x.1, x.2.1)) hy
   rw [hview, hent (ℓ + 1) (by omega), plainLevelColsOf_congr _ _ _ (hco spec #[st'] sess hsu hdec r.val r.isLt y₀ hy₀),
