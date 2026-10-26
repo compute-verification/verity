@@ -266,7 +266,7 @@ theorem side {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)
       have hp : RecVStar.population t = t.n := by
         unfold RecVStar.population
         rw [hpub, hnil]
-        rfl
+        all_goals rfl
       have e : nOf r s none = some sv.instances := by simp [nOf, hss, hs, Except.toOption]
       rw [e, ← hpop', hp]
     | some d =>
@@ -293,11 +293,11 @@ theorem numsOf_one {xO : Claims.Msg} {i : RecIns} {t : Flock.Stmt} (h : setupO x
   have ht : tablesO xO = [(t.spec, t)] := by
     unfold tablesO
     rw [h]
-    rfl
+    all_goals rfl
   have hk : VO.k xO = 2 + FlockDeploy.rounds true t.spec #[t] := by simp only [VO, h]
   unfold numsOf εtableO N₀O weightO numsT
   rw [ht, hk, rounds_one]
-  simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero]
+  all_goals simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero]
 
 /-- One table's numbers read only its `m`, `k_log`, region count and `m_pts`. -/
 theorem numsT_congr {t u : Flock.Stmt} (hm : t.m = u.m) (hk : t.c.kLog = u.c.kLog)
@@ -341,7 +341,7 @@ theorem numsOf_staged_eq {st : Stage} {x : Claims.Msg} {ms ms' : List (Claims.Ms
 theorem numsOf_staged {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ}
     {o : RecIns × Flock.SessionSpec × Array Flock.Stmt} (h : setupO (staged st x ms s) = some o) :
     numsOf (staged st x ms s) = nums st x s := by
-  have hex : ∃ ms, (setupO (staged st x ms s)).isSome := ⟨ms, by rw [h]; rfl⟩
+  have hex : ∃ ms, (setupO (staged st x ms s)).isSome := ⟨ms, by simp [h]⟩
   obtain ⟨o', ho'⟩ := Option.isSome_iff_exists.1 (Classical.choose_spec hex)
   unfold nums pick
   rw [dif_pos hex]
