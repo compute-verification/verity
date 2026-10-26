@@ -59,7 +59,7 @@ def test_the_head_is_fa3s_decode_head_where_it_reduces(T: int) -> None:
     """At the scale (DR + DV)^-0.5 the sparse head is `AttentionHead_v4` over the rotated rows, word for word: one block or
     several, the first visited one partial and zero-padded or full."""
     DR, DV, BN = 16, 16, 16
-    assert M.scale_log2_bits((DR + DV) ** -0.5) == b1._scale_log2_bits(DR + DV)
+    assert M.scale_log2_bits((DR + DV) ** -0.5) == b1.scale_log2_bits(DR + DV)
     qn, qr, kv = _case(T, T, DR, DV)
     assert np.array_equal(_run_head(T, DR, DV, BN, (DR + DV) ** -0.5, qn, qr, kv), _dense_fa3(T, DR, DV, BN, qn, qr, kv))
 

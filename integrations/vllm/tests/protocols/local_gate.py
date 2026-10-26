@@ -8,7 +8,7 @@ under a test key, for a rehearsal of a served window (`pouw_h1_rehearsal.py`); r
     python -I local_gate.py DIR admin VERB ...   # vy-admin's (`auditor.gate([VERB, ...])`): model-register
     python -I local_gate.py DIR wait SESSION   # blocks until the session's unit has exited; its `run` answer
 
-``init`` unpacks infra's tree (``git archive SHA verity benchmarks/live_challenger``) as ``DIR/tree/SHA``, so
+``init`` unpacks infra's tree (``git archive SHA`` of `ARCHIVE`'s paths, refused without one) as ``DIR/tree/SHA``, so
 `auditor.pinned_commit` names SHA, makes the host's state in ``DIR/host`` (`auditor.Host`, its pins log recording SHA as
 its own main, since nothing here fetches main) and its LMS key at ``--params``
 (default 4,5: 32 leaves), and builds the Lean verifier whose `one_stage.verifier.coins` serve.py draws its coins from
@@ -18,8 +18,8 @@ the build fails). Every verb then runs infra's own code from that tree, which go
 `admit`, `period`, `await_commitment`, `model_register`), each in this process, and a session's unit (`auditor.run`,
 serve.py with ``--root`` and the session's secret) a detached ``DIR run SESSION`` that holds ``DIR/units/SESSION.lock``
 while it runs, which is the gate's ``active``. The model registry is infra's (`models.py` of the tree): ``admin
-model-register`` reads the checkpoint role's manifest and core's pin from the tree, so the archive carries
-``integrations/vllm/manifests/checkpoints-int8.json`` beside ``verity``. What differs from vy-challenger-1: one account
+model-register`` reads the checkpoint role's manifest and core's pin from the tree, so the archive carries both
+checkpoint manifests (vLLM's and the torch loop's) beside ``verity``. What differs from vy-challenger-1: one account
 runs everything (no ``auditor`` user, ``runuser``, sudoers or systemd unit, so ``own`` does nothing and the registry isn't
 made append-only); the key is a test key of ``--params``, not ``lms.DEPLOYED``; serve.py
 listens on the node itself (no ``--peer``, so no ``ssh -R`` tunnel), on ``--ports`` (default 27811-27899, off the live
@@ -38,6 +38,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 CONFIG = "gate.json"
+#: what the tree's archive holds: infra's code and core, and every checkpoint manifest `models.MANIFESTS` reads, so a role
+#: of either registers
+ARCHIVE = ("verity", "benchmarks/live_challenger", "integrations/vllm/manifests/checkpoints-int8.json",
+           "examples/toy/manifests/checkpoints-int8.json")
 
 
 def _config(d: Path) -> dict:
@@ -104,7 +108,7 @@ def _start(d: Path, A):
 def init(d: Path, argv: list[str]) -> int:
     import argparse
     p = argparse.ArgumentParser(prog="local_gate.py DIR init")
-    p.add_argument("--tree", required=True, help="git archive SHA verity benchmarks/live_challenger, gzipped")
+    p.add_argument("--tree", required=True, help=f"git archive SHA {' '.join(ARCHIVE)}, gzipped")
     p.add_argument("--commit", required=True)
     p.add_argument("--params", default="4,5")
     p.add_argument("--peer", default="local")
@@ -116,6 +120,10 @@ def init(d: Path, argv: list[str]) -> int:
     tree.mkdir(parents=True)
     with tarfile.open(a.tree) as t:
         t.extractall(tree, filter="data")
+    if missing := [p for p in ARCHIVE if not (tree / p).exists()]:
+        print(f"local_gate: the tree {a.tree} has no {', '.join(missing)}: make it with "
+              f"`git archive --format=tar.gz -o TGZ {a.commit} {' '.join(ARCHIVE)}`", file=sys.stderr)
+        return 2
     (d / "host").mkdir(mode=0o700)
     (d / "host" / "sessions").mkdir()
     (d / "units").mkdir()

@@ -2,15 +2,16 @@
 result over each monitoring period of a datacenter.
 
     python -m verity_all_protocols.runner --out DIR --tools FILE [--windows N] [--start I] [--window-s S] [--jobs J]
-        [--node NAME] [--tamper W,...] [--law L] [--delta D] [--cap N] [--requests 3,7] [--steps 2] [--pouw h1]
-        [--deployment ID] [--onsite EXE] [--scratch DIR]
+        [--session-jobs S] [--node NAME] [--tamper W,...] [--law L] [--delta D] [--cap N] [--requests 3,7] [--steps 2] [--pouw h1]
+        [--deployment ID] [--onsite EXE] [--scratch DIR] [--registered]
 
 A window is one stretch of one machine's serving and its audits, and a monitoring period is the many windows on every
 machine of a deployment a result is about (`ARCHITECTURE.md`'s Glossary). Per window W (``--start`` on): the verifier
 registers the loop's circuit from its shape and run id (``serve --circuit-only``), the loop serves once
 (`examples/toy`, run id ``RUN/wW``, so each window has a root of its own) and writes its window into scratch
 with ``period.json`` beside it (the legs' records, `table.PERIOD`); each protocol of `table.TABLE` audits it through its leg
-(`decide`), up to ``--jobs`` windows at once, each audit on ports of its own; and ``DIR/wW/report.json`` holds the window's
+(`decide`), up to ``--jobs`` windows at once, each audit on ports of its own and with up to ``--session-jobs`` of its
+drawn members' proof sessions at once; and ``DIR/wW/report.json`` holds the window's
 report, also appended to ``DIR/reports.jsonl``:
 
     {"format": "verity/all-protocols-window/v1", "window": W, "node": NAME, "run": RUN, "loop": {...},
@@ -28,11 +29,16 @@ profile's), ``epsilon`` (a sampled protocol's bound on wrong units as a share of
 ``answer``. ``composed`` is `compose.composed`'s.
 
 ``--tools FILE``: JSON naming the built executables (``flock-circuit``, ``flock-verify``, ``flock-firewall``,
-``m0-pythonpath``). ``--tamper W,...``: those windows' loop records outputs that are not its model's (`serve --tamper`)
-and its prover skips its self-check, so a drawn unit's proof is of a false witness. ``--pouw h1`` (until ALLP-H1LOOP's
-``serve --pouw h1`` lands): the loop also writes PoUW's window (its linears as the pinned H1 tile) to ``<window>/pouw``,
-and ``verity_torch_loop.pouw_audit`` audits it into ``<window>/pouw/answer.json`` before the legs run. Only the window's
-public files are kept in ``DIR`` (never a prover's file: its rows and salts).
+``m0-pythonpath``, ``pous-run-protocol``, ``pous-setup``, ``remote-audit-protocol``). ``--tamper W,...``: those windows'
+loop records outputs that are not its model's (`serve --tamper`) and its prover skips its self-check, so a drawn unit's
+proof is of a false witness. ``--pouw h1`` (until ALLP-H1LOOP's ``serve --pouw h1`` lands): the loop also writes PoUW's
+window (its linears as the pinned H1 tile) to ``<window>/pouw``, and ``verity_torch_loop.pouw_audit`` audits it into
+``<window>/pouw/answer.json`` before the legs run. Only the window's public files are kept in ``DIR`` (never a prover's
+file: its rows and salts). ``--registered``: the loop reads its weights as registered values (`serve --registered`),
+committed once before the first window (`serve --commit-weights`), their opening in scratch and the verifier's pin in
+``DIR/weights-pin.json``, which ``period.json`` names (``registered``) and the integrity leg's audit holds every window's
+reads to; its members are then shared-row. ``period.json``'s ``periods`` is the windows the run's one certifier session
+serves (`legs/certifier.py`), ``--windows``, so each window's ``period`` (its place in this run) is one of them.
 """
 from __future__ import annotations
 
@@ -59,6 +65,9 @@ FORMAT = "verity/all-protocols-window/v1"
 ROOT = Path(__file__).resolve().parents[3]
 LOOP = ROOT / "examples" / "toy"
 PUBLIC = ("registration.json", "window.json", "index.json", "circuit.json", "serve.json", PERIOD)
+#: ``--registered``'s weights, committed once a run: their opening (the prover's salts) in scratch, the verifier's pin
+#: of their roots in ``DIR``
+WEIGHTS_OPENING, WEIGHTS_PIN = "weights-opening.json", "weights-pin.json"
 
 
 def epsilon(a: Mapping[str, Any]) -> str | None:
@@ -142,18 +151,22 @@ def loop_window(index: int, run: str, a: argparse.Namespace, scratch: Path, out:
     """The window's loop: the circuit registered before it runs, then its window in scratch with ``period.json`` (and with
     ``--pouw h1`` PoUW's window in its ``pouw/``); its public files in ``out/window``. -> the window's directory and what
     the loop printed."""
+    weights = a.weights
     shape = ["--law", a.law, "--cap", str(a.cap), "--requests", a.requests, "--steps", str(a.steps), "--run-id",
-             f"{run}/w{index}", *(["--pouw", a.pouw] if a.pouw else [])]
+             f"{run}/w{index}", *(["--pouw", a.pouw] if a.pouw else []), *(["--registered"] if weights else [])]
     registered = serve([*shape, "--circuit-only"])
     window = scratch / f"w{index}"
     tampered = index in a.tamper
-    got = serve([*shape, "--out", str(window), *(["--tamper"] if tampered else [])])
+    got = serve([*shape, "--out", str(window), *(["--tamper"] if tampered else []),
+                 *(["--weights", str(weights["opening"])] if weights else [])])
     (window / "serve.json").write_text(json.dumps(got, sort_keys=True))
     (window / PERIOD).write_text(json.dumps({
-        "window": index, "period": index, "node": a.node, "circuit": registered["circuit"], "run_root": got["run"],
-        "law": a.law, "delta": a.delta, "cap": a.cap, "tools": a.tools,
+        "window": index, "period": index - getattr(a, "start", 0), "periods": a.windows, "node": a.node,
+        "circuit": registered["circuit"], "run_root": got["run"], "law": a.law, "delta": a.delta, "cap": a.cap,
+        "tools": a.tools, "session_jobs": a.session_jobs,
         "pouw": {"mode": a.pouw, "circuit": registered.get("pouw")} if a.pouw else None,
-        "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {}}, sort_keys=True))
+        "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {},
+        **({"registered": str(weights["pin"])} if weights else {})}, sort_keys=True))
     kept = out / "window"
     kept.mkdir(parents=True, exist_ok=True)
     for f in [*PUBLIC, *(p.name for p in window.glob("m*-public.bin"))]:
@@ -164,7 +177,8 @@ def loop_window(index: int, run: str, a: argparse.Namespace, scratch: Path, out:
 
 def pouw_audit(period_dir: Path, out: Path) -> dict[str, Any]:
     """PoUW's audit of the window's H1 window (``verity_torch_loop.pouw_audit``, ALLP-H1LOOP's), before the legs: it writes
-    ``<window>/pouw/answer.json``, which PoUW's leg reads. -> its rc and ``POUW`` line."""
+    ``<window>/pouw/answer.json``, which PoUW's leg reads; its proving tree stays in scratch, and only its ``pouw.json`` and
+    log are kept in ``out``. -> its rc and ``POUW`` line."""
     p = json.loads((period_dir / PERIOD).read_text())
     t = p["tools"]
     out.mkdir(parents=True, exist_ok=True)
@@ -173,6 +187,9 @@ def pouw_audit(period_dir: Path, out: Path) -> dict[str, Any]:
             "--firewall", t["flock-firewall"], "--out", str(period_dir.parent / f"{period_dir.name}-pouw"),
             *(["--forged"] if p.get("prover_env") else [])]
     r = _python("verity_torch_loop.pouw_audit", argv, out / "pouw-audit")
+    kept = period_dir.parent / f"{period_dir.name}-pouw" / "pouw.json"
+    if kept.exists():
+        shutil.copy(kept, out / "pouw.json")
     lines = [x for x in (out / "pouw-audit.log").read_text().splitlines() if x.startswith("POUW ")]
     return {"rc": r.returncode, "line": json.loads(lines[-1].split(" ", 1)[1]) if lines else None}
 
@@ -206,6 +223,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--window-s", type=float, default=0, help="each window's loop starts this long after the one before (at "
                     "once when the one before took longer)")
     ap.add_argument("--jobs", type=int, default=1, help="windows audited at once, each on ports of its own")
+    ap.add_argument("--session-jobs", type=int, default=16,
+                    help="each integrity audit's drawn members' sessions run at once (a5.session_jobs)")
     ap.add_argument("--node", default=os.environ.get("RESEARCH_MACHINE") or os.uname().nodename)
     ap.add_argument("--tamper", default="", help="windows whose loop tampers with its outputs, e.g. 1,3")
     ap.add_argument("--law", default="subset:64", help="the proof service's law of each window (k = 64: about 74 wrong "
@@ -218,6 +237,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--deployment", default=M.REFERENCE, help="the census deployment the monitoring periods are over")
     ap.add_argument("--onsite", help="onsite's executable (`onsite check`), for when its components are ports")
     ap.add_argument("--scratch", help="where the loop's windows go (default a temporary directory, removed after)")
+    ap.add_argument("--registered", action="store_true", help="the loop reads its weights as registered values "
+                    "(`serve --registered`), committed once before the first window")
     a = ap.parse_args(argv)
     a.tamper = {int(x) for x in a.tamper.split(",") if x.strip()}
     a.tools = json.loads(Path(a.tools).read_text())
@@ -244,6 +265,9 @@ def main(argv: list[str] | None = None) -> int:
                   flush=True)
 
     with tempfile.TemporaryDirectory(dir=a.scratch) as scratch, ThreadPoolExecutor(max(1, a.jobs)) as pool:
+        a.weights = {"opening": Path(scratch) / WEIGHTS_OPENING, "pin": out / WEIGHTS_PIN} if a.registered else None
+        if a.weights:
+            serve(["--commit-weights", str(a.weights["opening"]), "--pin", str(a.weights["pin"])])
         t0 = time.monotonic()
         jobs = []
         for i, w in enumerate(range(a.start, a.start + a.windows)):

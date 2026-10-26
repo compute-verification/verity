@@ -153,7 +153,7 @@ def test_a_lean_change_without_a_lock_change_waits_for_a_lean_check_and_the_afte
 
 
 def test_a_lock_change_waits_for_a_passed_lean_check_of_a_next_commit_holding_it(world, monkeypatch):
-    h = Review(world, monkeypatch)
+    h = Review(world, monkeypatch, nonlean_first=False)       # a member that changes no Lean above a Lean change
     lock = json.dumps({"guarantees": {"T": "2"}, "reads": {}, "dependencies": {"M": "1"}})
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     world.gh.put(2, world.change({"pkg/lean-audit.json": lock}))
@@ -191,7 +191,7 @@ def test_a_running_lean_check_holds_a_rebuilt_next_with_the_same_prs_heads_and_t
     """24 Oct: re-marks low on `next` rebuilt it, the check's commit left it, and drive cancelled r20261024-144858-46af and
     r20261024-165000-3c72 mid-audit: nothing landed for 3 h.  A rebuilt `next` with the same PRs at the same heads onto the same
     `main` has the same tree there, which the check still covers."""
-    h = Review(world, monkeypatch)
+    h = Review(world, monkeypatch, nonlean_first=False)       # a member that changes no Lean above a Lean change
     world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
     world.gh.put(2, world.change({"a.txt": "2\n"}))
     for n in (1, 2):
@@ -234,7 +234,7 @@ def test_a_moved_lean_check_that_regenerated_locks_runs_again_on_the_rebuilt_com
 def test_the_lean_check_stops_below_a_member_that_came_onto_next_within_the_settle_ticks(world, monkeypatch):
     """A PR marked moments ago is the one most likely to be re-marked: a check of the prefix's top through it would leave `next`
     at its next push, so the check stops below it."""
-    h = Review(world, monkeypatch)
+    h = Review(world, monkeypatch, nonlean_first=False)       # a member that changes no Lean above a Lean change
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     h.review(1)
     assert h.tick().startswith("landed #1")
@@ -252,7 +252,7 @@ def test_the_lean_check_stops_below_a_member_that_came_onto_next_within_the_sett
 
 def test_a_member_that_came_onto_next_a_tick_ago_no_longer_stops_the_lean_check(world, monkeypatch):
     """24 Oct: one new head at position 2 capped the check at position 1 for an hour (three settle ticks)."""
-    h = Review(world, monkeypatch)
+    h = Review(world, monkeypatch, nonlean_first=False)       # a member that changes no Lean above a Lean change
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     h.review(1)
     assert h.tick().startswith("landed #1")
@@ -282,6 +282,20 @@ def _stacked(world, monkeypatch) -> tuple[Review, str, str]:
     assert h.launched == [(two, "m1", False), (three, "m1", False)], world.logs
     assert h.d.q.load_state()["drive"]["lean"][three]["stacked"] is True
     return h, two, three
+
+
+def test_a_proof_only_lean_change_lands_on_its_verdict_and_a_lock_or_code_lean_change_waits(world, monkeypatch):
+    """Daniel, 25 Oct 11:19 PM PDT: Lean in `Security/` that touches no lock is proofs and lands on its land verdict (the
+    after-landing lean-audit reverts it on a failure); a lock, or Lean outside `Security/` (it runs as code), still waits."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"Security/lean-audit.json": "{}\n", "Security/Proofs/A.lean": "theorem A : True := trivial\n"}))
+    world.gh.put(2, world.change({"Security/Proofs/B.lean": "theorem B : True := trivial\n"}))
+    world.gh.put(3, world.change({"pkg/C.lean": "theorem C : True := trivial\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    h.q.sync()
+    assert {m.pr: lean_change(h.d.repo, m.commit) for m in h.q.chain()} == {1: True, 2: False, 3: True}
+    assert h.q.chain()[0].pr == 2                                         # proofs only: non-Lean first puts it below
 
 
 def test_a_lean_check_is_stacked_at_nexts_top_for_a_lean_change_above_a_running_one(world, monkeypatch):
@@ -357,6 +371,61 @@ def test_lean_stack_decides_from_the_checks_verdicts_where_a_lean_check_is_stack
     got = lean_stack(chain, {c: {"ids": ["r"], "state": st} for c, st in lean.items()}, lambda m: str(m.pr) in changes,
                      lambda m: m.pr == churned, 2)
     assert got == want, case
+    assert lean_stack(chain, {"c0": {"ids": ["r"], "state": None}}, lambda m: m.pr > 0, lambda m: False, 3) == 2   # two free
+
+
+@pytest.mark.parametrize("case, changes, lo, top, slots, want", [
+    ("four Lean changes, two checks: below the third", "0123", 0, 3, 2, 1),
+    ("what changes no Lean below the next Lean change goes with the cut", "0245", 0, 5, 2, 3),
+    ("three checks: every two", "012345", 0, 5, 3, 1),
+    ("one check: the top", "0123", 0, 3, 1, 3),
+    ("none free counts as one", "0123", 0, 3, 0, 3),
+    ("one Lean change: the top", "2", 0, 5, 2, 5),
+    ("an odd count rounds the lower part up", "123", 1, 4, 2, 2),
+    ("only from lo", "0145", 2, 5, 2, 4),
+])
+def test_lean_cut_spaces_the_lean_checks_through_the_lean_changes(case, changes, lo, top, slots, want):
+    """`next` is c0..c5; ``changes`` names the members that change Lean."""
+    from research.drive import lean_cut
+    from research.queue import Member
+
+    chain = [Member(n, f"h{n}", "o", f"c{n}") for n in range(6)]
+    assert lean_cut(chain, lo, top, lambda m: str(m.pr) in changes, slots) == want, case
+
+
+def test_lean_checks_start_at_cut_points_lowest_first_and_a_failure_holds_only_what_is_above_it(world, monkeypatch):
+    """With room for two Lean checks, four reviewed Lean changes get one check through the lower two and one stacked at the top
+    in the same tick; the upper one failing holds only #3 and #4, which then check their own commit, and #1 and #2 land on the
+    lower check."""
+    h = Review(world, monkeypatch)
+    for n in (1, 2, 3, 4):
+        world.gh.put(n, world.change({f"pkg/L{n}.lean": f"-- {n}\n"}))
+        h.review(n)
+    assert not h.tick().startswith("landed"), world.logs
+    chain = h.q.chain()
+    assert [m.pr for m in chain] == [1, 2, 3, 4]
+    assert h.launched == [(chain[1].commit, "m1", False), (chain[3].commit, "m1", False)], world.logs
+    low, high = h.lean_ids()
+    assert h.d.q.load_state()["drive"]["lean"][chain[3].commit]["stacked"] is True
+    h.run_state[high] = ("done", 1, None)
+    h.evidence = [_steps_run(world.tmp, high, {LEAN_STEP: "failed"})]
+    assert not h.tick().startswith("landed") and h.cancelled == [] and len(h.launched) == 2, world.logs
+    h.run_state[low] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, low, {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #2"), world.logs
+    assert _main(world) == chain[1].commit
+    assert h.launched[2:] == [(chain[2].commit, "m1", False)], world.logs       # #3's own commit, before blaming it
+
+
+def test_members_that_change_no_lean_go_below_a_lean_change_and_land_while_its_lean_check_runs(world, monkeypatch):
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"pkg/T.lean": "theorem T : True := trivial\n"}))
+    world.gh.put(2, world.change({"a.txt": "2\n"}))
+    world.gh.put(3, world.change({"b.txt": "3\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    assert h.tick().startswith("landed #3"), world.logs
+    assert [m.pr for m in h.q.chain()] == [1] and h.launched == [(_tip(world), "m1", False)]
 
 
 def test_an_ejection_during_a_lean_check_of_its_prefix_waits_to_rebuild_next_and_lands_nothing_from_it_up(
@@ -429,7 +498,7 @@ def test_a_failed_lean_check_above_a_lean_change_checks_its_own_commit_before_bl
     """The check of the prefix's top failing says only that something at or below it broke Lean: the Lean change is checked at
     its own commit, lands when that passes, and its owner hears nothing; the failed top, no Lean change of its own, is `CI`'s."""
     _registry(world, "lane-1", "lane-2")
-    h = Review(world, monkeypatch)
+    h = Review(world, monkeypatch, nonlean_first=False)       # a member that changes no Lean above a Lean change
     world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
     world.gh.put(2, world.change({"b.txt": "2\n"}))
     for n in (1, 2):
@@ -701,6 +770,7 @@ def test_a_lean_check_above_the_landing_top_covers_it_only_with_no_lean_change_b
     """A passed check of a commit above what lands checked a tree with a Lean change the landing leaves out, which may fix what
     the landed one breaks: the check runs again on the prefix's top."""
     h = Review(world, monkeypatch)
+    h.d.max_lean_checks = 1                                   # one check through both, no cut between them
     world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
     world.gh.put(2, world.change({"pkg/T.lean": "theorem T : True := trivial\n"}))
     for n in (1, 2):

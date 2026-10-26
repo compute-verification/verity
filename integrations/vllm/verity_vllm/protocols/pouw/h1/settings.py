@@ -27,7 +27,7 @@ OPENS = {PH.SCHEME: "its window-open root (salt.window_open_root, over round 0's
 
 def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
     """The settings ``rows``, ``steps``, ``runner``, ``rounds``, ``challenger``, ``session``, ``admission``, ``gate``,
-    ``served`` and ``graphs`` of `raw`, in that order; ValueError names the first bad one."""
+    ``served``, ``graphs`` and ``period`` of `raw`, in that order; ValueError names the first bad one."""
     rows, steps = raw.get("rows"), raw.get("steps")
     if rows is not None and (not isinstance(rows, int) or isinstance(rows, bool) or rows < 32 or rows % 32):
         raise ValueError("pouw setting 'rows' is a positive multiple of 32 (H1's T: vLLM's max_num_batched_tokens)")
@@ -64,7 +64,8 @@ def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
     if not (isinstance(graphs, (list, tuple))
             and all(isinstance(z, int) and not isinstance(z, bool) and z > 0 for z in graphs)):
         raise ValueError("pouw setting 'graphs' is the engine's CUDA-graph capture sizes, positive integers (none when eager)")
-    return rows, steps, runner, rounds, challenger, session, admission, gate, served, tuple(graphs)
+    return (rows, steps, runner, rounds, challenger, session, admission, gate, served, tuple(graphs),
+            PHW.period_setting(raw.get("period")))
 
 
 def fills(scheme: str, settings: Mapping[str, Any]) -> tuple[str, ...]:
@@ -124,6 +125,12 @@ def refusals(scheme: str, settings: Any, stage: str, filled: tuple[str, ...] = (
         out.append(f"{scheme}: the pouw setting 'session' is the session of the challenger at 'challenger'")
     if scheme in CHALLENGED and settings.challenger is not None:
         out += PHW.refusals(scheme, settings, stage, opens=OPENS.get(scheme))
+    if scheme in PPD.SCHEMES and settings.challenger is not None and settings.session is not None:
+        why = PHW.period_reason(settings.period, settings.session)
+        out += [] if why is None else [f"{scheme}: {why}"]
+    elif settings.period is not None:
+        out.append(f"{scheme}: the pouw setting 'period' is the lane's open period that a Pearl-C install's reserved "
+                   f"session joins, so it goes with 'challenger' and 'session', for {', '.join(PPD.SCHEMES)} only")
     if scheme == PH.SCHEME and settings.rounds is not None and settings.steps is not None:
         have = settings.rounds.challenger.commitment.family(settings.rounds.label) - len(settings.rounds.roots)
         if have < settings.steps:

@@ -15,7 +15,10 @@ in the payload and holds only public structure, hiding commitments and paths bes
   H200's INT8 and ``GEMM_HOPPER`` for its BF16, ``GEMM_SM120_S8`` for the RTX PRO 6000). Every unit's template binds that
   dot, as circuits resolves the binding.
 * ``draw``: the drawn units (global indices), the law, and ``source``: ``live`` (the proof service's draw of record, with
-  ``receipt``, the challenger's live-coin receipt, which a live draw must carry) or ``fixture`` (chosen by hand).
+  ``receipt``, the challenger's live-coin receipt, which a live draw must carry) or ``fixture`` (chosen by hand). The law is
+  the window's registered one, fixed before any coin, and a live draw's ``record`` (the verifier's draw object, when it
+  carries one) is a draw under it over the registered population, of exactly the bundle's units (`check` against the
+  registration).
 * ``weights``: the registered values the units read (core's ``one_stage.registered``, as CMP-95 interface 1 registers the
   seeded weights: ``registered.domain(program, value, words, leaves, word_bits)``, rows in ``hm96-sha512/row/v2``):
   ``{program, values: [{value, root, leaves, words, word_bits, domain, row_schema}]}``.
@@ -72,7 +75,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.sampled_proofs.one_stage import registered as REG
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.commitments import hm96
@@ -512,7 +515,7 @@ def _check_slot(r: Mapping[str, Any], unit: Mapping[str, Any], row: bytes, bc: b
 def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, Any] | None = None,
           replay_units: bool = True) -> dict[str, str]:
     """The consumer's check of a bundle (module docstring): ``{key: why}``, empty when it holds. ``registration``: the
-    window's ``registration.json``, whose roots and digest the bundle's must be."""
+    window's ``registration.json``, whose roots and law the bundle's must be."""
     bad: dict[str, str] = {}
     if doc.get("format") != FORMAT:
         return {"format": f"not {FORMAT}"}
@@ -533,6 +536,12 @@ def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, 
         if window_domain(win["program"], win["partition"], port, r["schema"], r["leaves"], win["run"]) != r["domain"]:
             bad[f"root:{port}"] = "its domain is not the window-domain rule's over the registration's fields"
     if registration is not None:
+        law = registration["law"]
+        if d.get("law") != law or (law.get("law") == "subset" and len(d["units"]) != law.get("k")):
+            bad["draw:law"] = f"the draw is not one under the registered law {law}"
+        if "record" in d and not (D.check_draw(d["record"], registration, law).ok
+                                  and d["record"].get("units") == sorted(d["units"])):
+            bad["draw:record"] = "the draw's record is not a draw of its units under the registered law and population"
         reg_roots = {r["port"]: r for r in registration["roots"]}
         for port, r in win["roots"].items():
             if (reg_roots.get(port) or {}).get("root") != r["root"]:
@@ -677,16 +686,18 @@ def _step_key(salt_key: bytes, block: int, step: int) -> bytes:
 
 
 def torch_loop_window(out: str | Path, requests: Sequence[int] = (3, 7), steps: int = 1, cap: int = 8, tamper: bool = False,
-                      salt_key: bytes = FIXTURE_SALT_KEY) -> tuple[Any, dict[str, REG.Registered], Commitment]:
+                      salt_key: bytes = FIXTURE_SALT_KEY, law: str | None = None
+                      ) -> tuple[Any, dict[str, REG.Registered], Commitment]:
     """The torch loop's window written to ``out`` with its step commitments (a test salt key a step, from ``salt_key``): every
     row a unit commits or reads in the step commitment carries that commitment's salt, and every weight row its registered
     value's, so each window string is the one its opening reaches: -> (the loop, its registered weights, its commitment).
-    Needs torch and `examples/toy` on the path."""
-    from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R
+    ``law``: the law it registers (`draw.parse_law`; default the fixture's, ``subset:len(FIXTURE_DRAW)``). Needs torch and
+    `examples/toy` on the path."""
+    from verity.core.protocols.sampled_proofs.one_stage import registration as R
     from verity_torch_loop import loop as L
 
     loop = L.TorchLoop(L.Model(), list(requests), steps, tamper, RUN_ID)
-    win = loop.window(D.parse_law("subset:2"), cap)
+    win = loop.window(D.parse_law(law or f"subset:{len(FIXTURE_DRAW)}"), cap)
     h, program = loop.model.h, f"torch-loop/mlp-w8a8-h{loop.model.h}/seed{loop.model.seed}"
     weights = torch_loop_weights(loop.model, salt_key, program)
     layout, locate = torch_loop_layout(h, len(loop.model.layers)), torch_loop_locate(h)

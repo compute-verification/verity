@@ -31,8 +31,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     Until each protocol's verifier of record is Lean, these units are on the soundness path, because its Python verifier
     reads them: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`, `ml.kernels`, `ml.commitments`,
     `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH` in `tests/test_boundaries.py`, all that
-    `ALLOWED` lets core reach; it only shrinks). The rest, C-Flock's prover and the private circuits, can't affect
-    soundness.
+    `ALLOWED` lets core reach; it only shrinks). The rest, C-Flock's prover, the private circuits and `ml.definitions`,
+    can't affect soundness.
     - `circuits` (format in `circuits/PROTOCOL.md`): circuits and their evaluator (`evaluation`), the Boolean profile
       (`boolean`), what models compute (`ops`, the primitive circuits' Definitions), what the GPUs actually compute
       (`silicon`, the exact hardware semantics) and `targets`.
@@ -40,6 +40,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     - `commitments` (with Merkle multiproofs, `multiproof`), shared hash code (`crypto`), and the one challenge derivation
       (`randomness`).
     - `private_circuits`: the universal unit, one public Definition that runs any private circuit of a size class.
+    - `definitions`: the served workloads' kernel Definitions (`registry`, twins in `numerics`), their Boolean versions,
+      the proof-unit cut (`word`), and their encoding and digest (`encoding`).
     - `flock/` (`verity_flock`, a distribution of its own, `flock/pyproject.toml` with its package in `flock/python/`):
       C-Flock, the proof system. Its patches on upstream Flock, the CUDA prover, the zero-knowledge prover (`live/`,
       `flock-circuit --zk`), and `verifier/`: the verifier's specification and the scripts that run it, with upstream's
@@ -209,8 +211,8 @@ the standing rulings stated nowhere else.
 - **Results are per monitoring period, over all compute** (Daniel, 25 Oct). The time length of interest is the
   *monitoring period* (`ARCHITECTURE.md`, Glossary), not the window, the run or the demo. Every result, in a report, a
   table, a PR or a message to Daniel, is presented for monitoring periods of one week, one month and one year, and over
-  all compute: every machine of a deployment, a whole datacenter, though a demo checks one. The datacenter's size and
-  the window's length are stated parameters (from `benchmarks/census/`), and a figure scaled from one machine says which
+  all compute: every machine of a deployment, a whole datacenter, though a demo checks one. The datacenter's size (from
+  `benchmarks/census/`) and the window's length are stated parameters, and a figure scaled from one machine says which
   parts are proved and which are scaled. Give each bound as its pooled total over the period and as a share of the
   compute it covers, beside the per-window figure, never the per-window figure alone: a per-window δ that looks weak is
   not the result.
@@ -286,23 +288,25 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   in the PR's body names, else the Cursor agent id the body carries. Marks written before `marked_after` in
   `tools/verity/check/queue.toml` don't count, and a `hold` label keeps a PR out. `research queue status` says what each PR
   waits for.
-- Drive stacks admitted PRs on `next`, one merge commit each. Reviewers, agents ci staffs and never the PR's owner, read
-  `next` bottom up: `research queue review` lists the members above `main` with no land verdict at their head (number, head,
+- Drive stacks admitted PRs on `next`, one merge commit each, non-Lean first (`nonlean_first`, drive.toml): a sync puts
+  a PR whose own change is no Lean change below every Lean change it doesn't contain, in `--first`'s order and then
+  admission's, and never moves a member it keeps. Reviewers, agents ci staffs and never the PR's owner, read `next`
+  bottom up: `research queue review` lists the members above `main` with no land verdict at their head (number, head,
   owner, files, whether it waits for a Lean check), and `research queue review N --land [--ref NOTE] --by LANE` or
   `--hold REASON --by LANE` records one, a `reviewed` label on `pr:N@HEAD`. A verdict by the owner, its handle or its
   ready mark's author doesn't count, and a new head needs a new one. No change waits on any other per-head grant: not
   red-team's, the vLLM coordinator's or a statement reviewer's (Daniel, 8 Oct).
-- Each tick, drive fast-forwards `main` to the top of the longest prefix of `next` whose every member has a land verdict and
-  no hold. Before it lands, in minutes: the merge onto `next` is clean, and every `.py` file the landing leaves compiles
-  (drive ejects the PR that broke one). A PR that changes Lean (a `.lean` file of a package with a `lean-audit.json` lock, or
-  the lock) waits for its Lean check: a `lean-audit` that passed on a commit of `next` at or above it, which drive launches on
-  the reviewed prefix's top (`train.sh TOP MACHINES --deferred lean-audit`), and after a failure there on the PR's own commit;
-  only a failure at its own commit goes to its owner. Any recorded run whose `lean-audit` passed there counts too. The top
-  stops below a PR that came onto `next` in the same tick. While a check runs, a Lean change above it, reviewed or not, gets
-  one stacked at `next`'s top (at most `max_lean_checks` running, drive.toml); the lower one runs on. A rebuilt `next` with
-  the same PRs at the same heads keeps a check, and an eject from its prefix rebuilds `next` only once it ends (a stacked
-  check's: at once). A PR containing an unmarked PR of the same owner, or one its owner withdrew, carries that change and
-  doesn't wait for it.
+- Each tick, drive fast-forwards `main` to the top of the longest prefix of `next` whose every member has a land verdict
+  and no hold. Before it lands, in minutes: the merge onto `next` is clean, and every `.py` file the landing leaves
+  compiles (drive ejects the PR that broke one). A PR that changes a `lean-audit.json` lock, or Lean that runs as code
+  (a `.lean` file outside `Security/`), waits for its Lean check: a `lean-audit` that passed on a commit of `next` at or
+  above it, which drive launches on the reviewed prefix's top, and after a failure there on the PR's own commit; only a
+  failure at its own commit goes to its owner. Any recorded run whose `lean-audit` passed there counts too. Lean proofs
+  alone land on the verdict and are checked after landing (Daniel, 25 Oct). The top stops below a PR that came onto
+  `next` in the same tick. While a check runs, a Lean change above it gets one stacked (at most `max_lean_checks`
+  running, drive.toml); the lower one runs on. Each check stops at a cut point, after the first ceil(n / f) of the n
+  Lean changes it would hold (f: the checks still free), so a failure holds only what's above it. A PR containing an
+  unmarked PR of the same owner, or one its owner withdrew, carries that change and doesn't wait for it.
 - After each landing one run checks `main`'s tip with every check step (`train.sh MAIN MACHINES --deferred JOBS
   --no-regenerate`, with `--no-cache` while `after_landing_no_cache = true`), and nothing lands before one such run of `main`
   itself has ended, its baseline (or ci records `main` green on the control pod: `/data/infra/drive.sh queue baseline SHA
@@ -341,15 +345,11 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
     the certifier program (`verity/core/protocols/certifier/lean/`, `NetworkCertifier`, with its
     difftest), the NCI check (`verity/core/protocols/network/nci/lean/`, `NciCheck`, with its difftest) and the remote
     bandwidth audit's verifier (`verity/core/protocols/remote_bandwidth/lean/`, `RemoteAudit`, with its difftest).
-  - The ZK server is Lean, and its Rust path is dropped: under `FC_FIREWALL=1` every round that leaves, level 0's
-    commitment, the opening, the inner proof and each rep's proof file are computed by `Flock.Firewall` (the session
-    loop, each rep's frame, `Level0`, the finish), and a recursive session's release (`--firewall-state`) by
-    `core_firewall`. `flock-circuit` (Rust) still
-    computes the prover workers' values (the host witness, the device's rounds, which the frame passes or fails against
-    the Lean's) and the algebraic phase's scheduled rounds. Its own checks can only refuse more, and it relays the
-    rounds, coins and proof files (live `PROTOCOL.md` §10.4). The ZK theorem (`Flock.zk_server_lean_loop`) reads the
-    released bytes only through named hypotheses not yet proved about the live path (`LiveRoundEq`, `FillRoundEq`,
-    `FinishIs`, `LinkRoundEq`, `ProgReads`), so the ZK server is not yet proved.
+  - The ZK server is Lean, and its Rust path is dropped: under `FC_FIREWALL=1` every byte that leaves is computed by
+    `Flock.Firewall`, and a recursive session's release by `core_firewall`; `flock-circuit` (Rust) computes the prover
+    workers' values, can only refuse more, and relays (live `PROTOCOL.md` §10.4). The ZK theorem
+    (`Flock.zk_server_lean_loop`) reads the released bytes only through named hypotheses not yet proved about the live
+    path, so the ZK server is not yet proved.
   - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Models/` (its named
     assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
     `security_proofs` (ArkLib allowed): every proof and lemma, with `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for
@@ -535,7 +535,7 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
   and never resumes a local worker a third time.
 - **Landing is drive's.** The worker that made a branch opens its PR (`research queue open --head BRANCH --sha SHA
   --title T --body-file F --by LANE`, from any VM, with `Lane LANE` in the body), marks it ready and goes back to
-  research. A reviewer ci staffs writes its verdict, a PR that changes Lean waits for its Lean check, and the full check
+  research. A reviewer ci staffs writes its verdict, a lock or code Lean change waits for its Lean check, and the full check
   runs after landing and reverts a PR that breaks `main`; you hear back only if yours is held, ejected or reverted. Before
   marking, run the Lean check of the packages you touched and the suites your change touches, `research run --on auto --cwd
   source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py
