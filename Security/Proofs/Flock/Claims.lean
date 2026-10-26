@@ -231,6 +231,7 @@ import Proofs.Flock.Claims.DeployVK
 import Proofs.Flock.Claims.Recursion.FlockKSDeployK
 import Proofs.Flock.Claims.Recursion.PlainK
 import Proofs.Flock.Claims.Recursion.SlotsCalls
+import Proofs.Flock.Claims.Recursion.SlotsPorted
 import Proofs.Flock.Claims.DeployPlainCode
 import Proofs.Flock.Claims.DeployCode
 import Proofs.Flock.Claims.DeployTables
