@@ -77,7 +77,7 @@ required-value manifest: `format.py` the shared vocabulary, `verify.py` the rebu
 and `verity.ml.circuits.liveness`.  Never: execution data, hooks, model names, anything read from a run.
 
 **`correspondence/`** implements *runtime correspondence* as data: `runtime.py` (runtime-correspondence/v1),
-`reader_for_query.py` / `reader_for_acquire.py`; and *occurrence resolution*: `resolve.py`, `resolve_decomp.py`.  Never:
+`reader_for_query.py` / `reader_for_acquire.py`.  Never:
 verification policy, commitment positions, requiredness, verdicts.
 
 **`observe/`** implements *value observation* (the Match-side capture): `observer.py` (the TorchDispatchMode), `events.py` /

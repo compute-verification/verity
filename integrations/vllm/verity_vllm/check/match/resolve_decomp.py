@@ -1,4 +1,4 @@
-"""verity_vllm.correspondence.resolve_decomp -- the Match stage's X-09 decomposition of a fold record, driven by `observe.iter_observations` + `resolve`
+"""verity_vllm.check.match.resolve_decomp -- the Match stage's X-09 decomposition of a fold record, driven by `observe.iter_observations` + `resolve`
 (v2 Phase 4b), in the shape `cb_a.batch_decomp.decompose` writes (`match_decomp.json`: per request `canonical_sha256{a,b}`, `derived_digest`,
 `xreq`, `n_instances`; `attribution.how` / `unattributed` / `row_rule_disagreements`) so the two documents compare field by field.
 
@@ -23,7 +23,7 @@ from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.check.match import program_compare as C
 
 from verity_vllm.observe import contract as OB
-from verity_vllm.correspondence import resolve as RS
+from verity_vllm.check.match import resolve as RS
 
 SCHEMA = "verity-vllm/resolve-decomp/v1"
 

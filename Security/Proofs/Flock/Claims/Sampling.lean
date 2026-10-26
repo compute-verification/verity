@@ -4,8 +4,10 @@ import Proofs.Flock.Claims.Sampling.Bext
 import Proofs.Flock.Claims.Sampling.Committed
 import Proofs.Flock.Claims.Sampling.Count
 import Proofs.Flock.Claims.Sampling.Deployed
+import Proofs.Flock.Claims.Sampling.Down
 import Proofs.Flock.Claims.Sampling.DeployedSha512
 import Proofs.Flock.Claims.Sampling.Draws
+import Proofs.Flock.Claims.Sampling.EndToEndDraw
 import Proofs.Flock.Claims.Sampling.Escape
 import Proofs.Flock.Claims.Sampling.ExecBernoulli
 import Proofs.Flock.Claims.Sampling.HorizonPr
@@ -29,7 +31,8 @@ import Proofs.Flock.Claims.Sampling.ZK
 /-! The sampling compiler's lemmas: each registered draw law's miss bound in `Claims.Pr` (`Sampling.Draws`), the
 executable Bernoulli draw's bound (`Sampling.ExecBernoulli`), the audit layer's horizon escape (`Sampling.HorizonPr`) and every law's live draw's (`Sampling.Live`); each
 design's acceptance probability as its model draw's miss probability, the nested escape and the classes' product
-(`Sampling.Escape`), and the deployed count bound at the claims' designs (`Sampling.Count`); the extractor's rerun
+(`Sampling.Escape`), and the deployed count bound at the claims' designs (`Sampling.Count`); `P_a` antitone and `M_δ`
+closed downward at a one-class uniform subset design (`Sampling.Down`); the extractor's rerun
 programs (`Sampling.Extract`, `Sampling.Cost`), its rerun and own-call bounds (`Sampling.Runs`) and its expected reruns
 (`Sampling.RunsExp`); the commitment's binding at the openings the extractor checks (`Sampling.Binding`), at the
 registered path check (`Sampling.Path`) and at its hm96 leaf (`Sampling.Leaf`); `B_ext` and the block's bits from its
