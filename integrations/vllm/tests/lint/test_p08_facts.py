@@ -1,4 +1,4 @@
-"""P8: model and target facts live only in ``program/registry/quarantine/`` and ``engine/profiles/``.
+"""P8: model and target facts live only in ``verity_vllm/program/quarantine/`` and ``engine/profiles/``.
 
 The rule's literal scan: a string literal in code (docstrings and a module's ``__models__`` marker excepted) naming a model
 (``model``), a vLLM layer class (``layer-class``), a GPU (``gpu``) or an ``sm_8x``/``sm_9x``/``sm_10x``/``sm_12x``
@@ -16,7 +16,7 @@ from . import _ratchet as R
 
 NAME = "p08_facts"
 RULE = "P8 (model and target facts live in their two homes)"
-HOMES = ("verity_vllm/program/registry/quarantine/", "verity_vllm/engine/profiles/")
+HOMES = ("verity_vllm/program/quarantine/", "verity_vllm/engine/profiles/")
 MODEL = re.compile(r"(?i)(?<![a-z0-9])(llama|qwen|gemma|olmoe|olmo|mixtral|mistral|smollm|deepseek|phi-?[0-9]|pythia|"
                    r"gpt-?neox|gpt2|granite|falcon|starcoder|opt-[0-9])")
 LAYER_CLASS = re.compile(r"\b((?:QKV|Row|Column|MergedColumn|Replicated|ReplicatedLinear|VocabParallel|Parallel)"
@@ -59,8 +59,8 @@ def scan() -> tuple[R.Violation, ...]:
 
 def test_no_new_violations() -> None:
     R.assert_no_new(NAME, scan(), RULE,
-                    "Read model and target facts from program/registry/quarantine/ or the engine profile, not from a "
-                    "literal.")
+                    "Read model and target facts from verity_vllm/program/quarantine/ or the engine profile, "
+                    "not from a literal.")
 
 
 def test_allowlist_has_no_stale_entries() -> None:

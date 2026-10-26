@@ -386,7 +386,7 @@ theorem rep_facts (h64 : Claims.Out64 sha512) (g : Goals sha512 Readable.relatio
       some rs := by
     rw [← hn]; exact hrr0
   have hsched : RecDeploy.repSchedAt o.spec o.sts[k / 2]! = rs.toList := hsch0
-  have hcnt := repRounds_counts hf (FlockSoundness.Refine.fast100_dims _ _ hf).1 hrr
+  have hcnt := repRounds_schedN hf (FlockSoundness.Refine.fast100_dims _ _ hf).1 hrr
   rw [schedN_eq_repNs hf, hkl] at hcnt
   have hmap : (RecDeploy.repSchedAt o.spec o.sts[k / 2]!).map (·.1) = HS[k].toList.map Flock.Round.n := by
     rw [hsched, hcnt, ← hns, hst]

@@ -58,16 +58,19 @@ whose rows and salts go to ``served_rows/w<k>.json``), ``requests.jsonl``
 the runner's ids, the prompt ids, the streamed ids, its ingress, its finish, its committed rows and seeds, and its check)
 and `serve_commit.advice_trace`'s file. ``--scheme rows-sha512`` commits as the bench row's declared Commit does, with its
 committer parts built from the row's ``--required-manifest`` and taps (the acquisition plan under ``acquisition/``), and
-``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. The
-seals run on a thread of their own (`serve_seal.Sealer`) while the engine serves the next window; a close waits only while
-the windows awaiting their seal hold ``--seal-hold-gb`` of committed values, in the committer's pinned pool, which
+``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. Each
+window's finalize, its readback and records, then its seal run on a thread of their own (`serve_seal.Sealer`), in window
+order, while the engine serves the next window: the engine loop's part of a close only detaches the window from the
+committer (`NativeHostCommitter.detach`), and it waits only while the windows awaiting their finalize and seal hold
+``--seal-hold-gb`` of committed values, in the committer's pinned pool, which
 ``--seal-warm-gb`` grows before serving rather than on the engine loop. A window closes once its steps have committed
 ``--window-gb``, which bounds each bundle on disk; under ``--seal`` the server refuses to start unless ``--out``'s filesystem
 has ``--disk-floor-gb`` free beyond one such window, and once a window's seal would take it under that floor, the window is
 not sealed and the server stops: it refuses new requests, finishes those in flight, and exits. ``--copy-records-to`` (the
 run's ``$OUT``) gets a copy of the records (`serve_commit.MIRRORED`) after each close and each seal, and at the stop before
 the seals still pending. SIGTERM or SIGINT stops it: the open window is closed and its requests checked, the pending seals
-finish, and ``summary.json`` counts the requests and checks, the seals, and the admissions' order (`ReleaseOrder.summary`).
+finish, and ``summary.json`` counts the requests and checks, the seals, and the admissions' order (`ReleaseOrder.summary`);
+it is written before the pending seals too, and its ``final`` is true only once every window's records are written.
 
 The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
 the seal's thread runs Python, each take waits out the interpreter's switch interval, so the server serves with
@@ -154,8 +157,9 @@ class Options:
     seal: bool = option("--seal", action="boolean_optional", default=False,
                         help="seal each closed window as a deferred Commit's row dir, OUT/windows/w<k>/ (serve_seal.seal_window)")
     seal_off_loop: bool = option("--seal-off-loop", action="boolean_optional", default=True,
-                                 help="seal on a thread of its own while the engine serves the next window (serve_seal.Sealer; default "
-                                      "on); --no-seal-off-loop seals on the engine loop, which stops serving for the seal")
+                                 help="finalize and seal each window on a thread of its own while the engine serves the next one "
+                                      "(serve_seal.Sealer; default on); --no-seal-off-loop does both on the engine loop, which "
+                                      "stops serving for them")
     seal_hold_gb: float = option("--seal-hold-gb", type=float, default=64.0,
                                  help="the committed GB the windows awaiting their seal may hold (pinned host memory) before a "
                                       "close waits for room")
@@ -210,8 +214,9 @@ class EngineLoop:
 
     _STOP = object()
 
-    def __init__(self, engine: Any, commit: CommitWindows | None = None, cap: int = 0) -> None:
-        self.engine, self.commit, self.cap = engine, commit, int(cap)
+    def __init__(self, engine: Any, commit: CommitWindows | None = None, cap: int = 0,
+                 clock: Callable[[], float] = time.time) -> None:
+        self.engine, self.commit, self.cap, self.clock = engine, commit, int(cap), clock
         self.q: queue.Queue = queue.Queue()
         self.live: dict[str, Admission] = {}
         self.held: collections.deque[Admission] = collections.deque()
@@ -220,6 +225,7 @@ class EngineLoop:
         self.steps = 0
 
     def submit(self, adm: Admission) -> None:
+        adm.times.setdefault("submitted", self.clock())
         self.q.put(adm)
 
     def abort(self, engine_id: str) -> None:
@@ -264,6 +270,7 @@ class EngineLoop:
         except Exception as e:  # noqa: BLE001  (the engine's refusal of one request goes back to it)
             item.deliver(Delta([], "", error=f"{type(e).__name__}: {e}"))
             return
+        item.times["admitted"] = self.clock()
         self.live[item.engine_id] = item
         if self.commit is not None:
             self.commit.admitted(item)
@@ -353,11 +360,13 @@ class Server:
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
             head = await reader.readuntil(b"\r\n\r\n")
+            t_head = self.clock()
             lines = head.decode("latin-1").split("\r\n")
             method, path, _ = lines[0].split(" ", 2)
             headers = {k.strip().lower(): v.strip() for k, _, v in (ln.partition(":") for ln in lines[1:] if ln)}
             body = await reader.readexactly(int(headers.get("content-length") or 0))
-            await self.route(method, path.split("?", 1)[0], body, writer, headers, head + body)
+            await self.route(method, path.split("?", 1)[0], body, writer, headers, head + body,
+                             {"head": t_head, "received": self.clock()})
         except (asyncio.IncompleteReadError, ConnectionError, ValueError):
             pass
         finally:
@@ -378,7 +387,7 @@ class Server:
         await writer.drain()
 
     async def route(self, method: str, path: str, body: bytes, writer: asyncio.StreamWriter,
-                    headers: Mapping[str, str] | None = None, request: bytes = b"") -> None:
+                    headers: Mapping[str, str] | None = None, request: bytes = b"", times: Mapping[str, float] | None = None) -> None:
         release = None
         try:
             if path == "/health":
@@ -391,7 +400,7 @@ class Server:
                 return await self._json(writer, 200, json.dumps(self.tokenize(self._body(body))).encode())
             if path == "/v1/completions":
                 release = self._release(headers)
-                return await self.completions(self._body(body), writer, release, self.proto.of(request))
+                return await self.completions(self._body(body), writer, release, self.proto.of(request), times)
             raise RequestError(f"no route {method} {path}", 404, "NotFoundError")
         except RequestError as e:
             await self._json(writer, e.status, error_body(str(e), e.status, e.kind, e.param))
@@ -438,7 +447,7 @@ class Server:
         return {"count": len(ids), "max_model_len": self.max_model_len, "tokens": ids, "token_strs": strs}
 
     def admit(self, b: Any, deliver: Callable[[Delta], None], release: tuple[str, int] | None = None,
-              proto: Any = None) -> tuple[Completion, Admission]:
+              proto: Any = None, times: Mapping[str, float] | None = None) -> tuple[Completion, Admission]:
         """Parse a completion request into the engine's admission (ids, sampling parameters), under ``proto`` (by default
         the server's)."""
         proto = proto or self.proto
@@ -458,14 +467,14 @@ class Server:
             raise RequestError(TOP_P_REFUSAL.format(top_p=top_p), param="top_p")
         http_id = new_http_id()
         return req, Admission(http_id, engine_id_of(http_id), prompt_ids, params, deliver, ingress_of(proto.brought(req), params),
-                              user_of(req.raw), release)
+                              user_of(req.raw), release, dict(times or {}))
 
     async def completions(self, b: Any, writer: asyncio.StreamWriter, release: tuple[str, int] | None = None,
-                          proto: Any = None) -> None:
+                          proto: Any = None, times: Mapping[str, float] | None = None) -> None:
         proto = proto or self.proto
         loop = asyncio.get_running_loop()
         deltas: asyncio.Queue = asyncio.Queue()
-        req, adm = self.admit(b, lambda d: loop.call_soon_threadsafe(deltas.put_nowait, d), release, proto)
+        req, adm = self.admit(b, lambda d: loop.call_soon_threadsafe(deltas.put_nowait, d), release, proto, times)
         created, model = int(self.clock()), self.served_name
         self.submit(adm)
         self.served += 1
@@ -705,6 +714,8 @@ def main(opts: Options) -> int:
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
               "served_rows_statics": windows.served if windows is not None else None,
               "seal_off_loop": sealer is not None, "seal_hold_gb": opts.seal_hold_gb if sealer is not None else None, "pool_warmed": warmed,
+              "finalize_off_loop": sealer is not None and windows.finalize_on_loop is None,
+              "finalize_on_loop": windows.finalize_on_loop if windows is not None else None,
               "window_gb": opts.window_gb or None, "disk_floor": disk_record(windows), "copy_records_to": opts.copy_records_to,
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
               "window_requests": opts.window_requests or None,
@@ -724,8 +735,8 @@ def main(opts: Options) -> int:
         http.shutdown()
         if mirror is not None:
             mirror()                                     # the requests closed at the stop, before the seals still pending
-        def stopped() -> dict[str, Any]:
-            got = {"served": server.served, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
+        def stopped(final: bool) -> dict[str, Any]:
+            got = {"final": final, "served": server.served, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
                    "commit": windows.summary() if windows is not None else None, "admit": order and order.summary(),
                    "sealer": sealer.summary() if sealer is not None else None, "pauses": watchdog.summary(),
                    "mirror_errors": mirror.errors[:10] if mirror else None}
@@ -735,11 +746,11 @@ def main(opts: Options) -> int:
             return got
 
         if sealer is not None:                           # a cancel's SIGKILL can land before the pending seals end
-            stopped()
+            stopped(False)
             print(f"SERVE-OPENAI stopping: {sealer.summary()['held'] / SS.GB:.1f} GB of windows still to seal", flush=True)
             sealer.close()
         watchdog.stop()
-        summary = stopped()
+        summary = stopped(True)
         print(f"SERVE-OPENAI stopped: {json.dumps(summary)}", flush=True)
         trace.uninstall()
         if rows is not None:
