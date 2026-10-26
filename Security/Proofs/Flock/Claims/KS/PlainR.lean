@@ -196,7 +196,7 @@ theorem accR_cols {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Pr
   dsimp only at hu
   rw [hx] at hu
   cases hd : decR rd x ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst)
-      ((Claims.run sha512 P (VR rd) x ω r).msgs.map (RecDeploy.outCoin ∘ Prod.snd)) with
+      (((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.snd).map RecDeploy.outCoin) with
   | none => rw [hd] at hu; simp [Claims.Flock.lookCol] at hu
   | some d =>
     rw [hd] at hu
@@ -379,7 +379,7 @@ theorem decideFree_VR (rd : Claims.Msg → Option FinalP) : DecideFree sha512 (V
   | coin c₂ => revert hacc'; simp [nextR, hact, Claims.OC.eval]
   | decide s spec sts link c₁ mids f =>
     have hso := actR_setupOf hact
-    obtain ⟨-, -, -, -, hk, hkp⟩ := accR_length rd (x := x) (as := as) (cs := cs ++ [c]) (by simp [hl]) hacc'
+    obtain ⟨s', spec', sts', -, hk, hkp⟩ := accR_length rd (x := x) (as := as) (cs := cs ++ [c]) (by simp [hl]) hacc'
     have hcl : 0 < cs.length := by
       have e := hl.symm.trans hk
       have h1 : 1 < cs.length + 1 := by
