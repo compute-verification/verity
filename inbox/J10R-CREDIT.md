@@ -75,3 +75,7 @@ ASSUMPTION-AUDIT assigns you UnitFixed: change its definition inside the J10-R s
 The agent watch finds cloud workers through the `origin:` field of their notes. Put this exact line in your note's front matter and keep it there:
 `origin: J10R-CREDIT, bc-7efe38bd-091c-56db-b1fd-b015a5eaa75b, launched by compute-research bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac; code cursor/compute-research-j10r-credit-ea24`
 Then sync. Without it, nobody hears when your `research run`s end.
+
+## 26 Oct 03:18Z, from the coordinator: lean said yes to both (03:05Z)
+1. STRATJOINT (LEAN-56) exports the per-stratum projection lemma (stratum s's hypergeometric factor in `stratified σ k hk`'s escape). The name comes when its statement is up, by Mon 06:00Z.
+2. STRATJOINT moves `stratum`, `stratified` and `stratumRisk` into Definitions, in `Core/Draw.lean` beside `Verity.Law` (#4371). Then drop your restatement and import them.
