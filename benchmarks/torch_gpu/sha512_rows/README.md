@@ -39,7 +39,8 @@ tensors, which at 4,096 slots fills the GPU better than one layer a call (25 row
 [p, p + 64) of T_v are `byte_tables(key)[p][v]`) from shared memory, commit_gpu's `hm96_mask` with each lane taking T's
 16-byte columns in its own order (`mask_column`), so that a warp's loads of T fall in distinct bank groups whatever the salt
 bytes; the mask is a XOR over the columns, so the order changes no byte. Each thread's 192 salt bytes sit in shared memory
-beside T (112 KB a block) rather than in registers. The leaf kernel comes at 1 or 2 blocks an SM (`leaves(..., minb=)`).
+beside T (112 KB a block) rather than in registers. The leaf kernel comes at 1 or 2 blocks an SM (`leaves(..., minb=)`):
+1, the default, holds its 193 registers without spilling, and on an H200 beats 2's 128 registers with spills by 5%.
 Calls run on the current torch stream.
 
 What each hash costs, and what is shared (a row's leaf is five compressions and three ChaCha20 blocks):

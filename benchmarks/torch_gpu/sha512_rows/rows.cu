@@ -24,7 +24,7 @@
 #define SXR_MINB 2
 #endif
 #ifndef SXR_LEAF_MINB
-#define SXR_LEAF_MINB 2
+#define SXR_LEAF_MINB 1
 #endif
 
 using namespace sxr;

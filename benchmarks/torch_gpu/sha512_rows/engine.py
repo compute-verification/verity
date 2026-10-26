@@ -418,7 +418,7 @@ class Engine:
     def leaves(self, lt: LeafTable, x: Any, salts: SaltKey | Any, out: Any = None, minb: int = 0, frames: LeafTable | None = None,
                dest: Any = None, run: Any = None) -> Any:
         """(G, S, 8): each row's frame leaf over hm96's tree leaf of x (``row_digests``) under salt y. ``minb`` is the leaf
-        kernel's blocks an SM (1 or 2; 0, the build's default, 2).
+        kernel's blocks an SM (1 or 2; 0, the build's default, 1).
 
         With ``frames`` (``frame_table``, a unit each), ``dest`` (G,) uint32 on the device and ``run`` (S, units, 8): a row
         whose ``dest`` d is below the units is unit d alone, so its leaf is the unit's root, and the unit's frame leaf over it
