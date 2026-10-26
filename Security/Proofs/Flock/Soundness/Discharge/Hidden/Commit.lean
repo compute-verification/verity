@@ -373,6 +373,25 @@ theorem Committed.netKinds (hty : tags.typed = false) (h : Committed tags cf tab
     subst he
     exact P.kinds
 
+/-- **What a committed circuit's parse accepted, whatever its template** (`ParseFactsU`): `HmRow.parse`'s facts for a
+flat file, its parsed file's with the template's committed unit net first for a templated one. -/
+theorem Committed.factsU (hty : tags.typed = false) (h : Committed tags cf tables c) :
+    ∃ pre, ParseFactsU tags pre c := by
+  rcases h with h | h
+  · exact ⟨#[], (parse_facts (parse_untyped hty h).1).toU⟩
+  · obtain ⟨tu, c₀, P, -, rfl, -, -⟩ := TmplValue.parseTmpl_facts h
+    exact ⟨_, P.toU.retmpl _⟩
+
+/-- **A committed circuit's `sha512/row/v1` output rows** (`out_rows_v1`): unsegmented, one per output port, each after
+the input rows and of `2 · words = 128 · chunks` bytes; a templated file's are its parsed file's. -/
+theorem Committed.outRows (hty : tags.typed = false) (h : Committed tags cf tables c)
+    (hv1 : ∀ p ∈ c.ports.toList, p.v2 = false) : OutRows c := by
+  rcases h with h | h
+  · obtain ⟨hp, hc⟩ := parse_untyped hty h
+    exact out_rows_v1 hp hc hv1
+  · obtain ⟨tu, c₀, hp, hck, -, rfl⟩ := TmplValue.parseTmpl_cases h
+    exact out_rows_v1Pre hp (parse_factsPre_nets hp).1 hck hv1
+
 /-- **A session's layout**, flat or templated (`hidden_layoutC`). -/
 theorem SpecC.layout (ht : tags.typed = false) (s : SpecC tags cf pf coins tables draw st) : Layout st :=
   Or.elim s (hidden_layoutC ht) fun s => by
