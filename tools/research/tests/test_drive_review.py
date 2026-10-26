@@ -4,8 +4,13 @@ a Lean change only once a Lean check passed, and launches no train check; the af
 reverts what it implicates once `main` passed that step before, bisecting when several PRs are implicated."""
 from __future__ import annotations
 
+import contextlib
 import calendar
 import json
+import os
+import subprocess
+import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -909,3 +914,163 @@ def test_review_lists_the_members_lacking_a_land_verdict_and_records_one_refusin
                                                                                "no land verdict")
     (lab,) = world.store.labels(label_target(1, world.gh.prs[1].head), key=vocab.REVIEWED)
     assert (lab.value, lab.by, lab.ref) == ("land", "lane-9", "note:ci/x")
+
+
+def _detached(h: Review, tmp_path, lean: bool = True, post: bool = False) -> list[str]:
+    """``h``'s Lean checks (``lean``) and post-landing runs (``post``) launched as train.sh is: detached, the launch returning at
+    once with no run ids (`drive.detach`'s record), each launch's commit in the list returned.  `h.printed[launch["dir"]]` is
+    what its train.sh has printed (`drive.launched`): unset while it runs, its run ids, or [] once it exited without them."""
+    starts, h.printed = [], {}
+
+    def start(repo, commit, machine, *a, **kw):
+        starts.append(commit)
+        return {"dir": str(tmp_path / f"launch-{len(starts)}"), "pid": 0}
+
+    if lean:
+        h.d.launch_lean = start
+    if post:
+        h.d.launch_postland = start
+    h.d.launched = lambda launch: h.printed.get(launch["dir"], (None, "train: abc on m1; log x"))
+    return starts
+
+
+def test_a_lean_check_launches_detached_and_a_later_tick_reads_its_run_ids(world, monkeypatch, tmp_path):
+    """26 Oct (note:ci/20261026T0926Z-finding-drive-tick-profile): drive's tick waited 9-12 min on each Lean check's train.sh
+    for its run ids, so every tick that launched one took 15-26 min.  The launch returns at once; a later tick reads the ids."""
+    h = Review(world, monkeypatch)
+    starts = _detached(h, tmp_path)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    h.review(1)
+    assert not h.tick().startswith("landed")
+    top = _tip(world)
+    rec = h.d.q.load_state()["drive"]["lean"][top]
+    assert starts == [top] and rec["ids"] == [] and rec["launch"]["dir"] == str(tmp_path / "launch-1") and rec["state"] is None
+    out = h.tick()
+    assert not out.startswith("landed") and starts == [top], out          # still launching: it waits, and nothing launches
+    assert any("waits for the Lean check (launching)" in s for s in world.logs)
+    h.printed[rec["launch"]["dir"]] = (["r-lean"], "RUN r-lean")
+    h.run_state["r-lean"] = ("running", None, None)
+    h.clock += 600
+    assert not h.tick().startswith("landed")
+    rec = h.d.q.load_state()["drive"]["lean"][top]
+    assert rec["ids"] == ["r-lean"] and "launch" not in rec and rec["at"] == h.clock and rec["state"] is None
+    h.run_state["r-lean"] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, "r-lean", {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #1"), world.logs
+    assert starts == [top]
+
+
+def test_a_detached_lean_launch_that_ends_without_run_ids_registered_no_run_and_launches_again(world, monkeypatch, tmp_path):
+    from research.drive import LAUNCH_LOST_S
+
+    h = Review(world, monkeypatch)
+    starts = _detached(h, tmp_path)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    h.review(1)
+    h.tick()
+    top = _tip(world)
+    h.printed[str(tmp_path / "launch-1")] = ([], "train: no run launched in the wait; stopped its launcher")
+    assert not h.tick().startswith("landed")
+    (post,) = [p for p in h.posts if "registered no run" in p]
+    assert f"train.sh {top[:12]} m1 --deferred {LEAN_STEP} registered no run: train: no run launched" in post, post
+    assert f"{tmp_path / 'launch-1'}/log" in post
+    assert starts == [top, top]                                           # dropped, and launched again in the same tick
+    rec = h.d.q.load_state()["drive"]["lean"][top]
+    assert rec["launch"]["dir"] == str(tmp_path / "launch-2") and rec["state"] is None
+    h.clock += LAUNCH_LOST_S                                              # within the bound it still waits
+    h.tick()
+    assert starts == [top, top]
+    h.clock += 1                                                          # printing nothing past it, it registered no run
+    h.tick()
+    assert starts == [top, top, top] and len([p for p in h.posts if "registered no run" in p]) == 1   # told once per commit
+    rec = {"ids": [], "launch": {"dir": "d", "pid": 0}, "at": h.clock - LAUNCH_LOST_S - 1}
+    assert h.d._resolve(rec, "x").startswith("no run ids 60 min after its launch") and "launch" not in rec
+
+
+def test_a_launching_lean_check_holds_next_on_its_base_and_an_ejection_waits_for_it(world, monkeypatch, tmp_path):
+    h = Review(world, monkeypatch)
+    starts = _detached(h, tmp_path)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    h.review(1)
+    h.tick()
+    top = _tip(world)
+    _move_main(world, {"b.txt": "moved\n"})
+    out = h.tick()
+    assert "stays on" in out and _tip(world) == top and starts == [top], out
+    assert Q.lean_running(h.d.q.load_state(), 1) == "(launching)"
+
+
+def test_launching_lean_checks_count_against_max_lean_checks(world, monkeypatch, tmp_path):
+    """As `test_a_lean_check_is_stacked_at_nexts_top_for_a_lean_change_above_a_running_one`, with every launch still waiting
+    for its run ids: one still launching is a running check for the stack and for the cap."""
+    h = Review(world, monkeypatch)
+    starts = _detached(h, tmp_path)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1")
+    world.gh.put(2, world.change({"pkg/lean-audit.json": "{}"}))
+    world.gh.put(3, world.change({"pkg/T.lean": "theorem T : True := trivial\n"}))
+    h.review(2)
+    h.tick()
+    two, three = (m.commit for m in h.q.chain())
+    assert starts == [two], world.logs
+    h.tick()
+    assert starts == [two, three], world.logs                             # stacked above the one still launching
+    assert h.d.q.load_state()["drive"]["lean"][three]["stacked"] is True
+    world.gh.put(4, world.change({"pkg/U.lean": "theorem U : True := trivial\n"}))
+    h.tick()
+    h.tick()
+    assert starts == [two, three] and h.cancelled == [], world.logs       # two launching: max_lean_checks
+    h.d.max_lean_checks = 3
+    h.tick()
+    assert len(starts) == 3 and starts[2] == _tip(world), world.logs
+
+
+def test_the_after_landing_run_launches_detached_and_one_that_registered_no_run_is_told_and_launched_again(
+        world, monkeypatch, tmp_path):
+    h = Review(world, monkeypatch, baseline=False)
+    starts = _detached(h, tmp_path, lean=False, post=True)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    main = _main(world)
+    assert h.tick().startswith("nothing lands before an after-landing run")
+    run = h.postland()["run"]
+    assert starts == [main] and run["ids"] == [] and run["baseline"] is True
+    out = h.tick()
+    assert out.startswith("nothing lands before the post-landing run (launching) of `main`") and starts == [main], out
+    h.printed[run["launch"]["dir"]] = ([], "train: research run exited 1 before launching a run")
+    h.tick()
+    (post,) = [p for p in h.posts if "registered no run" in p]
+    assert f"train.sh {main[:12]} m1 --deferred" in post and "exited 1 before launching a run" in post, post
+    assert starts == [main, main]
+    run = h.postland()["run"]
+    h.printed[run["launch"]["dir"]] = (["r-post"], "RUN r-post")
+    h.run_state["r-post"] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, "r-post", {s: "passed" for s in AFTER_LANDING})]
+    assert h.tick().startswith("landed #1"), world.logs
+    assert h.postland()["verified"] == main
+
+
+def test_detach_returns_before_train_sh_prints_its_run_ids_and_launched_reads_them_or_an_exit_without_them(tmp_path, monkeypatch):
+    """`detach`'s job, with a stand-in for train.sh that prints its `RUN` line only once the test lets it."""
+    from research.drive import LAUNCHES, detach, launched
+
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    gate, rid = tmp_path / "gate", "r20261026-093000-abcd"
+    os.mkfifo(gate)
+    job = detach(tmp_path, ["sh", "-c", f'echo "train: abc on m1"; cat "$1" > /dev/null; echo "RUN {rid}"', "sh", str(gate)],
+                 dict(os.environ))
+    assert job["dir"].startswith(str(tmp_path / LAUNCHES)) and launched(job)[0] is None
+    with open(gate, "w"):
+        pass
+    with contextlib.suppress(ChildProcessError):                         # its end, not a clock
+        os.waitpid(job["pid"], 0)
+    assert launched(job) == ([rid], f"train: abc on m1\nRUN {rid}")
+    job = detach(tmp_path, ["sh", "-c", "echo 'train: no run launched' >&2; exit 1"], dict(os.environ))
+    with contextlib.suppress(ChildProcessError):
+        os.waitpid(job["pid"], 0)
+    assert launched(job) == ([], "train: no run launched") and (Path(job["dir"]) / "rc").read_text() == "1\n"
+    gone = subprocess.Popen(["true"])
+    gone.wait()
+    (Path(job["dir"]) / "rc").unlink()
+    assert launched({**job, "pid": gone.pid})[0] == []
