@@ -378,7 +378,7 @@ now (the certifier's protocol, on branch `cursor/io-tie-061a`).
   the coins' context) and its charged length to the registered one, so a row dir whose names make another circuit under
   unchanged digests is refused (`circuit`). It
   imports no `verity_vllm` code. The exception is a template whose Definition is still vLLM's (`SiluMul_v2`, `RoPEHead_v1`):
-  the input set loads it from `verity_vllm.program.registry` until #3927 moves those Definitions into `verity`.
+  the input set loads it from `verity.ml.definitions.registry` until #3927 moves those Definitions into `verity`.
 - **A single-GPU window** is a stand-in of the Commit's `rows-sha512` run root (`stand_in1`, held by `source1`), as
   `deferred_rows.from_bundle` writes one. The sealed bundle records the Commit's absolute node paths, and none is read: the
   prover's Programs come from `--row-dir` and the verifier's from its own trace, and the Build manifest falls back to

@@ -89,12 +89,6 @@ def isNull (j : Json) (k : String) : Bool :=
   | .ok _ => false
   | .error _ => true
 
-/-- `j` is `true`: what `j == Json.bool true` decides, by a match rather than through `Json`'s partial `==`. -/
-def isTrue (j : Json) : Bool :=
-  match j with
-  | .bool true => true
-  | _ => false
-
 def f128s (a : Array Json) : V (Array F128) := a.mapM fun x => match x.getStr? with
   | .ok s => f128OfHex s
   | .error _ => .error "record: an F128 is not a hex string"
@@ -118,7 +112,8 @@ def decode (spec : SessionSpec) (text : String) : V Session := do
     let _ ← CoinTree.checkRecord ct nonce (← fld j "coin_tree")
   -- S3
   let cfg ← fld j "config"
-  check (isTrue (← fld cfg "require_link")) "S3/F1: require_link is not true"
+  -- a match, not `Json`'s `==` (a `partial def`, so no proof can evaluate it)
+  check ((← fld cfg "require_link") matches Json.bool true) "S3/F1: require_link is not true"
   check ((← str j "link_mode") == "exchange") "S3/E1: link_mode is not exchange"
   let l ← fld j "link"
   check ((← str l "mode") == "exchange") "S3/E1: link.mode is not exchange"

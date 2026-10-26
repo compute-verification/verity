@@ -226,6 +226,14 @@ def test_a_wake_cursor_refuses_with_409_posts_nothing(relay):
     assert len(relay.posts) == 1 and "run-v" in relay.posts[0] and relay.OFFSET.read_text() == "2"
 
 
+def test_a_silent_coordinator_rings_top(relay):
+    """TOP-90 row 37: memory-accounting's coordinator hung 01:47-04:39Z, and only its own handle was rung."""
+    co = PROOFS_INBOX["holder"]
+    rec = {"kind": "silent", "agent": co, "name": "verity: proofs", "run": "run-r", "handle": "proofs", "lane": "proofs",
+           "minutes": 60, "active_minutes": 300, "window": 1, "since": "2026-10-26T02:00:00Z", "owner": "top"}
+    assert relay.rung(rec) == "top" and relay.rung({**rec, "owner": None}) == "proofs"
+
+
 def test_a_silent_agent_and_an_ended_run_lead_with_the_records_handle_and_ring_it(relay):
     proofs = relay.slack.tag(relay.slack.entry(relay.REG, "proofs"))
     w, co = "bc-22222222-2222-2222-2222-222222222222", PROOFS_INBOX["holder"]
