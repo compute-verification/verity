@@ -16,9 +16,13 @@ import Definitions.Core.Accel.Principles
 * **`G` is the devices at the open parameters `x`** (`OnCard`): `G`'s resources are the pooled cards' and the others',
   at θ's rates; its memory is theirs; its (P1) and (P2) are MODEL-SPEC's; and every words program the cards run is a
   program of `G` with the run's units as its use, its ticks and backlog as its wall time and no import;
-* **the challenger's clock** (`Timed`, RT-PROTO P5): the verifier refuses a round whose commitment comes more than
-  `Δ` after its dither coin, and draws every round's coin at least `Δ` before the period's end, so each round's work
-  lies inside the period whose capacity it is counted against.
+* **the public best methods** (`PubBest`), fixed per card and priced at the headline's dual price (`pubCost`), with
+  placeholders until D5;
+* **the network certifier's counts** (`Counted`, RT-PROTO P2): the verifier refuses a period whose signed counts into
+  or out of the devices pass the caps `E_in`, `E_out`;
+* **the auditor's clocks** (`Timed`, RT-PROTO P5): the verifier refuses a period in which the network certifier saw
+  some round's commitment arrive more than `Δ` after the challenger's coin, and draws every round's coin at least `Δ`
+  before the period's end; `TimedWorkFits` is what that buys, the rounds' work within the period's capacity.
 
 The open parameters `x` are not fixed here: the headline holds at every `x` meeting θ's floors (`Card.floors`: on the
 H200 `sync ≥ 1`, `b1 ≥ 1/8`, `madHi ≥ 2`; on sm_120 `madHi ≥ 2` and no native `b1`, RT-MODEL M12, M13) with the
@@ -97,8 +101,8 @@ def cardRun (m : Verity.Accel.Machine ι) (Prg : m.Prog ℕ) (M : m.Mem) (sched 
 def cardUnits (m : Verity.Accel.Machine ι) (iss : List (List m.Instr)) (r : m.Res) : ℚ≥0 :=
   ∑ t ∈ Finset.range iss.length, Verity.Accel.Machine.usage iss t r
 
-/-- **`G` is the period's devices at the open parameters `x`** (RT-LEAN L4, L9): an equivalence `e` of `G`'s resources
-with the pooled cards' and the other devices', under which
+/-- **`G` is the period's devices at the open parameters `x`** (RT-LEAN L4, L9, L31): under the equivalence `e` of
+`G`'s resources with the pooled cards' and the other devices',
 
 * each card resource runs at `n ρ_r` units a tick, `n ρ_r f` a second, and each other device's at its θ rate;
 * `G`'s memory is the pooled cards' bits (on-chip and device memory) and the other devices';
@@ -110,15 +114,14 @@ with the pooled cards' and the other devices', under which
   resource and nothing of the other devices, takes the run's ticks and its backlog as wall time, and imports nothing.
 
 So `SAKMatmul` at `G` speaks of every words program of the card at `x`, at the card's rates; the dual price, the honest
-cost `H` and the capacity `C` are in the card's units. `G.ext` is read as the network certifier's count of the bits
-crossing the period's devices' links in either direction (RT-PROTO P2: egress counted as well as ingress). The commitment and the round's other programs read the oracle
+cost `H` and the capacity `C` are in the card's units. `G.ext` is the bits a run imports, which the network certifier
+counts (`Assumptions.CertifierSeesImports`). The commitment and the round's other programs read the oracle
 `P.Orc`, which the card machine has no instruction for: their reading on the card is ABSORB-THM's realization (an oracle
 query priced at the public best's speed, R-ACCEL-7), open. A program of `G` cheaper than any of the card's makes
 `SAKMatmul` or `ShaSpeed` false at `G`, and the headline then says nothing at that `G`; the `G` the headline is read at
 has the card's programs and no others. -/
 def OnCard (G : Accel) (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devices c) (P : RoundProto)
-    (L : Layout (D.machine x) P) : Prop :=
-  ∃ e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res,
+    (L : Layout (D.machine x) P) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) : Prop :=
     (∀ r, G.rate (e.symm (.inl r)) = ((poolCard c D.n D.n_pos).ρ r : ℝ) * D.f) ∧
     (∀ h, G.rate (e.symm (.inr h)) = D.oth.rate h) ∧
     G.mem = (((D.machine x).chip + (D.machine x).mem : ℕ) : ℝ) + D.oth.mem ∧
@@ -134,18 +137,64 @@ def OnCard (G : Accel) (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devi
         G.wall Mw (M₀, d) = (((sched d).length + x.slack : ℕ) : ℝ) / D.f ∧
         G.ext Mw (M₀, d) = 0
 
+/-- **The public best methods on the card table `c`** (RT-LEAN L3, L31): the units, resource by resource, that the
+public best matmul method takes for one round's words (`mm`) and that the pinned public SHA-512 implementation takes
+for the round's commitment (`sha`), each a named public program run on the card. The headline prices them at its dual
+price (`pubCost`), so `pub_mm` and `pub_sha` are fixed per card, not chosen per reading. -/
+structure PubBest (c : Verity.Accel.Card) where
+  mm : Verity.Accel.Res → ℚ≥0
+  sha : Verity.Accel.Res → ℚ≥0
+
+/-- Units on the card's resources priced at `μ` through the resource match `e`. -/
+noncomputable def pubCost {G : Accel} {c : Verity.Accel.Card} {D : Devices c}
+    (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) (μ : G.Res → ℝ) (u : Verity.Accel.Res → ℚ≥0) : ℝ :=
+  ∑ r, μ (e.symm (.inl r)) * (u r : ℝ)
+
+/-- **Placeholder until D5 (12:00Z)**: the H200's public best methods, zero units, so `c_mm = c_sha = 0` and the
+headline's model term is 1 until D5 names the programs and their units. -/
+def pubBestH200Placeholder : PubBest Verity.Accel.H200.card := ⟨0, 0⟩
+
+/-- **Placeholder until D5 (12:00Z)**: the RTX PRO 6000's public best methods, zero units, as on the H200. -/
+def pubBestSm120Placeholder : PubBest Verity.Accel.Sm120.card := ⟨0, 0⟩
+
 end Cards
+
+section Certifier
+
+/-- A count the network certifier signs over a prover's period, at the oracle and the verifier's coins. -/
+abbrev Count (G : Accel) (P : RoundProto) (k : ℕ) : Type 1 :=
+  Prover G P k → P.Orc → (Fin k → P.Draw × P.Chk) → ℝ
+
+/-- **The verdict with the network certifier's counts** (RT-PROTO P2, RT-LEAN L32): the service's verdict, and the
+certifier's signed counts of the bits into (`cin`) and out of (`cout`) the period's devices are within the caps
+`E_in` and `E_out`, fixed before the period; a period past either is refused. -/
+def Counted {G : Accel} {P : RoundProto} {k : ℕ} (verdict : Verdict G P k) (cin cout : Count G P k)
+    (Ein Eout : ℝ) : Verdict G P k :=
+  fun A o x => verdict A o x ∧ cin A o x ≤ Ein ∧ cout A o x ≤ Eout
+
+end Certifier
 
 section Clock
 
-/-- **The verdict with the challenger's clock** (RT-PROTO P5, O-REDTEAM NF5): the service's verdict, and the
-challenger's schedule `t` draws every round's dither coin at least `Δ` before the period's end, and it refuses a period
-in which some round's commitment came more than `Δ` after that round's coin (its work, the stretch from coin to
-commitment, takes at most `Δ`). A round is credited in the period of its coin, and its work then lies inside that
-period, whose capacity `Period.cap` the headline counts it against: no round straddles two periods. -/
+/-- The times, by round, at which the network certifier saw each round's commitment arrive, over a prover's period at
+the oracle and the verifier's coins: its signed clock, an auditor device. -/
+abbrev Arrival (G : Accel) (P : RoundProto) (k : ℕ) : Type 1 :=
+  Prover G P k → P.Orc → (Fin k → P.Draw × P.Chk) → Fin k → ℝ
+
+/-- **The verdict with the auditor's clocks** (RT-PROTO P5, O-REDTEAM NF5, RT-LEAN L33): the service's verdict, the
+challenger's schedule `t` draws every round's dither coin at least `Δ` before the period's end, and the period is
+refused if the network certifier saw some round's commitment arrive (`arrive`) more than `Δ` after that round's coin.
+Both clocks are the auditor's; nothing here reads a time the prover reports. -/
 def Timed {G : Accel} {P : RoundProto} {k : ℕ} (verdict : Verdict G P k) (Pd : Period G) (Δ : ℝ)
-    (t : Fin k → ℝ) : Verdict G P k :=
-  fun A o x => verdict A o x ∧ (∀ w, 0 ≤ t w ∧ t w + Δ ≤ Pd.T) ∧ ∀ w, G.wall (A.work w) (A.workIn o x w) ≤ Δ
+    (t : Fin k → ℝ) (arrive : Arrival G P k) : Verdict G P k :=
+  fun A o x => verdict A o x ∧ (∀ w, 0 ≤ t w ∧ t w + Δ ≤ Pd.T) ∧ ∀ w, arrive A o x w ≤ t w + Δ
+
+/-- **An accepted period's rounds' work fits the period**: for every prover the verdict accepts, the work its rounds
+do from coin to commitment uses, resource by resource, at most the period's capacity `Period.cap`. This is what lets
+the headline count that work against the period's devices: it was done on them, inside the period. -/
+def TimedWorkFits {G : Accel} {P : RoundProto} {k : ℕ} (verdict : Verdict G P k) (Pd : Period G) : Prop :=
+  ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), verdict A o x →
+    ∀ r, ∑ w, G.use (A.work w) (A.workIn o x w) r ≤ Pd.cap r
 
 end Clock
 
