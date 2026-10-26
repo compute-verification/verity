@@ -3,7 +3,8 @@ import Properties.Verity.Game
 /-!
 # Soundness at the verifier of record, composed from its subprotocols' targets
 
-The verdicts are not free fields: in the causal game after the parameters and the commitment (`Vocab.game`), subprotocol
+The verdicts are not free fields: in the causal game after the parameters, the circuit file and the commitment
+(`Vocab.game`), subprotocol
 `a` accepts when its compiled component accepts its own case in what the prover sent and every release its check read
 is in the device's log (`Vocab.Verdict`), and the event is the verifier of record's acceptance (`Accepts`) while one
 claim fails (`Vocab.Holds`, sampled proofs' read off the commitment), outside the break. `Soundness` states that each
@@ -24,9 +25,9 @@ open Accounting
 
 /-- **Soundness at the verifier of record, from each subprotocol's target.** On any device, for any names `V` the
 subprotocols define, if sampled proofs, PoUW, PoUS, the bandwidth audit and the network certifier each meet their target
-in the causal game, then at all parameters and commitments and for every strategy, the probability that onsite's
-compiled verifier accepts while one of the period's claims fails (more than an `ε` share of the circuit's units unbound
-in some transcript the commitment opens to, less than `W` of work, fewer than `S` bits held on average, fewer than `Q`
+in the causal game, then at all parameters, circuit files and commitments and for every strategy, the probability that
+onsite's compiled verifier accepts a file that passed the commit phase's check while one of the period's claims fails
+(more than an `ε` share of the file's units unbound in some transcript the commitment opens to, less than `W` of work, fewer than `S` bits held on average, fewer than `Q`
 bits read, or more than `K` bits through the network certifiers), with no break, is at most the published errors
 summed. -/
 def Soundness : Prop :=

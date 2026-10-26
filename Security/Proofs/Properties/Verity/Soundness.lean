@@ -47,7 +47,7 @@ theorem prob_exists_finset_le {β κ : Type} (S : Finset κ) (p : κ → β → 
         _ ≤ Game.prob (p j) g σ + ∑ i ∈ S, Game.prob (p i) g σ := add_le_add le_rfl ih
 
 theorem soundness_of_subprotocols : Soundness := by
-  intro ι α _ d V hS hW hP hB hN θ c σ
+  intro ι α _ d V hS hW hP hB hN θ F c σ
   have hT : ∀ a, V.Target a := by
     intro a
     cases a with
@@ -56,15 +56,17 @@ theorem soundness_of_subprotocols : Soundness := by
     | pous => exact hP
     | poub => exact hB
     | network => exact hN
-  calc Game.prob (fun o => Accepts o.sent ∧ (∃ a, ¬ V.Holds θ c σ a o) ∧ ¬ V.Break θ c o) (V.game θ c) σ
-      ≤ Game.prob (fun o => ∃ a ∈ Finset.univ, V.Verdict a o ∧ ¬ V.Holds θ c σ a o ∧ ¬ V.Break θ c o)
-          (V.game θ c) σ := by
-        refine Game.prob_mono (fun o ⟨hacc, ⟨a, hfail⟩, hbrk⟩ => ⟨a, Finset.mem_univ a, ?_, hfail, hbrk⟩) _ σ
-        refine ⟨accepts_components hacc a, fun r hr => ?_⟩
+  calc Game.prob (fun o => Accepts o.sent ∧ V.Registered o.params o.file ∧ (∃ a, ¬ V.Holds θ F c σ a o) ∧
+          ¬ V.Break θ F c o) (V.game θ F c) σ
+      ≤ Game.prob (fun o => ∃ a ∈ Finset.univ, V.Verdict a o ∧ ¬ V.Holds θ F c σ a o ∧ ¬ V.Break θ F c o)
+          (V.game θ F c) σ := by
+        refine Game.prob_mono
+          (fun o ⟨hacc, hreg, ⟨a, hfail⟩, hbrk⟩ => ⟨a, Finset.mem_univ a, ?_, hfail, hbrk⟩) _ σ
+        refine ⟨hreg, accepts_components hacc a, fun r hr => ?_⟩
         by_contra hne
         exact hbrk (Or.inl ⟨a, accepts_components hacc a, r, hr, hne⟩)
-    _ ≤ ∑ a, Game.prob (fun o => V.Verdict a o ∧ ¬ V.Holds θ c σ a o ∧ ¬ V.Break θ c o) (V.game θ c) σ :=
+    _ ≤ ∑ a, Game.prob (fun o => V.Verdict a o ∧ ¬ V.Holds θ F c σ a o ∧ ¬ V.Break θ F c o) (V.game θ F c) σ :=
         prob_exists_finset_le _ _ _ σ
-    _ ≤ ∑ a, V.delta θ a := Finset.sum_le_sum fun a _ => hT a θ c σ
+    _ ≤ ∑ a, V.delta θ a := Finset.sum_le_sum fun a _ => hT a θ F c σ
 
 end Verity
