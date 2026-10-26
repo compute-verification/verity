@@ -372,8 +372,8 @@ algorithm: `remote-replicas/README.md`.
 Blobs that only uncited artifacts past their kind's TTL hold leave the remote (Daniel, 26 Oct: the store grew ~840 GiB a day).
 TTLs are `gc.TTL_DAYS`, by the manifest's LastModified: run-record/v1 and vllm-replay-bundle/v1 7 days, vllm-rowdir-tar/v1 3,
 run-files/v1 and vllm-row-meta/v1 14, telemetry/v1 30; every other kind keeps no TTL. Kept: an artifact or run that a label
-(target, ref or value), a citing tree (`--cite`: the notes repository, a checkout of the code with its fixture registry) or a
-cited artifact's `meta` names, every `art:` id a cited run's attempt names, whatever a kept manifest's `refs` name, young and
+(target, ref or value), a citing tree (`--cite`: the notes repository, a checkout of the code with its fixture registry), Linear
+(`--cite-linear`, required with `--apply`: issues and comments, projects, project updates, documents) or a cited artifact's `meta` names, every `art:` id a cited run's attempt names, whatever a kept manifest's `refs` name, young and
 untimed artifacts. Manifests, attempts and labels stay, so an expired id still resolves and `fetch` reports its blob absent.
 A blob is deleted only after it has been a candidate for `gc.GRACE_S` (24 h, the longest custody upload) and is one still,
 after a last listing of `manifests/`, so an upload that reused it meanwhile keeps it. Cite what you need before its TTL: a

@@ -3,8 +3,9 @@
 What stays (the keep set):
 
 * **cited**: an `art:` id (full, or the abbreviated `art:<8+ hex>` reports print) or a run id named by any label on the remote
-  (its target, ref or value) or by a file of a citing tree (`--cite DIR`: the notes repository, a checkout of the code with its
-  fixture registry); a cited run keeps every `art:` id its attempt names (outputs, inputs, telemetry).
+  (its target, ref or value), by a file of a citing tree (`--cite DIR`: the notes repository, a checkout of the code with its
+  fixture registry) or by Linear (`--cite-linear`: every issue's description and comments, projects, project updates and
+  documents); a cited run keeps every `art:` id its attempt names (outputs, inputs, telemetry).
 * **young**: an artifact whose manifest is younger than its kind's TTL (`TTL_DAYS`, by the manifest's LastModified).
 * **untimed**: every artifact of a kind `TTL_DAYS` doesn't name.
 
@@ -99,6 +100,66 @@ def scan_tree(root: Path) -> tuple[set[str], set[str]]:
             arts |= a
             runs |= r_
     return arts, runs
+
+
+LINEAR_PAGE = 50
+LINEAR_ISSUES = """query($after: String) { issues(first: %d, after: $after, includeArchived: true) {
+  nodes { id identifier description comments(first: %d) { nodes { body } pageInfo { hasNextPage endCursor } } }
+  pageInfo { hasNextPage endCursor } } }""" % (LINEAR_PAGE, LINEAR_PAGE)
+LINEAR_COMMENTS = """query($id: String!, $after: String) { issue(id: $id) { comments(first: %d, after: $after) {
+  nodes { body } pageInfo { hasNextPage endCursor } } } }""" % LINEAR_PAGE
+LINEAR_OTHERS = {
+    "projects": "nodes { description content }",
+    "projectUpdates": "nodes { body }",
+    "documents": "nodes { content }",
+}
+
+
+def scan_linear(gql: Callable[[str, dict], dict]) -> tuple[set[str], set[str], int]:
+    """Every art hex and run id Linear's text names (top, 26 Oct: lanes cite mostly there): each issue's description and comments,
+    archived ones too, every project's description and content, project updates and documents; and how many pages it read.
+    `gql(query, variables)` is `research.linear.Linear.gql`. Any error is a GcError: a citation it couldn't read could lose a blob."""
+    arts: set[str] = set()
+    runs: set[str] = set()
+    pages = 0
+
+    def take(text: Any) -> None:
+        a, r = named(json.dumps(text))
+        arts.update(a)
+        runs.update(r)
+
+    def pull(query: str, variables: dict) -> dict:
+        nonlocal pages
+        pages += 1
+        try:
+            return gql(query, variables)
+        except Exception as e:  # noqa: BLE001
+            raise GcError(f"Linear: {type(e).__name__}: {e}") from None
+
+    after = None
+    while True:
+        conn = pull(LINEAR_ISSUES, {"after": after})["issues"]
+        for issue in conn["nodes"]:
+            take([issue.get("identifier"), issue.get("description"), issue["comments"]["nodes"]])
+            more = issue["comments"]["pageInfo"]
+            while more["hasNextPage"]:
+                c = pull(LINEAR_COMMENTS, {"id": issue["id"], "after": more["endCursor"]})["issue"]["comments"]
+                take(c["nodes"])
+                more = c["pageInfo"]
+        if not conn["pageInfo"]["hasNextPage"]:
+            break
+        after = conn["pageInfo"]["endCursor"]
+    for field, sel in LINEAR_OTHERS.items():
+        after = None
+        while True:
+            q = "query($after: String) { %s(first: %d, after: $after) { %s pageInfo { hasNextPage endCursor } } }" % (
+                field, LINEAR_PAGE, sel)
+            conn = pull(q, {"after": after})[field]
+            take(conn["nodes"])
+            if not conn["pageInfo"]["hasNextPage"]:
+                break
+            after = conn["pageInfo"]["endCursor"]
+    return arts, runs, pages
 
 
 class Reader:
@@ -209,7 +270,8 @@ def _label_target(key: str) -> str:
 
 
 def plan(remote: Any, cache: Path, cite: list[Path], *, now: float, ttl: dict[str, float] | None = None, jobs: int = JOBS,
-         work: Path | None = None, log: Callable[[str], None] | None = None) -> Plan:
+         work: Path | None = None, linear: Callable[[str, dict], dict] | None = None,
+         log: Callable[[str], None] | None = None) -> Plan:
     say = log or (lambda s: None)
     ttl = TTL_DAYS if ttl is None else ttl
     rd = Reader(remote, cache, jobs)
@@ -220,6 +282,11 @@ def plan(remote: Any, cache: Path, cite: list[Path], *, now: float, ttl: dict[st
     for root in cite:
         a, r = scan_tree(Path(root))
         say(f"{root}: names {len(a)} art ids, {len(r)} runs")
+        cited_hex |= a
+        cited_runs |= r
+    if linear is not None:
+        a, r, pages = scan_linear(linear)
+        say(f"Linear ({pages} pages): names {len(a)} art ids, {len(r)} runs")
         cited_hex |= a
         cited_runs |= r
     listing = {m.group(1): _epoch(t) for k, t in remote.list_times("manifests/") if (m := MANIFEST_KEY.fullmatch(k))}

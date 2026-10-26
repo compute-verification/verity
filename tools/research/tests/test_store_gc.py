@@ -158,3 +158,52 @@ def test_an_unreadable_manifest_or_citing_tree_deletes_nothing(env, tmp_path):
         gc.plan(FsRemote(b), cache, [tmp_path / "missing"], now=NOW)
     with pytest.raises(gc.GcError, match="no citing tree"):
         gc.plan(FsRemote(b), cache, [], now=NOW)
+
+
+def fake_linear(pages: dict):
+    """`gql` over canned pages: (field, after) -> connection."""
+    asked = []
+
+    def gql(query, variables):
+        asked.append(variables)
+        if "issue(id:" in query:
+            return {"issue": {"comments": pages[("comments", variables["after"])]}}
+        field = next(f for f in ("issues", "projects", "projectUpdates", "documents") if f"{f}(first:" in query)
+        return {field: pages[(field, variables.get("after"))]}
+    return gql, asked
+
+
+def conn(nodes, after=None):
+    return {"nodes": nodes, "pageInfo": {"hasNextPage": after is not None, "endCursor": after}}
+
+
+def test_linear_cites_issues_their_comments_projects_updates_and_documents(env):
+    """top, 26 Oct: lanes cite run ids and art ids mostly in Linear (r20261026-171233-4e86 on INF-263 and VLLM-33)."""
+    b, notes, cache, _ = env
+    by_issue = artifact(b, "run-record/v1", blob(b, b"1"), age_days=40)
+    by_comment = artifact(b, "run-record/v1", blob(b, b"2"), age_days=40)
+    by_update = artifact(b, "run-record/v1", blob(b, b"3"), age_days=40)
+    by_run = artifact(b, "run-record/v1", blob(b, b"4"), age_days=40)
+    gone = artifact(b, "run-record/v1", blob(b, b"5"), age_days=40)
+    attempt(b, "r20261026-171233-4e86", {"run_record": by_run})
+    gql, asked = fake_linear({
+        ("issues", None): conn([{"id": "i1", "identifier": "INF-263", "description": f"see {by_issue[:20]}",
+                                 "comments": conn([{"body": "first"}], "c1")}], "p2"),
+        ("comments", "c1"): conn([{"body": f"and {by_comment}"}]),
+        ("issues", "p2"): conn([{"id": "i2", "identifier": "VLLM-33", "description": "run r20261026-171233-4e86",
+                                 "comments": conn([])}]),
+        ("projects", None): conn([{"description": "x", "content": None}]),
+        ("projectUpdates", None): conn([{"body": f"K from {by_update[:16]}"}]),
+        ("documents", None): conn([]),
+    })
+    p = gc.plan(FsRemote(b), cache, [notes], now=NOW, linear=gql)
+    assert set(p.expired) == {gone}
+    with pytest.raises(gc.GcError, match="Linear"):
+        gc.plan(FsRemote(b), cache, [notes], now=NOW, linear=lambda q, v: (_ for _ in ()).throw(RuntimeError("rate limited")))
+
+
+def test_apply_refuses_without_linear(tmp_path, capsys):
+    from research.store import cli
+    with pytest.raises(SystemExit):
+        cli.main(["gc", "--cite", str(tmp_path), "--cache", str(tmp_path), "--apply", "--state", str(tmp_path / "m.json")])
+    assert "--cite-linear" in capsys.readouterr().err

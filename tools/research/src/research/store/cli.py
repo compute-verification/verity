@@ -1332,18 +1332,24 @@ def cmd_gc(argv: list[str]) -> int:
     ap.add_argument("--apply", action="store_true", help="mark this pass's candidates and delete the ones marked a grace ago")
     ap.add_argument("--report", metavar="FILE", help="write the plan's summary and the expired ids here (JSON)")
     ap.add_argument("--work", metavar="DIR", help="where the pass's blob table goes (a local disk; default the temp dir)")
+    ap.add_argument("--cite-linear", action="store_true", help="Linear's issues, comments, projects, project updates and "
+                    "documents cite too (research.linear's credentials; required with --apply)")
     ap.add_argument("--jobs", type=int, default=gc.JOBS)
     ns = ap.parse_args(argv)
-    if ns.apply and not ns.state:
-        ap.error("--apply needs --state")
+    if ns.apply and not (ns.state and ns.cite_linear):
+        ap.error("--apply needs --state and --cite-linear (lanes cite in Linear most: top, 26 Oct)")
     st = LocalStore(ns.store)
     if st.remote is None:
         print("research data gc: no remote configured", file=sys.stderr)
         return 2
     say = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
     try:
+        linear = None
+        if ns.cite_linear:
+            from ..linear import Linear  # noqa: PLC0415
+            linear = Linear().gql
         p = gc.plan(st.remote, Path(ns.cache), [Path(c) for c in ns.cite], now=gc.clock(), jobs=ns.jobs,
-                    work=Path(ns.work) if ns.work else None, log=say)
+                    work=Path(ns.work) if ns.work else None, linear=linear, log=say)
         out: dict[str, Any] = {"remote": st.remote.describe(), "ttl_days": gc.TTL_DAYS, **p.summary()}
         if ns.apply:
             out["applied"] = gc.apply(st.remote, p, Path(ns.cache), Path(ns.state), now=gc.clock(), jobs=ns.jobs, log=say)
