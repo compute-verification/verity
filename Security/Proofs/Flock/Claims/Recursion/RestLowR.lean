@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.DecompBDeployed
 import Proofs.Flock.Claims.Recursion.CapLowerPin
+import Proofs.Flock.Claims.Recursion.ResLowJP
 
 /-!
 # The rest's lowering (`RestLowR`, `SaltRowRest`) at the layout of record, and its joint form
@@ -273,7 +274,7 @@ theorem recKSDecompLV_of_leavesJ
     (hB : BasesHold rd) (hF : FinalReadsL final L) (hLn : RoundLensL L) (hRd : ReadsAtL rd final L)
     (hSR : SaltRowRest rd b aux nOf hd rest wE final w L) (hOwn : PiecesOwned resP key ownR)
     (hlowR : RestLowJ rd b aux nOf hd rest wE final w L)
-    (hres : ResLowJ rd b aux nOf hd rest wE final w L resP elemAt vvAt ownR)
+    (hres : ResLowJP rd b aux nOf hd rest wE final w L resP elemAt vvAt ownR)
     (hSch : OpenLower.SideSchR FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
       Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) L (bdR rd wE final w) side
       (Rows.rowDPieces key))
@@ -377,7 +378,7 @@ theorem recKSDecompLV_of_leavesJ
     refine VPieces.piecesComputes_vown ownR ownQR (fun _ _ => none) (bdR rd wE final w)
       (recL rd b aux nOf hd rest wE final w L) resP (Rows.rowDPieces key) (fun _ => []) (resHolds elemAt vvAt)
       (openE rd key side posAt) (fun _ _ _ _ => True) ⟨x, st, hx, hf, rfl⟩
-      (hres x st hx hf c ws (joint_of_jointP hJP) s hs) ?_ ?_
+      (hres x st hx hf c ws hJP s hs) ?_ ?_
     · have hop := OpenLower.openPieces_deployedP FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
         Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) L (bdR rd wE final w) side
         (Rows.rowDPieces key) posAt hC hT hx hf hJP hs
@@ -413,7 +414,7 @@ theorem recKSDecompDV_of_leavesJ
     (hB : BasesHold rd) (hF : RestRead.FinalReads final (DeployedR.restR elem))
     (hRd : RestRead.ReadsAt rd final (DeployedR.restR elem))
     (hSRJ : SaltRowsJ rd wE final w (DeployedR.layR elem)) (hOwn : PiecesOwned resP key ownR)
-    (hres : ResLowJ rd b aux nOf hd rest wE final w (DeployedR.layR elem) resP elemAt vvAt ownR)
+    (hres : ResLowJP rd b aux nOf hd rest wE final w (DeployedR.layR elem) resP elemAt vvAt ownR)
     (hO : OpenLower.CopyOpensR FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w (DeployedR.layR elem))
       Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) (DeployedR.layR elem)
       (bdR rd wE final w) (OpenLower.sideAtR rd) (Rows.rowDPieces key))

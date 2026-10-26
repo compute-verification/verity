@@ -18,7 +18,7 @@ import Proofs.Flock.Claims.Recursion.InnerAtCoins
 import Proofs.Flock.Claims.Recursion.InnerExtras
 import Proofs.Flock.Claims.Recursion.OutTopRows
 import Proofs.Flock.Claims.Recursion.ResPiecesD
-import Proofs.Flock.Claims.Recursion.ResLowJD
+import Proofs.Flock.Claims.Recursion.ResLowerD
 import Proofs.Flock.Claims.Recursion.SideCapPos
 import Proofs.Flock.Claims.Recursion.VerdictRowEFree
 
@@ -119,7 +119,7 @@ owners (`piecesOwned_D`), the latter two from V*'s list and the parts' sessions'
 `dirsSideR_of`, check 5's `m` from `staged_innerAt` and its coin tie from `posTieR_dense`) and the level parts' `out`
 rows bound to RecCap's `top` rows (`outBindRP_deployed`), and the reader's side of the cap tie from `hRd`
 (`sideCapR_leaf`), the base checks (`basesHold_spec`) and row E's chain (`Top.rowEJoint_holds`). Open, each a named leaf: each algebra part's share of the pieces (`hres`, LOWRES'
-`ResLowered`, which gives `ResLowJ` by `resLowJ_of_resLowered`),
+`ResLoweredP`, each part at its own witness, which gives `ResLowJP` by `resLowJP_of_resLoweredP`),
 the last message's reading (`hF`, `hRd`), and the setup's listing
 (`hset`). -/
 theorem recursiveKSAt_of_leaves (wE w : Msg → ℝ)
@@ -128,7 +128,7 @@ theorem recursiveKSAt_of_leaves (wE w : Msg → ℝ)
     (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
     (hF : RestRead.FinalReads DeployedR.finalR (DeployedR.restR OpenRows.elemR))
     (hRd : RestRead.ReadsAt DeployedR.rdR DeployedR.finalR (DeployedR.restR OpenRows.elemR))
-    (hres : ResLower.ResLowered DeployedR.rdR wE DeployedR.finalR w (bB b aux nOf hd recRest) OpenRows.elemR
+    (hres : ResLower.ResLoweredP DeployedR.rdR wE DeployedR.finalR w (bB b aux nOf hd recRest) OpenRows.elemR
       Claims.Recursion.Form.Dense recRead (cmtTr recRead) resPD ownRD (Rows.elemReadC (Top.accRC DeployedR.rdR key))
       Rows.resVRead)
     (hset : ∀ xO, ∀ u ∈ ResLower.resSetup xO, u ∈ b.setup xO) :
@@ -176,7 +176,7 @@ theorem recursiveKSAt_of_leaves (wE w : Msg → ℝ)
     (targetRDep_readers DeployedR.rdR (resPiecesAt_D DeployedR.rdR key _ _))
     (Top.rowEJoint_holds DeployedR.rdR key _ _ _ _ _ _)
     (basesHold_spec DeployedR.rdR) hF hRd (saltRowsJ_layR DeployedR.rdR wE w OpenRows.elemR) (piecesOwned_D key)
-    (resLowJ_of_resLowered DeployedR.rdR b aux nOf hd recRest wE DeployedR.finalR w OpenRows.elemR _ _ hres) hO hDirs
+    (resLowJP_of_resLoweredP DeployedR.rdR b aux nOf hd recRest wE DeployedR.finalR w OpenRows.elemR _ _ _ _ hres) hO hDirs
     hOut (CapLower.sideCapR_leaf wE w b aux nOf hd recRest key hRd)
 
 end Leaves
