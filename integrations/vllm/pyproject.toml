@@ -80,9 +80,11 @@ parallel = true
 # benchmarks/pouw/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
 # tests/engine/int8_attention_sass.py reads the int8 attention kernels' SASS with the PoUW SASS gate's nvdisasm parser
 # (benchmarks/pouw/harness/sass_gate.py)
-# an xdist worker peaked at 6.2 GB, most stayed under 2 GB (19 Oct, vy-nebius-2: the full suite on 14 workers, r20261019-050410-3339;
-# 3.9 GB in the quick tier, r20261019-050331-542f); `--mem-gb`, or a job's memory cgroup, divides by this, so the default 16 GB
-# agent-test job runs 2 workers where the 9 GB default ran 1 and timed out at 60 min
+# a worker's peak grows with its share of the suite, since what its tests leave held isn't returned: 6.2 GB on 14 workers (19 Oct,
+# r20261019-050410-3339), 12 GB on 8 (25 Oct, r20261025-200148-c421: test_codec's alias test took 6.3 GB over the 5.6 GB held
+# before it), 15.5 GB on 5 (r20261025-164354-e533). `--mem-gb`, or a job's memory cgroup, divides by this, but suites.py's default
+# `--jobs` counts 9 GB a process, so a 16 GB job runs the suite in one process unless `--jobs` says more. tools/suite_parts.py
+# runs it as 8 parts at once, each on its job's CPUs (a sixth on 4 workers: 8.5, 6.2, 6.0 and 3.5 GB, r20261025-202541-5a90)
 worker_gb = 8
 # the full suite took 10,187 s on 5 workers (r20261018-214339-1952), past suites.py's SUITE_TIMEOUT_S; `--quick` leaves out the
 # tests over 5 s (their `slow` marks)

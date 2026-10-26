@@ -1,11 +1,11 @@
-"""tp_partial_source — bind THIS rank's rank-local inputs of every tensor-parallel collective (R14 lane tp, TP-03).
+"""tp_partial_source — bind THIS rank's rank-local inputs of every tensor-parallel collective.
 
 Under TP the module forward hooks of the native collector see the collective OUTPUT of a `RowParallelLinear` (o_proj / down_proj:
 `quant_method.apply` -> `tensor_model_parallel_all_reduce`), of the `VocabParallelEmbedding` (masked partial -> all_reduce) and of the
 `LogitsProcessor` (lm_head shard -> all_gather).  The TP-aware Program (derive_step --tp W --rank r) requires the rank-LOCAL values those
 collectives consume — `part_rank_r` = `Gemm_v1{K/W}` on the rank's weight shard, the masked embedding partial, the logits shard — as
-values of THIS rank (the received output is a function of both ranks' partials, never a fresh input).  R13 committed only the outputs
-(the reviewer's "missing rank-local GEMM-partial bindings"); this source snapshots the INPUT tensor of every collective call into the
+values of THIS rank (the received output is a function of both ranks' partials, never a fresh input).  Committing only the outputs
+would leave the rank-local GEMM partials unbound; this source snapshots the INPUT tensor of every collective call into the
 same packed step stream (same run root, same `chunk-leaf-v1` layout) BEFORE the collective runs, attributed to the calling module by a
 forward pre-hook, named `<module path>/part_rank<r>` (the all-gather input: `<module path>/shard_rank<r>`) -- bind's identity vocabulary: op_path = the issuing module, output_member = the rank-local partial member.
 
@@ -25,7 +25,7 @@ from verity_vllm.acquire.sources import oracle_witness as OW
 from verity_vllm.acquire.sources.allreduce_norm import AllReduceNorm
 from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified
 from verity_vllm.engine import hooks
-from verity_vllm.collectives.collective_sites import MOE_COLLECTIVE_CLASSES as MOE_SITE_CLASSES, MOE_COLLECTIVE_MODULES
+from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASSES as MOE_SITE_CLASSES, MOE_COLLECTIVE_MODULES
 
 SITES = (("vllm.model_executor.layers.linear", "tensor_model_parallel_all_reduce", "all_reduce"),
          ("vllm.model_executor.layers.vocab_parallel_embedding", "tensor_model_parallel_all_reduce", "all_reduce"),
@@ -67,8 +67,8 @@ def _committed(reader: Any, step: int, m: Any) -> bytes | None:
 
 
 def _ref_key(member: str, occ: int) -> str:
-    """Reference-tap key of the `occ`-th commit of `member` in a step: the member itself for the first (every site of R15-R18 commits each
-    member once per step), `<member>#<occ>` for a mid-module site's later calls (R19: OlmoeAttention's k gather is `#1`)."""
+    """Reference-tap key of the `occ`-th commit of `member` in a step: the member itself for the first (an ordinary site commits each
+    member once per step), `<member>#<occ>` for a mid-module site's later calls (OlmoeAttention's k gather is `#1`)."""
     return member if occ == 0 else f"{member}#{occ}"
 
 
@@ -150,7 +150,7 @@ class TPPartialSource:
         # hook binds it) -- the k-th call of the step is the binder's occurrence k = the manifest's invocation k (`collective_site_aliases`).
         # A call its instance's flags rule out (Qwen3MoeSparseMoeBlock's sequence-parallel all_gather) is no expected partial; it is listed
         # (`mid_sites_ruled_out`, the identity report's `tp_sites_ruled_out`) and its module stays patched, so a call that runs is named.
-        from verity_vllm.collectives.collective_sites import mid_module_site_census
+        from verity_vllm.engine.collectives.collective_sites import mid_module_site_census
         census = mid_module_site_census(model, self.world)
         self.mid_sites: dict[str, dict[str, Any]] = {s["name"]: s for s in census["sites"]}
         self.mid_sites_ruled_out: list[dict[str, Any]] = census["ruled_out"]
@@ -250,7 +250,7 @@ class TPPartialSource:
             except Exception:  # noqa: BLE001
                 continue
         if self.mid_sites or self.mid_sites_ruled_out:
-            from verity_vllm.collectives.collective_sites import patch_targets
+            from verity_vllm.engine.collectives.collective_sites import patch_targets
             targets += patch_targets(list(self.mid_sites.values()) + self.mid_sites_ruled_out)   # [R19 moe] the model classes' own imports
         done: set[tuple[int, str]] = set()
         for mod, attr, kind in targets:
@@ -280,7 +280,7 @@ class TPPartialSource:
 
     # -- acquisition -------------------------------------------------------------------------------------------------------
     def _bind(self, kind: str, x: Any) -> None:
-        """The collective INPUT x (this rank's partial / shard), staged before the collective runs.  LIFETIME ASSUMPTION (rev-cb M-0424):
+        """The collective INPUT x (this rank's partial / shard), staged before the collective runs.  LIFETIME ASSUMPTION:
         under the gather-mode row committer the staged reference is copied at the next flush (o_proj / down_proj hook right after the
         collective returns; layer 0's qkv_proj for the embedding partial; step end for the logits shard).  That is sound only because
         vLLM's tensor_model_parallel_all_reduce / all_gather are OUT OF PLACE (custom all-reduce writes a fresh out tensor; pynccl,
@@ -320,8 +320,8 @@ class TPPartialSource:
         self.stats["kinds"][kind] = self.stats["kinds"].get(kind, 0) + 1
 
     def _bind_received(self, kind: str, y: Any) -> None:
-        """[R15 TP-06, manbind M-0350 C3 / moe M-0352 (b)] the fused-MoE block's all-reduce OUTPUT as received by this rank, bound as
-        `<module>/out` -- the manifest's AllReduce2 row under `model.layers.<L>.mlp.experts` (M-0248 (b): the received value is a required
+        """The fused-MoE block's all-reduce OUTPUT as received by this rank, bound as
+        `<module>/out` -- the manifest's AllReduce2 row under `model.layers.<L>.mlp.experts` (the received value is a required
         identity of every rank).  The native collector acquires module outputs for ACQUIRE_CLASSES only (linears, norms, embedding,
         logits); MoERunner / FusedMoE are not among them and the MoE block collector binds the six block-stream planes and never a module
         output, so this source is the ONE binder of that name (a second binder would be refused by the binding map's duplicate rule)."""
@@ -389,7 +389,7 @@ class TPPartialSource:
 
     # -- value correspondence (C2) -----------------------------------------------------------------------------------------
     def compare(self, reader: Any) -> dict[str, Any]:
-        """[R15 TP-04 C2] After finalize(): for every partial this source bound, the committed bytes (opened and verified against the
+        """After finalize(): for every partial this source bound, the committed bytes (opened and verified against the
         rank's run root by `reader`, an `commit.opened.OpenedReader`) must equal (T) the hook-time reference clone taken in `_bind`, and,
         for the RowParallelLinear sites of the first `ref_reexec_steps` steps, (R) a re-execution of the rank-local GEMM on the shard from
         the tapped module input (`quant_method.apply(layer, x)` -- the exact relation `part_rank_r = Gemm_v1{K/W}(x_r, W_r)` the rank
@@ -470,7 +470,7 @@ class TPPartialSource:
         return out
 
     def compare_match_oracle(self, capture_dir: str, reader: Any) -> dict[str, Any]:
-        """[R15 coord M-0481 C2 form (B), TP family] Every committed TP partial (`<site>/part_rank<r>` | `/shard_rank<r>`) and received
+        """Every committed TP partial (`<site>/part_rank<r>` | `/shard_rank<r>`) and received
         fused-MoE output (`<site>/out`) of THIS rank -- opened and verified against the rank's run root by `reader` (an
         `commit.opened.OpenedReader`; a member whose opening does not verify is `not_verified`, FAIL) -- compared bit-for-bit against the
         INDEPENDENT Match observation of the same workload:
@@ -489,7 +489,7 @@ class TPPartialSource:
 
         import torch
 
-        from verity_vllm.collectives import fused_norm as FN
+        from verity_vllm.engine.collectives import fused_norm as FN
 
         t0 = time.perf_counter()
         cap = Path(capture_dir)
@@ -660,7 +660,7 @@ __all__ = ["TPPartialSource", "SITES", "COVERS_FAMILIES"]
 
 
 def late_read_check(com: Any, rc: Any, rank: int) -> dict[str, Any]:
-    """[rev-cb M-0424 T6-4, report M-0435] late-read detector for the fused-MoE received all-reduce output: the committed bytes of
+    """Late-read detector for the fused-MoE received all-reduce output: the committed bytes of
     `model.layers.<L>.mlp.experts/out` vs the committed `model.layers.<L+1>.input_layernorm/0` (last layer: `model.norm/0`) in the
     same step, for EVERY step and layer of the last finalized run.  The /out is staged (a held reference, copied at the next gather
     flush); vLLM's fused_add_rms_norm writes the next norm's output INTO that tensor in place, so a late read commits bytes equal

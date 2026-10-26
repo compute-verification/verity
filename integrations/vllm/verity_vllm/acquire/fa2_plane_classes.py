@@ -1,4 +1,4 @@
-"""X-03 per-layer attention plane classes (F-r19-int-22): the expected FA2/FA3 hidden-plane inventory of a step is DERIVED per attention
+"""X-03 per-layer attention plane classes: the expected FA2/FA3 hidden-plane inventory of a step is DERIVED per attention
 layer from the Program's attention Call statics x the step's active-sequence set; uniformity across layers is a consequence, never a rule.
 
 The seven questions for the Value `fa2.m1/L<k>` (the FA3 twin `fa3.m1/L<k>` differs only in the launch geometry):
@@ -346,7 +346,7 @@ def check_step(decls: Iterable[AttnLayerDecl], seqs: StepSequences, names: Itera
 
 
 def uniform_rule(counts_by_layer: Mapping[int, int], attention_layers: Iterable[int]) -> dict[int, int]:
-    """The R13 X-03 rule, unchanged, as a pure function (the no-declaration fallback of `identity_check`): every attention layer of the step
+    """The uniform X-03 rule as a pure function (the no-declaration fallback of `identity_check`): every attention layer of the step
     must carry the SAME positive count -- the modal count (ties -> smallest); layers outside `attention_layers` are reported with their count."""
     layers = list(attention_layers)
     counts = {k: int(counts_by_layer.get(k, 0)) for k in layers}
@@ -358,7 +358,7 @@ def uniform_rule(counts_by_layer: Mapping[int, int], attention_layers: Iterable[
 
 
 def counts_by_layer(names: Iterable[str]) -> Counter:
-    """Hidden-plane tensors per layer, every plane counted (executed and padding alike -- what the R13 rule read)."""
+    """Hidden-plane tensors per layer, every plane counted (executed and padding alike -- what `uniform_rule` reads)."""
     c: Counter = Counter()
     for n in names:
         m = _NAME_RE.match(n)

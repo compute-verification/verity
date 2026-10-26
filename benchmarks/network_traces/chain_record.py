@@ -5,6 +5,7 @@
     python benchmarks/network_traces/chain_record.py certs --run DIR [--client DIR] [--deployed] --out FILE
     python benchmarks/network_traces/chain_record.py report --custody FILE --certs FILE [--endpoint REPORT]
       [--n2 SUMMARY ...] [--scan SUMMARY] [--job FILE] [--audit WINDOW ...] --out DIR
+    python benchmarks/network_traces/chain_record.py leak --warden-run DIR [--scan SUMMARY] --out FILE
 
 * **custody**: each gate run under ``--gates`` (a directory holding the gate's ``end.json``, as `vy-challenger-gate
   fetch` writes it) holds the files its ``end.json`` names, each with the SHA-512 it records. In the clear, of public
@@ -28,8 +29,10 @@
   accepted. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan
   isn't run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its
   negatives are N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each
-  tampered run that check lets through. d1's K (`horizon_k`) counts the served units' compute audits (``--audit``: each window's draw and free
-  inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ.
+  tampered run that check lets through. d1's K (`horizon_k`) counts the served units' compute audits (``--audit``: each
+  window's draw and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ.
+* **leak**: K per monitoring period (week, month, year; one machine and 1,000) on the warden gate run, pooled at
+  δ = 1% and 10⁻⁶ and in the per-period form, each beside its share of Llama-3.2-1B's BF16 weights (`leak`).
 """
 from __future__ import annotations
 
@@ -274,8 +277,7 @@ def unexpected(name: str, m: dict, escape: dict | None = None) -> list[str]:
             * any(not w.get("as_expected") for w in wins)
             + [f"network {'accepted' if net.get('accepted') else 'refused'}"]
             * (net.get("accepted") != (name == "honest") and escape is None)
-            + ["a witness piece in what the verifier received"] * bool(rec.get("leaked") if "leaked" in rec
-                                                                        else rec.get("verifier_found"))
+            + [f"witness pieces leaked to the verifier: {rec.get('leaked')}"] * bool(rec.get("leaked"))
             + [f"the control (the prover's own {(rec.get('control') or {}).get('file')}) holds "
                f"{(rec.get('control') or {}).get('blobs_found')} of {(rec.get('control') or {}).get('of')} pieces, "
                "so the scan isn't shown to find a leak"] * ((rec.get("control") or {}).get("holds_all") is False))
@@ -300,7 +302,8 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
                          "windows": len(wins), "accepted_windows": sum(bool(w.get("accepted")) for w in wins),
                          "lean_proved": sum(bool((w.get("proof") or {}).get("proved")) for w in wins),
                          "as_expected": sum(bool(w.get("as_expected")) for w in wins),
-                         "leaked": (m.get("received") or {}).get("leaked"), "ok": m.get("ok"),
+                         "leaked": (m.get("received") or {}).get("leaked"),
+                         "structured": (m.get("received") or {}).get("structured"), "ok": m.get("ok"),
                          "prove_s": round(sum((w.get("prove") or {}).get("session_s") or 0 for w in wins), 1),
                          "verify_s": round(sum(w.get("verify_s") or 0 for w in wins), 1)}
     honest = members.get("honest") or {}
@@ -455,6 +458,109 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
                 "no carry across windows: each window's terms stand alone"]}
 
 
+# --- leak: K per monitoring period, on the warden run ------------------------------------------------------------------
+
+#: monitoring periods in minutes, and the machines a period's count runs over (memory-accounting's census convention)
+PERIODS = {"week": 10_080, "month": 43_200, "year": 525_600}
+MACHINES = (1, 1000)
+LEAK_DELTAS = (0.01, 1e-6)
+#: Llama-3.2-1B's parameters (128,256 × 2,048 tied embedding, 16 layers of 60,821,504, the final norm), BF16
+WEIGHTS_BITS = 1_235_814_400 * 16
+
+
+def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) -> dict:
+    """K, the bits the network certifier's accepted transcripts can carry about the secret, per monitoring period on
+    the warden run ``run`` (a fetched gate run: its ``end.json`` and ``deployment.json``), for the scan's class
+    (`scan_zk.CLASS`) and its draw of every unit. The per-period form is `NetTiming.Guarantees.PeriodLeakAccepted`'s
+    count, the pooled form `HorizonLeakAccepted`'s at q = 1 (Fmax = ⌈ln(1/δ)⌉), each term in note
+    network-accounting/20261025T2250Z-finding-warden-form-k's generator reading: log2 #Ss = 0, the fail cell's
+    position log2(egress_cells + 1) a connection, the scan's ``prog`` rows its free inputs (T·NP a link-window as
+    registered, 32 + KO·IDB a request if ``prog`` were an input only at its anchored entries), no faulty term with
+    every unit drawn, b = NS + NV, and Dj = 1. The period's link-windows and requests scale the run's own."""
+    import scan_zk as SZ
+    from verity.core.protocols.certifier import ingress_scan as IS, warden as W
+    dep = _json(next((p for p in (run / "out" / "deployment.json", run / "deployment.json") if p.is_file()), None))
+    v = (_json(run / "end.json") or {}).get("verdict") or {}
+    if not dep or not v.get("windows") or not v.get("requests"):
+        raise SystemExit(f"leak: {run} has no deployment.json, or no end.json verdict with its windows and requests")
+    params, cls = W.WardenParams(**dep["params"]), SZ.CLASS
+    cls.serves(params)
+    T, units = params.window, 2 * params.window
+    drawn = (scan or {}).get("draw", {}).get("honest") if isinstance((scan or {}).get("draw"), dict) else units
+    if drawn != units:
+        raise SystemExit(f"leak: the scan drew {drawn} of {units} units; K's faulty terms are 0 only with every unit "
+                         f"drawn (scan_zk --draw {units})")
+    NS, NP, NV = IS.state_bits(cls), IS.prog_bits(cls), IS.view_bits(cls)
+    cap = math.log2(params.egress_cells + 1)
+    anchored = 32 + cls.KO * cls.IDB
+    rate = v["requests"] / v["windows"]
+    window_s = T * params.bucket_ms / 1000
+    free = {"registered": {"link_window": T * NP, "request": 0}, "anchors": {"link_window": 0, "request": anchored}}
+
+    def count(link_windows: float, delta: float | None, reading: str) -> float:
+        requests = rate * link_windows
+        k = requests * cap + link_windows * free[reading]["link_window"] + requests * free[reading]["request"]
+        if delta is None:
+            return k
+        fmax = math.ceil(math.log(1 / delta))
+        return k + fmax * math.log2(link_windows * units + 1) + (NS + NV) * fmax
+
+    rows = []
+    for period, minutes in PERIODS.items():
+        for m in MACHINES:
+            lw = m * minutes * 60 / window_s
+            for reading in free:
+                pooled = {f"{d:g}": count(lw, d, reading) for d in LEAK_DELTAS}
+                per = count(lw, None, reading)
+                rows.append({"period": period, "machines": m, "link_windows": lw, "requests": rate * lw,
+                             "prog": reading, "pooled": pooled,
+                             "pooled_share": {d: k / weights_bits for d, k in pooled.items()},
+                             "per_period": per, "per_period_share": per / weights_bits,
+                             "per_link_window": count(1, None, reading)})
+    return {"warden_run": (_json(run / "end.json") or {}).get("run") or run.name, "params": dep["params"], "class": {k: getattr(cls, k) for k in ("B", "r", "lanes", "C", "IDB", "EVERY",
+                                                                             "WITHIN", "D", "KO")},
+            "widths": {"NS": NS, "NP": NP, "NV": NV, "egress_row": 8 * cls.egress.R * cls.B},
+            "draw": {"units": units, "drawn": drawn},
+            "run": {"link_windows": v["windows"], "requests": v["requests"], "requests_per_link_window": rate,
+                    "link_window_s": window_s, "accepted": v.get("accepted")},
+            "terms": {"log2_Ss": 0, "cap_per_request": cap, "free": free, "faulty": 0, "jitter": 0,
+                      "b": NS + NV, "fmax": {f"{d:g}": math.ceil(math.log(1 / d)) for d in LEAK_DELTAS}},
+            "weights_bits": weights_bits, "rows": rows,
+            "theorems": {"per_period": "NetTiming.Guarantees.PeriodLeakAccepted (#4326, #4349, #4373, #4370)",
+                         "pooled": "HorizonLeakAccepted (#4367), conditional: hesc and hleak await SampledKSLive "
+                                   "and P2"},
+            "conditions": [
+                "the generator reading of the scan's statement (each unit's registered rows its boundary values): "
+                "a claim, with lean and Daniel",
+                "log2 #Ss = 0 only once the schedule's digest binds each connection's admission bucket and lane, "
+                "and the server can't move an admission (not met today)",
+                "the scan proves link-window 0 of the warden run; the period's terms are its per-link-window and "
+                "per-request terms at the run's request rate",
+                "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriod's sum"]}
+
+
+#: each reading of the scan's free inputs, as the report labels it
+READINGS = {"registered": "`prog` as registered today (the record's K)",
+            "anchors": "`prog` only at its anchored entries (conditional on the generator-form lowering, LEAN-49)"}
+
+
+def leak_markdown(doc: dict) -> str:
+    d1, d2 = (f"{d:g}" for d in LEAK_DELTAS)
+    bits = lambda x: f"{x / 10 ** (e := math.floor(math.log10(x))):.3g}·10^{e}" if x >= 1e6 else f"{x:,.0f}"
+    share = lambda x: f"{100 * x:.3g}%" if x < 1 else f"{x:.3g}×" if x < 100 else f"{x:,.0f}×"
+    lines = []
+    for reading, title in READINGS.items():
+        lines += [f"**{title}**, bits, and the share of the weights:", "",
+                  "| period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |",
+                  "|---|---|---|---|---|---|"]
+        lines += [f"| {r['period']} | {r['machines']:,} | {bits(r['pooled'][d1])} ({share(r['pooled_share'][d1])}) | "
+                  f"{bits(r['pooled'][d2])} ({share(r['pooled_share'][d2])}) | {bits(r['per_period'])} "
+                  f"({share(r['per_period_share'])}) | {r['per_link_window']:,.0f} |"
+                  for r in doc["rows"] if r["prog"] == reading]
+        lines.append("")
+    return "\n".join(lines)
+
+
 def merged_n2(paths: list[str] | None) -> dict | None:
     """N2's summaries of one period's members proved in several runs (``--n2 A B …``, each run's draw on its own
     challenger session, every one of the same population and K): one summary, its members and sampled draws their
@@ -568,11 +674,21 @@ def main(argv=None) -> int:
     r.add_argument("--audit", nargs="*", help="the served units' compute audit windows (registration.json and "
                                               "circuit.json each), whose draw and free inputs d1's K counts")
     r.add_argument("--out", required=True, type=Path)
+    k = sub.add_parser("leak", help="K per monitoring period on the warden run, for the scan's class and draw")
+    k.add_argument("--warden-run", required=True, type=Path, help="the fetched warden gate run (its end.json)")
+    k.add_argument("--scan", help="the scan's summary on that run (its draw); default every unit drawn")
+    k.add_argument("--out", required=True, type=Path)
     a = ap.parse_args(argv)
     if a.command == "custody":
         doc = custody(a.gates)
     elif a.command == "certs":
         doc = certs(a.run, a.client or a.run, a.deployed)
+    elif a.command == "leak":
+        doc = leak(a.warden_run, _json(a.scan))
+        a.out.write_text(json.dumps(doc, indent=1, sort_keys=True))
+        a.out.with_suffix(".md").write_text(leak_markdown(doc))
+        print(leak_markdown(doc))
+        return 0
     else:
         doc = report(a)
         a.out.mkdir(parents=True, exist_ok=True)

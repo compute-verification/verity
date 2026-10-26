@@ -58,3 +58,14 @@ def test_counts_fallback_is_named_when_the_scheduler_output_lacks_geometry():
     # a geometry that does not add up to (ntok, nreq) is not trusted either
     bad = _sched([("a", 5, 1), ("b", 9, 1)])
     assert plan_key_of(bad, 3, 2)[1] == "counts"
+
+
+def test_a_geometry_key_is_pinned_and_a_malformed_geometry_falls_back_to_counts():
+    s = _sched([("r0", 0, 7), ("r1", 46, 1), ("r3", 400, 1)], cached_from=1)
+    assert plan_key_of(s, 9, 3) == (5939804984935576480, "geometry")
+    no_len = SimpleNamespace(scheduled_new_reqs=[SimpleNamespace(req_id="r0", num_computed_tokens=None)], scheduled_cached_reqs=None,
+                             num_scheduled_tokens={"r0": 7})
+    assert plan_key_of(no_len, 7, 1) == ((7 << 16) | 1, "counts")
+    short = SimpleNamespace(scheduled_new_reqs=[], scheduled_cached_reqs=SimpleNamespace(req_ids=["a", "b"], num_computed_tokens=[3]),
+                            num_scheduled_tokens={"a": 1, "b": 1})
+    assert plan_key_of(short, 2, 2) == ((2 << 16) | 2, "counts")
