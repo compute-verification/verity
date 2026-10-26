@@ -376,31 +376,36 @@ theorem tableBoundAbortLinK_of_rdAll (keepV : Bool → Bool) :
 
 /-! ## At the deployed reader `VR rd` -/
 
-/-- **`nextR` answers a message only at a coin**, the plain verifier's. -/
-theorem nextR_msg {rd : Claims.Msg → Option FinalP} {H : Claims.Msg → Claims.Msg} {x : Claims.Msg}
+/-- **`actR` asks a coin only where the plain verifier does.** -/
+theorem actR_coin {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+    {c : Coin} (h : actR rd x as cs = .coin c) : act false x as cs = .coin c := by
+  unfold actR at h
+  split at h
+  · rename_i c' hc'
+    cases h
+    exact hc'
+  · split at h <;> cases h
+
+/-- **`nextR` answers a message only where the plain verifier answers it.** -/
+theorem next_msg_of_nextR (rd : Claims.Msg → Option FinalP) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg}
     {as : List Claims.Msg} {cs : List Coin} {m : Claims.Msg} (h : ((nextR rd x as cs).eval H).1 = .msg m) :
-    ∃ c, act false x as cs = .coin c ∧ m = c.bytes := by
+    ((next false x as cs).eval H).1 = .msg m := by
   cases hact : actR rd x as cs with
   | rej => simp [nextR, hact, Claims.OC.eval] at h
   | coin c =>
-    unfold actR at hact
-    split at hact
-    · rename_i c' hc'
-      cases hact
-      rw [nextR_coin rd H x as cs c' hc'] at h
-      exact ⟨c', hc', (Claims.Out.msg.inj h).symm⟩
-    · split at hact <;> cases hact
+    have ha := actR_coin hact
+    rw [nextR_coin rd H x as cs c ha] at h
+    rw [next_coin H ha]
+    exact h
   | decide s spec sts link c₁ mids f =>
     rw [nextR_decide hact] at h
     exact absurd h (Claims.Bridge.outOf_ne_msg _ _ _)
 
-/-- **`VR rd` shows each round's coin**: it answers a message only at the plain verifier's coins (`nextR_msg`). -/
+/-- **`VR rd` shows each round's coin**: it answers a message only where the plain verifier does
+(`next_msg_of_nextR`). -/
 theorem coinsShown_VR (rd : Claims.Msg → Option FinalP) (H : Claims.Msg → Claims.Msg) :
-    Claims.Recursion.CoinsShown H (VR rd) decCoin := fun x as cs c m hl h => by
-  obtain ⟨c', ha, rfl⟩ := nextR_msg (rd := rd) h
-  exact coinsShown_V H false x as cs c _ hl (by
-    show ((next false x as (cs ++ [c])).eval H).1 = _
-    rw [next_coin H ha])
+    Claims.Recursion.CoinsShown H (VR rd) decCoin :=
+  fun x as cs c m hl h => coinsShown_V H false x as cs c m hl (next_msg_of_nextR (cs := cs ++ [c]) rd H h)
 
 /-- **`VR rd` never accepts `[0]` last**: past a coin it is a coin request, and with no coin `decR` reads none. -/
 theorem refusable_VR (rd : Claims.Msg → Option FinalP) (H : Claims.Msg → Claims.Msg) :
