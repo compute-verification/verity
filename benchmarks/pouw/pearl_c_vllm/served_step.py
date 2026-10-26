@@ -126,8 +126,9 @@ def _live(arm):
     session reserved on infra's gate (`bench_arm._LiveSession`), which the option opens on its salt epoch's root
     (`salt.epoch_open_root` of the weights' root and the epoch's number) and draws its salt coin from
     (`pouw_h1_window.salt_session`), through the pouw settings ``challenger`` (this node's 127.0.0.1, at the port the
-    gate's open answers), ``session`` (the reserve answer) and ``gate``. Returns the arm and the reserve answer, None
-    when the arm's coins stay in-process."""
+    gate's open answers), ``session`` (the reserve answer), ``gate`` and ``period`` (the lane's open period the
+    reserve joined, which the option refuses when it is H1's). Returns the arm and the reserve answer, None when the
+    arm's coins stay in-process."""
     import dataclasses
 
     from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm, _LiveSession
@@ -139,10 +140,10 @@ def _live(arm):
     if env.gate_command is None or env.peer is None:
         raise SystemExit("live coins take PEARLC_CHALLENGER_GATE (the gate's ssh command) and PEARLC_CHALLENGER_PEER "
                          "(this node's name in the challenger host's peers) together")
-    session = _LiveSession(env.gate_command, env.peer, env.epoch)
+    session = _LiveSession(env.gate_command, env.peer, env.epoch, env.lane)
     config = dict(arm.protocols_config or {})
     config["pouw"] = {**config.get("pouw", {}), "challenger": "127.0.0.1:0", "session": session.reserved,
-                      "gate": PHW.gate_of(session.gate.call)}
+                      "gate": PHW.gate_of(session.gate.call), "period": session.period}
     return dataclasses.replace(arm, protocols_config=config), session.reserved
 
 

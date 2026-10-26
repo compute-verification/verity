@@ -70,12 +70,7 @@ class Gate:
 
     def call(self, *words: str) -> dict[str, Any]:
         """The gate's JSON answer to `words`; `CoinError` naming a refusal (exit 3, ``{"refused"}``) or a broken answer."""
-        argv = [*self.command, shlex.join(words)]
-        if self._run is not None:
-            rc, text = self._run(argv)
-        else:
-            p = subprocess.run(argv, capture_output=True, text=True, check=False)
-            rc, text = p.returncode, p.stdout
+        rc, text = self._answer(words)
         try:
             doc = json.loads(text)
         except ValueError:
@@ -84,6 +79,20 @@ class Gate:
             why = doc.get("refused") if isinstance(doc, dict) else (text or "").strip()[:300]
             raise CoinError(f"the challenger gate refused {words[0]} (exit {rc}): {why}")
         return doc
+
+    def ledger(self) -> list[str]:
+        """The auditor's ledger as the gate's ``ledger`` answers it, one entry a line; `CoinError` when the gate refuses."""
+        rc, text = self._answer(("ledger",))
+        if rc != 0:
+            raise CoinError(f"the challenger gate refused ledger (exit {rc}): {(text or '').strip()[:300]}")
+        return text.splitlines()
+
+    def _answer(self, words: Sequence[str]) -> tuple[int, str]:
+        argv = [*self.command, shlex.join(words)]
+        if self._run is not None:
+            return self._run(argv)
+        p = subprocess.run(argv, capture_output=True, text=True, check=False)
+        return p.returncode, p.stdout
 
 
 def _connect(at: str, given: Mapping[str, Any], tries: int = 60) -> Any:
