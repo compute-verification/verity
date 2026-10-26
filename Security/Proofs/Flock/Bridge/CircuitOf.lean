@@ -13,7 +13,7 @@ population `n` (the public file's `pub.n`) give the key program `keyProg D.unrol
 
 * `coreOf C`: a game circuit (`FlockSoundness.Audit.Circuit`) as core's (`Verity.Circuit`), through the Boolean profile
   (`Verity.Boolean.Circuit.toCircuit`): the same gates, one bit each. `corePartition P` is the same partition, and
-  `coreBits X` a transcript of bits. `wrong_corePartition`: the wrong units are the same, so every statement about the
+  `coreBits xs` a transcript of bits. `wrong_corePartition`: the wrong units are the same, so every statement about the
   game's wrong units is one about core's.
 * `circuitOf D hU n := coreOf (keyCircuit D hU n)` and `partsOf D hU n := corePartition (keyPartition D hU n)`: the
   parsed file as core's circuit and its `n` units. `keyCircuit_eq` and `keyPartition_eq` restate the key program's
@@ -57,21 +57,31 @@ def coreBool (C : FlockSoundness.Audit.Circuit) : Verity.Boolean.Circuit where
   topo g a ha := C.topo g a (by rwa [args_coreOp] at ha)
   outputs := C.outputs
 
-/-- **A game circuit as core's**: its Boolean circuit, one bit a gate. -/
-abbrev coreOf (C : FlockSoundness.Audit.Circuit) : Verity.Circuit := (coreBool C).toCircuit
+/-- **A game circuit as core's**: its Boolean circuit (`coreOf_eq`), one bit a gate, written out so that its gates are
+the game circuit's. -/
+abbrev coreOf (C : FlockSoundness.Audit.Circuit) : Verity.Circuit where
+  N := C.N
+  w _ := 1
+  isInput g := (coreOp (C.op g)).isInput
+  reads g := (coreOp (C.op g)).args.toFinset
+  reads_lt g a ha := C.topo g a (by rwa [List.mem_toFinset, args_coreOp] at ha)
+  input_reads g h := by simp [Verity.Boolean.Op.args_of_isInput h]
+  op g v := BitVec.ofBool ((coreOp (C.op g)).apply fun a => (v a).getLsbD 0)
+  op_congr g v v' h := by
+    rw [Verity.Boolean.Op.apply_congr (coreOp (C.op g)) fun x hx => by rw [h x (List.mem_toFinset.2 hx)]]
+  outputs := C.outputs
 
 section Core
 
 variable {C : FlockSoundness.Audit.Circuit}
 
-theorem coreOf_N : (coreOf C).N = C.N := rfl
+/-- `coreOf` is the Boolean profile's circuit of the game circuit. -/
+theorem coreOf_eq : coreOf C = (coreBool C).toCircuit := rfl
 
 theorem coreOf_isInput (g : Fin C.N) : (coreOf C).isInput g = (C.op g).isInput := isInput_coreOp _
 
 theorem coreOf_reads (g : Fin C.N) : (coreOf C).reads g = (C.op g).args.toFinset :=
   congrArg List.toFinset (args_coreOp _)
-
-theorem coreOf_outputs : (coreOf C).outputs = C.outputs := rfl
 
 theorem coreOf_op (g : Fin C.N) (v : (coreOf C).Transcript) :
     (coreOf C).op g v = BitVec.ofBool ((C.op g).apply fun a => (v a).getLsbD 0) :=
@@ -80,10 +90,10 @@ theorem coreOf_op (g : Fin C.N) (v : (coreOf C).Transcript) :
 /-- A game partition as core's: the same units. -/
 def corePartition {n : ℕ} (P : FlockSoundness.Audit.Partition C n) : Verity.Partition (coreOf C) n where
   unit := P.unit
-  input_iff g := by rw [coreOf_isInput]; exact P.input_iff g
+  input_iff g := (P.input_iff g).trans (by rw [coreOf_isInput])
 
 /-- A transcript of bits as core's. -/
-def coreBits (X : Fin C.N → Bool) : (coreOf C).Transcript := fun g => BitVec.ofBool (X g)
+def coreBits (xs : Fin C.N → Bool) : (coreOf C).Transcript := fun g => BitVec.ofBool (xs g)
 
 variable {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
 
@@ -92,24 +102,24 @@ theorem corePartition_unit : (corePartition P).unit = P.unit := rfl
 theorem mem_committed_corePartition (g : Fin C.N) : g ∈ (corePartition P).committed ↔ g ∈ P.committed := by
   classical
   simp only [Verity.Partition.committed, FlockSoundness.Audit.Partition.committed, Finset.mem_filter,
-    Finset.mem_univ, true_and, coreOf_isInput, coreOf_reads, coreOf_outputs, List.mem_toFinset, corePartition_unit]
+    Finset.mem_univ, true_and, isInput_coreOp, args_coreOp, List.mem_toFinset, corePartition_unit]
 
-theorem localEval_corePartition (X : Fin C.N → Bool) (u : Fin n) (g : Fin C.N) :
-    (corePartition P).localEval (coreBits X) u g = BitVec.ofBool (P.localEval X u g) := by
+theorem localEval_corePartition (xs : Fin C.N → Bool) (u : Fin n) (g : Fin C.N) :
+    (corePartition P).localEval (coreBits xs) u g = BitVec.ofBool (P.localEval xs u g) := by
   induction g using WellFoundedLT.induction with
   | _ g ih =>
   by_cases hu : P.unit g = some u
-  · rw [(corePartition P).localEval_of_mem (coreBits X) (show (corePartition P).unit g = some u from hu), coreOf_op,
-      P.localEval_of_mem X hu]
+  · rw [(corePartition P).localEval_of_mem (coreBits xs) (show (corePartition P).unit g = some u from hu), coreOf_op,
+      P.localEval_of_mem xs hu]
     congr 1
     exact FlockSoundness.Audit.Op.apply_congr _ fun a ha => by simp [ih a (C.topo g a ha)]
-  · rw [(corePartition P).localEval_of_not_mem (coreBits X) (show (corePartition P).unit g ≠ some u from hu),
-      P.localEval_of_not_mem X hu]
+  · rw [(corePartition P).localEval_of_not_mem (coreBits xs) (show (corePartition P).unit g ≠ some u from hu),
+      P.localEval_of_not_mem xs hu]
     rfl
 
 /-- **The wrong units are the game's**: core's partition of a game circuit has the game partition's wrong units, on
 the same bits. -/
-theorem wrong_corePartition (X : Fin C.N → Bool) : (corePartition P).wrong (coreBits X) = P.wrong X := by
+theorem wrong_corePartition (xs : Fin C.N → Bool) : (corePartition P).wrong (coreBits xs) = P.wrong xs := by
   classical
   ext u
   rw [Verity.Partition.mem_wrong, FlockSoundness.Audit.Partition.mem_wrong]
@@ -252,6 +262,7 @@ theorem faulty_of_wrong {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ :
     (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool)
     (w : Wit) {u : Fin n} (hu : u ∈ P.wrong (openedOf C κ (w.val H Cm (stmtOf P κ kd desc q roots)))) :
     u.val ∈ faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w := by
+  classical
   rw [FlockSoundness.Audit.Partition.mem_wrong] at hu
   have hlt := u.isLt
   refine Finset.mem_filter.2 ⟨Finset.mem_range.2 (by rw [rus_length_partOf]; omega), ?_⟩
@@ -331,9 +342,9 @@ theorem keyPartition_eq : partsOf D hU n =
       (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)) := rfl
 
 /-- **`partsOf`'s wrong units are the key program's**, on the same bits. -/
-theorem wrong_partsOf (X : Fin (keyCircuit D hU n).N → Bool) :
-    (partsOf D hU n).wrong (coreBits X) = (keyPartition D hU n).wrong X :=
-  wrong_corePartition _ X
+theorem wrong_partsOf (xs : Fin (keyCircuit D hU n).N → Bool) :
+    (partsOf D hU n).wrong (coreBits xs) = (keyPartition D hU n).wrong xs :=
+  wrong_corePartition _ xs
 
 /-- **The wrong-units bridge at the parsed file's circuit**: a witness in `RelS` at `δ = C(n − K₀, kd)/C(n, kd)`, in
 the sampling statement of the key program at constants `κ`, leaves fewer than `K₀` of `partsOf`'s units wrong in the
