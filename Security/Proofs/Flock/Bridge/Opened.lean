@@ -36,7 +36,8 @@ def OpensAt (C : FlockSoundness.Audit.Circuit) (κ : Fin C.N → Option Bool) (H
 def Unique (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (roots : List Claims.Msg) : Prop :=
   ∀ o o' : Opening Bool, o.pos = o'.pos → Cm.Opens H roots o = true → Cm.Opens H roots o' = true → o.val = o'.val
 
-theorem opening_of_val {H : Claims.Msg → Claims.Msg} {Cm : Commitment Bool} {s : Stmt} {w : Wit} {i : ℕ} {b : Bool}
+theorem opening_of_val {H : Claims.Msg → Claims.Msg} {Cm : Commitment Bool} {s : Claims.Sampling.Stmt} {w : Wit}
+    {i : ℕ} {b : Bool}
     (h : w.val H Cm s i = some b) : ∃ o : Opening Bool, o.pos = i ∧ Cm.Opens H s.roots o = true ∧ o.val = b := by
   unfold Wit.val at h
   cases hf : w.vals.find? (fun o => o.pos == i && Cm.Opens H s.roots o) with
@@ -47,8 +48,8 @@ theorem opening_of_val {H : Claims.Msg → Claims.Msg} {Cm : Commitment Bool} {s
     simp only [Bool.and_eq_true, beq_iff_eq] at hp
     exact ⟨o, hp.1, hp.2, by simpa using h⟩
 
-theorem opensAt_of_val {κ : Fin C.N → Option Bool} {H : Claims.Msg → Claims.Msg} {Cm : Commitment Bool} {s : Stmt}
-    {w : Wit} {g : Fin C.N} {b : Bool} (hk : ¬((C.op g).isInput = true ∧ (κ g).isSome = true))
+theorem opensAt_of_val {κ : Fin C.N → Option Bool} {H : Claims.Msg → Claims.Msg} {Cm : Commitment Bool}
+    {s : Claims.Sampling.Stmt} {w : Wit} {g : Fin C.N} {b : Bool} (hk : ¬((C.op g).isInput = true ∧ (κ g).isSome = true))
     (h : w.val H Cm s (posOf C g) = some b) : OpensAt C κ H Cm s.roots g b := by
   rw [OpensAt, if_neg hk]
   exact opening_of_val h
@@ -82,7 +83,7 @@ opens, under the statement's roots, to the value `openedOf` reads there. -/
 theorem bound_of_not_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool) (kd : ℕ)
     (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool)
     (w : Wit) {u : Fin n} (h : u.val ∉ faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w) :
-    ∀ g ∈ (Verity.Partition.ofAudit P).io u,
+    ∀ g : Fin C.N, g ∈ (Verity.Partition.ofAudit P).io u →
       OpensAt C κ H Cm roots g (openedOf C κ (w.val H Cm (stmtOf P κ kd desc q roots)) g) := by
   classical
   obtain ⟨ι, hc⟩ := correct_of_not_faulty P κ kd desc q roots H Cm w h
@@ -103,8 +104,10 @@ theorem bound_of_not_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (
     obtain ⟨b, hb, -⟩ := (hc (posOf C g) (posOf_mem_unitGates.2 hgu)).2 hB
     rw [hrefB _ hB] at hb
     have hin := isInput_of_unit hgu
-    rw [show openedOf C κ (w.val H Cm (stmtOf P κ kd desc q roots)) g = b by simp [openedOf, hin, hb]]
-    exact opensAt_of_val (by simp [hin]) hb
+    have hnin : ¬((C.op g).isInput = true) := by rw [hin]; exact Bool.false_ne_true
+    rw [show openedOf C κ (w.val H Cm (stmtOf P κ kd desc q roots)) g = b by
+      unfold openedOf; rw [if_neg hnin, hb]; rfl]
+    exact opensAt_of_val (fun hk => hnin hk.1) hb
   · obtain ⟨h', hu', hr'⟩ := hrd.resolve_left hgu
     rw [Verity.Circuit.ofAudit_reads, List.mem_toFinset] at hr'
     have hu' : P.unit h' = some u := hu'
@@ -137,7 +140,7 @@ noncomputable def unbound {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ
     Finset (Fin n) :=
   Finset.univ.filter fun u =>
     ¬ (Verity.Partition.ofAudit P).Correct (Verity.Circuit.ofBits (openedOf C κ val)) u ∨
-      ∃ g ∈ (Verity.Partition.ofAudit P).io u, ¬ OpensAt C κ H Cm roots g (openedOf C κ val g)
+      ∃ g : Fin C.N, g ∈ (Verity.Partition.ofAudit P).io u ∧ ¬ OpensAt C κ H Cm roots g (openedOf C κ val g)
 
 /-- An unbound unit is faulty. -/
 theorem unbound_subset_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool) (kd : ℕ)
@@ -179,27 +182,27 @@ theorem card_unbound_lt_of_relS {n : ℕ} (P : FlockSoundness.Audit.Partition C 
 theorem ofBool_getLsbD_zero (x : BitVec 1) : BitVec.ofBool (x.getLsbD 0) = x := by
   refine BitVec.eq_of_getLsbD_eq fun i hi => ?_
   obtain rfl : i = 0 := by omega
-  simp [BitVec.getLsbD_ofBool]
+  simp
 
 /-- **A bound unit is correct in every transcript its `io` opens to**: where openings under `roots` are unique, a unit
-outside `unbound` is correct in any transcript `X` each wire of whose `io` opens to `X`'s bit there. -/
+outside `unbound` is correct in any transcript `T` each wire of whose `io` opens to `T`'s bit there. -/
 theorem correct_of_not_unbound {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (roots : List Claims.Msg) (val : ℕ → Option Bool)
     (hU : Unique H Cm roots) {u : Fin n} (hu : u ∉ unbound P κ H Cm roots val)
-    {X : (Verity.Circuit.ofAudit C).Transcript}
-    (hX : ∀ g ∈ (Verity.Partition.ofAudit P).io u, OpensAt C κ H Cm roots g ((X g).getLsbD 0)) :
-    (Verity.Partition.ofAudit P).Correct X u := by
+    {T : (Verity.Circuit.ofAudit C).Transcript}
+    (hT : ∀ g : Fin C.N, g ∈ (Verity.Partition.ofAudit P).io u → OpensAt C κ H Cm roots g ((T g).getLsbD 0)) :
+    (Verity.Partition.ofAudit P).Correct T u := by
   classical
   have hu' : ¬(¬ (Verity.Partition.ofAudit P).Correct (Verity.Circuit.ofBits (openedOf C κ val)) u ∨
-      ∃ g ∈ (Verity.Partition.ofAudit P).io u, ¬ OpensAt C κ H Cm roots g (openedOf C κ val g)) :=
+      ∃ g : Fin C.N, g ∈ (Verity.Partition.ofAudit P).io u ∧ ¬ OpensAt C κ H Cm roots g (openedOf C κ val g)) :=
     fun h => hu (Finset.mem_filter.2 ⟨Finset.mem_univ _, h⟩)
   have hc := not_not.1 fun h => hu' (Or.inl h)
-  have hb : ∀ g ∈ (Verity.Partition.ofAudit P).io u, OpensAt C κ H Cm roots g (openedOf C κ val g) :=
+  have hb : ∀ g : Fin C.N, g ∈ (Verity.Partition.ofAudit P).io u → OpensAt C κ H Cm roots g (openedOf C κ val g) :=
     fun g hg => not_not.1 fun h => hu' (Or.inr ⟨g, hg, h⟩)
   refine (Verity.Partition.ofAudit P).correct_congr (fun g hg => ?_) hc
-  calc X g = BitVec.ofBool ((X g).getLsbD 0) := (ofBool_getLsbD_zero _).symm
+  calc T g = BitVec.ofBool ((T g).getLsbD 0) := (ofBool_getLsbD_zero _).symm
     _ = Verity.Circuit.ofBits (openedOf C κ val) g := by
-      rw [opensAt_unique hU (hX g hg) (hb g hg)]
+      rw [opensAt_unique hU (hT g hg) (hb g hg)]
       rfl
 
 end Flock.Bridge

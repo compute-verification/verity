@@ -81,22 +81,26 @@ theorem prob_bind_interleave_fst_le {γ : Type} {Q : α → Prop} {δ : ℝ≥0�
 
 section Audit
 
-open FlockSoundness.Discharge.Exec FlockSoundness.Audit
+open FlockSoundness.Discharge.Exec (auditLive)
+open FlockSoundness.Audit (Law)
 
 variable {n : ℕ} {Reg : Type}
 
 /-- **The live audit once the prover has registered `R`**: the verifier draws, then the live session. -/
-def auditAfter (L : Law n) (Reg : Type) (live : Finset (Fin n) → Reg → FlockSoundness.Game Transcript) (R : Reg) :
-    FlockSoundness.Game (Reg × Finset (Fin n) × Transcript) :=
+def auditAfter (L : Law n) (Reg : Type)
+    (live : Finset (Fin n) → Reg → FlockSoundness.Game FlockSoundness.Discharge.Exec.Transcript) (R : Reg) :
+    FlockSoundness.Game (Reg × Finset (Fin n) × FlockSoundness.Discharge.Exec.Transcript) :=
   .coin L.Ω fun ω => (live (L.draw ω) R).map fun t => (R, L.draw ω, t)
 
-theorem auditLive_eq (L : Law n) (Reg : Type) (live : Finset (Fin n) → Reg → FlockSoundness.Game Transcript) :
+theorem auditLive_eq (L : Law n) (Reg : Type)
+    (live : Finset (Fin n) → Reg → FlockSoundness.Game FlockSoundness.Discharge.Exec.Transcript) :
     auditLive L Reg live = .send Reg (auditAfter L Reg live) := rfl
 
 /-- **A bound on the live audit bounds it after every registration**, so the registration may come from the period's
 commit phase. -/
-theorem prob_auditAfter_le {Q : Reg × Finset (Fin n) × Transcript → Prop} {δ : ℝ≥0∞} (L : Law n)
-    (live : Finset (Fin n) → Reg → FlockSoundness.Game Transcript)
+theorem prob_auditAfter_le {Q : Reg × Finset (Fin n) × FlockSoundness.Discharge.Exec.Transcript → Prop} {δ : ℝ≥0∞}
+    (L : Law n)
+    (live : Finset (Fin n) → Reg → FlockSoundness.Game FlockSoundness.Discharge.Exec.Transcript)
     (h : ∀ τ, FlockSoundness.Game.prob Q (auditLive L Reg live) τ ≤ δ) (R : Reg)
     (τ : FlockSoundness.Game.Strategy (auditAfter L Reg live R)) :
     FlockSoundness.Game.prob Q (auditAfter L Reg live R) τ ≤ δ :=
