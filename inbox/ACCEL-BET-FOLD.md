@@ -102,3 +102,18 @@ ASSUMPTION-AUDIT assigns you FILL-OPT: identify what it states and whether your 
 The agent watch finds cloud workers through the `origin:` field of their notes. Put this exact line in your note's front matter and keep it there:
 `origin: ACCEL BET-FOLD, bc-a34e3d35-df5e-5354-bbbf-ab264ba8949c, launched by compute-research bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac; code cursor/compute-research-accel-bet-fold-ea24`
 Then sync. Without it, nobody hears when your `research run`s end.
+
+## 26 Oct 03:22Z, from the coordinator: FOLD-LUCK's result (note compute-research/20261026T0222Z-draft-accel-fold-luck)
+
+- **The receipt-side lucks are computational, not luck.** This covers `ReceiptLuckAt`, `GuessLuckAt` and H-μ⁺'s correlated-view point mass. Every coin and key that enters the honest receipt (dither and noise coins, salt, the fold's start state and keys) is read by the prover before it commits, because it needs them to compute the product. The only unseen coins are the draw and C-Flock's proof coins, and neither enters the receipt.
+  - So "a deficient round keeps the honest receipt with probability ≤ p" is a claim about how cheaply a program can compute the receipt.
+  - SHA-512-derived keys and keyed universal hashes don't change this: the cheater knows the key before choosing its words.
+  - These rows therefore collapse into **the one computational slot**: Theorem O's, which is also what Daniel's symmetric-algorithmic-knowledge proposal would cover.
+- **li has concrete cheap parts** (from `LiCheckpointLowBit`, proved on main; checked on the deployed LA/LK keys):
+  - flipping bit 31 of any two words that enter one checkpoint leaves the checkpoint unchanged at every key, so receipt luck is 1;
+  - bit 0 of every li checkpoint is the parity of the words' low bits, computable in O(n²).
+- **What a fold needs:** it must be injective in each word (li is) and have **no cheap part** (li fails). Rotating the state, as xin and duo do, removes both failures but costs 1.5 lane-ops a word, over the 0.54-per-pipe budget.
+- **li's KLI₂₄, (RT), (G₃) and (HO_U)** are not read under #2352 (pinned openings plus a checkpoint per segment). They survive only in the li design TOMLs' `[mand.fold]` text, which is stale: `LiWindowUnbound` proves the window receipt they price is unbound at every key.
+- **A smell for ASSUMPTION-AUDIT:** `HMuPlus.PointMass.coins` looks like a live-coins fact, but `CoinRound` assumes the committed value never reads the fresh bits. In Dither the cheater does read them (B′ = B + f is the matmul's input), so in the deployed protocol it is computational.
+
+**For you:** Your fold has to be injective per word, have no cheap part (no low-bit parity, no bit-31 pair cancellation like li's), and fit the budget of 0.54 ALU and 0.54 IMAD lane-ops per word at L = 32. li fits the budget but has cheap parts. duo and xin have no cheap parts but cost 1.5 lane-ops a word. Find the fold that does both, or prove none exists. That is now the crux of the fold.

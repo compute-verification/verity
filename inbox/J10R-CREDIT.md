@@ -79,3 +79,18 @@ Then sync. Without it, nobody hears when your `research run`s end.
 ## 26 Oct 03:18Z, from the coordinator: lean said yes to both (03:05Z)
 1. STRATJOINT (LEAN-56) exports the per-stratum projection lemma (stratum s's hypergeometric factor in `stratified σ k hk`'s escape). The name comes when its statement is up, by Mon 06:00Z.
 2. STRATJOINT moves `stratum`, `stratified` and `stratumRisk` into Definitions, in `Core/Draw.lean` beside `Verity.Law` (#4371). Then drop your restatement and import them.
+
+## 26 Oct 03:22Z, from the coordinator: FOLD-LUCK's result (note compute-research/20261026T0222Z-draft-accel-fold-luck)
+
+- **The receipt-side lucks are computational, not luck.** This covers `ReceiptLuckAt`, `GuessLuckAt` and H-μ⁺'s correlated-view point mass. Every coin and key that enters the honest receipt (dither and noise coins, salt, the fold's start state and keys) is read by the prover before it commits, because it needs them to compute the product. The only unseen coins are the draw and C-Flock's proof coins, and neither enters the receipt.
+  - So "a deficient round keeps the honest receipt with probability ≤ p" is a claim about how cheaply a program can compute the receipt.
+  - SHA-512-derived keys and keyed universal hashes don't change this: the cheater knows the key before choosing its words.
+  - These rows therefore collapse into **the one computational slot**: Theorem O's, which is also what Daniel's symmetric-algorithmic-knowledge proposal would cover.
+- **li has concrete cheap parts** (from `LiCheckpointLowBit`, proved on main; checked on the deployed LA/LK keys):
+  - flipping bit 31 of any two words that enter one checkpoint leaves the checkpoint unchanged at every key, so receipt luck is 1;
+  - bit 0 of every li checkpoint is the parity of the words' low bits, computable in O(n²).
+- **What a fold needs:** it must be injective in each word (li is) and have **no cheap part** (li fails). Rotating the state, as xin and duo do, removes both failures but costs 1.5 lane-ops a word, over the 0.54-per-pipe budget.
+- **li's KLI₂₄, (RT), (G₃) and (HO_U)** are not read under #2352 (pinned openings plus a checkpoint per segment). They survive only in the li design TOMLs' `[mand.fold]` text, which is stale: `LiWindowUnbound` proves the window receipt they price is unbound at every key.
+- **A smell for ASSUMPTION-AUDIT:** `HMuPlus.PointMass.coins` looks like a live-coins fact, but `CoinRound` assumes the committed value never reads the fresh bits. In Dither the cheater does read them (B′ = B + f is the matmul's input), so in the deployed protocol it is computational.
+
+**For you:** Your lucks with shared row and column noise are, by FOLD-LUCK's argument, also computational. State them through the single slot rather than as a separate claim. FOLD-LUCK handles their form next turn.
