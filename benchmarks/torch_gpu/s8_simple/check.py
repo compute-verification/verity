@@ -47,8 +47,9 @@ SERVED = {"q": ("l0.wq",), "kv": ("l0.wk", "l0.wv"), "o": ("l0.wo",), "up": ("l0
 #: the demo's public weights seed (`text:verity/cmp92/h200/weights/v1`)
 SEED = b"verity/cmp92/h200/weights/v1"
 SETS = ("edge", "served")
-#: token rows: small batches, the skeleton's batch (4096), the block's (12288) and the frozen shape's full step (20480)
-MS = (1, 7, 128, 4096, 12288, 20480)
+#: token rows: small batches, the skeleton's batch (4096), the block's (16384), 12288 between them, and the frozen
+#: shape's full step (20480)
+MS = (1, 7, 128, 4096, 12288, 16384, 20480)
 #: rows checked at m > 128, and coordinates a run checks through the Definition's own evaluator
 ROWS, DEFINITION_COORDS = 256, 16
 TOKEN_SPREAD, CHANNEL_SPREAD = 1 / 127, 0.02 / 127
