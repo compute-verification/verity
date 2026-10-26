@@ -31,10 +31,13 @@ from typing import Literal
 
 @dataclass(frozen=True)
 class Budget:
-    """What one block may use: the FLOPs it runs and the novel bits that enter it."""
+    """What one block may use: the FLOPs it runs, the novel bits that enter it, and the bits that may cross its
+    narrowest declared forward cut (`math.inf` where the policy declares none: an NCI block; an episode of the proof of
+    forward computation, whose operators form a one-way chain, has `n_max` positions times the write allowance)."""
 
     compute: float
     inputs: float
+    cut: float = math.inf
 
 
 #: The most counted products one block with this budget finishes: a cap for a bound, a construction for an attack.
