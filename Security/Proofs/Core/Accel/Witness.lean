@@ -1,6 +1,8 @@
 import Definitions.Core.Accel.Witness
+import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.Order.Ring.NNRat
+import Mathlib.Tactic.IntervalCases
 import Mathlib.Tactic.NormNum
 import Mathlib.Tactic.Ring
 
@@ -187,15 +189,17 @@ theorem mma_use (n p : ℕ) (r : Res) : tickUse x [mma n p] r ≤ ρ r := by
   cases r <;> simp [tickUse, mma, mmaOp, opUse, port, ρ, Card.weightOf, card, weight, Shape.wa, Shape.wb, ha, hb] <;>
     norm_num
 
+theorem store_tick (n u : ℕ) (r : Res) : tickUse x ((chunk (n * n / 4) 151 u).map (store n)) r =
+    (chunk (n * n / 4) 151 u).length * opUse (card.weightOf x) (card.scale x) x.madHi (.copy .reg .dram 4) r := by
+  simp only [tickUse, List.map_map]
+  rw [show ((fun a : Ins => opUse (card.weightOf x) (card.scale x) x.madHi a.1.1 r) ∘ store n) =
+    fun _ => opUse (card.weightOf x) (card.scale x) x.madHi (.copy .reg .dram 4) r from rfl,
+    List.map_const', List.sum_replicate, nsmul_eq_mul]
+
 theorem store_use (n u : ℕ) (r : Res) : tickUse x ((chunk (n * n / 4) 151 u).map (store n)) r ≤ ρ r := by
   have hc : ((chunk (n * n / 4) 151 u).length : ℚ≥0) ≤ 151 := by
     exact_mod_cast (by simp [chunk] : (chunk (n * n / 4) 151 u).length ≤ 151)
-  have h : tickUse x ((chunk (n * n / 4) 151 u).map (store n)) r =
-      (chunk (n * n / 4) 151 u).length * opUse (card.weightOf x) (card.scale x) x.madHi (.copy .reg .dram 4) r := by
-    simp only [tickUse, List.map_map]
-    rw [show ((fun a : Ins => opUse (card.weightOf x) (card.scale x) x.madHi a.1.1 r) ∘ store n) =
-      fun _ => opUse (card.weightOf x) (card.scale x) x.madHi (.copy .reg .dram 4) r from rfl,
-      List.map_const', List.sum_replicate, nsmul_eq_mul]
+  have h := store_tick (x := x) n u r
   rw [h]
   cases r <;> simp [opUse, port]
   · rw [← one_div, ← mul_div_assoc, mul_one, div_le_iff₀ (by norm_num)]
@@ -269,5 +273,73 @@ theorem kernel_instrs (n : ℕ) :
   simp only [kernel, List.map_append, List.sum_append, List.map_map, Function.comp_def, List.length_map,
     List.length_cons, List.length_nil, h]
   simp
+
+/-! ## Code fetch -/
+
+theorem chunk_sum4 (len : ℕ) : ∀ m : ℕ,
+    ((List.range m).map fun u => (chunk len 151 u).length * 4).sum = min len (151 * m) * 4
+  | 0 => by simp
+  | m + 1 => by
+    rw [List.range_succ, List.map_append, List.sum_append, chunk_sum4 len m]
+    simp [chunk]
+    omega
+
+theorem kernel_dram (n : ℕ) :
+    ((kernel n).map fun is => tickUse x is .dram).sum = ((2 * n * (n / 4) + n * n / 4 * 4 : ℕ) : ℚ≥0) := by
+  have h := chunk_sum4 (n * n / 4) ((n * n / 4 + 150) / 151)
+  rw [min_eq_left (by omega)] at h
+  have hl : ∀ c, tickUse x [load n c] .dram = ((n / 4 : ℕ) : ℚ≥0) := by
+    intro c; unfold load; split <;> simp [tickUse, copyN, opUse, port]
+  have hm : ∀ p, tickUse x [mma n p] .dram = 0 := by
+    intro p; simp [tickUse, mma, mmaOp, opUse, port]
+  have hs : ∀ u, tickUse x ((chunk (n * n / 4) 151 u).map (store n)) .dram =
+      (((chunk (n * n / 4) 151 u).length * 4 : ℕ) : ℚ≥0) := by
+    intro u; rw [store_tick]; simp [opUse, port]
+  simp only [kernel, List.map_append, List.sum_append, List.map_map, Function.comp_def, hl, hm, hs]
+  rw [show ((List.range ((n * n / 4 + 150) / 151)).map fun u =>
+      (((chunk (n * n / 4) 151 u).length * 4 : ℕ) : ℚ≥0)) =
+    ((List.range ((n * n / 4 + 150) / 151)).map fun u => (chunk (n * n / 4) 151 u).length * 4).map (Nat.cast)
+    by rw [List.map_map]; rfl, ← Nat.cast_list_sum, h]
+  simp only [List.map_const', List.sum_replicate, List.length_range, nsmul_eq_mul, nsmul_zero, add_zero]
+  push_cast
+  ring
+
+theorem fetch_nat (n : ℕ) (h256 : 256 ∣ n) (hn : n ≤ 2048) :
+    (2 * n * (n / 4) + n * n / 4 * 4 + 4 * (2 * n + n / 32 * blocks n + n * n / 4)) * 33 ≤
+      20000 * (2 * n + n / 32 * blocks n + (n * n / 4 + 150) / 151) := by
+  obtain ⟨q, rfl⟩ := h256
+  have hq : q ≤ 8 := by omega
+  interval_cases q <;> norm_num [blocks]
+
+/-- **G2's code fetch**: the stores' HBM words and the code's, fetched once, fit in HBM's port over the run. -/
+theorem kernel_codeFetch (n : ℕ) (h256 : 256 ∣ n) (hn : n ≤ 2048)
+    (σ : (machine x cap oracle).State (ℕ × ℕ)) (hpc : ∀ θ, σ.pc θ = 0) :
+    Machine.CodeFetch (prog (kernel n)) σ (sched (kernel n)) := by
+  unfold Machine.CodeFetch
+  have hlen : (sched (kernel n)).length = (kernel n).length := List.length_mapIdx
+  have hsum : ∑ t ∈ Finset.range (sched (kernel n)).length,
+      Machine.usage (m := machine x cap oracle) (Machine.run (prog (kernel n)) σ (sched (kernel n))).2 t Res.dram =
+      ((2 * n * (n / 4) + n * n / 4 * 4 : ℕ) : ℚ≥0) := by
+    rw [run_plan _ σ hpc, hlen]
+    simp only [usage_plan]
+    rw [sum_range_getD (fun is => tickUse x is .dram) (by simp [tickUse]), kernel_dram]
+  have hc := code_le (x := x) (cap := cap) (oracle := oracle) (kernel n)
+  rw [kernel_instrs] at hc
+  have hc' : ((Machine.code (prog (x := x) (cap := cap) (oracle := oracle) (kernel n)) (sched (kernel n)) : ℕ) :
+      ℚ≥0) ≤ ((2 * n + n / 32 * blocks n + n * n / 4 : ℕ) : ℚ≥0) := by exact_mod_cast hc
+  have hnat := fetch_nat n h256 hn
+  have key : ((2 * n * (n / 4) + n * n / 4 * 4 : ℕ) : ℚ≥0) +
+      4 * ((Machine.code (prog (x := x) (cap := cap) (oracle := oracle) (kernel n)) (sched (kernel n)) : ℕ) : ℚ≥0) ≤
+      ρ .dram * (((sched (kernel n)).length + x.slack : ℕ) : ℚ≥0) := by
+    calc _ ≤ ((2 * n * (n / 4) + n * n / 4 * 4 : ℕ) : ℚ≥0) + 4 * ((2 * n + n / 32 * blocks n + n * n / 4 : ℕ) : ℚ≥0) :=
+          add_le_add le_rfl (mul_le_mul_of_nonneg_left hc' zero_le)
+      _ ≤ ρ .dram * ((sched (kernel n)).length : ℚ≥0) := by
+          rw [hlen, kernel_length, ρ, div_mul_eq_mul_div, le_div_iff₀ (by norm_num)]
+          exact_mod_cast hnat
+      _ ≤ _ := mul_le_mul_of_nonneg_left (by exact_mod_cast Nat.le_add_right _ _) zero_le
+  show ∑ t ∈ Finset.range (sched (kernel n)).length, Machine.usage (m := machine x cap oracle)
+      (Machine.run (prog (kernel n)) σ (sched (kernel n))).2 t Res.dram + 4 * _ ≤ ρ .dram * _
+  rw [hsum]
+  exact key
 
 end Verity.Accel.H200.Resident
