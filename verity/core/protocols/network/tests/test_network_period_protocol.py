@@ -154,6 +154,50 @@ def test_a_scan_in_the_checker_form_is_refused_by_name(server):
         assert verdict == REJECT and "(the checker form)" in json.loads(out)["reason"], (n, out)
 
 
+def test_a_wide_unit_is_charged_its_committed_bits(server):
+    """A compute audit's faulty bits are its bound times the most bits one of its Program's units commits, read off the
+    Program, not a proof unit's 16-bit public output: over honest clock-form periods whose audits' units commit 8 to
+    320 bits, each audit is charged `b · bits`, some audit of wide units more than `16 · b`, and Lean's public is the
+    mirror's."""
+    wide = 0
+    for n in range(12):
+        case = build("honest", n)
+        p, out = PC.params(case["params"]), reference(case)
+        assert out["verdict"] == ACCEPT, (n, out)
+        for audit, t in zip(p.audits, out["public"]["audits"]):
+            assert (t["units"], t["faulty_bits"]) == (audit.units, t["wrong_units"] * audit.bits), (n, t, audit)
+            wide += t["faulty_bits"] > 16 * t["wrong_units"]
+        verdict, got = D.replay(PORT, case, server)
+        assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
+    assert wide
+
+
+#: The refusals that hold a compute audit to its Program, in either form, each with what Lean's reason and the
+#: mirror's say.
+AUDIT_REFUSALS = {m: why for f in ("", "rows-") for m, why in (
+    (f"{f}audit-program", ("registration: not its Program",) * 2),
+    (f"{f}audit-units", ("not its Program's",) * 2))}
+
+
+def test_an_audit_is_held_to_its_program(server):
+    """An audit whose registration names another Program than its descriptor's, or whose answer is over another number
+    of units than its Program's template instances, is refused at that check by Lean and the mirror; and an audit
+    whose Program isn't a descriptor, is of another schema or has no template is refused as parameters."""
+    for m, (lean, mirror) in AUDIT_REFUSALS.items():
+        for n in range(4):
+            case = build(m, n, small=n % 2 == 0)
+            assert mirror in reference(case)["reason"], (m, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and lean in json.loads(out)["reason"], (m, n, out)
+    for form in ("honest", "rows-honest"):
+        case = build(form, 0, small=True)
+        for bad in PC.bad_audits(case["params"]):
+            broken = case | {"params": bad}
+            assert reference(broken)["reason"].startswith("params:"), (form, reference(broken))
+            verdict, out = D.replay(PORT, broken, server)
+            assert verdict == REJECT and json.loads(out)["reason"].startswith("params:"), (form, bad, out)
+
+
 def test_the_mirror_reads_a_registration_as_the_network_certifier_writes_it():
     """The rows form's honest registrations are `warden_rows.registration`'s documents, which its own
     `check_registration` reads back under the period's key, session and schedule."""
@@ -211,17 +255,21 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
 
 
 def test_the_bound_counts_what_it_says():
-    """K's terms on a period worked by hand: 10 units drawn subset:3 at δ = 1/10 with at most 4 wrong, 7 cells on one
-    connection and none on another, 2 syncs over 3 link-windows, jitter below 2 over 3 steps; and eps over audits at
-    δ = 1/10, 1/15 and 1/6, and over none (Lean's `#guard`s)."""
-    p = Params(((0, 3),), (7, 0), 0, 2, "a", None, b"", "", SyncSet((0,), (Fraction(1), Fraction(2))), 3)
+    """K's terms on a period worked by hand: 10 units, each committing 16 bits, drawn subset:3 at δ = 1/10 with at most
+    4 wrong, 7 cells on one connection and none on another, 2 syncs over 3 link-windows, jitter below 2 over 3 steps;
+    the same audit with units committing 40 bits, its faulty bits 4 · 40; and eps over audits at δ = 1/10, 1/15 and
+    1/6, and over none (Lean's `#guard`s)."""
+    p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 0), 0, 2, "a", None, b"", "",
+               SyncSet((0,), (Fraction(1), Fraction(2))), 3)
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)])
     assert (out["schedules"], out["cells"], out["audits"][0]["faulty_sets"], out["audits"][0]["faulty_bits"],
             out["audits"][0]["jitter"], out["K"]) == (3, 3, 9, 64, 3, 3 + 3 + 9 + 64 + 3)
+    wide = public(dataclasses.replace(p, audits=(PC.Audit(0, 3, "", 10, 40),)), [Facts(10, 3, Fraction(1, 10), 4)])
+    assert (wide["audits"][0]["faulty_bits"], wide["K"]) == (160, 3 + 3 + 9 + 160 + 3)
     assert [clog2(x) for x in range(6)] == [0, 0, 1, 2, 2, 3]
     assert [at_most(10, 0), at_most(10, 1), at_most(10, 2), at_most(4, 9), at_most(0, 3)] == [1, 11, 56, 16, 1]
     assert out["eps"] == "1/10"
-    three = dataclasses.replace(p, audits=((0, 0),) * 3)
+    three = dataclasses.replace(p, audits=(PC.Audit(0, 0, "", 1, 16),) * 3)
     assert public(three, [Facts(1, 1, Fraction(1, d), 0) for d in (10, 15, 6)])["eps"] == "1/3"
     assert public(dataclasses.replace(p, audits=()), [])["eps"] == "0"
 
@@ -232,7 +280,8 @@ def test_the_rows_forms_bound_counts_what_it_says():
     units (T = 10) drawn at δ = 1/15 with at most 3 wrong (1351 sets), 1,120 free inputs, instances committing 300 and
     512 bits, and jitter below 2 over its 10 steps; with every unit drawn, no faulty term; and eps over the scans' δ
     alone."""
-    p = Params(((0, 3),), (7, 2), 0, 2, "a", None, b"", "", None, 1, WardenParams(), PC.Scan(10, 1120, 300, 512))
+    p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", None, 1, WardenParams(),
+               PC.Scan(10, 1120, 300, 512))
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [Facts(20, 5, Fraction(1, 15), 3)])
     (scan,) = out["scans"]
     assert at_most(20, 3) == 1351 and clog2(1351) == 11

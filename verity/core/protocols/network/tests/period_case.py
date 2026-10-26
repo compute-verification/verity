@@ -7,7 +7,8 @@ and checks a period with the Python the period's pieces already have: one-stage'
 reads them (`pouw.core_check.answer_of` and `integrity`), the network certifier's certificates and clock certificates
 under its LMS key (`certifier.certificate`), Σ_sync (`certifier.schedule`), `registration.digest`, and in the rows form
 the schedule (`warden.WardenParams`) and the verifier's read of each row registration
-(`warden_rows.check_registration`), and the scan's terms read off its Program's descriptor (`_scan`). Its verdict,
+(`warden_rows.check_registration`), and the scan's terms read off its Program's descriptor (`_scan`), as each compute
+audit's units and their committed bits are read off its own (`_audit`). Its verdict,
 public, profile and digest are Lean's exactly; its reason is its own. Public is `K` and its terms over
 `PeriodLeakAccepted`'s windows (the clock form's audits, the rows form's scans, all at one δ), each with its `delta`,
 and `eps`, the union of those deltas as an exact ratio string.
@@ -22,9 +23,10 @@ each link-window's ingress and egress rows committed and registered under a smal
 registration holding both rows' roots and domains, answered by one-stage with a stratified or subset draw at the
 period's δ; the scan's Program is its generator form, stand-ins of its three templates at small widths
 (`scan_descriptor`), and a Program in the checker form is a bad scan (`bad_scans`). Beside them, the compute audits,
-each answered with a subset or stratified draw (a work law's) and its bound on wrong units. `case(kind, seed, form)` is
-a small period of the form aimed at a verdict, or at a decoding failure (`KINDS`), and `cases(seed, form)` one of each
-with its answer, as a composition's difftest takes a real component's cases.
+each registered over its Program, a population of one or two stand-in templates whose units commit from 8 to 320 bits
+(`audit_descriptor`), and answered with a subset or stratified draw (a work law's) and its bound on wrong units.
+`case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a decoding failure (`KINDS`), and
+`cases(seed, form)` one of each with its answer, as a composition's difftest takes a real component's cases.
 
 This is test-side Python (it imports `verity_difftest` and PoUW's `core_check`, which the certifier's package may not),
 so it lives beside the period's difftest (`test_network_period_protocol.py`), and other suites load it by path."""
@@ -51,6 +53,7 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k
 from verity.ml.circuits import boolean as BL, codec, population
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.commitments.identity import tagged_sha512
@@ -60,7 +63,7 @@ ID = "verity/certifier/v0"
 COMMITMENT_TAG = "verity-network-certifier/period/v0"
 ONE_STAGE = "verity/sampled-proofs/one-stage/v1"
 FORMATS = ("verity/registration/v1", "verity/registration/v2")
-#: a proof unit's outputs are at most 16 bits
+#: a proof unit's public outputs are at most 16 bits (the values it commits can be wider)
 OUT_BITS = 16
 UNIT = "unit"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
@@ -92,8 +95,19 @@ CHECKER_PARAMS = (("row", "sin", "prog", "sout", "view"), ("state", "row"))
 
 
 @dataclasses.dataclass(frozen=True)
+class Audit:
+    """`Audit`: a compute audit's layout terms (its free inputs and monitoring period) and what its Program gives: its
+    SHA-512, its units (its root's template instances) and the most bits one of them commits."""
+    free: int
+    steps: int
+    program: str
+    units: int
+    bits: int
+
+
+@dataclasses.dataclass(frozen=True)
 class Params:
-    audits: tuple[tuple[int, int], ...]
+    audits: tuple[Audit, ...]
     cells: tuple[int, ...]
     first: int
     jitter: int
@@ -186,11 +200,6 @@ def _sync_set(j) -> SyncSet:
     return SyncSet(tuple(deltas), tuple(rhos))
 
 
-def _audit(a, ctx: str) -> tuple[int, int]:
-    _exactly(a, ["free", "steps"], ctx)
-    return _nat(a["free"], ctx), _nat(a["steps"], ctx)
-
-
 def _schedule(j) -> WardenParams:
     """`scheduleOf`: `WardenParams`' fields, each a positive integer, B past a cell's header, and B, S and T u32s."""
     _exactly(j, SCHEDULE_KEYS, "schedule")
@@ -217,6 +226,27 @@ def bits_of(t) -> int:
 def program_sha512(desc: dict) -> str:
     """`partition_object.program_sha512`: SHA-512 of the canonical descriptor without `annotations`."""
     return hashlib.sha512(D.canonical({k: v for k, v in desc.items() if k != "annotations"}).encode()).hexdigest()
+
+
+def _members(x: dict) -> int:
+    """`Node.members`: a batch's members or a scan's iterations, else one."""
+    return x["n"] if x["form"] in ("batch", "scan") else 1
+
+
+def _audit(a, ctx: str) -> Audit:
+    """`auditOf`: the layout terms and the Program's descriptor, whose root's template instances are the audit's units,
+    each committing its template's return; a root with no template refused. It reads the descriptor's root nodes and
+    signatures; C-Flock's decoder, which Lean runs on it, refuses no descriptor this module writes."""
+    _exactly(a, ["free", "program", "steps"], ctx)
+    free, steps, j = _nat(a["free"], ctx), _nat(a["steps"], ctx), a["program"]
+    if not isinstance(j, dict) or j.get("schema") != SCHEMA:
+        raise D.Reject(f"{ctx}: program: not a Program's descriptor")
+    defs, callees = j["definitions"], j["callees"]
+    units = [(_members(x), bits_of(d["body"]["ret_type"])) for x in defs[j["root"]]["body"]["nodes"]
+             if (d := defs[callees[x["fn"]]])["form"] != "primitive"]
+    if not units:
+        raise D.Reject(f"{ctx}: program: no template")
+    return Audit(free, steps, program_sha512(j), sum(n for n, _ in units), max(b for _, b in units))
 
 
 def _scan(j, program: str, s: WardenParams) -> Scan:
@@ -252,8 +282,7 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
         raise D.Reject("scan: the ingress templates' prog or return differ")
     if be["ret_type"] != ["Tuple", [["Value", OUT_BITS], row]]:
         raise D.Reject("scan: the egress template doesn't return a u16 and the schedule's row")
-    inputs = sum(int(w[1]) * (x["n"] if x["form"] in ("batch", "scan") else 1)
-                 for x in nodes if (w := INPUT_ID.match(callees[x["fn"]])))
+    inputs = sum(int(w[1]) * _members(x) for x in nodes if (w := INPUT_ID.match(callees[x["fn"]])))
     bits = lambda b: sum(bits_of(t) for _, t in b["params"])  # noqa: E731
     if inputs != bits(bf) + (T - 1) * sum(bits(b) for _, b in later) + T * bits(be):
         raise D.Reject("scan: an input gate that is no template's parameter")
@@ -503,10 +532,16 @@ def _facts(what: str, prof: dict, pub) -> Facts:
     return Facts(lv["size"], drawn, prof["delta"], bound)
 
 
-def _audit_check(i: int, reg: Registration, a: dict) -> Facts:
+def _audit_check(i: int, audit: Audit, reg: Registration, a: dict) -> Facts:
+    """`auditCheck`: the registration names the audit's Program, and the answer's units are the Program's."""
     what = f"audit {i}"
+    if reg.record.get("program") != audit.program:
+        raise Finding(REJECT, f"{what}: registration: not its Program")
     prof, pub = _answered(what, reg, a)
-    return _facts(what, prof, pub)
+    f = _facts(what, prof, pub)
+    if f.units != audit.units:
+        raise Finding(REJECT, f"{what}: profile: {f.units} units, not its Program's {audit.units}")
+    return f
 
 
 def clog2(x: int) -> int:
@@ -524,8 +559,8 @@ def _facts_json(f: Facts) -> dict:
 
 
 def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int) -> dict:
-    """`AuditTerms.of` (a compute audit's, `per_unit` a proof unit's 16 output bits) and `Scan.terms` (a scan's,
-    `per_unit` the wider instance's committed bits)."""
+    """`AuditTerms.of` (a compute audit's, `per_unit` its Program's widest unit's committed bits) and `Scan.terms` (a
+    scan's, `per_unit` the wider instance's committed bits)."""
     return _facts_json(f) | {"faulty_bits": f.wrong * per_unit, "faulty_sets": clog2(at_most(f.units, f.wrong)),
                              "free": free, "jitter": clog2(jitter ** steps)}
 
@@ -535,7 +570,7 @@ def public(p: Params, facts: list[Facts], scans: list[Facts] | None = None) -> d
     link-windows' scans (`scans`, None in the clock form), where the compute audits are in no term."""
     cells = sum(clog2(cap + 1) for cap in p.cells)
     if scans is None:
-        units = [_terms(free, steps, OUT_BITS, f, p.jitter) for (free, steps), f in zip(p.audits, facts)]
+        units = [_terms(a.free, a.steps, a.bits, f, p.jitter) for a, f in zip(p.audits, facts)]
         schedules = clog2((len(p.sync_set.deltas) * len(p.sync_set.rhos)) ** p.windows)
         out = {"audits": units}
     else:
@@ -571,9 +606,9 @@ def check(p: Params, c: Commitment, e) -> tuple:
             findings.append(f)
     if any(f.delta != scans[0].delta for f in scans):
         findings.append(Finding(REJECT, "a scan's δ is not the period's"))
-    for i, (reg, a) in enumerate(zip(c.audits, audits)):
+    for i, (audit, reg, a) in enumerate(zip(p.audits, c.audits, audits)):
         try:
-            facts.append(_audit_check(i, reg, a))
+            facts.append(_audit_check(i, audit, reg, a))
         except Finding as f:
             findings.append(f)
     if rejected := next((f for f in findings if f.verdict == REJECT), None):
@@ -615,7 +650,7 @@ EXPECT = {
     "answer-protocol": REJECT, "answer-other": REJECT, "answer-reject": REJECT, "answer-undecided": UNDECIDED,
     "answer-profile": REJECT,
     "audit-other": REJECT, "audit-reject": REJECT, "audit-undecided": UNDECIDED, "audit-profile": REJECT,
-    "audit-bound": REJECT,
+    "audit-bound": REJECT, "audit-program": REJECT, "audit-units": REJECT,
     "undecided-and-reject": REJECT, "form": REJECT,
     "first": REJECT, "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
     "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
@@ -631,7 +666,7 @@ EXPECT = {
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
     "rows-answer-bound": REJECT, "rows-delta": REJECT, "rows-units": REJECT,
     "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": UNDECIDED,
-    "rows-audit-profile": REJECT, "rows-audit-bound": REJECT,
+    "rows-audit-profile": REJECT, "rows-audit-bound": REJECT, "rows-audit-program": REJECT, "rows-audit-units": REJECT,
     "rows-undecided-and-reject": REJECT, "rows-form": REJECT,
     "rows-first": REJECT, "rows-count-windows": REJECT, "rows-count-audits": REJECT, "rows-evidence-count": REJECT,
     "rows-params": REJECT, "rows-commitment": REJECT, "rows-evidence": REJECT,
@@ -788,6 +823,29 @@ def scan_descriptor(T: int, row: int, widths: tuple[int, int, int, int], counts:
     return D.canonical(codec.encode_program(program))
 
 
+def _unit_sig(S):
+    return (("x", Array(1, U16)),), Array(S.OUT, BYTE)
+
+
+#: A compute audit's stand-in unit: it commits `OUT` bytes, a proof unit's 16-bit public output (`OUT` = 2) or more or
+#: fewer, each one gate.
+AUDIT_UNIT = CompositeDefinition("NetworkPeriodAuditUnit", 0, ("OUT",), _unit_sig,
+                                 lambda B, S, x: B.batch(LOW, x[0], axes=(None,), n=S.OUT), register=False)
+#: The stand-in unit's widths in bytes: one under, at and over the public output's 16 bits.
+UNIT_BYTES = (1, 2, 5, 40)
+
+
+@lru_cache(maxsize=None)
+def audit_descriptor(units: tuple[tuple[int, int], ...]) -> str:
+    """The canonical descriptor of a compute audit's Program over the stand-in unit: `n` instances committing `out`
+    bytes each, for each `(n, out)` of `units` (each `out` its own template), one template as the window's population
+    program (`population_program`, `TemplateInstances_v1`), several as a mixed one."""
+    templates = [(bind(AUDIT_UNIT, OUT=out), n) for n, out in units]
+    program = population.population_program(*templates[0]) if len(templates) == 1 else \
+        population.mixed_population_program(templates)
+    return D.canonical(codec.encode_program(program))
+
+
 def build(m: str, seed: int, small: bool = False) -> dict:
     """A period's case with the change `m`, in the form `m` names (`form_of`), every choice drawn from `seed`; `small`:
     the toy key, as few link-windows and audits as `m` needs."""
@@ -915,7 +973,9 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         strata = [{"k": r.randint(1, T), "name": d.value, "size": T} for d in (INGRESS, EGRESS)] \
             if r.random() < 0.5 and units == 2 * T else None
         k = sum(s["k"] for s in strata) if strata else r.randint(1, units)
-        rec = {"format": r.choice(FORMATS), "law": {"k": k, "law": "subset" if strata is None else "stratified"},
+        law = {"k": k, "law": "subset"} if strata is None else {"k": k, "law": "stratified", "strata": [
+            {"k": s["k"], "template": s["name"], "units": [[j * T, (j + 1) * T]]} for j, s in enumerate(strata)]}
+        rec = {"format": r.choice(FORMATS), "law": law,
                "partition": f"{link}/scan/{w}", "population": units, "program": program, "protocol": ONE_STAGE,
                r.choice(["roots", "registered"]): entries, "window": {"kind": "stand-in", "window": w}}
         if aimed and m == "program":
@@ -1012,6 +1072,12 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     audit_params, audit_regs, audits = [], [], []
     for i in range(n_audits):
         units = r.randint(1, 40)
+        n_prog = units + (r.choice([1, -1]) if units > 1 else 1) if i == a and m == "audit-units" else units
+        split = r.randint(1, n_prog - 1) if n_prog > 1 and r.random() < 0.3 else None
+        outs = r.sample(UNIT_BYTES, 1 if split is None else 2)
+        desc = json.loads(audit_descriptor(((n_prog, outs[0]),) if split is None else
+                                           ((split, outs[0]), (n_prog - split, outs[1]))))
+        prog = program_sha512(desc)
         k, strata = r.randint(1, units), None
         law = {"k": k, "law": "subset"}
         if r.random() < 0.5:
@@ -1023,10 +1089,14 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                       for s in law["strata"]]
             k = sum(s["k"] for s in strata)
         rec = {"format": r.choice(FORMATS), "law": law, "partition": f"loop/{i}", "population": units,
-               "program": hashlib.sha512(b"loop %d" % i).hexdigest(), "protocol": ONE_STAGE,
-               "window": {"kind": "served", "window": i}}
+               "program": prog, "protocol": ONE_STAGE, "window": {"kind": "served", "window": i}}
+        if i == a and m == "audit-program":
+            if r.random() < 0.5:
+                rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), prog.upper(), None])
+            else:
+                desc = json.loads(audit_descriptor(((n_prog, r.choice([o for o in UNIT_BYTES if o != outs[0]])),)))
         digest = registration_digest(rec)
-        answer = _accepted(digest, rec["program"], rec["partition"], units, k, r.choice(["1/100", "1/1000000", "1/10"]),
+        answer = _accepted(digest, prog, rec["partition"], units, k, r.choice(["1/100", "1/1000000", "1/10"]),
                            r.randint(0, units), strata)
         if i == a:
             if m == "audit-other":
@@ -1043,7 +1113,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             elif m == "audit-bound":
                 answer["public"] = r.choice([{"drawn": []}, answer["public"] | {"bound": -1},
                                              answer["public"] | {"bound": "3"}, []])
-        audit_params.append({"free": r.randint(0, 5), "steps": r.randint(0, 4)})
+        audit_params.append({"free": r.randint(0, 5), "program": desc, "steps": r.randint(0, 4)})
         audit_regs.append(rec)
         audits.append(answer)
 
@@ -1062,7 +1132,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     elif m == "count-windows":
         case_params["windows"] = n_windows + r.choice([1, -1] if n_windows > 1 else [1])
     elif m == "count-audits":
-        case_params["audits"] = r.choice([audit_params[1:], [*audit_params, {"free": 0, "steps": 0}]])
+        case_params["audits"] = r.choice([audit_params[1:], [*audit_params, {
+            "free": 0, "program": json.loads(audit_descriptor(((1, 2),))), "steps": 0}]])
     elif m == "evidence-count":
         e_json = r.choice([{"audits": audits, "windows": windows[1:]}, {"audits": audits, "windows": windows + windows[:1]},
                            {"audits": [*audits, audits[0] if audits else windows[0]["answer"]], "windows": windows}])
@@ -1089,8 +1160,8 @@ def _bad_params(p: dict, n: int) -> list:
            p | {"program": p["program"].upper()}, p | {"program": 0},
            p | {"lms": p["lms"] | {"W": 3}}, p | {"lms": p["lms"] | {"H": 0}}, p | {"lms": p["lms"] | {"toy": 0}},
            p | {"lms": p["lms"] | {"x": 0}}, p | {"lms": {k: v for k, v in p["lms"].items() if k != "toy"}},
-           p | {"audits": [{"free": 0}]}, p | {"audits": [{"free": -1, "steps": 0}]}, p | {"audits": "x"},
-           p | {"cells": [-1]}, p | {"cells": [True]}, p | {"first": -1}, p | {"first": True}, p | {"first": "0"}]
+           p | {"cells": [-1]}, p | {"cells": [True]}, p | {"first": -1}, p | {"first": True}, p | {"first": "0"},
+           *bad_audits(p)]
     if "sync_set" in p:
         ss = p["sync_set"]
         return out + [p | {"sync_set": ss | {"deltas": []}}, p | {"sync_set": ss | {"rhos": [[0, 1]]}},
@@ -1104,6 +1175,17 @@ def _bad_params(p: dict, n: int) -> list:
                   p | {"schedule": s | {"cell_bytes": U32}}, p | {"schedule": s | {"lanes": U32}},
                   p | {"schedule": s | {"window": U32}}, p | {"sync_set": {"deltas": [0], "rhos": [[1, 1]]}},
                   *bad_scans(p)]
+
+
+def bad_audits(p: dict) -> list[dict]:
+    """Parameters whose audits `auditOf` refuses, each one change to `p`: an audit without its monitoring period, with a
+    negative free count, not a list, and an audit whose Program isn't a descriptor, is of another schema, or has no
+    template in its root (the stand-in unit alone)."""
+    good = json.loads(audit_descriptor(((1, 2),)))
+    bare = json.loads(D.canonical(codec.encode_program(Program(bind(AUDIT_UNIT, OUT=2)))))
+    one = lambda **kw: p | {"audits": [{"free": 0, "program": good, "steps": 0} | kw]}  # noqa: E731
+    return [p | {"audits": [{"free": 0, "program": good}]}, one(free=-1), p | {"audits": "x"}, one(program="x"),
+            one(program=good | {"schema": "verity-ir/v0"}), one(program=bare)]
 
 
 def _scan_widths(desc: dict) -> tuple[int, int, int, int]:
