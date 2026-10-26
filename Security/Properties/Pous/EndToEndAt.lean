@@ -155,14 +155,14 @@ def PassesAt (N : ℕ) [NeZero N] {S D Q L : ℕ} (session binding : ByteArray) 
           (A.pre W ((schAt N).enc W x.1 ()).1 ((schAt N).enc W x.1 ()).2 x.1) =
         List.ofFn fun j => ((schAt N).enc W x.1 ()).2 (I j)
 
-/-- **The draw favors no index at any block count (`ε_rs = 0` in the upper bound)**: for every `N ≥ 1` and every event
-`P` on indices, `uniformOn N` on `DRAW_BYTES` uniform bytes returns an index in `P` with probability at most `P`'s
-under the uniform index. At `2^19` it is equality (`DrawExact`); elsewhere a rejected word only takes probability
-away from every index. -/
+/-- **The draw favors no index at any block count (`ε_rs = 0` in the upper bound)**: for every positive block count
+`N + 1` and every event `P` on indices, `uniformOn (N + 1)` on `DRAW_BYTES` uniform bytes returns an index in `P` with
+probability at most `P`'s under the uniform index. At `2^19` it is equality (`DrawExact`); elsewhere a rejected word
+only takes probability away from every index. -/
 def DrawAtMost : Prop :=
-  ∀ (N : ℕ) [NeZero N] (P : Fin N → Prop),
+  ∀ (N : ℕ) (P : Fin (N + 1) → Prop),
     pr (fun s : Bytes DRAW_BYTES =>
-        ∃ i : Fin N, FlockSoundness.Randomness.uniformOn N (bytesOf s) = some i.val ∧ P i) ≤ pr P
+        ∃ i : Fin (N + 1), FlockSoundness.Randomness.uniformOn (N + 1) (bytesOf s) = some i.val ∧ P i) ≤ pr P
 
 /-- **P2's audit in the ring model at any block count, with `ω` uniform.** For every block count `N`, every state
 size `S` and `(D, Q, L)`, every bound `c` on P2's sequential audit at `N` (every `S`-bit preprocessing and

@@ -140,16 +140,16 @@ theorem pr_draws_le {A : Type} [Fintype A] [Nonempty A] (N : ℕ) [NeZero N] (F 
     (card_draws_le N (Nat.pos_of_ne_zero (NeZero.ne N))) F
 
 theorem drawAtMost : DrawAtMost := by
-  intro N _ P
+  intro N P
   calc pr (fun s : Bytes DRAW_BYTES =>
-        ∃ i : Fin N, FlockSoundness.Randomness.uniformOn N (bytesOf s) = some i.val ∧ P i)
+        ∃ i : Fin (N + 1), FlockSoundness.Randomness.uniformOn (N + 1) (bytesOf s) = some i.val ∧ P i)
       = pr (fun x : Unit × Bytes DRAW_BYTES =>
-          ∃ i : Fin N, FlockSoundness.Randomness.uniformOn N (bytesOf x.2) = some i.val ∧ P i) :=
+          ∃ i : Fin (N + 1), FlockSoundness.Randomness.uniformOn (N + 1) (bytesOf x.2) = some i.val ∧ P i) :=
         (pr_snd _).symm
-    _ ≤ pr (fun x : Unit × Fin N => P x.2) :=
-        pr_draw_le (A := Unit) (fun (s : Bytes DRAW_BYTES) (i : Fin N) =>
-            FlockSoundness.Randomness.uniformOn N (bytesOf s) = some i.val)
-          (fun i => by rw [Fintype.card_fin]; exact card_draw_le N (Nat.pos_of_ne_zero (NeZero.ne N)) i.val)
+    _ ≤ pr (fun x : Unit × Fin (N + 1) => P x.2) :=
+        pr_draw_le (A := Unit) (fun (s : Bytes DRAW_BYTES) (i : Fin (N + 1)) =>
+            FlockSoundness.Randomness.uniformOn (N + 1) (bytesOf s) = some i.val)
+          (fun i => by rw [Fintype.card_fin]; exact card_draw_le (N + 1) N.succ_pos i.val)
           (fun _ i => P i)
     _ = pr P := pr_snd P
 
