@@ -19,14 +19,14 @@ variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] {Srv : Type} [Fint
 
 theorem soundness (hS : V.SampledProofsSound) (hW : V.PouwSound) (hP : V.PousSound) (hB : V.BandwidthAuditSound)
     (hN : V.NetworkCertifierSound) (hWipe : W.WipeSound) : V.SoundnessWithWipe W := by
-  intro θ c σ
+  intro θ F c σ
   refine le_trans (Game.prob_mono ?_ _ σ) (le_trans (Game.prob_or_le _ _ _ σ)
-    (add_le_add (soundness_of_subprotocols ι α d V hS hW hP hB hN θ c σ)
+    (add_le_add (soundness_of_subprotocols ι α d V hS hW hP hB hN θ F c σ)
       (le_trans (prob_exists_finset_le Finset.univ _ _ σ)
-        (Finset.sum_le_sum fun s _ => hWipe θ c σ s))))
-  rintro o ⟨hacc, hfail | ⟨hwa, s, hs⟩, hVb, hWb⟩
-  · exact Or.inl ⟨hacc, hfail, hVb⟩
-  · refine Or.inr ⟨s, Finset.mem_univ s, ⟨hwa, fun r hr => ?_⟩, hs, hWb⟩
+        (Finset.sum_le_sum fun s _ => hWipe θ F c σ s))))
+  rintro o ⟨hacc, hreg, hfail | ⟨hwa, s, hs⟩, hVb, hWb⟩
+  · exact Or.inl ⟨hacc, hreg, hfail, hVb⟩
+  · refine Or.inr ⟨s, Finset.mem_univ s, ⟨hreg, hwa, fun r hr => ?_⟩, hs, hWb⟩
     by_contra hne
     exact hWb ⟨hwa, r, hr, hne⟩
 

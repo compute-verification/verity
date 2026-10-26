@@ -48,7 +48,7 @@ keeps and sends in each play; and each server's assumed capacity M_s, the bits a
 point) and the error per server, from the parameters alone. -/
 structure WipeVocab {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α) (Srv : Type) where
   coinsRead : Sent → List Release
-  world : (θ c : ByteArray) → Game.Strategy (V.game θ c) → Outcome → Srv → ServerWipe
+  world : (θ F c : ByteArray) → Game.Strategy (V.game θ F c) → Outcome → Srv → ServerWipe
   capacity : ByteArray → Srv → ℕ
   keepBits : ByteArray → ℕ
   delta : ByteArray → Srv → ℝ≥0∞
@@ -57,15 +57,17 @@ namespace WipeVocab
 
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] {V : Vocab d α} {Srv : Type} (W : WipeVocab V Srv)
 
-/-- **The wipe's verdict**: its component accepts what the prover sent, and every release its check read is in the
+/-- **The wipe's verdict**: the circuit file passed the commit phase's check, the wipe's component accepts what the
+prover sent, and every release its check read is in the
 device's log. -/
-def Verdict (o : Outcome) : Prop := WipeAccepts o.sent ∧ ∀ r ∈ W.coinsRead o.sent, r ∈ o.log
+def Verdict (o : Outcome) : Prop :=
+  V.Registered o.params o.file ∧ WipeAccepts o.sent ∧ ∀ r ∈ W.coinsRead o.sent, r ∈ o.log
 
 /-- **The wipe's claim at server `s`**: if the server's tiers hold at most its assumed capacity M_s, it keeps at most
 `keepBits` bits of prior content across the wipe tick, plus its egress. -/
-def Holds (θ c : ByteArray) (σ : Game.Strategy (V.game θ c)) (s : Srv) (o : Outcome) : Prop :=
-  (W.world θ c σ o s).mem ≤ W.capacity θ s →
-    (W.world θ c σ o s).kept ≤ W.keepBits θ + (W.world θ c σ o s).egress
+def Holds (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (s : Srv) (o : Outcome) : Prop :=
+  (W.world θ F c σ o s).mem ≤ W.capacity θ s →
+    (W.world θ F c σ o s).kept ≤ W.keepBits θ + (W.world θ F c σ o s).egress
 
 /-- **The wipe's break**: its component accepts on a release missing from the device's log, a signature under the
 device's key on a message the device never signed. -/
@@ -74,8 +76,8 @@ def Break (o : Outcome) : Prop := WipeAccepts o.sent ∧ ∃ r ∈ W.coinsRead o
 /-- **The wipe's target (MEM-93)**: at all parameters and commitments, for every strategy and every server, the
 probability that the wipe accepts while that server's claim fails, with no break, is at most its published error. -/
 def WipeSound : Prop :=
-  ∀ (θ c : ByteArray) (σ : Game.Strategy (V.game θ c)) (s : Srv),
-    Game.prob (fun o => W.Verdict o ∧ ¬ W.Holds θ c σ s o ∧ ¬ W.Break o) (V.game θ c) σ ≤ W.delta θ s
+  ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (s : Srv),
+    Game.prob (fun o => W.Verdict o ∧ ¬ W.Holds θ F c σ s o ∧ ¬ W.Break o) (V.game θ F c) σ ≤ W.delta θ s
 
 end WipeVocab
 
@@ -88,10 +90,10 @@ strategy, the probability that onsite's compiled verifier accepts while one of t
 `Vocab.Soundness`'s five, or the wipe's case is accepted while some server's claim fails), with no break, is at most
 the published errors summed, the wipe's summed over the servers. -/
 def SoundnessWithWipe (V : Vocab d α) (W : WipeVocab V Srv) : Prop :=
-  ∀ (θ c : ByteArray) (σ : Game.Strategy (V.game θ c)),
-    Game.prob (fun o => Accepts o.sent ∧
-        ((∃ a, ¬ V.Holds θ c σ a o) ∨ (WipeAccepts o.sent ∧ ∃ s, ¬ W.Holds θ c σ s o)) ∧
-        ¬ V.Break θ c o ∧ ¬ W.Break o) (V.game θ c) σ
+  ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
+    Game.prob (fun o => Accepts o.sent ∧ V.Registered o.params o.file ∧
+        ((∃ a, ¬ V.Holds θ F c σ a o) ∨ (WipeAccepts o.sent ∧ ∃ s, ¬ W.Holds θ F c σ s o)) ∧
+        ¬ V.Break θ F c o ∧ ¬ W.Break o) (V.game θ F c) σ
       ≤ (∑ a, V.delta θ a) + ∑ s, W.delta θ s
 
 end Vocab
