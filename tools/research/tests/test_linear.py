@@ -254,7 +254,7 @@ def test_a_comment_rings_the_issues_team_and_the_names_it_starts_with_but_never_
     rc, _, err = run(capsys, "linear", "comment", "INF-1", "picked up", "--as", "infra")              # the owner on its own issue
     assert rc == 0 and "route" not in err and len(bells(fake, infra)) == 1
     rc, _, err = run(capsys, "linear", "comment", "INF-1", "see this, @circuits", "--as", "proofs")
-    assert rc == 2 and "past its start" in err                                                         # names ring only at the start
+    assert rc == 0 and "past its start" in err                     # posted with a note: names ring only at the start (#4487)
 
 
 def test_traffic_counts_an_ask_taken_up_on_linear_as_answered(fake, registry, routes_dirs, capsys, lin):
