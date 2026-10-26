@@ -1,11 +1,16 @@
 """What honest inference needs from the circuit for frontier open models, and where their dynamic memory comes from: one
 decode token-step and one prefill token of each model of `frontier_models.json`, at its reference node and workload, in
-property/v1 units (`verity.ml.circuits.stacking`) by class and by role, with the stacked share f of `share.py`.
+nonlinear units by class and by role, with the stacked share f of `share.py`. Nonlinear units are #4622's gate model's
+(`Accounting.Gates`): only linear maps with coefficients fixed before the coins are free (a weight times an activation),
+every product of two run-dependent values is a data product, a unit, and every other nonlinear operation a unit as
+property/v1 (`verity.ml.circuits.stacking`) counts it.
 
 A model is composed from atoms: the exact-int8 profile's Definitions (vLLM's registry: `int8_exact`, `moe`, `b1`, `act`) bound
-at the model's statics, whose units `atoms.py` counts (measured), and a few operations the registry has no Definition for
-(linear-attention state updates, a depthwise conv, bias adds, gate products, combine adds, DSA's indexer scores, top-k and
-row selection: ``model:`` atoms, one rounding, compare-select or gather unit an operation, modeled). DSA's served circuit
+at the model's statics, whose property/v1 units `atoms.py` counts (measured), a few operations the registry has no Definition
+for (linear-attention state updates, a depthwise conv, bias adds, gate products, combine adds, DSA's indexer scores, top-k and
+row selection: ``model:`` atoms, one rounding, compare-select or gather unit an operation, modeled), and the data products
+property/v1 left free as s8 lanes (attention's QKᵀ and PV, DSA's indexer dots, linear attention's chunked prefill products:
+one unit each, from the shapes; a product an fp term already charges, as SwiGLU's or MoE's combine, isn't charged twice). DSA's served circuit
 (`verity_vllm.program.registry.dsa_topk`: a Waksman network over the whole history and a top-k check of N f32 scores in one
 primitive) is refused by property/v1 (`Xor3x16`, `DsaTopKOrderCheck` unlisted), so its row selection is costed as gathers,
 each selected row's words and its index bits. Each term of a composition is one of them times its instances a token, under a
@@ -13,21 +18,22 @@ role; `compose` builds them, `evaluate` sums them, and `check_anchor` holds the 
 int8 census measured on its whole Program (art:dc25549e).
 
 The reference profile is exact int8: every linear an `Int8RowQuant` (or the row's shared quantization) and a `ScaledMmS8`, its
-dots the s8 family's (free), the LM head an int8 linear, sampling greedy (`TokenSelect`), the KV stored as built (bf16, K' and
+dots the s8 family's (free: a weight times an activation; attention's, two run values, are data products), the LM head an int8
+linear, sampling greedy (`TokenSelect`), the KV stored as built (bf16, K' and
 V' quantized at every read: `Int8KvQuant` over the window) or at write (int8 codes under static scales: `Int8StaticQuant` once
 a token). One logical program: tensor and expert parallelism change who computes a term, not the terms.
 
 The serving model (`serve`) is a roofline: a decode step reads the weights (the experts a batch touches) and every request's
 dynamic memory (a DSA latent only at its top-k rows), at eta_memory of the node's bandwidth, or computes its products at
-eta_compute of its int8 rate, whichever
-is slower; the pool holds as many requests at context S as fit; a prefill is compute-bound. R_cap is the larger of the two
-phases' unit rates, and
+eta_compute of its int8 rate, whichever is slower; the pool holds as many requests at context S as fit; a prefill is
+compute-bound. R_cap is the larger of the two phases' unit rates, and
 
     f = (128 R_cap L / E + R_in L) / M_dyn
 
-with f again for the decode rate alone, for the softmax's work a key at property/v1's floor (`softmax_floor`), and for that
-with every requantization and linear epilogue at one rounding an element too (`exact_floor`). `sweep` gives f again as the
-pool's context takes the workload's ``sweep`` values.
+at E a word in nonlinear units (`E_WORD`), with f again for the decode rate alone, for the softmax's work a key at
+property/v1's floor (`softmax_floor`), for that with every requantization and linear epilogue at one rounding an element too
+(`exact_floor`; no floor removes a data product), and before #4622 (property/v1's units without data products, at
+`E_BEFORE`). `sweep` gives f again as the pool's context takes the workload's ``sweep`` values.
 
     python frontier.py --atoms-needed > atoms-needed.json            # the atoms atoms.py counts
     python frontier.py --atoms atoms.json --out frontier.json          # the table (and frontier.md beside it)
@@ -46,9 +52,14 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 HERE = Path(__file__).resolve().parent
-CLASSES = ("roundings", "compare_select", "gathers", "folds")
-#: E, L and R_in as `share.py` has them, but the red team's hole-B value (historical)
-E_WORD = {"proved": 8 * 3 * 1021, "conjectured": 364_497, "red team": 160 * 3 * 1021}
+CLASSES = ("roundings", "compare_select", "gathers", "folds", "products")
+#: E a word in nonlinear units (#4622's gate model, note:20261026T0110Z-report-s5-lowerbounds), at p1024, k = 3, S = 1,021:
+#: conjectured, `SquaringFloor` and `ChainSum` at 2^-40 (k S (2L - 1 + L - d), L = 128); best found, the seam square's 16,544
+#: nonlinear units a squaring times a word's k S squarings
+E_WORD = {"conjectured": 1_145_562, "best found": 16_544 * 3 * 1021}
+#: the conjectured E in property/v1's budgeted units before #4622 (`EncodeChainHardness`, since falsified), for the "before"
+#: column: f as this census had it, without data products
+E_BEFORE = {"conjectured": 364_497}
 LIFETIMES = {"10 min": 600, "1 h": 3600}
 R_IN = 100_000
 KV_MODES = ("as built", "at write")
@@ -84,10 +95,14 @@ MODELED: dict[str, dict[str, int]] = {
     "model:fp": {"roundings": 1},
     "model:cs": {"compare_select": 1},
     "model:gather": {"gathers": 1},
+    "model:product": {"products": 1},
 }
 #: a modeled MoE dispatch reads one expert index a slot: ceil(log2(E + 1)) gather bits (property/v1's ``range`` kind), when the
 #: registry's `MoeExpertRow_v1` isn't counted
 FP, CS, GA = "model:fp", "model:cs", "model:gather"
+#: a data product: a lane whose two multiplicands both depend on run data, one nonlinear unit (#4622's ``dataProducts``),
+#: counted from the shapes (the attention row's 2 S D a head is `products_pass.py`'s measured 16,384 at D = 128, S = 64)
+PRODUCT = "model:product"
 
 
 def key(family: str, **statics: Any) -> str:
@@ -140,13 +155,14 @@ class Term:
 
 
 class Build:
-    """A composition's terms, its constant-weight MACs and its data-by-data products a token (``dd``, by kind); `times` scales
-    what is added (a layer kind's instances)."""
+    """A composition's terms, its constant-weight MACs and its data-by-data products a token (``dd``, by kind; ``fp_kinds``
+    those its fp terms already charge); `mult` scales what is added (a layer kind's instances)."""
 
     def __init__(self) -> None:
         self.terms: list[Term] = []
         self.macs = Fraction(0)
         self.dd: Counter = Counter()
+        self.fp_kinds: set[str] = set()
         self.mult = Fraction(1)
 
     def add(self, role: str, atom: str, n: Any = 1, s: Any = None) -> None:
@@ -160,8 +176,14 @@ class Build:
         self.add("linear epilogue", MM(K, N), n)
         self.macs += Fraction(n) * K * N * self.mult
 
-    def products(self, kind: str, n: Any) -> None:
+    def products(self, kind: str, n: Any, role: str | None = None) -> None:
+        """n data-by-data products a token: under `role` a data product a unit (property/v1 left them free: s8 lanes); without
+        one, products an fp term of the composition already charges (an f32 product of two activations is one rounding)."""
         self.dd[kind] += Fraction(n) * self.mult
+        if role is None:
+            self.fp_kinds.add(kind)
+        else:
+            self.add(role, PRODUCT, n)
 
 
 # ---- the architectures -----------------------------------------------------------------------------------------------------
@@ -199,12 +221,12 @@ def attention_gqa(b: Build, m: Mapping[str, Any], phase: str, kv: str, S: int, P
         b.add("KV requant at read", KVQ(D), G if phase == "decode" else Fraction(G, P), s=S if phase == "decode" else P)
     else:
         b.add("KV write", SQ(D), 2 * G)
-    b.products("QK^T", Hq * D * keys)
-    b.products("PV", Hq * D * keys)
+    b.products("QK^T", Hq * D * keys, "QK^T and PV")
+    b.products("PV", Hq * D * keys, "QK^T and PV")
     if gate:
         b.add("gate", SIG, Hq * D)
         b.add("gate", FP, Hq * D)
-        b.products("gating", Hq * D)
+        b.products("gate", Hq * D)
     b.linear(Hq * D, H)
     stored = 2 * G * D
     dyn.append({"kind": "KV: K and V of G heads", "layers": int(b.mult), "values_per_token_layer": stored,
@@ -259,7 +281,7 @@ def attention_dsa_indexer(b: Build, m: Mapping[str, Any], phase: str, S: int, P:
     b.add("DSA indexer", CS, Hi * k["scored"])
     b.add("DSA indexer", FP, 2 * Hi * k["scored"] + k["scored"])
     b.add("DSA top-k", CS, 2 * k["ranked"])
-    b.products("indexer q k^T", Hi * di * k["scored"])
+    b.products("indexer q k^T", Hi * di * k["scored"], "DSA indexer")
     b.products("indexer weights", Hi * k["scored"])
     dyn.append({"kind": "DSA indexer key", "layers": b.mult, "values_per_token_layer": di,
                 "bytes_per_token_layer": {"as built": di + 4, "at write": di + 4}, "state_bytes_per_request_layer": 0,
@@ -296,8 +318,8 @@ def attention_mla(b: Build, m: Mapping[str, Any], phase: str, kv: str, S: int, P
         else:
             b.add("KV write", SQ(kl + rope), 1)
         b.linear(kl, vh, n=Hq)
-        b.products("QK^T", Hq * (kl + rope) * keys)
-        b.products("PV", Hq * kl * keys)
+        b.products("QK^T", Hq * (kl + rope) * keys, "QK^T and PV")
+        b.products("PV", Hq * kl * keys, "QK^T and PV")
     else:
         b.linear(kl, Hq * (nope + vh))
         b.add("attention", ROW(nope + rope), Hq, s=keys)
@@ -309,8 +331,8 @@ def attention_mla(b: Build, m: Mapping[str, Any], phase: str, kv: str, S: int, P
             b.add("KV write", SQ(kl + rope), 1)
             b.add("requantization", SQ(nope + rope), Hq)
             b.add("requantization", SQ(vh), Hq)
-        b.products("QK^T", Hq * (nope + rope) * keys)
-        b.products("PV", Hq * vh * keys)
+        b.products("QK^T", Hq * (nope + rope) * keys, "QK^T and PV")
+        b.products("PV", Hq * vh * keys, "QK^T and PV")
     b.linear(Hq * vh, H)
     stored = kl + rope
     dyn.append({"kind": "MLA latent c_KV and the RoPE key", "layers": int(b.mult), "values_per_token_layer": stored,
@@ -346,12 +368,13 @@ def attention_deltanet(b: Build, m: Mapping[str, Any], phase: str, kv: str, S: i
         C = lin["chunk"]
         b.add("gate", EXP, Fraction(Hv * C, 2))
         b.add("state update", FP, Hv * (Fraction(3 * dk * dv, C) + 3 * C + 2 * dk + 9 * dv))
-        b.products("state (K^T U, q S, W S)", 3 * Hv * dk * dv)
+        b.products("state (K^T U, q S, W S)", 3 * Hv * dk * dv, "state products")
         b.products("state decay", Fraction(Hv * dk * dv, C))
-        b.products("intra-chunk (A, T, W, U, QK^T, PV)", Hv * (Fraction(3 * C * dk, 2) + C * dv + Fraction(C * C, 6)))
+        b.products("intra-chunk (A, T, W, U, QK^T, PV)", Hv * (Fraction(3 * C * dk, 2) + C * dv + Fraction(C * C, 6)),
+                   "state products")
     b.add("norm", NT(dv, eps), Hv)
     b.add("activation", FP, 2 * nz)
-    b.products("gating", nz)
+    b.products("gate", nz)
     b.linear(Hv * dv, H)
     state, cst = Hv * dk * dv * 4, (conv - 1) * nqkv * 2
     write_in = Hk * dk + Hv * dv + 2 * Hv
@@ -379,13 +402,13 @@ def attention_lightning(b: Build, m: Mapping[str, Any], phase: str, kv: str, S: 
         # other through their decay-masked Q K^T
         C = lin["chunk"]
         b.add("state update", FP, Hh * (Fraction(3 * dk * dv, C) + C + 2 * dk + 3 * dv))
-        b.products("state (k^T v, q S)", 2 * Hh * dk * dv)
-        b.products("intra-block (QK^T, PV)", Hh * Fraction(C * (dk + dv), 2))
+        b.products("state (k^T v, q S)", 2 * Hh * dk * dv, "state products")
+        b.products("intra-block (QK^T, PV)", Hh * Fraction(C * (dk + dv), 2), "state products")
     b.add("norm", NT(Hh * dv, eps))
     b.linear(H, Hh * dv, quant=False)
     b.add("gate", SIG, Hh * dv)
     b.add("gate", FP, Hh * dv)
-    b.products("gating", Hh * dv)
+    b.products("gate", Hh * dv)
     b.linear(Hh * dv, H)
     state = Hh * dk * dv * 4
     dyn.append({"kind": "lightning-attention state (f32)", "layers": int(b.mult), "values_per_token_layer": 0,
@@ -406,7 +429,7 @@ def mlp_dense(b: Build, m: Mapping[str, Any], I: int) -> None:
     b.add("norm", NF(H, m["eps"]))
     b.linear(H, 2 * I)
     b.add("activation", SILU(I))
-    b.products("gating", I)
+    b.products("SwiGLU", I)
     b.linear(I, H)
 
 
@@ -428,18 +451,20 @@ def mlp_moe(b: Build, m: Mapping[str, Any]) -> None:
     b.add("MoE dispatch", XROW(E), k)
     b.linear(H, 2 * I, n=k, quant=False)
     b.add("activation", SILU(I), k)
-    b.products("gating", k * I)
+    b.products("SwiGLU", k * I)
     b.linear(I, H, n=k)
     b.add("MoE combine", FP, k * H)
+    b.products("MoE combine", k * H)
     if ns:
         b.linear(H, 2 * ns * Is, quant=False)
         b.add("activation", SILU(ns * Is))
-        b.products("gating", ns * Is)
+        b.products("SwiGLU", ns * Is)
         b.linear(ns * Is, H)
         if mlp.get("shared_gate"):
             b.linear(H, 1, quant=False)
             b.add("gate", SIG, 1)
             b.add("gate", FP, H)
+            b.products("gate", H)
     b.add("MoE combine", FP, (k - 1 + (1 if ns else 0)) * H)
 
 
@@ -473,7 +498,7 @@ def compose(m: Mapping[str, Any], phase: str, kv: str, S: int, P: int, *, anchor
         if Fraction(d["layers"]).denominator != 1:
             raise AssertionError(f"{d['kind']}: {d['layers']} layers")
         d["layers"] = int(d["layers"])
-    return {"terms": b.terms, "macs": b.macs, "dd": dict(b.dd), "dyn": list(merged.values())}
+    return {"terms": b.terms, "macs": b.macs, "dd": dict(b.dd), "dd_fp": sorted(b.fp_kinds), "dyn": list(merged.values())}
 
 
 # ---- the atoms -------------------------------------------------------------------------------------------------------------
@@ -507,7 +532,8 @@ def atom_units(atoms: Mapping[str, Any], atom: str, s: Fraction | None, what: st
 
 
 def evaluate(terms: Iterable[Term], atoms: Mapping[str, Any], primitives: bool = True) -> dict:
-    """The terms' units a token: by class, by role and class, measured (atoms) and modeled, and by ``primitive|class``."""
+    """The terms' nonlinear units a token: by class, by role and class, by source (measured atoms, modeled operations, data
+    products from the shapes), and by ``primitive|class``."""
     cls: Counter = Counter()
     role: dict[str, Counter] = {}
     src: Counter = Counter()
@@ -517,7 +543,7 @@ def evaluate(terms: Iterable[Term], atoms: Mapping[str, Any], primitives: bool =
         for c, v in u.items():
             cls[c] += t.n * v
             role.setdefault(t.role, Counter())[c] += t.n * v
-            src["modeled" if t.atom.startswith("model:") else "measured"] += t.n * v
+            src["shapes" if t.atom == PRODUCT else "modeled" if t.atom.startswith("model:") else "measured"] += t.n * v
         if primitives:
             for k, v in atom_units(atoms, t.atom, t.s, "primitives").items():
                 prim[f"{t.role}|{k}"] += t.n * v
@@ -535,12 +561,15 @@ KINDS = {
                        ("compare", r"Gt|Le|Eq|Ge|Lt|IsFinite"), ("logic", r"Bit|And|Xor|Not|Or"), ("other", r".")),
     "gathers": (("exp table", r"Exp2Lut|TableRead"), ("index bits", r".")),
     "folds": (("folds", r"."),),
+    "products": (("data products", r"."),),
 }
 
 
 #: the roles a token's units are grouped by in the markdown's shares (the last takes every other role)
-SHARES = (("softmax attention", ("attention",)), ("requantization and linear epilogues", ("requantization", "linear epilogue")),
-          ("KV quantization", ("KV requant at read", "KV write")), ("linear-attention state", ("state update", "conv")),
+SHARES = (("softmax attention", ("attention",)), ("QKᵀ and PV (data products)", ("QK^T and PV",)),
+          ("requantization and linear epilogues", ("requantization", "linear epilogue")),
+          ("KV quantization", ("KV requant at read", "KV write")),
+          ("linear-attention state", ("state update", "conv", "state products")),
           ("sparse attention: indexer, top-k, selection", ("DSA indexer", "DSA top-k", "DSA selection")),
           ("MoE routing and dispatch", ("MoE routing", "MoE dispatch")), ("other", ()))
 
@@ -582,7 +611,7 @@ def check_anchor(models: Mapping[str, Any], atoms: Mapping[str, Any], anchor: Ma
     any difference."""
     m = models[anchor["model"]]
     tok = evaluate(compose(m, "decode", "as built", S, P, anchor=True)["terms"], atoms, primitives=False)
-    att_roles = ("attention", "KV requant at read")
+    att_roles = ("attention", "KV requant at read", "QK^T and PV")
     mine = Counter()
     for r, u in tok["by_role"].items():
         if r not in att_roles:
@@ -655,9 +684,9 @@ def dynamic_bytes(dyn: Sequence[Mapping[str, Any]], kv: str, S: int) -> dict[str
 
 
 def serve(m: Mapping[str, Any], node: Mapping[str, Any], dec: Mapping[str, Any], pre: Mapping[str, Any], kv: str, S: int,
-          P: int) -> dict:
+          P: int, e_word: Mapping[str, int] = E_WORD) -> dict:
     """The roofline at the reference node (module docstring): the pool, the batch, the decode step and the prefill rate, R_cap,
-    the pool's turnover, the honest work a byte, and f."""
+    the pool's turnover, the honest work a byte written (at R_cap, ``W_byte``, and at the decode rate), and f at `e_word`."""
     gpus, tp = node["gpus"], m["tp"]
     engines = gpus // tp
     pw = params(m)
@@ -692,18 +721,20 @@ def serve(m: Mapping[str, Any], node: Mapping[str, Any], dec: Mapping[str, Any],
            "experts_touched": touched, "t_mem_s": t_mem, "t_cmp_s": t_cmp, "t_step_s": t_step,
            "bound": "memory" if t_mem >= t_cmp else "compute", "tokens_per_s_decode": tps_dec, "tokens_per_s_prefill": tps_pre,
            "R_decode": R_dec, "R_prefill": R_pre, "R_cap": R_cap, "R_cap_phase": "decode" if R_dec >= R_pre else "prefill",
-           "u_B_decode": B * u_dec / M, "T_turn_s": T_turn, "W_byte": R_cap * T_turn / M,
-           "f": {lt: {e: (128 * R_cap * L / E + R_IN * L) / M for e, E in E_WORD.items()} for lt, L in LIFETIMES.items()},
-           "f_decode": {lt: {e: (128 * R_dec * L / E + R_IN * L) / M for e, E in E_WORD.items()} for lt, L in LIFETIMES.items()}}
+           "u_B_decode": B * u_dec / M, "T_turn_s": T_turn, "W_byte": R_cap * T_turn / M, "W_byte_decode": R_dec * T_turn / M,
+           "f": {lt: {e: (128 * R_cap * L / E + R_IN * L) / M for e, E in e_word.items()} for lt, L in LIFETIMES.items()},
+           "f_decode": {lt: {e: (128 * R_dec * L / E + R_IN * L) / M for e, E in e_word.items()} for lt, L in LIFETIMES.items()}}
     return out
 
 
 def per_key_units(m: Mapping[str, Any], atoms: Mapping[str, Any], kv: str, S: int, P: int) -> dict:
-    """A decode token's units a key of context, and a key's bytes: the slope from S to S + 1 over the bytes a token adds."""
-    a = evaluate(compose(m, "decode", kv, S, P)["terms"], atoms, primitives=False)["total"]
-    b = evaluate(compose(m, "decode", kv, S + 1, P)["terms"], atoms, primitives=False)["total"]
-    tok = dynamic_bytes(compose(m, "decode", kv, S, P)["dyn"], kv, S)["per_token"]
-    return {"units_per_key": b - a, "bytes_per_key": tok, "units_per_byte": (b - a) / tok if tok else None}
+    """A decode token's units and data products a key of context, and a key's bytes: the slopes from S to S + 1, over the
+    bytes a token adds."""
+    c0, c1 = compose(m, "decode", kv, S, P), compose(m, "decode", kv, S + 1, P)
+    a, b = (evaluate(c["terms"], atoms, primitives=False)["total"] for c in (c0, c1))
+    dd = sum(c1["dd"].values()) - sum(c0["dd"].values())
+    tok = dynamic_bytes(c0["dyn"], kv, S)["per_token"]
+    return {"units_per_key": b - a, "products_per_key": dd, "bytes_per_key": tok, "units_per_byte": (b - a) / tok if tok else None}
 
 
 def softmax_floor(atoms: Mapping[str, Any]) -> dict:
@@ -741,27 +772,32 @@ def exact_floor(atoms: Mapping[str, Any]) -> dict:
 def table(spec: Mapping[str, Any], atoms: Mapping[str, Any]) -> dict:
     node, wl = spec["node"], spec["workload"]
     S, P = wl["context"], wl["prompt"]
-    out: dict[str, Any] = {"schema": "verity-stacked-share/frontier/v1", "node": node, "workload": wl, "E_word": E_WORD,
-                           "lifetimes_s": LIFETIMES, "R_in": R_IN, "anchor": check_anchor(spec["models"], atoms, spec["anchor"], S, P),
-                           "models": {}}
+    out: dict[str, Any] = {"schema": "verity-stacked-share/frontier/v2", "units": "nonlinear (#4622)", "node": node,
+                           "workload": wl, "E_word": E_WORD, "E_before": E_BEFORE, "lifetimes_s": LIFETIMES, "R_in": R_IN,
+                           "anchor": check_anchor(spec["models"], atoms, spec["anchor"], S, P), "models": {}}
     floors = {"softmax_floor": softmax_floor(atoms), "exact_floor": exact_floor(atoms)}
     for name, m in spec["models"].items():
         row: dict[str, Any] = {"hf": m.get("hf"), "revision": m.get("revision"), "source": m.get("source"),
                                "weights_as_published": m.get("weights"), "arch": m["arch"], "layers": layer_kinds(m)}
         for kv in KV_MODES:
-            ph, fl = {}, {f: {} for f in floors}
+            ph, fl, bf = {}, {f: {} for f in floors}, {}
             for phase in PHASES:
                 c = compose(m, phase, kv, S, P)
                 u = evaluate(c["terms"], atoms)
-                ph[phase] = {"units": u, "kinds": kinds(u["by_role_primitive"]), "macs": c["macs"], "dd": c["dd"], "dyn": c["dyn"]}
+                ph[phase] = {"units": u, "kinds": kinds(u["by_role_primitive"]), "macs": c["macs"], "dd": c["dd"],
+                             "dd_fp": c["dd_fp"], "dyn": c["dyn"]}
                 for f, at in floors.items():
                     fl[f][phase] = {**ph[phase], "units": evaluate(c["terms"], at, primitives=False)}
+                bf[phase] = {**ph[phase], "units": evaluate([t for t in c["terms"] if t.atom != PRODUCT], atoms, primitives=False)}
             sv = serve(m, node, ph["decode"], ph["prefill"], kv, S, P)
             row[kv] = {"decode": ph["decode"], "prefill": ph["prefill"], "serving": sv, "per_key": per_key_units(m, atoms, kv, S, P)}
             for f in floors:
                 sf = serve(m, node, fl[f]["decode"], fl[f]["prefill"], kv, S, P)
                 row[kv][f] = {"units": {p: fl[f][p]["units"]["total"] for p in PHASES},
                               **{k: sf[k] for k in ("R_decode", "R_prefill", "R_cap", "R_cap_phase", "f", "f_decode")}}
+            sb = serve(m, node, bf["decode"], bf["prefill"], kv, S, P, E_BEFORE)
+            row[kv]["before"] = {"units": {p: bf[p]["units"]["total"] for p in PHASES},
+                                 **{k: sb[k] for k in ("R_decode", "R_prefill", "R_cap", "R_cap_phase", "f", "f_decode")}}
         out["models"][name] = row
     out["sweep"] = sweep(spec, atoms, floors)
     return out
@@ -823,33 +859,82 @@ def human(n: float, unit: str = "B") -> str:
     return f"{n:.3g} {unit}"
 
 
+#: the data products' groups in the markdown, by dd kind (the first pattern that matches)
+PRODUCT_GROUPS = (("QKᵀ, PV", r"^(QK\^T|PV)$"), ("DSA indexer", r"^indexer"), ("linear-attention state and chunks", r"^(state|intra)"),
+                  ("SwiGLU", r"^SwiGLU$"), ("MoE combine", r"^MoE combine$"), ("gates", r"."))
+
+
+def product_groups(dd: Mapping[str, Fraction]) -> dict[str, Fraction]:
+    out = {name: Fraction(0) for name, _ in PRODUCT_GROUPS}
+    for kind, n in dd.items():
+        out[next(name for name, pat in PRODUCT_GROUPS if re.search(pat, kind))] += Fraction(n)
+    return out
+
+
+def row_md(cells: Sequence[Any]) -> str:
+    return "| " + " | ".join(str(c) for c in cells) + " |"
+
+
+def header_md(cols: Sequence[str]) -> list[str]:
+    return [row_md(cols), "|" + "---|" * len(cols)]
+
+
 def markdown(t: Mapping[str, Any]) -> str:
     wl, node = t["workload"], t["node"]
+    E = ", ".join(f"{e} {v:,}" for e, v in E_WORD.items())
     lines = [f"Reference: {node['name']}, a pool full of requests decoding at context S = {wl['context']}, prefills of "
-             f"P = {wl['prompt']}; exact-int8 profile; property/v1 units.", ""]
+             f"P = {wl['prompt']}; exact-int8 profile; nonlinear units (#4622: property/v1's budgeted units plus one a data "
+             f"product, a product of two run-dependent values); E a word {E}.", ""]
+    lines += ["**The census, KV at write** (decode at S; f at L = 10 min and 1 h; before: property/v1's units without data "
+              f"products, E {E_BEFORE['conjectured']:,}).", ""]
+    lines += header_md(["model", "decode units a token", "of which data products", "data products a context key",
+                        "units a byte written (decode / R_cap)", "R_cap (phase)", "f 10 min, E conjectured / best found",
+                        "f 1 h, E conjectured / best found", "f 1 h, E conjectured, decode rate alone",
+                        "before: f 1 h, E conjectured (decode alone)"])
+    for name, r in t["models"].items():
+        x = r["at write"]
+        sv, u, bf = x["serving"], x["decode"]["units"], x["before"]
+        lines.append(row_md([
+            name, g(u["total"]), f"{g(u['by_class'].get('products', 0))} ({float(u['by_class'].get('products', 0) / u['total']):.0%})",
+            g(x["per_key"]["products_per_key"]), f"{g(sv['W_byte_decode'])} / {g(sv['W_byte'])}",
+            f"{g(sv['R_cap'])} ({sv['R_cap_phase']})",
+            " / ".join(pct(sv["f"]["10 min"][e]) for e in E_WORD), " / ".join(pct(sv["f"]["1 h"][e]) for e in E_WORD),
+            pct(sv["f_decode"]["1 h"]["conjectured"]),
+            f"{pct(bf['f']['1 h']['conjectured'])} ({pct(bf['f_decode']['1 h']['conjectured'])})"]))
+    lines += ["", "**Data products a token, KV at write** (products of two run-dependent values, by kind; charged: those "
+              "property/v1 left free as s8 lanes, now a unit each; the rest its fp terms already charge as roundings).", ""]
+    lines += header_md(["model", "phase", *(n for n, _ in PRODUCT_GROUPS), "all", "charged (new)", "share of the nonlinear units"])
+    for name, r in t["models"].items():
+        for phase in PHASES:
+            x = r["at write"][phase]
+            pg, u = product_groups(x["dd"]), x["units"]
+            new = u["by_class"].get("products", 0)
+            lines.append(row_md([name, phase, *(g(pg[n]) for n, _ in PRODUCT_GROUPS), g(sum(pg.values())), g(new),
+                                 f"{float(new / u['total']):.1%}"]))
+    lines.append("")
     for kv in KV_MODES:
-        lines += [f"**KV {kv}.**", "",
-                  "| model | dynamic memory | B/token | state/request | M_dyn | batch | step | R_cap (phase) | units/B/step (decode) "
-                  "| units/key-byte | T_turn | W_byte | " + " | ".join(f"f {lt}, E {e}" for lt in LIFETIMES for e in E_WORD)
-                  + " | f 1 h, E conjectured, R of decode alone | f 10 min / 1 h, E conjectured, softmax at 1 unit a head-key "
-                  "| f 10 min / 1 h, E conjectured / red team, softmax and requantization at their floors |",
-                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|" + "---|" * (len(LIFETIMES) * len(E_WORD))]
+        lines += [f"**KV {kv}.**", ""]
+        lines += header_md(["model", "dynamic memory", "B/token", "state/request", "M_dyn", "batch", "step", "R_cap (phase)",
+                            "units/B/step (decode)", "units/key-byte", "T_turn", "units a byte written (R_cap)",
+                            *(f"f {lt}, E {e}" for lt in LIFETIMES for e in E_WORD), "f 1 h, E conjectured, R of decode alone",
+                            "f 10 min / 1 h, E conjectured, softmax at 1 unit a head-key",
+                            "f 10 min / 1 h, E conjectured / best found, softmax and requantization at their floors",
+                            "before: f 10 min / 1 h, E conjectured"])
         for name, r in t["models"].items():
             x = r[kv]
             sv, dyn = x["serving"], x["decode"]["dyn"]
             kinds_ = "; ".join(f"{d['kind']} ({d['layers']} layers)" for d in dyn)
             pk = x["per_key"]["units_per_byte"]
-            lines.append(
-                f"| {name} | {kinds_} | {human(sv['request_bytes']['per_token'])} | {human(sv['request_bytes']['state'])} | "
-                f"{human(sv['M_dyn'])} | {sv['B']} | {sv['t_step_s'] * 1e3:.3g} ms ({sv['bound']}) | "
-                f"{g(sv['R_cap'])} ({sv['R_cap_phase']}) | {g(sv['u_B_decode'])} | {g(pk) if pk is not None else '-'} | "
-                f"{g(sv['T_turn_s'])} s | {g(sv['W_byte'])} | "
-                + " | ".join(pct(sv["f"][lt][e]) for lt in LIFETIMES for e in E_WORD)
-                + f" | {pct(sv['f_decode']['1 h']['conjectured'])} | {pct(x['softmax_floor']['f']['10 min']['conjectured'])} / "
-                f"{pct(x['softmax_floor']['f']['1 h']['conjectured'])} | "
-                + " / ".join(pct(x["exact_floor"]["f"][lt][e]) for lt in LIFETIMES for e in ("conjectured", "red team")) + " |")
+            lines.append(row_md([
+                name, kinds_, human(sv["request_bytes"]["per_token"]), human(sv["request_bytes"]["state"]), human(sv["M_dyn"]),
+                sv["B"], f"{sv['t_step_s'] * 1e3:.3g} ms ({sv['bound']})", f"{g(sv['R_cap'])} ({sv['R_cap_phase']})",
+                g(sv["u_B_decode"]), g(pk) if pk is not None else "-", f"{g(sv['T_turn_s'])} s", g(sv["W_byte"]),
+                *(pct(sv["f"][lt][e]) for lt in LIFETIMES for e in E_WORD), pct(sv["f_decode"]["1 h"]["conjectured"]),
+                " / ".join(pct(x["softmax_floor"]["f"][lt]["conjectured"]) for lt in LIFETIMES),
+                " / ".join(pct(x["exact_floor"]["f"][lt][e]) for lt in LIFETIMES for e in E_WORD),
+                " / ".join(pct(x["before"]["f"][lt]["conjectured"]) for lt in LIFETIMES)]))
         lines.append("")
-    lines += ["**Where the units go, KV at write** (share of a token's units by role).", "",
+    lines += ["**Where the units go, KV at write** (share of a token's nonlinear units by role).", "",
               "| model | phase | " + " | ".join(name for name, _ in SHARES) + " |", "|---|---|" + "---|" * len(SHARES)]
     for name, r in t["models"].items():
         for phase in PHASES:
@@ -858,11 +943,11 @@ def markdown(t: Mapping[str, Any]) -> str:
             sh = shares(by)
             lines.append(f"| {name} | {phase} | " + " | ".join(f"{float(sh[n] / u['total']):.1%}" for n, _ in SHARES) + " |")
     lines.append("")
-    lines += ["**Honest operations a token, KV at write** (decode at S, prefill at P; MACs and units a token).", "",
-              "| model | phase | const-weight MACs | data x data MACs | units | roundings (requant) | softmax roundings | division "
-              "| rsqrt | compare-select | of which top-k (MoE routing, DSA) | of which softmax max | gathers (exp table / index bits) "
-              "| modeled share |",
-              "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    lines += ["**Honest operations a token, KV at write** (decode at S, prefill at P; MACs and nonlinear units a token).", "",
+              "| model | phase | const-weight MACs (free) | data x data products | nonlinear units | data products charged "
+              "| roundings (requant) | softmax roundings | division | rsqrt | compare-select | of which top-k (MoE routing, DSA) "
+              "| of which softmax max | gathers (exp table / index bits) | modeled share |",
+              "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for name, r in t["models"].items():
         for phase in PHASES:
             x = r["at write"][phase]
@@ -871,6 +956,7 @@ def markdown(t: Mapping[str, Any]) -> str:
             mod = float(u["by_source"].get("modeled", 0) / u["total"]) if u["total"] else 0
             lines.append(
                 f"| {name} | {phase} | {g(x['macs'])} | {g(sum(x['dd'].values()))} | {g(u['total'])} | "
+                f"{g(u['by_class'].get('products', 0))} | "
                 f"{g(u['by_class'].get('roundings', 0))} ({g(rd.get('requantization: round or convert', 0))}) | "
                 f"{g(rd.get('softmax: max subtract, LUT index, low byte', 0))} | {g(rd.get('division', 0))} | {g(rd.get('rsqrt / sqrt', 0))} | {g(u['by_class'].get('compare_select', 0))} | "
                 f"{g(cs.get('top-k (MoE routing, DSA)', 0))} | {g(cs.get('softmax max', 0))} | "

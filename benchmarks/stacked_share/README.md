@@ -67,12 +67,16 @@ serve it:
   property/v1, and fits the attention row and KV window exactly in S. It runs where `verity_vllm` imports, without torch.
 - `frontier.py --atoms atoms.json --out frontier.json` composes a decode token-step and a prefill token per model and layer
   kind (GQA, MLA with or without DSA, Gated DeltaNet, lightning attention, dense or MoE FFN) from the atoms, with the KV
-  quantized as built or once at its write. It refuses atoms that don't reproduce the census's measured 8B token units. It gives:
-  - the units and honest operations by class;
+  quantized as built or once at its write. It refuses atoms that don't reproduce the census's measured 8B token units. It counts
+  in nonlinear units (#4622's gate model): property/v1's units plus one a data product, a product of two run values that
+  property/v1 left free as s8 lanes (attention's QKᵀ and PV, DSA's indexer dots, linear attention's chunked prefill products),
+  with E a word in the same units (`E_WORD`). It gives:
+  - the nonlinear units and honest operations by class, and the data products a token by kind;
   - the dynamic memory's kind, bytes, write path and cut widths;
   - the roofline serving model's R_cap, M_dyn and turnover;
-  - f at each E and L, and again with the softmax's work a key at property/v1's floor (`softmax_floor`) and with every
-    requantization and linear epilogue at one rounding an element as well (`exact_floor`);
+  - f at each E and L, and again with the softmax's work a key at property/v1's floor (`softmax_floor`), with every
+    requantization and linear epilogue at one rounding an element as well (`exact_floor`), and before #4622 (property/v1's
+    units, E 364,497);
   - f with R_cap and with the decode rate alone as the pool's context varies (`sweep`, up to each model's max_context).
 
   It also writes the tables as `frontier.md`.
@@ -85,5 +89,7 @@ serve it:
 | linear attention, DeltaNet and routed-weight arithmetic | modeled: one rounding per FP output (`MODELED`) |
 | DSA's indexer scores, top-k and row selection | modeled: a unit per operation (`MODELED`); the served Waksman form is refused by property/v1 |
 | the floors | modeled: the softmax at one rounding a head-key; a requantization or an epilogue at the measured count of its essential rounding (`ESSENTIAL_ROUNDING`) |
+| data products | shapes: a unit each (`PRODUCT`); the attention row's 2 S D a head matches `products_pass.py`'s measured 16,384 at D = 128, S = 64 |
+| E a word | the conjecture (`SquaringFloor`, `ChainSum` at 2^-40) and the best construction found (the seam square), in nonlinear units (note:20261026T0110Z-report-s5-lowerbounds) |
 | shapes, experts, KV and state sizes | config: each model's `config.json` at its recorded revision |
 | R_cap, batch, t_step | modeled: roofline on the reference node (`node` in `frontier_models.json`) |

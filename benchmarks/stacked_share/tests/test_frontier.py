@@ -139,11 +139,15 @@ def test_the_table_on_synthetic_atoms():
             write = sv["tokens_per_s_decode"] * db["per_token"] + sv["B"] * db["rewritten"] / sv["t_step_s"]
             assert sv["T_turn_s"] == pytest.approx(sv["M_dyn"] / write)
             assert sv["R_cap"] == max(sv["R_decode"], sv["R_prefill"])
-            E, L = F.E_WORD["proved"], F.LIFETIMES["1 h"]
-            assert sv["f"]["1 h"]["proved"] == pytest.approx((128 * sv["R_cap"] * L / E + F.R_IN * L) / sv["M_dyn"])
-            fl, ex = r[kv]["softmax_floor"], r[kv]["exact_floor"]
+            E, L = F.E_WORD["conjectured"], F.LIFETIMES["1 h"]
+            assert sv["f"]["1 h"]["conjectured"] == pytest.approx((128 * sv["R_cap"] * L / E + F.R_IN * L) / sv["M_dyn"])
+            assert sv["W_byte_decode"] == pytest.approx(sv["R_decode"] / write)
+            fl, ex, bf = r[kv]["softmax_floor"], r[kv]["exact_floor"], r[kv]["before"]
             assert fl["R_decode"] < sv["R_decode"] and fl["R_prefill"] < sv["R_prefill"]
             assert ex["R_decode"] < fl["R_decode"] and ex["R_prefill"] < fl["R_prefill"]
+            assert bf["R_decode"] < sv["R_decode"] and bf["R_prefill"] < sv["R_prefill"]
+            E0 = F.E_BEFORE["conjectured"]
+            assert bf["f"]["1 h"]["conjectured"] == pytest.approx((128 * bf["R_cap"] * L / E0 + F.R_IN * L) / sv["M_dyn"])
     m = SPEC["models"]["Llama-3.1-8B"]
     floor = F.softmax_floor(atoms)
     gap = [F.evaluate(F.compose(m, "decode", "at write", S, P)["terms"], a, primitives=False)["total"] for a in (atoms, floor)]
@@ -162,8 +166,47 @@ def test_the_table_on_synthetic_atoms():
     assert 131072 not in t["sweep"]["Qwen3-8B"] and 131072 in t["sweep"]["Llama-3.1-8B"]
     md = F.markdown(t)
     assert "| DeepSeek-V3/R1/V3.1 |" in md and "**KV at write.**" in md and "**Where the units go, KV at write**" in md
-    assert "**f as the pool's context S varies**" in md
+    assert "**f as the pool's context S varies**" in md and "**The census, KV at write**" in md
+    assert "**Data products a token, KV at write**" in md
+    for table_ in md.split("\n\n"):
+        rows = [ln for ln in table_.splitlines() if ln.startswith("|")]
+        assert len({ln.count("|") for ln in rows}) <= 1, rows[:2]
     json.dumps(F.jsonable(t))
+
+
+def test_data_products():
+    """#4622's nonlinear units: a product of two run values is a unit. The attention row's QKᵀ and PV, 2 D a head-key, are
+    products_pass.py's measured 16,384 for Int8LutAttentionRow{D=128,S=64}; DSA's indexer dots and linear attention's chunked
+    prefill products are charged too; SwiGLU's, MoE's combine and the gates are already fp roundings, not charged twice."""
+    assert F.E_WORD == {"conjectured": 1_145_562, "best found": 50_674_272}
+    ms = SPEC["models"]
+
+    def charged(c):
+        return sum(t.n for t in c["terms"] if t.atom == F.PRODUCT)
+
+    c = F.compose(ms["Llama-3.1-8B"], "decode", "at write", 64, P)
+    assert charged(c) == 32 * 32 * 16_384
+    assert c["dd_fp"] == ["SwiGLU"] and c["dd"]["SwiGLU"] == 32 * 14336
+    v3 = F.compose(ms["DeepSeek-V3/R1/V3.1"], "decode", "at write", S, P)
+    assert charged(v3) == 61 * 128 * (576 + 512) * S
+    assert v3["dd"]["MoE combine"] == 58 * 8 * 7168 and set(v3["dd_fp"]) == {"SwiGLU", "MoE combine"}
+    v32 = F.compose(ms["DeepSeek-V3.2-Exp"], "decode", "at write", S, P)
+    assert charged(v32) == 61 * (128 * (576 + 512) * 2048 + 64 * 128 * S)
+    qn = ms["Qwen3-Next-80B-A3B"]
+    dec, pre = (F.compose(qn, ph, "at write", S, P) for ph in F.PHASES)
+    assert {"state (kS, k err^T, S^T q)", "state decay", "gate"} <= set(dec["dd_fp"])
+    assert charged(dec) == 12 * 16 * 2 * 256 * S
+    assert charged(pre) == 12 * 16 * 2 * 256 * Fraction(P + 1, 2) + pre["dd"]["state (K^T U, q S, W S)"] \
+        + pre["dd"]["intra-chunk (A, T, W, U, QK^T, PV)"]
+    atoms = {k: synthetic(k) for k in F.needed(ms, S, P)}
+    full = F.evaluate(v3["terms"], atoms, primitives=False)
+    budgeted = F.evaluate([t for t in v3["terms"] if t.atom != F.PRODUCT], atoms, primitives=False)
+    assert full["total"] - budgeted["total"] == full["by_class"]["products"] == charged(v3) == full["by_source"]["shapes"]
+    pk = F.per_key_units(ms["Llama-3.1-8B"], atoms, "at write", S, P)
+    assert pk["products_per_key"] == 32 * 32 * 2 * 128
+    # past the top-k a key adds only the indexer's: a head's q k dot and its weight product
+    assert F.per_key_units(ms["DeepSeek-V3.2-Exp"], atoms, "at write", S, P)["products_per_key"] == 61 * 64 * (128 + 1)
+    assert F.product_groups(v3["dd"])["QKᵀ, PV"] == charged(v3)
 
 
 def test_exact_floor():
@@ -217,6 +260,8 @@ def test_modeled_terms_and_kinds():
                  "requantization|F32Rint_v1|roundings": Fraction(4)})
     assert k == {"roundings": {"softmax: max subtract, LUT index, low byte": 2, "requantization: round or convert": 4}}
     sh = F.shares({"attention": Fraction(5), "linear epilogue": Fraction(2), "requantization": Fraction(1), "norm": Fraction(3),
-                   "MoE dispatch": Fraction(1)})
+                   "MoE dispatch": Fraction(1), "QK^T and PV": Fraction(7), "state products": Fraction(2)})
     assert sh["softmax attention"] == 5 and sh["requantization and linear epilogues"] == 3 and sh["other"] == 3
-    assert sh["MoE routing and dispatch"] == 1 and sum(sh.values()) == 12
+    assert sh["MoE routing and dispatch"] == 1 and sh["QKᵀ and PV (data products)"] == 7 and sh["linear-attention state"] == 2
+    assert sum(sh.values()) == 21
+    assert F.kinds({"QK^T and PV|model:product|products": Fraction(4)}) == {"products": {"data products": 4}}
