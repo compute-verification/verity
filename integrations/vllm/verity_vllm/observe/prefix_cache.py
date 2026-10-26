@@ -1,6 +1,6 @@
 """verity_vllm/observe/prefix_cache.py — prefix caching as a *state/request linkage* mechanism (coverage row M1).  Torch-free.
 
-Locked semantics (window 2026-09-17).  Previously computed KV state is NOT a free prescribed input.  A warm request that
+Locked semantics.  Previously computed KV state is NOT a free prescribed input.  A warm request that
 reuses a cached prefix consumes KV blocks that another request's gates produced; the Program must link that state to its
 producing computation — request → physical blocks → the writing rows/step (→ the k/v projection instances of that step) —
 otherwise the cell is not closed.  Matching tokens alone is not closure: it says the *declared* prompt equals the producer's

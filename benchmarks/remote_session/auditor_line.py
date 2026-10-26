@@ -97,7 +97,7 @@ names (`line_label`: `lean conditional on NoOutsideCompute`), and `research data
 the gate node: the security group's allow list, each interval it was applied, with infra's records, and whether the
 node mounts a shared filesystem (null while infra's answer is pending). A gate session whose span as the challenger
 signed it on the ledger (its open's `started_utc` to its end's `ended_utc`) lies strictly inside one applied interval
-is grounded by it (`no_relay`): its `NoOutsideCompute` rests on `ProviderLockdown`, under `trusted-nebius-host`,
+is grounded by it (`no_relay`): its `NoOutsideCompute` rests on `ProviderLockdown`, under `trusted-host`,
 which names what the lockdown doesn't close. A line whose credited sessions are all grounded (every gate session's,
 with none credited) is conditional on `ProviderLockdown` in its place; any other is conditional on
 `NoOutsideCompute`, as without the file. It changes no credit.
@@ -187,7 +187,7 @@ CONDITIONAL_ON = {"NoOutsideCompute": (
 LOCKDOWN = "ProviderLockdown"
 GROUNDED = {LOCKDOWN: (
     "the provider's lockdown of the gate node (Accounting.Remote.Held.Assumptions.ProviderLockdown, under "
-    "trusted-nebius-host): while infra's records show it applied, no device outside the node computes on a registered "
+    "trusted-host): while infra's records show it applied, no device outside the node computes on a registered "
     "block or a receipt, which gives NoOutsideCompute for a session whose signed span lies inside an applied interval "
     "(noOutsideCompute_of_lockdown); it assumes what the security group doesn't close: the provider's resolver, flows "
     "opened before it was applied, and the provider's own paths (metadata, management plane, a cluster's fabric, a "
