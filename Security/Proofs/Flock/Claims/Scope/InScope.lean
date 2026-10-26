@@ -107,11 +107,11 @@ theorem formOk_iff {t : Tags} {zk reg : Bool} {count : Nat} {cf : ByteArray} {ta
     have hpr' : max 7 (log2ceil (tu.t.defs.getD tu.t.root default).cols) ≤ 32 →
         ProvedScope.portReadsB (HmOut.unrolled c).unit = true := fun h =>
       (FlockSoundness.Discharge.FailClosed.portReadsB_eq _).trans (hpr (by rw [hul]; exact h))
-    simp only [FormOk, ht, Option.isSome_some, true_implies]
+    simp only [FormOk, ht, Option.isSome_some, eq_self_iff_true, true_implies]
     rw [hig, hul, eo, eu, v1Ports_unrolled, bitRows_unrolled, hh]
     unfold ProvedScope.scopeOkT
     simp only [Bool.and_eq_true, Bool.not_eq_true', beq_iff_eq, decide_eq_true_eq, ↓reduceIte, bne_iff_ne, ne_eq,
-      not_not, true_and, Bool.not_eq_true]
+      not_not, eq_self_iff_true, true_and, Bool.true_and, Bool.not_eq_true]
     constructor
     · rintro ⟨⟨⟨⟨⟨⟨hz, hr⟩, hn⟩, hig1⟩, hout⟩, hlog⟩, hrows⟩
       exact ⟨Or.inl ⟨hig1, hout⟩, hlog, hpr' hlog, hrows, hz, hr, hn, hig1, hout⟩
