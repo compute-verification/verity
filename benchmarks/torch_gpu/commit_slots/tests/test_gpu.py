@@ -102,13 +102,14 @@ def test_a_plan_on_some_sms_gives_the_reference_s_roots_on_graphs() -> None:
 
 @pytest.mark.parametrize("graphs", [False, True], ids=["eager", "graphs"])
 def test_tables_freed_once_added_take_no_allocator_retry_at_the_hbm_cap(graphs: bool) -> None:
-    """At the HBM cap, a producer that frees each group's tables once it has added them (e2e_h200's loop: a table lives
-    until the next group's are allocated, and the producer's stream waits for the reads ``LAG`` groups back) gets their
-    memory back for its next tables while the side stream lags its reads, so across two steps the allocator never
-    retries (a retry frees its cache and waits on every stream), and the roots are an unpressured run's. What it catches
-    that the roots' tests can't: a commit that keeps a freed table from the producer's next allocation, as
-    ``record_stream`` onto the side stream did (a table was reusable only once that stream had run everything queued on
-    it when the table was freed, so with room for three groups' tables the fourth group's retried)."""
+    """At the HBM cap, with room for two groups' tables (the one being read and the one being made), a producer that
+    frees each group's tables once it has made the next group's (e2e_h200's driver, its stream waiting for the reads
+    ``LAG`` groups back) gets the group before's memory back for the group after while the side stream lags its reads,
+    so across two steps the allocator never retries (a retry frees its cache and waits on every stream) and nothing
+    runs out, and the roots are an unpressured run's. What it catches that the roots' tests can't: a commit that keeps a
+    freed table from the producer's next allocation, as ``record_stream`` onto the side stream did (a table was reusable
+    only once that stream had run everything queued on it when the table was freed, so the third group's retried), or
+    as holding tables two adds did (the third group's ran out)."""
     dev, width, slots, lag = torch.device("cuda"), 4 << 20, 64, 2
     group = S.Group((width,), tuple((S.Row((S.Part(0, a, 32 << 10),)),) for a in range(0, width, 32 << 10)))
     plan = G.Plan(CTX, S.Layout("commit-slots/test-hbm-cap/v1", (group,) * 6))
@@ -139,7 +140,7 @@ def test_tables_freed_once_added_take_no_allocator_retry_at_the_hbm_cap(graphs: 
     torch.cuda.synchronize(dev)
     torch.cuda.empty_cache()
     free, _ = torch.cuda.mem_get_info(dev)
-    left, ballast = (free - 3 * slots * width - (128 << 20)) // (2 << 20) * (2 << 20), []
+    left, ballast = (free - 2 * slots * width - (128 << 20)) // (2 << 20) * (2 << 20), []
     try:
         while left > 0:
             ballast.append(torch.empty(min(left, 1 << 30), dtype=torch.uint8, device=dev))

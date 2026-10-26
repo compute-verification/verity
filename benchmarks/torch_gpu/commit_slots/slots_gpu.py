@@ -16,10 +16,10 @@ or at once, ``commit(plan, step, salt_key, outputs, slots)``, the reference's ``
 of the context and layout. ``Plan(..., device="host")`` runs the same calls on the engine's host twin (g++), with numpy arrays
 for tensors: what the CPU tests hold to the reference.
 
-The plan holds each add's tensors until the side stream has read them (``Plan.release``), so a producer may free its
-tables once it has added them: their memory goes back to the producer's stream once they are read, not at the side
-stream's tail, and at the HBM cap its next tables find it there without the allocator's retry (which frees the cache and
-waits on every stream).
+The plan holds each add's tensors until the side stream has read them or, at the next add, until the producer's stream
+waits for that read (``Plan.release``, ``LAG``), so a producer may free its tables once it has added them: their
+memory goes back to its stream in its order, not at the side stream's tail, and at the HBM cap its next tables find it
+there without the allocator's retry (which frees the cache and waits on every stream).
 
 With ``graphs=True`` (``StepCommitter``, ``commit``), each add is one CUDA graph launch: the group's passes, captured on its
 first add and replayed with the tensors' addresses and the salt key as data, so the same kernels give the same roots while
@@ -60,7 +60,8 @@ __all__ = ["LAG", "TEMP_BYTES", "E", "Pending", "Plan", "SmPartition", "StepComm
 
 HERE = Path(__file__).resolve().parent
 ENGINE = HERE.parent / "sha512_rows" / "engine.py"
-LAG = 2               # adds a plan holds unread tensors for before their producer waits for the read (e2e_h200.commit.LAG)
+LAG = 1               # adds a plan holds unread tensors for before their producer waits for the read: 1 keeps no more
+                      # tables alive at the producer's next allocation than it holds itself (at the HBM cap, 2 ran out)
 TEMP_BYTES = 1 << 30
 TEMP_BUFFERS = 4      # a pass's live (rows, slots) digest buffers at most: row digests, the run, the rest's leaves, a level
 PAD_CHUNK = 16        # pads alone are hashed 2^16 at a time
@@ -548,9 +549,11 @@ class StepCommitter:
     group's outputs in the layout's order, then ``finish``. On a CUDA plan every call goes on the plan's side stream after
     what the current stream has enqueued, and the plan holds each add's tensors until they are read (``Plan.release``),
     those of the add ``lag`` adds back no longer: the stream current when the step was made (``producer``, the tensors'
-    own) waits for their read instead, as `e2e_h200.commit`'s loop does. With ``marks`` (a list), each phase appends
-    ``(name, event)``, its end on the side stream (timing only). It holds each slot's frontier (``frontier``, (slots,
-    depth + 1, 8)) and a pass's temporaries, never a slot's leaves.
+    own) waits for their read instead, as `e2e_h200.commit`'s loop waits ``LAG`` (2) groups back. At the default lag of
+    1, a producer that drops each group's tables once it has made the next group's (e2e_h200's driver) finds the
+    previous group's memory free again for the group after: the commit adds no table to its peak. With ``marks`` (a
+    list), each phase appends ``(name, event)``, its end on the side stream (timing only). It holds each slot's frontier
+    (``frontier``, (slots, depth + 1, 8)) and a pass's temporaries, never a slot's leaves.
 
     With ``graphs`` (a CUDA plan), each add is one CUDA graph launch: the group's passes, captured on the first add of that
     group at these slots, pass size and leaf kernel (``Plan.graph``), and replayed with the tensors' addresses and the salt
