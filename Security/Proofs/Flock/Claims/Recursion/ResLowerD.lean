@@ -1,4 +1,6 @@
 import Proofs.Flock.Claims.Recursion.ResLowJD
+import Proofs.Flock.Claims.Recursion.ResLowJP
+import Proofs.Flock.Claims.Recursion.ResAccOff
 import Proofs.Flock.Claims.Recursion.ResTieVV
 import Proofs.Flock.Claims.Recursion.ElemRead
 import Proofs.Flock.Claims.Recursion.VerdictRowEJoint
@@ -18,13 +20,15 @@ chain step is additive, `consTerm`). The final check's residuals read the two as
 * `accBase X`, `elemPort X p e`: where `w`'s accumulators start, and the `w` index of group `p`'s row element `e`
   (`Rows.portAt`), at the inner statement's setup.
 * `accOff X p δ e`: the offset at row element `e`: `δ ((j - accBase X) % 2)` at an accumulator `j`, else `0`.
-* `FramePorts`: on every frame port, the copy's row is `elemReadC acc`'s, at every `acc` (P2, CAPPIECES).
-* `AccPorts`: on the accumulator ports, the copy's row is `elemReadC (Top.accRC rd key)`'s plus one `δ` (P3,
-  RECDCOIN).
-* `resLowered_D`: `ResLowered` at the deployed constants from the two (P1, LOWRES).
+* `PortsAt`: a piece's context, at a joint acceptance with each part at its own witness (`JointP`).
+* `FramePorts`: on every frame port, the copy's row is `elemReadC acc`'s, at every `acc` (P2).
+* `AccPorts`: on the accumulator ports, the copy's row is `elemReadC (Top.accRC rd key)`'s plus one `δ` (P3).
+* `ResLoweredP`: `ResLowered` at `JointP`, which KS holds where it reads `hres`; `resLowJP_of_resLoweredP` gives
+  `DecompBR.ResLowJP`.
+* `resLowered_D`: `ResLoweredP` at the deployed constants from the two.
 
-Nothing downstream of `ResLowered` reads `accRC`'s values themselves: `ResLowered` concludes `resHolds`, the vanishing
-of each piece's residuals (`ResZero`), and that is all `resLowJ_of_resLowered` and KS's row R take from it.
+Nothing downstream of `ResLoweredP` reads `accRC`'s values themselves: it concludes `resHolds`, the vanishing of each
+piece's residuals (`ResZero`), and that is all `ResLowJP` and KS's row R take from it.
 -/
 
 namespace RecDeploy.ResLower
@@ -61,23 +65,38 @@ abbrev DRL (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Opti
     Claims.Recursion.Deploy Coin :=
   recBound _root_.Flock.Readable.relation b (DeployedR.layR elem) (_root_.RecDeploy.bdR rd wE final w).IVStar
 
-/-- **A piece's port context**: part `s` accepts at `x` (`PartAccepts`), its V\* statement is an algebra part, and at a
-staged statement `xO` and witness `wt` that pass `Flock.check`, agree with the messages, record true calls and no
-collision, `q` is a `rec-residuals` piece it owns (`resPD`, `ownRD`), at table 0's part `(S, ns, nv)`, and the last
-message reads as `(os, last)`. `P` is what holds there. -/
+/-- What each part's circuit accepts at the deployed layout, at its own witness. -/
+abbrev AccP (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
+    (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) :=
+  PartAcceptsP FlockDeploy.sha512 (DRL rd wE final w b elem) (deployZkRec _root_.Flock.Readable.relation)
+    (DeployedR.layR elem) shape (showsPart untr b) cmt
+
+/-- **A piece's port context**: at a compiled statement `x` of the shape, every part accepts at its own witness and the
+parts' own messages `ms = (layR elem).msgs x ws` (`JointP`: the calls of all parts true and free of collisions
+together), part `s`'s V\* statement is an algebra part, and at its witness `wt = ws[s]` and a staged statement `xO`
+that passes `Flock.check`, agrees with the messages and records true calls with no collision, `q` is a
+`rec-residuals` piece it owns (`resPD`, `ownRD`), at table 0's part `(S, ns, nv)`, and the last message reads as
+`(os, last)`. `P` is what holds there.
+
+Per-part acceptance is not enough: one part's `PartAccepts` leaves free the rounds it doesn't hold first (and with
+them the last message's trailer, which `elemReadC` reads), and the accumulator rows other parts' chain steps tie. -/
 def PortsAt (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
     (P : (x : Msg) → (cs : List Coin) → (ms : List Msg) → (p : _root_.Flock.Readable.Parsed) → (ht : 0 < p.sts.size) →
       Claims.Flock.Wit → ResPiece → List ℕ → ℕ → Prop) : Prop :=
-  ∀ s x c ms, PartAccepts FlockDeploy.sha512 (DRL rd wE final w b elem) (deployZkRec _root_.Flock.Readable.relation)
-      (DeployedR.layR elem) shape (showsPart untr b) cmt s x c ms →
+  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+    ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
+    RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
+      (AccP rd wE final w b elem shape untr cmt) x c ws →
+    ∀ s (wt : Claims.Flock.Wit), ws[s]? = some wt →
     ∀ (r : XR), readX x = some r → ∀ (ss : Array VStar.Stmt), RecVStar.statements r.shape = .ok ss →
     ∀ (j : ℕ) (nm : String) (pt : VStar.Part), ss[s]? = some (.inner j nm pt) →
-    ∀ (xO : Msg) (wt : Claims.Flock.Wit) (p : _root_.Flock.Readable.Parsed),
+    ∀ (xO : Msg) (p : _root_.Flock.Readable.Parsed),
       _root_.Flock.Readable.parseBytes readOfO xO = some p →
       Claims.Flock.check (_root_.Flock.Readable.parseOf _root_.Flock.Readable.relation readOfO) xO wt = true →
-      showsPart untr b s x xO c → (DeployedR.layR elem).Agrees cmt x s wt xO ms →
+      showsPart untr b s x xO c → (DeployedR.layR elem).Agrees cmt x s wt xO ((DeployedR.layR elem).msgs x ws) →
       (∀ e ∈ (DeployedR.layR elem).calls x s wt, FlockDeploy.sha512 e.1 = e.2) →
       (Claims.findColl ((DeployedR.layR elem).calls x s wt ++
         vcallsAt FlockDeploy.sha512 (DRL rd wE final w b elem) xO)).isSome = false →
@@ -117,6 +136,50 @@ def AccPorts (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ →
       _root_.Flock.Readable.rowsRead ns nv (keyCopy p ht wt q.key) e =
         Rows.elemReadC (Top.accRC rd key) X ms' cs q.key e + δ ((j - accBase X) % 2)
 
+/-- **`ResLowered` at the parts' own witnesses**: at a compiled statement of the shape where every part accepts at its
+own witness and the parts' own messages (`JointP`), each algebra part's `rec-residuals` pieces hold
+(`resHolds elemAt vvAt`). This is the acceptance KS holds where it reads `hres` (`RestLowR`'s `hJ`). -/
+def ResLoweredP (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
+    (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
+    (pieces : Msg → List ResPiece) (ownQ : Msg → ResPiece → Option ℕ)
+    (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+    (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128) : Prop :=
+  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+    ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
+    RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
+      (AccP rd wE final w b elem shape untr cmt) x c ws →
+    ∀ s < (DRL rd wE final w b elem).nS x,
+      PiecesComputes (_root_.RecDeploy.bdR rd wE final w) (DRL rd wE final w b elem) pieces (resHolds elemAt vvAt) ownQ
+        s x c ((DeployedR.layR elem).msgs x ws)
+
 end
+
+end RecDeploy.ResLower
+
+namespace RecDeploy.DecompBR
+
+open Claims (Msg Out)
+open FlockDeploy (Coin FinalP)
+
+/-- **`ResLowJP` at the deployed layout from `ResLoweredP`**: the two are one statement at the brings `bB`, `Dense`,
+`recRead` and `cmtTr recRead`. -/
+theorem resLowJP_of_resLoweredP (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round)
+    (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
+    (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
+    (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    (pieces : Msg → List ResPiece) (ownQ : Msg → ResPiece → Option ℕ)
+    (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+    (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+    (h : ResLower.ResLoweredP rd wE final w (bB b aux nOf hd rest) elem Claims.Recursion.Form.Dense recRead
+      (cmtTr recRead) pieces ownQ elemAt vvAt) :
+    ResLowJP rd b aux nOf hd rest wE final w (DeployedR.layR elem) pieces elemAt vvAt ownQ :=
+  fun x st hx hf c ws hJ s hs => h x st hx hf c ws hJ s hs
+
+end RecDeploy.DecompBR
+
+namespace RecDeploy.ResLower
+
+noncomputable section
 
 end RecDeploy.ResLower
