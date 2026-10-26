@@ -180,3 +180,46 @@ def test_missing_proof_files_are_refused(fx, tmp_path):
     got, why = PF.verify(PF.Proof(st / "circuit.txt", st / "pub-32.bin", (tmp_path / "none",)), circuit_sha512=CIRCUIT,
                          program=b"{}", partition={}, registered={})
     assert got is None and why[0] == "proof", why
+
+
+def _v2(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True):
+    st = fx / "stage"
+    return PF.verdicts_v2(PF.Proof(st / "circuit.txt", st / public, (session,)), circuit_sha512=circuit,
+                          program=json.loads((st / "program.json").read_bytes()),
+                          partition=json.loads((st / "partition.json").read_text()),
+                          registered=json.loads((st / "registered.json").read_text()) if own else None)
+
+
+def _same(v1, v2):
+    """The two runs' findings agree on all but the session's name (a path for `verify`, a name for the v2 audit)."""
+    (a,), (b,) = v1, v2
+    assert (a.accepted, a.why, a.program, a.registered, a.units) == (b.accepted, b.why, b.program, b.registered,
+                                                                    b.units), (a, b)
+
+
+@lean
+@pytest.mark.slow
+def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
+    """The v2 audit (`SampledProofs.OneStageZk`) runs `flock-verify verify --zk`'s one-stage path inside its own Lean, on
+    the files as blobs: on the honest session, a session whose proof bytes were tampered with (record kept or
+    rehashed), and the honest session without the verifier's registered file, its finding is `verify`'s, reason and
+    units included."""
+    for session, own in ((fx / "session", True), (_tampered(fx, tmp_path / "kept", False), True),
+                         (_tampered(fx, tmp_path / "rehashed", True), True), (fx / "session", False)):
+        got, why = _verify(fx, session, own=own)
+        assert why is None, why
+        mine, refused = _v2(fx, session, own=own)
+        assert refused is None, refused
+        _same(got, mine)
+    (honest,), _ = _v2(fx, fx / "session")
+    assert honest.accepted and honest.units == DRAWN and honest.registered == {"cs": {"value": "cs_table",
+                                                                                     "root": CS_ROOT}}
+
+
+@lean
+@pytest.mark.slow
+def test_the_v2_audit_refuses_a_circuit_no_blob_holds(fx):
+    """The circuit file's blob is found only by the SHA-512 of its own bytes, so a digest other than the file's is a
+    refusal before any session is set up."""
+    got, why = _v2(fx, fx / "session", circuit="ab" * 64)
+    assert got is None and why.startswith("circuit: no blob has the SHA-512"), why

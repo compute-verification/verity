@@ -1,3 +1,3 @@
 import SampledProofs.OneStageZk
 
-def main (args : List String) : IO UInt32 := SampledProofs.OneStageZk.protocol.main args
+def main (args : List String) : IO UInt32 := SampledProofs.OneStageZk.main args
