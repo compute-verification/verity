@@ -226,4 +226,48 @@ theorem kernel_rate (n : ℕ) (hn : n ≤ 2048) (σ : (machine x cap oracle).Sta
     _ ≤ ρ r * ((w.len + x.slack : ℕ) : ℚ≥0) :=
         mul_le_mul_of_nonneg_left (by exact_mod_cast Nat.le_add_right _ _) zero_le
 
+/-! ## Code -/
+
+theorem sum_range_getD {β : Type} [AddCommMonoid β] (f : List Ins → β) (hf : f [] = 0) :
+    ∀ plan : List (List Ins), ∑ t ∈ Finset.range plan.length, f (plan.getD t []) = (plan.map f).sum
+  | [] => by simp
+  | is :: rest => by
+    rw [List.length_cons, Finset.sum_range_succ', List.map_cons, List.sum_cons, add_comm]
+    simp only [List.getD_cons_succ, List.getD_cons_zero, sum_range_getD f hf rest]
+
+theorem schedFrom_map_length : ∀ (plan : List (List Ins)) (t₀ : ℕ),
+    (schedFrom t₀ plan).map List.length = plan.map List.length
+  | [], _ => rfl
+  | is :: rest, t₀ => by simp [schedFrom, schedFrom_map_length rest]
+
+theorem code_le (plan : List (List Ins)) :
+    Machine.code (prog (x := x) (cap := cap) (oracle := oracle) plan) (sched plan) ≤ (plan.map List.length).sum := by
+  unfold Machine.code
+  have h1 : ∀ θ, (prog (x := x) (cap := cap) (oracle := oracle) plan θ).length ≤ 1 := fun θ => by
+    simp only [prog]
+    cases ((plan.getD θ.1 [])[θ.2]?.map Ins.instr) <;> simp
+  calc ((sched plan).flatten.dedup.map fun θ => (prog plan θ).length).sum
+      ≤ ((sched plan).flatten.map fun θ => (prog (x := x) (cap := cap) (oracle := oracle) plan θ).length).sum :=
+        ((List.dedup_sublist _).map _).sum_le_sum (fun _ _ => Nat.zero_le _)
+    _ ≤ ((sched plan).flatten.map fun _ => 1).sum := List.sum_le_sum fun θ _ => h1 θ
+    _ = (plan.map List.length).sum := by
+        rw [List.map_const', List.sum_replicate, nsmul_eq_mul, Nat.cast_id, mul_one, List.length_flatten,
+          sched_eq, schedFrom_map_length]
+
+theorem chunk_sum (len : ℕ) : ∀ m : ℕ,
+    ((List.range m).map fun u => (chunk len 151 u).length).sum = min len (151 * m)
+  | 0 => by simp
+  | m + 1 => by
+    rw [List.range_succ, List.map_append, List.sum_append, chunk_sum len m]
+    simp [chunk]
+    omega
+
+theorem kernel_instrs (n : ℕ) :
+    ((kernel n).map List.length).sum = 2 * n + n / 32 * blocks n + n * n / 4 := by
+  have h := chunk_sum (n * n / 4) ((n * n / 4 + 150) / 151)
+  rw [min_eq_left (by omega)] at h
+  simp only [kernel, List.map_append, List.sum_append, List.map_map, Function.comp_def, List.length_map,
+    List.length_cons, List.length_nil, h]
+  simp
+
 end Verity.Accel.H200.Resident
