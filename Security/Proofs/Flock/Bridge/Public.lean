@@ -105,10 +105,11 @@ def SampledKSLivePub : Prop :=
     let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hU n g
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs, at their cost: two runs of the
     -- prover and two verifications for a rewinding finder, one of each for the self-clash finder
-    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
+    (∀ ω j, FlockSoundness.Assumptions.TableCRZAt execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) (2 * (t' + v)) (t' + v)) →
     -- ecr/sha-512 for the prover's link finders
-    LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
+    FlockSoundness.Assumptions.LinkCRZCAt execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ)
+      k Rw M t' →
     prob (fun o => LiveAcceptsZK I o ∧
         ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
           (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
