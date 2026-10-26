@@ -74,6 +74,8 @@ structure RealizesIntegrityOfIntegrityBlock {ι : Type} {d : Device ι} {α : Ty
 
 namespace Guarantees.Bridge
 
+open FlockSoundness.Audit FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
+  FlockSoundness.Discharge.ZkHidden in
 /-- **The integrity audit of a server-time block, from C-Flock's integrity audit of that block.** For the period `r` of
 server-time block `b` whose sampled-proofs audit realizes C-Flock's integrity audit of block `b` of the server's
 sessions `S` (`RealizesIntegrityOfIntegrityBlock`), each of the block's draws covering at least a fraction `q > 0` of
@@ -83,8 +85,6 @@ certificates whose share `ε` of the block's units is at least `ln(1/δ)/q`, the
 per-period guarantee (`PeriodRun.Sound`) at error
 $$\delta + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}),$$
 `Flock.Guarantees.IntegrityBlock`'s, when that is finite. -/
-open FlockSoundness.Audit FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
-  FlockSoundness.Discharge.ZkHidden in
 def IntegrityOfIntegrityBlock : Prop :=
   ∀ (ι : Type) (d : Device ι) (α : Type) [Fintype α] (C : Verity.Circuit) (I : Type) (Ω : I → Type)
     [DecidableEq I] [∀ i, Fintype (Ω i)] (r : PeriodRun d α C Ω) (S : Flock.Guarantees.ServerBlocks) (b : ℕ)
@@ -102,6 +102,8 @@ def IntegrityOfIntegrityBlock : Prop :=
     ENNReal.ofReal δ + S.err b ≠ ⊤ →
     r.Sound c p .sampled (ENNReal.ofReal δ + S.err b).toReal
 
+open FlockSoundness.Audit FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
+  FlockSoundness.Discharge.ZkHidden in
 /-- **Demo A's composed theorem, with every server-time block's integrity leg from C-Flock's integrity audit of that
 block.** As `Accounting.Guarantees.JointHorizonBlocksA` (sampled proofs, PoUW and the network certifier over `B`
 server-time blocks, no wipe or memory term), with block `b`'s sampled audit given by its realization of block `b` of
@@ -110,8 +112,6 @@ every block, in place of its per-period guarantee: the probability that one of t
 while its claim fails is at most
 $$\sum_b \Big(\delta + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}) + \delta_{b,\mathrm{pouw}}
   + \delta_{b,\mathrm{network}}\Big).$$ -/
-open FlockSoundness.Audit FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
-  FlockSoundness.Discharge.ZkHidden in
 def JointHorizonBlocksAOfIntegrityBlock : Prop :=
   ∀ (ι α I : Type) [Fintype α] [Fintype I] [DecidableEq I] (Ω : I → Type) [∀ i, Fintype (Ω i)]
     [∀ i, Nonempty (Ω i)] (d : Device ι) (C : Verity.Circuit) (B : ℕ) (r : Fin B → PeriodRun d α C Ω)
@@ -134,6 +134,8 @@ def JointHorizonBlocksAOfIntegrityBlock : Prop :=
         (r b).accepts a ξ ∧ ¬ (r b).Holds (c b) p a ξ) ≤
       ∑ b : Fin B, ((ENNReal.ofReal δI + S.err b).toReal + δ b .pouw + δ b .network)
 
+open FlockSoundness.Audit FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
+  FlockSoundness.Discharge.ZkHidden in
 /-- **The joint guarantee over a horizon of server-time blocks, with every block's integrity leg from C-Flock's
 integrity audit of that block.** As `Accounting.Guarantees.JointHorizonBlocks`, with block `b`'s sampled audit given
 by its realization of block `b` of the server's sessions `S` (`RealizesIntegrityOfIntegrityBlock`), under the premises
@@ -142,8 +144,6 @@ accepted audit's claim fails, some accepted wipe's survivor bound fails, or some
 PoUS accepted is at most
 $$\sum_b \Big(\delta + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}) + \sum_{a \ne \mathrm{sampled}} \delta_{b,a}\Big)
   + \sum_b \varepsilon_{\mathrm{wipe},b} + \sum_b \delta_{\mathrm{PoUS},b}.$$ -/
-open FlockSoundness.Audit FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
-  FlockSoundness.Discharge.ZkHidden in
 def JointHorizonBlocksOfIntegrityBlock : Prop :=
   ∀ (ι α I : Type) [Fintype ι] [Fintype α] [Fintype I] [DecidableEq I] (Ω : I → Type) [∀ i, Fintype (Ω i)]
     [∀ i, Nonempty (Ω i)] (d : Device ι) (C : Verity.Circuit) (B : ℕ) (s : BlocksRun d α C Ω B)
