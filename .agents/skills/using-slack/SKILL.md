@@ -58,8 +58,8 @@ research msg read --thread <ts>                                                #
 ~~~
 
 - **One thread per request**: the root is the ask or announcement, and everything about it is a reply.
-- **Only the names a post starts with ring** (`@name`s, user-group tags, or `handle:` as the first word). `send`, `reply`
-  and `ask` refuse a handle named with `@` later in the body; drop the `@` to mention without a doorbell.
+- **Only the names a post starts with ring** (`@name`s, user-group tags, or `handle:` as the first word). A handle named
+  later still posts, with a note on stderr that it wasn't rung; move it to the start (or `--to`) to ring it.
 - **A reply that names no one** rings the root's poster, or, from the poster, everyone the root addressed. So a progress
   note is `send --kind fyi` (or `--quiet`): it rings only its `--to` names.
 - **Under an announcement, a reply rings only the names it starts with**, whatever PRs or runs it names: start it with
