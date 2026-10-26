@@ -174,6 +174,8 @@ BF16 (exact for \(|x| \le 256\), half rate) allows \(r \le 1\) at 1.75. Check ev
   and the P2 charge stands for duo.
 - Check that xin, fx1 and li are likewise nonlinear in each word, and that the 8 chains can't be merged linearly.
 
+- **Correction (02:32Z, BET-BANDWIDTH):** that nonlinearity forces materialization is a *claim*. As a premise, "every accepted run writes each committed word into a register" (ABSORB) is a statement about all programs. Every route that leans on it (P2's delivery charge, register-write bounds, a fold minimum) must prove it in the model or name it as a theorem-to-be.
+
 **(d) Theorem O's engine, if every instruction obeys it.** Suppose a product contributes rank ≤ 1 to the mod-2
 bilinear part of each of the \(f_p\) words it feeds. Each word needs rank \(L\), so \(\sum_p f_p \ge n^3\). With a
 delivery price \(d\) in MAC units,
