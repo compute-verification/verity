@@ -38,7 +38,8 @@
   "Properties.RemoteAudit.Schedule",
   "Properties.RemoteAudit.Live",
   "Properties.Composition",
-  "Properties.Verity.Soundness"
+  "Properties.Verity.Soundness",
+  "Properties.Verity.Game"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
