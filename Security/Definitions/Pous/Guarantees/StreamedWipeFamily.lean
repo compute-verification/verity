@@ -9,8 +9,8 @@ The game is `Security/Definitions/Pous/Model/StreamedWipe.lean`, the proofs
 `Security/Proofs/Pous/StreamedWipe/Family.lean`.
 
 **What they rest on.** No named assumption, as `StreamedWipe`: the PRF (C3) enters as its advantage in the conclusion,
-and every tier counted, C5 and C6 are the game's shape, which the challenger's deployment must make true. The port's
-`eps = 2^-128` leaves the PRF's advantage out. **What they cover:** the sequential reveal (batch size 1), the only one
+and key custody, every tier counted, C5 and C6 are the game's shape, which the challenger's deployment must make true.
+The port's `eps = 2^-128` leaves the PRF's advantage out. **What they cover:** the sequential reveal (batch size 1), the only one
 the verdict accepts.
 -/
 
@@ -36,7 +36,12 @@ exceeds (per label, `512/24 + 1 < 512/19`). Sampling cannot take all of `f`: at 
 is `(18/19)^2152 ≈ 2^-167.9`, the compression term needs the missing labels' `M/19` bits plus the count.
 
 Same footing as `StreamedWipe`: no named assumption; C3 (the PRF's advantage, in the conclusion), every tier counted
-and C5/C6 as there. Proof: `PousStreamedWipe.streamed_wipe_meets_family`.
+and C5/C6 as there, and key custody, which the game's shape encodes and the deployment must make true:
+
+- *key custody*: `K` is generated and held only by the challenger, off the prover's node. The game's `fill` never reads
+  `K`; a prover holding it computes every label in one SHA-512 compression and keeps all of its memory foreign.
+
+Proof: `PousStreamedWipe.streamed_wipe_meets_family`.
 
 Frozen (no-function): a bound in the wipe game's model, which no Lean function computes. -/
 def StreamedWipeMeetsFamily : Prop :=

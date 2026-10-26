@@ -13,6 +13,8 @@ the protocol `verity/core/protocols/pous/PROTOCOL.md` ("The streamed-label wipe"
 the conclusion (`prfAdvantage`), which C3 bounds for an efficient prover; the guarantee holds for every prover. The
 physical premises enter as the game's shape, and the challenger's deployment must make them true:
 
+- *key custody*: `K` is generated and held only by the challenger, off the prover's node; `fill` never reads it, and a
+  prover holding it computes every label in one SHA-512 compression;
 - *no unaccounted tier*: `M` is every bit the server can hold when the fill ends, all its memory tiers;
 - C6, *egress certified over the whole wipe*: `E` bounds the bits that left the boundary from the fill's start to the
   last challenge, as the network certifier counts them, and the deadline keeps an answer from being fetched from

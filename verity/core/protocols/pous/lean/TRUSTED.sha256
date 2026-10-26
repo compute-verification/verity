@@ -21,6 +21,7 @@ f880248af5267b110f4cdfd91c67000c4a81917eb942429f7cae2ee5d4850f66  ../../../../..
 d288169b3dc60861ae150688cdc6facb8ae60d95a9ab91704852285843434db0  ../../../../../Security/Definitions/Pous/Accounting/Rebuild.lean
 b677a8872dabcb6219f1ae2c271c35d1d8ca1ca3a4327a880500992691e0f0bc  ../../../../../Security/Definitions/Pous/Game/Oracle.lean
 88069a0c9b4dda40aee828ba450e3eea2cdcf0f87d277834f8374ec12022d8d7  ../../../../../Security/Definitions/Pous/Game/Prob.lean
+8fd6ca15c804cac532611fd0df4cbe6afdb774f7e645eaa6f4046b2f37220b54  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean
 11e8efe5ca9c6d092347de8ef8a41bbe2e010e9209c915e98c674f6396d714a4  ../../../../../Security/Definitions/Pous/Model/Audit.lean
 5a3a5196064a7b60bfd1c62a98076098d3093a8e4ceddc5bc5200fb51ff84ed9  ../../../../../Security/Definitions/Pous/Model/BandChain.lean
 de7f95a3337997aebdcc6bc391f32055040272e5262d9616a797cecdc003bc7f  ../../../../../Security/Definitions/Pous/Model/BandGraph.lean
@@ -51,4 +52,4 @@ c1f3114390c593fcab239b629bed7ac2aa8ba42a4c405b0c54b1875a9a611b8d  ../../../../..
 3c739f0351a0e2269c5ce1978e835ff27573f4d3f74c91426abc04ad1f272dc9  ../../../../../Security/Models/Pous/Guarantees.lean
 5ca33632f925b37bb744f8c1f05bbaef954ba269dd5416f70f0efa6ae64c409c  ../../../../../Security/Models/Pous/Guarantees/P2.lean
 c8d78f5c2bdf9f4fc7b84b118d89e82ab6703c5aaa55ae1a9cfee3bde463d423  ../../../../../Security/Models/Pous/Guarantees/SecureErasure.lean
-553dc52a24ef78a0faf6308a1902308b614b513fc59263ab7bc0f81c0fea4e1e  ../../../../../Security/Models/Pous/Guarantees/StreamedWipe.lean
+dce8b648c351d591e8c5cf1b9794de18e5d8665f519f6e3538a654c94de65810  ../../../../../Security/Models/Pous/Guarantees/StreamedWipe.lean
