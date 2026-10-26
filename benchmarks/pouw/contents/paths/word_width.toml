@@ -1,0 +1,4 @@
+order = 369
+path = "`theory/word_width.py`"
+runs_on = "CPU"
+what = "ACCEL ALGO-COST item 6: words mod 2^8 let every bilinear scheme wrap its summed forms to s8 for free (exact check of depth-1 and depth-2 Strassen on v1 operands, mod 2^8 exact and mod 2^16 not), and the price of depth-r Strassen mod 2^8 on the H200 and the RTX PRO 6000 at v1's L (note:compute-research/20261026T0340Z-draft-accel-algo-cost)"
