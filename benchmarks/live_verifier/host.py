@@ -591,9 +591,14 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
 def exec_party(argv: list[str], sink: BinaryIO, log: Path, minutes: int) -> int:
     """Run the party with the gate's stdin (the request line), its stdout forwarded line by line to `sink` and to `log`; killed
     after `minutes`, which `log` records."""
-    with open(log, "ab") as out, subprocess.Popen(argv, cwd=TREE, stdout=subprocess.PIPE) as p:
+    with open(log, "ab") as out, subprocess.Popen(argv, cwd=TREE, stdout=subprocess.PIPE, start_new_session=True) as p:
         ran_out = threading.Event()
-        timer = threading.Timer(minutes * 60, lambda: (ran_out.set(), p.kill()))
+
+        def kill() -> None:
+            ran_out.set()
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(p.pid, signal.SIGKILL)    # runuser's child too: killing runuser alone leaves the party listening
+        timer = threading.Timer(minutes * 60, kill)
         timer.start()
         try:
             for line in p.stdout:
