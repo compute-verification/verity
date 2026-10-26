@@ -90,7 +90,7 @@ constexpr int LEAF_SMEM = T_BYTES + 4 * SALT_U32 * SXR_THREADS;
 
 template <int MINB>
 int launch_leaves(cudaStream_t stream, const LeafArgs& a, u64 n) {
-  static int per_sm_[64] = {}, sms_[64] = {};   // a device's resident leaf blocks an SM and its SMs, once its
+  static int per_sm_[64] = {}, sms_[64] = {};   // a device's resident leaf CTAs an SM and its SMs, once its
                                                 // shared-memory limit is raised
   int dev = 0, rc;
   if ((rc = cudaGetDevice(&dev))) return rc;

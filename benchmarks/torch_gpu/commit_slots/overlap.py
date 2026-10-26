@@ -76,7 +76,7 @@ HIGH = -(1 << 20)
 SMI = ("clocks.sm", "power.draw.average", "power.draw.instant", "temperature.gpu", "memory.used",
        "clocks_event_reasons.active")
 SMI_MIN = ("clocks.sm", "power.draw", "temperature.gpu", "memory.used")
-#: torch's allocator counters a run records: a retry frees the cache, waiting on every stream a freed block was used on
+#: torch's allocator counters a run records: a retry frees the cache, waiting on every stream a freed allocation was used on
 ALLOCATOR = ("num_alloc_retries", "num_sync_all_streams", "num_device_alloc", "num_device_free", "num_ooms")
 #: NVML's clock event reasons, by bit
 REASONS = {0x1: "gpu_idle", 0x2: "applications_clocks", 0x4: "sw_power_cap", 0x8: "hw_slowdown", 0x10: "sync_boost",

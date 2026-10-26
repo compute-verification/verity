@@ -190,7 +190,7 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
   host still spends about 1.07 s in a step's `add`s, with no upload or sync left in them: it waits on the launch queue
   (5,108 launches a step, 1,379 of them the fold's levels).
 - **The commit on N of the 132 SMs** (`Plan(sms=N)`, the side stream on a green context of N SMs and the leaf kernel's
-  grid filling them; `overlap.py`'s `MODE:shared:STEPS:N`, shared rows at 4,096 slots, leaf kernel at 2 blocks an SM;
+  grid filling them; `overlap.py`'s `MODE:shared:STEPS:N`, shared rows at 4,096 slots, leaf kernel at 2 CTAs an SM;
   runs r20261026-171704-923c and r20261026-173759-4d04, vy-dc-h200-3). Alone it takes 166 to 173 SM·s a step at every N
   from 8 to 88 (20.73 s on 8 SMs, 4.18 on 40, 2.62 on 64), 176 on all 132, its roots the uncapped commit's. Beside the
   served step on every SM, the least overhead is the commit at high priority on 64 SMs: a step of 4.343 s, +1.046 s
