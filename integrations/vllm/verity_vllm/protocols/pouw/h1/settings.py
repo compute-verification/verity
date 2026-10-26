@@ -14,10 +14,15 @@ from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 from verity_vllm.protocols.pouw.h1 import window as PHW
+from verity_vllm.protocols.pouw import pearl_c as PPD
 
 #: The schemes whose coins the auditor host's challenger can draw (the setting ``challenger``): H1's salt and rounds,
-#: ncp-v2's salt
-CHALLENGED = (PH.SCHEME, "ncp-v2")
+#: ncp-v2's and Pearl-C's salt
+CHALLENGED = (PH.SCHEME, "ncp-v2", *PPD.SCHEMES)
+#: The challenged schemes whose install opens the session the gate reserved itself (``session`` the gate's reserve
+#: answer, ``gate`` its open), by the root it opens it on, the one its salt coin follows
+OPENS = {PH.SCHEME: "its window-open root (salt.window_open_root, over round 0's request table)",
+         **dict.fromkeys(PPD.SCHEMES, "its salt epoch's root (salt.epoch_open_root, over the weights' root)")}
 
 
 def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
@@ -48,7 +53,7 @@ def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
     gate = raw.get("gate")
     if gate is not None and not callable(gate):
         raise ValueError("pouw setting 'gate' is gate(session, root): the challenger gate's open of the reserved "
-                         "session on the window's open root (pouw_h1_window.Gate)")
+                         "session on the root the window's salt follows (pouw_h1_window.Gate)")
     served = raw.get("served")
     if served is not None:
         from verity_vllm.protocols.pouw.h1 import served as SV
@@ -114,11 +119,11 @@ def refusals(scheme: str, settings: Any, stage: str, filled: tuple[str, ...] = (
                                   or settings.admission is not None or settings.served is not None):
         out.append(f"{scheme}: the pouw settings 'runner', 'rounds', 'admission' and 'served' are H1's ({PH.SCHEME})")
     if scheme not in CHALLENGED and settings.challenger is not None:
-        out.append(f"{scheme}: the pouw setting 'challenger' is {' and '.join(CHALLENGED)}'s")
+        out.append(f"{scheme}: the pouw setting 'challenger' is for {', '.join(CHALLENGED)} only")
     if (settings.session is not None or settings.gate is not None) and settings.challenger is None:
         out.append(f"{scheme}: the pouw setting 'session' is the session of the challenger at 'challenger'")
     if scheme in CHALLENGED and settings.challenger is not None:
-        out += PHW.refusals(scheme, settings, stage, opens=scheme == PH.SCHEME)
+        out += PHW.refusals(scheme, settings, stage, opens=OPENS.get(scheme))
     if scheme == PH.SCHEME and settings.rounds is not None and settings.steps is not None:
         have = settings.rounds.challenger.commitment.family(settings.rounds.label) - len(settings.rounds.roots)
         if have < settings.steps:
@@ -127,4 +132,4 @@ def refusals(scheme: str, settings: Any, stage: str, filled: tuple[str, ...] = (
     return out
 
 
-__all__ = ["CHALLENGED", "fills", "from_engine", "of", "refusals"]
+__all__ = ["CHALLENGED", "OPENS", "fills", "from_engine", "of", "refusals"]
