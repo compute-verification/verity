@@ -106,7 +106,8 @@ def PortsAt (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Opt
       RecResiduals.shape? m k cl = some sh → RecResiduals.holoOf p.sts[0].c = .ok holo →
       RecResiduals.part { sh with holo } jj = .ok (S, ns, nv) →
     ∀ os last, (_root_.RecDeploy.bdR rd wE final w).final
-        (ms.getD ((_root_.RecDeploy.bdR rd wE final w).DE.V.k (Claims.Recursion.xI (DRL rd wE final w b elem) x) - 1)
+        (((DeployedR.layR elem).msgs x ws).getD
+          ((_root_.RecDeploy.bdR rd wE final w).DE.V.k (Claims.Recursion.xI (DRL rd wE final w b elem) x) - 1)
           []) = some (os, last) →
       os.length + 1 = (_root_.RecDeploy.bdR rd wE final w).DE.V.k (Claims.Recursion.xI (DRL rd wE final w b elem) x) →
       P (Claims.Recursion.xI (DRL rd wE final w b elem) x)
