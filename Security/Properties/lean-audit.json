@@ -229,7 +229,9 @@
   "Definitions.Claims",
   "Definitions.Pouw.Basic",
   "Definitions.Pouw.Window",
-  "Definitions.Pouw.PearlC"
+  "Definitions.Pouw.PearlC",
+  "Definitions.Pouw.Fp8Atom",
+  "Definitions.Pouw.Game.Defs"
  ],
  "layers": {
   "Properties.Pouw": {
