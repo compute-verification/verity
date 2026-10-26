@@ -3,8 +3,8 @@ import Proofs.Flock.Bridge.Canon
 /-!
 # The assembly with canonical openings (`Bridge.AssemblyTargetC`, proved)
 
-`Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC`, which concludes `SampledKSLiveV2` (row/v2 circuit files,
-`Bridge.RowsV2`, which `TransportsLiveC` takes too). At `kd = 0` the miss term `C(n − K₀, 0)/C(n, 0)` is `1`.
+`Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC`, which concludes `SampledKSLiveV2` (circuit files of
+`sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` rows, `Bridge.RowsOk`, which `TransportsLiveC` takes too). At `kd = 0` the miss term `C(n − K₀, 0)/C(n, 0)` is `1`.
 Otherwise `EndToEndHiddenC` at `K₁ = min K₀ (n − kd + 1)` bounds the event: outside `RelS` at least `K₁` slots are
 faulty population slots (`CountTarget`: slots below `n`; the input class is drawn at rate `0`), and each is a unit
 wrong on the registration with canonical openings (`canonAt`), since a unit right in that sense is not faulty

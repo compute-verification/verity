@@ -13,7 +13,7 @@ canonical transport (`transportsLiveC`), M1's core (`faultyRightTargetC`), the s
 (`count`) and `EndToEndHiddenC` (`endToEndHiddenC_of`, from `openingsCanon`) plugged in.
 -/
 
-/-- **The sampled audit's knowledge soundness, live, at row/v2 circuit files** (`Flock.Guarantees.SampledKSLiveV2`). -/
+/-- **The sampled audit's knowledge soundness, live, at the circuit files the verifier of record reads** (`Flock.Guarantees.SampledKSLiveV2`). -/
 theorem Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2 :=
   Flock.Bridge.assemblyTargetC Flock.Bridge.transportsLiveC Flock.Bridge.faultyRightTargetC Flock.Bridge.partRus
     Flock.Bridge.count (Flock.Bridge.endToEndHiddenC_of Flock.Bridge.openingsCanon)
