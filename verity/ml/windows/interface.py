@@ -30,7 +30,7 @@ bit concatenation of its leaves, then one output row ``o<j>`` per return field, 
 port's leaves (one bit each) are read as their `boolean.word_type` words.
 
 A wired port's row is committed under its writer's output row's salt, so the two rows' public strings are one, which
-a5's wiring check holds before the draw (`wiring`). A wire reads a row whole: a row gathered from several writers' words
+a5's wiring check holds on the drawn units (`wiring.check_drawn`). A wire reads a row whole: a row gathered from several writers' words
 (RoPE's query from the Q coordinates, attention's K and V from earlier positions) is refused until circuits and proofs
 choose its row form, except in the form they chose, WIRES' cut (``cuts``, `SampledProofs.Wires`): a port read from
 several writers is cut ``k`` ways, parameter ``p`` is ``k`` rows ``p#j``, row ``j`` its outer elements

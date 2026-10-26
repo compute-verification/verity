@@ -10,8 +10,9 @@ live-coin design and what it would cost.
 
 The code is `audit.py` (the lifecycle), `coins.py` (the coins), `receipts.py` (seeds, plans, receipts and trees),
 `codec.py` (the store's encoding), `memory_map.py` (serving's record of the KV blocks it wrote and freed, the audit's
-input from serving), `store.py` (a registered store bound to a pinned model, §3) and `timing.py` (the honest schedule,
-and where the sketch's bound is read). Every byte format below is pinned by
+input from serving), `store.py` (a registered store bound to a pinned model, §3), `timing.py` (the honest schedule,
+and where the sketch's bound is read) and `p2.py` (the audit over PoUS's P2 store, §11). Every byte format below is
+pinned by
 `tests/vectors.json`. This is a reference implementation: pure Python, with openings checked in the clear. The clear
 checks are the specification of what each zero-knowledge proof unit proves on the deployed path (§8). The verifier's
 definition is Lean code, `lean/` (`RemoteAudit`: `verifyWindow`, a window's draw and its openings' checks, and
@@ -65,7 +66,19 @@ codec than the record's, or a bare fraction. The stated ceiling is the node's, t
 0.065% under the default codec, 0.097% at k = 2 and 0.31% under p512/k2 (`timing.SQUARINGS_PER_S`,
 `timing.READ_BYTES_PER_S`). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
 \(\delta\) read over the horizon, plus \(2^{-\text{slack}}\) per pass, plus \(s/2^{512}\) per window for guessing a
-receipt. Under the default receipt kind, sketch-sha512, a receipt also rests on the receipts' sketch (`SketchBound`,
+receipt, plus the deployed draw's terms beyond \(\delta\) (`ledger.draw`, `PooledDraw`'s): \(\sum_t s'_t/2^{64}\) for
+a rejected first word (`ledger.rejection`), the coin commitment's hiding terms (\(n \cdot 2^{-191}\) over \(n\)
+windows), and the receipts' binding term, \(\sum_t \sqrt{|L_t| s_t} \cdot q_t/2^{256.5}\) under `cr/sha-512` for
+window \(t\)'s fork finder of \(q_t = 2FC + 2 \cdot 69 \, s_t\) SHA-512 calls, which runs the prover twice from the
+cut before the window's coin (`ledger.binding`). It is charged at the session's bounds, not at one record's \(U_t\)
+and \(s'_t\), which follow the prover's play: \(|L_t|\), the most receipts a window of the session can have, is its
+pass cap (the pace's \(k\), unpaced `STEP_LIMIT` − 1) times its extent (\(N\), or the codec's `max_blocks` when the
+session reserves append coins), and \(s_t = \min(s, |L_t|)\). Drawn \(g > 1\) windows a coin (`groups_per_coin`), its
+\(t\) is a draw: \(\lceil W/g \rceil\) of them, each with at most \(g\) times a window's \(|L_t|\) receipts and the
+cap \(s\) over them together. It takes the chance that the two runs' roots differ as
+0, which the deployed protocol doesn't yet ensure (the gap `binding-split`, §8). The windows' PRF advantages are the draw's fourth term: named with their claim
+(`prf/sha-512`, `ledger.PRF_CLAIM`), with no value. The memory line's \(\delta\) carries the hiding and binding terms
+beside its \(2^{-\text{slack}}\) a pass. Under the default receipt kind, sketch-sha512, a receipt also rests on the receipts' sketch (`SketchBound`,
 derived by `Accounting.Guarantees.Remote.SketchBoundDeployed`), which adds at most \(Q \cdot 2^{-95.12}\) a session
 at 16 rows for a prover of \(Q = F \cdot C\) SHA-512 compressions, \(C\) the node's own over the span and \(F\) the
 outside-compute factor (\(2^{20}\), provisional), and \((Q + P) N \cdot 2^{-512}\) for a receipt right without its
@@ -969,12 +982,14 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   (`ledger.Node`: a maximal rebuild batch, \(S_{\text{chip}}\), and a maximal disk read, a second at the ceiling;
   link-charged, one link window as well), and its on-chip storage \(S_{\text{chip}}\). δ is the horizon's error plus
   the coin commitment's hiding terms \(\sum_t \mathrm{hide}_t\), at most \(n \cdot 2^{-191}\) over \(n\) windows
-  (`ledger.hiding`), plus the sketch's (`timing.sketch_failure`) plus the draw's rejection \(\sum_t k_t / 2^{64}\)
-  (`ledger.rejection`), at the receipts each draw requested, \(k_t\) the record's `samples`, not the
-  \(\min(k_t, U_t)\) it drew: a draw that opens all its receipts is charged \(k_t\) too, as `LineHeld`'s error is.
-  These are the ledger's parts (`ledger.DELTA_PARTS`), the horizon's profile and slack and then these three.
-  `LineHeld`'s error also carries the windows' PRF advantages, \(\sum_t \mathrm{Adv}(\mathrm{prf}\,t)\), which have no
-  numeric value: the ledger names them by their claim (prf/sha-512, `ledger.PRF_CLAIM`) and puts them in no δ.
+  (`ledger.hiding`), plus the receipts' binding term \(\sum_t \sqrt{|L_t| s_t} \cdot q_t/2^{256.5}\) at the session's
+  bounds (`ledger.binding`, §1; it takes the gap `binding-split` as closed),
+  plus the sketch's (`timing.sketch_failure`) plus the draw's rejection \(\sum_t k_t / 2^{64}\) (`ledger.rejection`),
+  at the receipts each draw requested, \(k_t\) the record's `samples`, not the \(\min(k_t, U_t)\) it drew: a draw
+  that opens all its receipts is charged \(k_t\) too, as `LineHeld`'s error is. These are the ledger's parts
+  (`ledger.DELTA_PARTS`), the horizon's profile and slack and then these four. `LineHeld`'s error also carries the
+  windows' PRF advantages, \(\sum_t \mathrm{Adv}(\mathrm{prf}\,t)\), which have no numeric value: the ledger names
+  them by their claim (prf/sha-512, `ledger.PRF_CLAIM`) and puts them in no δ.
 
   Every form, the link-charged one included, is conditional on `NoOutsideCompute`, statement C in full: no device
   outside the node computes on a registered block or a receipt during the session. Identity is only its links clause:
@@ -1315,7 +1330,18 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   at the coin commitment with leaf \(t\) committing zeros and reads at most \(s_t\) first blocks of the stream it
   is given), plus the commitment's hiding terms, hm96's, at most \(n \cdot 2^{-191}\) over \(n\) windows
   (`Committed.hide`, `ledger.hiding`): the prover holds the root of every coin from the start, so a window is
-  fixed before its coin only once that root is (`Live` of `Committed.view`).
+  fixed before its coin only once that root is (`Live` of `Committed.view`). Plus the receipts' binding term
+  (`Receipts.binding`, `ledger.binding`): `Refused` lets an opened receipt through only correct or moved off the row
+  its root holds (`Receipts.held`, the plurality of the accepted rows it shows over its window's continuations from
+  the cut before its coin, the same at every continuation: `Binding.held_cont`, `tally_le_held`), and a move is two
+  accepted openings of one root and rank with different rows, a SHA-512 collision among their checks
+  (`Hash.Guarantees.RowBinding`, proved), charged under `cr/sha-512` through the fork form: `ReceiptsBindingOfCR`
+  bounds it by \(\sum_t \sqrt{|L_t| s_t (q_t^2/2^{513} + \mathrm{split}_t)}\), two runs from window \(t\)'s cut on
+  independent openings coins, with \(L_t\) a set holding every receipt window \(t\) opens at every outcome, \(s_t\) the
+  session's draw cap and \(\mathrm{split}_t\) the chance that the two runs' roots differ. `ledger.binding` charges it
+  at the session's bounds (§1) and at \(\mathrm{split}_t = 0\) (`Binding.binding_le_of_fixed`), which holds where the
+  cut fixes the roots; the deployed prover may compute them from the coin commitment, so that is the gap
+  `binding-split` (below).
   `pooled` is computed in exact rationals in the verifier's Lean
   (`lean/RemoteAudit/Pooled.lean`, `pooled.py` held to it by a difftest), the budget \(\bar d \cdot S\) from above by a
   certified rational root, and `Properties.RemoteAudit.PooledCovers` proves its W at least the bound `PooledDraw`
@@ -1325,6 +1351,25 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   a receipt under a registration that binds \(z\), the sketch's bound read at \(r^*\) (`timing.sketch_reading`), and
   the profile at δ.
   The chain's ordering is a random-oracle argument over a prover of bounded queries, which the statements must say.
+- **The gap `binding-split`.** The verifier sends the prover the coin commitment in its `session` message, before the
+  first coin, and each challenge coin with its leaf and path (`coins.coin_reason`, `prover.py`). The commitment's root
+  is a function of every coin, window \(t\)'s openings coin among them, so the prover may compute window \(t\)'s roots
+  from it, and two runs from the cut on independent openings coins may root the window differently:
+  \(\mathrm{split}_t\) has no bound, and hiding doesn't give one (the two runs share the salts, and the move is read
+  after the coin is released). `ledger.binding` takes \(\mathrm{split}_t = 0\), and every line says it is conditional
+  on it (`auditor_line.py`'s `CONDITIONAL_ON`). The change that closes it: the verifier sends the prover no commitment
+  and no coin's leaf or path until the session ends, only the challenge and append coins' values and each window's
+  draws, and at
+  `end` it sends the commitment and every released coin's opening, which the prover checks then (`layout_reason`,
+  `coin_reason`) and refuses the session's record over. The auditor's check of the coins against the record's
+  commitment is unchanged; what moves is the prover's own check that no coin was chosen after a root, which becomes
+  after the fact. Window \(t\)'s roots, ranks and the receipts' verifier then read only the cut before its openings
+  coin (the challenge coins, the earlier windows' openings, the append coins and the prover's own randomness), so the
+  two runs root it alike, \(\mathrm{split}_t = 0\), and `Binding.binding_le_of_fixed`'s hypothesis holds. It touches
+  `verifier.py`'s `session` and `coin` messages, `prover.py`'s coin check, `wire.py`, the Lean model of the play
+  (`Committed.play`, which gives the prover the commitment from the start) and a statement that the play fixes each
+  window's receipts by its cut, which is what closes the gap. The same view may also let `PooledDraw` drop the
+  hiding terms, which is for its statement to show.
 - **The binding's Lean.** The store binding's decision (`store.py`, §3) is ported to `lean/RemoteAudit/Store.lean`
   and held to the Python by a difftest (`lean/tests/test_binding.py`), refusals compared word for word: the pin from
   its file's bytes (`pinOf`, `modelPin`), `checkpoint_sha512`, the payload salts, the expected payload root from the
@@ -1496,6 +1541,85 @@ At the stated \(T\) = 60 s with 789 GB over every tier and RTT 1 ms, the horizon
 by \(q^k\)). 16 KiB receipts make it 0.58%, and a 26 µs flush with them 0.23%. The worst window's \(\gamma_t\) goes
 from 0.896% to 0.81% and 0.46%. With λ and \(\mu_{\text{chip}}\) at 0 the horizon's γ is 0.16%, because the chain's
 steady state and \(\mu_{\text{rebuild}}\) alone exceed 0.15%.
+
+## 11. The P2 store
+
+`p2.py` runs the audit over PoUS's P2-encoded weights store: the store is PoUS's `C*`, `W` encoded under P2
+(`pous.schemes.p2`, `p2-16448/v4`) at PoUS's setup, and the receipts are made by the GPU's own decode of it while it
+serves. This section is what differs from §1–§8; the rest (seeds, plans, leaves, trees, windows, deadlines, coins,
+draws) is unchanged, over units where those sections say blocks. Its byte formats are pinned by `tests/test_p2.py`
+and held to the Lean by `lean/tests/test_p2.py`.
+
+**The store.** Block \(j\) is 2,056 bytes, a big-endian integer below \(p = 2^{16448} - 21065\), at byte \(2056j\);
+\(j = \text{blocks\_per\_segment} \cdot s + v\). A unit is four consecutive blocks, unit \(g\) blocks \(4g \ldots 4g +
+3\): 8,224 bytes, 257 whole 32-byte sectors. The store's \(U = \lfloor N/4 \rfloor\) units are what plans range over,
+and the last \(N - 4U\) blocks are in no unit and no receipt certifies them (none in PoUS's store of \(2^{16}\)-block
+segments). The receipt's vector is a unit, not a block, because block \(j\) starts at byte \(8j \bmod 32\): a
+receipt of one block would leave sectors half read, and `SketchBoundSession`'s guess term, over sectors, would grow
+from \(Q/2^{96}\) to \(Q/2^{64}\).
+
+**Registration** (`p2.Registration`, `p2.register`). PoUS's setup: the prover commits to `W` (`setup.commit`), the
+verifier draws the salt from its own secret after the commitment (`setup.draw_salt`), and builds `vk` from the `C*` it
+decodes to the committed `W` (`setup.verifier_key_from_encoding`). The registration is the node, P2's parameters, the
+commitment, the salt, `vk`'s root and \(k_s\); its digest is `p2.py`'s table, and it is the session's
+\(\text{root}_{(0,-1)}\) as in §4. The setup of record is MEM-69's: commitment `9aaaf192…` (#4477) and its salt.
+
+**The decode kernel's sketch.** This is the interface the kernel computes, and `p2.Sketcher` is its CPU reference.
+Per pass \(i\), after root \(i-1\):
+
+~~~text
+seed_i     the audit's (receipts.seed): SHA512(SEED_DOMAIN ‖ σ_t ‖ u32be i ‖ root_(t,i−1)), 64 bytes
+S_i        k_s rows (16) of 1,028 bytes, from seed_i on the host: K = derive(seed_i,
+           "verity/remote-bandwidth/sketch-signs/v0", {"tag": "sketch-sha512", "k": k_s, "n": 8224}), row c =
+           K.stream(("row", c), 1028) (verity.ml.randomness); bit x of a row (byte x // 8, bit x % 8, LSB first) is
+           the sign of the unit's byte x: 1 → −1, 0 → +1
+~~~
+
+Per block \(j\) the kernel decodes, from the 2,056 bytes it read of `C*`, before decoding them:
+
+~~~text
+b          j mod 4, the block's place in its unit
+signs      bytes 257·b … 257·b + 256 of each row: bit x of that slice is block byte x's sign
+π_j[c]     Σ_(x < 2056) sign_c(x) · int8(c_j[x]), c_j's bytes as stored (byte 0 the integer's most significant),
+           int8 two's complement; k_s int32, |π_j[c]| ≤ 128·2056
+~~~
+
+Per unit \(g\), once its four blocks are decoded (in any order):
+
+~~~text
+σ_g[c]     π_(4g)[c] + π_(4g+1)[c] + π_(4g+2)[c] + π_(4g+3)[c], exact in int32 (|σ_g[c]| ≤ 128·8224 < 2^21)
+y_g        SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be g ‖ σ_g as k_s int32 little-endian):
+           one compression after the pass's 128-byte prefix, whose midstate every unit shares
+~~~
+
+The host commits the \(y_g\) in plan order as §4's tree (`p2.Prover.commit`). The partial is a function of the bytes
+the decode read, so the receipt binds the read the decode made; computing it from the decoded `W`, or from a second
+read, is another protocol. Per block it is \(16 \times 2056\) sign-and-add steps beside the decode's two 16,448-bit
+squarings. The fixture kernels build against comes from the serving loop over #4455's toy `C*` (`serve.py fixture`,
+pinned there by its SHA-512 and published as `art:23a1667b4d4515f46fabea029492a1ca3788eef0771b115642f21e18f58f3da2`):
+a pinned seed, the sign rows, every block's \(\pi\), every unit's \(\sigma\) and \(y\).
+
+**Openings** (`p2.Opening`, `p2.Session.verify`). An opening of unit \(g\) is its four blocks, each with its path to
+`vk`'s root, and the receipt leaf with its salt and path. The verifier checks the leaf on the pass's root, each block on
+`vk` under PoUS's leaf (`pous.verifier.leaf_hash`, `payload-path` if one fails; in the Lean, PoUS's own leaf and
+path check, `PousCheck.Merkle`), and \(y_g\) recomputed from the four blocks (`p2.check`). It decodes nothing: `vk`'s leaves are of the `C*` the verifier decoded to the committed `W`, so a block on its
+path is `C*`'s block, by SHA-512's collision resistance. A P2 store is fixed at setup, so a session over it appends
+nothing (`append`).
+
+**What it rests on, and what is open.**
+
+- The record (`Session.record`) is §7's, with `block_bytes` 8,224, `codec` `p2-16448/v4` and layout `p2-unit4/v0`.
+  `audit.Rebuild` refuses a P2 codec, so `audit.ledger` refuses a P2 record: \(\mu_{\text{rebuild}}\) at P2's encode
+  waits on `WorkHardnessP2` and `SquaringCeilingP2`, drafted (not decided) in Accounting's assumptions, which need the
+  H200's squaring rate at 16,448 bits measured. Claims are Daniel's.
+- The sketch bound at units is `SketchBoundSession` at \(m = 257\) sectors, drafted as `SketchBoundP2`:
+  \(\delta_s = Q/2^{96} + (Q + P)(\varepsilon + N/2^{512}) + (Q + P)^2/2^{257}\) at `SketchRank 16 257 12 ε`, with
+  \(\varepsilon = 257 \cdot\) `timing.sign_rank_at_most(16, 11)` \(= 2^{-95.2491}\) (\(2^{-96.2548}\) at 4,096-byte
+  blocks' 128 sectors). The memory line's `SketchBoundAt` follows from it by `SketchBoundLine`, which holds at every
+  \(m\).
+- Not yet built: the Lean session over a P2 store (the Lean ports here are the registration digest, the partials,
+  the unit receipt and the opening check, `lean/RemoteAudit/P2.lean`), the registry's one live registration a node for
+  P2, and the zero-knowledge opening unit of a P2 unit (§8).
 
 ## Appendix A. Live coins, and why the protocol doesn't use them
 

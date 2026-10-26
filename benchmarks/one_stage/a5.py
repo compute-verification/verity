@@ -137,9 +137,11 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   context); `a5_row_tables.py` is their stand-in.
 * **Wiring across statements** (`commit.wiring`, verifier PROTOCOL §16.13 ``Wiring``): a w13 coordinate's K-chunks
   (`pipeline.kchunk_rows`) are three templates, each chunk's ``acc`` row the output row of the chunk before it, committed under
-  that row's salt. Lean's links hold only inside a statement, so before the draw every wire is held on the public bodies the leaf
-  layer binds (`wiring.check`: the two rows' strings are one), and a drawn chunk's ``acc`` is then the committed output of the
-  chunk that wrote it, drawn or not. A sparse-MLA row's combine reads its splits' partials and lses the same way
+  that row's salt. Lean's links hold only inside a statement, so after the draw each drawn unit's wires are held on the public
+  bodies the leaf layer binds (`wiring.check_drawn`, Lean's `Wires.Summary.drawnOk`: the two rows' strings are one), and a
+  drawn chunk's ``acc`` is then the committed output of the chunk that wrote it, drawn or not. A unit whose wired row is
+  not its writer's is faulty in the wired flattening, so the drawn units' wires are the check; every unit's
+  (`wiring.check`) is recorded beside it as the reference (``wiring_reference``), never gating. A sparse-MLA row's combine reads its splits' partials and lses the same way
   (`pipeline.split_rows`, `a5_sparse_mla.py` its stand-in). The negatives (`wiring_negatives`) wire a unit to another unit, swap
   two of a combine's slots, and flip a wired row's string in its reader's public body.
 """
@@ -419,9 +421,10 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
 
 
 def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) -> dict[str, dict]:
-    """The verifier's wiring check (§16.13) on altered wires: the first wire's writers rotated (each unit reading another unit's
-    row), two wires of one output swapped (a split's partial read into another combine slot), and a wired row's string flipped
-    in its reader's public body (a partial that is not the one its writer committed)."""
+    """The verifier's wiring check (§16.13, `wiring.check_drawn`) on altered wires, each with the units it alters drawn: the first
+    wire's writers rotated (each unit reading another unit's row), two wires of one output swapped (a split's partial read into
+    another combine slot), and a wired row's string flipped in its reader's public body (a partial that is not the one its
+    writer committed), its unit 0 drawn."""
     neg: dict[str, dict] = {}
     k = next((k for k, m in enumerate(members) if m.wired), None)
     if k is None:
@@ -431,19 +434,25 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
         return [replace(m, wired=wired) if i == j else m for i, m in enumerate(members)]
 
     (p, o, ws), *rest = members[k].wired
-    neg["chunk-wired-to-another-unit (§16.13)"] = {"refused": bool(WI.check(rewired(k, ((p, o, ws[1:] + ws[:1]), *rest)), publics))}
+    def units(j: int) -> range:
+        return range(members[j].base, members[j].base + members[j].n)
+
+    neg["chunk-wired-to-another-unit (§16.13)"] = {
+        "refused": bool(WI.check_drawn(rewired(k, ((p, o, ws[1:] + ws[:1]), *rest)), publics, units(k)))}
     swap = next(((j, a, b) for j, m in enumerate(members) for a in range(len(m.wired)) for b in range(a + 1, len(m.wired))
                  if m.wired[a][1] == m.wired[b][1] and m.wired[a][2] != m.wired[b][2]), None)
     if swap is not None:
         j, a, b = swap
         w = list(members[j].wired)
         w[a], w[b] = (w[a][0], w[a][1], w[b][2]), (w[b][0], w[b][1], w[a][2])
-        neg["partial-wired-to-another-combine-slot (§16.13)"] = {"refused": bool(WI.check(rewired(j, tuple(w)), publics))}
+        neg["partial-wired-to-another-combine-slot (§16.13)"] = {
+            "refused": bool(WI.check_drawn(rewired(j, tuple(w)), publics, units(j)))}
     m = members[k]
     names = [q for q, _ in m.all_rows]
     body = bytearray(publics[m.key])
     body[names.index(p) * WI.BC_BYTES] ^= 1
-    neg["wired-row-not-its-writer-s-output (§16.13)"] = {"refused": bool(WI.check(members, {**publics, m.key: bytes(body)}))}
+    neg["wired-row-not-its-writer-s-output (§16.13)"] = {
+        "refused": bool(WI.check_drawn(members, {**publics, m.key: bytes(body)}, [m.base]))}
     return neg
 
 
@@ -600,7 +609,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
     if any(m.wired for m in mine.members):
         bad = WI.check(mine.members, publics)
-        checks["wiring"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
+        summary["wiring_reference"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
     w = rec.get("window", {})
     checks["source"] = source(w)
     summary["source"], summary["commitment"] = w.get("kind"), w.get("commitment")
@@ -640,6 +649,15 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         union_draw, drawn_law, receipt = dict(draw.draw), dict(draw.law), dict(draw.registration.receipt)
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     (out / "draw.json").write_text(json.dumps(union_draw, sort_keys=True))
+    after: dict[str, dict] = {}
+    if any(m.wired for m in mine.members):
+        bad = WI.check_drawn(mine.members, publics, union_draw["units"])
+        after["wiring"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
+        if bad:
+            summary.update(checks={**checks, **after})
+            (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+            print("A5 " + json.dumps({"refused_after_draw": {"wiring": False}, "checks": after}, default=str))
+            return summary, False
     served_units, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
     linked = None       # the first drawn chunk with registered reads: its session, for the registered-reads negatives
     row_verdicts: dict[str, dict] = {}      # each drawn chunk's Lean verdict with registered reads, whose finding the record carries
@@ -762,6 +780,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
     result["checks_before_draw"] = checks
+    if after:
+        result["checks_after_draw"] = after
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
 
     # negatives: each re-decides one input altered
