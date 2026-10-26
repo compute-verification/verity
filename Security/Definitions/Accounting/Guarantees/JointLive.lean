@@ -20,7 +20,7 @@ the probability that some subprotocol accepts while its claim fails is at most t
 * `JointPeriodLiveECR`: the same with `ecr/sha-512` asked of each finder, so the bound is numbers;
 * `JointHorizonLive`: `m` periods read off one game's run, each over its own circuit;
 * `JointHorizonBlocksLive`: `B` server-time blocks read off one game's run, with the wipe that opens each block and each
-  block's memory term (`Accounting.Guarantees.JointHorizonBlocks`' terms, on the run).
+  block's memory term (`Accounting.BlocksRun`'s wipes and memory terms, on the run).
 
 Two statements say the bound is not vacuous: an honest prover meets every claim on every run
 (`JointPeriodLive_honest`), and some prover fails a claim with positive probability at an accepting verdict
@@ -126,7 +126,8 @@ Then at every strategy the probability that some block's accepted subprotocol's 
 survivor bound fails, or some block's memory term fails while its PoUS accepted is at most
 $$\sum_b \sum_a \big(\delta_{b,a} + \mathrm{loss}_{b,a}(\Pr[B_{b,a}^s \text{ finds}])\big)
   + \sum_b \varepsilon_{\mathrm{wipe},b} + \sum_b \delta_{\mathrm{PoUS},b}.$$
-The gap `JointHorizonBlocks` states (PRF-167, the state a block carries across a wipe) is unchanged. -/
+**Gap (PRF-167):** the state a block carries across a wipe (the KV cache, committed before the wipe and re-read after
+it) is outside the integrity bound. -/
 def JointHorizonBlocksLive : Prop :=
   ∀ (ι α : Type) [Fintype ι] [Fintype α] (d : Device ι) (B : ℕ) (C : Fin B → Verity.Circuit) (O : Type)
     (G : Verity.Game O) (S : BlocksLive d α B C G) (H : Claims.Msg → Claims.Msg) (c : Fin B → Certificates)

@@ -568,7 +568,7 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
                 "and the server can't move an admission (not met today)",
                 "the scan proves link-window 0 of the warden run; the period's terms are its per-link-window and "
                 "per-request terms at the run's request rate",
-                "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriod's sum"]}
+                "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's sum"]}
 
 
 #: each reading of the scan's free inputs, as the report labels it

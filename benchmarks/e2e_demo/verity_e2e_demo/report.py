@@ -17,7 +17,7 @@ once at the top and in the sources table.
 
 **Demo A** composes sampled proofs, PoUW and network accounting (`DEMO_A`): accept when all three accepted on the
 block's server, reject when one rejected, pending otherwise, with their errors summed as
-``Accounting.Guarantees.JointHorizon`` states it. PoUS, the bandwidth audit and the wipe compose at M4 (Demo B).
+``Accounting.Guarantees.JointHorizonLive`` states it. PoUS, the bandwidth audit and the wipe compose at M4 (Demo B).
 
 **The guarantee** cites LEAN-56's ``Flock.Guarantees.JointStratified`` when ``JOINT_LOCKED`` is true (locked by M3),
 else #4358's per-subcircuit bound, with the joint figure labelled unlocked.
@@ -506,7 +506,7 @@ def _caveats(records: Sequence[Mapping[str, Any]], values: Mapping[str, V], extr
             lines.append(f"{PROTOCOL_NAMES[p].capitalize()} ran on a fixture, not on the block "
                          f"(block record {r['run']}).")
     if not r["composed"]["joint_horizon"]["statement"].get("proved"):
-        lines.append("JointHorizon is stated, not yet proved: the error sum in part 1 is the sum it states.")
+        lines.append("JointHorizonLive is stated, not yet proved: the error sum in part 1 is the sum it states.")
     lines.append("PRF-167: the state carried across a wipe has no cross-session binding term yet, so the bound holds "
                  "per server-time block.")
     lines.append("`pous-ring-instantiation` is M4's: PoUS's S_cert, the bandwidth audit's Q_cert and the wipe's f·M "
