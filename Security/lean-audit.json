@@ -35808,9 +35808,9 @@
    ]
   },
   "Proofs.Accounting.TS.Session.Checked.Guarantees": {
-   "digest": "e3d1ee78dcb03553e8fc7332bcb424751c30ecd893ae144a9976588c8256a2e9",
+   "digest": "3a92b4d3d69ec6c989d0ec6ce80f5eced72651c817521d56f31f6e74c5b20a5f",
    "definitions": {
-    "Accounting.Guarantees.TS.CheckedSessionSound": "e0e282fa701db4a833ac8b33e3979991893eb46b1959c225ec453f86fb0ee096"
+    "Accounting.Guarantees.TS.CheckedSessionSound": "a9fba452008c71adfe968c0688b04eba17cf088e1f92c86afda64be675541a10"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.CheckedSessionSound"]
   },
@@ -35845,9 +35845,9 @@
    "guarantees": ["Accounting.SecurityProofs.TS.HeldSessionSound"]
   },
   "Proofs.Accounting.TS.Session.Held.Guarantees": {
-   "digest": "e08749f326bca24705700e1b32e9563b1151e618b6922d0590c18a3dbb01d0df",
+   "digest": "9e0aa411e87deb4adea059e8dde0ec8102545d9e4bcea0857f1ed55a2e355fba",
    "definitions": {
-    "Accounting.Guarantees.TS.HeldSessionSound": "b457bf7e7916e9faebf055aa4ec4abf29753a27fac611e1d850e14babd9871d0"
+    "Accounting.Guarantees.TS.HeldSessionSound": "8a580458715c4a6018881918f62eeabe8ef6804c40aabc0fe1bd94a54de0e418"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.HeldSessionSound"]
   },
@@ -36019,9 +36019,9 @@
    "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
   "Proofs.Accounting.TS.Session.Tile.Guarantees": {
-   "digest": "2b3c9227f8851a32689115d7d059ec34f7810e45e34faad9a52225a009265ad5",
+   "digest": "79edbe33575570a4c2d954c55e31259adbc94c1d634a931095db4f2d49959981",
    "definitions": {
-    "Accounting.Guarantees.TS.TileSessionSound": "7f9178e66e7a823a3acd4480720a3102a9bed253dfdf46901464d7694d937f80"
+    "Accounting.Guarantees.TS.TileSessionSound": "f755e55bca780f4599472bd1326ff400ae14ae8d639a6f86889fc3e40d461839"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
