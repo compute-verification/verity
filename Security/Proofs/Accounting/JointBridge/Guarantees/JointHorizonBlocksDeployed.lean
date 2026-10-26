@@ -94,11 +94,11 @@ def JointHorizonBlocksDeployed : Prop :=
     ∀ RI : (b : Fin B) → RealizesIntegrityOfIntegrityBlock (s.block b) S b,
     (∀ b ξ t (τ : FlockSoundness.Game.Strategy (S.W t).game),
       Flock.Guarantees.Period.Plays S.W S.T ((RI b).strat ξ) t τ → ∀ ω j,
-      TableCRZ execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀ ((S.W t).L.draw ω) (reg ((S.W t).sim τ))) j
-        (zcStrat execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀) (cont ((S.W t).sim τ) ω)) (S.W t).qF (S.W t).qS) →
+      TableCRZ FlockSoundness.execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀ ((S.W t).L.draw ω) (reg ((S.W t).sim τ))) j
+        (zcStrat FlockSoundness.execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀) (cont ((S.W t).sim τ) ω)) (S.W t).qF (S.W t).qS) →
     (∀ b ξ t (τ : FlockSoundness.Game.Strategy (S.W t).game),
       Flock.Guarantees.Period.Plays S.W S.T ((RI b).strat ξ) t τ →
-      LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
+      LinkCRZC FlockSoundness.execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
         (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') →
     (∀ b, Real.log (1 / δI) / q ≤ (c b).ε * (s.block b).units) →
     (∀ b, ENNReal.ofReal δI + S.err b ≠ ⊤) →
@@ -228,11 +228,11 @@ def JointHorizonBlocksDeployedA : Prop :=
     ∀ RI : (b : Fin B) → RealizesIntegrityOfIntegrityBlock (r b) S b,
     (∀ b ξ t (τ : FlockSoundness.Game.Strategy (S.W t).game),
       Flock.Guarantees.Period.Plays S.W S.T ((RI b).strat ξ) t τ → ∀ ω j,
-      TableCRZ execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀ ((S.W t).L.draw ω) (reg ((S.W t).sim τ))) j
-        (zcStrat execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀) (cont ((S.W t).sim τ) ω)) (S.W t).qF (S.W t).qS) →
+      TableCRZ FlockSoundness.execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀ ((S.W t).L.draw ω) (reg ((S.W t).sim τ))) j
+        (zcStrat FlockSoundness.execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀) (cont ((S.W t).sim τ) ω)) (S.W t).qF (S.W t).qS) →
     (∀ b ξ t (τ : FlockSoundness.Game.Strategy (S.W t).game),
       Flock.Guarantees.Period.Plays S.W S.T ((RI b).strat ξ) t τ →
-      LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
+      LinkCRZC FlockSoundness.execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
         (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') →
     (∀ b, Real.log (1 / δI) / q ≤ (c b).ε * (r b).units) →
     (∀ b, ENNReal.ofReal δI + S.err b ≠ ⊤) →
