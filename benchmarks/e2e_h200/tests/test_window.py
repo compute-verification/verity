@@ -2,6 +2,7 @@
 
 - At the frozen shape, FAMILIES' shared-row layout and its writers are circuits' artifacts.
 - Every read a proof block's ports make lies in rows its producers wrote, and K and V are read at the steps that wrote them.
+- A linear's weight reads are whole rows of the weights' registration (CMP-160).
 - A run served by continuous batching on the CPU at MINI: for proof blocks of every family drawn at every step, the ports
   are assembled from its committed rows (under 1 KiB rows, 64 B rows whose ports span rows, and today's ``families/v1``,
   whose slot roots are the run's own). They must be the inputs replay reads and the outputs it checks, and each row opens
@@ -24,6 +25,7 @@ from e2e_h200.slots import Request, SlotKV, SlotShape
 from e2e_h200.store import GeneratorStore
 from e2e_h200.units import Replayer
 from e2e_h200.weights import Weights
+from verity_torch_loop import weights as SW
 
 #: art:8ce57586b2176a6364260a10963c9703b5b8919b26bd965a4f907667846323e9's writers, `window.writers_digest`
 FROZEN_WRITERS = ("5f20869283c3b4c078193c42259d1f2aada1a82138e203a438216d4449c1fc6f"
@@ -91,7 +93,7 @@ def test_a_linears_x_is_its_quantizers_r_rows_and_attention_reads_k_and_v_at_the
     first = frozen.outputs(7, 1, "l50.down_quant", 0)[0][0].row
     assert rows == list(range(first, first + 8)) and x == (W.Segment(7, 1, first + 7, 0, 8192),)
     assert frozen.locate(7, 1, "l50.wdown", 11, "sx") == (W.Segment(7, 1, first, 8192, 4),)
-    assert frozen.locate(7, 1, "l50.wdown", 11, "wrow3") == (W.Registered("l50.wdown", 11, 3 * 8192, 8192),)
+    assert frozen.locate(7, 1, "l50.wdown", 11, "wrow3") == (W.Registered("l50.wdown", 11 * 8 + 3, 0, 8192),)
     k = frozen.locate(7, 1, "l3.softmax", 200, "k")
     kv = frozen.outputs(0, 0, "l3.wk", 0)[0][0].row
     assert k == tuple(W.Segment(j, 1, kv, 0, 128) for j in range(8)) + (W.Absent(128),) * (PV_K - 8)
@@ -99,6 +101,25 @@ def test_a_linears_x_is_its_quantizers_r_rows_and_attention_reads_k_and_v_at_the
     assert frozen.locate(7, 1, "l3.pv", 9, "v8") == (W.Absent(128),)
     with pytest.raises(ValueError, match="gather"):
         frozen.locate(7, 1, "l3.pv.gather", 0, "x")
+
+
+def test_a_linears_registered_reads_at_the_frozen_shape_are_whole_rows_of_cmp_160s_registration(frozen) -> None:
+    """CMP-160 registered the frozen weights as 733 values of 25,284,864 rows (r20261026-204952-3496), a linear's ``wrow{r}``
+    of coordinate n its row n R + r and ``sw`` its scale's row n."""
+    ts = SW.tensors(FROZEN)
+    assert (len(ts), sum(t.leaves for t in ts)) == (733, 25_284_864)
+    rb = {t.name: 2 * t.words for t in ts}
+    linears = [f for f in frozen.families() if frozen.units[f].template == "ScaledMmS8CoordinateRows_v1"]
+    assert len(linears) == 6 * FROZEN.layers + 1
+    for f in linears:
+        u = frozen.units[f]
+        R = sum(p.startswith("wrow") for p in frozen.ports(f))
+        for n in sorted({0, u.count // 2, u.count - 1}):
+            for r in range(R):
+                assert frozen.locate(7, 1, f, n, f"wrow{r}") == (W.Registered(u.table, n * R + r, 0, rb[u.table]),)
+            assert frozen.locate(7, 1, f, n, "sw") == (W.Registered(u.table + ".scale", n, 0, 4),)
+    assert frozen.locate(7, 1, "embed", 9, "col") == (W.Registered("tok", 9, 0, 2 * FROZEN.vocab),)
+    assert frozen.locate(7, 1, "embed", 9, "pos") == (W.Registered("pos", 9 * FROZEN.context + 7, 0, 2),)
 
 
 def test_the_bundles_pieces_on_families_v1_at_the_frozen_shape_are_cmp_161s() -> None:

@@ -18,7 +18,9 @@ writers (`writers`) are art:8ce57586…'s.
 
 - `Segment`: bytes of one committed row, named by the step whose commitment holds it, the commitment's slot at that step
   (the batch row the sequence ran at), the row's index in the slot's layout, and the bytes within it;
-- `Registered`: bytes of a registered weight's row (CMP-160), in no step commitment;
+- `Registered`: bytes of a row of a registered weight, in no step commitment: the tensor's little-endian bytes cut into rows
+  of `Tensor.words` u16 words, the positions its registration opens (CMP-160). At the frozen shape a row of a linear is
+  8,192 codes, so ``wrow{r}`` of coordinate n is its row n R + r whole and ``sw`` the scale's row n;
 - `Run`: a run input of the step's Program, ``token`` (ingress) or ``n`` (position + 1, kind position);
 - `Absent`: a key row at or past ``n``, never opened, which the Definition masks; assembled as zero bytes.
 
@@ -48,6 +50,7 @@ from .commit import _slots
 from .plan import Entry, Map, Table, Units
 from .shape import PV_K, Shape, forms
 from .units import sources
+from verity_torch_loop import weights as SW
 
 ROW = 1024
 KEPT = ("wk", "wv")
@@ -71,7 +74,7 @@ class Segment:
 
 @dataclass(frozen=True)
 class Registered:
-    """``nbytes`` bytes at ``offset`` of row ``row`` of the registered value ``value`` (row 0 of a one-row tensor)."""
+    """``nbytes`` bytes at ``offset`` of registered row ``row`` (its position) of the registered value ``value``."""
 
     value: str
     row: int
@@ -225,6 +228,9 @@ class Window:
         self._index: dict[int, _Index] = {}
         self._row_base = self.layout.group_row_base
         self._unit_base = self.layout.unit_base
+        if shape.tok_rows != "coordinate":
+            raise ValueError(f"{shape.name}: an embedding block reads tok's coordinate rows, not {shape.tok_rows!r} rows")
+        self._weights = {t.name: t for t in SW.tensors(shape)}
 
     # -- the layout
 
@@ -252,6 +258,12 @@ class Window:
         if len(hit) != 1 or hit[0, 1] - hit[0, 0] != 4:
             raise ValueError(f"{op}'s chunk row {codes.row} hasn't one scale in its commit unit")
         return Segment(step, slot, base + int(hit[0, 2]), int(hit[0, 3]), 4)
+
+    def _registered(self, value: str, lo: int, hi: int) -> tuple[Registered, ...]:
+        """Bytes ``lo .. hi`` of registered value ``value`` as pieces of its registered rows."""
+        rb = 2 * self._weights[value].words
+        return tuple(Registered(value, r, max(lo, r * rb) - r * rb, min(hi, (r + 1) * rb) - max(lo, r * rb))
+                     for r in range(lo // rb, -(-hi // rb)))
 
     def unit_of(self, row: int) -> tuple[int, int]:
         """Row ``row`` of a slot's layout as (its commit unit, its rank in the unit)."""
@@ -329,15 +341,16 @@ class Window:
         seg = lambda op, lo, hi: self._segments(step, slot, op, lo, hi)  # noqa: E731
         whole = lambda op: seg(op, 0, self.tables[op][2].nbytes)  # noqa: E731
         if t == "EmbeddingCoordinate_v1":
-            return {"tok": (Run("token"),), "col": (Registered("tok", i, 0, 2 * self.shape.vocab),),
-                    "pos": (Registered("pos", i, 2 * self.position(step, slot), 2),)}[port]
+            v, at = 2 * self.shape.vocab, 2 * (i * self.shape.context + self.position(step, slot))
+            return {"tok": lambda: (Run("token"),), "col": lambda: self._registered("tok", v * i, v * (i + 1)),
+                    "pos": lambda: self._registered("pos", at, at + 2)}[port]()
         if t == "RmsSumSqChunks_v1":
             n = 2 * c * (u.nbytes // 4)
             return seg(self.src[u.table[:-len("_sums")]], i * n, (i + 1) * n)
         if t == "RmsNormOutSums_v1":
             op = u.table[:-len("_norm")]
             return {"x": lambda: seg(self.src[op], 2 * c * i, 2 * c * (i + 1)),
-                    "w": lambda: (Registered(op + "_norm", 0, 2 * c * i, 2 * c),),
+                    "w": lambda: self._registered(op + "_norm", 2 * c * i, 2 * c * (i + 1)),
                     "s": lambda: whole(op + "_sums")}[port]()
         if t == "RowAbsMax_v1":
             op = u.table[:-len("_amax")]
@@ -361,9 +374,11 @@ class Window:
                 (x0,) = seg(qop, 0, q)
                 return (self._scale(step, slot, qop, x0),)
             if port == "sw":
-                return (Registered(u.table + ".scale", 0, 4 * i, 4),)
+                return self._registered(u.table + ".scale", 4 * i, 4 * (i + 1))
             r = int(port.removeprefix("wrow").removeprefix("x"))
-            return (Registered(u.table, i, r * q, q),) if port.startswith("wrow") else seg(qop, r * q, (r + 1) * q)
+            if port.startswith("wrow"):
+                return self._registered(u.table, k * i + r * q, k * i + (r + 1) * q)
+            return seg(qop, r * q, (r + 1) * q)
         if t in ("QkSoftmaxRowPad_v1", "PvRow_v1"):
             layer, d = u.table.split(".")[0], self.shape.head_dim
             if port == "n":
@@ -502,6 +517,11 @@ def writers_digest(writers: Sequence[Mapping[str, Any]]) -> str:
 
 
 def weights_of(w: Any) -> Callable[[str, int], bytes]:
-    """``weights`` for `assemble` from the seeded weights (`weights.Weights`): row ``row`` of a tensor, a one-row tensor
-    whole."""
-    return lambda value, row: np.ascontiguousarray(w.array(value) if w.t[value].rows == 1 else w.row(value, row)).tobytes()
+    """``weights`` for `assemble` from the seeded weights (`weights.Weights`): registered row ``row`` of a tensor."""
+
+    def row(value: str, r: int) -> bytes:
+        t = w.t[value]
+        rb = 2 * t.words
+        return w.stream(t.offset + r * rb, t.offset + (r + 1) * rb)
+
+    return row
