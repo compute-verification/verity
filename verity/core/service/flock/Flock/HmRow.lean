@@ -1634,8 +1634,10 @@ def checkRows (c : Circuit) : V Unit := do
 
 /-- Parse the circuit file as `HmRow.parse` (a typed one as `HmRow.parseTyped`) reads it, its rows every row, and check
 them (`checkRows`). `HmRow.checkTyped` holds a template's instance inputs to every row, so it reads the template with the
-output rows' words after its inputs, and the circuit keeps the template's own block. -/
-def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
+output rows' words after its inputs, and the circuit keeps the template's own block. A templated statement's tags
+(`Tags.isTmpl`) are refused: its circuit is read from its template (`parseTmpl`, `parseCommit`, `parseStmt`). -/
+def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit :=
+  if tags.isTmpl then throw s!"{tags.name}: a templated statement's circuit is read from its template" else do
   let c ← if !tags.typed then HmRow.parse tags bytes tables else do
     let (k, r) ← Typed.read tags bytes tables
     match r with
@@ -1647,7 +1649,8 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   return c
 
 /-- `parse` through `HmRow.parseFast` (`parse_eq_fast`): the firewall's setup (`Firewall.Hello.Setup.setup`). -/
-def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
+def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit :=
+  if tags.isTmpl then throw s!"{tags.name}: a templated statement's circuit is read from its template" else do
   let c ← if !tags.typed then HmRow.parseFast tags bytes tables else do
     let (k, r) ← Typed.read tags bytes tables
     match r with
@@ -1663,6 +1666,14 @@ theorem parse_eq_fast : @parse = @parseFast := by
   unfold parse parseFast
   simp -zeta only [HmRow.parse_eq_fast]
   try rfl
+
+/-- `parse` refuses a templated statement's tags. -/
+theorem parse_isTmpl {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (h : parse tags bytes tables = .ok c) : tags.isTmpl = false := by
+  unfold parse at h
+  cases hi : tags.isTmpl
+  · rfl
+  · rw [if_pos hi] at h; cases h
 
 /-- META, read off the file's second line alone, between its first two newlines, as `HmRow.parse` reads that line: neither
 the rest of the file's UTF-8 nor its lines are read. -/

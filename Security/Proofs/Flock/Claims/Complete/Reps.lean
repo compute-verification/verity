@@ -364,7 +364,9 @@ theorem circuitOf_check {tags : Tags} {file : ByteArray} {tables : List (String 
     ∃ ls, HmRow.check c tags ls = .ok () := by
   unfold ProvedScope.circuitOf at h
   split at h
-  · unfold HmOut.parse at h
+  · have hi := HmOut.parse_isTmpl h
+    unfold HmOut.parse at h
+    rw [if_neg (by simp [hi])] at h
     simp only [ht, Bool.not_false, ↓reduceIte] at h
     obtain ⟨c', hc', h⟩ := ebind_ok h
     obtain ⟨_, -, h⟩ := ebind_ok h

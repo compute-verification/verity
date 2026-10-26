@@ -29,7 +29,9 @@ theorem hmOut_parse_mask {tags : Tags} {bytes : ByteArray} {tables : List (Strin
     obtain ⟨_, -, h'⟩ := ebind_ok h'
     simp only [pure, Except.pure, Except.ok.injEq] at h'
     exact h'.symm
+  have hi := HmOut.parse_isTmpl h
   unfold HmOut.parse at h
+  rw [if_neg (by simp [hi])] at h
   dsimp only at h
   split at h
   · obtain ⟨c', hc', h⟩ := ebind_ok h

@@ -142,7 +142,7 @@ theorem setupOf_tableJH {I : Inputs} {record : String} {d : Lean.Json} {spec : S
 
 theorem parseH_identity {tags : Tags} (ht : tags.typed = false) (x : Lean.Json) (b : ByteArray)
     (t : List (String × ByteArray)) : HmOut.parse { tags with identity := x } b t = HmOut.parse tags b t := by
-  simp only [HmOut.parse, parse_identity]
+  simp only [HmOut.parse, parse_identity, Tags.isTmpl]
   simp only [ht, Bool.not_false, ite_true]
 
 /-- An untyped `HmOut.parse` reads no identity, so it agrees at every table's tags. -/

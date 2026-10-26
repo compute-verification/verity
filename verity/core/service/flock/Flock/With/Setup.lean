@@ -697,7 +697,8 @@ open HmRow
 
 /-- `HmOut.parse` through the oracle. -/
 def parseWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) :
-    M Circuit := do
+    M Circuit :=
+  if tags.isTmpl then throw s!"{tags.name}: a templated statement's circuit is read from its template" else do
   let c ← if !tags.typed then HmRow.parseWith hs tags bytes tables else do
     let (k, r) ← Typed.readWith hs tags bytes tables
     match r with

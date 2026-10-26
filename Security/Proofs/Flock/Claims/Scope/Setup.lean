@@ -88,7 +88,7 @@ theorem setupH_scope {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables :
 
 theorem parseH_identity {tags : Tags} (ht : tags.typed = false) (x : Lean.Json) (b : ByteArray)
     (t : List (String × ByteArray)) : HmOut.parse { tags with identity := x } b t = HmOut.parse tags b t := by
-  simp only [HmOut.parse, Composed.parse_identity]
+  simp only [HmOut.parse, Composed.parse_identity, Tags.isTmpl]
   simp only [ht, Bool.not_false, ite_true]
 
 theorem parseH_tagsAt {tags : Tags} (ht : tags.typed = false) (count j : ℕ) (b : ByteArray)
