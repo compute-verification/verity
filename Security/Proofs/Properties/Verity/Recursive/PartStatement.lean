@@ -364,19 +364,16 @@ theorem metaOf_eq (b : ByteArray) : VStar.Recursive.metaOf b = RecDeploy.metaOf 
 /-- `jsonOf`'s reading doesn't depend on what it names. -/
 theorem jsonOf_what {a a' : String} {b : ByteArray} {j : Json} (h : jsonOf a b = .ok j) : jsonOf a' b = .ok j := by
   unfold jsonOf at h ⊢
-  cases hu : String.fromUTF8? b with
-  | none => rw [hu] at h; cases h
+  revert h
+  cases String.fromUTF8? b with
+  | none => intro h; cases h
   | some t =>
-    rw [hu] at h ⊢
-    cases hp : Json.parse t with
-    | error e => rw [hp] at h; cases h
-    | ok j' => rw [hp] at h ⊢; exact h
-
-theorem bind_ok {ε α β : Type} {m : Except ε α} {f : α → Except ε β} {b : β} (h : (m >>= f) = .ok b) :
-    ∃ a, m = .ok a ∧ f a = .ok b := by
-  cases m with
-  | error e => cases h
-  | ok a => exact ⟨a, rfl, h⟩
+    intro h
+    dsimp only at h ⊢
+    revert h
+    cases Json.parse t with
+    | error e => intro h; cases h
+    | ok j' => intro h; exact h
 
 /-- A blob's lookup doesn't depend on what it names. -/
 theorem blobs_get_what {bs : Core.Blobs} {d a a' : String} {b : ByteArray} (h : bs.get d a = .ok b) :
@@ -499,6 +496,219 @@ def partIns (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.Par
   link := some h.link
   rows
 
+theorem mapM_some_ok {ε α β : Type} {f : α → Except ε β} {a : α} {b : β} (h : f a = .ok b) :
+    (some a).mapM f = .ok (some b) := by
+  simp only [Option.mapM, h]
+  rfl
+
+/-- **`RecRaw.ins` from its readers' results.** -/
+theorem recIns_of {w : RecRaw} {b : FlockDeploy.Ins} {i : Option RecVStar.Inner} {f : Option VStar.Bindings}
+    {src : Option RecCoins.Source} {c : Option RecVStar.InnerCommits} {l : Option RecVStar.InnerLink}
+    {rw : Option (Array Registered.Port)} (h1 : w.base.ins = .ok b)
+    (h2 : w.recInner.mapM (fun b => do RecVStar.Inner.ofJson (← jsonOf "rec-inner" b)) = .ok i)
+    (h3 : w.recBindings.mapM (fun b => do RecVStar.ownBindingsOfJson (← jsonOf "rec-bindings" b)) = .ok f)
+    (h4 : sourceOf w = .ok src) (h5 : commitsOf w src (boundOf w.innerCircuit) i = .ok c)
+    (h6 : linkInputOf w src = .ok l)
+    (h7 : w.recRows.mapM (fun b => do
+      (Registered.ofJson (← jsonOf "rec rows" b)).mapError fun e => s!"rec rows: {e}") = .ok rw) :
+    w.ins = .ok
+      { base := b, inner := i, part := w.recPart, bindings := f, src := src, bound := boundOf w.innerCircuit,
+        commits := c, link := l, rows := rw } := by
+  unfold RecRaw.ins
+  rw [h1]; simp only [ok_bind]
+  rw [h2]; simp only [ok_bind]
+  rw [h3]; simp only [ok_bind]
+  rw [h4]; simp only [ok_bind]
+  rw [h5]; simp only [ok_bind]
+  rw [h6]; simp only [ok_bind]
+  rw [h7]; rfl
+
+/-- The registration `innerHeld` reads off the blobs is the one `Names` puts in the statement, as text. -/
+theorem reg_text {bs : Core.Blobs} {rd : Option String} {rw : Option ByteArray} {reg : Option String}
+    (hI : (rd.mapM fun d => (bs.get d "rec inner registration").toOption) = some rw)
+    (hC : (rd.mapM fun d => do
+          let some s := String.fromUTF8? (← bs.get d "rec inner registration")
+            | throw "rec inner registration: not UTF-8"
+          pure s : Flock.V (Option String)) = .ok reg) :
+    rw.mapM (textOf "rec inner registration") = .ok reg := by
+  cases rd with
+  | none =>
+    cases hI; cases hC; rfl
+  | some d =>
+    simp only [Option.mapM] at hI hC
+    simp only [Option.mapM, textOf]
+    revert hI hC
+    cases bs.get d "rec inner registration" with
+    | error e => intro hI; cases hI
+    | ok b =>
+      intro hI hC
+      simp only [Except.toOption] at hI
+      cases hI
+      dsimp only
+      simp only [ok_bind] at hC
+      revert hC
+      cases String.fromUTF8? b with
+      | none => intro hC; cases hC
+      | some u => intro hC; cases hC; rfl
+
+/-- **The verifier's readers take part `s`'s statement to compiled part `s`'s inputs**: `RecRaw.ins` on `partRaw`,
+under `insO_staged_partIns`' hypotheses. -/
+theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {q : PartX}
+    {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs : Core.Blobs} {h : VStar.Recursive.InnerHeld}
+    (hh : VStar.Recursive.innerHeld o pr bs = .ok h)
+    {pj : VStar.Recursive.PartOwn} {tags0 : Tags} (htags : Tags.find? VStar.Recursive.STATEMENT = some tags0)
+    (hplain : tags0.plainLeaves = false)
+    {circuitB pubB : ByteArray} {registered rows : Option (Array Registered.Port)} {bindings : VStar.Bindings}
+    {draw : Option Json}
+    (hregC : (pj.registered.mapM VStar.Recursive.registeredOf).map (Option.map (·.1)) = .ok registered)
+    (hrowsC : pj.rows.mapM (fun j => ((do pure (← VStar.Recursive.registeredOf j).1 : Flock.V _)).mapError
+      (s!"rec rows: " ++ ·)) = .ok rows)
+    (hbindC : RecVStar.ownBindingsOfJson pj.bindings = .ok bindings)
+    (hIc : bs.get o.circuit "the inner circuit" = .ok r.innerRaw.circuit)
+    (hIp : bs.get pr.pub "the inner public file" = .ok r.innerRaw.publicFile)
+    (hIstmt : r.innerRaw.statement = VStar.Recursive.INNER_STATEMENT) (hIos : r.innerRaw.osCoins = true)
+    (hItab : r.innerRaw.tables = [])
+    (hIpart : r.innerRaw.partition.map (jsonOf "partition") = some (.ok o.partition))
+    (hIdraw : r.innerRaw.draw = (bs.get pr.draw "the inner statement's draw").toOption)
+    (hIshape : (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" r.w.recInner)) = .ok h.shape)
+    (hIreg : (pr.registration.mapM fun d => (bs.get d "rec inner registration").toOption) = some r.w.registration)
+    (hPform : PartForm q.base) (hPc : q.base.circuit = circuitB)
+    (hPpart : q.base.partition.map (jsonOf "partition") = some (.ok pj.partition))
+    (hPprog : q.base.program = some pj.program)
+    (hPreg : q.base.registered.map (jsonOf "registered") = pj.registered.map Except.ok)
+    (hProws : q.rows.map (jsonOf "rec-rows") = pj.rows.map Except.ok)
+    (hPbind : jsonOf "rec-bindings" r.w.bindings = .ok pj.bindings)
+    (hPdraw : (q.base.draw.mapM (jsonOf "draw")).map (Option.map Flock.norm) = .ok draw)
+    (hSp : st.pub x ms s = pubB)
+    (hSr : bs.get pr.record "the inner session's record" = .ok (st.record x ms))
+    (hSt : bs.get pr.transcript "rec inner transcript" = .ok (st.transcript x ms)) :
+    (partRaw r st x ms s q).ins = .ok (partIns tags0 circuitB pubB pj registered draw h s bindings rows) := by
+  obtain ⟨cI, pI, recB, drawB, trB, record, t, reg, hc, hp, hs, hrB, hu, hd, hsrc, hbound, htB, ht, hreg, hcm, hl⟩ :=
+    innerHeld_ok hh
+  have ecI : r.innerRaw.circuit = cI := Except.ok.inj (hIc.symm.trans hc)
+  have epI : r.innerRaw.publicFile = pI := Except.ok.inj (hIp.symm.trans hp)
+  have erec : st.record x ms = recB := Except.ok.inj (hSr.symm.trans hrB)
+  have etr : st.transcript x ms = trB := Except.ok.inj (hSt.symm.trans htB)
+  have edraw : r.innerRaw.draw = some drawB := by rw [hIdraw, hd]; rfl
+  obtain ⟨hst, hzk, hos, hcnt, htab, hwk, hwt, hstr, hcl, hpi⟩ := hPform
+  have hpart : ∀ (o' : Option ByteArray) (a : String) (j : Json), o'.map (jsonOf a) = some (.ok j) →
+      ∃ pq, o' = some pq ∧ jsonOf a pq = .ok j := by
+    intro o' a j h'
+    cases o' with
+    | none => cases h'
+    | some pq => exact ⟨pq, rfl, Option.some.inj h'⟩
+  obtain ⟨pq, hpq, hpqj⟩ := hpart _ _ _ hIpart
+  have hbase : (partRaw r st x ms s q).base.ins =
+      .ok (partIns tags0 circuitB pubB pj registered draw h s bindings rows).base := by
+    obtain ⟨d, hd1, hd2⟩ : ∃ d, q.base.draw.mapM (jsonOf "draw") = .ok d ∧ d.map Flock.norm = draw := by
+      revert hPdraw
+      cases q.base.draw.mapM (jsonOf "draw") with
+      | error e => intro h'; cases h'
+      | ok d => intro h'; cases h'; exact ⟨d, rfl, rfl⟩
+    obtain ⟨pb, hpb, hpbj⟩ := hpart _ _ _ hPpart
+    have hreg' : q.base.registered.mapM (fun b => do Registered.ofJson (← jsonOf "registered reads" b)) =
+        .ok registered := by
+      revert hPreg
+      revert hregC
+      cases q.base.registered <;> cases pj.registered <;> intro hC hP
+      · rw [← hC]; rfl
+      · cases hP
+      · cases hP
+      · rename_i b j
+        have hj := jsonOf_what (a' := "registered reads") (Option.some.inj hP)
+        have hro : ∀ t, VStar.Recursive.registeredOf j = .ok t → Registered.ofJson j = .ok t.1 :=
+          fun _ h' => registeredOf_own h'
+        simp only [Option.mapM] at hC ⊢
+        rw [hj, ok_bind]
+        revert hC hro
+        cases VStar.Recursive.registeredOf j with
+        | error e => intro hC; cases hC
+        | ok t =>
+          intro hC hro
+          rw [hro t rfl]
+          cases hC
+          rfl
+    have hpm : q.base.partition.mapM (jsonOf "partition") = .ok (some pj.partition) := by
+      rw [hpb]; exact mapM_some_ok hpbj
+    have hnone : ∀ {α β : Type} (f : α → Except String β), (none : Option α).mapM f = .ok none := fun _ => rfl
+    subst hSp hd2 hPc
+    simp only [FlockDeploy.Raw.ins, partRaw, hst, htags, hzk, hplain, hos, hcnt, htab, hwk, hwt, hcl, hpi, hstr,
+      hPprog, hd1, hpm, hreg', hnone, ok_bind, Bool.and_false, Bool.and_true, Bool.false_eq_true, ite_false,
+      ite_true]
+    rfl
+  have h2 : (partRaw r st x ms s q).recInner.mapM (fun b => do RecVStar.Inner.ofJson (← jsonOf "rec-inner" b)) =
+      .ok (some h.shape) := mapM_some_ok hIshape
+  have h3 : (partRaw r st x ms s q).recBindings.mapM
+      (fun b => do RecVStar.ownBindingsOfJson (← jsonOf "rec-bindings" b)) = .ok (some bindings) := by
+    apply mapM_some_ok
+    rw [hPbind]
+    exact hbindC
+  have h4 : sourceOf (partRaw r st x ms s q) = .ok (some h.src) := by
+    simp only [sourceOf, formOf, partRaw, hpq, hIstmt, hIos, hItab, edraw, ecI, epI, erec, jsonOf_what hpqj, textOf,
+      hu, ok_bind, Option.getD_some]
+    rw [hsrc]
+    rfl
+  have hb : boundOf (partRaw r st x ms s q).innerCircuit = h.bound := by
+    rw [hbound]
+    show boundOf (some r.innerRaw.circuit) = _
+    rw [ecI]
+    show (do RecSetup.metaBound (← RecDeploy.metaOf cI)) = _
+    rw [metaOf_eq]
+  have h5 : commitsOf (partRaw r st x ms s q) (some h.src) (boundOf (partRaw r st x ms s q).innerCircuit)
+      (some h.shape) = .ok (some h.commits) := by
+    have htx : textOf "rec inner transcript" (st.transcript x ms) = .ok t := by
+      rw [etr]; unfold textOf; rw [ht]
+    have hrg : r.w.registration.mapM (textOf "rec inner registration") = .ok reg :=
+      reg_text hIreg hreg
+    unfold commitsOf
+    rw [hb, hsrc]
+    show (if (r.w.registration.isSome && (some r.innerRaw.circuit).isNone) = true then _ else
+      some <$> RecSetup.commits (some h.shape) (textOf "rec inner transcript" (st.transcript x ms))
+        (r.w.registration.mapM (textOf "rec inner registration")) h.bound record) = _
+    rw [htx, hrg, if_neg (by simp)]
+    show some <$> RecSetup.commits (some h.shape) (pure t) (pure reg) h.bound record = _
+    rw [hcm]
+    rfl
+  have h6 : linkInputOf (partRaw r st x ms s q) (some h.src) = .ok (some h.link) := by
+    have htx : textOf "rec inner transcript" (st.transcript x ms) = .ok t := by
+      rw [etr]; unfold textOf; rw [ht]
+    unfold linkInputOf
+    rw [hsrc]
+    show (do match Json.parse (← textOf "rec inner transcript" (st.transcript x ms)) with
+      | .ok j => some <$> RecVStar.innerLink j record
+      | .error e => .error s!"rec inner transcript: not JSON: {e}") = _
+    rw [htx, ok_bind]
+    revert hl
+    cases Json.parse t with
+    | ok j => intro hl; dsimp only at hl ⊢; rw [hl]; rfl
+    | error e => intro hl; cases hl
+  have h7 : (partRaw r st x ms s q).recRows.mapM (fun b => do
+      (Registered.ofJson (← jsonOf "rec rows" b)).mapError fun e => s!"rec rows: {e}") = .ok rows := by
+    show q.rows.mapM _ = _
+    revert hProws
+    revert hrowsC
+    cases q.rows <;> cases pj.rows <;> intro hC hP
+    · rw [← hC]; rfl
+    · cases hP
+    · cases hP
+    · rename_i b j
+      have hj := jsonOf_what (a' := "rec rows") (Option.some.inj hP)
+      have hro : ∀ t, VStar.Recursive.registeredOf j = .ok t → Registered.ofJson j = .ok t.1 :=
+        fun _ h' => registeredOf_own h'
+      simp only [Option.mapM] at hC ⊢
+      rw [hj, ok_bind]
+      revert hC hro
+      cases VStar.Recursive.registeredOf j with
+      | error e => intro hC; cases hC
+      | ok t =>
+        intro hC hro
+        rw [hro t rfl]
+        cases hC
+        rfl
+  rw [recIns_of hbase h2 h3 h4 h5 h6 h7]
+  rw [hb]
+  rfl
+
 /-- **Piece C: part `s`'s staged statement is read as compiled part `s`'s inputs.** Take `readX`'s reading `r` of `x`
 and its part `s`, `q`; the compiled check's inner session held (`innerHeld`), and part `s`'s own inputs `pj` with what
 the compiled `partVerdict` reads of them (`registered`, `rows`, `bindings`, the statement's tags `tags0`, the part's
@@ -509,6 +719,9 @@ circuit and public file). Suppose:
   `pj`'s, the bindings `pj`'s, its form `PartForm`, and its draw, read as the verifier reads one, `draw`;
 * `Shows`' clauses: part `s`'s staged public file is `pubB`, the inner session's record and the coin server's
   transcript the blobs';
+* `hplain`: the statement's tags `tags0` don't have plain SHA-512 leaves, which `Raw.ins` refuses under `--zk`. Lean
+  can't evaluate it (`Tags.plainLeaves` compares `Json`, whose `==` is a `partial def`), and compiled `partVerdict`
+  doesn't check it (PRF-201);
 * and part `s`'s statement fits its length words (`partRaw_fits` gives it from the staged files').
 
 Then the outer verifier reads part `s`'s staged statement (`insO`) as `partIns`: compiled part `s`'s inputs. -/
@@ -517,6 +730,7 @@ theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {s
     {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs : Core.Blobs} {h : VStar.Recursive.InnerHeld}
     (hh : VStar.Recursive.innerHeld o pr bs = .ok h)
     {pj : VStar.Recursive.PartOwn} {tags0 : Tags} (htags : Tags.find? VStar.Recursive.STATEMENT = some tags0)
+    (hplain : tags0.plainLeaves = false)
     {circuitB pubB : ByteArray} {registered rows : Option (Array Registered.Port)} {bindings : VStar.Bindings}
     {draw : Option Json}
     (hregC : (pj.registered.mapM VStar.Recursive.registeredOf).map (Option.map (·.1)) = .ok registered)
@@ -543,6 +757,9 @@ theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {s
     (hSt : bs.get pr.transcript "rec inner transcript" = .ok (st.transcript x ms))
     (hfit : RecRawFits (partRaw r st x ms s q)) :
     insO (staged st x ms s) = some (partIns tags0 circuitB pubB pj registered draw h s bindings rows) := by
-  sorry
+  rw [insO_staged hr hq hfit hPform.2.1,
+    ins_partRaw hh htags hplain hregC hrowsC hbindC hIc hIp hIstmt hIos hItab hIpart hIdraw hIshape hIreg hPform hPc
+      hPpart hPprog hPreg hProws hPbind hPdraw hSp hSr hSt]
+  rfl
 
 end Verity.Recursive.Part
