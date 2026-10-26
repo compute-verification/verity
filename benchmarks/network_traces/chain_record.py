@@ -26,8 +26,11 @@
   summary is `n2_advised_zk.py prove --e2e`'s on the advice profile and `n2_zk.py prove`'s on the others (Selection
   All: every link-window's one unit proved) or, once it lands, N2-ZK's sampled draw's, read by the same fields. Scan's
   is `scan_zk.py prove`'s, a stand-in on its own synthetic warden run until IO-TIE's ``--warden-run`` takes the gate's
-  warden rows. A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden run) never makes the report
-  accepted. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan
+  warden rows, accepted only when every round's verdict is the one scan_zk expects and no witness piece reached the
+  verifier (`scan_step`). A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden run) never makes
+  the report accepted. Without ``--n2`` the report is the scan's part of the record alone (`SCAN_ONLY`, its
+  ``scope``), and its verdict is ``scan accepted`` or ``scan refused``: N2 isn't required, and the rest is held as
+  before. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan
   isn't run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its
   negatives are N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each
   tampered run that check lets through. d1's K (`horizon_k`) counts the served units' compute audits (``--audit``: each
@@ -77,6 +80,10 @@ CLEAR = {
 }
 #: the certifier-only path (``--job``'s ``path``): the records are the certifier rehearsal's alone
 CERTIFIER_ONLY = "certifier-only"
+#: a report given no N2 summary (``report`` without ``--n2``, `chain_record.sh`'s ``CR_SCAN_ONLY=1``): the scan's
+#: part of the record, whose N2 runs in jobs of its own; its verdict is ``scan accepted`` or ``scan refused``, never the
+#: whole chain's ``accepted``
+SCAN_ONLY = "scan only, N2 not given"
 #: what a report on the certifier-only path stands on that isn't the chain's own
 STUBBED = (
     "the records come from the certifier-only path (certifier_serve.py's proxy in front of the endpoint), not the "
@@ -350,6 +357,8 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
 
 
 def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -> dict:
+    """`scan_zk.py prove`'s summary: accepted when the honest round's window is accepted, every other round's (chain,
+    forged) refused, no witness piece was found at the verifier, and scan_zk's own ``ok`` holds."""
     job = job or {}
     if s is None or (job.get("rc") or {}).get("scan") not in (None, "0"):
         return {"verdict": "not run" if s is None and not (job.get("rc") or {}).get("scan") else "failed",
@@ -359,12 +368,18 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
         a = r.get("audit") or {}
         rounds[name] = {"accepted": a.get("accepted"), "window_accepted": a.get("window_accepted"),
                         "verdicts": a.get("verdicts"), "why": a.get("why"),
-                        "wrong_units": (a.get("audit") or {}).get("wrong_units"), "ok": r.get("ok")}
+                        "wrong_units": (a.get("audit") or {}).get("wrong_units"), "ok": r.get("ok"),
+                        "leaked": (a.get("received") or {}).get("verifier_found") or []}
     honest = rounds.get("honest") or {}
+    wrong = ([f"{n}: window {'accepted' if v.get('window_accepted') else 'refused'}" for n, v in rounds.items()
+              if bool(v.get("window_accepted")) != (n == "honest")]
+             + [f"{n}: witness pieces found at the verifier: {v['leaked']}" for n, v in rounds.items() if v["leaked"]]
+             + ["scan_zk's ok is not true"] * (s.get("ok") is not True))
     units = 2 * int(s.get("T") or 0)
     k = (s.get("draw") or {}).get("honest") if isinstance(s.get("draw"), dict) else None
-    return {"verdict": ("accepted" if honest.get("window_accepted") else "refused") if rounds else "dry",
-            "ok": s.get("ok"), "rounds": rounds,
+    return {"verdict": ("dry" if not rounds else "refused" if not honest.get("window_accepted")
+                        else "failed" if wrong else "accepted"),
+            "why": "; ".join(wrong) or (job.get("why") or {}).get("scan"), "ok": s.get("ok"), "rounds": rounds,
             "negatives": {k: not v.get("window_accepted") for k, v in rounds.items() if k != "honest"},
             "stand_in": None if warden_run else "scan_zk's own synthetic warden run (scan_traffic), not the gate's "
                                                 "rows: IO-TIE's --warden-run takes those",
@@ -678,7 +693,7 @@ def block_entry(answer: dict | None, case: dict | None, verdict: str, *, server:
     that answer on its ``case`` (`decide_period`), so neither a refused chain nor another period's answer carries a K;
     else why not, `block_leg`'s refusal included."""
     why = (NO_PERIOD_ANSWER if answer is None else
-           f"the chain is {verdict}: a refused chain carries no K" if verdict != "accepted" else
+           f"the chain is {verdict}: only an accepted chain carries a K" if verdict != "accepted" else
            "no --server: the node the block ran on" if not server else
            "no case: what the answer commits to can't be held to the chain" if case is None else
            period_binding(answer, case, **chain))
@@ -718,20 +733,24 @@ def report(a) -> dict:
     cust, cert = _json(a.custody) or {}, _json(a.certs) or {}
     job = _json(a.job) or {}
     certifier_only = job.get("path") == CERTIFIER_ONLY
+    scan_only = a.n2 is None and not certifier_only
     endpoint = endpoint_step(_json(a.endpoint))
-    merged = merged_n2(a.n2)
-    n2 = n2_step(merged, cert, job)
+    merged = None if scan_only else merged_n2(a.n2)
+    n2 = ({"verdict": "not given", "why": SCAN_ONLY, "in_the_clear": CLEAR["n2"]} if scan_only
+          else n2_step(merged, cert, job))
     scan = ({"verdict": "not run", "why": STUBBED[0], "in_the_clear": CLEAR["scan"]} if certifier_only
             else scan_step(_json(a.scan), a.warden_run, job))
-    proved = n2.get("verdict") == "accepted" and (certifier_only or scan.get("verdict") == "accepted")
+    proved = ((scan_only or n2.get("verdict") == "accepted")
+              and (certifier_only or scan.get("verdict") == "accepted"))
     steps = {"custody": cust, "certificates": {k: v for k, v in cert.items() if k != "rows"}, "endpoint": endpoint,
-             "n2": n2, "scan": scan, "lean": {"verdict": "accepted" if proved else n2.get("verdict"),
+             "n2": n2, "scan": scan, "lean": {"verdict": "accepted" if proved else (scan if scan_only else n2).get(
+                                        "verdict"),
                                     "binary": job.get("lean"), "in_the_clear": CLEAR["lean"],
                                     "n2_windows_proved": ((n2.get("members") or {}).get("honest") or {}).get(
                                         "lean_proved"),
                                     "scan_rounds": {k: v.get("verdicts") for k, v in scan.get("rounds", {}).items()}}}
-    required = ("custody", "certificates", *(("endpoint",) if job.get("profile") == ADVICE else ()), "n2",
-                *(() if certifier_only else ("scan",)))
+    required = ("custody", "certificates", *(("endpoint",) if job.get("profile") == ADVICE else ()),
+                *(() if scan_only else ("n2",)), *(() if certifier_only else ("scan",)))
     accepted = (all(steps[k].get("verdict") == "accepted" for k in required)
                 and not any(steps[k].get("stand_in") for k in ("n2", "scan")))
     rehearsal = {f"rehearsal/{g['gate_run']}/{s}": v == "refused" for g in cust.get("gate_runs") or []
@@ -741,11 +760,12 @@ def report(a) -> dict:
                  **{f"scan/{k}": v for k, v in scan.get("negatives", {}).items()}}
     audit_dirs = [Path(d) for d in getattr(a, "audit", None) or []]
     audits = [audit_of(d) for d in audit_dirs]
-    verdict = "accepted" if accepted else "refused"
+    verdict = ("scan " if scan_only else "") + ("accepted" if accepted else "refused")
     runs = list(dict.fromkeys(r for r in (job.get("run"), *(g.get("gate_run") for g in cust.get("gate_runs") or []))
                               if r))
     return {"schema": SCHEMA, "job": job, "verdict": verdict, "path": job.get("path"),
-            "stubbed": stubbed(job, cust), "negatives_refused": negatives, "steps": steps,
+            "scope": SCAN_ONLY if scan_only else None, "stubbed": stubbed(job, cust),
+            "negatives_refused": negatives, "steps": steps,
             "d1": d1_terms(cert, n2, scan, cust, endpoint, audits),
             "block": period_block(a, verdict, runs, cert=cert, n2=merged, audit_dirs=audit_dirs)}
 
@@ -754,7 +774,8 @@ def markdown(r: dict) -> str:
     j, s = r["job"], r["steps"]
     lines = [f"# Network chain run {j.get('run', '?')}", "",
              f"Tree {j.get('tree', '?')}, gates {', '.join(j.get('gates', [])) or '?'}. Verdict: **{r['verdict']}**"
-             + (f" on the {r['path']} path." if r.get("path") else "."), ""]
+             + (f" on the {r['path']} path" if r.get("path") else "") + (f", {r['scope']}." if r.get("scope") else "."),
+             ""]
     if r.get("stubbed"):
         lines += ["Stubbed:", *[f"- {x}" for x in r["stubbed"]], ""]
     lines += ["| step | verdict | ε at δ | in the clear |", "|---|---|---|---|"]
@@ -805,7 +826,8 @@ def main(argv=None) -> int:
     r = sub.add_parser("report", help="one report over the steps' outputs")
     for f in ("custody", "certs", "endpoint", "scan", "job"):
         r.add_argument(f"--{f}")
-    r.add_argument("--n2", nargs="*", help="N2's summary, or one per run of a period's members (merged_n2)")
+    r.add_argument("--n2", nargs="*", help="N2's summary, or one per run of a period's members (merged_n2); without "
+                                           "it, the scan's part alone (SCAN_ONLY)")
     r.add_argument("--warden-run")
     r.add_argument("--audit", nargs="*", help="the served units' compute audit windows (registration.json and "
                                               "circuit.json each), whose draw and free inputs d1's K counts")
@@ -838,8 +860,8 @@ def main(argv=None) -> int:
             (a.out / "block.json").write_text(json.dumps(doc["block"]["entry"], indent=1, sort_keys=True))
         a.out = a.out / "report.json"
     a.out.write_text(json.dumps(doc, indent=1, sort_keys=True, default=str))
-    print(json.dumps({k: doc.get(k) for k in ("verdict", "why", "negatives_refused") if k in doc}))
-    return 0 if doc.get("verdict") == "accepted" else 1
+    print(json.dumps({k: doc.get(k) for k in ("verdict", "scope", "why", "negatives_refused") if k in doc}))
+    return 0 if doc.get("verdict") in ("accepted", "scan accepted") else 1
 
 
 if __name__ == "__main__":

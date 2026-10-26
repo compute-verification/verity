@@ -5,15 +5,19 @@ certificate's, a kept certificate whose signature is changed, and a key under `l
 the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
 several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
 window was drawn; the draw's bound at δ is C(n − b − 1, k) / C(n, k)'s; leak counts the scan's widths and terms on a
-warden run's files, and refuses a sampled draw and a warden the scan's class doesn't serve. On the certifier-only path
-the report needs no scan, names what it stubs, and counts the rehearsal's refused runs and the I/O tie's verdict on
-each tampered run the check let through as negatives; d1's K is #4404's horizon count over the compute audits' draws
-and free inputs and the network's own terms. On certifier/v0's period answer, an accepted report writes the block
-record's certifier entry by #4404's `block_leg`, in the block record's schema, only when the answer is this chain's
-(its case's commitment the answer's, the chain's link, session and key, link-windows the chain certified under N2's
-own registrations, the report's compute audits) and the verifier's own on its case, and none for another session's
-period, another case, the rows form, an answer the check doesn't give, other audits, another registration, a
-link-window N2 didn't register, a missing case, no verifier, a refused chain or no server."""
+warden run's files, and refuses a sampled draw and a warden the scan's class doesn't serve; the job's copy of the
+gates' records into its output keeps no gate run's witness/. On the certifier-only path the report needs no scan,
+names what it stubs, and counts the rehearsal's refused runs and the I/O tie's verdict on each tampered run the check
+let through as negatives; d1's K is #4404's horizon count over the compute audits' draws and free inputs and the
+network's own terms. Given no N2 summary the report is the scan's alone, its verdict `scan accepted` (exit 0) when the
+honest round is accepted, every other refused and no witness piece reached the verifier, and `scan refused` (exit 1)
+on a wrong verdict, a leak or a missing record; the full report holds the scan to its negatives too. On certifier/v0's
+period answer, an accepted report writes the block record's certifier entry by #4404's `block_leg`, in the block
+record's schema, only when the answer is this chain's (its case's commitment the answer's, the chain's link, session
+and key, link-windows the chain certified under N2's own registrations, the report's compute audits) and the
+verifier's own on its case, and none for another session's period, another case, the rows form, an answer the check
+doesn't give, other audits, another registration, a link-window N2 didn't register, a missing case, no verifier, a
+refused or scan-only chain or no server."""
 
 from __future__ import annotations
 
@@ -21,7 +25,9 @@ import hashlib
 import importlib.util
 import json
 import math
+import os
 import shutil
+import subprocess
 import sys
 from fractions import Fraction
 from pathlib import Path
@@ -130,6 +136,23 @@ def test_custody(tmp_path):
     got = cr.custody(tmp_path)
     assert got["verdict"] == "refused" and got["gate_runs"][0]["mismatches"] == {"honest/a.json": "sha512 differs"}
     assert cr.custody(tmp_path / "none")["verdict"] == "refused"
+
+
+def test_job_keeps_no_gate_runs_witness(tmp_path):
+    """chain_record.sh's copy of the gates' records into $OUT, which custody uploads, leaves every witness/ behind."""
+    lines = (HERE / "chain_record.sh").read_text().splitlines()
+    i = next(k for k, line in enumerate(lines) if line.startswith('(cd "$G" && find'))
+    copy = "\n".join(lines[i:i + 2])
+    run = tmp_path / "G" / "g2" / "c20261026T000000Z-0000"
+    for name in ("end.json", "out/deployment.json", "witness/check.json", "witness/cells.jsonl"):
+        (run / name).parent.mkdir(parents=True, exist_ok=True)
+        (run / name).write_text("{}")
+    (tmp_path / "OUT" / "gates").mkdir(parents=True)
+    subprocess.run(["bash", "-c", copy], check=True, env={"G": str(tmp_path / "G"), "OUT": str(tmp_path / "OUT"),
+                                                          "PATH": os.environ["PATH"]})
+    kept = sorted(p.relative_to(tmp_path / "OUT" / "gates" / "g2" / run.name).as_posix()
+                  for p in (tmp_path / "OUT").rglob("*") if p.is_file())
+    assert kept == ["end.json", "out/deployment.json"]
 
 
 def _steps(tmp_path, job: dict, endpoint: bool = True) -> SimpleNamespace:
@@ -322,6 +345,60 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
                                            "warden_run": None}))
     assert refused["verdict"] == "refused" and refused["block"]["why"].startswith("the chain is refused")
     assert "no certifier entry: the chain is refused" in cr.markdown(refused)
+    scan_only = cr.report(SimpleNamespace(**{**vars(steps), "n2": None, "period_answer": honest, "server": "node-1"}))
+    assert scan_only["verdict"] == "scan accepted" and scan_only["block"]["why"] == (
+        "the chain is scan accepted: only an accepted chain carries a K")
+
+
+def test_a_scan_only_report_exits_0_on_the_expected_verdicts_and_1_on_a_wrong_one_a_leak_or_a_missing_record(tmp_path):
+    steps = _steps(tmp_path, {"profile": "advice", "rc": {"n2": None, "scan": "0"}, "scan_only": True})
+    n2_summary, steps.n2 = steps.n2, None
+    rnd = lambda accepted, found=(): {"audit": {"window_accepted": accepted, "received": {"verifier_found": list(found)}}}
+    put = lambda honest, forged, ok=True: Path(steps.scan).write_text(json.dumps(
+        {"ok": ok, "T": 32, "rounds": {"honest": honest, "forged": forged}}))
+    args = ["report", "--custody", steps.custody, "--certs", steps.certs, "--endpoint", steps.endpoint, "--scan",
+            steps.scan, "--job", steps.job, "--warden-run", steps.warden_run]
+    run = lambda name: (cr.main(args + ["--out", str(tmp_path / name)]),
+                        json.loads((tmp_path / name / "report.json").read_text()))
+
+    put(rnd(True), rnd(False))
+    rc, got = run("pass")
+    assert rc == 0 and got["verdict"] == "scan accepted" and got["scope"] == cr.SCAN_ONLY == "scan only, N2 not given"
+    assert got["steps"]["n2"]["verdict"] == "not given" and got["negatives_refused"] == {"scan/forged": True}
+    assert "Verdict: **scan accepted**, scan only, N2 not given." in (tmp_path / "pass" / "report.md").read_text()
+
+    put(rnd(True), rnd(True))
+    rc, got = run("forged-accepted")
+    assert rc == 1 and got["scope"] == cr.SCAN_ONLY and got["verdict"] == "scan refused"
+    md = (tmp_path / "forged-accepted" / "report.md").read_text()
+    assert "Verdict: **scan refused**, scan only, N2 not given." in md
+    assert (got["steps"]["scan"]["verdict"], got["steps"]["scan"]["why"]) == ("failed", "forged: window accepted")
+    put(rnd(False), rnd(False))
+    rc, got = run("honest-refused")
+    assert rc == 1 and got["verdict"] == "scan refused"
+    put(rnd(True, ["head egress 3 @64"]), rnd(False))
+    rc, got = run("leak")
+    assert rc == 1 and got["verdict"] == "scan refused"
+    assert got["steps"]["scan"]["why"] == "honest: witness pieces found at the verifier: ['head egress 3 @64']"
+    put(rnd(True), rnd(False), ok=False)
+    assert run("not-ok")[0] == 1
+    Path(steps.scan).unlink()
+    rc, got = run("no-scan")
+    assert rc == 1 and got["verdict"] == "scan refused" and got["steps"]["scan"]["verdict"] == "failed"
+    put(rnd(True), rnd(False))
+    Path(steps.custody).unlink()
+    rc, got = run("no-custody")
+    assert rc == 1 and got["verdict"] == "scan refused"
+
+    steps.n2 = n2_summary
+    Path(steps.custody).write_text(json.dumps({"verdict": "accepted"}))
+    put(rnd(True), rnd(False))
+    got = cr.report(steps)
+    assert got["scope"] is None and got["verdict"] == "accepted"
+    assert "Verdict: **accepted**." in cr.markdown(got)
+    put(rnd(True), rnd(True))
+    got = cr.report(steps)
+    assert got["scope"] is None and got["verdict"] == "refused" and got["negatives_refused"]["scan/forged"] is False
 
 
 def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
