@@ -11,12 +11,13 @@ from fractions import Fraction
 import pytest
 
 import pouw
-from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.pouw import core_check as CC, operands as OP
 from verity.core.protocols.pouw import window as Wd
 from verity_torch_loop import serve
 
 UNPINNED = "params: check.template is not a tile template the verifier pins"
-NOT_POUWS = "commitment: window is not {context, kind, public} with strings and an object"
+NOT_POUWS = ("commitment: window is not {context, kind, public}, with strings and an object, and optionally activations "
+             "and registered")
 TEMPLATE = 'ScaledMmS8Coordinate_v1{K=128,DOT={"fn":"BlackwellS8ImmaDot32_v1"}}'
 
 
@@ -69,7 +70,7 @@ def _exe(tmp_path, line: str):
     return exe
 
 
-def _h1_window(period, dst, n_real: int = 128, **edit):
+def _h1_window(period, dst, n_real: int = 128, operands=None, **edit):
     """A copy of the period with an H1 window registered at the verifier's parameters (`pouw.h1_params`) and the proof
     service's acceptance of it, in the form `pouw_check_cases.honest` builds: a stand-in for the loop's ``--pouw h1``."""
     shutil.copytree(period, dst)
@@ -85,7 +86,8 @@ def _h1_window(period, dst, n_real: int = 128, **edit):
            "roots": [{"port": "entries", "root": "03" * 64, "leaves": p["check"]["entries"], "domain": "04" * 64},
                      {"port": "W", "root": "ab" * 64, "leaves": 16, "domain": "05" * 64}],
            "leaf_layer": None, "anchors": [], "previous": None,
-           "window": {"kind": "served", "context": p["context"], "public": items}}
+           "window": {"kind": "served", "context": p["context"], "public": items,
+                      **({OP.KEY: operands(p["context"])} if operands else {})}}
     digest = CC.digest(CC.commitment(CC.line(rec).encode())).hex()
     answer = {"commitment": digest, "protocol": CC.ONE_STAGE, "reason": None, "verdict": "accept",
               "profile": {"covered": [], "delta": p["delta"], "drawn": {CC.LEVEL: k}, "linked": True,
@@ -112,6 +114,24 @@ def test_an_honest_h1_window_is_accepted_with_its_credited_work_and_eps_at_both_
         assert q["eps"] == str(Wd.eps_at(k, Fraction(q["delta"]), w.credited * tw, w.n, tw))
     assert Fraction(detail["quotes"][1]["eps"]) <= Fraction(pouw.H1_EPS)
     assert Fraction(detail["quotes"][0]["eps"]) < Fraction(detail["quotes"][1]["eps"])
+    assert detail["operands"] is None
+
+
+def test_an_h1_windows_operands_are_reported_with_what_they_dont_establish(period, tmp_path):
+    """The record names the operands' root X, each value's root, and the gaps: the A rows' tie to the served x rows is a
+    gather (CIR-100), not proved."""
+    block = {}
+
+    def operands(context):
+        block.update(OP.block("p", OP.commit("p", context, {"a": [[1, 2], [3, 4]], "b": [[5, 6, 7, 8]]})))
+        return block
+
+    d, _, _ = _h1_window(period, tmp_path / "h1", operands=operands)
+    assert pouw.leg(d, "local", tmp_path / "out")["verdict"] == "accept"
+    got = json.loads((tmp_path / "out" / "pouw.detail.json").read_text())["operands"]
+    assert got["held"] and got["X"] == OP.root(block).hex()
+    assert got["roots"] == {v: e["root"] for v, e in block["values"].items()}
+    assert any("CIR-100" in g for g in got["gaps"])
 
 
 def test_an_h1_window_registered_at_another_eps_is_refused(period, tmp_path):

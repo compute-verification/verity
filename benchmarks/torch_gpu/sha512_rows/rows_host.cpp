@@ -69,7 +69,8 @@ int sxr_leaf_setup(void*, LeafRow* rows, uint32_t G, const uint64_t* dids, const
 }
 
 int sxr_leaves(void*, const LeafArgs* a) {
-  for (u64 t = 0; t < (u64)a->G * a->S; ++t) leaf<D>(*a, a->T, 256, (u32)(t / a->S), (u32)(t % a->S));
+  u32 y[SALT_U32];
+  for (u64 t = 0; t < (u64)a->G * a->S; ++t) leaf<D>(*a, a->T, y, 1, (u32)t & 7, (u32)(t / a->S), (u32)(t % a->S));
   return 0;
 }
 

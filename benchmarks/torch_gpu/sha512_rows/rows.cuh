@@ -42,9 +42,8 @@ struct LeafRow {     // 224 bytes: row g's frame leaf, rank and position in the 
 };
 static_assert(sizeof(LeafRow) == 224, "LeafRow is 224 bytes");
 
-constexpr int SALT_WORDS = 24;   // hm96-sha512's 192-byte salt
-constexpr int T_BYTES = 256 * 256;
-constexpr int TSTRIDE = 272;     // bytes a T row in shared memory: 256 + 16, so rows start in different bank groups
+constexpr int SALT_U32 = 48;     // hm96-sha512's 192-byte salt, as little-endian u32 words
+constexpr int T_BYTES = 256 * 256;   // T: 256 rows of 256 bytes, in shared memory as in global memory
 
 #define SXR_FRAME "veritor/protocol/merkle/frame/v3"
 
@@ -243,12 +242,13 @@ SX_HD void chacha20(const u32* key, u64 counter, u64 nonce, u32* out) {
 }
 #undef SXR_QR
 
-// y as 24 big-endian words: ChaCha20 blocks 3 salt_row .. 3 salt_row + 2 under key with nonce (C-Flock's hm96_salt)
-SX_HD void salt_key_words(const u32* key, u64 nonce, u64 salt_row, u64* Y) {
+// y as SALT_U32 little-endian words, word w at y[w ys]: ChaCha20 blocks 3 salt_row .. 3 salt_row + 2 under key with nonce
+// (C-Flock's hm96_salt)
+SX_HD void salt_key_words(const u32* key, u64 nonce, u64 salt_row, u32* y, u32 ys) {
   for (int c = 0; c < 3; ++c) {
     u32 o[16];
     chacha20(key, 3 * salt_row + c, nonce, o);
-    for (int i = 0; i < 8; ++i) Y[8 * c + i] = sx::be64(o[2 * i], o[2 * i + 1]);
+    for (int i = 0; i < 16; ++i) y[(16 * c + i) * ys] = o[i];
   }
 }
 
@@ -324,65 +324,83 @@ SX_HD void frame_tail(const LeafRow& r, const u64* v, u64* out) {
   msg_hash<C>(m, 128, out);
 }
 
-// M_key y as 16 little-endian u32 (mask byte 4w + k is byte k of m[w]), from T (rows `stride` apart: TSTRIDE in shared
-// memory, 256 on the host). Bytes [p, p + 64) of T_v are byte_tables(key)[p][v], so for salt bytes p = 16 q + r the 80 bytes
-// [16 q, 16 q + 80) of T_{y_p} are xored into A_r, and A_r shifted down r bytes into m. Copied from commit_gpu's hm96_mask
-// (benchmarks/pouw/commit_gpu/commit_gpu.cuh, its shared-memory path), with the stride an argument as in commit_slots'.
-SX_HD void mask(const uint8_t* T, int stride, const u64* Y, u32* m) {
+// the 16-byte column q a lane l (0-7) takes at step k (0-11) of each r. A 16-byte load from T_v's column q, unit i, is in
+// bank group (q + i) mod 8 whatever v (T's rows are 256 bytes apart), and a 16-byte load's lanes go to shared memory 8 at a
+// time, so lanes on columns distinct mod 8 don't conflict: in steps 0-3 lanes 0-3 take columns 8-11 and lanes 4-7 columns
+// 4-7, in steps 4-7 the other way round, and in steps 8-11 every lane takes columns 0-3 (two lanes a bank group). Each lane
+// takes every column once, and the mask is their XOR, so the order changes no byte.
+SX_HD u32 mask_column(int k, u32 l) {
+  const u32 base = k >= 8 ? 0 : ((k >> 2) ^ (l >> 2)) ? 4 : 8;
+  return base + ((k + l) & 3);
+}
+
+// M_key y as 16 little-endian u32 (mask byte 4w + k is byte k of m[w]), from T (rows 256 bytes apart) and y (SALT_U32 words,
+// word w at y[w ys]), the column order lane l's. Bytes [p, p + 64) of T_v are byte_tables(key)[p][v], so for salt bytes
+// p = 16 q + r the 80 bytes [16 q, 16 q + 80) of T_{y_p} are xored into A_r, and A_r shifted down r bytes into m (commit_gpu's
+// hm96_mask, benchmarks/pouw/commit_gpu/commit_gpu.cuh, with its columns in lane l's order).
+SX_HD void mask(const uint8_t* T, const u32* y, u32 ys, u32 l, u32* m) {
 #pragma unroll
   for (int w = 0; w < 16; ++w) m[w] = 0;
 #pragma unroll
-  for (int r = 0; r < 16; ++r) {
-    u32 A[20];
+  for (int a = 0; a < 4; ++a) {   // r = 4 a .. 4 a + 3: bytes of the words 4 q + a
+    u32 yw[12];
 #pragma unroll
-    for (int i = 0; i < 20; ++i) A[i] = 0;
+    for (int k = 0; k < 12; ++k) yw[k] = y[(4 * mask_column(k, l) + a) * ys];
 #pragma unroll
-    for (int q = 0; q < 12; ++q) {
-      const int p = 16 * q + r;
-      const u32 v = (u32)(Y[p >> 3] >> (56 - 8 * (p & 7))) & 0xFFu;
-      const uint8_t* t = T + v * stride + 16 * q;
+    for (int rr = 0; rr < 4; ++rr) {
+      const int r = 4 * a + rr;
+      u32 A[20];
 #pragma unroll
-      for (int i = 0; i < 5; ++i) {
-        const uint4 u = ld16_any(t + 16 * i);
-        A[4 * i] ^= u.x; A[4 * i + 1] ^= u.y; A[4 * i + 2] ^= u.z; A[4 * i + 3] ^= u.w;
+      for (int i = 0; i < 20; ++i) A[i] = 0;
+#pragma unroll
+      for (int k = 0; k < 12; ++k) {
+        const u32 v = (yw[k] >> (8 * rr)) & 0xFFu;
+        const uint8_t* t = T + 256 * v + 16 * mask_column(k, l);
+#pragma unroll
+        for (int i = 0; i < 5; ++i) {
+          const uint4 u = ld16_any(t + 16 * i);
+          A[4 * i] ^= u.x; A[4 * i + 1] ^= u.y; A[4 * i + 2] ^= u.z; A[4 * i + 3] ^= u.w;
+        }
       }
-    }
-    const int sw = r >> 2, sh = 8 * (r & 3);
+      const int sw = r >> 2, sh = 8 * (r & 3);
 #pragma unroll
-    for (int w = 0; w < 16; ++w) m[w] ^= sh ? (A[w + sw] >> sh | A[w + sw + 1] << (32 - sh)) : A[w + sw];
+      for (int w = 0; w < 16; ++w) m[w] ^= sh ? (A[w + sw] >> sh | A[w + sw + 1] << (32 - sh)) : A[w + sw];
+    }
   }
 }
 
 // row g's leaf in slot s: b = x ^ M y, c = SHA-512(salt_prefix || y), h = SHA-512(leaf_prefix(key) || b || c), then the frame
 // leaf SHA-512(leaf prefix || h), and with A.frames, for a unit of this row alone, its slot-tree leaf over that (the unit's
-// root). T is A.T's table at `stride` (in shared memory on the device).
+// root). T is A.T's table (in shared memory on the device), y the thread's SALT_U32 words of scratch, ys apart (in shared
+// memory on the device, so that y's 48 registers are free), and l the thread's lane in its group of 8 (mask_column).
 template <class C>
-SX_HD void leaf(const LeafArgs& A, const uint8_t* T, int stride, u32 g, u32 s) {
+SX_HD void leaf(const LeafArgs& A, const uint8_t* T, u32* y, u32 ys, u32 l, u32 g, u32 s) {
   const LeafRow& r = A.rows[g];
   const u64 gs = (u64)g * A.S + s;
-  u64 Y[SALT_WORDS];
   if (A.salts) {
-    const uint8_t* y = A.salts + 192 * gs;
+    const uint8_t* sp = A.salts + 192 * gs;
     for (int i = 0; i < 12; ++i) {
-      const uint4 u = ld16(y + 16 * i);
-      Y[2 * i] = sx::be64(u.x, u.y);
-      Y[2 * i + 1] = sx::be64(u.z, u.w);
+      const uint4 u = ld16(sp + 16 * i);
+      y[4 * i * ys] = u.x;
+      y[(4 * i + 1) * ys] = u.y;
+      y[(4 * i + 2) * ys] = u.z;
+      y[(4 * i + 3) * ys] = u.w;
     }
   } else {
-    salt_key_words(A.key, A.nonce0 + s, r.salt_row, Y);
+    salt_key_words(A.key, A.nonce0 + s, r.salt_row, y, ys);
   }
   u64 bc[16];
   {
     u32 m[16];
-    mask(T, stride, Y, m);
+    mask(T, y, ys, l, m);
     for (int i = 0; i < 8; ++i) bc[i] = ld8(A.x + 8 * gs + i) ^ ((u64)sx::bswap32(m[2 * i]) << 32 | sx::bswap32(m[2 * i + 1]));
   }
   u64 w[16];
   u64* c = bc + 8;
   for (int i = 0; i < 8; ++i) c[i] = A.ms_salt[i];
-  for (int i = 0; i < 16; ++i) w[i] = Y[i];
+  for (int i = 0; i < 16; ++i) w[i] = sx::be64(y[2 * i * ys], y[(2 * i + 1) * ys]);
   C::run(c, w);
-  for (int i = 0; i < 8; ++i) w[i] = Y[16 + i];
+  for (int i = 0; i < 8; ++i) w[i] = sx::be64(y[(32 + 2 * i) * ys], y[(33 + 2 * i) * ys]);
   w[8] = 0x8000000000000000ull;
   for (int i = 9; i < 15; ++i) w[i] = 0;
   w[15] = (128 + 192) * 8;
