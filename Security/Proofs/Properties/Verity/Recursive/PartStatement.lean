@@ -144,22 +144,170 @@ theorem decodeRec_encode_fits {w : RecRaw} (h : RecRawFits w) : decodeRec w.enco
   rw [hr]
   simp
 
+theorem obind_some {α β : Type} {m : Option α} {f : α → Option β} {b : β} (h : (m >>= f) = some b) :
+    ∃ a, m = some a ∧ f a = some b := by
+  cases m with
+  | none => cases h
+  | some a => exact ⟨a, rfl, h⟩
+
+theorem toOption_ok {ε α : Type} {e : Except ε α} {a : α} (h : e.toOption = some a) : e = .ok a := by
+  cases e with
+  | error _ => cases h
+  | ok a' => cases h; rfl
+
 /-- **What `readXPre` reads**: `x`'s fields (`decodeX`), the inner statement's (`FlockDeploy.decode`), the verifier's
 own inner shape and the inner statement's partition, each as `readXPre` reads it. -/
 theorem readXPre_spec {x : Claims.Msg} {r : XR} (h : readXPre x = some r) :
     decodeX x = some r.w ∧ FlockDeploy.decode r.w.inner = some r.innerRaw ∧
       (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" r.w.recInner)) = .ok r.shape ∧
       r.innerRaw.partition.mapM (jsonOf "partition") = .ok r.partition := by
-  sorry
+  unfold readXPre at h
+  obtain ⟨w, hw, h⟩ := obind_some h
+  obtain ⟨ri, hri, h⟩ := obind_some h
+  obtain ⟨shape, hshape, h⟩ := obind_some h
+  obtain ⟨partition, hpart, h⟩ := obind_some h
+  obtain ⟨dims, _, h⟩ := obind_some h
+  obtain ⟨vs, _, h⟩ := obind_some h
+  split at h
+  · cases h
+  · cases h
+    exact ⟨hw, hri, toOption_ok hshape, toOption_ok hpart⟩
+
+/-- **The form compiled part `s` sets up**: the statement `verity/flock-circuit` (`VStar.Recursive.STATEMENT`) under
+`--zk`, its coins the keyed coin tree, one table and no lookup tables, and no `--work`, `--work-table`, `--stratified`,
+`--closure` or `--public-inputs`. `Names` is to carry it for each part. -/
+def PartForm (b : Raw) : Prop :=
+  b.statement = VStar.Recursive.STATEMENT ∧ b.zk = true ∧ b.osCoins = false ∧ b.count = 1 ∧ b.tables = [] ∧
+    b.work = none ∧ b.workTable = none ∧ b.stratified = none ∧ b.closure = none ∧ b.publicInputs = none
+
+theorem len_encBytes (b : ByteArray) : (encBytes b).length = 8 + b.size := by
+  show (encNat b.size ++ b.data.toList).length = _
+  rw [List.length_append, FlockComplete.encNat_length, Array.length_toList]
+  rfl
+
+theorem len_encStr (t : String) : (encStr t).length = 8 + t.toUTF8.size := len_encBytes _
+
+theorem encOpt_le {o : Option ByteArray} : ∀ b ∈ o, b.size ≤ (encOpt encBytes o).length := by
+  intro b hb
+  cases o with
+  | none => cases hb
+  | some b' =>
+    cases hb
+    simp only [encOpt, List.length_cons, len_encBytes]
+    omega
+
+theorem flatMap_le {α : Type} {f : α → List UInt8} : ∀ {l : List α} {a : α}, a ∈ l →
+    (f a).length ≤ (l.flatMap f).length
+  | [], _, h => by cases h
+  | b :: l, a, h => by
+    rw [List.flatMap_cons, List.length_append]
+    cases h with
+    | head => omega
+    | tail _ h => have := flatMap_le (f := f) h; omega
+
+theorem length_le_flatMap {α : Type} {f : α → List UInt8} (hf : ∀ a, 1 ≤ (f a).length) :
+    ∀ l : List α, l.length ≤ (l.flatMap f).length
+  | [] => by simp
+  | a :: l => by
+    rw [List.flatMap_cons, List.length_append, List.length_cons]
+    have := hf a
+    have := length_le_flatMap hf l
+    omega
+
+theorem raw_len (w : Raw) :
+    w.statement.toUTF8.size + w.circuit.size + w.publicFile.size +
+      (w.tables.flatMap fun p => encStr p.1 ++ encBytes p.2).length + (encOpt encBytes w.draw).length +
+      (encOpt encBytes w.partition).length + (encOpt encBytes w.program).length +
+      (encOpt encBytes w.registered).length ≤ w.encode.length := by
+  simp only [Raw.encode, encList, List.length_append, len_encStr, len_encBytes]
+  omega
+
+theorem raw_pub (w : Raw) (P : ByteArray) :
+    ({ w with publicFile := P } : Raw).encode.length + w.publicFile.size = w.encode.length + P.size := by
+  simp only [Raw.encode, List.length_append, len_encStr, len_encBytes]
+  omega
+
+theorem recx_len (w : RecX) :
+    w.inner.length + w.recInner.size + w.bindings.size + (encOpt encBytes w.registration).length +
+      (w.parts.flatMap PartX.encode).length ≤ w.encode.length := by
+  simp only [RecX.encode, encList, List.length_append, len_encStr, len_encBytes]
+  omega
+
+theorem partx_len (p : PartX) : p.base.encode.length + (encOpt encBytes p.rows).length ≤ p.encode.length := by
+  have hs : (⟨p.base.encode.toArray⟩ : ByteArray).size = p.base.encode.length := by
+    show p.base.encode.toArray.size = _
+    simp
+  simp only [PartX.encode, List.length_append, len_encBytes, hs]
+  omega
 
 /-- **Part `s`'s statement fits** where the files the run stages for it do: every field it takes from `x` fits, since
 `x` decodes, and Flock's statement with the staged public file is no longer than `x` and that file together. -/
 theorem partRaw_fits {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stage}
-    {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {q : PartX} (hq : r.w.parts[s]? = some q)
+    {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {q : PartX} (hq : r.w.parts[s]? = some q) (hP : PartForm q.base)
     (hpub : x.length + (st.pub x ms s).size < 2 ^ 64)
     (hrec : (st.record x ms).size < 2 ^ 64) (htr : (st.transcript x ms).size < 2 ^ 64) :
     RecRawFits (partRaw r st x ms s q) := by
-  sorry
+  obtain ⟨hw, hri, -, -⟩ := readXPre_spec (readXPre_of_readX hr)
+  have hx := decodeX_encode hw
+  have hi := FlockDeploy.decode_encode hri
+  obtain ⟨_, _, _, hcnt, htab, hwk, hwt, hstr, hcl, hpi⟩ := hP
+  have hmem : q ∈ r.w.parts := List.mem_of_getElem? hq
+  have hslt : s < r.w.parts.length := by
+    rcases List.getElem?_eq_some_iff.mp hq with ⟨h, _⟩
+    exact h
+  have h1 := recx_len r.w
+  have h2 := flatMap_le (f := PartX.encode) hmem
+  have h3 := partx_len q
+  have h4 := raw_len q.base
+  have h5 := raw_pub q.base (st.pub x ms s)
+  have h6 := raw_len r.innerRaw
+  have h7 := length_le_flatMap (f := PartX.encode) (fun p => by
+    simp only [PartX.encode, List.length_append, len_encBytes]
+    omega) r.w.parts
+  rw [hx] at h1
+  rw [hi] at h6
+  have hxl : x.length < 2 ^ 64 := by omega
+  refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
+    ?_, ?_, ?_⟩
+  · show q.base.statement.toUTF8.size < 2 ^ 64; omega
+  · show q.base.circuit.size < 2 ^ 64; omega
+  · show (st.pub x ms s).size < 2 ^ 64; omega
+  · show q.base.tables.length < 2 ^ 64; rw [htab]; decide
+  · show ∀ p ∈ q.base.tables, _; rw [htab]; intro p hp; cases hp
+  · show q.base.count < 2 ^ 64; rw [hcnt]; decide
+  · intro b hb; have := encOpt_le (o := q.base.draw) b hb; omega
+  · intro b hb; have := encOpt_le (o := q.base.partition) b hb; omega
+  · intro b hb; have := encOpt_le (o := q.base.program) b hb; omega
+  · show ∀ n ∈ q.base.work, _; rw [hwk]; intro n hn; cases hn
+  · show ∀ n ∈ q.base.workTable, _; rw [hwt]; intro n hn; cases hn
+  · show ∀ n ∈ q.base.stratified, _; rw [hstr]; intro n hn; cases hn
+  · show ∀ n ∈ q.base.closure, _; rw [hcl]; intro n hn; cases hn
+  · intro b hb; have := encOpt_le (o := q.base.registered) b hb; omega
+  · show ∀ n ∈ q.base.publicInputs, _; rw [hpi]; intro n hn; cases hn
+  · have h5' : (partRaw r st x ms s q).base.encode.length + q.base.publicFile.size =
+        q.base.encode.length + (st.pub x ms s).size := h5
+    omega
+  · intro b hb; cases hb; omega
+  · intro n hn; cases hn; omega
+  · intro b hb; cases hb; omega
+  · intro b hb; have := encOpt_le (o := q.rows) b hb; omega
+  · intro b hb; cases hb; omega
+  · intro b hb; cases hb; omega
+  · intro b hb; have := encOpt_le (o := r.innerRaw.partition) b hb; omega
+  · intro b hb; cases hb
+  · intro b hb; cases hb; exact hrec
+  · intro b hb; cases hb; exact htr
+  · intro b hb; have := encOpt_le (o := r.w.registration) b hb; omega
+  · intro t ht; cases ht; omega
+  · intro ts hts
+    cases hts
+    have h8 := length_le_flatMap (f := fun p : String × ByteArray => encStr p.1 ++ encBytes p.2) (fun p => by
+      simp only [List.length_append, len_encStr]; omega) r.innerRaw.tables
+    refine ⟨by omega, fun p hp => ?_⟩
+    have h9 := flatMap_le (f := fun p : String × ByteArray => encStr p.1 ++ encBytes p.2) hp
+    simp only [List.length_append, len_encStr, len_encBytes] at h9
+    constructor <;> omega
+  · intro b hb; have := encOpt_le (o := r.innerRaw.draw) b hb; omega
 
 /-- **Part `s`'s staged statement is `partRaw`'s encoding** where it fits. -/
 theorem staged_eq {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stage} {ms : List (Claims.Msg × Claims.Out)}
@@ -459,13 +607,6 @@ theorem innerHeld_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs
 
 /-! ## The correspondence -/
 
-/-- **The form compiled part `s` sets up**: the statement `verity/flock-circuit` (`VStar.Recursive.STATEMENT`) under
-`--zk`, its coins the keyed coin tree, one table and no lookup tables, and no `--work`, `--work-table`, `--stratified`,
-`--closure` or `--public-inputs`. `Names` is to carry it for each part. -/
-def PartForm (b : Raw) : Prop :=
-  b.statement = VStar.Recursive.STATEMENT ∧ b.zk = true ∧ b.osCoins = false ∧ b.count = 1 ∧ b.tables = [] ∧
-    b.work = none ∧ b.workTable = none ∧ b.stratified = none ∧ b.closure = none ∧ b.publicInputs = none
-
 /-- The coins compiled part `s`'s session is set up on: the keyed coin tree of its one table. -/
 def partCoins (tags0 : Tags) : Coins := .tree (Zk.coinSpec (tags0.tableNames 1))
 
@@ -722,7 +863,8 @@ circuit and public file). Suppose:
 * `hplain`: the statement's tags `tags0` don't have plain SHA-512 leaves, which `Raw.ins` refuses under `--zk`. Lean
   can't evaluate it (`Tags.plainLeaves` compares `Json`, whose `==` is a `partial def`), and compiled `partVerdict`
   doesn't check it (PRF-201);
-* and part `s`'s statement fits its length words (`partRaw_fits` gives it from the staged files').
+* and the staged files fit their length words: `x` with part `s`'s public file, the inner session's record and the
+  transcript are each under `2^64` bytes (PRF-201: the compiled check is to refuse larger ones).
 
 Then the outer verifier reads part `s`'s staged statement (`insO`) as `partIns`: compiled part `s`'s inputs. -/
 theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stage}
@@ -755,8 +897,10 @@ theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {s
     (hSp : st.pub x ms s = pubB)
     (hSr : bs.get pr.record "the inner session's record" = .ok (st.record x ms))
     (hSt : bs.get pr.transcript "rec inner transcript" = .ok (st.transcript x ms))
-    (hfit : RecRawFits (partRaw r st x ms s q)) :
+    (hpub : x.length + pubB.size < 2 ^ 64) (hrec : (st.record x ms).size < 2 ^ 64)
+    (htr : (st.transcript x ms).size < 2 ^ 64) :
     insO (staged st x ms s) = some (partIns tags0 circuitB pubB pj registered draw h s bindings rows) := by
+  have hfit := partRaw_fits hr hq hPform (by rw [hSp]; exact hpub) hrec htr
   rw [insO_staged hr hq hfit hPform.2.1,
     ins_partRaw hh htags hplain hregC hrowsC hbindC hIc hIp hIstmt hIos hItab hIpart hIdraw hIshape hIreg hPform hPc
       hPpart hPprog hPreg hProws hPbind hPdraw hSp hSr hSt]
