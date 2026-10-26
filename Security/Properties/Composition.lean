@@ -13,8 +13,9 @@ Together they reduce an acceptance of a composition's `answer` to its components
 and the composition's check accepts them (`AnswerAccepts`, at the product), so the cases fit the composition, every
 component's `answer` accepts its own case, which `AnswerAccepts` (at the component) decodes to that component's check
 accepting, and the commitment is the binding of the components' digests (`AcceptMeans`). At a registered composition
-the check's acceptance is also the registration check's on the registration's case, whose digest the commitment binds,
-and the rest is an accepted composition of the components (`AcceptRegistration`). The predicates below say what the
+the check's acceptance is also the registration check's on the registration's case, whose digest the commitment binds
+and the component whose commitment is the registration committed to, and the rest is an accepted composition of the
+components (`AcceptRegistration`). The predicates below say what the
 cases and digests are, in the components' own terms; none restates the composition's check.
 -/
 
@@ -68,20 +69,25 @@ def AcceptMeans : Prop :=
 
 /-- An accepted registered composition: the registration's entry `n` and case `k` are the registration check `R`'s and
 carry the same parameters, its case decodes to what `R`'s check accepts under them, the registration's digest is `d`,
-the commitment's part after the components' binding `b`, and the components' parameters `ps` and cases `ev` are an
-`Accepted` composition of `cs` under `b`, with its public outputs and profile. -/
-def RegisteredAccepted (id : String) (R : Protocol) (cs : List Protocol) (n : Named) (ps : List Named) (b d : ByteArray)
-    (k : Case) (ev : List Case) (pub prof : Keyed) : Prop :=
+the commitment's part after the components' binding `b`, the component `s` of `cs` committed on its case to the same
+digest `d` (one registration digest in both), and the components' parameters `ps` and cases `ev` are an `Accepted`
+composition of `cs` under `b`, with its public outputs and profile. -/
+def RegisteredAccepted (id : String) (R : Protocol) (s : String) (cs : List Protocol) (n : Named) (ps : List Named)
+    (b d : ByteArray) (k : Case) (ev : List Case) (pub prof : Keyed) : Prop :=
   n.id = R.id ∧ k.id = R.id ∧ k.params = n.params ∧ DecodedAccepted R n.params.toUTF8 k.commitment k.evidence ∧
-    digestOf R k.commitment = some d ∧ Accepted id cs ps b ev pub prof
+    digestOf R k.commitment = some d ∧ (∃ x ∈ cs.zip ev, x.1.id = s ∧ digestOf x.1 x.2.commitment = some d) ∧
+    Accepted id cs ps b ev pub prof
 
 /-- **An accepted registered composition is `RegisteredAccepted`**: what its check accepts, the registration check
-accepted on the registration's case, the commitment binds the registration's digest, and the rest is an accepted
-composition of the components (`AcceptMeans`'s conclusion). At onsite (`Core.Onsite.protocol`, whose check is
-`checkRegistered "verity/onsite/v0" NciCheck.Protocol.protocol Core.Onsite.components`), NCI accepted the registration. -/
+accepted on the registration's case, the commitment binds the registration's digest, the component `s` committed to
+that digest, and the rest is an accepted composition of the components (`AcceptMeans`'s conclusion). At onsite
+(`Core.Onsite.protocol`, whose check is `checkRegistered "verity/onsite/v0" NciCheck.Protocol.protocol
+SampledProofs.OneStage.protocol.id Core.Onsite.components`), NCI accepted the registration, and it is the registration
+record sampled proofs' one-stage audit committed to. -/
 def AcceptRegistration : Prop :=
-  ∀ (id : String) (R : Protocol) (cs : List Protocol) (n : Named) (ps : List Named) (b d : ByteArray) (k : Case)
-    (ev : List Case) (pub prof : Keyed),
-    checkRegistered id R cs (n, ps) (b, d) (k, ev) = .accept pub prof → RegisteredAccepted id R cs n ps b d k ev pub prof
+  ∀ (id : String) (R : Protocol) (s : String) (cs : List Protocol) (n : Named) (ps : List Named) (b d : ByteArray)
+    (k : Case) (ev : List Case) (pub prof : Keyed),
+    checkRegistered id R s cs (n, ps) (b, d) (k, ev) = .accept pub prof →
+      RegisteredAccepted id R s cs n ps b d k ev pub prof
 
 end Properties.Composition

@@ -4,8 +4,10 @@ NCI's, `verity/nci/v1`): one `Core.Protocol` that runs the registration check's 
 in its commit phase, before composing, and then composes its components as `product` does (`check`). The registration
 check is not a component:
 
-* It rejects when the registration check doesn't accept the registration, whatever the components answer, and when the
-  commitment doesn't bind the registration's digest.
+* It rejects when the registration check doesn't accept the registration, whatever the components answer, when the
+  commitment doesn't bind the registration's digest, and when the component whose commitment is the registration (at
+  onsite, sampled proofs' one-stage audit, whose commitment is the run's registration record) committed to another
+  digest: one registration digest in both.
 * Otherwise it answers as `product` of its components does on their cases, under the commitment's binding of their
   digests: an accepted registration adds nothing to what the composition makes public or keeps.
 
@@ -45,10 +47,21 @@ def decodeRegisteredEvidence (b : ByteArray) : V (Case × List Case) := do
 def registrationAnswer (R : Protocol) (n : Named) (k : Case) : Answer :=
   R.answer n.params.toUTF8 k.commitment k.evidence
 
+/-- The digest of the commitment of the case `ev` carries in the place of the component `s` of `cs`, as that component
+decodes it; `none` when no component is `s` or its commitment doesn't decode. -/
+def committedBy (s : String) (cs : List Protocol) (ev : List Case) : Option ByteArray :=
+  ((cs.zip ev).find? fun x => x.1.id == s).bind fun x => (x.1.commitment x.2.commitment).toOption.map x.1.digest
+
+/-- Why a registered composition refuses when the registration check `r` checked the registration digest `d` and the
+component `s` committed to `d'`. -/
+def mismatch (r s : String) (d : ByteArray) (d' : Option ByteArray) : String :=
+  s!"registration: {r} checked {Flock.hexOf d}, {s} committed {(d'.map Flock.hexOf).getD "no digest"}"
+
 /-- The registration check `R` on the registration's entry `n` and case `k`, then `check` of the components `cs` on the
 rest under the binding `b`: a registration that isn't `R`'s, that `R` doesn't accept, or whose digest isn't `d` rejects
-before any component is run. -/
-def checkRegistered (id : String) (R : Protocol) (cs : List Protocol) :
+before any component is run, and once the cases fit the composition, one that isn't the registration the component `s`
+committed to rejects whatever the components answer. -/
+def checkRegistered (id : String) (R : Protocol) (s : String) (cs : List Protocol) :
     Named × List Named → ByteArray × ByteArray → Case × List Case → Outcome Keyed Keyed
   | (n, ps), (b, d), (k, ev) =>
     if n.id ≠ R.id then .reject s!"params: the registration is {R.id}'s, not {n.id}'s"
@@ -60,11 +73,14 @@ def checkRegistered (id : String) (R : Protocol) (cs : List Protocol) :
       .reject s!"registration: {R.id} {a.verdict.name}: {a.reason.getD ""}"
     else if (registrationAnswer R n k).digest ≠ some d then
       .reject "the commitment does not bind the registration's digest"
-    else check id cs ps b ev
+    else match run cs ps ev with
+      | .error r => .reject r
+      | .ok answers =>
+        if committedBy s cs ev ≠ some d then .reject (mismatch R.id s d (committedBy s cs ev)) else judge id b answers
 
 /-- The composition `id` of the components `cs`, which must be listed in the order of their ids, each once, after the
-registration check `R`. -/
-def registered (id : String) (R : Protocol) (cs : List Protocol) : Protocol where
+registration check `R`, on the registration the component `s` commits to. -/
+def registered (id : String) (R : Protocol) (s : String) (cs : List Protocol) : Protocol where
   id := id
   Params := Named × List Named
   Commitment := ByteArray × ByteArray
@@ -75,7 +91,7 @@ def registered (id : String) (R : Protocol) (cs : List Protocol) : Protocol wher
   commitment := decodeRegisteredCommitment
   evidence := decodeRegisteredEvidence
   digest c := c.1 ++ c.2
-  check := checkRegistered id R cs
+  check := checkRegistered id R s cs
   publicJson := Json.mkObj
   profileJson := Json.mkObj
 

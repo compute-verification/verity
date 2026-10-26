@@ -792,6 +792,9 @@
    "assumptions": [],
    "type_hash": "62c9c4ab346e4e8737a8dd33e32a7442528b5943912fec653650c09f23382320"
   },
+  "Properties.Composition.acceptRegistration": {
+   "owner": "@soundness"
+  },
   "Properties.Composition.answerAccepts": {
    "owner": "@proofs",
    "signature": ["Properties.Composition.answerAccepts : Properties.Composition.AnswerAccepts"],

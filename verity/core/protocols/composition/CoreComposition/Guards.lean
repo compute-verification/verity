@@ -2,7 +2,8 @@
 The `#guard`s that pin the composition's verdict rule on a product of two stubs, `a` and `b` (`Core.Example.protocol`,
 k = 2): every pair of the components' verdicts, reject dominating; a commitment that doesn't bind their digests; and
 every way the cases can fail to fit the composition. Then the same two after a registration check, a third stub `r`
-(`registered`): its refusal refusing the whole, and the commitment binding its digest.
+(`registered`, on the registration `b` commits to): its refusal refusing the whole, the commitment binding its digest,
+and a registration other than the one `b` committed to refused.
 -/
 import CoreComposition.Cases
 import CoreComposition.Stubs
@@ -88,7 +89,7 @@ private def readsBack (a : Answer) : Bool :=
   "{\"components\":[{\"id\":\"a\"}]}".toUTF8).reason ==
   some "evidence: a component's case: the keys must be [commitment, evidence, id, params], not [id]"
 
-private def registeredToy : Protocol := registered "verity/toy/v1" (Stub.stub "r") [Stub.stub "a", Stub.stub "b"]
+private def registeredToy : Protocol := registered "verity/toy/v1" (Stub.stub "r") "b" [Stub.stub "a", Stub.stub "b"]
 
 private def answerR (r : Stubbed) (xs : List Stubbed) (c : ByteArray := commitmentOf registeredToy xs ++ r.root) :
     Answer :=
@@ -120,6 +121,18 @@ private def answerR (r : Stubbed) (xs : List Stubbed) (c : ByteArray := commitme
   some "the commitment does not bind the components' digests"
 #guard (answerR (accepts "r") [accepts "a", accepts "b"] (c := ByteArray.empty)).reason ==
   some "commitment: the binding of the components' digests is 64 bytes, then the registration's digest: not 0 bytes"
+-- the registration the registration check checked is the one the component `b` committed to: one digest in both, once
+-- the cases fit the composition, whatever the components answer
+private def other : Stubbed := { accepts "r" with root := ⟨(List.replicate 32 9).toArray⟩ }
+private def hex (b : Nat) : String := String.join (List.replicate 32 s!"0{b}")
+#guard (answerR other [accepts "a", accepts "b"]).reason ==
+  some s!"registration: r checked {hex 9}, b committed {hex 7}"
+#guard (answerR other [accepts "a", undecided "b"]).verdict == .reject
+#guard (answerR other [rejects "a", accepts "b"]).reason ==
+  some s!"registration: r checked {hex 9}, b committed {hex 7}"
+#guard (answerR (accepts "r") [accepts "a", { accepts "b" with root := ByteArray.empty }]).reason ==
+  some s!"registration: r checked {hex 7}, b committed no digest"
+#guard (answerR other [accepts "a"]).reason == some "params: b is missing"
 -- the registration is the registration check's, under the composition's params
 #guard (answerR (accepts "a") [accepts "a", accepts "b"]).reason == some "params: the registration is r's, not a's"
 #guard (registeredToy.answer (paramsOfRegistered (accepts "r").case [(accepts "a").case, (accepts "b").case]).toUTF8
