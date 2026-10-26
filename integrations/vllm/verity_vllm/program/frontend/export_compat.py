@@ -218,9 +218,9 @@ def read_back_applied() -> dict:
 
 def host_facts() -> dict:
     """The construction HOST (informational; not part of any identity): hostname, CUDA visibility, the host GPU's name."""
-    import os
     import socket
-    h = {"hostname": socket.gethostname(), "CUDA_VISIBLE_DEVICES": os.environ.get("CUDA_VISIBLE_DEVICES"), "cuda_available": bool(torch.cuda.is_available()),
+    from verity_vllm import settings
+    h = {"hostname": socket.gethostname(), "CUDA_VISIBLE_DEVICES": settings.raw("CUDA_VISIBLE_DEVICES"), "cuda_available": bool(torch.cuda.is_available()),
          "host_gpu": None}
     if h["cuda_available"]:
         try:
@@ -586,7 +586,7 @@ def moe_gate_leaf(model=None, site=None):
         site = importlib.import_module(_LL_BF16_SITE)
     from verity_vllm.program.frontend.rules import vllm_iface  # noqa: F401  (registers the op)
     from verity_vllm.program.frontend.rules.vllm_bindings.observations import traced_launch_tokens
-    from verity_vllm.program.registry.bf16_gemm_check import LL_MAX_M
+    from verity.ml.definitions.registry.bf16_gemm_check import LL_MAX_M
     cublas_tier = all(getattr(g, "allow_cublas_router_gemm", False) and not getattr(g, "allow_fp32_router_gemm", False)
                       and not getattr(g, "allow_bf16x3_router_gemm", False) for g in gates)
 

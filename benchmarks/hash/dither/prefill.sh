@@ -20,18 +20,24 @@
 # take node 0); out/load.csv samples the node's load every 10 s.  A J10-R row (--env DITHER_SO_UNITS=j10r --env
 # J10R_SHA=559bc0aa69) takes DITHER_SO_RDEAD=0: its units are each computed in full ($DITHER_UNITS_SKIP_DEAD unset), so
 # dither_so refuses the zero-receipt rows of 1, and at m = T no row block is dead.
-# J10RC=1 is the J10-RC row (served step 370.5 ms at T = 2048 on the RTX, gamma 5.83 over exact-fused,
-# r20261024-192152-9fbb): that J10-R row with its units as kh_units_multi_j10rc (DITHER_SO_J10RC_MIN_T 512) in 8-warp
+# J10RC=1 is the J10-RC row (served step 341.0 ms at T = 2048 on the RTX, gamma 5.37 over exact-fused,
+# r20261025-104529-8fc1): that J10-R row with its units as kh_units_multi_j10rc (DITHER_SO_J10RC_MIN_T 512) in 8-warp
 # blocks over 2 x 4 patches of units, each row block's tail digits once a call, on WarpSmemX (KCX's JRY, JRX, WARPS,
 # MINB and JSWZQ), the z tables without yu on uncaptured steps (DITHER_YCMP) and prefill's GEMM tiles (DITHER_MM_CFG,
-# dmmsweep.py --grid prefill r20261024-182514-971d).  The environment's J10R_SHA, DITHER_SO_J10RC_MIN_T and
-# DITHER_MM_CFG win, and a KCX of its own goes after these flags.
+# dmmsweep.py --grid prefill r20261024-182514-971d), its units' stream at the serving stream's priority
+# (DITHER_SO_UNITS_PRIO -1: at the default 0 the forward's blocks take the SMs first and the trees wait 154 ms a step on
+# the units; at -1, 369.4 -> 354.7 ms, and at -2 and -3 the forward waits instead, 389.6 ms; r20261024-225336-030b),
+# and its units on 6 of every 8 SMs (DITHER_SO_UNITS_SMQ 6/8: h1umjc_sm, each CTA taking 8 neighbouring units under
+# KCX's JCTA, so the forward keeps the rest whole; 8/8 361.5, 7/8 348.8, 6/8 340.5, 5/8 343.3, 4/8 397.6 ms,
+# r20261025-000337-a414).  The environment's J10R_SHA, DITHER_SO_J10RC_MIN_T, DITHER_MM_CFG, DITHER_SO_UNITS_PRIO and
+# DITHER_SO_UNITS_SMQ win, and a KCX of its own goes after these flags.
 set -uo pipefail
 if [ "${J10RC:-0}" = 1 ]; then
   export DITHER_SO_UNITS=j10r J10R_SHA=${J10R_SHA:-559bc0aa69} DITHER_SO_RDEAD=0 DITHER_YCMP=1
-  export DITHER_SO_J10RC_MIN_T=${DITHER_SO_J10RC_MIN_T:-512}
+  export DITHER_SO_J10RC_MIN_T=${DITHER_SO_J10RC_MIN_T:-512} DITHER_SO_UNITS_PRIO=${DITHER_SO_UNITS_PRIO:--1}
+  export DITHER_SO_UNITS_SMQ=${DITHER_SO_UNITS_SMQ:-6/8}
   export DITHER_MM_CFG=${DITHER_MM_CFG:-6144,4096,2048=128x128x64:w4:s4:k1:t1+4096,4096,2048=128x128x64:w4:s4:k1:t1+28672,4096,2048=128x64x64:w4:s3:k1:t1:g4+4096,14336,2048=128x128x64:w4:s4:k1:t1:g8}
-  KCX="-DH1U_JRC=1 -DH1U_JSWZ=32 -DH1U_JRY=1 -DH1U_JRX=1 -DH1U_WARPS=8 -DH1U_MINB=1 -DH1U_JSWZQ=2 ${KCX:-}"
+  KCX="-DH1U_JRC=1 -DH1U_JSWZ=32 -DH1U_JRY=1 -DH1U_JRX=1 -DH1U_WARPS=8 -DH1U_MINB=1 -DH1U_JSWZQ=2 -DH1U_JCTA=1 ${KCX:-}"
 fi
 D=${RESEARCH_RUN_DIR:?}
 mkdir -p "$D/out"

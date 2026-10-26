@@ -635,12 +635,12 @@ def recStatementsCmd (args : List String) : IO UInt32 := do
   IO.println s!"RECVSTAR {line.compress}"
   return (if res.toBool then 0 else 1)
 
-/-- A record's `unit_draw`, when it is a draw (not absent, not null). -/
+/-- A record's `unit_draw`, when it is a draw (not absent, not null), rebuilt (`norm`). -/
 def recordDraw (record : String) : Option Lean.Json :=
   match Lean.Json.parse record with
   | .ok j => match j.getObjVal? "unit_draw" with
     | .ok Lean.Json.null => none
-    | .ok d => some d
+    | .ok d => some (Flock.norm d)
     | .error _ => none
   | .error _ => none
 
@@ -732,10 +732,11 @@ none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`
 deployed prover writes after the pair (`Tags.upstreamPlain`, PROTOCOL.md §8.1), so each rep is decoded from the file then
 the tag (`verifyFiles (plainBytes true)`), while S17 binds the record's `proof_sha` to the file as received; each form is
 refused where the other is pinned. Not with `--zk`.
-`--plain-tables`: the plain path past one table (`ProvedScope.checkP`, §16.15): a plain session of public outputs at up to
-`Tags.MAX_TABLES` tables, at a subset draw, with the verifier's own `--program` the one META's `program_sha512` names
-(`ProvedScope.programP`), which `flock_verify_sound`'s plain multi-table claim covers; the check is the one without
-`--registered F` (`FailClosed.ScopeP`). Without it a plain session has at most one table. Not with `--zk`. -/
+`--plain-tables`: the plain path past one table (`ProvedScope.checkP`, §16.15): a plain session of public or hidden
+outputs (at hidden outputs with `hm96-sha512/v1` leaves) at up to `Tags.MAX_TABLES` tables, at a subset draw, with the
+verifier's own `--program` the one META's `program_sha512` names (`ProvedScope.programP`), which `flock_verify_sound`'s
+plain multi-table claims cover; the check is the one without `--registered F` (`FailClosed.ScopeP`), so a shared-row
+public file is refused. Without it a plain session has at most one table. Not with `--zk`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
@@ -1224,12 +1225,31 @@ def ownLaw (args : List String) : IO (Except String (Option (Draw.Law × Nat))) 
   | none, some _ => workInput args
   | _, none => stratifiedInput args
 
+/-- `--registration F`: the window's registration record (one-stage `registration`, the one its receipt names), whose `law`
+and `population` were fixed before any coin: `(law object, population)`; none without the flag. -/
+def registeredLaw (args : List String) : IO (Except String (Option (Lean.Json × Nat))) := do
+  let some f := argOf args "--registration" | return .ok none
+  let t ← try pure (← IO.FS.readFile f) catch e => return .error s!"registration: {e}"
+  let .ok j := Lean.Json.parse t | return .error "registration: not JSON"
+  let .ok law := j.getObjVal? "law" | return .error "registration: no law"
+  let .ok pop := j.getObjValAs? Nat "population" | return .error "registration: no population"
+  return .ok (some (law, pop))
+
+/-- The law and population drawn are the registration's (`registeredLaw`), else why not. -/
+def heldToRegistration (law : Draw.Law) (pop : Nat) : Lean.Json × Nat → Option String
+  | (reg, n) =>
+    if law.toJson.compress != reg.compress then
+      some s!"the law {law.toJson.compress} is not the registered law {reg.compress}"
+    else if pop != n then some s!"the population {pop} is not the registered {n}"
+    else none
+
 /-- `draw (--population N (--k K | --p NUM/DEN) | --program P --partition Q (--stratified K | --work K --work-table F))
-[--closure F] [--stream HEX | --stream-file F]`: the unit draw (§7.3), from the operating system's randomness (a stratified or work draw:
+[--closure F] [--registration F] [--stream HEX | --stream-file F]`: the unit draw (§7.3), from the operating system's randomness (a stratified or work draw:
 one stream per stratum), or from the given bytes (a test; a stratified or work draw's streams are its consecutive segments).
 The strata are the verifier's own, derived from its program and partition object, and a work law's works and floors are its
-own work table's; with `--closure F`, a work draw is widened by the verifier's closure map. Prints `DRAW {…}`, the object
-the verifier sends in the clear. -/
+own work table's; with `--closure F`, a work draw is widened by the verifier's closure map. With `--registration F` the
+draw is refused, before any coin is read, unless its law and population are the registration's. Prints `DRAW {…}`, the
+object the verifier sends in the clear. -/
 def drawCmd (args : List String) : IO UInt32 := do
   let (law, pop) ← match ← ownLaw args with
     | .error e => IO.eprintln s!"draw: {e}"; return 2
@@ -1248,6 +1268,12 @@ def drawCmd (args : List String) : IO UInt32 := do
           | _, _ => IO.eprintln "draw: --p NUM/DEN"; return 2
         | _ => IO.eprintln "draw: --p NUM/DEN"; return 2
       | _, _ => IO.eprintln "draw: exactly one of --k, --p"; return 2
+  match ← registeredLaw args with
+    | .error e => IO.eprintln s!"draw: {e}"; return 2
+    | .ok none => pure ()
+    | .ok (some r) => match heldToRegistration law pop r with
+      | some why => IO.eprintln s!"draw: {why}"; return 2
+      | none => pure ()
   let stream ← match argOf args "--stream", argOf args "--stream-file" with
     | none, none => pure none
     | some hex, none => match unhex hex with | .ok b => pure (some b) | .error e => IO.eprintln s!"draw: {e}"; return 2
@@ -1267,10 +1293,10 @@ def drawCmd (args : List String) : IO UInt32 := do
   IO.println s!"DRAW {d.toJson.compress}"
   return 0
 
-/-- `draw-test FILE [--program P --partition Q (--stratified K | --work K --work-table F)] [--closure F]`: U1–U3 (§7.3) on each case
-`{"record", "statement", "instances"}` (a draw or null each), one `DRAWCHECK {"ok", "why"}` line per case. With a law's
-flags, the statement's draw is also held to the verifier's own law and population (`draw.check_draw`'s `law` and
-`population`). -/
+/-- `draw-test FILE [--program P --partition Q (--stratified K | --work K --work-table F)] [--closure F] [--registration F]`: U1–U3
+(§7.3) on each case `{"record", "statement", "instances"}` (a draw or null each), one `DRAWCHECK {"ok", "why"}` line per case.
+With a law's flags, the statement's draw is also held to the verifier's own law and population (`draw.check_draw`'s `law`
+and `population`), and with `--registration F` to the registered ones. -/
 def drawTest (path : String) (args : List String) : IO UInt32 := do
   let .ok (.arr cases) := Lean.Json.parse (← IO.FS.readFile path) | IO.eprintln "draw-test: not a JSON list"; return 2
   let own ← match ← ownLaw args with
@@ -1278,6 +1304,9 @@ def drawTest (path : String) (args : List String) : IO UInt32 := do
     | .error e => IO.eprintln s!"draw-test: {e}"; return 2
   let closure ← match ← closureInput args with
     | .ok c => pure c
+    | .error e => IO.eprintln s!"draw-test: {e}"; return 2
+  let reg ← match ← registeredLaw args with
+    | .ok r => pure r
     | .error e => IO.eprintln s!"draw-test: {e}"; return 2
   for c in cases do
     let side := fun (k : String) => match c.getObjVal? k with
@@ -1291,6 +1320,9 @@ def drawTest (path : String) (args : List String) : IO UInt32 := do
         let d ← Draw.UnitDraw.ofJson s
         if d.population != pop then throw s!"U2: the draw's population {d.population} is not the verifier's {pop}"
         if d.law != law then throw "U2: the draw's law is not the verifier's own (its program and query)"
+      if let (some r, some s) := (reg, side "statement") then
+        let d ← Draw.UnitDraw.ofJson s
+        if let some why := heldToRegistration d.law d.population r then throw s!"U2: {why}"
       if let (some cm, some s) := (closure, side "statement") then
         let d ← Draw.UnitDraw.ofJson s
         if d.closure != Draw.closureOf cm d.units then throw "U3: the draw's closure is not the verifier's own (its closure map)"

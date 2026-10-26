@@ -19,10 +19,10 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity_vllm.check.replay import evaluate as EV, index as IX, opening as OP
 from verity_vllm.program import compact as CP
-from verity_vllm.program.kernels import batched_gemm_rows, rows
-from verity_vllm.program.kernels.batched_gemm_rows import batched_gemm
-from verity_vllm.program.kernels.kernel_registry import Declined
-from verity_vllm.program.registry import b1, bf16_gemm_check as BC, cublas_bf16 as CB, hopper
+from verity.ml.definitions.numerics import batched_gemm_rows, rows
+from verity.ml.definitions.numerics.batched_gemm_rows import batched_gemm
+from verity.ml.definitions.numerics.kernel_registry import Declined
+from verity.ml.definitions.registry import b1, bf16_gemm_check as BC, cublas_bf16 as CB, hopper
 
 HOP = '{"fn":"HopperBF16WgmmaDot16_v1"}'
 
@@ -33,7 +33,7 @@ def _words(rng, *shape, scale=1.0) -> np.ndarray:
 
 def test_the_family_is_registered_with_its_evaluator():
     assert "BatchedGemm_v1" in rows.EVALUATORS and "BatchedGemm_v1" in rows.ROWS
-    assert rows.EVALUATORS["BatchedGemm_v1"].startswith("verity_vllm.program.kernels.batched_gemm_rows.batched_gemm")
+    assert rows.EVALUATORS["BatchedGemm_v1"].startswith("verity.ml.definitions.numerics.batched_gemm_rows.batched_gemm")
 
 
 @pytest.mark.parametrize("B,K,N", [(2, 32, 3), (3, 48, 5)])

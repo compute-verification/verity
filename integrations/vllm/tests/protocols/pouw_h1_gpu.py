@@ -300,6 +300,57 @@ def session_end(gate: Any, reserved: dict[str, Any]) -> dict[str, Any]:
             "ok": bool(end.get("closed") and end.get("complete"))}
 
 
+def fixed_length(decl: Any) -> dict[str, Any]:
+    """The fixed length `decl`'s window serves (``period-open --length``, core's `credit.LENGTH_FIELD`): each request's
+    public max_tokens, every one admitted at step 0 and run to its cap (``ignore_eos``, the public-cap done source)."""
+    return {"max_tokens": [decl.max_tokens] * decl.slots, "stop": "fixed"}
+
+
+def period_open_argv(name: str, circuit: str, draw_k: int, decl: Any, files: dict[str, str]) -> list[str]:
+    """``period-open`` of the Commit window's period `name`: cap 1 (the Commit's window alone, so a negative's refused
+    window, which ends complete, is never one of it), its circuit (the period's declared Program's digest), its draw K
+    (`pouw_h1_challenger.draw_k` over the declared layout, core's `credit.committed_k`), T, its circuit files
+    (`period_files`, core's `credit.committed_files`) and the fixed length (`fixed_length`, core's
+    `credit.committed_length`)."""
+    return ["period-open", "--name", name, "--cap", "1", "--circuit", circuit, "--draw-k", str(draw_k),
+            "--rows", str(decl.rows), "--circuit-files", json.dumps(files, sort_keys=True, separators=(",", ":")),
+            "--length", json.dumps(fixed_length(decl), sort_keys=True, separators=(",", ":"))]
+
+
+def period_files(circuits: Path, circuit: str, layout: dict, decl: Any) -> dict[str, str]:
+    """The ``--circuit-files`` of `circuits`' manifest (`pouw_h1_circuits.build`'s, with ``--live``): every stratum's
+    ``k<K>`` of `layout` and the live template's, built for the period's `circuit` and the live Program at `decl`'s T
+    rows and S rounds. ValueError naming the build that would be, for any other."""
+    from tests.protocols import pouw_h1_circuits as PC
+    redo = f"build them with pouw_h1_circuits --program <Program {circuit[:16]}...> --out DIR --live {decl.rows},{decl.steps}"
+    try:
+        doc = json.loads((circuits / PC.MANIFEST).read_text())
+    except (OSError, ValueError) as e:
+        raise ValueError(f"no circuit files at {circuits} ({type(e).__name__}): {redo}") from None
+    if doc.get("program") != circuit:
+        raise ValueError(f"{circuits}'s circuit files are Program {str(doc.get('program'))[:16]}...'s, not the period's: {redo}")
+    lb = doc.get("live_bind") or {}
+    if (lb.get("T"), lb.get("S")) != (decl.rows, decl.steps):
+        raise ValueError(f"{circuits}'s live circuit file is for T = {lb.get('T')}, S = {lb.get('S')}, not the window's "
+                         f"{decl.rows}, {decl.steps}: {redo}")
+    want = {f"k{k}" for k in PC.strata(layout)} | {"live"}
+    if set(doc.get("files") or {}) != want:
+        raise ValueError(f"{circuits}'s circuit files are {sorted(doc.get('files') or {})}, not {sorted(want)}: {redo}")
+    return doc["files"]
+
+
+def period_verb(gate: Any, argv: list[str]) -> dict[str, Any]:
+    """The gate's answer to `argv` (``period-open``/``period-close``); ValueError naming what it said when it refuses."""
+    p = subprocess.run(gate_argv(gate.argv, argv), capture_output=True, text=True)
+    try:
+        answer = json.loads(p.stdout)
+    except ValueError:
+        answer = None
+    if p.returncode or not isinstance(answer, dict) or "refused" in answer:
+        raise ValueError(f"the gate refused {argv[0]} (exit {p.returncode}): {(p.stdout + p.stderr)[-1000:]}")
+    return answer
+
+
 def model_key_of(gate: Any, model: str, circuit: str) -> Any:
     """The auditor's registration of `model` under the period's `circuit` and its salt key
     (`pouw_h1_served.ModelKey`), as the gate's ``model-key --model M --circuit C`` answers the lane's gate key; the key
@@ -758,7 +809,18 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     if a.baseline_h1:
         doc["h1_baseline"] = window("baseline", plain, outdir / "baseline")
     if a.commit:
+        if a.period:
+            from verity_vllm.protocols.pouw.h1 import challenger as PHC
+            from verity_vllm.protocols.pouw.h1 import served as SV
+            layout = SV.declared_layout(period[2]["shapes"], period[2]["modules"], decl.rows, decl.steps)
+            draw_k, files = PHC.draw_k(layout), period_files(Path(a.circuits), period[1], layout, decl)
+            doc["period_gate"] = {"name": a.period, "length": fixed_length(decl), "draw_k": draw_k, "circuit_files": files,
+                                  "open": period_verb(a.gate, period_open_argv(a.period, period[1], draw_k, decl, files))}
+            print(f"[gate] period {json.dumps(doc['period_gate'], default=str)}", flush=True)
         doc["h1_commit"] = window("commit", plain, outdir / "commit", commit=True)
+        if a.period:
+            doc["period_gate"]["close"] = period_verb(a.gate, ["period-close", "--name", a.period])
+            print(f"[gate] period {a.period} closed {json.dumps(doc['period_gate']['close'], default=str)}", flush=True)
         (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
         if a.negatives:
             doc["negatives"] = {}
@@ -1424,7 +1486,12 @@ def main(argv: list[str] | None = None) -> int:
                                                    "NAME), NAME this node's name in the gate's peers, and the next window's "
                                                    "is reserved once that session has ended (window_sessions)")
     ap.add_argument("--period", metavar="NAME", help="with --check-challenger: the lane's period the window is one of, which "
-                                                     "the ledger must credit with it accepted")
+                                                     "the ledger must credit with it accepted; with --commit and --peer: "
+                                                     "the period the run opens at its Commit window (period_open_argv, "
+                                                     "with --length) and closes once that window's session has ended")
+    ap.add_argument("--circuits", metavar="DIR", help="with --commit and --period: the period's circuit files, "
+                                                      "pouw_h1_circuits --live T,S's directory, whose manifest's files "
+                                                      "the period-open commits (--circuit-files, period_files)")
     ap.add_argument("--descriptor", metavar="PROGRAM", help="with --check-challenger: the period's declared window Program "
                                                             "(the rehearsal's window-program.json.gz), whose bytes core's "
                                                             "credit reads the window's layout from")
@@ -1506,6 +1573,11 @@ def main(argv: list[str] | None = None) -> int:
     if a.peer and not (a.challenger and a.gate and a.workload == "fill" and not a.handoff and a.session is None):
         ap.error("--peer is the fill workload's, with --challenger and --gate, without --session or --handoff (each window "
                  "reserves its own session)")
+    if a.period and not a.check_challenger and not (a.commit and a.peer):
+        ap.error("--period is --check-challenger's, or --commit's with --peer (the period its Commit window opens)")
+    if a.period and a.commit and not a.circuits:
+        ap.error("--commit with --period needs --circuits: core's credit verifies a window only on the circuit files its "
+                 "period's open commits (pouw_h1_circuits --program PROGRAM --out DIR --live T,S)")
     if a.negatives and not a.commit:
         ap.error("--negatives is --commit's")
     if a.credit and not (a.commit and a.receipts):

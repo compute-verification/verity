@@ -89,6 +89,7 @@ inputs = [
     "integrations/vllm/verity_vllm/protocols/pouw/h1/kept.py",
     "integrations/vllm/verity_vllm/protocols/pouw/h1/live.py",
     "integrations/vllm/verity_vllm/protocols/pouw/h1/served_files.py",
+    "integrations/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
     "benchmarks/vllm_encoded/bench_arm.py",
     "benchmarks/vllm_encoded/step_spans.py",
     "benchmarks/vllm_encoded/paged.cu",

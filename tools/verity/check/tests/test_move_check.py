@@ -101,6 +101,20 @@ def test_path_edit_to_a_directory_that_did_not_move_is_refused(tmp_path):
     assert f["path"] == "pyproject.toml" and "security_proofs/pouw" in f["hunk"]
 
 
+def test_path_after_a_checkout_variable_is_certified(tmp_path):
+    """`tools/move/layout.py` rewrites a moved path after `$REPO/` or `${ROOT}/` (a shell script's checkout), so the check
+    reads it from the root there too; a moved path inside a longer one is still not the move's."""
+    run = 'SRC=$REPO/protocols/pous/src:${ROOT}/protocols/pous\nOUT=$W/x/protocols/pous\n'
+    repo, base = _repo(tmp_path, {**BASE_FILES, "run.sh": run})
+    _move(repo, "protocols/pous", "security_proofs/pous")
+    _write(repo, {"run.sh": run.replace("$REPO/protocols", "$REPO/security_proofs").replace("}/protocols", "}/security_proofs")})
+    r = _check(repo, base)
+    assert r["certified"], r["refusals"]
+    _write(repo, {"run.sh": run.replace("protocols/pous", "security_proofs/pous")})
+    [f] = _check(repo, base)["refusals"]
+    assert f["path"] == "run.sh" and "+OUT=$W/x/security_proofs/pous" in f["hunk"]
+
+
 def test_non_path_edit_in_pyproject_is_refused(tmp_path):
     repo, base = _repo(tmp_path, {**BASE_FILES, "protocols/pous/pyproject.toml": PYPROJECT})
     _move(repo, "protocols/pous", "security_proofs/pous")
@@ -764,6 +778,24 @@ def test_an_import_that_binds_another_name_is_refused(tmp_path):
     [f] = _app(tmp_path, {"pkg/app/use.py": PY_OLD},
                {"pkg/app/use.py": PY_NEW.replace("bandwidth as ST", "bandwidth as BW")})["refusals"]
     assert f["path"] == "pkg/app/use.py" and "BW" in f["hunk"]
+
+
+PAREN_OLD = "from app import store as ST\nfrom app.store.remote import (Session,\n                              Other)\n"
+
+
+def test_a_parenthesized_import_continued_on_an_unchanged_line_is_certified(tmp_path):
+    r = _app(tmp_path, {"pkg/app/use.py": PAREN_OLD}, {"pkg/app/use.py": PAREN_OLD.replace(
+        "from app import store as ST", "from app.protocols import bandwidth as ST").replace(
+        "app.store.remote", "app.protocols.bandwidth.remote")})
+    assert r["certified"], r["refusals"]
+
+
+def test_a_parenthesized_import_of_a_module_that_did_not_move_there_is_refused(tmp_path):
+    for old in (PAREN_OLD, PAREN_OLD.replace("import (Session,", "import (")):
+        new = old.replace("from app import store as ST", "from app.protocols import bandwidth as ST").replace(
+            "app.store.remote", "app.protocols.linear.api")
+        [f] = _app(tmp_path / str(len(old)), {"pkg/app/use.py": old}, {"pkg/app/use.py": new})["refusals"]
+        assert f["path"] == "pkg/app/use.py" and "linear.api" in f["hunk"]
 
 
 def test_a_module_anchor_that_names_another_directory_is_refused(tmp_path):

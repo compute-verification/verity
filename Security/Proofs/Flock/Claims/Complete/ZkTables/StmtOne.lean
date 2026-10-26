@@ -351,8 +351,7 @@ theorem stmt_of_one (S : JsonSpec) {x : Claims.Msg} {s : Ins} {spec : SessionSpe
     cases e : ProvedScope.lawWhy true s.read.tags false D with
     | none => rfl
     | some _ => rw [e] at hdl; cases hdl
-  obtain ⟨t, ht⟩ := draw_parse (setupOf_some hs).1 hdd
-  have hw := S.parse_wf t d ht
+  have hw := (insOf_draw_norm (setupOf_some hs).1 hdd).2
   refine ⟨ofJson_obj hD, ?_, D, hD, by rw [hspec]; exact hn⟩
   rcases law_of_lawWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
   · exact good_stratified hw hD hK

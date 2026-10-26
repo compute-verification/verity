@@ -22,19 +22,20 @@ over its span, and `max(0, w − lost)` weights bytes a tick, `w` the weights bl
   (the links' ceiling `Links`, `SquaringCeiling`, `Disks`, `ChipCeiling`, `Routed`, `Paced` at the record's groups
   `recordPace`, `Covers`, `SketchBoundAt` at `δs` and `NoOutsideCompute`, statement C in full: no device outside the
   node computes on a registered block or a receipt during the session, and the draw's `Live` at every fixed coin
-  commitment, `Refused`, `Counted`, of the session the prover plays holding `com`, `play com`) and the record's one
-  code-to-model premise (`Registered`, `Properties.RemoteAudit.Line.Premises`), the probability that the Lean verifier
-  accepts the record's session and the line it reads off the Lean verifier's record (`lineOf`: its groups, windows and
-  registered blocks the record's) credits a stretch more than the trace held over its span (`Credits`) is at most
-  `δs + (δ + Σ_t s / 2^64 + Σ_t adv_t + Σ_t hide_t)`, `δ` the one the line reads its pooled bound at (`Node.delta`, a
-  nonnegative rational; the line computes at none outside `(0, 1)`), `adv_t` the advantage on `prf t` of window `t`'s
-  distinguisher at that `δ` (`Session.distinguisher`) with openings coin `t`'s commitment leaf committing zeros
-  (`Committed.junk`), and `hide_t` window `t`'s hiding term (`Committed.hide`, hm96's, at most `n·2^-191` over the
-  session's `n` windows in all). The rates are the node's in the model's units, a tick a nanosecond (`Node.squarings` …
-  `Node.chipBlocks`), and the openings are the deployed draw's (`Accounting.Remote.Draw`: `Key.subset` on the first
-  blocks `prf t` gives window `t`'s coin, at most `receiptMax = 2^64 − 1 < 2^448` receipts a window, the verifier's
-  `RECEIPT_LIMIT` less one, the sampler's fallbacks `rest` free), at the error
-  `Accounting.Guarantees.Remote.PooledDraw` states.
+  commitment, `Refused` at the receipts `R`, `Counted`, of the session the prover plays holding `com`, `play com`) and
+  the record's one code-to-model premise (`Registered`, `Properties.RemoteAudit.Line.Premises`), the probability that
+  the Lean verifier accepts the record's session and the line it reads off the Lean verifier's record (`lineOf`: its
+  groups, windows and registered blocks the record's) credits a stretch more than the trace held over its span
+  (`Credits`) is at most `δs + (δ + Σ_t s / 2^64 + Σ_t adv_t + Σ_t hide_t + bind)`, `δ` the one the line reads its
+  pooled bound at (`Node.delta`, a nonnegative rational; the line computes at none outside `(0, 1)`), `adv_t` the
+  advantage on `prf t` of window `t`'s distinguisher at that `δ` (`Session.distinguisher`) with openings coin `t`'s
+  commitment leaf committing zeros (`Committed.junk`), `hide_t` window `t`'s hiding term (`Committed.hide`, hm96's, at
+  most `n·2^-191` over the session's `n` windows in all), and `bind` the receipts' binding term (`Receipts.binding`:
+  some opened receipt presented with an accepted row other than the one its root holds). The rates are the node's in
+  the model's units, a tick a nanosecond (`Node.squarings` … `Node.chipBlocks`), and the openings are the deployed
+  draw's (`Accounting.Remote.Draw`: `Key.subset` on the first blocks `prf t` gives window `t`'s coin, at most
+  `receiptMax = 2^64 − 1 < 2^448` receipts a window, the verifier's `RECEIPT_LIMIT` less one, the sampler's fallbacks
+  `rest` free), at the error `Accounting.Guarantees.Remote.PooledDraw` states.
 * **LineHeldIdentity** (time-held, `forms[0]`): the same under Identity, no block coming in over the links.
 
 They follow from the model's argument for `Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn`, the line's W covering
@@ -127,13 +128,14 @@ the one played holding the deployed commitment (`played`), whose trace of record
 verifier's on the record) meets the memory model's premises at the node's rates and the record's groups and the
 record's code-to-model premise (`Registered`), the probability that the Lean verifier accepts the record's session and
 a stretch of the record's link-charged line credits more than the trace held over its span is at most
-`δs + (δ + Σ_t s / 2^64 + Σ_t adv_t + Σ_t hide_t)`, `δ` the line's, `adv_t` the advantage on `prf t` of window `t`'s
-distinguisher at it with leaf `t` of the coin commitment committing zeros, and `hide_t` window `t`'s hiding term. -/
+`δs + (δ + Σ_t s / 2^64 + Σ_t adv_t + Σ_t hide_t + bind)`, `δ` the line's, `adv_t` the advantage on `prf t` of window
+`t`'s distinguisher at it with leaf `t` of the coin commitment committing zeros, `hide_t` window `t`'s hiding term and
+`bind` the receipts' binding term at `R`. -/
 def LineHeld : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.windows → Pous.Bits κ → Blocks receiptMax)
     (rest : Coins node.windows κ X → Fin node.windows → ℕ → ℕ) (recs : Cm → Coins node.windows κ X → Record)
     (correct : Cm → Fin node.windows → Coins node.windows κ X → Finset ℕ) (com : Coins node.windows κ X → Cm)
-    (T : Trace (Coins node.windows κ X)) (δs : ℝ),
+    (T : Trace (Coins node.windows κ X)) (R : Receipts node.windows κ X) (δs : ℝ),
     let r := played recs com
     let F := recordCommitted node recs correct
     ∀ O : Outside (ofRecord T node r),
@@ -142,13 +144,13 @@ def LineHeld : Prop :=
     Disks (ofRecord T node r) node.disk node.diskBurst → ChipCeiling (ofRecord T node r) node.chipBlocks →
     Routed (ofRecord T node r) → Paced (ofRecord T node r) (recordPace node r) → Covers (ofRecord T node r) →
     SketchBoundAt (ofRecord T node r) O δs → NoOutsideCompute (ofRecord T node r) O → (∀ c, Live (F.view c)) →
-    Refused (F.play com) prf rest (ofRecord T node r) → Counted (F.play com) (ofRecord T node r) →
+    Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
     Registered (ofRecord T node r) node →
     Pouw.pr (fun ω => Verified node (r ω) ∧ ¬ HeldAt (ofRecord T node r) ω node (r ω) 1) ≤
       δs + ((node.delta : ℝ) + ((∑ _t : Fin node.windows, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
-        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal)
+        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
 
 /-- **The memory line of record, time-held, under Identity.** `LineHeld` for the record's time-held line, with no
 block coming in over the node's boundary links (`Identity`) in place of their ceiling. -/
@@ -156,7 +158,7 @@ def LineHeldIdentity : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.windows → Pous.Bits κ → Blocks receiptMax)
     (rest : Coins node.windows κ X → Fin node.windows → ℕ → ℕ) (recs : Cm → Coins node.windows κ X → Record)
     (correct : Cm → Fin node.windows → Coins node.windows κ X → Finset ℕ) (com : Coins node.windows κ X → Cm)
-    (T : Trace (Coins node.windows κ X)) (δs : ℝ),
+    (T : Trace (Coins node.windows κ X)) (R : Receipts node.windows κ X) (δs : ℝ),
     let r := played recs com
     let F := recordCommitted node recs correct
     ∀ O : Outside (ofRecord T node r),
@@ -165,12 +167,12 @@ def LineHeldIdentity : Prop :=
     Disks (ofRecord T node r) node.disk node.diskBurst → ChipCeiling (ofRecord T node r) node.chipBlocks →
     Routed (ofRecord T node r) → Paced (ofRecord T node r) (recordPace node r) → Covers (ofRecord T node r) →
     SketchBoundAt (ofRecord T node r) O δs → NoOutsideCompute (ofRecord T node r) O → (∀ c, Live (F.view c)) →
-    Refused (F.play com) prf rest (ofRecord T node r) → Counted (F.play com) (ofRecord T node r) →
+    Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
     Registered (ofRecord T node r) node →
     Pouw.pr (fun ω => Verified node (r ω) ∧ ¬ HeldAt (ofRecord T node r) ω node (r ω) 0) ≤
       δs + ((node.delta : ℝ) + ((∑ _t : Fin node.windows, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
-        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal)
+        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
 
 end Properties.RemoteAudit.Line
