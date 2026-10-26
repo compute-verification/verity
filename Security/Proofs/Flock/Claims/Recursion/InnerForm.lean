@@ -48,8 +48,8 @@ at a draw (`jsonOf`, as Flock's plain verifier reads it) that proves every one o
 theorem checkForm_ok {fm : RecCoins.InnerForm} {st : Stmt} {u : Unit}
     (h : RecSetup.checkForm (some fm) st = .ok u) :
     fm.statement = Tags.circuitPlainLeaves.name ∧ fm.os = true ∧ fm.tables = [] ∧
-      ∃ b d D, fm.draw = some b ∧ FlockDeploy.jsonOf "draw" b = .ok d ∧ Draw.UnitDraw.ofJson d = .ok D ∧
-        D.proved = Array.range st.n := by
+      ∃ b d D, fm.draw = some b ∧ FlockDeploy.jsonOf "draw" b = .ok d ∧
+        Draw.UnitDraw.ofJson (Flock.norm d) = .ok D ∧ D.proved = Array.range st.n := by
   unfold RecSetup.checkForm at h
   dsimp only at h
   simp only [throw_bind'] at h
@@ -123,14 +123,15 @@ theorem ins_plainLeaves {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins =
     s.read.zk = false ∧ s.read.tags = RecCoins.innerTags ∧ s.read.coins = Coins.os ∧
       s.read.I.circuitFile = w.circuit ∧ s.read.I.publicFile = w.publicFile ∧ s.read.I.count = w.count ∧
       s.read.I.tables = w.tables ∧ w.partition.mapM (FlockDeploy.jsonOf "partition") = .ok s.read.I.partition ∧
-      w.draw.mapM (FlockDeploy.jsonOf "draw") = .ok s.read.draw ∧ s.read.publicInputs = w.publicInputs := by
+      (∃ dr, w.draw.mapM (FlockDeploy.jsonOf "draw") = .ok dr ∧ s.read.draw = dr.map Flock.norm) ∧
+      s.read.publicInputs = w.publicInputs := by
   have hf : Tags.find? w.statement = some Tags.circuitPlainLeaves := by rw [hs]; rfl
   unfold FlockDeploy.Raw.ins at h
   simp only [hf, hz, ho, Bool.false_and, Bool.false_eq_true, ↓reduceIte, bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
   all_goals first
     | (cases h; done)
-    | (cases h; exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, by assumption, by assumption, rfl⟩)
+    | (cases h; exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, by assumption, ⟨_, by assumption, rfl⟩, rfl⟩)
 
 /-! ## A full draw keeps the files' numbers -/
 
@@ -230,11 +231,12 @@ theorem innerSetup_files {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecSco
     rw [z8] at hpa
     simp only [Except.toOption, Option.some.injEq] at hpa
     rw [hpa, hp]
-  have hdraw : s.read.draw = some d := by
-    have hz9 := z9
+  have hdraw : s.read.draw = some (Flock.norm d) := by
+    obtain ⟨dr, hz9, he⟩ := z9
     rw [hb] at hz9
     simp only [Option.mapM_some, hjd, Functor.map, Except.map, Except.ok.injEq] at hz9
-    exact hz9.symm
+    rw [he, ← hz9]
+    rfl
   have hsetup := FlockDeploy.Ins.setup_read hsu
   unfold Readable.Read.setup at hsetup
   rw [z2, z3, z4, z5, z7, hs3, hdraw, hpart, hpi] at hsetup

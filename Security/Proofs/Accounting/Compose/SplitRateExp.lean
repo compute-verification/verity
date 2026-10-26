@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.Compose
+import Definitions.Accounting.Guarantees.Compose
 
 /-!
 # The sharp rate: proof

@@ -2,6 +2,7 @@ import Flock.Field
 import Flock.Hash
 import Flock.Bytes
 import Flock.Canon
+import Flock.Norm
 import Flock.Schedule
 import Flock.Proof
 import Flock.Transcript

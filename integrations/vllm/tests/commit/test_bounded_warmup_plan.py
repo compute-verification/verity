@@ -99,7 +99,7 @@ def test_warmup_requests_keep_a_per_request_variant_and_leave_unseeded_requests_
     mixed = [{"request_id": "a", "prompt_token_ids": [5] * 8, "max_tokens": 4, "seed": None, "n": 1},
              {"request_id": "b", "prompt_token_ids": [6] * 3, "max_tokens": 2, "arrive_step": 1, "seed": 7, "n": 2,
               "variant": "greedy", "temperature": 0.0, "top_p": 1.0, "top_k": 0}]
-    warm = throwaway_requests(ENGINE, mixed)
+    warm = throwaway_requests(ENGINE, mixed, seed=200)
     assert warm[0]["seed"] is None and "variant" not in warm[0]
     assert {k: warm[1][k] for k in ("seed", "n", "variant", "temperature", "top_p", "top_k", "arrive_step", "max_tokens")} == \
         {"seed": 7, "n": 2, "variant": "greedy", "temperature": 0.0, "top_p": 1.0, "top_k": 0, "arrive_step": 1, "max_tokens": 2}

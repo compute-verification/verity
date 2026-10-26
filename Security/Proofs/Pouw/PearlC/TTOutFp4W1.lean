@@ -1,4 +1,4 @@
-import Models.Pouw.Assumptions.PearlC.TTOutFp4
+import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
 import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
 import Proofs.Pouw.PearlC.TTOutW1
 
