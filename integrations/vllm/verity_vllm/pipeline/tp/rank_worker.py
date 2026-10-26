@@ -75,7 +75,7 @@ def repo_modules_loaded() -> dict[str, Any]:
     return {"method": "runtime: sys.modules of this process filtered to the repo root + vllm-poc, plus native_collect's cpp_extension sources when loaded (TP-11)",
             "pid": os.getpid(), "n": len(files), "files": sorted(files), "native_collect_jit_sources": jit}
 
-EXTENSION = "verity_vllm.engine.rank_worker.TP2CaptureWorkerExtension"
+EXTENSION = "verity_vllm.pipeline.tp.rank_worker.TP2CaptureWorkerExtension"
 
 
 def _moe_collective_modules() -> list[Any]:
@@ -1275,7 +1275,7 @@ class TP2CaptureWorkerExtension:
         """The census of the profiled stretch; ``keep_trace``: the Kineto trace too, gzipped (only on ``keep_ranks`` when given)."""
         import torch
 
-        from verity_vllm.properties import census
+        from verity_vllm.observe import kernel_trace
 
         p = self._tp2_prof
         torch.cuda.synchronize()
@@ -1285,9 +1285,9 @@ class TP2CaptureWorkerExtension:
         out.mkdir(parents=True, exist_ok=True)
         tr = out / f"trace.rank{rank}.json"
         p.export_chrome_trace(str(tr))
-        evs = census._load_trace(tr)
-        ks = census.kernels_of_trace_events(evs)
-        summary = census.summarize_kernels(ks)
+        evs = kernel_trace.load_trace(tr)
+        ks = kernel_trace.kernels_of_trace_events(evs)
+        summary = kernel_trace.summarize_kernels(ks)
         cpu_ops = {}
         for e in evs:
             if e.get("ph") == "X" and e.get("cat") == "cpu_op":

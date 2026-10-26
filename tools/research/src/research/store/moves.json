@@ -1466,6 +1466,11 @@
       "paths": {
         "integrations/vllm/verity_vllm/observe/chunks.py": "integrations/vllm/verity_vllm/engine/chunks.py"
       }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/engine/rank_worker.py": "integrations/vllm/verity_vllm/pipeline/tp/rank_worker.py"
+      }
     }
   ]
 }

@@ -137,12 +137,12 @@
     {"file": "verity_vllm/pipeline/tp/match.py", "kind": "environ", "symbol": "_engine_main", "detail": "os.environ.items"},
     {"file": "verity_vllm/pipeline/tp/match.py", "kind": "optional-import", "symbol": "_check_main", "detail": "except ImportError"},
     {"file": "verity_vllm/acquire/sources/partial_source.py", "kind": "broad-except", "symbol": "TPPartialSource.install", "detail": "except Exception"},
-    {"file": "verity_vllm/engine/rank_worker.py", "kind": "broad-except", "symbol": "_moe_collective_modules", "detail": "except Exception"},
-    {"file": "verity_vllm/engine/rank_worker.py", "kind": "environ", "symbol": "_tp_facts", "detail": "CUDA_VISIBLE_DEVICES"},
-    {"file": "verity_vllm/engine/rank_worker.py", "kind": "environ", "symbol": "_tp_facts", "detail": "os.environ.items"},
     {"file": "verity_vllm/program/sampling_topp_adapter.py", "kind": "environ", "symbol": "cases", "detail": "VERITY_REAL_LOGITS"},
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "seed-default", "symbol": "_MemoProjection.__init__", "detail": "seed_node"},
     {"file": "verity_vllm/engine/chunks.py", "kind": "broad-except", "symbol": "Collector.on_step", "detail": "except Exception"},
-    {"file": "verity_vllm/engine/chunks.py", "kind": "broad-except", "symbol": "scheduler_of", "detail": "except Exception"}
+    {"file": "verity_vllm/engine/chunks.py", "kind": "broad-except", "symbol": "scheduler_of", "detail": "except Exception"},
+    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "broad-except", "symbol": "_moe_collective_modules", "detail": "except Exception"},
+    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "environ", "symbol": "_tp_facts", "detail": "CUDA_VISIBLE_DEVICES"},
+    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "environ", "symbol": "_tp_facts", "detail": "os.environ.items"}
   ]
 }

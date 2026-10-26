@@ -21,7 +21,7 @@
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "vllm-internals", "symbol": "get_model_runner", "detail": "model_executor"},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "vllm-internals", "symbol": "get_scheduler", "detail": "engine_core", "count": 2},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "vllm-internals", "symbol": "get_scheduler", "detail": "llm_engine"},
-    {"file": "verity_vllm/engine/rank_worker.py", "kind": "vllm-internals", "symbol": "_LLMShim.__init__", "detail": "llm_engine"},
+    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "vllm-internals", "symbol": "_LLMShim.__init__", "detail": "llm_engine"},
     {"file": "verity_vllm/engine/run_facts.py", "kind": "vllm-internals", "symbol": "model_config_subset", "detail": "llm_engine"},
     {"file": "verity_vllm/engine/step_trace.py", "kind": "vllm-internals", "symbol": "scheduler_of", "detail": "engine_core", "count": 2},
     {"file": "verity_vllm/engine/step_trace.py", "kind": "vllm-internals", "symbol": "scheduler_of", "detail": "llm_engine"},
