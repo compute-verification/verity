@@ -65,9 +65,9 @@ end JointNC
 
 /-! ## What a cap row carries -/
 
-/-- **The node a cap row carries**: its first 64 bytes. RecCap's `top` row is the node then 64 bytes of padding
-(`VStar.capUnit`'s `out`, registered as zero rows), and a climb's top is the node alone. -/
-def capNode (b : ByteArray) : ByteArray := b.extract 0 64
+/-- **The node a cap row carries**: its first 64 bytes (CAPPIECES' `nodeOf`). RecCap's `top` row is the node then 64
+bytes of padding (`VStar.capUnit`'s `out`, registered as zero rows), and a climb's top is the node alone. -/
+def capNode (b : ByteArray) : ByteArray := ⟨(b.data.toList.take 64).toArray⟩
 
 /-- RecCap's `top` row at instance `n`, off part witness `w'` in its circuit `c'` (`rowHidden`, eight bits a byte). -/
 def capRow (c' : Circuit) (w' : Claims.Flock.Wit) (n : ℕ) : ByteArray :=
