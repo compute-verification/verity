@@ -39,7 +39,7 @@ theorem forall₂_getElem? {α β : Type} {R : α → β → Prop} :
   | _, _, .cons hab _, 0, a, h => by
     simp at h
     subst h
-    exact ⟨_, rfl, hab⟩
+    exact ⟨_, List.getElem?_cons_zero, hab⟩
   | _, _, .cons _ hlr, i + 1, a, h => by simpa using forall₂_getElem? hlr i a (by simpa using h)
 
 theorem forall₂_getElem?' {α β : Type} {R : α → β → Prop} :
@@ -48,7 +48,7 @@ theorem forall₂_getElem?' {α β : Type} {R : α → β → Prop} :
   | _, _, .cons hab _, 0, b, h => by
     simp at h
     subst h
-    exact ⟨_, rfl, hab⟩
+    exact ⟨_, List.getElem?_cons_zero, hab⟩
   | _, _, .cons _ hlr, i + 1, b, h => by simpa using forall₂_getElem?' hlr i b (by simpa using h)
 
 /-- **`gateOf?`'s gate** is an input exactly at an input id, and reads exactly its operands. -/
@@ -57,8 +57,7 @@ theorem gateOf?_spec {key : String} {ops : Array ℕ} {b : Claims.Sampling.BGate
   unfold gateOf? at h
   by_cases hi : _root_.Flock.Program.isInputId key = true
   · rw [if_pos hi] at h
-    split_ifs at h with he
-    cases h
+    split_ifs at h with he <;> cases h
     subst he
     simp [hi, Claims.Sampling.BGate.reads]
   · rw [if_neg hi] at h
@@ -80,9 +79,10 @@ theorem flatOf_flattens : FlatOfFlattens := by
   have Fg := forall₂_of_mapM hg
   have Fo := forall₂_of_mapM ho
   have hlen : gates.length = (P.defs[P.root]!).gates := by simpa using Fg.length_eq.symm
+  unfold Flattens
   refine ⟨hlen, ?_, ?_⟩
   · intro g hgl
-    have hgn : g < (P.defs[P.root]!).gates := hlen ▸ hgl
+    have hgn : g < (P.defs[P.root]!).gates := by rw [← hlen]; exact hgl
     obtain ⟨b, hb, hfb⟩ := forall₂_getElem? Fg g g (by simp [hgn])
     unfold flatGate at hfb
     split at hfb
@@ -104,8 +104,7 @@ theorem flatOf_flattens : FlatOfFlattens := by
       obtain ⟨i, hi⟩ := List.mem_iff_getElem?.1 hmem
       obtain ⟨j, hj, hr⟩ := forall₂_getElem?' Fo i g hi
       simp only [List.getElem?_range] at hj
-      split_ifs at hj with him
-      cases hj
+      split_ifs at hj with him <;> cases hj
       refine ⟨i, him, ?_⟩
       unfold flatOut at hr
       cases hres : _root_.Flock.Program.resolve P P.rootScope ((P.defs[P.root]!).body.ret.get i) with

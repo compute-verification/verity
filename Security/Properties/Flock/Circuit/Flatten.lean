@@ -74,7 +74,7 @@ def parseOf (rd : Claims.Msg → Option (Claims.Msg × Claims.Sampling.Query × 
   | none => none
   | some (desc, q, d, roots) =>
     match _root_.Flock.Program.decode ⟨desc.toArray⟩ with
-    | .ok P => (flatOf P).map fun C => ⟨desc, C, q, d, roots⟩
+    | .ok P => (flatOf P).map fun C => (⟨desc, C, q, d, roots⟩ : Claims.Sampling.Stmt)
     | .error _ => none
 
 /-- **`flatOf` flattens**: a Program's flattening, where `flatOf` gives one, is the Program flattened (`Flattens`). -/
