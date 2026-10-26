@@ -501,8 +501,8 @@ theorem rowsW_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ
   beta_reduce
   have hxI : Claims.Recursion.xI (DRL rd wE final w b elem) x = xIOf x := rfl
   obtain ⟨h0, r', ss', hr', hss', LANES', HH', n', hsv'⟩ := OpenLower.ownQR_some ho
-  obtain rfl : r' = r := Option.some.inj (hr'.symm.trans hr)
-  obtain rfl : ss' = ss := Except.ok.inj (hss'.symm.trans hss)
+  obtain rfl : r = r' := Option.some.inj (hr.symm.trans hr')
+  obtain rfl : ss = ss' := Except.ok.inj (hss.symm.trans hss')
   have hlv : lv = q.level := by
     rw [hsv] at hsv'
     cases hsv'
@@ -510,7 +510,7 @@ theorem rowsW_of (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ
   subst hlv
   -- the part's circuit, and the witnesses' count
   obtain ⟨vs, hvs, hlen, hall⟩ := readX_partVStar hr
-  obtain rfl : vs = ss := Except.ok.inj (hvs.symm.trans hss)
+  obtain rfl : ss = vs := Except.ok.inj (hss.symm.trans hvs)
   have hs : s < ss.size := (Array.getElem?_eq_some_iff.1 hsv).1
   obtain ⟨-, pt, cc, -, hpt, hpc, -⟩ := hall s hs
   have hc : r.w.parts[s]?.bind partCircuit = some cc := by rw [hpt, Option.bind_some, hpc]
