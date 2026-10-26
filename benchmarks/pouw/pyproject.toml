@@ -80,6 +80,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/kernel.py",
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/lanes.py",
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/manifest.py",
+          "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/ends.py",
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
@@ -88,7 +89,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "integrations/vllm/verity_vllm/protocols/pouw/h1/kept.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/live.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/served_files.py",
-          "integrations/vllm/verity_vllm/commit",
+          "integrations/vllm/verity_vllm/commit", "integrations/vllm/verity_vllm/records",
           "integrations/vllm/verity_vllm/query/__init__.py", "integrations/vllm/verity_vllm/query/manifest",
           "integrations/vllm/verity_vllm/program/__init__.py", "integrations/vllm/verity_vllm/program/frontend/__init__.py",
           "integrations/vllm/verity_vllm/program/frontend/correspond.py",
@@ -116,9 +117,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/forms.py", "benchmarks/hash/dither/h1c.py",
           "benchmarks/hash/dither/h1r.py", "benchmarks/hash/dither/j10r_units.py",
           "benchmarks/hash/dither/hb_side.py", "benchmarks/hash/exactlin/exactlin.py",
-          "integrations/vllm/verity_vllm/protocol_options/pouw_h1_tables_device.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
-          "integrations/vllm/verity_vllm/protocol_options/pouw_h1_words.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/words.py"]
 # Build outputs the served challenger's checks of record run or skip on (`check` runs this suite after its Lean steps).
 artifacts = ["verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-check",

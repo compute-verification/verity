@@ -161,6 +161,7 @@ import Proofs.Flock.Claims.Scope
 import Proofs.Flock.Claims.DeployOC
 import Proofs.Flock.Claims.DeployInputs
 import Proofs.Flock.Claims.JsonEq
+import Proofs.Flock.Claims.JsonNorm
 import Proofs.Flock.Claims.CanonEq
 import Proofs.Flock.Claims.Deploy
 import Proofs.Flock.Claims.DeployE
@@ -179,6 +180,8 @@ import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Claims.Assembled
 import Proofs.Flock.Claims.ZK
+import Proofs.Flock.Claims.KS.ZkAcceptsAt
+import Proofs.Flock.Claims.KS.ZkAcceptsRun
 import Proofs.Flock.Claims.CompleteFails
 import Proofs.Flock.Claims.Sampling
 import Proofs.Flock.Claims.Witnesses
