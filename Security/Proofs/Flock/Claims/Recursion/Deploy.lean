@@ -576,11 +576,10 @@ def innerView (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (rd : 
   (Claims.run H (Claims.replay (rd.msgs x ws)) IV (xIOf x) () fun i => Claims.coinSeq r i.val).seen
 
 /-- **The inputs of the SHA-512 evaluations the inner verifier makes on the inner messages the outer witnesses give**:
-its run's calls at `H`, at the coins `default`. Where the inner verifier's calls read no coin, as `IVStar`'s at the
-deployed plain verifier's steps (`Claims.Recursion.Bound.run_vLog_free`), they are its calls at every coins. -/
+its run's calls at `H`, at the coins `c` (a draw's, whose first are the inner session's). -/
 def innerCallsOf (H : Claims.Msg → Claims.Msg) (IV : Claims.Verifier Coin) (rd : Readers) (x : Claims.Msg)
-    (ws : List Claims.Flock.Wit) : List Claims.Msg :=
-  (Claims.run H (Claims.replay (rd.msgs x ws)) IV (xIOf x) () fun _ => default).vLog.map Prod.fst
+    (c : ℕ → Coin) (ws : List Claims.Flock.Wit) : List Claims.Msg :=
+  (Claims.run H (Claims.replay (rd.msgs x ws)) IV (xIOf x) () fun i => c i.val).vLog.map Prod.fst
 
 /-! ## The reference prover -/
 
@@ -751,7 +750,7 @@ check, and what the deployment brings (`b`). The inner view runs `IV` at the cla
 one (`Hm96.Default512`: its salt prefix, and its salt mask `Φ` as 64 bytes). Its completeness error is `δcRec`, which
 reads the inner session as the deployed plain verifier's (`FlockComplete.δc`), the one the claims instantiate `IV`
 with; its inner setup's calls are the plain setup's at SHA-512 (`innerSetupIns`), and its inner verifier's calls on the
-inner messages `IV`'s run's at the coins `default` (`innerCallsOf`). -/
+inner messages `IV`'s run's at the coins it is handed (`innerCallsOf`). -/
 noncomputable def deployRec (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings) :
     Claims.Recursion.Deploy Coin where
   V := V IV b.st
