@@ -17,7 +17,7 @@ Imports point down the layer order `pipeline` > `check` | `properties` > `acquir
 ~~~text
 verity_vllm/
   pipeline/           stage drivers      build.py match.py commit.py row*.py report.py hot.py layout.py cli.py llm.py research_tools.py tp/
-  engine/             the vLLM engine    build.py run_facts.py code_identity.py vllm_adapter.py engine_driver.py engine_profile.py arrivals.py chunks.py static_schedule.py served_seed.py profiles/
+  engine/             the vLLM engine    build.py run_facts.py code_identity.py kernel_identity.py vllm_adapter.py engine_driver.py engine_profile.py arrivals.py chunks.py static_schedule.py served_seed.py profiles/
   program/            Program            registry/ frontend/ lifting/ verity/ml/kernels/ model.py workload.py compact.py dtypes.py
   query/              verification query module_body.py word.py cross_call.py required.py program_view.py manifest/ compare.py
   correspondence/     runtime corresp.   runtime.py reader_for_*.py resolve*.py capture_identities.py
@@ -50,7 +50,7 @@ extension they hand vLLM).  Entrypoints:
 lives here is misfiled.
 
 **`engine/`** is the vLLM engine we attach to: `build.py` (the engine under κ and what it reads back), `run_facts.py` (profile
-manifest, versions), `code_identity.py` (executed code objects),
+manifest, versions), `code_identity.py` (executed code objects; `kernel_identity.py` the generated kernels' sources and binaries),
 `vllm_adapter.py` (workloads and request driving; the stages import the engine's names from it), `engine_driver.py`,
 `engine_profile.py`, `arrivals.py`, `chunks.py` (chunk attribution, the run loop's `on_step`), `static_schedule.py` (a
 `sampling.ignore_eos` run held to the schedule its declaration alone decides), `served_seed.py` (the public default seed a served
@@ -115,7 +115,7 @@ runtime metadata in the identity tuple.
 **`check/`** implements *checks -> verdicts*: `match/` (`global_match.py`, `global_match_fast.py`, `program_compare.py`,
 `batch_decomp.py`, `rank_match.py`, `xrank_collectives.py`), `replay/` (`driver.py` with `sampled_replay`, `replay*.py`,
 `stoch_recompute.py`, `compiled_kernel_check.py`, `vu_query.py`), `gates.py` G1..G8, execution extent (`executed_prefix.py`),
-`verdict.py` (with `commit_verdict`), `value_check.py` / `compiled_value_check.py` / `oracle_compare.py`, `kernel_identity.py`,
+`verdict.py` (with `commit_verdict`), `value_check.py` / `compiled_value_check.py` / `oracle_compare.py`,
 `fold_compare.py`, `operand_provenance.py`, input provenance (`weights_of_record.py`: checkpoint basis, `weights_pin`;
 `root_policy.py`), and batch invariance (`batch.py`: a template's outputs read no other owner's rows, and its launch shape doesn't
 pick its Definition; `circuit-check --batch` runs it over `predict/batch.py`'s templates); `poc_*.py` are v1 leftovers.  Never: acquire or commit anything.
