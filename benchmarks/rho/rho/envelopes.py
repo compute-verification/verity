@@ -59,6 +59,9 @@ class Policy:
     name: str
     gamma: float
     k: float
+    #: the inference overhead: the honest inference workload's circuit under this partition over its unpartitioned
+    #: size, a factor beside the training overhead ρ. NaN where it isn't modeled (its source says so).
+    inference_overhead: float = math.nan
 
 
 @dataclass(frozen=True)

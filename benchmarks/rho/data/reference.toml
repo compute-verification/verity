@@ -31,6 +31,7 @@ compute = { value = 2.84e19, unit = "FLOP", source = "ruling: Daniel 25 Oct, abo
 [policy.v4-pro-session]
 gamma = { value = 9.8e16, unit = "FLOP", source = "a 1M-token session: 1e6 x 2 x 49e9", status = "derived" }
 k = { value = 2e7, unit = "bit", low = 2.2e6, high = 8.8e7, source = "ruling: Daniel 25 Oct, a session returns at most 2.5 MB (1M tokens at 20 bits)", status = "ruled" }
+inference_overhead = { value = nan, unit = "x", source = "not modeled: a placeholder for the honest inference workload's overhead under this partition; rho models no honest inference circuit to partition" }
 
 # Each fleet is the whole world's compute: sized to serve the committed computation, 2e16 requests x 4,500 tokens x
 # 2 x 49e9 = 8.82e30 FLOP a year (prefill only), at the fleet's serving MFU: count = 8.82e30 / (phi x year x mfu_serve).
