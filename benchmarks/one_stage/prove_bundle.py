@@ -6,6 +6,22 @@ tampered window's member, whose proof must not be accepted.
     python benchmarks/one_stage/prove_bundle.py make --scratch DIR --out DIR [--k K --lean flock-verify]
     python benchmarks/one_stage/prove_bundle.py --bundle B.json --window DIR --bin flock-circuit --lean flock-verify \\
         --firewall flock-firewall --out DIR [--members N] [--tampered DIR] [--live] [--flips N]
+    python benchmarks/one_stage/prove_bundle.py draw --step DIR --lean flock-verify
+    python benchmarks/one_stage/prove_bundle.py --step DIR --bin ... --lean ... --firewall ... --out DIR [--flips N]
+
+* **A registered step** (``--step DIR``, PRF-172's M3): the draw is held to a step's registration, not to a window's.
+  ``DIR/step-registration.json`` (`replay_bundle.STEP_FORMAT`) registers one serving step's commit-slots roots (its step
+  root, every slot root, layout digest, context, and the registered values' roots) with the law and the population, every
+  ``(slot, layout unit)`` of the step: proof block ``g`` is slot ``g // units_per_slot``'s layout unit
+  ``g % units_per_slot``. ``receipt.json`` is the challenger's receipt naming the registration's digest
+  (`replay_bundle.step_digest`), bound before the coin, and ``draw.json`` the live draw of record under the registered
+  law over the registered population (``draw`` here: Lean's `flock-verify draw --registration` on its own coins). After
+  the coin each drawn block has ``blocks/<g>/``: a one-member window of its own rows and salts (``window/``), its bundle
+  (``bundle.{json,bin}``, its draw live and naming the step's receipt) and optionally a tampered twin (``tampered/``). Each
+  block's bundle is held to its window and, by `replay_bundle.check_step`, to the registered step at ``g``: every row's
+  paths reach the registered step root and slot root, and its string is the window's leaf. A drawn index with no block,
+  or a block that is refused, is a visible failure; it is not proved, and the verdict is not ok. Lean decides each
+  block's window (its session); the ties to the step root are Python's (`TIES`, in the summary).
 
 * **The draw** (`make`): the torch loop's window and its tampered twin written under the fixture's test key, then the
   bundle. With ``--k K`` the windows register `subset:K` and the draw is live (`live_draw`): the challenger logs its
@@ -78,11 +94,12 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
-def hold(doc: dict, payload: bytes, wdir: Path) -> tuple[dict[str, bool], dict]:
-    """The bundle held to the window (module docstring): ``({check: ok}, the bundle check's findings)``."""
+def hold(doc: dict, payload: bytes, wdir: Path, step: tuple[dict, int] | None = None) -> tuple[dict[str, bool], dict]:
+    """The bundle held to the window (module docstring): ``({check: ok}, the bundle check's findings)``. With ``step``,
+    ``(step registration, drawn index)``, the bundle's check is `replay_bundle.check_step`'s."""
     rec = json.loads((wdir / "registration.json").read_text())
     win = json.loads((wdir / "window.json").read_text())
-    bad = RB.check(doc, payload, registration=rec)
+    bad = RB.check_step(doc, payload, *step, registration=rec) if step else RB.check(doc, payload, registration=rec)
     ok = {"bundle_check": not bad, "run": doc["window"]["run"] == win["run"],
           "registration": doc["window"]["registration"] == win["registration_digest"],
           "partition": doc["window"]["partition"] == win["partition_digest"]}
@@ -129,6 +146,103 @@ def held_draw(doc: dict, wdir: Path) -> dict[str, bool]:
             "draw:units": record.get("units") == sorted(units)}
 
 
+def _read_step(sdir: Path) -> dict:
+    reg = json.loads((sdir / "step-registration.json").read_text())
+    if set(reg) != RB.STEP_KEYS or reg.get("format") != RB.STEP_FORMAT:
+        raise SystemExit(f"{sdir}/step-registration.json: not a {RB.STEP_FORMAT} with exactly {sorted(RB.STEP_KEYS)}")
+    if reg["law"].get("law") != "subset":
+        raise SystemExit(f"the registered law {reg['law']} is not a subset law")
+    return reg
+
+
+def step_draw(lean: str, sdir: Path) -> tuple[dict, dict]:
+    """The challenger's draw of record over a registered step (`--step`): its receipt naming the step registration's
+    digest, logged before any coin is read, then the registered law's proof blocks drawn uniformly over the registered
+    population by Lean's `flock-verify draw` on its own coins, held by `--registration` to that law and population:
+    ``(receipt, draw)``, written as ``receipt.json`` and ``draw.json`` in ``sdir``."""
+    reg = _read_step(sdir)
+    receipt = {**R.receipt(reg, CHALLENGER), "registration": RB.step_digest(reg)}
+    (sdir / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
+    p = a0.run([lean, "draw", "--population", str(reg["population"]), "--k", str(reg["law"]["k"]),
+                "--registration", str(sdir / "step-registration.json")], sdir / "draw.log")
+    line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
+    if p.returncode != 0 or line is None:
+        raise SystemExit(f"flock-verify draw: rc {p.returncode}: {p.stderr[-500:]}")
+    draw = json.loads(line.split(" ", 1)[1])
+    (sdir / "draw.json").write_text(json.dumps(draw, sort_keys=True))
+    return receipt, draw
+
+
+def hold_step(sdir: Path) -> tuple[dict, dict[str, bool], dict[int, dict], list[int]]:
+    """A step tree held before anything is proved (module docstring, ``--step``): ``(registration, {check: ok} of the step,
+    {index: block} of the delivered drawn blocks, the drawn indices with no block)``. Each block is ``{dir, doc, payload,
+    window, held, findings}``, its ``held`` the block's bundle held to its window and to the registered step at its
+    index (`replay_bundle.check_step`), and its draw a live one naming the step's receipt."""
+    reg = _read_step(sdir)
+    receipt = json.loads((sdir / "receipt.json").read_text())
+    draw = json.loads((sdir / "draw.json").read_text())
+    units = draw.get("units") if isinstance(draw.get("units"), list) else []
+    dirs = {int(d.name): d for d in (sdir / "blocks").iterdir() if d.is_dir() and d.name.isdigit()} \
+        if (sdir / "blocks").is_dir() else {}
+    held = {"step:receipt": receipt.get("format") == R.RECEIPT and receipt.get("registration") == RB.step_digest(reg),
+            "step:draw": D.check_draw(draw, reg, reg["law"]).ok,
+            "step:blocks": set(dirs) <= set(units)}
+    blocks = {}
+    for g in sorted(set(dirs) & set(units)):
+        d = dirs[g]
+        doc, payload = RB.read(d / "bundle.json")
+        ok, bad = hold(doc, payload, d / "window", step=(reg, g))
+        bd = doc["draw"]
+        ok["draw:live"] = bd.get("source") == "live" and bd.get("receipt") == receipt
+        blocks[g] = {"dir": d, "doc": doc, "payload": payload, "window": d / "window", "held": ok, "findings": bad}
+    return reg, held, blocks, sorted(set(units) - set(dirs))
+
+
+TIES = {"lean": "each drawn block's one-member window: its C-Flock --zk session behind the Lean firewall, decided by Lean "
+                "verify --zk --partition --program (the window's statement, its port roots and its member's Definition)",
+        "python": "each drawn block's rows to the registered step root (replay_bundle.check: the unit path, slot_path and "
+                  "step_path, and each row's string the window's leaf; replay_bundle.check_step: the commitment's step root, "
+                  "slot roots, layout and context the registration's, the block the drawn index's), the receipt naming the "
+                  "step registration's digest, and the draw under the registered law over the registered population "
+                  "(draw.check_draw)"}
+
+
+def make_step(s: Path, out: Path, k: int, lean: str) -> int:
+    """The torch loop's step as a step tree (`--step`): its registration from the fixture's commitment, the live draw over
+    it (`step_draw`), and per drawn block whose layout unit is a proof block of the window (a ScaledMm coordinate; the
+    layers' quantizer units are none) a one-unit bundle of the window, registered `subset:1`, with the step's receipt."""
+    _, weights, com = RB.torch_loop_window(s / "window", law="subset:1")
+    RB.torch_loop_window(s / "tampered", tamper=True, law="subset:1")
+    (b, st), = com.steps
+    reg = RB.step_registration(com, weights, D.parse_law(f"subset:{k}"), run=RB.RUN_ID,
+                               program=next(iter(weights.values())).program, block=b, step=st)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "step-registration.json").write_text(json.dumps(reg, indent=1, sort_keys=True))
+    receipt, draw = step_draw(lean, out)
+    w = RB._Window(s / "window")
+    at = {}
+    for u in range(w.win["population"]):
+        c = RB.torch_loop_coords(*w.label(u))
+        at[c["slot"] * com.layout.unit_count + c["layer"] * 129 + 1 + c["unit"]] = u
+    made = {}
+    for g in draw["units"]:
+        if g not in at:
+            continue
+        d = out / "blocks" / str(g)
+        doc, pay = RB.build(s / "window", [at[g]], commitment=com, locate=RB.torch_loop_locate(128), binding=BINDING,
+                            reads=RB.torch_loop_reads, weights=weights,
+                            draw={"source": "live", "law": D.parse_law("subset:1"), "receipt": receipt, "coins": CHALLENGER})
+        RB.write(doc, pay, d, "bundle")
+        (d / "window").symlink_to((s / "window").resolve())
+        if not made:
+            (d / "tampered").symlink_to((s / "tampered").resolve())
+        made[g] = at[g]
+    print("MAKE " + json.dumps({"step": str(out), "registration": RB.step_digest(reg), "population": reg["population"],
+                                "drawn": draw["units"], "blocks": made,
+                                "no_block": [g for g in draw["units"] if g not in at]}, sort_keys=True), flush=True)
+    return 0
+
+
 def make(argv) -> int:
     ap = argparse.ArgumentParser(prog="prove_bundle.py make", description="The torch loop's windows and the bundle of a draw.")
     ap.add_argument("--scratch", required=True, help="writes window/ and tampered/ here")
@@ -136,8 +250,13 @@ def make(argv) -> int:
     ap.add_argument("--k", type=int, default=0,
                     help="the windows register subset:K and the draw is live, K units over the whole partition (else FIXTURE_DRAW)")
     ap.add_argument("--lean", help="flock-verify, for a live draw")
+    ap.add_argument("--step", action="store_true", help="a step tree (`--step`) of K blocks drawn over the step's registration")
     a = ap.parse_args(argv)
     s, out = Path(a.scratch), Path(a.out)
+    if a.step:
+        if not (a.k and a.lean):
+            raise SystemExit("a step tree is drawn live: --k K --lean flock-verify")
+        return make_step(s, out, a.k, a.lean)
     law = f"subset:{a.k}" if a.k else None
     _, weights, com = RB.torch_loop_window(s / "window", law=law)
     RB.torch_loop_window(s / "tampered", tamper=True, law=law)
@@ -261,26 +380,73 @@ def flipped(a, mm: dict, honest: Path, out: Path) -> dict[str, dict]:
     return cases
 
 
-def main(argv=None) -> int:
-    argv = sys.argv[1:] if argv is None else argv
-    if argv[:1] == ["make"]:
-        return make(argv[1:])
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--bundle", required=True, help="the bundle's JSON; its payload is the .bin beside it")
-    ap.add_argument("--window", required=True, help="the prover's window: what Window.write wrote, private files included")
-    ap.add_argument("--bin", required=True)
-    ap.add_argument("--lean", required=True)
-    ap.add_argument("--firewall", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--members", type=int, default=None, help="prove only the bundle's first N drawn members")
-    ap.add_argument("--tampered", help="a tampered window of the same shape: its first drawn member must not be accepted")
-    ap.add_argument("--session-timeout", type=float, default=14400)
-    ap.add_argument("--live", action="store_true", help="the bundle's draw must be live, with its receipt")
-    ap.add_argument("--flips", type=int, default=0, help="Lean-verify only the first N one-bit proof edits (0: all)")
-    ap.add_argument("--lean-jobs", type=int, default=1, help="Lean verifies at once beside the one session proving")
-    a = ap.parse_args(argv)
-    out, wdir = Path(a.out), Path(a.window)
-    out.mkdir(parents=True, exist_ok=True)
+def prove(a, jobs: list, tampered: tuple[Path, dict] | None, out: Path) -> tuple[dict, dict, str | None]:
+    """Each job ``(key, label, stage, member, session dir)`` proved in its own session, one at a time, with up to
+    ``--lean-jobs`` Lean verifies beside the one proving (``stage()`` stages the bundle's member as a5 does); then the
+    flipped bits of the session of least k_log, and the tampered arms of ``(tampered window, member)``:
+    ``(rows, negatives, the flipped session's key)``."""
+    rows, first, proved = {}, None, []
+    with ThreadPoolExecutor(max_workers=max(1, a.lean_jobs)) as lean_pool:
+        for key, label, stage, bm, sdir in jobs:
+            mm = stage()
+            proved.append((key, label, bm, mm, session(a, mm, bm["draw"], sdir, lean_pool=lean_pool)))
+            print(f"PROVEBUNDLE {label} proved: e2e {proved[-1][-1]['timing']['e2e_s']} s", flush=True)
+        for *_, s in proved:
+            s["lean"] = s["lean"].result()
+    for key, label, bm, mm, s in proved:
+        units = sorted(bm["base"] + i for i in bm["local"])
+        s["checks_before_draw"] = mm["checks"]
+        s["k_log"] = mm["k_log"]
+        s["accepted"] = (all(mm["checks"].values()) and s["m0"]["accepted"] and s["lean"]["accepted"] is True and s["roots"]
+                         and sorted(s["served_draw"] or []) == sorted(bm["local"]) and sorted(s["proved"]) == units)
+        rows[key] = {**s, "units": units}
+        if s["session"] and (first is None or mm["k_log"] < first[0]["k_log"]):
+            first = (mm, s, key)
+        print(f"PROVEBUNDLE {label} units {units}: accepted {s['accepted']} (M0 {s['m0']['accepted']}, Lean "
+              f"{s['lean']['accepted']} {s['lean']['why'] or ''}), k_log {mm['k_log']}, e2e {s['timing']['e2e_s']} s, "
+              f"Lean verify {s['lean']['verify_s']} s", flush=True)
+    negatives: dict[str, dict] = {}
+    if first:
+        for name, v in flipped(a, first[0], Path(first[1]["session"]), out / "flipped").items():
+            negatives[f"flipped/{name}"] = v
+        n_ok = sum(v["refused"] for k, v in negatives.items() if k.startswith("flipped/"))
+        print(f"PROVEBUNDLE flipped bits ({first[2]}): {n_ok}/{len(negatives)} refused by Lean", flush=True)
+    if tampered:
+        tw, bm = tampered
+        mm = Staged(tw, out / "tampered").member(bm["k"])
+        for arm, fw in (("firewalled", True), ("unfirewalled", False)):
+            s = session(a, mm, bm["draw"], out / "tampered" / f"session-{arm}", firewall=fw, forged=True)
+            # behind the firewall no proof may leave the prover; without it Lean's own verdict must refuse the proof
+            refused = (str(s["prover"]["stopped"]).startswith("FIREWALL-REFUSED") and s["lean"]["accepted"] is not True
+                       and s["m0"]["accepted"] is not True) if fw else a0.lean_refused(s["lean"])
+            negatives[f"tampered/{arm}"] = {"refused": refused, "lean": s["lean"], "m0": s["m0"], "prover": s["prover"],
+                                            "checks_before_draw": mm["checks"]}
+            print(f"PROVEBUNDLE tampered {arm}: refused {negatives[f'tampered/{arm}']['refused']} (prover "
+                  f"{str(s['prover']['stopped'] or s['prover']['why'])[:200]!r}; Lean {str(s['lean']['why'])[:200]!r})",
+                  flush=True)
+    return rows, negatives, first[2] if first else None
+
+
+def _finish(summary: dict, out: Path, rows: dict, negatives: dict, flipped_key: str | None, failures: dict) -> int:
+    summary.update(members=rows, negatives=negatives, flipped_member=flipped_key, visible_failures=failures)
+    ok = (bool(rows) and all(r["accepted"] for r in rows.values()) and bool(negatives)
+          and all(v["refused"] for v in negatives.values()) and not failures)
+    summary["ok"] = ok
+    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    print("PROVEBUNDLE " + json.dumps({"ok": ok, "accepted": {k: r["accepted"] for k, r in rows.items()},
+                                       "negatives_refused": sum(v["refused"] for v in negatives.values()),
+                                       "negatives": len(negatives), "visible_failures": failures}, sort_keys=True), flush=True)
+    return 0 if ok else 1
+
+
+def _refuse(summary: dict, out: Path, **why) -> int:
+    (out / "summary.json").write_text(json.dumps({**summary, "ok": False}, indent=1, sort_keys=True, default=str))
+    print("PROVEBUNDLE " + json.dumps({"ok": False, **why}, sort_keys=True, default=str), flush=True)
+    return 1
+
+
+def main_window(a, out: Path) -> int:
+    wdir = Path(a.window)
     doc, payload = RB.read(a.bundle)
     held, bad = hold(doc, payload, wdir)
     held.update(held_draw(doc, wdir))
@@ -292,62 +458,87 @@ def main(argv=None) -> int:
                      "window": {"run": doc["window"]["run"], "registration": doc["window"]["registration"]},
                      "held": held, "bundle_findings": bad}
     if not all(held.values()):
-        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-        print("PROVEBUNDLE " + json.dumps({"ok": False, "held": held, "bundle_findings": bad}, sort_keys=True))
-        return 1
+        return _refuse(summary, out, held=held, bundle_findings=bad)
     sv = Staged(wdir, out / "honest")
     members = doc["members"][:a.members] if a.members else doc["members"]
-    rows, first, proved = {}, None, []
-    with ThreadPoolExecutor(max_workers=max(1, a.lean_jobs)) as lean_pool:
-        for bm in members:
-            mm = sv.member(bm["k"])
-            proved.append((bm, mm, session(a, mm, bm["draw"], out / "honest" / f"session-m{bm['k']}", lean_pool=lean_pool)))
-            print(f"PROVEBUNDLE member m{bm['k']} proved: e2e {proved[-1][2]['timing']['e2e_s']} s", flush=True)
-        for _, _, s in proved:
-            s["lean"] = s["lean"].result()
-    for bm, mm, s in proved:
-        units = sorted(bm["base"] + i for i in bm["local"])
-        s["checks_before_draw"] = mm["checks"]
-        s["k_log"] = mm["k_log"]
-        s["accepted"] = (all(mm["checks"].values()) and s["m0"]["accepted"] and s["lean"]["accepted"] is True and s["roots"]
-                         and sorted(s["served_draw"] or []) == sorted(bm["local"]) and sorted(s["proved"]) == units)
-        rows[f"m{bm['k']}"] = {**s, "units": units}
-        if s["session"] and (first is None or mm["k_log"] < first[0]["k_log"]):
-            first = (mm, s)
-        print(f"PROVEBUNDLE member m{bm['k']} units {units}: accepted {s['accepted']} (M0 {s['m0']['accepted']}, Lean "
-              f"{s['lean']['accepted']} {s['lean']['why'] or ''}), k_log {mm['k_log']}, e2e {s['timing']['e2e_s']} s, "
-              f"Lean verify {s['lean']['verify_s']} s", flush=True)
-    summary["members"] = rows
-    negatives: dict[str, dict] = {}
-    if first:
-        summary["flipped_member"] = first[0]["k"]
-        for name, v in flipped(a, first[0], Path(first[1]["session"]), out / "flipped").items():
-            negatives[f"flipped/{name}"] = v
-        n_ok = sum(v["refused"] for k, v in negatives.items() if k.startswith("flipped/"))
-        print(f"PROVEBUNDLE flipped bits: {n_ok}/{len(negatives)} refused by Lean", flush=True)
-    if a.tampered:
-        tw = Path(a.tampered)
-        bm = members[0]
-        tv = Staged(tw, out / "tampered")
-        mm = tv.member(bm["k"])
-        for arm, fw in (("firewalled", True), ("unfirewalled", False)):
-            s = session(a, mm, bm["draw"], out / "tampered" / f"session-{arm}", firewall=fw, forged=True)
-            # behind the firewall no proof may leave the prover; without it Lean's own verdict must refuse the proof
-            refused = (str(s["prover"]["stopped"]).startswith("FIREWALL-REFUSED") and s["lean"]["accepted"] is not True
-                       and s["m0"]["accepted"] is not True) if fw else a0.lean_refused(s["lean"])
-            negatives[f"tampered/{arm}"] = {"refused": refused, "lean": s["lean"], "m0": s["m0"], "prover": s["prover"],
-                                            "checks_before_draw": mm["checks"]}
-            print(f"PROVEBUNDLE tampered {arm}: refused {negatives[f'tampered/{arm}']['refused']} (prover "
-                  f"{str(s['prover']['stopped'] or s['prover']['why'])[:200]!r}; Lean {str(s['lean']['why'])[:200]!r})",
-                  flush=True)
-    summary["negatives"] = negatives
-    ok = bool(rows) and all(r["accepted"] for r in rows.values()) and bool(negatives) and all(v["refused"] for v in negatives.values())
-    summary["ok"] = ok
-    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-    print("PROVEBUNDLE " + json.dumps({"ok": ok, "accepted": {k: r["accepted"] for k, r in rows.items()},
-                                       "negatives_refused": sum(v["refused"] for v in negatives.values()),
-                                       "negatives": len(negatives)}, sort_keys=True), flush=True)
-    return 0 if ok else 1
+    jobs = [(f"m{bm['k']}", f"member m{bm['k']}", lambda k=bm["k"]: sv.member(k), bm, out / "honest" / f"session-m{bm['k']}")
+            for bm in members]
+    rows, negatives, fk = prove(a, jobs, (Path(a.tampered), members[0]) if a.tampered else None, out)
+    return _finish(summary, out, rows, negatives, fk, {})
+
+
+def main_step(a, out: Path) -> int:
+    """A step tree (``--step``): every drawn block held to the registered step before anything is proved, then each held
+    block's one member proved in its own session. A drawn index with no block, or a block its hold refuses, is a visible
+    failure: it is not proved and the verdict is not ok (no redraw)."""
+    sdir = Path(a.step)
+    reg, held, blocks, missing = hold_step(sdir)
+    refused = {g: b for g, b in blocks.items() if not all(b["held"].values())}
+    failures = {**{str(g): "no block delivered for the drawn index" for g in missing},
+                **{str(g): "refused before proving: " + ", ".join(k for k, v in b["held"].items() if not v)
+                   for g, b in refused.items()}}
+    summary: dict = {"format": FORMAT, "ties": TIES, "held": held,
+                     "step": {x: reg[x] for x in ("run", "program", "block", "step", "step_root", "slots", "units_per_slot",
+                                                  "population", "law", "layout_digest", "context")}
+                     | {"registration": RB.step_digest(reg)},
+                     "draw": json.loads((sdir / "draw.json").read_text()),
+                     "blocks": {str(g): {"slot_unit": RB.block_of(reg, g), "held": b["held"], "findings": b["findings"],
+                                         "payload_sha512": b["doc"]["payload"]["sha512"]} for g, b in blocks.items()}}
+    print("PROVEBUNDLE step held: " + json.dumps({"held": held, "blocks": {g: all(b["held"].values()) for g, b in blocks.items()},
+                                                  "visible_failures": failures}, sort_keys=True), flush=True)
+    if not all(held.values()):
+        return _refuse(summary, out, held=held, visible_failures=failures)
+    jobs, tampered = [], None
+    for g in sorted(set(blocks) - set(refused)):
+        b = blocks[g]
+        bm = b["doc"]["members"][0]
+        bdir = out / "blocks" / str(g)
+        jobs.append((f"b{g}", f"block {g} (slot, unit {RB.block_of(reg, g)})",
+                     lambda w=b["window"], d=bdir, k=bm["k"]: Staged(w, d).member(k), bm, bdir / f"session-m{bm['k']}"))
+        tw = Path(a.tampered) if a.tampered else b["dir"] / "tampered"
+        if tampered is None and tw.is_dir():
+            tampered = (tw, bm)
+    rows, negatives, fk = prove(a, jobs, tampered, out)
+    return _finish(summary, out, rows, negatives, fk, failures)
+
+
+def draw_cmd(argv) -> int:
+    ap = argparse.ArgumentParser(prog="prove_bundle.py draw", description="The challenger's live draw over a registered step.")
+    ap.add_argument("--step", required=True, help="holds step-registration.json; writes receipt.json and draw.json there")
+    ap.add_argument("--lean", required=True, help="flock-verify")
+    a = ap.parse_args(argv)
+    receipt, draw = step_draw(a.lean, Path(a.step))
+    print("DRAW " + json.dumps({"receipt": receipt, "draw": draw}, sort_keys=True), flush=True)
+    return 0
+
+
+def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["make"]:
+        return make(argv[1:])
+    if argv[:1] == ["draw"]:
+        return draw_cmd(argv[1:])
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--bundle", help="the bundle's JSON; its payload is the .bin beside it")
+    ap.add_argument("--window", help="the prover's window: what Window.write wrote, private files included")
+    ap.add_argument("--step", help="a step tree: step-registration.json, receipt.json, draw.json and "
+                                   "blocks/<index>/{window/, bundle.{json,bin}, tampered/?}, the draw the step registration's")
+    ap.add_argument("--bin", required=True)
+    ap.add_argument("--lean", required=True)
+    ap.add_argument("--firewall", required=True)
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--members", type=int, default=None, help="prove only the bundle's first N drawn members")
+    ap.add_argument("--tampered", help="a tampered window of the same shape: its first drawn member must not be accepted")
+    ap.add_argument("--session-timeout", type=float, default=14400)
+    ap.add_argument("--live", action="store_true", help="the bundle's draw must be live, with its receipt")
+    ap.add_argument("--flips", type=int, default=0, help="Lean-verify only the first N one-bit proof edits (0: all)")
+    ap.add_argument("--lean-jobs", type=int, default=1, help="Lean verifies at once beside the one session proving")
+    a = ap.parse_args(argv)
+    if bool(a.step) == bool(a.bundle or a.window) or (not a.step and not (a.bundle and a.window)):
+        ap.error("--step DIR, or --bundle B.json and --window DIR")
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    return main_step(a, out) if a.step else main_window(a, out)
 
 
 if __name__ == "__main__":
