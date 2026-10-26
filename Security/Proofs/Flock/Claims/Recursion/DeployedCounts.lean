@@ -28,13 +28,13 @@ condition on `x` beyond `lamLin2_deployedB_ge`'s `hS`, and `hn` from its `hO` (`
   `n ≤ g · 2^nbl ≤ 2^(k_log - 7) · 2^(35 - k_log) = 2^28` (`Counts.n_le`); a V\* table holds at most `65536`
   (`RecBudget.table`, `budget_table_ok`).
 * **Check 5's rows** (`resSetup_length_le`): `rec-residuals` registers two rows of `v` and two zero rows, `rec-open`
-  `2 q` rows of `dirs`, two inputs a row; `q < 256` at every level of every `fast100` schedule, a constant of the
-  verifier (`fast100_small`), so no condition on `x` bounds it. At most `64 · (8 + 1020) = 65792` inputs.
+  `2 q` rows each of `coef` and `dirs`, two inputs a row; `q < 256` at every level of every `fast100` schedule, a constant of the
+  verifier (`fast100_small`), so no condition on `x` bounds it. At most `64 · (8 + 2040) = 131072` inputs.
 * **Registered reads** (`regIns_length_le`): at most `|sts| · |own| · n · D`, and an accepted part's registration has
   at most `4096` ports of trees at most `64` levels deep (`RecBudget.regs`, `regSize_staged`), so `D ≤ 66`.
 
-So each staged statement has at most `65792 + 4096 · 65536 · 66 = 17716805888` setup inputs (`deployedSetup_staged_le`),
-the run at most `nS x · 17716805888` (`setupCalls_deployedB_le_cap`), and at `nS x ≤ 2^16` at most `2^55`
+So each staged statement has at most `131072 + 4096 · 65536 · 66 = 17716871168` setup inputs (`deployedSetup_staged_le`),
+the run at most `nS x · 17716871168` (`setupCalls_deployedB_le_cap`), and at `nS x ≤ 2^16` at most `2^55`
 (`setupCalls_deployedB_le_joint`), the call bound `lamLin2_deployedB_ge` charges (`lamLin2_deployedB_ge_joint`). The
 parts are at most `4096` wherever one staged part sets up: they are one a statement of `RecVStar.statements` at the
 verifier's inner shape (`readX_listed`), which `RecBudget.statements` caps (`nS_le_staged`).
@@ -264,11 +264,11 @@ theorem residualRows_size {inn : RecCoins.Inner} {j : ℕ} {rows : Array (Array 
     | (cases h; done)
     | (cases h; exact residualRowsOf_size (by assumption))
 
-/-- **`rec-open` registers at most 510 rows of `dirs`**: `2 q` at the inner schedule's one level of its lanes and
-siblings, and `q < 256` at every level of every `fast100` schedule (`fast100_small`), which `RecResiduals.shape?`
-requires of the inner session's `m`: a constant of the verifier, not a condition on `x`. -/
-theorem openRows_dirs_le {inn : RecCoins.Inner} {LANES H : ℕ} {cr dr : Array (Array ℕ)}
-    (hor : FlockSoundness.Discharge.Recursion.openRows inn LANES H = some (cr, dr)) : dr.size ≤ 510 := by
+/-- **`rec-open` registers at most 510 rows each of `coef` and `dirs`**: `2 q` at the inner schedule's one level of
+its lanes and siblings, and `q < 256` at every level of every `fast100` schedule (`fast100_small`), which
+`RecResiduals.shape?` requires of the inner session's `m`: a constant of the verifier, not a condition on `x`. -/
+theorem openRows_size_le {inn : RecCoins.Inner} {LANES H : ℕ} {cr dr : Array (Array ℕ)}
+    (hor : FlockSoundness.Discharge.Recursion.openRows inn LANES H = some (cr, dr)) : cr.size ≤ 510 ∧ dr.size ≤ 510 := by
   unfold FlockSoundness.Discharge.Recursion.openRows at hor
   cases ha : inn.algebra with
   | error e => rw [ha] at hor; simp at hor
@@ -295,7 +295,7 @@ theorem openRows_dirs_le {inn : RecCoins.Inner} {LANES H : ℕ} {cr dr : Array (
           | ok r1 =>
             rw [h0, h1] at hor
             simp only [Option.some.injEq, Prod.mk.injEq] at hor
-            obtain ⟨-, rfl⟩ := hor
+            obtain ⟨rfl, rfl⟩ := hor
             have hlt : l < sh.sched.levels.size := by
               have hm : l ∈ FlockSoundness.Discharge.Recursion.innerLevels sh LANES H := by
                 rw [hl]
@@ -304,7 +304,8 @@ theorem openRows_dirs_le {inn : RecCoins.Inner} {LANES H : ℕ} {cr dr : Array (
               exact List.mem_range.1 (List.mem_filter.1 hm).1
             have hq := ((FlockSoundness.Discharge.DecodeZL.fast100_small _ _ hf).2.2 _
               (Array.getElem_mem hlt)).2.2.1
-            simp only [FlockSoundness.Discharge.Recursion.openDirs, Array.size_map, Array.size_range]
+            simp only [FlockSoundness.Discharge.Recursion.openCoef, FlockSoundness.Discharge.Recursion.openDirs,
+              Array.size_map, Array.size_range]
             rw [getElem!_pos sh.sched.levels l hlt]
             omega
 
@@ -321,17 +322,18 @@ theorem resSetupSt_length_le (src : Option RecCoins.Source) (st : Stmt) :
        omega)
 
 theorem openSetupSt_length_le (src : Option RecCoins.Source) (st : Stmt) :
-    (ResLower.openSetupSt src st).length ≤ 1020 := by
+    (ResLower.openSetupSt src st).length ≤ 2040 := by
   unfold ResLower.openSetupSt
   repeat' split
   all_goals first
     | (simp; done)
-    | (refine le_trans (commitIns_length_le _ _) ?_
-       have hd := openRows_dirs_le ‹_›
+    | (rw [List.length_append]
+       refine le_trans (Nat.add_le_add (commitIns_length_le _ _) (commitIns_length_le _ _)) ?_
+       have hd := openRows_size_le ‹_›
        omega)
 
-/-- **Check 5's evaluations at a V\* statement**: at most `64 · (8 + 1020)`. -/
-theorem resSetup_length_le (xO : Msg) : (ResLower.resSetup xO).length ≤ 65792 := by
+/-- **Check 5's evaluations at a V\* statement**: at most `64 · (8 + 2040)`. -/
+theorem resSetup_length_le (xO : Msg) : (ResLower.resSetup xO).length ≤ 131072 := by
   unfold ResLower.resSetup
   cases hs : setupO xO with
   | none => simp
@@ -339,7 +341,7 @@ theorem resSetup_length_le (xO : Msg) : (ResLower.resSetup xO).length ≤ 65792 
     obtain ⟨i, spec, sts⟩ := v
     dsimp only
     have hsz := (setupO_counts hs).1
-    refine le_trans (flatMap_length_le _ 1028 _ fun st _ => ?_) ?_
+    refine le_trans (flatMap_length_le _ 2048 _ fun st _ => ?_) ?_
     · simp only [List.length_append]
       exact le_trans (Nat.add_le_add (resSetupSt_length_le _ _) (openSetupSt_length_le _ _)) (by norm_num)
     · rw [Array.length_toList]
@@ -478,11 +480,11 @@ theorem mem_vstar_staged {st : Stage} {x : Msg} {ps : List (Msg × Out)} {xO : M
 
 /-! ## The count -/
 
-/-- **A staged statement's `deployedSetup`**: at most `65792 + 4096 · 65536 · 66 = 17716805888` inputs, check 5's
+/-- **A staged statement's `deployedSetup`**: at most `131072 + 4096 · 65536 · 66 = 17716871168` inputs, check 5's
 (`resSetup_length_le`) and the registered reads of its one table (`RecSetup.oneFull`) of at most `65536` instances
 (`RecBudget.table`) over at most `4096` ports of at most `66` inputs an opening (`regSize_staged`). -/
 theorem deployedSetup_staged_le {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} :
-    (deployedSetup (staged st x ms s)).length ≤ 17716805888 := by
+    (deployedSetup (staged st x ms s)).length ≤ 17716871168 := by
   rw [deployedSetup_length]
   refine le_trans (Nat.add_le_add (resSetup_length_le _) (?_ : (regIns (staged st x ms s)).length ≤ 17716740096))
     (by norm_num)
@@ -517,7 +519,7 @@ theorem deployedSetup_staged_le {st : Stage} {x : Msg} {ms : List (Msg × Out)} 
 
 end Counts
 
-/-- **The compiled verifier's own evaluations at the deployed brings**: at most `nS x · 17716805888` at a run's V\*
+/-- **The compiled verifier's own evaluations at the deployed brings**: at most `nS x · 17716871168` at a run's V\*
 statements. The tables, instances, check 5's rows and the registered reads are all bounded by the verifier's own
 refusals and constants (`RecSetup.oneFull`'s one table, `RecBudget`'s caps on a V\* session's registration and table,
 `fast100`'s `q < 256`), so no condition on `x` enters. -/
@@ -525,13 +527,13 @@ theorem setupCalls_deployedB_le_cap (rel : _root_.Flock.Readable.Parsed → _roo
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (IV : Claims.Verifier Coin) (H : Msg → Msg) (x : Msg)
     (ps : List (Msg × Out)) :
     (Claims.Recursion.setupCalls H (recBound rel (deployedB b) L IV)
-      ((recBound rel (deployedB b) L IV).vstar x ps)).length ≤ nS x * 17716805888 :=
+      ((recBound rel (deployedB b) L IV).vstar x ps)).length ≤ nS x * 17716871168 :=
   setupCalls_deployedB_le_at rel b L IV H x ps fun xO hx => by
     obtain ⟨ms, s, rfl⟩ := mem_vstar_staged hx
     exact deployedSetup_staged_le
 
 /-- **`v ≤ 2^55` at the deployed brings**, at `nS x ≤ 2^16` V\* parts (`lamLin2_deployedB_ge`'s `hn`):
-`2^16 · 17716805888 ≤ 2^55`, `lamLin2_deployed_ge_dep`'s `hV`. -/
+`2^16 · 17716871168 ≤ 2^55`, `lamLin2_deployed_ge_dep`'s `hV`. -/
 theorem setupCalls_deployedB_le_joint (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (IV : Claims.Verifier Coin) (H : Msg → Msg) (x : Msg)
     (ps : List (Msg × Out)) (hn : nS x ≤ 2 ^ 16) :
