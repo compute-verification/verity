@@ -13,7 +13,6 @@
     {"file": "verity_vllm/engine/build.py", "kind": "vllm-internals", "symbol": "compilation_facts", "detail": "llm_engine"},
     {"file": "verity_vllm/engine/build.py", "kind": "vllm-internals", "symbol": "effective_execution_doc", "detail": "llm_engine"},
     {"file": "verity_vllm/engine/build.py", "kind": "vllm-internals", "symbol": "resolved_async_scheduling", "detail": "llm_engine"},
-    {"file": "verity_vllm/engine/engine_profile.py", "kind": "canonical-json", "symbol": "canonical_json_bytes", "detail": "verity.ml.circuits.codec.canonical_json"},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "vllm-internals", "symbol": "backends_info", "detail": "llm_engine"},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "vllm-internals", "symbol": "cache_info", "detail": "llm_engine", "count": 4},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "vllm-internals", "symbol": "effective_compilation", "detail": "llm_engine"},
