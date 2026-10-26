@@ -4,14 +4,21 @@ import Mathlib.Tactic.NormNum
 /-!
 # The accelerator model's principles, proved
 
-P2's three halves that need no capture: an MMA's output reads only its own row, column and accumulator (`p2Local`), its
-outputs are distinct products' destinations (`p2Distinct`), and every opcode takes at least a lane's share of an issue
-slot (`p2Priced`).
+The integer path is exact on the s32 range, saturating or not (`p1Int`). P2's halves that need no capture: an MMA's
+output reads only its own row, column and accumulator (`p2Local`), its outputs are distinct products' destinations
+(`p2Distinct`), and every opcode takes at least a lane's share of an issue slot (`p2Priced`).
 -/
 
 open scoped NNRat
 
 namespace Verity.Accel
+
+theorem p1Int : P1Int := by
+  intro fa fb sat c a b _ s h1 h2
+  have hs : (if sat then max (-2 ^ 31) (min (2 ^ 31 - 1) s) else s) = s := by split <;> omega
+  simp only [intDot]
+  rw [hs, BitVec.toInt_ofInt]
+  exact Int.bmod_eq_of_le h1 h2
 
 theorem p2Local : P2Local := by
   intro dot fa fb s v v' o hA hB hC
