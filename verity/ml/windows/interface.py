@@ -1108,12 +1108,14 @@ class Window:
                    if self.count(tid) != n}
         if missing:
             raise ValueError(f"units recorded / in the circuit by template: {missing}; a window closes over all of them")
-        base = self._bases()
+        base, cat = self._bases(), {}
         data, salts_of, self._entries = [], {}, {}
         for m in self.window.members:
-            lay, got = layout(self.circuit.template(m.template)), self._recorded[m.template]
-            ports = [np.concatenate([b.words[g] for b in got]) for g in range(len(lay.rows) + len(lay.outs))]
-            lo = m.base - base[m.template]
+            lay = layout(self.circuit.template(m.template))
+            if m.template not in cat:
+                got = self._recorded[m.template]
+                cat[m.template] = [np.concatenate([b.words[g] for b in got]) for g in range(len(lay.rows) + len(lay.outs))]
+            ports, lo = cat[m.template], m.base - base[m.template]
             d = {"rows": {p: ports[g][lo:lo + m.n] for g, (p, _) in enumerate(lay.rows)},
                  "outs": {p: ports[len(lay.rows) + j][lo:lo + m.n] for j, (p, _) in enumerate(lay.outs)}}
             reads = member_reads(self.circuit, m, base[m.template])

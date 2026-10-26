@@ -42,6 +42,11 @@
 #     reading them as registered values (--registered) and each audit holding them to the pin (records_audit.py
 #     --registered), plus an arm serving other weights under the registered salts (--tamper-weights), which Lean's
 #     registered reads must refuse.
+#   PP_TORCH_DECODER=1: the same for the torch loop's decoder (verity_torch_loop.serve_transformer, CMP-92's 2-layer
+#     transformer, its four templates' units), honest and tampered, against the circuit registered before it ran, in members
+#     of PP_TORCH_LOOP_CAP units (default 16), committed by PP_TORCH_DECODER_WORKERS processes (default 8);
+#     PP_TORCH_LOOP_SHAPE: more serve_transformer.py flags (--prompt, --generate, --bf16-dot). The public member files
+#     aren't kept. PP_LAW=stratified:3 draws a member of every template.
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
 #     honest subset:4, forged subset:8 (every unit drawn); with PP_PLAIN=1, stratified:4 and stratified:8.
 #   PP_PLAIN=1: plain C-Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
@@ -280,6 +285,30 @@ elif [ -n "${PP_TORCH_LOOP:-}" ]; then
   [ "${PP_ONLY:-}" = honest ] || [ -z "${PP_TORCH_LOOP_REGISTERED:-}" ] || loop torch-loop-other-weights --tamper-weights || rc=1
   loop torch-loop-compiled --compiled || rc=1
   [ "${PP_ONLY:-}" = honest ] || loop torch-loop-compiled-tampered --compiled --tamper || rc=1
+elif [ -n "${PP_TORCH_DECODER:-}" ]; then
+  TLAW=${PP_LAW:-subset:2} TCAP=${PP_TORCH_LOOP_CAP:-16}
+  TD="$PY -m verity_torch_loop.serve_transformer --law $TLAW --cap $TCAP --workers ${PP_TORCH_DECODER_WORKERS:-8} ${PP_TORCH_LOOP_SHAPE:-}"
+  export PYTHONPATH=$REPO/integrations/torch_loop
+  decoder() {  # NAME [--tamper]: the decoder's window, audited from its records alone against the circuit registered before it
+               # ran, each arm a run (and a root) of its own
+    local name=$1 forged= id=${RESEARCH_RUN_ID:-local}/$1 serve=() c run
+    [ "${2:-}" = --tamper ] && forged=--forged serve=(--tamper)
+    mkdir -p $O/$name
+    c=$($TD --run-id $id --circuit-only | tee $O/$name/circuit-before.json | $PY -c 'import json, sys; print(json.load(sys.stdin)["circuit"])') \
+      || return 1
+    $TD --run-id $id --out $W/$name-window "${serve[@]}" | tee $O/$name/serve.json || return 1
+    run=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["run"])' $O/$name/serve.json) || return 1
+    mkdir -p $O/$name/window && cp $W/$name-window/{registration,window,index,circuit}.json $O/$name/window/
+    $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-window --law $TLAW --circuit $c --run $run \
+      ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
+      --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
+    local rc=$?
+    grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
+    keep $name
+    return $rc
+  }
+  decoder torch-decoder || rc=1
+  [ "${PP_ONLY:-}" = honest ] || decoder torch-decoder-tampered --tamper || rc=1
 else
   S=$W/served
   (cd integrations/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law $LAW:4 --deferred) \
