@@ -14,6 +14,11 @@ Then `d6.period` at each beside load, with and without the route, on the RTX PRO
 priced as a whole) on both cards.
 
     PUBLIC_BEST_DIR=<D5 v2>/benchmarks/pouw/theory python3 b1alu_check.py <D6 accel_score dir> PICKS OUT_PREFIX
+        [--cost 0.77,1.25] [--pipes alu,fma] [--skip-menu]
+
+--cost: emulated b1's ALU time in INT8 product-times (A7's 0.77; AND + POPC + an add on D5's 64 ALU lanes is about
+1.25, and 1.6 with Harley-Seal's adds), one pass each; --pipes: the pipes it may run on (fma: LOP3 on all 128 INT32
+lanes of sm_120, which D5's card doesn't model); --skip-menu: skip the unpatched pass.
 """
 import json
 import pickle
@@ -24,7 +29,15 @@ sys.path.insert(0, sys.argv[1])
 import d6  # noqa: E402
 
 pb = d6.pb
-A7_ALU = 0.77
+
+
+def _opt(name, default):
+    return sys.argv[sys.argv.index(name) + 1] if name in sys.argv else default
+
+
+COSTS = tuple(float(x) for x in _opt("--cost", "0.77").split(","))
+PIPES = tuple(_opt("--pipes", "alu,fma").split(","))
+A7_ALU = COSTS[0]
 XS = (0.0, 0.25, 1.0)
 MODELS = ("Llama-3.1-8B", "Llama-3.1-70B", "DeepSeek-V4-Pro")
 _orig = pb.tile_methods
@@ -40,7 +53,7 @@ def patched(card, t, Lp, K, bit, depth, L, zleaf, peels, dense, digits=(2, 2), o
     ms = _orig(card, t, Lp, K, bit, depth, L, zleaf, peels, dense, digits, o_route, zhd, schemes, v)
     if card.family != "sm_120":
         return ms
-    extra = {f"o_route b1 on {p}": emu(card, p) for p in ("alu", "fma")}
+    extra = {f"o_route b1 on {p}": emu(card, p) for p in PIPES}
     out = []
     for m in ms:
         if m.items and m.items[0][0] == "O":
@@ -49,7 +62,7 @@ def patched(card, t, Lp, K, bit, depth, L, zleaf, peels, dense, digits=(2, 2), o
         out.append(m)
     tiles = next(m for m in ms if m.label == "tiles")
     mma = dict(smem=1 / card.honest_tile[0] + 1 / card.honest_tile[1], rf=card.mma_rf, issue=card.mma_issue)
-    for p in ("alu", "fma"):
+    for p in PIPES:
         f = {r: y / t for r, y in mma.items()}
         f["tensor"] = 1 / (t * card.s8)
         for r, y in emu(card, p).items():
@@ -83,8 +96,9 @@ def run(cards, label):
 if __name__ == "__main__":
     P = pickle.load(open(sys.argv[2], "rb"))
     static, pv = P["v3.1"]
-    out = {"menu": run(("RTX PRO 6000", "H200"), "D5 v2 menu (D6)")}
+    out = {} if "--skip-menu" in sys.argv else {"menu": run(("RTX PRO 6000", "H200"), "D5 v2 menu (D6)")}
     pb.tile_methods = patched
-    out["b1"] = run(("RTX PRO 6000",), "+ emulated b1 (A7)")
+    for A7_ALU in COSTS:
+        out[f"b1 {A7_ALU} on {'+'.join(PIPES)}"] = run(("RTX PRO 6000",), f"+ b1 {A7_ALU} {'+'.join(PIPES)}")
     json.dump({lab: {" | ".join(map(str, k)): v for k, v in r.items()} for lab, r in out.items()},
               open(sys.argv[3] + ".json", "w"), indent=1, default=str)
