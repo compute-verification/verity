@@ -37,6 +37,12 @@ merge the gate can't rule out, such as a read on a path it can't show infeasible
 numeric evidence that each sequence is exact on subnormal inputs and outputs, as each pinned ptxas builds it, is
 `ieee_pin.cu`, run by `ieee_pin.py`, whose run each toolkit's ``numeric`` names; its builds are where the pins come from.
 
+A flagged instruction also passes, alone and in any function, when its toolkit's entry lists it under ``exceptions``: an
+instruction of `EXCEPTABLE`, in that one form, which a Definition the verifier replays models bit for bit, named in the
+entry (``definition``) with the numeric run that held the toolkit's target card to it on every operand word (``numeric``,
+its ``runs``). MUFU.EX2 is one under 13.0.1-sm_90a: `verity.ml.circuits.ops.mufu.MufuEx2Ftz` on all 2^32 operands on two
+H200s. An entry without both, or an instruction `EXCEPTABLE` doesn't list, fails the pins.
+
 The cubins come from a .cubin, a fatbin, or a host ELF's .nv_fatbin section (parsed here, since ``cuobjdump -xelf`` writes
 same-named cubins over each other), each disassembled by nvdisasm; ``cuobjdump -sass`` of the whole binary must list the same
 flagged instructions, or the gate fails. A compressed fatbin entry fails too (build with nvcc's ``--no-compress``, or ship the
@@ -86,6 +92,9 @@ SHT_NOTE = 7
 MAX_LISTED = 20
 MAX_STATES = 1 << 20
 FP64_MUFU = frozenset({"RCP64H", "RSQ64H"})
+#: the flagged instructions a toolkit's ``exceptions`` may list, each in the one form (guard aside) its numeric run measured:
+#: a register operand, no modifier
+EXCEPTABLE = {"MUFU.EX2": re.compile(r"MUFU\.EX2 R\d+, R\d+")}
 
 _INSN = re.compile(r"/\*([0-9a-f]{4,})\*/\s+(.*?)\s*;")
 _PRED = re.compile(r"^@!?U?P[T0-9]+\s+")
@@ -963,6 +972,13 @@ def parse_pins(data: bytes | str, where: str) -> dict:
     pins = json.loads(data)
     if pins.get("version") != PINS_VERSION:
         raise SassGateFailed(f"{where} is {pins.get('version')!r}, not {PINS_VERSION}")
+    for tk, rec in pins["toolkits"].items():
+        for insn, exc in rec.get("exceptions", {}).items():
+            if insn not in EXCEPTABLE:
+                raise SassGateFailed(f"{where}: {tk} excepts {insn}, which sass_gate.EXCEPTABLE doesn't list (only "
+                                     f"{', '.join(EXCEPTABLE)}): add it there with the one form its numeric run measured")
+            if not exc.get("definition") or not (exc.get("numeric") or {}).get("runs"):
+                raise SassGateFailed(f"{where}: {tk}'s exception for {insn} names no definition or no numeric runs")
     return pins
 
 
@@ -997,6 +1013,7 @@ def cubin_verdict(funcs: list[dict], notes: list[dict], pins: dict) -> dict:
     fns = [Function(f) for f in funcs]
     tk, why = toolkit_of(notes, pins) if any(f.insns for f in fns) else (None, None)
     pinned = pins["toolkits"][tk]["subroutines"] if tk else {}
+    excepted = pins["toolkits"][tk].get("exceptions", {}) if tk else {}
     flagged_at, covered, hints, misses, merged = [], {}, {}, [], []
     fp64 = 0
     for fi, fn in enumerate(fns):
@@ -1041,6 +1058,15 @@ def cubin_verdict(funcs: list[dict], notes: list[dict], pins: dict) -> dict:
                     covered.setdefault((fi, k), m.kind)
             merged += [{"function": fn.name, "sequence": m.kind, "value": f"{reg} from 0x{fn.insns[k].addr:04x}",
                         "reader": f"0x{fn.insns[u].addr:04x} {fn.insns[u].text}"} for k, reg, u in m.merged]
+        for k, ins in enumerate(fn.insns):
+            if (fi, k) in covered or ins.name not in EXCEPTABLE:
+                continue
+            if ins.name not in excepted:
+                hints.setdefault((fi, k), f"{tk} lists no exception for {ins.name}")
+            elif EXCEPTABLE[ins.name].fullmatch(ins.body()):
+                covered[(fi, k)] = ins.name
+            else:
+                hints.setdefault((fi, k), f"{ins.name} is excepted only as {EXCEPTABLE[ins.name].pattern}")
     bad = [(fi, k) for fi, k in flagged_at if (fi, k) not in covered]
     return {"tool_notes": notes, "toolkit": tk, "unpinned": why, "functions": len(fns),
             "flagged": len(flagged_at), "covered": dict(Counter(covered[x] for x in flagged_at if x in covered)),
@@ -1266,7 +1292,8 @@ def why_failed(rec: dict) -> str:
         c = rec["cubins"][o["cubin"]]
         where = (f" (cubin {o['cubin']}: {c['unpinned']}, so nothing is exempt)" if c["unpinned"]
                  else f" ({o['why']})" if o.get("why") else "")
-        return (f"{rec['offending_n']} flagged instruction(s) (.FTZ or FP32 MUFU) outside a pinned IEEE sequence, first "
+        return (f"{rec['offending_n']} flagged instruction(s) (.FTZ or FP32 MUFU) outside a pinned IEEE sequence or "
+                f"exception, first "
                 f"{o['function']} {o['address']}: {o['instruction']}{where}")
     if rec["ptx_bad_n"]:
         return f"{rec['ptx_bad_n']} .ftz, .approx or div.full PTX instruction(s), first: {rec['ptx_bad'][0]}"
@@ -1404,7 +1431,8 @@ def pin_record(paths: list[Path], tools: dict) -> list[dict]:
 def update_pins(records: list[dict], toolkit: str, path: Path = PINS) -> dict:
     """Pin `toolkit` from `pin_record`s of its builds: the one ptxas version and build their notes name, the arguments
     (-v aside), and every signature of each subroutine with a flagged instruction (ptxas specializes a body to its
-    callers, so one name may have several). Its numeric run is kept while those signatures are unchanged."""
+    callers, so one name may have several). Its numeric run is kept while those signatures are unchanged, and its
+    exceptions while the ptxas is."""
     notes = [n for r in records for n in r["tool_notes"] if n["tool"] == "ptxas"]
     builds = {(n["version"], n["branch"]) for n in notes}
     if len(builds) != 1:
@@ -1426,7 +1454,9 @@ def update_pins(records: list[dict], toolkit: str, path: Path = PINS) -> dict:
         "version": version, "branch": branch,
         "args": sorted({" ".join(a for a in n["args"].split() if a != "-v") for n in notes}),
         "subroutines": pinned,
-        "numeric": old.get("numeric") if old.get("subroutines") == pinned else None}
+        "numeric": old.get("numeric") if old.get("subroutines") == pinned else None,
+        **({"exceptions": old["exceptions"]} if old.get("exceptions") and (old["version"], old["branch"]) == (version, branch)
+           else {})}
     live = {sid for t in pins["toolkits"].values() for sids in t["subroutines"].values() for sid in sids}
     pins["signatures"] = {sid: b for sid, b in sorted({**pins["signatures"], **blocks}.items()) if sid in live}
     path.write_text(json.dumps(pins, indent=1) + "\n")

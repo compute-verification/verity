@@ -1,8 +1,9 @@
 """The SASS gate (`harness/sass_gate.py`), on CUDA 12.9.1's and 13.0.1's listings of `fixtures/sass_gate/ftz_probe.cu` and
 `ftz_refused.cu` (sm_120a, and 13.0.1's sm_90a): builds without flags pass, with every flagged instruction inside a pinned sequence; --use_fast_math, -ftz=true
 and the approximate -prec-div=false -prec-sqrt=false fail, as does every kernel of `ftz_refused.cu`; a cubin whose ptxas
-(version, build, arguments) isn't pinned with a numeric run exempts nothing; each sequence breaks under a mutation; a read
-the gate can't tell from a merge passes and is listed; the pins regenerate; the two disassemblies must agree; the fatbin
+(version, build, arguments) isn't pinned with a numeric run exempts nothing; an instruction a toolkit excepts (MUFU.EX2
+under 13.0.1-sm_90a, on kernels' units_softmax) passes alone, in its one form, and nothing else does; each sequence
+breaks under a mutation; a read the gate can't tell from a merge passes and is listed; the pins regenerate; the two disassemblies must agree; the fatbin
 parser finds every cubin and refuses what it can't read; passes are cached and failures aren't; an arm must declare its
 binaries; and, where a CUDA toolkit is present, real builds."""
 
@@ -413,7 +414,8 @@ def test_an_sm90a_build_without_flags_passes_under_its_own_entry_and_no_other(pi
 def test_the_shipped_sm90a_entry_exempts_only_the_bodies_its_numeric_run_tested():
     """The shipped entry is found for an sm_90a build of its ptxas and exempts the seeds and the bodies ieee_pin.cu's builds
     pinned; the probe's sqrt calls reach a __cuda_sm20_sqrt_rn_f32_slowpath that ptxas specialized otherwise, which no
-    numeric run tested, so they stay refused, and so does every refused kernel."""
+    numeric run tested, so they stay refused, and so does every refused kernel but __expf's, whose one flagged instruction
+    is a bare MUFU.EX2 between IEEE FMULs, which the entry excepts."""
     entry = SG.load_pins()["toolkits"]["13.0.1-sm_90a"]
     assert entry["args"] == ["-arch sm_90a -m 64", "-arch sm_90a -m 64 -fmad false"]
     assert entry["numeric"]["run"] == "r20261023-120437-0149"
@@ -422,7 +424,8 @@ def test_the_shipped_sm90a_entry_exempts_only_the_bodies_its_numeric_run_tested(
     assert [c.split(" ")[0] for c in v["unmatched_calls"]] == ["sqrt_k", "rho_k"]
     assert "sqrt" not in str(v["covered"]) and 0 < v["offending_n"] < v["flagged"]
     r = verdict("refused90")
-    assert r["toolkit"] == "13.0.1-sm_90a" and r["covered"] == {} and r["offending_n"] == r["flagged"] == 18
+    assert r["toolkit"] == "13.0.1-sm_90a" and r["covered"] == {"MUFU.EX2": 1} and r["flagged"] == 18
+    assert r["offending_n"] == 17 and "expf_k" not in {o["function"] for o in r["offending"]}
 
 
 def test_every_refused_kernel_fails_at_sm90a_too(pins90):
@@ -473,6 +476,94 @@ def test_a_conversion_may_write_only_its_destination_types_width(pins90, f2f, ex
         assert "$b changes between its readers" in v["offending"][0]["why"]
 
 
+# ---- exceptions -----------------------------------------------------------------------------------------------------------
+# `units_softmax90` is kernels' units_softmax (benchmarks/torch_gpu/units/units.cu at 3cc8d5b6a6, #4518) as 13.0.1's ptxas
+# built it for sm_90a: the cubin H200 run r20261026-032225-3cee ran (sha256 81d539e9...), listed by r20261026-072428-54b7.
+# Its 32 MUFU.EX2 are ex2.approx.ftz.f32, one per element of a row; the same run's units_sweep held that instruction to
+# MufuEx2Ftz on all 2^32 operands.
+
+SOFTMAX_RCP = ("units_softmax", "MUFU.RCP R0, R3")
+
+
+def softmax90(text: str | None = None, notes: list | None = None, p: dict | None = None) -> dict:
+    return SG.cubin_verdict(SG.parse_nvdisasm(listing("units_softmax90") if text is None else text),
+                            NOTES["units_softmax90"] if notes is None else notes, SG.load_pins() if p is None else p)
+
+
+def ex2s(v: dict) -> list[dict]:
+    return [o for o in v["offending"] if SG.opcode(o["instruction"])[:2] == ["MUFU", "EX2"]]
+
+
+def test_units_softmax_mufu_ex2_passes_under_the_shipped_sm90a_exception():
+    """Every MUFU.EX2 of units_softmax passes under the shipped 13.0.1-sm_90a entry. What stays flagged is its r = 1/s
+    div.rn, which the exception doesn't touch: a fast path the gate doesn't match, around a slow path that ptxas
+    specialized to a body no numeric run tested."""
+    v = softmax90()
+    assert v["toolkit"] == "13.0.1-sm_90a" and v["covered"] == {"MUFU.EX2": 32} and v["flagged"] == 44
+    assert not ex2s(v) and v["offending_n"] == 12 and SOFTMAX_RCP in offending(v)
+    assert all("signature 999a4f7e9f909396) isn't a pinned one" in o["why"] for o in v["offending"]
+               if (o["function"], o["instruction"]) != SOFTMAX_RCP)
+
+
+def test_without_the_exception_or_for_another_target_every_mufu_ex2_is_refused():
+    p = SG.load_pins()
+    del p["toolkits"]["13.0.1-sm_90a"]["exceptions"]
+    v = softmax90(p=p)
+    assert v["covered"] == {} and len(ex2s(v)) == 32
+    assert {o["why"] for o in ex2s(v)} == {"13.0.1-sm_90a lists no exception for MUFU.EX2"}
+    sm120 = softmax90(notes=[{**NOTES["units_softmax90"][0], "args": "-v -arch sm_120a -m 64 -fmad false"}])
+    assert sm120["toolkit"] == "13.0.1" and sm120["covered"] == {} and len(ex2s(sm120)) == 32
+    assert {o["why"] for o in ex2s(sm120)} == {"13.0.1 lists no exception for MUFU.EX2"}
+
+
+@pytest.mark.parametrize("new,why", [("@P5 MUFU.RSQ R35, R42", None), ("@P5 MUFU.LG2 R35, R42", None),
+                                     ("@P5 MUFU.TANH R35, R42", None), ("@P5 MUFU.EX2.F16 R35, R42", None),
+                                     ("@P5 MUFU.EX2 R35, -R42", "MUFU.EX2 is excepted only as"),
+                                     ("@P5 MUFU.EX2 R35, |R42|", "MUFU.EX2 is excepted only as")])
+def test_another_mufu_or_another_form_of_ex2_is_still_refused(new, why):
+    """The exception is MUFU.EX2 of a register, the form the sweep measured: another MUFU in its place, or MUFU.EX2 with
+    another type or an operand modifier, stays flagged while the other 31 pass."""
+    v = softmax90(in_function(listing("units_softmax90"), "units_softmax", "@P5 MUFU.EX2 R35, R42", new))
+    hit = [o for o in v["offending"] if o["instruction"] == new]
+    assert v["covered"] == {"MUFU.EX2": 31} and len(hit) == 1 and v["offending_n"] == 13
+    assert hit[0].get("why", "").startswith(why) if why else "why" not in hit[0]
+
+
+def test_the_exception_names_the_definition_and_table_its_runs_measured():
+    """The shipped exception is MufuEx2Ftz_v1 over the library's ex2 table, the evaluator the sweep's digests came from;
+    another id or table is another Definition, which needs its own run. No other toolkit excepts anything."""
+    from verity.ml.circuits import library
+    from verity.ml.circuits.ops import mufu
+
+    p = SG.load_pins()
+    exc = p["toolkits"]["13.0.1-sm_90a"]["exceptions"]
+    assert set(exc) == set(SG.EXCEPTABLE) == {"MUFU.EX2"}
+    assert exc["MUFU.EX2"]["definition"].startswith(f"verity.ml.circuits.ops.mufu.MufuEx2Ftz ({mufu.MufuEx2Ftz.id}, ")
+    assert library.table("ex2").sha512 in exc["MUFU.EX2"]["definition"] and len(mufu.table("ex2")) == 1 << 23
+    assert exc["MUFU.EX2"]["numeric"]["runs"] == ["r20261026-015355-aec6", "r20261026-032225-3cee"]
+    assert [tk for tk, rec in p["toolkits"].items() if rec.get("exceptions")] == ["13.0.1-sm_90a"]
+
+
+@pytest.mark.parametrize("exc,why", [({"MUFU.RSQ": {"definition": "d", "numeric": {"runs": ["r"]}}},
+                                      "excepts MUFU.RSQ, which sass_gate.EXCEPTABLE doesn't list"),
+                                     ({"MUFU.EX2": {"definition": "d", "numeric": {"runs": []}}}, "no numeric runs"),
+                                     ({"MUFU.EX2": {"numeric": {"runs": ["r"]}}}, "names no definition")])
+def test_pins_refuse_an_exception_the_gate_doesnt_list_or_without_its_evidence(tmp_path, exc, why):
+    p = SG.load_pins()
+    p["toolkits"]["13.0.1-sm_90a"]["exceptions"] = exc
+    (tmp_path / "pins.json").write_text(json.dumps(p))
+    with pytest.raises(SG.SassGateFailed, match=why):
+        SG.load_pins(tmp_path / "pins.json")
+
+
+def test_a_repin_keeps_the_exceptions_only_while_the_ptxas_is_unchanged(tmp_path, records):
+    out = tmp_path / "pins.json"
+    out.write_text(SG.PINS.read_text())
+    exc = SG.load_pins()["toolkits"]["13.0.1-sm_90a"]["exceptions"]
+    assert SG.update_pins(records("plain90"), "13.0.1-sm_90a", out)["exceptions"] == exc
+    assert "exceptions" not in SG.update_pins(records("plain"), "13.0.1-sm_90a", out)
+
+
 # ---- tool notes -----------------------------------------------------------------------------------------------------------
 
 
@@ -521,8 +612,8 @@ def test_the_two_disassemblies_must_agree():
 def test_why_failed_names_the_first_instruction_and_why():
     r = judge("fast_math")
     assert not r["ok"] and r["cross_check"]["agree"] and r["offending_n"] == 42
-    assert SG.why_failed(r).startswith("42 flagged instruction(s) (.FTZ or FP32 MUFU) outside a pinned IEEE sequence, "
-                                       "first ")
+    assert SG.why_failed(r).startswith("42 flagged instruction(s) (.FTZ or FP32 MUFU) outside a pinned IEEE sequence or "
+                                       "exception, first ")
     unpinned = SG.judge([(SG.parse_nvdisasm(listing("plain")), [])], (FIX / "plain.cuobjdump.txt").read_text(), [], pins())
     assert "(cubin 0: no ptxas record (.note.nv.tkinfo), so nothing is exempt)" in SG.why_failed(unpinned)
 
@@ -710,7 +801,8 @@ def test_a_real_build(tmp_path, arch, src, flags, ok):
     /usr/local/cuda) and gates both with the shipped pins; skipped without nvcc, cuobjdump and nvdisasm. It catches what the
     listings can't: a toolkit whose expansions or notes differ, and a real host ELF's fatbin. A build passes only from a
     toolkit pinned for its target with a numeric run; an sm_90a cubin from any other fails closed (12.9 writes it no ptxas
-    note, 13.0 unpinned arguments)."""
+    note, 13.0 unpinned arguments), and one from 13.0.1 fails only on the div and sqrt slow-path bodies its numeric run
+    didn't pin (`test_the_shipped_sm90a_entry_exempts_only_the_bodies_its_numeric_run_tested`)."""
     try:
         tools = SG.find_tools()
     except SG.SassGateFailed as ex:
@@ -731,9 +823,13 @@ def test_a_real_build(tmp_path, arch, src, flags, ok):
         if arch == "sm_90a" and not pinned:
             assert code[0]["unpinned"] == "no ptxas record (.note.nv.tkinfo)" \
                 or "with unpinned arguments '-arch sm_90a -m 64" in code[0]["unpinned"], code[0]["unpinned"]
-        assert rec["ok"] is (ok and pinned), (out, rec["offending"][:3])
-        if rec["ok"] and arch == "sm_120a":
+        assert rec["ok"] is (ok and pinned and arch == "sm_120a"), (out, rec["offending"][:3])
+        if rec["ok"]:
             assert rec["covered"] == PLAIN_COVERED, (out, rec["covered"])
+        elif pinned and ok:
+            assert {o["function"] for o in rec["offending"]} <= {"sqrt_k", "rho_k", "cdiv_k"} and all(
+                "isn't the pinned body" in o["why"] or "isn't a pinned one" in o["why"]
+                for o in rec["offending"] if "why" in o), (out, rec["offending"][:3])
         elif pinned:
             fns = {o["function"] for o in rec["offending"]}
             assert fns and (fns <= FP32_KERNELS or src == "ftz_refused.cu"), (out, fns)
