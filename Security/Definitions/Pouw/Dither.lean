@@ -20,7 +20,8 @@ The headline of the ACCEL program (`Definitions.Pouw.Guarantees.Dither.WorkSound
   SAK(matmul) on the words and SHA-512's speed on their commitment (`Definitions.Pouw.Assumptions.Dither`'s
   `SAKMatmul`, `ShaSpeed`), in units of priced cost, outside a degenerate set of dithers;
 * **a monitoring period's prover** round by round on instances registered before the period (`Prover`), what it
-  sends (`Prover.transcript`), its credited use (`Prover.workUse`) and oracle calls (`Prover.calls`), and the service's
+  sends (`Prover.transcript`), its timed use (`Prover.timedUse`, its rounds' work and answers) and oracle calls
+  (`Prover.calls`), and the service's
   verdict on the transcript and the auditor's devices' readings (`Verdict`, `Readings`, `Prover.Passes`);
 * **freed compute** (`Period`, `Period.FreedWithin`, `Period.DualOpt`, `FreedSound`): R-ACCEL-1's definition, kept in
   this one place, and its probability form, the headline's conclusion;
@@ -262,6 +263,10 @@ check coins are drawn; the verifier draws the check coins `c`; `answer w` answer
 earlier rounds' coins only through the state, so nothing before round `w`'s commitment depends on round `w`'s check
 coins or on any later coin.
 
+**Both of a round's phases are timed**: the challenger times `work w` from the dither to the commitment, and
+`answer w` from the check coins to the answer deadline `τ_ans` (RT-LEAN-2 I1's "time `answer` too"). Both run inside
+the period on its devices, so what fits there is their sum (`timedUse`), and so are the oracle calls the cap bounds.
+
 **A round is the set of calls whose coins go out together** (RT-PROTO-2 P13): every root of round `w` is in before
 round `w + 1`'s coins go out. Calls that overlap in time but whose coins went out separately are separate rounds, in
 the order their coins went out, and a prover that runs them concurrently is a prover whose `work w` reads only what
@@ -315,16 +320,15 @@ check against its commitment. -/
 def Accepted (reg : Fin k → P.Inst) (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : Prop :=
   ∀ w, P.accept o (reg w) (x w).1 (x w).2 (A.root o x w) (A.ans o x w)
 
-/-- **The rounds' credited use** of resource `r`: every round's `work` at its input, nothing else (RT-LEAN-2 I1). The
-answers and whatever the prover does outside its rounds are other work. -/
-noncomputable def workUse (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (r : G.Res) : ℝ :=
-  ∑ w, G.use (A.work w) (A.workIn o x w) r
+/-- **The rounds' timed use** of resource `r`: every round's `work` and `answer` at their inputs, the two phases the
+challenger times (RT-LEAN-2 I1). Whatever the prover does outside its rounds is other work. -/
+noncomputable def timedUse (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (r : G.Res) : ℝ :=
+  ∑ w, (G.use (A.work w) (A.workIn o x w) r + G.use (A.answer w) (A.answerIn o x w) r)
 
-/-- **The rounds' oracle calls**: every round's `work` at its input (RT-LEAN-2 L39). On a run whose work fits the
-period's devices, (G3) caps them at a resource's capacity over a call's use of it. The answers' calls aren't counted:
-answers are untimed (I1), so nothing caps them. -/
+/-- **The rounds' oracle calls**: every round's `work` and `answer` at their inputs (RT-LEAN-2 L39). On a run whose
+timed use fits the period's devices, (G3) caps them at a resource's capacity over a call's use of it. -/
 noncomputable def calls (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : ℝ :=
-  ∑ w, G.calls (A.work w) (A.workIn o x w)
+  ∑ w, (G.calls (A.work w) (A.workIn o x w) + G.calls (A.answer w) (A.answerIn o x w))
 
 /-- The rounds' exchanged bits (`Accel.ext`), their work's and answers'. -/
 noncomputable def ext (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : ℝ :=
@@ -366,8 +370,9 @@ section Freed
 /-- **A monitoring period's devices and the other work they could do**, in resource units: the period's length `T`
 (seconds), the other jobs `J`, each with its value `val` per unit and its use `needs` per unit, and the honest use
 `hon` of the credited work and its value `rv` (R-ACCEL-1's credit, in the jobs' units: its honest cost at the dual
-price; RT-LEAN L25). `WorkSound` reads it at `W = 1` credited unit: `hon` is the registered rounds' total honest use,
-whose rounds differ (RT-LEAN-2 L27, RT-PROTO-2 P15), and `rv` their credit. -/
+price; RT-LEAN L25). `WorkSound` reads it at `W = 1` credited unit: `hon` is the registered rounds' total honest
+timed use, work and answers, both inside `T` (RT-LEAN-2 I1), whose rounds differ (RT-LEAN-2 L27, RT-PROTO-2 P15), and
+`rv` their credit. -/
 structure Period (G : Accel) where
   T : ℝ
   J : Type
@@ -386,8 +391,8 @@ variable {G : Accel} (Pd : Period G)
 /-- What the devices can do in the period (G2): `ρ_r T` of resource `r`. -/
 def cap (r : G.Res) : ℝ := G.rate r * Pd.T
 
-/-- A strategy fits the devices: its credited part (its rounds' work, `Prover.workUse`) uses `X`, its other work
-`z ≥ 0` units of each job, and the two together use no resource past its capacity. -/
+/-- A strategy fits the devices: its credited part (its rounds' timed work and answers, `Prover.timedUse`) uses `X`,
+its other work `z ≥ 0` units of each job, and the two together use no resource past its capacity. -/
 def Fits (X : G.Res → ℝ) (z : Pd.J → ℝ) : Prop := (∀ j, 0 ≤ z j) ∧ ∀ r, X r + ∑ j, z j * Pd.needs j r ≤ Pd.cap r
 
 /-- A strategy's value: its `W` credited rounds at `rv` each, plus its other work's. -/
@@ -414,7 +419,8 @@ end Period
 /-- **Freed compute at most `ε C`, prover by prover** (R-ACCEL-1's probability form): for every prover, the
 probability over the oracle and the verifier's coins that the service accepts its period (`Prover.Passes`, on its
 transcript and the devices' readings `dev`) and some other work `z` fits on the period's devices beside its rounds'
-work (`Prover.workUse`, RT-LEAN-2 I1) with `W rv + W_other(z) > OPT_honest + ε C` (`¬ Period.FreedWithin`) is at most
+timed work and answers (`Prover.timedUse`, RT-LEAN-2 I1) with `W rv + W_other(z) > OPT_honest + ε C`
+(`¬ Period.FreedWithin`) is at most
 `κ`. `W` is the credited work. `ε` and `κ` are the prover's own: a prover whose commitment path makes more queries
 has a larger walk-and-log cost and extraction error (`ExtractAdv`). Wrap corrections and peels (BET-HYBRID-2) are
 serving work outside the words: they are other work here, never credit, so skipping them isn't a soundness
@@ -423,7 +429,7 @@ def FreedSound (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Ve
     (dev : Readings G P k Obs) (Pd : Period G) (W : ℝ) (ε : Prover G P k → ℝ) (C : ℝ) (κ : Prover G P k → ℝ) :
     Prop :=
   ∀ A : Prover G P k, prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) => A.Passes verdict dev ox.1 ox.2 ∧
-    ∃ z, Pd.Fits (A.workUse ox.1 ox.2) z ∧ ¬ Pd.FreedWithin W z (ε A) C) ≤ κ A
+    ∃ z, Pd.Fits (A.timedUse ox.1 ox.2) z ∧ ¬ Pd.FreedWithin W z (ε A) C) ≤ κ A
 
 end Freed
 
