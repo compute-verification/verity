@@ -1,4 +1,5 @@
 import Proofs.Flock.Recursive.KSStatement
+import Proofs.Flock.Recursive.KSV
 import Proofs.Flock.Claims.Recursion.NonVacuous
 import Proofs.Flock.Claims.KS.PlainRConflict
 import Proofs.Flock.Claims.KS.PlainAccPrR
@@ -31,8 +32,10 @@ import Proofs.Flock.Claims.Recursion.SideCapPos
 coins). The extra calls `layR` records are true at the outer relation (`moreSlotsTrue_deployed`). It takes `DecompBP`
 at what each part's circuit accepts at its own witness `ws[s]` (`hD`, `PartAcceptsP`). `recursiveKSAt_of_decomp` takes
 `DecompB` at `PartAccepts` instead, as `RecKSDecompL` at `layR`, which pins (`decompBP_of_decompB`).
-`recursiveKSAt_of_leaves` proves `DecompBP` from chain B's leaves (`RestLow.recKSDecompDP_of_leavesJ`), pinned because
-the cap tie binds across parts through the parts' own witnesses' calls (`OutBindRP`).
+`recursiveKSAt_of_leaves` proves `DecompBV` from chain B's leaves (`RestLow.recKSDecompDV_of_leavesJ`) and takes it
+through `recursiveKSAt_ofV`: pinned because the cap tie binds across parts through the parts' own witnesses' calls
+(`OutBindRP`), and at the V\* statements because row E's chain ties two parts' slots through the compiled verifier's
+own evaluations there (`Top.RowEJoint`, under `JointV`).
 -/
 
 
@@ -107,8 +110,8 @@ theorem copyOpensR_bdDeployed {H : Msg → Msg} {D : Claims.Recursion.Deploy Coi
     h x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO wt p hst q hq ho ht os last hfin hl
 
 /-- **`RecursiveKSAt` from chain B's leaves, at the deployed readers**: `recursiveKSAt_of` at the element-level
-reader `DeployedR.rdR` and the last message's pieces `OpenRows.elemR`, with `DecompBP` at the layout of record
-from `recKSDecompDP_of_leavesJ`, at the decision's positions `Rows.posAt`, row R's readers
+reader `DeployedR.rdR` and the last message's pieces `OpenRows.elemR`, through `recursiveKSAt_ofV`, with `DecompBV`
+at the layout of record from `recKSDecompDV_of_leavesJ`, at the decision's positions `Rows.posAt`, row R's readers
 (`elemReadC (Top.accRC rdR key)`, `resVRead`) and the concrete `rec-residuals` pieces and owners (`resPD`, `ownRD`).
 Proved: the extra calls (`moreSlotsTrue_deployed`), the reader's bound (`plainRdInR`), the rounds no part holds
 (`saltRowsJ_layR`), row R's target (`targetRDep_readers`) from the pieces `resPD` has (`resPiecesAt_D`), the pieces'
@@ -126,7 +129,7 @@ theorem recursiveKSAt_of_leaves (wE w : Msg → ℝ)
     (hEJ : Top.RowEJoint DeployedR.rdR key FlockDeploy.sha512
       (recL DeployedR.rdR b aux nOf hd recRest wE DeployedR.finalR w (DeployedR.layR OpenRows.elemR))
       (bdR DeployedR.rdR wE DeployedR.finalR w) (DeployedR.layR OpenRows.elemR) Claims.Recursion.Form.Dense
-      (acceptsL DeployedR.rdR b aux nOf hd recRest wE DeployedR.finalR w (DeployedR.layR OpenRows.elemR)))
+      (acceptsLV DeployedR.rdR b aux nOf hd recRest wE DeployedR.finalR w (DeployedR.layR OpenRows.elemR)))
     (hF : RestRead.FinalReads DeployedR.finalR (DeployedR.restR OpenRows.elemR))
     (hRd : RestRead.ReadsAt DeployedR.rdR DeployedR.finalR (DeployedR.restR OpenRows.elemR))
     (hres : ResLower.ResLowered DeployedR.rdR wE DeployedR.finalR w (bB b aux nOf hd recRest) OpenRows.elemR
@@ -169,10 +172,10 @@ theorem recursiveKSAt_of_leaves (wE w : Msg → ℝ)
       (IV := (bdR DeployedR.rdR wE DeployedR.finalR w).IVStar) (shape := Claims.Recursion.Form.Dense)
       (Bd := bdR DeployedR.rdR wE DeployedR.finalR w) (Rows.rowDPieces key) (fun _ => rfl) (fun _ h => h)
       (OpenLower.piecesInRangeR_rowDPieces key) (fun _ => le_rfl)
-  refine recursiveKSAt_of DeployedR.rdR DeployedR.finalR OpenRows.elemR wE w b aux nOf hd recRest
+  refine recursiveKSAt_ofV DeployedR.rdR DeployedR.finalR OpenRows.elemR wE w b aux nOf hd recRest
     (fun x _ => FlockDeploy.KS.plainRdInR DeployedR.rdR x) fun shape hs => ?_
   obtain rfl := List.mem_singleton.1 hs
-  exact recKSDecompDP_of_leavesJ DeployedR.rdR b aux nOf hd recRest OpenRows.elemR wE DeployedR.finalR w resPD key
+  exact recKSDecompDV_of_leavesJ DeployedR.rdR b aux nOf hd recRest OpenRows.elemR wE DeployedR.finalR w resPD key
     (Rows.elemReadC (Top.accRC DeployedR.rdR key)) Rows.resVRead ownRD
     (targetRDep_readers DeployedR.rdR (resPiecesAt_D DeployedR.rdR key _ _)) hEJ
     (basesHold_spec DeployedR.rdR) hF hRd (saltRowsJ_layR DeployedR.rdR wE w OpenRows.elemR) (piecesOwned_D key)

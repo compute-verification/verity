@@ -30,7 +30,7 @@ theorem recursiveKSAt_of_leaves_deployed (wE w : Msg → ℝ)
     (hEJ : Top.RowEJoint DeployedR.rdR key FlockDeploy.sha512
       (recL DeployedR.rdR (deployedB b) aux nOf hd recRest wE DeployedR.finalR w (DeployedR.layR OpenRows.elemR))
       (bdR DeployedR.rdR wE DeployedR.finalR w) (DeployedR.layR OpenRows.elemR) Claims.Recursion.Form.Dense
-      (acceptsL DeployedR.rdR (deployedB b) aux nOf hd recRest wE DeployedR.finalR w (DeployedR.layR OpenRows.elemR)))
+      (acceptsLV DeployedR.rdR (deployedB b) aux nOf hd recRest wE DeployedR.finalR w (DeployedR.layR OpenRows.elemR)))
     (hres : ResLower.ResLowered DeployedR.rdR wE DeployedR.finalR w (bB (deployedB b) aux nOf hd recRest)
       OpenRows.elemR Claims.Recursion.Form.Dense recRead (cmtTr recRead) resPD ownRD
       (Rows.elemReadC (Top.accRC DeployedR.rdR key)) Rows.resVRead) :
