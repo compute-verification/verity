@@ -20,7 +20,7 @@ posted on 25 Oct at 06:17Z, and what PRs have done since.
 | PoUS | all | none (ideal model only) | item 11, E2EMAP, over item 1 as a hypothesis: Thu 29 Oct |
 | Bandwidth (over PoUS's store) | all | none with a session layer | item 11, E2EMAP: Thu 29 Oct |
 | Remote bandwidth | all | none with a session layer | item 11, E2EMAP: Thu 29 Oct |
-| Network certifier | all | none: `SampledAuditAccepted` stated, unproved | item 10, FINTAU: proved on main (#4054); #4083 (open) lists it. The leak step is proved and listed on main (#4055, #4044) |
+| Network certifier | all | none: `SampledAuditAccepted` stated, unproved | item 10, FINTAU: proved on main (#4054); #4083 (open) lists it. The leak step is listed on main (#4055, #4044) under the named assumption `SampledAuditAccepted`, its hypothesis, which the lock lists as an assumption; proved once #4083 lands |
 | NCI | all | none with a session layer; it rests on the assumption `PouwSound`, which no PoUW guarantee instantiates | item 11's NCI part: `PouwSound` replaced by item 9's e2e, Fri 30 Oct, after item 9 |
 | Accounting (top layer) | — | Already modular: the pattern every lower layer should copy | — |
 
