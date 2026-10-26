@@ -1,8 +1,8 @@
 """What the band-fill wipe's prover and memory challenger share: the scheme, the binding a session signs, the cheat's
 pattern, and the control channel.
 
-The control channel is JSON lines over one TCP connection, the prover listening on its own 127.0.0.1 (the memory
-challenger reaches it through an SSH tunnel):
+The control channel is JSON lines over one TCP connection, the prover listening on an address the memory challenger
+reaches directly, or on its own 127.0.0.1 behind an SSH tunnel:
 
 ~~~text
 prover -> {"op": "hello", "segments", "params", "scheme", "device", ...}

@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # The band-fill wipe (benchmarks/pous/band_wipe/) as research runs: the prover on the GPU node, the memory challenger on another
-# machine, which reaches the prover's 127.0.0.1 through ssh (its line of /etc/vy/peers). A node with /etc/vy/runs-via-slot
-# (vy-nebius-1 and -2) takes it only through a GPU slot, with the GPU from gpu-lease:
+# machine, which reaches the prover directly (DIRECT=<its address>, the prover listening there: LISTEN=<address>) or through
+# ssh to its 127.0.0.1 (PEER=<its line of /etc/vy/peers>; too slow for a session meant to pass, challenger.SSH). A node with
+# /etc/vy/runs-via-slot (vy-nebius-1 and -2) takes it only through a GPU slot, with the GPU from gpu-lease:
 #
 #   research run --on vy-nebius-1 --cwd source --source . -- env CHECK_SLOTS=/workspace/research/locks/gpu/slots \
 #     python3 tools/verity/check/slot.py --by LANE -- gpu-lease 1 --wait --max-min 45 --mem-gb 24 --preemptible -- \
-#     bash benchmarks/pous/band_wipe/run.sh ROLE=prover [SEGMENTS=N]
+#     bash benchmarks/pous/band_wipe/run.sh ROLE=prover [SEGMENTS=N] [LISTEN=0.0.0.0]
 #   research run --on vy-nebius-cpu-3 --cwd source --source . -- \
-#     bash benchmarks/pous/band_wipe/run.sh ROLE=challenger PEER=vy-nebius-1 [MODES=honest,cheat] [SESSIONS=1] [SIGNER=lms]
+#     bash benchmarks/pous/band_wipe/run.sh ROLE=challenger PEER=vy-nebius-1|DIRECT=10.80.0.18 [MODES=honest,cheat] [SESSIONS=1]
 #   research run --on vy-dc-h200-2 --gpus 1 --cwd source --source . -- \
 #     bash benchmarks/pous/band_wipe/run.sh ROLE=loopback [SEGMENTS=N] [VERIFY=0]
 #   research run --on vy-nebius-cpu-2 --cwd source --source . --send <run's out/> -- \
@@ -17,7 +18,8 @@
 # a rehearsal and the fill time, never a run of record, since the memory challenger must run on a machine the prover doesn't
 # control. VERIFY=0 leaves the verdict to a ROLE=verify run on a CPU node (at the full device, the honest session's 2152
 # blocks take the reference encoder hours of CPU). CTRL_PORT and RESP_PORT (47610, 47611) are the prover's control and
-# responder ports on its 127.0.0.1; CCPU, SSHCPU and RCPU the cores of the memory challenger, its ssh and the responder.
+# responder ports on LISTEN (127.0.0.1); CCPU, SSHCPU and RCPU the cores of the memory challenger, its ssh and the responder.
+# SIGNER is lms (S1's key) for a challenger, test for a loopback rehearsal.
 # WORK=<dir> holds the venvs (default /workspace as pod.sh, else $HOME where /workspace isn't writable: $WORK/pous-bench) and
 # POUS_BUILD the pous_native build (default $WORK/pous-bench/band_wipe_build). S1's key and its session log are in
 # ~/.local/state/verity-band-wipe on the challenger's machine (challenger.STATE), made there by the first run.
@@ -59,7 +61,7 @@ gpu_env() {  # pod.sh's: the installed CUDA 13 or 12 toolkit (12.8+ on Blackwell
   nvcc --version > "$O/nvcc.txt" 2>&1
 }
 prover() {
-  "$PY" -m band_wipe.prover --out "$O" --build-dir "${POUS_BUILD:-$W/band_wipe_build}" --listen "127.0.0.1:$CTRL_PORT" \
+  "$PY" -m band_wipe.prover --out "$O" --build-dir "${POUS_BUILD:-$W/band_wipe_build}" --listen "${LISTEN:-127.0.0.1}:$CTRL_PORT" \
     --resp-port "$RESP_PORT" ${SEGMENTS:+--segments "$SEGMENTS"} ${RCPU:+--responder-cpu "$RCPU"} ${THREADS:+--threads "$THREADS"} \
     ${RESERVE_MIB:+--reserve-mib "$RESERVE_MIB"}
 }
@@ -73,7 +75,9 @@ challenger() {
 case $ROLE in
   prover) gpu_env || exit 3; prover; exit $? ;;
   challenger) cpu_env || exit 3; SIGNER=${SIGNER:-lms}; lscpu -e > "$O/lscpu.txt" 2>&1
-    challenger --peer "${PEER:?PEER=<the prover machine, a line of /etc/vy/peers>}"; exit $? ;;
+    if [ -n "${DIRECT:-}" ]; then challenger --direct "$DIRECT"
+    else challenger --peer "${PEER:?DIRECT=<the prover address> or PEER=<its line of /etc/vy/peers>}"; fi
+    exit $? ;;
   loopback) gpu_env || exit 3; SIGNER=${SIGNER:-test}; lscpu -e > "$O/lscpu.txt" 2>&1
     prover > "$O/prover.log" 2>&1 &
     PP=$!

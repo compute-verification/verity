@@ -12,14 +12,15 @@ the memory challenger's fresh 192-bit salt meets `EraseMeets` at `f = 1/19`, `(D
 is the deadline `Δ + RTT < (D + 1)·call_ns`, so the limit is `6 × 241,500 − 1 = 1,448,999` ns (`limit_ns`), and
 `memory_challenger.covering_certificate` must cover `k = 2152` within it before any round.
 
-**`run`.** With `--peer`, it opens an SSH tunnel to that machine of `--peers` (`ssh -N -L`, the control port and the
-responder's port forwarded to the prover's 127.0.0.1), and connects through it until the prover's hello arrives
-(`--wait-s`).  Each wipe of `--modes` (`honest`, `cheat`):
+**`run`.** With `--direct HOST`, it connects to the prover listening on HOST (`prover.py --listen HOST:PORT`, a path the
+prover's network admits from this machine); with `--peer`, through an SSH tunnel to that machine of `--peers` (`ssh -L`, the
+control port and the responder's port forwarded to the prover's 127.0.0.1, `SSH`), too slow for a session meant to pass.
+It retries until the prover's hello arrives (`--wait-s`).  Each wipe of `--modes` (`honest`, `cheat`):
 
 1. a fresh salt (`os.urandom(24)`), and `--sessions` memory challengers with their coins drawn and committed and their
    session ids claimed in the session log, all before the salt is sent; each session's binding is `wire.binding`;
 2. the salt to the prover, which fills and answers `filled`;
-3. `--pings` round trips through the tunnel (recorded, not used: the limit is the guarantee's), then each session's
+3. `--pings` round trips to the responder (recorded, not used: the limit is the guarantee's), then each session's
    `k` rounds after `WARMUP_PINGS` pings, signed and its coins opened; the first late round ends a session;
 4. the signed sessions to `sessions-wipe{j}.json` (`live.write_sessions`) before any verdict runs.
 
@@ -83,10 +84,15 @@ ERASE = {"guarantee": "Pous.Guarantees.SecureErasureMeetsFamily",
                   "whole blocks, not against that one"}
 K = ERASE["k"]
 STATE = Path.home() / ".local" / "state" / "verity-band-wipe"
-SSH = ["ssh", "-N", "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes", "-o", "StrictHostKeyChecking=accept-new",
-       "-o", "ServerAliveInterval=15", "-o", "Compression=no", "-o", "IPQoS=lowdelay", "-c", "aes128-gcm@openssh.com"]
-"""The tunnel's ssh: AES-GCM, no compression and low-delay QoS had the shorter tail for 64 KiB answers between two
-uk-south2 nodes (p99.9 719 against 962 µs over 20,000 round trips, r20261026-000730-fbd6)."""
+SSH = ["ssh", "-tt", "-o", "ObscureKeystrokeTiming=no", "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes",
+       "-o", "StrictHostKeyChecking=accept-new", "-o", "ServerAliveInterval=15", "-o", "Compression=no", "-o", "IPQoS=lowdelay",
+       "-c", "aes128-gcm@openssh.com"]
+"""The tunnel's ssh, holding a pty session (`TUNNEL_HOLD`) so that both ends set TCP_NODELAY: under `-N` Nagle holds a 64 KiB
+answer's tail for a delayed ACK (p99.9 42 ms, r20261026-010824-7e2d), and a pty's keystroke-timing obfuscation sends every
+20 ms (p50 20.5 ms, same run) unless turned off.  Between two uk-south2 nodes this tunnel still took p50 1.27 ms, p99.9
+1.85 ms for a 64 KiB answer, 330 of 2,000 over `limit_ns` (r20261026-010951-afe5), so it is a rehearsal's path; a session
+meant to pass needs `--direct`."""
+TUNNEL_HOLD = "exec sleep infinity"
 
 
 def limit_ns(params: Any) -> int:
@@ -303,7 +309,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--out", type=Path, required=True)
     where = r.add_mutually_exclusive_group(required=True)
     where.add_argument("--peer", help="the prover's machine, a line of --peers")
-    where.add_argument("--direct", help="the prover's host, reached without a tunnel (a loopback rehearsal)")
+    where.add_argument("--direct", help="the prover's host, reached without a tunnel")
     r.add_argument("--peers", type=Path, default=Path("/etc/vy/peers"))
     r.add_argument("--ctrl-port", type=int, default=47610)
     r.add_argument("--resp-port", type=int, default=47611)
@@ -335,7 +341,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.peer:
         lc, lr = free_port(), free_port()
         fwd = ["-L", f"127.0.0.1:{lc}:127.0.0.1:{a.ctrl_port}", "-L", f"127.0.0.1:{lr}:127.0.0.1:{a.resp_port}"]
-        cmd = [*(["taskset", "-c", str(a.ssh_cpu)] if a.ssh_cpu is not None else []), *SSH, *fwd, *peer_ssh(a.peers, a.peer)]
+        cmd = [*(["taskset", "-c", str(a.ssh_cpu)] if a.ssh_cpu is not None else []), *SSH, *fwd, *peer_ssh(a.peers, a.peer),
+               TUNNEL_HOLD]
         tunnel = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=open(a.out / "tunnel.log", "w"),
                                   stderr=subprocess.STDOUT)
         host, ctrl, resp = "127.0.0.1", lc, lr
