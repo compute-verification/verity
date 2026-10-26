@@ -397,9 +397,9 @@ theorem coins_of_decode (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array 
           some ((recs₀.map (mapStream eraseG))[t]'(by simp; omega)) := by
       refine find?_getElem (by simp; omega) ?_ fun j hj => ?_
       · simp only [Array.getElem_map, getObjValAs_mapStream, hrec₀ t (by omega), getObjValAs_streamObj]
-        simp
+        simp [Except.toOption]
       · simp only [Array.getElem_map, getObjValAs_mapStream, hrec₀ j (by omega), getObjValAs_streamObj]
-        simpa using hne j t (by omega) (by omega) (by omega)
+        simpa [Except.toOption] using hne j t (by omega) (by omega) (by omega)
     have hro := roundsOf_of hJ2 hfind₁ (by
       simp only [Array.getElem_map, arr_mapStream, hrec₀ t (by omega), arr_streamObj]
       rfl)
@@ -407,7 +407,8 @@ theorem coins_of_decode (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array 
     obtain ⟨hSt, -⟩ := recStreams_get (spec := spec) (sts := sts) (ms := ms) (cs := cs) (k := t)
       (by rw [hSd]; omega)
     simp only [hSd] at hSt
-    rw [hSt, hlen t, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h₂, Option.getD_some]
+    rw [hSt, hlen t, List.getD_eq_getElem?_getD,
+      List.getElem?_eq_getElem (by simp at h₂; omega), Option.getD_some]
   -- the rounds, one by one
   apply Array.ext
   · rw [Array.size_map, ← hrsz, hrsS, hSksz, hlen k]
@@ -421,7 +422,8 @@ theorem coins_of_decode (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array 
     rw [hoffk] at hmc
     obtain ⟨-, hc⟩ := List.getElem?_zip_eq_some.1 hmc
     simp only [Array.getElem_map, hcoins, canonRounds, Array.getElem_range]
-    rw [hSn j hjS, List.getD_eq_getElem?_getD, hc, Option.getD_some]
+    rw [hSn j hjS]
+    simp only [List.getD_eq_getElem?_getD, hc, Option.getD_some]
 
 /-! ## The verifier rows don't read the comb -/
 
