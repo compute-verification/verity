@@ -32,8 +32,11 @@ int sxr_row_setup(void*, RowSpec* rows, uint32_t G) {
   return 0;
 }
 
-int sxr_rows(void*, int, const RowSpec* rows, uint32_t G, uint32_t S, uint64_t* x) {
-  for (u64 t = 0; t < (u64)G * S; ++t) row_digest<D>(rows[t / S], t % S, x + 8 * t);
+int sxr_rows(void*, int, const RowSpec* rows, const uint32_t* order, uint32_t G, uint32_t S, uint64_t* x) {
+  for (u64 t = 0; t < (u64)G * S; ++t) {
+    const u64 j = t / S, s = t % S, g = order ? order[j] : j;
+    row_digest<D>(rows[g], s, x + 8 * (g * S + s));
+  }
   return 0;
 }
 
@@ -43,7 +46,7 @@ int sxr_leaf_setup(void*, LeafRow* rows, uint32_t G, const uint64_t* dids, const
 }
 
 int sxr_leaves(void*, const LeafArgs* a) {
-  for (u64 t = 0; t < (u64)a->G * a->S; ++t) leaf<D>(*a, (u32)(t / a->S), (u32)(t % a->S));
+  for (u64 t = 0; t < (u64)a->G * a->S; ++t) leaf<D>(*a, a->T, 256, (u32)(t / a->S), (u32)(t % a->S));
   return 0;
 }
 

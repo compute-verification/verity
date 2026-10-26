@@ -5,6 +5,7 @@
 // commit_gpu's sha::compress, the one commit_slots runs); the other kernels use SX_V and SX_ROLL.
 #include <cuda_runtime.h>
 
+#include <algorithm>
 #include <cstdio>
 
 #include "rows.cuh"
@@ -44,17 +45,19 @@ __global__ void __launch_bounds__(SXR_THREADS) k_row_setup(RowSpec* rows, u32 G)
   if (t < G) row_setup<D>(rows[t]);
 }
 
-// a thread a (row g, slot s), t = g S + s: a warp's rows are one row of the table in consecutive slots
+// a thread a (row g, slot s), t = j S + s with g = order[j]: a warp's rows are one row of the table in consecutive slots, and
+// blocks start in `order` (the longest rows first, so the last wave is short rows); x stays at (g, s)
 template <class C>
-__global__ void __launch_bounds__(SXR_THREADS, SXR_MINB) k_rows(const RowSpec* __restrict__ rows, u32 G, u32 S,
-                                                                u64* __restrict__ x) {
+__global__ void __launch_bounds__(SXR_THREADS, SXR_MINB) k_rows(const RowSpec* __restrict__ rows, const u32* __restrict__ order,
+                                                                u32 G, u32 S, u64* __restrict__ x) {
   const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x;
   if (t >= (u64)G * S) return;
-  const u32 g = (u32)(t / S), s = (u32)(t % S);
+  const u32 j = (u32)(t / S), s = (u32)(t % S), g = order ? __ldg(order + j) : j;
   u64 d[8];
   row_digest<C>(rows[g], s, d);
+  u64* o = x + 8 * ((u64)g * S + s);
 #pragma unroll
-  for (int i = 0; i < 8; ++i) x[8 * t + i] = d[i];
+  for (int i = 0; i < 8; ++i) o[i] = d[i];
 }
 
 __global__ void __launch_bounds__(SXR_THREADS) k_leaf_setup(LeafRow* rows, u32 G, const u64* dids, const uint8_t* schema,
@@ -63,10 +66,18 @@ __global__ void __launch_bounds__(SXR_THREADS) k_leaf_setup(LeafRow* rows, u32 G
   if (t < G) leaf_setup<D>(rows[t], dids, schema, schema_len);
 }
 
+// T in shared memory (a block's 64 KB, loaded once), the leaves grid-stride over resident blocks
 __global__ void __launch_bounds__(SXR_THREADS) k_leaves(const __grid_constant__ LeafArgs a) {
-  const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x;
-  if (t < (u64)a.G * a.S) leaf<D>(a, (u32)(t / a.S), (u32)(t % a.S));
+  extern __shared__ uint4 smem[];
+  const uint4* Tg = reinterpret_cast<const uint4*>(a.T);
+  for (int i = threadIdx.x; i < T_BYTES / 16; i += blockDim.x) smem[(i >> 4) * (TSTRIDE / 16) + (i & 15)] = __ldg(Tg + i);
+  __syncthreads();
+  const uint8_t* T = reinterpret_cast<const uint8_t*>(smem);
+  const u64 n = (u64)a.G * a.S, step = (u64)gridDim.x * blockDim.x;
+#pragma unroll 1
+  for (u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x; t < n; t += step) leaf<D>(a, T, TSTRIDE, (u32)(t / a.S), (u32)(t % a.S));
 }
+constexpr int LEAF_SMEM = 256 * TSTRIDE;
 
 __global__ void __launch_bounds__(SXR_THREADS) k_frame_leaves(const u64* dids, u32 D_, const u64* values, u32 T, u32 n,
                                                                u64 rank0, const uint8_t* schema, u32 schema_len, u64* out) {
@@ -96,7 +107,7 @@ __global__ void __launch_bounds__(SXR_THREADS) k_pads(const u64* dids, u32 D_, u
   pad<D>(dids + 8 * (D_ == 1 ? 0 : tree), first + j, out + 8 * t);
 }
 
-using RowKernel = void (*)(const RowSpec*, u32, u32, u64*);
+using RowKernel = void (*)(const RowSpec*, const u32*, u32, u32, u64*);
 struct Variant {
   const char* name;
   RowKernel k;
@@ -151,10 +162,10 @@ int sxr_row_setup(void* stream, RowSpec* rows, uint32_t G) {
   return launched();
 }
 
-int sxr_rows(void* stream, int variant, const RowSpec* rows, uint32_t G, uint32_t S, uint64_t* x) {
+int sxr_rows(void* stream, int variant, const RowSpec* rows, const uint32_t* order, uint32_t G, uint32_t S, uint64_t* x) {
   if (variant < 0 || variant >= NVAR) return -1;
   const u64 n = (u64)G * S;
-  if (n) VARIANTS[variant].k<<<blocks(n), SXR_THREADS, 0, (cudaStream_t)stream>>>(rows, G, S, x);
+  if (n) VARIANTS[variant].k<<<blocks(n), SXR_THREADS, 0, (cudaStream_t)stream>>>(rows, order, G, S, x);
   return launched();
 }
 
@@ -165,7 +176,21 @@ int sxr_leaf_setup(void* stream, LeafRow* rows, uint32_t G, const uint64_t* dids
 
 int sxr_leaves(void* stream, const LeafArgs* a) {
   const u64 n = (u64)a->G * a->S;
-  if (n) k_leaves<<<blocks(n), SXR_THREADS, 0, (cudaStream_t)stream>>>(*a);
+  if (!n) return 0;
+  static int resident[64] = {};   // a device's resident leaf blocks, once its shared-memory limit is raised
+  int dev = 0, rc;
+  if ((rc = cudaGetDevice(&dev))) return rc;
+  if (dev < 0 || dev >= 64) return (int)cudaErrorInvalidDevice;
+  if (!resident[dev]) {
+    int sms = 0, per_sm = 0;
+    if ((rc = cudaFuncSetAttribute(k_leaves, cudaFuncAttributeMaxDynamicSharedMemorySize, LEAF_SMEM)) ||
+        (rc = cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev)) ||
+        (rc = cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, k_leaves, SXR_THREADS, LEAF_SMEM)))
+      return rc;
+    resident[dev] = per_sm * sms > 0 ? per_sm * sms : 1;
+  }
+  const unsigned grid = (unsigned)std::min<u64>(blocks(n), (u64)resident[dev]);
+  k_leaves<<<grid, SXR_THREADS, LEAF_SMEM, (cudaStream_t)stream>>>(*a);
   return launched();
 }
 

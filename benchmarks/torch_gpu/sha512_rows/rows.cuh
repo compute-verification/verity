@@ -38,7 +38,8 @@ struct LeafRow {     // 224 bytes: row g's frame leaf, rank and position in the 
 static_assert(sizeof(LeafRow) == 224, "LeafRow is 224 bytes");
 
 constexpr int SALT_WORDS = 24;   // hm96-sha512's 192-byte salt
-constexpr int TABLE_WORDS = 192 * 256 * 8;
+constexpr int T_BYTES = 256 * 256;
+constexpr int TSTRIDE = 272;     // bytes a T row in shared memory: 256 + 16, so rows start in different bank groups
 
 #define SXR_FRAME "veritor/protocol/merkle/frame/v3"
 
@@ -47,6 +48,15 @@ constexpr int TABLE_WORDS = 192 * 256 * 8;
 SX_HD uint4 ld16(const uint8_t* p) {
 #ifdef __CUDA_ARCH__
   return __ldg(reinterpret_cast<const uint4*>(p));
+#else
+  uint4 v;
+  memcpy(&v, p, 16);
+  return v;
+#endif
+}
+SX_HD uint4 ld16_any(const uint8_t* p) {   // 16 aligned bytes from any space (shared memory included)
+#ifdef __CUDA_ARCH__
+  return *reinterpret_cast<const uint4*>(p);
 #else
   uint4 v;
   memcpy(&v, p, 16);
@@ -222,7 +232,7 @@ struct LeafArgs {
   const LeafRow* rows;
   const u64* x;          // (G, S, 8) inner digests
   u64* out;              // (G, S, 8) leaves
-  const u64* table;      // (192, 256, 8): byte_tables(key)[p][v] as big-endian words
+  const uint8_t* T;      // hm96's Hankel table (engine.hankel_table): T_v, 256 rows of 256 bytes
   const uint8_t* salts;  // (G, S, 192) the caller's y, or null for the salt key's
   u32 key[8];            // the salt key (ChaCha20's key words), when salts is null
   u64 nonce0;            // slot s's nonce is nonce0 + s
@@ -247,10 +257,39 @@ SX_HD void leaf_setup(LeafRow& r, const u64* dids, const uint8_t* schema, u32 sc
   for (int i = 0; i < 16; ++i) r.tail[i] = m.w[16 + i];
 }
 
+// M_key y as 16 little-endian u32 (mask byte 4w + k is byte k of m[w]), from T (rows `stride` apart: TSTRIDE in shared
+// memory, 256 on the host). Bytes [p, p + 64) of T_v are byte_tables(key)[p][v], so for salt bytes p = 16 q + r the 80 bytes
+// [16 q, 16 q + 80) of T_{y_p} are xored into A_r, and A_r shifted down r bytes into m. Copied from commit_gpu's hm96_mask
+// (benchmarks/pouw/commit_gpu/commit_gpu.cuh, its shared-memory path), with the stride an argument as in commit_slots'.
+SX_HD void mask(const uint8_t* T, int stride, const u64* Y, u32* m) {
+#pragma unroll
+  for (int w = 0; w < 16; ++w) m[w] = 0;
+#pragma unroll
+  for (int r = 0; r < 16; ++r) {
+    u32 A[20];
+#pragma unroll
+    for (int i = 0; i < 20; ++i) A[i] = 0;
+#pragma unroll
+    for (int q = 0; q < 12; ++q) {
+      const int p = 16 * q + r;
+      const u32 v = (u32)(Y[p >> 3] >> (56 - 8 * (p & 7))) & 0xFFu;
+      const uint8_t* t = T + v * stride + 16 * q;
+#pragma unroll
+      for (int i = 0; i < 5; ++i) {
+        const uint4 u = ld16_any(t + 16 * i);
+        A[4 * i] ^= u.x; A[4 * i + 1] ^= u.y; A[4 * i + 2] ^= u.z; A[4 * i + 3] ^= u.w;
+      }
+    }
+    const int sw = r >> 2, sh = 8 * (r & 3);
+#pragma unroll
+    for (int w = 0; w < 16; ++w) m[w] ^= sh ? (A[w + sw] >> sh | A[w + sw + 1] << (32 - sh)) : A[w + sw];
+  }
+}
+
 // row g's leaf in slot s: b = x ^ M y, c = SHA-512(salt_prefix || y), h = SHA-512(leaf_prefix(key) || b || c), then the frame
-// leaf SHA-512(leaf prefix || h)
+// leaf SHA-512(leaf prefix || h). T is A.T's table at `stride` (in shared memory on the device).
 template <class C>
-SX_HD void leaf(const LeafArgs& A, u32 g, u32 s) {
+SX_HD void leaf(const LeafArgs& A, const uint8_t* T, int stride, u32 g, u32 s) {
   const LeafRow& r = A.rows[g];
   const u64 gs = (u64)g * A.S + s;
   u64 Y[SALT_WORDS];
@@ -265,19 +304,10 @@ SX_HD void leaf(const LeafArgs& A, u32 g, u32 s) {
     salt_key_words(A.key, A.nonce0 + s, r.salt_row, Y);
   }
   u64 bc[16];
-  for (int i = 0; i < 8; ++i) bc[i] = ld8(A.x + 8 * gs + i);
-#ifdef __CUDA_ARCH__
-#pragma unroll 1
-#endif
-  for (int p = 0; p < 192; ++p) {
-    const u32 v = (u32)(Y[p >> 3] >> (56 - 8 * (p & 7))) & 0xFF;
-    const uint8_t* t = reinterpret_cast<const uint8_t*>(A.table + 8 * (256 * (u64)p + v));
-#pragma unroll
-    for (int i = 0; i < 4; ++i) {
-      const uint4 u = ld16(t + 16 * i);
-      bc[2 * i] ^= (u64)u.y << 32 | u.x;
-      bc[2 * i + 1] ^= (u64)u.w << 32 | u.z;
-    }
+  {
+    u32 m[16];
+    mask(T, stride, Y, m);
+    for (int i = 0; i < 8; ++i) bc[i] = ld8(A.x + 8 * gs + i) ^ ((u64)sx::bswap32(m[2 * i]) << 32 | sx::bswap32(m[2 * i + 1]));
   }
   u64 w[16];
   u64* c = bc + 8;

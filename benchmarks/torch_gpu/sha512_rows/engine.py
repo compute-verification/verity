@@ -66,7 +66,7 @@ u32, u64, vp = ctypes.c_uint32, ctypes.c_uint64, ctypes.c_void_p
 
 
 class LeafArgs(ctypes.Structure):
-    _fields_ = [("rows", vp), ("x", vp), ("out", vp), ("table", vp), ("salts", vp), ("key", u32 * 8), ("nonce0", u64),
+    _fields_ = [("rows", vp), ("x", vp), ("out", vp), ("T", vp), ("salts", vp), ("key", u32 * 8), ("nonce0", u64),
                 ("ms_salt", u64 * 8), ("ms_leaf", u64 * 8), ("G", u32), ("S", u32)]
 
 
@@ -103,7 +103,7 @@ def _abi(dll: ctypes.CDLL, path: Path) -> ctypes.CDLL:
     dll.sxr_default.restype = ctypes.c_char_p
     dll.sxr_midstate.argtypes, dll.sxr_midstate.restype = [vp, vp], None
     dll.sxr_row_setup.argtypes = [vp, vp, u32]
-    dll.sxr_rows.argtypes = [vp, ctypes.c_int, vp, u32, u32, vp]
+    dll.sxr_rows.argtypes = [vp, ctypes.c_int, vp, vp, u32, u32, vp]
     dll.sxr_leaf_setup.argtypes = [vp, vp, u32, vp, vp, u32]
     dll.sxr_leaves.argtypes = [vp, ctypes.POINTER(LeafArgs)]
     dll.sxr_frame_leaves.argtypes = [vp, vp, u32, vp, u32, u32, u64, vp, u32, vp]
@@ -152,11 +152,19 @@ def digests(w: Any) -> list[bytes]:
     return [raw[64 * i:64 * (i + 1)] for i in range(len(raw) // 64)]
 
 
-def table_words(key: bytes = KEY) -> np.ndarray:
-    """hm96-sha512's byte tables under ``key`` as (192, 256, 8) words: entry [p][v] is ``byte_tables(key)[p][v]``'s 64 bytes
-    (little-endian, as ``mask`` lays them out) read as big-endian words, so a row's b is x xor the entries of its salt's bytes."""
-    raw = b"".join(v.to_bytes(64, "little") for table in INST.byte_tables(key) for v in table)
-    return np.frombuffer(raw, dtype=">u8").astype(np.uint64).reshape(192, 256, 8)
+def hankel_table(key: bytes = KEY) -> np.ndarray:
+    """hm96-sha512's Hankel table under ``key``, (256, 256) bytes: T_v is the xor of ``k >> s`` over the set bits s of v (k the
+    key as a little-endian integer), 256 bytes little-endian, so bytes [p, p + 64) of T_v are ``byte_tables(key)[p][v]``
+    (commit_gpu's and commit_slots' table; refused for a key where that fails)."""
+    k = int.from_bytes(key, "little")
+    rows = [0] * 256
+    for v in range(1, 256):
+        rows[v] = rows[v & (v - 1)] ^ (k >> ((v & -v).bit_length() - 1))
+    T = [r.to_bytes(256, "little") for r in rows]
+    tables = INST.byte_tables(key)
+    if any(T[v][p:p + 64] != tables[p][v].to_bytes(64, "little") for p in range(len(tables)) for v in range(256)):
+        raise ValueError("this key's byte tables are not windows of one Hankel table")
+    return np.frombuffer(b"".join(T), dtype=np.uint8).reshape(256, 256)
 
 
 @dataclass(frozen=True)
@@ -173,13 +181,15 @@ class SaltKey:
 
 @dataclass
 class RowTable:
-    """A bound row table: each row's parts at the tensors' addresses, on the engine's device (keep the tensors alive)."""
+    """A bound row table: each row's parts at the tensors' addresses, on the engine's device (keep the tensors alive), and
+    the order the row kernel starts them in (the most compressions first; the digests stay in table order)."""
 
     spec: Any
     G: int
     slots: int
     nbytes: tuple[int, ...]
     tensors: tuple[Any, ...]
+    order: Any = None
 
 
 @dataclass
@@ -219,7 +229,7 @@ class Engine:
         self.variants = [self.lib.sxr_variant_name(i).decode() for i in range(self.lib.sxr_variants())]
         self.default = self.lib.sxr_default().decode()
         self.key = INST.check_key(key)
-        self.table = self._up(table_words(self.key).reshape(-1))
+        self.table = self._up(hankel_table(self.key).reshape(-1))
         self.ms_salt = self.midstate(INST.salt_prefix)
         self.ms_leaf = self.midstate(INST.leaf_prefix(self.key))
 
@@ -312,7 +322,8 @@ class Engine:
             raise ValueError("rows and slots are u32 and at least 1")
         d = self._up(spec)
         self._ok(self.lib.sxr_row_setup(self._stream(), self._ptr(d), len(rows)), "row setup")
-        return RowTable(d, len(rows), slots, tuple(nbytes), tuple(tensors))
+        order = np.argsort(-((np.asarray(nbytes, dtype=np.int64) + 17 + 127) // 128), kind="stable").astype(np.uint32)
+        return RowTable(d, len(rows), slots, tuple(nbytes), tuple(tensors), self._up(order))
 
     def row_digests(self, table: RowTable, variant: str | None = None, out: Any = None) -> Any:
         """(G, S, 8): x = SHA-512(P(8 nbytes) || row g's bytes in slot s), sha512/row/v2."""
@@ -322,8 +333,8 @@ class Engine:
         if name not in self.variants:
             raise ValueError(f"no variant {name!r}; built: {self.variants}")
         out = self._words(table.G, table.slots) if out is None else out
-        rc = self.lib.sxr_rows(self._stream(), self.variants.index(name), self._ptr(table.spec), table.G, table.slots,
-                               self._ptr(out))
+        rc = self.lib.sxr_rows(self._stream(), self.variants.index(name), self._ptr(table.spec), self._ptr(table.order), table.G,
+                               table.slots, self._ptr(out))
         self._ok(rc, "rows")
         return out
 
@@ -357,7 +368,7 @@ class Engine:
             raise ValueError(f"x has {G} rows, the leaf table {lt.G}")
         out = self._words(G, S) if out is None else out
         a = LeafArgs()
-        a.rows, a.x, a.out, a.table = self._ptr(lt.rows), self._ptr(x), self._ptr(out), self._ptr(self.table)
+        a.rows, a.x, a.out, a.T = self._ptr(lt.rows), self._ptr(x), self._ptr(out), self._ptr(self.table)
         if isinstance(salts, SaltKey):
             a.salts, a.nonce0 = 0, salts.nonce0
             a.key[:] = list(np.frombuffer(salts.key, dtype="<u4"))
