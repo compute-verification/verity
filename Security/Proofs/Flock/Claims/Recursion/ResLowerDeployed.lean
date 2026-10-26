@@ -21,7 +21,8 @@ salt inputs and the two row inputs collide or are equal (`commit_tie`). The veri
 (`Brings.setup`, `vcallsAt`); the part's must be among its recorded calls for `PartAccepts`' refusal
 (`findColl (L.calls x s w ++ vcallsAt H D xO)`) to charge the collision. `layoutBTops` records the hm96 calls of the
 message-round ports only (`heldRows`), not of `v` or `out`. `layoutBTopsV` adds them (`valCalls`): each instance's salt
-and row calls at `v` (its input columns, `rowHidden`) and at `out` (its output columns, `outForms`).
+and row calls at `v` (its input columns, `rowHidden`) and at `out` (its output columns, `outForms`), and at a
+`rec-open` part's `dirs` (`openPorts`, whose check 5 evaluations are `openSetupSt`).
 
 * `commit_tie`: two commit strings at SHA-512 agree, and both salts' and both rows' inputs are among a list of true
   evaluations with no collision, so the rows are equal.
@@ -115,12 +116,20 @@ def portCalls (c : Circuit) (nm : String) (q n : ℕ) : List (Msg × List HmNets
 verifier's values, and `out`, its zero rows. -/
 def resPorts : List String := ["v", "out"]
 
+/-- The port check 5 holds to the verifier's own rows at a `rec-open` part (`RecCoins.checkOpen`): `dirs`, the
+directions of the positions the verifier drew. -/
+def openPorts : List String := ["dirs"]
+
 /-- **The rows check 5 holds at part `s`**: at a part whose V\* statement is an algebra part (`.inner`), ports `v` and
-`out` (`resPorts`) at each of its two instances (rep `r` at instance `r`), with the port's index. -/
+`out` (`resPorts`) at each of its two instances (rep `r` at instance `r`); at a `rec-open` part of `n` instances,
+port `dirs` (`openPorts`) at each; with the port's index. -/
 def valPorts (r : XR) (s : ℕ) : List (String × ℕ × ℕ) :=
   match (RecVStar.statements r.shape).toOption.bind (·[s]?), r.w.parts[s]?.bind partCircuit with
   | some (.inner _ _ _), some c => resPorts.flatMap fun nm => match c.ports.findIdx? (·.name == nm) with
     | some q => (List.range 2).map fun n => (nm, q, n)
+    | none => []
+  | some (.recOpen _ _ _ n), some c => openPorts.flatMap fun nm => match c.ports.findIdx? (·.name == nm) with
+    | some q => (List.range n).map fun i => (nm, q, i)
     | none => []
   | _, _ => []
 
@@ -200,12 +209,26 @@ def resSetupSt (src : Option RecCoins.Source) (st : Stmt) : List Msg :=
     | _, _ => []
   | _, _ => []
 
-/-- **Check 5's evaluations at a V\* statement `xO`**: `resSetupSt` at each statement its recursive setup sets up, at
-check 5's source (`RecCoins.Source.atC3`, as `RecIns.setup` runs `RecCoins.check`). The deployed `Brings.setup` lists
-them (`hset : ∀ xO, resSetup xO ⊆ b.setup xO`). -/
+/-- **Check 5's evaluations at one statement `st`** of a `rec-open` unit, at its source `src`: `checkOpen`'s at `dirs`
+(the verifier's `dirs` rows, `openRows`, under `verifierSalt` of META's `program_sha512`). None at any other unit. -/
+def openSetupSt (src : Option RecCoins.Source) (st : Stmt) : List Msg :=
+  match RecOpen.params st.c.unit.name, src with
+  | some (L, H), some f =>
+    match (f.load st.c.unit.name).toOption, (st.c.metaJ.getObjValAs? String "program_sha512").toOption with
+    | some inn, some prog => match FlockSoundness.Discharge.Recursion.openRows inn L H with
+      | some (_, dr) => commitIns dr (RecCoins.verifierSalt prog RecCoins.DIRS_VALUE)
+      | none => []
+    | _, _ => []
+  | _, _ => []
+
+/-- **Check 5's evaluations at a V\* statement `xO`**: `resSetupSt` and `openSetupSt` at each statement its recursive
+setup sets up, at check 5's source (`RecCoins.Source.atC3`, as `RecIns.setup` runs `RecCoins.check`). The deployed
+`Brings.setup` lists them (`hset : ∀ xO, resSetup xO ⊆ b.setup xO`). -/
 def resSetup (xO : Msg) : List Msg :=
   match setupO xO with
-  | some (i, _, sts) => sts.toList.flatMap (resSetupSt (RecCoins.Source.atC3 i.src i.inner i.commits))
+  | some (i, _, sts) => sts.toList.flatMap fun st =>
+      resSetupSt (RecCoins.Source.atC3 i.src i.inner i.commits) st ++
+        openSetupSt (RecCoins.Source.atC3 i.src i.inner i.commits) st
   | none => []
 
 theorem rowDigest_eq (row : Array ℕ) : Firewall.rowDigest row = Sha512.hash ⟨(rowInput row).toArray⟩ := by
@@ -419,6 +442,31 @@ theorem portCalls_sub_layVR (elem : (r : XR) → List (Fin r.w.parts.length × L
   refine List.mem_append_right _ ?_
   simp only [Option.map_some, Option.getD_some, valCalls, hc]
   exact List.mem_flatMap.2 ⟨_, mem_valPorts hss hsv hc hnm hq hn, he⟩
+
+theorem mem_valPorts_open {r : XR} {s : ℕ} {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss)
+    {lv LANES HH n : ℕ} (hsv : ss[s]? = some (.recOpen lv LANES HH n)) {c : Circuit}
+    (hc : r.w.parts[s]?.bind partCircuit = some c) {nm : String} (hnm : nm ∈ openPorts) {q : ℕ}
+    (hq : c.ports.findIdx? (·.name == nm) = some q) {i : ℕ} (hi : i < n) : (nm, q, i) ∈ valPorts r s := by
+  have hst : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.recOpen lv LANES HH n) := by
+    rw [hss]; exact hsv
+  unfold valPorts
+  rw [hst, hc]
+  dsimp only
+  exact List.mem_flatMap.2 ⟨nm, hnm, by rw [hq]; exact List.mem_map.2 ⟨i, List.mem_range.2 hi, rfl⟩⟩
+
+/-- **`layVR` records check 5's calls at a `rec-open` part**: each instance `i < n`'s hm96 calls at port `dirs` are
+among part `s`'s recorded calls. -/
+theorem portCalls_sub_layVR_open (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {ss : Array VStar.Stmt}
+    (hss : RecVStar.statements r.shape = .ok ss) {lv LANES HH n : ℕ} (hsv : ss[s]? = some (.recOpen lv LANES HH n))
+    {c : Circuit} (hc : r.w.parts[s]?.bind partCircuit = some c) {nm : String} (hnm : nm ∈ openPorts) {q : ℕ}
+    (hq : c.ports.findIdx? (·.name == nm) = some q) {i : ℕ} (hi : i < n) :
+    ∀ e ∈ portCalls c nm q i, e ∈ (layVR elem).shaAt x s := fun e he => by
+  show e ∈ (layoutBTops _).shaAt x s ++ ((readX x).map fun r => valCalls r s).getD []
+  rw [hr]
+  refine List.mem_append_right _ ?_
+  simp only [Option.map_some, Option.getD_some, valCalls, hc]
+  exact List.mem_flatMap.2 ⟨_, mem_valPorts_open hss hsv hc hnm hq hi, he⟩
 
 /-- **Check 5's tie at one instance of a part, at `layVR`**: `resTie_copy` at the compiled record over `layVR`, whose
 calls hold check 5's (`portCalls_sub_layVR`), with `v`'s slot at its unit input columns (`SlotCommits`) and `out`'s
@@ -1254,7 +1302,8 @@ theorem resTie_staged {b : Brings} {IV : Claims.Verifier Coin}
     unfold resSetupSt
     simp only [hres, hf, hinn, hprog, Except.toOption, hrows]
   have hmemS : ∀ u ∈ resSetupSt (RecCoins.Source.atC3 i.src i.inner i.commits) sts[0], u ∈ b.setup xO :=
-    fun u hu => hset u (by unfold resSetup; rw [hsu]; exact List.mem_flatMap.2 ⟨sts[0], by simp, hu⟩)
+    fun u hu => hset u (by
+      unfold resSetup; rw [hsu]; exact List.mem_flatMap.2 ⟨sts[0], by simp, List.mem_append_left _ hu⟩)
   rw [hst] at hmemS
   have hci : ∀ {rs : Array (Array ℕ)} {sl : ℕ → ByteArray}, n < rs.size →
       rowInput (RecCoins.padTo rs[n]! (Registered.rowWords rs[n]!.size 16)) ∈ commitIns rs sl ∧
