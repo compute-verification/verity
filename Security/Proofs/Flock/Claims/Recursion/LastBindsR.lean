@@ -89,7 +89,7 @@ theorem nextR_lastStep (rd : Msg → Option FinalP) (H : Msg → Msg) (x : Msg) 
         simp only [nextR, actR, h, Claims.OC.eval]
         rfl
       rw [hm hc₂, hm hc₃]
-    · push_neg at hz
+    · push Not at hz
       have he : nextR rd x ms (c₀ :: l ++ [c']) = nextR rd x ms (c₀ :: l ++ [c]) := by
         simp only [nextR, actR_congr_last rd x ms c₀ l c c' hz]
       rw [he]
@@ -197,8 +197,8 @@ theorem colsRV_plainView {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} 
   · show ((ms.zip _).map Prod.snd).map outCoin = cs.dropLast ++ [default]
     rw [List.map_snd_zip (by omega), List.map_append, List.map_map]
     congr 1
-    refine List.map_congr_left fun c _ => ?_
-    exact coinOf_bytes c
+    conv_rhs => rw [← List.map_id cs.dropLast]
+    exact List.map_congr_left fun c _ => coinOf_bytes c
 
 /-- **`LastStepBinds` at the deployed bound record at the deployed reader's steps and columns**, from `RLastBinds`,
 at SHA-512, whatever the code side's other choices. -/
@@ -210,8 +210,13 @@ theorem lastStepBinds_R (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
   change ms.length + 1 = (FlockDeploy.V false).k x at hk
   change ((nextR rd x (ms ++ [l]) cs).eval FlockDeploy.sha512).1 = .acc at hacc
   change ((nextR rd x (ms ++ [l']) cs).eval FlockDeploy.sha512).1 = .acc at hacc'
-  change ∀ j < ms.length, ((nextR rd x (ms.take (j + 1)) (cs.take (j + 1))).eval FlockDeploy.sha512).1 =
-    .msg (cs.getD j default).bytes at hearly
+  have hans := bdDeployed_ans rel (nextR rd) (FlockDeploy.colsRV rd) wE join rowIn final w
+  simp only [hans] at hearly
+  have hview : ∀ ms' : List Msg,
+      (FlockDeploy.KS.bdR rel rd wE join rowIn final w).lastView ms' cs = plainView ms' cs := fun ms' => by
+    unfold Bound.lastView plainView
+    simp only [hans]
+  rw [hview, hview] at hne
   change FlockDeploy.colsRV rd (plainView (ms ++ [l]) cs) ≠ FlockDeploy.colsRV rd (plainView (ms ++ [l']) cs) ∨
     ((nextR rd x (ms ++ [l]) cs).eval FlockDeploy.sha512).2.toFinset ≠
       ((nextR rd x (ms ++ [l']) cs).eval FlockDeploy.sha512).2.toFinset at hne
