@@ -64,10 +64,11 @@ every machine of a census deployment, the pooled total first and the per-window 
   the verdict still stands on: the records are the certifier-only path's, not the network certifier's own cells; the
   device runs beside the server, not on the auditor's machine through the gate; and the output tie is computed in the
   clear, not proved, unless the runner ties it (`--tie`): then the network certifier commits the output it relayed in
-  each link-window as the registered value `out` and signs its head with its session's own key at the link-window's
-  close (`certifier_serve.py --out-program`, `out_commit.commit_out`; the record public, the rows and salts the
-  prover's), the verifier pins its root from that record alone under the deployment's certifier key and session
-  (`check_out`), each output unit's `o0` reads it, the integrity audit proves the output class (every unit with an
+  each link-window as the registered value `out` at the reading circuit's out shape (its registered read of `out`: one
+  word a row, or in the wired circuit a down_proj unit's whole row, request-major) and signs its head with its
+  session's own key at the link-window's close (`certifier_serve.py --out-shape`, `out_commit.commit_out`; the record
+  public, the rows and salts the prover's), the verifier pins its root from that record alone at its own shape under
+  the deployment's certifier key and session (`check_out`), each output unit's `o0` reads it, the integrity audit proves the output class (every unit with an
   uncut registered read of an output port) whole beside its work draw, and Lean's registered reads refuse an output
   unit whose row doesn't open the signed root; the clear check is then a diagnostic.
   `CERTIFIER_PATH=warden` takes the network certifier's own cells instead (`warden_serve.py rehearse --ids --prompts
@@ -105,11 +106,12 @@ every machine of a census deployment, the pooled total first and the per-window 
 
 ## S1's run of record
 
-This is the one way to run S1 so that it counts:
+This is the one way to run S1 so that it counts, the joint run: every layer chained (`--wired`) and the output tied to
+what the network certifier relayed:
 
 ~~~sh
-research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 -- \
-  bash benchmarks/all_protocols/run.sh --of-record --windows 2 --tie-tamper 0
+research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 --store-read -- \
+  bash benchmarks/all_protocols/run.sh --of-record --wired --windows 2 --tie-tamper 0
 ~~~
 
 `--of-record` sets the flags three lanes' work needs:
@@ -117,26 +119,21 @@ research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-
 - `--tie`, network-accounting's output tie;
 - `--pouw h1`, whose work leg refuses a window without PoUW's window;
 - `--registered`, so the weights are counted registered, not free;
-- `--law work:64`, the work law the tie needs;
+- `--law work:64`, the work law the tie needs (`work:14` with `--wired`: the wired toy has 14 units);
 - `--jobs 1 --session-jobs 1`, so one firewalled session runs at a time.
 
 Under `--tie-tamper` it also sets `CERTIFIER_TAMPER=byte`.
 
 `run.sh` checks the command before it builds anything (`runner --check`, whose output is `$OUT/mode-check.json`). It
 refuses a command that contradicts the mode, with the reason: another `--law`, `--jobs` or `--session-jobs` other than 1,
-another `CERTIFIER_TAMPER`, or `--wired`.
+or another `CERTIFIER_TAMPER`.
 
-Window 0 is tied to a relay with one egress byte changed, so it must reject, and window 1 is honest, so it must accept.
-Any other command is a development run: its `mode.json` says `"of_record": false`.
+Window 0 is tied to a relay with one egress byte changed, so it must reject (Lean's registered read of the wired
+down_proj unit's `o0`), and window 1 is honest, so it must accept. Any other command is a development run: its
+`mode.json` says `"of_record": false`.
 
-The run of record is unwired: the output tie reads the per-coordinate circuit's output units, so `--tie` and `--wired`
-are refused together. Its mode names the gap (`gap`), and the wiring is cited from its companion run (wired,
-registered, no tie), a development run:
-
-~~~sh
-research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 -- \
-  bash benchmarks/all_protocols/run.sh --registered --wired --pouw h1 --law work:14 --jobs 1 --session-jobs 1 \
-  --windows 2 --tamper 0
-~~~
-
-The wired output tie needs `out` committed at h words a row (`certifier_serve --out-words`), after S1.
+In the wired circuit `out` is one row of h words a down_proj unit, request j's step s row `j·S + s`: each down_proj
+unit's `o0` reads its row, and the next step's plain quantize unit's `x` reads the same row in place of the `down` tie.
+The network certifier commits `out` at that width and the verifier pins it at that width, both from the circuit's
+registered read (`serve --circuit-only`'s `out_shape`). `--of-record` without `--wired` is the unwired run, one word a
+row; its mode names the gap (`gap`): the wiring is cited from the wired run of record.

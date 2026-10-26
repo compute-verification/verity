@@ -39,9 +39,11 @@ periods may accept. A run whose tamper N2 proves no member of (``byte``) has no 
 only the runs N2 proved.
 
 **The output tie** (the runner's ``--tie``): the runner relays the session before the loop serves (`relay`, with the
-reading program's digest), and at each egress link-window's close the network certifier commits the output it relayed
-as the registered value ``out`` and signs its head with the session's own key in its session (`certifier_serve.py
---out-program`, `out_commit.commit_out` under its running `Issuer`): the record public (``out-records.jsonl``, in
+reading circuit's out shape: its program digest and its registered read of ``out``, one word a row in the
+per-coordinate circuit and H, a down_proj unit's whole ``o0`` row, in the wired one), and at each egress link-window's
+close the network certifier commits the output it relayed as the registered value ``out`` at that shape and signs its
+head with the session's own key in its session (`certifier_serve.py --out-shape`, `out_commit.commit_out` under its
+running `Issuer`): the record public (``out-records.jsonl``, in
 `PUBLIC_SESSION`), the rows and salts the prover's. A period's is its link-window's (`relayed`: the honest run's, or
 under ``--tie-tamper`` the ``CERTIFIER_TAMPER=byte`` run's, one output byte changed on the egress). The verifier pins
 ``out``'s root from that record alone under the deployment's certifier key and session (`out_commit.check_out`), and
@@ -217,9 +219,22 @@ def member_rows(period_dir: Path, m: Mapping[str, Any]) -> np.ndarray:
 def loop_units(period_dir: Path) -> dict[int, tuple[dict, dict[str, np.ndarray]]]:
     """Every unit of the period's window: its label (`index.json`: request, step, layer; a wired record's ``requests``,
     one a unit in order, each unit's ``request``) and its rows by port, u16 words, read off the member's value files
-    (`member_rows`). A wired window's quantize units have no ``layer``."""
+    (`member_rows`). A wired window's quantize units have no ``layer``. A wired record's units may span members (a
+    ``--cap`` below the requests), so its first unit is the least of its spans across them, and a record whose spans
+    aren't one unit a request, consecutive, is refused (ValueError)."""
     win = json.loads((period_dir / "window.json").read_text())
     labels = {m["name"]: m["labels"] for m in json.loads((period_dir / "index.json").read_text())["members"]}
+    records: dict[str, list[int]] = {}
+    for spans in labels.values():
+        for lo, hi, lab in spans:
+            if "requests" in lab:
+                records.setdefault(json.dumps(lab, sort_keys=True), []).extend(range(lo, hi))
+    first = {}
+    for key, us in records.items():
+        n = len(json.loads(key)["requests"])
+        if sorted(us) != list(range(min(us), min(us) + n)):
+            raise ValueError(f"index.json: the record labelled {key} spans units {sorted(us)}, not one a request of {n}")
+        first[key] = min(us)
     out: dict[int, tuple[dict, dict[str, np.ndarray]]] = {}
     for m in win["members"]:
         names, widths = [p for p, _ in m["ports"]], [w for _, w in m["ports"]]
@@ -229,8 +244,9 @@ def loop_units(period_dir: Path) -> dict[int, tuple[dict, dict[str, np.ndarray]]
         label = {}
         for lo, hi, lab in labels[m["name"]]:
             if "requests" in lab:
+                key = json.dumps(lab, sort_keys=True)
                 rest = {k: v for k, v in lab.items() if k != "requests"}
-                label.update({u: {**rest, "request": lab["requests"][u - lo]} for u in range(lo, hi)})
+                label.update({u: {**rest, "request": lab["requests"][u - first[key]]} for u in range(lo, hi)})
             else:
                 label.update({u: lab for u in range(lo, hi)})
         for i, u in enumerate(units):
@@ -370,12 +386,13 @@ def _env(tools: Mapping[str, str], exes: Mapping[str, str]) -> dict[str, str]:
 
 
 def relay(s: Path, prompts: Sequence[int], steps: int, h: int, periods: int, tools: Mapping[str, str],
-          out_program: str | None = None) -> dict[str, Any]:
+          out_shape: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The session's relay (module docstring): `certifier_serve.py rehearse` of the run's ``periods`` periods of
     ``prompts`` through the network certifier into ``s``, honest and under `CERTIFIER_TAMPER`, before any proof; its
     record ``relay.json``. The runner relays before the loop serves when the loop's outputs are tied to the certified
-    ones (``--tie``), the network certifier then committing each link-window's output for the reading program
-    ``out_program`` (``--out-program``); `session` relays at the first period otherwise."""
+    ones (``--tie``), the network certifier then committing each link-window's output at ``out_shape``, the reading
+    circuit's registered read of ``out`` (`out_commit.OutShape`'s doc, written to ``s/out-shape.json`` for
+    ``--out-shape``); `session` relays at the first period otherwise."""
     if (s / "relay.json").exists():
         return json.loads((s / "relay.json").read_text())
     s.mkdir(parents=True, exist_ok=True)
@@ -383,6 +400,8 @@ def relay(s: Path, prompts: Sequence[int], steps: int, h: int, periods: int, too
     tamper = os.environ.get("CERTIFIER_TAMPER", "extra")
     strategies = ["honest", *([tamper] if tamper else [])]
     frames = steps * math.ceil(4 * h / TOKEN_BYTES)
+    if out_shape is not None:
+        (s / "out-shape.json").write_text(json.dumps(dict(out_shape), sort_keys=True))
     stub, url = _stub(steps, h, s / "stub.log")
     try:
         rc = _run([sys.executable, str(TRACES / "certifier_serve.py"), "rehearse", "--upstream", url,
@@ -390,7 +409,7 @@ def relay(s: Path, prompts: Sequence[int], steps: int, h: int, periods: int, too
                    "--prompts", ";".join(map(str, prompts)), "--requests", str(len(prompts) * periods),
                    "--in-flight", str(len(prompts)), "--tokens", str(steps), "--response-frames", str(frames),
                    "--probes", str(len(prompts)), "--window-per-group", "--strategies", ",".join(strategies),
-                   "--height", str(height), *(["--out-program", out_program] if out_program else [])],
+                   "--height", str(height), *(["--out-shape", str(s / "out-shape.json")] if out_shape else [])],
                   s / "rehearse.log", _env(tools, exes))
     finally:
         stub.terminate()
@@ -399,7 +418,7 @@ def relay(s: Path, prompts: Sequence[int], steps: int, h: int, periods: int, too
         raise RuntimeError(f"certifier_serve.py rehearse exited {rc} with no summary ({s / 'rehearse.log'})")
     rec = {"prompts": list(prompts), "steps": steps, "h": h, "periods": periods, "height": height,
            "strategies": strategies, "tamper": tamper or None, "frames": frames, "rehearse_exit": rc, "exes": exes,
-           "dir": str(s), "out_program": out_program}
+           "dir": str(s), "out_shape": None if out_shape is None else dict(out_shape)}
     (s / "relay.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     return rec
 
