@@ -68,6 +68,7 @@ class Flipped(P.PerCall):
         super()._commit(c, receipts, acc)
 
 
+@pytest.mark.slow
 def test_the_steps_root_binds_every_receipt(params):
     a, b, c = P.python(SHAPE, run_id="t"), P.python(SHAPE, run_id="t"), Flipped(SHAPE, run_id="t")
     for sub in (a, b, c):
