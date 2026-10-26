@@ -36,7 +36,9 @@ W8A8 MLP on CPU) audited by every protocol's own code, each decided on its own a
   `NetworkCheck.Period` (`verity/certifier/v0`, `network-period check`) on the period's link-windows and its compute
   audit, whose free inputs are the window's unregistered input rows (`circuit.json`): on acceptance `public.K`, the
   bits a covert sender in the server can move over the link in the period, except with probability `public.eps`, at
-  δ = 1/100 (beside it the case at 10⁻⁶ and the tampered run's, whose tampered period must reject). The session stays in
+  δ = 1/100 (beside it the case at 10⁻⁶ and the tampered run's, whose tampered period must reject). `eps` sums its
+  terms' δ (each audit's, and in the rows form each link-window's scan's), so each term is decided at δ over their
+  count (`term_delta`) and an accepted answer's `eps` is δ itself. The session stays in
   the runner's scratch; `$OUT/certifier-session/` gets each run's deployment, calibration and client certificates only,
   and `summary.json` counts, N2's exit and its leak scan. Its `stubbed` names what the verdict still stands on: the
   records are the certifier-only path's, not the network certifier's own cells; the device runs beside the server,

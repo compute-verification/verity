@@ -20,6 +20,9 @@
 * the scan's answer of link-window 0 is its audit record re-decided at the leg's δ, a refusal a reject, and
   `rows_case_of`'s case is the rows form's: a signed rows period of the mirror's (`period_case.build`), taken apart into
   a warden run's windows and scans and rebuilt, is the same commitment and evidence, and the mirror accepts it;
+* each term of a case is decided at its share of the δ (`term_delta`): a signed clock case of two audits and a signed
+  rows period of the mirror's (two audits, three scans) are accepted with eps that δ, an unsplit one with eps their
+  sum, which `holds_at` refuses;
 * `block_leg` turns a period's accepted answer, clock form (r20261025-213746-7692's period 0) or rows form
   (r20261025-235229-305e's), into the block record's certifier leg, K held at each δ its exact eps is at most, and
   refuses a rejected answer; where #4454's ``verity/block-record/v1`` is in the tree, each leg fits its schema, is
@@ -429,22 +432,30 @@ def test_a_rows_case_is_the_rows_forms():
         L.rows_case_of(rw, [3, 4], scans | {4: (LOOP, {}, 26 * 32)}, audits, 3, [FREE])
 
 
-def test_a_signed_rows_period_rebuilt_by_rows_case_of_is_accepted(monkeypatch):
+def mirror_rows_run(monkeypatch, seed: int) -> tuple[dict, dict, dict, dict, list[int]]:
+    """A signed rows period of the mirror's (`period_case.build`) and the warden run it is the case of: (case,
+    commitment, evidence, run as `warden_windows` reads it, link-windows)."""
     import warden_serve as WS
 
-    case = PERIOD.build("rows-honest", 19)
+    case = PERIOD.build("rows-honest", seed)
     p = case["params"]
     c, e = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
     lp = p["lms"]
-    assert not lp["toy"] and len(c["audits"]) == 2 and p["first"] == 3
     monkeypatch.setattr(WS, "LINK", p["link"])
     dep = {"key": {"params": [lp["N"], lp["W"], lp["H"]], "public": p["key"]}, "params": p["schedule"],
            "session": p["session"]}
-    ws = range(p["first"], p["first"] + p["windows"])
+    ws = list(range(p["first"], p["first"] + p["windows"]))
     rw = {"deployment": dep, "windows": {w: {
         "registrations": dict(zip(("ingress", "egress"), x["registrations"])),
         "certificates": dict(zip((WS.INGRESS, WS.EGRESS, WS.FAILS), x["certificates"]))}
         for w, x in zip(ws, e["windows"])}}
+    return case, c, e, rw, ws
+
+
+def test_a_signed_rows_period_rebuilt_by_rows_case_of_is_accepted(monkeypatch):
+    case, c, e, rw, ws = mirror_rows_run(monkeypatch, 19)
+    p = case["params"]
+    assert not p["lms"]["toy"] and len(c["audits"]) == 2 and p["first"] == 3
     scans = {w: (reg, x["answer"], p["scan"]["free"]) for w, reg, x in zip(ws, c["windows"], e["windows"])}
     free = [a["free"] for a in p["audits"]]
     got = L.rows_case_of(rw, list(ws), scans, list(zip(c["audits"], e["audits"])), p["first"], free)
@@ -455,6 +466,41 @@ def test_a_signed_rows_period_rebuilt_by_rows_case_of_is_accepted(monkeypatch):
     assert got["params"]["audits"] == [{"free": f, "steps": len(ws) * T} for f in free]
     a = PERIOD.reference(got)
     assert a["verdict"] == "accept" and len(a["public"]["scans"]) == len(ws) and a["public"]["schedules"] == 0
+
+
+def _record(reg: dict, answer: dict) -> dict:
+    """The accepted audit record an answer of the mirror's re-decides from: its registration's law and its units."""
+    return {"accepted": True, "registration": reg, "draw": {**reg["law"], "units": answer["public"]["drawn"]},
+            "proved_units": answer["public"]["proved"]}
+
+
+@pytest.mark.parametrize("delta", L.DELTAS)
+def test_each_term_is_decided_at_its_share_of_the_periods_delta(monkeypatch, delta):
+    assert L.term_delta(delta, 5) == delta / 5
+    with pytest.raises(ValueError, match="at least one term"):
+        L.term_delta(delta, 0)
+    accept = {"verdict": "accept"}
+    rw, second = session_run([1, 2]), LOOP | {"partition": "cc" * 64}
+    records = [(LOOP, ACCEPTED), (second, ACCEPTED | {"registration": second})]
+    for d, eps in ((L.term_delta(delta, len(records)), delta), (delta, 2 * delta)):
+        audits = [(r, L.audit_answer(r, accept, rec, d)) for r, rec in records]
+        a = PERIOD.reference(L.case_of(rw, [1, 2], audits, 1, [FREE, FREE]))
+        assert a["verdict"] == "accept" and Fraction(a["public"]["eps"]) == eps
+    L.holds_at(0, a, 2 * delta)
+    with pytest.raises(RuntimeError, match="term_delta"):
+        L.holds_at(0, a, delta)
+    L.holds_at(0, {"verdict": "reject", "public": None}, delta)
+    case, c, e, rws, ws = mirror_rows_run(monkeypatch, 28)
+    p, n = case["params"], len(c["audits"]) + len(ws)
+    assert (len(c["audits"]), len(ws)) == (2, 3)
+    d = L.term_delta(delta, n)
+    scans = {w: (r, L.audit_answer(r, accept, _record(r, x["answer"]), d), p["scan"]["free"])
+             for w, r, x in zip(ws, c["windows"], e["windows"])}
+    audits = [(r, L.audit_answer(r, accept, _record(r, x), d)) for r, x in zip(c["audits"], e["audits"])]
+    a = PERIOD.reference(L.rows_case_of(rws, ws, scans, audits, p["first"], [x["free"] for x in p["audits"]]))
+    assert a["verdict"] == "accept" and a["public"]["eps"] == str(delta)
+    assert [t["delta"] for t in [*a["public"]["audits"], *a["public"]["scans"]]] == [str(d)] * n
+    L.holds_at(0, a, delta)
 
 
 ANSWERS = json.loads((Path(__file__).parent / "fixtures" / "certifier-period-answers.json").read_text())

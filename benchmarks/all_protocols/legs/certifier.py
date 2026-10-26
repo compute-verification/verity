@@ -28,8 +28,10 @@ integrity leg accepts, a mismatch is the leg's error; when it refuses (a loop-ta
 registration, its one-stage answer from N2's outcome of record (Selection All: its one unit, `answer_of_outcome`), its
 two certificates and its clock certificate as the client kept them, the salted certificate alone (`clock_evidence`: the
 sync and its salt are witness); and the period's compute audit, the integrity leg's registration and audit record
-re-decided by one-stage's own bound at δ (`audit_answer`). Its answer is ``network-period check``'s at δ = 1/100
-(`DELTAS`), and ``out/`` also holds the case and answer at δ = 10⁻⁶ and the tampered run's (``tamper.*``). The period
+re-decided by one-stage's own bound at its term's δ (`audit_answer`). Its answer is ``network-period check``'s at
+δ = 1/100 (`DELTAS`), and ``out/`` also holds the case and answer at δ = 10⁻⁶ and the tampered run's (``tamper.*``).
+At each δ every term of the case is decided at δ over the case's term count (`term_delta`: the answer's ``eps`` is the
+sum of its terms' δ), so an accepted answer's ``eps`` is δ itself, which the leg asserts (`holds_at`). The period
 holding the tampered link-window (`TAMPERED_WINDOW`) must reject there, which the leg asserts; the tampered run's other
 periods may accept.
 
@@ -49,7 +51,8 @@ runner's ``--out/warden-session/`` (`warden_publish`, `WARDEN_PUBLIC`, the certi
 salts, the records, the client's log, the traffic and the prompts stay in the scratch. Each run the dry scan accepts
 is then proved on link-window 0 (`scan_prove`: `scan_zk.py prove --warden-run --draw` `SCAN_DRAW`, its units ``--zk``
 behind the Lean firewall; a round not as expected or witness in what its verifier received refuses the session), and
-its audit record is one-stage's answer for its registration, re-decided at the leg's δ (`scan_window`). A period whose
+its audit record is one-stage's answer for its registration, re-decided at its term's δ (`scan_window`: the rows form's
+terms are the audits and each link-window's scan, `term_delta`). A period whose
 every link-window has a scan answer is decided in certifier/v0's rows form (`rows_case_of`, ``network-period check``):
 per link-window the scan's registration in the commitment (its ``warden/<side>`` roots the rows' registrations' roots
 and domains, `scan_zk.warden_roots`) and, in the evidence, its answer, the three records' certificates and the two rows'
@@ -94,7 +97,8 @@ ROOT = Path(__file__).resolve().parents[3]
 TRACES = ROOT / "benchmarks" / "network_traces"
 LEAN = ROOT / "verity" / "core" / "protocols" / "network" / "lean"
 SESSION = "certifier-session"
-#: the δ of every compute audit's bound in a period's case: the answer's, then the one written beside it
+#: the δ a period's certificate holds at: its answer's, then the one written beside it, each split across the case's
+#: terms (`term_delta`)
 DELTAS = (Fraction(1, 100), Fraction(1, 10 ** 6))
 #: N2's stream decides at `certifier_serve.DELTA`
 N2_DELTA = Fraction(2) ** -40
@@ -901,12 +905,33 @@ def match_outputs(requests: Sequence[Mapping[str, Any]], events: Sequence[bytes]
 
 # --- the leg -------------------------------------------------------------------------------------------------------------
 
-def _audits(period_dir: Path, out: Path, delta: Fraction) -> list[tuple[dict, dict]]:
+def term_delta(delta: Fraction, terms: int) -> Fraction:
+    """The δ each of a case's ``terms`` is decided at for its answer to hold at ``delta``: `NetworkCheck.Period`'s
+    ``eps`` is the sum of its terms' δ (each compute audit's, and in the rows form each link-window's scan's; the clock
+    form's link-window answers add none), so each takes an equal share."""
+    if terms < 1:
+        raise ValueError(f"a case has at least one term, not {terms}")
+    return delta / terms
+
+
+def holds_at(index: int, a: Mapping[str, Any], delta: Fraction) -> None:
+    """An accepted answer's ``eps`` is the ``delta`` its terms were split for (`term_delta`), else the leg's error."""
+    if a["verdict"] == "accept" and Fraction(a["public"]["eps"]) != delta:
+        raise RuntimeError(f"period {index}: eps {a['public']['eps']} for δ = {delta}: the case has a term its split "
+                           "(term_delta) didn't count")
+
+
+def _audit_records(period_dir: Path, out: Path) -> list[tuple[dict, dict, dict | None]]:
+    """The period's compute audits, undecided: the registration, the integrity leg's answer and its audit record."""
     reg = json.loads((period_dir / "registration.json").read_text())
     integrity = json.loads((period_dir / "answers" / "sampled-proofs.json").read_text())
     rec_file = out.parent / "integrity" / "audit" / "window" / "audit.json"
     record = json.loads(rec_file.read_text()) if rec_file.exists() else None
-    return [(reg, audit_answer(reg, integrity, record, delta))]
+    return [(reg, integrity, record)]
+
+
+def _audits(records: Sequence[tuple[dict, dict, dict | None]], delta: Fraction) -> list[tuple[dict, dict]]:
+    return [(reg, audit_answer(reg, integrity, record, delta)) for reg, integrity, record in records]
 
 
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
@@ -945,7 +970,7 @@ def warden_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
         if sp["exit"] != 0:
             raise fail(f"scan_zk.py prove of the {name} run's link-window 0 exited {sp['exit']}: a round not as "
                        f"expected, or witness in what the verifier received ({sp['dir']})")
-    exe, answer = sess["exes"]["network-period"], None
+    exe, answer, records = sess["exes"]["network-period"], None, _audit_records(period_dir, out)
     for strategy in sess["strategies"]:
         rw = warden_windows(sess, strategy)
         ws = warden_period_windows(rw["groups"], index, per)
@@ -962,16 +987,18 @@ def warden_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
                               "the scan refused link-window 0 before it registered it: no scan answer to decide on")
         else:
             for k, delta in enumerate(DELTAS):
-                case = rows_case_of(rw, ws, {0: scan_window(sess, strategy, delta)}, _audits(period_dir, out, delta),
-                                    ws[0], [summary["free_inputs"]["bits"]])
+                d = term_delta(delta, len(records) + len(ws))
+                case = rows_case_of(rw, ws, {0: scan_window(sess, strategy, d)}, _audits(records, d), ws[0],
+                                    [summary["free_inputs"]["bits"]])
                 a = check(exe, case)
+                holds_at(index, a, delta)
                 name = ("" if strategy == "honest" else f"{strategy}.") + "certifier" + (
                     "" if k == 0 else f".delta-{delta.denominator}")
                 (out / f"{name}.case.json").write_text(json.dumps(case, sort_keys=True))
                 (out / f"{name}.answer.json").write_text(json.dumps(a, sort_keys=True))
                 pub = a.get("public") or {}
-                row[str(delta)] = {"verdict": a["verdict"], "reason": a.get("reason"), "K": pub.get("K"),
-                                   "eps": pub.get("eps"), "scans": pub.get("scans")}
+                row[str(delta)] = {"verdict": a["verdict"], "reason": a.get("reason"), "term_delta": str(d),
+                                   "K": pub.get("K"), "eps": pub.get("eps"), "scans": pub.get("scans")}
                 if strategy == "honest" and k == 0:
                     answer = a
         if strategy == "honest":
@@ -1021,7 +1048,7 @@ def certifier_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     outputs = registered_outputs(units)
     free = free_inputs(json.loads((period_dir / "circuit.json").read_text()))
     integrity = json.loads((period_dir / "answers" / "sampled-proofs.json").read_text())["verdict"]
-    per, exe = len(sess["prompts"]), sess["exes"]["network-period"]
+    per, exe, records = len(sess["prompts"]), sess["exes"]["network-period"], _audit_records(period_dir, out)
     summary["free_inputs"] = free
     answer = None
     for strategy in sess["strategies"]:
@@ -1040,13 +1067,15 @@ def certifier_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
             row["io"]["refused"] = (f"the certified outputs are not the period's registered outputs; the integrity leg "
                                     f"answered {integrity}, so the case decides on its audit")
         for k, delta in enumerate(DELTAS):
-            case = case_of(rw, ws, _audits(period_dir, out, delta), ws[0], [free["bits"]])
+            d = term_delta(delta, len(records))
+            case = case_of(rw, ws, _audits(records, d), ws[0], [free["bits"]])
             a = check(exe, case)
+            holds_at(index, a, delta)
             suffix = "" if k == 0 else f".delta-{delta.denominator}"
             name = "certifier" if strategy == "honest" and k == 0 else f"{tag}certifier{suffix}"
             (out / f"{name}.case.json").write_text(json.dumps(case, sort_keys=True))
             (out / f"{name}.answer.json").write_text(json.dumps(a, sort_keys=True))
-            row[str(delta)] = {"verdict": a["verdict"], "reason": a.get("reason"),
+            row[str(delta)] = {"verdict": a["verdict"], "reason": a.get("reason"), "term_delta": str(d),
                                "K": (a.get("public") or {}).get("K"), "eps": (a.get("public") or {}).get("eps")}
             if strategy == "honest" and k == 0:
                 answer = a
@@ -1064,7 +1093,7 @@ def certifier_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
 # --- the block record ----------------------------------------------------------------------------------------------------
 
 #: the block record's δs (``verity/block-record/v1``'s ``at``): a leg's certificate holds at δ where its error is at
-#: most δ. The leg's `DELTAS` are each audit's and scan's own δ, so a period's error is their sum.
+#: most δ. The leg splits each of its `DELTAS` across a period's terms (`term_delta`), so its answer at δ has error δ.
 BLOCK_DELTAS = (Fraction(1, 100), Fraction(1, 10 ** 6))
 #: where the block record says a leg's error is read from: the runner row's ``quantity`` (the answer's public)
 BLOCK_ERROR_FROM = "quantity.eps"
@@ -1100,8 +1129,9 @@ def block_leg(answer: Mapping[str, Any], *, server: str, runs: Sequence[str], so
 __all__ = ["BLOCK_DELTAS", "BLOCK_ERROR_FROM", "DELTAS", "PATHS", "PROTOCOL", "PUBLIC_SESSION", "STUBBED",
            "TAMPERED_WINDOW", "WARDEN_PENDING", "WARDEN_PUBLIC", "WARDEN_TAMPERED_PERIOD", "WARDEN_TAMPERS",
            "answer_of_outcome", "audit_answer", "block_leg", "case_of", "certified_events", "certifier_leg", "check",
-           "clock_evidence", "free_inputs", "io", "layout", "leg", "loop_units", "match_ids", "match_outputs",
-           "n2_refusal", "n2_report", "period_windows", "publish", "registered_outputs", "requests_of", "rows_case_of",
-           "SCAN_DRAW", "SCAN_KEEP", "scan_dry", "scan_free", "scan_prove", "scan_schedule", "scan_window", "session",
-           "warden_argv", "warden_ids", "warden_io", "warden_leg", "warden_period_windows", "warden_publish",
-           "warden_rehearse", "warden_session", "warden_tampers", "warden_windows"]
+           "clock_evidence", "free_inputs", "holds_at", "io", "layout", "leg", "loop_units", "match_ids",
+           "match_outputs", "n2_refusal", "n2_report", "period_windows", "publish", "registered_outputs", "requests_of",
+           "rows_case_of", "SCAN_DRAW", "SCAN_KEEP", "scan_dry", "scan_free", "scan_prove", "scan_schedule",
+           "scan_window", "session", "term_delta", "warden_argv", "warden_ids", "warden_io", "warden_leg",
+           "warden_period_windows", "warden_publish", "warden_rehearse", "warden_session", "warden_tampers",
+           "warden_windows"]
