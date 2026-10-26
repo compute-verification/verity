@@ -16,8 +16,12 @@
 #   research run --on vy-dc-h200-3 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
 #     --env GPU_LEASE_WHO=kernels-kp2dec --send CPU_RUN/out/fixtures/expected.npz --send .../fixtures.json \
 #     --send CPU_RUN/out/lib/sm_90a/j10r_ref.so [--send .../h1u_kr.so ...] -- bash benchmarks/torch_gpu/j10r_sm90/job.sh gpu
-# Env: NVCC (default CUDA 13.0's), H1U_ARMS (NAME=DEFINES ..., default kr, kra and kraq), STEPS (gpu's, default "check
-# bench"), CHECK_ARGS, BENCH_ARGS, LEASE_MIN (default 25),
+# gpu's steps (STEPS, default "check bench") run in that order under one lease; "prof" is prof.py's one call a linear of
+# the h1u build PROF_ARM (default kraq) under ncu (NCU, default the ncu beside NVCC; NCU_SET, default --set full; NCU_K,
+# its kernel filter), --clock-control none, into $OUT/prof/units.ncu-rep, its raw, details and SASS pages and
+# summary.json written after the lease.
+# Env: NVCC (default CUDA 13.0's), H1U_ARMS (NAME=DEFINES ..., default kr, kra and kraq), STEPS, CHECK_ARGS, BENCH_ARGS,
+# PROF_ARGS, LEASE_MIN (default 25),
 # PY (default /workspace/cp/venv312's or /workspace/jobs/venv312's python, else torch and numpy from PyPI in a uv venv
 # in the scratch directory), JOBS.
 set -uo pipefail
@@ -138,8 +142,13 @@ case $WHAT in
       W8=$(s8_build 2> "$OUT/s8-build.out"); echo "s8 build rc $?" >> "$OUT/rc.txt"; tail -5 "$OUT/s8-build.out"
       [ -f "$OUT/s8ship/s8_wgmma.cubin" ] && { export S8_WGMMA_CUBIN=$OUT/s8ship/s8_wgmma.cubin; BA="--wgmma $W8 $BA"; }
     fi
-    export O=$OUT PY D S STEPS=${STEPS:-check bench} CHECK_ARGS=${CHECK_ARGS:-} BENCH_ARGS=$BA FIX
-    export LA_S="${LA[*]}"
+    PL=()
+    for f in "${H1US[@]}"; do [ "$(basename "$f" .so)" = "h1u_${PROF_ARM:-kraq}" ] && PL=(--h1u "${PROF_ARM:-kraq}=$f" $SM); done
+    NCU=${NCU:-$(dirname "$NVCC")/ncu}
+    mkdir -p "$OUT/prof"
+    export O=$OUT PY D S STEPS=${STEPS:-check bench} CHECK_ARGS=${CHECK_ARGS:-} BENCH_ARGS=$BA FIX NCU
+    export LA_S="${LA[*]}" PL_S="${PL[*]}" PROF_ARGS=${PROF_ARGS:-} NCU_SET=${NCU_SET:---set full}
+    export NCU_K=${NCU_K:-regex:h1umj|h1jr|h1_seeds}
     # shellcheck disable=SC2016
     gpu-lease 1 --wait --max-min "${LEASE_MIN:-25}" -- bash -c '
       nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem,power.limit --format=csv \
@@ -150,11 +159,24 @@ case $WHAT in
           bench) [ -f "$D/bench.py" ] || continue
                  $PY "$D/bench.py" --fixtures "$FIX" --out "$O" --scratch "$S" --check "$O/check.json" $LA_S $BENCH_ARGS \
                    > "$O/bench.jsonl" 2> "$O/bench.err" ;;
+          prof) [ -n "$PL_S" ] || { echo "prof: no h1u build named ${PROF_ARM:-kraq}" > "$O/prof.err"; false; } &&
+                timeout 900 "$NCU" --profile-from-start off --clock-control none $NCU_SET --import-source no --nvtx \
+                  -k "$NCU_K" -c 64 -f -o "$O/prof/units" $PY "$D/prof.py" run --fixtures "$FIX" --scratch "$S" \
+                  --out "$O/prof" $PL_S $PROF_ARGS > "$O/prof.out" 2> "$O/prof.err" ;;
         esac
         echo "$s rc $?" >> "$O/rc.txt"
       done
       nvidia-smi --query-gpu=clocks.sm,power.draw,temperature.gpu --format=csv -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1'
     echo "lease rc $?" >> "$OUT/rc.txt"
+    if [ -f "$OUT/prof/units.ncu-rep" ]; then
+      "$NCU" -i "$OUT/prof/units.ncu-rep" --page raw --csv > "$OUT/prof/raw.csv" 2> "$OUT/prof/pages.err"
+      "$NCU" -i "$OUT/prof/units.ncu-rep" --page details --print-details all > "$OUT/prof/details.txt" 2>> "$OUT/prof/pages.err"
+      "$NCU" -i "$OUT/prof/units.ncu-rep" --page source --print-source sass --csv 2>> "$OUT/prof/pages.err" \
+        | gzip > "$OUT/prof/source-sass.csv.gz"
+      $PY "$D/prof.py" summary "$OUT/prof/raw.csv" --out "$OUT/prof/summary.json" > /dev/null
+      echo "prof pages rc $?" >> "$OUT/rc.txt"
+    fi
+    tail -5 "$OUT/prof.err" 2>/dev/null
     cat "$OUT/rc.txt" "$OUT/operands.out"
     tail -40 "$OUT/check.out" 2>/dev/null | cut -c1-600
     tail -20 "$OUT/check.err" 2>/dev/null
