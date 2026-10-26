@@ -74,7 +74,7 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 |---|---|---|
 | MOV | coarse | a register copy on the `alu` |
 | SHFL | covered | `Lane.shfl` on the shuffle pipe (`Res.shfl`, 32 lanes a SM-clock), beside the `alu` |
-| LDG, STG, LDS, STS, LDL, STL, LD, ST | covered | `copy` of at most 4 words, direct or `indirect` (an address register plus an offset) |
+| LDG, STG, LDS, STS, LDL, STL, LD, ST | covered | `copy` of at most 4 words, direct or `indirect` (an address register plus an offset); a load whose lanes read one address is `bcast`, its words read once (RT-MODEL M6(c)) |
 | LDSM, STSM (`ldmatrix`, `stmatrix`) | coarse | 4-word copies. The `.trans` forms move 16-bit halves across lanes, which is missing |
 | MOVM (`movmatrix`) | missing | |
 | LDGSTS (`cp.async`) | coarse | a copy from device memory or L2 to shared memory, with no latency |
@@ -118,7 +118,7 @@ uncovered variants (`.64`, other atomic operations, `f16` accumulators).
 | FADD, FADD32I, FFMA32I, FFMA, FMUL, FMUL32I | covered | `Lane.fadd`/`ffma`/`fmul` (an immediate is an operand) |
 | FSEL, BREV, FLO, IADD, IADD3, IADD32I, IMAD, IMNMX, IMUL, IMUL32I, ISCADD, ISCADD32I, ISETP, LEA, LOP, LOP3, LOP32I, POPC, SHF, SHL, SHR, PRMT, SEL | covered | `Lane` integer functions (an immediate is an operand; `IMUL` is `mad` at `c = 0`, `SHL`/`SHR` are `shf`, `ISCADD` is `lea`) |
 | ATOM, ATOMS, ATOMG, REDAS, REDG | covered | `Op.atom` (the modelled operations; others missing) |
-| MOV, MOV32I, LD, LDG, LDL, LDS, LDSM, STSM, ST, STG, STL, STS, R2UR | covered | `Op.copy` (a lane load or store, at most 4 words) |
+| MOV, MOV32I, LD, LDG, LDL, LDS, LDSM, STSM, ST, STG, STL, STS, R2UR | covered | `Op.copy` (a lane load or store, at most 4 words), `Op.bcast` (a broadcast load) |
 | LDGSTS, STAS, UBLKCP, UTMALDG, UTMASTG | covered | `Op.copy` (bulk, shared memory at one end) |
 | BMMA, BGMMA | covered | `Op.mma` (`b1`, `Open.b1`) |
 | QGMMA | covered | `Op.mma` (`e4m3`/`e5m2`) |

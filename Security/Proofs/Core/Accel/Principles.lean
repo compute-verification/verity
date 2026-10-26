@@ -1,5 +1,6 @@
 import Definitions.Core.Accel.Principles
 import Mathlib.Tactic.NormNum
+import Mathlib.Tactic.Linarith
 
 /-!
 # The accelerator model's principles, proved
@@ -43,6 +44,13 @@ theorem p2Priced : P2Priced := by
   | lane g => simp [opUse]
   | uni g => simpa [opUse] using h
   | copy s t n => cases s <;> cases t <;> simp [opUse, port]
+  | bcast s n k =>
+    have h1 : (1 : ℚ) ≤ max (k : ℚ) 1 := le_max_right _ _
+    have hk : (1 / 32 : ℚ≥0) ≤ ((max k 1 : ℕ) : ℚ≥0) / 32 := by
+      rw [← NNRat.coe_le_coe]
+      push_cast
+      linarith
+    cases s <;> simpa [opUse, port] using hk
   | atom s _ => cases s <;> simp [opUse, port]
   | red s t n _ => cases s <;> cases t <;> simp [opUse, port]
   | dmma sh => simpa [opUse] using h

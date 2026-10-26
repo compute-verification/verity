@@ -80,7 +80,9 @@ maybe `A`, there). Every unit is per word or per product, so a price vector over
 product, a lane function per result, and a copy per word moved; an MMA with `D ≠ C` delivers its accumulators to
 new words at no units beyond its own (P2's fork, RT-MODEL M5), so no such pricing covers a per-seed delivery cost.
 An `IMAD.HI` uses `hi` lanes of `imad`, its own
-price, not tied to `IMAD`'s. -/
+price, not tied to `IMAD`'s. A broadcast load to `k` lanes pays `k` lanes' share of a slot and its `n` words once at
+its source, as the card's port serves lanes that read one word at once (CUDA C++ Programming Guide, 'Shared
+Memory'; RT-MODEL M6(c): as `k` copies it paid `k·n` bank units, 32 × the card's on a whole-warp broadcast). -/
 def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) : Op Store → Res → ℚ≥0
   | .mma fa fb _ sh sa sb, r =>
     (if r = .tensor ∨ r = .tensorLong then (sh.m * sh.n * sh.k : ℕ) * weight fa * scale sh else 0) + (if r = .issue then 1 else 0) +
@@ -100,6 +102,7 @@ def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) 
   | .copy s t n, r =>
     (if r = .issue then 1 / 32 else 0) + (n : ℚ≥0) * (port s r + port t r) +
       (if s = .reg ∧ t = .reg ∧ r = .alu then (n : ℚ≥0) else 0)
+  | .bcast s n k, r => (if r = .issue then ((max k 1 : ℕ) : ℚ≥0) / 32 else 0) + (n : ℚ≥0) * port s r
   | .atom s _, r => (if r = .issue then 1 / 32 else 0) + port s r
   | .red s t n _, r => (if r = .issue then 1 / 32 else 0) + (n : ℚ≥0) * (port s r + port t r)
   | .dmma sh, r =>

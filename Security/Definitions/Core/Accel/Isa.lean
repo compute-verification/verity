@@ -18,7 +18,8 @@ writes, and the units of each resource it uses; this module says what each compu
 * **Lane functions** (`Op.lane`): one lane's CUDA-core instruction on registers: integer add, multiply-add (low, wide,
   high), logic, shifts, byte permute, bit counts, compares, selects, `dp4a`, and FP32 `fma`, `add` and `mul`
   (`Verity.Fp32`).
-* **Copies** (`Op.copy`): `n` words from one store to another, unchanged: loads, stores, register moves, TMA.
+* **Copies** (`Op.copy`): `n` words from one store to another, unchanged: loads, stores, register moves, TMA. A
+  broadcast load (`Op.bcast`), the lanes of a warp instruction reading one address, reads its words once.
 * **Atomics** (`Op.atom`): a read-modify-write of one word of a store: integer add, exchange.
 
 An opcode reads and writes only its operands, so a product leaves its accumulator only through further instructions,
@@ -452,6 +453,9 @@ inductive Op (S : Type) where
   | uni (g : Lane)
   /-- `n` words from store `s` to store `t` -/
   | copy (s t : S) (n : ℕ)
+  /-- a broadcast load: `n` words of store `s`, read once, to the registers of `k` lanes (output `i` is word `i % n`),
+  as when the lanes of a warp instruction read one address (`LDS`, `LDG`; RT-MODEL M6(c)) -/
+  | bcast (s : S) (n k : ℕ)
   /-- an atomic on a word of store `s`: input 0 and output 0 are that word, input 1 the register operand, and output
   1 the word's old value -/
   | atom (s : S) (g : AtomFn)
@@ -487,7 +491,7 @@ def nIn : Op S → ℕ
   | .mma fa fb _ sh _ _ => sh.wa fa + sh.wb fb + sh.m * sh.n
   | .mmaSp fa fb _ sh _ _ => sh.waSp fa + sh.wsel + sh.wb fb + sh.m * sh.n
   | .lane g | .uni g => g.nIn
-  | .copy _ _ n => n
+  | .copy _ _ n | .bcast _ n _ => n
   | .atom _ _ => 2
   | .red _ _ n _ => 2 * n
   | .dmma sh => 2 * sh.m * sh.k + 2 * sh.k * sh.n + 2 * sh.m * sh.n
@@ -496,6 +500,7 @@ def nOut : Op S → ℕ
   | .mma _ _ _ sh _ _ | .mmaSp _ _ _ sh _ _ => sh.m * sh.n
   | .lane g | .uni g => g.nOut
   | .copy _ _ n | .red _ _ n _ => n
+  | .bcast _ n k => k * n
   | .atom _ _ => 2
   | .dmma sh => 2 * sh.m * sh.n
 
@@ -506,7 +511,7 @@ def inStore (reg : S) : (o : Op S) → Fin o.nIn → S
     if i.val < sh.waSp fa then sa
     else if sh.waSp fa + sh.wsel ≤ i.val ∧ i.val < sh.waSp fa + sh.wsel + sh.wb fb then sb else reg
   | .lane _, _ | .uni _, _ => reg
-  | .copy s _ _, _ => s
+  | .copy s _ _, _ | .bcast s _ _, _ => s
   | .atom s _, i => if i.val = 0 then s else reg
   | .red s t n _, i => if i.val < n then s else t
   | .dmma _, _ => reg
@@ -516,6 +521,7 @@ def outStore (reg : S) : (o : Op S) → Fin o.nOut → S
   | .mma .., _ | .mmaSp .., _ => reg
   | .lane _, _ | .uni _, _ => reg
   | .copy _ t _, _ => t
+  | .bcast _ _ _, _ => reg
   | .atom s _, i => if i.val = 0 then s else reg
   | .red _ t _ _, _ => t
   | .dmma _, _ => reg
@@ -527,6 +533,7 @@ def eval (dot dotSp : Fmt → Fmt → Bool → ℕ → Dot) : (o : Op S) → (Fi
   | .mmaSp fa fb sat sh _ _, v, o => mmaSpEval (dotSp fa fb sat sh.k) fa fb sh (getD v) o.val
   | .lane g, v, o | .uni g, v, o => g.eval (getD v) o.val
   | .copy _ _ _, v, o => getD v o.val
+  | .bcast _ n _, v, o => getD v (o.val % n)
   | .atom _ .add, v, o => if o.val = 0 then getD v 0 + getD v 1 else getD v 0
   | .atom _ .exch, v, o => if o.val = 0 then getD v 1 else getD v 0
   | .red _ _ n g, v, o => g.eval (fun j => if j = 0 then getD v (n + o.val) else if j = 1 then getD v o.val else 0) 0
