@@ -89,9 +89,12 @@ theorem steered_on {Pfx Y : Type} {N T M blocks cap : ℕ} {idx : Pfx → ℕ}
 /-- **A declared circuit's held and moved bits from an accepted stacked audit, at the committed steering cap**,
 `Properties.DeclaredCircuit.ScheduledRequirement`. -/
 theorem scheduledRequirement : ScheduledRequirement := by
-  intro n P N ρ S q G Xr Lr qr τ k a L E B εnum εden T M ε δ ιW Wc caps Aud Ω Ca Ch _ _ enc choose dflt steer
-    joined A blocks cap idx appended sent V Kg Dv _ _ W pl ℓ grp bind mm plan addr layout hn hP hN hE0 hrank hKB hE hε
-    hB hCC hlife _hres hprop hreads hx RL C γ owned credit tiles store win accepted
+  intro n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T M ε δ ιW Wc caps Aud Ω Ca Ch _ _ enc choose dflt steer
+    joined A blocks cap idx appended sent V Kg Dv _ _ W pl ℓ grp bind mm plan addr layout hn hP hN hE0 hrank hKB hSq
+    hCs hEle hε hB hCC hlife _hres hprop hreads hx RL C γ owned credit tiles store win accepted
+  have hE : Gates.EncodeBound Gates.p1024 3 B E εnum εden :=
+    Accounting.SecurityProofs.Gates.encodeBound_of hSq hCs hEle hε (by decide)
+      Accounting.SecurityProofs.Gates.p1024_floor.1 Accounting.SecurityProofs.Gates.p1024_floor.2
   obtain ⟨sched, slot, hslot⟩ := steered_on (blocks := blocks) (cap := cap) (idx := idx) (dflt := dflt) accepted
     fun _ _ h => h
   have hB' : ∀ s w η j pre, Assumptions.SketchHashBudget
@@ -119,7 +122,7 @@ theorem scheduledRequirement : ScheduledRequirement := by
     obtain ⟨K, I, hreb, hI, hcard, hK⟩ := hCC hlife c g y
     have h1 := hreb R O
     dsimp only at h1
-    exact h1.trans (Nat.add_le_add_left (Carrier.card_le_census hE hε hE0 hprop hreads K hI hcard hK) _)
+    exact h1.trans (Nat.add_le_add_left (Carrier.card_le_census hE hE0 hprop hreads K hI hcard hK) _)
   have hcredit : ∀ x w j, credit x (bind x w j) ≤ (tiles x w j).card * 32768 := by
     intro x w j
     have hm := (hx x).2.2 w j
