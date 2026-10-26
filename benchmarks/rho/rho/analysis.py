@@ -31,7 +31,7 @@ from typing import Any
 from rho import lean
 from rho.params import Param, Registry
 from rho.regimes import Context, Regime
-from rho.scenario import Result, Scenario, evaluate, evaluate_named
+from rho.scenario import Result, Scenario, evaluate, evaluate_named, reads
 from rho.theorem import Partition
 
 Metric = Callable[[Result], float]
@@ -146,9 +146,10 @@ def ranged(registry: Registry, keys: Iterable[str] | None = None) -> list[str]:
 
 
 def tornado(registry: Registry, scenario: str, keys: Iterable[str] | None = None, metric: Metric = LO) -> list[Swing]:
+    """Keys default to the ranged ones the scenario reads (`scenario.reads`)."""
     base = at(registry, scenario, None, metric)
     out = []
-    for k in ranged(registry, keys):
+    for k in ranged(registry, sorted(reads(registry, scenario)) if keys is None else keys):
         p = registry.param(k)
         out.append(Swing(k, p.low, p.high, at(registry, scenario, {k: p.low}, metric),
                          at(registry, scenario, {k: p.high}, metric), base))

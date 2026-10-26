@@ -9,11 +9,13 @@ from rho.params import Registry
 
 REG = Registry.load()
 PNG = b"\x89PNG\r\n\x1a\n"
+#: one onsite and one remote scenario: every figure has what it needs, and the test stays under a few seconds
+NAMES = ["onsite-h200-kimi", "remote-h200-kimi"]
 
 
 @pytest.mark.parametrize("name", list(figures.FIGURES))
 def test_each_figure_writes_a_png_and_the_standard_json_it_plots(tmp_path, name):
-    written = figures.render(REG, tmp_path, grid=4, only=[name])[name]
+    written = figures.render(REG, tmp_path, NAMES, grid=4, only=[name])[name]
     if name in ("class-vs-k", "brackets", "dark"):
         assert written, f"{name} needs only a scenario, and drew nothing"
     assert [p.name for p in written] == ([f"{name}.png", f"{name}.json"] if written else [])

@@ -2,10 +2,11 @@
 
 * **Work** (`work.<name>.flops`, reference-algorithm FLOPs): the adversary's whole compute does it in `ρ · flops / rate`
   seconds (`Scenario.rate` is its unencumbered FLOP/s), at the guaranteed ρ and at the best attack's; its dark pool alone
-  in `flops / (d · rate)`.
+  in `flops / (d · rate)`, `d` its share of progress (`Fleet.dark_effective`).
 * **Exfiltration** (`exfil.<name>.bits`): onsite, what monitored locations produce reaches the dark pool only through
-  side channels (the regime's `side` bit/s per location; certified egress is the declared circuit's output, fixed by its
-  registered inputs), from one location or from every location at once. Remotely nothing bounds it (0 s).
+  the channels no certifier reads (the regime's `timing` and `side` bit/s per host, times the location's hosts;
+  certified egress is the declared circuit's output, fixed by its registered inputs), from one location or from every
+  location at once. Remotely nothing bounds it (0 s).
 """
 
 from __future__ import annotations
@@ -28,15 +29,15 @@ class Point:
 
 def work(result: Result, flops: float) -> dict[str, float]:
     s = result.scenario
-    d = s.context.fleet.dark
+    d = s.context.fleet.dark_effective
     return {"unencumbered": flops / s.rate, "guaranteed": result.lo * flops / s.rate,
             "best attack": result.hi * flops / s.rate, "dark pool": flops / (d * s.rate) if d > 0 else math.inf}
 
 
 def exfil(scenario: Scenario, bits: float) -> dict[str, float]:
-    side = getattr(scenario.regime, "side", None)
-    if side is None:
+    if not hasattr(scenario.regime, "side"):
         return {"one location": 0.0, "every location": 0.0}
+    side = (getattr(scenario.regime, "timing", 0.0) + scenario.regime.side) * scenario.context.location.hosts
     return {"one location": bits / side if side > 0 else math.inf,
             "every location": bits / (side * scenario.context.fleet.count) if side > 0 else math.inf}
 

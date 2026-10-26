@@ -71,8 +71,8 @@ implementation (or different numbers in `data/`), never an edit to the layers ar
 | profile | `profile.py` | `Profile`: κ, state bits, `m`, and every field a class reads, named as in Lean | — | (the interface between the two) |
 | families | `families.py` | `Family.profile(Model, Run) → Profile` | full | an algorithm family and its parameters |
 | instances | `instances.py` | `Model`, `Run` (a target: `6 N_active T` FLOPs unless given) | kimi-k2, deepseek-v4-pro; their pretraining runs, one V4 optimizer step | an architecture, a scale |
-| hardware | `hardware.py` | `Location` (Φ, memory), `Fleet` (count, dark share, MFU), `Horizon` | h200-hgx, nvl72; reference-h200, world-h200, world-nvl72 | the actual datacenter |
-| regimes | `regimes.py` | `Regime.partition(Context) → Partition`, with `Policy` (Γ, k) | unmonitored, remote, onsite | what the protocols certify, and how |
+| hardware | `hardware.py` | `Location` (Φ, memory, hosts, host memory and ops, line rate), `Fleet` (count, dark share, MFU, the dark pool's MFU: `dark_effective`), `Horizon` | h100-hgx, h200-hgx, b200-hgx, gb200-nvl72, rtx-pro-6000-server, h200-hgx-rack4; 100k-GPU fleets, a 400k NVL72 fleet, the world-scale reference fleets | the actual datacenter |
+| regimes | `regimes.py` | `Regime.partition(Context) → Partition`, with `Policy` (Γ, k); a table may name a `base` and override what differs | unmonitored; remote (`DampenerRemote`'s terms, matching `tiers.py`), remote-sampled; onsite (`certified` or `links` physical cut), onsite-5gb, onsite-links, onsite-no-pouw | what the protocols certify, and how |
 | params | `params.py` | `Registry`: dotted keys over `data/*.toml`, `override`, `fields` | — | every number, with `low`/`high`, `source`, `status` |
 | scenario | `scenario.py` | `build`, `evaluate → Result` (per family: each bound, all bounds at once, each attack) | `data/scenarios.toml` | a choice per layer |
 | analysis | `analysis.py` | over any keys: `sweep`, `tornado`, `threshold`, `dangers` and `rescues`, `corner` (every range at its worse end), `margins`, `phase` and `frontier`, `attribution` (what sets ρ), `upto(status)` | — | — |
@@ -85,13 +85,17 @@ implementation (or different numbers in `data/`), never an edit to the layers ar
 The NCI verifier of record enforces the policy `(Γ, k)` on the **declared** circuit. The **actual** circuit is what the
 fleet computes, and the regimes map it onto blocks:
 
-- **declared cut** (remote and onsite): the certified share of a region runs declared blocks `(Γ, k)`; every other FLOP
-  (PoUW's residual `r̂` and deficit `ε_W`, the slack `ε'`, the verdict lag `JΔ/H`, what sampled proofs let go undone `χ`)
-  is free at face value. It rests on `DampenerRemote`'s premises (PoUW, terminal and sampled detection) and the
+- **declared cut** (remote and onsite): the certified share of a region runs declared blocks `(Γ, k)`; every other unit
+  of capacity is free at face value, at peak as Lean counts it: the GPUs' uncredited floor, clock above the credit and
+  host CPUs (`r̂`), PoUW's deficit `ε_W`, the slack `ε'`, the verdict lag `JΔ/H`, the escape slack `θ` and what sampled
+  proofs let go undone `χ`. It rests on `DampenerRemote`'s premises (PoUW, terminal and sampled detection) and the
   verifier's enforcement.
-- **physical cut** (onsite): a location over a wipe window is one block, `(Φ Δτ, R + I_cert Δτ + β_side Δτ)`. It rests on
-  causality on the actual circuit's annotation: `WindowsAt` on `Accounting.Placed` (`width_into_region_le`, `Links`,
-  `Covered`; ASK-141), with the wipe's residual `R`, the certifier's ingress `I_cert` and side channels `β_side`.
+- **physical cut** (onsite): a location over a wipe window is one block, `(Φ Δτ, K)`, by causality on the actual
+  circuit's annotation (`width_into_region_le`, `Links`, `Covered`; ASK-141). In its `links` form, what Lean proves
+  today (`Windows`), `K` is the location's memory plus its line rate over the window. In its `certified` form (the
+  default), `K = R + I_cert Δτ + (timing + β_side) Δτ`: what a wipe leaves per device and per host, the certifier's
+  ingress and the channels no certifier reads; it needs `WindowsAt` read as information rather than width, which is a
+  draft.
 
 A location is the largest set of devices joined by links no certifier sees (an HGX server's NVLink domain, an NVL72
 rack). Remotely nothing bounds what enters a location, so free FLOPs are free; onsite the window's input caps them too.

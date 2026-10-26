@@ -6,7 +6,7 @@ from rho.attacks import ATTACKS
 from rho.classes import CLASSES
 from rho.params import Registry
 from rho.regimes import KINDS
-from rho.scenario import evaluate_named
+from rho.scenario import evaluate_named, reads
 
 REG = Registry.load()
 
@@ -52,3 +52,9 @@ def test_admitting_weaker_statuses_never_lowers_the_guarantee(name):
     rhos = [analysis.upto(s)(r) for s in ("proved", "conditional", "draft", "absent")]
     assert rhos == sorted(rhos) and math.isclose(rhos[-1], r.lo)
     assert all(0 <= f.combined.slowdown.monitored <= 1 for f in r.families)
+
+
+def test_a_scenario_reads_its_own_tables_and_not_the_others():
+    keys = reads(REG, "reference-onsite-h200")
+    assert "fleet.world-h200.dark" in keys and "regime.onsite.residual_bits" in keys
+    assert not any(k.startswith(("fleet.world-nvl72.", "model.kimi-k2.")) for k in keys)

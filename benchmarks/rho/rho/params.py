@@ -42,8 +42,10 @@ class Param:
 
 
 class Registry:
-    def __init__(self, params: Mapping[str, Param]):
+    def __init__(self, params: Mapping[str, Param], seen: set[str] | None = None):
         self._params = dict(params)
+        #: the keys read so far, when tracking (`tracked`)
+        self.seen = seen
 
     @classmethod
     def load(cls, paths: Iterable[Path] | None = None) -> Registry:
@@ -67,9 +69,16 @@ class Registry:
 
     def param(self, key: str) -> Param:
         try:
-            return self._params[key]
+            p = self._params[key]
         except KeyError:
             raise KeyError(f"no parameter {key!r} in the registry (data/*.toml)") from None
+        if self.seen is not None:
+            self.seen.add(key)
+        return p
+
+    def tracked(self) -> Registry:
+        """This registry, recording in `seen` every key read through it."""
+        return Registry(self._params, set())
 
     def params(self) -> list[Param]:
         return list(self._params.values())
@@ -83,10 +92,10 @@ class Registry:
     def table(self, prefix: str) -> dict[str, Any]:
         """The leaves directly in table `prefix`, by their last name."""
         head = prefix + "."
-        out = {k[len(head):]: p.value for k, p in self._params.items() if k.startswith(head) and "." not in k[len(head):]}
-        if not out:
+        keys = [k for k in self._params if k.startswith(head) and "." not in k[len(head):]]
+        if not keys:
             raise KeyError(f"no table {prefix!r} in the registry (data/*.toml)")
-        return out
+        return {k[len(head):]: self.param(k).value for k in keys}
 
     def fields(self, cls: type, prefix: str, **given: Any) -> Any:
         """An instance of dataclass `cls` from table `prefix`: each field from the table (or `given`), and no other keys

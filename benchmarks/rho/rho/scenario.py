@@ -41,9 +41,10 @@ class Scenario:
 
     @property
     def rate(self) -> float:
-        """The adversary's whole compute, unencumbered, in FLOP/s: the monitored fleet and its dark share."""
+        """The adversary's whole unencumbered training rate, in reference FLOP/s: the monitored fleet's, and the dark
+        pool's share of progress (`Fleet.dark_effective`) beside it."""
         f = self.context.fleet
-        return f.count * self.context.location.phi * f.mfu_train / (1 - f.dark)
+        return f.count * self.context.location.phi * f.mfu_train / (1 - f.dark_effective)
 
     def years(self, rho: float) -> float:
         """Years to reach the run's target at slowdown `rho`."""
@@ -163,6 +164,13 @@ def evaluate(s: Scenario) -> Result:
         out.append(FamilyResult(fam.name, p, tuple(e for e, _ in bounds), combined,
                                 tuple(_estimate(a, p, partition, block)[0] for a in s.attacks)))
     return Result(s, tuple(out))
+
+
+def reads(registry: Registry, name: str) -> frozenset[str]:
+    """The registry keys scenario `name` reads: the parameters its ρ can depend on."""
+    tracked = registry.tracked()
+    build(tracked, name)
+    return frozenset(tracked.seen or ())
 
 
 def evaluate_named(registry: Registry, name: str) -> Result:

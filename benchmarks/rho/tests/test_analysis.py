@@ -20,6 +20,7 @@ def synthetic(monkeypatch, rho):
         return rho({"a": 1.0, "b": 1.0, "c": 1.0, "d": 1.0} | dict(values or {}))
 
     monkeypatch.setattr(analysis, "at", at)
+    monkeypatch.setattr(analysis, "reads", lambda registry, scenario: frozenset(p.key for p in registry.params()))
     return reg
 
 

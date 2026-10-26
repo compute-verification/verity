@@ -2,6 +2,7 @@
 # committed inference, about 2e16 requests a year of DeepSeek-V4-Pro in FP8 at about 4,500 input tokens each, on two
 # fleets (8-GPU H200 servers; NVL72 racks, a rack one location), dark share 0.1% and 1%, side channels 1 kb/s per
 # server, horizons a week, a month and a year; and the work and exfiltration references that make rho interpretable.
+# Its regimes are data/regimes.toml's onsite (a wipe every 24 h, 10 GB a device today) and remote.
 
 [model.deepseek-v4-pro]
 n_total = { value = 1.6e12, unit = "param", source = "ruling: Daniel 25 Oct reference datacenter (1.6T total)", status = "ruled" }
@@ -28,11 +29,6 @@ compute = { value = 2.84e19, unit = "FLOP", source = "ruling: Daniel 25 Oct, abo
 gamma = { value = 9.8e16, unit = "FLOP", source = "a 1M-token session: 1e6 x 2 x 49e9", status = "derived" }
 k = { value = 2e7, unit = "bit", low = 2.2e6, high = 8.8e7, source = "ruling: Daniel 25 Oct, a session returns at most 2.5 MB (1M tokens at 20 bits)", status = "ruled" }
 
-[location.nvl72]
-devices = { value = 72, unit = "GPU", source = "GB200 NVL72: 72 GPUs on one NVLink domain (a rack is one location, Daniel 25 Oct)", status = "datasheet" }
-phi = { value = 3.6e17, unit = "FLOP/s", low = 3.6e17, high = 7.2e17, source = "top's arithmetic in the reference spec: 360 PF dense FP8 per rack; high: FP4", status = "datasheet" }
-memory = { value = 1.104e14, unit = "bit", source = "72 x 192 GB HBM3e (about 13.8 TB)", status = "datasheet" }
-
 # Each fleet is the whole world's compute: sized to serve the committed computation, 2e16 requests x 4,500 tokens x
 # 2 x 49e9 = 8.82e30 FLOP a year (prefill only), at the fleet's serving MFU: count = 8.82e30 / (phi x year x mfu_serve).
 [fleet.world-h200]
@@ -43,47 +39,11 @@ mfu_train = { value = 0.4, low = 0.3, high = 0.55, source = "frontier pretrainin
 mfu_serve = { value = 0.4, low = 0.2, high = 0.6, source = "the served work's MFU, prefill-heavy", status = "assumed" }
 
 [fleet.world-nvl72]
-location = "nvl72"
+location = "gb200-nvl72"
 count = { value = 1.94e6, unit = "location", source = "8.82e30 / (3.6e17 x 3.1536e7 x 0.4); top's 7.8e5 is at 100% use", status = "derived" }
 dark = { value = 0.01, low = 0.001, high = 0.05, source = "ruling: Daniel 25 Oct, one connected unencumbered pool, operating points 0.1% and 1%", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.3, high = 0.55, source = "frontier pretraining MFU", status = "assumed" }
 mfu_serve = { value = 0.4, low = 0.2, high = 0.6, source = "the served work's MFU, prefill-heavy", status = "assumed" }
-
-# Onsite at Daniel's operating point: a wipe every 24 h; residual 10 GB per device today, 5 GB his target.
-[regime.reference-onsite-h200]
-kind = "onsite"
-residual = { value = 0.505, low = 0.01, high = 1.0, source = "benchmarks/nci/tiers.py audited_residual: the GPUs' uncredited share at the floor credit 0.323 + host CPUs 0.118 + clock 0.064; low: best plausible design; high: nothing credited today", status = "measured" }
-eps_w = { value = 0.00744, low = 0.001, high = 0.03, source = "benchmarks/nci/tiers.py DEFAULTS eps_w", status = "derived" }
-eps_agg = { value = 1e-4, low = 0, high = 1e-3, source = "benchmarks/nci/tiers.py DEFAULTS eps_agg", status = "derived" }
-identities = { value = 1, unit = "identity", source = "benchmarks/nci/tiers.py DEFAULTS", status = "assumed" }
-lag_s = { value = 3600, unit = "s", low = 60, high = 86400, source = "benchmarks/nci/tiers.py DEFAULTS lag_s", status = "assumed" }
-cheat = { value = 0, low = 0, high = 0.01, source = "sampled proofs at q = 1 (tiers T1-T4)", status = "assumed" }
-wipe_s = { value = 86400, unit = "s", low = 3600, high = 604800, source = "ruling: Daniel 25 Oct, a wipe every 24 h", status = "ruled" }
-residual_bits = { value = 8e10, unit = "bit/device", low = 4e10, high = 1.6e11, source = "memory-accounting r20261026-003454-bfd2: 10 GB per H200 today; low: Daniel's 5 GB", status = "measured" }
-ingress = { value = 1.1e6, unit = "bit/s", low = 1e5, high = 1e7, source = "2e16 requests/yr / 4.42e7 servers = 14.3 requests/s x 4,500 tokens x 17 bits", status = "derived" }
-side = { value = 1e3, unit = "bit/s", low = 1e2, high = 1e7, source = "ruling: Daniel 25 Oct, 1 kb/s per server, swept", status = "ruled" }
-
-[regime.reference-onsite-nvl72]
-kind = "onsite"
-residual = { value = 0.505, low = 0.01, high = 1.0, source = "benchmarks/nci/tiers.py audited_residual: the GPUs' uncredited share at the floor credit 0.323 + host CPUs 0.118 + clock 0.064; low: best plausible design; high: nothing credited today", status = "measured" }
-eps_w = { value = 0.00744, low = 0.001, high = 0.03, source = "benchmarks/nci/tiers.py DEFAULTS eps_w", status = "derived" }
-eps_agg = { value = 1e-4, low = 0, high = 1e-3, source = "benchmarks/nci/tiers.py DEFAULTS eps_agg", status = "derived" }
-identities = { value = 1, unit = "identity", source = "benchmarks/nci/tiers.py DEFAULTS", status = "assumed" }
-lag_s = { value = 3600, unit = "s", low = 60, high = 86400, source = "benchmarks/nci/tiers.py DEFAULTS lag_s", status = "assumed" }
-cheat = { value = 0, low = 0, high = 0.01, source = "sampled proofs at q = 1 (tiers T1-T4)", status = "assumed" }
-wipe_s = { value = 86400, unit = "s", low = 3600, high = 604800, source = "ruling: Daniel 25 Oct, a wipe every 24 h", status = "ruled" }
-residual_bits = { value = 8e10, unit = "bit/device", low = 4e10, high = 1.6e11, source = "the H200 figure (memory-accounting r20261026-003454-bfd2), not measured on GB200", status = "assumed" }
-ingress = { value = 2.5e7, unit = "bit/s", low = 2.5e6, high = 2.5e8, source = "2e16 requests/yr / 1.94e6 racks = 327 requests/s x 4,500 tokens x 17 bits", status = "derived" }
-side = { value = 1e3, unit = "bit/s", low = 1e2, high = 1e7, source = "ruling: Daniel 25 Oct, 1 kb/s per server, a rack taken as one server", status = "assumed" }
-
-[regime.reference-remote]
-kind = "remote"
-residual = { value = 0.505, low = 0.01, high = 1.0, source = "benchmarks/nci/tiers.py audited_residual: the GPUs' uncredited share at the floor credit 0.323 + host CPUs 0.118 + clock 0.064; low: best plausible design; high: nothing credited today", status = "measured" }
-eps_w = { value = 0.00744, low = 0.001, high = 0.03, source = "benchmarks/nci/tiers.py DEFAULTS eps_w", status = "derived" }
-eps_agg = { value = 1e-4, low = 0, high = 1e-3, source = "benchmarks/nci/tiers.py DEFAULTS eps_agg", status = "derived" }
-identities = { value = 1, unit = "identity", source = "benchmarks/nci/tiers.py DEFAULTS", status = "assumed" }
-lag_s = { value = 3600, unit = "s", low = 60, high = 86400, source = "benchmarks/nci/tiers.py DEFAULTS lag_s", status = "assumed" }
-cheat = { value = 0, low = 0, high = 0.01, source = "sampled proofs at q = 1 (tiers T1-T4)", status = "assumed" }
 
 [work.v4-step]
 flops = { value = 2.84e19, unit = "FLOP", source = "ruling: Daniel 25 Oct, one optimizer step (about 4 H100-hours)", status = "ruled" }
@@ -105,7 +65,7 @@ bits = { value = 1.68e8, unit = "bit", source = "ruling: Daniel 25 Oct, 100M tok
 
 [scenario.reference-onsite-h200]
 fleet = "world-h200"
-regime = "reference-onsite-h200"
+regime = "onsite"
 policy = "v4-pro-session"
 horizon = "year"
 run = "v4-pretrain"
@@ -113,7 +73,7 @@ families = ["full"]
 
 [scenario.reference-onsite-nvl72]
 fleet = "world-nvl72"
-regime = "reference-onsite-nvl72"
+regime = "onsite"
 policy = "v4-pro-session"
 horizon = "year"
 run = "v4-pretrain"
@@ -121,7 +81,7 @@ families = ["full"]
 
 [scenario.reference-remote-h200]
 fleet = "world-h200"
-regime = "reference-remote"
+regime = "remote"
 policy = "v4-pro-session"
 horizon = "year"
 run = "v4-pretrain"
@@ -129,7 +89,7 @@ families = ["full"]
 
 [scenario.reference-remote-nvl72]
 fleet = "world-nvl72"
-regime = "reference-remote"
+regime = "remote"
 policy = "v4-pro-session"
 horizon = "year"
 run = "v4-pretrain"
