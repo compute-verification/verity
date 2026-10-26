@@ -121,7 +121,7 @@ SAMPLERS_BOUND = {"greedy": "ArgmaxTokenSelect_v1 (aten.argmax over the bf16 log
 
 
 def declared_live_counts(reqs: list[dict]) -> list[int]:
-    """[R15 stoch, DECISION M-0529 (A)] The DECLARED chronology's live sampler batch per engine step: n_live(e) = #{r : arrive_r <= e <
+    """The DECLARED chronology's live sampler batch per engine step: n_live(e) = #{r : arrive_r <= e <
     arrive_r + cap_r} — every request is sampled once per engine step from its arrival (prefill sample at e = arrive_r) until it has produced
     `cap_r` tokens (the `length` stop; vLLM's sampler sees one logits row per scheduled request, chunked prefills included).  Index e."""
     horizon = max((int(r.get("arrive_step", 0) or 0) + _cap_of(r) for r in reqs), default=0)
@@ -196,7 +196,7 @@ def workload_engine_args(workload: str | None, tp: int) -> dict:
 
 
 def sampling_policy(arg: str | None, workload: str | None) -> dict:
-    """[R13 X-05] The row's sampling policy as a STRUCTURAL INPUT of the construction (BRIEF: prompt length, max_tokens, sampling kind).
+    """[X-05] The row's sampling policy as a STRUCTURAL INPUT of the construction (BRIEF: prompt length, max_tokens, sampling kind).
 
     Sources, in order: `--workload <manifest>` (the row's manifest: `sweep.sampling` + `sweep.sampling_params` from `sweep/workload.py`,
     else the legacy `sampling.variant` -> `variants[...]`, else per-request `variant` / `seed` fields), and/or `--sampling <policy>` with
@@ -616,7 +616,7 @@ def _count(xs) -> dict:
 
 
 def _sharded_param_summary(model) -> dict:
-    """[R13 tp] the rank's parameter shapes AS INSTANTIATED at this rank (the sharded weight inputs the Program commits to), keyed by the
+    """The rank's parameter shapes AS INSTANTIATED at this rank (the sharded weight inputs the Program commits to), keyed by the
     vLLM layer class: `{class: {shape: count}}` — the independent check that the shard shapes match the engine worker's loaded shards."""
     import torch
     by_cls: dict = {}

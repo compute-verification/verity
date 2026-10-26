@@ -9,7 +9,7 @@ The network certificate check (`NetworkCheck.Check.protocol`) meets the unit's c
 returns: the records `CertifierDevice.step` publishes over the trace the world gives it, and the certificates the host's
 assembly has its issuer sign for them. Each property here is stated over those outputs, for every input of the device and
 every commitment and evidence the check accepts under the device's parameters (`unitParams`), given the one premise of
-the network lane, that the device runs as built (`NetTiming.DeviceIntact`, the listed `trusted-nebius-host`). Everything
+the network lane, that the device runs as built (`NetTiming.DeviceIntact`, the listed `trusted-host`). Everything
 else the old abstract device was assumed to do (each head its link-window's, each egress head `record_head` of its
 recorded grid) is now a fact about the device's code.
 
@@ -28,12 +28,12 @@ session id: it signs nothing when its signing state has already started its issu
 `deviceCode`); (c) no other run's message input has the SHA-512 digest of this run's. (c) is `cr/sha-512` over the
 key's whole signing history, the hash-then-sign composition behind `euf-cma/lms-sha512-n64`, not a break tied to the
 run: only a model of the key's runs would make it one. (b), and the one-time use of each leaf that the forgery reading
-already rests on (`DeviceInput.next` is the host's), rest on `trusted-nebius-host`, where the state the device keeps on
+already rests on (`DeviceInput.next` is the host's), rest on `trusted-host`, where the state the device keeps on
 its host is its next LMS leaf and the session ids it has started. That claim's part about one run is
 `NetTiming.DeviceIntact`; no statement here takes the rest as a premise, since a statement of one run can't name other
 runs.
 
-`Properties.Proofs.CertifierNetwork.Runs` proves `AcceptedRowsAreProgramRows`; `Proofs.NetworkCertifier.Accepted` (in
+`Proofs.Properties.CertifierNetwork.Runs` proves `AcceptedRowsAreProgramRows`; `Proofs.NetworkCertifier.Accepted` (in
 `security_proofs`, through the reference's `Proofs.NetworkCertifier.Code`) proves `AcceptedRunsAreProgramRuns` and the
 count it gives, `EncardAcceptedObservationsLe`.
 -/
