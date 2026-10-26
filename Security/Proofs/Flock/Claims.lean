@@ -307,6 +307,7 @@ import Proofs.Flock.Claims.Recursion.ResLowerDD
 import Proofs.Flock.Claims.Recursion.KSDec
 import Proofs.Flock.Claims.Recursion.ResAccPorts
 import Proofs.Flock.Claims.Recursion.ResChainW
+import Proofs.Flock.Claims.Recursion.ResEndsW
 import Proofs.Flock.Claims.Recursion.OpenCoefTie
 import Proofs.Flock.Claims.Recursion.OpenLevW
 import Proofs.Flock.Claims.Recursion.HresAsm
