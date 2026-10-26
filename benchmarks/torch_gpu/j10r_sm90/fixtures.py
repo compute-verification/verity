@@ -72,8 +72,11 @@ def expected(out: Path, linears: list[str], ms: list[int], count: int, v6: int, 
             work += [(lin, m, u, i < v6) for i, u in enumerate(S.picks(lin, m, count))]
     work.sort(key=lambda j: -S.LINEARS[j[0]][1])
     t0 = time.time()
-    with ProcessPoolExecutor(jobs) as ex:
-        res = list(ex.map(unit_expected, work))
+    if jobs <= 1:
+        res = [unit_expected(j) for j in work]
+    else:
+        with ProcessPoolExecutor(jobs) as ex:
+            res = list(ex.map(unit_expected, work))
     doc: dict = {"schema": SCHEMA, "definition": "h1tile.j10r_reference (PouwH1Tile_v5; v6 on the first --v6 units)",
                  "sources": _sources(), "salt": S.SALT.hex(), "weights_seed": S.WEIGHTS_SEED.decode(),
                  "weights_format": S.WEIGHTS_FORMAT, "activations_seed": S.X_SEED.decode(), "tile": [S.T, S.T],
