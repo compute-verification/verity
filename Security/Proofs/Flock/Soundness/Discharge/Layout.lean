@@ -13,6 +13,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.Site
 import Proofs.Flock.Soundness.Discharge.Layout.OutSite
 import Proofs.Flock.Soundness.Discharge.Layout.OfRows
 import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+import Proofs.Flock.Soundness.Discharge.Layout.KeyProgP
 import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 import Proofs.Flock.Soundness.Discharge.Layout.OutPin
 import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
@@ -54,6 +55,8 @@ from the decoder's places and the executable's regions:
   with rows the message-keyed inputs (`keyRowOf`): Δ's copies (`keyProg_copies`), the rows' `b ‖ c`
   (`keyProg_bcPinned`), the single gates' bits (`keyProg_valPinned`), and `lay` and `rs` there (`keyLayout`,
   `keyRows`);
+* `KeyProgP`: the gates of `Placed.keyProgP` (keys with public inputs): row bits (`keyRowOfP`), public gates
+  (`keyPubOf`), the registration's bit at a single gate (`keyGateP`), and `single_gateP` under `KeysRowP`;
 * `OutShape`: the shape region "out" packs, from the verifier's checks in an untyped circuit whose unit returns the
   outputs (`outShape_of_parse`, by `Net.ofRows`'s `built_out` and `HmRow.check`'s `check_out`);
 * `OutPin`: the units' committed gates at those places hold the population's returned outputs (`keyProg_hout`, with the
