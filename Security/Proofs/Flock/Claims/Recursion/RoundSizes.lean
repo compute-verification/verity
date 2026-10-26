@@ -296,8 +296,8 @@ theorem roundSizes_eq {sh : Shape} {S : Flock.RecAlgebra.GfS} {sch : Flock.Sched
   have p6 : SzAt w (k2 + (2 + n)) [2 + n] := SzAt.one (size_at (by omega) (round_size hneZ eg).2)
   have pH : SzAt w 0 (headSz sh.m sh.kLog (2 + n)) := by
     unfold headSz
-    exact SzAt.app p0 (SzAt.app p1 (SzAt.app p2 (SzAt.app p3 (SzAt.app p4 (SzAt.app p5 p6 (by simp)) (by simp; omega))
-      (by simp; omega)) (by simp; omega)) (by simp; omega)) (by simp; omega)
+    exact SzAt.app p0 (SzAt.app p1 (SzAt.app p2 (SzAt.app p3 (SzAt.app p4 (SzAt.app p5 p6 (by simp)) (by simp <;> omega))
+      (by simp <;> omega)) (by simp <;> omega)) (by simp <;> omega)) (by simp <;> omega)
   have hall := SzAt.sizes (SzAt.app pH pL (by simp [headSz]; omega)) (by simp [headSz]; omega)
   rw [← hall, ← hc]
   exact (zeroRounds_sizes _).symm
