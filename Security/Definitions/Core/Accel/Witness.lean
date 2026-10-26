@@ -87,7 +87,7 @@ def mma (n p : ℕ) : Ins :=
   let e := p % blocks n
   let i₀ := 64 * (e / (n / 256))
   let j₀ := 256 * (e % (n / 256))
-  (⟨mmaOp, ⟨rfl, by decide, Or.inr ⟨rfl, by decide, by decide, by decide, Or.inr rfl, rfl⟩⟩⟩,
+  (⟨mmaOp, ⟨rfl, by decide, Or.inr ⟨rfl, by decide, by decide, by decide, Or.inr rfl, rfl, rfl⟩⟩⟩,
     fun i =>
       if i < 512 then .direct (addrA n (i₀ + i / 8) (8 * κ + i % 8))
       else if i < 2560 then .direct (addrB n (j₀ + (i - 512) / 8) (8 * κ + (i - 512) % 8))

@@ -70,8 +70,8 @@ shapes and twice their `k`, at the same tensor units a real product (so twice th
 included), and `redux.sync` (`Lane.redux`, a uniform instruction's slot).
 
 **Not yet in the instance** (each a gap in faithfulness, not a relaxation): `f16` accumulators, conversions (`I2F`,
-`F2I`, `F2FP`), `MUFU`, `FMNMX`, `mul.hi.s32`, `BMSK`, constant-bank operands, `vote`, TMA multicast, and the 64-bit
-and `inc`/`dec` reductions.
+`F2I`, `F2FP`), `MUFU`, `FMNMX`, `mul.hi.s32`, `BMSK`, constant-bank operands, `vote`, TMA multicast, the 64-bit
+and `inc`/`dec` reductions, and `mma.sync` FP8 (`m16n8k32` `.e4m3`/`.e5m2`, PTX sm_89 and later; no capture of its dot).
 -/
 
 open scoped NNRat
@@ -104,7 +104,7 @@ def weight : Fmt → ℚ≥0
   | .f64 => 32
   | _ => 0
 
-/-- PTX's `k` for each format (`mma.sync` and `wgmma`). -/
+/-- PTX's `k` for each format, `mma.sync`'s (PTX ISA 9.0 §9.7.14); `wgmma` takes one of them, `wgK`. -/
 def ks : Fmt → List ℕ
   | .s8 | .u8 => [16, 32]
   | .e4m3 | .e5m2 => [32]
@@ -112,6 +112,16 @@ def ks : Fmt → List ℕ
   | .tf32 => [4, 8]
   | .b1 => [128, 256]
   | _ => []
+
+/-- `wgmma`'s one `k` for each format (PTX ISA 9.0 §9.7.15: 32 for `s8`, `u8` and FP8, 16 for `f16` and `bf16`, 8
+for `tf32`, 256 for `b1`), so its `k16` integer and `k8` half forms don't exist (RT-MODEL M11): on the card the only
+`s8` `k16` form is `mma.sync` `IMMA.16816`. -/
+def wgK : Fmt → ℕ
+  | .s8 | .u8 | .e4m3 | .e5m2 => 32
+  | .f16 | .bf16 => 16
+  | .tf32 => 8
+  | .b1 => 256
+  | _ => 0
 
 /-- Whether a format is FP8. -/
 def fp8 (f : Fmt) : Bool := f = .e4m3 || f = .e5m2
@@ -124,11 +134,11 @@ def Avail : Op Store → Prop
   | .mma fa fb _ sh sa sb =>
     pair fa fb ∧ sh.k ∈ ks fa ∧
       ((sh.m = 16 ∧ sh.n = 8 ∧ !fp8 fa ∧ sa = .reg ∧ sb = .reg) ∨
-        (sh.m = 64 ∧ 8 ∣ sh.n ∧ 8 ≤ sh.n ∧ sh.n ≤ 256 ∧ (sa = .reg ∨ sa = .smem) ∧ sb = .smem))
+        (sh.m = 64 ∧ 8 ∣ sh.n ∧ 8 ≤ sh.n ∧ sh.n ≤ 256 ∧ (sa = .reg ∨ sa = .smem) ∧ sb = .smem ∧ sh.k = wgK fa))
   | .mmaSp fa fb _ sh sa sb =>
     pair fa fb ∧ fa ≠ .b1 ∧ sh.k ∈ (ks fa).map (2 * ·) ∧
       ((sh.m = 16 ∧ sh.n = 8 ∧ !fp8 fa ∧ sa = .reg ∧ sb = .reg) ∨
-        (sh.m = 64 ∧ 8 ∣ sh.n ∧ 8 ≤ sh.n ∧ sh.n ≤ 256 ∧ (sa = .reg ∨ sa = .smem) ∧ sb = .smem))
+        (sh.m = 64 ∧ 8 ∣ sh.n ∧ 8 ≤ sh.n ∧ sh.n ≤ 256 ∧ (sa = .reg ∨ sa = .smem) ∧ sb = .smem ∧ sh.k = 2 * wgK fa))
   | .lane g => g.warp = false
   | .uni g => g.uniform = true
   | .copy s t n => n ≤ 4 ∨ (s = .smem ∧ t ≠ .reg) ∨ (t = .smem ∧ s ≠ .reg)
@@ -139,7 +149,9 @@ def Avail : Op Store → Prop
 /-- Hopper's FP8 pipeline (`models.HOPPER_E4M3_K32`, `HOPPER_E5M2_K32`). -/
 def fp8Pipeline : TC.Pipeline := { groups := [32], width := 14, zeroExponent := -139 }
 
-/-- The dots the H200's captures pin. -/
+/-- The dots the H200's captures pin. The integer ones (`intCaptured`) ignore `k` and the shape, so the `k16`
+forms inherit the `k32` captures: a sum of 16 products is exact (at most 2^18 in magnitude), and the only place a
+clamp lands is `C + dot`, which the `k32` captures' clamp tiles pin (RT-MODEL M11). -/
 def captured (fa fb : Fmt) (sat : Bool) (k : ℕ) : Option Dot :=
   match intCaptured fa fb sat with
   | some d => some d

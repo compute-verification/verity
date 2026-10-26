@@ -19,6 +19,9 @@ shared memory with L1, 128 KB an SM (whitepaper: 128 KB of L1 and shared memory 
   2617 MHz boost is the same 1024), so 192,512; a MAC of `e4m3`, `e5m2` or `e2m1` (`kind::f8f6f4`, `QMMA.16832`) uses
   1 unit, of `nvf4` or `mxf4` (`OMMA.SF.16864`, 8192 MACs in 16 cycles; whitepaper FP4 2,015.2 dense) 1/2, of `f16` or
   `bf16` 2 (503.8), of `tf32` 4 (251.9); sm_120 has no native `b1` MMA (below);
+* the `k16` integer `mma.sync` (`IMMA.16816`) runs at half the `k32` rate on the card (CALIB: 512 against 1024 MACs an
+  SM clock); the instance prices it at the `k32` rate, which lets a program do more, and a per-shape θ row would
+  tighten it (RT-MODEL M11);
 * issue: 4 warp instructions an SM clock (four sub-partitions, one warp scheduler each), so 752;
 * `alu` and `imad`: 64 lanes an SM clock each (the DS-120 census: `LOP3` and `IMAD` two cycles a warp instruction on a
   sub-partition; CUDA C++ Programming Guide §6.4.1 Table 7), so 12,032 each;
@@ -118,7 +121,9 @@ def Avail : Op Store → Prop
 `_E2M1_`), not pinned (`captured`). -/
 def f8Pipeline : TC.Pipeline := { groups := [32], width := 26, zeroExponent := -133 }
 
-/-- The dots the RTX PRO 6000's captures pin. -/
+/-- The dots the RTX PRO 6000's captures pin. The integer ones (`intCaptured`) ignore `k` and the shape, so the `k16`
+forms inherit the `k32` captures: a sum of 16 products is exact (at most 2^18 in magnitude), and the only place a
+clamp lands is `C + dot`, which the `k32` captures' clamp tiles pin (RT-MODEL M11). -/
 def captured (fa fb : Fmt) (sat : Bool) (k : ℕ) : Option Dot :=
   match intCaptured fa fb sat with
   | some d => some d
@@ -128,7 +133,8 @@ def captured (fa fb : Fmt) (sat : Bool) (k : ℕ) : Option Dot :=
 /-- **The RTX PRO 6000's table.** A program's code is at most GDDR7's bytes over 16-byte instructions; the coarse
 device's rates are the tensor core's s8 MACs, the 188 · 128 FP32 lanes, and GDDR7's bits a tick rounded up
 (1597 · 10⁹ · 8 / 2.43 · 10⁹ = 5,257.6). θ's floor: `madHi ≥ 2` (`IMAD.HI` at 32 lanes a
-SM-clock against `IMAD`'s 64, CUDA C++ Programming Guide §6.4.1 Table 7; not yet measured on this card). `b1` needs
+SM-clock against `IMAD`'s 64, CUDA C++ Programming Guide §6.4.1 Table 7; not yet measured on this card: RT-UNITS U8
+reads about 16 lanes from `SHA_ROT`, which would make it 4, and the floor rises to CALIB's measurement). `b1` needs
 no floor: no `b1` MMA is available. -/
 def card : Card where
   size := size
