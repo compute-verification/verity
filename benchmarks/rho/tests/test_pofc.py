@@ -12,6 +12,8 @@ from rho.theorem import Budget
 
 REG = Registry.load()
 RULES = pofc.rules(REG)
+#: the page's toll tables price a weight at 16 bits in 4-bit activation slots
+PAGE_RULES = replace(RULES, weight_bits=16)
 N_MAX = (1e4, 1e5, 1e6)
 
 #: Daniel's Notion page "Proof of forward computation": one layer's boundary positions, and the toll in % at n_max 1e4,
@@ -33,8 +35,8 @@ def sig(x: float, n: int) -> float:
 def test_one_layer_costs_the_pages_positions(name):
     """784,738 positions a Llama-405B layer (the page's ~800k) and 25.4M a Kimi K3 layer (~25M)."""
     m = pofc.stack(REG, name)
-    assert RULES.weight_bits == 16 and RULES.act_bits == 4 and RULES.s(m) == m.d_model * 4
-    assert math.isclose(pofc.positions(m, RULES.weight_bits, RULES.act_bits), PER_LAYER[name], rel_tol=0.025)
+    assert PAGE_RULES.act_bits == 4 and PAGE_RULES.s(m) == m.d_model * 4
+    assert math.isclose(pofc.positions(m, PAGE_RULES.weight_bits, PAGE_RULES.act_bits), PER_LAYER[name], rel_tol=0.025)
 
 
 @pytest.mark.parametrize("name", PAGE)
@@ -42,15 +44,15 @@ def test_the_toll_tables_are_the_pages_to_every_cell(name):
     """The page multiplies its per-layer positions by the depth over `n_max`, to two figures; the exact toll is within
     that rounding, and Kimi K3's top 64 is its whole model."""
     m = pofc.stack(REG, name)
-    s = RULES.s(m)
-    exact = pofc.tolls(m, PAGE[name], N_MAX, RULES)
+    s = PAGE_RULES.s(m)
+    exact = pofc.tolls(m, PAGE[name], N_MAX, PAGE_RULES)
     for depth, row in PAGE[name].items():
         for n, cell in zip(N_MAX, row, strict=True):
             assert sig(100 * pofc.toll(depth * PER_LAYER[name] * s, n, s), 2) == cell
             assert math.isclose(100 * exact[depth, n], cell, rel_tol=0.05)
     if name == "kimi-k3":
         assert all(sig(100 * exact[64, n], 2) == cell for n, cell in zip(N_MAX, PAGE[name][64], strict=True))
-        assert math.isclose(exact[64, 1e4], pofc.toll(m.n_total * RULES.weight_bits, 1e4, s))
+        assert math.isclose(exact[64, 1e4], pofc.toll(m.n_total * PAGE_RULES.weight_bits, 1e4, s))
 
 
 def test_the_toll_is_the_weights_over_an_episodes_boundary():
@@ -123,9 +125,10 @@ def test_backprop_caps_only_under_a_forward_cut_below_a_toll_of_one():
     a = pofc.Backprop(s.model, RULES).allowance(profile())
     ep = pofc.episode(RULES, s.model)
     assert math.isinf(a(ep)) and math.isinf(a(Budget(ep.compute, ep.inputs)))
-    wide = pofc.episode(replace(RULES, n_max=1e9), s.model)
+    wide = pofc.episode(replace(RULES, n_max=5e8), s.model)
     t = pofc.trained(profile(), s.model, RULES)
-    assert 0 < t.toll(wide) < 1 and math.isclose(a(wide), t.within(wide)) and a(wide) < 0.6 * wide.compute / 2
+    # above a toll of 2/3 the free positions hold fewer training tokens (3 forwards each) than the compute pays for
+    assert 2 / 3 < t.toll(wide) < 1 and math.isclose(a(wide), t.within(wide)) and a(wide) < 0.6 * wide.compute / 2
     signal = pofc.Backprop(s.model, RULES, signal=True).allowance(profile())
     assert math.isclose(signal(ep), t.tokens(ep.inputs)) and signal(ep) < 0.6 * ep.compute / 2
 
@@ -143,26 +146,57 @@ def test_the_profiles_depth_is_read_when_the_argument_gives_none():
 
 
 def test_the_constructions_open_where_the_page_says():
+    """In bits, at the committed precision the loss operator holds its own layer (attack b) and the palindrome needs
+    `P ≥ 2×` (attack c); at the page's 16-bit weights it needs `p ≥ 2×` for both, and `P ≥ 3×` besides."""
     s, _ = reference()
     m, p = s.model, profile()
     with pytest.raises(Outside):
-        pofc.LastLayers(m, RULES, 1).allowance(p)
-    wide_p = replace(RULES, per_operator=2.0)
-    assert pofc.trained(p, m, wide_p).held == 1
-    ep = pofc.episode(wide_p, m)
-    assert pofc.LastLayers(m, wide_p, 1).allowance(p)(ep) == 0.6 * ep.compute / 2
-    assert pofc.LastLayers(m, wide_p, 1).allowance(p)(Budget(ep.compute, ep.inputs)) == 0.0
-    for rules in (RULES, replace(RULES, commit=3.0)):
+        pofc.LastLayers(m, PAGE_RULES, 1).allowance(p)
+    assert pofc.trained(p, m, RULES).held == pofc.trained(p, m, replace(PAGE_RULES, per_operator=2.0)).held == 1
+    ep = pofc.episode(RULES, m)
+    assert pofc.LastLayers(m, RULES, 1).allowance(p)(ep) == 0.6 * ep.compute / 2
+    assert pofc.LastLayers(m, RULES, 1).allowance(p)(Budget(ep.compute, ep.inputs)) == 0.0
+    for rules in (RULES, replace(PAGE_RULES, commit=3.0)):
         with pytest.raises(Outside):
             pofc.Palindrome(m, rules).allowance(p)
-    assert pofc.Palindrome(m, replace(RULES, commit=3.0, per_operator=2.0)).allowance(p)(ep) == 0.6 * ep.compute / 2
+    assert pofc.Palindrome(m, replace(RULES, commit=2.0)).allowance(p)(ep) == 0.6 * ep.compute / 2
+    assert pofc.Palindrome(m, replace(PAGE_RULES, commit=3.0, per_operator=2.0)).allowance(p)(ep) == 0.6 * ep.compute / 2
     big = pofc.episode(replace(RULES, n_max=1e8), m)
-    t = pofc.trained(p, m, RULES, 1)
-    full, served = (pofc.WeightsAsActivations(m, RULES, 1, b).allowance(p)(big) for b in (None, RULES.act_bits))
+    t = pofc.trained(p, m, RULES, 4)
+    full, served = (pofc.WeightsAsActivations(m, RULES, 4, b).allowance(p)(big) for b in (None, RULES.act_bits))
     assert math.isclose(full, t.within(big)) and math.isclose(served, t.within(big, RULES.act_bits)) and served > full
     assert pofc.WeightsAsActivations(m, RULES).allowance(p)(pofc.episode(RULES, m)) == 0.0
     assert pofc.junk_share(RULES, m, s.context) == 1.0
     assert pofc.junk_share(replace(RULES, episodes_per_day=1.0), m, s.context) < 1e-3
+
+
+def test_an_update_leaves_an_episode_only_through_its_outputs():
+    """Registration happens once (Daniel, 25 Oct) and every declared episode reads the committed `θ`, so what a
+    construction trains inside an episode reaches the next only through `Y` and back in through `X` (Daniel, 26 Oct);
+    under `recommit` it persists by new parameters, as the page's charge to `P` reads."""
+    s, _ = reference()
+    m, ep = s.model, pofc.episode(RULES, s.model)
+    assert RULES.persist == "outputs" and REG["pofc.rules.reference.persist"] == "outputs"
+    outputs = replace(RULES, commit=2.0)
+    recommit = replace(outputs, persist="recommit")
+    big = replace(profile(), state_bits=2 * RULES.y)
+    for make in (lambda r: pofc.LastLayers(m, r, 1), lambda r: pofc.Palindrome(m, r),
+                 lambda r: pofc.WeightsAsActivations(m, r, 1), lambda r: pofc.JunkEpisodes(m, r, 1.0, 1)):
+        with pytest.raises(Outside, match="only through Y"):
+            make(outputs).allowance(big)
+        assert make(recommit).allowance(big)(ep) == make(outputs).allowance(profile())(ep)
+    with pytest.raises(ValueError, match="persist"):
+        replace(RULES, persist="sometimes")
+
+
+def test_in_episode_training_no_longer_sets_the_upper_end_where_its_update_cant_leave():
+    """At `n_max = 1e8` training the top layer inside an episode reached ρ = 1 when its update persisted for free; under
+    `outputs` its 2e11-bit state can't leave through `Y`, so the upper end is the scenario's own attacks'."""
+    (top1,) = (q for q in pofc.versus(REG, n_maxes=(1e8,), depths=(1,)))
+    assert top1.hi > 1.5
+    (free,) = (q for q in pofc.versus(REG.override({"pofc.rules.reference.persist": "recommit"}), n_maxes=(1e8,),
+                                         depths=(1,)))
+    assert free.hi == pytest.approx(1.0)
 
 
 def test_every_pofc_number_says_where_it_comes_from_and_how_sure_it_is():
