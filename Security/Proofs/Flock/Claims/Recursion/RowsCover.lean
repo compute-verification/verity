@@ -70,7 +70,8 @@ circuit has RecCap's port `top` (`capPorted`). -/
 theorem readX_listed {x : Msg} {r : XR} (h : readX x = some r) :
     ∃ vs, RecVStar.statements r.shape = .ok vs ∧ r.w.parts.length = vs.size ∧ portsNamed r.w.parts vs = true ∧
       capPorted r.w.parts = true := by
-  unfold readX at h
+  replace h := readXPre_of_readX h
+  unfold readXPre at h
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
   obtain ⟨w, -, ri, -, sh, -, pa, -, dims, -, vs, hvs, h⟩ := h
   split_ifs at h with hl

@@ -52,7 +52,8 @@ theorem readX_spec {x : Claims.Msg} {r : XR} (h : readX x = some r) :
     (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" r.w.recInner)).toOption = some r.shape ∧
       (r.innerRaw.partition.mapM (jsonOf "partition")).toOption = some r.partition ∧
       (RecVStar.statements r.shape).isOk = true := by
-  unfold readX at h
+  replace h := readXPre_of_readX h
+  unfold readXPre at h
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
   obtain ⟨w, -, ri, -, sh, hsh, pa, hpa, dims, -, vs, hvs, h⟩ := h
   split_ifs at h with hl
