@@ -44,19 +44,17 @@ theorem derivedGroups_some {pi : HmIn.Ports} {gs : Array Nat} (h : HmIn.derivedG
     pi.ports.isEmpty = false ∧ gs.size = pi.ports.size ∧
       ∀ k < pi.ports.size, HmIn.derivedGroup pi k = some (gs.getD k 1) := by
   unfold HmIn.derivedGroups at h
-  simp only at h
   split at h
   · rename_i hc
     obtain rfl := (Option.some.inj h).symm
-    simp only [Bool.and_eq_true, Bool.not_eq_true', Array.all_eq_true, Array.size_map, Array.size_range,
-      Array.getElem_map, Array.getElem_range] at hc
+    simp only [Bool.and_eq_true, Bool.not_eq_true', List.all_eq_true, List.mem_range] at hc
     refine ⟨hc.1, by simp, fun k hk => ?_⟩
-    have hpos := hc.2 k (by simpa using hk)
+    have hs := hc.2 k hk
     have hgd : ((Array.range pi.ports.size).map fun k => (HmIn.derivedGroup pi k).getD 0).getD k 1 =
         (HmIn.derivedGroup pi k).getD 0 := by
       simp [Array.getD_eq_getD_getElem?, hk]
     rw [hgd]
-    revert hpos
+    revert hs
     cases HmIn.derivedGroup pi k <;> simp
   · exact absurd h (by simp)
 
@@ -67,7 +65,7 @@ theorem checkDerived_words {pi : HmIn.Ports} {pop : Public} {gs : Array Nat}
   unfold HmIn.checkDerived at h
   simp only at h
   split at h
-  · exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw, Except.throw])
+  · exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw])
   · rename_i hn
     have hpos : 0 < pi.ports.size := Nat.lt_of_le_of_lt (Nat.zero_le _) hk
     have hd : (i * pi.ports.size + k) / pi.ports.size = i := by

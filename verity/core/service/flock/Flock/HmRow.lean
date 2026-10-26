@@ -2016,8 +2016,9 @@ def derivedGroup (pi : Ports) (k : Nat) : Option Nat :=
 /-- The groups of a circuit with public inputs whose every port the verifier derives (`derivedGroup`), port `k`'s at `k`;
 none when a port's words are a recomputation the verifier is handed (`--public-inputs F`, `checkOwn`). -/
 def derivedGroups (pi : Ports) : Option (Array Nat) :=
-  let gs := (Array.range pi.ports.size).map fun k => (derivedGroup pi k).getD 0
-  if !pi.ports.isEmpty && gs.all (0 < ·) then some gs else none
+  if !pi.ports.isEmpty && (List.range pi.ports.size).all (derivedGroup pi · |>.isSome) then
+    some ((Array.range pi.ports.size).map fun k => (derivedGroup pi k).getD 0)
+  else none
 
 /-- The verifier's own derivation (`derivedGroups`, groups `gs`): every instance `i` of the population, its word of port `k`
 `i mod gs[k]`, one word a port. The public file's words must be these. -/
