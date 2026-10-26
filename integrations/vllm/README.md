@@ -53,7 +53,7 @@ lives here is misfiled.
 manifest, versions), `code_identity.py` (executed code objects; `kernel_identity.py` the generated kernels' sources and binaries),
 `chunks.py` (chunk attribution, the run loop's `on_step`),
 `vllm_adapter.py` (workloads and request driving; the stages import the engine's names from it), `engine_driver.py`,
-`handle.py` (a built engine's scheduler and model runner: the module that knows vLLM's object graph),
+`handle.py` (a built engine's scheduler and model runner),
 `engine_profile.py`, `arrivals.py`, `static_schedule.py` (a `sampling.ignore_eos` run held to the schedule its declaration alone
 decides), `served_seed.py` (the public default seed a served request without one is sampled under), `rank_worker.py` (the TP rank worker extension), and `profiles/` (kappa: capture profiles and workload JSON; one generic
 constructor + a facts table; the adapter's fixed cases, `cases.py`).  Never: commit, decide what is required.
@@ -215,12 +215,8 @@ regression: the current tree's checks against the frozen v1 records (`expected/<
 
 ## Python API
 
-Outside this distribution, code imports `verity_vllm` only through its public modules, and from each only the names its
-`__all__` lists (`tests/test_vllm_public_api.py`, whose allowlist of the other modules still imported only shrinks):
-
-- `verity_vllm`: `LLM`, `EnginePin` (the checkpoint pin it runs), `EngineSpec` and `TargetProfile` (the declared target);
-- `verity_vllm.engine.spec`: engine spec documents (`EngineSpec`, `Engine`, `load`, `from_mapping`, `SCHEMA`);
-- `verity_vllm.engine.handle`: a built engine's `scheduler` and `model_runner`.
+Outside code imports only `verity_vllm`, `verity_vllm.engine.spec` and `verity_vllm.engine.handle`, each only its `__all__`
+(`tests/test_vllm_public_api.py`).
 
 `verity_vllm.LLM` is a pinned vLLM engine, constructed and called like `vllm.LLM`:
 
