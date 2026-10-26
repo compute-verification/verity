@@ -152,9 +152,11 @@ python tools/verity/lean/check.py PKG  the full check, which the train's check r
 - The PR says which guarantees changed and why; the ledger's status rows match `lean-audit.json`.
 - Merge `main` into your branch rather than rebasing. Run `python tools/verity/lean/merge.py --install` once per clone, so
   `lean-audit.json` merges without a rebuild; only a conflict it refuses needs `check.py --update` on the merged tree.
-- Record your lock at your own head, then mark the PR ready. A train regenerates records that differ only because
-  another PR moved what yours reads; re-record yourself only what it can't (a refused conflict, `shape`, a move's map).
-  A clean merge of `main` after your records run needs no new one: the fast path says so and builds nothing.
+- Record your lock at your own head, then mark: `ready` refuses a changed lock no records run of the head passed on
+  its own bytes (`--no-preflight` too). A passing Lean check, a clean merge of `main` over a passing head, or a commit
+  of exactly the `record/lean-audit.json` a passing run kept needs no new run.
+  A train regenerates records that differ only because another PR moved what yours reads; re-record yourself only
+  what it can't (a refused conflict, `shape`, a move's map).
 
 ## Standing rulings (Daniel)
 
