@@ -382,6 +382,7 @@ theorem hsched {acc : ℕ → Array F128} {i : ℕ} (hG : D.RowG cls acc i) (hi 
   rw [getElem!_pos D.sts i hi]
   simp only [RecDeploy.repSchedAt, h2, Option.map_some, Option.getD_some]
   rw [FlockVBridge.Family.repRounds_sz h2 hfast, hv, hsm, hsk]
+  rfl
 
 end DecAt
 
