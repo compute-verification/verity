@@ -643,7 +643,7 @@ theorem capPrefixR (rd : Claims.Msg → Option FinalP) : CapPrefixR rd := by
   simp only [habs, ↓reduceIte, List.cons.injEq, and_true] at hd
   have hcb := congrArg (fun b : ByteArray => b.data.toList) hd
   simp only at hcb
-  have hvv := colBytes_inj hcb
+  have hvv := colBytes_inj (padRow_inj hcb (by simp only [Frame.colBytes_length, List.length_cons, List.length_nil]))
   have hkf : kFr q₁.ligerito.messages[capMsg sch.k0 ℓ]! = kFr q₂.ligerito.messages[capMsg sch.k0 ℓ]! := by
     simp only [List.cons.injEq, and_true] at hvv
     obtain ⟨e1, e2, e3, e4⟩ := hvv
