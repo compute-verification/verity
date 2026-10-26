@@ -663,4 +663,67 @@ theorem loads_exec (n : ℕ) (h4 : 4 ∣ n) (hsz : 2 * n * (n / 4) ≤ (machine 
         · rw [ite_eq_right (fun h => h2 h.2), ite_eq_right (fun h => by rw [add_mul, one_mul] at h; omega)]
     · rw [ite_eq_right (fun h => hu h.1), ih u q hq, ite_eq_right (fun h => hu h.1), ite_eq_right (fun h => hu h.1)]
 
+/-! ## The stores -/
+
+theorem store_eq (n w : ℕ) (h4 : 4 ∣ n) :
+    store n w = copyN .reg .dram 4 (Or.inl le_rfl) (4 * w) (n * n / 2 + 4 * w) := by
+  obtain ⟨k, rfl⟩ := h4
+  rcases Nat.eq_zero_or_pos k with rfl | hk
+  · simp [store, acc, dramC]
+  have e1 : 4 * k / 4 = k := by omega
+  have e2 : w / k * (4 * k) + 4 * (w % k) = 4 * w := by
+    have := Nat.div_add_mod w k
+    rw [show w / k * (4 * k) = 4 * (k * (w / k)) by ring]
+    omega
+  simp only [store, acc, dramC, e1, e2, Nat.add_assoc]
+
+/-- The stores' instructions in order. -/
+theorem stores_exec (n : ℕ) (h4 : 4 ∣ n) (hsd : n * n / 2 + n * n ≤ (machine x cap oracle).size .dram)
+    (hsr : n * n ≤ (machine x cap oracle).size .reg) (M : (machine x cap oracle).Mem) :
+    ∀ m ≤ n * n / 4, ∀ (u : Store) (q : ℕ), q < (machine x cap oracle).size u →
+      ((List.range m).map (store n)).foldl (fun M a => instrExec a.instr M) M ((machine x cap oracle).loc u q) =
+        if u = .dram ∧ n * n / 2 ≤ q ∧ q < n * n / 2 + 4 * m then M ((machine x cap oracle).loc .reg (q - n * n / 2))
+        else M ((machine x cap oracle).loc u q)
+  | 0, _, u, q, _ => by simp
+  | m + 1, hm, u, q, hq => by
+    have hb : n * n / 2 + 4 * m + 4 ≤ (machine x cap oracle).size .dram := by omega
+    rw [List.range_succ, List.map_append, List.foldl_append, List.map_cons, List.map_nil, List.foldl_cons,
+      List.foldl_nil, store_eq n m h4]
+    erw [copy_at .reg .dram 4 _ (4 * m) (n * n / 2 + 4 * m) _ u q hq hb]
+    have ih := stores_exec n h4 hsd hsr M m (by omega)
+    by_cases hu : u = .dram
+    · subst hu
+      by_cases h1 : n * n / 2 + 4 * m ≤ q ∧ q < n * n / 2 + 4 * m + 4
+      · rw [ite_eq_left ⟨rfl, h1⟩, ih .reg _ (by omega), ite_eq_right (by simp), ite_eq_left ⟨rfl, by omega, by omega⟩,
+          show 4 * m + (q - (n * n / 2 + 4 * m)) = q - n * n / 2 by omega]
+      · rw [ite_eq_right (fun h => h1 h.2), ih .dram q hq]
+        by_cases h2 : n * n / 2 ≤ q ∧ q < n * n / 2 + 4 * m
+        · rw [ite_eq_left ⟨rfl, h2⟩, ite_eq_left ⟨rfl, h2.1, by omega⟩]
+        · rw [ite_eq_right (fun h => h2 h.2), ite_eq_right (fun h => by omega)]
+    · rw [ite_eq_right (fun h => hu h.1), ih u q hq, ite_eq_right (fun h => hu h.1), ite_eq_right (fun h => hu h.1)]
+
+theorem chunk_flatten (len : ℕ) : ∀ m : ℕ,
+    ((List.range m).map (chunk len 151)).flatten = List.range (min len (151 * m))
+  | 0 => by simp
+  | m + 1 => by
+    rw [List.range_succ, List.map_append, List.flatten_append, chunk_flatten len m]
+    simp only [List.map_cons, List.map_nil, List.flatten_cons, List.flatten_nil, List.append_nil, chunk]
+    rw [List.range_eq_range', List.range_eq_range']
+    by_cases h : len ≤ 151 * m
+    · rw [min_eq_left h, min_eq_left (by omega : len ≤ 151 * (m + 1)), show len - 151 * m = 0 by omega]
+      simp
+    · have := List.range'_append (s := 0) (m := 151 * m) (n := min 151 (len - 151 * m)) (step := 1)
+      rw [min_eq_right (by omega : 151 * m ≤ len),
+        show min len (151 * (m + 1)) = 151 * m + min 151 (len - 151 * m) by omega]
+      simpa using this
+
+/-- The store ticks run the stores in order. -/
+theorem stores_ticks (n : ℕ) (M : (machine x cap oracle).Mem) :
+    ((List.range ((n * n / 4 + 150) / 151)).map fun u => (chunk (n * n / 4) 151 u).map (store n)).foldl tickExec M =
+      ((List.range (n * n / 4)).map (store n)).foldl (fun M a => instrExec a.instr M) M := by
+  have hf := chunk_flatten (n * n / 4) ((n * n / 4 + 150) / 151)
+  rw [min_eq_left (by omega)] at hf
+  rw [← hf, List.map_flatten, List.foldl_flatten, List.map_map]
+  rfl
+
 end Verity.Accel.H200.Resident

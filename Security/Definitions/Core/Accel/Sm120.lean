@@ -23,14 +23,16 @@ shared memory with L1, 128 KB an SM (whitepaper: 128 KB of L1 and shared memory 
   `bf16` 2 (503.8), of `tf32` 4 (251.9); sm_120 has no native `b1` MMA (below); `tensorLong` is `tensor`, since the
   card has one clock for its tensor and lane figures (RT-MODEL M1);
 * the `k16` integer `mma.sync` (`IMMA.16816`) runs at half the `k32` rate on the card (CALIB: 512 against 1024 MACs an
-  SM clock); the instance prices it at the `k32` rate, which lets a program do more, and a per-shape θ row would
+  SM clock, runs r20261017-041103-d35d and r20261017-041754-7630); the instance prices it at the `k32` rate, which lets a program do more, and a per-shape θ row would
   tighten it (RT-MODEL M11);
 * issue: 4 warp instructions an SM clock (four sub-partitions, one warp scheduler each), so 752;
 * `alu` and `imad`: 64 lanes an SM clock each (the DS-120 census: `LOP3` and `IMAD` two cycles a warp instruction on a
   sub-partition; CUDA C++ Programming Guide §6.4.1 Table 7), so 12,032 each;
 * `f64`: 2 lanes an SM clock (Programming Guide Table 7, CC 12.0: 64-bit floating-point multiply-add 2), so 376; DMMA
-  (`Op.dmma`; PTX gives `mma` `.f64` to sm_80 and later) has no documented rate on this card: 32 tensor units a MAC,
-  32 MACs an SM clock, 16 × the FP64 lanes' rate, is a generous placeholder, and CALIB's θ needs a row for it;
+  (`Op.dmma`; PTX gives `mma` `.f64` to sm_80 and later) has no documented rate on this card, and CALIB measured
+  1.75 MACs an SM clock (`DMMA.8x8x4`, run r20261017-041103-d35d, note:20261017T0321Z-draft-eps1-tensor): 32 tensor
+  units a MAC, 32 MACs an SM clock, 18 × that, stays as a generous figure, since a measured rate bounds the card's
+  from below only;
 * shared memory: 32 banks of a 32-bit word a clock an SM (Programming Guide, 'Shared Memory'), so 6016;
 * GDDR7: 1597 GB/s (product page, 'Memory Bandwidth 1597 GB/s'), 1597 · 10⁹ / (4 · 2.43 · 10⁹) = 39925/243 words.
 
@@ -40,7 +42,8 @@ is a program of the modelled instructions); `s8`/`u8` either way, `e4m3`, `e5m2`
 (`kind::f8f6f4`), the other formats with themselves. Every lane function, and the integer ones on the uniform
 datapath too (`uni`, a whole issue slot each: CUDA Binary Utilities §4.4 lists the uniform opcodes CC 10.0 to 12.0
 share, and no document gives their issue cost; one slot as measured on sm_100, RT-B200-EMP, run r20261019-055605-6cc2,
-and on sm_90, a placeholder until CALIB measures sm_120; whether sm_120's uniform datapath has functions beyond the
+on sm_90, and on this card, where CALIB measured 3.06 uniform warp instructions an SM clock against issue's 4, run
+r20261017-055801-e051; whether sm_120's uniform datapath has functions beyond the
 integer ones is a gap); copies of at most 4 words, and bulk copies with shared memory at one end (TMA); atomics on
 shared memory, L2 and GDDR7; integer reductions as on the H200.
 
@@ -59,13 +62,14 @@ infinite accumulators record-only. The mixed FP8 pairs and the block-scaled FP4 
 (`models.BLACKWELL_SM120_NVF4`, `_MXF4`, captured in Python, a block-scaled adder this module doesn't transcribe) and
 every other dot are `Open.dot`.
 
-**2:4 sparse MMAs** (`mma.sp`): at `m16n8` and twice the dense `k`, at the same tensor units a real product, their
-dots `Open.dotSp`; the block-scaled sparse forms (`kind::mxf4nvf4` at `k = 128`) are a gap.
+**2:4 sparse MMAs** (`mma.sp`): at `m16n8` and twice the dense `k`, at the same tensor units a real product (CALIB:
+`IMMA.SP` at 2,048 logical MACs an SM clock, twice the dense rate, run r20260930-111747-26f3), their dots `Open.dotSp`; the block-scaled sparse forms (`kind::mxf4nvf4` at `k = 128`) are a gap.
 
 **Coarser than the card**, and **not yet in the instance**: as for the H200 (`Accel.H200`), with FP6 (`e3m2`, `e2m3`)
 and the block-scaled FP8 and FP6 forms (`kind::mxf8f6f4`) among the gaps. DMMA, the FP64 lanes, `HFMA2`, the float
-reductions and `redux.sync` are over-approximated as on the H200 (`HFMA2`'s sm_120 rate is undocumented: an issue
-slot's share is at least the card's, since issue caps every lane instruction; a θ row should confirm it).
+reductions and `redux.sync` are over-approximated as on the H200 (`HFMA2`'s sm_120 rate is undocumented; the model
+gives it 256 FP16 FMAs an SM clock, two a lane on the 128 FP32 lanes, and CALIB's census measured 125.9,
+note:20261015T0608Z-draft-census-sm120).
 -/
 
 open scoped NNRat

@@ -176,7 +176,9 @@ def captured (fa fb : Fmt) (sat : Bool) (k : ℕ) : Option Dot :=
 /-- **The H200 SXM's table.** A program's code is at most HBM's bytes over 16-byte instructions; the coarse device's
 rates are the tensor core's s8 MACs, the 132 · 128 FP32 lanes, and HBM's bits a tick rounded up
 (4.8 · 10¹² · 8 / 1.98 · 10⁹ = 19,393.9). θ's floors: `sync ≥ 1` (the tensor pipe's peak is the data sheet's, which
-`wgmma` reaches, so no MMA form beats it), `b1 ≥ 1/8` (CALIB, CMP-115; the A100's binary peak is 8 × its INT8 peak)
+`wgmma` reaches, so no MMA form beats it; CALIB measured `mma.sync` at 65.6% of `wgmma` on every native form and the
+`k16` INT8 form at 48.7%, CMP-115 comment 3bf82c41, a card's `sync` of about 1.52 and 2.05, so the floor is the sheet's
+and generous), `b1 ≥ 1/8` (CALIB, CMP-115; the A100's binary peak is 8 × its INT8 peak)
 `madHi ≥ 2` (`IMAD.HI` at 32 lanes a SM-clock against `IMAD`'s 64, CUDA C++ Programming Guide §6.4.1 Table 7,
 CC 9.0, footnote 6; CALIB measured 30.6, r20261017-095350-02ff), and `slack ≥ 1` (a backlog of at least a tick: an
 MMA completes after the tick that issues it, and `Rate` and `CodeFetch` only get weaker as `slack` grows, so this floor
