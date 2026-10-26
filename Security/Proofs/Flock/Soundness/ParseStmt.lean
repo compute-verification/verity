@@ -86,7 +86,7 @@ theorem unrolled_unit (h : HmOut.parseTmpl tags cf tables = .ok ct) : (HmOut.unr
   simp [Array.getD_eq_getD_getElem?, hsz]
 
 theorem unrolled_tmpl (h : HmOut.parseTmpl tags cf tables = .ok ct) : (HmOut.unrolled ct).tmpl = none := by
-  obtain ⟨-, -, -, -, -, -, -, -, he⟩ := unrolled_of_parseTmpl h
+  obtain ⟨_, _, _, _, _, _, _, _, he⟩ := unrolled_of_parseTmpl h
   rw [he]
 
 /-- **A templated file's statement circuit's unit is `Built`**: `Tmpl.unroll`'s net (`built_tmpl`). -/
