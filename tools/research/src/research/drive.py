@@ -59,15 +59,15 @@ A tick syncs `next` as above, then lands its longest prefix whose every member h
 mark's author doesn't count: `queue.unreviewed`), a fast-forward of `main` through the same landing steps.  Two gates cut the
 prefix first.  A Lean change (a member whose own change touches a lock, `lean-audit.json`, or a Lean source of a package that
 has one: `queue.lean_change`) lands only once a lean-audit passed on a commit of `next` at or above it: drive's own Lean check
-(`train.sh TOP MACHINES --deferred lean-audit`, of the prefix's top), or any recorded run of the store whose lean-audit passed
-there; one that regenerated locks lands exactly at its commit, the locks on top.  While any Lean check of a commit of `next`
-runs, drive's or one in its run registry it didn't launch (a hand `train.sh COMMIT MACHINES --deferred lean-audit` on the
-control pod), `next` stays on its base for it as for a train's check, and the members up to it keep their place (`--first`
-goes above them).  While one runs, a Lean change above it, reviewed or not, gets a check stacked at `next`'s top, below what
+(`train.sh TOP MACHINES --deferred lean-audit`, of the prefix's top, while `next` stays on its base for it as for a train's
+check), or any recorded run of the store whose lean-audit passed there; one that regenerated locks lands exactly at its commit,
+the locks on top.  While one runs, a Lean change above it, reviewed or not, gets a check stacked at `next`'s top, below what
 came this tick (`lean_stack`, at most `max_lean_checks` running), so it doesn't wait for the lower one to pass and then for a
 whole check of its own; the lower one runs on.  A failed Lean check is run again on the Lean change's own commit, and only a
 failure there is told to its owner; nothing at or above a failed commit lands until it leaves `next`.  And every .py file the
-landing leaves must compile (`py_compile`): the PR that last changed one that doesn't is ejected.  No train is checked.  Each
+landing leaves must compile (`py_compile`): the PR that last changed one that doesn't is ejected.  No train is checked.  While
+any Lean check of a commit of `next` runs, drive's or a hand one of its run registry (`_running_lean`), the members up to it keep
+their place, as under a train's check (`--first` goes above them).  Each
 landing awaits the after-landing run, the post-landing run above with every ci.toml job (`AFTER_LANDING`), `--no-cache` while
 `after_landing_no_cache`, and `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `main`
 itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
