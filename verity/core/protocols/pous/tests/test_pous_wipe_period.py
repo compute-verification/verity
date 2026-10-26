@@ -164,7 +164,8 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
 @pytest.mark.parametrize("labels", [16, 1000, 1 << 19, 3 << 20, 1 << 30, 1_610_612_736, 1 << 50])
 def test_the_bound_is_within_f_m_at_2152_reads(labels: int) -> None:
     """The streamed wipe's own bound (`retained_bits`, Pous.Guarantees.StreamedWipe before its PRF term) at k = 2152
-    and δ = 2^-128, egress 0, is at most ⌈M/19⌉ from 16 labels up: the numeric step `EXPERIMENTAL` names."""
+    and δ = 2^-128, egress 0, is at most ⌈M/19⌉ from 16 labels up, as `StreamedWipeMeetsFamily` proves from one
+    segment up."""
     m = labels * sw.LABEL_BITS
     q, _ = sw.retained_bits(labels, W.READS, m, 0, -128)
     assert q <= math.ceil(m / 19), (labels, q, m / 19)

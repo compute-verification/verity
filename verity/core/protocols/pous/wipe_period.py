@@ -60,11 +60,10 @@ LIMIT_NS = 20_000_000
 """The leg's deadline a read: 20 ms, a socket round trip on one machine or a nearby one with room to spare."""
 TIER = "host-dram"
 EXPERIMENTAL = (
-    "f = 1/19 at eps = 2^-128 with 2152 timed reads is Pous.Guarantees.SecureErasureMeetsFamily's bound, proved for the "
-    "band fill (chainBandSeg); this verdict judges the streamed-label fill, whose proved guarantee is "
-    "Pous.Guarantees.StreamedWipe. That it implies the published bound for a fill of at least one 32 MiB segment at "
-    "k = 2152 is a numeric step (streamed_wipe.retained_bits), not proved in Lean, and eps leaves out StreamedWipe's PRF "
-    "advantage and its premises: every tier declared, the egress certified by the network certifier, no side channel")
+    "f = 1/19 at eps = 2^-128 with 2152 timed reads is Pous.Guarantees.StreamedWipeMeetsFamily, proved for the "
+    "streamed-label fill this verdict judges, at every fill of at least one 32 MiB segment; eps leaves out its PRF "
+    "advantage and its premises: K generated and held only by the challenger, off the prover's node; every tier "
+    "declared; the egress certified by the network certifier; no side channel")
 OTHER = "the wipe's commitment is not of the period's server and session"
 UNSIGNED = "the memory challenger has not signed the wipe: its reads are incomplete or not yet verified"
 
