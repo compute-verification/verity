@@ -183,7 +183,7 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   head (N3's, which is designed to hold the window's frames to the head's root) opens its head leaf in two or three
   SHA-512 compressions, where the record leaf would cost the certificate's 272 more. The firewall keeps the records and
   salts (`Opening`). The challenger receives one salted root and never a certificate, a certifier's salt or a head.
-- **Selection:** `All`. A registration is one link-window, one proof unit, so an accepted outcome is the exhaustive fact.
+- **Selection:** `All`. A registration is one link-window, one proof block, so an accepted outcome is the exhaustive fact.
   The record's `window` provenance is exactly `{"kind": "served", "window": w}`, and the challenger holds w to the
   registration's order (`LinkWindows.register`): the receipt keeps the order, and the order is the link-window.
 - **The network verdict of record** is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε
@@ -1163,7 +1163,7 @@ requests, whose frames are a function of the prompt's length alone), for every p
   verifier of record verified itself (`advised.IoTieVerdict`, naming the link, the registrations and the advice),
   given by the verifier's own tie source (`LinkWindows.ties`). The tie service (`tie_service.IngressTie`) builds it,
   and `tie_service.Ties` is that source. A registration is one ingress link-window, the warden's salted root of its
-  T bucket rows, held to the window's order, and T proof units, unit t bucket row t. The unit is
+  T bucket rows, held to the window's order, and T proof blocks, unit t bucket row t. The unit is
   `NetworkIngressTieBucket`: one gate naming IoTieRequest and its pinned circuit digest
   (`io_request.circuit-check.json`), its witness row the bucket row itself, read off the warden's root by the
   verifier's own registered read (`warden_rows.bucket_port`). The statement is a shared-row file whose `wit` table is
@@ -1346,8 +1346,8 @@ The bound charges the caps `b_w`, not the realized lengths, since a run counts i
 it. The compiler must be registered before the run (`CompilerPrecommitted`), and its frames must read only the advice
 and the certified ingress (`CompilerDeterministic`). Each run's egress must equal the compiled Program's, which needs
 every egress frame tied, and which the tie gives only when no step unit can be faulty: every step unit drawn `All`, or a
-sampled audit at δ ≥ miss(1). At a smaller δ an accepted sampled audit gives `Accepted` only with the faulty units'
-committed gates held as advice (`SampledAuditAccepted`), and the charge adds the faulty units' committed bits and
+sampled audit at δ ≥ miss(1). At a smaller δ an accepted sampled audit gives `Accepted` only with the faulty proof blocks'
+committed gates held as advice (`SampledAuditAccepted`), and the charge adds the faulty proof blocks' committed bits and
 log2 of the number of possible faulty sets, except with probability δ + ε_ks + ε_bind over the selection
 (`SecurityProofs.SampledLeakAccepted`). Charging a window only for the windows up to it would need a causality
 assumption about the compiler, which the statement doesn't take.
@@ -1361,7 +1361,7 @@ data in the cells (`WardenViewEqClientView`): the server's accept time, send tim
 through the fail cells. NCI's transfer gates are these cells' bits, whose number per window the schedule fixes. The
 schedules are charged `log2 #schedules`, so a schedule that came to depend on the server is still counted. The content
 term (`k`: the egress data bits no proved unit fixes, `ε` times the data bits at the draw's `δ`) is a premise of the run,
-not an assumption. For the circuit's Program, `SecurityProofs.SampledLeakAccepted` counts it: the faulty units'
+not an assumption. For the circuit's Program, `SecurityProofs.SampledLeakAccepted` counts it: the faulty proof blocks'
 committed bits plus log2 of the number of possible faulty sets, except with probability δ + ε_ks + ε_bind.
 
 The inference-only policy charges an isolation unit the ingress covert capacity from the last wipe before it starts,
@@ -1487,7 +1487,7 @@ of the wrong units (step 3 below), I_ε = log2 #Φ, and δ_audit = δ + ε_ks + 
    counting guarantee is needed. What is new is the bridge from steps 1 to 3: that an audit accepted by sampled proofs
    is, except with probability δ_audit, `Accepted` for some (a, φ). `Accepted` is the exact binding, in which every
    recorded row is the Program's. Today's audit gets it by recomputing the grid, and a sampled audit does not.
-   For the circuit's Program, `SampledAuditAccepted` (PRF-144, proved) is that bridge with φ the faulty units' committed
+   For the circuit's Program, `SampledAuditAccepted` (PRF-144, proved) is that bridge with φ the faulty proof blocks' committed
    gates, and `SecurityProofs.EncardAccSeqsSampledLe` is its count: φ costs those gates' bits plus log2 of the number
    of possible faulty sets. `SecurityProofs.SampledLeakAccepted` composes the two, with a pinned at the registered inputs.
 5. **The advice set.** `#𝒜_c ≤ 2^(c+1) − 1`. `encode` is injective (A5), so distinct advice values are distinct bit
@@ -2743,7 +2743,7 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
 
 ## The warden's cells as rows (`warden_rows`)
 
-Design v3 makes the transfer gates the cells' bits: the sender's proof unit opens a cell's row as an output and the
+Design v3 makes the transfer gates the cells' bits: the sender's proof block opens a cell's row as an output and the
 receiver's opens the same row as an input, under a root the warden signs, through the Lean verifier's registered
 reads (`Flock.Registered.checkPort`, `--registered`), with no new verifier form. `warden_rows.py`'s docstring has the
 encodings; this section says what is committed, signed and read.

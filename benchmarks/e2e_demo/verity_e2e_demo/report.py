@@ -157,9 +157,9 @@ MEASURED: dict[str, str] = {
     "H_A": "the bound (BOUND_CITATION) at δ = 1/100 on the block's draw, harm in ANDs: "
            "`sampled_proofs.optimize.certify` on the block's sizes and k",
     "H_B": "the same bound, harm in output bits",
-    "BLOCK_ANDS": "the block's circuit: ANDs over all its proof units (circuit-check's ANDs a unit × units, per "
+    "BLOCK_ANDS": "the block's circuit: ANDs over all its proof blocks (circuit-check's ANDs a unit × units, per "
                   "subcircuit)",
-    "BLOCK_OUTPUT_BITS": "the block's circuit: output bits over all its proof units",
+    "BLOCK_OUTPUT_BITS": "the block's circuit: output bits over all its proof blocks",
     "POUW_EPS": "CMP-126 (H200-POUW): PoUW's ε at δ = 1/100 from the block's one draw, its tiles a subcircuit at the "
                 "planner's k",
     "POUW_COVERAGE": "CMP-126: the share of the block's static INT8 MACs its tiles cover (`range`)",
