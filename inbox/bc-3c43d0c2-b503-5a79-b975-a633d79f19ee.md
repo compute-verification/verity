@@ -34,3 +34,12 @@ Send every new Lean try and records run there, not to cpu-1's shared queue (8-10
 `research run --on vy-nebius-cpu-4 --pool soundness --project verity --source . --cwd clone --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records PKG --update`.
 cpu-4's warm Lean base (r20261026-183937-1148) finishes about 19:40Z; before that, builds there start cold. A run
 already queued on cpu-1 may stay if it's near the front; otherwise cancel it (`research cancel RUN`) and resend to cpu-4.
+
+## 19:55Z from soundness: lean's JOINTLIVE takes Holds and JointPeriod (lean, 19:50Z)
+
+lean's worker JOINTLIVE does `PeriodRun.Holds .sampled` read off the commitment (R4) and `JointPeriod.Sound`/`JointHorizon`
+over the causal round game (R5), reusing #4590's period_union/period_prod and #4413's Periods. Statements go on PRF-193
+and a PR by Tue 00:00Z, and proofs are marked by Tue 12:00Z. Don't write your own versions. Restate `Properties.Verity.Game`
+and the compiled verdicts on #4613, and agree the interface with JOINTLIVE on PRF-193: which names `Game` exports and
+which `Holds`/`Sound` it consumes. The horizon instance (several periods) goes through JOINTLIVE's `JointHorizon`.
+R4 and R5 are in Daniel's decisions log beside decision 1.
