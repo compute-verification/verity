@@ -73,6 +73,8 @@ class Shape:
     prompt: int = 8
     batch: int = 20_480
     step_s: float = 7.5
+    #: the block's steps when they differ from its positions (a request's lifetime as compute-accounting counts it)
+    steps: int = 0
 
     @property
     def positions(self) -> int:
@@ -85,7 +87,7 @@ class Shape:
     @property
     def block_s(self) -> float:
         """One lockstep window: every request from its first byte to its last."""
-        return self.positions * self.step_s
+        return (self.steps or self.positions) * self.step_s
 
 
 @dataclass(frozen=True)

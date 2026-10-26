@@ -54,9 +54,16 @@ outputs, replay of the layer-steps the draw meets (to build their witnesses), an
   tiles (`--tiles`) and softmax and PV padded to the context (`--pad`); and gives the frontier over the share, the
   window length in blocks that proves within its own GPU time, and the faulty ANDs (`Stratified.harm_bound`, not a Lean
   guarantee).
+- `demo_a.py`: Demo A's frontier on one H200 (PRF-166): plain INT8 weights, no P2 decode, a block of 16,384 requests at
+  CMP-92's 7.84 s step, 32 steps a request, on `h200.py`'s partition with statements shared per template per block. The
+  harm is Daniel's half skipped credited work (an s8 coordinate's K MACs, else 0), half leaked output bits, each half
+  weighted at each budget by the least bound that budget certifies for it alone; each point reports `certify`'s
+  `free_compute` and `leak` from its one draw at δ = 1% and 1e-6, the knee, and whether 1% of the block's GPU time
+  affords a plan.
 
 ```text
 uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
 uv run python benchmarks/sampling_plan/transformer.py --out DIR [--model large] [--share S] [--delta D]
 uv run python benchmarks/sampling_plan/h200.py --out DIR [--share S] [--batch B] [--step-s T] [--tiles] [--pad]
+uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--pad]
 ```
