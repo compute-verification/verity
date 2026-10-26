@@ -28,12 +28,12 @@ theorem replay_ok {p : RemoteAudit.Protocol.Params} {reg : RemoteAudit.Registrat
     simp only [hs, bind, Except.bind] at h
     cases hr : RemoteAudit.Session.run
         (RemoteAudit.Session.State.init params reg coins appendCoins notBeforeNs) events with
-    | error why => simp [hr] at h
+    | error why => simp [hr, bind, Except.bind] at h
     | ok y =>
       obtain ⟨rs, s'⟩ := y
-      simp only [hr, pure, Except.pure, Except.ok.injEq] at h
+      simp only [hr, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
       subst h
-      exact ⟨params, coins, appendCoins, notBeforeNs, events, rs, rfl, hr⟩
+      exact ⟨params, coins, appendCoins, notBeforeNs, events, rs, by simp [hs], hr⟩
 
 theorem acceptIsVerified : AcceptIsVerified := by
   intro p reg e pub prof h
@@ -46,7 +46,8 @@ theorem acceptIsVerified : AcceptIsVerified := by
       obtain ⟨params, coins, appendCoins, notBeforeNs, events, rs, hs, hrun⟩ := replay_ok hr
       rcases hc : RemoteAudit.Protocol.certify sm 1 with ⟨pub', prof'⟩
       rw [hc] at h
-      cases h
+      simp only [Core.Outcome.accept.injEq] at h
+      obtain ⟨rfl, -⟩ := h
       exact ⟨params, coins, appendCoins, notBeforeNs, events, rs, s, sm, hs, hrun, hout, hsum, by rw [hc]⟩
     · cases h
     · cases h
