@@ -1,6 +1,7 @@
 """machine-model render [SECTION ...]       every table of the data directory as Markdown, read from data/ alone (no
                                           solve): vectors, epochs, rows, floors, designs, honest, units, forms, table,
-                                          headline, attacks, devices (default: all of them); the README holds none"""
+                                          headline, attacks, devices, theta (default: all of them); the README holds
+                                          none"""
 from __future__ import annotations
 
 import tomllib
@@ -8,6 +9,7 @@ from collections import Counter
 from pathlib import Path
 
 from verity_machine_model import eps as E
+from verity_machine_model import theta as T
 from verity_machine_model.model import (CLAIMS, DATA, all_attacks, census_files, census_lines, device, devices, floors,
                                         model, rows, vector, vectors)
 
@@ -173,11 +175,73 @@ def _devices(_data: Path) -> str | None:
                    "current vector"], body)
 
 
+def _measured(x) -> str:
+    return "–" if x is None else f"{x:g}"
+
+
+def _theta(data: Path) -> str | None:
+    if not T.has(data):
+        return None
+    t = T.theta(data)
+    figs = {f.key: f for f in T.figures(t)}
+    out = [f"{t.gpu}, {t.sms} SMs ({t.sms_source}). Documents: " + "; ".join(t.documents) + ".",
+           "### Clocks",
+           _table(["clock", "MHz", "grade", "source", "measured"],
+                  [[f"`{c.name}`", f"{c.mhz:g}", c.grade, c.source, c.measured] for c in t.clocks.values()]),
+           "### Rates (a SM-clock's, in the unit named; B/s for the whole GPU)",
+           _table(["rate", "what", "unit", "sheet", "figure at clock (10¹²/s)", "measured", "grade", "source",
+                   "runs, or the gap"],
+                  [[f"`{r.key}`", r.what, r.unit, _measured(r.sheet),
+                    f"{figs[r.key].figure:g} at `{r.clock}` (2 · sheet · SMs · clock {figs[r.key].value:.2f})"
+                    if r.key in figs else "", _measured(r.measured), r.grade, r.source, r.runs or f"gap: {r.gap}"]
+                   for r in t.rates.values()]),
+           "### Capacities",
+           _table(["capacity", "what", "value", "unit", "grade", "source", "measured, or the gap"],
+                  [[f"`{c.key}`", c.what, f"{c.value:g}", c.unit, c.grade, c.source,
+                    c.measured or (c.gap and f"gap: {c.gap}")] for c in t.capacities.values()]),
+           "### Exact paths",
+           _table(["format", "native", "exact", "ISA"], [[p["format"], p["native"], p["exact"], p["isa"]]
+                                                          for p in t.paths]),
+           "### FP8 atoms",
+           _table(["form", "products", "group", "alignment", "accumulation", "promotion", "rate", "source"],
+                  [[x[k] for k in ("form", "products", "group", "alignment", "accumulation", "promotion", "rate",
+                                   "source")] for x in t.fp8])]
+    f = T.fold(t, data)
+    body = []
+    rs = {rd: {r.name: r for r in T.routes(t, rd)} for rd in T.READINGS}
+    for name in rs["sheet"]:
+        body.append([f"d: {name}", *(f"{rs[rd][name].d:.2f}" if name in rs[rd] else "–" for rd in T.READINGS),
+                     "ρ₈ over deliveries a SM-clock"])
+    ss = {rd: T.strassen(t, rd, f.L) for rd in T.READINGS}
+    body.append([f"Strassen at L = {f.L}: tensor time over naive", *(f"{ss[rd].tensor:.4f}" for rd in T.READINGS),
+                 f"7/8 · ρ_k{f.L} / ρ_k{f.L // 2}"])
+    for name in T.ADDING:
+        body.append([f"exchange: {name}", *(f"{ss[rd].rates[name]:.3f}" if name in ss[rd].rates else "none"
+                                            for rd in T.READINGS),
+                     "5d/(4L) / (1 − tensor time); none: the level saves no tensor time"])
+    bs = {rd: T.bound(t, rd) for rd in (*T.READINGS, "measured only")}
+    mo = bs["measured only"]
+    body.append(["B_RF, words a SM-clock", f"{bs['sheet'].words:.1f}", f"{bs['measured'].words:.1f}",
+                 f"LP over the writers; measured only: {mo.words:.1f}"])
+    body.append(["c ≈ ρ₈/B_RF (bits)", f"{bs['sheet'].c:.4f}", f"{bs['measured'].c:.4f}",
+                 f"measured only: {mo.c:.4f}"])
+    body.append([f"r_H, honest `{f.profile}` ({f.status})", f"{f.r_h:.4f}", f"{f.r_h:.4f}",
+                 ", ".join(f"{c} {v:.4f}" for c, v in f.per_word.items())])
+    body.append([f"r_min, {f.fold}'s own", f"{f.r_min:g}", f"{f.r_min:g}",
+                 ", ".join(f"{c} {v:g}" for c, v in f.minimal.items())])
+    body.append(["slack over the cheapest exchange", *(f"{100 * f.eps(rd):.2f}%" for rd in T.READINGS),
+                 "(r_H − r_min) in tensor MAC-times a MAC, over the cheapest adding route's exchange"])
+    out += ["### Derived (`machine-model theta` prints the arithmetic)",
+            _table(["derived", "sheet", "measured", "how"], body)]
+    return "\n\n".join(out)
+
+
 SECTIONS = {"vectors": ("Vectors", _vectors), "epochs": ("Epochs and their census", _epochs),
             "rows": ("Rows", _rows), "floors": ("Floors", _floors), "designs": ("Designs", _designs),
             "honest": ("Honest kernels", _honest), "units": ("Proof units", _units), "forms": ("MMA forms", _forms),
             "table": ("The table route", _route), "headline": ("The per-family headline's designs", _headline),
-            "attacks": ("Attack families", _attacks), "devices": ("Devices", _devices)}
+            "attacks": ("Attack families", _attacks), "devices": ("Devices", _devices),
+            "theta": ("θ: rates, capacities, clocks and exact paths, with sources", _theta)}
 
 
 def _where(data: Path) -> str:

@@ -328,16 +328,16 @@ what = "DFMA (FP64 FMA: two words a lane)"
 unit = "lanes/SM/clk"
 sheet = 64
 clock = "fmax"
-figure = 34
-grade = "data sheet and Programming Guide"
-source = "DS 'FP64 34 TFLOPS'; WP Table 3 'Peak FP64 TFLOPS (non-Tensor)' 33.5; CPG Table 7, CC 9.0: '64-bit floating-point add, multiply, multiply-add' 64"
+figure = 33.5
+grade = "whitepaper, data sheet and Programming Guide"
+source = "WP Table 3 'Peak FP64 TFLOPS (non-Tensor)' 33.5 at 1980 MHz; DS 'FP64 34 TFLOPS' (2 · 64 · 132 · 1980 MHz is 33.45, so the DS rounds up); CPG Table 7, CC 9.0: '64-bit floating-point add, multiply, multiply-add' 64"
 gap = "the H200 lane-pipe probe (alu.prmt's)"
 
 [[rate]]
 key = "iadd64"
 what = "64-bit integer add"
 unit = "lanes/SM/clk"
-grade = "Programming Guide"
+grade = "none"
 source = "CPG Table 7, CC 9.0: '64-bit integer add' Multiple instructions (no native IADD.64)"
 gap = "absent as one instruction on sm_90"
 
@@ -379,6 +379,15 @@ grade = "Programming Guide"
 source = "CPG 'Shared Memory' (§18.4.3 onward, kept through CC 9.0): 32 banks, each 32 bits a clock; §18.8.3: unified L1 and shared memory, 256 KB a SM"
 measured = 127.96
 runs = "LDS.128 alone 127.96; beside wgmma n128 SS (94.3 B a SM-clock of operand reads) 28.7, 123.0 together: SS wgmma shares the port (emp_smem, RT-H200-EMP: r20261019-062628-43df r20261019-063344-f650 r20261019-064443-0ae6)"
+
+[[rate]]
+key = "smem.bcast"
+what = "broadcast LDS.128 (every lane one 16-B address: 128 register words a warp instruction)"
+unit = "warp instructions/SM/clk"
+sheet = 1
+grade = "Programming Guide"
+source = "CPG 'Shared Memory': a request whose lanes read one word is served at once (broadcast), and the port takes a request a clock"
+gap = "the H200 memory probe (smem.write's); sm_120 measured 0.4528 (data/theta.toml)"
 
 [[rate]]
 key = "smem.write"
@@ -534,8 +543,9 @@ source = "total_fp8.HOPPER_E4M3_MMAV2_K32's docstring: ptxas's lowering measured
 # ---- B_RF: the units that write registers (section 4(g)) --------------------------------------------------------------------
 # `rate` names the rate whose sheet and measured values set the class's instructions a SM-clock (that rate over `per`,
 # MACs, lanes or bytes a warp instruction); `words` is the 32-bit registers a warp instruction writes; classes with one
-# `pipe` share it. Issue holds every class at `slots` SMSP-cycles a warp instruction (1 on the sheet; the measured reading
-# applies `[[joint]]`), 4 SMSP-cycles a SM-clock.
+# `pipe` share it. Every class takes an issue slot a warp instruction (`issue`'s rate a SM-clock), and the measured
+# readings add each `[[joint]]` row: the class's `joint` coefficient, else the row's `other`, SMSP-cycles a warp
+# instruction, against 4 SMSP-cycles a SM-clock.
 
 [[writer]]
 name = "wgmma m64n256k32 s8"
@@ -553,9 +563,16 @@ words = 128
 pipe = "tensor"
 
 [[writer]]
-name = "LDS.128 (shared memory to registers)"
+name = "LDS.128 (distinct words)"
 rate = "smem.read"
 per = 512
+words = 128
+pipe = "smem"
+
+[[writer]]
+name = "LDS.128 broadcast"
+rate = "smem.bcast"
+per = 1
 words = 128
 pipe = "smem"
 

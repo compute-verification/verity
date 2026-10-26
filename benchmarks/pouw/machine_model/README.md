@@ -10,7 +10,7 @@ route's price a word beside its measured cost.
 
 This file holds no table of the data. `machine-model render` prints every one as Markdown, read from `data/` (or a
 device's directory) alone: the vectors, the epochs and their census, the rows, the floors, the designs with their noise
-legend, the honest kernels, the proof units, the MMA forms, the table route, the attack families and the devices.
+legend, the honest kernels, the proof units, the MMA forms, the table route, the attack families, the devices and θ.
 `tests/test_render.py` fails on a table here, so a new vector, design or census row touches only its own data file.
 
 ~~~bash
@@ -44,6 +44,8 @@ uv run machine-model --device sm_100 sheet --eps --uni 0.1 0.02   # ... with a u
 uv run machine-model capacity 0.745/duo:0.6+lane:0.3 0.255/served:0.15   # the certified share σ of a window's capacity
 uv run machine-model counts e-l7qs 2048 28672 4096   # H's closed-form instruction counts and model bound at a shape
 uv run machine-model counts e-l7qs --check           # every ncu observation of H against them
+uv run machine-model --device sm_90 theta    # θ: each figure at its clock, d by route, Strassen's exchange rate, B_RF, r_H
+uv run machine-model render theta            # θ's rates, capacities, clocks, exact paths and FP8 atoms with sources
 ~~~
 
 The data, each kind of thing a file or a line of its own:
@@ -82,6 +84,11 @@ The data, each kind of thing a file or a line of its own:
   bandwidth it is bound by (the most L2 read in any measured pattern, + 2%).
 - `data/headline.toml`: the per-family headline's spec: each GPU family's design of record, the vector each reading
   prices it on, the conditions no computation shows, and its scope, per node ("The headline is per node").
+- `data/theta.toml` (and `data/devices/sm_90/theta.toml`, the H200's): θ, the accelerator model's parameters:
+  every tensor rate by format and shape, every lane pipe, the register file, shared memory, L1, L2 and HBM, the
+  capacities and clocks, each with its vendor document and page first, then the census or run that measured it, or the
+  run that would (`gap`); the exact paths (b1, INT4, FP4) with their ISA reference; the FP8 atoms' semantics; and the
+  units that write registers, which B_RF's LP reads.
 - `data/devices/sm_NN/`: another device's data ("Devices" below).
 
 The code:
@@ -104,6 +111,10 @@ The code:
   decision 77; note:20261017T0652Z-draft-filler).
 - `verity_machine_model/redteam.py`: the red-team audit of a headline design against a device's committed census.
 - `verity_machine_model/headline.py`: the per-family headline, every number computed from the design files and vectors.
+- `verity_machine_model/theta.py`: reading `theta.toml` and holding it to its rules, and what it derives on the data
+  sheet and measured: d, one delivery in INT8 MAC units by route; Strassen's ALU-for-tensor-core exchange rate at the
+  honest kernel's L; B_RF, the most register bits all units write a SM-clock, and c ≈ ρ₈/B_RF; and honest's r_H against
+  the fold's r_min.
 - `verity_machine_model/cli.py` and `verity_machine_model/commands/`: the `machine-model` command. `cli.py` only
   dispatches; each command is a module of `commands/` with its usage as its docstring, `add(sub)` its arguments and
   `run(args)` its body, so a new command is a new module and touches no other.
