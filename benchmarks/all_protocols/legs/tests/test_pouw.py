@@ -123,3 +123,27 @@ def test_the_lean_answer_must_agree(period, tmp_path, monkeypatch):
     monkeypatch.setenv(pouw.LEAN_ENV, str(_exe(tmp_path, want.replace("reject", "accept"))))
     with pytest.raises(RuntimeError, match="disagree"):
         pouw.leg(period, "local", tmp_path / "disagree")
+
+
+def test_a_window_with_the_loops_salt_has_live_coins_and_its_salt_sessions_inputs(period, tmp_path):
+    """With ``salt.json`` beside a window, its parameters' coins are live and hold the salt session's inputs (``live``),
+    which core's parameter rule takes (and refuses live coins without); where core takes no live parameters, the file is
+    not read."""
+    work = pouw.served(period)
+    seeded = pouw.h1_params(period, work), pouw.params(period, work)
+    assert all(Wd.COINS not in p["check"] and "live" not in p for p in seeded)
+    d = tmp_path / "p0"
+    shutil.copytree(period, d)
+    (d / pouw.H1_DIR).mkdir()
+    live = {k: f"{k}-of-the-session" for k in ("key", "ledger", "main", "pins", "session")}
+    for at in (d, d / pouw.H1_DIR):
+        (at / pouw.SALT).write_text(json.dumps({"answer": {"epoch": 0}, "live": live}))
+    h1, integrity = pouw.h1_params(d, work), pouw.params(d, work)
+    if pouw.LIVE_PARAM is None:
+        assert (h1, integrity) == seeded
+        return
+    for p in (h1, integrity):
+        assert p["check"][Wd.COINS] == "live" and p[pouw.LIVE_PARAM] == live
+    assert CC.params(h1)[pouw.LIVE_PARAM] == live
+    with pytest.raises(CC.Refused, match="live is exactly when"):
+        CC.params({k: v for k, v in h1.items() if k != pouw.LIVE_PARAM})
