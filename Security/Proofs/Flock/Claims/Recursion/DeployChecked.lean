@@ -134,7 +134,7 @@ theorem innerOk_iff {inner : Msg} : innerOk inner = .ok () ↔
         | false =>
           rw [hd, ht] at h
           first | cases h | exact absurd h nofun
-        | true => exact ⟨s, spec, sts, hs, hu, rfl, rfl⟩
+        | true => exact ⟨s, spec, sts, hs, hu, by rw [hd]; rfl, ht⟩
     · rintro ⟨s', spec', sts', hs', hc, hd, ht⟩
       rw [hs] at hs'
       cases hs'
