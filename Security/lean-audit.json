@@ -9059,6 +9059,48 @@
    "assumptions": [],
    "type_hash": ""
   },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200 : Pouw.Guarantees.DitherInstance.WorkSoundOnCardH200"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120 : Pouw.Guarantees.DitherInstance.WorkSoundOnCardSm120"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Pouw.SecurityProofs.Dither.WorkSound": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Dither.WorkSound : Pouw.Guarantees.Dither.WorkSound"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Pouw.SecurityProofs.Dither.WorkSoundNoFold": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Dither.WorkSoundNoFold : Pouw.Guarantees.Dither.WorkSoundNoFold"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Pouw.SecurityProofs.Dither.FleetSound": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Dither.FleetSound : Pouw.Guarantees.Dither.FleetSound"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Pouw.SecurityProofs.Dither.FreedOfFloor": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Dither.FreedOfFloor : Pouw.Guarantees.Dither.FreedOfFloor"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Pouw.SecurityProofs.ShaRealize.ExtractOfRealize": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.ShaRealize.ExtractOfRealize : Pouw.Guarantees.ShaRealize.ExtractOfRealize"],
+   "assumptions": [],
+   "type_hash": ""
+  },
   "Pouw.SecurityProofs.EndToEnd": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.EndToEnd : Pouw.Guarantees.EndToEnd"],
@@ -10799,7 +10841,13 @@
    }
   },
   "frozen": {
-   "Pouw.Guarantees.Dither.WorkSound": "unstated: WORKSOUND-2's headline on the abstract accelerator; no guarantee of this package states it until WORKSOUND-2 lists its proof Pouw.SecurityProofs.Dither.WorkSound, and WorkSoundH200 and WorkSoundSm120 read it on the cards (CMP-136).",
+   "Pouw.SecurityProofs.Dither.WorkSound": "frozen (verdict): a probability statement over a quantified service verdict whose soundness is the premise ServiceSound, not a property of one function; it gets the shape when the proof service's verdict is a named Lean function the event reads (CMP-136).",
+   "Pouw.SecurityProofs.Dither.WorkSoundNoFold": "frozen (verdict): as WorkSound, on the no-fold round with ExtractOfRealize in place of ExtractAdv (CMP-136, RT-LEAN-2 L39).",
+   "Pouw.SecurityProofs.Dither.FleetSound": "frozen (verdict): the union bound over units each sound at its own quantified verdict, as WorkSound (CMP-136, RT-PROTO-2 P16).",
+   "Pouw.SecurityProofs.Dither.FreedOfFloor": "lemma: weak duality, the step from the rounds' floor at the dual price to WorkSound's conclusion; a fact of linear programming about no protocol function (CMP-136).",
+   "Pouw.SecurityProofs.ShaRealize.ExtractOfRealize": "frozen (premise): ExtractAdv from ShaRealize and SHA-512 as a random oracle, one premise's form from another's, about no protocol function's acceptance (CMP-132).",
+   "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200": "frozen (verdict): as WorkSoundH200, at the open parameters card-within-accel(H200) gives (CMP-136, RT-LEAN L10, L31).",
+   "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120": "frozen (verdict): as WorkSoundOnCardH200, on the RTX PRO 6000 (CMP-136).",
    "Pouw.SecurityProofs.DitherInstance.WorkSoundH200": "frozen (verdict): a probability statement over a quantified service verdict whose soundness is the premise ServiceSound, not a property of one function; it gets the shape when the proof service's verdict is a named Lean function the event reads (CMP-136).",
    "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120": "frozen (verdict): as WorkSoundH200, on the RTX PRO 6000 (CMP-136).",
    "Flock.SecurityProofs.EndToEnd": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",

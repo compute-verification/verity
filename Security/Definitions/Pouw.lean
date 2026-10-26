@@ -32,8 +32,6 @@ import Definitions.Pouw.Game.Params
 import Definitions.Pouw.H1Zy
 import Definitions.Pouw.M1
 import Definitions.Pouw.MerkleExtract
-import Definitions.Pouw.Assumptions.ShaRealize
-import Definitions.Pouw.Guarantees.ShaRealize
 import Definitions.Pouw.NCP.Defs
 import Definitions.Pouw.NCP.ExtraIdentity
 import Definitions.Pouw.NCP.Pinned
