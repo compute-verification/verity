@@ -1,0 +1,4 @@
+order = 369
+path = "`theory/d5_v2.py`"
+runs_on = "CPU"
+what = "D5 v2, the public best on protocol v3's operands (PROTO-DESIGN-3's nofold rounds: t noise tiles, L' capped per static shape and per PV length, b streamed by the network certifier) at the period's dual prices (P12): each round's job is public_best.tile_job's hull (every way to the words, with PD3-4's O-route and zero-high-digit peel) priced job-only and in a served period beside tensor-bound work, with c = pub/H, the routes' leak, the deployed gap and the matmul's c_mm, the sensitivity in the period's other tensor work, the caps of CMP-118, the coordinator's 06:37Z and an L' 64 row, PV at every attended length, pub_sha in model units (U13), P-HYB3's rows (A21), advice on W' (P14, L28), and the named programs pub_mm and pub_sha per card for WORKSOUND-INST-2"
