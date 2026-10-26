@@ -13,7 +13,8 @@ Three readings of the rates (units a SM-clock):
   LDS.128 on the H200) is priced at its issue slot alone.
 - `sheet`: ACCEL CALIB's theta (cursor/compute-research-accel-calib-ea24, `data/devices/sm_90/theta.toml` and
   `data/theta.toml`), its `sheet` value, or `measured` where no document gives one (b1 on the H200).
-- `measured`: CALIB's `measured` value, or `sheet` where it has none.
+- `measured`: CALIB's `measured` value, or `sheet` where it has none, with CALIB's measured issue joints (`JOINTS`)
+  beside the plain issue slot.
 
 A `*` marks a shape CALIB has not timed: its `measured` is the sheet's. A writer's word ratio is its time a distinct
 word over the k32 MMA's at the same reading's tensor rate (1 = the tensor core's word, ½ = twice as fast). The 4(g)
@@ -80,6 +81,21 @@ SM120 = [
 CARDS = {"H200": H200, "sm_120": SM120}
 READINGS = ("ds", "sheet", "measured")
 
+# CALIB's measured issue joints (theta.toml `[[joint]]`, census JI90_0 and JI3e_0..2): a writer named here takes that
+# many SMSP-cycles of the joint a warp instruction, every other warp instruction `other`, against 4 SMSP-cycles a
+# SM-clock. The measured reading applies them beside the plain issue slot.
+JOINTS = {
+    "H200": [("JI90_0", {"wgmma m64n256k32 s8": 62.741}, 0.981)],
+    "sm_120": [(n, {"mma.sync m16n8k32 s8": s, "mma.sync m16n8k16 s8": s}, o)
+               for n, s, o in (("JI3e_0", 8.115, 1.000), ("JI3e_1", 15.030, 0.317), ("JI3e_2", 15.539, 0.172))],
+}
+
+
+def issue_rows(card, reading):
+    """(slots by writer name, slots of every other warp instruction) rows, each held to ISSUE a SM-clock."""
+    cname = next(k for k, v in CARDS.items() if v is card)
+    return [({}, 1.0)] + ([(mma, other) for _, mma, other in JOINTS[cname]] if reading == "measured" else [])
+
 
 def instr_time(per, rate) -> float:
     """SM-clocks of the writer's pipe a warp instruction takes, or the issue slot alone (¼) with no rate."""
@@ -103,11 +119,16 @@ def small_k(w) -> bool:
 
 def lp(card, reading, heads_only: bool, no_small_k: bool = False, lanes_only: bool = False):
     """4(g): max distinct words a SM-clock, writers at once, under issue and each pipe (A2, A4, G2); `lanes_only`
-    leaves the tensor pipe out (R-ACCEL-1: what the lanes write beside a tensor core busy with other work)."""
+    holds the tensor pipe at its peak on other work, its k32 instructions charged to issue (R-ACCEL-1: what the lanes
+    write beside a tensor core busy with other work)."""
     ws = [w for w in card if (w[5] or not heads_only) and not (no_small_k and small_k(w))
           and not (lanes_only and w[1] == "tensor")]
     pipes = sorted({w[1] for w in ws})
-    A, b = [[1.0] * len(ws)], [ISSUE]
+    tc, A, b = card[0], [], []
+    tc_x = tc[6][reading] / tc[2] if lanes_only else 0.0
+    for mma, other in issue_rows(card, reading):
+        A.append([mma.get(w[0], other) for w in ws])
+        b.append(ISSUE - mma.get(tc[0], other) * tc_x)
     for p in pipes:
         A.append([(w[2] / w[6][reading] if (w[1] == p and w[6][reading]) else 0.0) for w in ws])
         b.append(1.0)
@@ -138,9 +159,9 @@ def honest_dither(card, reading, fold: str = "li") -> float:
     the tensor pipe, each lane pipe and issue (the MMA's own issue slot included)."""
     name, _, per, words, _, _, rates = card[0]
     f = FOLDS[fold]
-    issue_per_word = sum(f.values()) / 32 + 1 / words
-    return min(rates[reading] / per * words, *(_lane_rate(card, p, reading) / n for p, n in f.items()),
-               ISSUE / issue_per_word)
+    issue = (ISSUE / (mma.get(name, other) / words + other * sum(f.values()) / 32)
+             for mma, other in issue_rows(card, reading))
+    return min(rates[reading] / per * words, *(_lane_rate(card, p, reading) / n for p, n in f.items()), *issue)
 
 
 def concurrency(card, reading, fold: str = "li") -> tuple[float, float]:
@@ -149,7 +170,6 @@ def concurrency(card, reading, fold: str = "li") -> tuple[float, float]:
     and the fold). Returns (Four Russians words a SM-clock, that over the tensor peak's words): the strategy's credited
     work plus other work over the honest optimum's is 1 plus the second. Lookups are priced conflict-free."""
     name, _, per, words, _, _, rates = card[0]
-    issue = ISSUE - rates[reading] / per
     f = FOLDS[fold]
     lds = _row(card, "LDS.128 (copy)")
     lds_t = instr_time(lds[2], lds[6][reading])
@@ -157,7 +177,9 @@ def concurrency(card, reading, fold: str = "li") -> tuple[float, float]:
     alu_t = 2 / (iadd[6][reading] or ISSUE * 32) + f["alu"] / _lane_rate(card, "alu", reading)
     imad_t = f["imad"] / _lane_rate(card, "imad", reading)
     issue_t = (3 / 4 + 2 + sum(f.values())) / 32
-    fr = min(issue / issue_t, 1 / (3 / 128 * lds_t), 1 / alu_t, 1 / imad_t)
+    tc_x = rates[reading] / per
+    issue = min((ISSUE - mma.get(name, other) * tc_x) / (other * issue_t) for mma, other in issue_rows(card, reading))
+    fr = min(issue, 1 / (3 / 128 * lds_t), 1 / alu_t, 1 / imad_t)
     return fr, fr / (rates[reading] / per * words)
 
 
