@@ -24,6 +24,7 @@ builder bounds that least size from above only).
 from __future__ import annotations
 
 import functools
+import os
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -44,10 +45,15 @@ from verity.ml.circuits.types import Array  # noqa: E402
 ACCEL_REF = "#4662 at 08bfdc3a07 (Security/Definitions/Core/Accel/{H200,Sm120,Card,Isa}.lean)"
 
 
+#: "gates": And2 + Xor2 + Not, the gate count; "and": And2 alone, the multiplicative size C-Flock's proof pays for.
+MEASURE = os.environ.get("ACCEL_GATE_MEASURE", "gates")
+assert MEASURE in ("gates", "and"), f"ACCEL_GATE_MEASURE is 'gates' or 'and', not {MEASURE!r}"
+
+
 def size(build, widths, out: int) -> dict:
-    """The gates of `build` traced on one element a width in `widths` (bits), `out` output bits."""
+    """The gates of `build` traced on one element a width in `widths` (bits), `out` output bits; `total` in MEASURE."""
     tr = trace(build, [Array(w, BL.BIT) for w in widths], Array(out, BL.BIT))
-    return dict(tr.counts, total=sum(tr.counts.values()))
+    return dict(tr.counts, total=sum(tr.counts.values()) if MEASURE == "gates" else tr.counts.get("and", 0))
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -388,11 +394,16 @@ def _stand_in(name: str) -> bool:
     return name.startswith("mma.sp") or name.split()[-1] in OPEN_DOT
 
 
+F64 = ("dmma", "lane dfma")
+
+
 @functools.cache
-def phi(card: str, pinned: bool = False) -> dict:
+def phi(card: str, pinned: bool = False, serving: bool = False) -> dict:
     """Φ: max Σ x_i gates_i a SM-clock over 𝓜's units (one LP), then gates a second at 𝓜's tick, with the mix.
-    pinned: the stand-in dots left out (`_stand_in`), a sensitivity on what they add."""
-    a, ins = ACCEL[card], [i for i in instructions(card) if not (pinned and _stand_in(i["name"]))]
+    pinned: the stand-in dots left out (`_stand_in`), a sensitivity on what they add. serving: FP64 (`F64`) left out
+    too, the instructions LLM serving doesn't run (a sensitivity: Φ itself counts every instruction)."""
+    drop = lambda n: ((pinned or serving) and _stand_in(n)) or (serving and n in F64)  # noqa: E731
+    a, ins = ACCEL[card], [i for i in instructions(card) if not drop(i["name"])]
     res = list(a["rho"])
     A = np.array([[i["use"].get(r, 0.0) for i in ins] for r in res])
     sol = linprog(-np.array([i["gates"] for i in ins], dtype=float), A_ub=A, b_ub=[a["rho"][r] for r in res],
@@ -488,7 +499,7 @@ def lookup_gates(table_entries: int, width: int, macs: float) -> float:
     """An indexed read's least canonical circuit in this model: 𝓜 has no data-dependent load (`Isa.lean`'s `Op`:
     copies between fixed locations), so a table read is its multiplexer tree, (entries − 1)·width ANDs and twice
     that in XORs (`forms.mux`), over the MACs it stands for."""
-    return 3 * (table_entries - 1) * width / macs
+    return (3 if MEASURE == "gates" else 1) * (table_entries - 1) * width / macs
 
 
 def report() -> str:

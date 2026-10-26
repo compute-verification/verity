@@ -15,8 +15,11 @@ The picks are v3.1's rule taken in size: per card, the τ of `d6.TAUS` whose `d6
 credited share in size over the three models (ties within 0.1 point to the lower mean γ), a PV class with no L′ at
 γ ≤ 10 credited at its least-γ L′ only where that adds credited size per honest second (`value_test`).
 
-    PUBLIC_BEST_DIR=<checkout at 0588f18015 (D5 v2.1)>/benchmarks/pouw/theory \\
+    PUBLIC_BEST_DIR=<checkout at 0588f18015 (D5 v2.1)>/benchmarks/pouw/theory [ACCEL_GATE_MEASURE=gates|and] \\
         python3 benchmarks/pouw/accel_score/d6v2.py [--json OUT] [--pickle OUT] [--quick]
+
+ACCEL_GATE_MEASURE (`gates.MEASURE`) picks the size: all gates (the default) or ANDs alone; the build of record is
+both, one run each.
 
 --from PKL prints the report from a build's pickle without rebuilding. --quick: the 8B model, 512-token requests and
 two τ only (a smoke test, not a result).
@@ -64,6 +67,8 @@ V11 = dict(art="art:6926be1c98b7855aca699278551040538e83843d28b72fdf85044cfd291b
                    ("RTX PRO 6000", "Llama-3.1-8B"): (0.111, 0.445, 1.779),
                    ("RTX PRO 6000", "Llama-3.1-70B"): (0.130, 0.521, 2.083),
                    ("RTX PRO 6000", "DeepSeek-V4-Pro"): (0.108, 0.432, 1.730)})
+UNIT = {"gates": "all gates (And2 + Xor2 + Not)",
+        "and": "ANDs (And2 alone, the multiplicative size C-Flock's proof pays for; Xor2 and Not free)"}[G.MEASURE]
 SHORT = {"Llama-3.1-8B": "8B", "Llama-3.1-70B": "70B", "DeepSeek-V4-Pro": "V4"}
 MODELS = [m["name"] for m in nf.WORLD]
 TAUS = d6.TAUS
@@ -76,16 +81,18 @@ _SJ: dict = {}
 
 
 def size_job(card: str, K: int, N: int, t: int, Lp: int, weight_coins: bool, bound: str = HEAD_BOUND,
-             hashed: bool = False) -> dict:
+             hashed: bool = False, wired: bool = False) -> dict:
     """S_b a naive MAC of one round class at a pick: the least size over the menu (hull) and over the honest words'
     programs alone (dense, OPT* in size), each at the gate prices `bound`, with the winning methods and routes.
     hashed: the round's SHA-512 compressions added at their traced gates (`gates.sha512_gates`; nofold's `comps`, the
     leaves, A and the coin expansion a naive MAC), a sensitivity on what v1.1's credit carried. Size adds across
-    subcircuits, so the hash adds to the least size and doesn't move the winning method."""
-    key = (card, K, N, t, Lp, weight_coins, bound, hashed)
+    subcircuits, so the hash adds to the least size and doesn't move the winning method. wired: D5's table routes
+    kept, a read at its resources' gate prices (smem and issue carry none), so a table read is wiring: the actual
+    circuit is one run's (`Accounting.Actual`), its addresses fixed (RT-SIZE's RS1)."""
+    key = (card, K, N, t, Lp, weight_coins, bound, hashed, wired)
     if key not in _SJ:
         c, ms, L, _, _, r = d6.job_parts(card, K, N, t, Lp, weight_coins, bit=G.bit_size(card))
-        kw = dict(beside=True, items=(), lookups=False, mu=G.d5_sigma(card, c, bound))
+        kw = dict(beside=True, items=(), lookups=wired, mu=G.d5_sigma(card, c, bound))
         dense, hull = (pb.price_methods(c, x, L, N, pb.TOKENS, **kw) for x in (ms[:1], ms))
         h = r["comps"] * G.sha512_gates()["total"] if hashed else 0.0
         _SJ[key] = dict(dense=dense.c / c.s8 + h, hull=hull.c / c.s8 + h, comps=r["comps"],
@@ -117,12 +124,13 @@ def size_period(card: str, model: dict, static: dict, pv: dict, sens: bool = Fal
     items, plain = credited_items(card, model, static, pv)
     cred = sum(w for _, _, w, _, _ in items)
     out = dict(cred_macs=cred, plain_pv=plain, classes=len(items))
-    variants = [("s", HEAD_BOUND, False, "hull")]
+    variants = [("s", HEAD_BOUND, False, False, "hull")]
     if sens:
-        variants += [("s_hi", "hi", False, "hull"), ("s_dense", HEAD_BOUND, False, "dense"),
-                     ("s_hashed", HEAD_BOUND, True, "hull"), ("s_dense_hi", "hi", False, "dense")]
-    for name, bound, hashed, wh in variants:
-        out[name] = sum(w * size_job(card, K, N, p["t"], p["Lp"], wc, bound, hashed)[wh]
+        variants += [("s_hi", "hi", False, False, "hull"), ("s_dense", HEAD_BOUND, False, False, "dense"),
+                     ("s_hashed", HEAD_BOUND, True, False, "hull"), ("s_dense_hi", "hi", False, False, "dense"),
+                     ("s_wired", HEAD_BOUND, False, True, "hull")]
+    for name, bound, hashed, wired, wh in variants:
+        out[name] = sum(w * size_job(card, K, N, p["t"], p["Lp"], wc, bound, hashed, wired)[wh]
                         for K, N, w, p, wc in items) / cred
     if sens:
         for kind, wc_ in (("static", True), ("pv", False)):
@@ -352,7 +360,9 @@ def build(quick: bool = False) -> dict:
         out["rows"][card, rate, m] = e
     out["picks"] = {k: p and dict(t=p["t"], Lp=p["Lp"], gamma=p["gamma"], leak=p.get("leak"))
                     for k, p in {**static, **pv}.items()}
-    out["phi"] = {c: dict(full=G.phi(c), pinned=G.phi(c, pinned=True)) for c in G.ACCEL}
+    out["measure"] = G.MEASURE
+    out["phi"] = {c: dict(full=G.phi(c), pinned=G.phi(c, pinned=True), serving=G.phi(c, serving=True))
+                  for c in G.ACCEL}
     out["s_x"] = G.s_x()
     out["sha512"] = G.sha512_gates()
     out["lanes"] = G.lane_gates()
@@ -387,7 +397,8 @@ def verdict(D: dict) -> str:
 
     def ok(b):
         return "meets" if b else "MISSES"
-    return (f"VERDICT D6 v2 (size): ε_skip at δ_coin 1e-6 ≤ {pct(eps, 3)} ({ok(eps <= GOALS['eps'])} ≤ 1%, ratio "
+    return (f"VERDICT D6 v2 (size in {'all gates' if D['measure'] == 'gates' else 'ANDs'}): ε_skip at δ_coin 1e-6 ≤ "
+            f"{pct(eps, 3)} ({ok(eps <= GOALS['eps'])} ≤ 1%, ratio "
             f"{eps / GOALS['eps']:.3f}); γ ≤ {gam:.2f} ({ok(gam <= GOALS['gamma'])} ≤ 10, ratio {gam / 10:.3f}); "
             f"coverage of MACs ≥ {pct(cov, 1)} ({ok(cov >= GOALS['cov'])} ≥ 95%, ratio {cov / 0.95:.3f}); coverage "
             f"of gates ≥ {pct(cg, 1)} ({ok(cg >= GOALS['cov'])} ≥ 95%, ratio {cg / 0.95:.3f}); perplexity carried, "
@@ -402,8 +413,9 @@ def report(D: dict) -> str:
     models = D["models"]
     sx = D["s_x"]
     L.append("## D6 v2: ACCEL's goals in circuit size, printed by `benchmarks/pouw/accel_score/d6v2.py` (CMP-158)\n")
-    L.append("Every number is in gates of the canonical Boolean circuit (And2, Xor2, Not; `verity.ml.circuits.boolean."
-             "trace`). Credit is size: a sampling block's public cost S_b is the least gate count over D5 v2.1's "
+    L.append(f"Every size is in {UNIT} of the canonical Boolean circuit (`verity.ml.circuits.boolean.trace`; this "
+             f"build is ACCEL_GATE_MEASURE={D['measure']}, and the other measure is its companion build), called "
+             "gates below. Credit is size: a sampling block's public cost S_b is the least gate count over D5 v2.1's "
              "menu of a program for its products, the registration declares S_reg = Σ_b S_b at the monitoring "
              "period's start, and ε_skip is a share of S_reg. Φ is gates a second from 𝓜 (#4662's `Accel`), s_× = "
              f"{sx['s_x']:.1f} gates (an s8 MAC). Results are per monitoring period (a week, a month, a year) over "
@@ -446,17 +458,20 @@ def report(D: dict) -> str:
              "instructions (FFMA and DFMA lanes, 2:4 FP16 MMA) complete far more gates a second than the INT8 "
              "products the protocol credits. The share is the product of its factors:\n")
     L.append("| card, model | clock | served η | coverage | S_b a credited MAC / Φ an s8 MAC-time | 1/γ | answers | "
-             "share | v1.1's at μ° |")
-    L.append("|---|---|---|---|---|---|---|---|---|")
+             "share | at Φ without FP64 and stand-ins | v1.1's at μ° |")
+    L.append("|---|---|---|---|---|---|---|---|---|---|")
     for card in cards:
+        sv = phi_s8(card) / D["phi"][card]["serving"]["per_s8_mac"]
         for m in models:
             r = rows[card, "measured", m]
             f = r["share"]["factors"]
             L.append(f"| {card}, {SHORT[m]} | {f['clock']:.3f} | {f['served η']:.2f} | {pct(f['coverage'], 1)} | "
                      f"{r['size']['s']:.1f} / {phi_s8(card):.0f} = {f['S_b / Φ an s8 MAC-time']:.3f} | "
                      f"{f['1/γ']:.3f} | {f['answers']:.4f} | {pct(r['share']['share'], 2)} | "
-                     f"{pct(V11['share'][card, m], 1)} |")
+                     f"{pct(r['share']['share'] * sv, 2)} | {pct(V11['share'][card, m], 1)} |")
     L.append("")
+    L.append("Φ without FP64 and stand-ins leaves out DMMA, DFMA and the dots 𝓜 leaves open, which serving doesn't run "
+             "(RT-SIZE's RS2): a sensitivity, since Φ is what the card can complete, whatever serving runs.\n")
 
     # Φ.
     L.append("### Φ per card, and how it is derived\n")
@@ -468,15 +483,16 @@ def report(D: dict) -> str:
              "times SMs and 𝓜's tick. Copies and shuffles compute nothing. Formats 𝓜 leaves `Open.dot` (f16, tf32, "
              "sm_120's e2m1, every 2:4 form) take a stand-in, so the pinned-dots line leaves them out.\n")
     L.append("| card | Φ (gates/s) | a SM-clock | an s8 MAC-time | the LP's mix | binding units | pinned dots only: "
-             "Φ, an s8 MAC-time, mix |")
-    L.append("|---|---|---|---|---|---|---|")
+             "Φ, an s8 MAC-time, mix | without FP64 too: Φ, an s8 MAC-time, mix |")
+    L.append("|---|---|---|---|---|---|---|---|")
     for c in G.ACCEL:
-        p, q = D["phi"][c]["full"], D["phi"][c]["pinned"]
+        p, q, v = D["phi"][c]["full"], D["phi"][c]["pinned"], D["phi"][c]["serving"]
 
         def mix(x):
             return ", ".join(f"{k} {pct(v, 1)}" for k, v in sorted(x.items(), key=lambda kv: -kv[1]))
         L.append(f"| {c} | {sci(p['per_s'], 3)} | {p['per_sm_clock']:.4g} | {p['per_s8_mac']:.0f} | {mix(p['mix'])} | "
-                 f"{', '.join(p['binding'])} | {sci(q['per_s'], 3)}, {q['per_s8_mac']:.0f}, {mix(q['mix'])} |")
+                 f"{', '.join(p['binding'])} | {sci(q['per_s'], 3)}, {q['per_s8_mac']:.0f}, {mix(q['mix'])} | "
+                 f"{sci(v['per_s'], 3)}, {v['per_s8_mac']:.0f}, {mix(v['mix'])} |")
     L.append("")
     L.append(f"𝓜's ticks: H200 {G.ACCEL['H200']['mhz']} MHz × {G.ACCEL['H200']['sms']} SMs, RTX PRO 6000 "
              f"{G.ACCEL['RTX PRO 6000']['mhz']} MHz × {G.ACCEL['RTX PRO 6000']['sms']} SMs ({G.ACCEL_REF}). The share "
@@ -510,9 +526,13 @@ def report(D: dict) -> str:
              f"nofold's `comps` a naive MAC) at one compression's traced gates, {sha['total']:,} ({sha['and']:,} And2, "
              f"{sha['xor']:,} Xor2, {sha['not']:,} Not; `gates.sha512_gates`): what v1.1's credit carried, and the "
              "share it would give.\n")
+    L.append("The wired column keeps D5's table routes with a read at its resources' gate prices (smem and issue carry "
+             "none): the actual circuit is one run's (`Accounting.Actual`), so a read's address is wiring, not a "
+             "multiplexer (RT-SIZE's RS1). The headline leaves the table routes out; the wired column is what the "
+             "least size over the menu is if that reading holds.\n")
     L.append("| card, model | S_b a credited MAC: lo / hi | OPT* (dense) lo / hi | with the round's SHA-512 (lo), share "
-             "| static / PV | credited classes | the largest class's winning method |")
-    L.append("|---|---|---|---|---|---|---|")
+             "| table reads as wiring (lo), share | static / PV | credited classes | the largest class's winning method |")
+    L.append("|---|---|---|---|---|---|---|---|")
     for card in cards:
         for m in models:
             r = rows[card, "measured", m]
@@ -521,7 +541,8 @@ def report(D: dict) -> str:
             meth = ", ".join(f"{k} {v:.2f}" for k, v in lg["mix"].items())
             L.append(f"| {card}, {SHORT[m]} | {s['s']:.1f} / {s['s_hi']:.1f} | {s['s_dense']:.1f} / "
                      f"{s['s_dense_hi']:.1f} | {s['s_hashed']:.1f}, "
-                     f"{pct(r['share']['share'] * s['s_hashed'] / s['s'], 2)} | "
+                     f"{pct(r['share']['share'] * s['s_hashed'] / s['s'], 2)} | {s['s_wired']:.1f}, "
+                     f"{pct(r['share']['share'] * s['s_wired'] / s['s'], 2)} | "
                      f"{s['static']['s']:.1f} / " + (f"{s['pv']['s']:.1f}" if s['pv']['s'] else "— (none credited)")
                      + f" | {s['classes']} | {lg['K']}×{lg['N']} L′ "
                      f"{lg['Lp']}: {meth} |")
@@ -555,6 +576,10 @@ def report(D: dict) -> str:
              "card's E4M3 dot) is " + ", ".join(
                  f"{pct(rows[c, 'measured', models[0]]['exclusion']['year']['census_gates'] / rows[c, 'measured', models[0]]['exclusion']['year']['cap'], 1)} of Φ_fleet T on the {c}"
                  for c in cards) + ".\n")
+    L.append("U/s_× bounds counted operations only if each needs s_× gates of its own. Under gate sharing it doesn't: "
+             "a constant-operand or Four Russians product takes fewer gates an operation (RT-SIZE's RS3), and the "
+             "S_b table's wired column is that sharing in S_b. U/s_× over F/2 is RT-SIZE's vacuity V at the s8 "
+             "rate: above 1, the bound allows more hidden counted work than the fleet's FP8 peak.\n")
 
     # Serving blocks.
     L.append("### Serving blocks (8-GPU servers, a wipe every 24 h)\n")
@@ -593,18 +618,25 @@ def report(D: dict) -> str:
 
     # Beside.
     L.append("### v1.1's hidden beside work, in size\n")
-    L.append("Size removes it. S_b is public and fixed when the registration is declared, and no dual prices the "
-             "period, so x plain INT8 MACs of other work a credited MAC beside the credited rounds change no credit: "
-             "they are uncertified capacity, inside U at their own gates (x · g_s8 a credited MAC), and so inside "
-             "U/s_×. v1.1's column (μ°, its art) is beside for comparison.\n")
-    L.append("| card, model | hidden in size at x = 0.25 / 1 / 4 | beside gates a credited MAC | U a credited MAC "
-             "(fits?) | v1.1's hidden at μ°, x = 0.25 / 1 / 4 |")
-    L.append("|---|---|---|---|---|")
+    L.append("Size removes v1.1's pricing gap, and the beside work moves into U (RT-SIZE's RS4). S_b is public and "
+             "fixed when the registration is declared, and no dual prices the period, so x plain INT8 MACs of other "
+             "work a credited MAC beside the credited rounds change no credit: hidden in the credit is 0 at every x. "
+             "They are uncertified capacity, inside U at their own gates (x · g_s8 a credited MAC), so U/s_× counts "
+             "them only as far as s_× holds (the exclusion section). The tensor pipe idles 1 − 1/γ of a credited "
+             "block, room for γ − 1 hidden s8 MACs a credited MAC at the s8 rate. v1.1's column (μ°, its art) is "
+             "beside for comparison.\n")
+    L.append("| card, model | hidden in the credit at x = 0.25 / 1 / 4 | beside gates a credited MAC | U a credited MAC "
+             "(fits?) | tensor pipe idle, 1 − 1/γ | hidden s8 MACs a credited MAC it holds | v1.1's hidden at μ°, "
+             "x = 0.25 / 1 / 4 |")
+    L.append("|---|---|---|---|---|---|---|")
     for card in cards:
         for m in models:
-            b = [x for x in rows[card, "measured", m]["beside"] if x["x"] > 0]
+            r = rows[card, "measured", m]
+            b = [x for x in r["beside"] if x["x"] > 0]
+            g = r["world"]["gamma"]
             L.append(f"| {card}, {SHORT[m]} | 0 / 0 / 0 | " + " / ".join(f"{x['gates']:.0f}" for x in b)
                      + f" | {b[0]['U']:.0f} (" + " / ".join("yes" if x["fits"] else "no" for x in b) + ") | "
+                     + f"{pct(1 - 1 / g, 1)} | {g - 1:.2f} | "
                      + " / ".join(pct(v, 1) for v in V11["hidden"][card, m]) + " |")
     L.append("")
 
@@ -645,10 +677,30 @@ def report(D: dict) -> str:
              "period, so no union over weeks (the weekly variant keeps it).")
     L.append("- **The world rows are gone.** Each result is per monitoring period over the census: U, U/s_× and "
              "the census's own counted operations, the serving-block bound summed over its blocks.")
-    L.append("- **Hidden beside work** is 0: no dual prices the period (above).")
+    L.append("- **Hidden beside work** in the credit is 0, since no dual prices the period; the work moves into U "
+             "(above).")
     L.append("- **The picks.** The rule scores each τ's picks by the share in size; S_b barely moves with L′ (the "
              "menu's best route doesn't use the peels), so it favours the least γ.")
     L.append("- **Coverage of gates** is new: the elementwise steps, softmax above all, are uncredited gates.\n")
+
+    # RT-SIZE.
+    def rng(f):
+        return ", ".join(f"{min(f(rows[c, 'measured', m]) for m in models):.1f}–"
+                         f"{max(f(rows[c, 'measured', m]) for m in models):.1f} on the {c}" for c in cards)
+    L.append("### RT-SIZE's checkpoint 1 (CMP-158, 19:56Z) against this build\n")
+    L.append("- **RS1, values don't certify gates.** The wired column measures it here: with D5's table routes and a "
+             "read as wiring, S_b (gates a credited MAC) is " + rng(lambda r: r["size"]["s_wired"])
+             + ", against the headline's " + rng(lambda r: r["size"]["s"]) + ". The headline leaves table routes out because 𝓜 has no indexed "
+             "load; in the actual circuit of one run that reason fails, so the headline S_b overstates the least "
+             "size unless the credit rests on a premise in 𝓜's resources (RS1's fix: a claim, Daniel's).")
+    L.append("- **RS2, a scalar Φ.** The share at Φ without FP64 and stand-ins shows how much of the low share is Φ "
+             "counting what serving doesn't run; the companion build gives Φ in RT-SIZE's measure (ANDs).")
+    L.append("- **RS3, s_× under sharing.** Stated with the exclusion bound: U/s_× holds only without gate sharing.")
+    L.append("- **RS4, beside work moves into U.** The beside table gives the tensor pipe's idle share and what it "
+             "holds.")
+    L.append("- **RS5, late answers.** The answers' busy share of a week (the ε_skip table) is the serialized "
+             "queue's load; near 95% its lag runs to hours. Queued check coins are ACCEL-SPEC's fix, and D6 v2 "
+             "carries no timing change.\n")
 
     # Lean.
     L.append("### What the Lean needs (for the Lean worker after CMP-154)\n")
@@ -700,6 +752,7 @@ if __name__ == "__main__":
     if a.src:
         D = pickle.loads(Path(a.src).read_bytes())
         MODELS, TAUS = D["models"], D["taus"]
+        assert D["measure"] == G.MEASURE, f"this pickle is in {D['measure']}: set ACCEL_GATE_MEASURE={D['measure']}"
     else:
         D = d6.quiet(build, a.quick)
     if a.pickle:
