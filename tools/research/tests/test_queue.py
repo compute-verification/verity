@@ -1315,11 +1315,11 @@ FAKE_SYNC = (sys.executable, "-c", "import sys; from pathlib import Path; s = Pa
              "'error: The lockfile at `uv.lock` needs to be updated, but `--locked` was provided.', file=sys.stderr); sys.exit(2 * s)")
 
 
-def _preflight(world: World, free=lambda: 1.0, repo: Path | None = None):
+def _preflight(world: World, free=lambda: 1.0):
     from research.queue import Preflight
 
-    return Preflight(repo or world.dev, str(world.origin), world.store, sync=FAKE_SYNC, python=sys.executable,
-                     root=world.tmp / "pre", log=world.logs.append, free=free)
+    return Preflight(world.dev, str(world.origin), world.store, sync=FAKE_SYNC, python=sys.executable, root=world.tmp / "pre",
+                     log=world.logs.append, free=free)
 
 
 def _preflight_main(world: World, extra: dict[str, str] | None = None) -> str:
@@ -1450,32 +1450,6 @@ def test_the_preflight_runs_a_lint_only_on_a_change_that_reaches_what_it_judges(
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
 
 
-def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_and_names_it(world, capsys):
-    """17 Oct: drive held #2382 because it contained #2008, never marked, and #2333 because it contained the withdrawn #2331."""
-    from research.queue import MarkOnly, ready
-
-    world.with_store_remote()
-    world.gh.put(5, parent := world.change({"x.txt": "x\n"}), ready=False)
-    world.gh.put(4, world.change({"y.txt": "y\n"}, base=parent), ready=False)
-    pre = _preflight(world)
-    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1
-    err = capsys.readouterr().err
-    assert (f"it contains #5's head {parent[:12]}, and #5 isn't admitted (not marked ready at {parent[:8]}), so drive holds "
-            f"this PR behind it: mark #5 ready first, so it lands first, or drop #5's commits from this branch (if this PR "
-            f"carries #5's change, #5's owner withdraws its mark: `research data label pr:5@{parent[:12]} ready false "
-            f"--by OWNER`)") in err
-    assert "merged onto `main` at" in err                                                    # no `next` yet
-    world.gh.put(5, parent, labels=("hold",), ready=False)
-    assert ready(world.gh, world.store, 5, "lane-5", MarkOnly(), preflight=pre) == 0
-    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1
-    assert "and #5 isn't admitted (held (`hold` label))" in capsys.readouterr().err
-    world.gh.put(5, parent, ready=False)
-    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 0         # #5 admitted: drive lands it first
-    world.gh.put(6, six := world.change({"z.txt": "z\n"}), ready=False, body="Lane `lane-4`.")
-    world.gh.put(4, world.change({"w.txt": "w\n"}, base=six), ready=False)
-    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 0         # #6 is lane-4's own: #4 carries it
-
-
 def test_the_preflight_refuses_what_the_sync_holds_a_marked_pr_waiting_on_one_it_contains(world, capsys):
     """TOP-90 row 74 (26 Oct): lean's re-marks of #4510, #4439 and #4564 were taken, and only the next sync said "contains
     #4439, which isn't admitted".  Here #5 is marked but contains lane-4's unmarked #6, which #5 doesn't carry, so the sync
@@ -1518,7 +1492,7 @@ def test_the_preflight_runs_on_a_head_its_pull_ref_doesnt_have_yet_from_the_bran
     preflight wasn't run at all; it fetches the head from the branch."""
     import dataclasses
 
-    from research.queue import MarkOnly, ready
+    from research.queue import MarkOnly, Preflight, ready
 
     world.with_store_remote()
     world.gh.put(5, five := world.change({"x.txt": "x\n"}), ready=False)
@@ -1527,8 +1501,36 @@ def test_the_preflight_runs_on_a_head_its_pull_ref_doesnt_have_yet_from_the_bran
     _git(world.dev, "push", "-q", "origin", f"{new}:refs/heads/lane-4/change")
     world.gh.prs[4] = dataclasses.replace(world.gh.prs[4], head=new, branch="lane-4/change")    # refs/pull/4/head is still `old`
     _git(world.tmp, "clone", "-q", str(world.origin), str(marker := world.tmp / "marker"))     # a checkout without `new`
-    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=_preflight(world, repo=marker)) == 1
+    pre = Preflight(marker, str(world.origin), world.store, sync=FAKE_SYNC, python=sys.executable, root=world.tmp / "pre",
+                    log=world.logs.append)
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1
     assert f"it contains #5's head {five[:12]}, and #5 isn't admitted" in capsys.readouterr().err
+
+
+def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_and_names_it(world, capsys):
+    """17 Oct: drive held #2382 because it contained #2008, never marked, and #2333 because it contained the withdrawn #2331."""
+    from research.queue import MarkOnly, ready
+
+    world.with_store_remote()
+    world.gh.put(5, parent := world.change({"x.txt": "x\n"}), ready=False)
+    world.gh.put(4, world.change({"y.txt": "y\n"}, base=parent), ready=False)
+    pre = _preflight(world)
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1
+    err = capsys.readouterr().err
+    assert (f"it contains #5's head {parent[:12]}, and #5 isn't admitted (not marked ready at {parent[:8]}), so drive holds "
+            f"this PR behind it: mark #5 ready first, so it lands first, or drop #5's commits from this branch (if this PR "
+            f"carries #5's change, #5's owner withdraws its mark: `research data label pr:5@{parent[:12]} ready false "
+            f"--by OWNER`)") in err
+    assert "merged onto `main` at" in err                                                    # no `next` yet
+    world.gh.put(5, parent, labels=("hold",), ready=False)
+    assert ready(world.gh, world.store, 5, "lane-5", MarkOnly(), preflight=pre) == 0
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1
+    assert "and #5 isn't admitted (held (`hold` label))" in capsys.readouterr().err
+    world.gh.put(5, parent, ready=False)
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 0         # #5 admitted: drive lands it first
+    world.gh.put(6, six := world.change({"z.txt": "z\n"}), ready=False, body="Lane `lane-4`.")
+    world.gh.put(4, world.change({"w.txt": "w\n"}, base=six), ready=False)
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 0         # #6 is lane-4's own: #4 carries it
 
 
 def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monkeypatch, capsys):
