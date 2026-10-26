@@ -9,7 +9,8 @@
 #   MANIFEST.sha256
 # Usage: bash benchmarks/torch_gpu/attn_bf16/build.sh [OUT [CASE ...]]   (default /tmp/attn-bf16-ship, every case; CUDA names
 #        the toolkit, default the first of /usr/local/cuda, /usr/local/cuda-13.0 with nvcc; CUBIN_ONLY=1 stops after the
-#        SASS gates and needs no uv)
+#        SASS gates and needs no uv; FIXTURE_PY names a Python with numpy to run fixture.py with this tree's verity
+#        instead of uv's, as on a GPU host's bench venv)
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
 if [ -z "${CUDA:-}" ]; then
@@ -31,7 +32,11 @@ for ARCH in sm_90a sm_120a; do
 done
 [ -n "${CUBIN_ONLY:-}" ] && exit 0
 cd "$ROOT"
-uv run python benchmarks/torch_gpu/attn_bf16/fixture.py "$OUT/check" "$@"
+if [ -n "${FIXTURE_PY:-}" ]; then
+  PYTHONPATH=$ROOT${PYTHONPATH:+:$PYTHONPATH} "$FIXTURE_PY" benchmarks/torch_gpu/attn_bf16/fixture.py "$OUT/check" "$@"
+else
+  uv run python benchmarks/torch_gpu/attn_bf16/fixture.py "$OUT/check" "$@"
+fi
 cp "$HERE/run.py" "$HERE/attn.py" "$HERE/gen.py" "$HERE/session.sh" "$OUT/"
 { git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/torch_gpu/attn_bf16 verity; } > "$OUT/source.txt"
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
