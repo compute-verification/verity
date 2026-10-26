@@ -42,6 +42,7 @@ import numpy as np
 from dataclasses import dataclass
 
 from verity_vllm.config import option
+from verity_vllm.records.workload import Workload
 
 VARIANT = ("vllm d9105ea80 V2 sampler, explicit seed: FlashInfer disabled; _temperature_kernel -> _apply_topp_split(S) "
            "[_topp_sb_stats_kernel, _topp_sb_step_kernel x5, _topp_sb_mask_kernel] -> _gumbel_sample_kernel (Philox tl.rand + Gumbel) "
@@ -72,16 +73,15 @@ def _request_facts(header) -> dict[str, dict]:
 def _manifest_facts(path: str | Path) -> dict[str, dict]:
     """The DECLARED facts from the workload manifest itself (`workloads/<row>.json`: `variants[sampling.variant]` +
     per-request `seed`), independent of what the run's header recorded -- so a manifest that disagrees with the run is caught."""
-    w = json.loads(Path(path).read_text())
-    v = str((w.get("sampling") or {}).get("variant", "greedy"))
-    p = (w.get("variants") or {}).get(v) or {"temperature": 0.0, "top_p": 1.0, "top_k": 0}
-    top = (w.get("sampling") or {}).get("seed")
+    w = Workload.load(path)
+    p = w.variants.get(w.sampling_variant or "greedy") or {"temperature": 0.0, "top_p": 1.0, "top_k": 0}
+    top = None if w.sampling is None else w.sampling.seed
     out = {}
-    for r in w.get("requests", []) or []:
-        rp = (w.get("variants") or {}).get(str(r["variant"])) if r.get("variant") is not None else p
-        s = r.get("seed", top)
-        out[r["request_id"]] = {"seed": None if s is None else int(s), "temperature": float(rp.get("temperature", 0.0)),
-                                "top_p": float(rp.get("top_p", 1.0)), "top_k": int(rp.get("top_k", 0) or 0)}
+    for r in w.requests:
+        rp = w.variants.get(r.variant) if r.variant is not None else p
+        s = r.seed if r.seed is not None else top
+        out[r.request_id] = {"seed": s, "temperature": float(rp.get("temperature", 0.0)),
+                             "top_p": float(rp.get("top_p", 1.0)), "top_k": int(rp.get("top_k", 0) or 0)}
     return out
 
 
@@ -285,9 +285,8 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
     wl_req: dict[str, dict] = {}
     if workload is not None:
         try:
-            for r in json.loads(Path(workload).read_text()).get("requests", []):
-                rid = str(r.get("request_id") or r.get("id"))
-                wl_req[rid] = {"prompt_len": int(r.get("prompt_len") or len(r.get("prompt_token_ids") or [])), "cap": int(r.get("max_tokens") or 0)}
+            for r in Workload.load(workload).requests:
+                wl_req[r.request_id] = {"prompt_len": r.prompt_length or 0, "cap": r.max_tokens}
         except (OSError, ValueError) as e:  # noqa: BLE001
             out["problems"].append(f"draw ledger: the workload manifest could not be read ({e!r}): prompt_len / cap unknown, the ledger is unjudged")
     sr = _stop_rule(build_dir)
