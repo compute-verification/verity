@@ -19,10 +19,13 @@ evaluator by tests/test_s8_simple.py, and by `verify` itself on a sample of coor
   2^100, +-max, +-inf and three NaNs.
 
 Every row is checked at m <= 128, and `ROWS` rows at larger m (the special rows, the last, the rest drawn), each over all
-n channels, the s32 sums (`int_mm`) as well as the words. `gpu` times the s32 GEMM (`int_mm`), the epilogue (`scale`) and
-`linear` with CUDA events after a warm-up, and checks that the last timed call's words are the first's. `verify` counts,
-per (set, n, k, m), the mismatches, the reference words by class (NaN, inf, zero, subnormal), and the coordinates where the
-other two scale orders, sw first or sx * sw first, round to another word: what a reordered epilogue would have failed on.
+n channels, the s32 sums (`int_mm`) as well as the words of both epilogues. On CUDA, `gpu` also compares the fused
+epilogue's words with the eager one's at every coordinate of every m, and audits the PTX of each variant the fused kernel
+compiled to (`ptx_audit`). It times the s32 GEMM (`int_mm`), the eager epilogue (`scale`), the fused one (`fused_scale`)
+and `linear` with each, using CUDA events after a warm-up, and checks that the last timed call's words are the first's.
+`verify` counts, per (set, n, k, m), the mismatches, the reference words by class (NaN, inf, zero, subnormal), and the
+coordinates where the other two scale orders, sw first or sx * sw first, round to another word: what a reordered epilogue
+would have failed on. It sums the times over a layer's linears (`LAYER`).
 """
 from __future__ import annotations
 
@@ -32,6 +35,7 @@ import importlib.util
 import json
 import multiprocessing
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -47,6 +51,9 @@ SERVED = {"q": ("l0.wq",), "kv": ("l0.wk", "l0.wv"), "o": ("l0.wo",), "up": ("l0
 #: the demo's public weights seed (`text:verity/cmp92/h200/weights/v1`)
 SEED = b"verity/cmp92/h200/weights/v1"
 SETS = ("edge", "served")
+#: one decoder layer's linears (the head runs once a step)
+LAYER = ("q", "kv", "o", "up", "down")
+TIMES = ("gemm_ms", "scale_ms", "fused_ms", "linear_ms", "linear_eager_ms")
 #: token rows: small batches, the skeleton's batch (4096), the block's (16384), 12288 between them, and the frozen
 #: shape's full step (20480)
 MS = (1, 7, 128, 4096, 12288, 16384, 20480)
@@ -245,6 +252,22 @@ def _timed(torch, fn, warm: int, reps: int):
     return float(np.median(ms)), [round(v, 4) for v in ms], out
 
 
+_F32_ARITH = re.compile(r"\b(?:add|sub|mul|fma|mad|div|rcp|sqrt|neg|abs|min|max|ex2|lg2|cvt)(?:\.[a-z0-9]+)*?\.f32\b")
+
+
+def ptx_audit(ptx: str) -> dict:
+    """The fused kernel's PTX holds `FUSED_PTX` once a coordinate and no other f32 arithmetic: as many `mul.rn.f32` as
+    twice the `cvt.rn.f32.s32`, as many `cvt.rn.bf16.f32`, and no fma, no `.ftz` and no other f32 instruction."""
+    n = {op: len(re.findall(r"\b" + re.escape(op) + r"\b", ptx)) for op in ("cvt.rn.f32.s32", "mul.rn.f32", "cvt.rn.bf16.f32")}
+    n |= {"fma": len(re.findall(r"\bfma\.", ptx)), "ftz": len(re.findall(r"\.ftz\b", ptx)),
+          "blocks": ptx.count("mul.rn.f32 t, t,") // 2}
+    n["other_f32"] = len(_F32_ARITH.findall(ptx)) - n["cvt.rn.f32.s32"] - n["mul.rn.f32"] - n["cvt.rn.bf16.f32"]
+    c = n["cvt.rn.f32.s32"]
+    n["ok"] = bool(c > 0 and n["mul.rn.f32"] == 2 * c and n["cvt.rn.bf16.f32"] == c == n["blocks"]
+                   and n["fma"] == n["ftz"] == n["other_f32"] == 0)
+    return n
+
+
 def run_gpu(a: argparse.Namespace) -> int:
     import torch
     sys.path.insert(0, str(HERE))
@@ -254,7 +277,7 @@ def run_gpu(a: argparse.Namespace) -> int:
     out.mkdir(parents=True, exist_ok=True)
     dev = torch.device(a.device)
     made = json.loads((scratch / "weights.json").read_text())
-    runs, env = [], None
+    runs, env, ptx, fused = [], None, {}, dev.type == "cuda"
     for set_ in a.sets:
         for name, (n, k) in a.shapes.items():
             meta = made[f"{set_}/{name}"]
@@ -270,32 +293,48 @@ def run_gpu(a: argparse.Namespace) -> int:
                 codes, sc = specials(t, k, rng, TOKEN_SPREAD)
                 x[:t], sx_np[:t] = torch.from_numpy(codes).to(dev), sc
                 sx = torch.from_numpy(sx_np).to(dev)
-                y = S.linear(x, sx, w, sw)
+                y_eager = S.linear(x, sx, w, sw, epilogue="eager")
+                y = S.linear(x, sx, w, sw) if fused else y_eager
                 acc = S.int_mm(x, w)
                 env = env or _env(torch, dev)
                 rows = sample_rows(m, t, rng)
                 ri = torch.from_numpy(rows).to(dev)
                 f = f"run-{set_}-{name}-m{m}.npz"
                 np.savez(scratch / f, rows=rows, x=x[ri].cpu().numpy(), sx=sx_np, acc=acc[ri].cpu().numpy(),
-                         y=y[ri].view(torch.int16).cpu().numpy().view(np.uint16))
+                         y=y[ri].view(torch.int16).cpu().numpy().view(np.uint16),
+                         y_eager=y_eager[ri].view(torch.int16).cpu().numpy().view(np.uint16))
                 run = {"set": set_, "shape": name, "n": n, "k": k, "m": m, "file": f, "w": meta["w"], "sw": meta["sw"],
-                       "w_sha256": meta["w_sha256"], "rows_checked": len(rows)}
-                if dev.type == "cuda":
+                       "w_sha256": meta["w_sha256"], "rows_checked": len(rows), "epilogue": "fused" if fused else "eager"}
+                if fused:
+                    text = S.fused_ptx(acc, sx, sw)
+                    digest = hashlib.sha256(text.encode()).hexdigest()[:16]
+                    if digest not in ptx:
+                        ptx[digest] = ptx_audit(text)
+                        (out / f"fused-{digest}.ptx").write_text(text)
+                    run |= {"fused_ptx": digest,
+                            "fused_vs_eager_mismatches": int((y.view(torch.int16) != y_eager.view(torch.int16)).sum())}
                     gemm, gemm_reps, _ = _timed(torch, lambda: S.int_mm(x, w), WARM, REPS)
                     ep, ep_reps, _ = _timed(torch, lambda: S.scale(acc, sx, sw), WARM, REPS)
+                    fu, fu_reps, _ = _timed(torch, lambda: S.fused_scale(acc, sx, sw), WARM, REPS)
                     lin, lin_reps, last = _timed(torch, lambda: S.linear(x, sx, w, sw), WARM, REPS)
-                    run |= {"gemm_ms": round(gemm, 4), "scale_ms": round(ep, 4), "linear_ms": round(lin, 4),
+                    line, line_reps, last_eager = _timed(torch, lambda: S.linear(x, sx, w, sw, epilogue="eager"), WARM, REPS)
+                    run |= {"gemm_ms": round(gemm, 4), "scale_ms": round(ep, 4), "fused_ms": round(fu, 4),
+                            "linear_ms": round(lin, 4), "linear_eager_ms": round(line, 4),
                             "gemm_tops": round(2 * m * n * k / gemm / 1e9, 2), "gemm_reps_ms": gemm_reps,
-                            "scale_reps_ms": ep_reps, "linear_reps_ms": lin_reps,
-                            "repeat_equal": bool(torch.equal(last.view(torch.int16), y.view(torch.int16)))}
-                    del last
+                            "scale_reps_ms": ep_reps, "fused_reps_ms": fu_reps, "linear_reps_ms": lin_reps,
+                            "linear_eager_reps_ms": line_reps,
+                            "repeat_equal": bool(torch.equal(last.view(torch.int16), y.view(torch.int16))
+                                                 and torch.equal(last_eager.view(torch.int16), y_eager.view(torch.int16)))}
+                    del last, last_eager
                 runs.append(run)
                 print(json.dumps({key: v for key, v in run.items() if not key.endswith("reps_ms")}), flush=True)
-                del x, sx, y, acc, ri
+                del x, sx, y, y_eager, acc, ri
             del w, sw
             if dev.type == "cuda":
                 torch.cuda.empty_cache()
-    (out / "gpu.json").write_text(json.dumps({"env": env, "runs": runs}, indent=1))
+    if fused:
+        env["triton"] = sys.modules["triton"].__version__
+    (out / "gpu.json").write_text(json.dumps({"env": env, "ptx": ptx, "runs": runs}, indent=1))
     return 0
 
 
@@ -324,11 +363,12 @@ def run_verify(a: argparse.Namespace) -> int:
     for run in rec["runs"]:
         d = np.load(scratch / run["file"])
         w, sw = np.load(scratch / run["w"], mmap_mode="r"), np.load(scratch / run["sw"])
-        rows, x, y = d["rows"], d["x"], d["y"]
+        rows, x, y, y_eager = d["rows"], d["x"], d["y"], d["y_eager"]
         sx = d["sx"][rows]
         acc = exact_sums(x, w)
         want = epilogue(acc, sx, sw)
         bad, nan_word = y != want, _nan_word(want, y)
+        bad_eager = y_eager != want
         rng = np.random.default_rng(seed_of("definition", run["set"], run["shape"], run["m"]))
         q, t = DEFINITION_COORDS // 2, min(len(rows), len(SPECIALS))
         ci = np.concatenate([rng.integers(0, t, q), rng.integers(0, len(rows), q)])
@@ -337,37 +377,66 @@ def run_verify(a: argparse.Namespace) -> int:
         dv = np.asarray(E.evaluate_batch(coord, x[ci].view(np.uint8), sx[ci].view(np.uint32),
                                          np.asarray(w[cj]).view(np.uint8), sw[cj].view(np.uint32),
                                          kernel="reference")).astype(np.uint16)
-        dbad = dv != y[ci, cj]
-        r = {key: run[key] for key in ("set", "shape", "n", "k", "m", "rows_checked")}
+        dbad, dbad_eager = dv != y[ci, cj], dv != y_eager[ci, cj]
+        r = {key: run[key] for key in ("set", "shape", "n", "k", "m", "rows_checked", "epilogue")}
         r |= {"coords_checked": int(want.size), "s32_mismatches": int((d["acc"].astype(np.int64) != acc).sum()),
               "mismatches": int(bad.sum()), "nan_word_mismatches": int((bad & nan_word).sum()),
+              "eager_mismatches": int(bad_eager.sum()),
               "definition_coords": len(ci), "definition_vs_twin_mismatches": int((dv != want[ci, cj]).sum()),
-              "definition_vs_gpu_mismatches": int(dbad.sum()),
+              "definition_vs_gpu_mismatches": int(dbad.sum()), "definition_vs_eager_mismatches": int(dbad_eager.sum()),
               "order_sensitive": {o: int((epilogue(acc, sx, sw, o) != want).sum()) for o in ("sw-first", "scales-first")},
               "reference_classes": classes(want), "max_abs_sum": int(np.abs(acc).max()),
               "sums_past_2^24": int((np.abs(acc) >= 1 << 24).sum())}
-        r |= {key: run[key] for key in ("gemm_ms", "scale_ms", "linear_ms", "gemm_tops", "repeat_equal") if key in run}
+        r |= {key: run[key] for key in (*TIMES, "gemm_tops", "repeat_equal", "fused_ptx", "fused_vs_eager_mismatches")
+              if key in run}
         # torch's CPU cast writes another NaN word (s8_simple's docstring): a CPU run may differ there and nowhere else
         if cpu:
             bad, dbad = bad & ~nan_word, dbad & ~_nan_word(dv, y[ci, cj])
-        r["pass"] = bool(not bad.any() and not dbad.any() and r["definition_vs_twin_mismatches"] == 0
-                         and r["s32_mismatches"] == 0 and r.get("repeat_equal", True))
+            bad_eager, dbad_eager = bad_eager & ~_nan_word(want, y_eager), dbad_eager & ~_nan_word(dv, y_eager[ci, cj])
+        # a GPU run checks the fused epilogue: every word equal to the eager one's, and PTX that passed its audit
+        fused_ok = cpu or (run["epilogue"] == "fused" and run.get("fused_vs_eager_mismatches") == 0
+                           and rec["ptx"].get(run.get("fused_ptx"), {}).get("ok") is True)
+        r["pass"] = bool(not bad.any() and not dbad.any() and not bad_eager.any() and not dbad_eager.any() and fused_ok
+                         and r["definition_vs_twin_mismatches"] == 0 and r["s32_mismatches"] == 0
+                         and r.get("repeat_equal", True))
         ok &= r["pass"]
         results.append(r)
         print(_line(r), flush=True)
-    (out / "verify.json").write_text(json.dumps({"env": rec["env"], "pass": ok, "results": results}, indent=1))
-    (out / "summary.txt").write_text("\n".join(_line(r) for r in results) + f"\npass {ok}\n")
+    layers = _layers(results)
+    (out / "verify.json").write_text(json.dumps({"env": rec["env"], "ptx": rec.get("ptx", {}), "pass": ok,
+                                                 "results": results, "layers": layers}, indent=1))
+    text = "\n".join([*map(_line, results), *(_layer_line(v) for v in layers),
+                      *(f"ptx {h} {json.dumps(v)}" for h, v in rec.get("ptx", {}).items())])
+    (out / "summary.txt").write_text(text + f"\npass {ok}\n")
     print(f"pass {ok}")
     return 0 if ok else 1
 
 
+def _layers(results: list[dict]) -> list[dict]:
+    """Each (set, m)'s times summed over `LAYER`'s linears, where every one of them was timed."""
+    by, out = {(r["set"], r["shape"], r["m"]): r for r in results if "gemm_ms" in r}, []
+    for set_, m in dict.fromkeys((r["set"], r["m"]) for r in results):
+        rs = [by.get((set_, s, m)) for s in LAYER]
+        if all(rs):
+            out.append({"set": set_, "m": m} | {key: round(sum(r[key] for r in rs), 3) for key in TIMES})
+    return out
+
+
+def _layer_line(v: dict) -> str:
+    return (f"layer  {v['set']:6} m={v['m']:<5} gemm {v['gemm_ms']:.3f} eager-epilogue {v['scale_ms']:.3f} fused-epilogue "
+            f"{v['fused_ms']:.3f} linear {v['linear_ms']:.3f} (eager {v['linear_eager_ms']:.3f}) ms")
+
+
 def _line(r: dict) -> str:
-    t = f" gemm {r['gemm_ms']:.3f} ms ({r['gemm_tops']:.0f} TOPS) scale {r['scale_ms']:.3f} linear {r['linear_ms']:.3f}" \
-        if "gemm_ms" in r else ""
-    return (f"{r['set']:6} {r['shape']:4} n={r['n']:<5} k={r['k']:<5} m={r['m']:<5} rows {r['rows_checked']}/{r['m']} "
-            f"coords {r['coords_checked']} mismatches {r['mismatches']} (s32 {r['s32_mismatches']}, nan-word "
-            f"{r['nan_word_mismatches']}) definition {r['definition_coords']}: {r['definition_vs_gpu_mismatches']} "
-            f"order-sensitive {r['order_sensitive']['sw-first']}/{r['order_sensitive']['scales-first']}{t}")
+    t = (f" gemm {r['gemm_ms']:.3f} ms ({r['gemm_tops']:.0f} TOPS) eager-epilogue {r['scale_ms']:.3f} fused-epilogue "
+         f"{r['fused_ms']:.3f} linear {r['linear_ms']:.3f} (eager {r['linear_eager_ms']:.3f})") if "gemm_ms" in r else ""
+    f = (f" fused-vs-eager {r['fused_vs_eager_mismatches']}/{r['m'] * r['n']}"
+         if "fused_vs_eager_mismatches" in r else "")
+    return (f"{r['set']:6} {r['shape']:4} n={r['n']:<5} k={r['k']:<5} m={r['m']:<5} {r['epilogue']} rows "
+            f"{r['rows_checked']}/{r['m']} coords {r['coords_checked']} mismatches {r['mismatches']} (s32 "
+            f"{r['s32_mismatches']}, nan-word {r['nan_word_mismatches']}, eager {r['eager_mismatches']}) definition "
+            f"{r['definition_coords']}: {r['definition_vs_gpu_mismatches']} (eager {r['definition_vs_eager_mismatches']}) "
+            f"order-sensitive {r['order_sensitive']['sw-first']}/{r['order_sensitive']['scales-first']}{f}{t}")
 
 
 def _shapes(text: str) -> dict[str, tuple[int, int]]:

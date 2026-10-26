@@ -79,7 +79,7 @@ def test_the_twin_takes_the_definitions_order_where_the_other_orders_round_diffe
 
 @pytest.mark.parametrize("m", [1, 7, 30])
 def test_linear_on_the_cpu_is_the_twin(m: int) -> None:
-    """`linear` on the CPU (`torch._int_mm`, the eager epilogue) is the twin at every word but a NaN, where torch's CPU
+    """`linear` on the CPU (`torch._int_mm`, `epilogue="eager"`) is the twin at every word but a NaN, where torch's CPU
     cast writes another NaN word for the Definition's 0x7FFF (s8_simple's docstring)."""
     torch = pytest.importorskip("torch")
     import s8_simple as S
@@ -89,7 +89,7 @@ def test_linear_on_the_cpu_is_the_twin(m: int) -> None:
     x, sx = x[:m], sx[:m]
     w = np.concatenate([w, rng.integers(-128, 128, (10, 128)).astype(np.int8)])
     sw = np.concatenate([sw, C.scales(rng, 10, C.CHANNEL_SPREAD)])
-    y = S.linear(*(torch.from_numpy(a) for a in (x, sx, w, sw)))
+    y = S.linear(*(torch.from_numpy(a) for a in (x, sx, w, sw)), epilogue="eager")
     got, want = y.view(torch.int16).numpy().view(np.uint16), C.twin(x, sx, w, sw)
     nan = want == C.NAN_BF16
     assert np.array_equal(got[~nan], want[~nan])
@@ -106,30 +106,71 @@ def test_linear_refuses_what_the_definition_does_not_bind() -> None:
         return torch.zeros(m, k, dtype=dtype), torch.ones(m), torch.zeros(n, k, dtype=torch.int8), torch.ones(n)
 
     for args, why in ((ops(2, 48, 8), "K = 48"), (ops(1, 1 << 17, 8), "K = 131072"), (ops(2, 64, 12), "N = 12"),
-                      (ops(2, 64, 8, torch.uint8), "dtypes")):
+                      (ops(2, 64, 8, torch.uint8), "dtypes"), (ops(2, 64, 8), "epilogue='eager'")):
         with pytest.raises(ValueError, match=why):
             S.linear(*args)
+    with pytest.raises(ValueError, match="pass one of"):
+        S.linear(*ops(2, 64, 8), epilogue="fast")
     for k in (48, 1 << 17):
         with pytest.raises(ValueError):
             bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM90_S8)
 
 
+def test_the_ptx_audit_takes_only_the_definitions_instructions() -> None:
+    """`ptx_audit` passes PTX made of `FUSED_PTX` blocks, and fails one with an fma, a flushed multiply, a missing multiply
+    or other f32 arithmetic: what a compiler pass that touched the epilogue would leave."""
+    import s8_simple as S
+
+    def block(i: int, src: str = S.FUSED_PTX) -> str:
+        return src.replace("$0", f"%rs{i}").replace("$1", f"%r{i}").replace("$2", f"%f{2 * i}").replace("$3", f"%f{2 * i + 1}")
+
+    body = "ld.global.v4.b32 {%r1, %r2, %r3, %r4}, [%rd1];\nmov.f32 %f9, 0f00000000;\n"
+    good = body + "\n".join(block(i) for i in range(4))
+    audit = C.ptx_audit(good)
+    assert audit["ok"] and audit["cvt.rn.f32.s32"] == audit["blocks"] == 4 and audit["mul.rn.f32"] == 8
+    for bad in (good.replace("mul.rn.f32 t, t, %f1;", "fma.rn.f32 t, t, %f1, %f9;"),
+                good.replace("mul.rn.f32 t, t, %f1;", "mul.rn.ftz.f32 t, t, %f1;"),
+                good.replace("mul.rn.f32 t, t, %f1;", ""),
+                good + "\nadd.f32 %f9, %f9, %f9;"):
+        assert not C.ptx_audit(bad)["ok"]
+
+
 def test_the_check_passes_on_the_cpu_and_fails_a_wrong_word(tmp_path: Path) -> None:
-    """`weights`, `gpu` and `verify` on the CPU at two tiny shapes, m = 1, 7 and 300 (256 rows sampled): they pass, the only
-    differences being torch's CPU NaN word, and a run file with one flipped finite word fails."""
+    """`weights`, `gpu` and `verify` on the CPU at two tiny shapes, m = 1, 7 and 300 (256 rows sampled), with the eager
+    epilogue: they pass, the only differences being torch's CPU NaN word. Then the run files hold the twin's words and the
+    record claims a GPU: it passes only with the fused epilogue's fields (every word equal to the eager one's, PTX that
+    passed its audit), and one flipped finite word in either epilogue's words fails it."""
     pytest.importorskip("torch")
     s, o = tmp_path / "scratch", tmp_path / "out"
     s.mkdir()
     common = ["--scratch", str(s), "--sets", "edge", "--shapes", "a=64:96,b=40:256", "--ms", "1,7,300", "--device", "cpu"]
+    verify = ["verify", *common, "--out", str(o)]
     assert C.main(["weights", *common]) == 0
     assert C.main(["gpu", *common, "--out", str(o)]) == 0
-    assert C.main(["verify", *common, "--out", str(o)]) == 0
+    assert C.main(verify) == 0
     v = json.loads((o / "verify.json").read_text())
-    assert v["pass"] and len(v["results"]) == 6
+    assert v["pass"] and len(v["results"]) == 6 and {r["epilogue"] for r in v["results"]} == {"eager"}
     assert sorted({r["rows_checked"] for r in v["results"]}) == [1, 7, 256]
     assert sum(r["nan_word_mismatches"] for r in v["results"]) == sum(r["mismatches"] for r in v["results"]) > 0
+
+    g = o / "gpu.json"
+    rec = json.loads(g.read_text())
+    for run in rec["runs"]:
+        d = dict(np.load(s / run["file"]))
+        d["y"] = d["y_eager"] = C.twin(d["x"], d["sx"][d["rows"]], np.load(s / run["w"]), np.load(s / run["sw"]))
+        np.savez(s / run["file"], **d)
+    gpu = rec | {"env": rec["env"] | {"device": "cuda"}}
+    fused = [run | {"epilogue": "fused", "fused_ptx": "p", "fused_vs_eager_mismatches": 0} for run in rec["runs"]]
+    for record, code in ((gpu, 1), (gpu | {"runs": fused}, 1), (gpu | {"runs": fused, "ptx": {"p": {"ok": False}}}, 1),
+                         (gpu | {"runs": fused[:-1] + [fused[-1] | {"fused_vs_eager_mismatches": 1}],
+                                 "ptx": {"p": {"ok": True}}}, 1),
+                         (gpu | {"runs": fused, "ptx": {"p": {"ok": True}}}, 0)):
+        g.write_text(json.dumps(record))
+        assert C.main(verify) == code
     f = s / "run-edge-a-m7.npz"
-    d = dict(np.load(f))
-    d["y"][0, 0] ^= 1
-    np.savez(f, **d)
-    assert C.main(["verify", *common, "--out", str(o)]) == 1
+    clean = dict(np.load(f))
+    for key in ("y", "y_eager"):
+        d = {name: a.copy() for name, a in clean.items()}
+        d[key][0, 0] ^= 1
+        np.savez(f, **d)
+        assert C.main(verify) == 1

@@ -9,20 +9,37 @@ channel sw [N].
 
 `int_mm` is `torch._int_mm`, cuBLASLt's s8 x s8 -> s32 GEMM (the int8 profile's, `verity_vllm.engine.int8_exact`). It
 refuses M <= 16, so a smaller x gets zero rows appended up to `MIN_ROWS`, and the first M rows are kept: a row of the
-product reads only its own row of x. `scale` is the epilogue as four eager kernels with one rounding each: the s32 -> f32
-conversion, the two in-place multiplies, then the bf16 cast. Run it eagerly: under `torch.compile` the four would fuse
-into one generated kernel, which `check.py` did not check. On CUDA the cast is `cvt.rn.bf16.f32` (every NaN 0x7FFF, the
-Definition's `F2fpBf16_v1`); on the CPU torch's cast writes another NaN word (0x7FC0 or 0xFFFF), and every other word is
-the same.
+product reads only its own row of x. The epilogue is one of `EPILOGUES`:
+
+* `fused_scale` (`linear`'s default, CUDA only): one Triton kernel that reads each s32 once and writes each bf16 once. A
+  coordinate is `FUSED_PTX`, the Definition's primitives as PTX: `cvt.rn.f32.s32` (`S32ToF32Rn_v1`), `mul.rn.f32` by sx
+  then by sw (`F32MulV2_v1`, two roundings, no FTZ), `cvt.rn.bf16.f32` (`F2fpBf16_v1`, every NaN 0x7FFF). Inline PTX,
+  so no compiler pass can contract, reorder or flush them, and `fused_ptx` returns what a launch compiled.
+* `scale` (`epilogue="eager"`, any device): four eager torch kernels with one rounding each, the s32 -> f32 conversion,
+  the two in-place multiplies, then the bf16 cast. Run it eagerly: under `torch.compile` the four would fuse into one
+  generated kernel, which `check.py` doesn't check. On CUDA the cast is `cvt.rn.bf16.f32`; on the CPU torch's cast
+  writes another NaN word (0x7FC0 or 0xFFFF), and every other word is the same.
 """
 from __future__ import annotations
 
 import torch
 
+try:
+    import triton
+    import triton.language as tl
+except ImportError:
+    triton = None
+
 #: the least K whose s8 x s8 sum can leave s32 (`gemm.S8_K_LIMIT`), and the Definition's k step: it binds only multiples
 K_LIMIT, K_STEP = 1 << 17, 32
 #: the fewest rows `torch._int_mm` takes on CUDA
 MIN_ROWS = 17
+EPILOGUES = ("fused", "eager")
+#: one coordinate of the fused epilogue: $0 the bf16 word, $1 the s32 sum, $2 sx, $3 sw
+FUSED_PTX = ("{ .reg .f32 t; cvt.rn.f32.s32 t, $1; mul.rn.f32 t, t, $2; mul.rn.f32 t, t, $3; "
+             "cvt.rn.bf16.f32 $0, t; }")
+#: the fused kernel's tile (rows, channels) and warps
+FUSED_TILE, FUSED_WARPS = (16, 256), 4
 
 
 def int_mm(x: torch.Tensor, w: torch.Tensor) -> torch.Tensor:
@@ -41,16 +58,53 @@ def scale(acc: torch.Tensor, sx: torch.Tensor, sw: torch.Tensor) -> torch.Tensor
     return y.to(torch.bfloat16)
 
 
-def linear(x_s8: torch.Tensor, sx_f32: torch.Tensor, w_s8: torch.Tensor, sw_f32: torch.Tensor) -> torch.Tensor:
-    """The W8A8 linear: bf16 [M, N] of x s8 [M, K], sx f32 [M], w s8 [N, K] and sw f32 [N] (module docstring)."""
-    refusal = refuse(x_s8, sx_f32, w_s8, sw_f32)
+if triton is not None:
+    @triton.jit
+    def _fused_kernel(acc, sx, sw, y, m, n, stride, PTX: tl.constexpr, BM: tl.constexpr, BN: tl.constexpr):
+        i = tl.program_id(0) * BM + tl.arange(0, BM)
+        j = tl.program_id(1) * BN + tl.arange(0, BN)
+        inside = (i < m)[:, None] & (j < n)[None, :]
+        a = tl.load(acc + i.to(tl.int64)[:, None] * stride + j[None, :], mask=inside, other=0)
+        s = tl.broadcast_to(tl.load(sx + i, mask=i < m, other=0.0)[:, None], (BM, BN))
+        t = tl.broadcast_to(tl.load(sw + j, mask=j < n, other=0.0)[None, :], (BM, BN))
+        word = tl.inline_asm_elementwise(PTX, "=h,r,f,f", [a, s, t], dtype=tl.int16, is_pure=True, pack=1)
+        tl.store(y + i.to(tl.int64)[:, None] * n + j[None, :], word, mask=inside)
+
+
+def _fused(acc: torch.Tensor, sx: torch.Tensor, sw: torch.Tensor):
+    m, n = acc.shape
+    acc = acc if acc.stride(1) == 1 else acc.contiguous()
+    y = torch.empty((m, n), dtype=torch.bfloat16, device=acc.device)
+    grid = (triton.cdiv(m, FUSED_TILE[0]), triton.cdiv(n, FUSED_TILE[1]))
+    kernel = _fused_kernel[grid](acc, sx.contiguous(), sw.contiguous(), y.view(torch.int16), m, n, acc.stride(0),
+                                 PTX=FUSED_PTX, BM=FUSED_TILE[0], BN=FUSED_TILE[1], num_warps=FUSED_WARPS)
+    return y, kernel
+
+
+def fused_scale(acc: torch.Tensor, sx: torch.Tensor, sw: torch.Tensor) -> torch.Tensor:
+    """`scale` as one kernel on CUDA tensors, each s32 read once and each bf16 written once (module docstring)."""
+    return _fused(acc, sx, sw)[0]
+
+
+def fused_ptx(acc: torch.Tensor, sx: torch.Tensor, sw: torch.Tensor) -> str:
+    """The PTX `fused_scale` runs on these operands: Triton compiles a variant per specialization of m, n and the stride."""
+    return _fused(acc, sx, sw)[1].asm["ptx"]
+
+
+def linear(x_s8: torch.Tensor, sx_f32: torch.Tensor, w_s8: torch.Tensor, sw_f32: torch.Tensor,
+           epilogue: str = "fused") -> torch.Tensor:
+    """The W8A8 linear: bf16 [M, N] of x s8 [M, K], sx f32 [M], w s8 [N, K] and sw f32 [N], with the fused epilogue or
+    the eager one (module docstring)."""
+    refusal = refuse(x_s8, sx_f32, w_s8, sw_f32, epilogue)
     if refusal:
         raise ValueError(f"s8_simple.linear: {refusal}")
-    return scale(int_mm(x_s8, w_s8), sx_f32, sw_f32)
+    return (fused_scale if epilogue == "fused" else scale)(int_mm(x_s8, w_s8), sx_f32, sw_f32)
 
 
-def refuse(x: torch.Tensor, sx: torch.Tensor, w: torch.Tensor, sw: torch.Tensor) -> str | None:
+def refuse(x: torch.Tensor, sx: torch.Tensor, w: torch.Tensor, sw: torch.Tensor, epilogue: str = "fused") -> str | None:
     """Why `linear` can't compute the Definition on these operands, or None."""
+    if epilogue not in EPILOGUES:
+        return f"epilogue {epilogue!r}: pass one of {EPILOGUES}"
     got = (x.dtype, sx.dtype, w.dtype, sw.dtype)
     if got != (torch.int8, torch.float32, torch.int8, torch.float32):
         return f"dtypes {got}: pass x and w as int8 codes and sx and sw as float32 scales"
@@ -64,4 +118,7 @@ def refuse(x: torch.Tensor, sx: torch.Tensor, w: torch.Tensor, sw: torch.Tensor)
                 f"to the next multiple, or split K into parts below {K_LIMIT}")
     if n % 8:
         return f"N = {n}: torch._int_mm takes a multiple of 8 channels; pad w with zero rows and drop their outputs"
+    if epilogue == "fused" and (triton is None or x.device.type != "cuda"):
+        return (f"the fused epilogue is a Triton kernel on CUDA ({x.device.type} tensors"
+                f"{', and no Triton here' if triton is None else ''}): pass epilogue='eager'")
     return None
