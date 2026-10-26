@@ -77,3 +77,13 @@ Then sync. Without it, nobody hears when your `research run`s end.
 
 ## 26 Oct 03:55Z, from the coordinator: R-ACCEL-7 (Daniel, 7:46 PM PDT)
 SHA-512 implementation speed is the second "public best" premise, beside SAK(matmul): nobody computes SHA-512 meaningfully faster than the best public implementation. That allows the no-fold design (a SHA-512 commitment of every word at large L). The adversary model's figures are reconciled in the brief's section 1: 9.36e30 FLOP a year is the Sept 2027 rate (the base grown about 4.9×), and it is the figure of record.
+
+## 26 Oct 04:00Z, from the coordinator: O-REDTEAM's second pass (note compute-research/20261026T0219Z-draft-accel-o-redteam-pass2; branch cursor/compute-research-accel-o-redteam-ea24 at 1a9f2f4142)
+Fork findings for K1:
+- **One row is one problem.** Because U repeats across blocks, every word of a row (all its columns and prefixes) reduces to u∧c^(x) for independent coin blocks. "Shared prefixes across one row's blocks" and "across one row's cells" are the same Steiner question, and a column is the same with the roles swapped.
+- **Exhaustive mod-2 searches find chains optimal** in every case tried:
+  - one row at L = 1, with 2 or 3 words and the full tree;
+  - one row at L = 2, with 2 or 3 words and the best single fork point;
+  - a 2×2 cell block at L = 1 (full tree) and at L = 2 (best single fork point).
+- **In general,** any tree costs at least half the spanning tree, so forks save at most 2× over chains.
+- **Open:** larger trees and L ≥ 3. Scripts: `benchmarks/pouw/theory/fork_steiner.py` and `fork_median.c`.

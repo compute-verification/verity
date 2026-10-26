@@ -179,3 +179,6 @@ BET-ALGO-LAB: on DS-90 the cheapest exact alternative to the honest kernel is 3.
 
 ## 26 Oct 03:55Z, from the coordinator: R-ACCEL-7 (Daniel, 7:46 PM PDT)
 SHA-512 implementation speed is the second "public best" premise, beside SAK(matmul): nobody computes SHA-512 meaningfully faster than the best public implementation. That allows the no-fold design (a SHA-512 commitment of every word at large L). The adversary model's figures are reconciled in the brief's section 1: 9.36e30 FLOP a year is the Sept 2027 rate (the base grown about 4.9×), and it is the figure of record.
+
+## 26 Oct 04:00Z, from the coordinator: O-REDTEAM's second pass (note compute-research/20261026T0219Z-draft-accel-o-redteam-pass2; branch cursor/compute-research-accel-o-redteam-ea24 at 1a9f2f4142)
+O-REDTEAM's M2: with 2:4-sparse MMA, sparse other work done in freed tensor-core time gets up to 2× the MACs per tensor unit. So R-ACCEL-1's W_other must be stated in tensor-core *time* units (or priced at the dual), not in MACs. Otherwise the bound is false on the card by up to 2×. Also M5: under tensor load the H200 runs at about 1830 MHz, not 1980, so state per-second figures at the sustained clock.

@@ -98,3 +98,15 @@ Then sync. Without it, nobody hears when your `research run`s end.
 
 ## 26 Oct 03:55Z, from the coordinator: R-ACCEL-7 (Daniel, 7:46 PM PDT)
 SHA-512 implementation speed is the second "public best" premise, beside SAK(matmul): nobody computes SHA-512 meaningfully faster than the best public implementation. That allows the no-fold design (a SHA-512 commitment of every word at large L). The adversary model's figures are reconciled in the brief's section 1: 9.36e30 FLOP a year is the Sept 2027 rate (the base grown about 4.9×), and it is the figure of record.
+
+## 26 Oct 04:00Z, from the coordinator: O-REDTEAM's second pass (note compute-research/20261026T0219Z-draft-accel-o-redteam-pass2; branch cursor/compute-research-accel-o-redteam-ea24 at 1a9f2f4142)
+Findings against your statement (738a30c30f), beyond R1–R8:
+- **M1:** SHFL has its own pipe at 32 per SM per clock, alongside the 64 ALU lanes. The model prices a cross-lane move as an ALU copy, so the card does ALU+shuffle work up to 1.5× faster than modeled. Make the shuffle a resource of its own.
+- **M2:** 2:4-sparse MMA is still a gap. It's no use on Dither's products, but it matters for other work: up to 2× the MACs per tensor unit (DITHER-THM handles that side).
+- **M3:** `redux` does a warp-wide reduction in one issue slot, against ten warp instructions in the model, and HFMA2 doubles exact small-integer adds. Add both.
+- **M4:** DMMA is missing (32× below s8). A constant-bank operand saves at most one issue slot per use.
+- **M5:** under tensor load the card runs at about 1830 MHz, not 1980, so ticks overstate per-second rates by about 8.2%. State the clock, with CALIB.
+- **M6:** the witness assumes 4.8 TB/s of HBM; measured streams reach 85–90%.
+- **M7:** L2 is free in the model. That's safe for the lower bound, but no proof may lean on a DRAM bound for traffic that fits in 50 MiB.
+- **M8:** off-SM engines (copy engines, texture filtering, sm_120's RT cores) are missing. Each is about 1% of lane adds or less, but list them.
+- **M9:** on sm_120, an s8 product through FP4 needs three slices, 1.5× the cost of s8.

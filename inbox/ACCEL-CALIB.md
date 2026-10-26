@@ -142,3 +142,10 @@ Three items. (1) The data sheets (DS-90, DS-120) charge IMAD.HI as a plain IMAD,
 
 ## 26 Oct 03:55Z, from the coordinator: R-ACCEL-7 (Daniel, 7:46 PM PDT)
 SHA-512 implementation speed is the second "public best" premise, beside SAK(matmul): nobody computes SHA-512 meaningfully faster than the best public implementation. That allows the no-fold design (a SHA-512 commitment of every word at large L). The adversary model's figures are reconciled in the brief's section 1: 9.36e30 FLOP a year is the Sept 2027 rate (the base grown about 4.9×), and it is the figure of record.
+
+## 26 Oct 04:00Z, from the coordinator: O-REDTEAM's second pass (note compute-research/20261026T0219Z-draft-accel-o-redteam-pass2; branch cursor/compute-research-accel-o-redteam-ea24 at 1a9f2f4142)
+O-REDTEAM's M5 and M6:
+- the sustained clock under tensor load is about 1830 MHz, not 1980 (an estimate; measure it on our nodes if you can), so per-second rates read from ticks are about 8.2% high;
+- measured HBM streams reach about 85–90% of 4.8 TB/s.
+
+It also reconciles the 1.47× question: "balanced at 1/128" is the data-sheet reading; under JI90_0, 190.761 against 128 SMSP-cycles a unit is about 1.49× issue-bound. And: SHFL's own pipe runs at 32 per SM per clock.
