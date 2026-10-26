@@ -7,21 +7,28 @@
     python tools/verity/lean/merge.py --normalize FILE...      recompute each `reads` digest from its definitions
 
 `.gitattributes` names this driver for every `lean-audit.json`, and git runs it when both sides changed the file. A record is
-a map of entries by name: the guarantees, the modules under `reads`, the dependencies, and the policy's own sections. Each
-side's change to an entry (added, changed or removed) applies, and an entry both sides changed differently refuses the merge.
-A guarantee's record (its `owner` aside, which merges on its own) and a dependency's digest are one entry each. Under `reads`, which two branches adding guarantees that
-read one module both change, the module's definitions merge the same way, its readers (`guarantees`) as sets, and its digest
-is recomputed from the merged definitions (`audit.module_digest`). When one side stops reading a definition (or a whole
-module) whose module the other side changed, a reads-only clash, the record does not say which guarantees read which
-definition, so the merge keeps the union: the definition with the other side's hash, and the readers as sets, less those
-the merged record no longer lists (a group left with none is dropped). It names those entries in one line on stderr. A
-definition both sides changed to different hashes still refuses, and so does every clash outside `reads`. A side
-written before guarantees were called that (`pins`) is read under today's names (`audit.as_guarantees`).
+a map of entries by name: the guarantees, the modules under `reads`, the assumptions, the dependencies, and the policy's own
+sections. Each side's change to an entry (added, changed or removed) applies. Under `reads`, which two branches adding
+guarantees that read one module both change, the module's definitions merge the same way, its readers (`guarantees`) as
+sets, and its digest is recomputed from the merged definitions (`audit.module_digest`). A side written before guarantees
+were called that (`pins`) is read under today's names (`audit.as_guarantees`).
+
+What the build determines never refuses: the records `check.py --update` writes from it and a train's Lean check
+(`--regenerate`) rewrites on the merged tree whenever they differ (`audit.RECORD_DIFFERENCE`, `audit.regenerated`). Those are
+a guarantee's record (signature, named assumptions, type hash: restated on both sides, the merged tree's statement decides
+it), each `reads` group (which guarantees read which definition, and each definition's hash) and an assumption's `digest`.
+Where the sides disagree the merge takes the union (a definition or a module one side stopped reading, readers as sets
+less those the merged record no longer lists, a group left without readers or definitions dropped) or ours' value (a
+hash or a record both sides changed differently), and names each in one line on stderr. Whether a guarantee is listed is
+not the build's: one side's removal applies over the other's change to its record. What only a person writes still
+refuses when both sides changed it differently: an `owner`, a `shape` or `frozen` entry, a dependency's revision, a policy
+entry (a layer's field, a `compile_time` digest).
 
 Exit 0: merged. Exit 1: refused, the entries named on stderr and OURS left as it was, which git reports as a conflict; then
 regenerate the record on the merged tree (`check.py --update`), as without the driver. A merged record is a candidate, never
-a verdict: `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference, as for any record, and
-a train's (`--regenerate`) commits the regenerated `reads` on landing.
+a verdict: `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference, as for any record; a
+train's (`--regenerate`) commits the regenerated records on landing, and Daniel's landing DM shows each one that changed
+against `main`.
 
 The layer rules (`layers`), which two branches that each widen a layer for a guarantee both change, merge field by field: `imports`
 and `except` as lists, `why` as a list of its `; ` clauses (`layers`). Every list of names (the roots, `meaning`, `proved_in`,
@@ -111,19 +118,72 @@ def entries(path: str, o: dict, a: dict, b: dict, why: list[str], depth: int = 1
     return out
 
 
-def guarantees(o: dict, a: dict, b: dict, why: list[str]) -> dict:
+def derived(path: str, o, a, b, candidate: list[str]):
+    """The three-way merge of a value the build determines (a definition's hash, an assumption's digest, a guarantee's
+    signature, named assumptions and type hash): as `one`, but no clash refuses.  A value both sides changed differently is
+    ours' (named ``path (ours)`` in ``candidate``), and one removed on one side and changed on the other is kept (the union,
+    named ``path``): the train's Lean check regenerates it from the merged tree."""
+    if a == b or a == o:
+        return b
+    if b == o:
+        return a
+    if a is MISSING or b is MISSING:
+        candidate.append(path)
+        return b if a is MISSING else a
+    candidate.append(f"{path} (ours)")
+    return a
+
+
+def owned(rec, k: str = "owner"):
+    return MISSING if rec is MISSING else rec.get(k, MISSING)
+
+
+def guarantees(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) -> dict:
     """The guarantees entry by entry, each one's `owner` apart from the rest of its record: a branch that restates a guarantee
-    and one that gives it an owner merge."""
+    and one that gives it an owner merge.  The rest of a record (signature, named assumptions, type hash) is the build's, so
+    two sides that restated it differently merge as ours' record (`derived`), which the train's Lean check rebuilds from the
+    merged statement.  Whether a guarantee is listed is not the build's: one side's removal applies over the other's
+    change to its record, and refuses only when that side changed its owner."""
     out = {}
     for k in keys("guarantees", a, b):
         x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
-        if MISSING in (y, z) or not all(isinstance(r, dict) for r in (y, z, {} if x is MISSING else x)):
+        if not all(isinstance(r, dict) for r in (x, y, z) if r is not MISSING):
+            v = one(f"guarantees[{k}]", x, y, z, why)
+        elif MISSING in (y, z) and x is not MISSING and y != z:
+            kept = y if z is MISSING else z
+            if kept == x:
+                v = MISSING
+            elif owned(kept) == owned(x):
+                v = MISSING
+                candidate.append(f"guarantees[{k}] (removed)")
+            else:
+                v = one(f"guarantees[{k}]", x, y, z, why)
+        elif MISSING in (y, z):
             v = one(f"guarantees[{k}]", x, y, z, why)
         else:
-            v = one(f"guarantees[{k}]", x if x is MISSING else A.unowned(x), A.unowned(y), A.unowned(z), why)
-            who = one(f"guarantees[{k}].owner", MISSING if x is MISSING else x.get("owner", MISSING), y.get("owner", MISSING),
-                      z.get("owner", MISSING), why)
+            v = derived(f"guarantees[{k}]", x if x is MISSING else A.unowned(x), A.unowned(y), A.unowned(z), candidate)
+            who = one(f"guarantees[{k}].owner", owned(x), owned(y), owned(z), why)
             v = v if who is MISSING else {"owner": who} | v
+        if v is not MISSING:
+            out[k] = v
+    return out
+
+
+def assumptions(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) -> dict:
+    """The named assumptions entry by entry, each one's `owner` (hand-written) apart from its `digest` (the build's: the hash
+    its `reads` record holds), which merges as `derived`.  An entry one side removed and the other changed is kept: the
+    train's Lean check drops it when no guarantee of the merged tree reads it (`assumptions.unread`)."""
+    out = {}
+    for k in keys("assumptions", a, b):
+        x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
+        if not all(isinstance(r, dict) for r in (x, y, z) if r is not MISSING):
+            v = one(f"assumptions[{k}]", x, y, z, why)
+        elif MISSING in (y, z):
+            v = derived(f"assumptions[{k}]", x, y, z, candidate)
+        else:
+            d = derived(f"assumptions[{k}].digest", owned(x, "digest"), owned(y, "digest"), owned(z, "digest"), candidate)
+            who = one(f"assumptions[{k}].owner", owned(x), owned(y), owned(z), why)
+            v = ({} if who is MISSING else {"owner": who}) | ({} if d is MISSING else {"digest": d})
         if v is not MISSING:
             out[k] = v
     return out
@@ -137,7 +197,8 @@ def core(group):
 def group(m: str, x: dict, y: dict, z: dict, why: list[str], candidate: list[str]) -> dict:
     """One module's `reads` entry, both sides having changed it: definitions entry by entry, readers as sets.  A definition one
     side no longer reads while the other still reads it stays, with the other side's hash: the record does not say which
-    guarantees read it, so the union is the candidate (``candidate``), and the train's Lean check regenerates the group."""
+    guarantees read it, so the union is the candidate (``candidate``), and the train's Lean check regenerates the group.  A
+    hash both sides changed differently is ours' (`derived`)."""
     xd, yd, zd = A.definitions(x), A.definitions(y), A.definitions(z)
     defs = {}
     for d in sorted(set(xd) | set(yd) | set(zd)):
@@ -145,10 +206,10 @@ def group(m: str, x: dict, y: dict, z: dict, why: list[str], candidate: list[str
         if p is not MISSING and (q is MISSING) != (r is MISSING):
             defs[d] = q if r is MISSING else r
             candidate.append(f"reads[{m}].definitions[{d}]")
-        elif (v := one(f"reads[{m}].definitions[{d}]", p, q, r, why)) is not MISSING:
+        elif (v := derived(f"reads[{m}].definitions[{d}]", p, q, r, candidate)) is not MISSING:
             defs[d] = v
     if len({len(h) for h in defs.values() if isinstance(h, str)}) > 1:
-        why.append(f"reads[{m}]: its definitions would mix 32-bit and SHA-256 hashes (one side's record was rehashed)")
+        candidate.append(f"reads[{m}] (32-bit and SHA-256 hashes mixed)")
     xp, yp, zp = set(x.get("guarantees", [])), set(y.get("guarantees", [])), set(z.get("guarantees", []))
     return {"definitions": defs, "guarantees": sorted((yp & zp) | (yp - xp) | (zp - xp))}
 
@@ -212,8 +273,9 @@ def layers(o: dict, a: dict, b: dict, why: list[str]) -> dict:
 
 def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = None) -> tuple[dict, list[str]]:
     """(the merged record, why it is refused: empty when it merged).  A pure function of the three records.  ``candidate``
-    collects the `reads` entries merged although the sides disagree on which guarantees read what (a reads-only clash): the
-    union, which the train's Lean check regenerates."""
+    collects the records the build determines (`RECORD_DIFFERENCE`'s kinds: guarantees' records, `reads`, assumptions'
+    digests) merged although the sides disagree on them: the union or ours' value, which the train's Lean check
+    regenerates."""
     why: list[str] = []
     candidate = [] if candidate is None else candidate
     out = {}
@@ -222,7 +284,10 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
         if k == "reads":
             v = reads({} if o is MISSING else o, {} if a is MISSING else a, {} if b is MISSING else b, why, candidate)
         elif k == "guarantees" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
-            v = guarantees({} if o is MISSING else o, a, b, why)
+            v = guarantees({} if o is MISSING else o, a, b, why, candidate)
+        elif k == "assumptions" and all(isinstance(s, dict) for s in (o, a, b) if s is not MISSING):
+            v = assumptions(*({} if s is MISSING else s for s in (o, a, b)), why, candidate)
+            v = MISSING if not v and MISSING in (a, b) else v
         elif k == "layers" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = layers({} if o is MISSING else o, a, b, why)
         elif names(o, a, b):
@@ -238,11 +303,9 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
         if extra := sorted(set(g["guarantees"]) - kept):
             g["guarantees"] = [r for r in g["guarantees"] if r in kept]
             candidate.append(f"reads[{m}].guarantees[{', '.join(extra)}]")
-        if not g["guarantees"]:
+        if not g["guarantees"] or not g["definitions"]:
             del out["reads"][m]
             candidate.append(f"reads[{m}]")
-        elif not g["definitions"]:
-            why.append(f"reads[{m}]: the merge leaves it without definitions")
     return out, why
 
 
@@ -419,8 +482,8 @@ def main(argv: list[str]) -> int:
         print("\n".join(f"  {w}" for w in why), file=sys.stderr)
         return 1
     if candidate:
-        print(f"merge.py: {path}: merged reads as a candidate, the union of both sides, which the train's Lean check "
-              f"regenerates: {'; '.join(dict.fromkeys(candidate))}", file=sys.stderr)
+        print(f"merge.py: {path}: merged derived records as a candidate (the union, or ours' value where marked), which the "
+              f"train's Lean check regenerates: {'; '.join(dict.fromkeys(candidate))}", file=sys.stderr)
     ours.write_text(A.text(merged))
     return 0
 
