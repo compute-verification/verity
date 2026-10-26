@@ -53,9 +53,9 @@ theorem readPs_frames {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r�
       · simp
       · intro n h1 h2
         have hn : n < rs.length := by simpa using h1
-        simp only [List.getElem_map, List.getElem_range]
-        rw [(hTs n hn).2, getElem!_pos (rs.map Prod.fst).toArray n (by simpa using hn)]
-        try simp
+        rw [List.getElem_map, (hTs n hn).2, List.getElem_map, List.getElem_range,
+          getElem!_pos (rs.map Prod.fst).toArray n (by simpa using hn)]
+        simp
   · rw [if_neg hc] at h
     cases h
 
