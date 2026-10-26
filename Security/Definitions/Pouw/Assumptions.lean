@@ -57,6 +57,7 @@ import Definitions.Pouw.Assumptions.PearlC.TTOutTileUOnly
 import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 import Definitions.Pouw.Assumptions.Pinned
+import Definitions.Pouw.Assumptions.Pool
 import Definitions.Pouw.Assumptions.RelativeSecurity
 import Definitions.Pouw.Assumptions.ShaRealize
 /-!
