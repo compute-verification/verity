@@ -196,7 +196,7 @@ theorem accR_cols {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Pr
   dsimp only at hu
   rw [hx] at hu
   cases hd : decR rd x ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst)
-      (((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.snd).map outCoin) with
+      (((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.snd).map RecDeploy.outCoin) with
   | none => simp [hd, Claims.Flock.lookCol] at hu
   | some d =>
     simp only [hd] at hu
@@ -227,7 +227,7 @@ theorem cutLens_length {α : Type} : ∀ (ns : List ℕ) (l : List α), (cutLens
 
 /-- **`readPs` reads one round message per opened round**: each rep's frames are as many as its block of rows
 (`FitsRep.rounds`), and the blocks cut all the rounds (`cutLens_flatten`). -/
-theorem readPs_length {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray}
+theorem readPs_length {spec : SessionSpec} {sts : Array Flock.Stmt} {c₁ : Coin} {r₀ : List ByteArray}
     {rss : List (List ByteArray)} {cs : List Coin} {fl : FinalP} {pf : Array Flock.Proof × List Claims.Msg}
     (h : readPs spec sts c₁ r₀ rss cs fl = some pf) : pf.2.length = rss.length := by
   unfold readPs at h
@@ -261,7 +261,7 @@ theorem readPs_length {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r�
 proof, at `verifyJWithMK` and `liveOfJ`): where `liveOfJ` reads the link's points of the session's count, there are
 two rep streams per table, and stream `k` (table `k / 2`'s rep `k % 2`) has `repRounds false spec sts[k / 2]`
 rounds. -/
-theorem streams_size_plainJ (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt}
+theorem streams_size_plainJ (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Flock.Stmt}
     {j : Lean.Json} {proofs : Array ByteArray} {lv : Live}
     (hv : verifyJWithMK keep hs spec (tabsOf sts) j proofs = .ok ()) (hl : liveOfJ spec j = .ok lv)
     (hpn : lv.points.size = spec.points) :
