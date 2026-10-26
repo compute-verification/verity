@@ -11,7 +11,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
 A templated session commits `cs`, its unit net `Tmpl.unitNet`'s, and its statement circuit is `HmOut.unrolled cs`, the
 same circuit with the logical unit net. The two read the same input ports, leaves, cuts and wires; only a wire out of a
 unit slot reads an output column, which the committed unit holds at `upos` of the logical one: its output groups are
-the logical groups placed at `posMap` (`Group.at`, `outsOk`), so each output port is as wide, bit `t` at `upos` of the
+the logical groups placed at `posMap` (`Net.Group.at`, `outsOk`), so each output port is as wide, bit `t` at `upos` of the
 logical bit (`portCols_at`).
 
 So Δ's source key in the committed circuit is the statement circuit's with a unit output column moved to `upos`
@@ -74,17 +74,17 @@ theorem portCols_one_at {pos : Array ℕ} {g : Group}
     (h0 : pos.getD (g.col * WORD) 0 % (g.words * WORD) = 0)
     (hin : ∀ i < g.words * WORD, pos.getD (g.col * WORD + i) 0 = pos.getD (g.col * WORD) 0 + i)
     (hfit : g.bits.toList.sum ≤ g.words * WORD) :
-    (portCols #[Group.at pos g]).toList.length = (portCols #[g]).toList.length ∧
-      ∀ j (h : j < (portCols #[g]).toList.length) (h' : j < (portCols #[Group.at pos g]).toList.length),
-        PortAt pos ((portCols #[g]).toList[j]) ((portCols #[Group.at pos g]).toList[j]) := by
+    (portCols #[Net.Group.at pos g]).toList.length = (portCols #[g]).toList.length ∧
+      ∀ j (h : j < (portCols #[g]).toList.length) (h' : j < (portCols #[Net.Group.at pos g]).toList.length),
+        PortAt pos ((portCols #[g]).toList[j]) ((portCols #[Net.Group.at pos g]).toList[j]) := by
   have hd : pos.getD (g.col * WORD) 0 / WORD * WORD = pos.getD (g.col * WORD) 0 := by
     have : WORD ∣ pos.getD (g.col * WORD) 0 :=
       Nat.dvd_trans (Nat.dvd_mul_left WORD g.words) (Nat.dvd_of_mod_eq_zero h0)
     exact Nat.div_mul_cancel this
   rw [portCols_one_closed, portCols_one_closed]
-  refine ⟨by simp [Group.at], fun j h h' => ?_⟩
+  refine ⟨by simp [Net.Group.at], fun j h h' => ?_⟩
   simp only [List.length_map, List.length_range] at h
-  simp only [List.getElem_map, List.getElem_range, Group.at]
+  simp only [List.getElem_map, List.getElem_range, Net.Group.at]
   refine ⟨rfl, fun t ht => ?_⟩
   have hle := take_sum_getD_le g.bits.toList j (by simpa using h)
   dsimp only at ht ⊢
@@ -97,10 +97,10 @@ def AtOk (pos : Array ℕ) (g : Group) : Prop :=
     g.bits.toList.sum ≤ g.words * WORD
 
 theorem flatMap_at {pos : Array ℕ} : ∀ (A : List Group), (∀ g ∈ A, AtOk pos g) →
-    (A.flatMap fun g => (portCols #[Group.at pos g]).toList).length = (A.flatMap fun g => (portCols #[g]).toList).length ∧
+    (A.flatMap fun g => (portCols #[Net.Group.at pos g]).toList).length = (A.flatMap fun g => (portCols #[g]).toList).length ∧
       ∀ j (h : j < (A.flatMap fun g => (portCols #[g]).toList).length)
-        (h' : j < (A.flatMap fun g => (portCols #[Group.at pos g]).toList).length),
-        PortAt pos ((A.flatMap fun g => (portCols #[g]).toList)[j]) ((A.flatMap fun g => (portCols #[Group.at pos g]).toList)[j])
+        (h' : j < (A.flatMap fun g => (portCols #[Net.Group.at pos g]).toList).length),
+        PortAt pos ((A.flatMap fun g => (portCols #[g]).toList)[j]) ((A.flatMap fun g => (portCols #[Net.Group.at pos g]).toList)[j])
   | [], _ => ⟨rfl, fun j h => absurd h (by simp)⟩
   | g :: A, hA => by
     obtain ⟨h0, hin, hfit⟩ := hA g (List.mem_cons_self ..)
@@ -113,20 +113,20 @@ theorem flatMap_at {pos : Array ℕ} : ∀ (A : List Group), (∀ g ∈ A, AtOk 
       exact hp1 j hj _
     · have hj' : (portCols #[g]).toList.length ≤ j := Nat.le_of_not_lt hj
       rw [List.getElem_append_right hj', List.getElem_append_right (by rw [hl1]; exact hj'),
-        getElem_congr_idx (show j - (portCols #[Group.at pos g]).toList.length = j - (portCols #[g]).toList.length by
+        getElem_congr_idx (show j - (portCols #[Net.Group.at pos g]).toList.length = j - (portCols #[g]).toList.length by
           rw [hl1])]
       exact hp2 _ (by omega) _
 
 /-- **Output groups placed at `pos`** (`outsOk`, as `Net.ofRowsAt` places them): as many ports, each the logical port
 placed at `pos`. -/
-theorem portCols_at {pos : Array ℕ} {gs : Array Group} (hout : outsOk pos gs = true)
+theorem portCols_at {pos : Array ℕ} {gs : Array Group} (hout : Net.outsOk pos gs = true)
     (hfit : ∀ g ∈ gs.toList, g.bits.foldl (· + ·) 0 ≤ g.words * WORD) :
-    (portCols (gs.map (Group.at pos))).size = (portCols gs).size ∧
+    (portCols (gs.map (Net.Group.at pos))).size = (portCols gs).size ∧
       ∀ j < (portCols gs).size,
-        PortAt pos ((portCols gs).getD j default) ((portCols (gs.map (Group.at pos))).getD j default) := by
+        PortAt pos ((portCols gs).getD j default) ((portCols (gs.map (Net.Group.at pos))).getD j default) := by
   have hok : ∀ g ∈ gs.toList, AtOk pos g := by
     intro g hg
-    unfold outsOk at hout
+    unfold Net.outsOk at hout
     simp only [Array.all_eq_true', Bool.and_eq_true, beq_iff_eq, List.all_eq_true, List.mem_range] at hout
     obtain ⟨h0, hin⟩ := hout g (Array.mem_toList_iff.1 hg)
     refine ⟨h0, hin, ?_⟩
@@ -134,20 +134,20 @@ theorem portCols_at {pos : Array ℕ} {gs : Array Group} (hout : outsOk pos gs =
     exact hfit g hg
   obtain ⟨hl, hp⟩ := flatMap_at gs.toList hok
   have e1 := portCols_toList gs
-  have e2 := portCols_toList (gs.map (Group.at pos))
+  have e2 := portCols_toList (gs.map (Net.Group.at pos))
   rw [Array.toList_map, List.flatMap_map] at e2
-  have hs : (portCols (gs.map (Group.at pos))).size = (portCols gs).size := by
+  have hs : (portCols (gs.map (Net.Group.at pos))).size = (portCols gs).size := by
     rw [← Array.length_toList, ← Array.length_toList, e1, e2, hl]
   refine ⟨hs, fun j hj => ?_⟩
   have hj1 : j < (gs.toList.flatMap fun g => (portCols #[g]).toList).length := by
     rw [← e1, Array.length_toList]; exact hj
-  have hj2 : j < (gs.toList.flatMap fun g => (portCols #[Group.at pos g]).toList).length := by
+  have hj2 : j < (gs.toList.flatMap fun g => (portCols #[Net.Group.at pos g]).toList).length := by
     rw [hl]; exact hj1
   have g1 : (portCols gs).getD j default = (gs.toList.flatMap fun g => (portCols #[g]).toList)[j] := by
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hj, Option.getD_some, ← Array.getElem_toList]
     exact List.getElem_of_eq e1 _
-  have g2 : (portCols (gs.map (Group.at pos))).getD j default =
-      (gs.toList.flatMap fun g => (portCols #[Group.at pos g]).toList)[j] := by
+  have g2 : (portCols (gs.map (Net.Group.at pos))).getD j default =
+      (gs.toList.flatMap fun g => (portCols #[Net.Group.at pos g]).toList)[j] := by
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (by rw [hs]; exact hj), Option.getD_some,
       ← Array.getElem_toList]
     exact List.getElem_of_eq e2 _
@@ -176,11 +176,11 @@ theorem tmpl_unit_at {tags : Tags} {cf : ByteArray} {tables : List (String × By
     ∃ (n : Net) (pos : Array ℕ), cs.unitNet < cs.nets.size ∧
       HmOut.unrolled cs = { cs with nets := cs.nets.set! cs.unitNet ("unit", n), tmpl := none } ∧
       upos cs = (fun x => pos.getD x 0) ∧ n.inGroups = cs.unit.inGroups ∧ n.inWords = cs.unit.inWords ∧
-      Built n ∧ cs.unit.outGroups = n.outGroups.map (Group.at pos) ∧
-      (portCols (n.outGroups.map (Group.at pos))).size = (portCols n.outGroups).size ∧
+      Built n ∧ cs.unit.outGroups = n.outGroups.map (Net.Group.at pos) ∧
+      (portCols (n.outGroups.map (Net.Group.at pos))).size = (portCols n.outGroups).size ∧
       (∀ j < (portCols n.outGroups).size,
-        PortAt pos ((portCols n.outGroups).getD j default) ((portCols (n.outGroups.map (Group.at pos))).getD j default)) ∧
-      outsOk pos n.outGroups = true := by
+        PortAt pos ((portCols n.outGroups).getD j default) ((portCols (n.outGroups.map (Net.Group.at pos))).getD j default)) ∧
+      Net.outsOk pos n.outGroups = true := by
   obtain ⟨tu, n, ht, hn, hl, -, hsz, hu, he⟩ := unrolled_of_parseTmpl hT
   have A := UnitAt.tmpl ht hu
   have hB : Built n := hl ▸ built_tmpl ht
@@ -209,16 +209,16 @@ theorem outCol_tmpl {tags : Tags} {cf : ByteArray} {tables : List (String × Byt
   rw [he, hU, hog, hup]
   have hne : 0 < n.outGroups.size := Nat.pos_of_ne_zero (FlockSoundness.Discharge.Layout.built_out hB).1
   have e0 : n.outGroups.getD 0 default = n.outGroups[0] := by simp [Array.getD_eq_getD_getElem?, hne]
-  have e1 : (n.outGroups.map (Group.at pos)).getD 0 default = Group.at pos n.outGroups[0] := by
+  have e1 : (n.outGroups.map (Net.Group.at pos)).getD 0 default = Net.Group.at pos n.outGroups[0] := by
     simp [Array.getD_eq_getD_getElem?, hne]
   rw [e1, e0]
   rw [e0] at hi
-  unfold outsOk at hok
+  unfold Net.outsOk at hok
   simp only [Array.all_eq_true', Bool.and_eq_true, beq_iff_eq, List.all_eq_true, List.mem_range] at hok
   obtain ⟨h0, hin⟩ := hok _ (Array.getElem_mem hne)
   have hd : pos.getD (n.outGroups[0].col * WORD) 0 / WORD * WORD = pos.getD (n.outGroups[0].col * WORD) 0 :=
     Nat.div_mul_cancel (Nat.dvd_trans (Nat.dvd_mul_left WORD _) (Nat.dvd_of_mod_eq_zero h0))
-  simp only [Group.at]
+  simp only [Net.Group.at]
   rw [hd, hin _ hi]
 
 /-- **Δ's committed key with a unit output column moved by `f`**: every other key is the same. -/
@@ -238,10 +238,10 @@ theorem atUnit_msg {u : ℕ} {f : ℕ → ℕ} {s : Src} {q byte bit : ℕ} :
 
 theorem srcAt_unrolled {cs : Circuit} {n : Net} {pos : Array ℕ} {k p t : ℕ}
     (hsz : cs.unitNet < cs.nets.size) (hg : n.inGroups = cs.unit.inGroups)
-    (hog : cs.unit.outGroups = n.outGroups.map (Group.at pos))
-    (hat : (portCols (n.outGroups.map (Group.at pos))).size = (portCols n.outGroups).size ∧
+    (hog : cs.unit.outGroups = n.outGroups.map (Net.Group.at pos))
+    (hat : (portCols (n.outGroups.map (Net.Group.at pos))).size = (portCols n.outGroups).size ∧
       ∀ j < (portCols n.outGroups).size,
-        PortAt pos ((portCols n.outGroups).getD j default) ((portCols (n.outGroups.map (Group.at pos))).getD j default))
+        PortAt pos ((portCols n.outGroups).getD j default) ((portCols (n.outGroups.map (Net.Group.at pos))).getD j default))
     (hwire : ∀ w ∈ cs.wires.toList, w.dst = (cs.unitNet, k, p) →
       w.src.2.2 < (portCols (cs.nets.getD w.src.1 default).2.outGroups).size ∧
         t < ((portCols (cs.nets.getD w.src.1 default).2.outGroups).getD w.src.2.2 default).2) :
@@ -439,7 +439,7 @@ theorem outCol_commit16 (hty : tags.typed = false) (h : Committed tags cf tables
     rw [he, hU]
     have hne : 0 < n.outGroups.size := Nat.pos_of_ne_zero (FlockSoundness.Discharge.Layout.built_out hB).1
     have e0 : n.outGroups.getD 0 default = n.outGroups[0] := by simp [Array.getD_eq_getD_getElem?, hne]
-    have e1 : cs.unit.outGroups.getD 0 default = Group.at pos n.outGroups[0] := by
+    have e1 : cs.unit.outGroups.getD 0 default = Net.Group.at pos n.outGroups[0] := by
       rw [hog]; simp [Array.getD_eq_getD_getElem?, hne]
     rw [e1] at h16 hj
     rw [e0]
