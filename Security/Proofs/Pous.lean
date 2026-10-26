@@ -52,6 +52,7 @@ import Proofs.Pous.EndToEnd
 import Proofs.Pous.Period
 import Proofs.Pous.Obligation
 import Proofs.Pous.EndToEndAt
+import Proofs.Pous.PeriodAt
 
 /-!
 # The proved guarantees
