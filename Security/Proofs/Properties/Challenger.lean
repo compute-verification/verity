@@ -4,7 +4,7 @@ import Properties.Challenger
 # Proofs of `Properties.Challenger`
 
 `liveAnswer`: `Live.factors` turns `answer`'s check into `checkAt` at the coins the evidence reads, and `answerAt` runs
-the same decoders.
+the same decoders. `coinsFromLog`: ONE-4's target from `liveAnswer` and the reader's property `DrawnByDevice`.
 -/
 
 namespace Properties.Challenger
@@ -12,34 +12,28 @@ namespace Properties.Challenger
 theorem liveAnswer : LiveAnswer := by
   intro P L a b e h
   unfold Core.Protocol.answer at h
-  split at h
-  · simp at h
-  · rename_i p hp
-    split at h
-    · simp at h
-    · rename_i c hc
-      split at h
-      · simp at h
-      · rename_i ev hev
-        rw [L.factors] at h
-        split at h
-        · rename_i ξ hξ
-          refine ⟨p, c, ev, ξ, hp, hc, hev, hξ, ?_⟩
-          have hp' : (Core.canonicalJson a >>= (L.at ξ).params) = .ok p := hp
-          have hc' : (L.at ξ).commitment b = .ok c := hc
-          have hev' : (L.at ξ).evidence e = .ok ev := hev
-          unfold Core.Protocol.answerAt Core.Protocol.answer
-          rw [hp', hc', hev']
-          exact h
-        · split at h <;> simp at h
+  cases hp : (Core.canonicalJson a >>= P.params) with
+  | error r => simp [hp] at h
+  | ok p =>
+    cases hc : P.commitment b with
+    | error r => simp [hp, hc] at h
+    | ok c =>
+      cases hev : P.evidence e with
+      | error r => simp [hp, hc, hev] at h
+      | ok ev =>
+        cases hξ : L.coins p c ev with
+        | error r => simp [hp, hc, hev, L.factors, hξ] at h
+        | ok ξ =>
+          refine ⟨p, c, ev, ξ, rfl, rfl, rfl, rfl, ?_⟩
+          simpa [Core.Protocol.answerAt, Core.Live.at, Core.Protocol.answer, hp, hc, hev, L.factors, hξ] using h
 
-/-- ONE-4's target from the reader's property: `liveAnswer` gives the coins read, `DrawnByDevice` what they are. -/
 theorem coinsFromLog (hd : DrawnByDevice) : CoinsFromLog := by
   intro P L R dev a b e h
   obtain ⟨p, c, ev, ξ, hp, hc, hev, hξ, hacc⟩ := liveAnswer P L a b e h
   refine ⟨p, c, ev, ξ, hp, hc, hev, hacc, ?_⟩
   rw [R.reads] at hξ
-  cases hraw : drawCoins (R.key p) (Flock.hexOf (R.window p c)) R.label (R.after p c) (R.record ev) with
+  cases hraw : SampledProofs.Challenger.drawCoins (R.key p) (Flock.hexOf (R.window p c)) R.label (R.after p c)
+      (R.record ev) with
   | error r => rw [hraw] at hξ; cases hξ
   | ok raw =>
     rw [hraw] at hξ
