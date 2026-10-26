@@ -6,8 +6,8 @@ import Proofs.Pouw.RelativeSecurity
 
 * `FreedOfFloor`: the guarantee `Definitions.Pouw.Guarantees.Dither.FreedOfFloor`, weak duality of the period's linear
   program.
-* `WorkSound`: the guarantee `Definitions.Pouw.Guarantees.Dither.WorkSound`. `Extract` splits each round's work into a
-  words program and a commitment program on those words. Their two moments (SAK(matmul)'s and SHA-512's speed's)
+* `WorkSound`: the guarantee `Definitions.Pouw.Guarantees.Dither.WorkSound`. `ExtractAdv` splits each round's work into a
+  words program on advice fixed before the round's coins and a commitment program on those words. Their two moments (SAK(matmul)'s and SHA-512's speed's)
   combine by the convexity of `exp` at the honest round's shares (`combined_moment_le`). A round's factor reads only the
   coins up to that round, so the rounds' product is a supermartingale over the fresh coins (`expect_prod_adapted`, the
   argument of `RoundGame.expect_weight_le` on `Fin k → Draw × Chk`), and Markov bounds the luck by `δ`. The union bound
@@ -235,45 +235,45 @@ theorem state_congr (o : P.Orc) (x x' : Fin k → P.Draw × P.Chk) :
     · simp only [Prover.state, dite_eq_left hw, h', h ⟨w, hw⟩ (Nat.lt_succ_self w)]
     · simp only [Prover.state, dite_eq_right hw, h']
 
-/-- Round `w`'s instance and words input read only the coins of the rounds up to it. -/
-theorem instAt_wordsIn_congr (o : P.Orc) (x x' : Fin k → P.Draw × P.Chk) (w : Fin k)
-    (h : ∀ j : Fin k, j ≤ w → x j = x' j) :
-    A.instAt o x w = A.instAt o x' w ∧ A.wordsIn o x w = A.wordsIn o x' w := by
-  have hs := state_congr A o x x' w fun j hj => h j (Fin.le_iff_val_le_val.mpr hj.le)
-  have hw := h w le_rfl
-  simp only [Prover.instAt, Prover.wordsIn, hs, hw, and_self]
+/-- Round `w`'s instance reads only the coins of the rounds before it. -/
+theorem instAt_congr (o : P.Orc) (x x' : Fin k → P.Draw × P.Chk) (w : Fin k)
+    (h : ∀ j : Fin k, j < w → x j = x' j) : A.instAt o x w = A.instAt o x' w := by
+  have hs := state_congr A o x x' w fun j hj => h j (Fin.lt_def.mpr hj)
+  simp only [Prover.instAt, hs]
 
-/-- Round `w`'s instance and words input at its own coin `ω`, the other coins fixed. -/
-theorem instAt_wordsIn_update (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k) (ω : P.Draw × P.Chk) :
-    A.instAt o (Function.update x w ω) w = A.instAt o x w ∧
-      A.wordsIn o (Function.update x w ω) w = ((G.Mc.eval (A.inst w) (o, A.state o x w)).1, ω.1) := by
+/-- Round `w`'s instance at its own coin `ω`, the other coins fixed. -/
+theorem instAt_update (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k) (ω : P.Draw × P.Chk) :
+    A.instAt o (Function.update x w ω) w = A.instAt o x w := by
   have hs := state_congr A o (Function.update x w ω) x w fun j hj =>
     Function.update_of_ne (Fin.ne_of_val_ne (Nat.ne_of_lt hj)) _ _
-  simp only [Prover.instAt, Prover.wordsIn, hs, Function.update_self, and_self]
+  simp only [Prover.instAt, hs]
 
-/-- Round `w`'s combined shortfall at the oracle and the coins: the extracted words program's and commitment program's
-shortfalls against the public bests, weighted by their shares `H_mm/H` and `H_sha/H` of the honest round. -/
-noncomputable def roundD (μ : G.Res → ℝ) (cmm csha β Hmm Hsha H : ℝ) (Mw : Fin k → G.Mc.Alg (A.St × P.Draw) P.Tr)
+variable {Adv : Type} (adv : P.Orc → (Fin k → P.Draw × P.Chk) → Fin k → Adv)
+
+/-- Round `w`'s combined shortfall at the oracle and the coins: the extracted words program's (on the round's advice
+and dither) and commitment program's shortfalls against the public bests, weighted by their shares `H_mm/H` and
+`H_sha/H` of the honest round. -/
+noncomputable def roundD (μ : G.Res → ℝ) (cmm csha β Hmm Hsha H : ℝ) (Mw : Fin k → G.Mc.Alg (Adv × P.Draw) P.Tr)
     (Mh : Fin k → G.Mc.Alg (P.Orc × P.Tr) P.Root) (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k) : ℝ :=
-  Hmm / H * roundShortfall cmm β Hmm (G.cost μ (Mw w) (A.wordsIn o x w)) (G.ext (Mw w) (A.wordsIn o x w)) +
-    Hsha / H * roundShortfall csha β Hsha (G.cost μ (Mh w) (o, G.Mc.eval (Mw w) (A.wordsIn o x w)))
-      (G.ext (Mh w) (o, G.Mc.eval (Mw w) (A.wordsIn o x w)))
+  Hmm / H * roundShortfall cmm β Hmm (G.cost μ (Mw w) (adv o x w, (x w).1)) (G.ext (Mw w) (adv o x w, (x w).1)) +
+    Hsha / H * roundShortfall csha β Hsha (G.cost μ (Mh w) (o, G.Mc.eval (Mw w) (adv o x w, (x w).1)))
+      (G.ext (Mh w) (o, G.Mc.eval (Mw w) (adv o x w, (x w).1)))
 
 /-- Round `w`'s check on the extracted words. -/
-def roundOk (Mw : Fin k → G.Mc.Alg (A.St × P.Draw) P.Tr) (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k) :
+def roundOk (Mw : Fin k → G.Mc.Alg (Adv × P.Draw) P.Tr) (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k) :
     Prop :=
-  P.ok (A.instAt o x w) (x w).1 (x w).2 (G.Mc.eval (Mw w) (A.wordsIn o x w))
+  P.ok (A.instAt o x w) (x w).1 (x w).2 (G.Mc.eval (Mw w) (adv o x w, (x w).1))
 
 open Classical in
 /-- Round `w`'s factor of the supermartingale: `1[check passes] · e^{η D_w}`. -/
 noncomputable def roundY (μ : G.Res → ℝ) (cmm csha η β Hmm Hsha H : ℝ)
-    (Mw : Fin k → G.Mc.Alg (A.St × P.Draw) P.Tr) (Mh : Fin k → G.Mc.Alg (P.Orc × P.Tr) P.Root) (o : P.Orc)
+    (Mw : Fin k → G.Mc.Alg (Adv × P.Draw) P.Tr) (Mh : Fin k → G.Mc.Alg (P.Orc × P.Tr) P.Root) (o : P.Orc)
     (x : Fin k → P.Draw × P.Chk) (w : Fin k) : ℝ :=
-  if roundOk A Mw o x w then Real.exp (η * roundD A μ cmm csha β Hmm Hsha H Mw Mh o x w) else 0
+  if roundOk A adv Mw o x w then Real.exp (η * roundD adv μ cmm csha β Hmm Hsha H Mw Mh o x w) else 0
 
-theorem roundY_nonneg (μ : G.Res → ℝ) (cmm csha η β Hmm Hsha H : ℝ) (Mw : Fin k → G.Mc.Alg (A.St × P.Draw) P.Tr)
+theorem roundY_nonneg (μ : G.Res → ℝ) (cmm csha η β Hmm Hsha H : ℝ) (Mw : Fin k → G.Mc.Alg (Adv × P.Draw) P.Tr)
     (Mh : Fin k → G.Mc.Alg (P.Orc × P.Tr) P.Root) (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k) :
-    0 ≤ roundY A μ cmm csha η β Hmm Hsha H Mw Mh o x w := by
+    0 ≤ roundY A adv μ cmm csha η β Hmm Hsha H Mw Mh o x w := by
   unfold roundY
   split_ifs
   · exact (Real.exp_pos _).le
@@ -288,7 +288,7 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
   intro G P k verdict Pd μ pubmm pubsha Hmm Hsha Ho η δ β K κS κx hdual hHmm hHsha hHo hH hpm hps hη hδ hδ1 hβ hK
     hG1 hG2 hP1 hP2 hsak hsha hserv himp hextr A
   classical
-  obtain ⟨Mw, Mh, hcomp, huse, hext, hx⟩ := hextr hG1 hG2 hP1 hP2 A
+  obtain ⟨Adv, adv, Mw, Mh, hadv, hcomp, huse, hext, hx⟩ := hextr hG1 hG2 hP1 hP2 A
   obtain ⟨hμ, hneeds, hval, z', hfit', hslack⟩ := hdual
   have hHpos : 0 < Hmm + Hsha + Ho := by linarith
   have hlog : 0 ≤ Real.log (1 / δ) := Real.log_nonneg (by rw [le_div_iff₀ hδ]; linarith)
@@ -303,44 +303,47 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
       (div_nonneg hlog (mul_nonneg hη.le (Nat.cast_nonneg k))))
       (div_nonneg (mul_nonneg hβ hK) (mul_nonneg (Nat.cast_nonneg k) hHpos.le))
   -- The luck: the rounds' checks all pass on the extracted words, and their combined shortfall reaches `ln(1/δ)/η`.
-  have E3 : prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) => (∀ w, roundOk A Mw ox.1 ox.2 w) ∧
+  have E3 : prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) => (∀ w, roundOk A adv Mw ox.1 ox.2 w) ∧
       Real.log (1 / δ) / η ≤
-        ∑ w, roundD A μ (pubmm / Hmm) (pubsha / Hsha) β Hmm Hsha (Hmm + Hsha + Ho) Mw Mh ox.1 ox.2 w) ≤ δ := by
+        ∑ w, roundD adv μ (pubmm / Hmm) (pubsha / Hsha) β Hmm Hsha (Hmm + Hsha + Ho) Mw Mh ox.1 ox.2 w) ≤ δ := by
     refine prob_le_of_slices_fst _ hδ.le fun o => ?_
     have hE : expect (fun x : Fin k → P.Draw × P.Chk =>
-        ∏ w, roundY A μ (pubmm / Hmm) (pubsha / Hsha) η β Hmm Hsha (Hmm + Hsha + Ho) Mw Mh o x w) ≤ 1 := by
-      refine expect_prod_adapted k _ (fun w x => roundY_nonneg A _ _ _ _ _ _ _ _ _ _ o x w) ?_ ?_
+        ∏ w, roundY A adv μ (pubmm / Hmm) (pubsha / Hsha) η β Hmm Hsha (Hmm + Hsha + Ho) Mw Mh o x w) ≤ 1 := by
+      refine expect_prod_adapted k _ (fun w x => roundY_nonneg A adv _ _ _ _ _ _ _ _ _ _ o x w) ?_ ?_
       · intro i x x' h
-        obtain ⟨h1, h2⟩ := instAt_wordsIn_congr A o x x' i h
+        have h1 := instAt_congr A o x x' i fun j hj => h j hj.le
+        have h2 : adv o x i = adv o x' i := hadv o x x' i fun v hv => h v hv.le
         have h3 := h i le_rfl
         unfold roundY roundOk roundD
         rw [h1, h2, h3]
       · intro i x
         refine Eq.trans_le ?_ (combined_moment_le G P μ (pubmm / Hmm) (pubsha / Hsha) η β Hmm Hsha Ho hHmm hHsha hHo
-          o (A.instAt o x i) (G.Mc.eval (A.inst i) (o, A.state o x i)).1 (Mw i) (Mh i)
+          o (A.instAt o x i) (adv o x i) (Mw i) (Mh i)
           (hsak hG1 hG2 hP1 hP2 _ _ _ _) (hsha hG1 hG2 hP1 hP2 _ _ _ _ _ _ (hcomp i o)))
         congr 1
         funext ω
-        obtain ⟨h1, h2⟩ := instAt_wordsIn_update A o x i ω
+        have h1 := instAt_update A o x i ω
+        have h2 : adv o (Function.update x i ω) i = adv o x i :=
+          hadv o _ _ i fun v hv => Function.update_of_ne hv.ne ω x
         unfold roundY roundOk roundD
         rw [h1, h2, Function.update_self]
     have hδeq : Real.exp (-(η * (Real.log (1 / δ) / η))) = δ := by
       rw [mul_comm η, div_mul_cancel₀ _ hη.ne', one_div, Real.log_inv, neg_neg, Real.exp_log hδ]
     refine (prob_le_of_expect_le_one
-      (fun x => Finset.prod_nonneg fun w _ => roundY_nonneg A _ _ _ _ _ _ _ _ _ _ o x w) hE
+      (fun x => Finset.prod_nonneg fun w _ => roundY_nonneg A adv _ _ _ _ _ _ _ _ _ _ o x w) hE
       (η * (Real.log (1 / δ) / η)) fun x hx => ?_).trans hδeq.le
-    have hok : ∀ w, roundOk A Mw o x w := hx.1
+    have hok : ∀ w, roundOk A adv Mw o x w := hx.1
     have hD : Real.log (1 / δ) / η ≤
-        ∑ w, roundD A μ (pubmm / Hmm) (pubsha / Hsha) β Hmm Hsha (Hmm + Hsha + Ho) Mw Mh o x w := hx.2
-    have hprod : ∏ w, roundY A μ (pubmm / Hmm) (pubsha / Hsha) η β Hmm Hsha (Hmm + Hsha + Ho) Mw Mh o x w =
-        Real.exp (η * ∑ w, roundD A μ (pubmm / Hmm) (pubsha / Hsha) β Hmm Hsha (Hmm + Hsha + Ho) Mw Mh o x w) := by
+        ∑ w, roundD adv μ (pubmm / Hmm) (pubsha / Hsha) β Hmm Hsha (Hmm + Hsha + Ho) Mw Mh o x w := hx.2
+    have hprod : ∏ w, roundY A adv μ (pubmm / Hmm) (pubsha / Hsha) η β Hmm Hsha (Hmm + Hsha + Ho) Mw Mh o x w =
+        Real.exp (η * ∑ w, roundD adv μ (pubmm / Hmm) (pubsha / Hsha) β Hmm Hsha (Hmm + Hsha + Ho) Mw Mh o x w) := by
       rw [Finset.mul_sum, Real.exp_sum]
       exact Finset.prod_congr rfl fun w _ => by unfold roundY; rw [ite_eq_left (hok w)]
     rw [hprod]
     exact Real.exp_le_exp.mpr (mul_le_mul_of_nonneg_left hD hη.le)
   -- Off the three bad events, the rounds meet the work floor.
-  have key : ∀ o x, verdict A o x → (∀ w, roundOk A Mw o x w) →
-      ∑ w, roundD A μ (pubmm / Hmm) (pubsha / Hsha) β Hmm Hsha (Hmm + Hsha + Ho) Mw Mh o x w <
+  have key : ∀ o x, verdict A o x → (∀ w, roundOk A adv Mw o x w) →
+      ∑ w, roundD adv μ (pubmm / Hmm) (pubsha / Hsha) β Hmm Hsha (Hmm + Hsha + Ho) Mw Mh o x w <
         Real.log (1 / δ) / η →
       (1 - epsWorkSound (pubmm / Hmm) (pubsha / Hsha) Hmm Hsha Ho η δ β K k) * ∑ r, μ r * ((k : ℝ) * Pd.hon r) ≤
         ∑ r, μ r * A.use o x r := by
@@ -349,7 +352,7 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
       rw [hH, Finset.mul_sum]
       exact Finset.sum_congr rfl fun r _ => by ring
     rw [hC]
-    have hcost : ∀ w, G.cost μ (Mw w) (A.wordsIn o x w) + G.cost μ (Mh w) (o, G.Mc.eval (Mw w) (A.wordsIn o x w)) ≤
+    have hcost : ∀ w, G.cost μ (Mw w) ((adv o x w, (x w).1)) + G.cost μ (Mh w) (o, G.Mc.eval (Mw w) ((adv o x w, (x w).1))) ≤
         G.cost μ (A.work w) (A.workIn o x w) := by
       intro w
       unfold Accel.cost
@@ -368,9 +371,9 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
         _ = ∑ r, μ r * A.use o x r := by
             simp only [Prover.use, Finset.mul_sum]
             exact Finset.sum_comm
-    have hextk : ∑ w, (G.ext (Mw w) (A.wordsIn o x w) + G.ext (Mh w) (o, G.Mc.eval (Mw w) (A.wordsIn o x w))) ≤
+    have hextk : ∑ w, (G.ext (Mw w) ((adv o x w, (x w).1)) + G.ext (Mh w) (o, G.Mc.eval (Mw w) ((adv o x w, (x w).1)))) ≤
         K := by
-      calc ∑ w, (G.ext (Mw w) (A.wordsIn o x w) + G.ext (Mh w) (o, G.Mc.eval (Mw w) (A.wordsIn o x w)))
+      calc ∑ w, (G.ext (Mw w) ((adv o x w, (x w).1)) + G.ext (Mh w) (o, G.Mc.eval (Mw w) ((adv o x w, (x w).1))))
           ≤ ∑ w, (G.ext (A.inst w) (o, A.state o x w) + G.ext (A.work w) (A.workIn o x w) +
               G.ext (A.answer w) (A.answerIn o x w)) :=
             Finset.sum_le_sum fun w _ => by
@@ -383,31 +386,31 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
         linarith [((hG2.2 (A.inst w) (o, A.state o x w)).2 r).1, ((hG2.2 (A.work w) (A.workIn o x w)).2 r).1,
           ((hG2.2 (A.answer w) (A.answerIn o x w)).2 r).1])
     have hDlow : ((k : ℝ) * (pubmm + pubsha) -
-          ∑ w, (G.cost μ (Mw w) (A.wordsIn o x w) + G.cost μ (Mh w) (o, G.Mc.eval (Mw w) (A.wordsIn o x w))) -
-          β * ∑ w, (G.ext (Mw w) (A.wordsIn o x w) + G.ext (Mh w) (o, G.Mc.eval (Mw w) (A.wordsIn o x w)))) /
+          ∑ w, (G.cost μ (Mw w) ((adv o x w, (x w).1)) + G.cost μ (Mh w) (o, G.Mc.eval (Mw w) ((adv o x w, (x w).1)))) -
+          β * ∑ w, (G.ext (Mw w) ((adv o x w, (x w).1)) + G.ext (Mh w) (o, G.Mc.eval (Mw w) ((adv o x w, (x w).1))))) /
           (Hmm + Hsha + Ho) ≤
-        ∑ w, roundD A μ (pubmm / Hmm) (pubsha / Hsha) β Hmm Hsha (Hmm + Hsha + Ho) Mw Mh o x w := by
+        ∑ w, roundD adv μ (pubmm / Hmm) (pubsha / Hsha) β Hmm Hsha (Hmm + Hsha + Ho) Mw Mh o x w := by
       rw [show ((k : ℝ) * (pubmm + pubsha) -
-          ∑ w, (G.cost μ (Mw w) (A.wordsIn o x w) + G.cost μ (Mh w) (o, G.Mc.eval (Mw w) (A.wordsIn o x w))) -
-          β * ∑ w, (G.ext (Mw w) (A.wordsIn o x w) + G.ext (Mh w) (o, G.Mc.eval (Mw w) (A.wordsIn o x w)))) =
+          ∑ w, (G.cost μ (Mw w) ((adv o x w, (x w).1)) + G.cost μ (Mh w) (o, G.Mc.eval (Mw w) ((adv o x w, (x w).1)))) -
+          β * ∑ w, (G.ext (Mw w) ((adv o x w, (x w).1)) + G.ext (Mh w) (o, G.Mc.eval (Mw w) ((adv o x w, (x w).1))))) =
           ∑ w : Fin k, ((pubmm + pubsha) -
-            (G.cost μ (Mw w) (A.wordsIn o x w) + G.cost μ (Mh w) (o, G.Mc.eval (Mw w) (A.wordsIn o x w))) -
-            β * (G.ext (Mw w) (A.wordsIn o x w) + G.ext (Mh w) (o, G.Mc.eval (Mw w) (A.wordsIn o x w)))) by
+            (G.cost μ (Mw w) ((adv o x w, (x w).1)) + G.cost μ (Mh w) (o, G.Mc.eval (Mw w) ((adv o x w, (x w).1)))) -
+            β * (G.ext (Mw w) ((adv o x w, (x w).1)) + G.ext (Mh w) (o, G.Mc.eval (Mw w) ((adv o x w, (x w).1))))) by
         simp only [Finset.sum_sub_distrib, ← Finset.mul_sum, Finset.sum_const, Finset.card_univ, Fintype.card_fin,
           nsmul_eq_mul], Finset.sum_div]
       exact Finset.sum_le_sum fun w _ => roundD_ge hHmm hHsha hHpos
     exact floor_of_luck hHmm hHsha hHo hη hβ hS0 hD hDlow ((Finset.sum_le_sum fun w _ => hcost w).trans hwork)
       hextk
   refine (prob_mono (q := fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>
-      ((verdict A ox.1 ox.2 ∧ ¬ A.Accepted ox.1 ox.2) ∨ (A.Accepted ox.1 ox.2 ∧ ∃ w, ¬ roundOk A Mw ox.1 ox.2 w)) ∨
-        ((∀ w, roundOk A Mw ox.1 ox.2 w) ∧ Real.log (1 / δ) / η ≤
-          ∑ w, roundD A μ (pubmm / Hmm) (pubsha / Hsha) β Hmm Hsha (Hmm + Hsha + Ho) Mw Mh ox.1 ox.2 w))
+      ((verdict A ox.1 ox.2 ∧ ¬ A.Accepted ox.1 ox.2) ∨ (A.Accepted ox.1 ox.2 ∧ ∃ w, ¬ roundOk A adv Mw ox.1 ox.2 w)) ∨
+        ((∀ w, roundOk A adv Mw ox.1 ox.2 w) ∧ Real.log (1 / δ) / η ≤
+          ∑ w, roundD adv μ (pubmm / Hmm) (pubsha / Hsha) β Hmm Hsha (Hmm + Hsha + Ho) Mw Mh ox.1 ox.2 w))
       fun ox hox => ?_).trans ?_
   · obtain ⟨hv, z, hfit, hnot⟩ := hox
     by_cases hacc : A.Accepted ox.1 ox.2
-    · by_cases hok : ∀ w, roundOk A Mw ox.1 ox.2 w
+    · by_cases hok : ∀ w, roundOk A adv Mw ox.1 ox.2 w
       · by_cases hD : Real.log (1 / δ) / η ≤
-            ∑ w, roundD A μ (pubmm / Hmm) (pubsha / Hsha) β Hmm Hsha (Hmm + Hsha + Ho) Mw Mh ox.1 ox.2 w
+            ∑ w, roundD adv μ (pubmm / Hmm) (pubsha / Hsha) β Hmm Hsha (Hmm + Hsha + Ho) Mw Mh ox.1 ox.2 w
         · exact Or.inr ⟨hok, hD⟩
         · exact absurd (FreedOfFloor G Pd k _ (A.use ox.1 ox.2) μ z z' hμ hneeds hval (Nat.cast_nonneg k) hε0 hfit'
             hslack hfit (key ox.1 ox.2 hv hok (not_le.mp hD))) hnot
@@ -415,7 +418,7 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
         exact Or.inl (Or.inr ⟨hacc, hok⟩)
     · exact Or.inl (Or.inl ⟨hv, hacc⟩)
   · have hx' : prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>
-        A.Accepted ox.1 ox.2 ∧ ∃ w, ¬ roundOk A Mw ox.1 ox.2 w) ≤ κx := hx
+        A.Accepted ox.1 ox.2 ∧ ∃ w, ¬ roundOk A adv Mw ox.1 ox.2 w) ≤ κx := hx
     refine ((prob_or_le _ _).trans (add_le_add (prob_or_le _ _) E3)).trans ?_
     linarith [hserv A, hx']
 

@@ -9,6 +9,7 @@ import Proofs.Pouw.EndToEndWindow.Statement
 import Proofs.Pouw.Eps1
 import Proofs.Pouw.Dimension
 import Proofs.Pouw.Dither
+import Proofs.Pouw.DitherWitness
 import Proofs.Pouw.DitherInstance
 import Proofs.Pouw.Dimension.A2WordsProofs
 import Proofs.Pouw.Dimension.CausalProofs
@@ -60,6 +61,8 @@ import Proofs.Pouw.HiddenCredit
 import Proofs.Pouw.H1Zy
 import Proofs.Pouw.LiveCredit
 import Proofs.Pouw.M1
+import Proofs.Pouw.MerkleExtract
+import Proofs.Pouw.ShaRealize
 import Proofs.Pouw.Milestone
 import Proofs.Pouw.NCP
 import Proofs.Pouw.NCP.ChainProofs

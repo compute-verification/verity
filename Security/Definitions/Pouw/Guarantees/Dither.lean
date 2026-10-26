@@ -1,5 +1,6 @@
 import Definitions.Pouw.Dither
 import Definitions.Pouw.Assumptions.Dither
+import Definitions.Pouw.Assumptions.ShaRealize
 
 /-!
 # The no-fold Dither protocol's work-soundness over a monitoring period (trusted)
@@ -31,7 +32,8 @@ devices meet (G1), (G2), (P1) and (P2), and
 * SHA-512's speed holds on the commitment likewise with constant `pub_sha/H_sha` against `H_sha`,
 * the service's verdict accepts only periods whose rounds' checks pass, but with probability `κ_S`,
 * the network certifier counts at most `K` imported bits, and
-* each round's work splits into its words and their commitment, but with probability `κ_x` (`Extract`),
+* each round's work splits into its words, on advice fixed before the round's coins, and their commitment, but with
+  probability `κ_x` (`ExtractAdv`),
 
 then for every prover, the probability over the oracle and the verifier's coins that the service accepts its period
 and other work `z` fits on the period's devices beside its rounds' use with `k rv + W_other(z) > OPT_honest + ε C`
@@ -51,7 +53,7 @@ def WorkSound : Prop :=
     pubmm ≤ Hmm → pubsha ≤ Hsha → 0 < η → 0 < δ → δ ≤ 1 → 0 ≤ β → 0 ≤ K →
     G.G1 → G.G2 → G.P1 → G.P2 →
     SAKMatmul G P μ (pubmm / Hmm) η β Hmm → ShaSpeed G P μ (pubsha / Hsha) η β Hsha →
-    ServiceSound G P k verdict κS → ImportWithinCertifier G P k verdict K → Extract G P k κx →
+    ServiceSound G P k verdict κS → ImportWithinCertifier G P k verdict K → ExtractAdv G P k κx →
     FreedSound G P k verdict Pd k (epsWorkSound (pubmm / Hmm) (pubsha / Hsha) Hmm Hsha Ho η δ β K k)
       (∑ r, μ r * (k * Pd.hon r)) (δ + κS + κx)
 
