@@ -324,9 +324,13 @@ class _Program:
             for a, b, r in self.outs[j]:
                 if b <= lo or a >= hi:
                     continue
-                if a < lo or b > hi:
-                    raise Unexpressible(f"{self.name}: node {j}'s words [{lo}, {hi}) cut its row {r} at [{a}, {b})")
-                out.append(r)
+                w = r.words
+                i0, i1 = (max(a, lo) - a) // w, -(-(min(b, hi) - a) // w)
+                if a + i0 * w < lo or a + i1 * w > hi:
+                    k = i0 if a + i0 * w < lo else i1 - 1
+                    raise Unexpressible(f"{self.name}: node {j}'s words [{lo}, {hi}) cut its row "
+                                        f"{Row(r.tid, r.unit + k, r.out, w)} at [{a + k * w}, {a + (k + 1) * w})")
+                out += [r] if b - a == w else [Row(r.tid, r.unit + i, r.out, w) for i in range(i0, i1)]
         return tuple(out)
 
     def weight(self, refs: Refs, words: int) -> int:
@@ -418,7 +422,7 @@ class _Program:
             tid, u = self.b.unit(bind(node.fn.defn, **{**b, "N": m}), count)
             self.b.feed(tid, "x", u, count, xs)
             self.b.read(tid, "w", u, (count,), lo + s0 * K, (m * K,))
-            pieces += [(s0 + i * m, s0 + (i + 1) * m, Row(tid, u + i, "o0", m)) for i in range(count)]
+            pieces.append((s0, s0 + count * m, Row(tid, u, "o0", m)))
         self.outs[j] = pieces
         self.gemms[j] = (node.fn, xs, lo)
 
@@ -439,7 +443,7 @@ class _Program:
             self.b.feed(tid, "sx", u, count, ss)
             self.b.read(tid, "w", u, (count,), lo + s0 * K // 2, (m * K // 2,))
             self.b.read(tid, "sw", u, (count,), slo + 2 * s0, (2 * m,))
-            pieces += [(s0 + i * m, s0 + (i + 1) * m, Row(tid, u + i, "o0", m)) for i in range(count)]
+            pieces.append((s0, s0 + count * m, Row(tid, u, "o0", m)))
         self.outs[j] = pieces
 
     def _heads(self, node: Any, family: str, count: int) -> Any:
