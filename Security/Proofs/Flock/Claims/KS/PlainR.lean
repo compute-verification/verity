@@ -374,8 +374,10 @@ theorem decideFree_VR (rd : Claims.Msg → Option FinalP) : DecideFree sha512 (V
     dsimp only at hk
     obtain ⟨c₀, cs', rfl⟩ : ∃ c₀ cs', cs = c₀ :: cs' := by
       rcases cs with _ | ⟨c₀, cs'⟩
-      · have h1 : as.length = 1 := by simpa using hl
-        rw [h1] at hk
+      · exfalso
+        trace_state
+        simp only [List.length_nil, zero_add] at hl
+        have h2 : 2 ≤ as.length := by rw [hk]; exact Nat.le_add_right _ _
         omega
       · exact ⟨c₀, cs', rfl⟩
     have ha : ∀ t, as.getLast? ≠ some (0 :: t) := fun t hlast => by
