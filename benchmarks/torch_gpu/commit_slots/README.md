@@ -189,6 +189,24 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
   4 GiB take 1.318 s. Six sampled slots' roots equal the reference's, and the step root the reference's step tree. The
   host still spends about 1.07 s in a step's `add`s, with no upload or sync left in them: it waits on the launch queue
   (5,108 launches a step, 1,379 of them the fold's levels).
+- **The commit on N of the 132 SMs** (`Plan(sms=N)`, the side stream on a green context of N SMs and the leaf kernel's
+  grid filling them; `overlap.py`'s `MODE:shared:STEPS:N`, shared rows at 4,096 slots, leaf kernel at 2 blocks an SM;
+  runs r20261026-171704-923c and r20261026-173759-4d04, vy-dc-h200-3). Alone it takes 166 to 173 SM·s a step at every N
+  from 8 to 88 (20.73 s on 8 SMs, 4.18 on 40, 2.62 on 64), 176 on all 132, its roots the uncapped commit's. Beside the
+  served step on every SM, the least overhead is the commit at high priority on 64 SMs: a step of 4.343 s, +1.046 s
+  over serving alone (3.298 s in that run), 1.10 times CMP-149's 0.95 s, against +1.095 s for the uncapped commit at low
+  priority in the same run. From 56 to 88 SMs it stays at +1.05 to +1.10 s. Below 48 SMs the commit alone outlasts the
+  forward. SM clocks stay at 1,980 MHz with no clock event reason, at 619 to 641 W median (instant at most 698 W)
+  against the 700 W limit, so power never binds.
+- **The forward on the other SMs** (`:Nr`) is worse at every N (run r20261026-181159-8f26; `serve:shared:3:Nr` is the
+  served step alone there), for two reasons. The forward slows on fewer SMs: 3.534 s on 124, 4.182 on 92, 5.201 on 68,
+  against 3.274 s on all 132. And when the commit lags, torch's allocator, at 146.3 of 150.1 GB, frees its cache for
+  the next group's tables (2.08 GB at 4,096 slots), waiting on every stream: at 40 SMs (the commit alone 4.173 s, the
+  forward alone 4.182 s) a step takes 6.984 s with 92 such retries in 3 steps, and at 8 SMs 23.288 s with 69. At 64,
+  with none, it takes 5.297 s, the forward alone's time and 0.10 s. The partitions themselves run at once
+  (`green_probe.py`, runs r20261026-174052-c188 and r20261026-180440-47aa): the commit on 40 or 64 SMs and int8 GEMMs
+  on the others overlap 0.91 to 0.93 (1 at once, 0 in turns), 0.88 to 0.90 coupled as today's loop couples them, and
+  0.08 sharing every SM in one context.
 
 ## Files
 
@@ -208,5 +226,8 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
 - `overlap.py`: the commit beside `../../e2e_h200/`'s served step on one GPU: serving alone, the commit alone, today's
   loop, and overlapped at low, high and equal priority (from the forward's host thread or one of its own), each with the
   commit on every SM or on a green context of N (`MODE:LAYOUT:STEPS:N`, the forward on every SM, or `:Nr`, on the other
-  SMs' green context), with nvidia-smi's clocks, power and HBM, each overlapped or capped step's roots against today's
-  loop's and a `VERDICT` line a run; `overlap.sh`: it under one GPU lease (its header has the `research run` line).
+  SMs' green context; `serve:LAYOUT:STEPS:Nr`, the served step alone there; `--host-lag`, the forward's host waiting on
+  the side stream's reads before it allocates), with nvidia-smi's clocks, power and HBM, torch's allocator counters,
+  each overlapped or capped step's roots against today's loop's and a `VERDICT` line a run; `overlap.sh`: it under one
+  GPU lease (its header has the `research run` line). `green_probe.py`: the commit on a green context of N SMs beside
+  int8 GEMMs on the other SMs or every SM, uncoupled or coupled as today's loop couples them (no model).
