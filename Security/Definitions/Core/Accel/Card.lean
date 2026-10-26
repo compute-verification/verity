@@ -48,8 +48,9 @@ inductive Res
   /-- the tensor core, in s8 MACs, at the tick's clock: its per-clock peak, the short-window cap -/
   | tensor
   /-- the tensor core over long windows, in s8 MACs: the data sheet's rate at its tensor clock, where that is below
-  the tick's (the H200's 1830 MHz against its 1980, RT-MODEL M1); an MMA uses as many units of it as of `tensor`, and
-  DMMA none (FP64 tensor ops run at the tick's clock) -/
+  the tick's (the H200's 1830 MHz against its 1980, RT-MODEL M1). Every tensor-core instruction, DMMA included (one
+  datapath for every format, FP64 too: A100 whitepaper, 'Third-generation Tensor Cores'), uses as many units of it as
+  of `tensor`, so the formats share one long-window budget -/
   | tensorLong
   /-- the warp schedulers' issue slots, in warp instructions -/
   | issue
@@ -101,7 +102,8 @@ def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) 
       (if s = .reg ∧ t = .reg ∧ r = .alu then (n : ℚ≥0) else 0)
   | .atom s _, r => (if r = .issue then 1 / 32 else 0) + port s r
   | .red s t n _, r => (if r = .issue then 1 / 32 else 0) + (n : ℚ≥0) * (port s r + port t r)
-  | .dmma sh, r => (if r = .tensor then (sh.m * sh.n * sh.k : ℕ) * weight .f64 else 0) + (if r = .issue then 1 else 0)
+  | .dmma sh, r =>
+    (if r = .tensor ∨ r = .tensorLong then (sh.m * sh.n * sh.k : ℕ) * weight .f64 else 0) + (if r = .issue then 1 else 0)
 
 /-- What no document states and no capture has pinned yet: a parameter of the instance until it is measured. -/
 structure Open where

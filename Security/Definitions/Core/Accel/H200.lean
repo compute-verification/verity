@@ -23,7 +23,7 @@ reports.
   peak); the sheet's 1,979 TOPS is at 1830 MHz, so over long windows an MMA's units are capped at
   132 · 4096 · 1830/1980 = 499,712 a tick (`tensorLong`, RT-MODEL M1: whitepaper V1.04 Table 3's 1830 MHz boost clock
   for the FP8, FP16, BF16, TF32 and INT8 tensor figures, against 1980 MHz for FP64 tensor, FP32 and FP64; measured
-  1,942.7 TOPS at about 1797 MHz under saturated `wgmma`, r20261019-053910-d2c9). DMMA uses `tensor` only; a MAC of `e4m3` or `e5m2` uses 1 unit (the same
+  1,942.7 TOPS at about 1797 MHz under saturated `wgmma`, r20261019-053910-d2c9); a MAC of `e4m3` or `e5m2` uses 1 unit (the same
   1,979 TFLOPS), of `f16` or `bf16` 2 (989.5), of `tf32` 4 (494.5); `b1` has no peak in any document (`Open.b1`);
 * `mma.sync`: its tensor rate apart from `wgmma`'s, which is the data sheet's (no document gives `mma.sync`'s on
   Hopper, where it runs below `wgmma`), is `Open.sync` (`scale`) until CALIB measures it;
@@ -32,8 +32,12 @@ reports.
 * `alu` and `imad`: 64 lanes an SM clock each (CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 9.0: 32-bit integer
   add, compare, min, max, logic and shift 64; multiply and multiply-add 64), so 8448 each;
 * `f64`: 64 lanes an SM clock (Programming Guide Table 7, CC 9.0: 64-bit floating-point add, multiply, multiply-add
-  64), so 8448; DMMA (`Op.dmma`) 128 MACs an SM clock, 32 tensor units a MAC (whitepaper: FP64 Tensor Core 67 TFLOPS
-  over 132 SMs at 1980 MHz is 128.2);
+  64), so 8448: the FP64 cores, 64 an SM apart from the tensor cores (whitepaper Table 3, 'FP64 Cores / SM (excl.
+  Tensor)'); DMMA (`Op.dmma`) runs on the tensor cores (A100 whitepaper: the third-generation Tensor Cores accelerate
+  'all data types including FP16, BF16, TF32, FP64, INT8'), 128 MACs an SM clock at 1980 MHz (whitepaper: FP64 Tensor
+  Core 67 TFLOPS over 132 SMs at 1980 MHz is 128.2), so a DMMA MAC uses 32 · 1830/1980 units of `tensor` and of
+  `tensorLong`: over a long window DMMA alone reaches the sheet's 67 TFLOPS, and DMMA beside the low-precision
+  formats shares their one budget;
 * shared memory: 32 banks of one 32-bit word a clock an SM (Programming Guide, 'Shared Memory', CC 9.0), so 4224;
 * HBM: 4.8 TB/s (H200 data sheet, 'GPU Memory Bandwidth 4.8TB/s'), 4.8 · 10¹² / (4 · 1.98 · 10⁹) = 20000/33 words.
 
@@ -109,7 +113,7 @@ def weight : Fmt → ℚ≥0
   | .s8 | .u8 | .e4m3 | .e5m2 => 1
   | .f16 | .bf16 => 2
   | .tf32 => 4
-  | .f64 => 32
+  | .f64 => 32 * 1830 / 1980
   | _ => 0
 
 /-- PTX's `k` for each format, `mma.sync`'s (PTX ISA 9.0 §9.7.14); `wgmma` takes one of them, `wgK`. -/

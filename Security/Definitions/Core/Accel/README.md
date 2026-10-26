@@ -34,7 +34,7 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 | QMMA.SF (sm_120 `kind::mxf8f6f4`) | `mma.sync` `.block_scale` | missing | block-scaled FP8 and FP6 |
 | HMMA.SP, IMMA.SP, QMMA.SP, the sparse GMMA | `mma.sp`, `wgmma.mma_async.sp` | covered | `Op.mmaSp`: the kept pairs (each kept element of A with the element of B its 2-bit selector names) at the dense forms' tensor units a real product, so twice the logical rate; dots `Open.dotSp` under `AccelProductForm` |
 | OMMA.SP (sm_120) | `mma.sp` `kind::mxf4nvf4` | missing | block-scaled sparse FP4 |
-| DMMA (sm_90) | `mma.sync` `.f64` | over-approximated | `Op.dmma`: exact integer MMA on FP64's exact integers, 128 MACs an SM clock (32 units a MAC) |
+| DMMA (sm_90) | `mma.sync` `.f64` | over-approximated | `Op.dmma`: exact integer MMA on FP64's exact integers, on the tensor cores at 128 MACs an SM clock at 1980 MHz (32 · 1830/1980 units of `tensor` and `tensorLong` a MAC, so it shares the low-precision formats' long-window budget) |
 | DMMA (sm_120) | `mma.sync` `.f64` | over-approximated | `Op.dmma` at a placeholder 32 MACs an SM clock; rate undocumented (θ row) |
 
 ## Integer and floating-point lanes
