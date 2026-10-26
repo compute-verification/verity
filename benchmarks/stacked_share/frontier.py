@@ -477,14 +477,20 @@ def shares(by_role: Mapping[str, Fraction]) -> dict[str, Fraction]:
     return out
 
 
+#: the softmax's own roundings a key (the score less the row's max, its LUT index, the exp's low byte)
+SOFTMAX_ROUNDINGS = r"LowByte|LutIndex|I32Sub"
+
+
 def kinds(prim: Mapping[str, Fraction]) -> dict[str, dict[str, Fraction]]:
     """Units by class and operation kind, from ``role|primitive|class``; MoE routing's and the attention's compare-selects
-    apart (the routing's top-k, the softmax's max)."""
+    apart (the routing's top-k, the softmax's max), and the softmax's own roundings apart from the requantizations."""
     out: dict[str, Counter] = {}
     for k, v in prim.items():
         role, p, c = k.split("|")
         kind = next(name for name, pat in KINDS[c] if re.search(pat, p))
-        if c == "compare_select" and role == "MoE routing":
+        if c == "roundings" and role == "attention" and re.search(SOFTMAX_ROUNDINGS, p):
+            kind = "softmax: max subtract, LUT index, low byte"
+        elif c == "compare_select" and role == "MoE routing":
             kind = "MoE routing (top-k)"
         elif c == "compare_select" and role == "attention" and kind in ("select", "compare"):
             kind = "softmax max"
@@ -707,9 +713,10 @@ def markdown(t: Mapping[str, Any]) -> str:
             lines.append(f"| {name} | {phase} | " + " | ".join(f"{float(sh[n] / u['total']):.1%}" for n, _ in SHARES) + " |")
     lines.append("")
     lines += ["**Honest operations a token, KV at write** (decode at S, prefill at P; MACs and units a token).", "",
-              "| model | phase | const-weight MACs | data x data MACs | units | roundings (requant) | division | rsqrt | "
-              "compare-select | of which top-k routing | of which softmax max | gathers (exp table / index bits) | modeled share |",
-              "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+              "| model | phase | const-weight MACs | data x data MACs | units | roundings (requant) | softmax roundings | division "
+              "| rsqrt | compare-select | of which top-k routing | of which softmax max | gathers (exp table / index bits) "
+              "| modeled share |",
+              "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for name, r in t["models"].items():
         for phase in PHASES:
             x = r["at write"][phase]
@@ -719,7 +726,7 @@ def markdown(t: Mapping[str, Any]) -> str:
             lines.append(
                 f"| {name} | {phase} | {g(x['macs'])} | {g(sum(x['dd'].values()))} | {g(u['total'])} | "
                 f"{g(u['by_class'].get('roundings', 0))} ({g(rd.get('requantization: round or convert', 0))}) | "
-                f"{g(rd.get('division', 0))} | {g(rd.get('rsqrt / sqrt', 0))} | {g(u['by_class'].get('compare_select', 0))} | "
+                f"{g(rd.get('softmax: max subtract, LUT index, low byte', 0))} | {g(rd.get('division', 0))} | {g(rd.get('rsqrt / sqrt', 0))} | {g(u['by_class'].get('compare_select', 0))} | "
                 f"{g(cs.get('MoE routing (top-k)', 0))} | {g(cs.get('softmax max', 0))} | "
                 f"{g(ga.get('exp table', 0))} / {g(ga.get('index bits', 0))} | {mod:.1%} |")
     lines += ["", "**Writes and cuts** (bits a token-layer; the narrowest cut in front of each write).", "",

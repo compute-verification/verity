@@ -136,6 +136,9 @@ def test_modeled_terms_and_kinds():
     k = F.kinds({"MoE routing|F32GtStrict_v1|compare_select": Fraction(5), "attention|SelectI32_v1|compare_select": Fraction(2),
                  "requantization|F32Fmaxf_v1|compare_select": Fraction(3), "norm|F32Div_v1|roundings": Fraction(1)})
     assert k == {"compare_select": {"MoE routing (top-k)": 5, "softmax max": 2, "max, min, clamp": 3}, "roundings": {"division": 1}}
+    k = F.kinds({"attention|LutIndex_v1|roundings": Fraction(1), "attention|S32LowByte_v1|roundings": Fraction(1),
+                 "requantization|F32Rint_v1|roundings": Fraction(4)})
+    assert k == {"roundings": {"softmax: max subtract, LUT index, low byte": 2, "requantization: round or convert": 4}}
     sh = F.shares({"attention": Fraction(5), "linear epilogue": Fraction(2), "requantization": Fraction(1), "norm": Fraction(3),
                    "MoE dispatch": Fraction(1)})
     assert sh["softmax attention"] == 5 and sh["requantization and linear epilogues"] == 3 and sh["other"] == 3
