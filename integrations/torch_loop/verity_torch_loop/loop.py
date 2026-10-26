@@ -32,6 +32,12 @@
   registration's window (`activations`), which the draw comes after, so they are fixed before the window's draw coin;
   their salts are the prover's (`activations_opening`). The circuit declares no read of them: they are per-window values
   the prover chose, so they take no input bit out of the free count (only a pinned value does).
+* **The output tie** (``tie``): the output the network certifier relayed is a registered value `OUT` (``out``: one row of
+  one u16 word a unit of the last linear, request-major, then step, then output coordinate, in ``hm96-sha512/row/v2``),
+  committed by the certifier under its salts and pinned by the verifier from the certifier's signed record alone. The
+  circuit declares each output unit's ``o0`` a registered read of it, so its output row is committed under the
+  certifier's salt (`out_opening`, `opened_out`) and the Lean verifier's registered reads refuse a unit whose output
+  isn't the row the certifier relayed.
 """
 from __future__ import annotations
 
@@ -63,6 +69,9 @@ WEIGHTS = (("w", "wrow"), ("sw", "sw"))
 #: the committed activations, each the template port whose rows it holds
 ACTIVATIONS = ("x", "sx")
 ACTIVATIONS_OPENING = "verity-torch-loop/activations-opening/v1"
+#: the output value the network certifier relayed and committed, and the output port that reads it
+OUT = ("out", "o0")
+OUT_OPENING = "verity-torch-loop/out-opening/v1"
 
 
 def template(k: int):
@@ -170,6 +179,21 @@ def activations_opening(model: Model, values: dict[str, REG.Registered]) -> dict
             "salts": {v: [s.hex() for s in r.salts] for v, r in values.items()}}
 
 
+def out_opening(program: str, rows: list[list[int]], salts: list[bytes]) -> dict:
+    """The prover's file of the output value the network certifier committed: the reading program's digest, the rows
+    the server sent and the certifier's salts for them (its witness)."""
+    return {"format": OUT_OPENING, "program": program, "value": OUT[0], "rows": [list(map(int, r)) for r in rows],
+            "salts": [s.hex() for s in salts]}
+
+
+def opened_out(doc: dict) -> REG.Registered:
+    """The output value committed again from its `out_opening`, as the certifier committed it."""
+    if doc.get("format") != OUT_OPENING or doc.get("value") != OUT[0]:
+        raise ValueError(f"not an opening of the output value ({OUT_OPENING})")
+    return REG.Registered.commit(doc["program"], OUT[0], doc["rows"], [bytes.fromhex(s) for s in doc["salts"]],
+                                 schema=REG.SCHEMA_V2)
+
+
 def bits(t: torch.Tensor) -> np.ndarray:
     """A tensor's elements as unsigned integers of their width (`evaluate_batch`'s convention)."""
     if t.dtype == torch.bfloat16:
@@ -183,9 +207,9 @@ class TorchLoop:
     the run, so two runs of one shape have two roots (infra's gate opens a root's coins once, ever)."""
 
     def __init__(self, model: Model, requests: list[int], steps: int = 2, tamper: bool = False, run_id: str = "",
-                 registered: bool = False, tamper_weights: bool = False) -> None:
+                 registered: bool = False, tamper_weights: bool = False, tie: bool = False) -> None:
         self.model, self.requests, self.steps, self.tamper, self.run_id = model, list(requests), steps, tamper, run_id
-        self.registered, self.tamper_weights = registered, tamper_weights
+        self.registered, self.tamper_weights, self.tie = registered, tamper_weights, tie
         self.outputs: dict[tuple[int, int], torch.Tensor] = {}
         self.activations: dict[str, list[np.ndarray]] = {v: [] for v in ACTIVATIONS}
 
@@ -202,15 +226,35 @@ class TorchLoop:
 
     def circuit(self) -> IF.Circuit:
         """The loop's circuit: its units, and with ``registered`` each unit's ``wrow`` and ``sw`` read from the registered
-        weights, unit (request, step, layer, n) reading row ``h·layer + n`` (a fan-out over the requests and steps)."""
+        weights, unit (request, step, layer, n) reading row ``h·layer + n`` (a fan-out over the requests and steps). With
+        ``tie``, each output unit's ``o0`` (the last linear's, `output_units`) is a registered read of `OUT`: unit
+        (request r, step s, last layer, n) reads row ``(r·steps + s)·h + n``, one ``Read`` a request and step."""
         h, fn = self.model.h, template(self.model.h)
-        reg = None
+        tid, rs = descriptor_id(fn), len(self.requests) * self.steps
+        params, reads = {}, []
         if self.registered:
-            tid, rs = descriptor_id(fn), len(self.requests) * self.steps
             words = {p: w for p, w in IF.layout(fn).rows}
-            reg = IF.Registered({v: 2 * h * words[p] for v, p in WEIGHTS},
-                                reads=tuple(IF.Read(tid, p, v, 0, (rs, 2, h), 0, (0, h * words[p], words[p])) for v, p in WEIGHTS))
+            params |= {v: 2 * h * words[p] for v, p in WEIGHTS}
+            reads += [IF.Read(tid, p, v, 0, (rs, 2, h), 0, (0, h * words[p], words[p])) for v, p in WEIGHTS]
+        if self.tie:
+            value, port = OUT
+            params[value] = rs * h
+            reads += [IF.Read(tid, port, value, lo, (h,), k * h, (1,)) for k, (lo, _hi) in enumerate(self.output_units())]
+        reg = IF.Registered(params, reads=tuple(reads)) if params else None
         return IF.Circuit(f"torch-loop/mlp-w8a8-h{h}", ((fn, self.units),), registered=reg)
+
+    def output_units(self) -> list[list[int]]:
+        """The units whose outputs the loop serves out, as ascending ``[lo, hi)`` ranges: the last linear's at every request
+        and step (`run`'s order: request, step, layer, then output coordinate), from the loop's shape alone."""
+        h, last = self.model.h, len(self.model.layers) - 1
+        per = len(self.model.layers) * h
+        return [[(r * self.steps + s) * per + last * h, (r * self.steps + s) * per + per]
+                for r in range(len(self.requests)) for s in range(self.steps)]
+
+    def work_table(self, law: dict) -> dict[str, int] | None:
+        """Under a ``work`` law, every unit of the circuit's one template credited alike (work 1, floor 1), so the law draws
+        its ``k`` as a uniform ``k``-subset; None under any other law."""
+        return {IF.descriptor_id(template(self.model.h)): 1} if law.get("law") == "work" else None
 
     def run(self, window: IF.Window) -> None:
         """Serve every request, recording each linear's units into ``window`` as they are computed."""
@@ -246,10 +290,14 @@ class TorchLoop:
                 for v, rows in self.activations.items()}
 
     def window(self, law: dict, cap: int = 16, advice: dict | None = None,
-               weights: dict[str, REG.Registered] | None = None) -> IF.Window:
+               weights: dict[str, REG.Registered] | None = None, out: REG.Registered | None = None) -> IF.Window:
         """The loop's window under ``law`` in members of at most ``cap`` units, every unit recorded; ``advice``: the binding
         of its compiler and its schedule's commitment (`interface.advice_binding`), when its circuit is the compiler's;
-        ``weights``: with ``registered``, the weights as committed before the run (`commit_weights`)."""
-        win = IF.Window(self.circuit(), self.run_root, law, cap, advice=advice, registered=weights)
+        ``weights``: with ``registered``, the weights as committed before the run (`commit_weights`); ``out``: with ``tie``,
+        the output value as the network certifier committed it (`opened_out`). Under a ``work`` law it carries the loop's
+        work table (`work_table`)."""
+        values = {**(weights or {}), **({OUT[0]: out} if out is not None else {})}
+        win = IF.Window(self.circuit(), self.run_root, law, cap, advice=advice, registered=values or None,
+                        work_table=self.work_table(law))
         self.run(win)
         return win

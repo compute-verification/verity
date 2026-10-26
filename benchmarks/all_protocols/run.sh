@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# `verity bench all-protocols`: every window, one run of the torch loop (integrations/torch_loop, a W8A8 MLP on CPU) audited
-# by every protocol's leg (verity_all_protocols.table: legs/<component>.py), each window's report in $OUT/w<W>/report.json and
+# `verity bench all-protocols`: every window, one run of the toy (integrations/torch_loop, a W8A8 MLP on CPU) audited by
+# every protocol's leg (verity_all_protocols.table: legs/<component>.py), each window's report in $OUT/w<W>/report.json and
 # $OUT/reports.jsonl, and the monitoring-period report over the windows so far in $OUT/monitoring-period.json
 # (verity_all_protocols.runner, .monitoring). Builds what the legs run first, as benchmarks/prove_path/run.sh does: M0's
 # flock-circuit, Lean's flock-verify and flock-firewall, the sampled-proofs verifier of record, onsite, PoUS's run and
 # setup checks (pous-run-protocol, pous-setup), the remote bandwidth session's (remote-audit-protocol) and the streamed
 # wipe's (wipe-protocol), in scratch and the clone; the legs find them in period.json's tools. Its arguments go to the
-# runner (--windows N, --start I, --tamper W,..., --pouw h1, --registered); ALLP_FLOCK_WORK=DIR keeps M0's build
-# across runs.
+# runner (--windows N, --start I, --tamper W,..., --pouw h1, --registered, --tie, --tie-tamper W,... with
+# CERTIFIER_TAMPER=byte); ALLP_FLOCK_WORK=DIR keeps M0's build across runs.
 #   research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 64 -- \
 #     bash benchmarks/all_protocols/run.sh --windows 4 --tamper 3
 set -uxo pipefail
