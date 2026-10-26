@@ -230,6 +230,7 @@ import Proofs.Flock.Claims.Recursion.VStarDeployed
 import Proofs.Flock.Claims.Recursion.VStarFit
 import Proofs.Flock.Claims.Recursion.VStarHh
 import Proofs.Flock.Claims.Recursion.VStarPorts
+import Proofs.Flock.Claims.Recursion.VStarPin
 import Proofs.Flock.Claims.Recursion.LastSharedR
 import Proofs.Flock.Claims.Recursion.LastFilesR
 import Proofs.Flock.Claims.Recursion.RowDLevels
