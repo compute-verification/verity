@@ -97,6 +97,7 @@ from verity_vllm.check.match.engine_steps import vu_population, within_step_orde
 from verity_vllm.check.match.match_run import MatchRun
 from verity_vllm.check.match.per_request import check_requests
 from verity_vllm.check.match.record import canonicalize_record, read_record, request_aliases
+from verity_vllm.records.global_match import SCHEMA as GM_SCHEMA
 
 COMPARATOR = "cb_a.global_match/v1"
 RULES_VERSION = "r14-v1"
@@ -174,7 +175,7 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
     tokens = json.load(open(tokens_path)) if os.path.exists(tokens_path) else None
     rec = read_record(log_path)
     mark("read_record")
-    res = {"schema": "cb-a/global-match/v1", "comparator": COMPARATOR, "rules_version": RULES_VERSION,
+    res = {"schema": GM_SCHEMA, "comparator": COMPARATOR, "rules_version": RULES_VERSION,
            "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir, "log": log_path,
            "global_program": {"schema": gp.get("schema"), "builder": gp.get("builder"), "workload": gp.get("workload"),
                               "workload_digest": gp.get("workload_digest"), "n_requests": len(gp.get("requests") or []),
