@@ -82,7 +82,8 @@
         "infra/cluster/",
         "tools/agent-guard/",
         "tools/research/",
-        ".cursor/"
+        ".cursor/",
+        ".python-version"
       ],
       "branch_suffixes": [
         "558b",
@@ -132,7 +133,8 @@
         "benchmarks/sampling_plan/",
         "integrations/vllm/verity_vllm/protocols/sampled_proofs.py",
         "Security/Definitions/Hash/",
-        "Security/Proofs/Hash/"
+        "Security/Proofs/Hash/",
+        "verity/core/protocols/interface/"
       ],
       "branch_suffixes": [
         "95d4",
@@ -223,12 +225,15 @@
         "Security/Definitions/Nci.lean",
         "Security/Definitions/Nci/",
         "Security/Proofs/Nci/",
+        "benchmarks/all_protocols/",
         "benchmarks/pouw/",
         "benchmarks/pouw/machine_model/",
         "benchmarks/pouw/receipts/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
         "benchmarks/nci/",
+        "benchmarks/e2e_h200/",
+        "benchmarks/e2e_demo/",
         ".agents/skills/kernel-engineering/",
         "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
         "integrations/vllm/verity_vllm/protocols/pouw/circuit.py",
@@ -295,7 +300,8 @@
       "handle": "compute-research",
       "holder": "compute-accounting's research lane (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac): the machine model (W1 and the device records), the Lean accounting statements (NCI, DeclaredCircuitRequirement) and their red and blue teams, and PoUW's protocol statements (period, salt, credit form)",
       "remit": "The machine model, the Lean accounting statements (NCI and the rest) and their red and blue teams, and PoUW's protocol statements.",
-      "charter": "note:compute-accounting/20261019T2230Z-report-lane-split"
+      "charter": "note:compute-accounting/20261019T2230Z-report-lane-split",
+      "usergroup": "S0CBZ2L8542"
     },
     {
       "handle": "memory-accounting",
@@ -618,7 +624,8 @@
       "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top); renamed from @hash by Daniel, 2026-10-18 9:40 AM PDT",
       "usergroup": "S0CAYGG5BDW",
       "owns": [
-        "benchmarks/hash/"
+        "benchmarks/hash/",
+        "benchmarks/torch_gpu/"
       ],
       "branch_suffixes": [
         "15ad"
@@ -637,7 +644,9 @@
       "remit": "Training compute and scaling laws: Daniel's training agent, for scaling-law questions.",
       "charter": "Daniel, 2026-10-18 (via top, COMM-44)",
       "usergroup": "S0CA9EAFKED",
-      "owns": [],
+      "owns": [
+        "benchmarks/rho/"
+      ],
       "branch_suffixes": [
         "4207"
       ],
@@ -647,6 +656,24 @@
         "Which parts of the training-slowdown claim are proved, and which are still assumptions?",
         "If a lab hides some of its GPUs from monitoring, how much protection is left?",
         "What would have to improve for the slowdown to go from about 30x to over 1,000x?"
+      ]
+    },
+    {
+      "handle": "counters",
+      "holder": "the counters coordinator (bc-163d178a-a74a-59de-8ea7-6e320c7891ef), a new slice launched from top's charter",
+      "remit": "Trusted event counters: which few counted event streams (bits moved, core steps) make each security goal provable.",
+      "charter": "Daniel, 2026-10-25 8:14 PM PDT (a new slice, via top)",
+      "usergroup": "S0CCWGJBEJU",
+      "owns": [],
+      "branch_suffixes": [
+        "91ef"
+      ],
+      "examples": [
+        "If we could trust one hardware counter in a datacenter, which should it be, and what would it settle?",
+        "Does counting the bits a GPU sends to its host make the memory or network guarantee provable?",
+        "Which security goals would trusted tensor-core step counts settle, and which would still need proofs?",
+        "How do our guarantees change as a physical rate bound, such as CUDA-core to tensor-core bandwidth, gets looser?",
+        "Could a retrofit to today's GPUs give us any of these counters, or does it take new silicon?"
       ]
     }
   ]

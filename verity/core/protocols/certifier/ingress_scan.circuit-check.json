@@ -1,0 +1,7 @@
+{
+ "digests": {
+  "IngressScanBucket_v1{B=512,r=2,lanes=2,C=4,IDB=17,EVERY=3,WITHIN=3,D=5,KO=8}": {
+   "sha512": "1eadbdc66c55673a5d1ff8bec8e4472a5a35c93fcf3803b19fa85b98ee2b42167b48a073d5b64bc3dfc56e1cc3640588876fe24ebd5cfed79bf97bc2568882c9"
+  }
+ }
+}

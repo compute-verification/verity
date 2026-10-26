@@ -31,6 +31,7 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.config import TARGET_NUM_SMS, TARGETS, RowEngine, option
 
 FAIL_CLASS = "PRECHECK_FAIL_TARGET_FAMILY"
@@ -89,7 +90,7 @@ def declared_target(workload: dict, row_id: str | None = None) -> tuple[int, int
 
 def device_cc() -> tuple[tuple[int, int] | None, str]:
     """(cc, source) of the GPU this process would use; (None, reason) when no device is visible."""
-    vis = os.environ.get("CUDA_VISIBLE_DEVICES")
+    vis = settings.CUDA_VISIBLE_DEVICES
     try:
         out = subprocess.run(["nvidia-smi", "--query-gpu=index,compute_cap", "--format=csv,noheader"], capture_output=True, text=True, timeout=20)
         rows = [r.strip() for r in out.stdout.splitlines() if r.strip()]

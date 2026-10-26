@@ -105,8 +105,10 @@ expected and runs `chat open` again, which reuses the channel and may post the w
 
 ## Deploy
 
-Production is `verity-slack-events` (https://verity-slack-events.vercel.app), deployed from main by console with
-`vercel deploy --prod` (Git deploys are off), behind the docs site's rewrite of `/api/slack/*`. The setup, as done:
+Production is `verity-slack-events` (https://verity-slack-events.vercel.app), behind the docs site's rewrite of
+`/api/slack/*`. A landing deploys it: Git deployments build only `main`, and only when `infra/slack-events/`, `slack.py` or
+the registry changed since the deployment before (`service/ignore.py`, vercel.json's `ignoreCommand`). Console's
+`vercel deploy --prod` from main always builds, as the fallback. The setup, as done:
 
 1. A Vercel project on this repository with Root Directory `infra/slack-events/service`, and "Include files
    outside the root directory in the Build Step" on (`build.py` reads the repository around it, and fails without it).

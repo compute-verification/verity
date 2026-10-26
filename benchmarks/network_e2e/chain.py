@@ -17,10 +17,12 @@ stood on; `stubs` lists what is still a stand-in.
   advice and every output length from the residual, the config and the tokens, and `derived.rebuild` the whole advice
   (the tie's derivation, in the clear on the rehearsal's published witness).
 * **The endpoint's own advice** (`served_advice`, e2e's ``--endpoint-run``): `verity-vllm advice` over a `verity-vllm
-  serve-openai` endpoint's records (`ENDPOINT`), one advice a closed Commit window, each registered (its hiding root,
-  under the window's Commit) with its opening beside it. The honest run's windows are bound to it (each window opened
-  to its registered root, every certified request in exactly one window) and each rebuilt from its certified I/O under
-  the config read off the endpoint's records (`endpoint_config`), its bits placed in the run's link-windows.
+  serve-openai` endpoint's records (`ENDPOINT`), one window advice (`verity_vllm.pipeline.window_advice`) a closed
+  Commit window, each registered (its hiding root, under the window's Commit) with its opening beside it. The honest
+  run's windows are bound to it (each window opened to its registered root, every certified request admitted in
+  exactly one window, a window that carries requests in joined to the window before it, `window_chain.join`) and each
+  chain of windows rebuilt from its certified I/O under the config read off the endpoint's records
+  (`endpoint_config`), its bits placed in the run's link-windows.
 * **The prove path** (`prove_path`, ``--prove-path DIR|TGZ``): `prove_path.py audit`'s output adopted (`run.sh`'s ``$OUT``,
   each arm a directory with its ``summary.json``): an honest arm passes when every rank's audit accepted on the verifier's
   coins and every negative was refused; a forged arm when Lean refused the forged unit it drew. The advice the arm
@@ -64,10 +66,12 @@ sys.path.insert(0, str(HERE.parents[1] / "benchmarks" / "network_traces"))
 
 import active_replay as ar  # noqa: E402
 import negatives as NG  # noqa: E402
+import window_chain as WC  # noqa: E402
 from verity.core.protocols.certifier import advice as I1  # noqa: E402
 from verity.core.protocols.certifier.active import compact_record_data  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity.ml.commitments import advice as AC  # noqa: E402
+from verity_vllm.pipeline import window_advice as WA  # noqa: E402
 
 
 def _derived():
@@ -204,11 +208,13 @@ def endpoint_config(recs: list[dict], serve: dict, eos: list[int]) -> dict:
 
 
 def opens(reg: dict, opening: dict, adv) -> bool:
-    """Whether a Commit window's opening opens its registered root (``reg``, its public registration) to ``adv``: the
-    opening's bytes are ``adv``'s v0 encoding, committed as `advice_windows.commit_advice` commits them (``row_bits``
-    rows, the last zero-padded, under the binding of the scheme to the registered compiler)."""
+    """Whether a Commit window's opening opens its registered root (``reg``, its public registration) to ``adv``, its
+    window advice (`window_advice.Advice`, or an I1 v0 advice, a window that carries nothing): the opening's bytes are
+    ``adv``'s encoding (`window_advice.encode`, I1 v0's for a window that carries nothing), committed as
+    `advice_windows.commit_advice` commits them (``row_bits`` rows, the last zero-padded, under the binding of the
+    scheme to the registered compiler)."""
     data = bytes.fromhex(opening["advice"])
-    if data != I1.encode(adv) or opening.get("scheme") != reg["scheme"]:
+    if data != (I1.encode(adv) if type(adv) is I1.Advice else WA.encode(adv)) or opening.get("scheme") != reg["scheme"]:
         return False
     w = reg["row_bits"] // 8
     rows = [data[i:i + w].ljust(w, b"\0") for i in range(0, max(len(data), 1), w)]
@@ -233,13 +239,19 @@ def _first_steps(recs: list[dict]) -> dict[int, float]:
 
 def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: int, eos: list[int]) -> tuple[dict, dict]:
     """The endpoint's own advice for the honest run, as `advice` and `bits` report one: ``adv_dir`` is `verity-vllm
-    advice`'s over the endpoint's records ``ep`` (`ENDPOINT`), one I1 v0 advice a closed Commit window. The run's
-    windows are those whose first step falls in its link-windows (``deployment``'s origin and span, `SLACK_S`). The
-    advice is bound to the run when each window's requests are certified ones, every certified request is in exactly
-    one window, and each window's opening opens its registered root and its registration names the window's Commit
-    (``windows.jsonl``). Each window's advice is rebuilt from its certified I/O under the config read off the endpoint
-    (`endpoint_config`) by `bits`, charged per bucket (T 1) and placed at its first step's bucket, so its bits land in
-    the link-windows of T buckets I1's rule puts them in, its release at its own width."""
+    advice`'s over the endpoint's records ``ep`` (`ENDPOINT`), one window advice (`window_advice`) a closed Commit
+    window. The run's windows are those whose first step falls in its link-windows (``deployment``'s origin and span,
+    `SLACK_S`). A window that carries requests in joins the window before it into a chain (``chain``), joined into one
+    I1 v0 advice (`window_chain.join`): its carried requests and their state are the earlier window's, as that window's
+    registered advice closed them, never its own string's, so each request and step is charged once. The advice is
+    bound to the run when each window's requests are certified ones, every certified request is admitted in exactly one
+    window, each window's opening opens its registered root and its registration names the window's Commit
+    (``windows.jsonl``), and each chain joins: a window that carries a request in follows the window before it, which
+    the run holds, and no window is left owing a carry. Each chain's advice is rebuilt from its certified I/O under the
+    config read off the endpoint (`endpoint_config`) by `bits`, charged per bucket (T 1) and placed at its first
+    window's first step's bucket, each later window's release counted from its own first step's, so its bits land in
+    the link-windows of T buckets I1's rule puts them in, its release at its own width; a chain's bits are on its first
+    window's row."""
     recs = _jsonl(ep / "advice_trace.jsonl")
     serve = json.loads((ep / "serve.json").read_text())
     index = json.loads((adv_dir / "windows.json").read_text())
@@ -257,7 +269,14 @@ def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: 
         out["config"] = config = endpoint_config(recs, serve, eos)
     except (KeyError, ValueError) as err:
         out["why"], config = f"no serving config off the endpoint's records: {err!r}", None
-    problems, rows, links, seen = [], [], {}, {u: 0 for u in users}
+    problems, rows, links, seen, loaded = [], [], {}, {u: 0 for u in users}, []
+
+    def place(charged: dict[int, dict], at: int) -> None:
+        for x in charged:
+            lw = links.setdefault((x["window"] + at) // T, dict.fromkeys(COUNTS, 0))
+            for k in COUNTS:
+                lw[k] = None if lw[k] is None or x.get(k) is None else lw[k] + x[k]
+
     for w in sorted(w for w, t in first.items() if origin - SLACK_S <= t < origin + span):
         if str(w) not in index["windows"]:
             why = (index.get("refused") or {}).get(str(w)) or "still open"
@@ -266,26 +285,25 @@ def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: 
             continue
         d = adv_dir / f"w{w}"
         reg = json.loads((d / "registration.json").read_text())
-        adv = I1.from_json(json.loads((d / "private" / "advice.json").read_text()))
+        adv = WA.from_json(json.loads((d / "private" / "advice.json").read_text()))
         ids = [q.id for q in adv.requests]
-        for i in ids:
+        for i in ids[len(adv.carried):]:
             if i in seen:
                 seen[i] += 1
         foreign = [i for i in ids if i not in certified]
         opened = opens(reg, json.loads((d / "private" / "opening.json").read_text()), adv)
-        b = bits(adv, 1, 0, config, [r for r in io if r["user"] in set(ids)])
         at = math.floor((first[w] - origin) / bucket_s)
-        for x in b["windows"]:
-            lw = links.setdefault((x["window"] + at) // T, dict.fromkeys(COUNTS, 0))
-            for k in COUNTS:
-                lw[k] = None if lw[k] is None or x[k] is None else lw[k] + x[k]
         row = {"window": w, "commit": reg.get("commit"), "commit_is_the_windows": reg.get("commit") == commits.get(w),
-               "root": reg["binding"]["advice"]["root"], "opened": opened, "requests": len(ids),
-               "steps": len(adv.steps), "outputs": len(adv.release), "t0_s": round(first[w] - origin, 3),
-               "bucket": at, "link_window": at // T, "bound": b["bound"], "public_fields": b["public_fields"],
-               "rebuilt": b["rebuilt"], "why": b["why"]}
-        rows.append(row | {k: sum(x[k] for x in b["windows"]) if all(x[k] is not None for x in b["windows"])
-                           else None for k in COUNTS})
+               "root": reg["binding"]["advice"]["root"], "opened": opened, "requests": len(ids) - len(adv.carried),
+               "carried": len(adv.carried), "steps": len(adv.steps), "outputs": len(adv.release),
+               "committed_bits": WA.total_bits(adv), "t0_s": round(first[w] - origin, 3), "bucket": at,
+               "link_window": at // T, "chain": [w], "bound": None, "public_fields": None, "rebuilt": None, "why": None,
+               **dict.fromkeys(COUNTS, 0)}
+        rows.append(row)
+        if adv.carried and loaded and loaded[-1][-1][0] == w - 1:
+            loaded[-1].append((w, adv, row))
+        else:
+            loaded.append([(w, adv, row)])
         if foreign:
             problems.append(f"Commit window {w} holds {len(foreign)} requests that aren't the run's certified ones "
                             f"({', '.join(foreign[:3])})")
@@ -293,6 +311,28 @@ def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: 
             problems.append(f"Commit window {w}'s opening doesn't open its registered root to its advice")
         if not row["commit_is_the_windows"]:
             problems.append(f"Commit window {w}'s registration names another Commit than the endpoint's windows.jsonl")
+    for chained in loaded:
+        at, ws, last = chained[0][2]["bucket"], [w for w, _, _ in chained], {}
+
+        def released(k: int, rid: str, _: int, b: int, chained=chained, at=at, last=last) -> int:
+            last[rid] = max(last.get(rid, 0), b + chained[k][2]["bucket"] - at)
+            return last[rid]
+
+        try:
+            adv = WC.join([(w, a) for w, a, _ in chained], released)
+        except I1.MalformedAdvice as err:
+            problems.append(str(err))
+            for w, a, row in chained:
+                place([{"window": b, "v0_bits": n} for b, n in WA.bits_by_window(a, 1).items()], row["bucket"])
+                row.update(chain=ws, bound=False, why=str(err), v0_bits=row["committed_bits"],
+                           **dict.fromkeys(COUNTS[1:]))
+            continue
+        b = bits(adv, 1, 0, config, [r for r in io if r["user"] in {q.id for q in adv.requests}])
+        place(b["windows"], at)
+        for _, _, row in chained:
+            row.update(chain=ws, **{k: b[k] for k in ("bound", "public_fields", "rebuilt", "why")})
+        chained[0][2].update({k: sum(x[k] for x in b["windows"]) if all(x[k] is not None for x in b["windows"])
+                              else None for k in COUNTS})
     missing, twice = [u for u, n in seen.items() if n == 0], [u for u, n in seen.items() if n > 1]
     if not rows:
         problems.append("no Commit window of the endpoint's opened in the run's link-windows")
@@ -309,10 +349,12 @@ def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: 
     out["why"] = out["why"] or next((f"Commit window {r['window']}: {r['why']}" for r in ran if r["why"]), None)
     out["commit_windows"] = rows
     out["v0_total"] = sum(r["v0_bits"] for r in ran)
+    out["chains"] = [[w for w, _, _ in c] for c in loaded if len(c) > 1]
     n = deployment["windows"]
     out["windows"] = [{"window": w, **links.get(w, dict.fromkeys(COUNTS, 0)), "in_run": w < n}
                       for w in sorted(set(range(n)) | set(links))]
-    info = {"file": str(adv_dir), "form": "the endpoint's own (verity-vllm advice): I1 v0, one advice a Commit window",
+    info = {"file": str(adv_dir), "form": "the endpoint's own (verity-vllm advice): window advice, one a Commit "
+            "window, a chain of windows that carry requests across their close joined into one I1 v0 advice",
             "served": serve.get("run_id"), "windows": len(ran), "bits": out["v0_total"],
             "requests": sum(r["requests"] for r in ran), "steps": sum(r["steps"] for r in ran),
             "outputs": sum(r["outputs"] for r in ran), "file_sha512": None, "v0_sha512": None}
@@ -417,7 +459,7 @@ def held_to(w: int, root: str | None, given: str | None, adv_dir: Path | None, c
         out["the_registered_root"] = root is not None and root == reg["binding"]["advice"]["root"]
         out["names_the_commit"] = commit is not None and reg.get("commit") == commit
         out["opens"] = opens(reg, json.loads((src / "private" / "opening.json").read_text()),
-                             I1.from_json(json.loads((report / "private" / "advice.json").read_text())))
+                             WA.from_json(json.loads((report / "private" / "advice.json").read_text())))
     except (OSError, ValueError, KeyError, TypeError) as err:
         out["tied_why"] = f"no registration of Commit window {w}'s advice to hold it to at {src} ({err!r})"
         return out
@@ -901,17 +943,23 @@ def markdown(c: dict) -> list[str]:
     served = b is not None and "served" in b
     if served:
         lines += ["", "## Advice", "",
-                  (f"The endpoint's own ({b['served']}): `verity-vllm advice` over its records, one I1 v0 advice a "
+                  (f"The endpoint's own ({b['served']}): `verity-vllm advice` over its records, one window advice a "
                    f"closed Commit window, at {a['file']}. The run's Commit windows (those opening in its link-windows): "
                    f"{a['windows']}, with {a['requests']} requests, {a['steps']} steps, {a['outputs']} kept outputs, "
                    f"{a['bits']} bits in v0." if a else "The endpoint's own: none.")
-                  + f" Bound to these runs: {_cell(b['bound'])} ({b['bound_why'] or 'every window opened to its registered root under its Commit, every advice request a certified one, each in one window'}).",
-                  "", "| Commit window | Commit run id | opens at s | link-window | requests | steps | v0 bits | "
-                  "derived bits | derived, shaped | forced | opened | bound | rebuilt |",
-                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
-        lines += [f"| {x['window']} | refused: {x['refused']} |" + " — |" * 11 if "refused" in x else
+                  + f" Bound to these runs: {_cell(b['bound'])} ({b['bound_why'] or 'every window opened to its registered root under its Commit, every advice request a certified one, each admitted in one window'})."
+                  + (" A window that carries requests in is joined to the window before it into one I1 v0 advice, "
+                     "its carried requests the earlier window's (windows "
+                     + ", ".join("–".join(map(str, c)) for c in b["chains"]) + "): each chain's v0 and derived bits "
+                     "are on its first window's row, the committed bits each window's own string's."
+                     if b.get("chains") else ""),
+                  "", "| Commit window | Commit run id | opens at s | link-window | requests admitted | carried in | "
+                  "steps | committed bits | v0 bits | derived bits | derived, shaped | forced | opened | bound | rebuilt |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+        lines += [f"| {x['window']} | refused: {x['refused']} |" + " — |" * 13 if "refused" in x else
                   f"| {x['window']} | {_cell((x['commit'] or {}).get('run_id'))} | {x['t0_s']} | {x['link_window']} | "
-                  f"{x['requests']} | {x['steps']} | {x['v0_bits']} | {_cell(x['derived_bits'])} | "
+                  f"{x['requests']} | {_cell(x.get('carried'))} | {x['steps']} | {_cell(x.get('committed_bits'))} | "
+                  f"{x['v0_bits']} | {_cell(x['derived_bits'])} | "
                   f"{_cell(x['derived_shaped_bits'])} | {_cell(x['forced_bits'])} | {x['opened']} | {_cell(x['bound'])} "
                   f"| {_cell(x['rebuilt'])} |" for x in b["commit_windows"]]
     elif a is not None:
