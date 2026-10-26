@@ -9,9 +9,10 @@ Every opening is then checked (`replay_bundle.check_reads`) against a registrati
     python benchmarks/e2e_h200/kv_reads.py --out OUT [--phase all|replay|open --private DIR] [--secret FILE]
         [--registered ROOTS.json] [--slots K] [--blocks N] [--workers W] [run flags as m3draw.py's]
 
-``--phase replay`` (the GPU's part: the run, the root check and the drawn slots' and blocks' replay) writes the drawn slots'
-committed rows, the salt keys and the blocks' port rows to ``--private DIR/state.pkl`` (0600, the prover's: never under
-``$OUT``); ``--phase open`` (CPU only, so the card's lease is released) opens and checks them from there. ``all`` does both.
+``--phase replay`` (the GPU's part: the run, keeping the drawn slots' committed rows as each group closes, the root check
+and the drawn blocks' replay from those rows) writes the rows, the salt keys and the blocks' port rows to ``--private
+DIR/state.pkl`` (0600, the prover's: never under ``$OUT``); ``--phase open`` (CPU only, so the card's lease is released)
+opens and checks them from there. ``all`` does both.
 ``--secret``: m3draw's salt secret (``SHA-512(tag || secret || step)[:32]`` a step), else the run id's fixture salt keys.
 ``--registered``: m3draw's ``roots.json``, every step's and slot's root, which the run's must equal (exit 5 otherwise).
 Writes ``OUT/kv_reads.json`` (public: the step registration naming every step's root, the blocks, their reads' public
@@ -38,9 +39,9 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path[:0] = [str(HERE), str(HERE.parent / "e2e_demo")]
 import run as RUN
-from e2e_h200.commit import Committer, fixture_salt, fixture_secrets
+from e2e_h200.commit import Committer, StepTables, fixture_salt, fixture_secrets
 from e2e_h200.driver import Driver, Params
-from e2e_h200.opening import draw_slots, replay_slot
+from e2e_h200.opening import draw_slots
 from e2e_h200.shape import SHAPES
 from e2e_h200.units import Replayer
 from e2e_h200.weights import Weights
@@ -84,6 +85,36 @@ class SlotRows(Sequence):
         for g, src in zip(self.layout.groups, self.sources, strict=True):
             rows += [b"".join(src[p.source][p.offset:p.offset + p.nbytes].tobytes() for p in r.parts) for u in g.units for r in u]
         return iter(rows)
+
+
+class KeepingDriver(Driver):
+    """A run of record (``keep=False``) that keeps batch rows ``rows``' committed tables of every step, each as the batch-1
+    `StepTables` a replay of that slot alone writes (``steps[b]``, with its input bytes ``tokens[b]``): copied as each group
+    closes, before its tables are dropped."""
+
+    def __init__(self, *args: Any, rows: Sequence[int], **kw: Any) -> None:
+        super().__init__(*args, keep=False, **kw)
+        self.rows = list(rows)
+        self.steps_of: dict[int, list[StepTables]] = {b: [] for b in self.rows}
+        self.tokens_of: dict[int, list[np.ndarray]] = {b: [] for b in self.rows}
+        self._held: dict[int, dict[str, tuple[np.ndarray, np.ndarray]]] = {}
+
+    def _close(self, st: StepTables, group: int) -> None:
+        for b in self.rows:
+            held = self._held.setdefault(b, {})
+            for t in self.groups[group]:
+                c, w = st.tables[t.op]
+                held[t.op] = (c[b:b + 1].cpu().numpy(), w[b:b + 1].cpu().numpy())
+        super()._close(st, group)
+
+    def step_slots(self, slots: np.ndarray, positions: np.ndarray, tokens: np.ndarray, salt_key: bytes | None = None,
+                   nonce0: int = 0) -> Any:
+        res = super().step_slots(slots, positions, tokens, salt_key, nonce0)
+        for b in self.rows:
+            self.steps_of[b].append(StepTables(res.step, res.positions[b:b + 1], 1, self._held.pop(b),
+                                               slots=np.zeros(1, np.int64), salt_key=res.salt_key))
+            self.tokens_of[b].append(res.tokens_in[b:b + 1].copy())
+        return res
 
 
 def slot_rows(committer: Committer, st: Any) -> SlotRows:
@@ -163,8 +194,9 @@ def tamper_path(reads: list[dict]) -> list[dict]:
 
 
 def replay(a: argparse.Namespace) -> dict[str, Any] | int:
-    """The GPU's part: the run, its roots held to the registered ones, and the drawn slots and blocks replayed: the state
-    `open_state` opens (the drawn slots' rows and the salt keys are the prover's), or an exit code."""
+    """The GPU's part: the run (keeping the drawn slots' committed rows), its roots held to the registered ones, and the
+    drawn blocks replayed from those rows: the state `open_state` opens (the rows and the salt keys are the prover's), or an
+    exit code."""
     shape = SHAPES[a.shape]
     seed = {"test": SW.TEST_SEED, "demo": SW.DEMO_SEED}.get(a.seed, a.seed.encode())
     weights = Weights(shape, seed)
@@ -182,9 +214,10 @@ def replay(a: argparse.Namespace) -> dict[str, Any] | int:
     lay = committer.layout
     prompts = RUN.prompts_for(a.run_id, a.batch, a.prompt_bytes)
     params = Params(shape, store, a.device, True)
+    slots = draw_slots(a.batch, a.slots, a.run_id.encode(), a.steps - 1)
     t0 = time.perf_counter()
-    driver = Driver(shape, params, a.batch, committer, a.device, keep=False, micro_batch=a.micro_batch or None,
-                    attention=a.attention)
+    driver = KeepingDriver(shape, params, a.batch, committer, a.device, micro_batch=a.micro_batch or None,
+                           attention=a.attention, rows=slots)
     results = driver.run(prompts, a.steps)
     seconds = {"run": time.perf_counter() - t0}
     print(json.dumps({"steps": len(results), "last_root": results[-1].root.hex()[:32], "seconds": seconds["run"]}), flush=True)
@@ -199,18 +232,14 @@ def replay(a: argparse.Namespace) -> dict[str, Any] | int:
         raise SystemExit("a lockstep run's slots are at position s at step s")
 
     t0 = time.perf_counter()
-    slots = draw_slots(a.batch, a.slots, a.run_id.encode(), s)
     blocks = draw_blocks(shape, slots, a.blocks, a.run_id.encode())
     sources: dict[int, dict[int, list[list[np.ndarray]]]] = {t: {} for t in range(len(results))}
     items, docs, bad = [], [], 0
     for b in slots:
-        op = replay_slot(shape, params, committer, results, prompts, b, s, a.device, a.attention)
-        if not all(op.roots_equal):
-            raise SystemExit(f"slot {b}'s replay is not its committed slot roots at steps {op.roots_equal}")
-        rows = {t: slot_rows(committer, op.driver.steps[t]) for t in range(s + 1)}
+        rows = {t: slot_rows(committer, driver.steps_of[b][t]) for t in range(s + 1)}
         for t, r in rows.items():
             sources[t][b] = r.sources
-        rp = Replayer(shape, weights, op.driver.steps, op.tokens)
+        rp = Replayer(shape, weights, driver.steps_of[b], driver.tokens_of[b])
         fams = {f.name: f for f in rp.model_families(s)}
         for bb, fam, layer, head in blocks:
             if bb != b:
@@ -234,7 +263,7 @@ def replay(a: argparse.Namespace) -> dict[str, Any] | int:
                 entry["n"] = int(inputs[2][0])
             docs.append(entry)
             bad += not ok
-        del op, rp, fams
+        del rp, fams
     seconds["replay"] = time.perf_counter() - t0
     store.close()
     return {"run_id": a.run_id, "shape": a.shape, "batch": a.batch, "steps": len(results), "rc": rc, "seconds": seconds,
