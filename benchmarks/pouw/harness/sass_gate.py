@@ -792,7 +792,18 @@ def _immediate(ins: Insn) -> int | None:
     return None
 
 
-_SLOT = re.compile(r"c\[0x0\]\[0x[0-9a-f]+\]")
+_SLOT = re.compile(r"c\[0x0\]\[(0x[0-9a-f]+)\]")
+
+
+def _slot(ins: Insn, reg: str) -> str | None:
+    """The slot of constant bank 0 whose 32 bits `reg` holds after a load of a fixed slot (LDC or ULDC, or the pair .64
+    loads), else None."""
+    m = _SLOT.fullmatch(ins.args[1]) if len(ins.args) == 2 and ins.op[0] in ("LDC", "ULDC") else None
+    d = re.fullmatch(r"(U?R)(\d+)", ins.args[0]) if ins.args else None
+    if m is None or d is None or ins.op[1:] not in ([], ["64"]):
+        return None
+    regs = [f"{d.group(1)}{int(d.group(2)) + i}" for i in range(2 if ins.op[1:] else 1)]
+    return f"c[0x0][0x{int(m.group(1), 16) + 4 * regs.index(reg):x}]" if reg in regs else None
 
 
 def _copied(ins: Insn) -> str | None:
@@ -819,8 +830,8 @@ def value(fn: Function, k: int, reg: str, seen: frozenset = frozenset()) -> tupl
         return value(fn, d, src, seen | {d})
     if (v := _immediate(ins)) is not None:
         return ("imm", v)
-    if ins.name in ("LDC", "ULDC") and len(ins.args) == 2 and _SLOT.fullmatch(ins.args[1]):
-        return ("const", ins.args[1])
+    if (slot := _slot(ins, reg)) is not None:
+        return ("const", slot)
     return ("reg", reg, k)
 
 
@@ -839,9 +850,9 @@ def _passes(fn: Function, c: int, want: list[tuple]) -> str | None:
     for t in range(lo, hi):
         ins = fn.insns[t]
         if "c[" in ins.text:
-            if ins.name not in ("LDC", "ULDC") or len(ins.args) != 2 or not _SLOT.fullmatch(ins.args[1]):
+            if ins.name not in ("LDC", "ULDC") or (slot := _slot(ins, ins.args[0])) is None:
                 return f"the slow path reads the constant bank at 0x{ins.addr:04x} other than one fixed 32-bit slot"
-            slots.add(ins.args[1])
+            slots.add(slot)
     for reg in sorted({r for t in range(lo, hi) for r in fn.insns[t].reads}):
         eff = fn.callee_effect(c, reg)
         if eff is None:
