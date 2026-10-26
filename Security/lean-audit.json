@@ -2233,103 +2233,6 @@
    "except": [],
    "why": "the relation (relation.py) imports no proofs and nothing of the semantics: the two transcriptions are independent"
   },
-  "Definitions.Nci": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Nci"],
-   "except": [],
-   "why": "the policy is stated over core's model and imports no proofs"
-  },
-  "Definitions.Pouw": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw"],
-   "except": ["Definitions.Pouw.PearlC.Defs"],
-   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share"
-  },
-  "Definitions.Pouw.Basic": {
-   "imports": ["Mathlib", "Definitions.Pouw.Basic"],
-   "except": [],
-   "why": "probability, integer matrices and oracle programs"
-  },
-  "Definitions.Pouw.PearlC.Defs": {
-   "imports": [
-    "Mathlib",
-    "Batteries",
-    "Definitions.Pouw.Fp8Atom.E4M3",
-    "Definitions.Pouw.Fp8Atom.Atom",
-    "Definitions.Pouw.Fp8Atom.Fp32"
-   ],
-   "except": [],
-   "why": "Pearl-C's Π, definitions only, over Fp8Atom's definitions: the game and the named assumption read it"
-  },
-  "Definitions.Pous": {
-   "imports": ["Mathlib", "Definitions.Pous"],
-   "except": [],
-   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof"
-  },
-  "Definitions.Pous.Game": {
-   "imports": ["Mathlib", "Definitions.Pous.Game"],
-   "except": [],
-   "why": "the probability and oracle model"
-  },
-  "Definitions.Pous.Model": {
-   "imports": ["Mathlib", "Definitions.Pous.Game", "Definitions.Pous.Model"],
-   "except": [],
-   "why": "the models import the game and each other, not the parameters or a proof"
-  },
-  "Definitions.Pous.P2": {
-   "imports": [
-    "Mathlib",
-    "Definitions.Pous.Game",
-    "Definitions.Pous.Model",
-    "Definitions.Pous.Accounting",
-    "Definitions.Pous.P2"
-   ],
-   "except": [],
-   "why": "P2's pins and its cost model read only the game, the models and the parameters"
-  },
-  "Definitions.NetworkCertifier": {
-   "imports": ["Mathlib", "Definitions.NetworkCertifier", "Definitions.Claims"],
-   "except": [],
-   "why": "the protocol's definitions, and the statements under its Guarantees/, are trusted text: they import no assumption or proof, only Mathlib, one another and the claims' definitions (the sampled audit reads sampling's vocabulary)"
-  },
-  "Definitions.Accounting": {
-   "imports": [
-    "Mathlib",
-    "Definitions.Core",
-    "Definitions.Pouw",
-    "Definitions.Pous.Game.Prob",
-    "Definitions.Pous.Model.Audit",
-    "Definitions.Pous.Model.SampledAudit",
-    "Definitions.Pous",
-    "Definitions.Hash",
-    "Definitions.Accounting"
-   ],
-   "except": ["Definitions.Accounting.Bandwidth.Game"],
-   "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth and rate audits' games read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); lemma M reads PoUS's audit model (Definitions.Pous.Model.Audit, Definitions.Pous.Model.SampledAudit); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game); B2's responder and lemma M's vocabulary read PoUS's audit game (Definitions.Pous); they import no assumption, guarantee or proof; the bandwidth audit's game reads PoUS's uniform probability under its own layer (Definitions.Accounting.Bandwidth); the remote audit's receipts are the served row leaf in frame-v3-sha512 trees, and their binding event is a collision among the two openings' checks (Definitions.Hash)"
-  },
-  "Definitions.Accounting.Bandwidth": {
-   "imports": [
-    "Mathlib",
-    "Definitions.Pous.Game.Prob",
-    "Definitions.Accounting.Confidence",
-    "Definitions.Accounting.Bandwidth"
-   ],
-   "except": [],
-   "why": "the bandwidth audit's game is trusted text: it reads only PoUS's bit strings and uniform probability, and imports no assumption, guarantee or proof; the chip's ports on a strategy's runs (Definitions.Accounting.Bandwidth.Causal) read the actual-circuit model's runs, links and ports (Definitions.Accounting.Confidence)"
-  },
-  "Definitions.Claims": {
-   "imports": ["Mathlib", "Definitions.Claims"],
-   "except": [],
-   "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof"
-  },
-  "Definitions.Hash": {
-   "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash"],
-   "except": [],
-   "why": "the hash area's definitions are trusted text: the served row leaf's formats (frame-v3 trees, sha512/row-seg/v1 and sha512/row/v2, hm96-sha512/v1) over a hash, on Mathlib and the claims' messages and collisions (Definitions.Claims); they import no assumption, guarantee or proof"
-  },
-  "Definitions.Population": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Population"],
-   "except": [],
-   "why": "populations' definitions are trusted text: they import no assumption, guarantee or proof; a partition of a core circuit is a population"
-  },
   "Definitions.Core.Assumptions": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Core.Assumptions"],
    "except": [],
@@ -2341,6 +2244,11 @@
    "except": [],
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof",
    "sealed": true
+  },
+  "Definitions.Nci": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Nci"],
+   "except": [],
+   "why": "the policy is stated over core's model and imports no proofs"
   },
   "Definitions.Nci.Assumptions": {
    "imports": [
@@ -2386,6 +2294,27 @@
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof",
    "sealed": true
   },
+  "Definitions.Pouw": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw"],
+   "except": ["Definitions.Pouw.PearlC.Defs"],
+   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share"
+  },
+  "Definitions.Pouw.Basic": {
+   "imports": ["Mathlib", "Definitions.Pouw.Basic"],
+   "except": [],
+   "why": "probability, integer matrices and oracle programs"
+  },
+  "Definitions.Pouw.PearlC.Defs": {
+   "imports": [
+    "Mathlib",
+    "Batteries",
+    "Definitions.Pouw.Fp8Atom.E4M3",
+    "Definitions.Pouw.Fp8Atom.Atom",
+    "Definitions.Pouw.Fp8Atom.Fp32"
+   ],
+   "except": [],
+   "why": "Pearl-C's Π, definitions only, over Fp8Atom's definitions: the game and the named assumption read it"
+  },
   "Definitions.Pous.Assumptions": {
    "imports": ["Mathlib", "Definitions.Pous", "Definitions.Pous.Assumptions"],
    "except": [],
@@ -2423,6 +2352,37 @@
    "except": [],
    "why": "P2's pins and its cost model read only the game, the models and the parameters"
   },
+  "Definitions.Pous": {
+   "imports": ["Mathlib", "Definitions.Pous"],
+   "except": [],
+   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof"
+  },
+  "Definitions.Pous.Game": {
+   "imports": ["Mathlib", "Definitions.Pous.Game"],
+   "except": [],
+   "why": "the probability and oracle model"
+  },
+  "Definitions.Pous.Model": {
+   "imports": ["Mathlib", "Definitions.Pous.Game", "Definitions.Pous.Model"],
+   "except": [],
+   "why": "the models import the game and each other, not the parameters or a proof"
+  },
+  "Definitions.Pous.P2": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Pous.Game",
+    "Definitions.Pous.Model",
+    "Definitions.Pous.Accounting",
+    "Definitions.Pous.P2"
+   ],
+   "except": [],
+   "why": "P2's pins and its cost model read only the game, the models and the parameters"
+  },
+  "Definitions.NetworkCertifier": {
+   "imports": ["Mathlib", "Definitions.NetworkCertifier", "Definitions.Claims"],
+   "except": [],
+   "why": "the protocol's definitions, and the statements under its Guarantees/, are trusted text: they import no assumption or proof, only Mathlib, one another and the claims' definitions (the sampled audit reads sampling's vocabulary)"
+  },
   "Definitions.NetworkCertifier.Assumptions": {
    "imports": ["Mathlib", "Definitions.NetworkCertifier", "Definitions.NetworkCertifier.Assumptions"],
    "except": [],
@@ -2447,6 +2407,21 @@
    "why": "a guarantee is a Prop over Mathlib, never over a proof",
    "sealed": true
   },
+  "Definitions.Accounting": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Pouw",
+    "Definitions.Pous.Game.Prob",
+    "Definitions.Pous.Model.Audit",
+    "Definitions.Pous.Model.SampledAudit",
+    "Definitions.Pous",
+    "Definitions.Hash",
+    "Definitions.Accounting"
+   ],
+   "except": ["Definitions.Accounting.Bandwidth.Game"],
+   "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth and rate audits' games read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); lemma M reads PoUS's audit model (Definitions.Pous.Model.Audit, Definitions.Pous.Model.SampledAudit); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game); B2's responder and lemma M's vocabulary read PoUS's audit game (Definitions.Pous); they import no assumption, guarantee or proof; the bandwidth audit's game reads PoUS's uniform probability under its own layer (Definitions.Accounting.Bandwidth); the remote audit's receipts are the served row leaf in frame-v3-sha512 trees, and their binding event is a collision among the two openings' checks (Definitions.Hash)"
+  },
   "Definitions.Accounting.Guarantees": {
    "imports": [
     "Mathlib",
@@ -2468,6 +2443,16 @@
    "why": "the runtime corollary divides the developer's region as NCI does (Definitions.Core.Partition, Definitions.Nci) and takes NCI's named incompressibility assumptions (Definitions.Nci.Assumptions) as hypotheses; B1 is TT at the cost model of the actual circuit's provers; B2 and lemma M compose with PoUS's audit game (Definitions.Pous) and take P2's named assumption P2RingAuditSecure (Definitions.Pous.Assumptions.P2) as a hypothesis; a guarantee is stated over resource accounting's definitions and the device model, with the per-resource guarantees and the named assumptions (PoUW's TT, resource accounting's own) as hypotheses, never over a proof; lemma M's P2 forms read P2's cost model (Definitions.Pous.P2.Cost) and its named assumption (Definitions.Pous.Assumptions.P2); the composed credit's binding lemma (Compose.BindingOfECR) prices a fork by the claims' expected-cost collision resistance (Definitions.Claims' ExpectedCR, Finder), as the claims state it",
    "sealed": true
   },
+  "Definitions.Accounting.Bandwidth": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Pous.Game.Prob",
+    "Definitions.Accounting.Confidence",
+    "Definitions.Accounting.Bandwidth"
+   ],
+   "except": [],
+   "why": "the bandwidth audit's game is trusted text: it reads only PoUS's bit strings and uniform probability, and imports no assumption, guarantee or proof; the chip's ports on a strategy's runs (Definitions.Accounting.Bandwidth.Causal) read the actual-circuit model's runs, links and ports (Definitions.Accounting.Confidence)"
+  },
   "Definitions.Accounting.Guarantees.Bandwidth": {
    "imports": [
     "Mathlib",
@@ -2484,11 +2469,26 @@
    "why": "a named assumption of resource accounting (the remote audit's W at the rebuild pricing, Identity, PoUW's conjecture for the bound z) is a Prop over its definitions, never over a guarantee or a proof",
    "sealed": true
   },
+  "Definitions.Claims": {
+   "imports": ["Mathlib", "Definitions.Claims"],
+   "except": [],
+   "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof"
+  },
+  "Definitions.Hash": {
+   "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash"],
+   "except": [],
+   "why": "the hash area's definitions are trusted text: the served row leaf's formats (frame-v3 trees, sha512/row-seg/v1 and sha512/row/v2, hm96-sha512/v1) over a hash, on Mathlib and the claims' messages and collisions (Definitions.Claims); they import no assumption, guarantee or proof"
+  },
   "Definitions.Hash.Guarantees": {
    "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash", "Definitions.Hash.Guarantees"],
    "except": [],
    "why": "a guarantee is stated over the hash area's definitions, never over a proof",
    "sealed": true
+  },
+  "Definitions.Population": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Population"],
+   "except": [],
+   "why": "populations' definitions are trusted text: they import no assumption, guarantee or proof; a partition of a core circuit is a population"
   },
   "Definitions.Nci.Guarantees.FitRate": {
    "imports": [
@@ -2510,6 +2510,49 @@
  },
  "reads_exempt": {
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+ },
+ "trees": {
+  "definitions": ["Definitions", "Models"],
+  "properties": ["Properties"],
+  "proofs": ["Proofs", "Proofs.Properties"],
+  "except": {
+   "Proofs.Flock.Verifier": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Level3": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.VBridge": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Recursive": "the recursive audit's model, on C-Flock's; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.EndToEnd": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.EndToEndDrawn": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.EndToEndHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.EndToEndRegistered": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct",
+   "Proofs.Flock.Claims": "the claims' witnesses (LEAN-26) read C-Flock's deployed records (FlockDeploy, the radius decoders, the readable relation) and the toy records a claim fails at, which are in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Deploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.DeployCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.DeployPlainCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.GS.RadiusDeploy": "the deployed plain record's radius decoder (`Claims.GS.plainDecodeRD`), at which the claims' `meets` witnesses (LEAN-26) state the list-decoding spec; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.GS.RadiusFamily": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Scope.Readable": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.ZkDecodeFlock": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Witnesses.Flock": "a toy outer Flock record (`Claims.Witness.Flock.ksD`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Witnesses.Recursion": "the toy recursion records and inner protocols (`ksR`, `compR`, `effR`, `accI`, `noI`, ...), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Witnesses.Shared": "a toy oracle (`Claims.Witness.constH`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Witnesses.RecursionMeets": "the toy statements of each inner shape (`denseStmt`, `sparseStmt`), at which the claims' `meets` witnesses (LEAN-26) show the readable scope non-empty; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.DeployInputs": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.NumbersDeploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Recursion.Deploy": "the claims' meets witnesses state antecedents at the recursion's deployed record (`RecDeploy.deployRec`, `Brings`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Recursion.DeployInputs": "the claims' meets witnesses state antecedents at the recursion's deployed record's inputs (`RecDeploy.RecIns`, `setupO`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Complete.Ready": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Masked": "the masked guarantees state Flock's claims at its deployed masked records (`deployZk`, `zkDeployed`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.EndToEndRegisteredRows": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.SoundAtBridge": "the bridge from C-Flock's rows link to the proof layer reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Accounting.TS.Session": "the named premises and the statement of #2855's proof layer read through its C-Flock sessions (Accounting.Guarantees.TS.SessionSoundAt) read #2909's RowsSession, which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.SessionLoop": "the session loop's guarantee states Flock's zero knowledge at the loop's release (`LeanRelease.ofLoop`) and the deployed masked record (`deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Bridge": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Properties.NetworkCertifier.Bytes": "the byte conversion `bs`, which the deployed sampling commitment's SHA-512 (`Claims.Sampling.Path.sha512Msg`) and registration roots read in SampledKSLive; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod": "the integrity bridge's realization reads C-Flock's integrity audit over a period (Flock.Guarantees.IntegrityHorizon, its HiddenWindow and Period.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  }
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
  "guarantees": {
@@ -11496,7 +11539,7 @@
    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline": "frozen (conjecture,no-function,world-unlisted): the H200's headline on its measured vector DC-90-ri under (I3) ScalarRoute at q = q_T = 3/5 at 1.086%, over 1%, the twin of Sm90MeasuredHeadline (the same reading at A6's proved 1/2 floor, 1.412%) beside it, not in its place, so it is cited with its premise (DC-90-ri 1.086% under (I3) at 3/5; 1.412% at the proved 1/2 floor; credit against the built flat, the cheater priced at every known fold, counted ones included), under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of DC-90-ri and dither-2s-licpw-redux-p1-l32 (Definitions.Accounting.HeadlineDc.Sm90MeasuredI3: Sm90Measured's machine, writer kinds, vector classes, fold routes and flat, none of which reads q, at q = q_T = 3/5 and b_T = 0, B_flat 195.30 on JPA90_0) with pi* JI90_0 12809871/15625000 + JI90_1 16889149/500000000 + JPA90_0 73194979/500000000, q = q_T = 3/5, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (1.08582%, with ln(8/7) >= 2/15; the unfolded one gives 1.02745%); FacetCeilings on DC-90-ri's rows, WordsWritten at the forms' omega, ScalarRoute at 3/5 (assumed: ClassPSlots counts a slot a word but takes a writer's slot as writing nothing else, which a 64-bit head writing two words a lane, IMAD.WIDE or DFMA, breaks; A6's SheetWords gives it at 1/2 only, SheetScalarRouteHalf, where the lane route ties the IGMMA's word rate on JI90_0, 65.28 to 65.27 words a cycle; the bound is at its floor from about 0.5884 and under 1% at no q, and 3/5 is the least floor of denominator at most 5 there), NoSum (which carries the tensor forms DC-90-ri prices at the scalar coefficient off the menu), FOLD-OPT per word folded at pi* (FoldOptFoldedAt at the twin's pi* and the run's unfolded share, ASK-6 = A; a conjecture under shape.conjectures, RT2-LOGIC-1, open at the twin's pi* and a premise only about folds off the cheater's menu, which holds every counted fold known (Sm90MeasuredHeadline's); not implied by FOLD-OPT at 1/2's pi* (HB-PROOF's M1), since its JPA90_0 weight prices ALU and the IGMMA alone; every class a fold route issues prices above 0 there (a free class would make it harder to meet, not easier); phi* is li-bulk's trimmed infinite-W member, counted, not built, with the built CP_RED2 4.6e-10 of it above; M1's tie, the two-slot round trip on cp-red8 at phi*·(1 - 3.32e-10) at the twin's earlier pi*, is off the menu since li's XOR has three inputs a half step and one ATOM.E.XOR and one LD.E carry two, and at this pi* prices at 1.28 phi*; flat's fold, by built routes alone, prices at 1.0042 phi* and flat's fold with each IMAD as 32 ALU shift-adds at 18.26 N_w phi*, and that fold, which makes it false at every certificate on the B200's readings, RT3-LOGIC-6, is at least an IMAD.WIDE route of the menu on every row here), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Definitions.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
    "Nci.SecurityProofs.CoveringBound": "frozen (no-function): It is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHard and with ActivationChained read in its statement (Security/Definitions/Nci/Assumptions/Covering.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Accounting.SecurityProofs.TS.LeafLanesSound": "frozen (no-function,world-unlisted): option A's 33 linked statements (h1zy.PouwH1LaneZy_v1's 32 lanes and PouwH1Combine_v1) realize one unit's proof layer (leafLayer, accepted where flock-verify accepts all 33 sessions with their known-content, complete and known-read checks, Flock.Registered.checkKnownAll, checkComplete and Flock.KnownRead.check; its relation the unit's served checks on the leaf's 32 x 32 cells: z = A·Bᵀ, y = dq(z) and the receipt the XOR of its lanes' honest partials) over every window of fully checked C-Flock sessions, not a Lean function; it takes CheckedSessionSound's hypotheses at each of the 33 sessions (RowsSession.CR, WindowLaw, RowsSession.ServedRegistered), which are not on the premises list, and its premise LeafChecks (the circuits at their port rows, registered or not; Proofs.Accounting.TS.Session.Lanes.Assumptions) is not on it either. The leaf it opens and the receipt it checks are the ones the sessions' committed rows decode to (leafOf, receiptOf), so nothing is assumed of the rows; the lanes that read one A or B row read it in full at one registered tree (readFull, read_bits). Its relation admits LeafColl, a clash of two of the sessions' registrants' records (an explicit SHA-512 collision, both inputs in hand), so the registrants' rows agreeing across the 33 sessions is proved (rowsAgree_or_leafColl, from registrants_eq_or_collides), not assumed; and LeafKnownColl, a collision of a session's known-content tie, so the known rows holding is proved too (knownHeld_or_coll). The leaf is one declared unit and its partials are proof-layer values (RT4-LOGIC-30). Proved from CheckedSessionSound's SoundAt at each session, the complete check's registration of every port row (RowsSession.rowsReg_eq_portRead), the lanes' cover of the leaf and a union bound, at 33 delta.",
-   "Accounting.SecurityProofs.TS.TileSessionSound": "frozen (no-function,world-unlisted): CheckedSessionSound at the tile layer (tileLayer: flock-verify --zk --registered with its known-content and complete checks, Flock.Registered.checkComplete in its acceptance, its relation CheckedRel and every drawn unit's decoded cells meeting PouwH1TileZy_v1's Definition, z = A·Bᵀ and y = dq(z), or OkColl) over every window of fully checked C-Flock sessions, not a Lean function; it takes CheckedSessionSound's hypotheses, which are not on the premises list, and its premise TileChecks (Proofs.Accounting.TS.Session.Tile.Assumptions), which is not on it either. Proved as HeldSessionSound is, from CheckedSessionSound's SoundAt and the ok tie (tie_ok), at delta.",
+   "Accounting.SecurityProofs.TS.TileSessionSound": "frozen (no-function,world-unlisted): CheckedSessionSound at the tile layer (tileLayer: flock-verify --zk --registered with its known-content check, its relation CheckedRel and every drawn unit's decoded cells meeting PouwH1TileZy_v1's Definition, z = A·Bᵀ and y = dq(z), or OkColl) over every window of fully checked C-Flock sessions, not a Lean function; it takes CheckedSessionSound's hypotheses, which are not on the premises list, every circuit port a port of own (what Flock.Registered.checkComplete establishes), and its premise TileChecks (Proofs.Accounting.TS.Session.Tile.Assumptions), which is not on it either. Proved as HeldSessionSound is, from CheckedSessionSound's SoundAt and the ok tie (tie_ok), at delta.",
    "Nci.SecurityProofs.CoveringBoundTwoCosts": "frozen (no-function): CoveringBound's twin at two costs, a weight's c_w and an activation's c_a, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardAt and with ActivationChainedAt read in its statement (Security/Definitions/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Flock.SecurityProofs.SessionLoopZK": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound at the session loop's release (ofLoop at the deployed relation, SHA-512, the hm96 hiding gap at the pinned key): as a simulation statement against every malicious verifier it has no acceptance of a function to take; at the loop's own tables (Loop.realOf, at every level-0 source), it takes the loop's obligation (Flock.Guarantees.LoopInnerRound0), the tables' obligation (Flock.Guarantees.TablesAdmitUnrefused), the transport's round trusts (LeanRelease.LinkRoundEq, FinishIs, LiveRoundEq, FillRoundEq) and the tables' side (CoinLayer Tables, Complete, DummyReg, Causal, SwCausal, TapeOK), premises that aren't on the list, at a statement the loop serves (Loop.Serves).",
    "Flock.SecurityProofs.SessionLoopZKDeployed": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound at the session loop's release at the deployed tables (Masked.dataE, ofLoop at the deployed relation, SHA-512, the hm96 hiding gap at the pinned key): as a simulation statement against every malicious verifier it has no acceptance of a function to take; at the loop's own tables (Loop.realOf, at every level-0 source), at the loop's own link and Finish (ofLoopLink: Loop.linkOf, the level-0 roots the loop draws; LeanRelease.withFiles, Loop.filesE: each rep's Finish.proofFile on what the loop holds of it, and the record the auditor assembles, recordJson of the streams it saw), it takes the statement in scope (Claims.Flock.Scope, which the loop does not check and the verifier checks only at its verdict), every input the loop takes from its host and operating system being the tape's (Loop.Src, flock-firewall-os-src: its level-0 inputs, Loop.Level0Src, and its rep draws, Loop.RepSrc), the loop's obligation (Flock.Guarantees.LoopInnerRound0), the transport's round trusts (LeanRelease.FinishIs, LiveRoundEq, FillRoundEq) and the tables' side (CoinLayer Tables, Complete, DummyReg, Causal, SwCausal, TapeOK), premises that aren't on the list, at a statement the loop serves (Loop.Serves).",
@@ -46066,48 +46109,5 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
- },
- "trees": {
-  "definitions": ["Definitions", "Models"],
-  "properties": ["Properties"],
-  "proofs": ["Proofs", "Proofs.Properties"],
-  "except": {
-   "Proofs.Flock.Verifier": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Level3": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.VBridge": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Recursive": "the recursive audit's model, on C-Flock's; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.EndToEnd": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.EndToEndDrawn": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.EndToEndHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.EndToEndRegistered": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct",
-   "Proofs.Flock.Claims": "the claims' witnesses (LEAN-26) read C-Flock's deployed records (FlockDeploy, the radius decoders, the readable relation) and the toy records a claim fails at, which are in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Deploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.DeployCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.DeployPlainCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.GS.RadiusDeploy": "the deployed plain record's radius decoder (`Claims.GS.plainDecodeRD`), at which the claims' `meets` witnesses (LEAN-26) state the list-decoding spec; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.GS.RadiusFamily": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Scope.Readable": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.ZkDecodeFlock": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Witnesses.Flock": "a toy outer Flock record (`Claims.Witness.Flock.ksD`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Witnesses.Recursion": "the toy recursion records and inner protocols (`ksR`, `compR`, `effR`, `accI`, `noI`, ...), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Witnesses.Shared": "a toy oracle (`Claims.Witness.constH`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Witnesses.RecursionMeets": "the toy statements of each inner shape (`denseStmt`, `sparseStmt`), at which the claims' `meets` witnesses (LEAN-26) show the readable scope non-empty; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.DeployInputs": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.NumbersDeploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Recursion.Deploy": "the claims' meets witnesses state antecedents at the recursion's deployed record (`RecDeploy.deployRec`, `Brings`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Recursion.DeployInputs": "the claims' meets witnesses state antecedents at the recursion's deployed record's inputs (`RecDeploy.RecIns`, `setupO`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Complete.Ready": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Masked": "the masked guarantees state Flock's claims at its deployed masked records (`deployZk`, `zkDeployed`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.EndToEndRegisteredRows": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.SoundAtBridge": "the bridge from C-Flock's rows link to the proof layer reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Accounting.TS.Session": "the named premises and the statement of #2855's proof layer read through its C-Flock sessions (Accounting.Guarantees.TS.SessionSoundAt) read #2909's RowsSession, which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.SessionLoop": "the session loop's guarantee states Flock's zero knowledge at the loop's release (`LeanRelease.ofLoop`) and the deployed masked record (`deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Bridge": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Properties.NetworkCertifier.Bytes": "the byte conversion `bs`, which the deployed sampling commitment's SHA-512 (`Claims.Sampling.Path.sha512Msg`) and registration roots read in SampledKSLive; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod": "the integrity bridge's realization reads C-Flock's integrity audit over a period (Flock.Guarantees.IntegrityHorizon, its HiddenWindow and Period.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
-  }
  }
 }
