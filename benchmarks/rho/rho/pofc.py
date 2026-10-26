@@ -12,7 +12,16 @@ bits the weights take,
     t = (weight bits behind the boundary) / (n_max s)
 
 so exact backprop inside an episode is blocked outright at `t ≥ 1`, and gives a share `t` of the episode's positions to
-weights instead of tokens at `t < 1`.
+weights instead of tokens at `t < 1`. Everything is counted in bits, `P` and `p` included (Daniel, 26 Oct: circuit
+language), so a weight crosses at the bits the forward circuit reads it, the committed precision.
+
+**Where an update goes** depends on the regime's threat model (Daniel, 26 Oct). Registration happens once (25 Oct) and
+every declared episode reads the committed `θ`, so an update made inside an episode reaches a later declared episode
+only as its output `Y` coming back in as `X` (`Rules.persist = "outputs"`); `"recommit"` is the page's reading, a prover
+that commits new parameters and pays `P`. What an episode computes also stays with whoever ran it, for covert
+computation: onsite, the server, until its wipe, which the physical cut bounds with everything else the window holds
+(other servers learn only its certified outputs, timing and side channels); remote, the prover, whose covert computation
+only the uncertified capacity bounds. Both are cuts the wrapped regime already has.
 
 PoFC enters ρ beside the layers it touches, never in them:
 
@@ -57,6 +66,9 @@ ATTACKS = "draft:pofc-attacks"
 
 DAY = 86400.0
 
+#: `outputs`: through `Y` and back in through `X` (registration once); `recommit`: new parameters, charged to `P`
+PERSIST = ("outputs", "recommit")
+
 
 class Layered(Protocol):
     """What the toll reads about a model: an `instances.Model` or a `Stack`."""
@@ -88,7 +100,8 @@ class Rules:
     write: float
     #: bits a written value carries (the serving precision)
     act_bits: float
-    #: bits a weight needs to train
+    #: bits the backward pass reads a weight at: the forward circuit's (`commit_bits`), unless an attacker's training
+    #: needs more
     weight_bits: float
     #: bits the honest model's weights are committed at
     commit_bits: float
@@ -100,6 +113,12 @@ class Rules:
     output_bits: float
     #: episodes a location may run a day
     episodes_per_day: float
+    #: how an update made inside an episode reaches the next (`PERSIST`)
+    persist: str = "outputs"
+
+    def __post_init__(self) -> None:
+        if self.persist not in PERSIST:
+            raise ValueError(f"pofc rules {self.name}: persist {self.persist!r} is not one of {PERSIST}")
 
     def s(self, m: Layered) -> float:
         """`s = write · d_model · act_bits`: the bits one position carries across a boundary."""
@@ -154,9 +173,9 @@ class Trained:
     #: `L`: the layers the gradient must reach, from the top
     depth: int
     layer_params: float
-    #: bits a weight needs to train
+    #: bits a weight crosses at (`Rules.weight_bits`)
     weight_bits: float
-    #: top layers the operator holding the loss commits with it at the training precision, within `p`: they never cross
+    #: top layers the operator holding the loss commits with it at `weight_bits`, within `p`: they never cross
     held: int
     #: `P` less the honest model's commitment, in bits: weights committed a second time rather than crossing
     spare: float
@@ -168,7 +187,7 @@ class Trained:
 
     def behind(self, bits: float | None = None) -> float:
         """Weight bits that must cross the boundary in front of the operator holding the loss: the trained layers it
-        doesn't hold, at `bits` a weight (the training precision unless given), less what the spare commitment holds."""
+        doesn't hold, at `bits` a weight (`weight_bits` unless given), less what the spare commitment holds."""
         b = self.weight_bits if bits is None else bits
         return max(0.0, (self.depth - self.held) * self.layer_params * b - self.spare)
 
@@ -235,11 +254,19 @@ def _cut(budget: Budget) -> bool:
     return math.isfinite(budget.cut)
 
 
+def persists(p: Profile, rules: Rules) -> None:
+    """Raise `Outside` unless what a construction trains inside an episode reaches the next one: under `outputs`, only
+    a trained state that fits through `Y` and back in through `X`."""
+    if rules.persist == "outputs" and p.state_bits > min(rules.x, rules.y):
+        raise Outside(f"{p.name}'s {p.state_bits:.3g}-bit state leaves an episode only through Y "
+                      f"({rules.y:.3g} bits): registration happens once")
+
+
 @dataclass(frozen=True)
 class LastLayers:
     """Train only the top layers the operator holding the loss commits with it (attack b): its weights, activations and
     the loss sit in one operator, so nothing crosses and a block under a forward cut trains unthrottled. The prover
-    chooses the cuts, so what it may hold is what `p` fits at the training precision (`Trained.held`); outside unless
+    chooses the cuts, so what it may hold is what `p` fits at `weight_bits` (`Trained.held`); outside unless
     the gradient reaches no deeper. Blocks without a forward cut comply."""
 
     model: Model
@@ -250,6 +277,7 @@ class LastLayers:
     cites: tuple[str, ...] = (ATTACKS,)
 
     def allowance(self, p: Profile) -> Allowance:
+        persists(p, self.rules)
         t = trained(p, self.model, self.rules, self.depth)
         if t.depth > t.held:
             raise Outside(f"{p.name} trains {t.depth} layers; the operator holding the loss fits {t.held} within p")
@@ -260,7 +288,7 @@ class LastLayers:
 class Palindrome:
     """Commit layer `i`'s weights to operators `i` and `k − i + 1`, so the chain's first half runs the forward and its
     second the backward (attack c): it pays by commitment, so it is open when the spare commitment holds every trained
-    layer the last operator doesn't and `p` holds one at the training precision (a backward operator's copy), and then
+    layer the last operator doesn't and `p` holds one at `weight_bits` (a backward operator's copy), and then
     trains unthrottled under a forward cut. Blocks without one comply."""
 
     model: Model
@@ -271,12 +299,13 @@ class Palindrome:
     cites: tuple[str, ...] = (ATTACKS,)
 
     def allowance(self, p: Profile) -> Allowance:
+        persists(p, self.rules)
         t = trained(p, self.model, self.rules, self.depth)
         need = max(0, t.depth - t.held) * t.layer_params * t.weight_bits
         if need > t.spare:
             raise Outside(f"{p.name} needs {need:.3g} bits committed again; P leaves {t.spare:.3g}")
         if self.rules.per_operator * self.rules.commit_bits < self.rules.weight_bits:
-            raise Outside(f"p holds {self.rules.per_operator:g} honest layers, short of one at the training precision")
+            raise Outside(f"p holds {self.rules.per_operator:g} honest layers, short of one at weight_bits")
         return lambda budget: t.kappa * budget.compute / 2 if _cut(budget) else 0.0
 
 
@@ -284,8 +313,8 @@ class Palindrome:
 class WeightsAsActivations:
     """Stream the trained layers' weights forward as activations beside the tokens (attack d): `c d_model²` parameters
     cross in about `c d_model` positions, every upstream layer sharing the one boundary, so a block under a forward cut
-    trains the tokens the weights leave room for (`Trained.within`), nothing at `t ≥ 1`. At `bits` a weight, the
-    training precision unless given: an attacker content with serving-precision weights claws back the surcharge.
+    trains the tokens the weights leave room for (`Trained.within`), nothing at `t ≥ 1`. At `bits` a weight,
+    `weight_bits` unless given: an attacker content with serving-precision weights claws back the surcharge.
     Blocks without a forward cut comply."""
 
     model: Model
@@ -297,6 +326,7 @@ class WeightsAsActivations:
     cites: tuple[str, ...] = (ATTACKS,)
 
     def allowance(self, p: Profile) -> Allowance:
+        persists(p, self.rules)
         t = trained(p, self.model, self.rules, self.depth)
         return lambda budget: t.within(budget, self.bits) if _cut(budget) else 0.0
 
@@ -316,6 +346,7 @@ class JunkEpisodes:
     cites: tuple[str, ...] = (ATTACKS,)
 
     def allowance(self, p: Profile) -> Allowance:
+        persists(p, self.rules)
         t = trained(p, self.model, self.rules, self.depth)
         return lambda budget: self.share * t.within(budget) if _cut(budget) else 0.0
 
@@ -368,7 +399,7 @@ class Pofc:
 
     def partition(self, ctx: Context) -> Partition:
         inner = self.regime.partition(ctx)
-        # the blocks a link cuts carry peak compute (the physical block is Φ Δτ), so their time is compute over Φ
+        # the blocks a link cuts carry peak compute (the serving block is Φ Δτ), so their time is compute over Φ
         rate = ctx.location.phi
         regions = tuple(
             replace(r, cuts=r.cuts + tuple(self._under(c, f"{c.name}+pofc", rate, self.link)

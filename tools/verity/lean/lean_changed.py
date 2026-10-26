@@ -6,6 +6,7 @@ the audit's cold build reaches it.
     python tools/verity/lean/lean_changed.py --cache DIR --deps DIR --tree DIR
     python tools/verity/lean/lean_changed.py --records PKG [--update [--moved FILE]] [--out DIR] [--dev-cache] [--rebuild]   a lane's records
     python tools/verity/lean/lean_changed.py --try FILE   a lane's edit loop (`verity lean try FILE`)
+    python tools/verity/lean/lean_changed.py --build FILE...   the ready mark's preflight's Lean step (`build_files`)
 
 `--try` elaborates one file (FILE: its path from the repository's root) on the same warm tree as `--records`, under the same
 `build` slot, tree lock, sync, `repair` and dependencies, for the closure of the package that owns FILE only: there it runs
@@ -1001,6 +1002,100 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print) -> int:
             os.environ.pop(LEAN_SLOT.HELD, None)
 
 
+#: `--build`'s last line, then a JSON object, which the ready mark's preflight reads (`research.queue.LakeBuild`)
+BUILD_LINE = "lean-build: "
+
+
+def first_errors(text: str, pkg: str, tracked: set[str]) -> dict[str, str]:
+    """{file: its first Lean error line} of Lake's output ``text`` for a build in ``pkg``, each file a tracked path from the
+    repository's root (Lake names it from ``pkg``'s directory, or from the package of its `closure` that holds it)."""
+    out: dict[str, str] = {}
+    for line in text.splitlines():
+        if not (m := ERROR.match(line)):
+            continue
+        rel = m.group(1)
+        f = next((c for c in [os.path.normpath(os.path.join(pkg, rel)), *(f"{q}/{rel}" for q in closure(pkg))] if c in tracked), rel)
+        out.setdefault(f, line.strip())
+    return out
+
+
+def build_files(files: list[str], deps: Path, tree: Path | None = None, log=print) -> int:
+    """`--build`: the ready mark's preflight's Lean step (`research.queue.Preflight`). On the tree of the `build` slot it takes,
+    as `--try` does (slot, tree lock, sync, `repair` and dependencies), `lake build +MODULE...` of ``files``' modules (paths
+    from the repository's root) in each package owning one, those it requires by path first; a package whose dependencies
+    this node doesn't keep is skipped, never fetched cold. Its last line is `BUILD_LINE` and a JSON object: `built` ({package:
+    lake's exit status}), `failed` ({file: its first Lean error}, in a tracked `.lean` file; an import clash this tree left is
+    healed as `--try` heals it and not counted) and `skipped` ({package, file or `*`: why it wasn't built}). Exit 0 when
+    every build passed, 1 when one failed, 2 when none ran. Without Lean slots here (not a node) it builds nothing."""
+    doc: dict[str, dict] = {"built": {}, "failed": {}, "skipped": {}}
+
+    def done(rc: int) -> int:
+        print(BUILD_LINE + json.dumps(doc, sort_keys=True), flush=True)
+        return rc
+
+    if not LEAN_SLOT.SLOTS.exists():
+        doc["skipped"]["*"] = f"no Lean slots here ({LEAN_SLOT.SLOTS}): not a node that keeps a warm Lean tree"
+        return done(2)
+    tracked = LA.COMMON.tracked_files(ROOT)
+    if tracked is None:
+        doc["skipped"]["*"] = "the tree's files cannot be listed"
+        return done(2)
+    pkgs, by_pkg = LA.packages(tracked), {}
+    for f in (f.removeprefix("./") for f in files):
+        if (p := owner(f, pkgs)) is None or not f.endswith(".lean") or not (ROOT / f).is_file():
+            doc["skipped"][f] = "not a .lean file in a Lake package with a lean-audit.json"
+        else:
+            by_pkg.setdefault(p, []).append(f)
+    lake = shutil.which("lake") or str(Path.home() / ".elan" / "bin" / "lake")
+    if not Path(lake).is_file():
+        doc["skipped"]["*"] = "no `lake` here"
+        return done(2)
+    os.environ.pop(LEAN_SLOT.HELD, None)
+    try:
+        slot = LEAN_SLOT.hold(FAST_POOL, or_any=False)
+    except LEAN_SLOT.Refused as e:
+        doc["skipped"]["*"] = f"no `{FAST_POOL}` Lean slot here ({e})"
+        return done(2)
+    try:
+        tree = tree or records_tree()
+        tree.mkdir(parents=True, exist_ok=True)
+        with open(tree / ".lock", "w") as held:
+            if not hold_tree(held, tree, log):
+                doc["skipped"]["*"] = f"another run held {tree}"
+                return done(2)
+            links, left, sandbox, have = read_links(tree), left_by(tree), sandboxed(), set(tracked)
+            for pkg, fs in sorted(by_pkg.items(), key=lambda kv: (rank(kv[0]), kv[0])):
+                t0 = time.monotonic()
+                mark(tree, package=pkg, phase="sync")
+                n = sync(closure(pkg), tracked, tree)
+                there = [q for q in [*closure(pkg), (left or {}).get("package")] if isinstance(q, str) and (tree / q).is_dir()]
+                repair(tree, list(dict.fromkeys(there)), links, left, log)
+                left = None
+                write_links(tree, links)
+                mark(tree, package=pkg, phase="deps")
+                packages = tree / pkg / ".lake" / "packages"
+                if not (packages.is_dir() and pkg not in links) and not link(pkg, tree, deps, links, log, copy=True):
+                    doc["skipped"][pkg] = "this node keeps no dependencies (Mathlib) for its manifest, and they aren't fetched cold"
+                    continue
+                write_links(tree, links)
+                mark(tree, package=pkg, phase="build")
+                mods = [f"+{module_of(pkg, f)}" for f in fs]
+                log(f"lean-build: {pkg} on {tree} ({n} files changed there): lake build {' '.join(mods)}")
+                rc, text = build(pkg, tree, lake, mods, sandbox)
+                errs = first_errors(text, pkg, have)
+                if rc and (healed := clashed(tree, closure(pkg), text)):
+                    errs = {f: e for f, e in errs.items() if not CLASH.search(e)}
+                    doc["skipped"][pkg] = f"an import clash this tree left ({' and '.join(healed)}), healed for the next build"
+                doc["built"][pkg], doc["failed"] = rc, {**doc["failed"], **errs}
+                log(f"lean-build: {pkg}: exit {rc} in {time.monotonic() - t0:.0f} s")
+            (tree / DIRTY).unlink(missing_ok=True)
+    finally:
+        if slot is not None:
+            os.close(slot)
+            os.environ.pop(LEAN_SLOT.HELD, None)
+    return done(1 if any(doc["built"].values()) else 0 if doc["built"] else 2)
+
+
 def reports(out: Path, pkg: str, p: str) -> Path:
     """Where check.py's reports on ``p`` go: ``out`` for PKG, `requirer-<path>/` under it for a requirer."""
     return out if p == pkg else out / f"requirer-{re.sub(r'[^A-Za-z0-9]+', '_', p)}"
@@ -1130,10 +1225,16 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--try", dest="try_", metavar="FILE",
                     help=f"elaborate FILE (from the repository's root) on the tree of a Lean slot of pool {FAST_POOL}: "
                     "lake build of its imports, then lake env lean FILE; never check.py")
+    ap.add_argument("--build", nargs="+", metavar="FILE",
+                    help=f"lake build the modules of these files (from the repository's root) on the tree of a Lean slot of pool "
+                    f"{FAST_POOL}, as --try does, with no dependency fetched cold; its last line is `{BUILD_LINE}` and JSON "
+                    "(the ready mark's preflight)")
     a = ap.parse_args(argv)
-    if a.try_:
-        if a.records or a.update or a.moved or a.out or a.dev_cache or a.rebuild:
-            ap.error("--try takes only --deps and --tree")
+    if a.try_ or a.build:
+        if a.records or a.update or a.moved or a.out or a.dev_cache or a.rebuild or (a.try_ and a.build):
+            ap.error("--try and --build take only --deps and --tree, and not each other")
+        if a.build:
+            return build_files(a.build, a.deps, a.tree, log=lambda s: print(s, flush=True))
         return try_file(a.try_, a.deps, a.tree, log=lambda s: print(s, flush=True))
     if not a.records:
         if a.update or a.moved or a.out or a.dev_cache or a.rebuild:
