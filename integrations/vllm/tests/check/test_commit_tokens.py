@@ -19,12 +19,13 @@ import pytest
 
 from tests.check.opened import commit_host_steps
 from tests.commit.test_binding_negatives import PD
-from verity_vllm.check import commit_tokens as CT, executed_prefix as EP
+from verity_vllm.check import commit_tokens as CT, executed_prefix as EPL
 from verity_vllm.check.replay import population as POP
 from verity_vllm.check.replay.linkage import boundary_linkage, linkage_horizon
 from verity_vllm.check.replay.opening import CommittedStore
-from verity_vllm.commit import binding as B
+from verity_vllm.commit import binding as B, executed_prefix as EP
 from verity_vllm.commit.opened import OpenedReader, UnverifiedUnlinked
+from verity_vllm.records.global_match import SCHEMA as GM_SCHEMA
 
 C = CT.CommitTokens
 EOS, CAP, LAG, LAG_ROW = 2, 5, 1, 99
@@ -105,7 +106,7 @@ def named(problems: list[str], *parts: str) -> bool:
 
 
 def _no_match(w: World) -> dict:
-    return EP.link_to_match_account(w.epr, EP.load_match_account(None), order=ORDER, declared_lag=LAG, served_tokens=w.served)
+    return EPL.link_to_match_account(w.epr, EPL.load_match_account(None), order=ORDER, declared_lag=LAG, served_tokens=w.served)
 
 
 def _match_dir(tmp_path, *, gm_verdict: str = "PASS") -> str:
@@ -117,9 +118,10 @@ def _match_dir(tmp_path, *, gm_verdict: str = "PASS") -> str:
     tok = {"lag": {"value": LAG, "async_scheduling": True},
            "requests": [{"request_id": u, "generated_token_ids": SERVED[r], "max_tokens": CAP, **{k: v for k, v in lens[r].items() if k != "cap"}}
                         for u, r in ORDER.items()]}
-    gm = {"verdict": gm_verdict, "failed_checks": [] if gm_verdict == "PASS" else ["G6"],
+    gm = {"schema": GM_SCHEMA, "verdict": gm_verdict, "reasons": [], "failed_checks": [] if gm_verdict == "PASS" else ["G6"],
           "requests": [{"request_id": f"rec-{r}", "workload_request_id": u, "index": int(r[1:])} for u, r in ORDER.items()],
-          "checks": [{"id": "G6", "status": gm_verdict, "lengths_by_request": {f"rec-{r}": v for r, v in lens.items()},
+          "checks": [{"id": "G6", "what": "chronology", "status": gm_verdict, "problems": [], "n_problems": 0,
+                      "lengths_by_request": {f"rec-{r}": v for r, v in lens.items()},
                       "lag": {"declared": LAG, "record_attests": LAG, "tokens_json_lag": LAG, "exercised": True, "variable_lag": False}}]}
     (row / "match" / "capture" / "tokens.json").write_text(json.dumps(tok))
     (row / "global_match.json").write_text(json.dumps(gm))
@@ -504,9 +506,9 @@ def test_an_id_with_a_nonzero_high_word_is_refused_where_it_is_read(tmp_path):
     lk = _linkage(w)
     assert lk["result"] is False and any(u["request_id"] == "r1" and u["why"].startswith("the committed sampled id of step 0: token id")
                                          for u in lk["unlinked"])
-    acc = EP.load_match_account(_match_dir(tmp_path))
+    acc = EPL.load_match_account(_match_dir(tmp_path))
     acc["tokens"]["requests"][1]["generated_token_ids"] = served["r1"]
-    m = EP.link_to_match_account(w.epr, acc, order=ORDER, declared_lag=LAG, served_tokens=w.served)
+    m = EPL.link_to_match_account(w.epr, acc, order=ORDER, declared_lag=LAG, served_tokens=w.served)
     assert named(m["problems"], "r1: the Match record's tokens.json served an id that is no circuit's: token id", "nonzero high word")
     neg = {"r0": SERVED["r0"], "r1": [-1, *SERVED["r1"][1:]]}
     assert named(refused(world({"r0": SAMPLED["r0"], "r1": neg["r1"]}, neg).link()), "r1: (1) served token 0: token id -1 has a nonzero high word")

@@ -72,8 +72,6 @@ QB/2 threads, one per group).
 """
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 from types import SimpleNamespace
 
 from verity.ml.circuits.defs import bind, composite, primitive

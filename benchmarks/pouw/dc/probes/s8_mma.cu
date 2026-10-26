@@ -5,6 +5,8 @@
 //   sm_90a   mma_*   mma.sync.aligned.m16n8k32.row.col{.satfinite}.s32.{s8,u8}.{s8,u8}.s32 (one warp a 16 x 8 tile)
 //            wg_*    wgmma.mma_async.sync.aligned.m64n8k32.s32.{s8,u8}.{s8,u8}{.satfinite}, A and B from shared memory
 //                    (one warpgroup a 64 x 8 tile; the accumulator registers start at C, scale-d 1)
+//            wgN_*   the same wgmma at m64nNk32 for N = 64, 128, 256, the N an s8 GEMM's 64 x N warpgroup tile issues
+//                    (one warpgroup a 64 x N tile, wgmma.cuh's wrappers)
 //   sm_100a  mma_*   the same mma.sync
 //            tc_*    tcgen05.mma.cta_group::1.kind::i8, M = 128, N = 32, K = 32, D in tensor memory preloaded with C by
 //                    tcgen05.st, enable-input-d 1; the instruction descriptor's saturate bit (bit 3) is the .satfinite
@@ -28,6 +30,7 @@
 #include <vector>
 
 #include "../dc.cuh"
+#include "../wgmma.cuh"
 
 // ---- mma.sync m16n8k32 (benchmarks/tc_probe/mma_tiles.cu's 8-bit fragment layout) ---------------------------------------
 #define MMA_FORM(NAME, PTX)                                                                                               \
@@ -120,6 +123,54 @@ WG_FORM(wg_s8s8_wrap, "wgmma.mma_async.sync.aligned.m64n8k32.s32.s8.s8")
 WG_FORM(wg_s8u8_wrap, "wgmma.mma_async.sync.aligned.m64n8k32.s32.s8.u8")
 WG_FORM(wg_u8s8_wrap, "wgmma.mma_async.sync.aligned.m64n8k32.s32.u8.s8")
 WG_FORM(wg_u8u8_wrap, "wgmma.mma_async.sync.aligned.m64n8k32.s32.u8.u8")
+
+// ---- sm_90a: wgmma m64nNk32, N = 64, 128, 256 -------------------------------------------------------------------------
+// Thread (warp w, lane = 4 g + q) holds D[16 w + g + 8 ((e >> 1) & 1)][8 (e >> 2) + 2 q + (e & 1)] in d[e], e < N / 2:
+// m64n8k32's fragment once for each 8 columns.
+#define WGN_FORM(NAME, N, FN)                                                                                             \
+  extern "C" __global__ void __launch_bounds__(128) NAME(const uint8_t* __restrict__ A, const uint8_t* __restrict__ Bt,   \
+                                                         const uint32_t* __restrict__ C, uint32_t* __restrict__ D,        \
+                                                         int ntiles) {                                                    \
+    WGN_BODY(N, FN)                                                                                                       \
+  }
+#if defined(__CUDA_ARCH_FEAT_SM90_ALL)
+#define WGN_AT(N, e) ((16 * w + g + 8 * (((e) >> 1) & 1)) * (N) + 8 * ((e) >> 2) + 2 * q + ((e) & 1))
+#define WGN_BODY(N, FN)                                                                                                   \
+  __shared__ __align__(1024) unsigned char sA[64 * 32];                                                                   \
+  __shared__ __align__(1024) unsigned char sB[N * 32];                                                                    \
+  const int tile = blockIdx.x;                                                                                            \
+  if (tile >= ntiles) return;                                                                                             \
+  const int w = threadIdx.x >> 5, lane = threadIdx.x & 31, g = lane >> 2, q = lane & 3;                                   \
+  load_kmaj(sA, A + (size_t)tile * 64 * 32, 64);                                                                          \
+  load_kmaj(sB, Bt + (size_t)tile * N * 32, N);                                                                           \
+  fence_async_smem();                                                                                                     \
+  __syncthreads();                                                                                                        \
+  const uint32_t* c = C + (size_t)tile * 64 * N;                                                                          \
+  uint32_t* d = D + (size_t)tile * 64 * N;                                                                                \
+  int r[N / 2];                                                                                                           \
+  _Pragma("unroll") for (int e = 0; e < N / 2; e++) r[e] = (int)c[WGN_AT(N, e)];                                         \
+  wgmma_hold(r);                                                                                                          \
+  wgmma_fence();                                                                                                          \
+  FN(r, wgmma_desc(smem_u32(sA), kmaj_lbo(), kmaj_sbo(32)), wgmma_desc(smem_u32(sB), kmaj_lbo(), kmaj_sbo(32)), 1);       \
+  wgmma_commit();                                                                                                         \
+  wgmma_wait<0>();                                                                                                        \
+  wgmma_hold(r);                                                                                                          \
+  _Pragma("unroll") for (int e = 0; e < N / 2; e++) d[WGN_AT(N, e)] = (uint32_t)r[e];
+#else
+#define WGN_BODY(N, FN)
+#endif
+#define WGN_FORMS(N)                                                                                                      \
+  WGN_FORM(wg##N##_s8s8_sat, N, wgmma_i8_s8s8_sat_n##N)                                                                   \
+  WGN_FORM(wg##N##_s8u8_sat, N, wgmma_i8_s8u8_sat_n##N)                                                                   \
+  WGN_FORM(wg##N##_u8s8_sat, N, wgmma_i8_u8s8_sat_n##N)                                                                   \
+  WGN_FORM(wg##N##_u8u8_sat, N, wgmma_i8_u8u8_sat_n##N)                                                                   \
+  WGN_FORM(wg##N##_s8s8_wrap, N, wgmma_i8_s8s8_wrap_n##N)                                                                 \
+  WGN_FORM(wg##N##_s8u8_wrap, N, wgmma_i8_s8u8_wrap_n##N)                                                                 \
+  WGN_FORM(wg##N##_u8s8_wrap, N, wgmma_i8_u8s8_wrap_n##N)                                                                 \
+  WGN_FORM(wg##N##_u8u8_wrap, N, wgmma_i8_u8u8_wrap_n##N)
+WGN_FORMS(64)
+WGN_FORMS(128)
+WGN_FORMS(256)
 
 // ---- sm_100a: tcgen05.mma kind::i8, M 128, N 32 ---------------------------------------------------------------------------
 // D row i is TMEM lane i, column j TMEM column j; warp w reaches lanes 32 w .. 32 w + 31, so thread (w, lane) owns row
@@ -224,6 +275,12 @@ const Family FAMILIES[] = {
     {"wg", 64, 8, 128, 1,
      {{"s8s8_sat", wg_s8s8_sat}, {"s8u8_sat", wg_s8u8_sat}, {"u8s8_sat", wg_u8s8_sat}, {"u8u8_sat", wg_u8u8_sat},
       {"s8s8_wrap", wg_s8s8_wrap}, {"s8u8_wrap", wg_s8u8_wrap}, {"u8s8_wrap", wg_u8s8_wrap}, {"u8u8_wrap", wg_u8u8_wrap}}},
+#define WGN_FAMILY(N)                                                                                                     \
+  {"wg" #N, 64, N, 128, 1,                                                                                                \
+   {{"s8s8_sat", wg##N##_s8s8_sat}, {"s8u8_sat", wg##N##_s8u8_sat}, {"u8s8_sat", wg##N##_u8s8_sat},                       \
+    {"u8u8_sat", wg##N##_u8u8_sat}, {"s8s8_wrap", wg##N##_s8s8_wrap}, {"s8u8_wrap", wg##N##_s8u8_wrap},                   \
+    {"u8s8_wrap", wg##N##_u8s8_wrap}, {"u8u8_wrap", wg##N##_u8u8_wrap}}}
+    WGN_FAMILY(64), WGN_FAMILY(128), WGN_FAMILY(256),
     {"tc", 128, 32, 128, 1,
      {{"s8s8_sat", tc_s8s8_sat}, {"s8u8_sat", tc_s8u8_sat}, {"u8s8_sat", tc_u8s8_sat}, {"u8u8_sat", tc_u8u8_sat},
       {"s8s8_wrap", tc_s8s8_wrap}, {"s8u8_wrap", tc_s8u8_wrap}, {"u8s8_wrap", tc_u8s8_wrap}, {"u8u8_wrap", tc_u8u8_wrap}}},
@@ -267,14 +324,14 @@ void write_all(const std::string& path, const void* data, size_t n) {
 
 int main(int argc, char** argv) {
   if (argc != 4) {
-    fprintf(stderr, "usage: s8_mma mma|wg|tc CASES OUTDIR\n");
+    fprintf(stderr, "usage: s8_mma mma|wg|wg64|wg128|wg256|tc CASES OUTDIR\n");
     return 2;
   }
   const Family* fam = nullptr;
   for (const Family& f : FAMILIES)
     if (strcmp(f.name, argv[1]) == 0) fam = &f;
   if (!fam) {
-    fprintf(stderr, "no family %s (mma, wg, tc)\n", argv[1]);
+    fprintf(stderr, "no family %s (mma, wg, wg64, wg128, wg256, tc)\n", argv[1]);
     return 2;
   }
   const std::vector<uint8_t> cases = read_all(argv[2]);

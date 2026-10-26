@@ -174,3 +174,19 @@ def test_config_refusals_name_the_fix(world, driven, monkeypatch, capsys):
         with pytest.raises(SystemExit) as e:
             Q.main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err
+
+
+def test_the_gates_are_read_whatever_other_keys_drive_toml_holds(tmp_path):
+    """CI-185: a branch's older queue.py reads main's drive.toml for the preflight's gates; a key added since doesn't stop it."""
+    from research.queue import gates_at
+
+    _git(tmp_path, "init", "-q", "-b", "main")
+    (tmp_path / DRIVE_FLAGS).parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / DRIVE_FLAGS).write_text('landing_gates = ["gates/g.py"]\nmax_lean_checks_of_the_future = 9\n')
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "x")
+    assert gates_at(tmp_path, "main") == ("gates/g.py",)
+    (tmp_path / DRIVE_FLAGS).write_text('landing_gates = "gates/g.py"\n')
+    _git(tmp_path, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "y")
+    with pytest.raises(QueueError, match="landing_gates"):
+        gates_at(tmp_path, "main")
