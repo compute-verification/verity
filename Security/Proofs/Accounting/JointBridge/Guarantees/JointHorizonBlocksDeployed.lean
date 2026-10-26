@@ -1,5 +1,6 @@
 import Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock
-import Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
+import Definitions.Accounting.JointBridge.CreditedWords
+import Definitions.Accounting.Assumptions.CreditedWords
 import Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted
 import Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
 import Definitions.Accounting.JointBridge.SpaceOfPeriodHeld
@@ -54,9 +55,12 @@ their sources' premises, block by block:
   (`Accounting.RealizesIntegrityOfIntegrityBlock`), each draw covering at least a fraction `q > 0` of its sampling
   block's units, under A3 for each draw's bytes and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512` (`LinkCRZC`) at every
   strategy the node plays a sampling block with, at an integrity certificate of at least `ln(1/δ_I)/q` units;
-* PoUW: block `b`'s PoUW audit is H1's checked credit over the torch loop
-  (`Accounting.RealizesWorkOfH1CheckedCreditPeriod`), under `Properties.Pouw.Period.H1CheckedCreditPeriod`'s premises
-  at the block's windows, openings, salts, live tiles, play and folded words;
+* PoUW: block `b`'s PoUW audit credits H1's checked words over the torch loop (`Accounting.RealizesCreditedWords` at
+  `m = minWordMacs Sc Cd macs` multiply-adds a word, `u` a unit and `b_unit` bits a unit), each right word of a unit
+  the device didn't outsource costing `m` multiply-adds of priced work (`Accounting.Assumptions.WordCostsMacs`) and at
+  most `K / b_unit` units outsourced (`Accounting.Assumptions.HelpWithinCertifier`), under
+  `Properties.Pouw.Period.H1CheckedCreditPeriod`'s premises at the block's windows, openings, salts, live tiles, play
+  and folded words;
 * PoUS: block `b`'s PoUS audit is the capacity audit of a joint run on a ring-model server
   (`Accounting.RealizesSpaceOfPeriodHeld`, `Pous.Period.RingDevice`), under `Pous.Period.PeriodHeld`'s premises, with a
   space certificate within the ring game's state bound;
@@ -80,7 +84,8 @@ term (`δ_PoUS b`) are taken as in `JointHorizonBlocks`: memory accounting's wip
 `Pous.Guarantees.SecureErasureMeetsFamily` through DEVICE-WIPE's `Verity.Wipe.SurvivorBound` to `BlockWipe.Survives`,
 doesn't exist yet, and neither does a bridge from weights-only PoUS to `BlocksRun.MemoryTerm`. Each bridge's own gap
 stays as its realization's field or its source's premise: the program-from-circuit correspondence (M1, `wrong_eq`), the
-words fixed right as device-model work (RT4-LOGIC-6, `work_of_fixed`), PoUS at its challenge times only, and the
+words fixed right as device-model work (RT4-LOGIC-6, now the premises `WordCostsMacs` and `HelpWithinCertifier`), PoUS
+at its challenge times only, and the
 trace's values at the registered inputs and the records' coverage on the network certifier's acceptance
 (`window_le`). As in `JointHorizonBlocks`, the state a block
 carries across a wipe is outside the integrity bound (PRF-167). -/
@@ -122,12 +127,19 @@ def JointHorizonBlocksDeployed : Prop :=
       (Pl : Fin B → ((i : I) → Ω i) →
         Accounting.TS.Play (Pouw.RelativeSecurity.Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n K T L U)
       (folded : Fin B → ((i : I) → Ω i) →
+        Pouw.RelativeSecurity.Paths (Pouw.RelativeSecurity.Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → ℝ)
+      (macs : Accounting.Compose.Kind → ℕ) (u bUnit : ℕ)
+      (help : Fin B → ((i : I) → Ω i) →
         Pouw.RelativeSecurity.Paths (Pouw.RelativeSecurity.Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → ℝ),
-    ∀ RW : (b : Fin B) → Accounting.RealizesWorkOfH1CheckedCreditPeriod (s.block b) (c b) p
-      (Pouw.RelativeSecurity.Paths (Pouw.RelativeSecurity.Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n)
-      (fun ξ => (Pl b ξ).accepts) (fun ξ x => n * ((Pl b ξ).run x).fixed)
+    ∀ RW : (b : Fin B) → Accounting.RealizesCreditedWords (s.block b) (c b) p (Accounting.Compose.minWordMacs Sc Cd macs) u
+      bUnit (Pouw.RelativeSecurity.Paths (Pouw.RelativeSecurity.Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n)
+      (fun ξ => (Pl b ξ).accepts)
       (fun ξ x => Accounting.Compose.creditPrefix Sc Cd 144 ((ws b ξ).prefixLen prm x)
         (Properties.Pouw.Period.checkedLive Sc Cd (Wp b ξ) prm (ws b ξ) x) 1 1 (67 / 8) δs),
+    (∀ b, Accounting.Assumptions.WordCostsMacs (s.block b) p (Accounting.Compose.minWordMacs Sc Cd macs) u (RW b).coin
+      (fun ξ => (Pl b ξ).accepts) (fun ξ x => n * ((Pl b ξ).run x).fixed) (help b)) →
+    (∀ b, Accounting.Assumptions.HelpWithinCertifier (s.block b) (c b) bUnit (RW b).coin (fun ξ => (Pl b ξ).accepts)
+      (help b)) →
     Accounting.Compose.Scope Sc Cd δs →
     (∀ t : Fin 144, (8 / 9 : ℝ) * (144 : ℕ) * Accounting.Compose.shareCone Sc Cd 144 t ≤ 1) →
     (∀ j, Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd 144)
@@ -212,8 +224,8 @@ open FlockSoundness.Audit FlockSoundness.Discharge.ZkExec FlockSoundness.Dischar
 certifier over a horizon of `B` server-time blocks.** As `Accounting.Guarantees.JointHorizonBlocksA`, with each block's
 three legs given by their realizations and their sources' premises, block by block, as in
 `JointHorizonBlocksDeployed`: block `b`'s sampled audit is C-Flock's integrity audit of block `b` of the server's
-sessions `S` (`Accounting.RealizesIntegrityOfIntegrityBlock`), its PoUW audit H1's checked credit over the torch loop
-(`Accounting.RealizesWorkOfH1CheckedCreditPeriod`), and its network audit the network certifier's period of `n_c`
+sessions `S` (`Accounting.RealizesIntegrityOfIntegrityBlock`), its PoUW audit H1's checked words credited over the
+torch loop (`Accounting.RealizesCreditedWords`, with `WordCostsMacs` and `HelpWithinCertifier`), and its network audit the network certifier's period of `n_c`
 sampled audits (`Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted`). Then the probability that one of those three
 audits in some block accepts while its claim fails is at most
 $$\sum_b \Big(\delta_I + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}) + \delta_s + n(\delta_{bind} + \delta_{ks})
@@ -258,12 +270,19 @@ def JointHorizonBlocksDeployedA : Prop :=
       (Pl : Fin B → ((i : I) → Ω i) →
         Accounting.TS.Play (Pouw.RelativeSecurity.Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n K T L U)
       (folded : Fin B → ((i : I) → Ω i) →
+        Pouw.RelativeSecurity.Paths (Pouw.RelativeSecurity.Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → ℝ)
+      (macs : Accounting.Compose.Kind → ℕ) (u bUnit : ℕ)
+      (help : Fin B → ((i : I) → Ω i) →
         Pouw.RelativeSecurity.Paths (Pouw.RelativeSecurity.Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → ℝ),
-    ∀ RW : (b : Fin B) → Accounting.RealizesWorkOfH1CheckedCreditPeriod (r b) (c b) p
-      (Pouw.RelativeSecurity.Paths (Pouw.RelativeSecurity.Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n)
-      (fun ξ => (Pl b ξ).accepts) (fun ξ x => n * ((Pl b ξ).run x).fixed)
+    ∀ RW : (b : Fin B) → Accounting.RealizesCreditedWords (r b) (c b) p (Accounting.Compose.minWordMacs Sc Cd macs) u
+      bUnit (Pouw.RelativeSecurity.Paths (Pouw.RelativeSecurity.Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n)
+      (fun ξ => (Pl b ξ).accepts)
       (fun ξ x => Accounting.Compose.creditPrefix Sc Cd 144 ((ws b ξ).prefixLen prm x)
         (Properties.Pouw.Period.checkedLive Sc Cd (Wp b ξ) prm (ws b ξ) x) 1 1 (67 / 8) δs),
+    (∀ b, Accounting.Assumptions.WordCostsMacs (r b) p (Accounting.Compose.minWordMacs Sc Cd macs) u (RW b).coin
+      (fun ξ => (Pl b ξ).accepts) (fun ξ x => n * ((Pl b ξ).run x).fixed) (help b)) →
+    (∀ b, Accounting.Assumptions.HelpWithinCertifier (r b) (c b) bUnit (RW b).coin (fun ξ => (Pl b ξ).accepts)
+      (help b)) →
     Accounting.Compose.Scope Sc Cd δs →
     (∀ t : Fin 144, (8 / 9 : ℝ) * (144 : ℕ) * Accounting.Compose.shareCone Sc Cd 144 t ≤ 1) →
     (∀ j, Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd 144)

@@ -31,7 +31,7 @@ theorem JointHorizonBlocksDeployed : Accounting.Guarantees.JointHorizonBlocksDep
   intro ι α I _ _ _ _ Ω _ _ d C B s c p f εWipe δPous
     S q δI hq hδI hqt hA3 RI hT hL hcert hfin
     ι' K T L U Cn Ξ V _ _ _ _ _ _ _ Sc Cd n hn hN hr hM hK prm enc staged flat δs δbind δks ws opened salt Wp Pl folded
-    RW hScope hρ hw hluck hgame hdead hpre hbind hreg hdraw hsvc hsalt hpins hmu hrb hguess hfix
+    macs u bUnit help RW hcost hhelp hScope hρ hw hluck hgame hdead hpre hbind hreg hdraw hsvc hsalt hpins hmu hrb hguess hfix
     hd hp hH Dr Qr Lr hP ΩW ΩQ run P round RS hdev hS
     N bits h sB G k lam hN0 RB hQ
     Coin Col Tn _ _ _ _ _ H D Ln Kₒ Sn lay kh δc decode regN Dj nc RN hks hbc hδc hdec εks εbind εtap herr hbindN htap
@@ -48,8 +48,9 @@ theorem JointHorizonBlocksDeployed : Accounting.Guarantees.JointHorizonBlocksDep
     cases a
     · exact Bridge.IntegrityOfIntegrityBlock ι d α C I Ω (s.block b) S b q δI hq hδI (hqt b) (hA3 b) (RI b)
         (hT b) (hL b) (c b) p (hcert b) (hfin b)
-    · exact Bridge.WorkOfH1CheckedCreditPeriod ι α I Ω d C (s.block b) (c b) p Sc Cd hn hN hr hM hK prm enc staged
-        flat δs δbind δks (ws b) (opened b) (salt b) (Wp b) (Pl b) (folded b) (RW b) hScope hρ hw hluck (hgame b)
+    · exact Bridge.WorkOfH1CheckedCreditPeriod p macs u bUnit ι α I Ω d C (s.block b) (c b) Sc Cd hn hN hr hM hK prm enc
+        staged flat δs δbind δks (ws b) (opened b) (salt b) (Wp b) (Pl b) (folded b) (help b) (RW b) (hcost b)
+        (hhelp b) hScope hρ hw hluck (hgame b)
         (hdead b) (hpre b) (hbind b) (hreg b) (hdraw b) (hsvc b) (hsalt b) hpins (hmu b) (hrb b) (hguess b) (hfix b)
     · exact Bridge.SpaceOfPeriodHeld hd hp hH Dr Qr Lr hP ι α d C I Ω (s.block b) (ΩW b) (ΩQ b) (run b) (P b)
         (round b) (c b) p (RS b) (hdev b) (hS b)
@@ -65,7 +66,7 @@ theorem JointHorizonBlocksDeployedA : Accounting.Guarantees.JointHorizonBlocksDe
   intro ι α I _ _ _ Ω _ _ d C B r c p
     S q δI hq hδI hqt hA3 RI hT hL hcert hfin
     ι' K T L U Cn Ξ V _ _ _ _ _ _ _ Sc Cd n hn hN hr hM hK prm enc staged flat δs δbind δks ws opened salt Wp Pl folded
-    RW hScope hρ hw hluck hgame hdead hpre hbind hreg hdraw hsvc hsalt hpins hmu hrb hguess hfix
+    macs u bUnit help RW hcost hhelp hScope hρ hw hluck hgame hdead hpre hbind hreg hdraw hsvc hsalt hpins hmu hrb hguess hfix
     Coin Col Tn _ _ _ _ _ H D Ln Kₒ Sn lay kh δc decode regN Dj nc RN hks hbc hδc hdec εks εbind εtap herr hbindN htap
   let δ : Fin B → Audit → ℝ := fun b a => match a with
     | .sampled => (ENNReal.ofReal δI + S.err b).toReal
@@ -78,8 +79,9 @@ theorem JointHorizonBlocksDeployedA : Accounting.Guarantees.JointHorizonBlocksDe
     rcases ha with rfl | rfl | rfl
     · exact Bridge.IntegrityOfIntegrityBlock ι d α C I Ω (r b) S b q δI hq hδI (hqt b) (hA3 b) (RI b)
         (hT b) (hL b) (c b) p (hcert b) (hfin b)
-    · exact Bridge.WorkOfH1CheckedCreditPeriod ι α I Ω d C (r b) (c b) p Sc Cd hn hN hr hM hK prm enc staged
-        flat δs δbind δks (ws b) (opened b) (salt b) (Wp b) (Pl b) (folded b) (RW b) hScope hρ hw hluck (hgame b)
+    · exact Bridge.WorkOfH1CheckedCreditPeriod p macs u bUnit ι α I Ω d C (r b) (c b) Sc Cd hn hN hr hM hK prm enc
+        staged flat δs δbind δks (ws b) (opened b) (salt b) (Wp b) (Pl b) (folded b) (help b) (RW b) (hcost b)
+        (hhelp b) hScope hρ hw hluck (hgame b)
         (hdead b) (hpre b) (hbind b) (hreg b) (hdraw b) (hsvc b) (hsalt b) hpins (hmu b) (hrb b) (hguess b) (hfix b)
     · exact Bridge.CommOfPeriodLeakAccepted (c b) p (RN b) hks hbc hδc hdec εks εbind εtap (herr b) (hbindN b) (htap b)
   refine (JointHorizonBlocksA ι α I Ω d C B r c p δ hδ).trans_eq (Finset.sum_congr rfl fun b _ => ?_)
