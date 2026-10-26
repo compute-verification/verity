@@ -495,11 +495,13 @@ theorem _root_.RecDeploy.HpEarly.slotsOk_assign (h : TraceOk c pin) (hck : _root
   have hin2 : hmIn c 2 = 1536 := by rw [VStarTrace.hmIn_eq]; exact (Hm.hmIn_eq hck).2.2
   refine slotCommits_of_hm96 _ (Hidden.hm_zh c (slotW mask c pin n) (n % c.g) q hhm) ?_ ?_ ?_ ?_
   · intro i hi
+    have hi' : @LT.lt ℕ _ i 512 := hi
     rw [hmsgE, Hm.lastCv_eq, hlast]
     refine (hzin i (by omega)).trans ((hzE i (by omega)).trans ?_)
     rw [hin.1 i hi, getD_u64, chain_cvs hn hr' hv2 hsg hwN]
     exact Hm.wordsBit_eq _ (n := 8) (by omega)
   · intro i hi
+    have hi' : @LT.lt ℕ _ i 1024 := hi
     rw [hmsgE, Hm.lastBlock_eq, hlast]
     refine (hzin (512 + i) (by omega)).trans ((hzE (512 + i) (by omega)).trans ?_)
     rw [hin.2 i hi, getD_u64]
@@ -510,6 +512,7 @@ theorem _root_.RecDeploy.HpEarly.slotsOk_assign (h : TraceOk c pin) (hck : _root
     refine List.map_congr_left fun j hj => ?_
     rw [block_eq hn hr' hv2 hsg hwN (List.mem_range.1 hj)]
   · intro j hj
+    have hj' : @LT.lt ℕ _ j 1536 := hj
     refine (hzin (1536 + j) (by omega)).trans ?_
     rw [bitL_readForms (fs := hmSalt c q n) (by simp [hmSalt]; omega)]
     simp only [hmSalt, List.getElem_map, List.getElem_range]
