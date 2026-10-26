@@ -1,0 +1,123 @@
+import Proofs.Flock.Claims.Recursion.VerdictTargetL
+import Proofs.Flock.Claims.Recursion.VerdictRowDCover
+import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
+
+/-!
+# `NonVacuous`'s row targets from the rows' deployed forms
+
+`TargetR` and `TargetD` from what rows R and D leave open at the deployed reader:
+
+* `targetR_of`: `TargetR` from `TargetRDep`, each rep's coin rounds at the shape's sizes (`hsz`), its four
+  accumulators (`hacc`), and the `rec-residuals` pieces with their cover and ties (`hcoverR`, `hE`, `hvv`): S and its
+  groups are `DecAt.structure_ok`, `hw` is `DecAt.hw_of_acc` and `hparts` is `DecAt.partsZero_of_pieces`.
+* `targetD_of`: `TargetD` from `TargetDDep`, the `rec-open` pieces' sides and positions (`hside`, `hpos`) and the
+  passing level checks (`hlev`), with `TargetRDep`'s `hsz` for the verifier rows' run (`DecAt.rowsRun_of`):
+  `DecAt.rowD_target`.
+
+`Top.targetL` (`VerdictTargetL`) gives `TargetL` from the coin tie `TargetZ`.
+-/
+
+namespace RecDeploy
+
+open Flock
+open Claims (Msg)
+open FlockDeploy (Coin FinalP)
+open FlockVBridge.Family (roundSizes)
+open FlockVBridge.PartS (wIdx)
+open Flock.RecAlgebra (verifierRows structureOf el)
+open Flock.RecResiduals (portSizes groups)
+open FlockSoundness.Discharge.Recursion (HClass)
+open RecDeploy.Rows (DecAt)
+
+noncomputable section
+
+namespace Top
+
+section Targets
+
+variable (rd : Msg → Option FinalP) (P : Msg → List Msg → List Coin → Prop)
+  (acc : Msg → List Msg → List Coin → ℕ → Array F128)
+
+/-- **Row R's target at the deployed reader**: each rep's coin rounds at the shape's sizes, its four accumulators,
+and `rec-residuals` pieces that hold, with one piece per (rep, group) at the copy `keyAt r p` (`hcoverR`), the copy's
+elements `w` at the group's row ports (`hE`) and its verifier values `verifierRows`' `v` at the group's `V` (`hvv`). -/
+def TargetRDep : Prop :=
+  ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ),
+    i < D.sts.size →
+      (∀ r : Fin 2, (D.rep cls (acc x ms cs) i r).rounds.toList.map Array.size = roundSizes (D.sh cls i)) ∧
+      (∀ r : Fin 2, (acc x ms cs (2 * i + r)).size = 4) ∧
+      ∃ (rpieces : List ResPiece) (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
+        (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128) (keyAt : Fin 2 → ℕ → ℕ × ℕ × ℕ × ℕ),
+        (∀ q ∈ rpieces, resHolds elemAt vvAt q x ms cs) ∧
+        (∀ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
+          structureOf (D.sh cls i) = .ok S → groups S (portSizes (D.sh cls i)) = .ok gs →
+          ∀ (r : Fin 2) p (_hp : p < gs.size), ∃ q ∈ rpieces, q.key = keyAt r p ∧
+            ∃ ns nv, RecResiduals.part (D.sh cls i) p = .ok (q.S, ns, nv)) ∧
+        (∀ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
+          structureOf (D.sh cls i) = .ok S → groups S (portSizes (D.sh cls i)) = .ok gs →
+          ∀ (r : Fin 2) p (hp : p < gs.size) k (hk : k < (wIdx (portSizes (D.sh cls i)) gs[p].2.1).size),
+            elemAt x ms (keyAt r p) k =
+              el (D.rep cls (acc x ms cs) i r).w (wIdx (portSizes (D.sh cls i)) gs[p].2.1)[k]) ∧
+        ∀ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
+          structureOf (D.sh cls i) = .ok S → groups S (portSizes (D.sh cls i)) = .ok gs →
+          ∀ (r : Fin 2) v info kappa, verifierRows (D.sh cls i) (D.rep cls (acc x ms cs) i r).rounds
+              (D.rep cls (acc x ms cs) i r).extras (D.rep cls (acc x ms cs) i r).comb = .ok (v, info, kappa) →
+            ∀ p (hp : p < gs.size) k (hk : k < gs[p].2.2.size), vvAt x cs (keyAt r p) k = el v gs[p].2.2[k]
+
+/-- **Row D's target at the deployed reader**: the `rec-open` pieces' sides (`hside`) and positions (`hpos`) at some
+key, and every verifier rows' run's level checks passing (`hlev`). -/
+def TargetDDep : Prop :=
+  ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ),
+    i < D.sts.size →
+      ∃ (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (sideAt : Msg → List Msg → OpenPiece → OpenSide)
+        (posAt : Msg → List Coin → OpenPiece → ℕ),
+        (∀ r : Fin 2, ∀ q ∈ Rows.DecAt.rowDPiecesAt key i x, q.table = i → q.rep = r.val →
+          sideAt x ms q = D.side cls i r) ∧
+        (∀ r : Fin 2, ∀ v info kappa,
+          verifierRows (D.sh cls i) (D.rep cls (acc x ms cs) i r).rounds (D.rep cls (acc x ms cs) i r).extras
+            (D.rep cls (acc x ms cs) i r).comb = .ok (v, info, kappa) →
+          ∀ q ∈ Rows.DecAt.rowDPiecesAt key i x, q.table = i → q.rep = r.val →
+            posAt x cs q = (info.lg.conss[q.level]!).pos[q.query]!) ∧
+        ∀ r : Fin 2, ∀ v info kappa,
+          verifierRows (D.sh cls i) (D.rep cls (acc x ms cs) i r).rounds (D.rep cls (acc x ms cs) i r).extras
+            (D.rep cls (acc x ms cs) i r).comb = .ok (v, info, kappa) →
+          ∀ ℓ < (D.files cls i).sch.levels.size, ((D.files cls i).sch.levels[ℓ]!).q ≤ (info.lg.conss[ℓ]!).pos.size ∧
+            Rows.levelCheck (D.files cls i).sch ((D.files cls i).proof r).cap ((D.files cls i).proof r).ligerito ℓ
+              (info.lg.conss[ℓ]!).pos = .ok ()
+
+end Targets
+
+variable {rd : Msg → Option FinalP} {P : Msg → List Msg → List Coin → Prop}
+  {acc : Msg → List Msg → List Coin → ℕ → Array F128}
+
+/-- **`TargetR` from row R's deployed form.** -/
+theorem targetR_of (h : TargetRDep rd P acc) : TargetR rd P acc := by
+  intro x ms cs hA D cls i hi
+  obtain ⟨⟨xo, sto, hst, hf, hx⟩, hr, hb, -⟩ := id hA
+  obtain ⟨hsz, hacc, rpieces, elemAt, vvAt, keyAt, hres, hcoverR, hE, hvv⟩ := h x ms cs hA D cls i hi
+  obtain ⟨S, gs, hS, hg⟩ := D.structure_ok cls hst hf hx hi D.points_eq
+  have hG := D.rowG cls (acc x ms cs) hst hf hx hi
+  exact ⟨S, gs, hS, hg, hsz,
+    fun r => D.hw_of_acc cls (acc x ms cs) i r hG D.points_eq (idx_lt D hi r)
+      (shaped_of_base hr hb D _ (idx_lt D hi r)) hS (hacc r),
+    fun r => D.partsZero_of_pieces cls (acc x ms cs) i r rpieces elemAt vvAt hres (keyAt r) (hcoverR S gs hS hg r)
+      (hE S gs hS hg r) fun v info kappa hv => hvv S gs hS hg r v info kappa hv⟩
+
+/-- **`TargetD` from row D's deployed form**, with row R's round sizes for the verifier rows' run. -/
+theorem targetD_of (hR : TargetRDep rd P acc) (h : TargetDDep rd P acc) : TargetD rd P acc := by
+  intro x ms cs hA D cls i hi
+  obtain ⟨⟨xo, sto, hst, hf, hx⟩, -, -, -⟩ := id hA
+  have hti : i < D.spec.tables.size := by
+    obtain ⟨h1, h2⟩ := D.tables_of_dense hst hf hx
+    omega
+  obtain ⟨hsz, -⟩ := hR x ms cs hA D cls i hi
+  obtain ⟨S, gs, hS, -⟩ := D.structure_ok cls hst hf hx hi D.points_eq
+  obtain ⟨key, sideAt, posAt, hside, hpos, hlev⟩ := h x ms cs hA D cls i hi
+  exact D.rowD_target cls (acc x ms cs) key hi sideAt posAt hside hpos (D.rowsRun_of cls (acc x ms cs) hti hS hsz)
+    hlev
+
+end Top
+
+end
+
+end RecDeploy
