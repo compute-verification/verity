@@ -131,8 +131,9 @@ class ServeSession:
             rec = self.cs.end()
             self.cs.log(f"[serve] remote session over the server's first {lock.audited} engine steps, a pass each: "
                         f"{'ACCEPTED' if rec['accepted'] else 'REJECTED'}" + (f" ({rec['error']})" if rec["error"] else ""))
+            mm = rec["memory_map"]
             self.record = {k: rec.get(k) for k in ("verifier", "plan", "accepted", "error", "encode")} | {
-                "agrees": (rec.get("memory_map") or {}).get("agrees"), "path": str(self.cs.out / "remote_session.json")}
+                "agrees": mm.get("agrees") if mm else None, "path": str(self.cs.out / "remote_session.json")}
         if lock is not None:
             self.record["run"] = {"steps": lock.audited + lock.unaudited, "audited": lock.audited, "unaudited": lock.unaudited}
         return self.record
