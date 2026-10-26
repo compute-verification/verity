@@ -102,7 +102,7 @@ theorem hz (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup) (hi : i < D.sts
       exact Array.getElem_mem h2'
     have hX := hne _ hmem
     have e : (R[2]!).coins = (R.map (·.coins))[2]! := by
-      rw [getElem!_pos _ 2 h2', Array.getElem_map, getElem!_pos R 2 h2R]
+      rw [getElem!_pos (R.map (·.coins)) 2 h2', Array.getElem_map, getElem!_pos R 2 h2R]
     have hc : (canonRounds D.spec D.sts cs.tail.dropLast (2 * i + r))[2]! =
         (cs.tail.dropLast.getD (((repLens D.spec D.sts).take (2 * i + r)).sum + 2) default).vals
           ((RecDeploy.repSchedAt D.spec D.sts[(2 * i + r) / 2]!).getD 2 default).1 := by
@@ -134,7 +134,7 @@ theorem hsz_of_sched (acc : ℕ → Array F128) (hnd : (D.spec.repStreams.toList
   · intro j h₁ h₂
     have hj : j < (RecDeploy.repSchedAt D.spec D.sts[i]!).length := by simpa using h₂
     simp only [canonRounds, hd]
-    simp [FlockDeploy.Coin.vals, List.getD_eq_getElem?_getD, hd, hj]
+    simp [FlockDeploy.Coin.vals, List.getD_eq_getElem?_getD, hj]
 
 end DecAt
 
