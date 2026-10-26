@@ -1,12 +1,12 @@
 import math
 
 import pytest
-from rho import classes, lean
+from rho import analysis, classes, lean
 from rho.attacks import ATTACKS
 from rho.classes import CLASSES
 from rho.params import Registry
 from rho.regimes import KINDS
-from rho.scenario import evaluate_named
+from rho.scenario import evaluate_named, reads
 
 REG = Registry.load()
 
@@ -44,3 +44,17 @@ def test_every_lean_citation_is_in_a_lock():
     cites += [c for kind in KINDS.values() for c in getattr(kind, "CITES", ()) + getattr(kind, "PHYSICAL", ())]
     absent = sorted({c for c in cites if lean.status(c) == "absent"})
     assert not absent, f"no lock lists {absent}"
+
+
+@pytest.mark.parametrize("name", REG.names("scenario"))
+def test_admitting_weaker_statuses_never_lowers_the_guarantee(name):
+    r = evaluate_named(REG, name)
+    rhos = [analysis.upto(s)(r) for s in ("proved", "conditional", "draft", "absent")]
+    assert rhos == sorted(rhos) and math.isclose(rhos[-1], r.lo)
+    assert all(0 <= f.combined.slowdown.monitored <= 1 for f in r.families)
+
+
+def test_a_scenario_reads_its_own_tables_and_not_the_others():
+    keys = reads(REG, "reference-onsite-h200")
+    assert "fleet.world-h200.dark" in keys and "regime.onsite.residual_bits" in keys
+    assert not any(k.startswith(("fleet.world-nvl72.", "model.kimi-k2.")) for k in keys)

@@ -31,10 +31,13 @@ from typing import Literal
 
 @dataclass(frozen=True)
 class Budget:
-    """What one block may use: the FLOPs it runs and the novel bits that enter it."""
+    """What one block may use: the FLOPs it runs, the novel bits that enter it, and the bits that may cross its
+    narrowest declared forward cut (`math.inf` where the policy declares none: an NCI block; an episode of the proof of
+    forward computation, whose operators form a one-way chain, has `n_max` positions times the write allowance)."""
 
     compute: float
     inputs: float
+    cut: float = math.inf
 
 
 #: The most counted products one block with this budget finishes: a cap for a bound, a construction for an attack.
@@ -122,6 +125,13 @@ class Slowdown:
     efficiency: float
     regions: Mapping[str, Share]
     terms: Mapping[str, float]
+
+    @property
+    def monitored(self) -> float:
+        """The share of the adversary's training done on monitored compute: the protocols do their job for this
+        algorithm when it is small (`g ≪ d`), and not when it is near 1."""
+        rate = self.dark + (1 - self.dark) * self.g
+        return (1 - self.dark) * self.g / rate if rate > 0 else 0.0
 
 
 def slowdown(partition: Partition, allowance: Allowance, kappa: float, efficiency: float = 1.0,

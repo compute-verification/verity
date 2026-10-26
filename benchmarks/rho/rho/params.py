@@ -42,8 +42,21 @@ class Param:
 
 
 class Registry:
-    def __init__(self, params: Mapping[str, Param]):
+    def __init__(self, params: Mapping[str, Param], seen: set[str] | None = None,
+                 index: Mapping[str, tuple[str, ...]] | None = None):
         self._params = dict(params)
+        #: the keys read so far, when tracking (`tracked`)
+        self.seen = seen
+        #: each table's leaf keys, by the table's prefix; shared by every registry with the same keys
+        self._index = index
+
+    def _tables(self) -> Mapping[str, tuple[str, ...]]:
+        if self._index is None:
+            index: dict[str, list[str]] = {}
+            for k in self._params:
+                index.setdefault(k.rpartition(".")[0], []).append(k)
+            self._index = {t: tuple(ks) for t, ks in index.items()}
+        return self._index
 
     @classmethod
     def load(cls, paths: Iterable[Path] | None = None) -> Registry:
@@ -67,9 +80,16 @@ class Registry:
 
     def param(self, key: str) -> Param:
         try:
-            return self._params[key]
+            p = self._params[key]
         except KeyError:
             raise KeyError(f"no parameter {key!r} in the registry (data/*.toml)") from None
+        if self.seen is not None:
+            self.seen.add(key)
+        return p
+
+    def tracked(self) -> Registry:
+        """This registry, recording in `seen` every key read through it."""
+        return Registry(self._params, set(), self._tables())
 
     def params(self) -> list[Param]:
         return list(self._params.values())
@@ -77,16 +97,14 @@ class Registry:
     def names(self, prefix: str) -> list[str]:
         """The tables directly under `prefix` (`names("fleet")` lists the fleets)."""
         head = prefix + "."
-        return sorted({k[len(head):].split(".")[0] for k in self._params if k.startswith(head)
-                       and "." in k[len(head):]})
+        return sorted({t[len(head):].split(".")[0] for t in self._tables() if t.startswith(head)})
 
     def table(self, prefix: str) -> dict[str, Any]:
         """The leaves directly in table `prefix`, by their last name."""
-        head = prefix + "."
-        out = {k[len(head):]: p.value for k, p in self._params.items() if k.startswith(head) and "." not in k[len(head):]}
-        if not out:
+        keys = self._tables().get(prefix)
+        if not keys:
             raise KeyError(f"no table {prefix!r} in the registry (data/*.toml)")
-        return out
+        return {k[len(prefix) + 1:]: self.param(k).value for k in keys}
 
     def fields(self, cls: type, prefix: str, **given: Any) -> Any:
         """An instance of dataclass `cls` from table `prefix`: each field from the table (or `given`), and no other keys
@@ -106,7 +124,7 @@ class Registry:
         params = dict(self._params)
         for key, value in values.items():
             params[key] = replace(self.param(key), value=value)
-        return Registry(params)
+        return Registry(params, index=self._tables())
 
 
 def _flatten(table: Mapping[str, Any], prefix: str = "") -> Iterable[tuple[str, Param]]:
