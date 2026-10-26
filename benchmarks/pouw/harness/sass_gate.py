@@ -20,13 +20,19 @@ or no numeric run, and nothing is exempt:
 - rcp.rn's and sqrt.rn's fast path around a call into a pinned body (`FAST`): the range check, the branch, the call and the
   four-instruction fast block;
 - div.rn's fast path (`DIV`): MUFU.RCP b, its five FFMAs and FCHK, and the branch around a call into a pinned body; a
-  constant numerator is an immediate in the FFMAs, and FCHK's numerator register must hold the same bits;
+  constant numerator is an immediate in the FFMAs, and FCHK's numerator register must hold the FFMAs' numerator (`value`:
+  the same register unchanged, a copy, the same immediate or a load of the same slot of constant bank 0);
 - integer division's seed (`match_int_seed`): I2F.RP d, MUFU.RCP, +2 ulp (IADD3 0xffffffe, or 0x1ffffffe at 64 bits), then
   F2I(.FTZ).U32/U64.TRUNC, each step the one reader of the last that only its value reaches; the F2I's input is a normal
   float, so .FTZ can't change it.
 ptxas for sm_90a writes the range checks' and the seed's add of an immediate as VIADD R, R, imm or IADD3 R, R, imm, RZ
 where sm_120a's writes IADD3 R, PT, PT, R, imm, RZ, and a constant numerator's move from a uniform register as IMAD.U32
 R, RZ, RZ, UR: each sequence takes every spelling of the same 32-bit integer operation, and nothing else.
+Each fast path's call passes the slow path exactly the fast path's operands (`_passes`): the registers the body may read
+before writing them and the constant-bank slots it loads hold, as `value` keys them, x (rcp, sqrt) or a and b (div), with
+the return address besides, so a call block may move them into place or reload them from their slot (ULDC, IMAD.U32).
+A BRX branches to its ``BRANCH_TARGETS`` (the cubin's EIATTR_INDIRECT_BRANCH_TARGETS, as nvdisasm prints them); any other
+indirect branch is a path the gate can't follow.
 rsqrt has no entry: at default flags ptxas builds __frsqrt_rn from bare MUFU.RSQ, so it's refused.
 Every operand of a matched sequence is the one definition that reaches it on every path (a sequence may straddle blocks, as
 when ptxas hoists a loop's next range check and seed above the last iteration's tail), inputs unchanged between their
@@ -60,6 +66,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import itertools
 import json
 import os
 import re
@@ -101,6 +108,8 @@ _PRED = re.compile(r"^@!?U?P[T0-9]+\s+")
 _GUARD = re.compile(r"^@(!?)(U?P[T0-6])\s+")
 _REG = re.compile(r"(?<![\w.$])(UR\d+|R\d+|UP[0-6]|P[0-6]|PR)(\.64)?(?!\w)")
 _TARGET = re.compile(r"`\(([^)\s]+)\)")
+# nvdisasm's rendering of a BRX's EIATTR_INDIRECT_BRANCH_TARGETS, which ptxas writes into the cubin as it does the tkinfo note
+_BRANCH_TARGETS = re.compile(r'\(\*"BRANCH_TARGETS ([^"]+)"\*\)')
 _SUBROUTINE = re.compile(r"\$__internal_\d+_\$(\w+)")
 
 
@@ -204,9 +213,10 @@ def _split(s: str) -> list[str]:
 
 class Insn:
     """One instruction: its guard (``!P0``), opcode, operands, the registers it may read, surely writes when it executes
-    (``writes``; ``kills`` is the same, empty when guarded) and may write, and its branch targets (label names)."""
+    (``writes``; ``kills`` is the same, empty when guarded) and may write, its branch targets (label names: a BRX's are its
+    ``BRANCH_TARGETS``), and whether it branches where the gate can't follow (``indirect``: JMX, JMP, a BRX without them)."""
 
-    __slots__ = ("addr", "text", "guard", "op", "args", "reads", "writes", "kills", "maydef", "targets")
+    __slots__ = ("addr", "text", "guard", "op", "args", "reads", "writes", "kills", "maydef", "targets", "indirect")
 
     def __init__(self, addr: int, text: str):
         self.addr, self.text = addr, text
@@ -218,6 +228,11 @@ class Insn:
         self.op = head.split(".")
         self.args = _split(rest)
         self.targets = _TARGET.findall(rest)
+        bt = _BRANCH_TARGETS.search(rest) if self.op[0] == "BRX" else None
+        if bt:
+            self.targets = [x.strip() for x in bt.group(1).split(",")]
+            self.args = _split(rest[:bt.start()])
+        self.indirect = self.op[0] in INDIRECT and not bt
         o, (dw, rw) = self.op[0], _widths(self.op)
         a, mem = self.args, o in MEMORY
         reads = {g.group(2)} - {"PT", "UPT"} if g else set()
@@ -237,6 +252,10 @@ class Insn:
                 for arg, w in zip(srcs, ws):
                     reads |= _regs(arg, w)
                 srcs = srcs[len(ws):]
+            elif self.op == ["P2R"] and len(srcs) == 3 and srcs[0] == "PR" and re.fullmatch(r"0x[0-9a-f]+", srcs[2]):
+                # P2R R, PR, R', mask reads the predicates whose bits the mask sets
+                reads |= {p for i, p in enumerate(_PREDS) if int(srcs[2], 16) >> i & 1}
+                srcs = srcs[1:]
             for arg in srcs:
                 reads |= _regs(arg, rw, address=mem)
             # F2F.<to>.<from> names its destination's type, so that type's width is all it writes (sm_90a's ptxas
@@ -293,7 +312,7 @@ class Function:
             if ins.guard:
                 for r in ins.reads | ins.maydef:
                     self._guards.setdefault(r, set()).add(ins.guard.lstrip("!"))
-        self.entries = Counter(self.labels.get(t) for i in self.insns if i.op[0] == "BRA" for t in i.targets)
+        self.entries = Counter(self.labels.get(t) for i in self.insns if i.op[0] in ("BRA", "BRX") for t in i.targets)
 
     def target(self, k: int) -> int | None:
         t = self.insns[k].targets
@@ -303,9 +322,9 @@ class Function:
         """The instructions that may follow k; None when unknown (an indirect branch)."""
         ins = self.insns[k]
         o = ins.op[0]
-        if o in INDIRECT or (o == "BRA" and not ins.targets):
+        if ins.indirect or (o == "BRA" and not ins.targets):
             return None
-        if o == "BRA":
+        if o in ("BRA", "BRX"):
             t = [self.labels.get(x) for x in ins.targets]
             if None in t:
                 return None
@@ -342,8 +361,9 @@ class Function:
         return [i - 1] if s is not None and i in s else []
 
     def reach(self, k: int, reg: str) -> int | None:
-        """The instruction whose result `reg` holds at k on every path to k: None when paths differ, or one meets a call, an
-        entry, a guarded or partial write, or a label it can't see behind (a function with an indirect branch)."""
+        """The instruction whose result `reg` holds at k on every path to k: None when paths differ, or one meets a call that
+        may change it (`preserves`), an entry, a guarded or partial write, or a label it can't see behind (a function with an
+        indirect branch)."""
         found, seen, stack = None, set(), [k]
         while stack:
             ps = self.before(stack.pop())
@@ -354,7 +374,7 @@ class Function:
                     continue
                 seen.add(j)
                 p = self.insns[j]
-                if p.op[0] == "CALL" or p.op[0] in INDIRECT:
+                if (p.op[0] == "CALL" and not self.preserves(j, reg)) or p.indirect:
                     return None
                 if reg in p.maydef:
                     if reg not in p.kills or found not in (None, j):
@@ -365,8 +385,8 @@ class Function:
         return found
 
     def steady(self, reg: str, i: int, j: int) -> bool:
-        """`reg` holds the same value when j reads it as when i does: every path to j passes i, and nothing from i on writes
-        `reg` or calls."""
+        """`reg` holds the same value when j reads it as when i does: every path to j passes i, and nothing from i on may
+        write `reg` (a call, unless it `preserves` it)."""
         seen, stack = set(), [j] if i != j else []
         while stack:
             ps = self.before(stack.pop())
@@ -377,7 +397,7 @@ class Function:
                     continue
                 seen.add(t)
                 p = self.insns[t]
-                if reg in p.maydef or p.op[0] == "CALL" or p.op[0] in INDIRECT:
+                if reg in p.maydef or (p.op[0] == "CALL" and not self.preserves(t, reg)) or p.indirect:
                     return False
                 if t != i:
                     stack.append(t)
@@ -397,6 +417,13 @@ class Function:
             t = None if sub is None else self._trace([sub[1]], reg, sub)
             self._effects[lab, reg] = None if t is None else (bool(t[0]), not t[1])
         return self._effects[lab, reg]
+
+    def preserves(self, k: int, reg: str) -> bool:
+        """The CALL at k returns with `reg` unchanged: it enters a subroutine of this section that may leave only by its
+        return, and none of whose instructions may write `reg`."""
+        sub = self.subroutines.get(self.insns[k].targets[0] if self.insns[k].targets else None)
+        return sub is not None and self.callee_effect(k, reg) is not None \
+            and not any(reg in self.insns[t].maydef for t in range(sub[1], sub[2]))
 
     def defined_elsewhere(self, u: int, reg: str, d: int) -> bool:
         """Whether a write of `reg` besides d reaches u, so that u reads a merge of d's value and another: an unguarded
@@ -465,7 +492,7 @@ class Function:
             sure = lit is None or lit in facts
             if reg in ins.reads and not (lit and lit in pending):
                 out.add(i)
-            if o in INDIRECT or (sub and o in ("CALL", "EXIT")):
+            if ins.indirect or (sub and o in ("CALL", "EXIT")):
                 return None
             if o == "CALL":
                 eff = self.callee_effect(i, reg)
@@ -482,7 +509,7 @@ class Function:
             if gone:
                 facts = frozenset(f for f in facts if f[0] not in gone)
                 pending = frozenset(f for f in pending if f[0] not in gone)
-            if o in ("BRA", "RET", "EXIT"):
+            if o in ("BRA", "BRX", "RET", "EXIT"):
                 if lit:
                     alts = [(lit, True)] + ([] if lit in facts else [((lit[0], not lit[1]), False)])
                 else:
@@ -502,7 +529,7 @@ class Function:
                         if not back:
                             return None
                         stack.extend((x, f2, p2) for x in back)
-                    elif o == "BRA":
+                    elif o in ("BRA", "BRX"):
                         t = [self.labels.get(x) for x in ins.targets]
                         if not t or None in t:
                             return None
@@ -576,8 +603,10 @@ def _block(fn: Function, start: int, block: list[tuple], env: dict) -> tuple[dic
     return go(0, env, {})
 
 
+# A call block's moves of the slow path's operands and return address into place (`_passes` checks what they pass): an
+# immediate, a register, or a reload of a fixed slot of constant bank 0 (ULDC, then IMAD.U32 R, RZ, RZ, UR)
 SETUP = re.compile(r"(MOV|MOV32I) U?R\d+, (0x[0-9a-f]+|-?\d+|U?R\d+)|IMAD\.MOV\.U32 R\d+, RZ, RZ, (0x[0-9a-f]+|-?\d+|R\d+)"
-                   r"|HFMA2(\.MMA)? R\d+, -RZ, RZ, \S+, \S+")
+                   r"|HFMA2(\.MMA)? R\d+, -RZ, RZ, \S+, \S+|ULDC UR\d+, c\[0x0\]\[0x[0-9a-f]+\]|IMAD\.U32 R\d+, RZ, RZ, UR\d+")
 COPY = re.compile(r"MOV R\d+, R\d+|IMAD\.MOV\.U32 R\d+, RZ, RZ, R\d+")
 
 FAST = {
@@ -600,7 +629,7 @@ DIV = {"slowpath": "__cuda_sm3x_div_rn_noftz_f32_slowpath",
        "chain": [("FFMA $t, -$b, $r, 1", "FFMA $t, $r, -$b, 1"), ("FFMA $u, $r, $t, $r", "FFMA $u, $t, $r, $r"),
                  ("FFMA $q, $a, $u, RZ", "FFMA $q, $u, $a, RZ"), ("FFMA $e, -$b, $q, $a", "FFMA $e, $q, -$b, $a"),
                  ("FFMA $z, $u, $e, $q", "FFMA $z, $e, $u, $q")],
-       "check": ("FCHK $P, $a, $b",), "check_constant": ("FCHK $P, $n, $b",)}
+       "check": ("FCHK $P, $n, $b",)}
 INT_ROUND_UP = {"0xffffffe", "0x1ffffffe"}
 
 
@@ -734,6 +763,8 @@ def match_fast(fn: Function, c: int, kind: str, bodies: frozenset[str]) -> Match
     res = _returned(fn, c, copies, env["z"])
     if res is None:
         return "the slow path doesn't return its result in $z on every path"
+    if (e := _passes(fn, c, [value(fn, g, env["x"])])) is not None:
+        return e
     m = Match(f"{kind}-fast-path", members, inner)
     return _escape(fn, m) or m
 
@@ -761,18 +792,71 @@ def _immediate(ins: Insn) -> int | None:
     return None
 
 
-def constant(fn: Function, k: int, reg: str) -> int | None:
-    """The 32 bits `reg` holds at k when a load of an immediate set them on every path to k, else None."""
+_SLOT = re.compile(r"c\[0x0\]\[0x[0-9a-f]+\]")
+
+
+def _copied(ins: Insn) -> str | None:
+    """The register a 32-bit copy (MOV, UMOV, IMAD.MOV.U32 or IMAD.U32 R, RZ, RZ, src) reads, else None."""
+    a = ins.args
+    if ins.name in ("MOV", "UMOV") and len(a) == 2 and re.fullmatch(r"U?R\d+", a[1]):
+        return a[1]
+    if ins.name in ("IMAD.MOV.U32", "IMAD.U32") and len(a) == 4 and a[1:3] == ["RZ", "RZ"] and re.fullmatch(r"U?R\d+", a[3]):
+        return a[3]
+    return None
+
+
+def value(fn: Function, k: int, reg: str, seen: frozenset = frozenset()) -> tuple:
+    """What `reg` holds at k, through the copies that set it on every path to k: ``("imm", bits)`` from a load of an
+    immediate (RZ is 0), ``("const", slot)`` from a 32-bit LDC or ULDC of a fixed slot of constant bank 0 (the kernel's
+    parameters, which nothing writes while it runs), else ``("reg", r, j)``: register r's value when j reads it."""
+    if reg in ("RZ", "URZ"):
+        return ("imm", 0)
     d = fn.reach(k, reg)
-    if d is None:
-        return None
+    if d is None or d in seen:
+        return ("reg", reg, k)
     ins = fn.insns[d]
-    if ins.name in ("MOV", "UMOV") and len(ins.args) == 2 and re.fullmatch(r"U?R\d+", ins.args[1]):
-        return constant(fn, d, ins.args[1])
-    if ins.name == "IMAD.U32" and len(ins.args) == 4 and ins.args[1:3] == ["RZ", "RZ"] \
-            and re.fullmatch(r"UR\d+", ins.args[3]):
-        return constant(fn, d, ins.args[3])
-    return _immediate(ins)
+    if (src := _copied(ins)) is not None:
+        return value(fn, d, src, seen | {d})
+    if (v := _immediate(ins)) is not None:
+        return ("imm", v)
+    if ins.name in ("LDC", "ULDC") and len(ins.args) == 2 and _SLOT.fullmatch(ins.args[1]):
+        return ("const", ins.args[1])
+    return ("reg", reg, k)
+
+
+def same(fn: Function, x: tuple, y: tuple) -> bool:
+    """Two `value` keys are the same 32 bits: equal constants, or one register unchanged from one's read to the other's."""
+    if x[0] == y[0] == "reg":
+        return x[1] == y[1] and (fn.steady(x[1], x[2], y[2]) or fn.steady(x[1], y[2], x[2]))
+    return x == y
+
+
+def _passes(fn: Function, c: int, want: list[tuple]) -> str | None:
+    """None when the slow path the CALL at c enters reads exactly the operands `want` (`value` keys): the registers its body
+    may read before writing them, the constant-bank slots it loads, and the return address (the instruction after c)."""
+    lo, hi = fn.subroutines[fn.insns[c].targets[0]][1:]
+    inputs, slots = [], set()
+    for t in range(lo, hi):
+        ins = fn.insns[t]
+        if "c[" in ins.text:
+            if ins.name not in ("LDC", "ULDC") or len(ins.args) != 2 or not _SLOT.fullmatch(ins.args[1]):
+                return f"the slow path reads the constant bank at 0x{ins.addr:04x} other than one fixed 32-bit slot"
+            slots.add(ins.args[1])
+    for reg in sorted({r for t in range(lo, hi) for r in fn.insns[t].reads}):
+        eff = fn.callee_effect(c, reg)
+        if eff is None:
+            return "the slow path may leave other than by its return"
+        if eff[0]:
+            inputs.append(value(fn, c, reg))
+    back = ("imm", fn.insns[c + 1].addr) if c + 1 < len(fn.insns) else None
+    if back not in inputs:
+        return "the slow path isn't passed its return address"
+    inputs.remove(back)
+    inputs += [("const", s) for s in sorted(slots)]
+    if len(inputs) != len(want) or not any(all(same(fn, x, y) for x, y in zip(p, want))
+                                           for p in itertools.permutations(inputs)):
+        return "the slow path isn't passed the fast path's operands"
+    return None
 
 
 def match_div(fn: Function, k0: int, bodies: frozenset[str]) -> Match | str:
@@ -799,14 +883,22 @@ def match_div(fn: Function, k0: int, bodies: frozenset[str]) -> Match | str:
     g = at + 1
     while g < n and g not in fn.label_at and not _control(fn.insns[g]):
         g += 1
-    check = DIV["check" if re.fullmatch(r"U?R\d+", env["a"]) else "check_constant"][0]
-    fchk = [t for t in range(start, g) if unify(check, fn.insns[t], env) is not None]
+    qa = next(t for t, p in pats.items() if _defines(p) == "q")
+    if re.fullmatch(r"U?R\d+", env["a"]):
+        a = value(fn, qa, env["a"])
+    elif (bits := _f32(env["a"])) is not None:
+        a = ("imm", bits)
+    else:
+        return f"the numerator {env['a']} isn't an FP32 immediate"
+    b = value(fn, k0, env["b"])
+    check = DIV["check"][0]
+    fchk = [(t, e) for t in range(start, g) if (e := unify(check, fn.insns[t], env)) is not None
+            and same(fn, value(fn, t, e["n"]), a)]
     if len(fchk) != 1:
-        return f"no {check} in the block"
-    env = unify(check, fn.insns[fchk[0]], env)
-    pats[fchk[0]] = check
-    if "n" in env and (constant(fn, fchk[0], env["n"]) != _f32(env["a"]) or _f32(env["a"]) is None):
-        return f"FCHK's numerator {env['n']} isn't the constant {env['a']}"
+        return f"no {check} in the block whose $n holds $a"
+    (t, env), = fchk
+    fchk = [t]
+    pats[t] = check
     br = fn.insns[g] if g < n else None
     if br is None or g in fn.label_at or br.name != "BRA" or br.guard != "!" + env["P"] or len(br.args) != 1:
         return "no @!$P BRA after the fast path"
@@ -823,6 +915,8 @@ def match_div(fn: Function, k0: int, bodies: frozenset[str]) -> Match | str:
     res = _returned(fn, c, copies, env["z"])
     if res is None:
         return "the slow path doesn't return its result in $z on every path"
+    if (e := _passes(fn, c, [a, b])) is not None:
+        return e
     inner = [(t, env[_defines(p)]) for t, p in pats.items() if _defines(p) not in ("z", "P")]
     m = Match("div-fast-path", {g, c, *setup, *copies, *pats}, inner)
     return _escape(fn, m) or m

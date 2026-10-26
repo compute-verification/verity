@@ -226,7 +226,7 @@ def test_a_constant_numerator_must_be_the_constant_fchk_checks():
     text = in_function(listing("plain"), "cdiv_k", "UMOV UR6, 0x40400000", "UMOV UR6, 0x40800000")
     v = verdict("plain", text=text)
     assert offending(v) == {("cdiv_k", "MUFU.RCP R0, R3")}
-    assert "FCHK's numerator R8 isn't the constant 3" in v["offending"][0]["why"]
+    assert "no FCHK $P, $n, $b in the block whose $n holds $a" in v["offending"][0]["why"]
 
 
 PIPE = ("ISETP.GT.U32.AND P0, PT, R4, 0x727fffff, PT ;\n"
