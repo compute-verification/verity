@@ -298,9 +298,11 @@ class Plan:
             addr = torch.zeros((2, len(tensors)), dtype=torch.int64, device=self.device)
             g = torch.cuda.CUDAGraph(keep_graph=True)
             g.capture_begin(pool=self._pool, capture_error_mode="thread_local")
+            sc.capturing = True
             try:
                 sc._passes(grp, self.rows(grp.shape, tensors, addr), False)
             finally:
+                sc.capturing = False
                 g.capture_end()
             g.instantiate()
             n = -(-sc.slots // self.per_pass(grp.shape, sc.slots))
@@ -429,20 +431,22 @@ class StepCommitter:
     (a list), each phase appends ``(name, event)``, its end on the side stream (timing only). It holds each slot's frontier
     (``frontier``, (slots, depth + 1, 8)) and a pass's temporaries, never a slot's leaves.
 
-    With ``graphs`` (a CUDA plan, no marks), each add is one CUDA graph launch: the group's passes, captured on the first
-    add of that group at these slots, pass size and leaf kernel (``Plan.graph``), and replayed with the tensors' addresses
-    and the salt key as data. The kernels and their arguments are the same, so the roots are; the host enqueues a handful of
-    calls an add instead of a pass's dozens, so it no longer waits on the launch queue. The frontier is then the plan's,
-    so a plan has one such step open at a time, its adds and finish in order."""
+    With ``graphs`` (a CUDA plan), each add is one CUDA graph launch: the group's passes, captured on the first add of that
+    group at these slots, pass size and leaf kernel (``Plan.graph``), and replayed with the tensors' addresses and the salt
+    key as data. The kernels and their arguments are the same, so the roots are; the host enqueues a handful of calls an add
+    instead of a pass's dozens, so it no longer waits on the launch queue. The frontier is then the plan's, so a plan has
+    one such step open at a time, its adds and finish in order. Its ``marks`` are one ``("add", event)`` an add, and
+    ``finish``'s."""
 
     def __init__(self, plan: Plan, step: int, slots: int, salt_key: bytes, marks: list[tuple[str, Any]] | None = None,
                  graphs: bool = False) -> None:
         if len(salt_key) != 32:
             raise ValueError("a salt key is 32 bytes")
-        if graphs and (plan.host or marks is not None):
-            raise ValueError("a step on graphs is on a CUDA plan, and unmarked")
+        if graphs and plan.host:
+            raise ValueError("a step on graphs is on a CUDA plan")
         self.step_did = S.step_domain(plan.context, plan.layout, step, slots).domain_id
         self.plan, self.slots, self.k, self.marks, self.graphs = plan, slots, 0, marks, graphs
+        self.capturing = False
         self.salts = E.SaltKey(salt_key)
         if graphs:
             if plan._open is not None and plan._open.k:
@@ -457,7 +461,7 @@ class StepCommitter:
                 self.frontier = plan._frontiers[slots]
 
     def _mark(self, name: str) -> None:
-        if self.marks is not None and not self.plan.host:
+        if self.marks is not None and not self.plan.host and not self.capturing:
             ev = self.plan.torch.cuda.Event(enable_timing=True)
             ev.record(self.plan.stream)
             self.marks.append((name, ev))
@@ -510,6 +514,7 @@ class StepCommitter:
             gr.graph.replay()
             done = torch.cuda.Event()
             done.record(plan.stream)
+        self._mark("add")
         return done
 
     def _leaves(self, grp: _Group, frames: Any, table: Any, s0: int, last: bool) -> tuple[Any, Any]:

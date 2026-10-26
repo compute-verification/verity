@@ -75,6 +75,21 @@ def test_the_edge_layout_on_graphs() -> None:
         assert G.commit(plan, step, key, _cuda(out), 300, graphs=True) == G.commit(host, step, key, out, 300)
 
 
+def test_a_marked_step_on_graphs_marks_each_add() -> None:
+    """Marks (e2e_h200 times its commit by the last) are one an add on graphs, none captured, and finish's as ever."""
+    layout = S.h200_layout(layers=2)
+    plan = G.Plan(CTX, layout)
+    for step in (1, 2):
+        out = S.random_outputs(layout, 3, np.random.default_rng(step))
+        marks: list = []
+        sc = G.StepCommitter(plan, step, 3, KEY, marks=marks, graphs=True)
+        for tensors in _cuda(out):
+            sc.add(tensors)
+        assert sc.finish().result() == S.commit(CTX, layout, step, KEY, out, 3)
+        assert [n for n, _ in marks] == ["add"] * len(layout.groups) + ["slot_trees", "step_tree"]
+        assert marks[0][1].elapsed_time(marks[-1][1]) >= 0
+
+
 def test_a_plan_has_one_step_on_graphs_open() -> None:
     layout = S.edge_layout()
     plan = G.Plan(CTX, layout)
