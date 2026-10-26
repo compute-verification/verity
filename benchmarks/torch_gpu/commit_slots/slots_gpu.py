@@ -76,25 +76,55 @@ class _Engine(E.Engine):
 
 
 @dataclass(frozen=True)
+class _Shape:
+    """A group's rows and units as arrays, the same for every group the layout repeats (its layers): each row's parts
+    (``a`` then ``b``, ``b_len`` 0 for a one-part row) and its unit and rank, the engine's row spec with byte offsets in
+    place of addresses (``row_setup`` done), the row kernel's order, and for each row count n > 1 its units and their
+    first rows."""
+    rows: int
+    units: int
+    unit_of_row: np.ndarray
+    rank: np.ndarray
+    src: np.ndarray
+    off: np.ndarray
+    extent: np.ndarray
+    spec: Any
+    order: Any
+    nbytes: tuple[int, ...]
+    single: Any
+    single_rows: Any
+    multi: dict[int, tuple[Any, Any]]
+
+
+@dataclass(frozen=True)
 class _Group:
-    parts: list[list[tuple[int, int, int]]]
+    shape: _Shape
     leaf_table: Any
-    units: tuple[tuple[int, int], ...]
+    dids: Any
     first_unit: int
 
 
 class Plan:
-    """What a run's ``context`` and ``layout`` fix, on ``device`` (a CUDA device, or ``"host"`` for the engine's host twin)."""
+    """What a run's ``context`` and ``layout`` fix, on ``device`` (a CUDA device, or ``"host"`` for the engine's host twin).
+    Its work is linear in the layout's units: each unit's domain id is hashed once (``slots.unit_domain_ids``), and each
+    group the layout repeats is laid out once."""
 
     def __init__(self, context: bytes, layout: S.Layout, device: Any = "cuda", arch: str | None = None) -> None:
         self.context, self.layout = context, layout
         self.engine = _Engine(device, arch)
         self.host, self.torch, self.device = self.engine.host, self.engine.torch, self.engine.device
-        self.unit_dids = [S.unit_domain(context, layout, u).domain_id for u in range(layout.unit_count)]
+        self.unit_dids = E.words(S.unit_domain_ids(context, layout))
         self.slot_did = S.slot_domain(context, layout).domain_id
         self.stream = None if self.host else self.torch.cuda.Stream(self.device)
+        shapes: dict[int, _Shape] = {}
         with self.side():
-            self.groups = [self._group(i, g) for i, g in enumerate(layout.groups)]
+            self.groups = []
+            u0 = 0
+            for i, g in enumerate(layout.groups):
+                if id(g) not in shapes:
+                    shapes[id(g)] = self._shape(g)
+                self.groups.append(self._group(i, u0, shapes[id(g)]))
+                u0 += len(g.units)
         if not self.host:
             self.torch.cuda.synchronize(self.device)
 
@@ -102,30 +132,111 @@ class Plan:
         """The plan's side stream as the current stream (nothing on the host)."""
         return contextlib.nullcontext() if self.host else self.torch.cuda.stream(self.stream)
 
-    def _group(self, i: int, g: S.Group) -> _Group:
-        u0 = self.layout.unit_base[i]
-        parts: list[list[tuple[int, int, int]]] = []
-        did_of_row, rank, salt_row, units = [], [], [], []
-        for k, unit in enumerate(g.units):
-            units.append((len(parts), len(unit)))
-            for r, row in enumerate(unit):
-                if len(row.parts) > 2:
-                    raise ValueError("a row on the device has at most two parts")
-                parts.append([(p.source, p.offset, p.nbytes) for p in row.parts])
-                did_of_row.append(k)
-                rank.append(r)
-                salt_row.append(self.layout.row_base[u0 + k] + r)
-        lt = self.engine.leaf_table(self.unit_dids[u0:u0 + len(g.units)], did_of_row, rank, None, salt_row)
-        return _Group(parts, lt, tuple(units), u0)
+    def put(self, a: np.ndarray) -> Any:
+        """An index or word array on the plan's device (int64 there)."""
+        return a if self.host else self.torch.from_numpy(np.ascontiguousarray(a).view(np.int64)).to(self.device)
+
+    def _shape(self, g: S.Group) -> _Shape:
+        n = np.fromiter((len(u) for u in g.units), dtype=np.int64, count=len(g.units))
+        first = np.concatenate(([0], np.cumsum(n)[:-1])).astype(np.int64)
+        rows = [r for u in g.units for r in u]
+        if any(len(r.parts) > 2 for r in rows):
+            raise ValueError("a row on the device has at most two parts")
+        G = len(rows)
+        flat = [(p.source, p.offset, p.nbytes) for r in rows for p in (*r.parts, *[S.Part(0, 0, 0)] * (2 - len(r.parts)))]
+        cols = np.array(flat, dtype=np.int64).reshape(G, 2, 3) if G else np.zeros((0, 2, 3), dtype=np.int64)
+        src, off, ln = cols[:, :, 0].T.copy(), cols[:, :, 1].T.copy(), cols[:, :, 2].T.copy()
+        spec = np.zeros(G, dtype=E.ROW_SPEC)
+        spec["a"], spec["b"], spec["a_len"], spec["b_len"] = off[0], off[1], ln[0], ln[1]
+        spec["nbytes"] = ln[0] + ln[1]
+        spec = self.engine._up(spec)
+        self.engine._ok(self.engine.lib.sxr_row_setup(self.engine._stream(), self.engine._ptr(spec), G), "row setup")
+        nbytes = ln[0] + ln[1]
+        order = np.argsort(-((nbytes + 17 + 127) // 128), kind="stable").astype(np.uint32)
+        extent = np.zeros(len(g.sources), dtype=np.int64)
+        for k in range(2):
+            has = ln[k] > 0
+            np.maximum.at(extent, src[k][has], off[k][has] + ln[k][has])
+        multi = {}
+        for m in sorted(set(n.tolist()) - {1}):
+            units = np.flatnonzero(n == m)
+            multi[m] = (self.put(units), self.put(first[units][:, None] + np.arange(m)))
+        ones = np.flatnonzero(n == 1)
+        return _Shape(G, len(n), np.repeat(np.arange(len(n)), n), np.arange(G) - np.repeat(first, n), self.put(src), off, extent,
+                      spec, self.engine._up(order), tuple(nbytes.tolist()), self.put(ones), self.put(first[ones]), multi)
+
+    def _group(self, i: int, u0: int, shape: _Shape) -> _Group:
+        dids = self.unit_dids[u0:u0 + shape.units]
+        salt_row = self.layout.group_row_base[i] + np.arange(shape.rows, dtype=np.int64)
+        lt = self.engine.leaf_table(dids, shape.unit_of_row, shape.rank, None, salt_row)
+        return _Group(shape, lt, self.put(dids), u0)
+
+    def rows(self, shape: _Shape, tensors: Sequence[Any]) -> Any:
+        """The engine's row table for a group of ``shape`` over ``tensors``: its spec with each part's tensor address added
+        (the engine's ``rows``, without a Python step a row)."""
+        slots = int(tensors[0].shape[0])
+        base, stride, width = [], [], []
+        for t in tensors:
+            if int(t.shape[0]) != slots:
+                raise ValueError("every tensor has the same slots")
+            if self.host:
+                a = np.asarray(t)
+                base.append(a.ctypes.data)
+                stride.append(a.strides[0] if slots > 1 else a[0].nbytes)
+                width.append(a[0].nbytes)
+            else:
+                base.append(t.data_ptr())
+                stride.append(t.stride(0) * t.element_size())
+                width.append(t[0].numel() * t.element_size())
+        if np.any(shape.extent > np.asarray(width, dtype=np.int64)):
+            raise ValueError(f"a part is outside its tensor's rows {width}")
+        if self.host:
+            spec = shape.spec.copy()
+            b, s = np.asarray(base, dtype=np.uint64), np.asarray(stride, dtype=np.uint64)
+            two = shape.spec["b_len"] > 0
+            spec["a"] = b[shape.src[0]] + shape.off[0].astype(np.uint64)
+            spec["a_stride"] = s[shape.src[0]]
+            spec["b"] = np.where(two, b[shape.src[1]] + shape.off[1].astype(np.uint64), 0)
+            spec["b_stride"] = np.where(two, s[shape.src[1]], 0)
+            spec["a16"] = (spec["a"] % 16 == 0) & (spec["a_stride"] % 16 == 0)
+        else:
+            torch = self.torch
+            spec = shape.spec.clone()
+            w = spec.view(torch.int64).reshape(shape.rows, -1)
+            b = torch.tensor(base, dtype=torch.int64, device=self.device)
+            s = torch.tensor(stride, dtype=torch.int64, device=self.device)
+            src = shape.src
+            two = (w[:, 4] >> 32) > 0
+            w[:, 0] = b[src[0]] + w[:, 0]
+            w[:, 1] = s[src[0]]
+            w[:, 2] = torch.where(two, b[src[1]] + w[:, 2], 0)
+            w[:, 3] = torch.where(two, s[src[1]], 0)
+            a16 = ((w[:, 0] % 16 == 0) & (w[:, 1] % 16 == 0)).to(torch.int64)
+            w[:, 5] = (w[:, 5] & 0xFFFFFFFF) | (a16 << 32)
+        return E.RowTable(spec, shape.rows, slots, shape.nbytes, tuple(tensors), shape.order)
+
+    def unit_roots(self, grp: _Group, leaves: Any) -> Any:
+        """(units, S, 8): each unit's root over its rows' (G, S, 8) leaves; a one-row unit's root is its leaf, and the units
+        of each larger row count are one call."""
+        shape, S_ = grp.shape, int(leaves.shape[1])
+        if shape.units == shape.rows:
+            return leaves
+        roots = self.empty(shape.units, S_)
+        roots[shape.single] = leaves[shape.single_rows]
+        for m, (units, rows) in shape.multi.items():
+            x = leaves[rows]
+            x = x.transpose(0, 2, 1, 3) if self.host else x.permute(0, 2, 1, 3)
+            dids = grp.dids[units]
+            dids = np.repeat(dids, S_, axis=0) if self.host else dids.repeat_interleave(S_, dim=0)
+            r = self.engine.root(x.reshape(-1, m, 8) if self.host else x.reshape(-1, m, 8).contiguous(), dids)
+            roots[units] = r.reshape(len(units), S_, 8)
+        return roots
 
     def empty(self, *shape: int) -> Any:
         """Digest words, (*shape, 8)."""
         if self.host:
             return np.zeros((*shape, 8), dtype=np.uint64)
         return self.torch.empty((*shape, 8), dtype=self.torch.int64, device=self.device)
-
-    def stack(self, xs: Sequence[Any], axis: int) -> Any:
-        return np.stack(xs, axis=axis) if self.host else self.torch.stack(list(xs), dim=axis)
 
     def per_slot(self, rows: Any) -> Any:
         """(n, S, 8) leaves as (S, n, 8), contiguous."""
@@ -184,17 +295,15 @@ class StepCommitter:
         if not plan.host:
             plan.stream.wait_stream(plan.torch.cuda.current_stream(plan.device))
         with plan.side():
-            x = eng.row_digests(eng.rows(grp.parts, tensors))
+            x = eng.row_digests(plan.rows(grp.shape, tensors))
             self._mark("rows")
             if not plan.host:
                 done = plan.torch.cuda.Event()
                 done.record(plan.stream)
             leaves = eng.leaves(grp.leaf_table, x, self.salts)
             self._mark("leaves")
-            roots = [leaves[a] if n == 1 else eng.root(plan.per_slot(leaves[a:a + n]), [plan.unit_dids[grp.first_unit + k]])
-                     for k, (a, n) in enumerate(grp.units)]
-            u0, u1 = grp.first_unit, grp.first_unit + len(grp.units)
-            self.slot_leaves[:, u0:u1] = eng.frame_leaves(plan.stack(roots, 1), [plan.slot_did], u0)
+            u0, u1 = grp.first_unit, grp.first_unit + grp.shape.units
+            self.slot_leaves[:, u0:u1] = eng.frame_leaves(plan.per_slot(plan.unit_roots(grp, leaves)), [plan.slot_did], u0)
             self._mark("units")
         self.k += 1
         return done
