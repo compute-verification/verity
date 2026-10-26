@@ -16,15 +16,34 @@ committed row longer than one SHA-512 block.
   `benchmarks/prove_path/records_audit.py`): the schedule to the circuit record, exit 2 on advice that is not a schedule.
   It registers under its name, the digest over its code (this package and `verity/`, `interface.compiler_digest`) and the
   commit that code is at; the audit runs it from its own checkout of that commit (`--table ARGV...`: the verifier's entry).
+- `verity_torch_loop/checkpoint.py`, `checkpoint/` and `manifests/checkpoints-int8.json`: the loop's model as the int8
+  checkpoint role `TORCH_LOOP_MLP_H128_W8A8`. The auditor's gate (`benchmarks/live_challenger/models.py`) registers that role
+  to sign the loop's weights root.
+  - The files are the weights `Model()` serves (H = 128, seed 0) in the gate's layout: each linear's s8 codes and s_w under
+    its op path, plus the embedding, in `model.safetensors`, beside `config.json`.
+  - The manifest entry pins each file's size and sha256 and lists `linears`, the loop's op paths in order.
+  - `python -m verity_torch_loop.checkpoint` writes the files, and `--check` checks them.
+  - The gate reads this manifest only once its `MANIFEST` names it; today that is vLLM's alone.
 - `tests/`: the loop's outputs are the Definition's, unit by unit; core's registration check passes the written window and
   refuses a port under another domain; the verifier's window from the records (`interface.of_records`) is the loop's; its
   compiler compiles its committed schedule to the circuit it registers and refuses advice that is not a schedule; its unit
   composes into C-Flock's unit statement (slow); a tampering loop's outputs are not its Definition's; the loop loads no
-  vLLM.
+  vLLM. The checkpoint role's files are the served weights bit for bit, its entry pins them and names the linears in order,
+  and the gate's own code reads the loop's rows from them and digests them to the role's checkpoint digest.
 - End to end: `benchmarks/prove_path/run.sh` with `PP_TORCH_LOOP=1` audits the honest and the tampered window from their
   records alone, against the registered circuit (`records_audit.py audit --circuit SHA512`) and against the compiler's
   output (`--opening`, `--compilers`): live coins, C-Flock `--zk` behind the Lean firewall, the Lean verifier of record,
   each tampered window refused.
+- `verity_torch_loop/weights.py`: the demo's seeded weights and their registration root (CMP-95 interface 1), for any
+  decoder shape (the H200 demo's frozen shape, Phase 1's CPU model): a SHA-512 counter generator from (seed, tensor, row)
+  to every tensor, the weights stream's layout (`manifest`), and each tensor as a registered value of core's for the
+  program that reads it (its digest and parameter widths, as `registered.registered_entries` derives the domains; `tok`
+  one token a row, `EmbeddingRead_v1`'s), its root computed in parallel chunks (`root`). No torch.
+  `python -m verity_torch_loop.weights manifest|write|root|fixture`; the fixture is `tests/fixtures/weights-v1.json`.
+  The H200 demo's manifest under its seed (`DEMO_SEED`), with each tensor's SHA-256, and its registration digest under
+  the test salt key for the placeholder program `TEST_PROGRAM` are
+  art:3683a02687286d9f36801bac54842dceb66595a497c00e621d03294a12ab4664 (run r20261026-002244-d3a7, 48 workers on
+  vy-nebius-cpu-4: 32 s for the digests, 2 min 32 s for the root).
 
 ## The demo of record
 
@@ -57,13 +76,19 @@ for every live prover,
 Pr[`flock-verify` accepts and at least K₀ of the 256 units are wrong] ≤ C(256 − K₀, 64) / C(256, 64) + ε_ks + δ_link.
 
 The first term is 0.42 at K₀ = 3 (the profile's 2 at δ = 0.5), 0.096 at K₀ = 8, 0.0085 at K₀ = 16 and 4.9 × 10⁻⁵ at
-K₀ = 32. The draw on the gate's coins is `Select.select`'s, and the theorem covers it through A6
-(`uniform/flock-coin-server`). The statement's named assumptions are hypotheses: A3 (the verifier's bytes are uniform),
-`live-verifier` (with A6 for the coin server's coins), `cr/sha-512` and `ecr/sha-512`. What it doesn't cover:
+K₀ = 32. The statement's named assumptions are hypotheses: A3 (the verifier's bytes are uniform), `live-verifier`
+(with `uniform/flock-coin-server` for the coin server's coins), `cr/sha-512` and `ecr/sha-512`.
 
-- `live-verifier`, a hypothesis. It says the draw a5 serves the session (its share of the gate challenger's draw) is the
-  one `flock-verify draw` printed. That premise is not proved for the served path. A3 is read here of the gate
-  challenger's bytes, an auditor device under `trusted-host`.
+The draw on the gate's coins is `Select.select`'s. A6 (`Security/Proofs/Flock/Claims/Sampling/Select/OS.lean`,
+`Properties.SampledProofs.SecurityProofs`) proves it is the theorem's subset draw on the same bytes:
+- `drawUnits_subset_runOS`, with no hypotheses: the code's subset draw equals `Law.runOS f (.subset k) n`.
+- `select_subset_runOS`: an accepted `Select.select` at a subset:k rule checks every unit of that draw.
+- `select_subset_escape_le`: under A3 alone, Pr[accepted and a set B escapes] ≤ `(Law.subset n k).escape B`.
+
+What it doesn't cover:
+
+- The record's custody, which `live-verifier` still takes as a hypothesis: that the record `flock-verify` reads is the
+  coin server's. A3 is read here of the gate challenger's bytes, an auditor device under `trusted-host`.
 - The checks a5 and `records_audit.py` make outside the session (R1 to R7, the receipt, the registration fixed before the
   draw), which the bound does not need.
 - The chain from this bound into `Claims.Sampling.KS` (the "session verdict ⇒ Flock KS" row that

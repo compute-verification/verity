@@ -72,7 +72,7 @@ def active_allreduce_settings() -> dict | None:
 
 
 def observe_launch_context(launch: dict | None) -> None:
-    """[R15 hopper HOP-03] The LAUNCH CONTEXT the request Program is built under (`frontend.targets.parse_launch_context`: per request step
+    """[HOP-03] The LAUNCH CONTEXT the request Program is built under (`frontend.targets.parse_launch_context`: per request step
     the varlen launch's max_seqlen_q over ALL co-scheduled sequences).  The attention rule's FA3 tile selection reads it: a request's
     own rows are the launch's value only for a batch of one.  None = no declared context (own rows; B1 semantics, digests unchanged)."""
     _OBSERVED["launch_context"] = dict(launch) if launch else None

@@ -82,6 +82,20 @@ def test_only_a_live_epochs_coins_carry_a_window():
         "the coin commitment's coins are not a live epoch's: one salt, one draw, then the rounds'"
 
 
+def test_a_pearl_c_salt_session_is_its_salt_coin_alone():
+    """`salt_epoch_reason` (Lean `Properties.Pouw.LiveSalt.SaltEpoch`): `LIVE_SCHEME` over `SALT_FAMILIES` alone. H1's
+    layout, which a Pearl-C pass would leave incomplete, two salt coins, and another scheme are refused."""
+    salt = Ch.LiveChallenger(Wd.LIVE_SCHEME, 7, Wd.SALT_FAMILIES, entropy("s")).commitment
+    assert salt.families == ((Wd.SALT, 1),) and Wd.salt_epoch_reason(salt) is None
+    assert Wd.live_epoch_reason(salt) is not None
+    h1 = Wd.live_challenger(7, 1, entropy("h")).commitment
+    assert Wd.salt_epoch_reason(h1) == "the coin commitment's coins are not a Pearl-C salt session's: its salt coin alone"
+    two = Ch.LiveChallenger(Wd.LIVE_SCHEME, 7, ((Wd.SALT, 2),), entropy("t")).commitment
+    assert "not a Pearl-C salt session's" in Wd.salt_epoch_reason(two)
+    other = Ch.LiveChallenger("verity/vllm/commit-coins/v1", 7, Wd.SALT_FAMILIES, entropy("v")).commitment
+    assert Wd.salt_epoch_reason(other) == f"the coin commitment's scheme is verity/vllm/commit-coins/v1, not {Wd.LIVE_SCHEME}"
+
+
 def test_the_round_key_is_its_own_coin_and_root():
     ch, roots, ops = window()
     keys = [Wd.round_key(ch.commitment, o.coin, r, roots[r]).value for r, o in enumerate(ops)]
