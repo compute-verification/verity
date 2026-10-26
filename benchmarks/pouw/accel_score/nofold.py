@@ -209,8 +209,7 @@ V2_CARDS = {
 SHA_BUILT = {"H200": 4.79e9, "RTX PRO 6000": 7.13e9}
 U_W, U_X = 80, 96              # BET-HYBRID-2 K (±80 both) and NAIVE-STRASSEN (V ±96 to depth 13): the larger of each
 P_W, P_X = 0.0119, 0.0042      # wrap densities at those widths, Llama-3.1-8B (BET-HYBRID-2 H; 70B p_X 0.64%)
-RHO_V2 = 4                     # Z_X Uᵀ and V Y_Wᵀ, two base-128 digits each; Z_X = Σ_s X_s π_sᵀ absorbs (VΠ)Uᵀ
-ZERO_DIGITS = 1                # only Y_W = Σ_s c can be narrow at A = B = 0; Z_X's high digit carries VΠ
+RHO_V2 = 4                     # Z_X Uᵀ and V Y_Wᵀ, two base-128 digits each; Z_X = Σ_s (X_s + V)π_sᵀ absorbs (VΠ)Uᵀ
 M_PREFILL = 8192               # tokens a prefill call
 EPS_ALG_V2 = 0.005             # budget on the deployed kernel's gap at A = B = 0, per credited shape
 SHAPES = {                     # (K, N, layers): the frozen model, and COVER-ATTN's served static shapes
@@ -223,36 +222,49 @@ SHAPES = {                     # (K, N, layers): the frozen model, and COVER-ATT
 
 
 def v2_round(card: str, K: int, N: int, L: int, word_bits: int, m: int = M_PREFILL, commit_a: bool = False,
-             built: bool = False, weight_coins: bool = True) -> dict:
+             built: bool = False, weight_coins: bool = True, tiles: int = 1) -> dict:
     """One prefill call of protocol v2, per MAC in plain INT8 tensor time at η.
 
-    Tensor: the product (1) and the four peels, O = T_last − Z_X Uᵀ − V Y_Wᵀ + 256(w_X Eᵀ + X w_Wᵀ). ALU: hashing (S segment words of `word_bits` and O at 32 bits a cell,
-    NF3's leaf and tree), coin expansion (SHA-512 counter mode, 512 bits a compression: the dither (m+N)K bits, the
-    noise 8 bits a value of V and U, the S permutations), and the wraps. A is the previous call's committed output under
-    a public elementwise map plus committed per-row scalars, so it adds no leaves (`commit_a` prices committing it
-    anyway). ε_alg is the larger of the two routes PD2-1 found at A = B = 0.
+    A segment (one word a cell) is L long and holds `tiles` noise tiles of period L' = L/tiles, each with a fresh
+    permutation of U's columns. Tensor: the product (1) and the peels, O = T_last − Z_X Uᵀ − V Y_Wᵀ + 256(w_X Eᵀ +
+    X w_Wᵀ), base-128 digits of Z_X (|X + V| ≤ 224, K/L' terms) and Y_W (|W| ≤ 128, K/L' terms), inner dimension L'.
+    ALU: hashing (S segment words of `word_bits` and O at 32 bits a cell, NF3's leaf and tree), coin expansion (SHA-512
+    counter mode, 512 bits a compression: the dither (m+N)K bits, the noise 8 bits a value of V and U, the K/L'
+    permutations), and the wraps. A is the previous call's committed output under a public elementwise map plus
+    committed per-row scalars, so it adds no leaves (`commit_a` prices committing it anyway).
+
+    ε_alg is the cheapest route at A = B = 0 (or at low-rank A and B), where nothing wraps (|b + V| ≤ 97): PD2-1's
+    O-route (O = bcᵀ at K/s_b instead of the peels) and zero high digits of Y_W = Σ c; the one-segment skip
+    (L − K/s_b); and building every word from b_s c_sᵀ (L/s_b) plus its cross terms, Σ_j (b + V)π_jᵀ Uᵀ (one digit at
+    one tile, two above) and V(Σ_j c_j)ᵀ (one digit), which also yields O without the peels.
     """
     mac, sha, c_op, s_b = V2_CARDS[card]
     per_comp = ETA * mac / (SHA_BUILT[card] if built else sha)
     per_bit = LEAF_BLOCKS * TREE / LEAF_DATA_BITS
     S = math.ceil(K / L)
+    Lp = L / tiles
+    n_terms = K / Lp
+    dz, dy = (2 if 224 * n_terms < 2 ** 14 else 3), (2 if 128 * n_terms < 2 ** 14 else 3)
     g_hash = per_comp * per_bit * (S * word_bits + 32) / K
     g_a = per_comp * per_bit * 8 / N if commit_a else 0.0
     side = m + N if weight_coins else m
-    coin_bits = side * K + 8 * side * L + (S * L * math.log2(L) if weight_coins else 0)
+    coin_bits = side * K + 8 * side * Lp + (K * math.log2(Lp) if weight_coins else 0)
     g_coin = per_comp * coin_bits / (512 * m * N * K)
-    g_rm = RHO_V2 * L / K
+    g_rm = (dz + dy) * Lp / K
     g_wrap = c_op * (P_W + P_X) / 2
     tensor, alu = 1 + g_rm, g_hash + g_a + g_coin + g_wrap
     g = tensor + alu
-    saved = max(ZERO_DIGITS * L, g_rm * K - K / s_b)   # at A = B = 0 nothing wraps (|b + V| ≤ 97): wraps cost 0 there
-    return {"L": L, "S": S, "gamma": g, "gamma_max": max(tensor, alu), "hash": g_hash, "A": g_a, "coin": g_coin,
-            "rm": g_rm, "wrap": g_wrap, "h": (g_hash + g_a + g_coin) / g, "eps_alg": saved / (g * K)}
+    c_t = (1 if tiles == 1 else 2) + 1
+    saved = max(0.0, (dy - 1) * Lp, g_rm * K - K / s_b, L - K / s_b, K + g_rm * K - K / s_b - c_t * K / tiles)
+    return {"L": L, "tiles": tiles, "S": S, "gamma": g, "gamma_max": max(tensor, alu), "hash": g_hash, "A": g_a,
+            "coin": g_coin, "rm": g_rm, "wrap": g_wrap, "h": (g_hash + g_a + g_coin) / g, "eps_alg": saved / (g * K)}
 
 
-def v2_pick(card: str, K: int, N: int, word_bits: int, budget: float = EPS_ALG_V2, **kw) -> dict:
-    """The L (a multiple of 64, at most K) of least γ with ε_alg within budget; else the L of least ε_alg."""
-    rounds = [v2_round(card, K, N, L, word_bits, **kw) for L in range(64, K + 1, 64)]
+def v2_pick(card: str, K: int, N: int, word_bits: int, budget: float = EPS_ALG_V2, tile_set=(1,), **kw) -> dict:
+    """The segment (L' a multiple of 64, L = tiles·L' at most K) of least γ with ε_alg within budget; else the least
+    ε_alg."""
+    rounds = [v2_round(card, K, N, t * Lp, word_bits, tiles=t, **kw)
+              for t in tile_set for Lp in range(64, K // t + 1, 64)]
     ok = [r for r in rounds if r["eps_alg"] <= budget]
     return min(ok, key=lambda r: r["gamma"]) if ok else min(rounds, key=lambda r: r["eps_alg"])
 
@@ -313,6 +325,24 @@ def v2_att(budget: float = 0.01) -> None:
     for card in V2_CARDS:
         r = v2_round(card, 128, 4096, 128, 16)
         print(f"  {card:13} QK^T at K 128 (one segment): eps_alg {r['eps_alg']:.0%} at gamma {r['gamma']:.2f}")
+
+
+def v2_tiles(budget: float = 0.01) -> None:
+    """v2 with several noise tiles a segment: words follow L, the peels and PD2-1's routes follow L' = L/tiles."""
+    print(f"\nv2 with noise tiles (16-bit words, eps_alg budget {budget:.0%}): one tile a segment, then 1 to 6")
+    for card in V2_CARDS:
+        for model in SHAPES:
+            one = v2_static(card, model, 16, budget)
+            many = v2_static(card, model, 16, budget, tile_set=range(1, 7))
+            g, (K, N, L) = many["worst"]
+            print(f"  {card:13} {model:16} gamma {one['gamma']:5.2f} -> {many['gamma']:5.2f} (g_max {many['gamma_max']:.2f},"
+                  f" h {many['h']:.2f}, eps_alg {many['eps_alg']:.2%}); worst K {K} N {N} L {L}: {g:.2f}")
+        for model, (dv, _) in ATT_MODELS.items():
+            cells = []
+            for n in (2048, 8192, 32768):
+                r = v2_pick(card, n, dv, 16, budget, tile_set=range(1, 7), weight_coins=False)
+                cells.append(f"n {n}: {r['gamma']:.2f} (L {r['L']}, {r['tiles']} tiles)")
+            print(f"  {card:13} {model:16} PV " + "; ".join(cells))
 
 
 def seg_coins() -> None:
@@ -396,4 +426,5 @@ if __name__ == "__main__":
     v2_scan()
     v2()
     v2_att()
+    v2_tiles()
     seg_coins()
