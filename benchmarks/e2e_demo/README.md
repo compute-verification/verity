@@ -45,8 +45,9 @@ for one server-time block and what the composed verdict reads. It extends the al
 
 - the block's server and steps, `server_time: [{server, steps: [lo, hi)}]`;
 - the legs integrity, pouw, pous, bandwidth, certifier and wipe. Each is `null` when the block ran no such audit, else
-  its protocol, the core answer, its certificate (integrity bound, W_cert, S_cert, Q_cert, K, f·M), its error and the
-  certificate at δ = 1/100 and 1/10^6, its run ids, and `source: real|fixture`;
+  its protocol, the core answer, its certificate (integrity bound, W_cert, S_cert, Q_cert, K, the wipe's foreign_bits at
+  its reads `k` and ratio `r`), its error and the certificate at δ = 1/100 and 1/10^6, its run ids, and
+  `source: real|fixture`;
 - the composed verdict and the error of `Accounting.Guarantees.JointHorizon` over the block: the accepted legs' errors
   summed. The statement is not yet proved and not on `main` (lane fc8d);
 - the monitoring period: week, month and year over a census deployment's machines (a parameter), with JointHorizon's
