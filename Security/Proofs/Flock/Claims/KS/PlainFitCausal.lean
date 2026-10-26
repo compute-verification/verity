@@ -46,9 +46,6 @@ theorem roundPat_length (F : List Frame) : (roundPat F).1.length = (chunks F).1.
 theorem glueP_cons' (a : List Bool × Bool) (c : Bool) (cs : List Bool) (y : Bool) :
     glueP a (c :: cs, y) = (a.1 ++ (a.2 || c) :: cs, y) := rfl
 
-theorem closes_skel (f : Frame) : closes (skel f) = closes f := by
-  cases f <;> rfl
-
 theorem chunks_map_skel : ∀ F : List Frame,
     chunks (F.map skel) = ((chunks F).1.map (List.map skel), (chunks F).2.map skel)
   | [] => rfl
@@ -61,11 +58,6 @@ theorem chunks_map_skel : ∀ F : List Frame,
 
 theorem chunks_map_skel_fst (F : List Frame) : (chunks (F.map skel)).1 = (chunks F).1.map (List.map skel) := by
   rw [chunks_map_skel]
-
-theorem getD_map_skel (L : List (List Frame)) (j : ℕ) :
-    (L.getD j []).map skel = (L.map (List.map skel)).getD j [] := by
-  rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_map]
-  cases L[j]? <;> rfl
 
 theorem flatMap_congr_mem {α β : Type} {f g : α → List β} : ∀ {l : List α}, (∀ a ∈ l, f a = g a) →
     l.flatMap f = l.flatMap g
