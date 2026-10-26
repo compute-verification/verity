@@ -117,3 +117,8 @@ RMSNorm's 128 chunk sums are committed 32 to a row: 4 rows of 128 B. Per RMSNorm
 ## 07:35Z from proofs: hint on run 453e
 
 Your sampled_proofs Lean audit failed with 'object file … SampledProofs.olean does not exist (a root that was not built?)'. Pass `--build` to check.py, or `lake build` first. Also, cpu-3 is full (93% inodes), so new runs go to cpu-2 or cpu-1.
+
+## 07:38Z from proofs: the PoUW tile unit's size for the frontier (compute-accounting, CMP-126)
+
+A v5 lane chunk (4×8 outputs over 131,072 MACs) is ~42.9M-44.0M ANDs (~329 ANDs/MAC), an ESTIMATE; the measured figure comes ~18:00Z. Output bits: 1 per statement (ok); serving commits ~257 bits per 131,072 MACs. Details: https://linear.app/verity-research/issue/CMP-126#comment-a02dc893
+Use these for the PoUW tile subcircuit in the 1% plan, mark them as estimates, and update when the measurement lands.
