@@ -47,7 +47,6 @@ KNOWN: dict[str, str] = {
     f"{P}Flock/Soundness/Types/Flatten.lean::FlockSoundness.Types.Flatten.Gate": "C-Flock's flattened gate; wave 2",
     f"{P}Pouw/RelativeSecurity.lean::Pouw.RelativeSecurity.ModelB.Gate": "RS-MODEL's proof-local gate; wave 2",
     # Op: Core/Boolean's `Verity.Boolean.Op`.
-    f"{D}Accounting/Device.lean::Accounting.Op": "the op classes a step charges, a name clash: rename; wave 2",
     f"{D}Accounting/Gates/Model.lean::Accounting.Gates.Op": "the gate accounting's operation over input slots; wave 2",
     f"{D}Flock/Circuit.lean::FlockSoundness.Audit.Op": "C-Flock's audit gate op, a copy of Core/Boolean's; wave 2",
     f"{D}Pouw/Assumptions/Dimension/Embed.lean::Pouw.Dimension.Embed.Op": "an M4090 instruction, a name clash: rename; wave 2",
@@ -59,7 +58,7 @@ KNOWN: dict[str, str] = {
     f"{D}Pous/Game/Oracle.lean::Pous.Prog": "PoUS's parallel oracle program, a name clash: rename; wave 2",
     f"{D}Pouw/Eps1/M3.lean::Pouw.Eps1.Prog": "an M3 program for Dither's words; wave 2",
     f"{D}Pouw/PearlC/W1.lean::Pouw.PearlC.W1.Prog": "Pearl-C's W1 program, a constant bank and a code tree; wave 2",
-    f"{P}Flock/Soundness/Lowering.lean::FlockSoundness.Prog": "C-Flock's program of template units; wave 2",
+    f"{D}Flock/Lowering.lean::FlockSoundness.Prog": "C-Flock's program of template units; wave 2",
     f"{P}Pouw/RelativeSecurity.lean::Pouw.RelativeSecurity.ModelB.Prog": "RS-MODEL's proof-local program; wave 2",
     # Program
     f"{D}Accounting/CoinFlow.lean::Accounting.CoinFlow.Program": "a Program's dataflow over coins and values; wave 2",
@@ -92,20 +91,16 @@ KNOWN: dict[str, str] = {
     # Draw
     f"{D}Accounting/Gates/Codec.lean::Accounting.Gates.Draw": "a k-round key's draw, a name clash: rename; wave 3",
     f"{D}Claims/Recursion.lean::Claims.Recursion.Draw": "a V* session's draw as its record holds it; wave 3",
-    f"{D}Population/DrawPressure.lean::Population.Exfil.Draw": "k of n units without replacement; wave 3",
-    # Law
-    f"{D}Pouw/Window.lean::Pouw.Window.Law": "PoUW's draw law over units; wave 3",
-    f"{P}Flock/Soundness/Audit/Law.lean::FlockSoundness.Audit.Law": "C-Flock's audit's copy of the draw law; wave 3",
-    # Digest: Hash/Basic's `Hash.Digest`.
-    f"{D}Core/Advice.lean::Verity.Advice.Digest": "the advice's 64-byte digest beside Hash's, in Core; wave 4",
+    f"{D}SampledProofs/DrawPressure.lean::Population.Exfil.Draw": "k of n units without replacement; wave 3",
+    # Law: Core/Draw's `Verity.Law`.
+    f"{D}Flock/Audit/Law.lean::FlockSoundness.Audit.Law": "C-Flock's audit's copy of the draw law; wave 3",
     # Collision
     f"{D}Claims.lean::Claims.Collision": "a collision of a hash on messages; wave 4",
     f"{D}Flock/Merkle.lean::FlockSoundness.Merkle.Collision": "a collision of a hash on byte strings; wave 4",
     f"{P}Flock/Verifier/Hash.lean::Flock.Sha256.Collision": "a SHA-256 collision; wave 4",
     f"{P}Flock/Verifier/Hash.lean::Flock.Sha512.Collision": "a SHA-512 collision; wave 4",
     f"{P}Flock/Verifier/Merkle.lean::Flock.MerkleScheme.Collision": "a collision of a Merkle scheme's hash; wave 4",
-    # Device
-    f"{D}Accounting/Device.lean::Accounting.Device": "the resource audits' device by its limits, not in Core; wave 5",
+    # Device: Core/Device's `Verity.Device`.
     f"{D}Accounting/RateAudit.lean::Accounting.Rate.Device": "the rate audit's device; wave 5",
     f"{D}Accounting/RateAuditSketch.lean::Accounting.RateSketch.Device": "the rate sketch's device; wave 5",
     f"{D}Accounting/Bandwidth/Game.lean::Bandwidth.Device": "the bandwidth game's device; wave 5",
