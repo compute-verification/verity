@@ -245,18 +245,18 @@ class Capture:
                 named.setdefault(f"runner.kv_caches[{i}]", {"alloc": v.alloc, "shape": list(v.shape), "dtype": v.dtype})
         try:
             self._kv_num_blocks = int(self.runner.kv_cache_config.num_blocks)
-        except Exception:  # noqa: BLE001
+        except (AttributeError, TypeError, ValueError):
             self._kv_num_blocks = None
         for e in self.storage.events_pending():
             self._write(e)
         try:
             block_size = int(self.runner.kv_cache_config.kv_cache_groups[0].kv_cache_spec.block_size)
-        except Exception:  # noqa: BLE001
+        except (AttributeError, LookupError, TypeError, ValueError):
             block_size = None
-        try:  # [r8 E-cleanup, hybrid KV cache] the KV-cache groups (layer names, block size, spec kind) for the record
+        try:  # hybrid KV cache: the KV-cache groups (layer names, block size, spec kind) for the record
             groups_note = [{"layers": [str(x) for x in g.layer_names], "block_size": int(g.kv_cache_spec.block_size),
                             "spec": type(g.kv_cache_spec).__name__} for g in self.runner.kv_cache_config.kv_cache_groups]
-        except Exception:  # noqa: BLE001
+        except (AttributeError, TypeError, ValueError):
             groups_note = None
         self._write(Note("external buffers (not roots): runner input buffers and KV caches",
                          {"buffers": named, "kv_num_blocks": self._kv_num_blocks, "block_size": block_size,

@@ -178,11 +178,10 @@ theorem stmtOkZk (S : Claims.JsonSpec printJ Flock.canon) : StmtOkZk H rel := by
     cases e : ProvedScope.lawWhy true c.s.read.tags D with
     | none => rfl
     | some _ => rw [e] at hdl; cases hdl
-  obtain ⟨t, ht⟩ := draw_parse hdraw hdd
   have hg : Good d := by
     rcases law_of_lawWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
-    · exact good_stratified (S.parse_wf _ _ ht) hD hK
-    · exact good_subset (S.parse_wf _ _ ht) hD hk
+    · exact good_stratified (draw_wf hdraw hdd) hD hK
+    · exact good_subset (draw_wf hdraw hdd) hD hk
   refine ⟨fun hn' => ?_, hg, D, hD, by rw [hspec]; exact hn⟩
   rw [hn'] at hD
   cases hD

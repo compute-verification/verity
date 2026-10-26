@@ -12,7 +12,9 @@ layout.
 
 The worker reads and fills the cache while the serving thread asks whether a plan is in it (`in`), so a plan is added to
 the current generation before it leaves the previous one, and `in` looks at the previous generation first: a plan never
-appears missing while it moves. `end_run` runs between runs, when the worker has drained.
+appears missing while it moves. `end_run` runs between runs: in the committer's reset when the worker has drained, or on the
+worker at a detached window's end (`NativeHostCommitter.detach`). There the serving thread asks of a step it ends whether a
+plan survives the window ends the worker reaches before that step (`native_collect.NativeCollectCommitter._plan_held`).
 """
 from __future__ import annotations
 

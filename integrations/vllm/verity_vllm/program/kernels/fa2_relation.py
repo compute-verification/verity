@@ -245,11 +245,9 @@ RELATION_IDS = {
 RELATIONS: dict[str, Any] = {rid: fn for rid, (_, fn, _) in RELATION_IDS.items()}
 
 
-def register_with_w2(replace: bool = False) -> list[str]:
-    try:
-        from verity_vllm.program.kernels import relations as R
-    except ImportError:
-        return []
+def register_with_w2(R: Any, replace: bool = False) -> list[str]:
+    """Fill W2's slots in ``R`` (``verity_vllm.program.kernels.relations``, which calls this when it loads); returns the ids
+    registered."""
     done = []
     for rid, (op_type, fn, doc) in RELATION_IDS.items():
         existing = R.REGISTRY.get(rid)
@@ -266,5 +264,3 @@ def register_with_w2(replace: bool = False) -> list[str]:
         done.append(rid)
     return done
 
-
-REGISTERED_WITH_W2 = register_with_w2()

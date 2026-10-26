@@ -161,6 +161,7 @@ import textwrap
 import threading
 import time
 import tomllib
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -1000,6 +1001,7 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
                                   "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
                                   "spec": spec_of(policy),
                                   "premises": [p for p in premises if isinstance(p, str)] if isinstance(premises, list) else [],
+                                  "assumptions": sorted(a for a in policy.get("assumptions", {}) if isinstance(a, str)),
                                   "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
                                   "moved": sorted([new, old] for old, new in (moved or {}).items()),
                                   "out": str(out), "canon": str(canon)}))
@@ -1262,7 +1264,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         fails.append(Failure("assumptions.modules", None, f"assumptions: the policy lists assumption modules "
                              f"({', '.join(prefixes)}); list the assumptions by name instead, each with its record: "
                              f"`check.py --update` converts the list"))
-    kept, premised = {}, {}
+    kept, premised, unfolds = {}, {}, {}
     for name, rec in sorted(policy.get("guarantees", {}).items()):
         who = (rec or {}).get("owner") or owner
         if not who:
@@ -1289,15 +1291,20 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             fails.append(Failure("guarantees.premises", name, f"guarantees: {name}'s premises could not be read "
                                  f"(`Facts.lean`'s `premisesOf` failed on its statement), so the lock can't be held to "
                                  f"them: make `premisesOf` read this statement's form"))
+        mine = {}
         for pr in f.get("premises") or []:
+            mine |= pr.get("unfolds") or {}
             if "Assumptions" in (m := pr.get("module") or "").split(".") or m in own:
                 premised.setdefault(pr["head"], set()).add(name)
+        unfolds |= mine
         named = []
         for h in f["hypotheses"]:
             if not h["closed"]:
                 continue
             if h["named"] and (h["named"] in assumed if not prefixes else under(prefixes, h["module"] or "")):
                 named.append(h["named"])
+            elif not prefixes and h["named"] and (u := unfolding(h["named"], mine, assumed)) and not u[1]:
+                named += u[0]
             else:
                 fails.append(Failure("guarantees.unnamed-hypothesis", name, f"guarantees: {name} assumes ({h['binder']} : "
                                      f"{h['type']}), a closed Prop that is not a named assumption: a Prop constant listed "
@@ -1349,7 +1356,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                 fails.append(Failure("guarantees.reads-digest", m, f"guarantees: the digest recorded for {m} is not the "
                                      f"SHA-256 of its definitions; `python tools/verity/lean/merge.py --normalize` "
                                      f"recomputes it"))
-    records, why = assumption_records(policy, now_reads, update, owner, premised)
+    records, why = assumption_records(policy, now_reads, update, owner, premised, unfolds)
     fails += why
     out = dict(policy)
     if kept:
@@ -1520,8 +1527,36 @@ def vacuous_meets(body: dict, claim: str) -> str | None:
     return None
 
 
+def unfolding(d: str, unfolds: dict, listed) -> tuple[list[str], list[str]] | None:
+    """What the premise ``d`` asserts, by `Facts.lean`'s `unfolds` (the parts its definition asserts through `∧`, the bodies
+    of `∀` and `→`, and reducible unfolding, beside the assumptions what it takes mentions): (the ``listed`` assumptions it
+    comes to, the parts that are none), or None when it doesn't unfold.  A part the lock doesn't list comes to what it
+    unfolds to when that is listed assumptions alone; a bound predicate, a constant applied to a proposition or a predicate
+    (a combinator, a recursive definition) and anything else that is no listed assumption keep ``d`` from being an alias of
+    listed assumptions, which it is when the second list is empty."""
+    def walk(c: str, path: frozenset) -> tuple[list[str], list[str]] | None:
+        parts = unfolds.get(c)
+        if not isinstance(parts, list) or c in path:
+            return None
+        yes, no = set(), set()
+        for p in parts:
+            h = p.get("head")
+            if h is None:
+                no.add("a bound predicate")
+            elif p.get("props"):
+                no.add(f"{h} applied to a proposition or predicate")
+            elif h in listed:
+                yes.add(h)
+            elif (u := walk(h, path | {c})) and not u[1]:
+                yes |= set(u[0])
+            else:
+                no.add(h)
+        return sorted(yes), sorted(no)
+    return walk(d, frozenset())
+
+
 def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str | None,
-                       premised: dict | None = None) -> tuple[dict, list[str]]:
+                       premised: dict | None = None, unfolds: dict | None = None) -> tuple[dict, list[str]]:
     """The `assumptions` records as the build has them, and the failures: each named assumption (a definition of the spec,
     stated as a `Prop` and taken as a hypothesis or read inside a guarantee's statement) has an `owner` and the digest its
     `reads` record holds, so a changed assumption shows as its own record, and an entry no guarantee reads fails.  An
@@ -1532,8 +1567,11 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     (`own_modules`: a premise defined in `Definitions` carries what it assumes as much as one in `Models`), its `Guarantees`
     definitions unfolded and a `Premises` abbrev seen through, and under its other definitions and in its conclusion each
     constant of an assumptions module or a `shape.premises` module that a hypothesis mentions:
-    one the lock doesn't list fails, and an update adds it the same way, so an entry lost in a merge is never silent."""
+    one the lock doesn't list fails, and an update adds it the same way, so an entry lost in a merge is never silent.
+    A premise that is an alias of listed assumptions (`unfolding`, by ``unfolds``) is not one: what it unfolds to is
+    premised in its place.  Under an update, a premise that doesn't unfold counts as listed, since the update adds it."""
     assumed, fails, out = policy.get("assumptions", {}), [], {}
+    premised, unfolds = {d: set(by) for d, by in (premised or {}).items()}, unfolds or {}
     read = {d: (m, h, g["guarantees"]) for m, g in now_reads.items() for d, h in g["definitions"].items()}
     owners = {n: (r or {}).get("owner") for n, r in policy.get("guarantees", {}).items()}
     if isinstance(assumed, list):
@@ -1544,6 +1582,12 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
             if under(policy["assumptions"], m):
                 who = {owners.get(g) for g in by} - {None}
                 assumed[d] = {"owner": who.pop()} if len(who) == 1 else {}
+    listed = set(assumed) | ({d for d in premised if not isinstance(unfolds.get(d), list)} if update else set())
+    for d in sorted(premised):
+        if d not in assumed and (u := unfolding(d, unfolds, listed)) and not u[1]:
+            by = premised.pop(d)
+            for a in u[0]:
+                premised.setdefault(a, set()).update(by)
     for a, rec in sorted(assumed.items()):
         who = (rec or {}).get("owner") or owner
         if a not in read and a in (premised or {}):
@@ -1571,18 +1615,23 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
         elif rec["digest"] != h:
             fails.append(Failure("assumptions.digest", a, f"assumptions: {a}'s definition in {m} changed; run `check.py "
                                  f"--update` and commit the record (Daniel's DM shows the change when it lands)"))
-    for d, by in sorted((premised or {}).items()):
+    for d, by in sorted(premised.items()):
         if d in assumed:
             continue
+        who = {owners.get(g) for g in by} - {None}
+        mine = who.pop() if len(who) == 1 else owner
+        entry = ({"owner": mine} if mine else {}) | ({"digest": read[d][1]} if d in read else {})
         if update:
-            who = {owners.get(g) for g in by} - {None}
-            mine = who.pop() if len(who) == 1 else owner
-            out[d] = ({"owner": mine} if mine else {}) | ({"digest": read[d][1]} if d in read else {})
-        else:
-            fails.append(Failure("assumptions.unlisted-premise", d, f"assumptions: {d} is a premise of "
-                                 f"{', '.join(sorted(by))}, an assumption the lock doesn't list; run `check.py --update` to "
-                                 f"add it with its guarantees' owner and commit the record (Daniel's DM shows it when it "
-                                 f"lands)"))
+            out[d] = entry
+            continue
+        u = unfolding(d, unfolds, assumed)
+        parts = "" if not u else (f" It unfolds to {', '.join(u[1])}" + (f" beside the listed {', '.join(u[0])}" if u[0]
+                                  else "") + ", so it is no alias of listed assumptions, which the lock would not count.")
+        fails.append(Failure("assumptions.unlisted-premise", d, f"assumptions: {d} is a premise of "
+                             f"{', '.join(sorted(by))}, an assumption the lock doesn't list; run `check.py --update` to "
+                             f"add it with its guarantees' owner and commit the record (Daniel's DM shows it when it "
+                             f"lands), or write {json.dumps(d)}: {json.dumps({'owner': '@lane'} | entry)} under "
+                             f"`assumptions`{'' if mine else ' with the lane that answers for it'}.{parts}"))
     return out, fails
 
 
@@ -1644,7 +1693,8 @@ def shape(policy: dict, facts: dict) -> list[str]:
     hypotheses whose head is a constant of a module under `shape.premises`. Several acceptances of the function are
     one, of the tuple of their inputs (a binding property). A hypothesis is read by its body under its leading binders
     (`Facts.lean`'s `head` and `applies`): an acceptance applies the function there and holds under no hypothesis of
-    its own (`guarded`). A `Prop` field of a structure an input ranges over or returns (a family) is a hypothesis too
+    its own (`guarded`); binder order and an equation of one field of two inputs don't matter (`part_refusals`). A
+    `Prop` field of a structure an input ranges over or returns (a family) is a hypothesis too
     (`Nonempty` among them), and a conjunction counts as its conjuncts, each a property of the entry's function or, when the
     entry lists `conjuncts` (one `{function, outcome}` per conjunct), of its own. A probability statement has its
     acceptance in its event: under `shape.events` (constants, such as `FlockSoundness.Game.prob`), a conjunct whose
@@ -1769,7 +1819,11 @@ def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[
                   events: list[str] = ()) -> list[str]:
     """`refusals` for one conjunct.  Its hypotheses run from its first binder to the first input bound after its acceptance (the
     first hypothesis about the function), or, for an outcome of `none`, after its first hypothesis; what follows is its
-    conclusion, so `accepts → ∀ w < n, P w` concludes `∀ w < n, P w` while `accepts → Q → P` takes `Q`.  A probability
+    conclusion, so `accepts → ∀ w < n, P w` concludes `∀ w < n, P w` while `accepts → Q → P` takes `Q`.  A statement that
+    is one of these written in another order fits too: its binders reordered with its acceptances and premises first
+    (`reordered`), so `∀ x w, Q w → accepts x → P` is `∀ x, accepts x → ∀ w, Q w → P`; and a hypothesis equating one
+    field of two inputs is allowed (`shares`), since `∀ c c', c.root = c'.root → …` is `∀ … r, …` over `⟨…, r⟩` and
+    `⟨…, r⟩` with the root bound once.  A probability
     statement has its acceptance in the event (`shape.events`): when its conclusion has an event of one of those constants
     (`prob (fun o => A₁ o ∧ … ∧ Aₙ o ∧ B o) g σ ≤ …`, `Facts.lean`'s `eventsOf`) and in every one each conjunct before
     the last is about the function, every hypothesis is taken, and each that isn't a premise is refused, an acceptance
@@ -1790,10 +1844,31 @@ def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[
     probs = [e for e in got.get("events", []) if e["head"] in events]
     inevent = outcome != "none" and bool(probs) and all(
         len(e["conjuncts"]) > 1 and all(map(about, e["conjuncts"][:-1])) for e in probs)
-    start = next((h for h in hyps if outcome != "none" and not premise(h) and about(h)), None) if outcome != "none" else \
-        next(iter(hyps), None)
-    ends = min((i["at"] for i in got["inputs"] if start is not None and i["at"] > start["at"]), default=None)
-    taken = hyps if inevent else [h for h in hyps if ends is None or h["at"] < ends]
+
+    def split(rank: Callable[[int], int]) -> tuple[dict | None, list[dict]]:
+        """The acceptance (or first hypothesis) and the hypotheses taken, with the binders in the order ``rank`` gives."""
+        order = sorted(hyps, key=lambda h: rank(h["at"]))
+        start = next((h for h in order if not premise(h) and about(h)), None) if outcome != "none" else next(iter(order), None)
+        ends = min((rank(i["at"]) for i in got["inputs"] if start is not None and rank(i["at"]) > rank(start["at"])),
+                   default=None)
+        return start, order if inevent else [h for h in order if ends is None or rank(h["at"]) < ends]
+
+    read = {j for h in hyps if h["source"] == "binder" and about(h) for j in h.get("uses", ())}
+
+    def allowed(h: dict) -> bool:
+        return (outcome != "none" and about(h) and not inevent) or premise(h) or (
+            outcome != "none" and not inevent and shares(got, h, read))
+
+    start, taken = split(lambda a: a)
+    if not inevent and not all(map(allowed, taken)):
+        moved = reordered(got, lambda h: (outcome != "none" and about(h)) or premise(h) or h["source"] == "field")
+        if moved is not None:
+            order, first = moved
+            rank = {a: r for r, a in enumerate(order)}
+            concluded = set(order[first:]) & {i["at"] for i in got["inputs"]} & set(got["uses"])
+            if all(map(allowed, split(rank.__getitem__)[1])) and all(
+                    allowed(h) or concluded & set(h.get("uses", ())) for h in taken):
+                taken = []
     out = []
     if outcome != "none" and probs and not inevent:
         out.append(f"bounds an event of {', '.join(sorted({e['head'] for e in probs}))} whose conjuncts before its last "
@@ -1803,7 +1878,7 @@ def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[
         out.append(f"takes no hypothesis that its function returned {outcome} ({said}): a property says what holds when "
                    f"it does (an iff's converse, or an honest case, is a completeness theorem, in Proofs/)")
     for h in taken:
-        if (outcome != "none" and about(h) and not inevent) or premise(h):
+        if allowed(h):
             continue
         what = "a field of an input it ranges over" if h["source"] == "field" else "a hypothesis"
         its = f"its event's first conjunct, {outcome} by {said}" if inevent else f"{outcome} by {said}"
@@ -1815,6 +1890,50 @@ def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[
     if outcome == "none" and not any(reaches(f, set(got["conclusion"]) | {c for h in hyps for c in h["reaches"]}) for f in fns):
         out.append(f"says nothing about {said}, the function its entry names")
     return out
+
+
+def binders_of(got: dict) -> list[dict] | None:
+    """A statement part's binders, its inputs and its `Prop` binders, each with the positions of the binders it mentions
+    (`Facts.lean`'s `uses`), or None when `Facts.lean` didn't report them (facts older than `uses`)."""
+    binders = [*got["inputs"], *(h for h in got["hypotheses"] if h["source"] == "binder")]
+    return binders if "uses" in got and all("uses" in b for b in binders) else None
+
+
+def reordered(got: dict, seed: Callable[[dict], bool]) -> tuple[list[int], int] | None:
+    """The positions of the statement part ``got``'s binders reordered, and how many come first: the binders of the
+    hypotheses ``seed`` picks (its acceptances and premises), with every binder they mention, transitively, then the
+    rest, each group in its written order. A binder mentions only binders before it, and none of the first group mentions
+    one of the rest, so the order is a statement too, and the same one: `∀ w, Q w → A → C` is `A → ∀ w, Q w → C` when `A`
+    mentions neither `w` nor `Q`'s proof, and two binders that don't mention each other commute. A `Prop` field of a
+    structure an input ranges over moves with the input. None when `Facts.lean` didn't report what each binder mentions."""
+    binders = binders_of(got)
+    if binders is None:
+        return None
+    uses: dict[int, set[int]] = {}
+    for b in binders:
+        uses.setdefault(b["at"], set()).update(b["uses"])
+    kept = {h["at"] for h in got["hypotheses"] if seed(h)}
+    stack = list(kept)
+    while stack:
+        for j in uses.get(stack.pop(), ()):
+            if j not in kept:
+                kept.add(j)
+                stack.append(j)
+    return sorted(uses.keys() | kept, key=lambda a: (a not in kept, a)), len(kept)
+
+
+def shares(got: dict, h: dict, read: set[int]) -> bool:
+    """Whether the hypothesis ``h`` of the statement part ``got`` equates one field of two of its inputs (`x.f = y.f`,
+    `Facts.lean`'s `shares`: the same path of structure projections, not empty, of two different inputs bound before it),
+    both of them inputs its acceptance reads (``read``), and nothing mentions its proof. By structure eta,
+    `∀ x y, x.f = y.f → P x y` is `P` of two structures whose `f` is one value bound once (`⟨a, r⟩` and `⟨a', r⟩`), a
+    statement without the hypothesis."""
+    s, binders = h.get("shares"), binders_of(got)
+    if not s or h["source"] != "binder" or binders is None:
+        return False
+    j, k = s["inputs"]
+    return j != k and {j, k} <= read & {i["at"] for i in got["inputs"]} and max(j, k) < h["at"] and bool(s["path"]) and \
+        all(h["at"] not in b["uses"] for b in binders) and h["at"] not in got["uses"]
 
 
 def reaches(function: str, reached: set[str]) -> bool:

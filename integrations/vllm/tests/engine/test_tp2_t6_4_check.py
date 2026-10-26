@@ -13,7 +13,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
-from tests.check.opened import commit_host_steps  # noqa: E402
+from tests.check.opened import commit_host_steps
 
 
 def _worker():
