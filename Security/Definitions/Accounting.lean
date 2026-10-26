@@ -23,6 +23,7 @@ import Definitions.Accounting.Gates
 import Definitions.Accounting.Headline
 import Definitions.Accounting.HeadlineDc
 import Definitions.Accounting.Joint
+import Definitions.Accounting.JointPeriod
 import Definitions.Accounting.Localization
 import Definitions.Accounting.Memory
 import Definitions.Accounting.PerRun
