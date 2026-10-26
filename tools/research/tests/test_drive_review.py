@@ -1099,3 +1099,76 @@ def test_a_detached_train_launch_runs_its_own_copy_of_train_sh(tmp_path, monkeyp
         os.waitpid(job["pid"], 0)
     ids, tail = launched(job)
     assert ids == [rid] and f"train: {copy} in {repo}" in tail, tail
+
+
+def test_a_hand_lean_check_through_drive_holds_next_from_its_launch_before_train_sh_registers_a_run(world, monkeypatch, tmp_path):
+    """26 Oct 10:36Z: train.sh registers a hand Lean check's run 5-10 min after its launch, and a tick in that window reordered
+    `next` and threw away S1's check at 19a382ca.  `research queue lean-check` records it in drive's state as it launches."""
+    h = Review(world, monkeypatch)
+    starts = _detached(h, tmp_path)
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt"), (4, "d.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    assert not h.tick().startswith("landed")
+    one, two = (m.commit for m in h.q.chain()[:2])
+    rec = h.d.hand_lean(two[:12], "ci")
+    assert starts == [two] and h.hand == {}                               # launching: the run registry knows nothing yet
+    saved = h.d.q.load_state()["drive"]["lean"][two]
+    assert saved == rec and rec["state"] is None and rec["ids"] == [] and rec["launch"]["dir"] == str(tmp_path / "launch-1")
+    assert (rec["hand"], rec["by"], rec["members"]) == (True, "ci", [[m.pr, m.head] for m in h.q.chain()[:2]])
+    assert Q.lean_running(h.d.q.load_state(), 2) == "(launching)"
+    h.q.first = (4,)
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1, 2, 4, 3], world.logs        # `--first` goes above the hand check
+    assert [m.commit for m in h.q.chain()[:2]] == [one, two] and starts == [two]
+
+
+def test_lean_check_refuses_a_commit_that_is_not_a_member_of_next(world, monkeypatch):
+    from research.merge import DRIVE_ENV
+
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    assert not h.tick().startswith("landed")
+    argv = ["--workdir", str(h.q.workdir), "--remote", str(world.origin), "--repo", "o/r", "--store", str(world.tmp / "store"),
+            "--rules", str(world.dev / "ci" / "queue.toml"), "--on", "m1", "--by", "ci"]
+    monkeypatch.delenv(DRIVE_ENV, raising=False)
+    assert Q.main(["lean-check", _tip(world), *argv]) == 1                # drive's state is the control pod's
+    monkeypatch.setenv(DRIVE_ENV, "1")
+    for c in (_main(world), world.gh.prs[1].head, "nonsense"):            # `main`, a PR's head, no commit
+        assert Q.main(["lean-check", c, *argv]) == 1
+        with pytest.raises(QueueError, match="is not a commit of `next`"):
+            h.d.hand_lean(c, "ci")
+    assert h.launched == [] and not h.d.q.load_state()["drive"].get("lean")
+
+
+def test_lean_check_refuses_a_commit_a_running_lean_check_at_or_above_it_holds(world, monkeypatch):
+    h = Review(world, monkeypatch, nonlean_first=False)       # a member that changes no Lean above a Lean change
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"pkg/lean-audit.json": "{}"}))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    assert h.tick().startswith("landed #1"), world.logs
+    two, top = (m.commit for m in h.q.chain())
+    assert h.launched == [(top, "m1", False)]                             # drive's own, of the prefix's top
+    for c in (two, top):
+        with pytest.raises(QueueError, match=f"running Lean check {h.lean_ids()[0]} of {top[:12]} \\(#3\\) already holds"):
+            h.d.hand_lean(c, "ci")
+    assert len(h.launched) == 1 and "hand" not in h.d.q.load_state()["drive"]["lean"][top]
+
+
+def test_a_hand_lean_check_is_followed_and_covers_as_drives_own(world, monkeypatch):
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    assert not h.tick().startswith("landed") and h.launched == []
+    top = _tip(world)
+    h.d.hand_lean(top, "ci")
+    assert h.launched == [(top, "m1", False)]
+    (rid,) = h.lean_ids()
+    h.review(1)
+    assert not h.tick().startswith("landed") and len(h.launched) == 1     # drive waits for it, and launches none of its own
+    assert any(f"waits for the Lean check {rid} of {top[:12]}" in s for s in world.logs), world.logs
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {"lean-build": "passed", LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #1"), world.logs
+    assert _main(world) == top and len(h.launched) == 1
+    assert any(f"the Lean check {rid} of {top[:12]} passed" in s for s in world.logs), world.logs
