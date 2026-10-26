@@ -43,6 +43,15 @@ by data sheet, and the table says so.
 
 > **R-ACCEL-8 (04:41Z):** no shadow GEMMs and no noised copies. Credited work is the useful product with O bound. See brief section 1.
 
+> **Status 10:58Z (real UTC).**
+> - **D2:** #4665 marked (`31f3f2f443`; replaces #4567).
+> - **D3:** #4662 marked (`08bfdc3a07`; replaces #4553).
+> - **D4:** #4607 marked (`ab613d7108`).
+> - #4442 (wipe vocabulary) and #4363 (S1) are marked, all in the queue.
+> - **D5 v2:** out (`note:20261026T0815Z-draft-accel-public-best-2`).
+> - **Open:** D6 (PROTO-DESIGN-4, 17:00Z); D7 (RT-LEAN-3, RT-PROTO-2's last turn, ALGO-COST-3, 18:00Z); WORKSOUND-WIT's `WorkSoundNoFold` witness (15:00Z).
+> - L10 is closed by #4665's lock, which has records for `CardWithinAccel` and `AccelProductForm`.
+>
 > **Status 06:50Z (real UTC).**
 > - **D1:** protocol v3 is adopted (PROTO-DESIGN-3, CMP-118 e0cd4061): H200 t = 2, L′ 512–640; RTX PRO 6000 t = 3, L′ 256. Its overlapped γ is at most 6.06, so P-HYB3 is only the alternative.
 > - **D6:** PROTO-DESIGN-4 bc-9bcba447, due 17:00Z.
