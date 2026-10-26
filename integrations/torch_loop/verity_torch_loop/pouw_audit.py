@@ -5,7 +5,7 @@
 
 The audit is one-stage's from the records alone (`benchmarks/prove_path/records_audit.py`, `a5.audit`): the registration
 checked by Lean and Python, the draw on the verifier's live coins read after the receipt, C-Flock ``--zk`` behind the Lean
-firewall on the drawn tiles, Lean's verdicts and the audit record. Two things differ, both because the registration's
+firewall on the drawn tiles, Lean's verdicts and the audit record. What differs is because the registration's
 window is PoUW's ``{context, kind, public}``, not one-stage's provenance:
 
 * the verifier's window comes from ``circuit.json`` held to ``provenance.json`` (the window one-stage would name): its
@@ -14,7 +14,11 @@ window is PoUW's ``{context, kind, public}``, not one-stage's provenance:
 * the template is the pinned H1 tile, resolved by `pouw.resolve` and composed by C-Flock's `UnitStager` on the record's
   statement (`records_audit.composer`);
 * a member's public header names its set by the window's run, which a PoUW window states as its context
-  (`flock_input_files`).
+  (`flock_input_files`), and the window's operands (``activations``) are held to domains binding that context
+  (`committed_activations`);
+* the tiles' ``a`` and ``b`` rows are registered reads of those operands: each drawn member's ``--registered`` file comes
+  from the record and the registration's entries alone (`operands.held`, records_audit's ``--registered``), and Lean's
+  registered reads open every row against them.
 
 Then `answer` makes the proof service's answer for the registration in PoUW's evidence form (`core_check.evidence`:
 public ``{"draw": ...}``, the profile at the verifier's δ), written to ``DIR/answer.json``, and `core_check.answer` (and,
@@ -36,7 +40,7 @@ from pathlib import Path
 from collections.abc import Mapping
 from typing import Any
 
-from verity.core.protocols.pouw import core_check as CC, window as Wd
+from verity.core.protocols.pouw import core_check as CC, operands as OP, window as Wd
 from verity.core.protocols.sampled_proofs.one_stage import audit as A, registration as R
 from verity.ml.windows import interface as IF
 
@@ -49,7 +53,7 @@ import records_audit as RA  # noqa: E402
 
 from verity.ml.windows import flock_inputs as FI  # noqa: E402
 
-_source, _input_files = RA.source, FI.flock_input_files
+_source, _input_files, _activations = RA.source, FI.flock_input_files, RA.committed_activations
 
 
 def flock_input_files(window_dir, k, circuit, out_dir, *, write=("pub", "inst"), files=None):
@@ -92,11 +96,19 @@ def source(w: Mapping[str, Any] | None, held: Mapping[str, Any]) -> dict[str, An
     """`records_audit.source` on the window one-stage would name: a PoUW window's provenance when its context is the
     provenance's run; any other window as given (so a registration naming another circuit or run is refused)."""
     w = dict(w or {})
-    if sorted(w) == ["context", "kind", "public"]:
+    if sorted(set(w) - {OP.KEY}) == ["context", "kind", "public"]:
         prov = held["provenance"]
         v = _source({**prov, "kind": w["kind"]} if w["context"] == prov.get("run") else {}, held)
         return v
     return _source(w, held)
+
+
+def committed_activations(w: Mapping[str, Any]) -> dict[str, Any] | None:
+    """`records_audit.committed_activations` with a PoUW window's run read as its context."""
+    w = dict(w)
+    if "run" not in w and "context" in w:
+        w["run"] = w["context"]
+    return _activations(w)
 
 
 def answer(audit_out: Path, rec: Mapping[str, Any], delta: Fraction) -> dict[str, Any]:
@@ -177,9 +189,14 @@ def main(argv: list[str] | None = None) -> int:
     RA.verifier_window = verifier_window
     FI.flock_input_files = flock_input_files
     RA.source = lambda w, held: source(w, {**held, **held_prov})
+    RA.committed_activations = committed_activations
+    RA.pinned = lambda doc: OP.held({"context": rec["window"]["context"], OP.KEY: doc})
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "operands.json").write_text(json.dumps(rec["window"].get(OP.KEY), sort_keys=True))
     rc = RA.main(["audit", "--window", str(wdir), "--law", f"{law['law']}:{law['k']}", "--circuit", a.circuit,
                   "--run", a.run, "--m0-pythonpath", a.m0_pythonpath, "--bin", a.bin, "--lean", a.lean,
                   "--firewall", a.firewall, "--out", str(out / "audit"), "--delta", a.delta_audit,
+                  "--registered", str(out / "operands.json"),
                   *(["--forged"] if a.forged else [])])
     items = rec["window"]["public"]
     params = {"check": PW.check_item(), "context": a.run, "delta": str(PW.DELTA), "eps": str(PW.EPS),

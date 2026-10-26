@@ -80,7 +80,7 @@ def main(argv: list[str] | None = None) -> int:
         empty = IF.Window(loop.circuit(), loop.run_root, law, a.cap)
         out = {"circuit": hashlib.sha512(IF.circuit_bytes(empty.circuit_record())).hexdigest()}
         if a.pouw:
-            h1 = PW.H1Loop(loop, bytes(PW.SALT_BYTES))
+            h1 = PW.H1Loop(loop)
             h1w = IF.Window(h1.circuit(), loop.run_root, h1.law, PW.CAP)
             out["pouw"] = hashlib.sha512(IF.circuit_bytes(h1w.circuit_record())).hexdigest()
         print(json.dumps(out))
@@ -102,11 +102,13 @@ def main(argv: list[str] | None = None) -> int:
     rec = json.loads((Path(a.out) / "registration.json").read_text())
     pouw = None
     if a.pouw:
-        h1 = PW.H1Loop(loop, bytes.fromhex(a.pouw_salt) if a.pouw_salt else PW.fresh_salt())
+        h1 = PW.H1Loop(loop)
+        salt = bytes.fromhex(a.pouw_salt) if a.pouw_salt else PW.fresh_salt()
         pdir = Path(a.pouw_out or Path(a.out) / "pouw")
-        prec = h1.write(h1.window(), pdir, {"loop": "torch-loop/pouw-h1"})
+        prec = h1.write(h1.window(salt), pdir, {"loop": "torch-loop/pouw-h1"})
         pouw = {"circuit": json.loads((pdir / "provenance.json").read_text())["circuit"], "tiles": h1.real,
-                "work": prec["window"]["public"]["work"], "law": prec["law"], "registration": R.digest(prec), "out": str(pdir)}
+                "work": prec["window"]["public"]["work"], "law": prec["law"], "registration": R.digest(prec), "out": str(pdir),
+                "X": h1.X.hex()}
     print(json.dumps({"pouw": pouw, "circuit": rec["window"]["circuit"], "run": loop.run_root, "population": win.window.population,
                       "members": len(win.window.members), "mismatched": {t: len(v) for t, v in bad.items()},
                       "compiler": rec["window"].get("compiler"), "registration": R.digest(rec), "out": str(Path(a.out)),
