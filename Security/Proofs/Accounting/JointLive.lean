@@ -47,7 +47,7 @@ theorem Live.prob_exists_univ_le {O ι : Type} [Fintype ι] (p : ι → O → Pr
 
 /-- **The joint guarantee over a period played as a causal game** (`Accounting.Guarantees.JointPeriodLive`). -/
 theorem JointPeriodLive : Accounting.Guarantees.JointPeriodLive := by
-  intro ι α _ d C O G r H c δ loss h s
+  intro ι α _ d C O G r c err h s
   exact (Live.prob_exists_univ_le _ G s).trans (Finset.sum_le_sum fun a _ => h a s)
 
 /-- A finder meeting `ecr/sha-512` within `q` expected calls outputs a collision with probability at most
@@ -61,8 +61,9 @@ theorem Live.pr_le_of_expectedCR {H : Claims.Msg → Claims.Msg} {F : Claims.Fin
 (`Accounting.Guarantees.JointPeriodLiveECR`). -/
 theorem JointPeriodLiveECR : Accounting.Guarantees.JointPeriodLiveECR := by
   intro ι α _ d C O G r H c δ loss q h hmono hcr hq s
-  refine (JointPeriodLive ι α d C O G r H c δ loss h s).trans (Finset.sum_le_sum fun a _ => ?_)
-  show δ a + loss a (ENNReal.ofReal ((r.finder a s).Pr H)) ≤ _
+  refine (JointPeriodLive ι α d C O G r c (fun a s => r.error H a (δ a s) (loss a) s) h s).trans
+    (Finset.sum_le_sum fun a _ => ?_)
+  show δ a s + loss a (ENNReal.ofReal ((r.finder a s).Pr H)) ≤ _
   exact add_le_add le_rfl
     (hmono a (ENNReal.ofReal_le_ofReal (Live.pr_le_of_expectedCR (hcr a s) (hq a s))))
 
@@ -177,7 +178,7 @@ theorem JointPeriodLive_nontrivial : Accounting.Guarantees.JointPeriodLive_nontr
 /-- **The joint guarantee over a horizon of periods played as one causal game**
 (`Accounting.Guarantees.JointHorizonLive`). -/
 theorem JointHorizonLive : Accounting.Guarantees.JointHorizonLive := by
-  intro ι α _ d m C O G r H c δ loss h s
+  intro ι α _ d m C O G r c err h s
   calc prob (fun o => ∃ j a, (r j).accepts a o ∧ ¬ (r j).Holds (c j) s a o) G s
       ≤ ∑ j, prob (fun o => ∃ a, (r j).accepts a o ∧ ¬ (r j).Holds (c j) s a o) G s :=
         Live.prob_exists_univ_le _ G s
@@ -188,11 +189,11 @@ theorem JointHorizonLive : Accounting.Guarantees.JointHorizonLive := by
 /-- **The joint guarantee over a horizon of server-time blocks and their wipes, played as one causal game**
 (`Accounting.Guarantees.JointHorizonBlocksLive`). -/
 theorem JointHorizonBlocksLive : Accounting.Guarantees.JointHorizonBlocksLive := by
-  intro ι α _ _ d B C O G S H c fw δ loss εWipe δPous h hW hM s
-  have hA := JointHorizonLive ι α d B C O G S.block H c δ loss h s
-  have hW' : prob (fun o => ∃ b, (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives fw o) G s ≤ ∑ b, εWipe b :=
+  intro ι α _ _ d B C O G S c fw err εWipe δPous h hW hM s
+  have hA := JointHorizonLive ι α d B C O G S.block c err h s
+  have hW' : prob (fun o => ∃ b, (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives fw o) G s ≤ ∑ b, εWipe b s :=
     (Live.prob_exists_univ_le _ G s).trans (Finset.sum_le_sum fun b _ => hW b s)
-  have hM' : prob (fun o => ∃ b, (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm s b o) G s ≤ ∑ b, δPous b :=
+  have hM' : prob (fun o => ∃ b, (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm s b o) G s ≤ ∑ b, δPous b s :=
     (Live.prob_exists_univ_le _ G s).trans (Finset.sum_le_sum fun b _ => hM b s)
   calc _ ≤ _ := prob_or_le _ _ G s
     _ ≤ _ := add_le_add le_rfl (prob_or_le _ _ G s)
