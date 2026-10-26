@@ -221,6 +221,80 @@ theorem rowDigest_eq (row : Array ℕ) : Firewall.rowDigest row = Sha512.hash �
   rw [rowInput, FlockSoundness.Refine.bytes_of_list]
   rfl
 
+/-- A row's words as `Firewall.rowDigest` lays them after its prefix: each two bytes, little-endian. -/
+def wordBytes (ws : Array ℕ) : Msg := ws.toList.flatMap fun w => [(w % 256).toUInt8, (w / 256 % 256).toUInt8]
+
+theorem foldl_words (l : List ℕ) (b : ByteArray) :
+    (l.foldl (fun b w => (b.push (w % 256).toUInt8).push (w / 256 % 256).toUInt8) b).data.toList =
+      b.data.toList ++ l.flatMap fun w => [(w % 256).toUInt8, (w / 256 % 256).toUInt8] := by
+  induction l generalizing b with
+  | nil => simp
+  | cons w l ih =>
+    rw [List.foldl_cons, ih, List.flatMap_cons]
+    simp [ByteArray.data_push, Array.toList_push]
+
+/-- **`rowInput` is the row's `sha512/row/v1` prefix, then its words' bytes.** -/
+theorem rowInput_eq (row : Array ℕ) :
+    rowInput row = (HmRow.rowPrefix row.size).data.toList ++ wordBytes row := by
+  rw [rowInput, ← Array.foldl_toList, foldl_words]
+  rfl
+
+theorem bitL_wordBytes : ∀ (ws : List ℕ) (i : ℕ), i < 16 * ws.length →
+    FlockSoundness.Discharge.Hm.bitL (ws.flatMap fun w => [(w % 256).toUInt8, (w / 256 % 256).toUInt8]) i =
+      (ws.getD (i / 16) 0).testBit (i % 16)
+  | [], _, h => by simp at h
+  | w :: ws, i, h => by
+    rw [List.flatMap_cons]
+    by_cases hi : i < 16
+    · rw [FlockSoundness.Discharge.Hm.bitL, List.getD_eq_getElem?_getD, Nat.div_eq_of_lt hi, Nat.mod_eq_of_lt hi]
+      by_cases h8 : i < 8
+      · rw [Nat.div_eq_of_lt h8]
+        simp only [List.cons_append, List.getElem?_cons_zero, Option.getD_some, List.getD_cons_zero]
+        rw [Nat.toUInt8, UInt8.toNat_ofNat', Nat.mod_mod_of_dvd _ (by norm_num), show (256 : ℕ) = 2 ^ 8 from rfl,
+          Nat.testBit_mod_two_pow, Nat.mod_eq_of_lt h8]
+        simp [h8]
+      · rw [show i / 8 = 1 by omega]
+        simp only [List.cons_append, List.getElem?_cons_succ, List.getElem?_cons_zero, Option.getD_some,
+          List.getD_cons_zero]
+        rw [Nat.toUInt8, UInt8.toNat_ofNat', Nat.mod_mod_of_dvd _ (by norm_num), show (256 : ℕ) = 2 ^ 8 from rfl,
+          Nat.testBit_mod_two_pow, Nat.testBit_div_two_pow, show i % 8 + 8 = i by omega]
+        simp [show i % 8 < 8 by omega]
+    · have ih := bitL_wordBytes ws (i - 16) (by simp at h; omega)
+      rw [show (i / 16) = (i - 16) / 16 + 1 by omega, List.getD_cons_succ, show i % 16 = (i - 16) % 16 by omega, ← ih]
+      rw [FlockSoundness.Discharge.Hm.bitL, FlockSoundness.Discharge.Hm.bitL, List.cons_append, List.cons_append,
+        List.nil_append, show i / 8 = (i - 16) / 8 + 2 by omega, show i % 8 = (i - 16) % 8 by omega]
+      simp [List.getD_eq_getElem?_getD]
+
+/-- **Check 5's tie at a copy, from its rows**: where the bytes the copy's `v` row forms `fv` read are the words of
+`row` (the verifier's, `8 nv` words at least) and those its `out` row forms `fo` read are zero words, and the copy's
+`v` columns and residual columns are those forms' bits, the copy's residual columns are zero and its `v` reads `row`'s
+elements (`ResTie` at `wordsElems nv row`). -/
+theorem resTie_of_rows {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} {v : ℕ → Bool} {w : Claims.Flock.Wit}
+    {fv fo : List HmNets.Lin} {row : Array ℕ} {nz : ℕ} (hsz : 8 * nv ≤ row.size)
+    (hvb : readForms w fv = wordBytes row) (hob : readForms w fo = wordBytes (Array.replicate nz 0))
+    (hVc : ∀ i (hi : i < 128 * nv), ∃ hl : i < fv.length,
+      v (FlockVBridge.OfVStar.vBase (FlockVBridge.OfVStar.partRep ns nv) + i) = formBit w fv[i])
+    (hOc : ∀ q (hq : q < 128 * S.res.length), ∃ hl : q < fo.length,
+      v (FlockVBridge.OfVStar.partBase S ns nv + q) = formBit w fo[q]) :
+    ResTie S ns nv (wordsElems nv row) v := by
+  refine ⟨fun q hq => ?_, funext fun e => ?_⟩
+  · obtain ⟨hl, hq'⟩ := hOc q hq
+    rw [hq', ← bitL_readForms hl, hob]
+    by_cases hz : q < 16 * nz
+    · rw [wordBytes, bitL_wordBytes _ _ (by simpa using hz)]
+      simp
+    · rw [FlockSoundness.Discharge.Hm.bitL, List.getD_eq_getElem?_getD, List.getElem?_eq_none]
+      · simp
+      · simp [wordBytes]; omega
+  · unfold _root_.Flock.Readable.vRead _root_.Flock.Readable.readElems wordsElems
+    split_ifs with he
+    · refine FlockVBridge.OfVStar.ofBits_congr fun t ht => ?_
+      obtain ⟨hl, ht'⟩ := hVc (128 * e + t) (by omega)
+      rw [ht', ← bitL_readForms hl, hvb, wordBytes, bitL_wordBytes _ _ (by simp; omega),
+        show (128 * e + t) / 16 = 8 * e + t / 16 by omega, show (128 * e + t) % 16 = t % 16 by omega]
+      simp [List.getD_eq_getElem?_getD, Array.getD]
+    · rfl
+
 /-! ## Check 5's tie at one port and instance -/
 
 /-- **Check 5's tie at one port's row** (`commit_tie` at `PartAccepts`' refusal): where part `s` records port `q`'s
