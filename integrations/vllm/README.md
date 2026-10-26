@@ -29,6 +29,7 @@ verity_vllm/
   properties/         property harnesses noninterference.py census.py kernel_allowlist.py golden.py holdout.py admission.py ...
   collectives/        collectives        collective_record.py collective_sites.py embedding_shard.py
   config.py target_family.py             run-definition locations; the target-family preflight
+  settings.py                            every environment variable, declared once (role, type, doc); the run's record of them
   pins/               measured pins      <DEVICE>.json (cuBLAS routes, SMs) served/<ROLE>.<DEVICE>.json (a served Build's artifact, dispatch, MoE launches)
   ops/                pod operations     pod_bootstrap.sh pod_gate.sh pod_*_tap.sh canary.sh *_negatives.sh known_roots.json
 tests/<subpackage>/   mirrors the package; tests/regression = the R19 reference harness (opt in with VERITY_REGRESSION=1)
@@ -336,7 +337,14 @@ bit-identical decode; an executor whose scheme has a circuit in its protocol pac
 PoUW is refused beside sampled proofs until its modeled circuit lands (its `traced_as` is None).  PoUW's settings are `coins` (the epoch's challenger,
 `verity.core.protocols.pouw.coins.Challenger`, held in the auditor's process: install opens its salt coin
 after the weights' root and refuses without one; a pipeline that is its run's own auditor supplies one,
-`pouw.challenged`), `retain_steps` and `transcript_dir`. Its weight operands are formed per forward from the weight each call is handed, so
+`pouw.challenged`), `retain_steps` and `transcript_dir`. Under `ncp-v2` and Pearl-C, `challenger` (the auditor host's,
+`HOST:PORT`) and `session` replace `coins`: ncp-v2's session is the gate's open answer, and Pearl-C's the gate's reserve
+answer for a session of its salt coin alone (`window.SALT_FAMILIES`), which install opens through `gate` on its salt
+epoch's root (`salt.epoch_open_root` of the weights' root and the epoch's number k) before its salt coin opens after
+that root (`pouw_h1_window.salt_session`), so the session ends complete. Each install is an epoch, committing its weights
+under a fresh hm96 key; a reinstall over a weights' root this process already had an epoch over takes the next k. The
+retained manifest names k (`pass_index`) and that session (`session`: its id, ledger seq, root and commitment, never the hello's secret),
+and `pouw_h1_challenger.session_reason` holds a pass to it, recomputing the root from the weights' root and k. Its weight operands are formed per forward from the weight each call is handed, so
 PoUW keeps no weight-derived copy and POUS composes with it. A call holds the formed operands of the one layer it
 executes (3 B per weight of that layer: 1.41 GB for a 70B gate_up), plus under `FORM_BYTES` (256 MiB) of host work. PoUW executes `ncp-v1` and `ncp-v1-shift24` on the host in numpy, and its
 placeholders are listed in its `info()`.
@@ -358,7 +366,9 @@ uv run pytest tests/program verity_vllm        # the CPU oracle; tests that need
 ~~~
 
 Tests and tools read fixtures relative to this directory: run them from here.  The repository's merge gate (`check`) runs them as
-the suite `verity-vllm` (`tools/verity/check/suites.py --list`).  Every tool is a `verity-vllm` command
+the suite `verity-vllm` (`tools/verity/check/suites.py --list`).  The suite is about 12000 CPU-s, 50 min in one 4-CPU job;
+`python3 tools/suite_parts.py launch` runs it as 8 `research run --on auto` jobs at once, each a suites.py run of one part's test
+modules, and prints their run ids (`tools/suite_parts.py --help`).  Every tool is a `verity-vllm` command
 (`verity-vllm --help`); a sweep row runs with `verity-vllm row run <row-id> <ROLE> <hf-repo> <revision>`.
 
 A row's one config is its file `workloads/<row-id>.json`, schema `verity-vllm/workload/v2`, read as `config.RowConfig`: the

@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.KS.ConflictRun
+import Proofs.Flock.Claims.DeployK
 
 /-!
 # Conflicts tied to collisions, at both records
@@ -161,6 +162,90 @@ theorem runOf_eq {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Claims.Msg} {
   | error e => rw [he] at hext; cases hext
   | ok v => rw [he] at hext; cases hext; rfl
 
+/-! ## The decoder's `root_B`, whatever `keep` -/
+
+/-- **What the verifier's decoder reads of each table's `root_B`**, whatever the hashes and `keep` (S5's parse). -/
+theorem decodeWithK_rootB (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
+    {sess : Session} (h : Record.decodeWithK keep hs spec text = .ok sess) :
+    ∃ j l, Lean.Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧
+      List.Forall₂ (Claims.Bridge.Custody.RootField l) spec.tables.toList sess.rootB.toList := by
+  unfold Record.decodeWithK Record.decodeJWithK at h
+  dsimp only at h
+  split at h
+  rotate_left
+  · cases h
+  rename_i j hparse
+  obtain ⟨j', hj, h⟩ := ebind_ok h
+  cases hj
+  repeat' (first | (obtain ⟨_, _, h⟩ := ebind_ok h) | (split at h))
+  all_goals
+    cases h
+    refine ⟨_, _, by assumption, by assumption,
+      List.Forall₂.imp (fun t rb h => ?_) (Claims.Bridge.Custody.mapM_forall₂ (by assumption))⟩
+    beta_reduce at h
+    obtain ⟨v, h1, h⟩ := ebind_ok h
+    obtain ⟨s, h2, h⟩ := ebind_ok h
+    obtain ⟨rb', h3, h⟩ := ebind_ok h
+    repeat' (first | (obtain ⟨_, _, h⟩ := ebind_ok h) | (simp only [] at h))
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    exact ⟨v, s, h1, h2, h3⟩
+
+/-- **The element-level decoder's `root_B` is `liveOf`'s**, whatever the hashes and `keep`. -/
+theorem decodeWithK_rootB_live (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
+    {sess : Session} {lv : Live} (hd : Record.decodeWithK keep hs spec text = .ok sess)
+    (hl : liveOf spec text = .ok lv) : sess.rootB = lv.rootB := by
+  obtain ⟨j, l, hp, hl1, hroot⟩ := decodeWithK_rootB keep hs hd
+  obtain ⟨j', l', recs', hp', hl1', -, hroot', -, -⟩ := Claims.Bridge.Custody.liveOf_ok hl
+  rw [hp] at hp'
+  cases hp'
+  rw [hl1] at hl1'
+  cases hl1'
+  exact Array.ext' (Claims.Bridge.Custody.forall₂_unique (R := Claims.Bridge.Custody.RootField l)
+    (fun _ _ _ => Claims.Bridge.Custody.rootField_unique) hroot hroot')
+
+/-! ## The query round, at the verdict read through `keep` -/
+
+/-- **Level 0's query round in a session `verifyWithMK keep` accepts**, under any oracle and whatever `keep`:
+`plainQueryRound_verifyWithM`'s conclusion, with the session `Record.decodeWithK keep` decodes. -/
+theorem plainQueryRound_verifyWithMK (keep : Bool → Bool) (hs : Hashes Flock.V) (spec : SessionSpec)
+    (tabs : Array Setup) (record : String) (proofs : Array ByteArray)
+    (hf : ∀ st ∈ tabs, (∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog) ∧
+      st.fold.kLog = st.kLog)
+    (h : verifyWithMK keep hs spec tabs record proofs = .ok ()) :
+    ∃ sess : Session, Record.decodeWithK keep hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
+      ∀ (i : ℕ) (hi : i < tabs.size), ∃ sch : Flock.Schedule, fast100 tabs[i].m = some sch ∧ ∀ r < 2,
+        ∃ (stream : StreamRec) (extras : Array Flock.Claim) (p : Proof),
+          sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
+          tabs[i].extra sess.points = .ok extras ∧
+          decodeProof (FlockSoundness.Refine.shapeOf tabs[i] sch extras.size) proofs[2 * i + r]! = .ok p ∧
+          Claims.Flock.plainQueryRound tabs[i].m tabs[i].kLog sch.k0 (2 + extras.size) < stream.rounds.size ∧
+          Claims.Flock.plainRepColsOf (Claims.Flock.plainProofShape tabs[i].m tabs[i].kLog (2 + extras.size)
+              tabs[i].merkle.digestLen
+              (if tabs[i].merkle.saltBytes = 0 && !tabs[i].openedSalts then none else some tabs[i].merkle.saltBytes))
+              stream.rounds proofs[2 * i + r]! =
+            Claims.Flock.zkRepCols (sch.levels.getD 0 default)
+              (stream.rounds[Claims.Flock.plainQueryRound tabs[i].m tabs[i].kLog sch.k0 (2 + extras.size)]!).coins
+              p.ligerito.initialProof.rows ∧
+          merkleCheckWith (tabs[i].merkle.opsWith hs) tabs[i].merkle p.cap (sch.levels.getD 0 default).cap
+            (sch.levels.getD 0 default).d
+            (positions (sch.levels.getD 0 default)
+              (stream.rounds[Claims.Flock.plainQueryRound tabs[i].m tabs[i].kLog sch.k0 (2 + extras.size)]!).coins)
+            p.ligerito.initialProof.rows p.ligerito.initialProof.siblings p.ligerito.initialProof.salts
+            (2 ^ (sch.levels.getD 0 default).lanes) = .ok () ∧
+          p.cap.foldl (· ++ ·) ByteArray.empty = sess.rootB[i]! := by
+  obtain ⟨sess, schs, hsess, hsz, -, hall⟩ := verifyWithMK_tables keep hs h
+  refine ⟨sess, hsess, hsz, fun i hi => ?_⟩
+  obtain ⟨hi', c₀, c₁, hsch, h0, h1⟩ := hall i hi
+  obtain ⟨hfi, hkl⟩ := hf tabs[i] (Array.getElem_mem hi)
+  refine ⟨schs[i]'hi', hsch, fun r hr2 => ?_⟩
+  have hr : ∃ c, verifyRepWith hs spec tabs[i] (schs[i]'hi') sess i r proofs[2 * i + r]! = .ok c := by
+    rcases (by omega : r = 0 ∨ r = 1) with rfl | rfl
+    · exact ⟨c₀, by simpa using h0⟩
+    · exact ⟨c₁, h1⟩
+  obtain ⟨c, hc⟩ := hr
+  exact plainRepColsOf_verifyRepWith hs spec tabs[i] (schs[i]'hi') sess i r _ c hsch hfi hkl hc
+
 /-! ## An accepted plain run's openings -/
 
 /-- **The columns table 0's reps open in a plain record**, every one, before `distinctBelow` keeps one per position. -/
@@ -178,22 +263,21 @@ theorem mem_plainRawCols {s : Claims.Seen} {p : ℕ × List 𝔽} (h : p ∈ col
     simp only [hr, Bool.false_eq_true, ↓reduceIte, Claims.Flock.plainRunCols] at h ⊢
     exact mem_of_distinctBelow h
 
-/-- **An accepted plain run's reps open a column only as a Merkle opening** of table 0's level 0 in its own log: at
-the statement's setup, table 0's `fast100` schedule and the link of the tape's first message, a column `u` a rep opens
-at `q` is an opened row whose opening under table 0's scheme against `root_B[0]` of the link passed, every SHA-512
-input of it in the run's verifier log. -/
-theorem plain_opening_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
-    {r : Fin ((V false).k x) → Coin} {q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
-    (hu : (q, u) ∈ plainRawCols (Claims.run sha512 P (V false) x ω r).seen) :
-    ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule)
-      (link : List ByteArray × List ByteArray) (row : Array F128),
-      setupOf false x = some (s, spec, sts) ∧ sts[0]? = some st ∧ fast100 st.m = some sch ∧
-      linkOf ((P.next x [] ω).eval sha512).1 = some link ∧
+/-- **A plain record whose verdict read through `keep` accepts within `L` opens a column only as a Merkle opening** of
+table 0's level 0 in `L`, at a statement that sets up, a final message `seen` ends on and checks that pass: a column `u`
+a rep opens at `q` is an opened row whose opening under table 0's scheme against `root_B[0]` of `link` passed. The
+shared step of `plain_opening_raw` (`keep := id`), `plainE_opening_raw` (`fun _ => true`) and `plainK_opening_raw`. -/
+theorem plain_opening_raw_of_verdictK (keep : Bool → Bool) {x : Claims.Msg} {seen : Claims.Seen}
+    {L : List (Claims.Msg × Claims.Msg)} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final} {q : ℕ}
+    {u : List 𝔽} (hs : setupOf false x = some (s, spec, sts)) (hf : lastFinal seen = some f)
+    (hc : checks false s spec x link c₁ mids f = .ok ())
+    (hv : verifyWithMK keep (hashesIn (L.map Prod.fst)) spec (tabsOf sts) f.record f.proofs = .ok ())
+    (hu : (q, u) ∈ plainRawCols seen) :
+    ∃ (st : Stmt) (sch : Flock.Schedule) (row : Array F128), sts[0]? = some st ∧ fast100 st.m = some sch ∧
       Opening (Setup.ofCircuit st).merkle (sch.levels.getD 0 default) (2 ^ (sch.levels.getD 0 default).lanes)
-        link.1.toArray[0]! (Claims.run sha512 P (V false) x ω r).vLog q row ∧
+        link.1.toArray[0]! L q row ∧
       u = row.toList.map FlockLevel3.GF128.of := by
-  obtain ⟨s, spec, sts, link, c₁, mids, f, hs, hf, hlink, hc, hv⟩ := acc_within h
-  generalize hL : (Claims.run sha512 P (V false) x ω r).vLog = L at hv ⊢
   obtain ⟨hx, lv, hlv, hcu⟩ := Claims.Bridge.Custody.checks_ok hc
   obtain ⟨hroot, -⟩ := Claims.Bridge.Custody.custody_ok hcu
   unfold plainRawCols at hu
@@ -216,26 +300,23 @@ theorem plain_opening_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {�
     exact e
   have h0 : 0 < (tabsOf sts).size := by simpa [tabsOf] using hsts0
   have ht0 : (tabsOf sts)[0] = Setup.ofCircuit st := by rw [tabsOf_getElem h0]; simp only [hst0]
-  replace hv : verifyWithM (hashesIn (L.map Prod.fst)) spec (tabsOf sts) f.record f.proofs = .ok () := hv
-  obtain ⟨sess, hdec, hsz, hreps⟩ :=
-    plainQueryRound_verifyWithM (hashesIn (L.map Prod.fst)) spec (tabsOf sts) f.record f.proofs (tabsOf_fold sts) hv
+  obtain ⟨sess, hdec, hsz, hreps⟩ := plainQueryRound_verifyWithMK keep (hashesIn (L.map Prod.fst)) spec
+    (tabsOf sts) f.record f.proofs (tabsOf_fold sts) hv
   obtain ⟨sch, hsch, hrep⟩ := hreps 0 h0
   obtain ⟨stream, extras', p, hstream, hext', hp', hlt, hcols, hmc, hcap⟩ := hrep k hk
   simp only [ht0] at hsch hext' hp' hlt hcols hmc
-  have hdec' : Record.decode spec f.record = .ok sess := by
-    rw [← With.decodeWith_std]
-    exact (With.decodeWith_sim sub (sub_hashes (L.map Prod.fst)) spec f.record) sess hdec
-  obtain ⟨hrB, hpts, hlsz, hstreams⟩ := Claims.Bridge.Custody.decode_live hdec' hlv
-  rw [hpts, hext] at hext'
+  have hrB := decodeWithK_rootB_live keep (hashesIn (L.map Prod.fst)) hdec hlv
+  obtain ⟨hpts, -, hlsz, hstreams⟩ := liveOf_decodeWithK keep (hashesIn (L.map Prod.fst)) hlv hdec
+  rw [← hpts, hext] at hext'
   cases hext'
   have htab : 0 < spec.tables.size := by rw [← hsz]; exact h0
   obtain ⟨hk', hrs⟩ := Claims.Bridge.Custody.repStreams_getElem spec htab hk
-  obtain ⟨y, hy, hfa⟩ := hstreams (2 * 0 + k) hk'
+  have hk2 : 2 * 0 + k < lv.streams.size := by rw [hlsz]; exact hk'
+  obtain ⟨y, hy, hfa⟩ := hstreams (2 * 0 + k) hk' hk2
   rw [hrs] at hy
   have hys : y = stream := Option.some.inj (hy.symm.trans hstream)
   subst hys
-  have hcoins := forall₂_coins (fun _ _ hab => hab.2.1) hfa
-  have hk2 : 2 * 0 + k < lv.streams.size := by rw [hlsz]; exact hk'
+  have hcoins := forall₂_coins (fun _ _ hab => hab.2) hfa
   have hcolsEq : Claims.Flock.plainRepColsOf
       (Claims.Flock.plainProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
         (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st)))
@@ -250,8 +331,8 @@ theorem plain_opening_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {�
       rw [show ByteArray.empty = default from rfl, getD_eq_getElem!]; simp
     rw [e1, e2]
     refine plainRepColsOf_congr _ _ fun j => ?_
-    rw [← Array.getElem?_toList, ← Array.getElem?_toList]
-    exact (hcoins j).symm
+    rw [getElem!_pos lv.streams (2 * 0 + k) hk2, ← Array.getElem?_toList, ← Array.getElem?_toList]
+    exact hcoins j
   have hp2 : (q, u) ∈ Claims.Flock.zkRepCols (sch.levels.getD 0 default)
       (y.rounds[Claims.Flock.plainQueryRound (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog sch.k0
         (2 + extras.size)]!).coins p.ligerito.initialProof.rows := by
@@ -271,8 +352,8 @@ theorem plain_opening_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {�
     (With.opsWith_sim (back (L.map Prod.fst)) (back_hashes (L.map Prod.fst)) (Setup.ofCircuit st).merkle)
     (Setup.ofCircuit st).merkle _ _ _ _ _ _ _ _ () hmc
   obtain ⟨hpure, hlog⟩ := merkleCheck_logsOf hms hruns
-  obtain ⟨hcs, hcw⟩ := merkleCheck_cap hpure
-  refine ⟨s, spec, sts, st, sch, link, p.ligerito.initialProof.rows[j]!, hs, hst, hsch, hlink,
+  obtain ⟨hcs, hcw⟩ := FlockSoundness.Refine.merkleCheck_cap hpure
+  refine ⟨st, sch, p.ligerito.initialProof.rows[j]!, hst, hsch,
     ⟨hms, p.cap, p.ligerito.initialProof.salts.getD j ByteArray.empty,
       sibsOf p.ligerito.initialProof.siblings ((sch.levels.getD 0 default).d - (sch.levels.getD 0 default).cap) j,
       hcs, fun b hb => (hcw b hb).trans hdl, ?_, ?_,
@@ -282,6 +363,27 @@ theorem plain_opening_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {�
     exact merkleCheck_opens _ _ _ _ _ _ _ _ _ hpure j hj
   · rw [← hjq]
     exact hlog j hj
+
+/-- **An accepted plain run's reps open a column only as a Merkle opening** of table 0's level 0 in its own log: at
+the statement's setup, table 0's `fast100` schedule and the link of the tape's first message, a column `u` a rep opens
+at `q` is an opened row whose opening under table 0's scheme against `root_B[0]` of the link passed, every SHA-512
+input of it in the run's verifier log. -/
+theorem plain_opening_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {r : Fin ((V false).k x) → Coin} {q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
+    (hu : (q, u) ∈ plainRawCols (Claims.run sha512 P (V false) x ω r).seen) :
+    ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule)
+      (link : List ByteArray × List ByteArray) (row : Array F128),
+      setupOf false x = some (s, spec, sts) ∧ sts[0]? = some st ∧ fast100 st.m = some sch ∧
+      linkOf ((P.next x [] ω).eval sha512).1 = some link ∧
+      Opening (Setup.ofCircuit st).merkle (sch.levels.getD 0 default) (2 ^ (sch.levels.getD 0 default).lanes)
+        link.1.toArray[0]! (Claims.run sha512 P (V false) x ω r).vLog q row ∧
+      u = row.toList.map FlockLevel3.GF128.of := by
+  obtain ⟨s, spec, sts, link, c₁, mids, f, hs, hf, hlink, hc, hv⟩ := acc_within h
+  replace hv : verifyWithMK id (hashesIn ((Claims.run sha512 P (V false) x ω r).vLog.map Prod.fst)) spec (tabsOf sts)
+      f.record f.proofs = .ok () := hv
+  obtain ⟨st, sch, row, hst, hsch, hop, hu⟩ :=
+    plain_opening_raw_of_verdictK id (L := (Claims.run sha512 P (V false) x ω r).vLog) hs hf hc hv hu
+  exact ⟨s, spec, sts, st, sch, link, row, hs, hst, hsch, hlink, hop, hu⟩
 
 /-- **An accepted plain run opens a column only as a Merkle opening** of table 0's level 0 in its own log: a column
 `u` the run's reader opens at `q` is one a rep opens (`plain_opening_raw`). -/

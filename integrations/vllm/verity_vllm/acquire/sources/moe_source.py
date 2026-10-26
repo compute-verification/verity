@@ -1,4 +1,4 @@
-"""[R13 moe / MOE-03] The fused-MoE block's value families as an acquisition source of the native committer (`NativeHostCommitter.attach_source`,
+"""The fused-MoE block's value families as an acquisition source of the native committer (`NativeHostCommitter.attach_source`,
 the FA2 `HiddenM1Source` precedent): the values the Program's MoE instances produce are materialised device tensors BETWEEN the block's
 kernels, but inside ONE module's forward (`MoERunner`), in workspace buffers the next layer overwrites -- a module forward hook sees only
 the final [M, H] sum.  This source wraps the three Python launch sites of the pinned vLLM and snapshots each producer's output into the
@@ -35,11 +35,11 @@ vLLM fuses the SiLU and the quant (`ops.silu_and_mul_per_block_quant`): no bf16 
 A MoE module that does not all-reduce its output on a rank (GLM-5.3: `reduce_results=False`; the next layer's fused all-reduce norm
 sums it) returns a value no other binder sees: on a TP rank (`world` > 1) the source binds it as `<module>/out` after the forward.
 
-[R16 moe FLUSH-03] "right after its kernel" is only true of a committer that copies at `_acquire`.  The gather collector
+"Right after its kernel" is only true of a committer that copies at `_acquire`.  The gather collector
 (`native_collect_v2b`) STAGES a descriptor and copies at the next flush point -- a module hook -- and the fused-MoE block has no hook
 between its launches: vLLM's TritonExperts carves `intermediate_cache1` (up) and `intermediate_cache3` (down) out of the same workspace
 (`_resize_cache(workspace2, ...)` twice; byte-for-byte alias when 2I == H), so the block's own w2 launch overwrites `up` before the next
-layer's `input_layernorm` pre-flush reads it -> the committed `up` was the same layer's `down` (R16 lane-moe C2 v3 on the real OLMoE B1
+layer's `input_layernorm` pre-flush reads it -> the committed `up` was the same layer's `down` (on the real OLMoE B1
 record, 320/320 MoeExpertGemm_v1 VUs).  The source therefore asks the committer to flush right after staging `up`
 (`committer.flush_after_plane("up")`: one gather launch per MoE layer per step on the gather collector, a no-op on the arena committer);
 `act`, `down`, `sum` are overwritten only by the next layer, after that layer's pre-flush, and the router outputs are fresh allocations.

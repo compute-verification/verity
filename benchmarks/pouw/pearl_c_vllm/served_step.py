@@ -11,7 +11,10 @@ tokens and requests it scheduled, the model runner's ``execute_model`` and ``sam
 run's calls (``pc``: `PearlCDeviceRun.gemm`, each call's Python, launches and uploads), its pass ends (``pend``:
 `PearlCDeviceRun.end`, the transcript tree and its reads back) and a whole-step replay's slot upload and records (``wr``:
 `whole_replay`, ``wrd``: `whole_replayed`).  Each phase is also an NVTX range, and the timed reps sit between
-cudaProfilerStart and cudaProfilerStop, for ``nsys profile --capture-range=cudaProfilerApi``.
+cudaProfilerStart and cudaProfilerStop, for ``nsys profile --capture-range=cudaProfilerApi``.  A protocol arm serving
+Pearl-C takes its salt coin from a live session on the auditor host when ``PEARLC_CHALLENGER_GATE`` and
+``PEARLC_CHALLENGER_PEER`` are set (`_live`), else from a challenger in this process; ``coins.json`` says which, and how
+the session closed (`coins_of`).
 
 ``analyze`` reads nsys's SQLite export.  A decode step is an engine step whose every scheduled request takes one token; its
 window runs from its start to the next step's.  Per window: the GPU's busy time (the union of kernel intervals, every
@@ -117,6 +120,32 @@ def _patch_engine(llm) -> None:
         runner.sample_tokens = _timed(runner.sample_tokens, "sample")
 
 
+def _live(arm):
+    """`arm` with its salt coin from a live session on the auditor host when ``PEARLC_CHALLENGER_GATE`` and
+    ``PEARLC_CHALLENGER_PEER`` are set (`bench_arm.PearlCArm`'s) and the arm serves Pearl-C through the PoUW option: a
+    session reserved on infra's gate (`bench_arm._LiveSession`), which the option opens on its salt epoch's root
+    (`salt.epoch_open_root` of the weights' root and the epoch's number) and draws its salt coin from
+    (`pouw_h1_window.salt_session`), through the pouw settings ``challenger`` (this node's 127.0.0.1, at the port the
+    gate's open answers), ``session`` (the reserve answer) and ``gate``. Returns the arm and the reserve answer, None
+    when the arm's coins stay in-process."""
+    import dataclasses
+
+    from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm, _LiveSession
+    from verity_vllm.protocols.pouw.h1 import window as PHW
+    from verity_vllm.protocols.pouw import pearl_c as PPD
+    env = PearlCArm()
+    if not any(e.partition(":")[2] in PPD.SCHEMES for e in arm.protocols) or (env.gate_command, env.peer) == (None, None):
+        return arm, None
+    if env.gate_command is None or env.peer is None:
+        raise SystemExit("live coins take PEARLC_CHALLENGER_GATE (the gate's ssh command) and PEARLC_CHALLENGER_PEER "
+                         "(this node's name in the challenger host's peers) together")
+    session = _LiveSession(env.gate_command, env.peer, env.epoch)
+    config = dict(arm.protocols_config or {})
+    config["pouw"] = {**config.get("pouw", {}), "challenger": "127.0.0.1:0", "session": session.reserved,
+                      "gate": PHW.gate_of(session.gate.call)}
+    return dataclasses.replace(arm, protocols_config=config), session.reserved
+
+
 def _engine(spec_name: str, arm_id: str):
     from verity_bench.vllm.arms import resolve_arms
     from verity_bench.vllm.presets import load_spec, served
@@ -126,22 +155,39 @@ def _engine(spec_name: str, arm_id: str):
     preset, eager = served(spec.preset, spec.eager)
     names = list(spec.arms) + ([arm_id] if arm_id not in spec.arms else [])
     arms = resolve_arms(names, spec.arm_modules, {k: v for k, v in spec.arm_settings.items() if k in names})
-    arm = next(x for x in arms if x.id == arm_id)
+    arm, reserved = _live(next(x for x in arms if x.id == arm_id))
     preset, eager = arm_execution(arm, preset, eager)
     if preset.engine_settings.get("serving_defaults") and os.environ.get(INDUCTOR_DIR_MARK) != "1":
         import tempfile
         os.environ["TORCHINDUCTOR_CACHE_DIR"] = tempfile.mkdtemp(prefix="served_step_inductor_")
         os.environ[INDUCTOR_DIR_MARK] = "1"
     _patch_pearl()
-    return spec, arm, _VllmEngine(arm, preset, False, eager)
+    return spec, arm, _VllmEngine(arm, preset, False, eager), reserved
+
+
+def coins_of(option, reserved) -> dict:
+    """Where the PoUW option `option` took its salt coin: its ``coin_source``, the gate's answer it carries (``session``,
+    no secret), its salt epoch's number (``pass_index``) and the root its salt coin follows (that epoch's root over
+    the weights' root, `salt.epoch_open_root`; the weights' root for a coin held in-process), its salt, and how its
+    session closed (``details.challenger``, once the engine has closed), and the session head a retained pass's manifest
+    names (``manifest_head``, `pouw_pearl_c_manifest.session_head`); `reserved` the gate's reserve answer `_live` took."""
+    from verity.core.protocols.pouw import salt as PS
+    from verity_vllm.protocols.pouw.pearl_c.manifest import session_head
+    c = option.commitment()
+    k, w = c.get("pass_index"), c.get("weights_root")
+    after = w if k is None or w is None else PS.epoch_open_root(bytes.fromhex(w), k).hex()
+    return {"source": c.get("coin_source", "in-process"), "reserved": reserved, "session": c.get("session"),
+            "pass_index": k, "weights_root": w, "salt_after": after, "salt": c.get("salt"),
+            "closed": option.info().get("challenger"), "manifest_head": session_head(c)}
 
 
 def run(a) -> int:
     from verity_bench.vllm.presets import expand_sweep
-    spec, arm, engine = _engine(a.spec, a.arm)
+    spec, arm, engine, reserved = _engine(a.spec, a.arm)
     import torch
     point = next(p for p in expand_sweep(spec.sweep) if p.id == a.point)
     _patch_engine(engine.llm.vllm)
+    option = engine.llm.protocols.get("pouw") if getattr(engine.llm, "protocols", None) is not None else None
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     _PHASE.update(name="gate")
@@ -170,6 +216,10 @@ def run(a) -> int:
         print(json.dumps({"arm": arm.id, "point": point.id, "gate": bool(gate.get("passed")),
                           **summarize_host(_STEPS, point.batch)}, default=str))
     engine.close()
+    if option is not None:
+        coins = coins_of(option, reserved)
+        (out / "coins.json").write_text(json.dumps(coins, indent=1))
+        print(json.dumps({"coins": coins}))
     return 0 if gate.get("passed") else 3
 
 
