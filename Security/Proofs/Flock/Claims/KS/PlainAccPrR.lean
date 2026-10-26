@@ -148,11 +148,12 @@ theorem stepWith_outCoinsR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : 
       rw [hl] at hm
       refine stepWith_outCoinsR rd P x ω r vn hvn n _ _ _ (by simp [hl]) ?_ h
       simp only [List.map_append, List.map_singleton, hc, hm, List.length_append, List.length_singleton,
-        List.range_succ] <;> rfl
+        List.range_succ]
     | acc =>
       rw [RecDeploy.stepWith_succ_acc sha512 P x ω vn n hist as t hv]
       refine ⟨t.msgs.length, by simp, ?_⟩
-      simp only [List.map_append, List.map_singleton, hc] <;> rfl
+      simp only [List.map_append, List.map_singleton, hc]
+      rfl
     | rej =>
       rw [RecDeploy.stepWith_succ_rej sha512 P x ω vn n hist as t hv] at h
       simp at h
