@@ -73,7 +73,9 @@ $\sigma$'s (`ExecStrata`), misses $B$ with probability at most `Law.stratified`'
 over strata; `flock_e2e_drawn_exec` and `flock_e2e_count_exec` are the e2e theorems at the executable's sampling design
 (`execStratified`), the count curve bounded by `Law.stratified`'s `miss`. `execStrata_of_ofJson`
 (`ExecStrataOf.lean`): the strata of a draw file `UnitDraw.ofJson` accepts describe some assignment's (`ExecStrata`), each
-stratum's `k` at most its size, so those two hypotheses follow from the verifier accepting. `drawOS_subset_escape_le`,
+stratum's `k` at most its size, so those two hypotheses follow from the verifier accepting. The `FailClosed` claims take
+neither: their law is the verifier's own (`liveLaw`) and their bound the infimum over such assignments
+(`liveStrata_of_ofJson`: non-empty at an accepted draw file's law). `drawOS_subset_escape_le`,
 `drawOS_stratified_escape_le` and `drawOS_work_escape_le` (`ExecDrawOS.lean`), **the live draw**: `Flock.Draw.drawOS`,
 which is `drawWith` on `IO.getRandomBytes` (`drawOS_def`), extending a stream that runs out and rerunning, misses $B$
 with probability at most the same acceptance probabilities, on a byte source that A3 makes uniform
