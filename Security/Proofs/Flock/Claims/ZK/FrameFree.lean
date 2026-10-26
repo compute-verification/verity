@@ -391,7 +391,7 @@ theorem piopV_two (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flo
   rw [piopV_succ, piopV_succ]
   simp [piopV, piopFr, fvals]
 
-theorem flatMap_range'_congr {β : Type} (f g : ℕ → List β) (s n : ℕ) (h : ∀ i < n, f (s + i) = g i) :
+theorem flatMap_range'_congr_sq {β : Type} (f g : ℕ → List β) (s n : ℕ) (h : ∀ i < n, f (s + i) = g i) :
     (List.range' s n).flatMap f = (List.range n).flatMap g := by
   rw [List.range'_eq_map_range, List.flatMap_map]
   exact List.flatMap_congr fun i hi => h i (List.mem_range.mp hi)
@@ -425,7 +425,7 @@ theorem piopV_all (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flo
     simp [piopFr, fvals, List.range_eq_range']
   have h3 : (List.range' 3 (m - 6)).flatMap (fun jj => fvals (piopFr m kLog digest cap root lay mk jj)) =
       (List.range' 0 lay.nMlv).flatMap fun a => [mk (lay.ml a 0), mk (lay.ml a 1)] := by
-    rw [flatMap_range'_congr _ (fun a => [mk (lay.ml a 0), mk (lay.ml a 1)]) 3 (m - 6), hn, List.range_eq_range']
+    rw [flatMap_range'_congr_sq _ (fun a => [mk (lay.ml a 0), mk (lay.ml a 1)]) 3 (m - 6), hn, List.range_eq_range']
     intro i hi
     rw [piopFr, if_neg (show ¬ 3 + i = 0 by omega), if_neg (show ¬ 3 + i = 1 by omega),
       if_neg (show ¬ 3 + i = 2 by omega), if_pos (show 3 + i < 3 + (m - 6) by omega)]
@@ -446,7 +446,7 @@ theorem piopV_all (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flo
   have h6 : (List.range' (5 + (m - 6)) (kLog - 6)).flatMap
       (fun jj => fvals (piopFr m kLog digest cap root lay mk jj)) =
       (List.range' 0 lay.nLc).flatMap fun a => [mk (lay.lc a 0), mk (lay.lc a 1)] := by
-    rw [flatMap_range'_congr _ (fun a => [mk (lay.lc a 0), mk (lay.lc a 1)]) _ (kLog - 6), hl, List.range_eq_range']
+    rw [flatMap_range'_congr_sq _ (fun a => [mk (lay.lc a 0), mk (lay.lc a 1)]) _ (kLog - 6), hl, List.range_eq_range']
     intro i hi
     rw [piopFr, if_neg (show ¬ 5 + (m - 6) + i = 0 by omega), if_neg (show ¬ 5 + (m - 6) + i = 1 by omega),
       if_neg (show ¬ 5 + (m - 6) + i = 2 by omega), if_neg (show ¬ 5 + (m - 6) + i < 3 + (m - 6) by omega),
