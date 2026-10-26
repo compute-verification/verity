@@ -72,6 +72,7 @@ theorem sitesAtHP_bcSite :
     exact tableHP_bcSite ht hc hscope dj hU hpi hpub _ h
   · exact absurd hM (tableAtHP_unsat dj x₀ hS _)
 
+include ht hc hscope in
 /-- **`KeysRowP` from `scopeOkH`**: `KeysRow` from the parse (`Layout.keysRow_of_parse`), at public inputs. -/
 theorem keysRowP_of_scopeH :
     Layout.KeysRowP c hU pi (Layout.portRowW c) :=

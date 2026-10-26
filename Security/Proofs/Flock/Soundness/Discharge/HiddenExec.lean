@@ -25,6 +25,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.SitesP
 import Proofs.Flock.Soundness.Discharge.HiddenExec.RowsAtHP
 import Proofs.Flock.Soundness.Discharge.HiddenExec.LiveOnP
 import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExecP
+import Proofs.Flock.Soundness.Discharge.HiddenExec.SetupP
 
 /-!
 # flock-verify's acceptance under hidden outputs, and the headline over hidden-output sessions
@@ -62,4 +63,6 @@ Since #757 main's prover writes the hidden-output statement (`verity/flock-circu
 * `RowsAtHP`: `lay` and `rs` there (`layAtHP`, `rsAtHP`, `rsAtHP_computes`), `BcSiteHP` at every satisfiable site.
 * `LiveOnP`: R11 for one-table sessions at `own` (`AcceptsP`, `DecodesOnP`, `Prog.flock_headline_live_onXP`).
 * `HeadlineExecP`: `flock_headline_exec_hiddenP`, `flock_headline_exec_hidden` at `own` and `Placed.keyProgP`.
+* `SetupP`: what a setup at `own` establishes (its tags, leaf scheme, well-formedness and drawn public file, the
+  session's rounds and link points), and `drawSetupHP_of_setupHiddenI`.
 -/
