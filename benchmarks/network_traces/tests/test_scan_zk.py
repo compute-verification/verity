@@ -88,8 +88,8 @@ def test_a_group_of_link_windows_is_one_registration_a_member_a_window(tmp_path)
     assert ing1.ports["row"]["reads"] == list(range(T)) and ing1.ports["row"][sz.REG.READS_FROM] == T
     assert ing1.ports["sin"]["reads"] == list(range(T - 1, G * T - 1))
     assert eg1.ports["o1"]["root"] == at.sides["egress"][1].head.root.hex() and eg1.ports["o1"][sz.REG.READS_FROM] == 3 * T
-    assert [m.name for m in h.rounds["chain"] if m.refused] == [sz.target(at, "chain")] == ["ingress-0"]
-    assert [m.name for m in h.rounds["tampered"] if m.refused] == [sz.target(at, "tampered")]
+    assert [m.name for m in h.rounds["chain"] if m.refused] == sz.targets(at, "chain") == ["ingress-0"]
+    assert [m.name for m in h.rounds["tampered"] if m.refused] == sz.targets(at, "tampered")
     with pytest.raises(SystemExit, match="a group is 1 or more link-windows"):
         sz.link(tmp_path / "none", setup=sz.TEST, group=0)
 
@@ -126,19 +126,25 @@ def test_the_members_are_the_programs_ranges(G):
         assert sorted(b for _u, t, b in units if t != "egress") == (list(range(G * T)) if "first" in templates else [])
 
 
-def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run") -> Path:
-    """The synthetic run's records published as warden_serve's `Publisher` publishes a served run's (each record, its
-    certificate, its rows' registration and salts), under a warden key of its own, beside its `deployment.json`."""
+def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int | None = None,
+              late: tuple[int, ...] = ()) -> Path:
+    """The synthetic run's records over ``windows`` link-windows (the setup's by default) published as warden_serve's
+    `Publisher` publishes a served run's (each record and its certificate, the wire's rows' registration and salts),
+    under a warden key of its own, beside its `deployment.json`; the connections of ``late`` failed late (a void run,
+    their reasons in ``fails.records``)."""
+    windows = windows or setup.windows
     reqs = [sz._request(setup, i, p) for i, p in enumerate(setup.prompts)]
-    served = sz.traffic.serve(setup.params, reqs, setup.arrivals, [1 << 20] * len(reqs), setup.responses, setup.windows)
+    served = sz.traffic.serve(setup.params, reqs, setup.arrivals, [1 << 20] * len(reqs), setup.responses, windows,
+                              late)
     out.mkdir(parents=True)
     signer = sz.LmsSigner.create(sz.lms.keygen(sz.lms.Params(64, 1, 6), hashlib.sha512(seed).digest()),
                                  out.parent / f"{out.name}-signer.json")
     pub = WS.Publisher(out, sz.Issuer(signer, sz.SESSION), setup.params)
-    for rec in (*served.ingress, *served.egress):
-        pub.keep(rec, setup.params.grid)
-    (out / "fails.records").touch()
-    dep = WS.deployment_record(setup.params, signer.public_key(), sz.SESSION, origin_unix=0.0, windows=setup.windows,
+    for w in range(windows):
+        for rec, grid in ((served.ingress[w], setup.params.grid), (served.egress[w], setup.params.grid),
+                          (served.failed[w], setup.params.fails_grid)):
+            pub.keep(rec, grid)
+    dep = WS.deployment_record(setup.params, signer.public_key(), sz.SESSION, origin_unix=0.0, windows=windows,
                                listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=0.025, run_id=bytes(32))
     (out / "deployment.json").write_text(json.dumps(dep))
     return out
@@ -154,6 +160,85 @@ def test_a_warden_runs_rows_are_read_under_its_deployments_key(tmp_path):
     assert [list(h.at.sides[s][0].cells.rows) for s in ("ingress", "egress")] == [
         list(syn.at.sides[s][0].cells.rows) for s in ("ingress", "egress")]
     assert all(m.refused is None and set(m.outputs) == {1} for m in h.rounds["honest"])
+
+
+def _cells(run: Path) -> dict[tuple[str, int], dict]:
+    """A run's row registrations in ``cells.jsonl``, by direction and link-window."""
+    return {(d["registration"]["direction"], d["registration"]["window"]): d["registration"]
+            for d in map(json.loads, (run / "cells.jsonl").read_text().splitlines()) if "registration" in d}
+
+
+def test_the_registration_names_each_link_windows_warden_rows_its_ports_read(tmp_path):
+    """The rows form's hold (`NetworkCheck.Period`: the scan's registration names each of W's row registrations' root
+    and domain): a G = 2 group's honest round names, as ``warden/<direction>/<w>``, each of the four row registrations
+    of the run's ``cells.jsonl``, T leaves each (ingress's row ports and egress's o1 read them); the tampered round,
+    egress only, names the egress rows alone, the re-signed link-window's in its place."""
+    G, T = 2, sz.TEST.params.window
+    run = published(tmp_path / "run", sz.TEST, windows=G)
+    h = sz.host(tmp_path / "host", run, setup=sz.TEST, group=G)
+    regs = _cells(run)
+    assert sz.warden_roots([{"warden": m.warden} for m in h.rounds["honest"]]) == [
+        {"port": f"warden/{d}/{w}", "root": regs[d, w]["root"], "leaves": T, "domain": regs[d, w]["domain"]}
+        for d in ("egress", "ingress") for w in range(G)]
+    tampered, w = sz.warden_roots([{"warden": m.warden} for m in h.rounds["tampered"]]), h.at.tampered.window
+    assert [r["port"] for r in tampered] == [f"warden/egress/{x}" for x in range(G)]
+    assert tampered[w]["root"] == h.at.tampered.registration["root"] != regs["egress", w]["root"]
+    assert all(tampered[x]["root"] == regs["egress", x]["root"] for x in range(G) if x != w)
+
+
+def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
+    """`window_answer` as the rows form reads a link-window's scan answer (`pouw.core_check.answer_of` and `integrity`,
+    the period mirror's own reads): every unit of a G = 2 group drawn, one level drawn stratified over the three
+    templates, its bound 0, for the group's registration; a refused audit a reject of the same registration naming
+    why; an accepted record of another registration the driver's error."""
+    from verity.core.protocols.pouw import core_check as CC
+
+    G, T = 2, 4
+    defs = {"first": FIRST, "ingress": ING, "egress": EG}
+    counts = sz.counts_of(sz.members_of(sz.TEMPLATES, G, T))
+    program = sz.PA.mixed_population_program([(defs[t], counts[t]) for t in sz.TEMPLATES])
+    query = sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES])
+    N, law = sum(counts.values()), sz.DR.parse_law(f"stratified:{2 * G * T}")
+    reg = R.record(program, query, law, sz.S.SCHEME,
+                   [{"port": "warden/egress/1", "root": "aa" * 64, "leaves": T, "domain": "bb" * 64}],
+                   {"kind": "stand-in"}, leaf_layer="ee" * 64)
+    draw = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
+    record = {"accepted": True, "registration": reg, "draw": draw, "proved_units": list(range(N))}
+    a = sz.window_answer(reg, record, sz.Fraction(1, 100), "unused")
+    assert CC.answer_of(a)["verdict"] == "accept" and a["commitment"] == R.digest(reg) and a["protocol"] == R.PROTOCOL
+    assert a["public"]["bound"] == 0 and a["public"]["drawn"] == a["public"]["proved"] == list(range(N))
+    (level,) = CC.integrity(a["profile"])["levels"]
+    assert level["draw"]["law"] == "stratified" and sum(s["k"] for s in level["draw"]["strata"]) == N == level["size"]
+    why = "the scan's audit of link-windows [0, 1] refused: egress-1: registered reads: table row 3 does not open"
+    r = sz.window_answer(reg, None, sz.Fraction(1, 100), why)
+    assert CC.answer_of(r)["verdict"] == "reject" and r["reason"] == why and r["commitment"] == a["commitment"]
+    with pytest.raises(SystemExit, match="another registration"):
+        sz.window_answer(reg, {**record, "registration": {**reg, "population": 1}}, sz.Fraction(1, 100), "")
+
+
+def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail(tmp_path):
+    """A warden run whose warden failed a connection late (its server sent nothing: a FAIL in the egress row the
+    warden signed, its reason in ``fails.records``) is read, not refused: the scan renders the connection's END where
+    the warden wrote FAIL, that bucket alone differs from the warden's row, and the run's one round, honest, is refused
+    ("does not open") at the egress member of the FAIL's link-window, every other member held."""
+    G, T = 2, sz.TEST.params.window
+    h = sz.host(tmp_path / "host", published(tmp_path / "run", sz.TEST, windows=G, late=(1,)), setup=sz.TEST, group=G)
+    at = h.at
+    (b,) = at.void
+    assert at.failed == 1 and at.tampered is None and 2 not in at.outputs
+    assert set(h.rounds) == {"honest"} and sz.rounds_of(at) == {"honest": (sz.TEMPLATES, "does not open")}
+    refused = {m.name: m.refused for m in h.rounds["honest"] if m.refused}
+    assert list(refused) == sz.targets(at, "honest") == [f"egress-{b // T}"]
+    assert refused[f"egress-{b // T}"] == (f"registered reads: table row {b % T} does not open the registered root at "
+                                           f"position {b % T}")
+    assert sz.wired(h.rounds["honest"]) == []
+
+
+def test_schedule_prints_the_classs_schedule_as_warden_serves_flags(capsys):
+    assert sz.main(["schedule", "--class", "test"]) == 0
+    flags = capsys.readouterr().out.split()
+    assert dict(zip(flags[::2], flags[1::2])) == {f"--{k.replace('_', '-')}": str(v)
+                                                  for k, v in asdict(sz.TEST.params).items()}
 
 
 def _rewrite(path: Path, blobs: list[bytes]) -> None:
