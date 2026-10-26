@@ -172,6 +172,7 @@ class Ledger:
     streamed: list[int] = field(default_factory=list)
     finish: dict[str, Any] | None = None
     finished: bool = False
+    times: dict[str, float] = field(default_factory=dict)   # wall-clock stamps (telemetry): head, received, submitted, admitted, first_token
 
 
 class CommitWindows:
@@ -213,13 +214,16 @@ class CommitWindows:
         self.known[adm.engine_id] = adm.http_id
         self.arrivals.setdefault(adm.engine_id, len(self.arrivals))
         self.ledgers[adm.engine_id] = Ledger(adm.http_id, adm.engine_id, list(adm.prompt_ids), dict(adm.ingress),
-                                             getattr(adm, "user", None), getattr(adm, "release", None), len(self.known) - 1)
+                                             getattr(adm, "user", None), getattr(adm, "release", None), len(self.known) - 1,
+                                             times=dict(getattr(adm, "times", None) or {}))
         self.names[adm.engine_id] = self.ledgers[adm.engine_id].user or adm.http_id
 
     def streamed(self, engine_id: str, token_ids: list[int], finish_reason: str | None, stop_reason: Any) -> None:
         led = self.ledgers.get(engine_id)
         if led is None:
             return
+        if token_ids and "first_token" not in led.times:
+            led.times["first_token"] = self.wall()
         led.streamed.extend(int(t) for t in token_ids)
         if finish_reason is not None:
             led.finished = True
@@ -426,7 +430,7 @@ class CommitWindows:
                        "release": led.release, "admitted": led.admitted, "runner_ids": rr.runner_ids if rr else [],
                        "prompt_ids": led.prompt_ids, "streamed_ids": led.streamed, "ingress": led.ingress, "finish": led.finish,
                        "windows": sorted({r[0] for r in rr.rows}) if rr else [], "rows": rr.rows if rr else [],
-                       "committed_seeds": sorted(rr.seeds) if rr else [], "check": self.check(led)}
+                       "committed_seeds": sorted(rr.seeds) if rr else [], "check": self.check(led), "times": led.times}
                 self.checked.append({"http_id": led.http_id, "engine_id": led.engine_id, "passed": rec["check"]["passed"],
                                      "cache_hit": int(rec["check"].get("cache_hit") or 0)})
                 fh.write(json.dumps(rec) + "\n")

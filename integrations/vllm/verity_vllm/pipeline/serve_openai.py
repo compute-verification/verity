@@ -210,8 +210,9 @@ class EngineLoop:
 
     _STOP = object()
 
-    def __init__(self, engine: Any, commit: CommitWindows | None = None, cap: int = 0) -> None:
-        self.engine, self.commit, self.cap = engine, commit, int(cap)
+    def __init__(self, engine: Any, commit: CommitWindows | None = None, cap: int = 0,
+                 clock: Callable[[], float] = time.time) -> None:
+        self.engine, self.commit, self.cap, self.clock = engine, commit, int(cap), clock
         self.q: queue.Queue = queue.Queue()
         self.live: dict[str, Admission] = {}
         self.held: collections.deque[Admission] = collections.deque()
@@ -220,6 +221,7 @@ class EngineLoop:
         self.steps = 0
 
     def submit(self, adm: Admission) -> None:
+        adm.times.setdefault("submitted", self.clock())
         self.q.put(adm)
 
     def abort(self, engine_id: str) -> None:
@@ -264,6 +266,7 @@ class EngineLoop:
         except Exception as e:  # noqa: BLE001  (the engine's refusal of one request goes back to it)
             item.deliver(Delta([], "", error=f"{type(e).__name__}: {e}"))
             return
+        item.times["admitted"] = self.clock()
         self.live[item.engine_id] = item
         if self.commit is not None:
             self.commit.admitted(item)
@@ -353,11 +356,13 @@ class Server:
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
             head = await reader.readuntil(b"\r\n\r\n")
+            t_head = self.clock()
             lines = head.decode("latin-1").split("\r\n")
             method, path, _ = lines[0].split(" ", 2)
             headers = {k.strip().lower(): v.strip() for k, _, v in (ln.partition(":") for ln in lines[1:] if ln)}
             body = await reader.readexactly(int(headers.get("content-length") or 0))
-            await self.route(method, path.split("?", 1)[0], body, writer, headers, head + body)
+            await self.route(method, path.split("?", 1)[0], body, writer, headers, head + body,
+                             {"head": t_head, "received": self.clock()})
         except (asyncio.IncompleteReadError, ConnectionError, ValueError):
             pass
         finally:
@@ -378,7 +383,7 @@ class Server:
         await writer.drain()
 
     async def route(self, method: str, path: str, body: bytes, writer: asyncio.StreamWriter,
-                    headers: Mapping[str, str] | None = None, request: bytes = b"") -> None:
+                    headers: Mapping[str, str] | None = None, request: bytes = b"", times: Mapping[str, float] | None = None) -> None:
         release = None
         try:
             if path == "/health":
@@ -391,7 +396,7 @@ class Server:
                 return await self._json(writer, 200, json.dumps(self.tokenize(self._body(body))).encode())
             if path == "/v1/completions":
                 release = self._release(headers)
-                return await self.completions(self._body(body), writer, release, self.proto.of(request))
+                return await self.completions(self._body(body), writer, release, self.proto.of(request), times)
             raise RequestError(f"no route {method} {path}", 404, "NotFoundError")
         except RequestError as e:
             await self._json(writer, e.status, error_body(str(e), e.status, e.kind, e.param))
@@ -438,7 +443,7 @@ class Server:
         return {"count": len(ids), "max_model_len": self.max_model_len, "tokens": ids, "token_strs": strs}
 
     def admit(self, b: Any, deliver: Callable[[Delta], None], release: tuple[str, int] | None = None,
-              proto: Any = None) -> tuple[Completion, Admission]:
+              proto: Any = None, times: Mapping[str, float] | None = None) -> tuple[Completion, Admission]:
         """Parse a completion request into the engine's admission (ids, sampling parameters), under ``proto`` (by default
         the server's)."""
         proto = proto or self.proto
@@ -458,14 +463,14 @@ class Server:
             raise RequestError(TOP_P_REFUSAL.format(top_p=top_p), param="top_p")
         http_id = new_http_id()
         return req, Admission(http_id, engine_id_of(http_id), prompt_ids, params, deliver, ingress_of(proto.brought(req), params),
-                              user_of(req.raw), release)
+                              user_of(req.raw), release, dict(times or {}))
 
     async def completions(self, b: Any, writer: asyncio.StreamWriter, release: tuple[str, int] | None = None,
-                          proto: Any = None) -> None:
+                          proto: Any = None, times: Mapping[str, float] | None = None) -> None:
         proto = proto or self.proto
         loop = asyncio.get_running_loop()
         deltas: asyncio.Queue = asyncio.Queue()
-        req, adm = self.admit(b, lambda d: loop.call_soon_threadsafe(deltas.put_nowait, d), release, proto)
+        req, adm = self.admit(b, lambda d: loop.call_soon_threadsafe(deltas.put_nowait, d), release, proto, times)
         created, model = int(self.clock()), self.served_name
         self.submit(adm)
         self.served += 1
