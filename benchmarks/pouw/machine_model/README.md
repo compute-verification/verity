@@ -46,6 +46,7 @@ uv run machine-model counts e-l7qs 2048 28672 4096   # H's closed-form instructi
 uv run machine-model counts e-l7qs --check           # every ncu observation of H against them
 uv run machine-model --device sm_90 theta    # θ: each figure at its clock, d by route, Strassen's exchange rate, B_RF, r_H, γ, units, c_sha
 uv run machine-model render theta            # θ's rates, capacities, clocks, exact paths, FP8 atoms, units and SHA-512, with sources
+uv run machine-model cover --holes           # the coverage table's counts by mark and its holes; no flag: the table, --check: its problems
 ~~~
 
 The data, each kind of thing a file or a line of its own:
@@ -93,6 +94,8 @@ The data, each kind of thing a file or a line of its own:
   (`[sha512_mix]`), which SHA-512's ceiling on the card's pipes reads; and the host the card sits in on the node we
   run (`host.*`: cores a GPU, SHA-512 and AMX INT8 a core, DRAM a socket).
 - `data/devices/sm_NN/`: another device's data ("Devices" below).
+- `data/cover/`: the coverage table ("Coverage" below): the envelope ops (`envelope.toml`), a row per opcode and a
+  verdict per unit outside the SM pipes (`rows.toml`), and the SASS corpus's opcodes by form (`corpus.json`).
 
 The code:
 
@@ -121,6 +124,7 @@ The code:
   the mma.sync D ≠ C seed's d; Strassen's exchange at the no-fold receipt's L too; each tensor-over-lane ratio per
   second (`tick`); each RT-UNITS unit's verdict and the most a bounded one adds; and c_sha, our SHA-512 against each
   public figure, with the card's ceiling for our kernel's SASS, with and without IMAD.HI (`sha_ceiling`).
+- `verity_machine_model/cover.py`: reading the coverage table, the opcodes it must cover and what fails it.
 - `verity_machine_model/cli.py` and `verity_machine_model/commands/`: the `machine-model` command. `cli.py` only
   dispatches; each command is a module of `commands/` with its usage as its docstring, `add(sub)` its arguments and
   `run(args)` its body, so a new command is a new module and touches no other.
@@ -498,3 +502,45 @@ every noise. The B200's accumulator is in TMEM, so its floor is the tcgen05.ld.3
 to registers, 1024/L a MMA. Honest's profile counts that load in its fold, and the design's fold leaves it out, so a
 word written on lanes doesn't pay it. The baseline is dp4a on IMAD's class, as on sm_120, with its loads unpriced (the
 census has no IDP4A or LDS kind).
+
+## Coverage
+
+MODEL-MIN (CMP-165) states the accelerator as a small envelope ISA and one premise: every instruction a card executes is
+dominated by an envelope op at no fewer units of the same resource. `data/cover/` is that premise's evidence on the H200
+(sm_90) and the RTX PRO 6000 (sm_120), CMP-166. It is evidence, not trusted base: no verifier and no Lean reads it.
+`machine-model cover` prints it as Markdown, a table a card, with the counts by mark and every hole.
+
+- **The envelope ops** are `envelope.toml`'s, provisional until CMP-165 fixes the list. T is dot-local: an output
+  element is any function of its accumulator and its row's k elements and block scales, at k times its format's weight,
+  since an exact-integer MMA can't simulate a float or block-scaled one. T.sp is its 2:4 form, counted in kept products.
+  L is any function of at most 6 words and 8 predicates of the warp, writing 2 words and 2 predicates to one lane, at
+  ρ_L = 32 lanes × 4 issue slots a SM-clock. M moves a word, M.bcast reads a distinct word once for any number of
+  destinations, M.red sets a location of at most 128 bits to a function of its old value. S is dominated by L. H is the
+  oracle call.
+- **What must be covered** is every opcode of NVIDIA's family tables, Hopper's for sm_90 and Blackwell's for sm_120
+  (CUDA Binary Utilities 12.9 §4.3 and §4.4 in `../sass_census/data/bu_12_9.json`, and CUDA 13's in
+  `sass_isa_tables.json` beside it), every opcode of the SASS corpus of the CUDA 13 libraries (`corpus.json`, each
+  dotted form with its instruction count), every census kind of the machine model, and every unit θ lists
+  (`theta.UNITS`).
+- **A row** names its opcodes and devices, the census kinds it claims, its mark, its envelope op, its units, its rate (a
+  θ key, or `rate_value` a SM-clock), its argument and its source. A row with `forms` (regexes over the dotted form)
+  covers those forms of its opcodes; every opcode has a plain row too, which covers every other form. A unit outside
+  the SM pipes (TMA, the copy engines, L2's reductions, NVLink SHARP, texture, RT, video) is a `[[unit]]` with the same
+  marks.
+- **The marks**: `covered` (the argument dominates it at the rate), `coarse` (dominated, at a rate bounded from a coarser
+  figure, such as a pipe's share or the data sheet's peak for the format), `hole` (with its severity: `low`, `open`, or
+  `outside the card`), and `absent` (the card doesn't execute it: the family table lists it for another card, or ptxas
+  refuses the PTX). An opcode's mark is its worst row's.
+- **The tensor rule**: a dominated T or T.sp row's rate times its format's weight (halved for T.sp) is at most ρ_T, 1024
+  T units a SM-clock on sm_120 and 4096 on the H200.
+
+`tests/test_cover.py` fails when an opcode, a corpus form, a census kind or a unit has no row, when a corpus form matches
+two rows, when a tensor row's rate exceeds ρ_T, and when a hole has no severity. A new opcode, a new census kind or a
+new entry in `theta.UNITS` therefore needs its row before the tests pass.
+
+The lowering probe, `../sass_census/lowering.sh` over `lowering.cu`, compiles each case for sm_90a and sm_120a with the
+node's nvcc and checks the SASS it lowers to, or that ptxas refuses it. Its verdict line is `verdict: N/N cases lower as
+expected`, and it runs on any node with `research run --on auto --cwd source -- bash
+benchmarks/pouw/sass_census/lowering.sh`. It is what shows that f16 accumulators, FP6 and QMMA.SF are native on
+sm_120, that OMMA.SF.SP is the native sparse FP4 form, that BMMA's XOR has no native SASS on sm_90a, and that
+tcgen05 and wgmma are absent on sm_120a.

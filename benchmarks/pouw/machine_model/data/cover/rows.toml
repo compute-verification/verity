@@ -1,0 +1,1079 @@
+# The coverage table (MODEL-COVER, CMP-166): the evidence for MODEL-MIN's one coverage premise, that every instruction a
+# card executes is dominated by an envelope op (envelope.toml) at no fewer units of the same resource. It is evidence,
+# not the trusted base: `machine-model cover` renders it, and tests/test_cover.py fails when an opcode has no row.
+#
+# A `[[row]]` covers the opcodes `ops` on `devices` (default both). With `forms` (regexes on the dotted SASS opcode) it
+# covers only those forms, ahead of the plain row of its opcode; every opcode a device lists has a plain row there.
+# `kinds` are the census kinds (regexes) it claims, `rate` the θ key (or a key a device) of its rate, `rate_value` a rate
+# no θ key holds (MACs a SM-clock, logical for a sparse form) with its source, `fmt` a tensor row's weight class, and
+# `units` a row's envelope units a warp instruction where it isn't one L unit a lane.
+#
+# Marks:
+# - covered: dominated, and the rate the inequality reads is a document's or a run's, for this opcode or its pipe;
+# - coarse: dominated by the argument stated, on a bound shared with other opcodes (a port, the issue slot, a tree of L
+#   units), with no rate of its own;
+# - hole: no argument yet that an envelope op dominates it; `severity` says how much it could matter;
+# - absent: the opcode is in NVIDIA's family table, and the card can't execute it.
+#
+# Lowering probes are benchmarks/pouw/sass_census/lowering/ (ptxas 13.0, sm_90a and sm_120a; no GPU).
+
+# ---- tensor cores -----------------------------------------------------------------------------------------------------
+
+[[row]]
+ops = ["IMMA"]
+forms = ['IMMA\.16832\..*']
+what = "s8/u8 m16n8k32 (.SAT)"
+kinds = ["IMMA16832.*", "MMA"]
+mark = "covered"
+envelope = "T"
+fmt = "8"
+rate = { sm_90 = "tensor.s8.k32.sync", sm_120 = "tensor.s8.k32" }
+cost = "4,096 products × 1 = 4,096 T units a warp instruction"
+argument = "each s32 output element is a function of its accumulator and a 32-element row and column (.SAT clamps it)"
+source = "θ tensor.s8.k32 (census IMMA16832 M 16 SMSP-cycles, r20260930-111747-26f3); sm_90 θ tensor.s8.k32.sync"
+
+[[row]]
+ops = ["IMMA"]
+forms = ['IMMA\.16816\..*', 'IMMA\.8816\..*']
+what = "s8/u8 m16n8k16, m8n8k16"
+kinds = ["IMMA16816.*", "IMMA8816"]
+mark = "covered"
+envelope = "T"
+fmt = "8"
+rate = "tensor.s8.k16"
+cost = "2,048 (1,024) products × 1 a warp instruction"
+argument = "as the k32 form, at half the products an instruction and no more products a SM-clock"
+source = "θ tensor.s8.k16 (census IMMA16816 16 SMSP-cycles for 2,048 MACs; IMMA8816 DS_tensor 4)"
+
+[[row]]
+ops = ["IMMA"]
+forms = ['IMMA\.SP\..*']
+what = "2:4 sparse s8 m16n8k64, m16n8k32"
+kinds = ["IMMASP.*"]
+mark = "covered"
+envelope = "T.sp"
+fmt = "8"
+rate = "tensor.s8.sp"
+cost = "4,096 kept products × 1 (8,192 logical) a warp instruction"
+argument = "each output element reads 32 kept A elements, their selectors and 64 B elements: T.sp's row; sparse runs at twice the logical rate, the dense rate in kept products"
+source = "θ tensor.s8.sp (census IMMASP16864 16 SMSP-cycles); sm_90: the DS's sparse INT8 figure (θ tensor.s8.sp) bounds every sparse form"
+
+[[row]]
+ops = ["IMMA"]
+what = "any other form (u8/s8 mixes, the emulated s4 and b1 paths' IMMA)"
+mark = "coarse"
+envelope = "T"
+fmt = "8"
+rate = { sm_90 = "tensor.s8.k32", sm_120 = "tensor.s8.k32" }
+cost = "its products × 1"
+argument = "an IMMA multiplies ≤ 8-bit integers into s32 and holds the pipe at least as long a product as k32; s4 mma.sync lowers to IMMA.16832.S8.S8 plus lanes on both cards and b1 to IMMA.16832.U8.U8 on sm_120 (lowering probe)"
+source = "θ tensor.s8.k32 sheet; lowering probe s4, b1"
+
+[[row]]
+ops = ["HMMA"]
+forms = ['HMMA\.16816\.F32(\.BF16)?']
+what = "f16/bf16 m16n8k16, FP32 accumulators"
+kinds = ["HMMA16816", "HMMA16816_BF16", "HMMA16816_F16"]
+mark = "covered"
+envelope = "T"
+fmt = "16"
+rate = { sm_90 = "tensor.f16.k16.sync", sm_120 = "tensor.f16.k16" }
+cost = "2,048 products × 2 = 4,096 T units a warp instruction"
+argument = "an output element is a function of its FP32 accumulator and 16 16-bit elements a side"
+source = "θ tensor.f16.k16, tensor.bf16.k16 (census HMMA16816 M 16); sm_90 θ tensor.f16.k16.sync"
+
+[[row]]
+ops = ["HMMA"]
+forms = ['HMMA\.16816\.F16', 'HMMA\.1688\.F16']
+what = "f16 accumulators (two halves a register)"
+kinds = ["HMMA16816F16"]
+mark = "covered"
+envelope = "T"
+fmt = "16"
+rate = { sm_90 = "tensor.f16.k16.sync", sm_120 = "tensor.f16.k16" }
+cost = "2,048 products × 2 a warp instruction"
+argument = "an f16 accumulator is a narrower output word: T's output element is any function, so the f16 rounding is a special case; on sm_120 the .F16 form holds the pipe the same 16 SMSP-cycles as .F32"
+source = "census HMMA16816F16 M 16 SMSP-cycles (θ tensor.f16.k16 runs); lowering probe: HMMA.16816.F16 on both cards; sm_90 at θ tensor.f16.k16.sync's sheet"
+
+[[row]]
+ops = ["HMMA"]
+forms = ['HMMA\.1688\.F32(\.BF16)?']
+what = "f16/bf16 m16n8k8"
+mark = "coarse"
+envelope = "T"
+fmt = "16"
+rate = { sm_90 = "tensor.f16.k8.sync", sm_120 = "tensor.f16.k16" }
+cost = "1,024 products × 2 a warp instruction"
+argument = "the k8 shape at no more 16-bit products a SM-clock than the pipe's f16 rate (the WP gives one FP16 figure a card)"
+source = "sm_90 θ tensor.f16.k8.sync sheet; sm_120 θ tensor.f16.k16 sheet (no k8 run)"
+
+[[row]]
+ops = ["HMMA"]
+forms = ['HMMA\.1688\.F32\.TF32', 'HMMA\.1684\.F32\.TF32']
+what = "tf32 m16n8k8, m16n8k4"
+kinds = ["HMMA1688T", "HMMA1684T", "HMMA1688_TF32"]
+mark = "covered"
+envelope = "T"
+fmt = "tf32"
+rate = { sm_90 = "tensor.tf32.k8.sync", sm_120 = "tensor.tf32.k8" }
+cost = "1,024 products × 4 a warp instruction"
+argument = "19-bit tf32 elements read from 32-bit registers, an FP32 accumulator"
+source = "θ tensor.tf32.k8 (census HMMA1688T M 16, HMMA1684T DS_tensor 8); sm_90 θ tensor.tf32.k8.sync"
+
+[[row]]
+ops = ["HMMA"]
+forms = ['HMMA\.SP\.\d+\.F32(\.BF16)?']
+what = "2:4 sparse f16/bf16 m16n8k32"
+kinds = ["HMMASP16832"]
+mark = "covered"
+envelope = "T.sp"
+fmt = "16"
+rate_value = { sm_90 = 4096, sm_120 = 1024 }
+cost = "2,048 kept products × 2 a warp instruction"
+argument = "T.sp's row at 16-bit elements, at twice the dense logical rate"
+source = "sm_120 WP Table 4 FP16 sparse 1007.6 TFLOPS at 2,617 MHz, 188 SMs (1,024 a SM-clock; census HMMASP16832 DS_tensor 16); sm_90 DS 'FP16 Tensor Core 1,979 TFLOPS' sparse at 1,830 MHz (4,096)"
+
+[[row]]
+ops = ["HMMA"]
+forms = ['HMMA\.SP\.\d+\.F32\.TF32']
+what = "2:4 sparse tf32"
+mark = "covered"
+envelope = "T.sp"
+fmt = "tf32"
+rate_value = { sm_90 = 2048, sm_120 = 512 }
+cost = "kept products × 4"
+argument = "T.sp's row at tf32 elements"
+source = "sm_120 WP Table 4 TF32 sparse 503.8 (512 a SM-clock); sm_90 DS 'TF32 Tensor Core 989 TFLOPS' sparse (2,048)"
+
+[[row]]
+ops = ["HMMA"]
+what = "any other form (m8n8k4, other accumulators)"
+mark = "coarse"
+envelope = "T"
+fmt = "16"
+rate = { sm_90 = "tensor.f16.k16", sm_120 = "tensor.f16.k16" }
+cost = "its products × 2 (× 4 for tf32)"
+argument = "≤ 16-bit (or tf32) elements at no more products a SM-clock than the card's f16 (tf32) figure"
+source = "θ tensor.f16.k16 sheet"
+
+[[row]]
+ops = ["QMMA"]
+forms = ['QMMA\.16832\..*']
+devices = ["sm_120"]
+what = "kind::f8f6f4 m16n8k32: E4M3, E5M2, E3M2, E2M3, E2M1, any pairing"
+kinds = ["QMMA16832"]
+mark = "covered"
+envelope = "T"
+fmt = "8"
+rate = "tensor.e4m3.k32"
+cost = "4,096 products × 1 a warp instruction"
+argument = "every f8f6f4 operand fits an 8-bit element; FP6 and FP4 run at the FP8 instruction rate, so weight 1 charges them at least T's needs"
+source = "θ tensor.e4m3.k32, tensor.e5m2.k32 (census QMMA16832 M 16); lowering probe: QMMA.16832.F32.E3M2.E2M3 (FP6) is native"
+
+[[row]]
+ops = ["QMMA"]
+forms = ['QMMA\.SF\..*']
+devices = ["sm_120"]
+what = "kind::mxf8f6f4 .block_scale (UE8M0 a 32 elements)"
+kinds = ["QMMASF16832"]
+mark = "covered"
+envelope = "T"
+fmt = "8"
+rate = "tensor.e4m3.k32.sf"
+cost = "4,096 products × 1 a warp instruction"
+argument = "the block scales are row inputs T's output element reads; FP8, FP6 and FP4 operands at the FP8 rate"
+source = "census QMMASF16832 M 16 SMSP-cycles, 1023.8 (θ tensor.e4m3.k32.sf, r20260930-111747-26f3); lowering probe: QMMA.SF.16832.F32.E4M3.E4M3.E8 and .E3M2.E2M3.E8 native"
+
+[[row]]
+ops = ["QMMA"]
+forms = ['QMMA\.SP\..*']
+devices = ["sm_120"]
+what = "2:4 sparse FP8 m16n8k64"
+kinds = ["QMMASP16864"]
+mark = "covered"
+envelope = "T.sp"
+fmt = "8"
+rate_value = 2048
+cost = "4,096 kept products × 1 (8,192 logical) a warp instruction"
+argument = "T.sp's row at 8-bit elements"
+source = "WP Table 4 FP8 sparse 2015.2 at 2,617 MHz (2,048 a SM-clock); census QMMASP16864 M 16 SMSP-cycles for 8,192 logical MACs"
+
+[[row]]
+ops = ["QMMA"]
+devices = ["sm_120"]
+what = "any other form"
+mark = "coarse"
+envelope = "T"
+fmt = "8"
+rate = "tensor.e4m3.k32"
+cost = "its products × 1"
+argument = "≤ 8-bit float elements at no more products a SM-clock than the FP8 figure"
+source = "θ tensor.e4m3.k32 sheet"
+
+[[row]]
+ops = ["OMMA"]
+forms = ['OMMA\.SF\.16864\..*']
+devices = ["sm_120"]
+what = "kind::mxf4nvf4 .block_scale m16n8k64 (NVFP4 UE4M3 a 16, MXFP4 UE8M0 a 32)"
+kinds = ["OMMASF16864"]
+mark = "covered"
+envelope = "T"
+fmt = "4"
+rate = "tensor.e2m1.k64"
+cost = "8,192 products × 1/2 = 4,096 T units a warp instruction"
+argument = "E2M1 elements at weight 1/2 with their block scales as row inputs"
+source = "θ tensor.e2m1.k64 (census OMMASF16864 16 SMSP-cycles for 8,192 MACs, 2047.6)"
+
+[[row]]
+ops = ["OMMA"]
+forms = ['OMMA\.SF\.SP\..*']
+devices = ["sm_120"]
+what = "2:4 sparse block-scaled FP4 m16n8k128 (mma.sp kind::mxf4nvf4)"
+mark = "covered"
+envelope = "T.sp"
+fmt = "4"
+rate_value = 4096
+cost = "8,192 kept products × 1/2 (16,384 logical) a warp instruction"
+argument = "T.sp's row at 4-bit elements with block scales; the WP's sparse FP4 figure is twice the dense, the dense rate in kept products"
+source = "WP Table 4 FP4 sparse 4030.4 at 2,617 MHz (4,096 a SM-clock); lowering probe: OMMA.SF.SP.168128.F32.E2M1.E2M1.UE4M3.4X is native; GPU probe omma_sp (see README 'Coverage')"
+
+[[row]]
+ops = ["OMMA"]
+devices = ["sm_120"]
+what = "any other form"
+mark = "coarse"
+envelope = "T"
+fmt = "4"
+rate = "tensor.e2m1.k64"
+cost = "its products × 1/2"
+argument = "4-bit elements at no more products a SM-clock than the FP4 figure"
+source = "θ tensor.e2m1.k64 sheet"
+
+[[row]]
+ops = ["DMMA"]
+what = "f64 m8n8k4, m16n8k4/k8/k16"
+kinds = ["DMMA.*"]
+mark = "covered"
+envelope = "T"
+fmt = "64"
+rate = "tensor.f64"
+cost = "products × 32"
+argument = "f64 elements at weight 32; on the H200 the f64 tensor rate times 32 is exactly the INT8 rate, on sm_120 it is 1/18 of it"
+source = "θ tensor.f64 (sm_90 DS FP64 Tensor 67 TFLOPS, 128 a SM-clock; sm_120 DMMA.8x8x4 584 SMSP-cycles for 256 FMAs, r20261017-041103-d35d); lowering probe: DMMA.8 native on both"
+
+[[row]]
+ops = ["BMMA"]
+devices = ["sm_90"]
+what = "b1 m16n8k256 .and.popc"
+kinds = ["BMMA168256_B1"]
+mark = "covered"
+envelope = "T"
+fmt = "b1"
+rate = "tensor.b1.k256"
+cost = "32,768 b1 products × 1/8 a warp instruction"
+argument = "an output element is a function of its accumulator and 256 bits a side; at the b1 wgmma rate (above mma.sync's 21,501) b1 × 1/8 is the INT8 rate"
+source = "θ tensor.b1.k256 (census BGMMA_B1_N256; BMMA168256_B1 0.656167 × 32,768)"
+
+[[row]]
+ops = ["BMMA"]
+forms = ['BMMA\..*XOR.*']
+devices = ["sm_90"]
+what = ".xor.popc"
+mark = "covered"
+envelope = "T"
+fmt = "b1"
+rate = "tensor.b1.k256"
+cost = "as .and.popc"
+argument = "no native form: ptxas 13.0 lowers mma.sync .xor.popc on sm_90a to BMMA.168256.AND.POPC, popc(a ⊕ b) = popc a + popc b − 2 popc(a ∧ b); a hand-encoded XOR form, if the hardware decodes one, is the same b1 row function on the same pipe"
+source = "lowering probe bmma_xor (sm_90a: BMMA.168256.AND.POPC ×3, no XOR); θ tensor.b1.k256"
+
+[[row]]
+ops = ["HGMMA"]
+forms = ['HGMMA\.64x\d+x16\..*']
+devices = ["sm_90"]
+what = "wgmma f16/bf16 m64nNk16 (A in registers or shared memory)"
+kinds = ['HGMMA_(F16|BF16)_N\d+']
+mark = "covered"
+envelope = "T"
+fmt = "16"
+rate = "tensor.f16.k16"
+cost = "64·N·16 products × 2 a warpgroup instruction"
+argument = "T's row at 16-bit elements; operands read from shared memory are T's inputs (the M units of staging them are charged where they're written)"
+source = "θ tensor.f16.k16, tensor.bf16.k16 (census HGMMA_F16_N256, HGMMA_BF16_N256 2047.8)"
+
+[[row]]
+ops = ["HGMMA"]
+forms = ['HGMMA\.64x\d+x8\..*']
+devices = ["sm_90"]
+what = "wgmma tf32 m64nNk8"
+kinds = ['HGMMA_TF32_N\d+']
+mark = "covered"
+envelope = "T"
+fmt = "tf32"
+rate = "tensor.tf32.k8"
+cost = "64·N·8 products × 4"
+argument = "T's row at tf32"
+source = "θ tensor.tf32.k8 (census HGMMA_TF32_N256 1023.9)"
+
+[[row]]
+ops = ["HGMMA"]
+forms = ['HGMMA\.SP\.(REGOFFSET\.)?64x\d+x32\..*']
+devices = ["sm_90"]
+what = "sparse wgmma f16/bf16 m64nNk32"
+kinds = ['HGMMA_(F16|BF16)_N\d+_SP']
+mark = "covered"
+envelope = "T.sp"
+fmt = "16"
+rate_value = 4096
+cost = "64·N·16 kept products × 2"
+argument = "T.sp's row at 16-bit elements"
+source = "DS 'FP16 Tensor Core 1,979 TFLOPS' sparse at 1,830 MHz, 132 SMs (4,096 a SM-clock); census DS-90 HGMMA_F16_N256_SP"
+
+[[row]]
+ops = ["HGMMA"]
+forms = ['HGMMA\.SP\.(REGOFFSET\.)?64x\d+x16\..*']
+devices = ["sm_90"]
+what = "sparse wgmma tf32 m64nNk16"
+kinds = ['HGMMA_TF32_N\d+_SP']
+mark = "covered"
+envelope = "T.sp"
+fmt = "tf32"
+rate_value = 2048
+cost = "64·N·8 kept products × 4"
+argument = "T.sp's row at tf32"
+source = "DS 'TF32 Tensor Core 989 TFLOPS' sparse (2,048 a SM-clock); census DS-90 HGMMA_TF32_N256_SP"
+
+[[row]]
+ops = ["HGMMA"]
+devices = ["sm_90"]
+what = "any other form"
+mark = "coarse"
+envelope = "T"
+fmt = "16"
+rate = "tensor.f16.k16"
+cost = "its products × 2 (× 4 tf32)"
+argument = "≤ 16-bit elements at no more products a SM-clock than the FP16 figure; wgmma is refused on sm_120a (lowering probe)"
+source = "θ tensor.f16.k16 sheet"
+
+[[row]]
+ops = ["IGMMA"]
+forms = ['IGMMA\.64x\d+x32\..*']
+devices = ["sm_90"]
+what = "wgmma s8/u8 m64nNk32"
+kinds = ['IGMMA_(S8|U8S8)_N\d+(_RS)?']
+mark = "covered"
+envelope = "T"
+fmt = "8"
+rate = "tensor.s8.k32"
+cost = "64·N·32 products × 1"
+argument = "T's row at 8-bit integers (N < 64 runs slower: θ tensor.s8.k32.n32)"
+source = "θ tensor.s8.k32 (census IGMMA_S8_N256 4095.6)"
+
+[[row]]
+ops = ["IGMMA"]
+forms = ['IGMMA\.SP\..*']
+devices = ["sm_90"]
+what = "sparse wgmma s8 m64nNk64"
+kinds = ['IGMMA_.*_SP']
+mark = "covered"
+envelope = "T.sp"
+fmt = "8"
+rate = "tensor.s8.sp"
+cost = "64·N·32 kept products × 1"
+argument = "T.sp's row at 8-bit integers"
+source = "θ tensor.s8.sp (DS INT8 3,958 TOPS sparse); census DS-90 IGMMA_S8_N256_SP"
+
+[[row]]
+ops = ["IGMMA"]
+devices = ["sm_90"]
+what = "any other form"
+mark = "coarse"
+envelope = "T"
+fmt = "8"
+rate = "tensor.s8.k32"
+cost = "its products × 1"
+argument = "≤ 8-bit integers at no more products a SM-clock than the INT8 figure"
+source = "θ tensor.s8.k32 sheet"
+
+[[row]]
+ops = ["QGMMA"]
+forms = ['QGMMA\.64x\d+x32\..*']
+devices = ["sm_90"]
+what = "wgmma E4M3/E5M2 m64nNk32"
+kinds = ['QGMMA_(E4M3|E5M2)_N\d+']
+mark = "covered"
+envelope = "T"
+fmt = "8"
+rate = "tensor.e4m3.k32"
+cost = "64·N·32 products × 1"
+argument = "T's row at 8-bit floats"
+source = "θ tensor.e4m3.k32, tensor.e5m2.k32 (census QGMMA_E4M3_N256 4095.6)"
+
+[[row]]
+ops = ["QGMMA"]
+forms = ['QGMMA\.SP\..*']
+devices = ["sm_90"]
+what = "sparse wgmma FP8 m64nNk64"
+kinds = ['QGMMA_.*_SP']
+mark = "covered"
+envelope = "T.sp"
+fmt = "8"
+rate = "tensor.e4m3.sp"
+cost = "64·N·32 kept products × 1"
+argument = "T.sp's row at 8-bit floats"
+source = "θ tensor.e4m3.sp (DS FP8 3,958 TFLOPS sparse); census DS-90 QGMMA_E4M3_N256_SP"
+
+[[row]]
+ops = ["QGMMA"]
+devices = ["sm_90"]
+what = "any other form"
+mark = "coarse"
+envelope = "T"
+fmt = "8"
+rate = "tensor.e4m3.k32"
+cost = "its products × 1"
+argument = "8-bit floats at no more products a SM-clock than the FP8 figure"
+source = "θ tensor.e4m3.k32 sheet"
+
+[[row]]
+ops = ["BGMMA"]
+devices = ["sm_90"]
+what = "wgmma b1 m64nNk256 .and.popc"
+kinds = ["BGMMA_B1_N256"]
+mark = "covered"
+envelope = "T"
+fmt = "b1"
+rate = "tensor.b1.k256"
+cost = "64·N·256 b1 products × 1/8"
+argument = "T's row at b1, at exactly the INT8 rate in T units"
+source = "θ tensor.b1.k256 (census BGMMA_B1_N256 32,764.6)"
+
+[[row]]
+ops = ["WARPGROUP", "WARPGROUPSET"]
+devices = ["sm_90"]
+what = "wgmma's arrive, wait and register-count control"
+mark = "covered"
+envelope = "L"
+rate = "issue"
+cost = "32 L units (one issue slot)"
+argument = "synchronization and configuration with no data result: at most the warp's next PC"
+source = "θ issue (CPG §18.8.1)"
+
+[[row]]
+ops = ["UTCHMMA", "UTCIMMA", "UTCQMMA", "UTCOMMA", "UTCBAR", "UTCCP", "UTCSHIFT", "UTCATOMSWS", "LDT", "STT", "LDTM", "STTM"]
+devices = ["sm_120"]
+what = "tcgen05 and tensor memory (TMEM)"
+mark = "absent"
+envelope = "-"
+argument = "tcgen05 is CC 10.x/11.x only: ptxas 13.0 refuses tcgen05.alloc on sm_120a ('not supported on .target sm_120a') and on sm_90a, and none is in either card's corpus; NVIDIA's Blackwell table lists them for its whole family"
+source = "lowering probe tcgen05; corpus art:d11bc611d0e9 (sm_100 only)"
+
+# ---- lane instructions: one issue slot, any function of ≤ 6 words a lane --------------------------------------------
+
+[[row]]
+ops = ["IADD3", "IADD", "IADD32I", "LOP3", "LOP", "LOP32I", "SHF", "SHL", "SHR", "LEA", "ISETP", "IMNMX", "IABS", "BMSK",
+       "SGXT", "BREV", "FLO", "POPC", "ISCADD", "ISCADD32I", "IMAD", "IMUL", "IMUL32I", "IDP", "IDP4A"]
+what = "integer arithmetic, logic, shifts, compares, bit ops, multiply-add (.WIDE, .HI), dp4a, dp2a"
+kinds = ["ALU", "ALU64", "IMAD", "IMADW", "ISETP", "LEA", "FLO", "IDP4A", "XU"]
+mark = "covered"
+envelope = "L"
+rate = "issue"
+cost = "32 L units (one a lane)"
+argument = "each lane's result is a function of ≤ 3 register words, a uniform or immediate and ≤ 2 carry predicates (IMAD.WIDE's 64-bit addend is 2 words), writing ≤ 2 words and ≤ 2 predicates; every SASS instruction takes an issue slot, ≤ 4 a SM-clock, so ≤ 128 L units a SM-clock in any mix"
+source = "θ issue (CPG §18.10 / §18.8.1; census issue 1 SMSP-cycle a warp instruction in any mix, 4.005 / 3.998 measured)"
+
+[[row]]
+ops = ["VABSDIFF", "VABSDIFF4", "VIADD", "VIADDMNMX", "VIMNMX", "VIMNMX3", "VHMNMX", "VISET"]
+what = "SIMD within a word: absolute difference, add, min/max, compare"
+kinds = ["VIMNMX", "VIADD"]
+mark = "covered"
+envelope = "L"
+rate = "issue"
+cost = "32 L units"
+argument = "≤ 3 words in, 1 word (and a predicate) out a lane; on sm_120 vabsdiff4 lowers to VIADD.U8 + VIMNMX.U8 (lowering probe)"
+source = "θ issue"
+
+[[row]]
+ops = ["SPARSIFY", "DECOMPRESS"]
+devices = ["sm_120"]
+what = "'Generate metadata and compress a vector', 'Decompress a vector' (CUDA 13 Blackwell table only)"
+mark = "hole"
+severity = "low"
+envelope = "L"
+rate = "issue"
+argument = "one documented line each and no PTX that ptxas lowers to them; dominated by L if each lane's result reads ≤ 6 words, which nothing documents; in no corpus, and likely the CC 10.x sparse-tensor helpers"
+source = "CUDA 13 Binary Utilities Blackwell table (sass_isa_tables.json)"
+
+[[row]]
+ops = ["FADD", "FADD32I", "FMUL", "FMUL32I", "FFMA", "FFMA32I", "FMNMX", "FMNMX3", "FSEL", "FSET", "FSETP", "FCHK",
+       "FSWZADD", "FADD2", "FFMA2", "FMUL2", "FHADD", "FHFMA", "FHADD2", "FHFMA2", "FHMUL2", "HADD2", "HADD2_32I",
+       "HFMA2", "HFMA2_32I", "HMUL2", "HMUL2_32I", "HMNMX2", "HSET2", "HSETP2", "DADD", "DFMA", "DMUL", "DSETP"]
+what = "FP32, paired FP32, FP16x2, FP64 arithmetic, compares, min/max, selects"
+kinds = ["FFMA", "HFMA2", "DMUL", "W2"]
+mark = "covered"
+envelope = "L"
+rate = "issue"
+cost = "32 L units"
+argument = "≤ 3 operands of ≤ 64 bits (DFMA, FFMA2: 6 words) to ≤ 2 words a lane; FSWZADD reads a neighbour lane's word, which L may; on sm_120 fma.rn.f32x2 lowers to two FFMA (lowering probe), so FFMA2/FADD2/FMUL2 are CC 10.x forms"
+source = "θ issue; θ ffma, hfma2, dfma for the pipes below it"
+
+[[row]]
+ops = ["QADD4", "QFMA4", "QMUL4"]
+devices = ["sm_120"]
+what = "FP8 x4 add, multiply-add, multiply (BU 12.9 Blackwell table only)"
+mark = "covered"
+envelope = "L"
+rate = "issue"
+cost = "32 L units"
+argument = "four FP8 lanes within a word: ≤ 3 words in, 1 out a lane; in no corpus and absent from the CUDA 13 table"
+source = "BU 12.9 §4.4; θ issue"
+
+[[row]]
+ops = ["MUFU"]
+what = "rcp, rsq, sqrt, ex2, lg2, sin, cos, tanh, rcp64h, rsq64h"
+kinds = ["XU"]
+mark = "covered"
+envelope = "L"
+rate = "mufu"
+cost = "32 L units"
+argument = "a one-word function of one word a lane (S, which L dominates); the SFU's 16 lanes a SM-clock is below the issue slot's 128"
+source = "θ mufu (CPG Table 7: 16)"
+
+[[row]]
+ops = ["F2F", "F2I", "F2IP", "FRND", "I2F", "I2FP", "I2I", "I2IP", "F2FP"]
+what = "conversions and packs (F2FP.PACK_AB, .UNPACK_B, .SATFINITE, E8/E2M1 forms)"
+kinds = ["F2FS", "CVT64"]
+mark = "covered"
+envelope = "L"
+rate = "issue"
+cost = "32 L units"
+argument = "≤ 3 words in (MERGE_C reads a third), ≤ 2 words out a lane"
+source = "θ issue"
+
+[[row]]
+ops = ["MOV", "MOV32I", "MOV64IUR", "PRMT", "SEL", "P2R", "R2P", "PLOP3", "PSETP"]
+what = "moves, byte permute, select, predicate logic"
+kinds = ["NOROW", "UNLISTED", "MOV64", "SEL"]
+mark = "covered"
+envelope = "L"
+rate = "issue"
+cost = "32 L units"
+argument = "≤ 3 words and ≤ 8 predicates to ≤ 2 words or predicates a lane"
+source = "θ issue"
+
+[[row]]
+ops = ["SHFL"]
+what = "warp shuffle (.IDX, .UP, .DOWN, .BFLY)"
+kinds = ["SHFL"]
+mark = "covered"
+envelope = "L"
+rate = "shfl"
+cost = "32 L units"
+argument = "each lane's result is one word of another lane, which L reads; at ≤ 32 lanes a SM-clock"
+source = "θ shfl (CPG 32; census 16 sm_120, 32 sm_90)"
+
+[[row]]
+ops = ["MOVM"]
+what = "movmatrix: register transposes (.16.MT88, .U4TO8)"
+mark = "coarse"
+envelope = "L"
+rate = "issue"
+cost = "32 L units"
+argument = "each lane's result is ≤ 2 words assembled from halves (or nibbles) of ≤ 2 other lanes' words, which L reads; one issue slot"
+source = "θ issue; corpus MOVM.16.MT88; lowering probe MOVM.U4TO8.M832 (sm_120 b1 path)"
+
+[[row]]
+ops = ["VOTE", "VOTEU", "ELECT"]
+what = "vote, ballot, elect"
+mark = "coarse"
+envelope = "L"
+rate = "issue"
+cost = "32 L units"
+argument = "the warp's 32 predicates fold into one word in a tree of ≤ 7 L units (each folds ≤ 6 into 1), and the word reaches each lane or the uniform register: ≤ 7 + 16 ≤ 32 units of its slot"
+source = "θ issue"
+
+[[row]]
+ops = ["REDUX", "CREDUX"]
+what = "warp reduction into a uniform register (.SUM, .MIN, .MAX, .AND, .OR, .XOR)"
+kinds = ["REDUX"]
+mark = "coarse"
+envelope = "L"
+rate = "issue"
+cost = "32 L units"
+argument = "32 words fold in a tree of ≤ 7 L units into one uniform word, under the 32 of its slot; CREDUX (CC 10.x only in the corpus) the same"
+source = "θ issue; census REDUX (sm_90)"
+
+[[row]]
+ops = ["MATCH"]
+forms = ['MATCH\.ALL.*']
+what = "match.all (one mask: are all lanes equal)"
+mark = "coarse"
+envelope = "L"
+rate = "issue"
+cost = "32 L units"
+argument = "a tree of ≤ 7 L units of equality folds and the mask's broadcast: ≤ 32 units of its slot"
+source = "θ issue"
+
+[[row]]
+ops = ["MATCH"]
+what = "match.any (each lane the mask of the lanes holding its value; .U64)"
+mark = "hole"
+severity = "low"
+envelope = "L"
+units = 224
+argument = "each of 32 lanes writes a word that reads all 32 lanes' words: ≥ 7 L units a lane (≥ 14 for .U64), 224 a warp instruction, 7 issue slots' worth; dominated if MATCH.ANY issues at ≤ 128/224 = 0.57 warp instructions a SM-clock (≤ 0.29 for .U64); no document gives its rate"
+source = "GPU probe match_any (README 'Coverage')"
+
+[[row]]
+ops = ["S2R", "CS2R", "B2R", "LEPC", "GETLMEMBASE", "SETLMEMBASE", "SETCTAID", "PMTRIG", "QSPC"]
+what = "special registers, the PC, local-memory base, address-space query"
+mark = "covered"
+envelope = "L"
+rate = "issue"
+cost = "32 L units"
+argument = "a lane reads or writes one word of the SM's state, or tests an address: one L unit a lane"
+source = "θ issue"
+
+# ---- the uniform datapath ---------------------------------------------------------------------------------------------
+
+[[row]]
+ops = ["UIADD3", "UIADD3.64", "UIMAD", "ULOP", "ULOP3", "ULOP32I", "USHF", "USHL", "USHR", "UPRMT", "UPOPC", "UFLO",
+       "UBREV", "UBMSK", "USGXT", "UISETP", "USEL", "ULEA", "UMOV", "UMOV.64", "UPLOP3", "UPSETP", "UP2UR", "UR2UP",
+       "R2UR", "S2UR", "UF2F", "UF2FP", "UF2I", "UF2IP", "UFADD", "UFFMA", "UFMNMX", "UFMUL", "UFRND", "UFSEL", "UFSET",
+       "UFSETP", "UI2F", "UI2FP", "UI2I", "UI2IP", "UIABS", "UIMNMX", "UVIADD", "UVIMNMX", "ULEPC", "UCLEA",
+       "USETMAXREG", "UVIRTCOUNT", "UGETNEXTWORKID"]
+what = "integer and (sm_120) floating-point uniform ops, moves to and from uniform registers, register-count and work-ID control"
+kinds = ["UNI", "UNI64"]
+mark = "covered"
+envelope = "L"
+rate = "uniform"
+cost = "32 L units (its issue slot) for one result"
+argument = "one result a warp of ≤ 3 uniform words, under its slot's 32 units; UGETNEXTWORKID returns the next CTA id the work distributor holds, one word (M.red on a counter at worst)"
+source = "θ uniform (census UNI 3.06 sm_120, 2.04 sm_90), θ issue"
+
+# ---- memory -----------------------------------------------------------------------------------------------------------
+
+[[row]]
+ops = ["LDS", "STS"]
+what = "shared-memory loads and stores (.U8 to .128)"
+kinds = ['LDS\d+', 'STS\d+']
+mark = "covered"
+envelope = "M"
+rate = "smem.read"
+cost = "one M unit a word moved; a uniform-address request one a distinct word (M.bcast)"
+argument = "a word moved between registers and shared memory through its 32 banks of 32 bits a clock"
+source = "θ smem.read, smem.write, smem.bcast (census R6r, R6w)"
+
+[[row]]
+ops = ["LDSM", "STSM"]
+what = "ldmatrix, stmatrix (.M88, .MT88 transposes, .MT1616, .U4x16P64TO8 unpacks)"
+kinds = ['LDSM.*', 'STSM.*']
+mark = "covered"
+envelope = "M"
+rate = "smem.read"
+cost = "one M unit a word"
+argument = "M moves words in any arrangement, so a transpose or a 4-to-8-bit unpack is M; at the shared-memory port's rate"
+source = "θ smem.read (sm_90: LDS.128 and LDSM measured 127.96 B a SM-clock); census LDSM*_X*, STSM*_X*"
+
+[[row]]
+ops = ["LDG", "STG", "LD", "ST", "LDL", "STL"]
+what = "global, generic and local loads and stores (.E, .128, .ENL2.256, .CONSTANT, .NA, .STRONG)"
+kinds = ['LDG\d+.*', 'STG\d+']
+mark = "covered"
+envelope = "M"
+rate = "hbm"
+cost = "one M unit a word"
+argument = "a word moved between registers and L1, L2 or DRAM, at those stores' rates"
+source = "θ l1.read, l2.read, hbm (census LDG*)"
+
+[[row]]
+ops = ["LDGSTS", "LDGDEPBAR", "ARRIVES"]
+what = "cp.async (global to shared, bypassing registers) and its barrier arrivals"
+kinds = ["LDGSTS16"]
+mark = "covered"
+envelope = "M"
+rate = "smem.write"
+cost = "one M unit a word"
+argument = "a word moved from L2/DRAM into shared memory; ARRIVES (in the corpus, in no NVIDIA table) arrives on an mbarrier, M.red on one word"
+source = "θ smem.write, hbm; census LDGSTS16"
+
+[[row]]
+ops = ["LDC", "ULDC", "LDCU", "CS2UR"]
+what = "constant-bank loads into registers and uniform registers"
+kinds = ["LDC64", "LDCDIV", "LDCUNI"]
+mark = "coarse"
+envelope = "M.bcast"
+rate = "issue"
+cost = "one M unit a distinct word"
+argument = "a constant-bank word read once and written to every lane that asks; a divergent LDC serializes on its distinct addresses, so its distinct words a SM-clock are at most 2 a lane at one issue slot; no document gives the constant cache's rate"
+source = "θ issue; census LDCDIV, LDCUNI, LDC64"
+
+[[row]]
+ops = ["STAS"]
+what = "asynchronous store to a cluster peer's shared memory (DSMEM)"
+kinds = ["DSMST4P"]
+mark = "covered"
+envelope = "M"
+rate = "smem.write"
+cost = "one M unit a word"
+argument = "a word moved into a peer SM's shared memory, through that SM's port"
+source = "θ smem.write; census DSMST4P 0.0031 warp instructions a SM-clock"
+
+[[row]]
+ops = ["LDGMC"]
+devices = ["sm_90"]
+what = "multimem.ld_reduce through the NVSwitch (NVLink SHARP): .ADD, .MIN, .MAX, .AND, .OR, .XOR, f16x8/bf16x8"
+mark = "hole"
+severity = "low"
+envelope = "M.red"
+rate = "nvls.red"
+argument = "the NVSwitch reduces the word of each of the 8 GPUs and returns the result: 7 M.red units a returned word, done off the card, where the card's only charge is the word its link carries; ≤ 3.93 adds a SM-clock, 3% of L's 128, dominated node-wide by the 8 links' words but not on one card"
+source = "θ nvls.red (DS NVLink 900 GB/s; 450e9 / 4 · 7 / (132 · 1518 MHz)); lowering probe: multimem.ld_reduce is LDGMC.E.ADD.F32.RN.STRONG.SYS"
+
+[[row]]
+ops = ["LDGMC"]
+devices = ["sm_120"]
+what = "multimem.ld_reduce (ptxas emits LDGMC for sm_120a)"
+mark = "coarse"
+envelope = "M"
+rate = "hbm"
+cost = "one M unit a word"
+argument = "a multicast object needs NVLink or an NVSwitch, which the card lacks (θ nvlink.reduce absent): with no multicast object every address is unicast, and a reduction over one copy is that copy, a load; GPU probe multicast checks the attribute"
+source = "θ nvlink.reduce (absent); lowering probe; GPU probe multicast (README 'Coverage')"
+
+[[row]]
+ops = ["ATOMS", "REDS"]
+what = "shared-memory atomics and reductions (.ADD, .MIN, .MAX, .CAS, .CAST.SPIN, .POPC.INC, .64)"
+kinds = ['ATOMS\d+']
+mark = "covered"
+envelope = "M.red"
+rate = "smem.atom"
+cost = "one M.red unit a 32-bit word of the location"
+argument = "the new word is a function of the old and ≤ 2 operands (CAS), the old returned; ≤ 32 a SM-clock through the shared-memory port, 15.9 measured"
+source = "θ smem.atom (sheet 32); census ROW_ATOMS32 0.497 warp instructions a SM-clock (r20261016-183617-3914)"
+
+[[row]]
+ops = ["ATOM", "ATOMG", "RED", "REDG", "REDAS"]
+what = "global, generic and DSMEM atomics and reductions at the L2 (.ADD/.MIN/.MAX/.AND/.OR/.XOR/.EXCH/.CAS/.INC, .64, F32, F64, F16x2/BF16x2, F32x4, F16x8/BF16x8)"
+kinds = ['ATOM[EG]\d+.*', 'RED\d+', 'REDG\d+', "REDV", 'REDAS\d+']
+mark = "covered"
+envelope = "M.red"
+rate = "l2.red"
+cost = "one M.red unit a 32-bit word of the location (4 for a 128-bit vector)"
+argument = "an elementwise function of the old location and ≤ 2 operands, done at the L2 (or a peer's shared memory); ≤ 32 words a SM-clock through the L1 port, 1.9 measured for ATOMG"
+source = "θ l2.red, dsmem.red (sheet 32); census ATOMG32 L2red 0.0601 warp instructions a SM-clock (r20261016-210926-d856)"
+
+[[row]]
+ops = ["SURED", "SUATOM"]
+what = "surface reductions and atomics"
+kinds = ["SURED"]
+mark = "coarse"
+envelope = "M.red"
+rate = "l2.red"
+cost = "one M.red unit a word"
+argument = "as RED at a surface's address (the texture unit computes the address from coordinates, which M's any-address covers)"
+source = "θ l2.red; lowering probe: sured lowers to SURED.D.BA.2D.ADD on both cards"
+
+[[row]]
+ops = ["SULD", "SUST"]
+what = "surface loads and stores (.D raw, .P formatted)"
+kinds = ['SULD\d+']
+mark = "coarse"
+envelope = "M"
+rate = "hbm"
+cost = "one M unit a word"
+argument = "a raw (.D) surface access moves words at a surface's address; a formatted (.P) one converts each channel in the texture unit, which is the texture row's hole"
+source = "lowering probe: SULD.D.BA.2D, SUST.D.BA.2D; census SULD1, SULD4"
+
+[[row]]
+ops = ["UTMALDG", "UTMASTG", "UTMAPF", "UTMACCTL", "UTMACMDFLUSH", "UTMAL2CCTL", "UBLKCP", "UBLKPF", "UBLKL2CCTL",
+       "USTGR", "UMEMSETS"]
+what = "TMA tensor and bulk copies (tiled, im2col, gather4, multicast), prefetches, cache control, uniform stores, shared-memory init"
+kinds = ['UTMA.*', "TMA512", 'UBLKCP.*', 'G4_.*']
+mark = "covered"
+envelope = "M"
+rate = "smem.write"
+cost = "one M unit a word (M.bcast a word multicast)"
+argument = "the TMA computes addresses from a descriptor and coordinates (routing, which M's any-address covers) and moves words between shared and global memory, through the shared-memory port on one side; multicast writes one read word to each CTA of a cluster"
+source = "θ smem.write, hbm; census UTMA*, G4_* (ROW_G4_16 0.026), TMA512, UBLKCP4K"
+
+[[row]]
+ops = ["UBLKRED", "UTMAREDG", "UREDGR"]
+what = "TMA bulk and tensor reductions into global memory, uniform reductions"
+kinds = ["TMAred512"]
+mark = "covered"
+envelope = "M.red"
+rate = "tma.red"
+cost = "one M.red unit a word"
+argument = "an elementwise function of the old word and the shared-memory word, at the L2; each add reads its 4 B through the shared-memory port, ≤ 32 a SM-clock"
+source = "θ tma.red (sheet 32); census TMAred512"
+
+[[row]]
+ops = ["SYNCS", "SYNCSU", "USYNCS", "ACQBULK", "ACQSHMINIT", "DEPBAR"]
+what = "mbarrier arrive/wait (with transaction counts), bulk and init waits, scoreboard waits"
+mark = "coarse"
+envelope = "M.red"
+rate = "smem.atom"
+cost = "one M.red unit a 64-bit barrier word (2)"
+argument = "an arrive is a read-modify-write of a barrier word in shared memory (arrival count, transaction bytes); a wait reads it; no other data"
+source = "θ smem.atom; corpus SYNCS.ARRIVE.TRANS64.RED, SYNCS.PHASECHK"
+
+[[row]]
+ops = ["CCTL", "CCTLL", "CCTLT", "FENCE", "MEMBAR", "ERRBAR", "CGAERRBAR"]
+what = "cache control and memory fences"
+mark = "covered"
+envelope = "L"
+rate = "issue"
+cost = "32 L units"
+argument = "no data result: an invalidation, prefetch or ordering, at most the warp's next PC"
+source = "θ issue"
+
+# ---- texture ----------------------------------------------------------------------------------------------------------
+
+[[row]]
+ops = ["TEX", "TLD", "TLD4", "TXD"]
+what = "texture fetches: filtered (bilinear, trilinear, anisotropic), point (TLD, .LZ, .LL), gathers (TLD4), gradients (TXD)"
+kinds = ['TEX.*', 'TLD.*']
+mark = "hole"
+severity = "low"
+envelope = "-"
+rate = "tex"
+argument = "a filtered fetch weighs ≤ 4 texels (8 trilinear, at half rate) by 9-bit fixed-point weights and converts each channel's format in the texture unit, beyond the lane's issue slot: ≤ 16 products a SM-clock a channel (θ texture), ≤ 64 over 4 channels, 6% of ρ_T on sm_120 and 1.6% on the H200; no envelope op has a texture unit's power, and the fix is a texture rate in each card's numbers"
+source = "θ tex (WP 4 texture units a SM, 4 texels a clock), θ texture's bound; census TEX*, TLD* (sm_120); GPU probe tex (README 'Coverage')"
+
+[[row]]
+ops = ["TMML", "TXQ"]
+what = "texture level-of-detail and size queries"
+mark = "covered"
+envelope = "L"
+rate = "issue"
+cost = "32 L units"
+argument = "a lane's result is a function of ≤ 4 coordinate and derivative words, or the texture's header"
+source = "θ issue; lowering probe TXQ"
+
+# ---- control ----------------------------------------------------------------------------------------------------------
+
+[[row]]
+ops = ["BRA", "BRX", "BRXU", "JMP", "JMX", "JMXU", "CALL", "RET", "EXIT", "PREEXIT", "KILL", "BPT", "BREAK", "BSSY",
+       "BSYNC", "BMOV", "WARPSYNC", "YIELD", "NANOSLEEP", "NOP", "RPCMOV", "ENDCOLLECTIVE", "USETSHMSZ", "UCGABAR_ARV",
+       "UCGABAR_WAIT", "Option"]
+what = "branches, calls, convergence barriers, exits, sleeps, cluster barriers; 'Option' is the CUDA 13 table's header row, not an opcode"
+mark = "covered"
+envelope = "L"
+rate = "issue"
+cost = "32 L units"
+argument = "the result is the warp's next PC (a function of the PC, ≤ 2 words and predicates) or a barrier's arrival, with no data word"
+source = "θ issue"
+
+[[row]]
+ops = ["BAR"]
+what = "CTA barriers (.SYNC, .ARV, .RED.POPC/.AND/.OR)"
+mark = "coarse"
+envelope = "L"
+rate = "issue"
+cost = "32 L units a warp's BAR"
+argument = "BAR.RED folds the warp's 32 predicates in a tree of ≤ 7 L units and adds the warp's count to the CTA's: ≤ 8 units of its slot; the CTA's total reaches each lane as BAR's result"
+source = "θ issue"
+
+# ---- the units outside the SM pipes: one a θ `[[unit]]` key, and the ones θ doesn't list ------------------------------
+
+[[unit]]
+key = "tensor"
+what = "the tensor cores"
+mark = "covered"
+envelope = "T"
+argument = "every MMA form's rows above, each at rate × weight ≤ ρ_T"
+
+[[unit]]
+key = "dp4a"
+what = "IDP.4A, IDP.2A"
+mark = "covered"
+envelope = "L"
+argument = "a lane instruction in one issue slot (the integer row)"
+
+[[unit]]
+key = "imad"
+what = "IMAD, IMAD.WIDE, IMAD.HI"
+mark = "covered"
+envelope = "L"
+argument = "the integer row"
+
+[[unit]]
+key = "alu"
+what = "the integer ALU pipe"
+mark = "covered"
+envelope = "L"
+argument = "the integer row"
+
+[[unit]]
+key = "fp32"
+what = "FFMA, HFMA2"
+mark = "covered"
+envelope = "L"
+argument = "the floating-point row"
+
+[[unit]]
+key = "fp64"
+what = "DFMA"
+mark = "covered"
+envelope = "L"
+argument = "the floating-point row (6 words in, 2 out a lane)"
+
+[[unit]]
+key = "sfu"
+what = "MUFU"
+mark = "covered"
+envelope = "L"
+argument = "the MUFU row: S is dominated by L"
+
+[[unit]]
+key = "uniform"
+what = "the uniform datapath"
+mark = "covered"
+envelope = "L"
+argument = "the uniform row: one result a warp in an issue slot"
+
+[[unit]]
+key = "texture"
+what = "texture filtering, 4 units a SM"
+mark = "hole"
+severity = "low"
+envelope = "-"
+argument = "the texture row: ≤ 64 products a SM-clock over 4 channels, beyond the issue slot"
+
+[[unit]]
+key = "smem.atomics"
+what = "shared-memory atomics and reductions"
+mark = "covered"
+envelope = "M.red"
+argument = "the ATOMS row"
+
+[[unit]]
+key = "l2.atomics"
+what = "L2 atomics and reductions"
+mark = "covered"
+envelope = "M.red"
+argument = "the ATOM/RED row"
+
+[[unit]]
+key = "tma.reduce"
+what = "TMA bulk reductions"
+mark = "covered"
+envelope = "M.red"
+argument = "the UBLKRED row: no lane, but each add's word through the shared-memory port"
+
+[[unit]]
+key = "tma"
+what = "the TMA unit: tensor and bulk copies, multicast"
+mark = "covered"
+envelope = "M"
+argument = "the UTMA row: address generation is routing, the words are M (M.bcast multicast)"
+
+[[unit]]
+key = "async.copy"
+what = "cp.async (LDGSTS)"
+mark = "covered"
+envelope = "M"
+argument = "the LDGSTS row"
+
+[[unit]]
+key = "dsmem"
+what = "distributed shared memory in clusters"
+mark = "covered"
+envelope = "M.red"
+argument = "the STAS row (M) and the REDAS forms of the ATOM/RED row (M.red)"
+
+[[unit]]
+key = "constant"
+what = "the constant caches (LDC, ULDC, LDCU)"
+mark = "coarse"
+envelope = "M.bcast"
+argument = "the LDC row"
+
+[[unit]]
+key = "nvlink.reduce"
+devices = ["sm_90"]
+what = "NVLink SHARP in-network reductions"
+mark = "hole"
+severity = "low"
+envelope = "M.red"
+argument = "the sm_90 LDGMC row: ≤ 3.93 adds a SM-clock done in the switch, dominated node-wide, not on one card"
+
+[[unit]]
+key = "nvlink.reduce"
+devices = ["sm_120"]
+what = "NVLink and NVSwitch reductions"
+mark = "absent"
+envelope = "-"
+argument = "the card has no NVLink (θ nvlink.reduce absent); the sm_120 LDGMC row"
+
+[[unit]]
+key = "copy"
+devices = ["sm_120"]
+what = "copy engines (memcpy, memset)"
+mark = "covered"
+envelope = "M"
+argument = "they move bytes and add nothing (θ copy)"
+
+[[unit]]
+key = "copy"
+devices = ["sm_90"]
+what = "copy engines (memcpy, memset); in confidential-computing mode they encrypt"
+mark = "coarse"
+envelope = "M"
+argument = "they move bytes (θ copy); with CC mode on, the H200's copy engines AES-GCM what crosses PCIe under a key the driver holds, a fixed function of each 16 B no program chooses, so no product a program can use"
+
+[[unit]]
+key = "video"
+what = "NVDEC, NVJPG (H200); NVENC, NVDEC (sm_120)"
+mark = "hole"
+severity = "open"
+envelope = "-"
+argument = "fixed-function codecs; NVENC's motion search sums |a − b| over blocks, a b1 dot product on 0/1 pixels; no document gives a pixel or search rate (θ video)"
+
+[[unit]]
+key = "rt"
+devices = ["sm_120"]
+what = "RT cores, one a SM"
+mark = "hole"
+severity = "open"
+envelope = "-"
+argument = "a ray-triangle test computes ≤ 9 FP32 products, exact for small integers when the determinant is a power of two; the only document bound is RT TFLOPS (386 FMA-equivalents a SM-clock, 38% of ρ_T), which is loose (θ rt); reachable from OptiX only"
+
+[[unit]]
+key = "rt"
+devices = ["sm_90"]
+what = "RT cores"
+mark = "absent"
+envelope = "-"
+argument = "GH100 has none (θ rt)"
+
+[[unit]]
+key = "clocks"
+what = "clock limits"
+mark = "covered"
+envelope = "-"
+argument = "every rate here is a SM-clock's, so the premise doesn't move with the clock"
+
+[[unit]]
+key = "compression"
+what = "compressible memory and framebuffer compression"
+mark = "hole"
+severity = "low"
+envelope = "M"
+argument = "computes nothing, but a compressible operand may move more words a SM-clock than the store's rate M prices (θ compression); it reaches memory rates only, not T or L"
+
+[[unit]]
+key = "host.link"
+what = "PCIe Gen5 x16"
+mark = "covered"
+envelope = "M"
+argument = "moves bytes and adds nothing (θ host.link)"
+
+[[unit]]
+key = "host.cpu"
+what = "the host's CPUs, hashing what the card sends them"
+mark = "hole"
+severity = "outside the card"
+envelope = "-"
+argument = "not an instruction the card executes: the host's work is bounded by the link (θ host.cpu, P9/NF4), a premise about the host, not this one"

@@ -23,5 +23,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # The tests read this directory (the package and data/), the perplexity arms the designs name, the README, which
-# holds no table (`machine-model render` prints them), and the Lean sheets `machine-model sheet --lean` prints.
-inputs = ["benchmarks/ppl/specs", "benchmarks/pouw/machine_model/README.md", "Security/Definitions/Accounting/Sheets"]
+# holds no table (`machine-model render` prints them), the Lean sheets `machine-model sheet --lean` prints, and the
+# SASS opcode tables `machine-model cover` holds a row for each of.
+inputs = ["benchmarks/ppl/specs", "benchmarks/pouw/machine_model/README.md", "Security/Definitions/Accounting/Sheets",
+          "benchmarks/pouw/sass_census/data"]

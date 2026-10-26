@@ -1,0 +1,87 @@
+# The envelope ISA the coverage table (rows.toml) dominates every instruction by. MODEL-MIN (CMP-165) owns the list;
+# this is MODEL-COVER's (CMP-166) provisional v0, the brief's list made precise where a row needed it:
+#
+# - T is dot-local, not exact-integer: an exact integer MMA of the same width can't simulate a float or block-scaled
+#   MMA's output (an E4M3 product spans 2^-18 to 2^17 before the FP32 accumulator rounds), so T's output element is any
+#   function of its accumulator word and its row's elements, as `Accel.Open.dot` is today. Its block scales are row
+#   inputs.
+# - T.sp is T's 2:4 form: a dense tile at the same units doesn't dominate a sparse one, which reads twice the B elements
+#   a kept product.
+# - S (special function) dominates nothing L doesn't: every MUFU form is a one-word function in one issue slot.
+#
+# A row is dominated when its envelope op simulates it at `units` and the card's rate of it, times those units, is at
+# most the op's resource rate here: an instruction is charged no fewer units than the envelope needs. `rho` is a resource's
+# units a SM-clock; `weight` is T's units a product by element format.
+
+[[op]]
+key = "T"
+resource = "tensor"
+unit = "one product of a k-row, at its format's weight"
+semantics = """an output element of a tile is any function of its accumulator word, the k elements of its A row and B \
+column, and their block scales; k products of format f cost k · weight(f) units"""
+
+[[op]]
+key = "T.sp"
+resource = "tensor"
+unit = "one kept product of a 2:4 k-row, at its format's weight"
+semantics = """T over k kept A elements, each with its 2-bit selector, and the 2k B elements they choose among: an output \
+element is any function of its accumulator word, those, and their block scales; k kept products cost k · weight(f)"""
+
+[[op]]
+key = "L"
+resource = "lane"
+unit = "one lane's (or one uniform register's) result of one instruction"
+semantics = """any function of at most 6 words (32 bits) and 8 predicates read from the warp's registers, any lane's, \
+writing at most 2 words and 2 predicates to one lane or one uniform register, or the warp's next PC"""
+
+[[op]]
+key = "M"
+resource = "memory"
+unit = "one 32-bit word moved, on the store it is read from or written to"
+semantics = """a word read from one store (registers, shared memory, the constant bank, L1, L2, DRAM, a peer's memory, \
+host memory) and written to another, at any address and in any arrangement (transposes, gathers, swizzles, im2col)"""
+
+[[op]]
+key = "M.bcast"
+resource = "memory"
+unit = "one distinct 32-bit word read"
+semantics = """M whose read word is written to any number of destinations in one request (a uniform-address load, a \
+constant-bank read, a TMA multicast to a cluster's CTAs)"""
+
+[[op]]
+key = "M.red"
+resource = "memory"
+unit = "one 32-bit word of a location read, modified and written"
+semantics = """a location of at most 128 bits set to any function of its old value and at most two operands of its \
+width, returning the old value if asked, at one unit a 32-bit word of the location"""
+
+[[op]]
+key = "S"
+resource = "sfu"
+unit = "one lane's special-function result"
+semantics = "a one-word function of one word (rcp, rsq, sqrt, ex2, lg2, sin, cos, tanh); dominated by L, proposed dropped"
+
+[[op]]
+key = "H"
+resource = "oracle"
+unit = "one hash-oracle call"
+semantics = "one call of the priced oracle (G3); no SASS instruction is one: SHA-512 on the card is L work"
+
+[[op]]
+key = "-"
+resource = "none"
+unit = "none"
+semantics = "no envelope op: an absent unit (the card has none) or a hole"
+
+[device.sm_120]
+rho = { tensor = 1024, lane = 128 }
+rho_source = """tensor: θ tensor.s8.k32's sheet 1024 MACs a SM-clock at weight 1 (every format's measured rate times its \
+weight is at most it); lane: 32 lanes × θ issue's sheet 4 warp instructions a SM-clock (CPG §18.10: 4 schedulers, one \
+instruction a clock each; census DS_issue 1 SMSP-cycle in any mix)"""
+weight = { b1 = 0.125, "4" = 0.5, "6" = 1, "8" = 1, "16" = 2, tf32 = 4, "64" = 32 }
+
+[device.sm_90]
+rho = { tensor = 4096, lane = 128 }
+rho_source = """tensor: θ tensor.s8.k32's sheet 4096 MACs a SM-clock (wgmma) at weight 1; lane: 32 × θ issue's sheet 4 \
+(CPG §18.8.1)"""
+weight = { b1 = 0.125, "4" = 0.5, "6" = 1, "8" = 1, "16" = 2, tf32 = 4, "64" = 32 }
