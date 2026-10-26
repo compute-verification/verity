@@ -87,3 +87,76 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 | BAR, SYNCS (mbarrier), MEMBAR, FENCE, DEPBAR, ERRBAR, CCTL | coarse | the model is sequential within a tick and latency-free, so every synchronization holds at no cost |
 | S2R (`%tid`, `%clock`, `%smid`), CS2R | missing | special registers. A clock read is time as data, a side channel the model doesn't have |
 | VOTE, MATCH, ELECT, NANOSLEEP, YIELD, PMTRIG | missing | |
+
+## Every opcode of BU's lists
+
+The rows below take every opcode name in BU §4.3 (Hopper, 204 names) and §4.4 (Blackwell and Rubin, 257 names), as
+the page lists them (docs.nvidia.com/cuda/cuda-binary-utilities, fetched 26 Oct 2026). §4.4 doesn't say which of its
+opcodes sm_120 has, so its rows are the family's: the `tcgen05` and tensor-memory rows are sm_100's. A mark here is by
+the opcode's name and BU's one-line description, not yet by each variant's semantics: a *covered* opcode can still have
+uncovered variants (`.64`, other atomic operations, `f16` accumulators).
+
+### sm_90 (BU §4.3)
+
+| Opcodes | Mark | Model |
+|---|---|---|
+| BRA | covered | `Instr.bra` |
+| IDP4A | covered | `Lane.dp4a` |
+| FADD, FADD32I, FFMA32I, FFMA, FMUL, FMUL32I | covered | `Lane.fadd`/`ffma`/`fmul` (an immediate is an operand) |
+| FSEL, BREV, FLO, IADD, IADD3, IADD32I, IMAD, IMNMX, IMUL, IMUL32I, ISCADD, ISCADD32I, ISETP, LEA, LOP, LOP3, LOP32I, POPC, SHF, SHL, SHR, PRMT, SEL | covered | `Lane` integer functions (an immediate is an operand; `IMUL` is `mad` at `c = 0`, `SHL`/`SHR` are `shf`, `ISCADD` is `lea`) |
+| ATOM, ATOMS, ATOMG, REDAS, REDG | covered | `Op.atom` (the modelled operations; others missing) |
+| MOV, MOV32I, LD, LDG, LDL, LDS, LDSM, STSM, ST, STG, STL, STS, R2UR | covered | `Op.copy` (a lane load or store, at most 4 words) |
+| LDGSTS, STAS, UBLKCP, UTMALDG, UTMASTG | covered | `Op.copy` (bulk, shared memory at one end) |
+| BMMA, BGMMA | covered | `Op.mma` (`b1`, `Open.b1`) |
+| QGMMA | covered | `Op.mma` (`e4m3`/`e5m2`) |
+| HMMA, HGMMA | covered | `Op.mma` (`f16`/`bf16`/`tf32` with `f32` accumulators; `f16` accumulators missing) |
+| IMMA, IGMMA | covered | `Op.mma` (`s8`/`u8`, the integer path) |
+| UBREV, UFLO, UIADD3, UIMAD, UISETP, ULEA, ULOP, ULOP3, ULOP32I, UMOV, UPOPC, UPRMT, USEL, USHF, USHL, USHR | covered | `Op.uni` (integer, a whole issue slot) |
+| PLOP3, PSETP, P2R, R2P, UP2UR, UPLOP3, UPSETP, UR2UP | covered | predicates are registers: `Lane.lop3`, `setp`, register copies |
+| LDC, ULDC | coarse | a copy from device memory (constant banks) |
+| SHFL | coarse | a register copy (the shuffle pipe omitted) |
+| FENCE, LDGDEPBAR, SYNCS, CCTL, CCTLL, ERRBAR, MEMBAR, CCTLT, UCGABAR_ARV, UCGABAR_WAIT, USETMAXREG, WARPGROUP, WARPGROUPSET, UBLKPF, UTMACCTL, UTMACMDFLUSH, UTMAPF, ACQBULK, BMOV, BPT, BREAK, BSSY, BSYNC, CGAERRBAR, ENDCOLLECTIVE, EXIT, KILL, NANOSLEEP, PREEXIT, WARPSYNC, YIELD, BAR, DEPBAR, NOP, PMTRIG | coarse | no data effect: the schedule is free, so a program may omit it |
+| UCLEA, UIADD3.64, ULEPC | missing | 64-bit uniform and immediate moves, `UCLEA`, `ULEPC` |
+| FCHK, FMNMX, FSET, FSETP, FSWZADD | missing | FP32 compare, min/max, check, swizzle |
+| DADD, DFMA, DMMA, DMUL, DSETP | missing | FP64 |
+| MUFU | missing | MUFU (transcendentals) |
+| LDGMC, UBLKRED, UTMAREDG | missing | bulk and TMA reductions, multimem loads, shared reductions |
+| F2F, F2I, I2F, I2I, I2IP, I2FP, F2IP, FRND | missing | conversions |
+| QSPC, ELECT, GETLMEMBASE, LEPC, SETCTAID, SETLMEMBASE | missing | elect, address-space query, local-memory base, block id, work id, virtual count |
+| HADD2, HADD2_32I, HFMA2, HFMA2_32I, HMNMX2, HMUL2, HMUL2_32I, HSET2, HSETP2 | missing | half2 and mixed half arithmetic |
+| BRX, BRXU, CALL, JMP, JMX, JMXU, RET, RPCMOV | missing | indirect branches, calls, returns, jumps |
+| BMSK, IABS, IDP, SGXT, UBMSK, USGXT | missing | integer abs, sign extend, bit mask, `IDP.2A` |
+| MOVM, MATCH, REDUX, VOTEU, VOTE | missing | matrix move, match, vote, reduce |
+| S2UR, B2R, CS2R, S2R | missing | special registers (thread and block ids, clocks) |
+| SUATOM, SULD, SURED, SUST | missing | surfaces |
+| TEX, TLD, TLD4, TMML, TXD, TXQ | missing | texture path |
+| UF2FP | missing | uniform FP and conversions (the instances allow integer `uni` only) |
+| VABSDIFF, VABSDIFF4, VHMNMX, VIADD, VIADDMNMX, VIMNMX, VIMNMX3 | missing | video and three-way min/max integer ops |
+
+204 opcodes: 85 covered, 38 coarse, 81 missing.
+
+### Blackwell additions over sm_90 (BU §4.4; sm_120 has a subset)
+
+| Opcodes | Mark | Model |
+|---|---|---|
+| OMMA | covered | `Op.mma` (`e2m1`, block-scaled dots `Open.dot`) |
+| QMMA | covered | `Op.mma` (`e4m3`/`e5m2`) |
+| UIMNMX | covered | `Op.uni` (integer, a whole issue slot) |
+| LDCU | coarse | a copy from device memory (constant banks) |
+| SYNCSU, USYNCS, UBLKL2CCTL, UTMAL2CCTL, ACQSHMINIT | coarse | no data effect: the schedule is free, so a program may omit it |
+| MOV64IUR, UMOV.64 | missing | 64-bit uniform and immediate moves, `UCLEA`, `ULEPC` |
+| FMNMX3 | missing | FP32 compare, min/max, check, swizzle |
+| REDS, UREDGR | missing | bulk and TMA reductions, multimem loads, shared reductions |
+| UGETNEXTWORKID, UMEMSETS, UVIRTCOUNT | missing | elect, address-space query, local-memory base, block id, work id, virtual count |
+| FHADD, FHADD2, FHFMA, FHFMA2, FHMUL2 | missing | half2 and mixed half arithmetic |
+| UIABS | missing | integer abs, sign extend, bit mask, `IDP.2A` |
+| CREDUX | missing | matrix move, match, vote, reduce |
+| FADD2, FFMA2, FMUL2 | missing | paired FP32 |
+| DECOMPRESS, SPARSIFY | missing | sparsity, decompression |
+| CS2UR | missing | special registers (thread and block ids, clocks) |
+| LDT, LDTM, STT, STTM, UTCATOMSWS, UTCBAR, UTCCP, UTCHMMA, UTCIMMA, UTCOMMA, UTCQMMA, UTCSHIFT | missing | tensor memory and `tcgen05` (not on sm_120: PTX ISA gives `tcgen05` to sm_100a, sm_101a and sm_103a) |
+| UFADD, UF2F, UF2I, UF2IP, UFFMA, UFMNMX, UFMUL, UFRND, UFSEL, UFSET, UFSETP, UI2F, UI2FP, UI2I, UI2IP | missing | uniform FP and conversions (the instances allow integer `uni` only) |
+| USTGR | missing | uniform global store |
+| UVIADD, UVIMNMX, VISET | missing | video and three-way min/max integer ops |
+
+61 opcodes: 3 covered, 6 coarse, 52 missing.
