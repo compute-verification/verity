@@ -3,18 +3,20 @@
 # kernels' staging decode, and the cheat that skips a layer's reads; cwd = the source tree's root:
 #
 #   research run --on vy-dc-h200-2 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
-#     --env GPU_LEASE_WHO=bw-h200 [--env CONNECT=127.0.0.1:PORT [--env TUNNEL='SSH_OPTIONS USER@HOST']] \
+#     --env GPU_LEASE_WHO=bw-h200 [--env PARTY='ssh ... VERB' --env PARTY_HOST=ADDRESS] \
 #     [--send store-layout.json] [--send p2lib.tar] -- bash benchmarks/pous/p2_v1/bw_session.sh
 #
 # The verifier is `p2_party` on this host by default (VERIFIER, a shell command speaking --stdio), which certifies
-# nothing. CONNECT=HOST:PORT reaches the auditor's `p2_party --listen --sessions 2` instead (vy-auditor-2's gate port),
-# which serves the honest session and then the cheat (CHEAT_CONNECT, by default the same listener): on this host's
-# 127.0.0.1 when the gate forwards its port here (`ssh -R`), or with TUNNEL through `ssh -L` to TUNNEL's host, CONNECT
-# then the address there. The registration the verifier
-# holds is the tracked bandwidth-mem69-v2.json, and the store must be it. ENC is only ever read. The lib is kernels'
-# build: p2lib.tar from the run's inputs (LIB_SHA256), else that build's out/ on this host (BUILD), else build.sh's in
-# scratch, each held to its MANIFEST.sha256 and its sources to the kernels' build's (LIB_SOURCES_SHA256); the layout is
-# CMP-95 item 2's (LAYOUT_SHA512), from the run's inputs or kernels' run KSTAGE's on this host.
+# nothing. PARTY is the auditor's instead: the ssh command to vy-auditor-2's gate verb that starts `p2_party --listen`
+# there, once a session (the honest one, then the cheat), whose port this host reaches at PARTY_HOST and whose stdout
+# ends with the verifier's own record of the answer (`bandwidth.py session --party`). Or CONNECT=HOST:PORT reaches a
+# `p2_party --listen --sessions 2` already listening, the cheat at CHEAT_CONNECT (by default the same listener), with
+# TUNNEL ('SSH_OPTIONS USER@HOST') through `ssh -L` to TUNNEL's host, CONNECT then the address there. The registration
+# the verifier holds is the tracked bandwidth-mem69-v2.json, and the store must be it. ENC is only ever read. The lib
+# is kernels' build: p2lib.tar from the run's inputs (LIB_SHA256), else that build's out/ on this host (BUILD), else
+# build.sh's in scratch, each held to its MANIFEST.sha256 and its sources to the kernels' build's
+# (LIB_SOURCES_SHA256); the layout is CMP-95 item 2's (LAYOUT_SHA512), from the run's inputs or kernels' run KSTAGE's
+# on this host.
 #
 # Outside the lease: both held to their pins, the store's registration to the tracked one, and the toy's session on the
 # CPU (P2's reference decode, the same verifier) as a preflight. Under one untimed lease of at most LEASE_MIN minutes
@@ -43,12 +45,13 @@ SKIP_LAYER=${SKIP_LAYER:-51} CHEAT_SAMPLES=${CHEAT_SAMPLES:-1024}
 LEASE_MIN=${LEASE_MIN:-10}
 VERIFIER=${VERIFIER:-$PY -m verity.core.protocols.remote_bandwidth.p2_party --registration $REG --stdio}
 CONNECT=${CONNECT:-}; CHEAT_CONNECT=${CHEAT_CONNECT:-$CONNECT}; TUNNEL=${TUNNEL:-}
+PARTY=${PARTY:-} PARTY_HOST=${PARTY_HOST:-}
 S=$(mktemp -d)
 trap 'for c in "$S"/ctl-*; do [ -S "$c" ] && ssh -S "$c" -O exit tunnel 2>/dev/null; done; rm -rf "$S"' EXIT
 LIB_TAR=$IN/p2lib.tar; [ -f "$LIB_TAR" ] || LIB_TAR=$KSTAGE/inputs/p2lib.tar
 LAYOUT=$IN/store-layout.json; [ -f "$LAYOUT" ] || LAYOUT=$KSTAGE/inputs/store-layout.json
 export O D PY ENC NODE REG LAYOUT S MODE WINDOWS PASSES SAMPLES WINDOW_S DEADLINE_S SKIP_LAYER CHEAT_SAMPLES LEASE_MIN \
-  VERIFIER CONNECT CHEAT_CONNECT PATH=$CUDA/bin:$PATH PYTHONPATH=$PWD:$PWD/benchmarks/pous${PYTHONPATH:+:$PYTHONPATH}
+  VERIFIER CONNECT CHEAT_CONNECT PARTY PARTY_HOST PATH=$CUDA/bin:$PATH PYTHONPATH=$PWD:$PWD/benchmarks/pous${PYTHONPATH:+:$PYTHONPATH}
 : > "$O/rc.txt"; : > "$O/verdicts.txt"
 step() { echo "$1 rc $2 at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"; }
 
@@ -115,13 +118,15 @@ env -u GPU_LEASE_TIMED gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
   base=(session --store "$ENC" --layout "$LAYOUT" --lib "$LIB" --node "$NODE" --registration "$REG"
         --window-s "$WINDOW_S" --deadline-s "$DEADLINE_S")
   if [ "$MODE" != cheat ]; then
-    if [ -n "$CONNECT" ]; then to=(--connect "$CONNECT"); else to=(--verifier "$VERIFIER"); fi
+    to=(--verifier "$VERIFIER"); [ -n "$CONNECT" ] && to=(--connect "$CONNECT")
+    [ -n "$PARTY" ] && to=(--party "$PARTY" --party-host "$PARTY_HOST")
     "$PY" "$D/bandwidth.py" "${base[@]}" "${to[@]}" --windows "$WINDOWS" --passes "$PASSES" --samples "$SAMPLES" \
       --out "$O/honest" --expect accept > "$O/honest.log" 2> "$O/honest.err"
     step honest $?; tail -n 1 "$O/honest.log" >> "$O/verdicts.txt"
   fi
   if [ "$MODE" != honest ]; then
-    if [ -n "$CHEAT_CONNECT" ]; then to=(--connect "$CHEAT_CONNECT"); else to=(--verifier "$VERIFIER"); fi
+    to=(--verifier "$VERIFIER"); [ -n "$CHEAT_CONNECT" ] && to=(--connect "$CHEAT_CONNECT")
+    [ -n "$PARTY" ] && to=(--party "$PARTY" --party-host "$PARTY_HOST")
     "$PY" "$D/bandwidth.py" "${base[@]}" "${to[@]}" --windows 1 --passes 1 --samples "$CHEAT_SAMPLES" \
       --skip-layer "$SKIP_LAYER" --out "$O/cheat" --expect reject > "$O/cheat.log" 2> "$O/cheat.err"
     step cheat $?; tail -n 1 "$O/cheat.log" >> "$O/verdicts.txt"
