@@ -200,7 +200,7 @@ class Window:
 
 def window(t: Template, k: int, windows: int, r: Rates) -> Window:
     """`t`'s sampling block drawing k: its tables (at most `_cap` drawn units each, k rounded up to a multiple of them, as
-    `HiddenWindow.hdiv` needs), its expected proving cost, and at each delta `IntegrityPeriodLog`'s K0 (delta split over
+    `SamplingBlock.hdiv` needs), its expected proving cost, and at each delta `IntegrityPeriodLog`'s K0 (delta split over
     the block's `windows`) and `IntegrityHorizon`'s bound over any number of the subcircuit's sampling blocks."""
     a, cap = t.proved, X._cap(t.proved)
     k = min(t.units, k)

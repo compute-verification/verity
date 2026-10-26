@@ -48,7 +48,8 @@ deployment's window is such a play:
   64-byte draw coin, one SHA-512 stream per stratum), so the deployment's tie must name that assumption.
 * `Pl.game = serviceGame … Kd` draws a uniform `K_d`-subset of all `N_p` tiles, but the service draws the work law
   inside the joint draw (one stratum per width `K`, `k_s = ⌈K·w_s·n_s/W⌉`: `strata` and `law` in
-  `verity/core/protocols/pouw/credit.py`), so a window with two widths, or any window in the joint draw, can't meet it.
+  `verity/core/protocols/pouw/credit.py`), so a sampling block with two widths, or any sampling block of the joint
+  draw, can't meet it.
   `CircuitCredit`'s `p = 3 · 2⁻⁴⁰` is therefore not yet a served figure. The lane decided provisionally (26 Oct) to
   restate the remote dampener's per-window legs over `Flock.Guarantees.JointStratified` (#4560 stated, #4590 proved),
   the bound for the draw the service runs.
@@ -107,7 +108,7 @@ cut's coordinate where its PoUW and sampled-proofs coins are drawn at different 
 certificate at the coins `ξ`, and `wrong t` a failure of it. If, at every value `ξ` of the other windows' coins,
 window `t` is a `CircuitCredit` play certified by `cert t ξ` whose failure `wrong t` implies, at `p ≥ 0`
 (`CreditPlayOn`, `p ≥ δ_s + δ_bind + δ_ks`, `3 · 2⁻⁴⁰` at the deployed point for a uniform `K_d`-subset draw, which is
-not the served window's), or carries no PoUW play and is never wrong, then `DampenerRemotePeriod`'s PoUW hypothesis
+not the served sampling block's), or carries no PoUW play and is never wrong, then `DampenerRemotePeriod`'s PoUW hypothesis
 holds: over window `t`'s own coins (`ξ[t ↦ a]`, `a` uniform on `Ω t`), its certificate is wrong with probability at
 most `p`. The play and its certificate may depend on the other windows' coins, earlier ones (the prover's adaptivity)
 and later ones alike: the bound holds at each of their values. A composer's `cert t` reads no coin of window `t`'s;
@@ -122,5 +123,22 @@ def CircuitCreditPerWindow : Prop :=
         ∀ a, ¬ wrong t (Function.update ξ t a)) →
     ∀ t (ξ : (t : Fin T) → Ω t),
       Nci.Dampener.prob (PMF.uniformOfFintype (Ω t)) (fun a => wrong t (Function.update ξ t a)) ≤ p
+
+/-- **`CircuitCreditPerWindow`'s nontrivial lemma: its conclusion fails for a verifier that accepts everything.** Over a
+period of `T ≥ 1` windows, window `t`'s verdict accepts at every value of the coins (`accepts t ξ`), and its run takes
+less than `(1 − ε)·T_cred` of its certificate `cert t ξ` at every value (`time t ξ`: a prover that does nothing, at `0`,
+against a certificate crediting positive time at `ε < 1`). Its certificate's failure, `wrong t ξ = accepts t ξ ∧
+time t ξ < (1 − ε)·T_cred`, then holds on every value of window `t`'s own coins, so the conclusion fails at every
+`p < 1`. Proof: `Accounting.SecurityProofs.Compose.CircuitCreditPerWindow_nontrivial`. -/
+def CircuitCreditPerWindow_nontrivial : Prop :=
+  ∀ (T : ℕ) (Ω : Fin T → Type) [∀ t, Fintype (Ω t)] [∀ t, Nonempty (Ω t)]
+    (accepts : Fin T → ((t : Fin T) → Ω t) → Prop) (time : Fin T → ((t : Fin T) → Ω t) → ℝ)
+    (cert : Fin T → ((t : Fin T) → Ω t) → Accounting.Compose.Certificate) (p : ℝ),
+    0 < T → p < 1 → (∀ t ξ, accepts t ξ) → (∀ t ξ, time t ξ < (1 - (cert t ξ).eps) * (cert t ξ).credit) →
+    ¬ ∀ t (ξ : (t : Fin T) → Ω t),
+      Nci.Dampener.prob (PMF.uniformOfFintype (Ω t))
+        (fun a => accepts t (Function.update ξ t a) ∧
+          time t (Function.update ξ t a) <
+            (1 - (cert t (Function.update ξ t a)).eps) * (cert t (Function.update ξ t a)).credit) ≤ p
 
 end Accounting.Guarantees.Compose

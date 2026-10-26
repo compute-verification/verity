@@ -5,14 +5,18 @@ import Proofs.Nci.Remote
 /-!
 # Sampled proofs, window by window: proof
 
-`Flock.SecurityProofs.HiddenWindowPerWindow : Flock.Guarantees.HiddenWindowPerWindow`. A window's play reads only the
+`Flock.SecurityProofs.SamplingBlockPerWindow : Flock.Guarantees.SamplingBlockPerWindow`. A window's play reads only the
 earlier windows' coins, so it is one play at every run that agrees before the window, and at every value of the
 window's own coins (`past`, `Function.update_of_ne`): that gives the first two conclusions through the identifications.
 For the other two the play is fixed, and each event over the window's coins lies inside an event of the play's outcome:
 the draw misses the image of the window's faulty blocks under `unit` (of their number, `unit` injective on them),
-bounded by `HiddenWindow.drawMiss_le` and `HiddenWindow.one_sub_le`; and the window is accepted with a drawn wrong unit,
-since a drawn faulty block that is not detected is accepted, bounded by `HiddenWindow.accepted_drawnWrong_le`.
-`PlayOn.law` carries each to the game. A window with no block has no faulty one: its bounds are `1` and `0`.
+bounded by `SamplingBlock.drawMiss_le` and `SamplingBlock.one_sub_le`; and the sampling block is accepted with a drawn
+wrong unit, since a drawn faulty block that is not detected is accepted, bounded by
+`SamplingBlock.accepted_drawnWrong_le`. `PlayOn.law` carries each to the game. A window with no block has no faulty
+one: its bounds are `1` and `0`.
+
+`Flock.SecurityProofs.SamplingBlockPerWindow_nontrivial`: with nothing detected and every block drawn, the last leg's
+event holds at every value of window `t₀`'s coins, so its probability is `1` (`prob_add_not`), above `ks t₀`.
 -/
 
 namespace Flock.SecurityProofs
@@ -35,8 +39,12 @@ private theorem dprob_eq_zero {Ω : Type} [Fintype Ω] (μ : PMF Ω) {E : Ω →
   unfold Nci.Dampener.prob
   exact Finset.sum_eq_zero fun ω _ => by simp [h ω]
 
-/-- **Sampled proofs, window by window** (`Flock.Guarantees.HiddenWindowPerWindow`). -/
-theorem HiddenWindowPerWindow : Flock.Guarantees.HiddenWindowPerWindow := by
+private theorem dprob_eq_one {Ω : Type} [Fintype Ω] (μ : PMF Ω) {E : Ω → Prop} (h : ∀ ω, E ω) :
+    Nci.Dampener.prob μ E = 1 := by
+  linarith [Nci.SecurityProofs.prob_add_not μ E, dprob_eq_zero μ fun ω (hn : ¬ E ω) => hn (h ω)]
+
+/-- **Sampled proofs, window by window** (`Flock.Guarantees.SamplingBlockPerWindow`). -/
+theorem SamplingBlockPerWindow : Flock.Guarantees.SamplingBlockPerWindow := by
   intro T Ω _ _ β bad drawn detected win q ks hq hks hD
   have past : ∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s < t → ξ s = ξ' s) →
       (fun s : {s : Fin T // s < t} => ξ s.1) = fun s : {s : Fin T // s < t} => ξ' s.1 :=
@@ -100,8 +108,8 @@ theorem HiddenWindowPerWindow : Flock.Guarantees.HiddenWindowPerWindow := by
         _ ≤ (1 - q) ^ ((bad ξ).filter fun b => win b = t).card := by
             refine ENNReal.toReal_le_of_le_ofReal (pow_nonneg h1q _) ?_
             rw [ENNReal.ofReal_pow h1q, ← hB]
-            exact (HiddenWindow.drawMiss_le P.w hA3 B P.τ).trans
-              (pow_le_pow_left₀ zero_le (HiddenWindow.one_sub_le P.w hq0 hqk) _)
+            exact (SamplingBlock.drawMiss_le P.w hA3 B P.τ).trans
+              (pow_le_pow_left₀ zero_le (SamplingBlock.one_sub_le P.w hq0 hqk) _)
     · have h0 : ((bad ξ).filter fun b => win b = t).card = 0 := by
         rw [Finset.card_eq_zero, Finset.filter_eq_empty_iff]
         intro b _ hb
@@ -136,9 +144,18 @@ theorem HiddenWindowPerWindow : Flock.Guarantees.HiddenWindowPerWindow := by
         _ = (prob (fun o => LiveAcceptsZK P.w.I o ∧ ∃ u ∈ o.2.1, u ∈ P.w.wrongSet P.τ) P.w.game P.τ).toReal :=
             P.law fun o => LiveAcceptsZK P.w.I o ∧ ∃ u ∈ o.2.1, u ∈ P.w.wrongSet P.τ
         _ ≤ ks t := ENNReal.toReal_le_of_le_ofReal (hks t)
-            ((HiddenWindow.accepted_drawnWrong_le P.w P.τ hcr).trans hks')
+            ((SamplingBlock.accepted_drawnWrong_le P.w P.τ hcr).trans hks')
     · refine le_trans (le_of_eq (dprob_eq_zero _ ?_)) (hks t)
       rintro a ⟨⟨b, -, hbt, -⟩, -⟩
       exact hex ⟨b, hbt⟩
+
+/-- **`SamplingBlockPerWindow`'s nontrivial lemma** (`Flock.Guarantees.SamplingBlockPerWindow_nontrivial`). -/
+theorem SamplingBlockPerWindow_nontrivial : Flock.Guarantees.SamplingBlockPerWindow_nontrivial := by
+  rintro T Ω _ _ β bad drawn detected win q ks t₀ hdet hdr hbad hks ⟨-, -, -, h4⟩
+  let ξ : (t : Fin T) → Ω t := fun _ => Classical.arbitrary _
+  obtain ⟨b, hb, hbt⟩ := hbad ξ
+  have h := h4 t₀ ξ
+  rw [dprob_eq_one _ fun a => ⟨⟨b, hb, hbt, hdr _ b⟩, fun b' _ _ => by simp [hdet]⟩] at h
+  linarith
 
 end Flock.SecurityProofs

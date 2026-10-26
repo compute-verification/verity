@@ -10,6 +10,9 @@ window's coins `Ω'` inside an event pulled back along `Ω' ≃ B` has at most i
 play's failure over `B = Paths … × R`, the play at each value `r` of `R` failing with probability at most `δ` by
 `CircuitCredit`, has probability at most `δ` (`Pouw.RelativeSecurity.prob_le_of_slices`, `creditPlayOn_prob_le`). A
 window that carries no PoUW play is never wrong, so its probability is 0.
+
+`CircuitCreditPerWindow_nontrivial`: a failure that holds at every value of the window's coins has probability 1
+(`dampenerProb_uniform_eq_one`), above every `p < 1`.
 -/
 
 namespace Accounting.SecurityProofs.Compose
@@ -26,6 +29,15 @@ theorem dampenerProb_uniform {Ω : Type} [Fintype Ω] [Nonempty Ω] (E : Ω → 
   unfold Nci.Dampener.prob
   simp_rw [hu]
   rw [Finset.sum_ite, Finset.sum_const_zero, add_zero, Finset.sum_const, nsmul_eq_mul, div_eq_mul_inv]
+
+/-- An event that holds at every value of the coins has probability 1 under the uniform law. -/
+theorem dampenerProb_uniform_eq_one {Ω : Type} [Fintype Ω] [Nonempty Ω] {E : Ω → Prop} (h : ∀ a, E a) :
+    Nci.Dampener.prob (PMF.uniformOfFintype Ω) E = 1 := by
+  have hn : Pouw.RelativeSecurity.prob (fun a => ¬ E a) = 0 := by
+    unfold Pouw.RelativeSecurity.prob
+    simp [h]
+  rw [dampenerProb_uniform]
+  linarith [Pouw.RelativeSecurity.prob_add_not E]
 
 /-- An event of the coins `Ω'` inside an event `G` of `B` pulled back along `e : Ω' ≃ B` has at most `G`'s
 probability. -/
@@ -65,5 +77,12 @@ theorem CircuitCreditPerWindow : Accounting.Guarantees.Compose.CircuitCreditPerW
     exact creditPlayOn_prob_le hp h
   · unfold Nci.Dampener.prob
     simpa [h] using hp
+
+/-- **`CircuitCreditPerWindow`'s nontrivial lemma** (`Accounting.Guarantees.Compose.CircuitCreditPerWindow_nontrivial`). -/
+theorem CircuitCreditPerWindow_nontrivial : Accounting.Guarantees.Compose.CircuitCreditPerWindow_nontrivial := by
+  intro T Ω _ _ accepts time cert p hT hp hacc htime h
+  have h1 := h ⟨0, hT⟩ fun _ => Classical.arbitrary _
+  rw [dampenerProb_uniform_eq_one fun a => ⟨hacc _ _, htime _ _⟩] at h1
+  linarith
 
 end Accounting.SecurityProofs.Compose
