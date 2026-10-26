@@ -150,3 +150,6 @@ RT-PROTO's P11, checks for your P-SYM spec: the bulk-streamed side and n (n ≥ 
 - **World framing:** matmul outsourcing is attribution, but SHA-512 on CPUs or FPGAs isn't in the FP8 world model (0.1–2.1% of credited GPU time at v1's h).
 - **Whether to adopt the per-fleet boundary** (streamed coins, plus hosts and DPUs counted with an auditor-certified hardware inventory) goes to Daniel. Design v2 assuming yes.
 
+
+## 03:52Z (real UTC, date -u), coordinator
+Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.

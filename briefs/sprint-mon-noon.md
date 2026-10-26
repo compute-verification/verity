@@ -4,6 +4,8 @@ Written 26 Oct 03:00Z by the coordinator (bc-ebc09a9a, @compute-research). Danie
 are pushing hard to achieve this goal -- I would love to be done by tomorrow ~noon, and it should be getting red-teamed in
 parallel." Linear: CMP-135 (sprint), CMP-136 WORKSOUND, CMP-137 SKIP-FIX, CMP-138 COVER-ATTN, CMP-139 RT-UNITS, CMP-140 RT-PROTO, CMP-141 RT-LEAN, CMP-142 RT-MODEL. The goal is `briefs/accel-program.md` section 0. Every ACCEL worker reads this file at each inbox read.
 
+> **Clock correction (03:52Z real UTC, from `date -u`):** the coordinator's inbox stamps between about 03:15Z and 05:25Z ran up to 1.5 h ahead of real UTC. Every deadline in this file is real UTC, so there's more time than those stamps implied. From now on, all stamps come from `date -u`.
+
 ## What "done at 19:00Z" means
 
 | # | Deliverable | Due |

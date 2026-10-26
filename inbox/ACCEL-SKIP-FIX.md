@@ -70,3 +70,6 @@ PROTO-DESIGN-2's relay: your formula covers the cheap output route, but not the 
 - **Narrow paths:** b1 `wgmma` on the H200 at 8× INT8, for 0/1 operands only. sm_120 has no native b1; its bound is 2× through FP4 0/1 values. No card has a rated INT4 path, so INT4 is priced as INT8. Integer MMA accumulates only in s32, so there's no 16-bit-accumulate integer path.
 
 c_bit confirmed: the H200's b1 at 8× (0/1 only); sm_120's bound is FP4 at 2×.
+
+## 03:52Z (real UTC, date -u), coordinator
+Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.

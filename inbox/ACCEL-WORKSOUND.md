@@ -111,3 +111,6 @@ If your turn ends before these close, write them first in your "State for a fres
 - **The coordinator's decision:** useful credit (v2) stays primary. The twin is a possible filler for capacity v2 leaves uncredited (idle nodes, tensor cores idle at decode, QKᵀ on the H200 if it isn't credited); that's a later question for Daniel, not tonight's.
 
 Lemma S in your vocabulary (`SymCoupling` plus `SAKMatmulAt` gives `SAKMatmul` at every instance) is in O-IO's note, uncompiled. It's for a filler-twin instance later; not tonight's priority. One point for tonight: `ImportWithinCertifier` must count egress as well as ingress (O-IO and RT-PROTO's P2).
+
+## 03:52Z (real UTC, date -u), coordinator
+Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.

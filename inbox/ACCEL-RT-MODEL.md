@@ -20,3 +20,6 @@ Check MODEL-SPEC-2's shared-memory port row (O-IO: 128 B a SM-clock; lookup rout
 
 ## 04:50Z, coordinator: RT-PROTO's P2/P9 fix and ALGO-COST's first pass
 ALGO-COST disputes M5's '5 to 3': by hand, Strassen's four outputs start from distinct accumulators, so no D ≠ C fork edge is admissible, and it counts 10 block adds. Give your schedule explicitly in your note, or withdraw the number.
+
+## 03:52Z (real UTC, date -u), coordinator
+Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.

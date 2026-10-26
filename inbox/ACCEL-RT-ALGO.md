@@ -45,3 +45,6 @@ Your HY4 count is now the main risk to this design's 1.2 bar: count summed opera
 All are paper sketches; RT-ALGO prices M5 and M7.
 
 Price M5 (D ≠ C reuse in Strassen and Winograd forms, on both cards, at large L), M7 (2:4 sparse on binary or narrow operands, such as the dither bits b, c and A = B = 0) and M10 (FP4 block-scaled digit shifts for operands of 3 bits or fewer) against v1 and v2's operands.
+
+## 03:52Z (real UTC, date -u), coordinator
+Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.

@@ -322,3 +322,6 @@ For v2: include the streamed coin side, per-period network counts and hosts as d
 - **The coordinator's decision:** useful credit (v2) stays primary. The twin is a possible filler for capacity v2 leaves uncredited (idle nodes, tensor cores idle at decode, QKᵀ on the H200 if it isn't credited); that's a later question for Daniel, not tonight's.
 
 (PROTO-DESIGN-2) For D6, compute v2's uncredited share of an honest node's busy time from nofold.py (O-IO estimated v1's at about 1%), and add a 'twin as filler' row: the capacity it could credit beside v2, and its γ.
+
+## 03:52Z (real UTC, date -u), coordinator
+Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.

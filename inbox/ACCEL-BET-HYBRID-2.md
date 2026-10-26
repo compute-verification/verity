@@ -27,3 +27,6 @@ O-IO's results:
 - **The coordinator decided OPT_honest:** it's the best public algorithm (OPT*), as the agreed end state has it. The deployed kernel's gap from it is reported as its own term, ε_alg (0.53–1.76% for the reference kernel per O-IO).
 
 P-HYB3 (3-bit fresh dither) is an option for your large-L widths: it kills O-IO's lookup routes (ε ≤ 0.63% against the reference kernel), but dither variance is 21× that of 1 bit, so a perplexity cost is likely. Price it beside wider U/V.
+
+## 03:52Z (real UTC, date -u), coordinator
+Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.

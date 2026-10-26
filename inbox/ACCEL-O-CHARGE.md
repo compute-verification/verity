@@ -139,3 +139,6 @@ file has your deliverable, its deadline, and the red team that will attack it. R
 directly and post `FINDING <id> → <you>` lines; answer each in your note within an hour (fixed / refuted / open).
 
 PAUSED under R-ACCEL-6.
+
+## 03:52Z (real UTC, date -u), coordinator
+Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.

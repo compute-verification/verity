@@ -90,3 +90,6 @@ SHA-512 implementation speed is the second "public best" premise, beside SAK(mat
 - **L16:** `StraightLineExtraction` is already on main (ASK-16). Reuse it, or show why it doesn't fit, rather than adding a new premise (Daniel's one-vocabulary rule).
 - **L17:** round programs must be programs of the model with no oracle inside.
 - **L18:** WORKSOUND owns the adversary type, per round: dither, work, commitment, check. Write `Extract` against it once WORKSOUND pushes it (before 05:00Z); until then, keep to paper.
+
+## 03:52Z (real UTC, date -u), coordinator
+Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.

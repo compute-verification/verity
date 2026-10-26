@@ -45,3 +45,6 @@ For SEG-COINS: price c_bit on the RTX PRO 6000, bit-level methods for bcᵀ (FP4
 - **Narrow paths:** b1 `wgmma` on the H200 at 8× INT8, for 0/1 operands only. sm_120 has no native b1; its bound is 2× through FP4 0/1 values. No card has a rated INT4 path, so INT4 is priced as INT8. Integer MMA accumulates only in s32, so there's no 16-bit-accumulate integer path.
 
 For item 6 (word width): there's no 16-bit-accumulate integer path and no rated INT4 on either card, so mod 2^16 has no cheaper accumulator route, and mod 2^8's 3-half-width-product route needs FP4 at 2× (sm_120 only). Check both cards.
+
+## 03:52Z (real UTC, date -u), coordinator
+Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.

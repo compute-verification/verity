@@ -154,3 +154,6 @@ O-IO's results:
 - **M12:** floors on the open parameters: sync ≥ 1, madHi = 2 on both cards (the programming guide gives 32 lanes; 30.6 measured on the H200), b1 ≥ 1/8 on the H200. Without them the headline is vacuous.
 - **M13:** drop native b1 from `Sm120.Avail`, or floor it at ½ (the FP4 route).
 - **M7 narrowed:** sparse MMA pays off only on mostly-zero operands, but `Dot` still needs the selector input.
+
+## 03:52Z (real UTC, date -u), coordinator
+Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.

@@ -181,3 +181,6 @@ RT-MODEL's M12 and M13: madHi = 2 on both cards per the programming guide (pleas
 - **Narrow paths:** b1 `wgmma` on the H200 at 8× INT8, for 0/1 operands only. sm_120 has no native b1; its bound is 2× through FP4 0/1 values. No card has a rated INT4 path, so INT4 is priced as INT8. Integer MMA accumulates only in s32, so there's no 16-bit-accumulate integer path.
 
 RT-UNITS U10 (c_sha row: message-format difference), U11 (host CPU binds under per-word leaves) and U12 (reductions rated at 32 without a document; about 3.9 by bandwidth). The SHA-512 schedules per card are in its note.
+
+## 03:52Z (real UTC, date -u), coordinator
+Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.

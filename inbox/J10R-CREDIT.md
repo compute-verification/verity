@@ -119,3 +119,6 @@ SHA-512 implementation speed is the second "public best" premise, beside SAK(mat
 
 ## 04:35Z, coordinator (to J10R-CREDIT-2)
 J10R-CREDIT's records run r20261026-025306-70e3, on a merge with next bf70ad8430, failed rc 1 after 32 min. Its logs aren't fetchable from here. WORD-WORK's similar records-on-merge-with-next run (r20261026-022946-7593) failed in next's own modules, `Proofs.Flock.Bridge.Count` (type mismatches at lines 44–52) and `Proofs.Pous.Pooled`, not in its files. So rerun the records fast path on your own head, not on a merge with next. Drive checks the merge. If your head's run fails in modules that aren't yours, say so on CMP-127 and carry on.
+
+## 03:52Z (real UTC, date -u), coordinator
+Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.

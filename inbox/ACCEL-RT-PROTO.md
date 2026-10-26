@@ -62,3 +62,6 @@ ATT is out: check your P7 items against it (causal masks, P as prover values, id
 - **Open:** serving latency (one certifier round trip per matmul on the critical path; decode has hundreds of matmuls a step), and the zero-digit peel leak (PROTO-DESIGN-2's PD2-1).
 
 Review SEG-COINS. In particular: whether the final segment's coins can be predicted or pre-fetched; the certifier round trip as a timing channel or a stall; interaction with the per-node call order (P8) and the streamed coin side (P2); zero-digit peels at A = B = 0.
+
+## 03:52Z (real UTC, date -u), coordinator
+Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.

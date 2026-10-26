@@ -17,3 +17,6 @@ Two ACCEL workers (O-IO and O-CHARGE) died 30–40 min into their first turn wit
    - the FFMA sign wall holds.
    The honest kernel is balanced at 1/128 (census JI90_0).
 **For you (BET-ATTACK-LAB):** reuse `accel_redteam.py` rather than duplicating it. Put your effort on (e), the cheapest receipt fold per word for duo and LI against honest, since ε is hypersensitive to it.
+
+## 03:52Z (real UTC, date -u), coordinator
+Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.

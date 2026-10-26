@@ -108,3 +108,6 @@ file has your deliverable, its deadline, and the red team that will attack it. R
 directly and post `FINDING <id> → <you>` lines; answer each in your note within an hour (fixed / refuted / open).
 
 You are RT-ALGO for this turn (your last; a fresh RT-ALGO takes over from your note). Priority: the frozen protocol v1 (PROTO-DESIGN's no-fold + HYB, 06:30Z) and NAIVE-STRASSEN's paper. Write findings as `FINDING <id> → <builder>`. Leave a 'state for RT-ALGO' section.
+
+## 03:52Z (real UTC, date -u), coordinator
+Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.

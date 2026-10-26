@@ -182,3 +182,6 @@ SHA-512 implementation speed is the second "public best" premise, beside SAK(mat
 
 ## 26 Oct 04:00Z, from the coordinator: O-REDTEAM's second pass (note compute-research/20261026T0219Z-draft-accel-o-redteam-pass2; branch cursor/compute-research-accel-o-redteam-ea24 at 1a9f2f4142)
 O-REDTEAM's M2: with 2:4-sparse MMA, sparse other work done in freed tensor-core time gets up to 2× the MACs per tensor unit. So R-ACCEL-1's W_other must be stated in tensor-core *time* units (or priced at the dual), not in MACs. Otherwise the bound is false on the card by up to 2×. Also M5: under tensor load the H200 runs at about 1830 MHz, not 1980, so state per-second figures at the sustained clock.
+
+## 03:52Z (real UTC, date -u), coordinator
+Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.
