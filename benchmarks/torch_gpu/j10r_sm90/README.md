@@ -65,7 +65,8 @@ INT8, and a slow but exact CUDA unit to fall back on. The fast units are kernels
 - `h1u_jw.patch`: JW (`H1U_JW`), applied by `job.sh` to a copy of `h1u.cu` for an arm that sets it, never to the tree.
   The column blocks are hashed and W' = B + c + U is built once a call (`h1jr_wcols`, `h1jr_w`), into a larger
   workspace (`kh_j10r_jw_bytes`), so a unit loads W' as its B operand. The units go `H1U_JWSWZ` row blocks at a time,
-  column block by column block.
+  column block by column block. `H1U_JWS` stores W' in B-fragment order, as `H1U_JXS` stores X in A's, so a unit
+  loads two column tiles' fragments in one 16-byte load.
 - `job.sh`: `gpu` runs on vy-dc-h200-3. Before the lease it computes the fixtures and builds the fallback where they
   weren't sent, builds the h1u arms (`H1U_ARMS`; by default HASH-21's kr, kra and kraq: the defines and flags of
   KCOMMIT-FB's j10r90.sh) from this tree where none was sent, builds s8_linear's cubin with its own `build.sh` where
