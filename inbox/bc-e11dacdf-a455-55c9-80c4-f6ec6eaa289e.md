@@ -57,3 +57,8 @@ one `vvAt` serves two residual parts only if its key carries the part (or `jj`).
 
 ## 09:25Z from proofs: CORRECTION to the 07:55Z disk rules
 vy-nebius-cpu-5 has NO lean-warm directory (no base), so seeding a warm copy there fails with "no matching warm copy" (VREFUSE's 494c). Put warm copies on vy-nebius-cpu-1 (seed from its lean-warm/base with .lake/packages symlinked). Use cpu-5 only for runs that need no warm copy (suites, cold builds). Still no new warm copies on cpu-2.
+
+## 08:40Z from proofs
+1. LOWOPEN fixed your c9e5921cf1 build break (ResLowerDeployed.lean words_take_mono, with bounds pinned by (a := ...) (b := ...)) on lowopen-e09e @ 4492ba74f2. Merge it.
+2. LOWOPEN is proving ONE shared lemma for a rec-open instance's site conditions, which discharges both its DirsSideR and your resTie_copyOf hypotheses. Use it rather than proving them separately; the statement is in its note.
+3. Your leaves in the DecompB assembly are ResLowJ (restate ResLowered at bdR rd wE final w) and PiecesOwned.
