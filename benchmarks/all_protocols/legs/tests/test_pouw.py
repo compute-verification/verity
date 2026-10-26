@@ -3,6 +3,7 @@ law the integrity plan draws under, and a window without one has no PoUW case, s
 integrity window under any law."""
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import stat
@@ -13,6 +14,7 @@ import pytest
 import pouw
 from verity.core.protocols.pouw import core_check as CC, operands as OP
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity_torch_loop import serve
 
 UNPINNED = "params: check.template is not a tile template the verifier pins"
@@ -192,6 +194,31 @@ def test_a_window_with_the_loops_salt_has_live_coins_and_its_salt_sessions_input
     assert CC.params(h1)[pouw.LIVE_PARAM] == live
     with pytest.raises(CC.Refused, match="live is exactly when"):
         CC.params({k: v for k, v in h1.items() if k != pouw.LIVE_PARAM})
+
+
+def test_the_verifiers_pins_replace_the_provers_key_and_main_line(period, tmp_path):
+    """With ``period.json``'s ``pouw.verifier`` (the runner's ``--pouw-gate``), the salt session is checked under the
+    deployment's challenger key and the verifier's own main line, never the ones the prover wrote in ``salt.json``."""
+    if pouw.LIVE_PARAM is None:
+        pytest.skip("core takes no live parameters")
+    d = tmp_path / "p0"
+    shutil.copytree(period, d)
+    (d / pouw.H1_DIR).mkdir()
+    live = {k: f"{k}-of-the-session" for k in ("key", "ledger", "main", "pins", "session")}
+    (d / pouw.H1_DIR / pouw.SALT).write_text(json.dumps({"answer": {"epoch": 0}, "live": live}))
+    pub = bytes(range(80))
+    record = {"schema": Ch.KEY_RECORD_SCHEMA, "W": 1, "H": 20, "pubkey": pub.hex(),
+              "pubkey_sha512": hashlib.sha512(pub).hexdigest()}
+    (tmp_path / "main.txt").write_text("a" * 40 + "\n" + "b" * 40 + "\n")
+    p = json.loads((d / "period.json").read_text()) if (d / "period.json").exists() else {}
+    p["pouw"] = {"mode": "h1", "verifier": {"challenger_key": record, "main": str(tmp_path / "main.txt")}}
+    (d / "period.json").write_text(json.dumps(p))
+    got = pouw.h1_params(d, pouw.served(period))[pouw.LIVE_PARAM]
+    assert got == {**live, "key": Ch.key_of_record(record).to_json(), "main": ["a" * 40, "b" * 40]}
+    record["pubkey_sha512"] = "0" * 128
+    (d / "period.json").write_text(json.dumps(p))
+    with pytest.raises(Ch.CoinError, match="not the one whose SHA-512 it names"):
+        pouw.h1_params(d, pouw.served(period))
 
 
 def test_a_wired_window_serves_its_linears_macs_and_each_requests_steps(tmp_path):

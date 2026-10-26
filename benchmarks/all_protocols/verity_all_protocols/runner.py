@@ -65,7 +65,8 @@ unit's ``x`` the same row (`loop.TorchLoop.wired_circuit`).
 ``--of-record``: S1's run of record (`OF_RECORD`), the one way a run counts as its evidence: the joint run, every layer
 chained and the output tied. It sets ``--tie --wired --pouw h1 --registered --jobs 1 --session-jobs 1`` and a work law
 that draws every unit (`wired_units`: ``work:14`` on the toy's 2 requests of 2 steps), and ``CERTIFIER_TAMPER=byte``
-under ``--tie-tamper``, and refuses a command that contradicts any of them, with the reason (`of_record`). Every
+under ``--tie-tamper``, and refuses a command that contradicts any of them, with the reason (`of_record`), or that
+doesn't salt PoUW's H1 window from vy-challenger-1 (``--pouw-gate``; ``--pouw-live``'s gate is the prover's). Every
 run writes its mode, whether it is of record, and its exact flags to ``DIR/mode.json``, each window's ``period.json`` and
 report (``mode``) and its ``ALLP`` line, so a run's evidence says whether it counts. ``--check`` only checks the command
 and prints its mode, which ``run.sh`` does before it builds.
@@ -227,13 +228,18 @@ def loop_window(index: int, run: str, a: argparse.Namespace, scratch: Path, out:
     got = serve([*shape, "--out", str(window), *(["--tamper"] if tampered else []),
                  *(["--weights", str(weights["opening"])] if weights else []),
                  *(["--pouw-live", str(scratch / f"w{index}-salt-host")] if getattr(a, "pouw_live", False) else []),
+                 *(["--pouw-gate", a.pouw_gate, "--peer", a.peer, "--challenger-key", a.challenger_key, "--main", a.main,
+                    *(["--gate-key", a.gate_key] if a.gate_key else [])] if getattr(a, "pouw_gate", None) else []),
                  *(["--out-opening", str(tie.pop("opening"))] if tie else [])])
     (window / "serve.json").write_text(json.dumps(got, sort_keys=True))
     (window / PERIOD).write_text(json.dumps({
         "window": index, "period": index - getattr(a, "start", 0), "periods": a.windows, "node": a.node,
         "circuit": registered["circuit"], "run_root": got["run"], "law": a.law, "delta": a.delta, "cap": a.cap,
         "tools": a.tools,
-        "pouw": {"mode": a.pouw, "circuit": registered.get("pouw")} if a.pouw else None,
+        "pouw": {"mode": a.pouw, "circuit": registered.get("pouw"),
+                 **({"verifier": {"challenger_key": json.loads(Path(a.challenger_key).read_text()),
+                                  "main": str(Path(a.main).resolve())}} if getattr(a, "pouw_gate", None) else {})}
+        if a.pouw else None,
         "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {},
         "mode": getattr(a, "mode", None),
         **({"registered": str(pins)} if pins else {}), **({"tie": tie} if tie else {})}, sort_keys=True))
@@ -310,6 +316,10 @@ def of_record(a: argparse.Namespace) -> str | None:
     if a.law not in (None, want["law"]):
         return (f"S1's run of record draws under {want['law']} (the tie's output class needs a streamed work draw, and "
                 f"the run's figures are stated at k = {want['law'].partition(':')[2]}), not --law {a.law}: drop --law")
+    if not a.pouw_gate:
+        return ("S1's run of record salts PoUW's H1 window from vy-challenger-1's salt-only session (AGENTS.md, \"Live "
+                "coins only\"): pass --pouw-gate research@204.12.178.84 --peer NODE --challenger-key RECORD --main FILE "
+                "--gate-key KEY; --pouw-live's gate runs on the prover's node, and without either the window is seeded")
     tamper = os.environ.get("CERTIFIER_TAMPER")
     if a.tie_tamper and tamper not in (None, "byte"):
         return (f"--tie-tamper ties a window to the CERTIFIER_TAMPER=byte relay (one egress byte changed), not "
@@ -364,6 +374,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--pouw", choices=["h1"], help="the loop's PoUW window and its audit (ALLP-H1LOOP's, until it lands)")
     ap.add_argument("--pouw-live", action="store_true", help="with --pouw h1 --registered: the H1 window's salt from a "
                     "salt-only session (serve --pouw-live), here a development gate in scratch, not vy-challenger-1")
+    ap.add_argument("--pouw-gate", metavar="USER@HOST", help="with --pouw h1 --registered: the H1 window's salt from "
+                    "vy-challenger-1's salt-only session through infra's gate (serve --pouw-gate), with --peer, "
+                    "--challenger-key and --main; the leg pins that key and main line")
+    ap.add_argument("--peer", help="with --pouw-gate: this node as the gate's /etc/vy/peers names it")
+    ap.add_argument("--challenger-key", help="with --pouw-gate: the deployment's challenger-key/v1 record")
+    ap.add_argument("--gate-key", help="with --pouw-gate: the lane's own gate key")
+    ap.add_argument("--main", help="with --pouw-gate: the verifier's `git rev-list --first-parent origin/main`")
     ap.add_argument("--deployment", default=M.REFERENCE, help="the census deployment the monitoring periods are over")
     ap.add_argument("--onsite", help="onsite's executable (`onsite check`), for when its components are ports")
     ap.add_argument("--scratch", help="where the loop's windows go (default a temporary directory, removed after)")
@@ -391,6 +408,10 @@ def main(argv: list[str] | None = None) -> int:
                  f"{', '.join(unmet)}")
     if a.tie_tamper and not a.tie:
         ap.error("--tie-tamper needs --tie")
+    if a.pouw_live and a.pouw_gate:
+        ap.error("--pouw-live or --pouw-gate, not both")
+    if a.pouw_gate and not (a.peer and a.challenger_key and a.main):
+        ap.error("--pouw-gate needs --peer, --challenger-key and --main")
     r = len(a.requests.split(","))
     a.cap = a.cap or (math.gcd(CAP, r) if a.wired else CAP)
     if a.wired and r % a.cap:
