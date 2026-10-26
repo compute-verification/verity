@@ -15,14 +15,18 @@ def _pouw_roots() -> list[Any]:
     noise blocks' counter a `PouwAdd64` of its ``blocks`` base. They
     grow linearly in lanes and in KS. None where `circuit.segment` (E2E-120) is not on the tree, which is where `PouwH1Tile`
     is registered. `PouwU129`, the one-stream recombinations, the wrap pieces, the peel pieces, `PouwOrBit` and `PouwMask32`
-    are catalog roots (primitives and static-free composites)."""
+    are catalog roots (primitives and static-free composites). Then `TemplateInstances_v1` of `PouwH1Tile_v1` at N = 2
+    (`population_program`), a window's program over the pinned tile: each instance's salt a coin, its position a position
+    and its receipt a sink."""
+    from verity.core.protocols.pouw.circuit import h1tile as H
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
-    from verity.core.protocols.pouw.circuit import h1tile as H
+    from verity.ml.circuits.population import population_program
 
     if H.SG is None:
         return []
     exact = bind(BG.GemmAccumulatorS8, K=64, **BG.GEMM_SM120_S8)
     pairs = tuple((i, j) for i in range(4) for j in range(8))
-    return [bind(d, EXACT=exact, R=4, C=8, PAIRS=pairs)
-            for d in (H.PouwH1Tile, H.PouwH1Tile3, H.PouwH1Tile4, H.PouwH1Tile5, H.PouwH1Tile6)]
+    tiles = [bind(d, EXACT=exact, R=4, C=8, PAIRS=pairs)
+             for d in (H.PouwH1Tile, H.PouwH1Tile3, H.PouwH1Tile4, H.PouwH1Tile5, H.PouwH1Tile6)]
+    return [*tiles, population_program(tiles[0], 2).fn]

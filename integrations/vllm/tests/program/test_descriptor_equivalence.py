@@ -14,7 +14,7 @@ from verity.ml.circuits import Array, Program, Value, bind, composite, decode_pr
 from verity.ml.circuits.codec import SCHEMA_V0, SCHEMA_V1
 from verity_vllm.program.descriptor_equivalence import Mismatch, canonical_runs, canonical_runs_by_leaf, compare
 from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided, concat
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 from tests.program.test_running_example import Add16, Id16, Mul16, make_program
 

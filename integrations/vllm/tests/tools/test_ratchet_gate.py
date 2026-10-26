@@ -1,6 +1,7 @@
 """`tools/ratchet_gate.py` on toy repositories: a branch's own commits judged together against its merge base (the merge of its
-merge bases, when it has several), each queue merge on its own, no ratchet growing (by entries, per ratchet, or by an entry's
-count), a new, moved or renamed ratchet, the changes it doesn't judge, the base's lint code run on the change's tree (a
+merge bases, when it has several), each queue merge on its own, no ratchet growing (a counted kind by its total, which a move
+between its keys keeps; the other entries by number, per ratchet, or by an entry's count, P10's sizes among them), a new,
+moved or renamed ratchet, the changes it doesn't judge, the base's lint code run on the change's tree (a
 loosened, deleted or bypassed lint fails, naming what it still finds; a tightened one passes once its findings are fixed), the
 ruff lint rerun with the base's config and pin (a loosened config, lint or pin fails), the `noqa` count (no change adds more
 than it removes; a moved one is kept; only comments count; a new copy of a line is named where it was added), the exemptions
@@ -142,14 +143,18 @@ def test_a_branch_is_judged_against_its_merge_base_and_may_not_grow_a_ratchet(re
     assert (c["verdict"], c["before"], c["after"]) == ("passed", 2, 2)
 
 
-def test_no_recorded_count_grows_and_one_ratchet_does_not_pay_for_another(repo):
+def test_no_counted_kind_grows_and_one_ratchet_does_not_pay_for_another(repo):
     repo.commit("p02, and a count", {P02: _allowlist(_entry("verity_vllm/a.py", "X")),
                                      P01: _allowlist(_entry("verity_vllm/a.py", "A", 2), _entry("verity_vllm/b.py", "B"))})
     repo.git("checkout", "-q", "-b", "pr")
-    repo.commit("raises a count, retires another", {P01: _allowlist(_entry("verity_vllm/a.py", "A", 3))})
+    repo.commit("raises a count", {P01: _allowlist(_entry("verity_vllm/a.py", "A", 3), _entry("verity_vllm/b.py", "B"))})
     [c] = G.gate("main", "pr")["changes"]
-    assert (c["verdict"], c["before"], c["after"]) == ("failed", 3, 2)
-    assert c["why"].startswith(f'grows {P01} count 2 -> 3 for {G.key(_entry("verity_vllm/a.py", "A"))}')
+    assert (c["verdict"], c["before"], c["after"]) == ("failed", 3, 3)
+    assert c["why"].startswith(f"grows {P01} k 3 -> 4 in total: no change adds a ratchet exception")
+    assert c["fix"] == [f'{P01}: {G.key(_entry("verity_vllm/a.py", "A"))} 2 -> 3']
+    repo.commit("raises a count, retires another of its kind", {P01: _allowlist(_entry("verity_vllm/a.py", "A", 3))})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["before"], c["after"], c["pooled"]) == ("passed", 3, 2, [f"{P01} k 3 -> 3 in total over 2 moved key(s)"])
     repo.git("checkout", "-q", "-b", "trade", "main")
     repo.commit("retires from p01, adds to p02", {P01: _allowlist(_entry("verity_vllm/b.py", "B")),
                                                  P02: _allowlist(_entry("verity_vllm/a.py", "X"), _entry("verity_vllm/b.py", "Y"))})
@@ -158,6 +163,75 @@ def test_no_recorded_count_grows_and_one_ratchet_does_not_pay_for_another(repo):
     repo.git("checkout", "-q", "-b", "lower", "main")
     repo.commit("lowers a count", {P01: _allowlist(_entry("verity_vllm/a.py", "A"), _entry("verity_vllm/b.py", "B"))})
     assert _verdicts(G.gate("main", "lower"))[0][1] == "passed"
+
+
+TYPED = "integrations/vllm/tests/lint/allowlists/typed_records.json"
+CHECK, COMMIT, RECORDS = "verity_vllm/check", "verity_vllm/commit", "verity_vllm/records"
+
+
+def _or_empty(package: str, n: int) -> dict:
+    """typed_records' count of `.get(k) or []` reads in one package (#4525)"""
+    return {"file": package, "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": n}
+
+
+def _schema(file: str) -> dict:
+    """typed_records' per-site entry: a schema id literal outside records/"""
+    return {"file": file, "kind": "schema-literal", "symbol": "<module>", "detail": "verity/x/v1"}
+
+
+def test_a_move_between_packages_keeps_its_kinds_total_as_4545_moves_reads_from_check_to_commit(repo):
+    """clean-engine's #4545 moves `.get(k) or []` reads from check/ to commit/ to break their cycle: commit's count rises
+    53 -> 87 as check's falls 252 -> 218.  A new package is paid for the same way; a new per-site entry isn't, by any kind."""
+    gates = _schema("verity_vllm/check/gates.py")
+    repo.commit("typed_records", {TYPED: _allowlist(_or_empty(CHECK, 252), _or_empty(COMMIT, 53), gates)})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("#4545", {TYPED: _allowlist(_or_empty(CHECK, 218), _or_empty(COMMIT, 87), gates)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["before"], c["after"], c["fix"]) == ("passed", 5, 5, [])
+    assert c["pooled"] == [f"{TYPED} or-empty 305 -> 305 in total over 2 moved key(s)"]
+    assert c["why"] == f"5 -> 5 ratchet exceptions; pooled: {c['pooled'][0]}"
+    repo.commit("a new package, which check pays for", {
+        TYPED: _allowlist(_or_empty(CHECK, 210), _or_empty(COMMIT, 87), _or_empty(RECORDS, 8), gates)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["before"], c["after"]) == ("passed", 5, 6)
+    new = _schema("verity_vllm/commit/x.py")
+    repo.commit("a new schema literal", {
+        TYPED: _allowlist(_or_empty(CHECK, 200), _or_empty(COMMIT, 87), _or_empty(RECORDS, 8), gates, new)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(f"grows {TYPED} 1 -> 2 entries outside its counted kinds (or-empty)")
+    assert c["fix"] == [f"{TYPED}: new {G.key(new)}"]
+
+
+def test_a_kinds_total_may_not_grow_and_the_failure_names_the_totals_and_the_keys_that_moved(repo):
+    repo.commit("typed_records", {TYPED: _allowlist(_or_empty(CHECK, 252), _or_empty(COMMIT, 53))})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("moves 34 reads and adds one", {TYPED: _allowlist(_or_empty(CHECK, 218), _or_empty(COMMIT, 88))})
+    doc = G.gate("main", "pr")
+    [c] = doc["changes"]
+    assert (c["verdict"], c["pooled"]) == ("failed", [])
+    assert c["why"].startswith(f"grows {TYPED} or-empty 305 -> 306 in total: no change adds a ratchet exception or raises a "
+                               "recorded count, past what the same kind's other counts lose")
+    assert c["fix"] == [f"{TYPED}: {G.key(_or_empty(COMMIT, 0))} 53 -> 88", f"{TYPED}: {G.key(_or_empty(CHECK, 0))} 252 -> 218"]
+    assert doc["failures"][0]["fix"] == c["fix"]
+    repo.git("checkout", "-q", "-b", "fresh", "main")
+    one = {k: v for k, v in _or_empty(RECORDS, 1).items() if k != "count"}
+    repo.commit("a new package of one read, nothing paid", {TYPED: _allowlist(_or_empty(CHECK, 252), _or_empty(COMMIT, 53), one)})
+    [c] = G.gate("main", "fresh")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(f"grows {TYPED} or-empty 305 -> 306 in total")
+    assert c["fix"] == [f"{TYPED}: {G.key(one)} 0 -> 1"]
+
+
+def _size(symbol: str, lines: int) -> dict:
+    return {"file": "verity_vllm/a.py", "kind": "function", "symbol": symbol, "detail": "over the cap", "count": lines}
+
+
+def test_a_size_is_not_a_count_so_p10_does_not_pool(repo):
+    size = "integrations/vllm/tests/lint/allowlists/p10_size.json"
+    repo.commit("sizes", {size: _allowlist(_size("f", 120), _size("g", 140))})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("g shrinks, f grows", {size: _allowlist(_size("f", 130), _size("g", 100))})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(f"grows {size} count 120 -> 130 for {G.key(_size('f', 0))}")
 
 
 def test_main_moving_on_keeps_the_branch_judged_against_its_merge_base(repo):
