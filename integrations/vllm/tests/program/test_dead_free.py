@@ -257,3 +257,63 @@ def test_attention_v18_has_no_dead_gate_at_llama_geometry(T):
     block's key count is a multiple of 16 below 128."""
     new, old = (bind(fn, T=T, NH=32, KVH=8, D=64, BN=128, MASKED_FROM=0, **FA2) for fn in (DF.AttentionV18, F2.AttentionV5))
     assert (_dead(new), _dead(old)) == (0, 0 if T % 16 else 64)
+
+
+def _inlined(fn, inline: frozenset[str] = frozenset()) -> tuple[list[tuple], list[tuple]]:
+    """``fn``'s nodes with the Calls of the families ``inline`` names written in place, each (form, Definition id, axes, n, n_xs,
+    operands), every operand leaf a parameter leaf of ``fn`` or an output leaf of an earlier node here; and the return's leaves.
+    Equal for two Definitions, they are one circuit, so one function on every input."""
+    nodes: list[tuple] = []
+
+    def run(body, params: list) -> list:
+        outs: list = []
+
+        def src(r):
+            s, i, j = r
+            return params[i][j] if s == "p" else outs[i][j]
+
+        for node in body.nodes:
+            args = [tuple(map(src, a.refs)) for a in node.args]
+            if node.form == "call" and node.fn.base_id in inline:
+                outs.append(run(node.fn.body, args))
+            else:
+                nodes.append((node.form, node.fn.id, node.axes, node.n, node.n_xs, args))
+                outs.append([("n", len(nodes) - 1, j) for j in range(node.out.leaves)])
+        return [src(r) for r in body.ret]
+
+    ret = run(fn.body, [[("p", i, j) for j in range(t.leaves)] for i, (_, t) in enumerate(fn.body.params)])
+    return nodes, ret
+
+
+V19_STEPS = frozenset({"AttnBlockFirst_v1", "AttnHeadEnd_v1"})
+
+
+@pytest.mark.parametrize("T,BN,MF", [(1, 32, 0), (15, 32, 0), (16, 32, 0), (17, 32, 0), (32, 32, 0), (40, 32, 1), (48, 32, 0),
+                                     (48, 32, 1), (96, 32, 0), (96, 32, 2), (17, 16, 1)])
+def test_attention_head_v19_equals_v18(T, BN, MF):
+    """A first block of 1 ... BN keys, its V rows padded (40) or not (48), and blocks below it guarded or not."""
+    new, old = (bind(fn, T=T, D=16, BN=BN, MASKED_FROM=MF, **FA2) for fn in (DF.AttentionHeadV19, DF.AttentionHeadV18))
+    assert _dead(new) == 0
+    for q, k, v in _attention_cases(16, T):
+        _same(new, old, q, k, v)
+
+
+def test_attention_v19_equals_v18():
+    new, old = (bind(fn, T=48, NH=4, KVH=2, D=16, BN=32, MASKED_FROM=1, **FA2) for fn in (DF.AttentionV19, DF.AttentionV18))
+    assert _dead(new) == 0
+    for _ in range(2):
+        q, kc, vc = (_bf16(RNG.normal(0, 1, n)) for n in (4 * 16, 48 * 2 * 16, 48 * 2 * 16))
+        _same(new, old, q, kc, vc)
+
+
+@pytest.mark.parametrize("D,BN", [(64, 128), (128, 64)])
+@pytest.mark.parametrize("T", [1, 15, 16, 17, 64, 127, 128, 129, 200, 256, 385])
+def test_attention_head_v19_is_v18_with_its_calls_inlined_at_llama_geometry(D, BN, T):
+    """Llama-3.2-1B's heads (D 64, kBlockN 128) and Llama-3.1-8B's (D 128, kBlockN 64): v19's body is Calls only, and with
+    `AttnBlockFirst_v1` and `AttnHeadEnd_v1` written in place it is v18's circuit node for node, at every MASKED_FROM's extremes."""
+    nb = -(-T // BN)
+    for MF in {0, nb - 1}:
+        new, old = (bind(fn, T=T, D=D, BN=BN, MASKED_FROM=MF, **FA2) for fn in (DF.AttentionHeadV19, DF.AttentionHeadV18))
+        assert {(n.form, n.fn.base_id) for n in new.body.nodes} <= {("call", f) for f in (*V19_STEPS, "AttnBlock_v5")}
+        assert len(new.body.nodes) == nb + 1
+        assert _inlined(new, V19_STEPS) == _inlined(old)

@@ -1,4 +1,4 @@
-"""R15 compiled — required-value manifest of an `Execution=compiled` row from P_compiled x query (DECISIONS-2 §3, §7).
+"""Required-value manifest of an `Execution=compiled` row from P_compiled x query (DECISIONS-2 §3, §7).
 
 P_compiled is read from the PRODUCTION process's compiler artifacts: the Inductor output code of every piecewise piece (the wrapper's
 `call()` = the ordered kernel launches with their buffer arguments and shape constants).  Identities = one row per (step, piece, launch,

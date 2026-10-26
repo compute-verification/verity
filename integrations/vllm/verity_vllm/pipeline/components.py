@@ -105,7 +105,7 @@ def registration_refusal(dirs: list[str]) -> str | None:
 
 
 def component_provenance(d: str, desc: dict) -> dict:
-    """[rev-pm M-0123 E] the component descriptor GP-01 composes must be the Program the derive recorded: its recomputed digest must equal
+    """The component descriptor GP-01 composes must be the Program the derive recorded: its recomputed digest must equal
     result.json/artifact.json's program_digest.  `refusal` names the mismatch (fail closed); a component dir with no recorded digest is
     refused too (a descriptor without provenance is not a Build artifact)."""
     from verity.ml.circuits.codec import program_digest

@@ -322,7 +322,7 @@ _DNK, _DNN = _dense_kinds()
 
 
 def _moe_ffn_fixed(E: int, TOPK: int, VPT: int, H: int, I: int):
-    """[R17-42 route A (3)] `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}` (registry.moe_pad), imported on first use: the padded registry (pad's lifted
+    """[route A (3)] `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}` (registry.moe_pad), imported on first use: the padded registry (pad's lifted
     registry + the hand-lift hook) is not loaded by a dense derivation that never asks for the kind."""
     from verity.ml.definitions.registry import moe_pad as _mp  # noqa: PLC0415
     return ir_bind(_mp.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)

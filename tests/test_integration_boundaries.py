@@ -41,7 +41,7 @@ KNOWN = {
     ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.interface"),
     ("verity/core/primitives/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.registry"),
     ("verity/core/primitives/requirement/tests/test_requirement_difftest.py", "verity.ml.definitions.registry"),
-    ("verity/core/service/sigma/tests/test_sigma_difftest.py", "verity_vllm.program"),
+    ("verity/core/service/sigma/tests/test_sigma_difftest.py", "verity.ml.definitions.boolean"),
     ("verity/core/service/sigma/tests/test_sigma_difftest.py", "verity.ml.definitions.registry"),
     ("verity/core/service/sigma/tests/test_sigma_difftest.py", "verity.ml.definitions.registry.catalog"),
     ("verity/core/service/sigma/tests/test_sigma_difftest.py", "verity.ml.definitions.replay"),

@@ -1,5 +1,5 @@
-"""[R13 MOE-01] Bet A rules for vLLM's fused-MoE block under the batch-invariant profile — the leaf kernels `export_compat.moe_ops_traced`
-makes visible in place of the opaque `vllm.moe_forward` dispatcher (R12 F-moe-02 / B-MOE): generic in the block's shape parameters
+"""[MOE-01] Bet A rules for vLLM's fused-MoE block under the batch-invariant profile — the leaf kernels `export_compat.moe_ops_traced`
+makes visible in place of the opaque `vllm.moe_forward` dispatcher (F-moe-02 / B-MOE): generic in the block's shape parameters
 (E experts, TOPK, hidden H, intermediate I, tokens M), nothing about a model.
 
 The block, in launch order, and what each rule binds (numerics: `verity.ml.definitions.registry.moe`, difftested bit-exact in
@@ -23,7 +23,7 @@ Both fused_moe_kernel schedules are accepted: the sorted one (`sorted_token_ids_
 Everything else the launch could be (SPLIT_K > 1, fused bias, fp8/int8 paths, SWAP_AB, group quant, another compute_type, another source
 body) refuses with the pinned field named, as `TritonGemm[vllm-bi]` does.
 
-[R17-42 / R17-45 (a) route A (3): `TargetProfile.moe_construction`] TWO rule families own the same six leaf kernels, exclusively, by the
+[route A (3): `TargetProfile.moe_construction`] TWO rule families own the same six leaf kernels, exclusively, by the
 DECLARED construction (`vllm_bindings.active_target_profile().effective_moe_construction()`; a Program static, never attested):
 
   * `indexed-read` (the default; MOE-01, the four rules above): the block as SIX kinds -- router, the pair-major expert GEMMs with the

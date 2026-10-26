@@ -25,6 +25,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
+import verity.ml.definitions.boolean as BB
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.codec import decode_program, descriptor_id, encode_program, program_digest
 from verity.ml.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
@@ -33,7 +34,6 @@ from verity.ml.circuits.ops import prims as MP
 from verity.ml.circuits.program import Program, input_id, is_input
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, coll_concat
 from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Type, Value
-from verity.ml.definitions import boolean as BB
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry.catalog import load as load_registry
 from verity.ml.definitions.replay import replayer
