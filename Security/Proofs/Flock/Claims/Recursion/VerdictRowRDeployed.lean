@@ -47,17 +47,75 @@ their defaults. -/
 def algShape (sh : Shape) : Shape :=
   { m := sh.m, kLog := sh.kLog, claims := sh.claims, sched := sh.sched, holo := sh.holo }
 
-theorem structureOf_alg (sh : Shape) : structureOf (algShape sh) = structureOf sh := by
+theorem wNames_alg (sh : Shape) : wNames (algShape sh) = wNames sh := by
   cases sh
   rfl
+
+theorem wi_alg (sh : Shape) : RecAlgebra.wi (algShape sh) = RecAlgebra.wi sh := by
+  funext k
+  simp only [RecAlgebra.wi, wNames_alg]
+
+theorem orderOf_alg (sh : Shape) : RecAlgebra.orderOf (algShape sh) = RecAlgebra.orderOf sh := by
+  funext k
+  cases sh
+  rfl
+
+theorem varOp_alg (sh : Shape) : RecAlgebra.varOp (algShape sh) = RecAlgebra.varOp sh := by
+  funext c k
+  cases sh
+  rfl
+
+theorem accTerms_alg (sh : Shape) : RecAlgebra.accTerms (algShape sh) = RecAlgebra.accTerms sh := by
+  funext fin ri l
+  cases sh
+  rfl
+
+theorem coefOps_alg (sh : Shape) : RecAlgebra.coefOps (algShape sh) = RecAlgebra.coefOps sh := by
+  funext c ri l
+  induction l with
+  | nil => rfl
+  | cons h rest ih =>
+    obtain ⟨k, x⟩ := h
+    simp only [RecAlgebra.coefOps, varOp_alg, ih]
+
+theorem prodOps_alg (sh : Shape) : RecAlgebra.prodOps (algShape sh) = RecAlgebra.prodOps sh := by
+  funext c ri l
+  induction l with
+  | nil => rfl
+  | cons h rest ih =>
+    obtain ⟨⟨a, b⟩, x⟩ := h
+    simp only [RecAlgebra.prodOps, varOp_alg, ih]
+
+theorem buildRes_alg (sh : Shape) : RecAlgebra.buildRes (algShape sh) = RecAlgebra.buildRes sh := by
+  funext fin c ri f
+  simp only [RecAlgebra.buildRes, accTerms_alg, coefOps_alg, prodOps_alg, orderOf_alg]
+
+theorem buildAll_alg (sh : Shape) : RecAlgebra.buildAll (algShape sh) = RecAlgebra.buildAll sh := by
+  funext fin c l ri
+  induction l generalizing ri with
+  | nil => rfl
+  | cons f rest ih => simp only [RecAlgebra.buildAll, buildRes_alg, ih]
+
+theorem build_alg (sh : Shape) : RecAlgebra.build (algShape sh) = RecAlgebra.build sh := by
+  funext lins
+  simp only [RecAlgebra.build, buildAll_alg, wNames_alg]
+  rfl
+
+theorem residualLins_alg (sh : Shape) : RecAlgebra.residualLins (algShape sh) = RecAlgebra.residualLins sh := by
+  funext c e
+  cases sh
+  rfl
+
+theorem structureOf_alg (sh : Shape) : structureOf (algShape sh) = structureOf sh := by
+  have he : RecAlgebra.extrasLike (algShape sh) = RecAlgebra.extrasLike sh := rfl
+  simp only [RecAlgebra.structureOf, residualLins_alg, he, build_alg]
 
 theorem portSizes_alg (sh : Shape) : portSizes (algShape sh) = portSizes sh := by
   cases sh
   rfl
 
 theorem part_alg (sh : Shape) (j : ℕ) : RecResiduals.part (algShape sh) j = RecResiduals.part sh j := by
-  cases sh
-  rfl
+  simp only [RecResiduals.part, structureOf_alg, portSizes_alg]
 
 /-- **S's `nw` is w's names**: the rounds' elements, then the four running sums. -/
 theorem structureOf_nw {sh : Shape} {S : RecAlgebra.GfS} (h : structureOf sh = .ok S) :
@@ -187,16 +245,17 @@ theorem sh_alg {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo =
   have e : D.sh cls 0 = FlockSoundness.Refine.shapeOf (Setup.ofCircuit st) ((fast100 st.m).getD default)
       (D.files cls 0).extras.size := by
     show FlockSoundness.Refine.shapeOf (tabsOf D.sts)[0]! ((fast100 (tabsOf D.sts)[0]!.m).getD default) _ = _
-    rw [htab]
+    rw [htab] <;> rfl
   rw [e]
   have hmm : st.m = r.shape.m := by rw [hm, e1]
   have hkk : st.c.kLog = r.shape.kLog := by rw [hk, e2]
   have hcc : 2 + (D.files cls 0).extras.size = r.shape.claims := by
     rw [hesz, e4, hreg, hpt, Nat.mul_comm]
-  show ({ m := st.m, kLog := st.c.kLog, claims := 2 + (D.files cls 0).extras.size,
-      sched := (fast100 st.m).getD default, holo := false } : Shape) =
-    { m := r.shape.m, kLog := r.shape.kLog, claims := r.shape.claims, sched := sch0, holo := r.shape.holo }
-  rw [hcc, hkk, hmm, hf0, hh] <;> rfl
+  have hsc : (fast100 st.m).getD default = sch0 := by rw [hmm, hf0]; rfl
+  unfold algShape FlockSoundness.Refine.shapeOf
+  dsimp only
+  congr 1
+  all_goals first | exact hmm | exact hkk | exact hcc | exact hsc | exact hh.symm
 
 /-- **S and its groups at table `i`** (row R's `hS` and `hg`): V\*'s list, which the reader's scope check builds,
 computes them at the inner shape, which is table `i`'s decode shape in the fields they read. -/
