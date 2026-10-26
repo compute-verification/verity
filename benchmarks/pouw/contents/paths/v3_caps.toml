@@ -1,0 +1,4 @@
+order = 374
+path = "`theory/v3_caps.py`"
+runs_on = "CPU"
+what = "ACCEL ALGO-COST-2's pricing of v3's (t, L′) caps at the period's dual prices (P12): D5's job LP with PD3-4's O-route and zero-high-digit peel (`d5_routes.job_at`), every static shape and PV at every n on both cards, with the any-prices tensor saving beside it (note:compute-research/20261026T0440Z-draft-accel-algo-cost-2)"
